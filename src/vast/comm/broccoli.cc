@@ -199,23 +199,24 @@ ze::value broccoli::factory::make_value(int type, void* bro_val)
                         return ze::port(p->port_num, ze::port::icmp);
                 }
             }
-// TODO: Install recent Broccoli.
-//        case BRO_TYPE_IPADDR:
-//            BroAddr* addr = static_cast<BroAddr*>(bro_val);
-//            return ze::address(
-//                addr->addr,
-//                (addr->size == 1) ? ze::address::ipv4 : ze::address::ipv6,
-//                ze::address::network);
-//        case BRO_TYPE_SUBNET:
-//            {
-//                BroSubnet* sn = static_cast<BroSubnet*>(bro_val);
-//                ze::address addr(
-//                    sn->sn_net->addr,
-//                    (sn->sn_net->size == 1) ?
-//                        ze::address::ipv4 : ze::address::ipv6,
-//                    ze::address::network);
-//                return ze::prefix(std::move(addr), sn->sn_width);
-//            }
+        case BRO_TYPE_IPADDR:
+            {
+                BroAddr* addr = static_cast<BroAddr*>(bro_val);
+                return ze::address(
+                    addr->addr,
+                    (addr->size == 1) ? ze::address::ipv4 : ze::address::ipv6,
+                    ze::address::network);
+            }
+        case BRO_TYPE_SUBNET:
+            {
+                BroSubnet* sn = static_cast<BroSubnet*>(bro_val);
+                ze::address addr(
+                    sn->sn_net.addr,
+                    (sn->sn_net.size == 1) ?
+                        ze::address::ipv4 : ze::address::ipv6,
+                    ze::address::network);
+                return ze::prefix(std::move(addr), sn->sn_width);
+            }
         case BRO_TYPE_SET:
             {
                 ze::set set;
@@ -407,19 +408,34 @@ broccoli::reverse_factory::builder::operator()(ze::record const& r) const
 broccoli::reverse_factory::bro_val
 broccoli::reverse_factory::builder::operator()(ze::address const& a) const
 {
-    assert(! "not yet implemented");
-    return {};
+    // Caller must free the memory of the BroAddr!
+    BroAddr* addr = new BroAddr;
+    if (a.is_v4())
+    {
+        addr->size = 1;
+        std::copy(a.data().begin() + 12, a.data().end(),
+                  reinterpret_cast<uint8_t*>(&addr->addr));
+    }
+    else
+    {
+        addr->size = 4;
+        std::copy(a.data().begin(), a.data().end(),
+                  reinterpret_cast<uint8_t*>(&addr->addr));
+    }
+
+    return { BRO_TYPE_IPADDR, addr };
 }
 
 broccoli::reverse_factory::bro_val
-broccoli::reverse_factory::builder::operator()(ze::prefix const& s) const
+broccoli::reverse_factory::builder::operator()(ze::prefix const& p) const
 {
-    assert(! "not yet implemented");
-
     // Caller must free the memory of the BroSubnet!
     BroSubnet* bs = new BroSubnet;
-    //bs->sn_net = 
-    //bs->sn_width = 
+    bs->sn_width = p.length();
+    auto net = operator()(p.network());
+    auto addr = reinterpret_cast<BroAddr*>(net.value);
+    std::copy(addr, addr + sizeof(BroAddr), &bs->sn_net);
+    free(net);
 
     return { BRO_TYPE_PORT, bs };
 }
