@@ -31,7 +31,7 @@ char const* exception::what() const noexcept
 config_exception::config_exception(char const* msg, char const* option)
 {
     std::ostringstream oss;
-    oss << msg << " (option --" << option << ')';
+    oss << msg << " (--" << option << ')';
     msg_ = oss.str();
 };
 
@@ -39,7 +39,7 @@ config_exception::config_exception(char const* msg, char const* opt1,
                                    char const* opt2)
 {
     std::ostringstream oss;
-    oss << msg << " (option --" << opt1 << " and --" << opt2 << ')';
+    oss << msg << " (--" << opt1 << " and --" << opt2 << ')';
     msg_ = oss.str();
 };
 
