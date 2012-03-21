@@ -1,0 +1,10 @@
+#ifndef VAST_CONFIG_H
+#define VAST_CONFIG_H
+
+// Version number.
+#define VAST_VERSION @VERSION_MAJ_MIN@
+
+// Use Google Perftools
+#cmakedefine USE_PERFTOOLS
+
+#endif

@@ -1,0 +1,6 @@
+.DS_Store
+.*sw?
+build
+doc/html
+src/config.h
+tmp

@@ -1,0 +1,54 @@
+#
+#   Copyright (c) 2006 João Abecasis
+#
+#   Distributed under the Boost Software License, Version 1.0. (See
+#   accompanying file LICENSE_1_0.txt or copy at
+#   http://www.boost.org/LICENSE_1_0.txt)
+#
+
+using darwin
+    :
+    :
+    : <cxxflags>-std=gnu++0x
+    ;
+
+import modules ;
+import path ;
+
+boost-root = [ modules.peek : BOOST_ROOT ] ;
+
+if ! $(boost-root)
+{
+    local boost-search-dirs = [ modules.peek : BOOST_BUILD_PATH ] ;
+
+    for local dir in $(boost-search-dirs)
+    {
+        if [ path.glob $(dir)/../../../ : boost/version.hpp ]
+        {
+            boost-root += $(dir)/../../../ ;
+        }
+    }
+
+    if $(boost-root)
+    {
+        boost-root = [ path.make $(boost-root[1]) ] ;
+    }
+    else
+    {
+        ECHO "Warning: couldn't find BOOST_ROOT in" $(boost-root) ;
+    }
+}
+
+use-project /boost : $(boost-root) ;
+
+project boost-log
+    : requirements
+        <include>$(boost-root)
+        <include>.
+    :   #   build everything in ./bin.v2
+        build-dir bin.v2
+    ;
+
+build-project libs/log/build ;
+
+build-project libs/log/example/advanced_usage ;

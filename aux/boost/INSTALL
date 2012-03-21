@@ -1,0 +1,109 @@
+Introduction
+============
+
+This document briefly summaries how to install the Boost with the Boost Log dependency.
+
+Prerequisites
+-------------
+
+    * gcc (>= 4.6)
+
+    * Boost (>= 1.48)
+
+    * Boost Log (trunk)
+
+Installation
+============
+
+MacPorts
+--------
+
+If you are using Mac OS X, you can directly install Boost in C++11 mode
+including Boost Log by using a custom MacPorts port repository:
+
+    https://github.com/mavam/macports-overlay
+
+After having configured the overlay, it suffices to install Boost with
+
+    sudo port install boost +cxx11 +log +debug
+
+where the last +debug variant is optional but recommended. You may want to add
+the +no_static and +no_single variants to speed up the build process, in case
+you do not need the static or single-threaded versions of the libraries.
+
+Otherwise, installing Boost with its requirements is unfortunately a little
+tricky, because (1) Boost Log is not yet officially part of the Boost
+libraries although it has already been accepted, and (2) Boost needs to be
+compiled with the correct C++11 compiler flags.
+
+UNIX
+----
+
+Installation procedure:
+
+    0) Obtain Boost and Boost Log. The latter can be downloaded from
+       SourceForge:
+
+           svn co https://boost-log.svn.sourceforge.net/svnroot/boost-log
+
+    1) Get a source archive of the current Boost distribution and extract it.
+       Let us assume that the directory is called boost_1_48_0. Now create two
+       symlinks inside the boost distribution:
+
+           cd boost_1_48_0/boost
+           ln -s /path/to/boost-log/boost/log
+           cd ../libs
+           ln -s /path/to/boost-log/libs/log
+           cd ..
+
+    1b) (Mac OS X only.) Edit the file
+
+            tools/build/v2/tools/darwin.jam
+
+       and change the line
+
+         flags darwin.compile OPTIONS : -no-cpp-precomp -gdwarf-2 -fexceptions ;
+
+       to
+
+         flags darwin.compile OPTIONS : -gdwarf-2 -fexceptions ;
+
+       in order to remove the unsupported -no-cpp-precomp g++ flag in non-Apple
+       compilers. (VAST needs at least g++ 4.6 for to support C++11; Apple
+       ships only with 4.2 as of this writing.)
+
+    2) Execute the following commands inside the directory boost_1_48_0:
+
+           ./bootstrap.sh --with-libraries=log --with-toolset=darwin \
+                --prefix=PREFIX --exec-prefix=PREFIX
+           ./b2 --layout=tagged \
+                variant=debug,release link=shared cxxflags=-std=gnu++0x
+           ./b2 install
+
+       You may have to change --with-toolset option to an appropriate value
+       (e.g., gcc instead of darwin) according to your platform. If you only
+       want to install Boost Log and not the entire Boost libraries, omit the
+       --with-log option.
+
+    3) Now Boost Log (and Boost) should be installed in PREFIX and ready to use
+       with VAST.
+
+Plan B
+------
+
+If you prefer an out-of-source build that separately builds Boost Log from the
+rest of the Boost libraries, you can try the following (which I haven't tested
+though):
+
+    1) Copy the provided project-root.jam file into the Boost Log root
+       directory, i.e., the directory containing "boost" and "libs".
+
+    2) Let the BOOST_ROOT environment variable point to the directory of an
+       unpacked Boost source tree:
+
+           export BOOST_ROOT=/path/to/boost_1_48_0
+
+    3) Invoke b2 from the Boost source tree inside the Boost Log tree:
+
+           cd /path/to/boost-log
+           /path/to/boost_1_48_0/b2 variant=debug,release link=shared install

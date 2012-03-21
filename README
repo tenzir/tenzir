@@ -1,0 +1,62 @@
+
+                             _    _____   ___________
+                            | |  / /   | / ___/_  __/
+                            | | / / /| | \__ \ / /
+                            | |/ / ___ |___/ // /
+                            |___/_/  |_/____//_/
+
+================================================================================
+                                    Synopsis
+================================================================================
+
+Display available options:
+
+    % vast -h
+
+Display advanced options (verbose):
+
+    % vast -z
+
+Start VAST with all components and a given taxonomy:
+
+    % vast -a -t taxonomy
+
+================================================================================
+                                      VAST
+================================================================================
+
+TODO: describe VAST.
+
+VAST comes with a BSD-style licence; see COPYING for details.
+
+================================================================================
+                                 Documentation
+================================================================================
+
+The full documentation is available at
+
+                        http://www.icir.org/vast
+
+but you can also build the documentation offline. See INSTALL for details.
+
+================================================================================
+                                  Organization
+================================================================================
+
+The root directory of the VAST distribution is organized as follows:
+
+vast
+| CHANGES   ------------- The Changelog.
+| CMakeLists.txt   ------ CMake build file.
+| configure  ------------ An autotools-like wrapper for the build process.
+| COPYING   ------------- The licence agreement.
+| INSTALL   ------------- Instructions how to build and install VAST.
+| README   -------------- The file you are reading.
+| TODO   ---------------- Todo items for the future.
+| aux   ----------------- 3rd party software shipping with VAST.
+| cmake   --------------- CMake helper tools.
+| conf  ----------------- Example VAST configurations.
+| doc   ----------------- The Doxygen documentation.
+| src   ----------------- The source code.
+| test  ----------------- Unit tests.
+| tools  ---------------- Various helper tools.
