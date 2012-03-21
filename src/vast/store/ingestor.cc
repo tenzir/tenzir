@@ -1,10 +1,10 @@
-#include "store/ingestor.h"
+#include "vast/store/ingestor.h"
 
 #include <algorithm>
 #include <ze/event.h>
-#include "comm/connection.h"
-#include "comm/io.h"
-#include "util/logger.h"
+#include "vast/comm/connection.h"
+#include "vast/comm/io.h"
+#include "vast/util/logger.h"
 
 namespace vast {
 namespace store {

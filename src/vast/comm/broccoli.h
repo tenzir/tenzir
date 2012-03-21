@@ -5,8 +5,6 @@
 #include <boost/asio/strand.hpp>
 #include <broccoli.h>
 #include "vast/comm/forward.h"
-#include "vast/core/bytes.h"
-#include "vast/core/forward.h"
 
 namespace vast {
 namespace comm {
@@ -51,7 +49,7 @@ public:
 
     /// Sends a raw Broccoli event.
     /// @param raw The raw event to send.
-    void send(core::bytes const& raw);
+    void send(std::vector<uint8_t> const& raw);
 
     /// Starts sending/receiving events from the underlying connection.
     /// @param error_handler Invoked when Broccoli experiences an error.

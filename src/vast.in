@@ -1,0 +1,16 @@
+#!/bin/sh
+
+vast=@VAST_BINARY@
+
+@VAST_SYSTEM_ENV@="@VAST_LIBRARY_PATH@"
+[[ -n "$@VAST_SYSTEM_ENV@" ]] && export @VAST_SYSTEM_ENV@
+
+perftools_heap_check="@USE_GOOGLE_PERFTOOLS_HEAP_CHECKER@"
+[[ $perftools_heap_check = "TRUE" ]] && export HEAPCHECK=normal
+
+if [[ "$1" == "--gdb" ]] ; then
+    shift
+    exec gdb --args $vast $@
+else
+    exec $vast $@
+fi

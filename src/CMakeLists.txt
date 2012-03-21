@@ -1,24 +1,9 @@
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}
-                    ${CMAKE_CURRENT_BINARY_DIR})
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in
                ${CMAKE_CURRENT_BINARY_DIR}/config.h)
 
-file(GLOB_RECURSE vast_sources *.cc)
-add_executable(vast ${vast_sources})
-
-set(vastlibs
-    ${Boost_LIBRARIES}
-    ${Broccoli_LIBRARIES})
-if (USE_PERFTOOLS)
-    set(vastlibs ${vastlibs} ${Perftools_LIBRARIES})
-endif ()
-
-target_link_libraries(vast ${vastlibs})
-
-install(TARGETS vast DESTINATION bin)
-
-set(VAST_EXE vast CACHE STRING "VAST executable binary" FORCE)
+add_subdirectory(vast)
 
 #
 # VAST wrapper

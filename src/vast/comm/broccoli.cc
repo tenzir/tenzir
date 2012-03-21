@@ -72,7 +72,7 @@ void broccoli::subscribe(std::string const& event)
                                    &event_handler_);
 }
 
-void broccoli::send(core::bytes const& raw)
+void broccoli::send(std::vector<uint8_t> const& raw)
 {
     LOG(debug, broccoli)
         << "sending raw event of size " << raw.size();

@@ -1,4 +1,4 @@
-#include "profiler.h"
+#include "vast/util/profiler.h"
 
 #include <iomanip>
 #include <sys/resource.h>   // getrusage
@@ -57,7 +57,7 @@ profiler::profiler(boost::asio::io_service& io_service)
 {
 }
 
-void profiler::init(fs::path const& filename, core::duration interval)
+void profiler::init(fs::path const& filename, util::duration interval)
 {
     interval_ = interval;
 

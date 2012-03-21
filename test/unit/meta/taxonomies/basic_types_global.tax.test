@@ -1,0 +1,12 @@
+type t1: addr
+type t2: bool
+type t3: count
+type t4: double
+type t5: int
+type t6: interval
+type t7: file
+type t8: port
+type t9: string
+type t10: subnet
+type t11: time
+event foo(a1: t1, a2: t2, a3: t3, a4: t4, a5: t5, a6: t6, a7: t7, a8: t8, a9: t9, a10: t10, a11: t11)

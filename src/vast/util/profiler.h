@@ -3,9 +3,9 @@
 
 #include <boost/asio/basic_waitable_timer.hpp>
 #include <boost/operators.hpp>
-#include "fs/fstream.h"
-#include "fs/path.h"
-#include "core/time.h"
+#include "vast/fs/fstream.h"
+#include "vast/fs/path.h"
+#include "vast/util/time.h"
 
 namespace vast {
 namespace util {
@@ -39,7 +39,7 @@ public:
     /// @param filename The log file where to write measurements to.
     /// @param interval How often to take a measurment.
     void init(fs::path const& filename,
-              core::duration interval = std::chrono::seconds(1));
+              util::duration interval = std::chrono::seconds(1));
 
     /// Starts the profiler.
     void start();
@@ -51,8 +51,8 @@ private:
     void handle_timer(boost::system::error_code const& ec,
                       measurement const& previous);
 
-    core::duration interval_;
-    boost::asio::basic_waitable_timer<core::clock> timer_;
+    util::duration interval_;
+    boost::asio::basic_waitable_timer<util::clock> timer_;
     fs::ofstream file_;
 };
 

@@ -3,9 +3,8 @@
 
 #include <mutex>
 #include <string>
-#include "comm/broccoli.h"
-#include "comm/server.h"
-#include "core/forward.h"
+#include "vast/comm/broccoli.h"
+#include "vast/comm/server.h"
 
 namespace vast {
 namespace store {
@@ -13,6 +12,9 @@ namespace store {
 /// Ingests events from the external world.
 class ingestor
 {
+    ingestor(ingestor const&) = delete;
+    ingestor& operator=(ingestor const&) = delete;
+
 public:
     /// Constructor.
     ingestor(comm::io& io);
