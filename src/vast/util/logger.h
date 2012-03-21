@@ -6,7 +6,7 @@
 #include <boost/log/sources/record_ostream.hpp>
 #include <boost/log/sources/severity_channel_logger.hpp>
 #include <boost/noncopyable.hpp>
-#include "fs/path.h"
+#include "vast/fs/path.h"
 #include "config.h"
 
 namespace vast {

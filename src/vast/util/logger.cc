@@ -1,4 +1,4 @@
-#include "util/logger.h"
+#include "vast/util/logger.h"
 
 #include <boost/assert.hpp>
 #include <boost/log/attributes/clock.hpp>
@@ -7,7 +7,7 @@
 #include <boost/log/formatters/format.hpp>
 #include <boost/log/formatters/message.hpp>
 #include <boost/log/utility/init/to_console.hpp>
-#include "fs/operations.h"
+#include "vast/fs/operations.h"
 
 namespace vast {
 namespace util {

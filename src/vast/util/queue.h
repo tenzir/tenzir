@@ -15,9 +15,9 @@ class queue : std::queue<T>
     typedef std::queue<T> base;
 
 public:
-    using base::value_type;
-    using base::reference;
-    using base::const_reference;
+    typedef typename base::value_type value_type;
+    typedef typename base::reference reference;
+    typedef typename base::const_reference const_reference;
 
     /// Constructs an empty queue.
     queue()
