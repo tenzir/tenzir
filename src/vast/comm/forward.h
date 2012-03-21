@@ -4,7 +4,6 @@
 #include <functional>
 #include <memory>
 #include <ze/forward.h>
-#include "core/forward.h"
 
 namespace vast {
 namespace comm {

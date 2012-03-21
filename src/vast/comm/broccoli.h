@@ -4,9 +4,9 @@
 #include <memory>
 #include <boost/asio/strand.hpp>
 #include <broccoli.h>
-#include "comm/forward.h"
-#include "core/bytes.h"
-#include "core/forward.h"
+#include "vast/comm/forward.h"
+#include "vast/core/bytes.h"
+#include "vast/core/forward.h"
 
 namespace vast {
 namespace comm {

@@ -5,7 +5,7 @@
 #include <mutex>
 #include <vector>
 #include <ze/component.h>
-#include "util/queue.h"
+#include "vast/util/queue.h"
 
 namespace vast {
 namespace comm {

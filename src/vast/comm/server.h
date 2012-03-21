@@ -4,7 +4,7 @@
 #include <boost/asio/io_service.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/noncopyable.hpp>
-#include "comm/forward.h"
+#include "vast/comm/forward.h"
 
 namespace vast {
 namespace comm {

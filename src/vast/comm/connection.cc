@@ -1,4 +1,4 @@
-#include "comm/connection.h"
+#include "vast/comm/connection.h"
 
 namespace vast {
 namespace comm {

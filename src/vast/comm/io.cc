@@ -1,7 +1,7 @@
-#include "comm/io.h"
+#include "vast/comm/io.h"
 
-#include "util/logger.h"
-#include "util/make_unique.h"
+#include "vast/util/logger.h"
+#include "vast/util/make_unique.h"
 
 namespace vast {
 namespace comm {

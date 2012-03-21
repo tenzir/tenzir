@@ -1,11 +1,11 @@
-#include "comm/broccoli.h"
+#include "vast/comm/broccoli.h"
 
 #include <ze/event.h>
 #include <ze/type/container.h>
-#include "comm/connection.h"
-#include "comm/error.h"
-#include "util/logger.h"
-#include "util/make_unique.h"
+#include "vast/comm/connection.h"
+#include "vast/comm/exception.h"
+#include "vast/util/logger.h"
+#include "vast/util/make_unique.h"
 
 namespace vast {
 namespace comm {
@@ -27,7 +27,7 @@ broccoli::broccoli(connection_ptr const& conn, event_handler const& handler)
     LOG(debug, broccoli) << *connection_ << ": creating broccoli handle";
     bc_ = bro_conn_new_socket(socket.native(), BRO_CFLAG_DONTCACHE);
     if (bc_ < 0)
-        THROW(error::broccoli() << error::broccoli_func("bro_conn_new_socket"));
+        throw broccoli_exception("bro_conn_new_socket");
 }
 
 broccoli::broccoli(broccoli&& other)
@@ -99,7 +99,7 @@ void broccoli::run(conn_handler const& error_handler)
     if (! bro_conn_connect(bc_))
     {
         LOG(error, broccoli) << *connection_ << ": unable to attach broccoli";
-        THROW(error::broccoli() << error::broccoli_func("bro_conn_connect"));
+        throw broccoli_exception("bro_conn_connect");
     }
     LOG(debug, broccoli) << *connection_ << ": successfully attached to socket";
 
@@ -267,7 +267,7 @@ ze::value broccoli::factory::make_value(int type, void* bro_val)
             }
     }
 
-    THROW(error::broccoli() << error::broccoli_type(type));
+    throw broccoli_type_exception("invalid broccoli type", type);
 }
 
 struct broccoli::reverse_factory::builder
@@ -486,7 +486,7 @@ BroEvent* broccoli::reverse_factory::make_event(ze::event const& event)
     if (! bro_event)
     {
         LOG(error, broccoli) << "could not create bro_event " << event.name();
-        THROW(error::broccoli());
+        throw broccoli_exception("bro_event_new");
     }
 
     for (auto const& arg : event.args())

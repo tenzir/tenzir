@@ -1,7 +1,7 @@
-#include "comm/server.h"
+#include "vast/comm/server.h"
 
-#include "comm/connection.h"
-#include "util/logger.h"
+#include "vast/comm/connection.h"
+#include "vast/util/logger.h"
 
 namespace vast {
 namespace comm {
