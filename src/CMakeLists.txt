@@ -6,21 +6,11 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in
 add_subdirectory(vast)
 
 #
-# VAST wrapper
+# VAST wrapper - for convenience during development.
 #
 
-# Only inserst ${value} into the list ${var} if it is not already contained.
-macro (list_unique_insert var value)
-    list(FIND ${var} ${value} contained)
-    if (${contained} EQUAL -1)
-        LIST(APPEND ${var} ${value})
-    endif ()
-endmacro ()
+get_target_property(VAST_BINARY_LOCATION vast-bin LOCATION)
 
-# VAST executable (used in vast.in)
-get_target_property(VAST_BINARY vast LOCATION)
-
-# Determine correct name of environment variable that preloads shared libraries.
 if (UNIX)
     if (APPLE)
         set(VAST_SYSTEM_ENV DYLD_LIBRARY_PATH)
@@ -31,12 +21,20 @@ else ()
     message(FATAL_ERROR "Supporting currently only UNIX, sorry...")
 endif ()
 
-# Build the exported PATH.
-get_filename_component(Broccoli_library_dirs ${Broccoli_LIBRARIES} PATH)
+# Only inserts ${value} into the list ${var} if it is not already contained.
+macro (list_unique_insert var value)
+    list(FIND ${var} ${value} contained)
+    if (${contained} EQUAL -1)
+        LIST(APPEND ${var} ${value})
+    endif ()
+endmacro ()
 
 # A list of paths that is used to build the export string.
 set(path_list)
+get_filename_component(Broccoli_library_dirs ${Broccoli_LIBRARIES} PATH)
 list_unique_insert(path_list ${Broccoli_library_dirs})
+get_filename_component(0event_library_dirs ${0event_LIBRARIES} PATH)
+list_unique_insert(path_list ${0event_library_dirs})
 foreach(i ${Boost_LIBRARIES})
     get_filename_component(dir ${i} PATH)
     if (dir)
@@ -57,7 +55,6 @@ else ()
     set(VAST_LIBRARY_PATH "")
 endif()
 
-# TODO: install only if desired.
 # Copy the wrapper over to the build directory.
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/vast.in

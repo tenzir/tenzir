@@ -1,6 +1,6 @@
 #!/bin/sh
 
-vast=@VAST_BINARY@
+vast=@VAST_BINARY_LOCATION@
 
 @VAST_SYSTEM_ENV@="@VAST_LIBRARY_PATH@"
 [[ -n "$@VAST_SYSTEM_ENV@" ]] && export @VAST_SYSTEM_ENV@
