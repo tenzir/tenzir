@@ -125,6 +125,8 @@ void program::start()
             }
         }
 
+        comm::broccoli::init();
+
         if (config_.check("ingestor") || config_.check("all"))
         {
             ingestor_.init(config_.get<std::string>("ingest.ip"),

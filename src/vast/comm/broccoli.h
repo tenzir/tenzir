@@ -13,6 +13,12 @@ namespace comm {
 class broccoli
 {
 public:
+    /// Initializes Broccoli. This function must be called once before any call
+    /// into the Broccoli library to set up the necessary SSL context.
+    /// @param calltrace If @c true, enable call tracing.
+    /// @param messages If @c true, show message contents and protocol details.
+    static void init(bool calltrace = false, bool messages = false);
+
     /// Constructs a broccoli session over an existing TCP connection.
     /// @param conn The underlying connection.
     /// @param handler The event handler to invoke for each new arriving event.
@@ -110,12 +116,6 @@ private:
         /// Frees broccoli data if it was heap-allocated.
         static void free(bro_val const& val);
     };
-
-    /// Initializes Broccoli. This function must be called once before any call
-    /// into the Broccoli library to set up the necessary SSL context.
-    /// @param calltrace If @c true, enable call tracing.
-    /// @param messages If @c true, show message contents and protocol details.
-    static void init(bool calltrace = false, bool messages = false);
 
     /// The Broccoli callback handler. After subscribing to an Bro event, this
     /// handler is called for each event arriving from a Broccoli connection.

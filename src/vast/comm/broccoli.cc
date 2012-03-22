@@ -10,6 +10,30 @@
 namespace vast {
 namespace comm {
 
+bool broccoli::initialized = false;
+
+void broccoli::init(bool calltrace, bool messages)
+{
+    if (calltrace)
+    {
+        bro_debug_calltrace = 1;
+        LOG(verbose, broccoli) << "enabling call trace debugging";
+    }
+
+    if (messages)
+    {
+        bro_debug_messages = 1;
+        LOG(verbose, broccoli) << "enabling extra debug messages";
+    }
+
+    LOG(verbose, broccoli) << "initializing SSL context";
+    BroCtx ctx;
+    bro_ctx_init(&ctx);
+    bro_init(&ctx);
+
+    initialized = true;
+}
+
 broccoli::broccoli(connection_ptr const& conn, event_handler const& handler)
   : connection_(conn)
   , event_handler_(handler)
@@ -516,30 +540,6 @@ BroEvent* broccoli::reverse_factory::make_event(ze::event const& event)
     return bro_event;
 }
 
-
-bool broccoli::initialized = false;
-
-void broccoli::init(bool calltrace, bool messages)
-{
-    if (calltrace)
-    {
-        bro_debug_calltrace = 1;
-        LOG(verbose, broccoli) << "enabling call trace debugging";
-    }
-
-    if (messages)
-    {
-        bro_debug_messages = 1;
-        LOG(verbose, broccoli) << "enabling extra debug messages";
-    }
-
-    LOG(verbose, broccoli) << "initializing SSL context";
-    BroCtx ctx;
-    bro_ctx_init(&ctx);
-    bro_init(&ctx);
-
-    initialized = true;
-}
 
 void broccoli::callback(BroConn* bc, void* user_data, BroEvMeta* meta)
 {
