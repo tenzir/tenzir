@@ -35,27 +35,27 @@ void broccoli::init(bool calltrace, bool messages)
 }
 
 broccoli::broccoli(connection_ptr const& conn, event_handler const& handler)
-  : connection_(conn)
+  : conn_(conn)
   , event_handler_(handler)
   , strand_(
       std::make_unique<boost::asio::strand>(
-          connection_->socket().get_io_service()))
+          conn_->socket().get_io_service()))
   , bc_(nullptr)
 {
     assert(initialized);
 
-    auto& socket = connection_->socket();
+    auto& socket = conn_->socket();
     boost::asio::ip::tcp::socket::non_blocking_io non_blocking_io(true);
     socket.io_control(non_blocking_io);
 
-    LOG(debug, broccoli) << *connection_ << ": creating broccoli handle";
+    LOG(debug, broccoli) << *conn_ << ": creating broccoli handle";
     bc_ = bro_conn_new_socket(socket.native(), BRO_CFLAG_DONTCACHE);
     if (bc_ < 0)
         throw broccoli_exception("bro_conn_new_socket");
 }
 
 broccoli::broccoli(broccoli&& other)
-  : connection_(std::move(other.connection_))
+  : conn_(std::move(other.conn_))
   , event_handler_(std::move(other.event_handler_))
   , error_handler_(std::move(other.error_handler_))
   , strand_(std::move(other.strand_))
@@ -80,7 +80,7 @@ broccoli::~broccoli()
 void broccoli::swap(broccoli& other)
 {
     using std::swap;
-    swap(connection_, other.connection_);
+    swap(conn_, other.conn_);
     swap(event_handler_, other.event_handler_);
     swap(error_handler_, other.error_handler_);
     swap(strand_, other.strand_);
@@ -109,7 +109,7 @@ void broccoli::send(ze::event const& event)
     auto bro_event = reverse_factory::make_event(event);
     if (! bro_event_send(bc_, bro_event))
         LOG(error, broccoli)
-            << *connection_ << ": error sending event " << event.name();
+            << *conn_ << ": error sending event " << event.name();
 
     bro_event_free(bro_event);
 }
@@ -122,17 +122,17 @@ void broccoli::run(conn_handler const& error_handler)
 
     if (! bro_conn_connect(bc_))
     {
-        LOG(error, broccoli) << *connection_ << ": unable to attach broccoli";
+        LOG(error, broccoli) << *conn_ << ": unable to attach broccoli";
         throw broccoli_exception("bro_conn_connect");
     }
-    LOG(debug, broccoli) << *connection_ << ": successfully attached to socket";
+    LOG(debug, broccoli) << *conn_ << ": successfully attached to socket";
 
     async_read();
 }
 
 connection_ptr broccoli::connection() const
 {
-    return connection_;
+    return conn_;
 }
 
 
@@ -553,8 +553,8 @@ void broccoli::callback(BroConn* bc, void* user_data, BroEvMeta* meta)
 
 void broccoli::async_read()
 {
-    LOG(debug, broccoli) << *connection_ << ": starting async read";
-    connection_->socket().async_read_some(
+    LOG(debug, broccoli) << *conn_ << ": starting async read";
+    conn_->socket().async_read_some(
         boost::asio::null_buffers(),
         strand_->wrap(
             [&](boost::system::error_code const& ec, size_t bytes_transferred)
@@ -566,20 +566,23 @@ void broccoli::async_read()
 void broccoli::handle_read(boost::system::error_code const& ec)
 {
     if (! (ec || bro_conn_process_input(bc_)))
-        LOG(debug, broccoli) << *connection_ <<  ": no input to process";
-
-    if (! ec || ec == boost::asio::error::would_block)
-        async_read();
-    else
     {
-        if (ec == boost::asio::error::eof)
-            LOG(info, broccoli)
-                << *connection_ << ": remote broccoli disconnected";
-        else
-            LOG(error, broccoli) << *connection_ << ": " << ec.message();
-
-        error_handler_(connection_);
+        LOG(debug, broccoli) << *conn_ <<  ": no input to process";
+        return;
     }
+
+    if (ec == boost::asio::error::would_block)
+    {
+        async_read();
+        return;
+    }
+    else if (ec == boost::asio::error::eof)
+        LOG(info, broccoli) << *conn_ << ": remote broccoli disconnected";
+    else
+        LOG(error, broccoli) << *conn_ << ": " << ec.message();
+
+    error_handler_(conn_);
+
 }
 
 } // namespace comm

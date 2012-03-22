@@ -15,9 +15,9 @@ class broccoli
 public:
     /// Initializes Broccoli. This function must be called once before any call
     /// into the Broccoli library to set up the necessary SSL context.
-    /// @param calltrace If @c true, enable call tracing.
     /// @param messages If @c true, show message contents and protocol details.
-    static void init(bool calltrace = false, bool messages = false);
+    /// @param calltrace If @c true, enable call tracing.
+    static void init(bool messages = false, bool calltrace = false);
 
     /// Constructs a broccoli session over an existing TCP connection.
     /// @param conn The underlying connection.
@@ -140,7 +140,7 @@ private:
     /// Flag indicating whether Broccoli has already been initialized.
     static bool initialized;
 
-    connection_ptr connection_;
+    connection_ptr conn_;
     event_handler event_handler_;
     conn_handler error_handler_;
     std::unique_ptr<boost::asio::strand> strand_;
