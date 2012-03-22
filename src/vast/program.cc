@@ -2,7 +2,7 @@
 
 #include <cstdlib>
 #include <iostream>
-#include <boost/exception/diagnostic_information.hpp> 
+#include <boost/exception/diagnostic_information.hpp>
 #include "vast/exception.h"
 #include "vast/fs/path.h"
 #include "vast/fs/operations.h"
@@ -91,7 +91,7 @@ void program::start()
 
         if (config_.check("profile"))
         {
-            auto const& filename = 
+            auto const& filename =
                 config_.get<fs::path>("dir") /
                 config_.get<fs::path>("log-dir") /
                 "profiler.log";
@@ -145,16 +145,13 @@ void program::start()
     }
     catch (...)
     {
-        // FIXME: When streaming directly to the logger, the compiler complains
-        // about "no match for 'operator<<'.
-        std::stringstream ss;
-        ss << "exception details:" << std::endl
+        LOG(fatal, core)
+            << "exception details:" << std::endl
             << boost::current_exception_diagnostic_information();
-        LOG(fatal, core) << ss.str();
 
         return_ = EXIT_FAILURE;
     }
-    
+
     if (! terminating_)
         stop();
 }
