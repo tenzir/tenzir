@@ -46,6 +46,8 @@ configuration::configuration()
 #ifdef USE_PERFTOOLS_HEAP_PROFILER
         ("perftools-heap", "enable Google perftools heap profiling")
 #endif
+        ("broccoli-messages", "enable broccoli debug messages")
+        ("broccoli-calltrace", "enable broccoli function call tracing")
     ;
 
     po::options_description component("component options");

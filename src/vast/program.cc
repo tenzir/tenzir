@@ -125,7 +125,8 @@ void program::start()
             }
         }
 
-        comm::broccoli::init();
+        comm::broccoli::init(config_.check("broccoli-messages"),
+                             config_.check("broccoli-calltrace"));
 
         if (config_.check("ingestor") || config_.check("all"))
         {
