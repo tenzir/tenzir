@@ -52,6 +52,7 @@ std::ostream& operator<<(std::ostream& out, measurement const& m)
 
     return out;
 }
+
 profiler::profiler(boost::asio::io_service& io_service)
   : timer_(io_service)
 {
@@ -80,7 +81,10 @@ void profiler::start()
     timer_.expires_from_now(interval_);
     measurement now;
     timer_.async_wait(
-        [&](boost::system::error_code const& ec) { handle_timer(ec, now); });
+        [&, now](boost::system::error_code const& ec)
+        {
+            handle_timer(ec, now);
+        });
 }    
 
 void profiler::stop()
@@ -99,7 +103,10 @@ void profiler::handle_timer(boost::system::error_code const& ec,
 
     timer_.expires_at(timer_.expires_at() + interval_);
     timer_.async_wait(
-        [&](boost::system::error_code const& ec) { handle_timer(ec, now); });
+        [&, now](boost::system::error_code const& ec)
+        {
+            handle_timer(ec, now);
+        });
 }
 
 } // namespace util
