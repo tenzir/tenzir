@@ -19,7 +19,7 @@ configuration::configuration()
     po::options_description general("general options");
     general.add_options()
         ("config,c", po::value<fs::path>(), "configuration file")
-        ("dir,d", po::value<fs::path>()->default_value("vast"),
+        ("vast-dir,d", po::value<fs::path>()->default_value("vast"),
          "VAST directory")
         ("help,h", "display this help")
         ("taxonomy,t", po::value<fs::path>(), "event taxonomy")
@@ -32,7 +32,8 @@ configuration::configuration()
     po::options_description advanced("advanced options");
     advanced.add_options()
         ("log-dir",
-         po::value<fs::path>()->default_value("log"), "log directory")
+         po::value<fs::path>()->default_value(fs::path("vast") / "log"),
+         "log directory")
         ("log-verbosity,V",
          po::value<int>()->default_value(static_cast<int>(log::verbose)),
          "log file verbosity")

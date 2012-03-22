@@ -87,14 +87,12 @@ void program::start()
 {
     try
     {
-        auto dir = config_.get<fs::path>("dir");
+        auto vast_dir = config_.get<fs::path>("vast-dir");
+        auto log_dir = config_.get<fs::path>("log-dir");
 
         if (config_.check("profile"))
         {
-            auto const& filename =
-                config_.get<fs::path>("dir") /
-                config_.get<fs::path>("log-dir") /
-                "profiler.log";
+            auto const& filename = log_dir / "profiler.log";
 
             auto interval = config_.get<unsigned>("profiler-interval");
             profiler_.init(filename, std::chrono::milliseconds(interval));
@@ -106,12 +104,12 @@ void program::start()
         if (config_.check("perftools-heap"))
         {
             LOG(info, core) << "starting perftools CPU profiler";
-            ::HeapProfilerStart((dir / "heap.profile").string().c_str());
+            ::HeapProfilerStart((log_dir / "heap.profile").string().c_str());
         }
         if (config_.check("perftools-cpu"))
         {
             LOG(info, core) << "starting perftools heap profiler";
-            ::ProfilerStart((dir / "cpu.profile").string().c_str());
+            ::ProfilerStart((log_dir / "cpu.profile").string().c_str());
         }
 #endif
 
@@ -214,14 +212,14 @@ int program::end()
 
 void program::do_init()
 {
-    auto dir = config_.get<fs::path>("dir");
-    if (! fs::exists(dir))
-        fs::mkdir(dir);
+    auto vast_dir = config_.get<fs::path>("vast-dir");
+    if (! fs::exists(vast_dir))
+        fs::mkdir(vast_dir);
 
     util::LOGGER = new util::logger(
         config_.get<int>("console-verbosity"),
         config_.get<int>("log-verbosity"),
-        dir / config_.get<fs::path>("log-dir"));
+        config_.get<fs::path>("log-dir"));
 
     LOG(info, core) << " _   _____   __________";
     LOG(info, core) << "| | / / _ | / __/_  __/";
