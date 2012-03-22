@@ -34,8 +34,8 @@ public:
         return std::move(future);
     }
 
-    /// Starts the I/O loop and block.
-    void start();
+    /// Starts the I/O loop and blocks.
+    void start(util::queue<std::exception_ptr>& errors);
 
     /// Waits until all handler finish execution normally and then terminate.
     void stop();
@@ -48,7 +48,8 @@ public:
     boost::asio::io_service& service();
 
 private:
-    void run_worker();
+    /// Executes one queued task.
+    void execute_task();
 
     ze::component component_;
     std::unique_ptr<boost::asio::io_service::work> work_;

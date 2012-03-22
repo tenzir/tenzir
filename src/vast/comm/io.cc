@@ -13,24 +13,47 @@ io::io(unsigned zmq_threads, unsigned asio_hint)
 {
 }
 
-//void io::add_thread()
-//{
-//    threads_.emplace_back([&] { run(); });
-//}
-//
-//void io::remove_thread()
-//{
-//}
-
-void io::start()
+void io::start(util::queue<std::exception_ptr>& errors)
 {
-    component_.io_service().run();
+    for (auto i = 0u; i < std::thread::hardware_concurrency(); ++i)
+        threads_.emplace_back(
+            [&]
+            {
+                LOG(debug, comm)
+                    << "spawned new i/o thread thread "
+                    << std::this_thread::get_id();
+
+                try
+                {
+                    component_.io_service().run();
+                }
+                catch (...)
+                {
+                    std::exception_ptr e = std::current_exception();
+                    errors.push(e);
+
+                    LOG(fatal, comm)
+                        << "uncaught exception thrown in thread "
+                        << std::this_thread::get_id();
+                }
+            });
 }
 
 void io::stop()
 {
     LOG(verbose, comm) << "finishing outstanding I/O operations";
+
+    /// FIXME: Even after removing the work sentinal, io_service::run does not
+    /// return. Only calling io_service::stop seems to really make the thread
+    /// exit. To fix this, we need to figure our *why* io_service::run does not
+    /// return.
     work_.reset();
+
+    for (auto& thread : threads_)
+    {
+        LOG(debug, comm) << "joining thread " << thread.get_id();
+        thread.join();
+    }
 }
 
 void io::terminate()
@@ -48,27 +71,10 @@ boost::asio::io_service& io::service()
     return component_.io_service();
 }
 
-void io::run_worker()
+void io::execute_task()
 {
-    try
-    {
-        while (true)
-        {
-            auto task = tasks_.pop();
-            task();
-        }
-    }
-    catch (...)
-    {
-        std::exception_ptr e = std::current_exception();
-        // FIXME
-        //errors.push(e);
-
-        //LOG(fatal, comm)
-        //    << "unexpected exception thrown in thread "
-        //    << std::this_thread::get_id()
-        //    << " (" << name_ << ')';
-    }
+    auto task = tasks_.pop();
+    task();
 }
 
 } // namespace comm

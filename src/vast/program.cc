@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <boost/exception/diagnostic_information.hpp> 
+#include "vast/exception.h"
 #include "vast/fs/path.h"
 #include "vast/fs/operations.h"
 #include "vast/meta/taxonomy.h"
@@ -26,6 +27,7 @@ logger* LOGGER;
 program::program()
   : terminating_(false)
   , return_(EXIT_SUCCESS)
+  , ingestor_(io_)
   , profiler_(io_.service())
 {
 }
@@ -64,6 +66,10 @@ bool program::init(int argc, char *argv[])
 
         do_init();
         return true;
+    }
+    catch (config_exception const& e)
+    {
+        std::cerr << e.what() << std::endl;
     }
     catch (boost::program_options::unknown_option const& e)
     {
@@ -125,13 +131,14 @@ void program::start()
             }
         }
 
-        // Launch the components.
         if (config_.check("ingestor") || config_.check("all"))
         {
-            ;
+            ingestor_.init(config_.get<std::string>("ingest.ip"),
+                           config_.get<unsigned>("ingest.port"));
         }
 
-        // FIXME: Wait for a signal or an error.
+        io_.start(errors_);
+
         std::exception_ptr error = errors_.pop();
         if (error)
             std::rethrow_exception(error);
@@ -173,6 +180,8 @@ void program::stop()
         }
 #endif
 
+        io_.stop();
+
         if (config_.check("profile"))
             profiler_.stop();
 
@@ -187,8 +196,7 @@ void program::stop()
     }
     else
     {
-        // TODO: Tear down all remaining moving parts.
-        ;
+        io_.terminate();
     }
 }
 

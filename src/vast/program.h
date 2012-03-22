@@ -6,6 +6,7 @@
 #include "vast/configuration.h"
 #include "vast/comm/io.h"
 #include "vast/meta/taxonomy_manager.h"
+#include "vast/store/ingestor.h"
 #include "vast/util/profiler.h"
 #include "vast/util/queue.h"
 
@@ -54,9 +55,10 @@ private:
 
     configuration config_;
     comm::io io_;
-    util::profiler profiler_;
+    store::ingestor ingestor_;
     meta::taxonomy_manager tax_manager_;
 
+    util::profiler profiler_;
     util::queue<std::exception_ptr> errors_;
 };
 
