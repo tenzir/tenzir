@@ -91,7 +91,6 @@ while [ $# -ne 0 ]; do
             ;;
         --prefix=*)
             append_cache_entry CMAKE_INSTALL_PREFIX PATH   $optarg
-            append_cache_entry VAST_ROOT_DIR        PATH   $optarg
             ;;
         --enable-debug)
             append_cache_entry ENABLE_DEBUG         BOOL   true
