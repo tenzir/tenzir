@@ -51,7 +51,7 @@ configuration::configuration()
     component.add_options()
         ("all,a", "launch all components")
         ("ingestor,I", "launch the ingestor")
-        ("database,D", "create a database locally")
+        ("database,D", "launch the database")
         ("query-manager,Q", "launch the query manager")
     ;
 
