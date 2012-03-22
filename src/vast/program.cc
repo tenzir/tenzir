@@ -96,12 +96,8 @@ void program::start()
                 config_.get<fs::path>("log-dir") /
                 "profiler.log";
 
-            typedef std::chrono::duration<unsigned, std::ratio<1>> seconds;
-            seconds interval(config_.get<unsigned>("profiler-interval"));
-
-            profiler_.init(
-                filename,
-                std::chrono::duration_cast<util::duration>(interval));
+            auto interval = config_.get<unsigned>("profiler-interval");
+            profiler_.init(filename, std::chrono::milliseconds(interval));
 
             profiler_.start();
         }
