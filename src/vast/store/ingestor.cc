@@ -23,18 +23,17 @@ void ingestor::init(std::string const& host, unsigned port)
         port,
         [&](comm::connection_ptr const& conn)
         {
-            comm::broccoli broccoli(conn, event_handler_);
-            broccoli.subscribe("*");
-            broccoli.run(error_handler_);
+            auto bro = std::make_shared<comm::broccoli>(conn, event_handler_);
+            bro->subscribe("*");
+            bro->run(error_handler_);
 
             std::lock_guard<std::mutex> lock(mutex_);
-            broccolis_.push_back(std::move(broccoli));
+            broccolis_.push_back(bro);
         });
 }
 
 void ingestor::dispatch(std::shared_ptr<ze::event> const& event)
 {
-    LOG(debug, store) << "ingesting new event";
     LOG(debug, store) << *event;
     // TODO: Send the event down-the-line for stream querying & storing.
 }
@@ -48,9 +47,9 @@ void ingestor::disconnect(comm::connection_ptr const& conn)
     auto end = std::remove_if(
         broccolis_.begin(),
         broccolis_.end(),
-        [&conn](comm::broccoli const& broccoli)
+        [&conn](std::shared_ptr<comm::broccoli> const& broccoli)
         {
-            return conn == broccoli.connection();
+            return conn == broccoli->connection();
         });
 
     broccolis_.erase(end, broccolis_.end());

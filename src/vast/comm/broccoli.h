@@ -12,6 +12,9 @@ namespace comm {
 /// A Broccoli session.
 class broccoli
 {
+    broccoli(broccoli const&) = delete;
+    broccoli& operator=(broccoli const&) = delete;
+
 public:
     /// Initializes Broccoli. This function must be called once before any call
     /// into the Broccoli library to set up the necessary SSL context.
@@ -24,26 +27,8 @@ public:
     /// @param handler The event handler to invoke for each new arriving event.
     broccoli(connection_ptr const& conn, event_handler const& handler);
 
-    /// Moves another broccoli instance.
-    /// @param other The broccoli instance to move.
-    /// @note It is okay to let the strand of the other broccoli go out of
-    ///     scope, because handlers "posted through the strand that have not
-    ///     yet been invoked will still be dispatched in a way that meets the
-    ///     guarantee of non-concurrency."
-    broccoli(broccoli&& other);
-
-    broccoli(broccoli const&) = delete;
-
-    /// Assigns a broccoli to this instance.
-    /// @param other The right-hand side of the assignment.
-    broccoli& operator=(broccoli other);
-
     /// Destroys the internal Broccoli handle if it is still valid.
     ~broccoli();
-
-    /// Swaps two Broccoli objects.
-    /// @param other The other broccoli instance.
-    void swap(broccoli& other);
 
     /// Subscribes to a single event. This function must be called before run.
     /// @param event The name of the event to register.
@@ -141,9 +126,9 @@ private:
     static bool initialized;
 
     connection_ptr conn_;
+    boost::asio::strand strand_;
     event_handler event_handler_;
     conn_handler error_handler_;
-    std::unique_ptr<boost::asio::strand> strand_;
     BroConn* bc_;
 };
 

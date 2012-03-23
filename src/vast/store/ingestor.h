@@ -36,7 +36,7 @@ private:
     comm::server server_;
     comm::event_handler event_handler_;
     comm::conn_handler error_handler_;
-    std::vector<comm::broccoli> broccolis_;
+    std::vector<std::shared_ptr<comm::broccoli>> broccolis_;
     std::mutex mutex_;
 };
 

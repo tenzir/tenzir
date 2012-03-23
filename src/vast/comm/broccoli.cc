@@ -5,14 +5,50 @@
 #include "vast/comm/connection.h"
 #include "vast/comm/exception.h"
 #include "vast/util/logger.h"
-#include "vast/util/make_unique.h"
 
 namespace vast {
 namespace comm {
 
+/// Converts a Broccoli type to the corresponding 0event type.
+static ze::value_type to_ze_type(int broccoli_type)
+{
+    switch (broccoli_type)
+    {
+        default:
+            return ze::invalid_type;
+        case BRO_TYPE_BOOL:
+            return ze::bool_type;
+        case BRO_TYPE_INT:
+            return ze::int_type;
+        case BRO_TYPE_COUNT:
+        case BRO_TYPE_COUNTER:
+            return ze::uint_type;
+        case BRO_TYPE_DOUBLE:
+        case BRO_TYPE_TIME:
+        case BRO_TYPE_INTERVAL:
+            return ze::double_type;
+        case BRO_TYPE_STRING:
+            return ze::string_type;
+        case BRO_TYPE_VECTOR:
+            return ze::vector_type;
+        case BRO_TYPE_SET:
+            return ze::set_type;
+        case BRO_TYPE_TABLE:
+            return ze::table_type;
+        case BRO_TYPE_RECORD:
+            return ze::record_type;
+        case BRO_TYPE_IPADDR:
+            return ze::address_type;
+        case BRO_TYPE_SUBNET:
+            return ze::prefix_type;
+        case BRO_TYPE_PORT:
+            return ze::port_type;
+    }
+}
+
 bool broccoli::initialized = false;
 
-void broccoli::init(bool calltrace, bool messages)
+void broccoli::init(bool messages, bool calltrace)
 {
     if (calltrace)
     {
@@ -36,10 +72,8 @@ void broccoli::init(bool calltrace, bool messages)
 
 broccoli::broccoli(connection_ptr const& conn, event_handler const& handler)
   : conn_(conn)
+  , strand_(conn_->socket().get_io_service())
   , event_handler_(handler)
-  , strand_(
-      std::make_unique<boost::asio::strand>(
-          conn_->socket().get_io_service()))
   , bc_(nullptr)
 {
     assert(initialized);
@@ -54,39 +88,11 @@ broccoli::broccoli(connection_ptr const& conn, event_handler const& handler)
         throw broccoli_exception("bro_conn_new_socket");
 }
 
-broccoli::broccoli(broccoli&& other)
-  : conn_(std::move(other.conn_))
-  , event_handler_(std::move(other.event_handler_))
-  , error_handler_(std::move(other.error_handler_))
-  , strand_(std::move(other.strand_))
-  , bc_(other.bc_)
-{
-    other.bc_ = nullptr;
-}
-
-broccoli& broccoli::operator=(broccoli other)
-{
-    swap(other);
-    return *this;
-}
-
-
 broccoli::~broccoli()
 {
     if (bc_)
         bro_conn_delete(bc_);
 }
-
-void broccoli::swap(broccoli& other)
-{
-    using std::swap;
-    swap(conn_, other.conn_);
-    swap(event_handler_, other.event_handler_);
-    swap(error_handler_, other.error_handler_);
-    swap(strand_, other.strand_);
-    swap(bc_, other.bc_);
-}
-
 
 void broccoli::subscribe(std::string const& event)
 {
@@ -98,9 +104,7 @@ void broccoli::subscribe(std::string const& event)
 
 void broccoli::send(std::vector<uint8_t> const& raw)
 {
-    LOG(debug, broccoli)
-        << "sending raw event of size " << raw.size();
-
+    LOG(debug, broccoli) << "sending raw event of size " << raw.size();
     bro_event_send_raw(bc_, raw.data(), raw.size());
 }
 
@@ -135,7 +139,6 @@ connection_ptr broccoli::connection() const
     return conn_;
 }
 
-
 int broccoli::factory::table_callback(void *key_data, void *val_data,
                                       table_data const* data)
 {
@@ -150,7 +153,7 @@ int broccoli::factory::table_callback(void *key_data, void *val_data,
 int broccoli::factory::set_callback(void *key_data, set_data const* data)
 {
     ze::value key = make_value(data->key_type, key_data);
-    data->set->insert(std::move(data));
+    data->set->insert(std::move(key));
 
     return 1;
 }
@@ -162,11 +165,10 @@ void broccoli::factory::make_event(ze::event& event, BroEvMeta* meta)
 
     event.args().reserve(meta->ev_numargs);
     for (int i = 0; i < meta->ev_numargs; ++i)
-    {
-        ze::value val = make_value(meta->ev_args[i].arg_type,
-                                   meta->ev_args[i].arg_data);
-        event.args().push_back(std::move(val));
-    }
+        event.args().emplace_back(
+            make_value(meta->ev_args[i].arg_type,
+                       meta->ev_args[i].arg_data));
+
     event.args().shrink_to_fit();
 }
 
@@ -195,13 +197,14 @@ ze::value broccoli::factory::make_value(int type, void* bro_val)
         case BRO_TYPE_BOOL:
             return {*static_cast<bool*>(bro_val)};
         case BRO_TYPE_INT:
+            return {*static_cast<int64_t*>(bro_val)};
         case BRO_TYPE_COUNT:
         case BRO_TYPE_COUNTER:
-            return {*static_cast<bool*>(bro_val)};
+            return {*static_cast<uint64_t*>(bro_val)};
         case BRO_TYPE_DOUBLE:
-        case BRO_TYPE_TIME: // TODO: make time a first-class value in 0event.
+        case BRO_TYPE_TIME:
         case BRO_TYPE_INTERVAL:
-            return {*static_cast<bool*>(bro_val)};
+            return {*static_cast<double*>(bro_val)};
         case BRO_TYPE_STRING:
             {
                 BroString* s = static_cast<BroString*>(bro_val);
@@ -243,16 +246,16 @@ ze::value broccoli::factory::make_value(int type, void* bro_val)
             }
         case BRO_TYPE_SET:
             {
-                ze::set set;
                 BroSet* bro_set = static_cast<BroSet*>(bro_val);
                 if (! bro_set_get_size(bro_set))
-                    return set;
+                    return ze::set();
 
                 // Empty sets have BRO_TYPE_UNKNOWN. At this point, we know
                 // that the set has a valid type becuase it is not empty.
                 int key_type;
                 bro_set_get_type(bro_set, &key_type);
 
+                ze::set set(to_ze_type(key_type));
                 set_data data{key_type, &set};
                 bro_set_foreach(bro_set, (BroSetCallback)set_callback, &data);
 
@@ -260,15 +263,15 @@ ze::value broccoli::factory::make_value(int type, void* bro_val)
             }
         case BRO_TYPE_TABLE:
             {
-                ze::table table;
                 BroTable* bro_table = static_cast<BroTable*>(bro_val);
                 if (! bro_table_get_size(bro_table))
-                    return table;
+                    return ze::table();
 
                 int key_type, val_type;
                 bro_table_get_types(bro_table, &key_type, &val_type);
 
-                table_data data{key_type,val_type, &table};
+                ze::table table(to_ze_type(key_type), to_ze_type(val_type));
+                table_data data{key_type, val_type, &table};
                 bro_table_foreach(bro_table, (BroTableCallback)table_callback, &data);
 
                 return table;
@@ -543,12 +546,25 @@ BroEvent* broccoli::reverse_factory::make_event(ze::event const& event)
 
 void broccoli::callback(BroConn* bc, void* user_data, BroEvMeta* meta)
 {
-    LOG(debug, broccoli) << "callback for " << meta->ev_name;
-
-    auto event = std::make_shared<ze::event>();
-    factory::make_event(*event, meta);
-    event_handler* handler = static_cast<event_handler*>(user_data);
-    (*handler)(event);
+    try
+    {
+        auto event = std::make_shared<ze::event>();
+        factory::make_event(*event, meta);
+        event_handler* handler = static_cast<event_handler*>(user_data);
+        (*handler)(event);
+    }
+    catch (ze::exception const& e)
+    {
+        LOG(error, broccoli)
+            << "could not create ze::event from broccoli event '"
+            << meta->ev_name << "' (" << e.what() << ')';
+    }
+    catch (exception const& e)
+    {
+        LOG(error, broccoli)
+            << "error with broccoli event '"
+            << meta->ev_name << "' (" << e.what() << ')';
+    }
 }
 
 void broccoli::async_read()
@@ -556,7 +572,7 @@ void broccoli::async_read()
     LOG(debug, broccoli) << *conn_ << ": starting async read";
     conn_->socket().async_read_some(
         boost::asio::null_buffers(),
-        strand_->wrap(
+        strand_.wrap(
             [&](boost::system::error_code const& ec, size_t bytes_transferred)
             {
                 handle_read(ec);
@@ -565,24 +581,21 @@ void broccoli::async_read()
 
 void broccoli::handle_read(boost::system::error_code const& ec)
 {
-    if (! (ec || bro_conn_process_input(bc_)))
-    {
+    if (! ec && ! bro_conn_process_input(bc_))
         LOG(debug, broccoli) << *conn_ <<  ": no input to process";
-        return;
-    }
 
-    if (ec == boost::asio::error::would_block)
+    if (! ec || ec == boost::asio::error::would_block)
     {
         async_read();
         return;
     }
-    else if (ec == boost::asio::error::eof)
+
+    if (ec == boost::asio::error::eof)
         LOG(info, broccoli) << *conn_ << ": remote broccoli disconnected";
     else
         LOG(error, broccoli) << *conn_ << ": " << ec.message();
 
     error_handler_(conn_);
-
 }
 
 } // namespace comm
