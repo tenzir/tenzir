@@ -4,46 +4,43 @@
 #include <iosfwd>
 #include <boost/asio/io_service.hpp>
 #include <boost/asio/ip/tcp.hpp>
-#include <boost/noncopyable.hpp>
 
 namespace vast {
 namespace comm {
 
 /// A TCP connection.
-class connection : boost::noncopyable
+class connection
 {
     /// Sets the connection description upon accept.
     friend class server;
 
+    connection(connection const&) = delete;
+    connection& operator=(connection const&) = delete;
+
 public:
     /// Constructor.
-    /// \param io_service The io service object for that connection.
+    /// @param io_service The io service object for that connection.
     explicit connection(boost::asio::io_service& io_service);
 
-    /// Get a reference to the underlying socket of the connection.
-    /// \return A reference to the underlying socket.
+    /// Gets a reference to the underlying socket of the connection.
+    /// @return A reference to the underlying socket.
     boost::asio::ip::tcp::socket& socket();
 
-    /// Get a const reference to the underlying socket of the connection.
-    /// \return A const reference to the underlying socket.
+    /// Gets a const reference to the underlying socket of the connection.
+    /// @return A const reference to the underlying socket.
     boost::asio::ip::tcp::socket const& socket() const;
 
-    /// Get a string representation of the local endpoint.
-    /// \return A string of the form \c address:port
+    /// Gets a string representation of the local endpoint.
+    /// @return A string of the form \c address:port
     std::string const& local() const;
 
-    /// Get a string representation of the remote endpoint.
-    /// \return A string of the form \c address:port
+    /// Gets a string representation of the remote endpoint.
+    /// @return A string of the form \c address:port
     std::string const& remote() const;
 
 private:
-    /// The underlying socket.
     boost::asio::ip::tcp::socket socket_;
-
-    /// Description of the local endpoint.
     std::string local_;
-
-    /// Description of the remote endpoint.
     std::string remote_;
 };
 
