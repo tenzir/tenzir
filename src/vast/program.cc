@@ -174,10 +174,13 @@ void program::stop()
         }
 #endif
 
-        io_.stop();
+        if (config_.check("ingestor") || config_.check("all"))
+            ingestor_.stop();
 
         if (config_.check("profile"))
             profiler_.stop();
+
+        io_.stop();
 
         LOG(verbose, core) << "state saved";
 

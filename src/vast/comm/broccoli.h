@@ -10,12 +10,14 @@ namespace vast {
 namespace comm {
 
 /// A Broccoli session.
-class broccoli
+class broccoli : public std::enable_shared_from_this<broccoli>
 {
     broccoli(broccoli const&) = delete;
     broccoli& operator=(broccoli const&) = delete;
 
 public:
+    typedef std::function<void(std::shared_ptr<broccoli>)> error_handler;
+
     /// Initializes Broccoli. This function must be called once before any call
     /// into the Broccoli library to set up the necessary SSL context.
     /// @param messages If @c true, show message contents and protocol details.
@@ -43,12 +45,11 @@ public:
     void send(std::vector<uint8_t> const& raw);
 
     /// Starts sending/receiving events from the underlying connection.
-    /// @param error_handler Invoked when Broccoli experiences an error.
-    void run(conn_handler const& error_handler);
+    /// @param handler Invoked when Broccoli experiences an error.
+    void run(error_handler handler);
 
-    /// Retrieves the underlying connection.
-    /// @return The connection object;
-    connection_ptr connection() const;
+    /// Signals the connection to shutdown.
+    void stop();
 
 private:
     /// Creates a 0event from a Broccoli event.
@@ -119,17 +120,20 @@ private:
     void async_read();
 
     /// The read handler which is executed when data is available for reading.
-    /// \param ec Boost.Asio error code.
-    void handle_read(boost::system::error_code const& ec);
+    /// @param ec Boost Asio error code.
+    /// @param bytes_transferred The number of bytes transferred.
+    void handle_read(boost::system::error_code const& ec,
+                     size_t bytes_transferred);
 
     /// Flag indicating whether Broccoli has already been initialized.
     static bool initialized;
 
+    BroConn* bc_;
     connection_ptr conn_;
     boost::asio::strand strand_;
     event_handler event_handler_;
-    conn_handler error_handler_;
-    BroConn* bc_;
+    error_handler error_handler_;
+    bool terminate_;
 };
 
 } // namespace comm

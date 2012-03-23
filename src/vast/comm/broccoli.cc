@@ -71,10 +71,10 @@ void broccoli::init(bool messages, bool calltrace)
 }
 
 broccoli::broccoli(connection_ptr const& conn, event_handler const& handler)
-  : conn_(conn)
+  : bc_(nullptr)
+  , conn_(conn)
   , strand_(conn_->socket().get_io_service())
   , event_handler_(handler)
-  , bc_(nullptr)
 {
     assert(initialized);
 
@@ -118,9 +118,9 @@ void broccoli::send(ze::event const& event)
     bro_event_free(bro_event);
 }
 
-void broccoli::run(conn_handler const& error_handler)
+void broccoli::run(error_handler handler)
 {
-    error_handler_ = error_handler;
+    error_handler_ = std::move(handler);
 
     bro_event_registry_request(bc_);
 
@@ -134,9 +134,10 @@ void broccoli::run(conn_handler const& error_handler)
     async_read();
 }
 
-connection_ptr broccoli::connection() const
+void broccoli::stop()
 {
-    return conn_;
+    LOG(verbose, broccoli) << *conn_ << ": shutting down";
+    terminate_ = true;
 }
 
 int broccoli::factory::table_callback(void *key_data, void *val_data,
@@ -573,14 +574,18 @@ void broccoli::async_read()
     conn_->socket().async_read_some(
         boost::asio::null_buffers(),
         strand_.wrap(
-            [&](boost::system::error_code const& ec, size_t bytes_transferred)
-            {
-                handle_read(ec);
-            }));
+            std::bind(&broccoli::handle_read,
+                      shared_from_this(),
+                      std::placeholders::_1,
+                      std::placeholders::_2)));
 }
 
-void broccoli::handle_read(boost::system::error_code const& ec)
+void broccoli::handle_read(boost::system::error_code const& ec,
+                           size_t bytes_transferred)
 {
+    if (terminate_)
+        return;
+
     if (! ec && ! bro_conn_process_input(bc_))
         LOG(debug, broccoli) << *conn_ <<  ": no input to process";
 
@@ -595,7 +600,8 @@ void broccoli::handle_read(boost::system::error_code const& ec)
     else
         LOG(error, broccoli) << *conn_ << ": " << ec.message();
 
-    error_handler_(conn_);
+    stop();
+    error_handler_(shared_from_this());
 }
 
 } // namespace comm

@@ -23,10 +23,13 @@ public:
     /// @param event The name of the event to subscribe to.
     void subscribe(std::string event);
 
-    /// Starts event ingestion at a given endpoint.
+    /// Starts listening for Broccoli connections at a given endpoint.
     /// @param host The address or hostname where to listen.
     /// @param port The TCP port number to bind to.
     void init(std::string const& host, unsigned port);
+
+    /// Stops ingesting events by closing active connections.
+    void stop();
 
 private:
     /// Stores an event.
@@ -35,12 +38,12 @@ private:
 
     /// Remove a connection after an error or a remote disconnect.
     /// @param conn The connection of a Broccoli session.
-    void disconnect(comm::connection_ptr const& conn);
+    void disconnect(std::shared_ptr<comm::broccoli> const& conn);
 
     comm::server server_;
     std::vector<std::string> events_;
     comm::event_handler event_handler_;
-    comm::conn_handler error_handler_;
+    comm::broccoli::error_handler error_handler_;
     std::vector<std::shared_ptr<comm::broccoli>> broccolis_;
     std::mutex mutex_;
 };
