@@ -19,6 +19,10 @@ public:
     /// Constructor.
     ingestor(comm::io& io);
 
+    /// Adds an event name to the list of events to subscribe to.
+    /// @param event The name of the event to subscribe to.
+    void subscribe(std::string event);
+
     /// Starts event ingestion at a given endpoint.
     /// @param host The address or hostname where to listen.
     /// @param port The TCP port number to bind to.
@@ -34,6 +38,7 @@ private:
     void disconnect(comm::connection_ptr const& conn);
 
     comm::server server_;
+    std::vector<std::string> events_;
     comm::event_handler event_handler_;
     comm::conn_handler error_handler_;
     std::vector<std::shared_ptr<comm::broccoli>> broccolis_;
