@@ -48,7 +48,14 @@ public:
     /// @param handler Invoked when Broccoli experiences an error.
     void run(error_handler handler);
 
-    /// Signals the connection to shutdown.
+    /// Signals the broccoli session to shutdown. Since a broccoli instance is
+    /// handed to Boost Asio via @c shared_from_this(), it has potentially
+    /// infinite lifetime because Asio will continue to perform asynchronous
+    /// read attempts on the underlying connection until an error with the
+    /// connection occurs. This is why this function exists: it breaks this
+    /// infinite handler re-insertion by explicitly setting a flag that will
+    /// cause the next handler invocation to return immediately, without
+    /// performing further read operations.
     void stop();
 
 private:
