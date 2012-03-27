@@ -184,10 +184,6 @@ void program::stop()
 
         LOG(verbose, core) << "state saved";
 
-        // FIXME: this is not yet working correctly when stop is called from
-        // the SIGINT handler.  What should happen by pushing an empty
-        // exception_ptr (meaning, no error) onto the error queue is that
-        // start() resumes executing after having waited in errors_.pop();
         if (errors_.empty())
             errors_.push(std::exception_ptr());
     }
