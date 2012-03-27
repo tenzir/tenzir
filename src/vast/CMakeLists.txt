@@ -1,6 +1,11 @@
 include_directories(..)
 
-set(libs ${Boost_LIBRARIES} ${Broccoli_LIBRARIES} ${0event_LIBRARIES})
+set(libs
+    ${0event_LIBRARIES}
+    ${Boost_LIBRARIES}
+    ${Broccoli_LIBRARIES}
+    ${ZeroMQ_LIBRARIES})
+
 if (USE_PERFTOOLS)
     set(libs ${libs} ${Perftools_LIBRARIES})
 endif ()
