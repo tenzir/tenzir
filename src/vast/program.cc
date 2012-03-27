@@ -127,14 +127,19 @@ void program::start()
         comm::broccoli::init(config_.check("broccoli-messages"),
                              config_.check("broccoli-calltrace"));
 
-        if (config_.check("ingestion") || config_.check("all"))
+        if (config_.check("ingest") || config_.check("all"))
         {
+            std::vector<std::string> events;
+            if (config_.check("ingest.events"))
+                events = config_.get<std::vector<std::string>>("ingest.events");
+
             ingestion_.init(
-                config_.get<std::string>("ingestion.ip"),
-                config_.get<unsigned>("ingestion.port"),
+                config_.get<std::string>("ingest.ip"),
+                config_.get<unsigned>("ingest.port"),
+                events,
                 vast_dir / "archive",
-                config_.get<size_t>("ingestion.max-chunk-events"),
-                config_.get<size_t>("ingestion.max-segment-size") * 1000000);
+                config_.get<size_t>("ingest.max-chunk-events"),
+                config_.get<size_t>("ingest.max-segment-size") * 1000000);
         }
 
         io_.start(errors_);
@@ -177,7 +182,7 @@ void program::stop()
         }
 #endif
 
-        if (config_.check("ingestion") || config_.check("all"))
+        if (config_.check("ingest") || config_.check("all"))
             ingestion_.stop();
 
         if (config_.check("profile"))

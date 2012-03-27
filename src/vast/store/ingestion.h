@@ -18,6 +18,7 @@ public:
 
     void init(std::string const& ip,
               unsigned port,
+              std::vector<std::string> const& events,
               fs::path const& directory,
               size_t max_chunk_events,
               size_t max_segment_size);

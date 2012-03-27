@@ -53,7 +53,8 @@ configuration::configuration()
     po::options_description component("component options");
     component.add_options()
         ("all,a", "launch all components")
-        ("ingestion,I", "launch the ingestion component")
+        ("ingest,I", "launch the ingestion component")
+        ("load,L", "launch the loading component")
         ("query,Q", "launch the query component")
     ;
 
@@ -62,19 +63,21 @@ configuration::configuration()
         ("print-taxonomy,T", "print the parsed event taxonomy")
     ;
 
-    po::options_description ingestion("ingestion options");
-    ingestion.add_options()
-        ("ingestion.ip", po::value<std::string>()->default_value("127.0.0.1"),
+    po::options_description ingest("ingestion options");
+    ingest.add_options()
+        ("ingest.ip", po::value<std::string>()->default_value("127.0.0.1"),
          "IP address of the ingestor")
-        ("ingestion.port", po::value<unsigned>()->default_value(42000u),
+        ("ingest.port", po::value<unsigned>()->default_value(42000u),
          "port of the ingestor")
-        ("ingestion.max-chunk-events", po::value<size_t>()->default_value(1000),
-         "maximum number of events per chunk")
-        ("ingestion.max-segment-size", po::value<size_t>()->default_value(1u),
+        ("ingest.events", po::value<std::vector<std::string>>()->multitoken(),
+         "explicit list of events to ingest")
+        ("ingest.max-chunk-events", po::value<size_t>()->default_value(1000),
+         "maximum events per chunk")
+        ("ingest.max-segment-size", po::value<size_t>()->default_value(1u),
          "maximum segment size in MB")
     ;
 
-    all_.add(general).add(advanced).add(component).add(taxonomy).add(ingestion);
+    all_.add(general).add(advanced).add(component).add(taxonomy).add(ingest);
     visible_.add(general).add(component);
 }
 
@@ -119,13 +122,12 @@ void configuration::init()
 {
     po::notify(config_);
 
-    conflicts("all", "dispatcher");
-    conflicts("all", "database");
-    conflicts("all", "query-manager");
+    conflicts("all", "ingest");
+    conflicts("all", "load");
+    conflicts("all", "query");
+    conflicts("ingest", "load");
 
     depends("all", "taxonomy");
-    depends("database", "taxonomy");
-    depends("dispatcher", "taxonomy");
     depends("dump-taxonomy", "taxonomy");
 
     int v = get<int>("console-verbosity");

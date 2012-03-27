@@ -1,5 +1,7 @@
 #include "vast/store/ingestion.h"
 
+#include "vast/util/logger.h"
+
 namespace vast {
 namespace store {
 
@@ -13,16 +15,17 @@ ingestion::ingestion(ze::io& io)
 
 void ingestion::init(std::string const& ip,
                      unsigned port,
+                     std::vector<std::string> const& events,
                      fs::path const& directory,
                      size_t max_chunk_events,
                      size_t max_segment_size)
 {
     event_source_.init(ip, port);
-    // FIXME: debugging only.
-    event_source_.subscribe("new_connection");
-    event_source_.subscribe("http_header");
-    event_source_.subscribe("http_request");
-    event_source_.subscribe("http_reply");
+    for (const auto& event : events)
+    {
+        LOG(verbose, store) << "subscribing to event " << event;
+        event_source_.subscribe(event);
+    }
 
     archiver_.init(directory, max_chunk_events, max_segment_size);
 }
