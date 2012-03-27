@@ -53,36 +53,40 @@ osegment::osegment(size_t max_chunk_size)
 
 void osegment::put(ze::event const& event)
 {
-    auto& chunk = *chunks_.back();
-
     header_.respect(event);
-
+    auto& chunk = *chunks_.back();
     chunk.put(event);
     if (chunk.buffer().size() >= max_chunk_size_)
     {
         chunk.flush();
+        current_size_ += sizeof(ze::serialization::chunk_header);
+        current_size_ += chunk.buffer().size();
 
         LOG(debug, store)
             << "new segment chunk (old chunk size: "
             << chunk.buffer().size() << ')';
 
-        current_size_ += chunk.buffer().size();
         chunks_.emplace_back(new ochunk(method_));
     }
+}
+
+size_t osegment::size() const
+{
+    return current_size_;
 }
 
 void osegment::flush(std::ostream& out)
 {
     LOG(debug, store) << "flushing segment";
 
+    // Only the last chunk has not yet been flushed.
+    chunks_.back()->flush();
+
     ze::serialization::oarchive oa(out);
     oa << header_;
     oa << chunks_.size();
     for (auto& chunk : chunks_)
-    {
-        chunk->flush();
         oa << *chunk;
-    }
 }
 
 } // namespace store

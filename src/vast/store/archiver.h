@@ -4,7 +4,8 @@
 #include <ze/component.h>
 #include <ze/sink.h>
 #include "vast/fs/path.h"
-#include "vast/store/segment.h"
+#include "vast/fs/fstream.h"
+#include "vast/store/forward.h"
 
 namespace vast {
 namespace store {
@@ -20,6 +21,8 @@ public:
     /// @param c The component the archiver belongs to.
     archiver(ze::component<ze::event>& c);
 
+    ~archiver();
+
     /// Initializes the archiver.
     /// @param directory The directory in which to archive events.
     void init(fs::path const& directory);
@@ -28,6 +31,8 @@ private:
     void archive(ze::event_ptr&& event);
 
     std::unique_ptr<osegment> segment_;
+    size_t max_segment_size_;
+    fs::ofstream file_;
 };
 
 } // namespace store

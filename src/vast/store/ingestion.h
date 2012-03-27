@@ -20,7 +20,6 @@ public:
               unsigned port,
               fs::path const& directory);
 
-    void start();
     void stop();
 
 private:
