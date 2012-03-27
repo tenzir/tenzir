@@ -134,7 +134,7 @@ void program::start()
                 config_.get<unsigned>("ingestion.port"),
                 vast_dir / "archive",
                 config_.get<size_t>("ingestion.max-chunk-events"),
-                config_.get<size_t>("ingestion.max-segment-size") * 1000);
+                config_.get<size_t>("ingestion.max-segment-size") * 1000000);
         }
 
         io_.start(errors_);
