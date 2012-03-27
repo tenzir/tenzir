@@ -14,7 +14,7 @@ namespace vast {
 
 configuration::configuration()
   : visible_("")
-  , all_("available options")
+  , all_("")
 {
     po::options_description general("general options");
     general.add_options()

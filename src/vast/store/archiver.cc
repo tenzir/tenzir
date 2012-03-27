@@ -27,7 +27,7 @@ void archiver::init(fs::path const& directory,
 {
     receive([&](ze::event_ptr&& event) { archive(std::move(event)); });
 
-    LOG(verbose, store) << "initializing archiver in directory " << directory;
+    LOG(verbose, store) << "initializing archiver in " << directory;
     if (! fs::exists(directory))
         fs::mkdir(directory);
 
