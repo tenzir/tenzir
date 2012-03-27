@@ -90,8 +90,6 @@ void osegment::clear()
 
 void osegment::flush(std::ostream& out)
 {
-    LOG(debug, store) << "flushing segment";
-
     // Only the last chunk has not yet been flushed.
     chunks_.back()->flush();
 

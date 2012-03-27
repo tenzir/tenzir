@@ -27,11 +27,14 @@ void archiver::init(fs::path const& directory,
 {
     receive([&](ze::event_ptr&& event) { archive(std::move(event)); });
 
-    LOG(debug, store) << "initializing archiver in directory " << directory;
+    LOG(verbose, store) << "initializing archiver in directory " << directory;
     if (! fs::exists(directory))
         fs::mkdir(directory);
 
     file_.open(directory / "foo", std::ios::binary | std::ios::out);
+
+    LOG(verbose, store)
+        << "setting maximum segment size to " << max_segment_size << " bytes";
 
     max_segment_size_ = max_segment_size;
     segment_ = std::make_unique<osegment>(max_chunk_events);
