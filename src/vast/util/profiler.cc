@@ -58,7 +58,7 @@ profiler::profiler(boost::asio::io_service& io_service)
 {
 }
 
-void profiler::init(fs::path const& filename, util::duration interval)
+void profiler::init(fs::path const& filename, ze::duration interval)
 {
     interval_ = interval;
 
@@ -78,7 +78,9 @@ void profiler::start()
 {
     assert(file_.is_open());
 
-    timer_.expires_from_now(interval_);
+    timer_.expires_from_now(
+        std::chrono::duration_cast<ze::clock::duration>(interval_));
+
     measurement now;
     timer_.async_wait(
         [&, now](boost::system::error_code const& ec)
@@ -101,7 +103,9 @@ void profiler::handle_timer(boost::system::error_code const& ec,
     measurement now;
     file_ << now << now - previous << std::endl;
 
-    timer_.expires_at(timer_.expires_at() + interval_);
+    timer_.expires_from_now(
+        std::chrono::duration_cast<ze::clock::duration>(interval_));
+
     timer_.async_wait(
         [&, now](boost::system::error_code const& ec)
         {

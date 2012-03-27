@@ -53,9 +53,8 @@ configuration::configuration()
     po::options_description component("component options");
     component.add_options()
         ("all,a", "launch all components")
-        ("ingestor,I", "launch the ingestor")
-        ("database,D", "launch the database")
-        ("query-manager,Q", "launch the query manager")
+        ("ingestion,I", "launch the ingestion component")
+        ("query,Q", "launch the query component")
     ;
 
     po::options_description taxonomy("taxonomy options");
@@ -63,15 +62,15 @@ configuration::configuration()
         ("print-taxonomy,T", "print the parsed event taxonomy")
     ;
 
-    po::options_description ingest("ingest options");
-    ingest.add_options()
-        ("ingest.ip", po::value<std::string>()->default_value("127.0.0.1"),
+    po::options_description ingestion("ingestion options");
+    ingestion.add_options()
+        ("ingestion.ip", po::value<std::string>()->default_value("127.0.0.1"),
          "IP address of the ingestor")
-        ("ingest.port", po::value<unsigned>()->default_value(42000u),
+        ("ingestion.port", po::value<unsigned>()->default_value(42000u),
          "port of the ingestor")
     ;
 
-    all_.add(general).add(advanced).add(component).add(taxonomy).add(ingest);
+    all_.add(general).add(advanced).add(component).add(taxonomy).add(ingestion);
     visible_.add(general).add(component);
 }
 

@@ -1,6 +1,6 @@
 #include <csignal>
 #include <cstdlib>
-#include "program.h"
+#include "vast/program.h"
 
 vast::program VAST;
 

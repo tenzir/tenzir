@@ -9,7 +9,6 @@
 #include "vast/meta/taxonomy.h"
 #include "vast/util/logger.h"
 #include "vast/util/make_unique.h"
-#include "vast/store/ingestor.h"
 #include "config.h"
 
 #ifdef USE_PERFTOOLS
@@ -27,7 +26,7 @@ logger* LOGGER;
 program::program()
   : terminating_(false)
   , return_(EXIT_SUCCESS)
-  , ingestor_(io_)
+  , ingestion_(io_)
   , profiler_(io_.service())
 {
 }
@@ -46,7 +45,7 @@ bool program::init(std::string const& filename)
     }
     catch (boost::program_options::unknown_option const& e)
     {
-        std::cerr << e.what() << ", try -h or --help" << std::endl;
+        std::cerr << e.what();
     }
 
     return false;
@@ -128,10 +127,11 @@ void program::start()
         comm::broccoli::init(config_.check("broccoli-messages"),
                              config_.check("broccoli-calltrace"));
 
-        if (config_.check("ingestor") || config_.check("all"))
+        if (config_.check("ingestion") || config_.check("all"))
         {
-            ingestor_.init(config_.get<std::string>("ingest.ip"),
-                           config_.get<unsigned>("ingest.port"));
+            ingestion_.init(config_.get<std::string>("ingestion.ip"),
+                            config_.get<unsigned>("ingestion.port"),
+                            vast_dir / "archive");
         }
 
         io_.start(errors_);
@@ -174,8 +174,8 @@ void program::stop()
         }
 #endif
 
-        if (config_.check("ingestor") || config_.check("all"))
-            ingestor_.stop();
+        if (config_.check("ingestion") || config_.check("all"))
+            ingestion_.stop();
 
         if (config_.check("profile"))
             profiler_.stop();

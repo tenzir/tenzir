@@ -81,6 +81,7 @@ find_package(Boost
     COMPONENTS
         date_time
         filesystem
+        iostreams
         log
         program_options
         regex

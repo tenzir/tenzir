@@ -24,9 +24,11 @@ static ze::value_type to_ze_type(int broccoli_type)
         case BRO_TYPE_COUNTER:
             return ze::uint_type;
         case BRO_TYPE_DOUBLE:
-        case BRO_TYPE_TIME:
-        case BRO_TYPE_INTERVAL:
             return ze::double_type;
+        case BRO_TYPE_TIME:
+            return ze::timepoint_type;
+        case BRO_TYPE_INTERVAL:
+            return ze::duration_type;
         case BRO_TYPE_STRING:
             return ze::string_type;
         case BRO_TYPE_VECTOR:
@@ -70,7 +72,7 @@ void broccoli::init(bool messages, bool calltrace)
     initialized = true;
 }
 
-broccoli::broccoli(connection_ptr const& conn, event_handler const& handler)
+broccoli::broccoli(connection_ptr const& conn, event_ptr_handler const& handler)
   : bc_(nullptr)
   , conn_(conn)
   , strand_(conn_->socket().get_io_service())
@@ -196,16 +198,26 @@ ze::value broccoli::factory::make_value(int type, void* bro_val)
             LOG(warn, broccoli) << "unsupported broccoli type (" << type << ")";
             break;
         case BRO_TYPE_BOOL:
-            return {*static_cast<bool*>(bro_val)};
+            return *static_cast<bool*>(bro_val);
         case BRO_TYPE_INT:
-            return {*static_cast<int64_t*>(bro_val)};
+            return *static_cast<int64_t*>(bro_val);
         case BRO_TYPE_COUNT:
         case BRO_TYPE_COUNTER:
-            return {*static_cast<uint64_t*>(bro_val)};
+            return *static_cast<uint64_t*>(bro_val);
         case BRO_TYPE_DOUBLE:
+            return *static_cast<double*>(bro_val);
         case BRO_TYPE_TIME:
+            {
+                ze::double_seconds secs(*static_cast<double*>(bro_val));
+                auto duration = std::chrono::duration_cast<ze::duration>(secs);
+                return ze::time_point(duration);
+            }
         case BRO_TYPE_INTERVAL:
-            return {*static_cast<double*>(bro_val)};
+            {
+                ze::double_seconds secs(*static_cast<double*>(bro_val));
+                auto duration = std::chrono::duration_cast<ze::duration>(secs);
+                return duration;
+            }
         case BRO_TYPE_STRING:
             {
                 BroString* s = static_cast<BroString*>(bro_val);
@@ -309,6 +321,8 @@ struct broccoli::reverse_factory::builder
     result_type operator()(int64_t i) const;
     result_type operator()(uint64_t i) const;
     result_type operator()(double d) const;
+    result_type operator()(ze::duration d) const;
+    result_type operator()(ze::time_point t) const;
     result_type operator()(ze::string const& s) const;
     result_type operator()(ze::vector const& v) const;
     result_type operator()(ze::set const& s) const;
@@ -367,6 +381,22 @@ broccoli::reverse_factory::builder::operator()(ze::string const& s) const
         reinterpret_cast<const unsigned char*>(s.str()), s.size());
 
     return { BRO_TYPE_STRING, bs };
+}
+
+broccoli::reverse_factory::bro_val
+broccoli::reverse_factory::builder::operator()(ze::duration d) const
+{
+    double secs = std::chrono::duration_cast<ze::double_seconds>(d).count();
+    bro_val b;
+    b.type = BRO_TYPE_INTERVAL;
+    b.value = *reinterpret_cast<double**>(&secs);
+    return b;
+}
+
+broccoli::reverse_factory::bro_val
+broccoli::reverse_factory::builder::operator()(ze::time_point t) const
+{
+    return { BRO_TYPE_TIME, nullptr };
 }
 
 broccoli::reverse_factory::bro_val
@@ -549,10 +579,10 @@ void broccoli::callback(BroConn* bc, void* user_data, BroEvMeta* meta)
 {
     try
     {
-        auto event = std::make_shared<ze::event>();
+        ze::event_ptr event = new ze::event;
         factory::make_event(*event, meta);
-        event_handler* handler = static_cast<event_handler*>(user_data);
-        (*handler)(event);
+        auto f = static_cast<event_ptr_handler*>(user_data);
+        (*f)(std::move(event));
     }
     catch (ze::exception const& e)
     {

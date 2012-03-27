@@ -1,14 +1,12 @@
 #ifndef VAST_PROGRAM_H
 #define VAST_PROGRAM_H
 
-#include "config.h"
-
+#include <ze/io.h>
+#include <ze/util/queue.h>
 #include "vast/configuration.h"
-#include "vast/comm/io.h"
 #include "vast/meta/taxonomy_manager.h"
-#include "vast/store/ingestor.h"
+#include "vast/store/ingestion.h"
 #include "vast/util/profiler.h"
-#include "vast/util/queue.h"
 
 namespace vast {
 
@@ -54,12 +52,12 @@ private:
     int return_;
 
     configuration config_;
-    comm::io io_;
-    store::ingestor ingestor_;
+    ze::io io_;
+    store::ingestion ingestion_;
     meta::taxonomy_manager tax_manager_;
 
     util::profiler profiler_;
-    util::queue<std::exception_ptr> errors_;
+    ze::util::queue<std::exception_ptr> errors_;
 };
 
 } // namespace vast

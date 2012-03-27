@@ -27,7 +27,7 @@ public:
     /// Constructs a broccoli session over an existing TCP connection.
     /// @param conn The underlying connection.
     /// @param handler The event handler to invoke for each new arriving event.
-    broccoli(connection_ptr const& conn, event_handler const& handler);
+    broccoli(connection_ptr const& conn, event_ptr_handler const& handler);
 
     /// Destroys the internal Broccoli handle if it is still valid.
     ~broccoli();
@@ -138,7 +138,7 @@ private:
     BroConn* bc_;
     connection_ptr conn_;
     boost::asio::strand strand_;
-    event_handler event_handler_;
+    event_ptr_handler event_handler_;
     error_handler error_handler_;
     bool terminate_;
 };
