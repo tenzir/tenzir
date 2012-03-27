@@ -36,10 +36,10 @@ class osegment
 public:
     /// Constructs an output segment.
     ///
-    /// @param max_size The maximum chunk size in bytes. This is just an
+    /// @param max_chunk_size The maximum chunk size in bytes. This is just an
     /// lower bound on the actual buffer size because it is impossible to know
     /// the exact chunk size before flushing the stream.
-    osegment(size_t max_size);
+    osegment(size_t max_chunk_size);
 
     void put(ze::event const& event);
 
@@ -55,7 +55,7 @@ private:
     typedef ze::serialization::ochunk<ze::event> ochunk;
 
     ze::compression const method_;
-    size_t const max_size_;
+    size_t const max_chunk_size_;
     size_t current_size_;
     segment_header header_;
     std::vector<std::unique_ptr<ochunk>> chunks_;

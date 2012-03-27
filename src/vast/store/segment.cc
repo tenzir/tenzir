@@ -43,9 +43,9 @@ void save(ze::serialization::oarchive& oa, segment_header const& header)
     oa << header.n_events;
 }
 
-osegment::osegment(size_t max_size)
+osegment::osegment(size_t max_chunk_size)
   : method_(ze::compression::zlib)
-  , max_size_(max_size)
+  , max_chunk_size_(max_chunk_size)
   , current_size_(0ul)
 {
     chunks_.emplace_back(new ochunk(method_));
@@ -58,7 +58,7 @@ void osegment::put(ze::event const& event)
     header_.respect(event);
 
     chunk.put(event);
-    if (chunk.buffer().size() >= max_size_)
+    if (chunk.buffer().size() >= max_chunk_size_)
     {
         chunk.flush();
 
