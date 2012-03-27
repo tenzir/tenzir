@@ -600,7 +600,6 @@ void broccoli::callback(BroConn* bc, void* user_data, BroEvMeta* meta)
 
 void broccoli::async_read()
 {
-    LOG(debug, broccoli) << *conn_ << ": starting async read";
     conn_->socket().async_read_some(
         boost::asio::null_buffers(),
         strand_.wrap(
@@ -616,16 +615,15 @@ void broccoli::handle_read(boost::system::error_code const& ec,
     if (terminate_)
         return;
 
-    if (! ec && ! bro_conn_process_input(bc_))
-        LOG(debug, broccoli) << *conn_ <<  ": no input to process";
+    if (! ec)
+        bro_conn_process_input(bc_);
 
     if (! ec || ec == boost::asio::error::would_block)
     {
         async_read();
         return;
     }
-
-    if (ec == boost::asio::error::eof)
+    else if (ec == boost::asio::error::eof)
         LOG(info, broccoli) << *conn_ << ": remote broccoli disconnected";
     else
         LOG(error, broccoli) << *conn_ << ": " << ec.message();

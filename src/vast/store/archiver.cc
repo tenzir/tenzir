@@ -11,6 +11,7 @@ namespace store {
 
 archiver::archiver(ze::component<ze::event>& c)
   : ze::core_sink<ze::event>(c)
+  , max_segment_size_(0u)
 {
 }
 
@@ -20,26 +21,31 @@ archiver::~archiver()
         segment_->flush(file_);
 }
 
-void archiver::init(fs::path const& directory)
+void archiver::init(fs::path const& directory,
+                    size_t max_chunk_events,
+                    size_t max_segment_size)
 {
-    LOG(debug, store) << "initializing archiver in directory " << directory;
-
     receive([&](ze::event_ptr&& event) { archive(std::move(event)); });
 
+    LOG(debug, store) << "initializing archiver in directory " << directory;
     if (! fs::exists(directory))
         fs::mkdir(directory);
 
     file_.open(directory / "foo", std::ios::binary | std::ios::out);
 
-    segment_ = std::make_unique<osegment>(10000);
+    max_segment_size_ = max_segment_size;
+    segment_ = std::make_unique<osegment>(max_chunk_events);
 }
 
 void archiver::archive(ze::event_ptr&& event)
 {
     segment_->put(*event);
+    if (segment_->size() < max_segment_size_)
+        return;
 
-    if (segment_->size() > max_segment_size_)
-        segment_->flush(file_);
+    LOG(debug, store) << "flushing segment of size " << segment_->size();
+    segment_->flush(file_);
+    segment_->clear();
 }
 
 } // namespace store

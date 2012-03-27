@@ -68,6 +68,10 @@ configuration::configuration()
          "IP address of the ingestor")
         ("ingestion.port", po::value<unsigned>()->default_value(42000u),
          "port of the ingestor")
+        ("ingestion.max-chunk-events", po::value<size_t>()->default_value(1000),
+         "maximum number of events per chunk")
+        ("ingestion.max-segment-size", po::value<size_t>()->default_value(1u),
+         "maximum segment size in MB")
     ;
 
     all_.add(general).add(advanced).add(component).add(taxonomy).add(ingestion);

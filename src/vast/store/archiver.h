@@ -25,7 +25,11 @@ public:
 
     /// Initializes the archiver.
     /// @param directory The directory in which to archive events.
-    void init(fs::path const& directory);
+    /// @param max_chunk_events The maximum number of events per chunk.
+    /// @param max_segment_size The maximum segment size in bytes.
+    void init(fs::path const& directory,
+              size_t max_chunk_events,
+              size_t max_segment_size);
 
 private:
     void archive(ze::event_ptr&& event);

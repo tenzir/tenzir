@@ -129,9 +129,12 @@ void program::start()
 
         if (config_.check("ingestion") || config_.check("all"))
         {
-            ingestion_.init(config_.get<std::string>("ingestion.ip"),
-                            config_.get<unsigned>("ingestion.port"),
-                            vast_dir / "archive");
+            ingestion_.init(
+                config_.get<std::string>("ingestion.ip"),
+                config_.get<unsigned>("ingestion.port"),
+                vast_dir / "archive",
+                config_.get<size_t>("ingestion.max-chunk-events"),
+                config_.get<size_t>("ingestion.max-segment-size") * 1000);
         }
 
         io_.start(errors_);

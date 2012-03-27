@@ -12,6 +12,8 @@ segment_header::segment_header()
   , version(VAST_SEGMENT_VERSION)
   , n_events(0u)
 {
+    start = ze::clock::now();
+    end = start;
 }
 
 void segment_header::respect(ze::event const& event)
@@ -43,36 +45,47 @@ void save(ze::serialization::oarchive& oa, segment_header const& header)
     oa << header.n_events;
 }
 
-osegment::osegment(size_t max_chunk_size)
+osegment::osegment(size_t max_chunk_events)
   : method_(ze::compression::zlib)
-  , max_chunk_size_(max_chunk_size)
-  , current_size_(0ul)
+  , max_chunk_events_(max_chunk_events)
+  , current_size_(0u)
 {
     chunks_.emplace_back(new ochunk(method_));
+
+    LOG(debug, store)
+        << "creating segment with " << max_chunk_events_ << " events/chunk";
 }
 
 void osegment::put(ze::event const& event)
 {
+    assert(! chunks_.empty());
+
     header_.respect(event);
     auto& chunk = *chunks_.back();
     chunk.put(event);
-    if (chunk.buffer().size() >= max_chunk_size_)
-    {
-        chunk.flush();
-        current_size_ += sizeof(ze::serialization::chunk_header);
-        current_size_ += chunk.buffer().size();
 
-        LOG(debug, store)
-            << "new segment chunk (old chunk size: "
-            << chunk.buffer().size() << ')';
+    if (chunk.elements() < max_chunk_events_)
+        return;
 
-        chunks_.emplace_back(new ochunk(method_));
-    }
+    auto size = chunk.flush();
+    current_size_ += size;
+    LOG(debug, store)
+        << "flushed chunk" << " (" << size << " bytes)";
+
+    chunks_.emplace_back(new ochunk(method_));
 }
 
 size_t osegment::size() const
 {
     return current_size_;
+}
+
+void osegment::clear()
+{
+    chunks_.clear();
+    chunks_.emplace_back(new ochunk(method_));
+    header_ = segment_header();
+    current_size_ = 0u;
 }
 
 void osegment::flush(std::ostream& out)
@@ -87,6 +100,8 @@ void osegment::flush(std::ostream& out)
     oa << chunks_.size();
     for (auto& chunk : chunks_)
         oa << *chunk;
+
+    out.flush();
 }
 
 } // namespace store
