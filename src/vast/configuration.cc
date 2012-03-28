@@ -71,8 +71,8 @@ configuration::configuration()
          "explicit list of events to ingest")
         ("ingest.max-chunk-events", po::value<size_t>()->default_value(1000),
          "maximum events per chunk")
-        ("ingest.max-segment-size", po::value<size_t>()->default_value(1u),
-         "maximum segment size in MB")
+        ("ingest.max-segment-size", po::value<size_t>()->default_value(1000u),
+         "maximum segment size in KB")
     ;
 
     all_.add(general).add(advanced).add(component).add(taxonomy).add(ingest);

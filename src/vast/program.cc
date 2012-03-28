@@ -140,7 +140,7 @@ void program::start()
                 events,
                 vast_dir / "archive",
                 config_.get<size_t>("ingest.max-chunk-events"),
-                config_.get<size_t>("ingest.max-segment-size") * 1000000);
+                config_.get<size_t>("ingest.max-segment-size") * 1000);
         }
 
         io_.start(errors_);
