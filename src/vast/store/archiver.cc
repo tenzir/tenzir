@@ -1,6 +1,9 @@
 #include "vast/store/archiver.h"
 
+#include <boost/uuid/random_generator.hpp>
+#include <boost/uuid/uuid_io.hpp>
 #include <ze/event.h>
+#include "vast/fs/fstream.h"
 #include "vast/fs/operations.h"
 #include "vast/store/segment.h"
 #include "vast/util/logger.h"
@@ -17,8 +20,7 @@ archiver::archiver(ze::component<ze::event>& c)
 
 archiver::~archiver()
 {
-    if (segment_ && file_.good())
-        segment_->flush(file_);
+    flush();
 }
 
 void archiver::init(fs::path const& directory,
@@ -27,11 +29,10 @@ void archiver::init(fs::path const& directory,
 {
     receive([&](ze::event_ptr&& event) { archive(std::move(event)); });
 
-    LOG(verbose, store) << "initializing archiver in " << directory;
-    if (! fs::exists(directory))
-        fs::mkdir(directory);
-
-    file_.open(directory / "foo", std::ios::binary | std::ios::out);
+    archive_directory_ = directory;
+    LOG(verbose, store) << "initializing archiver in " << archive_directory_;
+    if (! fs::exists(archive_directory_))
+        fs::mkdir(archive_directory_);
 
     LOG(verbose, store)
         << "setting maximum segment size to " << max_segment_size << " bytes";
@@ -46,8 +47,25 @@ void archiver::archive(ze::event_ptr&& event)
     if (segment_->size() < max_segment_size_)
         return;
 
-    LOG(debug, store) << "flushing segment of size " << segment_->size();
-    segment_->flush(file_);
+    flush();
+}
+
+void archiver::flush()
+{
+    if (! segment_)
+        return;
+
+    std::string filename(
+        boost::uuids::to_string(boost::uuids::random_generator()()));
+
+    LOG(debug, store)
+        << "flushing segment of size " << segment_->size()
+        << " to " << filename;
+
+    fs::ofstream file(archive_directory_ / filename,
+                      std::ios::binary | std::ios::out);
+
+    segment_->flush(file);
 }
 
 } // namespace store

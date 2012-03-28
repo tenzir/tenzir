@@ -4,7 +4,6 @@
 #include <ze/component.h>
 #include <ze/sink.h>
 #include "vast/fs/path.h"
-#include "vast/fs/fstream.h"
 #include "vast/store/forward.h"
 
 namespace vast {
@@ -34,9 +33,11 @@ public:
 private:
     void archive(ze::event_ptr&& event);
 
+    void flush();
+
     std::unique_ptr<osegment> segment_;
     size_t max_segment_size_;
-    fs::ofstream file_;
+    fs::path archive_directory_;
 };
 
 } // namespace store

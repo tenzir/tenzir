@@ -7,7 +7,7 @@
 namespace vast {
 namespace store {
 
-/// The ingestion component.
+/// The emit component.
 class emit : public ze::component<ze::event>
 {
     emit(emit const&) = delete;
