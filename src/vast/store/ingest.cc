@@ -1,11 +1,11 @@
-#include "vast/store/ingestion.h"
+#include "vast/store/ingest.h"
 
 #include "vast/util/logger.h"
 
 namespace vast {
 namespace store {
 
-ingestion::ingestion(ze::io& io)
+ingest::ingest(ze::io& io)
   : comm::event_component(io)
   , event_source_(*this)
   , archiver_(*this)
@@ -13,7 +13,7 @@ ingestion::ingestion(ze::io& io)
     link(event_source_, archiver_);
 }
 
-void ingestion::init(std::string const& ip,
+void ingest::init(std::string const& ip,
                      unsigned port,
                      std::vector<std::string> const& events,
                      fs::path const& directory,
@@ -30,7 +30,7 @@ void ingestion::init(std::string const& ip,
     archiver_.init(directory, max_chunk_events, max_segment_size);
 }
 
-void ingestion::stop()
+void ingest::stop()
 {
     event_source_.stop();
 }

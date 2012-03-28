@@ -26,7 +26,8 @@ logger* LOGGER;
 program::program()
   : terminating_(false)
   , return_(EXIT_SUCCESS)
-  , ingestion_(io_)
+  , emit_(io_)
+  , ingest_(io_)
   , profiler_(io_.service())
 {
 }
@@ -127,13 +128,13 @@ void program::start()
         comm::broccoli::init(config_.check("broccoli-messages"),
                              config_.check("broccoli-calltrace"));
 
-        if (config_.check("ingest") || config_.check("all"))
+        if (config_.check("ingest"))
         {
             std::vector<std::string> events;
             if (config_.check("ingest.events"))
                 events = config_.get<std::vector<std::string>>("ingest.events");
 
-            ingestion_.init(
+            ingest_.init(
                 config_.get<std::string>("ingest.ip"),
                 config_.get<unsigned>("ingest.port"),
                 events,
@@ -143,6 +144,12 @@ void program::start()
         }
 
         io_.start(errors_);
+
+        if (config_.check("emit"))
+        {
+            emit_.init(vast_dir / "archive");
+            emit_.run();
+        }
 
         std::exception_ptr error = errors_.pop();
         if (error)
@@ -182,8 +189,8 @@ void program::stop()
         }
 #endif
 
-        if (config_.check("ingest") || config_.check("all"))
-            ingestion_.stop();
+        if (config_.check("ingest"))
+            ingest_.stop();
 
         if (config_.check("profile"))
             profiler_.stop();

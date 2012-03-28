@@ -5,7 +5,8 @@
 #include <ze/util/queue.h>
 #include "vast/configuration.h"
 #include "vast/meta/taxonomy_manager.h"
-#include "vast/store/ingestion.h"
+#include "vast/store/emit.h"
+#include "vast/store/ingest.h"
 #include "vast/util/profiler.h"
 
 namespace vast {
@@ -53,7 +54,8 @@ private:
 
     configuration config_;
     ze::io io_;
-    store::ingestion ingestion_;
+    store::emit emit_;
+    store::ingest ingest_;
     meta::taxonomy_manager tax_manager_;
 
     util::profiler profiler_;

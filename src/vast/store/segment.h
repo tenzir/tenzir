@@ -49,10 +49,10 @@ public:
     /// @return The segment size in bytes.
     size_t size() const;
 
+private:
     /// Removes all chunks and resets the segment header.
     void clear();
 
-private:
     typedef ze::serialization::ochunk<ze::event> ochunk;
 
     ze::compression const method_;
@@ -62,15 +62,21 @@ private:
     std::vector<std::unique_ptr<ochunk>> chunks_;
 };
 
+/// An input segment.
 class isegment
 {
 public:
-    void put(ze::event const& event);
+    /// Constructs an input segment from an input stream.
+    /// @param in The input stream that contains the segment.
+    isegment(std::istream& in);
+
+    void get(std::function<void(ze::event_ptr&& event)> f);
 
 private:
     typedef ze::serialization::ichunk<ze::event> ichunk;
 
-    std::vector<ichunk> chunks_;
+    segment_header header_;
+    std::istream& istream_;
 };
 
 } // namespace store

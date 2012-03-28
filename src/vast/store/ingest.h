@@ -1,5 +1,5 @@
-#ifndef VAST_STORE_INGESTION_H
-#define VAST_STORE_INGESTION_H
+#ifndef VAST_STORE_INGEST_H
+#define VAST_STORE_INGEST_H
 
 #include "vast/store/archiver.h"
 #include "vast/comm/event_source.h"
@@ -8,13 +8,13 @@ namespace vast {
 namespace store {
 
 /// The ingestion component.
-class ingestion : public comm::event_component
+class ingest : public comm::event_component
 {
-    ingestion(ingestion const&) = delete;
-    ingestion& operator=(ingestion const&) = delete;
+    ingest(ingest const&) = delete;
+    ingest& operator=(ingest const&) = delete;
 
 public:
-    ingestion(ze::io& io);
+    ingest(ze::io& io);
 
     void init(std::string const& ip,
               unsigned port,

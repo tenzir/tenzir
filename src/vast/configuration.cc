@@ -52,10 +52,8 @@ configuration::configuration()
 
     po::options_description component("component options");
     component.add_options()
-        ("all,a", "launch all components")
-        ("ingest,I", "launch the ingestion component")
-        ("load,L", "launch the loading component")
-        ("query,Q", "launch the query component")
+        ("ingest,I", "launch the ingest component")
+        ("emit,E", "launch the emit component")
     ;
 
     po::options_description taxonomy("taxonomy options");
@@ -63,7 +61,7 @@ configuration::configuration()
         ("print-taxonomy,T", "print the parsed event taxonomy")
     ;
 
-    po::options_description ingest("ingestion options");
+    po::options_description ingest("ingest options");
     ingest.add_options()
         ("ingest.ip", po::value<std::string>()->default_value("127.0.0.1"),
          "IP address of the ingestor")
@@ -122,12 +120,8 @@ void configuration::init()
 {
     po::notify(config_);
 
-    conflicts("all", "ingest");
-    conflicts("all", "load");
-    conflicts("all", "query");
-    conflicts("ingest", "load");
+    conflicts("ingest", "emit");
 
-    depends("all", "taxonomy");
     depends("dump-taxonomy", "taxonomy");
 
     int v = get<int>("console-verbosity");

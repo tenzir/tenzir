@@ -48,7 +48,6 @@ void archiver::archive(ze::event_ptr&& event)
 
     LOG(debug, store) << "flushing segment of size " << segment_->size();
     segment_->flush(file_);
-    segment_->clear();
 }
 
 } // namespace store
