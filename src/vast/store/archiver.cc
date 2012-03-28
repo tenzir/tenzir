@@ -20,7 +20,8 @@ archiver::archiver(ze::component<ze::event>& c)
 
 archiver::~archiver()
 {
-    flush();
+    if (segment_)
+        flush();
 }
 
 void archiver::init(fs::path const& directory,
@@ -52,16 +53,12 @@ void archiver::archive(ze::event_ptr&& event)
 
 void archiver::flush()
 {
-    if (! segment_)
-        return;
+    assert(segment_);
 
     std::string filename(
         boost::uuids::to_string(boost::uuids::random_generator()()));
 
-    LOG(debug, store)
-        << "flushing segment of size " << segment_->size()
-        << " to " << filename;
-
+    LOG(debug, store) << "flushing segment to " << filename;
     fs::ofstream file(archive_directory_ / filename,
                       std::ios::binary | std::ios::out);
 

@@ -80,11 +80,7 @@ void osegment::put(ze::event const& event)
     if (chunk.elements() < max_chunk_events_)
         return;
 
-    auto size = chunk.flush();
-    current_size_ += size;
-    LOG(debug, store)
-        << "flushed chunk" << " (" << size << " bytes)";
-
+    flush_chunk(chunk);
     chunks_.emplace_back(new ochunk(method_));
 }
 
@@ -96,14 +92,30 @@ size_t osegment::size() const
 void osegment::flush(std::ostream& out)
 {
     // Only the last chunk has not yet been flushed.
-    chunks_.back()->flush();
+    flush_chunk(*chunks_.back());
 
     ze::serialization::oarchive oa(out);
-    oa << header_;
-    oa << chunks_;
 
-    out.flush();
+    auto start = out.tellp();
+    oa << header_;
+    auto middle = out.tellp();
+    oa << chunks_;
+    auto end = out.tellp();
+
+    LOG(debug, store)
+        << "flushed segment "
+        << "(header: " << middle - start << " bytes, "
+        << "chunks: " << end - middle << " bytes)";
+
     clear();
+}
+
+void osegment::flush_chunk(ochunk& chunk)
+{
+    auto size = chunk.flush();
+    current_size_ += size;
+    LOG(debug, store)
+        << "flushed chunk" << " (" << size << " bytes)";
 }
 
 void osegment::clear()

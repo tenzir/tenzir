@@ -39,6 +39,8 @@ public:
     /// @param max_chunk_events The maximum number events per chunk.
     osegment(size_t max_chunk_events);
 
+    /// Puts an event into the segment.
+    /// @param event The event to store.
     void put(ze::event const& event);
 
     /// Flushes the segment to a given output stream.
@@ -46,14 +48,14 @@ public:
     void flush(std::ostream& out);
 
     /// Retrives the size of the segment.
-    /// @return The segment size in bytes.
+    /// @return The segment size in bytes (without the segment header).
     size_t size() const;
 
 private:
-    /// Removes all chunks and resets the segment header.
-    void clear();
-
     typedef ze::serialization::ochunk<ze::event> ochunk;
+
+    void flush_chunk(ochunk& chunk);
+    void clear();
 
     ze::compression const method_;
     size_t const max_chunk_events_;
