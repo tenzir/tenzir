@@ -43,9 +43,23 @@ void loader::load(fs::path const& dir)
 
             LOG(verbose, store) << "loading events from file " << p;
 
-            fs::ifstream file(p, std::ios::binary | std::ios::in);
-            isegment segment(file);
-            segment.get([&](ze::event_ptr&& event) { forward(std::move(event)); });
+            try
+            {
+                fs::ifstream file(p, std::ios::binary | std::ios::in);
+                isegment segment(file);
+                segment.get([&](ze::event_ptr&& event)
+                            {
+                                forward(std::move(event));
+                            });
+            }
+            catch (segment_exception const& e)
+            {
+                LOG(error, store) << e.what();
+            }
+            catch (ze::serialization::exception const& e)
+            {
+                LOG(error, store) << e.what();
+            }
         });
 }
 
