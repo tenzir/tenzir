@@ -53,8 +53,9 @@ private:
 
     configuration config_;
     ze::io io_;
-    emit emit_;
-    ingest ingest_;
+    emit_component emit_;
+    ingest_component ingest_;
+    query_component query_;
     meta::taxonomy_manager tax_manager_;
 
     util::profiler profiler_;

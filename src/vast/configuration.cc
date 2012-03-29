@@ -23,6 +23,7 @@ configuration::configuration()
          "VAST directory")
         ("help,h", "display this help")
         ("taxonomy,t", po::value<fs::path>(), "event taxonomy")
+        ("query,q", po::value<std::string>(), "query expression")
         ("console-verbosity,v",
          po::value<int>()->default_value(static_cast<int>(log::info)),
          "console logging verbosity")
@@ -52,8 +53,9 @@ configuration::configuration()
 
     po::options_description component("component options");
     component.add_options()
-        ("ingest,I", "launch the ingest component")
-        ("emit,E", "launch the emit component")
+        ("comp-ingest,I", "launch the ingest component")
+        ("comp-emit,E", "launch the emit component")
+        ("comp-query,Q", "launch the query component")
     ;
 
     po::options_description taxonomy("taxonomy options");
@@ -69,13 +71,21 @@ configuration::configuration()
          "port of the ingestor")
         ("ingest.events", po::value<std::vector<std::string>>()->multitoken(),
          "explicit list of events to ingest")
-        ("ingest.max-chunk-events", po::value<size_t>()->default_value(1000),
+        ("ingest.max-chunk-events", po::value<size_t>()->default_value(1000u),
          "maximum events per chunk")
         ("ingest.max-segment-size", po::value<size_t>()->default_value(1000u),
          "maximum segment size in KB")
     ;
 
-    all_.add(general).add(advanced).add(component).add(taxonomy).add(ingest);
+    po::options_description query("query options");
+    query.add_options()
+        ("query.paginate", po::value<unsigned>()->default_value(25u),
+         "number of events before prompt")
+    ;
+
+    all_.add(general).add(advanced).add(component).add(taxonomy)
+        .add(ingest).add(query);
+
     visible_.add(general).add(component);
 }
 

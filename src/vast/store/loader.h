@@ -28,7 +28,7 @@ public:
 
 private:
     void load(fs::path const& dir);
-    void dispatch(ze::event_ptr&& event);
+    void forward(ze::event_ptr&& event);
 
     fs::path dir_;
 };

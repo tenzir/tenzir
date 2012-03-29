@@ -4,24 +4,13 @@
 
 namespace vast {
 
-emit::emit(ze::io& io)
+emit_component::emit_component(ze::io& io)
   : ze::component<ze::event>(io)
   , loader(*this)
 {
 }
 
-void emit::init(fs::path const& directory)
-{
-    loader.init(directory);
-}
-
-void emit::run()
-{
-    loader.run();
-}
-
-
-ingest::ingest(ze::io& io)
+ingest_component::ingest_component(ze::io& io)
   : ze::component<ze::event>(io)
   , source(*this)
   , archiver(*this)
@@ -29,26 +18,10 @@ ingest::ingest(ze::io& io)
     link(source, archiver);
 }
 
-void ingest::init(std::string const& ip,
-                  unsigned port,
-                  std::vector<std::string> const& events,
-                  fs::path const& directory,
-                  size_t max_chunk_events,
-                  size_t max_segment_size)
+query_component::query_component(ze::io& io)
+  : ze::component<ze::event>(io)
+  , processor(*this)
 {
-    source.init(ip, port);
-    for (const auto& event : events)
-    {
-        LOG(verbose, store) << "subscribing to event " << event;
-        source.subscribe(event);
-    }
-
-    archiver.init(directory, max_chunk_events, max_segment_size);
-}
-
-void ingest::stop()
-{
-    source.stop();
 }
 
 } // namespace vast

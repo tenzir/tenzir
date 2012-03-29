@@ -28,6 +28,7 @@ program::program()
   , return_(EXIT_SUCCESS)
   , emit_(io_)
   , ingest_(io_)
+  , query_(io_)
   , profiler_(io_.service())
 {
 }
@@ -128,27 +129,45 @@ void program::start()
         comm::broccoli::init(config_.check("broccoli-messages"),
                              config_.check("broccoli-calltrace"));
 
-        if (config_.check("ingest"))
+        if (config_.check("comp-ingest"))
         {
             std::vector<std::string> events;
             if (config_.check("ingest.events"))
                 events = config_.get<std::vector<std::string>>("ingest.events");
 
-            ingest_.init(
-                config_.get<std::string>("ingest.ip"),
-                config_.get<unsigned>("ingest.port"),
-                events,
+            ingest_.source.init(config_.get<std::string>("ingest.ip"),
+                                config_.get<unsigned>("ingest.port"));
+
+            for (const auto& event : events)
+            {
+                LOG(verbose, store) << "subscribing to event " << event;
+                ingest_.source.subscribe(event);
+            }
+
+            ingest_.archiver.init(
                 vast_dir / "archive",
                 config_.get<size_t>("ingest.max-chunk-events"),
                 config_.get<size_t>("ingest.max-segment-size") * 1000);
         }
 
+
+        if (config_.check("comp-query"))
+        {
+            query_.processor.init();
+
+            if (config_.check("comp-emit"))
+            {
+                LOG(verbose, core) << "linking event loader with query processor";
+                query_.link(emit_.loader, query_.processor);
+            }
+        }
+
         io_.start(errors_);
 
-        if (config_.check("emit"))
+        if (config_.check("comp-emit"))
         {
-            emit_.init(vast_dir / "archive");
-            emit_.run();
+            emit_.loader.init(vast_dir / "archive");
+            emit_.loader.run();
         }
 
         std::exception_ptr error = errors_.pop();
@@ -189,8 +208,8 @@ void program::stop()
         }
 #endif
 
-        if (config_.check("ingest"))
-            ingest_.stop();
+        if (config_.check("comp-ingest"))
+            ingest_.source.stop();
 
         if (config_.check("profile"))
             profiler_.stop();

@@ -45,15 +45,13 @@ void loader::load(fs::path const& dir)
 
             fs::ifstream file(p, std::ios::binary | std::ios::in);
             isegment segment(file);
-            segment.get([&](ze::event_ptr&& event) { dispatch(std::move(event)); });
+            segment.get([&](ze::event_ptr&& event) { forward(std::move(event)); });
         });
 }
 
-void loader::dispatch(ze::event_ptr&& event)
+void loader::forward(ze::event_ptr&& event)
 {
-    LOG(debug, store) << "loaded event: " << *event;
-    // TODO: send loaded events to streamer.
-    //send(event);
+    send(event);
 }
 
 } // namespace store
