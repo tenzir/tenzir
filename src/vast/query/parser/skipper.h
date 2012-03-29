@@ -20,8 +20,8 @@ struct skipper : qi::grammar<Iterator>
         ascii::space_type space;
 
         start =
-                char_                           // Tab, space, CR, LF
-            |   "/*" >> *(space - "*/") >> "*/" // C-style comments
+                space                           // Tab, space, CR, LF
+            |   "/*" >> *(char_ - "*/") >> "*/" // C-style comments
             ;
     }
 
