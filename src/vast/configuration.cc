@@ -8,6 +8,7 @@
 #include "vast/exception.h"
 #include "vast/fs/path.h"
 #include "vast/fs/fstream.h"
+#include "vast/fs/operations.h"
 #include "vast/util/logger.h"
 
 namespace vast {
@@ -91,8 +92,11 @@ configuration::configuration()
 
 void configuration::load(std::string const& filename)
 {
-    fs::ifstream ifs(filename);
-    po::store(po::parse_config_file(ifs, all_), config_);
+    if (fs::exists(filename))
+    {
+        fs::ifstream ifs(filename);
+        po::store(po::parse_config_file(ifs, all_), config_);
+    }
 
     init();
 }
