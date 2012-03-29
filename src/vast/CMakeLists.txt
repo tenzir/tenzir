@@ -17,6 +17,7 @@ target_link_libraries(vast-bin ${libs})
 install(TARGETS vast-bin DESTINATION bin)
 
 file(GLOB_RECURSE vast_lib_sources
+    component.cc
     configuration.cc
     exception.cc
     program.cc
