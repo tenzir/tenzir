@@ -102,6 +102,7 @@ clause<Iterator>::clause(util::parser::error_handler<Iterator>& error_handler)
     binary_query_op.name("binary query operator");
     unary_query_op.name("unary query operator");
     binary_clause_op.name("binary clause operator");
+    type.name("type");
     query.name("query");
     unary_clause.name("unary clause");
     event_clause.name("event clause");
