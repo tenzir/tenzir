@@ -31,6 +31,8 @@ static ze::value_type to_ze_type(int broccoli_type)
             return ze::duration_type;
         case BRO_TYPE_STRING:
             return ze::string_type;
+        case BRO_TYPE_PATTERN:
+            return ze::regex_type;
         case BRO_TYPE_VECTOR:
             return ze::vector_type;
         case BRO_TYPE_SET:
@@ -324,6 +326,7 @@ struct broccoli::reverse_factory::builder
     result_type operator()(ze::duration d) const;
     result_type operator()(ze::time_point t) const;
     result_type operator()(ze::string const& s) const;
+    result_type operator()(ze::regex const& s) const;
     result_type operator()(ze::vector const& v) const;
     result_type operator()(ze::set const& s) const;
     result_type operator()(ze::table const& t) const;
@@ -378,9 +381,17 @@ broccoli::reverse_factory::builder::operator()(ze::string const& s) const
     BroString* bs = new BroString;
     bro_string_set_data(
         bs,
-        reinterpret_cast<const unsigned char*>(s.str()), s.size());
+        reinterpret_cast<const unsigned char*>(s.data()), s.size());
 
     return { BRO_TYPE_STRING, bs };
+}
+
+broccoli::reverse_factory::bro_val
+broccoli::reverse_factory::builder::operator()(ze::regex const& r) const
+{
+    assert(! "Broccoli does not yet support regular expressions");
+
+    return { BRO_TYPE_PATTERN, nullptr };
 }
 
 broccoli::reverse_factory::bro_val
@@ -402,7 +413,7 @@ broccoli::reverse_factory::builder::operator()(ze::time_point t) const
 broccoli::reverse_factory::bro_val
 broccoli::reverse_factory::builder::operator()(ze::vector const& v) const
 {
-    assert(! "not yet supported by Broccoli");
+    assert(! "Broccoli does not yet support vectors");
     return { BRO_TYPE_VECTOR, nullptr };
 }
 
