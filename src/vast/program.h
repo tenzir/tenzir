@@ -30,7 +30,7 @@ public:
 
     /// Initializes the program from a configuration file.
     /// @param filename The name of the configuration file.
-    bool init(std::string const& filename);
+    bool init(std::string const& filename = "");
 
     /// Starts VAST and block. 
     void start();

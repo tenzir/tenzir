@@ -50,4 +50,7 @@ BOOST_AUTO_TEST_CASE(clauses)
     typedef vast::query::ast::query query;
     for (auto& q : queries)
          BOOST_CHECK((parse<vast::query::parser::clause, query>(q)));
+
+    auto fail = "@foo == -42";
+    BOOST_CHECK(! (parse<vast::query::parser::clause, query>(fail)));
 }
