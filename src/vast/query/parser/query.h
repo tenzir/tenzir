@@ -8,12 +8,12 @@ namespace query {
 namespace parser {
 
 template <typename Iterator>
-struct clause : qi::grammar<Iterator, ast::query(), skipper<Iterator>>
+struct query : qi::grammar<Iterator, ast::query(), skipper<Iterator>>
 {
-    clause(util::parser::error_handler<Iterator>& error_handler);
+    query(util::parser::error_handler<Iterator>& error_handler);
 
     qi::rule<Iterator, ast::query(), skipper<Iterator>>
-        query;
+        qry;
 
     qi::rule<Iterator, ast::clause_operand(), skipper<Iterator>>
         unary_clause;

@@ -1,15 +1,15 @@
 #ifndef VAST_QUERY_PARSER_CLAUSE_DEFINITION_H
 #define VAST_QUERY_PARSER_CLAUSE_DEFINITION_H
 
-#include "vast/query/parser/clause.h"
+#include "vast/query/parser/query.h"
 
 namespace vast {
 namespace query {
 namespace parser {
 
 template <typename Iterator>
-clause<Iterator>::clause(util::parser::error_handler<Iterator>& error_handler)
-  : clause::base_type(query)
+query<Iterator>::query(util::parser::error_handler<Iterator>& error_handler)
+  : query::base_type(qry)
   , expr(error_handler)
 {
     qi::_1_type _1;
@@ -61,7 +61,7 @@ clause<Iterator>::clause(util::parser::error_handler<Iterator>& error_handler)
         ("port", ast::port_type)
         ;
 
-    query
+    qry
         =   unary_clause
         >>  *(binary_query_op > unary_clause)
         ;
@@ -87,14 +87,14 @@ clause<Iterator>::clause(util::parser::error_handler<Iterator>& error_handler)
         ;
 
     BOOST_SPIRIT_DEBUG_NODES(
-        (query)
+        (qry)
         (unary_clause)
         (type_clause)
         (event_clause)
         (identifier)
     );
 
-    on_error<fail>(query, error_handler.functor()(_4, _3));
+    on_error<fail>(qry, error_handler.functor()(_4, _3));
     on_error<fail>(unary_clause, error_handler.functor()(_4, _3));
     on_error<fail>(event_clause, error_handler.functor()(_4, _3));
     on_error<fail>(type_clause, error_handler.functor()(_4, _3));
@@ -103,7 +103,7 @@ clause<Iterator>::clause(util::parser::error_handler<Iterator>& error_handler)
     unary_query_op.name("unary query operator");
     binary_clause_op.name("binary clause operator");
     type.name("type");
-    query.name("query");
+    qry.name("query");
     unary_clause.name("unary clause");
     event_clause.name("event clause");
     type_clause.name("type clause");

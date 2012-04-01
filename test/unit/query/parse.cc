@@ -1,26 +1,13 @@
 #define BOOST_SPIRIT_QI_DEBUG
 
 #include <boost/test/unit_test.hpp>
-#include "vast/query/parser/clause.h"
-
-template <template <class> class Grammar, typename Attribute>
-bool parse(std::string const& str)
-{
-    typedef std::string::const_iterator iterator_type;
-    auto i = str.begin();
-    auto end = str.end();
-
-    vast::util::parser::error_handler<iterator_type> error_handler(i, end);
-    Grammar<iterator_type> grammar(error_handler);
-    vast::query::parser::skipper<iterator_type> skipper;
-    Attribute attr;
-
-    bool success = phrase_parse(i, end, grammar, skipper, attr);
-    return success && i == end;
-}
+#include "vast/query/parser/query.h"
+#include "vast/util/parser/parse.h"
 
 BOOST_AUTO_TEST_CASE(expressions)
 {
+    using vast::util::parser::parse;
+
     std::vector<std::string> expressions
     {
         "T",
@@ -30,13 +17,15 @@ BOOST_AUTO_TEST_CASE(expressions)
         "-(42 - 24) / 2"
     };
 
-    typedef vast::query::ast::expression expr;
+    vast::query::ast::expression expr;
     for (auto& e : expressions)
-        BOOST_CHECK((parse<vast::query::parser::expression, expr>(e)));
+        BOOST_CHECK((parse<vast::query::parser::expression>(e, expr)));
 }
 
-BOOST_AUTO_TEST_CASE(clauses)
+BOOST_AUTO_TEST_CASE(queries)
 {
+    using vast::util::parser::parse;
+
     std::vector<std::string> queries
     {
         "@port < 53/udp",
@@ -47,10 +36,10 @@ BOOST_AUTO_TEST_CASE(clauses)
         "! @int == +8 / +4 || ! @uint < -(4 * 2)"
     };
 
-    typedef vast::query::ast::query query;
+    vast::query::ast::query query;
     for (auto& q : queries)
-         BOOST_CHECK((parse<vast::query::parser::clause, query>(q)));
+         BOOST_CHECK((parse<vast::query::parser::query>(q, query)));
 
     auto fail = "@foo == -42";
-    BOOST_CHECK(! (parse<vast::query::parser::clause, query>(fail)));
+    BOOST_CHECK(! (parse<vast::query::parser::query>(fail, query)));
 }

@@ -29,8 +29,8 @@ public:
     };
 
     /// Constructs a query from a query expression.
-    /// @param expr The query expression.
-    query(std::string const& expr);
+    /// @param str The query string.
+    query(std::string const& str);
 
     /// Gets the query ID.
     /// @return The query ID.
