@@ -41,7 +41,7 @@ struct error_handler
                 << "parse error, expecting " << production
                 << " line " << line << ':';
 
-            LOG(error, core) << get_line(line_start) << std::endl;
+            LOG(error, core) << get_line(line_start);
             LOG(error, core) << std::string(' ', err_pos - line_start) << '^';
         }
         else
