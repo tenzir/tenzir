@@ -1,13 +1,14 @@
 #ifndef VAST_QUERY_PARSER_EXPRESSION_H
 #define VAST_QUERY_PARSER_EXPRESSION_H
 
+// Improves compile times significantly at the cost of predefining terminals.
 #define BOOST_SPIRIT_NO_PREDEFINED_TERMINALS
 
 #include <boost/spirit/include/qi.hpp>
+#include <ze/parser/value.h>
 #include "vast/query/ast.h"
 #include "vast/query/parser/error_handler.h"
 #include "vast/query/parser/skipper.h"
-#include <vector>
 
 namespace vast {
 namespace query {
@@ -25,7 +26,7 @@ struct expression : qi::grammar<Iterator, ast::expression(), skipper<Iterator>>
         expr;
 
     qi::rule<Iterator, ast::expr_operand(), skipper<Iterator>>
-        unary_expr, primary_expr;
+        unary, primary;
 
     qi::rule<Iterator, std::string(), skipper<Iterator>>
         identifier;
@@ -33,8 +34,7 @@ struct expression : qi::grammar<Iterator, ast::expression(), skipper<Iterator>>
     qi::symbols<char, ast::expr_operator>
         unary_op, binary_op;
 
-    qi::symbols<char>
-        keywords;
+    ze::parser::value<Iterator> val;
 };
 
 } // namespace ast

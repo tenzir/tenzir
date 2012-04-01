@@ -26,7 +26,7 @@ clause<Iterator>::clause(error_handler<Iterator>& error_handler)
     using qi::fail;
     using boost::phoenix::function;
 
-    typedef function<parser::error_handler<Iterator>> error_handler_function;
+    typedef function<parser::error_handler<Iterator>> handle_error;
 
     binary_op.add
         ("||", ast::logical_or)
@@ -61,12 +61,12 @@ clause<Iterator>::clause(error_handler<Iterator>& error_handler)
         ("port", ast::port_type)
         ;
 
-    query 
+    query
         =   unary_clause
         >>  *(binary_op > unary_clause)
         ;
 
-    unary_clause 
+    unary_clause
         =   event_clause
         |   type_clause
         |   (unary_op > unary_clause)
@@ -77,12 +77,12 @@ clause<Iterator>::clause(error_handler<Iterator>& error_handler)
         >   binary_op
         >   expr;
 
-    type_clause 
-        =   lexeme['@' > type] 
+    type_clause
+        =   lexeme['@' > type]
         >   binary_op > expr;
         ;
 
-    identifier 
+    identifier
         =   raw[lexeme[(alpha | '_') >> *(alnum | '_')]]
         ;
 
@@ -94,10 +94,18 @@ clause<Iterator>::clause(error_handler<Iterator>& error_handler)
         (identifier)
     );
 
-    on_error<fail>(query,
-                   error_handler_function(error_handler)(
-                       "error! expecting ", _4, _3));
+    on_error<fail>(query, handle_error(error_handler)(_4, _3));
+    on_error<fail>(unary_clause, handle_error(error_handler)(_4, _3));
+    on_error<fail>(event_clause, handle_error(error_handler)(_4, _3));
+    on_error<fail>(type_clause, handle_error(error_handler)(_4, _3));
 
+    binary_op.name("binary clause operator");
+    unary_op.name("unary clause operator");
+    query.name("query");
+    unary_clause.name("unary clause");
+    event_clause.name("event clause");
+    type_clause.name("type clause");
+    identifier.name("identifier");
 }
 
 } // namespace ast

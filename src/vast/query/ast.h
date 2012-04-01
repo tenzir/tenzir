@@ -6,6 +6,7 @@
 #include <boost/fusion/include/adapt_struct.hpp>
 #include <boost/fusion/include/io.hpp>
 #include <boost/optional.hpp>
+#include <ze/value.h>
 #include <vector>
 
 namespace vast {
@@ -28,9 +29,7 @@ struct identifier
 };
 
 typedef boost::variant<
-    nil
-  , bool
-  , identifier
+    ze::value
   , boost::recursive_wrapper<unary_expr>
   , boost::recursive_wrapper<expression>
 > expr_operand;

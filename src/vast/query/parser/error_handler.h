@@ -12,7 +12,7 @@ namespace parser {
 template <typename Iterator>
 struct error_handler
 {
-    template <typename, typename, typename>
+    template <typename, typename>
     struct result
     {
         typedef void type;
@@ -23,17 +23,18 @@ struct error_handler
     {
     }
 
-    template <typename Message, typename What>
-    void operator()(Message const& message,
-                    What const& what,
-                    Iterator err_pos) const
+    template <typename What>
+    void operator()(What const& what, Iterator err_pos) const
     {
         int line;
         Iterator line_start = get_pos(err_pos, line);
         if (err_pos != last)
         {
-            std::cout << message << what << " line " << line << ':' << std::endl;
-            std::cout << get_line(line_start) << std::endl;
+            std::cout
+                << "parse error, expecting " << what
+                << " line " << line << ':' << std::endl
+                << get_line(line_start) << std::endl;
+
             while (line_start++ != err_pos)
                 std::cout << ' ';
             std::cout << '^' << std::endl;
@@ -41,7 +42,7 @@ struct error_handler
         else
         {
             std::cout << "unexpected end of query ";
-            std::cout << message << what << " line " << line << std::endl;
+            std::cout << what << " line " << line << std::endl;
         }
     }
 

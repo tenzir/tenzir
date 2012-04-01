@@ -17,72 +17,58 @@ expression<Iterator>::expression(error_handler<Iterator>& error_handler)
     qi::_3_type _3;
     qi::_4_type _4;
 
-    qi::uint_type uint_;
-    qi::raw_type raw;
-    qi::lexeme_type lexeme;
-    qi::alpha_type alpha;
-    qi::alnum_type alnum;
-    qi::bool_type bool_;
-
     using qi::on_error;
     using qi::fail;
     using boost::phoenix::function;
 
-    typedef function<parser::error_handler<Iterator>> error_handler_function;
+    typedef function<parser::error_handler<Iterator>> handle_error;
 
     binary_op.add
-        ("+",  ast::plus)
-        ("-",  ast::minus)
-        ("*",  ast::times)
-        ("/",  ast::divide)
-        ("%",  ast::mod)
-        ;
-
-    unary_op.add
+        ("+", ast::plus)
+        ("-", ast::minus)
+        ("*", ast::times)
+        ("/", ast::divide)
+        ("%", ast::mod)
         ("|", ast::bitwise_or)
         ("^", ast::bitwise_xor)
         ("&", ast::bitwise_and)
+        ;
+
+    unary_op.add
         ("+", ast::positive)
         ("-", ast::negative)
         ;
 
-    keywords.add
-        ("T")
-        ("F")
+    expr
+        =   unary
+        >>  *(binary_op >> unary)
         ;
 
-    expr 
-        =   unary_expr
-        >>  *(binary_op > unary_expr)
+    unary
+        =   primary
+        |   (unary_op > unary)
         ;
 
-    unary_expr 
-        =   primary_expr
-        |   (unary_op > unary_expr)
-        ;
-
-    primary_expr 
-        =   identifier
-        |   bool_
+    primary
+        =   val
         |   ('(' > expr > ')')
-        ;
-
-    identifier 
-        =   !keywords
-        >>  raw[lexeme[(alpha | '_') >> *(alnum | '_')]]
         ;
 
     BOOST_SPIRIT_DEBUG_NODES(
         (expr)
-        (unary_expr)
-        (primary_expr)
-        (identifier)
+        (unary)
+        (primary)
     );
 
-    on_error<fail>(expr,
-                   error_handler_function(error_handler)(
-                       "error! expecting ", _4, _3));
+    on_error<fail>(expr, handle_error(error_handler)(_4, _3));
+    on_error<fail>(unary, handle_error(error_handler)(_4, _3));
+    on_error<fail>(primary, handle_error(error_handler)(_4, _3));
 
+    binary_op.name("binary expression operator");
+    unary_op.name("unary expression operator");
+    expr.name("expression");
+    unary.name("unary expression");
+    primary.name("primary expression");
 }
 
 } // namespace ast
