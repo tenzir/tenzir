@@ -1,10 +1,10 @@
-#ifndef VAST_QUERY_PARSER_SKIPPER_H
-#define VAST_QUERY_PARSER_SKIPPER_H
+#ifndef VAST_UTIL_PARSER_SKIPPER_H
+#define VAST_UTIL_PARSER_SKIPPER_H
 
 #include <boost/spirit/include/qi.hpp>
 
 namespace vast {
-namespace query {
+namespace util {
 namespace parser {
 
 namespace qi = boost::spirit::qi;
@@ -22,6 +22,7 @@ struct skipper : qi::grammar<Iterator>
         start =
                 space                           // Tab, space, CR, LF
             |   "/*" >> *(char_ - "*/") >> "*/" // C-style comments
+            |   '#' >> *(char_ - '\n') >> '\n'  // # until end of line
             ;
     }
 
@@ -29,7 +30,7 @@ struct skipper : qi::grammar<Iterator>
 };
 
 } // namespace ast
-} // namespace query
+} // namespace util
 } // namespace vast
 
 #endif

@@ -1,14 +1,16 @@
-#ifndef VAST_QUERY_PARSER_ERROR_HANDLER_H
-#define VAST_QUERY_PARSER_ERROR_HANDLER_H
+#ifndef VAST_UTIL_PARSER_ERROR_HANDLER_H
+#define VAST_UTIL_PARSER_ERROR_HANDLER_H
 
-#include <iostream>
 #include <string>
 #include <vector>
+#include <boost/spirit/include/phoenix_function.hpp>
+#include "vast/util/logger.h"
 
 namespace vast {
-namespace query {
+namespace util {
 namespace parser {
 
+/// A parser error handler that uses the logger to report the parse error.
 template <typename Iterator>
 struct error_handler
 {
@@ -23,27 +25,29 @@ struct error_handler
     {
     }
 
-    template <typename What>
-    void operator()(What const& what, Iterator err_pos) const
+    boost::phoenix::function<error_handler<Iterator>> functor()
+    {
+        return boost::phoenix::function<error_handler<Iterator>>(*this);
+    }
+
+    template <typename Production>
+    void operator()(Production const& production, Iterator err_pos) const
     {
         int line;
         Iterator line_start = get_pos(err_pos, line);
         if (err_pos != last)
         {
-            std::cout
-                << "parse error, expecting " << what
-                << " line " << line << ':' << std::endl
-                << get_line(line_start) << std::endl;
+            LOG(error, core)
+                << "parse error, expecting " << production
+                << " line " << line << ':';
 
-            while (line_start++ != err_pos)
-                std::cout << ' ';
-            std::cout << '^' << std::endl;
+            LOG(error, core) << get_line(line_start) << std::endl;
+            LOG(error, core) << std::string(' ', err_pos - line_start) << '^';
         }
         else
-        {
-            std::cout << "unexpected end of query ";
-            std::cout << what << " line " << line << std::endl;
-        }
+            LOG(error, core) 
+                << "unexpected end of input in production"
+                << production << " line " << line;
     }
 
     Iterator get_pos(Iterator err_pos, int& line) const
@@ -89,8 +93,8 @@ struct error_handler
     std::vector<Iterator> iters;
 };
 
-} // namespace ast
-} // namespace query
+} // namespace parser
+} // namespace util
 } // namespace vast
 
 #endif

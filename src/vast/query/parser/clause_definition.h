@@ -8,7 +8,7 @@ namespace query {
 namespace parser {
 
 template <typename Iterator>
-clause<Iterator>::clause(error_handler<Iterator>& error_handler)
+clause<Iterator>::clause(util::parser::error_handler<Iterator>& error_handler)
   : clause::base_type(query)
   , expr(error_handler)
 {
@@ -24,9 +24,6 @@ clause<Iterator>::clause(error_handler<Iterator>& error_handler)
 
     using qi::on_error;
     using qi::fail;
-    using boost::phoenix::function;
-
-    typedef function<parser::error_handler<Iterator>> handle_error;
 
     binary_query_op.add
         ("||", ast::logical_or)
@@ -97,10 +94,10 @@ clause<Iterator>::clause(error_handler<Iterator>& error_handler)
         (identifier)
     );
 
-    on_error<fail>(query, handle_error(error_handler)(_4, _3));
-    on_error<fail>(unary_clause, handle_error(error_handler)(_4, _3));
-    on_error<fail>(event_clause, handle_error(error_handler)(_4, _3));
-    on_error<fail>(type_clause, handle_error(error_handler)(_4, _3));
+    on_error<fail>(query, error_handler.functor()(_4, _3));
+    on_error<fail>(unary_clause, error_handler.functor()(_4, _3));
+    on_error<fail>(event_clause, error_handler.functor()(_4, _3));
+    on_error<fail>(type_clause, error_handler.functor()(_4, _3));
 
     binary_query_op.name("binary query operator");
     unary_query_op.name("unary query operator");

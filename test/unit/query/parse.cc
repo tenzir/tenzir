@@ -10,7 +10,7 @@ bool parse(std::string const& str)
     auto i = str.begin();
     auto end = str.end();
 
-    vast::query::parser::error_handler<iterator_type> error_handler(i, end);
+    vast::util::parser::error_handler<iterator_type> error_handler(i, end);
     Grammar<iterator_type> grammar(error_handler);
     vast::query::parser::skipper<iterator_type> skipper;
     Attribute attr;

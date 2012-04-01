@@ -2,14 +2,14 @@
 #define VAST_QUERY_PARSER_EXPRESSION_DEFINITION_H
 
 #include "vast/query/parser/expression.h"
-#include <boost/spirit/include/phoenix_function.hpp>
 
 namespace vast {
 namespace query {
 namespace parser {
 
 template <typename Iterator>
-expression<Iterator>::expression(error_handler<Iterator>& error_handler)
+expression<Iterator>::expression(
+    util::parser::error_handler<Iterator>& error_handler)
   : expression::base_type(expr)
 {
     qi::_1_type _1;
@@ -19,9 +19,6 @@ expression<Iterator>::expression(error_handler<Iterator>& error_handler)
 
     using qi::on_error;
     using qi::fail;
-    using boost::phoenix::function;
-
-    typedef function<parser::error_handler<Iterator>> handle_error;
 
     binary_op.add
         ("+", ast::plus)
@@ -60,9 +57,9 @@ expression<Iterator>::expression(error_handler<Iterator>& error_handler)
         (primary)
     );
 
-    on_error<fail>(expr, handle_error(error_handler)(_4, _3));
-    on_error<fail>(unary, handle_error(error_handler)(_4, _3));
-    on_error<fail>(primary, handle_error(error_handler)(_4, _3));
+    on_error<fail>(expr, error_handler.functor()(_4, _3));
+    on_error<fail>(unary, error_handler.functor()(_4, _3));
+    on_error<fail>(primary, error_handler.functor()(_4, _3));
 
     binary_op.name("binary expression operator");
     unary_op.name("unary expression operator");
