@@ -7,6 +7,7 @@
 #include "vast/fs/path.h"
 #include "vast/fs/operations.h"
 #include "vast/meta/taxonomy.h"
+#include "vast/query/query.h"
 #include "vast/util/logger.h"
 #include "vast/util/make_unique.h"
 #include "config.h"
@@ -154,6 +155,12 @@ void program::start()
         if (config_.check("comp-query"))
         {
             query_.processor.init();
+
+            if (config_.check("query"))
+            {
+                vast::query::query q(config_.get<std::string>("query"));
+                query_.processor.submit(q);
+            }
 
             if (config_.check("comp-emit"))
             {

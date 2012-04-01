@@ -58,8 +58,6 @@ expression<Iterator>::expression(
     );
 
     on_error<fail>(expr, error_handler.functor()(_4, _3));
-    on_error<fail>(unary, error_handler.functor()(_4, _3));
-    on_error<fail>(primary, error_handler.functor()(_4, _3));
 
     binary_op.name("binary expression operator");
     unary_op.name("unary expression operator");

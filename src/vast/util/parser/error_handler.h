@@ -39,15 +39,15 @@ struct error_handler
         {
             LOG(error, core)
                 << "parse error, expecting " << production
-                << " line " << line << ':';
+                << " at line " << line << ':';
 
             LOG(error, core) << get_line(line_start);
-            LOG(error, core) << std::string(' ', err_pos - line_start) << '^';
+            LOG(error, core) << std::string(err_pos - line_start, ' ') << '^';
         }
         else
             LOG(error, core) 
-                << "unexpected end of input in production"
-                << production << " line " << line;
+                << "unexpected end of input in "
+                << production << " at line " << line;
     }
 
     Iterator get_pos(Iterator err_pos, int& line) const

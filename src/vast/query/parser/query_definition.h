@@ -95,9 +95,6 @@ query<Iterator>::query(util::parser::error_handler<Iterator>& error_handler)
     );
 
     on_error<fail>(qry, error_handler.functor()(_4, _3));
-    on_error<fail>(unary_clause, error_handler.functor()(_4, _3));
-    on_error<fail>(event_clause, error_handler.functor()(_4, _3));
-    on_error<fail>(type_clause, error_handler.functor()(_4, _3));
 
     binary_query_op.name("binary query operator");
     unary_query_op.name("unary query operator");

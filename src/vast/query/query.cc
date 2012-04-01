@@ -2,8 +2,11 @@
 
 #include <ze/event.h>
 #include <boost/uuid/random_generator.hpp>
+#include <boost/uuid/uuid_io.hpp>
+#include "vast/query/exception.h"
 #include "vast/query/parser/query.h"
 #include "vast/util/parser/parse.h"
+#include "vast/util/logger.h"
 
 namespace vast {
 namespace query {
@@ -12,11 +15,11 @@ query::query(std::string const& str)
   : id_(boost::uuids::random_generator()())
   , state_(unknown)
 {
-    ast::query query_ast;
-    auto success = util::parser::parse<parser::query>(str, query_ast);
+    LOG(verbose, query) << "new query " << id_ << ": " << str;
 
-    if (! success)
-        throw "query parse error"; // TODO throw correct exception
+    ast::query query_ast;
+    if (! util::parser::parse<parser::query>(str, query_ast))
+        throw syntax_exception(str);
 }
 
 query::state query::status() const
