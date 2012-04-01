@@ -28,9 +28,16 @@ clause<Iterator>::clause(error_handler<Iterator>& error_handler)
 
     typedef function<parser::error_handler<Iterator>> handle_error;
 
-    binary_op.add
+    binary_query_op.add
         ("||", ast::logical_or)
         ("&&", ast::logical_and)
+        ;
+
+    unary_query_op.add
+        ("!", ast::logical_not)
+        ;
+
+    binary_clause_op.add
         ("~",  ast::match)
         ("==", ast::equal)
         ("!=", ast::not_equal)
@@ -38,10 +45,6 @@ clause<Iterator>::clause(error_handler<Iterator>& error_handler)
         ("<=", ast::less_equal)
         (">",  ast::greater)
         (">=", ast::greater_equal)
-        ;
-
-    unary_op.add
-        ("!", ast::logical_not)
         ;
 
     type.add
@@ -63,23 +66,23 @@ clause<Iterator>::clause(error_handler<Iterator>& error_handler)
 
     query
         =   unary_clause
-        >>  *(binary_op > unary_clause)
+        >>  *(binary_query_op > unary_clause)
         ;
 
     unary_clause
         =   event_clause
         |   type_clause
-        |   (unary_op > unary_clause)
+        |   (unary_query_op > unary_clause)
         ;
 
     event_clause
         =   identifier > '.' > identifier
-        >   binary_op
+        >   binary_clause_op
         >   expr;
 
     type_clause
         =   lexeme['@' > type]
-        >   binary_op > expr;
+        >   binary_clause_op > expr;
         ;
 
     identifier
@@ -99,8 +102,9 @@ clause<Iterator>::clause(error_handler<Iterator>& error_handler)
     on_error<fail>(event_clause, handle_error(error_handler)(_4, _3));
     on_error<fail>(type_clause, handle_error(error_handler)(_4, _3));
 
-    binary_op.name("binary clause operator");
-    unary_op.name("unary clause operator");
+    binary_query_op.name("binary query operator");
+    unary_query_op.name("unary query operator");
+    binary_clause_op.name("binary clause operator");
     query.name("query");
     unary_clause.name("unary clause");
     event_clause.name("event clause");

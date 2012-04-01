@@ -28,7 +28,7 @@ struct clause : qi::grammar<Iterator, ast::query(), skipper<Iterator>>
         identifier;
 
     qi::symbols<char, ast::clause_operator>
-        unary_op, binary_op;
+        unary_query_op, binary_query_op, binary_clause_op;
 
     qi::symbols<char, ast::type>
         type;
