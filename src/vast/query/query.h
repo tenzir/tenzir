@@ -18,8 +18,9 @@ public:
     /// Query state.
     enum state
     {
-        unknown,    ///< Unkown (default) state.
-        validated,  ///< Successfully parsed.
+        invalid,    ///< Invalid.
+        parsed,     ///< Successfully parsed.
+        validated,  ///< Structure and types validated.
         canonified, ///< Transformed into a unique representation.
         optimized,  ///< Optimized for execution.
         running,    ///< Executing.
@@ -28,9 +29,22 @@ public:
         completed   ///< Completed.
     };
 
+    /// Query type.
+    enum class type : uint8_t
+    {
+        meta        = 0x01, ///< Involves event meta data.
+        type        = 0x02, ///< Asks for values of specific types.
+        taxonomy    = 0x04  ///< Refers to specific arguments via a taxonomy.
+    };
+
     /// Constructs a query from a query expression.
     /// @param str The query string.
     query(std::string const& str);
+
+    /// Tests whether an event matches the query.
+    /// @param event The event to match.
+    /// @return @c true if @a event satisfies the query.
+    bool match(ze::event_ptr event);
 
     /// Gets the query ID.
     /// @return The query ID.

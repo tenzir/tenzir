@@ -30,7 +30,7 @@ struct query : qi::grammar<Iterator, ast::query(), skipper<Iterator>>
     qi::symbols<char, ast::clause_operator>
         unary_query_op, binary_query_op, binary_clause_op;
 
-    qi::symbols<char, ast::type>
+    qi::symbols<char, ze::value_type>
         type;
 
     expression<Iterator> expr;

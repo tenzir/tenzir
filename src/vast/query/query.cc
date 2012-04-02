@@ -13,13 +13,27 @@ namespace query {
 
 query::query(std::string const& str)
   : id_(boost::uuids::random_generator()())
-  , state_(unknown)
+  , state_(invalid)
 {
     LOG(verbose, query) << "new query " << id_ << ": " << str;
 
     ast::query query_ast;
     if (! util::parser::parse<parser::query>(str, query_ast))
         throw syntax_exception(str);
+
+    state_ = parsed;
+
+    // TODO: canonify (e.g., fold constants).
+
+    if (! ast::validate(query_ast))
+        throw semantic_exception("semantic error", str);
+
+    state_ = validated;
+}
+
+bool query::match(ze::event_ptr event)
+{
+    return true;
 }
 
 query::state query::status() const

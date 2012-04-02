@@ -47,7 +47,7 @@ enum expr_operator
     mod,
     positive,
     negative,
-    bitewise_not,
+    bitwise_not,
 };
 
 // Clause operators sorted by ascending precedence.
@@ -63,29 +63,6 @@ enum clause_operator
     greater,
     greater_equal,
     logical_not
-};
-
-enum type
-{
-    // Basic types
-    bool_type,
-    int_type,
-    uint_type,
-    double_type,
-    duration_type,
-    timepoint_type,
-    string_type,
-
-    // Containers
-    vector_type,
-    set_type,
-    table_type,
-    record_type,
-
-    // Network types
-    address_type,
-    prefix_type,
-    port_type
 };
 
 struct unary_expr
@@ -108,7 +85,7 @@ struct expression
 
 struct type_clause
 {
-    type lhs;
+    ze::value_type lhs;
     clause_operator op;
     expression rhs;
 };
@@ -145,6 +122,16 @@ struct query
     std::vector<clause_operation> rest;
 };
 
+/// Folds a constant expression into a single value.
+/// @param expr The constant expression.
+/// @return The folded value.
+ze::value fold(expression const& expr);
+
+/// Validates a query with respect to semantic correctness.
+/// @param q The query to validate.
+/// @return @c true iff the query is semantically correct.
+bool validate(query const& q);
+
 } // namespace ast
 } // namespace query
 } // namespace vast
@@ -166,7 +153,7 @@ BOOST_FUSION_ADAPT_STRUCT(
 
 BOOST_FUSION_ADAPT_STRUCT(
     vast::query::ast::type_clause,
-    (vast::query::ast::type, lhs)
+    (ze::value_type, lhs)
     (vast::query::ast::clause_operator, op)
     (vast::query::ast::expression, rhs))
 
