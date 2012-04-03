@@ -36,6 +36,7 @@ query<Iterator>::query(util::parser::error_handler<Iterator>& error_handler)
 
     binary_clause_op.add
         ("~",  ast::match)
+        ("!~", ast::not_match)
         ("==", ast::equal)
         ("!=", ast::not_equal)
         ("<",  ast::less)

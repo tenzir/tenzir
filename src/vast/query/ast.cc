@@ -95,8 +95,11 @@ struct validator : public boost::static_visitor<bool>
 
     bool operator()(type_clause const& clause) const
     {
-        auto value = fold(clause.rhs);
-        if (clause.lhs != value.which())
+        auto rhs = fold(clause.rhs);
+        auto rhs_type = rhs.which();
+        auto lhs_type = clause.lhs;
+        if (lhs_type != lhs_type ||
+            ! (lhs_type == ze::string_type && rhs_type == ze::regex_type))
             return false;
 
         // TODO: Test whether the type supports the provided binary operation.
@@ -133,14 +136,14 @@ ze::value fold(expression const& expr)
 
 bool validate(query const& q)
 {
-        if (! boost::apply_visitor(validator(), q.first))
+    if (! boost::apply_visitor(validator(), q.first))
+        return false;
+
+    for (auto& operation : q.rest)
+        if (! boost::apply_visitor(validator(), operation.operand))
             return false;
 
-        for (auto& operation : q.rest)
-            if (! boost::apply_visitor(validator(), operation.operand))
-                return false;
-
-        return true;
+    return true;
 };
 
 } // namespace ast

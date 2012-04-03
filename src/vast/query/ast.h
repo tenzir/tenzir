@@ -53,15 +53,21 @@ enum expr_operator
 // Clause operators sorted by ascending precedence.
 enum clause_operator
 {
-    logical_or,
-    logical_and,
     match,
+    not_match,
     equal,
     not_equal,
     less,
     less_equal,
     greater,
     greater_equal,
+};
+
+// Query operators sorted by ascending precedence.
+enum query_operator
+{
+    logical_or,
+    logical_and,
     logical_not
 };
 
@@ -106,13 +112,13 @@ typedef boost::variant<
 
 struct unary_clause
 {
-    clause_operator op;
+    query_operator op;
     clause_operand operand;
 };
 
 struct clause_operation
 {
-    clause_operator op;
+    query_operator op;
     clause_operand operand;
 };
 
@@ -127,7 +133,8 @@ struct query
 /// @return The folded value.
 ze::value fold(expression const& expr);
 
-/// Validates a query with respect to semantic correctness.
+/// Validates a query with respect to semantic correctness. This means ensuring
+/// that LHS and RHS of clause operators have the same type.
 /// @param q The query to validate.
 /// @return @c true iff the query is semantically correct.
 bool validate(query const& q);
@@ -166,12 +173,12 @@ BOOST_FUSION_ADAPT_STRUCT(
 
 BOOST_FUSION_ADAPT_STRUCT(
     vast::query::ast::unary_clause,
-    (vast::query::ast::clause_operator, op)
+    (vast::query::ast::query_operator, op)
     (vast::query::ast::clause_operand, operand))
 
 BOOST_FUSION_ADAPT_STRUCT(
     vast::query::ast::clause_operation,
-    (vast::query::ast::clause_operator, op)
+    (vast::query::ast::query_operator, op)
     (vast::query::ast::clause_operand, operand))
 
 BOOST_FUSION_ADAPT_STRUCT(
