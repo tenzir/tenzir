@@ -159,7 +159,7 @@ void program::start()
             if (config_.check("query"))
             {
                 vast::query::query q(config_.get<std::string>("query"));
-                query_.processor.submit(q);
+                query_.processor.submit(std::move(q));
             }
 
             if (config_.check("comp-emit"))

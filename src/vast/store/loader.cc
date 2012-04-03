@@ -61,6 +61,8 @@ void loader::load(fs::path const& dir)
                 LOG(error, store) << e.what();
             }
         });
+
+    LOG(verbose, store) << "finished loading events from " << dir;
 }
 
 void loader::forward(ze::event_ptr&& event)

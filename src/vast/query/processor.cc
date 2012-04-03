@@ -17,13 +17,16 @@ void processor::init()
     receive([&](ze::event_ptr&& event) { process(std::move(event)); });
 }
 
-void processor::submit(query const& query)
+void processor::submit(query query)
 {
+    queries_.push_back(std::move(query));
 }
 
 void processor::process(ze::event_ptr&& event)
 {
-    LOG(debug, query) << "processing event" << *event;
+    for (auto& query : queries_)
+        if (query.match(event))
+            LOG(debug, query) << "matching event" << *event;
 }
 
 } // namespace query

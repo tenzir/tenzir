@@ -88,7 +88,7 @@ struct folder : public boost::static_visitor<ze::value>
 
 struct validator : public boost::static_visitor<bool>
 {
-    bool operator()(clause_operand const& operand) const
+    bool operator()(clause const& operand) const
     {
         return boost::apply_visitor(*this, operand);
     }
@@ -98,13 +98,13 @@ struct validator : public boost::static_visitor<bool>
         auto rhs = fold(clause.rhs);
         auto rhs_type = rhs.which();
         auto lhs_type = clause.lhs;
-        if (lhs_type != lhs_type ||
-            ! (lhs_type == ze::string_type && rhs_type == ze::regex_type))
-            return false;
+        if (lhs_type == lhs_type ||
+            (lhs_type == ze::string_type && rhs_type == ze::regex_type))
+            return true;
 
         // TODO: Test whether the type supports the provided binary operation.
 
-        return true;
+        return false;
     }
 
     bool operator()(event_clause const& clause) const
@@ -113,11 +113,36 @@ struct validator : public boost::static_visitor<bool>
         return false;
     }
 
-    bool operator()(unary_clause const& clause) const
+    bool operator()(negated_clause const& clause) const
     {
         return boost::apply_visitor(*this, clause.operand);
     }
 };
+
+clause_operator negate(clause_operator op)
+{
+    switch (op)
+    {
+        default:
+            assert(! "missing operator implementation");
+        case match:
+            return not_match;
+        case not_match:
+            return match;
+        case equal:
+            return not_equal;
+        case not_equal:
+            return equal;
+        case less:
+            return greater_equal;
+        case less_equal:
+            return greater;
+        case greater:
+            return less_equal;
+        case greater_equal:
+            return less;
+    }
+}
 
 ze::value fold(expression const& expr)
 {

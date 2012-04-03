@@ -25,16 +25,12 @@ query<Iterator>::query(util::parser::error_handler<Iterator>& error_handler)
     using qi::on_error;
     using qi::fail;
 
-    binary_query_op.add
+    boolean_op.add
         ("||", ast::logical_or)
         ("&&", ast::logical_and)
         ;
 
-    unary_query_op.add
-        ("!", ast::logical_not)
-        ;
-
-    binary_clause_op.add
+    clause_op.add
         ("~",  ast::match)
         ("!~", ast::not_match)
         ("==", ast::equal)
@@ -63,24 +59,24 @@ query<Iterator>::query(util::parser::error_handler<Iterator>& error_handler)
         ;
 
     qry
-        =   unary_clause
-        >>  *(binary_query_op > unary_clause)
+        =   clause
+        >>  *(boolean_op > clause)
         ;
 
-    unary_clause
+    clause
         =   event_clause
         |   type_clause
-        |   (unary_query_op > unary_clause)
+        |   ('!' > clause)
         ;
 
     event_clause
         =   identifier > '.' > identifier
-        >   binary_clause_op
+        >   clause_op
         >   expr;
 
     type_clause
         =   lexeme['@' > type]
-        >   binary_clause_op > expr;
+        >   clause_op > expr;
         ;
 
     identifier
@@ -89,7 +85,7 @@ query<Iterator>::query(util::parser::error_handler<Iterator>& error_handler)
 
     BOOST_SPIRIT_DEBUG_NODES(
         (qry)
-        (unary_clause)
+        (clause)
         (type_clause)
         (event_clause)
         (identifier)
@@ -97,12 +93,11 @@ query<Iterator>::query(util::parser::error_handler<Iterator>& error_handler)
 
     on_error<fail>(qry, error_handler.functor()(_4, _3));
 
-    binary_query_op.name("binary query operator");
-    unary_query_op.name("unary query operator");
-    binary_clause_op.name("binary clause operator");
+    boolean_op.name("binary boolean operator");
+    clause_op.name("binary clause operator");
     type.name("type");
     qry.name("query");
-    unary_clause.name("unary clause");
+    clause.name("clause");
     event_clause.name("event clause");
     type_clause.name("type clause");
     identifier.name("identifier");

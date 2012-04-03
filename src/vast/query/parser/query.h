@@ -15,8 +15,8 @@ struct query : qi::grammar<Iterator, ast::query(), skipper<Iterator>>
     qi::rule<Iterator, ast::query(), skipper<Iterator>>
         qry;
 
-    qi::rule<Iterator, ast::clause_operand(), skipper<Iterator>>
-        unary_clause;
+    qi::rule<Iterator, ast::clause(), skipper<Iterator>>
+        clause;
 
     qi::rule<Iterator, ast::type_clause(), skipper<Iterator>>
         type_clause;
@@ -28,10 +28,10 @@ struct query : qi::grammar<Iterator, ast::query(), skipper<Iterator>>
         identifier;
 
     qi::symbols<char, ast::clause_operator>
-        binary_clause_op;
+        clause_op;
 
-    qi::symbols<char, ast::query_operator>
-        unary_query_op, binary_query_op;
+    qi::symbols<char, ast::boolean_operator>
+        boolean_op;
 
     qi::symbols<char, ze::value_type>
         type;

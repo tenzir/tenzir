@@ -6,6 +6,12 @@
 namespace vast {
 namespace query {
 
+namespace ast {
+
+struct query;
+
+} // namespace ast
+
 class query;
 class meta_query;
 class type_query;

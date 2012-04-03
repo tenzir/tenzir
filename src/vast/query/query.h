@@ -3,6 +3,8 @@
 
 #include <string>
 #include <ze/forward.h>
+#include "vast/query/ast.h"
+#include "vast/query/boolean_expression.h"
 #include "vast/util/uuid.h"
 
 namespace vast {
@@ -11,9 +13,6 @@ namespace query {
 /// The query.
 class query
 {
-    query(query const&) = delete;
-    query& operator=(query const&) = delete;
-
 public:
     /// Query state.
     enum state
@@ -37,9 +36,12 @@ public:
         taxonomy    = 0x04  ///< Refers to specific arguments via a taxonomy.
     };
 
-    /// Constructs a query from a query expression.
+    /// Constructs a query from a string.
     /// @param str The query string.
     query(std::string const& str);
+
+    query(query&& other);
+    query& operator=(query other);
 
     /// Tests whether an event matches the query.
     /// @param event The event to match.
@@ -61,12 +63,8 @@ public:
 private:
     util::uuid id_;
     state state_;
+    ast::query ast_;
 };
-
-/// Tests whether an event matches a query.
-/// @param q The query.
-/// @param e The event to test.
-bool match(query const& q, ze::event_ptr e);
 
 } // namespace query
 } // namespace vast

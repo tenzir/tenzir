@@ -3,7 +3,7 @@
 
 #include <ze/component.h>
 #include <ze/sink.h>
-#include "vast/query/forward.h"
+#include "vast/query/query.h"
 
 namespace vast {
 namespace query {
@@ -20,10 +20,12 @@ public:
     processor(ze::component<ze::event>& c);
 
     void init();
-    void submit(query const& q);
+    void submit(query q);
 
 private:
     void process(ze::event_ptr&& event);
+
+    std::vector<query> queries_;
 };
 
 } // namespace query

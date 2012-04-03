@@ -1,11 +1,9 @@
 #ifndef VAST_QUERY_AST_H
 #define VAST_QUERY_AST_H
 
-#include <boost/config/warning_disable.hpp>
 #include <boost/variant/recursive_variant.hpp>
 #include <boost/fusion/include/adapt_struct.hpp>
 #include <boost/fusion/include/io.hpp>
-#include <boost/optional.hpp>
 #include <ze/value.h>
 #include <vector>
 
@@ -15,7 +13,7 @@ namespace ast {
 
 struct nil {};
 struct unary_expr;
-struct unary_clause;
+struct negated_clause;
 struct expression;
 
 struct identifier
@@ -63,12 +61,11 @@ enum clause_operator
     greater_equal,
 };
 
-// Query operators sorted by ascending precedence.
-enum query_operator
+// Binary boolean operators.
+enum boolean_operator
 {
     logical_or,
-    logical_and,
-    logical_not
+    logical_and
 };
 
 struct unary_expr
@@ -107,26 +104,30 @@ struct event_clause
 typedef boost::variant<
     type_clause
   , event_clause
-  , boost::recursive_wrapper<unary_clause>
-> clause_operand;
+  , boost::recursive_wrapper<negated_clause>
+> clause;
 
-struct unary_clause
+struct negated_clause
 {
-    query_operator op;
-    clause_operand operand;
+    clause operand;
 };
 
 struct clause_operation
 {
-    query_operator op;
-    clause_operand operand;
+    boolean_operator op;
+    clause operand;
 };
 
 struct query
 {
-    clause_operand first;
+    clause first;
     std::vector<clause_operation> rest;
 };
+
+/// Negates a clause operand.
+/// @param op The operator to negate.
+/// @return The negation of @a op.
+clause_operator negate(clause_operator op);
 
 /// Folds a constant expression into a single value.
 /// @param expr The constant expression.
@@ -172,18 +173,17 @@ BOOST_FUSION_ADAPT_STRUCT(
     (vast::query::ast::expression, rhs))
 
 BOOST_FUSION_ADAPT_STRUCT(
-    vast::query::ast::unary_clause,
-    (vast::query::ast::query_operator, op)
-    (vast::query::ast::clause_operand, operand))
+    vast::query::ast::negated_clause,
+    (vast::query::ast::clause, operand))
 
 BOOST_FUSION_ADAPT_STRUCT(
     vast::query::ast::clause_operation,
-    (vast::query::ast::query_operator, op)
-    (vast::query::ast::clause_operand, operand))
+    (vast::query::ast::boolean_operator, op)
+    (vast::query::ast::clause, operand))
 
 BOOST_FUSION_ADAPT_STRUCT(
     vast::query::ast::query,
-    (vast::query::ast::clause_operand, first)
+    (vast::query::ast::clause, first)
     (std::vector<vast::query::ast::clause_operation>, rest))
 
 #endif
