@@ -64,9 +64,15 @@ query<Iterator>::query(util::parser::error_handler<Iterator>& error_handler)
         ;
 
     clause
-        =   event_clause
-        |   type_clause
-        |   ('!' > clause)
+        =   type_clause
+        |   event_clause
+        |   ('!' > not_clause)
+        ;
+
+    type_clause
+        =   lexeme['@' > type]
+        >   clause_op
+        >   expr;
         ;
 
     event_clause
@@ -74,9 +80,8 @@ query<Iterator>::query(util::parser::error_handler<Iterator>& error_handler)
         >   clause_op
         >   expr;
 
-    type_clause
-        =   lexeme['@' > type]
-        >   clause_op > expr;
+    not_clause
+        =   clause
         ;
 
     identifier
@@ -92,6 +97,10 @@ query<Iterator>::query(util::parser::error_handler<Iterator>& error_handler)
     );
 
     on_error<fail>(qry, error_handler.functor()(_4, _3));
+    on_error<fail>(clause, error_handler.functor()(_4, _3));
+    on_error<fail>(type_clause, error_handler.functor()(_4, _3));
+    on_error<fail>(event_clause, error_handler.functor()(_4, _3));
+    on_error<fail>(not_clause, error_handler.functor()(_4, _3));
 
     boolean_op.name("binary boolean operator");
     clause_op.name("binary clause operator");
@@ -100,6 +109,7 @@ query<Iterator>::query(util::parser::error_handler<Iterator>& error_handler)
     clause.name("clause");
     event_clause.name("event clause");
     type_clause.name("type clause");
+    not_clause.name("negated clause");
     identifier.name("identifier");
 }
 

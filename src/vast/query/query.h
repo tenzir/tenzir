@@ -3,7 +3,6 @@
 
 #include <string>
 #include <ze/forward.h>
-#include "vast/query/ast.h"
 #include "vast/query/boolean_expression.h"
 #include "vast/util/uuid.h"
 
@@ -38,7 +37,7 @@ public:
 
     /// Constructs a query from a string.
     /// @param str The query string.
-    query(std::string const& str);
+    query(std::string str);
 
     query(query&& other);
     query& operator=(query other);
@@ -63,7 +62,8 @@ public:
 private:
     util::uuid id_;
     state state_;
-    ast::query ast_;
+    std::string str_;
+    boolean_expression expr_;
 };
 
 } // namespace query

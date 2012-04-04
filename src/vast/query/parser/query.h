@@ -24,6 +24,9 @@ struct query : qi::grammar<Iterator, ast::query(), skipper<Iterator>>
     qi::rule<Iterator, ast::event_clause(), skipper<Iterator>>
         event_clause;
 
+    qi::rule<Iterator, ast::negated_clause(), skipper<Iterator>>
+        not_clause;
+
     qi::rule<Iterator, std::string(), skipper<Iterator>>
         identifier;
 

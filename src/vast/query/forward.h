@@ -8,6 +8,9 @@ namespace query {
 
 namespace ast {
 
+struct type_clause;
+struct event_clause;
+struct negated_clause;
 struct query;
 
 } // namespace ast

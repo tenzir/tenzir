@@ -26,7 +26,7 @@ void processor::process(ze::event_ptr&& event)
 {
     for (auto& query : queries_)
         if (query.match(event))
-            LOG(debug, query) << "matching event" << *event;
+            std::cout << *event << std::endl;
 }
 
 } // namespace query

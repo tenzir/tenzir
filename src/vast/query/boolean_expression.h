@@ -27,6 +27,9 @@ public:
     /// @param lhs The value from an event.
     void eval(ze::value const& lhs);
 
+    /// Sets the claues to false.
+    void reset();
+
     /// Retrieves the type of the clause.
     /// @return The type of the clause.
     ze::value_type type() const;
@@ -37,24 +40,32 @@ private:
     bool status_;
 };
 
+typedef std::vector<clause> conjunction;
+
 /// A sequence of clauses connected by boolean operators.
 class boolean_expression
 {
 public:
-    /// Constructs a boolean expression from a parsed query.
-    /// @param query The query AST.
-    boolean_expression(ast::query const& query);
+    /// Constructs an empty boolean expression.
+    boolean_expression();
 
     /// Converts the expression to @c bool.
     /// @return @c true if the expression is true.
     explicit operator bool() const;
+
+    /// Populates the expression from a parsed query.
+    /// @param query The query AST.
+    void assign(ast::query const& query);
+
+    /// Resets the expression by setting each clause to false.
+    void reset();
 
     /// Adds a value to the boolean expression.
     /// @param value The value to respect by the expression.
     void feed(ze::value const& value);
 
 private:
-    std::vector<std::vector<clause>> clauses_;
+    std::vector<conjunction> disjunction_;
 };
 
 } // namespace query

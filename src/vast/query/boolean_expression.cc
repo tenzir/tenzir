@@ -55,10 +55,10 @@ struct clausifier
 {
     typedef void result_type;
 
-    clausifier(std::vector<std::vector<clause>>& clauses)
-      : clauses(clauses)
+    clausifier(std::vector<conjunction>& disjunction)
+      : disjunction(disjunction)
     {
-        assert(! clauses.empty());
+        assert(! disjunction.empty());
     }
 
     void operator()(ast::clause const& operand)
@@ -76,7 +76,7 @@ struct clausifier
         }
 
         auto rhs = ast::fold(clause.rhs);
-        clauses.back().emplace_back(rhs, clause_ops[op]);
+        disjunction.back().emplace_back(rhs, clause_ops[op]);
     }
 
     void operator()(ast::event_clause const& clause)
@@ -90,7 +90,7 @@ struct clausifier
         boost::apply_visitor(*this, clause.operand);
     }
 
-    std::vector<std::vector<clause>>& clauses;
+    std::vector<conjunction>& disjunction;
     bool invert = false;
 };
 
@@ -111,52 +111,65 @@ void clause::eval(ze::value const& lhs)
     status_ = op_(lhs, rhs_);
 }
 
+void clause::reset()
+{
+    status_ = false;
+}
+
 ze::value_type clause::type() const
 {
     return rhs_.which();
 }
 
-boolean_expression::boolean_expression(ast::query const& query)
-  : clauses_(1)
+
+boolean_expression::boolean_expression()
+  : disjunction_(1)
 {
-    clausifier visitor(clauses_);
-    boost::apply_visitor(visitor, query.first);
-    for (auto& clause : query.rest)
-    {
-        if (clause.op == ast::logical_or)
-            clauses_.emplace_back();
-
-        boost::apply_visitor(visitor, clause.operand);
-    }
-
-    for (auto& ands : clauses_)
-        for (auto& clause : ands)
-            LOG(debug, query) << "clause type " << clause.type();
 }
 
 boolean_expression::operator bool() const
 {
     return std::any_of(
-        clauses_.begin(),
-        clauses_.end(),
-        [](std::vector<clause> const& ands)
+        disjunction_.begin(),
+        disjunction_.end(),
+        [](conjunction const& ands)
         {
             return std::all_of(
                 ands.begin(),
                 ands.end(),
-                [](clause const& c) { return bool(c); });
+                [](clause const& c)
+                {
+                    return bool(c);
+                });
         });
+}
+
+void boolean_expression::assign(ast::query const& query)
+{
+    clausifier visitor(disjunction_);
+    boost::apply_visitor(visitor, query.first);
+    for (auto& clause : query.rest)
+    {
+        if (clause.op == ast::logical_or)
+            disjunction_.emplace_back();
+
+        boost::apply_visitor(visitor, clause.operand);
+    }
+}
+
+void boolean_expression::reset()
+{
+    for (auto& ands : disjunction_)
+        for (auto& clause : ands)
+            clause.reset();
 }
 
 void boolean_expression::feed(ze::value const& value)
 {
-    for (auto& ands : clauses_)
+    for (auto& ands : disjunction_)
         for (auto& clause : ands)
-        {
-            LOG(debug, query) << "LHS: " << value.which() << " RHS: " << clause.type();
             if (! clause && clause.type() == value.which())
                 clause.eval(value);
-        }
 }
 
 } // namespace query

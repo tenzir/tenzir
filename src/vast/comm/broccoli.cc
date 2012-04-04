@@ -168,13 +168,13 @@ void broccoli::factory::make_event(ze::event& event, BroEvMeta* meta)
     event.name(meta->ev_name);
     event.timestamp(meta->ev_ts);
 
-    event.args().reserve(meta->ev_numargs);
+    event.reserve(meta->ev_numargs);
     for (int i = 0; i < meta->ev_numargs; ++i)
-        event.args().emplace_back(
+        event.emplace_back(
             make_value(meta->ev_args[i].arg_type,
                        meta->ev_args[i].arg_data));
 
-    event.args().shrink_to_fit();
+    event.shrink_to_fit();
 }
 
 ze::value broccoli::factory::make_value(int type, void* bro_val)
@@ -574,7 +574,7 @@ BroEvent* broccoli::reverse_factory::make_event(ze::event const& event)
         throw broccoli_exception("bro_event_new");
     }
 
-    for (auto const& arg : event.args())
+    for (auto& arg : event)
     {
         LOG(debug, event) << "adding argument: " << arg;
         bro_val val = ze::value::visit(arg, builder());

@@ -4,6 +4,7 @@
 #include <ze/type/regex.h>
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
+#include "vast/query/ast.h"
 #include "vast/query/exception.h"
 #include "vast/query/parser/query.h"
 #include "vast/util/parser/parse.h"
@@ -12,29 +13,34 @@
 namespace vast {
 namespace query {
 
-query::query(std::string const& str)
+query::query(std::string str)
   : id_(boost::uuids::random_generator()())
   , state_(invalid)
+  , str_(std::move(str))
 {
-    LOG(verbose, query) << "new query " << id_ << ": " << str;
+    LOG(verbose, query) << "new query " << id_ << ": " << str_;
 
-    if (! util::parser::parse<parser::query>(str, ast_))
-        throw syntax_exception(str);
+    ast::query query_ast;
+    if (! util::parser::parse<parser::query>(str_, query_ast))
+        throw syntax_exception(str_);
 
     state_ = parsed;
 
     // TODO: canonify (e.g., fold constants).
 
-    if (! ast::validate(ast_))
-        throw semantic_exception("semantic error", str);
+    if (! ast::validate(query_ast))
+        throw semantic_exception("semantic error", str_);
 
     state_ = validated;
+
+    expr_.assign(query_ast);
 }
 
 query::query(query&& other)
   : id_(std::move(other.id_))
   , state_(other.state_)
-  , ast_(std::move(other.ast_))
+  , str_(std::move(other.str_))
+  , expr_(std::move(other.expr_))
 {
     other.state_ = invalid;
 }
@@ -44,17 +50,20 @@ query& query::operator=(query other)
     using std::swap;
     swap(id_, other.id_);
     swap(state_, other.state_);
-    swap(ast_, other.ast_);
+    swap(str_, other.str_);
+    swap(expr_, other.expr_);
     return *this;
 }
 
 bool query::match(ze::event_ptr event)
 {
-    boolean_expression expr(ast_);
-    for (auto& arg : event->args())
-        expr.feed(arg);
-
-    return bool(expr);
+    expr_.reset();
+    return event->any(
+        [&](ze::value const& value)
+        {
+            expr_.feed(value);
+            return bool(expr_);
+        });
 }
 
 query::state query::status() const
