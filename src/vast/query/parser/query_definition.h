@@ -31,14 +31,16 @@ query<Iterator>::query(util::parser::error_handler<Iterator>& error_handler)
         ;
 
     clause_op.add
-        ("~",  ast::match)
-        ("!~", ast::not_match)
-        ("==", ast::equal)
-        ("!=", ast::not_equal)
-        ("<",  ast::less)
-        ("<=", ast::less_equal)
-        (">",  ast::greater)
-        (">=", ast::greater_equal)
+        ("~",   ast::match)
+        ("!~",  ast::not_match)
+        ("==",  ast::equal)
+        ("!=",  ast::not_equal)
+        ("<",   ast::less)
+        ("<=",  ast::less_equal)
+        (">",   ast::greater)
+        (">=",  ast::greater_equal)
+        ("in",  ast::in)
+        ("!in", ast::not_in)
         ;
 
     type.add

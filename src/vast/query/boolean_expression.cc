@@ -17,20 +17,32 @@ operator_map create_op_map()
     operator_map ops;
 
     ops[ast::match] =
-        [](ze::value const& lhs, ze::value const& rhs) 
-        { 
+        [](ze::value const& lhs, ze::value const& rhs)
+        {
             return rhs.get<ze::regex>().match(lhs.get<ze::string>());
         };
 
     ops[ast::not_match] =
-        [](ze::value const& lhs, ze::value const& rhs) 
-        { 
+        [](ze::value const& lhs, ze::value const& rhs)
+        {
             return ! rhs.get<ze::regex>().match(lhs.get<ze::string>());
+        };
+
+    ops[ast::in] =
+        [](ze::value const& lhs, ze::value const& rhs)
+        {
+            return rhs.get<ze::regex>().search(lhs.get<ze::string>());
+        };
+
+    ops[ast::not_in] =
+        [](ze::value const& lhs, ze::value const& rhs)
+        {
+            return ! rhs.get<ze::regex>().search(lhs.get<ze::string>());
         };
 
     ops[ast::equal] =
         [](ze::value const& lhs, ze::value const& rhs) { return lhs == rhs; };
- 
+
     ops[ast::not_equal] =
         [](ze::value const& lhs, ze::value const& rhs) { return lhs != rhs; };
 

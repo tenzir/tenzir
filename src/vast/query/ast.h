@@ -59,6 +59,8 @@ enum clause_operator
     less_equal,
     greater,
     greater_equal,
+    in,
+    not_in
 };
 
 // Binary boolean operators.
