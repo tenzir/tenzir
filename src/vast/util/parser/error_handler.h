@@ -25,9 +25,15 @@ struct error_handler
     {
     }
 
-    boost::phoenix::function<error_handler<Iterator>> functor()
+    template <typename Production, typename ...Args>
+    void set(Production& production, Args&& ...args) const
     {
-        return boost::phoenix::function<error_handler<Iterator>>(*this);
+        using boost::spirit::qi::on_error;
+        using boost::spirit::qi::fail;
+        typedef boost::phoenix::function<error_handler<Iterator>> functor;
+
+        on_error<fail>(production,
+                       functor(*this)(std::forward<Args>(args)...));
     }
 
     template <typename Production>

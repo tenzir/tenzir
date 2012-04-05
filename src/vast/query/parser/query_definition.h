@@ -98,11 +98,7 @@ query<Iterator>::query(util::parser::error_handler<Iterator>& error_handler)
         (identifier)
     );
 
-    on_error<fail>(qry, error_handler.functor()(_4, _3));
-    on_error<fail>(clause, error_handler.functor()(_4, _3));
-    on_error<fail>(type_clause, error_handler.functor()(_4, _3));
-    on_error<fail>(event_clause, error_handler.functor()(_4, _3));
-    on_error<fail>(not_clause, error_handler.functor()(_4, _3));
+    error_handler.set(qry, _4, _3);
 
     boolean_op.name("binary boolean operator");
     clause_op.name("binary clause operator");

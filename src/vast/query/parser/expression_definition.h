@@ -57,7 +57,7 @@ expression<Iterator>::expression(
         (primary)
     );
 
-    on_error<fail>(expr, error_handler.functor()(_4, _3));
+    error_handler.set(expr, _4, _3);
 
     binary_op.name("binary expression operator");
     unary_op.name("unary expression operator");
