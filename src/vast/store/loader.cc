@@ -46,11 +46,13 @@ void loader::load(fs::path const& dir)
             try
             {
                 fs::ifstream file(p, std::ios::binary | std::ios::in);
-                isegment segment(file);
-                segment.get([&](ze::event_ptr&& event)
-                            {
-                                forward(std::move(event));
-                            });
+                ze::serialization::iarchive ia(file);
+                std::shared_ptr<isegment> segment;
+                ia >> segment;
+                segment->get([&](ze::event_ptr&& event)
+                             {
+                                 forward(std::move(event));
+                             });
             }
             catch (segment_exception const& e)
             {

@@ -30,9 +30,15 @@ struct segment_header
 void save(ze::serialization::oarchive& oa, segment_header const&);
 void load(ze::serialization::oarchive& ia, segment_header&);
 
+class isegment;
+
 /// An output segment.
 class osegment
 {
+    friend isegment;
+    osegment(osegment const&) = delete;
+    osegment& operator=(osegment) = delete;
+
 public:
     /// Constructs an output segment.
     ///
@@ -51,15 +57,20 @@ public:
     /// @return The segment size in bytes (without the segment header).
     size_t size() const;
 
+    /// Ensures that all chunks have been flushed.
+    void flush();
+
 private:
     typedef ze::serialization::ochunk<ze::event> ochunk;
 
+    friend void save(ze::serialization::oarchive& oa, osegment const& segment);
+
     void flush_chunk(ochunk& chunk);
-    void clear();
 
     ze::compression const method_;
     size_t const max_chunk_events_;
     size_t current_size_;
+
     segment_header header_;
     std::vector<std::unique_ptr<ochunk>> chunks_;
 };
@@ -67,18 +78,26 @@ private:
 /// An input segment.
 class isegment
 {
+    isegment(isegment const&) = delete;
+    isegment& operator=(isegment) = delete;
+
 public:
-    /// Constructs an input segment from an input stream.
-    /// @param in The input stream that contains the segment.
-    isegment(std::istream& in);
+    /// Constructs an empty input segment that should be serialized into.
+    isegment() = default;
+
+    /// Constructs an input segment from on output segment.
+    /// @param o The output segment to steal the chunks from.
+    isegment(osegment&& o);
 
     void get(std::function<void(ze::event_ptr&& event)> f);
 
 private:
-    typedef ze::serialization::ichunk<ze::event> ichunk;
+    typedef ze::serialization::ichunk<ze::event_ptr> ichunk;
+
+    friend void load(ze::serialization::iarchive& ia, isegment& segment);
 
     segment_header header_;
-    std::istream& istream_;
+    std::vector<std::unique_ptr<ichunk>> chunks_;
 };
 
 } // namespace store

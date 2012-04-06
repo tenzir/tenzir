@@ -1,7 +1,5 @@
 #include "vast/store/archiver.h"
 
-#include <boost/uuid/random_generator.hpp>
-#include <boost/uuid/uuid_io.hpp>
 #include <ze/event.h>
 #include "vast/fs/fstream.h"
 #include "vast/fs/operations.h"
@@ -25,25 +23,27 @@ archiver::~archiver()
 }
 
 void archiver::init(fs::path const& directory,
-                    size_t max_chunk_events,
+                    size_t max_events_per_chunk,
                     size_t max_segment_size)
 {
     receive([&](ze::event_ptr&& event) { archive(std::move(event)); });
 
     archive_directory_ = directory;
-    LOG(verbose, store) << "initializing archiver in " << archive_directory_;
-    if (! fs::exists(archive_directory_))
-        fs::mkdir(archive_directory_);
+    assert(fs::exists(archive_directory_));
 
     LOG(verbose, store)
         << "setting maximum segment size to " << max_segment_size << " bytes";
 
     max_segment_size_ = max_segment_size;
-    segment_ = std::make_unique<osegment>(max_chunk_events);
+    max_events_per_chunk_ = max_segment_size;
+    segment_ = std::make_unique<osegment>(max_events_per_chunk_);
 }
 
 void archiver::archive(ze::event_ptr&& event)
 {
+    std::lock_guard<std::mutex> lock(segment_mutex_);
+    assert(segment_);
+
     segment_->put(*event);
     if (segment_->size() < max_segment_size_)
         return;
@@ -51,18 +51,21 @@ void archiver::archive(ze::event_ptr&& event)
     flush();
 }
 
-void archiver::flush()
+std::unique_ptr<osegment> archiver::flush()
 {
     assert(segment_);
+    segment_->flush();
 
-    std::string filename(
-        boost::uuids::to_string(boost::uuids::random_generator()()));
+    auto path =  archive_directory_ / ze::uuid::random().to_string();
+    LOG(debug, store) << "flushing segment to " << path;
+    fs::ofstream file(path, std::ios::binary | std::ios::out);
+    ze::serialization::oarchive oa(file);
+    oa << *segment_;
 
-    LOG(debug, store) << "flushing segment to " << filename;
-    fs::ofstream file(archive_directory_ / filename,
-                      std::ios::binary | std::ios::out);
+    auto flushed = std::move(segment_);
+    segment_ = std::make_unique<osegment>(max_events_per_chunk_);
 
-    segment_->flush(file);
+    return flushed;
 }
 
 } // namespace store
