@@ -1,7 +1,6 @@
 #ifndef VAST_STORE_SEGMENT_H
 #define VAST_STORE_SEGMENT_H
 
-#define VAST_SEGMENT_MAGIC      0x2a2a2a2a
 #define VAST_SEGMENT_VERSION    1
 
 #include <vector>
@@ -13,13 +12,14 @@
 namespace vast {
 namespace store {
 
+static uint32_t const segment_magic = 0x2a2a2a2a;
+
 struct segment_header
 {
     segment_header();
 
     void respect(ze::event const& event);
 
-    uint32_t magic;
     uint32_t version;
     ze::time_point start;
     ze::time_point end;

@@ -11,8 +11,7 @@ namespace vast {
 namespace store {
 
 segment_header::segment_header()
-  : magic(VAST_SEGMENT_MAGIC)
-  , version(VAST_SEGMENT_VERSION)
+  : version(VAST_SEGMENT_VERSION)
   , n_events(0u)
 {
     start = ze::clock::now();
@@ -40,7 +39,6 @@ void segment_header::respect(ze::event const& event)
 
 void save(ze::serialization::oarchive& oa, segment_header const& header)
 {
-    oa << header.magic;
     oa << header.version;
     oa << header.start;
     oa << header.end;
@@ -50,7 +48,11 @@ void save(ze::serialization::oarchive& oa, segment_header const& header)
 
 void load(ze::serialization::iarchive& ia, segment_header& header)
 {
-    ia >> header.magic;
+    uint32_t magic;
+    ia >> magic;
+    if (magic != segment_magic)
+        throw segment_exception("invalid segment magic");
+
     ia >> header.version;
     ia >> header.start;
     ia >> header.end;
@@ -132,9 +134,6 @@ isegment::isegment(std::istream& in)
 {
     ze::serialization::iarchive ia(istream_);
     ia >> header_;
-
-    if (header_.magic != VAST_SEGMENT_MAGIC)
-        throw segment_exception("invalid segment magic");
 
     if (header_.version > VAST_SEGMENT_VERSION)
         throw segment_exception("cannot handle segment version");
