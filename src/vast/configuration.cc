@@ -54,9 +54,9 @@ configuration::configuration()
 
     po::options_description component("component options");
     component.add_options()
-        ("comp-ingest,I", "launch the ingest component")
-        ("comp-emit,E", "launch the emit component")
-        ("comp-query,Q", "launch the query component")
+        ("comp-ingestor,I", "launch the ingestor")
+        ("comp-archive,A", "launch the archive")
+        ("comp-search,S", "launch the search")
     ;
 
     po::options_description taxonomy("taxonomy options");
@@ -64,28 +64,38 @@ configuration::configuration()
         ("print-taxonomy,T", "print the parsed event taxonomy")
     ;
 
-    po::options_description ingest("ingest options");
-    ingest.add_options()
-        ("ingest.ip", po::value<std::string>()->default_value("127.0.0.1"),
+    po::options_description ingestor("ingestor options");
+    ingestor.add_options()
+        ("ingestor.host", po::value<std::string>()->default_value("127.0.0.1"),
          "IP address of the ingestor")
-        ("ingest.port", po::value<unsigned>()->default_value(42000u),
+        ("ingestor.port", po::value<unsigned>()->default_value(42000u),
          "port of the ingestor")
-        ("ingest.events", po::value<std::vector<std::string>>()->multitoken(),
+        ("ingestor.events", po::value<std::vector<std::string>>()->multitoken(),
          "explicit list of events to ingest")
-        ("ingest.max-chunk-events", po::value<size_t>()->default_value(1000u),
-         "maximum events per chunk")
-        ("ingest.max-segment-size", po::value<size_t>()->default_value(1000u),
-         "maximum segment size in KB")
     ;
 
-    po::options_description query("query options");
-    query.add_options()
-        ("query.paginate", po::value<unsigned>()->default_value(25u),
-         "number of events before prompt")
+    po::options_description archive("archive options");
+    archive.add_options()
+        ("archive.max-events-per-chunk", po::value<size_t>()->default_value(1000u),
+         "maximum number of events per chunk")
+        ("archive.max-segment-size", po::value<size_t>()->default_value(1000u),
+         "maximum segment size in KB")
+        ("archive.max-segments", po::value<size_t>()->default_value(500u),
+         "maximum number of segments to keep in memory")
+    ;
+
+    po::options_description search("search options");
+    search.add_options()
+        ("search.host", po::value<std::string>()->default_value("127.0.0.1"),
+         "IP address of the search component")
+        ("search.port", po::value<unsigned>()->default_value(42001u),
+         "port of the search component")
+//        ("search.paginate", po::value<unsigned>()->default_value(25u),
+//         "number of events before prompt")
     ;
 
     all_.add(general).add(advanced).add(component).add(taxonomy)
-        .add(ingest).add(query);
+        .add(ingestor).add(archive).add(search);
 
     visible_.add(general).add(component);
 }
@@ -133,8 +143,6 @@ void configuration::print(std::ostream& out, bool advanced) const
 void configuration::init()
 {
     po::notify(config_);
-
-    conflicts("ingest", "emit");
 
     depends("dump-taxonomy", "taxonomy");
 

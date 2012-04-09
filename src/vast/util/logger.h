@@ -37,7 +37,7 @@ enum facility
     broccoli,
     comm,
     event,
-    fastbit,
+    ingest,
     meta,
     query,
     store
@@ -123,7 +123,7 @@ private:
     logger_t broccoli_;
     logger_t comm_;
     logger_t event_;
-    logger_t fastbit_;
+    logger_t ingest_;
     logger_t meta_;
     logger_t query_;
     logger_t store_;

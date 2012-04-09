@@ -9,6 +9,11 @@ exception::exception()
 {
 };
 
+exception::exception(std::string const& msg)
+  : vast::exception(msg)
+{
+};
+
 exception::~exception() noexcept
 {
 };

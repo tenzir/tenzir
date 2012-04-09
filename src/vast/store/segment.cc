@@ -1,6 +1,7 @@
 #include "vast/store/segment.h"
 
 #include <ze/event.h>
+#include <ze/serialization/chunk.h>
 #include <ze/serialization/container.h>
 #include <ze/serialization/string.h>
 #include <ze/serialization/pointer.h>
@@ -11,104 +12,119 @@
 namespace vast {
 namespace store {
 
-segment_header::segment_header()
-  : version(VAST_SEGMENT_VERSION)
-  , n_events(0u)
+uint32_t const basic_segment::magic = 0x2a2a2a2a;
+uint8_t const basic_segment::version = 1;
+
+ze::uuid const& basic_segment::id() const
 {
-    start = ze::clock::now();
-    end = start;
+    return id_;
 }
 
-void segment_header::respect(ze::event const& event)
+uint32_t basic_segment::n_events() const
 {
-    ++n_events;
-
-    if (event.timestamp() < start)
-        start = event.timestamp();
-    if (event.timestamp() > end)
-        end = event.timestamp();
-
-    auto i = std::lower_bound(event_names.begin(),
-                              event_names.end(),
-                              event.name());
-
-    if (i == event_names.end())
-        event_names.push_back(event.name());
-    else if (event.name() < *i)
-        event_names.insert(i, event.name());
+    return n_events_;
 }
 
-void save(ze::serialization::oarchive& oa, segment_header const& header)
+basic_segment::basic_segment()
+  : version_(version)
+  , n_events_(0u)
+  , id_(ze::uuid::random())
 {
-    oa << header.version;
-    oa << header.start;
-    oa << header.end;
-    oa << header.event_names;
-    oa << header.n_events;
+    start_ = ze::clock::now();
+    end_ = start_;
 }
 
-void load(ze::serialization::iarchive& ia, segment_header& header)
+basic_segment::basic_segment(basic_segment&& other)
+  : version_(other.version_)
+  , start_(std::move(other.start_))
+  , end_(std::move(other.end_))
+  , events_(std::move(other.events_))
+  , n_events_(other.n_events_)
+  , id_(std::move(other.id_))
+{
+    other.version_ = 0u;
+    other.n_events_ = 0u;
+}
+
+void save(ze::serialization::oarchive& oa, basic_segment const& bs)
+{
+    oa << basic_segment::magic;
+    oa << bs.version_;
+    oa << bs.id_;
+    oa << bs.start_;
+    oa << bs.end_;
+    oa << bs.events_;
+    oa << bs.n_events_;
+}
+
+void load(ze::serialization::iarchive& ia, basic_segment& bs)
 {
     uint32_t magic;
     ia >> magic;
-    if (magic != segment_magic)
+    if (magic != basic_segment::magic)
         throw segment_exception("invalid segment magic");
 
-    ia >> header.version;
-    ia >> header.start;
-    ia >> header.end;
-    ia >> header.event_names;
-    ia >> header.n_events;
+    ia >> bs.version_;
+    if (bs.version_ > basic_segment::version)
+        throw segment_exception("segment version too high");
+
+    ia >> bs.id_;
+    ia >> bs.start_;
+    ia >> bs.end_;
+    ia >> bs.events_;
+    ia >> bs.n_events_;
 }
 
-osegment::osegment(size_t max_chunk_events)
+osegment::osegment()
   : method_(ze::compression::zlib)
-  , max_chunk_events_(max_chunk_events)
-  , current_size_(0u)
+  , size_(0ul)
 {
     chunks_.emplace_back(new ochunk(method_));
-
-    LOG(debug, store)
-        << "creating segment with " << max_chunk_events_ << " events/chunk";
 }
 
-void osegment::put(ze::event const& event)
+uint32_t osegment::put(ze::event const& event)
 {
     assert(! chunks_.empty());
 
-    header_.respect(event);
+    ++n_events_;
+
+    if (event.timestamp() < start_)
+        start_ = event.timestamp();
+    if (event.timestamp() > end_)
+        end_ = event.timestamp();
+
+    auto i = std::lower_bound(events_.begin(), events_.end(), event.name());
+    if (i == events_.end())
+        events_.push_back(event.name());
+    else if (event.name() < *i)
+        events_.insert(i, event.name());
+
     auto& chunk = *chunks_.back();
     chunk.put(event);
-
-    if (chunk.elements() < max_chunk_events_)
-        return;
-
-    flush_chunk(chunk);
-    chunks_.emplace_back(new ochunk(method_));
+    return chunk.elements();
 }
 
 size_t osegment::size() const
 {
-    return current_size_;
+    return size_;
 }
 
 void osegment::flush()
 {
-    // Only the last chunk has not yet been flushed.
-    flush_chunk(*chunks_.back());
+    auto size = chunks_.back()->flush();
+    size_ += size;
+    LOG(debug, store) << "flushed chunk" << " (" << size << " bytes)";
 }
 
-void osegment::flush_chunk(ochunk& chunk)
+void osegment::push_chunk()
 {
-    auto size = chunk.flush();
-    current_size_ += size;
-    LOG(debug, store) << "flushed chunk" << " (" << size << " bytes)";
+    chunks_.emplace_back(new ochunk(method_));
 }
 
 void save(ze::serialization::oarchive& oa, osegment const& segment)
 {
     auto start = oa.position();
-    oa << segment.header_;
+    oa << static_cast<basic_segment const&>(segment);
     auto middle = oa.position();
     oa << segment.chunks_;
     auto end = oa.position();
@@ -120,8 +136,9 @@ void save(ze::serialization::oarchive& oa, osegment const& segment)
 }
 
 isegment::isegment(osegment&& o)
-  : header_(std::move(o.header_))
+  : basic_segment(std::move(o))
 {
+    assert(! o.chunks_.empty());
     for (auto& chunk : o.chunks_)
         chunks_.emplace_back(std::make_unique<ichunk>(std::move(*chunk)));
 }
@@ -134,10 +151,7 @@ void isegment::get(std::function<void(ze::event_ptr&& event)> f)
 
 void load(ze::serialization::iarchive& ia, isegment& segment)
 {
-    ia >> segment.header_;
-    if (segment.header_.version > VAST_SEGMENT_VERSION)
-        throw segment_exception("cannot handle segment version");
-
+    ia >> static_cast<basic_segment&>(segment);
     ia >> segment.chunks_;
     assert(! segment.chunks_.empty());
 }

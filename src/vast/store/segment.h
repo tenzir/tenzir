@@ -1,39 +1,52 @@
 #ifndef VAST_STORE_SEGMENT_H
 #define VAST_STORE_SEGMENT_H
 
-#define VAST_SEGMENT_VERSION    1
-
+#include <memory>
 #include <vector>
 #include <string>
 #include <ze/forward.h>
-#include <ze/serialization/chunk.h>
+#include <ze/intrusive.h>
+#include <ze/uuid.h>
 #include <ze/type/time.h>
 
 namespace vast {
 namespace store {
 
-static uint32_t const segment_magic = 0x2a2a2a2a;
-
-struct segment_header
+class basic_segment : ze::intrusive_base<basic_segment>
 {
-    segment_header();
+    basic_segment(basic_segment const&) = delete;
+    basic_segment& operator=(basic_segment) = delete;
 
-    void respect(ze::event const& event);
+public:
+    ze::uuid const& id() const;
+    uint32_t n_events() const;
 
-    uint32_t version;
-    ze::time_point start;
-    ze::time_point end;
-    std::vector<std::string> event_names;
-    uint32_t n_events;
+protected:
+    basic_segment();
+    basic_segment(basic_segment&& other);
+
+    uint32_t version_;
+    ze::time_point start_;
+    ze::time_point end_;
+    std::vector<std::string> events_;
+    uint32_t n_events_;
+
+private:
+    friend void save(ze::serialization::oarchive& oa, basic_segment const& bs);
+    friend void load(ze::serialization::iarchive& ia, basic_segment& bs);
+
+    // FIXME: gives a linker error w/ gcc 4.7, although this is legal in C++11.
+    //static uint32_t const magic = 0x2a2a2a2a;
+    //static uint8_t const version = 1;
+    static uint32_t const magic;
+    static uint8_t const version;
+    ze::uuid id_;
 };
-
-void save(ze::serialization::oarchive& oa, segment_header const&);
-void load(ze::serialization::oarchive& ia, segment_header&);
 
 class isegment;
 
 /// An output segment.
-class osegment
+class osegment : public basic_segment
 {
     friend isegment;
     osegment(osegment const&) = delete;
@@ -41,42 +54,36 @@ class osegment
 
 public:
     /// Constructs an output segment.
-    ///
-    /// @param max_chunk_events The maximum number events per chunk.
-    osegment(size_t max_chunk_events);
+    osegment();
 
     /// Puts an event into the segment.
     /// @param event The event to store.
-    void put(ze::event const& event);
+    /// @return The number of events in the current chunk
+    uint32_t put(ze::event const& event);
 
-    /// Flushes the segment to a given output stream.
-    /// @param out The output stream to write the segment into.
-    void flush(std::ostream& out);
-
-    /// Retrives the size of the segment.
+    /// Retrieves the size of the segment.
     /// @return The segment size in bytes (without the segment header).
     size_t size() const;
 
-    /// Ensures that all chunks have been flushed.
+    /// Flushes the currently active chunk.
     void flush();
+
+    /// Creates a new chunk at the end of the segment.
+    void push_chunk();
 
 private:
     typedef ze::serialization::ochunk<ze::event> ochunk;
 
     friend void save(ze::serialization::oarchive& oa, osegment const& segment);
 
-    void flush_chunk(ochunk& chunk);
-
     ze::compression const method_;
-    size_t const max_chunk_events_;
-    size_t current_size_;
+    size_t size_;
 
-    segment_header header_;
     std::vector<std::unique_ptr<ochunk>> chunks_;
 };
 
 /// An input segment.
-class isegment
+class isegment : public basic_segment
 {
     isegment(isegment const&) = delete;
     isegment& operator=(isegment) = delete;
@@ -85,7 +92,7 @@ public:
     /// Constructs an empty input segment that should be serialized into.
     isegment() = default;
 
-    /// Constructs an input segment from on output segment.
+    /// Constructs an input segment from an output segment.
     /// @param o The output segment to steal the chunks from.
     isegment(osegment&& o);
 
@@ -96,7 +103,6 @@ private:
 
     friend void load(ze::serialization::iarchive& ia, isegment& segment);
 
-    segment_header header_;
     std::vector<std::unique_ptr<ichunk>> chunks_;
 };
 

@@ -12,14 +12,14 @@ namespace vast {
 namespace comm {
 
 /// Receives events from the external world.
-class event_source : public ze::component<ze::event>::source
+class event_source : public ze::core_source<ze::event>
 {
     event_source(event_source const&) = delete;
     event_source& operator=(event_source const&) = delete;
 
 public:
     /// Constructor.
-    event_source(ze::component<ze::event>& c);
+    event_source(ze::component& c);
 
     /// Adds an event name to the list of events to subscribe to.
     /// @param event The name of the event to subscribe to.

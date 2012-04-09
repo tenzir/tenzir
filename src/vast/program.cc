@@ -3,13 +3,13 @@
 #include <cstdlib>
 #include <iostream>
 #include <boost/exception/diagnostic_information.hpp>
+#include <ze/util/make_unique.h>
 #include "vast/exception.h"
 #include "vast/fs/path.h"
 #include "vast/fs/operations.h"
 #include "vast/meta/taxonomy.h"
 #include "vast/query/query.h"
 #include "vast/util/logger.h"
-#include "vast/util/make_unique.h"
 #include "config.h"
 
 #ifdef USE_PERFTOOLS
@@ -27,9 +27,9 @@ logger* LOGGER;
 program::program()
   : terminating_(false)
   , return_(EXIT_SUCCESS)
-  , emit_(io_)
-  , ingest_(io_)
-  , query_(io_)
+  , ingestor_(io_)
+  , archive_(io_, ingestor_.source)
+  , search_(io_)
   , profiler_(io_.service())
 {
 }
@@ -130,51 +130,44 @@ void program::start()
         comm::broccoli::init(config_.check("broccoli-messages"),
                              config_.check("broccoli-calltrace"));
 
-        if (config_.check("comp-ingest"))
+        if (config_.check("comp-archive"))
+        {
+            archive_.init(
+                vast_dir / "archive",
+                config_.get<size_t>("archive.max-events-per-chunk"),
+                config_.get<size_t>("archive.max-segment-size") * 1000,
+                config_.get<size_t>("archive.max-segments"));
+        }
+
+        if (config_.check("comp-ingestor"))
         {
             std::vector<std::string> events;
-            if (config_.check("ingest.events"))
-                events = config_.get<std::vector<std::string>>("ingest.events");
+            if (config_.check("ingestor.events"))
+                events = config_.get<std::vector<std::string>>("ingestor.events");
 
-            ingest_.source.init(config_.get<std::string>("ingest.ip"),
-                                config_.get<unsigned>("ingest.port"));
+            ingestor_.source.init(config_.get<std::string>("ingestor.host"),
+                                  config_.get<unsigned>("ingestor.port"));
 
             for (const auto& event : events)
             {
                 LOG(verbose, store) << "subscribing to event " << event;
-                ingest_.source.subscribe(event);
+                ingestor_.source.subscribe(event);
             }
-
-            ingest_.archiver.init(
-                vast_dir / "archive",
-                config_.get<size_t>("ingest.max-chunk-events"),
-                config_.get<size_t>("ingest.max-segment-size") * 1000);
         }
 
-
-        if (config_.check("comp-query"))
+        if (config_.check("comp-search"))
         {
-            query_.processor.init();
-
-            if (config_.check("query"))
-            {
-                vast::query::query q(config_.get<std::string>("query"));
-                query_.processor.submit(std::move(q));
-            }
-
-            if (config_.check("comp-emit"))
-            {
-                LOG(verbose, core) << "linking event loader with query processor";
-                query_.link(emit_.loader, query_.processor);
-            }
+            search_.source.init(config_.get<std::string>("search.host"),
+                                config_.get<unsigned>("search.port"));
         }
 
         io_.start(errors_);
 
-        if (config_.check("comp-emit"))
+        // FIXME: debugging only.
+        if (config_.check("query"))
         {
-            emit_.loader.init(vast_dir / "archive");
-            emit_.loader.run();
+            vast::query::query q(config_.get<std::string>("query"));
+            search_.mgr.process(std::move(q));
         }
 
         std::exception_ptr error = errors_.pop();
@@ -215,8 +208,14 @@ void program::stop()
         }
 #endif
 
-        if (config_.check("comp-ingest"))
-            ingest_.source.stop();
+        if (config_.check("comp-search"))
+            search_.source.stop();
+
+        if (config_.check("comp-ingestor"))
+            ingestor_.source.stop();
+
+        if (config_.check("comp-archive"))
+            archive_.stop();
 
         if (config_.check("profile"))
             profiler_.stop();

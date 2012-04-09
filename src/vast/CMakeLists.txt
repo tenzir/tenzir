@@ -12,7 +12,6 @@ endif ()
 
 # Everything except main.cc
 file(GLOB_RECURSE vast_lib_sources
-    component.cc
     configuration.cc
     exception.cc
     program.cc

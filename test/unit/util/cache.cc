@@ -8,12 +8,12 @@ BOOST_AUTO_TEST_CASE(lru_cache)
     lru_cache c(2, [](std::string const& str) { return str.length(); });
 
     // Perform some accesses.
-    c["x"];
-    c["fu"];
-    c["foo"];
-    c["quux"];
-    c["corge"];
-    c["foo"];
+    c.retrieve("x");
+    c.retrieve("fu");
+    c.retrieve("foo");
+    c.retrieve("quux");
+    c.retrieve("corge");
+    c.retrieve("foo");
 
     std::vector<std::string> v;
     std::transform(

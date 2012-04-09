@@ -8,8 +8,8 @@
 namespace vast {
 namespace comm {
 
-event_source::event_source(ze::component<ze::event>& c)
-  : ze::component<ze::event>::source(c)
+event_source::event_source(ze::component& c)
+  : ze::core_source<ze::event>(c)
   , server_(io_.service())
   , event_handler_([&](ze::event_ptr&& event) { dispatch(std::move(event)); })
   , error_handler_([&](std::shared_ptr<broccoli> bro) { disconnect(bro); })

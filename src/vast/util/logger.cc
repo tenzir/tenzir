@@ -17,7 +17,7 @@ logger::logger(int cverb, int fverb, fs::path const& log_dir)
   , broccoli_(boost::log::keywords::channel = "broccoli")
   , comm_(boost::log::keywords::channel = "comm")
   , event_(boost::log::keywords::channel = "event")
-  , fastbit_(boost::log::keywords::channel = "fastbit")
+  , ingest_(boost::log::keywords::channel = "ingest")
   , meta_(boost::log::keywords::channel = "meta")
   , query_(boost::log::keywords::channel = "query")
   , store_(boost::log::keywords::channel = "store")
@@ -84,8 +84,8 @@ logger::logger_t& logger::get(log::facility f)
         case log::event:
             return event_;
             break;
-        case log::fastbit:
-            return fastbit_;
+        case log::ingest:
+            return ingest_;
             break;
         case log::meta:
             return meta_;

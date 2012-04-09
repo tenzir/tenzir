@@ -10,6 +10,7 @@ namespace query {
 struct exception : public vast::exception
 {
     exception();
+    exception(std::string const& msg);
     virtual ~exception() noexcept;
 };
 

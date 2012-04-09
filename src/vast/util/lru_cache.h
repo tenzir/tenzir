@@ -48,8 +48,8 @@ public:
         assert(capacity_);
     }
 
-    // Obtain value of the cached function for k
-    value_type& operator[](key_type const& key)
+    // Retrieves a value of the cached function for k
+    value_type& retrieve(key_type const& key)
     {
         auto i = cache_.find(key);
         if (i == cache_.end())
@@ -58,6 +58,22 @@ public:
         // Move accessed key to end of tracker.
         tracker_.splice(tracker_.end(), tracker_, i->second.second);
         return i->second.first;
+    }
+
+    // Inserts a fresh entry in the cache.
+    typename cache::iterator insert(key_type const& key, value_type val)
+    {
+        assert(cache_.find(key) == cache_.end());
+
+        if (cache_.size() == capacity_) 
+            evict();
+
+        auto t = tracker_.insert(tracker_.end(), key);
+        auto i = cache_.emplace(key,
+                                std::make_pair(std::move(val), std::move(t)));
+
+        assert(i.second);
+        return i.first;
     }
 
     iterator begin()
@@ -81,22 +97,6 @@ public:
     }
 
 private:
-    // Inserts a fresh entry in the cache.
-    typename cache::iterator insert(key_type const& key, value_type&& val)
-    {
-        assert(cache_.find(key) == cache_.end());
-
-        if (cache_.size() == capacity_) 
-            evict();
-
-        auto t = tracker_.insert(tracker_.end(), key);
-        auto i = cache_.emplace(key,
-                                std::make_pair(std::move(val), std::move(t)));
-
-        assert(i.second);
-        return i.first;
-    }
-
     // Purges the least-recently-used element in the cache.
     void evict()
     {
