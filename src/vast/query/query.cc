@@ -2,8 +2,6 @@
 
 #include <ze/event.h>
 #include <ze/type/regex.h>
-#include <boost/uuid/random_generator.hpp>
-#include <boost/uuid/uuid_io.hpp>
 #include "vast/query/ast.h"
 #include "vast/query/exception.h"
 #include "vast/query/parser/query.h"
@@ -14,7 +12,7 @@ namespace vast {
 namespace query {
 
 query::query(std::string str)
-  : id_(boost::uuids::random_generator()())
+  : id_(ze::uuid::random())
   , state_(invalid)
   , str_(std::move(str))
 {
@@ -25,8 +23,6 @@ query::query(std::string str)
         throw syntax_exception(str_);
 
     state_ = parsed;
-
-    // TODO: canonify (e.g., fold constants).
 
     if (! ast::validate(query_ast))
         throw semantic_exception("semantic error", str_);
@@ -76,7 +72,7 @@ void query::status(query::state s)
     state_ = s;
 }
 
-util::uuid query::id() const
+ze::uuid const& query::id() const
 {
     return id_;
 }

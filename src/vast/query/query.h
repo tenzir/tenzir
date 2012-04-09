@@ -3,8 +3,8 @@
 
 #include <string>
 #include <ze/forward.h>
+#include <ze/uuid.h>
 #include "vast/query/boolean_expression.h"
-#include "vast/util/uuid.h"
 
 namespace vast {
 namespace query {
@@ -49,7 +49,7 @@ public:
 
     /// Gets the query ID.
     /// @return The query ID.
-    util::uuid id() const;
+    ze::uuid const& id() const;
 
     /// Gets the query state.
     /// @return The current state of the query.
@@ -60,7 +60,7 @@ public:
     void status(state s);
 
 private:
-    util::uuid id_;
+    ze::uuid id_;
     state state_;
     std::string str_;
     boolean_expression expr_;
