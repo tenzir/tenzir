@@ -14,28 +14,43 @@ emitter::emitter(ze::component& c,
   : ze::core_source<ze::event>(c)
   , cache_(cache)
   , ids_(std::move(ids))
+  , current_(ids_.begin())
 {
 }
 
-void emitter::run()
+void emitter::start()
 {
-    for (auto const& id : ids_)
+    paused_ = false;
+    io_.service().post(std::bind(&emitter::emit, shared_from_this()));
+}
+
+void emitter::pause()
+{
+    paused_ = true;
+}
+
+void emitter::emit()
+{
+    if (paused_ || current_ == ids_.end())
+        return;
+
+    try
     {
-        try
-        {
-            std::shared_ptr<isegment> segment = cache_->retrieve(id);
-            LOG(verbose, store) << "emitting segment " << id;
-            segment->get([&](ze::event_ptr&& e) { send(e); });
-        }
-        catch (segment_exception const& e)
-        {
-            LOG(error, store) << e.what();
-        }
-        catch (ze::serialization::exception const& e)
-        {
-            LOG(error, store) << e.what();
-        }
+        auto id = *current_++;
+        std::shared_ptr<isegment> segment = cache_->retrieve(id);
+        LOG(verbose, store) << "emitting segment " << id;
+        segment->get([&](ze::event_ptr&& e) { send(e); });
     }
+    catch (segment_exception const& e)
+    {
+        LOG(error, store) << e.what();
+    }
+    catch (ze::serialization::exception const& e)
+    {
+        LOG(error, store) << e.what();
+    }
+
+    io_.service().post(std::bind(&emitter::emit, shared_from_this()));
 }
 
 } // namespace store

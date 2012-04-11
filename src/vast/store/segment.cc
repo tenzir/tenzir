@@ -15,11 +15,6 @@ namespace store {
 uint32_t const basic_segment::magic = 0x2a2a2a2a;
 uint8_t const basic_segment::version = 1;
 
-ze::uuid const& basic_segment::id() const
-{
-    return id_;
-}
-
 uint32_t basic_segment::n_events() const
 {
     return n_events_;
@@ -28,19 +23,18 @@ uint32_t basic_segment::n_events() const
 basic_segment::basic_segment()
   : version_(version)
   , n_events_(0u)
-  , id_(ze::uuid::random())
 {
     start_ = ze::clock::now();
     end_ = start_;
 }
 
 basic_segment::basic_segment(basic_segment&& other)
-  : version_(other.version_)
+  : object(std::move(other))
+  , version_(other.version_)
   , start_(std::move(other.start_))
   , end_(std::move(other.end_))
   , events_(std::move(other.events_))
   , n_events_(other.n_events_)
-  , id_(std::move(other.id_))
 {
     other.version_ = 0u;
     other.n_events_ = 0u;
@@ -50,7 +44,7 @@ void save(ze::serialization::oarchive& oa, basic_segment const& bs)
 {
     oa << basic_segment::magic;
     oa << bs.version_;
-    oa << bs.id_;
+    oa << static_cast<ze::object const&>(bs);
     oa << bs.start_;
     oa << bs.end_;
     oa << bs.events_;
@@ -68,7 +62,7 @@ void load(ze::serialization::iarchive& ia, basic_segment& bs)
     if (bs.version_ > basic_segment::version)
         throw segment_exception("segment version too high");
 
-    ia >> bs.id_;
+    ia >> static_cast<ze::object&>(bs);
     ia >> bs.start_;
     ia >> bs.end_;
     ia >> bs.events_;

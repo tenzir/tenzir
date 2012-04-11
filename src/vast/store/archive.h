@@ -6,7 +6,6 @@
 #include "vast/fs/path.h"
 #include "vast/comm/forward.h"
 #include "vast/store/forward.h"
-#include "vast/store/emitter.h"
 #include "vast/store/segment_cache.h"
 #include "vast/store/segmentizer.h"
 
@@ -24,13 +23,13 @@ public:
     ///
     /// @param io A reference to the 0event I/O object.
     ///
-    /// @param ingestor_source The event soure of the ingestor.
+    /// @param ingest The ingestor component.
     ///
     /// @todo The archive should actually not receive a reference to the
     /// ingestor_source, but rather a string endpoint description of the
     /// ingestor, since the ingestor will run as a separate component and
     /// potentially not in the same address space.
-    archive(ze::io& io, comm::event_source& ingestor_source);
+    archive(ze::io& io, ingestor& ingest);
 
     /// Initializes the archive.
     /// @param directory The root directory of the archive.
@@ -56,8 +55,12 @@ public:
     /// an arbitrary sink.
     // TODO: implement a basic index and support time plus event-based
     // filtering.
-    //emitter get(time_interval i, std::vector<std::string> events = {});
-    std::unique_ptr<emitter> get();
+    //emitter create_emitter(time_interval i, std::vector<std::string> events = {});
+    emitter& create_emitter();
+
+    /// Retrieves an emitter by ID.
+    /// @param id The emitter ID.
+    emitter& lookup_emitter(ze::uuid const& id);
 
 private:
     /// Scans through a directory for segments and records their path.
@@ -68,11 +71,14 @@ private:
     void on_rotate(ze::intrusive_ptr<osegment> os);
 
     /// Loads a segment into memory after a cache miss.
-    std::shared_ptr<isegment> load(ze::uuid id);
+    std::shared_ptr<isegment> load(ze::uuid const& id);
 
     fs::path archive_root_;
-    std::unordered_map<ze::uuid, fs::path> segments_;
     std::shared_ptr<segment_cache> cache_;
+    std::mutex segment_mutex_;
+    std::mutex emitter_mutex_;
+    std::unordered_map<ze::uuid, fs::path> segments_;
+    std::unordered_map<ze::uuid, std::shared_ptr<emitter>> emitters_;
 
     segmentizer segmentizer_;
     ze::core_sink<osegment> writer_;

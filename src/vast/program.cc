@@ -3,7 +3,9 @@
 #include <cstdlib>
 #include <iostream>
 #include <boost/exception/diagnostic_information.hpp>
-#include <ze/util/make_unique.h>
+#include <ze/event.h>   // FIXME: debugging only
+#include <ze/link.h>    // FIXME: debugging only
+#include "vast/store/emitter.h"    // FIXME: debugging only
 #include "vast/exception.h"
 #include "vast/fs/path.h"
 #include "vast/fs/operations.h"
@@ -28,8 +30,8 @@ program::program()
   : terminating_(false)
   , return_(EXIT_SUCCESS)
   , ingestor_(io_)
-  , archive_(io_, ingestor_.source)
-  , search_(io_)
+  , archive_(io_, ingestor_)
+  , search_(io_, archive_)
   , profiler_(io_.service())
 {
 }
@@ -157,18 +159,29 @@ void program::start()
 
         if (config_.check("comp-search"))
         {
-            search_.source.init(config_.get<std::string>("search.host"),
-                                config_.get<unsigned>("search.port"));
+            search_.init(config_.get<std::string>("search.host"),
+                         config_.get<unsigned>("search.port"));
         }
 
-        io_.start(errors_);
-
-        // FIXME: debugging only.
         if (config_.check("query"))
         {
-            vast::query::query q(config_.get<std::string>("query"));
-            search_.mgr.process(std::move(q));
+            // FIXME: debugging only.
+            auto query = new vast::query::query(search_, config_.get<std::string>("query"));
+            auto printer = new ze::core_sink<ze::event>(search_);
+            printer->receive(
+                [](ze::event_ptr&& e)
+                {
+                    std::cout << *e << std::endl;
+                });
+
+            auto& emitter = archive_.create_emitter();
+            ze::link(emitter, query->frontend());
+            ze::link(query->backend(), *printer);
+            emitter.start();
         }
+
+        auto threads = config_.get<unsigned>("threads");
+        io_.start(errors_, threads);
 
         std::exception_ptr error = errors_.pop();
         if (error)
@@ -209,7 +222,7 @@ void program::stop()
 #endif
 
         if (config_.check("comp-search"))
-            search_.source.stop();
+            search_.stop();
 
         if (config_.check("comp-ingestor"))
             ingestor_.source.stop();

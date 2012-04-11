@@ -27,7 +27,7 @@ public:
     /// @param lhs The value from an event.
     void eval(ze::value const& lhs);
 
-    /// Sets the claues to false.
+    /// Sets the clause to false.
     void reset();
 
     /// Retrieves the type of the clause.

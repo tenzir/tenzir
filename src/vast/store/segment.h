@@ -6,19 +6,19 @@
 #include <string>
 #include <ze/forward.h>
 #include <ze/intrusive.h>
-#include <ze/uuid.h>
+#include <ze/object.h>
 #include <ze/type/time.h>
 
 namespace vast {
 namespace store {
 
-class basic_segment : ze::intrusive_base<basic_segment>
+class basic_segment : public ze::object
+                    , ze::intrusive_base<basic_segment>
 {
     basic_segment(basic_segment const&) = delete;
     basic_segment& operator=(basic_segment) = delete;
 
 public:
-    ze::uuid const& id() const;
     uint32_t n_events() const;
 
 protected:
@@ -40,7 +40,6 @@ private:
     //static uint8_t const version = 1;
     static uint32_t const magic;
     static uint8_t const version;
-    ze::uuid id_;
 };
 
 class isegment;

@@ -33,6 +33,10 @@ configuration::configuration()
 
     po::options_description advanced("advanced options");
     advanced.add_options()
+        ("threads",
+         po::value<unsigned>()->default_value(
+             std::thread::hardware_concurrency()),
+         "number of threads for asynchronous I/O")
         ("log-dir",
          po::value<fs::path>()->default_value(fs::path("vast") / "log"),
          "log directory")
@@ -70,13 +74,15 @@ configuration::configuration()
          "IP address of the ingestor")
         ("ingestor.port", po::value<unsigned>()->default_value(42000u),
          "port of the ingestor")
-        ("ingestor.events", po::value<std::vector<std::string>>()->multitoken(),
+        ("ingestor.events",
+         po::value<std::vector<std::string>>()->multitoken(),
          "explicit list of events to ingest")
     ;
 
     po::options_description archive("archive options");
     archive.add_options()
-        ("archive.max-events-per-chunk", po::value<size_t>()->default_value(1000u),
+        ("archive.max-events-per-chunk",
+         po::value<size_t>()->default_value(1000u),
          "maximum number of events per chunk")
         ("archive.max-segment-size", po::value<size_t>()->default_value(1000u),
          "maximum segment size in KB")
@@ -90,8 +96,6 @@ configuration::configuration()
          "IP address of the search component")
         ("search.port", po::value<unsigned>()->default_value(42001u),
          "port of the search component")
-//        ("search.paginate", po::value<unsigned>()->default_value(25u),
-//         "number of events before prompt")
     ;
 
     all_.add(general).add(advanced).add(component).add(taxonomy)

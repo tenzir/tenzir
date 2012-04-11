@@ -11,12 +11,12 @@
 namespace vast {
 namespace query {
 
-query::query(std::string str)
-  : id_(ze::uuid::random())
+query::query(ze::component& c, std::string str)
+  : device(c)
   , state_(invalid)
   , str_(std::move(str))
 {
-    LOG(verbose, query) << "new query " << id_ << ": " << str_;
+    LOG(verbose, query) << "new query " << id() << ": " << str_;
 
     ast::query query_ast;
     if (! util::parser::parse<parser::query>(str_, query_ast))
@@ -30,31 +30,19 @@ query::query(std::string str)
     state_ = validated;
 
     expr_.assign(query_ast);
+
+    frontend().receive(
+        [&](ze::event_ptr&& event)
+        {
+            if (match(*event))
+                backend().send(std::move(event));
+        });
 }
 
-query::query(query&& other)
-  : id_(std::move(other.id_))
-  , state_(other.state_)
-  , str_(std::move(other.str_))
-  , expr_(std::move(other.expr_))
-{
-    other.state_ = invalid;
-}
-
-query& query::operator=(query other)
-{
-    using std::swap;
-    swap(id_, other.id_);
-    swap(state_, other.state_);
-    swap(str_, other.str_);
-    swap(expr_, other.expr_);
-    return *this;
-}
-
-bool query::match(ze::event_ptr event)
+bool query::match(ze::event const& event)
 {
     expr_.reset();
-    return event->any(
+    return event.any(
         [&](ze::value const& value)
         {
             expr_.feed(value);
@@ -70,11 +58,6 @@ query::state query::status() const
 void query::status(query::state s)
 {
     state_ = s;
-}
-
-ze::uuid const& query::id() const
-{
-    return id_;
 }
 
 } // namespace query

@@ -12,7 +12,7 @@ namespace store {
 segmentizer::segmentizer(ze::component& c)
   : device_type(c)
 {
-    sink().receive([&](ze::event_ptr&& event) { write(std::move(event)); });
+    frontend().receive([&](ze::event_ptr&& event) { write(std::move(event)); });
 }
 
 segmentizer::~segmentizer()
@@ -41,7 +41,7 @@ void segmentizer::stop()
     if (segment_->n_events() > 0u)
     {
         segment_->flush();
-        source().send(segment_);
+        backend().send(segment_);
     }
     segment_.reset();
 }
@@ -67,7 +67,7 @@ void segmentizer::write(ze::event_ptr&& event)
         return;
     }
 
-    source().send(segment_);
+    backend().send(segment_);
     segment_ = new osegment;
 }
 

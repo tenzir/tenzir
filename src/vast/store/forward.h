@@ -4,6 +4,9 @@
 namespace vast {
 namespace store {
 
+class archive;
+class emitter;
+class ingestor;
 class isegment;
 class osegment;
 

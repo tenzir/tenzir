@@ -1,22 +1,23 @@
 #include "vast/store/archive.h"
 
-#include <ze/util/make_unique.h>
 #include <ze/link.h>
-#include "vast/comm/event_source.h"
 #include "vast/fs/fstream.h"
 #include "vast/fs/operations.h"
+#include "vast/store/emitter.h"
+#include "vast/store/exception.h"
+#include "vast/store/ingestor.h"
 #include "vast/store/segment.h"
 #include "vast/util/logger.h"
 
 namespace vast {
 namespace store {
 
-archive::archive(ze::io& io, comm::event_source& ingestor_source)
+archive::archive(ze::io& io, ingestor& ingest)
   : ze::component(io)
   , segmentizer_(*this)
   , writer_(*this)
 {
-    ze::link(ingestor_source, segmentizer_);
+    ze::link(ingest.source, segmentizer_);
     ze::link(segmentizer_, writer_);
     writer_.receive([&](ze::intrusive_ptr<osegment>&& os)
                     {
@@ -34,7 +35,7 @@ void archive::init(fs::path const& directory,
     LOG(info, store) << "creating segment cache with capacity " << max_segments;
     cache_ = std::make_shared<segment_cache>(
             max_segments,
-            [&](ze::uuid id) { return load(id); });
+            [&](ze::uuid const& id) { return load(id); });
 
     segmentizer_.init(max_events_per_chunk, max_segment_size);
 
@@ -55,22 +56,42 @@ void archive::init(fs::path const& directory,
 void archive::stop()
 {
     segmentizer_.stop();
+
+    for (auto& pair : emitters_)
+        pair.second->pause();
 }
 
-std::unique_ptr<emitter> archive::get()
+emitter& archive::create_emitter()
 {
     std::vector<ze::uuid> ids;
     // TODO: only select those segments IDs which contain relevant events.
-    std::transform(
-        segments_.begin(),
-        segments_.end(),
-        std::back_inserter(ids),
-        [&](decltype(segments_)::value_type const& pair)
-        {
-            return pair.first;
-        });
+    {
+        std::lock_guard<std::mutex> lock(segment_mutex_);
+        std::transform(
+            segments_.begin(),
+            segments_.end(),
+            std::back_inserter(ids),
+            [&](decltype(segments_)::value_type const& pair)
+            {
+                return pair.first;
+            });
+    }
 
-    return std::make_unique<emitter>(*this, cache_, std::move(ids));
+    auto e = std::make_shared<emitter>(*this, cache_, std::move(ids));
+    std::lock_guard<std::mutex> lock(emitter_mutex_);
+    emitters_.emplace(e->id(), e);
+
+    return *e;
+}
+
+emitter& archive::lookup_emitter(ze::uuid const& id)
+{
+    std::lock_guard<std::mutex> lock(emitter_mutex_);
+    auto i = emitters_.find(id);
+    if (i == emitters_.end())
+        throw archive_exception("invalid emitter ID");
+
+    return *i->second;
 }
 
 void archive::scan(fs::path const& directory)
@@ -84,6 +105,7 @@ void archive::scan(fs::path const& directory)
             else
             {
                 LOG(verbose, store) << "found segment " << p;
+                std::lock_guard<std::mutex> lock(segment_mutex_);
                 segments_.emplace(p.filename().string(), p);
             }
         });
@@ -100,19 +122,25 @@ void archive::on_rotate(ze::intrusive_ptr<osegment> os)
     LOG(debug, store) << "wrote segment to " << path;
 
     auto is = std::make_shared<isegment>(std::move(*os));
-    assert(segments_.find(is->id()) == segments_.end());
-    segments_.emplace(is->id(), path);
+    {
+        std::lock_guard<std::mutex> lock(segment_mutex_);
+        assert(segments_.find(is->id()) == segments_.end());
+        segments_.emplace(is->id(), path);
+    }
 
     cache_->insert(is->id(), is);
 }
 
-std::shared_ptr<isegment> archive::load(ze::uuid id)
+std::shared_ptr<isegment> archive::load(ze::uuid const& id)
 {
     LOG(debug, store) << "cache miss, loading segment " << id;
 
-    // The inquired segment must have been recorded at startup or added upon
-    // segment rotation by the writer.
-    assert(segments_.find(id) != segments_.end());
+    {
+        std::lock_guard<std::mutex> lock(segment_mutex_);
+        // The inquired segment must have been recorded at startup or added
+        // upon segment rotation by the writer.
+        assert(segments_.find(id) != segments_.end());
+    }
 
     auto path = archive_root_ / id.to_string();
     fs::ifstream file(path, std::ios::binary | std::ios::in);

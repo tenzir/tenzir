@@ -7,8 +7,9 @@
 namespace vast {
 namespace store {
 
-/// Reads events from the archive on disk.
+/// Reads events from archive's segment cache.
 class emitter : public ze::core_source<ze::event>
+              , public std::enable_shared_from_this<emitter>
 {
     emitter(emitter const&) = delete;
     emitter& operator=(emitter const&) = delete;
@@ -17,19 +18,24 @@ public:
     /// Constructs an emitter.
     /// @param c The component the emitter belongs to.
     /// @param cache The cache containing the segments.
-    /// @param ids A vector of IDs for the segments to emit.
+    /// @param ids A vector of IDs representing the segments to emit.
     emitter(ze::component& c,
             std::shared_ptr<segment_cache> cache,
             std::vector<ze::uuid> ids);
 
-    /// Starts the emitter and blocks.
-    void run();
+    /// Stars the emission process by scheduling a task.
+    void start();
+
+    /// Temporarily stops the emission of events.
+    void pause();
 
 private:
-    void emit(ze::event_ptr&& event);
+    void emit();
 
+    bool paused_ = true;
     std::shared_ptr<segment_cache> cache_;
     std::vector<ze::uuid> ids_;
+    std::vector<ze::uuid>::const_iterator current_;
 };
 
 } // namespace store
