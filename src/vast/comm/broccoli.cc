@@ -545,6 +545,9 @@ void broccoli::reverse_factory::free(bro_val const& v)
         case BRO_TYPE_STRING:
              delete static_cast<BroString*>(v.value);
             break;
+        case BRO_TYPE_IPADDR:
+            delete static_cast<BroAddr*>(v.value);
+            break;
         case BRO_TYPE_PORT:
             delete static_cast<BroPort*>(v.value);
             break;
