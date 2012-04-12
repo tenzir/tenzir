@@ -2,6 +2,7 @@
 #define VAST_UTIL_LRU_CACHE
 
 #include <cassert>
+#include <mutex>
 #include <unordered_map>
 #include <list>
 
@@ -45,12 +46,14 @@ public:
       : capacity_(capacity)
       , miss_function_(f)
     {
-        assert(capacity_);
+        assert(capacity_ > 0ul);
     }
 
     // Retrieves a value of the cached function for k
     value_type& retrieve(key_type const& key)
     {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
+
         auto i = cache_.find(key);
         if (i == cache_.end())
             return insert(key, miss_function_(key))->second.first;
@@ -63,6 +66,8 @@ public:
     // Inserts a fresh entry in the cache.
     typename cache::iterator insert(key_type const& key, value_type val)
     {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
+
         assert(cache_.find(key) == cache_.end());
 
         if (cache_.size() == capacity_) 
@@ -112,6 +117,7 @@ private:
     size_t const capacity_;
     miss_function miss_function_;
 
+    std::recursive_mutex mutex_;
     tracker tracker_;
     cache cache_;
 };
