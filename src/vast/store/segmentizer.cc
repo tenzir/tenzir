@@ -10,7 +10,7 @@ namespace vast {
 namespace store {
 
 segmentizer::segmentizer(ze::component& c)
-  : device_type(c)
+  : device(c)
 {
     frontend().receive([&](ze::event_ptr&& event) { write(std::move(event)); });
 }

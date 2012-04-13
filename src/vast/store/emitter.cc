@@ -11,7 +11,7 @@ namespace store {
 emitter::emitter(ze::component& c,
                  std::shared_ptr<segment_cache> cache,
                  std::vector<ze::uuid> ids)
-  : ze::core_source<ze::event>(c)
+  : ze::publisher<>(c)
   , cache_(cache)
   , ids_(std::move(ids))
   , current_(ids_.begin())

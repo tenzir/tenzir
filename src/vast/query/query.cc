@@ -31,11 +31,12 @@ query::query(ze::component& c, std::string str)
 
     expr_.assign(query_ast);
 
+    //filter([&](ze::event_ptr const& e) { return match(*e); });
     frontend().receive(
-        [&](ze::event_ptr&& event)
+        [&](ze::event_ptr&& e)
         {
-            if (match(*event))
-                backend().send(std::move(event));
+            if (match(*e))
+                backend().send(*e);
         });
 }
 

@@ -2,8 +2,7 @@
 #define VAST_QUERY_QUERY_H
 
 #include <string>
-#include <ze/device.h>
-#include <ze/uuid.h>
+#include <ze/vertex.h>
 #include "vast/query/boolean_expression.h"
 
 namespace vast {
@@ -11,17 +10,12 @@ namespace query {
 
 /// The query.
 class query : public ze::object
-            , public ze::basic_device<
-                  ze::core_sink<ze::event>
-                , ze::core_source<ze::event>>
+            , public ze::device<ze::subscriber<>, ze::serial_dealer<>>
 {
     query(query const& other) = delete;
     query& operator=(query other) = delete;
 
-    typedef ze::basic_device<
-                ze::core_sink<ze::event>
-              , ze::core_source<ze::event>
-    > device;
+    typedef ze::device<ze::subscriber<>, ze::serial_dealer<>> device;
 
 public:
     /// Query state.

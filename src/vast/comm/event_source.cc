@@ -9,9 +9,9 @@ namespace vast {
 namespace comm {
 
 event_source::event_source(ze::component& c)
-  : ze::core_source<ze::event>(c)
+  : ze::publisher<>(c)
   , server_(io_.service())
-  , event_handler_([&](ze::event_ptr&& event) { dispatch(std::move(event)); })
+  , event_handler_([&](ze::event_ptr&& event) { send(std::move(event)); })
   , error_handler_([&](std::shared_ptr<broccoli> bro) { disconnect(bro); })
 {
 }
@@ -50,11 +50,6 @@ void event_source::stop()
         broccoli->stop();
 
     broccolis_.clear();
-}
-
-void event_source::dispatch(ze::event_ptr&& event)
-{
-    send(event);
 }
 
 void event_source::disconnect(std::shared_ptr<broccoli> const& session)

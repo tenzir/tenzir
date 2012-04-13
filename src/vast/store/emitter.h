@@ -1,14 +1,14 @@
 #ifndef VAST_STORE_EMITTER_H
 #define VAST_STORE_EMITTER_H
 
-#include <ze/source.h>
+#include <ze/vertex.h>
 #include "vast/store/segment_cache.h"
 
 namespace vast {
 namespace store {
 
 /// Reads events from archive's segment cache.
-class emitter : public ze::core_source<ze::event>
+class emitter : public ze::publisher<>
               , public std::enable_shared_from_this<emitter>
 {
     emitter(emitter const&) = delete;

@@ -2,7 +2,7 @@
 #define VAST_QUERY_SEARCH_H
 
 #include <unordered_map>
-#include <ze/sink.h>
+#include <ze/vertex.h>
 #include "vast/comm/event_source.h"
 #include "vast/query/query.h"
 #include "vast/store/forward.h"
@@ -26,7 +26,8 @@ public:
 
     void stop();
 
-    /// Creates a query from a query event.
+    /// Submit's a query event.
+    /// @param query_event The query control event.
     void submit(ze::event_ptr query_event);
 
 private:
@@ -35,11 +36,11 @@ private:
 
     store::archive& archive_;
     std::mutex query_mutex_;
-    std::unordered_map<ze::uuid, query> queries_;
+    std::unordered_map<ze::uuid, std::unique_ptr<query>> queries_;
     std::unordered_map<ze::uuid, ze::uuid> query_to_emitter_;
 
     comm::event_source source_;
-    ze::core_sink<ze::event> manager_;
+    ze::subscriber<> manager_;
 };
 
 } // namespace query

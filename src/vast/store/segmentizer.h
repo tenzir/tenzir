@@ -2,7 +2,7 @@
 #define VAST_STORE_SEGMENTIZER_H
 
 #include <mutex>
-#include <ze/device.h>
+#include <ze/vertex.h>
 #include "vast/fs/path.h"
 #include "vast/store/forward.h"
 
@@ -10,18 +10,14 @@ namespace vast {
 namespace store {
 
 /// Writes events into a segment.
-class segmentizer : public ze::basic_device<
-                               ze::core_sink<ze::event>
-                             , ze::core_source<osegment>>
+class segmentizer
+  : public ze::device<ze::subscriber<>, ze::publisher<osegment>>
 {
     segmentizer(segmentizer const&) = delete;
     segmentizer& operator=(segmentizer const&) = delete;
 
 public:
-    typedef ze::basic_device<
-        ze::core_sink<ze::event>
-      , ze::core_source<osegment>
-    > device_type;
+    typedef ze::device<ze::subscriber<>, ze::publisher<osegment>> device;
 
     /// Constructs a segmentizer.
     /// @param c The component the segmentizer belongs to.

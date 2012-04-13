@@ -1,7 +1,7 @@
 #include "vast/query/search.h"
 
 #include <ze/event.h>
-#include <ze/link.h>
+#include <ze/util/make_unique.h>
 #include "vast/util/logger.h"
 #include "vast/query/exception.h"
 #include "vast/store/archive.h"
@@ -16,35 +16,8 @@ search::search(ze::io& io, store::archive& archive)
   , source_(*this)
   , manager_(*this)
 {
-    ze::link(source_, manager_);
-
-    manager_.receive(
-        [&](ze::event_ptr&& e)
-        {
-            auto& event = *e;
-            validate(event);
-
-            auto action = event[0].get<ze::string>().to_string();
-            auto& options = event[1].get<ze::table>();
-            auto expr = options["expression"].get<ze::string>().to_string();
-
-            if (action == "create")
-            {
-                query q(*this, expr);
-                auto& emitter = archive_.create_emitter();
-                ze::link(emitter, q.frontend());
-                emitter.start();
-                //q.backend().connect("tcp://" + {dst.begin(), dst.end()});
-                //{
-                //    std::lock_guard<std::mutex> lock(query_mutex_);
-                //    queries_.push_back(std::move(q));
-                //}
-            }
-            else if (action == "control")
-            {
-                assert(! "not yet implemented");
-            }
-        });
+    source_.to(manager_);
+    manager_.receive([&](ze::event_ptr&& e) { submit(std::move(e)); });
 }
 
 void search::init(std::string const& host, unsigned port)
@@ -54,8 +27,41 @@ void search::init(std::string const& host, unsigned port)
 
 void search::stop()
 {
-    // TODO: stop all emitters and queries.
+    source_.stop();
 };
+
+void search::submit(ze::event_ptr query_event)
+{
+    LOG(debug, query) << "new search event: " << *query_event;
+    auto& event = *query_event;
+    validate(event);
+
+    auto action = event[0].get<ze::string>().to_string();
+    auto& options = event[1].get<ze::table>();
+    auto expr = options["expression"].get<ze::string>().to_string();
+    auto dst = options["destination"].get<ze::string>().to_string();
+
+    if (action == "create")
+    {
+        auto q = std::make_unique<query>(*this, expr);
+        auto& emitter = archive_.create_emitter();
+        emitter.to(q->frontend());
+        LOG(verbose, query) << "query connecting to " << dst;
+        q->backend().connect(ze::zmq::tcp, dst);
+        {
+            std::lock_guard<std::mutex> lock(query_mutex_);
+            auto id = q->id();
+            queries_.emplace(id, std::move(q));
+            query_to_emitter_.emplace(id, emitter.id());
+        }
+
+        emitter.start();
+    }
+    else if (action == "control")
+    {
+        // TODO: not yet implemented
+    }
+}
 
 void search::validate(ze::event const& event)
 {

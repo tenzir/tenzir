@@ -4,8 +4,6 @@
 #include <iostream>
 #include <boost/exception/diagnostic_information.hpp>
 #include <ze/event.h>   // FIXME: debugging only
-#include <ze/link.h>    // FIXME: debugging only
-#include "vast/store/emitter.h"    // FIXME: debugging only
 #include "vast/exception.h"
 #include "vast/fs/path.h"
 #include "vast/fs/operations.h"
@@ -165,19 +163,23 @@ void program::start()
 
         if (config_.check("query"))
         {
-            // FIXME: debugging only.
-            auto query = new vast::query::query(search_, config_.get<std::string>("query"));
-            auto printer = new ze::core_sink<ze::event>(search_);
+            // FIXME: Debugging only; not deallocated and causes crash at exit.
+            auto printer = new ze::serial_dealer<>(search_);
             printer->receive(
-                [](ze::event_ptr&& e)
-                {
-                    std::cout << *e << std::endl;
-                });
+                [](ze::event&& e) { std::cout << e << std::endl; });
 
-            auto& emitter = archive_.create_emitter();
-            ze::link(emitter, query->frontend());
-            ze::link(query->backend(), *printer);
-            emitter.start();
+            std::string endpoint = "127.0.0.1:55555";
+            LOG(debug, query) << "connecting to " << endpoint;
+            printer->bind(ze::zmq::tcp, endpoint);
+
+            ze::event_ptr event = new ze::event("vast::query");
+            event->timestamp(ze::clock::now());
+            event->push_back(ze::value("create"));
+            ze::table options(ze::string_type, ze::string_type);
+            options["expression"] = config_.get<std::string>("query");
+            options["destination"] = endpoint;
+            event->push_back(std::move(options));
+            search_.submit(event);
         }
 
         auto threads = config_.get<unsigned>("threads");

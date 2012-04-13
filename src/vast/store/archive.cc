@@ -1,6 +1,5 @@
 #include "vast/store/archive.h"
 
-#include <ze/link.h>
 #include "vast/fs/fstream.h"
 #include "vast/fs/operations.h"
 #include "vast/store/emitter.h"
@@ -17,8 +16,8 @@ archive::archive(ze::io& io, ingestor& ingest)
   , segmentizer_(*this)
   , writer_(*this)
 {
-    ze::link(ingest.source, segmentizer_);
-    ze::link(segmentizer_, writer_);
+    ingest.source.to(segmentizer_.frontend());
+    segmentizer_.backend().to(writer_);
     writer_.receive([&](ze::intrusive_ptr<osegment>&& os)
                     {
                         on_rotate(os);
@@ -59,6 +58,8 @@ void archive::stop()
 
     for (auto& pair : emitters_)
         pair.second->pause();
+
+    emitters_.clear();
 }
 
 emitter& archive::create_emitter()

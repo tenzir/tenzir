@@ -3,8 +3,7 @@
 
 #include <mutex>
 #include <string>
-#include <ze/component.h>
-#include <ze/source.h>
+#include <ze/vertex.h>
 #include "vast/comm/broccoli.h"
 #include "vast/comm/server.h"
 
@@ -12,7 +11,7 @@ namespace vast {
 namespace comm {
 
 /// Receives events from the external world.
-class event_source : public ze::core_source<ze::event>
+class event_source : public ze::publisher<>
 {
     event_source(event_source const&) = delete;
     event_source& operator=(event_source const&) = delete;
@@ -34,10 +33,6 @@ public:
     void stop();
 
 private:
-    /// Dispatches an event.
-    /// @param event The event to send to a sink..
-    void dispatch(ze::event_ptr&& event);
-
     /// Removes a connection after an error or a remote disconnect.
     /// @param session The Broccoli session
     void disconnect(std::shared_ptr<broccoli> const& session);

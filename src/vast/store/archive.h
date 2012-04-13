@@ -81,7 +81,7 @@ private:
     std::unordered_map<ze::uuid, std::shared_ptr<emitter>> emitters_;
 
     segmentizer segmentizer_;
-    ze::core_sink<osegment> writer_;
+    ze::subscriber<osegment> writer_;
 };
 
 } // namespace store
