@@ -23,6 +23,7 @@ search::search(ze::io& io, store::archive& archive)
 void search::init(std::string const& host, unsigned port)
 {
     source_.init(host, port);
+    source_.subscribe("VAST::query");
 }
 
 void search::stop()
@@ -65,7 +66,7 @@ void search::submit(ze::event_ptr query_event)
 
 void search::validate(ze::event const& event)
 {
-    if (event.name() != "vast::query")
+    if (event.name() != "VAST::query")
         throw exception("invalid query event name");
 
     if (event.size() != 2)
