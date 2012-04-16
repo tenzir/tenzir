@@ -30,6 +30,7 @@ program::program()
   , ingestor_(io_)
   , archive_(io_, ingestor_)
   , search_(io_, archive_)
+  , query_client_(io_)
   , profiler_(io_.service())
 {
 }
@@ -163,23 +164,10 @@ void program::start()
 
         if (config_.check("query"))
         {
-            // FIXME: Debugging only; not deallocated and causes crash at exit.
-            auto printer = new ze::serial_dealer<>(search_);
-            printer->receive(
-                [](ze::event&& e) { std::cout << e << std::endl; });
+            query_client_.init(config_.get<std::string>("search.host"),
+                               config_.get<unsigned>("search.port"));
 
-            std::string endpoint = "127.0.0.1:55555";
-            LOG(debug, query) << "connecting to " << endpoint;
-            printer->bind(ze::zmq::tcp, endpoint);
-
-            ze::event_ptr event = new ze::event("vast::query");
-            event->timestamp(ze::clock::now());
-            event->push_back(ze::value("create"));
-            ze::table options(ze::string_type, ze::string_type);
-            options["expression"] = config_.get<std::string>("query");
-            options["destination"] = endpoint;
-            event->push_back(std::move(options));
-            search_.submit(event);
+            query_client_.submit(config_.get<std::string>("query"));
         }
 
         auto threads = config_.get<unsigned>("threads");
@@ -222,6 +210,9 @@ void program::stop()
             ::HeapProfilerStop();
         }
 #endif
+
+        if (config_.check("query"))
+            query_client_.stop();
 
         if (config_.check("comp-search"))
             search_.stop();

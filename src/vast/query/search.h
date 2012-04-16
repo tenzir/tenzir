@@ -3,7 +3,6 @@
 
 #include <unordered_map>
 #include <ze/vertex.h>
-#include "vast/comm/event_source.h"
 #include "vast/query/query.h"
 #include "vast/store/forward.h"
 
@@ -18,29 +17,41 @@ public:
     search(search const&) = delete;
     search& operator=(search) = delete;
 
-    /// Initializes the search component and start listening for Broccoli
-    /// connections at a given endpoint.
+    /// Initializes the search component.
     /// @param host The address or hostname where to listen.
     /// @param port The TCP port number to bind to.
     void init(std::string const& host, unsigned port);
 
+    /// Stops the search component.
     void stop();
 
-    /// Submit's a query event.
-    /// @param query_event The query control event.
-    void submit(ze::event_ptr query_event);
-
 private:
-    /// Makes sure a query event has the right structure.
-    void validate(ze::event const& event);
+    template <typename ...Args>
+    void reply(char const* msg, std::vector<ze::zmq::message>& route,
+               Args&& ...args)
+    {
+        ze::event event("VAST::ack", std::forward<Args>(args)...);
+        manager_.send_with_route(event, std::move(route));
+    }
+
+    template <typename ...Args>
+    void ack(std::vector<ze::zmq::message>& route, Args&& ...args)
+    {
+        reply("VAST::ack", route, std::forward<Args>(args)...);
+    }
+
+    template <typename ...Args>
+    void nack(std::vector<ze::zmq::message>& route, Args&& ...args)
+    {
+        reply("VAST::nack", route, std::forward<Args>(args)...);
+    }
 
     store::archive& archive_;
     std::mutex query_mutex_;
     std::unordered_map<ze::uuid, std::unique_ptr<query>> queries_;
     std::unordered_map<ze::uuid, ze::uuid> query_to_emitter_;
 
-    comm::event_source source_;
-    ze::subscriber<> manager_;
+    ze::router<> manager_;
 };
 
 } // namespace query

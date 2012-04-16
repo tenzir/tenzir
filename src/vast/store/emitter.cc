@@ -18,14 +18,21 @@ emitter::emitter(ze::component& c,
 {
 }
 
+emitter::~emitter()
+{
+    LOG(debug, store) << "removed emitter " << id();
+}
+
 void emitter::start()
 {
+    LOG(debug, store) << "starting emitter " << id();
     paused_ = false;
     io_.service().post(std::bind(&emitter::emit, shared_from_this()));
 }
 
 void emitter::pause()
 {
+    LOG(debug, store) << "pausing emitter " << id();
     paused_ = true;
 }
 
@@ -36,9 +43,9 @@ void emitter::emit()
 
     try
     {
-        auto id = *current_++;
-        std::shared_ptr<isegment> segment = cache_->retrieve(id);
-        LOG(verbose, store) << "emitting segment " << id;
+        auto i = *current_++;
+        std::shared_ptr<isegment> segment = cache_->retrieve(i);
+        LOG(verbose, store) << "emitter " << id() << ": emitting segment " << i;
         segment->get([&](ze::event_ptr&& e) { send(e); });
     }
     catch (segment_exception const& e)

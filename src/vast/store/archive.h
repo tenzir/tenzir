@@ -62,6 +62,10 @@ public:
     /// @param id The emitter ID.
     emitter& lookup_emitter(ze::uuid const& id);
 
+    /// Removes an emitter.
+    /// @param id The emitter ID.
+    void remove_emitter(ze::uuid const& id);
+
 private:
     /// Scans through a directory for segments and records their path.
     /// @param directory The directory to scan.

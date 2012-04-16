@@ -17,7 +17,7 @@ segmentizer::segmentizer(ze::component& c)
 
 segmentizer::~segmentizer()
 {
-    if (! terminating_)
+    if (segment_ && ! terminating_)
         stop();
 }
 
@@ -35,7 +35,6 @@ void segmentizer::init(size_t max_events_per_chunk, size_t max_segment_size)
 
 void segmentizer::stop()
 {
-    LOG(debug, store) << "terminating segmentizer";
     terminating_ = true;
     std::lock_guard<std::mutex> lock(segment_mutex_);
     if (segment_->n_events() > 0u)

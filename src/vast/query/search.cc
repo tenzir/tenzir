@@ -13,96 +13,151 @@ namespace query {
 search::search(ze::io& io, store::archive& archive)
   : ze::component(io)
   , archive_(archive)
-  , source_(*this)
   , manager_(*this)
 {
-    source_.to(manager_);
-    manager_.receive([&](ze::event_ptr&& e) { submit(std::move(e)); });
+    manager_.receive_with_route(
+        [&](ze::event&& event, std::vector<ze::zmq::message>&& route)
+        {
+            if (event.name() != "VAST::query")
+            {
+                nack(route, "invalid query event name");
+                return;
+            }
+
+            if (event.size() != 2)
+            {
+                nack(route, "invalid number of event arguments");
+                return;
+            }
+
+            if (event[0].which() != ze::string_type ||
+                event[1].which() != ze::table_type)
+            {
+                nack(route, "invalid event argument types");
+                return;
+            }
+
+            auto action = event[0].get<ze::string>().to_string();
+            auto& options = event[1].get<ze::table>();
+
+            if (options.key_value_type() != ze::string_type ||
+                options.map_value_type() != ze::string_type)
+            {
+                nack(route, "invalid 'options' key/value type");
+                return;
+            }
+
+            if (action == "create")
+            {
+                auto e = options.find("expression");
+                if (e == options.end())
+                {
+                    nack(route, "'expression' option required");
+                    return;
+                }
+
+                auto d = options.find("destination");
+                if (d == options.end())
+                {
+                    nack(route, "'destination' option required");
+                    return;
+                }
+
+                auto expr = e->second.get<ze::string>().to_string();
+                auto dst = d->second.get<ze::string>().to_string();
+
+                auto q = std::make_unique<query>(*this, expr);
+                auto& emitter = archive_.create_emitter();
+                emitter.to(q->frontend());
+                LOG(info, query) << "connecting to client query " << dst;
+                q->backend().connect(ze::zmq::tcp, dst);
+
+                // FIXME: Find out why it makes a difference *when* we setup up
+                // the subscriber-to-dealer relay. The emitter won't send any
+                // messages to the query if we call this function before
+                // connecting the emitter with the query frontend, i.e., before
+                // emitter.to(q->frontend()). Ideally, this function should not
+                // even exist and its code would move to the query constructor.
+                q->relay();
+
+                auto id = q->id();
+                {
+                    std::lock_guard<std::mutex> lock(query_mutex_);
+                    queries_.emplace(id, std::move(q));
+                    query_to_emitter_.emplace(id, emitter.id());
+                }
+
+                LOG(debug, query) << "sending query details back to client";
+                ack(route, "query created", id.to_string());
+
+                emitter.start();
+            }
+            else if (action == "remove" || action == "control")
+            {
+                auto i = options.find("id");
+                if (i == options.end())
+                {
+                    nack(route, "'id' option required");
+                    return;
+                }
+
+                auto qid = ze::uuid(i->second.get<ze::string>().to_string());
+                std::lock_guard<std::mutex> lock(query_mutex_);
+                auto q = queries_.find(qid);
+                if (q == queries_.end())
+                {
+                    nack(route, "unknown query ID", qid.to_string());
+                    return;
+                }
+
+                auto e = query_to_emitter_.find(qid);
+                assert(e != query_to_emitter_.end());
+                auto eid = e->second;
+
+                if (action == "remove")
+                {
+                    archive.remove_emitter(eid);
+                    queries_.erase(q);
+                    query_to_emitter_.erase(e);
+                }
+                else if (action == "control")
+                {
+                    auto& emitter = archive_.lookup_emitter(eid);
+
+                    auto a = options.find("aspect");
+                    if (a == options.end())
+                    {
+                        nack(route, "'aspect' option required");
+                        return;
+                    }
+
+                    auto aspect = a->second.get<ze::string>().to_string();
+                    if (aspect == "next batch")
+                    {
+                        // TODO: implement pagination.
+                    }
+                    else
+                    {
+                        nack(route, "unknown control aspect");
+                        return;
+                    }
+                }
+            }
+        });
 }
 
 void search::init(std::string const& host, unsigned port)
 {
-    source_.init(host, port);
-    source_.subscribe("VAST::query");
+    auto endpoint = host + ":" + std::to_string(port);
+    manager_.bind(ze::zmq::tcp, endpoint);
+    LOG(info, query) << "search component listening on " << endpoint;
 }
 
 void search::stop()
 {
-    source_.stop();
+    query_to_emitter_.clear();
+    queries_.clear();
 };
-
-void search::submit(ze::event_ptr query_event)
-{
-    LOG(debug, query) << "new search event: " << *query_event;
-    auto& event = *query_event;
-    validate(event);
-
-    auto action = event[0].get<ze::string>().to_string();
-    auto& options = event[1].get<ze::table>();
-    auto expr = options["expression"].get<ze::string>().to_string();
-    auto dst = options["destination"].get<ze::string>().to_string();
-
-    if (action == "create")
-    {
-        auto q = std::make_unique<query>(*this, expr);
-        auto& emitter = archive_.create_emitter();
-        emitter.to(q->frontend());
-        LOG(verbose, query) << "query connecting to " << dst;
-        q->backend().connect(ze::zmq::tcp, dst);
-        {
-            std::lock_guard<std::mutex> lock(query_mutex_);
-            auto id = q->id();
-            queries_.emplace(id, std::move(q));
-            query_to_emitter_.emplace(id, emitter.id());
-        }
-
-        emitter.start();
-    }
-    else if (action == "control")
-    {
-        // TODO: not yet implemented
-    }
-}
-
-void search::validate(ze::event const& event)
-{
-    if (event.name() != "VAST::query")
-        throw exception("invalid query event name");
-
-    if (event.size() != 2)
-        throw exception("invalid number of query event arguments");
-
-    if (! event[0].which() == ze::string_type)
-        throw exception("invalid first argument type of query event");
-
-    if (! event[1].which() == ze::table_type)
-        throw exception("invalid second argument type of query event");
-
-    auto action = event[0].get<ze::string>().to_string();
-    auto& options = event[1].get<ze::table>();
-
-    if (action == "create")
-    {
-        if (options.size() < 2)
-            throw exception("action 'create' requires two parameters");
-
-        auto expr = options.find("expression");
-        if (expr == options.end())
-            throw exception("option 'expression' required");
-        else if (expr->second.which() != ze::string_type)
-            throw exception("option 'expression' has invalid type");
-
-        auto dst = options.find("destination");
-        if (dst == options.end())
-            throw exception("option 'destination' required");
-        else if (dst->second.which() != ze::string_type)
-            throw exception("option 'destination' has invalid type");
-    }
-    else if (action == "control")
-    {
-        // TODO: not yet implemented.
-    }
-}
 
 } // namespace query
 } // namespace vast

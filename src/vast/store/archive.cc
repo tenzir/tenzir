@@ -95,6 +95,17 @@ emitter& archive::lookup_emitter(ze::uuid const& id)
     return *i->second;
 }
 
+void archive::remove_emitter(ze::uuid const& id)
+{
+    std::lock_guard<std::mutex> lock(emitter_mutex_);
+    auto i = emitters_.find(id);
+    if (i == emitters_.end())
+        throw archive_exception("invalid emitter ID");
+
+    i->second->pause();
+    emitters_.erase(i);
+}
+
 void archive::scan(fs::path const& directory)
 {
     fs::each_dir_entry(

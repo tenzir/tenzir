@@ -37,6 +37,11 @@ public:
     /// @param str The query expression.
     query(ze::component& c, std::string str);
 
+    // Links the query device frontend with the backend.
+    // @todo Find out why we cannot get rid of this function and move its code
+    // into the constructor.
+    void relay();
+
     /// Tests whether an event matches the query.
     /// @param event The event to match.
     /// @return @c true if @a event satisfies the query.

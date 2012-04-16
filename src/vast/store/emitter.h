@@ -23,6 +23,9 @@ public:
             std::shared_ptr<segment_cache> cache,
             std::vector<ze::uuid> ids);
 
+    /// Destroys an emitter.
+    ~emitter();
+
     /// Stars the emission process by scheduling a task.
     void start();
 
@@ -31,6 +34,8 @@ public:
 
 private:
     void emit();
+
+    void emit_chunk();
 
     bool paused_ = true;
     std::shared_ptr<segment_cache> cache_;

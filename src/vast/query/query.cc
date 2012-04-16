@@ -30,8 +30,10 @@ query::query(ze::component& c, std::string str)
     state_ = validated;
 
     expr_.assign(query_ast);
+}
 
-    //filter([&](ze::event_ptr const& e) { return match(*e); });
+void query::relay()
+{
     frontend().receive(
         [&](ze::event_ptr&& e)
         {
