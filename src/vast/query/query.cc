@@ -11,10 +11,15 @@
 namespace vast {
 namespace query {
 
-query::query(ze::component& c, std::string str)
+query::query(ze::component& c,
+             std::string str,
+             uint64_t batch_size,
+             batch_function each_batch)
   : device(c)
   , state_(invalid)
   , str_(std::move(str))
+  , batch_size_(batch_size)
+  , each_batch_(each_batch)
 {
     LOG(verbose, query) << "new query " << id() << ": " << str_;
 
@@ -37,8 +42,13 @@ void query::relay()
     frontend().receive(
         [&](ze::event_ptr&& e)
         {
+            ++processed_;
             if (match(*e))
+            {
                 backend().send(*e);
+                if (++matched_ % batch_size_ == 0ull && each_batch_)
+                    each_batch_(processed_, matched_);
+            }
         });
 }
 
@@ -58,7 +68,7 @@ query::state query::status() const
     return state_;
 }
 
-void query::status(query::state s)
+void query::status(state s)
 {
     state_ = s;
 }

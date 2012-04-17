@@ -18,6 +18,8 @@ class query : public ze::object
     typedef ze::device<ze::subscriber<>, ze::serial_dealer<>> device;
 
 public:
+    typedef std::function<void(uint64_t, uint64_t)> batch_function;
+
     /// Query state.
     enum state
     {
@@ -35,7 +37,12 @@ public:
     /// Constructs a query from a query expression.
     /// @param c The component this query belongs to.
     /// @param str The query expression.
-    query(ze::component& c, std::string str);
+    /// @param batch_size TODO
+    /// @param each_batch TODO
+    query(ze::component& c,
+          std::string str,
+          uint64_t batch_size = 0ull,
+          batch_function each_batch = batch_function());
 
     // Links the query device frontend with the backend.
     // @todo Find out why we cannot get rid of this function and move its code
@@ -60,6 +67,10 @@ private:
     state state_;
     std::string str_;
     boolean_expression expr_;
+    uint64_t matched_ = 0ull;   // TODO: Use boost::accumulators.
+    uint64_t processed_ = 0ull; // TODO: Use boost::accumulators.
+    uint64_t batch_size_;
+    batch_function each_batch_;
 };
 
 } // namespace query

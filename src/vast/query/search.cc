@@ -66,10 +66,22 @@ search::search(ze::io& io, store::archive& archive)
                 auto expr = e->second.get<ze::string>().to_string();
                 auto dst = d->second.get<ze::string>().to_string();
 
-                auto q = std::make_unique<query>(*this, expr);
                 auto& emitter = archive_.create_emitter();
+                std::unique_ptr<query> q;
+
+                auto b = options.find("batch size");
+                if (b == options.end())
+                    q = std::make_unique<query>(*this, expr);
+                else
+                    q = std::make_unique<query>(
+                        *this,
+                        expr,
+                        std::strtoull(
+                            b->second.get<ze::string>().data(), nullptr, 10),
+                        [&](uint64_t, uint64_t) { emitter.pause(); });
+
                 emitter.to(q->frontend());
-                LOG(info, query) << "connecting to client query " << dst;
+                LOG(info, query) << "connecting to client " << dst;
                 q->backend().connect(ze::zmq::tcp, dst);
 
                 // FIXME: Find out why it makes a difference *when* we setup up
@@ -79,6 +91,7 @@ search::search(ze::io& io, store::archive& archive)
                 // emitter.to(q->frontend()). Ideally, this function should not
                 // even exist and its code would move to the query constructor.
                 q->relay();
+                q->status(query::running);
 
                 auto id = q->id();
                 {
@@ -134,7 +147,8 @@ search::search(ze::io& io, store::archive& archive)
                     auto aspect = a->second.get<ze::string>().to_string();
                     if (aspect == "next batch")
                     {
-                        // TODO: implement pagination.
+                        LOG(info, query) << "resuming emitter " << emitter.id();
+                        emitter.start();
                     }
                     else
                     {

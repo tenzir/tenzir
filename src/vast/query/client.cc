@@ -1,6 +1,7 @@
 #include "vast/query/client.h"
 
 #include <ze/event.h>
+#include "vast/util/console.h"
 #include "vast/util/logger.h"
 #include "vast/query/exception.h"
 
@@ -60,22 +61,61 @@ void client::stop()
         LOG(verbose, query) << "telling VAST to stop query " << query;
         control_.send({"VAST::query", "remove", ze::table{"id", query}});
     }
+
+    queries_.clear();
 };
 
-void client::submit(std::string const& expression)
+void client::submit(std::string const& expression, unsigned batch_size)
 {
-    // TODO: Make configurable.
-    auto endpoint = "127.0.0.1:55555";
+    // TODO: Make parameters configurable.
+
+    std::string host("127.0.0.1");
+    auto port = data_.bind(ze::zmq::tcp, host + ":*");
+    auto endpoint = host + ":" + std::to_string(port);
     LOG(info, query) << "new query listening on " << endpoint;
-    data_.bind(ze::zmq::tcp, endpoint);
 
     ze::event event("VAST::query",
                     "create",
                     ze::table{"expression", expression,
-                              "destination", endpoint});
-
+                              "destination", endpoint,
+                              "batch size", std::to_string(batch_size)});
     control_.send(event);
 }
+
+void client::wait_for_input()
+{
+    util::unbuffer();
+
+    char c;
+    while (std::cin.get(c))
+    {
+        switch (c)
+        {
+            case ' ':
+                {
+                    // Currently only one query per client supported.
+                    assert(queries_.size() == 1);
+
+                    ze::event event("VAST::query",
+                                    "control",
+                                    ze::table{
+                                        "id", queries_[0],
+                                        "aspect", "next batch"});
+
+                    LOG(debug, query) << "asking for next batch";
+                    control_.send(event);
+                }
+                break;
+            case 'q':
+                stop();
+                return;
+            default:
+                continue;
+        }
+    }
+
+    util::buffer();
+};
 
 } // namespace query
 } // namespace vast

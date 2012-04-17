@@ -167,11 +167,18 @@ void program::start()
             query_client_.init(config_.get<std::string>("search.host"),
                                config_.get<unsigned>("search.port"));
 
-            query_client_.submit(config_.get<std::string>("query"));
+            query_client_.submit(config_.get<std::string>("query"),
+                                 config_.get<unsigned>("client.batch-size"));
         }
 
         auto threads = config_.get<unsigned>("threads");
         io_.start(errors_, threads);
+
+        if (config_.check("query"))
+        {
+            query_client_.wait_for_input();
+            errors_.push(std::exception_ptr());
+        }
 
         std::exception_ptr error = errors_.pop();
         if (error)

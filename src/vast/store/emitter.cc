@@ -25,28 +25,49 @@ emitter::~emitter()
 
 void emitter::start()
 {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    if (state_ == finished)
+        return;
+
     LOG(debug, store) << "starting emitter " << id();
-    paused_ = false;
+    state_ = running;
+    state_mutex_.unlock();
+
     io_.service().post(std::bind(&emitter::emit, shared_from_this()));
 }
 
 void emitter::pause()
 {
     LOG(debug, store) << "pausing emitter " << id();
-    paused_ = true;
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    state_ = paused;
 }
 
 void emitter::emit()
 {
-    if (paused_ || current_ == ids_.end())
-        return;
+    {
+        std::lock_guard<std::mutex> lock(state_mutex_);
+        assert(state_ != finished);
+        if (state_ == paused)
+            return;
+    }
 
     try
     {
-        auto i = *current_++;
-        std::shared_ptr<isegment> segment = cache_->retrieve(i);
-        LOG(verbose, store) << "emitter " << id() << ": emitting segment " << i;
-        segment->get([&](ze::event_ptr&& e) { send(e); });
+        std::shared_ptr<isegment> segment = cache_->retrieve(*current_);
+        auto remaining = segment->get_chunk([&](ze::event_ptr&& e) { send(e); });
+
+        LOG(debug, store)
+            << "emitter " << id()
+            << ": emmitted chunk, " << remaining << " remaining";
+
+        // Advance to the next segment after having processed all chunks.
+        if (remaining == 0 && ++current_ == ids_.end())
+        {
+            std::lock_guard<std::mutex> lock(state_mutex_);
+            state_ = finished;
+            return;
+        }
     }
     catch (segment_exception const& e)
     {

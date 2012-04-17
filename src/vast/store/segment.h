@@ -95,7 +95,15 @@ public:
     /// @param o The output segment to steal the chunks from.
     isegment(osegment&& o);
 
+    /// Invokes a function on each event of chunks.
+    /// @param f The function to invoke on each event.
     void get(std::function<void(ze::event_ptr&& event)> f);
+
+    /// Invokes a function on each event from the current chunk and switch to
+    /// the next chunk afterwards.
+    /// @param f The function to invoke on each event.
+    /// @return The number of chunks left in the segment.
+    size_t get_chunk(std::function<void(ze::event_ptr&& event)> f);
 
 private:
     typedef ze::serialization::ichunk<ze::event_ptr> ichunk;
@@ -103,6 +111,7 @@ private:
     friend void load(ze::serialization::iarchive& ia, isegment& segment);
 
     std::vector<std::unique_ptr<ichunk>> chunks_;
+    std::vector<std::unique_ptr<ichunk>>::const_iterator current_;
 };
 
 } // namespace store

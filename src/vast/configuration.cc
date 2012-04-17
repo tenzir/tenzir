@@ -98,8 +98,14 @@ configuration::configuration()
          "port of the search component")
     ;
 
+    po::options_description client("client options");
+    client.add_options()
+        ("client.batch-size", po::value<unsigned>()->default_value(0u),
+         "number of query results per page")
+    ;
+
     all_.add(general).add(advanced).add(component).add(taxonomy)
-        .add(ingestor).add(archive).add(search);
+        .add(ingestor).add(archive).add(search).add(client);
 
     visible_.add(general).add(component);
 }

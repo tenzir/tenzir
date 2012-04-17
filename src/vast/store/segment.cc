@@ -135,6 +135,8 @@ isegment::isegment(osegment&& o)
     assert(! o.chunks_.empty());
     for (auto& chunk : o.chunks_)
         chunks_.emplace_back(std::make_unique<ichunk>(std::move(*chunk)));
+
+    current_ = chunks_.begin();
 }
 
 void isegment::get(std::function<void(ze::event_ptr&& event)> f)
@@ -143,11 +145,27 @@ void isegment::get(std::function<void(ze::event_ptr&& event)> f)
         chunk->get(f);
 }
 
+size_t isegment::get_chunk(std::function<void(ze::event_ptr&& event)> f)
+{
+    assert(current_ != chunks_.end());
+    (**current_).get(f);
+
+    if (++current_ == chunks_.end())
+    {
+        current_ = chunks_.begin();
+        return 0;
+    }
+
+    return chunks_.end() - current_;
+}
+
 void load(ze::serialization::iarchive& ia, isegment& segment)
 {
     ia >> static_cast<basic_segment&>(segment);
     ia >> segment.chunks_;
     assert(! segment.chunks_.empty());
+
+    segment.current_ = segment.chunks_.begin();
 }
 
 } // namespace store

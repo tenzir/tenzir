@@ -27,7 +27,11 @@ public:
 
     /// Submits a new query.
     /// @param expression The query expression
-    void submit(std::string const& expression);
+    /// @param batch_size Number of results per page.
+    void submit(std::string const& expression, unsigned batch_size = 0u);
+
+    /// Wait for console input on STDIN.
+    void wait_for_input();
 
 private:
     ze::serial_dealer<> control_;
