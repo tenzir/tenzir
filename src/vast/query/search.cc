@@ -131,6 +131,8 @@ search::search(ze::io& io, store::archive& archive)
 
                 if (action == "remove")
                 {
+                    LOG(info, query) << "removing query " << qid;
+                    LOG(info, query) << "removing emitter " << eid;
                     archive.remove_emitter(eid);
                     queries_.erase(q);
                     query_to_emitter_.erase(e);
@@ -149,7 +151,8 @@ search::search(ze::io& io, store::archive& archive)
                     auto aspect = a->second.get<ze::string>().to_string();
                     if (aspect == "next batch")
                     {
-                        emitter.start();
+                        if (emitter.start() == store::emitter::finished)
+                            nack(route, "query finished", qid.to_string());
                     }
                     else
                     {

@@ -30,7 +30,7 @@ private:
     void reply(char const* msg, std::vector<ze::zmq::message>& route,
                Args&& ...args)
     {
-        ze::event event("VAST::ack", std::forward<Args>(args)...);
+        ze::event event(msg, std::forward<Args>(args)...);
         manager_.send_with_route(event, std::move(route));
     }
 

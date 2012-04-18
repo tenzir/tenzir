@@ -55,7 +55,22 @@ client::client(ze::io& io)
                 }
             }
             else if (e.name() == "VAST::nack")
-                LOG(info, query) << e;
+            {
+                assert(e[0].which() == ze::string_type);
+                auto msg = e[0].get<ze::string>().to_string();
+                if (msg == "query finished")
+                {
+                    assert(e.size() == 2);
+                    assert(e[1].which() == ze::string_type);
+                    auto id = e[0].get<ze::string>().to_string();
+                    assert(id == query_);
+
+                    LOG(verbose, query) << "query finished";
+                    terminating_ = true;
+                    stop();
+                }
+
+            }
             else
                 LOG(error, query) << "unknown VAST response: " << e;
         });
@@ -97,6 +112,9 @@ void client::wait_for_input()
     char c;
     while (std::cin.get(c))
     {
+        if (terminating_)
+            break;
+
         switch (c)
         {
             case ' ':
