@@ -29,9 +29,9 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
 
   Required Packages in Non-Standard Locations:
     --with-0event=PATH     path to 0vent install root
+    --with-0mq=PATH        path to 0MQ install root
     --with-boost=PATH      path to Boost install root
     --with-broccoli=PATH   path to Broccoli install root
-    --with-zeromq=PATH     path to ZeroMQ install root
 
   Optional Packages in Non-Standard Locations:
     --with-perftools=PATH  path to Google perftools install root
@@ -101,6 +101,9 @@ while [ $# -ne 0 ]; do
         --with-0event=*)
             append_cache_entry 0event_ROOT_DIR PATH $optarg
             ;;
+        --with-0mq=*)
+            append_cache_entry ZeroMQ_ROOT_DIR PATH $optarg
+            ;;
         --with-boost=*)
             append_cache_entry BOOST_ROOT PATH $optarg
             ;;
@@ -113,9 +116,6 @@ while [ $# -ne 0 ]; do
         --with-perftools=*)
             append_cache_entry ENABLE_PERFTOOLS     BOOL   true
             append_cache_entry Perftools_ROOT_DIR PATH $optarg
-            ;;
-        --with-zeromq=*)
-            append_cache_entry ZeroMQ_ROOT_DIR PATH $optarg
             ;;
         --binary-package)
             append_cache_entry BINARY_PACKAGING_MODE BOOL true
