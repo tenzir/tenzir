@@ -152,7 +152,10 @@ search::search(ze::io& io, store::archive& archive)
                     if (aspect == "next batch")
                     {
                         if (emitter.start() == store::emitter::finished)
+                        {
                             nack(route, "query finished", qid.to_string());
+                            return;
+                        }
                     }
                     else
                     {
@@ -174,6 +177,7 @@ search::search(ze::io& io, store::archive& archive)
                         ze::table{"processed", std::to_string(stats.processed),
                                   "matches", std::to_string(stats.matched),
                                   "selectivity", std::to_string(selectivity)});
+                    return;
                 }
             }
         });
