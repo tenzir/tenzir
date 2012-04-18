@@ -18,46 +18,36 @@ emitter::emitter(ze::component& c,
 {
 }
 
-emitter::~emitter()
+emitter::state emitter::start()
 {
-    LOG(debug, store) << "removed emitter " << id();
-}
-
-void emitter::start()
-{
-    std::lock_guard<std::mutex> lock(state_mutex_);
+    std::lock_guard<std::mutex> lock(mutex_);
     if (state_ == finished)
-        return;
+        return state_;
 
     LOG(debug, store) << "starting emitter " << id();
     state_ = running;
-    state_mutex_.unlock();
 
     io_.service().post(std::bind(&emitter::emit, shared_from_this()));
+    return state_;
 }
 
-void emitter::pause()
+emitter::state emitter::pause()
 {
-    std::lock_guard<std::mutex> lock(state_mutex_);
-    if (state_ == finished)
-        return;
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (state_ == finished || state_ == paused)
+        return state_;
 
     LOG(debug, store) << "pausing emitter " << id();
-
-    if (state_ == paused)
-        LOG(warn, store) << "emitter " << id() << " already paused";
-
     state_ = paused;
+    return state_;
 }
 
 void emitter::emit()
 {
-    {
-        std::lock_guard<std::mutex> lock(state_mutex_);
-        assert(state_ != finished);
-        if (state_ == paused)
-            return;
-    }
+    std::lock_guard<std::mutex> lock(mutex_);
+    assert(state_ != finished);
+    if (state_ == paused)
+        return;
 
     try
     {
@@ -65,14 +55,13 @@ void emitter::emit()
         auto remaining = segment->get_chunk([&](ze::event_ptr&& e) { send(e); });
 
         LOG(debug, store)
-            << "emitter " << id()
-            << ": emmitted chunk, " << remaining << " remaining";
+            << "emmitted chunk, " << remaining << " remaining (segment "
+            << segment->id() << ")";
 
         // Advance to the next segment after having processed all chunks.
         if (remaining == 0 && ++current_ == ids_.end())
         {
             LOG(debug, store) << "emitter " << id() << ": finished";
-            std::lock_guard<std::mutex> lock(state_mutex_);
             state_ = finished;
             return;
         }

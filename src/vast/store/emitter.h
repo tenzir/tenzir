@@ -33,25 +33,18 @@ public:
             std::shared_ptr<segment_cache> cache,
             std::vector<ze::uuid> ids);
 
-    /// Destroys an emitter.
-    ~emitter();
-
     /// Stars the emission process by scheduling a task.
-    void start();
+    state start();
 
     /// Temporarily stops the emission of events.
-    void pause();
-
-    /// Retrieves the emitter status.
-    /// @return The current status of the emitter.
-    state status() const;
+    state pause();
 
 private:
     // Note: emitting chunks asynchronously could lead to segment thrashing in
     // the cache if the ingestion rate is very high.
     void emit();
 
-    std::mutex state_mutex_;
+    std::mutex mutex_;
     state state_ = stopped;
     std::shared_ptr<segment_cache> cache_;
     std::vector<ze::uuid> ids_;
