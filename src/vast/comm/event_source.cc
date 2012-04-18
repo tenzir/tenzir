@@ -11,7 +11,7 @@ namespace comm {
 event_source::event_source(ze::component& c)
   : ze::publisher<>(c)
   , server_(io_.service())
-  , event_handler_([&](ze::event_ptr&& event) { send(std::move(event)); })
+  , event_handler_([&](ze::event_ptr event) { send(std::move(event)); })
   , error_handler_([&](std::shared_ptr<broccoli> bro) { disconnect(bro); })
 {
 }

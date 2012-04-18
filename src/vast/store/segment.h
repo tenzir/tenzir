@@ -97,13 +97,13 @@ public:
 
     /// Invokes a function on each event of chunks.
     /// @param f The function to invoke on each event.
-    void get(std::function<void(ze::event_ptr&& event)> f);
+    void get(std::function<void(ze::event_ptr event)> f);
 
     /// Invokes a function on each event from the current chunk and switch to
     /// the next chunk afterwards.
     /// @param f The function to invoke on each event.
     /// @return The number of chunks left in the segment.
-    size_t get_chunk(std::function<void(ze::event_ptr&& event)> f);
+    size_t get_chunk(std::function<void(ze::event_ptr event)> f);
 
 private:
     typedef ze::serialization::ichunk<ze::event_ptr> ichunk;

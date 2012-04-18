@@ -16,7 +16,7 @@ search::search(ze::io& io, store::archive& archive)
   , manager_(*this)
 {
     manager_.receive_with_route(
-        [&](ze::event&& event, std::vector<ze::zmq::message>&& route)
+        [&](ze::event event, std::vector<ze::zmq::message> route)
         {
             if (event.name() != "VAST::query")
             {

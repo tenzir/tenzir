@@ -18,7 +18,7 @@ archive::archive(ze::io& io, ingestor& ingest)
 {
     ingest.source.to(segmentizer_.frontend());
     segmentizer_.backend().to(writer_);
-    writer_.receive([&](ze::intrusive_ptr<osegment>&& os)
+    writer_.receive([&](ze::intrusive_ptr<osegment> os)
                     {
                         on_rotate(os);
                     });

@@ -38,7 +38,7 @@ public:
 
 private:
     /// Writes an event into the output segment.
-    void write(ze::event_ptr&& event);
+    void write(ze::event_ptr event);
 
     bool terminating_;
     std::mutex segment_mutex_;

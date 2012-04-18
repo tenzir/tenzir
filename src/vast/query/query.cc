@@ -40,7 +40,7 @@ query::query(ze::component& c,
 void query::relay()
 {
     frontend().receive(
-        [&](ze::event_ptr&& e)
+        [&](ze::event_ptr e)
         {
             ++stats_.processed;
             if (match(*e))

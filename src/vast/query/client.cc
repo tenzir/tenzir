@@ -16,7 +16,7 @@ client::client(ze::io& io)
   , asking_(true)
 {
     data_.receive(
-        [&](ze::event&& e)
+        [&](ze::event e)
         {
             std::lock_guard<std::mutex> lock(print_mutex_);
             if (asking_)
@@ -38,7 +38,7 @@ client::client(ze::io& io)
         });
 
     control_.receive(
-        [&](ze::event&& e)
+        [&](ze::event e)
         {
             if (e.name() == "VAST::ack")
             {

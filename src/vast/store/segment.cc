@@ -139,13 +139,13 @@ isegment::isegment(osegment&& o)
     current_ = chunks_.begin();
 }
 
-void isegment::get(std::function<void(ze::event_ptr&& event)> f)
+void isegment::get(std::function<void(ze::event_ptr event)> f)
 {
     for (auto& chunk : chunks_)
         chunk->get(f);
 }
 
-size_t isegment::get_chunk(std::function<void(ze::event_ptr&& event)> f)
+size_t isegment::get_chunk(std::function<void(ze::event_ptr event)> f)
 {
     assert(current_ != chunks_.end());
     (**current_).get(f);

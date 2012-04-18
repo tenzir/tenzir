@@ -52,7 +52,7 @@ void emitter::emit()
     try
     {
         std::shared_ptr<isegment> segment = cache_->retrieve(*current_);
-        auto remaining = segment->get_chunk([&](ze::event_ptr&& e) { send(e); });
+        auto remaining = segment->get_chunk([&](ze::event_ptr e) { send(e); });
 
         LOG(debug, store)
             << "emmitted chunk, " << remaining << " remaining (segment "

@@ -12,7 +12,7 @@ namespace store {
 segmentizer::segmentizer(ze::component& c)
   : device(c)
 {
-    frontend().receive([&](ze::event_ptr&& event) { write(std::move(event)); });
+    frontend().receive([&](ze::event_ptr event) { write(std::move(event)); });
 }
 
 segmentizer::~segmentizer()
@@ -45,7 +45,7 @@ void segmentizer::stop()
     segment_.reset();
 }
 
-void segmentizer::write(ze::event_ptr&& event)
+void segmentizer::write(ze::event_ptr event)
 {
     std::lock_guard<std::mutex> lock(segment_mutex_);
     if (! segment_)

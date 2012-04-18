@@ -14,8 +14,8 @@ typedef std::function<void(connection_ptr const&)> conn_handler;
 
 class event_source;
 
-typedef std::function<void(ze::event_ptr&& event)> event_ptr_handler;
-typedef std::function<void(ze::event&& event)> event_handler;
+typedef std::function<void(ze::event_ptr event)> event_ptr_handler;
+typedef std::function<void(ze::event event)> event_handler;
 
 } // namespace comm
 } // namespace vast
