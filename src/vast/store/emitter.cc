@@ -38,8 +38,15 @@ void emitter::start()
 
 void emitter::pause()
 {
-    LOG(debug, store) << "pausing emitter " << id();
     std::lock_guard<std::mutex> lock(state_mutex_);
+    if (state_ == finished)
+        return;
+
+    LOG(debug, store) << "pausing emitter " << id();
+
+    if (state_ == paused)
+        LOG(warn, store) << "emitter " << id() << " already paused";
+
     state_ = paused;
 }
 
@@ -64,6 +71,7 @@ void emitter::emit()
         // Advance to the next segment after having processed all chunks.
         if (remaining == 0 && ++current_ == ids_.end())
         {
+            LOG(debug, store) << "emitter " << id() << ": finished";
             std::lock_guard<std::mutex> lock(state_mutex_);
             state_ = finished;
             return;

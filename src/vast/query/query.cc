@@ -42,12 +42,12 @@ void query::relay()
     frontend().receive(
         [&](ze::event_ptr&& e)
         {
-            ++processed_;
+            ++stats_.processed;
             if (match(*e))
             {
                 backend().send(*e);
-                if (++matched_ % batch_size_ == 0ull && each_batch_)
-                    each_batch_(processed_, matched_);
+                if (++stats_.matched % batch_size_ == 0ull && each_batch_)
+                    each_batch_();
             }
         });
 }
@@ -71,6 +71,11 @@ query::state query::status() const
 void query::status(state s)
 {
     state_ = s;
+}
+
+query::statistics const& query::stats() const
+{
+    return stats_;
 }
 
 } // namespace query

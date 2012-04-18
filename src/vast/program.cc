@@ -165,10 +165,9 @@ void program::start()
         if (config_.check("query"))
         {
             query_client_.init(config_.get<std::string>("search.host"),
-                               config_.get<unsigned>("search.port"));
-
-            query_client_.submit(config_.get<std::string>("query"),
-                                 config_.get<unsigned>("client.batch-size"));
+                               config_.get<unsigned>("search.port"),
+                               config_.get<std::string>("query"),
+                               config_.get<unsigned>("client.batch-size"));
         }
 
         auto threads = config_.get<unsigned>("threads");

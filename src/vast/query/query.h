@@ -18,7 +18,13 @@ class query : public ze::object
     typedef ze::device<ze::subscriber<>, ze::serial_dealer<>> device;
 
 public:
-    typedef std::function<void(uint64_t, uint64_t)> batch_function;
+    struct statistics
+    {
+        uint64_t processed = 0ull;
+        uint64_t matched = 0ull;
+    };
+
+    typedef std::function<void()> batch_function;
 
     /// Query state.
     enum state
@@ -62,15 +68,16 @@ public:
     /// @param state The query state
     void status(state s);
 
+    statistics const& stats() const;
+
 private:
     ze::uuid id_;
     state state_;
     std::string str_;
     boolean_expression expr_;
-    uint64_t matched_ = 0ull;   // TODO: Use boost::accumulators.
-    uint64_t processed_ = 0ull; // TODO: Use boost::accumulators.
     uint64_t batch_size_;
     batch_function each_batch_;
+    statistics stats_;
 };
 
 } // namespace query

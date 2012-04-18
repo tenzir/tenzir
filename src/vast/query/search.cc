@@ -78,7 +78,7 @@ search::search(ze::io& io, store::archive& archive)
                         expr,
                         std::strtoull(
                             b->second.get<ze::string>().data(), nullptr, 10),
-                        [&](uint64_t, uint64_t) { emitter.pause(); });
+                        [&] { emitter.pause(); });
 
                 emitter.to(q->frontend());
                 LOG(info, query) << "connecting to client " << dst;
@@ -105,7 +105,9 @@ search::search(ze::io& io, store::archive& archive)
 
                 emitter.start();
             }
-            else if (action == "remove" || action == "control")
+            else if (action == "remove" ||
+                     action == "control" ||
+                     action == "statistics")
             {
                 auto i = options.find("id");
                 if (i == options.end())
@@ -147,7 +149,6 @@ search::search(ze::io& io, store::archive& archive)
                     auto aspect = a->second.get<ze::string>().to_string();
                     if (aspect == "next batch")
                     {
-                        LOG(info, query) << "resuming emitter " << emitter.id();
                         emitter.start();
                     }
                     else
@@ -155,6 +156,21 @@ search::search(ze::io& io, store::archive& archive)
                         nack(route, "unknown control aspect");
                         return;
                     }
+                }
+                else if (action == "statistics")
+                {
+                    auto& stats = q->second->stats();
+
+                    auto selectivity = static_cast<double>(stats.matched) /
+                                       static_cast<double>(stats.processed);
+
+                    LOG(debug, query) << "sending query statistics to client";
+                    ack(route,
+                        "statistics",
+                        qid.to_string(),
+                        ze::table{"processed", std::to_string(stats.processed),
+                                  "matches", std::to_string(stats.matched),
+                                  "selectivity", std::to_string(selectivity)});
                 }
             }
         });
