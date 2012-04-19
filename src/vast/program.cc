@@ -3,7 +3,6 @@
 #include <cstdlib>
 #include <iostream>
 #include <boost/exception/diagnostic_information.hpp>
-#include <ze/event.h>   // FIXME: debugging only
 #include "vast/exception.h"
 #include "vast/fs/path.h"
 #include "vast/fs/operations.h"

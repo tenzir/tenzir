@@ -2,6 +2,7 @@
 #define VAST_QUERY_CLIENT_H
 
 #include <mutex>
+#include <ze/event.h>
 #include <ze/util/queue.h>
 #include <ze/vertex.h>
 #include "vast/query/query.h"
