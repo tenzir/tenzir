@@ -51,6 +51,7 @@ else ()
 endif ()
 
 # Avoid -DNDEBUG in release builds by setting these manually.
+set(CMAKE_CXX_FLAGS_DEBUG -O0)
 set(CMAKE_CXX_FLAGS_MINSIZEREL -Os)
 set(CMAKE_CXX_FLAGS_RELEASE -O3)
 
