@@ -22,6 +22,7 @@ VAST requires the following packages:
   [Clang 3.1](http://clang.llvm.org/)
 * [CMake](http://www.cmake.org)
 * [C++ Boost Libraries](http://www.boost.org)
+* [0event](https://github.com/mavam/ze)
 * [Broccoli](http://www.bro-ids.org)
 
 Optional:
