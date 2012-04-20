@@ -1,104 +1,134 @@
 #include "vast/util/logger.h"
 
-#include <boost/assert.hpp>
-#include <boost/log/attributes/clock.hpp>
-#include <boost/log/formatters/attr.hpp>
-#include <boost/log/formatters/date_time.hpp>
-#include <boost/log/formatters/format.hpp>
-#include <boost/log/formatters/message.hpp>
-#include <boost/log/utility/init/to_console.hpp>
-#include "vast/fs/operations.h"
+#include <iomanip>
+#include <ze/type/time.h>
 
 namespace vast {
 namespace util {
 
-logger::logger(int cverb, int fverb, fs::path const& log_dir)
-  : core_(boost::log::keywords::channel = "core")
-  , broccoli_(boost::log::keywords::channel = "broccoli")
-  , comm_(boost::log::keywords::channel = "comm")
-  , event_(boost::log::keywords::channel = "event")
-  , ingest_(boost::log::keywords::channel = "ingest")
-  , meta_(boost::log::keywords::channel = "meta")
-  , query_(boost::log::keywords::channel = "query")
-  , store_(boost::log::keywords::channel = "store")
+static char const* const facilities[] =
 {
-    namespace fmt = boost::log::formatters;
+    "core",
+    "broccoli",
+    "comm",
+    "event",
+    "ingest",
+    "meta",
+    "query",
+    "store"
+};
 
-    auto core = boost::log::core::get();
+static char const* const levels[] =
+{
+    "quiet",
+    "fatal",
+    "error",
+    "warning",
+    "info",
+    "verbose",
+    "debug"
+};
 
-    // Add a timestamps to both console and logfiles.
-    boost::log::attributes::local_clock timestamp;
-    core->add_global_attribute("TimeStamp", timestamp);
-
-    // Initialize the console.
-    auto console = boost::log::init_log_to_console();
-    console->set_filter(
-            boost::log::filters::attr<log::level>("Severity") <= cverb);
-    console->locked_backend()->auto_flush(true);
-    console->set_formatter(
-            fmt::format("%1% %|2$-10| %3%")
-                % fmt::date_time<boost::posix_time::ptime>("TimeStamp",
-                    "%Y-%m-%d %H:%M:%S.%f")
-                % fmt::attr<std::string>("Channel", "[%x]")
-                % fmt::message()
-            );
-
-    // Initialize the logfiles.
-    if (! fs::exists(log_dir))
-        fs::mkdir(log_dir);
-
-    // FIXME: Why does std::make_shared does not work here?
-    auto backend = boost::make_shared<file_backend>(
-        boost::log::keywords::file_name = log_dir / "vast.log",
-        boost::log::keywords::open_mode =
-        (std::ios_base::out | std::ios_base::app));
-
-    auto log_file = boost::make_shared<file_sink>(backend);
-
-    log_file->set_filter(
-        boost::log::filters::attr<log::level>("Severity") <= fverb);
-    log_file->set_formatter(
-        fmt::format("%1% %|2$-10| %3%")
-        % fmt::date_time<boost::posix_time::ptime>("TimeStamp",
-                                                   "%Y-%m-%d %H:%M:%S.%f")
-        % fmt::attr<std::string>("Channel", "[%x]")
-        % fmt::message()
-        );
-
-    core->add_sink(log_file);
+logger::sink::sink(level lvl, std::ostream& out)
+  : level_(lvl)
+  , out_(out)
+{
 }
 
-logger::logger_t& logger::get(log::facility f)
+bool logger::sink::takes(level lvl)
 {
-    switch (f)
-    {
-        case log::core:
-            return core_;
-            break;
-        case log::broccoli:
-            return broccoli_;
-            break;
-        case log::comm:
-            return comm_;
-            break;
-        case log::event:
-            return event_;
-            break;
-        case log::ingest:
-            return ingest_;
-            break;
-        case log::meta:
-            return meta_;
-            break;
-        case log::query:
-            return query_;
-            break;
-        case log::store:
-            return store_;
-            break;
-        default:
-            BOOST_ASSERT(! "invalid logging facility");
-    };
+    return lvl <= level_;
+}
+
+logger::file_sink::file_sink(level lvl, fs::path file)
+  : sink(lvl, file_)
+  , file_(file, std::ios::app)
+{
+}
+
+logger::record::record(logger& log, level lvl, facility fac)
+  : logger_(log)
+  , level_(lvl)
+{
+    typedef std::underlying_type<logger::facility>::type underlying;
+    auto fac_str = facilities[static_cast<underlying>(fac)];
+    stream_
+        << ze::clock::now().time_since_epoch().count()
+        << " " << '['  << fac_str << ']';
+
+    static size_t max_len = 8ul;
+    stream_ 
+        << std::setfill(' ') << std::setw(max_len - std::strlen(fac_str) + 1) 
+        << ' ';
+}
+
+logger::record::~record()
+{
+    logger_.write(*this);
+}
+
+
+logger::logger(level console_verbosity,
+       level logfile_verbosity,
+       fs::path const& logfile)
+  : console_(console_verbosity, std::cerr)
+  , logfile_(logfile_verbosity, logfile)
+{
+}
+
+bool logger::takes(level lvl)
+{
+    return console_.takes(lvl) || logfile_.takes(lvl);
+}
+
+logger::record logger::make_record(level lvl, facility fac)
+{
+    return {*this, lvl, fac};
+}
+
+void logger::write(record const& rec)
+{
+    if (console_.takes(rec.level_))
+        console_.write(rec.stream_.rdbuf());
+
+    if (logfile_.takes(rec.level_))
+        logfile_.write(rec.stream_.str());
+}
+
+
+bool operator<(logger::level x, logger::level y)
+{
+    typedef std::underlying_type<logger::level>::type underlying;
+    return static_cast<underlying>(x) < static_cast<underlying>(y);
+}
+
+bool operator<=(logger::level x, logger::level y)
+{
+    return ! (y < x);
+}
+
+bool operator>=(logger::level x, logger::level y)
+{
+    return ! (x < y);
+}
+
+bool operator>(logger::level x, logger::level y)
+{
+    return y < x;
+}
+
+std::ostream& operator<<(std::ostream& out, logger::facility f)
+{
+    typedef std::underlying_type<logger::facility>::type underlying;
+    out << facilities[static_cast<underlying>(f)];
+    return out;
+}
+
+std::ostream& operator<<(std::ostream& out, logger::level l)
+{
+    typedef std::underlying_type<logger::level>::type underlying;
+    out << levels[static_cast<underlying>(l)];
+    return out;
 }
 
 } // namespace util

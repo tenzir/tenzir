@@ -638,9 +638,13 @@ void broccoli::handle_read(boost::system::error_code const& ec,
         return;
     }
     else if (ec == boost::asio::error::eof)
+    {
         LOG(info, broccoli) << *conn_ << ": remote broccoli disconnected";
+    }
     else
+    {
         LOG(error, broccoli) << *conn_ << ": " << ec.message();
+    }
 
     stop();
     error_handler_(shared_from_this());

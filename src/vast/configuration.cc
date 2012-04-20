@@ -26,7 +26,7 @@ configuration::configuration()
         ("taxonomy,t", po::value<fs::path>(), "event taxonomy")
         ("query,q", po::value<std::string>(), "query expression")
         ("console-verbosity,v",
-         po::value<int>()->default_value(static_cast<int>(log::info)),
+         po::value<int>()->default_value(util::logger::info),
          "console logging verbosity")
         ("advanced,z", "show advanced options")
     ;
@@ -40,8 +40,8 @@ configuration::configuration()
         ("log-dir",
          po::value<fs::path>()->default_value(fs::path("vast") / "log"),
          "log directory")
-        ("log-verbosity,V",
-         po::value<int>()->default_value(static_cast<int>(log::verbose)),
+        ("logfile-verbosity,V",
+         po::value<int>()->default_value(util::logger::verbose),
          "log file verbosity")
         ("profile,p", "enable internal profiling")
         ("profiler-interval", po::value<unsigned>()->default_value(1000u),
@@ -157,12 +157,12 @@ void configuration::init()
     depends("dump-taxonomy", "taxonomy");
 
     int v = get<int>("console-verbosity");
-    if (v < -1 || v > 5)
-        throw config_exception("verbosity not in [0,5]", "console-verbosity");
+    if (v < 0 || v > 6)
+        throw config_exception("verbosity not in [0,6]", "console-verbosity");
 
-    v = get<int>("log-verbosity");
-    if (v < -1 || v > 5)
-        throw config_exception("verbosity not in [0,5]", "log-verbosity");
+    v = get<int>("logfile-verbosity");
+    if (v < 0 || v > 6)
+        throw config_exception("verbosity not in [0,6]", "log-verbosity");
 }
 
 void configuration::conflicts(const char* opt1, const char* opt2) const

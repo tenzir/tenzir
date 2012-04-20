@@ -185,7 +185,7 @@ void program::start()
     catch (...)
     {
         LOG(fatal, core)
-            << "exception details:" << std::endl
+            << "exception details:\n"
             << boost::current_exception_diagnostic_information();
 
         return_ = EXIT_FAILURE;
@@ -270,9 +270,9 @@ void program::do_init()
         fs::mkdir(vast_dir);
 
     util::LOGGER = new util::logger(
-        config_.get<int>("console-verbosity"),
-        config_.get<int>("log-verbosity"),
-        config_.get<fs::path>("log-dir"));
+        static_cast<util::logger::level>(config_.get<int>("console-verbosity")),
+        static_cast<util::logger::level>(config_.get<int>("logfile-verbosity")),
+        config_.get<fs::path>("log-dir") / "vast.log");
 
     LOG(info, core) << " _   _____   __________";
     LOG(info, core) << "| | / / _ | / __/_  __/";
