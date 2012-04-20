@@ -128,12 +128,6 @@ public:
     /// @a lvl.
     bool takes(level lvl);
 
-    /// Creates a log record to stream into.
-    /// @param lvl The level 
-    /// @param fac
-    /// @return A record object to stream text data into.
-    record make_record(level lvl, facility fac);
-
 private:
     /// Writes a record to the relevant sinks.
     /// @param rec The record to dispatch.

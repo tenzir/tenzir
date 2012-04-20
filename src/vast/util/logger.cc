@@ -81,11 +81,6 @@ bool logger::takes(level lvl)
     return console_.takes(lvl) || logfile_.takes(lvl);
 }
 
-logger::record logger::make_record(level lvl, facility fac)
-{
-    return {*this, lvl, fac};
-}
-
 void logger::write(record const& rec)
 {
     if (console_.takes(rec.level_))
