@@ -118,13 +118,12 @@ endmacro(SetPackageFileName)
 
 # Sets up binary package metadata
 macro(SetPackageMetadata)
-    set(CPACK_PACKAGE_VENDOR "Lawrence Berkeley National Laboratory")
-    set(CPACK_PACKAGE_CONTACT "info@bro-ids.org")
-    set(CPACK_PACKAGE_DESCRIPTION_SUMMARY
-        "The Bro Network Intrusion Detection System")
+    set(CPACK_PACKAGE_VENDOR "International Computer Science Institute")
+    set(CPACK_PACKAGE_CONTACT "vallentin@icir.org")
+    set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "VAST")
 
     # CPack may enforce file name extensions for certain package generators
-    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/README
+    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/README.md
                    ${CMAKE_CURRENT_BINARY_DIR}/README.txt
                     COPYONLY)
     configure_file(${CMAKE_CURRENT_SOURCE_DIR}/COPYING
