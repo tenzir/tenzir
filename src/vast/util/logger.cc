@@ -46,6 +46,12 @@ logger::file_sink::file_sink(level lvl, fs::path file)
 {
 }
 
+logger::file_sink::~file_sink()
+{
+    if (file_.good())
+        file_ << std::endl;
+}
+
 logger::record::record(logger& log, level lvl, facility fac)
   : logger_(log)
   , level_(lvl)

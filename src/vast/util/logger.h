@@ -85,6 +85,7 @@ public:
     {
     public:
         file_sink(level lvl, fs::path file);
+        ~file_sink();
 
     private:
         fs::ofstream file_;
