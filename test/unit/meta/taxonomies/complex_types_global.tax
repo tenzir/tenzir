@@ -2,7 +2,7 @@
 
 type enum_t: enum { x, y, z }
 type vector_t: vector of addr
-type set_t: set[file]
+type set_t: set[pattern]
 type table_t: table[port] of addr
 
 event foo

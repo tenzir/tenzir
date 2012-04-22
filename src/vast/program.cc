@@ -120,9 +120,9 @@ void program::start()
             auto const& taxonomy = config_.get<fs::path>("taxonomy");
             tax_manager_.init(taxonomy);
 
-            if (config_.check("dump-taxonomy"))
+            if (config_.check("print-taxonomy"))
             {
-                std::cout << tax_manager_.get()->to_string();
+                std::cout << tax_manager_.get().to_string();
                 return;
             }
         }
@@ -274,11 +274,11 @@ void program::do_init()
         static_cast<util::logger::level>(config_.get<int>("logfile-verbosity")),
         config_.get<fs::path>("log-dir") / "vast.log");
 
-    LOG(info, core) << " _   _____   __________";
-    LOG(info, core) << "| | / / _ | / __/_  __/";
-    LOG(info, core) << "| |/ / __ |_\\ \\  / / ";
-    LOG(info, core) << "|___/_/ |_/___/ /_/  " << VAST_VERSION;
-    LOG(info, core) << "";
+    LOG(verbose, core) << " _   _____   __________";
+    LOG(verbose, core) << "| | / / _ | / __/_  __/";
+    LOG(verbose, core) << "| |/ / __ |_\\ \\  / / ";
+    LOG(verbose, core) << "|___/_/ |_/___/ /_/  " << VAST_VERSION;
+    LOG(verbose, core) << "";
 }
 
 } // namespace vast

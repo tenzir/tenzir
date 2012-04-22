@@ -5,42 +5,45 @@
 #include <string>
 #include <vector>
 #include <boost/operators.hpp>
+#include <ze/intrusive.h>
 #include "vast/meta/forward.h"
 
 namespace vast {
 namespace meta {
 
 /// Contains meta information for one particular event argument.
-class argument : boost::equality_comparable<argument>
+class argument : ze::intrusive_base<argument>
+               , boost::equality_comparable<argument>
 {
+    argument(argument const&) = delete;
+    argument& operator=(argument) = delete;
+
 public:
     /// Creates an argument of a specific type.
     /// @param name The name of the argument.
     /// @param type The type of the argument.
-    argument(const std::string& name, type_ptr type);
+    argument(std::string const& name, type_ptr type);
 
     /// Compares two arguments for equality. Two arguments are equal if they
     /// have the same name and type.
-    /// @param rhs The argument to compare with.
+    /// @param other The argument to compare with.
     /// @return @c true iff both arguments are equal.
-    bool operator==(const argument& rhs) const;
+    bool operator==(argument const& other) const;
 
     /// Gets the argument name.
     /// @return The argument name.
-    const std::string& name() const;
+    std::string const& name() const;
 
     /// Gets the argument type.
     /// @return The type of the argument.
     type_ptr type() const;
 
-    /// Create a human-readable representation of the argument.
-    // @return A string describing argument name and type.
-    std::string to_string() const;
-
 private:
     std::string name_;
     type_ptr type_;
 };
+
+std::ostream& operator<<(std::ostream& out, argument const& a);
 
 } // namespace meta
 } // namespace vast

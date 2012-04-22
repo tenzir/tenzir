@@ -1,7 +1,7 @@
 #include "vast/meta/event.h"
 
-#include <sstream>
 #include "vast/meta/argument.h"
+#include "vast/meta/type.h"
 
 namespace vast {
 namespace meta {
@@ -9,6 +9,10 @@ namespace meta {
 event::event(const std::string& name, const std::vector<argument_ptr>& args)
   : name_(name)
   , args_(args)
+{
+}
+
+event::~event()
 {
 }
 
@@ -32,23 +36,21 @@ const std::string& event::name() const
     return name_;
 }
 
-std::string event::to_string() const
+std::ostream& operator<<(std::ostream& out, event const& e)
 {
-    std::stringstream ss;
-    ss << '(';
-
-    auto first = args_.begin();
-    auto last = args_.end();
+    out << e.name();
+    out << '(';
+    auto first = e.args_.begin();
+    auto last = e.args_.end();
     while (first != last)
     {
-        ss << (*first)->to_string();
+        out << **first;
         if (++first != last)
-            ss << ", ";
+            out << ", ";
     }
+    out << ')';
 
-    ss << ')';
-
-    return ss.str();
+    return out;
 }
 
 } // namespace meta

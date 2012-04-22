@@ -154,7 +154,7 @@ void configuration::init()
 {
     po::notify(config_);
 
-    depends("dump-taxonomy", "taxonomy");
+    depends("print-taxonomy", "taxonomy");
 
     int v = get<int>("console-verbosity");
     if (v < 0 || v > 6)

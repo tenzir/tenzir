@@ -17,11 +17,11 @@ public:
 
     /// Retrieves the current taxonomy.
     /// @return A pointer to the current taxonomy.
-    taxonomy_ptr get() const;
+    taxonomy& get();
 
 private:
     // For now, we have a single taxonomy.
-    taxonomy_ptr tax_;
+    std::unique_ptr<taxonomy> tax_;
 };
 
 } // namespace meta

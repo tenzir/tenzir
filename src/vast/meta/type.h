@@ -1,9 +1,11 @@
 #ifndef VAST_META_TYPE_H
 #define VAST_META_TYPE_H
 
+#include <memory>
 #include <string>
 #include <vector>
 #include <boost/operators.hpp>
+#include <ze/intrusive.h>
 #include "vast/meta/forward.h"
 #include "vast/util/crc.h"
 
@@ -12,7 +14,7 @@ namespace meta {
 
 /// A type in the taxonomy.
 class type : boost::equality_comparable<type>
-           , public std::enable_shared_from_this<type>
+           , ze::intrusive_base<type>
 {
 public:
     /// Construts an empty type.
@@ -25,38 +27,43 @@ public:
     /// Equality operator.
     /// @param other The other type.
     /// @return @c true @e iff both types are equal.
-    bool operator==(const type& other) const;
+    bool operator==(type const& other) const;
 
     /// Tests whether a type is a symbol. Since only symbols have a name, a
-    /// type is a symbol @e iff it has name.
-    /// @return @c true @e iff the type is a symbol.
+    /// type is a symbol @e *iff* it has name.
+    /// @return @c true @e *iff* the type is a symbol.
     bool is_symbol() const;
 
     /// Gets the name of the type.
     /// @return The type name.
-    const std::string& name() const;
+    std::string name() const;
 
-    /// Creates symbol by seting a name of this type.
+    /// Creates a symbol by setting a name for this type.
     /// @param name The type name.
-    type_ptr symbolize(const std::string& name);
+    type_ptr symbolize(std::string const& name);
 
     /// Gets the string representation of the type.
-    /// @param resolve_symbols Whether to print the symbols or actual types.
-    /// @return The string representation of the type.
-    std::string to_string(bool resolve_symbols = false) const;
+    ///
+    /// @param resolve Flag to indicate whether to resolve the type name.
+    ///
+    /// @return The string representation of the type. If @a resolve is
+    /// `false`, the name of the type (i.e., it's alias) is returned. Otherwise
+    /// its alias is unwrapped one layer and the string representation of the
+    /// aliased type is returned.
+    std::string to_string(bool resolve = false) const;
 
 protected:
-    /// Clones an object, i.e., perform a deep copy.
+    /// Clones an object, i.e., performs a deep copy.
     ///
     /// @return While the base class implementation returns a @c type*, the
     ///     derived classes should return a @c derived*.
     /// @see http://accu.org/index.php/journals/522
     virtual type* clone() const = 0;
 
-    virtual std::string to_string_impl(bool resolve_symbols) const = 0;
+    virtual std::string to_string_impl() const = 0;
 
 private:
-    std::string name_;
+    std::vector<std::string> aliases_;
     util::crc32::value_type checksum_;
 };
 
@@ -70,7 +77,7 @@ public:
 
 protected:
     virtual basic_type* clone() const = 0;
-    virtual std::string to_string_impl(bool resolve_symbols) const = 0;
+    virtual std::string to_string_impl() const = 0;
 };
 
 /// A complex type.
@@ -82,7 +89,7 @@ public:
 
 protected:
     virtual complex_type* clone() const = 0;
-    virtual std::string to_string_impl(bool resolve_symbols) const = 0;
+    virtual std::string to_string_impl() const = 0;
 };
 
 /// A container type.
@@ -94,7 +101,7 @@ public:
 
 protected:
     virtual container_type* clone() const = 0;
-    virtual std::string to_string_impl(bool resolve_symbols) const = 0;
+    virtual std::string to_string_impl() const = 0;
 };
 
 /// A helper macro to declare complex types.
@@ -107,7 +114,7 @@ protected:
                                                                             \
     protected:                                                              \
         virtual t* clone() const;                                           \
-        virtual std::string to_string_impl(bool resolve_symbols) const;     \
+        virtual std::string to_string_impl() const;                         \
                                                                             \
     public:
 
@@ -120,18 +127,17 @@ protected:
     VAST_BEGIN_DECLARE_TYPE(t, basic_type)                                  \
     VAST_END_DECLARE_TYPE
 
-/// @class vast::meta::unknown_type @brief Inernal type for unknown types.
-/// @class vast::meta::addr_type @brief An IP address type.
 /// @class vast::meta::bool_type @brief A @c bool type.
-/// @class vast::meta::count_type @brief A count (unsigned) type.
-/// @class vast::meta::double_type @brief A @c double type.
 /// @class vast::meta::int_type @brief An @c int type.
-/// @class vast::meta::interval_type @brief A time interval type.
-/// @class vast::meta::file_type @brief A file type.
-/// @class vast::meta::port_type @brief A port type.
+/// @class vast::meta::uint_type @brief A count (unsigned) type.
+/// @class vast::meta::double_type @brief A @c double type.
+/// @class vast::meta::duration_type @brief A time interval type.
+/// @class vast::meta::timepoint_type @brief An absolute time point type.
 /// @class vast::meta::string_type @brief A string type.
-/// @class vast::meta::subnet_type @brief A subnet type.
-/// @class vast::meta::time_type @brief A time type.
+/// @class vast::meta::regex_type @brief A regular expression pattern type.
+/// @class vast::meta::addr_type @brief An IP address type.
+/// @class vast::meta::prefix_type @brief A subnet type.
+/// @class vast::meta::port_type @brief A port type.
 /// @class vast::meta::enum_type @brief An enum type.
 /// @class vast::meta::record @brief A record type with arguments.
 /// @class vast::meta::vector_type @brief A vector type.
@@ -141,17 +147,17 @@ protected:
 VAST_BEGIN_DECLARE_TYPE(unknown_type, type)
 VAST_END_DECLARE_TYPE
 
-VAST_DECLARE_BASIC_TYPE(addr_type)
 VAST_DECLARE_BASIC_TYPE(bool_type)
-VAST_DECLARE_BASIC_TYPE(count_type)
-VAST_DECLARE_BASIC_TYPE(double_type)
 VAST_DECLARE_BASIC_TYPE(int_type)
-VAST_DECLARE_BASIC_TYPE(interval_type)
-VAST_DECLARE_BASIC_TYPE(file_type)
-VAST_DECLARE_BASIC_TYPE(port_type)
+VAST_DECLARE_BASIC_TYPE(uint_type)
+VAST_DECLARE_BASIC_TYPE(double_type)
+VAST_DECLARE_BASIC_TYPE(duration_type)
+VAST_DECLARE_BASIC_TYPE(timepoint_type)
 VAST_DECLARE_BASIC_TYPE(string_type)
-VAST_DECLARE_BASIC_TYPE(subnet_type)
-VAST_DECLARE_BASIC_TYPE(time_type)
+VAST_DECLARE_BASIC_TYPE(regex_type)
+VAST_DECLARE_BASIC_TYPE(address_type)
+VAST_DECLARE_BASIC_TYPE(prefix_type)
+VAST_DECLARE_BASIC_TYPE(port_type)
 
 VAST_BEGIN_DECLARE_TYPE(enum_type, complex_type)
     std::vector<std::string> fields;        ///< The enum fields.
@@ -179,43 +185,35 @@ VAST_END_DECLARE_TYPE
 //
 
 /// Determine whether a type is a basic type.
-/// @tparam Base The base pointer type.
-/// @param base A pointer to a type.
+/// @param type A pointer to a type.
 /// @return @c true @e iff the type is a @link basic_type basic type@endlink.
-template <typename Base>
-bool is_basic_type(Base base)
+inline bool is_basic_type(type_ptr const& type)
 {
-    return std::dynamic_pointer_cast<basic_type>(base).get() != nullptr;
+    return dynamic_cast<basic_type*>(type.get()) != nullptr;
 }
 
 /// Determine whether a type is a @link complex_type complex type@endlink.
-/// @tparam Base The base pointer type.
-/// @param base A pointer to a type.
+/// @param type A pointer to a type.
 /// @return @c true @e iff the type is a complex type.
-template <typename Base>
-bool is_complex_type(Base base)
+inline bool is_complex_type(type_ptr const& type)
 {
-    return std::dynamic_pointer_cast<complex_type>(base).get() != nullptr;
+    return dynamic_cast<complex_type*>(type.get()) != nullptr;
 }
 
 /// Determine whether a type is a container type.
-/// @tparam Base The base pointer type.
-/// @param base A pointer to a type.
+/// @param type A pointer to a type.
 /// @return @c true @e iff the type is container type.
-template <typename Base>
-bool is_container_type(Base base)
+inline bool is_container_type(type_ptr const& type)
 {
-    return std::dynamic_pointer_cast<container_type>(base).get() != nullptr;
+    return dynamic_cast<container_type*>(type.get()) != nullptr;
 }
 
 /// Determine whether a type is a record type.
-/// @tparam Base The base pointer type.
-/// @param base A pointer to a type.
+/// @param type A pointer to a type.
 /// @return @c true @e iff the type is a record type.
-template <typename Base>
-bool is_record_type(Base base)
+inline bool is_record_type(type_ptr const& type)
 {
-    return std::dynamic_pointer_cast<record_type>(base).get() != nullptr;
+    return dynamic_cast<record_type*>(type.get()) != nullptr;
 }
 
 } // namespace meta

@@ -1,16 +1,16 @@
 # Basic types with global scope.
 
-type t1: addr
-type t2: bool
+type t1: bool
+type t2: int
 type t3: count
 type t4: double
-type t5: int
-type t6: interval
-type t7: file
-type t8: port
-type t9: string
+type t5: interval
+type t6: time
+type t7: string
+type t8: pattern
+type t9: addr
 type t10: subnet
-type t11: time
+type t11: port
 
 event foo
 (

@@ -10,11 +10,10 @@ vast::program VAST;
 
 int main(int argc, char* argv[])
 {
-    if (! VAST.init(argc, argv))
+    if (! VAST.init("/dev/null"))
         std::exit(-1);
 
-    // TODO: Once the new logger is in place, send the unit test output to it.
-    //boost::unit_test::unit_test_log.set_stream(std::ostream& str);
+    boost::unit_test::unit_test_log.set_stream(vast::util::LOGGER->console());
 
     char const* args[] = {"", "--log_level=test_suite"};
     auto rc = boost::unit_test::unit_test_main(

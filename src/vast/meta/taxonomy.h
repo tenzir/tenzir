@@ -2,7 +2,8 @@
 #define VAST_META_TAXONOMY_H
 
 #include <string>
-#include <boost/noncopyable.hpp>
+#include <unordered_map>
+#include <ze/intrusive.h>
 #include "vast/fs/path.h"
 #include "vast/meta/forward.h"
 
@@ -10,29 +11,39 @@ namespace vast {
 namespace meta {
 
 /// Specifies and manages the event meta information.
-class taxonomy : boost::noncopyable
+class taxonomy
 {
+    taxonomy(taxonomy const&) = delete;
+    taxonomy& operator=(taxonomy) = delete;
+
 public:
-    /// Load the event taxonomy.
-    /// \param contents The contents of a taxonomy file.
-    void load(const std::string& contents);
+    /// Constructs a taxonomy.
+    taxonomy();
 
-    /// Load the event taxonomy.
-    /// \param filename The taxonomy file.
-    void load(const fs::path& filename);
+    ~taxonomy();
 
-    /// Save the current event taxonomy to a given filename.
-    /// \param filename The taxonomy file.
-    void save(const fs::path& filename) const;
+    /// Loads a taxonomy.
+    /// @param contents The contents of a taxonomy file.
+    void load(std::string const& contents);
+
+    /// Loads a taxonomy from a file.
+    /// @param filename The taxonomy file.
+    void load(fs::path const& filename);
+
+    /// Saves the taxonomy to a given filename.
+    /// @param filename The taxonomy file.
+    void save(fs::path const& filename) const;
 
     /// Create a string representation of the taxonomy.
-    // \return A string of the parsed AST from the taxonomy file.
+    // @return A string of the parsed AST from the taxonomy file.
     std::string to_string() const;
 
 private:
-    std::string ast_;   ///< Normalized taxonomy AST.
-    type_map types_;    ///< Global types indexed by name.
-    event_map events_;  ///< Events indexed by name.
+    // We keep the symbol "tables" as a vector to keep the symbols in the same
+    // order as declared by the user, which becomes useful when transforming
+    // and printing the taxonomy.
+    std::vector<type_ptr> types_;
+    std::vector<event_ptr> events_;
 };
 
 } // namespace meta

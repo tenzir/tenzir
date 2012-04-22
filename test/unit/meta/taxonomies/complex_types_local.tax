@@ -4,6 +4,6 @@ event foo
 (
     e: enum { x, y, z },
     v: vector of addr,
-    s: set[file],
+    s: set[pattern],
     t: table[port] of addr
 )

@@ -6,13 +6,13 @@
 namespace vast {
 namespace meta {
 
-argument::argument(const std::string& name, type_ptr type)
+argument::argument(std::string const& name, type_ptr type)
   : name_(name)
   , type_(type)
 {
 }
 
-bool argument::operator==(const argument& rhs) const
+bool argument::operator==(argument const& rhs) const
 {
     return name_ == rhs.name_ && *type_ == *rhs.type_;
 }
@@ -27,11 +27,10 @@ type_ptr argument::type() const
     return type_;
 }
 
-std::string argument::to_string() const
+std::ostream& operator<<(std::ostream& out, argument const& a)
 {
-    std::stringstream ss;
-    ss << name_ << ": " << type_->to_string();
-    return ss.str();
+    out << a.name() << ": " << a.type()->to_string();
+    return out;
 }
 
 } // namespace meta

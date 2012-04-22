@@ -1,6 +1,8 @@
 #include <boost/test/unit_test.hpp>
 #include "vast/fs/fstream.h"
 #include "vast/meta/taxonomy.h"
+#include "vast/meta/type.h"
+#include "vast/meta/event.h"
 
 // Bring the contents of a file into a std::string.
 std::string load(const vast::fs::path& path)
@@ -24,7 +26,7 @@ std::string load(const vast::fs::path& path)
         t.load(p);                                                      \
         auto expected_output = load(expected);                          \
                                                                         \
-        BOOST_CHECK(t.to_string() == expected_output);                  \
+        BOOST_CHECK_EQUAL(t.to_string(), expected_output);              \
     }
 
 // Contains the test case defintions for all taxonomy test files.
