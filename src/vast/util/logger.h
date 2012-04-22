@@ -62,6 +62,8 @@ public:
     /// A generic sink referencing an existing output stream.
     class sink
     {
+        friend class logger;
+
     public:
         sink(level lvl, std::ostream& out);
 
@@ -128,6 +130,10 @@ public:
     /// @return `true` if the logger has at least one sink that operates at
     /// @a lvl.
     bool takes(level lvl);
+
+    /// Gets a reference to the console sink.
+    /// @return A reference to the console sink.
+    std::ostream& console() const;
 
 private:
     /// Writes a record to the relevant sinks.

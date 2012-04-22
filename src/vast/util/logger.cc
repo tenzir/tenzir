@@ -96,6 +96,10 @@ void logger::write(record const& rec)
         logfile_.write(rec.stream_.str());
 }
 
+std::ostream& logger::console() const
+{
+    return console_.out_;
+}
 
 bool operator<(logger::level x, logger::level y)
 {
