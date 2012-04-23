@@ -15,7 +15,7 @@ endif ()
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 if ("${PROJECT_SOURCE_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
-    # uninstall target
+    # Support 'make uninstall'.
     configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/cmake_uninstall.cmake.in"
                    "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake"
                     @ONLY)
@@ -41,35 +41,30 @@ list(GET version_numbers 1 VERSION_MINOR)
 set(VERSION_MAJ_MIN "${VERSION_MAJOR}.${VERSION_MINOR}")
 
 # Setup build parameters.
-#set(EXTRA_COMPILE_FLAGS "-Wall -Wno-unused")
-set(EXTRA_COMPILE_FLAGS "-Wall")
+add_definitions("-Wall -std=c++11")
 if (ENABLE_DEBUG)
     set(CMAKE_BUILD_TYPE Debug)
-    set(EXTRA_COMPILE_FLAGS "${EXTRA_COMPILE_FLAGS} -DVAST_DEBUG")
+    add_definitions("-DVAST_DEBUG")
 else ()
     set(CMAKE_BUILD_TYPE Release)
 endif ()
 
-# Avoid -DNDEBUG in release builds by setting these manually.
+# Avoid -DNDEBUG.
 set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")
 set(CMAKE_CXX_FLAGS_MINSIZEREL "-Os")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
-# GCC tests.
-execute_process(
-    COMMAND ${CMAKE_CXX_COMPILER} -dumpversion OUTPUT_VARIABLE GCC_VERSION)
-if (CMAKE_COMPILER_IS_GNUCXX)
+if("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
+    execute_process(
+        COMMAND ${CMAKE_CXX_COMPILER} -dumpversion OUTPUT_VARIABLE GCC_VERSION)
     if (NOT (GCC_VERSION VERSION_GREATER 4.7 OR GCC_VERSION VERSION_EQUAL 4.7))
         message(FATAL_ERROR "${PROJECT_NAME} requires g++ 4.7 or greater.")
     endif ()
-    set(EXTRA_COMPILE_FLAGS "${EXTRA_COMPILE_FLAGS} -std=c++11")
-else ()
+elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+    add_definitions("-stdlib=libc++")
+else()
     message(FATAL_ERROR "Your C++ compiler does not support C++11.")
 endif ()
-
-# Compiler flags may already exist in the CMake cache (e.g., when specifying
-# CFLAGS environment variable before running cmake for the the first time).
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${EXTRA_COMPILE_FLAGS}")
 
 #-----------------------------------------------------------------------
 #                          Dependency Configuration
@@ -91,24 +86,32 @@ find_package(Boost
 if (NOT Boost_FOUND)
     set(MISSING_PREREQS true)
     list(APPEND MISSING_DEPENDENCIES Boost)
+else ()
+    include_directories(${Boost_INCLUDE_DIRS})
 endif ()
 
 find_package(Broccoli)
 if (NOT BROCCOLI_FOUND)
     set(MISSING_PREREQS true)
     list(APPEND MISSING_DEPENDENCIES Broccoli)
+else ()
+    include_directories(${Broccoli_INCLUDE_DIR})
 endif ()
 
 find_package(ZeroMQ)
 if (NOT ZEROMQ_FOUND)
     set(MISSING_PREREQS true)
     list(APPEND MISSING_DEPENDENCIES ZeroMQ)
+else ()
+    include_directories(${ZeroMQ_INCLUDE_DIR})
 endif ()
 
 find_package(0event)
 if (NOT 0EVENT_FOUND)
     set(MISSING_PREREQS true)
     list(APPEND MISSING_DEPENDENCIES 0event)
+else ()
+    include_directories(${0event_INCLUDE_DIR})
 endif ()
 
 if (MISSING_PREREQS)
