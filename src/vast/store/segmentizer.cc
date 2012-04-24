@@ -23,13 +23,14 @@ segmentizer::~segmentizer()
 
 void segmentizer::init(size_t max_events_per_chunk, size_t max_segment_size)
 {
+    max_events_per_chunk_ = max_events_per_chunk;
+    max_segment_size_ = max_segment_size;
+
     LOG(verbose, store)
-        << "maximum segment size: " << max_segment_size << " bytes";
+        << "maximum segment size: " << max_segment_size_ << " bytes";
     LOG(verbose, store)
         << "maximum number of events per chunk: " << max_events_per_chunk_;
 
-    max_events_per_chunk_ = max_events_per_chunk;
-    max_segment_size_ = max_segment_size;
     segment_ = new osegment;
 }
 
