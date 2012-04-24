@@ -46,51 +46,50 @@ taxonomy<Iterator>::taxonomy(
         ("port", ast::port_type)
         ;
 
+    auto type_decl_lambda = 
+        [&](ast::type_declaration const& td, qi::unused_type, qi::unused_type)
+        {
+            if (types.find(td.name))
+            {
+                LOG(error, meta) << "duplicate type: " << td.name;
+                throw semantic_exception("duplicate type");
+            }
+            else if (events.find(td.name))
+            {
+                LOG(error, meta) 
+                    << "event with name '" << td.name << "' already exists";
+                throw semantic_exception("invalid type name");
+            }
+
+            types.add(td.name, td.type);
+        };
+
+    auto event_decl_lambda =
+        [&](ast::event_declaration const& ed, qi::unused_type,
+            qi::unused_type)
+        {
+            if (events.find(ed.name))
+            {
+                LOG(error, meta) << "duplicate event: " << ed.name;
+                throw semantic_exception("duplicate event");
+            }
+            else if (types.find(ed.name))
+            {
+                LOG(error, meta) 
+                    << "type with name '" << ed.name << "' already exists";
+                throw semantic_exception("invalid event name");
+            }
+
+            events.add(ed.name);
+        };
+
     tax
         =   *stmt
         ;
 
     stmt
-        =   type_decl [_val = _1]
-                      [[&](ast::type_declaration const& td, qi::unused_type,
-                           qi::unused_type)
-                       {
-                           if (types.find(td.name))
-                           {
-                               LOG(error, meta) 
-                                   << "duplicate type: " << td.name;
-                               throw semantic_exception("duplicate type");
-                           }
-                           else if (events.find(td.name))
-                           {
-                               LOG(error, meta) 
-                                   << "event with name '" << td.name 
-                                   << "' already exists";
-                               throw semantic_exception("invalid type name");
-                           }
-
-                           types.add(td.name, td.type);
-                       }]
-        |   event_decl  [_val = _1]
-                        [[&](ast::event_declaration const& ed, qi::unused_type,
-                            qi::unused_type)
-                         {
-                             if (events.find(ed.name))
-                             {
-                                 LOG(error, meta) 
-                                     << "duplicate event: " << ed.name;
-                                 throw semantic_exception("duplicate event");
-                             }
-                             else if (types.find(ed.name))
-                             {
-                                 LOG(error, meta) 
-                                     << "type with name '" << ed.name 
-                                     << "' already exists";
-                                 throw semantic_exception("invalid event name");
-                             }
-
-                             events.add(ed.name);
-                         }]
+        =   type_decl   [_val = _1][type_decl_lambda]
+        |   event_decl  [_val = _1][event_decl_lambda]
         ;
 
     event_decl
