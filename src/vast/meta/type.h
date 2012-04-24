@@ -4,7 +4,6 @@
 #include <memory>
 #include <string>
 #include <vector>
-#include <boost/operators.hpp>
 #include <ze/intrusive.h>
 #include "vast/meta/forward.h"
 #include "vast/util/crc.h"
@@ -13,8 +12,7 @@ namespace vast {
 namespace meta {
 
 /// A type in the taxonomy.
-class type : boost::equality_comparable<type>
-           , ze::intrusive_base<type>
+class type : ze::intrusive_base<type>
 {
 public:
     /// Construts an empty type.
@@ -23,11 +21,6 @@ public:
     /// Destroys a type. Objects of type type are owned through the base
     /// pointer and must therefore be deleted publicly and virtually.
     virtual ~type();
-
-    /// Equality operator.
-    /// @param other The other type.
-    /// @return @c true @e iff both types are equal.
-    bool operator==(type const& other) const;
 
     /// Tests whether a type is a symbol. Since only symbols have a name, a
     /// type is a symbol @e *iff* it has name.
@@ -63,9 +56,13 @@ protected:
     virtual std::string to_string_impl() const = 0;
 
 private:
+    friend bool operator==(type const& x, type const& y);
+
     std::vector<std::string> aliases_;
     util::crc32::value_type checksum_;
 };
+
+bool operator!=(type const& x, type const& y);
 
 /// A basic type. This type fits into an integral type, such as @c int, 
 /// @c double, or @c uint64_t.

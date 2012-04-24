@@ -4,7 +4,6 @@
 #include <iosfwd>
 #include <string>
 #include <vector>
-#include <boost/operators.hpp>
 #include <ze/intrusive.h>
 #include "vast/meta/forward.h"
 
@@ -13,7 +12,6 @@ namespace meta {
 
 /// Contains meta information for one particular event argument.
 class argument : ze::intrusive_base<argument>
-               , boost::equality_comparable<argument>
 {
     argument(argument const&) = delete;
     argument& operator=(argument) = delete;
@@ -23,12 +21,6 @@ public:
     /// @param name The name of the argument.
     /// @param type The type of the argument.
     argument(std::string const& name, type_ptr type);
-
-    /// Compares two arguments for equality. Two arguments are equal if they
-    /// have the same name and type.
-    /// @param other The argument to compare with.
-    /// @return @c true iff both arguments are equal.
-    bool operator==(argument const& other) const;
 
     /// Gets the argument name.
     /// @return The argument name.
@@ -42,6 +34,9 @@ private:
     std::string name_;
     type_ptr type_;
 };
+
+bool operator==(argument const& x, argument const& y);
+bool operator!=(argument const& x, argument const& y);
 
 std::ostream& operator<<(std::ostream& out, argument const& a);
 

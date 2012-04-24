@@ -12,11 +12,6 @@ argument::argument(std::string const& name, type_ptr type)
 {
 }
 
-bool argument::operator==(argument const& rhs) const
-{
-    return name_ == rhs.name_ && *type_ == *rhs.type_;
-}
-
 const std::string& argument::name() const
 {
     return name_;
@@ -25,6 +20,16 @@ const std::string& argument::name() const
 type_ptr argument::type() const
 {
     return type_;
+}
+
+bool operator==(argument const& x, argument const& y)
+{
+    return x.name() == y.name() && *x.type() == *y.type();
+}
+
+bool operator!=(argument const& x, argument const& y)
+{
+    return ! (x == y);
 }
 
 std::ostream& operator<<(std::ostream& out, argument const& a)

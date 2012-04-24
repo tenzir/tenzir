@@ -15,11 +15,6 @@ type::~type()
 {
 }
 
-bool type::operator==(type const& rhs) const
-{
-    return checksum_ == rhs.checksum_;
-}
-
 bool type::is_symbol() const
 {
     return ! aliases_.empty();
@@ -48,6 +43,16 @@ std::string type::to_string(bool resolve) const
         assert(aliases_.size() > 1);
         return  *(aliases_.end() - (resolve ? 2 : 1));
     }
+}
+
+bool operator==(type const& x, type const& y)
+{
+    return x.checksum_ == y.checksum_;
+}
+
+bool operator!=(type const& x, type const& y)
+{
+    return ! (x == y);
 }
 
 basic_type::basic_type()
