@@ -17,4 +17,4 @@ configure_file(meta/taxonomy_test_cases.h.in meta/taxonomy_test_cases.h)
 file(GLOB_RECURSE tests *.cc)
 
 add_executable(unit-test ${tests} ${dependencies})
-target_link_libraries(unit-test vast-lib)
+target_link_libraries(unit-test libvast)

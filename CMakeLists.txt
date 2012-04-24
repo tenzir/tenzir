@@ -13,6 +13,7 @@ if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
 endif ()
 
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+include(Helpers)
 
 if ("${PROJECT_SOURCE_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
     # Support 'make uninstall'.
@@ -77,40 +78,38 @@ find_package(Boost
         date_time
         filesystem
         program_options
-        serialization
         system
-        thread
         unit_test_framework
 )
-if (NOT Boost_FOUND)
+if (Boost_FOUND)
+    include_directories(${Boost_INCLUDE_DIRS})
+else ()
     set(MISSING_PREREQS true)
     list(APPEND MISSING_DEPENDENCIES Boost)
-else ()
-    include_directories(${Boost_INCLUDE_DIRS})
 endif ()
 
 find_package(Broccoli)
-if (NOT BROCCOLI_FOUND)
+if (BROCCOLI_FOUND)
+    include_directories(${Broccoli_INCLUDE_DIR})
+else ()
     set(MISSING_PREREQS true)
     list(APPEND MISSING_DEPENDENCIES Broccoli)
-else ()
-    include_directories(${Broccoli_INCLUDE_DIR})
 endif ()
 
 find_package(ZeroMQ)
-if (NOT ZEROMQ_FOUND)
+if (ZEROMQ_FOUND)
+    include_directories(${ZeroMQ_INCLUDE_DIR})
+else ()
     set(MISSING_PREREQS true)
     list(APPEND MISSING_DEPENDENCIES ZeroMQ)
-else ()
-    include_directories(${ZeroMQ_INCLUDE_DIR})
 endif ()
 
 find_package(0event)
-if (NOT 0EVENT_FOUND)
+if (0EVENT_FOUND)
+    include_directories(${0event_INCLUDE_DIR})
+else ()
     set(MISSING_PREREQS true)
     list(APPEND MISSING_DEPENDENCIES 0event)
-else ()
-    include_directories(${0event_INCLUDE_DIR})
 endif ()
 
 if (MISSING_PREREQS)
@@ -120,12 +119,6 @@ if (MISSING_PREREQS)
     endforeach ()
     message(FATAL_ERROR "Could not find required dependencies:${deps}")
 endif ()
-
-# Adapt build flags after all packages have been found.
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBOOST_PARAMETER_MAX_ARITY=15")
-include_directories(${Boost_INCLUDE_DIRS})
-include_directories(${Broccoli_INCLUDE_DIR})
-include_directories(${0event_INCLUDE_DIR})
 
 #
 # Optional dependencies
@@ -175,6 +168,10 @@ endif ()
 #                             Build Configuration
 #-----------------------------------------------------------------------
 
+string(TOUPPER ${CMAKE_BUILD_TYPE} build_type)
+get_directory_property(defs DIRECTORY ${CMAKE_SOURCE_DIR} COMPILE_DEFINITIONS)
+join("${defs}" " " definitions)
+
 message(
     "\n====================|  VAST Build Summary  |===================="
     "\n"
@@ -182,7 +179,8 @@ message(
     "\nDebug mode:        ${ENABLE_DEBUG}"
     "\n"
     "\nCXX:               ${CMAKE_CXX_COMPILER}"
-    "\nCXXFLAGS:          ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${BuildType}}"
+    "\nCXXFLAGS:          ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${build_type}}"
+    "\nDefinitions:       ${definitions}"
     "\n"
     "\nGoogle perftools:  ${USE_PERFTOOLS}"
     "\n"

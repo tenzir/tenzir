@@ -1,5 +1,0 @@
-include(vast_create_project)
-include(vast_configure)
-include(vast_make)
-include(vast_unpack)
-include(vast_build_boost)

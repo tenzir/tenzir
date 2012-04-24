@@ -17,12 +17,12 @@ file(GLOB_RECURSE vast_lib_sources
     program.cc
     */*.cc)
 
-add_library(vast-lib SHARED ${vast_lib_sources})
-set_target_properties(vast-lib PROPERTIES OUTPUT_NAME vast)
-target_link_libraries(vast-lib ${libs})
-install(TARGETS vast-lib DESTINATION lib)
+add_library(libvast SHARED ${vast_lib_sources})
+set_target_properties(libvast PROPERTIES OUTPUT_NAME vast)
+target_link_libraries(libvast ${libs})
+install(TARGETS libvast DESTINATION lib)
 
-add_executable(vast-bin main.cc)
-set_target_properties(vast-bin PROPERTIES OUTPUT_NAME vast)
-target_link_libraries(vast-bin vast-lib ${libs})
-install(TARGETS vast-bin DESTINATION bin)
+add_executable(vast main.cc)
+set_target_properties(vast PROPERTIES OUTPUT_NAME vast)
+target_link_libraries(vast libvast ${libs})
+install(TARGETS vast DESTINATION bin)
