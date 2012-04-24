@@ -98,7 +98,7 @@ struct validator : public boost::static_visitor<bool>
         auto rhs = fold(clause.rhs);
         auto rhs_type = rhs.which();
         auto lhs_type = clause.lhs;
-        if (lhs_type == lhs_type ||
+        if (lhs_type == rhs_type ||
             (lhs_type == ze::string_type && rhs_type == ze::regex_type))
             return true;
 
