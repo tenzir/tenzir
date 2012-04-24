@@ -9,7 +9,7 @@ add_subdirectory(vast)
 # VAST wrapper - for convenience during development.
 #
 
-get_target_property(VAST_BINARY_LOCATION vast-bin LOCATION)
+get_target_property(VAST_BINARY_LOCATION vast LOCATION)
 
 if (UNIX)
     if (APPLE)
