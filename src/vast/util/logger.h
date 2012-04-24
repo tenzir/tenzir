@@ -131,8 +131,8 @@ public:
     /// @a lvl.
     bool takes(level lvl);
 
-    /// Gets a reference to the console sink.
-    /// @return A reference to the console sink.
+    /// Gets a reference to the console output stream.
+    /// @return A reference to the `std::ostream` of the console.
     std::ostream& console() const;
 
 private:
