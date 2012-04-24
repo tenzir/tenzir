@@ -2,6 +2,7 @@
 #define VAST_QUERY_SEARCH_H
 
 #include <unordered_map>
+#include <ze/event.h>
 #include <ze/vertex.h>
 #include "vast/query/query.h"
 #include "vast/store/forward.h"

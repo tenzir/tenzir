@@ -1,6 +1,5 @@
 #include "vast/query/search.h"
 
-#include <ze/event.h>
 #include <ze/util/make_unique.h>
 #include "vast/util/logger.h"
 #include "vast/query/exception.h"

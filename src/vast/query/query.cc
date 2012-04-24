@@ -56,7 +56,7 @@ bool query::match(ze::event const& event)
 {
     expr_.reset();
     return event.any(
-        [&](ze::value const& value)
+        [&](ze::value const& value) -> bool
         {
             expr_.feed(value);
             return bool(expr_);
