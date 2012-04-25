@@ -244,18 +244,19 @@ ze::value broccoli::factory::make_value(int type, void* bro_val)
         case BRO_TYPE_IPADDR:
             {
                 BroAddr* addr = static_cast<BroAddr*>(bro_val);
+                auto is_v4 = bro_util_is_v4_addr(addr);
                 return ze::address(
                     addr->addr,
-                    (addr->size == 1) ? ze::address::ipv4 : ze::address::ipv6,
+                    is_v4 ? ze::address::ipv4 : ze::address::ipv6,
                     ze::address::network);
             }
         case BRO_TYPE_SUBNET:
             {
                 BroSubnet* sn = static_cast<BroSubnet*>(bro_val);
+                auto is_v4 = bro_util_is_v4_addr(&sn->sn_net);
                 ze::address addr(
                     sn->sn_net.addr,
-                    (sn->sn_net.size == 1) ?
-                        ze::address::ipv4 : ze::address::ipv6,
+                    is_v4 ? ze::address::ipv4 : ze::address::ipv6,
                     ze::address::network);
                 return ze::prefix(std::move(addr), sn->sn_width);
             }
@@ -479,18 +480,8 @@ broccoli::reverse_factory::builder::operator()(ze::address const& a) const
 {
     // Caller must free the memory of the BroAddr!
     BroAddr* addr = new BroAddr;
-    if (a.is_v4())
-    {
-        addr->size = 1;
-        std::copy(a.data().begin() + 12, a.data().end(),
-                  reinterpret_cast<uint8_t*>(&addr->addr));
-    }
-    else
-    {
-        addr->size = 4;
-        std::copy(a.data().begin(), a.data().end(),
-                  reinterpret_cast<uint8_t*>(&addr->addr));
-    }
+    std::copy(a.data().begin(), a.data().end(),
+              reinterpret_cast<uint8_t*>(&addr->addr));
 
     return { BRO_TYPE_IPADDR, addr };
 }
