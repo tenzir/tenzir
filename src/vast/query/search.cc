@@ -132,7 +132,7 @@ search::search(ze::io& io, store::archive& archive)
                 {
                     LOG(info, query) << "removing query " << qid;
                     LOG(info, query) << "removing emitter " << eid;
-                    archive.remove_emitter(eid);
+                    archive_.remove_emitter(eid);
                     queries_.erase(q);
                     query_to_emitter_.erase(e);
                 }
