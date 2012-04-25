@@ -2,6 +2,7 @@
 
 #include <iomanip>
 #include <sys/resource.h>   // getrusage
+#include <sys/time.h>       // gettimeofday
 
 namespace vast {
 namespace util {
@@ -9,19 +10,19 @@ namespace util {
 measurement::measurement()
 {
     struct timeval begin;
-    ::gettimeofday(&begin, 0);
-    clock = static_cast<double>(begin.tv_sec) + 
+    gettimeofday(&begin, 0);
+    clock = static_cast<double>(begin.tv_sec) +
         static_cast<double>(begin.tv_usec) / 1000000.0;
 
-    struct rusage ru;        
-    ::getrusage(RUSAGE_SELF, &ru);        
+    struct rusage ru;
+    getrusage(RUSAGE_SELF, &ru);
     struct timeval& u = ru.ru_utime;
     struct timeval& s = ru.ru_stime;
-    
-    usr_time = static_cast<double>(u.tv_sec) + 
+
+    usr_time = static_cast<double>(u.tv_sec) +
         static_cast<double>(u.tv_usec) / 1000000.0;
 
-    sys_time = static_cast<double>(s.tv_sec) + 
+    sys_time = static_cast<double>(s.tv_sec) +
         static_cast<double>(s.tv_usec) / 1000000.0;
 }
 
@@ -87,7 +88,7 @@ void profiler::start()
         {
             handle_timer(ec, now);
         });
-}    
+}
 
 void profiler::stop()
 {
