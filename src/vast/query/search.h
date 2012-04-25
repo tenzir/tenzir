@@ -52,7 +52,7 @@ private:
     std::unordered_map<ze::uuid, std::unique_ptr<query>> queries_;
     std::unordered_map<ze::uuid, ze::uuid> query_to_emitter_;
 
-    ze::router<> manager_;
+    ze::serial_router<> manager_;
 };
 
 } // namespace query
