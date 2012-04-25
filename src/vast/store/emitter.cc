@@ -16,6 +16,8 @@ emitter::emitter(ze::component& c,
   , ids_(std::move(ids))
   , current_(ids_.begin())
 {
+    if (current_ == ids_.end())
+        state_ = finished;
 }
 
 emitter::state emitter::start()
@@ -51,6 +53,7 @@ void emitter::emit()
 
     try
     {
+        assert(current_ != ids_.end());
         std::shared_ptr<isegment> segment = cache_->retrieve(*current_);
         auto remaining = segment->get_chunk([&](ze::event_ptr e) { send(e); });
 
