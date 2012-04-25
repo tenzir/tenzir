@@ -75,7 +75,6 @@ include(MacDependencyPaths)
 find_package(Boost
     1.49.0
     COMPONENTS
-        date_time
         filesystem
         program_options
         system
