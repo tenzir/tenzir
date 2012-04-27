@@ -130,7 +130,7 @@ void clause::reset()
 
 ze::value_type clause::type() const
 {
-    return rhs_.which();
+    return rhs_.which() == ze::regex_type ? ze::string_type : rhs_.which();
 }
 
 
