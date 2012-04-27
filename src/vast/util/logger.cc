@@ -1,6 +1,7 @@
 #include "vast/util/logger.h"
 
 #include <iomanip>
+#include <thread>
 #include <ze/type/time.h>
 
 namespace vast {
@@ -17,6 +18,17 @@ static char const* const facilities[] =
     "query",
     "store"
 };
+
+/// Computes the number of characters that align the facility string with the
+/// largest facility string.
+// FIXME: compute at compile time.
+size_t pad(logger::facility f)
+{
+    static size_t const max_len = 8ul;
+    typedef std::underlying_type<logger::facility>::type underlying;
+    auto str = facilities[static_cast<underlying>(f)];
+    return max_len - std::strlen(str) + 1;
+}
 
 static char const* const levels[] =
 {
@@ -56,15 +68,12 @@ logger::record::record(logger& log, level lvl, facility fac)
   : logger_(log)
   , level_(lvl)
 {
-    typedef std::underlying_type<logger::facility>::type underlying;
-    auto fac_str = facilities[static_cast<underlying>(fac)];
     stream_
         << ze::clock::now().time_since_epoch().count()
-        << " " << '['  << fac_str << ']';
+        << " " << '[' << std::this_thread::get_id() << '|' << fac << ']';
 
-    static size_t max_len = 8ul;
     stream_ 
-        << std::setfill(' ') << std::setw(max_len - std::strlen(fac_str) + 1) 
+        << std::setfill(' ') << std::setw(pad(fac)) 
         << ' ';
 }
 
