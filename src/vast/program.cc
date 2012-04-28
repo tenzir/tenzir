@@ -230,20 +230,36 @@ void program::stop()
 #endif
 
         if (config_.check("query"))
+        {
+            LOG(debug, core) << "stopping queries";
             query_client_.stop();
+        }
 
         if (config_.check("comp-search"))
+        {
+            LOG(debug, core) << "stopping search component";
             search_.stop();
+        }
 
         if (config_.check("comp-ingestor"))
-            ingestor_.source.stop();
+        {
+            LOG(debug, core) << "stopping ingestor component";
+            ingestor_.stop();
+        }
 
         if (config_.check("comp-archive"))
+        {
+            LOG(debug, core) << "stopping archive component";
             archive_.stop();
+        }
 
         if (config_.check("profile"))
+        {
+            LOG(debug, core) << "stopping profiler";
             profiler_.stop();
+        }
 
+        LOG(debug, core) << "stopping I/O";
         io_.stop();
 
         LOG(verbose, core) << "state saved";

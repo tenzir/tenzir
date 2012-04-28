@@ -28,36 +28,25 @@ template <
 class streamer
 {
 public:
-    typedef Attribute attribute;
-    typedef std::function<void(Attribute const&)> callback_type;
-
-    streamer(callback_type callback)
-      : callback_(callback)
+    streamer(std::istream& in)
+      : first_(istream_iterator(in))
+      , last_(istream_iterator())
     {
     }
 
-    bool extract(std::istream& in)
+    bool extract(Attribute& attr)
     {
-        namespace qi = boost::spirit::qi;
-        auto f = multi_pass_iterator(istream_iterator(in));
-        auto l = multi_pass_iterator(istream_iterator());
-        auto action = 
-            [&](Attribute const& x, qi::unused_type, qi::unused_type)
-            {
-                callback_(x);
-            };
+        auto success = boost::spirit::qi::phrase_parse(
+            first_, last_, grammar_, skipper_, attr);
 
-        Grammar<multi_pass_iterator> grammar;
-        Skipper<multi_pass_iterator> skipper;
-        bool success = true;
-        while (success && f != l)
-            success = qi::phrase_parse(f, l, +grammar[action], skipper);
-
-        return success;
+        return success && first_ != last_;
     }
 
 private:
-    callback_type callback_;
+    Grammar<multi_pass_iterator> grammar_;
+    Skipper<multi_pass_iterator> skipper_;
+    multi_pass_iterator first_;
+    multi_pass_iterator last_;
 };
 
 } // namespace parser
