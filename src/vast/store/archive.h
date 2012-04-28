@@ -58,11 +58,12 @@ public:
     // TODO: implement a basic index and support time plus event-based
     // filtering.
     //emitter create_emitter(time_interval i, std::vector<std::string> events = {});
-    emitter& create_emitter();
+    std::shared_ptr<emitter> create_emitter();
 
     /// Retrieves an emitter by ID.
     /// @param id The emitter ID.
-    emitter& lookup_emitter(ze::uuid const& id);
+    /// @return The emitter with ID @a id.
+    std::shared_ptr<emitter> lookup_emitter(ze::uuid const& id);
 
     /// Removes an emitter.
     /// @param id The emitter ID.

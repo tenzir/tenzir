@@ -40,6 +40,7 @@ client::client(ze::io& io)
     control_.receive(
         [&](ze::event e)
         {
+            LOG(verbose, query) << e;
             if (e.name() == "VAST::ack")
             {
                 assert(e[0].which() == ze::string_type);
@@ -48,10 +49,6 @@ client::client(ze::io& io)
                 {
                     assert(e[1].which() == ze::string_type);
                     query_ = e[1].get<ze::string>().to_string();
-                }
-                else if (msg == "statistics")
-                {
-                    LOG(info, query) << e;
                 }
             }
             else if (e.name() == "VAST::nack")
@@ -62,18 +59,13 @@ client::client(ze::io& io)
                 {
                     assert(e.size() == 2);
                     assert(e[1].which() == ze::string_type);
-                    auto id = e[0].get<ze::string>().to_string();
+                    auto id = e[1].get<ze::string>().to_string();
                     assert(id == query_);
 
-                    LOG(verbose, query) << "query finished";
                     terminating_ = true;
                     stop();
                 }
-                else
-                    LOG(error, query) << "negative VAST response: " << e;
             }
-            else
-                LOG(error, query) << "unknown VAST response: " << e;
         });
 }
 

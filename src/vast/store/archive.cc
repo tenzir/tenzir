@@ -66,7 +66,7 @@ void archive::stop()
     emitters_.clear();
 }
 
-emitter& archive::create_emitter()
+std::shared_ptr<emitter> archive::create_emitter()
 {
     std::vector<ze::uuid> ids;
     // TODO: only select those segments IDs which contain relevant events.
@@ -86,17 +86,17 @@ emitter& archive::create_emitter()
     std::lock_guard<std::mutex> lock(emitter_mutex_);
     emitters_.emplace(e->id(), e);
 
-    return *e;
+    return e;
 }
 
-emitter& archive::lookup_emitter(ze::uuid const& id)
+std::shared_ptr<emitter> archive::lookup_emitter(ze::uuid const& id)
 {
     std::lock_guard<std::mutex> lock(emitter_mutex_);
     auto i = emitters_.find(id);
     if (i == emitters_.end())
         throw archive_exception("invalid emitter ID");
 
-    return *i->second;
+    return i->second;
 }
 
 void archive::remove_emitter(ze::uuid const& id)

@@ -31,7 +31,8 @@ private:
 
     std::shared_ptr<segment_cache> cache_;
     std::vector<ze::uuid> ids_;
-    std::vector<ze::uuid>::const_iterator current_;
+    std::vector<ze::uuid>::const_iterator segment_id_;
+    std::shared_ptr<isegment> segment_;
 };
 
 } // namespace store

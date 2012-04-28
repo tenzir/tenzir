@@ -15,31 +15,51 @@ emitter::emitter(ze::component& c,
   , ze::actor<emitter>(c)
   , cache_(cache)
   , ids_(std::move(ids))
-  , current_(ids_.begin())
+  , segment_id_(ids_.begin())
 {
     // FIXME: "empty" emitters should not be constructed in the first place.
-    if (current_ == ids_.end())
+    if (segment_id_ == ids_.end())
         status(finished);
 }
 
 void emitter::act()
 {
+    if (status() != running)
+    {
+        LOG(debug, store) << "emitter " << id() << status();
+        return;
+    }
+
+    assert(segment_id_ != ids_.end());
+
     try
     {
-        assert(current_ != ids_.end());
-        std::shared_ptr<isegment> segment = cache_->retrieve(*current_);
-        auto remaining = segment->get_chunk([&](ze::event_ptr e) { send(e); });
+        if (! segment_)
+            segment_ = cache_->retrieve(*segment_id_);
+
+        auto remaining = segment_->get_chunk([&](ze::event_ptr e) { send(e); });
 
         LOG(debug, store)
-            << "emmitted chunk, " << remaining << " remaining (segment "
-            << segment->id() << ")";
+            << "emmitted chunk, "
+            << remaining << " chunks remaining in segment " << segment_->id();
 
-        // Advance to the next segment after having processed all chunks.
-        if (remaining == 0 && ++current_ == ids_.end())
+        if (remaining == 0)
         {
-            LOG(debug, store) << "emitter " << id() << ": finished";
-            status(finished);
-            return;
+            if (++segment_id_ != ids_.end())
+            {
+                segment_ = cache_->retrieve(*segment_id_);
+                LOG(debug, store)
+                    << "emitter " << id() << " advanced to next segment "
+                    << *segment_id_;
+
+                enact();
+            }
+            else
+            {
+                status(finished);
+                LOG(debug, store)
+                    << "emitter " << id() << " processed all segments";
+            }
         }
     }
     catch (segment_exception const& e)
@@ -50,8 +70,6 @@ void emitter::act()
     {
         LOG(error, store) << e.what();
     }
-
-    enact();
 }
 
 } // namespace store

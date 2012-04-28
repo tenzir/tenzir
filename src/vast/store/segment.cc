@@ -107,7 +107,7 @@ void osegment::flush()
 {
     auto size = chunks_.back()->flush();
     size_ += size;
-    LOG(debug, store) << "flushed chunk" << " (" << size << " bytes)";
+    LOG(debug, store) << "flushed chunk" << " (" << size << "B)";
 }
 
 void osegment::push_chunk()
@@ -123,10 +123,17 @@ void save(ze::serialization::oarchive& oa, osegment const& segment)
     oa << segment.chunks_;
     auto end = oa.position();
 
+    auto mins = std::chrono::duration_cast<std::chrono::minutes>(
+        segment.end_ - segment.start_);
+
     LOG(debug, store)
-        << "serialized segment "
-        << "(header: " << middle - start << " bytes, "
-        << "chunks: " << end - middle << " bytes)";
+        << "serialized segment (#events: "
+        << segment.n_events_
+        << ", span: "
+        << mins.count()
+        << " mins, size: "
+        <<  middle - start << "/"
+        << end - middle << "B header/chunks)";
 }
 
 isegment::isegment(osegment&& o)
@@ -148,7 +155,15 @@ void isegment::get(std::function<void(ze::event_ptr event)> f)
 size_t isegment::get_chunk(std::function<void(ze::event_ptr event)> f)
 {
     assert(current_ != chunks_.end());
-    (**current_).get(f);
+
+    try
+    {
+        (**current_).get(f);
+    }
+    catch (ze::bad_type_exception e)
+    {
+        LOG(error, store) << "skipping rest of bad chunk: " << e.what();
+    }
 
     if (++current_ == chunks_.end())
     {
@@ -164,6 +179,8 @@ void load(ze::serialization::iarchive& ia, isegment& segment)
     ia >> static_cast<basic_segment&>(segment);
     ia >> segment.chunks_;
     assert(! segment.chunks_.empty());
+
+    // TODO: seek to next chunk on error.
 
     segment.current_ = segment.chunks_.begin();
 }

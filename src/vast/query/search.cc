@@ -65,7 +65,7 @@ search::search(ze::io& io, store::archive& archive)
                 auto expr = e->second.get<ze::string>().to_string();
                 auto dst = d->second.get<ze::string>().to_string();
 
-                auto& emitter = archive_.create_emitter();
+                auto emitter = archive_.create_emitter();
                 std::unique_ptr<query> q;
 
                 auto b = options.find("batch size");
@@ -77,9 +77,9 @@ search::search(ze::io& io, store::archive& archive)
                         expr,
                         std::strtoull(
                             b->second.get<ze::string>().data(), nullptr, 10),
-                        [&] { emitter.pause(); });
+                        [emitter] { emitter->pause(); });
 
-                emitter.to(q->frontend());
+                emitter->to(q->frontend());
                 LOG(info, query) << "connecting to client " << dst;
                 q->backend().connect(ze::zmq::tcp, dst);
 
@@ -96,13 +96,13 @@ search::search(ze::io& io, store::archive& archive)
                 {
                     std::lock_guard<std::mutex> lock(query_mutex_);
                     queries_.emplace(id, std::move(q));
-                    query_to_emitter_.emplace(id, emitter.id());
+                    query_to_emitter_.emplace(id, emitter->id());
                 }
 
                 LOG(debug, query) << "sending query details back to client";
                 ack(route, "query created", id.to_string());
 
-                emitter.start();
+                emitter->start();
 
             }
             else if (action == "remove" ||
@@ -146,7 +146,7 @@ search::search(ze::io& io, store::archive& archive)
                 }
                 else if (action == "control")
                 {
-                    auto& emitter = archive_.lookup_emitter(eid);
+                    auto emitter = archive_.lookup_emitter(eid);
 
                     auto a = options.find("aspect");
                     if (a == options.end())
@@ -158,13 +158,22 @@ search::search(ze::io& io, store::archive& archive)
                     auto aspect = a->second.get<ze::string>().to_string();
                     if (aspect == "next batch")
                     {
-                        if (emitter.status() == store::emitter::finished)
+                        if (emitter->status() == store::emitter::finished)
                         {
                             nack(route, "query finished", qid.to_string());
                             return;
                         }
-
-                        emitter.start();
+                        else if (emitter->status() == store::emitter::paused)
+                        {
+                            LOG(debug, query) << "starting paused emitter " << eid;
+                            emitter->start();
+                        }
+                        else
+                        {
+                            assert(emitter->status() == store::emitter::stopped);
+                            nack(route, "query stopped", qid.to_string());
+                            return;
+                        }
                     }
                     else
                     {
