@@ -160,6 +160,10 @@ void configuration::init()
     depends("print-taxonomy", "taxonomy");
     depends("ingestor.parser", "ingestor.file");
 
+    auto threads = get<unsigned>("threads");
+    if (threads < 1)
+        throw config_exception("need at least one thread", "threads");
+
     int v = get<int>("console-verbosity");
     if (v < 0 || v > 6)
         throw config_exception("verbosity not in [0,6]", "console-verbosity");
