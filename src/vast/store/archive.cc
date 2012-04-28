@@ -2,26 +2,27 @@
 
 #include "vast/fs/fstream.h"
 #include "vast/fs/operations.h"
+#include "vast/ingest/ingestor.h"
 #include "vast/store/emitter.h"
 #include "vast/store/exception.h"
-#include "vast/store/ingestor.h"
 #include "vast/store/segment.h"
 #include "vast/util/logger.h"
 
 namespace vast {
 namespace store {
 
-archive::archive(ze::io& io, ingestor& ingest)
+archive::archive(ze::io& io, ingest::ingestor& ingest)
   : ze::component(io)
   , segmentizer_(*this)
   , writer_(*this)
 {
     ingest.source.to(segmentizer_.frontend());
     segmentizer_.backend().to(writer_);
-    writer_.receive([&](ze::intrusive_ptr<osegment> os)
-                    {
-                        on_rotate(os);
-                    });
+    writer_.receive(
+        [&](ze::intrusive_ptr<osegment> os)
+        {
+            on_rotate(os);
+        });
 }
 
 void archive::init(fs::path const& directory,

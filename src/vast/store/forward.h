@@ -6,7 +6,6 @@ namespace store {
 
 class archive;
 class emitter;
-struct ingestor;
 class isegment;
 class osegment;
 

@@ -4,11 +4,11 @@
 #include <ze/io.h>
 #include <ze/util/queue.h>
 #include "vast/configuration.h"
+#include "vast/ingest/ingestor.h"
 #include "vast/meta/taxonomy_manager.h"
 #include "vast/query/client.h"
 #include "vast/query/search.h"
 #include "vast/store/archive.h"
-#include "vast/store/ingestor.h"
 #include "vast/util/profiler.h"
 
 namespace vast {
@@ -56,7 +56,7 @@ private:
 
     configuration config_;
     ze::io io_;
-    store::ingestor ingestor_;
+    ingest::ingestor ingestor_;
     store::archive archive_;
     query::search search_;
     query::client query_client_;
