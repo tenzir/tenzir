@@ -38,6 +38,7 @@ public:
 
     bool extract(std::istream& in)
     {
+        namespace qi = boost::spirit::qi;
         auto f = multi_pass_iterator(istream_iterator(in));
         auto l = multi_pass_iterator(istream_iterator());
         auto action = 

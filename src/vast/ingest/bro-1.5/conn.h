@@ -27,7 +27,7 @@ struct skipper : qi::grammar<Iterator>
         ascii::space_type space;
 
         start =
-                space                           // Tab, space, CR, LF
+                space - '\n'    // Tab & space
             ;
     };
 

@@ -77,6 +77,9 @@ configuration::configuration()
         ("ingestor.events",
          po::value<std::vector<std::string>>()->multitoken(),
          "explicit list of events to ingest")
+        ("ingestor.file",
+         po::value<std::vector<fs::path>>()->multitoken(),
+         "file(s) to ingest")
     ;
 
     po::options_description archive("archive options");
@@ -155,6 +158,7 @@ void configuration::init()
     po::notify(config_);
 
     depends("print-taxonomy", "taxonomy");
+    depends("ingestor.parser", "ingestor.file");
 
     int v = get<int>("console-verbosity");
     if (v < 0 || v > 6)

@@ -4,7 +4,8 @@
 namespace vast {
 namespace ingest {
 
-struct ingestor;
+class ingestor;
+class reader;
 
 } // namespace ingest
 } // namespace vast

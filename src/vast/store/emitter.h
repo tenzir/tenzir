@@ -13,6 +13,7 @@ namespace store {
 class emitter : public ze::publisher<>
               , public ze::actor<emitter>
 {
+    friend class ze::actor<emitter>;
     emitter(emitter const&) = delete;
     emitter& operator=(emitter const&) = delete;
 
@@ -25,10 +26,9 @@ public:
             std::shared_ptr<segment_cache> cache,
             std::vector<ze::uuid> ids);
 
-    /// Asynchronous callback.
+private:
     void act();
 
-private:
     std::shared_ptr<segment_cache> cache_;
     std::vector<ze::uuid> ids_;
     std::vector<ze::uuid>::const_iterator current_;

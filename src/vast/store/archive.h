@@ -5,7 +5,6 @@
 #include <ze/uuid.h>
 #include "vast/fs/path.h"
 #include "vast/comm/forward.h"
-#include "vast/ingest/forward.h"
 #include "vast/store/forward.h"
 #include "vast/store/segment_cache.h"
 #include "vast/store/segmentizer.h"
@@ -30,7 +29,9 @@ public:
     /// ingestor_source, but rather a string endpoint description of the
     /// ingestor, since the ingestor will run as a separate component and
     /// potentially not in the same address space.
-    archive(ze::io& io, ingest::ingestor& ingest);
+    archive(ze::io& io);
+
+    ze::subscriber<>& subscriber();
 
     /// Initializes the archive.
     /// @param directory The root directory of the archive.

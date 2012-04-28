@@ -6,6 +6,7 @@
 #include "vast/exception.h"
 #include "vast/fs/path.h"
 #include "vast/fs/operations.h"
+#include "vast/ingest/reader.h"
 #include "vast/meta/taxonomy.h"
 #include "vast/query/query.h"
 #include "vast/util/logger.h"
@@ -27,7 +28,7 @@ program::program()
   : terminating_(false)
   , return_(EXIT_SUCCESS)
   , ingestor_(io_)
-  , archive_(io_, ingestor_)
+  , archive_(io_)
   , search_(io_, archive_)
   , query_client_(io_)
   , profiler_(io_.service())
@@ -141,17 +142,29 @@ void program::start()
 
         if (config_.check("comp-ingestor"))
         {
-            std::vector<std::string> events;
-            if (config_.check("ingestor.events"))
-                events = config_.get<std::vector<std::string>>("ingestor.events");
-
+            ingestor_.source.to(archive_.subscriber());
             ingestor_.source.init(config_.get<std::string>("ingestor.host"),
                                   config_.get<unsigned>("ingestor.port"));
 
-            for (const auto& event : events)
+            if (config_.check("ingestor.file"))
             {
-                LOG(verbose, store) << "subscribing to event " << event;
-                ingestor_.source.subscribe(event);
+                auto files = config_.get<std::vector<fs::path>>("ingestor.file");
+                for (auto& file : files)
+                {
+                    auto reader = ingestor_.make_reader(file);
+                    reader->to(archive_.subscriber());
+                    reader->start();
+                }
+            }
+
+            if (config_.check("ingestor.events"))
+            {
+                auto events = config_.get<std::vector<std::string>>("ingestor.events");
+                for (auto& event : events)
+                {
+                    LOG(verbose, store) << "subscribing to event " << event;
+                    ingestor_.source.subscribe(event);
+                }
             }
         }
 

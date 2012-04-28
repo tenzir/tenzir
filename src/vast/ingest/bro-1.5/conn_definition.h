@@ -31,7 +31,6 @@ connection<Iterator>::connection()
     using qi::on_error;
     using qi::fail;
     qi::_4_type _4;
-    ascii::space_type space;
     ascii::char_type chr;
     ascii::print_type printable;
     qi::ushort_type uint16;
@@ -52,14 +51,15 @@ connection<Iterator>::connection()
         >   id                      // State
         >   (chr('X') | chr('L'))   // Flags
         >   -addl                   // Additional Information
+        >   '\n'
         ;
 
     id
-        =   +(printable - space);
+        =   +(printable - ' ');
         ;
 
     addl
-        =   +(printable - "\n");
+        =   +(printable - '\n');
         ;
 
     on_error<fail>(conn, boost::phoenix::function<error_handler>()(_4));

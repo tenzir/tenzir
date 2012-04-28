@@ -103,6 +103,7 @@ search::search(ze::io& io, store::archive& archive)
                 ack(route, "query created", id.to_string());
 
                 emitter.start();
+
             }
             else if (action == "remove" ||
                      action == "control" ||
@@ -115,7 +116,14 @@ search::search(ze::io& io, store::archive& archive)
                     return;
                 }
 
-                auto qid = ze::uuid(i->second.get<ze::string>().to_string());
+                auto id_string = i->second.get<ze::string>().to_string();
+                if (id_string.empty())
+                {
+                    nack(route, "invalid query ID", id_string);
+                    return;
+                }
+
+                auto qid = ze::uuid(id_string);
                 std::lock_guard<std::mutex> lock(query_mutex_);
                 auto q = queries_.find(qid);
                 if (q == queries_.end())
@@ -150,11 +158,13 @@ search::search(ze::io& io, store::archive& archive)
                     auto aspect = a->second.get<ze::string>().to_string();
                     if (aspect == "next batch")
                     {
-                        if (emitter.start() == store::emitter::finished)
+                        if (emitter.status() == store::emitter::finished)
                         {
                             nack(route, "query finished", qid.to_string());
                             return;
                         }
+
+                        emitter.start();
                     }
                     else
                     {

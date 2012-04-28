@@ -2,7 +2,6 @@
 
 #include "vast/fs/fstream.h"
 #include "vast/fs/operations.h"
-#include "vast/ingest/ingestor.h"
 #include "vast/store/emitter.h"
 #include "vast/store/exception.h"
 #include "vast/store/segment.h"
@@ -11,12 +10,11 @@
 namespace vast {
 namespace store {
 
-archive::archive(ze::io& io, ingest::ingestor& ingest)
+archive::archive(ze::io& io)
   : ze::component(io)
   , segmentizer_(*this)
   , writer_(*this)
 {
-    ingest.source.to(segmentizer_.frontend());
     segmentizer_.backend().to(writer_);
     writer_.receive(
         [&](ze::intrusive_ptr<osegment> os)
@@ -51,6 +49,11 @@ void archive::init(fs::path const& directory,
         if (segments_.empty())
             LOG(info, store) << "no segments found in " << archive_root_;
     }
+}
+
+ze::subscriber<>& archive::subscriber()
+{
+    return segmentizer_.frontend();
 }
 
 void archive::stop()

@@ -69,7 +69,8 @@ client::client(ze::io& io)
                     terminating_ = true;
                     stop();
                 }
-
+                else
+                    LOG(error, query) << "negative VAST response: " << e;
             }
             else
                 LOG(error, query) << "unknown VAST response: " << e;
