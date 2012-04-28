@@ -247,6 +247,10 @@ void program::stop()
             ingestor_.stop();
         }
 
+        // This extra time allows in-flight events from the ingestor to be
+        // processed by the archive.
+        sleep(1);
+
         if (config_.check("comp-archive"))
         {
             LOG(debug, core) << "stopping archive component";
