@@ -17,9 +17,6 @@ emitter::emitter(ze::component& c,
   , ids_(std::move(ids))
   , segment_id_(ids_.begin())
 {
-    // FIXME: "empty" emitters should not be constructed in the first place.
-    if (segment_id_ == ids_.end())
-        status(finished);
 }
 
 void emitter::act()
@@ -29,16 +26,24 @@ void emitter::act()
         LOG(debug, store) << "emitter " << id() << status();
         return;
     }
-
-    assert(segment_id_ != ids_.end());
+    else if (segment_id_ == ids_.end())
+    {
+        LOG(debug, store) << "emitter " << id() << status();
+        status(finished);
+        return;
+    }
 
     try
     {
         if (! segment_)
+        {
+            LOG(debug, store) << "emitter " << id()
+                << " retrieves segment from cache";
+
             segment_ = cache_->retrieve(*segment_id_);
+        }
 
         auto remaining = segment_->get_chunk([&](ze::event_ptr e) { send(e); });
-
         LOG(debug, store)
             << "emmitted chunk, "
             << remaining << " chunks remaining in segment " << segment_->id();
@@ -47,18 +52,17 @@ void emitter::act()
         {
             if (++segment_id_ != ids_.end())
             {
-                segment_ = cache_->retrieve(*segment_id_);
+                segment_.reset();
                 LOG(debug, store)
-                    << "emitter " << id() << " advanced to next segment "
-                    << *segment_id_;
-
-                enact();
+                    << "emitter " << id() << " advanced to next segment ";
             }
             else
             {
-                status(finished);
                 LOG(debug, store)
                     << "emitter " << id() << " processed all segments";
+
+                status(finished);
+                return;
             }
         }
     }
@@ -66,10 +70,8 @@ void emitter::act()
     {
         LOG(error, store) << e.what();
     }
-    catch (ze::serialization::exception const& e)
-    {
-        LOG(error, store) << e.what();
-    }
+
+    enact();
 }
 
 } // namespace store

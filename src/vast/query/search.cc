@@ -72,24 +72,20 @@ search::search(ze::io& io, store::archive& archive)
                 if (b == options.end())
                     q = std::make_unique<query>(*this, expr);
                 else
+                {
+                    auto batch_size = std::strtoull(
+                            b->second.get<ze::string>().data(), nullptr, 10);
+
                     q = std::make_unique<query>(
                         *this,
                         expr,
-                        std::strtoull(
-                            b->second.get<ze::string>().data(), nullptr, 10),
+                        batch_size,
                         [emitter] { emitter->pause(); });
+                }
 
                 emitter->to(q->frontend());
                 LOG(info, query) << "connecting to client " << dst;
                 q->backend().connect(ze::zmq::tcp, dst);
-
-                // FIXME: Find out why it makes a difference *when* we setup up
-                // the subscriber-to-dealer relay. The emitter won't send any
-                // messages to the query if we call this function before
-                // connecting the emitter with the query frontend, i.e., before
-                // emitter.to(q->frontend()). Ideally, this function should not
-                // even exist and its code would move to the query constructor.
-                q->relay();
                 q->status(query::running);
 
                 auto id = q->id();
@@ -103,7 +99,6 @@ search::search(ze::io& io, store::archive& archive)
                 ack(route, "query created", id.to_string());
 
                 emitter->start();
-
             }
             else if (action == "remove" ||
                      action == "control" ||

@@ -16,11 +16,7 @@ archive::archive(ze::io& io)
   , writer_(*this)
 {
     segmentizer_.backend().to(writer_);
-    writer_.receive(
-        [&](ze::intrusive_ptr<osegment> os)
-        {
-            on_rotate(os);
-        });
+    writer_.receive([&](ze::intrusive_ptr<osegment> os) { on_rotate(os); });
 }
 
 void archive::init(fs::path const& directory,

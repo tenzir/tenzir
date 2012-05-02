@@ -164,6 +164,13 @@ size_t isegment::get_chunk(std::function<void(ze::event_ptr event)> f)
     {
         LOG(error, store) << "skipping rest of bad chunk: " << e.what();
     }
+    catch (ze::serialization::exception const& e)
+    {
+        LOG(error, store) << "error while deserializing events: " << e.what();
+        LOG(error, store)
+            << "skipping rest of chunk #"
+            << (current_ - chunks_.begin());
+    }
 
     if (++current_ == chunks_.end())
     {

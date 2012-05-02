@@ -35,10 +35,7 @@ query::query(ze::component& c,
     state_ = validated;
 
     expr_.assign(query_ast);
-}
 
-void query::relay()
-{
     frontend().receive(
         [&](ze::event_ptr e)
         {
