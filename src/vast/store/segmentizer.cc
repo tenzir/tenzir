@@ -12,7 +12,31 @@ namespace store {
 segmentizer::segmentizer(ze::component& c)
   : device(c)
 {
-    frontend().receive([&](ze::event_ptr event) { write(std::move(event)); });
+    frontend().receive(
+        [&](ze::event_ptr event)
+        {
+            std::lock_guard<std::mutex> lock(segment_mutex_);
+            if (! segment_)
+            {
+                LOG(warn, store)
+                    << "segmentizer couldn't accommodate event: " << *event;
+                return;
+            }
+
+            auto events = segment_->put(*event);
+            if (events < max_events_per_chunk_)
+                return;
+
+            segment_->flush();
+            if (segment_->size() < max_segment_size_)
+            {
+                segment_->push_chunk();
+                return;
+            }
+
+            backend().send(segment_);
+            segment_ = new osegment;
+        });
 }
 
 segmentizer::~segmentizer()
@@ -44,31 +68,6 @@ void segmentizer::stop()
         backend().send(segment_);
     }
     segment_.reset();
-}
-
-void segmentizer::write(ze::event_ptr event)
-{
-    std::lock_guard<std::mutex> lock(segment_mutex_);
-    if (! segment_)
-    {
-        LOG(warn, store)
-            << "segmentizer couldn't accommodate event: " << *event;
-        return;
-    }
-
-    auto events = segment_->put(*event);
-    if (events < max_events_per_chunk_)
-        return;
-
-    segment_->flush();
-    if (segment_->size() < max_segment_size_)
-    {
-        segment_->push_chunk();
-        return;
-    }
-
-    backend().send(segment_);
-    segment_ = new osegment;
 }
 
 } // namespace store

@@ -74,9 +74,6 @@ private:
     /// @param directory The directory to scan.
     void scan(fs::path const& directory);
 
-    /// Processes a rotated output segment from the writer.
-    void on_rotate(ze::intrusive_ptr<osegment> os);
-
     /// Loads a segment into memory after a cache miss.
     std::shared_ptr<isegment> load(ze::uuid const& id);
 

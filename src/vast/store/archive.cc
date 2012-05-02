@@ -16,7 +16,26 @@ archive::archive(ze::io& io)
   , writer_(*this)
 {
     segmentizer_.backend().to(writer_);
-    writer_.receive([&](ze::intrusive_ptr<osegment> os) { on_rotate(os); });
+    writer_.receive(
+        [&](ze::intrusive_ptr<osegment> os)
+        {
+            auto path = archive_root_ / os->id().to_string();
+            {
+                fs::ofstream file(path, std::ios::binary | std::ios::out);
+                ze::serialization::oarchive oa(file);
+                oa << os;
+            }
+            LOG(debug, store) << "wrote segment to " << path;
+
+            auto is = std::make_shared<isegment>(std::move(*os));
+            {
+                std::lock_guard<std::mutex> lock(segment_mutex_);
+                assert(segments_.find(is->id()) == segments_.end());
+                segments_.emplace(is->id(), path);
+            }
+
+            cache_->insert(is->id(), is);
+        });
 }
 
 void archive::init(fs::path const& directory,
@@ -121,26 +140,6 @@ void archive::scan(fs::path const& directory)
                 segments_.emplace(p.filename().string(), p);
             }
         });
-}
-
-void archive::on_rotate(ze::intrusive_ptr<osegment> os)
-{
-    auto path = archive_root_ / os->id().to_string();
-    {
-        fs::ofstream file(path, std::ios::binary | std::ios::out);
-        ze::serialization::oarchive oa(file);
-        oa << os;
-    }
-    LOG(debug, store) << "wrote segment to " << path;
-
-    auto is = std::make_shared<isegment>(std::move(*os));
-    {
-        std::lock_guard<std::mutex> lock(segment_mutex_);
-        assert(segments_.find(is->id()) == segments_.end());
-        segments_.emplace(is->id(), path);
-    }
-
-    cache_->insert(is->id(), is);
 }
 
 std::shared_ptr<isegment> archive::load(ze::uuid const& id)

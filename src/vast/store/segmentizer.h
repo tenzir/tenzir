@@ -14,7 +14,7 @@ class segmentizer
   : public ze::device<ze::subscriber<>, ze::publisher<osegment>>
 {
     segmentizer(segmentizer const&) = delete;
-    segmentizer& operator=(segmentizer const&) = delete;
+    segmentizer& operator=(segmentizer) = delete;
 
 public:
     typedef ze::device<ze::subscriber<>, ze::publisher<osegment>> device;
@@ -37,9 +37,6 @@ public:
     void stop();
 
 private:
-    /// Writes an event into the output segment.
-    void write(ze::event_ptr event);
-
     bool terminating_;
     std::mutex segment_mutex_;
     size_t max_segment_size_;
