@@ -29,13 +29,14 @@ public:
     virtual ~reader() = default;
 
 protected:
-    virtual bool parse() = 0;
+    virtual bool parse(ze::event& event) = 0;
+    virtual bool done() = 0;
 
     fs::ifstream file_;
 
 private:
     void act();
-    size_t const batch_size_ = 1000;
+    size_t const batch_size_ = 10000;
     size_t events_ = 0;
 };
 
@@ -46,7 +47,7 @@ class bro_reader : public reader
     typedef util::parser::streamer<
         ingest::bro15::parser::connection
       , ingest::bro15::parser::skipper
-      , ingest::bro15::ast::conn
+      , ze::event
     > streamer;
 
 public:
@@ -54,7 +55,8 @@ public:
     virtual ~bro_reader();
 
 protected:
-    virtual bool parse();
+    virtual bool parse(ze::event& event);
+    virtual bool done();
 
 private:
     streamer streamer_;

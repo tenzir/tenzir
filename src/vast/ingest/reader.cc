@@ -25,8 +25,11 @@ void reader::act()
     bool success = true;
     do
     {
-        success = parse();
+        ze::event_ptr event(new ze::event);
+        success = parse(*event);
         ++events_;
+        if (success)
+            send(event);
     }
     while (success && events_ % batch_size_);
 
@@ -35,10 +38,15 @@ void reader::act()
         LOG(verbose, ingest) << "reader ingested " << events_ << " events";
         enact();
     }
-    else
+    else if (! done())
     {
         status(stopped);
         LOG(error, ingest) << "reader stopping due to parse error";
+    }
+    else
+    {
+        status(finished);
+        LOG(info, ingest) << "reader ingested file successfully";
     }
 }
 
@@ -52,53 +60,20 @@ bro_reader::~bro_reader()
 {
 }
 
-bool bro_reader::parse()
+bool bro_reader::parse(ze::event& event)
 {
-    ingest::bro15::ast::conn c;
-    if (! streamer_.extract(c))
+    if (! streamer_.extract(event))
         return false;
 
-    ze::event_ptr e(new ze::event);
-    e->id(ze::uuid::random());
-    e->name("bro::connection");
-    e->timestamp(c.timestamp);
+    event.id(ze::uuid::random());
+    event.name("bro::connection");
 
-    if (c.duration)
-    {
-        auto dur = ze::double_seconds(*c.duration);
-        e->emplace_back(std::chrono::duration_cast<ze::duration>(dur));
-    }
-    else
-        e->emplace_back(ze::nil);
-
-    e->push_back(c.orig_h);
-    e->push_back(c.resp_h);
-    if (c.service)
-        e->emplace_back(std::move(*c.service));
-    else
-        e->push_back(ze::nil);
-
-    ze::port::port_type p;
-    if (c.proto == "tcp")
-        p = ze::port::tcp;
-    else if (c.proto == "udp")
-        p = ze::port::udp;
-    else if (c.proto == "icmp")
-        p = ze::port::icmp;
-    else
-        p = ze::port::unknown;
-
-    e->emplace_back(ze::port(c.orig_p, p));
-    e->emplace_back(ze::port(c.resp_p, p));
-    e->push_back(c.flags);
-
-    if (c.addl)
-        e->emplace_back(std::move(*c.addl));
-    else
-        e->push_back(ze::nil);
-
-    send(e);
     return true;
+}
+
+bool bro_reader::done()
+{
+    return streamer_.done();
 }
 
 } // namespace ingest

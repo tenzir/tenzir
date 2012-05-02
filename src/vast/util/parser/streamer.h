@@ -36,10 +36,13 @@ public:
 
     bool extract(Attribute& attr)
     {
-        auto success = boost::spirit::qi::phrase_parse(
+        return boost::spirit::qi::phrase_parse(
             first_, last_, grammar_, skipper_, attr);
+    }
 
-        return success && first_ != last_;
+    bool done() const
+    {
+        return first_ == last_;
     }
 
 private:
