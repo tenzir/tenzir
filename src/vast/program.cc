@@ -183,7 +183,7 @@ void program::start()
         }
 
         auto threads = config_.get<unsigned>("threads");
-        io_.start(errors_, threads);
+        io_.start(threads, errors_);
 
         if (config_.check("query"))
         {
