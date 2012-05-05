@@ -4,7 +4,6 @@
 
 #include <iostream>
 #include <string>
-#include <thread>
 #include "vast/exception.h"
 #include "vast/fs/path.h"
 #include "vast/fs/fstream.h"
@@ -34,8 +33,7 @@ configuration::configuration()
     po::options_description advanced("advanced options");
     advanced.add_options()
         ("threads",
-         po::value<unsigned>()->default_value(
-             std::thread::hardware_concurrency()),
+         po::value<unsigned>()->default_value(1u),
          "number of threads for asynchronous I/O")
         ("log-dir",
          po::value<fs::path>()->default_value(fs::path("vast") / "log"),
