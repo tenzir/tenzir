@@ -28,7 +28,7 @@ struct query : qi::grammar<Iterator, ast::query(), skipper<Iterator>>
         not_clause;
 
     qi::rule<Iterator, std::string(), skipper<Iterator>>
-        identifier;
+        identifier, glob;
 
     qi::symbols<char, ast::clause_operator>
         clause_op;

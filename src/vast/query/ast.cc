@@ -13,7 +13,7 @@ struct folder : public boost::static_visitor<ze::value>
         switch (op)
         {
             default:
-                assert(! "unary expression operator not implemented");
+                assert(! "unary expression folder not yet implemented");
                 return ze::invalid;
             // TODO: implement 0event operations.
             //case positive:
@@ -32,7 +32,7 @@ struct folder : public boost::static_visitor<ze::value>
         switch (op)
         {
             default:
-                assert(! "binary expression operator not implemented");
+                assert(! "binary expression folder not yet implemented");
                 return ze::invalid;
             // TODO: implement 0event operations.
             //case bitwise_or:
@@ -107,10 +107,14 @@ struct validator : public boost::static_visitor<bool>
         return false;
     }
 
-    bool operator()(event_clause const& clause) const
+    bool operator()(event_clause& clause) const
     {
-        assert(! "not yet implemented");
-        return false;
+        // TODO: Perform the dereference and replace it with the corresponding
+        // offset.
+        clause.lhs[1] = std::to_string(0ul);
+        clause.lhs.resize(2);
+
+        return true;
     }
 
     bool operator()(negated_clause const& clause) const
@@ -159,7 +163,7 @@ ze::value fold(expression const& expr)
     return value;
 }
 
-bool validate(query const& q)
+bool validate(query& q)
 {
     if (! boost::apply_visitor(validator(), q.first))
         return false;

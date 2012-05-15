@@ -35,12 +35,15 @@ query::query(ze::component& c,
     state_ = validated;
 
     expr_.assign(query_ast);
+}
 
+void query::init()
+{
     frontend().receive(
         [&](ze::event_ptr e)
         {
             ++stats_.processed;
-            if (match(*e))
+            if (match(e))
             {
                 backend().send(*e);
                 if (++stats_.matched % batch_size_ == 0ull && each_batch_)
@@ -49,15 +52,9 @@ query::query(ze::component& c,
         });
 }
 
-bool query::match(ze::event const& event)
+bool query::match(ze::event_ptr const& event)
 {
-    expr_.reset();
-    return event.any(
-        [&](ze::value const& value) -> bool
-        {
-            expr_.feed(value);
-            return bool(expr_);
-        });
+    return expr_.eval(event);
 }
 
 query::state query::status() const

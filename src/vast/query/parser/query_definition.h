@@ -72,13 +72,14 @@ query<Iterator>::query(util::parser::error_handler<Iterator>& error_handler)
         ;
 
     type_clause
-        =   lexeme['@' > type]
+        =   -glob
+        >>  '@' > type
         >   clause_op
         >   expr;
         ;
 
     event_clause
-        =   identifier > '.' > identifier
+        =   glob >> *('$' > identifier)
         >   clause_op
         >   expr;
 
@@ -87,7 +88,11 @@ query<Iterator>::query(util::parser::error_handler<Iterator>& error_handler)
         ;
 
     identifier
-        =   raw[lexeme[(alpha | '_') >> *(alnum | '_')]]
+        =   raw[lexeme[(alpha | '_') >> *(alnum | '_' | ':')]]
+        ;
+
+    glob
+        =   raw[lexeme[+(alnum | '_' | ':' | '?' | '*' | '[' | ']')]]
         ;
 
     BOOST_SPIRIT_DEBUG_NODES(

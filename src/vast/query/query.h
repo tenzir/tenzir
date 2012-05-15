@@ -3,7 +3,7 @@
 
 #include <string>
 #include <ze/vertex.h>
-#include "vast/query/boolean_expression.h"
+#include "vast/query/expression.h"
 
 namespace vast {
 namespace query {
@@ -53,12 +53,12 @@ public:
     // Links the query device frontend with the backend.
     // @todo Find out why we cannot get rid of this function and move its code
     // into the constructor.
-    void relay();
+    void init();
 
     /// Tests whether an event matches the query.
     /// @param event The event to match.
     /// @return @c true if @a event satisfies the query.
-    bool match(ze::event const& event);
+    bool match(ze::event_ptr const& event);
 
     /// Gets the query state.
     /// @return The current state of the query.
@@ -74,7 +74,7 @@ private:
     ze::uuid id_;
     state state_;
     std::string str_;
-    boolean_expression expr_;
+    expression expr_;
     uint64_t batch_size_;
     batch_function each_batch_;
     statistics stats_;

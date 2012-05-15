@@ -1,9 +1,9 @@
 #ifndef VAST_QUERY_AST_H
 #define VAST_QUERY_AST_H
 
+#include <boost/optional.hpp>
 #include <boost/variant/recursive_variant.hpp>
 #include <boost/fusion/include/adapt_struct.hpp>
-#include <boost/fusion/include/io.hpp>
 #include <ze/value.h>
 #include <vector>
 
@@ -49,7 +49,7 @@ enum expr_operator
 };
 
 // Clause operators sorted by ascending precedence.
-enum clause_operator
+enum clause_operator : int
 {
     match,
     not_match,
@@ -90,6 +90,7 @@ struct expression
 
 struct type_clause
 {
+    boost::optional<std::string> glob_expr;
     ze::value_type lhs;
     clause_operator op;
     expression rhs;
@@ -97,8 +98,7 @@ struct type_clause
 
 struct event_clause
 {
-    identifier lhs_event;
-    identifier lhs_arg;
+    std::vector<std::string> lhs;
     clause_operator op;
     expression rhs;
 };
@@ -140,7 +140,7 @@ ze::value fold(expression const& expr);
 /// that LHS and RHS of clause operators have the same type.
 /// @param q The query to validate.
 /// @return @c true iff the query is semantically correct.
-bool validate(query const& q);
+bool validate(query& q);
 
 } // namespace ast
 } // namespace query
@@ -163,14 +163,14 @@ BOOST_FUSION_ADAPT_STRUCT(
 
 BOOST_FUSION_ADAPT_STRUCT(
     vast::query::ast::type_clause,
+    (boost::optional<std::string>, glob_expr)
     (ze::value_type, lhs)
     (vast::query::ast::clause_operator, op)
     (vast::query::ast::expression, rhs))
 
 BOOST_FUSION_ADAPT_STRUCT(
     vast::query::ast::event_clause,
-    (vast::query::ast::identifier, lhs_event)
-    (vast::query::ast::identifier, lhs_arg)
+    (std::vector<std::string>, lhs)
     (vast::query::ast::clause_operator, op)
     (vast::query::ast::expression, rhs))
 
