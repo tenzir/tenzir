@@ -33,7 +33,7 @@ BOOST_AUTO_TEST_CASE(queries)
         "@address == 192.168.0.1 && @port == 80/tcp",
         "@string ~ /evil.*/ && @prefix >= 10.0.0.0/8",
         "@address == 1.2.3.4 ^ 5.6.7.8 || @prefix != 10.0.0.0/8",
-        "! @int == +8 / +4 || ! @uint < -(4 * 2)"
+        "! @int == +8 / +4 || ! @count < -(4 * 2)"
     };
 
     vast::query::ast::query query;
