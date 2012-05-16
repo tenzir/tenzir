@@ -19,6 +19,7 @@ query<Iterator>::query(util::parser::error_handler<Iterator>& error_handler)
 
     qi::raw_type raw;
     qi::lexeme_type lexeme;
+    qi::repeat_type repeat;
     qi::alpha_type alpha;
     qi::alnum_type alnum;
 
@@ -55,7 +56,7 @@ query<Iterator>::query(util::parser::error_handler<Iterator>& error_handler)
         ("set", ze::set_type)
         ("table", ze::table_type)
         ("record", ze::record_type)
-        ("address", ze::address_type)
+        ("addr", ze::address_type)
         ("prefix", ze::prefix_type)
         ("port", ze::port_type)
         ;
@@ -73,7 +74,7 @@ query<Iterator>::query(util::parser::error_handler<Iterator>& error_handler)
 
     type_clause
         =   -glob
-        >>  '@' > type
+        >>  ':' > type
         >   clause_op
         >   expr;
         ;
@@ -88,11 +89,23 @@ query<Iterator>::query(util::parser::error_handler<Iterator>& error_handler)
         ;
 
     identifier
-        =   raw[lexeme[(alpha | '_') >> *(alnum | '_' | ':')]]
+        =   raw[lexeme[(alpha | '_') >> *(alnum | '_' )]]
         ;
 
+    // Supports currently only one level of scoping.
     glob
-        =   raw[lexeme[+(alnum | '_' | ':' | '?' | '*' | '[' | ']')]]
+        =   raw[lexeme[
+                (alpha | '_' | '*' | '?')
+            >> *(alnum | '_' | '*' | '?')
+            >> -(   repeat(2)[':']
+                >   (alpha | '_' | '*' | '?')
+                >> *(alnum | '_' | '*' | '?')
+                )
+            ]]
+        ;
+
+    event_name
+        =   raw[lexeme[ ((alpha | '_') >> *(alnum | '_' )) % repeat(2)[':'] ]]
         ;
 
     BOOST_SPIRIT_DEBUG_NODES(

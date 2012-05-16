@@ -13,9 +13,7 @@ namespace expr {
 ze::value const& node::result()
 {
     if (! ready())
-    {
         eval();
-    }
 
     return result_;
 }
@@ -99,6 +97,14 @@ void exists::eval()
 void n_ary_operator::add(std::unique_ptr<node> operand)
 {
     operands_.push_back(std::move(operand));
+}
+
+void n_ary_operator::reset()
+{
+    for (auto& op : operands_)
+        op->reset();
+    
+    ready_ = false;
 }
 
 void conjunction::eval()
@@ -230,14 +236,6 @@ relational_operator::relational_operator(ast::clause_operator op)
     }
 }
 
-void relational_operator::reset()
-{
-    assert(operands_.size() == 2);
-    operands_[0]->reset();
-    operands_[1]->reset();
-    ready_ = false;
-}
-
 void relational_operator::eval()
 {
     assert(operands_.size() == 2);
@@ -249,7 +247,6 @@ void relational_operator::eval()
         {
             auto& r = operands_[1]->result();
             ready_ = op_(l, r);
-            std::cerr << "op(" << l << ", " << r << ") = " << ready_ << std::endl;
             if (ready_)
                 break;
         }

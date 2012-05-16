@@ -63,7 +63,7 @@ private:
     virtual void eval();
 };
 
-/// Extracts an argument at a given offset.
+///  the event name.
 class offset_extractor : public extractor
 {
 public:
@@ -96,6 +96,7 @@ class n_ary_operator : public node
 {
 public:
     void add(std::unique_ptr<node> operand);
+    virtual void reset();
 
 protected:
     virtual void eval() = 0;
@@ -123,7 +124,6 @@ class relational_operator : public n_ary_operator
         binary_predicate;
 public:
     relational_operator(ast::clause_operator op);
-    virtual void reset();
 
 private:
     virtual void eval();
