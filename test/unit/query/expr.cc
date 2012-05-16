@@ -15,7 +15,6 @@ std::vector<ze::event_ptr> events
 
 bool test_expression(std::string const& query, ze::event_ptr const& event)
 {
-    std::cerr << "---------------> " << query << std::endl;
     vast::query::ast::query ast;
     if (! vast::util::parser::parse<vast::query::parser::query>(query, ast))
         throw vast::query::syntax_exception(query);
