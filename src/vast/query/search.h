@@ -11,6 +11,40 @@ namespace vast {
 namespace query {
 
 /// The search component.
+///
+/// The communication protocol uses the following events:
+///
+/// - `vast::query(action: string, options: table[string] of string)`
+///
+///     Allowed values for `action` are:
+///
+///         - `create`. Creates a query. The `options` table must contain a
+///           `destination` value that represents a valid endpoint.
+///
+///         - `remove`
+///
+///         - `control`
+///
+///         - `statistics`
+///
+///     Allowed values for `options` are:
+///
+///         - `id`. The UUID of a query assigned by VAST.
+///
+///         - `aspect`. The control aspect when `action` has the value
+///           `control`.
+///
+///         - `destination`. The endpoint of a query result in the form
+///           `address:port`.
+///
+///         - `expression`. A query expression.
+///
+///         - `batch size`. The number of query results to process at once
+///            before asking the user to proceed with the execution.
+///
+/// - `vast::nack(msg: string, ....)`
+/// - `vast::ack(msg: string, ...)`
+///
 class search : public ze::component
 {
 public:
@@ -38,13 +72,13 @@ private:
     template <typename ...Args>
     void ack(std::vector<ze::zmq::message>& route, Args&& ...args)
     {
-        reply("VAST::ack", route, std::forward<Args>(args)...);
+        reply("vast::ack", route, std::forward<Args>(args)...);
     }
 
     template <typename ...Args>
     void nack(std::vector<ze::zmq::message>& route, Args&& ...args)
     {
-        reply("VAST::nack", route, std::forward<Args>(args)...);
+        reply("vast::nack", route, std::forward<Args>(args)...);
     }
 
     store::archive& archive_;

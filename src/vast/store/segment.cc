@@ -70,7 +70,7 @@ void load(ze::serialization::iarchive& ia, basic_segment& bs)
 }
 
 osegment::osegment()
-  : method_(ze::compression::zlib)
+  : method_(ze::compression::none)
   , size_(0ul)
 {
     chunks_.emplace_back(new ochunk(method_));
@@ -107,7 +107,7 @@ void osegment::flush()
 {
     auto size = chunks_.back()->flush();
     size_ += size;
-    LOG(debug, store) << "flushed chunk" << " (" << size << "B)";
+    LOG(verbose, store) << "flushed chunk" << " (" << size << "B)";
 }
 
 void osegment::push_chunk()
@@ -126,7 +126,7 @@ void save(ze::serialization::oarchive& oa, osegment const& segment)
     auto mins = std::chrono::duration_cast<std::chrono::minutes>(
         segment.end_ - segment.start_);
 
-    LOG(debug, store)
+    LOG(verbose, store)
         << "serialized segment (#events: "
         << segment.n_events_
         << ", span: "

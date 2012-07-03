@@ -18,7 +18,7 @@ segmentizer::segmentizer(ze::component& c)
             std::lock_guard<std::mutex> lock(segment_mutex_);
             if (! segment_)
             {
-                LOG(warn, store)
+                LOG(debug, store)
                     << "segmentizer couldn't accommodate event: " << *event;
                 return;
             }

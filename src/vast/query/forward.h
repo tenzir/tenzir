@@ -8,6 +8,7 @@ namespace query {
 
 namespace ast {
 
+enum clause_operator : int;
 struct type_clause;
 struct event_clause;
 struct negated_clause;

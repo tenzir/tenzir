@@ -16,12 +16,6 @@ reader::reader(ze::component& c, fs::path const& filename)
 
 void reader::act()
 {
-    if (status() != running)
-    {
-        LOG(debug, ingest) << "reader " << id() << status();
-        return;
-    }
-
     bool success = true;
     do
     {
@@ -53,10 +47,6 @@ void reader::act()
 bro_reader::bro_reader(ze::component& c, fs::path const& filename)
   : reader(c, filename)
   , streamer_(file_)
-{
-}
-
-bro_reader::~bro_reader()
 {
 }
 

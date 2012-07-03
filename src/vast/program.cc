@@ -151,6 +151,7 @@ void program::start()
                 auto files = config_.get<std::vector<fs::path>>("ingestor.file");
                 for (auto& file : files)
                 {
+                    LOG(info, core) << "ingesting " << file;
                     auto reader = ingestor_.make_reader(file);
                     reader->to(archive_.subscriber());
                     reader->start();

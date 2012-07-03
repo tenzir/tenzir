@@ -46,7 +46,6 @@ private:
     unsigned batch_size_;
     unsigned printed_;
     bool asking_;
-    bool terminating_;
     std::mutex print_mutex_;
 };
 

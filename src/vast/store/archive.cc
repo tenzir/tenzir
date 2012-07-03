@@ -25,7 +25,7 @@ archive::archive(ze::io& io)
                 ze::serialization::oarchive oa(file);
                 oa << os;
             }
-            LOG(debug, store) << "wrote segment to " << path;
+            LOG(verbose, store) << "wrote segment to " << path;
 
             auto is = std::make_shared<isegment>(std::move(*os));
             {

@@ -63,7 +63,7 @@ private:
     virtual void eval();
 };
 
-///  the event name.
+/// Extracts an argument at a given offset.
 class offset_extractor : public extractor
 {
 public:
@@ -131,6 +131,7 @@ private:
     binary_predicate op_;
 };
 
+/// A constant value.
 class constant : public node
 {
 public:

@@ -44,17 +44,15 @@ void emitter::act()
         }
 
         auto remaining = segment_->get_chunk([&](ze::event_ptr e) { send(e); });
-        LOG(debug, store)
-            << "emmitted chunk, "
-            << remaining << " chunks remaining in segment " << segment_->id();
+//        LOG(debug, store)
+//            << "emitted chunk, "
+//            << remaining << " chunks remaining in segment " << segment_->id();
 
         if (remaining == 0)
         {
             if (++segment_id_ != ids_.end())
             {
                 segment_.reset();
-                LOG(debug, store)
-                    << "emitter " << id() << " advanced to next segment ";
             }
             else
             {

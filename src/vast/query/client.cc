@@ -41,7 +41,7 @@ client::client(ze::io& io)
         [&](ze::event e)
         {
             LOG(verbose, query) << e;
-            if (e.name() == "VAST::ack")
+            if (e.name() == "vast::ack")
             {
                 assert(e[0].which() == ze::string_type);
                 auto msg = e[0].get<ze::string>().to_string();
@@ -49,21 +49,6 @@ client::client(ze::io& io)
                 {
                     assert(e[1].which() == ze::string_type);
                     query_ = e[1].get<ze::string>().to_string();
-                }
-            }
-            else if (e.name() == "VAST::nack")
-            {
-                assert(e[0].which() == ze::string_type);
-                auto msg = e[0].get<ze::string>().to_string();
-                if (msg == "query finished")
-                {
-                    assert(e.size() == 2);
-                    assert(e[1].which() == ze::string_type);
-                    auto id = e[1].get<ze::string>().to_string();
-                    assert(id == query_);
-
-                    terminating_ = true;
-                    stop();
                 }
             }
         });
@@ -84,7 +69,7 @@ void client::init(std::string const& host,
     auto local_endpoint = localhost + ":" + std::to_string(local_port);
     LOG(info, query) << "new query listening on " << local_endpoint;
 
-    ze::event event("VAST::query",
+    ze::event event("vast::query",
                     "create",
                     ze::table{"expression", expression,
                               "destination", local_endpoint,
@@ -95,7 +80,7 @@ void client::init(std::string const& host,
 void client::stop()
 {
     LOG(verbose, query) << "telling VAST to stop query " << query_;
-    control_.send({"VAST::query", "remove", ze::table{"id", query_}});
+    control_.send({"vast::query", "remove", ze::table{"id", query_}});
 };
 
 void client::wait_for_input()
@@ -105,9 +90,6 @@ void client::wait_for_input()
     char c;
     while (std::cin.get(c))
     {
-        if (terminating_)
-            break;
-
         switch (c)
         {
             case ' ':
@@ -115,7 +97,7 @@ void client::wait_for_input()
                     bool printed = try_print();
                     if (! printed)
                     {
-                        ze::event event("VAST::query",
+                        ze::event event("vast::query",
                                         "control",
                                         ze::table{
                                             "id", query_,
@@ -131,7 +113,7 @@ void client::wait_for_input()
                 break;
             case 's':
                 {
-                    ze::event event("VAST::query",
+                    ze::event event("vast::query",
                                     "statistics",
                                     ze::table{"id", query_});
 

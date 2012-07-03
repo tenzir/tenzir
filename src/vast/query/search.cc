@@ -17,7 +17,7 @@ search::search(ze::io& io, store::archive& archive)
     manager_.receive_with_route(
         [&](ze::event event, std::vector<ze::zmq::message> route)
         {
-            if (event.name() != "VAST::query")
+            if (event.name() != "vast::query")
             {
                 nack(route, "invalid query event name");
                 return;
@@ -68,25 +68,34 @@ search::search(ze::io& io, store::archive& archive)
                 auto emitter = archive_.create_emitter();
                 std::unique_ptr<query> q;
 
-                auto b = options.find("batch size");
-                if (b == options.end())
-                    q = std::make_unique<query>(*this, expr);
-                else
+                try
                 {
-                    auto batch_size = std::strtoull(
-                            b->second.get<ze::string>().data(), nullptr, 10);
+                    auto b = options.find("batch size");
+                    if (b == options.end())
+                        q = std::make_unique<query>(*this, expr);
+                    else
+                    {
+                        auto batch_size = std::strtoull(
+                                b->second.get<ze::string>().data(), nullptr, 10);
 
-                    q = std::make_unique<query>(
-                        *this,
-                        expr,
-                        batch_size,
-                        [emitter] { emitter->pause(); });
+                        q = std::make_unique<query>(
+                            *this,
+                            expr,
+                            batch_size,
+                            [emitter] { emitter->pause(); });
+                    }
+                }
+                catch (syntax_exception const& e)
+                {
+                    nack(route, "invalid query syntax");
+                    archive_.remove_emitter(emitter->id());
+                    return;
                 }
 
+                q->init();
                 emitter->to(q->frontend());
                 LOG(info, query) << "connecting to client " << dst;
                 q->backend().connect(ze::zmq::tcp, dst);
-                q->status(query::running);
 
                 auto id = q->id();
                 {
@@ -97,8 +106,6 @@ search::search(ze::io& io, store::archive& archive)
 
                 LOG(debug, query) << "sending query details back to client";
                 ack(route, "query created", id.to_string());
-
-                emitter->start();
             }
             else if (action == "remove" ||
                      action == "control" ||
@@ -158,17 +165,9 @@ search::search(ze::io& io, store::archive& archive)
                             nack(route, "query finished", qid.to_string());
                             return;
                         }
-                        else if (emitter->status() == store::emitter::paused)
-                        {
-                            LOG(debug, query) << "starting paused emitter " << eid;
-                            emitter->start();
-                        }
-                        else
-                        {
-                            assert(emitter->status() == store::emitter::stopped);
-                            nack(route, "query stopped", qid.to_string());
-                            return;
-                        }
+
+                        LOG(debug, query) << "starting emitter for next batch " << eid;
+                        emitter->start();
                     }
                     else
                     {

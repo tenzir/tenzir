@@ -75,7 +75,7 @@ private:
 
     friend void save(ze::serialization::oarchive& oa, osegment const& segment);
 
-    ze::compression const method_;
+    ze::compression::method const method_;
     size_t size_;
 
     std::vector<std::unique_ptr<ochunk>> chunks_;
