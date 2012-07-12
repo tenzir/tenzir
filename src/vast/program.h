@@ -1,14 +1,8 @@
 #ifndef VAST_PROGRAM_H
 #define VAST_PROGRAM_H
 
-#include <ze/io.h>
-#include <ze/util/queue.h>
+#include <cppa/cppa.hpp>
 #include "vast/configuration.h"
-#include "vast/ingest/ingestor.h"
-#include "vast/meta/taxonomy_manager.h"
-#include "vast/query/client.h"
-#include "vast/query/search.h"
-#include "vast/store/archive.h"
 #include "vast/util/profiler.h"
 
 namespace vast {
@@ -55,15 +49,13 @@ private:
     int return_;
 
     configuration config_;
-    ze::io io_;
-    ingest::ingestor ingestor_;
-    store::archive archive_;
-    query::search search_;
-    query::client query_client_;
-    meta::taxonomy_manager tax_manager_;
-
     util::profiler profiler_;
-    ze::util::queue<std::exception_ptr> errors_;
+
+    cppa::actor_ptr archive_;
+    cppa::actor_ptr ingestor_;
+    cppa::actor_ptr search_;
+    cppa::actor_ptr query_client_;
+    cppa::actor_ptr tax_manager_;
 };
 
 } // namespace vast

@@ -11,65 +11,59 @@
 namespace vast {
 namespace query {
 
-query::query(ze::component& c,
-             std::string str,
-             uint64_t batch_size,
-             batch_function each_batch)
-  : device(c)
+query::query(cppa::actor_ptr search, std::string str)
+  : search_(search)
   , state_(invalid)
   , str_(std::move(str))
-  , batch_size_(batch_size)
-  , each_batch_(each_batch)
 {
-    LOG(verbose, query) << "new query " << id() << ": " << str_;
+  LOG(verbose, query) << "new query " << id() << ": " << str_;
 
-    ast::query query_ast;
-    if (! util::parser::parse<parser::query>(str_, query_ast))
-        throw syntax_exception(str_);
+  init_state = (
+      on(atom("initialize"), arg_match) >> [](unsigned batch_size)
+      {
+        ast::query query_ast;
+        if (! util::parser::parse<parser::query>(str_, query_ast))
+          throw syntax_exception(str_);
 
-    state_ = parsed;
+        if (! ast::validate(query_ast))
+          throw semantic_exception("semantic error", str_);
 
-    if (! ast::validate(query_ast))
-        throw semantic_exception("semantic error", str_);
+        expr_.assign(query_ast);
+      },
+      on(atom("set"), atom("source"), arg_match) >> [](actor_ptr source)
+      {
+        LOG(debug, query) << "setting source for query " << id();
+        source_ = source;
+      },
+      on(atom("set"), atom("sink"), arg_match) >> [](actor_ptr sink)
+      {
+        LOG(debug, query) << "setting sink for query " << id();
+        sink_ = sink;
+      },
+      on(atom("set"), atom("batch size"), arg_match) >> [](unsigned batch_size)
+      {
+        assert(batch_size > 0);
 
-    state_ = validated;
+        LOG(debug, query) 
+          << "setting batch size to " << batch_size << " for query " << id();
 
-    expr_.assign(query_ast);
-}
-
-void query::init()
-{
-    frontend().receive(
-        [&](ze::event_ptr e)
+        batch_size_ = batch_size;
+      },
+      on(atom("get"), atom("statistics")) >> []()
+      {
+        // TODO: make query statistics a first-class libcppa citizen.
+        //reply(stats_);
+      },
+      on_arg_match >> [](ze::event const& e)
+      {
+        ++stats_.processed;
+        if (expr_.eval(e))
         {
-            ++stats_.processed;
-            if (match(e))
-            {
-                backend().send(*e);
-                if (++stats_.matched % batch_size_ == 0ull && each_batch_)
-                    each_batch_();
-            }
-        });
-}
-
-bool query::match(ze::event_ptr const& event)
-{
-    return expr_.eval(event);
-}
-
-query::state query::status() const
-{
-    return state_;
-}
-
-void query::status(state s)
-{
-    state_ = s;
-}
-
-query::statistics const& query::stats() const
-{
-    return stats_;
+          sink_ << self->last_dequeued();
+          if (++stats_.matched % batch_size_ == 0ull)
+            send(source_, atom("pause"));
+        }
+      });
 }
 
 } // namespace query

@@ -28,7 +28,7 @@ void node::reset()
     ready_ = false;
 }
 
-void extractor::feed(ze::event_ptr event)
+void extractor::feed(ze::event const* event)
 {
     event_ = event;
     ready_ = false;
@@ -62,7 +62,7 @@ exists::exists(ze::value_type type)
 {
 }
 
-void exists::feed(ze::event_ptr event)
+void exists::feed(ze::event const* event)
 {
     event_ = event;
     flat_size_ = event->flat_size();
@@ -463,16 +463,17 @@ void expression::assign(ast::query const& query)
     assert(! extractors_.empty());
 }
 
-bool expression::eval(ze::event_ptr const& event)
+bool expression::eval(ze::event const& event)
 {
     for (auto ext : extractors_)
-        ext->feed(event);
+        ext->feed(&event);
 
     ze::value r(false);
     while (! root_->ready())
         r = root_->result();
 
     assert(r.which() == ze::bool_type);
+
     root_->reset();
     return r.get<bool>();
 }

@@ -41,12 +41,12 @@ protected:
 class extractor : public node
 {
 public:
-    virtual void feed(ze::event_ptr event);
+    virtual void feed(ze::event const* event);
 
 protected:
     virtual void eval() = 0;
 
-    ze::event_ptr event_;
+    ze::event const* event_;
 };
 
 /// Extracts the event timestamp.
@@ -80,7 +80,7 @@ class exists : public extractor
 public:
     exists(ze::value_type type);
 
-    virtual void feed(ze::event_ptr event);
+    virtual void feed(ze::event const* event);
     virtual void reset();
 
 private:
@@ -159,7 +159,7 @@ public:
     /// Evaluates an event with respect to the root node.
     /// @param event The event to evaluate against the expression.
     /// @return `true` if @a event matches the expression.
-    bool eval(ze::event_ptr const& event);
+    bool eval(ze::event const& event);
 
 private:
     std::unique_ptr<expr::node> root_;

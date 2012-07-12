@@ -6,6 +6,7 @@
 
 namespace vast {
 namespace util {
+namespace detail {
 
 measurement::measurement()
 {
@@ -54,8 +55,10 @@ std::ostream& operator<<(std::ostream& out, measurement const& m)
     return out;
 }
 
-profiler::profiler(boost::asio::io_service& io_service)
-  : timer_(io_service)
+} // namespace detail
+
+profiler::profiler()
+  : timer_(io_service_)
 {
 }
 
@@ -82,7 +85,7 @@ void profiler::start()
     timer_.expires_from_now(
         std::chrono::duration_cast<ze::clock::duration>(interval_));
 
-    measurement now;
+    detail::measurement now;
     timer_.async_wait(
         [&, now](boost::system::error_code const& ec)
         {
@@ -96,12 +99,12 @@ void profiler::stop()
 }
 
 void profiler::handle_timer(boost::system::error_code const& ec,
-                            measurement const& previous)
+                            detail::measurement const& previous)
 {
     if (ec == boost::asio::error::operation_aborted)
         return;
 
-    measurement now;
+    detail::measurement now;
     file_ << now << now - previous << std::endl;
 
     timer_.expires_from_now(

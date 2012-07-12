@@ -1,35 +1,45 @@
 #include "vast/ingest/ingestor.h"
 
+#include "vast/comm/bro_event_source.h"
 #include "vast/ingest/reader.h"
 #include "vast/util/logger.h"
 
 namespace vast {
 namespace ingest {
 
-ingestor::ingestor(ze::io& io)
-  : ze::component(io)
-  , source(*this)
+ingestor::ingestor(cppa::actor_ptr archive)
+  : archive_(archive)
 {
-}
+  using namespace cppa;
+  init_state = (
+      on(atom("initialize"), arg_match) >> [=](std::string const& host,
+                                               unsigned port)
+      {
+        bro_event_source_ = spawn<comm::bro_event_source>(self);
+        send(bro_event_source_, atom("bind"), host, port);
+      },
+      on(atom("subscribe"), arg_match) >> [](std::string const& event_name)
+      {
+        bro_event_source_ << self->last_dequeued();
+      },
+      on(atom("read_file"), arg_match) >> [=](std::string const& filename)
+      {
+        auto r = spawn<bro_reader>(archive_);
+        send(r, atom("read"), filename);
+        readers_.push_back(r);
+      },
+      on(atom("shutdown")) >> [=]()
+      {
+        LOG(debug, ingest) << "stopping bro event source";
+        bro_event_source_ << self->last_dequeued();
 
-void ingestor::stop()
-{
-    LOG(debug, ingest) << "stopping source";
-    source.stop();
+        LOG(debug, ingest) << "stopping readers";
+        for (auto& r : readers_)
+          r << self->last_dequeued();
+        readers_.clear();
 
-    LOG(debug, ingest) << "stopping readers";
-    for (auto& r : readers_)
-        r->stop();
-
-    readers_.clear();
-}
-
-std::shared_ptr<reader> ingestor::make_reader(fs::path const& filename)
-{
-    // TODO: Support multiple readers that detect the file format dynamically.
-    auto r = std::make_shared<bro_reader>(*this, filename);
-    readers_.push_back(r);
-    return r;
+        self->quit();
+      });
 }
 
 } // namespace ingest

@@ -1,33 +1,21 @@
-# A simple static wrapper for a number of standard Makefile targets,
-# mostly just forwarding to build/Makefile. This is provided only for
-# convenience and supports only a subset of what CMake's Makefile
-# offers.
+DIRS := build
 
-BUILD=build
+all:
+	@for i in $(DIRS); do $(MAKE) -C $$i $@; done
 
-all: configured
-	@$(MAKE) -C $(BUILD) $@
-
-configured:
-	@test -d $(BUILD) || ( echo "Error: No build/ directory found. Did you run configure?" && exit 1 )
-	@test -e $(BUILD)/Makefile || ( echo "Error: No build/Makefile found. Did you run configure?" && exit 1 )
-
-test: configured
-	@$(MAKE) -C $(BUILD) $@
+test:
+	@for i in $(DIRS); do $(MAKE) -C $$i $@; done
 
 install:
-	@$(MAKE) -C $(BUILD) $@
+	@for i in $(DIRS); do $(MAKE) -C $$i $@; done
 
-uninstall: configured
-	@$(MAKE) -C $(BUILD) $@
+uninstall:
+	@for i in $(DIRS); do $(MAKE) -C $$i $@; done
 
-clean: configured
-	@$(MAKE) -C $(BUILD) $@
+clean:
+	@for i in $(DIRS); do $(MAKE) -C $$i $@; done
 
 distclean:
-	rm -rf $(BUILD)
+	rm -rf $(DIRS) Makefile
 
-doc:
-	@$(MAKE) -C $(BUILD) $@
-
-.PHONY : all configured test install uninstall clean distclean doc
+.PHONY: all test install uninstall clean distclean

@@ -1,52 +1,34 @@
 #ifndef VAST_QUERY_CLIENT_H
 #define VAST_QUERY_CLIENT_H
 
-#include <mutex>
+#include <cppa/cppa.hpp>
 #include <ze/event.h>
 #include <ze/util/queue.h>
-#include <ze/vertex.h>
-#include "vast/query/query.h"
-#include "vast/store/forward.h"
 
 namespace vast {
 namespace query {
 
 /// A simple query client.
-class client : public ze::component
+class client : cppa::sb_actor<client>
 {
-    client(client const&) = delete;
-    client& operator=(client) = delete;
-
 public:
-    client(ze::io& io);
-
-    /// Initializes the query client.
-    /// @param host The IP address of VAST's search component.
-    /// @param port The TCP port of VAST's search component.
-    /// @param expression The query expression
-    /// @param batch_size Number of results per page.
-    void init(std::string const& host,
-              unsigned port,
-              std::string const& expression,
-              unsigned batch_size = 0u);
-
-    /// Stops the query client.
-    void stop();
-
-    /// Wait for console input on STDIN.
-    void wait_for_input();
+  /// Sets the initial behavior.
+  client();
+  cppa::behavior init_state;
 
 private:
-    bool try_print();
+  /// Waits for console input on STDIN.
+  void wait_for_input();
 
-    ze::util::queue<ze::event> buffer_;
-    ze::serial_dealer<> control_;
-    ze::serial_dealer<> data_;
-    std::string query_;
-    unsigned batch_size_;
-    unsigned printed_;
-    bool asking_;
-    std::mutex print_mutex_;
+  /// Tries to pop and print an event from the result buffer.
+  bool try_print();
+
+  cppa::actor_ptr remote_;
+  std::string query_;
+  ze::util::queue<ze::event> buffer_;
+  unsigned batch_size_ = 10;
+  unsigned printed_ = 0;
+  bool asking_ = true;
 };
 
 } // namespace query

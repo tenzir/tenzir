@@ -8,68 +8,82 @@
 namespace vast {
 namespace store {
 
-emitter::emitter(ze::component& c,
-                 std::shared_ptr<segment_cache> cache,
-                 std::vector<ze::uuid> ids)
-  : ze::publisher<>(c)
-  , ze::actor<emitter>(c)
-  , cache_(cache)
+emitter::emitter(segment_manager& sm, std::vector<ze::uuid> ids)
+  : segment_manager_(sm)
   , ids_(std::move(ids))
-  , segment_id_(ids_.begin())
+  , current_(ids_.begin())
 {
+  using namespace cppa;
+
+  auto shutdown = on<atom("shutdown")> >> []()
+  {
+    LOG(verbose, store) << "shutting down emitter " << id();
+    self->quit();
+  }
+
+  init_state = (
+      on(atom("sink"), arg_match) [=](actor_ptr sink)
+      {
+        sink_ = sink;
+        send(sink, atom("set"), atom("source"), self);
+        become(running_);
+      },
+      shutdown
+      );
+
+  running_ = (
+      on(atom("emit")) >> []()
+      {
+        emit_chunk();
+      },
+      shutdown
+      );
 }
 
-void emitter::act()
+void emitter::emit_chunk()
 {
-    if (status() != running)
+  using namespace cppa;
+  if (current_ == ids_.end())
+  {
+    LOG(debug, store) << "emitter " << id() << "has already finished";
+    send(self, atom("shutdown"));
+    return;
+  }
+
+  try
+  {
+    if (! segment_)
     {
-        LOG(debug, store) << "emitter " << id() << status();
-        return;
-    }
-    else if (segment_id_ == ids_.end())
-    {
-        LOG(debug, store) << "emitter " << id() << status();
-        status(finished);
-        return;
+      LOG(debug, store) 
+        << "emitter " << id() << " retrieves segment from cache";
+
+      segment_ = segment_manager_->retrieve(*current_);
     }
 
-    try
-    {
-        if (! segment_)
+    auto remaining = segment_->process_chunk(
+        [=](ze::event e)
         {
-            LOG(debug, store) << "emitter " << id()
-                << " retrieves segment from cache";
+          send(sink_, std::move(e));
+        });
 
-            segment_ = cache_->retrieve(*segment_id_);
-        }
-
-        auto remaining = segment_->get_chunk([&](ze::event_ptr e) { send(e); });
-//        LOG(debug, store)
-//            << "emitted chunk, "
-//            << remaining << " chunks remaining in segment " << segment_->id();
-
-        if (remaining == 0)
-        {
-            if (++segment_id_ != ids_.end())
-            {
-                segment_.reset();
-            }
-            else
-            {
-                LOG(debug, store)
-                    << "emitter " << id() << " processed all segments";
-
-                status(finished);
-                return;
-            }
-        }
-    }
-    catch (segment_exception const& e)
+    if (remaining == 0)
     {
-        LOG(error, store) << e.what();
+      if (++current_ != ids_.end())
+      {
+        segment_.reset();
+      }
+      else
+      {
+        LOG(debug, store) << "emitter " << id() << "has finished";
+        send(self, atom("shutdown"));
+        return;
+      }
     }
-
-    enact();
+  }
+  catch (segment_exception const& e)
+  {
+    LOG(error, store) << e.what();
+  }
 }
 
 } // namespace store

@@ -1,38 +1,32 @@
 #ifndef VAST_STORE_EMITTER_H
 #define VAST_STORE_EMITTER_H
 
-#include <mutex>
-#include <ze/vertex.h>
-#include <ze/actor.h>
-#include "vast/store/segment_cache.h"
+#include <cppa/cppa.hpp>
+#include "vast/store/segment_manager.h"
 
 namespace vast {
 namespace store {
 
 /// Reads events from archive's segment cache.
-class emitter : public ze::publisher<>
-              , public ze::actor<emitter>
+class emitter : public cppa::sb_actor<emitter>, public ze::object
 {
-    friend class ze::actor<emitter>;
-    emitter(emitter const&) = delete;
-    emitter& operator=(emitter const&) = delete;
+  friend class cppa::sb_actor<emitter>;
 
 public:
-    /// Constructs an emitter.
-    /// @param c The component the emitter belongs to.
-    /// @param cache The cache containing the segments.
-    /// @param ids A vector of IDs representing the segments to emit.
-    emitter(ze::component& c,
-            std::shared_ptr<segment_cache> cache,
-            std::vector<ze::uuid> ids);
+  /// Sets the initial behavior.
+  emitter(segment_manager& sm, std::vector<ze::uuid> ids);
 
 private:
-    void act();
+  void emit_chunk();
 
-    std::shared_ptr<segment_cache> cache_;
-    std::vector<ze::uuid> ids_;
-    std::vector<ze::uuid>::const_iterator segment_id_;
-    std::shared_ptr<isegment> segment_;
+  segment_manager& segment_manager_;
+  std::vector<ze::uuid> ids_;
+  std::vector<ze::uuid>::const_iterator current_;
+  std::shared_ptr<isegment> segment_;
+
+  cppa::actor_ptr sink_;
+  cppa::behavior running_;
+  cppa::behavior init_state;
 };
 
 } // namespace store

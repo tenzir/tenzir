@@ -9,7 +9,7 @@
 
 namespace vast {
 namespace util {
-
+namespace detail {  
 /// A resoure measurement.
 struct measurement : boost::addable<measurement>
                    , boost::subtractable<measurement>
@@ -27,13 +27,14 @@ struct measurement : boost::addable<measurement>
 
 std::ostream& operator<<(std::ostream& out, measurement const& s);
 
+} // namespace detail
+
 /// A simple CPU profiler.
 class profiler
 {
 public:
     /// Constructs the profiler.
-    /// @param io_service The Asio I/O service object.
-    profiler(boost::asio::io_service& io_service);
+    profiler();
 
     /// Initializes the profiler.
     /// @param filename The log file where to write measurements to.
@@ -49,10 +50,11 @@ public:
 
 private:
     void handle_timer(boost::system::error_code const& ec,
-                      measurement const& previous);
+                      detail::measurement const& previous);
 
-    ze::duration interval_;
+    boost::asio::io_service io_service_;
     boost::asio::basic_waitable_timer<ze::clock> timer_;
+    ze::duration interval_;
     fs::ofstream file_;
 };
 

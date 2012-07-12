@@ -8,80 +8,78 @@
 namespace vast {
 namespace query {
 
-client::client(ze::io& io)
-  : ze::component(io)
-  , control_(*this)
-  , data_(*this)
+client::client()
   , printed_(0u)
   , asking_(true)
 {
-    data_.receive(
-        [&](ze::event e)
-        {
-            std::lock_guard<std::mutex> lock(print_mutex_);
-            if (asking_)
-            {
-                asking_ = false;
-                std::cout << e << std::endl;
-                ++printed_;
-            }
-            else if (printed_ % batch_size_ != 0u)
-            {
-                std::cout << e << std::endl;
-                ++printed_;
-            }
-            else
-            {
-                print_mutex_.unlock();
-                buffer_.push(std::move(e));
-            }
-        });
+  using namespace cppa;
+  init_state = (
+      on(atom("initialize"), arg_match) >> [](std::string const& host,
+                                              unsigned port)
+      {
+        // Connect to server.
+        remote_ = remote_actor(host, port);
+      },
+      on(atom("query"), atom("create"), arg_match) >> [](std::string const&
+                                                         expression)
+      {
+        remote_ << self->last_dequeued();
+      }
+      on(atom("query", atom("created"), arg_match)) >> [](std::string const& id)
+      {
+        query_ = id;
 
-    control_.receive(
-        [&](ze::event e)
-        {
-            LOG(verbose, query) << e;
-            if (e.name() == "vast::ack")
-            {
-                assert(e[0].which() == ze::string_type);
-                auto msg = e[0].get<ze::string>().to_string();
-                if (msg == "query created")
-                {
-                    assert(e[1].which() == ze::string_type);
-                    query_ = e[1].get<ze::string>().to_string();
-                }
-            }
-        });
+        // FIXME: get real endpoint details from self.
+        std::string host = "localhost";
+        auto port = 4242;
+
+        std::vector<std::string> vals{host, std::to_string(port)};
+        send(remote_, atom("query"), atom("set"), id, "sink", vals);
+
+        vals = {batch_size}
+        send(remote_, atom("query"), atom("set"), id, "batch size", vals);
+      },
+      on<atom("query", atom("set"), arg_match> >> [](std::string const& id,
+                                                      std::string const& opt,
+                                                      std::string const& val)
+      {
+        remote_ << self->last_dequeued();
+      },
+      on<atom("query", atom("get"), arg_match> >> [](std::string const& id,
+                                                      std::string const& opt)
+      {
+        remote_ << self->last_dequeued();
+      },
+      on(atom("get user input")) >> []()
+      {
+        wait_for_input();
+      }
+      on(atom("shutdown")) >> []()
+      {
+        LOG(verbose, query) << "telling server to stop query " << query_;
+        send(remote_, atom("query"), atom("stop"), query_);
+      },
+      on_arg_match >> [](ze::event const& e)
+      {
+          // TODO: use become() to transition into a new state.
+          if (asking_)
+          {
+              asking_ = false;
+              std::cout << e << std::endl;
+              ++printed_;
+          }
+          else if (printed_ % batch_size_ != 0)
+          {
+              std::cout << e << std::endl;
+              ++printed_;
+          }
+          else
+          {
+              // FIXME: avoid copy.
+              buffer_.push(e);
+          }
+      });
 }
-
-void client::init(std::string const& host,
-                  unsigned port,
-                  std::string const& expression,
-                  unsigned batch_size)
-{
-    batch_size_ = batch_size;
-    auto endpoint = host + ":" + std::to_string(port);
-    LOG(info, query) << "client connecting to " << endpoint;
-    control_.connect(ze::zmq::tcp, endpoint);
-
-    std::string localhost("127.0.0.1");
-    auto local_port = data_.bind(ze::zmq::tcp, localhost + ":*");
-    auto local_endpoint = localhost + ":" + std::to_string(local_port);
-    LOG(info, query) << "new query listening on " << local_endpoint;
-
-    ze::event event("vast::query",
-                    "create",
-                    ze::table{"expression", expression,
-                              "destination", local_endpoint,
-                              "batch size", std::to_string(batch_size_)});
-    control_.send(event);
-}
-
-void client::stop()
-{
-    LOG(verbose, query) << "telling VAST to stop query " << query_;
-    control_.send({"vast::query", "remove", ze::table{"id", query_}});
-};
 
 void client::wait_for_input()
 {
@@ -90,45 +88,33 @@ void client::wait_for_input()
     char c;
     while (std::cin.get(c))
     {
-        switch (c)
-        {
-            case ' ':
-                {
-                    bool printed = try_print();
-                    if (! printed)
-                    {
-                        ze::event event("vast::query",
-                                        "control",
-                                        ze::table{
-                                            "id", query_,
-                                            "aspect", "next batch"});
-                        LOG(debug, query)
-                            << "asking for next batch in query " << query_;
-                        control_.send(event);
+      switch (c)
+      {
+        case ' ':
+          {
+            bool printed = try_print();
+            if (! printed)
+            {
+              LOG(debug, query) << "asking for next batch in query " << query_;
+              send(remote_, atom("query"), atom("control"), query_, atom("next batch"));
 
-                        std::lock_guard<std::mutex> lock(print_mutex_);
-                        asking_ = true;
-                    }
-                }
-                break;
-            case 's':
-                {
-                    ze::event event("vast::query",
-                                    "statistics",
-                                    ze::table{"id", query_});
-
-                    LOG(debug, query)
-                        << "asking statistics about query " << query_;
-
-                    control_.send(event);
-                }
-                break;
-            case 'q':
-                stop();
-                return;
-            default:
-                continue;
-        }
+              // TODO: become(asking)
+              asking_ = true;
+            }
+          }
+          break;
+        case 's':
+          {
+            LOG(debug, query) << "asking statistics about query " << query_;
+            send(remote_, atom("query"), atom("get"), query_, "statistics");
+          }
+          break;
+        case 'q':
+          send(self, atom("shutdown");
+          break;
+        default:
+          continue;
+      }
     }
 
     util::buffer();
@@ -136,20 +122,21 @@ void client::wait_for_input()
 
 bool client::try_print()
 {
-    std::lock_guard<std::mutex> lock(print_mutex_);
-    ze::event e;
-    bool popped;
-    do
+  ze::event e;
+  bool popped;
+
+  do
+  {
+    popped = buffer_.try_pop(e);
+    if (popped)
     {
-        popped = buffer_.try_pop(e);
-        if (popped)
-        {
-            std::cout << e << std::endl;
-            ++printed_;
-        }
+      std::cout << e << std::endl;
+      ++printed_;
     }
-    while (popped && printed_ % batch_size_ != 0u);
-    return popped && printed_ % batch_size_ == 0u;
+  }
+  while (popped && printed_ % batch_size_ != 0);
+
+  return popped && printed_ % batch_size_ == 0;
 }
 
 } // namespace query

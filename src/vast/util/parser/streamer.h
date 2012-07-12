@@ -28,28 +28,28 @@ template <
 class streamer
 {
 public:
-    streamer(std::istream& in)
-      : first_(istream_iterator(in))
-      , last_(istream_iterator())
-    {
-    }
+  streamer(std::istream& in)
+    : first_(istream_iterator(in))
+    , last_(istream_iterator())
+  {
+  }
 
-    bool extract(Attribute& attr)
-    {
-        return boost::spirit::qi::phrase_parse(
-            first_, last_, grammar_, skipper_, attr);
-    }
+  bool extract(Attribute& attr)
+  {
+    return boost::spirit::qi::phrase_parse(
+        first_, last_, grammar_, skipper_, attr);
+  }
 
-    bool done() const
-    {
-        return first_ == last_;
-    }
+  bool done() const
+  {
+    return first_ == last_;
+  }
 
 private:
-    Grammar<multi_pass_iterator> grammar_;
-    Skipper<multi_pass_iterator> skipper_;
-    multi_pass_iterator first_;
-    multi_pass_iterator last_;
+  Grammar<multi_pass_iterator> grammar_;
+  Skipper<multi_pass_iterator> skipper_;
+  multi_pass_iterator first_;
+  multi_pass_iterator last_;
 };
 
 } // namespace parser

@@ -1,7 +1,6 @@
 #include "vast/comm/broccoli.h"
 
 #include <ze/event.h>
-#include <ze/type/container.h>
 #include "vast/comm/connection.h"
 #include "vast/comm/exception.h"
 #include "vast/util/logger.h"
@@ -74,7 +73,7 @@ void broccoli::init(bool messages, bool calltrace)
     initialized = true;
 }
 
-broccoli::broccoli(connection_ptr const& conn, event_ptr_handler const& handler)
+broccoli::broccoli(connection_ptr const& conn, event_handler const& handler)
   : bc_(nullptr)
   , conn_(conn)
   , strand_(conn_->socket().get_io_service())
@@ -584,9 +583,9 @@ void broccoli::callback(BroConn* bc, void* user_data, BroEvMeta* meta)
 {
     try
     {
-        ze::event_ptr event = new ze::event;
-        factory::make_event(*event, meta);
-        auto f = static_cast<event_ptr_handler*>(user_data);
+        ze::event event;
+        factory::make_event(event, meta);
+        auto f = static_cast<event_handler*>(user_data);
         (*f)(std::move(event));
     }
     catch (ze::exception const& e)

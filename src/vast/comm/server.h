@@ -4,15 +4,20 @@
 #include <boost/asio/io_service.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/noncopyable.hpp>
-#include "vast/comm/forward.h"
 
 namespace vast {
 namespace comm {
+
+// Forward declarations.
+class connection;
 
 /// An asynchronous TCP server.
 class server : boost::noncopyable
 {
 public:
+    typedef std::shared_ptr<connection> connection_ptr;
+    typedef std::function<void(connection_ptr const&)> conn_handler;
+
     /// Constructor.
     /// \param io_service The Asio I/O service instance.
     server(boost::asio::io_service& io_service);

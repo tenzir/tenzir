@@ -1,10 +1,10 @@
 include_directories(..)
 
 set(libs
-    ${0event_LIBRARIES}
     ${Boost_LIBRARIES}
-    ${Broccoli_LIBRARIES}
-    ${ZeroMQ_LIBRARIES})
+    ${LIBCPPA_LIBRARIES}
+    ${0event_LIBRARIES}
+    ${Broccoli_LIBRARIES})
 
 if (USE_PERFTOOLS)
     set(libs ${libs} ${Perftools_LIBRARIES})

@@ -1,6 +1,7 @@
 .DS_Store
 .*sw?
 build
+Makefile
 doc/html
 src/config.h
 tmp

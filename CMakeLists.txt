@@ -1,9 +1,5 @@
-project(VAST CXX)
-
-#-----------------------------------------------------------------------
-#                             CMake Configuration
-#-----------------------------------------------------------------------
 cmake_minimum_required(VERSION 2.6 FATAL_ERROR)
+project(VAST CXX)
 
 # Prohibit in-source builds.
 if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
@@ -15,8 +11,8 @@ endif ()
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 include(Helpers)
 
+# Support for 'make uninstall'.
 if ("${PROJECT_SOURCE_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
-    # Support 'make uninstall'.
     configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/cmake_uninstall.cmake.in"
                    "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake"
                     @ONLY)
@@ -25,15 +21,9 @@ if ("${PROJECT_SOURCE_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
         ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake)
 endif ()
 
-# Ignore noisy compiler output.
 set(CMAKE_VERBOSE_MAKEFILE false
     CACHE STRING "Show all outputs including compiler lines." FORCE)
 
-#-----------------------------------------------------------------------
-#                             Project Configuration
-#-----------------------------------------------------------------------
-
-# Extract version.
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" VERSION LIMIT_COUNT 1)
 string(REPLACE "." " " version_numbers ${VERSION})
 separate_arguments(version_numbers)
@@ -43,13 +33,13 @@ set(VERSION_MAJ_MIN "${VERSION_MAJOR}.${VERSION_MINOR}")
 
 set(CMAKE_CXX_FLAGS                "-Wall -std=c++11")
 set(CMAKE_CXX_FLAGS_DEBUG          "-O0 -g")
-set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os -DNDEBUG")
-set(CMAKE_CXX_FLAGS_RELEASE        "-O4 -DNDEBUG")
+set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os")
+set(CMAKE_CXX_FLAGS_RELEASE        "-O4")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g")
 
 if (ENABLE_DEBUG)
     set(CMAKE_BUILD_TYPE Debug)
-    add_definitions("-DVAST_DEBUG")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVAST_DEBUG")
 else ()
     set(CMAKE_BUILD_TYPE Release)
 endif ()
@@ -66,10 +56,6 @@ else()
     message(FATAL_ERROR "Your C++ compiler does not support C++11.")
 endif ()
 
-#-----------------------------------------------------------------------
-#                          Dependency Configuration
-#-----------------------------------------------------------------------
-
 include(MacDependencyPaths)
 
 find_package(Boost
@@ -83,47 +69,34 @@ find_package(Boost
 if (Boost_FOUND)
     include_directories(${Boost_INCLUDE_DIRS})
 else ()
-    set(MISSING_PREREQS true)
-    list(APPEND MISSING_DEPENDENCIES Boost)
+    message(FATAL_ERROR "Could not find Boost")
 endif ()
 
 find_package(Broccoli)
 if (BROCCOLI_FOUND)
     include_directories(${Broccoli_INCLUDE_DIR})
 else ()
-    set(MISSING_PREREQS true)
-    list(APPEND MISSING_DEPENDENCIES Broccoli)
+    message(FATAL_ERROR "Could not find Broccoli")
 endif ()
 
-find_package(ZeroMQ)
-if (ZEROMQ_FOUND)
-    include_directories(${ZeroMQ_INCLUDE_DIR})
+find_package(libcppa)
+if (LIBCPPA_FOUND)
+    include_directories(${LIBCPPA_INCLUDE_DIR})
 else ()
-    set(MISSING_PREREQS true)
-    list(APPEND MISSING_DEPENDENCIES ZeroMQ)
+    message(FATAL_ERROR "Could not find libcppa")
 endif ()
 
 find_package(0event)
 if (0EVENT_FOUND)
     include_directories(${0event_INCLUDE_DIR})
 else ()
-    set(MISSING_PREREQS true)
-    list(APPEND MISSING_DEPENDENCIES 0event)
+    message(FATAL_ERROR "Could not find 0event")
 endif ()
-
-if (MISSING_PREREQS)
-    set (deps)
-    foreach (dep ${MISSING_DEPENDENCIES})
-        set(deps "${deps} ${dep}")
-    endforeach ()
-    message(FATAL_ERROR "Could not find required dependencies:${deps}")
-endif ()
-
-#
-# Optional dependencies
-#
 
 find_package(Doxygen)
+if (DOXYGEN_FOUND)
+    add_subdirectory(doc)
+endif ()
 
 set(USE_PERFTOOLS false)
 if (ENABLE_PERFTOOLS)
@@ -135,25 +108,10 @@ if (ENABLE_PERFTOOLS)
     endif ()
 endif ()
 
-#-----------------------------------------------------------------------
-#                            System Introspection
-#-----------------------------------------------------------------------
-
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
-
-#-----------------------------------------------------------------------
-#                         Recurse into Subdirectories
-#-----------------------------------------------------------------------
 
 add_subdirectory(src)
 add_subdirectory(test)
-if (DOXYGEN_FOUND)
-    add_subdirectory(doc)
-endif ()
-
-#-----------------------------------------------------------------------
-#                           Packaging Configuration
-#-----------------------------------------------------------------------
 
 # If this CMake project is a sub-project of another, we will not
 # configure the generic packaging because CPack will fail in the case
@@ -163,42 +121,24 @@ if ("${PROJECT_SOURCE_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
     ConfigurePackaging(${VERSION})
 endif ()
 
-#-----------------------------------------------------------------------
-#                             Build Configuration
-#-----------------------------------------------------------------------
-
 string(TOUPPER ${CMAKE_BUILD_TYPE} build_type)
-get_directory_property(defs DIRECTORY ${CMAKE_SOURCE_DIR} COMPILE_DEFINITIONS)
-join("${defs}" " " definitions)
-
 message(
-    "\n====================|  VAST Build Summary  |===================="
+    "\n====================|  Build Summary  |===================="
     "\n"
-    "\nInstall prefix:    ${CMAKE_INSTALL_PREFIX}"
-    "\nDebug mode:        ${ENABLE_DEBUG}"
+    "\nVAST version:     ${VERSION_MAJ_MIN}"
     "\n"
-    "\nCXX:               ${CMAKE_CXX_COMPILER}"
-    "\nCXXFLAGS:          ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${build_type}}"
-    "\nDefinitions:       ${definitions}"
+    "\nSource directory: ${CMAKE_SOURCE_DIR}"
+    "\nBuild directory:  ${CMAKE_BINARY_DIR}"
+    "\nInstall prefix:   ${CMAKE_INSTALL_PREFIX}"
+    "\nDebug mode:       ${ENABLE_DEBUG}"
     "\n"
-    "\nGoogle perftools:  ${USE_PERFTOOLS}"
+    "\nCXX:              ${CMAKE_CXX_COMPILER}"
+    "\nCXXFLAGS:         ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${build_type}}"
     "\n"
-    "\n================================================================\n"
+    "\n0event:           ${0event_INCLUDE_DIR}"
+    "\nLibcppa:          ${LIBCPPA_INCLUDE_DIR}"
+    "\nBoost:            ${Boost_INCLUDE_DIR}"
+    "\nDoxygen:          ${DOXYGEN_FOUND}"
+    "\n"
+    "\n===========================================================\n"
 )
-
-#-----------------------------------------------------------------------
-#                                Installation
-#-----------------------------------------------------------------------
-
-# Show warning when installing user is different from the one that configured
-# TODO.
-install(CODE "
-    if (NOT $ENV{USER} STREQUAL \$ENV{USER})
-        message(STATUS \"ATTENTION: Install is being performed by user \"
-                \"'\$ENV{USER}', but the build directory was configured by \"
-                \"user '$ENV{USER}'. This may result in a permissions error \"
-                \"when writing the install manifest, but you can ignore it \"
-                \"and consider the installation as successful if you don't \"
-                \"care about the install manifest.\")
-    endif ()
-")

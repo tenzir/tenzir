@@ -4,7 +4,6 @@
 #include <memory>
 #include <boost/asio/strand.hpp>
 #include <broccoli.h>
-#include "vast/comm/forward.h"
 
 namespace vast {
 namespace comm {
@@ -16,6 +15,7 @@ class broccoli : public std::enable_shared_from_this<broccoli>
     broccoli& operator=(broccoli const&) = delete;
 
 public:
+    typedef std::function<void(ze::event event)> event_handler;
     typedef std::function<void(std::shared_ptr<broccoli>)> error_handler;
 
     /// Initializes Broccoli. This function must be called once before any call
@@ -27,7 +27,7 @@ public:
     /// Constructs a broccoli session over an existing TCP connection.
     /// @param conn The underlying connection.
     /// @param handler The event handler to invoke for each new arriving event.
-    broccoli(connection_ptr const& conn, event_ptr_handler const& handler);
+    broccoli(connection_ptr const& conn, event_handler const& handler);
 
     /// Destroys the internal Broccoli handle if it is still valid.
     ~broccoli();
@@ -138,7 +138,7 @@ private:
     BroConn* bc_;
     connection_ptr conn_;
     boost::asio::strand strand_;
-    event_ptr_handler event_handler_;
+    event_handler event_handler_;
     error_handler error_handler_;
     bool terminate_;
 };

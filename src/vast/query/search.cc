@@ -9,91 +9,57 @@
 namespace vast {
 namespace query {
 
-search::search(ze::io& io, store::archive& archive)
-  : ze::component(io)
-  , archive_(archive)
-  , manager_(*this)
+search::search(cppa::actor_ptr archive)
+  : archive_(archive)
 {
-    manager_.receive_with_route(
-        [&](ze::event event, std::vector<ze::zmq::message> route)
+  using namespace cppa;
+  init_state = (
+      on(atom("publish"), arg_match) >> [](std::string const& host,
+                                           uint16_t port)
+      {
+        LOG(info, query) 
+          << "search component listening on " << host << ':' << port;
+
+        publish(self, port);
+      },
+      on(atom("query"), atom("create"), arg_match) >> [](std::string const&
+                                                         expression)
+      {
+        auto q = spawn<query>(self, expr);
+
+        send(archive_, atom("emitter"), atom("create"), q);
+
+        assert(queries_.find(q->id()) == queries.end());
+        queries_.insert({q->id(), q})
+
+      },
+      on<atom("query"), atom("set"), arg_match> >> [](std::string const& id,
+                                                      std::string const& opt,
+                                                      std::vector<std::string> const& vals)
+      {
+        auto q = queries_.find(id);
+        if (q == queries_.end())
         {
-            if (event.name() != "vast::query")
-            {
-                nack(route, "invalid query event name");
-                return;
-            }
+          reply("query", atom("error"), id, "invalid query id");
+          return;
+        }
 
-            if (event.size() != 2)
-            {
-                nack(route, "invalid number of event arguments");
-                return;
-            }
+        if (opt == "sink")
+        {
+          
 
-            if (event[0].which() != ze::string_type ||
-                event[1].which() != ze::table_type)
-            {
-                nack(route, "invalid event argument types");
-                return;
-            }
+        }
+          send(*
 
-            auto action = event[0].get<ze::string>().to_string();
-            auto& options = event[1].get<ze::table>();
+      },
 
-            if (options.key_value_type() != ze::string_type ||
-                options.map_value_type() != ze::string_type)
-            {
-                nack(route, "invalid 'options' key/value type");
-                return;
-            }
+    on<atom("query"), atom("set"), std::string, anything>() >> 
+      [](std::string const& id, )
+      {
+      }
 
-            if (action == "create")
-            {
-                auto e = options.find("expression");
-                if (e == options.end())
-                {
-                    nack(route, "'expression' option required");
-                    return;
-                }
 
-                auto d = options.find("destination");
-                if (d == options.end())
-                {
-                    nack(route, "'destination' option required");
-                    return;
-                }
 
-                auto expr = e->second.get<ze::string>().to_string();
-                auto dst = d->second.get<ze::string>().to_string();
-
-                auto emitter = archive_.create_emitter();
-                std::unique_ptr<query> q;
-
-                try
-                {
-                    auto b = options.find("batch size");
-                    if (b == options.end())
-                        q = std::make_unique<query>(*this, expr);
-                    else
-                    {
-                        auto batch_size = std::strtoull(
-                                b->second.get<ze::string>().data(), nullptr, 10);
-
-                        q = std::make_unique<query>(
-                            *this,
-                            expr,
-                            batch_size,
-                            [emitter] { emitter->pause(); });
-                    }
-                }
-                catch (syntax_exception const& e)
-                {
-                    nack(route, "invalid query syntax");
-                    archive_.remove_emitter(emitter->id());
-                    return;
-                }
-
-                q->init();
-                emitter->to(q->frontend());
                 LOG(info, query) << "connecting to client " << dst;
                 q->backend().connect(ze::zmq::tcp, dst);
 
@@ -197,9 +163,6 @@ search::search(ze::io& io, store::archive& archive)
 
 void search::init(std::string const& host, unsigned port)
 {
-    auto endpoint = host + ":" + std::to_string(port);
-    manager_.bind(ze::zmq::tcp, endpoint);
-    LOG(info, query) << "search component listening on " << endpoint;
 }
 
 void search::stop()
