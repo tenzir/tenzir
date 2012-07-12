@@ -3,10 +3,14 @@
 
 #include <memory>
 #include <boost/asio/strand.hpp>
+#include <ze/event.h>
 #include <broccoli.h>
 
 namespace vast {
 namespace comm {
+
+// Forward declarations
+class connection;
 
 /// A Broccoli session.
 class broccoli : public std::enable_shared_from_this<broccoli>
@@ -27,7 +31,7 @@ public:
     /// Constructs a broccoli session over an existing TCP connection.
     /// @param conn The underlying connection.
     /// @param handler The event handler to invoke for each new arriving event.
-    broccoli(connection_ptr const& conn, event_handler const& handler);
+    broccoli(std::shared_ptr<connection> conn, event_handler const& handler);
 
     /// Destroys the internal Broccoli handle if it is still valid.
     ~broccoli();
@@ -136,7 +140,7 @@ private:
     static bool initialized;
 
     BroConn* bc_;
-    connection_ptr conn_;
+    std::shared_ptr<connection> conn_;
     boost::asio::strand strand_;
     event_handler event_handler_;
     error_handler error_handler_;

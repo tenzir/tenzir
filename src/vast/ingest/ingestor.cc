@@ -18,7 +18,7 @@ ingestor::ingestor(cppa::actor_ptr archive)
         bro_event_source_ = spawn<comm::bro_event_source>(self);
         send(bro_event_source_, atom("bind"), host, port);
       },
-      on(atom("subscribe"), arg_match) >> [](std::string const& event_name)
+      on(atom("subscribe"), arg_match) >> [=](std::string const& event_name)
       {
         bro_event_source_ << self->last_dequeued();
       },

@@ -11,6 +11,8 @@
 #include <ze/type/time.h>
 #include "vast/store/exception.h"
 
+// TODO: make segments first-class libcppa citizens.
+
 namespace vast {
 namespace store {
 
@@ -85,13 +87,13 @@ public:
     chunk_type::getter getter_;
   };
 
-  writer write();
-
-  uint32_t n_events() const;
-  size_t chunks() const;
-
   segment(ze::compression method = ze::compression::none);
   segment(segment&& other);
+
+  reader read(size_t i) const;
+  writer write();
+  uint32_t n_events() const;
+  size_t chunks() const;
 
 private:
   template <typename Archive>

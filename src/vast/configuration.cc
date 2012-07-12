@@ -22,7 +22,7 @@ configuration::configuration()
     ("vast-dir,d", po::value<fs::path>()->default_value("vast"),
      "VAST directory")
     ("help,h", "display this help")
-    ("taxonomy,t", po::value<std::string>(), "event taxonomy")
+    ("schema,s", po::value<std::string>(), "event schema file")
     ("query,q", po::value<std::string>(), "query expression")
     ("console-verbosity,v",
      po::value<int>()->default_value(util::logger::info),
@@ -39,7 +39,7 @@ configuration::configuration()
      po::value<int>()->default_value(util::logger::verbose),
      "log file verbosity")
     ("profile,p", "enable internal profiling")
-    ("profiler-interval", po::value<unsigned>()->default_value(1000u),
+    ("profiler-interval", po::value<unsigned>()->default_value(1000),
      "profiling interval in milliseconds")
 #ifdef USE_PERFTOOLS_CPU_PROFILER
     ("perftools-cpu", "enable Google perftools CPU profiling")
@@ -58,16 +58,16 @@ configuration::configuration()
     ("comp-search,S", "launch the search")
     ;
 
-  po::options_description taxonomy("taxonomy options");
-  taxonomy.add_options()
-    ("print-taxonomy,T", "print the parsed event taxonomy")
+  po::options_description schema("schema options");
+  schema.add_options()
+    ("print-schema", "print the parsed event schema")
     ;
 
   po::options_description ingestor("ingestor options");
   ingestor.add_options()
     ("ingestor.host", po::value<std::string>()->default_value("127.0.0.1"),
      "IP address of the ingestor")
-    ("ingestor.port", po::value<unsigned>()->default_value(42000u),
+    ("ingestor.port", po::value<unsigned>()->default_value(42000),
      "port of the ingestor")
     ("ingestor.events", po::value<std::vector<std::string>>()->multitoken(),
      "explicit list of events to ingest")
@@ -77,11 +77,15 @@ configuration::configuration()
 
   po::options_description archive("archive options");
   archive.add_options()
-    ("archive.max-events-per-chunk", po::value<size_t>()->default_value(1000u),
+    ("archive.host", po::value<std::string>()->default_value("127.0.0.1"),
+     "IP address of the archive")
+    ("archive.port", po::value<unsigned>()->default_value(42002),
+     "port of the archive")
+    ("archive.max-events-per-chunk", po::value<size_t>()->default_value(1000),
      "maximum number of events per chunk")
-    ("archive.max-segment-size", po::value<size_t>()->default_value(1000u),
+    ("archive.max-segment-size", po::value<size_t>()->default_value(1000),
      "maximum segment size in KB")
-    ("archive.max-segments", po::value<size_t>()->default_value(500u),
+    ("archive.max-segments", po::value<size_t>()->default_value(500),
      "maximum number of segments to keep in memory")
     ;
 
@@ -89,17 +93,17 @@ configuration::configuration()
   search.add_options()
     ("search.host", po::value<std::string>()->default_value("127.0.0.1"),
      "IP address of the search component")
-    ("search.port", po::value<unsigned>()->default_value(42001u),
+    ("search.port", po::value<unsigned>()->default_value(42001),
      "port of the search component")
     ;
 
   po::options_description client("client options");
   client.add_options()
-    ("client.batch-size", po::value<unsigned>()->default_value(0u),
+    ("client.batch-size", po::value<unsigned>()->default_value(0),
      "number of query results per page")
     ;
 
-  all_.add(general).add(advanced).add(component).add(taxonomy)
+  all_.add(general).add(advanced).add(component).add(schema)
     .add(ingestor).add(archive).add(search).add(client);
 
   visible_.add(general).add(component);
@@ -149,7 +153,7 @@ void configuration::init()
 {
   po::notify(config_);
 
-  depends("print-taxonomy", "taxonomy");
+  depends("print-schema", "schema");
 
   int v = get<int>("console-verbosity");
   if (v < 0 || v > 6)

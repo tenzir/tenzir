@@ -8,8 +8,10 @@ namespace vast {
 namespace store {
 
 /// Writes events into a segment and relays baked segments to the archive.
-class segmentizer : public cppa::sb_actor<segmentizer>, public ze::object
+class segmentizer : public cppa::sb_actor<segmentizer>
 {
+  friend class cppa::sb_actor<segmentizer>;
+
 public:
   /// Spawns a segmentizer.
   /// @param max_events_per_chunk The maximum number of events per chunk.
@@ -18,6 +20,8 @@ public:
 
 private:
   segment segment_;
+  segment::writer writer_;
+  cppa::behavior init_state;
 };
 
 } // namespace store

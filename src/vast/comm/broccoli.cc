@@ -73,9 +73,10 @@ void broccoli::init(bool messages, bool calltrace)
     initialized = true;
 }
 
-broccoli::broccoli(connection_ptr const& conn, event_handler const& handler)
+broccoli::broccoli(std::shared_ptr<connection> conn,
+                   event_handler const& handler)
   : bc_(nullptr)
-  , conn_(conn)
+  , conn_(std::move(conn))
   , strand_(conn_->socket().get_io_service())
   , event_handler_(handler)
 {

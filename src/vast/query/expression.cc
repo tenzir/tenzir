@@ -103,7 +103,7 @@ void n_ary_operator::reset()
 {
     for (auto& op : operands_)
         op->reset();
-    
+
     ready_ = false;
 }
 
@@ -170,11 +170,11 @@ relational_operator::relational_operator(ast::clause_operator op)
         case ast::in:
             op_ = [](ze::value const& lhs, ze::value const& rhs) -> bool
                 {
-                    if (lhs.which() == ze::string_type && 
+                    if (lhs.which() == ze::string_type &&
                         rhs.which() == ze::regex_type)
                         return rhs.get<ze::regex>().search(lhs.get<ze::string>());
 
-                    if (lhs.which() == ze::address_type && 
+                    if (lhs.which() == ze::address_type &&
                         rhs.which() == ze::prefix_type)
                         return rhs.get<ze::prefix>().contains(lhs.get<ze::address>());
 
@@ -185,11 +185,11 @@ relational_operator::relational_operator(ast::clause_operator op)
         case ast::not_in:
             op_ = [](ze::value const& lhs, ze::value const& rhs) -> bool
                 {
-                    if (lhs.which() == ze::string_type && 
+                    if (lhs.which() == ze::string_type &&
                         rhs.which() == ze::regex_type)
                         return ! rhs.get<ze::regex>().search(lhs.get<ze::string>());
 
-                    if (lhs.which() == ze::address_type && 
+                    if (lhs.which() == ze::address_type &&
                         rhs.which() == ze::prefix_type)
                         return ! rhs.get<ze::prefix>().contains(lhs.get<ze::address>());
 
@@ -361,7 +361,7 @@ public:
         }
 
         p->add(make_glob_node(clause.lhs[0]));
-        
+
         auto op = clause.op;
         if (invert_)
         {

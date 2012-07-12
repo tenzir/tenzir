@@ -23,7 +23,7 @@ class cppa_iarchive : public ze::serialization::iarchive<cppa_iarchive>
 {
 public:
   cppa_iarchive(cppa::deserializer* source, std::string const& name);
-  cppa_~iarchive();
+  ~cppa_iarchive();
   void read_raw(void* x, size_t n);
 
 private:

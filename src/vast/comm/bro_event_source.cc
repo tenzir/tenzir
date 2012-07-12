@@ -9,24 +9,26 @@ namespace vast {
 namespace comm {
 
 bro_event_source::bro_event_source(cppa::actor_ptr upstream)
-  : server_(io_service_)
+  : server_(active_io_service_)
   , error_handler_([&](std::shared_ptr<broccoli> bro) { disconnect(bro); })
 {
     using namespace cppa;
+
     init_state = (
-        on(atom("subscribe", arg_match)) >> [=](std::string const& event)
+        on(atom("subscribe"), arg_match) >> [=](std::string const& event)
         {
           subscribe(event);
         },
-        on(atom("bind", arg_match)) >> [=](std::string const& host, unsigned port)
+        on(atom("bind"), arg_match) >> [=](std::string const& host, unsigned port)
         {
           bind(host, port, upstream);
-          io_service_.run();
+          active_io_service_.start();
         },
-        on(atom("shutdown")) >> []()
+        on(atom("shutdown")) >> [=]()
         {
           // Stop all Broccolis.
           stop();
+          active_io_service_.stop();
           self->quit();
         });
 }
@@ -40,16 +42,17 @@ void bro_event_source::subscribe(std::string event)
     events_.insert(i, std::move(event));
 }
 
-void bro_event_source::bind(std::string const& host, unsigned port)
+void bro_event_source::bind(std::string const& host, unsigned port,
+                            cppa::actor_ptr sink)
 {
   server_.bind(
       host,
       port,
-      [=](connection_ptr const& conn)
+      [=](std::shared_ptr<connection> const& conn)
       {
         auto bro = std::make_shared<broccoli>(
             conn,
-            [=](ze::event event) { send(self, std::move(event)); });
+            [=](ze::event event) { send(sink, std::move(event)); });
 
         for (auto const& event : events_)
           bro->subscribe(event);

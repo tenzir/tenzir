@@ -7,42 +7,36 @@ namespace vast {
 namespace store {
 
 segmentizer::segmentizer(size_t max_events_per_chunk, size_t max_segment_size)
+  : writer_(segment.write())
 {
-  using namespace cppa;
-
   LOG(verbose, store)
     << "maximum segment size: " << max_segment_size_ << " bytes";
   LOG(verbose, store)
     << "maximum number of events per chunk: " << max_events_per_chunk_;
 
+  using namespace cppa;
   init_state = (
       on_arg_match >> [=](ze::event const& e)
       {
-        auto n = segment_.put(event);
+        auto n = writer_ << e;
         if (n < max_events_per_chunk_)
           return;
 
-        segment_.flush();
         if (segment_.size() < max_segment_size_)
         {
-          segment_.push_chunk();
+          writer_ = segment_.write();
           return;
         }
 
         send(sink_, std::move(segment_));
-        segment_ = osegment();
+        segment().swap(segment_);
       },
       on(atom("shutdown")) >> [=]()
       {
-        if (segment_->n_events() > 0u)
-        {
-          LOG(verbose, store) 
-            << "flushing last segment with " 
-            << segment_->n_events() << " events";
-
-          segment_->flush();
+        if (writer_->bytes() > 0)
           send(sink_, std::move(segment_));
-        }
+          
+        self->quit();
       });
 }
 

@@ -8,7 +8,7 @@ namespace vast {
 namespace store {
 
 /// Reads events from archive's segment cache.
-class emitter : public cppa::sb_actor<emitter>, public ze::object
+class emitter : public cppa::sb_actor<emitter>
 {
   friend class cppa::sb_actor<emitter>;
 

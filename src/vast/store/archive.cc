@@ -19,7 +19,6 @@ archive::archive(std::string const& directory,
 {
   LOG(info, store) << "creating segment cache with capacity " << max_segments;
 
-
   segmentizer_ = cppa::spawn<segmentizer>(max_events_per_chunk,
                                           max_segment_size);
 
@@ -38,17 +37,17 @@ archive::archive(std::string const& directory,
   using namespace cppa;
 
   init_state = (
-      on(atom("emitter"), atom("create"), arg_match) >> [](actor_ptr sink)
+      on(atom("emitter"), atom("create"), arg_match) >> [=](actor_ptr sink)
       {
         create_emitter(sink);
       },
-      on_arg_match >> [=](osegment const& os)
+      on_arg_match >> [=](segment const& s)
       {
-        auto path = archive_root_ / os->id().to_string();
+        auto path = archive_root_ / s.id().to_string();
         {
             fs::ofstream file(path, std::ios::binary | std::ios::out);
-            ze::serialization::oarchive oa(file);
-            oa << os;
+            ze::serialization::stream_oarchive oa(file);
+            oa << s;
         }
 
         LOG(verbose, store) << "wrote segment to " << path;
@@ -56,7 +55,6 @@ archive::archive(std::string const& directory,
         // FIXME: os cannot be moved.
         auto is = std::make_shared<isegment>(std::move(*os));
         {
-            std::lock_guard<std::mutex> lock(segment_files_mutex_);
             assert(segment_files_.find(is->id()) == segment_files_.end());
             segment_files_.emplace(is->id(), path);
         }
@@ -68,6 +66,7 @@ archive::archive(std::string const& directory,
         segmentizer_ << self->last_dequeued();
         for (auto em : emitters)
           em << self->last_dequeued();
+        self->quit();
       });
 }
 
@@ -76,7 +75,6 @@ void archive::create_emitter(cppa::actor_ptr sink)
   // TODO: only select those segments IDs which contain relevant events.
   std::vector<ze::uuid> ids;
   {
-    std::lock_guard<std::mutex> lock(segment_files_mutex_);
     std::transform(
         segment_files_.begin(),
         segment_files_.end(),
@@ -103,7 +101,6 @@ void archive::scan(fs::path const& directory)
             else
             {
                 LOG(verbose, store) << "found segment " << p;
-                std::lock_guard<std::mutex> lock(segment_files_mutex_);
                 segment_files_.emplace(p.filename().string(), p);
             }
         });
@@ -113,12 +110,9 @@ std::shared_ptr<isegment> archive::load(ze::uuid const& id)
 {
     LOG(debug, store) << "cache miss, loading segment " << id;
 
-    {
-        // The inquired segment must have been recorded at startup or added
-        // upon segment rotation by the writer.
-        std::lock_guard<std::mutex> lock(segment_files_mutex_);
-        assert(segment_files_.find(id) != segment_files_.end());
-    }
+    // The inquired segment must have been recorded at startup or added
+    // upon segment rotation by the writer.
+    assert(segment_files_.find(id) != segment_files_.end());
 
     auto path = archive_root_ / id.to_string();
     fs::ifstream file(path, std::ios::binary | std::ios::in);

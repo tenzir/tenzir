@@ -4,14 +4,13 @@
 #include <iostream>
 #include <boost/exception/diagnostic_information.hpp>
 #include "vast/exception.h"
-#include "vast/ingest/ingestor.h"
+#include "vast/comm/broccoli.h"
+#include "vast/detail/cppa_type_info.h"
 #include "vast/fs/path.h"
 #include "vast/fs/operations.h"
-#include "vast/ingest/reader.h"
-#include "vast/meta/taxonomy.h"
-#include "vast/meta/taxonomy_manager.h"
+#include "vast/ingest/ingestor.h"
+#include "vast/meta/schema_manager.h"
 #include "vast/query/client.h"
-#include "vast/query/query.h"
 #include "vast/query/search.h"
 #include "vast/store/archive.h"
 #include "vast/util/logger.h"
@@ -90,48 +89,46 @@ bool program::init(int argc, char *argv[])
 void program::start()
 {
   using namespace cppa;
+  announce(typeid(ze::uuid), new detail::uuid_type_info);
+  announce(typeid(ze::event), new detail::event_type_info);
 
   try
   {
-    auto vast_dir = config_.get<fs::path>("vast-dir");
     auto log_dir = config_.get<fs::path>("log-dir");
 
 #ifdef USE_PERFTOOLS
     if (config_.check("perftools-heap"))
     {
       LOG(info, core) << "starting perftools CPU profiler";
-      ::HeapProfilerStart((log_dir / "heap.profile").string().c_str());
+      ::HeapProfilerStart((log_dir / "heap.profile").string().data());
     }
     if (config_.check("perftools-cpu"))
     {
       LOG(info, core) << "starting perftools heap profiler";
-      ::ProfilerStart((log_dir / "cpu.profile").string().c_str());
+      ::ProfilerStart((log_dir / "cpu.profile").string().data());
     }
 #endif
 
     if (config_.check("profile"))
     {
       auto const& filename = log_dir / "profiler.log";
-
       auto interval = config_.get<unsigned>("profiler-interval");
       profiler_.init(filename, std::chrono::milliseconds(interval));
-
       profiler_.start();
     }
 
-    tax_manager_ = spawn<meta::tax_manager>();
-    if (config_.check("taxonomy"))
+    schema_manager_ = spawn<meta::schema_manager>();
+    if (config_.check("schema"))
     {
-      auto& taxonomy_file = config_.get<std::string>("taxonomy");
-      send(tax_manager, atom("load"), taxonomy_file);
+      send(schema_manager_, atom("load"), config_.get<std::string>("schema"));
 
-      if (config_.check("print-taxonomy"))
+      if (config_.check("print-schema"))
       {
-        send(tax_manager, atom("print"));
+        send(schema_manager_, atom("print"));
         receive(
-            on(atom("taxonomy"), arg_match) >> [](std::string const& tax)
+            on(atom("schema"), arg_match) >> [](std::string const& schema)
             {
-              std::cout << tax << std::endl;
+              std::cout << schema << std::endl;
             });
 
         return;
@@ -143,18 +140,22 @@ void program::start()
 
     if (config_.check("comp-archive"))
     {
-      archive_ = spawn<store::archive>();
-      send(archive_, atom("initialize"),
-          vast_dir / "archive",
+      archive_ = spawn<store::archive>(
+          (config_.get<fs::path>("vast-dir") / "archive").string(),
           config_.get<size_t>("archive.max-events-per-chunk"),
           config_.get<size_t>("archive.max-segment-size") * 1000,
           config_.get<size_t>("archive.max-segments"));
     }
-
+    else
+    {
+      archive_ = remote_actor(
+          config_.get<std::string>("archive.host").data(),
+          config_.get<unsigned>("archive.port"));
+    }
 
     if (config_.check("comp-ingestor"))
     {
-      ingestor_ = spawn<store::ingestor>(archive_);
+      ingestor_ = spawn<ingest::ingestor>(archive_);
       send(ingestor_,
            atom("initialize"),
            config_.get<std::string>("ingestor.host"),
@@ -179,31 +180,39 @@ void program::start()
           send(ingestor_, atom("read_file"), file);
         }
       }
-
+    }
+    else
+    {
+      ingestor_ = remote_actor(
+          config_.get<std::string>("ingestor.host").data(),
+          config_.get<unsigned>("ingestor.port"));
     }
 
     if (config_.check("comp-search"))
     {
-      search_ = spawn<store::search>(archive_);
-
+      search_ = spawn<query::search>(archive_);
       send(search_,
            atom("publish"),
            config_.get<std::string>("search.host"),
            config_.get<unsigned>("search.port"));
     }
-
-    if (config_.check("query"))
+    else
     {
-
-      query_client_.init(config_.get<std::string>("search.host"),
-                         config_.get<unsigned>("search.port"),
-                         config_.get<std::string>("query"),
-                         config_.get<unsigned>("client.batch-size"));
+      search_ = remote_actor(
+          config_.get<std::string>("search.host").data(),
+          config_.get<unsigned>("search.port"));
     }
 
     if (config_.check("query"))
     {
-      query_client_.wait_for_input();
+      query_client_ = spawn<query::client>(
+          search_,
+          config_.get<unsigned>("client.batch-size"));
+
+      send(query_client_,
+           atom("query"),
+           atom("create"),
+           config_.get<std::string>("query"));
     }
 
     await_all_others_done();

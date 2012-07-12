@@ -55,7 +55,7 @@ private:
     cppa::actor_ptr ingestor_;
     cppa::actor_ptr search_;
     cppa::actor_ptr query_client_;
-    cppa::actor_ptr tax_manager_;
+    cppa::actor_ptr schema_manager_;
 };
 
 } // namespace vast

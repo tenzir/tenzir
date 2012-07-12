@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <ze/uuid.h>
+#include "vast/fs/path.h"
 #include "vast/store/segment_manager.h"
 #include "vast/store/segmentizer.h"
 
@@ -43,7 +44,6 @@ private:
 
     fs::path archive_root_;
     segment_manager segment_manager_;
-    std::mutex segment_files_mutex_;
     std::unordered_map<ze::uuid, fs::path> segment_files_;
     std::vector<cppa::actor_ptr> emitters_;
 

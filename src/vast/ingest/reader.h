@@ -8,23 +8,25 @@ namespace vast {
 namespace ingest {
 
 /// A reader that transforms file contents into events.
-class reader : cppa::sb_actor<reader>
+class reader : public cppa::sb_actor<reader>
 {
+  friend class cppa::sb_actor<reader>;
+
 public:
   /// Constructs a reader.
   /// @param upstream The upstream actor receiving the events.
   reader(cppa::actor_ptr upstream);
   virtual ~reader() = default;
 
-  cppa::behavior init_state;
-
 protected:
   /// Extracts events from a filestream.
   /// @param ifs The file stream to extract events from.
-  /// @return The number of events extracted.
-  virtual size_t extract(std::ifstream& ifs) = 0;
+  /// @param n  The number of events extracted.
+  /// @return `true` *iff* the reader successfully ingested the file.
+  virtual bool extract(std::ifstream& ifs, size_t& n) = 0;
 
   cppa::actor_ptr upstream_;
+  cppa::behavior init_state;
 };
 
 
@@ -35,7 +37,7 @@ public:
   bro_reader(cppa::actor_ptr upstream);
 
 protected:
-  virtual size_t extract(std::ifstream& ifs);
+  virtual bool extract(std::ifstream& ifs, size_t& n);
 };
 
 } // namespace ingest

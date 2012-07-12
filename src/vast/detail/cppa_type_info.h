@@ -1,20 +1,27 @@
-#ifndef ZE_CPPA_TYPE_INFO_H
-#define ZE_CPPA_TYPE_INFO_H
+#ifndef VAST_DETAIL_CPPA_TYPE_INFO_H
+#define VAST_DETAIL_CPPA_TYPE_INFO_H
 
 #include <ze/forward.h>
 #include <cppa/util/abstract_uniform_type_info.hpp>
 
-namespace ze {
-namespace cppa {
+namespace vast {
+namespace detail {
 
-class event_type_info : public ::cppa::util::abstract_uniform_type_info<event>
+class uuid_type_info : public cppa::util::abstract_uniform_type_info<ze::uuid>
 {
 protected:
-    void serialize(void const* ptr, ::cppa::serializer* sink) const;
-    void deserialize(void* ptr, ::cppa::deserializer* source) const;
+  void serialize(void const* ptr, cppa::serializer* sink) const;
+  void deserialize(void* ptr, cppa::deserializer* source) const;
 };
 
-} // namespace cppa
-} // namespace ze
+class event_type_info : public cppa::util::abstract_uniform_type_info<ze::event>
+{
+protected:
+  void serialize(void const* ptr, cppa::serializer* sink) const;
+  void deserialize(void* ptr, cppa::deserializer* source) const;
+};
+
+} // namespace detail
+} // namespace vast
 
 #endif

@@ -11,58 +11,82 @@
 namespace vast {
 namespace query {
 
-query::query(cppa::actor_ptr search, std::string str)
-  : search_(search)
-  , state_(invalid)
-  , str_(std::move(str))
+query::query(std::string str)
+  : str_(std::move(str))
 {
+  using namespace cppa;
   LOG(verbose, query) << "new query " << id() << ": " << str_;
 
   init_state = (
-      on(atom("initialize"), arg_match) >> [](unsigned batch_size)
+      on(atom("parse")) >> [=]
       {
-        ast::query query_ast;
-        if (! util::parser::parse<parser::query>(str_, query_ast))
-          throw syntax_exception(str_);
+        try
+        {
+          ast::query query_ast;
+          if (! util::parser::parse<parser::query>(str_, query_ast))
+            throw syntax_exception(str_);
 
-        if (! ast::validate(query_ast))
-          throw semantic_exception("semantic error", str_);
+          if (! ast::validate(query_ast))
+            throw semantic_exception("semantic error", str_);
 
-        expr_.assign(query_ast);
+          expr_.assign(query_ast);
+        }
+        catch (syntax_exception const& e)
+        {
+          LOG(error, query)
+            << "syntax error in query " << id() << ": " << e.what();
+
+          reply(atom("query"), atom("parse"), atom("failure"), id());
+        }
+        catch (semantic_exception const& e)
+        {
+          LOG(error, query)
+            << "semantic error in query " << id() << ": " << e.what();
+
+          reply(atom("query"), atom("parse"), atom("failure"), id());
+        }
       },
-      on(atom("set"), atom("source"), arg_match) >> [](actor_ptr source)
+      on(atom("set"), atom("source"), arg_match) >> [=](actor_ptr source)
       {
         LOG(debug, query) << "setting source for query " << id();
         source_ = source;
       },
-      on(atom("set"), atom("sink"), arg_match) >> [](actor_ptr sink)
+      on(atom("set"), atom("sink"), arg_match) >> [=](actor_ptr sink)
       {
         LOG(debug, query) << "setting sink for query " << id();
         sink_ = sink;
       },
-      on(atom("set"), atom("batch size"), arg_match) >> [](unsigned batch_size)
+      on(atom("set"), atom("batch size"), arg_match) >> [=](unsigned batch_size)
       {
         assert(batch_size > 0);
 
-        LOG(debug, query) 
+        LOG(debug, query)
           << "setting batch size to " << batch_size << " for query " << id();
 
         batch_size_ = batch_size;
       },
-      on(atom("get"), atom("statistics")) >> []()
+      on(atom("get"), atom("statistics")) >> [=]
       {
-        // TODO: make query statistics a first-class libcppa citizen.
-        //reply(stats_);
+        reply(atom("statistics"), stats_.processed, stats_.matched);
       },
-      on_arg_match >> [](ze::event const& e)
+      on(atom("next batch")) >> [=]
+      {
+        send(source_, atom("emit"));
+      },
+      on_arg_match >> [=](ze::event const& e)
       {
         ++stats_.processed;
         if (expr_.eval(e))
         {
           sink_ << self->last_dequeued();
-          if (++stats_.matched % batch_size_ == 0ull)
+          if (++stats_.matched % batch_size_ == 0)
             send(source_, atom("pause"));
         }
+      },
+      on(atom("shutdown")) >> [=]
+      {
+        LOG(debug, query) << "shutting down query " << id();
+        self->quit();
       });
 }
 
