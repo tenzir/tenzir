@@ -92,10 +92,10 @@ cppa::cow_tuple<segment> segment_manager::on_miss(ze::uuid const& id)
   auto path = dir_ / id.to_string();
   fs::ifstream file(path, std::ios::binary | std::ios::in);
   ze::serialization::stream_iarchive ia(file);
-  cppa::cow_tuple<segment> segment_tuple;
-  ia >> cppa::get_ref<0>(segment_tuple);
+  segment s;
+  ia >> s;
 
-  return segment_tuple;
+  return std::move(s);
 }
 
 } // namespace store
