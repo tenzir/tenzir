@@ -35,6 +35,11 @@ reader::reader(cppa::actor_ptr upstream)
       });
 }
 
+bro_reader::bro_reader(cppa::actor_ptr upstream)
+  : reader(upstream)
+{
+}
+
 bool bro_reader::extract(std::ifstream& ifs, size_t& n)
 {
   if (! ifs.good())

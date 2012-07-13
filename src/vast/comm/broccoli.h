@@ -9,7 +9,7 @@
 namespace vast {
 namespace comm {
 
-// Forward declarations
+// Forward declarations.
 class connection;
 
 /// A Broccoli session.

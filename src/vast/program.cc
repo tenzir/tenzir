@@ -1,25 +1,25 @@
-#include "vast/program.h"
+#include <vast/program.h>
 
 #include <cstdlib>
 #include <iostream>
 #include <boost/exception/diagnostic_information.hpp>
-#include "vast/exception.h"
-#include "vast/comm/broccoli.h"
-#include "vast/detail/cppa_type_info.h"
-#include "vast/fs/path.h"
-#include "vast/fs/operations.h"
-#include "vast/ingest/ingestor.h"
-#include "vast/meta/schema_manager.h"
-#include "vast/query/client.h"
-#include "vast/query/search.h"
-#include "vast/store/archive.h"
-#include "vast/util/logger.h"
-#include "config.h"
+#include <vast/exception.h>
+#include <vast/comm/broccoli.h>
+#include <vast/detail/cppa_type_info.h>
+#include <vast/fs/path.h>
+#include <vast/fs/operations.h>
+#include <vast/ingest/ingestor.h>
+#include <vast/meta/schema_manager.h>
+#include <vast/query/client.h>
+#include <vast/query/search.h>
+#include <vast/store/archive.h>
+#include <vast/util/logger.h>
+#include <config.h>
 
 
 #ifdef USE_PERFTOOLS
-#include "google/profiler.h"
-#include "google/heap-profiler.h"
+#include <google/profiler.h>
+#include <google/heap-profiler.h>
 #endif
 
 namespace vast {

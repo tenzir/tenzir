@@ -3,7 +3,7 @@
 
 #include <cppa/cppa.hpp>
 #include <ze/event.h>
-#include "vast/query/query.h"
+#include <vast/query/query.h>
 
 namespace vast {
 namespace query {

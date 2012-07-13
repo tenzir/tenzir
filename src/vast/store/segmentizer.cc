@@ -1,40 +1,43 @@
-#include "vast/store/segmentizer.h"
+#include <vast/store/segmentizer.h>
 
 #include <ze/event.h>
-#include "vast/util/logger.h"
+#include <vast/util/logger.h>
 
 namespace vast {
 namespace store {
 
-segmentizer::segmentizer(size_t max_events_per_chunk, size_t max_segment_size)
-  : writer_(segment.write())
+segmentizer::segmentizer(cppa::actor_ptr segment_manager,
+                         size_t max_events_per_chunk,
+                         size_t max_segment_size)
+  : writer_(segment_)
+  , segment_manager_(segment_manager)
 {
   LOG(verbose, store)
-    << "maximum segment size: " << max_segment_size_ << " bytes";
+    << "maximum segment size: " << max_segment_size << " bytes";
   LOG(verbose, store)
-    << "maximum number of events per chunk: " << max_events_per_chunk_;
+    << "maximum number of events per chunk: " << max_events_per_chunk;
 
   using namespace cppa;
   init_state = (
       on_arg_match >> [=](ze::event const& e)
       {
         auto n = writer_ << e;
-        if (n < max_events_per_chunk_)
+        if (n < max_events_per_chunk)
           return;
 
-        if (segment_.size() < max_segment_size_)
+        if (segment_.bytes() < max_segment_size)
         {
-          writer_ = segment_.write();
+          writer_.new_chunk();
           return;
         }
 
-        send(sink_, std::move(segment_));
-        segment().swap(segment_);
+        send(segment_manager_, std::move(segment_));
+        segment_ = segment();
       },
       on(atom("shutdown")) >> [=]()
       {
-        if (writer_->bytes() > 0)
-          send(sink_, std::move(segment_));
+        if (writer_.bytes() > 0)
+          send(segment_manager_, std::move(segment_));
           
         self->quit();
       });

@@ -2,8 +2,8 @@
 #define VAST_PROGRAM_H
 
 #include <cppa/cppa.hpp>
-#include "vast/configuration.h"
-#include "vast/util/profiler.h"
+#include <vast/configuration.h>
+#include <vast/util/profiler.h>
 
 namespace vast {
 

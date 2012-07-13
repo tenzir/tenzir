@@ -1,11 +1,19 @@
 #ifndef VAST_STORE_EMITTER_H
 #define VAST_STORE_EMITTER_H
 
+// TODO: Currently, no more available segment IDs means that we're done.
+// Eventually, emitters should request more IDs from the index once they have
+// only a few left (i.e., reached a minimum-number-of-IDs-threshold).
+
+#include <deque>
 #include <cppa/cppa.hpp>
-#include "vast/store/segment_manager.h"
+#include <ze/uuid.h>
 
 namespace vast {
 namespace store {
+
+// Forward declarations.
+class segment;
 
 /// Reads events from archive's segment cache.
 class emitter : public cppa::sb_actor<emitter>
@@ -13,17 +21,20 @@ class emitter : public cppa::sb_actor<emitter>
   friend class cppa::sb_actor<emitter>;
 
 public:
-  /// Sets the initial behavior.
-  emitter(segment_manager& sm, std::vector<ze::uuid> ids);
+  /// Spawns an emitter.
+  /// @param segment_manager The segment manager to ask for segments.
+  emitter(cppa::actor_ptr segment_manager);
 
 private:
   void emit_chunk();
 
-  segment_manager& segment_manager_;
-  std::vector<ze::uuid> ids_;
-  std::vector<ze::uuid>::const_iterator current_;
-  std::shared_ptr<isegment> segment_;
+  std::deque<ze::uuid> ids_;
+  cppa::cow_tuple<segment> segment_tuple_;
+  size_t current_chunk_ = 0;
+  size_t last_chunk_ = 0;
+  segment const* segment_;
 
+  cppa::actor_ptr segment_manager_;
   cppa::actor_ptr sink_;
   cppa::behavior running_;
   cppa::behavior init_state;

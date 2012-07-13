@@ -1,9 +1,9 @@
-#include "vast/query/client.h"
+#include <vast/query/client.h>
 
 #include <ze/event.h>
-#include "vast/util/console.h"
-#include "vast/util/logger.h"
-#include "vast/query/exception.h"
+#include <vast/util/console.h>
+#include <vast/util/logger.h>
+#include <vast/query/exception.h>
 
 namespace vast {
 namespace query {

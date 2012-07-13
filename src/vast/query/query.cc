@@ -1,12 +1,12 @@
-#include "vast/query/query.h"
+#include <vast/query/query.h>
 
 #include <ze/event.h>
 #include <ze/type/regex.h>
-#include "vast/query/ast.h"
-#include "vast/query/exception.h"
-#include "vast/query/parser/query.h"
-#include "vast/util/parser/parse.h"
-#include "vast/util/logger.h"
+#include <vast/query/ast.h>
+#include <vast/query/exception.h>
+#include <vast/query/parser/query.h>
+#include <vast/util/parser/parse.h>
+#include <vast/util/logger.h>
 
 namespace vast {
 namespace query {

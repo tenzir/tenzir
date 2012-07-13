@@ -9,7 +9,7 @@
 #include <ze/compression.h>
 #include <ze/serialization.h>
 #include <ze/type/time.h>
-#include "vast/store/exception.h"
+#include <vast/store/exception.h>
 
 // TODO: make segments first-class libcppa citizens.
 
@@ -18,9 +18,6 @@ namespace store {
 
 class segment : public ze::object
 {
-  segment(segment const&) = delete;
-  segment& operator=(segment) = delete;
-
   typedef ze::serialization::chunk<ze::event> chunk_type;
 
   struct chunk_creator
@@ -34,10 +31,17 @@ class segment : public ze::object
 public:
   class writer : chunk_creator
   {
+    writer(writer const&) = delete;
+    writer& operator=(writer) = delete;
+
   public:
     /// Creates a new chunk at the end of the segment for writing.
     /// @param s The segment to write to.
     writer(segment& s);
+
+    /// Append a new chunk to the chunk vector and use it for subsequent write
+    /// operations.
+    void new_chunk();
 
     /// Serializes an event into the segment.
     /// @param event The event to store.
@@ -57,6 +61,9 @@ public:
 
   class reader
   {
+    reader(reader const&) = delete;
+    reader& operator=(reader) = delete;
+
   public:
     /// Creates a reader for a specific segment chunk.
     ///
@@ -64,7 +71,7 @@ public:
     ///
     /// @param i The chunk index, must be in *[0, n)* where *n* is the
     /// number of chunks in `s`.
-    reader(segment& s, size_t i);
+    reader(chunk_type const& chunk);
 
     /// Deserializes an event into the segment.
     /// @param event The event to deserialize into.
@@ -83,17 +90,28 @@ public:
 
   private:
     size_t bytes_ = 0;
-    segment& segment_;
     chunk_type::getter getter_;
   };
 
   segment(ze::compression method = ze::compression::none);
-  segment(segment&& other);
 
+  /// Creates a reader proxy to read a given chunk.
+  ///
+  /// @param i The chunk index, must be in *[0, n)* where *n* is the
+  /// number of chunks in `s`.
   reader read(size_t i) const;
   writer write();
-  uint32_t n_events() const;
+
+
+  uint32_t events() const;
+
+  /// Retrieves the number of chunks.
+  /// @return The number of chunks in the segment..
   size_t chunks() const;
+
+  /// Retrieves the number of bytes the segment occupies.
+  /// @return The number of bytes the segment occupies.
+  size_t bytes() const;
 
 private:
   template <typename Archive>
@@ -102,17 +120,17 @@ private:
     oa << segment::magic;
     oa << s.version_;
     oa << static_cast<ze::object const&>(s);
-    oa << s.method_;
+    oa << s.compression_;
     oa << s.start_;
     oa << s.end_;
+    oa << s.event_names_;
     oa << s.events_;
-    oa << s.n_events_;
     oa << s.chunks_;
 
     // FIXME: bring back in as compiled function.
     //LOG(verbose, store)
     //  << "serialized segment (#events: "
-    //  << segment.n_events_
+    //  << segment.events_
     //  << ", span: "
     //  << mins.count()
     //  << " mins, size: "
@@ -133,11 +151,11 @@ private:
       throw segment_exception("segment version too high");
 
     ia >> static_cast<ze::object&>(s);
-    ia >> s.method_;
+    ia >> s.compression_;
     ia >> s.start_;
     ia >> s.end_;
+    ia >> s.event_names_;
     ia >> s.events_;
-    ia >> s.n_events_;
     ia >> s.chunks_;
   }
 
@@ -145,11 +163,11 @@ private:
   static uint8_t const version = 1;
 
   uint32_t version_;
-  ze::compression const method_;
+  ze::compression compression_;
   ze::time_point start_;
   ze::time_point end_;
-  std::vector<std::string> events_;
-  uint32_t n_events_;
+  std::vector<std::string> event_names_;
+  uint32_t events_;
   std::vector<chunk_type> chunks_;
 };
 

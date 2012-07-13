@@ -1,10 +1,10 @@
-#include "vast/query/search.h"
+#include <vast/query/search.h>
 
 #include <ze/util/make_unique.h>
-#include "vast/util/logger.h"
-#include "vast/query/exception.h"
-#include "vast/store/archive.h"
-#include "vast/store/emitter.h"
+#include <vast/util/logger.h>
+#include <vast/query/exception.h>
+#include <vast/store/archive.h>
+#include <vast/store/emitter.h>
 
 namespace vast {
 namespace query {
@@ -27,9 +27,10 @@ search::search(cppa::actor_ptr archive)
             {
               send(q, atom("set"), atom("source"), emitter);
               send(q, atom("set"), atom("sink"), sink);
-
-              auto i = std::find(queries_.begin(), queries_.end(), q);
-              assert(i == queries_.end());
+              {
+                auto i = std::find(queries_.begin(), queries_.end(), q);
+                assert(i == queries_.end());
+              }
               queries_.push_back(std::move(q));
 
               send(sink, atom("query"), atom("create"), atom("ack"), q);

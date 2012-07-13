@@ -8,31 +8,33 @@
 namespace vast {
 namespace store {
 
-emitter::emitter(segment_manager& sm, std::vector<ze::uuid> ids)
-  : segment_manager_(sm)
-  , ids_(std::move(ids))
-  , current_(ids_.begin())
+emitter::emitter(cppa::actor_ptr segment_manager)
+  : segment_manager_(segment_manager)
 {
   using namespace cppa;
 
-  auto shutdown = on<atom("shutdown")> >> []()
+  auto shutdown = on(atom("shutdown")) >> [=]
   {
     LOG(verbose, store) << "shutting down emitter " << id();
+    ids_.clear();
     self->quit();
-  }
+  };
 
   init_state = (
-      on(atom("sink"), arg_match) [=](actor_ptr sink)
+      on(atom("set"), atom("sink"), arg_match) >> [=](actor_ptr sink)
       {
         sink_ = sink;
-        send(sink, atom("set"), atom("source"), self);
+      },
+      on(atom("ids"), arg_match) >> [=](std::vector<ze::uuid> const& ids)
+      {
+        std::copy(ids.begin(), ids.end(), std::back_inserter(ids_));
         become(running_);
       },
       shutdown
       );
 
   running_ = (
-      on(atom("emit")) >> []()
+      on(atom("emit")) >> [=]()
       {
         emit_chunk();
       },
@@ -43,9 +45,10 @@ emitter::emitter(segment_manager& sm, std::vector<ze::uuid> ids)
 void emitter::emit_chunk()
 {
   using namespace cppa;
-  if (current_ == ids_.end())
+
+  if (ids_.empty())
   {
-    LOG(debug, store) << "emitter " << id() << "has already finished";
+    LOG(debug, store) << "emitter " << id() << " has no more segment IDs";
     send(self, atom("shutdown"));
     return;
   }
@@ -55,28 +58,46 @@ void emitter::emit_chunk()
     if (! segment_)
     {
       LOG(debug, store) 
-        << "emitter " << id() << " retrieves segment from cache";
+        << "emitter " << id() << ": fetching segment " << ids_.front();
 
-      segment_ = segment_manager_->retrieve(*current_);
+      send(segment_manager_, atom("retrieve"), ids_.front());
+      ids_.pop_front();
+
+      become(
+          keep_behavior,
+          on_arg_match >> [=](segment const& /* s */)
+          {
+            auto opt = tuple_cast<segment>(self->last_dequeued());
+            assert(opt.valid());
+            segment_tuple_ = *opt;
+            segment_ = &get<0>(segment_tuple_);
+
+            current_chunk_ = 0;
+            last_chunk_ = segment_->chunks();
+            assert(segment_->chunks() > 0);
+
+            unbecome();
+          },
+          on(atom("shutdown")) >> [=]
+          {
+            send(self, atom("shutdown"));
+            unbecome();
+          });
     }
 
-    auto remaining = segment_->process_chunk(
-        [=](ze::event e)
-        {
-          send(sink_, std::move(e));
-        });
+    LOG(debug, store) 
+      << "emitter " << id() << ": processing chunk #" << current_chunk_;
 
-    if (remaining == 0)
+    segment_->read(current_chunk_++).read(
+        [=](ze::event e) { send(sink_, std::move(e)); });
+
+    if (current_chunk_ == last_chunk_)
     {
-      if (++current_ != ids_.end())
-      {
-        segment_.reset();
-      }
-      else
+      segment_ = nullptr;
+      if (ids_.empty())
       {
         LOG(debug, store) << "emitter " << id() << "has finished";
         send(self, atom("shutdown"));
-        return;
       }
     }
   }

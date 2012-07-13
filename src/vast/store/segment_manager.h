@@ -1,15 +1,52 @@
 #ifndef VAST_STORE_SEGMENT_MANAGER_H
 #define VAST_STORE_SEGMENT_MANAGER_H
 
-#include <memory>
-#include <ze/uuid.h>
-#include "vast/util/lru_cache.h"
+#include <unordered_map>
+#include <cppa/cppa.hpp>
+#include <ze/event.h>
+#include <vast/fs/path.h>
+#include <vast/util/lru_cache.h>
 
 namespace vast {
 namespace store {
 
-class isegment;
-typedef util::lru_cache<ze::uuid, std::shared_ptr<isegment>> segment_manager;
+// Forward declarations.
+class segment;
+
+/// Manages the segments on disk an in-memory segments in a LRU fashion.
+class segment_manager : public cppa::sb_actor<segment_manager>
+{
+  friend class cppa::sb_actor<segment_manager>;
+  typedef util::lru_cache<ze::uuid, cppa::cow_tuple<segment>> lru_cache;
+
+public:
+  /// Spawns the segment manager.
+  ///
+  /// @param capacity The number of segments to keep in memory until old ones
+  /// should be evicted.
+  ///
+  /// @param dir The directory with the segments.
+  segment_manager(size_t capacity, std::string const& dir);
+
+private:
+  /// Scans through a directory for segments and records their path.
+  /// @param directory The directory to scan.
+  void scan(fs::path const& directory);
+
+  /// Records a given segment to disk and puts it in the cache.
+  /// @param t The COW-tuple containing the segment.
+  void store_segment(cppa::cow_tuple<segment> t);
+
+  /// Loads a segment into memory after a cache miss.
+  /// @param id The ID which could not be found in the cache.
+  /// @return A copy-on-write tuple containing the loaded segment.
+  cppa::cow_tuple<segment> on_miss(ze::uuid const& id);
+
+  lru_cache cache_;
+  fs::path const dir_;
+  std::unordered_map<ze::uuid, fs::path> segment_files_;
+  cppa::behavior init_state;
+};
 
 } // namespace store
 } // namespace vast
