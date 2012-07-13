@@ -7,13 +7,13 @@
 #include "vast/query/parser/query.h"
 #include "vast/util/parser/parse.h"
 
-std::vector<ze::event_ptr> events
+std::vector<ze::event> events
 {
-    new ze::event{"foo", "babba", 1.337, 42u, 100, "bar", -4.8},
-    new ze::event{"bar", "yadda", ze::record{false, "baz"}}
+    {"foo", "babba", 1.337, 42u, 100, "bar", -4.8},
+    {"bar", "yadda", ze::record{false, "baz"}}
 };
 
-bool test_expression(std::string const& query, ze::event_ptr const& event)
+bool test_expression(std::string const& query, ze::event const& event)
 {
     vast::query::ast::query ast;
     if (! vast::util::parser::parse<vast::query::parser::query>(query, ast))
