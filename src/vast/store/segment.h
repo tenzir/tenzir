@@ -11,7 +11,6 @@
 #include <ze/serialization.h>
 #include <ze/type/time.h>
 #include <vast/store/exception.h>
-#include <vast/detail/cppa_cow_tuple_serialization.h>
 
 // TODO: make segments and chunks first-class libcppa citizens.
 
@@ -119,6 +118,9 @@ public:
   writer write();
 
 private:
+  friend bool operator==(segment const& x, segment const& y);
+  friend bool operator!=(segment const& x, segment const& y);
+
   template <typename Archive>
   friend void save(Archive& oa, segment const& s)
   {
@@ -130,17 +132,10 @@ private:
     oa << s.end_;
     oa << s.event_names_;
     oa << s.events_;
-    oa << s.chunks_;
 
-    // FIXME: bring back in as compiled function.
-    //LOG(verbose, store)
-    //  << "serialized segment (#events: "
-    //  << segment.events_
-    //  << ", span: "
-    //  << mins.count()
-    //  << " mins, size: "
-    //  <<  middle - start << "/"
-    //  << end - middle << "B header/chunks)";
+    oa << s.chunks_.size();
+    for (auto& tuple : s.chunks_)
+      oa << cppa::get<0>(tuple);
   }
 
   template <typename Archive>
@@ -161,7 +156,17 @@ private:
     ia >> s.end_;
     ia >> s.event_names_;
     ia >> s.events_;
-    ia >> s.chunks_;
+
+    size_t n;
+    ia >> n;
+    s.chunks_.resize(n);
+    for (auto& tuple : s.chunks_)
+    {
+      chunk chk;
+      ia >> chk;
+      auto t = cppa::make_cow_tuple(std::move(chk));
+      tuple = std::move(t);
+    }
   }
 
   static uint32_t const magic = 0x2a2a2a2a;

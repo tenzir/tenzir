@@ -134,5 +134,20 @@ segment::writer segment::write()
   return {*this};
 }
 
+bool operator==(segment const& x, segment const& y)
+{
+  return x.version_ == y.version_ &&
+    x.compression_ == y.compression_ &&
+    x.start_ == y.start_ &&
+    x.event_names_ == y.event_names_ &&
+    x.events_ == y.events_ &&
+    x.chunks_ == y.chunks_;
+}
+
+bool operator!=(segment const& x, segment const& y)
+{
+  return ! (x == y);
+}
+
 } // namespace store
 } // namespace vast
