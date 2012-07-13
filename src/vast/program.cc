@@ -89,8 +89,7 @@ bool program::init(int argc, char *argv[])
 void program::start()
 {
   using namespace cppa;
-  announce(typeid(ze::uuid), new detail::uuid_type_info);
-  announce(typeid(ze::event), new detail::event_type_info);
+  detail::cppa_announce_types();
 
   try
   {
