@@ -1,12 +1,11 @@
-#ifndef VAST_COMM_DETAIL_ACTIVE_IO_SERVICE_H
-#define VAST_COMM_DETAIL_ACTIVE_IO_SERVICE_H
+#ifndef VAST_UTIL_ACTIVE_IO_SERVICE_H
+#define VAST_UTIL_ACTIVE_IO_SERVICE_H
 
 #include <thread>
 #include <boost/asio/io_service.hpp>
 
 namespace vast {
-namespace comm {
-namespace detail {
+namespace util {
 
 /// Wraps a Boost Asio I/O service object as an *active object*.
 class active_io_service : public boost::asio::io_service
@@ -33,8 +32,7 @@ private:
   std::vector<std::thread> threads_;
 };
 
-} // namespace detail
-} // namespace comm
+} // namespace util
 } // namespace vast
 
 #endif

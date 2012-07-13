@@ -1,9 +1,8 @@
-#include <vast/comm/detail/active_io_service.h>
+#include <vast/util/active_io_service.h>
 #include <ze/util/make_unique.h>
 
 namespace vast {
-namespace comm {
-namespace detail {
+namespace util {
 
 active_io_service::active_io_service(unsigned concurrency_hint)
   : boost::asio::io_service(concurrency_hint)
@@ -28,6 +27,5 @@ void active_io_service::stop(bool cancel)
     thread.join();
 }
 
-} // namespace detail
-} // namespace comm
+} // namespace util
 } // namespace vast

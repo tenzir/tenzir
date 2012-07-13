@@ -6,7 +6,7 @@
 #include <cppa/cppa.hpp>
 #include <vast/comm/broccoli.h>
 #include <vast/comm/server.h>
-#include <vast/comm/detail/active_io_service.h>
+#include <vast/util/active_io_service.h>
 
 namespace vast {
 namespace comm {
@@ -39,7 +39,7 @@ private:
   /// @param session The Broccoli session
   void disconnect(std::shared_ptr<broccoli> const& session);
 
-  detail::active_io_service active_io_service_;
+  util::active_io_service active_io_service_;
   server server_;
   broccoli::error_handler error_handler_;
   std::vector<std::string> events_;
