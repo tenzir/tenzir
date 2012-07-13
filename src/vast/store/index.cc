@@ -13,12 +13,12 @@ index::index(cppa::actor_ptr archive, std::string const& directory)
   init_state = (
       on_arg_match >> [=](segment const& s)
       {
-        LOG(debug, store) << "[index] indexing segment " << s.id();
+        LOG(debug, store) << "indexing segment " << s.id();
         // TODO.
       },
       on(atom("shutdown")) >> [=]()
       {
-        LOG(debug, store) << "[index] shutting down";
+        LOG(debug, store) << "shutting down";
         self->quit();
       });
 }

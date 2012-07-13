@@ -49,7 +49,7 @@ search::search(cppa::actor_ptr archive)
       on(atom("shutdown")) >> [=]
       {
         for (auto& q : queries_)
-          send(q, atom("shutdown"));
+          q << self->last_dequeued();
 
         queries_.clear();
       });

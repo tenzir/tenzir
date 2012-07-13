@@ -139,21 +139,17 @@ void program::start()
 
     if (config_.check("comp-archive"))
     {
+      LOG(verbose, store) << "spawning archive actor";
       archive_ = spawn<store::archive>(
           (config_.get<fs::path>("vast-dir") / "archive").string(),
           config_.get<size_t>("archive.max-events-per-chunk"),
           config_.get<size_t>("archive.max-segment-size") * 1000,
           config_.get<size_t>("archive.max-segments"));
     }
-    else
-    {
-      archive_ = remote_actor(
-          config_.get<std::string>("archive.host"),
-          config_.get<unsigned>("archive.port"));
-    }
 
     if (config_.check("comp-ingestor"))
     {
+      LOG(verbose, store) << "spawning ingestor actor";
       ingestor_ = spawn<ingest::ingestor>(archive_);
       send(ingestor_,
            atom("initialize"),
@@ -180,16 +176,15 @@ void program::start()
         }
       }
     }
-    else
-    {
-      ingestor_ = remote_actor(
-          config_.get<std::string>("ingestor.host"),
-          config_.get<unsigned>("ingestor.port"));
-    }
 
     if (config_.check("comp-search"))
     {
+      LOG(verbose, store) << "spawning search actor";
       search_ = spawn<query::search>(archive_);
+
+      LOG(verbose, store) << "publishing search actor at "
+          << config_.get<std::string>("search.host") << ":"
+          << config_.get<unsigned>("search.port");
       send(search_,
            atom("publish"),
            config_.get<std::string>("search.host"),
@@ -197,6 +192,9 @@ void program::start()
     }
     else
     {
+      LOG(verbose, store) << "connecting to search actor at "
+          << config_.get<std::string>("search.host") << ":"
+          << config_.get<unsigned>("search.port");
       search_ = remote_actor(
           config_.get<std::string>("search.host"),
           config_.get<unsigned>("search.port"));
@@ -204,6 +202,9 @@ void program::start()
 
     if (config_.check("query"))
     {
+      LOG(verbose, store) << "spawning query client actor with batch size "
+          << config_.get<unsigned>("client.batch-size");
+
       query_client_ = spawn<query::client>(
           search_,
           config_.get<unsigned>("client.batch-size"));
