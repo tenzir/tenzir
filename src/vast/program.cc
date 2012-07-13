@@ -149,7 +149,7 @@ void program::start()
     else
     {
       archive_ = remote_actor(
-          config_.get<std::string>("archive.host").data(),
+          config_.get<std::string>("archive.host"),
           config_.get<unsigned>("archive.port"));
     }
 
@@ -184,7 +184,7 @@ void program::start()
     else
     {
       ingestor_ = remote_actor(
-          config_.get<std::string>("ingestor.host").data(),
+          config_.get<std::string>("ingestor.host"),
           config_.get<unsigned>("ingestor.port"));
     }
 
@@ -199,7 +199,7 @@ void program::start()
     else
     {
       search_ = remote_actor(
-          config_.get<std::string>("search.host").data(),
+          config_.get<std::string>("search.host"),
           config_.get<unsigned>("search.port"));
     }
 
