@@ -88,11 +88,14 @@ void profiler::start()
   detail::measurement now;
   timer_.async_wait(
       [&, now](boost::system::error_code const& ec) { handle_timer(ec, now); });
+
+  io_service_.start();
 }
 
 void profiler::stop()
 {
   timer_.cancel();
+  io_service_.stop();
 }
 
 void profiler::handle_timer(boost::system::error_code const& ec,

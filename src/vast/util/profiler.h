@@ -6,6 +6,7 @@
 #include <ze/type/time.h>
 #include <vast/fs/fstream.h>
 #include <vast/fs/path.h>
+#include <vast/util/active_io_service.h>
 
 namespace vast {
 namespace util {
@@ -52,7 +53,7 @@ private:
   void handle_timer(boost::system::error_code const& ec,
                     detail::measurement const& previous);
 
-  boost::asio::io_service io_service_;
+  util::active_io_service io_service_;
   boost::asio::basic_waitable_timer<ze::clock> timer_;
   ze::duration interval_;
   fs::ofstream file_;
