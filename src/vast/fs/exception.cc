@@ -1,4 +1,4 @@
-#include "vast/fs/exception.h"
+#include <vast/fs/exception.h>
 
 #include <sstream>
 
@@ -27,9 +27,9 @@ exception::~exception() noexcept
 dir_exception::dir_exception(char const* msg, std::string const& dir)
   : exception(msg)
 {
-    std::ostringstream oss;
-    oss << msg << " (" << dir << ')';
-    msg_ = oss.str();
+  std::ostringstream oss;
+  oss << msg << " (" << dir << ')';
+  msg_ = oss.str();
 };
 
 dir_exception::~dir_exception() noexcept

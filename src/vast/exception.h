@@ -12,22 +12,22 @@ namespace vast {
 class exception : public std::exception
 {
 public:
-    exception();
-    exception(char const* msg);
-    exception(std::string const& msg);
-    virtual ~exception() noexcept;
+  exception();
+  exception(char const* msg);
+  exception(std::string const& msg);
+  virtual ~exception() noexcept;
 
-    virtual char const* what() const noexcept;
+  virtual char const* what() const noexcept;
 
 protected:
-    std::string msg_;
+  std::string msg_;
 };
 
 struct config_exception : public exception
 {
-    config_exception(char const* msg, char const* option);
-    config_exception(char const* msg, char const* opt1, char const* opt2);
-    virtual ~config_exception() noexcept;
+  config_exception(char const* msg, char const* option);
+  config_exception(char const* msg, char const* opt1, char const* opt2);
+  virtual ~config_exception() noexcept;
 };
 
 } // namespace vast

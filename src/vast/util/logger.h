@@ -3,8 +3,8 @@
 
 #include <mutex>
 #include <sstream>
-#include "vast/fs/fstream.h"
-#include "vast/fs/path.h"
+#include <vast/fs/fstream.h>
+#include <vast/fs/path.h>
 
 namespace vast {
 namespace util {
