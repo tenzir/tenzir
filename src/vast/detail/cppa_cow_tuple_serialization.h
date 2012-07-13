@@ -26,19 +26,47 @@ struct tuple_saver
   Archive& oa;
 };
 
+template <typename Archive>
+struct tuple_loader
+{
+  tuple_loader(Archive& ia)
+    : ia(ia)
+  {
+  }
+
+  template <typename T>
+  void operator()(T& x)
+  {
+    ia >> x;
+  }
+
+  Archive& ia;
+};
+
 } // namespace detail
 
 template <typename Archive, typename... T>
 void save(Archive& oa, cppa::cow_tuple<T...> const& tuple)
 {
   cppa::util::static_foreach<0, sizeof...(T)>::eval(
-      tuple,
-      detail::tuple_saver<Archive>(oa));
+      tuple, detail::tuple_saver<Archive>(oa));
 };
 
-// Note that there is no analogue load function, since this would require
-// mutable access to the tuple elements. This is, by definition,  not possible
-// without occuring a copy of the tuple.
+template <typename Archive, typename... T>
+void load(Archive& ia, cppa::cow_tuple<T...>& tuple)
+{
+  cppa::cow_tuple<T...> t;
+
+  std::tuple<T...> m;
+  cppa::util::static_foreach<0, sizeof...(T)>::eval(
+      m, detail::tuple_loader<Archive>(ia));
+
+  // TODO: how to move the mutable tuple 
+  assert(! "Not yet implemented");
+
+  tuple = std::move(t);
+};
+
 
 } // namespace serialization
 } // namespace ze

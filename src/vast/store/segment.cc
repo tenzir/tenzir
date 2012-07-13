@@ -13,16 +13,16 @@ uint32_t const segment::magic;
 uint8_t const segment::version;
 
 segment::writer::writer(segment& s)
-  : chunk_creator(s)
-  , segment_(s)
-  , putter_(segment_.chunks_.back().put())
+  : segment_(s)
+  , putter_(chunk_.put())
 {
 }
 
-void segment::writer::new_chunk()
+void segment::writer::flush_chunk()
 {
-  segment_.chunks_.emplace_back();
-  putter_ = std::move(segment_.chunks_.back().put());
+  segment_.chunks_.emplace_back(std::move(chunk_));
+  chunk_ = chunk();
+  putter_ = std::move(chunk_.put());
 }
 
 uint32_t segment::writer::operator<<(ze::event const& event)
@@ -45,7 +45,7 @@ uint32_t segment::writer::operator<<(ze::event const& event)
 
   bytes_ += putter_ << event;
 
-  return segment_.chunks_.back().elements();
+  return chunk_.elements();
 }
 
 size_t segment::writer::bytes() const
@@ -54,7 +54,7 @@ size_t segment::writer::bytes() const
 }
 
 
-segment::reader::reader(segment::chunk_type const& chunk)
+segment::reader::reader(ze::chunk<ze::event> const& chunk)
   : getter_(chunk.get())
 {
 }
@@ -75,28 +75,6 @@ size_t segment::reader::bytes() const
   return bytes_;
 }
 
-segment::writer segment::write()
-{
-  return {*this};
-}
-
-segment::reader segment::read(size_t i) const
-{
-  assert(! chunks_.empty());
-  assert(i < chunks_.size());
-  return {chunks_[i]};
-}
-
-
-uint32_t segment::events() const
-{
-  return events_;
-}
-
-size_t segment::chunks() const
-{
-  return chunks_.size();
-}
 
 segment::segment(ze::compression method)
   : version_(version)
@@ -105,6 +83,18 @@ segment::segment(ze::compression method)
 {
   start_ = ze::clock::now();
   end_ = start_;
+}
+
+segment::chunk_tuple segment::operator[](size_t i) const
+{
+  assert(! chunks_.empty());
+  assert(i < chunks_.size());
+  return chunks_[i];
+}
+
+uint32_t segment::events() const
+{
+  return events_;
 }
 
 size_t segment::bytes() const
@@ -127,6 +117,21 @@ size_t segment::bytes() const
     chunks += 4 + 8 + chk.size();
 
   return header + events + chunks;
+}
+
+size_t segment::size() const
+{
+  return chunks_.size();
+}
+
+segment::reader segment::read(size_t i) const
+{
+  return {cppa::get<0>(chunks_[i])};
+}
+
+segment::writer segment::write()
+{
+  return {*this};
 }
 
 } // namespace store

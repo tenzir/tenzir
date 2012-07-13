@@ -27,7 +27,7 @@ segmentizer::segmentizer(cppa::actor_ptr segment_manager,
 
         if (segment_.bytes() < max_segment_size)
         {
-          writer_.new_chunk();
+          writer_.flush_chunk();
           return;
         }
 

@@ -1,35 +1,31 @@
 #ifndef VAST_STORE_SEGMENT_H
 #define VAST_STORE_SEGMENT_H
 
-#include <memory>
 #include <vector>
 #include <string>
+#include <cppa/cow_tuple.hpp>
 #include <ze/forward.h>
 #include <ze/object.h>
 #include <ze/compression.h>
+#include <ze/chunk.h>
 #include <ze/serialization.h>
 #include <ze/type/time.h>
 #include <vast/store/exception.h>
+#include <vast/detail/cppa_cow_tuple_serialization.h>
 
-// TODO: make segments first-class libcppa citizens.
+// TODO: make segments and chunks first-class libcppa citizens.
 
 namespace vast {
 namespace store {
 
+/// Contains a vector of chunks with additional meta data. 
 class segment : public ze::object
 {
-  typedef ze::serialization::chunk<ze::event> chunk_type;
-
-  struct chunk_creator
-  {
-    chunk_creator(segment& segment)
-    {
-      segment.chunks_.emplace_back();
-    }
-  };
-
 public:
-  class writer : chunk_creator
+  typedef ze::chunk<ze::event> chunk;
+  typedef cppa::cow_tuple<chunk> chunk_tuple;
+
+  class writer
   {
     writer(writer const&) = delete;
     writer& operator=(writer) = delete;
@@ -39,24 +35,24 @@ public:
     /// @param s The segment to write to.
     writer(segment& s);
 
-    /// Append a new chunk to the chunk vector and use it for subsequent write
-    /// operations.
-    void new_chunk();
+    /// Moves the current chunk from the writer into the segment and creates an
+    /// internal new chunk for subsequent write operations.
+    void flush_chunk();
 
     /// Serializes an event into the segment.
     /// @param event The event to store.
     /// @return The number of events in the current chunk
     uint32_t operator<<(ze::event const& event);
 
-    /// Retrieves the number of bytes processed.
-    /// @return The number of bytes written to the output archive of the
-    /// underlying chunk.
+    /// Retrieves the total number of bytes processed across all chunks.
+    /// @return The number of bytes written to the output archive.
     size_t bytes() const;
 
   private:
     size_t bytes_ = 0;
     segment& segment_;
-    chunk_type::putter putter_;
+    chunk chunk_;
+    chunk::putter putter_;
   };
 
   class reader
@@ -71,7 +67,7 @@ public:
     ///
     /// @param i The chunk index, must be in *[0, n)* where *n* is the
     /// number of chunks in `s`.
-    reader(chunk_type const& chunk);
+    reader(chunk const& chunk);
 
     /// Deserializes an event into the segment.
     /// @param event The event to deserialize into.
@@ -83,35 +79,44 @@ public:
     /// @return The number of bytes processed.
     size_t read(std::function<void(ze::event)> f);
 
-    /// Retrieves the number of bytes processed.
-    /// @return The number of bytes written from the input archive of the
-    /// underlying chunk.
+    /// Retrieves the total number of bytes processed across all chunks.
+    /// @return The number of bytes written from the input archive.
     size_t bytes() const;
 
   private:
     size_t bytes_ = 0;
-    chunk_type::getter getter_;
+    chunk::getter getter_;
   };
 
+  /// Constructs a segment.
+  /// @param method The compression method to use for each chunk.
   segment(ze::compression method = ze::compression::none);
 
-  /// Creates a reader proxy to read a given chunk.
+  /// Retrieves a const-reference to a given chunk tuple.
   ///
   /// @param i The chunk index, must be in *[0, n)* where *n* is the
-  /// number of chunks in `s`.
-  reader read(size_t i) const;
-  writer write();
-
-
+  /// number of chunks in `s` obtainable via segment::size().
+  chunk_tuple operator[](size_t i) const;
+  
+  /// Retrieves the total number events in the segment.
   uint32_t events() const;
-
-  /// Retrieves the number of chunks.
-  /// @return The number of chunks in the segment..
-  size_t chunks() const;
 
   /// Retrieves the number of bytes the segment occupies.
   /// @return The number of bytes the segment occupies.
   size_t bytes() const;
+
+  /// Retrieves the number of chunks.
+  /// @return The number of chunks in the segment.
+  size_t size() const;
+
+  /// Creates a reader proxy to read a given chunk.
+  ///
+  /// @param i The chunk index, must be in *[0, n)* where *n* is the
+  /// number of chunks in `s` obtainable via segment::size().
+  reader read(size_t i) const;
+
+  /// Creates a writer proxy to read a given chunk.
+  writer write();
 
 private:
   template <typename Archive>
@@ -168,7 +173,7 @@ private:
   ze::time_point end_;
   std::vector<std::string> event_names_;
   uint32_t events_;
-  std::vector<chunk_type> chunks_;
+  std::vector<chunk_tuple> chunks_;
 };
 
 } // namespace store

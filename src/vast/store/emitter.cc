@@ -73,8 +73,8 @@ void emitter::emit_chunk()
             segment_ = &get<0>(segment_tuple_);
 
             current_chunk_ = 0;
-            last_chunk_ = segment_->chunks();
-            assert(segment_->chunks() > 0);
+            last_chunk_ = segment_->size();
+            assert(segment_->size() > 0);
 
             unbecome();
           },
@@ -86,10 +86,10 @@ void emitter::emit_chunk()
     }
 
     LOG(debug, store) 
-      << "emitter " << id() << ": processing chunk #" << current_chunk_;
+      << "emitter " << id() << ": sending chunk #" << current_chunk_;
 
-    segment_->read(current_chunk_++).read(
-        [=](ze::event e) { send(sink_, std::move(e)); });
+    auto chunk = (*segment_)[current_chunk_++];
+    send(sink_, chunk);
 
     if (current_chunk_ == last_chunk_)
     {
