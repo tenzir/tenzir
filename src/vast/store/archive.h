@@ -23,10 +23,10 @@ public:
           size_t max_segments);
 
 private:
-    std::vector<cppa::actor_ptr> emitters_;
-    cppa::actor_ptr segment_manager_;
-    cppa::actor_ptr segmentizer_;
-    cppa::behavior init_state;
+  std::vector<cppa::actor_ptr> emitters_;
+  cppa::actor_ptr segment_manager_;
+  cppa::actor_ptr segmentizer_;
+  cppa::behavior init_state;
 };
 
 } // namespace store
