@@ -1,5 +1,6 @@
 #include <vast/query/query.h>
 
+#include <ze/chunk.h>
 #include <ze/event.h>
 #include <ze/type/regex.h>
 #include <vast/query/ast.h>
@@ -73,15 +74,25 @@ query::query(std::string str)
       {
         send(source_, atom("emit"));
       },
-      on_arg_match >> [=](ze::event const& e)
+      on_arg_match >> [=](ze::chunk<ze::event> const& chunk)
       {
-        ++stats_.processed;
-        if (expr_.eval(e))
+        auto more = true;
+        chunk.get().get([&more, this](ze::event e)
         {
-          sink_ << self->last_dequeued();
-          if (++stats_.matched % batch_size_ == 0)
-            send(source_, atom("pause"));
-        }
+          ++stats_.processed;
+          if (expr_.eval(e))
+          {
+            sink_ << self->last_dequeued();
+            if (++stats_.matched % batch_size_ == 0)
+            {
+              send(source_, atom("pause"));
+              more = false;
+            }
+          }
+        });
+
+        if (more)
+          send(self, atom("next batch"));
       },
       on(atom("shutdown")) >> [=]
       {
