@@ -64,6 +64,7 @@ void bro_event_source::start_server(std::string const& host, unsigned port,
 
 void bro_event_source::stop_server()
 {
+  server_.stop();
   std::lock_guard<std::mutex> lock(mutex_);
   for (auto const& broccoli : broccolis_)
     broccoli->stop();

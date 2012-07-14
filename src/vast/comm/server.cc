@@ -29,6 +29,7 @@ void server::stop()
 {
   io_service_.stop();
   thread_.join();
+  LOG(info, comm) << "server stopped";
 }
 
 void server::start_accept()
