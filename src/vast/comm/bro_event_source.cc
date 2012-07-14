@@ -9,26 +9,23 @@ namespace vast {
 namespace comm {
 
 bro_event_source::bro_event_source(cppa::actor_ptr upstream)
-  : server_(active_io_service_)
-  , error_handler_([&](std::shared_ptr<broccoli> bro) { disconnect(bro); })
+  : error_handler_([&](std::shared_ptr<broccoli> bro) { disconnect(bro); })
 {
     using namespace cppa;
 
     init_state = (
         on(atom("subscribe"), arg_match) >> [=](std::string const& event)
         {
+          LOG(verbose, comm) << "subscribing to event " << event;
           subscribe(event);
         },
         on(atom("bind"), arg_match) >> [=](std::string const& host, unsigned port)
         {
-          bind(host, port, upstream);
-          active_io_service_.start();
+          start_server(host, port, upstream);
         },
         on(atom("shutdown")) >> [=]()
         {
-          // Stop all Broccolis.
-          stop();
-          active_io_service_.stop();
+          stop_server();
           self->quit();
           LOG(verbose, comm) << "bro event source terminated";
         });
@@ -36,17 +33,17 @@ bro_event_source::bro_event_source(cppa::actor_ptr upstream)
 
 void bro_event_source::subscribe(std::string event)
 {
-  auto i = std::lower_bound(events_.begin(), events_.end(), event);
-  if (i == events_.end())
-    events_.push_back(std::move(event));
+  auto i = std::lower_bound(event_names_.begin(), event_names_.end(), event);
+  if (i == event_names_.end())
+    event_names_.push_back(std::move(event));
   else if (event < *i)
-    events_.insert(i, std::move(event));
+    event_names_.insert(i, std::move(event));
 }
 
-void bro_event_source::bind(std::string const& host, unsigned port,
-                            cppa::actor_ptr sink)
+void bro_event_source::start_server(std::string const& host, unsigned port,
+                                    cppa::actor_ptr sink)
 {
-  server_.bind(
+  server_.start(
       host,
       port,
       [=](std::shared_ptr<connection> const& conn)
@@ -55,7 +52,7 @@ void bro_event_source::bind(std::string const& host, unsigned port,
             conn,
             [=](ze::event event) { send(sink, std::move(event)); });
 
-        for (auto const& event : events_)
+        for (auto const& event : event_names_)
           bro->subscribe(event);
 
         bro->run(error_handler_);
@@ -65,7 +62,7 @@ void bro_event_source::bind(std::string const& host, unsigned port,
       });
 }
 
-void bro_event_source::stop()
+void bro_event_source::stop_server()
 {
   std::lock_guard<std::mutex> lock(mutex_);
   for (auto const& broccoli : broccolis_)

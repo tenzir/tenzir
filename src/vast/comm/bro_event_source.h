@@ -6,7 +6,6 @@
 #include <cppa/cppa.hpp>
 #include <vast/comm/broccoli.h>
 #include <vast/comm/server.h>
-#include <vast/util/active_io_service.h>
 
 namespace vast {
 namespace comm {
@@ -30,19 +29,18 @@ private:
   /// @param host The address or hostname where to listen.
   /// @param port The TCP port number to bind to.
   /// @param sink The actor receiving the Broccoli events.
-  void bind(std::string const& host, unsigned port, cppa::actor_ptr sink);
+  void start_server(std::string const& host, unsigned port, cppa::actor_ptr sink);
 
-  /// Stops ingesting events by closing active connections.
-  void stop();
+  /// Stops the TCP server.
+  void stop_server();
 
   /// Removes a connection after an error or a remote disconnect.
   /// @param session The Broccoli session
   void disconnect(std::shared_ptr<broccoli> const& session);
 
-  util::active_io_service active_io_service_;
   server server_;
   broccoli::error_handler error_handler_;
-  std::vector<std::string> events_;
+  std::vector<std::string> event_names_;
   std::vector<std::shared_ptr<broccoli>> broccolis_;
   std::mutex mutex_;
 
