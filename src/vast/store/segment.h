@@ -12,8 +12,6 @@
 #include <ze/type/time.h>
 #include <vast/store/exception.h>
 
-// TODO: make segments and chunks first-class libcppa citizens.
-
 namespace vast {
 namespace store {
 
@@ -91,7 +89,7 @@ public:
   /// @param method The compression method to use for each chunk.
   segment(ze::compression method = ze::compression::none);
 
-  /// Retrieves a const-reference to a given chunk tuple.
+  /// Retrieves a const-reference to a chunk tuple.
   ///
   /// @param i The chunk index, must be in *[0, n)* where *n* is the
   /// number of chunks in `s` obtainable via segment::size().
@@ -133,7 +131,8 @@ private:
     oa << s.event_names_;
     oa << s.events_;
 
-    oa << s.chunks_.size();
+    uint32_t size = s.chunks_.size();
+    oa << size;
     for (auto& tuple : s.chunks_)
       oa << cppa::get<0>(tuple);
   }
@@ -157,7 +156,7 @@ private:
     ia >> s.event_names_;
     ia >> s.events_;
 
-    size_t n;
+    uint32_t n;
     ia >> n;
     s.chunks_.resize(n);
     for (auto& tuple : s.chunks_)
