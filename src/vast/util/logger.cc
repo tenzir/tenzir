@@ -70,9 +70,15 @@ logger::record::record(logger& log, level lvl, facility fac)
 {
   stream_
     << ze::clock::now().time_since_epoch().count()
-    << " " << '[' << std::this_thread::get_id() << '|' << fac << ']';
+    << " " << '[';
+  
+  stream_ 
+    << std::setw(14) 
+    << std::this_thread::get_id();
 
-  stream_ << std::setfill(' ') << std::setw(pad(fac)) << ' ';
+  stream_ 
+    << '|' << fac << ']' 
+    << std::setfill(' ') << std::setw(pad(fac)) << ' ';
 }
 
 logger::record::~record()
