@@ -50,7 +50,11 @@ void bro_event_source::start_server(std::string const& host, unsigned port,
       {
         auto bro = std::make_shared<broccoli>(
             conn,
-            [=](ze::event event) { send(sink, std::move(event)); });
+            [=](ze::event event)
+            {
+              // TODO: send events in batches (chunks or segments).
+              send(sink, std::move(event));
+            });
 
         for (auto const& event : event_names_)
           bro->subscribe(event);

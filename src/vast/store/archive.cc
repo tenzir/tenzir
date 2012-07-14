@@ -28,6 +28,10 @@ archive::archive(std::string const& directory,
         send(em, atom("set"), atom("sink"), sink);
         reply(atom("emitter"), atom("create"), atom("ack"), em);
       },
+      on_arg_match >> [=](ze::event const& e)
+      {
+        segmentizer_ << self->last_dequeued();
+      },
       on(atom("shutdown")) >> [=]()
       {
         // TODO: wait for final segment from segmentizer via sync_send (well,
