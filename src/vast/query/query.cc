@@ -96,8 +96,8 @@ query::query(std::string str)
       },
       on(atom("shutdown")) >> [=]
       {
-        LOG(debug, query) << "shutting down query " << id();
         self->quit();
+        LOG(verbose, query) << "query " << id() << " terminated";
       });
 }
 

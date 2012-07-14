@@ -37,9 +37,13 @@ segmentizer::segmentizer(cppa::actor_ptr segment_manager,
       on(atom("shutdown")) >> [=]()
       {
         if (writer_.bytes() > 0)
+        {
+          LOG(debug, store) << "sending last segment";
           send(segment_manager_, std::move(segment_));
+        }
           
         self->quit();
+        LOG(verbose, store) << "segmentizer terminated";
       });
 }
 

@@ -52,6 +52,8 @@ search::search(cppa::actor_ptr archive)
           q << self->last_dequeued();
 
         queries_.clear();
+        self->quit();
+        LOG(verbose, query) << "search terminated";
       });
 }
 

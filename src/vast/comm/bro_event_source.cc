@@ -30,6 +30,7 @@ bro_event_source::bro_event_source(cppa::actor_ptr upstream)
           stop();
           active_io_service_.stop();
           self->quit();
+          LOG(verbose, comm) << "bro event source terminated";
         });
 }
 

@@ -99,12 +99,12 @@ void program::start()
     if (config_.check("perftools-heap"))
     {
       LOG(info, core) << "starting perftools CPU profiler";
-      ::HeapProfilerStart((log_dir / "heap.profile").string().data());
+      HeapProfilerStart((log_dir / "heap.profile").string().data());
     }
     if (config_.check("perftools-cpu"))
     {
       LOG(info, core) << "starting perftools heap profiler";
-      ::ProfilerStart((log_dir / "cpu.profile").string().data());
+      ProfilerStart((log_dir / "cpu.profile").string().data());
     }
 #endif
 
@@ -116,6 +116,10 @@ void program::start()
       profiler_.start();
     }
 
+    comm::broccoli::init(config_.check("broccoli-messages"),
+                         config_.check("broccoli-calltrace"));
+
+    LOG(debug, meta) << "spawning schema manager";
     schema_manager_ = spawn<meta::schema_manager>();
     if (config_.check("schema"))
     {
@@ -134,12 +138,9 @@ void program::start()
       }
     }
 
-    comm::broccoli::init(config_.check("broccoli-messages"),
-                         config_.check("broccoli-calltrace"));
-
     if (config_.check("comp-archive"))
     {
-      LOG(verbose, store) << "spawning archive actor";
+      LOG(verbose, store) << "spawning archive";
       archive_ = spawn<store::archive>(
           (config_.get<fs::path>("vast-dir") / "archive").string(),
           config_.get<size_t>("archive.max-events-per-chunk"),
@@ -149,7 +150,7 @@ void program::start()
 
     if (config_.check("comp-ingestor"))
     {
-      LOG(verbose, store) << "spawning ingestor actor";
+      LOG(verbose, store) << "spawning ingestor";
       ingestor_ = spawn<ingest::ingestor>(archive_);
       send(ingestor_,
            atom("initialize"),
@@ -179,10 +180,10 @@ void program::start()
 
     if (config_.check("comp-search"))
     {
-      LOG(verbose, store) << "spawning search actor";
+      LOG(verbose, store) << "spawning search";
       search_ = spawn<query::search>(archive_);
 
-      LOG(verbose, store) << "publishing search actor at "
+      LOG(verbose, store) << "publishing search at "
           << config_.get<std::string>("search.host") << ":"
           << config_.get<unsigned>("search.port");
       send(search_,
@@ -192,7 +193,7 @@ void program::start()
     }
     else
     {
-      LOG(verbose, store) << "connecting to search actor at "
+      LOG(verbose, store) << "connecting to search at "
           << config_.get<std::string>("search.host") << ":"
           << config_.get<unsigned>("search.port");
       search_ = remote_actor(
@@ -202,7 +203,7 @@ void program::start()
 
     if (config_.check("query"))
     {
-      LOG(verbose, store) << "spawning query client actor with batch size "
+      LOG(verbose, store) << "spawning query client with batch size "
           << config_.get<unsigned>("client.batch-size");
 
       query_client_ = spawn<query::client>(
@@ -225,9 +226,6 @@ void program::start()
 
     return_ = EXIT_FAILURE;
   }
-
-  if (! terminating_)
-    stop();
 }
 
 void program::stop()
@@ -241,37 +239,26 @@ void program::stop()
   }
 
   terminating_ = true;
-  LOG(verbose, core) << "writing out in-memory state";
 
   auto shutdown = make_any_tuple(atom("shutdown"));
 
   if (config_.check("query"))
-  {
-    LOG(debug, core) << "stopping queries";
     query_client_ << shutdown;
-  }
 
   if (config_.check("comp-search"))
-  {
-    LOG(debug, core) << "stopping search component";
     search_ << shutdown;
-  }
 
   if (config_.check("comp-ingestor"))
-  {
-    LOG(debug, core) << "stopping ingestor component";
     ingestor_ << shutdown;
-  }
 
   if (config_.check("comp-archive"))
-  {
-    LOG(debug, core) << "stopping archive component";
     archive_ << shutdown;
-  }
+
+  schema_manager_ << shutdown;
 
   if (config_.check("profile"))
   {
-    LOG(debug, core) << "stopping profiler";
+    LOG(verbose, core) << "stopping profiler";
     profiler_.stop();
   }
 
@@ -279,21 +266,17 @@ void program::stop()
   if (config_.check("perftools-cpu"))
   {
     LOG(info, core) << "stopping perftools CPU profiler";
-    ::ProfilerStop();
+    ProfilerStop();
   }
   if (config_.check("perftools-heap") && ::IsHeapProfilerRunning())
   {
     LOG(info, core) << "stopping perftools heap profiler";
-    ::HeapProfilerDump("cleanup");
-    ::HeapProfilerStop();
+    HeapProfilerDump("cleanup");
+    HeapProfilerStop();
   }
 #endif
 
-  LOG(verbose, core) << "state saved";
-
   return_ = EXIT_SUCCESS;
-
-  await_all_others_done();
 }
 
 int program::end()
@@ -301,11 +284,11 @@ int program::end()
   switch (return_)
   {
     case EXIT_SUCCESS:
-      LOG(verbose, core) << "VAST terminated cleanly";
+      LOG(info, core) << "VAST terminated cleanly";
       break;
 
     case EXIT_FAILURE:
-      LOG(verbose, core) << "VAST terminated with errors";
+      LOG(info, core) << "VAST terminated with errors";
       break;
 
     default:

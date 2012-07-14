@@ -32,6 +32,7 @@ reader::reader(cppa::actor_ptr upstream)
         }
 
         self->quit();
+        LOG(verbose, ingest) << "reader " << id() << " terminated";
       });
 }
 

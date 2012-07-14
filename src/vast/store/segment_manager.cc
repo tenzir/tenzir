@@ -46,6 +46,7 @@ segment_manager::segment_manager(size_t capacity, std::string const& dir)
         segment_files_.clear();
         cache_.clear();
         self->quit();
+        LOG(verbose, store) << "segment manager terminated";
       });
 }
 

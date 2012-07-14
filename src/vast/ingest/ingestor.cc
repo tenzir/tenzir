@@ -1,8 +1,8 @@
-#include "vast/ingest/ingestor.h"
+#include <vast/ingest/ingestor.h>
 
-#include "vast/comm/bro_event_source.h"
-#include "vast/ingest/reader.h"
-#include "vast/util/logger.h"
+#include <vast/comm/bro_event_source.h>
+#include <vast/ingest/reader.h>
+#include <vast/util/logger.h>
 
 namespace vast {
 namespace ingest {
@@ -30,15 +30,13 @@ ingestor::ingestor(cppa::actor_ptr archive)
       },
       on(atom("shutdown")) >> [=]()
       {
-        LOG(debug, ingest) << "stopping bro event source";
         bro_event_source_ << self->last_dequeued();
-
-        LOG(debug, ingest) << "stopping readers";
         for (auto& r : readers_)
           r << self->last_dequeued();
         readers_.clear();
 
         self->quit();
+        LOG(verbose, ingest) << "ingestor terminated";
       });
 }
 

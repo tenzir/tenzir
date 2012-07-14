@@ -15,9 +15,9 @@ emitter::emitter(cppa::actor_ptr segment_manager)
 
   auto shutdown = on(atom("shutdown")) >> [=]
   {
-    LOG(verbose, store) << "shutting down emitter " << id();
     ids_.clear();
     self->quit();
+    LOG(verbose, store) << "emitter " << id() << " terminated";
   };
 
   init_state = (
