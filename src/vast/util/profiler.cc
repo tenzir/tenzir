@@ -37,11 +37,15 @@ std::ostream& operator<<(std::ostream& out, profiler::measurement const& m)
   return out;
 }
 
-profiler::profiler(std::string const& filename, std::chrono::milliseconds ms)
+profiler::profiler(std::string const& filename, std::chrono::seconds secs)
   : file_(filename)
 {
   LOG(verbose, core)
-    << "writing profiling data every " << ms.count() << "ms to " << filename;
+    << "enabling getrusage profiling every "
+    << (secs.count() == 1 ?
+        std::string("second") :
+        std::to_string(secs.count()) + " seconds")
+    << " (" << filename << ')';
 
   assert(file_.good());
   file_.flags(std::ios::left);
@@ -59,13 +63,13 @@ profiler::profiler(std::string const& filename, std::chrono::milliseconds ms)
       on(atom("run")) >> [=]
       {
         measurement now;
-        delayed_send(self, ms, atom("data"), now.clock, now.usr, now.sys);
+        delayed_send(self, secs, atom("data"), now.clock, now.usr, now.sys);
       },
       on(atom("data"), arg_match) >> [=](double clock, double usr, double sys)
       {
         measurement now;
         file_ << now;
-        delayed_send(self, ms, atom("data"), now.clock, now.usr, now.sys);
+        delayed_send(self, secs, atom("data"), now.clock, now.usr, now.sys);
 
         now.clock -= clock;
         now.usr -= usr;

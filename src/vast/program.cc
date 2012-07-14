@@ -114,9 +114,9 @@ void program::start()
     {
       LOG(verbose, core) << "spawning profiler";
       auto const& filename = log_dir / "profiler.log";
-      auto ms = config_.get<unsigned>("profile-interval");
+      auto ms = config_.get<unsigned>("profile");
       profiler_ = spawn<util::profiler>(filename.string(),
-                                        std::chrono::milliseconds(ms));
+                                        std::chrono::seconds(ms));
       send(profiler_, atom("run"));
     }
 
@@ -282,11 +282,11 @@ int program::end()
   switch (return_)
   {
     case EXIT_SUCCESS:
-      LOG(info, core) << "VAST terminated cleanly";
+      LOG(info, core) << "vast terminated cleanly";
       break;
 
     case EXIT_FAILURE:
-      LOG(info, core) << "VAST terminated with errors";
+      LOG(info, core) << "vast terminated with errors";
       break;
 
     default:

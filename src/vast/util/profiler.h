@@ -29,8 +29,8 @@ class profiler : public cppa::sb_actor<profiler>
 public:
   /// Spawns the profiler.
   /// @param filename The log file where to write measurements to.
-  /// @param ms The number of milliseconds to delay subsequent measuremnts.
-  profiler(std::string const& filename, std::chrono::milliseconds ms);
+  /// @param secs The number of seconds between subsequent measurements.
+  profiler(std::string const& filename, std::chrono::seconds secs);
 
 private:
   fs::ofstream file_;

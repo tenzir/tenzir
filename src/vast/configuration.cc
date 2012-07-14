@@ -38,9 +38,7 @@ configuration::configuration()
     ("logfile-verbosity,V",
      po::value<int>()->default_value(util::logger::verbose),
      "log file verbosity")
-    ("profile,p", "enable internal profiling")
-    ("profile-interval,P", po::value<unsigned>()->default_value(1000),
-     "profiling interval in milliseconds")
+    ("profile,p", po::value<unsigned>(), "getrusage profiling (seconds)")
 #ifdef USE_PERFTOOLS_CPU_PROFILER
     ("perftools-cpu", "enable Google perftools CPU profiling")
 #endif
@@ -155,13 +153,16 @@ void configuration::init()
 
   depends("print-schema", "schema");
 
-  int v = get<int>("console-verbosity");
+  auto v = get<int>("console-verbosity");
   if (v < 0 || v > 6)
     throw config_exception("verbosity not in [0,6]", "console-verbosity");
 
   v = get<int>("logfile-verbosity");
   if (v < 0 || v > 6)
     throw config_exception("verbosity not in [0,6]", "log-verbosity");
+
+  if (check("profile") && get<unsigned>("profile") == 0)
+    throw config_exception("non-zero profiling interval required", "profile");
 }
 
 void configuration::conflicts(const char* opt1, const char* opt2) const
