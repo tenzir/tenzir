@@ -23,12 +23,9 @@ public:
   void start(unsigned threads = 1);
 
   /// Stops the active object by joining the created threads.
-  ///
-  /// @param cancel If `true`, cancel all outstanding asynchronous operations.
   void stop(bool cancel = false);
 
 private:
-  std::unique_ptr<boost::asio::io_service::work> work_;
   std::vector<std::thread> threads_;
 };
 
