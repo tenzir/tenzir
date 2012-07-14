@@ -32,14 +32,14 @@ configuration::configuration()
 
   po::options_description advanced("advanced options");
   advanced.add_options()
-    ("log-dir",
+    ("log-dir,L",
      po::value<fs::path>()->default_value(fs::path("vast") / "log"),
      "log directory")
     ("logfile-verbosity,V",
      po::value<int>()->default_value(util::logger::verbose),
      "log file verbosity")
     ("profile,p", "enable internal profiling")
-    ("profiler-interval", po::value<unsigned>()->default_value(1000),
+    ("profile-interval,P", po::value<unsigned>()->default_value(1000),
      "profiling interval in milliseconds")
 #ifdef USE_PERFTOOLS_CPU_PROFILER
     ("perftools-cpu", "enable Google perftools CPU profiling")
