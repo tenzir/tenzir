@@ -94,6 +94,8 @@ void program::start()
   try
   {
     auto log_dir = config_.get<fs::path>("log-dir");
+    if (! fs::exists(log_dir))
+      fs::mkdir(log_dir);
 
 #ifdef USE_PERFTOOLS
     if (config_.check("perftools-heap"))
@@ -110,16 +112,18 @@ void program::start()
 
     if (config_.check("profile"))
     {
+      LOG(verbose, core) << "spawning profiler";
       auto const& filename = log_dir / "profiler.log";
-      auto interval = config_.get<unsigned>("profiler-interval");
-      profiler_.init(filename, std::chrono::milliseconds(interval));
-      profiler_.start();
+      auto ms = config_.get<unsigned>("profile-interval");
+      profiler_ = spawn<util::profiler>(filename.string(),
+                                        std::chrono::milliseconds(ms));
+      send(profiler_, atom("run"));
     }
 
     comm::broccoli::init(config_.check("broccoli-messages"),
                          config_.check("broccoli-calltrace"));
 
-    LOG(debug, meta) << "spawning schema manager";
+    LOG(verbose, meta) << "spawning schema manager";
     schema_manager_ = spawn<meta::schema_manager>();
     if (config_.check("schema"))
     {
@@ -161,10 +165,7 @@ void program::start()
       {
         auto events = config_.get<std::vector<std::string>>("ingestor.events");
         for (auto& event : events)
-        {
-          LOG(verbose, store) << "subscribing to event " << event;
           send(ingestor_, atom("subscribe"), event);
-        }
       }
 
       if (config_.check("ingestor.file"))
@@ -257,10 +258,7 @@ void program::stop()
   schema_manager_ << shutdown;
 
   if (config_.check("profile"))
-  {
-    LOG(verbose, core) << "stopping profiler";
-    profiler_.stop();
-  }
+    profiler_ << shutdown;
 
 #ifdef USE_PERFTOOLS
   if (config_.check("perftools-cpu"))

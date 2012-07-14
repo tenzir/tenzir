@@ -49,13 +49,12 @@ private:
     int return_;
 
     configuration config_;
-    util::profiler profiler_;
-
     cppa::actor_ptr archive_;
     cppa::actor_ptr ingestor_;
     cppa::actor_ptr search_;
     cppa::actor_ptr query_client_;
     cppa::actor_ptr schema_manager_;
+    cppa::actor_ptr profiler_;
 };
 
 } // namespace vast
