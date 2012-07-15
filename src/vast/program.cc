@@ -78,6 +78,10 @@ bool program::init(int argc, char *argv[])
   {
     std::cerr << e.what() << ", try -h or --help" << std::endl;
   }
+  catch (boost::program_options::invalid_command_line_syntax const& e)
+  {
+    std::cerr << "invalid command line: " << e.what() << std::endl;
+  }
   catch (boost::exception const& e)
   {
     std::cerr << boost::diagnostic_information(e);
