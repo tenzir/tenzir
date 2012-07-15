@@ -20,8 +20,7 @@ int main(int argc, char *argv[])
   sigaction(SIGHUP, &sig_handler, NULL);
   sigaction(SIGTERM, &sig_handler, NULL);
 
-  auto ready = VAST.init(argc, argv);
-  if (ready)
+  if (VAST.init(argc, argv))
     VAST.start();
   else
     return EXIT_FAILURE;
