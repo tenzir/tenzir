@@ -148,7 +148,7 @@ void program::start()
 
     if (config_.check("comp-archive"))
     {
-      LOG(verbose, store) << "spawning archive";
+      LOG(verbose, core) << "spawning archive";
       archive_ = spawn<store::archive>(
           (config_.get<fs::path>("vast-dir") / "archive").string(),
           config_.get<size_t>("archive.max-events-per-chunk"),
@@ -158,7 +158,7 @@ void program::start()
 
     if (config_.check("comp-ingestor"))
     {
-      LOG(verbose, store) << "spawning ingestor";
+      LOG(verbose, core) << "spawning ingestor";
       ingestor_ = spawn<ingest::ingestor>(archive_);
       send(ingestor_,
            atom("initialize"),
@@ -185,10 +185,10 @@ void program::start()
 
     if (config_.check("comp-search"))
     {
-      LOG(verbose, store) << "spawning search";
+      LOG(verbose, core) << "spawning search";
       search_ = spawn<query::search>(archive_);
 
-      LOG(verbose, store) << "publishing search at "
+      LOG(verbose, core) << "publishing search at "
           << config_.get<std::string>("search.host") << ":"
           << config_.get<unsigned>("search.port");
       send(search_,
@@ -198,7 +198,7 @@ void program::start()
     }
     else
     {
-      LOG(verbose, store) << "connecting to search at "
+      LOG(verbose, core) << "connecting to search at "
           << config_.get<std::string>("search.host") << ":"
           << config_.get<unsigned>("search.port");
       search_ = remote_actor(
@@ -208,7 +208,7 @@ void program::start()
 
     if (config_.check("query"))
     {
-      LOG(verbose, store) << "spawning query client with batch size "
+      LOG(verbose, core) << "spawning query client with batch size "
           << config_.get<unsigned>("client.batch-size");
 
       query_client_ = spawn<query::client>(
