@@ -34,15 +34,20 @@ archive::archive(std::string const& directory,
       },
       on(atom("shutdown")) >> [=]()
       {
-        // TODO: wait for final segment from segmentizer via sync_send (well,
-        // the asynchronous version of it whose name yet have to be determined).
         segmentizer_ << self->last_dequeued();
-        segment_manager_ << self->last_dequeued();
-        for (auto em : emitters_)
-          em << self->last_dequeued();
+        become(
+            keep_behavior,
+            on(atom("shutdown"), atom("ack")) >> [=]
+            {
+              LOG(debug, store) << "received segmentizer shutdown ack";
 
-        self->quit();
-        LOG(verbose, store) << "archive terminated";
+              send(segment_manager_, atom("shutdown"));
+              for (auto em : emitters_)
+                send(em, atom("shutdown"));
+
+              self->quit();
+              LOG(verbose, store) << "archive terminated";
+            });
       });
 }
 

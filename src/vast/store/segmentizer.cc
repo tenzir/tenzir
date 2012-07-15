@@ -27,24 +27,50 @@ segmentizer::segmentizer(cppa::actor_ptr segment_manager,
 
         if (segment_.bytes() < max_segment_size)
         {
+          LOG(debug, store)
+            << "flushing chunk #" << segment_.size() + 1
+            << " of segment " << segment_.id();
+
           writer_.flush_chunk();
           return;
         }
+
+        LOG(debug, store)
+          << "sending segment " << segment_.id() << " to archive";
 
         send(segment_manager_, std::move(segment_));
         segment_ = segment();
       },
       on(atom("shutdown")) >> [=]()
       {
-        if (writer_.bytes() > 0)
+        if (writer_.elements() == 0)
+        {
+          reply(atom("shutdown"), atom("ack"));
+          terminate();
+        }
+        else
         {
           LOG(debug, store) << "sending last segment";
           send(segment_manager_, std::move(segment_));
+
+          auto archive = self->last_sender();
+          become(
+              keep_behavior,
+              on(atom("segment"), atom("ack"), segment_.id()) >>
+                [=](ze::uuid const& id)
+              {
+                LOG(debug, store) << "segment manager acked segment " << id;
+                send(archive, atom("shutdown"), atom("ack"));
+                terminate();
+              });
         }
-          
-        self->quit();
-        LOG(verbose, store) << "segmentizer terminated";
       });
+}
+
+void segmentizer::terminate()
+{
+  cppa::self->quit();
+  LOG(verbose, store) << "segmentizer terminated";
 }
 
 } // namespace store

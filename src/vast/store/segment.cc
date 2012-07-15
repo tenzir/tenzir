@@ -53,6 +53,11 @@ size_t segment::writer::bytes() const
   return bytes_;
 }
 
+size_t segment::writer::elements() const
+{
+  return chunk_.elements();
+}
+
 
 segment::reader::reader(ze::chunk<ze::event> const& chunk)
   : getter_(chunk.get())

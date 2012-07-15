@@ -45,6 +45,9 @@ public:
     /// @return The number of bytes written to the output archive.
     size_t bytes() const;
 
+    /// Retrieves the number of elements in the current chunk.
+    size_t elements() const;
+
   private:
     size_t bytes_ = 0;
     segment& segment_;

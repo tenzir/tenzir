@@ -31,10 +31,10 @@ segment_manager::segment_manager(size_t capacity, std::string const& dir)
   init_state = (
       on_arg_match >> [=](segment const& s)
       {
-        LOG(debug, store) << "incorporating segment " << s.id();
         auto t = tuple_cast<segment>(self->last_dequeued());
         assert(t.valid());
         store_segment(*t);
+        reply(atom("segment"), atom("ack"), s.id());
       },
       on(atom("retrieve"), arg_match) >> [=](ze::uuid const& id)
       {

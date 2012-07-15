@@ -22,6 +22,8 @@ public:
               size_t max_segment_size);
 
 private:
+  void terminate();
+
   segment segment_;
   segment::writer writer_;
   cppa::actor_ptr segment_manager_;
