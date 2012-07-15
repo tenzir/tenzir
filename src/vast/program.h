@@ -23,10 +23,12 @@ public:
     /// Initializes the program with arguments from @c main.
     /// @param argc argument counter from @c main.
     /// @param argv argument vector from @c main.
+    /// @return `true` if initialization was successful.
     bool init(int argc, char *argv[]);
 
     /// Initializes the program from a configuration file.
     /// @param filename The name of the configuration file.
+    /// @return `true` if initialization was successful.
     bool init(std::string const& filename = "");
 
     /// Starts VAST and block. 

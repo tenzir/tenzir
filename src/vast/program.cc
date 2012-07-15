@@ -31,7 +31,7 @@ logger* LOGGER;
 
 program::program()
   : terminating_(false)
-  , return_(EXIT_SUCCESS)
+  , return_(EXIT_FAILURE)
 {
 }
 
@@ -188,13 +188,10 @@ void program::start()
       LOG(verbose, core) << "spawning search";
       search_ = spawn<query::search>(archive_);
 
-      LOG(verbose, core) << "publishing search at "
-          << config_.get<std::string>("search.host") << ":"
+      //config_.get<std::string>("search.host")
+      LOG(verbose, core) << "publishing search at *:"
           << config_.get<unsigned>("search.port");
-      send(search_,
-           atom("publish"),
-           config_.get<std::string>("search.host"),
-           config_.get<unsigned>("search.port"));
+      publish(search_, config_.get<unsigned>("search.port"));
     }
     else
     {
@@ -222,14 +219,17 @@ void program::start()
     }
 
     await_all_others_done();
+    return_ = EXIT_SUCCESS;
+  }
+  catch (network_error const& e)
+  {
+      LOG(error, core) << "network error: " << e.what();
   }
   catch (...)
   {
     LOG(fatal, core)
       << "exception details:\n"
       << boost::current_exception_diagnostic_information();
-
-    return_ = EXIT_FAILURE;
   }
 }
 
