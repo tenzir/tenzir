@@ -104,6 +104,10 @@ query::query(cppa::actor_ptr archive,
         if (need_more)
           send(self, atom("next chunk"));
       },
+      on(atom("finished")) >> [=]
+      {
+        send(sink_, atom("query"), atom("finished"));
+      },
       on(atom("shutdown")) >> [=]
       {
         self->quit();

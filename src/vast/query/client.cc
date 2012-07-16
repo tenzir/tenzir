@@ -51,6 +51,11 @@ client::client(cppa::actor_ptr search, unsigned batch_size)
             << (matched / processed * 100) << " selectivity)"
             << std::endl;
       },
+      on(atom("query"), atom("finished")) >> [=]
+      {
+        LOG(verbose, query) << "query @" << query_->id() << " has finished";
+        send(self, atom("shutdown"));
+      },
       on_arg_match >> [=](ze::event const& e)
       {
         if (asking_)

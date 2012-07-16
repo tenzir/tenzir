@@ -35,7 +35,7 @@ emitter::emitter(cppa::actor_ptr segment_manager, cppa::actor_ptr sink)
         if (ids_.empty())
         {
           LOG(debug, store) << "emitter @" << id() << " has no segment IDs";
-          send(self, atom("shutdown"));
+          send(sink, atom("finished"));
           return;
         }
 
@@ -114,7 +114,7 @@ void emitter::emit_chunk()
     if (ids_.empty())
     {
       LOG(debug, store) << "emitter @" << id() << " has finished";
-      send(self, atom("shutdown"));
+      send(sink_, atom("finished"));
     }
   }
 }
