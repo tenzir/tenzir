@@ -19,7 +19,7 @@ configuration::configuration()
   po::options_description general("general options");
   general.add_options()
     ("config,c", po::value<fs::path>(), "configuration file")
-    ("vast-dir,d", po::value<fs::path>()->default_value("vast"),
+    ("directory,d", po::value<fs::path>()->default_value("vast"),
      "VAST directory")
     ("help,h", "display this help")
     ("schema,s", po::value<std::string>(), "event schema file")
@@ -32,13 +32,10 @@ configuration::configuration()
 
   po::options_description advanced("advanced options");
   advanced.add_options()
-    ("log-dir,L",
-     po::value<fs::path>()->default_value(fs::path("vast") / "log"),
-     "log directory")
     ("logfile-verbosity,V",
      po::value<int>()->default_value(util::logger::verbose),
      "log file verbosity")
-    ("profile,p", po::value<unsigned>(), "getrusage profiling (seconds)")
+    ("profile,P", po::value<unsigned>(), "getrusage profiling (seconds)")
 #ifdef USE_PERFTOOLS_CPU_PROFILER
     ("perftools-cpu", "enable Google perftools CPU profiling")
 #endif
@@ -49,11 +46,12 @@ configuration::configuration()
     ("broccoli-calltrace", "enable broccoli function call tracing")
     ;
 
-  po::options_description component("component options");
-  component.add_options()
-    ("comp-ingestor,I", "launch the ingestor")
-    ("comp-archive,A", "launch the archive")
-    ("comp-search,S", "launch the search")
+  po::options_description actor("actor options");
+  actor.add_options()
+    ("ingestor-actor,I", "spawn the ingestor locally")
+    ("archive-actor,A", "spawn the archive locally")
+    ("index-actor,X", "spawn the index locally")
+    ("search-actor,S", "spawn the search locally")
     ;
 
   po::options_description schema("schema options");
@@ -87,24 +85,32 @@ configuration::configuration()
      "maximum number of segments to keep in memory")
     ;
 
+  po::options_description index("index options");
+  index.add_options()
+    ("index.host", po::value<std::string>()->default_value("127.0.0.1"),
+     "IP address of the index")
+    ("index.port", po::value<unsigned>()->default_value(42003),
+     "port of the index")
+    ;
+
   po::options_description search("search options");
   search.add_options()
     ("search.host", po::value<std::string>()->default_value("127.0.0.1"),
-     "IP address of the search component")
+     "IP address of the search")
     ("search.port", po::value<unsigned>()->default_value(42001),
-     "port of the search component")
+     "port of the search")
     ;
 
   po::options_description client("client options");
   client.add_options()
-    ("client.batch-size", po::value<unsigned>()->default_value(0),
+    ("client.paginate,p", po::value<unsigned>()->default_value(10),
      "number of query results per page")
     ;
 
-  all_.add(general).add(advanced).add(component).add(schema)
-    .add(ingestor).add(archive).add(search).add(client);
+  all_.add(general).add(advanced).add(actor).add(schema)
+    .add(ingestor).add(archive).add(index).add(search).add(client);
 
-  visible_.add(general).add(component);
+  visible_.add(general).add(actor);
 }
 
 void configuration::load(std::string const& filename)
@@ -151,6 +157,7 @@ void configuration::init()
 {
   po::notify(config_);
 
+  depends("index-actor", "archive-actor");
   depends("print-schema", "schema");
 
   auto v = get<int>("console-verbosity");
@@ -162,7 +169,10 @@ void configuration::init()
     throw config_exception("verbosity not in [0,6]", "log-verbosity");
 
   if (check("profile") && get<unsigned>("profile") == 0)
-    throw config_exception("non-zero profiling interval required", "profile");
+    throw config_exception("profiling interval must be non-zero", "profile");
+
+  if (get<unsigned>("client.paginate") == 0)
+    throw config_exception("pagination must be non-zero", "client.paginate");
 }
 
 void configuration::conflicts(const char* opt1, const char* opt2) const

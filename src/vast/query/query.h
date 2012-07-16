@@ -20,9 +20,15 @@ public:
     uint64_t matched = 0;
   };
 
-  /// Constructs a query from a query expression.
+  /// Spawns a query actor.
+  /// @param archive The archive actor.
+  /// @param index The index actor.
+  /// @param index The sink receiving the results.
   /// @param str The query expression.
-  query(std::string str);
+  query(cppa::actor_ptr archive,
+        cppa::actor_ptr index,
+        cppa::actor_ptr sink,
+        std::string str);
 
 private:
   std::string str_;
@@ -30,9 +36,10 @@ private:
   uint64_t batch_size_;
   statistics stats_;
 
-  cppa::actor_ptr search_;
-  cppa::actor_ptr source_;
+  cppa::actor_ptr archive_;
+  cppa::actor_ptr index_;
   cppa::actor_ptr sink_;
+  cppa::actor_ptr source_;
   cppa::behavior init_state;
 };
 

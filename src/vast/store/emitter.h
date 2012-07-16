@@ -23,16 +23,18 @@ class emitter : public cppa::sb_actor<emitter>
 public:
   /// Spawns an emitter.
   /// @param segment_manager The segment manager to ask for segments.
-  emitter(cppa::actor_ptr segment_manager);
+  /// @param sink The actor receiving chunks.
+  emitter(cppa::actor_ptr segment_manager, cppa::actor_ptr sink);
 
 private:
+  void retrieve_segment();
   void emit_chunk();
 
   std::deque<ze::uuid> ids_;
   cppa::cow_tuple<segment> segment_tuple_;
   size_t current_chunk_ = 0;
   size_t last_chunk_ = 0;
-  segment const* segment_;
+  segment const* segment_ = nullptr;
 
   cppa::actor_ptr segment_manager_;
   cppa::actor_ptr sink_;

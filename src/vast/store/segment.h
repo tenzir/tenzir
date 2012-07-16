@@ -141,7 +141,7 @@ private:
   }
 
   template <typename Archive>
-  void load(Archive& ia, segment& s)
+  friend void load(Archive& ia, segment& s)
   {
     uint32_t magic;
     ia >> magic;

@@ -10,6 +10,7 @@ namespace ingest {
 ingestor::ingestor(cppa::actor_ptr archive)
   : archive_(archive)
 {
+  LOG(verbose, core) << "spawning ingestor @" << id();
   using namespace cppa;
   init_state = (
       on(atom("initialize"), arg_match) >> [=](std::string const& host,
@@ -36,7 +37,7 @@ ingestor::ingestor(cppa::actor_ptr archive)
         readers_.clear();
 
         self->quit();
-        LOG(verbose, ingest) << "ingestor terminated";
+        LOG(verbose, ingest) << "ingestor @" << id() << " terminated";
       });
 }
 

@@ -52,6 +52,7 @@ private:
 
     configuration config_;
     cppa::actor_ptr archive_;
+    cppa::actor_ptr index_;
     cppa::actor_ptr ingestor_;
     cppa::actor_ptr search_;
     cppa::actor_ptr query_client_;

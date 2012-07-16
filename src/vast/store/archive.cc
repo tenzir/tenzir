@@ -14,19 +14,18 @@ archive::archive(std::string const& directory,
                  size_t max_segment_size,
                  size_t max_segments)
 {
+  LOG(verbose, store) << "spawning archive @" << id();
   using namespace cppa;
   segment_manager_ = spawn<segment_manager>(max_segments, directory);
   segmentizer_ = spawn<segmentizer>(segment_manager_,
                                     max_events_per_chunk,
                                     max_segment_size);
-
   init_state = (
       on(atom("emitter"), atom("create"), arg_match) >> [=](actor_ptr sink)
       {
-        auto em = spawn<emitter>(segment_manager_);
+        auto em = spawn<emitter>(segment_manager_, sink);
+        send(em, atom("announce"));
         emitters_.push_back(em);
-        send(em, atom("set"), atom("sink"), sink);
-        reply(atom("emitter"), atom("create"), atom("ack"), em);
       },
       on_arg_match >> [=](ze::event const& e)
       {
@@ -39,14 +38,12 @@ archive::archive(std::string const& directory,
             keep_behavior,
             on(atom("shutdown"), atom("ack")) >> [=]
             {
-              LOG(debug, store) << "received segmentizer shutdown ack";
-
               send(segment_manager_, atom("shutdown"));
               for (auto em : emitters_)
                 send(em, atom("shutdown"));
 
               self->quit();
-              LOG(verbose, store) << "archive terminated";
+              LOG(verbose, store) << "archive @" << id() << " terminated";
             });
       });
 }

@@ -12,92 +12,102 @@
 namespace vast {
 namespace query {
 
-query::query(std::string str)
+query::query(cppa::actor_ptr archive,
+             cppa::actor_ptr index,
+             cppa::actor_ptr sink,
+             std::string str)
   : str_(std::move(str))
+  , archive_(archive)
+  , index_(index)
+  , sink_(sink)
 {
   using namespace cppa;
-  LOG(verbose, query) << "new query " << id() << ": " << str_;
+  LOG(verbose, query) 
+    << "spawning query @" << id() 
+    << " with expression \"" << str_ << '"'
+    << " for sink @" << sink_->id();
+
+  try
+  {
+    ast::query query_ast;
+    if (! util::parser::parse<parser::query>(str_, query_ast))
+      throw syntax_exception(str_);
+
+    if (! ast::validate(query_ast))
+      throw semantic_exception("semantic error", str_);
+
+    expr_.assign(query_ast);
+
+  }
+  catch (syntax_exception const& e)
+  {
+    LOG(error, query)
+      << "syntax error in query @" << id() << ": " << e.what();
+
+    reply(atom("query"), atom("parse"), atom("failure"), id());
+  }
+  catch (semantic_exception const& e)
+  {
+    LOG(error, query)
+      << "semantic error in query @" << id() << ": " << e.what();
+
+    reply(atom("query"), atom("parse"), atom("failure"), id());
+  }
 
   init_state = (
-      on(atom("parse")) >> [=]
+      on(atom("start")) >> [=]
       {
-        try
-        {
-          ast::query query_ast;
-          if (! util::parser::parse<parser::query>(str_, query_ast))
-            throw syntax_exception(str_);
-
-          if (! ast::validate(query_ast))
-            throw semantic_exception("semantic error", str_);
-
-          expr_.assign(query_ast);
-        }
-        catch (syntax_exception const& e)
-        {
-          LOG(error, query)
-            << "syntax error in query " << id() << ": " << e.what();
-
-          reply(atom("query"), atom("parse"), atom("failure"), id());
-        }
-        catch (semantic_exception const& e)
-        {
-          LOG(error, query)
-            << "semantic error in query " << id() << ": " << e.what();
-
-          reply(atom("query"), atom("parse"), atom("failure"), id());
-        }
+        send(index_, atom("give"), self);
       },
-      on(atom("set"), atom("source"), arg_match) >> [=](actor_ptr source)
+      on(atom("source"), arg_match) >> [=](actor_ptr source)
       {
-        LOG(debug, query) << "setting source for query " << id();
+        LOG(debug, query) 
+          << "query @" << id() << " sets source to @" << source->id();
+
         source_ = source;
-      },
-      on(atom("set"), atom("sink"), arg_match) >> [=](actor_ptr sink)
-      {
-        LOG(debug, query) << "setting sink for query " << id();
-        sink_ = sink;
+        send(sink_, atom("query"), atom("created"), self);
       },
       on(atom("set"), atom("batch size"), arg_match) >> [=](unsigned batch_size)
       {
-        assert(batch_size > 0);
-
         LOG(debug, query)
-          << "setting batch size to " << batch_size << " for query " << id();
+          << "query @" << id() << " sets batch size to " << batch_size;
 
+        assert(batch_size > 0);
         batch_size_ = batch_size;
+        reply(atom("set"), atom("batch size"), atom("ack"));
       },
       on(atom("get"), atom("statistics")) >> [=]
       {
         reply(atom("statistics"), stats_.processed, stats_.matched);
       },
-      on(atom("next batch")) >> [=]
+      on(atom("next chunk")) >> [=]
       {
+        LOG(debug, query)
+          << "query @" << id() << " asks source @" << source_->id() 
+          << " for next chunk";
         send(source_, atom("emit"));
       },
       on_arg_match >> [=](ze::chunk<ze::event> const& chunk)
       {
-        auto more = true;
-        chunk.get().get([&more, this](ze::event e)
+        auto need_more = true;
+        chunk.get().get([&need_more, this](ze::event e)
         {
           ++stats_.processed;
           if (expr_.eval(e))
           {
-            sink_ << self->last_dequeued();
+            send(sink_, std::move(e));
             if (++stats_.matched % batch_size_ == 0)
-            {
-              send(source_, atom("pause"));
-              more = false;
-            }
+              need_more = false;
           }
         });
 
-        if (more)
-          send(self, atom("next batch"));
+        if (need_more)
+          send(self, atom("next chunk"));
       },
       on(atom("shutdown")) >> [=]
       {
         self->quit();
-        LOG(verbose, query) << "query " << id() << " terminated";
+        LOG(verbose, query) << "query @" << id() << " terminated";
       });
 }
 

@@ -10,6 +10,7 @@ namespace meta {
 
 schema_manager::schema_manager()
 {
+  LOG(verbose, meta) << "spawning schema manager @" << id();
   using namespace cppa;
   init_state = (
       on(atom("load"), arg_match) >> [=](std::string const& file)
@@ -24,7 +25,7 @@ schema_manager::schema_manager()
       on(atom("shutdown")) >> [=]
       {
         self->quit();
-        LOG(verbose, meta) << "schema manager terminated";
+        LOG(verbose, meta) << "schema manager @" << id() << " terminated";
       });
 }
 

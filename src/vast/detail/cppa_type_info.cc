@@ -13,7 +13,9 @@ void cppa_announce_types()
 {
   using namespace cppa;
   announce(typeid(ze::uuid), new uuid_type_info);
+  announce<std::vector<ze::uuid>>();
   announce(typeid(ze::event), new event_type_info);
+  announce<std::vector<ze::event>>();
   announce(typeid(ze::chunk<ze::event>), new event_chunk_type_info);
   announce(typeid(store::segment), new segment_type_info);
 }

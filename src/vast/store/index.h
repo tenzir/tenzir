@@ -13,7 +13,6 @@ class index : public cppa::sb_actor<index>
 
 public:
   /// Spawns the index.
-  /// @param archive The archive actor.
   /// @param directory The root directory of the index.
   index(cppa::actor_ptr archive, std::string const& directory);
 

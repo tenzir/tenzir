@@ -12,10 +12,13 @@ segmentizer::segmentizer(cppa::actor_ptr segment_manager,
   : writer_(segment_)
   , segment_manager_(segment_manager)
 {
+  LOG(verbose, store) << "spawning segmentizer @" << id();
   LOG(verbose, store)
-    << "maximum segment size: " << max_segment_size << " bytes";
+    << "@" << id() << " has maximum segment size of " 
+    << max_segment_size << " bytes";
   LOG(verbose, store)
-    << "maximum number of events per chunk: " << max_events_per_chunk;
+    << "@" << id() << " uses at most " 
+    << max_events_per_chunk << " events per chunk";
 
   using namespace cppa;
   init_state = (
@@ -28,7 +31,7 @@ segmentizer::segmentizer(cppa::actor_ptr segment_manager,
         if (segment_.bytes() < max_segment_size)
         {
           LOG(debug, store)
-            << "flushing chunk #" << segment_.size() + 1
+            << "@" << id() << " flushes chunk #" << segment_.size() + 1
             << " of segment " << segment_.id();
 
           writer_.flush_chunk();
@@ -70,7 +73,7 @@ segmentizer::segmentizer(cppa::actor_ptr segment_manager,
 void segmentizer::terminate()
 {
   cppa::self->quit();
-  LOG(verbose, store) << "segmentizer terminated";
+  LOG(verbose, store) << "segmentizer @" << id() << " terminated";
 }
 
 } // namespace store

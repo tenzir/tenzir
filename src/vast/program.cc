@@ -13,6 +13,7 @@
 #include <vast/query/client.h>
 #include <vast/query/search.h>
 #include <vast/store/archive.h>
+#include <vast/store/index.h>
 #include <vast/util/logger.h>
 #include <config.h>
 
@@ -95,12 +96,11 @@ void program::start()
   using namespace cppa;
   detail::cppa_announce_types();
 
+  auto log_dir = config_.get<fs::path>("directory") / "log";
+  assert(fs::exists(log_dir));
+
   try
   {
-    auto log_dir = config_.get<fs::path>("log-dir");
-    if (! fs::exists(log_dir))
-      fs::mkdir(log_dir);
-
 #ifdef USE_PERFTOOLS
     if (config_.check("perftools-heap"))
     {
@@ -116,7 +116,6 @@ void program::start()
 
     if (config_.check("profile"))
     {
-      LOG(verbose, core) << "spawning profiler";
       auto const& filename = log_dir / "profiler.log";
       auto ms = config_.get<unsigned>("profile");
       profiler_ = spawn<util::profiler>(filename.string(),
@@ -127,7 +126,6 @@ void program::start()
     comm::broccoli::init(config_.check("broccoli-messages"),
                          config_.check("broccoli-calltrace"));
 
-    LOG(verbose, meta) << "spawning schema manager";
     schema_manager_ = spawn<meta::schema_manager>();
     if (config_.check("schema"))
     {
@@ -146,19 +144,20 @@ void program::start()
       }
     }
 
-    if (config_.check("comp-archive"))
-    {
-      LOG(verbose, core) << "spawning archive";
+    if (config_.check("archive-actor"))
       archive_ = spawn<store::archive>(
-          (config_.get<fs::path>("vast-dir") / "archive").string(),
+          (config_.get<fs::path>("directory") / "archive").string(),
           config_.get<size_t>("archive.max-events-per-chunk"),
           config_.get<size_t>("archive.max-segment-size") * 1000,
           config_.get<size_t>("archive.max-segments"));
-    }
 
-    if (config_.check("comp-ingestor"))
+    if (config_.check("index-actor"))
+        index_ = spawn<store::index>(
+            archive_,
+            (config_.get<fs::path>("directory") / "index").string());
+
+    if (config_.check("ingestor-actor"))
     {
-      LOG(verbose, core) << "spawning ingestor";
       ingestor_ = spawn<ingest::ingestor>(archive_);
       send(ingestor_,
            atom("initialize"),
@@ -183,10 +182,9 @@ void program::start()
       }
     }
 
-    if (config_.check("comp-search"))
+    if (config_.check("search-actor"))
     {
-      LOG(verbose, core) << "spawning search";
-      search_ = spawn<query::search>(archive_);
+      search_ = spawn<query::search>(archive_, index_);
 
       //config_.get<std::string>("search.host")
       LOG(verbose, core) << "publishing search at *:"
@@ -205,17 +203,13 @@ void program::start()
 
     if (config_.check("query"))
     {
-      LOG(verbose, core) << "spawning query client with batch size "
-          << config_.get<unsigned>("client.batch-size");
+      auto paginate = config_.get<unsigned>("client.paginate");
+      auto& expression = config_.get<std::string>("query");
+      LOG(verbose, core) 
+          << "spawning query client with pagination " << paginate;
 
-      query_client_ = spawn<query::client>(
-          search_,
-          config_.get<unsigned>("client.batch-size"));
-
-      send(query_client_,
-           atom("query"),
-           atom("create"),
-           config_.get<std::string>("query"));
+      query_client_ = spawn<query::client>(search_, paginate);
+      send(query_client_, atom("query"), atom("create"), expression);
     }
 
     await_all_others_done();
@@ -250,13 +244,16 @@ void program::stop()
   if (config_.check("query"))
     query_client_ << shutdown;
 
-  if (config_.check("comp-search"))
+  if (config_.check("search-actor"))
     search_ << shutdown;
 
-  if (config_.check("comp-ingestor"))
+  if (config_.check("ingestor-actor"))
     ingestor_ << shutdown;
 
-  if (config_.check("comp-archive"))
+  if (config_.check("index-actor"))
+    index_ << shutdown;
+
+  if (config_.check("archive-actor"))
     archive_ << shutdown;
 
   schema_manager_ << shutdown;
@@ -302,14 +299,18 @@ int program::end()
 
 void program::do_init()
 {
-  auto vast_dir = config_.get<fs::path>("vast-dir");
+  auto vast_dir = config_.get<fs::path>("directory");
   if (! fs::exists(vast_dir))
     fs::mkdir(vast_dir);
+
+  auto log_dir = vast_dir / "log";
+  if (! fs::exists(log_dir))
+      fs::mkdir(log_dir);
 
   util::LOGGER = new util::logger(
       static_cast<util::logger::level>(config_.get<int>("console-verbosity")),
       static_cast<util::logger::level>(config_.get<int>("logfile-verbosity")),
-      config_.get<fs::path>("log-dir") / "vast.log");
+      log_dir / "vast.log");
 
   LOG(verbose, core) << " _   _____   __________";
   LOG(verbose, core) << "| | / / _ | / __/_  __/";

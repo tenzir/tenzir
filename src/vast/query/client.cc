@@ -12,11 +12,12 @@ client::client(cppa::actor_ptr search, unsigned batch_size)
   : batch_size_(batch_size)
   , search_(search)
 {
+  LOG(verbose, query) << "spawning query client @" << id();
   using namespace cppa;
   auto shutdown = on(atom("shutdown")) >> [=]
     {
       self->quit();
-      LOG(verbose, query) << "query client terminated";
+      LOG(verbose, query) << "query client @" << id() << " terminated";
     };
 
   init_state = (
@@ -30,15 +31,15 @@ client::client(cppa::actor_ptr search, unsigned batch_size)
     );
 
   operating_ = (
-      on(atom("query"), atom("create"), atom("ack"), arg_match)
-        >> [=](actor_ptr query)
+      on(atom("query"), atom("created"), arg_match) >> [=](actor_ptr query)
       {
         query_ = query;
         send(query_, atom("set"), atom("batch size"), batch_size_);
       },
       on(atom("set"), atom("batch size"), atom("ack")) >> [=]
       {
-        wait_for_input();
+        LOG(info, query) << "successfully created query @" << query_->id();
+        send(query_, atom("next chunk"));
       },
       on(atom("statistics"), arg_match)
         >> [=](uint64_t processed, uint64_t matched)
@@ -65,16 +66,14 @@ client::client(cppa::actor_ptr search, unsigned batch_size)
         }
         else
         {
-          auto t = tuple_cast<ze::event>(self->last_dequeued());
-          assert(t.valid());
-          buffer_.push(*t);
+          wait_for_user_input();
         }
       },
       shutdown
     );
 }
 
-void client::wait_for_input()
+void client::wait_for_user_input()
 {
   using namespace cppa;
   util::unbuffer();
@@ -86,47 +85,34 @@ void client::wait_for_input()
     {
       case ' ':
         {
-          if (! try_print())
-          {
-            LOG(debug, query) << "asking for next batch in query " << query_->id();
-            send(query_, atom("next batch"));
-            asking_ = true;
-          }
+          LOG(debug, query) 
+            << "asking for next chunk in query @" << query_->id();
+          send(query_, atom("next chunk"));
+          asking_ = true;
         }
         break;
       case 's':
         {
-          LOG(debug, query) << "asking statistics about query " << query_->id();
+          LOG(debug, query) << "asking statistics about query @" << query_->id();
           send(query_, atom("get"), atom("statistics"));
         }
         break;
       case 'q':
-        send(self, atom("shutdown"));
+        {
+          LOG(debug, query) << "shutting down";
+          send(self, atom("shutdown"));
+        }
         break;
       default:
+        {
+          LOG(debug, query) << "invalid command, use <space>, q(uit), or s(top)";
+        }
         continue;
     }
   }
 
   util::buffer();
 };
-
-bool client::try_print()
-{
-  cppa::cow_tuple<ze::event> e;
-  bool popped;
-  do
-  {
-    popped = buffer_.try_pop(e);
-    if (popped)
-    {
-      std::cout << cppa::get<0>(e) << std::endl;
-      ++printed_;
-    }
-  }
-  while (popped && printed_ % batch_size_ != 0);
-  return popped && printed_ % batch_size_ == 0;
-}
 
 } // namespace query
 } // namespace vast

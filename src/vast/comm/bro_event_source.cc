@@ -11,24 +11,24 @@ namespace comm {
 bro_event_source::bro_event_source(cppa::actor_ptr upstream)
   : error_handler_([&](std::shared_ptr<broccoli> bro) { disconnect(bro); })
 {
-    using namespace cppa;
-
-    init_state = (
-        on(atom("subscribe"), arg_match) >> [=](std::string const& event)
-        {
-          LOG(verbose, comm) << "subscribing to event " << event;
-          subscribe(event);
-        },
-        on(atom("bind"), arg_match) >> [=](std::string const& host, unsigned port)
-        {
-          start_server(host, port, upstream);
-        },
-        on(atom("shutdown")) >> [=]()
-        {
-          stop_server();
-          self->quit();
-          LOG(verbose, comm) << "bro event source terminated";
-        });
+  LOG(verbose, core) << "spawning bro event source @" << id();
+  using namespace cppa;
+  init_state = (
+      on(atom("subscribe"), arg_match) >> [=](std::string const& event)
+      {
+        LOG(verbose, comm) << "subscribing to event " << event;
+        subscribe(event);
+      },
+      on(atom("bind"), arg_match) >> [=](std::string const& host, unsigned port)
+      {
+        start_server(host, port, upstream);
+      },
+      on(atom("shutdown")) >> [=]()
+      {
+        stop_server();
+        self->quit();
+        LOG(verbose, comm) << "bro event source @" << id() << " terminated";
+      });
 }
 
 void bro_event_source::subscribe(std::string event)

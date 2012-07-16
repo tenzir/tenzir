@@ -12,7 +12,8 @@ segment_manager::segment_manager(size_t capacity, std::string const& dir)
   : cache_(capacity, [&](ze::uuid const& id) { return on_miss(id); })
   , dir_(dir)
 {
-  LOG(debug, store) << "creating segment manager with capacity " << capacity;
+  LOG(debug, store) 
+    << "spawning segment manager @" << id() << " with capacity " << capacity;
 
   if (! fs::exists(dir_))
   {
@@ -36,17 +37,25 @@ segment_manager::segment_manager(size_t capacity, std::string const& dir)
         store_segment(*t);
         reply(atom("segment"), atom("ack"), s.id());
       },
+      on(atom("all ids")) >> [=]
+      {
+        std::vector<ze::uuid> ids;
+        for (auto& f : segment_files_)
+          ids.push_back(f.first);
+        reply(atom("ids"), std::move(ids));
+      },
       on(atom("retrieve"), arg_match) >> [=](ze::uuid const& id)
       {
-        LOG(debug, store) << "retrieving segment " << id;
-        reply(cache_.retrieve(id));
+        LOG(debug, store) 
+          << "segment manager @" << self->id() << " retrieves segment " << id;
+        self->last_sender() << cache_.retrieve(id);
       },
       on(atom("shutdown")) >> [=]
       {
         segment_files_.clear();
         cache_.clear();
         self->quit();
-        LOG(verbose, store) << "segment manager terminated";
+        LOG(verbose, store) << "segment manager @" << id() << " terminated";
       });
 }
 
@@ -90,8 +99,7 @@ cppa::cow_tuple<segment> segment_manager::on_miss(ze::uuid const& id)
   LOG(debug, store) << "cache miss, loading segment " << id;
   assert(segment_files_.find(id) != segment_files_.end());
 
-  auto path = dir_ / id.to_string();
-  fs::ifstream file(path, std::ios::binary | std::ios::in);
+  fs::ifstream file(dir_ / id.to_string(), std::ios::binary | std::ios::in);
   ze::serialization::stream_iarchive ia(file);
   segment s;
   ia >> s;

@@ -9,60 +9,55 @@
 namespace vast {
 namespace query {
 
-search::search(cppa::actor_ptr archive)
+search::search(cppa::actor_ptr archive, cppa::actor_ptr index)
   : archive_(archive)
+  , index_(index)
 {
+  LOG(verbose, core) << "spawning search @" << id();
   using namespace cppa;
   init_state = (
       on(atom("query"), atom("create"), arg_match)
         >> [=](std::string const& expression)
       {
-        auto q = spawn<query>(expression);
-        send(archive_, atom("emitter"), atom("create"), q);
-        auto sink = self->last_sender();
-        become(
-            keep_behavior,
-            on(atom("emitter"), atom("create"), atom("ack"), arg_match)
-              >> [=](actor_ptr emitter)
-            {
-              send(q, atom("set"), atom("source"), emitter);
-              send(q, atom("set"), atom("sink"), sink);
-              {
-                auto i = std::find(queries_.begin(), queries_.end(), q);
-                assert(i == queries_.end());
-              }
-              queries_.push_back(std::move(q));
-
-              send(sink, atom("query"), atom("create"), atom("ack"), q);
-              unbecome();
-            },
-            others() >> [=]
-            {
-              shutdown_query(q);
-              unbecome();
-            });
+        auto client = self->last_sender();
+        self->monitor(client);
+        auto q = spawn<query>(archive_, index_, client, expression);
+        send(q, atom("start"));
+        queries_.push_back(q);
+        clients_.emplace(client, q);
       },
-      on(atom("query"), atom("remove"), arg_match) >> [=](actor_ptr q)
+      on(atom("DOWN"), arg_match) >> [=](uint32_t reason)
       {
-        shutdown_query(q);
+        auto client = self->last_sender();
+        LOG(verbose, query) << "client @" << client->id() << " went down";
+        auto range = clients_.equal_range(client);
+        auto i = range.first;
+        while (i != range.second)
+        {
+          auto x = i++;
+          auto q = x->second;
+
+          LOG(debug, query) << "search @" << id() 
+            << " removes query @" << q->id();
+
+          send(q, atom("shutdown"));
+          clients_.erase(x);
+          queries_.erase(std::remove(queries_.begin(), queries_.end(), q),
+                         queries_.end());
+        }
       },
       on(atom("shutdown")) >> [=]
       {
         for (auto& q : queries_)
+        {
+          LOG(debug, query) << "@" << id() << " shuts down query @" << q->id();
           q << self->last_dequeued();
+        }
 
         queries_.clear();
         self->quit();
-        LOG(verbose, query) << "search terminated";
+        LOG(verbose, query) << "search @" << id() << " terminated";
       });
-}
-
-void search::shutdown_query(cppa::actor_ptr q)
-{
-  using namespace cppa;
-  send(q, atom("shutdown"));
-  queries_.erase(std::remove(queries_.begin(), queries_.end(), q),
-                 queries_.end());
 }
 
 } // namespace query

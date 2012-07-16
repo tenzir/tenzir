@@ -40,6 +40,7 @@ std::ostream& operator<<(std::ostream& out, profiler::measurement const& m)
 profiler::profiler(std::string const& filename, std::chrono::seconds secs)
   : file_(filename)
 {
+  LOG(verbose, core) << "spawning profiler @" << id();
   LOG(verbose, core)
     << "enabling getrusage profiling every "
     << (secs.count() == 1 ?

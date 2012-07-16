@@ -3,7 +3,6 @@
 
 #include <cppa/cppa.hpp>
 #include <ze/event.h>
-#include <ze/util/queue.h>
 
 namespace vast {
 namespace query {
@@ -24,12 +23,8 @@ public:
 
 private:
   /// Waits for console input on STDIN.
-  void wait_for_input();
+  void wait_for_user_input();
 
-  /// Tries to pop and print an event from the result buffer.
-  bool try_print();
-
-  ze::util::queue<cppa::cow_tuple<ze::event>> buffer_;
   unsigned batch_size_;
   unsigned printed_ = 0;
   bool asking_ = true;
