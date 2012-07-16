@@ -581,6 +581,8 @@ void broccoli::callback(BroConn* bc, void* user_data, BroEvMeta* meta)
   try
   {
     ze::event event;
+    event.id(ze::uuid::random());
+    event.timestamp(ze::clock::now());
     factory::make_event(event, meta);
     auto f = static_cast<event_handler*>(user_data);
     (*f)(std::move(event));
