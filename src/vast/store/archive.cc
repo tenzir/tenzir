@@ -44,6 +44,15 @@ archive::archive(std::string const& directory,
 
               self->quit();
               LOG(verbose, store) << "archive @" << id() << " terminated";
+            },
+            after(std::chrono::seconds(30)) >> [=]
+            {
+              LOG(error, store) << "archive @" << id()
+                << " did not receive shutdown ack from segmentizer @"
+                << segmentizer_->id();
+
+              self->quit();
+              LOG(verbose, store) << "archive @" << id() << " terminated";
             });
       });
 }

@@ -14,10 +14,10 @@ segmentizer::segmentizer(cppa::actor_ptr segment_manager,
 {
   LOG(verbose, store) << "spawning segmentizer @" << id();
   LOG(verbose, store)
-    << "@" << id() << " has maximum segment size of " 
+    << "segmentizer @" << id() << " has maximum segment size of "
     << max_segment_size << " bytes";
   LOG(verbose, store)
-    << "@" << id() << " uses at most " 
+    << "segmentizer @" << id() << " uses at most "
     << max_events_per_chunk << " events per chunk";
 
   using namespace cppa;
@@ -31,7 +31,8 @@ segmentizer::segmentizer(cppa::actor_ptr segment_manager,
         if (segment_.bytes() < max_segment_size)
         {
           LOG(debug, store)
-            << "@" << id() << " flushes chunk #" << segment_.size() + 1
+            << "segmentizer @" << id()
+            << " flushes chunk #" << segment_.size() + 1
             << " of segment " << segment_.id();
 
           writer_.flush_chunk();
@@ -39,7 +40,8 @@ segmentizer::segmentizer(cppa::actor_ptr segment_manager,
         }
 
         LOG(debug, store)
-          << "sending segment " << segment_.id() << " to archive";
+          << "segmentizer @" << id()
+          << " sends segment " << segment_.id() << " to archive";
 
         send(segment_manager_, std::move(segment_));
         segment_ = segment();
@@ -53,17 +55,26 @@ segmentizer::segmentizer(cppa::actor_ptr segment_manager,
         }
         else
         {
-          LOG(debug, store) << "sending last segment";
-          send(segment_manager_, std::move(segment_));
+          LOG(debug, store)
+            << "segmentizer @" << id()
+            << " sends last segment " << segment_.id();
 
+          send(segment_manager_, std::move(segment_));
           auto archive = self->last_sender();
           become(
               keep_behavior,
-              on(atom("segment"), atom("ack"), segment_.id()) >>
+              on(atom("segment"), atom("ack"), arg_match) >>
                 [=](ze::uuid const& id)
               {
-                LOG(debug, store) << "segment manager acked segment " << id;
                 send(archive, atom("shutdown"), atom("ack"));
+                terminate();
+              },
+              after(std::chrono::seconds(30)) >> [=]
+              {
+                LOG(debug, store)
+                  << "segmentizer @" << id()
+                  << " did not receive shutdown ack from segment manager @"
+                  << segment_manager_->id();
                 terminate();
               });
         }
