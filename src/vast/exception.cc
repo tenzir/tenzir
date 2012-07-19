@@ -4,10 +4,6 @@
 
 namespace vast {
 
-exception::exception()
-{
-};
-
 exception::exception(char const* msg)
   : msg_(msg)
 {
@@ -15,10 +11,6 @@ exception::exception(char const* msg)
 
 exception::exception(std::string const& msg)
   : msg_(msg)
-{
-};
-
-exception::~exception() noexcept
 {
 };
 
@@ -41,10 +33,6 @@ config_exception::config_exception(char const* msg, char const* opt1,
   std::ostringstream oss;
   oss << msg << " (--" << opt1 << " and --" << opt2 << ')';
   msg_ = oss.str();
-};
-
-config_exception::~config_exception() noexcept
-{
 };
 
 } // namespace vast
