@@ -146,19 +146,20 @@ bool bro_reader::extract(std::ifstream& ifs)
 
       events.push_back(std::move(e));
 
+      ++n;
+
       if (events.size() % batch_size == 0)
       {
         LOG(debug, ingest)
           << "reader @" << id()
           << " sends " << batch_size
-          << " events to @" << upstream_->id();
+          << " events to @" << upstream_->id()
+          << " (cumulative total: " << n << ')';
 
         cppa::send(upstream_, std::move(events));
         events.clear();
         events.reserve(batch_size);
       }
-
-      ++n;
     }
     catch (parse_exception const& e)
     {
@@ -178,7 +179,7 @@ bool bro_reader::extract(std::ifstream& ifs)
     cppa::send(upstream_, std::move(events));
   }
 
-  LOG(verbose, ingest) << "reader @" << id() << " ingested " << n << " events";
+  LOG(info, ingest) << "reader @" << id() << " ingested " << n << " events";
 
   return true;
 }
