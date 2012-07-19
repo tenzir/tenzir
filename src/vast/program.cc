@@ -179,10 +179,7 @@ void program::start()
       {
         auto files = config_.get<std::vector<std::string>>("ingestor.file");
         for (auto& file : files)
-        {
-          LOG(info, core) << "ingesting " << file;
           send(ingestor_, atom("read_file"), file);
-        }
       }
     }
 

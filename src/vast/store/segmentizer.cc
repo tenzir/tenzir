@@ -20,31 +20,38 @@ segmentizer::segmentizer(cppa::actor_ptr segment_manager,
     << "segmentizer @" << id() << " uses at most "
     << max_events_per_chunk << " events per chunk";
 
-  using namespace cppa;
-  init_state = (
-      on_arg_match >> [=](ze::event const& e)
+  auto write_event = [=](ze::event const& e)
+    {
+      auto n = writer_ << e;
+      if (n < max_events_per_chunk)
+        return;
+
+      if (segment_.bytes() < max_segment_size)
       {
-        auto n = writer_ << e;
-        if (n < max_events_per_chunk)
-          return;
-
-        if (segment_.bytes() < max_segment_size)
-        {
-          LOG(debug, store)
-            << "segmentizer @" << id()
-            << " flushes chunk #" << segment_.size() + 1
-            << " of segment " << segment_.id();
-
-          writer_.flush_chunk();
-          return;
-        }
-
         LOG(debug, store)
           << "segmentizer @" << id()
-          << " sends segment " << segment_.id() << " to archive";
+          << " flushes chunk #" << segment_.size() + 1
+          << " of segment " << segment_.id();
 
-        send(segment_manager_, std::move(segment_));
-        segment_ = segment();
+        writer_.flush_chunk();
+        return;
+      }
+
+      LOG(debug, store)
+        << "segmentizer @" << id()
+        << " sends segment " << segment_.id() << " to archive";
+
+      send(segment_manager_, std::move(segment_));
+      segment_ = segment();
+    };
+
+  using namespace cppa;
+  init_state = (
+      on_arg_match >> write_event,
+      on_arg_match >> [=](std::vector<ze::event> const& v)
+      {
+        for (auto& e : v)
+          write_event(e);
       },
       on(atom("shutdown")) >> [=]()
       {

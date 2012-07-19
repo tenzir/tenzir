@@ -16,7 +16,8 @@ bro_event_source::bro_event_source(cppa::actor_ptr upstream)
   init_state = (
       on(atom("subscribe"), arg_match) >> [=](std::string const& event)
       {
-        LOG(verbose, comm) << "subscribing to event " << event;
+        LOG(verbose, comm)
+          << "bro event source @" << id() << " subscribes to event " << event;
         subscribe(event);
       },
       on(atom("bind"), arg_match) >> [=](std::string const& host, unsigned port)

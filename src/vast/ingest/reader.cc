@@ -11,10 +11,17 @@ namespace ingest {
 reader::reader(cppa::actor_ptr upstream)
   : upstream_(upstream)
 {
+  LOG(verbose, core)
+    << "spawning reader @" << id() << " with upstream @" << upstream_->id();
+
   using namespace cppa;
+  chaining(false);
   init_state = (
       on(atom("read"), arg_match) >> [=](std::string const& filename)
       {
+        LOG(verbose, core)
+          << "reader @" << id() << " ingests file " << filename;
+
         fs::ifstream ifs(filename);
         ifs.unsetf(std::ios::skipws);
         assert(ifs.good());
@@ -39,7 +46,7 @@ bool bro_reader::extract(std::ifstream& ifs)
   if (! ifs.good())
     return false;
 
-  size_t batch_size = 1000;   // FIXME: make configurable.
+  size_t batch_size = 500;   // FIXME: make configurable.
   std::vector<ze::event> events;
   events.reserve(batch_size);
 
@@ -144,7 +151,7 @@ bool bro_reader::extract(std::ifstream& ifs)
         LOG(debug, ingest)
           << "reader @" << id()
           << " sends " << batch_size
-          << " events upstream to @" << upstream_->id();
+          << " events to @" << upstream_->id();
 
         cppa::send(upstream_, std::move(events));
         events.clear();
@@ -166,7 +173,8 @@ bool bro_reader::extract(std::ifstream& ifs)
     LOG(debug, ingest)
       << "reader @" << id()
       << " sends last " << events.size()
-      << " events upstream to @" << upstream_->id();
+      << " events to @" << upstream_->id();
+
     cppa::send(upstream_, std::move(events));
   }
 

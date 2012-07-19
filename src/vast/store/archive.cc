@@ -31,6 +31,14 @@ archive::archive(std::string const& directory,
       {
         segmentizer_ << self->last_dequeued();
       },
+      on_arg_match >> [=](std::vector<ze::event> const& v)
+      {
+        LOG(debug, store) << "archive @" << id()
+          << " forwards " << v.size() << " events to segmentizer @"
+          << segmentizer_->id();
+
+        segmentizer_ << self->last_dequeued();
+      },
       on(atom("shutdown")) >> [=]()
       {
         segmentizer_ << self->last_dequeued();
