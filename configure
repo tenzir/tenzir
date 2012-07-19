@@ -16,35 +16,35 @@ usage="\
 Usage: $0 [OPTION]... [VAR=VALUE]...
 
   Build Options:
-    --builddir=DIR         place build files in directory [build]
-    --generator=GENERATOR  CMake generator to use (see cmake --help)
-    --with-cxx=PATH        path to a C++ compiler executable
+    --builddir=DIR          place build files in directory [build]
+    --generator=GENERATOR   CMake generator to use (see cmake --help)
+    --with-cxx=PATH         path to a C++ compiler executable
 
   Installation Directories:
-    --prefix=PREFIX        installation directory [/usr/local/vast]
+    --prefix=PREFIX         installation directory [/usr/local/vast]
 
   Optional Features:
-    --enable-debug         compile in debugging mode
-    --enable-perftools     use Google perftools
+    --enable-debug          compile in debugging mode
+    --enable-perftools-heap use Gperftools' tcmalloc heap profiling
 
   Required Packages in Non-Standard Locations:
-    --with-libcppa=PATH    path to libcppa install root
-    --with-0event=PATH     path to 0vent install root
-    --with-boost=PATH      path to Boost install root
-    --with-broccoli=PATH   path to Broccoli install root
+    --with-libcppa=PATH     path to libcppa install root
+    --with-0event=PATH      path to 0vent install root
+    --with-boost=PATH       path to Boost install root
+    --with-broccoli=PATH    path to Broccoli install root
 
   Optional Packages in Non-Standard Locations:
-    --with-perftools=PATH  path to Google perftools install root
-    --with-doxygen=PATH    path to Doxygen install root
+    --with-perftools=PATH   path to Gperftools install root
+    --with-doxygen=PATH     path to Doxygen install root
 
   Packaging Options (for developers):
-    --binary-package       toggle special logic for binary packaging
-    --ignore-dirs=PATHS    paths to ignore when creating source package
-                           (semicolon delimited and quoted when multiple)
-    --pkg-name-prefix=NAME use the given name as the package prefix instead
-                           of the default CMake project name
-    --osx-sysroot=PATH     path to the OS X SDK to compile against
-    --osx-min-version=VER  minimum OS X version (the deployment target)
+    --binary-package        toggle special logic for binary packaging
+    --ignore-dirs=PATHS     paths to ignore when creating source package
+                            (semicolon delimited and quoted when multiple)
+    --pkg-name-prefix=NAME  use the given name as the package prefix instead
+                            of the default CMake project name
+    --osx-sysroot=PATH      path to the OS X SDK to compile against
+    --osx-min-version=VER   minimum OS X version (the deployment target)
 "
 
 
@@ -60,9 +60,9 @@ append_cache_entry () {
 # Set defaults
 builddir=build
 CMakeCacheEntries=""
-append_cache_entry CMAKE_INSTALL_PREFIX PATH   /usr/local/vast
-append_cache_entry ENABLE_DEBUG         BOOL   false
-append_cache_entry ENABLE_PERFTOOLS     BOOL   false
+append_cache_entry CMAKE_INSTALL_PREFIX  PATH   /usr/local/vast
+append_cache_entry ENABLE_DEBUG          BOOL   false
+append_cache_entry ENABLE_PERFTOOLS_HEAP BOOL   false
 append_cache_entry CPACK_SOURCE_IGNORE_FILES STRING
 
 # parse arguments
@@ -87,13 +87,13 @@ while [ $# -ne 0 ]; do
             append_cache_entry CMAKE_INSTALL_PREFIX PATH   $optarg
             ;;
         --enable-debug)
-            append_cache_entry ENABLE_DEBUG         BOOL   true
+            append_cache_entry ENABLE_DEBUG BOOL   true
             ;;
         --with-cxx=*)
             append_cache_entry CMAKE_CXX_COMPILER FILEPATH $optarg
             ;;
-        --enable-perftools)
-            append_cache_entry ENABLE_PERFTOOLS     BOOL   true
+        --enable-perftools-heap)
+            append_cache_entry ENABLE_PERFTOOLS_HEAP BOOL   true
             ;;
         --with-0event=*)
             append_cache_entry 0event_ROOT_DIR PATH $optarg
@@ -111,8 +111,7 @@ while [ $# -ne 0 ]; do
             append_cache_entry Broccoli_ROOT_DIR PATH $optarg
             ;;
         --with-perftools=*)
-            append_cache_entry ENABLE_PERFTOOLS     BOOL   true
-            append_cache_entry Perftools_ROOT_DIR PATH $optarg
+            append_cache_entry Gperftools_ROOT_DIR PATH $optarg
             ;;
         --binary-package)
             append_cache_entry BINARY_PACKAGING_MODE BOOL true

@@ -13,41 +13,41 @@
 #
 # Variables defined by this module:
 #
-#  Gperftools_FOUND              System has Gperftools libs/headers
-#  Gperftools_LIBRARIES          The Gperftools libraries (tcmalloc & profiler)
-#  Gperftools_INCLUDE_DIR        The location of Gperftools headers
+#  GPERFTOOLS_FOUND              System has Gperftools libs/headers
+#  GPERFTOOLS_LIBRARIES          The Gperftools libraries (tcmalloc & profiler)
+#  GPERFTOOLS_INCLUDE_DIR        The location of Gperftools headers
 
 find_path(Gperftools_ROOT_DIR NAMES include/google/heap-profiler.h)
 
-find_library(Gperftools_tcmalloc
+find_library(GPERFTOOLS_TCMALLOC
     NAMES tcmalloc
     HINTS ${Gperftools_ROOT_DIR}/lib)
 
-find_library(Gperftools_profiler
+find_library(GPERFTOOLS_PROFILER
     NAMES profiler
     HINTS ${Gperftools_ROOT_DIR}/lib)
 
-find_library(Gperftools_tcmalloc_and_profiler
+find_library(GPERFTOOLS_TCMALLOC_AND_PROFILER
     NAMES tcmalloc_and_profiler
     HINTS ${Gperftools_ROOT_DIR}/lib)
 
-find_path(Gperftools_INCLUDE_DIR
+find_path(GPERFTOOLS_INCLUDE_DIR
     NAMES Gperftools/heap-profiler.h
     HINTS ${Gperftools_ROOT_DIR}/include)
 
-set(Gperftools_LIBRARIES ${Gperftools_tcmalloc_and_profiler})
+set(GPERFTOOLS_LIBRARIES ${GPERFTOOLS_TCMALLOC_AND_PROFILER})
 
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(
     Gperftools
     DEFAULT_MSG
-    Gperftools_LIBRARIES
-    Gperftools_INCLUDE_DIR)
+    GPERFTOOLS_LIBRARIES
+    GPERFTOOLS_INCLUDE_DIR)
 
 mark_as_advanced(
     Gperftools_ROOT_DIR
-    Gperftools_tcmalloc
-    Gperftools_profiler
-    Gperftools_tcmalloc_and_profiler
-    Gperftools_LIBRARIES
-    Gperftools_INCLUDE_DIR)
+    GPERFTOOLS_TCMALLOC
+    GPERFTOOLS_PROFILER
+    GPERFTOOLS_TCMALLOC_AND_PROFILER
+    GPERFTOOLS_LIBRARIES
+    GPERFTOOLS_INCLUDE_DIR)

@@ -18,8 +18,10 @@
 #include <config.h>
 
 
-#ifdef USE_PERFTOOLS
+#ifdef USE_PERFTOOLS_CPU_PROFILER
 #include <google/profiler.h>
+#endif
+#ifdef USE_PERFTOOLS_HEAP_PROFILER
 #include <google/heap-profiler.h>
 #endif
 
@@ -101,15 +103,17 @@ void program::start()
 
   try
   {
-#ifdef USE_PERFTOOLS
+#ifdef USE_PERFTOOLS_HEAP_PROFILER
     if (config_.check("perftools-heap"))
     {
-      LOG(info, core) << "starting perftools CPU profiler";
+      LOG(info, core) << "starting Gperftools CPU profiler";
       HeapProfilerStart((log_dir / "heap.profile").string().data());
     }
+#endif
+#ifdef USE_PERFTOOLS_CPU_PROFILER
     if (config_.check("perftools-cpu"))
     {
-      LOG(info, core) << "starting perftools heap profiler";
+      LOG(info, core) << "starting Gperftools heap profiler";
       ProfilerStart((log_dir / "cpu.profile").string().data());
     }
 #endif
@@ -205,7 +209,7 @@ void program::start()
     {
       auto paginate = config_.get<unsigned>("client.paginate");
       auto& expression = config_.get<std::string>("query");
-      LOG(verbose, core) 
+      LOG(verbose, core)
           << "spawning query client with pagination " << paginate;
 
       query_client_ = spawn<query::client>(search_, paginate);
@@ -261,15 +265,24 @@ void program::stop()
   if (config_.check("profile"))
     profiler_ << shutdown;
 
-#ifdef USE_PERFTOOLS
+#ifdef USE_PERFTOOLS_CPU_PROFILER
+  ProfilerState state;
+  ProfilerGetCurrentState(&state);
+  LOG(info, core)
+    << "Gperftools CPU profiler gathered "
+    <<  state.samples_gathered << " samples"
+    << " in file " << state.profile_name;
+
   if (config_.check("perftools-cpu"))
   {
-    LOG(info, core) << "stopping perftools CPU profiler";
+    LOG(info, core) << "stopping Gperftools CPU profiler";
     ProfilerStop();
   }
-  if (config_.check("perftools-heap") && ::IsHeapProfilerRunning())
+#endif
+#ifdef USE_PERFTOOLS_HEAP_PROFILER
+  if (config_.check("perftools-heap") && IsHeapProfilerRunning())
   {
-    LOG(info, core) << "stopping perftools heap profiler";
+    LOG(info, core) << "stopping Gperftools heap profiler";
     HeapProfilerDump("cleanup");
     HeapProfilerStop();
   }

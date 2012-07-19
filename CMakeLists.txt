@@ -98,17 +98,17 @@ if (DOXYGEN_FOUND)
     add_subdirectory(doc)
 endif ()
 
-set(USE_PERFTOOLS false)
-if (ENABLE_PERFTOOLS)
-    find_package(Perftools)
-    if (PERFTOOLS_FOUND)
-        set(USE_PERFTOOLS true)
-        include_directories(BEFORE ${Perftools_INCLUDE_DIR})
-        list(APPEND OPTLIBS ${Perftools_LIBRARIES})
-    endif ()
+find_package(Gperftools)
+if (GPERFTOOLS_FOUND)
+  set(USE_PERFTOOLS_CPU_PROFILER true)
+  include_directories(BEFORE ${GPERFTOOLS_INCLUDE_DIR})
+endif ()
+set(USE_PERFTOOLS_HEAP_PROFILER false)
+if (ENABLE_PERFTOOLS_HEAP)
+  set(USE_PERFTOOLS_HEAP_PROFILER true)
 endif ()
 
-include_directories(${CMAKE_CURRENT_BINARY_DIR})
+include_directories(BEFORE ${CMAKE_CURRENT_BINARY_DIR})
 
 add_subdirectory(src)
 add_subdirectory(test)
@@ -131,6 +131,8 @@ message(
     "\nBuild directory:  ${CMAKE_BINARY_DIR}"
     "\nInstall prefix:   ${CMAKE_INSTALL_PREFIX}"
     "\nDebug mode:       ${ENABLE_DEBUG}"
+    "\nGperftools:       ${GPERFTOOLS_FOUND}"
+    "\nGperftools heap:  ${USE_PERFTOOLS_HEAP_PROFILER}"
     "\n"
     "\nCXX:              ${CMAKE_CXX_COMPILER}"
     "\nCXXFLAGS:         ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${build_type}}"
