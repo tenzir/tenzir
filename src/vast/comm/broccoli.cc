@@ -206,17 +206,9 @@ ze::value broccoli::factory::make_value(int type, void* bro_val)
     case BRO_TYPE_DOUBLE:
       return *static_cast<double*>(bro_val);
     case BRO_TYPE_TIME:
-      {
-        ze::double_seconds secs(*static_cast<double*>(bro_val));
-        auto duration = std::chrono::duration_cast<ze::duration>(secs);
-        return ze::time_point(duration);
-      }
+        return ze::time_point(ze::to_duration(*static_cast<double*>(bro_val)));
     case BRO_TYPE_INTERVAL:
-      {
-        ze::double_seconds secs(*static_cast<double*>(bro_val));
-        auto duration = std::chrono::duration_cast<ze::duration>(secs);
-        return duration;
-      }
+        return ze::to_duration(*static_cast<double*>(bro_val));;
     case BRO_TYPE_STRING:
       {
         BroString* s = static_cast<BroString*>(bro_val);
@@ -394,7 +386,7 @@ broccoli::reverse_factory::builder::operator()(ze::regex const& r) const
 broccoli::reverse_factory::bro_val
 broccoli::reverse_factory::builder::operator()(ze::duration d) const
 {
-  double secs = std::chrono::duration_cast<ze::double_seconds>(d).count();
+  double secs = ze::to_double(d);
   bro_val b;
   b.type = BRO_TYPE_INTERVAL;
   b.value = *reinterpret_cast<double**>(&secs);
