@@ -12,7 +12,6 @@ reader::reader(cppa::actor_ptr upstream)
   : upstream_(upstream)
 {
   using namespace cppa;
-  self->chaining(false);
   init_state = (
       on(atom("read"), arg_match) >> [=](std::string const& filename)
       {
@@ -20,17 +19,10 @@ reader::reader(cppa::actor_ptr upstream)
         ifs.unsetf(std::ios::skipws);
         assert(ifs.good());
 
-        size_t n = 0;;
-        if (extract(ifs, n))
-        {
-          LOG(verbose, ingest) << "reader @" << id()
-            << " ingested " << n << " events";
-          send(upstream_, atom("success"));
-        }
-        else
-        {
-          send(upstream_, atom("failure"));
-        }
+        auto success = extract(ifs);
+        send(upstream_,
+             atom("read"),
+             success ? atom("success") : atom("failure"));
 
         self->quit();
         LOG(verbose, ingest) << "reader @" << id() << " terminated";
@@ -42,7 +34,7 @@ bro_reader::bro_reader(cppa::actor_ptr upstream)
 {
 }
 
-bool bro_reader::extract(std::ifstream& ifs, size_t& n)
+bool bro_reader::extract(std::ifstream& ifs)
 {
   if (! ifs.good())
     return false;
@@ -52,6 +44,7 @@ bool bro_reader::extract(std::ifstream& ifs, size_t& n)
   events.reserve(batch_size);
 
   std::string line;
+  size_t n = 0;
   size_t lines = 0;
   while (std::getline(ifs, line))
   {
@@ -158,6 +151,7 @@ bool bro_reader::extract(std::ifstream& ifs, size_t& n)
         events.reserve(batch_size);
       }
 
+      ++n;
     }
     catch (parse_exception const& e)
     {
@@ -165,8 +159,6 @@ bool bro_reader::extract(std::ifstream& ifs, size_t& n)
         << "reader @" << id() << " encountered parse error at line " << lines
         << ": " << e.what();
     }
-
-    ++n;
   }
 
   if (! events.empty())
@@ -177,6 +169,8 @@ bool bro_reader::extract(std::ifstream& ifs, size_t& n)
       << " events upstream to @" << upstream_->id();
     cppa::send(upstream_, std::move(events));
   }
+
+  LOG(verbose, ingest) << "reader @" << id() << " ingested " << n << " events";
 
   return true;
 }

@@ -73,9 +73,8 @@ protected:
 
   /// Extracts events from a filestream.
   /// @param ifs The file stream to extract events from.
-  /// @param n  The number of events extracted.
   /// @return `true` *iff* the reader successfully ingested the file.
-  virtual bool extract(std::ifstream& ifs, size_t& n) = 0;
+  virtual bool extract(std::ifstream& ifs) = 0;
 
   cppa::actor_ptr upstream_;
   cppa::behavior init_state;
@@ -89,7 +88,7 @@ public:
   bro_reader(cppa::actor_ptr upstream);
 
 protected:
-  virtual bool extract(std::ifstream& ifs, size_t& n);
+  virtual bool extract(std::ifstream& ifs);
 };
 
 } // namespace ingest
