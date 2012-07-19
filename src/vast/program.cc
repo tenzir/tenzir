@@ -263,15 +263,16 @@ void program::stop()
     profiler_ << shutdown;
 
 #ifdef USE_PERFTOOLS_CPU_PROFILER
-  ProfilerState state;
-  ProfilerGetCurrentState(&state);
-  LOG(info, core)
-    << "Gperftools CPU profiler gathered "
-    <<  state.samples_gathered << " samples"
-    << " in file " << state.profile_name;
 
   if (config_.check("perftools-cpu"))
   {
+    ProfilerState state;
+    ProfilerGetCurrentState(&state);
+    LOG(info, core)
+      << "Gperftools CPU profiler gathered "
+      <<  state.samples_gathered << " samples"
+      << " in file " << state.profile_name;
+
     LOG(info, core) << "stopping Gperftools CPU profiler";
     ProfilerStop();
   }
