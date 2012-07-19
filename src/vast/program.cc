@@ -209,9 +209,6 @@ void program::start()
     {
       auto paginate = config_.get<unsigned>("client.paginate");
       auto& expression = config_.get<std::string>("query");
-      LOG(verbose, core)
-          << "spawning query client with pagination " << paginate;
-
       query_client_ = spawn<query::client>(search_, paginate);
       send(query_client_, atom("query"), atom("create"), expression);
     }

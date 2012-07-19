@@ -12,7 +12,10 @@ client::client(cppa::actor_ptr search, unsigned batch_size)
   : batch_size_(batch_size)
   , search_(search)
 {
-  LOG(verbose, query) << "spawning query client @" << id();
+  LOG(verbose, query)
+    << "spawning query client @" << id()
+    << " with batch size " << batch_size_;
+
   using namespace cppa;
   auto shutdown = on(atom("shutdown")) >> [=]
     {
@@ -90,7 +93,7 @@ void client::wait_for_user_input()
     {
       case ' ':
         {
-          LOG(debug, query) 
+          LOG(debug, query)
             << "asking for next chunk in query @" << query_->id();
           send(query_, atom("next chunk"));
           asking_ = true;
