@@ -1,10 +1,9 @@
-#include "vast/ingest/reader.h"
+#include <vast/ingest/reader.h>
 
 #include <ze/event.h>
-#include "vast/fs/fstream.h"
-#include "vast/ingest/bro-1.5/conn.h"
-#include "vast/util/logger.h"
-#include "vast/util/parser/streamer.h"
+#include <vast/fs/fstream.h>
+#include <vast/ingest/exception.h>
+#include <vast/util/logger.h>
 
 namespace vast {
 namespace ingest {
@@ -23,16 +22,17 @@ reader::reader(cppa::actor_ptr upstream)
         size_t n = 0;;
         if (extract(ifs, n))
         {
-          send(upstream_, atom("failure"));
+          LOG(verbose, ingest) << "reader @" << id()
+            << " ingested " << n << " events";
+          send(upstream, atom("success"));
         }
         else
         {
-          LOG(verbose, ingest) << "reader ingested " << n << " events";
-          send(upstream, atom("success"));
+          send(upstream_, atom("failure"));
         }
 
         self->quit();
-        LOG(verbose, ingest) << "reader " << id() << " terminated";
+        LOG(verbose, ingest) << "reader @" << id() << " terminated";
       });
 }
 
@@ -50,47 +50,133 @@ bool bro_reader::extract(std::ifstream& ifs, size_t& n)
   std::vector<ze::event> events;
   events.reserve(batch_size);
 
-  util::parser::streamer<
-      ingest::bro15::parser::connection
-    , ingest::bro15::parser::skipper
-    , ze::event
-  > streamer(ifs);
-
-  while (! streamer.done())
+  std::string line;
+  size_t lines = 0;
+  while (std::getline(ifs, line))
   {
-    if (! ifs.good())
+    try
     {
-      LOG(error, ingest) << "bad stream";
-      return false;
-    }
+      ++lines;
+      if (line.empty())
+      {
+        LOG(warn, ingest) << "encountered empty line in conn.log";
+        continue;
+      }
 
-    ze::event event;
-    event.id(ze::uuid::random());
-    event.name("bro::connection");
+      field_splitter<std::string::const_iterator> fs(line.begin(), line.end());
+      auto& i = fs.start();
+      auto& j = fs.end();
 
-    if (! streamer.extract(event))
-    {
-      LOG(error, ingest) << "reader stopping due to parse error";
-      if (! events.empty())
+      // A connection record.
+      ze::event e("bro::connection");
+      e.id(ze::uuid::random());
+
+      // Timestamp
+      if (*j != ' ')
+        throw parse_exception("invalid conn.log timestamp (field 1)");
+      e.emplace_back(ze::value::parse_time_point(i, j));
+
+      // Duration
+      if (! fs.advance())
+        throw parse_exception("invalid conn.log duration (field 2)");
+      e.emplace_back(*i == '?' ? ze::nil : ze::value::parse_duration(i, j));
+
+      // Originator address
+      if (! fs.advance())
+        throw parse_exception("invalid conn.log originating address (field 3)");
+      e.emplace_back(ze::value::parse_address(i, j));
+
+      // Responder address
+      if (! fs.advance())
+        throw parse_exception("invalid conn.log responding address (field 4)");
+      e.emplace_back(ze::value::parse_address(i, j));
+
+      // Service
+      if (! fs.advance())
+        throw parse_exception("invalid conn.log service (field 5)");
+      e.emplace_back(*i == '?' ? ze::nil : ze::value(i, j));
+
+      // Ports and protocol
+      if (! fs.advance())
+        throw parse_exception("invalid conn.log originating port (field 6)");
+      auto orig_p = ze::value::parse_port(i, j);
+      if (! fs.advance())
+        throw parse_exception("invalid conn.log responding port (field 7)");
+      auto resp_p = ze::value::parse_port(i, j);
+      if (! fs.advance())
+        throw parse_exception("invalid conn.log proto (field 8)");
+      auto proto = ze::value(i, j);
+      auto str = proto.get<ze::string>().data();
+      auto len = proto.get<ze::string>().size();
+      auto p = ze::port::unknown;
+      if (! std::strncmp(str, "tcp", len))
+        p = ze::port::tcp;
+      else if (! std::strncmp(str, "udp", len))
+        p = ze::port::udp;
+      else if (! std::strncmp(str, "icmp", len))
+        p = ze::port::icmp;
+      orig_p.get<ze::port>().type(p);
+      resp_p.get<ze::port>().type(p);
+      e.emplace_back(std::move(orig_p));
+      e.emplace_back(std::move(resp_p));
+      e.emplace_back(std::move(proto));
+
+      // Originator and responder bytes
+      if (! fs.advance())
+        throw parse_exception("invalid conn.log originating bytes (field 9)");
+      e.emplace_back(*i == '?' ? ze::nil : ze::value::parse_uint(i, j));
+      if (! fs.advance())
+        throw parse_exception("invalid conn.log responding bytes (field 10)");
+      e.emplace_back(*i == '?' ? ze::nil : ze::value::parse_uint(i, j));
+
+      // Connection state
+      if (! fs.advance())
+        throw parse_exception("invalid conn.log connection state (field 11)");
+      e.emplace_back(ze::value(i, j));
+
+      // Direction
+      if (! fs.advance())
+        throw parse_exception("invalid conn.log direction (field 12)");
+      e.emplace_back(ze::value(i, j));
+
+      // Additional information
+      if (fs.advance())
+        e.emplace_back(i, j);
+
+      events.push_back(std::move(e));
+
+      if (events.size() % batch_size == 0)
+      {
+        LOG(debug, ingest)
+          << "reader @" << id()
+          << " sends " << batch_size
+          << " events upstream to @" << upstream_->id();
         cppa::send(upstream_, std::move(events));
-      return false;
+        events.clear();
+        events.reserve(batch_size);
+      }
+
+    }
+    catch (parse_exception const& e)
+    {
+      LOG(error, ingest)
+        << "reader @" << id() << " encountered parse error at line " << lines
+        << ": " << e.what();
     }
 
     ++n;
-    events.push_back(std::move(event));
-
-    if (events.size() % batch_size == 0)
-    {
-      // TODO: announce std::vector<ze::event>
-      //cppa::send(upstream_, std::move(events));
-
-      // FIXME: what's the easiest way to reinitialize a moved vector?
-      events = decltype(events)();
-      events.reserve(batch_size);
-    }
   }
 
-  return n;
+  if (! events.empty())
+  {
+    LOG(debug, ingest)
+      << "reader @" << id()
+      << " sends last " << events.size()
+      << " events upstream to @" << upstream_->id();
+    cppa::send(upstream_, std::move(events));
+  }
+
+  return true;
 }
 
 } // namespace ingest
