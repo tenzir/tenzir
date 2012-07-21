@@ -10,6 +10,9 @@ namespace ingest {
 ingestor::ingestor(cppa::actor_ptr archive)
   : archive_(archive)
 {
+  // FIXME: make batch size configurable.
+  size_t batch_size = 500;
+
   LOG(verbose, core) << "spawning ingestor @" << id();
   using namespace cppa;
   init_state = (
@@ -21,22 +24,49 @@ ingestor::ingestor(cppa::actor_ptr archive)
       },
       on(atom("subscribe"), arg_match) >> [=](std::string const& event_name)
       {
-        bro_event_source_ << self->last_dequeued();
+        bro_event_source_ << last_dequeued();
       },
-      on(atom("read_file"), arg_match) >> [=](std::string const& filename)
+      on(atom("ingest"), arg_match) >> [=](std::string const& filename)
       {
-        auto r = spawn<bro_reader>(archive_);
-        send(r, atom("read"), filename);
-        readers_.push_back(r);
+        files_.push(filename);
+        send(self, atom("read"));
       },
-      on(atom("shutdown")) >> [=]()
+      on(atom("read")) >> [=]
       {
-        bro_event_source_ << self->last_dequeued();
-        for (auto& r : readers_)
-          r << self->last_dequeued();
-        readers_.clear();
+        if (files_.empty() || reader_)
+          return;
 
-        self->quit();
+        auto& filename = files_.front();
+        files_.pop();
+
+        reader_ = spawn<bro_15_conn_reader>(archive_, filename);
+        send(reader_, atom("extract"), batch_size);
+      },
+      on(atom("reader"), atom("ack")) >> [=]
+      {
+        assert(last_sender() == reader_);
+        send(last_sender(), atom("extract"), batch_size);
+      },
+      on(atom("reader"), atom("done")) >> [=]
+      {
+        assert(last_sender() == reader_);
+        send(reader_, atom("shutdown"));
+
+        reader_ = nullptr;
+        send(self, atom("read"));
+      },
+      on(atom("shutdown")) >> [=]
+      {
+        bro_event_source_ << last_dequeued();
+        if (reader_)
+        {
+          reader_ << last_dequeued();
+          LOG(verbose, ingest)
+            << "waiting for reader @" << reader_->id()
+            << " to process last batch";
+        }
+
+        quit();
         LOG(verbose, ingest) << "ingestor @" << id() << " terminated";
       });
 }

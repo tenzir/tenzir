@@ -179,7 +179,12 @@ void program::start()
       {
         auto files = config_.get<std::vector<std::string>>("ingestor.file");
         for (auto& file : files)
-          send(ingestor_, atom("read_file"), file);
+        {
+          if (fs::exists(file))
+            send(ingestor_, atom("ingest"), file);
+          else
+            LOG(error, core) << "no such file: " << file;
+        }
       }
     }
 

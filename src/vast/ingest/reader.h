@@ -1,8 +1,9 @@
 #ifndef VAST_INGEST_READER_H
 #define VAST_INGEST_READER_H
 
-#include <iosfwd>
+#include <fstream>
 #include <cppa/cppa.hpp>
+#include <ze/forward.h>
 
 namespace vast {
 namespace ingest {
@@ -15,7 +16,7 @@ class reader : public cppa::sb_actor<reader>
 public:
   /// Constructs a reader.
   /// @param upstream The upstream actor receiving the events.
-  reader(cppa::actor_ptr upstream);
+  reader(cppa::actor_ptr upstream, std::string const& filename);
   virtual ~reader() = default;
 
 protected:
@@ -73,22 +74,44 @@ protected:
 
   /// Extracts events from a filestream.
   /// @param ifs The file stream to extract events from.
-  /// @return `true` *iff* the reader successfully ingested the file.
-  virtual bool extract(std::ifstream& ifs) = 0;
-
+  /// @param batch_size The number of events to extract in one run.
+  /// @return The vector of extracted events.
+  virtual std::vector<ze::event> extract(std::ifstream& ifs,
+                                         size_t batch_size) = 0;
   cppa::actor_ptr upstream_;
+
+private:
   cppa::behavior init_state;
+  size_t total_events_ = 0;
+  std::ifstream file_;
 };
 
 
-/// A reader for Bro log files.
-class bro_reader : public reader
+/// A reader that processes line-based input.
+class line_reader : public reader
 {
 public:
-  bro_reader(cppa::actor_ptr upstream);
+  line_reader(cppa::actor_ptr upstream, std::string const& filename);
 
 protected:
-  virtual bool extract(std::ifstream& ifs);
+  /// Parses a single log line.
+  virtual ze::event parse(std::string const& line) = 0;
+
+private:
+  virtual std::vector<ze::event> extract(std::ifstream& ifs, size_t batch_size);
+
+  size_t current_line_ = 0;
+};
+
+/// A Bro 1.5 `conn.log` reader.
+class bro_15_conn_reader : public line_reader
+{
+public:
+  bro_15_conn_reader(cppa::actor_ptr upstream, std::string const& filename);
+
+private:
+  /// Parses a single log line.
+  virtual ze::event parse(std::string const& line);
 };
 
 } // namespace ingest
