@@ -100,7 +100,7 @@ Then,
     make install
 
 To make sure that the freshly built libstdc++ will be used, you may have to
-adapt the `(DY)LD_LIBRARY_PATH` to include `$PREFIX/lib` (plus `$PREFIX/lib64
+adapt the `(DY)LD_LIBRARY_PATH` to include `$PREFIX/lib` (plus `$PREFIX/lib64`
 for some architectures.) Also make sure that the new GCC is in your `$PATH`,
 ready to picked up by subsequent dependency configurations.
 
