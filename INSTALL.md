@@ -49,7 +49,7 @@ We recommend to install all Clang-related dependencies in the same prefix:
 ### [Boost](http://www.boost.org)
 
     ./bootstrap.sh --with-toolset=clang --prefix=$PREFIX \
-        --with-libraries=date_time,iostreams,system,thread,test,filesystem,program_options
+        --with-libraries=date_time,iostreams,system,thread,test,filesystem,program_options,regex
     
     ./b2 --layout=tagged variant=debug,release threading=multi \
         cxxflags="-std=c++11 -stdlib=libc++" linkflags="-L$LLVM/lib -stdlib=libc++"
