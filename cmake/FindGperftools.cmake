@@ -17,8 +17,6 @@
 #  GPERFTOOLS_LIBRARIES          The Gperftools libraries (tcmalloc & profiler)
 #  GPERFTOOLS_INCLUDE_DIR        The location of Gperftools headers
 
-find_path(Gperftools_ROOT_DIR NAMES include/google/heap-profiler.h)
-
 find_library(GPERFTOOLS_TCMALLOC
     NAMES tcmalloc
     HINTS ${Gperftools_ROOT_DIR}/lib)
@@ -32,7 +30,7 @@ find_library(GPERFTOOLS_TCMALLOC_AND_PROFILER
     HINTS ${Gperftools_ROOT_DIR}/lib)
 
 find_path(GPERFTOOLS_INCLUDE_DIR
-    NAMES Gperftools/heap-profiler.h
+    NAMES gperftools/heap-profiler.h
     HINTS ${Gperftools_ROOT_DIR}/include)
 
 set(GPERFTOOLS_LIBRARIES ${GPERFTOOLS_TCMALLOC_AND_PROFILER})
