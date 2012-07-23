@@ -20,6 +20,17 @@ extern logger* LOGGER;
                                      vast::util::logger::level,     \
                                      vast::util::logger::facility)
 
+/// Debugging logging macro.
+#ifdef VAST_DEBUG
+#define DBG(facility)                                               \
+    if (::vast::util::LOGGER->takes(vast::util::logger::debug))     \
+        ::vast::util::logger::record(*::vast::util::LOGGER,         \
+                                     vast::util::logger::debug,     \
+                                     vast::util::logger::facility)
+#else
+#undef DBG
+#endif
+
 namespace vast {
 namespace log {
 
