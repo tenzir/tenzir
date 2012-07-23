@@ -39,16 +39,15 @@ reader::reader(cppa::actor_ptr upstream, std::string const& filename)
         {
           total_events_ += events.size();
 
-          LOG(debug, ingest)
+          LOG(verbose, ingest)
             << "reader @" << id()
             << " sends " << events.size()
             << " events to @" << upstream_->id()
             << " (cumulative events: " << total_events_ << ')';
 
           send(upstream_, std::move(events));
+          reply(atom("reader"), file_ ? atom("ack") : atom("done"));
         }
-
-        reply(atom("reader"), atom("ack"));
       },
       on(atom("shutdown")) >> [=]
       {
@@ -77,6 +76,9 @@ std::vector<ze::event> line_reader::extract(std::ifstream& ifs, size_t batch_siz
     try
     {
       ++current_line_;
+      if (line.empty())
+        continue;
+
       events.emplace_back(parse(line));
       ++n;
     }
@@ -103,52 +105,84 @@ bro_15_conn_reader::bro_15_conn_reader(cppa::actor_ptr upstream,
 
 ze::event bro_15_conn_reader::parse(std::string const& line)
 {
-  if (line.empty())
-    throw parse_exception("empty line in conn.log");
-
   // A connection record.
   ze::event e("bro::connection");
   e.id(ze::uuid::random());
 
-  field_splitter<std::string::const_iterator> fs(line.begin(), line.end());
-  auto& i = fs.start();
-  auto& j = fs.end();
+  field_splitter<std::string::const_iterator> fs;
+  fs.split(line.begin(), line.end());
+  if (! (fs.fields() == 12 || fs.fields() == 13))
+    throw parse_exception("not enough conn.log fields (at least 12 needed)");
 
   // Timestamp
-  if (*j != ' ')
-    throw parse_exception("invalid conn.log timestamp (field 1)");
+  auto i = fs.start(0);
+  auto j = fs.end(0);
   e.emplace_back(ze::value::parse_time_point(i, j));
+  if (i != j)
+    throw parse_exception("invalid conn.log timestamp (field 1)");
 
   // Duration
-  if (! fs.advance())
-    throw parse_exception("invalid conn.log duration (field 2)");
-  e.emplace_back(*i == '?' ? ze::nil : ze::value::parse_duration(i, j));
+  i = fs.start(1);
+  j = fs.end(1);
+  if (*i == '?')
+  {
+    e.emplace_back(ze::nil);
+  }
+  else
+  {
+    e.emplace_back(ze::value::parse_duration(i, j));
+    if (i != j)
+      throw parse_exception("invalid conn.log duration (field 2)");
+  }
+
 
   // Originator address
-  if (! fs.advance())
-    throw parse_exception("invalid conn.log originating address (field 3)");
+  i = fs.start(2);
+  j = fs.end(2);
   e.emplace_back(ze::value::parse_address(i, j));
+  if (i != j)
+    throw parse_exception("invalid conn.log originating address (field 3)");
 
   // Responder address
-  if (! fs.advance())
-    throw parse_exception("invalid conn.log responding address (field 4)");
+  i = fs.start(3);
+  j = fs.end(3);
   e.emplace_back(ze::value::parse_address(i, j));
+  if (i != j)
+    throw parse_exception("invalid conn.log responding address (field 4)");
 
   // Service
-  if (! fs.advance())
-    throw parse_exception("invalid conn.log service (field 5)");
-  e.emplace_back(*i == '?' ? ze::nil : ze::value(i, j));
+  i = fs.start(4);
+  j = fs.end(4);
+  if (*i == '?')
+  {
+    e.emplace_back(ze::nil);
+  }
+  else
+  {
+    e.emplace_back(ze::value(i, j));
+    if (i != j)
+      throw parse_exception("invalid conn.log service (field 5)");
+  }
 
   // Ports and protocol
-  if (! fs.advance())
-    throw parse_exception("invalid conn.log originating port (field 6)");
+  i = fs.start(5);
+  j = fs.end(5);
   auto orig_p = ze::value::parse_port(i, j);
-  if (! fs.advance())
-    throw parse_exception("invalid conn.log responding port (field 7)");
+  if (i != j)
+    throw parse_exception("invalid conn.log originating port (field 6)");
+
+  i = fs.start(6);
+  j = fs.end(6);
   auto resp_p = ze::value::parse_port(i, j);
-  if (! fs.advance())
-    throw parse_exception("invalid conn.log proto (field 8)");
+  if (i != j)
+    throw parse_exception("invalid conn.log responding port (field 7)");
+
+  i = fs.start(7);
+  j = fs.end(7);
   auto proto = ze::value(i, j);
+  if (i != j)
+    throw parse_exception("invalid conn.log proto (field 8)");
+
   auto str = proto.get<ze::string>().data();
   auto len = proto.get<ze::string>().size();
   auto p = ze::port::unknown;
@@ -165,26 +199,41 @@ ze::event bro_15_conn_reader::parse(std::string const& line)
   e.emplace_back(std::move(proto));
 
   // Originator and responder bytes
-  if (! fs.advance())
-    throw parse_exception("invalid conn.log originating bytes (field 9)");
+  i = fs.start(8);
+  j = fs.end(8);
   e.emplace_back(*i == '?' ? ze::nil : ze::value::parse_uint(i, j));
-  if (! fs.advance())
-    throw parse_exception("invalid conn.log responding bytes (field 10)");
+  //if (i != j)
+  //  throw parse_exception("invalid conn.log originating bytes (field 9)");
+
+  i = fs.start(9);
+  j = fs.end(9);
   e.emplace_back(*i == '?' ? ze::nil : ze::value::parse_uint(i, j));
+  //if (i != j)
+  //  throw parse_exception("invalid conn.log responding bytes (field 10)");
 
   // Connection state
-  if (! fs.advance())
+  i = fs.start(10);
+  j = fs.end(10);
+  e.emplace_back(i, j);
+  if (i != j)
     throw parse_exception("invalid conn.log connection state (field 11)");
-  e.emplace_back(ze::value(i, j));
 
   // Direction
-  if (! fs.advance())
+  i = fs.start(11);
+  j = fs.end(11);
+  e.emplace_back(i, j);
+  if (i != j)
     throw parse_exception("invalid conn.log direction (field 12)");
-  e.emplace_back(ze::value(i, j));
 
   // Additional information
-  if (fs.advance())
+  if (fs.fields() == 13)
+  {
+    i = fs.start(12);
+    j = fs.end(12);
     e.emplace_back(i, j);
+    if (i != j)
+      throw parse_exception("invalid conn.log direction (field 12)");
+  }
 
   return e;
 }

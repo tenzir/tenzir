@@ -1,6 +1,7 @@
 #ifndef VAST_INGEST_READER_H
 #define VAST_INGEST_READER_H
 
+#include <cassert>
 #include <fstream>
 #include <cppa/cppa.hpp>
 #include <ze/forward.h>
@@ -25,51 +26,79 @@ protected:
   class field_splitter
   {
   public:
-    field_splitter(Iterator start, Iterator end, char sep_char = ' ')
-      : field_start_(start)
-      , field_end_(start)
-      , end_(end)
-      , sep_char_(sep_char)
-    {
-      if (field_start_ ==  end_)
-        return;
+    field_splitter() = default;
 
-      while (! (*field_end_ == sep_char_ || field_end_ == end_))
-        ++field_end_;
+    void split(Iterator start, Iterator end)
+    {
+      auto begin = start;
+      while (start != end)
+      {
+        while (*start != sep_[0] && start != end)
+            ++start;
+
+        if (start == end)
+        {
+            fields_.emplace_back(begin, end);
+            return;
+        }
+
+        auto cand_end = start++;
+        auto is_end = true;
+        for (auto i = 1; i < sep_len_; ++i)
+        {
+          if (start == end)
+          {
+            fields_.emplace_back(begin, end);
+            return;
+          }
+          else if (*start == sep_[i])
+          {
+            ++start;
+          }
+          else
+          {
+            is_end = false;
+            break;
+          }
+        }
+
+        if (is_end)
+        {
+          fields_.emplace_back(begin, cand_end);
+          begin = start;
+        }
+      }
     }
 
-    /// Advances the internal iterator range to the next field.
-    /// @return `true` *iff* there is more than one field in the range.
-    bool advance()
+    Iterator start(size_t i) const
     {
-      if (field_end_ == end_)
-        return false;
-
-      field_start_ = ++field_end_;
-      if (field_end_ == end_)
-        return false;
-
-      while (! (*field_end_ == sep_char_ || field_end_ == end_))
-        ++field_end_;
-
-      return true;
+      assert(i < fields_.size());
+      return fields_[i].first;
     }
 
-    Iterator& start()
+    Iterator end(size_t i) const
     {
-      return field_start_;
+      assert(i < fields_.size());
+      return fields_[i].second;
     }
 
-    Iterator& end()
+    void sep(char const* s, size_t len)
     {
-      return field_end_;
+      sep_ = s;
+      sep_len_ = len;
     }
 
-    private:
-      Iterator field_start_;
-      Iterator field_end_;
-      Iterator end_;
-      char sep_char_;
+    size_t fields() const
+    {
+      return fields_.size();
+    }
+
+  private:
+    typedef std::pair<Iterator, Iterator> iterator_pair;
+    std::vector<iterator_pair> fields_;
+
+    char const* sep_ = " ";
+    size_t sep_len_ = 1;
   };
 
   /// Extracts events from a filestream.
