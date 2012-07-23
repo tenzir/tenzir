@@ -79,7 +79,7 @@ else ()
     message(FATAL_ERROR "Could not find Broccoli")
 endif ()
 
-find_package(libcppa)
+find_package(Libcppa)
 if (LIBCPPA_FOUND)
     include_directories(${LIBCPPA_INCLUDE_DIR})
 else ()
