@@ -21,13 +21,29 @@ public:
   virtual ~reader() = default;
 
 protected:
-  /// Helper class to create iterator ranges separated by a given separator.
+  /// Helper class to create iterator ranges separated by a given character
+  /// sequence.
+  /// @tparam Iterator A random access iterator.
   template <typename Iterator>
   class field_splitter
   {
-  public:
-    field_splitter() = default;
+    static_assert(
+        std::is_same<
+          typename std::iterator_traits<Iterator>::iterator_category,
+          std::random_access_iterator_tag
+        >::value,
+        "field splitter requires random access iterator");
 
+  public:
+    /// Splits the given range *[start,end)* into fields.
+    ///
+    /// @param start The first element of the range.
+    ///
+    /// @param end One element past the last element of the range.
+    ///
+    /// @param max_fields The maximum number of fields to split. If there
+    /// exists more input after the last split operation at position *p*, then
+    /// the range *[p, end)* will constitute the final element.
     void split(Iterator start, Iterator end, int max_fields = -1)
     {
       auto begin = start;
@@ -70,24 +86,28 @@ protected:
       }
     }
 
+    /// Retrieves the start position of a given field.
     Iterator start(size_t i) const
     {
       assert(i < fields_.size());
       return fields_[i].first;
     }
 
+    /// Retrieves the end position of a given field.
     Iterator end(size_t i) const
     {
       assert(i < fields_.size());
       return fields_[i].second;
     }
 
+    /// Sets the field separator.
     void sep(char const* s, size_t len)
     {
       sep_ = s;
       sep_len_ = len;
     }
 
+    /// Retrieves the number of fields.
     size_t fields() const
     {
       return fields_.size();
