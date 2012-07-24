@@ -28,11 +28,6 @@ segmentizer::segmentizer(cppa::actor_ptr segment_manager,
 
       if (segment_.bytes() < max_segment_size)
       {
-        DBG(store)
-          << "segmentizer @" << id()
-          << " flushes chunk #" << segment_.size() + 1
-          << " of segment " << segment_.id();
-
         writer_.flush_chunk();
         return;
       }
