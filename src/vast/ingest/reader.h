@@ -5,6 +5,7 @@
 #include <fstream>
 #include <cppa/cppa.hpp>
 #include <ze/forward.h>
+#include <ze/value.h>
 
 namespace vast {
 namespace ingest {
@@ -62,6 +63,7 @@ protected:
         auto is_end = true;
         for (size_t i = 1; i < sep_len_; ++i)
         {
+          printf("sep[%zu]: %c, *start == %c", i, sep_[i], *start);
           if (start == end)
           {
             fields_.emplace_back(begin, end);
@@ -122,17 +124,15 @@ protected:
   };
 
   /// Extracts events from a filestream.
-  /// @param ifs The file stream to extract events from.
   /// @param batch_size The number of events to extract in one run.
   /// @return The vector of extracted events.
-  virtual std::vector<ze::event> extract(std::ifstream& ifs,
-                                         size_t batch_size) = 0;
+  virtual std::vector<ze::event> extract(size_t batch_size) = 0;
   cppa::actor_ptr upstream_;
+  std::ifstream file_;
 
 private:
   cppa::behavior init_state;
   size_t total_events_ = 0;
-  std::ifstream file_;
 };
 
 
@@ -147,9 +147,33 @@ protected:
   virtual ze::event parse(std::string const& line) = 0;
 
 private:
-  virtual std::vector<ze::event> extract(std::ifstream& ifs, size_t batch_size);
+  virtual std::vector<ze::event> extract(size_t batch_size);
 
   size_t current_line_ = 0;
+};
+
+class bro_reader : public line_reader
+{
+public:
+  bro_reader(cppa::actor_ptr upstream, std::string const& filename);
+
+  /// Extracts log meta data.
+  void parse_header();
+
+protected:
+  /// Parses a single log line.
+  virtual ze::event parse(std::string const& line);
+
+  ze::string escape_;
+  ze::string separator_;
+  ze::string set_separator_;
+  ze::string empty_field_;
+  ze::string unset_field_;
+  ze::string path_;
+  std::vector<ze::string> field_names_;
+  std::vector<ze::value_type> field_types_;
+
+private:
 };
 
 /// A Bro 1.5 `conn.log` reader.

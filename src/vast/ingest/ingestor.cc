@@ -1,6 +1,7 @@
 #include <vast/ingest/ingestor.h>
 
 #include <vast/comm/bro_event_source.h>
+#include <vast/ingest/exception.h>
 #include <vast/ingest/reader.h>
 #include <vast/util/logger.h>
 
@@ -26,9 +27,14 @@ ingestor::ingestor(cppa::actor_ptr archive)
       {
         bro_event_source_ << last_dequeued();
       },
-      on(atom("ingest"), arg_match) >> [=](std::string const& filename)
+      on(atom("ingest"), "bro1", arg_match) >> [=](std::string const& filename)
       {
-        files_.push(filename);
+        files_.emplace(file_type::bro1, filename);
+        send(self, atom("read"));
+      },
+      on(atom("ingest"), "bro2", arg_match) >> [=](std::string const& filename)
+      {
+        files_.emplace(file_type::bro2, filename);
         send(self, atom("read"));
       },
       on(atom("read")) >> [=]
@@ -36,10 +42,21 @@ ingestor::ingestor(cppa::actor_ptr archive)
         if (files_.empty() || reader_)
           return;
 
-        auto& filename = files_.front();
+        auto& file = files_.front();
         files_.pop();
 
-        reader_ = spawn<bro_15_conn_reader>(archive_, filename);
+        switch (file.first)
+        {
+          default:
+            throw exception("unsupport file type");
+          case file_type::bro1:
+            reader_ = spawn<bro_15_conn_reader>(archive_, file.second);
+            break;
+          case file_type::bro2:
+            reader_ = spawn<bro_reader>(archive_, file.second);
+            break;
+        }
+
         send(reader_, atom("extract"), batch_size);
       },
       on(atom("reader"), atom("ack")) >> [=]

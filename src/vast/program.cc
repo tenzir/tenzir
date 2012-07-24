@@ -175,13 +175,14 @@ void program::start()
           send(ingestor_, atom("subscribe"), event);
       }
 
-      if (config_.check("ingestor.file"))
+      if (config_.check("ingestor.file-names"))
       {
-        auto files = config_.get<std::vector<std::string>>("ingestor.file");
+        auto type = config_.get<std::string>("ingestor.file-type");
+        auto files = config_.get<std::vector<std::string>>("ingestor.file-names");
         for (auto& file : files)
         {
           if (fs::exists(file))
-            send(ingestor_, atom("ingest"), file);
+            send(ingestor_, atom("ingest"), type, file);
           else
             LOG(error, core) << "no such file: " << file;
         }

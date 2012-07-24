@@ -34,7 +34,7 @@ reader::reader(cppa::actor_ptr upstream, std::string const& filename)
           reply(atom("reader"), atom("done"));
         }
 
-        auto events = std::move(extract(file_, batch_size));
+        auto events = std::move(extract(batch_size));
         if (! events.empty())
         {
           total_events_ += events.size();
@@ -62,14 +62,14 @@ line_reader::line_reader(cppa::actor_ptr upstream, std::string const& filename)
 {
 }
 
-std::vector<ze::event> line_reader::extract(std::ifstream& ifs, size_t batch_size)
+std::vector<ze::event> line_reader::extract(size_t batch_size)
 {
   std::vector<ze::event> events;
   events.reserve(batch_size);
 
   size_t errors = 0;
   std::string line;
-  while (std::getline(ifs, line))
+  while (std::getline(file_, line))
   {
     try
     {
@@ -94,6 +94,190 @@ std::vector<ze::event> line_reader::extract(std::ifstream& ifs, size_t batch_siz
   }
 
   return events;
+}
+
+bro_reader::bro_reader(cppa::actor_ptr upstream, std::string const& filename)
+  : line_reader(std::move(upstream), filename)
+{
+  parse_header();
+}
+
+void bro_reader::parse_header()
+{
+  std::string line;
+
+
+  {
+    if (file_.peek() != '#')
+      throw parse_exception("bro log lacks first log file header");
+    if (! std::getline(file_, line))
+      throw parse_exception("could not extract first log line");
+
+    field_splitter<std::string::const_iterator> fs;
+    fs.split(line.begin(), line.end());
+    if (fs.fields() != 2 || std::string(fs.start(0), fs.end(0)) != "#separator")
+      throw parse_exception("invalid #separator definition");
+
+    std::string sep;
+    std::string bro_sep(fs.start(1), fs.end(1));
+    std::string::size_type pos = 0;
+    while (pos != std::string::npos)
+    {
+      pos = bro_sep.find("\\x", pos);
+      if (pos != std::string::npos)
+      {
+        auto i = std::stoi(bro_sep.substr(pos + 2, 2), nullptr, 16);
+        assert(i >= 0 && i <= 255);
+        sep.push_back(i);
+        pos += 2;
+      }
+    }
+
+    separator_.assign(sep.begin(), sep.end());
+  }
+
+  {
+    if (file_.peek() != '#')
+      throw parse_exception("bro log lacks second log file header");
+    if (! std::getline(file_, line))
+      throw parse_exception("could not extract second log line");
+
+    field_splitter<std::string::const_iterator> fs;
+    fs.sep(separator_.data(), separator_.size());
+    fs.split(line.begin(), line.end());
+    if (fs.fields() != 2 || std::string(fs.start(0), fs.end(0)) != "#set_separator")
+      throw parse_exception("invalid #set_separator definition");
+
+    // FIXME: support multi-char set separators.
+    auto set_sep = std::string(fs.start(1), fs.end(1));
+    set_separator_.assign(set_sep.begin(), set_sep.end());
+  }
+
+  {
+    if (file_.peek() != '#')
+      throw parse_exception("bro log lacks third log file header");
+    if (! std::getline(file_, line))
+      throw parse_exception("could not extract third log line");
+
+    field_splitter<std::string::const_iterator> fs;
+    fs.sep(separator_.data(), separator_.size());
+    fs.split(line.begin(), line.end());
+    if (fs.fields() != 2 || std::string(fs.start(0), fs.end(0)) != "#empty_field")
+      throw parse_exception("invalid #empty_field definition");
+
+    auto empty = std::string(fs.start(1), fs.end(1));
+    empty_field_.assign(empty.begin(), empty.end());
+  }
+
+  {
+    if (file_.peek() != '#')
+      throw parse_exception("bro log lacks fourth log file header");
+    if (! std::getline(file_, line))
+      throw parse_exception("could not extract fourth log line");
+
+    field_splitter<std::string::const_iterator> fs;
+    fs.sep(separator_.data(), separator_.size());
+    fs.split(line.begin(), line.end());
+    if (fs.fields() != 2 || std::string(fs.start(0), fs.end(0)) != "#unset_field")
+      throw parse_exception("invalid #unset_field definition");
+
+    auto unset = std::string(fs.start(1), fs.end(1));
+    unset_field_.assign(unset.begin(), unset.end());
+  }
+
+  {
+    if (file_.peek() != '#')
+      throw parse_exception("bro log lacks fifth log file header");
+    if (! std::getline(file_, line))
+      throw parse_exception("could not extract fifth log line");
+
+    field_splitter<std::string::const_iterator> fs;
+    fs.sep(separator_.data(), separator_.size());
+    fs.split(line.begin(), line.end());
+    if (fs.fields() != 2 || std::string(fs.start(0), fs.end(0)) != "#path")
+      throw parse_exception("invalid #path definition");
+
+    auto path = std::string(fs.start(1), fs.end(1));
+    path_.assign(path.begin(), path.end());
+  }
+
+  {
+    if (file_.peek() != '#')
+      throw parse_exception("bro log lacks sixth log file header");
+    if (! std::getline(file_, line))
+      throw parse_exception("could not extract sixth log line");
+
+    field_splitter<std::string::const_iterator> fs;
+    fs.sep(separator_.data(), separator_.size());
+    fs.split(line.begin(), line.end());
+
+    for (size_t i = 1; i < fs.fields(); ++i)
+      field_names_.emplace_back(fs.start(i), fs.end(i));
+  }
+
+  {
+    if (file_.peek() != '#')
+      throw parse_exception("bro log lacks seventh log file header");
+    if (! std::getline(file_, line))
+      throw parse_exception("could not seventh sixth log line");
+
+    field_splitter<std::string::const_iterator> fs;
+    fs.sep(separator_.data(), separator_.size());
+    fs.split(line.begin(), line.end());
+
+    for (size_t i = 1; i < fs.fields(); ++i)
+    {
+      std::string type(fs.start(i), fs.end(i));
+      ze::value_type vt;
+      // TODO: complete to all types
+      if (type == "enum")
+        vt = ze::string_type;
+      else if (type == "bool")
+        vt = ze::bool_type;
+      else if (type == "count")
+        vt = ze::uint_type;
+      else if (type == "interval")
+        vt = ze::duration_type;
+      else if (type == "time")
+        vt = ze::timepoint_type;
+      else if (type == "string")
+        vt = ze::string_type;
+      else if (type == "addr")
+        vt = ze::address_type;
+      else if (type == "port")
+        vt = ze::port_type;
+
+      field_types_.push_back(vt);
+    }
+  }
+
+  if (file_.peek() == '#')
+    throw parse_exception("more headers than VAST knows");
+
+  DBG(ingest) 
+    << "reader @" << id() << " parsed bro2 header:"
+    << " #separator " << separator_
+    << " #set_separator " << set_separator_
+    << " #empty_field " << empty_field_
+    << " #unset_field " << unset_field_
+    << " #path " << path_;
+  {
+    std::ostringstream str;
+    for (auto& name : field_names_)
+      str << " " << name;
+    DBG(ingest) << "reader @" << id() << " extracted field names:" << str.str();
+  }
+  {
+    std::ostringstream str;
+    for (auto& type : field_types_)
+      str << " " << type;
+    DBG(ingest) << "reader @" << id() << " extracted field types:" << str.str();
+  }
+}
+
+ze::event bro_reader::parse(std::string const& line)
+{
+  assert(! "not yet implemented");
 }
 
 bro_15_conn_reader::bro_15_conn_reader(cppa::actor_ptr upstream,

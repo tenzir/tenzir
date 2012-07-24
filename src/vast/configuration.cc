@@ -67,7 +67,9 @@ configuration::configuration()
      "port of the ingestor")
     ("ingestor.events", po::value<std::vector<std::string>>()->multitoken(),
      "explicit list of events to ingest")
-    ("ingestor.file", po::value<std::vector<std::string>>()->multitoken(),
+    ("ingestor.file-type", po::value<std::string>()->default_value("bro1"),
+     "file type of the file(s) to ingest")
+    ("ingestor.file-names", po::value<std::vector<std::string>>()->multitoken(),
      "file(s) to ingest")
     ;
 
@@ -159,6 +161,7 @@ void configuration::init()
 
   depends("index-actor", "archive-actor");
   depends("print-schema", "schema");
+  depends("ingestor.file-names", "ingestor.file-type");
 
   auto v = get<int>("console-verbosity");
   if (v < 0 || v > 6)
