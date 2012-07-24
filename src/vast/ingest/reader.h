@@ -28,7 +28,7 @@ protected:
   public:
     field_splitter() = default;
 
-    void split(Iterator start, Iterator end)
+    void split(Iterator start, Iterator end, int max_fields = -1)
     {
       auto begin = start;
       while (start != end)
@@ -36,7 +36,7 @@ protected:
         while (*start != sep_[0] && start != end)
             ++start;
 
-        if (start == end)
+        if (start == end || --max_fields == 0)
         {
             fields_.emplace_back(begin, end);
             return;
@@ -44,7 +44,7 @@ protected:
 
         auto cand_end = start++;
         auto is_end = true;
-        for (auto i = 1; i < sep_len_; ++i)
+        for (size_t i = 1; i < sep_len_; ++i)
         {
           if (start == end)
           {

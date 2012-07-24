@@ -34,7 +34,7 @@ reader::reader(cppa::actor_ptr upstream, std::string const& filename)
           reply(atom("reader"), atom("done"));
         }
 
-        auto events = std::move(extract(file_, 500));
+        auto events = std::move(extract(file_, batch_size));
         if (! events.empty())
         {
           total_events_ += events.size();
@@ -107,10 +107,11 @@ ze::event bro_15_conn_reader::parse(std::string const& line)
 {
   // A connection record.
   ze::event e("bro::connection");
-  e.id(ze::uuid::random());
+  // FIXME: Improve performance of random UUID generation.
+  //  e.id(ze::uuid::random());
 
   field_splitter<std::string::const_iterator> fs;
-  fs.split(line.begin(), line.end());
+  fs.split(line.begin(), line.end(), 13);
   if (! (fs.fields() == 12 || fs.fields() == 13))
     throw parse_exception("not enough conn.log fields (at least 12 needed)");
 
