@@ -1,5 +1,6 @@
 #include <vast/store/archive.h>
 
+#include <ze/event.h>
 #include <vast/store/emitter.h>
 #include <vast/store/exception.h>
 #include <vast/store/segmentizer.h>

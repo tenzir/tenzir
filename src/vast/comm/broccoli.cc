@@ -549,7 +549,7 @@ BroEvent* broccoli::reverse_factory::make_event(ze::event const& event)
 {
   LOG(debug, event) << "building broccoli event " << event.name();
 
-  BroEvent* bro_event = bro_event_new(event.name().c_str());
+  BroEvent* bro_event = bro_event_new(event.name().data());
   if (! bro_event)
   {
     LOG(error, broccoli) << "could not create bro_event " << event.name();
@@ -573,7 +573,6 @@ void broccoli::callback(BroConn* bc, void* user_data, BroEvMeta* meta)
   try
   {
     ze::event event;
-    event.id(ze::uuid::random());
     factory::make_event(event, meta);
     auto f = static_cast<event_handler*>(user_data);
     (*f)(std::move(event));

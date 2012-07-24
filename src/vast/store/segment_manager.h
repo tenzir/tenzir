@@ -3,7 +3,7 @@
 
 #include <unordered_map>
 #include <cppa/cppa.hpp>
-#include <ze/event.h>
+#include <ze/uuid.h>
 #include <vast/fs/path.h>
 #include <vast/util/lru_cache.h>
 

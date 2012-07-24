@@ -39,9 +39,9 @@ uint32_t segment::writer::operator<<(ze::event const& event)
                             event.name());
 
   if (i == segment_.event_names_.end())
-    segment_.event_names_.push_back(event.name());
+    segment_.event_names_.emplace_back(event.name().data());
   else if (event.name() < *i)
-    segment_.event_names_.insert(i, event.name());
+    segment_.event_names_.emplace(i, event.name().data());
 
   bytes_ += putter_ << event;
 
