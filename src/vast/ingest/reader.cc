@@ -46,8 +46,9 @@ reader::reader(cppa::actor_ptr upstream, std::string const& filename)
             << " (cumulative events: " << total_events_ << ')';
 
           send(upstream_, std::move(events));
-          reply(atom("reader"), file_ ? atom("ack") : atom("done"));
         }
+
+        reply(atom("reader"), file_ ? atom("ack") : atom("done"));
       },
       on(atom("shutdown")) >> [=]
       {
@@ -66,12 +67,9 @@ std::vector<ze::event> line_reader::extract(std::ifstream& ifs, size_t batch_siz
   std::vector<ze::event> events;
   events.reserve(batch_size);
 
-  size_t n = 0;
   size_t errors = 0;
   std::string line;
-  std::getline(ifs, line);
-
-  do
+  while (std::getline(ifs, line))
   {
     try
     {
@@ -80,7 +78,9 @@ std::vector<ze::event> line_reader::extract(std::ifstream& ifs, size_t batch_siz
         continue;
 
       events.emplace_back(parse(line));
-      ++n;
+
+      if (events.size() == batch_size)
+        break;
     }
     catch (parse_exception const& e)
     {
@@ -92,7 +92,6 @@ std::vector<ze::event> line_reader::extract(std::ifstream& ifs, size_t batch_siz
         break;
     }
   }
-  while (std::getline(ifs, line) && events.size() % batch_size != 0);
 
   return events;
 }
@@ -107,6 +106,7 @@ ze::event bro_15_conn_reader::parse(std::string const& line)
 {
   // A connection record.
   ze::event e("bro::connection");
+  e.timestamp(ze::clock::now());
   // FIXME: Improve performance of random UUID generation.
   //  e.id(ze::uuid::random());
 
@@ -135,7 +135,6 @@ ze::event bro_15_conn_reader::parse(std::string const& line)
     if (i != j)
       throw parse_exception("invalid conn.log duration (field 2)");
   }
-
 
   // Originator address
   i = fs.start(2);
@@ -202,15 +201,29 @@ ze::event bro_15_conn_reader::parse(std::string const& line)
   // Originator and responder bytes
   i = fs.start(8);
   j = fs.end(8);
-  e.emplace_back(*i == '?' ? ze::nil : ze::value::parse_uint(i, j));
-  //if (i != j)
-  //  throw parse_exception("invalid conn.log originating bytes (field 9)");
+  if (*i == '?')
+  {
+    e.emplace_back(ze::value::parse_uint(i, j));
+  }
+  else
+  {
+    e.emplace_back(ze::value::parse_duration(i, j));
+    if (i != j)
+      throw parse_exception("invalid conn.log originating bytes (field 9)");
+  }
 
-  i = fs.start(9);
-  j = fs.end(9);
-  e.emplace_back(*i == '?' ? ze::nil : ze::value::parse_uint(i, j));
-  //if (i != j)
-  //  throw parse_exception("invalid conn.log responding bytes (field 10)");
+  i = fs.start(8);
+  j = fs.end(8);
+  if (*i == '?')
+  {
+    e.emplace_back(ze::value::parse_uint(i, j));
+  }
+  else
+  {
+    e.emplace_back(ze::value::parse_duration(i, j));
+    if (i != j)
+      throw parse_exception("invalid conn.log responding bytes (field 10)");
+  }
 
   // Connection state
   i = fs.start(10);

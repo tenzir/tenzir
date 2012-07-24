@@ -50,7 +50,7 @@ segmentizer::segmentizer(cppa::actor_ptr segment_manager,
       },
       on(atom("shutdown")) >> [=]()
       {
-        if (writer_.elements() == 0)
+        if (segment_.events() == 0)
         {
           reply(atom("shutdown"), atom("ack"));
           terminate();
