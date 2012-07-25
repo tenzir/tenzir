@@ -22,107 +22,6 @@ public:
   virtual ~reader() = default;
 
 protected:
-  /// Helper class to create iterator ranges separated by a given character
-  /// sequence.
-  /// @tparam Iterator A random access iterator.
-  template <typename Iterator>
-  class field_splitter
-  {
-    static_assert(
-        std::is_same<
-          typename std::iterator_traits<Iterator>::iterator_category,
-          std::random_access_iterator_tag
-        >::value,
-        "field splitter requires random access iterator");
-
-  public:
-    /// Splits the given range *[start,end)* into fields.
-    ///
-    /// @param start The first element of the range.
-    ///
-    /// @param end One element past the last element of the range.
-    ///
-    /// @param max_fields The maximum number of fields to split. If there
-    /// exists more input after the last split operation at position *p*, then
-    /// the range *[p, end)* will constitute the final element.
-    void split(Iterator start, Iterator end, int max_fields = -1)
-    {
-      auto begin = start;
-      while (start != end)
-      {
-        while (*start != sep_[0] && start != end)
-            ++start;
-
-        if (start == end || --max_fields == 0)
-        {
-            fields_.emplace_back(begin, end);
-            return;
-        }
-
-        auto cand_end = start++;
-        auto is_end = true;
-        for (size_t i = 1; i < sep_len_; ++i)
-        {
-          printf("sep[%zu]: %c, *start == %c", i, sep_[i], *start);
-          if (start == end)
-          {
-            fields_.emplace_back(begin, end);
-            return;
-          }
-          else if (*start == sep_[i])
-          {
-            ++start;
-          }
-          else
-          {
-            is_end = false;
-            break;
-          }
-        }
-
-        if (is_end)
-        {
-          fields_.emplace_back(begin, cand_end);
-          begin = start;
-        }
-      }
-    }
-
-    /// Retrieves the start position of a given field.
-    Iterator start(size_t i) const
-    {
-      assert(i < fields_.size());
-      return fields_[i].first;
-    }
-
-    /// Retrieves the end position of a given field.
-    Iterator end(size_t i) const
-    {
-      assert(i < fields_.size());
-      return fields_[i].second;
-    }
-
-    /// Sets the field separator.
-    void sep(char const* s, size_t len)
-    {
-      sep_ = s;
-      sep_len_ = len;
-    }
-
-    /// Retrieves the number of fields.
-    size_t fields() const
-    {
-      return fields_.size();
-    }
-
-  private:
-    typedef std::pair<Iterator, Iterator> iterator_pair;
-    std::vector<iterator_pair> fields_;
-
-    char const* sep_ = " ";
-    size_t sep_len_ = 1;
-  };
-
   /// Extracts events from a filestream.
   /// @param batch_size The number of events to extract in one run.
   /// @return The vector of extracted events.
@@ -164,7 +63,6 @@ protected:
   /// Parses a single log line.
   virtual ze::event parse(std::string const& line);
 
-  ze::string escape_;
   ze::string separator_;
   ze::string set_separator_;
   ze::string empty_field_;
@@ -172,8 +70,11 @@ protected:
   ze::string path_;
   std::vector<ze::string> field_names_;
   std::vector<ze::value_type> field_types_;
+  std::vector<ze::value_type> set_types_;
 
 private:
+  /// Converts a Bro type to a 0event type. Does not support container types.
+  ze::value_type bro_to_ze(ze::string const& str);
 };
 
 /// A Bro 1.5 `conn.log` reader.

@@ -1,6 +1,7 @@
 #include <vast/ingest/reader.h>
 
 #include <ze/event.h>
+#include <ze/util/parse_helpers.h>
 #include <vast/ingest/exception.h>
 #include <vast/util/logger.h>
 
@@ -105,15 +106,13 @@ bro_reader::bro_reader(cppa::actor_ptr upstream, std::string const& filename)
 void bro_reader::parse_header()
 {
   std::string line;
-
-
   {
     if (file_.peek() != '#')
       throw parse_exception("bro log lacks first log file header");
     if (! std::getline(file_, line))
       throw parse_exception("could not extract first log line");
 
-    field_splitter<std::string::const_iterator> fs;
+    ze::util::field_splitter<std::string::const_iterator> fs;
     fs.split(line.begin(), line.end());
     if (fs.fields() != 2 || std::string(fs.start(0), fs.end(0)) != "#separator")
       throw parse_exception("invalid #separator definition");
@@ -133,7 +132,7 @@ void bro_reader::parse_header()
       }
     }
 
-    separator_.assign(sep.begin(), sep.end());
+    separator_ = ze::string(sep.begin(), sep.end());
   }
 
   {
@@ -142,7 +141,7 @@ void bro_reader::parse_header()
     if (! std::getline(file_, line))
       throw parse_exception("could not extract second log line");
 
-    field_splitter<std::string::const_iterator> fs;
+    ze::util::field_splitter<std::string::const_iterator> fs;
     fs.sep(separator_.data(), separator_.size());
     fs.split(line.begin(), line.end());
     if (fs.fields() != 2 || std::string(fs.start(0), fs.end(0)) != "#set_separator")
@@ -150,7 +149,7 @@ void bro_reader::parse_header()
 
     // FIXME: support multi-char set separators.
     auto set_sep = std::string(fs.start(1), fs.end(1));
-    set_separator_.assign(set_sep.begin(), set_sep.end());
+    set_separator_ = ze::string(set_sep.begin(), set_sep.end());
   }
 
   {
@@ -159,14 +158,14 @@ void bro_reader::parse_header()
     if (! std::getline(file_, line))
       throw parse_exception("could not extract third log line");
 
-    field_splitter<std::string::const_iterator> fs;
+    ze::util::field_splitter<std::string::const_iterator> fs;
     fs.sep(separator_.data(), separator_.size());
     fs.split(line.begin(), line.end());
     if (fs.fields() != 2 || std::string(fs.start(0), fs.end(0)) != "#empty_field")
       throw parse_exception("invalid #empty_field definition");
 
     auto empty = std::string(fs.start(1), fs.end(1));
-    empty_field_.assign(empty.begin(), empty.end());
+    empty_field_ = ze::string(empty.begin(), empty.end());
   }
 
   {
@@ -175,14 +174,14 @@ void bro_reader::parse_header()
     if (! std::getline(file_, line))
       throw parse_exception("could not extract fourth log line");
 
-    field_splitter<std::string::const_iterator> fs;
+    ze::util::field_splitter<std::string::const_iterator> fs;
     fs.sep(separator_.data(), separator_.size());
     fs.split(line.begin(), line.end());
     if (fs.fields() != 2 || std::string(fs.start(0), fs.end(0)) != "#unset_field")
       throw parse_exception("invalid #unset_field definition");
 
     auto unset = std::string(fs.start(1), fs.end(1));
-    unset_field_.assign(unset.begin(), unset.end());
+    unset_field_ = ze::string(unset.begin(), unset.end());
   }
 
   {
@@ -191,14 +190,14 @@ void bro_reader::parse_header()
     if (! std::getline(file_, line))
       throw parse_exception("could not extract fifth log line");
 
-    field_splitter<std::string::const_iterator> fs;
+    ze::util::field_splitter<std::string::const_iterator> fs;
     fs.sep(separator_.data(), separator_.size());
     fs.split(line.begin(), line.end());
     if (fs.fields() != 2 || std::string(fs.start(0), fs.end(0)) != "#path")
       throw parse_exception("invalid #path definition");
 
     auto path = std::string(fs.start(1), fs.end(1));
-    path_.assign(path.begin(), path.end());
+    path_ = ze::string(path.begin(), path.end());
   }
 
   {
@@ -207,7 +206,7 @@ void bro_reader::parse_header()
     if (! std::getline(file_, line))
       throw parse_exception("could not extract sixth log line");
 
-    field_splitter<std::string::const_iterator> fs;
+    ze::util::field_splitter<std::string::const_iterator> fs;
     fs.sep(separator_.data(), separator_.size());
     fs.split(line.begin(), line.end());
 
@@ -221,33 +220,24 @@ void bro_reader::parse_header()
     if (! std::getline(file_, line))
       throw parse_exception("could not seventh sixth log line");
 
-    field_splitter<std::string::const_iterator> fs;
+    ze::util::field_splitter<std::string::const_iterator> fs;
     fs.sep(separator_.data(), separator_.size());
     fs.split(line.begin(), line.end());
 
     for (size_t i = 1; i < fs.fields(); ++i)
     {
-      std::string type(fs.start(i), fs.end(i));
-      ze::value_type vt;
-      // TODO: complete to all types
-      if (type == "enum")
-        vt = ze::string_type;
-      else if (type == "bool")
-        vt = ze::bool_type;
-      else if (type == "count")
-        vt = ze::uint_type;
-      else if (type == "interval")
-        vt = ze::duration_type;
-      else if (type == "time")
-        vt = ze::timepoint_type;
-      else if (type == "string")
-        vt = ze::string_type;
-      else if (type == "addr")
-        vt = ze::address_type;
-      else if (type == "port")
-        vt = ze::port_type;
+      ze::string t(fs.start(i), fs.end(i));
 
-      field_types_.push_back(vt);
+      if (t.starts_with("table["))
+      {
+        field_types_.push_back(ze::set_type);
+        ze::string elem(t.find("[") + 1, t.end() - 1);
+        set_types_.push_back(bro_to_ze(elem));
+      }
+      else
+      {
+        field_types_.push_back(bro_to_ze(t));
+      }
     }
   }
 
@@ -265,14 +255,48 @@ void bro_reader::parse_header()
     std::ostringstream str;
     for (auto& name : field_names_)
       str << " " << name;
-    DBG(ingest) << "reader @" << id() << " extracted field names:" << str.str();
+    DBG(ingest) << "reader @" << id() << " has field names:" << str.str();
   }
   {
     std::ostringstream str;
     for (auto& type : field_types_)
       str << " " << type;
-    DBG(ingest) << "reader @" << id() << " extracted field types:" << str.str();
+    DBG(ingest) << "reader @" << id() << " has field types:" << str.str();
   }
+  {
+    std::ostringstream str;
+    for (auto& type : set_types_)
+      str << " " << type;
+    DBG(ingest) << "reader @" << id() << " has set types:" << str.str();
+  }
+}
+
+ze::value_type bro_reader::bro_to_ze(ze::string const& type)
+{
+  if (type == "enum" || type == "string" || type == "file")
+    return ze::string_type;
+  else if (type == "bool")
+    return ze::bool_type;
+  else if (type == "int")
+    return ze::int_type;
+  else if (type == "count")
+    return ze::uint_type;
+  else if (type == "double")
+    return ze::double_type;
+  else if (type == "interval")
+    return ze::duration_type;
+  else if (type == "time")
+    return ze::timepoint_type;
+  else if (type == "addr")
+    return ze::address_type;
+  else if (type == "port")
+    return ze::port_type;
+  else if (type == "pattern")
+    return ze::regex_type;
+  else if (type == "subnet")
+    return ze::prefix_type;
+  else
+    return ze::invalid_type;
 }
 
 ze::event bro_reader::parse(std::string const& line)
@@ -294,7 +318,7 @@ ze::event bro_15_conn_reader::parse(std::string const& line)
   // FIXME: Improve performance of random UUID generation.
   //  e.id(ze::uuid::random());
 
-  field_splitter<std::string::const_iterator> fs;
+  ze::util::field_splitter<std::string::const_iterator> fs;
   fs.split(line.begin(), line.end(), 13);
   if (! (fs.fields() == 12 || fs.fields() == 13))
     throw parse_exception("not enough conn.log fields (at least 12 needed)");
@@ -302,7 +326,7 @@ ze::event bro_15_conn_reader::parse(std::string const& line)
   // Timestamp
   auto i = fs.start(0);
   auto j = fs.end(0);
-  e.emplace_back(ze::value::parse_time_point(i, j));
+  e.emplace_back(ze::value::parse(ze::timepoint_type, i, j));
   if (i != j)
     throw parse_exception("invalid conn.log timestamp (field 1)");
 
@@ -315,7 +339,7 @@ ze::event bro_15_conn_reader::parse(std::string const& line)
   }
   else
   {
-    e.emplace_back(ze::value::parse_duration(i, j));
+    e.emplace_back(ze::value::parse(ze::duration_type, i, j));
     if (i != j)
       throw parse_exception("invalid conn.log duration (field 2)");
   }
@@ -323,14 +347,14 @@ ze::event bro_15_conn_reader::parse(std::string const& line)
   // Originator address
   i = fs.start(2);
   j = fs.end(2);
-  e.emplace_back(ze::value::parse_address(i, j));
+  e.emplace_back(ze::value::parse(ze::address_type, i, j));
   if (i != j)
     throw parse_exception("invalid conn.log originating address (field 3)");
 
   // Responder address
   i = fs.start(3);
   j = fs.end(3);
-  e.emplace_back(ze::value::parse_address(i, j));
+  e.emplace_back(ze::value::parse(ze::address_type, i, j));
   if (i != j)
     throw parse_exception("invalid conn.log responding address (field 4)");
 
@@ -343,7 +367,7 @@ ze::event bro_15_conn_reader::parse(std::string const& line)
   }
   else
   {
-    e.emplace_back(ze::value(i, j));
+    e.emplace_back(ze::value::parse(ze::string_type, i, j));
     if (i != j)
       throw parse_exception("invalid conn.log service (field 5)");
   }
@@ -351,30 +375,29 @@ ze::event bro_15_conn_reader::parse(std::string const& line)
   // Ports and protocol
   i = fs.start(5);
   j = fs.end(5);
-  auto orig_p = ze::value::parse_port(i, j);
+  auto orig_p = ze::value::parse(ze::port_type, i, j);
   if (i != j)
     throw parse_exception("invalid conn.log originating port (field 6)");
 
   i = fs.start(6);
   j = fs.end(6);
-  auto resp_p = ze::value::parse_port(i, j);
+  auto resp_p = ze::value::parse(ze::port_type, i, j);
   if (i != j)
     throw parse_exception("invalid conn.log responding port (field 7)");
 
   i = fs.start(7);
   j = fs.end(7);
-  auto proto = ze::value(i, j);
+  auto proto = ze::value::parse(ze::string_type, i, j);
   if (i != j)
     throw parse_exception("invalid conn.log proto (field 8)");
 
-  auto str = proto.get<ze::string>().data();
-  auto len = proto.get<ze::string>().size();
+  auto& str = proto.get<ze::string>();
   auto p = ze::port::unknown;
-  if (! std::strncmp(str, "tcp", len))
+  if (str == "tcp")
     p = ze::port::tcp;
-  else if (! std::strncmp(str, "udp", len))
+  else if (str == "udp")
     p = ze::port::udp;
-  else if (! std::strncmp(str, "icmp", len))
+  else if (str == "icmp")
     p = ze::port::icmp;
   orig_p.get<ze::port>().type(p);
   resp_p.get<ze::port>().type(p);
@@ -387,11 +410,11 @@ ze::event bro_15_conn_reader::parse(std::string const& line)
   j = fs.end(8);
   if (*i == '?')
   {
-    e.emplace_back(ze::value::parse_uint(i, j));
+    e.emplace_back(ze::nil);
   }
   else
   {
-    e.emplace_back(ze::value::parse_duration(i, j));
+    e.emplace_back(ze::value::parse(ze::uint_type, i, j));
     if (i != j)
       throw parse_exception("invalid conn.log originating bytes (field 9)");
   }
@@ -400,11 +423,11 @@ ze::event bro_15_conn_reader::parse(std::string const& line)
   j = fs.end(8);
   if (*i == '?')
   {
-    e.emplace_back(ze::value::parse_uint(i, j));
+    e.emplace_back(ze::nil);
   }
   else
   {
-    e.emplace_back(ze::value::parse_duration(i, j));
+    e.emplace_back(ze::value::parse(ze::uint_type, i, j));
     if (i != j)
       throw parse_exception("invalid conn.log responding bytes (field 10)");
   }
@@ -412,14 +435,14 @@ ze::event bro_15_conn_reader::parse(std::string const& line)
   // Connection state
   i = fs.start(10);
   j = fs.end(10);
-  e.emplace_back(i, j);
+  e.emplace_back(ze::string(i, j));
   if (i != j)
     throw parse_exception("invalid conn.log connection state (field 11)");
 
   // Direction
   i = fs.start(11);
   j = fs.end(11);
-  e.emplace_back(i, j);
+  e.emplace_back(ze::string(i, j));
   if (i != j)
     throw parse_exception("invalid conn.log direction (field 12)");
 
@@ -428,7 +451,7 @@ ze::event bro_15_conn_reader::parse(std::string const& line)
   {
     i = fs.start(12);
     j = fs.end(12);
-    e.emplace_back(i, j);
+    e.emplace_back(ze::string(i, j));
     if (i != j)
       throw parse_exception("invalid conn.log direction (field 12)");
   }
