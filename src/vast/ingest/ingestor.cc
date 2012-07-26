@@ -13,32 +13,36 @@ ingestor::ingestor(cppa::actor_ptr archive, std::string const& id_file)
   : archive_(archive)
 {
   // FIXME: make batch size configurable.
-  size_t batch_size = 50000;
+  size_t batch_size = 1000;
 
   LOG(verbose, ingest) << "spawning ingestor @" << id();
 
   using namespace cppa;
-  id_tracker_ = spawn<id_tracker>(id_file);
+  tracker_ = spawn<id_tracker>(id_file);
   init_state = (
       on(atom("initialize"), arg_match) >> [=](std::string const& host,
                                                unsigned port)
       {
-        bro_event_source_ = spawn<bro_event_source>(archive_);
+        bro_event_source_ = spawn<bro_event_source>(tracker_, archive_);
         send(bro_event_source_, atom("bind"), host, port);
       },
       on(atom("subscribe"), arg_match) >> [=](std::string const& event_name)
       {
         bro_event_source_ << last_dequeued();
       },
-      on(atom("ingest"), "bro1", arg_match) >> [=](std::string const& filename)
+      on(atom("ingest"), "bro1conn", arg_match) >> [=](std::string const& filename)
       {
-        files_.emplace(file_type::bro1, filename);
+        files_.emplace(file_type::bro1conn, filename);
         send(self, atom("read"));
       },
       on(atom("ingest"), "bro2", arg_match) >> [=](std::string const& filename)
       {
         files_.emplace(file_type::bro2, filename);
         send(self, atom("read"));
+      },
+      on(atom("ingest"), val<std::string>, arg_match) >> [=](std::string const&)
+      {
+        LOG(error, ingest) << "invalid ingestion file type";
       },
       on(atom("read")) >> [=]
       {
@@ -52,11 +56,12 @@ ingestor::ingestor(cppa::actor_ptr archive, std::string const& id_file)
         {
           default:
             throw exception("unsupport file type");
-          case file_type::bro1:
-            reader_ = spawn<bro_15_conn_reader>(archive_, file.second);
+          case file_type::bro1conn:
+            reader_ = spawn<bro_15_conn_reader>(self, tracker_, archive_,
+                                                file.second);
             break;
           case file_type::bro2:
-            reader_ = spawn<bro_reader>(archive_, file.second);
+            reader_ = spawn<bro_reader>(self, tracker_, archive_, file.second);
             break;
         }
 
@@ -85,7 +90,7 @@ ingestor::ingestor(cppa::actor_ptr archive, std::string const& id_file)
             << "waiting for reader @" << reader_->id()
             << " to process last batch";
         }
-        id_tracker_ << last_dequeued();
+        tracker_ << last_dequeued();
 
         quit();
         LOG(verbose, ingest) << "ingestor @" << id() << " terminated";

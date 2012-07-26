@@ -8,8 +8,12 @@
 namespace vast {
 namespace ingest {
 
-reader::reader(cppa::actor_ptr upstream, std::string const& filename)
-  : upstream_(upstream)
+reader::reader(cppa::actor_ptr ingestor,
+               cppa::actor_ptr tracker,
+               cppa::actor_ptr upstream,
+               std::string const& filename)
+  : tracker_(tracker)
+  , upstream_(upstream)
   , file_(filename)
 {
   LOG(verbose, ingest)
@@ -32,7 +36,13 @@ reader::reader(cppa::actor_ptr upstream, std::string const& filename)
           LOG(error, ingest)
             << "reader @" << id() << " experienced an error with " << filename;
 
-          reply(atom("reader"), atom("done"));
+          send(ingestor, atom("reader"), atom("done"));
+        }
+
+        if (next_id_ == last_id_)
+        {
+          ask_for_new_ids(batch_size);
+          return;
         }
 
         auto events = std::move(extract(batch_size));
@@ -49,7 +59,7 @@ reader::reader(cppa::actor_ptr upstream, std::string const& filename)
           send(upstream_, std::move(events));
         }
 
-        reply(atom("reader"), file_ ? atom("ack") : atom("done"));
+        send(ingestor, atom("reader"), file_ ? atom("ack") : atom("done"));
       },
       on(atom("shutdown")) >> [=]
       {
@@ -58,8 +68,45 @@ reader::reader(cppa::actor_ptr upstream, std::string const& filename)
       });
 }
 
-line_reader::line_reader(cppa::actor_ptr upstream, std::string const& filename)
-  : reader(std::move(upstream), filename)
+void reader::ask_for_new_ids(size_t n)
+{
+  DBG(ingest)
+    << "reader @" << id()
+    << " asks tracker @"  << tracker_->id()
+    << " for " << n << " new ids";
+
+  using namespace cppa;
+  auto future = sync_send(tracker_, atom("request"), n);
+  handle_response(future)(
+      on(atom("id"), arg_match) >> [=](uint64_t lower, uint64_t upper)
+      {
+        DBG(ingest)
+          << "reader @" << id() << " received id range from tracker: "
+          << '[' << lower << ',' << upper << ')';
+
+        next_id_ = lower;
+        last_id_ = upper;
+
+        send(self, atom("extract"), static_cast<size_t>(upper - lower));
+      },
+      after(std::chrono::seconds(5)) >> [=]
+      {
+        LOG(error, ingest)
+          << "reader @" << id()
+          << " did not receive new id range from tracker"
+          << " after 5 seconds";
+      });
+}
+
+
+line_reader::line_reader(cppa::actor_ptr ingestor,
+                         cppa::actor_ptr tracker,
+                         cppa::actor_ptr upstream,
+                         std::string const& filename)
+  : reader(std::move(ingestor),
+           std::move(tracker),
+           std::move(upstream),
+           filename)
 {
 }
 
@@ -78,7 +125,10 @@ std::vector<ze::event> line_reader::extract(size_t batch_size)
       if (line.empty())
         continue;
 
-      events.emplace_back(parse(line));
+      assert(next_id_ != last_id_);
+      auto event = std::move(parse(line));
+      event.id(next_id_++);
+      events.push_back(std::move(event));
 
       if (events.size() == batch_size)
         break;
@@ -86,8 +136,8 @@ std::vector<ze::event> line_reader::extract(size_t batch_size)
     catch (parse_exception const& e)
     {
       LOG(warn, ingest)
-        << "reader @" << id() << " encountered parse error at line " << current_line_
-        << ": " << e.what();
+        << "reader @" << id() << " encountered parse error at line "
+        << current_line_ << ": " << e.what();
 
       if (++errors >= 20)
         break;
@@ -97,8 +147,14 @@ std::vector<ze::event> line_reader::extract(size_t batch_size)
   return events;
 }
 
-bro_reader::bro_reader(cppa::actor_ptr upstream, std::string const& filename)
-  : line_reader(std::move(upstream), filename)
+bro_reader::bro_reader(cppa::actor_ptr ingestor,
+                       cppa::actor_ptr tracker,
+                       cppa::actor_ptr upstream,
+                       std::string const& filename)
+  : line_reader(std::move(ingestor),
+                std::move(tracker),
+                std::move(upstream),
+                filename)
 {
   parse_header();
 }
@@ -195,7 +251,7 @@ void bro_reader::parse_header()
     if (fs.fields() != 2 || std::string(fs.start(0), fs.end(0)) != "#path")
       throw parse_exception("invalid #path definition");
 
-    path_ = "bro::" + ze::string(fs.start(1), fs.end(1));
+    path_ = ze::string(fs.start(1), fs.end(1));
   }
 
   {
@@ -268,6 +324,8 @@ void bro_reader::parse_header()
       str << " " << type;
     DBG(ingest) << "reader @" << id() << " has set types:" << str.str();
   }
+
+  path_ = "bro::" + path_;
 }
 
 ze::value_type bro_reader::bro_to_ze(ze::string const& type)
@@ -355,19 +413,22 @@ ze::event bro_reader::parse(std::string const& line)
   return e;
 }
 
-bro_15_conn_reader::bro_15_conn_reader(cppa::actor_ptr upstream,
+bro_15_conn_reader::bro_15_conn_reader(cppa::actor_ptr ingestor,
+                                       cppa::actor_ptr tracker,
+                                       cppa::actor_ptr upstream,
                                        std::string const& filename)
-  : line_reader(std::move(upstream), filename)
+  : line_reader(std::move(ingestor),
+                std::move(tracker),
+                std::move(upstream),
+                filename)
 {
 }
 
 ze::event bro_15_conn_reader::parse(std::string const& line)
 {
   // A connection record.
-  ze::event e("bro::connection");
+  ze::event e("bro::conn");
   e.timestamp(ze::clock::now());
-  // FIXME: Improve performance of random UUID generation.
-  //  e.id(ze::uuid::random());
 
   ze::util::field_splitter<std::string::const_iterator> fs;
   fs.split(line.begin(), line.end(), 13);
@@ -486,14 +547,14 @@ ze::event bro_15_conn_reader::parse(std::string const& line)
   // Connection state
   i = fs.start(10);
   j = fs.end(10);
-  e.emplace_back(ze::string(i, j));
+  e.emplace_back(ze::string::parse(i, j));
   if (i != j)
     throw parse_exception("invalid conn.log connection state (field 11)");
 
   // Direction
   i = fs.start(11);
   j = fs.end(11);
-  e.emplace_back(ze::string(i, j));
+  e.emplace_back(ze::string::parse(i, j));
   if (i != j)
     throw parse_exception("invalid conn.log direction (field 12)");
 
@@ -502,7 +563,7 @@ ze::event bro_15_conn_reader::parse(std::string const& line)
   {
     i = fs.start(12);
     j = fs.end(12);
-    e.emplace_back(ze::string(i, j));
+    e.emplace_back(ze::string::parse(i, j));
     if (i != j)
       throw parse_exception("invalid conn.log direction (field 12)");
   }

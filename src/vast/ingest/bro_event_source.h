@@ -17,8 +17,9 @@ class bro_event_source : public cppa::sb_actor<bro_event_source>
 
 public:
   /// Constructs a Bro event source.
+  /// @param tracker The event ID tracker.
   /// @param upstream The actor to send the received events to.
-  bro_event_source(cppa::actor_ptr upstream);
+  bro_event_source(cppa::actor_ptr tracker, cppa::actor_ptr upstream);
 
 private:
   /// Adds an event name to the list of events to subscribe to.

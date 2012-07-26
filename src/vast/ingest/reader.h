@@ -17,17 +17,32 @@ class reader : public cppa::sb_actor<reader>
 
 public:
   /// Constructs a reader.
+  /// @param ingestor The ingestor.
+  /// @param tracker The event ID tracker.
   /// @param upstream The upstream actor receiving the events.
-  reader(cppa::actor_ptr upstream, std::string const& filename);
+  /// @param filename The name of the file to ingest.
+  reader(cppa::actor_ptr ingestor,
+         cppa::actor_ptr tracker,
+         cppa::actor_ptr upstream,
+         std::string const& filename);
+
   virtual ~reader() = default;
 
 protected:
+  /// Asks the ID tracker for a batch of new IDs.
+  /// @param n The number of IDs to request.
+  void ask_for_new_ids(size_t n);
+
   /// Extracts events from a filestream.
   /// @param batch_size The number of events to extract in one run.
   /// @return The vector of extracted events.
   virtual std::vector<ze::event> extract(size_t batch_size) = 0;
+
+  cppa::actor_ptr tracker_;
   cppa::actor_ptr upstream_;
   std::ifstream file_;
+  uint64_t next_id_ = 0;
+  uint64_t last_id_ = 0;
 
 private:
   cppa::behavior init_state;
@@ -39,7 +54,10 @@ private:
 class line_reader : public reader
 {
 public:
-  line_reader(cppa::actor_ptr upstream, std::string const& filename);
+  line_reader(cppa::actor_ptr ingestor,
+              cppa::actor_ptr tracker,
+              cppa::actor_ptr upstream,
+              std::string const& filename);
 
 protected:
   /// Parses a single log line.
@@ -54,7 +72,10 @@ private:
 class bro_reader : public line_reader
 {
 public:
-  bro_reader(cppa::actor_ptr upstream, std::string const& filename);
+  bro_reader(cppa::actor_ptr ingestor,
+             cppa::actor_ptr tracker,
+             cppa::actor_ptr upstream,
+             std::string const& filename);
 
   /// Extracts log meta data.
   void parse_header();
@@ -81,7 +102,10 @@ private:
 class bro_15_conn_reader : public line_reader
 {
 public:
-  bro_15_conn_reader(cppa::actor_ptr upstream, std::string const& filename);
+  bro_15_conn_reader(cppa::actor_ptr ingestor,
+                     cppa::actor_ptr tracker,
+                     cppa::actor_ptr upstream,
+                     std::string const& filename);
 
 private:
   /// Parses a single log line.

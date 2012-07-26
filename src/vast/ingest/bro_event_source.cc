@@ -8,7 +8,8 @@
 namespace vast {
 namespace ingest {
 
-bro_event_source::bro_event_source(cppa::actor_ptr upstream)
+bro_event_source::bro_event_source(cppa::actor_ptr tracker,
+                                   cppa::actor_ptr upstream)
   : error_handler_([&](std::shared_ptr<comm::broccoli> bro) { disconnect(bro); })
 {
   LOG(verbose, core) << "spawning bro event source @" << id();
@@ -53,7 +54,7 @@ void bro_event_source::start_server(std::string const& host, unsigned port,
             conn,
             [=](ze::event event)
             {
-              // TODO: send events in batches (chunks or segments).
+              // FIXME: assign events an ID.
               send(sink, std::move(event));
             });
 

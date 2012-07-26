@@ -12,10 +12,10 @@ class ingestor : public cppa::sb_actor<ingestor>
 {
   friend class cppa::sb_actor<ingestor>;
 
-  /// Support file types for ingestion.
+  /// Supported file types.
   enum class file_type
   {
-    bro1,
+    bro1conn,
     bro2
   };
 
@@ -28,7 +28,7 @@ public:
 private:
   std::queue<std::pair<file_type, std::string>> files_;
   cppa::actor_ptr archive_;
-  cppa::actor_ptr id_tracker_;
+  cppa::actor_ptr tracker_;
   cppa::actor_ptr bro_event_source_;
   cppa::actor_ptr reader_;
   cppa::behavior init_state;
