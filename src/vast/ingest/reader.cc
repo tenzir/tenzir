@@ -147,7 +147,6 @@ void bro_reader::parse_header()
     if (fs.fields() != 2 || std::string(fs.start(0), fs.end(0)) != "#set_separator")
       throw parse_exception("invalid #set_separator definition");
 
-    // FIXME: support multi-char set separators.
     auto set_sep = std::string(fs.start(1), fs.end(1));
     set_separator_ = ze::string(set_sep.begin(), set_sep.end());
   }
@@ -345,7 +344,8 @@ ze::event bro_reader::parse(std::string const& line)
     }
 
     if (field_types_[f] == ze::set_type)
-      e.push_back(ze::set::parse(set_types_[sets++], start, end));
+      e.push_back(ze::set::parse(
+              set_types_[sets++], start, end, set_separator_));
     else
       e.emplace_back(ze::value::parse(field_types_[f], start, end));
   }
