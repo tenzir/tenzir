@@ -162,7 +162,10 @@ void program::start()
 
     if (config_.check("ingestor-actor"))
     {
-      ingestor_ = spawn<ingest::ingestor>(archive_);
+      ingestor_ = spawn<ingest::ingestor>(
+          archive_,
+          (config_.get<fs::path>("directory") / "id").string());
+
       send(ingestor_,
            atom("initialize"),
            config_.get<std::string>("ingestor.host"),

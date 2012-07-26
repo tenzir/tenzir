@@ -22,11 +22,13 @@ class ingestor : public cppa::sb_actor<ingestor>
 public:
   /// Sets the initial behavior.
   /// @param archive The archive actor.
-  ingestor(cppa::actor_ptr archive);
+  /// @param id_file The event ID file for the ID tracker.
+  ingestor(cppa::actor_ptr archive, std::string const& id_file);
 
 private:
   std::queue<std::pair<file_type, std::string>> files_;
   cppa::actor_ptr archive_;
+  cppa::actor_ptr id_tracker_;
   cppa::actor_ptr bro_event_source_;
   cppa::actor_ptr reader_;
   cppa::behavior init_state;

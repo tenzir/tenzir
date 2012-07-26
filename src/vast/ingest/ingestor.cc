@@ -2,20 +2,23 @@
 
 #include <vast/ingest/bro_event_source.h>
 #include <vast/ingest/exception.h>
+#include <vast/ingest/id_tracker.h>
 #include <vast/ingest/reader.h>
 #include <vast/util/logger.h>
 
 namespace vast {
 namespace ingest {
 
-ingestor::ingestor(cppa::actor_ptr archive)
+ingestor::ingestor(cppa::actor_ptr archive, std::string const& id_file)
   : archive_(archive)
 {
   // FIXME: make batch size configurable.
   size_t batch_size = 50000;
 
   LOG(verbose, ingest) << "spawning ingestor @" << id();
+
   using namespace cppa;
+  id_tracker_ = spawn<id_tracker>(id_file);
   init_state = (
       on(atom("initialize"), arg_match) >> [=](std::string const& host,
                                                unsigned port)
@@ -82,6 +85,7 @@ ingestor::ingestor(cppa::actor_ptr archive)
             << "waiting for reader @" << reader_->id()
             << " to process last batch";
         }
+        id_tracker_ << last_dequeued();
 
         quit();
         LOG(verbose, ingest) << "ingestor @" << id() << " terminated";
