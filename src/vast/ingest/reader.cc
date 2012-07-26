@@ -53,7 +53,7 @@ reader::reader(cppa::actor_ptr upstream, std::string const& filename)
       },
       on(atom("shutdown")) >> [=]
       {
-        self->quit();
+        quit();
         LOG(verbose, ingest) << "reader @" << id() << " terminated";
       });
 }
