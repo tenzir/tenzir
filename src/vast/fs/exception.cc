@@ -5,10 +5,6 @@
 namespace vast {
 namespace fs {
 
-exception::exception()
-{
-};
-
 exception::exception(char const* msg)
   : vast::exception(msg)
 {
@@ -16,10 +12,6 @@ exception::exception(char const* msg)
 
 exception::exception(std::string const& msg)
   : vast::exception(msg)
-{
-};
-
-exception::~exception() noexcept
 {
 };
 
@@ -32,8 +24,12 @@ dir_exception::dir_exception(char const* msg, std::string const& dir)
   msg_ = oss.str();
 };
 
-dir_exception::~dir_exception() noexcept
+file_exception::file_exception(char const* msg, std::string const& file)
+  : exception(msg)
 {
+  std::ostringstream oss;
+  oss << msg << " (" << file << ')';
+  msg_ = oss.str();
 };
 
 } // namespace fs
