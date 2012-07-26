@@ -196,8 +196,7 @@ void bro_reader::parse_header()
     if (fs.fields() != 2 || std::string(fs.start(0), fs.end(0)) != "#path")
       throw parse_exception("invalid #path definition");
 
-    auto path = std::string(fs.start(1), fs.end(1));
-    path_ = ze::string(path.begin(), path.end());
+    path_ = "bro::" + ze::string(fs.start(1), fs.end(1));
   }
 
   {
@@ -301,7 +300,57 @@ ze::value_type bro_reader::bro_to_ze(ze::string const& type)
 
 ze::event bro_reader::parse(std::string const& line)
 {
-  assert(! "not yet implemented");
+  ze::util::field_splitter<std::string::const_iterator> fs;
+  fs.sep(separator_.data(), separator_.size());
+  fs.split(line.begin(), line.end());
+  if (fs.fields() != field_types_.size())
+      throw parse_exception("inconsistent number of fields");
+
+  ze::event e(path_);
+  e.timestamp(ze::clock::now());
+  size_t sets = 0;
+  for (size_t f = 0; f < fs.fields(); ++f)
+  {
+    auto start = fs.start(f);
+    auto end = fs.end(f);
+
+    auto unset = true;
+    for (size_t i = 0; i < unset_field_.size(); ++i)
+    {
+      if (unset_field_[i] != *(start + i))
+      {
+        unset = false;
+        break;
+      }
+    }
+    if (unset)
+    {
+      e.push_back(ze::nil);
+      continue;
+    }
+
+    auto empty = true;
+    for (size_t i = 0; i < empty_field_.size(); ++i)
+    {
+      if (empty_field_[i] != *(start + i))
+      {
+        empty = false;
+        break;
+      }
+    }
+    if (empty)
+    {
+      e.emplace_back(field_types_[f]);
+      continue;
+    }
+
+    if (field_types_[f] == ze::set_type)
+      e.push_back(ze::set::parse(set_types_[sets++], start, end));
+    else
+      e.emplace_back(ze::value::parse(field_types_[f], start, end));
+  }
+
+  return e;
 }
 
 bro_15_conn_reader::bro_15_conn_reader(cppa::actor_ptr upstream,
