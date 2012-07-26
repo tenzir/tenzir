@@ -14,7 +14,7 @@ ingestor::ingestor(cppa::actor_ptr archive)
   // FIXME: make batch size configurable.
   size_t batch_size = 50000;
 
-  LOG(verbose, core) << "spawning ingestor @" << id();
+  LOG(verbose, ingest) << "spawning ingestor @" << id();
   using namespace cppa;
   init_state = (
       on(atom("initialize"), arg_match) >> [=](std::string const& host,
