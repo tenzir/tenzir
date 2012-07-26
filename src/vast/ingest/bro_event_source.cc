@@ -1,22 +1,22 @@
-#include "vast/comm/bro_event_source.h"
+#include <vast/ingest/bro_event_source.h>
 
 #include <algorithm>
 #include <ze/event.h>
-#include "vast/comm/connection.h"
-#include "vast/util/logger.h"
+#include <vast/comm/connection.h>
+#include <vast/util/logger.h>
 
 namespace vast {
-namespace comm {
+namespace ingest {
 
 bro_event_source::bro_event_source(cppa::actor_ptr upstream)
-  : error_handler_([&](std::shared_ptr<broccoli> bro) { disconnect(bro); })
+  : error_handler_([&](std::shared_ptr<comm::broccoli> bro) { disconnect(bro); })
 {
   LOG(verbose, core) << "spawning bro event source @" << id();
   using namespace cppa;
   init_state = (
       on(atom("subscribe"), arg_match) >> [=](std::string const& event)
       {
-        LOG(verbose, comm)
+        LOG(verbose, ingest)
           << "bro event source @" << id() << " subscribes to event " << event;
         subscribe(event);
       },
@@ -28,7 +28,7 @@ bro_event_source::bro_event_source(cppa::actor_ptr upstream)
       {
         stop_server();
         quit();
-        LOG(verbose, comm) << "bro event source @" << id() << " terminated";
+        LOG(verbose, ingest) << "bro event source @" << id() << " terminated";
       });
 }
 
@@ -47,9 +47,9 @@ void bro_event_source::start_server(std::string const& host, unsigned port,
   server_.start(
       host,
       port,
-      [=](std::shared_ptr<connection> const& conn)
+      [=](std::shared_ptr<comm::connection> const& conn)
       {
-        auto bro = std::make_shared<broccoli>(
+        auto bro = std::make_shared<comm::broccoli>(
             conn,
             [=](ze::event event)
             {
@@ -77,12 +77,12 @@ void bro_event_source::stop_server()
   broccolis_.clear();
 }
 
-void bro_event_source::disconnect(std::shared_ptr<broccoli> const& session)
+void bro_event_source::disconnect(std::shared_ptr<comm::broccoli> const& session)
 {
   std::lock_guard<std::mutex> lock(mutex_);
   broccolis_.erase(std::remove(broccolis_.begin(), broccolis_.end(), session),
                    broccolis_.end());
 }
 
-} // namespace comm
+} // namespace ingest
 } // namespace vast

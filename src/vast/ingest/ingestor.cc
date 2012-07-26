@@ -1,6 +1,6 @@
 #include <vast/ingest/ingestor.h>
 
-#include <vast/comm/bro_event_source.h>
+#include <vast/ingest/bro_event_source.h>
 #include <vast/ingest/exception.h>
 #include <vast/ingest/reader.h>
 #include <vast/util/logger.h>
@@ -20,7 +20,7 @@ ingestor::ingestor(cppa::actor_ptr archive)
       on(atom("initialize"), arg_match) >> [=](std::string const& host,
                                                unsigned port)
       {
-        bro_event_source_ = spawn<comm::bro_event_source>(archive_);
+        bro_event_source_ = spawn<bro_event_source>(archive_);
         send(bro_event_source_, atom("bind"), host, port);
       },
       on(atom("subscribe"), arg_match) >> [=](std::string const& event_name)

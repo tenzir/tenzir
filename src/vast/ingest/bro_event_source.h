@@ -8,7 +8,7 @@
 #include <vast/comm/server.h>
 
 namespace vast {
-namespace comm {
+namespace ingest {
 
 /// Receives events from the external world.
 class bro_event_source : public cppa::sb_actor<bro_event_source>
@@ -36,18 +36,18 @@ private:
 
   /// Removes a connection after an error or a remote disconnect.
   /// @param session The Broccoli session
-  void disconnect(std::shared_ptr<broccoli> const& session);
+  void disconnect(std::shared_ptr<comm::broccoli> const& session);
 
-  server server_;
-  broccoli::error_handler error_handler_;
+  comm::server server_;
+  comm::broccoli::error_handler error_handler_;
   std::vector<std::string> event_names_;
-  std::vector<std::shared_ptr<broccoli>> broccolis_;
+  std::vector<std::shared_ptr<comm::broccoli>> broccolis_;
   std::mutex mutex_;
 
   cppa::behavior init_state;
 };
 
-} // namespace comm
+} // namespace ingest
 } // namespace vast
 
 #endif
