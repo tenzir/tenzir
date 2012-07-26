@@ -343,11 +343,12 @@ ze::event bro_reader::parse(std::string const& line)
       continue;
     }
 
+    ze::value v;
     if (field_types_[f] == ze::set_type)
-      e.push_back(ze::set::parse(
-              set_types_[sets++], start, end, set_separator_));
+      v = ze::set::parse(set_types_[sets++], start, end, set_separator_);
     else
-      e.emplace_back(ze::value::parse(field_types_[f], start, end));
+      v = ze::value::parse(field_types_[f], start, end);
+    e.emplace_back(std::move(v));
   }
 
   return e;
