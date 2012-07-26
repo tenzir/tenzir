@@ -242,7 +242,7 @@ void bro_reader::parse_header()
   if (file_.peek() == '#')
     throw parse_exception("more headers than VAST knows");
 
-  DBG(ingest) 
+  DBG(ingest)
     << "reader @" << id() << " parsed bro2 header:"
     << " #separator " << separator_
     << " #set_separator " << set_separator_
@@ -261,6 +261,7 @@ void bro_reader::parse_header()
       str << " " << type;
     DBG(ingest) << "reader @" << id() << " has field types:" << str.str();
   }
+  if (! set_types_.empty())
   {
     std::ostringstream str;
     for (auto& type : set_types_)
