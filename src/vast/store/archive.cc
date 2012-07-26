@@ -30,7 +30,7 @@ archive::archive(std::string const& directory,
       },
       on_arg_match >> [=](ze::event const& e)
       {
-        segmentizer_ << self->last_dequeued();
+        segmentizer_ << last_dequeued();
       },
       on_arg_match >> [=](std::vector<ze::event> const& v)
       {
@@ -38,11 +38,11 @@ archive::archive(std::string const& directory,
           << " forwards " << v.size() << " events to segmentizer @"
           << segmentizer_->id();
 
-        segmentizer_ << self->last_dequeued();
+        segmentizer_ << last_dequeued();
       },
       on(atom("shutdown")) >> [=]()
       {
-        segmentizer_ << self->last_dequeued();
+        segmentizer_ << last_dequeued();
         become(
             keep_behavior,
             on(atom("shutdown"), atom("ack")) >> [=]
@@ -51,7 +51,7 @@ archive::archive(std::string const& directory,
               for (auto em : emitters_)
                 send(em, atom("shutdown"));
 
-              self->quit();
+              quit();
               LOG(verbose, store) << "archive @" << id() << " terminated";
             },
             after(std::chrono::seconds(30)) >> [=]
@@ -60,7 +60,7 @@ archive::archive(std::string const& directory,
                 << " did not receive shutdown ack from segmentizer @"
                 << segmentizer_->id();
 
-              self->quit();
+              quit();
               LOG(verbose, store) << "archive @" << id() << " terminated";
             });
       });

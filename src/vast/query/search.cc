@@ -19,8 +19,8 @@ search::search(cppa::actor_ptr archive, cppa::actor_ptr index)
       on(atom("query"), atom("create"), arg_match)
         >> [=](std::string const& expression)
       {
-        auto client = self->last_sender();
-        self->monitor(client);
+        auto client = last_sender();
+        monitor(client);
         auto q = spawn<query>(archive_, index_, client, expression);
         send(q, atom("start"));
         queries_.push_back(q);
@@ -28,7 +28,7 @@ search::search(cppa::actor_ptr archive, cppa::actor_ptr index)
       },
       on(atom("DOWN"), arg_match) >> [=](uint32_t reason)
       {
-        auto client = self->last_sender();
+        auto client = last_sender();
         LOG(verbose, query) << "client @" << client->id() << " went down";
         auto range = clients_.equal_range(client);
         auto i = range.first;
@@ -51,11 +51,11 @@ search::search(cppa::actor_ptr archive, cppa::actor_ptr index)
         for (auto& q : queries_)
         {
           LOG(debug, query) << "@" << id() << " shuts down query @" << q->id();
-          q << self->last_dequeued();
+          q << last_dequeued();
         }
 
         queries_.clear();
-        self->quit();
+        quit();
         LOG(verbose, query) << "search @" << id() << " terminated";
       });
 }

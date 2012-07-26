@@ -19,7 +19,7 @@ client::client(cppa::actor_ptr search, unsigned batch_size)
   using namespace cppa;
   auto shutdown = on(atom("shutdown")) >> [=]
     {
-      self->quit();
+      quit();
       LOG(verbose, query) << "query client @" << id() << " terminated";
     };
 
@@ -27,7 +27,7 @@ client::client(cppa::actor_ptr search, unsigned batch_size)
       on(atom("query"), atom("create"), arg_match)
         >> [=](std::string const& expression)
       {
-        search_ << self->last_dequeued();
+        search_ << last_dequeued();
         become(operating_);
       },
       shutdown

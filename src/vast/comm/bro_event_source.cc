@@ -27,7 +27,7 @@ bro_event_source::bro_event_source(cppa::actor_ptr upstream)
       on(atom("shutdown")) >> [=]()
       {
         stop_server();
-        self->quit();
+        quit();
         LOG(verbose, comm) << "bro event source @" << id() << " terminated";
       });
 }

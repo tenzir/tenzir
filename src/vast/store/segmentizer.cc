@@ -62,7 +62,7 @@ segmentizer::segmentizer(cppa::actor_ptr segment_manager,
             << " sends last segment " << segment_.id();
 
           send(segment_manager_, std::move(segment_));
-          auto archive = self->last_sender();
+          auto archive = last_sender();
           become(
               keep_behavior,
               on(atom("segment"), atom("ack"), arg_match) >>
@@ -85,7 +85,7 @@ segmentizer::segmentizer(cppa::actor_ptr segment_manager,
 
 void segmentizer::terminate()
 {
-  cppa::self->quit();
+  quit();
   LOG(verbose, store) << "segmentizer @" << id() << " terminated";
 }
 

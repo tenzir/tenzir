@@ -29,7 +29,7 @@ index::index(cppa::actor_ptr archive, std::string const& directory)
       on(atom("shutdown")) >> [=]()
       {
         LOG(debug, store) << "shutting down";
-        self->quit();
+        quit();
       });
 }
 
