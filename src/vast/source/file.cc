@@ -60,17 +60,30 @@ bool line::next()
 
   return success;
 }
-  
+
 bro2::bro2(cppa::actor_ptr ingestor,
            cppa::actor_ptr tracker,
            std::string const& filename)
   : line(std::move(ingestor), std::move(tracker), filename)
 {
-  parse_header();
+  try
+  {
+    parse_header();
+  }
+  catch (error::parse const& e)
+  {
+    finished_ = true;
+    LOG(error, ingest)
+      << "not a valid bro 2.x log file: " << filename
+      << " (" << e.what() << ')';
+  }
 }
 
 void bro2::parse_header()
 {
+  if (line_.empty() || line_[0] != '#')
+    throw error::parse("no meta character '#' at start of first line");
+
   ze::util::field_splitter<std::string::const_iterator> fs;
   fs.split(line_.begin(), line_.end());
   if (fs.fields() != 2 || std::string(fs.start(0), fs.end(0)) != "#separator")
