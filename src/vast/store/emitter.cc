@@ -3,7 +3,7 @@
 #include <ze/event.h>
 #include "vast/store/exception.h"
 #include "vast/store/segment.h"
-#include "vast/util/logger.h"
+#include "vast/logger.h"
 
 namespace vast {
 namespace store {

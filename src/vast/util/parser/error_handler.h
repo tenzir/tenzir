@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 #include <boost/spirit/include/phoenix_function.hpp>
-#include <vast/util/logger.h>
+#include "vast/logger.h"
 
 namespace vast {
 namespace util {

@@ -1,9 +1,9 @@
-#include <vast/meta/schema_manager.h>
+#include "vast/meta/schema_manager.h"
 
-#include <vast/meta/taxonomy.h>
-#include <vast/meta/event.h>
-#include <vast/meta/type.h>
-#include <vast/util/logger.h>
+#include "vast/meta/taxonomy.h"
+#include "vast/meta/event.h"
+#include "vast/meta/type.h"
+#include "vast/logger.h"
 
 namespace vast {
 namespace meta {

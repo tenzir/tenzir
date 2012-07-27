@@ -2,7 +2,7 @@
 #define VAST_STORE_SEGMENTIZER_H
 
 #include <cppa/cppa.hpp>
-#include <vast/store/segment.h>
+#include "vast/store/segment.h"
 
 namespace vast {
 namespace store {

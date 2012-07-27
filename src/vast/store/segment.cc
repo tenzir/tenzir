@@ -1,8 +1,8 @@
-#include <vast/store/segment.h>
+#include "vast/store/segment.h"
 
 #include <ze/event.h>
 #include <ze/util/make_unique.h>
-#include <vast/util/logger.h>
+#include "vast/logger.h"
 
 namespace vast {
 namespace store {

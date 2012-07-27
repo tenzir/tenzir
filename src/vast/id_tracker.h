@@ -1,11 +1,10 @@
-#ifndef VAST_INGEST_ID_TRACKER_H
-#define VAST_INGEST_ID_TRACKER_H
+#ifndef VAST_ID_TRACKER_H
+#define VAST_ID_TRACKER_H
 
 #include <fstream>
 #include <cppa/cppa.hpp>
 
 namespace vast {
-namespace ingest {
 
 /// Keeps track of the event ID space.
 class id_tracker : public cppa::sb_actor<id_tracker>
@@ -23,7 +22,6 @@ private:
   uint64_t id_ = 0;
 };
 
-} // namespace ingest
 } // namespace vast
 
 #endif

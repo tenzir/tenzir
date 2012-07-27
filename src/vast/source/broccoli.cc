@@ -1,15 +1,14 @@
-#include <vast/ingest/bro_event_source.h>
+#include <vast/source/broccoli.h>
 
 #include <algorithm>
 #include <ze/event.h>
-#include <vast/comm/connection.h>
-#include <vast/util/logger.h>
+#include "vast/comm/connection.h"
+#include "vast/logger.h"
 
 namespace vast {
-namespace ingest {
+namespace source {
 
-bro_event_source::bro_event_source(cppa::actor_ptr tracker,
-                                   cppa::actor_ptr upstream)
+broccoli::broccoli(cppa::actor_ptr tracker, cppa::actor_ptr upstream)
   : error_handler_([&](std::shared_ptr<comm::broccoli> bro) { disconnect(bro); })
 {
   LOG(verbose, core) << "spawning bro event source @" << id();
@@ -33,7 +32,7 @@ bro_event_source::bro_event_source(cppa::actor_ptr tracker,
       });
 }
 
-void bro_event_source::subscribe(std::string event)
+void broccoli::subscribe(std::string event)
 {
   auto i = std::lower_bound(event_names_.begin(), event_names_.end(), event);
   if (i == event_names_.end())
@@ -42,7 +41,7 @@ void bro_event_source::subscribe(std::string event)
     event_names_.insert(i, std::move(event));
 }
 
-void bro_event_source::start_server(std::string const& host, unsigned port,
+void broccoli::start_server(std::string const& host, unsigned port,
                                     cppa::actor_ptr sink)
 {
   server_.start(
@@ -68,7 +67,7 @@ void bro_event_source::start_server(std::string const& host, unsigned port,
       });
 }
 
-void bro_event_source::stop_server()
+void broccoli::stop_server()
 {
   server_.stop();
   std::lock_guard<std::mutex> lock(mutex_);
@@ -78,12 +77,12 @@ void bro_event_source::stop_server()
   broccolis_.clear();
 }
 
-void bro_event_source::disconnect(std::shared_ptr<comm::broccoli> const& session)
+void broccoli::disconnect(std::shared_ptr<comm::broccoli> const& session)
 {
   std::lock_guard<std::mutex> lock(mutex_);
   broccolis_.erase(std::remove(broccolis_.begin(), broccolis_.end(), session),
                    broccolis_.end());
 }
 
-} // namespace ingest
+} // namespace source
 } // namespace vast

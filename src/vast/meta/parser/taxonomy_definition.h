@@ -3,7 +3,7 @@
 
 #include "vast/meta/exception.h"
 #include "vast/meta/parser/taxonomy.h"
-#include "vast/util/logger.h"
+#include "vast/logger.h"
 #include <boost/spirit/include/phoenix.hpp>
 
 namespace vast {

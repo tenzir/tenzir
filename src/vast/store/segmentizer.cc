@@ -1,7 +1,7 @@
-#include <vast/store/segmentizer.h>
+#include "vast/store/segmentizer.h"
 
 #include <ze/event.h>
-#include <vast/util/logger.h>
+#include "vast/logger.h"
 
 namespace vast {
 namespace store {

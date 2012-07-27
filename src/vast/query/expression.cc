@@ -1,10 +1,10 @@
-#include <vast/query/expression.h>
+#include "vast/query/expression.h"
 
 #include <boost/variant/apply_visitor.hpp>
 #include <ze/type/regex.h>
 #include <ze/util/make_unique.h>
-#include <vast/query/ast.h>
-#include <vast/util/logger.h>
+#include "vast/logger.h"
+#include "vast/query/ast.h"
 
 namespace vast {
 namespace query {

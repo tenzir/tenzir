@@ -1,7 +1,7 @@
-#include <vast/store/index.h>
+#include "vast/store/index.h"
 
-#include <vast/store/segment.h>
-#include <vast/util/logger.h>
+#include "vast/logger.h"
+#include "vast/store/segment.h"
 
 namespace vast {
 namespace store {

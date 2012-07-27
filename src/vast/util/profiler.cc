@@ -1,9 +1,9 @@
-#include <vast/util/profiler.h>
+#include "vast/util/profiler.h"
 
 #include <iomanip>
 #include <sys/resource.h>   // getrusage
 #include <sys/time.h>       // gettimeofday
-#include <vast/util/logger.h>
+#include "vast/logger.h"
 
 namespace vast {
 namespace util {

@@ -3,7 +3,7 @@
 
 #include <string>
 #include <cppa/cppa.hpp>
-#include <vast/query/expression.h>
+#include "vast/query/expression.h"
 
 namespace vast {
 namespace query {

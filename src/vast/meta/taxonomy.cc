@@ -8,7 +8,7 @@
 #include "vast/meta/exception.h"
 #include "vast/meta/type.h"
 #include "vast/util/parser/parse.h"
-#include "vast/util/logger.h"
+#include "vast/logger.h"
 
 namespace vast {
 namespace meta {

@@ -1,10 +1,10 @@
-#include <vast/detail/cppa_type_info.h>
+#include "vast/detail/cppa_type_info.h"
 
 #include <ze/chunk.h>
 #include <ze/event.h>
 #include <cppa/announce.hpp>
-#include <vast/detail/cppa_archive.h>
-#include <vast/store/segment.h>
+#include "vast/detail/cppa_archive.h"
+#include "vast/store/segment.h"
 
 namespace vast {
 namespace detail {

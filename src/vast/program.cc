@@ -1,21 +1,22 @@
-#include <vast/program.h>
+#include "vast/program.h"
 
 #include <cstdlib>
 #include <iostream>
 #include <boost/exception/diagnostic_information.hpp>
-#include <vast/exception.h>
-#include <vast/comm/broccoli.h>
-#include <vast/detail/cppa_type_info.h>
-#include <vast/fs/path.h>
-#include <vast/fs/operations.h>
-#include <vast/ingest/ingestor.h>
-#include <vast/meta/schema_manager.h>
-#include <vast/query/client.h>
-#include <vast/query/search.h>
-#include <vast/store/archive.h>
-#include <vast/store/index.h>
-#include <vast/util/logger.h>
-#include <config.h>
+#include "vast/exception.h"
+#include "vast/comm/broccoli.h"
+#include "vast/detail/cppa_type_info.h"
+#include "vast/fs/path.h"
+#include "vast/fs/operations.h"
+#include "vast/ingestor.h"
+#include "vast/logger.h"
+#include "vast/meta/schema_manager.h"
+#include "vast/query/client.h"
+#include "vast/query/search.h"
+#include "vast/store/archive.h"
+#include "vast/store/index.h"
+#include "vast/util/profiler.h"
+#include "config.h"
 
 
 #ifdef USE_PERFTOOLS_CPU_PROFILER
@@ -28,17 +29,11 @@
 namespace vast {
 
 /// Declaration of global (extern) variables.
-namespace util {
 logger* LOGGER;
-}
 
 program::program()
   : terminating_(false)
   , return_(EXIT_FAILURE)
-{
-}
-
-program::~program()
 {
 }
 
@@ -73,7 +68,7 @@ bool program::init(int argc, char *argv[])
     do_init();
     return true;
   }
-  catch (config_exception const& e)
+  catch (error::config const& e)
   {
     std::cerr << e.what() << std::endl;
   }
@@ -162,7 +157,7 @@ void program::start()
 
     if (config_.check("ingestor-actor"))
     {
-      ingestor_ = spawn<ingest::ingestor>(
+      ingestor_ = spawn<ingestor>(
           archive_,
           (config_.get<fs::path>("directory") / "id").string());
 
@@ -324,9 +319,9 @@ void program::do_init()
   if (! fs::exists(log_dir))
       fs::mkdir(log_dir);
 
-  util::LOGGER = new util::logger(
-      static_cast<util::logger::level>(config_.get<int>("console-verbosity")),
-      static_cast<util::logger::level>(config_.get<int>("logfile-verbosity")),
+  LOGGER = new logger(
+      static_cast<logger::level>(config_.get<int>("console-verbosity")),
+      static_cast<logger::level>(config_.get<int>("logfile-verbosity")),
       log_dir / "vast.log");
 
   LOG(verbose, core) << " _   _____   __________";

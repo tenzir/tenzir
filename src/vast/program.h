@@ -2,8 +2,7 @@
 #define VAST_PROGRAM_H
 
 #include <cppa/cppa.hpp>
-#include <vast/configuration.h>
-#include <vast/util/profiler.h>
+#include "vast/configuration.h"
 
 namespace vast {
 
@@ -16,9 +15,6 @@ class program
 public:
     /// Constructs the program.
     program();
-
-    /// Destroys the program.
-    ~program();
 
     /// Initializes the program with arguments from @c main.
     /// @param argc argument counter from @c main.

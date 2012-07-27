@@ -10,7 +10,7 @@
 #include <ze/chunk.h>
 #include <ze/serialization.h>
 #include <ze/type/time.h>
-#include <vast/store/exception.h>
+#include "vast/store/exception.h"
 
 namespace vast {
 namespace store {

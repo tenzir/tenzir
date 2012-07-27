@@ -8,7 +8,7 @@
 #include "vast/fs/path.h"
 #include "vast/fs/fstream.h"
 #include "vast/fs/operations.h"
-#include "vast/util/logger.h"
+#include "vast/logger.h"
 
 namespace vast {
 
@@ -25,7 +25,7 @@ configuration::configuration()
     ("schema,s", po::value<std::string>(), "event schema file")
     ("query,q", po::value<std::string>(), "query expression")
     ("console-verbosity,v",
-     po::value<int>()->default_value(util::logger::info),
+     po::value<int>()->default_value(logger::info),
      "console logging verbosity")
     ("advanced,z", "show advanced options")
     ;
@@ -33,7 +33,7 @@ configuration::configuration()
   po::options_description advanced("advanced options");
   advanced.add_options()
     ("logfile-verbosity,V",
-     po::value<int>()->default_value(util::logger::verbose),
+     po::value<int>()->default_value(logger::verbose),
      "log file verbosity")
     ("profile,P", po::value<unsigned>(), "getrusage profiling (seconds)")
 #ifdef USE_PERFTOOLS_CPU_PROFILER
@@ -165,31 +165,31 @@ void configuration::init()
 
   auto v = get<int>("console-verbosity");
   if (v < 0 || v > 6)
-    throw config_exception("verbosity not in [0,6]", "console-verbosity");
+    throw error::config("verbosity not in [0,6]", "console-verbosity");
 
   v = get<int>("logfile-verbosity");
   if (v < 0 || v > 6)
-    throw config_exception("verbosity not in [0,6]", "log-verbosity");
+    throw error::config("verbosity not in [0,6]", "log-verbosity");
 
   if (check("profile") && get<unsigned>("profile") == 0)
-    throw config_exception("profiling interval must be non-zero", "profile");
+    throw error::config("profiling interval must be non-zero", "profile");
 
   if (get<unsigned>("client.paginate") == 0)
-    throw config_exception("pagination must be non-zero", "client.paginate");
+    throw error::config("pagination must be non-zero", "client.paginate");
 }
 
 void configuration::conflicts(const char* opt1, const char* opt2) const
 {
   if (check(opt1) && ! config_[opt1].defaulted()
       && check(opt2) && ! config_[opt2].defaulted())
-    throw config_exception("conflicting options", opt1, opt2);
+    throw error::config("conflicting options", opt1, opt2);
 }
 
 void configuration::depends(const char* for_what, const char* required) const
 {
   if (check(for_what) && ! config_[for_what].defaulted() &&
       (! check(required) || config_[required].defaulted()))
-    throw config_exception("missing option dependency", for_what, required);
+    throw error::config("missing option dependency", for_what, required);
 }
 
 } // namespace vast

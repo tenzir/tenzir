@@ -3,7 +3,7 @@
 
 #include <chrono>
 #include <cppa/cppa.hpp>
-#include <vast/fs/fstream.h>
+#include "vast/fs/fstream.h"
 
 namespace vast {
 namespace util {

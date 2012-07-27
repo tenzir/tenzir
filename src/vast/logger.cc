@@ -1,11 +1,10 @@
-#include <vast/util/logger.h>
+#include "vast/logger.h"
 
 #include <iomanip>
 #include <thread>
-#include <ze/type/time.h>
+#include <chrono>
 
 namespace vast {
-namespace util {
 
 static char const* const facilities[] =
 {
@@ -69,7 +68,7 @@ logger::record::record(logger& log, level lvl, facility fac)
   , level_(lvl)
 {
   stream_
-    << ze::clock::now().time_since_epoch().count()
+    << std::chrono::system_clock::now().time_since_epoch().count()
     << " " << '[';
   
   stream_ 
@@ -149,5 +148,4 @@ std::ostream& operator<<(std::ostream& out, logger::level l)
   return out;
 }
 
-} // namespace util
 } // namespace vast

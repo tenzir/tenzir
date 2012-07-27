@@ -1,9 +1,9 @@
-#include <vast/store/segment_manager.h>
+#include "vast/store/segment_manager.h"
 
-#include <vast/fs/fstream.h>
-#include <vast/fs/operations.h>
-#include <vast/store/segment.h>
-#include <vast/util/logger.h>
+#include "vast/fs/fstream.h"
+#include "vast/fs/operations.h"
+#include "vast/store/segment.h"
+#include "vast/logger.h"
 
 namespace vast {
 namespace store {

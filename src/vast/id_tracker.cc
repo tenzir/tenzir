@@ -1,11 +1,10 @@
-#include <vast/ingest/id_tracker.h>
+#include "vast/id_tracker.h"
 
-#include <vast/fs/exception.h>
-#include <vast/fs/operations.h>
-#include <vast/util/logger.h>
+#include "vast/fs/exception.h"
+#include "vast/fs/operations.h"
+#include "vast/logger.h"
 
 namespace vast {
-namespace ingest {
 
 id_tracker::id_tracker(std::string const& id_file)
 {
@@ -77,5 +76,4 @@ id_tracker::id_tracker(std::string const& id_file)
     });
 }
 
-} // namespace ingest
 } // namespace vast

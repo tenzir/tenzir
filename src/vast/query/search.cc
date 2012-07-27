@@ -1,10 +1,10 @@
-#include <vast/query/search.h>
+#include "vast/query/search.h"
 
 #include <ze/util/make_unique.h>
-#include <vast/util/logger.h>
-#include <vast/query/exception.h>
-#include <vast/store/archive.h>
-#include <vast/store/emitter.h>
+#include "vast/logger.h"
+#include "vast/query/exception.h"
+#include "vast/store/archive.h"
+#include "vast/store/emitter.h"
 
 namespace vast {
 namespace query {

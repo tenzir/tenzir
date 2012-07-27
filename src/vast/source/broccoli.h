@@ -1,25 +1,30 @@
-#ifndef VAST_STORE_EVENT_SOURCE_H
-#define VAST_STORE_EVENT_SOURCE_H
+#ifndef VAST_SOURCE_BROCCOLI_H
+#define VAST_SOURCE_BROCCOLI_H
 
 #include <mutex>
 #include <string>
 #include <cppa/cppa.hpp>
-#include <vast/comm/broccoli.h>
-#include <vast/comm/server.h>
+#include "vast/event_source.h"
+#include "vast/comm/broccoli.h"
+#include "vast/comm/server.h"
 
 namespace vast {
-namespace ingest {
+namespace source {
 
+// TODO: Either make this a synchronous sink and inherit from
+// vast::event_source or provide a separate async_source class where this
+// source can inherit from..
+//
 /// Receives events from the external world.
-class bro_event_source : public cppa::sb_actor<bro_event_source>
+class broccoli : public cppa::sb_actor<broccoli>
 {
-  friend class cppa::sb_actor<bro_event_source>;
+  friend class cppa::sb_actor<broccoli>;
 
 public:
-  /// Constructs a Bro event source.
+  /// Constructs a Broccoli event source.
   /// @param tracker The event ID tracker.
   /// @param upstream The actor to send the received events to.
-  bro_event_source(cppa::actor_ptr tracker, cppa::actor_ptr upstream);
+  broccoli(cppa::actor_ptr tracker, cppa::actor_ptr upstream);
 
 private:
   /// Adds an event name to the list of events to subscribe to.
@@ -48,7 +53,7 @@ private:
   cppa::behavior init_state;
 };
 
-} // namespace ingest
+} // namespace source
 } // namespace vast
 
 #endif

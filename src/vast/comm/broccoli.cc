@@ -1,9 +1,9 @@
-#include <vast/comm/broccoli.h>
+#include "vast/comm/broccoli.h"
 
 #include <ze/event.h>
-#include <vast/comm/connection.h>
-#include <vast/comm/exception.h>
-#include <vast/util/logger.h>
+#include "vast/comm/connection.h"
+#include "vast/comm/exception.h"
+#include "vast/logger.h"
 
 namespace vast {
 namespace comm {

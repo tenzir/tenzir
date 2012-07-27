@@ -2,7 +2,7 @@
 #define VAST_QUERY_EXPRESSION_H
 
 #include <ze/event.h>
-#include <vast/query/forward.h>
+#include "vast/query/forward.h"
 
 namespace vast {
 namespace query {

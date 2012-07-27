@@ -1,11 +1,11 @@
-#include <vast/store/archive.h>
+#include "vast/store/archive.h"
 
 #include <ze/event.h>
-#include <vast/store/emitter.h>
-#include <vast/store/exception.h>
-#include <vast/store/segmentizer.h>
-#include <vast/store/segment_manager.h>
-#include <vast/util/logger.h>
+#include "vast/logger.h"
+#include "vast/store/emitter.h"
+#include "vast/store/exception.h"
+#include "vast/store/segmentizer.h"
+#include "vast/store/segment_manager.h"
 
 namespace vast {
 namespace store {
