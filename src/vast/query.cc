@@ -1,16 +1,15 @@
-#include "vast/query/query.h"
+#include "vast/query.h"
 
 #include <ze/chunk.h>
 #include <ze/event.h>
 #include <ze/type/regex.h>
+#include "vast/exception.h"
 #include "vast/logger.h"
-#include "vast/query/ast.h"
-#include "vast/query/exception.h"
-#include "vast/query/parser/query.h"
+#include "vast/detail/ast.h"
+#include "vast/detail/parser/query.h"
 #include "vast/util/parser/parse.h"
 
 namespace vast {
-namespace query {
 
 query::query(cppa::actor_ptr archive,
              cppa::actor_ptr index,
@@ -29,24 +28,24 @@ query::query(cppa::actor_ptr archive,
 
   try
   {
-    ast::query query_ast;
-    if (! util::parser::parse<parser::query>(str_, query_ast))
-      throw syntax_exception(str_);
+    detail::ast::query query_ast;
+    if (! util::parser::parse<detail::parser::query>(str_, query_ast))
+      throw error::syntax("parse error", str_);
 
-    if (! ast::validate(query_ast))
-      throw semantic_exception("semantic error", str_);
+    if (! detail::ast::validate(query_ast))
+      throw error::semantic("parse error", str_);
 
     expr_.assign(query_ast);
 
   }
-  catch (syntax_exception const& e)
+  catch (error::syntax const& e)
   {
     LOG(error, query)
       << "syntax error in query @" << id() << ": " << e.what();
 
     reply(atom("query"), atom("parse"), atom("failure"), id());
   }
-  catch (semantic_exception const& e)
+  catch (error::semantic const& e)
   {
     LOG(error, query)
       << "semantic error in query @" << id() << ": " << e.what();
@@ -115,5 +114,4 @@ query::query(cppa::actor_ptr archive,
       });
 }
 
-} // namespace query
 } // namespace vast

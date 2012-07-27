@@ -1,7 +1,7 @@
 #define BOOST_SPIRIT_QI_DEBUG
 
 #include <boost/test/unit_test.hpp>
-#include <vast/query/parser/query.h>
+#include <vast/detail/parser/query.h>
 #include <vast/util/parser/parse.h>
 
 BOOST_AUTO_TEST_CASE(expressions)
@@ -15,10 +15,10 @@ BOOST_AUTO_TEST_CASE(expressions)
     "-(42 - 24) / 2"
   };
 
-  vast::query::ast::expression expr;
+  vast::detail::ast::expression expr;
   using vast::util::parser::parse;
   for (auto& e : expressions)
-    BOOST_CHECK((parse<vast::query::parser::expression>(e, expr)));
+    BOOST_CHECK((parse<vast::detail::parser::expression>(e, expr)));
 }
 
 BOOST_AUTO_TEST_CASE(queries)
@@ -42,11 +42,11 @@ BOOST_AUTO_TEST_CASE(queries)
     "*$c$id_orig == 192.168.1.1"
   };
 
-  vast::query::ast::query query;
+  vast::detail::ast::query query;
   using vast::util::parser::parse;
   for (auto& q : queries)
-    BOOST_CHECK((parse<vast::query::parser::query>(q, query)));
+    BOOST_CHECK((parse<vast::detail::parser::query>(q, query)));
 
   auto fail = ":foo == -42";
-  BOOST_CHECK(! (parse<vast::query::parser::query>(fail, query)));
+  BOOST_CHECK(! (parse<vast::detail::parser::query>(fail, query)));
 }

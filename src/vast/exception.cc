@@ -55,5 +55,24 @@ segment::segment(char const* msg)
 {
 }
 
+query::query(char const* msg)
+  : exception(msg)
+{
+}
+
+syntax::syntax(char const* msg, std::string const& q)
+{
+  std::ostringstream oss;
+  oss << "syntax error: " << msg << " (query: " << q << ')';
+  msg_ = oss.str();
+}
+
+semantic::semantic(char const* msg, std::string const& q)
+{
+  std::ostringstream oss;
+  oss << "semantic error: " << msg << " (query: " << q << ')';
+  msg_ = oss.str();
+}
+
 } // namespace error
 } // namespace vast

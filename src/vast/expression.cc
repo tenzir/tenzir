@@ -1,13 +1,12 @@
-#include "vast/query/expression.h"
+#include "vast/expression.h"
 
 #include <boost/variant/apply_visitor.hpp>
 #include <ze/type/regex.h>
 #include <ze/util/make_unique.h>
 #include "vast/logger.h"
-#include "vast/query/ast.h"
+#include "vast/detail/ast.h"
 
 namespace vast {
-namespace query {
 namespace expr {
 
 ze::value const& node::result()
@@ -144,14 +143,14 @@ void disjunction::eval()
     ready_ = true;
 }
 
-relational_operator::relational_operator(ast::clause_operator op)
+relational_operator::relational_operator(detail::ast::clause_operator op)
 {
   switch (op)
   {
     default:
       assert(! "invalid operator type");
       break;
-    case ast::match:
+    case detail::ast::match:
       op_ = [](ze::value const& lhs, ze::value const& rhs) -> bool
       {
         assert(lhs.which() == ze::string_type);
@@ -159,7 +158,7 @@ relational_operator::relational_operator(ast::clause_operator op)
         return rhs.get<ze::regex>().match(lhs.get<ze::string>());
       };
       break;
-    case ast::not_match:
+    case detail::ast::not_match:
       op_ = [](ze::value const& lhs, ze::value const& rhs) -> bool
       {
         assert(lhs.which() == ze::string_type);
@@ -167,7 +166,7 @@ relational_operator::relational_operator(ast::clause_operator op)
         return ! rhs.get<ze::regex>().match(lhs.get<ze::string>());
       };
       break;
-    case ast::in:
+    case detail::ast::in:
       op_ = [](ze::value const& lhs, ze::value const& rhs) -> bool
       {
         if (lhs.which() == ze::string_type &&
@@ -182,7 +181,7 @@ relational_operator::relational_operator(ast::clause_operator op)
         return false;
       };
       break;
-    case ast::not_in:
+    case detail::ast::not_in:
       op_ = [](ze::value const& lhs, ze::value const& rhs) -> bool
       {
         if (lhs.which() == ze::string_type &&
@@ -197,37 +196,37 @@ relational_operator::relational_operator(ast::clause_operator op)
         return false;
       };
       break;
-    case ast::equal:
+    case detail::ast::equal:
       op_ = [](ze::value const& lhs, ze::value const& rhs)
       {
         return lhs == rhs;
       };
       break;
-    case ast::not_equal:
+    case detail::ast::not_equal:
       op_ = [](ze::value const& lhs, ze::value const& rhs)
       {
         return lhs != rhs;
       };
       break;
-    case ast::less:
+    case detail::ast::less:
       op_ = [](ze::value const& lhs, ze::value const& rhs)
       {
         return lhs < rhs;
       };
       break;
-    case ast::less_equal:
+    case detail::ast::less_equal:
       op_ = [](ze::value const& lhs, ze::value const& rhs)
       {
         return lhs <= rhs;
       };
       break;
-    case ast::greater:
+    case detail::ast::greater:
       op_ = [](ze::value const& lhs, ze::value const& rhs)
       {
         return lhs > rhs;
       };
       break;
-    case ast::greater_equal:
+    case detail::ast::greater_equal:
       op_ = [](ze::value const& lhs, ze::value const& rhs)
       {
         return lhs >= rhs;
@@ -291,17 +290,17 @@ public:
   {
   }
 
-  void operator()(ast::clause const& operand)
+  void operator()(detail::ast::clause const& operand)
   {
     boost::apply_visitor(*this, operand);
   }
 
-  void operator()(ast::type_clause const& clause)
+  void operator()(detail::ast::type_clause const& clause)
   {
     auto op = clause.op;
     if (invert_)
     {
-      op = ast::negate(op);
+      op = detail::ast::negate(op);
       invert_ = false;
     }
 
@@ -309,7 +308,7 @@ public:
     auto lhs = std::make_unique<expr::exists>(clause.lhs);
     extractors_.push_back(lhs.get());
     relation->add(std::move(lhs));
-    auto rhs = std::make_unique<expr::constant>(ast::fold(clause.rhs));
+    auto rhs = std::make_unique<expr::constant>(detail::ast::fold(clause.rhs));
     relation->add(std::move(rhs));
 
     if (! clause.glob_expr)
@@ -339,7 +338,7 @@ public:
     }
   }
 
-  void operator()(ast::event_clause const& clause)
+  void operator()(detail::ast::event_clause const& clause)
   {
     // The validation step of the query AST left the first element
     // untouched, as the name extractor uses it. Since all remaining
@@ -365,7 +364,7 @@ public:
     auto op = clause.op;
     if (invert_)
     {
-      op = ast::negate(op);
+      op = detail::ast::negate(op);
       invert_ = false;
     }
 
@@ -376,13 +375,13 @@ public:
     extractors_.push_back(lhs.get());
     relation->add(std::move(lhs));
 
-    auto rhs = std::make_unique<expr::constant>(ast::fold(clause.rhs));
+    auto rhs = std::make_unique<expr::constant>(detail::ast::fold(clause.rhs));
     relation->add(std::move(rhs));
 
     p->add(std::move(relation));
   }
 
-  void operator()(ast::negated_clause const& clause)
+  void operator()(detail::ast::negated_clause const& clause)
   {
     invert_ = true;
     boost::apply_visitor(*this, clause.operand);
@@ -397,7 +396,7 @@ private:
     auto glob = ze::regex("\\*|\\?").search(expr);
 
     auto op = std::make_unique<expr::relational_operator>(
-        glob ? ast::match : ast::equal);
+        glob ? detail::ast::match : detail::ast::equal);
 
     auto lhs = std::make_unique<expr::name_extractor>();
     extractors_.push_back(lhs.get());
@@ -415,7 +414,7 @@ private:
   bool invert_ = false;
 };
 
-void expression::assign(ast::query const& query)
+void expression::assign(detail::ast::query const& query)
 {
   if (query.rest.empty())
   {
@@ -428,10 +427,10 @@ void expression::assign(ast::query const& query)
   else
   {
     // First, split the query expression at each OR node.
-    std::vector<ast::query> ors{ast::query{query.first}};
+    std::vector<detail::ast::query> ors{detail::ast::query{query.first}};
     for (auto& clause : query.rest)
-      if (clause.op == ast::logical_or)
-        ors.emplace_back(ast::query{clause.operand});
+      if (clause.op == detail::ast::logical_or)
+        ors.emplace_back(detail::ast::query{clause.operand});
       else
         ors.back().rest.push_back(clause);
 
@@ -450,7 +449,7 @@ void expression::assign(ast::query const& query)
         boost::apply_visitor(std::ref(visitor), ands.first);
         for (auto clause : ands.rest)
         {
-          assert(clause.op == ast::logical_and);
+          assert(clause.op == detail::ast::logical_and);
           boost::apply_visitor(std::ref(visitor), clause.operand);
         }
 
@@ -478,5 +477,4 @@ bool expression::eval(ze::event const& event)
   return r.get<bool>();
 }
 
-} // namespace query
 } // namespace vast

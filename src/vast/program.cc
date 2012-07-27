@@ -8,13 +8,13 @@
 #include "vast/index.h"
 #include "vast/ingestor.h"
 #include "vast/logger.h"
+#include "vast/query_client.h"
+#include "vast/search.h"
 #include "vast/comm/broccoli.h"
 #include "vast/detail/cppa_type_info.h"
 #include "vast/fs/path.h"
 #include "vast/fs/operations.h"
 #include "vast/meta/schema_manager.h"
-#include "vast/query/client.h"
-#include "vast/query/search.h"
 #include "vast/util/profiler.h"
 #include "config.h"
 
@@ -189,7 +189,7 @@ void program::start()
 
     if (config_.check("search-actor"))
     {
-      search_ = spawn<query::search>(archive_, index_);
+      search_ = spawn<search>(archive_, index_);
 
       //config_.get<std::string>("search.host")
       LOG(verbose, core) << "publishing search at *:"
@@ -210,7 +210,7 @@ void program::start()
     {
       auto paginate = config_.get<unsigned>("client.paginate");
       auto& expression = config_.get<std::string>("query");
-      query_client_ = spawn<query::client>(search_, paginate);
+      query_client_ = spawn<query_client>(search_, paginate);
       send(query_client_, atom("query"), atom("create"), expression);
     }
 

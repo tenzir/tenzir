@@ -1,9 +1,9 @@
-#include "vast/query/ast.h"
+#include "vast/detail/ast.h"
 
 #include <boost/variant/apply_visitor.hpp>
 
 namespace vast {
-namespace query {
+namespace detail {
 namespace ast {
 
 struct folder : public boost::static_visitor<ze::value>
@@ -176,5 +176,5 @@ bool validate(query& q)
 };
 
 } // namespace ast
-} // namespace query
+} // namespace detail
 } // namespace vast

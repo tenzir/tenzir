@@ -6,11 +6,15 @@ set(vast_lib_sources
   emitter.cc
   event_source.cc
   exception.cc
+  expression.cc
   id_tracker.cc
   index.cc
   ingestor.cc
   logger.cc
   program.cc
+  query.cc
+  query_client.cc
+  search.cc
   segment.cc
   segment_manager.cc
   segmentizer.cc
@@ -18,8 +22,11 @@ set(vast_lib_sources
   comm/connection.cc
   comm/exception.cc
   comm/server.cc
+  detail/ast.cc
   detail/cppa_archive.cc
   detail/cppa_type_info.cc
+  detail/parser/expression.cc
+  detail/parser/query.cc
   fs/exception.cc
   fs/operations.cc
   meta/argument.cc
@@ -29,14 +36,6 @@ set(vast_lib_sources
   meta/taxonomy.cc
   meta/type.cc
   meta/parser/taxonomy.cc
-  query/ast.cc
-  query/client.cc
-  query/exception.cc
-  query/expression.cc
-  query/query.cc
-  query/search.cc
-  query/parser/expression.cc
-  query/parser/query.cc
   source/broccoli.cc
   source/file.cc
   util/console.cc

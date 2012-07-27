@@ -1,10 +1,10 @@
-#ifndef VAST_QUERY_PARSER_CLAUSE_DEFINITION_H
-#define VAST_QUERY_PARSER_CLAUSE_DEFINITION_H
+#ifndef VAST_DETAIL_PARSER_CLAUSE_DEFINITION_H
+#define VAST_DETAIL_PARSER_CLAUSE_DEFINITION_H
 
-#include "vast/query/parser/query.h"
+#include "vast/detail/parser/query.h"
 
 namespace vast {
-namespace query {
+namespace detail {
 namespace parser {
 
 template <typename Iterator>
@@ -130,7 +130,7 @@ query<Iterator>::query(util::parser::error_handler<Iterator>& error_handler)
 }
 
 } // namespace ast
-} // namespace query
+} // namespace detail
 } // namespace vast
 
 #endif

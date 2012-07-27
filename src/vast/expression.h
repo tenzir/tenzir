@@ -1,11 +1,19 @@
-#ifndef VAST_QUERY_EXPRESSION_H
-#define VAST_QUERY_EXPRESSION_H
+#ifndef VAST_EXPRESSION_H
+#define VAST_EXPRESSION_H
 
 #include <ze/event.h>
-#include "vast/query/forward.h"
 
 namespace vast {
-namespace query {
+
+// TODO: Hide the detail aspects in the implementation.
+// Forward declarations
+namespace detail {
+namespace ast {
+enum clause_operator : int;
+struct query;
+} // namespace ast
+} // namespace detail
+
 namespace expr {
 
 /// The base class for nodes in the expression tree.
@@ -123,7 +131,7 @@ class relational_operator : public n_ary_operator
   typedef std::function<bool(ze::value const&, ze::value const&)>
     binary_predicate;
 public:
-  relational_operator(ast::clause_operator op);
+  relational_operator(detail::ast::clause_operator op);
 
 private:
   virtual void eval();
@@ -154,7 +162,7 @@ public:
 
   /// Creates an expression tree from a query AST.
   /// @param query A parsed (and validated) query AST.
-  void assign(ast::query const& query);
+  void assign(detail::ast::query const& query);
 
   /// Evaluates an event with respect to the root node.
   /// @param event The event to evaluate against the expression.
@@ -166,7 +174,6 @@ private:
   std::vector<expr::extractor*> extractors_;
 };
 
-} // namespace query
 } // namespace vast
 
 #endif

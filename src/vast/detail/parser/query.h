@@ -1,10 +1,10 @@
-#ifndef VAST_QUERY_PARSER_CLAUSE_H
-#define VAST_QUERY_PARSER_CLAUSE_H
+#ifndef VAST_DETAIL_PARSER_CLAUSE_H
+#define VAST_DETAIL_PARSER_CLAUSE_H
 
-#include "vast/query/parser/expression.h"
+#include "vast/detail/parser/expression.h"
 
 namespace vast {
-namespace query {
+namespace detail {
 namespace parser {
 
 template <typename Iterator>
@@ -43,7 +43,7 @@ struct query : qi::grammar<Iterator, ast::query(), skipper<Iterator>>
 };
 
 } // namespace ast
-} // namespace query
+} // namespace detail
 } // namespace vast
 
 #endif

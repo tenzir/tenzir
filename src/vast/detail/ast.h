@@ -1,14 +1,14 @@
-#ifndef VAST_QUERY_AST_H
-#define VAST_QUERY_AST_H
+#ifndef VAST_DETAIL_AST_H
+#define VAST_DETAIL_AST_H
 
+#include <vector>
 #include <boost/optional.hpp>
 #include <boost/variant/recursive_variant.hpp>
 #include <boost/fusion/include/adapt_struct.hpp>
 #include <ze/value.h>
-#include <vector>
 
 namespace vast {
-namespace query {
+namespace detail {
 namespace ast {
 
 struct nil {};
@@ -143,49 +143,49 @@ ze::value fold(expression const& expr);
 bool validate(query& q);
 
 } // namespace ast
-} // namespace query
+} // namespace detail
 } // namespace vast
 
 BOOST_FUSION_ADAPT_STRUCT(
-    vast::query::ast::unary_expr,
-    (vast::query::ast::expr_operator, op)
-    (vast::query::ast::expr_operand, operand))
+    vast::detail::ast::unary_expr,
+    (vast::detail::ast::expr_operator, op)
+    (vast::detail::ast::expr_operand, operand))
 
 BOOST_FUSION_ADAPT_STRUCT(
-    vast::query::ast::expr_operation,
-    (vast::query::ast::expr_operator, op)
-    (vast::query::ast::expr_operand, operand))
+    vast::detail::ast::expr_operation,
+    (vast::detail::ast::expr_operator, op)
+    (vast::detail::ast::expr_operand, operand))
 
 BOOST_FUSION_ADAPT_STRUCT(
-    vast::query::ast::expression,
-    (vast::query::ast::expr_operand, first)
-    (std::vector<vast::query::ast::expr_operation>, rest))
+    vast::detail::ast::expression,
+    (vast::detail::ast::expr_operand, first)
+    (std::vector<vast::detail::ast::expr_operation>, rest))
 
 BOOST_FUSION_ADAPT_STRUCT(
-    vast::query::ast::type_clause,
+    vast::detail::ast::type_clause,
     (boost::optional<std::string>, glob_expr)
     (ze::value_type, lhs)
-    (vast::query::ast::clause_operator, op)
-    (vast::query::ast::expression, rhs))
+    (vast::detail::ast::clause_operator, op)
+    (vast::detail::ast::expression, rhs))
 
 BOOST_FUSION_ADAPT_STRUCT(
-    vast::query::ast::event_clause,
+    vast::detail::ast::event_clause,
     (std::vector<std::string>, lhs)
-    (vast::query::ast::clause_operator, op)
-    (vast::query::ast::expression, rhs))
+    (vast::detail::ast::clause_operator, op)
+    (vast::detail::ast::expression, rhs))
 
 BOOST_FUSION_ADAPT_STRUCT(
-    vast::query::ast::negated_clause,
-    (vast::query::ast::clause, operand))
+    vast::detail::ast::negated_clause,
+    (vast::detail::ast::clause, operand))
 
 BOOST_FUSION_ADAPT_STRUCT(
-    vast::query::ast::clause_operation,
-    (vast::query::ast::boolean_operator, op)
-    (vast::query::ast::clause, operand))
+    vast::detail::ast::clause_operation,
+    (vast::detail::ast::boolean_operator, op)
+    (vast::detail::ast::clause, operand))
 
 BOOST_FUSION_ADAPT_STRUCT(
-    vast::query::ast::query,
-    (vast::query::ast::clause, first)
-    (std::vector<vast::query::ast::clause_operation>, rest))
+    vast::detail::ast::query,
+    (vast::detail::ast::clause, first)
+    (std::vector<vast::detail::ast::clause_operation>, rest))
 
 #endif

@@ -1,13 +1,10 @@
-#include "vast/query/search.h"
+#include "vast/search.h"
 
 #include <ze/util/make_unique.h>
 #include "vast/logger.h"
-#include "vast/query/exception.h"
-#include "vast/archive.h"
-#include "vast/emitter.h"
+#include "vast/query.h"
 
 namespace vast {
-namespace query {
 
 search::search(cppa::actor_ptr archive, cppa::actor_ptr index)
   : archive_(archive)
@@ -60,5 +57,4 @@ search::search(cppa::actor_ptr archive, cppa::actor_ptr index)
       });
 }
 
-} // namespace query
 } // namespace vast

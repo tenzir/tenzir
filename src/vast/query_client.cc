@@ -1,14 +1,13 @@
-#include <vast/query/client.h>
+#include "vast/query_client.h"
 
 #include <ze/event.h>
+#include "vast/exception.h"
 #include "vast/logger.h"
 #include "vast/util/console.h"
-#include "vast/query/exception.h"
 
 namespace vast {
-namespace query {
 
-client::client(cppa::actor_ptr search, unsigned batch_size)
+query_client::query_client(cppa::actor_ptr search, unsigned batch_size)
   : batch_size_(batch_size)
   , search_(search)
 {
@@ -81,7 +80,7 @@ client::client(cppa::actor_ptr search, unsigned batch_size)
     );
 }
 
-void client::wait_for_user_input()
+void query_client::wait_for_user_input()
 {
   using namespace cppa;
   util::unbuffer();
@@ -122,5 +121,4 @@ void client::wait_for_user_input()
   util::buffer();
 };
 
-} // namespace query
 } // namespace vast

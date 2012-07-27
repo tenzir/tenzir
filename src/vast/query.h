@@ -1,12 +1,11 @@
-#ifndef VAST_QUERY_QUERY_H
-#define VAST_QUERY_QUERY_H
+#ifndef VAST_QUERY_H
+#define VAST_QUERY_H
 
 #include <string>
 #include <cppa/cppa.hpp>
-#include "vast/query/expression.h"
+#include "vast/expression.h"
 
 namespace vast {
-namespace query {
 
 /// The query.
 class query : public cppa::sb_actor<query>
@@ -43,7 +42,6 @@ private:
   cppa::behavior init_state;
 };
 
-} // namespace query
 } // namespace vast
 
 #endif

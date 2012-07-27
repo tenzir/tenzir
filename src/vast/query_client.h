@@ -5,12 +5,11 @@
 #include <ze/event.h>
 
 namespace vast {
-namespace query {
 
 /// A simple query client.
-class client : public cppa::sb_actor<client>
+class query_client : public cppa::sb_actor<query_client>
 {
-  friend class cppa::sb_actor<client>;
+  friend class cppa::sb_actor<query_client>;
 
 public:
   /// Spawns a query client.
@@ -19,7 +18,7 @@ public:
   ///
   /// @param batch_size The number of results to display until requiring user
   /// input.
-  client(cppa::actor_ptr search, unsigned batch_size);
+  query_client(cppa::actor_ptr search, unsigned batch_size);
 
 private:
   /// Waits for console input on STDIN.
@@ -35,7 +34,6 @@ private:
   cppa::behavior init_state;
 };
 
-} // namespace query
 } // namespace vast
 
 #endif

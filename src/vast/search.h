@@ -1,13 +1,10 @@
-#ifndef VAST_QUERY_SEARCH_H
-#define VAST_QUERY_SEARCH_H
+#ifndef VAST_SEARCH_H
+#define VAST_SEARCH_H
 
 #include <unordered_map>
 #include <cppa/cppa.hpp>
-#include <ze/event.h>
-#include "vast/query/query.h"
 
 namespace vast {
-namespace query {
 
 class search : public cppa::sb_actor<search>
 {
@@ -24,7 +21,6 @@ private:
   cppa::behavior init_state;
 };
 
-} // namespace query
 } // namespace vast
 
 #endif

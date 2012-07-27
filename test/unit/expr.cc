@@ -1,10 +1,9 @@
 #include <boost/test/unit_test.hpp>
 
 #include <ze/event.h>
-#include <vast/query/ast.h>
-#include <vast/query/exception.h>
-#include <vast/query/expression.h>
-#include <vast/query/parser/query.h>
+#include <vast/exception.h>
+#include <vast/expression.h>
+#include <vast/detail/parser/query.h>
 #include <vast/util/parser/parse.h>
 
 std::vector<ze::event> events
@@ -15,14 +14,14 @@ std::vector<ze::event> events
 
 bool test_expression(std::string const& query, ze::event const& event)
 {
-  vast::query::ast::query ast;
-  if (! vast::util::parser::parse<vast::query::parser::query>(query, ast))
-    throw vast::query::syntax_exception(query);
+  vast::detail::ast::query ast;
+  if (! vast::util::parser::parse<vast::detail::parser::query>(query, ast))
+    throw vast::error::syntax("parse error", query);
 
-  if (! vast::query::ast::validate(ast))
-    throw vast::query::semantic_exception("semantic error", query);
+  if (! vast::detail::ast::validate(ast))
+    throw vast::error::semantic("parse error", query);
 
-  vast::query::expression expr;
+  vast::expression expr;
   expr.assign(ast);
   return expr.eval(event);
 }

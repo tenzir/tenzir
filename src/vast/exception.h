@@ -53,6 +53,25 @@ struct segment : public exception
   segment(char const* msg);
 };
 
+/// Thrown when an error with a query occurs.
+struct query : public exception
+{
+  query() = default;
+  query(char const* msg);
+};
+
+/// Thrown when a syntax error with a query occurs.
+struct syntax : public query
+{
+  syntax(char const* msg, std::string const& q);
+};
+
+/// Thrown when a semantic error with a query occurs.
+struct semantic : public query
+{
+  semantic(char const* msg, std::string const& q);
+};
+
 } // namespace error
 } // namespace vast
 
