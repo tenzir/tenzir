@@ -59,7 +59,7 @@ endif ()
 include(MacDependencyPaths)
 
 find_package(Boost
-    1.49.0
+    1.50.0
     COMPONENTS
         filesystem
         program_options
