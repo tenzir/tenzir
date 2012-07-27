@@ -1,12 +1,11 @@
-#include "vast/store/emitter.h"
+#include "vast/emitter.h"
 
 #include <ze/event.h>
-#include "vast/store/exception.h"
-#include "vast/store/segment.h"
+#include "vast/exception.h"
 #include "vast/logger.h"
+#include "vast/segment.h"
 
 namespace vast {
-namespace store {
 
 emitter::emitter(cppa::actor_ptr segment_manager, cppa::actor_ptr sink)
   : segment_manager_(segment_manager)
@@ -119,5 +118,4 @@ void emitter::emit_chunk()
   }
 }
 
-} // namespace store
 } // namespace vast

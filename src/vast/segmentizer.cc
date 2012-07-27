@@ -1,10 +1,9 @@
-#include "vast/store/segmentizer.h"
+#include "vast/segmentizer.h"
 
 #include <ze/event.h>
 #include "vast/logger.h"
 
 namespace vast {
-namespace store {
 
 segmentizer::segmentizer(cppa::actor_ptr segment_manager,
                          size_t max_events_per_chunk,
@@ -89,5 +88,4 @@ void segmentizer::terminate()
   LOG(verbose, store) << "segmentizer @" << id() << " terminated";
 }
 
-} // namespace store
 } // namespace vast

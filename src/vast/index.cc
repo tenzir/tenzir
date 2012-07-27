@@ -1,10 +1,9 @@
-#include "vast/store/index.h"
+#include "vast/index.h"
 
 #include "vast/logger.h"
-#include "vast/store/segment.h"
+#include "vast/segment.h"
 
 namespace vast {
-namespace store {
 
 index::index(cppa::actor_ptr archive, std::string const& directory)
   : archive_(archive)
@@ -33,5 +32,4 @@ index::index(cppa::actor_ptr archive, std::string const& directory)
       });
 }
 
-} // namespace store
 } // namespace vast

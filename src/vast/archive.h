@@ -1,10 +1,9 @@
-#ifndef VAST_STORE_ARCHIVE_H
-#define VAST_STORE_ARCHIVE_H
+#ifndef VAST_ARCHIVE_H
+#define VAST_ARCHIVE_H
 
 #include <cppa/cppa.hpp>
 
 namespace vast {
-namespace store {
 
 /// The event archive. It stores events in the form of segments.
 class archive : public cppa::sb_actor<archive>
@@ -29,7 +28,6 @@ private:
   cppa::behavior init_state;
 };
 
-} // namespace store
 } // namespace vast
 
 #endif

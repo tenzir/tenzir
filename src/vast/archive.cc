@@ -1,14 +1,13 @@
-#include "vast/store/archive.h"
+#include "vast/archive.h"
 
 #include <ze/event.h>
+#include "vast/emitter.h"
+#include "vast/exception.h"
 #include "vast/logger.h"
-#include "vast/store/emitter.h"
-#include "vast/store/exception.h"
-#include "vast/store/segmentizer.h"
-#include "vast/store/segment_manager.h"
+#include "vast/segmentizer.h"
+#include "vast/segment_manager.h"
 
 namespace vast {
-namespace store {
 
 archive::archive(std::string const& directory,
                  size_t max_events_per_chunk,
@@ -34,7 +33,7 @@ archive::archive(std::string const& directory,
       },
       on_arg_match >> [=](std::vector<ze::event> const& v)
       {
-        LOG(debug, store) << "archive @" << id()
+        DBG(store) << "archive @" << id()
           << " forwards " << v.size() << " events to segmentizer @"
           << segmentizer_->id();
 
@@ -66,5 +65,4 @@ archive::archive(std::string const& directory,
       });
 }
 
-} // namespace store
 } // namespace vast

@@ -1,18 +1,17 @@
-#include "vast/store/segment_manager.h"
+#include "vast/segment_manager.h"
 
 #include "vast/fs/fstream.h"
 #include "vast/fs/operations.h"
-#include "vast/store/segment.h"
+#include "vast/segment.h"
 #include "vast/logger.h"
 
 namespace vast {
-namespace store {
 
 segment_manager::segment_manager(size_t capacity, std::string const& dir)
   : cache_(capacity, [&](ze::uuid const& id) { return on_miss(id); })
   , dir_(dir)
 {
-  LOG(debug, store)
+  LOG(verbose, store)
     << "spawning segment manager @" << id() << " with capacity " << capacity;
 
   if (! fs::exists(dir_))
@@ -101,7 +100,7 @@ void segment_manager::store_segment(cppa::cow_tuple<segment> t)
 
 cppa::cow_tuple<segment> segment_manager::on_miss(ze::uuid const& id)
 {
-  LOG(debug, store)
+  DBG(store)
     << "segment manager @" << cppa::self->id()
     << " experienced cache miss for segment " << id;
   assert(segment_files_.find(id) != segment_files_.end());
@@ -114,5 +113,4 @@ cppa::cow_tuple<segment> segment_manager::on_miss(ze::uuid const& id)
   return std::move(s);
 }
 
-} // namespace store
 } // namespace vast

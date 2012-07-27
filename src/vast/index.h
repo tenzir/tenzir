@@ -1,10 +1,9 @@
-#ifndef VAST_STORE_INDEX_H
-#define VAST_STORE_INDEX_H
+#ifndef VAST_INDEX_H
+#define VAST_INDEX_H
 
 #include <cppa/cppa.hpp>
 
 namespace vast {
-namespace store {
 
 /// The event index.
 class index : public cppa::sb_actor<index>
@@ -21,7 +20,6 @@ private:
   cppa::behavior init_state;
 };
 
-} // namespace store
 } // namespace vast
 
 #endif

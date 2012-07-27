@@ -4,7 +4,7 @@
 #include <ze/event.h>
 #include <cppa/announce.hpp>
 #include "vast/detail/cppa_archive.h"
-#include "vast/store/segment.h"
+#include "vast/segment.h"
 
 namespace vast {
 namespace detail {
@@ -17,7 +17,7 @@ void cppa_announce_types()
   announce(typeid(ze::event), new event_type_info);
   announce<std::vector<ze::event>>();
   announce(typeid(ze::chunk<ze::event>), new event_chunk_type_info);
-  announce(typeid(store::segment), new segment_type_info);
+  announce(typeid(segment), new segment_type_info);
 }
 
 void uuid_type_info::serialize(void const* ptr, cppa::serializer* sink) const
@@ -76,7 +76,7 @@ void event_chunk_type_info::deserialize(void* ptr, cppa::deserializer* source) c
 
 void segment_type_info::serialize(void const* ptr, cppa::serializer* sink) const
 {
-    auto s = reinterpret_cast<store::segment const*>(ptr);
+    auto s = reinterpret_cast<segment const*>(ptr);
     cppa_oarchive oa(sink, name());
     oa << *s;
 }
@@ -87,7 +87,7 @@ void segment_type_info::deserialize(void* ptr, cppa::deserializer* source) const
     if (cname != name())
         throw std::logic_error("wrong type name found");
 
-    auto s = reinterpret_cast<store::segment*>(ptr);
+    auto s = reinterpret_cast<segment*>(ptr);
     cppa_iarchive ia(source, cname);
     ia >> *s;
 }

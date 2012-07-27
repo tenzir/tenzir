@@ -3,18 +3,18 @@
 #include <cstdlib>
 #include <iostream>
 #include <boost/exception/diagnostic_information.hpp>
+#include "vast/archive.h"
 #include "vast/exception.h"
+#include "vast/index.h"
+#include "vast/ingestor.h"
+#include "vast/logger.h"
 #include "vast/comm/broccoli.h"
 #include "vast/detail/cppa_type_info.h"
 #include "vast/fs/path.h"
 #include "vast/fs/operations.h"
-#include "vast/ingestor.h"
-#include "vast/logger.h"
 #include "vast/meta/schema_manager.h"
 #include "vast/query/client.h"
 #include "vast/query/search.h"
-#include "vast/store/archive.h"
-#include "vast/store/index.h"
 #include "vast/util/profiler.h"
 #include "config.h"
 
@@ -144,14 +144,14 @@ void program::start()
     }
 
     if (config_.check("archive-actor"))
-      archive_ = spawn<store::archive>(
+      archive_ = spawn<archive>(
           (config_.get<fs::path>("directory") / "archive").string(),
           config_.get<size_t>("archive.max-events-per-chunk"),
           config_.get<size_t>("archive.max-segment-size") * 1000,
           config_.get<size_t>("archive.max-segments"));
 
     if (config_.check("index-actor"))
-        index_ = spawn<store::index>(
+        index_ = spawn<index>(
             archive_,
             (config_.get<fs::path>("directory") / "index").string());
 

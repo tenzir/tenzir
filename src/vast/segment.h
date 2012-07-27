@@ -1,5 +1,5 @@
-#ifndef VAST_STORE_SEGMENT_H
-#define VAST_STORE_SEGMENT_H
+#ifndef VAST_SEGMENT_H
+#define VAST_SEGMENT_H
 
 #include <vector>
 #include <string>
@@ -10,10 +10,9 @@
 #include <ze/chunk.h>
 #include <ze/serialization.h>
 #include <ze/type/time.h>
-#include "vast/store/exception.h"
+#include "vast/exception.h"
 
 namespace vast {
-namespace store {
 
 /// Contains a vector of chunks with additional meta data. 
 class segment : public ze::object
@@ -146,11 +145,11 @@ private:
     uint32_t magic;
     ia >> magic;
     if (magic != segment::magic)
-      throw segment_exception("invalid segment magic");
+      throw error::segment("invalid segment magic");
 
     ia >> s.version_;
     if (s.version_ > segment::version)
-      throw segment_exception("segment version too high");
+      throw error::segment("segment version too high");
 
     ia >> static_cast<ze::object&>(s);
     ia >> s.compression_;
@@ -183,7 +182,6 @@ private:
   std::vector<chunk_tuple> chunks_;
 };
 
-} // namespace store
 } // namespace vast
 
 #endif

@@ -1,13 +1,19 @@
 include_directories(BEFORE ..)
 
 set(vast_lib_sources
+  archive.cc
   configuration.cc
+  emitter.cc
   event_source.cc
   exception.cc
   id_tracker.cc
+  index.cc
   ingestor.cc
   logger.cc
   program.cc
+  segment.cc
+  segment_manager.cc
+  segmentizer.cc
   comm/broccoli.cc
   comm/connection.cc
   comm/exception.cc
@@ -19,27 +25,20 @@ set(vast_lib_sources
   meta/argument.cc
   meta/event.cc
   meta/exception.cc
-  meta/parser/taxonomy.cc
   meta/schema_manager.cc
   meta/taxonomy.cc
   meta/type.cc
+  meta/parser/taxonomy.cc
   query/ast.cc
   query/client.cc
   query/exception.cc
   query/expression.cc
-  query/parser/expression.cc
-  query/parser/query.cc
   query/query.cc
   query/search.cc
+  query/parser/expression.cc
+  query/parser/query.cc
   source/broccoli.cc
   source/file.cc
-  store/archive.cc
-  store/emitter.cc
-  store/exception.cc
-  store/index.cc
-  store/segment.cc
-  store/segment_manager.cc
-  store/segmentizer.cc
   util/console.cc
   util/profiler.cc)
 

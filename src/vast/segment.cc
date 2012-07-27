@@ -1,11 +1,10 @@
-#include "vast/store/segment.h"
+#include "vast/segment.h"
 
 #include <ze/event.h>
 #include <ze/util/make_unique.h>
 #include "vast/logger.h"
 
 namespace vast {
-namespace store {
 
 // FIXME: Why does the linker complain without these definitions? These are
 // redundant to those in the header file.
@@ -154,5 +153,4 @@ bool operator!=(segment const& x, segment const& y)
   return ! (x == y);
 }
 
-} // namespace store
 } // namespace vast

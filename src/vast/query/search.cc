@@ -3,8 +3,8 @@
 #include <ze/util/make_unique.h>
 #include "vast/logger.h"
 #include "vast/query/exception.h"
-#include "vast/store/archive.h"
-#include "vast/store/emitter.h"
+#include "vast/archive.h"
+#include "vast/emitter.h"
 
 namespace vast {
 namespace query {

@@ -48,6 +48,11 @@ struct parse : public ingest
   parse(char const* msg);
 };
 
+struct segment : public exception
+{
+  segment(char const* msg);
+};
+
 } // namespace error
 } // namespace vast
 

@@ -7,9 +7,7 @@
 namespace vast {
 
 // Forward declarations.
-namespace store {
 class segment;
-} // namespace store
 
 namespace detail {
 
@@ -38,8 +36,7 @@ protected:
   void deserialize(void* ptr, cppa::deserializer* source) const;
 };
 
-class segment_type_info
-  : public cppa::util::abstract_uniform_type_info<store::segment>
+class segment_type_info : public cppa::util::abstract_uniform_type_info<segment>
 {
 protected:
   void serialize(void const* ptr, cppa::serializer* sink) const;

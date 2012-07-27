@@ -1,5 +1,5 @@
-#ifndef VAST_STORE_EMITTER_H
-#define VAST_STORE_EMITTER_H
+#ifndef VAST_EMITTER_H
+#define VAST_EMITTER_H
 
 // TODO: Currently, no more available segment IDs means that we're done.
 // Eventually, emitters should request more IDs from the index once they have
@@ -10,7 +10,6 @@
 #include <ze/uuid.h>
 
 namespace vast {
-namespace store {
 
 // Forward declarations.
 class segment;
@@ -42,7 +41,6 @@ private:
   cppa::behavior init_state;
 };
 
-} // namespace store
 } // namespace vast
 
 #endif

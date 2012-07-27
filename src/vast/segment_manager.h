@@ -1,14 +1,13 @@
-#ifndef VAST_STORE_SEGMENT_MANAGER_H
-#define VAST_STORE_SEGMENT_MANAGER_H
+#ifndef VAST_SEGMENT_MANAGER_H
+#define VAST_SEGMENT_MANAGER_H
 
 #include <unordered_map>
 #include <cppa/cppa.hpp>
 #include <ze/uuid.h>
-#include <vast/fs/path.h>
-#include <vast/util/lru_cache.h>
+#include "vast/fs/path.h"
+#include "vast/util/lru_cache.h"
 
 namespace vast {
-namespace store {
 
 // Forward declarations.
 class segment;
@@ -48,7 +47,6 @@ private:
   cppa::behavior init_state;
 };
 
-} // namespace store
 } // namespace vast
 
 #endif

@@ -1,11 +1,10 @@
-#ifndef VAST_STORE_SEGMENTIZER_H
-#define VAST_STORE_SEGMENTIZER_H
+#ifndef VAST_SEGMENTIZER_H
+#define VAST_SEGMENTIZER_H
 
 #include <cppa/cppa.hpp>
-#include "vast/store/segment.h"
+#include "vast/segment.h"
 
 namespace vast {
-namespace store {
 
 /// Writes events into a segment and relays baked segments to the archive.
 class segmentizer : public cppa::sb_actor<segmentizer>
@@ -30,7 +29,6 @@ private:
   cppa::behavior init_state;
 };
 
-} // namespace store
 } // namespace vast
 
 #endif

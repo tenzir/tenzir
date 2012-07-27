@@ -50,5 +50,10 @@ parse::parse(char const* msg)
 {
 }
 
+segment::segment(char const* msg)
+  : exception(msg)
+{
+}
+
 } // namespace error
 } // namespace vast
