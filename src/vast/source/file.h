@@ -1,5 +1,5 @@
-#ifndef VAST_INGEST_READER_H
-#define VAST_INGEST_READER_H
+#ifndef VAST_SOURCE_FILE_H
+#define VAST_SOURCE_FILE_H
 
 #include <cassert>
 #include <fstream>

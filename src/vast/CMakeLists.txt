@@ -4,6 +4,7 @@ set(vast_lib_sources
   archive.cc
   configuration.cc
   emitter.cc
+  event_sink.cc
   event_source.cc
   exception.cc
   expression.cc
@@ -36,6 +37,7 @@ set(vast_lib_sources
   meta/taxonomy.cc
   meta/type.cc
   meta/parser/taxonomy.cc
+  sink/file.cc
   source/broccoli.cc
   source/file.cc
   util/console.cc
