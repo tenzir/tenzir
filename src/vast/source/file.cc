@@ -174,7 +174,7 @@ void bro2::parse_header()
     {
       ze::string t(fs.start(i), fs.end(i));
 
-      if (t.starts_with("table["))
+      if (t.starts_with("table") || t.starts_with("vector"))
       {
         field_types_.push_back(ze::set_type);
         ze::string elem(t.find("[") + 1, t.end() - 1);
