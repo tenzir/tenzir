@@ -1,11 +1,13 @@
 #include <csignal>
 #include <cstdlib>
-#include <vast/program.h>
+#include "vast/program.h"
 
 vast::program VAST;
 
 static void shutdown_handler(int signo)
 {
+  // FIXME: Calling this function is not safe. On POSIX,
+  // use sem_post and sem_wait in conjunction with a watchdog actor.
   VAST.stop();
 }
 

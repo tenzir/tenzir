@@ -21,9 +21,9 @@ configuration::configuration()
     ("config,c", po::value<fs::path>(), "configuration file")
     ("directory,d", po::value<fs::path>()->default_value("vast"),
      "VAST directory")
+    ("expression,e", po::value<std::string>(), "query expression")
     ("help,h", "display this help")
     ("schema,s", po::value<std::string>(), "event schema file")
-    ("query,q", po::value<std::string>(), "query expression")
     ("console-verbosity,v",
      po::value<int>()->default_value(logger::info),
      "console logging verbosity")
@@ -35,12 +35,13 @@ configuration::configuration()
     ("logfile-verbosity,V",
      po::value<int>()->default_value(logger::verbose),
      "log file verbosity")
-    ("profile,P", po::value<unsigned>(), "getrusage profiling (seconds)")
+    ("profile,P", po::value<unsigned>(),
+     "enable getrusage profiling at a given interval (seconds)")
 #ifdef USE_PERFTOOLS_CPU_PROFILER
-    ("perftools-cpu", "enable Google perftools CPU profiling")
+    ("profile-cpu", "also enable Google perftools CPU profiling")
 #endif
 #ifdef USE_PERFTOOLS_HEAP_PROFILER
-    ("perftools-heap", "enable Google perftools heap profiling")
+    ("profile-heap", "also enable Google perftools heap profiling")
 #endif
     ("broccoli-messages", "enable broccoli debug messages")
     ("broccoli-calltrace", "enable broccoli function call tracing")
@@ -142,7 +143,7 @@ void configuration::load(int argc, char *argv[])
 
   if (check("config"))
   {
-    fs::path const& cfg = get<fs::path>("conf");
+    fs::path const& cfg = get<fs::path>("config");
     std::ifstream ifs(cfg.string().c_str());
     po::store(po::parse_config_file(ifs, all_), config_);
   }
@@ -172,10 +173,10 @@ void configuration::init()
   depends("print-schema", "schema");
   depends("ingest.file-names", "ingest.file-type");
 
-  conflicts("query", "tracker-actor");
-  conflicts("query", "archive-actor");
-  conflicts("query", "index-actor");
-  conflicts("query", "search-actor");
+  conflicts("expression", "tracker-actor");
+  conflicts("expression", "archive-actor");
+  conflicts("expression", "index-actor");
+  conflicts("expression", "search-actor");
 
   auto v = get<int>("console-verbosity");
   if (v < 0 || v > 6)

@@ -40,9 +40,21 @@ bool program::init(std::string const& filename)
     do_init();
     return true;
   }
+  catch (error::config const& e)
+  {
+    std::cerr << e.what() << std::endl;
+  }
   catch (boost::program_options::unknown_option const& e)
   {
-    std::cerr << e.what();
+    std::cerr << e.what() << std::endl;
+  }
+  catch (boost::exception const& e)
+  {
+    std::cerr << boost::diagnostic_information(e);
+  }
+  catch (...)
+  {
+    std::cerr << "unknown exception during program initialization" << std::endl;
   }
 
   return false;
@@ -79,6 +91,10 @@ bool program::init(int argc, char *argv[])
   {
     std::cerr << boost::diagnostic_information(e);
   }
+  catch (...)
+  {
+    std::cerr << "unknown exception during program initialization" << std::endl;
+  }
 
   return false;
 }
@@ -93,28 +109,14 @@ void program::start()
 
   try
   {
-#ifdef USE_PERFTOOLS_HEAP_PROFILER
-    if (config_.check("perftools-heap"))
-    {
-      LOG(info, core) << "starting Gperftools CPU profiler";
-      HeapProfilerStart((log_dir / "heap.profile").string().data());
-    }
-#endif
-#ifdef USE_PERFTOOLS_CPU_PROFILER
-    if (config_.check("perftools-cpu"))
-    {
-      LOG(info, core) << "starting Gperftools heap profiler";
-      ProfilerStart((log_dir / "cpu.profile").string().data());
-    }
-#endif
-
     if (config_.check("profile"))
     {
-      auto const& filename = log_dir / "profiler.log";
       auto ms = config_.get<unsigned>("profile");
-      profiler_ = spawn<util::profiler>(filename.string(),
-                                        std::chrono::seconds(ms));
-      send(profiler_, atom("run"));
+      profiler_ = spawn<util::profiler>(log_dir.string(), std::chrono::seconds(ms));
+      send(profiler_,
+           atom("run"),
+           config_.check("profile-cpu"),
+           config_.check("profile-heap"));
     }
 
     schema_manager_ = spawn<meta::schema_manager>();
@@ -250,7 +252,7 @@ void program::start()
           config_.get<unsigned>("search.port"));
     }
 
-    if (config_.check("query"))
+    if (config_.check("expression"))
     {
       auto paginate = config_.get<unsigned>("query.paginate");
       auto& expression = config_.get<std::string>("query");
@@ -309,30 +311,6 @@ void program::stop()
 
   if (config_.check("profile"))
     profiler_ << shutdown;
-
-#ifdef USE_PERFTOOLS_CPU_PROFILER
-
-  if (config_.check("perftools-cpu"))
-  {
-    ProfilerState state;
-    ProfilerGetCurrentState(&state);
-    LOG(info, core)
-      << "Gperftools CPU profiler gathered "
-      <<  state.samples_gathered << " samples"
-      << " in file " << state.profile_name;
-
-    LOG(info, core) << "stopping Gperftools CPU profiler";
-    ProfilerStop();
-  }
-#endif
-#ifdef USE_PERFTOOLS_HEAP_PROFILER
-  if (config_.check("perftools-heap") && IsHeapProfilerRunning())
-  {
-    LOG(info, core) << "stopping Gperftools heap profiler";
-    HeapProfilerDump("cleanup");
-    HeapProfilerStop();
-  }
-#endif
 
   return_ = EXIT_SUCCESS;
 }
