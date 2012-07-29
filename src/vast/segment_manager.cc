@@ -1,9 +1,9 @@
 #include "vast/segment_manager.h"
 
-#include "vast/fs/fstream.h"
-#include "vast/fs/operations.h"
 #include "vast/segment.h"
 #include "vast/logger.h"
+#include "vast/fs/fstream.h"
+#include "vast/fs/operations.h"
 
 namespace vast {
 
@@ -14,22 +14,14 @@ segment_manager::segment_manager(size_t capacity, std::string const& dir)
   LOG(verbose, archive)
     << "spawning segment manager @" << id() << " with capacity " << capacity;
 
-  if (! fs::exists(dir_))
-  {
-    LOG(info, archive)
-      << "segment manager @" << id() << " creates new directory " << dir_;
-    fs::mkdir(dir_);
-  }
-  else
-  {
-    LOG(info, archive)
-      << "segment manager @" << id() << " scans directory " << dir_;
+  LOG(verbose, archive)
+    << "segment manager @" << id() << " scans directory " << dir_;
 
-    scan(dir_);
-    if (segment_files_.empty())
-      LOG(info, archive)
-        << "segment manager @" << id() << " did not find any segments";
-  }
+  assert(fs::exists(dir_));
+  scan(dir_);
+  if (segment_files_.empty())
+    LOG(verbose, archive)
+      << "segment manager @" << id() << " did not find any segments";
 
   using namespace cppa;
   init_state = (

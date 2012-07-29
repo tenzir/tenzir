@@ -2,6 +2,7 @@
 
 #include "vast/logger.h"
 #include "vast/segment.h"
+#include "vast/fs/operations.h"
 
 namespace vast {
 
@@ -9,6 +10,12 @@ index::index(cppa::actor_ptr archive, std::string const& directory)
   : archive_(archive)
 {
   LOG(verbose, index) << "spawning index @" << id();
+  if (! fs::exists(directory))
+  {
+    LOG(info, index)
+      << "index @" << id() << " creates new directory " << directory;
+    fs::mkdir(directory);
+  }
 
   using namespace cppa;
   init_state = (

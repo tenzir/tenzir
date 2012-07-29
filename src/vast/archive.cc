@@ -6,12 +6,20 @@
 #include "vast/logger.h"
 #include "vast/segment.h"
 #include "vast/segment_manager.h"
+#include "vast/fs/operations.h"
 
 namespace vast {
 
 archive::archive(std::string const& directory, size_t max_segments)
 {
   LOG(verbose, archive) << "spawning archive @" << id();
+  if (! fs::exists(directory))
+  {
+    LOG(info, archive)
+      << "archive @" << id() << " creates new directory " << directory;
+    fs::mkdir(directory);
+  }
+
   using namespace cppa;
   segment_manager_ = spawn<segment_manager>(max_segments, directory);
   init_state = (
