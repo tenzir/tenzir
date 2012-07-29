@@ -11,11 +11,12 @@ static char const* const facilities[] =
   "core",
   "broccoli",
   "comm",
-  "event",
-  "ingest",
   "meta",
   "query",
-  "store"
+  "ingest",
+  "emit",
+  "archive",
+  "index"
 };
 
 /// Computes the number of characters that align the facility string with the

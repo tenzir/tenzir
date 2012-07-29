@@ -547,7 +547,7 @@ void broccoli::reverse_factory::free(bro_val const& v)
 
 BroEvent* broccoli::reverse_factory::make_event(ze::event const& event)
 {
-  LOG(debug, event) << "building broccoli event " << event.name();
+  LOG(debug, broccoli) << "building broccoli event " << event.name();
 
   BroEvent* bro_event = bro_event_new(event.name().data());
   if (! bro_event)
@@ -558,7 +558,7 @@ BroEvent* broccoli::reverse_factory::make_event(ze::event const& event)
 
   for (auto& arg : event)
   {
-    LOG(debug, event) << "adding argument: " << arg;
+    LOG(debug, broccoli) << "adding argument: " << arg;
     bro_val val = ze::value::visit(arg, builder());
     bro_event_add_val(bro_event, val.type, NULL, val.value);
     free(val);

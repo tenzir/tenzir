@@ -12,7 +12,7 @@ emitter::emitter(cppa::actor_ptr segment_manager, cppa::actor_ptr sink)
   , sink_(sink)
 {
   using namespace cppa;
-  LOG(verbose, store) 
+  LOG(verbose, archive)
     << "spawning emitter @" << id() << " with sink @" << sink_->id();
 
   init_state = (
@@ -21,7 +21,7 @@ emitter::emitter(cppa::actor_ptr segment_manager, cppa::actor_ptr sink)
         // TODO: The index should give the archive a list of segment IDs that
         // we hand to this emitter, that then will query the segment manager to
         // give us the corresponding segments.
-        
+
         send(segment_manager_, atom("all ids"));
       },
       on(atom("ids"), arg_match) >> [=](std::vector<ze::uuid> const& ids)
@@ -33,7 +33,7 @@ emitter::emitter(cppa::actor_ptr segment_manager, cppa::actor_ptr sink)
       {
         if (ids_.empty())
         {
-          LOG(debug, store) << "emitter @" << id() << " has no segment IDs";
+          LOG(debug, archive) << "emitter @" << id() << " has no segment IDs";
           send(sink, atom("finished"));
           return;
         }
@@ -47,14 +47,14 @@ emitter::emitter(cppa::actor_ptr segment_manager, cppa::actor_ptr sink)
       {
         ids_.clear();
         self->quit();
-        LOG(verbose, store) << "emitter @" << id() << " terminated";
+        LOG(verbose, archive) << "emitter @" << id() << " terminated";
       });
 }
 
 void emitter::retrieve_segment()
 {
   using namespace cppa;
-  LOG(debug, store) 
+  LOG(debug, archive)
     << "emitter @" << id() << " retrieves segment " << ids_.front();
 
   send(segment_manager_, atom("retrieve"), ids_.front());
@@ -81,14 +81,14 @@ void emitter::retrieve_segment()
       },
       others() >> [=]
       {
-        LOG(error, store) 
+        LOG(error, archive)
           << "invalid message";
 
         unbecome();
       },
       after(std::chrono::seconds(10)) >> [=]
       {
-        LOG(error, store) 
+        LOG(error, archive)
           << "emitter @" << id() << " did not receive segment " << ids_.front();
         unbecome();
       });
@@ -97,7 +97,7 @@ void emitter::retrieve_segment()
 void emitter::emit_chunk()
 {
   using namespace cppa;
-  LOG(debug, store) 
+  LOG(debug, archive)
     << "emitter @" << id() << " sends chunk #" << current_chunk_;
 
   assert(segment_);
@@ -105,14 +105,14 @@ void emitter::emit_chunk()
 
   if (current_chunk_ == last_chunk_)
   {
-    LOG(debug, store) 
-      << "emitter @" << id() 
+    LOG(debug, archive)
+      << "emitter @" << id()
       << " reached last chunk of segment" << segment_->id();
 
     segment_ = nullptr;
     if (ids_.empty())
     {
-      LOG(debug, store) << "emitter @" << id() << " has finished";
+      LOG(debug, archive) << "emitter @" << id() << " has finished";
       send(sink_, atom("finished"));
     }
   }

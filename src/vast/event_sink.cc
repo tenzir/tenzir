@@ -8,7 +8,7 @@ namespace vast {
 
 event_sink::event_sink()
 {
-  LOG(verbose, store) << "spawning event sink @" << id();
+  LOG(verbose, emit) << "spawning event sink @" << id();
 
   using namespace cppa;
   chaining(false);
@@ -27,7 +27,7 @@ event_sink::event_sink()
       on(atom("shutdown")) >> [=]
       {
         quit();
-        LOG(verbose, store) << "event sink @" << id() << " terminated";
+        LOG(verbose, emit) << "event sink @" << id() << " terminated";
       });
 }
 

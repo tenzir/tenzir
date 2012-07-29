@@ -5,87 +5,51 @@
 
 namespace vast {
 
-segmentizer::segmentizer(cppa::actor_ptr segment_manager,
-                         size_t max_events_per_chunk,
-                         size_t max_segment_size)
+segmentizer::segmentizer(size_t max_events_per_chunk, size_t max_segment_size)
   : writer_(segment_)
-  , segment_manager_(segment_manager)
 {
-  LOG(verbose, store) << "spawning segmentizer @" << id();
-  LOG(verbose, store)
+  LOG(verbose, ingest) << "spawning segmentizer @" << id();
+  LOG(verbose, ingest)
     << "segmentizer @" << id() << " has maximum segment size of "
     << max_segment_size << " bytes";
-  LOG(verbose, store)
+  LOG(verbose, ingest)
     << "segmentizer @" << id() << " uses at most "
     << max_events_per_chunk << " events per chunk";
 
-  auto write_event = [=](ze::event const& e)
-    {
-      auto n = writer_ << e;
-      if (n < max_events_per_chunk)
-        return;
-
-      if (segment_.bytes() < max_segment_size)
-      {
-        writer_.flush_chunk();
-        return;
-      }
-
-      LOG(debug, store)
-        << "segmentizer @" << id()
-        << " sends segment " << segment_.id() << " to archive";
-
-      send(segment_manager_, std::move(segment_));
-      segment_ = segment();
-    };
-
   using namespace cppa;
   init_state = (
-      on_arg_match >> write_event,
       on_arg_match >> [=](std::vector<ze::event> const& v)
       {
         for (auto& e : v)
-          write_event(e);
+        {
+          auto n = writer_ << e;
+          if (n < max_events_per_chunk)
+            return;
+
+
+          if (segment_.bytes() < max_segment_size)
+          {
+            writer_.flush_chunk();
+            return;
+          }
+
+          DBG(ingest)
+            << "segmentizer @" << id() << " relays segment " << segment_.id();
+
+          reply(std::move(segment_));
+          segment_ = segment();
+        }
       },
-      on(atom("shutdown")) >> [=]()
+      on(atom("shutdown")) >> [=]
       {
-        if (segment_.events() == 0)
-        {
-          reply(atom("shutdown"), atom("ack"));
-          terminate();
-        }
+        if (segment_.events() > 0)
+          reply(std::move(segment_));
         else
-        {
-          LOG(debug, store)
-            << "segmentizer @" << id()
-            << " sends last segment " << segment_.id();
+          reply(atom("done"));
 
-          send(segment_manager_, std::move(segment_));
-          auto archive = last_sender();
-          become(
-              keep_behavior,
-              on(atom("segment"), atom("ack"), arg_match) >>
-                [=](ze::uuid const& id)
-              {
-                send(archive, atom("shutdown"), atom("ack"));
-                terminate();
-              },
-              after(std::chrono::seconds(30)) >> [=]
-              {
-                LOG(debug, store)
-                  << "segmentizer @" << id()
-                  << " did not receive shutdown ack from segment manager @"
-                  << segment_manager_->id();
-                terminate();
-              });
-        }
+        quit();
+        LOG(verbose, ingest) << "segmentizer @" << id() << " terminated";
       });
-}
-
-void segmentizer::terminate()
-{
-  quit();
-  LOG(verbose, store) << "segmentizer @" << id() << " terminated";
 }
 
 } // namespace vast

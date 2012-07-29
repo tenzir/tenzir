@@ -12,19 +12,19 @@ namespace vast {
 namespace source {
 
 // TODO: Either make this a synchronous sink and inherit from
-// vast::event_source or provide a separate async_source class where this
-// source can inherit from..
-//
+// vast::event_source or provide a separate async_source class that this
+// source can inherit from.
+
 /// Receives events from the external world.
 class broccoli : public cppa::sb_actor<broccoli>
 {
   friend class cppa::sb_actor<broccoli>;
 
 public:
-  /// Constructs a Broccoli event source.
+  /// Spawns a Broccoli event source.
+  /// @param ingestor The ingestor actor.
   /// @param tracker The event ID tracker.
-  /// @param upstream The actor to send the received events to.
-  broccoli(cppa::actor_ptr tracker, cppa::actor_ptr upstream);
+  broccoli(cppa::actor_ptr ingestor, cppa::actor_ptr tracker);
 
 private:
   /// Adds an event name to the list of events to subscribe to.
@@ -34,8 +34,7 @@ private:
   /// Starts listening for Broccoli connections at a given endpoint.
   /// @param host The address or hostname where to listen.
   /// @param port The TCP port number to bind to.
-  /// @param sink The actor receiving the Broccoli events.
-  void start_server(std::string const& host, unsigned port, cppa::actor_ptr sink);
+  void start_server(std::string const& host, unsigned port);
 
   /// Stops the TCP server.
   void stop_server();
@@ -50,6 +49,7 @@ private:
   std::vector<std::shared_ptr<comm::broccoli>> broccolis_;
   std::mutex mutex_;
 
+  cppa::actor_ptr segmentizer_;
   cppa::behavior init_state;
 };
 

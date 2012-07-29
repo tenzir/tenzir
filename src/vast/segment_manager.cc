@@ -11,22 +11,22 @@ segment_manager::segment_manager(size_t capacity, std::string const& dir)
   : cache_(capacity, [&](ze::uuid const& id) { return on_miss(id); })
   , dir_(dir)
 {
-  LOG(verbose, store)
+  LOG(verbose, archive)
     << "spawning segment manager @" << id() << " with capacity " << capacity;
 
   if (! fs::exists(dir_))
   {
-    LOG(info, store)
+    LOG(info, archive)
       << "segment manager @" << id() << " creates new directory " << dir_;
     fs::mkdir(dir_);
   }
   else
   {
-    LOG(info, store)
+    LOG(info, archive)
       << "segment manager @" << id() << " scans directory " << dir_;
     scan(dir_);
     if (segment_files_.empty())
-      LOG(info, store)
+      LOG(info, archive)
         << "segment manager @" << id() << " did not find any segments";
   }
 
@@ -48,7 +48,7 @@ segment_manager::segment_manager(size_t capacity, std::string const& dir)
       },
       on(atom("retrieve"), arg_match) >> [=](ze::uuid const& id)
       {
-        LOG(debug, store)
+        LOG(debug, archive)
           << "segment manager @" << self->id() << " retrieves segment " << id;
         self->last_sender() << cache_.retrieve(id);
       },
@@ -57,7 +57,7 @@ segment_manager::segment_manager(size_t capacity, std::string const& dir)
         segment_files_.clear();
         cache_.clear();
         self->quit();
-        LOG(verbose, store) << "segment manager @" << id() << " terminated";
+        LOG(verbose, archive) << "segment manager @" << id() << " terminated";
       });
 }
 
@@ -71,7 +71,7 @@ void segment_manager::scan(fs::path const& directory)
           scan(p);
         else
         {
-          LOG(verbose, store)
+          LOG(verbose, archive)
             << "segment manager @" << id() << " found segment " << p;
           segment_files_.emplace(p.filename().string(), p);
         }
@@ -93,14 +93,14 @@ void segment_manager::store_segment(cppa::cow_tuple<segment> t)
     oa << s;
   }
 
-  LOG(verbose, store)
+  LOG(verbose, archive)
     << "segment manager @" << id() << " wrote segment to " << path;
   cache_.insert(s.id(), t);
 }
 
 cppa::cow_tuple<segment> segment_manager::on_miss(ze::uuid const& id)
 {
-  DBG(store)
+  DBG(archive)
     << "segment manager @" << cppa::self->id()
     << " experienced cache miss for segment " << id;
   assert(segment_files_.find(id) != segment_files_.end());

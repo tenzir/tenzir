@@ -45,11 +45,12 @@ public:
     core     = 0,
     broccoli = 1,
     comm     = 2,
-    event    = 3,
-    ingest   = 4,
-    meta     = 5,
-    query    = 6,
-    store    = 7
+    meta     = 3,
+    query    = 4,
+    ingest   = 5,
+    emit     = 6,
+    archive  = 7,
+    index    = 8
   };
 
   enum level : int

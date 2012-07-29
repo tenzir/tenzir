@@ -4,29 +4,41 @@
 #include <ze/event.h>
 #include "vast/comm/connection.h"
 #include "vast/logger.h"
+#include "vast/segmentizer.h"
 
 namespace vast {
 namespace source {
 
-broccoli::broccoli(cppa::actor_ptr tracker, cppa::actor_ptr upstream)
+broccoli::broccoli(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
   : error_handler_([&](std::shared_ptr<comm::broccoli> bro) { disconnect(bro); })
 {
   LOG(verbose, core) << "spawning bro event source @" << id();
   using namespace cppa;
+  chaining(false);
   init_state = (
+      on(atom("initialize"), arg_match) >> [=](size_t max_events_per_chunk,
+                                               size_t max_segment_size)
+      {
+        segmentizer_ = spawn<segmentizer>(max_events_per_chunk,
+                                          max_segment_size);
+      },
       on(atom("subscribe"), arg_match) >> [=](std::string const& event)
       {
         LOG(verbose, ingest)
           << "bro event source @" << id() << " subscribes to event " << event;
+
         subscribe(event);
       },
       on(atom("bind"), arg_match) >> [=](std::string const& host, unsigned port)
       {
-        start_server(host, port, upstream);
+        assert(segmentizer_);
+        start_server(host, port);
       },
       on(atom("shutdown")) >> [=]()
       {
         stop_server();
+        // TODO: make sure last segment get's accommodated.
+        segmentizer_ << last_dequeued();
         quit();
         LOG(verbose, ingest) << "bro event source @" << id() << " terminated";
       });
@@ -41,8 +53,7 @@ void broccoli::subscribe(std::string event)
     event_names_.insert(i, std::move(event));
 }
 
-void broccoli::start_server(std::string const& host, unsigned port,
-                                    cppa::actor_ptr sink)
+void broccoli::start_server(std::string const& host, unsigned port)
 {
   server_.start(
       host,
@@ -53,8 +64,8 @@ void broccoli::start_server(std::string const& host, unsigned port,
             conn,
             [=](ze::event event)
             {
-              // FIXME: assign events an ID.
-              send(sink, std::move(event));
+              // FIXME: assign events an ID from the tracker.
+              send(segmentizer_, std::move(event));
             });
 
         for (auto const& event : event_names_)

@@ -5,6 +5,7 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include "vast/archive.h"
 #include "vast/exception.h"
+#include "vast/id_tracker.h"
 #include "vast/index.h"
 #include "vast/ingestor.h"
 #include "vast/logger.h"
@@ -146,8 +147,6 @@ void program::start()
     if (config_.check("archive-actor"))
       archive_ = spawn<archive>(
           (config_.get<fs::path>("directory") / "archive").string(),
-          config_.get<size_t>("archive.max-events-per-chunk"),
-          config_.get<size_t>("archive.max-segment-size") * 1000,
           config_.get<size_t>("archive.max-segments"));
 
     if (config_.check("index-actor"))
@@ -155,22 +154,23 @@ void program::start()
             archive_,
             (config_.get<fs::path>("directory") / "index").string());
 
+    auto id_file = (config_.get<fs::path>("directory") / "id").string();
+    tracker_ = spawn<id_tracker>(id_file);
+
     if (config_.check("ingestor-actor"))
     {
-      ingestor_ = spawn<ingestor>(
-          archive_,
-          (config_.get<fs::path>("directory") / "id").string());
+      ingestor_ = spawn<ingestor>(archive_, tracker_);
 
-      send(ingestor_,
-           atom("initialize"),
-           config_.get<std::string>("ingestor.host"),
-           config_.get<unsigned>("ingestor.port"));
+      send(ingestor_, atom("initialize"),
+          config_.get<size_t>("ingestor.max-events-per-chunk"),
+          config_.get<size_t>("ingestor.max-segment-size") * 1000000);
 
       if (config_.check("ingestor.events"))
       {
+        auto host = config_.get<std::string>("ingestor.host");
+        auto port = config_.get<unsigned>("ingestor.port");
         auto events = config_.get<std::vector<std::string>>("ingestor.events");
-        for (auto& event : events)
-          send(ingestor_, atom("subscribe"), event);
+        send(ingestor_, atom("ingest"), atom("broccoli"), host, port, events);
       }
 
       if (config_.check("ingestor.file-names"))
@@ -258,6 +258,7 @@ void program::stop()
   if (config_.check("archive-actor"))
     archive_ << shutdown;
 
+  tracker_ << shutdown;
   schema_manager_ << shutdown;
 
   if (config_.check("profile"))

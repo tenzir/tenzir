@@ -62,11 +62,15 @@ configuration::configuration()
   po::options_description ingestor("ingestor options");
   ingestor.add_options()
     ("ingestor.host", po::value<std::string>()->default_value("127.0.0.1"),
-     "IP address of the ingestor")
+     "IP address of the broccoli source")
     ("ingestor.port", po::value<unsigned>()->default_value(42000),
-     "port of the ingestor")
+     "port of the broccoli source")
     ("ingestor.events", po::value<std::vector<std::string>>()->multitoken(),
-     "explicit list of events to ingest")
+     "explicit list of events for broccoli to ingest")
+    ("ingestor.max-events-per-chunk", po::value<size_t>()->default_value(1000),
+     "maximum number of events per chunk")
+    ("ingestor.max-segment-size", po::value<size_t>()->default_value(1),
+     "maximum segment size in MB")
     ("ingestor.file-type", po::value<std::string>()->default_value("bro1"),
      "file type of the file(s) to ingest")
     ("ingestor.file-names", po::value<std::vector<std::string>>()->multitoken(),
@@ -79,10 +83,6 @@ configuration::configuration()
      "IP address of the archive")
     ("archive.port", po::value<unsigned>()->default_value(42002),
      "port of the archive")
-    ("archive.max-events-per-chunk", po::value<size_t>()->default_value(1000),
-     "maximum number of events per chunk")
-    ("archive.max-segment-size", po::value<size_t>()->default_value(1000),
-     "maximum segment size in KB")
     ("archive.max-segments", po::value<size_t>()->default_value(500),
      "maximum number of segments to keep in memory")
     ;

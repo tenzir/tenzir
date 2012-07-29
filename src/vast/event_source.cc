@@ -3,6 +3,7 @@
 #include <ze/event.h>
 #include "vast/exception.h"
 #include "vast/logger.h"
+#include "vast/segmentizer.h"
 
 namespace vast {
 
@@ -14,8 +15,15 @@ event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
   using namespace cppa;
   chaining(false);
   init_state = (
+      on(atom("initialize"), arg_match) >> [=](size_t max_events_per_chunk,
+                                               size_t max_segment_size)
+      {
+        segmentizer_ = spawn<segmentizer>(max_events_per_chunk,
+                                          max_segment_size);
+      },
       on(atom("extract"), arg_match) >> [=](size_t n)
       {
+        assert(segmentizer_);
         if (finished_)
         {
           send(ingestor, atom("source"), atom("done"));
@@ -50,24 +58,28 @@ event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
           }
         }
 
+        auto extracted = events.size();
         if (! events.empty())
         {
-          total_events_ += events.size();
+          total_events_ += extracted;
 
           LOG(verbose, ingest)
             << "event source @" << id()
-            << " sends " << events.size()
-//            << " events to segmentizer @" << segmentizer_->id()
+            << " sends " << extracted
+            << " events to upstream @" << segmentizer_->id()
             << " (cumulative events: " << total_events_ << ')';
 
-          // TODO: Spawn segmentizer.
-          //send(segmentizer_, std::move(events));
+          send(segmentizer_, std::move(events));
         }
 
-        send(ingestor, atom("source"), finished_ ? atom("done") : atom("ack"));
+        send(ingestor,
+             atom("source"),
+             finished_ ? atom("done") : atom("ack"),
+             extracted);
       },
       on(atom("shutdown")) >> [=]
       {
+        forward_to(segmentizer_);
         quit();
         LOG(verbose, ingest) << "event source @" << id() << " terminated";
       });
