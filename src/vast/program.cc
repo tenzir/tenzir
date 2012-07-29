@@ -123,9 +123,6 @@ void program::start()
       send(profiler_, atom("run"));
     }
 
-    comm::broccoli::init(config_.check("broccoli-messages"),
-                         config_.check("broccoli-calltrace"));
-
     schema_manager_ = spawn<meta::schema_manager>();
     if (config_.check("schema"))
     {
@@ -144,39 +141,56 @@ void program::start()
       }
     }
 
-    if (config_.check("archive-actor"))
+    if (config_.check("tracker-actor") || config_.check("all-server"))
+      tracker_ = spawn<id_tracker>(
+          (config_.get<fs::path>("directory") / "id").string());
+    else
+      tracker_ = remote_actor(
+          config_.get<std::string>("tracker.host"),
+          config_.get<unsigned>("tracker.port"));
+
+    if (config_.check("archive-actor") || config_.check("all-server"))
       archive_ = spawn<archive>(
           (config_.get<fs::path>("directory") / "archive").string(),
           config_.get<size_t>("archive.max-segments"));
+    else
+      archive_ = remote_actor(
+          config_.get<std::string>("archive.host"),
+          config_.get<unsigned>("archive.port"));
 
-    if (config_.check("index-actor"))
+    if (config_.check("index-actor") || config_.check("all-server"))
         index_ = spawn<index>(
             archive_,
             (config_.get<fs::path>("directory") / "index").string());
+    else
+      index_ = remote_actor(
+          config_.get<std::string>("index.host"),
+          config_.get<unsigned>("index.port"));
 
-    auto id_file = (config_.get<fs::path>("directory") / "id").string();
-    tracker_ = spawn<id_tracker>(id_file);
 
     if (config_.check("ingestor-actor"))
     {
-      ingestor_ = spawn<ingestor>(archive_, tracker_);
+      comm::broccoli::init(config_.check("broccoli-messages"),
+                           config_.check("broccoli-calltrace"));
+
+      ingestor_ = spawn<ingestor>(tracker_, archive_, index_);
 
       send(ingestor_, atom("initialize"),
-          config_.get<size_t>("ingestor.max-events-per-chunk"),
-          config_.get<size_t>("ingestor.max-segment-size") * 1000000);
+          config_.get<size_t>("ingest.max-events-per-chunk"),
+          config_.get<size_t>("ingest.max-segment-size") * 1000000);
 
-      if (config_.check("ingestor.events"))
+      if (config_.check("ingest.events"))
       {
-        auto host = config_.get<std::string>("ingestor.host");
-        auto port = config_.get<unsigned>("ingestor.port");
-        auto events = config_.get<std::vector<std::string>>("ingestor.events");
+        auto host = config_.get<std::string>("ingest.host");
+        auto port = config_.get<unsigned>("ingest.port");
+        auto events = config_.get<std::vector<std::string>>("ingest.events");
         send(ingestor_, atom("ingest"), atom("broccoli"), host, port, events);
       }
 
-      if (config_.check("ingestor.file-names"))
+      if (config_.check("ingest.file-names"))
       {
-        auto type = config_.get<std::string>("ingestor.file-type");
-        auto files = config_.get<std::vector<std::string>>("ingestor.file-names");
+        auto type = config_.get<std::string>("ingest.file-type");
+        auto files = config_.get<std::vector<std::string>>("ingest.file-names");
         for (auto& file : files)
         {
           if (fs::exists(file))
@@ -187,7 +201,7 @@ void program::start()
       }
     }
 
-    if (config_.check("search-actor"))
+    if (config_.check("search-actor") || config_.check("all-server"))
     {
       search_ = spawn<search>(archive_, index_);
 
@@ -246,19 +260,21 @@ void program::stop()
   if (config_.check("query"))
     query_client_ << shutdown;
 
-  if (config_.check("search-actor"))
+  if (config_.check("search-actor") || config_.check("all-server"))
     search_ << shutdown;
 
   if (config_.check("ingestor-actor"))
     ingestor_ << shutdown;
 
-  if (config_.check("index-actor"))
+  if (config_.check("index-actor") || config_.check("all-server"))
     index_ << shutdown;
 
-  if (config_.check("archive-actor"))
+  if (config_.check("archive-actor") || config_.check("all-server"))
     archive_ << shutdown;
 
-  tracker_ << shutdown;
+  if (config_.check("tracker-actor") || config_.check("all-server"))
+    tracker_ << shutdown;
+
   schema_manager_ << shutdown;
 
   if (config_.check("profile"))

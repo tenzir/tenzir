@@ -9,8 +9,11 @@
 
 namespace vast {
 
-ingestor::ingestor(cppa::actor_ptr archive, cppa::actor_ptr tracker)
+ingestor::ingestor(cppa::actor_ptr tracker,
+                   cppa::actor_ptr archive,
+                   cppa::actor_ptr index)
   : archive_(archive)
+  , index_(index)
 {
   // FIXME: make batch size configurable.
   size_t batch_size = 1000;
@@ -69,6 +72,7 @@ ingestor::ingestor(cppa::actor_ptr archive, cppa::actor_ptr tracker)
       },
       on_arg_match >> [=](segment const& /* s */)
       {
+        index_ << last_dequeued();
         archive_ << last_dequeued();
       },
       on(atom("shutdown")) >> [=]
@@ -100,6 +104,7 @@ void ingestor::remove(cppa::actor_ptr src)
         << " received last segment @" << s.id()
         << " from @" << last_sender()->id();
 
+      index_ << last_dequeued();
       archive_ << last_dequeued();
       if (sources_.empty() && terminating_)
         shutdown();

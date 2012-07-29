@@ -11,10 +11,13 @@ class ingestor : public cppa::sb_actor<ingestor>
   friend class cppa::sb_actor<ingestor>;
 
 public:
-  /// Sets the initial behavior.
-  /// @param archive The archive actor.
+  /// Spawns the ingestor.
   /// @param tracker The ID tracker.
-  ingestor(cppa::actor_ptr archive, cppa::actor_ptr tracker);
+  /// @param archive The archive actor.
+  /// @param archive The index actor.
+  ingestor(cppa::actor_ptr tracker,
+           cppa::actor_ptr archive,
+           cppa::actor_ptr index);
 
 private:
   void remove(cppa::actor_ptr src);
@@ -26,6 +29,7 @@ private:
 
   std::vector<cppa::actor_ptr> sources_;
   cppa::actor_ptr archive_;
+  cppa::actor_ptr index_;
   cppa::actor_ptr broccoli_;
   cppa::behavior init_state;
 };

@@ -22,7 +22,7 @@ index::index(cppa::actor_ptr archive, std::string const& directory)
       },
       on_arg_match >> [=](segment const& s)
       {
-        LOG(debug, index) << "indexing segment " << s.id();
+        DBG(index) << "index @" << id() << " processes segment " << s.id();
         // TODO: implement.
       },
       on(atom("shutdown")) >> [=]()
