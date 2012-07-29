@@ -113,14 +113,14 @@ configuration::configuration()
      "port of the search")
     ;
 
-  po::options_description client("client options");
-  client.add_options()
-    ("client.paginate,p", po::value<unsigned>()->default_value(10),
+  po::options_description query("query client options");
+  query.add_options()
+    ("query.paginate,p", po::value<unsigned>()->default_value(10),
      "number of query results per page")
     ;
 
   all_.add(general).add(advanced).add(actor).add(schema).add(tracker)
-    .add(ingest).add(archive).add(index).add(search).add(client);
+    .add(ingest).add(archive).add(index).add(search).add(query);
 
   visible_.add(general).add(actor);
 }
@@ -188,8 +188,8 @@ void configuration::init()
   if (check("profile") && get<unsigned>("profile") == 0)
     throw error::config("profiling interval must be non-zero", "profile");
 
-  if (get<unsigned>("client.paginate") == 0)
-    throw error::config("pagination must be non-zero", "client.paginate");
+  if (get<unsigned>("query.paginate") == 0)
+    throw error::config("pagination must be non-zero", "query.paginate");
 }
 
 void configuration::conflicts(const char* opt1, const char* opt2) const

@@ -252,7 +252,7 @@ void program::start()
 
     if (config_.check("query"))
     {
-      auto paginate = config_.get<unsigned>("client.paginate");
+      auto paginate = config_.get<unsigned>("query.paginate");
       auto& expression = config_.get<std::string>("query");
       query_client_ = spawn<query_client>(search_, paginate);
       send(query_client_, atom("query"), atom("create"), expression);
