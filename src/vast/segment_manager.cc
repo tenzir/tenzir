@@ -47,12 +47,12 @@ segment_manager::segment_manager(size_t capacity, std::string const& dir)
           ids.push_back(f.first);
         reply(atom("ids"), std::move(ids));
       },
-      on(atom("retrieve"), arg_match) >> [=](ze::uuid const& id)
+      on(atom("retrieve"), arg_match) >> [=](ze::uuid const& uuid)
       {
         LOG(debug, archive)
-          << "segment manager @" << id() << " retrieves segment " << id;
+          << "segment manager @" << id() << " retrieves segment " << uuid;
 
-        last_sender() << cache_.retrieve(id);
+        last_sender() << cache_.retrieve(uuid);
       },
       on(atom("shutdown")) >> [=]
       {
@@ -100,14 +100,14 @@ void segment_manager::store_segment(cppa::cow_tuple<segment> t)
   cache_.insert(s.id(), t);
 }
 
-cppa::cow_tuple<segment> segment_manager::on_miss(ze::uuid const& id)
+cppa::cow_tuple<segment> segment_manager::on_miss(ze::uuid const& uuid)
 {
   DBG(archive)
     << "segment manager @" << id()
-    << " experienced cache miss for segment " << id;
-  assert(segment_files_.find(id) != segment_files_.end());
+    << " experienced cache miss for segment " << uuid;
+  assert(segment_files_.find(uuid) != segment_files_.end());
 
-  fs::ifstream file(dir_ / id.to_string(), std::ios::binary | std::ios::in);
+  fs::ifstream file(dir_ / uuid.to_string(), std::ios::binary | std::ios::in);
   ze::serialization::stream_iarchive ia(file);
   segment s;
   ia >> s;

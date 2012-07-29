@@ -37,9 +37,9 @@ private:
   void store_segment(cppa::cow_tuple<segment> t);
 
   /// Loads a segment into memory after a cache miss.
-  /// @param id The ID which could not be found in the cache.
+  /// @param uuid The ID which could not be found in the cache.
   /// @return A copy-on-write tuple containing the loaded segment.
-  cppa::cow_tuple<segment> on_miss(ze::uuid const& id);
+  cppa::cow_tuple<segment> on_miss(ze::uuid const& uuid);
 
   lru_cache cache_;
   fs::path const dir_;
