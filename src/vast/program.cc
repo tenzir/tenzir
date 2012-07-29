@@ -32,12 +32,6 @@ namespace vast {
 /// Declaration of global (extern) variables.
 logger* LOGGER;
 
-program::program()
-  : terminating_(false)
-  , return_(EXIT_FAILURE)
-{
-}
-
 bool program::init(std::string const& filename)
 {
   try

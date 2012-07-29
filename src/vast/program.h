@@ -14,7 +14,7 @@ class program
 
 public:
     /// Constructs the program.
-    program();
+    program() = default;
 
     /// Initializes the program with arguments from @c main.
     /// @param argc argument counter from @c main.
@@ -43,8 +43,8 @@ public:
 private:
     void do_init();
     
-    bool terminating_;
-    int return_;
+    bool terminating_ = false;
+    int return_ = EXIT_FAILURE;
 
     configuration config_;
     cppa::actor_ptr archive_;
