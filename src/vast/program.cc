@@ -142,30 +142,54 @@ void program::start()
     }
 
     if (config_.check("tracker-actor") || config_.check("all-server"))
+    {
       tracker_ = spawn<id_tracker>(
           (config_.get<fs::path>("directory") / "id").string());
+
+      LOG(verbose, core) << "publishing tracker at *:"
+          << config_.get<unsigned>("tracker.port");
+      publish(tracker_, config_.get<unsigned>("tracker.port"));
+    }
     else
+    {
       tracker_ = remote_actor(
           config_.get<std::string>("tracker.host"),
           config_.get<unsigned>("tracker.port"));
+    }
 
     if (config_.check("archive-actor") || config_.check("all-server"))
+    {
       archive_ = spawn<archive>(
           (config_.get<fs::path>("directory") / "archive").string(),
           config_.get<size_t>("archive.max-segments"));
+
+      LOG(verbose, core) << "publishing archive at *:"
+          << config_.get<unsigned>("archive.port");
+      publish(archive_, config_.get<unsigned>("archive.port"));
+    }
     else
+    {
       archive_ = remote_actor(
           config_.get<std::string>("archive.host"),
           config_.get<unsigned>("archive.port"));
+    }
 
     if (config_.check("index-actor") || config_.check("all-server"))
+    {
         index_ = spawn<index>(
             archive_,
             (config_.get<fs::path>("directory") / "index").string());
+
+      LOG(verbose, core) << "publishing index at *:"
+          << config_.get<unsigned>("index.port");
+      publish(index_, config_.get<unsigned>("index.port"));
+    }
     else
+    {
       index_ = remote_actor(
           config_.get<std::string>("index.host"),
           config_.get<unsigned>("index.port"));
+    }
 
 
     if (config_.check("ingestor-actor"))
@@ -205,7 +229,6 @@ void program::start()
     {
       search_ = spawn<search>(archive_, index_);
 
-      //config_.get<std::string>("search.host")
       LOG(verbose, core) << "publishing search at *:"
           << config_.get<unsigned>("search.port");
       publish(search_, config_.get<unsigned>("search.port"));
