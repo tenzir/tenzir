@@ -24,6 +24,7 @@ segment_manager::segment_manager(size_t capacity, std::string const& dir)
   {
     LOG(info, archive)
       << "segment manager @" << id() << " scans directory " << dir_;
+
     scan(dir_);
     if (segment_files_.empty())
       LOG(info, archive)
@@ -34,7 +35,7 @@ segment_manager::segment_manager(size_t capacity, std::string const& dir)
   init_state = (
       on_arg_match >> [=](segment const& s)
       {
-        auto t = tuple_cast<segment>(self->last_dequeued());
+        auto t = tuple_cast<segment>(last_dequeued());
         assert(t.valid());
         store_segment(*t);
         reply(atom("segment"), atom("ack"), s.id());
@@ -49,14 +50,15 @@ segment_manager::segment_manager(size_t capacity, std::string const& dir)
       on(atom("retrieve"), arg_match) >> [=](ze::uuid const& id)
       {
         LOG(debug, archive)
-          << "segment manager @" << self->id() << " retrieves segment " << id;
-        self->last_sender() << cache_.retrieve(id);
+          << "segment manager @" << id() << " retrieves segment " << id;
+
+        last_sender() << cache_.retrieve(id);
       },
       on(atom("shutdown")) >> [=]
       {
         segment_files_.clear();
         cache_.clear();
-        self->quit();
+        quit();
         LOG(verbose, archive) << "segment manager @" << id() << " terminated";
       });
 }
@@ -101,7 +103,7 @@ void segment_manager::store_segment(cppa::cow_tuple<segment> t)
 cppa::cow_tuple<segment> segment_manager::on_miss(ze::uuid const& id)
 {
   DBG(archive)
-    << "segment manager @" << cppa::self->id()
+    << "segment manager @" << id()
     << " experienced cache miss for segment " << id;
   assert(segment_files_.find(id) != segment_files_.end());
 
