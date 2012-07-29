@@ -152,6 +152,10 @@ void program::start()
     }
     else
     {
+      LOG(verbose, core) << "connecting to tracker at "
+          << config_.get<std::string>("tracker.host") << ":"
+          << config_.get<unsigned>("tracker.port");
+
       tracker_ = remote_actor(
           config_.get<std::string>("tracker.host"),
           config_.get<unsigned>("tracker.port"));
@@ -169,6 +173,10 @@ void program::start()
     }
     else
     {
+      LOG(verbose, core) << "connecting to archive at "
+          << config_.get<std::string>("archive.host") << ":"
+          << config_.get<unsigned>("archive.port");
+
       archive_ = remote_actor(
           config_.get<std::string>("archive.host"),
           config_.get<unsigned>("archive.port"));
@@ -176,9 +184,9 @@ void program::start()
 
     if (config_.check("index-actor") || config_.check("all-server"))
     {
-        index_ = spawn<index>(
-            archive_,
-            (config_.get<fs::path>("directory") / "index").string());
+      index_ = spawn<index>(
+          archive_,
+          (config_.get<fs::path>("directory") / "index").string());
 
       LOG(verbose, core) << "publishing index at *:"
           << config_.get<unsigned>("index.port");
@@ -186,6 +194,10 @@ void program::start()
     }
     else
     {
+      LOG(verbose, core) << "connecting to index at "
+          << config_.get<std::string>("index.host") << ":"
+          << config_.get<unsigned>("index.port");
+
       index_ = remote_actor(
           config_.get<std::string>("index.host"),
           config_.get<unsigned>("index.port"));
@@ -238,6 +250,7 @@ void program::start()
       LOG(verbose, core) << "connecting to search at "
           << config_.get<std::string>("search.host") << ":"
           << config_.get<unsigned>("search.port");
+
       search_ = remote_actor(
           config_.get<std::string>("search.host"),
           config_.get<unsigned>("search.port"));
