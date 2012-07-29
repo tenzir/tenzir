@@ -48,10 +48,12 @@ configuration::configuration()
 
   po::options_description actor("actor options");
   actor.add_options()
+    ("all-server,a", "spawn all server components")
     ("ingestor-actor,I", "spawn the ingestor locally")
     ("archive-actor,A", "spawn the archive locally")
     ("index-actor,X", "spawn the index locally")
     ("search-actor,S", "spawn the search locally")
+    ("tracker-actor,T", "spawn the ID tracker locally")
     ;
 
   po::options_description schema("schema options");
@@ -59,28 +61,36 @@ configuration::configuration()
     ("print-schema", "print the parsed event schema")
     ;
 
-  po::options_description ingestor("ingestor options");
-  ingestor.add_options()
-    ("ingestor.host", po::value<std::string>()->default_value("127.0.0.1"),
-     "IP address of the broccoli source")
-    ("ingestor.port", po::value<unsigned>()->default_value(42000),
+  po::options_description tracker("ID tracker options");
+  tracker.add_options()
+    ("tracker.host", po::value<std::string>()->default_value("127.0.0.1"),
+     "hostname or IP address of the ID tracker")
+    ("tracker.port", po::value<unsigned>()->default_value(42004),
+     "TCP port of the ID tracker")
+    ;
+
+  po::options_description ingest("ingest options");
+  ingest.add_options()
+    ("ingest.host", po::value<std::string>()->default_value("127.0.0.1"),
+     "hostname or IP address of the broccoli source")
+    ("ingest.port", po::value<unsigned>()->default_value(42000),
      "port of the broccoli source")
-    ("ingestor.events", po::value<std::vector<std::string>>()->multitoken(),
+    ("ingest.events", po::value<std::vector<std::string>>()->multitoken(),
      "explicit list of events for broccoli to ingest")
-    ("ingestor.max-events-per-chunk", po::value<size_t>()->default_value(1000),
+    ("ingest.max-events-per-chunk", po::value<size_t>()->default_value(1000),
      "maximum number of events per chunk")
-    ("ingestor.max-segment-size", po::value<size_t>()->default_value(1),
+    ("ingest.max-segment-size", po::value<size_t>()->default_value(1),
      "maximum segment size in MB")
-    ("ingestor.file-type", po::value<std::string>()->default_value("bro1"),
+    ("ingest.file-type", po::value<std::string>()->default_value("bro1"),
      "file type of the file(s) to ingest")
-    ("ingestor.file-names", po::value<std::vector<std::string>>()->multitoken(),
+    ("ingest.file-names", po::value<std::vector<std::string>>()->multitoken(),
      "file(s) to ingest")
     ;
 
   po::options_description archive("archive options");
   archive.add_options()
     ("archive.host", po::value<std::string>()->default_value("127.0.0.1"),
-     "IP address of the archive")
+     "hostname or IP address of the archive")
     ("archive.port", po::value<unsigned>()->default_value(42002),
      "port of the archive")
     ("archive.max-segments", po::value<size_t>()->default_value(500),
@@ -90,7 +100,7 @@ configuration::configuration()
   po::options_description index("index options");
   index.add_options()
     ("index.host", po::value<std::string>()->default_value("127.0.0.1"),
-     "IP address of the index")
+     "hostname or IP address of the index")
     ("index.port", po::value<unsigned>()->default_value(42003),
      "port of the index")
     ;
@@ -98,7 +108,7 @@ configuration::configuration()
   po::options_description search("search options");
   search.add_options()
     ("search.host", po::value<std::string>()->default_value("127.0.0.1"),
-     "IP address of the search")
+     "hostname or IP address of the search")
     ("search.port", po::value<unsigned>()->default_value(42001),
      "port of the search")
     ;
@@ -109,8 +119,8 @@ configuration::configuration()
      "number of query results per page")
     ;
 
-  all_.add(general).add(advanced).add(actor).add(schema)
-    .add(ingestor).add(archive).add(index).add(search).add(client);
+  all_.add(general).add(advanced).add(actor).add(schema).add(tracker)
+    .add(ingest).add(archive).add(index).add(search).add(client);
 
   visible_.add(general).add(actor);
 }
@@ -159,9 +169,13 @@ void configuration::init()
 {
   po::notify(config_);
 
-  depends("index-actor", "archive-actor");
   depends("print-schema", "schema");
-  depends("ingestor.file-names", "ingestor.file-type");
+  depends("ingest.file-names", "ingest.file-type");
+
+  conflicts("query", "tracker-actor");
+  conflicts("query", "archive-actor");
+  conflicts("query", "index-actor");
+  conflicts("query", "search-actor");
 
   auto v = get<int>("console-verbosity");
   if (v < 0 || v > 6)
