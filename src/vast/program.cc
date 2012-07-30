@@ -71,28 +71,29 @@ bool program::start()
            config_.check("profile-heap"));
     }
 
-    schema_manager_ = spawn<meta::schema_manager>();
-    if (config_.check("schema"))
-    {
-      send(schema_manager_, atom("load"), config_.get<std::string>("schema"));
+    // TODO: uncomment once brought back into the game.
+    //schema_manager_ = spawn<meta::schema_manager>();
+    //if (config_.check("schema"))
+    //{
+    //  send(schema_manager_, atom("load"), config_.get<std::string>("schema"));
 
-      if (config_.check("print-schema"))
-      {
-        send(schema_manager_, atom("print"));
-        receive(
-            on(atom("schema"), arg_match) >> [](std::string const& schema)
-            {
-              std::cout << schema << std::endl;
-            },
-            after(std::chrono::seconds(1)) >> [=]
-            {
-              LOG(error, meta) 
-                << "schema manager did not answer after one second";
-            });
+    //  if (config_.check("print-schema"))
+    //  {
+    //    send(schema_manager_, atom("print"));
+    //    receive(
+    //        on(atom("schema"), arg_match) >> [](std::string const& schema)
+    //        {
+    //          std::cout << schema << std::endl;
+    //        },
+    //        after(std::chrono::seconds(1)) >> [=]
+    //        {
+    //          LOG(error, meta)
+    //            << "schema manager did not answer after one second";
+    //        });
 
-        return false;
-      }
-    }
+    //    return false;
+    //  }
+    //}
 
     if (config_.check("tracker-actor") || config_.check("all-server"))
     {
@@ -251,7 +252,8 @@ void program::stop()
   if (config_.check("tracker-actor") || config_.check("all-server"))
     tracker_ << shutdown;
 
-  schema_manager_ << shutdown;
+  // TODO: uncomment once brought back into the game.
+  //schema_manager_ << shutdown;
 
   if (config_.check("profile"))
     profiler_ << shutdown;
