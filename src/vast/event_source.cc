@@ -63,7 +63,7 @@ event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
         {
           total_events_ += extracted;
 
-          LOG(verbose, ingest)
+          DBG(ingest)
             << "event source @" << id()
             << " sends " << extracted
             << " events to upstream @" << segmentizer_->id()
