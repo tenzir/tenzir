@@ -57,6 +57,11 @@ archive::archive(std::string const& directory, size_t max_segments)
           }
         }
       },
+      on(atom("get"), arg_match) >> [=](ze::uuid const& id)
+      {
+        forward_to(segment_manager_);
+      },
+      // TODO: use atom("put") once it is clear how to merge cow_tuple's.
       on_arg_match >> [=](segment const& /* s */)
       {
         segment_manager_ << last_dequeued();
