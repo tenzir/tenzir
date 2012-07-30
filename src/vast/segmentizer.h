@@ -18,6 +18,9 @@ public:
   segmentizer(size_t max_events_per_chunk, size_t max_segment_size);
 
 private:
+  void write_event(const ze::event& event);
+
+  size_t last_bytes_ = 0;
   segment segment_;
   segment::writer writer_;
   cppa::behavior init_state;

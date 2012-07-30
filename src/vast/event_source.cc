@@ -77,6 +77,10 @@ event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
              finished_ ? atom("done") : atom("ack"),
              extracted);
       },
+      on_arg_match >> [=](segment const& /* s */)
+      {
+        ingestor << last_dequeued();
+      },
       on(atom("shutdown")) >> [=]
       {
         forward_to(segmentizer_);

@@ -23,15 +23,16 @@ segmentizer::segmentizer(size_t max_events_per_chunk, size_t max_segment_size)
         for (auto& e : v)
         {
           auto n = writer_ << e;
-          if (n < max_events_per_chunk)
-            return;
+          if (n % max_events_per_chunk != 0)
+            continue;
 
-
-          if (segment_.bytes() < max_segment_size)
+          if (writer_.bytes() - last_bytes_ < max_segment_size)
           {
             writer_.flush_chunk();
-            return;
+            continue;
           }
+
+          last_bytes_ = writer_.bytes();
 
           DBG(ingest)
             << "segmentizer @" << id() << " relays segment " << segment_.id();
@@ -43,9 +44,16 @@ segmentizer::segmentizer(size_t max_events_per_chunk, size_t max_segment_size)
       on(atom("shutdown")) >> [=]
       {
         if (segment_.events() > 0)
+        {
+          if (writer_.elements() > 0)
+            writer_.flush_chunk();
+
           reply(std::move(segment_));
+        }
         else
+        {
           reply(atom("done"));
+        }
 
         quit();
         LOG(verbose, ingest) << "segmentizer @" << id() << " terminated";
