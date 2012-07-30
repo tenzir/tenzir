@@ -19,12 +19,14 @@ public:
 
   /// Initializes the configuration from a configuration file.
   /// @param filename The name of the configuration file.
-  void load(std::string const& filename);
+  /// @return `true` if configuration initialization was successful.
+  bool load(std::string const& filename = "");
 
   /// Initialize the configuration from the command line parameters.
   /// @argc The argc parameter from main.
   /// @param argv The argv parameter from main.
-  void load(int argc, char *argv[]);
+  /// @return `true` if configuration initialization was successful.
+  bool load(int argc, char *argv[]);
 
   /// Check whether the given option is set.
   /// @param option Name of the option to check.

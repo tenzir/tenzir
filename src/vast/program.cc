@@ -2,7 +2,6 @@
 
 #include <cstdlib>
 #include <iostream>
-#include <boost/exception/diagnostic_information.hpp>
 #include "vast/archive.h"
 #include "vast/exception.h"
 #include "vast/id_tracker.h"
@@ -32,83 +31,36 @@ namespace vast {
 /// Declaration of global (extern) variables.
 logger* LOGGER;
 
-bool program::init(std::string const& filename)
+program::program(configuration const& config)
+  : config_(config)
 {
-  try
-  {
-    config_.load(filename);
-    do_init();
-    return true;
-  }
-  catch (error::config const& e)
-  {
-    std::cerr << e.what() << std::endl;
-  }
-  catch (boost::program_options::unknown_option const& e)
-  {
-    std::cerr << e.what() << std::endl;
-  }
-  catch (boost::exception const& e)
-  {
-    std::cerr << boost::diagnostic_information(e);
-  }
-  catch (...)
-  {
-    std::cerr << "unknown exception during program initialization" << std::endl;
-  }
-
-  return false;
-}
-
-bool program::init(int argc, char *argv[])
-{
-  try
-  {
-    config_.load(argc, argv);
-
-    if (argc < 2 || config_.check("help") || config_.check("advanced"))
-    {
-      config_.print(std::cerr, config_.check("advanced"));
-      return false;
-    }
-
-    do_init();
-    return true;
-  }
-  catch (error::config const& e)
-  {
-    std::cerr << e.what() << std::endl;
-  }
-  catch (boost::program_options::unknown_option const& e)
-  {
-    std::cerr << e.what() << ", try -h or --help" << std::endl;
-  }
-  catch (boost::program_options::invalid_command_line_syntax const& e)
-  {
-    std::cerr << "invalid command line: " << e.what() << std::endl;
-  }
-  catch (boost::exception const& e)
-  {
-    std::cerr << boost::diagnostic_information(e);
-  }
-  catch (...)
-  {
-    std::cerr << "unknown exception during program initialization" << std::endl;
-  }
-
-  return false;
-}
-
-void program::start()
-{
-  using namespace cppa;
   detail::cppa_announce_types();
+}
 
-  auto log_dir = config_.get<fs::path>("directory") / "log";
-  assert(fs::exists(log_dir));
+bool program::start()
+{
+  auto vast_dir = config_.get<fs::path>("directory");
+  if (! fs::exists(vast_dir))
+    fs::mkdir(vast_dir);
+
+  auto log_dir = vast_dir / "log";
+  if (! fs::exists(log_dir))
+      fs::mkdir(log_dir);
+
+  LOGGER = new logger(
+      static_cast<logger::level>(config_.get<int>("console-verbosity")),
+      static_cast<logger::level>(config_.get<int>("logfile-verbosity")),
+      log_dir / "vast.log");
+
+  LOG(verbose, core) << " _   _____   __________";
+  LOG(verbose, core) << "| | / / _ | / __/_  __/";
+  LOG(verbose, core) << "| |/ / __ |_\\ \\  / / ";
+  LOG(verbose, core) << "|___/_/ |_/___/ /_/  " << VAST_VERSION;
+  LOG(verbose, core) << "";
 
   try
   {
+    using namespace cppa;
     if (config_.check("profile"))
     {
       auto ms = config_.get<unsigned>("profile");
@@ -132,9 +84,14 @@ void program::start()
             on(atom("schema"), arg_match) >> [](std::string const& schema)
             {
               std::cout << schema << std::endl;
+            },
+            after(std::chrono::seconds(1)) >> [=]
+            {
+              LOG(error, meta) 
+                << "schema manager did not answer after one second";
             });
 
-        return;
+        return false;
       }
     }
 
@@ -145,6 +102,7 @@ void program::start()
 
       LOG(verbose, core) << "publishing tracker at *:"
           << config_.get<unsigned>("tracker.port");
+
       publish(tracker_, config_.get<unsigned>("tracker.port"));
     }
     else
@@ -166,6 +124,7 @@ void program::start()
 
       LOG(verbose, core) << "publishing archive at *:"
           << config_.get<unsigned>("archive.port");
+
       publish(archive_, config_.get<unsigned>("archive.port"));
     }
     else
@@ -187,6 +146,7 @@ void program::start()
 
       LOG(verbose, core) << "publishing index at *:"
           << config_.get<unsigned>("index.port");
+
       publish(index_, config_.get<unsigned>("index.port"));
     }
     else
@@ -240,6 +200,7 @@ void program::start()
 
       LOG(verbose, core) << "publishing search at *:"
           << config_.get<unsigned>("search.port");
+
       publish(search_, config_.get<unsigned>("search.port"));
     }
     else
@@ -261,33 +222,19 @@ void program::start()
       send(query_client_, atom("query"), atom("create"), expression);
     }
 
-    await_all_others_done();
-    return_ = EXIT_SUCCESS;
+    return true;
   }
-  catch (network_error const& e)
+  catch (cppa::network_error const& e)
   {
       LOG(error, core) << "network error: " << e.what();
   }
-  catch (...)
-  {
-    LOG(fatal, core)
-      << "exception details:\n"
-      << boost::current_exception_diagnostic_information();
-  }
+
+  return false;
 }
 
 void program::stop()
 {
   using namespace cppa;
-
-  if (terminating_)
-  {
-    return_ = EXIT_FAILURE;
-    return;
-  }
-
-  terminating_ = true;
-
   auto shutdown = make_any_tuple(atom("shutdown"));
 
   if (config_.check("query"))
@@ -313,48 +260,7 @@ void program::stop()
   if (config_.check("profile"))
     profiler_ << shutdown;
 
-  return_ = EXIT_SUCCESS;
-}
-
-int program::end()
-{
-  switch (return_)
-  {
-    case EXIT_SUCCESS:
-      LOG(info, core) << "vast terminated cleanly";
-      break;
-
-    case EXIT_FAILURE:
-      LOG(info, core) << "vast terminated with errors";
-      break;
-
-    default:
-      assert(! "invalid return code");
-  }
-
-  return return_;
-}
-
-void program::do_init()
-{
-  auto vast_dir = config_.get<fs::path>("directory");
-  if (! fs::exists(vast_dir))
-    fs::mkdir(vast_dir);
-
-  auto log_dir = vast_dir / "log";
-  if (! fs::exists(log_dir))
-      fs::mkdir(log_dir);
-
-  LOGGER = new logger(
-      static_cast<logger::level>(config_.get<int>("console-verbosity")),
-      static_cast<logger::level>(config_.get<int>("logfile-verbosity")),
-      log_dir / "vast.log");
-
-  LOG(verbose, core) << " _   _____   __________";
-  LOG(verbose, core) << "| | / / _ | / __/_  __/";
-  LOG(verbose, core) << "| |/ / __ |_\\ \\  / / ";
-  LOG(verbose, core) << "|___/_/ |_/___/ /_/  " << VAST_VERSION;
-  LOG(verbose, core) << "";
+  await_all_others_done();
 }
 
 } // namespace vast

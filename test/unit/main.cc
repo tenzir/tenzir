@@ -6,12 +6,14 @@
 #include "vast/program.h"
 #include "vast/logger.h"
 
-vast::program VAST;
-
 int main(int argc, char* argv[])
 {
-  if (! VAST.init("/dev/null"))
-    std::exit(-1);
+  vast::configuration config;
+  if (! config.load())
+    std::exit(1);
+
+  vast::program program(config);
+  program.start();
 
   boost::unit_test::unit_test_log.set_stream(vast::LOGGER->console());
 
@@ -23,6 +25,8 @@ int main(int argc, char* argv[])
 
   if (rc)
     LOG(error, core) << "unit test suite exited with error code " << rc;
+
+  program.stop();
 
   return rc;
 }

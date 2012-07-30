@@ -2,13 +2,22 @@
 #include <cstdlib>
 #include "vast/program.h"
 
-vast::program VAST;
+std::atomic<bool> terminating(false);
+std::condition_variable cv;
+struct sigaction old_handler;
 
+// Technically, this signal handler does not operate in a safe [1] manner.
+// But it works fine for our purpose.
+// [1] https://www.securecoding.cert.org/confluence/display/seccode/SIG30-C.+Call+only+asynchronous-safe+functions+within+signal+handlers
 static void shutdown_handler(int signo)
 {
-  // FIXME: Calling this function is not safe. On POSIX,
-  // use sem_post and sem_wait in conjunction with a watchdog actor.
-  VAST.stop();
+  auto old = terminating.load();
+  while (! terminating.compare_exchange_weak(old, !old))
+    ;
+
+  cv.notify_all();
+
+  sigaction(SIGINT, &old_handler, NULL);
 }
 
 int main(int argc, char *argv[])
@@ -17,15 +26,26 @@ int main(int argc, char *argv[])
   sig_handler.sa_handler = shutdown_handler;
   sigemptyset(&sig_handler.sa_mask);
   sig_handler.sa_flags = 0;
+  sigaction(SIGINT, &sig_handler, &old_handler);
 
-  sigaction(SIGINT, &sig_handler, NULL);
-  sigaction(SIGHUP, &sig_handler, NULL);
-  sigaction(SIGTERM, &sig_handler, NULL);
-
-  if (VAST.init(argc, argv))
-    VAST.start();
-  else
+  vast::configuration config;
+  if (! config.load(argc, argv))
     return EXIT_FAILURE;
 
-  return VAST.end();
+  if (argc < 2 || config.check("help") || config.check("advanced"))
+  {
+    config.print(std::cerr, config.check("advanced"));
+    return EXIT_SUCCESS;
+  }
+
+  vast::program program(config);
+  program.start();
+
+  std::mutex mutex;
+  std::unique_lock<std::mutex> lock(mutex);
+  cv.wait(lock, []() { return terminating.load() == true; });
+
+  program.stop();
+
+  return EXIT_SUCCESS;
 }

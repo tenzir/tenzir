@@ -4,6 +4,7 @@
 
 #include <iostream>
 #include <string>
+#include <boost/exception/diagnostic_information.hpp>
 #include "vast/exception.h"
 #include "vast/fs/path.h"
 #include "vast/fs/fstream.h"
@@ -126,29 +127,69 @@ configuration::configuration()
   visible_.add(general).add(actor);
 }
 
-void configuration::load(std::string const& filename)
+bool configuration::load(std::string const& filename)
 {
-  if (fs::exists(filename))
+  try
   {
-    fs::ifstream ifs(filename);
-    po::store(po::parse_config_file(ifs, all_), config_);
+    if (fs::exists(filename))
+    {
+      fs::ifstream ifs(filename);
+      po::store(po::parse_config_file(ifs, all_), config_);
+    }
+
+    init();
+    return true;
+  }
+  catch (error::config const& e)
+  {
+    std::cerr << e.what() << std::endl;
+  }
+  catch (boost::program_options::unknown_option const& e)
+  {
+    std::cerr << e.what() << std::endl;
+  }
+  catch (boost::exception const& e)
+  {
+    std::cerr << boost::diagnostic_information(e);
   }
 
-  init();
+  return false;
 }
 
-void configuration::load(int argc, char *argv[])
+bool configuration::load(int argc, char *argv[])
 {
-  po::store(parse_command_line(argc, argv, all_), config_);
-
-  if (check("config"))
+  try
   {
-    fs::path const& cfg = get<fs::path>("config");
-    std::ifstream ifs(cfg.string().c_str());
-    po::store(po::parse_config_file(ifs, all_), config_);
+    po::store(parse_command_line(argc, argv, all_), config_);
+
+    if (check("config"))
+    {
+      fs::path const& cfg = get<fs::path>("config");
+      std::ifstream ifs(cfg.string().data());
+      po::store(po::parse_config_file(ifs, all_), config_);
+    }
+
+    init();
+    return true;
+  }
+  catch (error::config const& e)
+  {
+    std::cerr << e.what() << std::endl;
+  }
+  catch (boost::program_options::unknown_option const& e)
+  {
+    std::cerr << e.what() << ", try -h or --help" << std::endl;
+  }
+  catch (boost::program_options::invalid_command_line_syntax const& e)
+  {
+    std::cerr << "invalid command line: " << e.what() << std::endl;
+  }
+  catch (boost::exception const& e)
+  {
+    std::cerr << boost::diagnostic_information(e);
   }
 
-  init();
+  return false;
 }
 
 bool configuration::check(char const* option) const
@@ -158,7 +199,8 @@ bool configuration::check(char const* option) const
 
 void configuration::print(std::ostream& out, bool advanced) const
 {
-  out << " _   _____   __________\n"
+  out << 
+    " _   _____   __________\n"
     "| | / / _ | / __/_  __/\n"
     "| |/ / __ |_\\ \\  / /\n"
     "|___/_/ |_/___/ /_/  " << VAST_VERSION << '\n'
