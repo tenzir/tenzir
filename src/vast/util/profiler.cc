@@ -73,8 +73,7 @@ profiler::profiler(std::string const& log_dir, std::chrono::seconds secs)
   using namespace cppa;
   chaining(false);
   init_state = (
-      // FIXME: use 'bool' instead 'int' after the libcppa bug has been fixed.
-      on(atom("run"), arg_match) >> [=](int perftools_cpu, int perftools_heap)
+      on(atom("run"), arg_match) >> [=](bool perftools_cpu, bool perftools_heap)
       {
 #ifdef USE_PERFTOOLS_CPU_PROFILER
         if (perftools_cpu)
