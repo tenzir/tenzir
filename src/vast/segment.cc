@@ -42,7 +42,7 @@ uint32_t segment::writer::operator<<(ze::event const& event)
   else if (event.name() < *i)
     segment_.event_names_.emplace(i, event.name().data());
 
-  bytes_ += putter_ << event;
+  bytes_ = putter_ << event;
 
   return chunk_.elements();
 }
@@ -65,7 +65,7 @@ segment::reader::reader(ze::chunk<ze::event> const& chunk)
 
 uint32_t segment::reader::operator>>(ze::event& e)
 {
-  bytes_ += getter_ >> e;
+  bytes_ = getter_ >> e;
   return getter_.available();
 }
 
