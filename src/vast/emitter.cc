@@ -21,7 +21,6 @@ emitter::emitter(cppa::actor_ptr segment_manager, cppa::actor_ptr sink)
         // TODO: The index should give the archive a list of segment IDs that
         // we hand to this emitter, that then will query the segment manager to
         // give us the corresponding segments.
-
         send(segment_manager_, atom("all ids"));
       },
       on(atom("ids"), arg_match) >> [=](std::vector<ze::uuid> const& ids)
@@ -34,7 +33,7 @@ emitter::emitter(cppa::actor_ptr segment_manager, cppa::actor_ptr sink)
         if (ids_.empty())
         {
           LOG(debug, archive) << "emitter @" << id() << " has no segment IDs";
-          send(sink, atom("finished"));
+          send(sink, atom("source"), atom("finished"));
           return;
         }
 
@@ -57,14 +56,12 @@ void emitter::retrieve_segment()
   LOG(debug, archive)
     << "emitter @" << id() << " retrieves segment " << ids_.front();
 
-  send(segment_manager_, atom("retrieve"), ids_.front());
-  become(
-      keep_behavior,
+  handle_response(sync_send(segment_manager_, atom("retrieve"), ids_.front()))(
       on_arg_match >> [=](segment const& s)
       {
         ids_.pop_front();
 
-        auto opt = tuple_cast<segment>(self->last_dequeued());
+        auto opt = tuple_cast<segment>(last_dequeued());
         assert(opt.valid());
         segment_tuple_ = *opt;
         segment_ = &get<0>(segment_tuple_);
@@ -73,24 +70,17 @@ void emitter::retrieve_segment()
         last_chunk_ = segment_->size();
         assert(segment_->size() > 0);
 
-        // FIXME: why does this fail? For now, we directly call emit_chunk().
         send(self, atom("emit"));
-        emit_chunk();
-
-        unbecome();
       },
       others() >> [=]
       {
-        LOG(error, archive)
-          << "invalid message";
-
-        unbecome();
+        LOG(error, archive) << "unexpected message!!!!!!";
       },
       after(std::chrono::seconds(10)) >> [=]
       {
         LOG(error, archive)
-          << "emitter @" << id() << " did not receive segment " << ids_.front();
-        unbecome();
+          << "emitter @" << id()
+          << " timed out while requesting segment " << ids_.front();
       });
 }
 

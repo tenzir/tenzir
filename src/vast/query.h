@@ -23,14 +23,9 @@ public:
   /// @param archive The archive actor.
   /// @param index The index actor.
   /// @param index The sink receiving the results.
-  /// @param str The query expression.
-  query(cppa::actor_ptr archive,
-        cppa::actor_ptr index,
-        cppa::actor_ptr sink,
-        std::string str);
+  query(cppa::actor_ptr archive, cppa::actor_ptr index, cppa::actor_ptr sink);
 
 private:
-  std::string str_;
   expression expr_;
   uint64_t batch_size_;
   statistics stats_;

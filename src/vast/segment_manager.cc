@@ -44,7 +44,8 @@ segment_manager::segment_manager(size_t capacity, std::string const& dir)
         LOG(debug, archive)
           << "segment manager @" << id() << " retrieves segment " << uuid;
 
-        last_sender() << cache_.retrieve(uuid);
+        // FIXME: how to get rid of the extra wrapping into a cow_tuple??
+        reply(cache_.retrieve(uuid));
       },
       on(atom("shutdown")) >> [=]
       {

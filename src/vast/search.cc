@@ -17,38 +17,58 @@ search::search(cppa::actor_ptr archive, cppa::actor_ptr index)
         >> [=](std::string const& expression)
       {
         auto client = last_sender();
-        monitor(client);
-        auto q = spawn<query>(archive_, index_, client, expression);
-        send(q, atom("start"));
-        queries_.push_back(q);
-        clients_.emplace(client, q);
+        auto q = spawn<query>(archive_, index_, client);
+        handle_response(sync_send(q, atom("parse"), expression))(
+            on(atom("parse"), atom("failure")) >> [=]
+            {
+              send(q, atom("shutdown"));
+            },
+            on(atom("parse"), atom("success")) >> [=]
+            {
+              assert(queries_.find(q) == queries_.end());
+              queries_.emplace(q, client);
+              monitor(client);
+              send(index_, atom("give"), q);
+            },
+            after(std::chrono::seconds(1)) >> [=]
+            {
+              LOG(error, query)
+                << "search @" << id()
+                << " did not receive parse answer from query @" << q->id();
+              send(q, atom("shutdown"));
+            });
+
       },
       on(atom("DOWN"), arg_match) >> [=](uint32_t reason)
       {
-        auto client = last_sender();
-        LOG(verbose, query) << "client @" << client->id() << " went down";
-        auto range = clients_.equal_range(client);
-        auto i = range.first;
-        while (i != range.second)
+        LOG(verbose, query)
+          << "client @" << last_sender()->id() << " went down,"
+          << " removing all associated queries";
+
+        for (auto i = queries_.begin(); i != queries_.end(); )
         {
-          auto x = i++;
-          auto q = x->second;
+          if (i->second == last_sender())
+          {
+            DBG(query)
+              << "search @" << id() << " erases query @" << i->first->id();
 
-          LOG(debug, query) << "search @" << id() 
-            << " removes query @" << q->id();
-
-          send(q, atom("shutdown"));
-          clients_.erase(x);
-          queries_.erase(std::remove(queries_.begin(), queries_.end(), q),
-                         queries_.end());
+            send(i->first, atom("shutdown"));
+            i = queries_.erase(i);
+          }
+          else
+          {
+            ++i;
+          }
         }
       },
       on(atom("shutdown")) >> [=]
       {
-        for (auto& q : queries_)
+        for (auto& i : queries_)
         {
-          LOG(debug, query) << "@" << id() << " shuts down query @" << q->id();
-          q << last_dequeued();
+          LOG(debug, query)
+            << "search @" << id() << " shuts down query @" << i.first->id();
+
+          i.first << last_dequeued();
         }
 
         queries_.clear();

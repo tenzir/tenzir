@@ -14,8 +14,9 @@ public:
   search(cppa::actor_ptr archive, cppa::actor_ptr index);
   
 private:
-  std::vector<cppa::actor_ptr> queries_;
-  std::unordered_multimap<cppa::actor_ptr, cppa::actor_ptr> clients_;
+  /// Maps queries to clients.
+  std::unordered_map<cppa::actor_ptr, cppa::actor_ptr> queries_;
+
   cppa::actor_ptr archive_;
   cppa::actor_ptr index_;
   cppa::behavior init_state;

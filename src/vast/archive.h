@@ -1,6 +1,7 @@
 #ifndef VAST_ARCHIVE_H
 #define VAST_ARCHIVE_H
 
+#include <unordered_map>
 #include <cppa/cppa.hpp>
 
 namespace vast {
@@ -17,7 +18,9 @@ public:
   archive(std::string const& directory, size_t max_segments);
 
 private:
-  std::vector<cppa::actor_ptr> emitters_;
+  /// Maps sinks emitters to sinks.
+  std::unordered_map<cppa::actor_ptr, cppa::actor_ptr> emitters_;
+
   cppa::actor_ptr segment_manager_;
   cppa::behavior init_state;
 };

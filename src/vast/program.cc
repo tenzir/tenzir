@@ -234,7 +234,7 @@ void program::stop()
   using namespace cppa;
   auto shutdown = make_any_tuple(atom("shutdown"));
 
-  if (config_.check("query"))
+  if (config_.check("expression"))
     query_client_ << shutdown;
 
   if (config_.check("search-actor") || config_.check("all-server"))
