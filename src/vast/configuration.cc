@@ -83,7 +83,7 @@ configuration::configuration()
      "maximum number of events per chunk")
     ("ingest.max-segment-size", po::value<size_t>()->default_value(1),
      "maximum segment size in MB")
-    ("ingest.file-type", po::value<std::string>()->default_value("bro1"),
+    ("ingest.file-type", po::value<std::string>()->default_value("bro2"),
      "file type of the file(s) to ingest")
     ("ingest.file-names", po::value<std::vector<std::string>>()->multitoken(),
      "file(s) to ingest")
