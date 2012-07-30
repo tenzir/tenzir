@@ -44,8 +44,7 @@ segment_manager::segment_manager(size_t capacity, std::string const& dir)
         LOG(debug, archive)
           << "segment manager @" << id() << " retrieves segment " << uuid;
 
-        // FIXME: how to get rid of the extra wrapping into a cow_tuple??
-        reply(cache_.retrieve(uuid));
+        reply_tuple(cache_.retrieve(uuid));
       },
       on(atom("shutdown")) >> [=]
       {
@@ -58,18 +57,13 @@ segment_manager::segment_manager(size_t capacity, std::string const& dir)
 
 void segment_manager::scan(fs::path const& directory)
 {
-  fs::each_dir_entry(
+  fs::each_file_entry(
       dir_,
       [&](fs::path const& p)
       {
-        if (fs::is_directory(p))
-          scan(p);
-        else
-        {
-          LOG(verbose, archive)
-            << "segment manager @" << id() << " found segment " << p;
-          segment_files_.emplace(p.filename().string(), p);
-        }
+        LOG(verbose, archive)
+          << "segment manager @" << id() << " found segment " << p;
+        segment_files_.emplace(p.filename().string(), p);
       });
 }
 
