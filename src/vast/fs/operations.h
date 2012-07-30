@@ -33,9 +33,15 @@ bool is_symlink(path const& p);
 /// @param dir The path to the directory to iterate over.
 ///
 /// @param f The callback function to invoke for each directory entry. The
-/// callback parameters have the following meaning:
-void each_dir_entry(fs::path const& dir,
-                    std::function<void(fs::path const&)> f);
+void each_dir_entry(path const& dir, std::function<void(path const&)> f);
+
+/// Recursively iterates over a directory and and invokes the provided callback
+/// for each file.
+///
+/// @param dir The path to the directory to iterate over.
+///
+/// @param f The callback function to invoke for each directory entry.
+void each_file_entry(path const& dir, std::function<void(path const&)> f);
 
 } // namespace fs
 } // namespace vast
