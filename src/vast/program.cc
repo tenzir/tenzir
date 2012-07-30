@@ -203,7 +203,7 @@ bool program::start()
 
       publish(search_, config_.get<unsigned>("search.port"));
     }
-    else
+    else if (config_.check("expression"))
     {
       LOG(verbose, core) << "connecting to search at "
           << config_.get<std::string>("search.host") << ":"
@@ -212,12 +212,9 @@ bool program::start()
       search_ = remote_actor(
           config_.get<std::string>("search.host"),
           config_.get<unsigned>("search.port"));
-    }
 
-    if (config_.check("expression"))
-    {
       auto paginate = config_.get<unsigned>("query.paginate");
-      auto& expression = config_.get<std::string>("query");
+      auto& expression = config_.get<std::string>("expression");
       query_client_ = spawn<query_client>(search_, paginate);
       send(query_client_, atom("query"), atom("create"), expression);
     }
