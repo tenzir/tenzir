@@ -115,8 +115,9 @@ void program::start()
       profiler_ = spawn<util::profiler>(log_dir.string(), std::chrono::seconds(ms));
       send(profiler_,
            atom("run"),
-           config_.check("profile-cpu"),
-           config_.check("profile-heap"));
+           // FIXME: use 'bool' instead 'int' after the libcppa bug has been fixed.
+           static_cast<int>(config_.check("profile-cpu")),
+           static_cast<int>(config_.check("profile-heap")));
     }
 
     schema_manager_ = spawn<meta::schema_manager>();
