@@ -81,7 +81,7 @@ void index::write(segment const& s)
   ze::serialization::stream_oarchive oa(file);
   oa << s.head();
 
-  DBG(index)
+  LOG(verbose, index)
     << "index @" << id() << " wrote segment header to " << path;
 }
 
