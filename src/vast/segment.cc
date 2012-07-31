@@ -11,9 +11,14 @@ namespace vast {
 uint32_t const segment::magic;
 uint8_t const segment::version;
 
+segment::header::header()
+  : id(ze::uuid::random())
+{
+}
+
 segment::writer::writer(segment& s)
   : segment_(s)
-  , putter_(chunk_.put())
+  , putter_(chunk::putter(&chunk_))
 {
 }
 
@@ -21,26 +26,26 @@ void segment::writer::flush_chunk()
 {
   segment_.chunks_.emplace_back(std::move(chunk_));
   chunk_ = chunk();
-  putter_ = std::move(chunk_.put());
+  putter_ = std::move(chunk::putter(&chunk_));
 }
 
 uint32_t segment::writer::operator<<(ze::event const& event)
 {
-  ++segment_.events_;
+  ++segment_.header_.events;
 
-  if (event.timestamp() < segment_.start_)
-    segment_.start_ = event.timestamp();
-  if (event.timestamp() > segment_.end_)
-    segment_.end_ = event.timestamp();
+  if (event.timestamp() < segment_.header_.start)
+    segment_.header_.start = event.timestamp();
+  if (event.timestamp() > segment_.header_.end)
+    segment_.header_.end = event.timestamp();
 
-  auto i = std::lower_bound(segment_.event_names_.begin(),
-                            segment_.event_names_.end(),
+  auto i = std::lower_bound(segment_.header_.event_names.begin(),
+                            segment_.header_.event_names.end(),
                             event.name());
 
-  if (i == segment_.event_names_.end())
-    segment_.event_names_.emplace_back(event.name().data());
+  if (i == segment_.header_.event_names.end())
+    segment_.header_.event_names.emplace_back(event.name().data());
   else if (event.name() < *i)
-    segment_.event_names_.emplace(i, event.name().data());
+    segment_.header_.event_names.emplace(i, event.name().data());
 
   bytes_ = putter_ << event;
 
@@ -58,35 +63,52 @@ size_t segment::writer::elements() const
 }
 
 
-segment::reader::reader(ze::chunk<ze::event> const& chunk)
-  : getter_(chunk.get())
+segment::reader::reader(segment const& s)
+  : segment_(s)
+  , chunk_(segment_.chunks_.begin())
+  , getter_(&cppa::get<0>(segment_[0]))
 {
+  assert(chunk_ != segment_.chunks_.end());
 }
 
 uint32_t segment::reader::operator>>(ze::event& e)
 {
+  if (events() == 0)
+  {
+    if (++chunk_ == segment_.chunks_.end())
+      throw error::segment("attempted read on invalid chunk");
+
+    getter_ = std::move(chunk::getter(&cppa::get<0>(*chunk_)));
+    total_bytes_ += bytes_;
+    bytes_ = 0;
+  }
+
   bytes_ = getter_ >> e;
   return getter_.available();
 }
 
-size_t segment::reader::read(std::function<void(ze::event)> f)
-{
-  return getter_.get(f);
-}
-
 size_t segment::reader::bytes() const
 {
-  return bytes_;
+  return total_bytes_ + bytes_;
+}
+
+uint32_t segment::reader::events() const
+{
+  return getter_.available();
+}
+
+size_t segment::reader::chunks() const
+{
+  return segment_.chunks_.end() - chunk_;
 }
 
 
 segment::segment(ze::compression method)
-  : version_(version)
-  , compression_(method)
-  , events_(0)
 {
-  start_ = ze::clock::now();
-  end_ = start_;
+  header_.version = version;
+  header_.compression = method;
+  header_.start = ze::clock::now();
+  header_.end = header_.start;
 }
 
 segment::chunk_tuple segment::operator[](size_t i) const
@@ -96,24 +118,24 @@ segment::chunk_tuple segment::operator[](size_t i) const
   return chunks_[i];
 }
 
-uint32_t segment::events() const
+segment::header const& segment::head() const
 {
-  return events_;
+  return header_;
 }
 
 size_t segment::bytes() const
 {
   // FIXME: compute incrementally rather than ad-hoc.
   static size_t constexpr header =
-    sizeof(version_) +
-    sizeof(compression_) +
-    sizeof(start_) +
-    sizeof(end_) +
-    sizeof(events_);
+    sizeof(header_.version) +
+    sizeof(header_.compression) +
+    sizeof(header_.start) +
+    sizeof(header_.end) +
+    sizeof(header_.events);
 
   // FIXME: do not hardcode size of ze::serialization.
   size_t events = 8;
-  for (auto& str : event_names_)
+  for (auto& str : header_.event_names)
     events += 4 + str.size();
 
   size_t chunks = 8;
@@ -128,23 +150,18 @@ size_t segment::size() const
   return chunks_.size();
 }
 
-segment::reader segment::read(size_t i) const
+ze::uuid const& segment::id() const
 {
-  return {cppa::get<0>(chunks_[i])};
-}
-
-segment::writer segment::write()
-{
-  return {*this};
+  return header_.id;
 }
 
 bool operator==(segment const& x, segment const& y)
 {
-  return x.version_ == y.version_ &&
-    x.compression_ == y.compression_ &&
-    x.start_ == y.start_ &&
-    x.event_names_ == y.event_names_ &&
-    x.events_ == y.events_ &&
+  return x.header_.version == y.version &&
+    x.header_.compression == y.header_.compression &&
+    x.header_.start == y.header_.start &&
+    x.header_.event_names == y.header_.event_names &&
+    x.header_.events == y.header_.events &&
     x.chunks_ == y.chunks_;
 }
 

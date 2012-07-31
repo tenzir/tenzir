@@ -5,7 +5,7 @@
 #include <string>
 #include <cppa/cow_tuple.hpp>
 #include <ze/forward.h>
-#include <ze/object.h>
+#include <ze/uuid.h>
 #include <ze/compression.h>
 #include <ze/chunk.h>
 #include <ze/serialization.h>
@@ -15,11 +15,58 @@
 namespace vast {
 
 /// Contains a vector of chunks with additional meta data. 
-class segment : public ze::object
+class segment
 {
 public:
   typedef ze::chunk<ze::event> chunk;
   typedef cppa::cow_tuple<chunk> chunk_tuple;
+
+  /// The segment header.
+  struct header
+  {
+    header();
+
+    template <typename Archive>
+    friend void save(Archive& oa, header const& h)
+    {
+      oa << segment::magic;
+      oa << h.version;
+      oa << h.id;
+      oa << h.compression;
+      oa << h.start;
+      oa << h.end;
+      oa << h.event_names;
+      oa << h.events;
+    }
+
+    template <typename Archive>
+    friend void load(Archive& ia, header& h)
+    {
+      uint32_t magic;
+      ia >> magic;
+      if (magic != segment::magic)
+        throw error::segment("invalid segment magic");
+
+      ia >> h.version;
+      if (h.version > segment::version)
+        throw error::segment("segment version too high");
+
+      ia >> h.id;
+      ia >> h.compression;
+      ia >> h.start;
+      ia >> h.end;
+      ia >> h.event_names;
+      ia >> h.events;
+    }
+
+    uint32_t version = 0;
+    ze::uuid id;
+    ze::compression compression;
+    ze::time_point start;
+    ze::time_point end;
+    std::vector<std::string> event_names;
+    uint32_t events = 0;
+  };
 
   class writer
   {
@@ -66,24 +113,28 @@ public:
     ///
     /// @param i The chunk index, must be in *[0, n)* where *n* is the
     /// number of chunks in `s`.
-    reader(chunk const& chunk);
+    reader(segment const& s);
 
     /// Deserializes an event into the segment.
     /// @param event The event to deserialize into.
     /// @return The number of events left for extraction in the current chunk.
-    uint32_t operator>>(ze::event & event);
-
-    /// Invokes a callback on each deserialized event.
-    /// @param A callback taking the new event as argument.
-    /// @return The number of bytes processed.
-    size_t read(std::function<void(ze::event)> f);
+    uint32_t operator>>(ze::event& event);
 
     /// Retrieves the total number of bytes processed across all chunks.
     /// @return The number of bytes written from the input archive.
     size_t bytes() const;
 
+    /// Retrieves the number of events available in the current chunk
+    uint32_t events() const;
+
+    /// Retrieves the number of chunks remaining to be processed.
+    size_t chunks() const;
+
   private:
     size_t bytes_ = 0;
+    size_t total_bytes_ = 0;
+    segment const& segment_;
+    std::vector<chunk_tuple>::const_iterator chunk_;
     chunk::getter getter_;
   };
 
@@ -97,8 +148,8 @@ public:
   /// number of chunks in `s` obtainable via segment::size().
   chunk_tuple operator[](size_t i) const;
   
-  /// Retrieves the total number events in the segment.
-  uint32_t events() const;
+  /// Retrieves the segment header for inspection.
+  header const& head() const;
 
   /// Retrieves the number of bytes the segment occupies.
   /// @return The number of bytes the segment occupies.
@@ -108,14 +159,9 @@ public:
   /// @return The number of chunks in the segment.
   size_t size() const;
 
-  /// Creates a reader proxy to read a given chunk.
-  ///
-  /// @param i The chunk index, must be in *[0, n)* where *n* is the
-  /// number of chunks in `s` obtainable via segment::size().
-  reader read(size_t i) const;
-
-  /// Creates a writer proxy to read a given chunk.
-  writer write();
+  /// Retrieves the segment ID.
+  /// @return A UUID identifying the segment.
+  ze::uuid const& id() const;
 
 private:
   friend bool operator==(segment const& x, segment const& y);
@@ -124,14 +170,7 @@ private:
   template <typename Archive>
   friend void save(Archive& oa, segment const& s)
   {
-    oa << segment::magic;
-    oa << s.version_;
-    oa << static_cast<ze::object const&>(s);
-    oa << s.compression_;
-    oa << s.start_;
-    oa << s.end_;
-    oa << s.event_names_;
-    oa << s.events_;
+    oa << s.header_;
 
     uint32_t size = s.chunks_.size();
     oa << size;
@@ -142,21 +181,8 @@ private:
   template <typename Archive>
   friend void load(Archive& ia, segment& s)
   {
-    uint32_t magic;
-    ia >> magic;
-    if (magic != segment::magic)
-      throw error::segment("invalid segment magic");
+    ia >> s.header_;
 
-    ia >> s.version_;
-    if (s.version_ > segment::version)
-      throw error::segment("segment version too high");
-
-    ia >> static_cast<ze::object&>(s);
-    ia >> s.compression_;
-    ia >> s.start_;
-    ia >> s.end_;
-    ia >> s.event_names_;
-    ia >> s.events_;
 
     uint32_t n;
     ia >> n;
@@ -173,12 +199,7 @@ private:
   static uint32_t const magic = 0x2a2a2a2a;
   static uint8_t const version = 1;
 
-  uint32_t version_;
-  ze::compression compression_;
-  ze::time_point start_;
-  ze::time_point end_;
-  std::vector<std::string> event_names_;
-  uint32_t events_;
+  header header_;
   std::vector<chunk_tuple> chunks_;
 };
 
