@@ -91,7 +91,7 @@ private:
   expression expr_;
   statistics stats_;
   window window_;
-  size_t window_size_ = 5; // FIXME: make configurable.
+  int window_size_ = 5; // FIXME: make configurable.
 
   std::vector<ze::uuid> ids_;
   std::vector<ze::uuid>::const_iterator head_;
