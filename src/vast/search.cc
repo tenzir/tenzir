@@ -24,8 +24,8 @@ search::search(cppa::actor_ptr archive, cppa::actor_ptr index)
       on(atom("DOWN"), arg_match) >> [=](uint32_t reason)
       {
         LOG(verbose, query)
-          << "client @" << last_sender()->id() << " went down,"
-          << " removing all associated queries";
+          << "client @" << last_sender()->id() 
+          << " went down, removing associated queries";
 
         for (auto i = queries_.begin(); i != queries_.end(); )
         {
