@@ -13,31 +13,13 @@ search::search(cppa::actor_ptr archive, cppa::actor_ptr index)
   LOG(verbose, core) << "spawning search @" << id();
   using namespace cppa;
   init_state = (
-      on(atom("query"), atom("create"), arg_match)
-        >> [=](std::string const& expression)
+      on(atom("query"), atom("create")) >> [=]
       {
-        auto client = last_sender();
-        auto q = spawn<query>(archive_, index_, client);
-        handle_response(sync_send(q, atom("parse"), expression))(
-            on(atom("parse"), atom("failure")) >> [=]
-            {
-              send(q, atom("shutdown"));
-            },
-            on(atom("parse"), atom("success")) >> [=]
-            {
-              assert(queries_.find(q) == queries_.end());
-              queries_.emplace(q, client);
-              monitor(client);
-              send(index_, atom("give"), q);
-            },
-            after(std::chrono::seconds(1)) >> [=]
-            {
-              LOG(error, query)
-                << "search @" << id()
-                << " did not receive parse answer from query @" << q->id();
-              send(q, atom("shutdown"));
-            });
-
+        auto q = spawn<query>(archive_, index_, last_sender());
+        assert(queries_.find(q) == queries_.end());
+        queries_.emplace(q, last_sender());
+        monitor(last_sender());
+        reply(atom("query"), q);
       },
       on(atom("DOWN"), arg_match) >> [=](uint32_t reason)
       {

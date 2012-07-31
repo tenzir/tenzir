@@ -72,8 +72,7 @@ ingestor::ingestor(cppa::actor_ptr tracker,
       },
       on_arg_match >> [=](segment const& /* s */)
       {
-        index_ << last_dequeued();
-        archive_ << last_dequeued();
+        forward(last_dequeued());
       },
       on(atom("shutdown")) >> [=]
       {
@@ -90,6 +89,15 @@ ingestor::ingestor(cppa::actor_ptr tracker,
       });
 }
 
+void ingestor::forward(cppa::any_tuple s)
+{
+  using namespace cppa;
+  auto opt = tuple_cast<segment>(s);
+  assert(opt.valid());
+  send(index_, atom("build"), get<0>(*opt));
+  send(archive_, atom("put"), get<0>(*opt));
+}
+
 void ingestor::remove(cppa::actor_ptr src)
 {
   auto i = std::find(sources_.begin(), sources_.end(), src);
@@ -104,8 +112,7 @@ void ingestor::remove(cppa::actor_ptr src)
         << " received last segment @" << s.id()
         << " from @" << last_sender()->id();
 
-      index_ << last_dequeued();
-      archive_ << last_dequeued();
+      forward(last_dequeued());
       if (sources_.empty() && terminating_)
         shutdown();
     },

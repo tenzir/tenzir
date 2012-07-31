@@ -7,41 +7,43 @@
 
 namespace vast {
 
-query_client::query_client(cppa::actor_ptr search, unsigned batch_size)
-  : batch_size_(batch_size)
+query_client::query_client(cppa::actor_ptr search,
+                           std::string const& expression,
+                           unsigned batch_size)
+  : expression_(expression)
+  , batch_size_(batch_size)
   , search_(search)
 {
-  LOG(verbose, query)
-    << "spawning query client @" << id()
-    << " with batch size " << batch_size_;
+  LOG(verbose, query) << "spawning query client @" << id();
 
   using namespace cppa;
-  auto shutdown = on(atom("shutdown")) >> [=]
-    {
-      quit();
-      LOG(verbose, query) << "query client @" << id() << " terminated";
-    };
-
   init_state = (
-      on(atom("query"), atom("create"), arg_match)
-        >> [=](std::string const& expression)
+      on(atom("start")) >> [=]
       {
-        search_ << last_dequeued();
-        become(operating_);
-      },
-      shutdown
-    );
+        // FIXME: We use 'become' until the sync_send issues have been fixed.
+        //auto future = sync_send(search_, atom("query"), atom("create"));
+        //handle_response(future)(
+        send(search_, atom("query"), atom("create"));
+        become(
+            keep_behavior,
+            on(atom("query"), arg_match) >> [=](actor_ptr query)
+            {
+              query_ = query;
+              LOG(info, query) << "query client @" << id()
+                << " successfully created query @" << query_->id();
 
-  operating_ = (
-      on(atom("query"), atom("created"), arg_match) >> [=](actor_ptr query)
-      {
-        query_ = query;
-        send(query_, atom("set"), atom("batch size"), batch_size_);
-      },
-      on(atom("set"), atom("batch size"), atom("ack")) >> [=]
-      {
-        LOG(info, query) << "successfully created query @" << query_->id();
-        send(query_, atom("next chunk"));
+              unbecome(); // TODO: remove after sync_send fix.
+              set_batch_size();
+            },
+            after(std::chrono::seconds(2)) >> [=]
+            {
+              LOG(error, query)
+                << "query client @" << id()
+                << " timed out trying to create query";
+
+              unbecome(); // TODO: remove after sync_send fix.
+              send(self, atom("shutdown"));
+            });
       },
       on(atom("statistics"), arg_match)
         >> [=](uint64_t processed, uint64_t matched)
@@ -76,8 +78,75 @@ query_client::query_client(cppa::actor_ptr search, unsigned batch_size)
           wait_for_user_input();
         }
       },
-      shutdown
-    );
+      on(atom("shutdown")) >> [=]
+      {
+        quit();
+        LOG(verbose, query) << "query client @" << id() << " terminated";
+      });
+}
+
+void query_client::set_batch_size()
+{
+  using namespace cppa;
+  // FIXME: We use 'become' until the sync_send issues have been fixed.
+  //auto future = sync_send(query_, atom("set"), atom("batch size"), batch_size_);
+  //handle_response(future)(
+  send(query_, atom("set"), atom("batch size"), batch_size_);
+  become(
+      keep_behavior,
+      on(atom("set"), atom("batch size"), atom("failure")) >> [=]
+      {
+        unbecome(); // TODO: remove after sync_send fix.
+        send(self, atom("shutdown"));
+      },
+      on(atom("set"), atom("batch size"), atom("success")) >> [=]
+      {
+        LOG(info, query) << "query client @" << id()
+          << " successfully set batch size to " << batch_size_;
+
+        unbecome(); // TODO: remove after sync_send fix.
+        set_expression();
+      },
+      after(std::chrono::seconds(1)) >> [=]
+      {
+        LOG(info, query) << "query client @" << id()
+          << " timed out trying to set batch size to " << batch_size_;
+
+        unbecome(); // TODO: remove after sync_send fix.
+        send(self, atom("shutdown"));
+      });
+}
+
+void query_client::set_expression()
+{
+  using namespace cppa;
+  // FIXME: We use 'become' until the sync_send issues have been fixed.
+  //auto f = sync_send(query_, atom("set"), atom("expression"), expression_);
+  //handle_response(f)(
+  send(query_, atom("set"), atom("expression"), expression_);
+  become(
+      keep_behavior,
+      on(atom("set"), atom("expression"), atom("failure")) >> [=]
+      {
+        unbecome(); // TODO: remove after sync_send fix.
+        send(self, atom("shutdown"));
+      },
+      on(atom("set"), atom("expression"), atom("success")) >> [=]
+      {
+        LOG(info, query) << "query client @" << id()
+          << " successfully set expression '" << expression_ << "'";
+
+        unbecome(); // TODO: remove after sync_send fix.
+        send(query_, atom("start"));
+      },
+      after(std::chrono::seconds(1)) >> [=]
+      {
+        LOG(info, query) << "query client @" << id()
+          << " timed out trying to set expression: " << expression_;
+
+        unbecome(); // TODO: remove after sync_send fix.
+        send(self, atom("shutdown"));
+      });
 }
 
 void query_client::wait_for_user_input()
@@ -94,7 +163,7 @@ void query_client::wait_for_user_input()
         {
           LOG(debug, query)
             << "asking for next chunk in query @" << query_->id();
-          send(query_, atom("next chunk"));
+          send(query_, atom("get"), atom("results"));
           asking_ = true;
         }
         break;

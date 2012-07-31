@@ -48,6 +48,7 @@ event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
           {
             auto e = extract();
             assert(next_id_ != last_id_);
+
             e.id(next_id_++);
             events.push_back(std::move(e));
             ++i;

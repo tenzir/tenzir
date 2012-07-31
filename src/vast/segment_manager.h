@@ -28,10 +28,6 @@ public:
   segment_manager(size_t capacity, std::string const& dir);
 
 private:
-  /// Scans through a directory for segments and records their path.
-  /// @param directory The directory to scan.
-  void scan(fs::path const& directory);
-
   /// Records a given segment to disk and puts it in the cache.
   /// @param t The COW-tuple containing the segment.
   void store_segment(cppa::cow_tuple<segment> t);

@@ -14,32 +14,32 @@ segment_manager::segment_manager(size_t capacity, std::string const& dir)
   LOG(verbose, archive)
     << "spawning segment manager @" << id() << " with capacity " << capacity;
 
-  LOG(verbose, archive)
-    << "segment manager @" << id() << " scans directory " << dir_;
-
-  assert(fs::exists(dir_));
-  scan(dir_);
-  if (segment_files_.empty())
-    LOG(verbose, archive)
-      << "segment manager @" << id() << " did not find any segments";
-
   using namespace cppa;
+  chaining(false);
   init_state = (
-      on_arg_match >> [=](segment const& s)
+      on(atom("load")) >> [=]
       {
-        auto t = tuple_cast<segment>(last_dequeued());
-        assert(t.valid());
-        store_segment(*t);
+        fs::each_file_entry(
+            dir_,
+            [&](fs::path const& p)
+            {
+              LOG(verbose, archive)
+                << "segment manager @" << id() << " found segment " << p;
+              segment_files_.emplace(p.filename().string(), p);
+            });
+
+        if (segment_files_.empty())
+          LOG(verbose, archive)
+            << "segment manager @" << id() << " did not find any segments";
+      },
+      on(atom("put"), arg_match) >> [=](segment const& s)
+      {
+        auto opt = tuple_cast<anything, segment>(last_dequeued());
+        assert(opt.valid());
+        store_segment(get<0>(*opt));
         reply(atom("segment"), atom("ack"), s.id());
       },
-      on(atom("all ids")) >> [=]
-      {
-        std::vector<ze::uuid> ids;
-        for (auto& f : segment_files_)
-          ids.push_back(f.first);
-        reply(atom("ids"), std::move(ids));
-      },
-      on(atom("retrieve"), arg_match) >> [=](ze::uuid const& uuid)
+      on(atom("get"), arg_match) >> [=](ze::uuid const& uuid)
       {
         LOG(debug, archive)
           << "segment manager @" << id() << " retrieves segment " << uuid;
@@ -52,18 +52,6 @@ segment_manager::segment_manager(size_t capacity, std::string const& dir)
         cache_.clear();
         quit();
         LOG(verbose, archive) << "segment manager @" << id() << " terminated";
-      });
-}
-
-void segment_manager::scan(fs::path const& directory)
-{
-  fs::each_file_entry(
-      dir_,
-      [&](fs::path const& p)
-      {
-        LOG(verbose, archive)
-          << "segment manager @" << id() << " found segment " << p;
-        segment_files_.emplace(p.filename().string(), p);
       });
 }
 
@@ -91,7 +79,7 @@ cppa::cow_tuple<segment> segment_manager::on_miss(ze::uuid const& uuid)
 {
   DBG(archive)
     << "segment manager @" << id()
-    << " experienced cache miss for segment " << uuid;
+    << " cache miss, going to disk for segment " << uuid;
   assert(segment_files_.find(uuid) != segment_files_.end());
 
   fs::ifstream file(dir_ / uuid.to_string(), std::ios::binary | std::ios::in);

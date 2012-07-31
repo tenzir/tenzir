@@ -43,7 +43,7 @@ segmentizer::segmentizer(size_t max_events_per_chunk, size_t max_segment_size)
       },
       on(atom("shutdown")) >> [=]
       {
-        if (segment_.events() > 0)
+        if (segment_.head().events > 0)
         {
           if (writer_.elements() > 0)
             writer_.flush_chunk();

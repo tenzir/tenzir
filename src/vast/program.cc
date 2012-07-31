@@ -121,6 +121,7 @@ bool program::start()
       archive_ = spawn<archive>(
           (config_.get<fs::path>("directory") / "archive").string(),
           config_.get<size_t>("archive.max-segments"));
+      send(archive_, atom("load"));
 
       LOG(verbose, core) << "publishing archive at *:"
           << config_.get<unsigned>("archive.port");
@@ -143,6 +144,7 @@ bool program::start()
       index_ = spawn<index>(
           archive_,
           (config_.get<fs::path>("directory") / "index").string());
+      send(index_, atom("load"));
 
       LOG(verbose, core) << "publishing index at *:"
           << config_.get<unsigned>("index.port");
@@ -215,8 +217,8 @@ bool program::start()
 
       auto paginate = config_.get<unsigned>("query.paginate");
       auto& expression = config_.get<std::string>("expression");
-      query_client_ = spawn<query_client>(search_, paginate);
-      send(query_client_, atom("query"), atom("create"), expression);
+      query_client_ = spawn<query_client>(search_, expression, paginate);
+      send(query_client_, atom("start"));
     }
 
     return true;

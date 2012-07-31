@@ -20,6 +20,7 @@ public:
            cppa::actor_ptr index);
 
 private:
+  void forward(cppa::any_tuple s);
   void remove(cppa::actor_ptr src);
   void shutdown();
 

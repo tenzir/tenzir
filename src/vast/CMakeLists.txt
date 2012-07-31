@@ -3,7 +3,6 @@ include_directories(BEFORE ..)
 set(vast_lib_sources
   archive.cc
   configuration.cc
-  emitter.cc
   event_sink.cc
   event_source.cc
   exception.cc
