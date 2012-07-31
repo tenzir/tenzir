@@ -93,11 +93,20 @@ void index::build(segment::header const& hdr)
   assert(ids_.count(hdr.id) == 0);
   ids_.insert(hdr.id);
 
+// TODO: Remove as soon as newer GCC versions have adopted r181022.
+#ifdef __clang__
   for (auto& event : hdr.event_names)
     event_names_.emplace(event, hdr.id);
 
   start_.emplace(hdr.start, hdr.id);
   end_.emplace(hdr.end, hdr.id);
+#else
+  for (auto& event : hdr.event_names)
+    event_names_.insert({event, hdr.id});
+
+  start_.insert({hdr.start, hdr.id});
+  end_.insert({hdr.end, hdr.id});
+#endif
 }
 
 } // namespace vast
