@@ -100,7 +100,10 @@ query::query(cppa::actor_ptr archive,
         auto opt = tuple_cast<segment>(last_dequeued());
         assert(opt.valid());
         window_.push(*opt);
-        ++ack_;
+
+        // The first arriving segment triggers result extraction.
+        if (ack_++ == ids_.begin())
+            send(self, atom("get"), atom("results"));
 
         DBG(query)
           << "query @" << id() << " received segment " << s.id();
@@ -111,9 +114,6 @@ query::query(cppa::actor_ptr archive,
           << ", ack " << (ack_ - ids_.cbegin())
           << ", head " << (head_ - ids_.cbegin());
 
-        ze::event e;
-        window_.one(e);
-        DBG(query) << e;
       },
       on(atom("get"), atom("results")) >> [=]
       {
