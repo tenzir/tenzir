@@ -69,16 +69,17 @@ segment::reader::reader(segment const& s)
   , getter_(&cppa::get<0>(segment_[0]))
 {
   assert(chunk_ != segment_.chunks_.end());
+  ++chunk_;
 }
 
 uint32_t segment::reader::operator>>(ze::event& e)
 {
   if (events() == 0)
   {
-    if (++chunk_ == segment_.chunks_.end())
+    if (chunk_ == segment_.chunks_.end())
       throw error::segment("attempted read on invalid chunk");
 
-    getter_ = std::move(chunk::getter(&cppa::get<0>(*chunk_)));
+    getter_ = std::move(chunk::getter(&cppa::get<0>(*chunk_++)));
     total_bytes_ += bytes_;
     bytes_ = 0;
   }

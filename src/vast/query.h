@@ -37,10 +37,22 @@ private:
     /// Adds a new segment to the window.
     void push(cppa::cow_tuple<segment> s);
 
-    /// Tries to extract the next event.
+    /// Determines whether the window can extract events from the current
+    /// segment.
+    /// @return `true` if the the
+    bool ready() const;
+
+    /// Determines wheter the window is *stale*, i.e., is not ready and has no
+    /// more segments to advance to.
+    bool stale() const;
+
+    /// Tries to extract an event from the current segment.
+    ///
     /// @param event Receives the next event.
-    /// @return `true` if extracting an event in to *event* succeeded and
-    /// `false` if there are no more events in the current segment.
+    ///
+    /// @return `true` if extracting an event from the current segment into
+    /// *event* succeeded and `false` if there are no more events in the
+    /// current segment.
     bool one(ze::event& event);
 
     /// Returns the current window size;

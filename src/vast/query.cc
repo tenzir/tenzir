@@ -19,19 +19,30 @@ void query::window::push(cppa::cow_tuple<segment> s)
   if (! current_segment_)
   {
     assert(! reader_);
-    current_segment_ = &cppa::get<0>(s);
+    current_segment_ = &get<0>(s);
     reader_.reset(new segment::reader(*current_segment_));
   }
 }
 
+bool query::window::ready() const
+{
+  return
+    current_segment_ &&
+    reader_ &&
+    (reader_->events() > 0 || reader_->chunks() > 0);
+}
+
+bool query::window::stale() const
+{
+  return ! ready() && segments_.size() == 1;
+}
+
 bool query::window::one(ze::event& event)
 {
-  assert(reader_);
-  if (reader_->events() == 0 && reader_->chunks() == 0)
+  if (! ready())
     return false;
 
   *reader_ >> event;
-
   return true;
 }
 
@@ -42,7 +53,7 @@ size_t query::window::size() const
 
 bool query::window::advance()
 {
-  if (segments_.empty())
+  if (segments_.size() < 2)
     return false;
 
   segments_.pop_front();
@@ -95,25 +106,21 @@ query::query(cppa::actor_ptr archive,
         DBG(query) << "query @" << id() << " hits index";
         run();
       },
-      on_arg_match >> [=](segment const& s) 
+      on_arg_match >> [=](segment const& s)
       {
+        // Extract results when one of the following conditions hold:
+        //
+        //  - The arriving segment is the first of all arriving segments.
+        //  - The window was stale prior to the arrival of this segment.
+        if (ack_++ == ids_.begin() || window_.stale())
+            send(self, atom("get"), atom("results"));
+
         auto opt = tuple_cast<segment>(last_dequeued());
         assert(opt.valid());
         window_.push(*opt);
 
-        // The first arriving segment triggers result extraction.
-        if (ack_++ == ids_.begin())
-            send(self, atom("get"), atom("results"));
-
         DBG(query)
           << "query @" << id() << " received segment " << s.id();
-
-        DBG(query)
-          << "query @" << id() << " window details: "
-          << "size " << window_.size()
-          << ", ack " << (ack_ - ids_.cbegin())
-          << ", head " << (head_ - ids_.cbegin());
-
       },
       on(atom("get"), atom("results")) >> [=]
       {
@@ -168,7 +175,7 @@ void query::run()
       on(atom("hit"), arg_match) >> [=](std::vector<ze::uuid> const& ids)
       {
         LOG(info, query)
-          << "query @" << id() << " received index hit (" 
+          << "query @" << id() << " received index hit ("
           << ids.size() << " segments)";
 
         ids_ = ids;
@@ -201,15 +208,15 @@ void query::run()
 
 void query::extract(size_t n)
 {
-  LOG(debug, query) << "query @" << id() << " extracts " << n << " results";
+  LOG(debug, query)
+    << "query @" << id() << " tries to extract " << n << " results";
 
   ze::event e;
   size_t i = 0;
   while (i < n)
   {
     ze::event e;
-    bool extracted;
-    extracted = window_.one(e);
+    auto extracted = window_.one(e);
     if (extracted)
     {
       if (match(e))
@@ -220,9 +227,14 @@ void query::extract(size_t n)
       DBG(query)
         << "query @" << id() << " advances to next segment in window";
 
-      // Prefetch another segment if we still need to.
-      if (ids_.end() - head_ > window_size_)
+      // Prefetch another segment if we still need to (and can do so).
+      if (head_ - ack_ < window_size_ && head_ != ids_.end())
+      {
+        DBG(query)
+          << "query @" << id() << " prefetches segment " << *head_;
+
         send(archive_, atom("get"), *head_++);
+      }
 
       extracted = window_.one(e);
       assert(extracted); // By the post-condition of window::advance().
@@ -233,9 +245,8 @@ void query::extract(size_t n)
     else if (ack_ < head_)
     {
       DBG(query)
-        << "query @" << id() << " has in-flight segments, try again later";
+        << "query @" << id() << " has in-flight segments, trying again later";
 
-      send(sink_, atom("query"), atom("busy"));
       break;
     }
     else if (head_ == ids_.end())
@@ -246,6 +257,11 @@ void query::extract(size_t n)
       send(sink_, atom("query"), atom("finished"));
       break;
     }
+    else
+    {
+      assert(! "should never happen");
+      break;
+    }
   }
 }
 
@@ -254,7 +270,7 @@ bool query::match(ze::event const& event)
   ++stats_.processed;
   if (expr_.eval(event))
   {
-    cppa::send(sink_, std::move(event));
+    send(sink_, std::move(event));
     ++stats_.matched;
     return true;
   }

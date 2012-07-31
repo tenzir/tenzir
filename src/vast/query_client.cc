@@ -62,21 +62,9 @@ query_client::query_client(cppa::actor_ptr search,
       },
       on_arg_match >> [=](ze::event const& e)
       {
-        if (asking_)
-        {
-          asking_ = false;
-          std::cout << e << std::endl;
-          ++printed_;
-        }
-        else if (printed_ % batch_size_ != 0)
-        {
-          std::cout << e << std::endl;
-          ++printed_;
-        }
-        else
-        {
+        std::cout << e << std::endl;
+        if (++printed_ % batch_size_ == 0)
           wait_for_user_input();
-        }
       },
       on(atom("shutdown")) >> [=]
       {
@@ -154,6 +142,7 @@ void query_client::wait_for_user_input()
   using namespace cppa;
   util::unbuffer();
 
+  DBG(query) << "query client @" << id() << " waits for user input";
   char c;
   while (std::cin.get(c))
   {
@@ -161,24 +150,28 @@ void query_client::wait_for_user_input()
     {
       case ' ':
         {
-          LOG(debug, query)
-            << "asking for next chunk in query @" << query_->id();
+          DBG(query)
+            << "query client @" << id()
+            << " asks for more results in query @" << query_->id();
+
           send(query_, atom("get"), atom("results"));
-          asking_ = true;
         }
-        break;
+        return;
       case 's':
         {
-          LOG(debug, query) << "asking statistics about query @" << query_->id();
+          DBG(query)
+            << "query client @" << id()
+            << " asks for statistics of query @" << query_->id();
+
           send(query_, atom("get"), atom("statistics"));
         }
-        break;
+        return;
       case 'q':
         {
-          LOG(debug, query) << "shutting down";
+          DBG(query) << "query client @" << id() << " shuts down";
           send(self, atom("shutdown"));
         }
-        break;
+        return;
       default:
         {
           LOG(debug, query) << "invalid command, use <space>, q(uit), or s(top)";
