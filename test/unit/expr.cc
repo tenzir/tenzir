@@ -3,8 +3,6 @@
 #include <ze/event.h>
 #include <vast/exception.h>
 #include <vast/expression.h>
-#include <vast/detail/parser/query.h>
-#include <vast/util/parser/parse.h>
 
 std::vector<ze::event> events
 {
@@ -14,15 +12,8 @@ std::vector<ze::event> events
 
 bool test_expression(std::string const& query, ze::event const& event)
 {
-  vast::detail::ast::query ast;
-  if (! vast::util::parser::parse<vast::detail::parser::query>(query, ast))
-    throw vast::error::syntax("parse error", query);
-
-  if (! vast::detail::ast::validate(ast))
-    throw vast::error::semantic("parse error", query);
-
   vast::expression expr;
-  expr.assign(ast);
+  expr.parse(query);
   return expr.eval(event);
 }
 
