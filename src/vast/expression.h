@@ -71,6 +71,13 @@ private:
   virtual void eval();
 };
 
+/// Extracts the event ID.
+class id_extractor : public extractor
+{
+private:
+  virtual void eval();
+};
+
 /// Extracts an argument at a given offset.
 class offset_extractor : public extractor
 {

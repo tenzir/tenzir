@@ -93,19 +93,31 @@ struct validator : public boost::static_visitor<bool>
     return boost::apply_visitor(*this, operand);
   }
 
+  bool operator()(tag_clause const& clause) const
+  {
+    auto rhs = fold(clause.rhs);
+    auto rhs_type = rhs.which();
+    auto& lhs = clause.lhs;
+    return
+      (lhs == "name" && (rhs_type == ze::string_type
+                         || rhs_type == ze::regex_type))
+      || (lhs == "time" && rhs_type == ze::timepoint_type)
+      || (lhs == "id" && rhs_type == ze::uint_type);
+  }
+
   bool operator()(type_clause const& clause) const
   {
     auto rhs = fold(clause.rhs);
     auto rhs_type = rhs.which();
-    auto lhs_type = clause.lhs;
-    if (lhs_type == rhs_type ||
-        (lhs_type == ze::string_type && rhs_type == ze::regex_type) ||
-        (lhs_type == ze::address_type && rhs_type == ze::prefix_type))
-      return true;
-
-    // TODO: Test whether the type supports the provided binary operation.
-
-    return false;
+    auto& lhs_type = clause.lhs;
+    auto& op = clause.op;
+    return
+      lhs_type == rhs_type
+      || (lhs_type == ze::string_type
+          && (op == match || op == not_match || op == in || op == not_in)
+          && rhs_type == ze::regex_type)
+      || (lhs_type == ze::address_type && clause.op == in
+          && rhs_type == ze::prefix_type);
   }
 
   bool operator()(event_clause& clause) const

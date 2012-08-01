@@ -88,9 +88,15 @@ struct expression
   std::vector<expr_operation> rest;
 };
 
+struct tag_clause
+{
+  std::string lhs;
+  clause_operator op;
+  expression rhs;
+};
+
 struct type_clause
 {
-  boost::optional<std::string> glob_expr;
   ze::value_type lhs;
   clause_operator op;
   expression rhs;
@@ -104,7 +110,8 @@ struct event_clause
 };
 
 typedef boost::variant<
-  type_clause
+    tag_clause
+  , type_clause
   , event_clause
   , boost::recursive_wrapper<negated_clause>
 > clause;
@@ -162,8 +169,13 @@ BOOST_FUSION_ADAPT_STRUCT(
     (std::vector<vast::detail::ast::expr_operation>, rest))
 
   BOOST_FUSION_ADAPT_STRUCT(
+    vast::detail::ast::tag_clause,
+    (std::string, lhs)
+    (vast::detail::ast::clause_operator, op)
+    (vast::detail::ast::expression, rhs))
+
+  BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::type_clause,
-    (boost::optional<std::string>, glob_expr)
     (ze::value_type, lhs)
     (vast::detail::ast::clause_operator, op)
     (vast::detail::ast::expression, rhs))

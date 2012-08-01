@@ -32,10 +32,10 @@ BOOST_AUTO_TEST_CASE(queries)
     ":string ~ /evil.*/ && :prefix >= 10.0.0.0/8",
     ":addr == 1.2.3.4 ^ 5.6.7.8 || :prefix != 10.0.0.0/8",
     "! :int == +8 / +4 || ! :count < -(4 * 2)",
-    // Scope with event name.
-    "foo*:int == +8",
-    "bro::*:string == \"foo\"",
-    "bro::*_connection:addr == 127.0.0.1",
+    // Event tags
+    "&name == \"foo\"",// && :int == +8",
+    "&time < 1 hour ago",// && :string == \"foo\"",
+    "&id == 42",// || :addr == 127.0.0.1",
     // Dereferencing event names.
     "foo$bar == T",
     "foo$c$id_orig == 192.168.1.1",

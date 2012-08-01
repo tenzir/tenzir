@@ -18,6 +18,9 @@ struct query : qi::grammar<Iterator, ast::query(), skipper<Iterator>>
     qi::rule<Iterator, ast::clause(), skipper<Iterator>>
         clause;
 
+    qi::rule<Iterator, ast::tag_clause(), skipper<Iterator>>
+        tag_clause;
+
     qi::rule<Iterator, ast::type_clause(), skipper<Iterator>>
         type_clause;
 

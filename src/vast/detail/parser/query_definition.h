@@ -67,22 +67,29 @@ query<Iterator>::query(util::parser::error_handler<Iterator>& error_handler)
         ;
 
     clause
-        =   type_clause
+        =   tag_clause
+        |   type_clause
         |   event_clause
         |   ('!' > not_clause)
         ;
 
-    type_clause
-        =   -glob
-        >>  ':' > type
+    tag_clause
+        =   '&' > identifier
         >   clause_op
-        >   expr;
+        >   expr
+        ;
+
+    type_clause
+        =   ':' > type
+        >   clause_op
+        >   expr
         ;
 
     event_clause
         =   glob >> *('$' > identifier)
         >   clause_op
-        >   expr;
+        >   expr
+        ;
 
     not_clause
         =   clause
@@ -111,6 +118,7 @@ query<Iterator>::query(util::parser::error_handler<Iterator>& error_handler)
     BOOST_SPIRIT_DEBUG_NODES(
         (qry)
         (clause)
+        (tag_clause)
         (type_clause)
         (event_clause)
         (identifier)
@@ -123,8 +131,9 @@ query<Iterator>::query(util::parser::error_handler<Iterator>& error_handler)
     type.name("type");
     qry.name("query");
     clause.name("clause");
-    event_clause.name("event clause");
+    tag_clause.name("tag clause");
     type_clause.name("type clause");
+    event_clause.name("event clause");
     not_clause.name("negated clause");
     identifier.name("identifier");
 }

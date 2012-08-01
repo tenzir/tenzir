@@ -9,7 +9,7 @@
 int main(int argc, char* argv[])
 {
   vast::configuration config;
-  if (! config.load())
+  if (! config.load("/dev/null"))
     std::exit(1);
 
   vast::program program(config);

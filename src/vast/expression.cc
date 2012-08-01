@@ -45,6 +45,12 @@ void name_extractor::eval()
   ready_ = true;
 }
 
+void id_extractor::eval()
+{
+  result_ = event_->id();
+  ready_ = true;
+}
+
 offset_extractor::offset_extractor(size_t offset)
   : offset_(offset)
 {
@@ -295,6 +301,32 @@ public:
     boost::apply_visitor(*this, operand);
   }
 
+  void operator()(detail::ast::tag_clause const& clause)
+  {
+    auto op = clause.op;
+    if (invert_)
+    {
+      op = detail::ast::negate(op);
+      invert_ = false;
+    }
+
+    auto relation = std::make_unique<expr::relational_operator>(op);
+    auto rhs = std::make_unique<expr::constant>(detail::ast::fold(clause.rhs));
+    std::unique_ptr<expr::extractor> lhs;
+    if (clause.lhs == "name")
+      lhs = std::make_unique<expr::name_extractor>();
+    else if (clause.lhs == "time")
+      lhs = std::make_unique<expr::timestamp_extractor>();
+    else if (clause.lhs == "id")
+      lhs = std::make_unique<expr::id_extractor>();
+
+    assert(lhs);
+    extractors_.push_back(lhs.get());
+    relation->add(std::move(lhs));
+    relation->add(std::move(rhs));
+    parent_->add(std::move(relation));
+  }
+
   void operator()(detail::ast::type_clause const& clause)
   {
     auto op = clause.op;
@@ -306,36 +338,11 @@ public:
 
     auto relation = std::make_unique<expr::relational_operator>(op);
     auto lhs = std::make_unique<expr::exists>(clause.lhs);
+    auto rhs = std::make_unique<expr::constant>(detail::ast::fold(clause.rhs));
     extractors_.push_back(lhs.get());
     relation->add(std::move(lhs));
-    auto rhs = std::make_unique<expr::constant>(detail::ast::fold(clause.rhs));
     relation->add(std::move(rhs));
-
-    if (! clause.glob_expr)
-    {
-      parent_->add(std::move(relation));
-    }
-    else
-    {
-      // TODO: Factor out this common optimization step of adding nodes
-      // directly at the parent of they are conjunctions. We should
-      // create a visitor interface and then an optimizer-visitor that
-      // performs such steps.
-      expr::n_ary_operator* p;
-      if (dynamic_cast<expr::conjunction*>(parent_))
-      {
-        p = parent_;
-      }
-      else
-      {
-        auto conj = std::make_unique<expr::conjunction>();
-        p = conj.get();
-        parent_->add(std::move(conj));
-      }
-
-      p->add(make_glob_node(*clause.glob_expr));
-      p->add(std::move(relation));
-    }
+    parent_->add(std::move(relation));
   }
 
   void operator()(detail::ast::event_clause const& clause)
@@ -347,6 +354,9 @@ public:
     // one element representing this offset.
     assert(clause.lhs.size() == 2);
 
+    // TODO: Factor out this common optimization step of adding nodes directly
+    // at the parent of they are conjunctions. We should create a visitor
+    // interface and then an optimizer-visitor that performs such steps.
     expr::n_ary_operator* p;
     if (dynamic_cast<expr::conjunction*>(parent_))
     {
@@ -434,7 +444,8 @@ void expression::assign(detail::ast::query const& query)
       else
         ors.back().rest.push_back(clause);
 
-    // Then for each conjunction
+    // Then create a conjunction for each set of subsequent AND nodes between
+    // two OR nodes.
     auto disjunction = std::make_unique<expr::disjunction>();
     for (auto& ands : ors)
       if (ands.rest.empty())

@@ -48,14 +48,14 @@ BOOST_AUTO_TEST_CASE(event_queries)
 {
   std::vector<std::string> true_queries
   {
-    "foo:count == 42 || bar:string ~ /yad.*/",
-    "f*:count == 42 || :bool == F",
+    ":count == 42 || :string ~ /yad.*/",
+    ":count == 42 || :bool == F",
     "f*$not$yet$implemented ~ /vast/ || *$not$there$yet ~ /.*[bd]{2}a/"
   };
 
   std::vector<std::string> false_queries
   {
-    "bar:string ~ /x/ || bar:bool == T"
+    ":string ~ /x/ || :bool == T"
   };
 
   for (auto& q : true_queries)
