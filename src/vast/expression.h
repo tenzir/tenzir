@@ -41,7 +41,7 @@ protected:
   node() = default;
   virtual void eval() = 0;
 
-  ze::value result_;
+  ze::value result_ = ze::invalid;
   bool ready_ = false;
 };
 
@@ -125,6 +125,7 @@ private:
   virtual void eval();
 };
 
+// TODO: factor into one class for each operator.
 /// A binary operator.
 class relational_operator : public n_ary_operator
 {

@@ -286,7 +286,7 @@ public:
   expressionizer(expr::n_ary_operator* parent,
                  std::vector<expr::extractor*>& extractors)
     : parent_(parent)
-      , extractors_(extractors)
+    , extractors_(extractors)
   {
   }
 

@@ -18,16 +18,16 @@ struct expression;
 
 struct identifier
 {
-    identifier(std::string const& s = "")
-      : name(s)
-    {
-    }
+  identifier(std::string const& s = "")
+    : name(s)
+  {
+  }
 
-    std::string name;
+  std::string name;
 };
 
 typedef boost::variant<
-    ze::value
+ze::value
   , boost::recursive_wrapper<unary_expr>
   , boost::recursive_wrapper<expression>
 > expr_operand;
@@ -35,95 +35,95 @@ typedef boost::variant<
 // Expression operators sorted by ascending precedence.
 enum expr_operator
 {
-    bitwise_or,
-    bitwise_xor,
-    bitwise_and,
-    plus,
-    minus,
-    times,
-    divide,
-    mod,
-    positive,
-    negative,
-    bitwise_not,
+  bitwise_or,
+  bitwise_xor,
+  bitwise_and,
+  plus,
+  minus,
+  times,
+  divide,
+  mod,
+  positive,
+  negative,
+  bitwise_not,
 };
 
 // Clause operators sorted by ascending precedence.
 enum clause_operator : int
 {
-    match,
-    not_match,
-    equal,
-    not_equal,
-    less,
-    less_equal,
-    greater,
-    greater_equal,
-    in,
-    not_in
+  match,
+  not_match,
+  equal,
+  not_equal,
+  less,
+  less_equal,
+  greater,
+  greater_equal,
+  in,
+  not_in
 };
 
 // Binary boolean operators.
 enum boolean_operator
 {
-    logical_or,
-    logical_and
+  logical_or,
+  logical_and
 };
 
 struct unary_expr
 {
-    expr_operator op;
-    expr_operand operand;
+  expr_operator op;
+  expr_operand operand;
 };
 
 struct expr_operation
 {
-    expr_operator op;
-    expr_operand operand;
+  expr_operator op;
+  expr_operand operand;
 };
 
 struct expression
 {
-    expr_operand first;
-    std::vector<expr_operation> rest;
+  expr_operand first;
+  std::vector<expr_operation> rest;
 };
 
 struct type_clause
 {
-    boost::optional<std::string> glob_expr;
-    ze::value_type lhs;
-    clause_operator op;
-    expression rhs;
+  boost::optional<std::string> glob_expr;
+  ze::value_type lhs;
+  clause_operator op;
+  expression rhs;
 };
 
 struct event_clause
 {
-    std::vector<std::string> lhs;
-    clause_operator op;
-    expression rhs;
+  std::vector<std::string> lhs;
+  clause_operator op;
+  expression rhs;
 };
 
 typedef boost::variant<
-    type_clause
+  type_clause
   , event_clause
   , boost::recursive_wrapper<negated_clause>
 > clause;
 
 struct negated_clause
 {
-    clause operand;
+  clause operand;
 };
 
 struct clause_operation
 {
-    boolean_operator op;
-    clause operand;
+  boolean_operator op;
+  clause operand;
 };
 
 struct query
 {
-    clause first;
-    std::vector<clause_operation> rest;
+  clause first;
+  std::vector<clause_operation> rest;
 };
 
 /// Negates a clause operand.
@@ -151,39 +151,39 @@ BOOST_FUSION_ADAPT_STRUCT(
     (vast::detail::ast::expr_operator, op)
     (vast::detail::ast::expr_operand, operand))
 
-BOOST_FUSION_ADAPT_STRUCT(
+  BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::expr_operation,
     (vast::detail::ast::expr_operator, op)
     (vast::detail::ast::expr_operand, operand))
 
-BOOST_FUSION_ADAPT_STRUCT(
+  BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::expression,
     (vast::detail::ast::expr_operand, first)
     (std::vector<vast::detail::ast::expr_operation>, rest))
 
-BOOST_FUSION_ADAPT_STRUCT(
+  BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::type_clause,
     (boost::optional<std::string>, glob_expr)
     (ze::value_type, lhs)
     (vast::detail::ast::clause_operator, op)
     (vast::detail::ast::expression, rhs))
 
-BOOST_FUSION_ADAPT_STRUCT(
+  BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::event_clause,
     (std::vector<std::string>, lhs)
     (vast::detail::ast::clause_operator, op)
     (vast::detail::ast::expression, rhs))
 
-BOOST_FUSION_ADAPT_STRUCT(
+  BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::negated_clause,
     (vast::detail::ast::clause, operand))
 
-BOOST_FUSION_ADAPT_STRUCT(
+  BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::clause_operation,
     (vast::detail::ast::boolean_operator, op)
     (vast::detail::ast::clause, operand))
 
-BOOST_FUSION_ADAPT_STRUCT(
+  BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::query,
     (vast::detail::ast::clause, first)
     (std::vector<vast::detail::ast::clause_operation>, rest))
