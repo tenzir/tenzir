@@ -99,7 +99,8 @@ struct validator : public boost::static_visitor<bool>
         auto rhs_type = rhs.which();
         auto lhs_type = clause.lhs;
         if (lhs_type == rhs_type ||
-            (lhs_type == ze::string_type && rhs_type == ze::regex_type))
+            (lhs_type == ze::string_type && rhs_type == ze::regex_type) ||
+            (lhs_type == ze::address_type && rhs_type == ze::prefix_type))
             return true;
 
         // TODO: Test whether the type supports the provided binary operation.
