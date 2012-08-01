@@ -8,6 +8,7 @@ namespace vast {
 
 // Forward declarations.
 class segment;
+class expression;
 
 namespace detail {
 
@@ -37,6 +38,13 @@ protected:
 };
 
 class segment_type_info : public cppa::util::abstract_uniform_type_info<segment>
+{
+protected:
+  void serialize(void const* ptr, cppa::serializer* sink) const;
+  void deserialize(void* ptr, cppa::deserializer* source) const;
+};
+
+class expression_type_info : public cppa::util::abstract_uniform_type_info<expression>
 {
 protected:
   void serialize(void const* ptr, cppa::serializer* sink) const;

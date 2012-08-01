@@ -3,8 +3,11 @@
 #include <boost/variant/apply_visitor.hpp>
 #include <ze/type/regex.h>
 #include <ze/util/make_unique.h>
+#include "vast/exception.h"
 #include "vast/logger.h"
 #include "vast/detail/ast.h"
+#include "vast/detail/parser/query.h"
+#include "vast/util/parser/parse.h"
 
 namespace vast {
 namespace expr {
@@ -33,6 +36,11 @@ void extractor::feed(ze::event const* event)
   ready_ = false;
 }
 
+ze::event const* extractor::event() const
+{
+  return event_;
+}
+
 void timestamp_extractor::eval()
 {
   result_ = event_->timestamp();
@@ -54,6 +62,11 @@ void id_extractor::eval()
 offset_extractor::offset_extractor(size_t offset)
   : offset_(offset)
 {
+}
+
+size_t offset_extractor::offset() const
+{
+  return offset_;
 }
 
 void offset_extractor::eval()
@@ -110,6 +123,16 @@ void n_ary_operator::reset()
     op->reset();
 
   ready_ = false;
+}
+
+std::vector<std::unique_ptr<node>>& n_ary_operator::operands()
+{
+  return operands_;
+}
+
+std::vector<std::unique_ptr<node>> const& n_ary_operator::operands() const
+{
+  return operands_;
 }
 
 void conjunction::eval()
@@ -239,6 +262,11 @@ relational_operator::relational_operator(detail::ast::clause_operator op)
       };
       break;
   }
+}
+
+relational_operator::binary_predicate const& relational_operator::op() const
+{
+  return op_;
 }
 
 void relational_operator::eval()
@@ -424,21 +452,55 @@ private:
   bool invert_ = false;
 };
 
-void expression::assign(detail::ast::query const& query)
+expression::expression(expression const& other)
+  : str_(other.str_)
 {
-  if (query.rest.empty())
+  parse(str_);
+}
+
+expression::expression(expression&& other)
+  : str_(std::move(other.str_))
+  , root_(std::move(other.root_))
+  , extractors_(std::move(other.extractors_))
+{
+}
+
+expression& expression::operator=(expression other)
+{
+  using std::swap;
+  swap(str_, other.str_);
+  swap(root_, other.root_);
+  swap(extractors_, other.extractors_);
+  return *this;
+}
+
+void expression::parse(std::string str)
+{
+  if (str.empty())
+    return;
+
+  str_ = std::move(str);
+
+  detail::ast::query ast;
+  if (! util::parser::parse<detail::parser::query>(str_, ast))
+    throw error::syntax("parse error", str_);
+
+  if (! detail::ast::validate(ast))
+    throw error::semantic("parse error", str_);
+
+  if (ast.rest.empty())
   {
     /// WLOG, we can always add a conjunction as root.
     auto conjunction = std::make_unique<expr::conjunction>();
     expressionizer visitor(conjunction.get(), extractors_);
-    boost::apply_visitor(std::ref(visitor), query.first);
+    boost::apply_visitor(std::ref(visitor), ast.first);
     root_ = std::move(conjunction);
   }
   else
   {
     // First, split the query expression at each OR node.
-    std::vector<detail::ast::query> ors{detail::ast::query{query.first}};
-    for (auto& clause : query.rest)
+    std::vector<detail::ast::query> ors{detail::ast::query{ast.first}};
+    for (auto& clause : ast.rest)
       if (clause.op == detail::ast::logical_or)
         ors.emplace_back(detail::ast::query{clause.operand});
       else
@@ -486,6 +548,23 @@ bool expression::eval(ze::event const& event)
 
   root_->reset();
   return r.get<bool>();
+}
+
+void expression::accept(expr::const_visitor& v) const
+{
+  assert(root_);
+  v.visit(*root_);
+}
+
+void expression::accept(expr::visitor& v)
+{
+  assert(root_);
+  v.visit(*root_);
+}
+
+bool operator==(expression const& x, expression const& y)
+{
+  return x.str_ == y.str_;
 }
 
 } // namespace vast

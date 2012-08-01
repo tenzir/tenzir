@@ -5,6 +5,7 @@
 #include <cppa/announce.hpp>
 #include "vast/detail/cppa_archive.h"
 #include "vast/segment.h"
+#include "vast/expression.h"
 
 namespace vast {
 namespace detail {
@@ -18,6 +19,7 @@ void cppa_announce_types()
   announce<std::vector<ze::event>>();
   announce(typeid(ze::chunk<ze::event>), new event_chunk_type_info);
   announce(typeid(segment), new segment_type_info);
+  announce(typeid(expression), new expression_type_info);
 }
 
 void uuid_type_info::serialize(void const* ptr, cppa::serializer* sink) const
@@ -90,6 +92,24 @@ void segment_type_info::deserialize(void* ptr, cppa::deserializer* source) const
     auto s = reinterpret_cast<segment*>(ptr);
     cppa_iarchive ia(source, cname);
     ia >> *s;
+}
+
+void expression_type_info::serialize(void const* ptr, cppa::serializer* sink) const
+{
+    auto expr = reinterpret_cast<expression const*>(ptr);
+    cppa_oarchive oa(sink, name());
+    oa << *expr;
+}
+
+void expression_type_info::deserialize(void* ptr, cppa::deserializer* source) const
+{
+    std::string cname = source->seek_object();
+    if (cname != name())
+        throw std::logic_error("wrong type name found");
+
+    auto expr = reinterpret_cast<expression*>(ptr);
+    cppa_iarchive ia(source, cname);
+    ia >> *expr;
 }
 
 } // namespace detail
