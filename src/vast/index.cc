@@ -1,5 +1,6 @@
 #include "vast/index.h"
 
+#include <ze/type/regex.h>
 #include "vast/logger.h"
 #include "vast/fs/operations.h"
 #include "vast/fs/fstream.h"
@@ -50,11 +51,38 @@ index::index(cppa::actor_ptr archive, std::string directory)
       },
       on(atom("hit"), atom("name"), arg_match) >> [=](std::string const& str)
       {
-        // TODO: Implement
+        if (ids_.empty())
+        {
+          reply(atom("miss"));
+          return;
+        }
+
+        ze::regex rx(str);
+        std::vector<ze::uuid> ids;
+        for (auto& i : event_names_)
+          if (rx.match(i.first))
+            ids.push_back(i.second);
+
+        if (ids.empty())
+          return;
+        else
+          reply(atom("hit"), std::move(ids));
       },
       on(atom("hit"), atom("time"), arg_match)
-        >> [=](int64_t start, int64_t end)
+        >> [=](ze::time_point l, ze::time_point u)
       {
+        if (l == ze::time_point() && u == ze::time_point())
+        {
+          send(self, atom("hit"), atom("all"));
+          return;
+        }
+
+        if (ids_.empty())
+        {
+          reply(atom("miss"));
+          return;
+        }
+
         // TODO: Implement
       },
       on(atom("build"), arg_match) >> [=](segment const& s)
@@ -87,7 +115,7 @@ void index::write(segment const& s)
 
 void index::build(segment::header const& hdr)
 {
-  LOG(verbose, index) << "index @" << id() 
+  LOG(verbose, index) << "index @" << id()
     << " builds in-memory indexes for segment " << hdr.id;
 
   assert(ids_.count(hdr.id) == 0);
