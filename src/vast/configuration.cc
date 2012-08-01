@@ -25,8 +25,7 @@ configuration::configuration()
     ("expression,e", po::value<std::string>(), "query expression")
     ("help,h", "display this help")
     ("schema,s", po::value<std::string>(), "event schema file")
-    ("console-verbosity,v",
-     po::value<int>()->default_value(logger::info),
+    ("console-verbosity,v", po::value<int>()->default_value(logger::info),
      "console logging verbosity")
     ("advanced,z", "show advanced options")
     ;
@@ -131,11 +130,11 @@ bool configuration::load(std::string const& filename)
 {
   try
   {
-    if (fs::exists(filename))
-    {
-      fs::ifstream ifs(filename);
-      po::store(po::parse_config_file(ifs, all_), config_);
-    }
+    if (! fs::exists(filename))
+      return false;
+
+    fs::ifstream ifs(filename);
+    po::store(po::parse_config_file(ifs, all_), config_);
 
     init();
     return true;
