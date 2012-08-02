@@ -197,9 +197,7 @@ index::index(cppa::actor_ptr archive, std::string directory)
           return;
         }
 
-        std::vector<ze::uuid> ids;
-        std::copy(ids_.begin(), ids_.end(), std::back_inserter(ids));
-        reply(atom("hit"), std::move(ids));
+        reply(atom("hit"), ids_);
       },
       on(atom("hit"), arg_match) >> [=](expression const& expr)
       {
