@@ -9,13 +9,12 @@
 namespace vast {
 namespace detail {
 
-/// Picks the relevant subsets of the query expression and forwards them to
-/// the index.
-class picker : public expr::const_visitor
+/// Visits an expression and hits the meta index.
+class hitter : public expr::const_visitor
 {
 public:
-  /// Constructs a picker with an index actor.
-  picker(index::meta const& m, std::vector<ze::uuid>& ids)
+  /// Constructs a hitter with an index actor.
+  hitter(index::meta const& m, std::vector<ze::uuid>& ids)
     : meta_(m)
     , ids_(ids)
   {
@@ -110,14 +109,14 @@ public:
 
     // The first intersection operand has a free shot.
     auto i = conj.operands().begin();
-    picker p(meta_, ids);
+    hitter p(meta_, ids);
     (*i)->accept(p);
     std::sort(ids.begin(), ids.end());
 
     for (++i; i != conj.operands().end(); ++i)
     {
       std::vector<ze::uuid> result;
-      picker p(meta_, result);
+      hitter p(meta_, result);
       (*i)->accept(p);
 
       std::sort(result.begin(), result.end());
@@ -139,7 +138,7 @@ public:
     for (auto& operand : disj.operands())
     {
       std::vector<ze::uuid> result;
-      picker p(meta_, result);
+      hitter p(meta_, result);
       operand->accept(p);
 
       std::sort(result.begin(), result.end());
@@ -233,8 +232,8 @@ index::index(cppa::actor_ptr archive, std::string directory)
         }
 
         std::vector<ze::uuid> ids;
-        detail::picker picker(meta_, ids);
-        expr.accept(picker);
+        detail::hitter hitter(meta_, ids);
+        expr.accept(hitter);
 
         if (ids.empty())
           reply(atom("miss"));
