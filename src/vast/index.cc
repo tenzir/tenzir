@@ -37,9 +37,8 @@ public:
     assert(op_ != nullptr);
 
     // If the time point is in the interval, we have to consider it.
-    auto time = rhs_.get<ze::time_point>();
     for (auto& i : meta_.ranges)
-      if (i.first.first >= time && i.first.second <= time)
+      if ((*op_)(i.first.first, rhs_) || (*op_)(i.first.first, rhs_))
         ids_.push_back(i.second);
   }
 
