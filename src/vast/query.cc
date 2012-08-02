@@ -126,6 +126,18 @@ query::query(cppa::actor_ptr archive,
         DBG(query) << "query @" << id() << " hits index";
         run();
       },
+      on_arg_match >> [=](std::vector<ze::uuid> const& ids)
+      {
+        ids_ = ids;
+        head_ = ack_ = ids_.begin();
+
+        size_t first_fetch = std::min(ids_.size(), 3ul); // TODO: make configurable.
+        for (size_t i = 0; i < first_fetch; ++i)
+        {
+          DBG(query) << "query @" << id() << " prefetches segment " << *head_;
+          send(archive_, atom("get"), *head_++);
+        }
+      },
       on_arg_match >> [=](segment const& s)
       {
         // Extract results when one of the following conditions hold:
@@ -167,15 +179,19 @@ void query::run()
           << "query @" << id() << " received index hit ("
           << ids.size() << " segments)";
 
-        ids_ = ids;
-        head_ = ack_ = ids_.begin();
+        auto opt = tuple_cast<anything, std::vector<ze::uuid>>(last_dequeued());
+        assert(opt.valid());
+        cow_tuple<std::vector<ze::uuid>> id_tuple(*opt);
+        send(self, id_tuple);
+      },
+      on(atom("impossible")) >> [=]
+      {
+        LOG(info, query)
+          << "query @" << id() << " cannot use index to speed up answer";
+        LOG(info, query)
+          << "query @" << id() << " asks archive @" << archive_->id() << " for all segments";
 
-        size_t first_fetch = std::min(ids_.size(), 3ul); // TODO: make configurable.
-        for (size_t i = 0; i < first_fetch; ++i)
-        {
-          DBG(query) << "query @" << id() << " prefetches segment " << *head_;
-          send(archive_, atom("get"), *head_++);
-        }
+        send(archive_, atom("get"), atom("ids"));
       },
       on(atom("miss")) >> [=]
       {

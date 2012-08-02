@@ -9,6 +9,76 @@
 namespace vast {
 namespace detail {
 
+/// Determines whether a query expression has clauses that may benefit from an
+/// index lookup.
+class checker : public expr::const_visitor
+{
+public:
+  operator bool() const
+  {
+    return positive_;
+  }
+
+  virtual void visit(expr::node const&)
+  {
+    assert(! "should never happen");
+  }
+
+  virtual void visit(expr::timestamp_extractor const&)
+  {
+    positive_ = true;
+  }
+
+  virtual void visit(expr::name_extractor const& node)
+  {
+    positive_ = true;
+  }
+
+  virtual void visit(expr::id_extractor const&)
+  {
+    /* Do exactly nothing. */
+  }
+
+  virtual void visit(expr::offset_extractor const&)
+  {
+    /* Do exactly nothing. */
+  }
+
+  virtual void visit(expr::exists const&)
+  {
+    /* Do exactly nothing. */
+  }
+
+  virtual void visit(expr::conjunction const& conj)
+  {
+    for (auto& op : conj.operands())
+      if (! positive_)
+        op->accept(*this);
+  }
+
+  virtual void visit(expr::disjunction const& disj)
+  {
+    for (auto& op : disj.operands())
+      if (! positive_)
+        op->accept(*this);
+  }
+
+  virtual void visit(expr::relational_operator const& op)
+  {
+    assert(op.operands().size() == 2);
+    op.operands()[0]->accept(*this);
+  }
+
+  virtual void visit(expr::constant const& c)
+  {
+    /* Do exactly nothing. */
+  }
+
+private:
+  bool positive_ = false;
+};
+
+
 /// Visits an expression and hits the meta index.
 class hitter : public expr::const_visitor
 {
@@ -21,11 +91,6 @@ public:
   }
 
   virtual void visit(expr::node const&)
-  {
-    assert(! "should never happen");
-  }
-
-  virtual void visit(expr::extractor const&)
   {
     assert(! "should never happen");
   }
@@ -96,11 +161,6 @@ public:
   virtual void visit(expr::exists const&)
   {
     /* Do exactly nothing. */
-  }
-
-  virtual void visit(expr::n_ary_operator const& n_ary)
-  {
-    assert(! "should never happen");
   }
 
   virtual void visit(expr::conjunction const& conj)
@@ -225,9 +285,11 @@ index::index(cppa::actor_ptr archive, std::string directory)
       },
       on(atom("hit"), arg_match) >> [=](expression const& expr)
       {
-        if (ids_.empty())
+        detail::checker checker;
+        expr.accept(checker);
+        if (! checker || ids_.empty())
         {
-          reply(atom("miss"));
+          reply(atom("impossible"));
           return;
         }
 

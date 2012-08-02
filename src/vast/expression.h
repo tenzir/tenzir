@@ -8,13 +8,11 @@ namespace vast {
 namespace expr {
 
 class node;
-class extractor;
 class timestamp_extractor;
 class name_extractor;
 class id_extractor;
 class offset_extractor;
 class exists;
-class n_ary_operator;
 class conjunction;
 class disjunction;
 class relational_operator;
@@ -22,13 +20,11 @@ class constant;
 
 typedef util::const_visitor<
     node
- ,  extractor
  ,  timestamp_extractor
  ,  name_extractor
  ,  id_extractor
  ,  offset_extractor
  ,  exists
- ,  n_ary_operator
  ,  conjunction
  ,  disjunction
  ,  relational_operator
@@ -37,13 +33,11 @@ typedef util::const_visitor<
 
 typedef util::visitor<
     node
- ,  extractor
  ,  timestamp_extractor
  ,  name_extractor
  ,  id_extractor
  ,  offset_extractor
  ,  exists
- ,  n_ary_operator
  ,  conjunction
  ,  disjunction
  ,  relational_operator

@@ -25,6 +25,10 @@ archive::archive(std::string const& directory, size_t max_segments)
         segment_manager_ = spawn<segment_manager>(max_segments, directory);
         forward_to(segment_manager_);
       },
+      on(atom("get"), atom("ids")) >> [=]
+      {
+        forward_to(segment_manager_);
+      },
       on(atom("get"), arg_match) >> [=](ze::uuid const& /* id */)
       {
         forward_to(segment_manager_);

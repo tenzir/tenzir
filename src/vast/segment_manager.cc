@@ -39,6 +39,22 @@ segment_manager::segment_manager(size_t capacity, std::string const& dir)
         store_segment(get<0>(*opt));
         reply(atom("segment"), atom("ack"), s.id());
       },
+      on(atom("get"), atom("ids")) >> [=]
+      {
+        LOG(debug, archive)
+          << "segment manager @" << id() << " retrieves all ids";
+
+        std::vector<ze::uuid> ids;
+        std::transform(segment_files_.begin(),
+                       segment_files_.end(),
+                       std::back_inserter(ids),
+                       [](std::pair<ze::uuid, fs::path> const& p)
+                       {
+                         return p.first;
+                       });
+
+        reply(ids);
+      },
       on(atom("get"), arg_match) >> [=](ze::uuid const& uuid)
       {
         LOG(debug, archive)
