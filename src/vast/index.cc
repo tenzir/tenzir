@@ -36,10 +36,42 @@ public:
     assert(rhs_.which() == ze::timepoint_type);
     assert(op_ != nullptr);
 
-    // If the time point is in the interval, we have to consider it.
-    for (auto& i : meta_.ranges)
-      if ((*op_)(i.first.first, rhs_) || (*op_)(i.first.first, rhs_))
-        ids_.push_back(i.second);
+    switch (op_->type())
+    {
+      default:
+        assert(! "invalid time extractor operator");
+        break;
+      case expr::equal:
+        for (auto& i : meta_.ranges)
+          if (rhs_ >= i.first.first && rhs_ <= i.first.second)
+            ids_.push_back(i.second);
+        break;
+      case expr::not_equal:
+        for (auto& i : meta_.ranges)
+          if (rhs_ < i.first.first || rhs_ > i.first.second)
+            ids_.push_back(i.second);
+        break;
+      case expr::less:
+        for (auto& i : meta_.ranges)
+          if (rhs_ > i.first.first)
+            ids_.push_back(i.second);
+        break;
+      case expr::less_equal:
+        for (auto& i : meta_.ranges)
+          if (rhs_ >= i.first.first)
+            ids_.push_back(i.second);
+        break;
+      case expr::greater:
+        for (auto& i : meta_.ranges)
+          if (rhs_ < i.first.second)
+            ids_.push_back(i.second);
+        break;
+      case expr::greater_equal:
+        for (auto& i : meta_.ranges)
+          if (rhs_ <= i.first.second)
+            ids_.push_back(i.second);
+        break;
+    }
   }
 
   virtual void visit(expr::name_extractor const& node)
@@ -48,10 +80,8 @@ public:
     assert(op_ != nullptr);
 
     for (auto& i : meta_.names)
-    {
-      if ((*op_)(i.first, rhs_))
+      if (op_->test(i.first, rhs_))
         ids_.push_back(i.second);
-    }
   }
 
   virtual void visit(expr::id_extractor const&)
@@ -131,13 +161,8 @@ public:
     assert(rhs_ == ze::invalid);
     assert(op.operands().size() == 2);
 
-    // We first save the RHS value,
+    op_ = &op;
     op.operands()[1]->accept(*this);
-
-    // then save the predicate, ...
-    op_ = &op.op();
-
-    // ...and finally dispatch to the LHS extractor.
     op.operands()[0]->accept(*this);
 
     op_ = nullptr;
@@ -151,8 +176,8 @@ public:
   }
 
 private:
+  expr::relational_operator const* op_ = nullptr;
   ze::value rhs_ = ze::invalid;
-  expr::relational_operator::binary_predicate const* op_ = nullptr;
   index::meta const& meta_;
   std::vector<ze::uuid>& ids_;
 };

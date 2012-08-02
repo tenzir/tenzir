@@ -171,14 +171,15 @@ void disjunction::eval()
     ready_ = true;
 }
 
-relational_operator::relational_operator(detail::ast::clause_operator op)
+relational_operator::relational_operator(relation_type type)
+  : type_(type)
 {
-  switch (op)
+  switch (type_)
   {
     default:
       assert(! "invalid operator type");
       break;
-    case detail::ast::match:
+    case match:
       op_ = [](ze::value const& lhs, ze::value const& rhs) -> bool
       {
         assert(lhs.which() == ze::string_type);
@@ -186,7 +187,7 @@ relational_operator::relational_operator(detail::ast::clause_operator op)
         return rhs.get<ze::regex>().match(lhs.get<ze::string>());
       };
       break;
-    case detail::ast::not_match:
+    case not_match:
       op_ = [](ze::value const& lhs, ze::value const& rhs) -> bool
       {
         assert(lhs.which() == ze::string_type);
@@ -194,7 +195,7 @@ relational_operator::relational_operator(detail::ast::clause_operator op)
         return ! rhs.get<ze::regex>().match(lhs.get<ze::string>());
       };
       break;
-    case detail::ast::in:
+    case in:
       op_ = [](ze::value const& lhs, ze::value const& rhs) -> bool
       {
         if (lhs.which() == ze::string_type &&
@@ -209,7 +210,7 @@ relational_operator::relational_operator(detail::ast::clause_operator op)
         return false;
       };
       break;
-    case detail::ast::not_in:
+    case not_in:
       op_ = [](ze::value const& lhs, ze::value const& rhs) -> bool
       {
         if (lhs.which() == ze::string_type &&
@@ -224,37 +225,37 @@ relational_operator::relational_operator(detail::ast::clause_operator op)
         return false;
       };
       break;
-    case detail::ast::equal:
+    case equal:
       op_ = [](ze::value const& lhs, ze::value const& rhs)
       {
         return lhs == rhs;
       };
       break;
-    case detail::ast::not_equal:
+    case not_equal:
       op_ = [](ze::value const& lhs, ze::value const& rhs)
       {
         return lhs != rhs;
       };
       break;
-    case detail::ast::less:
+    case less:
       op_ = [](ze::value const& lhs, ze::value const& rhs)
       {
         return lhs < rhs;
       };
       break;
-    case detail::ast::less_equal:
+    case less_equal:
       op_ = [](ze::value const& lhs, ze::value const& rhs)
       {
         return lhs <= rhs;
       };
       break;
-    case detail::ast::greater:
+    case greater:
       op_ = [](ze::value const& lhs, ze::value const& rhs)
       {
         return lhs > rhs;
       };
       break;
-    case detail::ast::greater_equal:
+    case greater_equal:
       op_ = [](ze::value const& lhs, ze::value const& rhs)
       {
         return lhs >= rhs;
@@ -263,9 +264,14 @@ relational_operator::relational_operator(detail::ast::clause_operator op)
   }
 }
 
-relational_operator::binary_predicate const& relational_operator::op() const
+bool relational_operator::test(ze::value const& lhs, ze::value const& rhs) const
 {
-  return op_;
+  return op_(lhs, rhs);
+}
+
+relation_type relational_operator::type() const
+{
+  return type_;
 }
 
 void relational_operator::eval()
@@ -343,7 +349,7 @@ public:
       invert_ = false;
     }
 
-    auto relation = std::make_unique<expr::relational_operator>(op);
+    auto relation = make_relational_operator(op);
     auto rhs = std::make_unique<expr::constant>(detail::ast::fold(clause.rhs));
     std::unique_ptr<expr::extractor> lhs;
     if (clause.lhs == "name")
@@ -369,7 +375,7 @@ public:
       invert_ = false;
     }
 
-    auto relation = std::make_unique<expr::relational_operator>(op);
+    auto relation = make_relational_operator(op);
     auto lhs = std::make_unique<expr::exists>(clause.lhs);
     auto rhs = std::make_unique<expr::constant>(detail::ast::fold(clause.rhs));
     extractors_.push_back(lhs.get());
@@ -411,7 +417,7 @@ public:
       invert_ = false;
     }
 
-    auto relation = std::make_unique<expr::relational_operator>(op);
+    auto relation = make_relational_operator(op);
 
     size_t offset = std::strtoul(clause.lhs[1].data(), nullptr, 10);
     auto lhs = std::make_unique<expr::offset_extractor>(offset);
@@ -438,7 +444,7 @@ private:
     // moment: we just look whether the expression contains * or ?.
     auto glob = ze::regex("\\*|\\?").search(expr);
 
-    auto op = std::make_unique<expr::relational_operator>(
+    auto op = make_relational_operator(
         glob ? detail::ast::match : detail::ast::equal);
 
     auto lhs = std::make_unique<expr::name_extractor>();
@@ -450,6 +456,38 @@ private:
       op->add(std::make_unique<expr::constant>(expr));
 
     return std::move(op);
+  }
+
+  std::unique_ptr<expr::relational_operator>
+  make_relational_operator(detail::ast::clause_operator op)
+  {
+    typedef expr::relation_type type;
+    switch (op)
+    {
+      default:
+        assert(! "missing relational operator in expression");
+        return std::unique_ptr<expr::relational_operator>();
+      case detail::ast::match:
+        return std::make_unique<expr::relational_operator>(type::match);
+      case detail::ast::not_match:
+        return std::make_unique<expr::relational_operator>(type::not_match);
+      case detail::ast::in:
+        return std::make_unique<expr::relational_operator>(type::in);
+      case detail::ast::not_in:
+        return std::make_unique<expr::relational_operator>(type::not_in);
+      case detail::ast::equal:
+        return std::make_unique<expr::relational_operator>(type::equal);
+      case detail::ast::not_equal:
+        return std::make_unique<expr::relational_operator>(type::not_equal);
+      case detail::ast::less:
+        return std::make_unique<expr::relational_operator>(type::less);
+      case detail::ast::less_equal:
+        return std::make_unique<expr::relational_operator>(type::less_equal);
+      case detail::ast::greater:
+        return std::make_unique<expr::relational_operator>(type::greater);
+      case detail::ast::greater_equal:
+        return std::make_unique<expr::relational_operator>(type::greater_equal);
+    }
   }
 
   expr::n_ary_operator* parent_;

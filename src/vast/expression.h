@@ -5,16 +5,6 @@
 #include "vast/util/visitor.h"
 
 namespace vast {
-
-// TODO: Hide the detail aspects in the implementation.
-// Forward declarations
-namespace detail {
-namespace ast {
-enum clause_operator : int;
-struct query;
-} // namespace ast
-} // namespace detail
-
 namespace expr {
 
 class node;
@@ -219,17 +209,32 @@ private:
   virtual void eval();
 };
 
-// TODO: factor into one class for per operator.
-/// A binary operator.
+/// The type of a relational operator.
+enum relation_type
+{
+  match,
+  not_match,
+  in,
+  not_in,
+  equal,
+  not_equal,
+  less,
+  less_equal,
+  greater,
+  greater_equal
+};
+
+/// A relational operator.
 class relational_operator : public n_ary_operator
 {
 public:
   typedef std::function<bool(ze::value const&, ze::value const&)>
     binary_predicate;
 
-  relational_operator(detail::ast::clause_operator op);
+  relational_operator(relation_type op);
 
-  binary_predicate const& op() const;
+  bool test(ze::value const& lhs, ze::value const& rhs) const;
+  relation_type type() const;
 
   VAST_ACCEPT_CONST(const_visitor)
   VAST_ACCEPT(visitor)
@@ -238,6 +243,7 @@ private:
   virtual void eval();
 
   binary_predicate op_;
+  relation_type type_;
 };
 
 /// A constant value.
