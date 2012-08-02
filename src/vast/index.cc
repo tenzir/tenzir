@@ -4,8 +4,161 @@
 #include "vast/logger.h"
 #include "vast/fs/operations.h"
 #include "vast/fs/fstream.h"
+#include "vast/expression.h"
 
 namespace vast {
+namespace detail {
+
+/// Picks the relevant subsets of the query expression and forwards them to
+/// the index.
+class picker : public expr::const_visitor
+{
+public:
+  /// Constructs a picker with an index actor.
+  picker(index::meta const& m, std::vector<ze::uuid>& ids)
+    : meta_(m)
+    , ids_(ids)
+  {
+  }
+
+  virtual void visit(expr::node const&)
+  {
+    assert(! "should never happen");
+  }
+
+  virtual void visit(expr::extractor const&)
+  {
+    assert(! "should never happen");
+  }
+
+  virtual void visit(expr::timestamp_extractor const&)
+  {
+    assert(rhs_.which() == ze::timepoint_type);
+    assert(op_ != nullptr);
+
+    // If the time point is in the interval, we have to consider it.
+    auto time = rhs_.get<ze::time_point>();
+    for (auto& i : meta_.ranges)
+      if (i.first.first >= time && i.first.second <= time)
+        ids_.push_back(i.second);
+  }
+
+  virtual void visit(expr::name_extractor const& node)
+  {
+    assert(rhs_.which() == ze::string_type || rhs_.which() == ze::regex_type);
+    assert(op_ != nullptr);
+
+    for (auto& i : meta_.names)
+    {
+      if ((*op_)(i.first, rhs_))
+        ids_.push_back(i.second);
+    }
+  }
+
+  virtual void visit(expr::id_extractor const&)
+  {
+    /* Do exactly nothing. */
+  }
+
+  virtual void visit(expr::offset_extractor const&)
+  {
+    /* Do exactly nothing. */
+  }
+
+  virtual void visit(expr::exists const&)
+  {
+    /* Do exactly nothing. */
+  }
+
+  virtual void visit(expr::n_ary_operator const& n_ary)
+  {
+    assert(! "should never happen");
+  }
+
+  virtual void visit(expr::conjunction const& conj)
+  {
+    std::vector<ze::uuid> ids;
+
+    // The first intersection operand has a free shot.
+    auto i = conj.operands().begin();
+    picker p(meta_, ids);
+    (*i)->accept(p);
+    std::sort(ids.begin(), ids.end());
+
+    for (++i; i != conj.operands().end(); ++i)
+    {
+      std::vector<ze::uuid> result;
+      picker p(meta_, result);
+      (*i)->accept(p);
+
+      std::sort(result.begin(), result.end());
+      std::vector<ze::uuid> intersection;
+
+      std::set_intersection(ids.begin(), ids.end(),
+                     result.begin(), result.end(),
+                     std::back_inserter(intersection));
+
+      intersection.swap(ids);
+    }
+
+    ids_.swap(ids);
+  }
+
+  virtual void visit(expr::disjunction const& disj)
+  {
+    std::vector<ze::uuid> ids;
+    for (auto& operand : disj.operands())
+    {
+      std::vector<ze::uuid> result;
+      picker p(meta_, result);
+      operand->accept(p);
+
+      std::sort(result.begin(), result.end());
+      std::vector<ze::uuid> unification;
+
+      std::set_union(ids.begin(), ids.end(),
+                     result.begin(), result.end(),
+                     std::back_inserter(unification));
+
+      unification.swap(ids);
+    }
+
+    ids_.swap(ids);
+  }
+
+  virtual void visit(expr::relational_operator const& op)
+  {
+    assert(op_ == nullptr);
+    assert(rhs_ == ze::invalid);
+    assert(op.operands().size() == 2);
+
+    // We first save the RHS value,
+    op.operands()[1]->accept(*this);
+
+    // then save the predicate, ...
+    op_ = &op.op();
+
+    // ...and finally dispatch to the LHS extractor.
+    op.operands()[0]->accept(*this);
+
+    op_ = nullptr;
+    rhs_ = ze::invalid;
+  }
+
+  virtual void visit(expr::constant const& c)
+  {
+    assert(c.ready());
+    rhs_ = c.result();
+  }
+
+private:
+  ze::value rhs_ = ze::invalid;
+  expr::relational_operator::binary_predicate const* op_ = nullptr;
+  index::meta const& meta_;
+  std::vector<ze::uuid>& ids_;
+};
+
+} // namespace detail
 
 index::index(cppa::actor_ptr archive, std::string directory)
   : dir_(std::move(directory))
@@ -49,7 +202,7 @@ index::index(cppa::actor_ptr archive, std::string directory)
         std::copy(ids_.begin(), ids_.end(), std::back_inserter(ids));
         reply(atom("hit"), std::move(ids));
       },
-      on(atom("hit"), atom("name"), arg_match) >> [=](std::string const& str)
+      on(atom("hit"), arg_match) >> [=](expression const& expr)
       {
         if (ids_.empty())
         {
@@ -57,33 +210,15 @@ index::index(cppa::actor_ptr archive, std::string directory)
           return;
         }
 
-        ze::regex rx(str);
         std::vector<ze::uuid> ids;
-        for (auto& i : event_names_)
-          if (rx.match(i.first))
-            ids.push_back(i.second);
+        detail::picker picker(meta_, ids);
+        expr.accept(picker);
 
         if (ids.empty())
-          return;
+          reply(atom("miss"));
         else
           reply(atom("hit"), std::move(ids));
-      },
-      on(atom("hit"), atom("time"), arg_match)
-        >> [=](ze::time_point l, ze::time_point u)
-      {
-        if (l == ze::time_point() && u == ze::time_point())
-        {
-          send(self, atom("hit"), atom("all"));
-          return;
-        }
 
-        if (ids_.empty())
-        {
-          reply(atom("miss"));
-          return;
-        }
-
-        // TODO: Implement
       },
       on(atom("build"), arg_match) >> [=](segment const& s)
       {
@@ -124,17 +259,14 @@ void index::build(segment::header const& hdr)
 // TODO: Remove as soon as newer GCC versions have adopted r181022.
 #ifdef __clang__
   for (auto& event : hdr.event_names)
-    event_names_.emplace(event, hdr.id);
+    meta_.names.emplace(event, hdr.id);
 
-  start_.emplace(hdr.start, hdr.id);
-  end_.emplace(hdr.end, hdr.id);
 #else
   for (auto& event : hdr.event_names)
-    event_names_.insert({event, hdr.id});
-
-  start_.insert({hdr.start, hdr.id});
-  end_.insert({hdr.end, hdr.id});
+    meta_.names.insert({event, hdr.id});
 #endif
+
+  meta_.ranges.insert({{hdr.start, hdr.end}, hdr.id});
 }
 
 } // namespace vast

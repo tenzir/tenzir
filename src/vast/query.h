@@ -74,10 +74,6 @@ private:
     std::unique_ptr<segment::reader> reader_;
   };
 
-  /// Parses the query expression and replies with success or failure.
-  /// @param The query expression.
-  void parse(std::string const& expr);
-
   /// Ask the index, receive segment IDs, and query the archive with them.
   void run();
 

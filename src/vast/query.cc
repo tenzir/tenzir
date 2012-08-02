@@ -5,9 +5,6 @@
 #include <ze/type/regex.h>
 #include "vast/exception.h"
 #include "vast/logger.h"
-#include "vast/detail/ast.h"
-#include "vast/detail/parser/query.h"
-#include "vast/util/parser/parse.h"
 
 namespace vast {
 
@@ -81,7 +78,25 @@ query::query(cppa::actor_ptr archive,
         DBG(query)
           << "query @" << id() << " parses expression '" << expr << "'";
 
-        parse(expr);
+        try
+        {
+          expr_.parse(expr);
+          reply(atom("set"), atom("expression"), atom("success"));
+
+          return;
+        }
+        catch (error::syntax const& e)
+        {
+          LOG(error, query)
+            << "syntax error in query @" << id() << ": " << e.what();
+        }
+        catch (error::semantic const& e)
+        {
+          LOG(error, query)
+              << "semantic error in query @" << id() << ": " << e.what();
+        }
+
+        reply(atom("set"), atom("expression"), atom("failure"));
       },
       on(atom("set"), atom("batch size"), arg_match) >> [=](unsigned batch_size)
       {
@@ -137,40 +152,9 @@ query::query(cppa::actor_ptr archive,
       });
 }
 
-void query::parse(std::string const& expr)
-{
-  try
-  {
-    detail::ast::query query_ast;
-    if (! util::parser::parse<detail::parser::query>(expr, query_ast))
-      throw error::syntax("parse error", expr);
-
-    if (! detail::ast::validate(query_ast))
-      throw error::semantic("parse error", expr);
-
-    expr_.assign(query_ast);
-    reply(atom("set"), atom("expression"), atom("success"));
-    return;
-  }
-  catch (error::syntax const& e)
-  {
-    LOG(error, query)
-      << "syntax error in query @" << id() << ": " << e.what();
-  }
-  catch (error::semantic const& e)
-  {
-    LOG(error, query)
-        << "semantic error in query @" << id() << ": " << e.what();
-  }
-
-  reply(atom("set"), atom("expression"), atom("failure"));
-}
-
 void query::run()
 {
-  // TODO: walk the AST and create more fine-grained index queries.
-  auto future = sync_send(index_, atom("hit"), atom("all"));
-
+  auto future = sync_send(index_, atom("hit"), expr_);
   handle_response(future)(
       on(atom("hit"), arg_match) >> [=](std::vector<ze::uuid> const& ids)
       {

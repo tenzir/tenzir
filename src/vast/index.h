@@ -5,7 +5,7 @@
 #include <map>
 #include <cppa/cppa.hpp>
 #include <ze/uuid.h>
-#include <ze/type/time.h>
+#include <ze/type/string.h>
 #include "vast/segment.h"
 
 namespace vast {
@@ -16,6 +16,14 @@ class index : public cppa::sb_actor<index>
   friend class cppa::sb_actor<index>;
 
 public:
+  /// The in-memory index for event meta data;
+  struct meta
+  {
+    typedef std::pair<ze::time_point, ze::time_point> interval;
+    std::multimap<interval, ze::uuid> ranges;
+    std::multimap<ze::string, ze::uuid> names;
+  };
+
   /// Spawns the index.
   /// @param directory The root directory of the index.
   index(cppa::actor_ptr archive, std::string directory);
@@ -34,10 +42,8 @@ private:
   cppa::actor_ptr archive_;
   cppa::behavior init_state;
 
-  std::multimap<ze::time_point, ze::uuid> start_;
-  std::multimap<ze::time_point, ze::uuid> end_;
-  std::multimap<std::string, ze::uuid> event_names_;
   std::set<ze::uuid> ids_;
+  meta meta_;
 };
 
 } // namespace vast
