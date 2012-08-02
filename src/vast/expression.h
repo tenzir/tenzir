@@ -70,7 +70,7 @@ public:
 
   /// Gets the result of the sub-tree induced by this node.
   /// @return The value of this node.
-  ze::value const& result();
+  ze::value const& result() const;
 
   /// Determines whether the result is available without evaluation.
   ///
@@ -81,12 +81,14 @@ public:
   /// Resets the sub-tree induced by this node.
   virtual void reset();
 
+  /// Evaluates the sub-tree induced by this node.
+  virtual void eval() = 0;
+
   VAST_ACCEPT_CONST(const_visitor)
   VAST_ACCEPT(visitor)
 
 protected:
   node() = default;
-  virtual void eval() = 0;
 
   ze::value result_ = ze::invalid;
   bool ready_ = false;

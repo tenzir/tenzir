@@ -12,11 +12,8 @@
 namespace vast {
 namespace expr {
 
-ze::value const& node::result()
+ze::value const& node::result() const
 {
-  if (! ready())
-    eval();
-
   return result_;
 }
 
@@ -143,12 +140,13 @@ void conjunction::eval()
       operands_.end(),
       [&](std::unique_ptr<node> const& operand) -> bool
       {
-      auto& result = operand->result();
-      if (! operand->ready())
-      ready_ = false;
+        if (! operand->ready())
+          operand->eval();
+        if (! operand->ready())
+        ready_ = false;
 
-      assert(result.which() == ze::bool_type);
-      return result.get<bool>();
+        assert(operand->result().which() == ze::bool_type);
+        return operand->result().get<bool>();
       });
 }
 
@@ -160,12 +158,13 @@ void disjunction::eval()
       operands_.end(),
       [&](std::unique_ptr<node> const& operand) -> bool
       {
-      auto& result = operand->result();
-      if (! operand->ready())
-      ready_ = false;
+        if (! operand->ready())
+          operand->eval();
+        if (! operand->ready())
+        ready_ = false;
 
-      assert(result.which() == ze::bool_type);
-      return result.get<bool>();
+        assert(operand->result().which() == ze::bool_type);
+        return operand->result().get<bool>();
       });
 
   if (result_.get<bool>() && ! ready_)
@@ -273,22 +272,28 @@ void relational_operator::eval()
 {
   assert(operands_.size() == 2);
 
+  auto& lhs = operands_[0];
   do
   {
-    auto& l = operands_[0]->result();
+    if (! lhs->ready())
+      lhs->eval();
+
+    auto& rhs = operands_[1];
     do
     {
-      auto& r = operands_[1]->result();
-      ready_ = op_(l, r);
+      if (! rhs->ready())
+        rhs->eval();
+
+      ready_ = op_(lhs->result(), rhs->result());
       if (ready_)
         break;
     }
-    while (! operands_[1]->ready());
+    while (! rhs->ready());
 
     if (ready_)
       break;
   }
-  while (! operands_[0]->ready());
+  while (! lhs->ready());
 
   result_ = ready_;
   ready_ = true;
@@ -540,9 +545,10 @@ bool expression::eval(ze::event const& event)
   for (auto ext : extractors_)
     ext->feed(&event);
 
-  ze::value r(false);
   while (! root_->ready())
-    r = root_->result();
+    root_->eval();
+
+  auto& r = root_->result();
 
   assert(r.which() == ze::bool_type);
 
@@ -553,13 +559,13 @@ bool expression::eval(ze::event const& event)
 void expression::accept(expr::const_visitor& v) const
 {
   assert(root_);
-  v.visit(*root_);
+  root_->accept(v);
 }
 
 void expression::accept(expr::visitor& v)
 {
   assert(root_);
-  v.visit(*root_);
+  root_->accept(v);
 }
 
 bool operator==(expression const& x, expression const& y)
