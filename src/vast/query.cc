@@ -87,16 +87,21 @@ query::query(cppa::actor_ptr archive,
         }
         catch (error::syntax const& e)
         {
-          LOG(error, query)
-            << "syntax error in query @" << id() << ": " << e.what();
+          std::stringstream msg;
+          msg << "query @" << id() << " is invalid: " << e.what();
+
+          LOG(error, query) << msg.str();
+          reply(atom("set"), atom("expression"), atom("failure"), msg.str());
         }
         catch (error::semantic const& e)
         {
-          LOG(error, query)
-              << "semantic error in query @" << id() << ": " << e.what();
+          std::stringstream msg;
+          msg << "query @" << id() << " is invalid: " << e.what();
+
+          LOG(error, query) << msg.str();
+          reply(atom("set"), atom("expression"), atom("failure"), msg.str());
         }
 
-        reply(atom("set"), atom("expression"), atom("failure"));
       },
       on(atom("set"), atom("batch size"), arg_match) >> [=](unsigned batch_size)
       {

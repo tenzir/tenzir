@@ -63,13 +63,13 @@ struct query : public exception
 /// Thrown when a syntax error with a query occurs.
 struct syntax : public query
 {
-  syntax(char const* msg, std::string const& q);
+  syntax(std::string const& q);
 };
 
 /// Thrown when a semantic error with a query occurs.
 struct semantic : public query
 {
-  semantic(char const* msg, std::string const& q);
+  semantic(std::string const& q);
 };
 
 } // namespace error

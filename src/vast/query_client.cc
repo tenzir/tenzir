@@ -114,9 +114,12 @@ void query_client::set_expression()
   send(query_, atom("set"), atom("expression"), expression_);
   become(
       keep_behavior,
-      on(atom("set"), atom("expression"), atom("failure")) >> [=]
+      on(atom("set"), atom("expression"), atom("failure"), arg_match) 
+        >> [=](std::string const& msg)
       {
-        unbecome(); // TODO: remove after sync_send fix.
+        LOG(error, query) << msg;
+
+        unbecome();
         send(self, atom("shutdown"));
       },
       on(atom("set"), atom("expression"), atom("success")) >> [=]
@@ -124,7 +127,7 @@ void query_client::set_expression()
         LOG(info, query) << "query client @" << id()
           << " successfully set expression '" << expression_ << "'";
 
-        unbecome(); // TODO: remove after sync_send fix.
+        unbecome();
         send(query_, atom("start"));
       },
       after(std::chrono::seconds(1)) >> [=]
@@ -132,7 +135,7 @@ void query_client::set_expression()
         LOG(info, query) << "query client @" << id()
           << " timed out trying to set expression: " << expression_;
 
-        unbecome(); // TODO: remove after sync_send fix.
+        unbecome();
         send(self, atom("shutdown"));
       });
 }

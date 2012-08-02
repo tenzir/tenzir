@@ -488,10 +488,10 @@ void expression::parse(std::string str)
 
   detail::ast::query ast;
   if (! util::parser::parse<detail::parser::query>(str_, ast))
-    throw error::syntax("parse error", str_);
+    throw error::syntax(str_);
 
   if (! detail::ast::validate(ast))
-    throw error::semantic("parse error", str_);
+    throw error::semantic(str_);
 
   if (ast.rest.empty())
   {

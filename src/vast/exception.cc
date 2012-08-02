@@ -60,17 +60,17 @@ query::query(char const* msg)
 {
 }
 
-syntax::syntax(char const* msg, std::string const& q)
+syntax::syntax(std::string const& q)
 {
   std::ostringstream oss;
-  oss << "syntax error: " << msg << " (query: " << q << ')';
+  oss << "syntax error in '" << q << "'";
   msg_ = oss.str();
 }
 
-semantic::semantic(char const* msg, std::string const& q)
+semantic::semantic(std::string const& q)
 {
   std::ostringstream oss;
-  oss << "semantic error: " << msg << " (query: " << q << ')';
+  oss << "semantic error in '" << q << "'";
   msg_ = oss.str();
 }
 
