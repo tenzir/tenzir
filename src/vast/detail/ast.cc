@@ -120,6 +120,14 @@ struct validator : public boost::static_visitor<bool>
           && rhs_type == ze::prefix_type);
   }
 
+  bool operator()(offset_clause const& clause) const
+  {
+    auto rhs = fold(clause.rhs);
+
+    // No check possible without schema.
+    return true;
+  }
+
   bool operator()(event_clause& clause) const
   {
     // TODO: Perform the dereference and replace it with the corresponding

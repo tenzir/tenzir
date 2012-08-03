@@ -95,6 +95,13 @@ struct tag_clause
   expression rhs;
 };
 
+struct offset_clause
+{
+  std::vector<unsigned> offsets;
+  clause_operator op;
+  expression rhs;
+};
+
 struct type_clause
 {
   ze::value_type lhs;
@@ -111,6 +118,7 @@ struct event_clause
 
 typedef boost::variant<
     tag_clause
+  , offset_clause
   , type_clause
   , event_clause
   , boost::recursive_wrapper<negated_clause>
@@ -171,6 +179,12 @@ BOOST_FUSION_ADAPT_STRUCT(
   BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::tag_clause,
     (std::string, lhs)
+    (vast::detail::ast::clause_operator, op)
+    (vast::detail::ast::expression, rhs))
+
+  BOOST_FUSION_ADAPT_STRUCT(
+    vast::detail::ast::offset_clause,
+    (std::vector<unsigned>, offsets)
     (vast::detail::ast::clause_operator, op)
     (vast::detail::ast::expression, rhs))
 

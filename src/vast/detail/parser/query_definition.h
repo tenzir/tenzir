@@ -22,6 +22,7 @@ query<Iterator>::query(util::parser::error_handler<Iterator>& error_handler)
     qi::repeat_type repeat;
     qi::alpha_type alpha;
     qi::alnum_type alnum;
+    qi::uint_type uint;
 
     using qi::on_error;
     using qi::fail;
@@ -69,6 +70,7 @@ query<Iterator>::query(util::parser::error_handler<Iterator>& error_handler)
     clause
         =   tag_clause
         |   type_clause
+        |   offset_clause
         |   event_clause
         |   ('!' > not_clause)
         ;
@@ -81,6 +83,13 @@ query<Iterator>::query(util::parser::error_handler<Iterator>& error_handler)
 
     type_clause
         =   ':' > type
+        >   clause_op
+        >   expr
+        ;
+
+    offset_clause
+        =   '@'
+        >   uint % ','
         >   clause_op
         >   expr
         ;
@@ -120,6 +129,7 @@ query<Iterator>::query(util::parser::error_handler<Iterator>& error_handler)
         (clause)
         (tag_clause)
         (type_clause)
+        (offset_clause)
         (event_clause)
         (identifier)
     );
@@ -132,6 +142,7 @@ query<Iterator>::query(util::parser::error_handler<Iterator>& error_handler)
     qry.name("query");
     clause.name("clause");
     tag_clause.name("tag clause");
+    offset_clause.name("offset clause");
     type_clause.name("type clause");
     event_clause.name("event clause");
     not_clause.name("negated clause");
