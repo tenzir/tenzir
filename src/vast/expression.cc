@@ -56,19 +56,44 @@ void id_extractor::eval()
   ready_ = true;
 }
 
-offset_extractor::offset_extractor(size_t offset)
-  : offset_(offset)
+offset_extractor::offset_extractor(std::vector<size_t> offsets)
+  : offsets_(std::move(offsets))
 {
-}
-
-size_t offset_extractor::offset() const
-{
-  return offset_;
 }
 
 void offset_extractor::eval()
 {
-  result_ = event_->flat_at(offset_);
+  if (event_->empty())
+  {
+    result_ = ze::invalid;
+  }
+  else
+  {
+    ze::record const* record = event_;
+    size_t i = 0;
+    while (i < offsets_.size() - 1)
+    {
+      auto off = offsets_[i++];
+      if (off >= record->size())
+      {
+        result_ = ze::invalid;
+        break;
+      }
+
+      auto& value = (*record)[off];
+      if (value.which() != ze::record_type)
+      {
+        result_ = ze::invalid;
+        break;
+      }
+
+      record = &value.get<ze::record>();
+    }
+
+    auto last = offsets_[i];
+    result_ = last < record->size() ? (*record)[last] : ze::invalid;
+  }
+
   ready_ = true;
 }
 
@@ -182,16 +207,18 @@ relational_operator::relational_operator(relation_type type)
     case match:
       op_ = [](ze::value const& lhs, ze::value const& rhs) -> bool
       {
-        assert(lhs.which() == ze::string_type);
-        assert(rhs.which() == ze::regex_type);
+        if (lhs.which() != ze::string_type || rhs.which() != ze::regex_type)
+          return false;
+
         return rhs.get<ze::regex>().match(lhs.get<ze::string>());
       };
       break;
     case not_match:
       op_ = [](ze::value const& lhs, ze::value const& rhs) -> bool
       {
-        assert(lhs.which() == ze::string_type);
-        assert(rhs.which() == ze::regex_type);
+        if (lhs.which() != ze::string_type || rhs.which() != ze::regex_type)
+          return false;
+
         return ! rhs.get<ze::regex>().match(lhs.get<ze::string>());
       };
       break;
@@ -206,7 +233,6 @@ relational_operator::relational_operator(relation_type type)
             rhs.which() == ze::prefix_type)
           return rhs.get<ze::prefix>().contains(lhs.get<ze::address>());
 
-        assert(! "operator 'in' not well-defined");
         return false;
       };
       break;
@@ -221,7 +247,6 @@ relational_operator::relational_operator(relation_type type)
             rhs.which() == ze::prefix_type)
           return ! rhs.get<ze::prefix>().contains(lhs.get<ze::address>());
 
-        assert(! "operator '!in' not well-defined");
         return false;
       };
       break;
@@ -384,6 +409,24 @@ public:
     parent_->add(std::move(relation));
   }
 
+  void operator()(detail::ast::offset_clause const& clause)
+  {
+    auto op = clause.op;
+    if (invert_)
+    {
+      op = detail::ast::negate(op);
+      invert_ = false;
+    }
+
+    auto relation = make_relational_operator(op);
+    auto lhs = std::make_unique<expr::offset_extractor>(clause.offsets);
+    auto rhs = std::make_unique<expr::constant>(detail::ast::fold(clause.rhs));
+    extractors_.push_back(lhs.get());
+    relation->add(std::move(lhs));
+    relation->add(std::move(rhs));
+    parent_->add(std::move(relation));
+  }
+
   void operator()(detail::ast::event_clause const& clause)
   {
     // The validation step of the query AST left the first element
@@ -419,8 +462,9 @@ public:
 
     auto relation = make_relational_operator(op);
 
-    size_t offset = std::strtoul(clause.lhs[1].data(), nullptr, 10);
-    auto lhs = std::make_unique<expr::offset_extractor>(offset);
+    // FIXME: use schema to determine correct offsets.
+    std::vector<size_t> offsets{0};
+    auto lhs = std::make_unique<expr::offset_extractor>(std::move(offsets));
     extractors_.push_back(lhs.get());
     relation->add(std::move(lhs));
 
@@ -523,6 +567,7 @@ void expression::parse(std::string str)
     return;
 
   str_ = std::move(str);
+  extractors_.clear();
 
   detail::ast::query ast;
   if (! util::parser::parse<detail::parser::query>(str_, ast))

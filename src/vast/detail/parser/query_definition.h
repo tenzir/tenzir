@@ -22,7 +22,7 @@ query<Iterator>::query(util::parser::error_handler<Iterator>& error_handler)
     qi::repeat_type repeat;
     qi::alpha_type alpha;
     qi::alnum_type alnum;
-    qi::uint_type uint;
+    qi::ulong_type ulong;
 
     using qi::on_error;
     using qi::fail;
@@ -89,7 +89,7 @@ query<Iterator>::query(util::parser::error_handler<Iterator>& error_handler)
 
     offset_clause
         =   '@'
-        >   uint % ','
+        >   ulong % ','
         >   clause_op
         >   expr
         ;

@@ -131,16 +131,14 @@ private:
 class offset_extractor : public extractor
 {
 public:
-  offset_extractor(size_t offset);
-
-  size_t offset() const;
+  offset_extractor(std::vector<size_t> offsets);
 
   VAST_ACCEPT_CONST(const_visitor)
   VAST_ACCEPT(visitor)
 
 private:
   virtual void eval();
-  size_t offset_;
+  std::vector<size_t> offsets_;
 };
 
 /// An existential quantifier.

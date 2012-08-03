@@ -123,9 +123,7 @@ struct validator : public boost::static_visitor<bool>
   bool operator()(offset_clause const& clause) const
   {
     auto rhs = fold(clause.rhs);
-
-    // No check possible without schema.
-    return true;
+    return ! clause.offsets.empty();
   }
 
   bool operator()(event_clause& clause) const
