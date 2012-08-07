@@ -1,8 +1,6 @@
 #include "vast/query.h"
 
-#include <ze/chunk.h>
-#include <ze/event.h>
-#include <ze/type/regex.h>
+#include <ze.h>
 #include "vast/exception.h"
 #include "vast/logger.h"
 
@@ -199,6 +197,10 @@ void query::run()
           << "query @" << id() << " received index miss";
 
         send(sink_, atom("query"), atom("index"), atom("miss"));
+
+        // TODO: Eventually, we want to let the user decide what happens on a
+        // index miss. For now, we just sequentially scan the archive.
+        send(archive_, atom("get"), atom("ids"));
       },
       after(std::chrono::minutes(1)) >> [=]
       {

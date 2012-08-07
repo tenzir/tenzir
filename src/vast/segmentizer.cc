@@ -1,6 +1,6 @@
 #include "vast/segmentizer.h"
 
-#include <ze/event.h>
+#include <ze.h>
 #include "vast/logger.h"
 
 namespace vast {

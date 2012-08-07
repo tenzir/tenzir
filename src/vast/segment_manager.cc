@@ -1,5 +1,6 @@
 #include "vast/segment_manager.h"
 
+#include <ze.h>
 #include "vast/segment.h"
 #include "vast/logger.h"
 #include "vast/fs/fstream.h"
@@ -78,7 +79,7 @@ void segment_manager::store_segment(cppa::cow_tuple<segment> t)
   // A segment should not have been recorded twice.
   assert(segment_files_.find(s.id()) == segment_files_.end());
 
-  auto path = dir_ / s.id().to_string();
+  auto path = dir_ / ze::to_string(s.id());
   segment_files_.emplace(s.id(), path);
   {
     fs::ofstream file(path, std::ios::binary | std::ios::out);
@@ -98,7 +99,7 @@ cppa::cow_tuple<segment> segment_manager::on_miss(ze::uuid const& uuid)
     << " cache miss, going to disk for segment " << uuid;
   assert(segment_files_.find(uuid) != segment_files_.end());
 
-  fs::ifstream file(dir_ / uuid.to_string(), std::ios::binary | std::ios::in);
+  fs::ifstream file(dir_ / ze::to_string(uuid), std::ios::binary | std::ios::in);
   ze::serialization::stream_iarchive ia(file);
   segment s;
   ia >> s;

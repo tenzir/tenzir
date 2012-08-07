@@ -1,6 +1,6 @@
 #include "vast/index.h"
 
-#include <ze/type/regex.h>
+#include <ze.h>
 #include "vast/logger.h"
 #include "vast/fs/operations.h"
 #include "vast/fs/fstream.h"
@@ -322,7 +322,7 @@ void index::process(segment const& s)
 
 void index::write(segment const& s)
 {
-  auto path = fs::path(dir_) / s.id().to_string();
+  auto path = fs::path(dir_) / ze::to_string(s.id());
   fs::ofstream file(path, std::ios::binary | std::ios::out);
   ze::serialization::stream_oarchive oa(file);
   oa << s.head();

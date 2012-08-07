@@ -27,7 +27,7 @@ public:
     header();
 
     template <typename Archive>
-    friend void save(Archive& oa, header const& h)
+    friend void serialize(Archive& oa, header const& h)
     {
       oa << segment::magic;
       oa << h.version;
@@ -40,7 +40,7 @@ public:
     }
 
     template <typename Archive>
-    friend void load(Archive& ia, header& h)
+    friend void deserialize(Archive& ia, header& h)
     {
       uint32_t magic;
       ia >> magic;
@@ -168,7 +168,7 @@ private:
   friend bool operator!=(segment const& x, segment const& y);
 
   template <typename Archive>
-  friend void save(Archive& oa, segment const& s)
+  friend void serialize(Archive& oa, segment const& s)
   {
     oa << s.header_;
 
@@ -179,7 +179,7 @@ private:
   }
 
   template <typename Archive>
-  friend void load(Archive& ia, segment& s)
+  friend void deserialize(Archive& ia, segment& s)
   {
     ia >> s.header_;
 

@@ -1,6 +1,6 @@
 #include "vast/query_client.h"
 
-#include <ze/event.h>
+#include <ze.h>
 #include "vast/exception.h"
 #include "vast/logger.h"
 #include "vast/util/console.h"
@@ -54,6 +54,11 @@ query_client::query_client(cppa::actor_ptr search,
             << matched << " events matched ("
             << (matched / processed * 100) << " selectivity)"
             << std::endl;
+      },
+      on(atom("query"), atom("index"), atom("miss")) >> [=]
+      {
+        LOG(info, query)
+          << "query @" << query_->id() << " received index miss";
       },
       on(atom("query"), atom("finished")) >> [=]
       {

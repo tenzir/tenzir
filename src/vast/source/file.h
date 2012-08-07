@@ -5,7 +5,8 @@
 #include <fstream>
 #include <cppa/cppa.hpp>
 #include <ze/forward.h>
-#include <ze/value.h>
+#include <ze/value_type.h>
+#include <ze/type/string.h>
 #include "vast/event_source.h"
 
 namespace vast {

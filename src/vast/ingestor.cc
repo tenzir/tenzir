@@ -1,5 +1,6 @@
 #include "vast/ingestor.h"
 
+#include <ze.h>
 #include "vast/exception.h"
 #include "vast/event_source.h"
 #include "vast/logger.h"

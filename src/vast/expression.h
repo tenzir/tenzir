@@ -292,13 +292,13 @@ public:
 
 private:
   template <typename Archive>
-  friend void save(Archive& oa, expression const& expr)
+  friend void serialize(Archive& oa, expression const& expr)
   {
     oa << expr.str_;
   }
 
   template <typename Archive>
-  friend void load(Archive& ia, expression& expr)
+  friend void deserialize(Archive& ia, expression& expr)
   {
     std::string str;
     ia >> str;

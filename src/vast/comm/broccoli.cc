@@ -1,6 +1,6 @@
 #include "vast/comm/broccoli.h"
 
-#include <ze/event.h>
+#include <ze.h>
 #include "vast/comm/connection.h"
 #include "vast/comm/exception.h"
 #include "vast/logger.h"

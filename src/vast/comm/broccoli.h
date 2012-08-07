@@ -3,7 +3,7 @@
 
 #include <memory>
 #include <boost/asio/strand.hpp>
-#include <ze/event.h>
+#include <ze/forward.h>
 #include <broccoli.h>
 
 namespace vast {

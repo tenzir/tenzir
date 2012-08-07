@@ -2,7 +2,6 @@
 #define VAST_QUERY_CLIENT_H
 
 #include <cppa/cppa.hpp>
-#include <ze/event.h>
 
 namespace vast {
 
