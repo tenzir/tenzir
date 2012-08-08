@@ -34,11 +34,11 @@ BOOST_AUTO_TEST_CASE(queries)
     "! :int == +8 / +4 || ! :count < -(4 * 2)",
     // Event tags.
     "&name == \"foo\"",
-    "&time < 1 hour ago",
+    "&time < now - 1h",
     "&id == 42",
     // Offsets.
     "@5 in {1, 2, 3}",
-    "@10,3 < 1 hour ago",
+    "@10,3 < now - 3d5m",
     "@0,3,2 ~ /yikes/",
     // Dereferencing event names.
     "foo$bar == T",
