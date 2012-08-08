@@ -108,7 +108,7 @@ segment::segment(ze::compression method)
 {
   header_.version = version;
   header_.compression = method;
-  header_.start = ze::clock::now();
+  header_.start = ze::now();
   header_.end = header_.start;
 }
 

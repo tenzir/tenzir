@@ -25,9 +25,9 @@ static ze::value_type to_ze_type(int broccoli_type)
     case BRO_TYPE_DOUBLE:
       return ze::double_type;
     case BRO_TYPE_TIME:
-      return ze::timepoint_type;
+      return ze::time_point_type;
     case BRO_TYPE_INTERVAL:
-      return ze::duration_type;
+      return ze::time_range_type;
     case BRO_TYPE_STRING:
       return ze::string_type;
     case BRO_TYPE_PATTERN:
@@ -163,7 +163,7 @@ int broccoli::factory::set_callback(void *key_data, set_data const* data)
 void broccoli::factory::make_event(ze::event& event, BroEvMeta* meta)
 {
   event.name(meta->ev_name);
-  event.timestamp(meta->ev_ts);
+  event.timestamp(ze::time_range(meta->ev_ts));
 
   event.reserve(meta->ev_numargs);
   for (int i = 0; i < meta->ev_numargs; ++i)
@@ -206,9 +206,9 @@ ze::value broccoli::factory::make_value(int type, void* bro_val)
     case BRO_TYPE_DOUBLE:
       return *static_cast<double*>(bro_val);
     case BRO_TYPE_TIME:
-        return ze::time_point(ze::to_duration(*static_cast<double*>(bro_val)));
+        return ze::time_point(ze::time_range(*static_cast<double*>(bro_val)));
     case BRO_TYPE_INTERVAL:
-        return ze::to_duration(*static_cast<double*>(bro_val));;
+        return ze::time_range(*static_cast<double*>(bro_val));;
     case BRO_TYPE_STRING:
       {
         BroString* s = static_cast<BroString*>(bro_val);
@@ -313,7 +313,7 @@ struct broccoli::reverse_factory::builder
   result_type operator()(int64_t i) const;
   result_type operator()(uint64_t i) const;
   result_type operator()(double d) const;
-  result_type operator()(ze::duration d) const;
+  result_type operator()(ze::time_range r) const;
   result_type operator()(ze::time_point t) const;
   result_type operator()(ze::string const& s) const;
   result_type operator()(ze::regex const& s) const;
@@ -384,9 +384,9 @@ broccoli::reverse_factory::builder::operator()(ze::regex const& r) const
 }
 
 broccoli::reverse_factory::bro_val
-broccoli::reverse_factory::builder::operator()(ze::duration d) const
+broccoli::reverse_factory::builder::operator()(ze::time_range r) const
 {
-  double secs = ze::to_double(d);
+  double secs = r.to_double();
   bro_val b;
   b.type = BRO_TYPE_INTERVAL;
   b.value = *reinterpret_cast<double**>(&secs);

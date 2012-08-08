@@ -97,7 +97,7 @@ public:
 
   virtual void visit(expr::timestamp_extractor const&)
   {
-    assert(rhs_.which() == ze::timepoint_type);
+    assert(rhs_.which() == ze::time_point_type);
     assert(op_ != nullptr);
 
     switch (op_->type())

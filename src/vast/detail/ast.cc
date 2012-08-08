@@ -101,7 +101,7 @@ struct validator : public boost::static_visitor<bool>
     return
       (lhs == "name" && (rhs_type == ze::string_type
                          || rhs_type == ze::regex_type))
-      || (lhs == "time" && rhs_type == ze::timepoint_type)
+      || (lhs == "time" && rhs_type == ze::time_point_type)
       || (lhs == "id" && rhs_type == ze::uint_type);
   }
 

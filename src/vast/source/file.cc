@@ -247,9 +247,9 @@ ze::value_type bro2::bro_to_ze(ze::string const& type)
   else if (type == "double")
     return ze::double_type;
   else if (type == "interval")
-    return ze::duration_type;
+    return ze::time_range_type;
   else if (type == "time")
-    return ze::timepoint_type;
+    return ze::time_point_type;
   else if (type == "addr")
     return ze::address_type;
   else if (type == "port")
@@ -271,7 +271,7 @@ ze::event bro2::parse(std::string const& line)
     throw error::parse("inconsistent number of fields");
 
   ze::event e(path_);
-  e.timestamp(ze::clock::now());
+  e.timestamp(ze::now());
   size_t sets = 0;
   for (size_t f = 0; f < fs.fields(); ++f)
   {
@@ -329,7 +329,7 @@ bro15conn::bro15conn(cppa::actor_ptr ingestor,
 ze::event bro15conn::parse(std::string const& line)
 {
   ze::event e("bro::conn");
-  e.timestamp(ze::clock::now());
+  e.timestamp(ze::now());
 
   ze::util::field_splitter<std::string::const_iterator> fs;
   fs.split(line.begin(), line.end(), 13);
@@ -339,7 +339,7 @@ ze::event bro15conn::parse(std::string const& line)
   // Timestamp
   auto i = fs.start(0);
   auto j = fs.end(0);
-  e.emplace_back(ze::value::parse(ze::timepoint_type, i, j));
+  e.emplace_back(ze::value::parse(ze::time_point_type, i, j));
   if (i != j)
     throw error::parse("invalid conn.log timestamp (field 1)");
 
@@ -352,7 +352,7 @@ ze::event bro15conn::parse(std::string const& line)
   }
   else
   {
-    e.emplace_back(ze::value::parse(ze::duration_type, i, j));
+    e.emplace_back(ze::value::parse(ze::time_range_type, i, j));
     if (i != j)
       throw error::parse("invalid conn.log duration (field 2)");
   }
