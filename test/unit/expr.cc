@@ -1,6 +1,6 @@
 #include <boost/test/unit_test.hpp>
 
-#include <ze/event.h>
+#include <ze.h>
 #include <vast/exception.h>
 #include <vast/expression.h>
 
@@ -82,6 +82,7 @@ BOOST_AUTO_TEST_CASE(offset_queries)
 
   event = {"foo", ze::record{-1337, ze::record{ze::record{true, false}}}};
   expr.parse("@0,1,0,0 == T");
+  std::cout << event << std::endl;
   BOOST_CHECK(expr.eval(event));
   expr.parse("@0,1,0,1 == F");
   BOOST_CHECK(expr.eval(event));

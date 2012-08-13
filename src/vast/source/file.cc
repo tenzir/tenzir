@@ -1,7 +1,8 @@
 #include <vast/source/file.h>
 
 #include <ze.h>
-#include <ze/util/parse_helpers.h>
+#include <ze/parse.h>
+#include "vast/util/field_splitter.h"
 #include "vast/exception.h"
 #include "vast/logger.h"
 
@@ -84,7 +85,7 @@ void bro2::parse_header()
   if (line_.empty() || line_[0] != '#')
     throw error::parse("no meta character '#' at start of first line");
 
-  ze::util::field_splitter<std::string::const_iterator> fs;
+  util::field_splitter<std::string::const_iterator> fs;
   fs.split(line_.begin(), line_.end());
   if (fs.fields() != 2 || std::string(fs.start(0), fs.end(0)) != "#separator")
     throw error::parse("invalid #separator definition");
@@ -112,7 +113,7 @@ void bro2::parse_header()
     if (! next())
       throw error::parse("could not extract second log line");
 
-    ze::util::field_splitter<std::string::const_iterator> fs;
+    util::field_splitter<std::string::const_iterator> fs;
     fs.sep(separator_.data(), separator_.size());
     fs.split(line_.begin(), line_.end());
     if (fs.fields() != 2 || std::string(fs.start(0), fs.end(0)) != "#set_separator")
@@ -126,7 +127,7 @@ void bro2::parse_header()
     if (! next())
       throw error::parse("could not extract third log line");
 
-    ze::util::field_splitter<std::string::const_iterator> fs;
+    util::field_splitter<std::string::const_iterator> fs;
     fs.sep(separator_.data(), separator_.size());
     fs.split(line_.begin(), line_.end());
     if (fs.fields() != 2 || std::string(fs.start(0), fs.end(0)) != "#empty_field")
@@ -140,7 +141,7 @@ void bro2::parse_header()
     if (! next())
       throw error::parse("could not extract fourth log line");
 
-    ze::util::field_splitter<std::string::const_iterator> fs;
+    util::field_splitter<std::string::const_iterator> fs;
     fs.sep(separator_.data(), separator_.size());
     fs.split(line_.begin(), line_.end());
     if (fs.fields() != 2 || std::string(fs.start(0), fs.end(0)) != "#unset_field")
@@ -154,7 +155,7 @@ void bro2::parse_header()
     if (! next())
       throw error::parse("could not extract fifth log line");
 
-    ze::util::field_splitter<std::string::const_iterator> fs;
+    util::field_splitter<std::string::const_iterator> fs;
     fs.sep(separator_.data(), separator_.size());
     fs.split(line_.begin(), line_.end());
     if (fs.fields() != 2 || std::string(fs.start(0), fs.end(0)) != "#path")
@@ -167,7 +168,7 @@ void bro2::parse_header()
     if (! next())
       throw error::parse("could not extract sixth log line");
 
-    ze::util::field_splitter<std::string::const_iterator> fs;
+    util::field_splitter<std::string::const_iterator> fs;
     fs.sep(separator_.data(), separator_.size());
     fs.split(line_.begin(), line_.end());
 
@@ -179,7 +180,7 @@ void bro2::parse_header()
     if (! next())
       throw error::parse("could not extract seventh log line");
 
-    ze::util::field_splitter<std::string::const_iterator> fs;
+    util::field_splitter<std::string::const_iterator> fs;
     fs.sep(separator_.data(), separator_.size());
     fs.split(line_.begin(), line_.end());
 
@@ -264,7 +265,7 @@ ze::value_type bro2::bro_to_ze(ze::string const& type)
 
 ze::event bro2::parse(std::string const& line)
 {
-  ze::util::field_splitter<std::string::const_iterator> fs;
+  util::field_splitter<std::string::const_iterator> fs;
   fs.sep(separator_.data(), separator_.size());
   fs.split(line.begin(), line.end());
   if (fs.fields() != field_types_.size())
@@ -278,6 +279,7 @@ ze::event bro2::parse(std::string const& line)
     auto start = fs.start(f);
     auto end = fs.end(f);
 
+    // Check whether the field is set. (Not '-' by default.)
     auto unset = true;
     for (size_t i = 0; i < unset_field_.size(); ++i)
     {
@@ -293,6 +295,7 @@ ze::event bro2::parse(std::string const& line)
       continue;
     }
 
+    // Check whether the field empty. (Not "(empty)" by default.)
     auto empty = true;
     for (size_t i = 0; i < empty_field_.size(); ++i)
     {
@@ -308,12 +311,24 @@ ze::event bro2::parse(std::string const& line)
       continue;
     }
 
-    ze::value v;
+    // Parse the field according to its type, sets are still special.
     if (field_types_[f] == ze::set_type)
-      v = ze::set::parse(set_types_[sets++], start, end, set_separator_);
+    {
+      ze::set s;
+      // TODO: take care of escaped set separators.
+      auto success = ze::parse(start, end, s, set_types_[sets++], set_separator_);
+      if (! success)
+        throw error::parse("invalid set syntax");
+      e.emplace_back(std::move(s));
+    }
     else
-      v = ze::value::parse(field_types_[f], start, end);
-    e.emplace_back(std::move(v));
+    {
+      ze::value v;
+      auto success = ze::parse(start, end, v, field_types_[f]);
+      if (! success)
+        throw error::parse("could not parse field");
+      e.push_back(std::move(v));
+    }
   }
 
   return e;
@@ -331,7 +346,7 @@ ze::event bro15conn::parse(std::string const& line)
   ze::event e("bro::conn");
   e.timestamp(ze::now());
 
-  ze::util::field_splitter<std::string::const_iterator> fs;
+  util::field_splitter<std::string::const_iterator> fs;
   fs.split(line.begin(), line.end(), 13);
   if (! (fs.fields() == 12 || fs.fields() == 13))
     throw error::parse("not enough conn.log fields (at least 12 needed)");
@@ -339,9 +354,10 @@ ze::event bro15conn::parse(std::string const& line)
   // Timestamp
   auto i = fs.start(0);
   auto j = fs.end(0);
-  e.emplace_back(ze::value::parse(ze::time_point_type, i, j));
-  if (i != j)
+  ze::time_range range;
+  if (! ze::parse(i, j, range) || i != j) 
     throw error::parse("invalid conn.log timestamp (field 1)");
+  e.emplace_back(ze::time_point(range));
 
   // Duration
   i = fs.start(1);
@@ -352,24 +368,26 @@ ze::event bro15conn::parse(std::string const& line)
   }
   else
   {
-    e.emplace_back(ze::value::parse(ze::time_range_type, i, j));
-    if (i != j)
+    ze::time_range range;
+    if (! ze::parse(i, j, range) || i != j) 
       throw error::parse("invalid conn.log duration (field 2)");
+    e.emplace_back(range);
   }
 
   // Originator address
   i = fs.start(2);
   j = fs.end(2);
-  e.emplace_back(ze::value::parse(ze::address_type, i, j));
-  if (i != j)
+  ze::address addr;
+  if (! ze::parse(i, j, addr) || i != j) 
     throw error::parse("invalid conn.log originating address (field 3)");
+  e.emplace_back(std::move(addr));
 
   // Responder address
   i = fs.start(3);
   j = fs.end(3);
-  e.emplace_back(ze::value::parse(ze::address_type, i, j));
-  if (i != j)
+  if (! ze::parse(i, j, addr) || i != j) 
     throw error::parse("invalid conn.log responding address (field 4)");
+  e.emplace_back(std::move(addr));
 
   // Service
   i = fs.start(4);
@@ -380,40 +398,40 @@ ze::event bro15conn::parse(std::string const& line)
   }
   else
   {
-    e.emplace_back(ze::value::parse(ze::string_type, i, j));
-    if (i != j)
+    ze::string service;
+    if (! ze::parse(i, j, service) || i != j) 
       throw error::parse("invalid conn.log service (field 5)");
+    e.emplace_back(std::move(service));
   }
 
   // Ports and protocol
   i = fs.start(5);
   j = fs.end(5);
-  auto orig_p = ze::value::parse(ze::port_type, i, j);
-  if (i != j)
+  ze::port orig_p;
+  if (! ze::parse(i, j, orig_p) || i != j) 
     throw error::parse("invalid conn.log originating port (field 6)");
 
   i = fs.start(6);
   j = fs.end(6);
-  auto resp_p = ze::value::parse(ze::port_type, i, j);
-  if (i != j)
+  ze::port resp_p;
+  if (! ze::parse(i, j, resp_p) || i != j) 
     throw error::parse("invalid conn.log responding port (field 7)");
 
   i = fs.start(7);
   j = fs.end(7);
-  auto proto = ze::value::parse(ze::string_type, i, j);
-  if (i != j)
+  ze::string proto;
+  if (! ze::parse(i, j, proto) || i != j) 
     throw error::parse("invalid conn.log proto (field 8)");
 
-  auto& str = proto.get<ze::string>();
   auto p = ze::port::unknown;
-  if (str == "tcp")
+  if (proto == "tcp")
     p = ze::port::tcp;
-  else if (str == "udp")
+  else if (proto == "udp")
     p = ze::port::udp;
-  else if (str == "icmp")
+  else if (proto == "icmp")
     p = ze::port::icmp;
-  orig_p.get<ze::port>().type(p);
-  resp_p.get<ze::port>().type(p);
+  orig_p.type(p);
+  resp_p.type(p);
   e.emplace_back(std::move(orig_p));
   e.emplace_back(std::move(resp_p));
   e.emplace_back(std::move(proto));
@@ -427,9 +445,10 @@ ze::event bro15conn::parse(std::string const& line)
   }
   else
   {
-    e.emplace_back(ze::value::parse(ze::uint_type, i, j));
-    if (i != j)
+    uint64_t orig_bytes;
+    if (! ze::parse(i, j, orig_bytes) || i != j) 
       throw error::parse("invalid conn.log originating bytes (field 9)");
+    e.emplace_back(orig_bytes);
   }
 
   i = fs.start(8);
@@ -440,33 +459,37 @@ ze::event bro15conn::parse(std::string const& line)
   }
   else
   {
-    e.emplace_back(ze::value::parse(ze::uint_type, i, j));
-    if (i != j)
+    uint64_t resp_bytes;
+    if (! ze::parse(i, j, resp_bytes) || i != j) 
       throw error::parse("invalid conn.log responding bytes (field 10)");
+    e.emplace_back(resp_bytes);
   }
 
   // Connection state
   i = fs.start(10);
   j = fs.end(10);
-  e.emplace_back(ze::string::parse(i, j));
-  if (i != j)
+  ze::string state;
+  if (! ze::parse(i, j, state) || i != j) 
     throw error::parse("invalid conn.log connection state (field 11)");
+  e.emplace_back(std::move(state));
 
   // Direction
   i = fs.start(11);
   j = fs.end(11);
-  e.emplace_back(ze::string::parse(i, j));
-  if (i != j)
+  ze::string direction;
+  if (! ze::parse(i, j, direction) || i != j) 
     throw error::parse("invalid conn.log direction (field 12)");
+  e.emplace_back(std::move(direction));
 
   // Additional information
   if (fs.fields() == 13)
   {
     i = fs.start(12);
     j = fs.end(12);
-    e.emplace_back(ze::string::parse(i, j));
-    if (i != j)
-      throw error::parse("invalid conn.log direction (field 12)");
+    ze::string addl;
+    if (! ze::parse(i, j, addl) || i != j) 
+      throw error::parse("invalid conn.log additional data (field 13)");
+    e.emplace_back(std::move(addl));
   }
 
   return e;

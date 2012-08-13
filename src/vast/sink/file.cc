@@ -1,7 +1,6 @@
 #include "vast/sink/file.h"
 
 #include <ze/event.h>
-#include <ze/util/parse_helpers.h>
 #include "vast/exception.h"
 #include "vast/logger.h"
 

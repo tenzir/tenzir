@@ -5,7 +5,7 @@
 #define BOOST_SPIRIT_NO_PREDEFINED_TERMINALS
 
 #include <boost/spirit/include/qi.hpp>
-#include <ze/parser/value.h>
+#include <ze/detail/parser/value.h>
 #include "vast/detail/ast.h"
 #include "vast/util/parser/error_handler.h"
 #include "vast/util/parser/skipper.h"
@@ -35,7 +35,7 @@ struct expression : qi::grammar<Iterator, ast::expression(), skipper<Iterator>>
     qi::symbols<char, ast::expr_operator>
         unary_op, binary_op;
 
-    ze::parser::value<Iterator> val;
+    ze::detail::parser::value<Iterator> val;
 };
 
 } // namespace ast
