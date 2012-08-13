@@ -80,10 +80,9 @@ BOOST_AUTO_TEST_CASE(offset_queries)
   expr.parse("@1,2,3 ~ /foo/");   // And again too deep.
   BOOST_CHECK(! expr.eval(event));
 
-  event = {"foo", ze::record{-1337, ze::record{ze::record{true, false}}}};
-  expr.parse("@0,1,0,0 == T");
-  std::cout << event << std::endl;
+  event = {"foo", -1337, ze::record{ze::record{true, false}}};
+  expr.parse("@1,0,0 == T");
   BOOST_CHECK(expr.eval(event));
-  expr.parse("@0,1,0,1 == F");
+  expr.parse("@1,0,1 == F");
   BOOST_CHECK(expr.eval(event));
 }
