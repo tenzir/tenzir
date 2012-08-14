@@ -110,12 +110,12 @@ void event_source::ask_for_new_ids(size_t n)
 
         send(self, atom("extract"), static_cast<size_t>(upper - lower));
       },
-      after(std::chrono::seconds(5)) >> [=]
+      after(std::chrono::seconds(10)) >> [=]
       {
         LOG(error, ingest)
           << "event source @" << id()
           << " did not receive new id range from tracker"
-          << " after 5 seconds";
+          << " after 10 seconds";
       });
 }
 
