@@ -151,6 +151,9 @@ public:
   /// Retrieves the segment header for inspection.
   header const& head() const;
 
+  /// Retrieves the number of events in the segment.
+  uint32_t events() const;
+
   /// Retrieves the number of bytes the segment occupies.
   /// @return The number of bytes the segment occupies.
   size_t bytes() const;
@@ -182,7 +185,6 @@ private:
   friend void deserialize(Archive& ia, segment& s)
   {
     ia >> s.header_;
-
 
     uint32_t n;
     ia >> n;

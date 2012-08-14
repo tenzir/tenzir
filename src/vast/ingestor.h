@@ -5,7 +5,8 @@
 
 namespace vast {
 
-/// The ingestion component.
+/// The ingestor. This component manages different types of event sources, each
+/// of which generate events in a different manner.
 class ingestor : public cppa::sb_actor<ingestor>
 {
   friend class cppa::sb_actor<ingestor>;
@@ -20,9 +21,11 @@ public:
            cppa::actor_ptr index);
 
 private:
-  void forward(cppa::any_tuple s);
-  void remove(cppa::actor_ptr src);
   void shutdown();
+
+  size_t total_events_ = 0;
+  size_t last_total_events_ = 0;
+  std::chrono::system_clock::time_point last_measurement_;
 
   size_t max_events_per_chunk_ = 0; ///< The maximum number of events per chunk.
   size_t max_segment_size_ = 0;     ///< The maximum segment size in bytes.

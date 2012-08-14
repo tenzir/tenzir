@@ -1,10 +1,9 @@
 #include <vast/source/broccoli.h>
 
 #include <algorithm>
-#include <ze/event.h>
+#include <ze.h>
 #include "vast/comm/connection.h"
 #include "vast/logger.h"
-#include "vast/segmentizer.h"
 
 namespace vast {
 namespace source {
@@ -19,8 +18,8 @@ broccoli::broccoli(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
       on(atom("initialize"), arg_match) >> [=](size_t max_events_per_chunk,
                                                size_t max_segment_size)
       {
-        segmentizer_ = spawn<segmentizer>(max_events_per_chunk,
-                                          max_segment_size);
+        //segmentizer_ = spawn<segmentizer>(max_events_per_chunk,
+        //                                  max_segment_size);
       },
       on(atom("subscribe"), arg_match) >> [=](std::string const& event)
       {
@@ -31,14 +30,11 @@ broccoli::broccoli(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
       },
       on(atom("bind"), arg_match) >> [=](std::string const& host, unsigned port)
       {
-        assert(segmentizer_);
         start_server(host, port);
       },
       on(atom("shutdown")) >> [=]()
       {
         stop_server();
-        // TODO: make sure last segment get's accommodated.
-        segmentizer_ << last_dequeued();
         quit();
         LOG(verbose, ingest) << "bro event source @" << id() << " terminated";
       });
@@ -64,8 +60,9 @@ void broccoli::start_server(std::string const& host, unsigned port)
             conn,
             [=](ze::event event)
             {
-              // FIXME: assign events an ID from the tracker.
-              send(segmentizer_, std::move(event));
+              // FIXME: derive from async_event_source and invoke event
+              // callback.
+              DBG(ingest) << event;
             });
 
         for (auto const& event : event_names_)

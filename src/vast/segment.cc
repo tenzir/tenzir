@@ -124,6 +124,11 @@ segment::header const& segment::head() const
   return header_;
 }
 
+uint32_t segment::events() const
+{
+  return header_.events;
+}
+
 size_t segment::bytes() const
 {
   // FIXME: compute incrementally rather than ad-hoc.

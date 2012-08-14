@@ -1,32 +1,30 @@
 #include "vast/event_source.h"
 
-#include <ze/event.h>
+#include <ze.h>
 #include "vast/exception.h"
 #include "vast/logger.h"
-#include "vast/segmentizer.h"
 
 namespace vast {
 
 event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
-  : tracker_(tracker)
+  : writer_(segment_)
+  , ingestor_(ingestor)
+  , tracker_(tracker)
 {
-  LOG(verbose, ingest) << "spawning event source @" << id();
-
   using namespace cppa;
   chaining(false);
   init_state = (
       on(atom("initialize"), arg_match) >> [=](size_t max_events_per_chunk,
                                                size_t max_segment_size)
       {
-        segmentizer_ = spawn<segmentizer>(max_events_per_chunk,
-                                          max_segment_size);
+        max_events_per_chunk_ = max_events_per_chunk;
+        max_segment_size_ = max_segment_size;
       },
       on(atom("extract"), arg_match) >> [=](size_t n)
       {
-        assert(segmentizer_);
         if (finished_)
         {
-          send(ingestor, atom("source"), atom("done"));
+          send(self, atom("shutdown"));
           return;
         }
 
@@ -36,22 +34,22 @@ event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
           return;
         }
 
-        std::vector<ze::event> events;
-        events.reserve(n);
-        size_t i = 0;
-        while (i < n)
+        size_t extracted = 0;
+        while (extracted < n)
         {
           if (finished_)
-            break;
+          {
+            send(self, atom("shutdown"));
+            return;
+          }
 
           try
           {
             auto e = extract();
             assert(next_id_ != last_id_);
-
             e.id(next_id_++);
-            events.push_back(std::move(e));
-            ++i;
+            segmentize(e);
+            ++extracted;
           }
           catch (error::parse const& e)
           {
@@ -59,32 +57,21 @@ event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
           }
         }
 
-        auto extracted = events.size();
-        if (! events.empty())
-        {
-          total_events_ += extracted;
-
-          DBG(ingest)
-            << "event source @" << id()
-            << " sends " << extracted
-            << " events to upstream @" << segmentizer_->id()
-            << " (cumulative events: " << total_events_ << ')';
-
-          send(segmentizer_, std::move(events));
-        }
-
-        send(ingestor,
-             atom("source"),
-             finished_ ? atom("done") : atom("ack"),
-             extracted);
-      },
-      on_arg_match >> [=](segment const& /* s */)
-      {
-        ingestor << last_dequeued();
+        total_events_ += extracted;
+        send(ingestor_, atom("source"), atom("ack"), extracted);
       },
       on(atom("shutdown")) >> [=]
       {
-        forward_to(segmentizer_);
+        if (segment_.events() > 0)
+        {
+          if (writer_.elements() > 0)
+            writer_.flush_chunk();
+
+          ship_segment();
+        }
+
+        send(ingestor_, atom("shutdown"), atom("ack"), total_events_);
+
         quit();
         LOG(verbose, ingest) << "event source @" << id() << " terminated";
       });
@@ -118,6 +105,33 @@ void event_source::ask_for_new_ids(size_t n)
           << " did not receive new id range from tracker"
           << " after 5 seconds";
       });
+}
+
+void event_source::segmentize(ze::event const& e)
+{
+  auto n = writer_ << e;
+  if (n % max_events_per_chunk_ != 0)
+    return;
+
+  writer_.flush_chunk();
+
+  if (writer_.bytes() - writer_bytes_at_last_rotate_ < max_segment_size_)
+    return;
+
+  writer_bytes_at_last_rotate_ = writer_.bytes();
+
+  ship_segment();
+}
+
+void event_source::ship_segment()
+{
+  DBG(ingest)
+    << "event source @" << id()
+    << " ships segment " << segment_.id()
+    << " to ingestor @" << ingestor_->id();
+
+  send(ingestor_, std::move(segment_));
+  segment_ = segment();
 }
 
 } // namespace vast

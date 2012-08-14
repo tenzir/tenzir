@@ -114,6 +114,8 @@ bool program::start()
       tracker_ = remote_actor(
           config_.get<std::string>("tracker.host"),
           config_.get<unsigned>("tracker.port"));
+
+      LOG(verbose, core) << "connected to tracker actor @" << tracker_->id();
     }
 
     if (config_.check("archive-actor") || config_.check("all-server"))
@@ -137,6 +139,8 @@ bool program::start()
       archive_ = remote_actor(
           config_.get<std::string>("archive.host"),
           config_.get<unsigned>("archive.port"));
+
+      LOG(verbose, core) << "connected to archive actor @" << archive_->id();
     }
 
     if (config_.check("index-actor") || config_.check("all-server"))
@@ -160,6 +164,8 @@ bool program::start()
       index_ = remote_actor(
           config_.get<std::string>("index.host"),
           config_.get<unsigned>("index.port"));
+
+      LOG(verbose, core) << "connected to index actor @" << index_->id();
     }
 
 
@@ -194,6 +200,8 @@ bool program::start()
             LOG(error, core) << "no such file: " << file;
         }
       }
+
+      send(ingestor_, atom("extract"));
     }
 
     if (config_.check("search-actor") || config_.check("all-server"))
@@ -214,6 +222,8 @@ bool program::start()
       search_ = remote_actor(
           config_.get<std::string>("search.host"),
           config_.get<unsigned>("search.port"));
+
+      LOG(verbose, core) << "connected to search actor @" << search_->id();
 
       auto paginate = config_.get<unsigned>("query.paginate");
       auto& expression = config_.get<std::string>("expression");

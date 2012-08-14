@@ -44,6 +44,9 @@ public:
 protected:
   virtual ze::event extract();
   virtual ze::event parse(std::string const& line) = 0;
+
+  /// Retrieves the next line from the file.
+  /// @return `true` if extracting was successful.
   bool next();
 
   size_t current_line_ = 0;

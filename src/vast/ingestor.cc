@@ -10,10 +10,13 @@
 
 namespace vast {
 
+using namespace cppa;
+
 ingestor::ingestor(cppa::actor_ptr tracker,
                    cppa::actor_ptr archive,
                    cppa::actor_ptr index)
-  : archive_(archive)
+  : last_measurement_(std::chrono::system_clock::now())
+  , archive_(archive)
   , index_(index)
 {
   // FIXME: make batch size configurable.
@@ -21,7 +24,6 @@ ingestor::ingestor(cppa::actor_ptr tracker,
 
   LOG(verbose, ingest) << "spawning ingestor @" << id();
 
-  using namespace cppa;
   chaining(false);
   init_state = (
       on(atom("initialize"), arg_match) >> [=](size_t max_events_per_chunk,
@@ -45,35 +47,63 @@ ingestor::ingestor(cppa::actor_ptr tracker,
 
         send(broccoli_, atom("bind"), host, port);
       },
-      on(atom("ingest"), "bro15conn", arg_match) >> [=](std::string const& filename)
+      on(atom("ingest"), "bro15conn", arg_match) >> [=](std::string const& file)
       {
-        auto src = spawn<source::bro15conn>(self, tracker, filename);
-        send(src, atom("initialize"), max_events_per_chunk_, max_segment_size_);
-        send(src, atom("extract"), batch_size);
-        sources_.push_back(src);
+        auto source = spawn<source::bro15conn>(self, tracker, file);
+        sources_.push_back(source);
+        send(source, atom("initialize"), max_events_per_chunk_,
+             max_segment_size_);
       },
-      on(atom("ingest"), "bro2", arg_match) >> [=](std::string const& filename)
+      on(atom("ingest"), "bro2", arg_match) >> [=](std::string const& file)
       {
-        auto src = spawn<source::bro2>(self, tracker, filename);
-        send(src, atom("initialize"), max_events_per_chunk_, max_segment_size_);
-        send(src, atom("extract"), batch_size);
-        sources_.push_back(src);
+        auto source = spawn<source::bro2>(self, tracker, file);
+        sources_.push_back(source);
+        send(source, atom("initialize"), max_events_per_chunk_,
+             max_segment_size_);
       },
       on(atom("ingest"), val<std::string>, arg_match) >> [=](std::string const&)
       {
         LOG(error, ingest) << "invalid ingestion file type";
       },
-      on(atom("source"), atom("ack"), arg_match) >> [=](size_t extracted)
+      on(atom("extract")) >> [=]
       {
-        reply(atom("extract"), batch_size);
+        for (auto source : sources_)
+          send(source, atom("extract"), batch_size);
       },
-      on(atom("source"), atom("done"), arg_match) >> [=](size_t extracted)
+      on(atom("source"), atom("ack"), arg_match) >> [=](size_t events)
       {
-        remove(last_sender());
+        total_events_ += events;
+        auto event_delta = total_events_ - last_total_events_;
+        last_total_events_ = total_events_;
+
+        auto now = std::chrono::system_clock::now();
+        auto time_delta = std::chrono::duration_cast<std::chrono::microseconds>(
+            now - last_measurement_);
+
+        if (time_delta > std::chrono::seconds(1))
+        {
+          last_measurement_ = now;
+          LOG(verbose, ingest)
+            << "ingestor @" << id()
+            << " ingests at rate "
+            << event_delta * 1000000 / time_delta.count()
+            << " events/sec";
+        }
+
+        reply(atom("extract"), batch_size);
       },
       on_arg_match >> [=](segment const& /* s */)
       {
-        forward(last_dequeued());
+        auto opt = tuple_cast<segment>(last_dequeued());
+        assert(opt.valid());
+
+        DBG(ingest) << "ingestor @" << id()
+          << " relays segment " << get<0>(*opt).id()
+          << " to archive @" << archive_->id()
+          << " and index @" << index_->id();
+
+        send(index_, atom("build"), get<0>(*opt));
+        send(archive_, atom("put"), get<0>(*opt));
       },
       on(atom("shutdown")) >> [=]
       {
@@ -84,65 +114,25 @@ ingestor::ingestor(cppa::actor_ptr tracker,
 
         if (sources_.empty())
           shutdown();
+        else
+          for (auto source : sources_)
+            source << last_dequeued();
+      },
+      on(atom("shutdown"), atom("ack"), arg_match) >> [=](size_t events)
+      {
+        auto i = std::find(sources_.begin(), sources_.end(), last_sender());
+        assert(i != sources_.end());
+        sources_.erase(i);
 
-        for (auto src : sources_)
-          remove(src);
+        if (sources_.empty() && terminating_)
+          shutdown();
       });
-}
-
-void ingestor::forward(cppa::any_tuple s)
-{
-  using namespace cppa;
-  auto opt = tuple_cast<segment>(s);
-  assert(opt.valid());
-  send(index_, atom("build"), get<0>(*opt));
-  send(archive_, atom("put"), get<0>(*opt));
-}
-
-void ingestor::remove(cppa::actor_ptr src)
-{
-  auto i = std::find(sources_.begin(), sources_.end(), src);
-  assert(i != sources_.end());
-  sources_.erase(i);
-
-  using namespace cppa;
-  handle_response(sync_send(src, atom("shutdown")))(
-    on(arg_match) >> [=](segment const& s)
-    {
-      DBG(ingest) << "ingestor @" << id()
-        << " received last segment @" << s.id()
-        << " from @" << last_sender()->id();
-
-      forward(last_dequeued());
-      if (sources_.empty() && terminating_)
-        shutdown();
-    },
-    on(atom("done")) >> [=]
-    {
-      DBG(ingest) << "ingestor @" << id()
-        << " received done message"
-        << " from @" << last_sender()->id();
-
-      if (sources_.empty() && terminating_)
-        shutdown();
-    },
-    after(std::chrono::seconds(3)) >> [=]
-    {
-      LOG(error, ingest)
-        << "event source @" << src->id()
-        << " terminated, but could not reliable shutdown"
-        << " @" << last_sender()->id()
-        << ", buffered events may be lost";
-
-      if (sources_.empty() && terminating_)
-        shutdown();
-    });
 }
 
 void ingestor::shutdown()
 {
   quit();
-  LOG(verbose, ingest) << "ingestor @" << id() << " termianted";
+  LOG(verbose, ingest) << "ingestor @" << id() << " terminated";
 }
 
 } // namespace vast
