@@ -52,7 +52,7 @@ profiler::profiler(std::string const& log_dir, std::chrono::seconds secs)
   file_.open(f.data());
 
   LOG(verbose, core) << "spawning profiler @" << id();
-  LOG(verbose, core)
+  LOG(info, core)
     << "enabling getrusage profiling every "
     << (secs.count() == 1 ?
         std::string("second") :
@@ -116,7 +116,7 @@ profiler::profiler(std::string const& log_dir, std::chrono::seconds secs)
         ProfilerGetCurrentState(&state);
         if (state.enabled)
         {
-          LOG(verbose, core)
+          LOG(info, core)
             << "Gperftools CPU profiler gathered "
             <<  state.samples_gathered << " samples"
             << " in file " << state.profile_name;
