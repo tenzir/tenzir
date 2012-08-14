@@ -169,8 +169,7 @@ query::query(cppa::actor_ptr archive,
 
 void query::run()
 {
-  auto future = sync_send(index_, atom("hit"), expr_);
-  handle_response(future)(
+  handle_response(sync_send(index_, atom("hit"), expr_))(
       on(atom("hit"), arg_match) >> [=](std::vector<ze::uuid> const& ids)
       {
         LOG(info, query)
@@ -179,8 +178,7 @@ void query::run()
 
         auto opt = tuple_cast<anything, std::vector<ze::uuid>>(last_dequeued());
         assert(opt.valid());
-        cow_tuple<std::vector<ze::uuid>> id_tuple(*opt);
-        send(self, id_tuple);
+        send(self, get<0>(*opt));
       },
       on(atom("impossible")) >> [=]
       {
