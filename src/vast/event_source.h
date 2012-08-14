@@ -42,7 +42,7 @@ private:
 
   uint64_t next_id_ = 0;
   uint64_t last_id_ = 0;
-
+  size_t total_events_ = 0;
   util::temporal_accumulator<size_t> events_;
 
   size_t max_events_per_chunk_ = 0;

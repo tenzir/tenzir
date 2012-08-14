@@ -39,10 +39,7 @@ event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
         while (extracted < n)
         {
           if (finished_)
-          {
-            send(self, atom("shutdown"));
-            return;
-          }
+            break;
 
           try
           {
@@ -51,6 +48,7 @@ event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
             e.id(next_id_++);
             segmentize(e);
             ++extracted;
+            ++total_events_;
           }
           catch (error::parse const& e)
           {
@@ -69,7 +67,10 @@ event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
             << ")";
         }
 
-        send(ingestor_, atom("source"), atom("ack"), extracted);
+        if (finished_)
+            send(self, atom("shutdown"));
+        else
+          send(ingestor_, atom("source"), atom("ack"), extracted);
       },
       on(atom("shutdown")) >> [=]
       {
@@ -81,7 +82,7 @@ event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
           ship_segment();
         }
 
-        send(ingestor_, atom("shutdown"), atom("ack"), events_.sum());
+        send(ingestor_, atom("shutdown"), atom("ack"), total_events_);
 
         quit();
         LOG(verbose, ingest) << "event source @" << id() << " terminated";

@@ -114,6 +114,11 @@ public:
     return true;
   }
 
+  T current() const
+  {
+    return current_value_;
+  }
+
   T last() const
   {
     return last_value_;

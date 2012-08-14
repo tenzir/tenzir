@@ -70,9 +70,8 @@ ingestor::ingestor(cppa::actor_ptr tracker,
         for (auto source : sources_)
           send(source, atom("extract"), batch_size);
       },
-      on(atom("source"), atom("ack"), arg_match) >> [=](size_t events)
+      on(atom("source"), atom("ack"), arg_match) >> [=](size_t /* events */)
       {
-        total_events_ += events;
         reply(atom("extract"), batch_size);
       },
       on_arg_match >> [=](segment const& /* s */)
@@ -103,6 +102,7 @@ ingestor::ingestor(cppa::actor_ptr tracker,
       },
       on(atom("shutdown"), atom("ack"), arg_match) >> [=](size_t events)
       {
+        total_events_ += events;
         auto i = std::find(sources_.begin(), sources_.end(), last_sender());
         assert(i != sources_.end());
         sources_.erase(i);
