@@ -15,8 +15,7 @@ using namespace cppa;
 ingestor::ingestor(cppa::actor_ptr tracker,
                    cppa::actor_ptr archive,
                    cppa::actor_ptr index)
-  : last_measurement_(std::chrono::system_clock::now())
-  , archive_(archive)
+  : archive_(archive)
   , index_(index)
 {
   // FIXME: make batch size configurable.
