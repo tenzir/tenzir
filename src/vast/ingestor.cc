@@ -73,24 +73,6 @@ ingestor::ingestor(cppa::actor_ptr tracker,
       on(atom("source"), atom("ack"), arg_match) >> [=](size_t events)
       {
         total_events_ += events;
-        auto event_delta = total_events_ - last_total_events_;
-
-        auto now = std::chrono::system_clock::now();
-        auto time_delta = std::chrono::duration_cast<std::chrono::microseconds>(
-            now - last_measurement_);
-
-        if (time_delta > std::chrono::seconds(1))
-        {
-          last_measurement_ = now;
-          last_total_events_ = total_events_;
-
-          LOG(info, ingest)
-            << "ingestor @" << id()
-            << " ingests at rate "
-            << event_delta * 1000000 / time_delta.count()
-            << " events/sec";
-        }
-
         reply(atom("extract"), batch_size);
       },
       on_arg_match >> [=](segment const& /* s */)
@@ -137,7 +119,9 @@ ingestor::ingestor(cppa::actor_ptr tracker,
 void ingestor::shutdown()
 {
   quit();
-  LOG(verbose, ingest) << "ingestor @" << id() << " terminated";
+  LOG(verbose, ingest)
+      << "ingestor @" << id() << " terminated"
+      << " (ingested " << total_events_ << " events)";
 }
 
 } // namespace vast

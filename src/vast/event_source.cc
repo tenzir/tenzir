@@ -7,7 +7,8 @@
 namespace vast {
 
 event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
-  : writer_(segment_)
+  : events_(std::chrono::seconds(1))
+  , writer_(segment_)
   , ingestor_(ingestor)
   , tracker_(tracker)
 {
@@ -57,7 +58,17 @@ event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
           }
         }
 
-        total_events_ += extracted;
+        if (events_.timed_add(extracted) && events_.last() > 0)
+        {
+          LOG(info, ingest)
+            << "event source @" << id()
+            << " ingests at rate " << events_.last() << " events/sec"
+            << " (mean " << events_.mean()
+            << ", median " << events_.median()
+            << ", variance " << events_.variance()
+            << ")";
+        }
+
         send(ingestor_, atom("source"), atom("ack"), extracted);
       },
       on(atom("shutdown")) >> [=]
@@ -70,7 +81,7 @@ event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
           ship_segment();
         }
 
-        send(ingestor_, atom("shutdown"), atom("ack"), total_events_);
+        send(ingestor_, atom("shutdown"), atom("ack"), events_.sum());
 
         quit();
         LOG(verbose, ingest) << "event source @" << id() << " terminated";
