@@ -15,7 +15,7 @@ file::file(cppa::actor_ptr ingestor,
   : event_source(std::move(ingestor), std::move(tracker))
   , file_(filename)
 {
-  LOG(verbose, ingest)
+  LOG(info, ingest)
     << "spawning event source @" << id()
     << " for file " << filename;
 

@@ -333,7 +333,7 @@ void index::write(segment const& s)
 
 void index::build(segment::header const& hdr)
 {
-  LOG(verbose, index) << "index @" << id()
+  LOG(debug, index) << "index @" << id()
     << " builds in-memory indexes for segment " << hdr.id;
 
   assert(ids_.count(hdr.id) == 0);

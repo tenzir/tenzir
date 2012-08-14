@@ -74,7 +74,6 @@ ingestor::ingestor(cppa::actor_ptr tracker,
       {
         total_events_ += events;
         auto event_delta = total_events_ - last_total_events_;
-        last_total_events_ = total_events_;
 
         auto now = std::chrono::system_clock::now();
         auto time_delta = std::chrono::duration_cast<std::chrono::microseconds>(
@@ -83,7 +82,9 @@ ingestor::ingestor(cppa::actor_ptr tracker,
         if (time_delta > std::chrono::seconds(1))
         {
           last_measurement_ = now;
-          LOG(verbose, ingest)
+          last_total_events_ = total_events_;
+
+          LOG(info, ingest)
             << "ingestor @" << id()
             << " ingests at rate "
             << event_delta * 1000000 / time_delta.count()
@@ -123,6 +124,10 @@ ingestor::ingestor(cppa::actor_ptr tracker,
         auto i = std::find(sources_.begin(), sources_.end(), last_sender());
         assert(i != sources_.end());
         sources_.erase(i);
+
+        LOG(verbose, ingest)
+          << "ingestor @" << id()
+          << " received shutdown ack from source @" << last_sender()->id();
 
         if (sources_.empty() && terminating_)
           shutdown();
