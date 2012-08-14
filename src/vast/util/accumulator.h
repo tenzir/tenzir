@@ -1,6 +1,13 @@
 #ifndef VAST_UTIL_ACCUMULATOR_H
 #define VAST_UTIL_ACCUMULATOR_H
 
+// Boost Accumulators spits out quite a few warnings, which we'll disable here.
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-variable"
+#pragma clang diagnostic ignored "-Wunneeded-internal-declaration"
+#endif
+
 #include <chrono>
 #include <boost/accumulators/framework/accumulator_set.hpp>
 #include <boost/accumulators/framework/extractor.hpp>
@@ -133,5 +140,9 @@ private:
 
 } // namespace util
 } // namespace vast
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 #endif
