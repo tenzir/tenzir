@@ -1,18 +1,22 @@
-Installation notes
-==================
-
 Due to ABI incompatibilities of GCC's libstdc++ and Clang's libc++, it is
 impossible to mix and match the two in one application. As a result, one needs
 to build all with either Clang or GCC.
 
 C++11 is still in an early adoption phase, rendering the installation procedure
 a tricky task. This document bundles some tips that help to create a working
-build environment. Feedback about what works for you and what doesn't is very
-much appreciated.
+build environment. Feedback about what works and what doesn't is very much
+appreciated.
 
 The two currently supported platforms are **Mac OSX** (Darwin) and **Linux**.
 It is currently impossible to support Windows platforms, as Visual Studio lacks
 important C++11 features.
+
+If you are using a 64-bit version of Linux, make sure to use a recent version
+of [libunwind][libunwind] when enabling
+[gperftools](http://code.google.com/p/gperftools/), because there exist
+[known](http://code.google.com/p/gperftools/issues/detail?id=66)
+[bugs](http://code.google.com/p/gperftools/source/browse/trunk/README) that
+cause segmentation faults when linking against the system-provided version.
 
 In C++, the STL layer is different from the ABI layer. While the former is
 provided by Clang's libc++, the latter needs to be installed separately,
@@ -25,8 +29,7 @@ Clang
 There is generally good Clang support on Mac OS (Darwin), as it is the favored
 platform of the Clang developers. Still, the Clang version shipping with
 Macports uses libstdc++ as opposed to Clang's libc++. On Linux,
-[libcxxrt][libcxxrt] has proven to work well in combination with
-[libunwind](http://www.nongnu.org/libunwind/index.html).
+[libcxxrt][libcxxrt] has proven to work well
 
 Make sure that Clang is in your `$PATH` and export the following
 environment variables:
@@ -144,3 +147,4 @@ variables:
 
 
 [libcxxrt]: https://github.com/pathscale/libcxxrt
+[libunwind]: http://www.nongnu.org/libunwind/index.html
