@@ -4,11 +4,9 @@
 
 std::atomic<bool> terminating(false);
 std::condition_variable cv;
-struct sigaction old_handler;
+struct sigaction old_sigint_handler;
+struct sigaction old_sigterm_handler;
 
-// Technically, this signal handler does not operate in a safe [1] manner.
-// But it works fine for our purpose.
-// [1] https://www.securecoding.cert.org/confluence/display/seccode/SIG30-C.+Call+only+asynchronous-safe+functions+within+signal+handlers
 static void shutdown_handler(int signo)
 {
   auto old = terminating.load();
@@ -17,7 +15,8 @@ static void shutdown_handler(int signo)
 
   cv.notify_all();
 
-  sigaction(SIGINT, &old_handler, NULL);
+  sigaction(SIGINT, &old_sigint_handler, NULL);
+  sigaction(SIGTERM, &old_sigterm_handler, NULL);
 }
 
 int main(int argc, char *argv[])
@@ -26,7 +25,8 @@ int main(int argc, char *argv[])
   sig_handler.sa_handler = shutdown_handler;
   sigemptyset(&sig_handler.sa_mask);
   sig_handler.sa_flags = 0;
-  sigaction(SIGINT, &sig_handler, &old_handler);
+  sigaction(SIGINT, &sig_handler, &old_sigint_handler);
+  sigaction(SIGTERM, &sig_handler, &old_sigterm_handler);
 
   vast::configuration config;
   if (! config.load(argc, argv))
