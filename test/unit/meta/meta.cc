@@ -1,4 +1,4 @@
-#include <boost/test/unit_test.hpp>
+#include "../test.h"
 #include <vast/fs/fstream.h>
 #include <vast/meta/taxonomy.h>
 #include <vast/meta/type.h>

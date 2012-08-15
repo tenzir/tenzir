@@ -1,6 +1,6 @@
 #define BOOST_SPIRIT_QI_DEBUG
 
-#include <boost/test/unit_test.hpp>
+#include "test.h"
 #include <vast/detail/parser/query.h>
 #include <vast/util/parser/parse.h>
 

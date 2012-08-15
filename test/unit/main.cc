@@ -2,7 +2,7 @@
 #define BOOST_TEST_DYN_LINK
 #define BOOST_TEST_MODULE "VAST Unit Test Suite"
 
-#include <boost/test/unit_test.hpp>
+#include "test.h"
 #include "vast/program.h"
 #include "vast/logger.h"
 

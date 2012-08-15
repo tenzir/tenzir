@@ -1,4 +1,4 @@
-#include <boost/test/unit_test.hpp>
+#include "test.h"
 #include "vast/util/visitor.h"
 
 struct base;
