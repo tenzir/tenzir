@@ -1,4 +1,4 @@
-#include <boost/test/unit_test.hpp>
+#include "test.h"
 #include <vast/util/lru_cache.h>
 
 BOOST_AUTO_TEST_CASE(lru_cache)
