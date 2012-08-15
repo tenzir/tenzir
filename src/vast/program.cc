@@ -18,14 +18,6 @@
 #include "vast/util/profiler.h"
 #include "config.h"
 
-
-#ifdef USE_PERFTOOLS_CPU_PROFILER
-#include <google/profiler.h>
-#endif
-#ifdef USE_PERFTOOLS_HEAP_PROFILER
-#include <google/heap-profiler.h>
-#endif
-
 namespace vast {
 
 /// Declaration of global (extern) variables.
