@@ -29,7 +29,7 @@ Clang
 There is generally good Clang support on Mac OS (Darwin), as it is the favored
 platform of the Clang developers. Still, the Clang version shipping with
 Macports uses libstdc++ as opposed to Clang's libc++. On Linux,
-[libcxxrt][libcxxrt] has proven to work well
+[libcxxrt][libcxxrt] has proven to work well.
 
 Make sure that Clang is in your `$PATH` and export the following
 environment variables:
