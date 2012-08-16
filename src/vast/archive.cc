@@ -33,7 +33,7 @@ archive::archive(std::string const& directory, size_t max_segments)
       {
         forward_to(segment_manager_);
       },
-      on(atom("put"), arg_match) >> [=](segment const& /* s */)
+      on(arg_match) >> [=](segment const& /* s */)
       {
         forward_to(segment_manager_);
       },

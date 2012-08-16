@@ -303,21 +303,16 @@ index::index(cppa::actor_ptr archive, std::string directory)
           reply(atom("hit"), std::move(ids));
 
       },
-      on(atom("build"), arg_match) >> [=](segment const& s)
+      on(arg_match) >> [=](segment const& s)
       {
-        process(s);
+        write(s);
+        build(s.head());
       },
       on(atom("shutdown")) >> [=]()
       {
         quit();
         LOG(verbose, index) << "index @" << id() << " terminated";
       });
-}
-
-void index::process(segment const& s)
-{
-  write(s);
-  build(s.head());
 }
 
 void index::write(segment const& s)

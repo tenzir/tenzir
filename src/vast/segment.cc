@@ -112,6 +112,27 @@ segment::segment(ze::compression method)
   header_.end = header_.start;
 }
 
+segment::segment(segment const& other)
+  : header_(other.header_)
+  , chunks_(other.chunks_)
+{
+  DBG(core) << "copied a segment!";
+}
+
+segment::segment(segment&& other)
+  : header_(std::move(other.header_))
+  , chunks_(std::move(other.chunks_))
+{
+}
+
+segment& segment::operator=(segment other)
+{
+  using std::swap;
+  swap(header_, other.header_);
+  swap(chunks_, other.chunks_);
+  return *this;
+}
+
 segment::chunk_tuple segment::operator[](size_t i) const
 {
   assert(! chunks_.empty());

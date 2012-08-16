@@ -73,18 +73,15 @@ ingestor::ingestor(cppa::actor_ptr tracker,
       {
         reply(atom("extract"), batch_size);
       },
-      on_arg_match >> [=](segment const& /* s */)
+      on_arg_match >> [=](segment const& s)
       {
-        auto opt = tuple_cast<segment>(last_dequeued());
-        assert(opt.valid());
-
         DBG(ingest) << "ingestor @" << id()
-          << " relays segment " << get<0>(*opt).id()
+          << " relays segment " << s.id()
           << " to archive @" << archive_->id()
           << " and index @" << index_->id();
 
-        send(index_, atom("build"), get<0>(*opt));
-        send(archive_, atom("put"), get<0>(*opt));
+        index_ << last_dequeued();
+        archive_ << last_dequeued();
       },
       on(atom("shutdown")) >> [=]
       {

@@ -29,9 +29,6 @@ public:
   index(cppa::actor_ptr archive, std::string directory);
 
 private:
-  /// Processes an incoming segment from the ingestor.
-  void process(segment const& s);
-
   /// Writes a segment header to disk.
   void write(segment const& s);
 

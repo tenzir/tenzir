@@ -142,6 +142,19 @@ public:
   /// @param method The compression method to use for each chunk.
   segment(ze::compression method = ze::compression::none);
 
+  /// Copy-constructs a segment.
+  /// @param other The segment to copy.
+  segment(segment const& other);
+
+  /// Move-constructs a segment.
+  /// @param other The segment to move.
+  segment(segment&& other);
+
+  /// Assigns a segment to this instance.
+  /// @param other The RHS of the assignment.
+  /// @return A reference to the LHS of the assignment.
+  segment& operator=(segment other);
+
   /// Retrieves a const-reference to a chunk tuple.
   ///
   /// @param i The chunk index, must be in *[0, n)* where *n* is the
