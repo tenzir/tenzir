@@ -50,7 +50,7 @@ bool program::run()
           case '?':
             LOG(info, core)
               << "available commands: "
-                 "'(s)tatistics', <space> for results, (Q)uit";
+                 "<space> for results, (s)tatistics, (Q)uit";
             break;
           case ' ':
             send(query_client_, atom("client"), atom("results"));
