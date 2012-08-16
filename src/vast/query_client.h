@@ -29,7 +29,6 @@ private:
 
   std::string expression_;
   unsigned batch_size_ = 0;
-  unsigned printed_ = 0;
 
   cppa::actor_ptr search_;
   cppa::actor_ptr query_;
