@@ -63,7 +63,7 @@ system_monitor::system_monitor(actor_ptr receiver)
         }
         else
         {
-          // Shut down the watcher if it has not yet been terminated
+          // Shut down the watcher if it has not yet been terminated.
           std::raise(SIGTERM);
         }
       });
