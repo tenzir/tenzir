@@ -3,75 +3,59 @@
 #include <csignal>
 #include <cstdlib>
 #include "vast/logger.h"
+#include "vast/util/console.h"
 
 namespace vast {
 
-namespace detail {
-
-static std::condition_variable cv;
-static std::atomic<bool> terminating(false);
-
-static void wait_for_signal()
-{
-  std::mutex mutex;
-  std::unique_lock<std::mutex> lock(mutex);
-  cv.wait(lock, [] { return terminating.load() == true; });
-}
-
-static void terminate()
-{
-  auto old = terminating.load();
-  while (! terminating.compare_exchange_weak(old, !old))
-    ;
-
-  cv.notify_all();
-}
+static bool terminating = false;
 
 static void signal_handler(int signo)
 {
-  terminate();
+  terminating = true;
   std::signal(signo, SIG_DFL);
 }
-
-static void install_signal_handlers()
-{
-  std::signal(SIGINT, &signal_handler);
-  std::signal(SIGTERM, &signal_handler);
-}
-
-} // namespace detail
 
 using namespace cppa;
 
 system_monitor::system_monitor(actor_ptr receiver)
 {
   LOG(verbose, core) << "spawning system monitor @" << id();
-  detail::install_signal_handlers();
-  auto signal_watcher = spawn<detached>([]
+
+  std::signal(SIGINT, &signal_handler);
+  std::signal(SIGTERM, &signal_handler);
+
+  auto watcher = spawn<detached>([receiver]
       {
-        detail::wait_for_signal();
+        util::console::unbuffer();
+
+        char c;
+        while (! terminating)
+        {
+          if (util::console::get(c))
+          {
+            if (c == 'Q')
+              break;
+
+            send(receiver, atom("system"), atom("keystroke"), c);
+          }
+        }
+
+        util::console::buffer();
         self->quit();
       });
 
-  monitor(signal_watcher);
+  monitor(watcher);
   LOG(verbose, core) 
-    << "system monitor @" << id() 
-    << " spawns signal watcher @" << signal_watcher->id();
+    << "system monitor @" << id() << " spawns watcher @" << watcher->id();
 
   init_state = (
       on(atom("DOWN"), arg_match) >> [=](uint32_t reason)
       {
-        DBG(core) 
-          << "system monitor @" << id() 
-          << " passes termination signal to @" << receiver->id();
-
-        send(receiver, atom("system"), atom("signal"), atom("terminate"));
+        DBG(core) << "watcher @" << last_sender()->id() << " terminated";
+        send(self, atom("shutdown"));
       },
       on(atom("shutdown")) >> [=]
       {
-        // Make sure that signal watcher has terminated. We won't process the
-        // DOWN message, though, since we quite immediately.
-        detail::terminate();
         quit();
         LOG(verbose, core) << "system monitor @" << id() << " terminated";
       });

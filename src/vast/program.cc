@@ -35,16 +35,20 @@ bool program::run()
     return false;
 
   auto mon = spawn<system_monitor>(self);
+  self->monitor(mon);
 
-  bool terminate = false;
+  bool done = false;
   do_receive(
-      on(atom("system"), atom("signal"), atom("terminate")) >> [&terminate]
+      on(atom("system"), atom("keystroke"), arg_match) >> [](char key)
       {
-        terminate = true;
-      }).until(gref(terminate) == true);
+        DBG(core) << "received keystroke: " << key;
+      },
+      on(atom("DOWN"), arg_match) >> [&done](uint32_t reason)
+      {
+        done = true;
+      }).until(gref(done) == true);
 
   stop();
-  send(mon, atom("shutdown"));
   await_all_others_done();
 
   return true;
