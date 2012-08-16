@@ -10,35 +10,6 @@ This files specifies the coding style of the source code. In general, the style
 style resembles the Boost style, so unless otherwise noted please refer to
 mature Boost libraries, such as Asio or Spirit.
 
-Scoping
-=======
-
-- We do not allow static or global variables of class type since they can cause
-  debugging nightmares and have an indetermine order of construction and
-  destruction. If it is necessary to have global class type variable, declare a
-  raw pointer in the corresponding module and allocate (but never free) it in
-  program.cc. For example:
-
-    program.cc:
-
-        namespace vast {
-
-        util::logger* LOGGER;
-
-        }
-
-    util/logger.h:
-
-        namespace vast {
-
-        namespace util {
-        class logger;
-        }
-
-        extern util::logger* LOGGER;
-
-        }
-
 Header
 ======
 
@@ -57,15 +28,16 @@ Header
 
     #include <boost/operators.hpp>
 
-    #include "util/logger.h"
-    #include "util/profiler.h"
+    #include "vast/logger.h"
+    #include "vast/util/profiler.h"
 
   Within each section the order should be alphabetical. VAST includes should
   always be in doublequotes and relative to the source directory, whereas
   system-wide includes in angle brackets.
 
-  The top-level include of an implementation file is always the header file.
-  Aftewards, the above order applies again. For example,
+  In the implementation (*.cc) file, the top-level include always consist of
+  the corresponding header file. Aftewards, the above order applies again. For
+  example,
 
     #include "meta/event.h"
 
@@ -97,7 +69,7 @@ Comments
 - Doxygen comments (which are stripped during the generation of the
   documentation) start with ///.
 
-- Use \cmd rather than @cmd for Doxygen commands.
+- Use @cmd rather than \cmd for Doxygen commands.
 
 - Use // or /* and */ to define basic comments that should not be swallowed by
   Doxygen.
