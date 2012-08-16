@@ -6,6 +6,9 @@
 
 namespace vast {
 
+// The global logger instance.
+logger* LOGGER = nullptr;
+
 static char const* const facilities[] =
 {
   "core",
@@ -86,13 +89,16 @@ logger::record::~record()
   logger_.write(*this);
 }
 
-
-logger::logger(level console_verbosity,
-               level logfile_verbosity,
-               fs::path const& logfile)
-  : console_(console_verbosity, std::cerr)
-  , logfile_(logfile_verbosity, logfile)
+void logger::init(level console_verbosity,
+                  level logfile_verbosity,
+                  fs::path const& logfile)
 {
+  LOGGER = new logger(console_verbosity, logfile_verbosity, logfile);
+}
+
+logger* logger::get()
+{
+  return LOGGER;
 }
 
 bool logger::takes(level lvl)
@@ -107,6 +113,14 @@ void logger::write(record const& rec)
 
   if (logfile_.takes(rec.level_))
     logfile_.write(rec.stream_.str());
+}
+
+logger::logger(level console_verbosity,
+               level logfile_verbosity,
+               fs::path const& logfile)
+  : console_(console_verbosity, std::cerr)
+  , logfile_(logfile_verbosity, logfile)
+{
 }
 
 std::ostream& logger::console() const

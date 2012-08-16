@@ -6,25 +6,18 @@
 #include "vast/fs/fstream.h"
 #include "vast/fs/path.h"
 
-namespace vast {
-
-class logger;
-extern logger* LOGGER;
-
-} // namespace vast
-
 /// Basic logging macro.
 #define LOG(level, facility)                                \
-  if (::vast::LOGGER->takes(vast::logger::level))           \
-      ::vast::logger::record(*::vast::LOGGER,               \
+  if (::vast::logger::get()->takes(vast::logger::level))    \
+      ::vast::logger::record(*::vast::logger::get(),        \
                                    vast::logger::level,     \
                                    vast::logger::facility)
 
 /// Debugging logging macro.
 #ifdef VAST_DEBUG
 #define DBG(facility)                                       \
-  if (::vast::LOGGER->takes(vast::logger::debug))           \
-      ::vast::logger::record(*::vast::LOGGER,               \
+  if (::vast::logger::get()->takes(vast::logger::debug))    \
+      ::vast::logger::record(*::vast::logger::get(),        \
                                    vast::logger::debug,     \
                                    vast::logger::facility)
 #else
@@ -120,13 +113,17 @@ public:
     std::stringstream stream_;
   };
 
-  /// Constructs the logger.
+  /// Initializes the logger. This function must be called before any call to
+  /// logger::get.
   /// @param console_verbosity The console verbosity.
   /// @param logfile_verbosity The logfile verbosity.
   /// @param logfile The file where to log to.
-  logger(level console_verbosity,
-         level logfile_verbosity,
-         fs::path const& logfile);
+  static void init(level console_verbosity,
+                   level logfile_verbosity,
+                   fs::path const& logfile);
+
+  /// Retrieves a pointer to the global logger object.
+  static logger* get();
 
   /// Tests whether the logger processes a certain log level.
   ///
@@ -141,6 +138,16 @@ public:
   std::ostream& console() const;
 
 private:
+  friend void init();
+
+  /// Constructs the logger.
+  /// @param console_verbosity The console verbosity.
+  /// @param logfile_verbosity The logfile verbosity.
+  /// @param logfile The file where to log to.
+  logger(level console_verbosity,
+         level logfile_verbosity,
+         fs::path const& logfile);
+
   /// Writes a record to the relevant sinks.
   /// @param rec The record to dispatch.
   void write(record const& rec);

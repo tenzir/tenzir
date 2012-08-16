@@ -17,6 +17,7 @@ set(vast_lib_sources
   search.cc
   segment.cc
   segment_manager.cc
+  system_monitor.cc
   comm/broccoli.cc
   comm/connection.cc
   comm/exception.cc

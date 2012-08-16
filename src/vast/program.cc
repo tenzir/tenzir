@@ -10,6 +10,7 @@
 #include "vast/logger.h"
 #include "vast/query_client.h"
 #include "vast/search.h"
+#include "vast/system_monitor.h"
 #include "vast/comm/broccoli.h"
 #include "vast/detail/cppa_type_info.h"
 #include "vast/fs/path.h"
@@ -20,8 +21,7 @@
 
 namespace vast {
 
-/// Declaration of global (extern) variables.
-logger* LOGGER;
+using namespace cppa;
 
 program::program(configuration const& config)
   : config_(config)
@@ -29,30 +29,45 @@ program::program(configuration const& config)
   detail::cppa_announce_types();
 }
 
+bool program::run()
+{
+  if (! start())
+    return false;
+
+  auto mon = spawn<system_monitor>(self);
+
+  bool terminate = false;
+  do_receive(
+      on(atom("system"), atom("signal"), atom("terminate")) >> [&terminate]
+      {
+        terminate = true;
+      }).until(gref(terminate) == true);
+
+  stop();
+  send(mon, atom("shutdown"));
+  await_all_others_done();
+
+  return true;
+}
+
 bool program::start()
 {
-  auto vast_dir = config_.get<fs::path>("directory");
-  if (! fs::exists(vast_dir))
-    fs::mkdir(vast_dir);
-
-  auto log_dir = vast_dir / "log";
-  if (! fs::exists(log_dir))
-      fs::mkdir(log_dir);
-
-  LOGGER = new logger(
-      static_cast<logger::level>(config_.get<int>("console-verbosity")),
-      static_cast<logger::level>(config_.get<int>("logfile-verbosity")),
-      log_dir / "vast.log");
-
   LOG(verbose, core) << " _   _____   __________";
   LOG(verbose, core) << "| | / / _ | / __/_  __/";
   LOG(verbose, core) << "| |/ / __ |_\\ \\  / / ";
   LOG(verbose, core) << "|___/_/ |_/___/ /_/  " << VAST_VERSION;
   LOG(verbose, core) << "";
 
+  auto vast_dir = config_.get<fs::path>("directory");
+  if (! fs::exists(vast_dir))
+    fs::mkdir(vast_dir);
+
+  auto log_dir = config_.get<fs::path>("log.directory");
+  if (! fs::exists(log_dir))
+      fs::mkdir(log_dir);
+
   try
   {
-    using namespace cppa;
     if (config_.check("profile"))
     {
       auto ms = config_.get<unsigned>("profile");
@@ -225,7 +240,7 @@ bool program::start()
 
     return true;
   }
-  catch (cppa::network_error const& e)
+  catch (network_error const& e)
   {
       LOG(error, core) << "network error: " << e.what();
   }
@@ -235,7 +250,6 @@ bool program::start()
 
 void program::stop()
 {
-  using namespace cppa;
   auto shutdown = make_any_tuple(atom("shutdown"));
 
   if (config_.check("expression"))
@@ -261,8 +275,6 @@ void program::stop()
 
   if (config_.check("profile"))
     profiler_ << shutdown;
-
-  await_all_others_done();
 }
 
 } // namespace vast

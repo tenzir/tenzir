@@ -25,16 +25,23 @@ configuration::configuration()
     ("expression,e", po::value<std::string>(), "query expression")
     ("help,h", "display this help")
     ("schema,s", po::value<std::string>(), "event schema file")
-    ("console-verbosity,v", po::value<int>()->default_value(logger::info),
-     "console logging verbosity")
     ("advanced,z", "show advanced options")
+    ;
+
+  po::options_description logger("logger options");
+  logger.add_options()
+    ("log.console-verbosity,v", po::value<int>()->default_value(logger::info),
+     "console verbosity")
+    ("log.file-verbosity,V",
+     po::value<int>()->default_value(logger::verbose),
+     "log file verbosity")
+    ("log.directory", 
+     po::value<fs::path>()->default_value(fs::path("vast") / "log"),
+     "log direcotory")
     ;
 
   po::options_description advanced("advanced options");
   advanced.add_options()
-    ("logfile-verbosity,V",
-     po::value<int>()->default_value(logger::verbose),
-     "log file verbosity")
     ("profile,P", po::value<unsigned>(),
      "enable getrusage profiling at a given interval (seconds)")
 #ifdef USE_PERFTOOLS_CPU_PROFILER
@@ -120,8 +127,8 @@ configuration::configuration()
      "number of query results per page")
     ;
 
-  all_.add(general).add(advanced).add(actor).add(schema).add(tracker)
-    .add(ingest).add(archive).add(index).add(search).add(query);
+  all_.add(general).add(logger).add(advanced).add(actor).add(schema)
+    .add(tracker).add(ingest).add(archive).add(index).add(search).add(query);
 
   visible_.add(general).add(actor);
 }
@@ -219,13 +226,23 @@ void configuration::init()
   conflicts("expression", "index-actor");
   conflicts("expression", "search-actor");
 
-  auto v = get<int>("console-verbosity");
-  if (v < 0 || v > 6)
-    throw error::config("verbosity not in [0,6]", "console-verbosity");
+  auto cv = get<int>("log.console-verbosity");
+  if (cv < 0 || cv > 6)
+    throw error::config("verbosity not in [0,6]", "log.console-verbosity");
 
-  v = get<int>("logfile-verbosity");
-  if (v < 0 || v > 6)
-    throw error::config("verbosity not in [0,6]", "log-verbosity");
+  auto fv = get<int>("log.file-verbosity");
+  if (fv < 0 || fv > 6)
+    throw error::config("verbosity not in [0,6]", "log.file-verbosity");
+
+  auto log_dir = get<fs::path>("log.directory");
+  auto log_file = log_dir / "vast.log";
+  if (! fs::exists(log_dir))
+      fs::mkdir(log_dir);
+
+  logger::init(
+      static_cast<logger::level>(cv),
+      static_cast<logger::level>(fv),
+      log_file);
 
   if (check("profile") && get<unsigned>("profile") == 0)
     throw error::config("profiling interval must be non-zero", "profile");
