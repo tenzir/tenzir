@@ -88,6 +88,9 @@ void query_client::set_batch_size()
   handle_response(sync_send(query_, atom("set"), atom("batch size"), batch_size_))(
       on(atom("set"), atom("batch size"), atom("failure")) >> [=]
       {
+        LOG(error, query) << "query client @" << id()
+          << " failed setting batch size to " << batch_size_;
+
         send(self, atom("shutdown"));
       },
       on(atom("set"), atom("batch size"), atom("success")) >> [=]

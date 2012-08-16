@@ -27,9 +27,6 @@ private:
   void set_batch_size();
   void set_expression();
 
-  /// Waits for console input on STDIN.
-  void wait_for_user_input();
-
   std::string expression_;
   unsigned batch_size_ = 0;
   unsigned printed_ = 0;
