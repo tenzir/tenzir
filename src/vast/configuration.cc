@@ -22,7 +22,6 @@ configuration::configuration()
     ("config,c", po::value<fs::path>(), "configuration file")
     ("directory,d", po::value<fs::path>()->default_value("vast"),
      "VAST directory")
-    ("expression,e", po::value<std::string>(), "query expression")
     ("help,h", "display this help")
     ("schema,s", po::value<std::string>(), "event schema file")
     ("advanced,z", "show advanced options")
@@ -121,14 +120,15 @@ configuration::configuration()
      "port of the search")
     ;
 
-  po::options_description query("query client options");
-  query.add_options()
-    ("query.paginate,p", po::value<unsigned>()->default_value(10),
+  po::options_description client("client options");
+  client.add_options()
+    ("client.expression,e", po::value<std::string>(), "query expression")
+    ("client.paginate,p", po::value<unsigned>()->default_value(10),
      "number of query results per page")
     ;
 
   all_.add(general).add(logger).add(advanced).add(actor).add(schema)
-    .add(tracker).add(ingest).add(archive).add(index).add(search).add(query);
+    .add(tracker).add(ingest).add(archive).add(index).add(search).add(client);
 
   visible_.add(general).add(actor);
 }
@@ -221,11 +221,6 @@ void configuration::init()
   depends("print-schema", "schema");
   depends("ingest.file-names", "ingest.file-type");
 
-  conflicts("expression", "tracker-actor");
-  conflicts("expression", "archive-actor");
-  conflicts("expression", "index-actor");
-  conflicts("expression", "search-actor");
-
   auto cv = get<int>("log.console-verbosity");
   if (cv < 0 || cv > 6)
     throw error::config("verbosity not in [0,6]", "log.console-verbosity");
@@ -233,6 +228,18 @@ void configuration::init()
   auto fv = get<int>("log.file-verbosity");
   if (fv < 0 || fv > 6)
     throw error::config("verbosity not in [0,6]", "log.file-verbosity");
+
+  if (check("profile") && get<unsigned>("profile") == 0)
+    throw error::config("profiling interval must be non-zero", "profile");
+
+  depends("client.paginate", "client.expression");
+  conflicts("client.expression", "tracker-actor");
+  conflicts("client.expression", "archive-actor");
+  conflicts("client.expression", "index-actor");
+  conflicts("client.expression", "search-actor");
+
+  if (get<unsigned>("client.paginate") == 0)
+    throw error::config("pagination must be non-zero", "client.paginate");
 
   auto log_dir = get<fs::path>("log.directory");
   auto log_file = log_dir / "vast.log";
@@ -243,12 +250,6 @@ void configuration::init()
       static_cast<logger::level>(cv),
       static_cast<logger::level>(fv),
       log_file);
-
-  if (check("profile") && get<unsigned>("profile") == 0)
-    throw error::config("profiling interval must be non-zero", "profile");
-
-  if (get<unsigned>("query.paginate") == 0)
-    throw error::config("pagination must be non-zero", "query.paginate");
 }
 
 void configuration::conflicts(const char* opt1, const char* opt2) const

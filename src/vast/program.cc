@@ -36,12 +36,29 @@ bool program::run()
 
   auto mon = spawn<system_monitor>(self);
   self->monitor(mon);
-
   bool done = false;
   do_receive(
-      on(atom("system"), atom("keystroke"), arg_match) >> [](char key)
+      on(atom("system"), atom("keystroke"), arg_match) >> [=](char key)
       {
-        DBG(core) << "received keystroke: " << key;
+        if (! query_client_)
+          return;
+
+        switch (key)
+        {
+          default:
+            LOG(info, core) << "invalid key: '" << key << "'";
+          case '?':
+            LOG(info, core)
+              << "available commands: "
+                 "'(s)tatistics', <space> for results, (Q)uit";
+            break;
+          case ' ':
+            send(query_client_, atom("client"), atom("results"));
+            break;
+          case 's':
+            send(query_client_, atom("client"), atom("statistics"));
+            break;
+        }
       },
       on(atom("DOWN"), arg_match) >> [&done](uint32_t reason)
       {
@@ -224,7 +241,7 @@ bool program::start()
 
       publish(search_, config_.get<unsigned>("search.port"));
     }
-    else if (config_.check("expression"))
+    else if (config_.check("client.expression"))
     {
       LOG(verbose, core) << "connecting to search at "
           << config_.get<std::string>("search.host") << ":"
@@ -236,8 +253,8 @@ bool program::start()
 
       LOG(verbose, core) << "connected to search actor @" << search_->id();
 
-      auto paginate = config_.get<unsigned>("query.paginate");
-      auto& expression = config_.get<std::string>("expression");
+      auto paginate = config_.get<unsigned>("client.paginate");
+      auto& expression = config_.get<std::string>("client.expression");
       query_client_ = spawn<query_client>(search_, expression, paginate);
       send(query_client_, atom("start"));
     }
@@ -256,7 +273,7 @@ void program::stop()
 {
   auto shutdown = make_any_tuple(atom("shutdown"));
 
-  if (config_.check("expression"))
+  if (query_client_)
     query_client_ << shutdown;
 
   if (config_.check("search-actor") || config_.check("all-server"))
@@ -277,7 +294,7 @@ void program::stop()
   // TODO: uncomment once brought back into the game.
   //schema_manager_ << shutdown;
 
-  if (config_.check("profile"))
+  if (profiler_)
     profiler_ << shutdown;
 }
 
