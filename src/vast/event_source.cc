@@ -68,7 +68,7 @@ event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
         }
 
         if (finished_)
-            send(self, atom("shutdown"));
+          send(self, atom("shutdown"));
         else
           send(ingestor_, atom("source"), atom("ack"), extracted);
       },

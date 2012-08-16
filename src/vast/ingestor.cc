@@ -18,18 +18,17 @@ ingestor::ingestor(cppa::actor_ptr tracker,
   : archive_(archive)
   , index_(index)
 {
-  // FIXME: make batch size configurable.
-  size_t batch_size = 1000;
-
   LOG(verbose, ingest) << "spawning ingestor @" << id();
 
   chaining(false);
   init_state = (
       on(atom("initialize"), arg_match) >> [=](size_t max_events_per_chunk,
-                                               size_t max_segment_size)
+                                               size_t max_segment_size,
+                                               size_t batch_size)
       {
         max_events_per_chunk_ = max_events_per_chunk;
         max_segment_size_ = max_segment_size;
+        batch_size_ = batch_size;
       },
       on(atom("ingest"), atom("broccoli"), arg_match) >>
         [=](std::string const& host, unsigned port,
@@ -67,11 +66,11 @@ ingestor::ingestor(cppa::actor_ptr tracker,
       on(atom("extract")) >> [=]
       {
         for (auto source : sources_)
-          send(source, atom("extract"), batch_size);
+          send(source, atom("extract"), batch_size_);
       },
       on(atom("source"), atom("ack"), arg_match) >> [=](size_t /* events */)
       {
-        reply(atom("extract"), batch_size);
+        reply(atom("extract"), batch_size_);
       },
       on_arg_match >> [=](segment const& s)
       {

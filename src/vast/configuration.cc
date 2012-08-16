@@ -78,20 +78,22 @@ configuration::configuration()
 
   po::options_description ingest("ingest options");
   ingest.add_options()
-    ("ingest.host", po::value<std::string>()->default_value("127.0.0.1"),
-     "hostname or IP address of the broccoli source")
-    ("ingest.port", po::value<unsigned>()->default_value(42000),
-     "port of the broccoli source")
-    ("ingest.events", po::value<std::vector<std::string>>()->multitoken(),
-     "explicit list of events for broccoli to ingest")
     ("ingest.max-events-per-chunk", po::value<size_t>()->default_value(1000),
      "maximum number of events per chunk")
     ("ingest.max-segment-size", po::value<size_t>()->default_value(1),
      "maximum segment size in MB")
-    ("ingest.file-type", po::value<std::string>()->default_value("bro2"),
-     "file type of the file(s) to ingest")
+    ("ingest.batch-size", po::value<size_t>()->default_value(1000),
+     "number of events to ingest before yielding")
+    ("ingest.broccoli-host", po::value<std::string>()->default_value("127.0.0.1"),
+     "hostname or IP address of the broccoli source")
+    ("ingest.broccoli-port", po::value<unsigned>()->default_value(42000),
+     "port of the broccoli source")
+    ("ingest.broccoli-events", po::value<std::vector<std::string>>()->multitoken(),
+     "explicit list of events for broccoli to ingest")
     ("ingest.file-names", po::value<std::vector<std::string>>()->multitoken(),
      "file(s) to ingest")
+    ("ingest.file-type", po::value<std::string>()->default_value("bro2"),
+     "file type of the file(s) to ingest")
     ;
 
   po::options_description archive("archive options");
@@ -219,7 +221,6 @@ void configuration::init()
   po::notify(config_);
 
   depends("print-schema", "schema");
-  depends("ingest.file-names", "ingest.file-type");
 
   auto cv = get<int>("log.console-verbosity");
   if (cv < 0 || cv > 6)

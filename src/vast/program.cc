@@ -208,13 +208,14 @@ bool program::start()
 
       send(ingestor_, atom("initialize"),
           config_.get<size_t>("ingest.max-events-per-chunk"),
-          config_.get<size_t>("ingest.max-segment-size") * 1000000);
+          config_.get<size_t>("ingest.max-segment-size") * 1000000,
+          config_.get<size_t>("ingest.batch-size"));
 
       if (config_.check("ingest.events"))
       {
-        auto host = config_.get<std::string>("ingest.host");
-        auto port = config_.get<unsigned>("ingest.port");
-        auto events = config_.get<std::vector<std::string>>("ingest.events");
+        auto host = config_.get<std::string>("ingest.broccoli-host");
+        auto port = config_.get<unsigned>("ingest.broccoli-port");
+        auto events = config_.get<std::vector<std::string>>("ingest.broccoli-events");
         send(ingestor_, atom("ingest"), atom("broccoli"), host, port, events);
       }
 
