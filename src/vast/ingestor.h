@@ -27,7 +27,6 @@ private:
 
   size_t max_events_per_chunk_ = 0; ///< The maximum number of events per chunk.
   size_t max_segment_size_ = 0;     ///< The maximum segment size in bytes.
-  bool terminating_ = false;
 
   std::vector<cppa::actor_ptr> sources_;
   cppa::actor_ptr archive_;

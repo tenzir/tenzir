@@ -85,8 +85,6 @@ ingestor::ingestor(cppa::actor_ptr tracker,
       },
       on(atom("shutdown")) >> [=]
       {
-        terminating_ = true;
-
         if (broccoli_)
           broccoli_ << last_dequeued();
 
@@ -107,7 +105,7 @@ ingestor::ingestor(cppa::actor_ptr tracker,
           << "ingestor @" << id()
           << " received shutdown ack from source @" << last_sender()->id();
 
-        if (sources_.empty() && terminating_)
+        if (sources_.empty())
           shutdown();
       });
 }
@@ -115,9 +113,9 @@ ingestor::ingestor(cppa::actor_ptr tracker,
 void ingestor::shutdown()
 {
   quit();
-  LOG(verbose, ingest)
-      << "ingestor @" << id() << " terminated"
-      << " (ingested " << total_events_ << " events)";
+  LOG(info, ingest)
+      << "ingestor @" << id() << " ingested " << total_events_ << " events";
+  LOG(verbose, ingest) << "ingestor @" << id() << " terminated";
 }
 
 } // namespace vast

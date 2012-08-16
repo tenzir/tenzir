@@ -7,11 +7,11 @@
 
 namespace vast {
 
-static bool terminating = false;
+static bool signaled = false;
 
 static void signal_handler(int signo)
 {
-  terminating = true;
+  signaled = true;
   std::signal(signo, SIG_DFL);
 }
 
@@ -29,7 +29,7 @@ system_monitor::system_monitor(actor_ptr receiver)
         util::console::unbuffer();
 
         char c;
-        while (! terminating)
+        while (! signaled)
         {
           if (util::console::get(c))
           {
@@ -56,8 +56,16 @@ system_monitor::system_monitor(actor_ptr receiver)
       },
       on(atom("shutdown")) >> [=]
       {
-        quit();
-        LOG(verbose, core) << "system monitor @" << id() << " terminated";
+        if (signaled)
+        {
+          quit();
+          LOG(verbose, core) << "system monitor @" << id() << " terminated";
+        }
+        else
+        {
+          // Shut down the watcher if it has not yet been terminated
+          std::raise(SIGTERM);
+        }
       });
 }
 

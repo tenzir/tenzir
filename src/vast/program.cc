@@ -34,8 +34,6 @@ bool program::run()
   if (! start())
     return false;
 
-  auto mon = spawn<system_monitor>(self);
-  self->monitor(mon);
   bool done = false;
   do_receive(
       on(atom("system"), atom("keystroke"), arg_match) >> [=](char key)
@@ -89,6 +87,9 @@ bool program::start()
 
   try
   {
+    system_monitor_ = spawn<system_monitor>(self);
+    self->monitor(system_monitor_);
+
     if (config_.check("profile"))
     {
       auto ms = config_.get<unsigned>("profile");
@@ -203,6 +204,7 @@ bool program::start()
                            config_.check("broccoli-calltrace"));
 
       ingestor_ = spawn<ingestor>(tracker_, archive_, index_);
+      self->monitor(ingestor_);
 
       send(ingestor_, atom("initialize"),
           config_.get<size_t>("ingest.max-events-per-chunk"),
@@ -296,6 +298,10 @@ void program::stop()
 
   if (profiler_)
     profiler_ << shutdown;
+
+  if (system_monitor_)
+    system_monitor_ << shutdown;
+
 }
 
 } // namespace vast
