@@ -24,7 +24,7 @@ system_monitor::system_monitor(actor_ptr receiver)
   std::signal(SIGINT, &signal_handler);
   std::signal(SIGTERM, &signal_handler);
 
-  auto watcher = spawn<detached>([receiver]
+  watcher_ = spawn<detached>([receiver]
       {
         util::console::unbuffer();
 
@@ -44,19 +44,21 @@ system_monitor::system_monitor(actor_ptr receiver)
         self->quit();
       });
 
-  monitor(watcher);
+  monitor(watcher_);
   LOG(verbose, core) 
-    << "system monitor @" << id() << " spawns watcher @" << watcher->id();
+    << "system monitor @" << id() << " spawns watcher @" << watcher_->id();
 
   init_state = (
       on(atom("DOWN"), arg_match) >> [=](uint32_t reason)
       {
         DBG(core) << "watcher @" << last_sender()->id() << " terminated";
+
+        watcher_ = nullptr;
         send(self, atom("shutdown"));
       },
       on(atom("shutdown")) >> [=]
       {
-        if (signaled)
+        if (signaled || ! watcher_)
         {
           quit();
           LOG(verbose, core) << "system monitor @" << id() << " terminated";

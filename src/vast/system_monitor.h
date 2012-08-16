@@ -18,6 +18,7 @@ public:
   system_monitor(cppa::actor_ptr receiver);
 
 private:
+  cppa::actor_ptr watcher_;
   cppa::behavior init_state;
 };
 
