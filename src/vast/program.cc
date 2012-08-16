@@ -259,6 +259,7 @@ bool program::start()
       auto paginate = config_.get<unsigned>("client.paginate");
       auto& expression = config_.get<std::string>("client.expression");
       query_client_ = spawn<query_client>(search_, expression, paginate);
+      self->monitor(query_client_);
       send(query_client_, atom("start"));
     }
 
