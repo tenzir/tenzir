@@ -21,7 +21,7 @@ query_client::query_client(actor_ptr search,
   init_state = (
       on(atom("start")) >> [=]
       {
-        handle_response(sync_send(search_, atom("query"), atom("create")))(
+        sync_send(search_, atom("query"), atom("create")).then(
             on(atom("query"), arg_match) >> [=](actor_ptr query)
             {
               query_ = query;
@@ -85,7 +85,7 @@ query_client::query_client(actor_ptr search,
 
 void query_client::set_batch_size()
 {
-  handle_response(sync_send(query_, atom("set"), atom("batch size"), batch_size_))(
+  sync_send(query_, atom("set"), atom("batch size"), batch_size_).then(
       on(atom("set"), atom("batch size"), atom("failure")) >> [=]
       {
         LOG(error, query) << "query client @" << id()
@@ -111,7 +111,7 @@ void query_client::set_batch_size()
 
 void query_client::set_expression()
 {
-  handle_response(sync_send(query_, atom("set"), atom("expression"), expression_))(
+  sync_send(query_, atom("set"), atom("expression"), expression_).then(
       on(atom("set"), atom("expression"), atom("failure"), arg_match)
         >> [=](std::string const& msg)
       {

@@ -169,7 +169,7 @@ query::query(cppa::actor_ptr archive,
 
 void query::run()
 {
-  handle_response(sync_send(index_, atom("hit"), expr_))(
+  sync_send(index_, atom("hit"), expr_).then(
       on(atom("hit"), arg_match) >> [=](std::vector<ze::uuid> const& ids)
       {
         LOG(info, query)

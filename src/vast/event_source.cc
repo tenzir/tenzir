@@ -6,13 +6,14 @@
 
 namespace vast {
 
+using namespace cppa;
+
 event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
   : events_(std::chrono::seconds(1))
   , writer_(segment_)
   , ingestor_(ingestor)
   , tracker_(tracker)
 {
-  using namespace cppa;
   chaining(false);
   init_state = (
       on(atom("initialize"), arg_match) >> [=](size_t max_events_per_chunk,
@@ -96,9 +97,7 @@ void event_source::ask_for_new_ids(size_t n)
     << " asks tracker @"  << tracker_->id()
     << " for " << n << " new ids";
 
-  using namespace cppa;
-  auto future = sync_send(tracker_, atom("request"), n);
-  handle_response(future)(
+  sync_send(tracker_, atom("request"), n).then(
       on(atom("id"), arg_match) >> [=](uint64_t lower, uint64_t upper)
       {
         DBG(ingest)
