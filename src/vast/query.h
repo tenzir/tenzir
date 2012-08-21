@@ -27,7 +27,26 @@ public:
   query(cppa::actor_ptr archive, cppa::actor_ptr index, cppa::actor_ptr sink);
 
 private:
-  /// A window of segments for extracting events.
+  /// A window of segments for extracting events. Internally, a window consists
+  /// of a double-ended queue which represents the available segments that the
+  /// query can process:
+  ///
+  ///            reader
+  ///
+  ///              |
+  ///              v
+  ///     -------+-----+----+-----+ -- +-----+-------
+  ///            | s_0 | .. | s_i | .. | s_n |
+  ///     -------+-----+----+-----+ -- +-----+-------
+  ///
+  ///                          ^          ^
+  ///                          |          |
+  ///                          ack        head
+  ///
+  //             |                |
+  //             +----------------+
+  //                 window size
+  //
   class window
   {
   public:
@@ -39,7 +58,7 @@ private:
 
     /// Determines whether the window can extract events from the current
     /// segment.
-    /// @return `true` if the the
+    /// @return `true` if the window has a segment with events to extract.
     bool ready() const;
 
     /// Determines wheter the window is *stale*, i.e., is not ready and has no

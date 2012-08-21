@@ -138,10 +138,10 @@ query::query(cppa::actor_ptr archive,
       },
       on_arg_match >> [=](segment const& s)
       {
-        // Extract results when one of the following conditions hold:
+        // Start extracting result when one of the following conditions hold:
         //
-        //  - The arriving segment is the first of all arriving segments.
-        //  - The window was stale prior to the arrival of this segment.
+        //  (1) The arriving segment is the first of all arriving segments.
+        //  (2) The window was stale prior to the arrival of this segment.
         if (ack_++ == ids_.begin() || window_.stale())
             send(self, atom("get"), atom("results"));
 
