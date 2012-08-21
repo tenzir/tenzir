@@ -24,7 +24,7 @@ public:
   /// The segment header.
   struct header
   {
-    header();
+    header() = default;
 
     template <typename Archive>
     friend void serialize(Archive& oa, header const& h)
@@ -139,8 +139,10 @@ public:
   };
 
   /// Constructs a segment.
+  /// @param method The UUID of the segment.
   /// @param method The compression method to use for each chunk.
-  segment(ze::compression method = ze::compression::none);
+  segment(ze::uuid uuid = ze::uuid::nil(),
+          ze::compression method = ze::compression::none);
 
   /// Copy-constructs a segment.
   /// @param other The segment to copy.

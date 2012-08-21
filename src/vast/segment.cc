@@ -11,11 +11,6 @@ namespace vast {
 uint32_t const segment::magic;
 uint8_t const segment::version;
 
-segment::header::header()
-  : id(ze::uuid::random())
-{
-}
-
 segment::writer::writer(segment& s)
   : segment_(s)
   , putter_(chunk::putter(&chunk_))
@@ -104,8 +99,9 @@ size_t segment::reader::chunks() const
 }
 
 
-segment::segment(ze::compression method)
+segment::segment(ze::uuid uuid, ze::compression method)
 {
+  header_.id = std::move(uuid);
   header_.version = version;
   header_.compression = method;
   header_.start = ze::now();
