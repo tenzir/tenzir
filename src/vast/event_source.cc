@@ -10,6 +10,7 @@ using namespace cppa;
 
 event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
   : events_(std::chrono::seconds(1))
+  , segment_(ze::uuid::random())
   , writer_(segment_)
   , ingestor_(ingestor)
   , tracker_(tracker)
@@ -142,7 +143,7 @@ void event_source::ship_segment()
     << " to ingestor @" << ingestor_->id();
 
   send(ingestor_, std::move(segment_));
-  segment_ = segment();
+  segment_ = segment(ze::uuid::random());
 }
 
 } // namespace vast

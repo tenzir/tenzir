@@ -21,19 +21,19 @@ expression<Iterator>::expression(
     using qi::fail;
 
     binary_op.add
-        ("+", ast::plus)
-        ("-", ast::minus)
-        ("*", ast::times)
-        ("/", ast::divide)
-        ("%", ast::mod)
-        ("|", ast::bitwise_or)
-        ("^", ast::bitwise_xor)
-        ("&", ast::bitwise_and)
+        ("+", ast::query::plus)
+        ("-", ast::query::minus)
+        ("*", ast::query::times)
+        ("/", ast::query::divide)
+        ("%", ast::query::mod)
+        ("|", ast::query::bitwise_or)
+        ("^", ast::query::bitwise_xor)
+        ("&", ast::query::bitwise_and)
         ;
 
     unary_op.add
-        ("+", ast::positive)
-        ("-", ast::negative)
+        ("+", ast::query::positive)
+        ("-", ast::query::negative)
         ;
 
     expr

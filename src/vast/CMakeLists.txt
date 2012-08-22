@@ -22,9 +22,9 @@ set(vast_lib_sources
   comm/connection.cc
   comm/exception.cc
   comm/server.cc
-  detail/ast.cc
   detail/cppa_archive.cc
   detail/cppa_type_info.cc
+  detail/ast/query.cc
   detail/parser/expression.cc
   detail/parser/query.cc
   fs/exception.cc
