@@ -28,21 +28,21 @@ query<Iterator>::query(util::parser::error_handler<Iterator>& error_handler)
     using qi::fail;
 
     boolean_op.add
-        ("||", ast::logical_or)
-        ("&&", ast::logical_and)
+        ("||", ast::query::logical_or)
+        ("&&", ast::query::logical_and)
         ;
 
     clause_op.add
-        ("~",   ast::match)
-        ("!~",  ast::not_match)
-        ("==",  ast::equal)
-        ("!=",  ast::not_equal)
-        ("<",   ast::less)
-        ("<=",  ast::less_equal)
-        (">",   ast::greater)
-        (">=",  ast::greater_equal)
-        ("in",  ast::in)
-        ("!in", ast::not_in)
+        ("~",   ast::query::match)
+        ("!~",  ast::query::not_match)
+        ("==",  ast::query::equal)
+        ("!=",  ast::query::not_equal)
+        ("<",   ast::query::less)
+        ("<=",  ast::query::less_equal)
+        (">",   ast::query::greater)
+        (">=",  ast::query::greater_equal)
+        ("in",  ast::query::in)
+        ("!in", ast::query::not_in)
         ;
 
     type.add

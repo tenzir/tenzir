@@ -5,7 +5,7 @@
 #include <ze/util/make_unique.h>
 #include "vast/exception.h"
 #include "vast/logger.h"
-#include "vast/detail/ast.h"
+#include "vast/detail/ast/query.h"
 #include "vast/detail/parser/query.h"
 #include "vast/util/parser/parse.h"
 
@@ -360,22 +360,21 @@ public:
   {
   }
 
-  void operator()(detail::ast::clause const& operand)
+  void operator()(detail::ast::query::clause const& operand)
   {
     boost::apply_visitor(*this, operand);
   }
 
-  void operator()(detail::ast::tag_clause const& clause)
+  void operator()(detail::ast::query::tag_clause const& clause)
   {
     auto op = clause.op;
     if (invert_)
     {
-      op = detail::ast::negate(op);
+      op = detail::ast::query::negate(op);
       invert_ = false;
     }
-
     auto relation = make_relational_operator(op);
-    auto rhs = std::make_unique<expr::constant>(detail::ast::fold(clause.rhs));
+
     std::unique_ptr<expr::extractor> lhs;
     if (clause.lhs == "name")
       lhs = std::make_unique<expr::name_extractor>();
@@ -383,51 +382,60 @@ public:
       lhs = std::make_unique<expr::timestamp_extractor>();
     else if (clause.lhs == "id")
       lhs = std::make_unique<expr::id_extractor>();
-
     assert(lhs);
     extractors_.push_back(lhs.get());
+
+    auto rhs = std::make_unique<expr::constant>(
+        detail::ast::query::fold(clause.rhs));
+
     relation->add(std::move(lhs));
     relation->add(std::move(rhs));
     parent_->add(std::move(relation));
   }
 
-  void operator()(detail::ast::type_clause const& clause)
+  void operator()(detail::ast::query::type_clause const& clause)
   {
     auto op = clause.op;
     if (invert_)
     {
-      op = detail::ast::negate(op);
+      op = detail::ast::query::negate(op);
       invert_ = false;
     }
-
     auto relation = make_relational_operator(op);
+
     auto lhs = std::make_unique<expr::exists>(clause.lhs);
-    auto rhs = std::make_unique<expr::constant>(detail::ast::fold(clause.rhs));
     extractors_.push_back(lhs.get());
+
+    auto rhs = std::make_unique<expr::constant>(
+        detail::ast::query::fold(clause.rhs));
+
     relation->add(std::move(lhs));
     relation->add(std::move(rhs));
     parent_->add(std::move(relation));
   }
 
-  void operator()(detail::ast::offset_clause const& clause)
+  void operator()(detail::ast::query::offset_clause const& clause)
   {
     auto op = clause.op;
     if (invert_)
     {
-      op = detail::ast::negate(op);
+      op = detail::ast::query::negate(op);
       invert_ = false;
     }
-
     auto relation = make_relational_operator(op);
+
     auto lhs = std::make_unique<expr::offset_extractor>(clause.offsets);
-    auto rhs = std::make_unique<expr::constant>(detail::ast::fold(clause.rhs));
     extractors_.push_back(lhs.get());
+
+    auto rhs = std::make_unique<expr::constant>(
+        detail::ast::query::fold(clause.rhs));
+
     relation->add(std::move(lhs));
     relation->add(std::move(rhs));
     parent_->add(std::move(relation));
   }
 
-  void operator()(detail::ast::event_clause const& clause)
+  void operator()(detail::ast::query::event_clause const& clause)
   {
     // The validation step of the query AST left the first element
     // untouched, as the name extractor uses it. Since all remaining
@@ -456,10 +464,9 @@ public:
     auto op = clause.op;
     if (invert_)
     {
-      op = detail::ast::negate(op);
+      op = detail::ast::query::negate(op);
       invert_ = false;
     }
-
     auto relation = make_relational_operator(op);
 
     // FIXME: use schema to determine correct offsets.
@@ -468,13 +475,13 @@ public:
     extractors_.push_back(lhs.get());
     relation->add(std::move(lhs));
 
-    auto rhs = std::make_unique<expr::constant>(detail::ast::fold(clause.rhs));
+    auto rhs = std::make_unique<expr::constant>(detail::ast::query::fold(clause.rhs));
     relation->add(std::move(rhs));
 
     p->add(std::move(relation));
   }
 
-  void operator()(detail::ast::negated_clause const& clause)
+  void operator()(detail::ast::query::negated_clause const& clause)
   {
     invert_ = true;
     boost::apply_visitor(*this, clause.operand);
@@ -489,7 +496,7 @@ private:
     auto glob = ze::regex("\\*|\\?").search(expr);
 
     auto op = make_relational_operator(
-        glob ? detail::ast::match : detail::ast::equal);
+        glob ? detail::ast::query::match : detail::ast::query::equal);
 
     auto lhs = std::make_unique<expr::name_extractor>();
     extractors_.push_back(lhs.get());
@@ -503,7 +510,7 @@ private:
   }
 
   std::unique_ptr<expr::relational_operator>
-  make_relational_operator(detail::ast::clause_operator op)
+  make_relational_operator(detail::ast::query::clause_operator op)
   {
     typedef expr::relation_type type;
     switch (op)
@@ -511,25 +518,25 @@ private:
       default:
         assert(! "missing relational operator in expression");
         return std::unique_ptr<expr::relational_operator>();
-      case detail::ast::match:
+      case detail::ast::query::match:
         return std::make_unique<expr::relational_operator>(type::match);
-      case detail::ast::not_match:
+      case detail::ast::query::not_match:
         return std::make_unique<expr::relational_operator>(type::not_match);
-      case detail::ast::in:
+      case detail::ast::query::in:
         return std::make_unique<expr::relational_operator>(type::in);
-      case detail::ast::not_in:
+      case detail::ast::query::not_in:
         return std::make_unique<expr::relational_operator>(type::not_in);
-      case detail::ast::equal:
+      case detail::ast::query::equal:
         return std::make_unique<expr::relational_operator>(type::equal);
-      case detail::ast::not_equal:
+      case detail::ast::query::not_equal:
         return std::make_unique<expr::relational_operator>(type::not_equal);
-      case detail::ast::less:
+      case detail::ast::query::less:
         return std::make_unique<expr::relational_operator>(type::less);
-      case detail::ast::less_equal:
+      case detail::ast::query::less_equal:
         return std::make_unique<expr::relational_operator>(type::less_equal);
-      case detail::ast::greater:
+      case detail::ast::query::greater:
         return std::make_unique<expr::relational_operator>(type::greater);
-      case detail::ast::greater_equal:
+      case detail::ast::query::greater_equal:
         return std::make_unique<expr::relational_operator>(type::greater_equal);
     }
   }
@@ -569,11 +576,11 @@ void expression::parse(std::string str)
   str_ = std::move(str);
   extractors_.clear();
 
-  detail::ast::query ast;
+  detail::ast::query::query ast;
   if (! util::parser::parse<detail::parser::query>(str_, ast))
     throw error::syntax(str_);
 
-  if (! detail::ast::validate(ast))
+  if (! detail::ast::query::validate(ast))
     throw error::semantic(str_);
 
   if (ast.rest.empty())
@@ -587,10 +594,10 @@ void expression::parse(std::string str)
   else
   {
     // First, split the query expression at each OR node.
-    std::vector<detail::ast::query> ors{detail::ast::query{ast.first}};
+    std::vector<detail::ast::query::query> ors{detail::ast::query::query{ast.first}};
     for (auto& clause : ast.rest)
-      if (clause.op == detail::ast::logical_or)
-        ors.emplace_back(detail::ast::query{clause.operand});
+      if (clause.op == detail::ast::query::logical_or)
+        ors.emplace_back(detail::ast::query::query{clause.operand});
       else
         ors.back().rest.push_back(clause);
 
@@ -610,7 +617,7 @@ void expression::parse(std::string str)
         boost::apply_visitor(std::ref(visitor), ands.first);
         for (auto clause : ands.rest)
         {
-          assert(clause.op == detail::ast::logical_and);
+          assert(clause.op == detail::ast::query::logical_and);
           boost::apply_visitor(std::ref(visitor), clause.operand);
         }
 
