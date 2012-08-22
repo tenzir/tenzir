@@ -8,8 +8,7 @@ namespace detail {
 namespace parser {
 
 template <typename Iterator>
-expression<Iterator>::expression(
-    util::parser::error_handler<Iterator>& error_handler)
+expression<Iterator>::expression(error_handler<Iterator>& on_error)
   : expression::base_type(expr)
 {
     qi::_1_type _1;
@@ -57,7 +56,7 @@ expression<Iterator>::expression(
         (primary)
     );
 
-    error_handler.set(expr, _4, _3);
+    on_error.set(expr, _4, _3);
 
     binary_op.name("binary expression operator");
     unary_op.name("unary expression operator");

@@ -6,8 +6,8 @@
 #include "vast/exception.h"
 #include "vast/logger.h"
 #include "vast/detail/ast/query.h"
+#include "vast/detail/parser/parse.h"
 #include "vast/detail/parser/query.h"
-#include "vast/util/parser/parse.h"
 
 namespace vast {
 namespace expr {
@@ -577,7 +577,7 @@ void expression::parse(std::string str)
   extractors_.clear();
 
   detail::ast::query::query ast;
-  if (! util::parser::parse<detail::parser::query>(str_, ast))
+  if (! detail::parser::parse<detail::parser::query>(str_, ast))
     throw error::syntax(str_);
 
   if (! detail::ast::query::validate(ast))

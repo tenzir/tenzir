@@ -7,21 +7,20 @@
 #include <boost/spirit/include/qi.hpp>
 #include <ze/detail/parser/value.h>
 #include "vast/detail/ast/query.h"
-#include "vast/util/parser/error_handler.h"
-#include "vast/util/parser/skipper.h"
+#include "vast/detail/parser/error_handler.h"
+#include "vast/detail/parser/skipper.h"
 
 namespace vast {
 namespace detail {
 namespace parser {
 
-using util::parser::skipper;
 namespace qi = boost::spirit::qi;
 namespace ascii = boost::spirit::ascii;
 
 template <typename Iterator>
 struct expression : qi::grammar<Iterator, ast::query::expression(), skipper<Iterator>>
 {
-    expression(util::parser::error_handler<Iterator>& error_handler);
+    expression(error_handler<Iterator>& on_error);
 
     qi::rule<Iterator, ast::query::expression(), skipper<Iterator>>
         expr;

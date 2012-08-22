@@ -1,13 +1,14 @@
-#ifndef VAST_UTIL_PARSER_ERROR_HANDLER_H
-#define VAST_UTIL_PARSER_ERROR_HANDLER_H
+#ifndef VAST_DETAIL_PARSER_ERROR_HANDLER_H
+#define VAST_DETAIL_PARSER_ERROR_HANDLER_H
 
 #include <string>
 #include <vector>
+#include <boost/spirit/include/qi.hpp>
 #include <boost/spirit/include/phoenix_function.hpp>
 #include "vast/logger.h"
 
 namespace vast {
-namespace util {
+namespace detail {
 namespace parser {
 
 /// A parser error handler that uses the logger to report the parse error.
@@ -99,7 +100,7 @@ struct error_handler
 };
 
 } // namespace parser
-} // namespace util
+} // namespace detail
 } // namespace vast
 
 #endif

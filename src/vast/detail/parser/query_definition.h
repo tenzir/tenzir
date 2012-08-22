@@ -8,9 +8,9 @@ namespace detail {
 namespace parser {
 
 template <typename Iterator>
-query<Iterator>::query(util::parser::error_handler<Iterator>& error_handler)
+query<Iterator>::query(error_handler<Iterator>& on_error)
   : query::base_type(qry)
-  , expr(error_handler)
+  , expr(on_error)
 {
     qi::_1_type _1;
     qi::_2_type _2;
@@ -134,7 +134,7 @@ query<Iterator>::query(util::parser::error_handler<Iterator>& error_handler)
         (identifier)
     );
 
-    error_handler.set(qry, _4, _3);
+    on_error.set(qry, _4, _3);
 
     boolean_op.name("binary boolean operator");
     clause_op.name("binary clause operator");

@@ -10,7 +10,7 @@ namespace parser {
 template <typename Iterator>
 struct query : qi::grammar<Iterator, ast::query::query(), skipper<Iterator>>
 {
-    query(util::parser::error_handler<Iterator>& error_handler);
+    query(error_handler<Iterator>& on_error);
 
     qi::rule<Iterator, ast::query::query(), skipper<Iterator>>
         qry;
