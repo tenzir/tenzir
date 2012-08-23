@@ -1,5 +1,7 @@
 #include "vast/to_string.h"
 
+#include <set>
+
 namespace vast {
 
 std::string to_string(schema::type const& type)
@@ -15,7 +17,7 @@ std::string to_string(schema::type const& type)
   }
   else if (dynamic_cast<schema::uint_type const*>(&type))
   {
-    str += "uint";
+    str += "count";
   }
   else if (dynamic_cast<schema::double_type const*>(&type))
   {
@@ -104,7 +106,8 @@ std::string to_string(schema::type_info const& ti)
 
 std::string to_string(schema::event const& e)
 {
-  std::string str("event(");
+  std::string str("event ");
+  str += e.name + "(";
   auto first = e.args.begin();
   auto last = e.args.end();
   while (first != last)
@@ -126,8 +129,24 @@ std::string to_string(schema const& s)
 {
   std::string str;
 
+  // Ignore aliases and built-in types.
+  // ...and also all aliases.
+  std::set<std::string> aliases;
+  static std::set<std::string> builtin{"bool", "int", "count", "double",
+                                       "interval", "time", "string", "pattern",
+                                       "addr", "subnet", "port"};
   for (auto& t : s.types_)
-    str += to_string(t) + '\n';
+  {
+    if (! (builtin.count(t.name) || aliases.count(t.name)))
+    {
+      str += "type " + t.name + ": " + to_string(*t.type) + '\n';
+      for (auto& a : t.aliases)
+      {
+        str += "type " + a + ": " + t.name + '\n';
+        aliases.insert(a);
+      }
+    }
+  }
 
   if (! s.events_.empty())
     str += '\n';

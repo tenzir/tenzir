@@ -18,7 +18,7 @@ schema_manager::schema_manager()
       },
       on(atom("print")) >> [=]()
       {
-        reply("schema", to_string(*schema_));
+        reply(atom("schema"), to_string(*schema_));
       },
       on(atom("shutdown")) >> [=]
       {

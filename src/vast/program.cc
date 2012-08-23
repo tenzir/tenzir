@@ -111,7 +111,7 @@ bool program::start()
         receive(
             on(atom("schema"), arg_match) >> [](std::string const& schema)
             {
-              std::cout << schema << std::endl;
+              std::cout << schema;
             },
             after(std::chrono::seconds(1)) >> [=]
             {
