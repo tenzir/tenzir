@@ -190,6 +190,7 @@ schema<Iterator>::schema(error_handler<Iterator>& on_error)
   vector_.name("vector type");
   set_.name("set type");
   table_.name("table type");
+  type_info_.name("type");
   record_.name("record type");
   identifier_.name("identifier");
 }
