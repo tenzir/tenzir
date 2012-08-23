@@ -13,12 +13,11 @@ schema_manager::schema_manager()
   init_state = (
       on(atom("load"), arg_match) >> [=](std::string const& file)
       {
-        schema_.reset(new schema);
-        schema_->read(file);
+        schema_.read(file);
       },
-      on(atom("print")) >> [=]()
+      on(atom("schema")) >> [=]()
       {
-        reply(atom("schema"), to_string(*schema_));
+        reply(schema_);
       },
       on(atom("shutdown")) >> [=]
       {

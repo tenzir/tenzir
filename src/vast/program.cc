@@ -9,9 +9,11 @@
 #include "vast/ingestor.h"
 #include "vast/logger.h"
 #include "vast/query_client.h"
+#include "vast/schema.h"
 #include "vast/schema_manager.h"
 #include "vast/search.h"
 #include "vast/system_monitor.h"
+#include "vast/to_string.h"
 #include "vast/comm/broccoli.h"
 #include "vast/detail/cppa_type_info.h"
 #include "vast/fs/path.h"
@@ -107,11 +109,11 @@ bool program::start()
 
       if (config_.check("schema.print"))
       {
-        send(schema_manager_, atom("print"));
+        send(schema_manager_, atom("schema"));
         receive(
-            on(atom("schema"), arg_match) >> [](std::string const& schema)
+            on_arg_match >> [](schema const& s)
             {
-              std::cout << schema;
+              std::cout << to_string(s);
             },
             after(std::chrono::seconds(1)) >> [=]
             {
@@ -236,7 +238,7 @@ bool program::start()
 
     if (config_.check("search-actor") || config_.check("all-server"))
     {
-      search_ = spawn<search>(archive_, index_);
+      search_ = spawn<search>(archive_, index_, schema_manager_);
 
       LOG(verbose, core) << "publishing search at *:"
           << config_.get<unsigned>("search.port");

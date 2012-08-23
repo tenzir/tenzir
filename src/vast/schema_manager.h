@@ -6,9 +6,6 @@
 
 namespace vast {
 
-// Forward declaration
-class schema;
-
 /// Manages the existing taxonomies.
 class schema_manager : public cppa::sb_actor<schema_manager>
 {
@@ -19,9 +16,7 @@ public:
   schema_manager();
 
 private:
-  // For now, we have a single schema.
-  intrusive_ptr<schema> schema_;
-
+  schema schema_;
   cppa::behavior init_state;
 };
 

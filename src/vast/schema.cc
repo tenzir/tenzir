@@ -233,4 +233,24 @@ void schema::add_event(event e)
   events_.emplace_back(std::move(e));
 }
 
+bool operator==(schema const& x, schema const& y)
+{
+  return x.types_ == y.types_ && x.events_ == y.events_;
+}
+
+bool operator==(schema::type_info const& x, schema::type_info const& y)
+{
+  return x.name == y.name && x.type == y.type;
+}
+
+bool operator==(schema::argument const& x, schema::argument const& y)
+{
+  return x.name == y.name && x.type == y.type;
+}
+
+bool operator==(schema::event const& x, schema::event const& y)
+{
+  return x.name == y.name && x.args == y.args;
+}
+
 } // namespace vast

@@ -2,9 +2,12 @@
 
 #include <ze/chunk.h>
 #include <ze/event.h>
+#include <ze/uuid.h>
 #include <cppa/announce.hpp>
 #include "vast/detail/cppa_archive.h"
+#include "vast/schema.h"
 #include "vast/segment.h"
+#include "vast/to_string.h"
 #include "vast/expression.h"
 
 namespace vast {
@@ -20,6 +23,7 @@ void cppa_announce_types()
   announce(typeid(ze::chunk<ze::event>), new event_chunk_type_info);
   announce(typeid(segment), new segment_type_info);
   announce(typeid(expression), new expression_type_info);
+  announce(typeid(schema), new schema_type_info);
 }
 
 void uuid_type_info::serialize(void const* ptr, cppa::serializer* sink) const
@@ -110,6 +114,24 @@ void expression_type_info::deserialize(void* ptr, cppa::deserializer* source) co
     auto expr = reinterpret_cast<expression*>(ptr);
     cppa_iarchive ia(source, cname);
     ia >> *expr;
+}
+
+void schema_type_info::serialize(void const* ptr, cppa::serializer* sink) const
+{
+    auto sch = reinterpret_cast<schema const*>(ptr);
+    cppa_oarchive oa(sink, name());
+    oa << *sch;
+}
+
+void schema_type_info::deserialize(void* ptr, cppa::deserializer* source) const
+{
+    std::string cname = source->seek_object();
+    if (cname != name())
+        throw std::logic_error("wrong type name found");
+
+    auto sch = reinterpret_cast<schema*>(ptr);
+    cppa_iarchive ia(source, cname);
+    ia >> *sch;
 }
 
 } // namespace detail

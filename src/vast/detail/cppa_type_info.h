@@ -7,6 +7,7 @@
 namespace vast {
 
 // Forward declarations.
+class schema;
 class segment;
 class expression;
 
@@ -15,14 +16,16 @@ namespace detail {
 /// Announces all necessary types we use here.
 void cppa_announce_types();
 
-class uuid_type_info : public cppa::util::abstract_uniform_type_info<ze::uuid>
+class uuid_type_info
+  : public cppa::util::abstract_uniform_type_info<ze::uuid>
 {
 protected:
   void serialize(void const* ptr, cppa::serializer* sink) const;
   void deserialize(void* ptr, cppa::deserializer* source) const;
 };
 
-class event_type_info : public cppa::util::abstract_uniform_type_info<ze::event>
+class event_type_info
+  : public cppa::util::abstract_uniform_type_info<ze::event>
 {
 protected:
   void serialize(void const* ptr, cppa::serializer* sink) const;
@@ -37,14 +40,24 @@ protected:
   void deserialize(void* ptr, cppa::deserializer* source) const;
 };
 
-class segment_type_info : public cppa::util::abstract_uniform_type_info<segment>
+class segment_type_info
+  : public cppa::util::abstract_uniform_type_info<segment>
 {
 protected:
   void serialize(void const* ptr, cppa::serializer* sink) const;
   void deserialize(void* ptr, cppa::deserializer* source) const;
 };
 
-class expression_type_info : public cppa::util::abstract_uniform_type_info<expression>
+class expression_type_info 
+  : public cppa::util::abstract_uniform_type_info<expression>
+{
+protected:
+  void serialize(void const* ptr, cppa::serializer* sink) const;
+  void deserialize(void* ptr, cppa::deserializer* source) const;
+};
+
+class schema_type_info 
+  : public cppa::util::abstract_uniform_type_info<schema>
 {
 protected:
   void serialize(void const* ptr, cppa::serializer* sink) const;
