@@ -16,16 +16,12 @@ query<Iterator>::query(error_handler<Iterator>& on_error)
     qi::_2_type _2;
     qi::_3_type _3;
     qi::_4_type _4;
-
     qi::raw_type raw;
     qi::lexeme_type lexeme;
     qi::repeat_type repeat;
     qi::alpha_type alpha;
     qi::alnum_type alnum;
     qi::ulong_type ulong;
-
-    using qi::on_error;
-    using qi::fail;
 
     boolean_op.add
         ("||", ast::query::logical_or)
@@ -46,20 +42,20 @@ query<Iterator>::query(error_handler<Iterator>& on_error)
         ;
 
     type.add
-        ("bool", ze::bool_type)
-        ("int", ze::int_type)
-        ("count", ze::uint_type)
-        ("double", ze::double_type)
-        ("duration", ze::time_range_type)
-        ("time", ze::time_point_type)
-        ("string", ze::string_type)
-        ("vector", ze::vector_type)
-        ("set", ze::set_type)
-        ("table", ze::table_type)
-        ("record", ze::record_type)
-        ("addr", ze::address_type)
-        ("prefix", ze::prefix_type)
-        ("port", ze::port_type)
+        ("bool",      ze::bool_type)
+        ("int",       ze::int_type)
+        ("count",     ze::uint_type)
+        ("double",    ze::double_type)
+        ("duration",  ze::time_range_type)
+        ("time",      ze::time_point_type)
+        ("string",    ze::string_type)
+        ("vector",    ze::vector_type)
+        ("set",       ze::set_type)
+        ("table",     ze::table_type)
+        ("record",    ze::record_type)
+        ("addr",      ze::address_type)
+        ("prefix",    ze::prefix_type)
+        ("port",      ze::port_type)
         ;
 
     qry

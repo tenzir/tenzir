@@ -16,9 +16,6 @@ expression<Iterator>::expression(error_handler<Iterator>& on_error)
     qi::_3_type _3;
     qi::_4_type _4;
 
-    using qi::on_error;
-    using qi::fail;
-
     binary_op.add
         ("+", ast::query::plus)
         ("-", ast::query::minus)

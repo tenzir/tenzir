@@ -1,6 +1,6 @@
 include_directories(BEFORE ..)
 
-set(vast_lib_sources
+set(libvast_sources
   archive.cc
   configuration.cc
   event_sink.cc
@@ -14,10 +14,13 @@ set(vast_lib_sources
   program.cc
   query.cc
   query_client.cc
+  schema.cc
+  schema_manager.cc
   search.cc
   segment.cc
   segment_manager.cc
   system_monitor.cc
+  to_string.cc
   comm/broccoli.cc
   comm/connection.cc
   comm/exception.cc
@@ -27,15 +30,9 @@ set(vast_lib_sources
   detail/ast/query.cc
   detail/parser/expression.cc
   detail/parser/query.cc
+  detail/parser/schema.cc
   fs/exception.cc
   fs/operations.cc
-  meta/argument.cc
-  meta/event.cc
-  meta/exception.cc
-  meta/schema_manager.cc
-  meta/taxonomy.cc
-  meta/type.cc
-  meta/parser/taxonomy.cc
   sink/file.cc
   source/broccoli.cc
   source/file.cc
@@ -58,7 +55,7 @@ if (GPERFTOOLS_FOUND AND USE_PERFTOOLS_HEAP_PROFILER)
   set(libs ${libs} ${GPERFTOOLS_TCMALLOC})
 endif ()
 
-add_library(libvast SHARED ${vast_lib_sources})
+add_library(libvast SHARED ${libvast_sources})
 set_target_properties(libvast PROPERTIES OUTPUT_NAME vast)
 target_link_libraries(libvast ${libs})
 install(TARGETS libvast DESTINATION lib)

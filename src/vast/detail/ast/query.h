@@ -1,7 +1,6 @@
 #ifndef VAST_DETAIL_AST_QUERY_H
 #define VAST_DETAIL_AST_QUERY_H
 
-#include <vector>
 #include <boost/optional.hpp>
 #include <boost/variant/recursive_variant.hpp>
 #include <boost/fusion/include/adapt_struct.hpp>

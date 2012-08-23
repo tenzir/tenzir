@@ -58,18 +58,14 @@ struct query : public exception
 {
   query() = default;
   query(char const* msg);
+  query(char const* msg, std::string const& expr);
 };
 
-/// Thrown when a syntax error with a query occurs.
-struct syntax : public query
+/// Thrown when an error with a schema occurs.
+struct schema : public exception
 {
-  syntax(std::string const& q);
-};
-
-/// Thrown when a semantic error with a query occurs.
-struct semantic : public query
-{
-  semantic(std::string const& q);
+  schema() = default;
+  schema(char const* msg);
 };
 
 } // namespace error

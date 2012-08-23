@@ -1,12 +1,10 @@
-#include "vast/meta/schema_manager.h"
+#include "vast/schema_manager.h"
 
-#include "vast/meta/taxonomy.h"
-#include "vast/meta/event.h"
-#include "vast/meta/type.h"
+#include "vast/schema.h"
 #include "vast/logger.h"
+#include "vast/to_string.h"
 
 namespace vast {
-namespace meta {
 
 schema_manager::schema_manager()
 {
@@ -15,12 +13,12 @@ schema_manager::schema_manager()
   init_state = (
       on(atom("load"), arg_match) >> [=](std::string const& file)
       {
-        schema_.reset(new taxonomy);
-        schema_->load(file);
+        schema_.reset(new schema);
+        schema_->read(file);
       },
       on(atom("print")) >> [=]()
       {
-        reply("schema", schema_->to_string());
+        reply("schema", to_string(*schema_));
       },
       on(atom("shutdown")) >> [=]
       {
@@ -29,5 +27,4 @@ schema_manager::schema_manager()
       });
 }
 
-} // namespace meta
 } // namespace vast

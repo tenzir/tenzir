@@ -83,7 +83,7 @@ query::query(cppa::actor_ptr archive,
 
           return;
         }
-        catch (error::syntax const& e)
+        catch (error::query const& e)
         {
           std::stringstream msg;
           msg << "query @" << id() << " is invalid: " << e.what();
@@ -91,15 +91,6 @@ query::query(cppa::actor_ptr archive,
           LOG(error, query) << msg.str();
           reply(atom("set"), atom("expression"), atom("failure"), msg.str());
         }
-        catch (error::semantic const& e)
-        {
-          std::stringstream msg;
-          msg << "query @" << id() << " is invalid: " << e.what();
-
-          LOG(error, query) << msg.str();
-          reply(atom("set"), atom("expression"), atom("failure"), msg.str());
-        }
-
       },
       on(atom("set"), atom("batch size"), arg_match) >> [=](unsigned batch_size)
       {

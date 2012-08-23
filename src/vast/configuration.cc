@@ -23,7 +23,6 @@ configuration::configuration()
     ("directory,d", po::value<fs::path>()->default_value("vast"),
      "VAST directory")
     ("help,h", "display this help")
-    ("schema,s", po::value<std::string>(), "event schema file")
     ("advanced,z", "show advanced options")
     ;
 
@@ -65,7 +64,8 @@ configuration::configuration()
 
   po::options_description schema("schema options");
   schema.add_options()
-    ("print-schema", "print the parsed event schema")
+    ("schema.file,s", po::value<std::string>(), "schema file")
+    ("schema.print", "print the parsed event schema")
     ;
 
   po::options_description tracker("ID tracker options");
@@ -220,7 +220,7 @@ void configuration::init()
 {
   po::notify(config_);
 
-  depends("print-schema", "schema");
+  depends("schema.print", "schema.file");
 
   auto cv = get<int>("log.console-verbosity");
   if (cv < 0 || cv > 6)

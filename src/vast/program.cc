@@ -9,13 +9,13 @@
 #include "vast/ingestor.h"
 #include "vast/logger.h"
 #include "vast/query_client.h"
+#include "vast/schema_manager.h"
 #include "vast/search.h"
 #include "vast/system_monitor.h"
 #include "vast/comm/broccoli.h"
 #include "vast/detail/cppa_type_info.h"
 #include "vast/fs/path.h"
 #include "vast/fs/operations.h"
-#include "vast/meta/schema_manager.h"
 #include "vast/util/profiler.h"
 #include "config.h"
 
@@ -100,29 +100,28 @@ bool program::start()
            config_.check("profile-heap"));
     }
 
-    // TODO: uncomment once brought back into the game.
-    //schema_manager_ = spawn<meta::schema_manager>();
-    //if (config_.check("schema"))
-    //{
-    //  send(schema_manager_, atom("load"), config_.get<std::string>("schema"));
+    schema_manager_ = spawn<schema_manager>();
+    if (config_.check("schema.file"))
+    {
+      send(schema_manager_, atom("load"), config_.get<std::string>("schema.file"));
 
-    //  if (config_.check("print-schema"))
-    //  {
-    //    send(schema_manager_, atom("print"));
-    //    receive(
-    //        on(atom("schema"), arg_match) >> [](std::string const& schema)
-    //        {
-    //          std::cout << schema << std::endl;
-    //        },
-    //        after(std::chrono::seconds(1)) >> [=]
-    //        {
-    //          LOG(error, meta)
-    //            << "schema manager did not answer after one second";
-    //        });
+      if (config_.check("schema.print"))
+      {
+        send(schema_manager_, atom("print"));
+        receive(
+            on(atom("schema"), arg_match) >> [](std::string const& schema)
+            {
+              std::cout << schema << std::endl;
+            },
+            after(std::chrono::seconds(1)) >> [=]
+            {
+              LOG(error, meta)
+                << "schema manager did not answer after one second";
+            });
 
-    //    return false;
-    //  }
-    //}
+        return false;
+      }
+    }
 
     if (config_.check("tracker-actor") || config_.check("all-server"))
     {
@@ -295,8 +294,8 @@ void program::stop()
   if (config_.check("tracker-actor") || config_.check("all-server"))
     tracker_ << shutdown;
 
-  // TODO: uncomment once brought back into the game.
-  //schema_manager_ << shutdown;
+  if (schema_manager_)
+    schema_manager_ << shutdown;
 
   if (profiler_)
     profiler_ << shutdown;

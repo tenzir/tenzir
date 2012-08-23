@@ -60,18 +60,16 @@ query::query(char const* msg)
 {
 }
 
-syntax::syntax(std::string const& q)
+query::query(char const* msg, std::string const& expr)
 {
   std::ostringstream oss;
-  oss << "syntax error in '" << q << "'";
+  oss << msg << "'" << expr << "'";
   msg_ = oss.str();
 }
 
-semantic::semantic(std::string const& q)
+schema::schema(char const* msg)
+  : exception(msg)
 {
-  std::ostringstream oss;
-  oss << "semantic error in '" << q << "'";
-  msg_ = oss.str();
 }
 
 } // namespace error
