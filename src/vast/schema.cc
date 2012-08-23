@@ -34,9 +34,9 @@ public:
         return new schema::uint_type;
       case ast::schema::double_type:
         return new schema::double_type;
-      case ast::schema::duration_type:
+      case ast::schema::time_frame_type:
         return new schema::time_frame_type;
-      case ast::schema::timepoint_type:
+      case ast::schema::time_point_type:
         return new schema::time_point_type;
       case ast::schema::string_type:
         return new schema::string_type;
