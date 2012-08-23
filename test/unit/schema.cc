@@ -1,8 +1,8 @@
-#include "../test.h"
-#include <vast/fs/fstream.h>
-#include <vast/meta/taxonomy.h>
-#include <vast/meta/type.h>
-#include <vast/meta/event.h>
+#include "test.h"
+#include "vast/schema.h"
+#include "vast/to_string.h"
+#include "vast/fs/fstream.h"
+#include "vast/fs/path.h"
 
 // Bring the contents of a file into a std::string.
 std::string load(const vast::fs::path& path)
@@ -18,16 +18,16 @@ std::string load(const vast::fs::path& path)
   return storage;
 }
 
-#define DEFINE_TAXONOMY_TEST_CASE(name, input, expected)            \
+#define DEFINE_SCHEMA_TEST_CASE(name, input)                        \
   BOOST_AUTO_TEST_CASE(name)                                        \
   {                                                                 \
-    vast::meta::taxonomy t;                                         \
-    vast::fs::path p(input);                                        \
-    t.load(p);                                                      \
-    auto expected_output = load(expected);                          \
+    vast::schema s0, s1;                                            \
+    s0.read(input);                                                 \
                                                                     \
-    BOOST_CHECK_EQUAL(t.to_string(), expected_output);              \
+    auto str = vast::to_string(s0);                                 \
+    s1.load(str);                                                   \
+    BOOST_CHECK_EQUAL(str, vast::to_string(s1));                    \
   }
 
 // Contains the test case defintions for all taxonomy test files.
-#include "test/unit/meta/taxonomy_test_cases.h"
+#include "test/unit/schema_test_cases.h"

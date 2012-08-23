@@ -1,8 +1,8 @@
 #define BOOST_SPIRIT_QI_DEBUG
 
 #include "test.h"
-#include <vast/detail/parser/query.h>
-#include <vast/util/parser/parse.h>
+#include "vast/detail/parser/query.h"
+#include "vast/detail/parser/parse.h"
 
 BOOST_AUTO_TEST_CASE(expressions)
 {
@@ -15,16 +15,16 @@ BOOST_AUTO_TEST_CASE(expressions)
     "-(42 - 24) / 2"
   };
 
-  vast::detail::ast::expression expr;
-  using vast::util::parser::parse;
+  vast::detail::ast::query::expression expr;
+  using vast::detail::parser::parse;
   for (auto& e : expressions)
     BOOST_CHECK((parse<vast::detail::parser::expression>(e, expr)));
 }
 
 BOOST_AUTO_TEST_CASE(queries)
 {
-  vast::detail::ast::query query;
-  using vast::util::parser::parse;
+  vast::detail::ast::query::query query;
+  using vast::detail::parser::parse;
 
   // Type queries.
   auto q = ":port < 53/udp";

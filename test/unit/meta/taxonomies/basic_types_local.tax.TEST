@@ -1,2 +1,0 @@
-
-event foo(a1: bool, a2: int, a3: uint, a4: double, a5: duration, a6: timepoint, a7: string, a8: pattern, a9: addr, a10: subnet, a11: port)

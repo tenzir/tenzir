@@ -3,16 +3,15 @@ include_directories(
     ${CMAKE_BINARY_DIR}/src
     ${CMAKE_BINARY_DIR}/test/unit)
 
-# Generate C++ header file that defines the taxonomy test cases based on the
-# files in the taxonomy directory.
-file(GLOB taxonomies meta/taxonomies/*.tax)
-set (taxonomy_test_cases "")
-foreach (t ${taxonomies})
-    get_filename_component(base ${t} NAME_WE)
-    set (this "DEFINE_TAXONOMY_TEST_CASE(${base}, \"${t}\", \"${t}.TEST\")")
-    set (taxonomy_test_cases "${taxonomy_test_cases}${this}\n")
+# Generate C++ header file that defines the schema test cases.
+file(GLOB schemas schemas/*.sch)
+set (schema_test_cases "")
+foreach (s ${schemas})
+    get_filename_component(base ${s} NAME_WE)
+    set (this "DEFINE_SCHEMA_TEST_CASE(${base}, \"${s}\")")
+    set (schema_test_cases "${schema_test_cases}${this}\n")
 endforeach ()
-configure_file(meta/taxonomy_test_cases.h.in meta/taxonomy_test_cases.h)
+configure_file(schema_test_cases.h.in schema_test_cases.h)
 
 file(GLOB_RECURSE tests *.cc)
 
