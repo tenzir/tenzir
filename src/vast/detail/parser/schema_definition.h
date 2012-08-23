@@ -130,8 +130,8 @@ schema<Iterator>::schema(error_handler<Iterator>& on_error)
       ;
 
   type_info_
-      =   type_type_    [at_c<0>(_val) = "<anonymous>"][at_c<1>(_val) = _1]
-      |   type_         [_val = _1]
+      =   type_         [_val = _1]
+      |   type_type_    [at_c<0>(_val) = "<anonymous>"][at_c<1>(_val) = _1]
       |   basic_type_   [_val = _1]
       ;
 
