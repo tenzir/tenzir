@@ -74,6 +74,7 @@ public:
   {
     std::string name;
     type_info type;
+    bool optional = false;
   };
 
   struct record_type : complex_type
@@ -81,10 +82,9 @@ public:
     std::vector<argument> args;
   };
 
-  struct event
+  struct event : record_type
   {
     std::string name;
-    std::vector<argument> args;
   };
 
   /// Default-constructs a schema.
@@ -101,6 +101,14 @@ public:
   /// Saves the schema to a file.
   /// @param filename The schema file.
   void write(std::string const& filename) const;
+
+  /// Retrieves the list of all types in the schema.
+  /// @return a vector with type information objects.
+  std::vector<type_info> const& types() const;
+
+  /// Retrieves the list of all events in the schema.
+  /// @return a vector with event schema objects.
+  std::vector<event> const& events() const;
 
   /// Retrieves the type information for a given type name.
   ///

@@ -82,11 +82,29 @@ public:
 
   result_type operator()(ast::schema::record_type const& type) const
   {
-    // TODO: Parse argument attributes.
     auto record = new schema::record_type;
     for (auto& arg : type.args)
-      record->args.push_back({arg.name, create_type_info(arg.type)});
+      record->args.emplace_back(create_argument(arg));
     return record;
+  }
+
+  schema::argument create_argument(
+      ast::schema::argument_declaration const& a) const
+  {
+    schema::argument arg;
+    arg.name = a.name;
+    arg.type = create_type_info(a.type);
+
+    if (a.attrs)
+    {
+      for (auto& attr : *a.attrs)
+      {
+        if (attr.key == "optional")
+          arg.optional = true;
+      }
+    }
+
+    return arg;
   }
 
   schema::type_info create_type_info(ast::schema::type_info const& ti) const
@@ -125,10 +143,9 @@ public:
     schema::event e;
     e.name = ed.name;
 
-    // TODO: Parse argument attributes.
     if (ed.args)
       for (auto& arg : *ed.args)
-        e.args.push_back({arg.name, maker_.create_type_info(arg.type)});
+        e.args.emplace_back(maker_.create_argument(arg));
 
     schema_.add_event(std::move(e));
   }
@@ -189,6 +206,16 @@ void schema::read(const std::string& filename)
 void schema::write(std::string const& filename) const
 {
   fs::ofstream(filename) << to_string(*this);
+}
+
+std::vector<schema::type_info> const& schema::types() const
+{
+  return types_;
+}
+
+std::vector<schema::event> const& schema::events() const
+{
+  return events_;
 }
 
 schema::type_info schema::info(std::string const& name) const
