@@ -21,15 +21,9 @@ public:
   /// input.
   query_client(cppa::actor_ptr search,
                std::string const& expression,
-               unsigned batch_size);
+               uint32_t batch_size);
 
 private:
-  void set_batch_size();
-  void set_expression();
-
-  std::string expression_;
-  unsigned batch_size_ = 0;
-
   cppa::actor_ptr search_;
   cppa::actor_ptr query_;
   cppa::behavior init_state;
