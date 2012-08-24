@@ -152,9 +152,9 @@ clause_operator negate(clause_operator op);
 ze::value fold(expression const& expr);
 
 /// Validates a query with respect to semantic correctness. This means ensuring
-/// that LHS and RHS of clause operators have the same type.
+/// that LHS and RHS of clause operators have the correct types.
 /// @param q The query to validate.
-/// @return @c true iff the query is semantically correct.
+/// @return `true` *iff* *q* is semantically correct.
 bool validate(query& q);
 
 } // namespace query

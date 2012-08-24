@@ -269,7 +269,6 @@ index::index(cppa::actor_ptr archive, std::string directory)
               ze::serialization::stream_iarchive ia(file);
               segment::header hdr;
               ia >> hdr;
-
               build(hdr);
             });
       },

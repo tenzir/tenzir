@@ -87,6 +87,7 @@ public:
     std::vector<argument> args;
   };
 
+  /// Default-constructs a schema.
   schema() = default;
 
   /// Loads schema contents.

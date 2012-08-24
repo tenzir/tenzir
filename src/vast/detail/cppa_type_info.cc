@@ -21,8 +21,9 @@ void cppa_announce_types()
   announce(typeid(ze::event), new event_type_info);
   announce<std::vector<ze::event>>();
   announce(typeid(ze::chunk<ze::event>), new event_chunk_type_info);
-  announce(typeid(segment), new segment_type_info);
+
   announce(typeid(expression), new expression_type_info);
+  announce(typeid(segment), new segment_type_info);
   announce(typeid(schema), new schema_type_info);
 }
 
