@@ -124,17 +124,13 @@ struct validator : public boost::static_visitor<bool>
   bool operator()(offset_clause const& clause) const
   {
     auto rhs = fold(clause.rhs);
-    return ! clause.offsets.empty();
+    return ! (rhs == ze::invalid || clause.offsets.empty());
   }
 
-  bool operator()(event_clause& clause) const
+  bool operator()(event_clause const& clause) const
   {
-    // TODO: Perform the dereference and replace it with the corresponding
-    // offset.
-    clause.lhs[1] = std::to_string(0ul);
-    clause.lhs.resize(2);
-
-    return true;
+    auto rhs = fold(clause.rhs);
+    return ! (rhs == ze::invalid || clause.lhs.size() < 2);
   }
 
   bool operator()(negated_clause const& clause) const
