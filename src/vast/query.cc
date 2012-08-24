@@ -61,8 +61,10 @@ bool query::window::advance()
 
 query::query(cppa::actor_ptr archive,
              cppa::actor_ptr index,
-             cppa::actor_ptr sink)
-  : archive_(archive)
+             cppa::actor_ptr sink,
+             expression expr)
+  : expr_(std::move(expr))
+  , archive_(archive)
   , index_(index)
   , sink_(sink)
 {
@@ -71,45 +73,6 @@ query::query(cppa::actor_ptr archive,
 
   chaining(false);
   init_state = (
-      on(atom("set"), atom("expression"), arg_match) >> [=](std::string const& expr)
-      {
-        DBG(query)
-          << "query @" << id() << " parses expression '" << expr << "'";
-
-        try
-        {
-          expr_.parse(expr);
-          reply(atom("set"), atom("expression"), atom("success"));
-
-          return;
-        }
-        catch (error::query const& e)
-        {
-          std::stringstream msg;
-          msg << "query @" << id() << " is invalid: " << e.what();
-
-          LOG(error, query) << msg.str();
-          reply(atom("set"), atom("expression"), atom("failure"), msg.str());
-        }
-      },
-      on(atom("set"), atom("batch size"), arg_match) >> [=](unsigned batch_size)
-      {
-        if (batch_size == 0)
-        {
-          LOG(warn, query)
-            << "query @" << id() << " ignore invalid batch size of 0";
-
-          reply(atom("set"), atom("batch size"), atom("failure"));
-        }
-        else
-        {
-          LOG(debug, query)
-            << "query @" << id() << " sets batch size to " << batch_size;
-
-          batch_size_ = batch_size;
-          reply(atom("set"), atom("batch size"), atom("success"));
-        }
-      },
       on(atom("start")) >> [=]
       {
         DBG(query) << "query @" << id() << " hits index";
@@ -117,6 +80,15 @@ query::query(cppa::actor_ptr archive,
       },
       on_arg_match >> [=](std::vector<ze::uuid> const& ids)
       {
+        if (ids.empty())
+        {
+          LOG(info, query)
+            << " query @" << id() << " received empty id set";
+          send(self, atom("shutdown"));
+          send(sink_, atom("query"), atom("finished"));
+          return;
+        }
+
         ids_ = ids;
         head_ = ack_ = ids_.begin();
 
@@ -143,9 +115,9 @@ query::query(cppa::actor_ptr archive,
         DBG(query)
           << "query @" << id() << " received segment " << s.id();
       },
-      on(atom("get"), atom("results")) >> [=]
+      on(atom("get"), atom("results"), arg_match) >> [=](uint32_t n)
       {
-        extract(batch_size_);
+        extract(n);
       },
       on(atom("get"), atom("statistics")) >> [=]
       {
@@ -153,7 +125,7 @@ query::query(cppa::actor_ptr archive,
       },
       on(atom("shutdown")) >> [=]
       {
-        self->quit();
+        quit();
         LOG(verbose, query) << "query @" << id() << " terminated";
       });
 }
@@ -164,12 +136,10 @@ void query::run()
       on(atom("hit"), arg_match) >> [=](std::vector<ze::uuid> const& ids)
       {
         LOG(info, query)
-          << "query @" << id() << " received index hit ("
-          << ids.size() << " segments)";
+          << "query @" << id()
+          << " received index hit (" << ids.size() << " segments)";
 
-        auto opt = tuple_cast<anything, std::vector<ze::uuid>>(last_dequeued());
-        assert(opt.valid());
-        send(self, get<0>(*opt));
+        send(self, ids);
       },
       on(atom("impossible")) >> [=]
       {

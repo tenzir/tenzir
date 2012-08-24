@@ -23,8 +23,13 @@ public:
   /// Spawns a query actor.
   /// @param archive The archive actor.
   /// @param index The index actor.
-  /// @param index The sink receiving the results.
-  query(cppa::actor_ptr archive, cppa::actor_ptr index, cppa::actor_ptr sink);
+  /// @param sink The sink receiving the query results.
+  /// @param expr The query expression.
+  query(cppa::actor_ptr archive,
+        cppa::actor_ptr index,
+        cppa::actor_ptr sink,
+        expression expr);
+
 
 private:
   /// A window of segments for extracting events. Internally, a window consists
@@ -102,12 +107,12 @@ private:
   /// Tries to match an event and send it to the sink.
   bool match(ze::event const& event);
 
-  size_t batch_size_ = 0;
   expression expr_;
   statistics stats_;
   window window_;
   int window_size_ = 5; // FIXME: make configurable.
 
+  // TODO: Move into window.
   std::vector<ze::uuid> ids_;
   std::vector<ze::uuid>::const_iterator head_;
   std::vector<ze::uuid>::const_iterator ack_;

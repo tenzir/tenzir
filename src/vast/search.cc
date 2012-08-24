@@ -6,20 +6,54 @@
 
 namespace vast {
 
-search::search(cppa::actor_ptr archive, cppa::actor_ptr index)
+using namespace cppa;
+
+search::search(actor_ptr archive, actor_ptr index, actor_ptr schema_manager)
   : archive_(archive)
   , index_(index)
+  , schema_manager_(schema_manager)
 {
   LOG(verbose, core) << "spawning search @" << id();
-  using namespace cppa;
   init_state = (
-      on(atom("query"), atom("create")) >> [=]
+      on(atom("query"), atom("create"), arg_match)
+        >> [=](std::string const& str)
       {
-        auto q = spawn<query>(archive_, index_, last_sender());
-        assert(queries_.find(q) == queries_.end());
-        queries_.emplace(q, last_sender());
-        monitor(last_sender());
-        reply(atom("query"), q);
+        auto client = last_sender();
+        sync_send(schema_manager, atom("schema")).then(
+            on_arg_match >> [=](schema const& sch)
+            {
+              try
+              {
+                expression expr;
+                expr.parse(str, sch);
+
+                auto q = spawn<query>(
+                    archive_, index_, client, std::move(expr));
+
+                assert(queries_.find(q) == queries_.end());
+                queries_.emplace(q, client);
+
+                monitor(client);
+                send(client, atom("query"), q);
+              }
+              catch (error::query const& e)
+              {
+                std::stringstream msg;
+                msg << "query @" << id() << " is invalid: " << e.what();
+                LOG(error, query) << msg.str();
+                send(client, atom("query"), atom("failure"), msg.str());
+              }
+
+            },
+            after(std::chrono::seconds(1)) >> [=]
+            {
+              std::stringstream msg;
+              msg << "query @" << id()
+                << " timed out trying to reach schema manager @"
+                << schema_manager->id();
+              LOG(error, query) << msg.str();
+              send(client, atom("query"), atom("failure"), msg.str());
+            });
       },
       on(atom("DOWN"), arg_match) >> [=](uint32_t reason)
       {
