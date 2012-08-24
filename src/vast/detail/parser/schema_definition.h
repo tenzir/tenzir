@@ -23,6 +23,8 @@ schema<Iterator>::schema(error_handler<Iterator>& on_error)
   qi::_4_type _4;
   qi::_val_type _val;
   qi::lexeme_type lexeme;
+  qi::raw_type raw;
+  qi::repeat_type repeat;
   qi::lit_type lit;
   qi::char_type char_;
   namespace ascii = boost::spirit::ascii;
@@ -172,8 +174,13 @@ schema<Iterator>::schema(error_handler<Iterator>& on_error)
       ;
 
   identifier_
-      =   alpha >> *(alnum | char_('_') | char_('-'))
-      ;
+    = raw
+      [
+            alpha 
+        >> *(alnum | '_') 
+        >> *(repeat(2)[':'] > (alpha >> *(alnum | '_')))
+      ]
+    ;
 
   on_error.set(schema_, _4, _3);
 

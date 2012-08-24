@@ -12,137 +12,143 @@ query<Iterator>::query(error_handler<Iterator>& on_error)
   : query::base_type(qry)
   , expr(on_error)
 {
-    qi::_1_type _1;
-    qi::_2_type _2;
-    qi::_3_type _3;
-    qi::_4_type _4;
-    qi::raw_type raw;
-    qi::lexeme_type lexeme;
-    qi::repeat_type repeat;
-    qi::alpha_type alpha;
-    qi::alnum_type alnum;
-    qi::ulong_type ulong;
+  qi::_1_type _1;
+  qi::_2_type _2;
+  qi::_3_type _3;
+  qi::_4_type _4;
+  qi::raw_type raw;
+  qi::lexeme_type lexeme;
+  qi::repeat_type repeat;
+  qi::alpha_type alpha;
+  qi::alnum_type alnum;
+  qi::ulong_type ulong;
 
-    boolean_op.add
-        ("||", ast::query::logical_or)
-        ("&&", ast::query::logical_and)
-        ;
+  boolean_op.add
+    ("||", ast::query::logical_or)
+    ("&&", ast::query::logical_and)
+    ;
 
-    clause_op.add
-        ("~",   ast::query::match)
-        ("!~",  ast::query::not_match)
-        ("==",  ast::query::equal)
-        ("!=",  ast::query::not_equal)
-        ("<",   ast::query::less)
-        ("<=",  ast::query::less_equal)
-        (">",   ast::query::greater)
-        (">=",  ast::query::greater_equal)
-        ("in",  ast::query::in)
-        ("!in", ast::query::not_in)
-        ;
+  clause_op.add
+    ("~",   ast::query::match)
+    ("!~",  ast::query::not_match)
+    ("==",  ast::query::equal)
+    ("!=",  ast::query::not_equal)
+    ("<",   ast::query::less)
+    ("<=",  ast::query::less_equal)
+    (">",   ast::query::greater)
+    (">=",  ast::query::greater_equal)
+    ("in",  ast::query::in)
+    ("!in", ast::query::not_in)
+    ;
 
-    type.add
-        ("bool",      ze::bool_type)
-        ("int",       ze::int_type)
-        ("count",     ze::uint_type)
-        ("double",    ze::double_type)
-        ("duration",  ze::time_range_type)
-        ("time",      ze::time_point_type)
-        ("string",    ze::string_type)
-        ("vector",    ze::vector_type)
-        ("set",       ze::set_type)
-        ("table",     ze::table_type)
-        ("record",    ze::record_type)
-        ("addr",      ze::address_type)
-        ("prefix",    ze::prefix_type)
-        ("port",      ze::port_type)
-        ;
+  type.add
+    ("bool",      ze::bool_type)
+    ("int",       ze::int_type)
+    ("count",     ze::uint_type)
+    ("double",    ze::double_type)
+    ("duration",  ze::time_range_type)
+    ("time",      ze::time_point_type)
+    ("string",    ze::string_type)
+    ("vector",    ze::vector_type)
+    ("set",       ze::set_type)
+    ("table",     ze::table_type)
+    ("record",    ze::record_type)
+    ("addr",      ze::address_type)
+    ("prefix",    ze::prefix_type)
+    ("port",      ze::port_type)
+    ;
 
-    qry
-        =   clause
-        >>  *(boolean_op > clause)
-        ;
+  qry
+    =   clause
+    >>  *(boolean_op > clause)
+    ;
 
-    clause
-        =   tag_clause
-        |   type_clause
-        |   offset_clause
-        |   event_clause
-        |   ('!' > not_clause)
-        ;
+  clause
+    =   tag_clause
+    |   type_clause
+    |   offset_clause
+    |   event_clause
+    |   ('!' > not_clause)
+    ;
 
-    tag_clause
-        =   '&' > identifier
-        >   clause_op
-        >   expr
-        ;
+  tag_clause
+    =   '&'
+    >   identifier
+    >   clause_op
+    >   expr
+    ;
 
-    type_clause
-        =   ':' > type
-        >   clause_op
-        >   expr
-        ;
+  type_clause
+    =   ':'
+    >   type
+    >   clause_op
+    >   expr
+    ;
 
-    offset_clause
-        =   '@'
-        >   ulong % ','
-        >   clause_op
-        >   expr
-        ;
+  offset_clause
+    =   '@'
+    >   ulong % ','
+    >   clause_op
+    >   expr
+    ;
 
-    event_clause
-        =   glob >> *('$' > identifier)
-        >   clause_op
-        >   expr
-        ;
+  event_clause
+    =   glob >> *('$' > identifier)
+    >   clause_op
+    >   expr
+    ;
 
-    not_clause
-        =   clause
-        ;
+  not_clause
+    =   clause
+    ;
 
-    identifier
-        =   raw[lexeme[(alpha | '_') >> *(alnum | '_' )]]
-        ;
+  identifier
+    =   raw[lexeme[(alpha | '_') >> *(alnum | '_' )]]
+    ;
 
-    // Supports currently only one level of scoping.
-    glob
-        =   raw[lexeme[
-                (alpha | '_' | '*' | '?')
-            >> *(alnum | '_' | '*' | '?')
-            >> -(   repeat(2)[':']
-                >   (alpha | '_' | '*' | '?')
-                >> *(alnum | '_' | '*' | '?')
-                )
-            ]]
-        ;
+  // Supports currently only one level of scoping.
+  glob
+    = raw
+      [
+        lexeme
+        [
+              (alpha | '_' | '*' | '?')
+          >> *(alnum | '_' | '*' | '?')
+          >> -(   repeat(2)[':']
+              >   (alpha | '_' | '*' | '?')
+              >> *(alnum | '_' | '*' | '?')
+              )
+         ]
+      ]
+    ;
 
-    event_name
-        =   raw[lexeme[ ((alpha | '_') >> *(alnum | '_' )) % repeat(2)[':'] ]]
-        ;
+  event_name
+    =   raw[lexeme[ ((alpha | '_') >> *(alnum | '_' )) % repeat(2)[':'] ]]
+    ;
 
-    BOOST_SPIRIT_DEBUG_NODES(
-        (qry)
-        (clause)
-        (tag_clause)
-        (type_clause)
-        (offset_clause)
-        (event_clause)
-        (identifier)
-    );
+  BOOST_SPIRIT_DEBUG_NODES(
+      (qry)
+      (clause)
+      (tag_clause)
+      (type_clause)
+      (offset_clause)
+      (event_clause)
+      (identifier)
+      );
 
-    on_error.set(qry, _4, _3);
+  on_error.set(qry, _4, _3);
 
-    boolean_op.name("binary boolean operator");
-    clause_op.name("binary clause operator");
-    type.name("type");
-    qry.name("query");
-    clause.name("clause");
-    tag_clause.name("tag clause");
-    offset_clause.name("offset clause");
-    type_clause.name("type clause");
-    event_clause.name("event clause");
-    not_clause.name("negated clause");
-    identifier.name("identifier");
+  boolean_op.name("binary boolean operator");
+  clause_op.name("binary clause operator");
+  type.name("type");
+  qry.name("query");
+  clause.name("clause");
+  tag_clause.name("tag clause");
+  offset_clause.name("offset clause");
+  type_clause.name("type clause");
+  event_clause.name("event clause");
+  not_clause.name("negated clause");
+  identifier.name("identifier");
 }
 
 } // namespace ast
