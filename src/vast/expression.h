@@ -3,10 +3,17 @@
 
 #include <ze/event.h>
 #include "vast/util/visitor.h"
+#include "vast/schema.h"
 
 namespace vast {
+
+// Forward declarations
+class expression;
+std::string to_string(expression const&);
+
 namespace expr {
 
+// Forward declarations
 class node;
 class timestamp_extractor;
 class name_extractor;
@@ -265,17 +272,18 @@ public:
   /// @param other The expression to copy.
   expression(expression const& other);
 
-  /// Move-constructs an expression
+  /// Move-constructs an expression.
   /// @param other The expression to move.
   expression(expression&& other);
 
   /// Assigns an expression.
-  /// @param other The RHS of the assignment
+  /// @param other The RHS of the assignment.
   expression& operator=(expression other);
 
   /// Parses a given expression.
   /// @param str The query expression to transform into an AST.
-  void parse(std::string str);
+  /// @param sch The schema to use to resolve event clauses.
+  void parse(std::string str, schema sch);
 
   /// Evaluates an event with respect to the root node.
   /// @param event The event to evaluate against the expression.
@@ -295,6 +303,7 @@ private:
   friend void serialize(Archive& oa, expression const& expr)
   {
     oa << expr.str_;
+    oa << expr.schema_;
   }
 
   template <typename Archive>
@@ -302,12 +311,15 @@ private:
   {
     std::string str;
     ia >> str;
-    expr.parse(std::move(str));
+    schema sch;
+    ia >> sch;
+    expr.parse(std::move(str), std::move(sch));
   }
 
   friend bool operator==(expression const& x, expression const& y);
 
   std::string str_;
+  schema schema_;
   std::unique_ptr<expr::node> root_;
   std::vector<expr::extractor*> extractors_;
 };

@@ -5,6 +5,7 @@
 #include <ze/util/make_unique.h>
 #include "vast/exception.h"
 #include "vast/logger.h"
+#include "vast/schema.h"
 #include "vast/detail/ast/query.h"
 #include "vast/detail/parser/parse.h"
 #include "vast/detail/parser/query.h"
@@ -547,13 +548,13 @@ private:
 };
 
 expression::expression(expression const& other)
-  : str_(other.str_)
 {
-  parse(str_);
+  parse(other.str_, other.schema_);
 }
 
 expression::expression(expression&& other)
   : str_(std::move(other.str_))
+  , schema_(std::move(other.schema_))
   , root_(std::move(other.root_))
   , extractors_(std::move(other.extractors_))
 {
@@ -563,17 +564,19 @@ expression& expression::operator=(expression other)
 {
   using std::swap;
   swap(str_, other.str_);
+  swap(schema_, other.schema_);
   swap(root_, other.root_);
   swap(extractors_, other.extractors_);
   return *this;
 }
 
-void expression::parse(std::string str)
+void expression::parse(std::string str, schema sch)
 {
   if (str.empty())
-    return;
+      throw error::query("empty expression");
 
   str_ = std::move(str);
+  schema_ = std::move(sch);
   extractors_.clear();
 
   detail::ast::query::query ast;
@@ -660,7 +663,7 @@ void expression::accept(expr::visitor& v)
 
 bool operator==(expression const& x, expression const& y)
 {
-  return x.str_ == y.str_;
+  return x.str_ == y.str_ && x.schema_ == y.schema_;
 }
 
 } // namespace vast
