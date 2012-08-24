@@ -165,6 +165,10 @@ clause_operator negate(clause_operator op)
       return less_equal;
     case greater_equal:
       return less;
+    case in:
+      return not_in;
+    case not_in:
+      return in;
   }
 }
 
