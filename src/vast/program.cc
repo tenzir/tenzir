@@ -67,6 +67,7 @@ bool program::run()
 
   stop();
   await_all_others_done();
+  shutdown();
 
   return true;
 }
