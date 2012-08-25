@@ -343,7 +343,7 @@ bro15conn::bro15conn(cppa::actor_ptr ingestor,
 
 ze::event bro15conn::parse(std::string const& line)
 {
-  ze::event e("bro::conn15");
+  ze::event e("bro::conn");
   e.timestamp(ze::now());
 
   util::field_splitter<std::string::const_iterator> fs;
