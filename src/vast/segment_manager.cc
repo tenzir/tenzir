@@ -33,11 +33,11 @@ segment_manager::segment_manager(size_t capacity, std::string const& dir)
           LOG(verbose, archive)
             << "segment manager @" << id() << " did not find any segments";
       },
-      on(atom("put"), arg_match) >> [=](segment const& s)
+      on_arg_match >> [=](segment const& s)
       {
-        auto opt = tuple_cast<anything, segment>(last_dequeued());
+        auto opt = tuple_cast<segment>(last_dequeued());
         assert(opt.valid());
-        store_segment(get<0>(*opt));
+        store_segment(*opt);
         reply(atom("segment"), atom("ack"), s.id());
       },
       on(atom("get"), atom("ids")) >> [=]
