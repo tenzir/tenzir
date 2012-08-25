@@ -43,7 +43,6 @@ search::search(actor_ptr archive, actor_ptr index, actor_ptr schema_manager)
                 LOG(error, query) << msg.str();
                 send(client, atom("query"), atom("failure"), msg.str());
               }
-
             },
             after(std::chrono::seconds(1)) >> [=]
             {

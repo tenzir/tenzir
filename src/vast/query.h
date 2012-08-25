@@ -98,27 +98,26 @@ private:
     std::unique_ptr<segment::reader> reader_;
   };
 
-  /// Ask the index, receive segment IDs, and query the archive with them.
-  void run();
-
   /// Tries to extract a given number of events from the window.
+  /// @param n The number of results to extract.
   void extract(size_t n);
 
-  /// Tries to match an event and send it to the sink.
+  /// Tests whether an event matches the query expression.
+  /// @param event The event to check.
+  /// @return `true` iff *event* matches the query expression.
   bool match(ze::event const& event);
 
   expression expr_;
   statistics stats_;
-  window window_;
-  int window_size_ = 5; // FIXME: make configurable.
 
   // TODO: Move into window.
   std::vector<ze::uuid> ids_;
   std::vector<ze::uuid>::const_iterator head_;
   std::vector<ze::uuid>::const_iterator ack_;
+  int window_size_ = 5; // FIXME: make configurable.
+  window window_;
 
   cppa::actor_ptr archive_;
-  cppa::actor_ptr index_;
   cppa::actor_ptr sink_;
   cppa::behavior init_state;
 };

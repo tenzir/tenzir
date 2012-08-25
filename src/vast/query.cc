@@ -65,7 +65,6 @@ query::query(cppa::actor_ptr archive,
              expression expr)
   : expr_(std::move(expr))
   , archive_(archive)
-  , index_(index)
   , sink_(sink)
 {
   LOG(verbose, query)
@@ -76,14 +75,48 @@ query::query(cppa::actor_ptr archive,
       on(atom("start")) >> [=]
       {
         DBG(query) << "query @" << id() << " hits index";
-        run();
+        sync_send(index, atom("hit"), expr_).then(
+            on(atom("hit"), arg_match) >> [=](std::vector<ze::uuid> const& ids)
+            {
+              LOG(info, query)
+                << "query @" << id()
+                << " received index hit (" << ids.size() << " segments)";
+
+              send(self, ids);
+            },
+            on(atom("impossible")) >> [=]
+            {
+              LOG(info, query)
+                << "query @" << id() << " cannot use index to speed up answer,"
+                << " asking archive @" << archive_->id() << " for all segments";
+
+              send(archive_, atom("get"), atom("ids"));
+            },
+            on(atom("miss")) >> [=]
+            {
+              LOG(info, query)
+                << "query @" << id() << " received index miss";
+
+              send(sink_, atom("query"), atom("index"), atom("miss"));
+              // TODO: Eventually, we want to let the user decide what happens
+              // on a index miss.
+              send(archive_, atom("get"), atom("ids"));
+            },
+            after(std::chrono::minutes(1)) >> [=]
+            {
+              LOG(error, query)
+                << "query @" << id()
+                << " timed out after waiting one minute for index answer";
+
+              send(sink_, atom("query"), atom("index"), atom("time-out"));
+            });
       },
       on_arg_match >> [=](std::vector<ze::uuid> const& ids)
       {
         if (ids.empty())
         {
           LOG(info, query)
-            << " query @" << id() << " received empty id set";
+            << "query @" << id() << " received empty id set";
           send(self, atom("shutdown"));
           send(sink_, atom("query"), atom("finished"));
           return;
@@ -130,48 +163,6 @@ query::query(cppa::actor_ptr archive,
       });
 }
 
-void query::run()
-{
-  sync_send(index_, atom("hit"), expr_).then(
-      on(atom("hit"), arg_match) >> [=](std::vector<ze::uuid> const& ids)
-      {
-        LOG(info, query)
-          << "query @" << id()
-          << " received index hit (" << ids.size() << " segments)";
-
-        send(self, ids);
-      },
-      on(atom("impossible")) >> [=]
-      {
-        LOG(info, query)
-          << "query @" << id() << " cannot use index to speed up answer";
-        LOG(info, query)
-          << "query @" << id() << " asks archive @" << archive_->id() << " for all segments";
-
-        send(archive_, atom("get"), atom("ids"));
-      },
-      on(atom("miss")) >> [=]
-      {
-        LOG(info, query)
-          << "query @" << id() << " received index miss";
-
-        send(sink_, atom("query"), atom("index"), atom("miss"));
-
-        // TODO: Eventually, we want to let the user decide what happens on a
-        // index miss. For now, we just sequentially scan the archive.
-        send(archive_, atom("get"), atom("ids"));
-      },
-      after(std::chrono::minutes(1)) >> [=]
-      {
-        LOG(error, query)
-          << "query @" << id()
-          << " timed out after waiting one minute for index answer";
-
-        send(sink_, atom("query"), atom("index"), atom("time-out"));
-      });
-}
-
-
 void query::extract(size_t n)
 {
   LOG(debug, query)
@@ -186,7 +177,10 @@ void query::extract(size_t n)
     if (extracted)
     {
       if (match(e))
+      {
+        send(sink_, std::move(e));
         ++i;
+      }
     }
     else if (window_.advance())
     {
@@ -206,7 +200,10 @@ void query::extract(size_t n)
       assert(extracted); // By the post-condition of window::advance().
 
       if (match(e))
+      {
+        send(sink_, std::move(e));
         ++i;
+      }
     }
     else if (ack_ < head_)
     {
@@ -236,7 +233,6 @@ bool query::match(ze::event const& event)
   ++stats_.processed;
   if (expr_.eval(event))
   {
-    send(sink_, std::move(event));
     ++stats_.matched;
     return true;
   }
