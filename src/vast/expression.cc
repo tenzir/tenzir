@@ -5,7 +5,6 @@
 #include <ze/util/make_unique.h>
 #include "vast/exception.h"
 #include "vast/logger.h"
-#include "vast/schema.h"
 #include "vast/detail/ast/query.h"
 #include "vast/detail/parser/parse.h"
 #include "vast/detail/parser/query.h"
@@ -349,15 +348,18 @@ void constant::eval()
 
 } // namespace expr
 
+/// Takes a query AST and generates a polymorphic query expression tree.
 class expressionizer
 {
 public:
   typedef void result_type;
 
   expressionizer(expr::n_ary_operator* parent,
-                 std::vector<expr::extractor*>& extractors)
+                 std::vector<expr::extractor*>& extractors,
+                 schema const& sch)
     : parent_(parent)
     , extractors_(extractors)
+    , schema_(sch)
   {
   }
 
@@ -438,29 +440,56 @@ public:
 
   void operator()(detail::ast::query::event_clause const& clause)
   {
-    // The validation step of the query AST left the first element
-    // untouched, as the name extractor uses it. Since all remaining
-    // elements used to contain only a sequence of dereference operations
-    // that yield a single offset, they are at this point condensed into
-    // one element representing this offset.
-    assert(clause.lhs.size() == 2);
+    if (schema_.events().empty())
+      throw error::query("no events in schema");
 
-    // TODO: Factor out this common optimization step of adding nodes directly
-    // at the parent of they are conjunctions. We should create a visitor
-    // interface and then an optimizer-visitor that performs such steps.
-    expr::n_ary_operator* p;
-    if (dynamic_cast<expr::conjunction*>(parent_))
+    // An event clause always consists of two components: the event name
+    // extractor and offset extractor. For event dereference sequence (e.g.,
+    // http_request$c$..) the event name is explict, for type dereference
+    // sequences (e.g., connection$id$...), we need to find all events and
+    // types that have an argument of the given type.
+    //
+    // In any case, we always need a conjunction that joins the relevant event
+    // names with the actual offset extraction.
+    auto conjunction = std::make_unique<expr::conjunction>();
+
+    std::vector<size_t> offsets;
+    schema::record_type const* current = nullptr;
+    auto& id = clause.lhs.front();
+    for (auto& e : schema_.events())
     {
-      p = parent_;
+      if (id == e.name)
+      {
+        current = &e;
+        conjunction->add(make_glob_node(id));
+        break;
+      }
     }
-    else
+    if (! current)
     {
-      auto conj = std::make_unique<expr::conjunction>();
-      p = conj.get();
-      parent_->add(std::move(conj));
+      // The first element in the dereference sequence names a type, now we
+      // have to identify all events and records having argument of that
+      // type.
+      throw error::query("type dereference not yet implemented");
     }
 
-    p->add(make_glob_node(clause.lhs[0]));
+    for (size_t i = 1; i < clause.lhs.size(); ++i)
+    {
+      auto& id = clause.lhs[i];
+      assert(current);
+      for (size_t off = 0; off < current->args.size(); ++off)
+      {
+        auto& arg = current->args[off];
+        if (arg.name == id)
+        {
+          DBG(query)
+            << "translating event clause: "
+            << (clause.lhs[0] + '$' + id) << " -> " << off;
+          offsets.push_back(off);
+          break;
+        }
+      }
+    }
 
     auto op = clause.op;
     if (invert_)
@@ -469,21 +498,21 @@ public:
       invert_ = false;
     }
     auto relation = make_relational_operator(op);
-
-    // FIXME: use schema to determine correct offsets.
-    std::vector<size_t> offsets{0};
     auto lhs = std::make_unique<expr::offset_extractor>(std::move(offsets));
     extractors_.push_back(lhs.get());
+    auto rhs = std::make_unique<expr::constant>(
+        detail::ast::query::fold(clause.rhs));
+
     relation->add(std::move(lhs));
-
-    auto rhs = std::make_unique<expr::constant>(detail::ast::query::fold(clause.rhs));
     relation->add(std::move(rhs));
-
-    p->add(std::move(relation));
+    conjunction->add(std::move(relation));
+    parent_->add(std::move(conjunction));
   }
 
   void operator()(detail::ast::query::negated_clause const& clause)
   {
+    // Since all operators have a complement, we can push down the negation to
+    // the operator-level (as opposed to leaving it at the clause level).
     invert_ = true;
     boost::apply_visitor(*this, clause.operand);
   }
@@ -544,6 +573,7 @@ private:
 
   expr::n_ary_operator* parent_;
   std::vector<expr::extractor*>& extractors_;
+  schema const& schema_;
   bool invert_ = false;
 };
 
@@ -590,7 +620,7 @@ void expression::parse(std::string str, schema sch)
   {
     /// WLOG, we can always add a conjunction as root.
     auto conjunction = std::make_unique<expr::conjunction>();
-    expressionizer visitor(conjunction.get(), extractors_);
+    expressionizer visitor(conjunction.get(), extractors_, schema_);
     boost::apply_visitor(std::ref(visitor), ast.first);
     root_ = std::move(conjunction);
   }
@@ -610,13 +640,13 @@ void expression::parse(std::string str, schema sch)
     for (auto& ands : ors)
       if (ands.rest.empty())
       {
-        expressionizer visitor(disjunction.get(), extractors_);
+        expressionizer visitor(disjunction.get(), extractors_, schema_);
         boost::apply_visitor(std::ref(visitor), ands.first);
       }
       else
       {
         auto conjunction = std::make_unique<expr::conjunction>();
-        expressionizer visitor(conjunction.get(), extractors_);
+        expressionizer visitor(conjunction.get(), extractors_, schema_);
         boost::apply_visitor(std::ref(visitor), ands.first);
         for (auto clause : ands.rest)
         {

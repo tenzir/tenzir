@@ -283,7 +283,7 @@ public:
   /// Parses a given expression.
   /// @param str The query expression to transform into an AST.
   /// @param sch The schema to use to resolve event clauses.
-  void parse(std::string str, schema sch);
+  void parse(std::string str, schema sch = schema());
 
   /// Evaluates an event with respect to the root node.
   /// @param event The event to evaluate against the expression.
