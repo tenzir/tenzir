@@ -17,11 +17,14 @@ segment::writer::writer(segment& s)
 {
 }
 
-void segment::writer::flush_chunk()
+size_t segment::writer::bytes() const
 {
-  segment_.chunks_.emplace_back(std::move(chunk_));
-  chunk_ = chunk();
-  putter_ = std::move(chunk::putter(&chunk_));
+  return bytes_;
+}
+
+size_t segment::writer::elements() const
+{
+  return chunk_.elements();
 }
 
 uint32_t segment::writer::operator<<(ze::event const& event)
@@ -47,14 +50,11 @@ uint32_t segment::writer::operator<<(ze::event const& event)
   return chunk_.elements();
 }
 
-size_t segment::writer::bytes() const
+void segment::writer::flush_chunk()
 {
-  return bytes_;
-}
-
-size_t segment::writer::elements() const
-{
-  return chunk_.elements();
+  segment_.chunks_.emplace_back(std::move(chunk_));
+  chunk_ = chunk();
+  putter_ = std::move(chunk::putter(&chunk_));
 }
 
 
@@ -65,6 +65,21 @@ segment::reader::reader(segment const& s)
 {
   assert(chunk_ != segment_.chunks_.end());
   ++chunk_;
+}
+
+size_t segment::reader::bytes() const
+{
+  return total_bytes_ + bytes_;
+}
+
+uint32_t segment::reader::events() const
+{
+  return getter_.available();
+}
+
+size_t segment::reader::chunks() const
+{
+  return segment_.chunks_.end() - chunk_;
 }
 
 uint32_t segment::reader::operator>>(ze::event& e)
@@ -81,21 +96,6 @@ uint32_t segment::reader::operator>>(ze::event& e)
 
   bytes_ = getter_ >> e;
   return getter_.available();
-}
-
-size_t segment::reader::bytes() const
-{
-  return total_bytes_ + bytes_;
-}
-
-uint32_t segment::reader::events() const
-{
-  return getter_.available();
-}
-
-size_t segment::reader::chunks() const
-{
-  return segment_.chunks_.end() - chunk_;
 }
 
 

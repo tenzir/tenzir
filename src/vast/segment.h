@@ -78,21 +78,21 @@ public:
     /// @param s The segment to write to.
     writer(segment& s);
 
-    /// Moves the current chunk from the writer into the segment and creates an
-    /// internal new chunk for subsequent write operations.
-    void flush_chunk();
-
-    /// Serializes an event into the segment.
-    /// @param event The event to store.
-    /// @return The number of events in the current chunk
-    uint32_t operator<<(ze::event const& event);
-
     /// Retrieves the total number of bytes processed across all chunks.
     /// @return The number of bytes written to the output archive.
     size_t bytes() const;
 
     /// Retrieves the number of elements in the current chunk.
     size_t elements() const;
+
+    /// Serializes an event into the segment.
+    /// @param event The event to store.
+    /// @return The number of events in the current chunk
+    uint32_t operator<<(ze::event const& event);
+
+    /// Moves the current chunk from the writer into the segment and creates an
+    /// internal new chunk for subsequent write operations.
+    void flush_chunk();
 
   private:
     size_t bytes_ = 0;
@@ -107,21 +107,12 @@ public:
     reader& operator=(reader) = delete;
 
   public:
-    /// Creates a reader for a specific segment chunk.
-    ///
+    /// Creates a reader for a specific segment.
     /// @param s The segment to read from.
-    ///
-    /// @param i The chunk index, must be in *[0, n)* where *n* is the
-    /// number of chunks in `s`.
     reader(segment const& s);
 
-    /// Deserializes an event into the segment.
-    /// @param event The event to deserialize into.
-    /// @return The number of events left for extraction in the current chunk.
-    uint32_t operator>>(ze::event& event);
-
     /// Retrieves the total number of bytes processed across all chunks.
-    /// @return The number of bytes written from the input archive.
+    /// @return The number of bytes written by the input archive.
     size_t bytes() const;
 
     /// Retrieves the number of events available in the current chunk
@@ -129,6 +120,11 @@ public:
 
     /// Retrieves the number of chunks remaining to be processed.
     size_t chunks() const;
+
+    /// Deserializes an event from the segment.
+    /// @param event The event to deserialize into.
+    /// @return The number of events left for extraction in the current chunk.
+    uint32_t operator>>(ze::event& event);
 
   private:
     size_t bytes_ = 0;
