@@ -16,8 +16,9 @@ class query : public cppa::sb_actor<query>
 public:
   struct statistics
   {
-    uint64_t processed = 0;
-    uint64_t matched = 0;
+    uint64_t evaluated = 0;
+    uint64_t results = 0;
+    uint64_t batch = 0;
   };
 
   /// Spawns a query actor.
@@ -30,45 +31,20 @@ public:
         cppa::actor_ptr sink,
         expression expr);
 
-
 private:
-  /// A window of segments for extracting events. Internally, a window consists
-  /// of a double-ended queue which represents the available segments that the
-  /// query can process:
-  ///
-  ///            reader
-  ///
-  ///              |
-  ///              v
-  ///     -------+-----+----+-----+ -- +-----+-------
-  ///            | s_0 | .. | s_i | .. | s_n |
-  ///     -------+-----+----+-----+ -- +-----+-------
-  ///
-  ///                          ^          ^
-  ///                          |          |
-  ///                          ack        head
-  ///
-  //             |                |
-  //             +----------------+
-  //                 window size
-  //
+  /// A window of segments for extracting events.
   class window
   {
   public:
     /// Constructs an empty window.
     window() = default;
 
-    /// Adds a new segment to the window.
-    void push(cppa::cow_tuple<segment> s);
-
-    /// Determines whether the window can extract events from the current
-    /// segment.
-    /// @return `true` if the window has a segment with events to extract.
+    /// Determines whether the window is ready to extract events.
+    /// @return `true` *iff* at 1 or more events can be extracted.
     bool ready() const;
 
-    /// Determines wheter the window is *stale*, i.e., is not ready and has no
-    /// more segments to advance to.
-    bool stale() const;
+    /// Adds a new segment to the window.
+    void add(cppa::cow_tuple<segment> s);
 
     /// Tries to extract an event from the current segment.
     ///
@@ -77,44 +53,22 @@ private:
     /// @return `true` if extracting an event from the current segment into
     /// *event* succeeded and `false` if there are no more events in the
     /// current segment.
-    bool one(ze::event& event);
-
-    /// Returns the current window size;
-    /// @return The number of available segments in the window.
-    size_t size() const;
-
-    /// Tries to advance to the next segment.
-    ///
-    /// @return `true` *iff* there exists at least one more segment to advance
-    /// to.
-    ///
-    /// @post If the function returns `true`, the next call to window::one()
-    /// also returns `true` because empty chunks/segments do not exist.
-    bool advance();
+    bool extract(ze::event& event);
 
   private:
     std::deque<cppa::cow_tuple<segment>> segments_;
-    segment const* current_segment_ = nullptr;
     std::unique_ptr<segment::reader> reader_;
   };
 
-  /// Tries to extract a given number of events from the window.
-  /// @param n The number of results to extract.
-  void extract(size_t n);
-
-  /// Tests whether an event matches the query expression.
-  /// @param event The event to check.
-  /// @return `true` iff *event* matches the query expression.
-  bool match(ze::event const& event);
-
+  bool running_ = true;
+  uint64_t batch_size_ = 100; // TODO: adapt based on processing time.
   expression expr_;
   statistics stats_;
 
-  // TODO: Move into window.
   std::vector<ze::uuid> ids_;
-  std::vector<ze::uuid>::const_iterator head_;
-  std::vector<ze::uuid>::const_iterator ack_;
-  int window_size_ = 5; // FIXME: make configurable.
+  size_t head_ = 0;
+  size_t ack_ = 0;
+  size_t window_size_ = 5; // TODO: make configurable.
   window window_;
 
   cppa::actor_ptr archive_;

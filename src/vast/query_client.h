@@ -1,7 +1,9 @@
 #ifndef VAST_QUERY_CLIENT_H
 #define VAST_QUERY_CLIENT_H
 
+#include <deque>
 #include <cppa/cppa.hpp>
+#include <ze/forward.h>
 
 namespace vast {
 
@@ -24,6 +26,9 @@ public:
                uint32_t batch_size);
 
 private:
+  bool running_ = true;
+  size_t buffer_size_ = 50; // FIXME: make configurable.
+  std::deque<cppa::cow_tuple<ze::event>> results_;
   cppa::actor_ptr search_;
   cppa::actor_ptr query_;
   cppa::behavior init_state;

@@ -1,6 +1,7 @@
 #include "vast/query.h"
 
 #include <ze.h>
+#include <ze/to_string.h>
 #include "vast/exception.h"
 #include "vast/logger.h"
 
@@ -8,52 +9,36 @@ namespace vast {
 
 using namespace cppa;
 
-void query::window::push(cppa::cow_tuple<segment> s)
-{
-  segments_.push_back(s);
-  if (! current_segment_)
-  {
-    assert(! reader_);
-    current_segment_ = &get<0>(s);
-    reader_.reset(new segment::reader(*current_segment_));
-  }
-}
-
 bool query::window::ready() const
 {
-  return
-    current_segment_ &&
-    reader_ &&
-    (reader_->events() > 0 || reader_->chunks() > 0);
+  return reader_.get() != nullptr;
 }
 
-bool query::window::stale() const
+void query::window::add(cppa::cow_tuple<segment> s)
 {
-  return ! ready() && segments_.size() == 1;
+  segments_.push_back(s);
+  if (! reader_)
+    reader_.reset(new segment::reader(&get<0>(segments_.front())));
 }
 
-bool query::window::one(ze::event& event)
+bool query::window::extract(ze::event& event)
 {
-  if (! ready())
+  if (! reader_)
     return false;
 
   *reader_ >> event;
-  return true;
-}
 
-size_t query::window::size() const
-{
-  return segments_.size();
-}
-
-bool query::window::advance()
-{
-  if (segments_.size() < 2)
-    return false;
-
-  segments_.pop_front();
-  current_segment_ = &get<0>(segments_.front());
-  reader_.reset(new segment::reader(*current_segment_));
+  if (reader_->events() == 0 && reader_->chunks() == 0)
+  {
+    reader_.reset();
+    segments_.pop_front();
+    if (! segments_.empty())
+    {
+      reader_.reset(new segment::reader(&get<0>(segments_.front())));
+      assert(reader_->events() > 0);
+      assert(reader_->chunks() > 0);
+    }
+  }
 
   return true;
 }
@@ -75,6 +60,7 @@ query::query(cppa::actor_ptr archive,
       on(atom("start")) >> [=]
       {
         DBG(query) << "query @" << id() << " hits index";
+        // TODO: make this an asynchronous.
         sync_send(index, atom("hit"), expr_).then(
             on(atom("hit"), arg_match) >> [=](std::vector<ze::uuid> const& ids)
             {
@@ -97,9 +83,9 @@ query::query(cppa::actor_ptr archive,
               LOG(info, query)
                 << "query @" << id() << " received index miss";
 
-              send(sink_, atom("query"), atom("index"), atom("miss"));
               // TODO: Eventually, we want to let the user decide what happens
               // on a index miss.
+              //send(sink_, atom("query"), atom("index"), atom("miss"));
               send(archive_, atom("get"), atom("ids"));
             },
             after(std::chrono::minutes(1)) >> [=]
@@ -122,122 +108,128 @@ query::query(cppa::actor_ptr archive,
           return;
         }
 
-        ids_ = ids;
-        head_ = ack_ = ids_.begin();
-
-        size_t first_fetch = std::min(ids_.size(), 3ul); // TODO: make configurable.
-        for (size_t i = 0; i < first_fetch; ++i)
+        ids_.insert(ids_.end(), ids.begin(), ids.end());
+        while (head_ - ack_ < std::min(ids_.size(), window_size_))
         {
-          DBG(query) << "query @" << id() << " prefetches segment " << *head_;
-          send(archive_, atom("get"), *head_++);
+          DBG(query)
+            << "query @" << id() << " prefetches segment " << ids_[head_];
+          send(archive_, atom("get"), ids_[head_]);
+          ++head_;
         }
       },
       on_arg_match >> [=](segment const& s)
       {
-        // Start extracting result when one of the following conditions hold:
-        //
-        //  (1) The arriving segment is the first of all arriving segments.
-        //  (2) The window was stale prior to the arrival of this segment.
-        if (ack_++ == ids_.begin() || window_.stale())
-            send(self, atom("get"), atom("results"));
+        ++ack_;
+
+        DBG(query) 
+          << "query @" << id() 
+          << " received segment " << s.id()
+          << " (ack: " << ack_ << " head: " << head_ << ')';
 
         auto opt = tuple_cast<segment>(last_dequeued());
         assert(opt.valid());
-        window_.push(*opt);
+        window_.add(*opt);
 
-        DBG(query)
-          << "query @" << id() << " received segment " << s.id();
+        if (running_)
+          send(self, atom("results"));
       },
-      on(atom("get"), atom("results"), arg_match) >> [=](uint32_t n)
+      on(atom("pause")) >> [=]
       {
-        extract(n);
+        if (running_ == false)
+        {
+          DBG(query) << "query @" << id() << " ignores pause request";
+          return;
+        }
+
+        DBG(query) << "query @" << id() << " pauses processing";
+        running_ = false;
       },
-      on(atom("get"), atom("statistics")) >> [=]
+      on(atom("resume")) >> [=]
       {
-        reply(atom("statistics"), stats_.processed, stats_.matched);
+        if (running_ == true)
+        {
+          DBG(query) << "query @" << id() << " ignores resume request";
+          return;
+        }
+
+        DBG(query) << "query @" << id() << " resumes processing";
+        running_ = true;
+        send(self, atom("results"));
+      },
+      on(atom("results")) >> [=]
+      {
+        if (! running_)
+          return;
+
+        uint64_t i = 0;
+        while (stats_.batch < batch_size_)
+        {
+          ze::event e;
+          if (! window_.extract(e))
+            break;
+
+          ++stats_.evaluated;
+          if (expr_.eval(e))
+          {
+            ++i;
+            ++stats_.results;
+            send(sink_, std::move(e));
+          }
+        }
+
+        if (i > 0)
+        {
+          stats_.batch += i;
+          LOG(debug, query)
+            << "query @" << id()
+            << " extracted " << i << " results"
+            << " (evaluated " << stats_.evaluated << " events)";
+        }
+
+        if (stats_.batch == batch_size_)
+        {
+          DBG(query)
+            << "query @" << id()
+            << " extracted full batch"
+            << " (ack: " << ack_ << " head: " << head_ << ')';
+
+          stats_.batch = 0;
+          send(self, atom("results"));
+        }
+        else if (head_ - ack_ < window_size_ && head_ < ids_.size())
+        {
+          DBG(query)
+            << "query @" << id()
+            << " prefetches segment " << ids_[head_]
+            << " (ack: " << ack_ << " head: " << head_ << ')';
+
+          send(archive_, atom("get"), ids_[head_++]);
+        }
+        else if (ack_ < head_)
+        {
+          DBG(query)
+            << "query @" << id() << " has in-flight segments and tries again later"
+            << " (ack: " << ack_ << " head: " << head_ << ')';
+        }
+        else if (head_ == ids_.size())
+        {
+          DBG(query)
+            << "query @" << id() << " has no more segments to process"
+            << " (ack: " << ack_ << " head: " << head_ << ')';
+
+          running_ = false;
+          send(sink_, atom("query"), atom("finished"));
+        }
+      },
+      on(atom("statistics")) >> [=]
+      {
+        reply(atom("statistics"), stats_.evaluated, stats_.results);
       },
       on(atom("shutdown")) >> [=]
       {
         quit();
         LOG(verbose, query) << "query @" << id() << " terminated";
       });
-}
-
-void query::extract(size_t n)
-{
-  LOG(debug, query)
-    << "query @" << id() << " tries to extract " << n << " results";
-
-  ze::event e;
-  size_t i = 0;
-  while (i < n)
-  {
-    ze::event e;
-    auto extracted = window_.one(e);
-    if (extracted)
-    {
-      if (match(e))
-      {
-        send(sink_, std::move(e));
-        ++i;
-      }
-    }
-    else if (window_.advance())
-    {
-      DBG(query)
-        << "query @" << id() << " advances to next segment in window";
-
-      // Prefetch another segment if we still need to (and can do so).
-      if (head_ - ack_ < window_size_ && head_ != ids_.end())
-      {
-        DBG(query)
-          << "query @" << id() << " prefetches segment " << *head_;
-
-        send(archive_, atom("get"), *head_++);
-      }
-
-      extracted = window_.one(e);
-      assert(extracted); // By the post-condition of window::advance().
-
-      if (match(e))
-      {
-        send(sink_, std::move(e));
-        ++i;
-      }
-    }
-    else if (ack_ < head_)
-    {
-      DBG(query)
-        << "query @" << id() << " has in-flight segments, trying again later";
-
-      break;
-    }
-    else if (head_ == ids_.end())
-    {
-      DBG(query)
-        << "query @" << id() << " has no more segments to process";
-
-      send(sink_, atom("query"), atom("finished"));
-      break;
-    }
-    else
-    {
-      assert(! "should never happen");
-      break;
-    }
-  }
-}
-
-bool query::match(ze::event const& event)
-{
-  ++stats_.processed;
-  if (expr_.eval(event))
-  {
-    ++stats_.matched;
-    return true;
-  }
-
-  return false;
 }
 
 } // namespace vast

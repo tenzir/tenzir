@@ -53,10 +53,10 @@ bool program::run()
                  "<space> for results, (s)tatistics, (Q)uit";
             break;
           case ' ':
-            send(query_client_, atom("client"), atom("results"));
+            send(query_client_, atom("results"));
             break;
           case 's':
-            send(query_client_, atom("client"), atom("statistics"));
+            send(query_client_, atom("statistics"));
             break;
         }
       },

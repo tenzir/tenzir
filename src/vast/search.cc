@@ -16,7 +16,7 @@ search::search(actor_ptr archive, actor_ptr index, actor_ptr schema_manager)
   LOG(verbose, core) << "spawning search @" << id();
   init_state = (
       on(atom("query"), atom("create"), arg_match)
-        >> [=](std::string const& str)
+        >> [=](std::string const& str, uint32_t batch_size)
       {
         auto client = last_sender();
         sync_send(schema_manager, atom("schema")).then(
@@ -29,6 +29,7 @@ search::search(actor_ptr archive, actor_ptr index, actor_ptr schema_manager)
 
                 auto q = spawn<query>(
                     archive_, index_, client, std::move(expr));
+                send(q, atom("batch size"), batch_size);
 
                 assert(queries_.find(q) == queries_.end());
                 queries_.emplace(q, client);
