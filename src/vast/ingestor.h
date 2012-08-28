@@ -1,7 +1,9 @@
 #ifndef VAST_INGESTOR_H
 #define VAST_INGESTOR_H
 
+#include <unordered_map>
 #include <cppa/cppa.hpp>
+#include <ze/uuid.h>
 
 namespace vast {
 
@@ -21,6 +23,7 @@ public:
            cppa::actor_ptr index);
 
 private:
+  void ack(ze::uuid const& id);
   void shutdown();
 
   size_t max_events_per_chunk_ = 0;
@@ -30,6 +33,7 @@ private:
   size_t total_events_ = 0;
 
   std::vector<cppa::actor_ptr> sources_;
+  std::unordered_map<ze::uuid, unsigned> inflight_;
   cppa::actor_ptr archive_;
   cppa::actor_ptr index_;
   cppa::actor_ptr broccoli_;

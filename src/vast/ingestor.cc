@@ -81,17 +81,38 @@ ingestor::ingestor(cppa::actor_ptr tracker,
 
         index_ << last_dequeued();
         archive_ << last_dequeued();
+
+        assert(inflight_.find(s.id()) == inflight_.end());
+        inflight_.emplace(s.id(), 2);
+      },
+      on(atom("archive"), atom("segment"), atom("ack"), arg_match)
+        >> [=](ze::uuid const& uuid)
+      {
+        LOG(verbose, ingest)
+          << "ingestor @" << id() 
+          << " received segment ack from archive for " << uuid;
+
+        ack(uuid);
+      },
+      on(atom("index"), atom("segment"), atom("ack"), arg_match)
+        >> [=](ze::uuid const& uuid)
+      {
+        LOG(verbose, ingest)
+          << "ingestor @" << id() 
+          << " received segment ack from index for " << uuid;
+
+        ack(uuid);
       },
       on(atom("shutdown")) >> [=]
       {
         if (broccoli_)
           broccoli_ << last_dequeued();
 
-        if (sources_.empty())
-          shutdown();
-        else
+        if (! sources_.empty())
           for (auto source : sources_)
             source << last_dequeued();
+        else if (inflight_.empty())
+          shutdown();
       },
       on(atom("shutdown"), atom("ack"), arg_match) >> [=](size_t events)
       {
@@ -104,9 +125,22 @@ ingestor::ingestor(cppa::actor_ptr tracker,
           << "ingestor @" << id()
           << " received shutdown ack from source @" << last_sender()->id();
 
-        if (sources_.empty())
+        if (sources_.empty() && inflight_.empty())
           shutdown();
       });
+}
+
+void ingestor::ack(ze::uuid const& id)
+{
+  auto i = inflight_.find(id);
+  assert(i != inflight_.end() && i->second > 0);
+  if (i->second == 1)
+    inflight_.erase(i);
+  else
+    --i->second;
+
+  if (sources_.empty() && inflight_.empty())
+    shutdown();
 }
 
 void ingestor::shutdown()

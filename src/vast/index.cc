@@ -306,6 +306,7 @@ index::index(cppa::actor_ptr archive, std::string directory)
       {
         write(s);
         build(s.head());
+        reply(atom("index"), atom("segment"), atom("ack"), s.id());
       },
       on(atom("shutdown")) >> [=]()
       {

@@ -38,7 +38,10 @@ segment_manager::segment_manager(size_t capacity, std::string const& dir)
         auto opt = tuple_cast<segment>(last_dequeued());
         assert(opt.valid());
         store_segment(*opt);
-        reply(atom("segment"), atom("ack"), s.id());
+
+        // The segment manager is part of the archive, so it's fine to send an
+        // ACK which indicates that it comes from the archive.
+        reply(atom("archive"), atom("segment"), atom("ack"), s.id());
       },
       on(atom("get"), atom("ids")) >> [=]
       {
