@@ -76,7 +76,11 @@ public:
   public:
     /// Creates a new chunk at the end of the segment for writing.
     /// @param s The segment to write to.
-    writer(segment& s);
+    writer(segment* s);
+
+    /// Move-constructs a writer.
+    /// @param other The other writer.
+    writer(writer&& other);
 
     /// Retrieves the total number of bytes processed across all chunks.
     /// @return The number of bytes written to the output archive.
@@ -96,7 +100,7 @@ public:
 
   private:
     size_t bytes_ = 0;
-    segment& segment_;
+    segment* segment_;
     chunk chunk_;
     chunk::putter putter_;
   };
@@ -107,15 +111,19 @@ public:
     reader& operator=(reader) = delete;
 
   public:
-    /// Creates a reader for a specific segment.
+    /// Constructs a reader for a specific segment.
     /// @param s The segment to read from.
-    reader(segment const& s);
+    reader(segment const* s);
+
+    /// Move-constructs a reader.
+    /// @param other The other reader.
+    reader(reader&& other);
 
     /// Retrieves the total number of bytes processed across all chunks.
     /// @return The number of bytes written by the input archive.
     size_t bytes() const;
 
-    /// Retrieves the number of events available in the current chunk
+    /// Retrieves the number of events available in the current chunk.
     uint32_t events() const;
 
     /// Retrieves the number of chunks remaining to be processed.
@@ -129,7 +137,7 @@ public:
   private:
     size_t bytes_ = 0;
     size_t total_bytes_ = 0;
-    segment const& segment_;
+    segment const* segment_;
     std::vector<chunk_tuple>::const_iterator chunk_;
     chunk::getter getter_;
   };

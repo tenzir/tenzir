@@ -11,10 +11,20 @@ namespace vast {
 uint32_t const segment::magic;
 uint8_t const segment::version;
 
-segment::writer::writer(segment& s)
+segment::writer::writer(segment* s)
   : segment_(s)
   , putter_(chunk::putter(&chunk_))
 {
+}
+
+segment::writer::writer(writer&& other)
+  : bytes_(other.bytes_)
+  , segment_(other.segment_)
+  , chunk_(std::move(other.chunk_))
+  , putter_(std::move(other.putter_))
+{
+  other.bytes_ = 0;
+  other.segment_ = nullptr;
 }
 
 size_t segment::writer::bytes() const
@@ -29,21 +39,21 @@ size_t segment::writer::elements() const
 
 uint32_t segment::writer::operator<<(ze::event const& event)
 {
-  ++segment_.header_.events;
+  ++segment_->header_.events;
 
-  if (event.timestamp() < segment_.header_.start)
-    segment_.header_.start = event.timestamp();
-  if (event.timestamp() > segment_.header_.end)
-    segment_.header_.end = event.timestamp();
+  if (event.timestamp() < segment_->header_.start)
+    segment_->header_.start = event.timestamp();
+  if (event.timestamp() > segment_->header_.end)
+    segment_->header_.end = event.timestamp();
 
-  auto i = std::lower_bound(segment_.header_.event_names.begin(),
-                            segment_.header_.event_names.end(),
+  auto i = std::lower_bound(segment_->header_.event_names.begin(),
+                            segment_->header_.event_names.end(),
                             event.name());
 
-  if (i == segment_.header_.event_names.end())
-    segment_.header_.event_names.emplace_back(event.name().data());
+  if (i == segment_->header_.event_names.end())
+    segment_->header_.event_names.emplace_back(event.name().data());
   else if (event.name() < *i)
-    segment_.header_.event_names.emplace(i, event.name().data());
+    segment_->header_.event_names.emplace(i, event.name().data());
 
   bytes_ = putter_ << event;
 
@@ -52,19 +62,31 @@ uint32_t segment::writer::operator<<(ze::event const& event)
 
 void segment::writer::flush_chunk()
 {
-  segment_.chunks_.emplace_back(std::move(chunk_));
+  segment_->chunks_.emplace_back(std::move(chunk_));
   chunk_ = chunk();
   putter_ = std::move(chunk::putter(&chunk_));
 }
 
 
-segment::reader::reader(segment const& s)
+segment::reader::reader(segment const* s)
   : segment_(s)
-  , chunk_(segment_.chunks_.begin())
-  , getter_(&cppa::get<0>(segment_[0]))
+  , chunk_(segment_->chunks_.begin())
+  , getter_(&cppa::get<0>(segment_->chunks_.at(0)))
 {
-  assert(chunk_ != segment_.chunks_.end());
+  assert(! segment_->chunks_.empty());
   ++chunk_;
+}
+
+segment::reader::reader(reader&& other)
+  : bytes_(other.bytes_)
+  , total_bytes_(other.total_bytes_)
+  , segment_(other.segment_)
+  , chunk_(std::move(other.chunk_))
+  , getter_(std::move(other.getter_))
+{
+  other.bytes_ = 0;
+  other.total_bytes_ = 0;
+  other.segment_ = nullptr;
 }
 
 size_t segment::reader::bytes() const
@@ -79,14 +101,14 @@ uint32_t segment::reader::events() const
 
 size_t segment::reader::chunks() const
 {
-  return segment_.chunks_.end() - chunk_;
+  return segment_->chunks_.end() - chunk_;
 }
 
 uint32_t segment::reader::operator>>(ze::event& e)
 {
   if (events() == 0)
   {
-    if (chunk_ == segment_.chunks_.end())
+    if (chunk_ == segment_->chunks_.end())
       throw error::segment("attempted read on invalid chunk");
 
     getter_ = std::move(chunk::getter(&cppa::get<0>(*chunk_++)));
@@ -146,6 +168,7 @@ uint32_t segment::events() const
   return header_.events;
 }
 
+/*
 size_t segment::bytes() const
 {
   // FIXME: compute incrementally rather than ad-hoc.
@@ -167,6 +190,7 @@ size_t segment::bytes() const
 
   return header + events + chunks;
 }
+*/
 
 size_t segment::size() const
 {

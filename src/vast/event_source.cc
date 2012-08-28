@@ -11,7 +11,7 @@ using namespace cppa;
 event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
   : events_(std::chrono::seconds(1))
   , segment_(ze::uuid::random())
-  , writer_(segment_)
+  , writer_(&segment_)
   , ingestor_(ingestor)
   , tracker_(tracker)
 {
@@ -140,7 +140,8 @@ void event_source::ship_segment()
   DBG(ingest)
     << "event source @" << id()
     << " ships segment " << segment_.id()
-    << " to ingestor @" << ingestor_->id();
+    << " to ingestor @" << ingestor_->id()
+    << " (" << segment_.events() << " events)";
 
   send(ingestor_, std::move(segment_));
   segment_ = segment(ze::uuid::random());
