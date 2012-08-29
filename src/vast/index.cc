@@ -44,7 +44,7 @@ public:
     /* Do exactly nothing. */
   }
 
-  virtual void visit(expr::exists const&)
+  virtual void visit(expr::type_extractor const&)
   {
     /* Do exactly nothing. */
   }
@@ -158,7 +158,7 @@ public:
     /* Do exactly nothing. */
   }
 
-  virtual void visit(expr::exists const&)
+  virtual void visit(expr::type_extractor const&)
   {
     /* Do exactly nothing. */
   }

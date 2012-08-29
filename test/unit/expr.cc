@@ -10,59 +10,63 @@ std::vector<ze::event> events
   {"bar", "yadda", ze::record{false, "baz"}}
 };
 
-bool test_expression(std::string const& query, ze::event const& event)
-{
-  vast::expression expr;
-  expr.parse(query);
-  return expr.eval(event);
-}
-
 BOOST_AUTO_TEST_CASE(type_queries)
 {
-  std::vector<std::string> queries
-  {
-    ":count == 42",
-    ":int != +101",
-    ":string ~ /bar/ && :int == +100",
-    ":double >= -4.8",
-    ":int <= -3 || :int >= +100 && :string !~ /bar/ || :double > 1.0"
-  };
-
-  for (auto& q : queries)
-    BOOST_CHECK(test_expression(q, events[0]));
-
-  for (auto& q : queries)
-    BOOST_CHECK(! test_expression(q, events[1]));
+  vast::expression expr;
+  expr.parse(":count == 42");
+  BOOST_CHECK(expr.eval(events[0]));
+  BOOST_CHECK(! expr.eval(events[1]));
+  expr.parse(":int != +101");
+  BOOST_CHECK(expr.eval(events[0]));
+  BOOST_CHECK(! expr.eval(events[1]));
+  expr.parse(":string ~ /bar/ && :int == +100");
+  BOOST_CHECK(expr.eval(events[0]));
+  BOOST_CHECK(! expr.eval(events[1]));
+  expr.parse(":double >= -4.8");
+  BOOST_CHECK(expr.eval(events[0]));
+  BOOST_CHECK(! expr.eval(events[1]));
+  expr.parse(":int <= -3 || :int >= +100 && :string !~ /bar/ || :double > 1.0");
+  BOOST_CHECK(expr.eval(events[0]));
+  BOOST_CHECK(! expr.eval(events[1]));
 }
 
 BOOST_AUTO_TEST_CASE(event_queries)
 {
-  std::vector<std::string> true_queries
-  {
-    ":count == 42 || :string ~ /yad.*/",
-    ":count == 42 || :bool == F",
-    "f*$not$yet$implemented ~ /vast/ || *$not$there$yet ~ /.*[bd]{2}a/"
-  };
+  vast::schema schema;
+  schema.load("event foo(s1: string, d1: double, "
+              "c: count, i: int, s2: string, d2: double) "
+              "event bar(s1: string, r: record { b: bool, s: string })");
 
-  std::vector<std::string> false_queries
-  {
-    ":string ~ /x/ || :bool == T"
-  };
+  vast::expression expr;
+  expr.parse("foo$s1 == \"babba\"", schema);
+  BOOST_CHECK(expr.eval(events[0]));
+  expr.parse("foo$d1 > 0.5", schema);
+  BOOST_CHECK(expr.eval(events[0]));
+  expr.parse("foo$d2 < 0.5", schema);
+  BOOST_CHECK(expr.eval(events[0]));
+  expr.parse("bar$r$b == F", schema);
+  BOOST_CHECK(expr.eval(events[1]));
+  expr.parse("bar$r$s == \"baz\"", schema);
+  BOOST_CHECK(expr.eval(events[1]));
 
-  for (auto& q : true_queries)
-    for (auto& e : events)
-      BOOST_CHECK(test_expression(q, e));
+  BOOST_CHECK_THROW(
+      (expr.parse("not$there ~ /nil/", schema)), // invalid event name.
+      vast::error::query);
 
-  for (auto& q : false_queries)
-    for (auto& e : events)
-      BOOST_CHECK(! test_expression(q, e));
+  BOOST_CHECK_THROW(
+      (expr.parse("bar$puff ~ /nil/", schema)), // 'puff' is no argument.
+      vast::error::query);
+
+  BOOST_CHECK_THROW(
+      (expr.parse("bar$r$q == \"baz\"", schema)), // field 'q' does not exist.
+      vast::error::query);
 }
 
 BOOST_AUTO_TEST_CASE(offset_queries)
 {
   vast::expression expr;
-
   ze::event event("foo", 42u);
+
   expr.parse("@0 == 42");
   BOOST_CHECK(expr.eval(event));
   expr.parse("@1 != T");          // Out of bounds.

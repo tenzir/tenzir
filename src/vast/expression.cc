@@ -61,6 +61,11 @@ offset_extractor::offset_extractor(std::vector<size_t> offsets)
 {
 }
 
+std::vector<size_t> const& offset_extractor::offsets() const
+{
+  return offsets_;
+}
+
 void offset_extractor::eval()
 {
   if (event_->empty())
@@ -97,35 +102,65 @@ void offset_extractor::eval()
   ready_ = true;
 }
 
-exists::exists(ze::value_type type)
+type_extractor::type_extractor(ze::value_type type)
   : type_(type)
 {
 }
 
-void exists::feed(ze::event const* event)
+void type_extractor::feed(ze::event const* event)
 {
-  event_ = event;
-  flat_size_ = event->flat_size();
-  current_ = 0;
-  ready_ = false;
-}
-
-void exists::reset()
-{
-  current_ = 0;
-  ready_ = false;
-}
-
-void exists::eval()
-{
-  while (current_ < flat_size_)
+  if (event->empty())
   {
-    auto& arg = event_->flat_at(current_++);
-    if (type_ == arg.which())
+    ready_ = true;
+  }
+  else
+  {
+    event_ = event;
+    pos_.clear();
+    pos_.emplace_back(event, 0);
+    ready_ = false;
+  }
+}
+
+void type_extractor::reset()
+{
+  pos_.clear();
+  result_ = ze::invalid;
+  ready_ = false;
+}
+
+ze::value_type type_extractor::type() const
+{
+  return type_;
+}
+
+void type_extractor::eval()
+{
+  while (! pos_.empty())
+  {
+    auto& record = *pos_.back().first;
+    auto& idx = pos_.back().second;
+    auto& arg = record[idx];
+
+    if (idx == record.size())
+    {
+      pos_.pop_back();
+      continue;
+    }
+
+    ++idx;
+    if (arg.which() == ze::record_type)
+    {
+      pos_.emplace_back(&arg.get<ze::record>(), 0);
+    }
+    else if (arg.which() == type_)
     {
       result_ = arg;
-      if (current_ == flat_size_)
+      if (pos_.size() == 1 && idx == record.size())
+      {
+        pos_.clear();
         ready_ = true;
+      }
 
       return;
     }
@@ -168,7 +203,7 @@ void conjunction::eval()
         if (! operand->ready())
           operand->eval();
         if (! operand->ready())
-        ready_ = false;
+          ready_ = false;
 
         assert(operand->result().which() == ze::bool_type);
         return operand->result().get<bool>();
@@ -186,7 +221,7 @@ void disjunction::eval()
         if (! operand->ready())
           operand->eval();
         if (! operand->ready())
-        ready_ = false;
+          ready_ = false;
 
         assert(operand->result().which() == ze::bool_type);
         return operand->result().get<bool>();
@@ -302,20 +337,19 @@ relation_type relational_operator::type() const
 void relational_operator::eval()
 {
   assert(operands_.size() == 2);
-
   auto& lhs = operands_[0];
+  auto& rhs = operands_[1];
   do
   {
     if (! lhs->ready())
       lhs->eval();
 
-    auto& rhs = operands_[1];
     do
     {
       if (! rhs->ready())
         rhs->eval();
 
-      ready_ = op_(lhs->result(), rhs->result());
+      ready_ = test(lhs->result(), rhs->result());
       if (ready_)
         break;
     }
@@ -406,7 +440,7 @@ public:
     }
     auto relation = make_relational_operator(op);
 
-    auto lhs = std::make_unique<expr::exists>(clause.lhs);
+    auto lhs = std::make_unique<expr::type_extractor>(clause.lhs);
     extractors_.push_back(lhs.get());
 
     auto rhs = std::make_unique<expr::constant>(
@@ -454,41 +488,64 @@ public:
     auto conjunction = std::make_unique<expr::conjunction>();
 
     std::vector<size_t> offsets;
-    schema::record_type const* current = nullptr;
+    schema::record_type const* schema_record = nullptr;
     auto& id = clause.lhs.front();
     for (auto& e : schema_.events())
     {
       if (id == e.name)
       {
-        current = &e;
+        schema_record = &e;
         conjunction->add(make_glob_node(id));
         break;
       }
     }
-    if (! current)
+    if (! schema_record)
     {
       // The first element in the dereference sequence names a type, now we
       // have to identify all events and records having argument of that
       // type.
-      throw error::query("type dereference not yet implemented");
+      auto found = false;
+      for (auto& t : schema_.types())
+      {
+        if (id == t.name)
+        {
+          found = true;
+          throw error::query("type dereference not yet implemented");
+          break;
+        }
+      }
+
+      if (! found)
+        throw error::query("lhs of clause names neither event nor type");
     }
+
+    assert(schema_record);
 
     for (size_t i = 1; i < clause.lhs.size(); ++i)
     {
       auto& id = clause.lhs[i];
-      assert(current);
-      for (size_t off = 0; off < current->args.size(); ++off)
+      auto found = false;
+      for (size_t off = 0; off < schema_record->args.size(); ++off)
       {
-        auto& arg = current->args[off];
+        auto& arg = schema_record->args[off];
         if (arg.name == id)
         {
           DBG(query)
             << "translating event clause: "
             << (clause.lhs[0] + '$' + id) << " -> " << off;
           offsets.push_back(off);
+
+          if (auto type =
+              dynamic_cast<schema::record_type const*>(arg.type.type.get()))
+            schema_record = type;
+
+          found = true;
           break;
         }
       }
+
+      if (! found)
+        throw error::query("record field does not exist");
     }
 
     auto op = clause.op;
@@ -672,9 +729,7 @@ bool expression::eval(ze::event const& event)
     root_->eval();
 
   auto& r = root_->result();
-
   assert(r.which() == ze::bool_type);
-
   root_->reset();
   return r.get<bool>();
 }

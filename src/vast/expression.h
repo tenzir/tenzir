@@ -19,7 +19,7 @@ class timestamp_extractor;
 class name_extractor;
 class id_extractor;
 class offset_extractor;
-class exists;
+class type_extractor;
 class conjunction;
 class disjunction;
 class relational_operator;
@@ -31,7 +31,7 @@ typedef util::const_visitor<
  ,  name_extractor
  ,  id_extractor
  ,  offset_extractor
- ,  exists
+ ,  type_extractor
  ,  conjunction
  ,  disjunction
  ,  relational_operator
@@ -44,7 +44,7 @@ typedef util::visitor<
  ,  name_extractor
  ,  id_extractor
  ,  offset_extractor
- ,  exists
+ ,  type_extractor
  ,  conjunction
  ,  disjunction
  ,  relational_operator
@@ -143,16 +143,17 @@ public:
   VAST_ACCEPT_CONST(const_visitor)
   VAST_ACCEPT(visitor)
 
+  std::vector<size_t> const& offsets() const;
+
 private:
   virtual void eval();
   std::vector<size_t> offsets_;
 };
 
-/// An existential quantifier.
-class exists : public extractor
+class type_extractor : public extractor
 {
 public:
-  exists(ze::value_type type);
+  type_extractor(ze::value_type type);
 
   virtual void feed(ze::event const* event);
   virtual void reset();
@@ -160,12 +161,13 @@ public:
   VAST_ACCEPT_CONST(const_visitor)
   VAST_ACCEPT(visitor)
 
+  ze::value_type type() const;
+
 private:
   virtual void eval();
 
   ze::value_type type_;
-  size_t current_ = 0;
-  size_t flat_size_ = 0;
+  std::vector<std::pair<ze::record const*, size_t>> pos_;
 };
 
 /// An n-ary operator.
@@ -283,7 +285,7 @@ public:
   /// Parses a given expression.
   /// @param str The query expression to transform into an AST.
   /// @param sch The schema to use to resolve event clauses.
-  void parse(std::string str, schema sch = schema());
+  void parse(std::string str, schema sch = {});
 
   /// Evaluates an event with respect to the root node.
   /// @param event The event to evaluate against the expression.
