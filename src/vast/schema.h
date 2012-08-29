@@ -87,6 +87,19 @@ public:
     std::string name;
   };
 
+  /// Computes the offsets vectors to a given type for a given record.
+  ///
+  /// @param record The record to search for types of name *name*.
+  ///
+  /// @param name The name of the type to look for in *record*.
+  ///
+  /// @return A vector of offset vectors. Each offset vector represents a
+  /// sequence of offsets which have to be used in order to get to *name*.
+  /// Since *record* may contain multiple arguments of type *name*, the result
+  /// is a vector of vectors.
+  static std::vector<std::vector<size_t>>
+  offsets(record_type const* record, std::string const& name);
+
   /// Default-constructs a schema.
   schema() = default;
 

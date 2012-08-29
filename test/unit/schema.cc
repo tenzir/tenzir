@@ -31,3 +31,21 @@ std::string load(const vast::fs::path& path)
 
 // Contains the test case defintions for all taxonomy test files.
 #include "test/unit/schema_test_cases.h"
+
+BOOST_AUTO_TEST_CASE(offset_computation)
+{
+  vast::schema schema;
+  auto str =
+    "type foo: count"
+    "event e(r: record{ f: foo, r0: record{ f: foo }, r1: record{ f: foo }})";
+
+  schema.load(str);
+  auto& events = schema.events();
+  BOOST_REQUIRE_EQUAL(events.size(), 1);
+  auto e = events[0];
+  auto offsets = vast::schema::offsets(&e, "foo");
+  BOOST_CHECK_EQUAL(offsets.size(), 3);
+  BOOST_CHECK(offsets[0] == std::vector<size_t>({0, 0}));
+  BOOST_CHECK(offsets[1] == std::vector<size_t>({0, 1, 0}));
+  BOOST_CHECK(offsets[2] == std::vector<size_t>({0, 2, 0}));
+}

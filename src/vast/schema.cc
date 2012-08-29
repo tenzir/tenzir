@@ -228,6 +228,31 @@ schema::type_info schema::info(std::string const& name) const
   return i != types_.end() ? *i : type_info();
 }
 
+
+std::vector<std::vector<size_t>>
+schema::offsets(record_type const* record, std::string const& name)
+{
+  std::vector<std::vector<size_t>> offs;
+  for (size_t i = 0; i < record->args.size(); ++i)
+  {
+    auto& ti = record->args[i].type;
+    if (ti.name == name)
+    {
+      offs.push_back({i});
+    }
+    else if (auto r = dynamic_cast<schema::record_type const*>(ti.type.get()))
+    {
+      auto inner = offsets(r, name);
+      for (auto& v : inner)
+        v.insert(v.begin(), i);
+
+      offs.insert(offs.end(), inner.begin(), inner.end());
+    }
+  }
+
+  return offs;
+}
+
 void schema::add_type(std::string name, intrusive_ptr<type> t)
 {
   if (info(name))
