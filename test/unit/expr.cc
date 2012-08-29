@@ -55,11 +55,11 @@ BOOST_AUTO_TEST_CASE(event_queries)
 
   BOOST_CHECK_THROW(
       (expr.parse("bar$puff ~ /nil/", schema)), // 'puff' is no argument.
-      vast::error::query);
+      vast::error::schema);
 
   BOOST_CHECK_THROW(
       (expr.parse("bar$r$q == \"baz\"", schema)), // field 'q' does not exist.
-      vast::error::query);
+      vast::error::schema);
 }
 
 BOOST_AUTO_TEST_CASE(offset_queries)

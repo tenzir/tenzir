@@ -229,26 +229,80 @@ schema::type_info schema::info(std::string const& name) const
 }
 
 
-std::vector<std::vector<size_t>>
-schema::offsets(record_type const* record, std::string const& name)
+std::vector<std::vector<size_t>> schema::symbol_offsets(
+    record_type const* record,
+    std::vector<std::string> const& ids)
 {
+  if (ids.empty())
+    throw error::schema("empty symbol ids vector");
+
   std::vector<std::vector<size_t>> offs;
   for (size_t i = 0; i < record->args.size(); ++i)
   {
     auto& ti = record->args[i].type;
-    if (ti.name == name)
+    auto r = dynamic_cast<record_type const*>(ti.type.get());
+    if (ti.name == ids.front())
     {
-      offs.push_back({i});
+      if (ids.size() == 1)
+      {
+        offs.push_back({i});
+      }
+      else if (r)
+      {
+        auto arg_offs = argument_offsets(r, {ids.begin() + 1, ids.end()});
+        arg_offs.insert(arg_offs.begin(), i);
+        offs.push_back(std::move(arg_offs));
+      }
     }
-    else if (auto r = dynamic_cast<schema::record_type const*>(ti.type.get()))
+    else if (auto r = dynamic_cast<record_type const*>(ti.type.get()))
     {
-      auto inner = offsets(r, name);
+      auto inner = symbol_offsets(r, ids);
       for (auto& v : inner)
         v.insert(v.begin(), i);
 
       offs.insert(offs.end(), inner.begin(), inner.end());
     }
   }
+
+  return offs;
+}
+
+std::vector<size_t> schema::argument_offsets(
+    record_type const* record,
+    std::vector<std::string> const& ids)
+{
+  if (ids.empty())
+    throw error::schema("empty argument name vector");
+
+  std::vector<size_t> offs;
+  auto found = true;
+  for (auto sym = ids.begin(); sym != ids.end() && found; ++sym)
+  {
+    found = false;
+    assert(record != nullptr);
+    for (size_t i = 0; i < record->args.size(); ++i)
+    {
+      if (record->args[i].name == *sym)
+      {
+        // There can be only exactly one argument with the given name.
+        found = true;
+
+        // If the name matches, we have to check whether we're dealing
+        // with the last argument name or yet another intermediate
+        // record.
+        auto type_ptr = record->args[i].type.type.get();
+        record = dynamic_cast<record_type const*>(type_ptr);
+        if (sym + 1 != ids.end() && ! record)
+          throw error::schema("intermediate arguments must be records");
+
+        offs.push_back(i);
+        break;
+      }
+    }
+  }
+
+  if (! found)
+    throw error::schema("non-existant argument name");
 
   return offs;
 }

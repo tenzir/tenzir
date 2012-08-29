@@ -34,18 +34,33 @@ std::string load(const vast::fs::path& path)
 
 BOOST_AUTO_TEST_CASE(offset_computation)
 {
-  vast::schema schema;
   auto str =
     "type foo: count"
     "event e(r: record{ f: foo, r0: record{ f: foo }, r1: record{ f: foo }})";
 
+  vast::schema schema;
   schema.load(str);
-  auto& events = schema.events();
-  BOOST_REQUIRE_EQUAL(events.size(), 1);
-  auto e = events[0];
-  auto offsets = vast::schema::offsets(&e, "foo");
-  BOOST_CHECK_EQUAL(offsets.size(), 3);
+  auto offsets = vast::schema::symbol_offsets(&schema.events()[0], {"foo"});
+  BOOST_REQUIRE_EQUAL(offsets.size(), 3);
   BOOST_CHECK(offsets[0] == std::vector<size_t>({0, 0}));
   BOOST_CHECK(offsets[1] == std::vector<size_t>({0, 1, 0}));
   BOOST_CHECK(offsets[2] == std::vector<size_t>({0, 2, 0}));
+
+  str =
+    "type foo: record{ a: int, b: int, c: record{ x: int, y: addr, z: int}}"
+    "event e(r: record{ f: foo, r0: record{ f: foo }, r1: record{ f: foo }})";
+
+  schema.load(str);
+  offsets = vast::schema::symbol_offsets(&schema.events()[0], {"foo", "c", "y"});
+  BOOST_REQUIRE_EQUAL(offsets.size(), 3);
+  BOOST_CHECK(offsets[0] == std::vector<size_t>({0, 0, 2, 1}));
+  BOOST_CHECK(offsets[1] == std::vector<size_t>({0, 1, 0, 2, 1}));
+  BOOST_CHECK(offsets[2] == std::vector<size_t>({0, 2, 0, 2, 1}));
+  //for (auto& inner : offsets)
+  //{
+  //  for (auto& i : inner)
+  //    std::cout << i << " ";
+
+  //  std::cout << std::endl;
+  //}
 }

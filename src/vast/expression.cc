@@ -474,32 +474,58 @@ public:
 
   void operator()(detail::ast::query::event_clause const& clause)
   {
+    auto op = clause.op;
+    if (invert_)
+    {
+      op = detail::ast::query::negate(op);
+      invert_ = false;
+    }
+
     if (schema_.events().empty())
       throw error::query("no events in schema");
 
     // An event clause always consists of two components: the event name
-    // extractor and offset extractor. For event dereference sequence (e.g.,
+    // extractor and offset extractor. For event dereference sequences (e.g.,
     // http_request$c$..) the event name is explict, for type dereference
     // sequences (e.g., connection$id$...), we need to find all events and
     // types that have an argument of the given type.
-    //
-    // In any case, we always need a conjunction that joins the relevant event
-    // names with the actual offset extraction.
-    auto conjunction = std::make_unique<expr::conjunction>();
-
-    std::vector<size_t> offsets;
-    schema::record_type const* schema_record = nullptr;
-    auto& id = clause.lhs.front();
+    schema::record_type const* event = nullptr;
+    auto& symbol = clause.lhs.front();
     for (auto& e : schema_.events())
     {
-      if (id == e.name)
+      if (e.name == symbol)
       {
-        schema_record = &e;
-        conjunction->add(make_glob_node(id));
+        event = &e;
         break;
       }
     }
-    if (! schema_record)
+
+    if (event)
+    {
+      // Ignore the event name in lhs[0]. 
+      auto& ids = clause.lhs;
+      auto offs = schema::argument_offsets(event, {ids.begin() + 1, ids.end()});
+      if (offs.empty())
+        throw error::schema("unknown argument name");
+
+      // TODO: factor rest of block in separate function to promote DRY.
+      auto rel = make_relational_operator(op);
+      auto lhs = make_offset_extractor(std::move(offs));
+      auto rhs = make_constant(clause.rhs);
+      rel->add(std::move(lhs));
+      rel->add(std::move(rhs));
+
+      expr::conjunction* conj;
+      if (! (conj = dynamic_cast<expr::conjunction*>(parent_)))
+      {
+        auto c = std::make_unique<expr::conjunction>();
+        conj = c.get();
+        parent_->add(std::move(c));
+      }
+      conj->add(make_glob_node(symbol));
+      conj->add(std::move(rel));
+    }
+    else
     {
       // The first element in the dereference sequence names a type, now we
       // have to identify all events and records having argument of that
@@ -507,63 +533,43 @@ public:
       auto found = false;
       for (auto& t : schema_.types())
       {
-        if (id == t.name)
+        if (symbol == t.name)
         {
           found = true;
-          throw error::query("type dereference not yet implemented");
           break;
         }
       }
 
       if (! found)
-        throw error::query("lhs of clause names neither event nor type");
-    }
+        throw error::query("lhs[0] of clause names neither event nor type");
 
-    assert(schema_record);
-
-    for (size_t i = 1; i < clause.lhs.size(); ++i)
-    {
-      auto& id = clause.lhs[i];
-      auto found = false;
-      for (size_t off = 0; off < schema_record->args.size(); ++off)
+      for (auto& e : schema_.events())
       {
-        auto& arg = schema_record->args[off];
-        if (arg.name == id)
+        auto offsets = schema::symbol_offsets(&e, clause.lhs);
+        if (offsets.empty())
+          continue;
+        
+        // TODO: factor rest of block in separate function to promote DRY.
+        if (offsets.size() > 1)
+          throw error::schema("multiple offsets not yet implemented");
+
+        auto rel = make_relational_operator(op);
+        auto lhs = make_offset_extractor(std::move(offsets[0]));
+        auto rhs = make_constant(clause.rhs);
+        rel->add(std::move(lhs));
+        rel->add(std::move(rhs));
+
+        expr::conjunction* conj;
+        if (! (conj = dynamic_cast<expr::conjunction*>(parent_)))
         {
-          DBG(query)
-            << "translating event clause: "
-            << (clause.lhs[0] + '$' + id) << " -> " << off;
-          offsets.push_back(off);
-
-          if (auto type =
-              dynamic_cast<schema::record_type const*>(arg.type.type.get()))
-            schema_record = type;
-
-          found = true;
-          break;
+          auto c = std::make_unique<expr::conjunction>();
+          conj = c.get();
+          parent_->add(std::move(c));
         }
+        conj->add(make_glob_node(e.name));
+        conj->add(std::move(rel));
       }
-
-      if (! found)
-        throw error::query("record field does not exist");
     }
-
-    auto op = clause.op;
-    if (invert_)
-    {
-      op = detail::ast::query::negate(op);
-      invert_ = false;
-    }
-    auto relation = make_relational_operator(op);
-    auto lhs = std::make_unique<expr::offset_extractor>(std::move(offsets));
-    extractors_.push_back(lhs.get());
-    auto rhs = std::make_unique<expr::constant>(
-        detail::ast::query::fold(clause.rhs));
-
-    relation->add(std::move(lhs));
-    relation->add(std::move(rhs));
-    conjunction->add(std::move(relation));
-    parent_->add(std::move(conjunction));
   }
 
   void operator()(detail::ast::query::negated_clause const& clause)
@@ -575,6 +581,20 @@ public:
   }
 
 private:
+  std::unique_ptr<expr::offset_extractor>
+  make_offset_extractor(std::vector<size_t> offsets)
+  {
+    auto node = std::make_unique<expr::offset_extractor>(std::move(offsets));
+    extractors_.push_back(node.get());
+    return std::move(node);
+  }
+
+  std::unique_ptr<expr::constant>
+  make_constant(detail::ast::query::expression const& expr)
+  {
+    return std::make_unique<expr::constant>(detail::ast::query::fold(expr));
+  }
+
   std::unique_ptr<expr::node> make_glob_node(std::string const& expr)
   {
     // Determine whether we need a regular expression node or whether basic

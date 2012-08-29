@@ -87,18 +87,31 @@ public:
     std::string name;
   };
 
-  /// Computes the offsets vectors to a given type for a given record.
+  /// Computes the offsets vectors for a given symbol sequence.
   ///
-  /// @param record The record to search for types of name *name*.
+  /// @param record The record to search for symbol types whose name matches
+  /// the first element of *ids*.
   ///
-  /// @param name The name of the type to look for in *record*.
+  /// @param ids The name sequence to look for in *record*. If
+  /// `ids.size() > 1`, the first element represents a symbol of type record
+  /// and each subsequent elements of *ids* then represent further argument
+  /// names to dereference.
   ///
   /// @return A vector of offset vectors. Each offset vector represents a
   /// sequence of offsets which have to be used in order to get to *name*.
   /// Since *record* may contain multiple arguments of type *name*, the result
   /// is a vector of vectors.
-  static std::vector<std::vector<size_t>>
-  offsets(record_type const* record, std::string const& name);
+  static std::vector<std::vector<size_t>> symbol_offsets(
+      record_type const* record,
+      std::vector<std::string> const& ids);
+
+  /// Computes the offsets vector for a given argument name sequence.
+  /// @param record The event/record to search.
+  /// @param ids The argument names to look for in *record*.
+  /// @return A vector of offsets to get to *ids*.
+  static std::vector<size_t> argument_offsets(
+      record_type const* record,
+      std::vector<std::string> const& ids);
 
   /// Default-constructs a schema.
   schema() = default;
