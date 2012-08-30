@@ -62,5 +62,5 @@ install(TARGETS libvast DESTINATION lib)
 
 add_executable(vast main.cc)
 set_target_properties(vast PROPERTIES OUTPUT_NAME vast)
-target_link_libraries(vast libvast ${libs})
+target_link_libraries(vast ${libs} libvast)
 install(TARGETS vast DESTINATION bin)

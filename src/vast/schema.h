@@ -19,7 +19,15 @@ public:
   struct type : intrusive_base<type>
   {
     type() = default;
+#ifdef __clang__
     virtual ~type() = default;
+#else
+    // TODO: There is a bug in GCC 4.7
+    // (http://gcc.gnu.org/bugzilla/show_bug.cgi?id=53613) prevents us from
+    // using the =default version of the destructor. We can change this once
+    // 4.8 is the new standard.
+    virtual ~type() {}
+#endif
   };
 
   struct type_info
@@ -31,7 +39,12 @@ public:
 
     std::string name;
     std::vector<std::string> aliases;
+#ifdef __clang__
     intrusive_ptr<type> type;
+#else
+    // GCC is not smart enough to disambiguate types and names :-/.
+    intrusive_ptr<schema::type> type;
+#endif
   };
 
   struct basic_type : type { };
