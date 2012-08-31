@@ -348,7 +348,7 @@ ze::event bro15conn::parse(std::string const& line)
 
   util::field_splitter<std::string::const_iterator> fs;
   fs.split(line.begin(), line.end(), 13);
-  if (! (fs.fields() == 12 || fs.fields() == 13))
+  if (fs.fields() < 12)
     throw error::parse("not enough conn.log fields (at least 12 needed)");
 
   // Timestamp
