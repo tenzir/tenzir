@@ -58,6 +58,10 @@ endif ()
 
 include(MacDependencyPaths)
 
+if (BOOST_ROOT)
+    # Prevent falling back to system paths when using a custom Boost prefix.
+    set(Boost_NO_SYSTEM_PATHS true)
+endif ()
 find_package(Boost
     1.50.0
     COMPONENTS
