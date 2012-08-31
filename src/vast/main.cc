@@ -16,5 +16,5 @@ int main(int argc, char *argv[])
   vast::program program(config);
   auto rc = program.run();
 
-  return rc ? EXIT_FAILURE : EXIT_SUCCESS;
+  return rc ? EXIT_SUCCESS : EXIT_FAILURE;
 }
