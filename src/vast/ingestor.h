@@ -23,14 +23,11 @@ public:
            cppa::actor_ptr index);
 
 private:
-  void ack(ze::uuid const& id);
   void shutdown();
 
   size_t max_events_per_chunk_ = 0;
   size_t max_segment_size_ = 0;
   size_t batch_size_ = 0;
-
-  size_t total_events_ = 0;
 
   std::vector<cppa::actor_ptr> sources_;
   std::unordered_map<ze::uuid, unsigned> inflight_;

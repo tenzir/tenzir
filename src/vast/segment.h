@@ -76,7 +76,7 @@ public:
   public:
     /// Creates a new chunk at the end of the segment for writing.
     /// @param s The segment to write to.
-    writer(segment* s);
+    explicit writer(segment* s);
 
     /// Move-constructs a writer.
     /// @param other The other writer.
@@ -113,7 +113,7 @@ public:
   public:
     /// Constructs a reader for a specific segment.
     /// @param s The segment to read from.
-    reader(segment const* s);
+    explicit reader(segment const* s);
 
     /// Move-constructs a reader.
     /// @param other The other reader.

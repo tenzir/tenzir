@@ -38,10 +38,7 @@ segment_manager::segment_manager(size_t capacity, std::string const& dir)
         auto opt = tuple_cast<segment>(last_dequeued());
         assert(opt.valid());
         store_segment(*opt);
-
-        // The segment manager is part of the archive, so it's fine to send an
-        // ACK which indicates that it comes from the archive.
-        reply(atom("archive"), atom("segment"), atom("ack"), s.id());
+        reply(atom("segment"), atom("ack"), s.id());
       },
       on(atom("get"), atom("ids")) >> [=]
       {
@@ -78,10 +75,7 @@ segment_manager::segment_manager(size_t capacity, std::string const& dir)
 void segment_manager::store_segment(cppa::cow_tuple<segment> t)
 {
   auto& s = cppa::get<0>(t);
-
-  // A segment should not have been recorded twice.
   assert(segment_files_.find(s.id()) == segment_files_.end());
-
   auto path = dir_ / ze::to_string(s.id());
   segment_files_.emplace(s.id(), path);
   {
@@ -90,9 +84,9 @@ void segment_manager::store_segment(cppa::cow_tuple<segment> t)
     oa << s;
   }
 
+  cache_.insert(s.id(), t);
   LOG(verbose, archive)
     << "segment manager @" << id() << " wrote segment to " << path;
-  cache_.insert(s.id(), t);
 }
 
 cppa::cow_tuple<segment> segment_manager::on_miss(ze::uuid const& uuid)

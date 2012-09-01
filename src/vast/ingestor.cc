@@ -48,6 +48,7 @@ ingestor::ingestor(cppa::actor_ptr tracker,
       on(atom("ingest"), "bro15conn", arg_match) >> [=](std::string const& file)
       {
         auto source = spawn<source::bro15conn>(self, tracker, file);
+        monitor(source);
         sources_.push_back(source);
         send(source, atom("initialize"), max_events_per_chunk_,
              max_segment_size_);
@@ -84,70 +85,54 @@ ingestor::ingestor(cppa::actor_ptr tracker,
 
         assert(inflight_.find(s.id()) == inflight_.end());
         inflight_.emplace(s.id(), 2);
+
+        reply(atom("segment"), atom("ack"), s.id());
       },
-      on(atom("archive"), atom("segment"), atom("ack"), arg_match)
-        >> [=](ze::uuid const& uuid)
+      on(atom("segment"), atom("ack"), arg_match) >> [=](ze::uuid const& uuid)
       {
+        // Both archive and index send an ack.
         LOG(verbose, ingest)
           << "ingestor @" << id() 
-          << " received segment ack from archive for " << uuid;
+          << " received segment ack from @" << last_sender()->id()
+          << " for " << uuid;
 
-        ack(uuid);
-      },
-      on(atom("index"), atom("segment"), atom("ack"), arg_match)
-        >> [=](ze::uuid const& uuid)
-      {
-        LOG(verbose, ingest)
-          << "ingestor @" << id() 
-          << " received segment ack from index for " << uuid;
+        auto i = inflight_.find(uuid);
+        assert(i != inflight_.end() && i->second > 0);
+        if (i->second == 1)
+          inflight_.erase(i);
+        else
+          --i->second;
 
-        ack(uuid);
+        if (sources_.empty() && inflight_.empty())
+          shutdown();
       },
       on(atom("shutdown")) >> [=]
       {
         if (broccoli_)
           broccoli_ << last_dequeued();
-
-        if (! sources_.empty())
-          for (auto source : sources_)
-            source << last_dequeued();
-        else if (inflight_.empty())
+        if (sources_.empty() && inflight_.empty())
           shutdown();
+        for (auto source : sources_)
+          source << last_dequeued();
       },
-      on(atom("shutdown"), atom("ack"), arg_match) >> [=](size_t events)
+      on(atom("DOWN"), arg_match) >> [=](uint32_t reason)
       {
-        total_events_ += events;
+        LOG(verbose, ingest)
+          << "event source @" << last_sender()->id() 
+          << " went down, removing state";
+
         auto i = std::find(sources_.begin(), sources_.end(), last_sender());
         assert(i != sources_.end());
         sources_.erase(i);
-
-        LOG(verbose, ingest)
-          << "ingestor @" << id()
-          << " received shutdown ack from source @" << last_sender()->id();
 
         if (sources_.empty() && inflight_.empty())
           shutdown();
       });
 }
 
-void ingestor::ack(ze::uuid const& id)
-{
-  auto i = inflight_.find(id);
-  assert(i != inflight_.end() && i->second > 0);
-  if (i->second == 1)
-    inflight_.erase(i);
-  else
-    --i->second;
-
-  if (sources_.empty() && inflight_.empty())
-    shutdown();
-}
-
 void ingestor::shutdown()
 {
   quit();
-  LOG(info, ingest)
-      << "ingestor @" << id() << " ingested " << total_events_ << " events";
   LOG(verbose, ingest) << "ingestor @" << id() << " terminated";
 }
 

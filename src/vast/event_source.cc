@@ -8,20 +8,120 @@ namespace vast {
 
 using namespace cppa;
 
-event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
-  : events_(std::chrono::seconds(1))
-  , segment_(ze::uuid::random())
+event_source::segmentizer::segmentizer(
+    size_t max_events_per_chunk,
+    size_t max_segment_size,
+    actor_ptr ingestor)
+  : segment_(ze::uuid::random())
   , writer_(&segment_)
-  , ingestor_(ingestor)
-  , tracker_(tracker)
+{
+  init_state = (
+      on_arg_match >> [=](std::vector<ze::event> const& events)
+      {
+        DBG(ingest)
+          << "segmentizer @" << id()
+          << " received " << events.size() << " events";
+
+        for (auto& e : events)
+        {
+          auto n = writer_ << e;
+          if (n % max_events_per_chunk != 0)
+            continue;
+
+          writer_.flush_chunk();
+
+          if (writer_.bytes() - writer_bytes_at_last_rotate_ < max_segment_size)
+            continue;
+
+          writer_bytes_at_last_rotate_ = writer_.bytes();
+
+          DBG(ingest)
+            << "segmentizer @" << id()
+            << " ships segment " << segment_.id()
+            << " to ingestor @" << ingestor->id()
+            << " (" << segment_.events() << " events)";
+
+          sync_send(ingestor, std::move(segment_)).then(
+              on(atom("segment"), atom("ack"), arg_match)
+                >> [=](ze::uuid const& uuid)
+              {
+                assert(last_sender() == ingestor);
+                DBG(ingest)
+                  << "segmentizer @" << id()
+                  << " received segment ack from ingestor @" << ingestor->id()
+                  << " for " << uuid;
+              },
+              after(std::chrono::seconds(10)) >> [=]
+              {
+                LOG(error, ingest)
+                  << "segmentizer @" << id()
+                  << " did not receive ack from ingestor @" << ingestor->id()
+                  << " for " << segment_.id() << " after 10 seconds";
+              });
+
+          segment_ = segment(ze::uuid::random());
+        }
+      },
+      on(atom("shutdown")) >> [=]
+      {
+        if (segment_.events() == 0)
+        {
+          shutdown();
+        }
+        else
+        {
+          DBG(ingest)
+            << "segmentizer @" << id()
+            << " ships final segment " << segment_.id()
+            << " to ingestor @" << ingestor->id()
+            << " (" << segment_.events() << " events)";
+
+          if (writer_.elements() > 0)
+            writer_.flush_chunk();
+
+          sync_send(ingestor, std::move(segment_)).then(
+              on(atom("segment"), atom("ack"), arg_match)
+                >> [=](ze::uuid const& id)
+              {
+                shutdown();
+              },
+              after(std::chrono::seconds(10)) >> [=]
+              {
+                LOG(error, ingest)
+                  << "segmentizer @" << id()
+                  << " did not receive ack from ingestor @" << ingestor->id()
+                  << " for " << segment_.id() << " after 10 seconds";
+              });
+        }
+      });
+}
+
+void event_source::segmentizer::shutdown()
+{
+  quit();
+  LOG(verbose, ingest) << "segmentizer @" << id() << " terminated";
+}
+
+event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
+  : stats_(std::chrono::seconds(1))
+  , buffers_(1)
 {
   chaining(false);
   init_state = (
       on(atom("initialize"), arg_match) >> [=](size_t max_events_per_chunk,
                                                size_t max_segment_size)
       {
-        max_events_per_chunk_ = max_events_per_chunk;
-        max_segment_size_ = max_segment_size;
+        segmentizer_ = spawn<segmentizer>(
+            max_events_per_chunk,
+            max_segment_size,
+            ingestor);
+
+        monitor(segmentizer_);
+
+        LOG(verbose, ingest)
+          << "event source @" << id()
+          << " spawns segmentizer @" << segmentizer_->id()
+          << " with ingestor @" << ingestor->id();
       },
       on(atom("extract"), arg_match) >> [=](size_t n)
       {
@@ -31,12 +131,8 @@ event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
           return;
         }
 
-        if (next_id_ == last_id_)
-        {
-          ask_for_new_ids(n);
-          return;
-        }
-
+        assert(! buffers_.empty());
+        auto& buffer = buffers_.back();
         size_t extracted = 0;
         while (extracted < n)
         {
@@ -46,11 +142,8 @@ event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
           try
           {
             auto e = extract();
-            assert(next_id_ != last_id_);
-            e.id(next_id_++);
-            segmentize(e);
+            buffer.push_back(std::move(e));
             ++extracted;
-            ++total_events_;
           }
           catch (error::parse const& e)
           {
@@ -58,93 +151,134 @@ event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
           }
         }
 
-        if (events_.timed_add(extracted) && events_.last() > 0)
+        if (stats_.timed_add(extracted) && stats_.last() > 0)
         {
+          DBG(ingest)
+            << "event source @" << id() << " asks tracker @"  << tracker->id()
+            << " for " << buffer.size() << " ids";
+
+          send(tracker, atom("request"), buffer.size());
+          buffers_.push_back({});
+
           LOG(info, ingest)
             << "event source @" << id()
-            << " ingests at rate " << events_.last() << " events/sec"
-            << " (mean " << events_.mean()
-            << ", median " << events_.median()
-            << ", variance " << events_.variance()
+            << " ingests at rate " << stats_.last() << " events/sec"
+            << " (mean " << stats_.mean()
+            << ", median " << stats_.median()
+            << ", variance " << stats_.variance()
             << ")";
         }
 
         if (finished_)
           send(self, atom("shutdown"));
         else
-          send(ingestor_, atom("source"), atom("ack"), extracted);
+          send(ingestor, atom("source"), atom("ack"), extracted);
       },
-      on(atom("shutdown")) >> [=]
-      {
-        if (segment_.events() > 0)
-        {
-          if (writer_.elements() > 0)
-            writer_.flush_chunk();
-
-          ship_segment();
-        }
-
-        send(ingestor_, atom("shutdown"), atom("ack"), total_events_);
-
-        quit();
-        LOG(verbose, ingest) << "event source @" << id() << " terminated";
-      });
-}
-
-void event_source::ask_for_new_ids(size_t n)
-{
-  DBG(ingest)
-    << "event source @" << id()
-    << " asks tracker @"  << tracker_->id()
-    << " for " << n << " new ids";
-
-  sync_send(tracker_, atom("request"), n).then(
       on(atom("id"), arg_match) >> [=](uint64_t lower, uint64_t upper)
       {
         DBG(ingest)
-          << "event source @" << id() << " received id range from tracker: "
+          << "event source @" << id() << " received id range: "
           << '[' << lower << ',' << upper << ')';
 
-        next_id_ = lower;
-        last_id_ = upper;
-
-        send(self, atom("extract"), static_cast<size_t>(upper - lower));
+        imbue(lower, upper);
       },
-      after(std::chrono::seconds(10)) >> [=]
+      on(atom("shutdown")) >> [=]
       {
-        LOG(error, ingest)
+        if (buffers_.empty())
+        {
+          send(segmentizer_, atom("shutdown"));
+        }
+        else if (! waiting_)
+        {
+          send(segmentizer_, atom("shutdown"));
+          LOG(error, ingest)
+            << "event source @" << id()
+            << " terminates, discarding buffered events";
+        }
+        else if (buffers_.size() > 1)
+        {
+          LOG(info, ingest)
+            << "event source @" << id()
+            << " waits 3 seconds for " << buffers_.size()
+            << " outstanding tracker replies";
+
+          delayed_send(self, std::chrono::seconds(3), atom("shutdown"));
+          waiting_ = false;
+        }
+        else
+        {
+          auto& buffer = buffers_.front();
+          DBG(ingest)
+            << "event source @" << id() << " synchronously asks tracker for "
+            << buffer.size() << " ids";
+
+          sync_send(tracker, atom("request"), buffer.size()).then(
+              on(atom("id"), arg_match) >> [=](uint64_t lower, uint64_t upper)
+              {
+                DBG(ingest)
+                  << "event source @" << id() << " received id range: "
+                  << '[' << lower << ',' << upper << ')';
+
+                imbue(lower, upper);
+                send(segmentizer_, atom("shutdown"));
+              },
+              after(std::chrono::seconds(10)) >> [=]
+              {
+                LOG(error, ingest)
+                  << "segmentizer @" << id()
+                  << " timed out after 10 seconds trying to contact tracker";
+
+                buffers_.pop_front();
+              });
+        }
+      },
+      on(atom("DOWN"), arg_match) >> [=](uint32_t reason)
+      {
+        // We can only terminate after the segmentizer has delivered all
+        // outstanding segments and terminated, which is witnessed by the
+        // arrival of this message.
+
+        if (! buffers_.empty())
+        {
+          size_t events = 0;
+          for (auto& buf : buffers_)
+            events += buf.size();
+
+          LOG(warn, ingest)
+            << "event source @" << id()
+            << " discards " << events << " events in "
+            << buffers_.size() << " segment buffers";
+        }
+
+        quit();
+        LOG(verbose, ingest)
           << "event source @" << id()
-          << " did not receive new id range from tracker"
-          << " after 10 seconds";
+          << " terminated (ingested " << total_events_ << " events)";
       });
 }
 
-void event_source::segmentize(ze::event const& e)
+void event_source::imbue(uint64_t lower, uint64_t upper)
 {
-  auto n = writer_ << e;
-  if (n % max_events_per_chunk_ != 0)
-    return;
+  assert(! buffers_.empty());
 
-  writer_.flush_chunk();
+  auto& buffer = buffers_.front();
+  auto n = upper - lower;
+  if (n < buffer.size())
+  {
+    LOG(error, ingest)
+      << "event source @" << id()
+      << " received fewer ids than required,"
+      << " got: " << n << ", buffered: " << buffer.size();
 
-  if (writer_.bytes() - writer_bytes_at_last_rotate_ < max_segment_size_)
-    return;
+    throw error::ingest("not enough ids");
+  }
 
-  writer_bytes_at_last_rotate_ = writer_.bytes();
+  for (size_t i = 0; i < static_cast<size_t>(n); ++i)
+    buffer[i].id(lower++);
 
-  ship_segment();
-}
-
-void event_source::ship_segment()
-{
-  DBG(ingest)
-    << "event source @" << id()
-    << " ships segment " << segment_.id()
-    << " to ingestor @" << ingestor_->id()
-    << " (" << segment_.events() << " events)";
-
-  send(ingestor_, std::move(segment_));
-  segment_ = segment(ze::uuid::random());
+  total_events_ += buffer.size();
+  send(segmentizer_, std::move(buffer));
+  buffers_.pop_front();
 }
 
 } // namespace vast
