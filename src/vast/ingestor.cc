@@ -117,10 +117,6 @@ ingestor::ingestor(cppa::actor_ptr tracker,
       },
       on(atom("DOWN"), arg_match) >> [=](uint32_t reason)
       {
-        LOG(verbose, ingest)
-          << "event source @" << last_sender()->id() 
-          << " went down, removing state";
-
         auto i = std::find(sources_.begin(), sources_.end(), last_sender());
         assert(i != sources_.end());
         sources_.erase(i);

@@ -184,6 +184,7 @@ event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
       },
       on(atom("shutdown")) >> [=]
       {
+        finished_ = true;
         if (buffers_.empty())
         {
           send(segmentizer_, atom("shutdown"));
