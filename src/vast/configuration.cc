@@ -143,8 +143,7 @@ bool configuration::load(std::string const& filename)
     fs::ifstream ifs(filename);
     po::store(po::parse_config_file(ifs, all_), config_);
 
-    init();
-    return true;
+    return init();
   }
   catch (error::config const& e)
   {
@@ -175,8 +174,7 @@ bool configuration::load(int argc, char *argv[])
       po::store(po::parse_config_file(ifs, all_), config_);
     }
 
-    init();
-    return true;
+    return init();
   }
   catch (error::config const& e)
   {
@@ -214,9 +212,11 @@ void configuration::print(std::ostream& out, bool advanced) const
     << std::endl;
 }
 
-void configuration::init()
+bool configuration::init()
 {
   po::notify(config_);
+  if (check("help") || check("advanced"))
+    return false;
 
   depends("schema.print", "schema.file");
 
@@ -249,6 +249,8 @@ void configuration::init()
       static_cast<logger::level>(cv),
       static_cast<logger::level>(fv),
       log_file);
+
+  return true;
 }
 
 void configuration::conflicts(const char* opt1, const char* opt2) const

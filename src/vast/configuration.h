@@ -51,7 +51,7 @@ public:
   void print(std::ostream& out, bool advanced = false) const;
 
 private:
-  void init();
+  bool init();
 
   /// Checks that two given options are not specified at the same time.
   /// @param opt1 Option 1.
