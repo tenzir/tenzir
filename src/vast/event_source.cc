@@ -126,10 +126,7 @@ event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
       on(atom("extract"), arg_match) >> [=](size_t n)
       {
         if (finished_)
-        {
-          send(self, atom("shutdown"));
           return;
-        }
 
         assert(! buffers_.empty());
         auto& buffer = buffers_.back();
@@ -184,6 +181,9 @@ event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
       },
       on(atom("shutdown")) >> [=]
       {
+        // We have to set this flag here because it could well be that another
+        // extract message lingers in the queue between this message and the
+        // DOWN message from the segmentizer.
         finished_ = true;
         if (buffers_.empty())
         {
@@ -235,10 +235,6 @@ event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
       },
       on(atom("DOWN"), arg_match) >> [=](uint32_t reason)
       {
-        // We can only terminate after the segmentizer has delivered all
-        // outstanding segments and terminated, which is witnessed by the
-        // arrival of this message.
-
         if (! buffers_.empty())
         {
           size_t events = 0;
