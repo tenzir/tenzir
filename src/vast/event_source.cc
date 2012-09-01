@@ -172,7 +172,7 @@ event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
         if (finished_)
           send(self, atom("shutdown"));
         else
-          send(ingestor, atom("source"), atom("ack"), extracted);
+          send(self, atom("extract"), n);
       },
       on(atom("id"), arg_match) >> [=](uint64_t lower, uint64_t upper)
       {

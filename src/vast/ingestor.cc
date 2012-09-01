@@ -69,10 +69,6 @@ ingestor::ingestor(cppa::actor_ptr tracker,
         for (auto source : sources_)
           send(source, atom("extract"), batch_size_);
       },
-      on(atom("source"), atom("ack"), arg_match) >> [=](size_t /* events */)
-      {
-        reply(atom("extract"), batch_size_);
-      },
       on_arg_match >> [=](segment const& s)
       {
         DBG(ingest) << "ingestor @" << id()
