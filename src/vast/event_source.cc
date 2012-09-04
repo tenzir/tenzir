@@ -209,7 +209,7 @@ event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
             << "event source @" << id()
             << " waits 3 seconds for " << buffers_.size()
             << " outstanding id tracker replies"
-            << " (" << waiting_ << "10 attempts)";
+            << " (" << waiting_ << "/10 attempts)";
 
           delayed_send_tuple(self, std::chrono::seconds(3), last_dequeued());
         }
