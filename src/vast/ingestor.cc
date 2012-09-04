@@ -144,6 +144,10 @@ ingestor::ingestor(cppa::actor_ptr tracker,
         assert(i != sources_.end());
         sources_.erase(i);
 
+        auto j = rates_.find(last_sender());
+        if (j != rates_.end());
+          rates_.erase(j);
+
         if (sources_.empty() && inflight_.empty())
           shutdown();
       });
