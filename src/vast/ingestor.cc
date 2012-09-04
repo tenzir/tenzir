@@ -90,7 +90,7 @@ ingestor::ingestor(cppa::actor_ptr tracker,
             << "ingestor @" << id()
             << " ingests at rate " << sum << " events/sec";
 
-        if (! (sources_.empty() && inflight_.empty()))
+        if (! sources_.empty())
           delayed_send(
               self,
               std::chrono::seconds(1),
@@ -145,7 +145,7 @@ ingestor::ingestor(cppa::actor_ptr tracker,
         sources_.erase(i);
 
         auto j = rates_.find(last_sender());
-        if (j != rates_.end());
+        if (j != rates_.end())
           rates_.erase(j);
 
         if (sources_.empty() && inflight_.empty())
