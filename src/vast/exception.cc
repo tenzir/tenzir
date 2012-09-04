@@ -50,6 +50,14 @@ parse::parse(char const* msg)
 {
 }
 
+parse::parse(char const* msg, size_t line)
+  : ingest(msg)
+{
+  std::ostringstream oss;
+  oss << "line " << line << ": " << msg;
+  msg_ = oss.str();
+}
+
 segment::segment(char const* msg)
   : exception(msg)
 {

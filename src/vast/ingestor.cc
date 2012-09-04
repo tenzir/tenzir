@@ -68,6 +68,26 @@ ingestor::ingestor(cppa::actor_ptr tracker,
       {
         for (auto source : sources_)
           send(source, atom("extract"), batch_size_);
+
+        delayed_send(
+            self, std::chrono::seconds(2), atom("statistics"), atom("print"));
+      },
+      on(atom("statistics"), arg_match) >> [=](size_t rate)
+      {
+        rates_[last_sender()] = rate;
+      },
+      on(atom("statistics"), atom("print")) >> [=]
+      {
+        size_t sum = 0;
+        for (auto& p : rates_)
+          sum += p.second;
+
+        LOG(info, ingest)
+          << "ingestor @" << id()
+          << " ingests at rate " << sum << " events/sec";
+
+        if (! (sources_.empty() && inflight_.empty()))
+          delayed_send_tuple(self, std::chrono::seconds(1), last_dequeued());
       },
       on_arg_match >> [=](segment const& s)
       {

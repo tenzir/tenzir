@@ -44,9 +44,19 @@ ze::event line::extract()
     if (! next())
       break;
 
-  auto event = parse(line_);
-  next();
-  return event;
+  try
+  {
+    auto event = parse(line_);
+    next();
+    return event;
+  }
+  catch (error::parse const& e)
+  {
+    // Make sure we proceed to the next line, otherwise the next call to
+    // extract will use the same line again.
+    next();
+    throw;
+  }
 }
 
 bool line::next()
@@ -55,7 +65,7 @@ bool line::next()
   if (std::getline(file_, line_))
     success = true;
 
-  ++current_line_;
+  ++current_;
   if (! file_)
     finished_ = true;
 
@@ -202,7 +212,7 @@ void bro2::parse_header()
   }
 
   if (file_.peek() == '#')
-    throw error::parse("more headers than VAST knows");
+    throw error::parse("more headers than VAST knows", current_);
 
   DBG(ingest)
     << "event source @" << id() << " parsed bro2 header:"
@@ -269,7 +279,7 @@ ze::event bro2::parse(std::string const& line)
   fs.sep(separator_.data(), separator_.size());
   fs.split(line.begin(), line.end());
   if (fs.fields() != field_types_.size())
-    throw error::parse("inconsistent number of fields");
+    throw error::parse("inconsistent number of fields", current_);
 
   ze::event e(path_);
   e.timestamp(ze::now());
@@ -349,14 +359,14 @@ ze::event bro15conn::parse(std::string const& line)
   util::field_splitter<std::string::const_iterator> fs;
   fs.split(line.begin(), line.end(), 13);
   if (fs.fields() < 12)
-    throw error::parse("not enough conn.log fields (at least 12 needed)");
+    throw error::parse("less than 12 conn.log fields", current_);
 
   // Timestamp
   auto i = fs.start(0);
   auto j = fs.end(0);
   ze::time_range range;
   if (! ze::parse(i, j, range) || i != j) 
-    throw error::parse("invalid conn.log timestamp (field 1)");
+    throw error::parse("invalid conn.log timestamp (field 1)", current_);
   e.emplace_back(ze::time_point(range));
 
   // Duration
@@ -370,7 +380,7 @@ ze::event bro15conn::parse(std::string const& line)
   {
     ze::time_range range;
     if (! ze::parse(i, j, range) || i != j) 
-      throw error::parse("invalid conn.log duration (field 2)");
+      throw error::parse("invalid conn.log duration (field 2)", current_);
     e.emplace_back(range);
   }
 
@@ -379,14 +389,16 @@ ze::event bro15conn::parse(std::string const& line)
   j = fs.end(2);
   ze::address addr;
   if (! ze::parse(i, j, addr) || i != j) 
-    throw error::parse("invalid conn.log originating address (field 3)");
+    throw error::parse("invalid conn.log originating address (field 3)",
+                       current_);
   e.emplace_back(std::move(addr));
 
   // Responder address
   i = fs.start(3);
   j = fs.end(3);
   if (! ze::parse(i, j, addr) || i != j) 
-    throw error::parse("invalid conn.log responding address (field 4)");
+    throw error::parse("invalid conn.log responding address (field 4)",
+                       current_);
   e.emplace_back(std::move(addr));
 
   // Service
@@ -400,7 +412,7 @@ ze::event bro15conn::parse(std::string const& line)
   {
     ze::string service;
     if (! ze::parse(i, j, service) || i != j) 
-      throw error::parse("invalid conn.log service (field 5)");
+      throw error::parse("invalid conn.log service (field 5)", current_);
     e.emplace_back(std::move(service));
   }
 
@@ -409,19 +421,19 @@ ze::event bro15conn::parse(std::string const& line)
   j = fs.end(5);
   ze::port orig_p;
   if (! ze::parse(i, j, orig_p) || i != j) 
-    throw error::parse("invalid conn.log originating port (field 6)");
+    throw error::parse("invalid conn.log originating port (field 6)", current_);
 
   i = fs.start(6);
   j = fs.end(6);
   ze::port resp_p;
   if (! ze::parse(i, j, resp_p) || i != j) 
-    throw error::parse("invalid conn.log responding port (field 7)");
+    throw error::parse("invalid conn.log responding port (field 7)", current_);
 
   i = fs.start(7);
   j = fs.end(7);
   ze::string proto;
   if (! ze::parse(i, j, proto) || i != j) 
-    throw error::parse("invalid conn.log proto (field 8)");
+    throw error::parse("invalid conn.log proto (field 8)", current_);
 
   auto p = ze::port::unknown;
   if (proto == "tcp")
@@ -447,7 +459,8 @@ ze::event bro15conn::parse(std::string const& line)
   {
     uint64_t orig_bytes;
     if (! ze::parse(i, j, orig_bytes) || i != j) 
-      throw error::parse("invalid conn.log originating bytes (field 9)");
+      throw error::parse("invalid conn.log originating bytes (field 9)",
+                         current_);
     e.emplace_back(orig_bytes);
   }
 
@@ -461,7 +474,8 @@ ze::event bro15conn::parse(std::string const& line)
   {
     uint64_t resp_bytes;
     if (! ze::parse(i, j, resp_bytes) || i != j) 
-      throw error::parse("invalid conn.log responding bytes (field 10)");
+      throw error::parse("invalid conn.log responding bytes (field 10)",
+                         current_);
     e.emplace_back(resp_bytes);
   }
 
@@ -470,7 +484,8 @@ ze::event bro15conn::parse(std::string const& line)
   j = fs.end(10);
   ze::string state;
   if (! ze::parse(i, j, state) || i != j) 
-    throw error::parse("invalid conn.log connection state (field 11)");
+    throw error::parse("invalid conn.log connection state (field 11)",
+                       current_);
   e.emplace_back(std::move(state));
 
   // Direction
@@ -478,7 +493,7 @@ ze::event bro15conn::parse(std::string const& line)
   j = fs.end(11);
   ze::string direction;
   if (! ze::parse(i, j, direction) || i != j) 
-    throw error::parse("invalid conn.log direction (field 12)");
+    throw error::parse("invalid conn.log direction (field 12)", current_);
   e.emplace_back(std::move(direction));
 
   // Additional information
@@ -488,7 +503,8 @@ ze::event bro15conn::parse(std::string const& line)
     j = fs.end(12);
     ze::string addl;
     if (! ze::parse(i, j, addl) || i != j) 
-      throw error::parse("invalid conn.log additional data (field 13)");
+      throw error::parse("invalid conn.log additional data (field 13)",
+                         current_);
     e.emplace_back(std::move(addl));
   }
 

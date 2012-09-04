@@ -49,7 +49,7 @@ protected:
   /// @return `true` if extracting was successful.
   bool next();
 
-  size_t current_line_ = 0;
+  size_t current_ = 0;
   std::string line_;
 };
 

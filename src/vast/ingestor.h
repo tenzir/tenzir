@@ -30,6 +30,7 @@ private:
   size_t batch_size_ = 0;
 
   std::vector<cppa::actor_ptr> sources_;
+  std::unordered_map<cppa::actor_ptr, size_t> rates_;
   std::unordered_map<ze::uuid, unsigned> inflight_;
   cppa::actor_ptr archive_;
   cppa::actor_ptr index_;

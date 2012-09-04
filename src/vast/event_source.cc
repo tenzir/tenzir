@@ -144,7 +144,18 @@ event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
           }
           catch (error::parse const& e)
           {
-            LOG(error, ingest) << e.what();
+            ++errors_;
+            if (errors_ < 1000)
+            {
+              LOG(error, ingest)
+                << "event source @" << id()
+                << " encountered parse error: " << e.what();
+            }
+            else if (errors_ == 1000)
+            {
+              LOG(error, ingest)
+                << "event source @" << id() << " won't report further errors";
+            }
           }
         }
 
@@ -157,12 +168,13 @@ event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
           send(tracker, atom("request"), buffer.size());
           buffers_.push_back({});
 
+          send(ingestor, atom("statistics"), stats_.last());
           LOG(info, ingest)
             << "event source @" << id()
             << " ingests at rate " << stats_.last() << " events/sec"
             << " (mean " << stats_.mean()
             << ", median " << stats_.median()
-            << ", variance " << stats_.variance()
+            << ", standard deviation " << std::sqrt(stats_.variance())
             << ")";
         }
 
@@ -200,10 +212,10 @@ event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
         {
           LOG(info, ingest)
             << "event source @" << id()
-            << " waits 3 seconds for " << buffers_.size()
+            << " waits 30 seconds for " << buffers_.size()
             << " outstanding tracker replies";
 
-          delayed_send(self, std::chrono::seconds(3), atom("shutdown"));
+          delayed_send(self, std::chrono::seconds(30), atom("shutdown"));
           waiting_ = false;
         }
         else
@@ -248,9 +260,10 @@ event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
         }
 
         quit();
-        LOG(verbose, ingest)
-          << "event source @" << id()
-          << " terminated (ingested " << total_events_ << " events)";
+        LOG(info, ingest)
+          << "event source @" << id() << " terminated (ingested "
+          << events_ << " events, "
+          << errors_ << " errors)";
       });
 }
 
@@ -273,7 +286,7 @@ void event_source::imbue(uint64_t lower, uint64_t upper)
   for (size_t i = 0; i < static_cast<size_t>(n); ++i)
     buffer[i].id(lower++);
 
-  total_events_ += buffer.size();
+  events_ += buffer.size();
   send(segmentizer_, std::move(buffer));
   buffers_.pop_front();
 }

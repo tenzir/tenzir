@@ -46,6 +46,7 @@ struct parse : public ingest
 {
   parse() = default;
   parse(char const* msg);
+  parse(char const* msg, size_t line);
 };
 
 struct segment : public exception

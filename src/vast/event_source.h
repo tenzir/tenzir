@@ -50,7 +50,8 @@ private:
   void imbue(uint64_t lower, uint64_t upper);
 
   bool waiting_ = true;
-  size_t total_events_ = 0;
+  size_t errors_ = 0;
+  size_t events_ = 0;
   util::temporal_accumulator<size_t> stats_;
   std::deque<std::vector<ze::event>> buffers_;
   cppa::actor_ptr segmentizer_;
