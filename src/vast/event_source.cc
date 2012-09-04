@@ -205,13 +205,17 @@ event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
         else if (buffers_.size() > 1)
         {
           ++waiting_;
+          auto outstanding = buffers_.size() - 1;
           LOG(info, ingest)
             << "event source @" << id()
-            << " waits 3 seconds for " << buffers_.size()
-            << " outstanding id tracker replies"
+            << " waits " << waiting_ * 2 << " seconds for " << outstanding
+            << " outstanding id tracker repl"
+            << (outstanding == 1 ? "y" : "ies")
             << " (" << waiting_ << "/10 attempts)";
 
-          delayed_send_tuple(self, std::chrono::seconds(3), last_dequeued());
+          delayed_send_tuple(self,
+                             std::chrono::seconds(waiting_ * 2),
+                             last_dequeued());
         }
         else
         {
