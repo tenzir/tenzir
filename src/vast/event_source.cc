@@ -198,7 +198,7 @@ event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
         // extract message lingers in the queue between this message and the
         // DOWN message from the segmentizer.
         finished_ = true;
-        if (buffers_.empty() || waiting_ < 10)
+        if (buffers_.empty() || waiting_ >= 10)
         {
           segmentizer_ << last_dequeued();
         }
