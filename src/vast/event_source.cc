@@ -15,6 +15,7 @@ event_source::segmentizer::segmentizer(
   : segment_(ze::uuid::random())
   , writer_(&segment_)
 {
+  chaining(false);
   init_state = (
       on_arg_match >> [=](std::vector<ze::event> const& events)
       {
