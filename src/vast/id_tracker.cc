@@ -49,7 +49,8 @@ id_tracker::id_tracker(std::string const& id_file)
 
       DBG(ingest)
         << "id tracker @" << id() << " hands out ["
-        << id_ << ',' << id_ + n << ')';
+        << id_ << ',' << id_ + n << ')'
+        << " to @" << last_sender()->id();
 
       file_ << id_ + n << std::endl;
       if (file_)

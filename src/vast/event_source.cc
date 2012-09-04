@@ -170,7 +170,7 @@ event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
           buffers_.push_back({});
 
           send(ingestor, atom("statistics"), stats_.last());
-          LOG(info, ingest)
+          LOG(verbose, ingest)
             << "event source @" << id()
             << " ingests at rate " << stats_.last() << " events/sec"
             << " (mean " << stats_.mean()
@@ -198,16 +198,9 @@ event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
         // extract message lingers in the queue between this message and the
         // DOWN message from the segmentizer.
         finished_ = true;
-        if (buffers_.empty())
+        if (buffers_.empty() || ! waiting_)
         {
           send(segmentizer_, atom("shutdown"));
-        }
-        else if (! waiting_)
-        {
-          send(segmentizer_, atom("shutdown"));
-          LOG(error, ingest)
-            << "event source @" << id()
-            << " terminates, discarding buffered events";
         }
         else if (buffers_.size() > 1)
         {
@@ -254,10 +247,11 @@ event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
           for (auto& buf : buffers_)
             events += buf.size();
 
-          LOG(warn, ingest)
-            << "event source @" << id()
-            << " discards " << events << " events in "
-            << buffers_.size() << " segment buffers";
+          if (events > 0)
+            LOG(warn, ingest)
+              << "event source @" << id()
+              << " discards " << events << " events in "
+              << buffers_.size() << " segment buffers";
         }
 
         quit();
