@@ -198,19 +198,20 @@ event_source::event_source(cppa::actor_ptr ingestor, cppa::actor_ptr tracker)
         // extract message lingers in the queue between this message and the
         // DOWN message from the segmentizer.
         finished_ = true;
-        if (buffers_.empty() || ! waiting_)
+        if (buffers_.empty() || waiting_ < 10)
         {
-          send(segmentizer_, atom("shutdown"));
+          segmentizer_ << last_dequeued();
         }
         else if (buffers_.size() > 1)
         {
+          ++waiting_;
           LOG(info, ingest)
             << "event source @" << id()
-            << " waits 30 seconds for " << buffers_.size()
-            << " outstanding tracker replies";
+            << " waits 3 seconds for " << buffers_.size()
+            << " outstanding id tracker replies"
+            << " (" << waiting_ << "10 attempts)";
 
-          delayed_send(self, std::chrono::seconds(30), atom("shutdown"));
-          waiting_ = false;
+          delayed_send_tuple(self, std::chrono::seconds(3), last_dequeued());
         }
         else
         {

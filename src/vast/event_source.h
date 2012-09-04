@@ -49,7 +49,7 @@ private:
 
   void imbue(uint64_t lower, uint64_t upper);
 
-  bool waiting_ = true;
+  unsigned waiting_ = 0;
   size_t errors_ = 0;
   size_t events_ = 0;
   util::temporal_accumulator<size_t> stats_;
