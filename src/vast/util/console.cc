@@ -4,7 +4,8 @@
 #include <stdio.h>
 #include <termios.h>
 #include <cassert>
-#include <vast/exception.h>
+#include "vast/exception.h"
+#include "vast/util/poll.h"
 
 namespace vast {
 namespace util {
@@ -46,15 +47,7 @@ void buffer()
 
 bool get(char& c, int timeout)
 {
-  fd_set rdset;
-  FD_ZERO(&rdset);
-  FD_SET(::fileno(stdin), &rdset);
-  struct timeval tv{0, timeout};
-  auto rc = ::select(::fileno(stdin) + 1, &rdset, nullptr, nullptr, &tv);
-  if (rc <= 0)
-    return false;
-
-  if (! FD_ISSET(fileno(stdin), &rdset))
+  if (! poll(::fileno(stdin), timeout))
     return false;
 
   auto i = ::fgetc(stdin);
