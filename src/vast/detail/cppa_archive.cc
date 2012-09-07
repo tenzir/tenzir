@@ -3,7 +3,9 @@
 namespace vast {
 namespace detail {
 
-cppa_oarchive::cppa_oarchive(cppa::serializer* sink, std::string const& name)
+using namespace cppa;
+
+cppa_oarchive::cppa_oarchive(serializer* sink, std::string const& name)
   : sink_(sink)
 {
   sink_->begin_object(name);
@@ -20,9 +22,8 @@ void cppa_oarchive::write_raw(void const* x, size_t n)
 }
 
 
-cppa_iarchive::cppa_iarchive(cppa::deserializer* source,
-                             std::string const& name)
-: source_(source)
+cppa_iarchive::cppa_iarchive(deserializer* source, std::string const& name)
+  : source_(source)
 {
   source_->begin_object(name);
 }
