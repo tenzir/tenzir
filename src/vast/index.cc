@@ -300,7 +300,6 @@ index::index(cppa::actor_ptr archive, std::string directory)
           reply(atom("miss"));
         else
           reply(atom("hit"), std::move(ids));
-
       },
       on(arg_match) >> [=](segment const& s)
       {
