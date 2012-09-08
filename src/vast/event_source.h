@@ -30,15 +30,12 @@ protected:
   bool finished_ = true;
 
 private:
-  class segmentizer : public cppa::sb_actor<segmentizer>
+  struct segmentizer : cppa::sb_actor<segmentizer>
   {
-    friend class cppa::sb_actor<segmentizer>;
-  public:
     segmentizer(size_t max_events_per_chunk,
                 size_t max_segment_size,
                 cppa::actor_ptr ingestor);
 
-  private:
     void shutdown();
 
     segment segment_;
