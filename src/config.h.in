@@ -10,4 +10,14 @@
 // Use Gperftools heap profiler
 #cmakedefine USE_PERFTOOLS_HEAP_PROFILER
 
+#if defined(__APPLE__)
+#  define VAST_MACOS
+#elif defined(__GNUC__) && defined(__linux__)
+#  define VAST_LINUX
+#elif defined(WIN32)
+#  define VAST_WINDOWS
+#else
+#  error platform not supported
+#endif
+
 #endif
