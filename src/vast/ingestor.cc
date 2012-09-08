@@ -47,18 +47,11 @@ ingestor::ingestor(cppa::actor_ptr tracker,
       },
       on(atom("ingest"), "bro15conn", arg_match) >> [=](std::string const& file)
       {
-        auto source = spawn<source::bro15conn>(self, tracker, file);
-        monitor(source);
-        sources_.push_back(source);
-        send(source, atom("initialize"), max_events_per_chunk_,
-             max_segment_size_);
+        sources_.push_back(spawn<source::bro15conn>(self, tracker, file));
       },
       on(atom("ingest"), "bro2", arg_match) >> [=](std::string const& file)
       {
-        auto source = spawn<source::bro2>(self, tracker, file);
-        sources_.push_back(source);
-        send(source, atom("initialize"), max_events_per_chunk_,
-             max_segment_size_);
+        sources_.push_back(spawn<source::bro2>(self, tracker, file));
       },
       on(atom("ingest"), val<std::string>, arg_match) >> [=](std::string const&)
       {
@@ -67,7 +60,12 @@ ingestor::ingestor(cppa::actor_ptr tracker,
       on(atom("extract")) >> [=]
       {
         for (auto source : sources_)
+        {
+          monitor(source);
+          send(source, atom("initialize"), max_events_per_chunk_,
+               max_segment_size_);
           send(source, atom("extract"), batch_size_);
+        }
 
         size_t last = 0;
         delayed_send(
