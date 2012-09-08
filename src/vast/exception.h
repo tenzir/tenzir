@@ -26,15 +26,27 @@ protected:
 /// The namespace for all exceptions.
 namespace error {
 
+/// Thrown for network errors.
+struct network : exception
+{
+  network(char const* msg);
+};
+
+/// Thrown for errors with Broccoli.
+struct broccoli : network
+{
+  broccoli(char const* msg);
+};
+
 /// Thrown for errors with the program configuration.
-struct config : public exception
+struct config : exception
 {
   config(char const* msg, char const* option);
   config(char const* msg, char const* opt1, char const* opt2);
 };
 
 /// The base class for all exceptions during the ingestion process.
-struct ingest : public exception
+struct ingest : exception
 {
   ingest() = default;
   ingest(char const* msg);
@@ -42,20 +54,20 @@ struct ingest : public exception
 };
 
 /// Thrown when a parse error occurs while processing input data.
-struct parse : public ingest
+struct parse : ingest
 {
   parse() = default;
   parse(char const* msg);
   parse(char const* msg, size_t line);
 };
 
-struct segment : public exception
+struct segment : exception
 {
   segment(char const* msg);
 };
 
 /// Thrown when an error with a query occurs.
-struct query : public exception
+struct query : exception
 {
   query() = default;
   query(char const* msg);
@@ -63,7 +75,7 @@ struct query : public exception
 };
 
 /// Thrown when an error with a schema occurs.
-struct schema : public exception
+struct schema : exception
 {
   schema() = default;
   schema(char const* msg);

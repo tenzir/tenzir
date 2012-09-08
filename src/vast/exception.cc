@@ -21,6 +21,16 @@ char const* exception::what() const noexcept
 
 namespace error {
 
+network::network(char const* msg)
+  : exception(msg)
+{
+}
+
+broccoli::broccoli(char const* msg)
+  : network(msg)
+{
+}
+
 config::config(char const* msg, char const* option)
 {
   std::ostringstream oss;
