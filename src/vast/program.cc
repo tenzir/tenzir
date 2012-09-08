@@ -14,10 +14,10 @@
 #include "vast/search.h"
 #include "vast/system_monitor.h"
 #include "vast/to_string.h"
-#include "vast/comm/broccoli.h"
 #include "vast/detail/cppa_type_info.h"
 #include "vast/fs/path.h"
 #include "vast/fs/operations.h"
+#include "vast/util/broccoli.h"
 #include "vast/util/profiler.h"
 #include "config.h"
 
@@ -202,7 +202,7 @@ bool program::start()
 
     if (config_.check("ingestor-actor"))
     {
-      comm::broccoli::init(config_.check("broccoli-messages"),
+      util::broccoli::init(config_.check("broccoli-messages"),
                            config_.check("broccoli-calltrace"));
 
       ingestor_ = spawn<ingestor>(tracker_, archive_, index_);

@@ -21,10 +21,6 @@ set(libvast_sources
   segment_manager.cc
   system_monitor.cc
   to_string.cc
-  comm/broccoli.cc
-  comm/connection.cc
-  comm/exception.cc
-  comm/server.cc
   detail/cppa_archive.cc
   detail/cppa_type_info.cc
   detail/ast/query.cc
@@ -36,8 +32,11 @@ set(libvast_sources
   sink/file.cc
   source/broccoli.cc
   source/file.cc
+  util/broccoli.cc
   util/console.cc
-  util/profiler.cc)
+  util/poll.cc
+  util/profiler.cc
+  )
 
 set(libs
     ${Boost_LIBRARIES}

@@ -34,16 +34,10 @@ ingestor::ingestor(cppa::actor_ptr tracker,
         [=](std::string const& host, unsigned port,
             std::vector<std::string> const& events)
       {
-        broccoli_ = spawn<source::broccoli>(tracker, archive_);
-        send(broccoli_,
-             atom("initialize"),
-             max_events_per_chunk_,
-             max_segment_size_);
-
-        for (auto& e : events)
-          send(broccoli_, atom("subscribe"), e);
-
-        send(broccoli_, atom("bind"), host, port);
+        broccoli_ = spawn<source::broccoli>(self, tracker);
+        send(broccoli_, atom("start"), host, port);
+        for (auto& event : events)
+          send(broccoli_, atom("subscribe"), event);
       },
       on(atom("ingest"), "bro15conn", arg_match) >> [=](std::string const& file)
       {
