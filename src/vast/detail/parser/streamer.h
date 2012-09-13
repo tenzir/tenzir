@@ -1,11 +1,11 @@
-#ifndef VAST_UTIL_PARSER_STREAMER_H
-#define VAST_UTIL_PARSER_STREAMER_H
+#ifndef VAST_DETAIL_PARSER_STREAMER_H
+#define VAST_DETAIL_PARSER_STREAMER_H
 
 #include <boost/spirit/include/qi.hpp>
 #include <boost/spirit/include/support_multi_pass.hpp>
 
 namespace vast {
-namespace util {
+namespace detail {
 namespace parser {
 
 typedef std::istream_iterator<char> istream_iterator;
@@ -19,8 +19,8 @@ typedef boost::spirit::multi_pass<
     >
 > multi_pass_iterator;
 
-/// A stream parser that performs a one-time pass over the input and invokes a
-/// user-provided callback for each parsed object.
+/// A stream parser that performs a single pass over the input and extracts
+/// attributes until done.
 template <
     template <typename> class Grammar
   , template <typename> class Skipper
@@ -53,7 +53,7 @@ private:
 };
 
 } // namespace parser
-} // namespace util
+} // namespace detail
 } // namespace vast
 
 #endif

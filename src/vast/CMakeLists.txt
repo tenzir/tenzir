@@ -27,6 +27,7 @@ set(libvast_sources
   detail/parser/expression.cc
   detail/parser/query.cc
   detail/parser/schema.cc
+  detail/parser/bro15/conn.cc
   fs/exception.cc
   fs/operations.cc
   sink/file.cc
