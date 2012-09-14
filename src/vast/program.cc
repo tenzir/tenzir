@@ -81,12 +81,8 @@ bool program::start()
   LOG(verbose, core) << "";
 
   auto vast_dir = config_.get<fs::path>("directory");
-  if (! fs::exists(vast_dir))
-    fs::mkdir(vast_dir);
-
-  auto log_dir = config_.get<fs::path>("log.directory");
-  if (! fs::exists(log_dir))
-      fs::mkdir(log_dir);
+  assert(fs::exists(vast_dir));
+  assert(fs::exists(vast_dir / "log"));
 
   try
   {
@@ -96,7 +92,8 @@ bool program::start()
     if (config_.check("profile"))
     {
       auto ms = config_.get<unsigned>("profile");
-      profiler_ = spawn<util::profiler>(log_dir.string(), std::chrono::seconds(ms));
+      profiler_ = spawn<util::profiler>((vast_dir / "log").string(),
+                                        std::chrono::seconds(ms));
       send(profiler_,
            atom("run"),
            config_.check("profile-cpu"),
@@ -128,9 +125,7 @@ bool program::start()
 
     if (config_.check("tracker-actor") || config_.check("all-server"))
     {
-      tracker_ = spawn<id_tracker>(
-          (config_.get<fs::path>("directory") / "id").string());
-
+      tracker_ = spawn<id_tracker>((vast_dir / "id").string());
       LOG(verbose, core) << "publishing tracker at *:"
           << config_.get<unsigned>("tracker.port");
 
@@ -151,8 +146,7 @@ bool program::start()
 
     if (config_.check("archive-actor") || config_.check("all-server"))
     {
-      archive_ = spawn<archive>(
-          (config_.get<fs::path>("directory") / "archive").string(),
+      archive_ = spawn<archive>((vast_dir / "archive").string(),
           config_.get<size_t>("archive.max-segments"));
       send(archive_, atom("load"));
 
@@ -176,9 +170,7 @@ bool program::start()
 
     if (config_.check("index-actor") || config_.check("all-server"))
     {
-      index_ = spawn<index>(
-          archive_,
-          (config_.get<fs::path>("directory") / "index").string());
+      index_ = spawn<index>(archive_, (vast_dir / "index").string());
       send(index_, atom("load"));
 
       LOG(verbose, core) << "publishing index at *:"

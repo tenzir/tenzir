@@ -32,8 +32,6 @@ configuration::configuration()
      "console verbosity")
     ("log.file-verbosity,V", po::value<int>()->default_value(logger::verbose),
      "log file verbosity")
-    ("log.directory", po::value<fs::path>()->default_value("log"),
-     "log direcotory")
     ;
 
   po::options_description advanced("advanced options");
@@ -240,15 +238,14 @@ bool configuration::init()
   if (get<unsigned>("client.paginate") == 0)
     throw error::config("pagination must be non-zero", "client.paginate");
 
-  auto log_dir = get<fs::path>("directory") / get<fs::path>("log.directory");
-  auto log_file = log_dir / "vast.log";
+  auto log_dir = get<fs::path>("directory") / "log";
   if (! fs::exists(log_dir))
       fs::mkdir(log_dir);
 
   logger::init(
       static_cast<logger::level>(cv),
       static_cast<logger::level>(fv),
-      log_file);
+      log_dir / "vast.log");
 
   return true;
 }
