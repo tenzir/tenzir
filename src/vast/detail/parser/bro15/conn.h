@@ -8,7 +8,7 @@
 #define BOOST_SPIRIT_NO_PREDEFINED_TERMINALS
 
 #include <ze/event.h>
-#include <ze/parser/address.h>
+#include <ze/detail/parser/address.h>
 
 namespace vast {
 namespace detail {
@@ -43,7 +43,7 @@ struct connection : qi::grammar<Iterator, ze::event(), qi::locals<uint16_t, uint
   qi::rule<Iterator, ze::string()> id;
   qi::rule<Iterator, ze::string()> addl;
 
-  ze::parser::address<Iterator> addr;
+  ze::detail::parser::address<Iterator> addr;
 };
 
 } // namespace bro15
