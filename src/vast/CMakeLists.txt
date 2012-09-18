@@ -2,6 +2,7 @@ include_directories(BEFORE ..)
 
 set(libvast_sources
   bitvector.cc
+  bitstream.cc
   archive.cc
   configuration.cc
   event_sink.cc
