@@ -6,22 +6,8 @@
 namespace vast {
 
 /// An append-only sequence of bits.
-class bitstream
-{
-public:
-  virtual ~bitstream() = default;
-  virtual void append(size_t n, bool bit) = 0;
-  virtual void push_back(bool bit) = 0;
-  virtual void flip() = 0;
-  bitvector const& bits() const;
-
-protected:
-  bitvector bits_;
-};
-
-/// An operator mixin for concrete bit streams.
 template <typename Derived>
-class basic_bitstream : public bitstream
+class bitstream
 {
 public:
   friend bool operator==(Derived const& x, Derived const& y)
@@ -60,12 +46,27 @@ public:
 
   Derived operator~() const
   {
-    derived().flip();
+    Derived d(derived());
+    return d.flip();
   }
 
-  virtual void append(size_t n, bool bit) = 0;
-  virtual void push_back(bool bit) = 0;
-  virtual void flip() = 0;
+  void append(size_t n, bool bit)
+  {
+    derived().append_impl(n, bit);
+  }
+
+  void push_back(bool bit)
+  {
+    derived().push_back_impl(bit);
+  }
+
+  bitvector const& bits() const
+  {
+    return bits_;
+  }
+
+protected:
+  bitvector bits_;
 
 private:
   Derived& derived()
@@ -79,21 +80,21 @@ private:
   }
 };
 
-class null_bitstream : public basic_bitstream<null_bitstream>
+class null_bitstream : public bitstream<null_bitstream>
 {
-  friend class basic_bitstream<null_bitstream>;
+  friend class bitstream<null_bitstream>;
 
 public:
   null_bitstream& operator&=(null_bitstream const& other);
   null_bitstream& operator|=(null_bitstream const& other);
   null_bitstream& operator^=(null_bitstream const& other);
   null_bitstream& operator-=(null_bitstream const& other);
-  virtual void append(size_t n, bool bit);
-  virtual void push_back(bool bit);
-  virtual void flip();
+  null_bitstream& flip();
 
 private:
   bool equals(null_bitstream const& other) const;
+  void append_impl(size_t n, bool bit);
+  void push_back_impl(bool bit);
 };
 
 } // namespace vast
