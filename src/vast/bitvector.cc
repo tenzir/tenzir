@@ -447,9 +447,6 @@ size_type bitvector::find_next(size_type i) const
   return block ? bi * bits_per_block + lowest_bit(block) : find_from(bi + 1);
 }
 
-/// Computes the bit position first 1-bit in a given block.
-/// @param block The block to inspect.
-/// @return The bit position where *block* has its first bit set to 1.
 size_type bitvector::lowest_bit(block_type block)
 {
   auto x = block - (block & (block - 1)); // Extract right-most 1-bit.
@@ -464,21 +461,12 @@ block_type bitvector::extra_bits() const
   return bit_index(size());
 }
 
-// If the number of bits in the vector are not not a multiple of
-// bits_per_block, then the last block exhibits unused bits which this
-// function resets.
 void bitvector::zero_unused_bits()
 {
   if (extra_bits())
     bits_.back() &= ~(~block_type(0) << extra_bits());
 }
 
-/// Looks for the first 1-bit starting at a given position.
-///
-/// @param i The block index to start looking.
-///
-/// @return The block index of the first 1-bit starting from *i* or
-/// `bitvector::npos` if no 1-bit exists.
 size_type bitvector::find_from(size_type i) const
 {
   while (i < blocks() && bits_[i] == 0)
