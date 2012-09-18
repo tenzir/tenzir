@@ -2,6 +2,11 @@
 
 namespace vast {
 
+bitvector const& bitstream::bits() const
+{
+  return bits_;
+}
+
 null_bitstream& null_bitstream::operator&=(null_bitstream const& other)
 {
   bits_ &= other.bits_;
@@ -26,6 +31,16 @@ null_bitstream& null_bitstream::operator-=(null_bitstream const& other)
   return *this;
 }
 
+void null_bitstream::append(size_t n, bool bit)
+{
+  bits_.resize(bits_.size() + n, bit);
+}
+
+void null_bitstream::push_back(bool bit)
+{
+  bits_.push_back(bit);
+}
+
 void null_bitstream::flip()
 {
   bits_.flip();
@@ -34,16 +49,6 @@ void null_bitstream::flip()
 bool null_bitstream::equals(null_bitstream const& other) const
 {
   return bits_ == other.bits_;
-}
-
-void null_bitstream::append_impl(size_t n, bool bit)
-{
-  bits_.resize(bits_.size() + n, bit);
-}
-
-void null_bitstream::push_back_impl(bool bit)
-{
-  bits_.push_back(bit);
 }
 
 } // namespace vast
