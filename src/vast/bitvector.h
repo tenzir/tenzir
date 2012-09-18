@@ -88,7 +88,11 @@ public:
   //
   // Bitwise operations
   //
-
+  bitvector operator~() const;
+  bitvector operator<<(size_type n) const;
+  bitvector operator>>(size_type n) const;
+  bitvector& operator<<=(size_type n);
+  bitvector& operator>>=(size_type n);
   bitvector& operator&=(bitvector const& other);
   bitvector& operator|=(bitvector const& other);
   bitvector& operator^=(bitvector const& other);
@@ -97,11 +101,10 @@ public:
   friend bitvector operator|(bitvector const& x, bitvector const& y);
   friend bitvector operator^(bitvector const& x, bitvector const& y);
   friend bitvector operator-(bitvector const& x, bitvector const& y);
-  bitvector& operator<<=(size_type n);
-  bitvector& operator>>=(size_type n);
-  bitvector operator<<(size_type n) const;
-  bitvector operator>>(size_type n) const;
-  bitvector operator~() const;
+
+  //
+  // Relational operators
+  //
   friend bool operator==(bitvector const& x, bitvector const& y);
   friend bool operator!=(bitvector const& x, bitvector const& y);
   friend bool operator<(bitvector const& x, bitvector const& y);
@@ -109,7 +112,6 @@ public:
   //
   // Basic operations
   //
-
   /// Appends the bits in a sequence of values.
   /// @tparam Iterator A forward iterator.
   /// @param first An iterator pointing to the first element of the sequence.

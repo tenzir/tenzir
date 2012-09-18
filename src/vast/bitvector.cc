@@ -115,6 +115,13 @@ bitvector::bitvector(bitvector&& other)
   other.num_bits_ = 0;
 }
 
+bitvector bitvector::operator~() const
+{
+  bitvector b(*this);
+  b.flip();
+  return b;
+}
+
 bitvector& bitvector::operator=(bitvector other)
 {
   swap(*this, other);
@@ -128,60 +135,16 @@ void swap(bitvector x, bitvector y)
   swap(x.num_bits_, y.num_bits_);
 }
 
-bitvector& bitvector::operator&=(bitvector const& other)
+bitvector bitvector::operator<<(size_type n) const
 {
-  assert(size() == other.size());
-  for (size_type i = 0; i < blocks(); ++i)
-    bits_[i] &= other.bits_[i];
-  return *this;
+  bitvector b(*this);
+  return b <<= n;
 }
 
-bitvector& bitvector::operator|=(bitvector const& other)
+bitvector bitvector::operator>>(size_type n) const
 {
-  assert(size() == other.size());
-  for (size_type i = 0; i < blocks(); ++i)
-    bits_[i] |= other.bits_[i];
-  return *this;
-}
-
-bitvector& bitvector::operator^=(bitvector const& other)
-{
-  assert(size() == other.size());
-  for (size_type i = 0; i < blocks(); ++i)
-    bits_[i] ^= other.bits_[i];
-  return *this;
-}
-
-bitvector& bitvector::operator-=(bitvector const& other)
-{
-  assert(size() == other.size());
-  for (size_type i = 0; i < blocks(); ++i)
-    bits_[i] &= ~other.bits_[i];
-  return *this;
-}
-
-bitvector operator&(bitvector const& x, bitvector const& y)
-{
-  bitvector b(x);
-  return b &= y;
-}
-
-bitvector operator|(bitvector const& x, bitvector const& y)
-{
-  bitvector b(x);
-  return b |= y;
-}
-
-bitvector operator^(bitvector const& x, bitvector const& y)
-{
-  bitvector b(x);
-  return b ^= y;
-}
-
-bitvector operator-(bitvector const& x, bitvector const& y)
-{
-  bitvector b(x);
-  return b -= y;
+  bitvector b(*this);
+  return b >>= n;
 }
 
 bitvector& bitvector::operator<<=(size_type n)
@@ -250,23 +213,60 @@ bitvector& bitvector::operator>>=(size_type n)
   return *this;
 }
 
-bitvector bitvector::operator<<(size_type n) const
+bitvector& bitvector::operator&=(bitvector const& other)
 {
-  bitvector b(*this);
-  return b <<= n;
+  assert(size() == other.size());
+  for (size_type i = 0; i < blocks(); ++i)
+    bits_[i] &= other.bits_[i];
+  return *this;
 }
 
-bitvector bitvector::operator>>(size_type n) const
+bitvector& bitvector::operator|=(bitvector const& other)
 {
-  bitvector b(*this);
-  return b >>= n;
+  assert(size() == other.size());
+  for (size_type i = 0; i < blocks(); ++i)
+    bits_[i] |= other.bits_[i];
+  return *this;
 }
 
-bitvector bitvector::operator~() const
+bitvector& bitvector::operator^=(bitvector const& other)
 {
-  bitvector b(*this);
-  b.flip();
-  return b;
+  assert(size() == other.size());
+  for (size_type i = 0; i < blocks(); ++i)
+    bits_[i] ^= other.bits_[i];
+  return *this;
+}
+
+bitvector& bitvector::operator-=(bitvector const& other)
+{
+  assert(size() == other.size());
+  for (size_type i = 0; i < blocks(); ++i)
+    bits_[i] &= ~other.bits_[i];
+  return *this;
+}
+
+bitvector operator&(bitvector const& x, bitvector const& y)
+{
+  bitvector b(x);
+  return b &= y;
+}
+
+bitvector operator|(bitvector const& x, bitvector const& y)
+{
+  bitvector b(x);
+  return b |= y;
+}
+
+bitvector operator^(bitvector const& x, bitvector const& y)
+{
+  bitvector b(x);
+  return b ^= y;
+}
+
+bitvector operator-(bitvector const& x, bitvector const& y)
+{
+  bitvector b(x);
+  return b -= y;
 }
 
 bool operator==(bitvector const& x, bitvector const& y)
