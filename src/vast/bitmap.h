@@ -7,9 +7,9 @@
 namespace vast {
 namespace detail {
 
-/// A link-list-plus-hash-table-based bit stream storage policy.
-/// This storage policy offers *O(1)* lookup and *O(1)* neighbor access, at the
-/// cost of *O(n * b + n)* space.
+/// A linked-list-plus-hash-table-based bit stream storage policy.
+/// This storage policy offers *O(1)* lookup and *O(log(n))* bounds checks, at
+/// the cost of *O(n * b + n)* space.
 template <typename T, typename Bitstream>
 struct list_storage
 {
@@ -77,7 +77,7 @@ private:
 };
 
 /// A purely hash-table-based bit stream storage policy.
-/// This storage policy offers *O(1)* lookup and *O(n)* neighbor access,
+/// This storage policy offers *O(1)* lookup and *O(n)* bounds check,
 /// requiring *O(n * b)* space.
 template <typename T, typename Bitstream>
 struct unordered_storage
@@ -128,7 +128,7 @@ private:
 
 } // detail
 
-/// The base class for bitmap encoding policies.
+/// An equality encoding policy for bitmaps.
 template <typename T>
 struct equality_encoder
 {
@@ -180,7 +180,7 @@ struct null_binner
   }
 };
 
-/// A bitmap.
+/// A bitmap which maps values to @link bitstream bitstreams@endlink.
 template <
     typename T
   , typename Bitstream = null_bitstream
@@ -203,8 +203,9 @@ public:
   {
   }
 
-  /// Adds a value to the bitmap. This entails appending 1 to the single
-  /// bitstream for the given value and 0 to all other bitstreams.
+  /// Adds a value to the bitmap. For example, in the case of equality
+  /// encoding, this entails appending 1 to the single bitstream for the given
+  /// value and 0 to all other bitstreams.
   ///
   /// @param x The value to add.
   void push_back(T const& x)
@@ -223,6 +224,12 @@ public:
     ++num_elements_;
   }
 
+  /// Retrieves a bitstream of a given value.
+  ///
+  /// @param x The value to find the bitstream for.
+  ///
+  /// @return The bitstream corresponding to *x* or `nullptr` if *x* does not
+  /// exist in the bitmap.
   Bitstream const* operator[](T const& x) const
   {
     return bitstreams_.find(x);
