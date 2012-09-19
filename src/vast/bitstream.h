@@ -10,6 +10,13 @@ template <typename Derived>
 class bitstream
 {
 public:
+  bitstream() = default;
+
+  bitstream(bitvector::size_type n, bool bit)
+    : bits_(n, bit)
+  {
+  }
+
   friend bool operator==(Derived const& x, Derived const& y)
   {
     return x.equals(y);
@@ -82,9 +89,16 @@ private:
 
 class null_bitstream : public bitstream<null_bitstream>
 {
-  friend class bitstream<null_bitstream>;
+  typedef bitstream<null_bitstream> super;
+  friend super;
 
 public:
+  null_bitstream() = default;
+  null_bitstream(bitvector::size_type n, bool bit)
+    : super(n, bit)
+  {
+  }
+
   null_bitstream& operator&=(null_bitstream const& other);
   null_bitstream& operator|=(null_bitstream const& other);
   null_bitstream& operator^=(null_bitstream const& other);
