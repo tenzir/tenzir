@@ -11,10 +11,12 @@ BOOST_AUTO_TEST_CASE(basic_bitmap)
   bm.push_back(84);
   bm.push_back(42);
   bm.push_back(21);
-
-  std::cerr << to_string(bm[21]->bits()) << std::endl;
-  std::cerr << to_string(bm[42]->bits()) << std::endl;
-  std::cerr << to_string(bm[84]->bits()) << std::endl;
+  bm.push_back(30);
+  
+  BOOST_CHECK_EQUAL(to_string(bm[21]->bits()), "01000");
+  BOOST_CHECK_EQUAL(to_string(bm[30]->bits()), "10000");
+  BOOST_CHECK_EQUAL(to_string(bm[42]->bits()), "00101");
+  BOOST_CHECK_EQUAL(to_string(bm[84]->bits()), "00010");
 }
 
 BOOST_AUTO_TEST_CASE(range_encoded_bitmap)
@@ -26,8 +28,8 @@ BOOST_AUTO_TEST_CASE(range_encoded_bitmap)
   bm.push_back(21);
   bm.push_back(30);
 
-  std::cerr << to_string(bm[21]->bits()) << std::endl;
-  std::cerr << to_string(bm[30]->bits()) << std::endl;
-  std::cerr << to_string(bm[42]->bits()) << std::endl;
-  std::cerr << to_string(bm[84]->bits()) << std::endl;
+  BOOST_CHECK_EQUAL(to_string(bm[21]->bits()), "01000");
+  BOOST_CHECK_EQUAL(to_string(bm[30]->bits()), "11000");
+  BOOST_CHECK_EQUAL(to_string(bm[42]->bits()), "11101");
+  BOOST_CHECK_EQUAL(to_string(bm[84]->bits()), "11111");
 }

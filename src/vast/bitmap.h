@@ -3,7 +3,6 @@
 
 #include <unordered_map>
 #include "vast/bitstream.h"
-#include "vast/to_string.h"
 
 namespace vast {
 namespace detail {
