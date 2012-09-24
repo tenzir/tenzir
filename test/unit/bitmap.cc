@@ -32,4 +32,7 @@ BOOST_AUTO_TEST_CASE(range_encoded_bitmap)
   BOOST_CHECK_EQUAL(to_string(bm[30]->bits()), "11000");
   BOOST_CHECK_EQUAL(to_string(bm[42]->bits()), "11101");
   BOOST_CHECK_EQUAL(to_string(bm[84]->bits()), "11111");
+
+  bm.append(2, false);
+  BOOST_CHECK_EQUAL(to_string(bm[21]->bits()), "0001000");
 }

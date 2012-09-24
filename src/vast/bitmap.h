@@ -224,6 +224,14 @@ public:
     ++num_elements_;
   }
 
+  /// Appends a given number of bits to all bitstreams.
+  /// @param n The number of bits to append.
+  /// @param bit The value of the bit to append *n* times.
+  void append(size_t n, bool bit)
+  {
+    bitstreams_.each([=](T const&, Bitstream& v) { v.append(n, bit); });
+  }
+
   /// Retrieves a bitstream of a given value.
   ///
   /// @param x The value to find the bitstream for.
