@@ -1,6 +1,7 @@
 #ifndef VAST_SCHEMA_H
 #define VAST_SCHEMA_H
 
+#include <functional>
 #include <vector>
 #include <string>
 #include "vast/intrusive.h"
@@ -88,6 +89,7 @@ public:
     std::string name;
     type_info type;
     bool optional = false;
+    bool indexed = true;
   };
 
   struct record_type : complex_type
@@ -98,6 +100,7 @@ public:
   struct event : record_type
   {
     std::string name;
+    bool indexed = true;
   };
 
   /// Computes the offsets vectors for a given symbol sequence.
@@ -198,5 +201,15 @@ bool operator==(schema::argument const& x, schema::argument const& y);
 bool operator==(schema::event const& x, schema::event const& y);
 
 } // namespace vast
+
+namespace std {
+
+template <>
+struct hash<vast::schema>
+{
+  size_t operator()(vast::schema const& sch) const;
+};
+
+} // namespace std
 
 #endif

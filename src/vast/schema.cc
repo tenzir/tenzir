@@ -1,5 +1,6 @@
 #include "vast/schema.h"
 
+#include <ze/serialization.h>
 #include "vast/exception.h"
 #include "vast/logger.h"
 #include "vast/to_string.h"
@@ -101,6 +102,9 @@ public:
       {
         if (attr.key == "optional")
           arg.optional = true;
+
+        if (attr.key == "skip")
+          arg.indexed = false;
       }
     }
 
@@ -360,3 +364,14 @@ bool operator==(schema::event const& x, schema::event const& y)
 }
 
 } // namespace vast
+
+namespace std {
+
+size_t hash<vast::schema>::operator()(vast::schema const& sch) const
+{
+  std::string str;
+  ze::serialize(sch, str);
+  return hash<std::string>()(str);
+}
+
+} // namespace std
