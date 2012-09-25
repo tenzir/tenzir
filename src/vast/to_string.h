@@ -24,6 +24,12 @@ std::string to_string(bitvector const& b,
                       bool all = false,
                       size_t cut_off = 64);
 
+template <typename Bitstream>
+std::string to_string(Bitstream const& b)
+{
+  return to_string(b.bits());
+}
+
 std::string to_string(schema::type const& t);
 std::string to_string(schema::type_info const& ti);
 std::string to_string(schema::event const& e);
