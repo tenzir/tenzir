@@ -151,7 +151,7 @@ public:
     num_bits_ += bits_per_block * delta;
   }
 
-  /// Appends the bits of a given block.
+  /// Appends the bits in a given block.
   /// @param block The block containing bits to append.
   void append(block_type block);
 

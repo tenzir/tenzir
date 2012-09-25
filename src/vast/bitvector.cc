@@ -327,7 +327,7 @@ void bitvector::append(block_type block)
   auto excess = extra_bits();
   if (excess)
   {
-    assert(bits_.size() >= 2);
+    assert(! bits_.empty());
     bits_.push_back(block >> (bits_per_block - excess));
     bits_[bits_.size() - 2] |= (block << excess);
   }

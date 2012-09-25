@@ -19,6 +19,22 @@ BOOST_AUTO_TEST_CASE(bitvector_to_string)
 
 BOOST_AUTO_TEST_CASE(bitvector_basic_ops)
 {
+  bitvector x;
+  x.push_back(true);
+  x.push_back(false);
+  x.push_back(true);
+
+  BOOST_CHECK_EQUAL(x.size(), 3);
+  BOOST_CHECK_EQUAL(x.blocks(), 1);
+
+  x.append(0xffff);
+
+  BOOST_REQUIRE_EQUAL(x.blocks(), 2);
+  BOOST_CHECK_EQUAL(x.size(), 3 + bitvector::bits_per_block);
+}
+
+BOOST_AUTO_TEST_CASE(bitvector_bitwise_ops)
+{
   bitvector a(6);
   BOOST_CHECK_EQUAL(a.size(), 6);
   BOOST_CHECK_EQUAL(a.blocks(), 1);
