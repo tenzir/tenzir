@@ -7,11 +7,16 @@
 namespace vast {
 namespace detail {
 
+struct storage_policy
+{
+  size_t rows = 0;
+};
+
 /// A linked-list-plus-hash-table-based bit stream storage policy.
 /// This storage policy offers *O(1)* lookup and *O(log(n))* bounds checks, at
 /// the cost of *O(n * b + n)* space.
 template <typename T, typename Bitstream>
-struct list_storage
+struct list_storage : storage_policy
 {
   typedef Bitstream bitstream_type;
 
@@ -59,10 +64,16 @@ struct list_storage
     return false;
   }
 
+  size_t cardinality() const
+  {
+    return list_.size();
+  }
+
 private:
   typedef std::list<std::pair<T, Bitstream>> list_type;
   typedef typename list_type::value_type list_value_type;
   typedef typename list_type::iterator iterator_type;
+
   struct key_comp
   {
     bool operator()(list_value_type const& x, list_value_type const& y)
@@ -80,7 +91,7 @@ private:
 /// This storage policy offers *O(1)* lookup and *O(n)* bounds check,
 /// requiring *O(n * b)* space.
 template <typename T, typename Bitstream>
-struct unordered_storage
+struct unordered_storage : storage_policy
 {
   typedef Bitstream bitstream_type;
 
@@ -122,6 +133,11 @@ struct unordered_storage
     return p.second;
   }
 
+  size_t cardinality() const
+  {
+    return map_.size();
+  }
+
 private:
   std::unordered_map<T, Bitstream> map_;
 };
@@ -132,41 +148,110 @@ private:
 template <typename T>
 struct equality_encoder
 {
-  bool operator()(T const& x, T const& y)
+  template <typename Storage>
+  bool encode(Storage& store, T const& x)
   {
-    return x == y;
+    if (! store.find(x))
+      if (! store.emplace(x, {store.rows, 0}))
+        return false;
+
+    typedef typename Storage::bitstream_type bs_type;
+    store.each([&](T const& k, bs_type& bs) { bs.push_back(x == k); });
+    ++store.rows;
+    return true;
   }
 
   template <typename Storage>
   typename Storage::bitstream_type
-  make_bitstream(Storage& /* store */, size_t n, T const& x)
+  decode(Storage& store, T const& x) const
   {
-    return {n, 0};
+    auto bs = store.find(x);
+    if (bs)
+      return *bs;
+    return {};
   }
+};
+
+/// A binary encoding policy for bitmaps. This scheme is also known as
+/// *bit-sliced* encoding.
+template <typename T>
+struct binary_encoder
+{
+  static size_t constexpr bits = std::numeric_limits<T>::digits;
+
+  template <typename Storage>
+  bool encode(Storage& store, T const& x)
+  {
+    if (! initialized)
+    {
+      initialized = true;
+      assert(store.cardinality() == 0);
+      for (size_t i = 0; i < bits; ++i)
+        store.emplace(i, {});
+    }
+
+    typedef typename Storage::bitstream_type bs_type;
+    store.each([&](T const& k, bs_type& bs) { bs.push_back((x >> k) & 1); });
+
+    ++store.rows;
+    return true;
+  }
+
+  template <typename Storage>
+  typename Storage::bitstream_type
+  decode(Storage& store, T const& x) const
+  {
+    typename Storage::bitstream_type bs;
+    for (size_t i = 0; i < bits; ++i)
+      if ((x >> i) & 1)
+        bs |= *store.find(i);
+
+    return bs;
+  }
+
+  bool initialized = false;
 };
 
 /// A less-than-or-equal range encoding policy for bitmaps.
 template <typename T>
 struct range_encoder
 {
-  bool operator()(T const& x, T const& y)
+  template <typename Storage>
+  bool encode(Storage& store, T const& x)
   {
-    return x <= y;
+    if (! store.find(x))
+      if (! store.emplace(x, make_bitstream(store, x)))
+        return false;
+
+    typedef typename Storage::bitstream_type bs_type;
+    store.each([&](T const& k, bs_type& bs) { bs.push_back(x <= k); });
+    ++store.rows;
+    return true;
   }
 
   template <typename Storage>
   typename Storage::bitstream_type
-  make_bitstream(Storage& store, size_t n, T const& x)
+  decode(Storage& store, T const& x) const
+  {
+    auto bs = store.find(x);
+    if (bs)
+      return *bs;
+    return {};
+  }
+
+  template <typename Storage>
+  typename Storage::bitstream_type
+  make_bitstream(Storage& store, T const& x)
   {
     auto range = store.bounds(x);
     if (range.first && range.second)
       return *range.first;
     else if (range.first)
-      return {n, true};
+      return {store.rows, true};
     else if (range.second)
-      return {n, false};
+      return {store.rows, false};
     else
-      return {n, true};
+      return {store.rows, true};
   }
 };
 
@@ -210,18 +295,7 @@ public:
   /// @param x The value to add.
   void push_back(T const& x)
   {
-    auto bin = binner_(x);
-    if (! bitstreams_.find(bin))
-    {
-      auto z = encoder_.make_bitstream(bitstreams_, num_elements_, bin);
-      auto success = bitstreams_.emplace(bin, std::move(z));
-      assert(success);
-    }
-
-    bitstreams_.each(
-        [&](T const& k, Bitstream& v) { v.push_back(encoder_(bin, k)); });
-
-    ++num_elements_;
+    encoder_.encode(bitstreams_, binner_(x));
   }
 
   /// Appends a given number of bits to all bitstreams.
@@ -238,16 +312,15 @@ public:
   ///
   /// @return The bitstream corresponding to *x* or `nullptr` if *x* does not
   /// exist in the bitmap.
-  Bitstream const* operator[](T const& x) const
+  Bitstream operator[](T const& x) const
   {
-    return bitstreams_.find(binner_(x));
+    return encoder_.decode(bitstreams_, binner_(x));
   }
 
 private:
   Encoder<T> encoder_;
   Binner<T> binner_;
   storage_type bitstreams_;
-  size_t num_elements_ = 0;
 };
 
 } // namespace vast
