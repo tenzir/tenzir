@@ -174,7 +174,7 @@ struct range_encoder
 template <typename T>
 struct null_binner
 {
-  T operator()(T x)
+  T operator()(T x) const
   {
     return std::move(x);
   }
@@ -240,7 +240,7 @@ public:
   /// exist in the bitmap.
   Bitstream const* operator[](T const& x) const
   {
-    return bitstreams_.find(x);
+    return bitstreams_.find(binner_(x));
   }
 
 private:
