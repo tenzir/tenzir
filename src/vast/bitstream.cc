@@ -4,24 +4,32 @@ namespace vast {
 
 null_bitstream& null_bitstream::operator&=(null_bitstream const& other)
 {
+  if (bits_.size() < other.bits_.size())
+    bits_.resize(other.bits_.size());
   bits_ &= other.bits_;
   return *this;
 }
 
 null_bitstream& null_bitstream::operator|=(null_bitstream const& other)
 {
+  if (bits_.size() < other.bits_.size())
+    bits_.resize(other.bits_.size());
   bits_ |= other.bits_;
   return *this;
 }
 
 null_bitstream& null_bitstream::operator^=(null_bitstream const& other)
 {
+  if (bits_.size() < other.bits_.size())
+    bits_.resize(other.bits_.size());
   bits_ ^= other.bits_;
   return *this;
 }
 
 null_bitstream& null_bitstream::operator-=(null_bitstream const& other)
 {
+  if (bits_.size() < other.bits_.size())
+    bits_.resize(other.bits_.size());
   bits_ -= other.bits_;
   return *this;
 }
