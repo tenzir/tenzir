@@ -215,7 +215,7 @@ bitvector& bitvector::operator>>=(size_type n)
 
 bitvector& bitvector::operator&=(bitvector const& other)
 {
-  assert(size() == other.size());
+  assert(size() >= other.size());
   for (size_type i = 0; i < blocks(); ++i)
     bits_[i] &= other.bits_[i];
   return *this;
@@ -223,7 +223,7 @@ bitvector& bitvector::operator&=(bitvector const& other)
 
 bitvector& bitvector::operator|=(bitvector const& other)
 {
-  assert(size() == other.size());
+  assert(size() >= other.size());
   for (size_type i = 0; i < blocks(); ++i)
     bits_[i] |= other.bits_[i];
   return *this;
@@ -231,7 +231,7 @@ bitvector& bitvector::operator|=(bitvector const& other)
 
 bitvector& bitvector::operator^=(bitvector const& other)
 {
-  assert(size() == other.size());
+  assert(size() >= other.size());
   for (size_type i = 0; i < blocks(); ++i)
     bits_[i] ^= other.bits_[i];
   return *this;
@@ -239,7 +239,7 @@ bitvector& bitvector::operator^=(bitvector const& other)
 
 bitvector& bitvector::operator-=(bitvector const& other)
 {
-  assert(size() == other.size());
+  assert(size() >= other.size());
   for (size_type i = 0; i < blocks(); ++i)
     bits_[i] &= ~other.bits_[i];
   return *this;
