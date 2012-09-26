@@ -265,6 +265,68 @@ struct null_binner
   }
 };
 
+/// A binning policy that reduces value to a given precision.
+template <typename T>
+struct precision_binner
+{
+  template <typename B>
+  using is_bool = typename std::is_same<B, bool>::type;
+
+  template <typename F>
+  using is_double = typename std::is_same<F, double>::type;
+
+  static_assert(std::is_arithmetic<T>::value && !is_bool<T>::value,
+      "precision binning works only with number types");
+
+  /// Constructs a precision binner.
+  ///
+  /// @param precision The number of decimal digits. For example, a value of 3
+  /// means that the values 1000 and 1300 end up in the same bin having a value
+  /// of 1.
+  ///
+  /// For integral types, the sign of *precision* has no meaning, but for
+  /// floating point types, the sign indiciates the precision of the fractional
+  /// component. For example, a precision of -2 means that the values 42.03 and
+  /// 42.04 end up in the same bin 42.00.
+  ///
+  /// @note Integral types are truncated and fractional types are rounded.
+  precision_binner(int precision)
+  {
+    integral = std::pow(10, precision < 0 ? -precision : precision);
+    if (precision < 0)
+      fractional = integral;
+  }
+
+  T dispatch(T x, std::true_type) const
+  {
+    if (fractional != 0.0)
+    {
+      double i;
+      auto f = std::modf(x, &i);
+      return i + std::round(f * fractional) / fractional;
+    }
+    else if (integral)
+    {
+      return std::round(x / integral);
+    }
+    
+    return x;
+  }
+
+  T dispatch(T x, std::false_type) const
+  {
+    return x / integral;
+  }
+
+  T operator()(T x) const
+  {
+    return dispatch(x, is_double<T>());
+  }
+
+  T integral;
+  double fractional = 0.0;
+};
+
 /// A bitmap which maps values to @link bitstream bitstreams@endlink.
 template <
     typename T
