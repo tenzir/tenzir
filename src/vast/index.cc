@@ -63,10 +63,10 @@ public:
         op->accept(*this);
   }
 
-  virtual void visit(expr::relational_operator const& op)
+  virtual void visit(expr::relation const& rel)
   {
-    assert(op.operands().size() == 2);
-    op.operands()[0]->accept(*this);
+    assert(rel.operands().size() == 2);
+    rel.operands()[0]->accept(*this);
   }
 
   virtual void visit(expr::constant const& c)
@@ -98,39 +98,39 @@ public:
   virtual void visit(expr::timestamp_extractor const&)
   {
     assert(rhs_.which() == ze::time_point_type);
-    assert(op_ != nullptr);
+    assert(rel_ != nullptr);
 
-    switch (op_->type())
+    switch (rel_->type())
     {
       default:
         assert(! "invalid time extractor operator");
         break;
-      case expr::equal:
+      case equal:
         for (auto& i : meta_.ranges)
           if (rhs_ >= i.first.first && rhs_ <= i.first.second)
             ids_.push_back(i.second);
         break;
-      case expr::not_equal:
+      case not_equal:
         for (auto& i : meta_.ranges)
           if (rhs_ < i.first.first || rhs_ > i.first.second)
             ids_.push_back(i.second);
         break;
-      case expr::less:
+      case less:
         for (auto& i : meta_.ranges)
           if (rhs_ > i.first.first)
             ids_.push_back(i.second);
         break;
-      case expr::less_equal:
+      case less_equal:
         for (auto& i : meta_.ranges)
           if (rhs_ >= i.first.first)
             ids_.push_back(i.second);
         break;
-      case expr::greater:
+      case greater:
         for (auto& i : meta_.ranges)
           if (rhs_ < i.first.second)
             ids_.push_back(i.second);
         break;
-      case expr::greater_equal:
+      case greater_equal:
         for (auto& i : meta_.ranges)
           if (rhs_ <= i.first.second)
             ids_.push_back(i.second);
@@ -141,10 +141,10 @@ public:
   virtual void visit(expr::name_extractor const& node)
   {
     assert(rhs_.which() == ze::string_type || rhs_.which() == ze::regex_type);
-    assert(op_ != nullptr);
+    assert(rel_ != nullptr);
 
     for (auto& i : meta_.names)
-      if (op_->test(i.first, rhs_))
+      if (rel_->test(i.first, rhs_))
         ids_.push_back(i.second);
   }
 
@@ -214,17 +214,17 @@ public:
     ids_.swap(ids);
   }
 
-  virtual void visit(expr::relational_operator const& op)
+  virtual void visit(expr::relation const& rel)
   {
-    assert(op_ == nullptr);
+    assert(rel_ == nullptr);
     assert(rhs_ == ze::invalid);
-    assert(op.operands().size() == 2);
+    assert(rel.operands().size() == 2);
 
-    op_ = &op;
-    op.operands()[1]->accept(*this);
-    op.operands()[0]->accept(*this);
+    rel_ = &rel;
+    rel.operands()[1]->accept(*this);
+    rel.operands()[0]->accept(*this);
 
-    op_ = nullptr;
+    rel_ = nullptr;
     rhs_ = ze::invalid;
   }
 
@@ -235,7 +235,7 @@ public:
   }
 
 private:
-  expr::relational_operator const* op_ = nullptr;
+  expr::relation const* rel_ = nullptr;
   ze::value rhs_ = ze::invalid;
   index::meta const& meta_;
   std::vector<ze::uuid>& ids_;
@@ -271,6 +271,31 @@ index::index(cppa::actor_ptr archive, std::string directory)
               ia >> hdr;
               build(hdr);
             });
+      },
+      on(atom("create"), arg_match) >> [=](schema const& sch)
+      {
+        auto schema_hash = std::hash<schema>()(sch);
+        LOG(verbose, index)
+          << "index @" << id() << " builds indexes for schema 0x"
+          << std::hex << schema_hash;
+
+        for (auto& event : sch.events())
+        {
+          if (! event.indexed)
+            continue;
+
+          DBG(index)
+            << "index @" << id() << " creates index for event " << event.name;
+
+          for (auto& arg : event.args)
+          {
+            if (! arg.indexed)
+              continue;
+
+            DBG(index)
+              << "index @" << id() << " creates index for argument " << arg.name;
+          }
+        }
       },
       on(atom("hit"), atom("all")) >> [=]
       {
@@ -337,7 +362,6 @@ void index::build(segment::header const& hdr)
 #ifdef __clang__
   for (auto& event : hdr.event_names)
     meta_.names.emplace(event, hdr.id);
-
 #else
   for (auto& event : hdr.event_names)
     meta_.names.insert({event, hdr.id});

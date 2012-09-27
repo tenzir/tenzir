@@ -17,19 +17,19 @@ expression<Iterator>::expression(error_handler<Iterator>& on_error)
     qi::_4_type _4;
 
     binary_op.add
-        ("+", ast::query::plus)
-        ("-", ast::query::minus)
-        ("*", ast::query::times)
-        ("/", ast::query::divide)
-        ("%", ast::query::mod)
-        ("|", ast::query::bitwise_or)
-        ("^", ast::query::bitwise_xor)
-        ("&", ast::query::bitwise_and)
+        ("+", plus)
+        ("-", minus)
+        ("*", times)
+        ("/", divides)
+        ("%", mod)
+        ("|", bitwise_or)
+        ("^", bitwise_xor)
+        ("&", bitwise_and)
         ;
 
     unary_op.add
-        ("+", ast::query::positive)
-        ("-", ast::query::negative)
+        ("+", positive)
+        ("-", negative)
         ;
 
     expr

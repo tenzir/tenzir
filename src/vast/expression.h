@@ -3,6 +3,7 @@
 
 #include <ze/event.h>
 #include "vast/util/visitor.h"
+#include "vast/operator.h"
 #include "vast/schema.h"
 
 namespace vast {
@@ -22,7 +23,7 @@ class offset_extractor;
 class type_extractor;
 class conjunction;
 class disjunction;
-class relational_operator;
+class relation;
 class constant;
 
 typedef util::const_visitor<
@@ -34,7 +35,7 @@ typedef util::const_visitor<
  ,  type_extractor
  ,  conjunction
  ,  disjunction
- ,  relational_operator
+ ,  relation
  ,  constant
 > const_visitor;
 
@@ -47,7 +48,7 @@ typedef util::visitor<
  ,  type_extractor
  ,  conjunction
  ,  disjunction
- ,  relational_operator
+ ,  relation
  ,  constant
 > visitor;
 
@@ -210,32 +211,17 @@ private:
   virtual void eval();
 };
 
-/// The type of a relational operator.
-enum relation_type
-{
-  match,
-  not_match,
-  in,
-  not_in,
-  equal,
-  not_equal,
-  less,
-  less_equal,
-  greater,
-  greater_equal
-};
-
 /// A relational operator.
-class relational_operator : public n_ary_operator
+class relation : public n_ary_operator
 {
 public:
   typedef std::function<bool(ze::value const&, ze::value const&)>
     binary_predicate;
 
-  relational_operator(relation_type op);
+  relation(relational_operator op);
 
   bool test(ze::value const& lhs, ze::value const& rhs) const;
-  relation_type type() const;
+  relational_operator type() const;
 
   VAST_ACCEPT_CONST(const_visitor)
   VAST_ACCEPT(visitor)
@@ -244,7 +230,7 @@ private:
   virtual void eval();
 
   binary_predicate op_;
-  relation_type type_;
+  relational_operator op_type_;
 };
 
 /// A constant value.

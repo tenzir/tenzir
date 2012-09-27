@@ -231,13 +231,13 @@ void disjunction::eval()
     ready_ = true;
 }
 
-relational_operator::relational_operator(relation_type type)
-  : type_(type)
+relation::relation(relational_operator op)
+  : op_type_(op)
 {
-  switch (type_)
+  switch (op_type_)
   {
     default:
-      assert(! "invalid operator type");
+      assert(! "invalid operator");
       break;
     case match:
       op_ = [](ze::value const& lhs, ze::value const& rhs) -> bool
@@ -324,17 +324,17 @@ relational_operator::relational_operator(relation_type type)
   }
 }
 
-bool relational_operator::test(ze::value const& lhs, ze::value const& rhs) const
+bool relation::test(ze::value const& lhs, ze::value const& rhs) const
 {
   return op_(lhs, rhs);
 }
 
-relation_type relational_operator::type() const
+relational_operator relation::type() const
 {
-  return type_;
+  return op_type_;
 }
 
-void relational_operator::eval()
+void relation::eval()
 {
   assert(operands_.size() == 2);
   auto& lhs = operands_[0];
@@ -407,10 +407,10 @@ public:
     auto op = clause.op;
     if (invert_)
     {
-      op = detail::ast::query::negate(op);
+      op = negate(op);
       invert_ = false;
     }
-    auto relation = make_relational_operator(op);
+    auto relation = make_relation(op);
 
     std::unique_ptr<expr::extractor> lhs;
     if (clause.lhs == "name")
@@ -435,10 +435,10 @@ public:
     auto op = clause.op;
     if (invert_)
     {
-      op = detail::ast::query::negate(op);
+      op = negate(op);
       invert_ = false;
     }
-    auto relation = make_relational_operator(op);
+    auto relation = make_relation(op);
 
     auto lhs = std::make_unique<expr::type_extractor>(clause.lhs);
     extractors_.push_back(lhs.get());
@@ -456,10 +456,10 @@ public:
     auto op = clause.op;
     if (invert_)
     {
-      op = detail::ast::query::negate(op);
+      op = negate(op);
       invert_ = false;
     }
-    auto relation = make_relational_operator(op);
+    auto relation = make_relation(op);
 
     auto lhs = std::make_unique<expr::offset_extractor>(clause.offsets);
     extractors_.push_back(lhs.get());
@@ -477,7 +477,7 @@ public:
     auto op = clause.op;
     if (invert_)
     {
-      op = detail::ast::query::negate(op);
+      op = negate(op);
       invert_ = false;
     }
 
@@ -509,7 +509,7 @@ public:
         throw error::schema("unknown argument name");
 
       // TODO: factor rest of block in separate function to promote DRY.
-      auto rel = make_relational_operator(op);
+      auto rel = make_relation(op);
       auto lhs = make_offset_extractor(std::move(offs));
       auto rhs = make_constant(clause.rhs);
       rel->add(std::move(lhs));
@@ -553,7 +553,7 @@ public:
         if (offsets.size() > 1)
           throw error::schema("multiple offsets not yet implemented");
 
-        auto rel = make_relational_operator(op);
+        auto rel = make_relation(op);
         auto lhs = make_offset_extractor(std::move(offsets[0]));
         auto rhs = make_constant(clause.rhs);
         rel->add(std::move(lhs));
@@ -601,50 +601,45 @@ private:
     // equality comparison suffices. This check is relatively crude at the
     // moment: we just look whether the expression contains * or ?.
     auto glob = ze::regex("\\*|\\?").search(expr);
-
-    auto op = make_relational_operator(
-        glob ? detail::ast::query::match : detail::ast::query::equal);
-
+    auto rel = make_relation(glob ? match : equal);
     auto lhs = std::make_unique<expr::name_extractor>();
     extractors_.push_back(lhs.get());
-    op->add(std::move(lhs));
+    rel->add(std::move(lhs));
     if (glob)
-      op->add(std::make_unique<expr::constant>(ze::regex::glob(expr)));
+      rel->add(std::make_unique<expr::constant>(ze::regex::glob(expr)));
     else
-      op->add(std::make_unique<expr::constant>(expr));
+      rel->add(std::make_unique<expr::constant>(expr));
 
-    return std::move(op);
+    return std::move(rel);
   }
 
-  std::unique_ptr<expr::relational_operator>
-  make_relational_operator(detail::ast::query::clause_operator op)
+  std::unique_ptr<expr::relation> make_relation(relational_operator op)
   {
-    typedef expr::relation_type type;
     switch (op)
     {
       default:
         assert(! "missing relational operator in expression");
-        return std::unique_ptr<expr::relational_operator>();
-      case detail::ast::query::match:
-        return std::make_unique<expr::relational_operator>(type::match);
-      case detail::ast::query::not_match:
-        return std::make_unique<expr::relational_operator>(type::not_match);
-      case detail::ast::query::in:
-        return std::make_unique<expr::relational_operator>(type::in);
-      case detail::ast::query::not_in:
-        return std::make_unique<expr::relational_operator>(type::not_in);
-      case detail::ast::query::equal:
-        return std::make_unique<expr::relational_operator>(type::equal);
-      case detail::ast::query::not_equal:
-        return std::make_unique<expr::relational_operator>(type::not_equal);
-      case detail::ast::query::less:
-        return std::make_unique<expr::relational_operator>(type::less);
-      case detail::ast::query::less_equal:
-        return std::make_unique<expr::relational_operator>(type::less_equal);
-      case detail::ast::query::greater:
-        return std::make_unique<expr::relational_operator>(type::greater);
-      case detail::ast::query::greater_equal:
-        return std::make_unique<expr::relational_operator>(type::greater_equal);
+        return std::unique_ptr<expr::relation>();
+      case match:
+        return std::make_unique<expr::relation>(match);
+      case not_match:
+        return std::make_unique<expr::relation>(not_match);
+      case in:
+        return std::make_unique<expr::relation>(in);
+      case not_in:
+        return std::make_unique<expr::relation>(not_in);
+      case equal:
+        return std::make_unique<expr::relation>(equal);
+      case not_equal:
+        return std::make_unique<expr::relation>(not_equal);
+      case less:
+        return std::make_unique<expr::relation>(less);
+      case less_equal:
+        return std::make_unique<expr::relation>(less_equal);
+      case greater:
+        return std::make_unique<expr::relation>(greater);
+      case greater_equal:
+        return std::make_unique<expr::relation>(greater_equal);
     }
   }
 
@@ -706,7 +701,7 @@ void expression::parse(std::string str, schema sch)
     // First, split the query expression at each OR node.
     std::vector<detail::ast::query::query> ors{detail::ast::query::query{ast.first}};
     for (auto& clause : ast.rest)
-      if (clause.op == detail::ast::query::logical_or)
+      if (clause.op == logical_or)
         ors.emplace_back(detail::ast::query::query{clause.operand});
       else
         ors.back().rest.push_back(clause);
@@ -727,7 +722,7 @@ void expression::parse(std::string str, schema sch)
         boost::apply_visitor(std::ref(visitor), ands.first);
         for (auto clause : ands.rest)
         {
-          assert(clause.op == detail::ast::query::logical_and);
+          assert(clause.op == logical_and);
           boost::apply_visitor(std::ref(visitor), clause.operand);
         }
 

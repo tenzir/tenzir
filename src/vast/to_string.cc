@@ -257,7 +257,7 @@ public:
     --depth_;
   }
 
-  virtual void visit(expr::relational_operator const& rel)
+  virtual void visit(expr::relation const& rel)
   {
     assert(rel.operands().size() == 2);
 
@@ -267,34 +267,34 @@ public:
       default:
         assert(! "invalid operator type");
         break;
-      case expr::match:
+      case match:
         str_ += "~";
         break;
-      case expr::not_match:
+      case not_match:
         str_ += "!~";
         break;
-      case expr::in:
+      case in:
         str_ += "in";
         break;
-      case expr::not_in:
+      case not_in:
         str_ += "!in";
         break;
-      case expr::equal:
+      case equal:
         str_ += "==";
         break;
-      case expr::not_equal:
+      case not_equal:
         str_ += "!=";
         break;
-      case expr::less:
+      case less:
         str_ += "<";
         break;
-      case expr::less_equal:
+      case less_equal:
         str_ += "<=";
         break;
-      case expr::greater:
+      case greater:
         str_ += ">";
         break;
-      case expr::greater_equal:
+      case greater_equal:
         str_ += ">=";
         break;
     }

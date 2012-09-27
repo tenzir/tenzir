@@ -24,21 +24,21 @@ query<Iterator>::query(error_handler<Iterator>& on_error)
   qi::ulong_type ulong;
 
   boolean_op.add
-    ("||", ast::query::logical_or)
-    ("&&", ast::query::logical_and)
+    ("||", logical_or)
+    ("&&", logical_and)
     ;
 
   clause_op.add
-    ("~",   ast::query::match)
-    ("!~",  ast::query::not_match)
-    ("==",  ast::query::equal)
-    ("!=",  ast::query::not_equal)
-    ("<",   ast::query::less)
-    ("<=",  ast::query::less_equal)
-    (">",   ast::query::greater)
-    (">=",  ast::query::greater_equal)
-    ("in",  ast::query::in)
-    ("!in", ast::query::not_in)
+    ("~",   match)
+    ("!~",  not_match)
+    ("==",  equal)
+    ("!=",  not_equal)
+    ("<",   less)
+    ("<=",  less_equal)
+    (">",   greater)
+    (">=",  greater_equal)
+    ("in",  in)
+    ("!in", not_in)
     ;
 
   type.add

@@ -9,7 +9,7 @@ namespace query {
 
 struct folder : public boost::static_visitor<ze::value>
 {
-  static ze::value apply(expr_operator op, ze::value const& val)
+  static ze::value apply(arithmetic_operator op, ze::value const& val)
   {
     switch (op)
     {
@@ -26,7 +26,7 @@ struct folder : public boost::static_visitor<ze::value>
     }
   }
 
-  static ze::value apply(expr_operator op,
+  static ze::value apply(arithmetic_operator op,
                          ze::value const& lhs,
                          ze::value const& rhs)
   {
@@ -138,35 +138,6 @@ struct validator : public boost::static_visitor<bool>
     return boost::apply_visitor(*this, clause.operand);
   }
 };
-
-clause_operator negate(clause_operator op)
-{
-  switch (op)
-  {
-    default:
-      assert(! "missing operator implementation");
-    case match:
-      return not_match;
-    case not_match:
-      return match;
-    case equal:
-      return not_equal;
-    case not_equal:
-      return equal;
-    case less:
-      return greater_equal;
-    case less_equal:
-      return greater;
-    case greater:
-      return less_equal;
-    case greater_equal:
-      return less;
-    case in:
-      return not_in;
-    case not_in:
-      return in;
-  }
-}
 
 ze::value fold(expression const& expr)
 {

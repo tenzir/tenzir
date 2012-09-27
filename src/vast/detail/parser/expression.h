@@ -31,7 +31,7 @@ struct expression : qi::grammar<Iterator, ast::query::expression(), skipper<Iter
     qi::rule<Iterator, std::string(), skipper<Iterator>>
         identifier;
 
-    qi::symbols<char, ast::query::expr_operator>
+    qi::symbols<char, arithmetic_operator>
         unary_op, binary_op;
 
     ze::detail::parser::value<Iterator> val;
