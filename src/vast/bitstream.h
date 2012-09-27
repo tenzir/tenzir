@@ -85,6 +85,18 @@ private:
   {
     return *static_cast<Derived const*>(this);
   }
+
+  template <typename Archive>
+  friend void serialize(Archive& oa, bitstream const& bs)
+  {
+    oa << bs.bits_;
+  }
+
+  template <typename Archive>
+  friend void deserialize(Archive& ia, bitstream& bs)
+  {
+    ia >> bs.bits_;
+  }
 };
 
 class null_bitstream : public bitstream<null_bitstream>
