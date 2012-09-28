@@ -1,13 +1,12 @@
 language: cpp
-#compiler:
-#  - gcc
+compiler:
+  - gcc
 #  - clang
 before_script:
   # Get a recent GCC.
   - echo "\n" | sudo add-apt-repository ppa:ubuntu-toolchain-r/test
   - sudo apt-get update
   - sudo apt-get install g++-4.7
-  - g++ --version
   - g++-4.7 --version
   - export CXX=g++-4.7
   - export CC=gcc-4.7
