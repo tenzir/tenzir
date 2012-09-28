@@ -1,29 +1,9 @@
 language: cpp
 compiler:
   - gcc
-#  - clang
+  - clang
 before_script:
-  # Get a recent GCC.
-  - echo "\n" | sudo add-apt-repository ppa:ubuntu-toolchain-r/test
-  - sudo apt-get update
-  - sudo apt-get install g++-4.7
-  - g++-4.7 --version
-  - export CXX=g++-4.7
-  - export CC=gcc-4.7
-  # Boost
-  - sudo apt-get install libboost-all-dev
-  # Libcppa
-  - export PREFIX=$HOME/builds/mavam/prefix
-  - git clone git://github.com/Neverlord/libcppa.git && cd libcppa
-  - ./configure --enable-debug --prefix=$PREFIX
-  - make install
-  - cd ..
-  # 0event
-  - git clone git://github.com/mavam/ze.git && cd ze
-  - ./configure --enable-debug --prefix=$PREFIX
-  - make install
-  - cd ..
-  # Configure VAST
+  - ./tools/travis-build-setup
   - ./configure --enable-debug --with-libcppa=$PREFIX --with-0event=$PREFIX
 script: make
 branches:
