@@ -11,8 +11,7 @@ sudo apt-get update -qq
 
 # Boost
 sudo apt-cache search libboost
-sudo apt-get install -q libboost1.48-all-dev
-#sudo apt-get install -q libboost1.50-all-dev
+sudo apt-get install -q libboost1.50-all-dev
 
 # When building with GCC, update to 4.7.
 if [[ $CXX == "g++" ]] ; then
