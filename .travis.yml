@@ -1,0 +1,28 @@
+language: cpp
+compiler:
+  - gcc
+  - clang
+before_script:
+  # Libcppa
+  - export PREFIX=prefix
+  - git clone git://github.com/Neverlord/libcppa.git && cd libcppa
+  - ./configure --enable-debug --prefix=$PREFIX
+  - make install
+  - cd ..
+  # 0event
+  - git clone git://github.com/mavam/ze.git && cd ze
+  - ./configure --enable-debug --prefix=$PREFIX
+  - make install
+  - cd ..
+  # Configure VAST
+  - ./configure --enable-debug --with-libcppa=$PREFIX --with-0event=$PREFIX
+script: make
+branches:
+  only:
+    - master
+notifications:
+  recipients:
+    - vallentin@icir.org
+  email:
+    on_success: change
+    on_failure: always
