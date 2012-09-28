@@ -1,19 +1,24 @@
 #!/bin/bash
+#
 # This script install the necessary dependencies in order for VAST to run in
 # the Travis CI environment.
 
+# Add extra repositories for GCC and Boost
+sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+sudo add-apt-repository -y "deb http://archive.ubuntu.com/ubuntu/ quantal main restricted"
+sudo add-apt-repository -y "deb-src http://archive.ubuntu.com/ubuntu/ quantal main restricted"
+sudo apt-get update
+
 # Boost
-sudo apt-get install libboost1.50-all-dev
+sudo apt-get install libboost1.50.0-1-all-dev
 
 # When building with GCC, update to 4.7.
-if [[ "$CXX" == "g++" ]] ; then
-    echo downloading GCC 4.7
-    echo "\n" | sudo add-apt-repository ppa:ubuntu-toolchain-r/test
-    sudo apt-get update
+if [[ $CXX == "g++" ]] ; then
     sudo apt-get install g++-4.7
     export CXX=g++-4.7
     export CC=gcc-4.7
-elif [[ "$CXX" == "clang++" ]] ; then
+elif [[ $CXX == "clang++" ]] ; then
+    echo "TODO: setup clang 3.2"
 fi
 
 # The prefix where we install our dependencies in.
