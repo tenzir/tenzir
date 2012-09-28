@@ -5,11 +5,12 @@
 
 # Add extra repositories for GCC and Boost
 sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-sudo add-apt-repository -y "deb http://archive.ubuntu.com/ubuntu/ quantal main restricted"
+sudo add-apt-repository -y "deb http://archive.ubuntu.com/ubuntu/ quantal main
+universe"
 sudo apt-get update -qq
 
 # Boost
-# Let's see how far we get with 1.48.
+sudo apt-cache search libboost
 sudo apt-get install -q libboost1.48-all-dev
 #sudo apt-get install -q libboost1.50-all-dev
 
