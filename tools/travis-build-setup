@@ -5,20 +5,20 @@
 
 # Add extra repositories for GCC and Boost
 sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-sudo add-apt-repository -y "deb http://archive.ubuntu.com/ubuntu/ quantal main
-universe"
+sudo add-apt-repository -y "deb http://archive.ubuntu.com/ubuntu/ quantal main universe"
 sudo apt-get update -qq
 
 # Boost
-sudo apt-get install -q libboost1.50-all-dev
+sudo apt-get install -qq libboost1.50-all-dev
 
 # When building with GCC, update to 4.7.
 if [[ $CXX == "g++" ]] ; then
-    sudo apt-get install -q g++-4.7
+    sudo apt-get install -qq g++-4.7
     export CXX=g++-4.7
     export CC=gcc-4.7
 elif [[ $CXX == "clang++" ]] ; then
     echo "TODO: setup clang 3.2"
+    exit 1
 fi
 
 # The prefix where we install our dependencies in.
