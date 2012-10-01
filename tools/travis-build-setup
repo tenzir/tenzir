@@ -3,16 +3,6 @@
 # This script install the necessary dependencies in order for VAST to run in
 # the Travis CI environment.
 
-# When building with GCC, update to 4.7.
-if [[ $CXX == "g++" ]] ; then
-    sudo apt-get -qq install g++-4.7
-    export CXX=g++-4.7
-    export CC=gcc-4.7
-elif [[ $CXX == "clang++" ]] ; then
-    echo "TODO: setup clang 3.2"
-    exit 1
-fi
-
 # Libcppa
 git clone git://github.com/Neverlord/libcppa.git
 cd libcppa
