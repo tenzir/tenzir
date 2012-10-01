@@ -3,14 +3,14 @@ compiler:
   - gcc
   - clang
 before_script:
-  # VAST requires Clang 3.2, which Travis does not yet support.
-  - '[[ $CXX == "clang" ]] && return 1 || return 0'
-  # GCC 4.7
-  - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-  # Boost 1.50
-  - sudo add-apt-repository -y "deb http://archive.ubuntu.com/ubuntu/ quantal main universe"
+  - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test # GCC 4.7
+  - sudo add-apt-repository -y \
+    "deb http://archive.ubuntu.com/ubuntu/ quantal main universe" # Boost 1.50
   - sudo apt-get -qq update
-  - '[[ $CXX == "g++" ]] && sudo apt-get -qq install g++-4.7 && export CXX=g++-4.7 && export CC=gcc-4.7'
+  - '[[ $CXX == "clang" ]] && exit 1 || [[ $CXX == "g++" ]] \
+      && sudo apt-get -qq install g++-4.7 \
+      && export CXX=g++-4.7 \
+      && export CC=gcc-4.7'
   - sudo apt-get -qq install libboost1.50-all-dev
   # Libcppa
   - git clone git://github.com/Neverlord/libcppa.git
