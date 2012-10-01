@@ -3,7 +3,7 @@ compiler:
   - gcc
   - clang
 before_script:
-  - '[[ $CXX != "clang" ]]' # Clang 3.2 not yet supported
+  - '[[ $CXX == "clang" ]] && return 1 || return 0' # Clang 3.2 not yet supported
   - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
   - sudo add-apt-repository -y "deb http://archive.ubuntu.com/ubuntu/ quantal main universe"
   - sudo apt-get -qq update
