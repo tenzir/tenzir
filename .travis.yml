@@ -4,12 +4,12 @@ compiler:
   - clang
 before_script:
   - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test # GCC 4.7
-  - sudo add-apt-repository -y \
+  - sudo add-apt-repository -y
     "deb http://archive.ubuntu.com/ubuntu/ quantal main universe" # Boost 1.50
   - sudo apt-get -qq update
-  - '[[ $CXX == "clang" ]] && exit 1 || [[ $CXX == "g++" ]] \
-      && sudo apt-get -qq install g++-4.7 \
-      && export CXX=g++-4.7 \
+  - '[[ $CXX == "clang" ]] && exit 1 || [[ $CXX == "g++" ]]
+      && sudo apt-get -qq install g++-4.7
+      && export CXX=g++-4.7
       && export CC=gcc-4.7'
   - sudo apt-get -qq install libboost1.50-all-dev
   # Libcppa
