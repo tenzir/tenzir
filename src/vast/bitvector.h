@@ -2,6 +2,7 @@
 #define VAST_BITVECTOR_H
 
 #include <iterator>
+#include <limits>
 #include <vector>
 #include <ze/serialization/container.h>
 
