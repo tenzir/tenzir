@@ -40,9 +40,10 @@ set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g")
 if (ENABLE_DEBUG)
     set(CMAKE_BUILD_TYPE Debug)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVAST_DEBUG")
-else ()
-    set(CMAKE_BUILD_TYPE Release)
 endif ()
+if (NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE RelWithDebInfo)
+endif (CMAKE_BUILD_TYPE)
 
 if("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
     execute_process(
