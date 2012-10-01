@@ -10,7 +10,6 @@ universe"
 sudo apt-get update -qq
 
 # Boost
-sudo apt-cache search libboost
 sudo apt-get install -q libboost1.50-all-dev
 
 # When building with GCC, update to 4.7.
@@ -38,3 +37,6 @@ cd ze
 ./configure --enable-debug --prefix=$PREFIX
 make install
 cd ..
+
+# VAST
+./configure --enable-debug --with-libcppa=$PREFIX --with-0event=$PREFIX

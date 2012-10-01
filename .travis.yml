@@ -4,7 +4,6 @@ compiler:
   - clang
 before_script:
   - ./tools/travis-build-setup
-  - ./configure --enable-debug --with-libcppa=$PREFIX --with-0event=$PREFIX
 script: make
 branches:
   only:
