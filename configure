@@ -16,12 +16,12 @@ usage="\
 Usage: $0 [OPTION]... [VAR=VALUE]...
 
   Build Options:
-    --builddir=DIR          place build files in directory [build]
+    --build-dir=DIR         place build files in directory [build]
     --generator=GENERATOR   CMake generator to use (see cmake --help)
     --with-cxx=PATH         path to a C++ compiler executable
 
   Installation Directories:
-    --prefix=PREFIX         installation directory [/usr/local/vast]
+    --prefix=PREFIX         installation directory [/usr/local]
 
   Optional Features:
     --enable-debug          compile in debugging mode
@@ -77,7 +77,7 @@ while [ $# -ne 0 ]; do
             echo "${usage}" 1>&2
             exit 1
             ;;
-        --builddir=*)
+        --build-dir=*)
             builddir=$optarg
             ;;
         --generator=*)
