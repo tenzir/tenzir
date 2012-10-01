@@ -1,14 +1,10 @@
 #ifndef VAST_CONFIG_H
 #define VAST_CONFIG_H
 
-// Version number
 #define VAST_VERSION @VERSION_MAJ_MIN@
-
-// Use Gperftools CPU profiler
-#cmakedefine USE_PERFTOOLS_CPU_PROFILER
-
-// Use Gperftools heap profiler
-#cmakedefine USE_PERFTOOLS_HEAP_PROFILER
+#cmakedefine VAST_HAVE_BROCCOLI
+#cmakedefine VAST_USE_PERFTOOLS_CPU_PROFILER
+#cmakedefine VAST_USE_PERFTOOLS_HEAP_PROFILER
 
 #if defined(__APPLE__)
 #  define VAST_MACOS

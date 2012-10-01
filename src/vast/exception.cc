@@ -26,10 +26,12 @@ network::network(char const* msg)
 {
 }
 
+#ifdef VAST_HAVE_BROCCOLI
 broccoli::broccoli(char const* msg)
   : network(msg)
 {
 }
+#endif
 
 config::config(char const* msg, char const* option)
 {

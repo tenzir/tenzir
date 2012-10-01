@@ -33,36 +33,42 @@ set(libvast_sources
   fs/exception.cc
   fs/operations.cc
   sink/file.cc
-  source/broccoli.cc
   source/file.cc
-  util/broccoli.cc
   util/console.cc
   util/poll.cc
-  util/profiler.cc
-  )
+  util/profiler.cc)
 
-set(libs
+if (BROCCOLI_FOUND)
+  set(libvast_sources ${libvast_sources}
+    source/broccoli.cc
+    util/broccoli.cc)
+endif ()
+
+set(libvast_libs
     ${Boost_LIBRARIES}
     ${LIBCPPA_LIBRARIES}
-    ${0event_LIBRARIES}
-    ${Broccoli_LIBRARIES})
+    ${0event_LIBRARIES})
+
+if (BROCCOLI_FOUND)
+  set(libvast_libs ${libvast_libs} ${Broccoli_LIBRARIES})
+endif ()
 
 # Always link with -lprofile if we have Gperftools.
 if (GPERFTOOLS_FOUND)
-  set(libs ${libs} ${GPERFTOOLS_PROFILER})
+  set(libvast_libs ${libvast_libs} ${GPERFTOOLS_PROFILER})
 endif ()
 
 # Only link against tcmalloc if requested.
-if (GPERFTOOLS_FOUND AND USE_PERFTOOLS_HEAP_PROFILER)
-  set(libs ${libs} ${GPERFTOOLS_TCMALLOC})
+if (GPERFTOOLS_FOUND AND VAST_eSE_PERFTOOLS_HEAP_PROFILER)
+  set(libvast_libs ${libvast_libs} ${GPERFTOOLS_TCMALLOC})
 endif ()
 
 add_library(libvast SHARED ${libvast_sources})
 set_target_properties(libvast PROPERTIES OUTPUT_NAME vast)
-target_link_libraries(libvast ${libs})
+target_link_libraries(libvast ${libvast_libs})
 install(TARGETS libvast DESTINATION lib)
 
 add_executable(vast main.cc)
 set_target_properties(vast PROPERTIES OUTPUT_NAME vast)
-target_link_libraries(vast libvast ${libs})
+target_link_libraries(vast libvast ${libvast_libs})
 install(TARGETS vast DESTINATION bin)

@@ -5,8 +5,11 @@
 #include "vast/event_source.h"
 #include "vast/logger.h"
 #include "vast/segment.h"
-#include "vast/source/broccoli.h"
 #include "vast/source/file.h"
+
+#ifdef VAST_HAVE_BROCCOLI
+#include "vast/source/broccoli.h"
+#endif
 
 namespace vast {
 
@@ -30,6 +33,7 @@ ingestor::ingestor(cppa::actor_ptr tracker,
         max_segment_size_ = max_segment_size;
         batch_size_ = batch_size;
       },
+#ifdef VAST_HAVE_BROCCOLI
       on(atom("ingest"), atom("broccoli"), arg_match) >>
         [=](std::string const& host, unsigned port,
             std::vector<std::string> const& events)
@@ -39,6 +43,7 @@ ingestor::ingestor(cppa::actor_ptr tracker,
         for (auto& event : events)
           send(broccoli_, atom("subscribe"), event);
       },
+#endif
       on(atom("ingest"), "bro15conn", arg_match) >> [=](std::string const& file)
       {
         sources_.push_back(spawn<source::bro15conn>(self, tracker, file));
@@ -123,8 +128,10 @@ ingestor::ingestor(cppa::actor_ptr tracker,
       },
       on(atom("shutdown")) >> [=]
       {
+#ifdef VAST_HAVE_BROCCOLI
         if (broccoli_)
           broccoli_ << last_dequeued();
+#endif
         if (sources_.empty() && inflight_.empty())
           shutdown();
         for (auto source : sources_)

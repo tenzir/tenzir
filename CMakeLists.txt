@@ -68,19 +68,11 @@ find_package(Boost
         filesystem
         program_options
         system
-        unit_test_framework
-)
+        unit_test_framework)
 if (Boost_FOUND)
     include_directories(${Boost_INCLUDE_DIRS})
 else ()
     message(FATAL_ERROR "Could not find Boost")
-endif ()
-
-find_package(Broccoli)
-if (BROCCOLI_FOUND)
-    include_directories(${Broccoli_INCLUDE_DIR})
-else ()
-    message(FATAL_ERROR "Could not find Broccoli")
 endif ()
 
 find_package(Libcppa)
@@ -97,19 +89,25 @@ else ()
     message(FATAL_ERROR "Could not find 0event")
 endif ()
 
+find_package(Broccoli QUIET)
+if (BROCCOLI_FOUND)
+    set(VAST_HAVE_BROCCOLI true)
+    include_directories(${Broccoli_INCLUDE_DIR})
+endif ()
+
+find_package(Gperftools QUIET)
+if (GPERFTOOLS_FOUND)
+  set(VAST_USE_PERFTOOLS_CPU_PROFILER true)
+  include_directories(BEFORE ${GPERFTOOLS_INCLUDE_DIR})
+endif ()
+set(VAST_USE_PERFTOOLS_HEAP_PROFILER false)
+if (ENABLE_PERFTOOLS_HEAP)
+  set(VAST_USE_PERFTOOLS_HEAP_PROFILER true)
+endif ()
+
 find_package(Doxygen)
 if (DOXYGEN_FOUND)
     add_subdirectory(doc)
-endif ()
-
-find_package(Gperftools)
-if (GPERFTOOLS_FOUND)
-  set(USE_PERFTOOLS_CPU_PROFILER true)
-  include_directories(BEFORE ${GPERFTOOLS_INCLUDE_DIR})
-endif ()
-set(USE_PERFTOOLS_HEAP_PROFILER false)
-if (ENABLE_PERFTOOLS_HEAP)
-  set(USE_PERFTOOLS_HEAP_PROFILER true)
 endif ()
 
 include_directories(BEFORE ${CMAKE_CURRENT_BINARY_DIR})
@@ -126,7 +124,8 @@ if ("${PROJECT_SOURCE_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
 endif ()
 
 string(TOUPPER ${CMAKE_BUILD_TYPE} build_type)
-message(
+
+set(build_summary
     "\n====================|  Build Summary  |===================="
     "\n"
     "\nVAST version:     ${VERSION_MAJ_MIN}"
@@ -135,16 +134,23 @@ message(
     "\nBuild directory:  ${CMAKE_BINARY_DIR}"
     "\nInstall prefix:   ${CMAKE_INSTALL_PREFIX}"
     "\nDebug mode:       ${ENABLE_DEBUG}"
+    "\nBroccoli:         ${BROCCOLI_FOUND}"
     "\nGperftools:       ${GPERFTOOLS_FOUND}"
-    "\nGperftools heap:  ${USE_PERFTOOLS_HEAP_PROFILER}"
+    "\nGperftools heap:  ${VAST_USE_PERFTOOLS_HEAP_PROFILER}"
     "\n"
     "\nCXX:              ${CMAKE_CXX_COMPILER}"
     "\nCXXFLAGS:         ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${build_type}}"
     "\n"
-    "\n0event:           ${0event_INCLUDE_DIR}"
-    "\nLibcppa:          ${LIBCPPA_INCLUDE_DIR}"
     "\nBoost:            ${Boost_INCLUDE_DIR}"
+    "\nLibcppa:          ${LIBCPPA_INCLUDE_DIR}"
+    "\n0event:           ${0event_INCLUDE_DIR}")
+if (BROCCOLI_FOUND)
+  set(build_summary ${build_summary}
+    "\nBroccoli:         ${Broccoli_INCLUDE_DIR}")
+endif ()
+set(build_summary ${build_summary}
     "\nDoxygen:          ${DOXYGEN_FOUND}"
     "\n"
-    "\n===========================================================\n"
-)
+    "\n===========================================================\n")
+
+message(${build_summary})

@@ -1,10 +1,9 @@
 #include "vast/configuration.h"
 
-#include "config.h"
-
 #include <iostream>
 #include <string>
 #include <boost/exception/diagnostic_information.hpp>
+#include "vast/config.h"
 #include "vast/exception.h"
 #include "vast/fs/path.h"
 #include "vast/fs/fstream.h"
@@ -38,14 +37,16 @@ configuration::configuration()
   advanced.add_options()
     ("profile,P", po::value<unsigned>(),
      "enable getrusage profiling at a given interval (seconds)")
-#ifdef USE_PERFTOOLS_CPU_PROFILER
+#ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
     ("profile-cpu", "also enable Google perftools CPU profiling")
 #endif
-#ifdef USE_PERFTOOLS_HEAP_PROFILER
+#ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
     ("profile-heap", "also enable Google perftools heap profiling")
 #endif
+#ifdef VAST_HAVE_BROCCOLI
     ("broccoli-messages", "enable broccoli debug messages")
     ("broccoli-calltrace", "enable broccoli function call tracing")
+#endif
     ;
 
   po::options_description actor("actor options");
@@ -80,12 +81,14 @@ configuration::configuration()
      "maximum segment size in MB")
     ("ingest.batch-size", po::value<size_t>()->default_value(1000),
      "number of events to ingest before yielding")
+#ifdef VAST_HAVE_BROCCOLI
     ("ingest.broccoli-host", po::value<std::string>()->default_value("127.0.0.1"),
      "hostname or IP address of the broccoli source")
     ("ingest.broccoli-port", po::value<unsigned>()->default_value(42000),
      "port of the broccoli source")
     ("ingest.broccoli-events", po::value<std::vector<std::string>>()->multitoken(),
      "explicit list of events for broccoli to ingest")
+#endif
     ("ingest.file-names", po::value<std::vector<std::string>>()->multitoken(),
      "file(s) to ingest")
     ("ingest.file-type", po::value<std::string>()->default_value("bro2"),

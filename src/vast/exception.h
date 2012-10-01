@@ -2,6 +2,7 @@
 #define VAST_EXCEPTION_H
 
 #include "vast/exception.h"
+#include "vast/config.h"
 
 #include <exception>
 #include <string>
@@ -32,11 +33,13 @@ struct network : exception
   network(char const* msg);
 };
 
+#ifdef VAST_HAVE_BROCCOLI
 /// Thrown for errors with Broccoli.
 struct broccoli : network
 {
   broccoli(char const* msg);
 };
+#endif
 
 /// Thrown for errors with the program configuration.
 struct config : exception

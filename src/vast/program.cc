@@ -2,8 +2,10 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <ze/event.h>
 #include "vast/archive.h"
 #include "vast/exception.h"
+#include "vast/config.h"
 #include "vast/id_tracker.h"
 #include "vast/index.h"
 #include "vast/ingestor.h"
@@ -17,9 +19,11 @@
 #include "vast/detail/cppa_type_info.h"
 #include "vast/fs/path.h"
 #include "vast/fs/operations.h"
-#include "vast/util/broccoli.h"
 #include "vast/util/profiler.h"
-#include "config.h"
+
+#ifdef VAST_HAVE_BROCCOLI
+#include "vast/util/broccoli.h"
+#endif
 
 namespace vast {
 
@@ -194,8 +198,10 @@ bool program::start()
 
     if (config_.check("ingestor-actor"))
     {
+#ifdef VAST_HAVE_BROCCOLI
       util::broccoli::init(config_.check("broccoli-messages"),
                            config_.check("broccoli-calltrace"));
+#endif
 
       ingestor_ = spawn<ingestor>(tracker_, archive_, index_);
       self->monitor(ingestor_);
@@ -205,13 +211,15 @@ bool program::start()
           config_.get<size_t>("ingest.max-segment-size") * 1000000,
           config_.get<size_t>("ingest.batch-size"));
 
-      if (config_.check("ingest.events"))
+#ifdef VAST_HAVE_BROCCOLI
+      if (config_.check("ingest.broccoli-events"))
       {
         auto host = config_.get<std::string>("ingest.broccoli-host");
         auto port = config_.get<unsigned>("ingest.broccoli-port");
         auto events = config_.get<std::vector<std::string>>("ingest.broccoli-events");
         send(ingestor_, atom("ingest"), atom("broccoli"), host, port, events);
       }
+#endif
 
       if (config_.check("ingest.file-names"))
       {
