@@ -33,6 +33,9 @@ public:
 
   struct type_info
   {
+    type_info() = default;
+    type_info(std::string name, intrusive_ptr<schema::type> t);
+
     inline explicit operator bool() const
     {
       return type.get() != nullptr;
@@ -40,12 +43,7 @@ public:
 
     std::string name;
     std::vector<std::string> aliases;
-#ifdef __clang__
-    intrusive_ptr<type> type;
-#else
-    // GCC is not smart enough to disambiguate types and names :-/.
     intrusive_ptr<schema::type> type;
-#endif
   };
 
   struct basic_type : type { };

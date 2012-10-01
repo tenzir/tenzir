@@ -101,7 +101,7 @@ cppa::cow_tuple<segment> segment_manager::on_miss(ze::uuid const& uuid)
   segment s;
   ia >> s;
 
-  return std::move(s);
+  return {std::move(s)};
 }
 
 } // namespace vast

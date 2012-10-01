@@ -114,8 +114,9 @@ public:
   schema::type_info create_type_info(ast::schema::type_info const& ti) const
   {
     auto info = schema_.info(ti.name);
-    return info ? info :
-      schema::type_info{ti.name, {}, boost::apply_visitor(*this, ti.type)};
+    if (info)
+      return info;
+    return {ti.name, boost::apply_visitor(*this, ti.type)};
   }
 
 private:
@@ -160,6 +161,12 @@ private:
 };
 
 } // namespace detail
+
+schema::type_info::type_info(std::string name, intrusive_ptr<schema::type> t)
+  : name(std::move(name))
+  , type(std::move(t))
+{
+}
 
 void schema::load(std::string const& contents)
 {
@@ -317,7 +324,7 @@ void schema::add_type(std::string name, intrusive_ptr<type> t)
     throw error::schema("duplicate type");
 
   DBG(meta) << "adding type " << name << ": " << to_string(*t);
-  types_.push_back({std::move(name), {}, t});
+  types_.emplace_back(std::move(name), std::move(t));
 }
 
 bool schema::add_type_alias(std::string const& type, std::string const& alias)
