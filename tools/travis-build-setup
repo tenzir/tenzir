@@ -3,14 +3,6 @@
 # This script install the necessary dependencies in order for VAST to run in
 # the Travis CI environment.
 
-# Add extra repositories for GCC and Boost
-sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-sudo add-apt-repository -y "deb http://archive.ubuntu.com/ubuntu/ quantal main universe"
-sudo apt-get -qq update 
-
-# Boost
-sudo apt-get -qq install libboost1.50-all-dev
-
 # When building with GCC, update to 4.7.
 if [[ $CXX == "g++" ]] ; then
     sudo apt-get -qq install g++-4.7
@@ -20,9 +12,6 @@ elif [[ $CXX == "clang++" ]] ; then
     echo "TODO: setup clang 3.2"
     exit 1
 fi
-
-# The prefix where we install our dependencies in.
-export PREFIX=$HOME/builds/mavam/prefix
 
 # Libcppa
 git clone git://github.com/Neverlord/libcppa.git
@@ -39,4 +28,4 @@ make install
 cd ..
 
 # VAST
-./configure --enable-debug --with-libcppa=$PREFIX --with-0event=$PREFIX
+./configure $BUILD_TYPE --with-libcppa=$PREFIX --with-0event=$PREFIX

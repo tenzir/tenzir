@@ -1,8 +1,12 @@
 language: cpp
 compiler:
   - gcc
-#  - clang
+  - clang
 before_script:
+  - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+  - sudo add-apt-repository -y "deb http://archive.ubuntu.com/ubuntu/ quantal main universe"
+  - sudo apt-get -qq update
+  - sudo apt-get -qq install libboost1.50-all-dev
   - ./tools/travis-build-setup
 script: make
 branches:
@@ -14,3 +18,11 @@ notifications:
   email:
     on_success: change
     on_failure: always
+env:
+  global:
+    # The prefix for VAST dependencies.
+    - PREFIX=$HOME/builds/mavam/prefix
+  matrix:
+    - BUILD_TYPE=--enable-debug
+    allow_failures:
+      - compiler: clang
