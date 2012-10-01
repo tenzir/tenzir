@@ -3,14 +3,14 @@
 #include <iomanip>
 #include <sys/resource.h>   // getrusage
 #include <sys/time.h>       // gettimeofday
+#include "vast/config.h"
 #include "vast/logger.h"
 #include "vast/fs/path.h"
-#include "config.h"
 
-#ifdef USE_PERFTOOLS_CPU_PROFILER
+#ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
 #include <google/profiler.h>
 #endif
-#ifdef USE_PERFTOOLS_HEAP_PROFILER
+#ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
 #include <google/heap-profiler.h>
 #endif
 
@@ -75,7 +75,7 @@ profiler::profiler(std::string const& log_dir, std::chrono::seconds secs)
   init_state = (
       on(atom("run"), arg_match) >> [=](bool perftools_cpu, bool perftools_heap)
       {
-#ifdef USE_PERFTOOLS_CPU_PROFILER
+#ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
         if (perftools_cpu)
         {
           LOG(info, core)
@@ -85,7 +85,7 @@ profiler::profiler(std::string const& log_dir, std::chrono::seconds secs)
           ProfilerStart(f.string().data());
         }
 #endif
-#ifdef USE_PERFTOOLS_HEAP_PROFILER
+#ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
         if (perftools_heap)
         {
           LOG(info, core)
@@ -111,7 +111,7 @@ profiler::profiler(std::string const& log_dir, std::chrono::seconds secs)
       },
       on(atom("shutdown")) >> [=]
       {
-#ifdef USE_PERFTOOLS_CPU_PROFILER
+#ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
         ProfilerState state;
         ProfilerGetCurrentState(&state);
         if (state.enabled)
@@ -127,7 +127,7 @@ profiler::profiler(std::string const& log_dir, std::chrono::seconds secs)
           ProfilerStop();
         }
 #endif
-#ifdef USE_PERFTOOLS_HEAP_PROFILER
+#ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
         if (IsHeapProfilerRunning())
         {
           LOG(info, core)
