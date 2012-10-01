@@ -3,13 +3,29 @@ compiler:
   - gcc
   - clang
 before_script:
-  - '[[ $CXX == "clang" ]] && return 1 || return 0' # Clang 3.2 not yet supported
+  # VAST requires Clang 3.2, which Travis does not yet support.
+  - '[[ $CXX == "clang" ]] && return 1 || return 0'
+  # GCC 4.7
   - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+  # Boost 1.50
   - sudo add-apt-repository -y "deb http://archive.ubuntu.com/ubuntu/ quantal main universe"
   - sudo apt-get -qq update
   - '[[ $CXX == "g++" ]] && sudo apt-get -qq install g++-4.7 && export CXX=g++-4.7 && export CC=gcc-4.7'
   - sudo apt-get -qq install libboost1.50-all-dev
-  - ./tools/travis-build-setup
+  # Libcppa
+  - git clone git://github.com/Neverlord/libcppa.git
+  - pushd libcppa
+  - ./configure --enable-debug --prefix=$PREFIX
+  - make install
+  - popd
+  # 0event
+  - git clone git://github.com/mavam/ze.git
+  - pushd ze
+  - ./configure --enable-debug --prefix=$PREFIX
+  - make install
+  - popd
+  # VAST
+  - ./configure $BUILD_TYPE --with-libcppa=$PREFIX --with-0event=$PREFIX
 script: make
 branches:
   only:
