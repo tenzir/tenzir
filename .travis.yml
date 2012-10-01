@@ -24,5 +24,6 @@ env:
     - PREFIX=$HOME/builds/mavam/prefix
   matrix:
     - BUILD_TYPE=--enable-debug
-    allow_failures:
-      - compiler: clang
+matrix:
+  allow_failures:
+    - compiler: clang
