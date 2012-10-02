@@ -57,6 +57,11 @@ public:
     return d.flip();
   }
 
+  bool operator[](size_t i) const
+  {
+    return derived().at(i);
+  }
+
   void append(size_t n, bool bit)
   {
     derived().append_impl(n, bit);
@@ -116,6 +121,7 @@ public:
   null_bitstream& operator^=(null_bitstream const& other);
   null_bitstream& operator-=(null_bitstream const& other);
   null_bitstream& flip();
+  bool at(size_t i) const;
 
 private:
   bool equals(null_bitstream const& other) const;

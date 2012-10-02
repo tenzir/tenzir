@@ -55,4 +55,9 @@ null_bitstream& null_bitstream::flip()
   return *this;
 }
 
+bool null_bitstream::at(size_t i) const
+{
+  return bits_[i];
+}
+
 } // namespace vast
