@@ -58,4 +58,6 @@ BOOST_AUTO_TEST_CASE(bitvector_bitwise_ops)
   BOOST_CHECK_EQUAL(to_string((~a << 2) & b), to_string(a));
 
   BOOST_CHECK_EQUAL(b.count(), 3);
+
+  BOOST_CHECK_EQUAL(to_string(b, false), "010101");
 }

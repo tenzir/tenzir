@@ -7,7 +7,10 @@
 
 namespace vast {
 
-std::string to_string(bitvector const& b, bool all, size_t cut_off)
+std::string to_string(bitvector const& b,
+                      bool msb_to_lsb,
+                      bool all,
+                      size_t cut_off)
 {
   std::string str;
   auto str_size = all ? bitvector::bits_per_block * b.blocks() : b.size();
@@ -25,7 +28,7 @@ std::string to_string(bitvector const& b, bool all, size_t cut_off)
 
   for (bitvector::size_type i = 0; i < std::min(str_size, b.size()); ++i)
     if (b[i])
-      str[str_size - 1 - i] = '1';
+      str[msb_to_lsb ? str_size - i - 1 : i] = '1';
 
   return str;
 }

@@ -21,6 +21,7 @@ class expression;
 ///
 /// @return An `std::string` representation of *b*.
 std::string to_string(bitvector const& b,
+                      bool msb_to_lsb = true,
                       bool all = false,
                       size_t cut_off = 64);
 
