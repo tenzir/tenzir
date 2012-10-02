@@ -14,10 +14,12 @@ class dictionary
   static_assert(std::is_integral<Codomain>::value,
                 "a dictionary requires an integral codomain type");
 public:
+  typedef std::string string_type;
+
   /// Retrieves the ID of a given string.
   /// @param str The string to lookup.
   /// @return The ID of *str*.
-  Codomain const* operator[](std::string const& str) const
+  Codomain const* operator[](string_type const& str) const
   {
       return locate(str);
   }
@@ -25,7 +27,7 @@ public:
   /// Retrieves the string corresponding to a given ID.
   /// @param id The ID to lookup.
   /// @return str The string having ID *id*.
-  std::string const* operator[](Codomain id) const
+  string_type const* operator[](Codomain id) const
   {
       return extract(id);
   }
@@ -33,11 +35,11 @@ public:
   /// Inserts a string into the dictionary.
   /// @param str The string mapping to *id*.
   /// @return `true` if the insertion succeeded.
-  virtual Codomain const* insert(std::string const& str) = 0;
+  virtual Codomain const* insert(string_type const& str) = 0;
 
 protected:
-  virtual Codomain const* locate(std::string const& str) const = 0;
-  virtual std::string const* extract(Codomain id) const = 0;
+  virtual Codomain const* locate(string_type const& str) const = 0;
+  virtual string_type const* extract(Codomain id) const = 0;
 
   Codomain next_ = 0;
 };
@@ -47,14 +49,15 @@ template <typename Codomain>
 class map_dictionary : public dictionary<Codomain>
 {
   typedef dictionary<Codomain> super;
+  using typename super::string_type;
 public:
-  virtual Codomain const* locate(std::string const& str) const
+  virtual Codomain const* locate(string_type const& str) const
   {
     auto i = map_.find(str);
     return i == map_.end() ? nullptr : &i->second;
   }
 
-  virtual std::string const* extract(Codomain id) const
+  virtual string_type const* extract(Codomain id) const
   {
     for (auto& p : map_)
       if (p.second == id)
@@ -62,7 +65,7 @@ public:
     return nullptr;
   }
 
-  virtual Codomain const* insert(std::string const& str)
+  virtual Codomain const* insert(string_type const& str)
   {
     if (locate(str))
       return nullptr;
@@ -77,7 +80,7 @@ public:
   }
 
 private:
-  std::unordered_map<std::string, Codomain> map_;
+  std::unordered_map<string_type, Codomain> map_;
 };
 
 } // namespace util
