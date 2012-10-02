@@ -52,6 +52,12 @@ struct list_storage : storage_policy
       f(p.first, p.second);
   }
 
+  void each(std::function<void(T const&, Bitstream const&)> f) const
+  {
+    for (auto& p : list_)
+      f(p.first, p.second);
+  }
+
   bool emplace(T const& x, Bitstream b)
   {
     auto i = std::lower_bound(
@@ -122,6 +128,12 @@ struct unordered_storage : storage_policy
   }
 
   void each(std::function<void(T const&, Bitstream&)> f)
+  {
+    for (auto& p : map_)
+      f(p.first, p.second);
+  }
+
+  void each(std::function<void(T const&, Bitstream const&)> f) const
   {
     for (auto& p : map_)
       f(p.first, p.second);
@@ -377,6 +389,31 @@ public:
   Bitstream operator[](T const& x) const
   {
     return encoder_.decode(bitstreams_, binner_(x));
+  }
+
+  /// Transposes the bitmap into a vector of bitmaps where the *i*th element
+  /// represents the *i*th row of the encoded bitmap.
+  ///
+  /// @param header If not `nullptr`, a result parameter receiving the unique
+  /// element values in an order such that the *j*th element represents the
+  /// *j*th bit in each row.
+  ///
+  /// @return The transposed bitmap.
+  ///
+  /// @note The traversal of the bitstream storage must be deterministic in
+  /// order for the result to be meaningful.
+  std::vector<Bitstream> transpose(std::vector<T>* header) const
+  {
+    if (header)
+      bitstreams_.each(
+          [&](T const& x, Bitstream const&) { header->push_back(x); });
+
+    std::vector<Bitstream> rows(bitstreams_.rows);
+    for (size_t i = 0; i < rows.size(); ++i)
+      bitstreams_.each(
+          [&](T const&, Bitstream const& bs) { rows[i].push_back(bs[i]); });
+
+    return rows;
   }
 
 private:
