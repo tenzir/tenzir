@@ -43,7 +43,7 @@ if (ENABLE_DEBUG)
 endif ()
 if (NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE RelWithDebInfo)
-endif (CMAKE_BUILD_TYPE)
+endif ()
 
 if("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
     execute_process(
