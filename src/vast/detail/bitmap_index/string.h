@@ -4,6 +4,7 @@
 #include <ze/value.h>
 #include <ze/to_string.h>
 #include "vast/bitmap_index.h"
+#include "vast/exception.h"
 #include "vast/to_string.h"
 #include "vast/util/dictionary.h"
 
@@ -40,11 +41,16 @@ public:
 
   virtual Bitstream lookup(ze::value const& value, relational_operator op)
   {
+    if (! (op == equal || op == not_equal))
+      throw error::index("unsupported relational operator");
+
     auto str = ze::to_string(value.get<ze::string>());
     auto i = dictionary_[str];
     if (!i)
       return {};
-    return bitmap_[*i];
+
+    auto bs = bitmap_[*i];
+    return op == equal ? bs : ~bs;
   };
 
   virtual std::string to_string() const

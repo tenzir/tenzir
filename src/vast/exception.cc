@@ -92,5 +92,10 @@ schema::schema(char const* msg)
 {
 }
 
+index::index(char const* msg)
+  : exception(msg)
+{
+}
+
 } // namespace error
 } // namespace vast

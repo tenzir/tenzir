@@ -21,5 +21,9 @@ BOOST_AUTO_TEST_CASE(string_bitmap_index)
   BOOST_CHECK_EQUAL(to_string(foo.bits(), false), "100110");
   BOOST_CHECK_EQUAL(to_string(bar.bits(), false), "010001");
 
+  auto not_foo = bi->lookup("foo", not_equal);
+  BOOST_CHECK_EQUAL(to_string(not_foo.bits(), false), "011001");
+
   BOOST_CHECK(bi->lookup("qux", equal).empty());
+  BOOST_CHECK_THROW(bi->lookup("foo", match), error::index);
 }

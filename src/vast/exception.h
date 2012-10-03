@@ -84,6 +84,12 @@ struct schema : exception
   schema(char const* msg);
 };
 
+struct index : exception
+{
+  index() = default;
+  index(char const* msg);
+};
+
 } // namespace error
 } // namespace vast
 
