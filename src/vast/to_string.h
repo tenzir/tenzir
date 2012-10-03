@@ -6,6 +6,15 @@
 
 namespace vast {
 
+// Forward declarations.
+template <
+  typename,
+  typename,
+  template <typename> class,
+  template <typename> class
+>
+class bitmap;
+template <typename> class bitstream;
 class bitvector;
 class expression;
 
@@ -25,10 +34,65 @@ std::string to_string(bitvector const& b,
                       bool all = false,
                       size_t cut_off = 64);
 
-template <typename Bitstream>
-std::string to_string(Bitstream const& b)
+/// Converts a bitstream to an `std::string`.
+///
+/// @param bs The bitstream to convert.
+///
+/// @return An `std::string` representation of *bs*.
+template <typename Derived>
+std::string to_string(bitstream<Derived> const& bs)
 {
-  return to_string(b.bits());
+  return to_string(bs.bits());
+}
+
+/// Converts a bitmap to an `std::string`.
+///
+/// @param bm The bitmap to convert.
+///
+/// @param with_header If `true`, include a header with bitmap values as first
+/// row in the output.
+///
+/// @param delim The delimiting character separating header values.
+///
+/// @return An `std::string` representation of *bm*.
+template <
+  typename T,
+  typename Bitstream,
+  template <typename> class Encoder,
+  template <typename> class Binner
+>
+std::string to_string(
+    bitmap<T, Bitstream, Encoder, Binner> const& bm,
+    bool with_header = true,
+    char delim = '\t')
+{
+  std::string str;
+  std::vector<T> header;
+  auto t = bm.transpose(with_header ? &header : nullptr);
+  if (with_header)
+  {
+    auto first = header.begin();
+    auto last = header.end();
+    while (first != last)
+    {
+      using std::to_string;
+      str += to_string(*first);
+      if (++first != last)
+        str += delim;
+    }
+    str += '\n';
+  }
+
+  auto first = t.begin();
+  auto last = t.end();
+  while (first != last)
+  {
+    str += to_string(first->bits(), false);
+    if (++first != last)
+      str += '\n';
+  }
+
+  return str;
 }
 
 std::string to_string(schema::type const& t);
