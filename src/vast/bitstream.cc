@@ -60,4 +60,14 @@ bool null_bitstream::at(size_t i) const
   return bits_[i];
 }
 
+size_t null_bitstream::size_impl() const
+{
+  return bits_.size();
+}
+
+size_t null_bitstream::empty_impl() const
+{
+  return bits_.empty();
+}
+
 } // namespace vast

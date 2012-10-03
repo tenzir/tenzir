@@ -62,6 +62,16 @@ public:
     return derived().at(i);
   }
 
+  size_t size() const
+  {
+    return derived().size_impl();
+  }
+
+  bool empty() const
+  {
+    return derived().empty_impl();
+  }
+
   void append(size_t n, bool bit)
   {
     derived().append_impl(n, bit);
@@ -121,12 +131,14 @@ public:
   null_bitstream& operator^=(null_bitstream const& other);
   null_bitstream& operator-=(null_bitstream const& other);
   null_bitstream& flip();
-  bool at(size_t i) const;
 
 private:
   bool equals(null_bitstream const& other) const;
   void append_impl(size_t n, bool bit);
   void push_back_impl(bool bit);
+  bool at(size_t i) const;
+  size_t size_impl() const;
+  size_t empty_impl() const;
 };
 
 } // namespace vast
