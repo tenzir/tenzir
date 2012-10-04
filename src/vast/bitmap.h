@@ -298,8 +298,11 @@ struct binary_encoder
 
     typename Storage::bitstream_type result(store.rows, true);
     for (size_t i = 0; i < bits; ++i)
-        result &= ((x >> i) & 1) ? *store.find(i) : ~*store.find(i);
-      return std::move(result);
+      result &= ((x >> i) & 1) ? *store.find(i) : ~*store.find(i);
+
+    if (result.find_first() == Storage::bitstream_type::npos)
+      return {};
+    return std::move(result);
   }
 
   bool initialized = false;

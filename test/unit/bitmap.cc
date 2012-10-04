@@ -93,11 +93,8 @@ BOOST_AUTO_TEST_CASE(binary_encoded_bitmap)
   BOOST_CHECK_EQUAL(stringify(*bm[1]), "0000110");
   BOOST_CHECK_EQUAL(stringify(*bm[2]), "1101000");
   BOOST_CHECK_EQUAL(stringify(*bm[3]), "0010000");
-
-  // Binary encoding always returns an answer after the first element has been
-  // inserted into the bitmap.
-  BOOST_CHECK_EQUAL(stringify(*bm[4]), "0000000");
-  BOOST_CHECK_EQUAL(stringify(*bm[5]), "0000000");
+  BOOST_CHECK(! bm[4]);
+  BOOST_CHECK(! bm[5]);
 }
 
 BOOST_AUTO_TEST_CASE(bitmap_precision_binning_integral)
