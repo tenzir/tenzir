@@ -20,7 +20,7 @@ class bitvector
 public:
   typedef size_t block_type;
   typedef size_t size_type;
-  static size_t constexpr npos = static_cast<size_type>(-1);
+  static size_type constexpr npos = static_cast<size_type>(-1);
   static block_type constexpr bits_per_block = 
     std::numeric_limits<block_type>::digits;
 
