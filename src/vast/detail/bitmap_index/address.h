@@ -38,45 +38,11 @@ public:
       return {};
 
     if (value.which() == ze::address_type)
-    {
-      auto& addr = value.get<ze::address>();
-      auto& bytes = addr.data();
-      size_t const start = addr.is_v4() ? 12 : 0;
-      auto first = bitmaps_[start][bytes[start]];
-      if (! first)
-      {
-        if (op == not_equal)
-          return std::move(bitmaps_[0].all(false));
-        return {};
-      }
-
-      *first &= is_v4_;
-
-      for (size_t i = start + 1; i < 16; ++i)
-      {
-        auto bs = bitmaps_[i][bytes[i]];
-        if (! bs)
-        {
-          if (op == not_equal)
-            return std::move(bitmaps_[0].all(false));
-          return {};
-        }
-        *first &= *bs;
-      }
-
-      if (op == not_equal)
-        (*first).flip();
-
-      return first;
-    }
+      return lookup(value.get<ze::address>(), op);
     else if (value.which() == ze::prefix_type)
-    {
-      throw error::index("prefix matching not yet implemented");
-    }
+      return lookup(value.get<ze::prefix>(), op);
     else
-    {
       throw error::index("invalid value type");
-    }
 
     return {};
   };
@@ -87,7 +53,44 @@ public:
   }
 
 private:
-  std::array<bitmap<uint8_t, Bitstream>, 16> bitmaps_;
+  option<Bitstream> lookup(ze::address const& addr, relational_operator op)
+  {
+    auto& bytes = addr.data();
+    size_t const start = addr.is_v4() ? 12 : 0;
+    auto first = bitmaps_[start][bytes[start]];
+    if (! first)
+    {
+      if (op == not_equal)
+        return std::move(bitmaps_[0].all(false));
+      return {};
+    }
+
+    *first &= is_v4_;
+
+    for (size_t i = start + 1; i < 16; ++i)
+    {
+      auto bs = bitmaps_[i][bytes[i]];
+      if (! bs)
+      {
+        if (op == not_equal)
+          return std::move(bitmaps_[0].all(false));
+        return {};
+      }
+      *first &= *bs;
+    }
+
+    if (op == not_equal)
+      (*first).flip();
+
+    return first;
+  }
+
+  option<Bitstream> lookup(ze::prefix const& pfx, relational_operator op)
+  {
+    return {};
+  }
+
+  std::array<bitmap<uint8_t, Bitstream, binary_encoder>, 16> bitmaps_;
   Bitstream is_v4_;
 };
 
