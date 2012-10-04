@@ -10,7 +10,15 @@ template <typename Derived>
 class bitstream
 {
 public:
+  typedef bitvector::size_type size_type;
+  static size_type constexpr npos = bitvector::npos;
+
   bitstream() = default;
+
+  bitstream(size_type n, bool bit)
+  {
+    derived().append_impl(n, bit);
+  }
 
   friend bool operator==(Derived const& x, Derived const& y)
   {
@@ -52,12 +60,12 @@ public:
     return d.flip();
   }
 
-  bool operator[](size_t i) const
+  bool operator[](size_type i) const
   {
     return derived().at(i);
   }
 
-  size_t size() const
+  size_type size() const
   {
     return derived().size_impl();
   }
@@ -67,7 +75,7 @@ public:
     return derived().empty_impl();
   }
 
-  void append(size_t n, bool bit)
+  void append(size_type n, bool bit)
   {
     derived().append_impl(n, bit);
   }
@@ -87,22 +95,17 @@ public:
     return bits_;
   }
 
-  size_t find_first() const
+  size_type find_first() const
   {
     return derived().find_first_impl();
   }
 
-  size_t find_next(size_t i) const
+  size_type find_next(size_type i) const
   {
     return derived().find_next_impl(i);
   }
 
 protected:
-  bitstream(bitvector::size_type n, bool bit)
-    : bits_(n, bit)
-  {
-  }
-
   bitvector bits_;
 
 private:
@@ -149,14 +152,14 @@ public:
 
 private:
   bool equals(null_bitstream const& other) const;
-  void append_impl(size_t n, bool bit);
+  void append_impl(size_type n, bool bit);
   void push_back_impl(bool bit);
   void clear_impl() noexcept;
-  bool at(size_t i) const;
-  size_t size_impl() const;
-  size_t empty_impl() const;
-  size_t find_first_impl() const;
-  size_t find_next_impl(size_t i) const;
+  bool at(size_type i) const;
+  size_type size_impl() const;
+  size_type empty_impl() const;
+  size_type find_first_impl() const;
+  size_type find_next_impl(size_type i) const;
 };
 
 } // namespace vast

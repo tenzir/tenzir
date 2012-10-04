@@ -39,7 +39,7 @@ bool null_bitstream::equals(null_bitstream const& other) const
   return bits_ == other.bits_;
 }
 
-void null_bitstream::append_impl(size_t n, bool bit)
+void null_bitstream::append_impl(size_type n, bool bit)
 {
   bits_.resize(bits_.size() + n, bit);
 }
@@ -60,27 +60,27 @@ null_bitstream& null_bitstream::flip()
   return *this;
 }
 
-bool null_bitstream::at(size_t i) const
+bool null_bitstream::at(size_type i) const
 {
   return bits_[i];
 }
 
-size_t null_bitstream::size_impl() const
+null_bitstream::size_type null_bitstream::size_impl() const
 {
   return bits_.size();
 }
 
-size_t null_bitstream::empty_impl() const
+null_bitstream::size_type null_bitstream::empty_impl() const
 {
   return bits_.empty();
 }
 
-size_t null_bitstream::find_first_impl() const
+null_bitstream::size_type null_bitstream::find_first_impl() const
 {
   return bits_.find_first();
 }
 
-size_t null_bitstream::find_next_impl(size_t i) const
+null_bitstream::size_type null_bitstream::find_next_impl(size_type i) const
 {
   return bits_.find_next(i);
 }
