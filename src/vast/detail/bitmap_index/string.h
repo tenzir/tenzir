@@ -3,6 +3,7 @@
 
 #include <ze/value.h>
 #include <ze/to_string.h>
+#include "vast/bitmap.h"
 #include "vast/bitmap_index.h"
 #include "vast/exception.h"
 #include "vast/to_string.h"
@@ -21,11 +22,6 @@ class string_bitmap_index : public bitmap_index<Bitstream>
   typedef uint64_t dictionary_codomain;
 
 public:
-  virtual void append(size_t n, bool bit)
-  {
-    bitmap_.append(n, bit);
-  };
-
   virtual bool push_back(ze::value const& value)
   {
     auto str = ze::to_string(value.get<ze::string>());
@@ -39,18 +35,21 @@ public:
     return true;
   }
 
-  virtual Bitstream lookup(ze::value const& value, relational_operator op)
+  virtual option<Bitstream> lookup(ze::value const& value, relational_operator op)
   {
     if (! (op == equal || op == not_equal))
       throw error::index("unsupported relational operator");
 
     auto str = ze::to_string(value.get<ze::string>());
     auto i = dictionary_[str];
-    if (!i)
+    if (! i)
       return {};
 
-    auto bs = bitmap_[*i];
-    return op == equal ? bs : ~bs;
+    auto bs = bitmap_.lookup(*i);
+    if (! bs)
+      return {};
+
+    return op == equal ? bs : std::move((*bs).flip());
   };
 
   virtual std::string to_string() const
