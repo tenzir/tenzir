@@ -12,11 +12,6 @@ class bitstream
 public:
   bitstream() = default;
 
-  bitstream(bitvector::size_type n, bool bit)
-    : bits_(n, bit)
-  {
-  }
-
   friend bool operator==(Derived const& x, Derived const& y)
   {
     return x.equals(y);
@@ -82,12 +77,32 @@ public:
     derived().push_back_impl(bit);
   }
 
+  void clear() noexcept
+  {
+    derived().clear_impl();
+  }
+
   bitvector const& bits() const
   {
     return bits_;
   }
 
+  size_t find_first() const
+  {
+    return derived().find_first_impl();
+  }
+
+  size_t find_next(size_t i) const
+  {
+    return derived().find_next_impl(i);
+  }
+
 protected:
+  bitstream(bitvector::size_type n, bool bit)
+    : bits_(n, bit)
+  {
+  }
+
   bitvector bits_;
 
 private:
@@ -136,9 +151,12 @@ private:
   bool equals(null_bitstream const& other) const;
   void append_impl(size_t n, bool bit);
   void push_back_impl(bool bit);
+  void clear_impl() noexcept;
   bool at(size_t i) const;
   size_t size_impl() const;
   size_t empty_impl() const;
+  size_t find_first_impl() const;
+  size_t find_next_impl(size_t i) const;
 };
 
 } // namespace vast

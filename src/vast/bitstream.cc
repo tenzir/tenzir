@@ -49,6 +49,11 @@ void null_bitstream::push_back_impl(bool bit)
   bits_.push_back(bit);
 }
 
+void null_bitstream::clear_impl() noexcept
+{
+  bits_.clear();
+}
+
 null_bitstream& null_bitstream::flip()
 {
   bits_.flip();
@@ -68,6 +73,16 @@ size_t null_bitstream::size_impl() const
 size_t null_bitstream::empty_impl() const
 {
   return bits_.empty();
+}
+
+size_t null_bitstream::find_first_impl() const
+{
+  return bits_.find_first();
+}
+
+size_t null_bitstream::find_next_impl(size_t i) const
+{
+  return bits_.find_next(i);
 }
 
 } // namespace vast
