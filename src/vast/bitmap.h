@@ -3,6 +3,7 @@
 
 #include <unordered_map>
 #include "vast/bitstream.h"
+#include "vast/option.h"
 
 namespace vast {
 namespace detail {
@@ -174,12 +175,12 @@ struct equality_encoder
   }
 
   template <typename Storage>
-  typename Storage::bitstream_type
+  option<typename Storage::bitstream_type>
   decode(Storage& store, T const& x) const
   {
-    auto bs = store.find(x);
-    if (bs)
-      return *bs;
+    auto result = store.find(x);
+    if (result)
+      return *result;
     return {};
   }
 };
@@ -210,15 +211,22 @@ struct binary_encoder
   }
 
   template <typename Storage>
-  typename Storage::bitstream_type
+  option<typename Storage::bitstream_type>
   decode(Storage& store, T const& x) const
   {
-    typename Storage::bitstream_type bs;
+    typename Storage::bitstream_type result;
+    auto found = false;
     for (size_t i = 0; i < bits; ++i)
       if ((x >> i) & 1)
-        bs |= *store.find(i);
+      {
+        result |= *store.find(i);
+        if (! found)
+          found = true;
+      }
 
-    return bs;
+    if (found)
+      return std::move(result);
+    return {};
   }
 
   bool initialized = false;
@@ -242,12 +250,12 @@ struct range_encoder
   }
 
   template <typename Storage>
-  typename Storage::bitstream_type
+  option<typename Storage::bitstream_type>
   decode(Storage& store, T const& x) const
   {
-    auto bs = store.find(x);
-    if (bs)
-      return *bs;
+    auto result = store.find(x);
+    if (result)
+      return *result;
     return {};
   }
 
@@ -355,6 +363,8 @@ class bitmap
   >::type storage_type;
 
 public:
+  typedef Bitstream bitstream_type;
+
   /// Constructs an empty bitmap.
   bitmap(Encoder<T> encoder = Encoder<T>(), Binner<T> binner = Binner<T>())
     : encoder_(encoder)
@@ -372,23 +382,35 @@ public:
     encoder_.encode(bitstreams_, binner_(x));
   }
 
-  /// Appends a given number of bits to all bitstreams.
-  /// @param n The number of bits to append.
-  /// @param bit The value of the bit to append *n* times.
-  void append(size_t n, bool bit)
+  /// Same as lookup().
+  option<Bitstream> operator[](T const& x) const
   {
-    bitstreams_.each([=](T const&, Bitstream& v) { v.append(n, bit); });
+    return lookup(x);
   }
 
   /// Retrieves a bitstream of a given value.
   ///
   /// @param x The value to find the bitstream for.
   ///
-  /// @return The bitstream corresponding to *x* or `nullptr` if *x* does not
-  /// exist in the bitmap.
-  Bitstream operator[](T const& x) const
+  /// @return An @link option vast::option@endlink containing a bitstream *iff*
+  /// the value was found.
+  option<Bitstream> lookup(T const& x) const
   {
     return encoder_.decode(bitstreams_, binner_(x));
+  }
+
+  /// Retrieves the bitmap size.
+  /// @return The number of elements contained in the bitmap.
+  size_t size() const
+  {
+    return bitstreams_.rows;
+  }
+
+  /// Checks whether the bitmap is empty.
+  /// @return `true` *iff* the bitmap has 0 entries.
+  bool empty() const
+  {
+    return size() == 0;
   }
 
   /// Transposes the bitmap into a vector of bitmaps where the *i*th element
@@ -414,6 +436,16 @@ public:
           [&](T const&, Bitstream const& bs) { rows[i].push_back(bs[i]); });
 
     return rows;
+  }
+
+  /// Creates an all-0 or all-1 bitstream compatible in size to the bitmap.
+  /// @param bit The value of the bitstream.
+  /// @return A bitstream of length size() filled with value *bit*.
+  Bitstream all(bool bit) const
+  {
+    Bitstream bs;
+    bs.append(size(), bit);
+    return bs;
   }
 
 private:
