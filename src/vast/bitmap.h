@@ -13,7 +13,83 @@ struct storage_policy
   size_t rows = 0;
 };
 
-/// A linked-list-plus-hash-table-based bit stream storage policy.
+/// A vector-based random access bitstream storage policy.
+/// This storage policy maps values to indices. It provides *O(1)* access and
+/// requires *O(max(T))* space. Hence it is only useful for very dense domains.
+template <typename T, typename Bitstream>
+struct vector_storage : storage_policy
+{
+  typedef Bitstream bitstream_type;
+
+  Bitstream const* find(T const& x) const
+  {
+    if (x >= vector_.size() || ! vector_[x])
+      return nullptr;
+    return &*vector_[x];
+  }
+
+  std::pair<Bitstream const*, Bitstream const*>
+  bounds(T const& x) const
+  {
+    if (vector_.empty())
+      return {nullptr, nullptr};
+    else if (x >= vector_.size())
+      return {&*vector_.back(), nullptr};
+
+    Bitstream const* lower = nullptr;
+    Bitstream const* upper = nullptr;
+    bool found = false;
+    for (size_t i = 0; ! found && i < vector_.size(); ++i)
+      if (vector_[i] && i < x)
+        lower = &*vector_[i];
+      else if (lower && i >= x)
+        found = true;
+
+    found = false;
+    for (size_t i = vector_.size(); ! found && i > 0; --i)
+      if (vector_[i - 1] && i - 1 > x)
+        upper = &*vector_[i - 1];
+      else if (upper && i - 1 < x)
+        found = true;
+
+    return {lower, upper};
+  }
+
+  void each(std::function<void(T const&, Bitstream&)> f)
+  {
+    for (size_t i = 0; i < vector_.size(); ++i)
+      f(i, *vector_[i]);
+  }
+
+  void each(std::function<void(T const&, Bitstream const&)> f) const
+  {
+    for (size_t i = 0; i < vector_.size(); ++i)
+      f(i, *vector_[i]);
+  }
+
+  bool emplace(T const& x, Bitstream b)
+  {
+    if (x >= vector_.size())
+      vector_.resize(x + 1);
+    else if (x < vector_.size() && vector_[x])
+      return false;
+
+    vector_[x] = std::move(b);
+    ++cardinality_;
+    return true;
+  }
+
+  size_t cardinality() const
+  {
+    return cardinality_;
+  }
+
+private:
+  std::vector<option<Bitstream>> vector_;
+  size_t cardinality_ = 0;
+};
+
+/// A linked-list-plus-hash-table-based bitstream storage policy.
 /// This storage policy offers *O(1)* lookup and *O(log(n))* bounds checks, at
 /// the cost of *O(n * b + n)* space.
 template <typename T, typename Bitstream>
@@ -94,7 +170,7 @@ private:
   std::unordered_map<T, iterator_type> map_;
 };
 
-/// A purely hash-table-based bit stream storage policy.
+/// A purely hash-table-based bitstream storage policy.
 /// This storage policy offers *O(1)* lookup and *O(n)* bounds check,
 /// requiring *O(n * b)* space.
 template <typename T, typename Bitstream>
@@ -185,11 +261,14 @@ struct equality_encoder
   }
 };
 
-/// A binary encoding policy for bitmaps. This scheme is also known as
-/// *bit-sliced* encoding.
+/// A binary encoding policy for bitmaps.
+/// This scheme is also known as *bit-sliced* encoding.
 template <typename T>
 struct binary_encoder
 {
+  static_assert(std::is_integral<T>::value,
+                "binary encoding requires an integral type");
+
   static size_t constexpr bits = std::numeric_limits<T>::digits;
 
   template <typename Storage>
@@ -204,7 +283,7 @@ struct binary_encoder
     }
 
     typedef typename Storage::bitstream_type bs_type;
-    store.each([&](T const& k, bs_type& bs) { bs.push_back((x >> k) & 1); });
+    store.each([&](T const& i, bs_type& bs) { bs.push_back((x >> i) & 1); });
 
     ++store.rows;
     return true;
@@ -214,19 +293,13 @@ struct binary_encoder
   option<typename Storage::bitstream_type>
   decode(Storage& store, T const& x) const
   {
-    typename Storage::bitstream_type result;
-    auto found = false;
-    for (size_t i = 0; i < bits; ++i)
-      if ((x >> i) & 1)
-      {
-        result |= *store.find(i);
-        if (! found)
-          found = true;
-      }
+    if (! initialized)
+      return {};
 
-    if (found)
+    typename Storage::bitstream_type result(store.rows, true);
+    for (size_t i = 0; i < bits; ++i)
+        result &= ((x >> i) & 1) ? *store.find(i) : ~*store.find(i);
       return std::move(result);
-    return {};
   }
 
   bool initialized = false;
@@ -349,17 +422,21 @@ struct precision_binner
 
 /// A bitmap which maps values to @link bitstream bitstreams@endlink.
 template <
-    typename T
-  , typename Bitstream = null_bitstream
-  , template <typename> class Encoder = equality_encoder
-  , template <typename> class Binner = null_binner
+  typename T,
+  typename Bitstream = null_bitstream,
+  template <typename> class Encoder = equality_encoder,
+  template <typename> class Binner = null_binner
 >
 class bitmap
 {
   typedef typename std::conditional<
-      std::is_same<Encoder<T>, range_encoder<T>>::value
-    , detail::list_storage<T, Bitstream>
-    , detail::unordered_storage<T, Bitstream>
+    std::is_same<Encoder<T>, range_encoder<T>>::value,
+    detail::list_storage<T, Bitstream>,
+    typename std::conditional<
+      std::is_same<Encoder<T>, binary_encoder<T>>::value,
+        detail::vector_storage<T, Bitstream>,
+        detail::unordered_storage<T, Bitstream>
+    >::type
   >::type storage_type;
 
 public:

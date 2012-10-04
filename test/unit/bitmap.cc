@@ -10,6 +10,39 @@ std::string stringify(Bitstream const& bs)
   return to_string(bs.bits());
 }
 
+BOOST_AUTO_TEST_CASE(vector_storage)
+{
+  typedef null_bitstream bitstream_type;
+  detail::vector_storage<uint8_t, bitstream_type> s;
+  BOOST_CHECK(s.emplace(0, {}));
+  BOOST_CHECK(s.emplace(1, bitstream_type(10, true)));
+  BOOST_CHECK(s.emplace(2, {}));
+  BOOST_CHECK(s.emplace(3, bitstream_type(5, false)));
+  BOOST_CHECK(s.emplace(4, {}));
+  BOOST_CHECK_EQUAL(s.cardinality(), 5);
+  auto b = s.bounds(2);
+  BOOST_CHECK(b.first && b.second);
+  BOOST_CHECK_EQUAL(b.first->size(), 10);
+  BOOST_CHECK_EQUAL(b.second->size(), 5);
+  auto c = s.bounds(0);
+  BOOST_CHECK(! c.first && c.second);
+  auto d = s.bounds(4);
+  BOOST_CHECK(d.first && ! d.second);
+
+  detail::vector_storage<uint8_t, bitstream_type> t;
+  BOOST_CHECK(t.emplace(2, bitstream_type(10, true)));
+  BOOST_CHECK(t.emplace(4, bitstream_type(5, false)));
+  BOOST_CHECK_EQUAL(t.cardinality(), 2);
+  auto e = t.bounds(3);
+  BOOST_CHECK(e.first && e.second);
+  BOOST_CHECK_EQUAL(e.first->size(), 10);
+  BOOST_CHECK_EQUAL(e.second->size(), 5);
+  auto f = t.bounds(0);
+  BOOST_CHECK(! f.first && f.second);
+  auto g = t.bounds(8);
+  BOOST_CHECK(g.first && ! g.second);
+}
+
 BOOST_AUTO_TEST_CASE(basic_bitmap)
 {
   bitmap<int> bm;
@@ -56,12 +89,15 @@ BOOST_AUTO_TEST_CASE(binary_encoded_bitmap)
   bm.push_back(2);
   bm.push_back(2);
 
-  auto bs = bm.lookup(0);
-  BOOST_CHECK(! bs);
-  BOOST_CHECK_EQUAL(stringify(*bm[1]), "0010110");
-  BOOST_CHECK_EQUAL(stringify(*bm[2]), "1111000");
-  BOOST_CHECK_EQUAL(stringify(*bm[3]), "1111110"); // 0x01 | 0x10.
+  BOOST_CHECK_EQUAL(stringify(*bm[0]), "0000001");
+  BOOST_CHECK_EQUAL(stringify(*bm[1]), "0000110");
+  BOOST_CHECK_EQUAL(stringify(*bm[2]), "1101000");
+  BOOST_CHECK_EQUAL(stringify(*bm[3]), "0010000");
+
+  // Binary encoding always returns an answer after the first element has been
+  // inserted into the bitmap.
   BOOST_CHECK_EQUAL(stringify(*bm[4]), "0000000");
+  BOOST_CHECK_EQUAL(stringify(*bm[5]), "0000000");
 }
 
 BOOST_AUTO_TEST_CASE(bitmap_precision_binning_integral)
