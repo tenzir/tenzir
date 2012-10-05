@@ -56,6 +56,13 @@ BOOST_AUTO_TEST_CASE(basic_bitmap)
   BOOST_CHECK_EQUAL(stringify(*bm[30]), "10000");
   BOOST_CHECK_EQUAL(stringify(*bm[42]), "00101");
   BOOST_CHECK_EQUAL(stringify(*bm[84]), "00010");
+  BOOST_CHECK(! bm[39]);
+
+  BOOST_CHECK_EQUAL(stringify(*bm.lookup(not_equal, 21)), "10111");
+  BOOST_CHECK_EQUAL(stringify(*bm.lookup(not_equal, 30)), "01111");
+  BOOST_CHECK_EQUAL(stringify(*bm.lookup(not_equal, 42)), "11010");
+  BOOST_CHECK_EQUAL(stringify(*bm.lookup(not_equal, 84)), "11101");
+  BOOST_CHECK_EQUAL(stringify(*bm.lookup(not_equal, 13)), "11111");
 }
 
 BOOST_AUTO_TEST_CASE(range_encoded_bitmap)
@@ -71,6 +78,15 @@ BOOST_AUTO_TEST_CASE(range_encoded_bitmap)
   BOOST_CHECK_EQUAL(stringify(*bm[30]), "11000");
   BOOST_CHECK_EQUAL(stringify(*bm[42]), "11101");
   BOOST_CHECK_EQUAL(stringify(*bm[84]), "11111");
+  BOOST_CHECK(! bm[13]);
+
+  BOOST_CHECK_EQUAL(stringify(*bm.lookup(equal, 30)), "10000");
+  BOOST_CHECK_EQUAL(stringify(*bm.lookup(not_equal, 30)), "01111");
+  BOOST_CHECK_EQUAL(stringify(*bm.lookup(greater, 42)), "00010");
+  BOOST_CHECK_EQUAL(stringify(*bm.lookup(not_equal, 42)), "11010");
+  BOOST_CHECK_EQUAL(stringify(*bm.lookup(not_equal, 13)), "11111");
+  BOOST_CHECK_EQUAL(stringify(*bm.lookup(greater, 13)), "11111");
+  BOOST_CHECK_EQUAL(stringify(*bm.lookup(greater, 84)), "00000");
 }
 
 BOOST_AUTO_TEST_CASE(binary_encoded_bitmap)
@@ -88,8 +104,15 @@ BOOST_AUTO_TEST_CASE(binary_encoded_bitmap)
   BOOST_CHECK_EQUAL(stringify(*bm[1]), "0000110");
   BOOST_CHECK_EQUAL(stringify(*bm[2]), "1101000");
   BOOST_CHECK_EQUAL(stringify(*bm[3]), "0010000");
+  BOOST_CHECK(! bm[-42]);
   BOOST_CHECK(! bm[4]);
   BOOST_CHECK(! bm[5]);
+
+  BOOST_CHECK_EQUAL(stringify(*bm.lookup(not_equal, -42)), "1111111");
+  BOOST_CHECK_EQUAL(stringify(*bm.lookup(not_equal, 0)), "1111110");
+  BOOST_CHECK_EQUAL(stringify(*bm.lookup(not_equal, 1)), "1111001");
+  BOOST_CHECK_EQUAL(stringify(*bm.lookup(not_equal, 2)), "0010111");
+  BOOST_CHECK_EQUAL(stringify(*bm.lookup(not_equal, 3)), "1101111");
 }
 
 BOOST_AUTO_TEST_CASE(bitmap_precision_binning_integral)

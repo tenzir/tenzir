@@ -3,6 +3,8 @@
 
 #include <unordered_map>
 #include "vast/bitstream.h"
+#include "vast/exception.h"
+#include "vast/operator.h"
 #include "vast/option.h"
 
 namespace vast {
@@ -252,12 +254,24 @@ struct equality_encoder
 
   template <typename Storage>
   option<typename Storage::bitstream_type>
-  decode(Storage& store, T const& x) const
+  decode(Storage& store, T const& x, relational_operator op = equal) const
   {
     auto result = store.find(x);
-    if (result)
-      return *result;
-    return {};
+    switch (op)
+    {
+      default:
+        throw error::operation("unsupported relational operator", op);
+      case equal:
+        if (result)
+          return *result;
+        else
+          return {};
+      case not_equal:
+        if (result)
+          return ~*result;
+        else
+          return {{store.rows, true}};
+    }
   }
 };
 
@@ -291,18 +305,31 @@ struct binary_encoder
 
   template <typename Storage>
   option<typename Storage::bitstream_type>
-  decode(Storage& store, T const& x) const
+  decode(Storage& store, T const& x, relational_operator op = equal) const
   {
     if (! initialized)
       return {};
 
-    typename Storage::bitstream_type result(store.rows, true);
-    for (size_t i = 0; i < bits; ++i)
-      result &= ((x >> i) & 1) ? *store.find(i) : ~*store.find(i);
-
-    if (result.find_first() == Storage::bitstream_type::npos)
-      return {};
-    return std::move(result);
+    switch (op)
+    {
+      default:
+        throw error::operation("unsupported relational operator", op);
+      case equal:
+        {
+          typename Storage::bitstream_type result(store.rows, true);
+          for (size_t i = 0; i < bits; ++i)
+            result &= ((x >> i) & 1) ? *store.find(i) : ~*store.find(i);
+          if (result.find_first() == Storage::bitstream_type::npos)
+            return {};
+          else
+            return std::move(result);
+        }
+      case not_equal:
+        if (auto result = decode(store, x, equal))
+          return std::move((*result).flip());
+        else
+          return {{store.rows, true}};
+    }
   }
 
   bool initialized = false;
@@ -312,6 +339,9 @@ struct binary_encoder
 template <typename T>
 struct range_encoder
 {
+  static_assert(! std::is_same<T, bool>::value,
+                "range encoding for boolean value does not make sense");
+
   template <typename Storage>
   bool encode(Storage& store, T const& x)
   {
@@ -327,12 +357,41 @@ struct range_encoder
 
   template <typename Storage>
   option<typename Storage::bitstream_type>
-  decode(Storage& store, T const& x) const
+  decode(Storage& store, T const& x, relational_operator op = less_equal) const
   {
-    auto result = store.find(x);
-    if (result)
-      return *result;
-    return {};
+    switch (op)
+    {
+      default:
+        throw error::operation("unsupported relational operator", op);
+      case less_equal:
+        if (auto result = store.find(x))
+          return *result;
+        else
+          return {};
+      case greater:
+        if (auto result = decode(store, x, less_equal))
+          return std::move((*result).flip());
+        else
+          return {{store.rows, true}};
+      case equal:
+        {
+          // For a range-encoded bitstream v == x means z <= x & ~pred(z). If
+          // pred(z) does not exist, the query reduces to z <= x.
+          auto le = decode(store, x, less_equal);
+          if (! le)
+            return {};
+          auto range = store.bounds(x);
+          if (! range.first)
+            return le;
+          *le &= ~*range.first;
+          return le;
+        }
+      case not_equal:
+        if (auto result = decode(store, x, equal))
+          return std::move((*result).flip());
+        else
+          return {{store.rows, true}};
+    }
   }
 
   template <typename Storage>
@@ -472,10 +531,23 @@ public:
   /// @param x The value to find the bitstream for.
   ///
   /// @return An @link option vast::option@endlink containing a bitstream *iff*
-  /// the value was found.
+  /// the value was found according to the bitmap's encoding.
   option<Bitstream> lookup(T const& x) const
   {
     return encoder_.decode(bitstreams_, binner_(x));
+  }
+
+  /// Retrieves a bitstream of a given value with respect to a given operator.
+  ///
+  /// @param op The relational operator to use for looking up *x*.
+  ///
+  /// @param x The value to find the bitstream for.
+  ///
+  /// @return An @link option vast::option@endlink containing a bitstream
+  /// for all values *v* such that *op(v,x)* is `true`.
+  option<Bitstream> lookup(relational_operator op, T const& x) const
+  {
+    return encoder_.decode(bitstreams_, binner_(x), op);
   }
 
   /// Retrieves the bitmap size.
