@@ -56,11 +56,6 @@ BOOST_AUTO_TEST_CASE(basic_bitmap)
   BOOST_CHECK_EQUAL(stringify(*bm[30]), "10000");
   BOOST_CHECK_EQUAL(stringify(*bm[42]), "00101");
   BOOST_CHECK_EQUAL(stringify(*bm[84]), "00010");
-
-  auto zeros = bm.all(false);
-  BOOST_CHECK_EQUAL(zeros.size(), bm.size());
-  BOOST_CHECK_EQUAL(zeros[0], false);
-  BOOST_CHECK_EQUAL(zeros[zeros.size() - 1], false);
 }
 
 BOOST_AUTO_TEST_CASE(range_encoded_bitmap)
