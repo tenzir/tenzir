@@ -24,13 +24,13 @@ BOOST_AUTO_TEST_CASE(address_bitmap_index)
   bi->push_back(ze::address("192.168.0.2"));
 
   ze::address addr("192.168.0.1");
-  auto bs = bi->lookup(addr, equal);
+  auto bs = bi->lookup(equal, addr);
   BOOST_REQUIRE(bs);
   BOOST_CHECK_EQUAL(stringify(*bs), "011001");
-  auto nbs = bi->lookup(addr, not_equal);
+  auto nbs = bi->lookup(not_equal, addr);
   BOOST_CHECK_EQUAL(stringify(*nbs), "100110");
-  BOOST_CHECK(! bi->lookup(ze::address("192.168.0.5"), equal));
-  BOOST_CHECK_THROW(bi->lookup(ze::address("::"), match), error::operation);
+  BOOST_CHECK(! bi->lookup(equal, ze::address("192.168.0.5")));
+  BOOST_CHECK_THROW(bi->lookup(match, ze::address("::")), error::operation);
 
   bi->push_back(ze::address("192.168.0.128"));
   bi->push_back(ze::address("192.168.0.130"));
@@ -38,14 +38,14 @@ BOOST_AUTO_TEST_CASE(address_bitmap_index)
   bi->push_back(ze::address("192.168.0.127"));
 
   ze::prefix pfx{"192.168.0.128", 25};
-  auto pbs = bi->lookup(pfx, in);
+  auto pbs = bi->lookup(in, pfx);
   BOOST_REQUIRE(pbs);
   BOOST_CHECK_EQUAL(stringify(*pbs), "0111000000");
-  auto npbs = bi->lookup(pfx, not_in);
+  auto npbs = bi->lookup(not_in, pfx);
   BOOST_REQUIRE(npbs);
   BOOST_CHECK_EQUAL(stringify(*npbs), "1000111111");
   pfx = {"192.168.0.0", 24};
-  auto pbs2 = bi->lookup(pfx, in);
+  auto pbs2 = bi->lookup(in, pfx);
   BOOST_REQUIRE(pbs2);
   BOOST_CHECK_EQUAL(stringify(*pbs2), "1111111111");
 }
@@ -62,17 +62,17 @@ BOOST_AUTO_TEST_CASE(string_bitmap_index)
   bi->push_back("foo");
   bi->push_back("bar");
 
-  auto foo = bi->lookup("foo", equal);
-  auto bar = bi->lookup("bar", equal);
+  auto foo = bi->lookup(equal, "foo");
+  auto bar = bi->lookup(equal, "bar");
   BOOST_REQUIRE(foo);
   BOOST_REQUIRE(bar);
   BOOST_CHECK_EQUAL(to_string((*foo).bits(), false), "100110");
   BOOST_CHECK_EQUAL(to_string((*bar).bits(), false), "010001");
 
-  auto not_foo = bi->lookup("foo", not_equal);
+  auto not_foo = bi->lookup(not_equal, "foo");
   BOOST_REQUIRE(not_foo);
   BOOST_CHECK_EQUAL(to_string((*not_foo).bits(), false), "011001");
 
-  BOOST_CHECK(! bi->lookup("qux", equal));
-  BOOST_CHECK_THROW(bi->lookup("foo", match), error::operation);
+  BOOST_CHECK(! bi->lookup(equal, "qux"));
+  BOOST_CHECK_THROW(bi->lookup(match, "foo"), error::operation);
 }

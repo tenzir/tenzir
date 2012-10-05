@@ -28,8 +28,8 @@ public:
     return true;
   }
 
-  virtual option<Bitstream> lookup(ze::value const& value,
-                                   relational_operator op) const
+  virtual option<Bitstream>
+  lookup(relational_operator op, ze::value const& value) const
   {
     if (! (op == equal || op == not_equal || op == in || op == not_in))
       throw error::operation("unsupported relational operator", op);
