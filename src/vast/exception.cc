@@ -102,21 +102,21 @@ index::index(char const* msg)
 operation::operation(char const* msg, arithmetic_operator op)
 {
   std::ostringstream oss;
-  oss << msg << "'" << to_string(op) << "'";
+  oss << msg << ": " << to_string(op);
   msg_ = oss.str();
 }
 
 operation::operation(char const* msg, boolean_operator op)
 {
   std::ostringstream oss;
-  oss << msg << "'" << to_string(op) << "'";
+  oss << msg << ": " << to_string(op);
   msg_ = oss.str();
 }
 
 operation::operation(char const* msg, relational_operator op)
 {
   std::ostringstream oss;
-  oss << msg << "'" << to_string(op) << "'";
+  oss << msg << ": " << to_string(op);
   msg_ = oss.str();
 }
 

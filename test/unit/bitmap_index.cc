@@ -30,7 +30,7 @@ BOOST_AUTO_TEST_CASE(address_bitmap_index)
   auto nbs = bi->lookup(addr, not_equal);
   BOOST_CHECK_EQUAL(stringify(*nbs), "100110");
   BOOST_CHECK(! bi->lookup(ze::address("192.168.0.5"), equal));
-  BOOST_CHECK_THROW(bi->lookup(ze::address("::"), match), error::index);
+  BOOST_CHECK_THROW(bi->lookup(ze::address("::"), match), error::operation);
 
   bi->push_back(ze::address("192.168.0.128"));
   bi->push_back(ze::address("192.168.0.130"));
@@ -74,5 +74,5 @@ BOOST_AUTO_TEST_CASE(string_bitmap_index)
   BOOST_CHECK_EQUAL(to_string((*not_foo).bits(), false), "011001");
 
   BOOST_CHECK(! bi->lookup("qux", equal));
-  BOOST_CHECK_THROW(bi->lookup("foo", match), error::index);
+  BOOST_CHECK_THROW(bi->lookup("foo", match), error::operation);
 }
