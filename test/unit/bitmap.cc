@@ -78,6 +78,8 @@ BOOST_AUTO_TEST_CASE(range_encoded_bitmap)
   BOOST_CHECK_EQUAL(stringify(*bm[30]), "11000");
   BOOST_CHECK_EQUAL(stringify(*bm[42]), "11101");
   BOOST_CHECK_EQUAL(stringify(*bm[84]), "11111");
+  BOOST_CHECK_EQUAL(stringify(*bm[25]), "01000");
+  BOOST_CHECK_EQUAL(stringify(*bm[80]), "11101");
   BOOST_CHECK(! bm[13]);
 
   BOOST_CHECK_EQUAL(stringify(*bm.lookup(equal, 30)), "10000");
@@ -87,6 +89,11 @@ BOOST_AUTO_TEST_CASE(range_encoded_bitmap)
   BOOST_CHECK_EQUAL(stringify(*bm.lookup(not_equal, 13)), "11111");
   BOOST_CHECK_EQUAL(stringify(*bm.lookup(greater, 13)), "11111");
   BOOST_CHECK_EQUAL(stringify(*bm.lookup(greater, 84)), "00000");
+  BOOST_CHECK_EQUAL(stringify(*bm.lookup(less, 42)), "11000");
+  BOOST_CHECK_EQUAL(stringify(*bm.lookup(less, 84)), "11101");
+  BOOST_CHECK_EQUAL(stringify(*bm.lookup(greater_equal, 84)), "00010");
+  BOOST_CHECK_EQUAL(stringify(*bm.lookup(greater_equal, -42)), "11111");
+  BOOST_CHECK_EQUAL(stringify(*bm.lookup(greater_equal, 22)), "10111");
 }
 
 BOOST_AUTO_TEST_CASE(binary_encoded_bitmap)

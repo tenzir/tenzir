@@ -363,13 +363,27 @@ struct range_encoder
     {
       default:
         throw error::operation("unsupported relational operator", op);
+      case less:
+        if (! std::is_integral<T>::value)
+          throw error::operation("operator needs integral type", op);
+        else if (x == std::numeric_limits<T>::lowest())
+          return decode(store, x, less_equal);
+        else
+          return decode(store, x - 1, less_equal);
       case less_equal:
         if (auto result = store.find(x))
           return *result;
+        else if (auto lower = store.bounds(x).first)
+          return *lower;
         else
           return {};
       case greater:
         if (auto result = decode(store, x, less_equal))
+          return std::move((*result).flip());
+        else
+          return {{store.rows, true}};
+      case greater_equal:
+        if (auto result = decode(store, x, less))
           return std::move((*result).flip());
         else
           return {{store.rows, true}};
