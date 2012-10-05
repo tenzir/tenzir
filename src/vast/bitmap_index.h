@@ -2,6 +2,7 @@
 #define VAST_BITMAP_INDEX_H
 
 #include "vast/operator.h"
+#include "vast/option.h"
 
 namespace vast {
 
