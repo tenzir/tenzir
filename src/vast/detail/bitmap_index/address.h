@@ -22,29 +22,30 @@ public:
     auto& addr = value.get<ze::address>();
     auto& bytes = addr.data();
     size_t const start = addr.is_v4() ? 12 : 0;
-    is_v4_.push_back(start == 12);
+    v4_.push_back(start == 12);
     for (size_t i = 0; i < 16; ++i)
       bitmaps_[i].push_back(i < start ? 0x00 : bytes[i]);
     return true;
   }
 
   virtual option<Bitstream> lookup(ze::value const& value,
-                                   relational_operator op)
+                                   relational_operator op) const
   {
     if (! (op == equal || op == not_equal || op == in || op == not_in))
       throw error::index("unsupported relational operator");
 
-    if (bitmaps_[0].empty())
+    if (v4_.empty())
       return {};
 
-    if (value.which() == ze::address_type)
-      return lookup(value.get<ze::address>(), op);
-    else if (value.which() == ze::prefix_type)
-      return lookup(value.get<ze::prefix>(), op);
-    else
-      throw error::index("invalid value type");
-
-    return {};
+    switch (value.which())
+    {
+      default:
+        throw error::index("invalid value type");
+      case ze::address_type:
+        return lookup(value.get<ze::address>(), op);
+      case ze::prefix_type:
+        return lookup(value.get<ze::prefix>(), op);
+    }
   };
 
   virtual std::string to_string() const
@@ -53,45 +54,62 @@ public:
   }
 
 private:
-  option<Bitstream> lookup(ze::address const& addr, relational_operator op)
+  option<Bitstream> lookup(ze::address const& addr, relational_operator op) const
   {
     auto& bytes = addr.data();
-    size_t const start = addr.is_v4() ? 12 : 0;
-    auto first = bitmaps_[start][bytes[start]];
-    if (! first)
-    {
-      if (op == not_equal)
-        return std::move(bitmaps_[0].all(false));
-      return {};
-    }
-
-    *first &= is_v4_;
-
-    for (size_t i = start + 1; i < 16; ++i)
-    {
-      auto bs = bitmaps_[i][bytes[i]];
-      if (! bs)
-      {
-        if (op == not_equal)
-          return std::move(bitmaps_[0].all(false));
+    auto is_v4 = addr.is_v4();
+    option<Bitstream> result = is_v4 ? v4_ : Bitstream(v4_.size(), true);
+    for (size_t i = is_v4 ? 12 : 0; i < 16; ++ i)
+      if (auto bs = bitmaps_[i][bytes[i]])
+        *result &= *bs;
+      else if (op == not_equal)
+        return std::move(Bitstream(v4_.size(), true));
+      else
         return {};
-      }
-      *first &= *bs;
-    }
 
     if (op == not_equal)
-      (*first).flip();
-
-    return first;
+      (*result).flip();
+    return result;
   }
 
-  option<Bitstream> lookup(ze::prefix const& pfx, relational_operator op)
+  option<Bitstream> lookup(ze::prefix const& pfx, relational_operator op) const
   {
+    if (! (op == in || op == not_in))
+      throw error::index("unsupported relational operator");
+
+    auto topk = pfx.length();
+    if (topk == 0)
+      throw error::index("invalid IP prefix length");
+
+    auto net = pfx.network();
+    auto is_v4 = net.is_v4();
+    if ((is_v4 ? topk + 96 : topk) == 128)
+      return lookup(pfx.network(), op == in ? equal : not_equal);
+
+    option<Bitstream> result = is_v4 ? v4_ : Bitstream(v4_.size(), true);
+    auto bit = topk;
+    auto& bytes = net.data();
+    for (size_t i = is_v4 ? 12 : 0; i < 16; ++ i)
+      for (size_t j = 8; j --> 0; )
+      {
+        if (auto bs = bitmaps_[i].storage().find(j))
+          *result &= ((bytes[i] >> j) & 1) ? *bs : ~*bs;
+        else
+          throw error::index("corrupt index: bit must exist");
+
+        if (! --bit)
+        {
+          if (op == not_in)
+            (*result).flip();
+          return result;
+        }
+      }
+
     return {};
   }
 
   std::array<bitmap<uint8_t, Bitstream, binary_encoder>, 16> bitmaps_;
-  Bitstream is_v4_;
+  Bitstream v4_;
 };
 
 } // namespace detail

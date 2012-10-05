@@ -21,7 +21,7 @@ public:
   /// @param value The value to lookup.
   /// @param op The relation operator.
   virtual option<Bitstream> lookup(ze::value const& value,
-                                   relational_operator op) = 0;
+                                   relational_operator op) const = 0;
 
   /// Creates a string representation of the bitmap index.
   /// @return An `std::string` of the bitmap index.

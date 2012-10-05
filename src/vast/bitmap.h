@@ -447,8 +447,7 @@ public:
 
   /// Constructs an empty bitmap.
   bitmap(Encoder<T> encoder = Encoder<T>(), Binner<T> binner = Binner<T>())
-    : encoder_(encoder)
-    , binner_(binner)
+    : encoder_(encoder), binner_(binner)
   {
   }
 
@@ -493,6 +492,13 @@ public:
     return size() == 0;
   }
 
+  /// Retrieves the raw storage of the bitmap for inspection.
+  /// @return The underlying bitmap storage.
+  storage_type const& storage() const
+  {
+    return bitstreams_;
+  }
+
   /// Transposes the bitmap into a vector of bitmaps where the *i*th element
   /// represents the *i*th row of the encoded bitmap.
   ///
@@ -516,16 +522,6 @@ public:
           [&](T const&, Bitstream const& bs) { rows[i].push_back(bs[i]); });
 
     return rows;
-  }
-
-  /// Creates an all-0 or all-1 bitstream compatible in size to the bitmap.
-  /// @param bit The value of the bitstream.
-  /// @return A bitstream of length size() filled with value *bit*.
-  Bitstream all(bool bit) const
-  {
-    Bitstream bs;
-    bs.append(size(), bit);
-    return bs;
   }
 
 private:
