@@ -1,6 +1,8 @@
 #include "vast/exception.h"
 
 #include <sstream>
+#include "vast/operator.h"
+#include "vast/to_string.h"
 
 namespace vast {
 
@@ -95,6 +97,27 @@ schema::schema(char const* msg)
 index::index(char const* msg)
   : exception(msg)
 {
+}
+
+operation::operation(char const* msg, arithmetic_operator op)
+{
+  std::ostringstream oss;
+  oss << msg << "'" << to_string(op) << "'";
+  msg_ = oss.str();
+}
+
+operation::operation(char const* msg, boolean_operator op)
+{
+  std::ostringstream oss;
+  oss << msg << "'" << to_string(op) << "'";
+  msg_ = oss.str();
+}
+
+operation::operation(char const* msg, relational_operator op)
+{
+  std::ostringstream oss;
+  oss << msg << "'" << to_string(op) << "'";
+  msg_ = oss.str();
 }
 
 } // namespace error

@@ -9,6 +9,11 @@
 
 namespace vast {
 
+// Forward declarations.
+enum boolean_operator : uint8_t;
+enum arithmetic_operator : uint8_t;
+enum relational_operator : uint8_t;
+
 /// The base class for all exception thrown by VAST. It is never thrown
 /// directly but all exceptions thrown in VAST have to derive from it.
 class exception : public std::exception
@@ -84,10 +89,20 @@ struct schema : exception
   schema(char const* msg);
 };
 
+/// Thrown when an error with an index occurs.
 struct index : exception
 {
   index() = default;
   index(char const* msg);
+};
+
+/// Thrown when an error with an operator occurs.
+struct operation : exception
+{
+  operation() = default;
+  operation(char const* msg, arithmetic_operator op);
+  operation(char const* msg, boolean_operator op);
+  operation(char const* msg, relational_operator op);
 };
 
 } // namespace error

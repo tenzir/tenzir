@@ -32,7 +32,7 @@ public:
                                    relational_operator op) const
   {
     if (! (op == equal || op == not_equal || op == in || op == not_in))
-      throw error::index("unsupported relational operator");
+      throw error::operation("unsupported relational operator", op);
 
     if (v4_.empty())
       return {};
@@ -75,7 +75,7 @@ private:
   option<Bitstream> lookup(ze::prefix const& pfx, relational_operator op) const
   {
     if (! (op == in || op == not_in))
-      throw error::index("unsupported relational operator");
+      throw error::operation("unsupported relational operator", op);
 
     auto topk = pfx.length();
     if (topk == 0)

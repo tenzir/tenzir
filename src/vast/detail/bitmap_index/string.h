@@ -38,7 +38,7 @@ public:
   virtual option<Bitstream> lookup(ze::value const& value, relational_operator op) const
   {
     if (! (op == equal || op == not_equal))
-      throw error::index("unsupported relational operator");
+      throw error::operation("unsupported relational operator", op);
 
     auto str = ze::to_string(value.get<ze::string>());
     auto i = dictionary_[str];
