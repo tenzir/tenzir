@@ -51,8 +51,6 @@ inline relational_operator negate(relational_operator op)
 {
   switch (op)
   {
-    default:
-      assert(! "missing operator");
     case match:
       return not_match;
     case not_match:

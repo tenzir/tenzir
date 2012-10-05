@@ -2,6 +2,7 @@
 #define VAST_TO_STRING_H
 
 #include <string>
+#include "vast/operator.h"
 #include "vast/schema.h"
 
 namespace vast {
@@ -95,6 +96,9 @@ std::string to_string(
   return str;
 }
 
+std::string to_string(boolean_operator op);
+std::string to_string(arithmetic_operator op);
+std::string to_string(relational_operator op);
 std::string to_string(schema::type const& t);
 std::string to_string(schema::type_info const& ti);
 std::string to_string(schema::event const& e);

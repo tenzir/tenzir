@@ -33,6 +33,73 @@ std::string to_string(bitvector const& b,
   return str;
 }
 
+std::string to_string(boolean_operator op)
+{
+  switch (op)
+  {
+    case logical_not:
+      return "!";
+    case logical_and:
+      return "&&";
+    case logical_or:
+      return "||";
+  }
+}
+
+std::string to_string(arithmetic_operator op)
+{
+  switch (op)
+  {
+    case positive:
+    case plus:
+      return "+";
+    case minus:
+    case negative:
+      return "-";
+    case bitwise_not:
+      return "~";
+    case bitwise_or:
+      return "|";
+    case bitwise_xor:
+      return "^";
+    case bitwise_and:
+      return "|";
+    case times:
+      return "*";
+    case divides:
+      return "/";
+    case mod:
+      return "%";
+  }
+}
+
+std::string to_string(relational_operator op)
+{
+  switch (op)
+  {
+    case match:
+      return "~";
+    case not_match:
+      return "!~";
+    case in:
+      return "in";
+    case not_in:
+      return "!in";
+    case equal:
+      return "==";
+    case not_equal:
+      return "!=";
+    case less:
+      return "<";
+    case less_equal:
+      return "<=";
+    case greater:
+      return ">";
+    case greater_equal:
+      return ">=";
+  }
+}
+
 std::string to_string(schema::type const& type)
 {
   std::string str;
