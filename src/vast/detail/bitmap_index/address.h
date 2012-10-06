@@ -50,16 +50,11 @@ public:
 
   virtual std::string to_string() const
   {
-    std::string str;
     std::vector<Bitstream> v;
     v.reserve(128);
     for (size_t i = 0; i < 128; ++i)
-    {
       v.push_back(*bitmaps_[i / 8].storage().find(7 - i % 8));
-      str += std::to_string(i) + '\t';
-    }
-    str.pop_back();
-    str += '\n';
+    std::string str;
     for (auto& row : transpose(v))
       str += vast::to_string(row) + '\n';
     str.pop_back();
