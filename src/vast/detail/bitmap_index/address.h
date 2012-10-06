@@ -50,7 +50,20 @@ public:
 
   virtual std::string to_string() const
   {
-    throw error::index("to_string() not yet implemented");
+    std::string str;
+    std::vector<Bitstream> v;
+    v.reserve(128);
+    for (size_t i = 0; i < 128; ++i)
+    {
+      v.push_back(*bitmaps_[i / 8].storage().find(7 - i % 8));
+      str += std::to_string(i) + '\t';
+    }
+    str.pop_back();
+    str += '\n';
+    for (auto& row : transpose(v))
+      str += vast::to_string(row) + '\n';
+    str.pop_back();
+    return str;
   }
 
 private:
