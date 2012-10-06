@@ -516,7 +516,10 @@ class bitmap
   >::type storage_type;
 
 public:
+  typedef T value_type;
   typedef Bitstream bitstream_type;
+  typedef Encoder<T> encoder_type;
+  typedef Binner<T> binner_type;
 
   /// Constructs an empty bitmap.
   bitmap(Encoder<T> encoder = Encoder<T>(), Binner<T> binner = Binner<T>())
@@ -589,6 +592,68 @@ private:
   Encoder<T> encoder_;
   Binner<T> binner_;
   storage_type bitstreams_;
+};
+
+/// A bitmap specialization for `bool`.
+template <
+  typename Bitstream,
+  template <typename> class Encoder,
+  template <typename> class Binner
+>
+class bitmap<bool, Bitstream, Encoder, Binner>
+{
+public:
+  typedef bool value_type;
+  typedef Bitstream bitstream_type;
+  typedef Bitstream storage_type;
+
+  bitmap() = default;
+
+  void push_back(bool x)
+  {
+    bitstream_.push_back(x);
+  }
+
+  option<Bitstream> operator[](bool x) const
+  {
+    return lookup(x);
+  }
+
+  option<Bitstream> lookup(bool x) const
+  {
+    return {x ? bitstream_ : ~bitstream_};
+  }
+
+  option<Bitstream> lookup(relational_operator op, bool x) const
+  {
+    switch (op)
+    {
+      default:
+        throw error::operation("unsupported relational operator", op);
+      case not_equal:
+        return {x ? ~bitstream_ : bitstream_};
+      case equal:
+        return {x ? bitstream_ : ~bitstream_};
+    }
+  }
+
+  size_t size() const
+  {
+    return bitstream_.size();
+  }
+
+  bool empty() const
+  {
+    return bitstream_.empty();
+  }
+
+  storage_type const& storage() const
+  {
+    return bitstream_;
+  }
+
+private:
+  Bitstream bitstream_;
 };
 
 } // namespace vast

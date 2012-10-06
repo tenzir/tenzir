@@ -2,6 +2,7 @@
 #define VAST_TO_STRING_H
 
 #include <string>
+#include "vast/exception.h"
 #include "vast/operator.h"
 #include "vast/schema.h"
 
@@ -91,6 +92,43 @@ std::string to_string(
   for (auto& row : transpose(cols))
     str += to_string(row) + '\n';
   str.pop_back();
+  return str;
+}
+
+template <
+  typename Bitstream,
+  template <typename> class Encoder,
+  template <typename> class Binner
+>
+std::string to_string(
+    bitmap<bool, Bitstream, Encoder, Binner> const& bm,
+    bool with_header = false,
+    char delim = 0x00)
+{
+  std::string str;
+  auto& bs = bm.storage();
+  auto i = bs.find_first();
+  if (i == Bitstream::npos)
+    throw exception("bitstream too large to convert to string");
+  str.reserve(bs.size() * 2);
+  if (i > 0)
+    for (size_t j = 0; j < i; ++j)
+      str += "0\n";
+  str += "1\n";
+  auto j = i;
+  while ((j = bs.find_next(i)) != Bitstream::npos)
+  {
+    auto delta = j - i;
+    for (i = 1; i < delta; ++i)
+      str += "0\n";
+    str += "1\n";
+    i = j;
+  }
+  assert(j == Bitstream::npos);
+  for (j = 1; j < bs.size() - i; ++i)
+    str += "0\n";
+  if (str.back() == '\n')
+    str.pop_back();
   return str;
 }
 
