@@ -1,10 +1,126 @@
 #include "test.h"
 #include "vast/detail/bitmap_index/address.h"
+#include "vast/detail/bitmap_index/arithmetic.h"
 #include "vast/detail/bitmap_index/port.h"
 #include "vast/detail/bitmap_index/string.h"
 #include "vast/to_string.h"
 
 using namespace vast;
+
+BOOST_AUTO_TEST_CASE(boolean_bitmap_index)
+{
+  typedef null_bitstream bitstream_type;
+  detail::arithmetic_bitmap_index<ze::bool_type, bitstream_type> bbi;
+  bitmap_index<bitstream_type>* bi = &bbi;
+  bi->push_back(true);
+  bi->push_back(true);
+  bi->push_back(false);
+  bi->push_back(true);
+  bi->push_back(false);
+  bi->push_back(false);
+  bi->push_back(false);
+  bi->push_back(true);
+
+  auto f = bi->lookup(equal, false);
+  BOOST_REQUIRE(f);
+  BOOST_CHECK_EQUAL(to_string(*f), "00101110");
+  auto t = bi->lookup(not_equal, false);
+  BOOST_REQUIRE(t);
+  BOOST_CHECK_EQUAL(to_string(*t), "11010001");
+
+  BOOST_CHECK_EQUAL(
+      bi->to_string(),
+      "1\n"
+      "1\n"
+      "0\n"
+      "1\n"
+      "0\n"
+      "0\n"
+      "0\n"
+      "1");
+}
+
+BOOST_AUTO_TEST_CASE(integral_bitmap_index)
+{
+  typedef null_bitstream bitstream_type;
+  detail::arithmetic_bitmap_index<ze::int_type, bitstream_type> abi;
+  bitmap_index<bitstream_type>* bi = &abi;
+  bi->push_back(-7);
+  bi->push_back(42);
+  bi->push_back(10000);
+  bi->push_back(4711);
+  bi->push_back(31337);
+  bi->push_back(42);
+  bi->push_back(42);
+
+  auto leet = bi->lookup(equal, 31337);
+  BOOST_REQUIRE(leet);
+  BOOST_CHECK_EQUAL(to_string(*leet), "0000100");
+  auto less_than_leet = bi->lookup(less, 31337);
+  BOOST_REQUIRE(less_than_leet);
+  BOOST_CHECK_EQUAL(to_string(*less_than_leet), "1111011");
+  auto greater_zero = bi->lookup(greater, 0);
+  BOOST_REQUIRE(greater_zero);
+  BOOST_CHECK_EQUAL(to_string(*greater_zero), "0111111");
+}
+
+BOOST_AUTO_TEST_CASE(floating_point_bitmap_index)
+{
+  typedef null_bitstream bitstream_type;
+  detail::arithmetic_bitmap_index<ze::double_type, bitstream_type> abi(-2);
+  bitmap_index<bitstream_type>* bi = &abi;
+  bi->push_back(-7.8);
+  bi->push_back(42.123);
+  bi->push_back(10000.0);
+  bi->push_back(4711.13510);
+  bi->push_back(31337.3131313);
+  bi->push_back(42.12258);
+  bi->push_back(42.125799);
+
+  auto fourty_two = bi->lookup(equal, 42.12);
+  BOOST_REQUIRE(fourty_two);
+  BOOST_CHECK_EQUAL(to_string(*fourty_two), "0100010");
+  auto g_hun = bi->lookup(greater, 100.000001);
+  BOOST_REQUIRE(g_hun);
+  BOOST_CHECK_EQUAL(to_string(*g_hun), "0011100");
+}
+
+BOOST_AUTO_TEST_CASE(string_bitmap_index)
+{
+  typedef null_bitstream bitstream_type;
+  detail::string_bitmap_index<bitstream_type> sbi;
+  bitmap_index<bitstream_type>* bi = &sbi;
+  bi->push_back("foo");
+  bi->push_back("bar");
+  bi->push_back("baz");
+  bi->push_back("foo");
+  bi->push_back("foo");
+  bi->push_back("bar");
+
+  auto foo = bi->lookup(equal, "foo");
+  auto bar = bi->lookup(equal, "bar");
+  BOOST_REQUIRE(foo);
+  BOOST_REQUIRE(bar);
+  BOOST_CHECK_EQUAL(to_string(*foo), "100110");
+  BOOST_CHECK_EQUAL(to_string(*bar), "010001");
+
+  auto not_foo = bi->lookup(not_equal, "foo");
+  BOOST_REQUIRE(not_foo);
+  BOOST_CHECK_EQUAL(to_string(*not_foo), "011001");
+
+  BOOST_CHECK(! bi->lookup(equal, "qux"));
+  BOOST_CHECK_THROW(bi->lookup(match, "foo"), error::operation);
+
+  BOOST_CHECK_EQUAL(
+      bi->to_string(),
+      "2\t1\t0\n"
+      "001\n"
+      "010\n"
+      "100\n"
+      "001\n"
+      "001\n"
+      "010");
+}
 
 BOOST_AUTO_TEST_CASE(address_bitmap_index)
 {
@@ -65,8 +181,7 @@ BOOST_AUTO_TEST_CASE(address_bitmap_index)
       "0000000000000000000000000000000000000000000000000000000000000000"
       "0000000000000000000000000000000011000000101010000000000011110000\n"
       "0000000000000000000000000000000000000000000000000000000000000000"
-      "0000000000000000000000000000000011000000101010000000000001111111"
-      );
+      "0000000000000000000000000000000011000000101010000000000001111111");
 }
 
 BOOST_AUTO_TEST_CASE(port_bitmap_index)
@@ -101,44 +216,5 @@ BOOST_AUTO_TEST_CASE(port_bitmap_index)
       "111111\n"
       "000001\n"
       "001111\n"
-      "000011"
-      );
-}
-
-BOOST_AUTO_TEST_CASE(string_bitmap_index)
-{
-  typedef null_bitstream bitstream_type;
-  detail::string_bitmap_index<bitstream_type> sbi;
-  bitmap_index<bitstream_type>* bi = &sbi;
-  bi->push_back("foo");
-  bi->push_back("bar");
-  bi->push_back("baz");
-  bi->push_back("foo");
-  bi->push_back("foo");
-  bi->push_back("bar");
-
-  auto foo = bi->lookup(equal, "foo");
-  auto bar = bi->lookup(equal, "bar");
-  BOOST_REQUIRE(foo);
-  BOOST_REQUIRE(bar);
-  BOOST_CHECK_EQUAL(to_string(*foo), "100110");
-  BOOST_CHECK_EQUAL(to_string(*bar), "010001");
-
-  auto not_foo = bi->lookup(not_equal, "foo");
-  BOOST_REQUIRE(not_foo);
-  BOOST_CHECK_EQUAL(to_string(*not_foo), "011001");
-
-  BOOST_CHECK(! bi->lookup(equal, "qux"));
-  BOOST_CHECK_THROW(bi->lookup(match, "foo"), error::operation);
-
-  BOOST_CHECK_EQUAL(
-      bi->to_string(),
-      "2\t1\t0\n"
-      "001\n"
-      "010\n"
-      "100\n"
-      "001\n"
-      "001\n"
-      "010"
-      );
+      "000011");
 }
