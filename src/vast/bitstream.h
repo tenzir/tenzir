@@ -15,13 +15,6 @@ public:
   typedef bitvector::size_type size_type;
   static size_type constexpr npos = bitvector::npos;
 
-  bitstream() = default;
-
-  bitstream(size_type n, bool bit)
-  {
-    derived().append_impl(n, bit);
-  }
-
   friend bool operator==(Derived const& x, Derived const& y)
   {
     return x.equals(y);
@@ -108,6 +101,13 @@ public:
   }
 
 protected:
+  bitstream() = default;
+
+  bitstream(size_type n, bool bit)
+  {
+    derived().append_impl(n, bit);
+  }
+
   bitvector bits_;
 
 private:
