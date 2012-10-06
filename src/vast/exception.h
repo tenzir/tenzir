@@ -1,7 +1,6 @@
 #ifndef VAST_EXCEPTION_H
 #define VAST_EXCEPTION_H
 
-#include "vast/exception.h"
 #include "vast/config.h"
 
 #include <exception>
