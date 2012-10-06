@@ -14,7 +14,7 @@ std::string to_string(bitvector const& b,
 {
   std::string str;
   auto str_size = all ? bitvector::bits_per_block * b.blocks() : b.size();
-  if (str_size <= cut_off)
+  if (cut_off == 0 || str_size <= cut_off)
   {
     str.assign(str_size, '0');
   }

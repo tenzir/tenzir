@@ -12,9 +12,7 @@ BOOST_AUTO_TEST_CASE(bitvector_to_string)
 
   BOOST_CHECK_EQUAL(to_string(a), "");
   BOOST_CHECK_EQUAL(to_string(b), "0000000000");
-  BOOST_CHECK_EQUAL(
-      to_string(c), 
-      "1111111111111111111111111111111111111111111111111111111111111111..");
+  BOOST_CHECK_EQUAL(to_string(c), std::string(78, '1'));
 }
 
 BOOST_AUTO_TEST_CASE(bitvector_basic_ops)

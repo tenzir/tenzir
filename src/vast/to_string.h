@@ -33,7 +33,7 @@ class expression;
 std::string to_string(bitvector const& b,
                       bool msb_to_lsb = true,
                       bool all = false,
-                      size_t cut_off = 64);
+                      size_t cut_off = 0);
 
 /// Converts a bitstream to an `std::string`.
 ///
@@ -43,7 +43,7 @@ std::string to_string(bitvector const& b,
 template <typename Derived>
 std::string to_string(bitstream<Derived> const& bs)
 {
-  return to_string(bs.bits());
+  return to_string(bs.bits(), false, false, 0);
 }
 
 /// Converts a bitmap to an `std::string`.
