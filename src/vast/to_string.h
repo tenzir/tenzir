@@ -27,7 +27,8 @@ class expression;
 /// block if the number of `b.size()` is not a multiple of
 /// `bitvector::bits_per_block`.
 ///
-/// @param cut_off Specifies a maximum size on the output.
+/// @param cut_off Specifies a maximum size on the output. If 0, not cutting
+/// takes place.
 ///
 /// @return An `std::string` representation of *b*.
 std::string to_string(bitvector const& b,
