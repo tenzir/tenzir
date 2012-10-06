@@ -1,6 +1,7 @@
 #ifndef VAST_BITSTREAM_H
 #define VAST_BITSTREAM_H
 
+#include <algorithm>
 #include "vast/bitvector.h"
 #include "vast/exception.h"
 
