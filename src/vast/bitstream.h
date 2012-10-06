@@ -2,6 +2,7 @@
 #define VAST_BITSTREAM_H
 
 #include "vast/bitvector.h"
+#include "vast/exception.h"
 
 namespace vast {
 
@@ -161,6 +162,53 @@ private:
   size_type find_first_impl() const;
   size_type find_next_impl(size_type i) const;
 };
+
+/// Transposes a vector of equal-sized bitstreams.
+/// @param v A vector of bitstreams.
+/// @pre All elements of *v* must have the same size.
+template <typename Bitstream>
+std::vector<Bitstream> transpose(std::vector<Bitstream> const& v)
+{
+  if (v.empty())
+    return {};
+  auto vsize = v.size();
+  auto bsize = v[0].size();
+  if (bsize == 0)
+    return {};
+  for (size_t i = 0; i < vsize; ++i)
+    if (v[i].size() != bsize)
+      throw exception("tranpose requires same-size bitstreams");
+
+  std::vector<typename Bitstream::size_type> next(vsize);
+  auto min = Bitstream::npos;
+  for (size_t i = 0; i < vsize; ++i)
+  {
+    next[i] = v[i].find_first();
+    if (next[i] < min)
+      min = next[i];
+  }
+  auto all_zero = min;
+  std::vector<Bitstream> result;
+  while (result.size() != bsize)
+  {
+    assert(min != Bitstream::npos);
+    if (all_zero > 0)
+      result.resize(result.size() + all_zero, {vsize, false});
+    result.emplace_back(Bitstream());
+    auto& row = result.back();
+    for (size_t i = 0; i < vsize; ++i)
+      row.push_back(next[i] == min);
+    for (size_t i = 0; i < vsize; ++i)
+    {
+      if (next[i] != Bitstream::npos && next[i] == min)
+        next[i] = v[i].find_next(next[i]);
+    }
+    auto new_min = std::min_element(next.begin(), next.end());
+    all_zero = *new_min - min - 1;
+    min = *new_min;
+  }
+  return result;
+}
 
 } // namespace vast
 

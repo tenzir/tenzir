@@ -27,4 +27,32 @@ BOOST_AUTO_TEST_CASE(null_bitstream_operations)
   BOOST_CHECK_EQUAL(to_string(x ^ y), "00111000100");
   BOOST_CHECK_EQUAL(to_string(x - y), "00000000100");
   BOOST_CHECK_EQUAL(to_string(y - x), "00111000000");
+
+  std::vector<null_bitstream> v;
+  v.push_back(x);
+  v.push_back(y);
+  v.emplace_back(x - y);
+
+  // The original vector contains the following (from MSB to LSB):
+  // 10000000111
+  // 10111000011
+  // 00000000100
+  std::string str;
+  auto t = transpose(v);
+  for (auto& i : t)
+    str += to_string(i);
+  BOOST_CHECK_EQUAL(
+      str,
+      "011"
+      "011"
+      "101"
+      "000"
+      "000"
+      "000"
+      "010"
+      "010"
+      "010"
+      "000"
+      "011"
+      );
 }
