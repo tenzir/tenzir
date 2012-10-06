@@ -19,10 +19,10 @@ public:
   virtual bool push_back(ze::value const& value) = 0;
 
   /// Looks up a value with under given relational operator.
-  /// @param value The value to lookup.
   /// @param op The relation operator.
-  virtual option<Bitstream> lookup(ze::value const& value,
-                                   relational_operator op) const = 0;
+  /// @param value The value to lookup.
+  virtual option<Bitstream> lookup(relational_operator op,
+                                   ze::value const& value) const = 0;
 
   /// Creates a string representation of the bitmap index.
   /// @return An `std::string` of the bitmap index.
