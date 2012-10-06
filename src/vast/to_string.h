@@ -23,12 +23,15 @@ class expression;
 ///
 /// @param b The bitvector to convert.
 ///
+/// @param msb_to_lsb The order of display. If `true`, display bits from MSB to
+/// LSB and in the reverse order otherwise.
+///
 /// @param all Indicates whether to include also the unused bits of the last
 /// block if the number of `b.size()` is not a multiple of
 /// `bitvector::bits_per_block`.
 ///
-/// @param cut_off Specifies a maximum size on the output. If 0, not cutting
-/// takes place.
+/// @param cut_off Specifies a maximum size on the output. If 0, no cutting
+/// occurs.
 ///
 /// @return An `std::string` representation of *b*.
 std::string to_string(bitvector const& b,
@@ -36,7 +39,8 @@ std::string to_string(bitvector const& b,
                       bool all = false,
                       size_t cut_off = 0);
 
-/// Converts a bitstream to an `std::string`.
+/// Converts a bitstream to an `std::string`. Unlike a plain bitvector, we
+/// print bitstreams from LSB to MSB.
 ///
 /// @param bs The bitstream to convert.
 ///
@@ -68,32 +72,25 @@ std::string to_string(
     bool with_header = true,
     char delim = '\t')
 {
+  if (bm.empty())
+    return {};
   std::string str;
-  std::vector<T> header;
-  auto t = bm.transpose(with_header ? &header : nullptr);
+  auto& store = bm.storage();
   if (with_header)
   {
-    auto first = header.begin();
-    auto last = header.end();
-    while (first != last)
-    {
-      using std::to_string;
-      str += to_string(*first);
-      if (++first != last)
-        str += delim;
-    }
+    using std::to_string;
+    //using ze::to_string;
+    store.each(
+        [&](T const& x, Bitstream const&) { str += to_string(x) + delim; });
+    str.pop_back();
     str += '\n';
   }
-
-  auto first = t.begin();
-  auto last = t.end();
-  while (first != last)
-  {
-    str += to_string(first->bits(), false);
-    if (++first != last)
-      str += '\n';
-  }
-
+  std::vector<Bitstream> cols;
+  cols.reserve(store.rows);
+  store.each([&](T const&, Bitstream const& bs) { cols.push_back(bs); });
+  for (auto& row : transpose(cols))
+    str += to_string(row) + '\n';
+  str.pop_back();
   return str;
 }
 
