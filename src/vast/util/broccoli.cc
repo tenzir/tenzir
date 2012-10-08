@@ -38,7 +38,7 @@ ze::event make_event(BroEvMeta* meta)
 {
   ze::event event;
   event.name(meta->ev_name);
-  event.timestamp(ze::time_range(meta->ev_ts));
+  event.timestamp(ze::time_range::fractional(meta->ev_ts));
 
   event.reserve(meta->ev_numargs);
   for (int i = 0; i < meta->ev_numargs; ++i)
@@ -139,9 +139,10 @@ ze::value make_value(int type, void* bro_val)
     case BRO_TYPE_DOUBLE:
       return *static_cast<double*>(bro_val);
     case BRO_TYPE_TIME:
-        return ze::time_point(ze::time_range(*static_cast<double*>(bro_val)));
+        return ze::time_point(ze::time_range::fractional(
+                *static_cast<double*>(bro_val)));
     case BRO_TYPE_INTERVAL:
-        return ze::time_range(*static_cast<double*>(bro_val));;
+        return ze::time_range::fractional(*static_cast<double*>(bro_val));
     case BRO_TYPE_STRING:
       {
         BroString* s = static_cast<BroString*>(bro_val);
