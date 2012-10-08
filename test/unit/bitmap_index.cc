@@ -3,6 +3,7 @@
 #include "vast/detail/bitmap_index/arithmetic.h"
 #include "vast/detail/bitmap_index/port.h"
 #include "vast/detail/bitmap_index/string.h"
+#include "vast/detail/bitmap_index/time.h"
 #include "vast/to_string.h"
 
 using namespace vast;
@@ -83,6 +84,33 @@ BOOST_AUTO_TEST_CASE(floating_point_bitmap_index)
   auto g_hun = bi->lookup(greater, 100.000001);
   BOOST_REQUIRE(g_hun);
   BOOST_CHECK_EQUAL(to_string(*g_hun), "0011100");
+}
+
+BOOST_AUTO_TEST_CASE(time_bitmap_index)
+{
+  typedef null_bitstream bitstream_type;
+  detail::time_bitmap_index<bitstream_type> trbi(8);  // 0.1 sec resolution
+  bitmap_index<bitstream_type>* bi = &trbi;
+  bi->push_back(std::chrono::milliseconds(1000));
+  bi->push_back(std::chrono::milliseconds(2000));
+  bi->push_back(std::chrono::milliseconds(3000));
+  bi->push_back(std::chrono::milliseconds(1011));
+  bi->push_back(std::chrono::milliseconds(2222));
+  bi->push_back(std::chrono::milliseconds(2322));
+
+  auto hun = bi->lookup(equal, std::chrono::milliseconds(1034));
+  BOOST_REQUIRE(hun);
+  BOOST_CHECK_EQUAL(to_string(*hun), "100100");
+
+  BOOST_CHECK_EQUAL(
+      bi->to_string(),
+      "10\t20\t22\t23\t30\n"
+      "11111\n"
+      "01111\n"
+      "00001\n"
+      "11111\n"
+      "00111\n"
+      "00011");
 }
 
 BOOST_AUTO_TEST_CASE(string_bitmap_index)
