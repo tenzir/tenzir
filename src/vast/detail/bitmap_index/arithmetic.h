@@ -44,14 +44,13 @@ public:
   {
   }
 
-  virtual bool push_back(ze::value const& value)
+  virtual bool patch(size_t n) override
   {
-    bitmap_.push_back(value.get<underlying_value_type>());
-    return true;
+    return bitmap_.patch(n);
   }
 
   virtual option<Bitstream>
-  lookup(relational_operator op, ze::value const& value) const
+  lookup(relational_operator op, ze::value const& value) const override
   {
     if (op == in || op == not_in)
       throw error::operation("unsupported relational operator", op);
@@ -60,12 +59,17 @@ public:
     return bitmap_.lookup(op, value.get<underlying_value_type>());
   };
 
-  virtual std::string to_string() const
+  virtual std::string to_string() const override
   {
     return vast::to_string(bitmap_);
   }
 
 private:
+  virtual bool push_back_impl(ze::value const& value) override
+  {
+    return bitmap_.push_back(value.get<underlying_value_type>());
+  }
+
   bitmap_type bitmap_;
 };
 

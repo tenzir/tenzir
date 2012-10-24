@@ -17,19 +17,17 @@ class address_bitmap_index : public bitmap_index<Bitstream>
   typedef bitmap_index<Bitstream> super;
 
 public:
-  virtual bool push_back(ze::value const& value)
+  virtual bool patch(size_t n) override
   {
-    auto& addr = value.get<ze::address>();
-    auto& bytes = addr.data();
-    size_t const start = addr.is_v4() ? 12 : 0;
-    v4_.push_back(start == 12);
+    bool success = true;
     for (size_t i = 0; i < 16; ++i)
-      bitmaps_[i].push_back(i < start ? 0x00 : bytes[i]);
-    return true;
+      if (! bitmaps_[i].patch(1))
+        success = false;
+    return v4_.append(1, false) && success;
   }
 
   virtual option<Bitstream>
-  lookup(relational_operator op, ze::value const& value) const
+  lookup(relational_operator op, ze::value const& value) const override
   {
     if (! (op == equal || op == not_equal || op == in || op == not_in))
       throw error::operation("unsupported relational operator", op);
@@ -48,7 +46,7 @@ public:
     }
   };
 
-  virtual std::string to_string() const
+  virtual std::string to_string() const override
   {
     std::vector<Bitstream> v;
     v.reserve(128);
@@ -62,6 +60,18 @@ public:
   }
 
 private:
+  virtual bool push_back_impl(ze::value const& value) override
+  {
+    auto& addr = value.get<ze::address>();
+    auto& bytes = addr.data();
+    size_t const start = addr.is_v4() ? 12 : 0;
+    auto success = v4_.push_back(start == 12);
+    for (size_t i = 0; i < 16; ++i)
+      if (! bitmaps_[i].push_back(i < start ? 0x00 : bytes[i]))
+        success = false;
+    return success;
+  }
+
   option<Bitstream> lookup(ze::address const& addr, relational_operator op) const
   {
     auto& bytes = addr.data();

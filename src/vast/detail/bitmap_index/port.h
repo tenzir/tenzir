@@ -18,16 +18,14 @@ class port_bitmap_index : public bitmap_index<Bitstream>
   typedef std::underlying_type<ze::port::port_type>::type proto_type;
 
 public:
-  virtual bool push_back(ze::value const& value)
+  virtual bool patch(size_t n) override
   {
-    auto& port = value.get<ze::port>();
-    num_.push_back(port.number());
-    proto_.push_back(static_cast<proto_type>(port.type()));
-    return true;
+    auto success = num_.patch(n);
+    return proto_.patch(n) && success;
   }
 
   virtual option<Bitstream>
-  lookup(relational_operator op, ze::value const& value) const
+  lookup(relational_operator op, ze::value const& value) const override
   {
     if (op == in || op == not_in)
       throw error::operation("unsupported relational operator", op);
@@ -38,17 +36,25 @@ public:
     if (! nbs)
       return {};
     if (port.type() != ze::port::unknown)
-      if (auto tbs = num_.lookup(port.number()))
+      if (auto tbs = num_[port.type()])
           *nbs &= *tbs;
     return nbs;
   };
 
-  virtual std::string to_string() const
+  virtual std::string to_string() const override
   {
     return vast::to_string(num_);
   }
 
 private:
+  virtual bool push_back_impl(ze::value const& value) override
+  {
+    auto& port = value.get<ze::port>();
+    num_.push_back(port.number());
+    proto_.push_back(static_cast<proto_type>(port.type()));
+    return true;
+  }
+
   bitmap<uint16_t, Bitstream, range_encoder> num_;
   bitmap<proto_type, Bitstream> proto_;
 };

@@ -22,21 +22,13 @@ class string_bitmap_index : public bitmap_index<Bitstream>
   typedef uint64_t dictionary_codomain;
 
 public:
-  virtual bool push_back(ze::value const& value)
+  virtual bool patch(size_t n) override
   {
-    auto str = ze::to_string(value.get<ze::string>());
-    auto i = dictionary_[str];
-    if (!i)
-      i = dictionary_.insert(str);
-    if (!i)
-      return false;
-
-    bitmap_.push_back(*i);
-    return true;
+    return bitmap_.patch(n);
   }
 
   virtual option<Bitstream>
-  lookup(relational_operator op, ze::value const& value) const
+  lookup(relational_operator op, ze::value const& value) const override
   {
     if (! (op == equal || op == not_equal))
       throw error::operation("unsupported relational operator", op);
@@ -46,19 +38,31 @@ public:
     if (! i)
       return {};
 
-    auto bs = bitmap_.lookup(*i);
+    auto bs = bitmap_[*i];
     if (! bs)
       return {};
 
     return op == equal ? bs : std::move((*bs).flip());
   };
 
-  virtual std::string to_string() const
+  virtual std::string to_string() const override
   {
     return vast::to_string(bitmap_);
   }
 
 private:
+  virtual bool push_back_impl(ze::value const& value) override
+  {
+    auto str = ze::to_string(value.get<ze::string>());
+    auto i = dictionary_[str];
+    if (!i)
+      i = dictionary_.insert(str);
+    if (!i)
+      return false;
+
+    return bitmap_.push_back(*i);
+  }
+
   bitmap<dictionary_codomain, Bitstream> bitmap_;
   util::map_dictionary<dictionary_codomain> dictionary_;
 };

@@ -11,14 +11,26 @@ template <typename Bitstream>
 class bitmap_index
 {
 public:
+  /// Destroys a bitmap index.
   virtual ~bitmap_index() = default;
 
   /// Appends a single value.
   /// @param value The value to add to the index.
   /// @return `true` if appending succeeded.
-  virtual bool push_back(ze::value const& value) = 0;
+  bool push_back(ze::value const& value)
+  {
+    if (value == ze::nil)
+      return patch(1);
+    else
+      return push_back_impl(value);
+  }
 
-  /// Looks up a value with under given relational operator.
+  /// Appends fill material (i.e., invalid bits).
+  /// @param n The number of elements to append.
+  /// @return `true` on success.
+  virtual bool patch(size_t n) = 0;
+
+  /// Looks up a value with a given relational operator.
   /// @param op The relation operator.
   /// @param value The value to lookup.
   virtual option<Bitstream>
@@ -28,8 +40,11 @@ public:
   /// @return An `std::string` of the bitmap index.
   virtual std::string to_string() const = 0;
 
-protected:
-  uint64_t base_id_;
+private:
+  virtual bool push_back_impl(ze::value const& value) = 0;
+
+  bool optional_;
+  Bitstream nil_;
 };
 
 } // namespace vast

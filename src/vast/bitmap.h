@@ -532,26 +532,36 @@ public:
   /// value and 0 to all other bitstreams.
   ///
   /// @param x The value to add.
-  void push_back(T const& x)
+  ///
+  /// @return `true` on success and `false` if the bitmap is full, i.e., has
+  /// `2^std::numeric_limits<size_t>::digits() - 1` elements.
+  bool push_back(T const& x)
   {
-    encoder_.encode(bitstreams_, binner_(x));
+    auto success = encoder_.encode(bitstreams_, binner_(x));
+    return success && valid_.push_back(true);
   }
 
-  /// Same as lookup().
+  /// Appends a given number of invalid rows/elements to the bitmaps.
+  /// @param n The number of elements to append.
+  /// @return `true` on success and `false` if the bitmap is full.
+  bool patch(size_t n = 1)
+  {
+    auto success = valid_.append(n, false);
+    if (! success)
+      return false;
+    bitstreams_.each(
+        [&](T const&, Bitstream& bs)
+        {
+          if (! bs.append(n, false))
+            success = false;
+        });
+    return success;
+  }
+
+  /// Shorthand for `lookup(equal, x)`.
   option<Bitstream> operator[](T const& x) const
   {
-    return lookup(x);
-  }
-
-  /// Retrieves a bitstream of a given value.
-  ///
-  /// @param x The value to find the bitstream for.
-  ///
-  /// @return An @link option vast::option@endlink containing a bitstream *iff*
-  /// the value was found according to the bitmap's encoding.
-  option<Bitstream> lookup(T const& x) const
-  {
-    return encoder_.decode(bitstreams_, binner_(x));
+    return lookup(equal, x);
   }
 
   /// Retrieves a bitstream of a given value with respect to a given operator.
@@ -564,7 +574,10 @@ public:
   /// for all values *v* such that *op(v,x)* is `true`.
   option<Bitstream> lookup(relational_operator op, T const& x) const
   {
-    return encoder_.decode(bitstreams_, binner_(x), op);
+    auto result = encoder_.decode(bitstreams_, binner_(x), op);
+    if (result)
+      *result &= valid_;
+    return result;
   }
 
   /// Retrieves the bitmap size.
@@ -592,6 +605,7 @@ private:
   Encoder<T> encoder_;
   Binner<T> binner_;
   storage_type bitstreams_;
+  Bitstream valid_;
 };
 
 /// A bitmap specialization for `bool`.
@@ -609,19 +623,21 @@ public:
 
   bitmap() = default;
 
-  void push_back(bool x)
+  bool push_back(bool x)
   {
-    bitstream_.push_back(x);
+    auto success = bool_.push_back(x);
+    return valid_.push_back(true) && success;
+  }
+
+  bool patch(size_t n = 1)
+  {
+    auto success = bool_.append(n, false);
+    return valid_.append(n, false) && success;
   }
 
   option<Bitstream> operator[](bool x) const
   {
     return lookup(x);
-  }
-
-  option<Bitstream> lookup(bool x) const
-  {
-    return {x ? bitstream_ : ~bitstream_};
   }
 
   option<Bitstream> lookup(relational_operator op, bool x) const
@@ -631,29 +647,30 @@ public:
       default:
         throw error::operation("unsupported relational operator", op);
       case not_equal:
-        return {x ? ~bitstream_ : bitstream_};
+        return {(x ? ~bool_ : bool_) & valid_};
       case equal:
-        return {x ? bitstream_ : ~bitstream_};
+        return {(x ? bool_ : ~bool_) & valid_};
     }
   }
 
   size_t size() const
   {
-    return bitstream_.size();
+    return bool_.size();
   }
 
   bool empty() const
   {
-    return bitstream_.empty();
+    return bool_.empty();
   }
 
   storage_type const& storage() const
   {
-    return bitstream_;
+    return bool_;
   }
 
 private:
-  Bitstream bitstream_;
+  Bitstream bool_;
+  Bitstream valid_;
 };
 
 } // namespace vast

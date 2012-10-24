@@ -70,14 +70,20 @@ public:
     return derived().empty_impl();
   }
 
-  void append(size_type n, bool bit)
+  bool append(size_type n, bool bit)
   {
+    if (std::numeric_limits<size_type>::max() - n < size())
+      return false;
     derived().append_impl(n, bit);
+    return true;
   }
 
-  void push_back(bool bit)
+  bool push_back(bool bit)
   {
+    if (std::numeric_limits<size_type>::max() == size())
+      return false;
     derived().push_back_impl(bit);
+    return true;
   }
 
   void clear() noexcept

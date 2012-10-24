@@ -7,18 +7,18 @@ using namespace vast;
 BOOST_AUTO_TEST_CASE(null_bitstream_operations)
 {
   null_bitstream x;
-  x.append(3, true);
-  x.append(7, false);
-  x.push_back(true);
+  BOOST_REQUIRE(x.append(3, true));
+  BOOST_REQUIRE(x.append(7, false));
+  BOOST_REQUIRE(x.push_back(true));
   BOOST_CHECK_EQUAL(to_string(x),  "11100000001");
   BOOST_CHECK_EQUAL(to_string(~x), "00011111110");
 
   null_bitstream y;
-  y.append(2, true);
-  y.append(4, false);
-  y.append(3, true);
-  y.push_back(false);
-  y.push_back(true);
+  BOOST_REQUIRE(y.append(2, true));
+  BOOST_REQUIRE(y.append(4, false));
+  BOOST_REQUIRE(y.append(3, true));
+  BOOST_REQUIRE(y.push_back(false));
+  BOOST_REQUIRE(y.push_back(true));
   BOOST_CHECK_EQUAL(to_string(y),  "11000011101");
   BOOST_CHECK_EQUAL(to_string(~y), "00111100010");
 

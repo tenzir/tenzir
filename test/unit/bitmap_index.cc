@@ -13,14 +13,14 @@ BOOST_AUTO_TEST_CASE(boolean_bitmap_index)
   typedef null_bitstream bitstream_type;
   detail::arithmetic_bitmap_index<ze::bool_type, bitstream_type> bbi;
   bitmap_index<bitstream_type>* bi = &bbi;
-  bi->push_back(true);
-  bi->push_back(true);
-  bi->push_back(false);
-  bi->push_back(true);
-  bi->push_back(false);
-  bi->push_back(false);
-  bi->push_back(false);
-  bi->push_back(true);
+  BOOST_REQUIRE(bi->push_back(true));
+  BOOST_REQUIRE(bi->push_back(true));
+  BOOST_REQUIRE(bi->push_back(false));
+  BOOST_REQUIRE(bi->push_back(true));
+  BOOST_REQUIRE(bi->push_back(false));
+  BOOST_REQUIRE(bi->push_back(false));
+  BOOST_REQUIRE(bi->push_back(false));
+  BOOST_REQUIRE(bi->push_back(true));
 
   auto f = bi->lookup(equal, false);
   BOOST_REQUIRE(f);
@@ -46,13 +46,13 @@ BOOST_AUTO_TEST_CASE(integral_bitmap_index)
   typedef null_bitstream bitstream_type;
   detail::arithmetic_bitmap_index<ze::int_type, bitstream_type> abi;
   bitmap_index<bitstream_type>* bi = &abi;
-  bi->push_back(-7);
-  bi->push_back(42);
-  bi->push_back(10000);
-  bi->push_back(4711);
-  bi->push_back(31337);
-  bi->push_back(42);
-  bi->push_back(42);
+  BOOST_REQUIRE(bi->push_back(-7));
+  BOOST_REQUIRE(bi->push_back(42));
+  BOOST_REQUIRE(bi->push_back(10000));
+  BOOST_REQUIRE(bi->push_back(4711));
+  BOOST_REQUIRE(bi->push_back(31337));
+  BOOST_REQUIRE(bi->push_back(42));
+  BOOST_REQUIRE(bi->push_back(42));
 
   auto leet = bi->lookup(equal, 31337);
   BOOST_REQUIRE(leet);
@@ -70,13 +70,13 @@ BOOST_AUTO_TEST_CASE(floating_point_bitmap_index)
   typedef null_bitstream bitstream_type;
   detail::arithmetic_bitmap_index<ze::double_type, bitstream_type> abi(-2);
   bitmap_index<bitstream_type>* bi = &abi;
-  bi->push_back(-7.8);
-  bi->push_back(42.123);
-  bi->push_back(10000.0);
-  bi->push_back(4711.13510);
-  bi->push_back(31337.3131313);
-  bi->push_back(42.12258);
-  bi->push_back(42.125799);
+  BOOST_REQUIRE(bi->push_back(-7.8));
+  BOOST_REQUIRE(bi->push_back(42.123));
+  BOOST_REQUIRE(bi->push_back(10000.0));
+  BOOST_REQUIRE(bi->push_back(4711.13510));
+  BOOST_REQUIRE(bi->push_back(31337.3131313));
+  BOOST_REQUIRE(bi->push_back(42.12258));
+  BOOST_REQUIRE(bi->push_back(42.125799));
 
   auto fourty_two = bi->lookup(equal, 42.12);
   BOOST_REQUIRE(fourty_two);
@@ -91,12 +91,12 @@ BOOST_AUTO_TEST_CASE(time_bitmap_index)
   typedef null_bitstream bitstream_type;
   detail::time_bitmap_index<bitstream_type> trbi(8);  // 0.1 sec resolution
   bitmap_index<bitstream_type>* bi = &trbi;
-  bi->push_back(std::chrono::milliseconds(1000));
-  bi->push_back(std::chrono::milliseconds(2000));
-  bi->push_back(std::chrono::milliseconds(3000));
-  bi->push_back(std::chrono::milliseconds(1011));
-  bi->push_back(std::chrono::milliseconds(2222));
-  bi->push_back(std::chrono::milliseconds(2322));
+  BOOST_REQUIRE(bi->push_back(std::chrono::milliseconds(1000)));
+  BOOST_REQUIRE(bi->push_back(std::chrono::milliseconds(2000)));
+  BOOST_REQUIRE(bi->push_back(std::chrono::milliseconds(3000)));
+  BOOST_REQUIRE(bi->push_back(std::chrono::milliseconds(1011)));
+  BOOST_REQUIRE(bi->push_back(std::chrono::milliseconds(2222)));
+  BOOST_REQUIRE(bi->push_back(std::chrono::milliseconds(2322)));
 
   auto hun = bi->lookup(equal, std::chrono::milliseconds(1034));
   BOOST_REQUIRE(hun);
@@ -118,12 +118,12 @@ BOOST_AUTO_TEST_CASE(string_bitmap_index)
   typedef null_bitstream bitstream_type;
   detail::string_bitmap_index<bitstream_type> sbi;
   bitmap_index<bitstream_type>* bi = &sbi;
-  bi->push_back("foo");
-  bi->push_back("bar");
-  bi->push_back("baz");
-  bi->push_back("foo");
-  bi->push_back("foo");
-  bi->push_back("bar");
+  BOOST_REQUIRE(bi->push_back("foo"));
+  BOOST_REQUIRE(bi->push_back("bar"));
+  BOOST_REQUIRE(bi->push_back("baz"));
+  BOOST_REQUIRE(bi->push_back("foo"));
+  BOOST_REQUIRE(bi->push_back("foo"));
+  BOOST_REQUIRE(bi->push_back("bar"));
 
   auto foo = bi->lookup(equal, "foo");
   auto bar = bi->lookup(equal, "bar");
@@ -155,12 +155,12 @@ BOOST_AUTO_TEST_CASE(address_bitmap_index)
   typedef null_bitstream bitstream_type;
   detail::address_bitmap_index<bitstream_type> abi;
   bitmap_index<bitstream_type>* bi = &abi;
-  bi->push_back(ze::address("192.168.0.1"));
-  bi->push_back(ze::address("192.168.0.2"));
-  bi->push_back(ze::address("192.168.0.3"));
-  bi->push_back(ze::address("192.168.0.1"));
-  bi->push_back(ze::address("192.168.0.1"));
-  bi->push_back(ze::address("192.168.0.2"));
+  BOOST_REQUIRE(bi->push_back(ze::address("192.168.0.1")));
+  BOOST_REQUIRE(bi->push_back(ze::address("192.168.0.2")));
+  BOOST_REQUIRE(bi->push_back(ze::address("192.168.0.3")));
+  BOOST_REQUIRE(bi->push_back(ze::address("192.168.0.1")));
+  BOOST_REQUIRE(bi->push_back(ze::address("192.168.0.1")));
+  BOOST_REQUIRE(bi->push_back(ze::address("192.168.0.2")));
 
   ze::address addr("192.168.0.1");
   auto bs = bi->lookup(equal, addr);
