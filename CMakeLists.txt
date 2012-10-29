@@ -66,9 +66,7 @@ endif ()
 find_package(Boost
     1.50.0
     COMPONENTS
-        filesystem
         program_options
-        system
         unit_test_framework)
 if (Boost_FOUND)
     include_directories(${Boost_INCLUDE_DIRS})
