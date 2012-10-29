@@ -1,68 +1,35 @@
 #ifndef VAST_DETAIL_CPPA_TYPE_INFO_H
 #define VAST_DETAIL_CPPA_TYPE_INFO_H
 
-#include <ze/forward.h>
 #include <cppa/util/abstract_uniform_type_info.hpp>
+#include <ze/fwd.h>
+#include "vast/detail/cppa_serialization.h"
 
 namespace vast {
-
-// Forward declarations.
-class schema;
-class segment;
-class expression;
-
 namespace detail {
 
-/// Announces all necessary types we use here.
+template <typename T>
+class cppa_type_info : public cppa::util::abstract_uniform_type_info<T>
+{
+protected:
+  void serialize(void const* ptr, cppa::serializer* sink) const
+  {
+    auto x = reinterpret_cast<T const*>(ptr);
+    cppa_serializer serializer(sink, this->name());
+    serializer << *x;
+  }
+
+  void deserialize(void* ptr, cppa::deserializer* source) const
+  {
+    this->assert_type_name(source);
+    auto x = reinterpret_cast<T*>(ptr);
+    cppa_deserializer deserializer(source, this->name());
+    deserializer >> *x;
+  }
+};
+
+/// Announces all necessary types we use in VAST.
 void cppa_announce_types();
-
-class uuid_type_info
-  : public cppa::util::abstract_uniform_type_info<ze::uuid>
-{
-protected:
-  void serialize(void const* ptr, cppa::serializer* sink) const;
-  void deserialize(void* ptr, cppa::deserializer* source) const;
-};
-
-class event_type_info
-  : public cppa::util::abstract_uniform_type_info<ze::event>
-{
-protected:
-  void serialize(void const* ptr, cppa::serializer* sink) const;
-  void deserialize(void* ptr, cppa::deserializer* source) const;
-};
-
-class event_chunk_type_info
-  : public cppa::util::abstract_uniform_type_info<ze::chunk<ze::event>>
-{
-protected:
-  void serialize(void const* ptr, cppa::serializer* sink) const;
-  void deserialize(void* ptr, cppa::deserializer* source) const;
-};
-
-class segment_type_info
-  : public cppa::util::abstract_uniform_type_info<segment>
-{
-protected:
-  void serialize(void const* ptr, cppa::serializer* sink) const;
-  void deserialize(void* ptr, cppa::deserializer* source) const;
-};
-
-class expression_type_info 
-  : public cppa::util::abstract_uniform_type_info<expression>
-{
-protected:
-  void serialize(void const* ptr, cppa::serializer* sink) const;
-  void deserialize(void* ptr, cppa::deserializer* source) const;
-};
-
-class schema_type_info 
-  : public cppa::util::abstract_uniform_type_info<schema>
-{
-protected:
-  void serialize(void const* ptr, cppa::serializer* sink) const;
-  void deserialize(void* ptr, cppa::deserializer* source) const;
-};
 
 } // namespace detail
 } // namespace vast
