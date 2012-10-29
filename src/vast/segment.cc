@@ -2,6 +2,7 @@
 
 #include <ze/event.h>
 #include <ze/util/make_unique.h>
+#include "vast/exception.h"
 #include "vast/logger.h"
 
 namespace vast {
@@ -10,6 +11,37 @@ namespace vast {
 // redundant to those in the header file.
 uint32_t const segment::magic;
 uint8_t const segment::version;
+
+void segment::header::serialize(ze::io::serializer& sink)
+{
+  sink << segment::magic;
+  sink << version;
+  sink << id;
+  sink << compression;
+  sink << start;
+  sink << end;
+  sink << event_names;
+  sink << events;
+}
+
+void segment::header::deserialize(ze::io::deserializer& source)
+{
+  uint32_t magic;
+  source >> magic;
+  if (magic != segment::magic)
+    throw error::segment("invalid segment magic");
+
+  source >> version;
+  if (version > segment::version)
+    throw error::segment("segment version too high");
+
+  source >> id;
+  source >> compression;
+  source >> start;
+  source >> end;
+  source >> event_names;
+  source >> events;
+}
 
 segment::writer::writer(segment* s)
   : segment_(s)
@@ -121,7 +153,7 @@ uint32_t segment::reader::operator>>(ze::event& e)
 }
 
 
-segment::segment(ze::uuid uuid, ze::compression method)
+segment::segment(ze::uuid uuid, ze::io::compression method)
 {
   header_.id = std::move(uuid);
   header_.version = version;

@@ -31,6 +31,13 @@ protected:
 /// The namespace for all exceptions.
 namespace error {
 
+/// Thrown for file system errors.
+struct fs : exception
+{
+  fs(char const* msg);
+  fs(char const* msg, std::string const& file);
+};
+
 /// Thrown for network errors.
 struct network : exception
 {

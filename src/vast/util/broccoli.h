@@ -1,7 +1,7 @@
 #ifndef VAST_UTIL_BROCCOLI_H
 #define VAST_UTIL_BROCCOLI_H
 
-#include <ze/forward.h>
+#include <ze/fwd.h>
 #include "vast/util/server.h"
 
 // Forward declaration.

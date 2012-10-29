@@ -1,14 +1,12 @@
 #include "test.h"
+#include <fstream>
 #include "vast/schema.h"
 #include "vast/to_string.h"
-#include "vast/fs/fstream.h"
-#include "vast/fs/path.h"
 
 // Bring the contents of a file into a std::string.
-std::string load(const vast::fs::path& path)
+std::string load(const std::string& path)
 {
-  vast::fs::ifstream in(path);
-
+  std::ifstream in(path);
   std::string storage;
   in.unsetf(std::ios::skipws); // No white space skipping.
   std::copy(std::istream_iterator<char>(in),

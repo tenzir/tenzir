@@ -3,8 +3,6 @@
 #include <ze.h>
 #include "vast/segment.h"
 #include "vast/logger.h"
-#include "vast/fs/fstream.h"
-#include "vast/fs/operations.h"
 
 namespace vast {
 
@@ -20,13 +18,14 @@ segment_manager::segment_manager(size_t capacity, std::string const& dir)
   init_state = (
       on(atom("load")) >> [=]
       {
-        fs::each_file_entry(
+        ze::traverse(
             dir_,
-            [&](fs::path const& p)
+            [&](ze::path const& p) -> bool
             {
               LOG(verbose, archive)
                 << "segment manager @" << id() << " found segment " << p;
-              segment_files_.emplace(p.filename().string(), p);
+              segment_files_.emplace(p.basename().string(), p);
+              return true;
             });
 
         if (segment_files_.empty())
@@ -49,7 +48,7 @@ segment_manager::segment_manager(size_t capacity, std::string const& dir)
         std::transform(segment_files_.begin(),
                        segment_files_.end(),
                        std::back_inserter(ids),
-                       [](std::pair<ze::uuid, fs::path> const& p)
+                       [](std::pair<ze::uuid, ze::path> const& p)
                        {
                          return p.first;
                        });
@@ -79,9 +78,11 @@ void segment_manager::store_segment(cppa::cow_tuple<segment> t)
   auto path = dir_ / ze::to_string(s.id());
   segment_files_.emplace(s.id(), path);
   {
-    fs::ofstream file(path, std::ios::binary | std::ios::out);
-    ze::serialization::stream_oarchive oa(file);
-    oa << s;
+    ze::file file(path);
+    file.open(ze::file::write_only);
+    ze::io::file_output_stream out(file);
+    ze::io::binary_serializer sink(out);
+    sink << s;
   }
 
   cache_.insert(s.id(), t);
@@ -91,16 +92,17 @@ void segment_manager::store_segment(cppa::cow_tuple<segment> t)
 
 cppa::cow_tuple<segment> segment_manager::on_miss(ze::uuid const& uuid)
 {
+  assert(segment_files_.find(uuid) != segment_files_.end());
   DBG(archive)
     << "segment manager @" << id()
     << " cache miss, going to disk for segment " << uuid;
-  assert(segment_files_.find(uuid) != segment_files_.end());
 
-  fs::ifstream file(dir_ / ze::to_string(uuid), std::ios::binary | std::ios::in);
-  ze::serialization::stream_iarchive ia(file);
+  ze::file file(dir_ / ze::to_string(uuid));
+  file.open(ze::file::read_only);
+  ze::io::file_input_stream in(file);
+  ze::io::binary_deserializer source(in);
   segment s;
-  ia >> s;
-
+  source >> s;
   return {std::move(s)};
 }
 

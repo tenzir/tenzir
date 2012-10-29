@@ -4,7 +4,7 @@
 #include <cassert>
 #include <fstream>
 #include <cppa/cppa.hpp>
-#include <ze/forward.h>
+#include <ze/fwd.h>
 #include "vast/event_sink.h"
 
 namespace vast {

@@ -2,8 +2,8 @@
 #define VAST_UTIL_PROFILER_H
 
 #include <chrono>
+#include <fstream>
 #include <cppa/cppa.hpp>
-#include "vast/fs/fstream.h"
 
 namespace vast {
 namespace util {
@@ -33,7 +33,7 @@ public:
   profiler(std::string const& log_dir, std::chrono::seconds secs);
 
 private:
-  fs::ofstream file_;
+  std::ofstream file_;
   cppa::behavior init_state;
 };
 

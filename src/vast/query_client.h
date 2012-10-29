@@ -3,7 +3,7 @@
 
 #include <deque>
 #include <cppa/cppa.hpp>
-#include <ze/forward.h>
+#include <ze/fwd.h>
 
 namespace vast {
 

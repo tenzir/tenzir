@@ -42,9 +42,6 @@ public:
 
 private:
   virtual bool push_back_impl(ze::value const& value) = 0;
-
-  bool optional_;
-  Bitstream nil_;
 };
 
 } // namespace vast

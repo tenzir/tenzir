@@ -1,13 +1,62 @@
 #include "vast/index.h"
 
 #include <ze.h>
+#include "vast/bitmap_index.h"
 #include "vast/logger.h"
-#include "vast/fs/operations.h"
-#include "vast/fs/fstream.h"
+#include "vast/segment.h"
 #include "vast/expression.h"
 
+using namespace cppa;
 namespace vast {
-namespace detail {
+namespace {
+
+/// Owns a several bitmap indexes for a arguments of a specific event.
+template <typename Bitstream>
+class filament : public sb_actor<filament<Bitstream>>
+{
+public:
+  /// Spawns an event index with a given directory.
+  /// @param dir The directory containing the event argument indexes.
+  filament(std::string const& dir)
+  {
+    self->chaining(false);
+    init_state = (
+        on_arg_match >> [=](ze::event const& event)
+        {
+          auto delta = event.id() - last_;
+          for (auto& p : bitmaps_)
+          {
+            if (delta > 1)
+              p.second->patch(delta - 1, false);
+            p.second->push_back(event.at(p.first));
+          }
+          last_ = event.id();
+        },
+        on(atom("lookup")) >> [=]()
+        {
+        },
+        on(atom("shutdown")) >> [=]()
+        {
+            // TODO: flush bitmap indexes.
+        });
+  }
+
+  behavior init_state;
+
+private:
+  Bitstream lookup(std::vector<size_t> const& offsets,
+                   ze::value const& argument,
+                   relational_operator op) const
+  {
+    auto i = bitmaps_.find(offsets);
+    if (i == bitmaps_.end())
+      return {};
+    return i->second->lookup(argument, op);
+  };
+
+  std::map<std::vector<size_t>, std::unique_ptr<bitmap_index<Bitstream>>> bitmaps_;
+  uint64_t last_ = 0;
+};
 
 /// Determines whether a query expression has clauses that may benefit from an
 /// index lookup.
@@ -78,207 +127,43 @@ private:
   bool positive_ = false;
 };
 
+} // namespace
 
-/// Visits an expression and hits the meta index.
-class hitter : public expr::const_visitor
-{
-public:
-  /// Constructs a hitter with an index actor.
-  hitter(index::meta const& m, std::vector<ze::uuid>& ids)
-    : meta_(m)
-    , ids_(ids)
-  {
-  }
 
-  virtual void visit(expr::node const&)
-  {
-    assert(! "should never happen");
-  }
-
-  virtual void visit(expr::timestamp_extractor const&)
-  {
-    assert(rhs_.which() == ze::time_point_type);
-    assert(rel_ != nullptr);
-
-    switch (rel_->type())
-    {
-      default:
-        assert(! "invalid time extractor operator");
-        break;
-      case equal:
-        for (auto& i : meta_.ranges)
-          if (rhs_ >= i.first.first && rhs_ <= i.first.second)
-            ids_.push_back(i.second);
-        break;
-      case not_equal:
-        for (auto& i : meta_.ranges)
-          if (rhs_ < i.first.first || rhs_ > i.first.second)
-            ids_.push_back(i.second);
-        break;
-      case less:
-        for (auto& i : meta_.ranges)
-          if (rhs_ > i.first.first)
-            ids_.push_back(i.second);
-        break;
-      case less_equal:
-        for (auto& i : meta_.ranges)
-          if (rhs_ >= i.first.first)
-            ids_.push_back(i.second);
-        break;
-      case greater:
-        for (auto& i : meta_.ranges)
-          if (rhs_ < i.first.second)
-            ids_.push_back(i.second);
-        break;
-      case greater_equal:
-        for (auto& i : meta_.ranges)
-          if (rhs_ <= i.first.second)
-            ids_.push_back(i.second);
-        break;
-    }
-  }
-
-  virtual void visit(expr::name_extractor const& node)
-  {
-    assert(rhs_.which() == ze::string_type || rhs_.which() == ze::regex_type);
-    assert(rel_ != nullptr);
-
-    for (auto& i : meta_.names)
-      if (rel_->test(i.first, rhs_))
-        ids_.push_back(i.second);
-  }
-
-  virtual void visit(expr::id_extractor const&)
-  {
-    /* Do exactly nothing. */
-  }
-
-  virtual void visit(expr::offset_extractor const&)
-  {
-    /* Do exactly nothing. */
-  }
-
-  virtual void visit(expr::type_extractor const&)
-  {
-    /* Do exactly nothing. */
-  }
-
-  virtual void visit(expr::conjunction const& conj)
-  {
-    std::vector<ze::uuid> ids;
-
-    // The first intersection operand has a free shot.
-    auto i = conj.operands().begin();
-    hitter p(meta_, ids);
-    (*i)->accept(p);
-    std::sort(ids.begin(), ids.end());
-
-    for (++i; i != conj.operands().end(); ++i)
-    {
-      std::vector<ze::uuid> result;
-      hitter p(meta_, result);
-      (*i)->accept(p);
-
-      std::sort(result.begin(), result.end());
-      std::vector<ze::uuid> intersection;
-
-      std::set_intersection(ids.begin(), ids.end(),
-                     result.begin(), result.end(),
-                     std::back_inserter(intersection));
-
-      intersection.swap(ids);
-    }
-
-    ids_.swap(ids);
-  }
-
-  virtual void visit(expr::disjunction const& disj)
-  {
-    std::vector<ze::uuid> ids;
-    for (auto& operand : disj.operands())
-    {
-      std::vector<ze::uuid> result;
-      hitter p(meta_, result);
-      operand->accept(p);
-
-      std::sort(result.begin(), result.end());
-      std::vector<ze::uuid> unification;
-
-      std::set_union(ids.begin(), ids.end(),
-                     result.begin(), result.end(),
-                     std::back_inserter(unification));
-
-      unification.swap(ids);
-    }
-
-    ids_.swap(ids);
-  }
-
-  virtual void visit(expr::relation const& rel)
-  {
-    assert(rel_ == nullptr);
-    assert(rhs_ == ze::invalid);
-    assert(rel.operands().size() == 2);
-
-    rel_ = &rel;
-    rel.operands()[1]->accept(*this);
-    rel.operands()[0]->accept(*this);
-
-    rel_ = nullptr;
-    rhs_ = ze::invalid;
-  }
-
-  virtual void visit(expr::constant const& c)
-  {
-    assert(c.ready());
-    rhs_ = c.result();
-  }
-
-private:
-  expr::relation const* rel_ = nullptr;
-  ze::value rhs_ = ze::invalid;
-  index::meta const& meta_;
-  std::vector<ze::uuid>& ids_;
-};
-
-} // namespace detail
-
-index::index(cppa::actor_ptr archive, std::string directory)
+index::index(std::string directory)
   : dir_(std::move(directory))
-  , archive_(archive)
 {
-  using namespace cppa;
   chaining(false);
   init_state = (
       on(atom("load")) >> [=]
       {
         LOG(verbose, index) << "spawning index @" << id();
-        if (! fs::exists(dir_))
+        if (! ze::exists(dir_))
         {
           LOG(info, index)
             << "index @" << id() << " creates new directory " << dir_;
-          fs::mkdir(dir_);
+          ze::mkdir(dir_);
         }
 
-        assert(fs::exists(dir_));
-        fs::each_file_entry(
+        assert(ze::exists(dir_));
+        ze::traverse(
             dir_,
-            [&](fs::path const& p)
+            [&](ze::path const& p) -> bool
             {
-              fs::ifstream file(p, std::ios::binary | std::ios::in);
-              ze::serialization::stream_iarchive ia(file);
-              segment::header hdr;
-              ia >> hdr;
-              build(hdr);
+              LOG(info, index)
+                << "index @" << id() << " found file " << p;
+
+              // TODO:
+              //fs::ifstream file(p, std::ios::binary | std::ios::in);
+              //ze::serialization::stream_iarchive ia(file);
+              //segment::header hdr;
+              //ia >> hdr;
+              //build(hdr);
+              return true;
             });
       },
       on(atom("create"), arg_match) >> [=](schema const& sch)
       {
-        auto schema_hash = std::hash<schema>()(sch);
-        LOG(verbose, index)
-          << "index @" << id() << " builds indexes for schema 0x"
-          << std::hex << schema_hash;
-
         for (auto& event : sch.events())
         {
           if (! event.indexed)
@@ -299,37 +184,24 @@ index::index(cppa::actor_ptr archive, std::string directory)
       },
       on(atom("hit"), atom("all")) >> [=]
       {
-        if (ids_.empty())
-        {
-          reply(atom("miss"));
-          return;
-        }
-
-        reply(atom("hit"), ids_);
+        // TODO: see whether we still need this.
+        reply(atom("miss"));
       },
       on(atom("hit"), arg_match) >> [=](expression const& expr)
       {
-        detail::checker checker;
-        expr.accept(checker);
-        if (! checker || ids_.empty())
+        checker chkr;
+        expr.accept(chkr);
+        if (! chkr)
         {
           reply(atom("impossible"));
           return;
         }
 
-        std::vector<ze::uuid> ids;
-        detail::hitter hitter(meta_, ids);
-        expr.accept(hitter);
-
-        if (ids.empty())
-          reply(atom("miss"));
-        else
-          reply(atom("hit"), std::move(ids));
+        // TODO: parse expression and hit indexes.
       },
       on(arg_match) >> [=](segment const& s)
       {
-        write(s);
-        build(s.head());
+        // TODO: index each event in segment.
         reply(atom("segment"), atom("ack"), s.id());
       },
       on(atom("shutdown")) >> [=]()
@@ -337,37 +209,6 @@ index::index(cppa::actor_ptr archive, std::string directory)
         quit();
         LOG(verbose, index) << "index @" << id() << " terminated";
       });
-}
-
-void index::write(segment const& s)
-{
-  auto path = fs::path(dir_) / ze::to_string(s.id());
-  fs::ofstream file(path, std::ios::binary | std::ios::out);
-  ze::serialization::stream_oarchive oa(file);
-  oa << s.head();
-
-  LOG(verbose, index)
-    << "index @" << id() << " wrote segment header to " << path;
-}
-
-void index::build(segment::header const& hdr)
-{
-  LOG(debug, index) << "index @" << id()
-    << " builds in-memory indexes for segment " << hdr.id;
-
-  assert(ids_.count(hdr.id) == 0);
-  ids_.insert(hdr.id);
-
-// TODO: Remove as soon as newer GCC versions have adopted r181022.
-#ifdef __clang__
-  for (auto& event : hdr.event_names)
-    meta_.names.emplace(event, hdr.id);
-#else
-  for (auto& event : hdr.event_names)
-    meta_.names.insert({event, hdr.id});
-#endif
-
-  meta_.ranges.insert({{hdr.start, hdr.end}, hdr.id});
 }
 
 } // namespace vast

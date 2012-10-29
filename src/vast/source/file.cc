@@ -197,11 +197,14 @@ void bro2::parse_header()
     for (size_t i = 1; i < fs.fields(); ++i)
     {
       ze::string t(fs.start(i), fs.end(i));
-
       if (t.starts_with("table") || t.starts_with("vector"))
       {
         field_types_.push_back(ze::set_type);
-        ze::string elem(t.find("[") + 1, t.end() - 1);
+        auto open = t.find("[");
+        assert(open != ze::string::npos);
+        auto close = t.find("]", open);
+        assert(close != ze::string::npos);
+        auto elem = t.substr(open + 1, close - open - 1);
         set_types_.push_back(bro_to_ze(elem));
       }
       else

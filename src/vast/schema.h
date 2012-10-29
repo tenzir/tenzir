@@ -4,6 +4,7 @@
 #include <functional>
 #include <vector>
 #include <string>
+#include <ze/io/fwd.h>
 #include "vast/intrusive.h"
 
 namespace vast {
@@ -174,21 +175,11 @@ public:
   void add_event(event e);
 
 private:
-  template <typename Archive>
-  friend void serialize(Archive& oa, schema const& s)
-  {
-    oa << to_string(s);
-  }
-
-  template <typename Archive>
-  friend void deserialize(Archive& ia, schema& s)
-  {
-    std::string str;
-    ia >> str;
-    s.load(str);
-  }
-
+  friend class ze::io::access;
+  void serialize(ze::io::serializer& sink);
+  void deserialize(ze::io::deserializer& source);
   friend bool operator==(schema const& x, schema const& y);
+  friend bool operator!=(schema const& x, schema const& y);
 
   std::vector<type_info> types_;
   std::vector<event> events_;

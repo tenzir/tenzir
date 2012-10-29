@@ -2,6 +2,7 @@
 #define VAST_BITSTREAM_H
 
 #include <algorithm>
+#include <ze/io/serialization.h>
 #include "vast/bitvector.h"
 #include "vast/exception.h"
 
@@ -127,16 +128,14 @@ private:
     return *static_cast<Derived const*>(this);
   }
 
-  template <typename Archive>
-  friend void serialize(Archive& oa, bitstream const& bs)
+  void serialize(ze::io::serializer& sink)
   {
-    oa << bs.bits_;
+    sink << bits_;
   }
 
-  template <typename Archive>
-  friend void deserialize(Archive& ia, bitstream& bs)
+  void deserialize(ze::io::deserializer& source)
   {
-    ia >> bs.bits_;
+    source >> bits_;
   }
 };
 

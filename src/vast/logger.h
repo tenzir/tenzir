@@ -1,10 +1,10 @@
 #ifndef VAST_LOGGER_H
 #define VAST_LOGGER_H
 
+#include <fstream>
 #include <mutex>
 #include <sstream>
-#include "vast/fs/fstream.h"
-#include "vast/fs/path.h"
+#include "ze/fwd.h"
 
 /// Basic logging macro.
 #define LOG(level, facility)                                \
@@ -84,11 +84,11 @@ public:
   class file_sink : public sink
   {
   public:
-    file_sink(level lvl, fs::path file);
+    file_sink(level lvl, ze::path file);
     ~file_sink();
 
   private:
-    fs::ofstream file_;
+    std::ofstream file_;
   };
 
   /// A single formatted log line flushed upon destruction.
@@ -120,7 +120,7 @@ public:
   /// @param logfile The file where to log to.
   static void init(level console_verbosity,
                    level logfile_verbosity,
-                   fs::path const& logfile);
+                   ze::path const& logfile);
 
   /// Retrieves a pointer to the global logger object.
   static logger* get();
@@ -146,7 +146,7 @@ private:
   /// @param logfile The file where to log to.
   logger(level console_verbosity,
          level logfile_verbosity,
-         fs::path const& logfile);
+         ze::path const& logfile);
 
   /// Writes a record to the relevant sinks.
   /// @param rec The record to dispatch.

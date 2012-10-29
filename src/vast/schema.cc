@@ -1,12 +1,13 @@
 #include "vast/schema.h"
 
-#include <ze/serialization.h>
+#include <fstream>
+#include <ze/io/container_stream.h>
+#include <ze/io/serialization.h>
 #include "vast/exception.h"
 #include "vast/logger.h"
 #include "vast/to_string.h"
 #include "vast/detail/ast/schema.h"
 #include "vast/detail/parser/schema.h"
-#include "vast/fs/fstream.h"
 
 namespace vast {
 namespace detail {
@@ -203,20 +204,18 @@ void schema::load(std::string const& contents)
 
 void schema::read(const std::string& filename)
 {
-  fs::ifstream in(filename);
-
+  std::ifstream in(filename);
   std::string storage;
   in.unsetf(std::ios::skipws);
   std::copy(std::istream_iterator<char>(in),
             std::istream_iterator<char>(),
             std::back_inserter(storage));
-
   load(storage);
 }
 
 void schema::write(std::string const& filename) const
 {
-  fs::ofstream(filename) << to_string(*this);
+  std::ofstream(filename) << to_string(*this);
 }
 
 std::vector<schema::type_info> const& schema::types() const
@@ -350,9 +349,26 @@ void schema::add_event(event e)
   events_.emplace_back(std::move(e));
 }
 
+void schema::serialize(ze::io::serializer& sink)
+{
+  sink << to_string(*this);
+}
+
+void schema::deserialize(ze::io::deserializer& source)
+{
+  std::string str;
+  source >> str;
+  load(str);
+}
+
 bool operator==(schema const& x, schema const& y)
 {
   return x.types_ == y.types_ && x.events_ == y.events_;
+}
+
+bool operator!=(schema const& x, schema const& y)
+{
+  return ! (x == y);
 }
 
 bool operator==(schema::type_info const& x, schema::type_info const& y)
@@ -377,7 +393,11 @@ namespace std {
 size_t hash<vast::schema>::operator()(vast::schema const& sch) const
 {
   std::string str;
-  ze::serialize(sch, str);
+  {
+    auto out = ze::io::make_container_output_stream(str);
+    ze::io::serializer sink(out);
+    sink << sch;
+  }
   return hash<std::string>()(str);
 }
 

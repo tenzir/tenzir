@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <ze/event.h>
+#include <ze/file_system.h>
 #include "vast/archive.h"
 #include "vast/exception.h"
 #include "vast/config.h"
@@ -17,8 +18,6 @@
 #include "vast/system_monitor.h"
 #include "vast/to_string.h"
 #include "vast/detail/cppa_type_info.h"
-#include "vast/fs/path.h"
-#include "vast/fs/operations.h"
 #include "vast/util/profiler.h"
 
 #ifdef VAST_HAVE_BROCCOLI
@@ -84,9 +83,9 @@ bool program::start()
   LOG(verbose, core) << "|___/_/ |_/___/ /_/  " << VAST_VERSION;
   LOG(verbose, core) << "";
 
-  auto vast_dir = config_.get<fs::path>("directory");
-  assert(fs::exists(vast_dir));
-  assert(fs::exists(vast_dir / "log"));
+  auto const& vast_dir = config_.get<std::string>("directory");
+  assert(ze::exists(vast_dir));
+  assert(ze::exists(ze::path(vast_dir) / "log"));
 
   try
   {
@@ -96,7 +95,7 @@ bool program::start()
     if (config_.check("profile"))
     {
       auto ms = config_.get<unsigned>("profile");
-      profiler_ = spawn<util::profiler>((vast_dir / "log").string(),
+      profiler_ = spawn<util::profiler>((ze::path(vast_dir) / "log").string(),
                                         std::chrono::seconds(ms));
       send(profiler_,
            atom("run"),
@@ -129,7 +128,8 @@ bool program::start()
 
     if (config_.check("tracker-actor") || config_.check("all-server"))
     {
-      tracker_ = spawn<id_tracker>((vast_dir / "id").string());
+      tracker_ = spawn<id_tracker>((ze::path(vast_dir) / "id").string());
+      send(tracker_, atom("initialize"));
       LOG(verbose, core) << "publishing tracker at *:"
           << config_.get<unsigned>("tracker.port");
 
@@ -150,7 +150,7 @@ bool program::start()
 
     if (config_.check("archive-actor") || config_.check("all-server"))
     {
-      archive_ = spawn<archive>((vast_dir / "archive").string(),
+      archive_ = spawn<archive>((ze::path(vast_dir) / "archive").string(),
           config_.get<size_t>("archive.max-segments"));
       send(archive_, atom("load"));
 
@@ -174,7 +174,7 @@ bool program::start()
 
     if (config_.check("index-actor") || config_.check("all-server"))
     {
-      index_ = spawn<index>(archive_, (vast_dir / "index").string());
+      index_ = spawn<index>((ze::path(vast_dir) / "index").string());
       send(index_, atom("load"));
 
       LOG(verbose, core) << "publishing index at *:"
@@ -227,7 +227,7 @@ bool program::start()
         auto files = config_.get<std::vector<std::string>>("ingest.file-names");
         for (auto& file : files)
         {
-          if (fs::exists(file))
+          if (ze::exists(file))
             send(ingestor_, atom("ingest"), type, file);
           else
             LOG(error, core) << "no such file: " << file;

@@ -3,7 +3,7 @@
 
 #include <deque>
 #include <cppa/cppa.hpp>
-#include <ze/forward.h>
+#include <ze/fwd.h>
 #include "vast/segment.h"
 #include "vast/util/accumulator.h"
 

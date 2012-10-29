@@ -3,11 +3,11 @@
 #include <iostream>
 #include <string>
 #include <boost/exception/diagnostic_information.hpp>
+#include <ze/file_system.h>
+#include <ze/to_string.h>
+#include <ze/io.h>
 #include "vast/config.h"
 #include "vast/exception.h"
-#include "vast/fs/path.h"
-#include "vast/fs/fstream.h"
-#include "vast/fs/operations.h"
 #include "vast/logger.h"
 
 namespace vast {
@@ -18,8 +18,8 @@ configuration::configuration()
 {
   po::options_description general("general options");
   general.add_options()
-    ("config,c", po::value<fs::path>(), "configuration file")
-    ("directory,d", po::value<fs::path>()->default_value("vast"),
+    ("config,c", po::value<std::string>(), "configuration file")
+    ("directory,d", po::value<std::string>()->default_value("vast"),
      "VAST directory")
     ("help,h", "display this help")
     ("advanced,z", "show advanced options")
@@ -138,12 +138,10 @@ bool configuration::load(std::string const& filename)
 {
   try
   {
-    if (! fs::exists(filename))
+    if (! ze::exists(filename))
       return false;
-
-    fs::ifstream ifs(filename);
+    std::ifstream ifs(filename);
     po::store(po::parse_config_file(ifs, all_), config_);
-
     return init();
   }
   catch (error::config const& e)
@@ -158,7 +156,6 @@ bool configuration::load(std::string const& filename)
   {
     std::cerr << boost::diagnostic_information(e);
   }
-
   return false;
 }
 
@@ -170,8 +167,8 @@ bool configuration::load(int argc, char *argv[])
 
     if (check("config"))
     {
-      fs::path const& cfg = get<fs::path>("config");
-      std::ifstream ifs(cfg.string().data());
+      auto& cfg = get<std::string>("config");
+      std::ifstream ifs(cfg);
       po::store(po::parse_config_file(ifs, all_), config_);
     }
 
@@ -241,9 +238,9 @@ bool configuration::init()
   if (get<unsigned>("client.paginate") == 0)
     throw error::config("pagination must be non-zero", "client.paginate");
 
-  auto log_dir = get<fs::path>("directory") / "log";
-  if (! fs::exists(log_dir))
-      fs::mkdir(log_dir);
+  auto log_dir = ze::path(get<std::string>("directory")) / "log";
+  if (! ze::exists(log_dir))
+      ze::mkdir(log_dir);
 
   logger::init(
       static_cast<logger::level>(cv),

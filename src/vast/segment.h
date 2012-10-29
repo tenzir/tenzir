@@ -4,13 +4,10 @@
 #include <vector>
 #include <string>
 #include <cppa/cow_tuple.hpp>
-#include <ze/forward.h>
-#include <ze/uuid.h>
-#include <ze/compression.h>
 #include <ze/chunk.h>
-#include <ze/serialization.h>
-#include <ze/type/time.h>
-#include "vast/exception.h"
+#include <ze/time.h>
+#include <ze/uuid.h>
+#include <ze/io/compression.h>
 
 namespace vast {
 
@@ -26,42 +23,12 @@ public:
   {
     header() = default;
 
-    template <typename Archive>
-    friend void serialize(Archive& oa, header const& h)
-    {
-      oa << segment::magic;
-      oa << h.version;
-      oa << h.id;
-      oa << h.compression;
-      oa << h.start;
-      oa << h.end;
-      oa << h.event_names;
-      oa << h.events;
-    }
-
-    template <typename Archive>
-    friend void deserialize(Archive& ia, header& h)
-    {
-      uint32_t magic;
-      ia >> magic;
-      if (magic != segment::magic)
-        throw error::segment("invalid segment magic");
-
-      ia >> h.version;
-      if (h.version > segment::version)
-        throw error::segment("segment version too high");
-
-      ia >> h.id;
-      ia >> h.compression;
-      ia >> h.start;
-      ia >> h.end;
-      ia >> h.event_names;
-      ia >> h.events;
-    }
+    void serialize(ze::io::serializer& sink);
+    void deserialize(ze::io::deserializer& source);
 
     uint32_t version = 0;
     ze::uuid id;
-    ze::compression compression;
+    ze::io::compression compression;
     ze::time_point start;
     ze::time_point end;
     std::vector<std::string> event_names;
@@ -146,7 +113,7 @@ public:
   /// @param method The UUID of the segment.
   /// @param method The compression method to use for each chunk.
   segment(ze::uuid uuid = ze::uuid::nil(),
-          ze::compression method = ze::compression::none);
+          ze::io::compression method = ze::io::lz4);
 
   /// Copy-constructs a segment.
   /// @param other The segment to copy.

@@ -1,6 +1,7 @@
 #include "vast/bitvector.h"
 
 #include <cassert>
+#include <ze/io/serialization.h>
 #include "vast/exception.h"
 
 namespace vast {
@@ -454,6 +455,18 @@ size_type bitvector::lowest_bit(block_type block)
   while (x >>= 1)
     ++log;
   return log;
+}
+
+void bitvector::serialize(ze::io::serializer& sink)
+{
+  sink << num_bits_;
+  sink << bits_;
+}
+
+void bitvector::deserialize(ze::io::deserializer& source)
+{
+  source >> num_bits_;
+  source >> bits_;
 }
 
 block_type bitvector::extra_bits() const

@@ -3,8 +3,8 @@
 
 #include <unordered_map>
 #include <cppa/cppa.hpp>
+#include <ze/file_system.h>
 #include <ze/uuid.h>
-#include "vast/fs/path.h"
 #include "vast/util/lru_cache.h"
 
 namespace vast {
@@ -38,8 +38,8 @@ private:
   cppa::cow_tuple<segment> on_miss(ze::uuid const& uuid);
 
   lru_cache cache_;
-  fs::path const dir_;
-  std::unordered_map<ze::uuid, fs::path> segment_files_;
+  ze::path const dir_;
+  std::unordered_map<ze::uuid, ze::path> segment_files_;
   cppa::behavior init_state;
 };
 

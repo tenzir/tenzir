@@ -1,11 +1,12 @@
 #include "vast/util/profiler.h"
 
+#include <cassert>
 #include <iomanip>
 #include <sys/resource.h>   // getrusage
 #include <sys/time.h>       // gettimeofday
+#include <ze/file_system.h>
 #include "vast/config.h"
 #include "vast/logger.h"
-#include "vast/fs/path.h"
 
 #ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
 #include <google/profiler.h>
@@ -48,7 +49,7 @@ std::ostream& operator<<(std::ostream& out, profiler::measurement const& m)
 
 profiler::profiler(std::string const& log_dir, std::chrono::seconds secs)
 {
-  auto f = (fs::path(log_dir) / "profile.log").string();
+  auto f = (ze::path(log_dir) / "profile.log").string();
   file_.open(f.data());
 
   LOG(verbose, core) << "spawning profiler @" << id();
@@ -81,8 +82,8 @@ profiler::profiler(std::string const& log_dir, std::chrono::seconds secs)
           LOG(info, core)
             << "profiler @" << id() << " starts Gperftools CPU profiler";
 
-          auto f = fs::path(log_dir) / "perftools.cpu";
-          ProfilerStart(f.string().data());
+          auto f = ze::path(log_dir) / "perftools.cpu";
+          ProfilerStart(f.c_str());
         }
 #endif
 #ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
@@ -91,8 +92,8 @@ profiler::profiler(std::string const& log_dir, std::chrono::seconds secs)
           LOG(info, core)
             << "profiler @" << id() << " starts Gperftools heap profiler";
 
-          auto f = fs::path(log_dir) / "perftools.heap";
-          HeapProfilerStart(f.string().data());
+          auto f = ze::path(log_dir) / "perftools.heap";
+          HeapProfilerStart(f.c_str());
         }
 #endif
         measurement now;

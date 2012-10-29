@@ -1,11 +1,11 @@
 #include "vast/archive.h"
 
 #include <ze/event.h>
+#include <ze/file_system.h>
 #include "vast/exception.h"
 #include "vast/logger.h"
 #include "vast/segment.h"
 #include "vast/segment_manager.h"
-#include "vast/fs/operations.h"
 
 namespace vast {
 
@@ -16,11 +16,15 @@ archive::archive(std::string const& directory, size_t max_segments)
   init_state = (
       on(atom("load")) >> [=]
       {
-        if (! fs::exists(directory))
+        ze::path p(directory);
+        if (! ze::exists(p))
         {
           LOG(info, archive)
             << "archive @" << id() << " creates new directory " << directory;
-          fs::mkdir(directory);
+          if (! ze::mkdir(p))
+            LOG(error, archive)
+              << "archive @" << id()
+              << " failed to create directory " << directory;
         }
         segment_manager_ = spawn<segment_manager>(max_segments, directory);
         forward_to(segment_manager_);

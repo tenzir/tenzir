@@ -1,7 +1,7 @@
 #include "vast/expression.h"
 
 #include <boost/variant/apply_visitor.hpp>
-#include <ze/type/regex.h>
+#include <ze/regex.h>
 #include <ze/util/make_unique.h>
 #include "vast/exception.h"
 #include "vast/logger.h"

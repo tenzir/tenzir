@@ -1,8 +1,10 @@
 #include "vast/id_tracker.h"
 
-#include "vast/fs/exception.h"
-#include "vast/fs/operations.h"
+#include <ze/file_system.h>
+#include "vast/exception.h"
 #include "vast/logger.h"
+
+using namespace cppa;
 
 namespace vast {
 
@@ -11,31 +13,29 @@ id_tracker::id_tracker(std::string const& id_file)
   LOG(verbose, ingest)
     << "spawning id tracker @" << id()
     << " with id file " << id_file;
-
-  if (! fs::exists(id_file))
-  {
-    LOG(info, ingest)
-      << "id tracker @" << id()
-      << " did not find an id file, starting from 0";
-  }
-  else
-  {
-    std::ifstream ifs(id_file);
-    if (! ifs)
-      throw fs::file_exception("could not open id file", id_file);
-
-    ifs >> id_;
-    LOG(info, ingest)
-      << "id tracker @" << id()
-      << " found an id file with highest id " << id_;
-  }
-
-  file_.open(id_file);
-  file_.seekp(0);
-
-  using namespace cppa;
   chaining(false);
   init_state = (
+    on(atom("initialize")) >> [=]()
+    {
+      if (! ze::exists(id_file))
+      {
+        LOG(info, ingest)
+          << "id tracker @" << id()
+          << " did not find an id file, starting from 0";
+      }
+      else
+      {
+        std::ifstream ifs(id_file);
+        if (! ifs)
+          throw error::fs("could not open id file", id_file);
+        ifs >> id_;
+        LOG(info, ingest)
+          << "id tracker @" << id()
+          << " found an id file with highest id " << id_;
+      }
+      file_.open(id_file);
+      file_.seekp(0);
+    },
     on(atom("request"), arg_match) >> [=](size_t n)
     {
       if (std::numeric_limits<uint64_t>::max() - id_ < n)

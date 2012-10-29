@@ -2,7 +2,7 @@
 #define VAST_EVENT_SINK_H
 
 #include <cppa/cppa.hpp>
-#include <ze/forward.h>
+#include <ze/fwd.h>
 
 namespace vast {
 

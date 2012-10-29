@@ -23,6 +23,18 @@ char const* exception::what() const noexcept
 
 namespace error {
 
+fs::fs(char const* msg)
+  : exception(msg)
+{
+}
+
+fs::fs(char const* msg, std::string const& filename)
+{
+  std::ostringstream oss;
+  oss << "file " << filename << ": " << msg;
+  msg_ = oss.str();
+}
+
 network::network(char const* msg)
   : exception(msg)
 {

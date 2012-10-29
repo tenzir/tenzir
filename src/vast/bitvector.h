@@ -4,7 +4,7 @@
 #include <iterator>
 #include <limits>
 #include <vector>
-#include <ze/serialization/container.h>
+#include <ze/io/fwd.h>
 
 namespace vast {
 
@@ -272,19 +272,8 @@ private:
   /// @return The bit position where *block* has its first bit set to 1.
   static size_type lowest_bit(block_type block);
 
-  template <typename Archive>
-  friend void serialize(Archive& oa, bitvector const& bv)
-  {
-    oa << bv.num_bits_;
-    oa << bv.bits_;
-  }
-
-  template <typename Archive>
-  friend void deserialize(Archive& ia, bitvector& bv)
-  {
-    ia >> bv.num_bits_;
-    ia >> bv.bits_;
-  }
+  void serialize(ze::io::serializer& sink);
+  void deserialize(ze::io::deserializer& source);
 
   /// Computes the number of excess/unused bits in the bit vector.
   block_type extra_bits() const;

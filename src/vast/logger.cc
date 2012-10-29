@@ -1,8 +1,10 @@
 #include "vast/logger.h"
 
+#include <iostream>
 #include <iomanip>
 #include <thread>
 #include <chrono>
+#include <ze/file_system.h>
 
 namespace vast {
 
@@ -55,9 +57,9 @@ bool logger::sink::takes(level lvl)
   return lvl <= level_;
 }
 
-logger::file_sink::file_sink(level lvl, fs::path file)
+logger::file_sink::file_sink(level lvl, ze::path file)
   : sink(lvl, file_)
-  , file_(file, std::ios::app)
+  , file_(file.string(), std::ios::app)
 {
 }
 
@@ -91,7 +93,7 @@ logger::record::~record()
 
 void logger::init(level console_verbosity,
                   level logfile_verbosity,
-                  fs::path const& logfile)
+                  ze::path const& logfile)
 {
   LOGGER = new logger(console_verbosity, logfile_verbosity, logfile);
 }
@@ -117,7 +119,7 @@ void logger::write(record const& rec)
 
 logger::logger(level console_verbosity,
                level logfile_verbosity,
-               fs::path const& logfile)
+               ze::path const& logfile)
   : console_(console_verbosity, std::cerr)
   , logfile_(logfile_verbosity, logfile)
 {
