@@ -16,7 +16,7 @@ configure_file(schema_test_cases.h.in schema_test_cases.h)
 file(GLOB_RECURSE tests *.cc)
 
 add_executable(unit-test ${tests} ${dependencies})
-target_link_libraries(unit-test libvast)
+target_link_libraries(unit-test libvast ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY})
 
 add_custom_target(test ${CMAKE_CURRENT_BINARY_DIR}/unit-test -v0)
 add_dependencies(test unit-test)

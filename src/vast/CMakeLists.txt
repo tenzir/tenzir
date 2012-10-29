@@ -23,15 +23,13 @@ set(libvast_sources
   segment_manager.cc
   system_monitor.cc
   to_string.cc
-  detail/cppa_archive.cc
+  detail/cppa_serialization.cc
   detail/cppa_type_info.cc
   detail/ast/query.cc
   detail/parser/expression.cc
   detail/parser/query.cc
   detail/parser/schema.cc
   detail/parser/bro15/conn.cc
-  fs/exception.cc
-  fs/operations.cc
   sink/file.cc
   source/file.cc
   util/console.cc
@@ -45,7 +43,7 @@ if (BROCCOLI_FOUND)
 endif ()
 
 set(libvast_libs
-    ${Boost_LIBRARIES}
+    ${Boost_PROGRAM_OPTIONS_LIBRARY}
     ${LIBCPPA_LIBRARIES}
     ${0event_LIBRARIES})
 
