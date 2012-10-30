@@ -37,6 +37,8 @@ std::string to_string(boolean_operator op)
 {
   switch (op)
   {
+    default:
+      throw error::logic("missing case for boolean operator");
     case logical_not:
       return "!";
     case logical_and:
@@ -50,6 +52,8 @@ std::string to_string(arithmetic_operator op)
 {
   switch (op)
   {
+    default:
+      throw error::logic("missing case for arithmetic operator");
     case positive:
     case plus:
       return "+";
@@ -77,6 +81,8 @@ std::string to_string(relational_operator op)
 {
   switch (op)
   {
+    default:
+      throw error::logic("missing case for relational operator");
     case match:
       return "~";
     case not_match:

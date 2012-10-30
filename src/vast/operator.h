@@ -1,6 +1,8 @@
 #ifndef VAST_OPERATOR_H
 #define VAST_OPERATOR_H
 
+#include <cstdint>
+
 namespace vast {
 
 /// An arithmetic operator.
@@ -47,32 +49,7 @@ enum boolean_operator : uint8_t
 /// Negates a relational operator, i.e., creates the complementary operator.
 /// @param op The operator to negate.
 /// @return The complement of *op*.
-inline relational_operator negate(relational_operator op)
-{
-  switch (op)
-  {
-    case match:
-      return not_match;
-    case not_match:
-      return match;
-    case equal:
-      return not_equal;
-    case not_equal:
-      return equal;
-    case less:
-      return greater_equal;
-    case less_equal:
-      return greater;
-    case greater:
-      return less_equal;
-    case greater_equal:
-      return less;
-    case in:
-      return not_in;
-    case not_in:
-      return in;
-  }
-}
+relational_operator negate(relational_operator op);
 
 } // namespace
 
