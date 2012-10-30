@@ -1,4 +1,4 @@
-# Try to find 0event headers and library.
+# Tries to find 0event headers and library.
 #
 # Use this module as follows:
 #
@@ -18,19 +18,24 @@
 #  0event_INCLUDE_DIR        The location of 0event headers
 
 find_path(0event_INCLUDE_DIR
-    NAMES ze.h
-    HINTS ${0event_ROOT_DIR}/include)
+  NAMES ze.h
+  HINTS ${0event_ROOT_DIR}/include)
 
 find_library(0event_LIBRARIES
-    NAMES ze
-    HINTS ${0event_ROOT_DIR}/lib)
+  NAMES
+    lz4
+    lz4hc
+    ze
+  HINTS
+    ${0event_ROOT_DIR}/lib)
 
 include(FindPackageHandleStandardArgs)
-find_package_handle_standard_args(0event DEFAULT_MSG
-    0event_LIBRARIES
-    0event_INCLUDE_DIR)
+find_package_handle_standard_args(
+  0event DEFAULT_MSG
+  0event_LIBRARIES
+  0event_INCLUDE_DIR)
 
 mark_as_advanced(
-    0event_ROOT_DIR
-    0event_LIBRARIES
-    0event_INCLUDE_DIR)
+  0event_ROOT_DIR
+  0event_LIBRARIES
+  0event_INCLUDE_DIR)
