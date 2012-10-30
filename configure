@@ -15,29 +15,29 @@ use this configure script to access CMake equivalent functionality.\
 usage="\
 Usage: $0 [OPTION]... [VAR=VALUE]...
 
-  Build Options:
+  Build options:
     --build-dir=DIR         place build files in directory [build]
     --generator=GENERATOR   CMake generator to use (see cmake --help)
     --with-cxx=PATH         path to a C++ compiler executable
 
-  Installation Directories:
+  Installation directories:
     --prefix=PREFIX         installation directory [/usr/local]
 
-  Optional Features:
+  Optional features:
     --enable-debug          compile in debugging mode
     --enable-perftools-heap use Gperftools' tcmalloc heap profiling
 
-  Required Packages in Non-Standard Locations:
+  Required packages in non-standard locations:
     --with-libcppa=PATH     path to libcppa install root
     --with-0event=PATH      path to 0vent install root
     --with-boost=PATH       path to Boost install root
-    --with-broccoli=PATH    path to Broccoli install root
 
-  Optional Packages in Non-Standard Locations:
+  Optional packages in non-standard locations:
     --with-perftools=PATH   path to Gperftools install root
+    --with-broccoli=PATH    path to Broccoli install root
     --with-doxygen=PATH     path to Doxygen install root
 
-  Packaging Options (for developers):
+  Packaging options (for developers):
     --binary-package        toggle special logic for binary packaging
     --ignore-dirs=PATHS     paths to ignore when creating source package
                             (semicolon delimited and quoted when multiple)
