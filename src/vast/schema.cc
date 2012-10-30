@@ -395,7 +395,7 @@ size_t hash<vast::schema>::operator()(vast::schema const& sch) const
   std::string str;
   {
     auto out = ze::io::make_container_output_stream(str);
-    ze::io::serializer sink(out);
+    ze::io::binary_serializer sink(out);
     sink << sch;
   }
   return hash<std::string>()(str);

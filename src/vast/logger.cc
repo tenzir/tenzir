@@ -1,9 +1,10 @@
 #include "vast/logger.h"
 
+#include <cstring>
+#include <chrono>
 #include <iostream>
 #include <iomanip>
 #include <thread>
-#include <chrono>
 #include <ze/file_system.h>
 
 namespace vast {

@@ -284,7 +284,8 @@ ze::event bro2::parse(std::string const& line)
   if (fs.fields() != field_types_.size())
     throw error::parse("inconsistent number of fields", current_);
 
-  ze::event e(path_);
+  ze::event e;
+  e.name(path_);
   e.timestamp(ze::now());
   size_t sets = 0;
   for (size_t f = 0; f < fs.fields(); ++f)
@@ -356,7 +357,8 @@ bro15conn::bro15conn(cppa::actor_ptr ingestor,
 
 ze::event bro15conn::parse(std::string const& line)
 {
-  ze::event e("bro::conn");
+  ze::event e;
+  e.name("bro::conn");
   e.timestamp(ze::now());
 
   util::field_splitter<std::string::const_iterator> fs;
