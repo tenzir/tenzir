@@ -21,8 +21,7 @@ public:
   exception() = default;
   exception(char const* msg);
   exception(std::string const& msg);
-
-  virtual char const* what() const noexcept;
+  virtual char const* what() const noexcept override;
 
 protected:
   std::string msg_;
@@ -30,6 +29,14 @@ protected:
 
 /// The namespace for all exceptions.
 namespace error {
+
+/// The analogue of `std::logic_error`. It reports errors that are a
+/// consequence of faulty logic within the program such as violating logical
+/// preconditions or class invariants and may be preventable.
+struct logic : exception
+{
+  logic(char const* msg);
+};
 
 /// Thrown for file system errors.
 struct fs : exception

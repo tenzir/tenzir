@@ -23,6 +23,11 @@ char const* exception::what() const noexcept
 
 namespace error {
 
+logic::logic(char const* msg)
+  : exception(msg)
+{
+}
+
 fs::fs(char const* msg)
   : exception(msg)
 {
