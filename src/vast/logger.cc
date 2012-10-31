@@ -60,13 +60,18 @@ bool logger::sink::takes(level lvl)
 
 logger::file_sink::file_sink(level lvl, ze::path file)
   : sink(lvl, file_)
-  , file_(file.string(), std::ios::app)
 {
+  if (lvl != quiet)
+  {
+    if (! ze::exists(file.parent()))
+      ze::mkdir(file.parent());
+    file_.open(file.string(), std::ios::app);
+  }
 }
 
 logger::file_sink::~file_sink()
 {
-  if (file_.good())
+  if (file_)
     file_ << std::endl;
 }
 

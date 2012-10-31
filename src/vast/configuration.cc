@@ -3,6 +3,7 @@
 #include <iostream> // FIXME: remove.
 #include <ze/file_system.h>
 #include "vast/logger.h"
+#include "vast/detail/cppa_type_info.h"
 
 namespace vast {
 
@@ -40,7 +41,7 @@ configuration::configuration()
   advanced.visible(false);
 
   auto& actor = create_block("actor options");
-  actor.add('a', "all", "spawn all server actors");
+  actor.add('a', "all-server", "spawn all server actors");
   actor.add('I', "archive", "spawn the ingestor");
   actor.add('A', "index", "spawn the index");
   actor.add('X', "search", "spawn the search");
@@ -115,15 +116,17 @@ void configuration::verify()
 
   if (as<unsigned>("client.paginate") == 0)
     throw error::config("pagination must be non-zero", "client.paginate");
+}
 
-  auto log_dir = ze::path(get("directory")) / "log";
-  if (! ze::exists(log_dir))
-      ze::mkdir(log_dir);
-
+void init(configuration const& config)
+{
+  ze::path directory = config.get("directory");
   logger::init(
-      static_cast<logger::level>(cv),
-      static_cast<logger::level>(fv),
-      log_dir / "vast.log");
+      static_cast<logger::level>(config.as<int>("log.console-verbosity")),
+      static_cast<logger::level>(config.as<int>("log.file-verbosity")),
+      directory / "log" / "vast.log");
+
+  detail::cppa_announce_types();
 }
 
 } // namespace vast

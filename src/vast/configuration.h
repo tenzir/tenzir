@@ -15,6 +15,11 @@ protected:
   virtual void verify() override;
 };
 
+/// Initializes VAST. This function must be called exactly once before creating
+/// an instance of vast::program.
+/// @param The program configuration.
+void init(configuration const& config);
+
 } // namespace vast
 
 #endif

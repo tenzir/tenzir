@@ -17,7 +17,6 @@
 #include "vast/search.h"
 #include "vast/system_monitor.h"
 #include "vast/to_string.h"
-#include "vast/detail/cppa_type_info.h"
 #include "vast/util/profiler.h"
 
 #ifdef VAST_HAVE_BROCCOLI
@@ -31,7 +30,6 @@ using namespace cppa;
 program::program(configuration const& config)
   : config_(config)
 {
-  detail::cppa_announce_types();
 }
 
 bool program::run()

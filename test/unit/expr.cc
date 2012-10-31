@@ -4,11 +4,22 @@
 #include <vast/exception.h>
 #include <vast/expression.h>
 
-std::vector<ze::event> events
+struct event_fixture
 {
-  {"foo", "babba", 1.337, 42u, 100, "bar", -4.8},
-  {"bar", "yadda", ze::record{false, "baz"}}
+  event_fixture()
+  {
+    ze::event e0{"babba", 1.337, 42u, 100, "bar", -4.80};
+    e0.name("foo");
+    ze::event e1{"yadda", ze::record{false, "baz"}};
+    e1.name("bar");
+    events.push_back(std::move(e0));
+    events.push_back(std::move(e1));
+  }
+
+  std::vector<ze::event> events;
 };
+
+BOOST_FIXTURE_TEST_SUITE(expression_tests, event_fixture)
 
 BOOST_AUTO_TEST_CASE(type_queries)
 {
@@ -90,3 +101,5 @@ BOOST_AUTO_TEST_CASE(offset_queries)
   expr.parse("@1,0,1 == F");
   BOOST_CHECK(expr.eval(event));
 }
+
+BOOST_AUTO_TEST_SUITE_END()

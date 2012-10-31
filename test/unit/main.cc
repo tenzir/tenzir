@@ -10,6 +10,7 @@ int main(int argc, char* argv[])
 {
   vast::configuration config;
   config.load("/dev/null");
+  vast::init(config);
 
   boost::unit_test::unit_test_log.set_stream(vast::logger::get()->console());
   char const* args[] = {"", "--log_level=test_suite"};

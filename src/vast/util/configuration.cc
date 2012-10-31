@@ -8,13 +8,14 @@
 namespace vast {
 namespace util {
 
+// TODO: Implement this function.
 void configuration::load(std::string const& filename)
 {
   std::ifstream ifs(filename);
   if (! ifs)
     throw error::config("could not open configuration file");
 
-  // TODO: Implement this function.
+  verify();
 }
 
 void configuration::load(int argc, char *argv[])
@@ -55,6 +56,8 @@ void configuration::load(int argc, char *argv[])
       values.emplace_back(argv[++i]);
     if (values.size() > o->max_vals_)
       throw error::config("too many values", arg);
+    if (o->max_vals_ == 1 && values.size() != 1)
+      throw error::config("option value required", arg);
     if (! values.empty())
       o->values_ = std::move(values);
   }
