@@ -34,7 +34,7 @@ private:
   write(T x)
   {
     using namespace ze;
-    sink_->write_value(util::byte_swap<host_endian, network_endian>(x));
+    sink_->write_value(ze::util::byte_swap<host_endian, network_endian>(x));
     return true;
   }
 
@@ -73,7 +73,7 @@ private:
         "invalid type conversion on cppa's primitive variant");
 
     auto pv = source_->read_value(ptype);
-    x = util::byte_swap<network_endian, host_endian>(cppa::get<T>(pv));
+    x = ze::util::byte_swap<network_endian, host_endian>(cppa::get<T>(pv));
     return true;
   }
 

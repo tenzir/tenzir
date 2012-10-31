@@ -62,8 +62,10 @@ struct broccoli : network
 /// Thrown for errors with the program configuration.
 struct config : exception
 {
-  config(char const* msg, char const* option);
-  config(char const* msg, char const* opt1, char const* opt2);
+  config(char const* msg);
+  config(char const* msg, char shortcut);
+  config(char const* msg, std::string option);
+  config(char const* msg, std::string option1, std::string option2);
 };
 
 /// The base class for all exceptions during the ingestion process.

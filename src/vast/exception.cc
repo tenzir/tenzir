@@ -52,17 +52,29 @@ broccoli::broccoli(char const* msg)
 }
 #endif
 
-config::config(char const* msg, char const* option)
+config::config(char const* msg)
+  : exception(msg)
+{
+}
+
+config::config(char const* msg, char shortcut)
 {
   std::ostringstream oss;
-  oss << msg << " (--" << option << ')';
+  oss << msg << " (-" << shortcut << ')';
   msg_ = oss.str();
 }
 
-config::config(char const* msg, char const* opt1, char const* opt2)
+config::config(char const* msg, std::string option)
 {
   std::ostringstream oss;
-  oss << msg << " (--" << opt1 << " and --" << opt2 << ')';
+  oss << msg << " (" << option << ')';
+  msg_ = oss.str();
+}
+
+config::config(char const* msg, std::string option1, std::string option2)
+{
+  std::ostringstream oss;
+  oss << msg << " (" << option1 << " and " << option2 << ')';
   msg_ = oss.str();
 }
 

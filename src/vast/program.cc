@@ -83,7 +83,7 @@ bool program::start()
   LOG(verbose, core) << "|___/_/ |_/___/ /_/  " << VAST_VERSION;
   LOG(verbose, core) << "";
 
-  auto const& vast_dir = config_.get<std::string>("directory");
+  auto& vast_dir = config_.get("directory");
   assert(ze::exists(vast_dir));
   assert(ze::exists(ze::path(vast_dir) / "log"));
 
@@ -94,7 +94,7 @@ bool program::start()
 
     if (config_.check("profile"))
     {
-      auto ms = config_.get<unsigned>("profile");
+      auto ms = config_.as<unsigned>("profile");
       profiler_ = spawn<util::profiler>((ze::path(vast_dir) / "log").string(),
                                         std::chrono::seconds(ms));
       send(profiler_,
@@ -106,7 +106,7 @@ bool program::start()
     schema_manager_ = spawn<schema_manager>();
     if (config_.check("schema.file"))
     {
-      send(schema_manager_, atom("load"), config_.get<std::string>("schema.file"));
+      send(schema_manager_, atom("load"), config_.get("schema.file"));
 
       if (config_.check("schema.print"))
       {
@@ -131,19 +131,19 @@ bool program::start()
       tracker_ = spawn<id_tracker>((ze::path(vast_dir) / "id").string());
       send(tracker_, atom("initialize"));
       LOG(verbose, core) << "publishing tracker at *:"
-          << config_.get<unsigned>("tracker.port");
+          << config_.as<unsigned>("tracker.port");
 
-      publish(tracker_, config_.get<unsigned>("tracker.port"));
+      publish(tracker_, config_.as<unsigned>("tracker.port"));
     }
     else
     {
       LOG(verbose, core) << "connecting to tracker at "
-          << config_.get<std::string>("tracker.host") << ":"
-          << config_.get<unsigned>("tracker.port");
+          << config_.get("tracker.host") << ":"
+          << config_.as<unsigned>("tracker.port");
 
       tracker_ = remote_actor(
-          config_.get<std::string>("tracker.host"),
-          config_.get<unsigned>("tracker.port"));
+          config_.get("tracker.host"),
+          config_.as<unsigned>("tracker.port"));
 
       LOG(verbose, core) << "connected to tracker actor @" << tracker_->id();
     }
@@ -151,23 +151,23 @@ bool program::start()
     if (config_.check("archive-actor") || config_.check("all-server"))
     {
       archive_ = spawn<archive>((ze::path(vast_dir) / "archive").string(),
-          config_.get<size_t>("archive.max-segments"));
+          config_.as<size_t>("archive.max-segments"));
       send(archive_, atom("load"));
 
       LOG(verbose, core) << "publishing archive at *:"
-          << config_.get<unsigned>("archive.port");
+          << config_.as<unsigned>("archive.port");
 
-      publish(archive_, config_.get<unsigned>("archive.port"));
+      publish(archive_, config_.as<unsigned>("archive.port"));
     }
     else
     {
       LOG(verbose, core) << "connecting to archive at "
-          << config_.get<std::string>("archive.host") << ":"
-          << config_.get<unsigned>("archive.port");
+          << config_.get("archive.host") << ":"
+          << config_.as<unsigned>("archive.port");
 
       archive_ = remote_actor(
-          config_.get<std::string>("archive.host"),
-          config_.get<unsigned>("archive.port"));
+          config_.get("archive.host"),
+          config_.as<unsigned>("archive.port"));
 
       LOG(verbose, core) << "connected to archive actor @" << archive_->id();
     }
@@ -178,19 +178,19 @@ bool program::start()
       send(index_, atom("load"));
 
       LOG(verbose, core) << "publishing index at *:"
-          << config_.get<unsigned>("index.port");
+          << config_.as<unsigned>("index.port");
 
-      publish(index_, config_.get<unsigned>("index.port"));
+      publish(index_, config_.as<unsigned>("index.port"));
     }
     else
     {
       LOG(verbose, core) << "connecting to index at "
-          << config_.get<std::string>("index.host") << ":"
-          << config_.get<unsigned>("index.port");
+          << config_.get("index.host") << ":"
+          << config_.as<unsigned>("index.port");
 
       index_ = remote_actor(
-          config_.get<std::string>("index.host"),
-          config_.get<unsigned>("index.port"));
+          config_.get("index.host"),
+          config_.as<unsigned>("index.port"));
 
       LOG(verbose, core) << "connected to index actor @" << index_->id();
     }
@@ -207,24 +207,27 @@ bool program::start()
       self->monitor(ingestor_);
 
       send(ingestor_, atom("initialize"),
-          config_.get<size_t>("ingest.max-events-per-chunk"),
-          config_.get<size_t>("ingest.max-segment-size") * 1000000,
-          config_.get<size_t>("ingest.batch-size"));
+          config_.as<size_t>("ingest.max-events-per-chunk"),
+          config_.as<size_t>("ingest.max-segment-size") * 1000000,
+          config_.as<size_t>("ingest.batch-size"));
 
 #ifdef VAST_HAVE_BROCCOLI
       if (config_.check("ingest.broccoli-events"))
       {
-        auto host = config_.get<std::string>("ingest.broccoli-host");
-        auto port = config_.get<unsigned>("ingest.broccoli-port");
-        auto events = config_.get<std::vector<std::string>>("ingest.broccoli-events");
-        send(ingestor_, atom("ingest"), atom("broccoli"), host, port, events);
+        auto host = config_.get("ingest.broccoli-host");
+        auto port = config_.as<unsigned>("ingest.broccoli-port");
+        auto events = config_.as<std::vector<std::string>>("ingest.broccoli-events");
+        send(ingestor_,
+             atom("ingest"), atom("broccoli"),
+             host, port,
+             std::move(events));
       }
 #endif
 
       if (config_.check("ingest.file-names"))
       {
-        auto type = config_.get<std::string>("ingest.file-type");
-        auto files = config_.get<std::vector<std::string>>("ingest.file-names");
+        auto type = config_.get("ingest.file-type");
+        auto files = config_.as<std::vector<std::string>>("ingest.file-names");
         for (auto& file : files)
         {
           if (ze::exists(file))
@@ -242,24 +245,24 @@ bool program::start()
       search_ = spawn<search>(archive_, index_, schema_manager_);
 
       LOG(verbose, core) << "publishing search at *:"
-          << config_.get<unsigned>("search.port");
+          << config_.as<unsigned>("search.port");
 
-      publish(search_, config_.get<unsigned>("search.port"));
+      publish(search_, config_.as<unsigned>("search.port"));
     }
     else if (config_.check("client.expression"))
     {
       LOG(verbose, core) << "connecting to search at "
-          << config_.get<std::string>("search.host") << ":"
-          << config_.get<unsigned>("search.port");
+          << config_.get("search.host") << ":"
+          << config_.as<unsigned>("search.port");
 
       search_ = remote_actor(
-          config_.get<std::string>("search.host"),
-          config_.get<unsigned>("search.port"));
+          config_.get("search.host"),
+          config_.as<unsigned>("search.port"));
 
       LOG(verbose, core) << "connected to search actor @" << search_->id();
 
-      auto paginate = config_.get<unsigned>("client.paginate");
-      auto& expression = config_.get<std::string>("client.expression");
+      auto paginate = config_.as<unsigned>("client.paginate");
+      auto& expression = config_.get("client.expression");
       query_client_ = spawn<query_client>(search_, expression, paginate);
       self->monitor(query_client_);
       send(query_client_, atom("start"));
