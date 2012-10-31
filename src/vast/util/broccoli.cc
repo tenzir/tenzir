@@ -499,12 +499,12 @@ void init(bool messages, bool calltrace)
 }
 
 connection::connection(
-    cppa::util::input_stream_ptr in,
-    cppa::util::output_stream_ptr out)
+    cppa::network::input_stream_ptr in,
+    cppa::network::output_stream_ptr out)
   : in_(std::move(in))
   , out_(std::move(out))
 {
-  auto fd = in_->read_file_handle();
+  auto fd = in_->read_handle();
   bc_ = bro_conn_new_socket(fd, BRO_CFLAG_DONTCACHE);
   if (bc_ < 0)
     throw error::broccoli("bro_conn_new_socket");

@@ -28,12 +28,12 @@ struct connection : cppa::sb_actor<connection>
   /// @param The input stream to read data from.
   /// @param The output stream to read data from.
   connection(
-      cppa::util::input_stream_ptr in,
-      cppa::util::output_stream_ptr out);
+      cppa::network::input_stream_ptr in,
+      cppa::network::output_stream_ptr out);
 
   struct bro_conn* bc_;
-  cppa::util::input_stream_ptr in_;
-  cppa::util::output_stream_ptr out_;
+  cppa::network::input_stream_ptr in_;
+  cppa::network::output_stream_ptr out_;
   event_handler event_handler_;
   //std::vector<ze::event> events_;
   cppa::behavior init_state;

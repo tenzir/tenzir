@@ -2,7 +2,7 @@
 #define VAST_UTIL_SERVER_H
 
 #include <cppa/cppa.hpp>
-#include <cppa/detail/ipv4_acceptor.hpp>
+#include <cppa/network/ipv4_acceptor.hpp>
 #include "vast/util/poll.h"
 
 namespace vast {
@@ -19,13 +19,13 @@ struct server : cppa::sb_actor<server<Connection>>
   /// @param connection_handler The actor handling freshly accepted
   /// connections.
   server(uint16_t port, cppa::actor_ptr connection_handler)
-    : acceptor(cppa::detail::ipv4_acceptor::create(port, nullptr))
+    : acceptor(cppa::network::ipv4_acceptor::create(port, nullptr))
   {
     using namespace cppa;
     init_state = (
         on(atom("accept")) >> [=]
         {
-          if (poll(acceptor->acceptor_file_handle()))
+          if (poll(acceptor->file_handle()))
           {
             auto opt = acceptor->try_accept_connection();
             if (opt)
@@ -42,7 +42,7 @@ struct server : cppa::sb_actor<server<Connection>>
         });
   }
 
-  std::unique_ptr<cppa::util::acceptor> acceptor;
+  std::unique_ptr<cppa::network::acceptor> acceptor;
   cppa::behavior init_state;
 };
 
