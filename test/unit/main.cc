@@ -9,11 +9,9 @@
 int main(int argc, char* argv[])
 {
   vast::configuration config;
-  if (! config.load("/dev/null"))
-    return 1;
+  config.load("/dev/null");
 
   boost::unit_test::unit_test_log.set_stream(vast::logger::get()->console());
-
   char const* args[] = {"", "--log_level=test_suite"};
   auto rc = boost::unit_test::unit_test_main(
       &init_unit_test,

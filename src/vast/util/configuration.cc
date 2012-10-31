@@ -13,7 +13,8 @@ void configuration::load(std::string const& filename)
   std::ifstream ifs(filename);
   if (! ifs)
     throw error::config("could not open configuration file");
-  throw error::logic("parsing of configuration file not yet implemented");
+
+  // TODO: Implement this function.
 }
 
 void configuration::load(int argc, char *argv[])

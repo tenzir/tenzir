@@ -25,9 +25,10 @@ struct vector_storage : storage_policy
 
   Bitstream const* find(T const& x) const
   {
-    if (x >= vector_.size() || ! vector_[x])
+    auto i = static_cast<size_t>(x);
+    if (i >= vector_.size() || ! vector_[i])
       return nullptr;
-    return &*vector_[x];
+    return &*vector_[i];
   }
 
   std::pair<Bitstream const*, Bitstream const*>
@@ -71,12 +72,13 @@ struct vector_storage : storage_policy
 
   bool emplace(T const& x, Bitstream b)
   {
-    if (x >= vector_.size())
-      vector_.resize(x + 1);
-    else if (x < vector_.size() && vector_[x])
+    auto i = static_cast<size_t>(x);
+    if (i >= vector_.size())
+      vector_.resize(i + 1);
+    else if (i < vector_.size() && vector_[i])
       return false;
 
-    vector_[x] = std::move(b);
+    vector_[i] = std::move(b);
     ++cardinality_;
     return true;
   }
