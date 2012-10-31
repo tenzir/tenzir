@@ -31,18 +31,12 @@ endmacro ()
 
 # A list of paths that is used to build the export string.
 set(path_list)
-foreach(i ${Boost_LIBRARIES})
+foreach(i ${Boost_LIBRARIES} ${0event_LIBRARIES} ${Broccoli_LIBRARIES})
     get_filename_component(dir ${i} PATH)
     if (dir)
         list_unique_insert(path_list ${dir})
     endif ()
 endforeach ()
-get_filename_component(0event_library_dirs ${0event_LIBRARIES} PATH)
-list_unique_insert(path_list ${0event_library_dirs})
-if (BROCCOLI_FOUND)
-  get_filename_component(Broccoli_library_dirs ${Broccoli_LIBRARIES} PATH)
-  list_unique_insert(path_list ${Broccoli_library_dirs})
-endif ()
 
 # Build the final string in the shell script.
 list(LENGTH path_list path_list_length)

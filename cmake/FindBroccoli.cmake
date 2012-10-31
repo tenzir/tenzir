@@ -1,4 +1,4 @@
-# - Try to find Broccoli headers and libraries
+# Tries to find Broccoli headers and libraries
 #
 # Usage of this module as follows:
 #
@@ -14,27 +14,25 @@
 # Variables defined by this module:
 #
 #  BROCCOLI_FOUND              System has Broccoli libs/headers
-#  Broccoli_LIBRARIES          The Broccoli libraries
-#  Broccoli_INCLUDE_DIR        The location of Broccoli headers
+#  BROCCOLI_LIBRARIES          The Broccoli libraries
+#  BROCCOLI_INCLUDE_DIR        The location of Broccoli headers
 
-find_path(Broccoli_INCLUDE_DIR
-    NAMES broccoli.h
-    HINTS ${Broccoli_ROOT_DIR}/include
-)
+find_path(BROCCOLI_INCLUDE_DIR
+  NAMES broccoli.h
+  HINTS ${Broccoli_ROOT_DIR}/include)
 
-find_library(Broccoli_LIBRARIES
-    NAMES broccoli
-    HINTS ${Broccoli_ROOT_DIR}/lib
-)
+find_library(BROCCOLI_LIBRARIES
+  NAMES broccoli
+  HINTS ${Broccoli_ROOT_DIR}/lib)
 
 include(FindPackageHandleStandardArgs)
-find_package_handle_standard_args(Broccoli DEFAULT_MSG
-    Broccoli_LIBRARIES
-    Broccoli_INCLUDE_DIR
-)
+find_package_handle_standard_args(
+  Broccoli
+  DEFAULT_MSG
+  BROCCOLI_LIBRARIES
+  BROCCOLI_INCLUDE_DIR)
 
 mark_as_advanced(
-    Broccoli_ROOT_DIR
-    Broccoli_LIBRARIES
-    Broccoli_INCLUDE_DIR
-)
+  BROCCOLI_ROOT_DIR
+  BROCCOLI_LIBRARIES
+  BROCCOLI_INCLUDE_DIR)
