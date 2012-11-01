@@ -42,10 +42,11 @@ configuration::configuration()
 
   auto& actor = create_block("actor options");
   actor.add('a', "all-server", "spawn all server actors");
-  actor.add('I', "archive", "spawn the ingestor");
-  actor.add('A', "index", "spawn the index");
-  actor.add('X', "search", "spawn the search");
-  actor.add('T', "tracker", "spawn the ID tracker");
+  actor.add('A', "archive-actor", "spawn the archive");
+  actor.add('I', "ingestor-actor", "spawn the ingestor");
+  actor.add('X', "index-actor", "spawn the index");
+  actor.add('S', "search-actor", "spawn the search");
+  actor.add('T', "tracker-actor", "spawn the ID tracker");
   actor.visible(false);
 
   auto& schema = create_block("schema options", "schema");
