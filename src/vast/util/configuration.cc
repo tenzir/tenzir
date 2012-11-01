@@ -22,28 +22,29 @@ void configuration::load(int argc, char *argv[])
 {
   for (int i = 1; i < argc; ++i)
   {
+    std::vector<std::string> values;
     std::string arg(argv[i]);
     if (arg.size() < 2)
     {
       throw error::config("ill-formed option specificiation", argv[i]);
     }
-    else if (arg.size() == 2)
+    else if (arg[0] == '-' && arg[1] == '-')
     {
-      // Argument must be of the form '-*'.
-      if (arg[0] != '-')
-        throw error::config("ill-formed option specificiation", argv[i]);
+      // Argument must begin with '--'.
+      if (arg.size() == 2)
+        throw error::config("ill-formed option specification", argv[i]);
+      arg = arg.substr(2);
+    }
+    else if (arg[0] == '-')
+    {
+      if (arg.size() > 2)
+        // The short option comes with a value.
+        values.push_back(arg.substr(2));
       arg = arg[1];
       auto s = shortcuts_.find(arg);
       if (s == shortcuts_.end())
         throw error::config("unknown short option", arg[0]);
       arg = s->second;
-    }
-    else
-    {
-      // Argument must be of the form '--*'.
-      if (! (arg[0] == '-' && arg[1] == '-'))
-        throw error::config("ill-formed option specification", argv[i]);
-      arg = arg.substr(2);
     }
 
     auto o = find_option(arg);
@@ -51,7 +52,6 @@ void configuration::load(int argc, char *argv[])
       throw error::config("unknown option", arg);
     o->defaulted_ = false;
 
-    std::vector<std::string> values;
     while (i + 1 < argc && std::strlen(argv[i + 1]) > 0 && argv[i + 1][0] != '-')
       values.emplace_back(argv[++i]);
     if (values.size() > o->max_vals_)
