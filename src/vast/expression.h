@@ -287,24 +287,12 @@ public:
   void accept(expr::visitor& v);
 
 private:
-  template <typename Archive>
-  friend void serialize(Archive& oa, expression const& expr)
-  {
-    oa << expr.str_;
-    oa << expr.schema_;
-  }
-
-  template <typename Archive>
-  friend void deserialize(Archive& ia, expression& expr)
-  {
-    std::string str;
-    ia >> str;
-    schema sch;
-    ia >> sch;
-    expr.parse(std::move(str), std::move(sch));
-  }
+  friend ze::io::access;
+  void serialize(ze::io::serializer& sink);
+  void deserialize(ze::io::deserializer& source);
 
   friend bool operator==(expression const& x, expression const& y);
+  friend bool operator!=(expression const& x, expression const& y);
 
   std::string str_;
   schema schema_;

@@ -2,6 +2,7 @@
 
 #include <boost/variant/apply_visitor.hpp>
 #include <ze/regex.h>
+#include <ze/io/serialization.h>
 #include <ze/util/make_unique.h>
 #include "vast/exception.h"
 #include "vast/logger.h"
@@ -761,9 +762,29 @@ void expression::accept(expr::visitor& v)
   root_->accept(v);
 }
 
+void expression::serialize(ze::io::serializer& sink)
+{
+  sink << str_;
+  sink << schema_;
+}
+
+void expression::deserialize(ze::io::deserializer& source)
+{
+  std::string str;
+  source >> str;
+  schema sch;
+  source >> sch;
+  parse(std::move(str), std::move(sch));
+}
+
 bool operator==(expression const& x, expression const& y)
 {
   return x.str_ == y.str_ && x.schema_ == y.schema_;
+}
+
+bool operator!=(expression const& x, expression const& y)
+{
+  return ! (x == y);
 }
 
 } // namespace vast

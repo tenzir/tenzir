@@ -272,9 +272,6 @@ private:
   /// @return The bit position where *block* has its first bit set to 1.
   static size_type lowest_bit(block_type block);
 
-  void serialize(ze::io::serializer& sink);
-  void deserialize(ze::io::deserializer& source);
-
   /// Computes the number of excess/unused bits in the bit vector.
   block_type extra_bits() const;
 
@@ -290,6 +287,9 @@ private:
   /// @return The block index of the first 1-bit starting from *i* or
   /// `bitvector::npos` if no 1-bit exists.
   size_type find_from(size_type i) const;
+
+  void serialize(ze::io::serializer& sink);
+  void deserialize(ze::io::deserializer& source);
 
   std::vector<block_type> bits_;
   size_type num_bits_;

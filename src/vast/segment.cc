@@ -1,6 +1,7 @@
 #include "vast/segment.h"
 
 #include <ze/event.h>
+#include <ze/io/serialization.h>
 #include <ze/util/make_unique.h>
 #include "vast/exception.h"
 #include "vast/logger.h"
@@ -232,6 +233,28 @@ size_t segment::size() const
 ze::uuid const& segment::id() const
 {
   return header_.id;
+}
+
+void segment::serialize(ze::io::serializer& sink)
+{
+  sink << header_;
+  sink.write_sequence_begin(chunks_.size());
+  for (auto& tuple : chunks_)
+    sink << cppa::get<0>(tuple);
+}
+
+void segment::deserialize(ze::io::deserializer& source)
+{
+  source >> header_;
+  uint64_t n;
+  source.read_sequence_begin(n);
+  chunks_.resize(n);
+  for (auto& tuple : chunks_)
+  {
+    chunk chk;
+    source >> chk;
+    tuple = std::move(cppa::make_cow_tuple(std::move(chk)));
+  }
 }
 
 bool operator==(segment const& x, segment const& y)

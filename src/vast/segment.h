@@ -156,33 +156,9 @@ private:
   friend bool operator==(segment const& x, segment const& y);
   friend bool operator!=(segment const& x, segment const& y);
 
-  template <typename Archive>
-  friend void serialize(Archive& oa, segment const& s)
-  {
-    oa << s.header_;
-
-    uint32_t size = s.chunks_.size();
-    oa << size;
-    for (auto& tuple : s.chunks_)
-      oa << cppa::get<0>(tuple);
-  }
-
-  template <typename Archive>
-  friend void deserialize(Archive& ia, segment& s)
-  {
-    ia >> s.header_;
-
-    uint32_t n;
-    ia >> n;
-    s.chunks_.resize(n);
-    for (auto& tuple : s.chunks_)
-    {
-      chunk chk;
-      ia >> chk;
-      auto t = cppa::make_cow_tuple(std::move(chk));
-      tuple = std::move(t);
-    }
-  }
+  friend ze::io::access;
+  void serialize(ze::io::serializer& sink);
+  void deserialize(ze::io::deserializer& source);
 
   static uint32_t const magic = 0x2a2a2a2a;
   static uint8_t const version = 1;

@@ -457,18 +457,6 @@ size_type bitvector::lowest_bit(block_type block)
   return log;
 }
 
-void bitvector::serialize(ze::io::serializer& sink)
-{
-  sink << num_bits_;
-  sink << bits_;
-}
-
-void bitvector::deserialize(ze::io::deserializer& source)
-{
-  source >> num_bits_;
-  source >> bits_;
-}
-
 block_type bitvector::extra_bits() const
 {
   return bit_index(size());
@@ -487,6 +475,18 @@ size_type bitvector::find_from(size_type i) const
   if (i >= blocks())
     return npos;
   return i * bits_per_block + lowest_bit(bits_[i]);
+}
+
+void bitvector::serialize(ze::io::serializer& sink)
+{
+  sink << num_bits_;
+  sink << bits_;
+}
+
+void bitvector::deserialize(ze::io::deserializer& source)
+{
+  source >> num_bits_;
+  source >> bits_;
 }
 
 } // namespace vast
