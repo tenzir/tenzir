@@ -15,7 +15,8 @@ before_script:
   # Libcppa
   - git clone git://github.com/Neverlord/libcppa.git
   - pushd libcppa
-  - ./configure --enable-debug --prefix=$PREFIX
+  #- ./configure --enable-debug --prefix=$PREFIX --no-examples --no-unit-tests
+  - ./configure --enable-debug --prefix=$PREFIX --no-examples
   - make install
   - popd
   # 0event
