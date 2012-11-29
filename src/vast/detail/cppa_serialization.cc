@@ -79,7 +79,13 @@ bool cppa_serializer::write_sequence_end()
 bool cppa_serializer::write_raw(void const* data, size_t size)
 {
   sink_->write_raw(size, data);
+  bytes_ += size;
   return true;
+}
+
+size_t cppa_serializer::bytes() const
+{
+  return bytes_;
 }
 
 
@@ -100,6 +106,7 @@ bool cppa_deserializer::read_bool(bool& x)
   uint8_t u;
   auto success = read(u);
   x = u == 1;
+  bytes_ += sizeof(u);
   return success;
 }
   
@@ -162,7 +169,13 @@ bool cppa_deserializer::read_sequence_end()
 bool cppa_deserializer::read_raw(void* data, size_t size)
 {
   source_->read_raw(size, data);
+  bytes_ += size;
   return true;
+}
+
+size_t cppa_deserializer::bytes() const
+{
+  return bytes_;
 }
 
 } // namespace detail

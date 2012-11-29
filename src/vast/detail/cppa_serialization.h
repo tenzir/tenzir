@@ -27,6 +27,7 @@ public:
   virtual bool write_sequence_begin(uint64_t size) override;
   virtual bool write_sequence_end() override;
   virtual bool write_raw(void const* data, size_t size) override;
+  virtual size_t bytes() const;
 
 private:
   template <typename T>
@@ -35,10 +36,12 @@ private:
   {
     using namespace ze;
     sink_->write_value(ze::util::byte_swap<host_endian, network_endian>(x));
+    bytes_ += sizeof(T);
     return true;
   }
 
   cppa::serializer* sink_;
+  size_t bytes_;
 };
 
 class cppa_deserializer : public ze::io::deserializer
@@ -59,6 +62,7 @@ public:
   virtual bool read_sequence_begin(uint64_t& size) override;
   virtual bool read_sequence_end() override;
   virtual bool read_raw(void* data, size_t size) override;
+  virtual size_t bytes() const;
 
 private:
   template <typename T>
@@ -74,10 +78,12 @@ private:
 
     auto pv = source_->read_value(ptype);
     x = ze::util::byte_swap<network_endian, host_endian>(cppa::get<T>(pv));
+    bytes_ += sizeof(T);
     return true;
   }
 
   cppa::deserializer* source_;
+  size_t bytes_;
 };
 
 } // namespace detail
