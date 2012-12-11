@@ -89,8 +89,14 @@ The C++11 requirement dictates GCC version 4.7 or greater. If your distribution
 does not provide one out of the box, you may have to build GCC in your home
 directory. Here are some brief hints how to do so.
 
+First, the installation sequence becomes easier when working with the
+installation prefix as an environment variable:
+
+    export PREFIX=/path/to/installation-prefix
+
 Then,
 
+    ./contrib/download_prerequisites
     mkdir build
     cd build
 
@@ -104,13 +110,8 @@ Then,
 
 To make sure that the freshly built libstdc++ will be used, you may have to
 adapt the `(DY)LD_LIBRARY_PATH` to include `$PREFIX/lib` (plus `$PREFIX/lib64`
-for some architectures.) Also make sure that the new GCC is in your `$PATH`,
+for some architectures). Also make sure that the new GCC is in your `$PATH`,
 ready to picked up by subsequent dependency configurations.
-
-Before proceeding, you may find it useful to set the following environment
-variables:
-
-    export PREFIX=/path/to/installation-prefix
 
 ### [Boost](http://www.boost.org)
 
