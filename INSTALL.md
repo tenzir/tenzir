@@ -87,7 +87,9 @@ GCC
 
 The C++11 requirement dictates GCC version 4.7 or greater. If your distribution
 does not provide one out of the box, you may have to build GCC in your home
-directory. Here are some brief hints how to do so.
+directory. Here are some brief hints how to do so, the [official installation
+guide](http://gcc.gnu.org/wiki/InstallingGCC) also contains useful
+instructions.
 
 First, the installation sequence becomes easier when working with the
 installation prefix as an environment variable:
@@ -101,7 +103,7 @@ Then,
     cd build
 
     export BUILD=x86_64-redhat-linux
-    ../configure --prefix=$PREFIX --enable-languages=c,c++ \
+    ../configure --prefix=$PREFIX --enable-languages=c++ \
         --enable-shared=libstdc++ --disable-multilib \
         --build=$BUILD --enable-threads=posix --enable-tls 
 
