@@ -21,55 +21,64 @@ public:
   /// The segment header.
   struct header
   {
-    header() = default;
-
-    void serialize(ze::io::serializer& sink);
-    void deserialize(ze::io::deserializer& source);
-
     uint32_t version = 0;
     ze::uuid id;
     ze::io::compression compression;
     ze::time_point start;
     ze::time_point end;
-    std::vector<std::string> event_names;
     uint32_t events = 0;
+
+  private:
+    friend ze::io::access;
+    void serialize(ze::io::serializer& sink);
+    void deserialize(ze::io::deserializer& source);
   };
 
+  /// A proxy class for writing into a segment. Each writer maintains a local
+  /// chunk that receives events to serialize. Upon flushing, the writer
+  /// appends the chunk to the segment.
   class writer
   {
     writer(writer const&) = delete;
     writer& operator=(writer) = delete;
 
   public:
-    /// Creates a new chunk at the end of the segment for writing.
+    /// Constructs a writer that writes to a segment.
     /// @param s The segment to write to.
     explicit writer(segment* s);
 
     /// Move-constructs a writer.
     /// @param other The other writer.
-    writer(writer&& other);
+    writer(writer&& other) = default;
 
-    /// Retrieves the total number of bytes processed across all chunks.
-    /// @return The number of bytes written to the output archive.
-    size_t bytes() const;
+    /// Serializes an event into the segment.
+    /// @param event The event to store.
+    void operator<<(ze::event const& event);
+
+    /// Moves the current chunk from the writer into the segment and creates an
+    /// internal new chunk for subsequent write operations.
+    /// @return The number of bytes the moved chunk occupied.
+    void flush();
 
     /// Retrieves the number of elements in the current chunk.
     size_t elements() const;
 
-    /// Serializes an event into the segment.
-    /// @param event The event to store.
-    /// @return The number of events in the current chunk
-    uint32_t operator<<(ze::event const& event);
+    /// Retrieves the total number of bytes processed across all chunks.
+    /// Updated with each call to operator<<.
+    /// @return The number of bytes written into this writer.
+    size_t processed_bytes() const;
 
-    /// Moves the current chunk from the writer into the segment and creates an
-    /// internal new chunk for subsequent write operations.
-    void flush_chunk();
+    /// Retrieves the sum in bytes of all chunk sizes, excluding the current
+    /// chunk. Updated with each call to `flush`.
+    /// @return The number of bytes written into this writer.
+    size_t chunk_bytes() const;
 
   private:
-    size_t bytes_ = 0;
     segment* segment_;
     chunk chunk_;
     chunk::putter putter_;
+    size_t processed_bytes_ = 0;
+    size_t chunk_bytes_ = 0;
   };
 
   class reader
@@ -84,29 +93,39 @@ public:
 
     /// Move-constructs a reader.
     /// @param other The other reader.
-    reader(reader&& other);
+    reader(reader&& other) = default;
 
-    /// Retrieves the total number of bytes processed across all chunks.
-    /// @return The number of bytes written by the input archive.
-    size_t bytes() const;
-
-    /// Retrieves the number of events available in the current chunk.
-    uint32_t events() const;
-
-    /// Retrieves the number of chunks remaining to be processed.
-    size_t chunks() const;
+    /// Tests whether the reader has more events to extract.
+    /// @return `true` if the reader has more events available.
+    explicit operator bool () const;
 
     /// Deserializes an event from the segment.
     /// @param event The event to deserialize into.
     /// @return The number of events left for extraction in the current chunk.
-    uint32_t operator>>(ze::event& event);
+    void operator>>(ze::event& event);
+
+    /// Retrieves the number of events available in the current chunk.
+    uint32_t available_events() const;
+
+    /// Retrieves the number of chunks remaining to be processed.
+    size_t available_chunks() const;
+
+    /// Retrieves the total number of bytes processed across all chunks.
+    /// Updated with each call to operator>>.
+    /// @return The number of bytes written into this writer.
+    size_t processed_bytes() const;
+
+    /// Retrieves the sum in bytes of all chunk sizes, excluding the current
+    /// chunk. Updated with each chunk rotation.
+    /// @return The number of bytes written into this writer.
+    size_t chunk_bytes() const;
 
   private:
-    size_t bytes_ = 0;
-    size_t total_bytes_ = 0;
     segment const* segment_;
     std::vector<chunk_tuple>::const_iterator chunk_;
     chunk::getter getter_;
+    size_t processed_bytes_ = 0;
+    size_t chunk_bytes_ = 0;
   };
 
   /// Constructs a segment.
@@ -121,7 +140,7 @@ public:
 
   /// Move-constructs a segment.
   /// @param other The segment to move.
-  segment(segment&& other);
+  segment(segment&& other) = default;
 
   /// Assigns a segment to this instance.
   /// @param other The RHS of the assignment.

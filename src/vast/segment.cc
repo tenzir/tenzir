@@ -1,6 +1,7 @@
 #include "vast/segment.h"
 
 #include <ze/event.h>
+#include <ze/logger.h>
 #include <ze/io/serialization.h>
 #include <ze/util/make_unique.h>
 #include "vast/exception.h"
@@ -21,7 +22,6 @@ void segment::header::serialize(ze::io::serializer& sink)
   sink << compression;
   sink << start;
   sink << end;
-  sink << event_names;
   sink << events;
 }
 
@@ -40,38 +40,18 @@ void segment::header::deserialize(ze::io::deserializer& source)
   source >> compression;
   source >> start;
   source >> end;
-  source >> event_names;
   source >> events;
 }
 
 segment::writer::writer(segment* s)
-  : segment_(s)
-  , putter_(chunk::putter(&chunk_))
+  : segment_(s),
+    putter_(&chunk_)
 {
 }
 
-segment::writer::writer(writer&& other)
-  : bytes_(other.bytes_)
-  , segment_(other.segment_)
-  , chunk_(std::move(other.chunk_))
-  , putter_(std::move(other.putter_))
+void segment::writer::operator<<(ze::event const& event)
 {
-  other.bytes_ = 0;
-  other.segment_ = nullptr;
-}
-
-size_t segment::writer::bytes() const
-{
-  return bytes_;
-}
-
-size_t segment::writer::elements() const
-{
-  return chunk_.elements();
-}
-
-uint32_t segment::writer::operator<<(ze::event const& event)
-{
+  ZE_ENTER(ZE_ARG(event));
   ++segment_->header_.events;
 
   if (event.timestamp() < segment_->header_.start)
@@ -79,78 +59,91 @@ uint32_t segment::writer::operator<<(ze::event const& event)
   if (event.timestamp() > segment_->header_.end)
     segment_->header_.end = event.timestamp();
 
-  auto i = std::lower_bound(segment_->header_.event_names.begin(),
-                            segment_->header_.event_names.end(),
-                            event.name());
-
-  if (i == segment_->header_.event_names.end())
-    segment_->header_.event_names.emplace_back(event.name().data());
-  else if (event.name() < *i)
-    segment_->header_.event_names.emplace(i, event.name().data());
-
-  bytes_ = putter_ << event;
-
-  return chunk_.elements();
+  putter_ << event;
 }
 
-void segment::writer::flush_chunk()
+void segment::writer::flush()
 {
-  segment_->chunks_.emplace_back(std::move(chunk_));
-  chunk_ = chunk();
-  putter_ = std::move(chunk::putter(&chunk_));
+  ZE_ENTER();
+  processed_bytes_ += putter_.bytes();
+  putter_.reset(); // Flushes and releases reference to chunk_.
+  if (! chunk_.empty())
+  {
+    chunk_bytes_ += chunk_.bytes();
+    segment_->chunks_.emplace_back(std::move(chunk_));
+    chunk_ = chunk();
+  }
+  putter_.reset(&chunk_);
+}
+
+size_t segment::writer::elements() const
+{
+  return chunk_.size();
+}
+
+size_t segment::writer::processed_bytes() const
+{
+  return processed_bytes_ + putter_.bytes();
+}
+
+size_t segment::writer::chunk_bytes() const
+{
+  return chunk_bytes_;
 }
 
 
 segment::reader::reader(segment const* s)
-  : segment_(s)
-  , chunk_(segment_->chunks_.begin())
-  , getter_(&cppa::get<0>(segment_->chunks_.at(0)))
+  : segment_(s),
+    chunk_(segment_->chunks_.begin())
 {
-  assert(! segment_->chunks_.empty());
+  if (segment_->chunks_.empty())
+    return;
+
+  getter_.reset(&cppa::get<0>(segment_->chunks_.at(0)));
   ++chunk_;
 }
 
-segment::reader::reader(reader&& other)
-  : bytes_(other.bytes_)
-  , total_bytes_(other.total_bytes_)
-  , segment_(other.segment_)
-  , chunk_(std::move(other.chunk_))
-  , getter_(std::move(other.getter_))
+segment::reader::operator bool () const
 {
-  other.bytes_ = 0;
-  other.total_bytes_ = 0;
-  other.segment_ = nullptr;
+  return available_events() > 0 || available_chunks() > 0;
 }
 
-size_t segment::reader::bytes() const
+void segment::reader::operator>>(ze::event& e)
 {
-  return total_bytes_ + bytes_;
-}
-
-uint32_t segment::reader::events() const
-{
-  return getter_.available();
-}
-
-size_t segment::reader::chunks() const
-{
-  return segment_->chunks_.end() - chunk_;
-}
-
-uint32_t segment::reader::operator>>(ze::event& e)
-{
-  if (events() == 0)
+  ZE_ENTER();
+  ZE_MSG("available events: " << available_events());
+  if (available_events() == 0)
   {
     if (chunk_ == segment_->chunks_.end())
-      throw error::segment("attempted read on invalid chunk");
+      throw error::segment("no more events available");
 
-    getter_ = std::move(chunk::getter(&cppa::get<0>(*chunk_++)));
-    total_bytes_ += bytes_;
-    bytes_ = 0;
+    processed_bytes_ += getter_.bytes();
+    chunk_bytes_ += cppa::get<0>(*chunk_).bytes();
+    getter_.reset(&cppa::get<0>(*chunk_++));
   }
 
-  bytes_ = getter_ >> e;
+  getter_ >> e;
+  ZE_LEAVE("got event: " << e);
+}
+
+uint32_t segment::reader::available_events() const
+{
   return getter_.available();
+}
+
+size_t segment::reader::available_chunks() const
+{
+  return std::distance(chunk_, segment_->chunks_.end());
+}
+
+size_t segment::reader::processed_bytes() const
+{
+  return processed_bytes_ + getter_.bytes();
+}
+
+size_t segment::reader::chunk_bytes() const
+{
+  return chunk_bytes_;
 }
 
 
@@ -164,16 +157,10 @@ segment::segment(ze::uuid uuid, ze::io::compression method)
 }
 
 segment::segment(segment const& other)
-  : header_(other.header_)
-  , chunks_(other.chunks_)
+  : header_(other.header_),
+    chunks_(other.chunks_)
 {
-  DBG(core) << "copied a segment!";
-}
-
-segment::segment(segment&& other)
-  : header_(std::move(other.header_))
-  , chunks_(std::move(other.chunks_))
-{
+  ZE_WARN("copied a segment!");
 }
 
 segment& segment::operator=(segment other)
@@ -262,7 +249,6 @@ bool operator==(segment const& x, segment const& y)
   return x.header_.version == y.version &&
     x.header_.compression == y.header_.compression &&
     x.header_.start == y.header_.start &&
-    x.header_.event_names == y.header_.event_names &&
     x.header_.events == y.header_.events &&
     x.chunks_ == y.chunks_;
 }
