@@ -25,16 +25,16 @@ event_source::segmentizer::segmentizer(
 
         for (auto& e : events)
         {
-          auto n = writer_ << e;
-          if (n % max_events_per_chunk != 0)
+          writer_ << e;
+          if (writer_.elements() % max_events_per_chunk != 0)
             continue;
 
-          writer_.flush_chunk();
+          writer_.flush();
 
-          if (writer_.bytes() - writer_bytes_at_last_rotate_ < max_segment_size)
+          if (writer_.chunk_bytes() - writer_bytes_at_last_rotate_ < max_segment_size)
             continue;
 
-          writer_bytes_at_last_rotate_ = writer_.bytes();
+          writer_bytes_at_last_rotate_ = writer_.chunk_bytes();
 
           DBG(ingest)
             << "segmentizer @" << id()
@@ -78,7 +78,7 @@ event_source::segmentizer::segmentizer(
             << " (" << segment_.events() << " events)";
 
           if (writer_.elements() > 0)
-            writer_.flush_chunk();
+            writer_.flush();
 
           sync_send(ingestor, std::move(segment_)).then(
               on(atom("segment"), atom("ack"), arg_match)

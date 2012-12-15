@@ -415,15 +415,15 @@ public:
 
     std::unique_ptr<expr::extractor> lhs;
     if (clause.lhs == "name")
-      lhs = std::make_unique<expr::name_extractor>();
+      lhs = ze::make_unique<expr::name_extractor>();
     else if (clause.lhs == "time")
-      lhs = std::make_unique<expr::timestamp_extractor>();
+      lhs = ze::make_unique<expr::timestamp_extractor>();
     else if (clause.lhs == "id")
-      lhs = std::make_unique<expr::id_extractor>();
+      lhs = ze::make_unique<expr::id_extractor>();
     assert(lhs);
     extractors_.push_back(lhs.get());
 
-    auto rhs = std::make_unique<expr::constant>(
+    auto rhs = ze::make_unique<expr::constant>(
         detail::ast::query::fold(clause.rhs));
 
     relation->add(std::move(lhs));
@@ -441,10 +441,10 @@ public:
     }
     auto relation = make_relation(op);
 
-    auto lhs = std::make_unique<expr::type_extractor>(clause.lhs);
+    auto lhs = ze::make_unique<expr::type_extractor>(clause.lhs);
     extractors_.push_back(lhs.get());
 
-    auto rhs = std::make_unique<expr::constant>(
+    auto rhs = ze::make_unique<expr::constant>(
         detail::ast::query::fold(clause.rhs));
 
     relation->add(std::move(lhs));
@@ -462,10 +462,10 @@ public:
     }
     auto relation = make_relation(op);
 
-    auto lhs = std::make_unique<expr::offset_extractor>(clause.offsets);
+    auto lhs = ze::make_unique<expr::offset_extractor>(clause.offsets);
     extractors_.push_back(lhs.get());
 
-    auto rhs = std::make_unique<expr::constant>(
+    auto rhs = ze::make_unique<expr::constant>(
         detail::ast::query::fold(clause.rhs));
 
     relation->add(std::move(lhs));
@@ -519,7 +519,7 @@ public:
       expr::conjunction* conj;
       if (! (conj = dynamic_cast<expr::conjunction*>(parent_)))
       {
-        auto c = std::make_unique<expr::conjunction>();
+        auto c = ze::make_unique<expr::conjunction>();
         conj = c.get();
         parent_->add(std::move(c));
       }
@@ -563,7 +563,7 @@ public:
         expr::conjunction* conj;
         if (! (conj = dynamic_cast<expr::conjunction*>(parent_)))
         {
-          auto c = std::make_unique<expr::conjunction>();
+          auto c = ze::make_unique<expr::conjunction>();
           conj = c.get();
           parent_->add(std::move(c));
         }
@@ -585,7 +585,7 @@ private:
   std::unique_ptr<expr::offset_extractor>
   make_offset_extractor(std::vector<size_t> offsets)
   {
-    auto node = std::make_unique<expr::offset_extractor>(std::move(offsets));
+    auto node = ze::make_unique<expr::offset_extractor>(std::move(offsets));
     extractors_.push_back(node.get());
     return std::move(node);
   }
@@ -593,7 +593,7 @@ private:
   std::unique_ptr<expr::constant>
   make_constant(detail::ast::query::expression const& expr)
   {
-    return std::make_unique<expr::constant>(detail::ast::query::fold(expr));
+    return ze::make_unique<expr::constant>(detail::ast::query::fold(expr));
   }
 
   std::unique_ptr<expr::node> make_glob_node(std::string const& expr)
@@ -603,13 +603,13 @@ private:
     // moment: we just look whether the expression contains * or ?.
     auto glob = ze::regex("\\*|\\?").search(expr);
     auto rel = make_relation(glob ? match : equal);
-    auto lhs = std::make_unique<expr::name_extractor>();
+    auto lhs = ze::make_unique<expr::name_extractor>();
     extractors_.push_back(lhs.get());
     rel->add(std::move(lhs));
     if (glob)
-      rel->add(std::make_unique<expr::constant>(ze::regex::glob(expr)));
+      rel->add(ze::make_unique<expr::constant>(ze::regex::glob(expr)));
     else
-      rel->add(std::make_unique<expr::constant>(expr));
+      rel->add(ze::make_unique<expr::constant>(expr));
 
     return std::move(rel);
   }
@@ -622,25 +622,25 @@ private:
         assert(! "missing relational operator in expression");
         return std::unique_ptr<expr::relation>();
       case match:
-        return std::make_unique<expr::relation>(match);
+        return ze::make_unique<expr::relation>(match);
       case not_match:
-        return std::make_unique<expr::relation>(not_match);
+        return ze::make_unique<expr::relation>(not_match);
       case in:
-        return std::make_unique<expr::relation>(in);
+        return ze::make_unique<expr::relation>(in);
       case not_in:
-        return std::make_unique<expr::relation>(not_in);
+        return ze::make_unique<expr::relation>(not_in);
       case equal:
-        return std::make_unique<expr::relation>(equal);
+        return ze::make_unique<expr::relation>(equal);
       case not_equal:
-        return std::make_unique<expr::relation>(not_equal);
+        return ze::make_unique<expr::relation>(not_equal);
       case less:
-        return std::make_unique<expr::relation>(less);
+        return ze::make_unique<expr::relation>(less);
       case less_equal:
-        return std::make_unique<expr::relation>(less_equal);
+        return ze::make_unique<expr::relation>(less_equal);
       case greater:
-        return std::make_unique<expr::relation>(greater);
+        return ze::make_unique<expr::relation>(greater);
       case greater_equal:
-        return std::make_unique<expr::relation>(greater_equal);
+        return ze::make_unique<expr::relation>(greater_equal);
     }
   }
 
@@ -692,7 +692,7 @@ void expression::parse(std::string str, schema sch)
   if (ast.rest.empty())
   {
     /// WLOG, we can always add a conjunction as root.
-    auto conjunction = std::make_unique<expr::conjunction>();
+    auto conjunction = ze::make_unique<expr::conjunction>();
     expressionizer visitor(conjunction.get(), extractors_, schema_);
     boost::apply_visitor(std::ref(visitor), ast.first);
     root_ = std::move(conjunction);
@@ -709,7 +709,7 @@ void expression::parse(std::string str, schema sch)
 
     // Then create a conjunction for each set of subsequent AND nodes between
     // two OR nodes.
-    auto disjunction = std::make_unique<expr::disjunction>();
+    auto disjunction = ze::make_unique<expr::disjunction>();
     for (auto& ands : ors)
       if (ands.rest.empty())
       {
@@ -718,7 +718,7 @@ void expression::parse(std::string str, schema sch)
       }
       else
       {
-        auto conjunction = std::make_unique<expr::conjunction>();
+        auto conjunction = ze::make_unique<expr::conjunction>();
         expressionizer visitor(conjunction.get(), extractors_, schema_);
         boost::apply_visitor(std::ref(visitor), ands.first);
         for (auto clause : ands.rest)

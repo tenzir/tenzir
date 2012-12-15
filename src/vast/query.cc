@@ -28,15 +28,15 @@ bool query::window::extract(ze::event& event)
 
   *reader_ >> event;
 
-  if (reader_->events() == 0 && reader_->chunks() == 0)
+  if (reader_->available_events() == 0 && reader_->available_chunks() == 0)
   {
     reader_.reset();
     segments_.pop_front();
     if (! segments_.empty())
     {
       reader_.reset(new segment::reader(&get<0>(segments_.front())));
-      assert(reader_->events() > 0);
-      assert(reader_->chunks() > 0);
+      assert(reader_->available_events() > 0);
+      assert(reader_->available_chunks() > 0);
     }
   }
 
