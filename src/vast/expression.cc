@@ -411,7 +411,7 @@ public:
       op = negate(op);
       invert_ = false;
     }
-    auto relation = make_relation(op);
+    auto relation = ze::make_unique<expr::relation>(op);
 
     std::unique_ptr<expr::extractor> lhs;
     if (clause.lhs == "name")
@@ -439,7 +439,7 @@ public:
       op = negate(op);
       invert_ = false;
     }
-    auto relation = make_relation(op);
+    auto relation = ze::make_unique<expr::relation>(op);
 
     auto lhs = ze::make_unique<expr::type_extractor>(clause.lhs);
     extractors_.push_back(lhs.get());
@@ -460,7 +460,7 @@ public:
       op = negate(op);
       invert_ = false;
     }
-    auto relation = make_relation(op);
+    auto relation = ze::make_unique<expr::relation>(op);
 
     auto lhs = ze::make_unique<expr::offset_extractor>(clause.offsets);
     extractors_.push_back(lhs.get());
@@ -510,11 +510,11 @@ public:
         throw error::schema("unknown argument name");
 
       // TODO: factor rest of block in separate function to promote DRY.
-      auto rel = make_relation(op);
+      auto relation = ze::make_unique<expr::relation>(op);
       auto lhs = make_offset_extractor(std::move(offs));
       auto rhs = make_constant(clause.rhs);
-      rel->add(std::move(lhs));
-      rel->add(std::move(rhs));
+      relation->add(std::move(lhs));
+      relation->add(std::move(rhs));
 
       expr::conjunction* conj;
       if (! (conj = dynamic_cast<expr::conjunction*>(parent_)))
@@ -524,7 +524,7 @@ public:
         parent_->add(std::move(c));
       }
       conj->add(make_glob_node(symbol));
-      conj->add(std::move(rel));
+      conj->add(std::move(relation));
     }
     else
     {
@@ -554,11 +554,11 @@ public:
         if (offsets.size() > 1)
           throw error::schema("multiple offsets not yet implemented");
 
-        auto rel = make_relation(op);
+        auto relation = ze::make_unique<expr::relation>(op);
         auto lhs = make_offset_extractor(std::move(offsets[0]));
         auto rhs = make_constant(clause.rhs);
-        rel->add(std::move(lhs));
-        rel->add(std::move(rhs));
+        relation->add(std::move(lhs));
+        relation->add(std::move(rhs));
 
         expr::conjunction* conj;
         if (! (conj = dynamic_cast<expr::conjunction*>(parent_)))
@@ -568,7 +568,7 @@ public:
           parent_->add(std::move(c));
         }
         conj->add(make_glob_node(e.name));
-        conj->add(std::move(rel));
+        conj->add(std::move(relation));
       }
     }
   }
@@ -602,46 +602,20 @@ private:
     // equality comparison suffices. This check is relatively crude at the
     // moment: we just look whether the expression contains * or ?.
     auto glob = ze::regex("\\*|\\?").search(expr);
-    auto rel = make_relation(glob ? match : equal);
+    auto relation = ze::make_unique<expr::relation>(glob ? match : equal);
     auto lhs = ze::make_unique<expr::name_extractor>();
     extractors_.push_back(lhs.get());
-    rel->add(std::move(lhs));
+    relation->add(std::move(lhs));
     if (glob)
-      rel->add(ze::make_unique<expr::constant>(ze::regex::glob(expr)));
+      relation->add(ze::make_unique<expr::constant>(ze::regex::glob(expr)));
     else
-      rel->add(ze::make_unique<expr::constant>(expr));
-
-    return std::move(rel);
+      relation->add(ze::make_unique<expr::constant>(expr));
+    return std::move(relation);
   }
 
   std::unique_ptr<expr::relation> make_relation(relational_operator op)
   {
-    switch (op)
-    {
-      default:
-        assert(! "missing relational operator in expression");
-        return std::unique_ptr<expr::relation>();
-      case match:
-        return ze::make_unique<expr::relation>(match);
-      case not_match:
-        return ze::make_unique<expr::relation>(not_match);
-      case in:
-        return ze::make_unique<expr::relation>(in);
-      case not_in:
-        return ze::make_unique<expr::relation>(not_in);
-      case equal:
-        return ze::make_unique<expr::relation>(equal);
-      case not_equal:
-        return ze::make_unique<expr::relation>(not_equal);
-      case less:
-        return ze::make_unique<expr::relation>(less);
-      case less_equal:
-        return ze::make_unique<expr::relation>(less_equal);
-      case greater:
-        return ze::make_unique<expr::relation>(greater);
-      case greater_equal:
-        return ze::make_unique<expr::relation>(greater_equal);
-    }
+    return ze::make_unique<expr::relation>(op);
   }
 
   expr::n_ary_operator* parent_;
