@@ -8,27 +8,52 @@
 #include <ze/time.h>
 #include <ze/uuid.h>
 #include <ze/io/compression.h>
+#include <ze/util/operators.h>
 
 namespace vast {
 
 /// Contains a vector of chunks with additional meta data. 
-class segment
+class segment : ze::util::equality_comparable<segment>
 {
 public:
   typedef ze::chunk<ze::event> chunk;
   typedef cppa::cow_tuple<chunk> chunk_tuple;
 
   /// The segment header.
-  struct header
+  struct header : ze::util::equality_comparable<header>
   {
+    /// The event-related meta data inside the segment header.
+    struct event_meta_data : ze::util::equality_comparable<event_meta_data>,
+                             ze::util::addable<event_meta_data>
+    {
+      /// Default-constructs event meta data.
+      event_meta_data();
+
+      friend bool operator==(event_meta_data const& x,
+                             event_meta_data const& y);
+
+      // Merges the event meta.
+      // @param other The meta data to merge..
+      // @param A reference to `*this`.
+      event_meta_data& operator+=(event_meta_data const& other);
+
+      /// Integrates the meta of an event into the header.
+      /// @param event The event to integrate.
+      void accommodate(ze::event const& event);
+
+      ze::time_point start;
+      ze::time_point end;
+      uint32_t n = 0;
+    };
+
     uint32_t version = 0;
     ze::uuid id;
     ze::io::compression compression;
-    ze::time_point start;
-    ze::time_point end;
-    uint32_t events = 0;
+    event_meta_data event_meta;
 
   private:
+    friend bool operator==(header const& x, header const& y);
+
     friend ze::io::access;
     void serialize(ze::io::serializer& sink);
     void deserialize(ze::io::deserializer& source);
@@ -37,6 +62,10 @@ public:
   /// A proxy class for writing into a segment. Each writer maintains a local
   /// chunk that receives events to serialize. Upon flushing, the writer
   /// appends the chunk to the segment.
+  ///
+  /// @note It is possible to have multiple writers per segment, however, the
+  /// user must ensure that no call to writer::flush() occurrs concurrently.
+  /// This interface is not ideal and will probably change in the future.
   class writer
   {
     writer(writer const&) = delete;
@@ -75,6 +104,7 @@ public:
 
   private:
     segment* segment_;
+    header::event_meta_data event_meta_;
     chunk chunk_;
     chunk::putter putter_;
     size_t processed_bytes_ = 0;
@@ -173,7 +203,6 @@ public:
 
 private:
   friend bool operator==(segment const& x, segment const& y);
-  friend bool operator!=(segment const& x, segment const& y);
 
   friend ze::io::access;
   void serialize(ze::io::serializer& sink);

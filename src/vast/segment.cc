@@ -14,15 +14,55 @@ namespace vast {
 uint32_t const segment::magic;
 uint8_t const segment::version;
 
+segment::header::event_meta_data::event_meta_data()
+{
+  start = ze::now();
+  end = start;
+}
+
+segment::header::event_meta_data&
+segment::header::event_meta_data::operator+=(event_meta_data const& other)
+{
+  if (other.start < start)
+    start = other.start;
+  if (other.end > end)
+    end = other.end;
+  n += other.n;
+  return *this;
+}
+
+bool operator==(segment::header::event_meta_data const& x,
+                segment::header::event_meta_data const& y)
+{
+  return x.start == y.start && x.end == y.end && x.n == y.n;
+}
+
+void segment::header::event_meta_data::accommodate(ze::event const& event)
+{
+  if (event.timestamp() < start)
+    start = event.timestamp();
+  if (event.timestamp() > end)
+    end = event.timestamp();
+  ++n;
+}
+
+bool operator==(segment::header const& x, segment::header const& y)
+{
+  return x.version == y.version &&
+    x.id == y.id &&
+    x.compression == y.compression &&
+    x.event_meta == y.event_meta;
+}
+
 void segment::header::serialize(ze::io::serializer& sink)
 {
   sink << segment::magic;
   sink << version;
   sink << id;
   sink << compression;
-  sink << start;
-  sink << end;
-  sink << events;
+  sink << event_meta.start;
+  sink << event_meta.end;
+  sink << event_meta.n;
 }
 
 void segment::header::deserialize(ze::io::deserializer& source)
@@ -38,9 +78,9 @@ void segment::header::deserialize(ze::io::deserializer& source)
 
   source >> id;
   source >> compression;
-  source >> start;
-  source >> end;
-  source >> events;
+  source >> event_meta.start;
+  source >> event_meta.end;
+  source >> event_meta.n;
 }
 
 segment::writer::writer(segment* s)
@@ -52,13 +92,7 @@ segment::writer::writer(segment* s)
 void segment::writer::operator<<(ze::event const& event)
 {
   ZE_ENTER(ZE_ARG(event));
-  ++segment_->header_.events;
-
-  if (event.timestamp() < segment_->header_.start)
-    segment_->header_.start = event.timestamp();
-  if (event.timestamp() > segment_->header_.end)
-    segment_->header_.end = event.timestamp();
-
+  event_meta_.accommodate(event);
   putter_ << event;
 }
 
@@ -69,9 +103,11 @@ void segment::writer::flush()
   putter_.reset(); // Flushes and releases reference to chunk_.
   if (! chunk_.empty())
   {
-    chunk_bytes_ += chunk_.bytes();
+    segment_->header_.event_meta += event_meta_;
     segment_->chunks_.emplace_back(std::move(chunk_));
+    chunk_bytes_ += chunk_.bytes();
     chunk_ = chunk();
+    event_meta_ = header::event_meta_data();
   }
   putter_.reset(&chunk_);
 }
@@ -152,8 +188,6 @@ segment::segment(ze::uuid uuid, ze::io::compression method)
   header_.id = std::move(uuid);
   header_.version = version;
   header_.compression = method;
-  header_.start = ze::now();
-  header_.end = header_.start;
 }
 
 segment::segment(segment const& other)
@@ -185,7 +219,7 @@ segment::header const& segment::head() const
 
 uint32_t segment::events() const
 {
-  return header_.events;
+  return header_.event_meta.n;
 }
 
 /*
@@ -246,16 +280,7 @@ void segment::deserialize(ze::io::deserializer& source)
 
 bool operator==(segment const& x, segment const& y)
 {
-  return x.header_.version == y.version &&
-    x.header_.compression == y.header_.compression &&
-    x.header_.start == y.header_.start &&
-    x.header_.events == y.header_.events &&
-    x.chunks_ == y.chunks_;
-}
-
-bool operator!=(segment const& x, segment const& y)
-{
-  return ! (x == y);
+  return x.header_ == y.header_ && x.chunks_ == y.chunks_;
 }
 
 } // namespace vast
