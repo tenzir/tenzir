@@ -104,7 +104,8 @@ void segment::writer::flush()
   ZE_ENTER();
   processed_bytes_ += putter_.bytes();
   putter_.reset(); // Flushes and releases reference to chunk_.
-  if (! chunk_.empty())
+  auto not_empty = ! chunk_.empty();
+  if (not_empty)
   {
     segment_->header_.event_meta += event_meta_;
     segment_->chunks_.emplace_back(std::move(chunk_));
@@ -113,6 +114,7 @@ void segment::writer::flush()
     event_meta_ = header::event_meta_data();
   }
   putter_.reset(&chunk_);
+  return not_empty;
 }
 
 size_t segment::writer::elements() const

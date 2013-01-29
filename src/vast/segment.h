@@ -87,8 +87,8 @@ public:
 
     /// Moves the current chunk from the writer into the segment and creates an
     /// internal new chunk for subsequent write operations.
-    /// @return The number of bytes the moved chunk occupied.
-    void flush();
+    /// @return `true` if flushing was not a no-op.
+    bool flush();
 
     /// Retrieves the number of elements in the current chunk.
     size_t elements() const;
