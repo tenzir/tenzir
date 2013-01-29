@@ -50,6 +50,7 @@ bool operator==(segment::header const& x, segment::header const& y)
 {
   return x.version == y.version &&
     x.id == y.id &&
+    x.base == y.base &&
     x.compression == y.compression &&
     x.event_meta == y.event_meta;
 }
@@ -59,6 +60,7 @@ void segment::header::serialize(ze::io::serializer& sink)
   sink << segment::magic;
   sink << version;
   sink << id;
+  sink << base;
   sink << compression;
   sink << event_meta.start;
   sink << event_meta.end;
@@ -77,6 +79,7 @@ void segment::header::deserialize(ze::io::deserializer& source)
     throw error::segment("segment version too high");
 
   source >> id;
+  source >> base;
   source >> compression;
   source >> event_meta.start;
   source >> event_meta.end;

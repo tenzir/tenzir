@@ -48,6 +48,7 @@ public:
 
     uint32_t version = 0;
     ze::uuid id;
+    uint64_t base = 0;
     ze::io::compression compression;
     event_meta_data event_meta;
 
