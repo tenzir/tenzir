@@ -12,7 +12,7 @@ It is currently impossible to support Windows platforms, as Visual Studio lacks
 important C++11 features.
 
 If you are using a 64-bit version of Linux, make sure to use a recent version
-of [libunwind][libunwind] when enabling
+of [libunwind](http://www.nongnu.org/libunwind/index.html) when enabling
 [gperftools](http://code.google.com/p/gperftools/), because there exist
 [known](http://code.google.com/p/gperftools/issues/detail?id=66)
 [bugs](http://code.google.com/p/gperftools/source/browse/trunk/README) that
@@ -20,49 +20,41 @@ cause segmentation faults when linking against the system-provided version.
 
 In C++, the STL layer is different from the ABI layer. While the former is
 provided by Clang's libc++, the latter needs to be installed separately,
-e.g., via [libcxxrt][libcxxrt] or the LLVM
+e.g., via [libcxxrt](https://github.com/pathscale/libcxxrt) or the LLVM
 equivalent [libcxxabi](http://libcxxabi.llvm.org). 
 
 Clang
 -----
 
-There is generally good Clang support on Mac OS (Darwin), as it is the favored
-platform of the Clang developers. Still, the Clang version shipping with
-Macports uses libstdc++ as opposed to Clang's libc++. On Linux,
-[libcxxrt][libcxxrt] has proven to work well.
+Since installing Clang turns out to be non-trivial, this tutorial assumes a
+clang compiler installed via Robin Sommer's
+[install-clang](https://github.com/rsmmr/install-clang) script.
 
-Make sure that Clang is in your `$PATH` and export the following
+First, let's make sure that Clang is in the `$PATH` and export the following
 environment variables:
 
-    export LLVM=/opt/llvm       # Contains LLVM/Clang binaries.
     export CC=clang
     export CXX=clang++
-    export CXXFLAGS="-std=c++11 -stdlib=libc++"
-    export LDFLAGS="-L$LLVM/lib -stdlib=libc++"
-    export LD_LIBRARY_PATH=$LLVM/lib
+    export LD_LIBRARY_PATH=/opt/llvm/lib
 
-On Linux, it may be necessary to extend the linker flags when using libcxxrt:
-
-    export LDFLAGS="$LDFLAGS -lpthread -lcxxrt"
-
-We recommend to install all Clang-related dependencies in the same prefix:
+In this tutorial, we install all Clang-related dependencies in the same prefix:
 
     export PREFIX=/path/to/installation-prefix
 
 ### [Boost](http://www.boost.org)
 
     ./bootstrap.sh --with-toolset=clang --prefix=$PREFIX \
-        --with-libraries=date_time,iostreams,system,thread,test,filesystem,program_options,regex
+        --with-libraries=regex,system,test
     
     ./b2 --layout=tagged variant=debug,release threading=multi \
-        cxxflags="-std=c++11 -stdlib=libc++" linkflags="-L$LLVM/lib -stdlib=libc++"
+        cxxflags="-std=c++11 -stdlib=libc++"
     
     ./b2 install
 
 ### [Libcppa](https://github.com/Neverlord/libcppa)
 
     ./configure --enable-debug --disable-context-switching --prefix=$PREFIX \
-        --with-clang=$LLVM/bin/clang++ --with-boost=$PREFIX
+        --with-clang=clang++ --with-boost=$PREFIX
     make
     make test
     make install
@@ -118,7 +110,7 @@ ready to be picked up by subsequent dependency configurations.
 ### [Boost](http://www.boost.org)
 
     ./bootstrap.sh --with-toolset=gcc --prefix=$PREFIX \
-        --with-libraries=date_time,iostreams,system,thread,test,filesystem,program_options
+        --with-libraries=regex,system,test
     
     ./b2 --layout=tagged variant=debug,release threading=multi \
         cxxflags="-std=c++11"
@@ -146,8 +138,3 @@ ready to be picked up by subsequent dependency configurations.
     make
     make test
     make install
-
-
-
-[libcxxrt]: https://github.com/pathscale/libcxxrt
-[libunwind]: http://www.nongnu.org/libunwind/index.html
