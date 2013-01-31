@@ -4,13 +4,12 @@
 #include <ze/fwd.h>
 #include "vast/util/server.h"
 
-// Forward declaration.
-struct bro_conn;
-
 namespace vast {
 namespace util {
 namespace broccoli {
 
+// Forward declarations.
+struct bro_conn;
 struct connection;
 typedef util::server<connection> server;
 typedef std::function<void(ze::event)> event_handler;
