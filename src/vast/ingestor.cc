@@ -2,7 +2,7 @@
 
 #include <ze.h>
 #include "vast/exception.h"
-#include "vast/event_source.h"
+#include "vast/receiver.h"
 #include "vast/logger.h"
 #include "vast/segment.h"
 #include "vast/source/file.h"
@@ -38,24 +38,29 @@ ingestor::ingestor(cppa::actor_ptr tracker,
         [=](std::string const& host, unsigned port,
             std::vector<std::string> const& events)
       {
-        broccoli_ = spawn<source::broccoli>(self, tracker);
-        send(broccoli_, atom("start"), host, port);
+        auto recv = spawn<receiver>(self, tracker);
+        auto broccoli = spawn<source::broccoli>(recv, batch_size_);
+        recv->monitor(broccoli);
+        send(broccoli, atom("start"), host, port);
         for (auto& event : events)
-          send(broccoli_, atom("subscribe"), event);
+          send(broccoli, atom("subscribe"), event);
+        sources_.push_back(recv);
       },
 #endif
       on(atom("ingest"), "bro15conn", arg_match) >> [=](std::string const& file)
       {
-        sources_.push_back(spawn<source::bro15conn>(self, tracker, file));
+        auto recv = spawn<receiver>(self, tracker);
+        unleash<source::bro15conn>(recv, file);
+        sources_.push_back(recv);
       },
-      on(atom("ingest"), "bro2", arg_match) >> [=](std::string const& file)
-      {
-        sources_.push_back(spawn<source::bro2>(self, tracker, file));
-      },
-      on(atom("ingest"), val<std::string>, arg_match) >> [=](std::string const&)
-      {
-        LOG(error, ingest) << "invalid ingestion file type";
-      },
+      //on(atom("ingest"), "bro2", arg_match) >> [=](std::string const& file)
+      //{
+      //  sources_.push_back(spawn<source::bro2>(self, tracker, file));
+      //},
+      //on(atom("ingest"), val<std::string>, arg_match) >> [=](std::string const&)
+      //{
+      //  LOG(error, ingest) << "invalid ingestion file type";
+      //},
       on(atom("extract")) >> [=]
       {
         for (auto source : sources_)
@@ -128,10 +133,6 @@ ingestor::ingestor(cppa::actor_ptr tracker,
       },
       on(atom("shutdown")) >> [=]
       {
-#ifdef VAST_HAVE_BROCCOLI
-        if (broccoli_)
-          broccoli_ << last_dequeued();
-#endif
         if (sources_.empty() && inflight_.empty())
           shutdown();
         for (auto source : sources_)

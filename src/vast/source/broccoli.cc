@@ -11,14 +11,29 @@ namespace source {
 
 using namespace cppa;
 
-broccoli::broccoli(actor_ptr ingestor, actor_ptr tracker)
+broccoli::broccoli(actor_ptr receiver, size_t batch_size)
+  : asynchronous(receiver, batch_size)
 {
-  LOG(verbose, core) << "spawning bro event source @" << id();
+  LOG(verbose, core) << "spawning broccoli source @" << id();
   chaining(false);
-  init_state = (
+  derived_ = (
       on(atom("start"), arg_match) >> [=](std::string const& host, unsigned port)
       {
         server_ = spawn<util::broccoli::server>(port, self);
+        monitor(server_);
+      },
+      on(atom("DOWN"), arg_match) >> [](size_t exit_reason)
+      {
+        LOG(error, ingest)
+          << "broccoli source @" << id() 
+          << " noticed termination of its server @" << server_->id();
+        send(self, atom("shutdown"));
+      },
+      on(atom("shutdown")) >> [=]
+      {
+        server_ << last_dequeued();
+        quit();
+        LOG(verbose, ingest) << "broccoli source @" << id() << " terminated";
       },
       on(atom("connection"), arg_match) >> [=](actor_ptr conn)
       {
@@ -29,19 +44,12 @@ broccoli::broccoli(actor_ptr ingestor, actor_ptr tracker)
       on(atom("subscribe"), arg_match) >> [=](std::string const& event)
       {
         LOG(verbose, ingest)
-          << "bro event source @" << id() << " subscribes to event " << event;
+          << "broccoli source @" << id() << " subscribes to event " << event;
         event_names_.insert(event);
       },
-      on_arg_match >> [=](ze::event const& e)
+      on_arg_match >> [=](ze::event& event)
       {
-        // TODO.
-        DBG(ingest) << e;
-      },
-      on(atom("shutdown")) >> [=]
-      {
-        server_ << last_dequeued();
-        quit();
-        LOG(verbose, ingest) << "bro event source @" << id() << " terminated";
+        buffer(event);
       });
 }
 

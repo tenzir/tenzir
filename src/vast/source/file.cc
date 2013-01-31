@@ -9,16 +9,9 @@
 namespace vast {
 namespace source {
 
-file::file(cppa::actor_ptr ingestor,
-           cppa::actor_ptr tracker,
-           std::string const& filename)
-  : event_source(std::move(ingestor), std::move(tracker))
+file::file(std::string const& filename)
   , file_(filename)
 {
-  LOG(info, ingest)
-    << "spawning event source @" << id()
-    << " for file " << filename;
-
   if (file_)
   {
     file_.unsetf(std::ios::skipws);
@@ -26,14 +19,15 @@ file::file(cppa::actor_ptr ingestor,
   }
   else
   {
-    LOG(error, ingest) << "event source @" << id() << " cannot read " << filename;
+    LOG(error, ingest)
+      << "file source @" << id() << " cannot read " << filename;
+    //send(self, atom("shutdown"));
+    finished_ = true;
   }
 }
 
-line::line(cppa::actor_ptr ingestor,
-           cppa::actor_ptr tracker,
-           std::string const& filename)
-  : file(std::move(ingestor), std::move(tracker), filename)
+line::line(std::string const& filename)
+  : file(filename)
 {
   next();
 }
@@ -72,10 +66,8 @@ bool line::next()
   return success;
 }
 
-bro2::bro2(cppa::actor_ptr ingestor,
-           cppa::actor_ptr tracker,
-           std::string const& filename)
-  : line(std::move(ingestor), std::move(tracker), filename)
+bro2::bro2(std::string const& filename)
+  : line(filename)
 {
   try
   {
@@ -348,10 +340,8 @@ ze::event bro2::parse(std::string const& line)
   return e;
 }
 
-bro15conn::bro15conn(cppa::actor_ptr ingestor,
-                     cppa::actor_ptr tracker,
-                     std::string const& filename)
-  : line(std::move(ingestor), std::move(tracker), filename)
+bro15conn::bro15conn(std::string const& filename)
+  : line(filename)
 {
 }
 

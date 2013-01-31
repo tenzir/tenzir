@@ -5,8 +5,6 @@ set(libvast_sources
   bitstream.cc
   archive.cc
   configuration.cc
-  event_sink.cc
-  event_source.cc
   exception.cc
   expression.cc
   id_tracker.cc
@@ -17,6 +15,7 @@ set(libvast_sources
   program.cc
   query.cc
   query_client.cc
+  receiver.cc
   schema.cc
   schema_manager.cc
   search.cc
@@ -32,7 +31,9 @@ set(libvast_sources
   detail/parser/schema.cc
   detail/parser/bro15/conn.cc
   sink/file.cc
+  source/asynchronous.cc
   source/file.cc
+  source/synchronous.cc
   util/configuration.cc
   util/console.cc
   util/poll.cc

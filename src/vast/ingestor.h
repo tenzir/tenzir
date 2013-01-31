@@ -34,7 +34,6 @@ private:
   std::unordered_map<ze::uuid, unsigned> inflight_;
   cppa::actor_ptr archive_;
   cppa::actor_ptr index_;
-  cppa::actor_ptr broccoli_;
   cppa::behavior init_state;
 };
 

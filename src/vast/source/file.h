@@ -3,32 +3,23 @@
 
 #include <cassert>
 #include <fstream>
-#include <cppa/cppa.hpp>
 #include <ze/fwd.h>
 #include <ze/value_type.h>
 #include <ze/string.h>
-#include "vast/event_source.h"
+#include "vast/source/synchronous.h"
 
 namespace vast {
 namespace source {
 
-/// A file that transforms file contents into events.
-class file : public event_source
+/// A file source that transforms file contents into events.
+class file : public synchronous
 {
-  friend class cppa::sb_actor<file>;
-
 public:
   /// Constructs a file source.
-  /// @param ingestor The ingestor.
-  /// @param tracker The event ID tracker.
   /// @param filename The name of the file to ingest.
-  file(cppa::actor_ptr ingestor,
-       cppa::actor_ptr tracker,
-       std::string const& filename);
+  file(std::string const& filename);
 
 protected:
-  virtual ze::event extract() = 0;
-
   std::ifstream file_;
 };
 
@@ -37,12 +28,10 @@ protected:
 class line : public file
 {
 public:
-  line(cppa::actor_ptr ingestor,
-       cppa::actor_ptr tracker,
-       std::string const& filename);
+  line(std::string const& filename);
 
 protected:
-  virtual ze::event extract();
+  virtual ze::event extract() override;
   virtual ze::event parse(std::string const& line) = 0;
 
   /// Retrieves the next line from the file.
@@ -57,9 +46,7 @@ protected:
 class bro2 : public line
 {
 public:
-  bro2(cppa::actor_ptr ingestor,
-       cppa::actor_ptr tracker,
-       std::string const& filename);
+  bro2(std::string const& filename);
 
 private:
   /// Extracts the first `#`-lines of log meta data.
@@ -68,7 +55,7 @@ private:
   /// Converts a Bro type to a 0event type. Does not support container types.
   ze::value_type bro_to_ze(ze::string const& str);
 
-  virtual ze::event parse(std::string const& line);
+  virtual ze::event parse(std::string const& line) override;
 
   ze::string separator_;
   ze::string set_separator_;
@@ -84,13 +71,11 @@ private:
 class bro15conn : public line
 {
 public:
-    bro15conn(cppa::actor_ptr ingestor,
-              cppa::actor_ptr tracker,
-              std::string const& filename);
+    bro15conn(std::string const& filename);
 
 private:
   /// Parses a single log line.
-  virtual ze::event parse(std::string const& line);
+  virtual ze::event parse(std::string const& line) override;
 };
 
 } // namespace source
