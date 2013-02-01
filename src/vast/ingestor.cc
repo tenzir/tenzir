@@ -2,7 +2,7 @@
 
 #include <ze.h>
 #include "vast/exception.h"
-#include "vast/receiver.h"
+#include "vast/segmentizer.h"
 #include "vast/logger.h"
 #include "vast/segment.h"
 #include "vast/source/file.h"
@@ -17,59 +17,78 @@ using namespace cppa;
 
 ingestor::ingestor(cppa::actor_ptr tracker,
                    cppa::actor_ptr archive,
-                   cppa::actor_ptr index)
-  : archive_(archive)
-  , index_(index)
+                   cppa::actor_ptr index,
+                   size_t max_events_per_chunk,
+                   size_t max_segment_size,
+                   size_t batch_size)
+  : tracker_(tracker),
+    archive_(archive),
+    index_(index),
+    max_events_per_chunk_(max_events_per_chunk),
+    max_segment_size_(max_segment_size),
+    batch_size(batch_size)
 {
   LOG(verbose, ingest) << "spawning ingestor @" << id();
-
   chaining(false);
   init_state = (
-      on(atom("initialize"), arg_match) >> [=](size_t max_events_per_chunk,
-                                               size_t max_segment_size,
-                                               size_t batch_size)
+      on(atom("DOWN"), arg_match) >> [=](uint32_t reason)
       {
-        max_events_per_chunk_ = max_events_per_chunk;
-        max_segment_size_ = max_segment_size;
-        batch_size_ = batch_size;
+        auto i = std::find(segmentizers_.begin(), segmentizers_.end(), last_sender());
+        assert(i != segmentizers_.end());
+        segmentizers_.erase(i);
+
+        auto j = rates_.find(last_sender());
+        if (j != rates_.end())
+          rates_.erase(j);
+
+        if (segmentizers_.empty() && inflight_.empty())
+          shutdown();
+      },
+      on(atom("shutdown")) >> [=]
+      {
+        if (segmentizers_.empty() && inflight_.empty())
+          shutdown();
+        for (auto source : segmentizers_)
+          source << last_dequeued();
       },
 #ifdef VAST_HAVE_BROCCOLI
       on(atom("ingest"), atom("broccoli"), arg_match) >>
         [=](std::string const& host, unsigned port,
             std::vector<std::string> const& events)
       {
-        auto recv = spawn<receiver>(self, tracker);
-        auto broccoli = spawn<source::broccoli>(recv, batch_size_);
-        recv->monitor(broccoli);
+        auto seggy = make_segmentizer();
+        auto broccoli = spawn<source::broccoli>(seggy, batch_size)
+        send(seggy, atom("initialize"), broccoli);
+
         send(broccoli, atom("start"), host, port);
         for (auto& event : events)
           send(broccoli, atom("subscribe"), event);
-        sources_.push_back(recv);
+
+        segmentizers_.push_back(seggy);
       },
 #endif
       on(atom("ingest"), "bro15conn", arg_match) >> [=](std::string const& file)
       {
-        auto recv = spawn<receiver>(self, tracker);
-        unleash<source::bro15conn>(recv, file);
-        sources_.push_back(recv);
+        auto seggy = make_segmentizer();
+        auto src = unleash<source::bro15conn>(seggy, file);
+        send(seggy, atom("initialize"), src);
+        segmentizers_.push_back(seggy);
       },
-      //on(atom("ingest"), "bro2", arg_match) >> [=](std::string const& file)
-      //{
-      //  sources_.push_back(spawn<source::bro2>(self, tracker, file));
-      //},
-      //on(atom("ingest"), val<std::string>, arg_match) >> [=](std::string const&)
-      //{
-      //  LOG(error, ingest) << "invalid ingestion file type";
-      //},
+      on(atom("ingest"), "bro2", arg_match) >> [=](std::string const& file)
+      {
+        auto seggy = make_segmentizer();
+        auto src = unleash<source::bro2>(seggy, file);
+        send(seggy, atom("initialize"), src);
+        segmentizers_.push_back(seggy);
+      },
+      on(atom("ingest"), val<std::string>, arg_match) >> [=](std::string const&)
+      {
+        LOG(error, ingest) << "invalid ingestion file type";
+      },
       on(atom("extract")) >> [=]
       {
-        for (auto source : sources_)
-        {
-          monitor(source);
-          send(source, atom("initialize"), max_events_per_chunk_,
-               max_segment_size_);
-          send(source, atom("extract"), batch_size_);
-        }
+        for (auto s : segmentizers_)
+          send(s, atom("run"))
 
         size_t last = 0;
         delayed_send(
@@ -92,7 +111,7 @@ ingestor::ingestor(cppa::actor_ptr tracker,
             << "ingestor @" << id()
             << " ingests at rate " << sum << " events/sec";
 
-        if (! sources_.empty())
+        if (! segmentizers_.empty())
           delayed_send(
               self,
               std::chrono::seconds(1),
@@ -110,8 +129,6 @@ ingestor::ingestor(cppa::actor_ptr tracker,
 
         assert(inflight_.find(s.id()) == inflight_.end());
         inflight_.emplace(s.id(), 2);
-
-        reply(atom("segment"), atom("ack"), s.id());
       },
       on(atom("segment"), atom("ack"), arg_match) >> [=](ze::uuid const& uuid)
       {
@@ -128,29 +145,15 @@ ingestor::ingestor(cppa::actor_ptr tracker,
         else
           --i->second;
 
-        if (sources_.empty() && inflight_.empty())
-          shutdown();
-      },
-      on(atom("shutdown")) >> [=]
-      {
-        if (sources_.empty() && inflight_.empty())
-          shutdown();
-        for (auto source : sources_)
-          source << last_dequeued();
-      },
-      on(atom("DOWN"), arg_match) >> [=](uint32_t reason)
-      {
-        auto i = std::find(sources_.begin(), sources_.end(), last_sender());
-        assert(i != sources_.end());
-        sources_.erase(i);
-
-        auto j = rates_.find(last_sender());
-        if (j != rates_.end())
-          rates_.erase(j);
-
-        if (sources_.empty() && inflight_.empty())
+        if (segmentizers_.empty() && inflight_.empty())
           shutdown();
       });
+}
+
+actor_ptr ingestor::make_segmentizer() const
+{
+  return spawn<segmentizer>(self, tracker_,
+                            max_events_per_chunk_, max_segment_size_);
 }
 
 void ingestor::shutdown()

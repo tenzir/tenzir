@@ -10,7 +10,7 @@ namespace vast {
 namespace source {
 
 file::file(std::string const& filename)
-  , file_(filename)
+  : file_(filename)
 {
   if (file_)
   {

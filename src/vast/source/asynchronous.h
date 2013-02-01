@@ -7,23 +7,37 @@
 namespace vast {
 namespace source {
 
-/// An asynchronous source that provides buffers and relays events in batches.
+/// An asynchronous source that buffers and relays events in batches.
 /// Any child deriving from this class must be an actor.
-class asynchronous
+template <typename Derived>
+class asynchronous : public actor<asynchronous<Derived>>
 {
 public:
   /// Constructs an asynchronous source.
-  /// @param receiver The receiver of the event batches.
+  /// @param upstream The upstream of the event batches.
   /// @param batch_size The size of each event batch.
-  asynchronous(actor_ptr receiver, size_t batch_size);
+  asynchronous(cppa::actor_ptr upstream, size_t batch_size)
+  {
+    using namespace cppa;
+    processing_ = (
+        on_arg_match >> [=](ze::event& event)
+        {
+          this->buffer_.push_back(std::move(event)); 
+          if (buffer_.size() < batch_size_)
+            return;
+          send(upstream, std::move(this->events_));
+          this->events_.clear();
+        });
+  }
 
-  /// Buffer an event and send the batch when having reached the limit.
-  void buffer(ze::event event);
+  void init() override
+  {
+    become(this->operating().or_else(processing_));
+  }
 
 private:
-  actor_ptr receiver_;
-  size_t batch_size_ = 0;
   std::vector<ze::event> buffer_;
+  cppa::partial_function processing_;
 };
 
 } // namespace source

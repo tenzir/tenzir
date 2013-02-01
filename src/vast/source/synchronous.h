@@ -7,10 +7,12 @@ namespace vast {
 namespace source {
 
 /// A synchronous source that extracts events one by one.
-class synchronous : minion<synchronous>
+class synchronous : public minion<synchronous>
 {
+  friend class minion<synchronous>;
+
 public:
-  synchronous();
+  synchronous(cppa::actor_ptr upstream, size_t batch_size);
 
   virtual ze::event extract() = 0;
 
@@ -20,8 +22,7 @@ protected:
 private:
   size_t errors_ = 0;
   std::vector<ze::event> events_;
-  actor_ptr receiver_;
-  behavior operating_;
+  cppa::behavior operating_;
 };
 
 } // namespace source

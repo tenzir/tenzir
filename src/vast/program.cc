@@ -196,20 +196,17 @@ bool program::start()
 
     if (config_.check("ingestor-actor"))
     {
-#ifdef VAST_HAVE_BROCCOLI
-      util::broccoli::init(config_.check("broccoli-messages"),
-                           config_.check("broccoli-calltrace"));
-#endif
-
-      ingestor_ = spawn<ingestor>(tracker_, archive_, index_);
-      self->monitor(ingestor_);
-
-      send(ingestor_, atom("initialize"),
+      ingestor_ = spawn<ingestor>(
+          tracker_, archive_, index_,
           config_.as<size_t>("ingest.max-events-per-chunk"),
           config_.as<size_t>("ingest.max-segment-size") * 1000000,
           config_.as<size_t>("ingest.batch-size"));
+      self->monitor(ingestor_);
 
 #ifdef VAST_HAVE_BROCCOLI
+      util::broccoli::init(config_.check("broccoli-messages"),
+                           config_.check("broccoli-calltrace"));
+
       if (config_.check("ingest.broccoli-events"))
       {
         auto host = config_.get("ingest.broccoli-host");

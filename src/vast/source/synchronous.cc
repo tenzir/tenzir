@@ -3,7 +3,9 @@
 namespace vast {
 namespace source {
 
-synchronous::synchronous()
+using namespace cppa;
+
+synchronous::synchronous(actor_ptr upstream, size_t batch_size)
 {
   operating_ = (
       on(atom("shutdown")) >> []()
@@ -11,7 +13,7 @@ synchronous::synchronous()
         quit();
         LOG(info, ingest) << "source @" << id() << " terminated";
       },
-      on(atom("run"), arg_match) >> [=](size_t batch_size)
+      on(atom("run")) >> [=]()
       {
         if (finished_)
           return;
@@ -44,7 +46,7 @@ synchronous::synchronous()
           }
         }
 
-        send(receiver, std::move(events_));
+        send(upstream, std::move(events_));
         events_.clear();
 
         if (finished_)

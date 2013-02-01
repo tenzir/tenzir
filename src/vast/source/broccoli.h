@@ -9,17 +9,18 @@ namespace vast {
 namespace source {
 
 /// A Broccoli event source.
-struct broccoli : asynchronous, actor<broccoli>
+struct broccoli : asynchronous<broccoli>
 {
   /// Spawns a Broccoli event source.
-  /// @param ingestor The ingestor actor.
+  /// @param upstream The upstream actor receiving event batches.
   /// @param tracker The event ID tracker.
-  broccoli(actor_ptr receiver, size_t batch_size);
+  broccoli(cppa::actor_ptr upstream, size_t batch_size
+           std::string const& host, unsigned port);
 
   std::set<std::string> event_names_;
-  std::set<actor_ptr> broccolis_;
-  actor_ptr server_;
-  behavior operating_;
+  std::set<cppa::actor_ptr> broccolis_;
+  cppa::actor_ptr server_;
+  cppa::behavior operating_;
 };
 
 } // namespace source
