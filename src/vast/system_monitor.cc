@@ -7,13 +7,21 @@
 
 namespace vast {
 
-static bool signaled = false;
+namespace {
 
-static void signal_handler(int signo)
+int signals[] = { SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGUSR1, SIGUSR2 };
+int last_signal = 0;
+
+void signal_handler(int signo)
 {
-  signaled = true;
-  std::signal(signo, SIG_DFL);
+  // Only catch termination signals once to allow forced termination by the OS.
+  if (signo == SIGINT || signo == SIGTERM)
+    std::signal(signo, SIG_DFL);
+
+  last_signal = signo;
 }
+
+} // namespace <anonymous>
 
 using namespace cppa;
 
@@ -21,21 +29,27 @@ system_monitor::system_monitor(actor_ptr receiver)
 {
   LOG(verbose, core) << "spawning system monitor @" << id();
 
-  std::signal(SIGINT, &signal_handler);
-  std::signal(SIGTERM, &signal_handler);
+  for (auto s : signals)
+    std::signal(s, &signal_handler);
 
-  watcher_ = spawn<detached>([receiver]
+  // Watches for keystrokes and signals.
+  watcher_ = spawn_link<detached>([receiver]
       {
         util::console::unbuffer();
 
         char c;
-        while (! signaled)
+        while (! (last_signal == SIGINT || last_signal == SIGTERM))
         {
+          if (last_signal)
+          {
+            send(receiver, atom("system"), atom("signal"), last_signal)
+            last_signal = 0;
+          }
+
           if (util::console::get(c))
           {
             if (c == 'Q')
               break;
-
             send(receiver, atom("system"), atom("keystroke"), c);
           }
         }
@@ -44,30 +58,14 @@ system_monitor::system_monitor(actor_ptr receiver)
         self->quit();
       });
 
-  monitor(watcher_);
   LOG(verbose, core) 
-    << "system monitor @" << id() << " spawns watcher @" << watcher_->id();
+    << "system monitor @" << id() << " spawned watcher @" << watcher_->id();
 
   init_state = (
-      on(atom("DOWN"), arg_match) >> [=](uint32_t reason)
-      {
-        DBG(core) << "watcher @" << last_sender()->id() << " terminated";
-
-        watcher_ = nullptr;
-        send(self, atom("shutdown"));
-      },
       on(atom("shutdown")) >> [=]
       {
-        if (signaled || ! watcher_)
-        {
-          quit();
-          LOG(verbose, core) << "system monitor @" << id() << " terminated";
-        }
-        else
-        {
-          // Shut down the watcher if it has not yet been terminated.
-          std::raise(SIGTERM);
-        }
+        quit();
+        LOG(verbose, core) << "system monitor @" << id() << " terminated";
       });
 }
 
