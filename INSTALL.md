@@ -39,7 +39,7 @@ environment variables:
 
 In this tutorial, we install all Clang-related dependencies in the same prefix:
 
-    export PREFIX=/path/to/installation-prefix
+    export PREFIX=/opt/prefix/clang
 
 ### [Boost](http://www.boost.org)
 
@@ -47,29 +47,27 @@ In this tutorial, we install all Clang-related dependencies in the same prefix:
         --with-libraries=regex,system,test
     
     ./b2 --layout=tagged variant=debug,release threading=multi \
-        cxxflags="-std=c++11 -stdlib=libc++"
-    
-    ./b2 install
+        cxxflags="-std=c++11 -stdlib=libc++" linkflags="-stdlib=libc++" \
+        install
 
 ### [Libcppa](https://github.com/Neverlord/libcppa)
 
-    ./configure --enable-debug --disable-context-switching --prefix=$PREFIX \
-        --with-clang=clang++ --with-boost=$PREFIX
+    CXX=clang++ ./configure --prefix=$PREFIX
     make
     make test
     make install
 
 ### Øevent
 
-    ./configure --prefix=$PREFIX --with-boost=$PREFIX
+    CXX=clang++ ./configure --prefix=$PREFIX --with-boost=$PREFIX
     make
     make test
     make install
 
 ### VAST
 
-    ./configure --enable-debug --prefix=$PREFIX \
-        --with-boost=$PREFIX --with-libcppa=$PREFIX --with-0event=$PREFIX
+    CXX=clang++ ./configure --prefix=$PREFIX \
+        --with-boost=$PREFIX --with-libcppa=$PREFIX --with-ze=$PREFIX
     make
     make test
     make install
@@ -119,7 +117,7 @@ ready to be picked up by subsequent dependency configurations.
 
 ### [Libcppa](https://github.com/Neverlord/libcppa)
 
-    ./configure --enable-debug --prefix=$PREFIX --with-boost=$PREFIX
+    ./configure --enable-debug --prefix=$PREFIX
     make
     make test
     make install
@@ -134,7 +132,7 @@ ready to be picked up by subsequent dependency configurations.
 ### VAST
 
     ./configure --enable-debug --prefix=$PREFIX \
-        --with-boost=$PREFIX --with-libcppa=$PREFIX --with-0event=$PREFIX
+        --with-boost=$PREFIX --with-libcppa=$PREFIX --with-ze=$PREFIX
     make
     make test
     make install
