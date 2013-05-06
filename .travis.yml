@@ -3,6 +3,7 @@ compiler:
   - gcc
   - clang
 before_script:
+  # FIXME: Remove this hack once Travis supports GCC 4.7 and Clang 3.2.
   - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test # GCC 4.7
   - sudo add-apt-repository -y
     "deb http://archive.ubuntu.com/ubuntu/ quantal main universe" # Boost 1.50
@@ -26,7 +27,7 @@ before_script:
   - make install
   - popd
   # VAST
-  - ./configure $BUILD_TYPE --with-libcppa=$PREFIX --with-0event=$PREFIX
+  - ./configure $BUILD_TYPE --with-libcppa=$PREFIX --with-ze=$PREFIX
 script: make
 branches:
   only:
