@@ -29,7 +29,7 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
 
   Required packages in non-standard locations:
     --with-libcppa=PATH     path to libcppa install root
-    --with-0event=PATH      path to 0vent install root
+    --with-ze=PATH          path to 0vent install root
     --with-boost=PATH       path to Boost install root
 
   Optional packages in non-standard locations:
@@ -95,7 +95,7 @@ while [ $# -ne 0 ]; do
         --enable-perftools-heap)
             append_cache_entry ENABLE_PERFTOOLS_HEAP BOOL   true
             ;;
-        --with-0event=*)
+        --with-ze=*)
             append_cache_entry 0event_ROOT_DIR PATH $optarg
             ;;
         --with-libcppa=*)
