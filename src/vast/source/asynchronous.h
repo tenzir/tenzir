@@ -23,7 +23,7 @@ public:
         on_arg_match >> [=](ze::event& event)
         {
           this->buffer_.push_back(std::move(event)); 
-          if (buffer_.size() < batch_size_)
+          if (buffer_.size() < batch_size)
             return;
           send(upstream, std::move(this->events_));
           this->events_.clear();

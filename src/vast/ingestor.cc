@@ -23,10 +23,7 @@ ingestor::ingestor(cppa::actor_ptr tracker,
                    size_t batch_size)
   : tracker_(tracker),
     archive_(archive),
-    index_(index),
-    max_events_per_chunk_(max_events_per_chunk),
-    max_segment_size_(max_segment_size),
-    batch_size(batch_size)
+    index_(index)
 {
   LOG(verbose, ingest) << "spawning ingestor @" << id();
   chaining(false);
@@ -56,8 +53,9 @@ ingestor::ingestor(cppa::actor_ptr tracker,
         [=](std::string const& host, unsigned port,
             std::vector<std::string> const& events)
       {
-        auto seggy = make_segmentizer();
-        auto broccoli = spawn<source::broccoli>(seggy, batch_size)
+        auto seggy = spawn<segmentizer>(
+            self, tracker, max_events_per_chunk, max_segment_size);
+        auto broccoli = spawn<source::broccoli>(seggy, batch_size, host, port);
         send(seggy, atom("initialize"), broccoli);
 
         send(broccoli, atom("start"), host, port);
@@ -69,14 +67,16 @@ ingestor::ingestor(cppa::actor_ptr tracker,
 #endif
       on(atom("ingest"), "bro15conn", arg_match) >> [=](std::string const& file)
       {
-        auto seggy = make_segmentizer();
+        auto seggy = spawn<segmentizer>(
+            self, tracker, max_events_per_chunk, max_segment_size);
         auto src = unleash<source::bro15conn>(seggy, file);
         send(seggy, atom("initialize"), src);
         segmentizers_.push_back(seggy);
       },
       on(atom("ingest"), "bro2", arg_match) >> [=](std::string const& file)
       {
-        auto seggy = make_segmentizer();
+        auto seggy = spawn<segmentizer>(
+            self, tracker, max_events_per_chunk, max_segment_size);
         auto src = unleash<source::bro2>(seggy, file);
         send(seggy, atom("initialize"), src);
         segmentizers_.push_back(seggy);
@@ -88,7 +88,7 @@ ingestor::ingestor(cppa::actor_ptr tracker,
       on(atom("extract")) >> [=]
       {
         for (auto s : segmentizers_)
-          send(s, atom("run"))
+          send(s, atom("run"));
 
         size_t last = 0;
         delayed_send(
@@ -148,12 +148,6 @@ ingestor::ingestor(cppa::actor_ptr tracker,
         if (segmentizers_.empty() && inflight_.empty())
           shutdown();
       });
-}
-
-actor_ptr ingestor::make_segmentizer() const
-{
-  return spawn<segmentizer>(self, tracker_,
-                            max_events_per_chunk_, max_segment_size_);
 }
 
 void ingestor::shutdown()

@@ -18,16 +18,14 @@ public:
   /// @param tracker The ID tracker.
   /// @param archive The archive actor.
   /// @param index The index actor.
-  ingestor::ingestor(cppa::actor_ptr tracker,
-                     cppa::actor_ptr archive,
-                     cppa::actor_ptr index,
-                     size_t max_events_per_chunk,
-                     size_t max_segment_size,
-                     size_t batch_size);
+  ingestor(cppa::actor_ptr tracker,
+           cppa::actor_ptr archive,
+           cppa::actor_ptr index,
+           size_t max_events_per_chunk,
+           size_t max_segment_size,
+           size_t batch_size);
 
 private:
-  cppa::actor_ptr make_segmentizer() const
-
   void shutdown();
 
   std::vector<cppa::actor_ptr> segmentizers_;

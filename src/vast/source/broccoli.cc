@@ -18,6 +18,9 @@ broccoli::broccoli(actor_ptr receiver,
   operating_ = (
       on(atom("run")) >> [=]()
       {
+        // TODO: Make use of the host argument.
+        LOG(verbose, core) << "broccoli @" << id()
+          << "starts server at " << host << ':' << port;
         server_ = spawn<util::broccoli::server>(port, self);
         monitor(server_);
       },

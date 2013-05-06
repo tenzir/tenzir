@@ -12,9 +12,16 @@ namespace source {
 struct broccoli : asynchronous<broccoli>
 {
   /// Spawns a Broccoli event source.
+  ///
   /// @param upstream The upstream actor receiving event batches.
-  /// @param tracker The event ID tracker.
-  broccoli(cppa::actor_ptr upstream, size_t batch_size
+  ///
+  /// @param batch_size The number of events to buffer before relaying them
+  /// upstream.
+  ///
+  /// @param host The host to bind to.
+  ///
+  /// @param port The TCP port to listen on.
+  broccoli(cppa::actor_ptr upstream, size_t batch_size,
            std::string const& host, unsigned port);
 
   std::set<std::string> event_names_;
