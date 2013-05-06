@@ -15,7 +15,6 @@ set(libvast_sources
   program.cc
   query.cc
   query_client.cc
-  receiver.cc
   schema.cc
   schema_manager.cc
   search.cc
