@@ -1,8 +1,8 @@
 #ifndef VAST_SOURCE_ASYNCHRONOUS_H
 #define VAST_SOURCE_ASYNCHRONOUS_H
 
-#include <ze/event.h>
 #include <cppa/cppa.hpp>
+#include <ze/event.h>
 
 namespace vast {
 namespace source {
@@ -10,37 +10,39 @@ namespace source {
 /// An asynchronous source that buffers and relays events in batches.
 /// Any child deriving from this class must be an actor.
 template <typename Derived>
-struct asynchronous : public cppa::event_based_actor
+class asynchronous : public cppa::event_based_actor
 {
+public:
   /// Constructs an asynchronous source.
   /// @param upstream The upstream of the event batches.
   /// @param batch_size The size of each event batch.
   asynchronous(cppa::actor_ptr upstream, size_t batch_size)
   {
     using namespace cppa;
-    operating = (
+    operating_ = (
         on_arg_match >> [=](ze::event& e)
         {
-          this->buffer.push_back(std::move(e)); 
-          if (buffer.size() < batch_size)
+          this->events_.push_back(std::move(e));
+          if (events_.size() < batch_size)
             return;
-          send(upstream, std::move(this->buffer));
-          this->buffer.clear();
+          send(upstream, std::move(this->events_));
+          this->events_.clear();
         },
         on_arg_match >> [=](std::vector<ze::event> v)
         {
-          // TODO: Implement append up to batch size.
           assert(! "not yet implemented");
         });
   }
 
+  /// Implements `cppa::event_based_actor::init`.
   void init() override
   {
-    become(operating.or_else(static_cast<Derived*>(this)->init_state));
+    become(operating_.or_else(static_cast<Derived*>(this)->impl));
   }
 
-  std::vector<ze::event> buffer;
-  cppa::partial_function operating;
+private:
+  std::vector<ze::event> events_;
+  cppa::partial_function operating_;
 };
 
 } // namespace source
