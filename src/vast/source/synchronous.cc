@@ -5,55 +5,49 @@ namespace source {
 
 using namespace cppa;
 
-synchronous::synchronous(actor_ptr upstream, size_t batch_size)
+void synchronous::init()
 {
-  operating_ = (
-      on(atom("shutdown")) >> []()
+  become(
+      on(atom("init"), arg_match) >> [=](actor_ptr upstream, size_t batch_size)
       {
-        quit();
-        LOG(info, ingest) << "source @" << id() << " terminated";
-      },
-      on(atom("run")) >> [=]()
+        upstream_ = upstream;
+        batch_size_ = batch_size;
+      }
+      on(atom("run")) >> [=]
       {
-        if (finished_)
-          return;
-
-        size_t extracted = 0;
-        while (extracted < batch_size)
+        while (! finished())
         {
-          if (finished_)
+          while (events_.size() < batch_size_)
+          {
+            if (auto event = extract())
+            {
+              events_.push_back(std::move(*event));
+            }
+            else
+            {
+              ++errors_;
+              if (errors_ < 1000)
+              {
+                LOG(error, ingest)
+                  << "source @" << id() << " encountered parse error";
+              }
+              else if (errors_ == 1000)
+              {
+                LOG(error, ingest)
+                  << "source @" << id() << " won't report further errors";
+              }
+            }
+          }
+
+          send(upstream_, std::move(events_));
+          events_.clear();
+
+          // It could be that the call to extract() caused the source to finish.
+          if (finished())
             break;
-
-          try
-          {
-            events_.push_back(extract());
-            ++extracted;
-          }
-          catch (error::parse const& e)
-          {
-            ++errors_;
-            if (errors_ < 1000)
-            {
-              LOG(error, ingest)
-                << "source @" << id()
-                << " encountered parse error: " << e.what();
-            }
-            else if (errors_ == 1000)
-            {
-              LOG(error, ingest)
-                << "source @" << id() << " won't report further errors";
-            }
-          }
         }
-
-        send(upstream, std::move(events_));
-        events_.clear();
-
-        if (finished_)
-          send(self, atom("shutdown"));
-        else
-          send(self, atom("run"), batch_size);
-      });
+      }
+  );
 }
 
 } // namespace source

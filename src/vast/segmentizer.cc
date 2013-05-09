@@ -8,6 +8,7 @@ namespace vast {
 
 using namespace cppa;
 
+// TODO: factor chunky logic into functions.
 segmentizer::segmentizer(cppa::actor_ptr upstream,
                          cppa::actor_ptr tracker,
                          size_t max_events_per_chunk,

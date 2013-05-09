@@ -1,28 +1,36 @@
 #ifndef VAST_SOURCE_SYNCHRONOUS_H
 #define VAST_SOURCE_SYNCHRONOUS_H
 
-#include "vast/actor.h"
+#include <cppa/cppa.hpp>
+#include "vast/option.h"
 
 namespace vast {
 namespace source {
 
 /// A synchronous source that extracts events one by one.
-class synchronous : public minion<synchronous>
+struct synchronous : public cppa::event_based_actor
 {
-  friend class minion<synchronous>;
-
 public:
-  synchronous(cppa::actor_ptr upstream, size_t batch_size);
-
-  virtual ze::event extract() = 0;
+  /// Constructs a synchronous source.
+  synchronous() = default;
 
 protected:
-  bool finished_ = false;
+  /// Extracts a single event.
+  /// @return The parsed event.
+  virtual option<ze::event> extract() = 0;
+  
+  /// Checks whether the source has finished generating events.
+  /// @return `true` if the source cannot provide more events.
+  virtual bool finished() = 0;
 
 private:
+  /// Implements `event_based_actor::run`.
+  virtual void init() override;
+
+  cppa::actor_ptr upstream_;
+  size_t batch_size_ = 0;
   size_t errors_ = 0;
   std::vector<ze::event> events_;
-  cppa::behavior operating_;
 };
 
 } // namespace source

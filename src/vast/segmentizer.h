@@ -3,7 +3,7 @@
 
 #include <deque>
 #include <ze/fwd.h>
-#include "vast/actor.h"
+#include <cppa/cppa.hpp>
 #include "vast/segment.h"
 #include "vast/util/accumulator.h"
 
@@ -11,7 +11,7 @@ namespace vast {
 
 /// Receives events, writes them into segments, and sends them upstream after
 /// having received an ID range for them from the tracker.
-struct segmentizer : public actor<segmentizer>
+struct segmentizer : cppa::sb_actor<segmentizer>
 {
   /// Spawns a segmentizer.
   ///
@@ -37,7 +37,7 @@ struct segmentizer : public actor<segmentizer>
   segment::writer writer_;
 
   cppa::actor_ptr source_;
-  cppa::behavior operating_;
+  cppa::behavior init_state;
 };
 
 } // namespace vast
