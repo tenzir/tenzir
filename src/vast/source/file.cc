@@ -20,7 +20,7 @@ file::file(std::string const& filename)
 
 bool file::finished()
 {
-  return file_;
+  return file_.good();
 }
 
 line::line(std::string const& filename)
@@ -54,12 +54,9 @@ bro2::bro2(std::string const& filename)
 {
   if (! parse_header())
   {
+    LOG(error, ingest) << "not a valid bro 2.x log file: " << filename;
     if (file_)
       file_.close();
-
-    LOG(error, ingest)
-      << "not a valid bro 2.x log file: " << filename
-      << " (" << e.what() << ')';
   }
 }
 
@@ -261,6 +258,8 @@ bool bro2::parse_header()
 
   path_ = "bro::" + path_;
   next();
+
+  return true;
 }
 
 ze::value_type bro2::bro_to_ze(ze::string const& type)
@@ -299,8 +298,8 @@ option<ze::event> bro2::parse(std::string const& line)
   if (fs.fields() != field_types_.size())
   {
     LOG(error, ingest) 
-      << "inconsistent number of fields (line " << current_ ')';
-    return false;
+      << "inconsistent number of fields (line " << current_ << ')';
+    return {};
   }
 
   ze::event e;
@@ -353,7 +352,7 @@ option<ze::event> bro2::parse(std::string const& line)
       if (! success)
       {
         LOG(error, ingest) << "invalid set syntax";
-        return false;
+        return {};
       }
       e.emplace_back(std::move(s));
     }
@@ -364,7 +363,7 @@ option<ze::event> bro2::parse(std::string const& line)
       if (! success)
       {
         LOG(error, ingest) << "could not parse field";
-        return false;
+        return {};
       }
       e.push_back(std::move(v));
     }

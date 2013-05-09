@@ -39,7 +39,7 @@ bool program::run()
 
   bool done = false;
   do_receive(
-      on(atom("system"), atom("keystroke"), arg_match) >> [=](char key)
+      on(atom("system"), atom("key"), arg_match) >> [=, &done](char key)
       {
         if (! query_client_)
           return;
@@ -56,6 +56,9 @@ bool program::run()
           case ' ':
             send(query_client_, atom("results"));
             break;
+          case 'Q':
+            done = true;
+            break;
           case 's':
             send(query_client_, atom("statistics"));
             break;
@@ -64,7 +67,8 @@ bool program::run()
       on(atom("DOWN"), arg_match) >> [&done](uint32_t reason)
       {
         done = true;
-      }).until(gref(done) == true);
+      })
+  .until(gref(done));
 
   stop();
   await_all_others_done();
@@ -87,7 +91,7 @@ bool program::start()
 
   try
   {
-    system_monitor_ = spawn<system_monitor>(self);
+    system_monitor_ = spawn<system_monitor,detached>(self);
     self->monitor(system_monitor_);
 
     if (config_.check("profile"))

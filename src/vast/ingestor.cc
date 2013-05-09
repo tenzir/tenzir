@@ -68,9 +68,9 @@ ingestor::ingestor(cppa::actor_ptr tracker,
       on(atom("ingest"), "bro15conn", arg_match) >> [=](std::string const& file)
       {
         // FIXME
-        //auto seggy = spawn<segmentizer>(
-        //    self, tracker, max_events_per_chunk, max_segment_size);
-        //auto src = spawn<source::bro15conn,detached>(seggy, file);
+        auto seggy = spawn<segmentizer>(
+            self, tracker, max_events_per_chunk, max_segment_size);
+        auto src = spawn<source::bro15conn,detached>(file);
         //send(seggy, atom("initialize"), src);
         //segmentizers_.push_back(seggy);
       },

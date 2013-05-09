@@ -30,6 +30,7 @@ set(libvast_sources
   detail/parser/schema.cc
   detail/parser/bro15/conn.cc
   sink/file.cc
+  sink/synchronous.cc
   source/file.cc
   source/synchronous.cc
   util/configuration.cc

@@ -2,6 +2,7 @@
 #define VAST_SOURCE_SYNCHRONOUS_H
 
 #include <cppa/cppa.hpp>
+#include <ze/event.h>
 #include "vast/option.h"
 
 namespace vast {
@@ -11,8 +12,8 @@ namespace source {
 struct synchronous : public cppa::event_based_actor
 {
 public:
-  /// Constructs a synchronous source.
-  synchronous() = default;
+  /// Implements `event_based_actor::run`.
+  virtual void init() override;
 
 protected:
   /// Extracts a single event.
@@ -24,8 +25,7 @@ protected:
   virtual bool finished() = 0;
 
 private:
-  /// Implements `event_based_actor::run`.
-  virtual void init() override;
+  void run();
 
   cppa::actor_ptr upstream_;
   size_t batch_size_ = 0;

@@ -99,7 +99,7 @@ void segment::writer::operator<<(ze::event const& event)
   putter_ << event;
 }
 
-void segment::writer::flush()
+bool segment::writer::flush()
 {
   ZE_ENTER();
   processed_bytes_ += putter_.bytes();

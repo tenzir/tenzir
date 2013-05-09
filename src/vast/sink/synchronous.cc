@@ -1,4 +1,4 @@
-#include "vast/event_sink.h"
+#include "vast/sink/synchronous.h"
 
 #include <ze/event.h>
 #include "vast/exception.h"
@@ -6,22 +6,17 @@
 
 namespace vast {
 
-event_sink::event_sink()
+using namespace cppa;
+
+void synchronous::init()
 {
   LOG(verbose, emit) << "spawning event sink @" << id();
 
-  using namespace cppa;
   chaining(false);
-  init_state = (
-      on(atom("process"), arg_match) >> [=](ze::event const& event)
+  become(
+      on(atom("process"), arg_match) >> [=](ze::event const& e)
       {
-        if (finished_)
-        {
-          reply(atom("sink"), atom("done"));
-          return;
-        }
-
-        process(event);
+        process(e);
         ++total_events_;
       },
       on(atom("shutdown")) >> [=]
