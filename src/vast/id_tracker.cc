@@ -62,7 +62,7 @@ id_tracker::id_tracker(std::string const& id_file)
 
       file_.seekp(0);
     },
-    on(atom("shutdown")) >> [=]
+    on(atom("kill")) >> [=]
     {
       file_ << id_ << std::endl;
       DBG(ingest)

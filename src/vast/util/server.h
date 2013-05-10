@@ -36,7 +36,7 @@ struct server : cppa::sb_actor<server<Connection>>
           }
           self << self->last_dequeued();
         },
-        on(atom("shutdown")) >> [=]
+        on(atom("kill")) >> [=]
         {
           self->quit();
         });

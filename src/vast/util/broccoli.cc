@@ -530,7 +530,7 @@ connection::connection(
     {
       if (! bc_)
       {
-        send(self, atom("shutdown"));
+        send(self, atom("kill"));
         return;
       }
 
@@ -554,7 +554,7 @@ connection::connection(
 
       bro_event_free(bro_event);
     },
-    on(atom("shutdown")) >> [=]
+    on(atom("kill")) >> [=]
     {
       bro_conn_delete(bc_);
       bc_ = nullptr;

@@ -39,7 +39,7 @@ bool program::run()
 
   bool done = false;
   do_receive(
-      on(atom("system"), atom("keystroke"), arg_match) >> [=](char key)
+      on(atom("system"), atom("key"), arg_match) >> [=, &done](char key)
       {
         if (! query_client_)
           return;
@@ -56,6 +56,9 @@ bool program::run()
           case ' ':
             send(query_client_, atom("results"));
             break;
+          case 'Q':
+            done = true;
+            break;
           case 's':
             send(query_client_, atom("statistics"));
             break;
@@ -64,7 +67,8 @@ bool program::run()
       on(atom("DOWN"), arg_match) >> [&done](uint32_t reason)
       {
         done = true;
-      }).until(gref(done) == true);
+      })
+  .until(gref(done));
 
   stop();
   await_all_others_done();
@@ -87,7 +91,7 @@ bool program::start()
 
   try
   {
-    system_monitor_ = spawn<system_monitor>(self);
+    system_monitor_ = spawn<system_monitor,detached>(self);
     self->monitor(system_monitor_);
 
     if (config_.check("profile"))
@@ -196,20 +200,17 @@ bool program::start()
 
     if (config_.check("ingestor-actor"))
     {
-#ifdef VAST_HAVE_BROCCOLI
-      util::broccoli::init(config_.check("broccoli-messages"),
-                           config_.check("broccoli-calltrace"));
-#endif
-
-      ingestor_ = spawn<ingestor>(tracker_, archive_, index_);
-      self->monitor(ingestor_);
-
-      send(ingestor_, atom("initialize"),
+      ingestor_ = spawn<ingestor>(
+          tracker_, archive_, index_,
           config_.as<size_t>("ingest.max-events-per-chunk"),
           config_.as<size_t>("ingest.max-segment-size") * 1000000,
           config_.as<size_t>("ingest.batch-size"));
+      self->monitor(ingestor_);
 
 #ifdef VAST_HAVE_BROCCOLI
+      util::broccoli::init(config_.check("broccoli-messages"),
+                           config_.check("broccoli-calltrace"));
+
       if (config_.check("ingest.broccoli-events"))
       {
         auto host = config_.get("ingest.broccoli-host");
@@ -278,7 +279,7 @@ bool program::start()
 
 void program::stop()
 {
-  auto shutdown = make_any_tuple(atom("shutdown"));
+  auto shutdown = make_any_tuple(atom("kill"));
 
   if (query_client_)
     query_client_ << shutdown;

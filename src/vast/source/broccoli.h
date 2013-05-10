@@ -3,27 +3,25 @@
 
 #include <string>
 #include <set>
-#include "vast/event_source.h"
+#include "vast/source/asynchronous.h"
 
 namespace vast {
 namespace source {
 
-// TODO: Either make this a synchronous sink and inherit from
-// vast::event_source or provide a separate async_source class that this
-// source can inherit from.
-
-/// Receives events from the external world.
-struct broccoli : cppa::sb_actor<broccoli>
+/// A Broccoli event source.
+struct broccoli : asynchronous<broccoli>
 {
   /// Spawns a Broccoli event source.
-  /// @param ingestor The ingestor actor.
-  /// @param tracker The event ID tracker.
-  broccoli(cppa::actor_ptr ingestor, cppa::actor_ptr tracker);
+  ///
+  /// @param host The host to bind to.
+  ///
+  /// @param port The TCP port to listen on.
+  broccoli(std::string const& host, unsigned port);
 
-  cppa::actor_ptr server_;
   std::set<std::string> event_names_;
   std::set<cppa::actor_ptr> broccolis_;
-  cppa::behavior init_state;
+  cppa::actor_ptr server_;
+  cppa::behavior operating_;
 };
 
 } // namespace source

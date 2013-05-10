@@ -13,13 +13,10 @@ file::file(std::string const& filename)
   LOG(verbose, emit)
     << "spawning file sink @" << id() << " for file " << filename;
 
-  if (file_)
-    finished_ = false;
-  else
+  if (! file_)
     LOG(error, emit)
       << "file sink @" << id() << " cannot write to " << filename;
 }
-
 
 } // namespace sink
 } // namespace vast

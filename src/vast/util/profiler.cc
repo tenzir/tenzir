@@ -110,7 +110,7 @@ profiler::profiler(std::string const& log_dir, std::chrono::seconds secs)
         now.sys -= sys;
         file_ << now << std::endl;
       },
-      on(atom("shutdown")) >> [=]
+      on(atom("kill")) >> [=]
       {
 #ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
         ProfilerState state;

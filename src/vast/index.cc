@@ -35,7 +35,7 @@ public:
         on(atom("lookup")) >> [=]()
         {
         },
-        on(atom("shutdown")) >> [=]()
+        on(atom("kill")) >> [=]()
         {
             // TODO: flush bitmap indexes.
         });
@@ -204,7 +204,7 @@ index::index(std::string directory)
         // TODO: index each event in segment.
         reply(atom("segment"), atom("ack"), s.id());
       },
-      on(atom("shutdown")) >> [=]()
+      on(atom("kill")) >> [=]()
       {
         quit();
         LOG(verbose, index) << "index @" << id() << " terminated";

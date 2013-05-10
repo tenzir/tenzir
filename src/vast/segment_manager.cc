@@ -62,7 +62,7 @@ segment_manager::segment_manager(size_t capacity, std::string const& dir)
 
         reply_tuple(cache_.retrieve(uuid));
       },
-      on(atom("shutdown")) >> [=]
+      on(atom("kill")) >> [=]
       {
         segment_files_.clear();
         cache_.clear();

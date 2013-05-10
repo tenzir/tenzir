@@ -5,8 +5,6 @@ set(libvast_sources
   bitstream.cc
   archive.cc
   configuration.cc
-  event_sink.cc
-  event_source.cc
   exception.cc
   expression.cc
   id_tracker.cc
@@ -21,6 +19,7 @@ set(libvast_sources
   schema_manager.cc
   search.cc
   segment.cc
+  segmentizer.cc
   segment_manager.cc
   system_monitor.cc
   to_string.cc
@@ -32,7 +31,9 @@ set(libvast_sources
   detail/parser/schema.cc
   detail/parser/bro15/conn.cc
   sink/file.cc
+  sink/synchronous.cc
   source/file.cc
+  source/synchronous.cc
   util/configuration.cc
   util/console.cc
   util/poll.cc
