@@ -279,7 +279,7 @@ bool program::start()
 
 void program::stop()
 {
-  auto shutdown = make_any_tuple(atom("shutdown"));
+  auto shutdown = make_any_tuple(atom("kill"));
 
   if (query_client_)
     query_client_ << shutdown;

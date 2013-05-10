@@ -68,7 +68,7 @@ void system_monitor::init()
 
         send(self, atom("act"));
       },
-      on(atom("shutdown")) >> [=] { stop(); }
+      on(atom("kill")) >> [=] { stop(); }
   );
 }
 

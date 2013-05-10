@@ -31,7 +31,7 @@ broccoli::broccoli(std::string const& host, unsigned port)
         LOG(error, ingest)
           << "broccoli source @" << id() 
           << " noticed termination of its server @" << server_->id();
-        send(self, atom("shutdown"));
+        send(self, atom("kill"));
       },
       on(atom("connection"), arg_match) >> [=](actor_ptr conn)
       {

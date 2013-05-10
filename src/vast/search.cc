@@ -69,7 +69,7 @@ search::search(actor_ptr archive, actor_ptr index, actor_ptr schema_manager)
             DBG(query)
               << "search @" << id() << " erases query @" << i->first->id();
 
-            send(i->first, atom("shutdown"));
+            send(i->first, atom("kill"));
             i = queries_.erase(i);
           }
           else
@@ -78,7 +78,7 @@ search::search(actor_ptr archive, actor_ptr index, actor_ptr schema_manager)
           }
         }
       },
-      on(atom("shutdown")) >> [=]
+      on(atom("kill")) >> [=]
       {
         for (auto& i : queries_)
         {

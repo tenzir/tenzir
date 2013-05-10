@@ -19,7 +19,7 @@ void synchronous::init()
         process(e);
         ++total_events_;
       },
-      on(atom("shutdown")) >> [=]
+      on(atom("kill")) >> [=]
       {
         quit();
         LOG(verbose, emit) << "event sink @" << id() << " terminated";

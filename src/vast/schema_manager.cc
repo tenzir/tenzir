@@ -19,7 +19,7 @@ schema_manager::schema_manager()
       {
         reply(schema_);
       },
-      on(atom("shutdown")) >> [=]
+      on(atom("kill")) >> [=]
       {
         quit();
         LOG(verbose, meta) << "schema manager @" << id() << " terminated";

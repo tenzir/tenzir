@@ -41,7 +41,7 @@ archive::archive(std::string const& directory, size_t max_segments)
       {
         forward_to(segment_manager_);
       },
-      on(atom("shutdown")) >> [=]()
+      on(atom("kill")) >> [=]()
       {
         // TODO: wait for a signal from the ingestor that all segments have
         // been shipped.

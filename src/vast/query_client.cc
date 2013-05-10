@@ -99,7 +99,7 @@ query_client::query_client(actor_ptr search,
           running_ = false;
         }
       },
-      on(atom("shutdown")) >> [=]
+      on(atom("kill")) >> [=]
       {
         quit();
         LOG(verbose, query) << "query client @" << id() << " terminated";

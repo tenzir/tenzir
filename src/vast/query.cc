@@ -103,7 +103,7 @@ query::query(cppa::actor_ptr archive,
         {
           LOG(info, query)
             << "query @" << id() << " received empty id set";
-          send(self, atom("shutdown"));
+          send(self, atom("kill"));
           send(sink_, atom("query"), atom("finished"));
           return;
         }
@@ -225,7 +225,7 @@ query::query(cppa::actor_ptr archive,
       {
         reply(atom("statistics"), stats_.evaluated, stats_.results);
       },
-      on(atom("shutdown")) >> [=]
+      on(atom("kill")) >> [=]
       {
         quit();
         LOG(verbose, query) << "query @" << id() << " terminated";
