@@ -15,6 +15,11 @@ void synchronous::init()
         upstream_ = upstream;
         batch_size_ = batch_size;
       },
+      on(atom("kill")) >> [=]
+      {
+        quit();
+        LOG(verbose, ingest) << "source @" << id() << " terminated";
+      },
       on(atom("run")) >> [=] { run(); }
   );
 }
@@ -53,10 +58,7 @@ void synchronous::run()
     events_.clear();
   }
 
-  if (finished())
-    quit();
-  else
-    send(self, atom("run"));
+  send(self, finished() ? atom("kill") : atom("run"));
 }
 
 } // namespace source

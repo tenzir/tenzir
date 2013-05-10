@@ -9,10 +9,8 @@ namespace vast {
 
 /// The ingestor. This component manages different types of event sources, each
 /// of which generate events in a different manner.
-class ingestor : public cppa::sb_actor<ingestor>
+class ingestor : public cppa::event_based_actor
 {
-  friend class cppa::sb_actor<ingestor>;
-
 public:
   /// Spawns an ingestor.
   /// @param tracker The ID tracker.
@@ -25,16 +23,25 @@ public:
            size_t max_segment_size,
            size_t batch_size);
 
+  /// Implements `cppa::event_based_actor::init`.
+  virtual void init() final;
+
 private:
   void shutdown();
+
+  void init_source(cppa::actor_ptr source);
+
+  cppa::actor_ptr tracker_;
+  cppa::actor_ptr archive_;
+  cppa::actor_ptr index_;
+  size_t max_events_per_chunk_;
+  size_t max_segment_size_;
+  size_t batch_size_;
 
   std::vector<cppa::actor_ptr> segmentizers_;
   std::unordered_map<cppa::actor_ptr, size_t> rates_;
   std::unordered_map<ze::uuid, unsigned> inflight_;
-  cppa::actor_ptr tracker_;
-  cppa::actor_ptr archive_;
-  cppa::actor_ptr index_;
-  cppa::behavior init_state;
+  cppa::behavior operating_;
 };
 
 } // namespace vast

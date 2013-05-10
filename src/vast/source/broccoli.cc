@@ -8,15 +8,17 @@ namespace source {
 
 using namespace cppa;
 
-broccoli::broccoli(actor_ptr receiver,
-                   size_t batch_size,
-                   std::string const& host,
-                   unsigned port)
-  : asynchronous(receiver, batch_size)
+broccoli::broccoli(std::string const& host, unsigned port)
 {
   LOG(verbose, core) << "spawning broccoli source @" << id();
   operating_ = (
-      on(atom("run")) >> [=]()
+      on(atom("kill")) >> [=]
+      {
+        server_ << last_dequeued();
+        quit();
+        LOG(verbose, ingest) << "broccoli source @" << id() << " terminated";
+      },
+      on(atom("run")) >> [=]
       {
         // TODO: Make use of the host argument.
         LOG(verbose, core) << "broccoli @" << id()
@@ -31,12 +33,6 @@ broccoli::broccoli(actor_ptr receiver,
           << " noticed termination of its server @" << server_->id();
         send(self, atom("shutdown"));
       },
-      on(atom("shutdown")) >> [=]
-      {
-        server_ << last_dequeued();
-        quit();
-        LOG(verbose, ingest) << "broccoli source @" << id() << " terminated";
-      },
       on(atom("connection"), arg_match) >> [=](actor_ptr conn)
       {
         for (auto& event : event_names_)
@@ -48,6 +44,12 @@ broccoli::broccoli(actor_ptr receiver,
         LOG(verbose, ingest)
           << "broccoli source @" << id() << " subscribes to event " << event;
         event_names_.insert(event);
+      },
+      on(atom("subscribe"), arg_match)
+        >> [=](std::vector<std::string> const& events)
+      {
+        for (auto& e : events)
+          send(self, atom("subscribe"), e);
       });
 }
 

@@ -15,22 +15,27 @@ namespace vast {
 
 using namespace cppa;
 
-ingestor::ingestor(cppa::actor_ptr tracker,
-                   cppa::actor_ptr archive,
-                   cppa::actor_ptr index,
+ingestor::ingestor(actor_ptr tracker,
+                   actor_ptr archive,
+                   actor_ptr index,
                    size_t max_events_per_chunk,
                    size_t max_segment_size,
                    size_t batch_size)
   : tracker_(tracker),
     archive_(archive),
-    index_(index)
+    index_(index),
+    max_events_per_chunk_(max_events_per_chunk),
+    max_segment_size_(max_segment_size),
+    batch_size_(batch_size)
 {
   LOG(verbose, ingest) << "spawning ingestor @" << id();
   chaining(false);
-  init_state = (
+  operating_ = (
       on(atom("DOWN"), arg_match) >> [=](uint32_t reason)
       {
-        auto i = std::find(segmentizers_.begin(), segmentizers_.end(), last_sender());
+        auto i = std::find(segmentizers_.begin(),
+                           segmentizers_.end(),
+                           last_sender());
         assert(i != segmentizers_.end());
         segmentizers_.erase(i);
 
@@ -41,47 +46,33 @@ ingestor::ingestor(cppa::actor_ptr tracker,
         if (segmentizers_.empty() && inflight_.empty())
           shutdown();
       },
-      on(atom("shutdown")) >> [=]
+      on(atom("kill")) >> [=]
       {
         if (segmentizers_.empty() && inflight_.empty())
           shutdown();
-        for (auto source : segmentizers_)
-          source << last_dequeued();
+        for (auto s : segmentizers_)
+          s << last_dequeued();
       },
 #ifdef VAST_HAVE_BROCCOLI
       on(atom("ingest"), atom("broccoli"), arg_match) >>
         [=](std::string const& host, unsigned port,
             std::vector<std::string> const& events)
       {
-        auto seggy = spawn<segmentizer>(
-            self, tracker, max_events_per_chunk, max_segment_size);
-        auto broccoli = spawn<source::broccoli>(seggy, batch_size, host, port);
-        send(seggy, atom("initialize"), broccoli);
-
-        send(broccoli, atom("start"), host, port);
-        for (auto& event : events)
-          send(broccoli, atom("subscribe"), event);
-
-        segmentizers_.push_back(seggy);
+        auto broccoli = spawn<source::broccoli>(host, port);
+        init_source(broccoli);
+        send(broccoli, atom("subscribe"), events);
+        send(broccoli, atom("run"));
       },
 #endif
       on(atom("ingest"), "bro15conn", arg_match) >> [=](std::string const& file)
       {
-        // FIXME
-        auto seggy = spawn<segmentizer>(
-            self, tracker, max_events_per_chunk, max_segment_size);
-        auto src = spawn<source::bro15conn,detached>(file);
-        //send(seggy, atom("initialize"), src);
-        //segmentizers_.push_back(seggy);
+        auto src = spawn<source::bro15conn, detached>(file);
+        init_source(src);
       },
       on(atom("ingest"), "bro2", arg_match) >> [=](std::string const& file)
       {
-        // FIXME
-        //auto seggy = spawn<segmentizer>(
-        //    self, tracker, max_events_per_chunk, max_segment_size);
-        //auto src = spawn<source::bro2,detached>(file);
-        //send(seggy, atom("initialize"), src);
-        //segmentizers_.push_back(seggy);
+        auto src = spawn<source::bro2, detached>(file);
+        init_source(src);
       },
       on(atom("ingest"), val<std::string>, arg_match) >> [=](std::string const&)
       {
@@ -89,14 +80,10 @@ ingestor::ingestor(cppa::actor_ptr tracker,
       },
       on(atom("extract")) >> [=]
       {
-        for (auto s : segmentizers_)
-          send(s, atom("run"));
-
-        size_t last = 0;
         delayed_send(
             self,
             std::chrono::seconds(2),
-            atom("statistics"), atom("print"), last);
+            atom("statistics"), atom("print"), size_t(0));
       },
       on(atom("statistics"), arg_match) >> [=](size_t rate)
       {
@@ -152,10 +139,26 @@ ingestor::ingestor(cppa::actor_ptr tracker,
       });
 }
 
+void ingestor::init()
+{
+  become(operating_);
+}
+
 void ingestor::shutdown()
 {
-  quit();
+  self->quit();
   LOG(verbose, ingest) << "ingestor @" << id() << " terminated";
+}
+
+void ingestor::init_source(actor_ptr source)
+{
+  auto s = spawn<segmentizer>(self, source, max_events_per_chunk_,
+                              max_segment_size_);
+
+  send(source, atom("init"), s, batch_size_);
+
+  self->monitor(s);
+  segmentizers_.push_back(std::move(s));
 }
 
 } // namespace vast

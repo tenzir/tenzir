@@ -13,13 +13,17 @@ template <typename Derived>
 class asynchronous : public cppa::event_based_actor
 {
 public:
-  /// Constructs an asynchronous source.
-  /// @param upstream The upstream of the event batches.
-  /// @param batch_size The size of each event batch.
-  asynchronous(cppa::actor_ptr upstream, size_t batch_size)
+  /// Spawns an asynchronous source.
+  asynchronous()
   {
     using namespace cppa;
     operating_ = (
+        on(atom("init"), arg_match) >> [=](actor_ptr upstream,
+                                           size_t batch_size)
+        {
+          upstream_ = upstream;
+          batch_size_ = batch_size;
+        },
         on_arg_match >> [=](ze::event& e)
         {
           this->events_.push_back(std::move(e));
@@ -41,6 +45,8 @@ public:
   }
 
 private:
+  size_t batch_size_;
+  cppa::actor_ptr upstream_;
   std::vector<ze::event> events_;
   cppa::partial_function operating_;
 };
