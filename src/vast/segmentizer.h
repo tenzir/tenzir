@@ -31,8 +31,6 @@ public:
 
 private:
   size_t total_events_ = 0;
-  unsigned wait_attempts_ = 0;
-
   size_t writer_bytes_at_last_rotate_ = 0;
   util::temporal_accumulator<size_t> stats_;
   segment segment_;

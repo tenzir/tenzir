@@ -24,7 +24,6 @@ segmentizer::segmentizer(actor_ptr upstream, actor_ptr source,
           writer_.flush();
           auto n = segment_.events();
           total_events_ += n;
-          pending_.push_back(std::move(segment_));
           send(upstream, std::move(segment_));
           LOG(debug, ingest)
             << "segmentizer @" << id()

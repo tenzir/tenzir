@@ -19,6 +19,7 @@ set(libvast_sources
   schema_manager.cc
   search.cc
   segment.cc
+  segmentizer.cc
   segment_manager.cc
   system_monitor.cc
   to_string.cc
