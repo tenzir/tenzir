@@ -13,6 +13,7 @@ int main(int argc, char *argv[])
       return EXIT_SUCCESS;
     }
     
+    // FIXME: This sort of initialization should happend during config.load().
     vast::init(config);
     return vast::program(config).run() ? EXIT_SUCCESS : EXIT_FAILURE;
   }

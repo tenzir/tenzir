@@ -29,8 +29,7 @@ using namespace cppa;
 
 program::program(configuration const& config)
   : config_(config)
-{
-}
+{ }
 
 bool program::run()
 {
@@ -39,7 +38,7 @@ bool program::run()
 
   bool done = false;
   do_receive(
-      on(atom("system"), atom("key"), arg_match) >> [=, &done](char key)
+      on(atom("system"), atom("key"), arg_match) >> [&](char key)
       {
         if (! query_client_)
           return;
@@ -64,7 +63,7 @@ bool program::run()
             break;
         }
       },
-      on(atom("DOWN"), arg_match) >> [&done](uint32_t reason)
+      on(atom("DOWN"), arg_match) >> [&](uint32_t reason)
       {
         done = true;
       })
@@ -91,8 +90,7 @@ bool program::start()
 
   try
   {
-    system_monitor_ = spawn<system_monitor,detached>(self);
-    self->monitor(system_monitor_);
+    system_monitor_ = spawn<system_monitor, detached+monitored>(self);
 
     if (config_.check("profile"))
     {
@@ -109,47 +107,41 @@ bool program::start()
     if (config_.check("schema.file"))
     {
       send(schema_manager_, atom("load"), config_.get("schema.file"));
-
       if (config_.check("schema.print"))
       {
         send(schema_manager_, atom("schema"));
         receive(
-            on_arg_match >> [](schema const& s)
-            {
-              std::cout << to_string(s);
-            },
+            on_arg_match >> [](schema const& s) { std::cout << to_string(s); },
             after(std::chrono::seconds(1)) >> [=]
             {
               LOG(error, meta)
-                << "schema manager did not answer after one second";
+                << "schema manager "
+                << schema_manager_->id() << " did not answer after one second";
             });
-
         return false;
       }
     }
 
+    auto tracker_host = config_.get("tracker.host");
+    auto tracker_port = config_.as<unsigned>("tracker.port");
     if (config_.check("tracker-actor") || config_.check("all-server"))
     {
       tracker_ = spawn<id_tracker>((ze::path(vast_dir) / "id").string());
-      send(tracker_, atom("initialize"));
-      LOG(verbose, core) << "publishing tracker at *:"
-          << config_.as<unsigned>("tracker.port");
-
-      publish(tracker_, config_.as<unsigned>("tracker.port"));
+      LOG(verbose, core)
+        << "publishing tracker at " << tracker_host << ':' << tracker_port;
+      publish(tracker_, tracker_port, tracker_host.data());
     }
     else
     {
-      LOG(verbose, core) << "connecting to tracker at "
-          << config_.get("tracker.host") << ":"
-          << config_.as<unsigned>("tracker.port");
+      LOG(verbose, core)
+        << "connecting to tracker at " << tracker_host << ':' << tracker_port;
 
-      tracker_ = remote_actor(
-          config_.get("tracker.host"),
-          config_.as<unsigned>("tracker.port"));
-
+      tracker_ = remote_actor(tracker_host, tracker_port);
       LOG(verbose, core) << "connected to tracker actor @" << tracker_->id();
     }
 
+    auto archive_host = config_.get("archive.host");
+    auto archive_port = config_.as<unsigned>("archive.port");
     if (config_.check("archive-actor") || config_.check("all-server"))
     {
       archive_ = spawn<archive>((ze::path(vast_dir) / "archive").string(),
@@ -279,34 +271,34 @@ bool program::start()
 
 void program::stop()
 {
-  auto shutdown = make_any_tuple(atom("kill"));
+  auto kill = make_any_tuple(atom("kill"));
 
   if (query_client_)
-    query_client_ << shutdown;
+    query_client_ << kill;
 
   if (config_.check("search-actor") || config_.check("all-server"))
-    search_ << shutdown;
+    search_ << kill;
 
   if (config_.check("ingestor-actor"))
-    ingestor_ << shutdown;
+    ingestor_ << kill;
 
   if (config_.check("index-actor") || config_.check("all-server"))
-    index_ << shutdown;
+    index_ << kill;
 
   if (config_.check("archive-actor") || config_.check("all-server"))
-    archive_ << shutdown;
+    archive_ << kill;
 
   if (config_.check("tracker-actor") || config_.check("all-server"))
-    tracker_ << shutdown;
+    tracker_ << kill;
 
   if (schema_manager_)
-    schema_manager_ << shutdown;
+    schema_manager_ << kill;
 
   if (profiler_)
-    profiler_ << shutdown;
+    profiler_ << kill;
 
   if (system_monitor_)
-    system_monitor_ << shutdown;
+    system_monitor_ << kill;
 
 }
 

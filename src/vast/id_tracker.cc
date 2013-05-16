@@ -1,43 +1,42 @@
 #include "vast/id_tracker.h"
 
+#include <cassert>
 #include <ze/file_system.h>
-#include "vast/exception.h"
 #include "vast/logger.h"
 
 using namespace cppa;
 
 namespace vast {
 
-id_tracker::id_tracker(std::string const& id_file)
+id_tracker::id_tracker(std::string file_name)
+  : file_name_(std::move(file_name))
+{ }
+
+void id_tracker::init()
 {
   LOG(verbose, ingest)
-    << "spawning id tracker @" << id()
-    << " with id file " << id_file;
-  chaining(false);
-  init_state = (
-    on(atom("initialize")) >> [=]()
+    << "spawning id tracker @" << id() << " with id file " << file_name_;
+
+  if (ze::exists(file_name_))
+  {
+    std::ifstream ifs(file_name_);
+    if (! ifs)
     {
-      if (! ze::exists(id_file))
-      {
-        LOG(info, ingest)
-          << "id tracker @" << id()
-          << " did not find an id file, starting from 0";
-      }
-      else
-      {
-        std::ifstream ifs(id_file);
-        if (! ifs)
-          throw error::fs("could not open id file", id_file);
-        ifs >> id_;
-        LOG(info, ingest)
-          << "id tracker @" << id()
-          << " found an id file with highest id " << id_;
-      }
-      file_.open(id_file);
-      file_.seekp(0);
-    },
+      quit(); // TODO: use apt actor exit code.
+      return;
+    }
+    ifs >> id_;
+    LOG(info, ingest)
+      << "id tracker @" << id() << " found an id file with highest id " << id_;
+  }
+
+  file_.open(file_name_);
+  file_.seekp(0);
+
+  become(
     on(atom("request"), arg_match) >> [=](size_t n)
     {
+      assert(file_);
       if (std::numeric_limits<uint64_t>::max() - id_ < n)
       {
         LOG(error, ingest)
@@ -47,7 +46,7 @@ id_tracker::id_tracker(std::string const& id_file)
         return;
       }
 
-      DBG(ingest)
+      LOG(debug, ingest)
         << "id tracker @" << id() << " hands out ["
         << id_ << ',' << id_ + n << ')'
         << " to @" << last_sender()->id();
@@ -65,7 +64,7 @@ id_tracker::id_tracker(std::string const& id_file)
     on(atom("kill")) >> [=]
     {
       file_ << id_ << std::endl;
-      DBG(ingest)
+      LOG(debug, ingest)
         << "id tracker @" << id() << " saves last event id " << id_;
 
       if (! file_)
@@ -73,8 +72,12 @@ id_tracker::id_tracker(std::string const& id_file)
           << "id tracker @" << id() << " could not save current event id";
 
       quit();
-      LOG(verbose, ingest) << "id tracker @" << id() << " terminated";
     });
+}
+
+void id_tracker::on_exit()
+{
+  LOG(verbose, ingest) << "id tracker @" << id() << " terminated";
 }
 
 } // namespace vast

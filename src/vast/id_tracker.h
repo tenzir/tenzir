@@ -7,17 +7,21 @@
 namespace vast {
 
 /// Keeps track of the event ID space.
-class id_tracker : public cppa::sb_actor<id_tracker>
+class id_tracker : public cppa::event_based_actor
 {
-  friend class cppa::sb_actor<id_tracker>;
-
 public:
   /// Constructs the ID tracker.
-  /// @param id_file The filename containing the current ID.
-  id_tracker(std::string const& id_file);
+  /// @param file_name The filename containing the current ID.
+  id_tracker(std::string file_name);
+
+  /// Overrides `cppa::event_based_actor::init`.
+  virtual void init() final;
+
+  /// Overrides `cppa::event_based_actor::init`.
+  virtual void on_exit() final;
 
 private:
-  cppa::behavior init_state;
+  std::string file_name_;
   std::ofstream file_;
   uint64_t id_ = 0;
 };

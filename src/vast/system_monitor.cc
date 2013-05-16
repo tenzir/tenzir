@@ -36,6 +36,7 @@ system_monitor::system_monitor(actor_ptr receiver)
 
 void system_monitor::init()
 {
+  util::console::unbuffer();
   LOG(verbose, core) << "spawning system monitor @" << id();
 
   signals.fill(0);
@@ -45,7 +46,6 @@ void system_monitor::init()
   become(
       on(atom("init"), arg_match) >> [=](actor_ptr upstream)
       {
-        util::console::unbuffer();
         upstream_ = upstream;
       },
       on(atom("act")) >> [=]
@@ -57,7 +57,7 @@ void system_monitor::init()
           for (int i = 0; i < signals.size(); ++i)
           {
             if (signals[i] == SIGINT || signals[i] == SIGTERM)
-              stop();
+              quit();
             while (signals[i] > 0)
               send(upstream_, atom("system"), atom("signal"), signals[i]--);
           }
@@ -68,14 +68,13 @@ void system_monitor::init()
 
         send(self, atom("act"));
       },
-      on(atom("kill")) >> [=] { stop(); }
+      on(atom("kill")) >> [=] { quit(); }
   );
 }
 
-void system_monitor::stop()
+void system_monitor::on_exit()
 {
   util::console::buffer();
-  self->quit();
   LOG(verbose, core) << "system monitor @" << id() << " terminated";
 }
 

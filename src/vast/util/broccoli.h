@@ -26,9 +26,8 @@ struct connection : cppa::sb_actor<connection>
   /// Spawns a new Broccoli connection.
   /// @param The input stream to read data from.
   /// @param The output stream to read data from.
-  connection(
-      cppa::network::input_stream_ptr in,
-      cppa::network::output_stream_ptr out);
+  connection(cppa::network::input_stream_ptr in,
+             cppa::network::output_stream_ptr out);
 
   struct bro_conn* bc_;
   cppa::network::input_stream_ptr in_;

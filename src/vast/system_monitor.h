@@ -15,7 +15,11 @@ public:
   /// @param receiver the actor receiving the keystrokes.
   system_monitor(cppa::actor_ptr receiver);
 
-  void init() override;
+  /// Overrides `cppa::event_based_actor::init`.
+  void init() final;
+
+  /// Overrides `cppa::event_based_actor::on_exit`.
+  void on_exit() final;
 
 private:
   void stop();
