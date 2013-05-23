@@ -20,7 +20,7 @@ struct error_handler
   template <typename Production>
   void operator()(Production const& production) const
   {
-    LOG(error, ingest) << "parse error at production " << production;
+    VAST_LOG_ERROR("parse error at production " << production);
   }
 };
 
@@ -32,9 +32,9 @@ struct stamper
     typedef void type;
   };
 
-  void operator()(ze::event& e, double d) const
+  void operator()(event& e, double d) const
   {
-    e.timestamp(ze::time_point(ze::time_range::fractional(d)));
+    e.timestamp(time_point(time_range::fractional(d)));
   }
 };
 
@@ -47,20 +47,20 @@ struct pusher
   };
 
   template <typename T>
-  void operator()(ze::event& e, T const& x) const
+  void operator()(event& e, T const& x) const
   {
     e.push_back(x);
   }
 
   // All doubles are timestamps in Bro's 1.5 conn.log.
-  void operator()(ze::event& e, double d) const
+  void operator()(event& e, double d) const
   {
-    e.push_back(ze::time_point(ze::time_range::fractional(d)));
+    e.push_back(time_point(time_range::fractional(d)));
   }
 
   // This overload simply casts the attribute to a type that the constructor
-  // of ze::value understands.
-  void operator()(ze::event& e, unsigned long long x) const
+  // of value understands.
+  void operator()(event& e, unsigned long long x) const
   {
     e.push_back(static_cast<uint64_t>(x));
   }
@@ -71,19 +71,19 @@ struct port_maker
   template <typename, typename>
   struct result
   {
-    typedef ze::port type;
+    typedef port type;
   };
 
-  ze::port operator()(uint16_t number, ze::string const& str) const
+  port operator()(uint16_t number, string const& str) const
   {
     if (std::strncmp(str.data(), "tcp", str.size()) == 0)
-      return {number, ze::port::tcp};
+      return {number, port::tcp};
     if (std::strncmp(str.data(), "udp", str.size()) == 0)
-      return {number, ze::port::udp};
+      return {number, port::udp};
     if (std::strncmp(str.data(), "icmp", str.size()) == 0)
-      return {number, ze::port::icmp};
+      return {number, port::icmp};
 
-    return {number, ze::port::unknown};
+    return {number, port::unknown};
   }
 };
 
@@ -92,11 +92,11 @@ struct string_maker
   template <typename, typename>
   struct result
   {
-    typedef ze::string type;
+    typedef string type;
   };
 
   template <typename Iterator>
-  ze::string operator()(Iterator begin, Iterator end) const
+  string operator()(Iterator begin, Iterator end) const
   {
     return {begin, end};
   }
@@ -131,12 +131,12 @@ connection<Iterator>::connection()
 
   conn
     =   strict_double       [stamp(_val, _1)]
-    >   (   lit('?')        [push_back(_val, ze::nil)]
+    >   (   lit('?')        [push_back(_val, nil)]
         |   strict_double   [push_back(_val, _1)]       // Duration
         )
     >   addr                [push_back(_val, _1)]       // Originator addr
     >   addr                [push_back(_val, _1)]       // Responder addr
-    >   (   lit('?')        [push_back(_val, ze::nil)]  // Service
+    >   (   lit('?')        [push_back(_val, nil)]      // Service
         |   id              [push_back(_val, _1)]
         )
     >   uint16              [_a = _1]                   // Originator port
@@ -144,10 +144,10 @@ connection<Iterator>::connection()
     >   id                  [push_back(_val, make_port(_a, _1))]
                             [push_back(_val, make_port(_b, _1))]
                             [push_back(_val, _1)]       // Transport proto
-    >   (   lit('?')        [push_back(_val, ze::nil)]  // Originator bytes
+    >   (   lit('?')        [push_back(_val, nil)]      // Originator bytes
         |   uint64          [push_back(_val, _1)]       
         )
-    >   (   lit('?')        [push_back(_val, ze::nil)]
+    >   (   lit('?')        [push_back(_val, nil)]
         |   uint64          [push_back(_val, _1)]       // Responder bytes
         )
     >   id                  [push_back(_val, _1)]       // State

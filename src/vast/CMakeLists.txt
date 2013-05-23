@@ -1,35 +1,64 @@
 include_directories(BEFORE ..)
 
 set(libvast_sources
+  address.cc
+  archive.cc
   bitvector.cc
   bitstream.cc
-  archive.cc
   configuration.cc
+  container.cc
   exception.cc
   expression.cc
+  event.cc
+  file_system.cc
   id_tracker.cc
   index.cc
   ingestor.cc
   logger.cc
+  object.cc
   operator.cc
+  parse.cc
+  port.cc
+  prefix.cc
   program.cc
   query.cc
   query_client.cc
+  regex.cc
   schema.cc
   schema_manager.cc
   search.cc
   segment.cc
   segmentizer.cc
   segment_manager.cc
+  string.cc
   system_monitor.cc
+  time.cc
   to_string.cc
+  uuid.cc
+  value.cc
+  value_type.cc
   detail/cppa_serialization.cc
   detail/cppa_type_info.cc
+  detail/demangle.cc
+  detail/singleton_manager.cc
   detail/ast/query.cc
+  detail/parse.cc
+  detail/parser/address.cc
   detail/parser/expression.cc
+  detail/parser/duration.cc
   detail/parser/query.cc
+  detail/parser/time_point.cc
   detail/parser/schema.cc
+  detail/parser/value.cc
   detail/parser/bro15/conn.cc
+  io/array_stream.cc
+  io/buffered_stream.cc
+  io/coded_stream.cc
+  io/compressed_stream.cc
+  io/compression.cc
+  io/file_stream.cc
+  io/serialization.cc
+  io/stream.cc
   sink/file.cc
   sink/synchronous.cc
   source/file.cc
@@ -37,7 +66,8 @@ set(libvast_sources
   util/configuration.cc
   util/console.cc
   util/poll.cc
-  util/profiler.cc)
+  util/profiler.cc
+  )
 
 if (BROCCOLI_FOUND)
   set(libvast_sources ${libvast_sources}

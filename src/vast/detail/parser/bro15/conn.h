@@ -7,8 +7,8 @@
 // Improves compile times significantly at the cost of predefining terminals.
 #define BOOST_SPIRIT_NO_PREDEFINED_TERMINALS
 
-#include <ze/event.h>
-#include <ze/detail/parser/address.h>
+#include "vast/event.h"
+#include "vast/detail/parser/address.h"
 
 namespace vast {
 namespace detail {
@@ -35,15 +35,15 @@ struct skipper : qi::grammar<Iterator>
 };
 
 template <typename Iterator>
-struct connection : qi::grammar<Iterator, ze::event(), qi::locals<uint16_t, uint16_t>, skipper<Iterator>>
+struct connection : qi::grammar<Iterator, event(), qi::locals<uint16_t, uint16_t>, skipper<Iterator>>
 {
   connection();
 
-  qi::rule<Iterator, ze::event(), qi::locals<uint16_t, uint16_t>, skipper<Iterator>> conn;
-  qi::rule<Iterator, ze::string()> id;
-  qi::rule<Iterator, ze::string()> addl;
+  qi::rule<Iterator, event(), qi::locals<uint16_t, uint16_t>, skipper<Iterator>> conn;
+  qi::rule<Iterator, string()> id;
+  qi::rule<Iterator, string()> addl;
 
-  ze::detail::parser::address<Iterator> addr;
+  detail::parser::address<Iterator> addr;
 };
 
 } // namespace bro15

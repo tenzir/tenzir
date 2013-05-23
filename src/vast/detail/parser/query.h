@@ -42,7 +42,7 @@ struct query : qi::grammar<Iterator, ast::query::query(), skipper<Iterator>>
     qi::symbols<char, boolean_operator>
         boolean_op;
 
-    qi::symbols<char, ze::value_type>
+    qi::symbols<char, value_type>
         type;
 
     expression<Iterator> expr;

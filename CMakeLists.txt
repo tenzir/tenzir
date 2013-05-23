@@ -31,7 +31,9 @@ list(GET version_numbers 0 VERSION_MAJOR)
 list(GET version_numbers 1 VERSION_MINOR)
 set(VERSION_MAJ_MIN "${VERSION_MAJOR}.${VERSION_MINOR}")
 
-set(CMAKE_CXX_FLAGS                "-Wall -std=c++11")
+# TODO: Fix variadic logging and then add -pedantic again.
+#set(CMAKE_CXX_FLAGS                "-Wall -Wextra -pedantic -std=c++11")
+set(CMAKE_CXX_FLAGS                "-Wall -Wextra -std=c++11")
 set(CMAKE_CXX_FLAGS_DEBUG          "-O0 -g")
 set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os")
 set(CMAKE_CXX_FLAGS_RELEASE        "-O4")
@@ -39,6 +41,7 @@ set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g")
 
 if (ENABLE_DEBUG)
   set(CMAKE_BUILD_TYPE Debug)
+  set(VAST_LOG_LEVEL 6)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVAST_DEBUG")
 endif ()
 if (NOT CMAKE_BUILD_TYPE)
@@ -63,7 +66,7 @@ if (BOOST_ROOT)
   # Prevent falling back to system paths when using a custom Boost prefix.
   set(Boost_NO_SYSTEM_PATHS true)
 endif ()
-find_package(Boost 1.50.0 COMPONENTS unit_test_framework)
+find_package(Boost 1.50.0 COMPONENTS regex unit_test_framework)
 if (Boost_FOUND)
   include_directories(${Boost_INCLUDE_DIRS})
 else ()
@@ -75,13 +78,6 @@ if (LIBCPPA_FOUND)
   include_directories(${LIBCPPA_INCLUDE_DIR})
 else ()
   message(FATAL_ERROR "Could not find libcppa")
-endif ()
-
-find_package(0event)
-if (0EVENT_FOUND)
-  include_directories(${0EVENT_INCLUDE_DIR})
-else ()
-  message(FATAL_ERROR "Could not find 0event")
 endif ()
 
 find_package(Broccoli QUIET)
@@ -110,30 +106,29 @@ include_directories(BEFORE ${CMAKE_CURRENT_BINARY_DIR})
 add_subdirectory(src)
 add_subdirectory(test)
 
-  include(ConfigurePackaging)
-  ConfigurePackaging(${VERSION})
+include(ConfigurePackaging)
+ConfigurePackaging(${VERSION})
 
 string(TOUPPER ${CMAKE_BUILD_TYPE} build_type)
 
 set(build_summary
     "\n====================|  Build Summary  |===================="
     "\n"
-    "\nVAST version:     ${VERSION_MAJ_MIN}"
+    "\nVersion:          ${VERSION_MAJ_MIN}"
     "\n"
     "\nSource directory: ${CMAKE_SOURCE_DIR}"
     "\nBuild directory:  ${CMAKE_BINARY_DIR}"
     "\nInstall prefix:   ${CMAKE_INSTALL_PREFIX}"
     "\nDebug mode:       ${ENABLE_DEBUG}"
+    "\n"
+    "\nBoost:            ${Boost_INCLUDE_DIR}"
+    "\nLibcppa:          ${LIBCPPA_INCLUDE_DIR}"
     "\nBroccoli:         ${BROCCOLI_FOUND}"
     "\nGperftools:       ${GPERFTOOLS_FOUND}"
     "\nUse tcmalloc:     ${VAST_USE_PERFTOOLS_HEAP_PROFILER}"
     "\n"
     "\nCXX:              ${CMAKE_CXX_COMPILER}"
-    "\nCXXFLAGS:         ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${build_type}}"
-    "\n"
-    "\nBoost:            ${Boost_INCLUDE_DIR}"
-    "\nLibcppa:          ${LIBCPPA_INCLUDE_DIR}"
-    "\n0event:           ${0EVENT_INCLUDE_DIR}")
+    "\nCXXFLAGS:         ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${build_type}}")
 if (BROCCOLI_FOUND)
   set(build_summary ${build_summary}
     "\nBroccoli:         ${BROCCOLI_INCLUDE_DIR}")

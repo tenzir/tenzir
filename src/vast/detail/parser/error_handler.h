@@ -42,17 +42,15 @@ struct error_handler
     Iterator line_start = get_pos(err_pos, line);
     if (err_pos != last)
     {
-      LOG(error, core)
-        << "parse error, expecting " << production
-        << " at line " << line << ':';
-
-      LOG(error, core) << get_line(line_start);
-      LOG(error, core) << std::string(err_pos - line_start, ' ') << '^';
+      VAST_LOG_ERROR("parse error, expecting " << production <<
+                     " at line " << line << ':');
+      VAST_LOG_ERROR(get_line(line_start));
+      VAST_LOG_ERROR(std::string(err_pos - line_start, ' ') << '^');
     }
     else
     {
-      LOG(error, core) 
-        << "unexpected end of input in " << production << " at line " << line;
+      VAST_LOG_ERROR("unexpected end of input in " << production <<
+                     " at line " << line);
     }
   }
 
