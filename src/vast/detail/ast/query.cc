@@ -7,16 +7,16 @@ namespace detail {
 namespace ast {
 namespace query {
 
-struct folder : public boost::static_visitor<ze::value>
+struct folder : public boost::static_visitor<value>
 {
-  static ze::value apply(arithmetic_operator op, ze::value const& val)
+  static value apply(arithmetic_operator op, value const& /* val */)
   {
     switch (op)
     {
       default:
         assert(! "unary expression folder not yet implemented");
-        return ze::invalid;
-        // TODO: implement 0event operations.
+        return invalid;
+        // TODO: implement VAST operations.
         //case positive:
         //    return val;
         //case negative:
@@ -26,16 +26,16 @@ struct folder : public boost::static_visitor<ze::value>
     }
   }
 
-  static ze::value apply(arithmetic_operator op,
-                         ze::value const& lhs,
-                         ze::value const& rhs)
+  static value apply(arithmetic_operator op,
+                     value const& /* lhs */,
+                     value const& /* rhs */)
   {
     switch (op)
     {
       default:
         assert(! "binary expression folder not yet implemented");
-        return ze::invalid;
-        // TODO: implement 0event operations.
+        return invalid;
+        // TODO: implement VAST operations.
         //case bitwise_or:
         //    return lhs | rhs;
         //case bitwise_xor:
@@ -55,23 +55,23 @@ struct folder : public boost::static_visitor<ze::value>
     }
   }
 
-  ze::value operator()(ze::value const& val) const
+  value operator()(value const& val) const
   {
     return val;
   }
 
-  ze::value operator()(unary_expr const& unary) const
+  value operator()(unary_expr const& unary) const
   {
     auto operand = boost::apply_visitor(*this, unary.operand);
     return apply(unary.op, operand);
   }
 
-  ze::value operator()(expr_operand const& operand) const
+  value operator()(expr_operand const& operand) const
   {
     return boost::apply_visitor(*this, operand);
   }
 
-  ze::value operator()(expression const& expr) const
+  value operator()(expression const& expr) const
   {
     auto value = boost::apply_visitor(*this, expr.first);
     if (expr.rest.empty())
@@ -100,10 +100,10 @@ struct validator : public boost::static_visitor<bool>
     auto rhs_type = rhs.which();
     auto& lhs = clause.lhs;
     return
-      (lhs == "name" && (rhs_type == ze::string_type
-                         || rhs_type == ze::regex_type))
-      || (lhs == "time" && rhs_type == ze::time_point_type)
-      || (lhs == "id" && rhs_type == ze::uint_type);
+      (lhs == "name" && (rhs_type == string_type
+                         || rhs_type == regex_type))
+      || (lhs == "time" && rhs_type == time_point_type)
+      || (lhs == "id" && rhs_type == uint_type);
   }
 
   bool operator()(type_clause const& clause) const
@@ -114,23 +114,23 @@ struct validator : public boost::static_visitor<bool>
     auto& op = clause.op;
     return
       lhs_type == rhs_type
-      || (lhs_type == ze::string_type
+      || (lhs_type == string_type
           && (op == match || op == not_match || op == in || op == not_in)
-          && rhs_type == ze::regex_type)
-      || (lhs_type == ze::address_type && clause.op == in
-          && rhs_type == ze::prefix_type);
+          && rhs_type == regex_type)
+      || (lhs_type == address_type && clause.op == in
+          && rhs_type == prefix_type);
   }
 
   bool operator()(offset_clause const& clause) const
   {
     auto rhs = fold(clause.rhs);
-    return ! (rhs == ze::invalid || clause.offsets.empty());
+    return ! (rhs == invalid || clause.offsets.empty());
   }
 
   bool operator()(event_clause const& clause) const
   {
     auto rhs = fold(clause.rhs);
-    return ! (rhs == ze::invalid || clause.lhs.size() < 2);
+    return ! (rhs == invalid || clause.lhs.size() < 2);
   }
 
   bool operator()(negated_clause const& clause) const
@@ -139,7 +139,7 @@ struct validator : public boost::static_visitor<bool>
   }
 };
 
-ze::value fold(expression const& expr)
+value fold(expression const& expr)
 {
   auto value = boost::apply_visitor(folder(), expr.first);
   if (expr.rest.empty())

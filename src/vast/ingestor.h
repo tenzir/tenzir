@@ -3,7 +3,7 @@
 
 #include <unordered_map>
 #include <cppa/cppa.hpp>
-#include <ze/uuid.h>
+#include "vast/uuid.h"
 
 namespace vast {
 
@@ -40,7 +40,7 @@ private:
 
   std::vector<cppa::actor_ptr> segmentizers_;
   std::unordered_map<cppa::actor_ptr, size_t> rates_;
-  std::unordered_map<ze::uuid, unsigned> inflight_;
+  std::unordered_map<uuid, unsigned> inflight_;
   cppa::behavior operating_;
 };
 

@@ -3,13 +3,13 @@
 
 #include <cppa/deserializer.hpp>
 #include <cppa/serializer.hpp>
-#include <ze/io/serialization.h>
-#include <ze/util/byte_swap.h>
+#include "vast/io/serialization.h"
+#include "vast/util/byte_swap.h"
 
 namespace vast {
 namespace detail {
 
-class cppa_serializer : public ze::io::serializer
+class cppa_serializer : public io::serializer
 {
 public:
   cppa_serializer(cppa::serializer* sink, std::string const& name);
@@ -34,8 +34,8 @@ private:
   typename std::enable_if<std::is_arithmetic<T>::value, bool>::type
   write(T x)
   {
-    using namespace ze;
-    sink_->write_value(ze::util::byte_swap<host_endian, network_endian>(x));
+    using namespace vast;
+    sink_->write_value(util::byte_swap<host_endian, network_endian>(x));
     bytes_ += sizeof(T);
     return true;
   }
@@ -44,7 +44,7 @@ private:
   size_t bytes_;
 };
 
-class cppa_deserializer : public ze::io::deserializer
+class cppa_deserializer : public io::deserializer
 {
 public:
   cppa_deserializer(cppa::deserializer* source, std::string const& name);
@@ -69,7 +69,7 @@ private:
   typename std::enable_if<std::is_arithmetic<T>::value, bool>::type
   read(T& x)
   {
-    using namespace ze;
+    using namespace vast;
     using namespace cppa::detail;
     static constexpr auto ptype = type_to_ptype<T>::ptype;
     static_assert(
@@ -77,7 +77,7 @@ private:
         "invalid type conversion on cppa's primitive variant");
 
     auto pv = source_->read_value(ptype);
-    x = ze::util::byte_swap<network_endian, host_endian>(cppa::get<T>(pv));
+    x = util::byte_swap<network_endian, host_endian>(cppa::get<T>(pv));
     bytes_ += sizeof(T);
     return true;
   }

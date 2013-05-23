@@ -5,6 +5,7 @@
 
 #include <exception>
 #include <string>
+#include "vast/value_type.h"
 
 namespace vast {
 
@@ -29,6 +30,39 @@ protected:
 
 /// The namespace for all exceptions.
 namespace error {
+
+/// The VAST equivalent to `std::out_of_range`.
+struct out_of_range : public exception
+{
+  out_of_range(char const *msg);
+};
+
+/// Thrown whenever an error with the value type occurs, e.g., when a certain
+/// type is corrupt or not handled in a switch statement.
+struct bad_type : public exception
+{
+  bad_type(char const* msg, value_type type);
+  bad_type(char const* msg, value_type type1, value_type type2);
+};
+
+/// Thrown whenever an error with the actual value occurs. For instance, when
+/// creating a value fails due to the wrong input format.
+struct bad_value : public exception
+{
+  bad_value(std::string const& msg, value_type type);
+};
+
+/// Thrown for error regarding (de)serialization.
+struct serialization : public exception
+{
+  serialization(char const* msg);
+};
+
+/// Thrown for error with I/O streams.
+struct io : public exception
+{
+  io(char const* msg);
+};
 
 /// The analogue of `std::logic_error`. It reports errors that are a
 /// consequence of faulty logic within the program such as violating logical

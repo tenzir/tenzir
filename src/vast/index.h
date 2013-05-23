@@ -3,6 +3,7 @@
 
 #include <unordered_map>
 #include <cppa/cppa.hpp>
+#include "vast/file_system.h"
 
 namespace vast {
 
@@ -17,7 +18,7 @@ public:
   cppa::behavior init_state;
 
 private:
-  std::string const dir_;
+  path dir_;
   std::unordered_map<std::string, cppa::actor_ptr> filaments_;
 };
 

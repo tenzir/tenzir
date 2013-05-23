@@ -3,12 +3,15 @@
 
 #include <cassert>
 #include <fstream>
-#include <ze/fwd.h>
-#include <ze/value_type.h>
-#include <ze/string.h>
+#include "vast/value_type.h"
+#include "vast/string.h"
 #include "vast/source/synchronous.h"
 
 namespace vast {
+
+// Forward declaration.
+class event;
+
 namespace source {
 
 /// A file source that transforms file contents into events.
@@ -23,7 +26,7 @@ public:
   virtual bool finished() final;
 
 protected:
-  std::ifstream file_; // TODO: use a ze::io stream.
+  std::ifstream file_; // TODO: use an io stream.
 };
 
 
@@ -34,8 +37,8 @@ public:
   line(std::string const& filename);
 
 protected:
-  virtual option<ze::event> extract() override;
-  virtual option<ze::event> parse(std::string const& line) = 0;
+  virtual option<event> extract() override;
+  virtual option<event> parse(std::string const& line) = 0;
 
   /// Retrieves the next line from the file.
   /// @return `true` if extracting was successful.
@@ -55,19 +58,19 @@ private:
   /// Extracts the first `#`-lines of log meta data.
   bool parse_header();
 
-  /// Converts a Bro type to a 0event type. Does not support container types.
-  ze::value_type bro_to_ze(ze::string const& str);
+  /// Converts a Bro type to a VAST type. Does not support container types.
+  value_type bro_to_vast(string const& str);
 
-  virtual option<ze::event> parse(std::string const& line) override;
+  virtual option<event> parse(std::string const& line) override;
 
-  ze::string separator_;
-  ze::string set_separator_;
-  ze::string empty_field_;
-  ze::string unset_field_;
-  ze::string path_;
-  std::vector<ze::string> field_names_;
-  std::vector<ze::value_type> field_types_;
-  std::vector<ze::value_type> set_types_;
+  string separator_;
+  string set_separator_;
+  string empty_field_;
+  string unset_field_;
+  string path_;
+  std::vector<string> field_names_;
+  std::vector<value_type> field_types_;
+  std::vector<value_type> set_types_;
 };
 
 /// A Bro 1.5 `conn.log` source.
@@ -78,7 +81,7 @@ public:
 
 private:
   /// Parses a single log line.
-  virtual option<ze::event> parse(std::string const& line) override;
+  virtual option<event> parse(std::string const& line) override;
 };
 
 } // namespace source

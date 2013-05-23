@@ -2,7 +2,7 @@
 #define VAST_SOURCE_ASYNCHRONOUS_H
 
 #include <cppa/cppa.hpp>
-#include <ze/event.h>
+#include "vast/event.h"
 
 namespace vast {
 namespace source {
@@ -24,7 +24,7 @@ public:
           upstream_ = upstream;
           batch_size_ = batch_size;
         },
-        on_arg_match >> [=](ze::event& e)
+        on_arg_match >> [=](event& e)
         {
           this->events_.push_back(std::move(e));
           if (events_.size() < batch_size)
@@ -32,7 +32,7 @@ public:
           send(upstream, std::move(this->events_));
           this->events_.clear();
         },
-        on_arg_match >> [=](std::vector<ze::event> v)
+        on_arg_match >> [=](std::vector<event> v)
         {
           assert(! "not yet implemented");
         });
@@ -47,7 +47,7 @@ public:
 private:
   size_t batch_size_;
   cppa::actor_ptr upstream_;
-  std::vector<ze::event> events_;
+  std::vector<event> events_;
   cppa::partial_function operating_;
 };
 

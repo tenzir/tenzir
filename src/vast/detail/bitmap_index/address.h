@@ -1,11 +1,11 @@
 #ifndef VAST_DETAIL_BITMAP_INDEX_ADDRESS_H
 #define VAST_DETAIL_BITMAP_INDEX_ADDRESS_H
 
-#include <ze/value.h>
 #include "vast/bitmap.h"
 #include "vast/bitmap_index.h"
 #include "vast/exception.h"
 #include "vast/to_string.h"
+#include "vastue.h"
 
 namespace vast {
 namespace detail {
@@ -27,7 +27,7 @@ public:
   }
 
   virtual option<Bitstream>
-  lookup(relational_operator op, ze::value const& value) const override
+  lookup(relational_operator op, value const& val) const override
   {
     if (! (op == equal || op == not_equal || op == in || op == not_in))
       throw error::operation("unsupported relational operator", op);
@@ -35,14 +35,14 @@ public:
     if (v4_.empty())
       return {};
 
-    switch (value.which())
+    switch (val.which())
     {
       default:
         throw error::index("invalid value type");
-      case ze::address_type:
-        return lookup(value.get<ze::address>(), op);
-      case ze::prefix_type:
-        return lookup(value.get<ze::prefix>(), op);
+      case address_type:
+        return lookup(val.get<address>(), op);
+      case prefix_type:
+        return lookup(val.get<prefix>(), op);
     }
   };
 
@@ -60,9 +60,9 @@ public:
   }
 
 private:
-  virtual bool push_back_impl(ze::value const& value) override
+  virtual bool push_back_impl(value const& val) override
   {
-    auto& addr = value.get<ze::address>();
+    auto& addr = val.get<address>();
     auto& bytes = addr.data();
     size_t const start = addr.is_v4() ? 12 : 0;
     auto success = v4_.push_back(start == 12);
@@ -72,7 +72,7 @@ private:
     return success;
   }
 
-  option<Bitstream> lookup(ze::address const& addr, relational_operator op) const
+  option<Bitstream> lookup(address const& addr, relational_operator op) const
   {
     auto& bytes = addr.data();
     auto is_v4 = addr.is_v4();
@@ -90,7 +90,7 @@ private:
     return result;
   }
 
-  option<Bitstream> lookup(ze::prefix const& pfx, relational_operator op) const
+  option<Bitstream> lookup(prefix const& pfx, relational_operator op) const
   {
     if (! (op == in || op == not_in))
       throw error::operation("unsupported relational operator", op);

@@ -1,13 +1,13 @@
 #include "vast/detail/cppa_type_info.h"
 
-#include <ze/chunk.h>
-#include <ze/event.h>
-#include <ze/uuid.h>
 #include <cppa/announce.hpp>
+#include "vast/chunk.h"
+#include "vast/event.h"
+#include "vast/expression.h"
 #include "vast/schema.h"
 #include "vast/segment.h"
 #include "vast/to_string.h"
-#include "vast/expression.h"
+#include "vast/uuid.h"
 
 namespace vast {
 namespace detail {
@@ -20,16 +20,16 @@ void cppa_announce()
 
 void cppa_announce_types()
 {
-  cppa_announce<ze::uuid>();
-  cppa_announce<ze::event>();
-  cppa_announce<ze::chunk<ze::event>>();
+  cppa_announce<uuid>();
+  cppa_announce<event>();
+  cppa_announce<chunk<event>>();
 
   cppa_announce<expression>();
   cppa_announce<segment>();
   cppa_announce<schema>();
 
-  cppa::announce<std::vector<ze::uuid>>();
-  cppa::announce<std::vector<ze::event>>();
+  cppa::announce<std::vector<uuid>>();
+  cppa::announce<std::vector<event>>();
 }
 
 } // namespace detail

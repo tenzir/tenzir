@@ -1,13 +1,13 @@
 #include "vast/schema.h"
 
 #include <fstream>
-#include <ze/io/container_stream.h>
-#include <ze/io/serialization.h>
 #include "vast/exception.h"
 #include "vast/logger.h"
 #include "vast/to_string.h"
 #include "vast/detail/ast/schema.h"
 #include "vast/detail/parser/schema.h"
+#include "vast/io/container_stream.h"
+#include "vast/io/serialization.h"
 
 namespace vast {
 namespace detail {
@@ -174,7 +174,7 @@ void schema::load(std::string const& contents)
   types_.clear();
   events_.clear();
 
-  DBG(meta) << "parsing schema";
+  VAST_LOG_DEBUG("parsing schema");
 
   auto i = contents.begin();
   auto end = contents.end();
@@ -199,7 +199,7 @@ void schema::load(std::string const& contents)
   for (auto& statement : ast)
     boost::apply_visitor(std::ref(schema_maker), statement);
 
-  DBG(meta) << "parsed schema successfully";
+  VAST_LOG_DEBUG("parsed schema successfully");
 }
 
 void schema::read(const std::string& filename)
@@ -322,7 +322,7 @@ void schema::add_type(std::string name, intrusive_ptr<type> t)
   if (info(name))
     throw error::schema("duplicate type");
 
-  DBG(meta) << "adding type " << name << ": " << to_string(*t);
+  VAST_LOG_DEBUG("adding type " << name << ": " << to_string(*t));
   types_.emplace_back(std::move(name), std::move(t));
 }
 
@@ -338,23 +338,23 @@ bool schema::add_type_alias(std::string const& type, std::string const& alias)
 
   add_type(alias, i->type);
 
-  DBG(meta) << "making type alias: " << alias << " -> " << type;
+  VAST_LOG_DEBUG("making type alias: " << alias << " -> " << type);
   i->aliases.push_back(alias);
   return true;
 }
 
 void schema::add_event(event e)
 {
-  DBG(meta) << "adding event: " << to_string(e);
+  VAST_LOG_DEBUG("adding event: " << to_string(e));
   events_.emplace_back(std::move(e));
 }
 
-void schema::serialize(ze::io::serializer& sink)
+void schema::serialize(io::serializer& sink)
 {
   sink << to_string(*this);
 }
 
-void schema::deserialize(ze::io::deserializer& source)
+void schema::deserialize(io::deserializer& source)
 {
   std::string str;
   source >> str;
@@ -394,8 +394,8 @@ size_t hash<vast::schema>::operator()(vast::schema const& sch) const
 {
   std::string str;
   {
-    auto out = ze::io::make_container_output_stream(str);
-    ze::io::binary_serializer sink(out);
+    auto out = vast::io::make_container_output_stream(str);
+    vast::io::binary_serializer sink(out);
     sink << sch;
   }
   return hash<std::string>()(str);

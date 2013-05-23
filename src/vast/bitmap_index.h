@@ -3,6 +3,7 @@
 
 #include "vast/operator.h"
 #include "vast/option.h"
+#include "vast/value.h"
 
 namespace vast {
 
@@ -15,14 +16,11 @@ public:
   virtual ~bitmap_index() = default;
 
   /// Appends a single value.
-  /// @param value The value to add to the index.
+  /// @param val The value to add to the index.
   /// @return `true` if appending succeeded.
-  bool push_back(ze::value const& value)
+  bool push_back(value const& val)
   {
-    if (value == ze::nil)
-      return patch(1);
-    else
-      return push_back_impl(value);
+    return (val == nil) ? patch(1) : push_back_impl(val);
   }
 
   /// Appends fill material (i.e., invalid bits).
@@ -32,16 +30,16 @@ public:
 
   /// Looks up a value with a given relational operator.
   /// @param op The relation operator.
-  /// @param value The value to lookup.
+  /// @param val The value to lookup.
   virtual option<Bitstream>
-  lookup(relational_operator op, ze::value const& value) const = 0;
+  lookup(relational_operator op, value const& val) const = 0;
 
   /// Creates a string representation of the bitmap index.
   /// @return An `std::string` of the bitmap index.
   virtual std::string to_string() const = 0;
 
 private:
-  virtual bool push_back_impl(ze::value const& value) = 0;
+  virtual bool push_back_impl(value const& val) = 0;
 };
 
 } // namespace vast

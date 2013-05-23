@@ -1,9 +1,9 @@
 #include "vast/segment.h"
 
-#include <ze/event.h>
-#include <ze/logger.h>
-#include <ze/io/serialization.h>
-#include <ze/util/make_unique.h>
+#include "vast/event.h"
+#include "vast/logger.h"
+#include "vast/io/serialization.h"
+#include "vast/util/make_unique.h"
 #include "vast/exception.h"
 #include "vast/logger.h"
 
@@ -16,7 +16,7 @@ uint8_t const segment::version;
 
 segment::header::event_meta_data::event_meta_data()
 {
-  start = ze::now();
+  start = now();
   end = start;
 }
 
@@ -37,12 +37,12 @@ bool operator==(segment::header::event_meta_data const& x,
   return x.start == y.start && x.end == y.end && x.n == y.n;
 }
 
-void segment::header::event_meta_data::accommodate(ze::event const& event)
+void segment::header::event_meta_data::accommodate(event const& e)
 {
-  if (event.timestamp() < start)
-    start = event.timestamp();
-  if (event.timestamp() > end)
-    end = event.timestamp();
+  if (e.timestamp() < start)
+    start = e.timestamp();
+  if (e.timestamp() > end)
+    end = e.timestamp();
   ++n;
 }
 
@@ -55,7 +55,7 @@ bool operator==(segment::header const& x, segment::header const& y)
     x.event_meta == y.event_meta;
 }
 
-void segment::header::serialize(ze::io::serializer& sink)
+void segment::header::serialize(io::serializer& sink)
 {
   sink << segment::magic;
   sink << version;
@@ -67,7 +67,7 @@ void segment::header::serialize(ze::io::serializer& sink)
   sink << event_meta.n;
 }
 
-void segment::header::deserialize(ze::io::deserializer& source)
+void segment::header::deserialize(io::deserializer& source)
 {
   uint32_t magic;
   source >> magic;
@@ -92,16 +92,16 @@ segment::writer::writer(segment* s)
 {
 }
 
-void segment::writer::operator<<(ze::event const& event)
+void segment::writer::operator<<(event const& e)
 {
-  ZE_ENTER(ZE_ARG(event));
-  event_meta_.accommodate(event);
-  putter_ << event;
+  VAST_ENTER(VAST_ARG(e));
+  event_meta_.accommodate(e);
+  putter_ << e;
 }
 
 bool segment::writer::flush()
 {
-  ZE_ENTER();
+  VAST_ENTER();
   processed_bytes_ += putter_.bytes();
   putter_.reset(); // Flushes and releases reference to chunk_.
   auto not_empty = ! chunk_.empty();
@@ -110,7 +110,7 @@ bool segment::writer::flush()
     segment_->header_.event_meta += event_meta_;
     segment_->chunks_.emplace_back(std::move(chunk_));
     chunk_bytes_ += chunk_.bytes();
-    chunk_ = chunk();
+    chunk_ = chunk_type();
     event_meta_ = header::event_meta_data();
   }
   putter_.reset(&chunk_);
@@ -149,10 +149,10 @@ segment::reader::operator bool () const
   return available_events() > 0 || available_chunks() > 0;
 }
 
-void segment::reader::operator>>(ze::event& e)
+void segment::reader::operator>>(event& e)
 {
-  ZE_ENTER();
-  ZE_MSG("available events: " << available_events());
+  VAST_ENTER();
+  VAST_MSG("available events: " << available_events());
   if (available_events() == 0)
   {
     if (chunk_ == segment_->chunks_.end())
@@ -164,7 +164,7 @@ void segment::reader::operator>>(ze::event& e)
   }
 
   getter_ >> e;
-  ZE_LEAVE("got event: " << e);
+  VAST_LEAVE("got event: " << e);
 }
 
 uint32_t segment::reader::available_events() const
@@ -188,9 +188,9 @@ size_t segment::reader::chunk_bytes() const
 }
 
 
-segment::segment(ze::uuid uuid, ze::io::compression method)
+segment::segment(uuid id, io::compression method)
 {
-  header_.id = std::move(uuid);
+  header_.id = std::move(id);
   header_.version = version;
   header_.compression = method;
 }
@@ -199,7 +199,7 @@ segment::segment(segment const& other)
   : header_(other.header_),
     chunks_(other.chunks_)
 {
-  ZE_WARN("copied a segment!");
+  VAST_LOG_WARN("copied a segment!");
 }
 
 segment& segment::operator=(segment other)
@@ -238,7 +238,7 @@ size_t segment::bytes() const
     sizeof(header_.end) +
     sizeof(header_.events);
 
-  // FIXME: do not hardcode size of ze::serialization.
+  // FIXME: do not hardcode size of serialization.
   size_t events = 8;
   for (auto& str : header_.event_names)
     events += 4 + str.size();
@@ -256,12 +256,12 @@ size_t segment::size() const
   return chunks_.size();
 }
 
-ze::uuid const& segment::id() const
+uuid const& segment::id() const
 {
   return header_.id;
 }
 
-void segment::serialize(ze::io::serializer& sink)
+void segment::serialize(io::serializer& sink)
 {
   sink << header_;
   sink.write_sequence_begin(chunks_.size());
@@ -269,7 +269,7 @@ void segment::serialize(ze::io::serializer& sink)
     sink << cppa::get<0>(tuple);
 }
 
-void segment::deserialize(ze::io::deserializer& source)
+void segment::deserialize(io::deserializer& source)
 {
   source >> header_;
   uint64_t n;
@@ -277,7 +277,7 @@ void segment::deserialize(ze::io::deserializer& source)
   chunks_.resize(n);
   for (auto& tuple : chunks_)
   {
-    chunk chk;
+    chunk_type chk;
     source >> chk;
     tuple = std::move(cppa::make_cow_tuple(std::move(chk)));
   }

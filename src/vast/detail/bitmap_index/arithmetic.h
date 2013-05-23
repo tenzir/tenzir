@@ -1,20 +1,20 @@
 #ifndef VAST_DETAIL_BITMAP_INDEX_ARITHMETIC_H
 #define VAST_DETAIL_BITMAP_INDEX_ARITHMETIC_H
 
-#include <ze/value.h>
 #include "vast/bitmap.h"
 #include "vast/bitmap_index.h"
 #include "vast/exception.h"
 #include "vast/to_string.h"
+#include "vastue.h"
 
 namespace vast {
 namespace detail {
 
 /// A bitmap index for arithmetic types.
-template <ze::value_type T, typename Bitstream>
+template <value_type T, typename Bitstream>
 class arithmetic_bitmap_index : public bitmap_index<Bitstream>
 {
-  typedef ze::underlying_value_type<T> underlying_value_type;
+  typedef underlying_value_type<T> underlying_value_type;
   typedef typename std::conditional<
     std::is_same<underlying_value_type, bool>::value,
     bitmap<bool, Bitstream>,
@@ -50,13 +50,13 @@ public:
   }
 
   virtual option<Bitstream>
-  lookup(relational_operator op, ze::value const& value) const override
+  lookup(relational_operator op, value const& val) const override
   {
     if (op == in || op == not_in)
       throw error::operation("unsupported relational operator", op);
     if (bitmap_.empty())
       return {};
-    return bitmap_.lookup(op, value.get<underlying_value_type>());
+    return bitmap_.lookup(op, val.get<underlying_value_type>());
   };
 
   virtual std::string to_string() const override
@@ -65,9 +65,9 @@ public:
   }
 
 private:
-  virtual bool push_back_impl(ze::value const& value) override
+  virtual bool push_back_impl(value const& val) override
   {
-    return bitmap_.push_back(value.get<underlying_value_type>());
+    return bitmap_.push_back(val.get<underlying_value_type>());
   }
 
   bitmap_type bitmap_;

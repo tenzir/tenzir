@@ -1,12 +1,11 @@
 #ifndef VAST_DETAIL_BITMAP_INDEX_STRING_H
 #define VAST_DETAIL_BITMAP_INDEX_STRING_H
 
-#include <ze/value.h>
-#include <ze/to_string.h>
 #include "vast/bitmap.h"
 #include "vast/bitmap_index.h"
 #include "vast/exception.h"
 #include "vast/to_string.h"
+#include "vastue.h"
 #include "vast/util/dictionary.h"
 
 namespace vast {
@@ -28,12 +27,12 @@ public:
   }
 
   virtual option<Bitstream>
-  lookup(relational_operator op, ze::value const& value) const override
+  lookup(relational_operator op, value const& val) const override
   {
     if (! (op == equal || op == not_equal))
       throw error::operation("unsupported relational operator", op);
 
-    auto str = ze::to_string(value.get<ze::string>());
+    auto str = to_string(val.get<string>());
     auto i = dictionary_[str];
     if (! i)
       return {};
@@ -51,9 +50,9 @@ public:
   }
 
 private:
-  virtual bool push_back_impl(ze::value const& value) override
+  virtual bool push_back_impl(value const& val) override
   {
-    auto str = ze::to_string(value.get<ze::string>());
+    auto str = to_string(val.get<string>());
     auto i = dictionary_[str];
     if (!i)
       i = dictionary_.insert(str);

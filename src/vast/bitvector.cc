@@ -1,8 +1,8 @@
 #include "vast/bitvector.h"
 
 #include <cassert>
-#include <ze/io/serialization.h>
 #include "vast/exception.h"
+#include "vast/io/serialization.h"
 
 namespace vast {
 
@@ -477,13 +477,13 @@ size_type bitvector::find_from(size_type i) const
   return i * bits_per_block + lowest_bit(bits_[i]);
 }
 
-void bitvector::serialize(ze::io::serializer& sink)
+void bitvector::serialize(io::serializer& sink)
 {
   sink << num_bits_;
   sink << bits_;
 }
 
-void bitvector::deserialize(ze::io::deserializer& source)
+void bitvector::deserialize(io::deserializer& source)
 {
   source >> num_bits_;
   source >> bits_;

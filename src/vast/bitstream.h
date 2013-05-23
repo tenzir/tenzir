@@ -2,7 +2,7 @@
 #define VAST_BITSTREAM_H
 
 #include <algorithm>
-#include <ze/io/serialization.h>
+#include "vast/io/serialization.h"
 #include "vast/bitvector.h"
 #include "vast/exception.h"
 
@@ -128,12 +128,12 @@ private:
     return *static_cast<Derived const*>(this);
   }
 
-  void serialize(ze::io::serializer& sink)
+  void serialize(io::serializer& sink)
   {
     sink << bits_;
   }
 
-  void deserialize(ze::io::deserializer& source)
+  void deserialize(io::deserializer& source)
   {
     source >> bits_;
   }

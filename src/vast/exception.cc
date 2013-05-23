@@ -23,6 +23,43 @@ char const* exception::what() const noexcept
 
 namespace error {
 
+out_of_range::out_of_range(char const* msg)
+ : exception(msg)
+{
+}
+
+bad_type::bad_type(char const* msg, value_type type)
+{
+  std::ostringstream oss;
+  oss << "value: " << msg << " (type '" << type << "')";
+  msg_ = oss.str();
+}
+
+bad_type::bad_type(char const* msg, value_type type1, value_type type2)
+{
+  std::ostringstream oss;
+  oss << "value: " << msg
+    << " (types '" << type1 << "' and '" << type2 << "')";
+  msg_ = oss.str();
+}
+
+bad_value::bad_value(std::string const& msg, value_type type)
+{
+  std::ostringstream oss;
+  oss << "bad value: " << msg << " (type '" << type << "')";
+  msg_ = oss.str();
+}
+
+serialization::serialization(char const* msg)
+  : exception(msg)
+{
+}
+
+io::io(char const* msg)
+  : exception(msg)
+{
+}
+
 logic::logic(char const* msg)
   : exception(msg)
 {

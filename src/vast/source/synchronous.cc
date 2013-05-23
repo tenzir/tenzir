@@ -18,7 +18,7 @@ void synchronous::init()
       on(atom("kill")) >> [=]
       {
         quit();
-        LOG(verbose, ingest) << "source @" << id() << " terminated";
+        VAST_LOG_VERBOSE("source @" << id() << " terminated");
       },
       on(atom("run")) >> [=] { run(); }
   );
@@ -41,13 +41,11 @@ void synchronous::run()
       ++errors_;
       if (errors_ < 1000)
       {
-        LOG(error, ingest)
-          << "source @" << id() << " encountered parse error";
+        VAST_LOG_ERROR("source @" << id() << " encountered parse error");
       }
       else if (errors_ == 1000)
       {
-        LOG(error, ingest)
-          << "source @" << id() << " won't report further errors";
+        VAST_LOG_ERROR("source @" << id() << " won't report further errors");
       }
     }
   }

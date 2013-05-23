@@ -1,6 +1,5 @@
 #include "vast/ingestor.h"
 
-#include <ze.h>
 #include "vast/exception.h"
 #include "vast/segmentizer.h"
 #include "vast/logger.h"
@@ -28,10 +27,10 @@ ingestor::ingestor(actor_ptr tracker,
     max_segment_size_(max_segment_size),
     batch_size_(batch_size)
 {
-  LOG(verbose, ingest) << "spawning ingestor @" << id();
+  VAST_LOG_VERBOSE("spawning ingestor @" << id());
   chaining(false);
   operating_ = (
-      on(atom("DOWN"), arg_match) >> [=](uint32_t reason)
+      on(atom("DOWN"), arg_match) >> [=](uint32_t /* reason */)
       {
         auto i = std::find(segmentizers_.begin(),
                            segmentizers_.end(),
@@ -76,7 +75,7 @@ ingestor::ingestor(actor_ptr tracker,
       },
       on(atom("ingest"), val<std::string>, arg_match) >> [=](std::string const&)
       {
-        LOG(error, ingest) << "invalid ingestion file type";
+        VAST_LOG_ERROR("invalid ingestion file type");
       },
       on(atom("extract")) >> [=]
       {
@@ -96,9 +95,8 @@ ingestor::ingestor(actor_ptr tracker,
           sum += p.second;
 
         if (sum != last)
-          LOG(info, ingest)
-            << "ingestor @" << id()
-            << " ingests at rate " << sum << " events/sec";
+          VAST_LOG_INFO("ingestor @" << id() <<
+                        " ingests at rate " << sum << " events/sec");
 
         if (! segmentizers_.empty())
           delayed_send(
@@ -108,10 +106,10 @@ ingestor::ingestor(actor_ptr tracker,
       },
       on_arg_match >> [=](segment const& s)
       {
-        DBG(ingest) << "ingestor @" << id()
-          << " relays segment " << s.id()
-          << " to archive @" << archive_->id()
-          << " and index @" << index_->id();
+        VAST_LOG_DEBUG("ingestor @" << id() <<
+                       " relays segment " << s.id() <<
+                       " to archive @" << archive_->id() <<
+                       " and index @" << index_->id());
 
         index_ << last_dequeued();
         archive_ << last_dequeued();
@@ -119,15 +117,15 @@ ingestor::ingestor(actor_ptr tracker,
         assert(inflight_.find(s.id()) == inflight_.end());
         inflight_.emplace(s.id(), 2);
       },
-      on(atom("segment"), atom("ack"), arg_match) >> [=](ze::uuid const& uuid)
+      on(atom("segment"), atom("ack"), arg_match) >> [=](uuid const& uid)
       {
         // Both archive and index send an ack.
-        LOG(verbose, ingest)
-          << "ingestor @" << id() 
-          << " received segment ack from @" << last_sender()->id()
-          << " for " << uuid;
+        VAST_LOG_VERBOSE(
+            "ingestor @" << id() <<
+            " received segment ack from @" << last_sender()->id() <<
+            " for " << uid);
 
-        auto i = inflight_.find(uuid);
+        auto i = inflight_.find(uid);
         assert(i != inflight_.end() && i->second > 0);
         if (i->second == 1)
           inflight_.erase(i);
@@ -147,7 +145,7 @@ void ingestor::init()
 void ingestor::shutdown()
 {
   self->quit();
-  LOG(verbose, ingest) << "ingestor @" << id() << " terminated";
+  VAST_LOG_VERBOSE("ingestor @" << id() << " terminated");
 }
 
 void ingestor::init_source(actor_ptr source)

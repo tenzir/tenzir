@@ -37,7 +37,7 @@ system_monitor::system_monitor(actor_ptr receiver)
 void system_monitor::init()
 {
   util::console::unbuffer();
-  LOG(verbose, core) << "spawning system monitor @" << id();
+  VAST_LOG_VERBOSE("spawning system monitor @" << id());
 
   signals.fill(0);
   for (auto s : { SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGUSR1, SIGUSR2 })
@@ -54,9 +54,9 @@ void system_monitor::init()
         if (signals[0] > 0)
         {
           signals[0] = 0;
-          for (int i = 0; i < signals.size(); ++i)
+          for (int i = 0; size_t(i) < signals.size(); ++i)
           {
-            if (signals[i] == SIGINT || signals[i] == SIGTERM)
+            if (i == SIGINT || i == SIGTERM)
               quit();
             while (signals[i] > 0)
               send(upstream_, atom("system"), atom("signal"), signals[i]--);
@@ -75,7 +75,7 @@ void system_monitor::init()
 void system_monitor::on_exit()
 {
   util::console::buffer();
-  LOG(verbose, core) << "system monitor @" << id() << " terminated";
+  VAST_LOG_VERBOSE("system monitor @" << id() << " terminated");
 }
 
 } // namespace vast

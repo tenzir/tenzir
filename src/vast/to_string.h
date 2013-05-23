@@ -8,6 +8,11 @@
 
 namespace vast {
 
+std::string to_string(bool b);
+std::string to_string(int64_t i);
+std::string to_string(uint64_t i);
+std::string to_string(double d);
+
 // Forward declarations.
 template <
   typename,
@@ -80,7 +85,7 @@ std::string to_string(
   if (with_header)
   {
     using std::to_string;
-    //using ze::to_string;
+    //using vast::to_string;
     store.each(
         [&](T const& x, Bitstream const&) { str += to_string(x) + delim; });
     str.pop_back();
@@ -102,8 +107,8 @@ template <
 >
 std::string to_string(
     bitmap<bool, Bitstream, Encoder, Binner> const& bm,
-    bool with_header = false,
-    char delim = 0x00)
+    bool /* with_header = false */, 
+    char /* delim = 0x00 */)
 {
   std::string str;
   auto& bs = bm.storage();

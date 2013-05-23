@@ -1,6 +1,5 @@
 #include "vast/index.h"
 
-#include <ze.h>
 #include "vast/bitmap_index.h"
 #include "vast/logger.h"
 #include "vast/segment.h"
@@ -21,16 +20,16 @@ public:
   {
     self->chaining(false);
     init_state = (
-        on_arg_match >> [=](ze::event const& event)
+        on_arg_match >> [=](event const& e)
         {
-          auto delta = event.id() - last_;
+          auto delta = e.id() - last_;
           for (auto& p : bitmaps_)
           {
             if (delta > 1)
               p.second->patch(delta - 1, false);
-            p.second->push_back(event.at(p.first));
+            p.second->push_back(e.at(p.first));
           }
-          last_ = event.id();
+          last_ = e.id();
         },
         on(atom("lookup")) >> [=]()
         {
@@ -45,7 +44,7 @@ public:
 
 private:
   Bitstream lookup(std::vector<size_t> const& offsets,
-                   ze::value const& argument,
+                   value const& argument,
                    relational_operator op) const
   {
     auto i = bitmaps_.find(offsets);
@@ -78,7 +77,7 @@ public:
     positive_ = true;
   }
 
-  virtual void visit(expr::name_extractor const& node)
+  virtual void visit(expr::name_extractor const&)
   {
     positive_ = true;
   }
@@ -118,7 +117,7 @@ public:
     rel.operands()[0]->accept(*this);
   }
 
-  virtual void visit(expr::constant const& c)
+  virtual void visit(expr::constant const&)
   {
     /* Do exactly nothing. */
   }
@@ -131,31 +130,29 @@ private:
 
 
 index::index(std::string directory)
-  : dir_(std::move(directory))
+  : dir_(directory)
 {
   chaining(false);
   init_state = (
       on(atom("load")) >> [=]
       {
-        LOG(verbose, index) << "spawning index @" << id();
-        if (! ze::exists(dir_))
+        VAST_LOG_VERBOSE("spawning index @" << id());
+        if (! exists(dir_))
         {
-          LOG(info, index)
-            << "index @" << id() << " creates new directory " << dir_;
-          ze::mkdir(dir_);
+          VAST_LOG_INFO("index @" << id() << " creates new directory " << dir_);
+          mkdir(dir_);
         }
 
-        assert(ze::exists(dir_));
-        ze::traverse(
+        assert(exists(dir_));
+        traverse(
             dir_,
-            [&](ze::path const& p) -> bool
+            [&](path const& p) -> bool
             {
-              LOG(info, index)
-                << "index @" << id() << " found file " << p;
+              VAST_LOG_VERBOSE("index @" << id() << " found file " << p);
 
               // TODO:
               //fs::ifstream file(p, std::ios::binary | std::ios::in);
-              //ze::serialization::stream_iarchive ia(file);
+              //serialization::stream_iarchive ia(file);
               //segment::header hdr;
               //ia >> hdr;
               //build(hdr);
@@ -164,21 +161,21 @@ index::index(std::string directory)
       },
       on(atom("create"), arg_match) >> [=](schema const& sch)
       {
-        for (auto& event : sch.events())
+        for (auto& e : sch.events())
         {
-          if (! event.indexed)
+          if (! e.indexed)
             continue;
 
-          DBG(index)
-            << "index @" << id() << " creates index for event " << event.name;
+          VAST_LOG_DEBUG("index @" << id() <<
+                         " creates index for event " << e.name);
 
-          for (auto& arg : event.args)
+          for (auto& arg : e.args)
           {
             if (! arg.indexed)
               continue;
 
-            DBG(index)
-              << "index @" << id() << " creates index for argument " << arg.name;
+            VAST_LOG_DEBUG("index @" << id() <<
+                           " creates index for argument " << arg.name);
           }
         }
       },
@@ -207,7 +204,7 @@ index::index(std::string directory)
       on(atom("kill")) >> [=]()
       {
         quit();
-        LOG(verbose, index) << "index @" << id() << " terminated";
+        VAST_LOG_VERBOSE("index @" << id() << " terminated");
       });
 }
 

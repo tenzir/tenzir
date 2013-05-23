@@ -4,8 +4,8 @@
 #include <functional>
 #include <vector>
 #include <string>
-#include <ze/io/fwd.h>
 #include "vast/intrusive.h"
+#include "vast/io/fwd.h"
 
 namespace vast {
 
@@ -175,9 +175,9 @@ public:
   void add_event(event e);
 
 private:
-  friend class ze::io::access;
-  void serialize(ze::io::serializer& sink);
-  void deserialize(ze::io::deserializer& source);
+  friend class io::access;
+  void serialize(io::serializer& sink);
+  void deserialize(io::deserializer& source);
   friend bool operator==(schema const& x, schema const& y);
   friend bool operator!=(schema const& x, schema const& y);
 

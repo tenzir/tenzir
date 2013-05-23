@@ -4,8 +4,8 @@
 #include <boost/optional.hpp>
 #include <boost/variant/recursive_variant.hpp>
 #include <boost/fusion/include/adapt_struct.hpp>
-#include <ze/value.h>
 #include "vast/operator.h"
+#include "vast/value.h"
 
 namespace vast {
 namespace detail {
@@ -28,9 +28,9 @@ struct identifier
 };
 
 typedef boost::variant<
-ze::value
-  , boost::recursive_wrapper<unary_expr>
-  , boost::recursive_wrapper<expression>
+  value,
+  boost::recursive_wrapper<unary_expr>,
+  boost::recursive_wrapper<expression>
 > expr_operand;
 
 struct unary_expr
@@ -67,7 +67,7 @@ struct offset_clause
 
 struct type_clause
 {
-  ze::value_type lhs;
+  value_type lhs;
   relational_operator op;
   expression rhs;
 };
@@ -107,7 +107,7 @@ struct query
 /// Folds a constant expression into a single value.
 /// @param expr The constant expression.
 /// @return The folded value.
-ze::value fold(expression const& expr);
+value fold(expression const& expr);
 
 /// Validates a query with respect to semantic correctness. This means ensuring
 /// that LHS and RHS of clause operators have the correct types.
@@ -149,7 +149,7 @@ BOOST_FUSION_ADAPT_STRUCT(
 
   BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::query::type_clause,
-    (ze::value_type, lhs)
+    (vast::value_type, lhs)
     (vast::relational_operator, op)
     (vast::detail::ast::query::expression, rhs))
 

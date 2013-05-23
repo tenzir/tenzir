@@ -2,7 +2,6 @@
 #define VAST_DETAIL_CPPA_TYPE_INFO_H
 
 #include <cppa/util/abstract_uniform_type_info.hpp>
-#include <ze/fwd.h>
 #include "vast/detail/cppa_serialization.h"
 
 namespace vast {

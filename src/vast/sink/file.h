@@ -3,10 +3,12 @@
 
 #include <fstream>
 #include <cppa/cppa.hpp>
-#include <ze/fwd.h>
 #include "vast/sink/synchronous.h"
 
 namespace vast {
+
+class event;
+
 namespace sink {
 
 /// A file that transforms file contents into events.
@@ -18,7 +20,7 @@ public:
   file(std::string const& filename);
 
 protected:
-  virtual bool write(ze::event const& event) = 0;
+  virtual bool write(event const& e) = 0;
 
   std::ofstream file_;
 };

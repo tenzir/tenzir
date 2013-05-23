@@ -1,11 +1,11 @@
 #ifndef VAST_DETAIL_BITMAP_INDEX_PORT_H
 #define VAST_DETAIL_BITMAP_INDEX_PORT_H
 
-#include <ze/value.h>
 #include "vast/bitmap.h"
 #include "vast/bitmap_index.h"
 #include "vast/exception.h"
 #include "vast/to_string.h"
+#include "vastue.h"
 
 namespace vast {
 namespace detail {
@@ -15,7 +15,7 @@ template <typename Bitstream>
 class port_bitmap_index : public bitmap_index<Bitstream>
 {
   typedef bitmap_index<Bitstream> super;
-  typedef std::underlying_type<ze::port::port_type>::type proto_type;
+  typedef std::underlying_type<port::port_type>::type proto_type;
 
 public:
   virtual bool patch(size_t n) override
@@ -25,17 +25,17 @@ public:
   }
 
   virtual option<Bitstream>
-  lookup(relational_operator op, ze::value const& value) const override
+  lookup(relational_operator op, value const& val) const override
   {
     if (op == in || op == not_in)
       throw error::operation("unsupported relational operator", op);
     if (num_.empty())
       return {};
-    auto& port = value.get<ze::port>();
+    auto& port = val.get<port>();
     auto nbs = num_.lookup(op, port.number());
     if (! nbs)
       return {};
-    if (port.type() != ze::port::unknown)
+    if (port.type() != port::unknown)
       if (auto tbs = num_[port.type()])
           *nbs &= *tbs;
     return nbs;
@@ -47,9 +47,9 @@ public:
   }
 
 private:
-  virtual bool push_back_impl(ze::value const& value) override
+  virtual bool push_back_impl(value const& val) override
   {
-    auto& port = value.get<ze::port>();
+    auto& port = val.get<port>();
     num_.push_back(port.number());
     proto_.push_back(static_cast<proto_type>(port.type()));
     return true;

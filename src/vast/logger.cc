@@ -1,174 +1,295 @@
 #include "vast/logger.h"
 
-#include <cstring>
-#include <chrono>
-#include <iostream>
+#include <cassert>
 #include <iomanip>
+#include <iostream>
+#include <fstream>
 #include <thread>
-#include <ze/file_system.h>
+#include "vast/file_system.h"
+#include "vast/time.h"
+#include "vast/detail/singleton_manager.h"
+#include "vast/util/queue.h"
+
+#ifdef VAST_POSIX
+#  include <unistd.h> // getpid
+#endif
 
 namespace vast {
+namespace {
 
-// The global logger instance.
-logger* LOGGER = nullptr;
+// TODO: replace with thread_local once the compilers implement it.
+__thread size_t call_depth = 0;
 
-static char const* const facilities[] =
+// TODO: fix potential bugs due to `operator<</>>` occurring in return type via
+// decltype.
+std::string prettify(char const* pretty_func)
 {
-  "core",
-  "broccoli",
-  "comm",
-  "meta",
-  "query",
-  "ingest",
-  "emit",
-  "archive",
-  "index"
-};
-
-/// Computes the number of characters that align the facility string with the
-/// largest facility string.
-// FIXME: compute at compile time.
-size_t pad(logger::facility f)
-{
-  static size_t const max_len = 8ul;
-  typedef std::underlying_type<logger::facility>::type underlying;
-  auto str = facilities[static_cast<underlying>(f)];
-  return max_len - std::strlen(str) + 1;
-}
-
-static char const* const levels[] =
-{
-  "quiet",
-  "fatal",
-  "error",
-  "warning",
-  "info",
-  "verbose",
-  "debug"
-};
-
-logger::sink::sink(level lvl, std::ostream& out)
-  : level_(lvl)
-  , out_(out)
-{
-}
-
-bool logger::sink::takes(level lvl)
-{
-  return lvl <= level_;
-}
-
-logger::file_sink::file_sink(level lvl, ze::path file)
-  : sink(lvl, file_)
-{
-  if (lvl != quiet)
+  auto paren = pretty_func;
+  auto c = pretty_func;
+  auto templates = 0;
+  while (*c && (*c != ' ' || templates > 0))
   {
-    if (! ze::exists(file.parent()))
-      ze::mkdir(file.parent());
-    file_.open(file.string(), std::ios::app);
+    switch (*c)
+    {
+      default:
+        break;
+      case 'v':
+        {
+          static char const* vi = "virtual";
+          auto v = vi;
+          auto i = c;
+          while (*++v == *++i)
+            ;
+          if (*v == '\0')
+            c += 7;
+        }
+        break;
+      case 't':
+        {
+          static char const* tn = "typename";
+          auto t = tn;
+          auto i = c;
+          while (*++t == *++i)
+            ;
+          if (*t == '\0')
+            c += 8;
+        }
+        break;
+      case '<':
+        ++templates;
+        break;
+      case '>':
+        --templates;
+        break;
+      case '(':
+        {
+          assert(paren == pretty_func);
+          paren = c;
+        }
+        break;
+    }
+    ++c;
+  }
+
+  // No whitespace found, could be (con|des)tructor.
+  if (! c)
+    return {pretty_func, c};
+
+  if (*paren != '(')
+    while (*paren != '(')
+      ++paren;
+
+  // The space occurs before the '(', so we have a return type.
+  if (++c < paren)
+    return {c, paren};
+
+  // If we went beyond the left parenthesis, we're in a (con|des)tructor.
+  while (*paren && *paren != '(')
+    ++paren;
+  return {pretty_func, paren};
+}
+
+} // namespace <anonymous>
+
+struct logger::impl
+{
+  struct record
+  {
+    logger::level lvl;
+    std::string msg;
+  };
+
+  bool init(level console, level file, path dir)
+  {
+    console_level = console;
+    file_level = file;
+
+    std::ostringstream filename;
+    filename << "vast_" << std::time(nullptr);
+#ifdef VAST_POSIX
+    filename << '_' << ::getpid();
+#endif
+    filename << ".log";
+    log_file.open(to_string(dir / path(filename.str())), std::ios::out);
+    if (! log_file)
+      return false;
+
+    log_thread = std::thread([=] { run(); });
+    return true;
+  }
+
+  bool takes(logger::level lvl) const
+  {
+    return lvl <= std::max(file_level, console_level);
+  }
+
+  void log(logger::level lvl, std::string&& msg)
+  {
+    assert(! msg.empty());
+    records.push({lvl, std::move(msg)});
+  }
+
+  void run()
+  {
+    assert(log_file);
+    while (true)
+    {
+      auto r = records.pop();
+      if (r.msg.empty())
+      {
+        if (log_file)
+          log_file.close();
+        return;
+      }
+      if (r.lvl <= console_level)
+        std::cerr << r.msg << std::endl;
+      if (r.lvl <= file_level)
+        log_file << r.msg << std::endl;
+    }
+  }
+
+  void stop()
+  {
+    records.push({quiet, ""});
+    log_thread.join();
+  }
+
+  level console_level;
+  level file_level;
+  std::fstream log_file;
+  std::thread log_thread;
+  util::queue<record> records;
+};
+
+
+void logger::message::append_header(level lvl)
+{
+  *this
+    << std::setprecision(15) << std::setw(16) << std::left << std::setfill('0')
+    << now().to_double()
+    << ' '
+    << std::this_thread::get_id()
+    << ' ';
+  if (lvl != quiet)
+    *this << lvl << ' ';
+}
+
+void logger::message::append_function(char const* f)
+{
+  *this << prettify(f) << ' ';
+}
+
+void logger::message::append_fill(fill_type t)
+{
+  assert(call_depth >= 1);
+  std::string fill(3 + call_depth, '-');
+  fill[fill.size() - 1] = ' ';
+  if (t == right_arrow)
+  {
+    fill[0] = '+';
+    fill[fill.size() - 2] = '\\';
+  }
+  else if (t == left_arrow)
+  {
+    fill[fill.size() - 2] = '/';
+    fill[0] = '<';
+  }
+  else if (t == bar)
+  {
+    fill[fill.size() - 2] = '|';
+  }
+  *this << fill << ' ';
+}
+
+
+logger::tracer::tracer(char const* pretty_func)
+  : fun_(prettify(pretty_func))
+{
+  ++call_depth;
+  msg_.append_header(trace);
+  msg_.append_fill(message::right_arrow);
+  msg_ << fun_ << ' ';
+}
+
+void logger::tracer::commit()
+{
+  instance()->log(trace, msg_.str());
+  msg_.clear();
+  msg_.str(std::string());
+}
+
+void logger::tracer::reset(bool exit)
+{
+  msg_.append_header(trace);
+  if (! exit)
+  {
+    msg_.append_fill(message::bar);
+  }
+  else
+  {
+    msg_.append_fill(message::left_arrow);
+    msg_ << fun_ << ' ';
   }
 }
 
-logger::file_sink::~file_sink()
+logger::tracer::~tracer()
 {
-  if (file_)
-    file_ << std::endl;
+  msg_.seekp(0, std::ios::end);
+  if (msg_.tellp() == 0)
+  {
+    msg_.append_header(trace);
+    msg_.append_fill(message::left_arrow);
+    msg_ << fun_;
+  }
+  commit();
+  --call_depth;
 }
 
-logger::record::record(logger& log, level lvl, facility fac)
-  : logger_(log)
-  , level_(lvl)
-{
-  stream_
-    << std::chrono::system_clock::now().time_since_epoch().count()
-    << " " << '[';
-  
-  stream_ 
-    << std::setw(14) 
-    << std::this_thread::get_id();
 
-  stream_ 
-    << '|' << fac << ']' 
-    << std::setfill(' ') << std::setw(pad(fac)) << ' ';
+logger* logger::instance()
+{
+  return detail::singleton_manager::get_logger();
 }
 
-logger::record::~record()
+logger::logger()
 {
-  logger_.write(*this);
+  impl_ = new impl;
 }
 
-void logger::init(level console_verbosity,
-                  level logfile_verbosity,
-                  ze::path const& logfile)
+logger::~logger()
 {
-  LOGGER = new logger(console_verbosity, logfile_verbosity, logfile);
+  delete impl_;
 }
 
-logger* logger::get()
+void logger::log(level lvl, std::string&& msg)
 {
-  return LOGGER;
+  impl_->log(lvl, std::move(msg));
 }
 
-bool logger::takes(level lvl)
+bool logger::takes(logger::level lvl) const
 {
-  return console_.takes(lvl) || logfile_.takes(lvl);
+  return impl_->takes(lvl);
 }
 
-void logger::write(record const& rec)
+logger* logger::create()
 {
-  if (console_.takes(rec.level_))
-    console_.write(rec.stream_.rdbuf());
-
-  if (logfile_.takes(rec.level_))
-    logfile_.write(rec.stream_.str());
+  return new logger;
 }
 
-logger::logger(level console_verbosity,
-               level logfile_verbosity,
-               ze::path const& logfile)
-  : console_(console_verbosity, std::cerr)
-  , logfile_(logfile_verbosity, logfile)
+void logger::initialize()
 {
+  /* Nothing to do. */
 }
 
-std::ostream& logger::console() const
+void logger::destroy()
 {
-  return console_.out_;
+  impl_->stop();
+  delete this;
 }
 
-bool operator<(logger::level x, logger::level y)
+void logger::dispose()
 {
-  typedef std::underlying_type<logger::level>::type underlying;
-  return static_cast<underlying>(x) < static_cast<underlying>(y);
-}
-
-bool operator<=(logger::level x, logger::level y)
-{
-  return ! (y < x);
-}
-
-bool operator>=(logger::level x, logger::level y)
-{
-  return ! (x < y);
-}
-
-bool operator>(logger::level x, logger::level y)
-{
-  return y < x;
-}
-
-std::ostream& operator<<(std::ostream& out, logger::facility f)
-{
-  typedef std::underlying_type<logger::facility>::type underlying;
-  out << facilities[static_cast<underlying>(f)];
-  return out;
-}
-
-std::ostream& operator<<(std::ostream& out, logger::level l)
-{
-  typedef std::underlying_type<logger::level>::type underlying;
-  out << levels[static_cast<underlying>(l)];
-  return out;
+  delete this;
 }
 
 } // namespace vast

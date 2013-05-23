@@ -1,7 +1,7 @@
 #include "vast/id_tracker.h"
 
 #include <cassert>
-#include <ze/file_system.h>
+#include "vast/file_system.h"
 #include "vast/logger.h"
 
 using namespace cppa;
@@ -10,14 +10,14 @@ namespace vast {
 
 id_tracker::id_tracker(std::string file_name)
   : file_name_(std::move(file_name))
-{ }
+{
+}
 
 void id_tracker::init()
 {
-  LOG(verbose, ingest)
-    << "spawning id tracker @" << id() << " with id file " << file_name_;
-
-  if (ze::exists(file_name_))
+  VAST_LOG_VERBOSE("spawning id tracker @" << id() <<
+                   " with id file " << file_name_);
+  if (exists(path(string(file_name_))))
   {
     std::ifstream ifs(file_name_);
     if (! ifs)
@@ -26,8 +26,8 @@ void id_tracker::init()
       return;
     }
     ifs >> id_;
-    LOG(info, ingest)
-      << "id tracker @" << id() << " found an id file with highest id " << id_;
+    VAST_LOG_INFO("id tracker @" << id() <<
+                  " found an id file with highest id " << id_);
   }
 
   file_.open(file_name_);
@@ -39,17 +39,17 @@ void id_tracker::init()
       assert(file_);
       if (std::numeric_limits<uint64_t>::max() - id_ < n)
       {
-        LOG(error, ingest)
-          << "id tracker @" << id()
-          << " has not enough ids available to hand out " << n << " ids";
+        VAST_LOG_ERROR(
+            "id tracker @" << id() <<
+            " has not enough ids available to hand out " << n << " ids");
+
         reply(atom("id"), atom("failure"));
         return;
       }
 
-      LOG(debug, ingest)
-        << "id tracker @" << id() << " hands out ["
-        << id_ << ',' << id_ + n << ')'
-        << " to @" << last_sender()->id();
+      VAST_LOG_DEBUG("id tracker @" << id() <<
+                     " hands out [" << id_ << ',' << id_ + n << ')' <<
+                     " to @" << last_sender()->id());
 
       file_ << id_ + n << std::endl;
       if (file_)
@@ -64,20 +64,18 @@ void id_tracker::init()
     on(atom("kill")) >> [=]
     {
       file_ << id_ << std::endl;
-      LOG(debug, ingest)
-        << "id tracker @" << id() << " saves last event id " << id_;
+      VAST_LOG_DEBUG("id tracker @" << id() << " saves last event id " << id_);
 
       if (! file_)
-        LOG(error, ingest)
-          << "id tracker @" << id() << " could not save current event id";
-
+        VAST_LOG_ERROR("id tracker @" << id() <<
+                       " could not save current event id");
       quit();
     });
 }
 
 void id_tracker::on_exit()
 {
-  LOG(verbose, ingest) << "id tracker @" << id() << " terminated";
+  VAST_LOG_VERBOSE("id tracker @" << id() << " terminated");
 }
 
 } // namespace vast

@@ -3,8 +3,8 @@
 
 #include <unordered_map>
 #include <cppa/cppa.hpp>
-#include <ze/file_system.h>
-#include <ze/uuid.h>
+#include "vast/file_system.h"
+#include "vast/uuid.h"
 #include "vast/util/lru_cache.h"
 
 namespace vast {
@@ -16,7 +16,7 @@ class segment;
 class segment_manager : public cppa::sb_actor<segment_manager>
 {
   friend class cppa::sb_actor<segment_manager>;
-  typedef util::lru_cache<ze::uuid, cppa::cow_tuple<segment>> lru_cache;
+  typedef util::lru_cache<uuid, cppa::cow_tuple<segment>> lru_cache;
 
 public:
   /// Spawns the segment manager.
@@ -35,11 +35,11 @@ private:
   /// Loads a segment into memory after a cache miss.
   /// @param uuid The ID which could not be found in the cache.
   /// @return A copy-on-write tuple containing the loaded segment.
-  cppa::cow_tuple<segment> on_miss(ze::uuid const& uuid);
+  cppa::cow_tuple<segment> on_miss(uuid const& id);
 
   lru_cache cache_;
-  ze::path const dir_;
-  std::unordered_map<ze::uuid, ze::path> segment_files_;
+  path const dir_;
+  std::unordered_map<uuid, path> segment_files_;
   cppa::behavior init_state;
 };
 

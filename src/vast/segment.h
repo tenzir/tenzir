@@ -4,27 +4,29 @@
 #include <vector>
 #include <string>
 #include <cppa/cow_tuple.hpp>
-#include <ze/chunk.h>
-#include <ze/time.h>
-#include <ze/uuid.h>
-#include <ze/io/compression.h>
-#include <ze/util/operators.h>
+#include "vast/chunk.h"
+#include "vast/time.h"
+#include "vast/uuid.h"
+#include "vast/io/compression.h"
+#include "vast/util/operators.h"
 
 namespace vast {
 
+class event;
+
 /// Contains a vector of chunks with additional meta data. 
-class segment : ze::util::equality_comparable<segment>
+class segment : util::equality_comparable<segment>
 {
 public:
-  typedef ze::chunk<ze::event> chunk;
-  typedef cppa::cow_tuple<chunk> chunk_tuple;
+  typedef chunk<event> chunk_type;
+  typedef cppa::cow_tuple<chunk_type> chunk_tuple;
 
   /// The segment header.
-  struct header : ze::util::equality_comparable<header>
+  struct header : util::equality_comparable<header>
   {
     /// The event-related meta data inside the segment header.
-    struct event_meta_data : ze::util::equality_comparable<event_meta_data>,
-                             ze::util::addable<event_meta_data>
+    struct event_meta_data : util::equality_comparable<event_meta_data>,
+                             util::addable<event_meta_data>
     {
       /// Default-constructs event meta data.
       event_meta_data();
@@ -38,26 +40,26 @@ public:
       event_meta_data& operator+=(event_meta_data const& other);
 
       /// Integrates the meta of an event into the header.
-      /// @param event The event to integrate.
-      void accommodate(ze::event const& event);
+      /// @param e The event to integrate.
+      void accommodate(event const& e);
 
-      ze::time_point start;
-      ze::time_point end;
+      time_point start;
+      time_point end;
       uint32_t n = 0;
     };
 
     uint32_t version = 0;
-    ze::uuid id;
+    uuid id;
     uint64_t base = 0;
-    ze::io::compression compression;
+    io::compression compression;
     event_meta_data event_meta;
 
   private:
     friend bool operator==(header const& x, header const& y);
 
-    friend ze::io::access;
-    void serialize(ze::io::serializer& sink);
-    void deserialize(ze::io::deserializer& source);
+    friend io::access;
+    void serialize(io::serializer& sink);
+    void deserialize(io::deserializer& source);
   };
 
   /// A proxy class for writing into a segment. Each writer maintains a local
@@ -82,8 +84,8 @@ public:
     writer(writer&& other) = default;
 
     /// Serializes an event into the segment.
-    /// @param event The event to store.
-    void operator<<(ze::event const& event);
+    /// @param e The event to store.
+    void operator<<(event const& e);
 
     /// Moves the current chunk from the writer into the segment and creates an
     /// internal new chunk for subsequent write operations.
@@ -106,8 +108,8 @@ public:
   private:
     segment* segment_;
     header::event_meta_data event_meta_;
-    chunk chunk_;
-    chunk::putter putter_;
+    chunk_type chunk_;
+    chunk_type::putter putter_;
     size_t processed_bytes_ = 0;
     size_t chunk_bytes_ = 0;
   };
@@ -131,9 +133,9 @@ public:
     explicit operator bool () const;
 
     /// Deserializes an event from the segment.
-    /// @param event The event to deserialize into.
+    /// @param e The event to deserialize into.
     /// @return The number of events left for extraction in the current chunk.
-    void operator>>(ze::event& event);
+    void operator>>(event& e);
 
     /// Retrieves the number of events available in the current chunk.
     uint32_t available_events() const;
@@ -154,7 +156,7 @@ public:
   private:
     segment const* segment_;
     std::vector<chunk_tuple>::const_iterator chunk_;
-    chunk::getter getter_;
+    chunk_type::getter getter_;
     size_t processed_bytes_ = 0;
     size_t chunk_bytes_ = 0;
   };
@@ -162,8 +164,7 @@ public:
   /// Constructs a segment.
   /// @param method The UUID of the segment.
   /// @param method The compression method to use for each chunk.
-  segment(ze::uuid uuid = ze::uuid::nil(),
-          ze::io::compression method = ze::io::lz4);
+  segment(uuid id = uuid::nil(), io::compression method = io::lz4);
 
   /// Copy-constructs a segment.
   /// @param other The segment to copy.
@@ -200,14 +201,14 @@ public:
 
   /// Retrieves the segment ID.
   /// @return A UUID identifying the segment.
-  ze::uuid const& id() const;
+  uuid const& id() const;
 
 private:
   friend bool operator==(segment const& x, segment const& y);
 
-  friend ze::io::access;
-  void serialize(ze::io::serializer& sink);
-  void deserialize(ze::io::deserializer& source);
+  friend io::access;
+  void serialize(io::serializer& sink);
+  void deserialize(io::deserializer& source);
 
   static uint32_t const magic = 0x2a2a2a2a;
   static uint8_t const version = 1;

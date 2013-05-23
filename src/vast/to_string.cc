@@ -1,11 +1,38 @@
 #include "vast/to_string.h"
 
+#include <cstring>
 #include <set>
-#include <ze/to_string.h>
+#include "vast/to_string.h"
 #include "vast/bitvector.h"
 #include "vast/expression.h"
 
 namespace vast {
+
+std::string to_string(bool b)
+{
+  return b ? "T" : "F";
+}
+
+std::string to_string(int64_t i)
+{
+  std::string str;
+  if (i >= 0)
+    str += '+';
+  str += std::to_string(i);
+  return str;
+}
+
+std::string to_string(uint64_t i)
+{
+  return std::to_string(i);
+}
+
+std::string to_string(double d)
+{
+  char buf[32];
+  std::snprintf(buf, 32, "%.10f", d);
+  return {buf, std::strlen(buf)};
+}
 
 std::string to_string(bitvector const& b,
                       bool msb_to_lsb,

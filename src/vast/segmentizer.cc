@@ -1,6 +1,6 @@
 #include "vast/segmentizer.h"
 
-#include <ze.h>
+#include "vast/event.h"
 #include "vast/exception.h"
 #include "vast/logger.h"
 
@@ -12,12 +12,12 @@ segmentizer::segmentizer(actor_ptr upstream, actor_ptr source,
                          size_t max_events_per_chunk,
                          size_t max_segment_size)
   : stats_(std::chrono::seconds(1)),
-    segment_(ze::uuid::random()),
+    segment_(uuid::random()),
     writer_(&segment_)
 {
   monitor(source);
   operating_ = (
-      on(atom("DOWN"), arg_match) >> [=](uint32_t reason)
+      on(atom("DOWN"), arg_match) >> [=](uint32_t /* reason */)
       {
         if (writer_.elements() > 0)
         {
@@ -25,27 +25,24 @@ segmentizer::segmentizer(actor_ptr upstream, actor_ptr source,
           auto n = segment_.events();
           total_events_ += n;
           send(upstream, std::move(segment_));
-          LOG(debug, ingest)
-            << "segmentizer @" << id()
-            << " forwarded last segment with " << n << " events";
+          VAST_LOG_DEBUG("segmentizer @" << id() <<
+                         " forwarded last segment with " << n << " events");
         }
 
-        LOG(verbose, ingest)
-          << "segmentizer @" << id()
-          << " processed a total of " << total_events_ << " events";
+        VAST_LOG_VERBOSE("segmentizer @" << id() <<
+                         " processed a total of " << total_events_ << " events");
 
         quit();
-        LOG(verbose, ingest) << "segmentizer @" << id() << " terminated";
+        VAST_LOG_VERBOSE("segmentizer @" << id() << " terminated");
       },
       on(atom("kill")) >> [=]
       {
         source << last_dequeued();
       },
-      on_arg_match >> [=](std::vector<ze::event> const& events)
+      on_arg_match >> [=](std::vector<event> const& events)
       {
-        LOG(debug, ingest)
-          << "segmentizer @" << id()
-          << " received " << events.size() << " events";
+        VAST_LOG_DEBUG("segmentizer @" << id() <<
+                       " received " << events.size() << " events");
 
         for (auto& e : events)
         {
@@ -62,23 +59,21 @@ segmentizer::segmentizer(actor_ptr upstream, actor_ptr source,
 
           auto n = segment_.events();
           send(upstream, std::move(segment_));
-          segment_ = segment(ze::uuid::random());
+          segment_ = segment(uuid::random());
 
-          LOG(debug, ingest)
-            << "segmentizer @" << id()
-            << " forwarded last segment with " << n << " events";
+          VAST_LOG_DEBUG("segmentizer @" << id() <<
+                         " forwarded last segment with " << n << " events");
         }
 
         if (stats_.timed_add(events.size()) && stats_.last() > 0)
         {
           send(upstream, atom("statistics"), stats_.last());
-          LOG(verbose, ingest)
-            << "segmentizer @" << id()
-            << " ingests at rate " << stats_.last() << " events/sec"
-            << " (mean " << stats_.mean()
-            << ", median " << stats_.median()
-            << ", standard deviation " << std::sqrt(stats_.variance())
-            << ")";
+          VAST_LOG_VERBOSE(
+              "segmentizer @" << id() <<
+              " ingests at rate " << stats_.last() << " events/sec" <<
+              " (mean " << stats_.mean() <<
+              ", median " << stats_.median() <<
+              ", standard deviation " << std::sqrt(stats_.variance()) << ")");
         }
       });
 }

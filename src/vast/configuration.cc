@@ -1,10 +1,5 @@
 #include "vast/configuration.h"
 
-#include <iostream> // FIXME: remove.
-#include <ze/file_system.h>
-#include "vast/logger.h"
-#include "vast/detail/cppa_type_info.h"
-
 namespace vast {
 
 configuration::configuration()
@@ -24,8 +19,9 @@ configuration::configuration()
   general.add('z', "advanced", "show advanced options");
 
   auto& log = create_block("logger options", "log");
-  log.add('v', "console-verbosity", "console verbosity").init(4);
-  log.add('V', "file-verbosity", "log file verbosity").init(5);
+  log.add('v', "console-verbosity", "console verbosity").init(3);
+  log.add('V', "file-verbosity", "log file verbosity").init(4);
+
   auto& advanced = create_block("advanced options");
   advanced.add('P', "profile", "enable getrusage profiling at a given interval (seconds)").single();
 #ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
@@ -98,14 +94,6 @@ void configuration::verify()
 {
   depends("schema.print", "schema.file");
 
-  auto cv = as<int>("log.console-verbosity");
-  if (cv < 0 || cv > 6)
-    throw error::config("verbosity not in [0,6]", "log.console-verbosity");
-
-  auto fv = as<int>("log.file-verbosity");
-  if (fv < 0 || fv > 6)
-    throw error::config("verbosity not in [0,6]", "log.file-verbosity");
-
   if (check("profile") && as<unsigned>("profile") == 0)
     throw error::config("profiling interval must be non-zero", "profile");
 
@@ -117,17 +105,6 @@ void configuration::verify()
 
   if (as<unsigned>("client.paginate") == 0)
     throw error::config("pagination must be non-zero", "client.paginate");
-}
-
-void init(configuration const& config)
-{
-  ze::path directory = config.get("directory");
-  logger::init(
-      static_cast<logger::level>(config.as<int>("log.console-verbosity")),
-      static_cast<logger::level>(config.as<int>("log.file-verbosity")),
-      directory / "log" / "vast.log");
-
-  detail::cppa_announce_types();
 }
 
 } // namespace vast
