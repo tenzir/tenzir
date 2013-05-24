@@ -75,7 +75,7 @@ if (BROCCOLI_FOUND)
     util/broccoli.cc)
 endif ()
 
-set(libvast_libs ${LIBCPPA_LIBRARIES} ${0EVENT_LIBRARIES})
+set(libvast_libs lz4 ${LIBCPPA_LIBRARIES})
 
 if (BROCCOLI_FOUND)
   set(libvast_libs ${libvast_libs} ${BROCCOLI_LIBRARIES})

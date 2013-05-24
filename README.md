@@ -15,7 +15,6 @@ Required:
 - [Clang >= 3.2](http://clang.llvm.org/) or [g++ >= 4.7](http://gcc.gnu.org)
 - [C++ Boost Libraries](http://www.boost.org)
 - [libcppa](https://github.com/Neverlord/libcppa)
-- [0event](https://github.com/mavam/ze)
 
 Optional:
 
