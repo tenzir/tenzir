@@ -83,7 +83,7 @@ public:
   ~logger();
 
   /// Initializes the logger.
-  /// This function must be called prior to using any logging macro.
+  /// This function must be called once prior to using any logging macro.
   /// @param console The log level of the console.
   /// @param file The log level of the logfile.
   /// @param dir The directory to create the log file in.

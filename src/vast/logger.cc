@@ -261,6 +261,11 @@ logger::~logger()
   delete impl_;
 }
 
+void logger::init(level console, level file, path dir)
+{
+  impl_->init(console, file, dir);
+}
+
 void logger::log(level lvl, std::string&& msg)
 {
   impl_->log(lvl, std::move(msg));
