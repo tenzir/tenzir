@@ -16,6 +16,4 @@ BOOST_AUTO_TEST_CASE(basic_filesystem_tests)
   BOOST_CHECK(p.is_directory());
   BOOST_CHECK(rm(p));
   BOOST_CHECK(! p.is_directory());
-
-  std::cerr << "Current directory: " << to_string(path::current()) << std::endl;
 }

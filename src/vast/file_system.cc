@@ -14,22 +14,20 @@
 #  include <sys/types.h>
 #  define VAST_ERRNO errno 
 #  define VAST_CHDIR(P)(::chdir(P) == 0)
-#  define VAST_CREATE_DIRECTORY(P)(::mkdir(P, S_IRWXU|S_IRWXG|S_IRWXO)== 0)
-#  define VAST_CREATE_HARD_LINK(F, T)(::link(T, F)== 0)
+#  define VAST_CREATE_DIRECTORY(P)(::mkdir(P, S_IRWXU|S_IRWXG|S_IRWXO) == 0)
+#  define VAST_CREATE_HARD_LINK(F, T)(::link(T, F) == 0)
 #  define VAST_CREATE_SYMBOLIC_LINK(F, T, Flag)(::symlink(T, F) == 0)
 #  define VAST_DELETE_FILE(P)(::unlink(P) == 0)
 #  define VAST_DELETE_DIRECTORY(P)(::rmdir(P) == 0)
-#  define VAST_COPY_FILE(F,T,FailIfExistsBool)copy_file_api(F, T, FailIfExistsBool)
-#  define VAST_MOVE_FILE(F,T)(::rename(F, T)== 0)
+#  define VAST_MOVE_FILE(F,T)(::rename(F, T) == 0)
 #else
 #  define VAST_ERRNO ::GetLastError()
 #  define VAST_CHDIR(P)(::SetCurrentDirectoryW(P) != 0)
 #  define VAST_CREATE_DIRECTORY(P)(::CreateDirectoryW(P, 0) != 0)
 #  define VAST_CREATE_HARD_LINK(F,T)(create_hard_link_api(F, T, 0) != 0)
-#  define VAST_CREATE_SYMBOLIC_LINK(F,T,Flag)(create_symbolic_link_api(F, T, Flag)!= 0)
+#  define VAST_CREATE_SYMBOLIC_LINK(F,T,Flag)(create_symbolic_link_api(F, T, Flag) != 0)
 #  define VAST_DELETE_FILE(P)(::DeleteFileW(P) != 0)
 #  define VAST_DELETE_DIRECTORY(P)(::RemoveDirectoryW(P) != 0)
-#  define VAST_COPY_FILE(F,T,FailIfExistsBool) \
    (::CopyFileW(F, T, FailIfExistsBool) != 0)
 #  define VAST_MOVE_FILE(F,T) \
    (::MoveFileExW(\ F, T, MOVEFILE_REPLACE_EXISTING|MOVEFILE_COPY_ALLOWED) != 0)
