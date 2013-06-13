@@ -109,7 +109,6 @@ private:
   string str_;
 };
 
-std::string to_string(path const& p);
 std::ostream& operator<<(std::ostream& out, path const& p);
 
 /// A file abstraction.
