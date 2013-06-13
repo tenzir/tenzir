@@ -5,7 +5,7 @@
 #include "vast/bitmap_index.h"
 #include "vast/exception.h"
 #include "vast/to_string.h"
-#include "vastue.h"
+#include "vast/value.h"
 
 namespace vast {
 namespace detail {
@@ -40,7 +40,8 @@ public:
 
   virtual std::string to_string() const override
   {
-    return vast::to_string(bitmap_);
+    using vast::to_string;
+    return to_string(bitmap_);
   }
 
 private:

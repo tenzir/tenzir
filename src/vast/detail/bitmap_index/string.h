@@ -5,7 +5,7 @@
 #include "vast/bitmap_index.h"
 #include "vast/exception.h"
 #include "vast/to_string.h"
-#include "vastue.h"
+#include "vast/value.h"
 #include "vast/util/dictionary.h"
 
 namespace vast {
@@ -32,7 +32,7 @@ public:
     if (! (op == equal || op == not_equal))
       throw error::operation("unsupported relational operator", op);
 
-    auto str = to_string(val.get<string>());
+    auto str = vast::to_string(val.get<string>());
     auto i = dictionary_[str];
     if (! i)
       return {};
@@ -46,12 +46,14 @@ public:
 
   virtual std::string to_string() const override
   {
-    return vast::to_string(bitmap_);
+    using vast::to_string;
+    return to_string(bitmap_);
   }
 
 private:
   virtual bool push_back_impl(value const& val) override
   {
+    using vast::to_string;
     auto str = to_string(val.get<string>());
     auto i = dictionary_[str];
     if (!i)

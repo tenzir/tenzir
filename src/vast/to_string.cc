@@ -2,8 +2,7 @@
 
 #include <cstring>
 #include <set>
-#include "vast/to_string.h"
-#include "vast/bitvector.h"
+#include "vast/exception.h"
 #include "vast/expression.h"
 
 namespace vast {
@@ -32,32 +31,6 @@ std::string to_string(double d)
   char buf[32];
   std::snprintf(buf, 32, "%.10f", d);
   return {buf, std::strlen(buf)};
-}
-
-std::string to_string(bitvector const& b,
-                      bool msb_to_lsb,
-                      bool all,
-                      size_t cut_off)
-{
-  std::string str;
-  auto str_size = all ? bitvector::bits_per_block * b.blocks() : b.size();
-  if (cut_off == 0 || str_size <= cut_off)
-  {
-    str.assign(str_size, '0');
-  }
-  else
-  {
-    str.assign(cut_off + 2, '0');
-    str[cut_off + 0] = '.';
-    str[cut_off + 1] = '.';
-    str_size = cut_off;
-  }
-
-  for (bitvector::size_type i = 0; i < std::min(str_size, b.size()); ++i)
-    if (b[i])
-      str[msb_to_lsb ? str_size - i - 1 : i] = '1';
-
-  return str;
 }
 
 std::string to_string(boolean_operator op)

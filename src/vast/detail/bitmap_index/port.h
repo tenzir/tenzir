@@ -5,7 +5,7 @@
 #include "vast/bitmap_index.h"
 #include "vast/exception.h"
 #include "vast/to_string.h"
-#include "vastue.h"
+#include "vast/value.h"
 
 namespace vast {
 namespace detail {
@@ -31,27 +31,28 @@ public:
       throw error::operation("unsupported relational operator", op);
     if (num_.empty())
       return {};
-    auto& port = val.get<port>();
-    auto nbs = num_.lookup(op, port.number());
+    auto& p = val.get<port>();
+    auto nbs = num_.lookup(op, p.number());
     if (! nbs)
       return {};
-    if (port.type() != port::unknown)
-      if (auto tbs = num_[port.type()])
+    if (p.type() != port::unknown)
+      if (auto tbs = num_[p.type()])
           *nbs &= *tbs;
     return nbs;
   };
 
   virtual std::string to_string() const override
   {
-    return vast::to_string(num_);
+    using vast::to_string;
+    return to_string(num_);
   }
 
 private:
   virtual bool push_back_impl(value const& val) override
   {
-    auto& port = val.get<port>();
-    num_.push_back(port.number());
-    proto_.push_back(static_cast<proto_type>(port.type()));
+    auto& p = val.get<port>();
+    num_.push_back(p.number());
+    proto_.push_back(static_cast<proto_type>(p.type()));
     return true;
   }
 

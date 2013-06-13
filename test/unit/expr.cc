@@ -1,22 +1,23 @@
 #include "test.h"
+#include "vast/exception.h"
+#include "vast/event.h"
+#include "vast/expression.h"
 
-#include <ze.h>
-#include <vast/exception.h>
-#include <vast/expression.h>
+using namespace vast;
 
 struct event_fixture
 {
   event_fixture()
   {
-    ze::event e0{"babba", 1.337, 42u, 100, "bar", -4.80};
+    event e0{"babba", 1.337, 42u, 100, "bar", -4.80};
     e0.name("foo");
-    ze::event e1{"yadda", ze::record{false, "baz"}};
+    event e1{"yadda", record{false, "baz"}};
     e1.name("bar");
     events.push_back(std::move(e0));
     events.push_back(std::move(e1));
   }
 
-  std::vector<ze::event> events;
+  std::vector<event> events;
 };
 
 BOOST_FIXTURE_TEST_SUITE(expression_tests, event_fixture)
@@ -76,7 +77,7 @@ BOOST_AUTO_TEST_CASE(event_queries)
 BOOST_AUTO_TEST_CASE(offset_queries)
 {
   vast::expression expr;
-  ze::event event{42u};
+  event event{42u};
 
   expr.parse("@0 == 42");
   BOOST_CHECK(expr.eval(event));
@@ -85,7 +86,7 @@ BOOST_AUTO_TEST_CASE(offset_queries)
   expr.parse("@0,3 > 4.2");       // Too deep.
   BOOST_CHECK(! expr.eval(event));
 
-  event = {42u, ze::record{"foo", true, 4.2}};
+  event = {42u, record{"foo", true, 4.2}};
   expr.parse("@1,0 ~ /foo/");
   BOOST_CHECK(expr.eval(event));
   expr.parse("@1,1 == T");
@@ -95,7 +96,7 @@ BOOST_AUTO_TEST_CASE(offset_queries)
   expr.parse("@1,2,3 ~ /foo/");   // And again too deep.
   BOOST_CHECK(! expr.eval(event));
 
-  event = {-1337, ze::record{ze::record{true, false}}};
+  event = {-1337, record{record{true, false}}};
   expr.parse("@1,0,0 == T");
   BOOST_CHECK(expr.eval(event));
   expr.parse("@1,0,1 == F");

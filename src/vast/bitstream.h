@@ -139,6 +139,18 @@ private:
   }
 };
 
+/// Converts a bitstream to a `std::string`. Unlike a plain bitvector, we
+/// print bitstreams from LSB to MSB.
+///
+/// @param bs The bitstream to convert.
+///
+/// @return A `std::string` representation of *bs*.
+template <typename Derived>
+std::string to_string(bitstream<Derived> const& bs)
+{
+  return to_string(bs.bits(), false, false, 0);
+}
+
 class null_bitstream : public bitstream<null_bitstream>
 {
   typedef bitstream<null_bitstream> super;

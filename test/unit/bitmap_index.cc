@@ -10,9 +10,8 @@ using namespace vast;
 
 BOOST_AUTO_TEST_CASE(boolean_bitmap_index)
 {
-  typedef null_bitstream bitstream_type;
-  detail::arithmetic_bitmap_index<ze::bool_type, bitstream_type> bbi;
-  bitmap_index<bitstream_type>* bi = &bbi;
+  detail::arithmetic_bitmap_index<bool_type, null_bitstream> bbi;
+  bitmap_index<null_bitstream>* bi = &bbi;
   BOOST_REQUIRE(bi->push_back(true));
   BOOST_REQUIRE(bi->push_back(true));
   BOOST_REQUIRE(bi->push_back(false));
@@ -43,9 +42,8 @@ BOOST_AUTO_TEST_CASE(boolean_bitmap_index)
 
 BOOST_AUTO_TEST_CASE(integral_bitmap_index)
 {
-  typedef null_bitstream bitstream_type;
-  detail::arithmetic_bitmap_index<ze::int_type, bitstream_type> abi;
-  bitmap_index<bitstream_type>* bi = &abi;
+  detail::arithmetic_bitmap_index<int_type, null_bitstream> abi;
+  bitmap_index<null_bitstream>* bi = &abi;
   BOOST_REQUIRE(bi->push_back(-7));
   BOOST_REQUIRE(bi->push_back(42));
   BOOST_REQUIRE(bi->push_back(10000));
@@ -67,9 +65,8 @@ BOOST_AUTO_TEST_CASE(integral_bitmap_index)
 
 BOOST_AUTO_TEST_CASE(floating_point_bitmap_index)
 {
-  typedef null_bitstream bitstream_type;
-  detail::arithmetic_bitmap_index<ze::double_type, bitstream_type> abi(-2);
-  bitmap_index<bitstream_type>* bi = &abi;
+  detail::arithmetic_bitmap_index<double_type, null_bitstream> abi(-2);
+  bitmap_index<null_bitstream>* bi = &abi;
   BOOST_REQUIRE(bi->push_back(-7.8));
   BOOST_REQUIRE(bi->push_back(42.123));
   BOOST_REQUIRE(bi->push_back(10000.0));
@@ -88,9 +85,8 @@ BOOST_AUTO_TEST_CASE(floating_point_bitmap_index)
 
 BOOST_AUTO_TEST_CASE(time_bitmap_index)
 {
-  typedef null_bitstream bitstream_type;
-  detail::time_bitmap_index<bitstream_type> trbi(8);  // 0.1 sec resolution
-  bitmap_index<bitstream_type>* bi = &trbi;
+  detail::time_bitmap_index<null_bitstream> trbi(8);  // 0.1 sec resolution
+  bitmap_index<null_bitstream>* bi = &trbi;
   BOOST_REQUIRE(bi->push_back(std::chrono::milliseconds(1000)));
   BOOST_REQUIRE(bi->push_back(std::chrono::milliseconds(2000)));
   BOOST_REQUIRE(bi->push_back(std::chrono::milliseconds(3000)));
@@ -115,9 +111,8 @@ BOOST_AUTO_TEST_CASE(time_bitmap_index)
 
 BOOST_AUTO_TEST_CASE(string_bitmap_index)
 {
-  typedef null_bitstream bitstream_type;
-  detail::string_bitmap_index<bitstream_type> sbi;
-  bitmap_index<bitstream_type>* bi = &sbi;
+  detail::string_bitmap_index<null_bitstream> sbi;
+  bitmap_index<null_bitstream>* bi = &sbi;
   BOOST_REQUIRE(bi->push_back("foo"));
   BOOST_REQUIRE(bi->push_back("bar"));
   BOOST_REQUIRE(bi->push_back("baz"));
@@ -152,31 +147,30 @@ BOOST_AUTO_TEST_CASE(string_bitmap_index)
 
 BOOST_AUTO_TEST_CASE(address_bitmap_index)
 {
-  typedef null_bitstream bitstream_type;
-  detail::address_bitmap_index<bitstream_type> abi;
-  bitmap_index<bitstream_type>* bi = &abi;
-  BOOST_REQUIRE(bi->push_back(ze::address("192.168.0.1")));
-  BOOST_REQUIRE(bi->push_back(ze::address("192.168.0.2")));
-  BOOST_REQUIRE(bi->push_back(ze::address("192.168.0.3")));
-  BOOST_REQUIRE(bi->push_back(ze::address("192.168.0.1")));
-  BOOST_REQUIRE(bi->push_back(ze::address("192.168.0.1")));
-  BOOST_REQUIRE(bi->push_back(ze::address("192.168.0.2")));
+  detail::address_bitmap_index<null_bitstream> abi;
+  bitmap_index<null_bitstream>* bi = &abi;
+  BOOST_REQUIRE(bi->push_back(address("192.168.0.1")));
+  BOOST_REQUIRE(bi->push_back(address("192.168.0.2")));
+  BOOST_REQUIRE(bi->push_back(address("192.168.0.3")));
+  BOOST_REQUIRE(bi->push_back(address("192.168.0.1")));
+  BOOST_REQUIRE(bi->push_back(address("192.168.0.1")));
+  BOOST_REQUIRE(bi->push_back(address("192.168.0.2")));
 
-  ze::address addr("192.168.0.1");
+  address addr("192.168.0.1");
   auto bs = bi->lookup(equal, addr);
   BOOST_REQUIRE(bs);
   BOOST_CHECK_EQUAL(to_string(*bs), "100110");
   auto nbs = bi->lookup(not_equal, addr);
   BOOST_CHECK_EQUAL(to_string(*nbs), "011001");
-  BOOST_CHECK(! bi->lookup(equal, ze::address("192.168.0.5")));
-  BOOST_CHECK_THROW(bi->lookup(match, ze::address("::")), error::operation);
+  BOOST_CHECK(! bi->lookup(equal, address("192.168.0.5")));
+  BOOST_CHECK_THROW(bi->lookup(match, address("::")), error::operation);
 
-  bi->push_back(ze::address("192.168.0.128"));
-  bi->push_back(ze::address("192.168.0.130"));
-  bi->push_back(ze::address("192.168.0.240"));
-  bi->push_back(ze::address("192.168.0.127"));
+  bi->push_back(address("192.168.0.128"));
+  bi->push_back(address("192.168.0.130"));
+  bi->push_back(address("192.168.0.240"));
+  bi->push_back(address("192.168.0.127"));
 
-  ze::prefix pfx{"192.168.0.128", 25};
+  prefix pfx{"192.168.0.128", 25};
   auto pbs = bi->lookup(in, pfx);
   BOOST_REQUIRE(pbs);
   BOOST_CHECK_EQUAL(to_string(*pbs), "0000001110");
@@ -214,23 +208,22 @@ BOOST_AUTO_TEST_CASE(address_bitmap_index)
 
 BOOST_AUTO_TEST_CASE(port_bitmap_index)
 {
-  typedef null_bitstream bitstream_type;
-  detail::port_bitmap_index<bitstream_type> pbi;
-  bitmap_index<bitstream_type>* bi = &pbi;
-  bi->push_back(ze::port(80, ze::port::tcp));
-  bi->push_back(ze::port(443, ze::port::tcp));
-  bi->push_back(ze::port(53, ze::port::udp));
-  bi->push_back(ze::port(8, ze::port::icmp));
-  bi->push_back(ze::port(31337, ze::port::unknown));
-  bi->push_back(ze::port(80, ze::port::tcp));
-  bi->push_back(ze::port(8080, ze::port::tcp));
+  detail::port_bitmap_index<null_bitstream> pbi;
+  bitmap_index<null_bitstream>* bi = &pbi;
+  bi->push_back(port(80, port::tcp));
+  bi->push_back(port(443, port::tcp));
+  bi->push_back(port(53, port::udp));
+  bi->push_back(port(8, port::icmp));
+  bi->push_back(port(31337, port::unknown));
+  bi->push_back(port(80, port::tcp));
+  bi->push_back(port(8080, port::tcp));
 
-  ze::port http(80, ze::port::tcp);
+  port http(80, port::tcp);
   auto pbs = bi->lookup(equal, http);
   BOOST_REQUIRE(pbs);
   BOOST_CHECK_EQUAL(to_string(*pbs), "1000010");
 
-  ze::port priv(1024, ze::port::unknown);
+  port priv(1024, port::unknown);
   auto pbs2 = bi->lookup(less_equal, priv);
   BOOST_REQUIRE(pbs2);
   BOOST_CHECK_EQUAL(to_string(*pbs2), "1111010");

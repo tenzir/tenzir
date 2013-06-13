@@ -1,7 +1,6 @@
 #include "vast/bitvector.h"
 
 #include <cassert>
-#include "vast/exception.h"
 #include "vast/io/serialization.h"
 
 namespace vast {
@@ -26,7 +25,7 @@ uint8_t count_table[] =
   6, 7, 6, 7, 7, 8
 };
 
-} // namespace
+} // namespace <anonymous>
 
 bitvector::reference::reference(block_type& block, block_type i)
   : block_(block)
@@ -487,6 +486,32 @@ void bitvector::deserialize(io::deserializer& source)
 {
   source >> num_bits_;
   source >> bits_;
+}
+
+std::string to_string(bitvector const& b,
+                      bool msb_to_lsb,
+                      bool all,
+                      size_t cut_off)
+{
+  std::string str;
+  auto str_size = all ? bitvector::bits_per_block * b.blocks() : b.size();
+  if (cut_off == 0 || str_size <= cut_off)
+  {
+    str.assign(str_size, '0');
+  }
+  else
+  {
+    str.assign(cut_off + 2, '0');
+    str[cut_off + 0] = '.';
+    str[cut_off + 1] = '.';
+    str_size = cut_off;
+  }
+
+  for (bitvector::size_type i = 0; i < std::min(str_size, b.size()); ++i)
+    if (b[i])
+      str[msb_to_lsb ? str_size - i - 1 : i] = '1';
+
+  return str;
 }
 
 } // namespace vast

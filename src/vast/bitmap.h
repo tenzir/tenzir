@@ -603,6 +603,42 @@ public:
     return bitstreams_;
   }
 
+
+  /// Converts a bitmap to a `std::string`.
+  ///
+  /// @param bm The bitmap to convert.
+  ///
+  /// @param with_header If `true`, include a header with bitmap values as first
+  /// row in the output.
+  ///
+  /// @param delim The delimiting character separating header values.
+  ///
+  /// @return A `std::string` representation of *bm*.
+  friend std::string
+  to_string(bitmap const& bm, bool with_header = true, char delim = '\t')
+  {
+    if (bm.empty())
+      return {};
+    std::string str;
+    if (with_header)
+    {
+      using std::to_string;
+      //using vast::to_string;
+      bm.bitstreams_.each(
+          [&](T const& x, Bitstream const&) { str += to_string(x) + delim; });
+      str.pop_back();
+      str += '\n';
+    }
+    std::vector<Bitstream> cols;
+    cols.reserve(bm.bitstreams_.rows);
+    bm.bitstreams_.each(
+        [&](T const&, Bitstream const& bs) { cols.push_back(bs); });
+    for (auto& row : transpose(cols))
+      str += to_string(row) + '\n';
+    str.pop_back();
+    return str;
+  }
+
 private:
   Encoder<T> encoder_;
   Binner<T> binner_;
@@ -671,6 +707,34 @@ public:
   }
 
 private:
+  friend std::string to_string(bitmap const& bm)
+  {
+    std::string str;
+    auto i = bm.bool_.find_first();
+    if (i == Bitstream::npos)
+      throw exception("bitstream too large to convert to string");
+    str.reserve(bm.bool_.size() * 2);
+    if (i > 0)
+      for (size_t j = 0; j < i; ++j)
+        str += "0\n";
+    str += "1\n";
+    auto j = i;
+    while ((j = bm.bool_.find_next(i)) != Bitstream::npos)
+    {
+      auto delta = j - i;
+      for (i = 1; i < delta; ++i)
+        str += "0\n";
+      str += "1\n";
+      i = j;
+    }
+    assert(j == Bitstream::npos);
+    for (j = 1; j < bm.bool_.size() - i; ++i)
+      str += "0\n";
+    if (str.back() == '\n')
+      str.pop_back();
+    return str;
+  }
+
   Bitstream bool_;
   Bitstream valid_;
 };

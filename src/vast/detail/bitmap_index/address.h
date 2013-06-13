@@ -4,8 +4,7 @@
 #include "vast/bitmap.h"
 #include "vast/bitmap_index.h"
 #include "vast/exception.h"
-#include "vast/to_string.h"
-#include "vastue.h"
+#include "vast/value.h"
 
 namespace vast {
 namespace detail {
@@ -17,7 +16,7 @@ class address_bitmap_index : public bitmap_index<Bitstream>
   typedef bitmap_index<Bitstream> super;
 
 public:
-  virtual bool patch(size_t n) override
+  virtual bool patch(size_t /* n */) override
   {
     bool success = true;
     for (size_t i = 0; i < 16; ++i)
@@ -48,13 +47,14 @@ public:
 
   virtual std::string to_string() const override
   {
+    using vast::to_string;
     std::vector<Bitstream> v;
     v.reserve(128);
     for (size_t i = 0; i < 128; ++i)
       v.push_back(*bitmaps_[i / 8].storage().find(7 - i % 8));
     std::string str;
     for (auto& row : transpose(v))
-      str += vast::to_string(row) + '\n';
+      str += to_string(row) + '\n';
     str.pop_back();
     return str;
   }
