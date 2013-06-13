@@ -388,7 +388,7 @@ bool mkdir(path const& p)
   {
     auto str = to_string(p);
     pos = str.find(path::separator, pos);
-    if (pos != std::string::npos)
+    if (pos != string::npos)
       ++pos;
     str = str.substr(0, pos);
     path component(str);
