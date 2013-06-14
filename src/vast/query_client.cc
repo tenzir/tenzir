@@ -1,7 +1,8 @@
 #include "vast/query_client.h"
 
+#include <cassert>
 #include <iomanip>
-#include <ze.h>
+#include "vast/event.h"
 #include "vast/exception.h"
 #include "vast/logger.h"
 
@@ -14,7 +15,7 @@ query_client::query_client(actor_ptr search,
                            uint32_t batch_size)
   : search_(search)
 {
-  LOG(verbose, query) << "spawning query client @" << id();
+  VAST_LOG_VERBOSE("spawning query client @" << id());
 
   init_state = (
       on(atom("start")) >> [=]
@@ -24,26 +25,24 @@ query_client::query_client(actor_ptr search,
       on(atom("query"), atom("failure"), arg_match)
         >> [=](std::string const& msg)
       {
-        LOG(error, query) << msg;
+        VAST_LOG_ERROR(msg);
       },
       on(atom("query"), arg_match) >> [=](actor_ptr query)
       {
         query_ = query;
-        LOG(verbose, query)
-          << "query client @" << id()
-          << " successfully created query @" << query_->id();
+        VAST_LOG_VERBOSE("query client @" << id() <<
+                         " successfully created query @" << query_->id());
 
         send(query_, atom("start"));
       },
       on(atom("query"), atom("finished")) >> [=]
       {
-        LOG(info, query) << "query @" << query_->id() << " has finished";
+        VAST_LOG_INFO("query @" << query_->id() << " has finished");
       },
       on(atom("statistics")) >> [=]
       {
-        DBG(query)
-          << "query client @" << id()
-          << " asks for statistics of query @" << query_->id();
+        VAST_LOG_DEBUG("query client @" << id() <<
+                       " asks for statistics of query @" << query_->id());
 
         forward_to(query_);
       },
@@ -53,11 +52,11 @@ query_client::query_client(actor_ptr search,
         auto selectvity =
           static_cast<double>(processed) / static_cast<double>(matched);
 
-        LOG(info, query)
-            << "query @" << query_->id()
-            << " processed " << processed << " events,"
-            << " matched " << matched << " events"
-            << " (selectivity " << std::setprecision(3) << selectvity << "%)";
+        VAST_LOG_VERBOSE(
+            "query @" << query_->id() <<
+            " processed " << processed << " events," <<
+            " matched " << matched << " events" <<
+            " (selectivity " << std::setprecision(3) << selectvity << "%)");
       },
       on(atom("results")) >> [=]
       {
@@ -69,40 +68,40 @@ query_client::query_client(actor_ptr search,
           ++i;
         }
 
-        DBG(query)
-          << "query client @" << id()
-          << " printed " << i << " results"
-          << " (buffered: " << results_.size() << '/' << buffer_size_ << ')';
+        VAST_LOG_DEBUG(
+          "query client @" << id() <<
+          " printed " << i << " results" <<
+          " (buffered: " << results_.size() << '/' << buffer_size_ << ')');
 
         if (! running_ && results_.size() < buffer_size_)
         {
-          DBG(query)
-            << "query client @" << id()
-            << " underflowed local result buffer (" << results_.size() << "),"
-            << " resuming query @" << query_->id();
           send(query_, atom("resume"));
           running_ = true;
+          VAST_LOG_DEBUG(
+              "query client @" << id() <<
+              " underflowed local result buffer (" << results_.size() << ")," <<
+              " resuming query @" << query_->id());
         }
       },
-      on_arg_match >> [=](ze::event const& e)
+      on_arg_match >> [=](event const& /* e */)
       {
-        auto opt = tuple_cast<ze::event>(last_dequeued());
+        auto opt = tuple_cast<event>(last_dequeued());
         assert(opt);
         results_.push_back(*opt);
         if (running_ && results_.size() >= buffer_size_)
         {
-          DBG(query)
-            << "query client @" << id()
-            << " overflowed local result buffer (" << buffer_size_ << "),"
-            << " pausing query @" << query_->id();
           send(query_, atom("pause"));
           running_ = false;
+          VAST_LOG_DEBUG(
+              "query client @" << id() <<
+              " overflowed local result buffer (" << buffer_size_ << ")," <<
+              " pausing query @" << query_->id());
         }
       },
-      on(atom("shutdown")) >> [=]
+      on(atom("kill")) >> [=]
       {
         quit();
-        LOG(verbose, query) << "query client @" << id() << " terminated";
+        VAST_LOG_VERBOSE("query client @" << id() << " terminated");
       });
 }
 

@@ -2,7 +2,9 @@
 #define VAST_BITVECTOR_H
 
 #include <iterator>
+#include <limits>
 #include <vector>
+#include "vast/io/fwd.h"
 
 namespace vast {
 
@@ -18,7 +20,7 @@ class bitvector
 public:
   typedef size_t block_type;
   typedef size_t size_type;
-  static size_t constexpr npos = static_cast<size_type>(-1);
+  static size_type constexpr npos = static_cast<size_type>(-1);
   static block_type constexpr bits_per_block = 
     std::numeric_limits<block_type>::digits;
 
@@ -151,7 +153,7 @@ public:
     num_bits_ += bits_per_block * delta;
   }
 
-  /// Appends the bits of a given block.
+  /// Appends the bits in a given block.
   /// @param block The block containing bits to append.
   void append(block_type block);
 
@@ -286,9 +288,32 @@ private:
   /// `bitvector::npos` if no 1-bit exists.
   size_type find_from(size_type i) const;
 
+  void serialize(io::serializer& sink);
+  void deserialize(io::deserializer& source);
+
   std::vector<block_type> bits_;
   size_type num_bits_;
 };
+
+/// Converts a bitvector to a `std::string`.
+///
+/// @param b The bitvector to convert.
+///
+/// @param msb_to_lsb The order of display. If `true`, display bits from MSB to
+/// LSB and in the reverse order otherwise.
+///
+/// @param all Indicates whether to include also the unused bits of the last
+/// block if the number of `b.size()` is not a multiple of
+/// `bitvector::bits_per_block`.
+///
+/// @param cut_off Specifies a maximum size on the output. If 0, no cutting
+/// occurs.
+///
+/// @return A `std::string` representation of *b*.
+std::string to_string(bitvector const& b,
+                      bool msb_to_lsb = true,
+                      bool all = false,
+                      size_t cut_off = 0);
 
 } // namespace vast
 

@@ -1,9 +1,11 @@
 #ifndef VAST_SCHEMA_H
 #define VAST_SCHEMA_H
 
+#include <functional>
 #include <vector>
 #include <string>
 #include "vast/intrusive.h"
+#include "vast/io/fwd.h"
 
 namespace vast {
 
@@ -32,6 +34,9 @@ public:
 
   struct type_info
   {
+    type_info() = default;
+    type_info(std::string name, intrusive_ptr<schema::type> t);
+
     inline explicit operator bool() const
     {
       return type.get() != nullptr;
@@ -39,12 +44,7 @@ public:
 
     std::string name;
     std::vector<std::string> aliases;
-#ifdef __clang__
-    intrusive_ptr<type> type;
-#else
-    // GCC is not smart enough to disambiguate types and names :-/.
     intrusive_ptr<schema::type> type;
-#endif
   };
 
   struct basic_type : type { };
@@ -88,6 +88,7 @@ public:
     std::string name;
     type_info type;
     bool optional = false;
+    bool indexed = true;
   };
 
   struct record_type : complex_type
@@ -98,6 +99,7 @@ public:
   struct event : record_type
   {
     std::string name;
+    bool indexed = true;
   };
 
   /// Computes the offsets vectors for a given symbol sequence.
@@ -173,21 +175,11 @@ public:
   void add_event(event e);
 
 private:
-  template <typename Archive>
-  friend void serialize(Archive& oa, schema const& s)
-  {
-    oa << to_string(s);
-  }
-
-  template <typename Archive>
-  friend void deserialize(Archive& ia, schema& s)
-  {
-    std::string str;
-    ia >> str;
-    s.load(str);
-  }
-
+  friend class io::access;
+  void serialize(io::serializer& sink);
+  void deserialize(io::deserializer& source);
   friend bool operator==(schema const& x, schema const& y);
+  friend bool operator!=(schema const& x, schema const& y);
 
   std::vector<type_info> types_;
   std::vector<event> events_;
@@ -198,5 +190,15 @@ bool operator==(schema::argument const& x, schema::argument const& y);
 bool operator==(schema::event const& x, schema::event const& y);
 
 } // namespace vast
+
+namespace std {
+
+template <>
+struct hash<vast::schema>
+{
+  size_t operator()(vast::schema const& sch) const;
+};
+
+} // namespace std
 
 #endif

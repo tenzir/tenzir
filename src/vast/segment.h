@@ -4,105 +4,114 @@
 #include <vector>
 #include <string>
 #include <cppa/cow_tuple.hpp>
-#include <ze/forward.h>
-#include <ze/uuid.h>
-#include <ze/compression.h>
-#include <ze/chunk.h>
-#include <ze/serialization.h>
-#include <ze/type/time.h>
-#include "vast/exception.h"
+#include "vast/chunk.h"
+#include "vast/time.h"
+#include "vast/uuid.h"
+#include "vast/io/compression.h"
+#include "vast/util/operators.h"
 
 namespace vast {
 
+class event;
+
 /// Contains a vector of chunks with additional meta data. 
-class segment
+class segment : util::equality_comparable<segment>
 {
 public:
-  typedef ze::chunk<ze::event> chunk;
-  typedef cppa::cow_tuple<chunk> chunk_tuple;
+  typedef chunk<event> chunk_type;
+  typedef cppa::cow_tuple<chunk_type> chunk_tuple;
 
   /// The segment header.
-  struct header
+  struct header : util::equality_comparable<header>
   {
-    header() = default;
-
-    template <typename Archive>
-    friend void serialize(Archive& oa, header const& h)
+    /// The event-related meta data inside the segment header.
+    struct event_meta_data : util::equality_comparable<event_meta_data>,
+                             util::addable<event_meta_data>
     {
-      oa << segment::magic;
-      oa << h.version;
-      oa << h.id;
-      oa << h.compression;
-      oa << h.start;
-      oa << h.end;
-      oa << h.event_names;
-      oa << h.events;
-    }
+      /// Default-constructs event meta data.
+      event_meta_data();
 
-    template <typename Archive>
-    friend void deserialize(Archive& ia, header& h)
-    {
-      uint32_t magic;
-      ia >> magic;
-      if (magic != segment::magic)
-        throw error::segment("invalid segment magic");
+      friend bool operator==(event_meta_data const& x,
+                             event_meta_data const& y);
 
-      ia >> h.version;
-      if (h.version > segment::version)
-        throw error::segment("segment version too high");
+      // Merges the event meta.
+      // @param other The meta data to merge..
+      // @param A reference to `*this`.
+      event_meta_data& operator+=(event_meta_data const& other);
 
-      ia >> h.id;
-      ia >> h.compression;
-      ia >> h.start;
-      ia >> h.end;
-      ia >> h.event_names;
-      ia >> h.events;
-    }
+      /// Integrates the meta of an event into the header.
+      /// @param e The event to integrate.
+      void accommodate(event const& e);
+
+      time_point start;
+      time_point end;
+      uint32_t n = 0;
+    };
 
     uint32_t version = 0;
-    ze::uuid id;
-    ze::compression compression;
-    ze::time_point start;
-    ze::time_point end;
-    std::vector<std::string> event_names;
-    uint32_t events = 0;
+    uuid id;
+    uint64_t base = 0;
+    io::compression compression;
+    event_meta_data event_meta;
+
+  private:
+    friend bool operator==(header const& x, header const& y);
+
+    friend io::access;
+    void serialize(io::serializer& sink);
+    void deserialize(io::deserializer& source);
   };
 
+  /// A proxy class for writing into a segment. Each writer maintains a local
+  /// chunk that receives events to serialize. Upon flushing, the writer
+  /// appends the chunk to the segment.
+  ///
+  /// @note It is possible to have multiple writers per segment, however, the
+  /// user must ensure that no call to writer::flush() occurrs concurrently.
+  /// This interface is not ideal and will probably change in the future.
   class writer
   {
     writer(writer const&) = delete;
     writer& operator=(writer) = delete;
 
   public:
-    /// Creates a new chunk at the end of the segment for writing.
+    /// Constructs a writer that writes to a segment.
     /// @param s The segment to write to.
     explicit writer(segment* s);
 
     /// Move-constructs a writer.
     /// @param other The other writer.
-    writer(writer&& other);
+    writer(writer&& other) = default;
 
-    /// Retrieves the total number of bytes processed across all chunks.
-    /// @return The number of bytes written to the output archive.
-    size_t bytes() const;
+    /// Serializes an event into the segment.
+    /// @param e The event to store.
+    void operator<<(event const& e);
+
+    /// Moves the current chunk from the writer into the segment and creates an
+    /// internal new chunk for subsequent write operations.
+    /// @return `true` if flushing was not a no-op.
+    bool flush();
 
     /// Retrieves the number of elements in the current chunk.
     size_t elements() const;
 
-    /// Serializes an event into the segment.
-    /// @param event The event to store.
-    /// @return The number of events in the current chunk
-    uint32_t operator<<(ze::event const& event);
+    /// Retrieves the total number of bytes processed across all chunks.
+    /// Updated with each call to operator<<.
+    /// @return The number of bytes written into this writer.
+    size_t processed_bytes() const;
 
-    /// Moves the current chunk from the writer into the segment and creates an
-    /// internal new chunk for subsequent write operations.
-    void flush_chunk();
+    /// Retrieves the sum in bytes of all chunk sizes, excluding the current
+    /// chunk. Updated with each call to `flush`.
+    /// @return The number of bytes written into this writer.
+    size_t chunk_bytes() const;
 
   private:
-    size_t bytes_ = 0;
     segment* segment_;
-    chunk chunk_;
-    chunk::putter putter_;
+    header::event_meta_data event_meta_;
+    chunk_type chunk_;
+    chunk_type::putter putter_;
+    size_t processed_bytes_ = 0;
+    size_t chunk_bytes_ = 0;
   };
 
   class reader
@@ -117,36 +126,45 @@ public:
 
     /// Move-constructs a reader.
     /// @param other The other reader.
-    reader(reader&& other);
+    reader(reader&& other) = default;
 
-    /// Retrieves the total number of bytes processed across all chunks.
-    /// @return The number of bytes written by the input archive.
-    size_t bytes() const;
-
-    /// Retrieves the number of events available in the current chunk.
-    uint32_t events() const;
-
-    /// Retrieves the number of chunks remaining to be processed.
-    size_t chunks() const;
+    /// Tests whether the reader has more events to extract.
+    /// @return `true` if the reader has more events available.
+    explicit operator bool () const;
 
     /// Deserializes an event from the segment.
-    /// @param event The event to deserialize into.
+    /// @param e The event to deserialize into.
     /// @return The number of events left for extraction in the current chunk.
-    uint32_t operator>>(ze::event& event);
+    void operator>>(event& e);
+
+    /// Retrieves the number of events available in the current chunk.
+    uint32_t available_events() const;
+
+    /// Retrieves the number of chunks remaining to be processed.
+    size_t available_chunks() const;
+
+    /// Retrieves the total number of bytes processed across all chunks.
+    /// Updated with each call to operator>>.
+    /// @return The number of bytes written into this writer.
+    size_t processed_bytes() const;
+
+    /// Retrieves the sum in bytes of all chunk sizes, excluding the current
+    /// chunk. Updated with each chunk rotation.
+    /// @return The number of bytes written into this writer.
+    size_t chunk_bytes() const;
 
   private:
-    size_t bytes_ = 0;
-    size_t total_bytes_ = 0;
     segment const* segment_;
     std::vector<chunk_tuple>::const_iterator chunk_;
-    chunk::getter getter_;
+    chunk_type::getter getter_;
+    size_t processed_bytes_ = 0;
+    size_t chunk_bytes_ = 0;
   };
 
   /// Constructs a segment.
   /// @param method The UUID of the segment.
   /// @param method The compression method to use for each chunk.
-  segment(ze::uuid uuid = ze::uuid::nil(),
-          ze::compression method = ze::compression::none);
+  segment(uuid id = uuid::nil(), io::compression method = io::lz4);
 
   /// Copy-constructs a segment.
   /// @param other The segment to copy.
@@ -154,7 +172,7 @@ public:
 
   /// Move-constructs a segment.
   /// @param other The segment to move.
-  segment(segment&& other);
+  segment(segment&& other) = default;
 
   /// Assigns a segment to this instance.
   /// @param other The RHS of the assignment.
@@ -183,39 +201,14 @@ public:
 
   /// Retrieves the segment ID.
   /// @return A UUID identifying the segment.
-  ze::uuid const& id() const;
+  uuid const& id() const;
 
 private:
   friend bool operator==(segment const& x, segment const& y);
-  friend bool operator!=(segment const& x, segment const& y);
 
-  template <typename Archive>
-  friend void serialize(Archive& oa, segment const& s)
-  {
-    oa << s.header_;
-
-    uint32_t size = s.chunks_.size();
-    oa << size;
-    for (auto& tuple : s.chunks_)
-      oa << cppa::get<0>(tuple);
-  }
-
-  template <typename Archive>
-  friend void deserialize(Archive& ia, segment& s)
-  {
-    ia >> s.header_;
-
-    uint32_t n;
-    ia >> n;
-    s.chunks_.resize(n);
-    for (auto& tuple : s.chunks_)
-    {
-      chunk chk;
-      ia >> chk;
-      auto t = cppa::make_cow_tuple(std::move(chk));
-      tuple = std::move(t);
-    }
-  }
+  friend io::access;
+  void serialize(io::serializer& sink);
+  void deserialize(io::deserializer& source);
 
   static uint32_t const magic = 0x2a2a2a2a;
   static uint8_t const version = 1;

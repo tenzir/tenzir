@@ -1,5 +1,6 @@
 #include "vast/system_monitor.h"
 
+#include <array>
 #include <csignal>
 #include <cstdlib>
 #include "vast/logger.h"
@@ -7,68 +8,74 @@
 
 namespace vast {
 
-static bool signaled = false;
+namespace {
 
-static void signal_handler(int signo)
+// Keeps track of all signals 1--31, with index zero acting as boolean flag to
+// indicate that a signal has been received.
+std::array<int, 31> signals;
+
+// UNIX signals suck: The counting is still prone to races, but it's better
+// than nothing.
+void signal_handler(int signo)
 {
-  signaled = true;
-  std::signal(signo, SIG_DFL);
+  ++signals[0];
+  ++signals[signo];
+
+  // Only catch termination signals once to allow forced termination by the OS.
+  if (signo == SIGINT || signo == SIGTERM)
+    std::signal(signo, SIG_DFL);
 }
+
+} // namespace <anonymous>
 
 using namespace cppa;
 
 system_monitor::system_monitor(actor_ptr receiver)
+  : upstream_(receiver)
+{ }
+
+void system_monitor::init()
 {
-  LOG(verbose, core) << "spawning system monitor @" << id();
+  util::console::unbuffer();
+  VAST_LOG_VERBOSE("spawning system monitor @" << id());
 
-  std::signal(SIGINT, &signal_handler);
-  std::signal(SIGTERM, &signal_handler);
+  signals.fill(0);
+  for (auto s : { SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGUSR1, SIGUSR2 })
+    std::signal(s, &signal_handler);
 
-  watcher_ = spawn<detached>([receiver]
+  become(
+      on(atom("init"), arg_match) >> [=](actor_ptr upstream)
       {
-        util::console::unbuffer();
-
+        upstream_ = upstream;
+      },
+      on(atom("act")) >> [=]
+      {
         char c;
-        while (! signaled)
+        if (signals[0] > 0)
         {
-          if (util::console::get(c))
+          signals[0] = 0;
+          for (int i = 0; size_t(i) < signals.size(); ++i)
           {
-            if (c == 'Q')
-              break;
-
-            send(receiver, atom("system"), atom("keystroke"), c);
+            if (i == SIGINT || i == SIGTERM)
+              quit();
+            while (signals[i] > 0)
+              send(upstream_, atom("system"), atom("signal"), signals[i]--);
           }
         }
 
-        util::console::buffer();
-        self->quit();
-      });
+        if (util::console::get(c))
+          send(upstream_, atom("system"), atom("key"), c);
 
-  monitor(watcher_);
-  LOG(verbose, core) 
-    << "system monitor @" << id() << " spawns watcher @" << watcher_->id();
-
-  init_state = (
-      on(atom("DOWN"), arg_match) >> [=](uint32_t reason)
-      {
-        DBG(core) << "watcher @" << last_sender()->id() << " terminated";
-
-        watcher_ = nullptr;
-        send(self, atom("shutdown"));
+        send(self, atom("act"));
       },
-      on(atom("shutdown")) >> [=]
-      {
-        if (signaled || ! watcher_)
-        {
-          quit();
-          LOG(verbose, core) << "system monitor @" << id() << " terminated";
-        }
-        else
-        {
-          // Shut down the watcher if it has not yet been terminated.
-          std::raise(SIGTERM);
-        }
-      });
+      on(atom("kill")) >> [=] { quit(); }
+  );
+}
+
+void system_monitor::on_exit()
+{
+  util::console::buffer();
+  VAST_LOG_VERBOSE("system monitor @" << id() << " terminated");
 }
 
 } // namespace vast

@@ -4,14 +4,20 @@
 int main(int argc, char *argv[])
 {
   vast::configuration config;
-  if (argc < 2 || ! config.load(argc, argv))
+  try
   {
-    config.print(std::cerr, config.check("advanced"));
+    config.load(argc, argv);
+    if (argc < 2 || config.check("help") || config.check("advanced"))
+    {
+      config.usage(std::cerr, config.check("advanced"));
+      return EXIT_SUCCESS;
+    }
+    
+    return vast::program(config).run() ? EXIT_SUCCESS : EXIT_FAILURE;
+  }
+  catch (vast::error::config const& e)
+  {
+    std::cerr << e.what() << ", try -h or --help" << std::endl;
     return EXIT_FAILURE;
   }
-
-  vast::program program(config);
-  auto rc = program.run();
-
-  return rc ? EXIT_SUCCESS : EXIT_FAILURE;
 }

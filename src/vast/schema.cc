@@ -1,11 +1,13 @@
 #include "vast/schema.h"
 
+#include <fstream>
 #include "vast/exception.h"
 #include "vast/logger.h"
 #include "vast/to_string.h"
 #include "vast/detail/ast/schema.h"
 #include "vast/detail/parser/schema.h"
-#include "vast/fs/fstream.h"
+#include "vast/io/container_stream.h"
+#include "vast/io/serialization.h"
 
 namespace vast {
 namespace detail {
@@ -101,6 +103,9 @@ public:
       {
         if (attr.key == "optional")
           arg.optional = true;
+
+        if (attr.key == "skip")
+          arg.indexed = false;
       }
     }
 
@@ -110,8 +115,9 @@ public:
   schema::type_info create_type_info(ast::schema::type_info const& ti) const
   {
     auto info = schema_.info(ti.name);
-    return info ? info :
-      schema::type_info{ti.name, {}, boost::apply_visitor(*this, ti.type)};
+    if (info)
+      return info;
+    return {ti.name, boost::apply_visitor(*this, ti.type)};
   }
 
 private:
@@ -157,12 +163,18 @@ private:
 
 } // namespace detail
 
+schema::type_info::type_info(std::string name, intrusive_ptr<schema::type> t)
+  : name(std::move(name))
+  , type(std::move(t))
+{
+}
+
 void schema::load(std::string const& contents)
 {
   types_.clear();
   events_.clear();
 
-  DBG(meta) << "parsing schema";
+  VAST_LOG_DEBUG("parsing schema");
 
   auto i = contents.begin();
   auto end = contents.end();
@@ -187,25 +199,23 @@ void schema::load(std::string const& contents)
   for (auto& statement : ast)
     boost::apply_visitor(std::ref(schema_maker), statement);
 
-  DBG(meta) << "parsed schema successfully";
+  VAST_LOG_DEBUG("parsed schema successfully");
 }
 
 void schema::read(const std::string& filename)
 {
-  fs::ifstream in(filename);
-
+  std::ifstream in(filename);
   std::string storage;
   in.unsetf(std::ios::skipws);
   std::copy(std::istream_iterator<char>(in),
             std::istream_iterator<char>(),
             std::back_inserter(storage));
-
   load(storage);
 }
 
 void schema::write(std::string const& filename) const
 {
-  fs::ofstream(filename) << to_string(*this);
+  std::ofstream(filename) << to_string(*this);
 }
 
 std::vector<schema::type_info> const& schema::types() const
@@ -312,8 +322,8 @@ void schema::add_type(std::string name, intrusive_ptr<type> t)
   if (info(name))
     throw error::schema("duplicate type");
 
-  DBG(meta) << "adding type " << name << ": " << to_string(*t);
-  types_.push_back({std::move(name), {}, t});
+  VAST_LOG_DEBUG("adding type " << name << ": " << to_string(*t));
+  types_.emplace_back(std::move(name), std::move(t));
 }
 
 bool schema::add_type_alias(std::string const& type, std::string const& alias)
@@ -328,20 +338,37 @@ bool schema::add_type_alias(std::string const& type, std::string const& alias)
 
   add_type(alias, i->type);
 
-  DBG(meta) << "making type alias: " << alias << " -> " << type;
+  VAST_LOG_DEBUG("making type alias: " << alias << " -> " << type);
   i->aliases.push_back(alias);
   return true;
 }
 
 void schema::add_event(event e)
 {
-  DBG(meta) << "adding event: " << to_string(e);
+  VAST_LOG_DEBUG("adding event: " << to_string(e));
   events_.emplace_back(std::move(e));
+}
+
+void schema::serialize(io::serializer& sink)
+{
+  sink << to_string(*this);
+}
+
+void schema::deserialize(io::deserializer& source)
+{
+  std::string str;
+  source >> str;
+  load(str);
 }
 
 bool operator==(schema const& x, schema const& y)
 {
   return x.types_ == y.types_ && x.events_ == y.events_;
+}
+
+bool operator!=(schema const& x, schema const& y)
+{
+  return ! (x == y);
 }
 
 bool operator==(schema::type_info const& x, schema::type_info const& y)
@@ -360,3 +387,18 @@ bool operator==(schema::event const& x, schema::event const& y)
 }
 
 } // namespace vast
+
+namespace std {
+
+size_t hash<vast::schema>::operator()(vast::schema const& sch) const
+{
+  std::string str;
+  {
+    auto out = vast::io::make_container_output_stream(str);
+    vast::io::binary_serializer sink(out);
+    sink << sch;
+  }
+  return hash<std::string>()(str);
+}
+
+} // namespace std

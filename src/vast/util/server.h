@@ -2,7 +2,7 @@
 #define VAST_UTIL_SERVER_H
 
 #include <cppa/cppa.hpp>
-#include <cppa/detail/ipv4_acceptor.hpp>
+#include <cppa/network/ipv4_acceptor.hpp>
 #include "vast/util/poll.h"
 
 namespace vast {
@@ -11,38 +11,32 @@ namespace util {
 template <typename Connection>
 struct server : cppa::sb_actor<server<Connection>>
 {
-  /// Spawns a new server at a given port and redirects new connections to the
-  /// given actor.
-  ///
+  /// Spawns a new server and redirects new connections to a given actor.
   /// @param port The port to listen on.
-  ///
-  /// @param connection_handler The actor handling freshly accepted
-  /// connections.
-  server(uint16_t port, cppa::actor_ptr connection_handler)
-    : acceptor(cppa::detail::ipv4_acceptor::create(port, nullptr))
+  /// @param handler The actor handling freshly accepted connections.
+  server(uint16_t port, cppa::actor_ptr handler)
+    : acceptor(cppa::network::ipv4_acceptor::create(port, nullptr))
   {
     using namespace cppa;
     init_state = (
         on(atom("accept")) >> [=]
         {
-          if (poll(acceptor->acceptor_file_handle()))
+          if (poll(acceptor->file_handle()) &&
+            (auto opt = acceptor->try_accept_connection()))
           {
-            auto opt = acceptor->try_accept_connection();
-            if (opt)
-            {
-              auto conn = spawn<Connection>((*opt).first, (*opt).second);
-              send(connection_handler, atom("connection"), conn);
-            }
+            auto& stream = *opt;
+            auto conn = spawn<Connection>(stream.first, stream.second);
+            send(handler, atom("connection"), conn);
           }
           self << self->last_dequeued();
         },
-        on(atom("shutdown")) >> [=]
+        on(atom("kill")) >> [=]
         {
           self->quit();
         });
   }
 
-  std::unique_ptr<cppa::util::acceptor> acceptor;
+  std::unique_ptr<cppa::network::acceptor> acceptor;
   cppa::behavior init_state;
 };
 

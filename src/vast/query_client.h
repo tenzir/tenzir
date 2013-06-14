@@ -3,9 +3,10 @@
 
 #include <deque>
 #include <cppa/cppa.hpp>
-#include <ze/forward.h>
 
 namespace vast {
+
+class event;
 
 /// A simple query client.
 class query_client : public cppa::sb_actor<query_client>
@@ -28,7 +29,7 @@ public:
 private:
   bool running_ = true;
   size_t buffer_size_ = 50; // FIXME: make configurable.
-  std::deque<cppa::cow_tuple<ze::event>> results_;
+  std::deque<cppa::cow_tuple<event>> results_;
   cppa::actor_ptr search_;
   cppa::actor_ptr query_;
   cppa::behavior init_state;

@@ -1,16 +1,17 @@
 #include "vast/util/profiler.h"
 
+#include <cassert>
 #include <iomanip>
 #include <sys/resource.h>   // getrusage
 #include <sys/time.h>       // gettimeofday
+#include "vast/config.h"
 #include "vast/logger.h"
-#include "vast/fs/path.h"
-#include "config.h"
+#include "vast/file_system.h"
 
-#ifdef USE_PERFTOOLS_CPU_PROFILER
+#ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
 #include <google/profiler.h>
 #endif
-#ifdef USE_PERFTOOLS_HEAP_PROFILER
+#ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
 #include <google/heap-profiler.h>
 #endif
 
@@ -48,16 +49,16 @@ std::ostream& operator<<(std::ostream& out, profiler::measurement const& m)
 
 profiler::profiler(std::string const& log_dir, std::chrono::seconds secs)
 {
-  auto f = (fs::path(log_dir) / "profile.log").string();
-  file_.open(f.data());
+  auto filename = to_string(path(log_dir) / path("profile.log"));
+  file_.open(filename);
 
-  LOG(verbose, core) << "spawning profiler @" << id();
-  LOG(info, core)
-    << "enabling getrusage profiling every "
-    << (secs.count() == 1 ?
+  VAST_LOG_VERBOSE("spawning profiler @" << id());
+  VAST_LOG_INFO(
+      "enabling getrusage profiling every " <<
+      (secs.count() == 1 ?
         std::string("second") :
-        std::to_string(secs.count()) + " seconds")
-    << " (" << f << ')';
+        std::to_string(secs.count()) + " seconds") <<
+      " (" << filename << ')');
 
   assert(file_.good());
   file_.flags(std::ios::left);
@@ -75,24 +76,24 @@ profiler::profiler(std::string const& log_dir, std::chrono::seconds secs)
   init_state = (
       on(atom("run"), arg_match) >> [=](bool perftools_cpu, bool perftools_heap)
       {
-#ifdef USE_PERFTOOLS_CPU_PROFILER
+#ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
         if (perftools_cpu)
         {
-          LOG(info, core)
-            << "profiler @" << id() << " starts Gperftools CPU profiler";
+          VAST_LOG_INFO(
+              "profiler @" << id() << " starts Gperftools CPU profiler");
 
-          auto f = fs::path(log_dir) / "perftools.cpu";
-          ProfilerStart(f.string().data());
+          auto f = to_string(path(log_dir) / path("perftools.cpu"));
+          ProfilerStart(f.c_str());
         }
 #endif
-#ifdef USE_PERFTOOLS_HEAP_PROFILER
+#ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
         if (perftools_heap)
         {
-          LOG(info, core)
-            << "profiler @" << id() << " starts Gperftools heap profiler";
+          VAST_LOG_INFO(
+              "profiler @" << id() << " starts Gperftools heap profiler");
 
-          auto f = fs::path(log_dir) / "perftools.heap";
-          HeapProfilerStart(f.string().data());
+          auto f = to_string(path(log_dir) / path("perftools.heap"));
+          HeapProfilerStart(f.c_str());
         }
 #endif
         measurement now;
@@ -109,29 +110,27 @@ profiler::profiler(std::string const& log_dir, std::chrono::seconds secs)
         now.sys -= sys;
         file_ << now << std::endl;
       },
-      on(atom("shutdown")) >> [=]
+      on(atom("kill")) >> [=]
       {
-#ifdef USE_PERFTOOLS_CPU_PROFILER
+#ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
         ProfilerState state;
         ProfilerGetCurrentState(&state);
         if (state.enabled)
         {
-          LOG(info, core)
-            << "Gperftools CPU profiler gathered "
-            <<  state.samples_gathered << " samples"
-            << " in file " << state.profile_name;
-
-          LOG(info, core)
-            << "profiler @" << id() << " stops Gperftools CPU profiler";
-
           ProfilerStop();
+          VAST_LOG_INFO(
+              "Gperftools CPU profiler gathered " <<
+              state.samples_gathered << " samples" <<
+              " in file " << state.profile_name);
+          VAST_LOG_INFO(
+              "profiler @" << id() << " stops Gperftools CPU profiler");
         }
 #endif
-#ifdef USE_PERFTOOLS_HEAP_PROFILER
+#ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
         if (IsHeapProfilerRunning())
         {
-          LOG(info, core)
-            << "profiler @" << id() << " stops Gperftools heap profiler";
+          VAST_LOG_INFO(
+              "profiler @" << id() << " stops Gperftools heap profiler");
 
           HeapProfilerDump("cleanup");
           HeapProfilerStop();
@@ -140,7 +139,7 @@ profiler::profiler(std::string const& log_dir, std::chrono::seconds secs)
         file_.close();
         quit();
 
-        LOG(verbose, core) << "profiler @" << id() << " terminated";
+        VAST_LOG_VERBOSE("profiler @" << id() << " terminated");
       });
 }
 

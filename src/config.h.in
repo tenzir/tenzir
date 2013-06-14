@@ -1,23 +1,31 @@
 #ifndef VAST_CONFIG_H
 #define VAST_CONFIG_H
 
-// Version number
 #define VAST_VERSION @VERSION_MAJ_MIN@
+#define VAST_LOG_LEVEL @VAST_LOG_LEVEL@
 
-// Use Gperftools CPU profiler
-#cmakedefine USE_PERFTOOLS_CPU_PROFILER
+#cmakedefine VAST_USE_PERFTOOLS_CPU_PROFILER
+#cmakedefine VAST_USE_PERFTOOLS_HEAP_PROFILER
+#cmakedefine VAST_HAVE_SNAPPY
+#cmakedefine VAST_HAVE_BROCCOLI
 
-// Use Gperftools heap profiler
-#cmakedefine USE_PERFTOOLS_HEAP_PROFILER
+#ifdef __clang__
+#  define VAST_CLANG
+#elif __GNUC__
+#  define VAST_GCC
+#endif
 
 #if defined(__APPLE__)
 #  define VAST_MACOS
-#elif defined(__GNUC__) && defined(__linux__)
+#elif defined(__linux__)
 #  define VAST_LINUX
 #elif defined(WIN32)
 #  define VAST_WINDOWS
 #else
 #  error platform not supported
+#endif
+#ifndef VAST_WINDOWS
+#  define VAST_POSIX
 #endif
 
 #endif

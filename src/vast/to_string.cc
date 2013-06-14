@@ -1,33 +1,109 @@
 #include "vast/to_string.h"
 
+#include <cstring>
 #include <set>
-#include <ze/to_string.h>
-#include "vast/bitvector.h"
+#include "vast/exception.h"
 #include "vast/expression.h"
 
 namespace vast {
 
-std::string to_string(bitvector const& b, bool all, size_t cut_off)
+std::string to_string(bool b)
+{
+  return b ? "T" : "F";
+}
+
+std::string to_string(int64_t i)
 {
   std::string str;
-  auto str_size = all ? bitvector::bits_per_block * b.blocks() : b.size();
-  if (str_size <= cut_off)
-  {
-    str.assign(str_size, '0');
-  }
-  else
-  {
-    str.assign(cut_off + 2, '0');
-    str[cut_off + 0] = '.';
-    str[cut_off + 1] = '.';
-    str_size = cut_off;
-  }
-
-  for (bitvector::size_type i = 0; i < std::min(str_size, b.size()); ++i)
-    if (b[i])
-      str[str_size - 1 - i] = '1';
-
+  if (i >= 0)
+    str += '+';
+  str += std::to_string(i);
   return str;
+}
+
+std::string to_string(uint64_t i)
+{
+  return std::to_string(i);
+}
+
+std::string to_string(double d)
+{
+  char buf[32];
+  std::snprintf(buf, 32, "%.10f", d);
+  return {buf, std::strlen(buf)};
+}
+
+std::string to_string(boolean_operator op)
+{
+  switch (op)
+  {
+    default:
+      throw error::logic("missing case for boolean operator");
+    case logical_not:
+      return "!";
+    case logical_and:
+      return "&&";
+    case logical_or:
+      return "||";
+  }
+}
+
+std::string to_string(arithmetic_operator op)
+{
+  switch (op)
+  {
+    default:
+      throw error::logic("missing case for arithmetic operator");
+    case positive:
+    case plus:
+      return "+";
+    case minus:
+    case negative:
+      return "-";
+    case bitwise_not:
+      return "~";
+    case bitwise_or:
+      return "|";
+    case bitwise_xor:
+      return "^";
+    case bitwise_and:
+      return "|";
+    case times:
+      return "*";
+    case divides:
+      return "/";
+    case mod:
+      return "%";
+  }
+}
+
+std::string to_string(relational_operator op)
+{
+  switch (op)
+  {
+    default:
+      throw error::logic("missing case for relational operator");
+    case match:
+      return "~";
+    case not_match:
+      return "!~";
+    case in:
+      return "in";
+    case not_in:
+      return "!in";
+    case equal:
+      return "==";
+    case not_equal:
+      return "!=";
+    case less:
+      return "<";
+    case less_equal:
+      return "<=";
+    case greater:
+      return ">";
+    case greater_equal:
+      return ">=";
+  }
 }
 
 std::string to_string(schema::type const& type)
@@ -257,7 +333,7 @@ public:
     --depth_;
   }
 
-  virtual void visit(expr::relational_operator const& rel)
+  virtual void visit(expr::relation const& rel)
   {
     assert(rel.operands().size() == 2);
 
@@ -267,34 +343,34 @@ public:
       default:
         assert(! "invalid operator type");
         break;
-      case expr::match:
+      case match:
         str_ += "~";
         break;
-      case expr::not_match:
+      case not_match:
         str_ += "!~";
         break;
-      case expr::in:
+      case in:
         str_ += "in";
         break;
-      case expr::not_in:
+      case not_in:
         str_ += "!in";
         break;
-      case expr::equal:
+      case equal:
         str_ += "==";
         break;
-      case expr::not_equal:
+      case not_equal:
         str_ += "!=";
         break;
-      case expr::less:
+      case less:
         str_ += "<";
         break;
-      case expr::less_equal:
+      case less_equal:
         str_ += "<=";
         break;
-      case expr::greater:
+      case greater:
         str_ += ">";
         break;
-      case expr::greater_equal:
+      case greater_equal:
         str_ += ">=";
         break;
     }

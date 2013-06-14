@@ -1,26 +1,27 @@
 #include "vast/archive.h"
 
-#include <ze/event.h>
 #include "vast/exception.h"
+#include "vast/file_system.h"
 #include "vast/logger.h"
 #include "vast/segment.h"
 #include "vast/segment_manager.h"
-#include "vast/fs/operations.h"
 
 namespace vast {
 
 archive::archive(std::string const& directory, size_t max_segments)
 {
-  LOG(verbose, archive) << "spawning archive @" << id();
+  VAST_LOG_VERBOSE("spawning archive @" << id());
   using namespace cppa;
   init_state = (
       on(atom("load")) >> [=]
       {
-        if (! fs::exists(directory))
+        path p(directory);
+        if (! exists(p))
         {
-          LOG(info, archive)
-            << "archive @" << id() << " creates new directory " << directory;
-          fs::mkdir(directory);
+          VAST_LOG_INFO("archive @" << id() << " creates new directory " << directory);
+          if (! mkdir(p))
+            VAST_LOG_ERROR("archive @" << id() << 
+                           " failed to create directory " << directory);
         }
         segment_manager_ = spawn<segment_manager>(max_segments, directory);
         forward_to(segment_manager_);
@@ -29,7 +30,7 @@ archive::archive(std::string const& directory, size_t max_segments)
       {
         forward_to(segment_manager_);
       },
-      on(atom("get"), arg_match) >> [=](ze::uuid const& /* id */)
+      on(atom("get"), arg_match) >> [=](uuid const& /* id */)
       {
         forward_to(segment_manager_);
       },
@@ -37,14 +38,14 @@ archive::archive(std::string const& directory, size_t max_segments)
       {
         forward_to(segment_manager_);
       },
-      on(atom("shutdown")) >> [=]()
+      on(atom("kill")) >> [=]()
       {
         // TODO: wait for a signal from the ingestor that all segments have
         // been shipped.
         segment_manager_ << last_dequeued();
 
         quit();
-        LOG(verbose, archive) << "archive @" << id() << " terminated";
+        VAST_LOG_ERROR("archive @" << id() << " terminated");
       });
 }
 

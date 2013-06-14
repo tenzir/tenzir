@@ -15,29 +15,29 @@ use this configure script to access CMake equivalent functionality.\
 usage="\
 Usage: $0 [OPTION]... [VAR=VALUE]...
 
-  Build Options:
-    --builddir=DIR          place build files in directory [build]
+  Build options:
+    --build-dir=DIR         place build files in directory [build]
+    --log-level=LEVEL       maximum compile-time log level [verbose]
     --generator=GENERATOR   CMake generator to use (see cmake --help)
     --with-cxx=PATH         path to a C++ compiler executable
 
-  Installation Directories:
-    --prefix=PREFIX         installation directory [/usr/local/vast]
+  Installation directories:
+    --prefix=PREFIX         installation directory [/usr/local]
 
-  Optional Features:
+  Optional features:
     --enable-debug          compile in debugging mode
     --enable-perftools-heap use Gperftools' tcmalloc heap profiling
 
-  Required Packages in Non-Standard Locations:
+  Required packages in non-standard locations:
     --with-libcppa=PATH     path to libcppa install root
-    --with-0event=PATH      path to 0vent install root
     --with-boost=PATH       path to Boost install root
-    --with-broccoli=PATH    path to Broccoli install root
 
-  Optional Packages in Non-Standard Locations:
+  Optional packages in non-standard locations:
     --with-perftools=PATH   path to Gperftools install root
+    --with-broccoli=PATH    path to Broccoli install root
     --with-doxygen=PATH     path to Doxygen install root
 
-  Packaging Options (for developers):
+  Packaging options (for developers):
     --binary-package        toggle special logic for binary packaging
     --ignore-dirs=PATHS     paths to ignore when creating source package
                             (semicolon delimited and quoted when multiple)
@@ -57,12 +57,42 @@ append_cache_entry () {
     CMakeCacheEntries="$CMakeCacheEntries -D $1:$2=$3"
 }
 
+levelize() {
+  case "$1" in
+    quiet)
+      echo 0
+      ;;
+    error)
+      echo 1
+      ;;
+    warn)
+      echo 2
+      ;;
+    info)
+      echo 3
+      ;;
+    verbose)
+      echo 4
+      ;;
+    debug)
+      echo 5
+      ;;
+    trace)
+      echo 5
+      ;;
+    *)
+      echo "invalid log level specification, use:"
+      echo "  quiet|error|warn|info|verbose|debug|trace"
+      exit 1;
+  esac
+}
+
 # Set defaults
 builddir=build
 CMakeCacheEntries=""
-append_cache_entry CMAKE_INSTALL_PREFIX  PATH   /usr/local/vast
-append_cache_entry ENABLE_DEBUG          BOOL   false
-append_cache_entry ENABLE_PERFTOOLS_HEAP BOOL   false
+append_cache_entry CMAKE_INSTALL_PREFIX   PATH      /usr/local/vast
+append_cache_entry ENABLE_DEBUG           BOOL      false
+append_cache_entry ENABLE_PERFTOOLS_HEAP  BOOL      false
 append_cache_entry CPACK_SOURCE_IGNORE_FILES STRING
 
 # parse arguments
@@ -77,26 +107,26 @@ while [ $# -ne 0 ]; do
             echo "${usage}" 1>&2
             exit 1
             ;;
-        --builddir=*)
+        --build-dir=*)
             builddir=$optarg
             ;;
         --generator=*)
             CMakeGenerator="$optarg"
             ;;
+        --log-level=*)
+            append_cache_entry VAST_LOG_LEVEL INTEGER $(levelize $optarg)
+            ;;
         --prefix=*)
-            append_cache_entry CMAKE_INSTALL_PREFIX PATH   $optarg
+            append_cache_entry CMAKE_INSTALL_PREFIX PATH $optarg
             ;;
         --enable-debug)
-            append_cache_entry ENABLE_DEBUG BOOL   true
+            append_cache_entry ENABLE_DEBUG BOOL true
             ;;
         --with-cxx=*)
             append_cache_entry CMAKE_CXX_COMPILER FILEPATH $optarg
             ;;
         --enable-perftools-heap)
-            append_cache_entry ENABLE_PERFTOOLS_HEAP BOOL   true
-            ;;
-        --with-0event=*)
-            append_cache_entry 0event_ROOT_DIR PATH $optarg
+            append_cache_entry ENABLE_PERFTOOLS_HEAP BOOL true
             ;;
         --with-libcppa=*)
             append_cache_entry LIBCPPA_ROOT_DIR PATH $optarg

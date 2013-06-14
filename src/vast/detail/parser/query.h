@@ -36,13 +36,13 @@ struct query : qi::grammar<Iterator, ast::query::query(), skipper<Iterator>>
     qi::rule<Iterator, std::string(), skipper<Iterator>>
         identifier, glob, event_name;
 
-    qi::symbols<char, ast::query::clause_operator>
+    qi::symbols<char, relational_operator>
         clause_op;
 
-    qi::symbols<char, ast::query::boolean_operator>
+    qi::symbols<char, boolean_operator>
         boolean_op;
 
-    qi::symbols<char, ze::value_type>
+    qi::symbols<char, value_type>
         type;
 
     expression<Iterator> expr;

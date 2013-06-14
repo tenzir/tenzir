@@ -1,169 +1,270 @@
 #ifndef VAST_LOGGER_H
 #define VAST_LOGGER_H
 
-#include <mutex>
 #include <sstream>
-#include "vast/fs/fstream.h"
-#include "vast/fs/path.h"
-
-/// Basic logging macro.
-#define LOG(level, facility)                                \
-  if (::vast::logger::get()->takes(vast::logger::level))    \
-      ::vast::logger::record(*::vast::logger::get(),        \
-                                   vast::logger::level,     \
-                                   vast::logger::facility)
-
-/// Debugging logging macro.
-#ifdef VAST_DEBUG
-#define DBG(facility)                                       \
-  if (::vast::logger::get()->takes(vast::logger::debug))    \
-      ::vast::logger::record(*::vast::logger::get(),        \
-                                   vast::logger::debug,     \
-                                   vast::logger::facility)
-#else
-#undef DBG
-#endif
+#include "vast/config.h"
+#include "vast/util/pp.h"
 
 namespace vast {
 
-/// A simple multi-sink logger.
+// Forward declaration.
+class path;
+namespace detail {
+class singleton_manager;
+} // namespace detail
+
+/// A simple singleton logger and tracer.
 class logger
 {
-  logger(logger const&) = delete;
+  friend class detail::singleton_manager;
+
+  logger(const logger&) = delete;
   logger& operator=(logger) = delete;
 
 public:
-  enum facility : int
+  enum level : uint32_t
   {
-    core     = 0,
-    broccoli = 1,
-    comm     = 2,
-    meta     = 3,
-    query    = 4,
-    ingest   = 5,
-    emit     = 6,
-    archive  = 7,
-    index    = 8
+    quiet     = 0,
+    error     = 1,
+    warn      = 2,
+    info      = 3,
+    verbose   = 4,
+    debug     = 5,
+    trace     = 6
   };
 
-  enum level : int
+  /// A formatted message containing timestamp and thread ID.
+  struct message : public std::ostringstream
   {
-    quiet   = 0,
-    fatal   = 1,
-    error   = 2,
-    warn    = 3,
-    info    = 4,
-    verbose = 5,
-    debug   = 6
-  };
-
-  /// A generic sink referencing an existing output stream.
-  class sink
-  {
-    friend class logger;
-
-  public:
-    sink(level lvl, std::ostream& out);
-
-    bool takes(level lvl);
-
-    template <typename Source>
-    void write(Source const& src)
+    enum fill_type
     {
-      std::lock_guard<std::mutex> lock(mutex_);
-      out_ << src << std::endl;
-    }
+      left_arrow,
+      right_arrow,
+      bar
+    };
 
-  private:
-    level level_;
-    std::ostream& out_;
-    std::mutex mutex_;
+    /// Appends the current timestamp and the thread ID.
+    void append_header(level lvl = quiet);
+
+    /// Appends the name of a function.
+    /// @param The value of `__PRETTY_FUNCTION__`.
+    void append_function(char const* f);
+
+    void append_fill(fill_type t);
   };
 
-  /// A sink that writes records to a file.
-  class file_sink : public sink
+  /// Facilitates RAII-style tracing.
+  class tracer
   {
   public:
-    file_sink(level lvl, fs::path file);
-    ~file_sink();
-
-  private:
-    fs::ofstream file_;
-  };
-
-  /// A single formatted log line flushed upon destruction.
-  class record
-  {
-    friend class logger;
-
-  public:
-    record(logger& log, level lvl, facility fac);
-    ~record();
+    tracer(char const* pretty_function);
+    ~tracer();
 
     template <typename T>
-    record& operator<<(T const& x)
+    message& operator<<(T&& x)
     {
-      stream_ << x;
-      return *this;
+      msg_ << std::forward<T>(x);
+      return msg_;
     }
 
+    void commit();
+    void reset(bool exit);
+
   private:
-    logger& logger_;
-    level level_;
-    std::stringstream stream_;
+    std::string fun_;
+    message msg_;
   };
 
-  /// Initializes the logger. This function must be called before any call to
-  /// logger::get.
-  /// @param console_verbosity The console verbosity.
-  /// @param logfile_verbosity The logfile verbosity.
-  /// @param logfile The file where to log to.
-  static void init(level console_verbosity,
-                   level logfile_verbosity,
-                   fs::path const& logfile);
+  /// Retrieves the global logger instance.
+  /// @param The logger.
+  static logger* instance();
 
-  /// Retrieves a pointer to the global logger object.
-  static logger* get();
+  /// Destroys the logger.
+  ~logger();
 
-  /// Tests whether the logger processes a certain log level.
-  ///
-  /// @param lvl The level to test.
-  ///
-  /// @return `true` if the logger has at least one sink that operates at
-  /// @a lvl.
-  bool takes(level lvl);
+  /// Initializes the logger.
+  /// This function must be called once prior to using any logging macro.
+  /// @param console The log level of the console.
+  /// @param file The log level of the logfile.
+  /// @param dir The directory to create the log file in.
+  void init(level console, level file, path dir);
 
-  /// Gets a reference to the console output stream.
-  /// @return A reference to the `std::ostream` of the console.
-  std::ostream& console() const;
+  /// Logs a record.
+  /// @param lvl The log level.
+  /// @param msg The log message.
+  void log(level lvl, std::string&& msg);
+
+  /// Checks whether the logger takes a given level.
+  /// @param lvl The level to check.
+  /// @param `true` if the logger takes at least *lvl*.
+  bool takes(level lvl) const;
 
 private:
-  friend void init();
+  /// Implementation of the logger. We use PIMPL here to reduce the footprint
+  /// of the header file, as the logger constitutes a heavily used component.
+  struct impl;
 
-  /// Constructs the logger.
-  /// @param console_verbosity The console verbosity.
-  /// @param logfile_verbosity The logfile verbosity.
-  /// @param logfile The file where to log to.
-  logger(level console_verbosity,
-         level logfile_verbosity,
-         fs::path const& logfile);
+  /// Default-constructs a logger.
+  logger();
 
-  /// Writes a record to the relevant sinks.
-  /// @param rec The record to dispatch.
-  void write(record const& rec);
+  // Singleton implementation.
+  static logger* create();
+  void initialize();
+  void destroy();
+  void dispose();
 
-  sink console_;
-  file_sink logfile_;
+  void run();
+
+  impl* impl_;
 };
 
-bool operator<(logger::level x, logger::level y);
-bool operator<=(logger::level x, logger::level y);
-bool operator>=(logger::level x, logger::level y);
-bool operator>(logger::level x, logger::level y);
-
-std::ostream& operator<<(std::ostream& out, logger::facility f);
-std::ostream& operator<<(std::ostream& out, logger::level l);
+template <typename Stream>
+Stream& operator<<(Stream& stream, logger::level lvl)
+{
+  switch (lvl)
+  {
+    default:
+      stream << "invalid";
+      break;
+    case logger::quiet:
+      stream << "quiet  ";
+      break;
+    case logger::error:
+      stream << "error  ";
+      break;
+    case logger::warn:
+      stream << "warning";
+      break;
+    case logger::info:
+      stream << "info   ";
+      break;
+    case logger::verbose:
+      stream << "verbose";
+      break;
+    case logger::debug:
+      stream << "debug  ";
+      break;
+    case logger::trace:
+      stream << "trace  ";
+      break;
+  }
+  return stream;
+}
 
 } // namespace vast
 
+#define VAST_VOID static_cast<void>(0)
+
+#ifndef VAST_LOG_FACILITY
+#  define VAST_LOG_FACILITY '\0'
 #endif
+
+#define VAST_LOG(lvl, msg)                                                  \
+  {                                                                         \
+    if (::vast::logger::instance()->takes(lvl))                             \
+    {                                                                       \
+      ::vast::logger::message m;                                            \
+      m.append_header(lvl);                                                 \
+      m.append_function(__PRETTY_FUNCTION__);                               \
+      if (VAST_LOG_FACILITY)                                                \
+        m << " [" << VAST_LOG_FACILITY << ']';                              \
+      m << ' ' << msg;                                                      \
+      ::vast::logger::instance()->log(lvl, m.str());                        \
+    }                                                                       \
+  } VAST_VOID
+
+#if VAST_LOG_LEVEL > 0
+#  define VAST_LOG_ERROR(message)   VAST_LOG(::vast::logger::error, message)
+#else
+#  define VAST_LOG_ERROR(message)   VAST_VOID
+#endif
+#if VAST_LOG_LEVEL > 1
+#  define VAST_LOG_WARN(message)    VAST_LOG(::vast::logger::warn, message)
+#else
+#  define VAST_LOG_WARN(message)    VAST_VOID
+#endif
+#if VAST_LOG_LEVEL > 2
+#  define VAST_LOG_INFO(message)    VAST_LOG(::vast::logger::info, message)
+#else
+#  define VAST_LOG_INFO(message)    VAST_VOID
+#endif
+#if VAST_LOG_LEVEL > 3
+#  define VAST_LOG_VERBOSE(message) VAST_LOG(::vast::logger::verbose, message)
+#else
+#  define VAST_LOG_VERBOSE(message) VAST_VOID
+#endif
+#if VAST_LOG_LEVEL > 4
+#  define VAST_LOG_DEBUG(message)   VAST_LOG(::vast::logger::debug, message)
+#else
+#  define VAST_LOG_DEBUG(message)   VAST_VOID
+#endif
+#if VAST_LOG_LEVEL > 5
+#  define VAST_ENTER_ARGS(args)                                              \
+     ::vast::logger::tracer ze_tracer(__PRETTY_FUNCTION__);                    \
+     ze_tracer << " -->(" << args << ')';                                    \
+     ze_tracer.commit();                                                     \
+     VAST_VOID
+#  define VAST_ENTER_ARGS_MSG(args, msg)                                     \
+     ::vast::logger::tracer ze_tracer(__PRETTY_FUNCTION__);                    \
+     ze_tracer << " -->(" << args << ") " << msg;                            \
+     ze_tracer.commit();                                                     \
+     VAST_VOID
+#  define VAST_ENTER_MSG(msg) VAST_ENTER_ARGS_MSG('*', msg)
+
+#  define VAST_ENTER_0()     VAST_ENTER_ARGS('*')
+#  define VAST_ENTER_1(A)    VAST_ENTER_ARGS(A)
+#  define VAST_ENTER_2(A, B) VAST_ENTER_ARGS_MSG(A, B)
+#  define VAST_ENTER(...)    VAST_PP_OVERLOAD(VAST_ENTER_, \
+                                              __VA_ARGS__)(__VA_ARGS__)
+
+#  define VAST_ARG_1(A) #A << " = " << A
+#  define VAST_ARG_2(A, B)                                      \
+    VAST_ARG_1(A) << ", " << #B << " = " << B
+#  define VAST_ARG_3(A, B, C)                                   \
+    VAST_ARG_2(A, B) << ", " << #C << " = " << C
+#  define VAST_ARG_4(A, B, C, D)                                \
+    VAST_ARG_3(A, B, C) << ", " << #D << " = " << D
+#  define VAST_ARG_5(A, B, C, D, E)                             \
+    VAST_ARG_4(A, B, C, D) << ", " << #E << " = " << E
+#  define VAST_ARG(...) VAST_PP_OVERLOAD(VAST_ARG_, __VA_ARGS__)(__VA_ARGS__)
+
+#  define VAST_ARGF(arg, f) #arg << " = " << f(arg)
+#  define VAST_ARGM(arg, m) #arg << " = " << arg.m()
+#  define VAST_THIS "*this = " << *this
+#  define VAST_MSG(msg)                                                      \
+     ze_tracer.reset(false);                                                 \
+     ze_tracer << msg;                                                       \
+     ze_tracer.commit();                                                     \
+     VAST_VOID
+#  define VAST_LEAVE(msg)                                                    \
+     {                                                                       \
+       ze_tracer.reset(true);                                                \
+       ze_tracer << " <--(void) " << msg;                                    \
+       return;                                                               \
+     }                                                                       \
+     VAST_VOID
+#  define VAST_RETURN_VAL_MSG(value, msg)                                    \
+     {                                                                       \
+       auto&& ze_result = value;                                             \
+       ze_tracer.reset(true);                                                \
+       ze_tracer << " <--(" << ze_result << ") " << msg;                     \
+       return ze_result;                                                     \
+     }                                                                       \
+     VAST_VOID
+#  define VAST_RETURN_1(val)       VAST_RETURN_VAL_MSG(val, "")
+#  define VAST_RETURN_2(val, msg)  VAST_RETURN_VAL_MSG(val, msg)
+#  define VAST_RETURN(...) \
+     VAST_PP_OVERLOAD(VAST_RETURN_, __VA_ARGS__)(__VA_ARGS__)
+
+#else
+#  define VAST_ENTER(...) VAST_VOID
+#  define VAST_MSG(msg) VAST_VOID
+#  define VAST_LEAVE(msg) return
+#  define VAST_RETURN(value, ...) return value
+#  define VAST_ARG(...)
+#  define VAST_ARGF
+#  define VAST_ARGM
+#  define VAST_THIS
+#endif // VAST_LOG_LEVEL > 5
+
+#endif // VAST_LOGGER_H

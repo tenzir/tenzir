@@ -5,6 +5,7 @@
 #include <cppa/cppa.hpp>
 #include "vast/expression.h"
 #include "vast/segment.h"
+#include "vast/uuid.h"
 
 namespace vast {
 
@@ -48,12 +49,12 @@ private:
 
     /// Tries to extract an event from the current segment.
     ///
-    /// @param event Receives the next event.
+    /// @param e Receives the next event.
     ///
     /// @return `true` if extracting an event from the current segment into
     /// *event* succeeded and `false` if there are no more events in the
     /// current segment.
-    bool extract(ze::event& event);
+    bool extract(event& e);
 
   private:
     std::deque<cppa::cow_tuple<segment>> segments_;
@@ -65,7 +66,7 @@ private:
   expression expr_;
   statistics stats_;
 
-  std::vector<ze::uuid> ids_;
+  std::vector<uuid> ids_;
   size_t head_ = 0;
   size_t ack_ = 0;
   size_t window_size_ = 5; // TODO: make configurable.

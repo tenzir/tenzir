@@ -1,8 +1,9 @@
 #ifndef VAST_EXPRESSION_H
 #define VAST_EXPRESSION_H
 
-#include <ze/event.h>
 #include "vast/util/visitor.h"
+#include "vast/event.h"
+#include "vast/operator.h"
 #include "vast/schema.h"
 
 namespace vast {
@@ -22,7 +23,7 @@ class offset_extractor;
 class type_extractor;
 class conjunction;
 class disjunction;
-class relational_operator;
+class relation;
 class constant;
 
 typedef util::const_visitor<
@@ -34,7 +35,7 @@ typedef util::const_visitor<
  ,  type_extractor
  ,  conjunction
  ,  disjunction
- ,  relational_operator
+ ,  relation
  ,  constant
 > const_visitor;
 
@@ -47,7 +48,7 @@ typedef util::visitor<
  ,  type_extractor
  ,  conjunction
  ,  disjunction
- ,  relational_operator
+ ,  relation
  ,  constant
 > visitor;
 
@@ -61,7 +62,7 @@ public:
 
   /// Gets the result of the sub-tree induced by this node.
   /// @return The value of this node.
-  ze::value const& result() const;
+  value const& result() const;
 
   /// Determines whether the result is available without evaluation.
   ///
@@ -81,7 +82,7 @@ public:
 protected:
   node() = default;
 
-  ze::value result_ = ze::invalid;
+  value result_ = invalid;
   bool ready_ = false;
 };
 
@@ -89,8 +90,8 @@ protected:
 class extractor : public node
 {
 public:
-  virtual void feed(ze::event const* event);
-  ze::event const* event() const;
+  virtual void feed(event const* event);
+  //event const* event() const;
 
   VAST_ACCEPT_CONST(const_visitor)
   VAST_ACCEPT(visitor)
@@ -98,7 +99,7 @@ public:
 protected:
   virtual void eval() = 0;
 
-  ze::event const* event_;
+  event const* event_;
 };
 
 /// Extracts the event timestamp.
@@ -153,21 +154,21 @@ private:
 class type_extractor : public extractor
 {
 public:
-  type_extractor(ze::value_type type);
+  type_extractor(value_type type);
 
-  virtual void feed(ze::event const* event);
+  virtual void feed(event const* e);
   virtual void reset();
 
   VAST_ACCEPT_CONST(const_visitor)
   VAST_ACCEPT(visitor)
 
-  ze::value_type type() const;
+  value_type type() const;
 
 private:
   virtual void eval();
 
-  ze::value_type type_;
-  std::vector<std::pair<ze::record const*, size_t>> pos_;
+  value_type type_;
+  std::vector<std::pair<record const*, size_t>> pos_;
 };
 
 /// An n-ary operator.
@@ -210,32 +211,17 @@ private:
   virtual void eval();
 };
 
-/// The type of a relational operator.
-enum relation_type
-{
-  match,
-  not_match,
-  in,
-  not_in,
-  equal,
-  not_equal,
-  less,
-  less_equal,
-  greater,
-  greater_equal
-};
-
 /// A relational operator.
-class relational_operator : public n_ary_operator
+class relation : public n_ary_operator
 {
 public:
-  typedef std::function<bool(ze::value const&, ze::value const&)>
+  typedef std::function<bool(value const&, value const&)>
     binary_predicate;
 
-  relational_operator(relation_type op);
+  relation(relational_operator op);
 
-  bool test(ze::value const& lhs, ze::value const& rhs) const;
-  relation_type type() const;
+  bool test(value const& lhs, value const& rhs) const;
+  relational_operator type() const;
 
   VAST_ACCEPT_CONST(const_visitor)
   VAST_ACCEPT(visitor)
@@ -244,14 +230,14 @@ private:
   virtual void eval();
 
   binary_predicate op_;
-  relation_type type_;
+  relational_operator op_type_;
 };
 
 /// A constant value.
 class constant : public node
 {
 public:
-  constant(ze::value value);
+  constant(value val);
   virtual void reset();
 
   VAST_ACCEPT_CONST(const_visitor)
@@ -288,9 +274,9 @@ public:
   void parse(std::string str, schema sch = {});
 
   /// Evaluates an event with respect to the root node.
-  /// @param event The event to evaluate against the expression.
+  /// @param e The event to evaluate against the expression.
   /// @return `true` if @a event matches the expression.
-  bool eval(ze::event const& event);
+  bool eval(event const& e);
 
   /// Allow a visitor to process the expression.
   /// @param v The visitor
@@ -301,24 +287,12 @@ public:
   void accept(expr::visitor& v);
 
 private:
-  template <typename Archive>
-  friend void serialize(Archive& oa, expression const& expr)
-  {
-    oa << expr.str_;
-    oa << expr.schema_;
-  }
-
-  template <typename Archive>
-  friend void deserialize(Archive& ia, expression& expr)
-  {
-    std::string str;
-    ia >> str;
-    schema sch;
-    ia >> sch;
-    expr.parse(std::move(str), std::move(sch));
-  }
+  friend io::access;
+  void serialize(io::serializer& sink);
+  void deserialize(io::deserializer& source);
 
   friend bool operator==(expression const& x, expression const& y);
+  friend bool operator!=(expression const& x, expression const& y);
 
   std::string str_;
   schema schema_;

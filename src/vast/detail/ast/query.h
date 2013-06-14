@@ -4,7 +4,8 @@
 #include <boost/optional.hpp>
 #include <boost/variant/recursive_variant.hpp>
 #include <boost/fusion/include/adapt_struct.hpp>
-#include <ze/value.h>
+#include "vast/operator.h"
+#include "vast/value.h"
 
 namespace vast {
 namespace detail {
@@ -27,58 +28,20 @@ struct identifier
 };
 
 typedef boost::variant<
-ze::value
-  , boost::recursive_wrapper<unary_expr>
-  , boost::recursive_wrapper<expression>
+  value,
+  boost::recursive_wrapper<unary_expr>,
+  boost::recursive_wrapper<expression>
 > expr_operand;
-
-// Expression operators sorted by ascending precedence.
-enum expr_operator
-{
-  bitwise_or,
-  bitwise_xor,
-  bitwise_and,
-  plus,
-  minus,
-  times,
-  divide,
-  mod,
-  positive,
-  negative,
-  bitwise_not,
-};
-
-// Clause operators sorted by ascending precedence.
-enum clause_operator : int
-{
-  match,
-  not_match,
-  equal,
-  not_equal,
-  less,
-  less_equal,
-  greater,
-  greater_equal,
-  in,
-  not_in
-};
-
-// Binary boolean operators.
-enum boolean_operator
-{
-  logical_or,
-  logical_and
-};
 
 struct unary_expr
 {
-  expr_operator op;
+  arithmetic_operator op;
   expr_operand operand;
 };
 
 struct expr_operation
 {
-  expr_operator op;
+  arithmetic_operator op;
   expr_operand operand;
 };
 
@@ -91,28 +54,28 @@ struct expression
 struct tag_clause
 {
   std::string lhs;
-  clause_operator op;
+  relational_operator op;
   expression rhs;
 };
 
 struct offset_clause
 {
   std::vector<size_t> offsets;
-  clause_operator op;
+  relational_operator op;
   expression rhs;
 };
 
 struct type_clause
 {
-  ze::value_type lhs;
-  clause_operator op;
+  value_type lhs;
+  relational_operator op;
   expression rhs;
 };
 
 struct event_clause
 {
   std::vector<std::string> lhs;
-  clause_operator op;
+  relational_operator op;
   expression rhs;
 };
 
@@ -141,15 +104,10 @@ struct query
   std::vector<clause_operation> rest;
 };
 
-/// Negates a clause operand.
-/// @param op The operator to negate.
-/// @return The negation of @a op.
-clause_operator negate(clause_operator op);
-
 /// Folds a constant expression into a single value.
 /// @param expr The constant expression.
 /// @return The folded value.
-ze::value fold(expression const& expr);
+value fold(expression const& expr);
 
 /// Validates a query with respect to semantic correctness. This means ensuring
 /// that LHS and RHS of clause operators have the correct types.
@@ -164,12 +122,12 @@ bool validate(query& q);
 
 BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::query::unary_expr,
-    (vast::detail::ast::query::expr_operator, op)
+    (vast::arithmetic_operator, op)
     (vast::detail::ast::query::expr_operand, operand))
 
   BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::query::expr_operation,
-    (vast::detail::ast::query::expr_operator, op)
+    (vast::arithmetic_operator, op)
     (vast::detail::ast::query::expr_operand, operand))
 
   BOOST_FUSION_ADAPT_STRUCT(
@@ -180,25 +138,25 @@ BOOST_FUSION_ADAPT_STRUCT(
   BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::query::tag_clause,
     (std::string, lhs)
-    (vast::detail::ast::query::clause_operator, op)
+    (vast::relational_operator, op)
     (vast::detail::ast::query::expression, rhs))
 
   BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::query::offset_clause,
     (std::vector<size_t>, offsets)
-    (vast::detail::ast::query::clause_operator, op)
+    (vast::relational_operator, op)
     (vast::detail::ast::query::expression, rhs))
 
   BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::query::type_clause,
-    (ze::value_type, lhs)
-    (vast::detail::ast::query::clause_operator, op)
+    (vast::value_type, lhs)
+    (vast::relational_operator, op)
     (vast::detail::ast::query::expression, rhs))
 
   BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::query::event_clause,
     (std::vector<std::string>, lhs)
-    (vast::detail::ast::query::clause_operator, op)
+    (vast::relational_operator, op)
     (vast::detail::ast::query::expression, rhs))
 
   BOOST_FUSION_ADAPT_STRUCT(
@@ -207,7 +165,7 @@ BOOST_FUSION_ADAPT_STRUCT(
 
   BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::query::clause_operation,
-    (vast::detail::ast::query::boolean_operator, op)
+    (vast::boolean_operator, op)
     (vast::detail::ast::query::clause, operand))
 
   BOOST_FUSION_ADAPT_STRUCT(

@@ -3,39 +3,45 @@
 
 #include <unordered_map>
 #include <cppa/cppa.hpp>
-#include <ze/uuid.h>
+#include "vast/uuid.h"
 
 namespace vast {
 
 /// The ingestor. This component manages different types of event sources, each
 /// of which generate events in a different manner.
-class ingestor : public cppa::sb_actor<ingestor>
+class ingestor : public cppa::event_based_actor
 {
-  friend class cppa::sb_actor<ingestor>;
-
 public:
-  /// Spawns the ingestor.
+  /// Spawns an ingestor.
   /// @param tracker The ID tracker.
   /// @param archive The archive actor.
-  /// @param archive The index actor.
+  /// @param index The index actor.
   ingestor(cppa::actor_ptr tracker,
            cppa::actor_ptr archive,
-           cppa::actor_ptr index);
+           cppa::actor_ptr index,
+           size_t max_events_per_chunk,
+           size_t max_segment_size,
+           size_t batch_size);
+
+  /// Implements `cppa::event_based_actor::init`.
+  virtual void init() final;
 
 private:
   void shutdown();
 
-  size_t max_events_per_chunk_ = 0;
-  size_t max_segment_size_ = 0;
-  size_t batch_size_ = 0;
+  void init_source(cppa::actor_ptr source);
 
-  std::vector<cppa::actor_ptr> sources_;
-  std::unordered_map<cppa::actor_ptr, size_t> rates_;
-  std::unordered_map<ze::uuid, unsigned> inflight_;
+  cppa::actor_ptr tracker_;
   cppa::actor_ptr archive_;
   cppa::actor_ptr index_;
-  cppa::actor_ptr broccoli_;
-  cppa::behavior init_state;
+  size_t max_events_per_chunk_;
+  size_t max_segment_size_;
+  size_t batch_size_;
+
+  std::vector<cppa::actor_ptr> segmentizers_;
+  std::unordered_map<cppa::actor_ptr, size_t> rates_;
+  std::unordered_map<uuid, unsigned> inflight_;
+  cppa::behavior operating_;
 };
 
 } // namespace vast

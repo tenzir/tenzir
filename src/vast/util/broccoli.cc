@@ -1,8 +1,8 @@
 #include "vast/util/broccoli.h"
 
 #include <broccoli.h>
-#include <ze/event.h>
-#include <ze/io.h>
+#include <vast/event.h>
+#include <vast/io.h>
 #include "vast/exception.h"
 #include "vast/logger.h"
 
@@ -22,92 +22,91 @@ struct table_data
 {
   int key_type;
   int val_type;
-  ze::table* table;
+  table* tbl;
 };
 
 struct set_data
 {
   int key_type;
-  ze::set* set;
+  set* st;
 };
 
-ze::value make_value(int type, void* bro_val);
+value make_value(int type, void* bro_val);
 
-/// Creates a 0event event from a Bro event.
-ze::event make_event(BroEvMeta* meta)
+/// Creates a VAST event from a Bro event.
+event make_event(BroEvMeta* meta)
 {
-  ze::event event;
-  event.name(meta->ev_name);
-  event.timestamp(ze::time_range(meta->ev_ts));
+  event e;
+  e.name(meta->ev_name);
+  e.timestamp(time_range::fractional(meta->ev_ts));
 
-  event.reserve(meta->ev_numargs);
+  e.reserve(meta->ev_numargs);
   for (int i = 0; i < meta->ev_numargs; ++i)
-    event.emplace_back(
-        make_value(meta->ev_args[i].arg_type,
-                   meta->ev_args[i].arg_data));
+    e.emplace_back(
+        make_value(meta->ev_args[i].arg_type, meta->ev_args[i].arg_data));
 
-  event.shrink_to_fit();
-  return event;
+  e.shrink_to_fit();
+  return e;
 }
 
 int table_callback(void *key_data, void *val_data, table_data const* data)
 {
-  ze::value key = make_value(data->key_type, key_data);
-  ze::value value = make_value(data->val_type, val_data);
-  auto x = ze::table::value_type(std::move(key), std::move(value));
-  data->table->insert(std::move(x));
+  value key = make_value(data->key_type, key_data);
+  value val = make_value(data->val_type, val_data);
+  auto x = table::value_type(std::move(key), std::move(val));
+  data->tbl->insert(std::move(x));
   return 1;
 }
 
 int set_callback(void *key_data, set_data const* data)
 {
-  ze::value key = make_value(data->key_type, key_data);
-  data->set->insert(std::move(key));
+  value key = make_value(data->key_type, key_data);
+  data->st->insert(std::move(key));
   return 1;
 }
 
-/// Converts a Broccoli type to the corresponding 0event type.
-ze::value_type to_ze_type(int broccoli_type)
+/// Converts a Broccoli type to the corresponding VAST type.
+value_type to_vast_type(int broccoli_type)
 {
   switch (broccoli_type)
   {
     default:
-      return ze::invalid_type;
+      return invalid_type;
     case BRO_TYPE_BOOL:
-      return ze::bool_type;
+      return bool_type;
     case BRO_TYPE_INT:
-      return ze::int_type;
+      return int_type;
     case BRO_TYPE_COUNT:
     case BRO_TYPE_COUNTER:
-      return ze::uint_type;
+      return uint_type;
     case BRO_TYPE_DOUBLE:
-      return ze::double_type;
+      return double_type;
     case BRO_TYPE_TIME:
-      return ze::time_point_type;
+      return time_point_type;
     case BRO_TYPE_INTERVAL:
-      return ze::time_range_type;
+      return time_range_type;
     case BRO_TYPE_STRING:
-      return ze::string_type;
+      return string_type;
     case BRO_TYPE_PATTERN:
-      return ze::regex_type;
+      return regex_type;
     case BRO_TYPE_VECTOR:
-      return ze::vector_type;
+      return vector_type;
     case BRO_TYPE_SET:
-      return ze::set_type;
+      return set_type;
     case BRO_TYPE_TABLE:
-      return ze::table_type;
+      return table_type;
     case BRO_TYPE_RECORD:
-      return ze::record_type;
+      return record_type;
     case BRO_TYPE_IPADDR:
-      return ze::address_type;
+      return address_type;
     case BRO_TYPE_SUBNET:
-      return ze::prefix_type;
+      return prefix_type;
     case BRO_TYPE_PORT:
-      return ze::port_type;
+      return port_type;
   }
 }
 
-ze::value make_value(int type, void* bro_val)
+value make_value(int type, void* bro_val)
 {
   switch (type)
   {
@@ -139,9 +138,10 @@ ze::value make_value(int type, void* bro_val)
     case BRO_TYPE_DOUBLE:
       return *static_cast<double*>(bro_val);
     case BRO_TYPE_TIME:
-        return ze::time_point(ze::time_range(*static_cast<double*>(bro_val)));
+        return time_point(time_range::fractional(
+                *static_cast<double*>(bro_val)));
     case BRO_TYPE_INTERVAL:
-        return ze::time_range(*static_cast<double*>(bro_val));;
+        return time_range::fractional(*static_cast<double*>(bro_val));
     case BRO_TYPE_STRING:
       {
         BroString* s = static_cast<BroString*>(bro_val);
@@ -154,69 +154,67 @@ ze::value make_value(int type, void* bro_val)
         {
           default:
             LOG(warn, broccoli) << "invalid port type";
-            return ze::port(p->port_num, ze::port::unknown);
+            return port(p->port_num, port::unknown);
           case IPPROTO_TCP:
-            return ze::port(p->port_num, ze::port::tcp);
+            return port(p->port_num, port::tcp);
           case IPPROTO_UDP:
-            return ze::port(p->port_num, ze::port::udp);
+            return port(p->port_num, port::udp);
           case IPPROTO_ICMP:
-            return ze::port(p->port_num, ze::port::icmp);
+            return port(p->port_num, port::icmp);
         }
       }
     case BRO_TYPE_IPADDR:
       {
         BroAddr* addr = static_cast<BroAddr*>(bro_val);
         auto is_v4 = bro_util_is_v4_addr(addr);
-        return ze::address(
-            addr->addr,
-            is_v4 ? ze::address::ipv4 : ze::address::ipv6,
-            ze::address::network);
+        return address(addr->addr,
+                       is_v4 ? address::ipv4 : address::ipv6,
+                       address::network);
       }
     case BRO_TYPE_SUBNET:
       {
         BroSubnet* sn = static_cast<BroSubnet*>(bro_val);
         auto is_v4 = bro_util_is_v4_addr(&sn->sn_net);
-        ze::address addr(
-            sn->sn_net.addr,
-            is_v4 ? ze::address::ipv4 : ze::address::ipv6,
-            ze::address::network);
-        return ze::prefix(std::move(addr), sn->sn_width);
+        address addr(sn->sn_net.addr,
+                     is_v4 ? address::ipv4 : address::ipv6,
+                     address::network);
+        return prefix(std::move(addr), sn->sn_width);
       }
     case BRO_TYPE_SET:
       {
         BroSet* bro_set = static_cast<BroSet*>(bro_val);
         if (! bro_set_get_size(bro_set))
-          return ze::set();
+          return set();
 
         // Empty sets have BRO_TYPE_UNKNOWN. At this point, we know
         // that the set has a valid type becuase it is not empty.
         int key_type;
         bro_set_get_type(bro_set, &key_type);
 
-        ze::set set(to_ze_type(key_type));
-        set_data data{key_type, &set};
+        set s(to_vast_type(key_type));
+        set_data data{key_type, &s};
         bro_set_foreach(bro_set, (BroSetCallback)set_callback, &data);
 
-        return set;
+        return s;
       }
     case BRO_TYPE_TABLE:
       {
         BroTable* bro_table = static_cast<BroTable*>(bro_val);
         if (! bro_table_get_size(bro_table))
-          return ze::table();
+          return table();
 
         int key_type, val_type;
         bro_table_get_types(bro_table, &key_type, &val_type);
 
-        ze::table table(to_ze_type(key_type), to_ze_type(val_type));
-        table_data data{key_type, val_type, &table};
+        table tbl(to_vast_type(key_type), to_vast_type(val_type));
+        table_data data{key_type, val_type, &tbl};
         bro_table_foreach(bro_table, (BroTableCallback)table_callback, &data);
 
-        return table;
+        return tbl;
       }
     case BRO_TYPE_RECORD:
       {
-        ze::record record;
+        record rec;
         BroRecord *rec = static_cast<BroRecord*>(bro_val);
         void* bro_val;
         int bro_val_type = BRO_TYPE_UNKNOWN;
@@ -224,12 +222,12 @@ ze::value make_value(int type, void* bro_val)
         while ((bro_val = bro_record_get_nth_val(rec, cnt, &bro_val_type)))
         {
           auto val = make_value(bro_val_type, bro_val);
-          record.push_back(std::move(val));
+          rec.push_back(std::move(val));
           bro_val_type = BRO_TYPE_UNKNOWN;
           ++cnt;
         }
 
-        return record;
+        return rec;
       }
   }
 
@@ -268,12 +266,12 @@ struct builder
 {
   typedef bro_val result_type;
 
-  bro_val operator()(ze::invalid_value i) const
+  bro_val operator()(invalid_value i) const
   {
     return { BRO_TYPE_UNKNOWN, nullptr };
   }
 
-  bro_val operator()(ze::nil_value n) const
+  bro_val operator()(nil_value n) const
   {
     return { BRO_TYPE_UNKNOWN, nullptr };
   }
@@ -300,7 +298,7 @@ struct builder
     return { BRO_TYPE_DOUBLE, const_cast<double*>(&d) };
   }
 
-  bro_val operator()(ze::string const& s) const
+  bro_val operator()(string const& s) const
   {
     // Caller must free the memory of the BroString!
     BroString* bs = new BroString;
@@ -309,13 +307,13 @@ struct builder
     return { BRO_TYPE_STRING, bs };
   }
 
-  bro_val operator()(ze::regex const& r) const
+  bro_val operator()(regex const& r) const
   {
     throw error::broccoli("Broccoli does not yet support regular expressions");
     return { BRO_TYPE_PATTERN, nullptr };
   }
 
-  bro_val operator()(ze::time_range r) const
+  bro_val operator()(time_range r) const
   {
     double secs = r.to_double();
     bro_val b;
@@ -324,43 +322,43 @@ struct builder
     return b;
   }
 
-  bro_val operator()(ze::time_point t) const
+  bro_val operator()(time_point t) const
   {
     return { BRO_TYPE_TIME, nullptr };
   }
 
-  bro_val operator()(ze::vector const& v) const
+  bro_val operator()(vector const& v) const
   {
     throw error::broccoli("Broccoli does not yet support vectors");
     return { BRO_TYPE_VECTOR, nullptr };
   }
 
-  bro_val operator()(ze::set const& s) const
+  bro_val operator()(set const& s) const
   {
     // Caller must free the memory of the BroSet!
-    BroSet* set = bro_set_new();
+    BroSet* bs = bro_set_new();
     for (auto const& x : s)
     {
-      bro_val bv = ze::value::visit(x, *this);
-      bro_set_insert(set, bv.type, bv.value);
+      bro_val bv = value::visit(x, *this);
+      bro_set_insert(bs, bv.type, bv.value);
       free(bv);
     }
-    return { BRO_TYPE_SET, set };
+    return { BRO_TYPE_SET, bs };
   }
 
-  bro_val operator()(ze::table const& t) const
+  bro_val operator()(table const& t) const
   {
     // Caller must free the memory of the BroTable!
-    BroTable* table = bro_table_new();
+    BroTable* tbl = bro_table_new();
     for (auto const& x : t)
     {
-      bro_val key = ze::value::visit(x.first, *this);
-      bro_val val = ze::value::visit(x.second, *this);
+      bro_val key = value::visit(x.first, *this);
+      bro_val val = value::visit(x.second, *this);
 
       // If the table key is a compound type (i.e., record), we need to
       // use BRO_TYPE_LIST instead of BRO_TYPE_RECORD.
       bro_table_insert(
-          table,
+          tbl,
           key.type == BRO_TYPE_RECORD ? BRO_TYPE_LIST : key.type,
           key.value, val.type, val.value);
 
@@ -368,23 +366,23 @@ struct builder
       free(val);
     }
 
-    return { BRO_TYPE_TABLE, table };
+    return { BRO_TYPE_TABLE, tbl };
   }
 
-  bro_val operator()(ze::record const& r) const
+  bro_val operator()(record const& r) const
   {
     // Caller must free the memory of the BroRecord!
     BroRecord* rec = bro_record_new();
     for (auto const& val : r)
     {
-      bro_val bv = ze::value::visit(val, *this);
+      bro_val bv = value::visit(val, *this);
       bro_record_add_val(rec, NULL, bv.type, NULL, &bv.value);
       free(bv);
     }
     return { BRO_TYPE_RECORD, rec };
   }
 
-  bro_val operator()(ze::address const& a) const
+  bro_val operator()(address const& a) const
   {
     // Caller must free the memory of the BroAddr!
     BroAddr* addr = new BroAddr;
@@ -393,7 +391,7 @@ struct builder
     return { BRO_TYPE_IPADDR, addr };
   }
 
-  bro_val operator()(ze::prefix const& p) const
+  bro_val operator()(prefix const& p) const
   {
     // Caller must free the memory of the BroSubnet!
     BroSubnet* bs = new BroSubnet;
@@ -405,7 +403,7 @@ struct builder
     return { BRO_TYPE_PORT, bs };
   }
 
-  bro_val operator()(ze::port const& p) const
+  bro_val operator()(port const& p) const
   {
     // Caller must free the memory of the BroPort!
     BroPort* bp = new BroPort;
@@ -414,13 +412,13 @@ struct builder
     {
       default:
         throw error::broccoli("unsupported port type");
-      case ze::port::tcp:
+      case port::tcp:
         bp->port_proto = IPPROTO_TCP;
         break;
-      case ze::port::udp:
+      case port::udp:
         bp->port_proto = IPPROTO_UDP;
         break;
-      case ze::port::icmp:
+      case port::icmp:
         bp->port_proto = IPPROTO_ICMP;
         break;
     }
@@ -428,21 +426,21 @@ struct builder
   }
 };
 
-/// Creates a Bro event from a 0event event.
-BroEvent* make_event(ze::event const& event)
+/// Creates a Bro event from a VAST event.
+BroEvent* make_event(event const& e)
 {
-  DBG(broccoli) << "building broccoli event " << event.name();
-  BroEvent* bro_event = bro_event_new(event.name().data());
+  DBG(broccoli) << "building broccoli event " << e.name();
+  BroEvent* bro_event = bro_event_new(e.name().data());
   if (! bro_event)
   {
-    LOG(error, broccoli) << "could not create bro_event " << event.name();
+    LOG(error, broccoli) << "could not create bro_event " << e.name();
     throw error::broccoli("bro_event_new");
   }
 
-  for (auto& arg : event)
+  for (auto& a : e)
   {
-    DBG(broccoli) << "adding argument: " << arg;
-    bro_val val = ze::value::visit(arg, builder());
+    DBG(broccoli) << "adding argument: " << a;
+    bro_val val = value::visit(a, builder());
     bro_event_add_val(bro_event, val.type, NULL, val.value);
     free(val);
   }
@@ -450,25 +448,25 @@ BroEvent* make_event(ze::event const& event)
   return bro_event;
 }
 
-/// The Broccoli event callback that creates a 0event from a Broccoli event.
+/// The Broccoli event callback that creates a VAST from a Broccoli event.
 void callback(BroConn* bc, void* user_data, BroEvMeta* meta)
 {
   try
   {
-    ze::event event = make_event(meta);
+    event e = make_event(meta);
     auto f = static_cast<event_handler*>(user_data);
-    (*f)(std::move(event));
-  }
-  catch (ze::exception const& e)
-  {
-    LOG(error, broccoli)
-      << "could not create ze::event from broccoli event '"
-      << meta->ev_name << "' (" << e.what() << ')';
+    (*f)(std::move(e));
   }
   catch (error::broccoli const& e)
   {
     LOG(error, broccoli)
       << "error with broccoli event '"
+      << meta->ev_name << "' (" << e.what() << ')';
+  }
+  catch (exception const& e)
+  {
+    LOG(error, broccoli)
+      << "could not create VAST event from broccoli event '"
       << meta->ev_name << "' (" << e.what() << ')';
   }
 }
@@ -498,12 +496,12 @@ void init(bool messages, bool calltrace)
 }
 
 connection::connection(
-    cppa::util::input_stream_ptr in,
-    cppa::util::output_stream_ptr out)
+    cppa::network::input_stream_ptr in,
+    cppa::network::output_stream_ptr out)
   : in_(std::move(in))
   , out_(std::move(out))
 {
-  auto fd = in_->read_file_handle();
+  auto fd = in_->read_handle();
   bc_ = bro_conn_new_socket(fd, BRO_CFLAG_DONTCACHE);
   if (bc_ < 0)
     throw error::broccoli("bro_conn_new_socket");
@@ -518,7 +516,7 @@ connection::connection(
     },
     on(atom("start"), arg_match) >> [=](actor_ptr receiver)
     {
-      event_handler_ = [=](ze::event e) { send(receiver, std::move(e)); };
+      event_handler_ = [=](event e) { send(receiver, std::move(e)); };
       bro_event_registry_request(bc_);
       if (! bro_conn_connect(bc_))
         throw error::broccoli("bro_conn_connect()");
@@ -529,7 +527,7 @@ connection::connection(
     {
       if (! bc_)
       {
-        send(self, atom("shutdown"));
+        send(self, atom("kill"));
         return;
       }
 
@@ -544,16 +542,16 @@ connection::connection(
       LOG(debug, broccoli) << "sending raw event of size " << raw.size();
       bro_event_send_raw(bc_, raw.data(), raw.size());
     },
-    on_arg_match >> [=](ze::event const& event)
+    on_arg_match >> [=](event const& e)
     {
-      auto bro_event = make_event(event);
+      auto bro_event = make_event(e);
       if (! bro_event_send(bc_, bro_event))
         LOG(error, broccoli)
-          << "broccoli @ " << id() << " could not send event: " << event;
+          << "broccoli @ " << id() << " could not send event: " << e;
 
       bro_event_free(bro_event);
     },
-    on(atom("shutdown")) >> [=]
+    on(atom("kill")) >> [=]
     {
       bro_conn_delete(bc_);
       bc_ = nullptr;

@@ -1,6 +1,8 @@
 VAST
 ====
 
+[![Build Status](https://secure.travis-ci.org/mavam/vast.png)](http://travis-ci.org/mavam/vast)
+
 **Visibility Across Space and Time (VAST)** is a real-time platform for network
 forensics and incident response.
 
@@ -9,16 +11,14 @@ Dependencies
 
 Required:
 
-- A C++11 compiler, e.g., [g++ 4.7](http://gcc.gnu.org) or
-  [Clang 3.1](http://clang.llvm.org/)
 - [CMake](http://www.cmake.org)
+- [Clang >= 3.2](http://clang.llvm.org/) or [g++ >= 4.7](http://gcc.gnu.org)
 - [C++ Boost Libraries](http://www.boost.org)
 - [libcppa](https://github.com/Neverlord/libcppa)
-- [0event](https://github.com/mavam/ze)
-- [Broccoli](http://www.bro-ids.org)
 
 Optional:
 
+- [Broccoli](http://www.bro-ids.org)
 - [Google perftools](http://code.google.com/p/google-perftools)
 - [Doxygen](http://www.doxygen.org)
 

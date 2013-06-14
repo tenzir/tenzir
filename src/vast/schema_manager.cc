@@ -8,7 +8,7 @@ namespace vast {
 
 schema_manager::schema_manager()
 {
-  LOG(verbose, meta) << "spawning schema manager @" << id();
+  VAST_LOG_VERBOSE("spawning schema manager @" << id());
   using namespace cppa;
   init_state = (
       on(atom("load"), arg_match) >> [=](std::string const& file)
@@ -19,10 +19,10 @@ schema_manager::schema_manager()
       {
         reply(schema_);
       },
-      on(atom("shutdown")) >> [=]
+      on(atom("kill")) >> [=]
       {
         quit();
-        LOG(verbose, meta) << "schema manager @" << id() << " terminated";
+        VAST_LOG_VERBOSE("schema manager @" << id() << " terminated");
       });
 }
 

@@ -9,8 +9,8 @@ namespace vast {
 /// The main program.
 class program
 {
-  program(program const&);
-  program& operator=(program);
+  program(program const&) = delete;
+  program& operator=(program) = delete;
 
 public:
   /// Constructs the program.

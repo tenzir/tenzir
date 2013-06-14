@@ -1,7 +1,7 @@
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in
-               ${CMAKE_CURRENT_BINARY_DIR}/config.h)
+               ${CMAKE_CURRENT_BINARY_DIR}/vast/config.h)
 
 add_subdirectory(vast)
 
@@ -31,11 +31,7 @@ endmacro ()
 
 # A list of paths that is used to build the export string.
 set(path_list)
-get_filename_component(Broccoli_library_dirs ${Broccoli_LIBRARIES} PATH)
-list_unique_insert(path_list ${Broccoli_library_dirs})
-get_filename_component(0event_library_dirs ${0event_LIBRARIES} PATH)
-list_unique_insert(path_list ${0event_library_dirs})
-foreach(i ${Boost_LIBRARIES})
+foreach(i ${Boost_LIBRARIES} ${LIBCPPA_LIBRARIES} ${Broccoli_LIBRARIES})
     get_filename_component(dir ${i} PATH)
     if (dir)
         list_unique_insert(path_list ${dir})
