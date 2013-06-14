@@ -57,13 +57,6 @@ In this tutorial, we install all Clang-related dependencies in the same prefix:
     make test
     make install
 
-### Øevent
-
-    CXX=clang++ ./configure --prefix=$PREFIX --with-boost=$PREFIX
-    make
-    make test
-    make install
-
 ### VAST
 
     CXX=clang++ ./configure --prefix=$PREFIX \
@@ -118,13 +111,6 @@ ready to be picked up by subsequent dependency configurations.
 ### [Libcppa](https://github.com/Neverlord/libcppa)
 
     ./configure --enable-debug --prefix=$PREFIX
-    make
-    make test
-    make install
-
-### Øevent
-
-    ./configure --prefix=$PREFIX --with-boost=$PREFIX
     make
     make test
     make install
