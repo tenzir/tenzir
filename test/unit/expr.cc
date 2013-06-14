@@ -5,9 +5,9 @@
 
 using namespace vast;
 
-struct event_fixture
+struct expression_fixture
 {
-  event_fixture()
+  expression_fixture()
   {
     event e0{"babba", 1.337, 42u, 100, "bar", -4.80};
     e0.name("foo");
@@ -20,7 +20,7 @@ struct event_fixture
   std::vector<event> events;
 };
 
-BOOST_FIXTURE_TEST_SUITE(expression_tests, event_fixture)
+BOOST_FIXTURE_TEST_SUITE(expression_tests, expression_fixture)
 
 BOOST_AUTO_TEST_CASE(type_queries)
 {
