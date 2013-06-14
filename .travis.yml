@@ -1,33 +1,26 @@
 language: cpp
 compiler:
   - gcc
-  - clang
+  # Waiting for Clang 3.2 support, see travis-ci/travis-core#225.
+  #- clang
 before_script:
-  # FIXME: Remove this hack once Travis supports GCC 4.7 and Clang 3.2.
+  # FIXME: Remove the custom GCC installion after travis-ci/travis-core#195 has
+  # been resolved.
   - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test # GCC 4.7
   - sudo add-apt-repository -y
     "deb http://archive.ubuntu.com/ubuntu/ quantal main universe" # Boost 1.50
   - sudo apt-get -qq update
-  - '[[ $CXX == "clang" ]] && exit 1 || [[ $CXX == "g++" ]]
-      && sudo apt-get -qq install g++-4.7
-      && export CXX=g++-4.7
-      && export CC=gcc-4.7'
+  - sudo apt-get -qq install g++-4.7
+  - '[[ $CXX == "g++" ]] && && export CXX=g++-4.7 && export CC=gcc-4.7'
   - sudo apt-get -qq install libboost1.50-all-dev
   # Libcppa
   - git clone git://github.com/Neverlord/libcppa.git
   - pushd libcppa
-  #- ./configure --enable-debug --prefix=$PREFIX --no-examples --no-unit-tests
   - ./configure --enable-debug --prefix=$PREFIX --no-examples
   - make install
   - popd
-  # 0event
-  - git clone git://github.com/mavam/ze.git
-  - pushd ze
-  - ./configure --enable-debug --prefix=$PREFIX
-  - make install
-  - popd
   # VAST
-  - ./configure $BUILD_TYPE --with-libcppa=$PREFIX --with-ze=$PREFIX
+  - ./configure $BUILD_TYPE --with-libcppa=$PREFIX
 script: make
 branches:
   only:
@@ -40,8 +33,7 @@ notifications:
     on_failure: always
 env:
   global:
-    # The prefix for VAST dependencies.
-    - PREFIX=$HOME/builds/mavam/prefix
+    - PREFIX=$HOME/builds/mavam/prefix # The prefix for dependencies.
   matrix:
     - BUILD_TYPE=--enable-debug
 matrix:
