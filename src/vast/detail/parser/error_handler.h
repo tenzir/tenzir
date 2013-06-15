@@ -3,9 +3,8 @@
 
 #include <string>
 #include <vector>
-#include <boost/spirit/include/qi.hpp>
-#include <boost/spirit/include/phoenix_function.hpp>
 #include "vast/logger.h"
+#include "vast/detail/parser/boost.h"
 
 namespace vast {
 namespace detail {

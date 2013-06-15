@@ -1,8 +1,8 @@
 #ifndef VAST_DETAIL_PARSER_BRO15_CONN_DEFINITION_H
 #define VAST_DETAIL_PARSER_BRO15_CONN_DEFINITION_H
 
-#include "vast/detail/parser/bro15/conn.h"
 #include "vast/logger.h"
+#include "vast/detail/parser/bro15/conn.h"
 
 namespace vast {
 namespace detail {

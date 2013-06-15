@@ -1,9 +1,8 @@
 #ifndef VAST_DETAIL_PARSER_ADDRESS_H
 #define VAST_DETAIL_PARSER_ADDRESS_H
 
-#include <boost/spirit/include/qi.hpp>
-#include <boost/spirit/include/phoenix.hpp>
 #include "vast/address.h"
+#include "vast/detail/parser/boost.h"
 
 namespace vast {
 namespace detail {

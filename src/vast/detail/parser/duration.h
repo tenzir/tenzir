@@ -2,10 +2,9 @@
 #define VAST_DETAIL_PARSER_DURATION_H
 
 #include <string>
-#include <boost/spirit/include/qi.hpp>
-#include <boost/spirit/include/phoenix.hpp>
-#include "vast/detail/parser/skipper.h"
 #include "vast/time.h"
+#include "vast/detail/parser/boost.h"
+#include "vast/detail/parser/skipper.h"
 
 namespace vast {
 namespace detail {

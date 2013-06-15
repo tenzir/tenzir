@@ -1,16 +1,6 @@
 #ifndef VAST_DETAIL_PARSER_VALUE_H
 #define VAST_DETAIL_PARSER_VALUE_H
 
-// Improves compile times significantly at the cost of predefining terminals.
-#define BOOST_SPIRIT_NO_PREDEFINED_TERMINALS
-
-// Turn on to debug the parse process. All productions that should be debugged
-// must occur in the BOOST_SPIRIT_DEBUG_NODES macro specified in the grammar
-// constructor..
-#undef BOOST_SPIRIT_QI_DEBUG
-
-#include <boost/spirit/include/qi.hpp>
-#include <boost/spirit/include/phoenix.hpp>
 #include "vast/detail/parser/escaped_string.h"
 #include "vast/detail/parser/address.h"
 #include "vast/detail/parser/duration.h"

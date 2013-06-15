@@ -1,15 +1,18 @@
 #ifndef TEST_UNIT_TEST_H
 #define TEST_UNIT_TEST_H
 
-// Boost Accumulators spits out quite a few warnings, which we'll disable here.
-#ifdef __clang__
+#include "vast/config.h"
+
+#ifdef VAST_CLANG
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-variable"
+#pragma clang diagnostic ignored "-Wsign-compare"
+#pragma clang diagnostic ignored "-Wunneeded-internal-declaration"
 #endif
 
 #include <boost/test/unit_test.hpp>
 
-#ifdef __clang__
+#ifdef VAST_CLANG
 #pragma clang diagnostic pop
 #endif
 
