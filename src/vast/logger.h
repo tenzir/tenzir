@@ -3,23 +3,17 @@
 
 #include <sstream>
 #include "vast/config.h"
+#include "vast/singleton.h"
 #include "vast/util/pp.h"
 
 namespace vast {
 
-// Forward declaration.
 class path;
-namespace detail {
-class singleton_manager;
-} // namespace detail
 
 /// A simple singleton logger and tracer.
-class logger
+class logger : public singleton<logger>
 {
-  friend class detail::singleton_manager;
-
-  logger(const logger&) = delete;
-  logger& operator=(logger) = delete;
+  friend class singleton<logger>;
 
 public:
   enum level : uint32_t
@@ -74,10 +68,6 @@ public:
     std::string fun_;
     message msg_;
   };
-
-  /// Retrieves the global logger instance.
-  /// @param The logger.
-  static logger* instance();
 
   /// Destroys the logger.
   ~logger();

@@ -7,7 +7,6 @@
 #include <thread>
 #include "vast/file_system.h"
 #include "vast/time.h"
-#include "vast/detail/singleton_manager.h"
 #include "vast/util/queue.h"
 
 #ifdef VAST_POSIX
@@ -245,11 +244,6 @@ logger::tracer::~tracer()
   --call_depth;
 }
 
-
-logger* logger::instance()
-{
-  return detail::singleton_manager::get_logger();
-}
 
 logger::logger()
 {

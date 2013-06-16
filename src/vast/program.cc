@@ -14,10 +14,10 @@
 #include "vast/schema.h"
 #include "vast/schema_manager.h"
 #include "vast/search.h"
+#include "vast/shutdown.h"
 #include "vast/system_monitor.h"
 #include "vast/to_string.h"
 #include "vast/detail/cppa_type_info.h"
-#include "vast/detail/singleton_manager.h"
 #include "vast/util/profiler.h"
 
 #ifdef VAST_HAVE_BROCCOLI
@@ -71,8 +71,8 @@ bool program::run()
 
   stop();
   await_all_others_done();
-  shutdown();
-  detail::singleton_manager::shutdown();
+  cppa::shutdown();
+  vast::shutdown();
 
   return true;
 }
