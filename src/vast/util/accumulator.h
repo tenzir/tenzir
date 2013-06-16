@@ -5,6 +5,7 @@
 #ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-variable"
+#pragma clang diagnostic ignored "-Wunused-parameter"
 #pragma clang diagnostic ignored "-Wunneeded-internal-declaration"
 #endif
 
@@ -19,6 +20,10 @@
 #include <boost/accumulators/statistics/median.hpp>
 #include <boost/accumulators/statistics/sum.hpp>
 #include <boost/accumulators/statistics/variance.hpp>
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 namespace vast {
 namespace util {
@@ -140,9 +145,5 @@ private:
 
 } // namespace util
 } // namespace vast
-
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif
 
 #endif
