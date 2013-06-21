@@ -13,9 +13,9 @@ set(libvast_sources
   file_system.cc
   id_tracker.cc
   index.cc
+  individual.cc
   ingestor.cc
   logger.cc
-  object.cc
   operator.cc
   parse.cc
   port.cc
