@@ -1,8 +1,10 @@
 #ifndef VAST_UTIL_ACCUMULATOR_H
 #define VAST_UTIL_ACCUMULATOR_H
 
+#include "vast/config.h"
+
 // Boost Accumulators spits out quite a few warnings, which we'll disable here.
-#ifdef __clang__
+#ifdef VAST_CLANG
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-variable"
 #pragma clang diagnostic ignored "-Wunused-parameter"
@@ -21,7 +23,7 @@
 #include <boost/accumulators/statistics/sum.hpp>
 #include <boost/accumulators/statistics/variance.hpp>
 
-#ifdef __clang__
+#ifdef VAST_CLANG
 #pragma clang diagnostic pop
 #endif
 
