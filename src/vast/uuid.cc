@@ -28,23 +28,6 @@ uuid::uuid(std::string const& str)
   boost::uuids::string_generator()(str).swap(id_);
 }
 
-uuid::uuid(uuid const& other)
-  : id_(other.id_)
-{
-}
-
-uuid::uuid(uuid&& other)
-  : id_(std::move(other.id_))
-{
-}
-
-uuid& uuid::operator=(uuid other)
-{
-  using std::swap;
-  swap(id_, other.id_);
-  return *this;
-}
-
 uuid::const_iterator uuid::begin() const
 {
   return id_.begin();

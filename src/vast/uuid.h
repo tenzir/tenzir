@@ -18,9 +18,6 @@ public:
 
   uuid() = default;
   uuid(std::string const& str);
-  uuid(uuid const&);
-  uuid(uuid&&);
-  uuid& operator=(uuid other);
 
   const_iterator begin() const;
   const_iterator end() const;
