@@ -200,6 +200,10 @@ void logger::message::append_fill(fill_type t)
   *this << fill << ' ';
 }
 
+logger::message& operator<<(logger::message& msg, std::nullptr_t)
+{
+  return msg;
+}
 
 logger::tracer::tracer(char const* pretty_func)
   : fun_(prettify(pretty_func))

@@ -109,10 +109,7 @@ private:
   impl* impl_;
 };
 
-logger::message& operator<<(logger::message& msg, std::nullptr_t)
-{
-  return msg;
-}
+logger::message& operator<<(logger::message& msg, std::nullptr_t);
 
 template <typename Stream>
 Stream& operator<<(Stream& stream, logger::level lvl)
