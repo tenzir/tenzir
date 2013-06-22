@@ -1,6 +1,6 @@
 #include "vast/io/compression.h"
 
-#include "vast/io/serialization.h"
+#include "vast/serialization.h"
 
 namespace vast {
 namespace io {

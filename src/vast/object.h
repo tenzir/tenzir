@@ -2,7 +2,7 @@
 #define VAST_OBJECT_H
 
 #include "vast/type_info.h"
-#include "vast/io/fwd.h"
+#include "vast/fwd.h"
 
 namespace vast {
 
@@ -59,9 +59,9 @@ public:
   stable_type_info const* type() const;
 
 private:
-  friend io::access;
-  void serialize(io::serializer& sink) const;
-  void deserialize(io::deserializer& source);
+  friend access;
+  void serialize(serializer& sink) const;
+  void deserialize(deserializer& source);
 
   void* value_ = nullptr;
   stable_type_info const* type_ = nullptr;

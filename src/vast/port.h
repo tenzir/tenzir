@@ -3,7 +3,7 @@
 
 #include <iosfwd>
 #include <string>
-#include "vast/io/fwd.h"
+#include "vast/fwd.h"
 #include "vast/util/operators.h"
 
 namespace vast {
@@ -54,9 +54,9 @@ public:
   void type(port_type t);
 
 private:
-  friend io::access;
-  void serialize(io::serializer& sink);
-  void deserialize(io::deserializer& source);
+  friend access;
+  void serialize(serializer& sink);
+  void deserialize(deserializer& source);
 
   friend bool operator==(port const& x, port const& y);
   friend bool operator<(port const& x, port const& y);

@@ -1,10 +1,9 @@
-#ifndef VAST_IO_SERIALIZATION_STRING_H
-#define VAST_IO_SERIALIZATION_STRING_H
+#ifndef VAST_SERIALIZATION_STRING_H
+#define VAST_SERIALIZATION_STRING_H
 
 #include <string>
 
 namespace vast {
-namespace io {
 
 inline void serialize(serializer& sink, std::string const& str)
 {
@@ -28,7 +27,6 @@ inline void deserialize(deserializer& source, std::string& str)
   source.end_sequence();
 }
 
-} // namespace io
 } // namespace vast
 
 #endif

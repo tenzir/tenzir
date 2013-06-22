@@ -7,7 +7,7 @@
 #include "vast/container.h"
 #include "vast/logger.h"
 #include "vast/to_string.h"
-#include "vast/io/serialization.h"
+#include "vast/serialization.h"
 #include "vast/util/make_unique.h"
 
 namespace vast {
@@ -258,7 +258,7 @@ value_type value::which() const
   return type();
 }
 
-void value::serialize(io::serializer& sink)
+void value::serialize(serializer& sink)
 {
   VAST_ENTER(VAST_THIS);
   sink << type();
@@ -319,7 +319,7 @@ void value::serialize(io::serializer& sink)
   }
 }
 
-void value::deserialize(io::deserializer& source)
+void value::deserialize(deserializer& source)
 {
   VAST_ENTER();
   value_type vt;

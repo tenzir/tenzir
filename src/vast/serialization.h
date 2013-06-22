@@ -1,6 +1,7 @@
-#ifndef VAST_IO_SERIALIZATION_H
-#define VAST_IO_SERIALIZATION_H
+#ifndef VAST_SERIALIZATION_H
+#define VAST_SERIALIZATION_H
 
+#include <cstdint>
 #include <memory>
 #include "vast/config.h"
 #include "vast/intrusive.h"
@@ -9,8 +10,6 @@
 #include "vast/io/coded_stream.h"
 
 namespace vast {
-
-namespace io {
 
 /// Interface for serialization of objects.
 class serializer
@@ -131,7 +130,7 @@ class binary_serializer : public serializer
 public:
   /// Constructs a deserializer with an output stream.
   /// @param source The output stream to write into.
-  binary_serializer(output_stream& sink);
+  binary_serializer(io::output_stream& sink);
 
   virtual bool typed() const override;
   virtual bool begin_object(stable_type_info const& ti) override;
@@ -150,7 +149,7 @@ public:
   virtual size_t bytes() const;
 
 private:
-  coded_output_stream sink_;
+  io::coded_output_stream sink_;
   size_t bytes_ = 0;
 };
 
@@ -160,7 +159,7 @@ class binary_deserializer : public deserializer
 public:
   /// Constructs a deserializer with an input stream.
   /// @param source The input stream to read from.
-  binary_deserializer(input_stream& source);
+  binary_deserializer(io::input_stream& source);
 
   virtual bool typed() const override;
   virtual stable_type_info const* begin_object() override;
@@ -179,7 +178,7 @@ public:
   virtual size_t bytes() const;
 
 private:
-  coded_input_stream source_;
+  io::coded_input_stream source_;
   size_t bytes_ = 0;
 };
 
@@ -280,13 +279,12 @@ deserializer& operator>>(deserializer& source, T& x)
   return source;
 }
 
-} // namespace io
 } // namespace vast
 
-#include "vast/io/serialization/arithmetic.h"
-#include "vast/io/serialization/container.h"
-#include "vast/io/serialization/pointer.h"
-#include "vast/io/serialization/string.h"
-#include "vast/io/serialization/time.h"
+#include "vast/serialization/arithmetic.h"
+#include "vast/serialization/container.h"
+#include "vast/serialization/pointer.h"
+#include "vast/serialization/string.h"
+#include "vast/serialization/time.h"
 
 #endif

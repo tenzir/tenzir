@@ -1,13 +1,12 @@
-#ifndef VAST_IO_SERIALIZATION_CONTAINER_H
-#define VAST_IO_SERIALIZATION_CONTAINER_H
+#ifndef VAST_SERIALIZATION_CONTAINER_H
+#define VAST_SERIALIZATION_CONTAINER_H
 
 #include <vector>
 #include "vast/exception.h"
 #include "vast/traits.h"
-#include "vast/io/serialization/arithmetic.h"
+#include "vast/serialization/arithmetic.h"
 
 namespace vast {
-namespace io {
 
 template <typename T, size_t N>
 typename std::enable_if<
@@ -112,7 +111,6 @@ void deserialize(deserializer& source, std::pair<T, U>& pair)
   source >> pair.second;
 }
 
-} // namespace io
 } // namespace vast
 
 #endif

@@ -4,7 +4,7 @@
 #include <iterator>
 #include <limits>
 #include <vector>
-#include "vast/io/fwd.h"
+#include "vast/fwd.h"
 
 namespace vast {
 
@@ -288,8 +288,8 @@ private:
   /// `bitvector::npos` if no 1-bit exists.
   size_type find_from(size_type i) const;
 
-  void serialize(io::serializer& sink);
-  void deserialize(io::deserializer& source);
+  void serialize(serializer& sink);
+  void deserialize(deserializer& source);
 
   std::vector<block_type> bits_;
   size_type num_bits_;

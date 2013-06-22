@@ -287,9 +287,9 @@ public:
   void accept(expr::visitor& v);
 
 private:
-  friend io::access;
-  void serialize(io::serializer& sink);
-  void deserialize(io::deserializer& source);
+  friend access;
+  void serialize(serializer& sink);
+  void deserialize(deserializer& source);
 
   friend bool operator==(expression const& x, expression const& y);
   friend bool operator!=(expression const& x, expression const& y);

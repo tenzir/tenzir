@@ -2,7 +2,7 @@
 
 #include "vast/event.h"
 #include "vast/logger.h"
-#include "vast/io/serialization.h"
+#include "vast/serialization.h"
 #include "vast/util/make_unique.h"
 #include "vast/exception.h"
 #include "vast/logger.h"
@@ -55,7 +55,7 @@ bool operator==(segment::header const& x, segment::header const& y)
     x.event_meta == y.event_meta;
 }
 
-void segment::header::serialize(io::serializer& sink)
+void segment::header::serialize(serializer& sink)
 {
   sink << segment::magic;
   sink << version;
@@ -67,7 +67,7 @@ void segment::header::serialize(io::serializer& sink)
   sink << event_meta.n;
 }
 
-void segment::header::deserialize(io::deserializer& source)
+void segment::header::deserialize(deserializer& source)
 {
   uint32_t magic;
   source >> magic;
@@ -261,7 +261,7 @@ uuid const& segment::id() const
   return header_.id;
 }
 
-void segment::serialize(io::serializer& sink)
+void segment::serialize(serializer& sink)
 {
   sink << header_;
   sink.begin_sequence(chunks_.size());
@@ -270,7 +270,7 @@ void segment::serialize(io::serializer& sink)
   sink.end_sequence();
 }
 
-void segment::deserialize(io::deserializer& source)
+void segment::deserialize(deserializer& source)
 {
   source >> header_;
   uint64_t n;

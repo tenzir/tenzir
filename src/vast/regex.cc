@@ -1,6 +1,6 @@
 #include "vast/regex.h"
 
-#include "vast/io/serialization.h"
+#include "vast/serialization.h"
 
 namespace vast {
 
@@ -43,13 +43,13 @@ bool regex::match(std::string const& str,
   return true;
 }
 
-void regex::serialize(io::serializer& sink)
+void regex::serialize(serializer& sink)
 {
   VAST_ENTER(VAST_THIS);
   sink << str_;
 }
 
-void regex::deserialize(io::deserializer& source)
+void regex::deserialize(deserializer& source)
 {
   VAST_ENTER();
   source >> str_;

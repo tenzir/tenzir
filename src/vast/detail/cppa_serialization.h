@@ -3,13 +3,13 @@
 
 #include <cppa/deserializer.hpp>
 #include <cppa/serializer.hpp>
-#include "vast/io/serialization.h"
+#include "vast/serialization.h"
 #include "vast/util/byte_swap.h"
 
 namespace vast {
 namespace detail {
 
-class cppa_serializer : public io::serializer
+class cppa_serializer : public serializer
 {
 public:
   cppa_serializer(cppa::serializer* sink, std::string const& name);
@@ -44,7 +44,7 @@ private:
   size_t bytes_;
 };
 
-class cppa_deserializer : public io::deserializer
+class cppa_deserializer : public deserializer
 {
 public:
   cppa_deserializer(cppa::deserializer* source, std::string const& name);

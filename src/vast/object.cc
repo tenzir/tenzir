@@ -1,7 +1,7 @@
 #include "vast/object.h"
 
 #include <cassert>
-#include "vast/io/serialization.h"
+#include "vast/serialization.h"
 
 namespace vast {
 

@@ -1,5 +1,5 @@
 #include "vast/individual.h"
-#include "vast/io/serialization.h"
+#include "vast/serialization.h"
 
 namespace vast {
 
@@ -18,12 +18,12 @@ void individual::id(uuid id)
   id_ = std::move(id);
 }
 
-void individual::serialize(io::serializer& sink)
+void individual::serialize(serializer& sink)
 {
   sink << id_;
 }
 
-void individual::deserialize(io::deserializer& source)
+void individual::deserialize(deserializer& source)
 {
   source >> id_;
 }

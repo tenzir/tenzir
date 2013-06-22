@@ -1,4 +1,4 @@
-#include "vast/io/serialization.h"
+#include "vast/serialization.h"
 
 #include "vast/logger.h"
 #include "vast/type_info.h"
@@ -6,7 +6,6 @@
 #include "vast/util/coding.h"
 
 namespace vast {
-namespace io {
 
 bool serializer::typed() const
 {
@@ -60,7 +59,7 @@ bool deserializer::end_sequence()
   VAST_RETURN(true);
 }
 
-binary_serializer::binary_serializer(output_stream& sink)
+binary_serializer::binary_serializer(io::output_stream& sink)
   : sink_(sink)
 {
 }
@@ -166,7 +165,7 @@ size_t binary_serializer::bytes() const
 }
 
 
-binary_deserializer::binary_deserializer(input_stream& source)
+binary_deserializer::binary_deserializer(io::input_stream& source)
   : source_(source)
 {
 }
@@ -272,5 +271,4 @@ size_t binary_deserializer::bytes() const
   return bytes_;
 }
 
-} // namespace io
 } // namespace vast

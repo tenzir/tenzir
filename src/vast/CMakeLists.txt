@@ -31,6 +31,7 @@ set(libvast_sources
   segment.cc
   segmentizer.cc
   segment_manager.cc
+  serialization.cc
   shutdown.cc
   string.cc
   system_monitor.cc
@@ -60,7 +61,6 @@ set(libvast_sources
   io/compressed_stream.cc
   io/compression.cc
   io/file_stream.cc
-  io/serialization.cc
   io/stream.cc
   sink/file.cc
   sink/synchronous.cc

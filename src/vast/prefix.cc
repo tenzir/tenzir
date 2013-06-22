@@ -2,7 +2,7 @@
 
 #include "vast/logger.h"
 #include "vast/value.h" // TODO: remove after exception removal
-#include "vast/io/serialization.h"
+#include "vast/serialization.h"
 
 namespace vast {
 
@@ -73,14 +73,14 @@ void prefix::initialize()
   network_.mask(length_);
 }
 
-void prefix::serialize(io::serializer& sink)
+void prefix::serialize(serializer& sink)
 {
   VAST_ENTER(VAST_THIS);
   sink << length_;
   sink << network_;
 }
 
-void prefix::deserialize(io::deserializer& source)
+void prefix::deserialize(deserializer& source)
 {
   VAST_ENTER();
   source >> length_;

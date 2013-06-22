@@ -2,7 +2,7 @@
 #include "event_fixture.h"
 
 #include "vast/chunk.h"
-#include "vast/io/serialization.h"
+#include "vast/serialization.h"
 #include "vast/io/array_stream.h"
 #include "vast/io/container_stream.h"
 
@@ -66,7 +66,7 @@ BOOST_AUTO_TEST_CASE(byte_swapping)
 // A serializable object.
 class serializable
 {
-  friend io::access;
+  friend struct access;
 public:
   int i() const
   {
@@ -74,12 +74,12 @@ public:
   }
 
 private:
-  void serialize(io::serializer& sink)
+  void serialize(serializer& sink)
   {
     sink << i_ - 10;
   }
 
-  void deserialize(io::deserializer& source)
+  void deserialize(deserializer& source)
   {
     source >> i_;
     i_ += 10;
@@ -108,7 +108,7 @@ BOOST_AUTO_TEST_CASE(io_serialization_interface)
       auto out = io::make_container_output_stream(tmp);
       std::unique_ptr<io::compressed_output_stream> comp_out(
           io::compressed_output_stream::create(method, out));
-      io::binary_serializer sink(*comp_out);
+      binary_serializer sink(*comp_out);
       sink << input;
       sink << serializable();
     }
@@ -117,7 +117,7 @@ BOOST_AUTO_TEST_CASE(io_serialization_interface)
     io::array_input_stream in(tmp.data(), tmp.size());
     std::unique_ptr<io::compressed_input_stream> comp_in(
         io::compressed_input_stream::create(method, in));
-    io::binary_deserializer source(*comp_in);
+    binary_deserializer source(*comp_in);
     source >> output;
     BOOST_REQUIRE_EQUAL(input.size(), output.size());
     for (size_t i = 0; i < input.size(); ++i)

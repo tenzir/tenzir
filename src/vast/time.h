@@ -3,7 +3,7 @@
 
 #include <chrono>
 #include <string>
-#include "vast/io/fwd.h"
+#include "vast/fwd.h"
 #include "vast/util/operators.h"
 
 namespace vast {
@@ -129,9 +129,9 @@ public:
   rep count() const;
 
 private:
-  friend io::access;
-  void serialize(io::serializer& sink);
-  void deserialize(io::deserializer& source);
+  friend access;
+  void serialize(serializer& sink);
+  void deserialize(deserializer& source);
 
   duration_type duration_{0};
 };
@@ -233,9 +233,9 @@ public:
   std::tm to_tm() const;
 
 private:
-  friend io::access;
-  void serialize(io::serializer& sink);
-  void deserialize(io::deserializer& source);
+  friend access;
+  void serialize(serializer& sink);
+  void deserialize(deserializer& source);
 
   time_point_type time_point_;
 };

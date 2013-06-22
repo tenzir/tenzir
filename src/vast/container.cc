@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cassert>
 #include "vast/logger.h"
-#include "vast/io/serialization.h"
+#include "vast/serialization.h"
 
 namespace vast {
 namespace {
@@ -133,14 +133,14 @@ vast::value_type vector::type() const
   return type_;
 }
 
-void vector::serialize(io::serializer& sink)
+void vector::serialize(serializer& sink)
 {
   VAST_ENTER(VAST_THIS);
   sink << type_;
   sink << static_cast<super const&>(*this);
 }
 
-void vector::deserialize(io::deserializer& source)
+void vector::deserialize(deserializer& source)
 {
   VAST_ENTER();
   source >> type_;
@@ -287,14 +287,14 @@ vast::value_type set::type() const
   return type_;
 }
 
-void set::serialize(io::serializer& sink)
+void set::serialize(serializer& sink)
 {
   VAST_ENTER(VAST_THIS);
   sink << type_;
   sink << static_cast<super const&>(*this);
 }
 
-void set::deserialize(io::deserializer& source)
+void set::deserialize(deserializer& source)
 {
   VAST_ENTER();
   source >> type_;
@@ -492,7 +492,7 @@ table::const_iterator table::find(key_type const& key) const
   return (i != cend() && comp(key, *i)) ? cend() : i;
 }
 
-void table::serialize(io::serializer& sink)
+void table::serialize(serializer& sink)
 {
   VAST_ENTER(VAST_THIS);
   sink << key_type_;
@@ -500,7 +500,7 @@ void table::serialize(io::serializer& sink)
   sink << static_cast<super const&>(*this);
 }
 
-void table::deserialize(io::deserializer& source)
+void table::deserialize(deserializer& source)
 {
   VAST_ENTER();
   source >> key_type_;
@@ -636,13 +636,13 @@ void record::each(std::function<void(value const&)> f, bool recurse) const
       f(v);
 }
 
-void record::serialize(io::serializer& sink)
+void record::serialize(serializer& sink)
 {
   VAST_ENTER(VAST_THIS);
   sink << static_cast<super const&>(*this);
 }
 
-void record::deserialize(io::deserializer& source)
+void record::deserialize(deserializer& source)
 {
   VAST_ENTER();
   source >> static_cast<super&>(*this);

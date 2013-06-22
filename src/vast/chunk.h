@@ -2,10 +2,10 @@
 #define VAST_CHUNK_H
 
 #include "vast/logger.h"
+#include "vast/serialization.h"
 #include "vast/io/array_stream.h"
 #include "vast/io/container_stream.h"
 #include "vast/io/compressed_stream.h"
-#include "vast/io/serialization.h"
 #include "vast/util/make_unique.h"
 #include "vast/util/operators.h"
 
@@ -68,7 +68,7 @@ public:
       base_stream_ = make_unique<output_stream_type>(chunk_->buffer_);
       compressed_stream_.reset(io::compressed_output_stream::create(
           chunk_->compression_, *base_stream_));
-      sink_ = make_unique<io::binary_serializer>(*compressed_stream_);
+      sink_ = make_unique<binary_serializer>(*compressed_stream_);
     }
 
     /// Move-constructs a putter.
@@ -100,7 +100,7 @@ public:
     chunk* chunk_;
     std::unique_ptr<output_stream_type> base_stream_;
     std::unique_ptr<io::compressed_output_stream> compressed_stream_;
-    std::unique_ptr<io::binary_serializer> sink_;
+    std::unique_ptr<binary_serializer> sink_;
   };
 
   /// A proxy class to deserialize from the chunk.
@@ -143,7 +143,7 @@ public:
       compressed_stream_.reset(io::compressed_input_stream::create(
           chunk_->compression_,
           *base_stream_));
-      source_ = make_unique<io::binary_deserializer>(*compressed_stream_);
+      source_ = make_unique<binary_deserializer>(*compressed_stream_);
     }
 
     /// Deserializes an object from the chunk.
@@ -192,7 +192,7 @@ public:
     uint32_t available_ = 0;
     std::unique_ptr<io::array_input_stream> base_stream_;
     std::unique_ptr<io::compressed_input_stream> compressed_stream_;
-    std::unique_ptr<io::binary_deserializer> source_;
+    std::unique_ptr<binary_deserializer> source_;
   };
 
   /// Constructs a chunk.
@@ -229,14 +229,14 @@ public:
   }
 
 private:
-  friend io::access;
-  void serialize(io::serializer& sink)
+  friend access;
+  void serialize(serializer& sink)
   {
     sink << elements_;
     sink << buffer_;
   }
 
-  void deserialize(io::deserializer& source)
+  void deserialize(deserializer& source)
   {
     source >> elements_;
     source >> buffer_;

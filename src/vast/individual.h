@@ -2,7 +2,7 @@
 #define VAST_INDIVIDUAL_H
 
 #include "vast/uuid.h"
-#include "vast/io/fwd.h"
+#include "vast/fwd.h"
 
 namespace vast {
 
@@ -23,9 +23,9 @@ public:
   void id(uuid id);
 
 private:
-  friend io::access;
-  void serialize(io::serializer& sink);
-  void deserialize(io::deserializer& source);
+  friend access;
+  void serialize(serializer& sink);
+  void deserialize(deserializer& source);
   friend void swap(individual& x, individual& y);
 
   uuid id_;

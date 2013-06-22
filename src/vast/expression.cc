@@ -7,7 +7,7 @@
 #include "vast/detail/ast/query.h"
 #include "vast/detail/parser/parse.h"
 #include "vast/detail/parser/query.h"
-#include "vast/io/serialization.h"
+#include "vast/serialization.h"
 #include "vast/util/make_unique.h"
 
 namespace vast {
@@ -736,13 +736,13 @@ void expression::accept(expr::visitor& v)
   root_->accept(v);
 }
 
-void expression::serialize(io::serializer& sink)
+void expression::serialize(serializer& sink)
 {
   sink << str_;
   sink << schema_;
 }
 
-void expression::deserialize(io::deserializer& source)
+void expression::deserialize(deserializer& source)
 {
   std::string str;
   source >> str;

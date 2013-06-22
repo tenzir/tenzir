@@ -1,7 +1,7 @@
 #include "vast/event.h"
 
 #include "vast/logger.h"
-#include "vast/io/serialization.h"
+#include "vast/serialization.h"
 
 namespace vast {
 
@@ -63,7 +63,7 @@ void event::timestamp(time_point time)
   timestamp_ = time;
 }
 
-void event::serialize(io::serializer& sink)
+void event::serialize(serializer& sink)
 {
   VAST_ENTER(VAST_THIS);
   sink << id_;
@@ -72,7 +72,7 @@ void event::serialize(io::serializer& sink)
   sink << static_cast<record const&>(*this);
 }
 
-void event::deserialize(io::deserializer& source)
+void event::deserialize(deserializer& source)
 {
   VAST_ENTER();
   source >> id_;

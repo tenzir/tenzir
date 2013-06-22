@@ -3,7 +3,7 @@
 
 #include <array>
 #include <string>
-#include "vast/io/fwd.h"
+#include "vast/fwd.h"
 #include "vast/util/operators.h"
 
 namespace vast {
@@ -133,9 +133,9 @@ private:
   void from_v4(char const* str);
   void from_v6(char const* str);
 
-  friend io::access;
-  void serialize(io::serializer& sink);
-  void deserialize(io::deserializer& source);
+  friend access;
+  void serialize(serializer& sink);
+  void deserialize(deserializer& source);
 
   friend bool operator==(address const& x, address const& y);
   friend bool operator<(address const& x, address const& y);

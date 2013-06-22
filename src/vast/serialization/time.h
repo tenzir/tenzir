@@ -1,10 +1,9 @@
-#ifndef VAST_IO_SERIALIZATION_TIME_H
-#define VAST_IO_SERIALIZATION_TIME_H
+#ifndef VAST_SERIALIZATION_TIME_H
+#define VAST_SERIALIZATION_TIME_H
 
 #include <chrono>
 
 namespace vast {
-namespace io {
 
 template <typename Rep, typename Period>
 void serialize(serializer& sink, std::chrono::duration<Rep, Period> d)
@@ -34,7 +33,6 @@ void deserialize(deserializer& source, std::chrono::time_point<Clock, Duration>&
   t = std::chrono::time_point<Clock, Duration>(since_epoch);
 }
 
-} // namespace io
 } // namespace vast
 
 #endif

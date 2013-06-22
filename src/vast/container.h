@@ -2,7 +2,7 @@
 #define VAST_CONTAINER_H
 
 #include "vast/value.h"
-#include "vast/io/fwd.h"
+#include "vast/fwd.h"
 #include "vast/util/operators.h"
 
 namespace vast {
@@ -187,9 +187,9 @@ public:
   vast::value_type type() const;
 
 private:
-  friend io::access;
-  void serialize(io::serializer& sink);
-  void deserialize(io::deserializer& source);
+  friend access;
+  void serialize(serializer& sink);
+  void deserialize(deserializer& source);
 
   bool any_impl(std::function<bool(value const&)> f) const;
   bool all_impl(std::function<bool(value const&)> f) const;
@@ -313,9 +313,9 @@ public:
   vast::value_type type() const;
 
 private:
-  friend io::access;
-  void serialize(io::serializer& sink);
-  void deserialize(io::deserializer& source);
+  friend access;
+  void serialize(serializer& sink);
+  void deserialize(deserializer& source);
 
   bool any_impl(std::function<bool(value const&)> f) const;
   bool all_impl(std::function<bool(value const&)> f) const;
@@ -439,9 +439,9 @@ public:
   const_iterator find(key_type const& key) const;
 
 private:
-  friend io::access;
-  void serialize(io::serializer& sink);
-  void deserialize(io::deserializer& source);
+  friend access;
+  void serialize(serializer& sink);
+  void deserialize(deserializer& source);
 
   bool any_impl(std::function<bool(value const&)> f) const;
   bool all_impl(std::function<bool(value const&)> f) const;
@@ -508,9 +508,9 @@ public:
   void each(std::function<void(value const&)> f, bool recurse = false) const;
 
 private:
-  friend io::access;
-  void serialize(io::serializer& sink);
-  void deserialize(io::deserializer& source);
+  friend access;
+  void serialize(serializer& sink);
+  void deserialize(deserializer& source);
 
   value const* do_flat_at(size_t i, size_t& base) const;
   bool any_impl(std::function<bool(value const&)> f) const;

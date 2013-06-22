@@ -4,7 +4,7 @@
 #include "vast/container.h"
 #include "vast/string.h"
 #include "vast/value.h"
-#include "vast/io/fwd.h"
+#include "vast/fwd.h"
 #include "vast/util/operators.h"
 
 namespace vast {
@@ -60,9 +60,9 @@ private:
   friend bool operator<(event const& x, event const& y);
   friend void swap(event& x, event& y);
 
-  friend io::access;
-  void serialize(io::serializer& sink);
-  void deserialize(io::deserializer& source);
+  friend access;
+  void serialize(serializer& sink);
+  void deserialize(deserializer& source);
 
   uint64_t id_ = 0;
   time_point timestamp_;

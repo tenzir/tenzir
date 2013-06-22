@@ -2,7 +2,7 @@
 #define VAST_IO_COMPRESSION_H
 
 #include "vast/config.h"
-#include "vast/io/fwd.h"
+#include "vast/fwd.h"
 
 namespace vast {
 namespace io {

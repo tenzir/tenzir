@@ -4,7 +4,7 @@
 #include "vast/segment.h"
 #include "vast/logger.h"
 #include "vast/io/file_stream.h"
-#include "vast/io/serialization.h"
+#include "vast/serialization.h"
 
 namespace vast {
 
@@ -80,7 +80,7 @@ void segment_manager::store_segment(cppa::cow_tuple<segment> t)
     file f(filename);
     f.open(file::write_only);
     io::file_output_stream out(f);
-    io::binary_serializer sink(out);
+    binary_serializer sink(out);
     sink << s;
   }
 
@@ -98,7 +98,7 @@ cppa::cow_tuple<segment> segment_manager::on_miss(uuid const& uid)
   file f(dir_ / path(to_string(uid)));
   f.open(file::read_only);
   io::file_input_stream in(f);
-  io::binary_deserializer source(in);
+  binary_deserializer source(in);
   segment s;
   source >> s;
   return {std::move(s)};
