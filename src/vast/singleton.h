@@ -29,8 +29,6 @@ class singleton
   singleton& operator=(singleton const&) = delete;
 
 public:
-  singleton() = default;
-
   /// Retrieves the one-and-only instance of `T`.
   /// @return A pointer to access the instance of `T`.
   static T* instance()
@@ -70,9 +68,15 @@ public:
     while (true);
   }
 
+protected:
+  singleton() = default;
+
 private:
   static std::atomic<T*> ptr;
 };
+
+template <typename T>
+std::atomic<T*> singleton<T>::ptr;
 
 } // namespace vast
 
