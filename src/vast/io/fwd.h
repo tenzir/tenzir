@@ -6,7 +6,7 @@
 namespace vast {
 namespace io {
 
-class access;
+struct access;
 class input_stream;
 class output_stream;
 class array_input_stream;

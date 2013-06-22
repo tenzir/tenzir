@@ -16,6 +16,7 @@ set(libvast_sources
   individual.cc
   ingestor.cc
   logger.cc
+  object.cc
   operator.cc
   parse.cc
   port.cc

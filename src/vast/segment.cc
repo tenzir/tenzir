@@ -264,16 +264,17 @@ uuid const& segment::id() const
 void segment::serialize(io::serializer& sink)
 {
   sink << header_;
-  sink.write_sequence_begin(chunks_.size());
+  sink.begin_sequence(chunks_.size());
   for (auto& tuple : chunks_)
     sink << cppa::get<0>(tuple);
+  sink.end_sequence();
 }
 
 void segment::deserialize(io::deserializer& source)
 {
   source >> header_;
   uint64_t n;
-  source.read_sequence_begin(n);
+  source.begin_sequence(n);
   chunks_.resize(n);
   for (auto& tuple : chunks_)
   {
@@ -281,6 +282,7 @@ void segment::deserialize(io::deserializer& source)
     source >> chk;
     tuple = std::move(cppa::make_cow_tuple(std::move(chk)));
   }
+  source.end_sequence();
 }
 
 bool operator==(segment const& x, segment const& y)

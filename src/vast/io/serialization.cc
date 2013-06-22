@@ -1,14 +1,86 @@
 #include "vast/io/serialization.h"
 
 #include "vast/logger.h"
+#include "vast/type_info.h"
+#include "vast/detail/type_manager.h"
 #include "vast/util/coding.h"
 
 namespace vast {
 namespace io {
 
+bool serializer::typed() const
+{
+  return true;
+}
+
+bool serializer::begin_object(stable_type_info const& ti)
+{
+  VAST_ENTER();
+  save(*this, ti.id());
+  VAST_RETURN(true);
+}
+
+bool serializer::end_object()
+{
+  // Do nothing by default.
+  return true;
+}
+
+bool serializer::end_sequence()
+{
+  // Do nothing by default.
+  return true;
+}
+
+bool deserializer::typed() const
+{
+  return true;
+}
+
+stable_type_info const* deserializer::begin_object()
+{
+  VAST_ENTER();
+  type_id id = 0;
+  load(*this, id);
+  auto ti = detail::type_manager::instance()->lookup(id);
+  VAST_RETURN(ti);
+}
+
+bool deserializer::end_object()
+{
+  // Do nothing by default.
+  VAST_ENTER();
+  VAST_RETURN(true);
+}
+
+bool deserializer::end_sequence()
+{
+  // Do nothing by default.
+  VAST_ENTER();
+  VAST_RETURN(true);
+}
+
 binary_serializer::binary_serializer(output_stream& sink)
   : sink_(sink)
 {
+}
+
+bool binary_serializer::typed() const
+{
+  return true;
+}
+
+bool binary_serializer::begin_object(stable_type_info const&)
+{
+  VAST_ENTER();
+  VAST_RETURN(true);
+}
+
+bool binary_serializer::begin_sequence(uint64_t size)
+{
+  VAST_ENTER();
+  bytes_ += util::varbyte::size(size);
+  VAST_RETURN(sink_.write_varbyte(&size));
 }
 
 bool binary_serializer::write_bool(bool x)
@@ -81,20 +153,6 @@ bool binary_serializer::write_double(double x)
   VAST_RETURN(sink_.write<double>(&x));
 }
   
-bool binary_serializer::write_sequence_begin(uint64_t size)
-{
-  VAST_ENTER();
-  bytes_ += util::varbyte::size(size);
-  VAST_RETURN(sink_.write_varbyte(&size));
-}
-
-bool binary_serializer::write_sequence_end()
-{
-  // Do nothing.
-  VAST_ENTER();
-  VAST_RETURN(true);
-}
-
 bool binary_serializer::write_raw(void const* data, size_t size)
 {
   VAST_ENTER(VAST_ARG(data, size));
@@ -111,6 +169,25 @@ size_t binary_serializer::bytes() const
 binary_deserializer::binary_deserializer(input_stream& source)
   : source_(source)
 {
+}
+
+bool binary_deserializer::typed() const
+{
+  return true;
+}
+
+stable_type_info const* binary_deserializer::begin_object()
+{
+  VAST_ENTER();
+  VAST_RETURN(nullptr);
+}
+
+bool binary_deserializer::begin_sequence(uint64_t& size)
+{
+  VAST_ENTER();
+  auto success = source_.read_varbyte(&size);
+  bytes_ += util::varbyte::size(size);
+  VAST_RETURN(success);
 }
 
 bool binary_deserializer::read_bool(bool& x)
@@ -183,21 +260,6 @@ bool binary_deserializer::read_double(double& x)
   VAST_RETURN(source_.read<double>(&x), x);
 }
   
-bool binary_deserializer::read_sequence_begin(uint64_t& size)
-{
-  VAST_ENTER();
-  auto success = source_.read_varbyte(&size);
-  bytes_ += util::varbyte::size(size);
-  VAST_RETURN(success);
-}
-
-bool binary_deserializer::read_sequence_end()
-{
-  // Do nothing.
-  VAST_ENTER();
-  VAST_RETURN(true);
-}
-
 bool binary_deserializer::read_raw(void* data, size_t size)
 {
   VAST_ENTER();

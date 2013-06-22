@@ -457,17 +457,17 @@ void string::tag(char t)
 void string::serialize(io::serializer& sink)
 {
   VAST_ENTER(VAST_THIS);
-  sink.write_sequence_begin(size());
+  sink.begin_sequence(size());
   if (! empty())
     sink.write_raw(data(), size());
-  sink.write_sequence_end();
+  sink.end_sequence();
 }
 
 void string::deserialize(io::deserializer& source)
 {
   VAST_ENTER();
   uint64_t size;
-  source.read_sequence_begin(size);
+  source.begin_sequence(size);
   if (size > 0)
   {
     if (size > std::numeric_limits<size_type>::max())
@@ -475,7 +475,7 @@ void string::deserialize(io::deserializer& source)
     auto data = prepare(size);
     source.read_raw(data, size);
   }
-  source.read_sequence_end();
+  source.end_sequence();
   VAST_LEAVE(VAST_THIS);
 }
 

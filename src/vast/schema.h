@@ -175,7 +175,7 @@ public:
   void add_event(event e);
 
 private:
-  friend class io::access;
+  friend io::access;
   void serialize(io::serializer& sink);
   void deserialize(io::deserializer& source);
   friend bool operator==(schema const& x, schema const& y);
