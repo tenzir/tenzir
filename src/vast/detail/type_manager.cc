@@ -1,30 +1,33 @@
 #include "vast/detail/type_manager.h"
 
+#include <cassert>
 #include <exception>
 #include "vast/type_info.h"
+#include "vast/logger.h"
 
 namespace vast {
 namespace detail {
 
-void type_manager::add(std::type_info const& ti,
-                       std::unique_ptr<stable_type_info> uti)
+bool type_manager::add(std::type_info const& ti, global_type_info* gti)
 {
-  if (by_id_.find(uti->id()) != by_id_.end())
-    throw std::logic_error("duplicate type ID");
+  if (by_ti_.find(std::type_index(ti)) == by_ti_.end())
+    return false;
+  if (by_name_.find(ti.name()) == by_name_.end())
+    return false;;
 
-  if (by_name_.find(uti->name()) != by_name_.end())
-    throw std::logic_error("duplicate type name");
+  gti->id_ = ++id_;
 
-  auto idx = std::type_index(ti);
-  if (by_ti_.find(idx) != by_ti_.end())
-    throw std::logic_error("duplicate std::type_info");
+  VAST_LOG_DEBUG("registering new type " << detail::demangle(ti.name()) <<
+                 " with id " << id_ << " (aka " << ti.name() << ")");
 
-  by_id_.emplace(uti->id(), uti.get());
-  by_name_.emplace(uti->name(), uti.get());
-  by_ti_.emplace(std::move(idx), std::move(uti));
+  by_id_.emplace(gti->id(), gti);
+  by_name_.emplace(gti->name(), gti);
+  by_ti_.emplace(std::type_index(ti), std::unique_ptr<global_type_info>(gti));
+
+  return true;
 }
 
-stable_type_info const* type_manager::lookup(std::type_info const& ti) const
+global_type_info const* type_manager::lookup(std::type_info const& ti) const
 {
   auto i = by_ti_.find(std::type_index(ti));
   if (i == by_ti_.end())
@@ -32,7 +35,7 @@ stable_type_info const* type_manager::lookup(std::type_info const& ti) const
   return i->second.get();
 }
 
-stable_type_info const* type_manager::lookup(type_id id) const
+global_type_info const* type_manager::lookup(type_id id) const
 {
   auto i = by_id_.find(id);
   if (i == by_id_.end())
@@ -40,7 +43,7 @@ stable_type_info const* type_manager::lookup(type_id id) const
   return i->second;
 }
 
-stable_type_info const* type_manager::lookup(std::string const& name) const
+global_type_info const* type_manager::lookup(std::string const& name) const
 {
   auto i = by_name_.find(name);
   if (i == by_name_.end())
@@ -55,7 +58,29 @@ type_manager* type_manager::create()
 
 void type_manager::initialize()
 {
-  // TODO: announce built-in types.
+  vast::announce<bool>();
+  //announce<int8_t>();
+  //announce<int16_t>();
+  //announce<int32_t>();
+  //announce<int64_t>();
+  //announce<uint8_t>();
+  //announce<uint16_t>();
+  //announce<uint32_t>();
+  //announce<uint64_t>();
+  //announce<double>();
+  //announce<float>();
+
+  //announce<std::string>();
+  //announce<vector<std::string>>();
+
+  //announce<string>();
+  //announce<regex>();
+  //announce<address>();
+  //announce<prefix>();
+  //announce<port>();
+
+  //announce<value>();
+  //announce<value_type>();
 }
 
 void type_manager::destroy()

@@ -1,6 +1,7 @@
 #ifndef VAST_DETAIL_TYPE_MANAGER_H
 #define VAST_DETAIL_TYPE_MANAGER_H
 
+#include <memory>
 #include <typeindex>
 #include <typeinfo>
 #include <unordered_map>
@@ -10,7 +11,7 @@
 
 namespace vast {
 
-class stable_type_info;
+class global_type_info;
 
 namespace detail {
 
@@ -21,9 +22,10 @@ class type_manager : public singleton<type_manager>
 
 public:
   /// Registers a type with the type system.
-  /// @tparam T The type to register.
-  /// @throw `std::runtime_error` if `T` has already been registered.
-  void add(std::type_info const& ti, std::unique_ptr<stable_type_info> uti);
+  /// @param ti The type information of the type to register.
+  /// @param gti The global type information to associate with *ti*.
+  /// @throw `std::logic_error` if *ti* has already been registered.
+  bool add(std::type_info const& ti, global_type_info* gti);
 
   /// Retrieves type information by C++ RTTI.
   ///
@@ -31,7 +33,7 @@ public:
   ///
   /// @return A pointer to VAST's type information for *ti* or `nullptr` if no
   /// such information exists.
-  stable_type_info const* lookup(std::type_info const& ti) const;
+  global_type_info const* lookup(std::type_info const& ti) const;
 
   /// Retrieves type information by type ID.
   ///
@@ -39,7 +41,7 @@ public:
   ///
   /// @return A pointer to VAST's type information for *id* or `nullptr` if no
   /// such information exists.
-  stable_type_info const* lookup(type_id id) const;
+  global_type_info const* lookup(type_id id) const;
 
   /// Retrieves type information by type name.
   ///
@@ -47,7 +49,7 @@ public:
   ///
   /// @return A pointer to VAST's type information for *name* or `nullptr` if
   /// no such information exists.
-  stable_type_info const* lookup(std::string const& name) const;
+  global_type_info const* lookup(std::string const& name) const;
 
 private:
   // Singleton implementation.
@@ -56,10 +58,10 @@ private:
   void destroy();
   void dispose();
 
-  std::atomic<uint16_t> id_;
-  std::unordered_map<std::type_index, std::unique_ptr<stable_type_info>> by_ti_;
-  std::unordered_map<type_id, stable_type_info*> by_id_;
-  std::unordered_map<std::string, stable_type_info*> by_name_;
+  uint16_t id_;
+  std::unordered_map<std::type_index, std::unique_ptr<global_type_info>> by_ti_;
+  std::unordered_map<type_id, global_type_info const*> by_id_;
+  std::unordered_map<std::string, global_type_info const*> by_name_;
 };
 
 } // namespace detail

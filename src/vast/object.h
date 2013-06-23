@@ -6,7 +6,7 @@
 
 namespace vast {
 
-class stable_type_info;
+class global_type_info;
 
 /// Wraps a value of an announced type.
 class object
@@ -15,7 +15,7 @@ public:
   template <typename T>
   static object create(T x)
   {
-    auto ti = stable_typeid<T>();
+    auto ti = global_typeid<T>();
     if (! ti)
       throw std::invalid_argument("missing type info for type T");
     return {new T(std::move(x)), ti};
@@ -24,7 +24,7 @@ public:
   template <typename T>
   static object adopt(T* x)
   {
-    auto ti = stable_typeid<T>();
+    auto ti = global_typeid<T>();
     if (! ti)
       throw std::invalid_argument("missing type info for type T");
     return {x, ti};
@@ -48,15 +48,15 @@ public:
   /// Constructs an object from an existing value.
   /// @param value
   /// @warning Takes ownership of *value*.
-  object(void* value, stable_type_info const* type);
-  
+  object(void* value, global_type_info const* type);
+
   explicit operator bool() const;
 
   void const* value() const;
 
   void* mutable_value() const;
 
-  stable_type_info const* type() const;
+  global_type_info const* type() const;
 
 private:
   friend access;
@@ -64,7 +64,7 @@ private:
   void deserialize(deserializer& source);
 
   void* value_ = nullptr;
-  stable_type_info const* type_ = nullptr;
+  global_type_info const* type_ = nullptr;
 };
 
 template <typename T>

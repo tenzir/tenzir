@@ -5,7 +5,7 @@
 
 namespace vast {
 
-object::object(void* value, stable_type_info const* type)
+object::object(void* value, global_type_info const* type)
   : value_(value), type_(type)
 {
   assert(value);
@@ -26,7 +26,7 @@ object::operator bool() const
   return value_ != nullptr;
 }
 
-stable_type_info const* object::type() const
+global_type_info const* object::type() const
 {
   return type_;
 }

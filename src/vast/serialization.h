@@ -26,7 +26,7 @@ public:
   /// The default implementation serializes the unique type ID.
   /// @param ti The type information descripting the object instance.
   /// @return `true` on success.
-  virtual bool begin_object(stable_type_info const& ti);
+  virtual bool begin_object(global_type_info const& ti);
 
   /// Finishes reading an object.
   /// The default implementation does nothing.
@@ -83,7 +83,7 @@ public:
   /// corresponding type info object..
   /// @param ti The type information descripting the object instance.
   /// @return An engaged option on success.
-  virtual stable_type_info const* begin_object();
+  virtual global_type_info const* begin_object();
 
   /// Finishes writing an object.
   /// The default implementation does nothing.
@@ -133,7 +133,7 @@ public:
   binary_serializer(io::output_stream& sink);
 
   virtual bool typed() const override;
-  virtual bool begin_object(stable_type_info const& ti) override;
+  virtual bool begin_object(global_type_info const& ti) override;
   virtual bool begin_sequence(uint64_t size) override;
   virtual bool write_bool(bool x) override;
   virtual bool write_int8(int8_t x) override;
@@ -162,7 +162,7 @@ public:
   binary_deserializer(io::input_stream& source);
 
   virtual bool typed() const override;
-  virtual stable_type_info const* begin_object() override;
+  virtual global_type_info const* begin_object() override;
   virtual bool begin_sequence(uint64_t& size) override;
   virtual bool read_bool(bool& x) override;
   virtual bool read_int8(int8_t& x) override;
@@ -247,7 +247,7 @@ serializer& operator<<(serializer& sink, T const& x)
   auto typed = sink.typed();
   if (typed)
   {
-    auto ti = stable_typeid<T>();
+    auto ti = global_typeid<T>();
     if (! ti)
       throw std::logic_error("lacking type info for deserialization");
     sink.begin_object(*ti);

@@ -12,7 +12,7 @@ bool serializer::typed() const
   return true;
 }
 
-bool serializer::begin_object(stable_type_info const& ti)
+bool serializer::begin_object(global_type_info const& ti)
 {
   VAST_ENTER();
   save(*this, ti.id());
@@ -22,13 +22,15 @@ bool serializer::begin_object(stable_type_info const& ti)
 bool serializer::end_object()
 {
   // Do nothing by default.
-  return true;
+  VAST_ENTER();
+  VAST_RETURN(true);
 }
 
 bool serializer::end_sequence()
 {
   // Do nothing by default.
-  return true;
+  VAST_ENTER();
+  VAST_RETURN(true);
 }
 
 bool deserializer::typed() const
@@ -36,7 +38,7 @@ bool deserializer::typed() const
   return true;
 }
 
-stable_type_info const* deserializer::begin_object()
+global_type_info const* deserializer::begin_object()
 {
   VAST_ENTER();
   type_id id = 0;
@@ -69,7 +71,7 @@ bool binary_serializer::typed() const
   return true;
 }
 
-bool binary_serializer::begin_object(stable_type_info const&)
+bool binary_serializer::begin_object(global_type_info const&)
 {
   VAST_ENTER();
   VAST_RETURN(true);
@@ -175,7 +177,7 @@ bool binary_deserializer::typed() const
   return true;
 }
 
-stable_type_info const* binary_deserializer::begin_object()
+global_type_info const* binary_deserializer::begin_object()
 {
   VAST_ENTER();
   VAST_RETURN(nullptr);
