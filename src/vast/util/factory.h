@@ -9,7 +9,19 @@ namespace vast {
 namespace util {
 
 template <typename T>
-struct pointer_construction
+struct bare_pointer_construction
+{
+  typedef T* result_type;
+
+  template <typename... Args>
+  static result_type construct(Args&&... args)
+  {
+    return new T(std::forward<Args>(args)...);
+  }
+};
+
+template <typename T>
+struct unique_pointer_construction
 {
   typedef std::unique_ptr<T> result_type;
 
@@ -39,7 +51,7 @@ struct value_construction
 /// @tparam Constructor The construction policy.
 template <
   typename T,
-  template <typename> class Constructor = pointer_construction
+  template <typename> class Constructor = unique_pointer_construction
 >
 struct factory
 {
@@ -63,7 +75,7 @@ template <typename T, typename K>
 class polymorphic_factory
 {
   template <typename U>
-  using factory_type = factory<U, pointer_construction>;
+  using factory_type = factory<U, unique_pointer_construction>;
 
 public:
   typedef typename factory_type<T>::result_type result_type;

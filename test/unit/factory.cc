@@ -25,7 +25,11 @@ BOOST_AUTO_TEST_CASE(value_factories)
 
 BOOST_AUTO_TEST_CASE(pointer_factories)
 {
-  util::factory<double, util::pointer_construction> double_factory;
+  util::factory<std::string, util::bare_pointer_construction> string_factory;
+  std::string foo{"foo"};
+  BOOST_CHECK_EQUAL(*string_factory("foo"), foo);
+
+  util::factory<double, util::unique_pointer_construction> double_factory;
   BOOST_CHECK_EQUAL(*double_factory(4.2), 4.2);
 }
 
