@@ -9,6 +9,21 @@ struct access;
 class serializer;
 class deserializer;
 
+class value;
+enum value_type : uint8_t;
+
+class address;
+class time_range;
+class time_point;
+class port;
+class prefix;
+class record;
+class regex;
+class set;
+class string;
+class table;
+class vector;
+
 namespace io {
 
 class input_stream;
