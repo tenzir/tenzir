@@ -109,7 +109,9 @@ struct logger::impl
     filename << '_' << ::getpid();
 #endif
     filename << ".log";
-    log_file.open(to_string(dir / path(filename.str())), std::ios::out);
+    if (! exists(dir))
+      mkdir(dir);
+    log_file.open(to_string(dir / path(filename.str())));
     if (! log_file)
       return false;
 
@@ -155,7 +157,7 @@ struct logger::impl
 
   level console_level;
   level file_level;
-  std::fstream log_file;
+  std::ofstream log_file;
   std::thread log_thread;
   util::queue<record> records;
 };
@@ -259,9 +261,9 @@ logger::~logger()
   delete impl_;
 }
 
-void logger::init(level console, level file, path dir)
+bool logger::init(level console, level file, path dir)
 {
-  impl_->init(console, file, dir);
+  return impl_->init(console, file, dir);
 }
 
 void logger::log(level lvl, std::string&& msg)

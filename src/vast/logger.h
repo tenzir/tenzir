@@ -78,7 +78,8 @@ public:
   /// @param console The log level of the console.
   /// @param file The log level of the logfile.
   /// @param dir The directory to create the log file in.
-  void init(level console, level file, path dir);
+  /// @return `true` on success.
+  bool init(level console, level file, path dir);
 
   /// Logs a record.
   /// @param lvl The log level.
