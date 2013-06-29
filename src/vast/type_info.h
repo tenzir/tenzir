@@ -1,8 +1,10 @@
 #ifndef VAST_TYPE_INFO_H
 #define VAST_TYPE_INFO_H
 
+#include <cassert>
 #include <cstdint>
 #include <string>
+#include <functional>
 #include <typeinfo>
 #include <type_traits>
 #include "vast/fwd.h"
@@ -17,35 +19,62 @@ namespace detail {
 class type_manager;
 } // namespace detail
 
+/// Enhanced RTTI.
 class global_type_info
   : util::equality_comparable<global_type_info>,
     util::equality_comparable<global_type_info, std::type_info>,
     util::totally_ordered<global_type_info>
 {
-  friend detail::type_manager;
   friend bool operator<(global_type_info const& x, global_type_info const& y);
   friend bool operator==(global_type_info const& x, global_type_info const& y);
   friend bool operator==(global_type_info const& x, std::type_info const& y);
 
 public:
+  /// Retrieves the ID of this type.
+  /// @return The ID of this type.
   type_id id() const;
 
+  /// Retrieves the demangled and globally unique type name.
+  /// @param The name of this type.
   std::string const& name() const;
 
-  object construct() const;
+  /// Default-constructs an object of this type.
+  /// @return an object with this type.
+  object create() const;
 
+  /// Determines whether a given C++ type maps to this type.
+  /// @param ti The C++ type info.
+  /// @return `true` if this type maps to *ti*.
   virtual bool equals(std::type_info const& ti) const = 0;
 
+  /// Deletes an instance of this type.
+  /// @param instance The instance to delete.
   virtual void destroy(void const* instance) const = 0;
 
-  virtual void* create(void const* instance = nullptr) const = 0;
+  /// Default- or copy-constructs an instance of this type.
+  ///
+  /// @param instance If `nullptr`, this function returns a heap-allocated
+  /// instance of this type and creates a copy of the given parameter
+  /// otherwise.
+  ///
+  /// @return A heap-allocated instance of this type.
+  virtual void* construct(void const* instance = nullptr) const = 0;
 
-  virtual void serialize(void const* instance, serializer& sink) const = 0;
+  /// Serializes an instance of this type.
+  /// @param sink The serializer to write into.
+  /// @param instance A valid instance of of this type.
+  /// @pre `instance != nullptr`
+  virtual void serialize(serializer& sink, void const* instance) const = 0;
 
-  virtual void deserialize(void* instance, deserializer& source) const = 0;
+  /// Deserializes an instance of this type.
+  /// @param source The deserializer to read from.
+  /// @param instance A valid instance of of this type.
+  /// @pre `instance != nullptr`
+  /// @post `*instance` holds a valid instance of this type.
+  virtual void deserialize(deserializer& source, void* instance) const = 0;
 
 protected:
-  global_type_info(std::string name);
+  global_type_info(type_id id, std::string name);
 
 private:
   type_id id_ = 0;
@@ -57,8 +86,8 @@ template <typename T>
 class concrete_type_info : public global_type_info
 {
 public:
-  concrete_type_info()
-    : global_type_info(detail::demangle(typeid(T)))
+  concrete_type_info(type_id id)
+    : global_type_info(id, detail::demangle(typeid(T)))
   {
   }
 
@@ -72,19 +101,21 @@ public:
     delete cast(instance);
   }
 
-  virtual void* create(void const* instance) const override
+  virtual void* construct(void const* instance) const override
   {
     return instance ? new T(*cast(instance)) : new T();
   }
 
-  virtual void serialize(void const* instance, serializer& sink) const override
+  virtual void serialize(serializer& sink, void const* instance) const override
   {
-    sink << *cast(instance);
+    assert(instance != nullptr);
+    save(sink, *cast(instance));
   }
 
-  virtual void deserialize(void* instance, deserializer& source) const override
+  virtual void deserialize(deserializer& source, void* instance) const override
   {
-    source >> *cast(instance);
+    assert(instance != nullptr);
+    load(source, *cast(instance));
   }
 
 private:
@@ -100,7 +131,8 @@ private:
 };
 
 namespace detail {
-bool announce(std::type_info const& ti, global_type_info* gti);
+bool register_type(std::type_info const& ti,
+                   std::function<global_type_info*(type_id)> f);
 } // namespace detail
 
 /// Registers a type with VAST's runtime type system.
@@ -124,7 +156,8 @@ bool announce()
   static_assert(std::is_default_constructible<T>::value,
                 "announced types must be default-constructible");
 
-  return detail::announce(typeid(T), new TypeInfo);
+  auto factory = [](type_id id) { return new TypeInfo(id); };
+  return detail::register_type(typeid(T), factory);
 }
 
 /// Retrieves runtime type information about a given type.

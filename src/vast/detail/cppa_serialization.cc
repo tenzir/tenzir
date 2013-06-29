@@ -15,6 +15,17 @@ cppa_serializer::~cppa_serializer()
   sink_->end_object();
 }
 
+bool cppa_serializer::begin_sequence(uint64_t size)
+{
+  return write(size);
+}
+
+bool cppa_serializer::end_sequence()
+{
+  // Do nothing.
+  return true;
+}
+
 bool cppa_serializer::write_bool(bool x)
 {
   return write(static_cast<uint8_t>(x));
@@ -65,17 +76,6 @@ bool cppa_serializer::write_double(double x)
   return write(x);
 }
   
-bool cppa_serializer::begin_sequence(uint64_t size)
-{
-  return write(size);
-}
-
-bool cppa_serializer::end_sequence()
-{
-  // Do nothing.
-  return true;
-}
-
 bool cppa_serializer::write_raw(void const* data, size_t size)
 {
   sink_->write_raw(size, data);

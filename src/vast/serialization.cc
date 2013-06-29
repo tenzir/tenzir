@@ -9,7 +9,7 @@ namespace vast {
 
 bool serializer::typed() const
 {
-  return true;
+  return false;
 }
 
 bool serializer::begin_object(global_type_info const& ti)
@@ -35,7 +35,7 @@ bool serializer::end_sequence()
 
 bool deserializer::typed() const
 {
-  return true;
+  return false;
 }
 
 global_type_info const* deserializer::begin_object()
@@ -64,17 +64,6 @@ bool deserializer::end_sequence()
 binary_serializer::binary_serializer(io::output_stream& sink)
   : sink_(sink)
 {
-}
-
-bool binary_serializer::typed() const
-{
-  return true;
-}
-
-bool binary_serializer::begin_object(global_type_info const&)
-{
-  VAST_ENTER();
-  VAST_RETURN(true);
 }
 
 bool binary_serializer::begin_sequence(uint64_t size)
@@ -170,17 +159,6 @@ size_t binary_serializer::bytes() const
 binary_deserializer::binary_deserializer(io::input_stream& source)
   : source_(source)
 {
-}
-
-bool binary_deserializer::typed() const
-{
-  return true;
-}
-
-global_type_info const* binary_deserializer::begin_object()
-{
-  VAST_ENTER();
-  VAST_RETURN(nullptr);
 }
 
 bool binary_deserializer::begin_sequence(uint64_t& size)

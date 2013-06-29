@@ -2,23 +2,28 @@
 
 #include <cassert>
 #include <exception>
-#include "vast/type_info.h"
+#include "vast/container.h"
 #include "vast/logger.h"
+#include "vast/serialization.h"
+#include "vast/type_info.h"
+#include "vast/value.h"
 
 namespace vast {
 namespace detail {
 
-bool type_manager::add(std::type_info const& ti, global_type_info* gti)
+bool
+type_manager::add(std::type_info const& ti,
+                  std::function<global_type_info*(type_id)> f)
 {
-  if (by_ti_.find(std::type_index(ti)) == by_ti_.end())
+  if (by_ti_.find(std::type_index(ti)) != by_ti_.end())
     return false;
-  if (by_name_.find(ti.name()) == by_name_.end())
+  if (by_name_.find(ti.name()) != by_name_.end())
     return false;;
 
-  gti->id_ = ++id_;
+  auto gti = f(++id_);
 
   VAST_LOG_DEBUG("registering new type " << detail::demangle(ti.name()) <<
-                 " with id " << id_ << " (aka " << ti.name() << ")");
+                 " with id " << id_ << " (mangled name: " << ti.name() << ")");
 
   by_id_.emplace(gti->id(), gti);
   by_name_.emplace(gti->name(), gti);
@@ -58,29 +63,35 @@ type_manager* type_manager::create()
 
 void type_manager::initialize()
 {
-  vast::announce<bool>();
-  //announce<int8_t>();
-  //announce<int16_t>();
-  //announce<int32_t>();
-  //announce<int64_t>();
-  //announce<uint8_t>();
-  //announce<uint16_t>();
-  //announce<uint32_t>();
-  //announce<uint64_t>();
-  //announce<double>();
-  //announce<float>();
+  announce<bool>();
+  announce<int8_t>();
+  announce<int16_t>();
+  announce<int32_t>();
+  announce<int64_t>();
+  announce<uint8_t>();
+  announce<uint16_t>();
+  announce<uint32_t>();
+  announce<uint64_t>();
+  announce<double>();
 
-  //announce<std::string>();
-  //announce<vector<std::string>>();
+  announce<std::string>();
+  announce<std::vector<std::string>>();
 
-  //announce<string>();
-  //announce<regex>();
-  //announce<address>();
-  //announce<prefix>();
-  //announce<port>();
+  announce<address>();
+  announce<time_range>();
+  announce<time_point>();
+  announce<port>();
+  announce<prefix>();
+  announce<record>();
+  announce<regex>();
+  announce<set>();
+  announce<string>();
+  announce<table>();
+  announce<vector>();
 
-  //announce<value>();
-  //announce<value_type>();
+  announce<value_type>();
+  announce<value>();
+  announce<std::vector<value>>();
 }
 
 void type_manager::destroy()

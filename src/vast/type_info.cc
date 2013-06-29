@@ -16,13 +16,13 @@ std::string const& global_type_info::name() const
   return name_;
 }
 
-object global_type_info::construct() const
+object global_type_info::create() const
 {
-  return {create(), this};
+  return {construct(), this};
 }
 
-global_type_info::global_type_info(std::string name)
-  : name_(std::move(name))
+global_type_info::global_type_info(type_id id, std::string name)
+  : id_(id), name_(std::move(name))
 {
 }
 
@@ -42,9 +42,10 @@ bool operator==(global_type_info const& x, std::type_info const& y)
 }
 
 namespace detail {
-bool announce(std::type_info const& ti, global_type_info* gti)
+bool register_type(std::type_info const& ti,
+                   std::function<global_type_info*(type_id)> f)
 {
-  return detail::type_manager::instance()->add(ti, gti);
+  return detail::type_manager::instance()->add(ti, f);
 }
 } // namespace detail
 

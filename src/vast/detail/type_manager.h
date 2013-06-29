@@ -23,9 +23,10 @@ class type_manager : public singleton<type_manager>
 public:
   /// Registers a type with the type system.
   /// @param ti The type information of the type to register.
-  /// @param gti The global type information to associate with *ti*.
+  /// @param f The factory constructing a `global_type_info` instance for *ti*.
   /// @throw `std::logic_error` if *ti* has already been registered.
-  bool add(std::type_info const& ti, global_type_info* gti);
+  bool add(std::type_info const& ti,
+           std::function<global_type_info*(type_id)> f);
 
   /// Retrieves type information by C++ RTTI.
   ///
@@ -58,7 +59,7 @@ private:
   void destroy();
   void dispose();
 
-  uint16_t id_;
+  type_id id_;
   std::unordered_map<std::type_index, std::unique_ptr<global_type_info>> by_ti_;
   std::unordered_map<type_id, global_type_info const*> by_id_;
   std::unordered_map<std::string, global_type_info const*> by_name_;

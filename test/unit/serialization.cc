@@ -114,18 +114,15 @@ BOOST_AUTO_TEST_CASE(io_serialization_interface)
     }
 
     std::vector<int> output;
-    io::array_input_stream in(tmp.data(), tmp.size());
+    auto in = io::make_array_input_stream(tmp);
     std::unique_ptr<io::compressed_input_stream> comp_in(
         io::compressed_input_stream::create(method, in));
     binary_deserializer source(*comp_in);
     source >> output;
     BOOST_REQUIRE_EQUAL(input.size(), output.size());
     for (size_t i = 0; i < input.size(); ++i)
-    {
-      if (output[i] != input[i])
-        std::cerr << i << " !!" << std::endl;
       BOOST_CHECK_EQUAL(output[i], input[i]);
-    }
+
     serializable x;
     source >> x;
     BOOST_CHECK_EQUAL(x.i(), 42);
@@ -156,6 +153,60 @@ BOOST_AUTO_TEST_CASE(chunk_serialization)
 
   auto copy(chk);
   BOOST_CHECK(chk == copy);
+}
+
+class typed_serializer : public binary_serializer
+{
+public:
+  typed_serializer(io::output_stream& out)
+    : binary_serializer(out)
+  {
+  }
+
+  virtual bool typed() const override
+  {
+    return true;
+  }
+};
+
+class typed_deserializer : public binary_deserializer
+{
+public:
+  typed_deserializer(io::input_stream& in)
+    : binary_deserializer(in)
+  {
+  }
+
+  virtual bool typed() const override
+  {
+    return true;
+  }
+};
+
+BOOST_AUTO_TEST_CASE(typed_serialization)
+{
+  vector v{42, 84, 1337};
+  std::vector<uint8_t> buf;
+  {
+    auto out = io::make_container_output_stream(buf);
+    typed_serializer sink(out);
+    sink << v;
+  }
+  {
+    auto in = io::make_array_input_stream(buf);
+    typed_deserializer source(in);
+    vector w;
+    source >> w;
+    BOOST_CHECK_EQUAL(v, w);
+  }
+  {
+    auto in = io::make_array_input_stream(buf);
+    typed_deserializer source(in);
+    object o;
+    source >> o;
+    auto& w = get<vector>(o);
+    BOOST_CHECK_EQUAL(v, w);
+  }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

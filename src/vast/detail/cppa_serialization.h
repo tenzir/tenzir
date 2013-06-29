@@ -27,7 +27,7 @@ public:
   virtual bool write_uint64(uint64_t x) override;
   virtual bool write_double(double x) override;
   virtual bool write_raw(void const* data, size_t size) override;
-  virtual size_t bytes() const;
+  size_t bytes() const;
 
 private:
   template <typename T>
@@ -62,7 +62,7 @@ public:
   virtual bool read_uint64(uint64_t& x) override;
   virtual bool read_double(double& x) override;
   virtual bool read_raw(void* data, size_t size) override;
-  virtual size_t bytes() const;
+  size_t bytes() const;
 
 private:
   template <typename T>

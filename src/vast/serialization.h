@@ -6,6 +6,7 @@
 #include "vast/config.h"
 #include "vast/intrusive.h"
 #include "vast/traits.h"
+#include "vast/object.h"
 #include "vast/type_info.h"
 #include "vast/io/coded_stream.h"
 
@@ -18,7 +19,7 @@ public:
   virtual ~serializer() = default;
 
   /// Checks whether the serializer writes out type information.
-  /// The default implementation uses an typed serializer.
+  /// The default implementation uses an untyped serializer.
   /// @return `true` if the serializer is typed.
   virtual bool typed() const;
 
@@ -74,7 +75,7 @@ public:
   virtual ~deserializer() = default;
 
   /// Checks whether the deserializer reads in type information.
-  /// The default implementation uses an typed deserializer.
+  /// The default implementation uses an untyped deserializer.
   /// @return `true` if the deserializer is typed.
   virtual bool typed() const;
 
@@ -132,8 +133,6 @@ public:
   /// @param source The output stream to write into.
   binary_serializer(io::output_stream& sink);
 
-  virtual bool typed() const override;
-  virtual bool begin_object(global_type_info const& ti) override;
   virtual bool begin_sequence(uint64_t size) override;
   virtual bool write_bool(bool x) override;
   virtual bool write_int8(int8_t x) override;
@@ -161,8 +160,6 @@ public:
   /// @param source The input stream to read from.
   binary_deserializer(io::input_stream& source);
 
-  virtual bool typed() const override;
-  virtual global_type_info const* begin_object() override;
   virtual bool begin_sequence(uint64_t& size) override;
   virtual bool read_bool(bool& x) override;
   virtual bool read_int8(int8_t& x) override;
@@ -236,7 +233,7 @@ void load(deserializer& source, T& x)
   access::load(source, x, 0);
 }
 
-/// Serializes an object.
+/// Serializes a serializable instance.
 /// @tparam T the type of the instance to serialize.
 /// @param sink The serializer to write a `T` into.
 /// @param x An instance of type `T`.
@@ -249,7 +246,11 @@ serializer& operator<<(serializer& sink, T const& x)
   {
     auto ti = global_typeid<T>();
     if (! ti)
-      throw std::logic_error("lacking type info for deserialization");
+    {
+      std::string msg = "missing type info for: ";
+      msg += detail::demangle(typeid(T));
+      throw std::logic_error(std::move(msg));
+    }
     sink.begin_object(*ti);
   }
   save(sink, x);
@@ -258,7 +259,7 @@ serializer& operator<<(serializer& sink, T const& x)
   return sink;
 }
 
-/// Deserializes an object.
+/// Deserializes a deserializable instance.
 /// @tparam T the type of the instance to serialize.
 /// @param source The deserializer to extract a `T` from.
 /// @param x An instance of type `T`.
@@ -270,12 +271,34 @@ deserializer& operator>>(deserializer& source, T& x)
   if (typed)
   {
     auto ti = source.begin_object();
-    if (! (ti && ti->equals(typeid(T))))
-      throw std::logic_error("type mismatch during deserialization");
+    if (! ti)
+    {
+      std::string msg = "missing type info for: ";
+      msg += detail::demangle(typeid(T));
+      throw std::logic_error(std::move(msg));
+    }
+    else if (! ti->equals(typeid(T)))
+    {
+      std::string msg = "type clash during deserialization, expected ";
+      msg += ti->name() + " but got " + detail::demangle(typeid(T));
+      throw std::logic_error(std::move(msg));
+    }
   }
   load(source, x);
   if (typed)
     source.end_object();
+  return source;
+}
+
+inline serializer& operator<<(serializer& sink, object const& x)
+{
+  save(sink, x);
+  return sink;
+}
+
+inline deserializer& operator>>(deserializer& source, object& x)
+{
+  load(source, x);
   return source;
 }
 
