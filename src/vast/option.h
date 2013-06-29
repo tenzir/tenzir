@@ -35,9 +35,8 @@ public:
   option& operator=(option&&) = default;
 #endif
 
-  T* operator->() const
+  constexpr T const* operator->() const
   {
-    CPPA_REQUIRE(valid());
     return &cppa::option<T>::get();
   }
 };
