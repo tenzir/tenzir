@@ -27,7 +27,7 @@ public:
     assign(start, size);
   }
 
-  operator bool() const
+  explicit operator bool() const
   {
     return get() != nullptr;
   }
