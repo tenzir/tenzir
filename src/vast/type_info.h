@@ -25,9 +25,9 @@ class global_type_info
     util::equality_comparable<global_type_info, std::type_info>,
     util::totally_ordered<global_type_info>
 {
-  friend bool operator<(global_type_info const& x, global_type_info const& y);
   friend bool operator==(global_type_info const& x, global_type_info const& y);
   friend bool operator==(global_type_info const& x, std::type_info const& y);
+  friend bool operator<(global_type_info const& x, global_type_info const& y);
 
 public:
   /// Retrieves the ID of this type.
@@ -46,6 +46,13 @@ public:
   /// @param ti The C++ type info.
   /// @return `true` if this type maps to *ti*.
   virtual bool equals(std::type_info const& ti) const = 0;
+
+  /// Determines whether two instances of this type are equal.
+  /// @param instance1 An instance of this type.
+  /// @param instance2 An instance of this type.
+  /// @return `true` iff `*instance1 == *instance2`.
+  /// @pre Both *instance1* and *instance2* must be of this type.
+  virtual bool equals(void const* instance1, void const* instance2) const = 0;
 
   /// Deletes an instance of this type.
   /// @param instance The instance to delete.
@@ -94,6 +101,13 @@ public:
   virtual bool equals(std::type_info const& ti) const override
   {
     return typeid(T) == ti;
+  }
+
+  virtual bool equals(void const* inst1, void const* inst2) const override
+  {
+    assert(inst1 != nullptr);
+    assert(inst2 != nullptr);
+    return *cast(inst1) == *cast(inst2);
   }
 
   virtual void destroy(void const* instance) const override

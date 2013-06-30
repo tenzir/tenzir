@@ -7,19 +7,18 @@
 
 namespace vast {
 
-bool serializer::typed() const
-{
-  return false;
-}
-
-bool serializer::begin_object(global_type_info const& ti)
+bool serializer::begin_instance(std::type_info const& ti)
 {
   VAST_ENTER();
-  save(*this, ti.id());
+  if (global_typeid(ti) == nullptr)
+  {
+    VAST_LOG_ERROR("missing type info for " << detail::demangle(ti));
+    VAST_RETURN(false);
+  }
   VAST_RETURN(true);
 }
 
-bool serializer::end_object()
+bool serializer::end_instance()
 {
   // Do nothing by default.
   VAST_ENTER();
@@ -33,21 +32,39 @@ bool serializer::end_sequence()
   VAST_RETURN(true);
 }
 
-bool deserializer::typed() const
-{
-  return false;
-}
-
-global_type_info const* deserializer::begin_object()
+bool serializer::write_type(global_type_info const* gti)
 {
   VAST_ENTER();
-  type_id id = 0;
-  load(*this, id);
-  auto ti = detail::type_manager::instance()->lookup(id);
-  VAST_RETURN(ti);
+  assert(gti != nullptr);
+  save(*this, gti->id());
+  VAST_RETURN(true);
 }
 
-bool deserializer::end_object()
+bool serializer::write_object(object const& o)
+{
+  VAST_ENTER();
+  assert(o);
+  if (! write_type(o.type()) )
+  {
+    VAST_LOG_ERROR("failed to serialize object type");
+    VAST_RETURN(false);
+  }
+  o.type()->serialize(*this, o.value());
+  VAST_RETURN(true);
+}
+
+bool deserializer::begin_instance(std::type_info const& ti)
+{
+  VAST_ENTER();
+  if (global_typeid(ti) == nullptr)
+  {
+    VAST_LOG_ERROR("missing type info for " << detail::demangle(ti));
+    VAST_RETURN(false);
+  }
+  VAST_RETURN(true);
+}
+
+bool deserializer::end_instance()
 {
   // Do nothing by default.
   VAST_ENTER();
@@ -58,6 +75,40 @@ bool deserializer::end_sequence()
 {
   // Do nothing by default.
   VAST_ENTER();
+  VAST_RETURN(true);
+}
+
+bool deserializer::read_type(global_type_info const*& gti)
+{
+  VAST_ENTER();
+  type_id id = 0;
+  load(*this, id);
+  gti = global_typeid(id);
+  if (gti == nullptr)
+  {
+    VAST_LOG_ERROR("no type info for id " << id);
+    VAST_RETURN(false);
+  }
+  VAST_RETURN(true);
+}
+
+bool deserializer::read_object(object& o)
+{
+  VAST_ENTER();
+  global_type_info const* type = nullptr;
+  if (! read_type(type) )
+  {
+    VAST_LOG_ERROR("failed to deserialize object type");
+    VAST_RETURN(false);
+  }
+  else if (type == nullptr)
+  {
+    VAST_LOG_ERROR("deserialized invalid object type");
+    VAST_RETURN(false);
+  }
+  auto value = type->construct();
+  type->deserialize(*this, value);
+  o = std::move(object{type, value});
   VAST_RETURN(true);
 }
 

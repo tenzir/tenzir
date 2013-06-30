@@ -155,57 +155,21 @@ BOOST_AUTO_TEST_CASE(chunk_serialization)
   BOOST_CHECK(chk == copy);
 }
 
-class typed_serializer : public binary_serializer
+BOOST_AUTO_TEST_CASE(object_serialization)
 {
-public:
-  typed_serializer(io::output_stream& out)
-    : binary_serializer(out)
-  {
-  }
-
-  virtual bool typed() const override
-  {
-    return true;
-  }
-};
-
-class typed_deserializer : public binary_deserializer
-{
-public:
-  typed_deserializer(io::input_stream& in)
-    : binary_deserializer(in)
-  {
-  }
-
-  virtual bool typed() const override
-  {
-    return true;
-  }
-};
-
-BOOST_AUTO_TEST_CASE(typed_serialization)
-{
-  vector v{42, 84, 1337};
+  auto o = object::adopt(new vector{42, 84, 1337});
   std::vector<uint8_t> buf;
   {
     auto out = io::make_container_output_stream(buf);
-    typed_serializer sink(out);
-    sink << v;
+    binary_serializer sink(out);
+    BOOST_REQUIRE(sink.write_object(o));
   }
   {
     auto in = io::make_array_input_stream(buf);
-    typed_deserializer source(in);
-    vector w;
-    source >> w;
-    BOOST_CHECK_EQUAL(v, w);
-  }
-  {
-    auto in = io::make_array_input_stream(buf);
-    typed_deserializer source(in);
-    object o;
-    source >> o;
-    auto& w = get<vector>(o);
-    BOOST_CHECK_EQUAL(v, w);
+    binary_deserializer source(in);
+    object p;
+    BOOST_REQUIRE(source.read_object(p));
+    BOOST_CHECK(o == p);
   }
 }
 

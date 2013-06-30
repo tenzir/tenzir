@@ -18,21 +18,20 @@ class serializer
 public:
   virtual ~serializer() = default;
 
-  /// Checks whether the serializer writes out type information.
-  /// The default implementation uses an untyped serializer.
-  /// @return `true` if the serializer is typed.
-  virtual bool typed() const;
-
-  /// Begins reading an object of a given type.
-  /// The default implementation serializes the unique type ID.
-  /// @param ti The type information descripting the object instance.
+  /// Begins writing an object of a given type.
+  ///
+  /// @param ti The type information describing the object to write afterwards.
+  ///
   /// @return `true` on success.
-  virtual bool begin_object(global_type_info const& ti);
+  ///
+  /// @note The default implementation checks whether the given type info maps
+  /// to an announced type.
+  virtual bool begin_instance(std::type_info const& ti);
 
-  /// Finishes reading an object.
-  /// The default implementation does nothing.
+  /// Finishes writing an object.
   /// @return `true` on success.
-  virtual bool end_object();
+  /// @note The default implementation does nothing.
+  virtual bool end_instance();
 
   /// Begins writing a sequence.
   /// @param size The size of the sequence.
@@ -40,8 +39,8 @@ public:
   virtual bool begin_sequence(uint64_t size) = 0;
 
   /// Finishes writing a sequence.
-  /// The default implementation does nothing.
   /// @return `true` on success.
+  /// @note The default implementation does nothing.
   virtual bool end_sequence();
 
   /// Writes a value.
@@ -64,6 +63,20 @@ public:
   /// @return `true` on success.
   virtual bool write_raw(void const* data, size_t size) = 0;
 
+  /// Writes type information.
+  /// @param gti The type information to write.
+  /// @return `true` on success.
+  /// @note The default implementation writes out the type ID.
+  /// @pre `gti != nullptr`
+  virtual bool write_type(global_type_info const* gti);
+
+  /// Writes an object.
+  /// @param o The object to write.
+  /// @return `true` on success.
+  /// @note The default implementation writes object type information followed
+  /// by an instance as described by its type information.
+  virtual bool write_object(object const& o);
+
 protected:
   serializer() = default;
 };
@@ -74,22 +87,20 @@ class deserializer
 public:
   virtual ~deserializer() = default;
 
-  /// Checks whether the deserializer reads in type information.
-  /// The default implementation uses an untyped deserializer.
-  /// @return `true` if the deserializer is typed.
-  virtual bool typed() const;
+  /// Begins reading an object of a given type.
+  ///
+  /// @param ti The type information describing the object to read afterwards.
+  ///
+  /// @return `true` on success.
+  ///
+  /// @note The default implementation checks whether the given type info maps
+  /// to an announced type.
+  virtual bool begin_instance(std::type_info const& ti);
 
-  /// Begins writing an object of a given type.
-  /// The default implementation reads the unique type ID and returns the
-  /// corresponding type info object..
-  /// @param ti The type information descripting the object instance.
-  /// @return An engaged option on success.
-  virtual global_type_info const* begin_object();
-
-  /// Finishes writing an object.
+  /// Finishes reading an object.
   /// The default implementation does nothing.
   /// @return `true` on success.
-  virtual bool end_object();
+  virtual bool end_instance();
 
   /// Begins reading a sequence.
   /// @param size The size of the sequence.
@@ -120,6 +131,25 @@ public:
   /// @param size The number of bytes to read.
   /// @return `true` on success.
   virtual bool read_raw(void* data, size_t size) = 0;
+
+  /// Reads type information.
+  ///
+  /// @param gti The result parameter which receives either a pointer to an
+  /// announced type or `nullptr` if the type identifer does not map to an
+  /// announced type.
+  ///
+  /// @return `true` on success.
+  virtual bool read_type(global_type_info const*& gti);
+
+  /// Reads an object.
+  ///
+  /// @param o The object to read into.
+  ///
+  /// @return `true` on success.
+  ///
+  /// @note The default implementation reads object type information followed
+  /// by an instance as described by its type information.
+  virtual bool read_object(object& o);
 
 protected:
   deserializer() = default;
@@ -241,21 +271,9 @@ void load(deserializer& source, T& x)
 template <typename T>
 serializer& operator<<(serializer& sink, T const& x)
 {
-  auto typed = sink.typed();
-  if (typed)
-  {
-    auto ti = global_typeid<T>();
-    if (! ti)
-    {
-      std::string msg = "missing type info for: ";
-      msg += detail::demangle(typeid(T));
-      throw std::logic_error(std::move(msg));
-    }
-    sink.begin_object(*ti);
-  }
+  sink.begin_instance(typeid(T));
   save(sink, x);
-  if (typed)
-    sink.end_object();
+  sink.end_instance();
   return sink;
 }
 
@@ -267,38 +285,9 @@ serializer& operator<<(serializer& sink, T const& x)
 template <typename T>
 deserializer& operator>>(deserializer& source, T& x)
 {
-  auto typed = source.typed();
-  if (typed)
-  {
-    auto ti = source.begin_object();
-    if (! ti)
-    {
-      std::string msg = "missing type info for: ";
-      msg += detail::demangle(typeid(T));
-      throw std::logic_error(std::move(msg));
-    }
-    else if (! ti->equals(typeid(T)))
-    {
-      std::string msg = "type clash during deserialization, expected ";
-      msg += ti->name() + " but got " + detail::demangle(typeid(T));
-      throw std::logic_error(std::move(msg));
-    }
-  }
+  source.begin_instance(typeid(T));
   load(source, x);
-  if (typed)
-    source.end_object();
-  return source;
-}
-
-inline serializer& operator<<(serializer& sink, object const& x)
-{
-  save(sink, x);
-  return sink;
-}
-
-inline deserializer& operator>>(deserializer& source, object& x)
-{
-  load(source, x);
+  source.end_instance();
   return source;
 }
 

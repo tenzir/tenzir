@@ -5,11 +5,11 @@
 
 namespace vast {
 
-object::object(void* value, global_type_info const* type)
-  : value_(value), type_(type)
+object::object(global_type_info const* type, void* value)
+  : type_(type), value_(value)
 {
-  assert(value_ != nullptr);
   assert(type_ != nullptr);
+  assert(value_ != nullptr);
 }
 
 object::object(object const& other)
@@ -19,6 +19,26 @@ object::object(object const& other)
     type_ = other.type_;
     value_ = type_->construct(other.value_);
   }
+}
+
+object::object(object&& other)
+  : type_(other.type_), value_(other.value_)
+{
+  other.type_ = nullptr;
+  other.value_ = nullptr;
+}
+
+object& object::operator=(object other)
+{
+  std::swap(type_, other.type_);
+  std::swap(value_, other.value_);
+  return *this;
+}
+
+object::~object()
+{
+  if (*this)
+    type_->destroy(value_);
 }
 
 object::operator bool() const
@@ -41,30 +61,11 @@ void* object::value()
   return value_;
 }
 
-void object::serialize(serializer& sink) const
+bool operator==(object const& x, object const& y)
 {
-  // TODO: relax these assertions and serialize some sort of "invalid object."
-  assert(type_ != nullptr);
-  assert(value_ != nullptr);
-
-  sink.begin_object(*type_);
-  type_->serialize(sink, value_);
-  sink.end_object();
-}
-
-void object::deserialize(deserializer& source)
-{
-  if (value_ != nullptr)
-  {
-    assert(type_ != nullptr);
-    type_->destroy(value_);
-  }
-  type_ = source.begin_object();
-  if (type_ == nullptr)
-    throw std::logic_error("invalid type info");
-  value_ = type_->construct();
-  type_->deserialize(source, value_);
-  source.end_object();
+  return x.type() == y.type()
+    ? (x.value() == y.value() || x.type()->equals(x.value(), y.value()))
+    : false;
 }
 
 } // namespace vast

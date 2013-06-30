@@ -18,17 +18,12 @@ std::string const& global_type_info::name() const
 
 object global_type_info::create() const
 {
-  return {construct(), this};
+  return {this, construct()};
 }
 
 global_type_info::global_type_info(type_id id, std::string name)
   : id_(id), name_(std::move(name))
 {
-}
-
-bool operator<(global_type_info const& x, global_type_info const& y)
-{
-  return x.id_ < y.id_;
 }
 
 bool operator==(global_type_info const& x, global_type_info const& y)
@@ -39,6 +34,11 @@ bool operator==(global_type_info const& x, global_type_info const& y)
 bool operator==(global_type_info const& x, std::type_info const& y)
 {
   return x.equals(y);
+}
+
+bool operator<(global_type_info const& x, global_type_info const& y)
+{
+  return x.id_ < y.id_;
 }
 
 namespace detail {
