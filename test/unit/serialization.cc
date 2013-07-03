@@ -2,6 +2,7 @@
 #include "event_fixture.h"
 
 #include "vast/chunk.h"
+#include "vast/object.h"
 #include "vast/serialization.h"
 #include "vast/io/array_stream.h"
 #include "vast/io/container_stream.h"
@@ -63,7 +64,7 @@ BOOST_AUTO_TEST_CASE(byte_swapping)
   BOOST_CHECK_EQUAL(y64, x64);
 }
 
-// A serializable object.
+// A serializable class.
 class serializable
 {
   friend struct access;
@@ -74,7 +75,7 @@ public:
   }
 
 private:
-  void serialize(serializer& sink)
+  void serialize(serializer& sink) const
   {
     sink << i_ - 10;
   }
@@ -159,17 +160,83 @@ BOOST_AUTO_TEST_CASE(object_serialization)
 {
   auto o = object::adopt(new vector{42, 84, 1337});
   std::vector<uint8_t> buf;
+
+  auto out = io::make_container_output_stream(buf);
+  binary_serializer sink(out);
+  sink << o;
+
+  auto in = io::make_array_input_stream(buf);
+  binary_deserializer source(in);
+  object p;
+  source >> p;
+
+  BOOST_CHECK(o == p);
+}
+
+struct base
+{
+  virtual ~base() = default;
+  virtual uint32_t f() const = 0;
+  virtual void serialize(serializer& sink) const = 0;
+  virtual void deserialize(deserializer& source) = 0;
+};
+
+struct derived : base
+{
+  friend bool operator==(derived const& x, derived const& y)
   {
-    auto out = io::make_container_output_stream(buf);
-    binary_serializer sink(out);
-    BOOST_REQUIRE(sink.write_object(o));
+    return x.i == y.i;
+  }
+
+  virtual uint32_t f() const final
+  {
+    return i;
+  }
+
+  virtual void serialize(serializer& sink) const final
+  {
+    sink << i;
+  }
+
+  virtual void deserialize(deserializer& source) final
+  {
+    source >> i;
+  }
+
+  uint32_t i = 0;
+};
+
+BOOST_AUTO_TEST_CASE(polymorphic_object_serialization)
+{
+  derived d;
+  d.i = 42;
+  base& b = d;
+  std::vector<uint8_t> buf;
+
+  auto out = io::make_container_output_stream(buf);
+  binary_serializer sink(out);
+  BOOST_REQUIRE(announce<derived>());
+  BOOST_REQUIRE(write_object(sink, b));
+  {
+    auto in = io::make_array_input_stream(buf);
+    binary_deserializer source(in);
+    derived e;
+    BOOST_REQUIRE(read_object(source, e));
+    BOOST_CHECK_EQUAL(e.i, 42);
   }
   {
     auto in = io::make_array_input_stream(buf);
     binary_deserializer source(in);
-    object p;
-    BOOST_REQUIRE(source.read_object(p));
-    BOOST_CHECK(o == p);
+    object o;
+    source >> o;
+    BOOST_CHECK_EQUAL(get<derived>(o).f(), 42);
+    // It's always possible to get the exact type as above. However, it's
+    // impossible to obtain a reference to the base class because the extended
+    // type system can only check for type equality and not for a (transitive)
+    // is_convertible relation, as this is not defined over instances of
+    // std::type_info.
+    base* c = reinterpret_cast<base*>(o.value());
+    BOOST_CHECK_EQUAL(c->f(), 42);
   }
 }
 

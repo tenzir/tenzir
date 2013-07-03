@@ -18,7 +18,7 @@ void individual::id(uuid id)
   id_ = std::move(id);
 }
 
-void individual::serialize(serializer& sink)
+void individual::serialize(serializer& sink) const
 {
   sink << id_;
 }

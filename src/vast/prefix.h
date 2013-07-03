@@ -46,7 +46,7 @@ private:
   void initialize();
 
   friend access;
-  void serialize(serializer& sink);
+  void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
 
   address network_;

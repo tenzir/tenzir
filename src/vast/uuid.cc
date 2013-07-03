@@ -43,7 +43,7 @@ size_t uuid::hash() const
   return boost::uuids::hash_value(id_);
 }
 
-void uuid::serialize(serializer& sink)
+void uuid::serialize(serializer& sink) const
 {
   VAST_ENTER(VAST_THIS);
   sink.write_raw(&id_, sizeof(id_));

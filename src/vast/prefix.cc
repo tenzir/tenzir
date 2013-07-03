@@ -73,7 +73,7 @@ void prefix::initialize()
   network_.mask(length_);
 }
 
-void prefix::serialize(serializer& sink)
+void prefix::serialize(serializer& sink) const
 {
   VAST_ENTER(VAST_THIS);
   sink << length_;

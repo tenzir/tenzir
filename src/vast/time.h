@@ -130,7 +130,7 @@ public:
 
 private:
   friend access;
-  void serialize(serializer& sink);
+  void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
 
   duration_type duration_{0};
@@ -234,7 +234,7 @@ public:
 
 private:
   friend access;
-  void serialize(serializer& sink);
+  void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
 
   time_point_type time_point_;

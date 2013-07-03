@@ -189,7 +189,7 @@ std::array<uint8_t, 16> const& address::data() const
   return bytes_;
 }
 
-void address::serialize(serializer& sink)
+void address::serialize(serializer& sink) const
 {
   VAST_ENTER(VAST_THIS);
   for (size_t i = 0; i < 16; i += 8)

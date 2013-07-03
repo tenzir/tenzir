@@ -111,7 +111,7 @@ time_range::rep time_range::count() const
   return duration_.count();
 }
 
-void time_range::serialize(serializer& sink)
+void time_range::serialize(serializer& sink) const
 {
   VAST_ENTER(VAST_THIS);
   sink << duration_;
@@ -315,7 +315,7 @@ std::tm time_point::to_tm() const
   return t;
 }
 
-void time_point::serialize(serializer& sink)
+void time_point::serialize(serializer& sink) const
 {
   VAST_ENTER(VAST_THIS);;
   sink << time_point_;

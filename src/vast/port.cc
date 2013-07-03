@@ -49,7 +49,7 @@ void port::type(port_type t)
   type_ = t;
 }
 
-void port::serialize(serializer& sink)
+void port::serialize(serializer& sink) const
 {
   VAST_ENTER(VAST_THIS);
   typedef std::underlying_type<port::port_type>::type underlying_type;

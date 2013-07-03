@@ -63,7 +63,7 @@ void event::timestamp(time_point time)
   timestamp_ = time;
 }
 
-void event::serialize(serializer& sink)
+void event::serialize(serializer& sink) const
 {
   VAST_ENTER(VAST_THIS);
   sink << id_;

@@ -349,7 +349,7 @@ void schema::add_event(event e)
   events_.emplace_back(std::move(e));
 }
 
-void schema::serialize(serializer& sink)
+void schema::serialize(serializer& sink) const
 {
   sink << to_string(*this);
 }

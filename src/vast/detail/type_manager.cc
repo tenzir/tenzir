@@ -6,6 +6,7 @@
 #include "vast/logger.h"
 #include "vast/serialization.h"
 #include "vast/type_info.h"
+#include "vast/event.h"
 #include "vast/value.h"
 
 namespace vast {
@@ -92,6 +93,8 @@ void type_manager::initialize()
   announce<value_type>();
   announce<value>();
   announce<std::vector<value>>();
+  announce<event>();
+  announce<std::vector<event>>();
 }
 
 void type_manager::destroy()

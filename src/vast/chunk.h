@@ -230,7 +230,7 @@ public:
 
 private:
   friend access;
-  void serialize(serializer& sink)
+  void serialize(serializer& sink) const
   {
     sink << elements_;
     sink << buffer_;

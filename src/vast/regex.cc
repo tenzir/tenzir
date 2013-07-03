@@ -43,7 +43,7 @@ bool regex::match(std::string const& str,
   return true;
 }
 
-void regex::serialize(serializer& sink)
+void regex::serialize(serializer& sink) const
 {
   VAST_ENTER(VAST_THIS);
   sink << str_;

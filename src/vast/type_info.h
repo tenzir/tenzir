@@ -56,7 +56,7 @@ public:
 
   /// Deletes an instance of this type.
   /// @param instance The instance to delete.
-  virtual void destroy(void const* instance) const = 0;
+  virtual void destruct(void const* instance) const = 0;
 
   /// Default- or copy-constructs an instance of this type.
   ///
@@ -110,7 +110,7 @@ public:
     return *cast(inst1) == *cast(inst2);
   }
 
-  virtual void destroy(void const* instance) const override
+  virtual void destruct(void const* instance) const override
   {
     delete cast(instance);
   }
@@ -123,13 +123,13 @@ public:
   virtual void serialize(serializer& sink, void const* instance) const override
   {
     assert(instance != nullptr);
-    save(sink, *cast(instance));
+    detail::save(sink, *cast(instance));
   }
 
   virtual void deserialize(deserializer& source, void* instance) const override
   {
     assert(instance != nullptr);
-    load(source, *cast(instance));
+    detail::load(source, *cast(instance));
   }
 
 private:
@@ -167,6 +167,9 @@ bool register_type(std::type_info const& ti,
 template <typename T, typename TypeInfo = concrete_type_info<T>>
 bool announce()
 {
+  static_assert(! std::is_same<T, object>::value,
+                "objects cannot be announced");
+
   static_assert(std::is_default_constructible<T>::value,
                 "announced types must be default-constructible");
 

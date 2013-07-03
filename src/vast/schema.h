@@ -176,7 +176,7 @@ public:
 
 private:
   friend access;
-  void serialize(serializer& sink);
+  void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
   friend bool operator==(schema const& x, schema const& y);
   friend bool operator!=(schema const& x, schema const& y);

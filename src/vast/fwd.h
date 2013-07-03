@@ -24,8 +24,12 @@ class string;
 class table;
 class vector;
 
-namespace io {
+namespace detail {
+template <typename T> void save(serializer& sink, T const& x);
+template <typename T> void load(deserializer& source, T& x);
+} // namespace detail
 
+namespace io {
 class input_stream;
 class output_stream;
 class array_input_stream;
@@ -36,11 +40,10 @@ class coded_input_stream;
 class coded_output_stream;
 class file_input_stream;
 class file_output_stream;
-template <typename Container>
-class container_output_stream;
+template <typename Container> class container_output_stream;
 enum compression : uint8_t;
-
 } // namespace io
+
 } // namespace vast
 
 #endif

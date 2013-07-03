@@ -258,7 +258,7 @@ value_type value::which() const
   return type();
 }
 
-void value::serialize(serializer& sink)
+void value::serialize(serializer& sink) const
 {
   VAST_ENTER(VAST_THIS);
   sink << type();

@@ -6,26 +6,21 @@
 #include "vast/config.h"
 #include "vast/intrusive.h"
 #include "vast/traits.h"
-#include "vast/object.h"
 #include "vast/type_info.h"
 #include "vast/io/coded_stream.h"
 
 namespace vast {
 
-/// Interface for serialization of objects.
+/// Abstract base class for serializers.
 class serializer
 {
 public:
   virtual ~serializer() = default;
 
-  /// Begins writing an object of a given type.
-  ///
+  /// Begins writing an instance of a given type.
   /// @param ti The type information describing the object to write afterwards.
-  ///
   /// @return `true` on success.
-  ///
-  /// @note The default implementation checks whether the given type info maps
-  /// to an announced type.
+  /// @note The default implementation does nothing.
   virtual bool begin_instance(std::type_info const& ti);
 
   /// Finishes writing an object.
@@ -70,31 +65,20 @@ public:
   /// @pre `gti != nullptr`
   virtual bool write_type(global_type_info const* gti);
 
-  /// Writes an object.
-  /// @param o The object to write.
-  /// @return `true` on success.
-  /// @note The default implementation writes object type information followed
-  /// by an instance as described by its type information.
-  virtual bool write_object(object const& o);
-
 protected:
   serializer() = default;
 };
 
-/// Interface for deserialization of objects.
+/// Abstract base class for deserializers.
 class deserializer
 {
 public:
   virtual ~deserializer() = default;
 
   /// Begins reading an object of a given type.
-  ///
   /// @param ti The type information describing the object to read afterwards.
-  ///
   /// @return `true` on success.
-  ///
-  /// @note The default implementation checks whether the given type info maps
-  /// to an announced type.
+  /// @note The default implementation does nothing.
   virtual bool begin_instance(std::type_info const& ti);
 
   /// Finishes reading an object.
@@ -140,16 +124,6 @@ public:
   ///
   /// @return `true` on success.
   virtual bool read_type(global_type_info const*& gti);
-
-  /// Reads an object.
-  ///
-  /// @param o The object to read into.
-  ///
-  /// @return `true` on success.
-  ///
-  /// @note The default implementation reads object type information followed
-  /// by an instance as described by its type information.
-  virtual bool read_object(object& o);
 
 protected:
   deserializer() = default;
@@ -215,14 +189,14 @@ private:
 struct access
 {
   template <typename T>
-  static inline auto save(serializer& sink, T x, int)
+  static inline auto save(serializer& sink, T const& x, int)
     -> decltype(x.serialize(sink), void())
   {
     x.serialize(sink);
   }
 
   template <typename T>
-  static inline auto save(serializer& sink, T x, long)
+  static inline auto save(serializer& sink, T const& x, long)
     -> decltype(serialize(sink, x), void())
   {
     serialize(sink, x);
@@ -242,6 +216,9 @@ struct access
     deserialize(source, x);
   }
 };
+
+
+namespace detail {
 
 /// Serializes an instance.
 /// @tparam T the type of the instance to serialize.
@@ -263,7 +240,74 @@ void load(deserializer& source, T& x)
   access::load(source, x, 0);
 }
 
+} // namespace detail
+
+
+/// Writes a serializable instance in the form of an objet.
+/// @tparam T A serializable type.
+/// @param sink The serializer to write into.
+/// @param x An instance of type `T`.
+/// @return `true` on success.
+template <typename T>
+bool write_object(serializer& sink, T const& x)
+{
+  if (! sink.begin_instance(typeid(x)))
+    return false;
+  auto gti = global_typeid(typeid(x));
+  if (gti == nullptr || ! sink.write_type(gti))
+    return false;
+  detail::save(sink, x);
+  return sink.end_instance();
+}
+
+/// Reads a deserializable instance in the form of an objet.
+/// @tparam T A deserializable type.
+/// @param source The deserializer to read from.
+/// @param x An instance of type `T`.
+/// @return `true` on success.
+template <typename T>
+bool read_object(deserializer& source, T& x)
+{
+  if (! source.begin_instance(typeid(x)))
+    return false;
+  auto expected = global_typeid(typeid(x));
+  global_type_info const* got = nullptr;
+  if (! (source.read_type(got) && expected && got && *expected == *got))
+    return false;
+  detail::load(source, x);
+  return source.end_instance();
+}
+
+/// Writes a serializable instance to a serializer.
+/// @tparam T A serializable type.
+/// @param sink The serializer to write into.
+/// @param x An instance of type `T`.
+/// @return `true` on success.
+template <typename T>
+bool write(serializer& sink, T const& x)
+{
+  if (! sink.begin_instance(typeid(x)))
+    return false;
+  detail::save(sink, x);
+  return sink.end_instance();
+}
+
+/// Reads a deserializable instance from a deserializer.
+/// @tparam T A deserializable type.
+/// @param source The deserializer to read from.
+/// @param x An instance of type `T`.
+/// @return `true` on success.
+template <typename T>
+bool read(deserializer& source, T& x)
+{
+  if (! source.begin_instance(typeid(x)))
+    return false;
+  detail::load(source, x);
+  return source.end_instance();
+}
+
 /// Serializes a serializable instance.
+/// A chainable shorthand for ::write.
 /// @tparam T the type of the instance to serialize.
 /// @param sink The serializer to write a `T` into.
 /// @param x An instance of type `T`.
@@ -271,13 +315,12 @@ void load(deserializer& source, T& x)
 template <typename T>
 serializer& operator<<(serializer& sink, T const& x)
 {
-  sink.begin_instance(typeid(T));
-  save(sink, x);
-  sink.end_instance();
+  write(sink, x);
   return sink;
 }
 
 /// Deserializes a deserializable instance.
+/// A chainable shorthand for ::read.
 /// @tparam T the type of the instance to serialize.
 /// @param source The deserializer to extract a `T` from.
 /// @param x An instance of type `T`.
@@ -285,9 +328,7 @@ serializer& operator<<(serializer& sink, T const& x)
 template <typename T>
 deserializer& operator>>(deserializer& source, T& x)
 {
-  source.begin_instance(typeid(T));
-  load(source, x);
-  source.end_instance();
+  read(source, x);
   return source;
 }
 

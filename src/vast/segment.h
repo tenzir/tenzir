@@ -58,7 +58,7 @@ public:
     friend bool operator==(header const& x, header const& y);
 
     friend access;
-    void serialize(serializer& sink);
+    void serialize(serializer& sink) const;
     void deserialize(deserializer& source);
   };
 
@@ -207,7 +207,7 @@ private:
   friend bool operator==(segment const& x, segment const& y);
 
   friend access;
-  void serialize(serializer& sink);
+  void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
 
   static uint32_t const magic = 0x2a2a2a2a;

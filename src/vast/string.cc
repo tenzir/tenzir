@@ -454,7 +454,7 @@ void string::tag(char t)
   buf_[tag_off] = (t << 1) | (buf_[tag_off] & 1);
 }
 
-void string::serialize(serializer& sink)
+void string::serialize(serializer& sink) const
 {
   VAST_ENTER(VAST_THIS);
   sink.begin_sequence(size());

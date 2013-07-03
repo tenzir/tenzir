@@ -38,7 +38,7 @@ object& object::operator=(object other)
 object::~object()
 {
   if (*this)
-    type_->destroy(value_);
+    type_->destruct(value_);
 }
 
 object::operator bool() const
@@ -59,6 +59,42 @@ void const* object::value() const
 void* object::value()
 {
   return value_;
+}
+
+void* object::release()
+{
+  auto ptr = value_;
+  type_ = nullptr;
+  value_ = nullptr;
+  return ptr;
+}
+
+void object::serialize(serializer& sink) const
+{
+  VAST_ENTER();
+  assert(*this);
+  sink.write_type(type_);
+  type_->serialize(sink, value_);
+}
+
+void object::deserialize(deserializer& source)
+{
+  VAST_ENTER();
+  if (*this)
+    type_->destruct(value_);
+  if (! source.read_type(type_) )
+  {
+    VAST_LOG_ERROR("failed to deserialize object type");
+  }
+  else if (type_ == nullptr)
+  {
+    VAST_LOG_ERROR("deserialized an invalid object type");
+  }
+  else
+  {
+    value_ = type_->construct();
+    type_->deserialize(source, value_);
+  }
 }
 
 bool operator==(object const& x, object const& y)

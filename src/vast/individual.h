@@ -24,7 +24,7 @@ public:
 
 private:
   friend access;
-  void serialize(serializer& sink);
+  void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
   friend void swap(individual& x, individual& y);
 

@@ -55,7 +55,7 @@ bool operator==(segment::header const& x, segment::header const& y)
     x.event_meta == y.event_meta;
 }
 
-void segment::header::serialize(serializer& sink)
+void segment::header::serialize(serializer& sink) const
 {
   sink << segment::magic;
   sink << version;
@@ -261,7 +261,7 @@ uuid const& segment::id() const
   return header_.id;
 }
 
-void segment::serialize(serializer& sink)
+void segment::serialize(serializer& sink) const
 {
   sink << header_;
   sink.begin_sequence(chunks_.size());

@@ -36,7 +36,7 @@ public:
   template <typename T>
   object(T x)
   {
-    type_ = global_typeid<T>();
+    type_ = global_typeid(typeid(x));
     if (! type_)
       throw std::invalid_argument("missing type info for type T");
     value_ = new T(std::move(x));
@@ -78,7 +78,19 @@ public:
   /// @return The raw `void` pointer for this object.
   void* value();
 
+  /// Relinquishes ownership of the object's contained instance.
+  ///
+  /// @return A `void*` pointing to an heap-allocated pointer that the caller
+  /// must now properly cast and delete.
+  ///
+  /// @post `! *this`
+  void* release();
+
 private:
+  friend access;
+  void serialize(serializer& sink) const;
+  void deserialize(deserializer& source);
+
   global_type_info const* type_ = nullptr;
   void* value_ = nullptr;
 };
@@ -91,7 +103,7 @@ T& get(object& o)
   static_assert(!std::is_pointer<T>::value && !std::is_reference<T>::value,
                 "T must not be a reference or a pointer type.");
 
-  if (! (*(o.type()) == typeid(T)))
+  if (! (*o.type() == typeid(T)))
     throw std::invalid_argument("object type does not match T");
 
   return *reinterpret_cast<T*>(o.value());
@@ -103,7 +115,7 @@ T const& get(object const& o)
   static_assert(!std::is_pointer<T>::value && !std::is_reference<T>::value,
                 "T must not be a reference or a pointer type.");
 
-  if (! (*(o.type()) == typeid(T)))
+  if (! (*o.type() == typeid(T)))
     throw std::invalid_argument("object type does not match T");
 
   return *reinterpret_cast<T const*>(o.value());

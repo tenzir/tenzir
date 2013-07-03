@@ -133,7 +133,7 @@ vast::value_type vector::type() const
   return type_;
 }
 
-void vector::serialize(serializer& sink)
+void vector::serialize(serializer& sink) const
 {
   VAST_ENTER(VAST_THIS);
   sink << type_;
@@ -287,7 +287,7 @@ vast::value_type set::type() const
   return type_;
 }
 
-void set::serialize(serializer& sink)
+void set::serialize(serializer& sink) const
 {
   VAST_ENTER(VAST_THIS);
   sink << type_;
@@ -492,7 +492,7 @@ table::const_iterator table::find(key_type const& key) const
   return (i != cend() && comp(key, *i)) ? cend() : i;
 }
 
-void table::serialize(serializer& sink)
+void table::serialize(serializer& sink) const
 {
   VAST_ENTER(VAST_THIS);
   sink << key_type_;
@@ -636,7 +636,7 @@ void record::each(std::function<void(value const&)> f, bool recurse) const
       f(v);
 }
 
-void record::serialize(serializer& sink)
+void record::serialize(serializer& sink) const
 {
   VAST_ENTER(VAST_THIS);
   sink << static_cast<super const&>(*this);

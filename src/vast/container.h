@@ -188,7 +188,7 @@ public:
 
 private:
   friend access;
-  void serialize(serializer& sink);
+  void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
 
   bool any_impl(std::function<bool(value const&)> f) const;
@@ -314,7 +314,7 @@ public:
 
 private:
   friend access;
-  void serialize(serializer& sink);
+  void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
 
   bool any_impl(std::function<bool(value const&)> f) const;
@@ -440,7 +440,7 @@ public:
 
 private:
   friend access;
-  void serialize(serializer& sink);
+  void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
 
   bool any_impl(std::function<bool(value const&)> f) const;
@@ -509,7 +509,7 @@ public:
 
 private:
   friend access;
-  void serialize(serializer& sink);
+  void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
 
   value const* do_flat_at(size_t i, size_t& base) const;

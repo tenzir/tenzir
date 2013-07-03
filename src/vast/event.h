@@ -61,7 +61,7 @@ private:
   friend void swap(event& x, event& y);
 
   friend access;
-  void serialize(serializer& sink);
+  void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
 
   uint64_t id_ = 0;

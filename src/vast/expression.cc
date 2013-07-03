@@ -674,10 +674,11 @@ void expression::parse(std::string str, schema sch)
   else
   {
     // First, split the query expression at each OR node.
-    std::vector<detail::ast::query::query> ors{detail::ast::query::query{ast.first}};
+    std::vector<detail::ast::query::query> ors;
+    ors.emplace_back(detail::ast::query::query{ast.first, {}});
     for (auto& clause : ast.rest)
       if (clause.op == logical_or)
-        ors.emplace_back(detail::ast::query::query{clause.operand});
+        ors.emplace_back(detail::ast::query::query{clause.operand, {}});
       else
         ors.back().rest.push_back(clause);
 
@@ -736,7 +737,7 @@ void expression::accept(expr::visitor& v)
   root_->accept(v);
 }
 
-void expression::serialize(serializer& sink)
+void expression::serialize(serializer& sink) const
 {
   sink << str_;
   sink << schema_;
