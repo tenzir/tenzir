@@ -57,6 +57,42 @@ global_type_info const* type_manager::lookup(std::string const& name) const
   return i->second;
 }
 
+// TODO: automatically build transitive closure over linked types.
+bool type_manager::add_link(global_type_info const* from,
+                            std::type_info const& to)
+{
+  if (! from)
+    return false;
+  if (*from == to)
+    return false; // We do not store reflexivity...
+
+  auto& set = conversions_[from->id()];
+  auto t = set.find(std::type_index(to));
+  if (t != set.end())
+  {
+    VAST_LOG_WARN("attempted to register duplicate conversion from type " <<
+                  from->name() << " to type " << detail::demangle(to));
+    return false;
+  }
+  set.emplace(to);
+  return true;
+}
+
+bool type_manager::check_link(global_type_info const* from,
+                              std::type_info const& to) const
+{
+  if (! from)
+    return false;
+  if (*from == to)
+    return true; // ...but acknowledge it nonetheless.
+
+  auto s = conversions_.find(from->id());
+  if (s == conversions_.end())
+    return false;
+  return s->second.count(std::type_index(to));
+}
+
+
 type_manager* type_manager::create()
 {
   return new type_manager;

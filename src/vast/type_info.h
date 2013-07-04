@@ -6,7 +6,7 @@
 #include <string>
 #include <functional>
 #include <typeinfo>
-#include <type_traits>
+#include "vast/traits.h"
 #include "vast/fwd.h"
 #include "vast/typedefs.h"
 #include "vast/detail/demangle.h"
@@ -22,7 +22,7 @@ class type_manager;
 /// Enhanced RTTI.
 class global_type_info
   : util::equality_comparable<global_type_info>,
-    util::equality_comparable<global_type_info, std::type_info>,
+    util::equality_comparable<std::type_info>,
     util::totally_ordered<global_type_info>
 {
   friend bool operator==(global_type_info const& x, global_type_info const& y);
@@ -42,9 +42,9 @@ public:
   /// @return an object with this type.
   object create() const;
 
-  /// Determines whether a given C++ type maps to this type.
-  /// @param ti The C++ type info.
-  /// @return `true` if this type maps to *ti*.
+  /// Determines whether this type corresponds to C++ type information.
+  /// @param ti The C++ type information.
+  /// @return `true` if this type corresponds to *ti*.
   virtual bool equals(std::type_info const& ti) const = 0;
 
   /// Determines whether two instances of this type are equal.
@@ -89,6 +89,7 @@ private:
 };
 
 /// A concrete type info that suits most common types.
+/// @tparam T The type to wrap.
 template <typename T>
 class concrete_type_info : public global_type_info
 {
@@ -144,9 +145,43 @@ private:
   }
 };
 
+template <typename T>
+global_type_info const* global_typeid();
+
 namespace detail {
+
 bool register_type(std::type_info const& ti,
                    std::function<global_type_info*(type_id)> f);
+
+bool add_link(global_type_info const* from, std::type_info const& to);
+
+template <typename From, typename To, typename... Ts>
+struct converter
+{
+  static bool link()
+  {
+    return converter<From, To>::link() && converter<From, Ts...>::link();
+  }
+};
+
+template <typename From, typename To>
+struct converter<From, To>
+{
+  static bool link()
+  {
+    using BareFrom = RemovePointer<Unqualified<From>>;
+    using BareTo = RemovePointer<Unqualified<To>>;
+    static_assert(std::is_convertible<BareFrom*, BareTo*>::value,
+                  "From* not convertible to To*.");
+
+    auto gti = global_typeid<BareFrom>();
+    if (! gti)
+      throw std::logic_error("conversion requires announced type information");
+
+    return detail::add_link(gti, typeid(BareTo));
+  }
+};
+
 } // namespace detail
 
 /// Registers a type with VAST's runtime type system.
@@ -200,6 +235,32 @@ global_type_info const* global_typeid()
 {
   return global_typeid(typeid(T));
 }
+
+/// Registers a convertible-to relationship for an announced type.
+/// @tparam From The announced type to convert to *To*.
+/// @tparam To The type to convert *From* to.
+/// @return `true` iff the runtime accepted the conversion registration.
+template <typename From, typename To, typename... Ts>
+bool make_convertible()
+{
+  return detail::converter<From, To, Ts...>::link();
+}
+
+/// Checks a convertible-to relationship for an announced type.
+/// @tparam From The announced type to convert to *To*.
+/// @tparam To The type to convert *From* to.
+/// @return `true` iff it is feasible to convert between *From* and *To*.
+template <typename From, typename To>
+bool is_convertible()
+{
+  return is_convertible(global_typeid<From>(), typeid(To));
+}
+
+/// Checks a convertible-to relationship for an announced type.
+/// @param from The announced type to convert to *to*.
+/// @param to The type to convert *from* to.
+/// @return `true` iff it is feasible to convert between *from* and *to*.
+bool is_convertible(global_type_info const* from, std::type_info const& to);
 
 } // namespace vast
 

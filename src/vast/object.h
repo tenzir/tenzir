@@ -95,16 +95,20 @@ private:
   void* value_ = nullptr;
 };
 
+/// @relates object
 bool operator==(object const& x, object const& y);
 
+/// Retrieves an object value in a type-safe manner.
+/// @tparam T The type to convert the object to.
+/// @return A reference of type `T`.
 template <typename T>
 T& get(object& o)
 {
-  static_assert(!std::is_pointer<T>::value && !std::is_reference<T>::value,
+  static_assert(! std::is_pointer<T>::value && !std::is_reference<T>::value,
                 "T must not be a reference or a pointer type.");
 
-  if (! (*o.type() == typeid(T)))
-    throw std::invalid_argument("object type does not match T");
+  if (! (o.type()->equals(typeid(T)) || is_convertible(o.type(), typeid(T))))
+    throw std::invalid_argument("cannot convert object to requested type");
 
   return *reinterpret_cast<T*>(o.value());
 }
@@ -112,11 +116,11 @@ T& get(object& o)
 template <typename T>
 T const& get(object const& o)
 {
-  static_assert(!std::is_pointer<T>::value && !std::is_reference<T>::value,
+  static_assert(! std::is_pointer<T>::value && !std::is_reference<T>::value,
                 "T must not be a reference or a pointer type.");
 
-  if (! (*o.type() == typeid(T)))
-    throw std::invalid_argument("object type does not match T");
+  if (! (o.type()->equals(typeid(T)) || is_convertible(o.type(), typeid(T))))
+    throw std::invalid_argument("cannot convert object to requested type");
 
   return *reinterpret_cast<T const*>(o.value());
 }

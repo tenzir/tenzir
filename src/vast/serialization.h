@@ -270,9 +270,11 @@ bool read_object(deserializer& source, T& x)
 {
   if (! source.begin_instance(typeid(x)))
     return false;
-  auto expected = global_typeid(typeid(x));
+  auto want = global_typeid(typeid(x));
+  if (! want)
+    return false;
   global_type_info const* got = nullptr;
-  if (! (source.read_type(got) && expected && got && *expected == *got))
+  if (! (source.read_type(got) && got && *got == *want))
     return false;
   detail::load(source, x);
   return source.end_instance();

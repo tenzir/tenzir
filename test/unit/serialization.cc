@@ -210,14 +210,21 @@ BOOST_AUTO_TEST_CASE(polymorphic_object_serialization)
 {
   derived d;
   d.i = 42;
-  base& b = d;
   std::vector<uint8_t> buf;
-
-  auto out = io::make_container_output_stream(buf);
-  binary_serializer sink(out);
-  BOOST_REQUIRE(announce<derived>());
-  BOOST_REQUIRE(write_object(sink, b));
   {
+    // First, we serialize the object through a polymorphic reference to the
+    // base class, which invokes the correct virtual serialize method of the
+    // derived class.
+    auto out = io::make_container_output_stream(buf);
+    binary_serializer sink(out);
+    BOOST_REQUIRE((announce<derived>()));
+    BOOST_REQUIRE((make_convertible<derived, base>()));
+    base& b = d;
+    BOOST_REQUIRE(write_object(sink, b));
+  }
+  {
+    // It should always be possible to deserialize an instance of the exact
+    // derived type.
     auto in = io::make_array_input_stream(buf);
     binary_deserializer source(in);
     derived e;
@@ -225,18 +232,16 @@ BOOST_AUTO_TEST_CASE(polymorphic_object_serialization)
     BOOST_CHECK_EQUAL(e.i, 42);
   }
   {
+    // Similarly, it should always be possible to retrieve an opaque object and
+    // get the derived type via a type-checked invocation of get<T>.
     auto in = io::make_array_input_stream(buf);
     binary_deserializer source(in);
     object o;
     source >> o;
     BOOST_CHECK_EQUAL(get<derived>(o).f(), 42);
-    // It's always possible to get the exact type as above. However, it's
-    // impossible to obtain a reference to the base class because the extended
-    // type system can only check for type equality and not for a (transitive)
-    // is_convertible relation, as this is not defined over instances of
-    // std::type_info.
-    base* c = reinterpret_cast<base*>(o.value());
-    BOOST_CHECK_EQUAL(c->f(), 42);
+    // Since we've announced the type as being convertible to its base class,
+    // we can also safely obtain a reference to the base.
+    BOOST_CHECK_EQUAL(get<base>(o).f(), 42);
   }
 }
 

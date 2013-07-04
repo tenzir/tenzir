@@ -5,6 +5,7 @@
 #include <typeindex>
 #include <typeinfo>
 #include <unordered_map>
+#include <set>
 #include <string>
 #include "vast/singleton.h"
 #include "vast/typedefs.h"
@@ -52,6 +53,18 @@ public:
   /// no such information exists.
   global_type_info const* lookup(std::string const& name) const;
 
+  /// Registers a convertible-to relationship for an announced type.
+  /// @param from The announced type information to convert to *to*.
+  /// @param to The type information to convert *from* to.
+  /// @return `true` iff the type registration succeeded.
+  bool add_link(global_type_info const* from, std::type_info const& to);
+
+  /// Checks a convertible-to relationship for an announced type.
+  /// @param from The announced type information to convert to *to*.
+  /// @param to The type information to convert *from* to.
+  /// @return `true` iff *from* is convertible to *to*.
+  bool check_link(global_type_info const* from, std::type_info const& to) const;
+
 private:
   // Singleton implementation.
   static type_manager* create();
@@ -63,6 +76,7 @@ private:
   std::unordered_map<std::type_index, std::unique_ptr<global_type_info>> by_ti_;
   std::unordered_map<type_id, global_type_info const*> by_id_;
   std::unordered_map<std::string, global_type_info const*> by_name_;
+  std::unordered_map<type_id, std::set<std::type_index>> conversions_;
 };
 
 } // namespace detail

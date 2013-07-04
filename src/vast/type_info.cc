@@ -42,11 +42,18 @@ bool operator<(global_type_info const& x, global_type_info const& y)
 }
 
 namespace detail {
+
 bool register_type(std::type_info const& ti,
                    std::function<global_type_info*(type_id)> f)
 {
   return detail::type_manager::instance()->add(ti, f);
 }
+
+bool add_link(global_type_info const* from, std::type_info const& to)
+{
+  return detail::type_manager::instance()->add_link(from, to);
+}
+
 } // namespace detail
 
 global_type_info const* global_typeid(std::type_info const& ti)
@@ -63,6 +70,12 @@ global_type_info const* global_typeid(std::string const& name)
 {
   return detail::type_manager::instance()->lookup(name);
 }
+
+bool is_convertible(global_type_info const* from, std::type_info const& to)
+{
+  return detail::type_manager::instance()->check_link(from, to);
+}
+
 
 } // namespace vast
 
