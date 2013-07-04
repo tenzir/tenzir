@@ -7,7 +7,7 @@
 #include "vast/detail/ast/query.h"
 #include "vast/detail/parser/parse.h"
 #include "vast/detail/parser/query.h"
-#include "vast/io/serialization.h"
+#include "vast/serialization.h"
 #include "vast/util/make_unique.h"
 
 namespace vast {
@@ -674,10 +674,11 @@ void expression::parse(std::string str, schema sch)
   else
   {
     // First, split the query expression at each OR node.
-    std::vector<detail::ast::query::query> ors{detail::ast::query::query{ast.first}};
+    std::vector<detail::ast::query::query> ors;
+    ors.emplace_back(detail::ast::query::query{ast.first, {}});
     for (auto& clause : ast.rest)
       if (clause.op == logical_or)
-        ors.emplace_back(detail::ast::query::query{clause.operand});
+        ors.emplace_back(detail::ast::query::query{clause.operand, {}});
       else
         ors.back().rest.push_back(clause);
 
@@ -736,13 +737,13 @@ void expression::accept(expr::visitor& v)
   root_->accept(v);
 }
 
-void expression::serialize(io::serializer& sink)
+void expression::serialize(serializer& sink) const
 {
   sink << str_;
   sink << schema_;
 }
 
-void expression::deserialize(io::deserializer& source)
+void expression::deserialize(deserializer& source)
 {
   std::string str;
   source >> str;

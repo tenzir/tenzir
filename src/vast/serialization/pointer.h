@@ -1,12 +1,11 @@
-#ifndef VAST_IO_SERIALIZATION_POINTER_H
-#define VAST_IO_SERIALIZATION_POINTER_H
+#ifndef VAST_SERIALIZATION_POINTER_H
+#define VAST_SERIALIZATION_POINTER_H
 
 #include <memory>
 #include "vast/intrusive.h"
 #include "vast/traits.h"
 
 namespace vast {
-namespace io {
 
 template <typename T>
 typename std::enable_if<is_pointer_type<T>::value>::type
@@ -42,7 +41,6 @@ deserialize(deserializer& source, T& x)
   source >> *x;
 }
 
-} // namespace io
 } // namespace vast
 
 #endif

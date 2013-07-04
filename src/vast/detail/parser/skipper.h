@@ -1,7 +1,7 @@
 #ifndef VAST_DETAIL_PARSER_SKIPPER_H
 #define VAST_DETAIL_PARSER_SKIPPER_H
 
-#include <boost/spirit/include/qi.hpp>
+#include "vast/detail/parser/boost.h"
 
 namespace vast {
 namespace detail {

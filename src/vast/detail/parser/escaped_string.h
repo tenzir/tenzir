@@ -2,7 +2,7 @@
 #define VAST_DETAIL_PARSER_ESCAPED_STRING_H
 
 #include <string>
-#include <boost/spirit/include/qi.hpp>
+#include "vast/detail/parser/boost.h"
 
 namespace vast {
 namespace detail {

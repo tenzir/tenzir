@@ -3,17 +3,19 @@
 
 #include <cppa/deserializer.hpp>
 #include <cppa/serializer.hpp>
-#include "vast/io/serialization.h"
+#include "vast/serialization.h"
 #include "vast/util/byte_swap.h"
 
 namespace vast {
 namespace detail {
 
-class cppa_serializer : public io::serializer
+class cppa_serializer : public serializer
 {
 public:
   cppa_serializer(cppa::serializer* sink, std::string const& name);
-  ~cppa_serializer();
+  virtual ~cppa_serializer();
+  virtual bool begin_sequence(uint64_t size) override;
+  virtual bool end_sequence() override;
   virtual bool write_bool(bool x) override;
   virtual bool write_int8(int8_t x) override;
   virtual bool write_uint8(uint8_t x) override;
@@ -24,10 +26,8 @@ public:
   virtual bool write_int64(int64_t x) override;
   virtual bool write_uint64(uint64_t x) override;
   virtual bool write_double(double x) override;
-  virtual bool write_sequence_begin(uint64_t size) override;
-  virtual bool write_sequence_end() override;
   virtual bool write_raw(void const* data, size_t size) override;
-  virtual size_t bytes() const;
+  size_t bytes() const;
 
 private:
   template <typename T>
@@ -44,11 +44,13 @@ private:
   size_t bytes_;
 };
 
-class cppa_deserializer : public io::deserializer
+class cppa_deserializer : public deserializer
 {
 public:
   cppa_deserializer(cppa::deserializer* source, std::string const& name);
-  ~cppa_deserializer();
+  virtual ~cppa_deserializer();
+  virtual bool begin_sequence(uint64_t& size) override;
+  virtual bool end_sequence() override;
   virtual bool read_bool(bool& x) override;
   virtual bool read_int8(int8_t& x) override;
   virtual bool read_uint8(uint8_t& x) override;
@@ -59,10 +61,8 @@ public:
   virtual bool read_int64(int64_t& x) override;
   virtual bool read_uint64(uint64_t& x) override;
   virtual bool read_double(double& x) override;
-  virtual bool read_sequence_begin(uint64_t& size) override;
-  virtual bool read_sequence_end() override;
   virtual bool read_raw(void* data, size_t size) override;
-  virtual size_t bytes() const;
+  size_t bytes() const;
 
 private:
   template <typename T>

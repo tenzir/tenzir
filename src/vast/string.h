@@ -3,7 +3,7 @@
 
 #include <string>
 #include <vector>
-#include "vast/io/fwd.h"
+#include "vast/fwd.h"
 #include "vast/util/operators.h"
 
 namespace vast {
@@ -318,9 +318,9 @@ public:
   void tag(char t);
 
 private:
-  friend io::access;
-  void serialize(io::serializer& sink);
-  void deserialize(io::deserializer& source);
+  friend access;
+  void serialize(serializer& sink) const;
+  void deserialize(deserializer& source);
 
   template <typename Iterator>
   void assign(Iterator begin, Iterator end)

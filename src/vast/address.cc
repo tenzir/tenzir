@@ -5,7 +5,7 @@
 #include <cstring>
 #include "vast/logger.h"
 #include "vast/string.h"
-#include "vast/io/serialization.h"
+#include "vast/serialization.h"
 #include "vast/util/byte_swap.h"
 
 std::array<uint8_t, 12> const vast::address::v4_mapped_prefix =
@@ -189,7 +189,7 @@ std::array<uint8_t, 16> const& address::data() const
   return bytes_;
 }
 
-void address::serialize(io::serializer& sink)
+void address::serialize(serializer& sink) const
 {
   VAST_ENTER(VAST_THIS);
   for (size_t i = 0; i < 16; i += 8)
@@ -199,7 +199,7 @@ void address::serialize(io::serializer& sink)
   }
 }
 
-void address::deserialize(io::deserializer& source)
+void address::deserialize(deserializer& source)
 {
   VAST_ENTER();
   for (size_t i = 0; i < 16; i += 8)

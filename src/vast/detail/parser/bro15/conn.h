@@ -4,9 +4,6 @@
 // This grammar has more struct fields than the default can handle.
 #define FUSION_MAX_VECTOR_SIZE 20
 
-// Improves compile times significantly at the cost of predefining terminals.
-#define BOOST_SPIRIT_NO_PREDEFINED_TERMINALS
-
 #include "vast/event.h"
 #include "vast/detail/parser/address.h"
 

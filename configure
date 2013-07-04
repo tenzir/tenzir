@@ -78,7 +78,7 @@ levelize() {
       echo 5
       ;;
     trace)
-      echo 5
+      echo 6
       ;;
     *)
       echo "invalid log level specification, use:"

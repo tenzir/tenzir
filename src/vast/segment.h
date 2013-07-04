@@ -57,9 +57,9 @@ public:
   private:
     friend bool operator==(header const& x, header const& y);
 
-    friend io::access;
-    void serialize(io::serializer& sink);
-    void deserialize(io::deserializer& source);
+    friend access;
+    void serialize(serializer& sink) const;
+    void deserialize(deserializer& source);
   };
 
   /// A proxy class for writing into a segment. Each writer maintains a local
@@ -206,9 +206,9 @@ public:
 private:
   friend bool operator==(segment const& x, segment const& y);
 
-  friend io::access;
-  void serialize(io::serializer& sink);
-  void deserialize(io::deserializer& source);
+  friend access;
+  void serialize(serializer& sink) const;
+  void deserialize(deserializer& source);
 
   static uint32_t const magic = 0x2a2a2a2a;
   static uint8_t const version = 1;

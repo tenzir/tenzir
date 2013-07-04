@@ -1,14 +1,94 @@
-#include "vast/io/serialization.h"
+#include "vast/serialization.h"
 
 #include "vast/logger.h"
+#include "vast/type_info.h"
+#include "vast/detail/type_manager.h"
 #include "vast/util/coding.h"
 
 namespace vast {
-namespace io {
 
-binary_serializer::binary_serializer(output_stream& sink)
+bool serializer::begin_instance(std::type_info const& /* ti */)
+{
+  VAST_ENTER();
+  //if (global_typeid(ti) == nullptr)
+  //{
+  //  VAST_LOG_ERROR("missing type info for " << detail::demangle(ti));
+  //  VAST_RETURN(false);
+  //}
+  VAST_RETURN(true);
+}
+
+bool serializer::end_instance()
+{
+  // Do nothing by default.
+  VAST_ENTER();
+  VAST_RETURN(true);
+}
+
+bool serializer::end_sequence()
+{
+  // Do nothing by default.
+  VAST_ENTER();
+  VAST_RETURN(true);
+}
+
+bool serializer::write_type(global_type_info const* gti)
+{
+  VAST_ENTER();
+  assert(gti != nullptr);
+  detail::save(*this, gti->id());
+  VAST_RETURN(true);
+}
+
+bool deserializer::begin_instance(std::type_info const& /* ti */)
+{
+  VAST_ENTER();
+  //if (global_typeid(ti) == nullptr)
+  //{
+  //  VAST_LOG_ERROR("missing type info for " << detail::demangle(ti));
+  //  VAST_RETURN(false);
+  //}
+  VAST_RETURN(true);
+}
+
+bool deserializer::end_instance()
+{
+  // Do nothing by default.
+  VAST_ENTER();
+  VAST_RETURN(true);
+}
+
+bool deserializer::end_sequence()
+{
+  // Do nothing by default.
+  VAST_ENTER();
+  VAST_RETURN(true);
+}
+
+bool deserializer::read_type(global_type_info const*& gti)
+{
+  VAST_ENTER();
+  type_id id = 0;
+  detail::load(*this, id);
+  gti = global_typeid(id);
+  if (gti == nullptr)
+  {
+    VAST_LOG_ERROR("no type info for id " << id);
+    VAST_RETURN(false);
+  }
+  VAST_RETURN(true);
+}
+
+binary_serializer::binary_serializer(io::output_stream& sink)
   : sink_(sink)
 {
+}
+
+bool binary_serializer::begin_sequence(uint64_t size)
+{
+  VAST_ENTER();
+  bytes_ += util::varbyte::size(size);
+  VAST_RETURN(sink_.write_varbyte(&size));
 }
 
 bool binary_serializer::write_bool(bool x)
@@ -81,20 +161,6 @@ bool binary_serializer::write_double(double x)
   VAST_RETURN(sink_.write<double>(&x));
 }
   
-bool binary_serializer::write_sequence_begin(uint64_t size)
-{
-  VAST_ENTER();
-  bytes_ += util::varbyte::size(size);
-  VAST_RETURN(sink_.write_varbyte(&size));
-}
-
-bool binary_serializer::write_sequence_end()
-{
-  // Do nothing.
-  VAST_ENTER();
-  VAST_RETURN(true);
-}
-
 bool binary_serializer::write_raw(void const* data, size_t size)
 {
   VAST_ENTER(VAST_ARG(data, size));
@@ -108,9 +174,17 @@ size_t binary_serializer::bytes() const
 }
 
 
-binary_deserializer::binary_deserializer(input_stream& source)
+binary_deserializer::binary_deserializer(io::input_stream& source)
   : source_(source)
 {
+}
+
+bool binary_deserializer::begin_sequence(uint64_t& size)
+{
+  VAST_ENTER();
+  auto success = source_.read_varbyte(&size);
+  bytes_ += util::varbyte::size(size);
+  VAST_RETURN(success);
 }
 
 bool binary_deserializer::read_bool(bool& x)
@@ -183,21 +257,6 @@ bool binary_deserializer::read_double(double& x)
   VAST_RETURN(source_.read<double>(&x), x);
 }
   
-bool binary_deserializer::read_sequence_begin(uint64_t& size)
-{
-  VAST_ENTER();
-  auto success = source_.read_varbyte(&size);
-  bytes_ += util::varbyte::size(size);
-  VAST_RETURN(success);
-}
-
-bool binary_deserializer::read_sequence_end()
-{
-  // Do nothing.
-  VAST_ENTER();
-  VAST_RETURN(true);
-}
-
 bool binary_deserializer::read_raw(void* data, size_t size)
 {
   VAST_ENTER();
@@ -210,5 +269,4 @@ size_t binary_deserializer::bytes() const
   return bytes_;
 }
 
-} // namespace io
 } // namespace vast

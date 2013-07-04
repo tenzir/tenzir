@@ -4,7 +4,7 @@
 #include <iosfwd>
 #include <string>
 #include <type_traits>
-#include "vast/io/fwd.h"
+#include "vast/fwd.h"
 
 namespace vast {
 
@@ -50,8 +50,8 @@ enum value_type : uint8_t
   port_type       = 0x10  ///< A transport-layer port value.
 };
 
-void serialize(io::serializer& sink, value_type x);
-void deserialize(io::deserializer& source, value_type& x);
+void serialize(serializer& sink, value_type x);
+void deserialize(deserializer& source, value_type& x);
 
 std::string to_string(value_type t);
 std::ostream& operator<<(std::ostream& out, value_type const& t);

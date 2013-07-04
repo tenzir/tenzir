@@ -1,8 +1,8 @@
 #ifndef VAST_DETAIL_PARSER_SCHEMA_DEFINITION_H
 #define VAST_DETAIL_PARSER_SCHEMA_DEFINITION_H
 
-#include <boost/spirit/include/phoenix.hpp>
 #include "vast/exception.h"
+#include "vast/detail/parser/boost.h"
 #include "vast/detail/parser/schema.h"
 
 namespace vast {

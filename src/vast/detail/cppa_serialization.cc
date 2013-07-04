@@ -15,6 +15,17 @@ cppa_serializer::~cppa_serializer()
   sink_->end_object();
 }
 
+bool cppa_serializer::begin_sequence(uint64_t size)
+{
+  return write(size);
+}
+
+bool cppa_serializer::end_sequence()
+{
+  // Do nothing.
+  return true;
+}
+
 bool cppa_serializer::write_bool(bool x)
 {
   return write(static_cast<uint8_t>(x));
@@ -65,17 +76,6 @@ bool cppa_serializer::write_double(double x)
   return write(x);
 }
   
-bool cppa_serializer::write_sequence_begin(uint64_t size)
-{
-  return write(size);
-}
-
-bool cppa_serializer::write_sequence_end()
-{
-  // Do nothing.
-  return true;
-}
-
 bool cppa_serializer::write_raw(void const* data, size_t size)
 {
   sink_->write_raw(size, data);
@@ -99,6 +99,17 @@ cppa_deserializer::cppa_deserializer(cppa::deserializer* source,
 cppa_deserializer::~cppa_deserializer()
 {
   source_->end_object();
+}
+
+bool cppa_deserializer::begin_sequence(uint64_t& size)
+{
+  return read(size);
+}
+
+bool cppa_deserializer::end_sequence()
+{
+  // Do nothing.
+  return true;
 }
 
 bool cppa_deserializer::read_bool(bool& x)
@@ -155,17 +166,6 @@ bool cppa_deserializer::read_double(double& x)
   return read(x);
 }
   
-bool cppa_deserializer::read_sequence_begin(uint64_t& size)
-{
-  return read(size);
-}
-
-bool cppa_deserializer::read_sequence_end()
-{
-  // Do nothing.
-  return true;
-}
-
 bool cppa_deserializer::read_raw(void* data, size_t size)
 {
   source_->read_raw(size, data);

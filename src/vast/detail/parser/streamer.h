@@ -1,8 +1,7 @@
 #ifndef VAST_DETAIL_PARSER_STREAMER_H
 #define VAST_DETAIL_PARSER_STREAMER_H
 
-#include <boost/spirit/include/qi.hpp>
-#include <boost/spirit/include/support_multi_pass.hpp>
+#include "vast/detail/parser/boost.h"
 
 namespace vast {
 namespace detail {

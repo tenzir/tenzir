@@ -2,7 +2,7 @@
 
 #include <cstring>
 #include "vast/logger.h"
-#include "vast/io/serialization.h"
+#include "vast/serialization.h"
 
 namespace vast {
 
@@ -454,20 +454,20 @@ void string::tag(char t)
   buf_[tag_off] = (t << 1) | (buf_[tag_off] & 1);
 }
 
-void string::serialize(io::serializer& sink)
+void string::serialize(serializer& sink) const
 {
   VAST_ENTER(VAST_THIS);
-  sink.write_sequence_begin(size());
+  sink.begin_sequence(size());
   if (! empty())
     sink.write_raw(data(), size());
-  sink.write_sequence_end();
+  sink.end_sequence();
 }
 
-void string::deserialize(io::deserializer& source)
+void string::deserialize(deserializer& source)
 {
   VAST_ENTER();
   uint64_t size;
-  source.read_sequence_begin(size);
+  source.begin_sequence(size);
   if (size > 0)
   {
     if (size > std::numeric_limits<size_type>::max())
@@ -475,7 +475,7 @@ void string::deserialize(io::deserializer& source)
     auto data = prepare(size);
     source.read_raw(data, size);
   }
-  source.read_sequence_end();
+  source.end_sequence();
   VAST_LEAVE(VAST_THIS);
 }
 

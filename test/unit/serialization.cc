@@ -2,7 +2,8 @@
 #include "event_fixture.h"
 
 #include "vast/chunk.h"
-#include "vast/io/serialization.h"
+#include "vast/object.h"
+#include "vast/serialization.h"
 #include "vast/io/array_stream.h"
 #include "vast/io/container_stream.h"
 
@@ -63,10 +64,10 @@ BOOST_AUTO_TEST_CASE(byte_swapping)
   BOOST_CHECK_EQUAL(y64, x64);
 }
 
-// A serializable object.
+// A serializable class.
 class serializable
 {
-  friend io::access;
+  friend struct access;
 public:
   int i() const
   {
@@ -74,12 +75,12 @@ public:
   }
 
 private:
-  void serialize(io::serializer& sink)
+  void serialize(serializer& sink) const
   {
     sink << i_ - 10;
   }
 
-  void deserialize(io::deserializer& source)
+  void deserialize(deserializer& source)
   {
     source >> i_;
     i_ += 10;
@@ -108,24 +109,21 @@ BOOST_AUTO_TEST_CASE(io_serialization_interface)
       auto out = io::make_container_output_stream(tmp);
       std::unique_ptr<io::compressed_output_stream> comp_out(
           io::compressed_output_stream::create(method, out));
-      io::binary_serializer sink(*comp_out);
+      binary_serializer sink(*comp_out);
       sink << input;
       sink << serializable();
     }
 
     std::vector<int> output;
-    io::array_input_stream in(tmp.data(), tmp.size());
+    auto in = io::make_array_input_stream(tmp);
     std::unique_ptr<io::compressed_input_stream> comp_in(
         io::compressed_input_stream::create(method, in));
-    io::binary_deserializer source(*comp_in);
+    binary_deserializer source(*comp_in);
     source >> output;
     BOOST_REQUIRE_EQUAL(input.size(), output.size());
     for (size_t i = 0; i < input.size(); ++i)
-    {
-      if (output[i] != input[i])
-        std::cerr << i << " !!" << std::endl;
       BOOST_CHECK_EQUAL(output[i], input[i]);
-    }
+
     serializable x;
     source >> x;
     BOOST_CHECK_EQUAL(x.i(), 42);
@@ -156,6 +154,95 @@ BOOST_AUTO_TEST_CASE(chunk_serialization)
 
   auto copy(chk);
   BOOST_CHECK(chk == copy);
+}
+
+BOOST_AUTO_TEST_CASE(object_serialization)
+{
+  auto o = object::adopt(new vector{42, 84, 1337});
+  std::vector<uint8_t> buf;
+
+  auto out = io::make_container_output_stream(buf);
+  binary_serializer sink(out);
+  sink << o;
+
+  auto in = io::make_array_input_stream(buf);
+  binary_deserializer source(in);
+  object p;
+  source >> p;
+
+  BOOST_CHECK(o == p);
+}
+
+struct base
+{
+  virtual ~base() = default;
+  virtual uint32_t f() const = 0;
+  virtual void serialize(serializer& sink) const = 0;
+  virtual void deserialize(deserializer& source) = 0;
+};
+
+struct derived : base
+{
+  friend bool operator==(derived const& x, derived const& y)
+  {
+    return x.i == y.i;
+  }
+
+  virtual uint32_t f() const final
+  {
+    return i;
+  }
+
+  virtual void serialize(serializer& sink) const final
+  {
+    sink << i;
+  }
+
+  virtual void deserialize(deserializer& source) final
+  {
+    source >> i;
+  }
+
+  uint32_t i = 0;
+};
+
+BOOST_AUTO_TEST_CASE(polymorphic_object_serialization)
+{
+  derived d;
+  d.i = 42;
+  std::vector<uint8_t> buf;
+  {
+    // First, we serialize the object through a polymorphic reference to the
+    // base class, which invokes the correct virtual serialize method of the
+    // derived class.
+    auto out = io::make_container_output_stream(buf);
+    binary_serializer sink(out);
+    BOOST_REQUIRE((announce<derived>()));
+    BOOST_REQUIRE((make_convertible<derived, base>()));
+    base& b = d;
+    BOOST_REQUIRE(write_object(sink, b));
+  }
+  {
+    // It should always be possible to deserialize an instance of the exact
+    // derived type.
+    auto in = io::make_array_input_stream(buf);
+    binary_deserializer source(in);
+    derived e;
+    BOOST_REQUIRE(read_object(source, e));
+    BOOST_CHECK_EQUAL(e.i, 42);
+  }
+  {
+    // Similarly, it should always be possible to retrieve an opaque object and
+    // get the derived type via a type-checked invocation of get<T>.
+    auto in = io::make_array_input_stream(buf);
+    binary_deserializer source(in);
+    object o;
+    source >> o;
+    BOOST_CHECK_EQUAL(get<derived>(o).f(), 42);
+    // Since we've announced the type as being convertible to its base class,
+    // we can also safely obtain a reference to the base.
+    BOOST_CHECK_EQUAL(get<base>(o).f(), 42);
+  }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

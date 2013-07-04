@@ -10,6 +10,9 @@ namespace io {
 template <typename Container>
 class container_output_stream : public output_stream
 {
+  container_output_stream(container_output_stream const&) = delete;
+  container_output_stream& operator=(container_output_stream const&) = delete;
+
   template <typename T>
   using is_string = std::is_same<T, std::string>;
 
@@ -31,6 +34,9 @@ public:
     : container_(container)
   {
   }
+
+  container_output_stream(container_output_stream&&) = default;
+  container_output_stream& operator=(container_output_stream&&) = default;
 
   virtual bool next(void** data, size_t* size) override
   {

@@ -2,7 +2,7 @@
 
 #include <utility>
 #include "vast/logger.h"
-#include "vast/io/serialization.h"
+#include "vast/serialization.h"
 
 namespace vast {
 
@@ -49,7 +49,7 @@ void port::type(port_type t)
   type_ = t;
 }
 
-void port::serialize(io::serializer& sink)
+void port::serialize(serializer& sink) const
 {
   VAST_ENTER(VAST_THIS);
   typedef std::underlying_type<port::port_type>::type underlying_type;
@@ -57,7 +57,7 @@ void port::serialize(io::serializer& sink)
   sink << static_cast<underlying_type>(type_);
 }
 
-void port::deserialize(io::deserializer& source)
+void port::deserialize(deserializer& source)
 {
   VAST_ENTER();
   source >> number_;

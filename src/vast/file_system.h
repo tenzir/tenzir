@@ -221,7 +221,7 @@ bool mkdir(path const& p);
 /// @param p The path to a directory.
 ///
 /// @param f The function to call for each directory entry. The return value
-/// of *f* indicates whether to continue (`true`)or to stop (`false`)
+/// of *f* indicates whether to continue (`true`) or to stop (`false`)
 /// iterating.
 void traverse(path const& p, std::function<bool(path const&)> f);
 

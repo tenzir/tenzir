@@ -5,7 +5,7 @@
 #include <vector>
 #include <string>
 #include "vast/intrusive.h"
-#include "vast/io/fwd.h"
+#include "vast/fwd.h"
 
 namespace vast {
 
@@ -175,9 +175,9 @@ public:
   void add_event(event e);
 
 private:
-  friend class io::access;
-  void serialize(io::serializer& sink);
-  void deserialize(io::deserializer& source);
+  friend access;
+  void serialize(serializer& sink) const;
+  void deserialize(deserializer& source);
   friend bool operator==(schema const& x, schema const& y);
   friend bool operator!=(schema const& x, schema const& y);
 

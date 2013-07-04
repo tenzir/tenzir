@@ -7,7 +7,7 @@
 #include "vast/detail/ast/schema.h"
 #include "vast/detail/parser/schema.h"
 #include "vast/io/container_stream.h"
-#include "vast/io/serialization.h"
+#include "vast/serialization.h"
 
 namespace vast {
 namespace detail {
@@ -349,12 +349,12 @@ void schema::add_event(event e)
   events_.emplace_back(std::move(e));
 }
 
-void schema::serialize(io::serializer& sink)
+void schema::serialize(serializer& sink) const
 {
   sink << to_string(*this);
 }
 
-void schema::deserialize(io::deserializer& source)
+void schema::deserialize(deserializer& source)
 {
   std::string str;
   source >> str;
@@ -395,7 +395,7 @@ size_t hash<vast::schema>::operator()(vast::schema const& sch) const
   std::string str;
   {
     auto out = vast::io::make_container_output_stream(str);
-    vast::io::binary_serializer sink(out);
+    vast::binary_serializer sink(out);
     sink << sch;
   }
   return hash<std::string>()(str);

@@ -3,7 +3,7 @@
 
 #include <functional>
 #include <boost/uuid/uuid.hpp>
-#include "vast/io/fwd.h"
+#include "vast/fwd.h"
 #include "vast/util/operators.h"
 
 namespace vast {
@@ -18,9 +18,6 @@ public:
 
   uuid() = default;
   uuid(std::string const& str);
-  uuid(uuid const&);
-  uuid(uuid&&);
-  uuid& operator=(uuid other);
 
   const_iterator begin() const;
   const_iterator end() const;
@@ -28,9 +25,9 @@ public:
   size_t hash() const;
 
 private:
-  friend io::access;
-  void serialize(io::serializer& sink);
-  void deserialize(io::deserializer& source);
+  friend access;
+  void serialize(serializer& sink) const;
+  void deserialize(deserializer& source);
 
   friend bool operator==(uuid const& x, uuid const& y);
   friend bool operator<(uuid const& x, uuid const& y);

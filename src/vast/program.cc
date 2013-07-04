@@ -14,6 +14,7 @@
 #include "vast/schema.h"
 #include "vast/schema_manager.h"
 #include "vast/search.h"
+#include "vast/shutdown.h"
 #include "vast/system_monitor.h"
 #include "vast/to_string.h"
 #include "vast/detail/cppa_type_info.h"
@@ -70,7 +71,8 @@ bool program::run()
 
   stop();
   await_all_others_done();
-  shutdown();
+  cppa::shutdown();
+  vast::shutdown();
 
   return true;
 }

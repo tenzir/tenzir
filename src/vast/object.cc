@@ -1,41 +1,107 @@
 #include "vast/object.h"
-#include "vast/io/serialization.h"
+
+#include <cassert>
+#include "vast/serialization.h"
 
 namespace vast {
 
-object::object(uuid id)
-  : id_(id)
+object::object(global_type_info const* type, void* value)
+  : type_(type), value_(value)
 {
+  assert(type_ != nullptr);
+  assert(value_ != nullptr);
 }
 
-uuid const& object::id() const
+object::object(object const& other)
 {
-  return id_;
+  if (other)
+  {
+    type_ = other.type_;
+    value_ = type_->construct(other.value_);
+  }
 }
 
-void object::id(uuid id)
+object::object(object&& other)
+  : type_(other.type_), value_(other.value_)
 {
-  id_ = std::move(id);
+  other.type_ = nullptr;
+  other.value_ = nullptr;
 }
 
-void object::id(std::string const& str)
+object& object::operator=(object other)
 {
-  id(uuid(str));
+  std::swap(type_, other.type_);
+  std::swap(value_, other.value_);
+  return *this;
 }
 
-void object::serialize(io::serializer& sink)
+object::~object()
 {
-  sink << id_;
+  if (*this)
+    type_->destruct(value_);
 }
 
-void object::deserialize(io::deserializer& source)
+object::operator bool() const
 {
-  source >> id_;
+  return value_ != nullptr && type_ != nullptr;
 }
 
-void swap(object& x, object& y)
+global_type_info const* object::type() const
 {
-  swap(x.id_, y.id_);
+  return type_;
+}
+
+void const* object::value() const
+{
+  return value_;
+}
+
+void* object::value()
+{
+  return value_;
+}
+
+void* object::release()
+{
+  auto ptr = value_;
+  type_ = nullptr;
+  value_ = nullptr;
+  return ptr;
+}
+
+void object::serialize(serializer& sink) const
+{
+  VAST_ENTER();
+  assert(*this);
+  sink.write_type(type_);
+  type_->serialize(sink, value_);
+}
+
+void object::deserialize(deserializer& source)
+{
+  VAST_ENTER();
+  if (*this)
+    type_->destruct(value_);
+  if (! source.read_type(type_) )
+  {
+    VAST_LOG_ERROR("failed to deserialize object type");
+  }
+  else if (type_ == nullptr)
+  {
+    VAST_LOG_ERROR("deserialized an invalid object type");
+  }
+  else
+  {
+    value_ = type_->construct();
+    type_->deserialize(source, value_);
+  }
+}
+
+bool operator==(object const& x, object const& y)
+{
+  return x.type() == y.type()
+    ? (x.value() == y.value() || x.type()->equals(x.value(), y.value()))
+    : false;
 }
 
 } // namespace vast

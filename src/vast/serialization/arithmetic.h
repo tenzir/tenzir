@@ -1,8 +1,7 @@
-#ifndef VAST_IO_SERIALIZATION_ARITHMETIC_H
-#define VAST_IO_SERIALIZATION_ARITHMETIC_H
+#ifndef VAST_SERIALIZATION_ARITHMETIC_H
+#define VAST_SERIALIZATION_ARITHMETIC_H
 
 namespace vast {
-namespace io {
 
 inline bool serialize(serializer& sink, bool x)
 {
@@ -155,7 +154,6 @@ inline bool deserialize(deserializer& source, double& x)
   return source.read_double(x);
 }
 
-} // namespace io
 } // namespace vast
 
 #endif

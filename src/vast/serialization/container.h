@@ -1,13 +1,12 @@
-#ifndef VAST_IO_SERIALIZATION_CONTAINER_H
-#define VAST_IO_SERIALIZATION_CONTAINER_H
+#ifndef VAST_SERIALIZATION_CONTAINER_H
+#define VAST_SERIALIZATION_CONTAINER_H
 
 #include <vector>
 #include "vast/exception.h"
 #include "vast/traits.h"
-#include "vast/io/serialization/arithmetic.h"
+#include "vast/serialization/arithmetic.h"
 
 namespace vast {
-namespace io {
 
 template <typename T, size_t N>
 typename std::enable_if<
@@ -47,10 +46,10 @@ template <typename T>
 typename std::enable_if<is_byte<T>::value>::type
 serialize(serializer& sink, std::vector<T> const& v)
 {
-  sink.write_sequence_begin(v.size());
+  sink.begin_sequence(v.size());
   if (! v.empty())
     sink.write_raw(v.data(), v.size());
-  sink.write_sequence_end();
+  sink.end_sequence();
 }
 
 template <typename T>
@@ -58,26 +57,26 @@ typename std::enable_if<is_byte<T>::value>::type
 deserialize(deserializer& source, std::vector<T>& v)
 {
   uint64_t size;
-  source.read_sequence_begin(size);
+  source.begin_sequence(size);
   if (size > 0)
   {
     typedef typename std::vector<T>::size_type size_type;
     if (size > std::numeric_limits<size_type>::max())
-      throw error::io("size too large for architecture");
+      throw std::length_error("size too large for architecture");
     v.resize(size);
     source.read_raw(v.data(), size);
   }
-  source.read_sequence_end();
+  source.end_sequence();
 }
 
 template <typename T>
 typename std::enable_if<!is_byte<T>::value>::type
 serialize(serializer& sink, std::vector<T> const& v)
 {
-  sink.write_sequence_begin(v.size());
+  sink.begin_sequence(v.size());
   for (auto const& x : v)
     sink << x;
-  sink.write_sequence_end();
+  sink.end_sequence();
 }
 
 template <typename T>
@@ -85,17 +84,17 @@ typename std::enable_if<!is_byte<T>::value>::type
 deserialize(deserializer& source, std::vector<T>& v)
 {
   uint64_t size;
-  source.read_sequence_begin(size);
+  source.begin_sequence(size);
   if (size > 0)
   {
     typedef typename std::vector<T>::size_type size_type;
     if (size > std::numeric_limits<size_type>::max())
-      throw error::io("size too large for architecture");
+      throw std::length_error("size too large for architecture");
     v.resize(size);
     for (auto& x : v)
       source >> x;
   }
-  source.read_sequence_end();
+  source.end_sequence();
 }
 
 template <typename T, typename U>
@@ -112,7 +111,6 @@ void deserialize(deserializer& source, std::pair<T, U>& pair)
   source >> pair.second;
 }
 
-} // namespace io
 } // namespace vast
 
 #endif

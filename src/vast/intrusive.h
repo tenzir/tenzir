@@ -15,10 +15,7 @@ template <typename Derived>
 class intrusive_base
 {
 public:
-  intrusive_base()
-    : count_(0)
-  {
-  }
+  intrusive_base() = default;
 
   intrusive_base(intrusive_base const&)
   {
@@ -60,7 +57,7 @@ public:
   }
 
 private:
-  std::atomic_size_t count_;
+  std::atomic_size_t count_{0};
 };
 
 /// An intrusive smart pointer.
@@ -71,9 +68,7 @@ class intrusive_ptr
 public:
   typedef T element_type;
 
-  intrusive_ptr()
-  {
-  }
+  intrusive_ptr() = default;
 
   intrusive_ptr(T* p, bool add_ref = true)
     : ptr_(p)
@@ -229,6 +224,7 @@ std::ostream& operator<<(std::ostream& out, intrusive_ptr<T> const& x)
 }
 
 /// Helper function to create a an intrusive_ptr in an exception-safe way.
+/// @relates intrusive_ptr
 template<typename T, typename ...Args>
 intrusive_ptr<T> make_intrusive(Args&& ...args)
 {

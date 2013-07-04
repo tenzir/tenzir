@@ -90,6 +90,9 @@ using DisableIf =
   typename std::enable_if<!All<Condition...>::value, detail::enabler>::type;
 
 template <typename T>
+using RemovePointer = typename std::remove_pointer<T>::type;
+
+template <typename T>
 using Unqualified = 
   typename std::remove_cv<
     typename std::remove_reference<T>::type

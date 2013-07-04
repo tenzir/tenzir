@@ -3,23 +3,18 @@
 
 #include <sstream>
 #include "vast/config.h"
+#include "vast/singleton.h"
+#include "vast/traits.h"
 #include "vast/util/pp.h"
 
 namespace vast {
 
-// Forward declaration.
 class path;
-namespace detail {
-class singleton_manager;
-} // namespace detail
 
 /// A simple singleton logger and tracer.
-class logger
+class logger : public singleton<logger>
 {
-  friend class detail::singleton_manager;
-
-  logger(const logger&) = delete;
-  logger& operator=(logger) = delete;
+  friend class singleton<logger>;
 
 public:
   enum level : uint32_t
@@ -75,10 +70,6 @@ public:
     message msg_;
   };
 
-  /// Retrieves the global logger instance.
-  /// @param The logger.
-  static logger* instance();
-
   /// Destroys the logger.
   ~logger();
 
@@ -87,7 +78,8 @@ public:
   /// @param console The log level of the console.
   /// @param file The log level of the logfile.
   /// @param dir The directory to create the log file in.
-  void init(level console, level file, path dir);
+  /// @return `true` on success.
+  bool init(level console, level file, path dir);
 
   /// Logs a record.
   /// @param lvl The log level.
@@ -117,6 +109,8 @@ private:
 
   impl* impl_;
 };
+
+logger::message& operator<<(logger::message& msg, std::nullptr_t);
 
 template <typename Stream>
 Stream& operator<<(Stream& stream, logger::level lvl)

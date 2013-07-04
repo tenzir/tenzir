@@ -7,14 +7,14 @@
 namespace vast {
 namespace detail {
 
-/// Demangles the implementation-specific type name from `std::type_info`.
-/// @param typeid_name The value returned by `std::type_info::name`.
-/// @param A platform-indpendent represenation of *typeid_name*.
+/// Demangles a platform-specific type name.
+/// @param name The platform-spcific type-name to demangle.
+/// @param A platform-indpendent representation of *name*.
 std::string demangle(char const* typeid_name);
 
-/// Demangles the implementation-specific type name from `std::type_info`.
-/// @param info An instance of `std::type_info` as obtained by `typeid`.
-/// @param A platform-indpendent represenation of *typeid_name*.
+/// Demangles a platform-specific type name from C++ RTTI.
+/// @param info An `std::type_info` instance.
+/// @param A platform-indpendent name for the type represented by *info*.
 std::string demangle(const std::type_info& info);
 
 } // namespace detail

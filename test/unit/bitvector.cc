@@ -1,6 +1,5 @@
 #include "test.h"
 #include "vast/bitvector.h"
-#include "vast/to_string.h"
 
 using namespace vast;
 

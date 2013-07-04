@@ -105,9 +105,9 @@ public:
              std::function<void(std::string const&)> f) const;
 
 private:
-  friend io::access;
-  void serialize(io::serializer& sink);
-  void deserialize(io::deserializer& source);
+  friend access;
+  void serialize(serializer& sink) const;
+  void deserialize(deserializer& source);
 
   friend bool operator==(regex const& x, regex const& y);
   friend bool operator<(regex const& x, regex const& y);

@@ -7,7 +7,6 @@
 #include <thread>
 #include "vast/file_system.h"
 #include "vast/time.h"
-#include "vast/detail/singleton_manager.h"
 #include "vast/util/queue.h"
 
 #ifdef VAST_POSIX
@@ -110,7 +109,9 @@ struct logger::impl
     filename << '_' << ::getpid();
 #endif
     filename << ".log";
-    log_file.open(to_string(dir / path(filename.str())), std::ios::out);
+    if (! exists(dir))
+      mkdir(dir);
+    log_file.open(to_string(dir / path(filename.str())));
     if (! log_file)
       return false;
 
@@ -156,7 +157,7 @@ struct logger::impl
 
   level console_level;
   level file_level;
-  std::fstream log_file;
+  std::ofstream log_file;
   std::thread log_thread;
   util::queue<record> records;
 };
@@ -201,6 +202,10 @@ void logger::message::append_fill(fill_type t)
   *this << fill << ' ';
 }
 
+logger::message& operator<<(logger::message& msg, std::nullptr_t)
+{
+  return msg;
+}
 
 logger::tracer::tracer(char const* pretty_func)
   : fun_(prettify(pretty_func))
@@ -246,11 +251,6 @@ logger::tracer::~tracer()
 }
 
 
-logger* logger::instance()
-{
-  return detail::singleton_manager::get_logger();
-}
-
 logger::logger()
 {
   impl_ = new impl;
@@ -261,9 +261,9 @@ logger::~logger()
   delete impl_;
 }
 
-void logger::init(level console, level file, path dir)
+bool logger::init(level console, level file, path dir)
 {
-  impl_->init(console, file, dir);
+  return impl_->init(console, file, dir);
 }
 
 void logger::log(level lvl, std::string&& msg)

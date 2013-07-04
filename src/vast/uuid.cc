@@ -5,7 +5,7 @@
 #include <boost/uuid/uuid_io.hpp>
 #include "vast/logger.h"
 #include "vast/to_string.h"
-#include "vast/io/serialization.h"
+#include "vast/serialization.h"
 
 namespace vast {
 
@@ -28,23 +28,6 @@ uuid::uuid(std::string const& str)
   boost::uuids::string_generator()(str).swap(id_);
 }
 
-uuid::uuid(uuid const& other)
-  : id_(other.id_)
-{
-}
-
-uuid::uuid(uuid&& other)
-  : id_(std::move(other.id_))
-{
-}
-
-uuid& uuid::operator=(uuid other)
-{
-  using std::swap;
-  swap(id_, other.id_);
-  return *this;
-}
-
 uuid::const_iterator uuid::begin() const
 {
   return id_.begin();
@@ -60,13 +43,13 @@ size_t uuid::hash() const
   return boost::uuids::hash_value(id_);
 }
 
-void uuid::serialize(io::serializer& sink)
+void uuid::serialize(serializer& sink) const
 {
   VAST_ENTER(VAST_THIS);
   sink.write_raw(&id_, sizeof(id_));
 }
 
-void uuid::deserialize(io::deserializer& source)
+void uuid::deserialize(deserializer& source)
 {
   VAST_ENTER();
   source.read_raw(&id_, sizeof(id_));
