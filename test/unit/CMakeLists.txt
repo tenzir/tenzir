@@ -25,5 +25,6 @@ set(CMAKE_EXE_LINKER_FLAGS -L${Boost_LIBRARY_DIRS})
 add_executable(unit-test ${tests})
 target_link_libraries(unit-test libvast ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY})
 
-add_custom_target(test ${CMAKE_CURRENT_BINARY_DIR}/unit-test -v 0)
-add_dependencies(test unit-test)
+add_custom_target(
+  test ${CMAKE_CURRENT_BINARY_DIR}/unit-test -v 0
+  DEPENDS libvast unit-test)
