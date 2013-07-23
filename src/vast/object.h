@@ -66,17 +66,29 @@ public:
 
   explicit operator bool() const;
 
+  friend bool operator==(object const& x, object const& y);
+
   /// Retrieves the type of the object.
   /// @return The type information for this object.
   global_type_info const* type() const;
 
   /// Retrieves the raw object.
-  /// @return The raw `void const` pointer for this object.
+  /// @return The raw `void const` pointer of this object.
   void const* value() const;
 
   /// Retrieves the raw object.
-  /// @return The raw `void` pointer for this object.
+  /// @return The raw `void` pointer of this object.
   void* value();
+
+  /// Checks whether the object is convertible to a given type.
+  /// @tparam T The type to check.
+  /// @return `true` iff the object is convertible to `T`.
+  template <typename T>
+  bool convertible_to() const
+  {
+    return *this &&
+      (type()->equals(typeid(T)) || is_convertible(type(), typeid(T)));
+  }
 
   /// Relinquishes ownership of the object's contained instance.
   ///
@@ -85,6 +97,15 @@ public:
   ///
   /// @post `! *this`
   void* release();
+
+  /// Checks whether the object is convertible to a given type.
+  /// @tparam T The type to check.
+  /// @return `true` iff the object is convertible to `T`.
+  template <typename T>
+  T* release_as()
+  {
+    return convertible_to<T>() ? reinterpret_cast<T*>(release()) : nullptr;
+  }
 
 private:
   friend access;
@@ -95,9 +116,6 @@ private:
   void* value_ = nullptr;
 };
 
-/// @relates object
-bool operator==(object const& x, object const& y);
-
 /// Retrieves an object value in a type-safe manner.
 /// @tparam T The type to convert the object to.
 /// @return A reference of type `T`.
@@ -106,10 +124,8 @@ T& get(object& o)
 {
   static_assert(! std::is_pointer<T>::value && !std::is_reference<T>::value,
                 "T must not be a reference or a pointer type.");
-
-  if (! (o.type()->equals(typeid(T)) || is_convertible(o.type(), typeid(T))))
+  if (! o.convertible_to<T>())
     throw std::invalid_argument("cannot convert object to requested type");
-
   return *reinterpret_cast<T*>(o.value());
 }
 
@@ -118,10 +134,8 @@ T const& get(object const& o)
 {
   static_assert(! std::is_pointer<T>::value && !std::is_reference<T>::value,
                 "T must not be a reference or a pointer type.");
-
-  if (! (o.type()->equals(typeid(T)) || is_convertible(o.type(), typeid(T))))
+  if (! o.convertible_to<T>())
     throw std::invalid_argument("cannot convert object to requested type");
-
   return *reinterpret_cast<T const*>(o.value());
 }
 

@@ -46,6 +46,13 @@ object::operator bool() const
   return value_ != nullptr && type_ != nullptr;
 }
 
+bool operator==(object const& x, object const& y)
+{
+  return x.type() == y.type()
+    ? (x.value() == y.value() || x.type()->equals(x.value(), y.value()))
+    : false;
+}
+
 global_type_info const* object::type() const
 {
   return type_;
@@ -95,13 +102,6 @@ void object::deserialize(deserializer& source)
     value_ = type_->construct();
     type_->deserialize(source, value_);
   }
-}
-
-bool operator==(object const& x, object const& y)
-{
-  return x.type() == y.type()
-    ? (x.value() == y.value() || x.type()->equals(x.value(), y.value()))
-    : false;
 }
 
 } // namespace vast

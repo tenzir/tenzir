@@ -238,10 +238,17 @@ BOOST_AUTO_TEST_CASE(polymorphic_object_serialization)
     binary_deserializer source(in);
     object o;
     source >> o;
+    BOOST_CHECK(o.convertible_to<derived>());
     BOOST_CHECK_EQUAL(get<derived>(o).f(), 42);
     // Since we've announced the type as being convertible to its base class,
     // we can also safely obtain a reference to the base.
+    BOOST_CHECK(o.convertible_to<base>());
     BOOST_CHECK_EQUAL(get<base>(o).f(), 42);
+    // Moreover, we've checked convertability and can thus extract the raw
+    // instance from the object. Thereafter, we own it and have to delete it.
+    base* b = o.release_as<base>();
+    BOOST_REQUIRE(b != nullptr);
+    delete b;
   }
 }
 
