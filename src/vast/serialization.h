@@ -52,6 +52,12 @@ public:
   virtual bool write_uint64(uint64_t x) = 0;
   virtual bool write_double(double x) = 0;
 
+  /// Writes a string
+  /// @param data The beginning of the string.
+  /// @param size The number of bytes to write.
+  /// @return `true` on success.
+  virtual bool write_string(char const* data, size_t size);
+
   /// Writes raw bytes.
   /// @param data The data to write.
   /// @param size The number of bytes to write.
@@ -109,6 +115,12 @@ public:
   virtual bool read_int64(int64_t& x) = 0;
   virtual bool read_uint64(uint64_t& x) = 0;
   virtual bool read_double(double& x) = 0;
+
+  /// Reads a string.
+  /// @param data The beginning of the string.
+  /// @param size The number of bytes to read.
+  /// @return `true` on success.
+  virtual bool read_string(char* data, size_t size);
 
   /// Reads raw bytes.
   /// @param data The location to read into.

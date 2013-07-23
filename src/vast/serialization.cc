@@ -32,6 +32,12 @@ bool serializer::end_sequence()
   VAST_RETURN(true);
 }
 
+bool serializer::write_string(char const* data, size_t size)
+{
+  VAST_ENTER(VAST_ARG(data, size));
+  VAST_RETURN(write_raw(data, size));
+}
+
 bool serializer::write_type(global_type_info const* gti)
 {
   VAST_ENTER();
@@ -63,6 +69,12 @@ bool deserializer::end_sequence()
   // Do nothing by default.
   VAST_ENTER();
   VAST_RETURN(true);
+}
+
+bool deserializer::read_string(char* data, size_t size)
+{
+  VAST_ENTER();
+  VAST_RETURN(read_raw(data, size));
 }
 
 bool deserializer::read_type(global_type_info const*& gti)

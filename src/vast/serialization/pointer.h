@@ -15,29 +15,26 @@ serialize(serializer& sink, T const& x)
 }
 
 template <typename T>
-typename std::enable_if<is_unique_ptr<T>::value>::type
-deserialize(deserializer& source, T& x)
+void deserialize(deserializer& source, std::unique_ptr<T>& x)
 {
   if (! x)
-    x.reset(new typename T::element_type);
+    x.reset(new T());
   source >> *x;
 }
 
 template <typename T>
-typename std::enable_if<is_shared_ptr<T>::value>::type
-deserialize(deserializer& source, T& x)
+void deserialize(deserializer& source, std::shared_ptr<T>& x)
 {
   if (! x)
-    x = std::make_shared<typename T::element_type>();
+    x = std::make_shared<T>();
   source >> *x;
 }
 
 template <typename T>
-typename std::enable_if<is_intrusive_ptr<T>::value>::type
-deserialize(deserializer& source, T& x)
+void deserialize(deserializer& source, intrusive_ptr<T>& x)
 {
   if (! x)
-    x = new typename T::element_type;
+    x = new T();
   source >> *x;
 }
 
