@@ -210,21 +210,29 @@ BOOST_AUTO_TEST_CASE(polymorphic_object_serialization)
 {
   derived d;
   d.i = 42;
+
+  // Polymorphic types must be announced as their concrete type is not known at
+  // compile time.
+  BOOST_REQUIRE((announce<derived>()));
+
+  // Due to the lacking introspection capabilities in C++, the serialization
+  // framework requires explicit registration of each derived
+  // class to provide type-safe access.
+  BOOST_REQUIRE((make_convertible<derived, base>()));
+
   std::vector<uint8_t> buf;
   {
-    // First, we serialize the object through a polymorphic reference to the
-    // base class, which invokes the correct virtual serialize method of the
-    // derived class.
+    // We serialize the object through a polymorphic reference to the base
+    // class, which simply invokes the correct virtual serialize() method of
+    // the derived class.
     auto out = io::make_container_output_stream(buf);
     binary_serializer sink(out);
-    BOOST_REQUIRE((announce<derived>()));
-    BOOST_REQUIRE((make_convertible<derived, base>()));
     base& b = d;
     BOOST_REQUIRE(write_object(sink, b));
   }
   {
     // It should always be possible to deserialize an instance of the exact
-    // derived type.
+    // derived type. This technically does not require any virtual functions.
     auto in = io::make_array_input_stream(buf);
     binary_deserializer source(in);
     derived e;
@@ -244,9 +252,10 @@ BOOST_AUTO_TEST_CASE(polymorphic_object_serialization)
     // we can also safely obtain a reference to the base.
     BOOST_CHECK(o.convertible_to<base>());
     BOOST_CHECK_EQUAL(get<base>(o).f(), 42);
-    // Moreover, we've checked convertability and can thus extract the raw
+    // Moreover, since we've assurred convertability we can extract the raw
     // instance from the object. Thereafter, we own it and have to delete it.
     base* b = o.release_as<base>();
+    BOOST_CHECK_EQUAL(b->f(), 42);
     BOOST_REQUIRE(b != nullptr);
     delete b;
   }
