@@ -31,7 +31,7 @@ struct t2 : base
 
 struct printer : concrete_visitor
 {
-  virtual void visit(base const& x)
+  virtual void visit(base const&)
   {
     BOOST_CHECK(! "should not be invoked");
   }
