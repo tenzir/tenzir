@@ -109,12 +109,12 @@ public:
   {
   }
 
-  bool timed_add(T x)
+  bool timed_add(T x = 1)
   {
     current_value_ += x;
     auto now = clock::now();
-    auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
-        now - last_time_);
+    auto elapsed =
+      std::chrono::duration_cast<std::chrono::microseconds>(now - last_time_);
 
     if (elapsed < resolution_)
       return false;
@@ -124,7 +124,7 @@ public:
 
     last_time_ = now;
     current_value_ = 0;
-    
+
     return true;
   }
 
