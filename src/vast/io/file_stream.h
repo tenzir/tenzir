@@ -26,6 +26,7 @@ class file_input_stream : public input_stream
     virtual bool read(void* data, size_t bytes, size_t* got) override;
     virtual bool skip(size_t bytes, size_t *skipped) override;
     void close_on_delete(bool flag);
+    bool close();
 
   private:
     file& file_;

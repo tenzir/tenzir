@@ -34,6 +34,11 @@ void file_input_stream::streambuffer::close_on_delete(bool flag)
   close_on_delete_ = flag;
 }
 
+bool file_input_stream::streambuffer::close()
+{
+  return file_.close();
+}
+
 file_input_stream::file_input_stream(file& f, size_t block_size)
   : streambuffer_(f)
   , buffered_stream_(streambuffer_, block_size)
@@ -43,6 +48,11 @@ file_input_stream::file_input_stream(file& f, size_t block_size)
 void file_input_stream::close_on_delete(bool flag)
 {
   streambuffer_.close_on_delete(flag);
+}
+
+bool file_input_stream::close()
+{
+  return streambuffer_.close();
 }
 
 bool file_input_stream::next(void const** data, size_t* size)
