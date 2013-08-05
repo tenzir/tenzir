@@ -36,20 +36,20 @@ void synchronous::run()
   VAST_ENTER();
   while (events_.size() < batch_size_)
   {
-    if (auto e = extract())
-    {
-      events_.push_back(std::move(*e));
-    }
-    else if (finished())
+    if (finished())
     {
       break;
+    }
+    else if (auto e = extract())
+    {
+      events_.push_back(std::move(*e));
     }
     else
     {
       ++errors_;
       if (errors_ < 1000)
       {
-        VAST_LOG_ERROR("source @" << id() << " extraction parse error");
+        VAST_LOG_ERROR("source @" << id() << " experienced extraction error");
       }
       else if (errors_ == 1000)
       {

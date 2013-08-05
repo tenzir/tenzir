@@ -57,7 +57,6 @@ ingestor::ingestor(actor_ptr tracker,
         auto broccoli = spawn<source::broccoli>(host, port);
         init_source(broccoli);
         send(broccoli, atom("subscribe"), events);
-        send(broccoli, atom("run"));
       },
 #endif
       on(atom("ingest"), "bro15conn", arg_match) >> [=](std::string const& file)
@@ -76,8 +75,11 @@ ingestor::ingestor(actor_ptr tracker,
       {
         VAST_LOG_ERROR("invalid ingestion file type");
       },
-      on(atom("extract")) >> [=]
+      on(atom("run")) >> [=]
       {
+        for (auto& pair : sinks_)
+          pair.first << last_dequeued();
+
         delayed_send(
             self,
             std::chrono::seconds(2),
@@ -162,6 +164,8 @@ void ingestor::init_source(actor_ptr src)
   self->monitor(snk);
 
   sinks_.emplace(std::move(snk), 0);
+
+  send(src, atom("run"));
 }
 
 } // namespace vast

@@ -205,7 +205,9 @@ bool program::start()
       {
         auto host = config_.get("ingest.broccoli-host");
         auto port = config_.as<unsigned>("ingest.broccoli-port");
-        auto events = config_.as<std::vector<std::string>>("ingest.broccoli-events");
+        auto events =
+          config_.as<std::vector<std::string>>("ingest.broccoli-events");
+
         send(ingestor_,
              atom("ingest"), atom("broccoli"),
              host, port,
@@ -226,7 +228,7 @@ bool program::start()
         }
       }
 
-      send(ingestor_, atom("extract"));
+      send(ingestor_, atom("run"));
     }
 
     if (config_.check("search-actor") || config_.check("all-server"))

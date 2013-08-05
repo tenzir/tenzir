@@ -11,10 +11,8 @@ bool getline(input_stream& in, std::string& line)
   line.clear();
   char const* buf;
   size_t size;
-  auto split_crlf = false;
   while (in.next(reinterpret_cast<const void**>(&buf), &size))
   {
-    bool skipped = false;
     for (size_t i = 0; i < size; ++i)
     {
       switch (buf[i])

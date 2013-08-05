@@ -60,6 +60,7 @@ set(libvast_sources
   io/compressed_stream.cc
   io/compression.cc
   io/file_stream.cc
+  io/getline.cc
   io/stream.cc
   sink/file.cc
   sink/asynchronous.cc

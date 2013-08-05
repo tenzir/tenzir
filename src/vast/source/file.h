@@ -2,9 +2,9 @@
 #define VAST_SOURCE_FILE_H
 
 #include <cassert>
-#include <fstream>
 #include "vast/value_type.h"
 #include "vast/string.h"
+#include "vast/io/file_stream.h"
 #include "vast/source/synchronous.h"
 
 namespace vast {
@@ -25,7 +25,9 @@ public:
   virtual bool finished() final;
 
 protected:
-  std::ifstream file_; // TODO: use an io stream.
+  vast::file file_handle_;
+  io::file_input_stream file_stream_;
+  bool finished_ = false;
 };
 
 

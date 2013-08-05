@@ -15,11 +15,7 @@ class input_stream
 {
 public:
   /// Destroys an input stream.
-#ifdef VAST_CLANG
   virtual ~input_stream() = default;
-#else
-  virtual ~input_stream() { };
-#endif
 
   /// Retrieves a contiguous data buffer from the stream.
   ///
@@ -58,11 +54,7 @@ class output_stream
 {
 public:
   /// Destroys an output stream.
-#ifdef VAST_CLANG
   virtual ~output_stream() = default;
-#else
-  virtual ~output_stream() { };
-#endif
 
   /// Retrieves a contiguous data buffer from the stream for write operations.
   ///
