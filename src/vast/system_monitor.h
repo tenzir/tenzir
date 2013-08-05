@@ -25,7 +25,6 @@ private:
   void stop();
 
   cppa::actor_ptr upstream_;
-  cppa::actor_ptr watcher_;
 };
 
 } // namespace vast

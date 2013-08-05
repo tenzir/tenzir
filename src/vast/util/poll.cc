@@ -1,8 +1,8 @@
 #include "vast/util/poll.h"
 
 #include <cerrno>
+#include <stdexcept>
 #include <sys/select.h>
-#include "vast/exception.h"
 
 namespace vast {
 namespace util {
@@ -22,7 +22,7 @@ bool poll(int fd, int usec)
       case ENOMEM:
         return false;
       default:
-        throw exception("unhandled select() error");
+        throw std::logic_error("unhandled select() error");
     }
   }
 

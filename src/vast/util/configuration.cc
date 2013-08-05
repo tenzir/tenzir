@@ -1,6 +1,7 @@
 #include "vast/util/configuration.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cstring>
 #include <iostream>
 #include <fstream>
@@ -26,6 +27,7 @@ void configuration::load(int argc, char *argv[])
     std::string arg(argv[i]);
     if (arg.size() < 2)
     {
+      // We need at least a '-' followed by one character.
       throw error::config("ill-formed option specificiation", argv[i]);
     }
     else if (arg[0] == '-' && arg[1] == '-')
@@ -52,7 +54,7 @@ void configuration::load(int argc, char *argv[])
       throw error::config("unknown option", arg);
     o->defaulted_ = false;
 
-    while (i + 1 < argc && std::strlen(argv[i + 1]) > 0 && argv[i + 1][0] != '-')
+    while (i+1 < argc && std::strlen(argv[i+1]) > 0 && argv[i+1][0] != '-')
       values.emplace_back(argv[++i]);
     if (values.size() > o->max_vals_)
       throw error::config("too many values", arg);
@@ -70,16 +72,17 @@ bool configuration::check(std::string const& opt) const
   return o && ! o->defaulted_;
 }
 
-std::string const& configuration::get(char const* opt) const
+std::string const& configuration::get(std::string const& opt) const
 {
   auto o = find_option(opt);
   if (! o)
     throw error::config("invalid option cast", opt);
-  if (o->values().empty())
+  if (o->values_.empty())
     throw error::config("option has no value", opt);
   if (o->max_vals_ > 1)
     throw error::config("cannot get multi-value option", opt);
-  return o->values_[0];
+  assert(o->values_.size() == 1);
+  return o->values_.front();
 }
 
 void configuration::usage(std::ostream& sink, bool show_all)
@@ -133,11 +136,6 @@ configuration::option& configuration::option::single()
   return multi(1);
 }
 
-std::vector<std::string> const& configuration::option::values() const
-{
-  return values_;
-}
-
 configuration::block::block(block&& other)
   : visible_(other.visible_),
     name_(std::move(other.name_)),
@@ -150,7 +148,7 @@ configuration::block::block(block&& other)
 }
 
 configuration::option&
-configuration::block::add(std::string name, std::string desc)
+configuration::block::add(std::string const& name, std::string desc)
 {
   std::string fqn = qualify(name);
   if (config_->find_option(fqn))
@@ -160,12 +158,13 @@ configuration::block::add(std::string name, std::string desc)
 }
 
 configuration::option&
-configuration::block::add(char shortcut, std::string name, std::string desc)
+configuration::block::add(char shortcut, std::string const& name,
+                          std::string desc)
 {
   if (config_->shortcuts_.count({shortcut}))
     throw error::config("option shortcut already exists", shortcut);
-  config_->shortcuts_.insert({{shortcut}, std::move(qualify(name))});
   std::string fqn = qualify(name);
+  config_->shortcuts_.insert({{shortcut}, fqn});
   if (config_->find_option(fqn))
     throw error::config("option already exists", std::move(fqn));
   options_.emplace_back(std::move(fqn), std::move(desc), shortcut);
@@ -201,16 +200,18 @@ configuration::block::block(std::string name,
 
 std::string configuration::block::qualify(std::string const& name) const
 {
-  return ! prefix_.empty() ? prefix_ + separator + name : name;
+  return prefix_.empty() ? name : prefix_ + separator + name;
 }
 
-void configuration::conflicts(std::string const& opt1, std::string const& opt2) const
+void configuration::conflicts(std::string const& opt1,
+                              std::string const& opt2) const
 {
   if (check(opt1) && check(opt2))
     throw error::config("conflicting options", opt1, opt2);
 }
 
-void configuration::depends(std::string const& needy, std::string const& required) const
+void configuration::depends(std::string const& needy,
+                            std::string const& required) const
 {
   if (check(needy) && ! check(required))
     throw error::config("missing option dependency", needy, required);

@@ -41,31 +41,24 @@ bool program::run()
   do_receive(
       on(atom("system"), atom("key"), arg_match) >> [&](char key)
       {
-        if (! query_client_)
-          return;
-
+        VAST_LOG_DEBUG("@" << self->id() << " keystroke " << key);
         switch (key)
         {
           default:
             VAST_LOG_VERBOSE("invalid key: '" << key << "'");
           case '?':
-            VAST_LOG_VERBOSE("available commands: "
-                             "<space> for results, (s)tatistics, (Q)uit");
-            break;
-          case ' ':
-            send(query_client_, atom("results"));
+            VAST_LOG_VERBOSE("press 'Q' to quit");
             break;
           case 'Q':
             done = true;
             break;
-          case 's':
-            send(query_client_, atom("statistics"));
-            break;
         }
       },
-      on(atom("DOWN"), arg_match) >> [&](uint32_t /* reason */)
+      on(atom("system"), atom("signal"), arg_match) >> [&](int signal)
       {
-        done = true;
+        VAST_LOG_VERBOSE("@" << self->id() << " received signal " << signal);
+        if (signal == SIGINT || signal == SIGTERM)
+          done = true;
       })
   .until(gref(done));
 
@@ -82,11 +75,13 @@ bool program::start()
   detail::cppa_announce_types();
 
   path vast_dir = string(config_.get("directory"));
-  assert(exists(vast_dir));
+  if (! exists(vast_dir))
+    if (! mkdir(vast_dir))
+      return false;
 
   logger::instance()->init(
-      static_cast<logger::level>(config_.as<uint32_t>("console-verbosity")),
-      static_cast<logger::level>(config_.as<uint32_t>("file-verbosity")),
+      static_cast<logger::level>(config_.as<uint32_t>("log.console-verbosity")),
+      static_cast<logger::level>(config_.as<uint32_t>("log.file-verbosity")),
       vast_dir / "log");
 
   VAST_LOG_VERBOSE(" _   _____   __________");
@@ -97,7 +92,9 @@ bool program::start()
 
   try
   {
+    VAST_LOG_DEBUG("main program at @" << self->id());
     system_monitor_ = spawn<system_monitor, detached+monitored>(self);
+    send(system_monitor_, atom("act"));
 
     if (config_.check("profile"))
     {
@@ -136,7 +133,7 @@ bool program::start()
       tracker_ = spawn<id_tracker>(to_string(vast_dir / "id"));
       VAST_LOG_VERBOSE("publishing tracker at " << tracker_host <<
                        ':' << tracker_port);
-      publish(tracker_, tracker_port, tracker_host.data());
+      publish(tracker_, tracker_port, tracker_host.c_str());
     }
     else
     {
@@ -190,7 +187,6 @@ bool program::start()
 
       VAST_LOG_VERBOSE("connected to index actor @" << index_->id());
     }
-
 
     if (config_.check("ingestor-actor"))
     {

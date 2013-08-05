@@ -1,6 +1,7 @@
 #ifndef VAST_SOURCE_ASYNCHRONOUS_H
 #define VAST_SOURCE_ASYNCHRONOUS_H
 
+#include <cassert>
 #include <cppa/cppa.hpp>
 #include "vast/event.h"
 
@@ -18,35 +19,52 @@ public:
   {
     using namespace cppa;
     operating_ = (
-        on(atom("init"), arg_match) >> [=](actor_ptr upstream,
-                                           size_t batch_size)
+        on(atom("init"), arg_match) >> [=](actor_ptr sink, size_t batch_size)
         {
-          upstream_ = upstream;
+          sink_ = sink;
           batch_size_ = batch_size;
         },
         on_arg_match >> [=](event& e)
         {
-          this->events_.push_back(std::move(e));
-          if (events_.size() < batch_size)
+          assert(sink_);
+          if (batch_size_ == 0)
+          {
+            send(sink_, std::move(e));
             return;
-          send(upstream, std::move(this->events_));
-          this->events_.clear();
+          }
+          this->events_.push_back(std::move(e));
+          send_events();
         },
         on_arg_match >> [=](std::vector<event> v)
         {
-          assert(! "not yet implemented");
+          assert(sink_);
+          events_.insert(events_.end(),
+              std::make_move_iterator(v.begin()),
+              std::make_move_iterator(v.end()));
+          std::inplace_merge(events_.begin(),
+                             events_.begin() + events_.size(),
+                             events_.end());
+          send_events();
         });
   }
 
   /// Implements `cppa::event_based_actor::init`.
   void init() override
   {
-    become(operating_.or_else(static_cast<Derived*>(this)->impl));
+    become(operating_.or_else(static_cast<Derived*>(this)->impl_));
+  }
+
+  void send_events()
+  {
+    if (events_.size() < batch_size_)
+      return;
+    send(sink_, std::move(this->events_));
+    this->events_.clear();
   }
 
 private:
-  size_t batch_size_;
-  cppa::actor_ptr upstream_;
+  cppa::actor_ptr sink_;
+  size_t batch_size_ = 0;
   std::vector<event> events_;
   cppa::partial_function operating_;
 };

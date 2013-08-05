@@ -10,6 +10,8 @@ namespace source {
 file::file(std::string const& filename)
   : file_(filename)
 {
+  VAST_ENTER();
+
   if (file_)
     file_.unsetf(std::ios::skipws);
   else
@@ -18,17 +20,22 @@ file::file(std::string const& filename)
 
 bool file::finished()
 {
-  return file_.good();
+  VAST_ENTER();
+  VAST_RETURN(file_.good());
 }
 
 line::line(std::string const& filename)
   : file(filename)
 {
+  VAST_ENTER();
+
   next();
 }
 
 option<event> line::extract()
 {
+  VAST_ENTER();
+
   while (line_.empty())
     if (! next())
       break;
@@ -40,16 +47,21 @@ option<event> line::extract()
 
 bool line::next()
 {
+  VAST_ENTER();
+
   auto success = false;
   if (std::getline(file_, line_))
     success = true;
+
   ++current_;
-  return success;
+  VAST_RETURN(success);
 }
 
 bro2::bro2(std::string const& filename)
   : line(filename)
 {
+  VAST_ENTER();
+
   if (! parse_header())
   {
     VAST_LOG_ERROR("not a valid bro 2.x log file: " << filename);
@@ -60,6 +72,8 @@ bro2::bro2(std::string const& filename)
 
 bool bro2::parse_header()
 {
+  VAST_ENTER();
+
   if (line_.empty() || line_[0] != '#')
   {
     VAST_LOG_ERROR("no meta character '#' at start of first line");
@@ -289,6 +303,8 @@ value_type bro2::bro_to_vast(string const& type)
 
 option<event> bro2::parse(std::string const& line)
 {
+  VAST_ENTER();
+
   // TODO: switch to grammar-based parsing.
   using vast::parse;
   util::field_splitter<std::string::const_iterator> fs;
@@ -377,6 +393,8 @@ bro15conn::bro15conn(std::string const& filename)
 
 option<event> bro15conn::parse(std::string const& line)
 {
+  VAST_ENTER();
+
   // TODO: switch to grammar-based parsing.
   using vast::parse;
   event e;

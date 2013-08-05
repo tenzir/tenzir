@@ -1,4 +1,3 @@
-#include <cstdlib>
 #include "vast/program.h"
 
 int main(int argc, char *argv[])
@@ -10,14 +9,14 @@ int main(int argc, char *argv[])
     if (argc < 2 || config.check("help") || config.check("advanced"))
     {
       config.usage(std::cerr, config.check("advanced"));
-      return EXIT_SUCCESS;
+      return 0;
     }
-    
-    return vast::program(config).run() ? EXIT_SUCCESS : EXIT_FAILURE;
   }
   catch (vast::error::config const& e)
   {
     std::cerr << e.what() << ", try -h or --help" << std::endl;
-    return EXIT_FAILURE;
+    return 1;
   }
+
+  return vast::program(config).run() ? 0 : 1;
 }

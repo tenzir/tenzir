@@ -32,6 +32,9 @@ ingestor::ingestor(actor_ptr tracker,
   operating_ = (
       on(atom("DOWN"), arg_match) >> [=](uint32_t /* reason */)
       {
+        VAST_LOG_DEBUG("ingestor @" << id() <<
+                       " received DOWN from @" << last_sender()->id());
+
         auto i = std::find(segmentizers_.begin(),
                            segmentizers_.end(),
                            last_sender());
@@ -70,6 +73,8 @@ ingestor::ingestor(actor_ptr tracker,
       },
       on(atom("ingest"), "bro2", arg_match) >> [=](std::string const& file)
       {
+        VAST_LOG_DEBUG("ingestor @" << id() <<
+                       " spawns Bro 2 source with " << file);
         auto src = spawn<source::bro2, detached>(file);
         init_source(src);
       },
@@ -150,6 +155,9 @@ void ingestor::shutdown()
 
 void ingestor::init_source(actor_ptr source)
 {
+  VAST_LOG_VERBOSE("ingestor @" << id() <<
+                   " spawns segmentizer for source @" << source->id());
+
   auto s = spawn<segmentizer>(self, source, max_events_per_chunk_,
                               max_segment_size_);
 

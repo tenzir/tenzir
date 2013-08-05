@@ -1,4 +1,4 @@
-#include "vast/sink/synchronous.h"
+#include "vast/sink/asynchronous.h"
 
 #include "vast/event.h"
 #include "vast/exception.h"
@@ -9,7 +9,7 @@ namespace sink {
 
 using namespace cppa;
 
-void synchronous::init()
+void asynchronous::init()
 {
   VAST_LOG_VERBOSE("spawning event sink @" << id());
 
@@ -25,6 +25,15 @@ void synchronous::init()
         quit();
         VAST_LOG_VERBOSE("event sink @" << id() << " terminated");
       });
+}
+
+bool asynchronous::process(std::vector<event> const& v)
+{
+  auto success = true;
+  for (auto& e : v)
+    if (! process(e))
+      success = false;
+  return success;
 }
 
 } // namespace sink

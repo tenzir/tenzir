@@ -63,7 +63,7 @@ set(libvast_sources
   io/file_stream.cc
   io/stream.cc
   sink/file.cc
-  sink/synchronous.cc
+  sink/asynchronous.cc
   source/file.cc
   source/synchronous.cc
   util/configuration.cc

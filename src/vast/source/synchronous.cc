@@ -20,12 +20,16 @@ void synchronous::init()
         quit();
         VAST_LOG_VERBOSE("source @" << id() << " terminated");
       },
-      on(atom("run")) >> [=] { run(); }
+      on(atom("run")) >> [=]
+      {
+        run();
+      }
   );
 }
 
 void synchronous::run()
 {
+  VAST_ENTER();
   while (events_.size() < batch_size_)
   {
     if (auto e = extract())
@@ -41,7 +45,7 @@ void synchronous::run()
       ++errors_;
       if (errors_ < 1000)
       {
-        VAST_LOG_ERROR("source @" << id() << " encountered parse error");
+        VAST_LOG_ERROR("source @" << id() << " extraction parse error");
       }
       else if (errors_ == 1000)
       {

@@ -19,6 +19,9 @@ segmentizer::segmentizer(actor_ptr upstream, actor_ptr source,
   operating_ = (
       on(atom("DOWN"), arg_match) >> [=](uint32_t /* reason */)
       {
+        VAST_LOG_DEBUG("segmentizer @" << id() << " received DOWN from @" <<
+                       last_sender()->id());
+
         if (writer_.elements() > 0)
         {
           writer_.flush();
@@ -29,8 +32,8 @@ segmentizer::segmentizer(actor_ptr upstream, actor_ptr source,
                          " forwarded last segment with " << n << " events");
         }
 
-        VAST_LOG_VERBOSE("segmentizer @" << id() <<
-                         " processed a total of " << total_events_ << " events");
+        VAST_LOG_VERBOSE("segmentizer @" << id() << " processed a total of " <<
+                         total_events_ << " events");
 
         quit();
         VAST_LOG_VERBOSE("segmentizer @" << id() << " terminated");

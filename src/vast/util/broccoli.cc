@@ -111,10 +111,10 @@ value make_value(int type, void* bro_val)
   switch (type)
   {
     default:
-      LOG(warn, broccoli) << "type " << type << " does not exist";
+      VAST_LOG_WARN("type " << type << " does not exist");
       break;
     case BRO_TYPE_UNKNOWN:
-      LOG(warn, broccoli) << "unknown broccoli type (" << type << ")";
+      VAST_LOG_WARN("unknown broccoli type (" << type << ")");
       break;
     case BRO_TYPE_PATTERN:
     case BRO_TYPE_TIMER:
@@ -126,7 +126,7 @@ value make_value(int type, void* bro_val)
     case BRO_TYPE_VECTOR:
     case BRO_TYPE_ERROR:
     case BRO_TYPE_PACKET:
-      LOG(warn, broccoli) << "unsupported broccoli type (" << type << ")";
+      VAST_LOG_WARN("unsupported broccoli type (" << type << ")");
       break;
     case BRO_TYPE_BOOL:
       return *static_cast<bool*>(bro_val);
@@ -153,7 +153,7 @@ value make_value(int type, void* bro_val)
         switch (p->port_proto)
         {
           default:
-            LOG(warn, broccoli) << "invalid port type";
+            VAST_LOG_WARN("invalid port type");
             return port(p->port_num, port::unknown);
           case IPPROTO_TCP:
             return port(p->port_num, port::tcp);
@@ -302,7 +302,7 @@ struct builder
   {
     // Caller must free the memory of the BroString!
     BroString* bs = new BroString;
-    auto data = reinterpret_cast<const unsigned char*>(s.data()); 
+    auto data = reinterpret_cast<const unsigned char*>(s.data());
     bro_string_set_data(bs, data, s.size());
     return { BRO_TYPE_STRING, bs };
   }
@@ -429,17 +429,17 @@ struct builder
 /// Creates a Bro event from a VAST event.
 BroEvent* make_event(event const& e)
 {
-  DBG(broccoli) << "building broccoli event " << e.name();
+  VAST_LOG_DEBUG("building broccoli event " << e.name());
   BroEvent* bro_event = bro_event_new(e.name().data());
   if (! bro_event)
   {
-    LOG(error, broccoli) << "could not create bro_event " << e.name();
+    VAST_LOG_ERROR("could not create bro_event " << e.name());
     throw error::broccoli("bro_event_new");
   }
 
   for (auto& a : e)
   {
-    DBG(broccoli) << "adding argument: " << a;
+    VAST_LOG_DEBUG("adding argument: " << a);
     bro_val val = value::visit(a, builder());
     bro_event_add_val(bro_event, val.type, NULL, val.value);
     free(val);
@@ -459,15 +459,13 @@ void callback(BroConn* bc, void* user_data, BroEvMeta* meta)
   }
   catch (error::broccoli const& e)
   {
-    LOG(error, broccoli)
-      << "error with broccoli event '"
-      << meta->ev_name << "' (" << e.what() << ')';
+    VAST_LOG_ERROR("error with broccoli event '" <<
+                   meta->ev_name << "' (" << e.what() << ')');
   }
   catch (exception const& e)
   {
-    LOG(error, broccoli)
-      << "could not create VAST event from broccoli event '"
-      << meta->ev_name << "' (" << e.what() << ')';
+    VAST_LOG_ERROR("could not create VAST event from broccoli event '" <<
+                   meta->ev_name << "' (" << e.what() << ')');
   }
 }
 
@@ -480,24 +478,24 @@ void init(bool messages, bool calltrace)
   if (calltrace)
   {
     bro_debug_calltrace = 1;
-    LOG(verbose, broccoli) << "enabling call trace debugging";
+    VAST_LOG_VERBOSE("enabling call trace debugging");
   }
 
   if (messages)
   {
     bro_debug_messages = 1;
-    LOG(verbose, broccoli) << "enabling extra debug messages";
+    VAST_LOG_VERBOSE("enabling extra debug messages");
   }
 
-  LOG(verbose, broccoli) << "initializing SSL context";
+  VAST_LOG_VERBOSE("initializing SSL context");
   BroCtx ctx;
   bro_ctx_init(&ctx);
   bro_init(&ctx);
 }
 
 connection::connection(
-    cppa::network::input_stream_ptr in,
-    cppa::network::output_stream_ptr out)
+    cppa::io::input_stream_ptr in,
+    cppa::io::output_stream_ptr out)
   : in_(std::move(in))
   , out_(std::move(out))
 {
@@ -531,7 +529,7 @@ connection::connection(
         return;
       }
 
-      DBG(broccoli) << "polling fd";
+      VAST_LOG_DEBUG("polling fd");
       if (poll(fd))
         bro_conn_process_input(bc_);
 
@@ -539,15 +537,14 @@ connection::connection(
     },
     on_arg_match >> [=](std::vector<uint8_t> const& raw)
     {
-      LOG(debug, broccoli) << "sending raw event of size " << raw.size();
+      VAST_LOG_DEBUG("sending raw event of size " << raw.size());
       bro_event_send_raw(bc_, raw.data(), raw.size());
     },
     on_arg_match >> [=](event const& e)
     {
       auto bro_event = make_event(e);
       if (! bro_event_send(bc_, bro_event))
-        LOG(error, broccoli)
-          << "broccoli @ " << id() << " could not send event: " << e;
+        VAST_LOG_ERROR("broccoli @ " << id() << " could not send event: " << e);
 
       bro_event_free(bro_event);
     },

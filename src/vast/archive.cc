@@ -45,7 +45,7 @@ archive::archive(std::string const& directory, size_t max_segments)
         segment_manager_ << last_dequeued();
 
         quit();
-        VAST_LOG_ERROR("archive @" << id() << " terminated");
+        VAST_LOG_VERBOSE("archive @" << id() << " terminated");
       });
 }
 

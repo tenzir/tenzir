@@ -3,7 +3,7 @@
 
 #include <fstream>
 #include <cppa/cppa.hpp>
-#include "vast/sink/synchronous.h"
+#include "vast/sink/asynchronous.h"
 
 namespace vast {
 
@@ -12,7 +12,7 @@ class event;
 namespace sink {
 
 /// A file that transforms file contents into events.
-class file : public synchronous
+class file : public asynchronous
 {
 public:
   /// Constructs a file sink.

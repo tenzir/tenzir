@@ -24,7 +24,7 @@ public:
   /// @param filename The name of the configuration file.
   /// @return `true` if configuration initialization was successful.
   /// @throw error::config
-  void load(std::string const& filename = "");
+  void load(std::string const& filename);
 
   /// Initializes the configuration from command line parameters.
   /// @argc The argc parameter from main.
@@ -39,10 +39,10 @@ public:
   bool check(std::string const& option) const;
 
   /// Returns the value of the given option.
-  /// @param option The name of the option.
+  /// @param opt The name of the option.
   /// @return The option value.
   /// @throw error::config
-  std::string const& get(char const* option) const;
+  std::string const& get(std::string const& opt) const;
 
   /// Retrieves an option as a specific type.
   /// @tparam T The type to convert the option to.
@@ -60,7 +60,7 @@ public:
     if (o->max_vals_ > 1)
       throw error::config("cannot cast multi-value option", opt);
     T x;
-    std::istringstream ss(o->values_[0]);
+    std::istringstream ss(o->values_.front());
     ss >> x;
     return x;
   }
@@ -97,7 +97,6 @@ protected:
 
     option& single();
     option& multi(size_t n = -1);
-    std::vector<std::string> const& values() const;
 
   private:
     std::string name_;
@@ -126,13 +125,13 @@ protected:
     /// Adds a new option.
     /// @param name The option name.
     /// @param desc The option description.
-    option& add(std::string name, std::string desc);
+    option& add(std::string const& name, std::string desc);
 
     /// Adds a new option with shortcut.
     /// @param shortcut The shortcut of the option (single character).
     /// @param name The option name.
     /// @param desc The option description.
-    option& add(char shortcut, std::string name, std::string desc);
+    option& add(char shortcut, std::string const& name, std::string desc);
 
     /// Sets the visibility of this block when displaying the usage.
     bool visible() const;

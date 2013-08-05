@@ -169,7 +169,7 @@ void logger::message::append_header(level lvl)
     << std::setprecision(15) << std::setw(16) << std::left << std::setfill('0')
     << now().to_double()
     << ' '
-    << std::this_thread::get_id()
+    << std::setw(14) << std::setfill(' ') << std::this_thread::get_id()
     << ' ';
   if (lvl != quiet)
     *this << lvl << ' ';

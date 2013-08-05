@@ -12,16 +12,14 @@ namespace source {
 struct broccoli : asynchronous<broccoli>
 {
   /// Spawns a Broccoli event source.
-  ///
   /// @param host The host to bind to.
-  ///
   /// @param port The TCP port to listen on.
-  broccoli(std::string const& host, unsigned port);
+  broccoli(std::string const& host, unsigned port)
 
   std::set<std::string> event_names_;
   std::set<cppa::actor_ptr> broccolis_;
   cppa::actor_ptr server_;
-  cppa::behavior operating_;
+  cppa::behavior impl_;
 };
 
 } // namespace source

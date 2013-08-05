@@ -9,7 +9,6 @@
 
 namespace vast {
 
-// Forward declaration.
 class event;
 
 namespace source {
@@ -77,7 +76,7 @@ private:
 class bro15conn : public line
 {
 public:
-    bro15conn(std::string const& filename);
+  bro15conn(std::string const& filename);
 
 private:
   /// Parses a single log line.

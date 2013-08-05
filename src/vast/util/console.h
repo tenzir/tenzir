@@ -8,7 +8,8 @@ namespace console {
 /// Makes the console unbuffered.
 void unbuffer();
 
-/// Makes the console buffered again after a call to unbuffer.
+/// Makes the console buffered again after a call to ::unbuffer.
+/// @pre `unbuffer()` must have been called beforehand.
 void buffer();
 
 /// Tries to extract a single a character from STDIN within a short time

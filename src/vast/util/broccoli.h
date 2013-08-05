@@ -5,13 +5,11 @@
 
 namespace vast {
 
-// Forward declarations.
 class event;
 
 namespace util {
 namespace broccoli {
 
-// Forward declarations.
 struct bro_conn;
 struct connection;
 
@@ -30,12 +28,12 @@ struct connection : cppa::sb_actor<connection>
   /// Spawns a new Broccoli connection.
   /// @param The input stream to read data from.
   /// @param The output stream to read data from.
-  connection(cppa::network::input_stream_ptr in,
-             cppa::network::output_stream_ptr out);
+  connection(cppa::io::input_stream_ptr in,
+             cppa::io::output_stream_ptr out);
 
   struct bro_conn* bc_;
-  cppa::network::input_stream_ptr in_;
-  cppa::network::output_stream_ptr out_;
+  cppa::io::input_stream_ptr in_;
+  cppa::io::output_stream_ptr out_;
   event_handler event_handler_;
   //std::vector<event> events_;
   cppa::behavior init_state;
