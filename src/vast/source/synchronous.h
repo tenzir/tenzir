@@ -15,6 +15,9 @@ public:
   /// Implements `event_based_actor::run`.
   virtual void init() override;
 
+  /// Implements `event_based_actor::on_exit`.
+  virtual void on_exit() override;
+
 protected:
   /// Extracts a single event.
   /// @return The parsed event.

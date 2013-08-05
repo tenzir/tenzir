@@ -29,7 +29,6 @@ set(libvast_sources
   schema_manager.cc
   search.cc
   segment.cc
-  segmentizer.cc
   segment_manager.cc
   serialization.cc
   shutdown.cc
@@ -64,6 +63,7 @@ set(libvast_sources
   io/stream.cc
   sink/file.cc
   sink/asynchronous.cc
+  sink/segmentizer.cc
   source/file.cc
   source/synchronous.cc
   util/configuration.cc

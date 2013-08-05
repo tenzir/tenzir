@@ -18,13 +18,17 @@ void synchronous::init()
       on(atom("kill")) >> [=]
       {
         quit();
-        VAST_LOG_VERBOSE("source @" << id() << " terminated");
       },
       on(atom("run")) >> [=]
       {
         run();
       }
   );
+}
+
+void synchronous::on_exit()
+{
+  VAST_LOG_VERBOSE("source @" << id() << " terminated");
 }
 
 void synchronous::run()

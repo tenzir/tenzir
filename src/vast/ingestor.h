@@ -29,7 +29,7 @@ public:
 private:
   void shutdown();
 
-  void init_source(cppa::actor_ptr source);
+  void init_source(cppa::actor_ptr src);
 
   cppa::actor_ptr tracker_;
   cppa::actor_ptr archive_;
@@ -38,8 +38,7 @@ private:
   size_t max_segment_size_;
   size_t batch_size_;
 
-  std::vector<cppa::actor_ptr> segmentizers_;
-  std::unordered_map<cppa::actor_ptr, size_t> rates_;
+  std::unordered_map<cppa::actor_ptr, size_t> sinks_;
   std::unordered_map<uuid, unsigned> inflight_;
   cppa::behavior operating_;
 };

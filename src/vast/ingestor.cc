@@ -1,9 +1,9 @@
 #include "vast/ingestor.h"
 
 #include "vast/exception.h"
-#include "vast/segmentizer.h"
 #include "vast/logger.h"
 #include "vast/segment.h"
+#include "vast/sink/segmentizer.h"
 #include "vast/source/file.h"
 
 #ifdef VAST_HAVE_BROCCOLI
@@ -35,25 +35,19 @@ ingestor::ingestor(actor_ptr tracker,
         VAST_LOG_DEBUG("ingestor @" << id() <<
                        " received DOWN from @" << last_sender()->id());
 
-        auto i = std::find(segmentizers_.begin(),
-                           segmentizers_.end(),
-                           last_sender());
-        assert(i != segmentizers_.end());
-        segmentizers_.erase(i);
+        auto i = sinks_.find(last_sender());
+        assert(i != sinks_.end());
+        sinks_.erase(i);
 
-        auto j = rates_.find(last_sender());
-        if (j != rates_.end())
-          rates_.erase(j);
-
-        if (segmentizers_.empty() && inflight_.empty())
+        if (sinks_.empty() && inflight_.empty())
           shutdown();
       },
       on(atom("kill")) >> [=]
       {
-        if (segmentizers_.empty() && inflight_.empty())
+        if (sinks_.empty() && inflight_.empty())
           shutdown();
-        for (auto s : segmentizers_)
-          s << last_dequeued();
+        for (auto& pair : sinks_)
+          pair.first << last_dequeued();
       },
 #ifdef VAST_HAVE_BROCCOLI
       on(atom("ingest"), atom("broccoli"), arg_match) >>
@@ -91,19 +85,20 @@ ingestor::ingestor(actor_ptr tracker,
       },
       on(atom("statistics"), arg_match) >> [=](size_t rate)
       {
-        rates_[last_sender()] = rate;
+        assert(sinks_.find(last_sender()) != sinks_.end());
+        sinks_[last_sender()] = rate;
       },
       on(atom("statistics"), atom("print"), arg_match) >> [=](size_t last)
       {
         size_t sum = 0;
-        for (auto& p : rates_)
-          sum += p.second;
+        for (auto& pair : sinks_)
+          sum += pair.second;
 
         if (sum != last)
           VAST_LOG_INFO("ingestor @" << id() <<
                         " ingests at rate " << sum << " events/sec");
 
-        if (! segmentizers_.empty())
+        if (! sinks_.empty())
           delayed_send(
               self,
               std::chrono::seconds(1),
@@ -137,7 +132,7 @@ ingestor::ingestor(actor_ptr tracker,
         else
           --i->second;
 
-        if (segmentizers_.empty() && inflight_.empty())
+        if (sinks_.empty() && inflight_.empty())
           shutdown();
       });
 }
@@ -153,18 +148,20 @@ void ingestor::shutdown()
   VAST_LOG_VERBOSE("ingestor @" << id() << " terminated");
 }
 
-void ingestor::init_source(actor_ptr source)
+void ingestor::init_source(actor_ptr src)
 {
   VAST_LOG_VERBOSE("ingestor @" << id() <<
-                   " spawns segmentizer for source @" << source->id());
+                   " spawns segmentizer for source @" << src->id());
 
-  auto s = spawn<segmentizer>(self, source, max_events_per_chunk_,
-                              max_segment_size_);
+  auto snk = spawn<sink::segmentizer>(self, max_events_per_chunk_,
+                                    max_segment_size_);
+  send(src, atom("init"), snk, batch_size_);
 
-  send(source, atom("init"), s, batch_size_);
+  src->link_to(snk);
+  snk->link_to(src);
+  self->monitor(snk);
 
-  self->monitor(s);
-  segmentizers_.push_back(std::move(s));
+  sinks_.emplace(std::move(snk), 0);
 }
 
 } // namespace vast
