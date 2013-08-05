@@ -1,6 +1,7 @@
 #ifndef VAST_UTIL_FIELD_SPLITTER_H
 #define VAST_UTIL_FIELD_SPLITTER_H
 
+#include <algorithm>
 #include <cassert>
 #include <iterator>
 #include <vector>
@@ -21,6 +22,15 @@ class field_splitter
       "field splitter requires random access iterator");
 
 public:
+  /// Constructs a field splitter.
+  /// @param sep The field separator to use.
+  /// @param sep_len The string length of *sep*.
+  field_splitter(char const* sep = " ", size_t sep_len = 1)
+    : sep_(sep),
+      sep_len_(sep_len)
+  {
+  }
+
   /// Splits the given range *[start,end)* into fields.
   ///
   /// @param start The first element of the range.
@@ -86,25 +96,33 @@ public:
     return fields_[i].second;
   }
 
-  /// Sets the field separator.
-  void sep(char const* s, size_t len)
-  {
-    sep_ = s;
-    sep_len_ = len;
-  }
-
   /// Retrieves the number of fields.
   size_t fields() const
   {
     return fields_.size();
   }
 
+  /// Checks a field against a C string.
+  /// @param field The field to look at.
+  /// @param str The beginning of the string.
+  /// @param str_len The size of the string or 0 for auto-detection.
+  /// @pre `field < fields()`
+  /// @return `true` *iff* the string at *field* matches *str*.
+  bool equals(size_t field, char const* str, size_t str_len = 0)
+  {
+    assert(field < fields());
+    auto size = str_len == 0 ? std::strlen(str) : str_len;
+    if (static_cast<size_t>(std::distance(start(field), end(field))) != size)
+      return false;
+    return std::equal(start(field), end(field), str);
+  }
+
 private:
   typedef std::pair<Iterator, Iterator> iterator_pair;
   std::vector<iterator_pair> fields_;
 
-  char const* sep_ = " ";
-  size_t sep_len_ = 1;
+  char const* sep_;
+  size_t sep_len_;
 };
 
 } // namespace util
