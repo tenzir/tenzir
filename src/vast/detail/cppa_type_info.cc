@@ -28,8 +28,8 @@ void cppa_announce_types()
   cppa_announce<segment>();
   cppa_announce<schema>();
 
-  cppa::announce<std::vector<uuid>>();
-  cppa::announce<std::vector<event>>();
+  cppa_announce<std::vector<uuid>>();
+  cppa_announce<std::vector<event>>();
 }
 
 } // namespace detail
