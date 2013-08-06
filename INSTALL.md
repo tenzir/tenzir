@@ -15,8 +15,9 @@ If you are using a 64-bit version of Linux, make sure to use a recent version
 of [libunwind](http://www.nongnu.org/libunwind/index.html) when enabling
 [gperftools](http://code.google.com/p/gperftools/), because there exist
 [known](http://code.google.com/p/gperftools/issues/detail?id=66)
-[bugs](http://code.google.com/p/gperftools/source/browse/trunk/README) that
-cause segmentation faults when linking against the system-provided version.
+[bugs](https://code.google.com/p/gperftools/source/browse/README) that
+cause segmentation faults when linking against the system-provided version. On
+Mac OS, a [similar issue](https://code.google.com/p/gperftools/issues/detail?id=413) exists.
 
 In C++, the STL layer is different from the ABI layer. While the former is
 provided by Clang's libc++, the latter needs to be installed separately,
