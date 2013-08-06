@@ -20,7 +20,7 @@ archive::archive(std::string const& directory, size_t max_segments)
         {
           VAST_LOG_INFO("archive @" << id() << " creates new directory " << directory);
           if (! mkdir(p))
-            VAST_LOG_ERROR("archive @" << id() << 
+            VAST_LOG_ERROR("archive @" << id() <<
                            " failed to create directory " << directory);
         }
         segment_manager_ = spawn<segment_manager>(max_segments, directory);

@@ -50,11 +50,6 @@ configuration::configuration()
   schema.add("print", "print the parsed event schema");
   schema.visible(false);
 
-  auto& tracker = create_block("ID tracker options", "tracker");
-  tracker.add("host", "hostname/address of the tracker").init("127.0.0.1");
-  tracker.add("port", "TCP port of the ID tracker").init(42004);
-  tracker.visible(false);
-
   auto& ingest = create_block("ingest options", "ingest");
   ingest.add("max-events-per-chunk", "maximum number of events per chunk").init(1000);
   ingest.add("max-segment-size", "maximum segment size in MB").init("1");
@@ -68,16 +63,26 @@ configuration::configuration()
 #endif
   ingest.visible(false);
 
+  auto& receiver = create_block("receiver options", "receiver");
+  receiver.add("host", "hostname/address of the receiver").init("127.0.0.1");
+  receiver.add("port", "TCP port of the receiver").init(42000);
+  receiver.visible(false);
+
   auto& archive = create_block("archive options", "archive");
   archive.add("host", "hostname/address of the archive").init("127.0.0.1");
-  archive.add("port", "TCP port of the archive").init(42002);
+  archive.add("port", "TCP port of the archive").init(42003);
   archive.add("max-segments", "maximum number of segments to keep in memory").init(500);
   archive.visible(false);
 
   auto& index = create_block("index options", "index");
   index.add("host", "hostname/address of the archive").init("127.0.0.1");
-  index.add("port", "TCP port of the index").init(42003);
+  index.add("port", "TCP port of the index").init(42004);
   index.visible(false);
+
+  auto& tracker = create_block("ID tracker options", "tracker");
+  tracker.add("host", "hostname/address of the tracker").init("127.0.0.1");
+  tracker.add("port", "TCP port of the ID tracker").init(42002);
+  tracker.visible(false);
 
   auto& search = create_block("search options", "search");
   search.add("host", "hostname/address of the archive").init("127.0.0.1");

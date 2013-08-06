@@ -1,9 +1,7 @@
 #include "vast/ingestor.h"
 
-#include "vast/exception.h"
 #include "vast/logger.h"
 #include "vast/segment.h"
-#include "vast/sink/segmentizer.h"
 #include "vast/source/file.h"
 
 #ifdef VAST_HAVE_BROCCOLI
@@ -14,15 +12,11 @@ namespace vast {
 
 using namespace cppa;
 
-ingestor::ingestor(actor_ptr tracker,
-                   actor_ptr archive,
-                   actor_ptr index,
+ingestor::ingestor(actor_ptr receiver,
                    size_t max_events_per_chunk,
                    size_t max_segment_size,
                    size_t batch_size)
-  : tracker_(tracker),
-    archive_(archive),
-    index_(index),
+  : receiver_(receiver),
     max_events_per_chunk_(max_events_per_chunk),
     max_segment_size_(max_segment_size),
     batch_size_(batch_size)
@@ -39,13 +33,13 @@ ingestor::ingestor(actor_ptr tracker,
         assert(i != sinks_.end());
         sinks_.erase(i);
 
-        if (sinks_.empty() && inflight_.empty())
-          shutdown();
+        if (sinks_.empty())
+          quit();
       },
       on(atom("kill")) >> [=]
       {
-        if (sinks_.empty() && inflight_.empty())
-          shutdown();
+        if (sinks_.empty())
+          quit();
         for (auto& pair : sinks_)
           pair.first << last_dequeued();
       },
@@ -54,22 +48,20 @@ ingestor::ingestor(actor_ptr tracker,
         [=](std::string const& host, unsigned port,
             std::vector<std::string> const& events)
       {
-        auto broccoli = spawn<source::broccoli>(host, port);
-        init_source(broccoli);
-        send(broccoli, atom("subscribe"), events);
+        auto src = make_source<source::broccoli>(host, port);
+        send(src, atom("subscribe"), events);
+        send(src, atom("run"));
       },
 #endif
       on(atom("ingest"), "bro15conn", arg_match) >> [=](std::string const& file)
       {
-        auto src = spawn<source::bro15conn, detached>(file);
-        init_source(src);
+        auto src = make_source<source::bro15conn>(file);
+        send(src, atom("run"));
       },
       on(atom("ingest"), "bro2", arg_match) >> [=](std::string const& file)
       {
-        VAST_LOG_DEBUG("ingestor @" << id() <<
-                       " spawns Bro 2 source with " << file);
-        auto src = spawn<source::bro2, detached>(file);
-        init_source(src);
+        auto src = make_source<source::bro2>(file);
+        send(src, atom("run"));
       },
       on(atom("ingest"), val<std::string>, arg_match) >> [=](std::string const&)
       {
@@ -77,9 +69,6 @@ ingestor::ingestor(actor_ptr tracker,
       },
       on(atom("run")) >> [=]
       {
-        for (auto& pair : sinks_)
-          pair.first << last_dequeued();
-
         delayed_send(
             self,
             std::chrono::seconds(2),
@@ -106,36 +95,27 @@ ingestor::ingestor(actor_ptr tracker,
               std::chrono::seconds(1),
               atom("statistics"), atom("print"), sum);
       },
-      on_arg_match >> [=](segment const& s)
+      on_arg_match >> [=](segment& s)
       {
         VAST_LOG_DEBUG("ingestor @" << id() <<
                        " relays segment " << s.id() <<
-                       " to archive @" << archive_->id() <<
-                       " and index @" << index_->id());
+                       " to receiver @" << receiver->id());
 
-        index_ << last_dequeued();
-        archive_ << last_dequeued();
+        sync_send(receiver_, s).then(
+            on(atom("ack"), arg_match) >> [=](uuid const& segment_id)
+            {
+              VAST_LOG_DEBUG("ingestor @" << id() <<
+                             " received ack for " << segment_id);
+            },
+            after(std::chrono::seconds(30)) >> [=]
+            {
+              VAST_LOG_ERROR("ingestor @" << id() <<
+                             " did not receive ack from receiver @" <<
+                             receiver_->id());
 
-        assert(inflight_.find(s.id()) == inflight_.end());
-        inflight_.emplace(s.id(), 2);
-      },
-      on(atom("segment"), atom("ack"), arg_match) >> [=](uuid const& uid)
-      {
-        // Both archive and index send an ack.
-        VAST_LOG_VERBOSE(
-            "ingestor @" << id() <<
-            " received segment ack from @" << last_sender()->id() <<
-            " for " << uid);
-
-        auto i = inflight_.find(uid);
-        assert(i != inflight_.end() && i->second > 0);
-        if (i->second == 1)
-          inflight_.erase(i);
-        else
-          --i->second;
-
-        if (sinks_.empty() && inflight_.empty())
-          shutdown();
+              // TODO: Handle the failed segment, e.g., by sending it again or
+              // saving it to the file system.
+            });
       });
 }
 
@@ -144,28 +124,9 @@ void ingestor::init()
   become(operating_);
 }
 
-void ingestor::shutdown()
+void ingestor::on_exit()
 {
-  self->quit();
   VAST_LOG_VERBOSE("ingestor @" << id() << " terminated");
-}
-
-void ingestor::init_source(actor_ptr src)
-{
-  VAST_LOG_VERBOSE("ingestor @" << id() <<
-                   " spawns segmentizer for source @" << src->id());
-
-  auto snk = spawn<sink::segmentizer>(self, max_events_per_chunk_,
-                                    max_segment_size_);
-  send(src, atom("init"), snk, batch_size_);
-
-  src->link_to(snk);
-  snk->link_to(src);
-  self->monitor(snk);
-
-  sinks_.emplace(std::move(snk), 0);
-
-  send(src, atom("run"));
 }
 
 } // namespace vast

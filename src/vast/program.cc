@@ -11,6 +11,7 @@
 #include "vast/ingestor.h"
 #include "vast/logger.h"
 #include "vast/query_client.h"
+#include "vast/receiver.h"
 #include "vast/schema.h"
 #include "vast/schema_manager.h"
 #include "vast/search.h"
@@ -59,6 +60,13 @@ bool program::run()
         VAST_LOG_VERBOSE("@" << self->id() << " received signal " << signal);
         if (signal == SIGINT || signal == SIGTERM)
           done = true;
+      },
+      others() >> [=]
+      {
+        VAST_LOG_ERROR("program @" << self->id() <<
+                       " received unexpected message from @" <<
+                       self->last_sender()->id() << ": " <<
+                       to_string(self->last_dequeued()));
       })
   .until(gref(done));
 
@@ -93,7 +101,8 @@ bool program::start()
   try
   {
     VAST_LOG_DEBUG("main program at @" << self->id());
-    system_monitor_ = spawn<system_monitor, detached+monitored>(self);
+    system_monitor_ = spawn<system_monitor, detached>(self);
+    self->monitor(system_monitor_);
     send(system_monitor_, atom("act"));
 
     if (config_.check("profile"))
@@ -107,7 +116,7 @@ bool program::start()
            config_.check("profile-heap"));
     }
 
-    schema_manager_ = spawn<schema_manager>();
+    schema_manager_ = spawn<schema_manager, monitored>();
     if (config_.check("schema.file"))
     {
       send(schema_manager_, atom("load"), config_.get("schema.file"));
@@ -188,14 +197,31 @@ bool program::start()
       VAST_LOG_VERBOSE("connected to index actor @" << index_->id());
     }
 
+    auto receiver_host = config_.get("receiver.host");
+    auto receiver_port = config_.as<unsigned>("receiver.port");
+    if (config_.check("archive-actor")
+        || config_.check("index-actor")
+        || config_.check("all-server"))
+    {
+      receiver_ = spawn<receiver>();
+      VAST_LOG_VERBOSE("publishing receiver at *:" << receiver_port);
+      publish(receiver_, receiver_port);
+    }
+    else
+    {
+      VAST_LOG_VERBOSE("connecting to recever at " <<
+                       receiver_host << ":" << receiver_port);
+
+      receiver_ = remote_actor(receiver_host, receiver_port);
+      VAST_LOG_VERBOSE("connected to receiver actor @" << receiver_->id());
+    }
+
     if (config_.check("ingestor-actor"))
     {
-      ingestor_ = spawn<ingestor>(
-          tracker_, archive_, index_,
+      ingestor_ = spawn<ingestor, monitored>(receiver_,
           config_.as<size_t>("ingest.max-events-per-chunk"),
           config_.as<size_t>("ingest.max-segment-size") * 1000000,
           config_.as<size_t>("ingest.batch-size"));
-      self->monitor(ingestor_);
 
 #ifdef VAST_HAVE_BROCCOLI
       util::broccoli::init(config_.check("broccoli-messages"),
@@ -254,8 +280,8 @@ bool program::start()
 
       auto paginate = config_.as<unsigned>("client.paginate");
       auto& expression = config_.get("client.expression");
-      query_client_ = spawn<query_client>(search_, expression, paginate);
-      self->monitor(query_client_);
+      query_client_ = spawn<query_client, monitored>(search_, expression,
+                                                     paginate);
       send(query_client_, atom("start"));
     }
 
@@ -281,6 +307,9 @@ void program::stop()
 
   if (config_.check("ingestor-actor"))
     ingestor_ << kill;
+
+  if (config_.check("archive-actor") || config_.check("index-actor"))
+    receiver_ << kill;
 
   if (config_.check("index-actor") || config_.check("all-server"))
     index_ << kill;

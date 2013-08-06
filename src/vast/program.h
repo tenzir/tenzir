@@ -32,6 +32,7 @@ private:
 
   configuration const& config_;
 
+  cppa::actor_ptr receiver_;
   cppa::actor_ptr archive_;
   cppa::actor_ptr index_;
   cppa::actor_ptr tracker_;

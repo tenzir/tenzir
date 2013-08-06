@@ -8,8 +8,9 @@
 namespace vast {
 namespace source {
 
-file::file(std::string const& filename)
-  : file_handle_(path(filename)),
+file::file(cppa::actor_ptr sink, std::string const& filename)
+  : synchronous(sink),
+    file_handle_(path(filename)),
     file_stream_(file_handle_)
 {
   VAST_ENTER();
@@ -23,8 +24,8 @@ bool file::finished()
   VAST_RETURN(finished_);
 }
 
-line::line(std::string const& filename)
-  : file(filename)
+line::line(cppa::actor_ptr sink, std::string const& filename)
+  : file(sink, filename)
 {
   VAST_ENTER();
   if (! next())
@@ -61,10 +62,10 @@ bool line::next()
   VAST_RETURN(success);
 }
 
-bro2::bro2(std::string const& filename)
-  : line(filename)
+bro2::bro2(cppa::actor_ptr sink, std::string const& filename)
+  : line(sink, filename)
 {
-  VAST_ENTER();
+  VAST_LOG_VERBOSE("spawning bro 2 source @" << id() << " for " << filename);
 
   if (! parse_header())
   {
@@ -368,9 +369,11 @@ option<event> bro2::parse(std::string const& line)
   return e;
 }
 
-bro15conn::bro15conn(std::string const& filename)
-  : line(filename)
+bro15conn::bro15conn(cppa::actor_ptr sink, std::string const& filename)
+  : line(sink, filename)
 {
+  VAST_LOG_VERBOSE("spawning bro 1.5 conn.logsource @" << id() <<
+                   " for " << filename);
 }
 
 option<event> bro15conn::parse(std::string const& line)
@@ -395,7 +398,7 @@ option<event> bro15conn::parse(std::string const& line)
   auto i = fs.start(0);
   auto j = fs.end(0);
   time_range range;
-  if (! parse(i, j, range) || i != j) 
+  if (! parse(i, j, range) || i != j)
   {
     VAST_LOG_ERROR(
         "invalid conn.log timestamp (field 1) (line " << current_ << ')');
@@ -413,7 +416,7 @@ option<event> bro15conn::parse(std::string const& line)
   else
   {
     time_range range;
-    if (! parse(i, j, range) || i != j) 
+    if (! parse(i, j, range) || i != j)
     {
       VAST_LOG_ERROR(
           "invalid conn.log duration (field 2) (line " << current_ << ')');
@@ -426,7 +429,7 @@ option<event> bro15conn::parse(std::string const& line)
   i = fs.start(2);
   j = fs.end(2);
   address addr;
-  if (! parse(i, j, addr) || i != j) 
+  if (! parse(i, j, addr) || i != j)
   {
     VAST_LOG_ERROR("invalid conn.log originating address (field 3) (line " <<
                      current_ << ')');
@@ -437,7 +440,7 @@ option<event> bro15conn::parse(std::string const& line)
   // Responder address
   i = fs.start(3);
   j = fs.end(3);
-  if (! parse(i, j, addr) || i != j) 
+  if (! parse(i, j, addr) || i != j)
   {
     VAST_LOG_ERROR("invalid conn.log responding address (field 4) (line " <<
                      current_ << ')');
@@ -455,7 +458,7 @@ option<event> bro15conn::parse(std::string const& line)
   else
   {
     string service;
-    if (! parse(i, j, service) || i != j) 
+    if (! parse(i, j, service) || i != j)
     {
       VAST_LOG_ERROR("invalid conn.log service (field 5) (line " <<
                        current_ << ')');
@@ -468,7 +471,7 @@ option<event> bro15conn::parse(std::string const& line)
   i = fs.start(5);
   j = fs.end(5);
   port orig_p;
-  if (! parse(i, j, orig_p) || i != j) 
+  if (! parse(i, j, orig_p) || i != j)
   {
     VAST_LOG_ERROR("invalid conn.log originating port (field 6) (line " <<
                      current_ << ')');
@@ -478,7 +481,7 @@ option<event> bro15conn::parse(std::string const& line)
   i = fs.start(6);
   j = fs.end(6);
   port resp_p;
-  if (! parse(i, j, resp_p) || i != j) 
+  if (! parse(i, j, resp_p) || i != j)
   {
     VAST_LOG_ERROR("invalid conn.log responding port (field 7) (line " <<
                      current_ << ')');
@@ -488,7 +491,7 @@ option<event> bro15conn::parse(std::string const& line)
   i = fs.start(7);
   j = fs.end(7);
   string proto;
-  if (! parse(i, j, proto) || i != j) 
+  if (! parse(i, j, proto) || i != j)
   {
     VAST_LOG_ERROR("invalid conn.log proto (field 8) (line " <<
                      current_ << ')');
@@ -518,7 +521,7 @@ option<event> bro15conn::parse(std::string const& line)
   else
   {
     uint64_t orig_bytes;
-    if (! parse(i, j, orig_bytes) || i != j) 
+    if (! parse(i, j, orig_bytes) || i != j)
     {
       VAST_LOG_ERROR("invalid conn.log originating bytes (field 9) (line " <<
                      current_ << ')');
@@ -536,7 +539,7 @@ option<event> bro15conn::parse(std::string const& line)
   else
   {
     uint64_t resp_bytes;
-    if (! parse(i, j, resp_bytes) || i != j) 
+    if (! parse(i, j, resp_bytes) || i != j)
     {
       VAST_LOG_ERROR("invalid conn.log responding bytes (field 10) (line " <<
                      current_ << ')');
@@ -549,7 +552,7 @@ option<event> bro15conn::parse(std::string const& line)
   i = fs.start(10);
   j = fs.end(10);
   string state;
-  if (! parse(i, j, state) || i != j) 
+  if (! parse(i, j, state) || i != j)
   {
     VAST_LOG_ERROR("invalid conn.log connection state (field 11) (line " <<
                    current_ << ')');
@@ -561,7 +564,7 @@ option<event> bro15conn::parse(std::string const& line)
   i = fs.start(11);
   j = fs.end(11);
   string direction;
-  if (! parse(i, j, direction) || i != j) 
+  if (! parse(i, j, direction) || i != j)
   {
     VAST_LOG_ERROR("invalid conn.log direction (field 12) (line " <<
                    current_ << ')');
@@ -575,7 +578,7 @@ option<event> bro15conn::parse(std::string const& line)
     i = fs.start(12);
     j = fs.end(12);
     string addl;
-    if (! parse(i, j, addl) || i != j) 
+    if (! parse(i, j, addl) || i != j)
     {
       VAST_LOG_ERROR("invalid conn.log additional data (field 13) (line " <<
                      current_ << ')');

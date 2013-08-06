@@ -8,7 +8,7 @@ namespace source {
 
 using namespace cppa;
 
-broccoli::broccoli(std::string const& host, unsigned port)
+broccoli::broccoli(actor_ptr sink, std::string const& host, unsigned port)
 {
   VAST_LOG_VERBOSE("spawning broccoli source @" << id());
   impl_ = (
@@ -23,8 +23,7 @@ broccoli::broccoli(std::string const& host, unsigned port)
         // TODO: Make use of the host argument.
         VAST_LOG_VERBOSE("broccoli @" << id() <<
                          "starts server at " << host << ':' << port);
-        server_ = spawn<util::broccoli::server>(port, self);
-        monitor(server_);
+        server_ = spawn<util::broccoli::server, monitored>(port, self);
       },
       on(atom("DOWN"), arg_match) >> [=](size_t /* exit_reason */)
       {
@@ -43,7 +42,9 @@ broccoli::broccoli(std::string const& host, unsigned port)
       {
         for (auto& event : event_names_)
           send(conn, atom("subscribe"), event);
-        send(conn, atom("start"), self);
+        // TODO: Consider one segmentizer per connection as opposed to using
+        // one for all connections.
+        send(conn, atom("start"), sink);
       },
       on(atom("subscribe"), arg_match) >> [=](std::string const& event)
       {

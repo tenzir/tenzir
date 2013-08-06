@@ -7,12 +7,18 @@ namespace source {
 
 using namespace cppa;
 
+synchronous::synchronous(actor_ptr sink, size_t batch_size)
+  : sink_(sink),
+    batch_size_(batch_size)
+{
+}
+
 void synchronous::init()
 {
+  chaining(false);
   become(
-      on(atom("init"), arg_match) >> [=](actor_ptr upstream, size_t batch_size)
+      on(atom("batch size"), arg_match) >> [=](size_t batch_size)
       {
-        upstream_ = upstream;
         batch_size_ = batch_size;
       },
       on(atom("kill")) >> [=]
@@ -22,8 +28,14 @@ void synchronous::init()
       on(atom("run")) >> [=]
       {
         run();
-      }
-  );
+      },
+      others() >> [=]
+      {
+        VAST_LOG_ERROR("source @" << id() <<
+                       " received unexpected message from @" <<
+                       last_sender()->id() << ": " <<
+                       to_string(last_dequeued()));
+      });
 }
 
 void synchronous::on_exit()
@@ -60,7 +72,10 @@ void synchronous::run()
 
   if (! events_.empty())
   {
-    send(upstream_, std::move(events_));
+    VAST_LOG_DEBUG("source @" << id() << " sends " << events_.size() <<
+                   " events to sink @" << sink_->id());
+
+    send(sink_, std::move(events_));
     events_.clear();
   }
 

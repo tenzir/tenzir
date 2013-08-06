@@ -20,11 +20,13 @@ void asynchronous::init()
       },
       on_arg_match >> [=](event const& e)
       {
+        VAST_LOG_DEBUG("sink @" << id() << " got 1 event");
         process(e);
         ++total_events_;
       },
       on_arg_match >> [=](std::vector<event> const& v)
       {
+        VAST_LOG_DEBUG("sink @" << id() << " got " << v.size() << " events");
         process(v);
         total_events_ += v.size();
       },
@@ -32,13 +34,22 @@ void asynchronous::init()
       {
         before_exit();
         quit();
+      },
+      others() >> [=]
+      {
+        VAST_LOG_ERROR("sink @" << id() <<
+                       " received unexpected message from @" <<
+                       last_sender()->id() << ": " <<
+                       to_string(last_dequeued()));
       });
 }
 
 void asynchronous::on_exit()
 {
-  VAST_LOG_VERBOSE("sink @" << id() << " processed " <<
-                   total_events_ << " events in total");
+  if (total_events_ > 0)
+    VAST_LOG_VERBOSE("sink @" << id() << " processed " <<
+                     total_events_ << " events in total");
+
   VAST_LOG_VERBOSE("sink @" << id() << " terminated");
 }
 

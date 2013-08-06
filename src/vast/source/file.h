@@ -18,8 +18,9 @@ class file : public synchronous
 {
 public:
   /// Constructs a file source.
+  /// @param sink The actor to send the generated events to.
   /// @param filename The name of the file to ingest.
-  file(std::string const& filename);
+  file(cppa::actor_ptr sink, std::string const& filename);
 
   /// Implements `synchronous::finished`.
   virtual bool finished() final;
@@ -35,7 +36,7 @@ protected:
 class line : public file
 {
 public:
-  line(std::string const& filename);
+  line(cppa::actor_ptr sink, std::string const& filename);
 
 protected:
   virtual option<event> extract() override;
@@ -53,7 +54,7 @@ protected:
 class bro2 : public line
 {
 public:
-  bro2(std::string const& filename);
+  bro2(cppa::actor_ptr sink, std::string const& filename);
 
 private:
   /// Extracts the first `#`-lines of log meta data.
@@ -78,7 +79,7 @@ private:
 class bro15conn : public line
 {
 public:
-  bro15conn(std::string const& filename);
+  bro15conn(cppa::actor_ptr sink, std::string const& filename);
 
 private:
   /// Parses a single log line.

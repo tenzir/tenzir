@@ -12,9 +12,10 @@ namespace source {
 struct broccoli : asynchronous<broccoli>
 {
   /// Spawns a Broccoli event source.
+  /// @param sink The sink to send events to.
   /// @param host The host to bind to.
   /// @param port The TCP port to listen on.
-  broccoli(std::string const& host, unsigned port)
+  broccoli(cppa::actor:ptr sink, std::string const& host, unsigned port)
 
   std::set<std::string> event_names_;
   std::set<cppa::actor_ptr> broccolis_;

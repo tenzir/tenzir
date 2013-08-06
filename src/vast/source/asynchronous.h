@@ -15,13 +15,14 @@ class asynchronous : public cppa::event_based_actor
 {
 public:
   /// Spawns an asynchronous source.
-  asynchronous()
+  asynchronous(actor_ptr sink, size_t batch_size = 0)
+    : sink_(sink),
+      batch_size_(batch_size)
   {
     using namespace cppa;
     operating_ = (
-        on(atom("init"), arg_match) >> [=](actor_ptr sink, size_t batch_size)
+        on(atom("batch size"), arg_match) >> [=](size_t batch_size)
         {
-          sink_ = sink;
           batch_size_ = batch_size;
         },
         on_arg_match >> [=](event& e)
