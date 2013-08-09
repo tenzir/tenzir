@@ -9,6 +9,7 @@ namespace vast {
 
 bool serializer::begin_instance(std::type_info const& /* ti */)
 {
+  // Do nothing by default.
   VAST_ENTER();
   //if (global_typeid(ti) == nullptr)
   //{

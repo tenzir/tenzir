@@ -570,6 +570,11 @@ record::record()
 {
 }
 
+record::record(std::vector<value> values)
+  : super(std::move(values))
+{
+}
+
 record::record(std::initializer_list<value> list)
   : super(list)
 {

@@ -7,19 +7,23 @@
 namespace vast {
 
 /// The event archive. It stores events in the form of segments.
-class archive : public cppa::sb_actor<archive>
+class archive : public cppa::event_based_actor
 {
-  friend class cppa::sb_actor<archive>;
-
 public:
   /// Spawns the archive.
   /// @param directory The root directory of the archive.
   /// @param max_segments The maximum number of segments to keep in memory.
   archive(std::string const& directory, size_t max_segments);
 
+  /// Implements `cppa::event_based_actor::init`.
+  virtual void init() final;
+
+  /// Overrides `event_based_actor::on_exit`.
+  virtual void on_exit() final;
+
 private:
+  std::string directory_;
   cppa::actor_ptr segment_manager_;
-  cppa::behavior init_state;
 };
 
 } // namespace vast

@@ -5,6 +5,16 @@
 
 namespace vast {
 
+event::event(std::vector<value> values)
+  : record(std::move(values))
+{
+}
+
+event::event(std::initializer_list<value> args)
+  : record(std::move(args))
+{
+}
+
 event::event(event const& other)
   : record(other)
   , id_(other.id_)
@@ -18,11 +28,6 @@ event::event(event&& other)
   , id_(std::move(other.id_))
   , timestamp_(std::move(other.timestamp_))
   , name_(std::move(other.name_))
-{
-}
-
-event::event(std::initializer_list<value> args)
-  : record(std::move(args))
 {
 }
 

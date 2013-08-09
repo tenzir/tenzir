@@ -216,11 +216,11 @@ public:
     return elements_;
   }
 
-  /// Retrieves the size in bytes of the compressed buffer.
-  /// @return The number of bytes of the serialized and compressed buffer.
+  /// Retrieves the size in bytes of the compressed/serialized buffer.
+  /// @return The number of bytes of the serialized/compressed buffer.
   size_t bytes() const
   {
-    return sizeof(elements_) + buffer_.size();
+    return sizeof(elements_) + sizeof(compression_) + buffer_.size();
   }
 
   friend bool operator==(chunk const& x, chunk const& y)
@@ -232,12 +232,14 @@ private:
   friend access;
   void serialize(serializer& sink) const
   {
+    sink << compression_;
     sink << elements_;
     sink << buffer_;
   }
 
   void deserialize(deserializer& source)
   {
+    source >> compression_;
     source >> elements_;
     source >> buffer_;
   }

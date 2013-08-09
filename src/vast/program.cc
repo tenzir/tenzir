@@ -161,7 +161,7 @@ bool program::start()
           to_string(vast_dir / "archive"),
           config_.as<size_t>("archive.max-segments"));
 
-      send(archive_, atom("load"));
+      send(archive_, atom("init"));
       VAST_LOG_VERBOSE("publishing archive at *:" << archive_port);
       publish(archive_, archive_port);
     }
@@ -203,7 +203,7 @@ bool program::start()
         || config_.check("index-actor")
         || config_.check("all-server"))
     {
-      receiver_ = spawn<receiver>();
+      receiver_ = spawn<receiver>(tracker_, archive_, index_);
       VAST_LOG_VERBOSE("publishing receiver at *:" << receiver_port);
       publish(receiver_, receiver_port);
     }
@@ -308,7 +308,9 @@ void program::stop()
   if (config_.check("ingestor-actor"))
     ingestor_ << kill;
 
-  if (config_.check("archive-actor") || config_.check("index-actor"))
+  if (config_.check("archive-actor") ||
+      config_.check("index-actor") ||
+      config_.check("all-server"))
     receiver_ << kill;
 
   if (config_.check("index-actor") || config_.check("all-server"))

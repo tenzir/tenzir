@@ -472,6 +472,7 @@ public:
   //using std::vector<value>::vector;
 
   record();
+  record(std::vector<value> values);
   record(std::initializer_list<value> list);
   record(record const& other);
   record(record&& other);

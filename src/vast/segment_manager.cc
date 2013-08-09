@@ -6,38 +6,47 @@
 #include "vast/io/file_stream.h"
 #include "vast/serialization.h"
 
+using namespace cppa;
+
 namespace vast {
 
 segment_manager::segment_manager(size_t capacity, std::string const& dir)
-  : cache_(capacity, [&](uuid const& id) { return on_miss(id); })
-  , dir_(dir)
+  : cache_(capacity, [&](uuid const& id) { return on_miss(id); }),
+    dir_(dir)
 {
   VAST_LOG_VERBOSE("spawning segment manager @" << id() <<
                    " with capacity " << capacity);
-
-  using namespace cppa;
   chaining(false);
-  init_state = (
-      on(atom("load")) >> [=]
+}
+
+void segment_manager::init()
+{
+  become(
+      on(atom("init")) >> [=]
       {
         traverse(
             dir_,
             [&](path const& p) -> bool
             {
-              VAST_LOG_VERBOSE("segment manager @" << id() << " found segment " << p);
+              VAST_LOG_VERBOSE("segment manager @" << id() << 
+                               " found segment " << p);
               segment_files_.emplace(to_string(p.basename()), p);
               return true;
             });
 
         if (segment_files_.empty())
           VAST_LOG_VERBOSE("segment manager @" << id() <<
-                           " did not find any segments");
+                           " did not find any segments in " << dir_);
+      },
+      on(atom("kill")) >> [=]
+      {
+        segment_files_.clear();
+        cache_.clear();
+        quit();
       },
       on_arg_match >> [=](segment const& s)
       {
-        auto opt = tuple_cast<segment>(last_dequeued());
-        assert(opt.valid());
-        store_segment(*opt);
+        store_segment(last_dequeued());
         reply(atom("segment"), atom("ack"), s.id());
       },
       on(atom("get"), atom("ids")) >> [=]
@@ -47,11 +56,7 @@ segment_manager::segment_manager(size_t capacity, std::string const& dir)
         std::transform(segment_files_.begin(),
                        segment_files_.end(),
                        std::back_inserter(ids),
-                       [](std::pair<uuid, path> const& p)
-                       {
-                         return p.first;
-                       });
-
+                       [](std::pair<uuid, path> const& p) { return p.first; });
         reply(ids);
       },
       on(atom("get"), arg_match) >> [=](uuid const& uid)
@@ -60,19 +65,19 @@ segment_manager::segment_manager(size_t capacity, std::string const& dir)
                        " retrieves segment " << uid);
 
         reply_tuple(cache_.retrieve(uid));
-      },
-      on(atom("kill")) >> [=]
-      {
-        segment_files_.clear();
-        cache_.clear();
-        quit();
-        VAST_LOG_VERBOSE("segment manager @" << id() << " terminated");
       });
 }
 
-void segment_manager::store_segment(cppa::cow_tuple<segment> t)
+void segment_manager::on_exit()
 {
-  auto& s = cppa::get<0>(t);
+  VAST_LOG_VERBOSE("segment manager @" << id() << " terminated");
+}
+
+void segment_manager::store_segment(cppa::any_tuple t)
+{
+  auto opt = tuple_cast<segment>(t);
+  assert(opt.valid());
+  auto& s = cppa::get<0>(*opt);
   assert(segment_files_.find(s.id()) == segment_files_.end());
   auto filename = dir_ / path(to_string(s.id()));
   segment_files_.emplace(s.id(), filename);
@@ -84,7 +89,7 @@ void segment_manager::store_segment(cppa::cow_tuple<segment> t)
     sink << s;
   }
 
-  cache_.insert(s.id(), t);
+  cache_.insert(s.id(), *opt);
   VAST_LOG_VERBOSE("segment manager @" << id() <<
                    " wrote segment to " << filename);
 }

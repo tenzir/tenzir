@@ -121,7 +121,7 @@ struct list_storage : storage_policy
     // otherwise.
     auto upper = i.second != list_.end() ? &i.second->second : nullptr;
     auto lower = i.first != list_.begin() && (--i.first)->first < x
-      ? &i.first->second 
+      ? &i.first->second
       : nullptr;
 
     return {lower, upper};
@@ -480,7 +480,7 @@ struct precision_binner
     {
       return std::round(x / integral);
     }
-    
+
     return x;
   }
 

@@ -23,12 +23,13 @@ ingestor::ingestor(actor_ptr receiver,
 {
   VAST_LOG_VERBOSE("spawning ingestor @" << id());
   chaining(false);
-  operating_ = (
+}
+
+void ingestor::init()
+{
+  become(
       on(atom("DOWN"), arg_match) >> [=](uint32_t /* reason */)
       {
-        VAST_LOG_DEBUG("ingestor @" << id() <<
-                       " received DOWN from @" << last_sender()->id());
-
         auto i = sinks_.find(last_sender());
         assert(i != sinks_.end());
         sinks_.erase(i);
@@ -99,7 +100,7 @@ ingestor::ingestor(actor_ptr receiver,
       {
         VAST_LOG_DEBUG("ingestor @" << id() <<
                        " relays segment " << s.id() <<
-                       " to receiver @" << receiver->id());
+                       " to receiver @" << receiver_->id());
 
         sync_send(receiver_, s).then(
             on(atom("ack"), arg_match) >> [=](uuid const& segment_id)
@@ -117,11 +118,6 @@ ingestor::ingestor(actor_ptr receiver,
               // saving it to the file system.
             });
       });
-}
-
-void ingestor::init()
-{
-  become(operating_);
 }
 
 void ingestor::on_exit()

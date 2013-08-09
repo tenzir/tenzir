@@ -48,9 +48,7 @@ private:
   size_t max_events_per_chunk_;
   size_t max_segment_size_;
   size_t batch_size_;
-
   std::unordered_map<cppa::actor_ptr, size_t> sinks_;
-  cppa::behavior operating_;
 };
 
 } // namespace vast

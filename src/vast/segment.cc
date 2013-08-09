@@ -14,88 +14,70 @@ namespace vast {
 uint32_t const segment::magic;
 uint8_t const segment::version;
 
-segment::header::event_meta_data::event_meta_data()
+segment_header::segment_header()
 {
   start = now();
   end = start;
 }
 
-segment::header::event_meta_data&
-segment::header::event_meta_data::operator+=(event_meta_data const& other)
+bool operator==(segment_header const& x, segment_header const& y)
 {
-  if (other.start < start)
-    start = other.start;
-  if (other.end > end)
-    end = other.end;
-  n += other.n;
-  return *this;
+  return x.id == y.id
+      && x.base == y.base
+      && x.compression == y.compression
+      && x.start == y.start
+      && x.end == y.end
+      && x.n == y.n;
 }
 
-bool operator==(segment::header::event_meta_data const& x,
-                segment::header::event_meta_data const& y)
-{
-  return x.start == y.start && x.end == y.end && x.n == y.n;
-}
-
-void segment::header::event_meta_data::accommodate(event const& e)
-{
-  if (e.timestamp() < start)
-    start = e.timestamp();
-  if (e.timestamp() > end)
-    end = e.timestamp();
-  ++n;
-}
-
-bool operator==(segment::header const& x, segment::header const& y)
-{
-  return x.version == y.version &&
-    x.id == y.id &&
-    x.base == y.base &&
-    x.compression == y.compression &&
-    x.event_meta == y.event_meta;
-}
-
-void segment::header::serialize(serializer& sink) const
+void segment_header::serialize(serializer& sink) const
 {
   sink << segment::magic;
-  sink << version;
+  sink << segment::version;
   sink << id;
-  sink << base;
   sink << compression;
-  sink << event_meta.start;
-  sink << event_meta.end;
-  sink << event_meta.n;
+  sink << start;
+  sink << end;
+  sink << base;
+  sink << n;
 }
 
-void segment::header::deserialize(deserializer& source)
+void segment_header::deserialize(deserializer& source)
 {
   uint32_t magic;
   source >> magic;
   if (magic != segment::magic)
     throw error::segment("invalid segment magic");
 
+  uint8_t version;
   source >> version;
   if (version > segment::version)
     throw error::segment("segment version too high");
 
   source >> id;
-  source >> base;
   source >> compression;
-  source >> event_meta.start;
-  source >> event_meta.end;
-  source >> event_meta.n;
+  source >> start;
+  source >> end;
+  source >> base;
+  source >> n;
 }
 
 segment::writer::writer(segment* s)
   : segment_(s),
-    putter_(&chunk_)
+    putter_(&chunk_),
+    start_(now()),
+    end_(start_)
 {
 }
 
 void segment::writer::operator<<(event const& e)
 {
   VAST_ENTER(VAST_ARG(e));
-  event_meta_.accommodate(e);
+  if (e.timestamp() < start_)
+    start_ = e.timestamp();
+  if (e.timestamp() > end_)
+    end_ = e.timestamp();
+  ++n_;
   putter_ << e;
 }
 
@@ -107,11 +89,20 @@ bool segment::writer::flush()
   auto not_empty = ! chunk_.empty();
   if (not_empty)
   {
-    segment_->header_.event_meta += event_meta_;
+    auto& hdr = segment_->header_;
+    if (start_ < hdr.start)
+      hdr.start = start_;
+    if (end_ > hdr.end)
+      hdr.end = end_;
+    hdr.n += n_;
+
     segment_->chunks_.emplace_back(std::move(chunk_));
     chunk_bytes_ += chunk_.bytes();
+
     chunk_ = chunk_type();
-    event_meta_ = header::event_meta_data();
+    start_ = now();
+    end_ = start_;
+    n_ = 0;
   }
   putter_.reset(&chunk_);
   return not_empty;
@@ -191,7 +182,6 @@ size_t segment::reader::chunk_bytes() const
 segment::segment(uuid id, io::compression method)
 {
   header_.id = std::move(id);
-  header_.version = version;
   header_.compression = method;
 }
 
@@ -217,39 +207,20 @@ segment::chunk_tuple segment::operator[](size_t i) const
   return chunks_[i];
 }
 
-segment::header const& segment::head() const
+segment_header& segment::header()
+{
+  return header_;
+}
+
+segment_header const& segment::header() const
 {
   return header_;
 }
 
 uint32_t segment::events() const
 {
-  return header_.event_meta.n;
+  return header_.n;
 }
-
-/*
-size_t segment::bytes() const
-{
-  // FIXME: compute incrementally rather than ad-hoc.
-  static size_t constexpr header =
-    sizeof(header_.version) +
-    sizeof(header_.compression) +
-    sizeof(header_.start) +
-    sizeof(header_.end) +
-    sizeof(header_.events);
-
-  // FIXME: do not hardcode size of serialization.
-  size_t events = 8;
-  for (auto& str : header_.event_names)
-    events += 4 + str.size();
-
-  size_t chunks = 8;
-  for (auto& chk : chunks_)
-    chunks += 4 + 8 + chk.size();
-
-  return header + events + chunks;
-}
-*/
 
 size_t segment::size() const
 {
@@ -287,6 +258,7 @@ void segment::deserialize(deserializer& source)
 
 bool operator==(segment const& x, segment const& y)
 {
+  // TODO: maybe don't compare the full vector.
   return x.header_ == y.header_ && x.chunks_ == y.chunks_;
 }
 

@@ -13,9 +13,8 @@ namespace vast {
 class segment;
 
 /// Manages the segments on disk an in-memory segments in a LRU fashion.
-class segment_manager : public cppa::sb_actor<segment_manager>
+class segment_manager : public cppa::event_based_actor
 {
-  friend class cppa::sb_actor<segment_manager>;
   typedef util::lru_cache<uuid, cppa::cow_tuple<segment>> lru_cache;
 
 public:
@@ -27,10 +26,16 @@ public:
   /// @param dir The directory with the segments.
   segment_manager(size_t capacity, std::string const& dir);
 
+  /// Implements `event_based_actor::init`.
+  virtual void init() final;
+
+  /// Overrides `event_based_actor::on_exit`.
+  virtual void on_exit() final;
+
 private:
   /// Records a given segment to disk and puts it in the cache.
-  /// @param t The COW-tuple containing the segment.
-  void store_segment(cppa::cow_tuple<segment> t);
+  /// @param t The tuple containing the segment.
+  void store_segment(cppa::any_tuple t);
 
   /// Loads a segment into memory after a cache miss.
   /// @param uuid The ID which could not be found in the cache.
@@ -40,7 +45,6 @@ private:
   lru_cache cache_;
   path const dir_;
   std::unordered_map<uuid, path> segment_files_;
-  cppa::behavior init_state;
 };
 
 } // namespace vast

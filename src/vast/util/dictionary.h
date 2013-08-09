@@ -21,20 +21,23 @@ public:
   /// @return The ID of *str*.
   Codomain const* operator[](string_type const& str) const
   {
-      return locate(str);
+    return locate(str);
   }
 
   /// Retrieves the string corresponding to a given ID.
   /// @param id The ID to lookup.
-  /// @return str The string having ID *id*.
+  /// @return The string having ID *id*.
   string_type const* operator[](Codomain id) const
   {
-      return extract(id);
+    return extract(id);
   }
 
   /// Inserts a string into the dictionary.
+  ///
   /// @param str The string mapping to *id*.
-  /// @return `true` if the insertion succeeded.
+  ///
+  /// @return A pointer to the inserted value that *str* maps to or `nullptr`
+  /// on failure.
   virtual Codomain const* insert(string_type const& str) = 0;
 
 protected:

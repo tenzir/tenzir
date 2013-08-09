@@ -16,6 +16,14 @@ public:
   /// Constructs an empty event.
   event() = default;
 
+  /// Constructs an event with a list of zero or more arguments.
+  /// @param values The list of values.
+  event(std::vector<value> values);
+
+  /// Constructs an event with a list of zero or more arguments.
+  /// @param args The initializer list with values.
+  event(std::initializer_list<value> args);
+
   /// Copy constructor.
   /// @param other The event to copy.
   event(event const& other);
@@ -23,10 +31,6 @@ public:
   /// Move constructor.
   /// @param other The event to move.
   event(event&& other);
-
-  /// Constructs an event with a list of zero or more arguments.
-  /// @param args The event argument list.
-  event(std::initializer_list<value> args);
 
   /// Assignment operator.
   event& operator=(event other);

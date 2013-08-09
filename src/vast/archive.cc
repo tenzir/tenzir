@@ -6,25 +6,41 @@
 #include "vast/segment.h"
 #include "vast/segment_manager.h"
 
+using namespace cppa;
+
 namespace vast {
 
 archive::archive(std::string const& directory, size_t max_segments)
+  : directory_(directory)
 {
   VAST_LOG_VERBOSE("spawning archive @" << id());
-  using namespace cppa;
-  init_state = (
-      on(atom("load")) >> [=]
+  segment_manager_ = spawn<segment_manager>(max_segments, directory_);
+}
+
+void archive::init()
+{
+  become(
+      on(atom("init")) >> [=]
       {
-        path p(directory);
+        path p(directory_);
         if (! exists(p))
         {
-          VAST_LOG_INFO("archive @" << id() << " creates new directory " << directory);
+          VAST_LOG_INFO("archive @" << id() <<
+                        " creates new directory " << directory_);
+
           if (! mkdir(p))
+          {
             VAST_LOG_ERROR("archive @" << id() <<
-                           " failed to create directory " << directory);
+                           " failed to create directory " << directory_);
+            quit();
+          }
         }
-        segment_manager_ = spawn<segment_manager>(max_segments, directory);
-        forward_to(segment_manager_);
+        segment_manager_ << last_dequeued();
+      },
+      on(atom("kill")) >> [=]()
+      {
+        segment_manager_ << last_dequeued();
+        quit();
       },
       on(atom("get"), atom("ids")) >> [=]
       {
@@ -37,16 +53,13 @@ archive::archive(std::string const& directory, size_t max_segments)
       on(arg_match) >> [=](segment const& /* s */)
       {
         forward_to(segment_manager_);
-      },
-      on(atom("kill")) >> [=]()
-      {
-        // TODO: wait for a signal from the ingestor that all segments have
-        // been shipped.
-        segment_manager_ << last_dequeued();
-
-        quit();
-        VAST_LOG_VERBOSE("archive @" << id() << " terminated");
       });
 }
+
+void archive::on_exit()
+{
+  VAST_LOG_VERBOSE("archive @" << id() << " terminated");
+}
+
 
 } // namespace vast

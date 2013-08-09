@@ -14,6 +14,11 @@ void asynchronous::init()
   VAST_LOG_VERBOSE("spawning sink @" << id());
   self->trap_exit(true);
   become(
+      on(atom("kill")) >> [=]
+      {
+        before_exit();
+        quit();
+      },
       on(atom("EXIT"), arg_match) >> [=](uint32_t /* reason */)
       {
         send(self, atom("kill"));
@@ -29,11 +34,6 @@ void asynchronous::init()
         VAST_LOG_DEBUG("sink @" << id() << " got " << v.size() << " events");
         process(v);
         total_events_ += v.size();
-      },
-      on(atom("kill")) >> [=]
-      {
-        before_exit();
-        quit();
       },
       others() >> [=]
       {
