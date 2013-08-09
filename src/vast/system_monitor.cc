@@ -57,10 +57,10 @@ void system_monitor::init()
               send(upstream_, atom("system"), atom("signal"), i);
         }
 
-        if (util::console::get(c, 0))
+        if (util::console::get(c, 100))
           send(upstream_, atom("system"), atom("key"), c);
 
-        delayed_send(self, std::chrono::milliseconds(100), last_dequeued());
+        self << last_dequeued();
       },
       on(atom("kill")) >> [=]
       {
