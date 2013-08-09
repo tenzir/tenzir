@@ -44,7 +44,7 @@ public:
     /// @param chk The chunk to use.
     void reset(chunk* chk = nullptr)
     {
-      VAST_ENTER(VAST_ARG(chk));
+      VAST_ENTER();
       auto processed = bytes();
 
       sink_.reset();
@@ -66,7 +66,7 @@ public:
 
       chunk_ = chk;
       base_stream_ = make_unique<output_stream_type>(chunk_->buffer_);
-      compressed_stream_.reset(io::compressed_output_stream::create(
+      compressed_stream_.reset(io::make_compressed_output_stream(
           chunk_->compression_, *base_stream_));
       sink_ = make_unique<binary_serializer>(*compressed_stream_);
     }
@@ -140,7 +140,7 @@ public:
       base_stream_ = make_unique<io::array_input_stream>(
           chunk_->buffer_.data(),
           chunk_->buffer_.size());
-      compressed_stream_.reset(io::compressed_input_stream::create(
+      compressed_stream_.reset(io::make_compressed_input_stream(
           chunk_->compression_,
           *base_stream_));
       source_ = make_unique<binary_deserializer>(*compressed_stream_);

@@ -11,197 +11,6 @@
 
 namespace vast {
 namespace io {
-namespace {
-
-class null_input_stream : public compressed_input_stream
-{
-public:
-  null_input_stream(input_stream& source)
-    : compressed_input_stream(source)
-  {
-  }
-
-  virtual size_t uncompress(void const* source, size_t size) override
-  {
-    VAST_ENTER(VAST_ARG(source, size));
-    assert(uncompressed_.size() >= size);
-    std::memcpy(uncompressed_.data(), source, size);
-    VAST_RETURN(size);
-  }
-};
-
-class null_output_stream : public compressed_output_stream
-{
-public:
-  null_output_stream(output_stream& sink, size_t block_size = 0)
-    : compressed_output_stream(sink, block_size)
-  {
-  }
-
-  virtual ~null_output_stream()
-  {
-    flush();
-  }
-
-  virtual size_t compressed_size(size_t output) const override
-  {
-    VAST_ENTER(VAST_ARG(output));
-    VAST_RETURN(output);
-  }
-
-  virtual size_t compress(void* sink, size_t sink_size) override
-  {
-    VAST_ENTER(VAST_ARG(sink, sink_size));
-    assert(sink_size >= valid_bytes_);
-    std::memcpy(sink, uncompressed_.data(), valid_bytes_);
-    VAST_RETURN(valid_bytes_);
-  }
-};
-
-
-class lz4_input_stream : public compressed_input_stream
-{
-public:
-  lz4_input_stream(input_stream& source)
-    : compressed_input_stream(source)
-  {
-  }
-
-  virtual size_t uncompress(void const* source, size_t size) override
-  {
-    VAST_ENTER(VAST_ARG(source, size));
-    // LZ4 does not offer functionality to estimate the output size. It operates
-    // on at most 64KB blocks, so we need to ensure this maximum.
-    assert(uncompressed_.size() >= 64 << 10);
-    auto n = LZ4_uncompress_unknownOutputSize(
-        reinterpret_cast<char const*>(source),
-        reinterpret_cast<char*>(uncompressed_.data()),
-        static_cast<int>(size),
-        static_cast<int>(uncompressed_.size()));
-    assert(n > 0);
-    VAST_RETURN(n);
-  }
-};
-
-/// A compressed output stream based on LZ4.
-class lz4_output_stream : public compressed_output_stream
-{
-public:
-  lz4_output_stream(output_stream& sink)
-    : compressed_output_stream(sink)
-  {
-  }
-
-  virtual ~lz4_output_stream()
-  {
-    flush();
-  }
-
-  virtual size_t compressed_size(size_t output) const override
-  {
-    VAST_ENTER(VAST_ARG(output));
-    auto result = LZ4_compressBound(output);
-    VAST_RETURN(result);
-  }
-
-  virtual size_t compress(void* sink, size_t sink_size) override
-  {
-    VAST_ENTER(VAST_ARG(sink, sink_size));
-    assert(sink_size >= valid_bytes_);
-    auto n = LZ4_compress_limitedOutput(
-        reinterpret_cast<char const*>(uncompressed_.data()),
-        reinterpret_cast<char*>(sink),
-        static_cast<int>(valid_bytes_),
-        static_cast<int>(sink_size));
-    assert(n > 0);
-    VAST_RETURN(n);
-  }
-};
-
-#ifdef VAST_HAVE_SNAPPY
-/// A compressed input stream based on Snappy.
-class snappy_input_stream : public compressed_input_stream
-{
-public:
-  snappy_input_stream(input_stream& source)
-    : compressed_input_stream(source)
-  {
-  }
-
-  virtual size_t uncompress(void const* source, size_t size) override
-  {
-    VAST_ENTER(VAST_ARG(source, size));
-    size_t n;
-    auto success = ::snappy::GetUncompressedLength(
-        reinterpret_cast<char const*>(source), size, &n);
-    assert(success);
-    if (uncompressed_.size() < size)
-      uncompressed_.resize(64 << 10);
-    success = ::snappy::RawUncompress(
-        reinterpret_cast<char const*>(source),
-        size,
-        reinterpret_cast<char*>(uncompressed_.data()));
-    assert(success);
-    VAST_RETURN(n);
-  }
-};
-
-/// A compressed output stream based on Snappy.
-class snappy_output_stream : public compressed_output_stream
-{
-public:
-  snappy_output_stream(output_stream& sink)
-    : compressed_output_stream(sink)
-  {
-  }
-
-  virtual ~snappy_output_stream()
-  {
-    flush();
-  }
-
-  virtual size_t compressed_size(size_t output) const override
-  {
-    VAST_ENTER(VAST_ARG(output));
-    auto result = ::snappy::MaxCompressedLength(output);
-    VAST_RETURN(result);
-  }
-
-  virtual size_t compress(void* sink, size_t sink_size) override
-  {
-    VAST_ENTER(VAST_ARG(sink, sink_size));
-    size_t n;
-    ::snappy::RawCompress(
-        reinterpret_cast<char const*>(uncompressed_.data()),
-        valid_bytes_,
-        reinterpret_cast<char*>(sink),
-        &n);
-    assert(n <= sink_size);
-    assert(n > 0);
-    VAST_RETURN(n);
-  }
-};
-#endif // VAST_HAVE_SNAPPY
-
-} // namespace <anonymous>
-
-compressed_input_stream*
-compressed_input_stream::create(compression method, input_stream& source)
-{
-  switch (method)
-  {
-    default:
-      throw error::io("invalid compression method");
-    case null:
-      return new null_input_stream(source);
-    case lz4:
-      return new lz4_input_stream(source);
-#ifdef VAST_HAVE_SNAPPY
-    case snappy:
-      return new snappy_input_stream(source);
-#endif // VAST_HAVE_SNAPPY
-  }
-}
 
 bool compressed_input_stream::next(void const** data, size_t* size)
 {
@@ -289,24 +98,24 @@ compressed_input_stream::compressed_input_stream(input_stream& source)
 {
 }
 
-
-compressed_output_stream*
-compressed_output_stream::create(compression method, output_stream& sink)
+compressed_input_stream* make_compressed_input_stream(
+    compression method, input_stream& source)
 {
   switch (method)
   {
     default:
       throw error::io("invalid compression method");
     case null:
-      return new null_output_stream(sink);
+      return new null_input_stream(source);
     case lz4:
-      return new lz4_output_stream(sink);
+      return new lz4_input_stream(source);
 #ifdef VAST_HAVE_SNAPPY
     case snappy:
-      return new snappy_output_stream(sink);
+      return new snappy_input_stream(source);
 #endif // VAST_HAVE_SNAPPY
   }
 }
+
 
 bool compressed_output_stream::flush()
 {
@@ -382,6 +191,169 @@ compressed_output_stream::compressed_output_stream(
     sink_(sink)
 {
 }
+
+compressed_output_stream* make_compressed_output_stream(
+    compression method, output_stream& sink)
+{
+  switch (method)
+  {
+    default:
+      throw error::io("invalid compression method");
+    case null:
+      return new null_output_stream(sink);
+    case lz4:
+      return new lz4_output_stream(sink);
+#ifdef VAST_HAVE_SNAPPY
+    case snappy:
+      return new snappy_output_stream(sink);
+#endif // VAST_HAVE_SNAPPY
+  }
+}
+
+
+null_input_stream::null_input_stream(input_stream& source)
+  : compressed_input_stream(source)
+{
+}
+
+size_t null_input_stream::uncompress(void const* source, size_t size)
+{
+  VAST_ENTER(VAST_ARG(source, size));
+  assert(uncompressed_.size() >= size);
+  std::memcpy(uncompressed_.data(), source, size);
+  VAST_RETURN(size);
+}
+
+null_output_stream::null_output_stream(output_stream& sink, size_t block_size)
+  : compressed_output_stream(sink, block_size)
+{
+}
+
+null_output_stream::~null_output_stream()
+{
+  flush();
+}
+
+size_t null_output_stream::compressed_size(size_t output) const
+{
+  VAST_ENTER(VAST_ARG(output));
+  VAST_RETURN(output);
+}
+
+size_t null_output_stream::compress(void* sink, size_t sink_size)
+{
+  VAST_ENTER(VAST_ARG(sink, sink_size));
+  assert(sink_size >= valid_bytes_);
+  std::memcpy(sink, uncompressed_.data(), valid_bytes_);
+  VAST_RETURN(valid_bytes_);
+}
+
+
+lz4_input_stream::lz4_input_stream(input_stream& source)
+  : compressed_input_stream(source)
+{
+}
+
+size_t lz4_input_stream::uncompress(void const* source, size_t size)
+{
+  VAST_ENTER(VAST_ARG(source, size));
+  // LZ4 does not offer functionality to estimate the output size. It operates
+  // on at most 64KB blocks, so we need to ensure this maximum.
+  assert(uncompressed_.size() >= 64 << 10);
+  auto n = LZ4_uncompress_unknownOutputSize(
+      reinterpret_cast<char const*>(source),
+      reinterpret_cast<char*>(uncompressed_.data()),
+      static_cast<int>(size),
+      static_cast<int>(uncompressed_.size()));
+  assert(n > 0);
+  VAST_RETURN(n);
+}
+
+lz4_output_stream::lz4_output_stream(output_stream& sink)
+  : compressed_output_stream(sink)
+{
+}
+
+lz4_output_stream::~lz4_output_stream()
+{
+  flush();
+}
+
+size_t lz4_output_stream::compressed_size(size_t output) const
+{
+  VAST_ENTER(VAST_ARG(output));
+  auto result = LZ4_compressBound(output);
+  VAST_RETURN(result);
+}
+
+size_t lz4_output_stream::compress(void* sink, size_t sink_size)
+{
+  VAST_ENTER(VAST_ARG(sink, sink_size));
+  assert(sink_size >= valid_bytes_);
+  auto n = LZ4_compress_limitedOutput(
+      reinterpret_cast<char const*>(uncompressed_.data()),
+      reinterpret_cast<char*>(sink),
+      static_cast<int>(valid_bytes_),
+      static_cast<int>(sink_size));
+  assert(n > 0);
+  VAST_RETURN(n);
+}
+
+
+#ifdef VAST_HAVE_SNAPPY
+snappy_input_stream::snappy_input_stream(input_stream& source)
+  : compressed_input_stream(source)
+{
+}
+
+size_t uncompress(void const* source, size_t size)
+{
+  VAST_ENTER(VAST_ARG(source, size));
+  size_t n;
+  auto success = ::snappy::GetUncompressedLength(
+      reinterpret_cast<char const*>(source), size, &n);
+  assert(success);
+  if (uncompressed_.size() < size)
+    uncompressed_.resize(64 << 10);
+  success = ::snappy::RawUncompress(
+      reinterpret_cast<char const*>(source),
+      size,
+      reinterpret_cast<char*>(uncompressed_.data()));
+  assert(success);
+  VAST_RETURN(n);
+}
+
+snappy_output_stream::snappy_output_stream(output_stream& sink)
+  : compressed_output_stream(sink)
+{
+}
+
+snappy_output_stream::~snappy_output_stream()
+{
+  flush();
+}
+
+size_t compressed_size(size_t output) const
+{
+  VAST_ENTER(VAST_ARG(output));
+  auto result = ::snappy::MaxCompressedLength(output);
+  VAST_RETURN(result);
+}
+
+size_t compress(void* sink, size_t sink_size)
+{
+  VAST_ENTER(VAST_ARG(sink, sink_size));
+  size_t n;
+  ::snappy::RawCompress(
+      reinterpret_cast<char const*>(uncompressed_.data()),
+      valid_bytes_,
+      reinterpret_cast<char*>(sink),
+      &n);
+  assert(n <= sink_size);
+  assert(n > 0);
+  VAST_RETURN(n);
+}
+#endif // VAST_HAVE_SNAPPY
 
 } // namespace io
 } // namespace vast

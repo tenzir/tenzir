@@ -21,13 +21,6 @@ static size_t const uncompressed_block_size = 64 << 10;
 class compressed_input_stream : public input_stream
 {
 public:
-  /// Constructs a concrete compressed_input_stream.
-  /// @param method The compression method.
-  /// @param source The input stream to compress.
-  /// @return A compressed_input_stream using *method*.
-  static compressed_input_stream* create(compression method,
-                                         input_stream& source);
-
   virtual bool next(void const** data, size_t* size) override;
   virtual void rewind(size_t bytes) override;
   virtual bool skip(size_t bytes) override;
@@ -54,18 +47,18 @@ private:
   coded_input_stream source_;
 };
 
+/// Factory function to create a ::compressed_input_stream for a given
+/// compression method.
+/// @param method The compression method to use.
+/// @param source The underlying stream to read from.
+compressed_input_stream* make_compressed_input_stream(
+    compression method, input_stream& source);
+
 /// An output stream that compresses data written to it.
 class compressed_output_stream : public output_stream
 {
 public:
-  /// Constructs a concrete compressed_output_stream.
-  /// @param method The compression method.
-  /// @param sink The output stream to compress.
-  /// @return A compressed_output_stream using *method*.
-  static compressed_output_stream* create(compression method,
-                                          output_stream& sink);
   bool flush();
-
   virtual bool next(void** data, size_t* size) override;
   virtual void rewind(size_t bytes) override;
   virtual uint64_t bytes() const override;
@@ -100,6 +93,71 @@ private:
   coded_output_stream sink_;
 };
 
+/// Factory function to create a ::compressed_output_stream for a given
+/// compression method.
+/// @param method The compression method to use.
+/// @param sink The underlying stream to write into.
+compressed_output_stream* make_compressed_output_stream(
+    compression method, output_stream& sink);
+
+
+/// A compressed input stream that uses null compression.
+class null_input_stream : public compressed_input_stream
+{
+public:
+  null_input_stream(input_stream& source);
+  virtual size_t uncompress(void const* source, size_t size) override;
+};
+
+/// A compressed output stream that uses null compression.
+class null_output_stream : public compressed_output_stream
+{
+public:
+  null_output_stream(output_stream& sink, size_t block_size = 0);
+
+  virtual ~null_output_stream();
+  virtual size_t compressed_size(size_t output) const override;
+  virtual size_t compress(void* sink, size_t sink_size) override;
+};
+
+
+/// A compressed input stream using LZ4.
+class lz4_input_stream : public compressed_input_stream
+{
+public:
+  lz4_input_stream(input_stream& source);
+  virtual size_t uncompress(void const* source, size_t size) override;
+};
+
+/// A compressed output stream using LZ4.
+class lz4_output_stream : public compressed_output_stream
+{
+public:
+  lz4_output_stream(output_stream& sink);
+  virtual ~lz4_output_stream();
+  virtual size_t compressed_size(size_t output) const override;
+  virtual size_t compress(void* sink, size_t sink_size) override;
+};
+
+#ifdef VAST_HAVE_SNAPPY
+/// A compressed input stream using Snappy.
+class snappy_input_stream : public compressed_input_stream
+{
+public:
+  snappy_input_stream(input_stream& source);
+  virtual size_t uncompress(void const* source, size_t size) override;
+};
+
+/// A compressed output stream using Snappy.
+class snappy_output_stream : public compressed_output_stream
+{
+public:
+  snappy_output_stream(output_stream& sink);
+  virtual ~snappy_output_stream();
+  virtual size_t compressed_size(size_t output) const override;
+  virtual size_t compress(void* sink, size_t sink_size) override;
+};
+#endif // VAST_HAVE_SNAPPY
 
 } // namespace io
 } // namespace vast

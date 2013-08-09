@@ -108,7 +108,7 @@ BOOST_AUTO_TEST_CASE(io_serialization_interface)
     {
       auto out = io::make_container_output_stream(tmp);
       std::unique_ptr<io::compressed_output_stream> comp_out(
-          io::compressed_output_stream::create(method, out));
+          io::make_compressed_output_stream(method, out));
       binary_serializer sink(*comp_out);
       sink << input;
       sink << serializable();
@@ -117,7 +117,7 @@ BOOST_AUTO_TEST_CASE(io_serialization_interface)
     std::vector<int> output;
     auto in = io::make_array_input_stream(tmp);
     std::unique_ptr<io::compressed_input_stream> comp_in(
-        io::compressed_input_stream::create(method, in));
+        io::make_compressed_input_stream(method, in));
     binary_deserializer source(*comp_in);
     source >> output;
     BOOST_REQUIRE_EQUAL(input.size(), output.size());
