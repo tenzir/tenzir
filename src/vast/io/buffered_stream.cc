@@ -5,6 +5,23 @@
 namespace vast {
 namespace io {
 
+bool input_streambuffer::skip(size_t bytes, size_t* skipped)
+{
+  char buf[4096];
+  size_t got = 0;
+  if (skipped)
+    *skipped = 0;
+  while (*skipped < bytes)
+  {
+    auto n = std::min(bytes - *skipped, sizeof(buf));
+    if (! read(buf, n, skipped ? &got : nullptr))
+      return false;
+    if (skipped)
+      *skipped += got;
+  }
+  return true;
+}
+
 buffered_input_stream::buffered_input_stream(
     input_streambuffer& isb, size_t block_size)
   : buffer_(block_size > 0 ? block_size : default_block_size)

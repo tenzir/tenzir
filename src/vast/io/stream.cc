@@ -6,23 +6,6 @@
 namespace vast {
 namespace io {
 
-bool input_streambuffer::skip(size_t bytes, size_t* skipped)
-{
-  char buf[4096];
-  size_t got = 0;
-  if (skipped)
-    *skipped = 0;
-  while (*skipped < bytes)
-  {
-    auto n = std::min(bytes - *skipped, sizeof(buf));
-    if (! read(buf, n, skipped ? &got : nullptr))
-      return false;
-    if (skipped)
-      *skipped += got;
-  }
-  return true;
-}
-
 std::pair<size_t, size_t> copy(input_stream& source, output_stream& sink)
 {
   auto in_bytes = source.bytes();
