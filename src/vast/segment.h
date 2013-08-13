@@ -3,8 +3,8 @@
 
 #include <vector>
 #include <string>
-#include <cppa/cow_tuple.hpp>
 #include "vast/chunk.h"
+#include "vast/cow.h"
 #include "vast/time.h"
 #include "vast/option.h"
 #include "vast/uuid.h"
@@ -19,8 +19,6 @@ class event;
 class segment : util::equality_comparable<segment>
 {
 public:
-  typedef cppa::cow_tuple<chunk> chunk_tuple;
-
   /// A proxy class for writing into a segment. Each writer maintains a local
   /// chunk that receives events to serialize. Upon flushing, the writer
   /// appends the chunk to the underlying segment.
@@ -132,7 +130,7 @@ public:
   /// number of chunks in `s` obtainable via segment::size().
   ///
   /// @pre `! chunks_.empty() && i < chunks_.size()`
-  chunk_tuple operator[](size_t i) const;
+  cow<chunk> const& operator[](size_t i) const;
 
   /// Retrieves the number of events in the segment.
   uint32_t events() const;
@@ -166,7 +164,7 @@ private:
   uint32_t n_ = 0;
   uint32_t processed_bytes_ = 0;
   uint32_t occupied_bytes_ = 0;
-  std::vector<chunk_tuple> chunks_;
+  std::vector<cow<chunk>> chunks_;
 };
 
 } // namespace vast

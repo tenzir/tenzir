@@ -46,7 +46,7 @@ void segment_manager::init()
       },
       on_arg_match >> [=](segment const& s)
       {
-        store_segment(last_dequeued());
+        store(*tuple_cast<segment>(last_dequeued()));
         reply(atom("segment"), atom("ack"), s.id());
       },
       on(atom("get"), atom("ids")) >> [=]
@@ -73,11 +73,9 @@ void segment_manager::on_exit()
   VAST_LOG_VERBOSE("segment manager @" << id() << " terminated");
 }
 
-void segment_manager::store_segment(cppa::any_tuple t)
+void segment_manager::store(cow<segment> const& cs)
 {
-  auto opt = tuple_cast<segment>(t);
-  assert(opt.valid());
-  auto& s = cppa::get<0>(*opt);
+  auto& s = cget(cs);
   assert(segment_files_.find(s.id()) == segment_files_.end());
   auto filename = dir_ / path(to_string(s.id()));
   segment_files_.emplace(s.id(), filename);
@@ -89,12 +87,12 @@ void segment_manager::store_segment(cppa::any_tuple t)
     sink << s;
   }
 
-  cache_.insert(s.id(), *opt);
+  cache_.insert(s.id(), cs);
   VAST_LOG_VERBOSE("segment manager @" << id() <<
                    " wrote segment to " << filename);
 }
 
-cppa::cow_tuple<segment> segment_manager::on_miss(uuid const& uid)
+cow<segment> segment_manager::on_miss(uuid const& uid)
 {
   assert(segment_files_.find(uid) != segment_files_.end());
   VAST_LOG_DEBUG("segment manager @" << id() <<

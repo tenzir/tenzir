@@ -48,6 +48,15 @@ using is_pointer_type = std::integral_constant<
     is_intrusive_ptr<T>::value
 >;
 
+template <typename A, typename B>
+using disable_if_same_or_derived = typename std::enable_if<
+  ! std::is_base_of<
+    A,
+    typename std::remove_reference<B>::type
+  >::value
+>::type;
+
+
 // Integral bool
 template <bool B, typename...>
 using Bool = typename std::integral_constant<bool, B>::type;

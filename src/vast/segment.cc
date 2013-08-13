@@ -90,8 +90,7 @@ segment::reader::reader(segment const* s)
   : segment_(s)
 {
   if (! segment_->chunks_.empty())
-    reader_ = make_unique<chunk::reader>(
-        cppa::get<0>(segment_->chunks_[next_++]));
+    reader_ = make_unique<chunk::reader>(cget(segment_->chunks_[next_++]));
 }
 
 bool segment::reader::read(event& e)
@@ -105,7 +104,7 @@ bool segment::reader::read(event& e)
       return false;
 
     processed_bytes_ += reader_->bytes();
-    auto& next_chunk = cppa::get<0>(segment_->chunks_[next_++]);
+    auto& next_chunk = cget(segment_->chunks_[next_++]);
     reader_ = make_unique<chunk::reader>(next_chunk);
     return read(e);
   }
@@ -130,7 +129,7 @@ segment::segment(uuid id, io::compression method)
 {
 }
 
-segment::chunk_tuple segment::operator[](size_t i) const
+cow<chunk> const& segment::operator[](size_t i) const
 {
   assert(! chunks_.empty());
   assert(i < chunks_.size());
@@ -172,11 +171,7 @@ void segment::serialize(serializer& sink) const
   sink << n_;
   sink << processed_bytes_;
   sink << occupied_bytes_;
-
-  sink.begin_sequence(chunks_.size());
-  for (auto& tuple : chunks_)
-    sink << cppa::get<0>(tuple);
-  sink.end_sequence();
+  sink << chunks_;
 }
 
 void segment::deserialize(deserializer& source)
@@ -197,17 +192,7 @@ void segment::deserialize(deserializer& source)
   source >> n_;
   source >> processed_bytes_;
   source >> occupied_bytes_;
-
-  uint64_t n;
-  source.begin_sequence(n);
-  chunks_.resize(n);
-  for (auto& tuple : chunks_)
-  {
-    chunk chk;
-    source >> chk;
-    tuple = std::move(cppa::make_cow_tuple(std::move(chk)));
-  }
-  source.end_sequence();
+  source >> chunks_;
 }
 
 bool operator==(segment const& x, segment const& y)

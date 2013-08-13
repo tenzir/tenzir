@@ -35,7 +35,8 @@ void segmentizer::process(event const& e)
     return;
   }
 
-  VAST_LOG_DEBUG("segmentizer @" << id() << " sends segment with " <<
+  VAST_LOG_DEBUG("segmentizer @" << id() <<
+                 " sends segment " << segment_.id() << " with " <<
                  segment_.events() << " events to @" << upstream_->id());
 
   send(upstream_, std::move(segment_));
@@ -52,14 +53,14 @@ void segmentizer::before_exit()
     if (! writer_.flush())
       VAST_LOG_ERROR("segmentizer @" << id() <<
                      " failed to flush a fresh segment");
-
     assert(segment_.events() > 0);
-
-    VAST_LOG_DEBUG("segmentizer @" << id() << " sends final segment with " <<
-                   segment_.events() << " events to @" << upstream_->id());
-
-    send(upstream_, std::move(segment_));
   }
+
+  VAST_LOG_DEBUG("segmentizer @" << id() <<
+                 " sends final segment " << segment_.id() << " with " <<
+                 segment_.events() << " events to @" << upstream_->id());
+
+  send(upstream_, std::move(segment_));
 }
 
 } // namespace sink

@@ -1,7 +1,7 @@
 #ifndef VAST_IO_CONTAINER_STREAM_H
 #define VAST_IO_CONTAINER_STREAM_H
 
-#include "vast/io/stream.h"
+#include "vast/io/array_stream.h"
 
 namespace vast {
 namespace io {
@@ -72,6 +72,14 @@ inline container_output_stream<Container>
 make_container_output_stream(Container& container)
 {
   return container_output_stream<Container>(container);
+}
+
+/// @relates make_array_input_stream
+template <typename Container>
+inline array_input_stream
+make_container_input_stream(Container const& container, size_t block_size = 0)
+{
+  return make_array_input_stream(container, block_size);
 }
 
 } // namespace io
