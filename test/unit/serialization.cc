@@ -1,11 +1,11 @@
 #include "test.h"
 #include "event_fixture.h"
 
-#include "vast/chunk.h"
 #include "vast/object.h"
 #include "vast/serialization.h"
 #include "vast/io/array_stream.h"
 #include "vast/io/container_stream.h"
+#include "vast/io/compressed_stream.h"
 
 using namespace vast;
 
@@ -25,7 +25,6 @@ BOOST_AUTO_TEST_CASE(byte_swapping)
   auto y16 = byte_swap<little_endian, big_endian>(x16);
   auto y32 = byte_swap<little_endian, big_endian>(x32);
   auto y64 = byte_swap<little_endian, big_endian>(x64);
-
   BOOST_CHECK_EQUAL(y08, 0x11);
   BOOST_CHECK_EQUAL(y16, 0x2211);
   BOOST_CHECK_EQUAL(y32, 0x44332211);
@@ -35,7 +34,6 @@ BOOST_AUTO_TEST_CASE(byte_swapping)
   y16 = byte_swap<big_endian, little_endian>(y16);
   y32 = byte_swap<big_endian, little_endian>(y32);
   y64 = byte_swap<big_endian, little_endian>(y64);
-
   BOOST_CHECK_EQUAL(y08, x08);
   BOOST_CHECK_EQUAL(y16, x16);
   BOOST_CHECK_EQUAL(y32, x32);
@@ -46,7 +44,6 @@ BOOST_AUTO_TEST_CASE(byte_swapping)
   y16 = byte_swap<big_endian, big_endian>(y16);
   y32 = byte_swap<big_endian, big_endian>(y32);
   y64 = byte_swap<big_endian, big_endian>(y64);
-
   BOOST_CHECK_EQUAL(y08, x08);
   BOOST_CHECK_EQUAL(y16, x16);
   BOOST_CHECK_EQUAL(y32, x32);
@@ -57,7 +54,6 @@ BOOST_AUTO_TEST_CASE(byte_swapping)
   y16 = byte_swap<little_endian, little_endian>(y16);
   y32 = byte_swap<little_endian, little_endian>(y32);
   y64 = byte_swap<little_endian, little_endian>(y64);
-
   BOOST_CHECK_EQUAL(y08, x08);
   BOOST_CHECK_EQUAL(y16, x16);
   BOOST_CHECK_EQUAL(y32, x32);
@@ -128,32 +124,6 @@ BOOST_AUTO_TEST_CASE(io_serialization_interface)
     source >> x;
     BOOST_CHECK_EQUAL(x.i(), 42);
   }
-}
-
-BOOST_AUTO_TEST_CASE(chunk_serialization)
-{
-  chunk<event> chk;
-  {
-    auto putter = std::move(chunk<event>::putter(&chk)); // test = and move.
-    for (size_t i = 0; i < 1e3; ++i)
-      putter << events[i % events.size()];
-    BOOST_CHECK(chk.size() == 1e3);
-  }
-
-  auto getter = std::move(chunk<event>::getter(&chk)); // test = and move.
-  for (size_t i = 0; i < 1e3; ++i)
-  {
-    event deserialized;
-    getter >> deserialized;
-    BOOST_CHECK(deserialized == events[i % events.size()]);
-  }
-
-  size_t n = 0;
-  auto h = chunk<event>::getter(&chk);
-  h.get([&](event e) { BOOST_CHECK(e == events[n++ % events.size()]); });
-
-  auto copy(chk);
-  BOOST_CHECK(chk == copy);
 }
 
 BOOST_AUTO_TEST_CASE(object_serialization)

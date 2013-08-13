@@ -22,10 +22,10 @@ void cppa_announce_types()
 {
   cppa_announce<uuid>();
   cppa_announce<event>();
-  cppa_announce<chunk<event>>();
+  cppa_announce<chunk>();
+  cppa_announce<segment>();
 
   cppa_announce<expression>();
-  cppa_announce<segment>();
   cppa_announce<schema>();
 
   cppa_announce<std::vector<uuid>>();

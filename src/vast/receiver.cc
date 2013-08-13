@@ -40,7 +40,7 @@ void receiver::init()
                          "(got " << n << ", needed " << s.events());
           quit();
         }
-        s.header().base = from;
+        s.base(from);
         auto t = make_any_tuple(std::move(s));
         archive_ << t;
         index_ << t;

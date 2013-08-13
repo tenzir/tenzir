@@ -14,190 +14,120 @@ namespace vast {
 uint32_t const segment::magic;
 uint8_t const segment::version;
 
-segment_header::segment_header()
-{
-  start = now();
-  end = start;
-}
-
-bool operator==(segment_header const& x, segment_header const& y)
-{
-  return x.id == y.id
-      && x.base == y.base
-      && x.compression == y.compression
-      && x.start == y.start
-      && x.end == y.end
-      && x.n == y.n;
-}
-
-void segment_header::serialize(serializer& sink) const
-{
-  sink << segment::magic;
-  sink << segment::version;
-  sink << id;
-  sink << compression;
-  sink << start;
-  sink << end;
-  sink << base;
-  sink << n;
-}
-
-void segment_header::deserialize(deserializer& source)
-{
-  uint32_t magic;
-  source >> magic;
-  if (magic != segment::magic)
-    throw error::segment("invalid segment magic");
-
-  uint8_t version;
-  source >> version;
-  if (version > segment::version)
-    throw error::segment("segment version too high");
-
-  source >> id;
-  source >> compression;
-  source >> start;
-  source >> end;
-  source >> base;
-  source >> n;
-}
-
-segment::writer::writer(segment* s)
+segment::writer::writer(segment* s,
+                        size_t max_events_per_chunk,
+                        size_t max_segment_size)
   : segment_(s),
-    putter_(&chunk_),
-    start_(now()),
-    end_(start_)
+    chunk_(make_unique<chunk>(segment_->compression_)),
+    writer_(make_unique<chunk::writer>(*chunk_)),
+    max_events_per_chunk_(max_events_per_chunk),
+    max_segment_size_(max_segment_size)
 {
+  assert(s != nullptr);
 }
 
-void segment::writer::operator<<(event const& e)
+segment::writer::~writer()
 {
-  VAST_ENTER(VAST_ARG(e));
-  if (e.timestamp() < start_)
-    start_ = e.timestamp();
-  if (e.timestamp() > end_)
-    end_ = e.timestamp();
-  ++n_;
-  putter_ << e;
+  if (! flush())
+    VAST_LOG_WARN("segment writer discarded " << chunk_->size() << " events");
+}
+
+bool segment::writer::write(event const& e)
+{
+  if (! (writer_ && writer_->write(e)))
+    return false;
+
+  if (max_events_per_chunk_ > 0 && chunk_->size() % max_events_per_chunk_ == 0)
+    flush();
+
+  return true;
+}
+
+void segment::writer::attach_to(segment* s)
+{
+  assert(s != nullptr);
+  segment_ = s;
 }
 
 bool segment::writer::flush()
 {
-  VAST_ENTER();
-  processed_bytes_ += putter_.bytes();
-  putter_.reset(); // Flushes and releases reference to chunk_.
-  auto not_empty = ! chunk_.empty();
-  if (not_empty)
-  {
-    auto& hdr = segment_->header_;
-    if (start_ < hdr.start)
-      hdr.start = start_;
-    if (end_ > hdr.end)
-      hdr.end = end_;
-    hdr.n += n_;
+  if (chunk_->empty())
+    return true;
 
-    segment_->chunks_.emplace_back(std::move(chunk_));
-    chunk_bytes_ += chunk_.bytes();
+  if (writer_)
+    processed_bytes_ = writer_->bytes();
 
-    chunk_ = chunk_type();
-    start_ = now();
-    end_ = start_;
-    n_ = 0;
-  }
-  putter_.reset(&chunk_);
-  return not_empty;
+  writer_.reset();
+
+  if (full())
+    return false;
+
+  segment_->occupied_bytes_ += chunk_->bytes();
+  segment_->processed_bytes_ += processed_bytes_;
+  segment_->n_ += chunk_->size();
+  segment_->chunks_.emplace_back(std::move(*chunk_));
+
+  chunk_ = make_unique<chunk>(segment_->compression_);
+  writer_ = make_unique<chunk::writer>(*chunk_);
+  processed_bytes_ = 0;
+
+  return true;
 }
 
-size_t segment::writer::elements() const
+bool segment::writer::full() const
 {
-  return chunk_.size();
+  return max_segment_size_ > 0
+      && segment_->occupied_bytes_ + chunk_->bytes() > max_segment_size_;
 }
 
-size_t segment::writer::processed_bytes() const
+size_t segment::writer::bytes() const
 {
-  return processed_bytes_ + putter_.bytes();
-}
-
-size_t segment::writer::chunk_bytes() const
-{
-  return chunk_bytes_;
+  return writer_ ? writer_->bytes() : processed_bytes_;
 }
 
 
 segment::reader::reader(segment const* s)
-  : segment_(s),
-    chunk_(segment_->chunks_.begin())
+  : segment_(s)
 {
-  if (segment_->chunks_.empty())
-    return;
-
-  getter_.reset(&cppa::get<0>(segment_->chunks_.at(0)));
-  ++chunk_;
+  if (! segment_->chunks_.empty())
+    reader_ = make_unique<chunk::reader>(
+        cppa::get<0>(segment_->chunks_[next_++]));
 }
 
-segment::reader::operator bool () const
+bool segment::reader::read(event& e)
 {
-  return available_events() > 0 || available_chunks() > 0;
-}
+  if (! reader_)
+    return false;
 
-void segment::reader::operator>>(event& e)
-{
-  VAST_ENTER();
-  VAST_MSG("available events: " << available_events());
-  if (available_events() == 0)
+  if (reader_->size() == 0)
   {
-    if (chunk_ == segment_->chunks_.end())
-      throw error::segment("no more events available");
+    if (next_ == segment_->chunks_.size()) // no more events available
+      return false;
 
-    processed_bytes_ += getter_.bytes();
-    chunk_bytes_ += cppa::get<0>(*chunk_).bytes();
-    getter_.reset(&cppa::get<0>(*chunk_++));
+    processed_bytes_ += reader_->bytes();
+    auto& next_chunk = cppa::get<0>(segment_->chunks_[next_++]);
+    reader_ = make_unique<chunk::reader>(next_chunk);
+    return read(e);
   }
 
-  getter_ >> e;
-  VAST_LEAVE("got event: " << e);
+  reader_->read(e);
+  return true;
 }
 
-uint32_t segment::reader::available_events() const
+bool segment::reader::empty() const
 {
-  return getter_.available();
+  return reader_ ? reader_->size() == 0 : true;
 }
 
-size_t segment::reader::available_chunks() const
+size_t segment::reader::bytes() const
 {
-  return std::distance(chunk_, segment_->chunks_.end());
+  return processed_bytes_ + (reader_ ? reader_->bytes() : 0);
 }
-
-size_t segment::reader::processed_bytes() const
-{
-  return processed_bytes_ + getter_.bytes();
-}
-
-size_t segment::reader::chunk_bytes() const
-{
-  return chunk_bytes_;
-}
-
 
 segment::segment(uuid id, io::compression method)
+  : id_(id),
+    compression_(method)
 {
-  header_.id = std::move(id);
-  header_.compression = method;
-}
-
-segment::segment(segment const& other)
-  : header_(other.header_),
-    chunks_(other.chunks_)
-{
-  VAST_LOG_WARN("copied a segment!");
-}
-
-segment& segment::operator=(segment other)
-{
-  using std::swap;
-  swap(header_, other.header_);
-  swap(chunks_, other.chunks_);
-  return *this;
 }
 
 segment::chunk_tuple segment::operator[](size_t i) const
@@ -207,19 +137,9 @@ segment::chunk_tuple segment::operator[](size_t i) const
   return chunks_[i];
 }
 
-segment_header& segment::header()
-{
-  return header_;
-}
-
-segment_header const& segment::header() const
-{
-  return header_;
-}
-
 uint32_t segment::events() const
 {
-  return header_.n;
+  return n_;
 }
 
 size_t segment::size() const
@@ -229,12 +149,30 @@ size_t segment::size() const
 
 uuid const& segment::id() const
 {
-  return header_.id;
+  return id_;
+}
+
+void segment::base(uint64_t id)
+{
+  base_ = id;
+}
+
+uint64_t segment::base() const
+{
+  return base_;
 }
 
 void segment::serialize(serializer& sink) const
 {
-  sink << header_;
+  sink << magic;
+  sink << version;
+  sink << id_;
+  sink << compression_;
+  sink << base_;
+  sink << n_;
+  sink << processed_bytes_;
+  sink << occupied_bytes_;
+
   sink.begin_sequence(chunks_.size());
   for (auto& tuple : chunks_)
     sink << cppa::get<0>(tuple);
@@ -243,13 +181,29 @@ void segment::serialize(serializer& sink) const
 
 void segment::deserialize(deserializer& source)
 {
-  source >> header_;
+  uint32_t m;
+  source >> m;
+  if (m != magic)
+    throw error::segment("invalid segment magic");
+
+  uint8_t v;
+  source >> v;
+  if (v > segment::version)
+    throw error::segment("segment version too high");
+
+  source >> id_;
+  source >> compression_;
+  source >> base_;
+  source >> n_;
+  source >> processed_bytes_;
+  source >> occupied_bytes_;
+
   uint64_t n;
   source.begin_sequence(n);
   chunks_.resize(n);
   for (auto& tuple : chunks_)
   {
-    chunk_type chk;
+    chunk chk;
     source >> chk;
     tuple = std::move(cppa::make_cow_tuple(std::move(chk)));
   }
@@ -258,8 +212,7 @@ void segment::deserialize(deserializer& source)
 
 bool operator==(segment const& x, segment const& y)
 {
-  // TODO: maybe don't compare the full vector.
-  return x.header_ == y.header_ && x.chunks_ == y.chunks_;
+  return x.id_ == y.id_;
 }
 
 } // namespace vast

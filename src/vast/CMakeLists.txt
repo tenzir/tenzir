@@ -5,6 +5,7 @@ set(libvast_sources
   archive.cc
   bitvector.cc
   bitstream.cc
+  chunk.cc
   configuration.cc
   container.cc
   exception.cc

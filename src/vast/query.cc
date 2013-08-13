@@ -18,29 +18,30 @@ void query::window::add(cppa::cow_tuple<segment> s)
 {
   segments_.push_back(s);
   if (! reader_)
-    reader_.reset(new segment::reader(&get<0>(segments_.front())));
+  {
+    auto s = &get<0>(segments_.front());
+    reader_.reset(new segment::reader(s));
+  }
 }
 
 bool query::window::extract(event& e)
 {
-  if (! reader_)
+  if (reader_)
     return false;
 
-  *reader_ >> e;
-
-  if (reader_->available_events() == 0 && reader_->available_chunks() == 0)
+  if (reader_->read(e))
+    return true;
+  
+  reader_.reset();
+  assert(! segments_.empty());
+  segments_.pop_front();
+  if (! segments_.empty())
   {
-    reader_.reset();
-    segments_.pop_front();
-    if (! segments_.empty())
-    {
-      reader_.reset(new segment::reader(&get<0>(segments_.front())));
-      assert(reader_->available_events() > 0);
-      assert(reader_->available_chunks() > 0);
-    }
+    auto s = &get<0>(segments_.front());
+    reader_.reset(new segment::reader(s));
   }
 
-  return true;
+  return false;
 }
 
 
