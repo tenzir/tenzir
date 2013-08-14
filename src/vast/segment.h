@@ -18,6 +18,8 @@ class event;
 /// Contains a vector of chunks with additional meta data.
 class segment : util::equality_comparable<segment>
 {
+  friend bool operator==(segment const& x, segment const& y);
+
 public:
   /// A proxy class for writing into a segment. Each writer maintains a local
   /// chunk that receives events to serialize. Upon flushing, the writer
@@ -84,7 +86,6 @@ public:
     std::unique_ptr<chunk::writer> writer_;
     size_t max_events_per_chunk_;
     size_t max_segment_size_;
-    size_t processed_bytes_ = 0;
   };
 
   /// A proxy class for reading from a segment. Multiple readers can safely
@@ -105,15 +106,10 @@ public:
     /// @return `true` iff the reader is empty.
     bool empty() const;
 
-    /// Retrieves the total number of bytes processed across all chunks.
-    /// @return The number of bytes read so far.
-    size_t bytes() const;
-
   private:
     segment const* segment_;
     std::unique_ptr<chunk::reader> reader_;
     size_t next_ = 0;
-    size_t processed_bytes_ = 0;
   };
 
   static uint32_t const magic = 0x2a2a2a2a;
@@ -124,24 +120,14 @@ public:
   /// @param method The compression method to use for each chunk.
   segment(uuid id = uuid::nil(), io::compression method = io::lz4);
 
-  /// Retrieves a const-reference to a chunk tuple.
-  ///
-  /// @param i The chunk index, must be in *[0, n)* where *n* is the
-  /// number of chunks in `s` obtainable via segment::size().
-  ///
-  /// @pre `! chunks_.empty() && i < chunks_.size()`
-  cow<chunk> const& operator[](size_t i) const;
+  /// Retrieves the segment ID.
+  /// @return A UUID identifying the segment.
+  uuid const& id() const;
 
   /// Retrieves the number of events in the segment.
   uint32_t events() const;
 
-  /// Retrieves the number of chunks.
-  /// @return The number of chunks in the segment.
-  size_t size() const;
-
-  /// Retrieves the segment ID.
-  /// @return A UUID identifying the segment.
-  uuid const& id() const;
+  uint32_t bytes() const;
 
   /// Sets the segment base ID for events.
   /// @param id The base event ID for this segment.
@@ -152,18 +138,18 @@ public:
   uint64_t base() const;
 
 private:
-  friend bool operator==(segment const& x, segment const& y);
-
   friend access;
   void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
+
+  void append(chunk c);
 
   uuid id_;
   io::compression compression_;
   uint64_t base_ = 0;
   uint32_t n_ = 0;
-  uint32_t processed_bytes_ = 0;
   uint32_t occupied_bytes_ = 0;
+  std::vector<uint32_t> offsets_;
   std::vector<cow<chunk>> chunks_;
 };
 

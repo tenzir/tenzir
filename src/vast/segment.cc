@@ -14,6 +14,11 @@ namespace vast {
 uint32_t const segment::magic;
 uint8_t const segment::version;
 
+bool operator==(segment const& x, segment const& y)
+{
+  return x.id_ == y.id_;
+}
+
 segment::writer::writer(segment* s,
                         size_t max_events_per_chunk,
                         size_t max_segment_size)
@@ -54,22 +59,13 @@ bool segment::writer::flush()
   if (chunk_->empty())
     return true;
 
-  if (writer_)
-    processed_bytes_ = writer_->bytes();
-
   writer_.reset();
-
   if (full())
     return false;
 
-  segment_->occupied_bytes_ += chunk_->bytes();
-  segment_->processed_bytes_ += processed_bytes_;
-  segment_->n_ += chunk_->size();
-  segment_->chunks_.emplace_back(std::move(*chunk_));
-
+  segment_->append(std::move(*chunk_));
   chunk_ = make_unique<chunk>(segment_->compression_);
   writer_ = make_unique<chunk::writer>(*chunk_);
-  processed_bytes_ = 0;
 
   return true;
 }
@@ -77,12 +73,12 @@ bool segment::writer::flush()
 bool segment::writer::full() const
 {
   return max_segment_size_ > 0
-      && segment_->occupied_bytes_ + chunk_->bytes() > max_segment_size_;
+      && segment_->bytes() + chunk_->compressed_bytes() > max_segment_size_;
 }
 
 size_t segment::writer::bytes() const
 {
-  return writer_ ? writer_->bytes() : processed_bytes_;
+  return writer_ ? writer_->bytes() : chunk_->uncompressed_bytes();
 }
 
 
@@ -103,7 +99,6 @@ bool segment::reader::read(event& e)
     if (next_ == segment_->chunks_.size()) // no more events available
       return false;
 
-    processed_bytes_ += reader_->bytes();
     auto& next_chunk = cget(segment_->chunks_[next_++]);
     reader_ = make_unique<chunk::reader>(next_chunk);
     return read(e);
@@ -118,22 +113,15 @@ bool segment::reader::empty() const
   return reader_ ? reader_->size() == 0 : true;
 }
 
-size_t segment::reader::bytes() const
-{
-  return processed_bytes_ + (reader_ ? reader_->bytes() : 0);
-}
-
 segment::segment(uuid id, io::compression method)
   : id_(id),
     compression_(method)
 {
 }
 
-cow<chunk> const& segment::operator[](size_t i) const
+uuid const& segment::id() const
 {
-  assert(! chunks_.empty());
-  assert(i < chunks_.size());
-  return chunks_[i];
+  return id_;
 }
 
 uint32_t segment::events() const
@@ -141,14 +129,9 @@ uint32_t segment::events() const
   return n_;
 }
 
-size_t segment::size() const
+uint32_t segment::bytes() const
 {
-  return chunks_.size();
-}
-
-uuid const& segment::id() const
-{
-  return id_;
+  return occupied_bytes_;
 }
 
 void segment::base(uint64_t id)
@@ -169,7 +152,6 @@ void segment::serialize(serializer& sink) const
   sink << compression_;
   sink << base_;
   sink << n_;
-  sink << processed_bytes_;
   sink << occupied_bytes_;
   sink << chunks_;
 }
@@ -190,14 +172,15 @@ void segment::deserialize(deserializer& source)
   source >> compression_;
   source >> base_;
   source >> n_;
-  source >> processed_bytes_;
   source >> occupied_bytes_;
   source >> chunks_;
 }
 
-bool operator==(segment const& x, segment const& y)
+void segment::append(chunk c)
 {
-  return x.id_ == y.id_;
+  n_ += c.size();
+  occupied_bytes_ += c.compressed_bytes();
+  chunks_.emplace_back(std::move(c));
 }
 
 } // namespace vast

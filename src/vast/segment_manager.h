@@ -16,8 +16,6 @@ class segment;
 /// Manages the segments on disk an in-memory segments in a LRU fashion.
 class segment_manager : public cppa::event_based_actor
 {
-  typedef util::lru_cache<uuid, cow<segment>> lru_cache;
-
 public:
   /// Spawns the segment manager.
   ///
@@ -43,8 +41,8 @@ private:
   /// @return The loaded segment.
   cow<segment> on_miss(uuid const& id);
 
-  lru_cache cache_;
   path const dir_;
+  util::lru_cache<uuid, cow<segment>> cache_;
   std::unordered_map<uuid, path> segment_files_;
 };
 

@@ -11,8 +11,8 @@ using namespace cppa;
 namespace vast {
 
 segment_manager::segment_manager(size_t capacity, std::string const& dir)
-  : cache_(capacity, [&](uuid const& id) { return on_miss(id); }),
-    dir_(dir)
+  : dir_(dir),
+    cache_(capacity, [&](uuid const& id) { return on_miss(id); })
 {
   VAST_LOG_VERBOSE("spawning segment manager @" << id() <<
                    " with capacity " << capacity);

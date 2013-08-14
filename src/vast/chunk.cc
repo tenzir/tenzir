@@ -11,6 +11,11 @@ chunk::writer::writer(chunk& chk)
 {
 }
 
+chunk::writer::~writer()
+{
+  chunk_.bytes_ = serializer_.bytes();
+}
+
 size_t chunk::writer::bytes() const
 {
   return serializer_.bytes();
@@ -53,15 +58,21 @@ uint32_t chunk::size() const
   return elements_;
 }
 
-size_t chunk::bytes() const
+size_t chunk::compressed_bytes() const
 {
   return buffer_.size();
+}
+
+size_t chunk::uncompressed_bytes() const
+{
+  return bytes_;
 }
 
 void chunk::serialize(serializer& sink) const
 {
   sink << compression_;
   sink << elements_;
+  sink << bytes_;
   sink << buffer_;
 }
 
@@ -69,6 +80,7 @@ void chunk::deserialize(deserializer& source)
 {
   source >> compression_;
   source >> elements_;
+  source >> bytes_;
   source >> buffer_;
 }
 
@@ -76,6 +88,7 @@ bool operator==(chunk const& x, chunk const& y)
 {
   return x.compression_ == y.compression_
       && x.elements_ == y.elements_
+      && x.bytes_ == y.bytes_
       && x.buffer_ == y.buffer_;
 }
 

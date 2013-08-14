@@ -8,7 +8,9 @@
 
 namespace vast {
 
-/// A copy on write data structure with value semantics.
+/// Elevates a type into a copy-on-write structure. A `cow<T>` can be
+/// transparently used as a libcppa `any_tuple` or `cow_tuple<t>` and thus
+/// forwarded as a message without incurring an unnecessary copy.
 /// @tparam T A copy-constructible type.
 template <typename T>
 class cow

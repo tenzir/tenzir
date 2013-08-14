@@ -22,6 +22,9 @@ public:
     /// @param chk The chunk to serialize into.
     writer(chunk& chk);
 
+    /// Destructs a chunks.
+    ~writer();
+
     /// Move-constructs a writer.
     /// @param other The writer to move.
     writer(writer&& other) = default;
@@ -120,7 +123,11 @@ public:
 
   /// Retrieves the size in bytes of the compressed/serialized buffer.
   /// @return The number of bytes of the serialized/compressed buffer.
-  size_t bytes() const;
+  size_t compressed_bytes() const;
+
+  /// Retrieves the size in bytes of the compressed/serialized buffer.
+  /// @return The number of bytes of the serialized/compressed buffer.
+  size_t uncompressed_bytes() const;
 
   friend bool operator==(chunk const& x, chunk const& y);
 
@@ -131,6 +138,7 @@ private:
 
   io::compression compression_;
   uint32_t elements_ = 0;
+  uint32_t bytes_ = 0;
   std::vector<uint8_t> buffer_;
 };
 
