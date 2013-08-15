@@ -35,11 +35,12 @@ public:
 
     /// Serializes an object into the underlying chunk.
     /// @param x The object to serialize.
+    /// @param count The number of elements *x* should count for.
     template <typename T>
-    bool write(T const& x)
+    bool write(T const& x, size_t count = 1)
     {
       serializer_ << x;
-      ++chunk_.elements_;
+      chunk_.elements_ += count;
       return true;
     }
 
@@ -83,19 +84,19 @@ public:
     /// Deserializes an object from the chunk.
     /// @param x The object to deserialize into.
     template <typename T>
-    bool read(T& x)
+    bool read(T& x, size_t count = 1)
     {
       if (available_ == 0)
         return false;
 
       deserializer_ >> x;
-      --available_;
+      available_ -= count > available_ ? available_ : count;
       return true;
     }
 
     /// Retrieves the number of objects available for deserialization.
     /// @return The number of times one can call ::read on this chunk.
-    uint32_t size() const;
+    uint32_t elements() const;
 
     /// Retrieves the number of bytes deserialized so far.
     /// @return The number of deserialized bytes.
@@ -119,7 +120,7 @@ public:
 
   /// Retrieves the number of serialized elements in the chunk.
   /// @return The number of elements in the chunk.
-  uint32_t size() const;
+  uint32_t elements() const;
 
   /// Retrieves the size in bytes of the compressed/serialized buffer.
   /// @return The number of bytes of the serialized/compressed buffer.

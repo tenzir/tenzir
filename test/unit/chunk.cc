@@ -15,7 +15,7 @@ BOOST_AUTO_TEST_CASE(chunking)
     chunk::writer w(chk);
     for (size_t i = 0; i < 1e3; ++i)
       BOOST_CHECK(w.write(event{i}));
-    BOOST_CHECK(chk.size() == 1e3);
+    BOOST_CHECK(chk.elements() == 1e3);
   }
 
   chunk::reader r(chk);

@@ -32,7 +32,7 @@ chunk::reader::reader(chunk const& chk)
 {
 }
 
-uint32_t chunk::reader::size() const
+uint32_t chunk::reader::elements() const
 {
   return available_;
 }
@@ -53,7 +53,7 @@ bool chunk::empty() const
   return elements_ == 0;
 }
 
-uint32_t chunk::size() const
+uint32_t chunk::elements() const
 {
   return elements_;
 }

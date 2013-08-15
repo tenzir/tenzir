@@ -4,13 +4,13 @@
 
 using namespace vast;
 
-BOOST_AUTO_TEST_CASE(segment_operations)
+BOOST_AUTO_TEST_CASE(segment_reading_and_writing)
 {
   segment s1;
 
   /// Construct a writer with 256 events per chunk and no upper bound on the
   /// total segment size.
-  segment::writer w(&s1, 256 /*, 0*/);
+  segment::writer w(&s1, 256);
 
   for (size_t i = 0; i < 1124; ++i)
   {
@@ -48,4 +48,42 @@ BOOST_AUTO_TEST_CASE(segment_operations)
   while (r2.read(e))
     BOOST_CHECK_EQUAL(e, (event{n++}));
   BOOST_CHECK_EQUAL(n, 50);
+}
+
+BOOST_AUTO_TEST_CASE(segment_event_extraction)
+{
+  segment s1;
+  {
+    segment::writer w(&s1, 10);
+    for (size_t i = 0; i < 256; ++i)
+      BOOST_CHECK(w.write(event{i}));
+  }
+  BOOST_CHECK_EQUAL(s1.events(), 256);
+
+  auto b = 42u;
+  s1.base(b);
+
+  auto o = s1.load(b);
+  BOOST_REQUIRE(o);
+  auto& first = *o;
+  BOOST_CHECK_EQUAL(first.id(), b);
+  BOOST_CHECK_EQUAL(first[0], 0u);
+
+  o = s1.load(b + 42);
+  BOOST_REQUIRE(o);
+  auto& mid1 = *o;
+  BOOST_CHECK_EQUAL(mid1.id(), b + 42);
+  BOOST_CHECK_EQUAL(mid1[0], 42u);
+
+  o = s1.load(256);
+  BOOST_REQUIRE(o);
+  auto& mid2 = *o;
+  BOOST_CHECK_EQUAL(mid2.id(), 256);
+  BOOST_CHECK_EQUAL(mid2[0], 256u - b);
+
+  o = s1.load(b + 255);
+  BOOST_REQUIRE(o);
+  auto& last = *o;
+  BOOST_CHECK_EQUAL(last.id(), b + 255);
+  BOOST_CHECK_EQUAL(last[0], 255u);
 }

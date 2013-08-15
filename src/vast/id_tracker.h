@@ -23,7 +23,7 @@ public:
 private:
   std::string filename_;
   std::ofstream file_;
-  uint64_t id_ = 0;
+  uint64_t id_ = 1;
 };
 
 } // namespace vast

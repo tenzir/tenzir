@@ -48,6 +48,9 @@ using is_pointer_type = std::integral_constant<
     is_intrusive_ptr<T>::value
 >;
 
+/// See
+/// http://ericniebler.com/2013/08/07/universal-references-and-the-copy-constructo
+/// for details.
 template <typename A, typename B>
 using disable_if_same_or_derived = typename std::enable_if<
   ! std::is_base_of<

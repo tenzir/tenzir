@@ -13,8 +13,8 @@ segmentizer::segmentizer(actor_ptr upstream,
                          size_t max_events_per_chunk, size_t max_segment_size)
   : upstream_(upstream),
     stats_(std::chrono::seconds(1)),
-    segment_(uuid::random()),
-    writer_(&segment_, max_events_per_chunk, max_segment_size)
+    segment_(uuid::random(), max_segment_size),
+    writer_(&segment_, max_events_per_chunk)
 {
 }
 
@@ -39,8 +39,9 @@ void segmentizer::process(event const& e)
                  " sends segment " << segment_.id() << " with " <<
                  segment_.events() << " events to @" << upstream_->id());
 
+  auto max_segment_size = segment_.max_size();
   send(upstream_, std::move(segment_));
-  segment_ = segment(uuid::random());
+  segment_ = segment(uuid::random(), max_segment_size);
   writer_.attach_to(&segment_);
 }
 
