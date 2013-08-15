@@ -2,6 +2,7 @@
 #define VAST_OPTION_HPP
 
 #include <cppa/option.hpp>
+#include "vast/serialization.h"
 
 namespace vast {
 
@@ -38,6 +39,27 @@ public:
   constexpr T const* operator->() const
   {
     return &cppa::option<T>::get();
+  }
+
+private:
+  void serialize(serializer& sink) const
+  {
+    if (this->valid())
+      sink << true << this->get();
+    else
+      sink << false;
+  }
+
+  void deserialize(deserializer& source) const
+  {
+    bool flag;
+    source >> flag;
+    if (! flag)
+      return;
+    
+    T x;
+    source >> x;
+    *this = std::move(x);
   }
 };
 
