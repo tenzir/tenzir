@@ -26,10 +26,22 @@ public:
     return ! (x == y);
   }
 
+  Derived& operator&=(Derived const& other)
+  {
+    derived().bitwise_and(other);
+    return static_cast<Derived&>(*this);
+  }
+
   friend Derived operator&(Derived const& x, Derived const& y)
   {
     Derived d(x);
     return d &= y;
+  }
+
+  Derived& operator|=(Derived const& other)
+  {
+    derived().bitwise_or(other);
+    return static_cast<Derived&>(*this);
   }
 
   friend Derived operator|(Derived const& x, Derived const& y)
@@ -38,16 +50,34 @@ public:
     return d |= y;
   }
 
+  Derived& operator^=(Derived const& other)
+  {
+    derived().bitwise_xor(other);
+    return static_cast<Derived&>(*this);
+  }
+
   friend Derived operator^(Derived const& x, Derived const& y)
   {
     Derived d(x);
     return d ^= y;
   }
 
+  Derived& operator-=(Derived const& other)
+  {
+    derived().bitwise_subtract(other);
+    return static_cast<Derived&>(*this);
+  }
+
   friend Derived operator-(Derived const& x, Derived const& y)
   {
     Derived d(x);
     return d -= y;
+  }
+
+  Derived& flip()
+  {
+    derived().bitwise_not();
+    return static_cast<Derived&>(*this);
   }
 
   Derived operator~() const
@@ -165,13 +195,12 @@ public:
   {
   }
 
-  null_bitstream& operator&=(null_bitstream const& other);
-  null_bitstream& operator|=(null_bitstream const& other);
-  null_bitstream& operator^=(null_bitstream const& other);
-  null_bitstream& operator-=(null_bitstream const& other);
-  null_bitstream& flip();
-
 private:
+  void bitwise_not();
+  void bitwise_and(null_bitstream const& other);
+  void bitwise_or(null_bitstream const& other);
+  void bitwise_xor(null_bitstream const& other);
+  void bitwise_subtract(null_bitstream const& other);
   bool equals(null_bitstream const& other) const;
   void append_impl(size_type n, bool bit);
   void push_back_impl(bool bit);
