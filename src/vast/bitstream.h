@@ -183,6 +183,8 @@ std::string to_string(bitstream_base<Derived> const& bs)
   return to_string(bs.bits(), false, false, 0);
 }
 
+/// An uncompressed bitstream that simply forwards all operations to the
+/// underlying ::bitvector.
 class null_bitstream : public bitstream_base<null_bitstream>
 {
   typedef bitstream_base<null_bitstream> super;

@@ -86,7 +86,7 @@ private:
         return {};
 
     if (op == not_equal)
-      (*result).flip();
+      result->flip();
     return result;
   }
 
@@ -118,7 +118,7 @@ private:
         if (! --bit)
         {
           if (op == not_in)
-            (*result).flip();
+            result->flip();
           return result;
         }
       }

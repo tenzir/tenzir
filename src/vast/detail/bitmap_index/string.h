@@ -41,7 +41,7 @@ public:
     if (! bs)
       return {};
 
-    return op == equal ? bs : std::move((*bs).flip());
+    return op == equal ? bs : std::move(bs->flip());
   };
 
   virtual std::string to_string() const override

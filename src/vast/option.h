@@ -36,7 +36,12 @@ public:
   option& operator=(option&&) = default;
 #endif
 
-  constexpr T const* operator->() const
+  T const* operator->() const
+  {
+    return &cppa::option<T>::get();
+  }
+
+  T* operator->()
   {
     return &cppa::option<T>::get();
   }
