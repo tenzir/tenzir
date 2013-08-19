@@ -31,8 +31,7 @@ struct vector_storage : storage_policy
     return &*vector_[i];
   }
 
-  std::pair<Bitstream const*, Bitstream const*>
-  bounds(T const& x) const
+  std::pair<Bitstream const*, Bitstream const*> bounds(T const& x) const
   {
     if (vector_.empty())
       return {nullptr, nullptr};
@@ -107,8 +106,7 @@ struct list_storage : storage_policy
     return i == map_.end() ? nullptr : &i->second->second;
   }
 
-  std::pair<Bitstream const*, Bitstream const*>
-  bounds(T const& x) const
+  std::pair<Bitstream const*, Bitstream const*> bounds(T const& x) const
   {
     if (map_.empty())
       return {nullptr, nullptr};
@@ -188,8 +186,7 @@ struct unordered_storage : storage_policy
     return i == map_.end() ? nullptr : &i->second;
   }
 
-  std::pair<Bitstream const*, Bitstream const*>
-  bounds(T const& x) const
+  std::pair<Bitstream const*, Bitstream const*> bounds(T const& x) const
   {
     if (map_.empty())
       return {nullptr, nullptr};

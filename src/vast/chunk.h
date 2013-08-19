@@ -65,21 +65,10 @@ public:
   /// A proxy class to deserialize from the chunk.
   class reader
   {
-    reader(reader const&) = delete;
-    reader& operator=(reader const&) = delete;
-
   public:
     /// Constructs a reader from a chunk.
     /// @param chk The chunk to extract objects from.
     reader(chunk const& chk);
-
-    /// Move-constructs a reader.
-    /// @param other The reader to move.
-    reader(reader&& other) = default;
-
-    /// Move-assigns a reader.
-    /// @param other The reader to assign to this instance.
-    reader& operator=(reader&& other) = default;
 
     /// Deserializes an object from the chunk.
     /// @param x The object to deserialize into.

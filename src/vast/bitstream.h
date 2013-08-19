@@ -10,7 +10,7 @@ namespace vast {
 
 /// An append-only sequence of bits.
 template <typename Derived>
-class bitstream
+class bitstream_base
 {
 public:
   typedef bitvector::size_type size_type;
@@ -108,9 +108,9 @@ public:
   }
 
 protected:
-  bitstream() = default;
+  bitstream_base() = default;
 
-  bitstream(size_type n, bool bit)
+  bitstream_base(size_type n, bool bit)
   {
     derived().append_impl(n, bit);
   }
@@ -118,15 +118,7 @@ protected:
   bitvector bits_;
 
 private:
-  Derived& derived()
-  {
-    return *static_cast<Derived*>(this);
-  }
-
-  Derived const& derived() const
-  {
-    return *static_cast<Derived const*>(this);
-  }
+  friend access;
 
   void serialize(serializer& sink)
   {
@@ -137,6 +129,16 @@ private:
   {
     source >> bits_;
   }
+
+  Derived& derived()
+  {
+    return *static_cast<Derived*>(this);
+  }
+
+  Derived const& derived() const
+  {
+    return *static_cast<Derived const*>(this);
+  }
 };
 
 /// Converts a bitstream to a `std::string`. Unlike a plain bitvector, we
@@ -146,14 +148,14 @@ private:
 ///
 /// @return A `std::string` representation of *bs*.
 template <typename Derived>
-std::string to_string(bitstream<Derived> const& bs)
+std::string to_string(bitstream_base<Derived> const& bs)
 {
   return to_string(bs.bits(), false, false, 0);
 }
 
-class null_bitstream : public bitstream<null_bitstream>
+class null_bitstream : public bitstream_base<null_bitstream>
 {
-  typedef bitstream<null_bitstream> super;
+  typedef bitstream_base<null_bitstream> super;
   friend super;
 
 public:
