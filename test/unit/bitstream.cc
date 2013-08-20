@@ -4,6 +4,18 @@
 
 using namespace vast;
 
+BOOST_AUTO_TEST_CASE(polymorphic_bitstream)
+{
+  bitstream empty;
+  BOOST_CHECK(! empty);
+
+  bitstream x(null_bitstream{});
+  BOOST_REQUIRE(x);
+  BOOST_CHECK(x.append(3, true));
+  BOOST_CHECK(x.size());
+  BOOST_CHECK_EQUAL(to_string(x),  "111");
+}
+
 BOOST_AUTO_TEST_CASE(null_bitstream_operations)
 {
   null_bitstream x;

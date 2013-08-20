@@ -3,6 +3,7 @@ include_directories(BEFORE ..)
 set(libvast_sources
   address.cc
   archive.cc
+  bitmap_index.cc
   bitvector.cc
   bitstream.cc
   chunk.cc
