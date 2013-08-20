@@ -274,11 +274,6 @@ bool operator==(bitvector const& x, bitvector const& y)
   return x.num_bits_ == y.num_bits_ && x.bits_ == y.bits_;
 }
 
-bool operator!=(bitvector const& x, bitvector const& y)
-{
-  return ! (x == y);
-}
-
 bool operator<(bitvector const& x, bitvector const& y)
 {
   assert(x.size() == y.size());
@@ -476,7 +471,7 @@ size_type bitvector::find_from(size_type i) const
   return i * bits_per_block + lowest_bit(bits_[i]);
 }
 
-void bitvector::serialize(serializer& sink)
+void bitvector::serialize(serializer& sink) const
 {
   sink << num_bits_;
   sink << bits_;

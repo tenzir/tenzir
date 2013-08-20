@@ -3,7 +3,6 @@
 
 #include "vast/operator.h"
 #include "vast/option.h"
-#include "vast/value.h"
 
 namespace vast {
 

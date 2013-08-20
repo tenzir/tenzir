@@ -2,11 +2,11 @@
 #define VAST_BITSTREAM_H
 
 #include <algorithm>
-#include "vast/serialization.h"
 #include "vast/bitvector.h"
-#include "vast/exception.h"
+#include "vast/serialization.h"
 #include "vast/traits.h"
 #include "vast/util/make_unique.h"
+#include "vast/util/operators.h"
 
 namespace vast {
 namespace detail {
@@ -36,11 +36,20 @@ public:
   virtual size_type find_first_impl() const = 0;
   virtual size_type find_next_impl(size_type i) const = 0;
   virtual bitvector const& bits_impl() const = 0;
+
+protected:
+  bitstream_concept() = default;
+
+private:
+  friend access;
+  virtual void serialize(serializer& sink) const = 0;
+  virtual void deserialize(deserializer& source) = 0;
 };
 
 // A concrete bitstream concept.
 template <typename Bitstream>
-class bitstream_model : public bitstream_concept
+class bitstream_model : public bitstream_concept,
+                        util::equality_comparable<bitstream_model<Bitstream>>
 {
   Bitstream const& cast(bitstream_concept const& c) const
   {
@@ -56,7 +65,14 @@ class bitstream_model : public bitstream_concept
     return static_cast<bitstream_model&>(c).bitstream_;
   }
 
+  friend bool operator==(bitstream_model const& x, bitstream_model const& y)
+  {
+    return x.bitstream_ == y.bitstream_;
+  }
+
 public:
+  bitstream_model() = default;
+
   bitstream_model(Bitstream bs)
     : bitstream_(std::move(bs))
   {
@@ -143,6 +159,18 @@ public:
   }
 
 private:
+  friend access;
+
+  virtual void serialize(serializer& sink) const final
+  {
+    sink << bitstream_;
+  }
+
+  virtual void deserialize(deserializer& source) final
+  {
+    source >> bitstream_;
+  }
+
   Bitstream bitstream_;
 };
 
@@ -299,6 +327,19 @@ protected:
   {
     return *static_cast<Derived const*>(this);
   }
+
+private:
+  friend access;
+
+  void serialize(serializer& sink) const
+  {
+    derived().serialize(sink);
+  }
+
+  void deserialize(deserializer& source) const
+  {
+    derived().deserialize(source);
+  }
 };
 
 /// An append-only sequence of bits.
@@ -313,7 +354,7 @@ public:
 
   template <
     typename Bitstream,
-    typename = disable_if_same_or_derived<bitstream, Bitstream>
+    typename = DisableIfSameOrDerived<bitstream, Bitstream>
   >
   bitstream(Bitstream&& bs)
     : concept_{
@@ -344,6 +385,10 @@ private:
   size_type find_next_impl(size_type i) const;
   bitvector const& bits_impl() const;
 
+  friend access;
+  void serialize(serializer& sink) const;
+  void deserialize(deserializer& source);
+
   std::unique_ptr<detail::bitstream_concept> concept_;
 };
 
@@ -362,19 +407,16 @@ std::string to_string(bitstream_base<Derived> const& bs)
 
 /// An uncompressed bitstream that simply forwards all operations to the
 /// underlying ::bitvector.
-class null_bitstream : public bitstream_base<null_bitstream>
+class null_bitstream : public bitstream_base<null_bitstream>,
+                       util::totally_ordered<null_bitstream>
 {
   template <typename>
   friend class detail::bitstream_model;
-  //friend detail::bitstream_model<null_bitstream>;
   friend bitstream_base<null_bitstream>;
 
 public:
   null_bitstream() = default;
-  null_bitstream(bitvector::size_type n, bool bit)
-    : bits_(n, bit)
-  {
-  }
+  null_bitstream(bitvector::size_type n, bool bit);
 
 private:
   bool equals(null_bitstream const& other) const;
@@ -393,13 +435,23 @@ private:
   size_type find_next_impl(size_type i) const;
   bitvector const& bits_impl() const;
 
+  friend access;
+  void serialize(serializer& sink) const;
+  void deserialize(deserializer& source);
+
+  friend bool operator==(null_bitstream const& x, null_bitstream const& y);
+  friend bool operator<(null_bitstream const& x, null_bitstream const& y);
+
   bitvector bits_;
 };
 
 /// Transposes a vector of equal-sized bitstreams.
 /// @param v A vector of bitstreams.
 /// @pre All elements of *v* must have the same size.
-template <typename Bitstream>
+template <
+  typename Bitstream,
+  typename = DisableIfSameOrDerived<Bitstream, bitstream>
+>
 std::vector<Bitstream> transpose(std::vector<Bitstream> const& v)
 {
   if (v.empty())
@@ -410,7 +462,7 @@ std::vector<Bitstream> transpose(std::vector<Bitstream> const& v)
     return {};
   for (size_t i = 0; i < vsize; ++i)
     if (v[i].size() != bsize)
-      throw exception("tranpose requires same-size bitstreams");
+      throw std::logic_error("tranpose requires same-size bitstreams");
 
   std::vector<typename Bitstream::size_type> next(vsize);
   auto min = Bitstream::npos;

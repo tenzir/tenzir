@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <exception>
+#include "vast/bitstream.h"
 #include "vast/container.h"
 #include "vast/logger.h"
 #include "vast/serialization.h"
@@ -131,6 +132,12 @@ void type_manager::initialize()
   announce<std::vector<value>>();
   announce<event>();
   announce<std::vector<event>>();
+
+  announce<detail::bitstream_model<null_bitstream>>();
+  make_convertible<
+    detail::bitstream_model<null_bitstream>,
+    detail::bitstream_concept
+  >();
 }
 
 void type_manager::destroy()

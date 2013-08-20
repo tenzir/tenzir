@@ -52,13 +52,15 @@ using is_pointer_type = std::integral_constant<
 /// http://ericniebler.com/2013/08/07/universal-references-and-the-copy-constructo
 /// for details.
 template <typename A, typename B>
-using disable_if_same_or_derived = typename std::enable_if<
+using disable_if_same_or_derived = std::enable_if<
   ! std::is_base_of<
     A,
     typename std::remove_reference<B>::type
   >::value
->::type;
+>;
 
+template <typename A, typename B>
+using DisableIfSameOrDerived = typename disable_if_same_or_derived<A, B>::type;
 
 // Integral bool
 template <bool B, typename...>

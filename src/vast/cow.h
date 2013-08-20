@@ -23,7 +23,7 @@ public:
   /// @args The argument to forward to `cppa::cow_tuple`.
   template <
     typename... Args,
-    typename = disable_if_same_or_derived<cow<T>, Args...>
+    typename = DisableIfSameOrDerived<cow<T>, Args...>
   >
   cow(Args&&... args)
     : tuple_(std::forward<Args>(args)...)

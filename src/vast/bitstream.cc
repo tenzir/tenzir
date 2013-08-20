@@ -1,5 +1,7 @@
 #include "vast/bitstream.h"
 
+#include "vast/object.h"
+
 namespace vast {
 
 bitstream::bitstream(bitstream const& other)
@@ -92,7 +94,25 @@ bitvector const& bitstream::bits_impl() const
   return concept_->bits_impl();
 }
 
+void bitstream::serialize(serializer& sink) const
+{
+  write_object(sink, *concept_);
+}
 
+void bitstream::deserialize(deserializer& source)
+{
+  object o;
+  source >> o;
+  assert(o.convertible_to<detail::bitstream_concept>());
+  auto ptr = o.release_as<detail::bitstream_concept>();
+  concept_ = std::unique_ptr<detail::bitstream_concept>{ptr};
+}
+
+
+null_bitstream::null_bitstream(bitvector::size_type n, bool bit)
+  : bits_(n, bit)
+{
+}
 
 bool null_bitstream::equals(null_bitstream const& other) const
 {
@@ -175,6 +195,26 @@ null_bitstream::size_type null_bitstream::find_next_impl(size_type i) const
 bitvector const& null_bitstream::bits_impl() const
 {
   return bits_;
+}
+
+void null_bitstream::serialize(serializer& sink) const
+{
+  sink << bits_;
+}
+
+void null_bitstream::deserialize(deserializer& source)
+{
+  source >> bits_;
+}
+
+bool operator==(null_bitstream const& x, null_bitstream const& y)
+{
+  return x.bits_ == y.bits_;
+}
+
+bool operator<(null_bitstream const& x, null_bitstream const& y)
+{
+  return x.bits_ < y.bits_;
 }
 
 } // namespace vast

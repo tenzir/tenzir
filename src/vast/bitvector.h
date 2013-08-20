@@ -5,6 +5,7 @@
 #include <limits>
 #include <vector>
 #include "vast/fwd.h"
+#include "vast/util/operators.h"
 
 namespace vast {
 
@@ -13,7 +14,7 @@ class bitvector;
 std::string to_string(bitvector const&, bool, size_t);
 
 /// A vector of bits.
-class bitvector
+class bitvector : util::totally_ordered<bitvector>
 {
   friend std::string to_string(bitvector const&, bool, size_t);
 
@@ -108,7 +109,6 @@ public:
   // Relational operators
   //
   friend bool operator==(bitvector const& x, bitvector const& y);
-  friend bool operator!=(bitvector const& x, bitvector const& y);
   friend bool operator<(bitvector const& x, bitvector const& y);
 
   //
@@ -288,7 +288,8 @@ private:
   /// `bitvector::npos` if no 1-bit exists.
   size_type find_from(size_type i) const;
 
-  void serialize(serializer& sink);
+  friend access;
+  void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
 
   std::vector<block_type> bits_;
