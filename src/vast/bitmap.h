@@ -1,6 +1,7 @@
 #ifndef VAST_BITMAP_H
 #define VAST_BITMAP_H
 
+#include <list>
 #include <unordered_map>
 #include "vast/bitstream.h"
 #include "vast/exception.h"

@@ -1,16 +1,16 @@
 #include "test.h"
-#include "vast/detail/bitmap_index/address.h"
-#include "vast/detail/bitmap_index/arithmetic.h"
-#include "vast/detail/bitmap_index/port.h"
-#include "vast/detail/bitmap_index/string.h"
-#include "vast/detail/bitmap_index/time.h"
+#include "vast/bitmap_index/address.h"
+#include "vast/bitmap_index/arithmetic.h"
+#include "vast/bitmap_index/port.h"
+#include "vast/bitmap_index/string.h"
+#include "vast/bitmap_index/time.h"
 #include "vast/to_string.h"
 
 using namespace vast;
 
 BOOST_AUTO_TEST_CASE(boolean_bitmap_index)
 {
-  detail::arithmetic_bitmap_index<bool_type> bbi;
+  arithmetic_bitmap_index<bool_type> bbi;
   bitmap_index* bi = &bbi;
   BOOST_REQUIRE(bi->push_back(true));
   BOOST_REQUIRE(bi->push_back(true));
@@ -42,7 +42,7 @@ BOOST_AUTO_TEST_CASE(boolean_bitmap_index)
 
 BOOST_AUTO_TEST_CASE(integral_bitmap_index)
 {
-  detail::arithmetic_bitmap_index<int_type> abi;
+  arithmetic_bitmap_index<int_type> abi;
   bitmap_index* bi = &abi;
   BOOST_REQUIRE(bi->push_back(-7));
   BOOST_REQUIRE(bi->push_back(42));
@@ -65,7 +65,7 @@ BOOST_AUTO_TEST_CASE(integral_bitmap_index)
 
 BOOST_AUTO_TEST_CASE(floating_point_bitmap_index)
 {
-  detail::arithmetic_bitmap_index<double_type> abi(-2);
+  arithmetic_bitmap_index<double_type> abi(-2);
   bitmap_index* bi = &abi;
   BOOST_REQUIRE(bi->push_back(-7.8));
   BOOST_REQUIRE(bi->push_back(42.123));
@@ -83,9 +83,9 @@ BOOST_AUTO_TEST_CASE(floating_point_bitmap_index)
   BOOST_CHECK_EQUAL(to_string(*g_hun), "0011100");
 }
 
-BOOST_AUTO_TEST_CASE(time_bitmap_index)
+BOOST_AUTO_TEST_CASE(temporal_bitmap_index)
 {
-  detail::time_bitmap_index trbi(8);  // 0.1 sec resolution
+  time_bitmap_index trbi(8);  // 0.1 sec resolution
   bitmap_index* bi = &trbi;
   BOOST_REQUIRE(bi->push_back(std::chrono::milliseconds(1000)));
   BOOST_REQUIRE(bi->push_back(std::chrono::milliseconds(2000)));
@@ -109,9 +109,9 @@ BOOST_AUTO_TEST_CASE(time_bitmap_index)
       "00011");
 }
 
-BOOST_AUTO_TEST_CASE(string_bitmap_index)
+BOOST_AUTO_TEST_CASE(strings_bitmap_index)
 {
-  detail::string_bitmap_index sbi;
+  string_bitmap_index sbi;
   bitmap_index* bi = &sbi;
   BOOST_REQUIRE(bi->push_back("foo"));
   BOOST_REQUIRE(bi->push_back("bar"));
@@ -145,9 +145,9 @@ BOOST_AUTO_TEST_CASE(string_bitmap_index)
       "010");
 }
 
-BOOST_AUTO_TEST_CASE(address_bitmap_index)
+BOOST_AUTO_TEST_CASE(ip_address_bitmap_index)
 {
-  detail::address_bitmap_index abi;
+  address_bitmap_index abi;
   bitmap_index* bi = &abi;
   BOOST_REQUIRE(bi->push_back(address("192.168.0.1")));
   BOOST_REQUIRE(bi->push_back(address("192.168.0.2")));
@@ -206,9 +206,9 @@ BOOST_AUTO_TEST_CASE(address_bitmap_index)
       "0000000000000000000000000000000011000000101010000000000001111111");
 }
 
-BOOST_AUTO_TEST_CASE(port_bitmap_index)
+BOOST_AUTO_TEST_CASE(transport_port_bitmap_index)
 {
-  detail::port_bitmap_index pbi;
+  port_bitmap_index pbi;
   bitmap_index* bi = &pbi;
   bi->push_back(port(80, port::tcp));
   bi->push_back(port(443, port::tcp));

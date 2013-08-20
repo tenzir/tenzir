@@ -4,6 +4,10 @@ set(libvast_sources
   address.cc
   archive.cc
   bitmap_index.cc
+  bitmap_index/address.cc
+  bitmap_index/port.cc
+  bitmap_index/string.cc
+  bitmap_index/time.cc
   bitvector.cc
   bitstream.cc
   chunk.cc
