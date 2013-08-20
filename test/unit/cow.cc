@@ -30,15 +30,15 @@ BOOST_AUTO_TEST_CASE(copy_on_write)
 {
   cow<copyable> c1;
   auto c2 = c1;
-  BOOST_CHECK_EQUAL(&cget(c1), &cget(c2));
-  BOOST_CHECK_EQUAL(cget(c1).copies(), 0);
+  BOOST_CHECK_EQUAL(&c1.read(), &c2.read());
+  BOOST_CHECK_EQUAL(c1->copies(), 0);
 
   // Copies the tuple.
-  BOOST_CHECK_EQUAL(get(c2).copies(), 1);
+  BOOST_CHECK_EQUAL(c2.write().copies(), 1);
 
-  BOOST_CHECK_EQUAL(cget(c1).copies(), 1);
-  BOOST_CHECK_EQUAL(cget(c2).copies(), 1);
-  BOOST_CHECK(&cget(c1) != &cget(c2));
+  BOOST_CHECK_EQUAL(c1->copies(), 1);
+  BOOST_CHECK_EQUAL(c2->copies(), 1);
+  BOOST_CHECK(&c1.read() != &c2.read());
 }
 
 BOOST_AUTO_TEST_CASE(cow_serialization)
@@ -60,5 +60,5 @@ BOOST_AUTO_TEST_CASE(cow_serialization)
     deserializer >> y;
   }
 
-  BOOST_CHECK_EQUAL(cget(x), cget(y));
+  BOOST_CHECK_EQUAL(*x, *y);
 }

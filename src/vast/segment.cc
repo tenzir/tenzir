@@ -92,7 +92,7 @@ segment::reader::reader(segment const* s)
     current_id_(segment_->base_)
 {
   if (! segment_->chunks_.empty())
-    reader_ = make_unique<chunk::reader>(cget(segment_->chunks_[next_++]));
+    reader_ = make_unique<chunk::reader>(*segment_->chunks_[next_++]);
 }
 
 bool segment::reader::read(event& e)
@@ -118,7 +118,7 @@ bool segment::reader::skip_to(uint64_t id)
     if (current_id_ + elements < id)
     {
       current_id_ += elements;
-      chk = &cget(segment_->chunks_[next_]);
+      chk = &segment_->chunks_[next_].read();
       elements = chk->elements();
       reader_.reset();
       continue;
@@ -152,7 +152,7 @@ bool segment::reader::read(event* e)
     if (next_ == segment_->chunks_.size()) // No more events available.
       return false;
 
-    auto& next_chunk = cget(segment_->chunks_[next_++]);
+    auto& next_chunk = *segment_->chunks_[next_++];
     reader_ = make_unique<chunk::reader>(next_chunk);
     return read(e);
   }

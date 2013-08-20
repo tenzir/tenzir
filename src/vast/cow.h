@@ -40,18 +40,32 @@ public:
     return tuple_;
   }
 
+  T const& operator*() const
+  {
+    return read();
+  }
+
+  T const* operator->() const
+  {
+    return &read();
+  }
+
+  T const& read() const
+  {
+    return cppa::get<0>(tuple_);
+  }
+
+  T& write()
+  {
+    return cppa::get_ref<0>(tuple_);
+  }
+
 private:
   friend access;
 
-  template <typename U>
-  friend U& get(cow<U>&);
-
-  template <typename U>
-  friend U const& cget(cow<U> const&);
-
   void serialize(serializer& sink) const
   {
-    sink << cppa::get<0>(tuple_);
+    sink << read();
   }
 
   void deserialize(deserializer& source)
@@ -63,18 +77,6 @@ private:
 
   cppa::cow_tuple<T> tuple_;
 };
-
-template <typename T>
-T& get(cow<T>& c)
-{
-  return cppa::get_ref<0>(c.tuple_);
-}
-
-template <typename T>
-T const& cget(cow<T> const& c)
-{
-  return cppa::get<0>(c.tuple_);
-}
 
 } // namespace vast
 

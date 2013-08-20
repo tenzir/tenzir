@@ -73,21 +73,20 @@ void segment_manager::on_exit()
   VAST_LOG_VERBOSE("segment manager @" << id() << " terminated");
 }
 
-void segment_manager::store(cow<segment> const& cs)
+void segment_manager::store(cow<segment> const& s)
 {
-  auto& s = cget(cs);
-  assert(segment_files_.find(s.id()) == segment_files_.end());
-  auto filename = dir_ / path(to_string(s.id()));
-  segment_files_.emplace(s.id(), filename);
+  assert(segment_files_.find(s->id()) == segment_files_.end());
+  auto filename = dir_ / path(to_string(s->id()));
+  segment_files_.emplace(s->id(), filename);
   {
     file f(filename);
     f.open(file::write_only);
     io::file_output_stream out(f);
     binary_serializer sink(out);
-    sink << s;
+    sink << *s;
   }
 
-  cache_.insert(s.id(), cs);
+  cache_.insert(s->id(), s);
   VAST_LOG_VERBOSE("segment manager @" << id() <<
                    " wrote segment to " << filename);
 }
