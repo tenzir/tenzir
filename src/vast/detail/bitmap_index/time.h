@@ -11,9 +11,9 @@ namespace vast {
 namespace detail {
 
 /// A bitmap index for time range and time point types.
-template <typename Bitstream>
-class time_bitmap_index : public bitmap_index<Bitstream>
+class time_bitmap_index : public bitmap_index
 {
+  using bitstream_type = null_bitstream; // TODO: Use compressed bitstream.
   typedef time_range::rep value_type;
 
 public:
@@ -28,14 +28,17 @@ public:
     return bitmap_.patch(n);
   }
 
-  virtual option<Bitstream>
+  virtual option<bitstream>
   lookup(relational_operator op, value const& val) const override
   {
     if (op == in || op == not_in)
       throw error::operation("unsupported relational operator", op);
     if (bitmap_.empty())
       return {};
-    return bitmap_.lookup(op, extract(val));
+    auto result = bitmap_.lookup(op, extract(val));
+    if (! result)
+      return {};
+    return {std::move(*result)};
   };
 
   virtual std::string to_string() const override
@@ -64,7 +67,7 @@ private:
     }
   }
 
-  bitmap<value_type, Bitstream, range_encoder, precision_binner> bitmap_;
+  bitmap<value_type, bitstream_type, range_encoder, precision_binner> bitmap_;
 };
 
 } // namespace detail

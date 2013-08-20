@@ -10,8 +10,8 @@ using namespace vast;
 
 BOOST_AUTO_TEST_CASE(boolean_bitmap_index)
 {
-  detail::arithmetic_bitmap_index<bool_type, null_bitstream> bbi;
-  bitmap_index<null_bitstream>* bi = &bbi;
+  detail::arithmetic_bitmap_index<bool_type> bbi;
+  bitmap_index* bi = &bbi;
   BOOST_REQUIRE(bi->push_back(true));
   BOOST_REQUIRE(bi->push_back(true));
   BOOST_REQUIRE(bi->push_back(false));
@@ -42,8 +42,8 @@ BOOST_AUTO_TEST_CASE(boolean_bitmap_index)
 
 BOOST_AUTO_TEST_CASE(integral_bitmap_index)
 {
-  detail::arithmetic_bitmap_index<int_type, null_bitstream> abi;
-  bitmap_index<null_bitstream>* bi = &abi;
+  detail::arithmetic_bitmap_index<int_type> abi;
+  bitmap_index* bi = &abi;
   BOOST_REQUIRE(bi->push_back(-7));
   BOOST_REQUIRE(bi->push_back(42));
   BOOST_REQUIRE(bi->push_back(10000));
@@ -65,8 +65,8 @@ BOOST_AUTO_TEST_CASE(integral_bitmap_index)
 
 BOOST_AUTO_TEST_CASE(floating_point_bitmap_index)
 {
-  detail::arithmetic_bitmap_index<double_type, null_bitstream> abi(-2);
-  bitmap_index<null_bitstream>* bi = &abi;
+  detail::arithmetic_bitmap_index<double_type> abi(-2);
+  bitmap_index* bi = &abi;
   BOOST_REQUIRE(bi->push_back(-7.8));
   BOOST_REQUIRE(bi->push_back(42.123));
   BOOST_REQUIRE(bi->push_back(10000.0));
@@ -85,8 +85,8 @@ BOOST_AUTO_TEST_CASE(floating_point_bitmap_index)
 
 BOOST_AUTO_TEST_CASE(time_bitmap_index)
 {
-  detail::time_bitmap_index<null_bitstream> trbi(8);  // 0.1 sec resolution
-  bitmap_index<null_bitstream>* bi = &trbi;
+  detail::time_bitmap_index trbi(8);  // 0.1 sec resolution
+  bitmap_index* bi = &trbi;
   BOOST_REQUIRE(bi->push_back(std::chrono::milliseconds(1000)));
   BOOST_REQUIRE(bi->push_back(std::chrono::milliseconds(2000)));
   BOOST_REQUIRE(bi->push_back(std::chrono::milliseconds(3000)));
@@ -111,8 +111,8 @@ BOOST_AUTO_TEST_CASE(time_bitmap_index)
 
 BOOST_AUTO_TEST_CASE(string_bitmap_index)
 {
-  detail::string_bitmap_index<null_bitstream> sbi;
-  bitmap_index<null_bitstream>* bi = &sbi;
+  detail::string_bitmap_index sbi;
+  bitmap_index* bi = &sbi;
   BOOST_REQUIRE(bi->push_back("foo"));
   BOOST_REQUIRE(bi->push_back("bar"));
   BOOST_REQUIRE(bi->push_back("baz"));
@@ -147,8 +147,8 @@ BOOST_AUTO_TEST_CASE(string_bitmap_index)
 
 BOOST_AUTO_TEST_CASE(address_bitmap_index)
 {
-  detail::address_bitmap_index<null_bitstream> abi;
-  bitmap_index<null_bitstream>* bi = &abi;
+  detail::address_bitmap_index abi;
+  bitmap_index* bi = &abi;
   BOOST_REQUIRE(bi->push_back(address("192.168.0.1")));
   BOOST_REQUIRE(bi->push_back(address("192.168.0.2")));
   BOOST_REQUIRE(bi->push_back(address("192.168.0.3")));
@@ -208,8 +208,8 @@ BOOST_AUTO_TEST_CASE(address_bitmap_index)
 
 BOOST_AUTO_TEST_CASE(port_bitmap_index)
 {
-  detail::port_bitmap_index<null_bitstream> pbi;
-  bitmap_index<null_bitstream>* bi = &pbi;
+  detail::port_bitmap_index pbi;
+  bitmap_index* bi = &pbi;
   bi->push_back(port(80, port::tcp));
   bi->push_back(port(443, port::tcp));
   bi->push_back(port(53, port::udp));

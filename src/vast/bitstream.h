@@ -5,6 +5,7 @@
 #include "vast/serialization.h"
 #include "vast/bitvector.h"
 #include "vast/exception.h"
+#include "vast/traits.h"
 #include "vast/util/make_unique.h"
 
 namespace vast {
@@ -56,13 +57,8 @@ class bitstream_model : public bitstream_concept
   }
 
 public:
-  bitstream_model(Bitstream const& x)
-    : bitstream_{x}
-  {
-  }
-
-  bitstream_model(Bitstream&& bs)
-    : bitstream_{std::move(bs)}
+  bitstream_model(Bitstream bs)
+    : bitstream_(std::move(bs))
   {
   }
 
@@ -157,6 +153,11 @@ template <typename Derived>
 class bitstream_base
 {
 public:
+  bitstream_base(bitstream_base const&) = default;
+  bitstream_base(bitstream_base&&) = default;
+  bitstream_base& operator=(bitstream_base const&) = default;
+  bitstream_base& operator=(bitstream_base&&) = default;
+
   using size_type = detail::bitstream_concept::size_type;
   static size_type constexpr npos = bitvector::npos;
 
@@ -310,9 +311,14 @@ public:
   bitstream(bitstream const& other);
   bitstream(bitstream&& other);
 
-  template <typename Bitstream>
+  template <
+    typename Bitstream,
+    typename = disable_if_same_or_derived<bitstream, Bitstream>
+  >
   bitstream(Bitstream&& bs)
-    : concept_{make_unique<detail::bitstream_model<Bitstream>>(std::move(bs))}
+    : concept_{
+        new detail::bitstream_model<Unqualified<Bitstream>>{
+            std::forward<Bitstream>(bs)}}
   {
   }
 
@@ -358,7 +364,9 @@ std::string to_string(bitstream_base<Derived> const& bs)
 /// underlying ::bitvector.
 class null_bitstream : public bitstream_base<null_bitstream>
 {
-  friend detail::bitstream_model<null_bitstream>;
+  template <typename>
+  friend class detail::bitstream_model;
+  //friend detail::bitstream_model<null_bitstream>;
   friend bitstream_base<null_bitstream>;
 
 public:

@@ -10,52 +10,52 @@ namespace vast {
 namespace {
 
 /// Owns a several bitmap indexes for a arguments of a specific event.
-template <typename Bitstream>
-class filament : public sb_actor<filament<Bitstream>>
-{
-public:
-  /// Spawns an event index with a given directory.
-  /// @param dir The directory containing the event argument indexes.
-  filament(std::string const& dir)
-  {
-    self->chaining(false);
-    init_state = (
-        on_arg_match >> [=](event const& e)
-        {
-          auto delta = e.id() - last_;
-          for (auto& p : bitmaps_)
-          {
-            if (delta > 1)
-              p.second->patch(delta - 1, false);
-            p.second->push_back(e.at(p.first));
-          }
-          last_ = e.id();
-        },
-        on(atom("lookup")) >> [=]()
-        {
-        },
-        on(atom("kill")) >> [=]()
-        {
-            // TODO: flush bitmap indexes.
-        });
-  }
-
-  behavior init_state;
-
-private:
-  Bitstream lookup(std::vector<size_t> const& offsets,
-                   value const& argument,
-                   relational_operator op) const
-  {
-    auto i = bitmaps_.find(offsets);
-    if (i == bitmaps_.end())
-      return {};
-    return i->second->lookup(argument, op);
-  };
-
-  std::map<std::vector<size_t>, std::unique_ptr<bitmap_index<Bitstream>>> bitmaps_;
-  uint64_t last_ = 0;
-};
+//template <typename Bitstream>
+//class filament : public sb_actor<filament<Bitstream>>
+//{
+//public:
+//  /// Spawns an event index with a given directory.
+//  /// @param dir The directory containing the event argument indexes.
+//  filament(std::string const& dir)
+//  {
+//    self->chaining(false);
+//    init_state = (
+//        on_arg_match >> [=](event const& e)
+//        {
+//          auto delta = e.id() - last_;
+//          for (auto& p : bitmaps_)
+//          {
+//            if (delta > 1)
+//              p.second->patch(delta - 1, false);
+//            p.second->push_back(e.at(p.first));
+//          }
+//          last_ = e.id();
+//        },
+//        on(atom("lookup")) >> [=]()
+//        {
+//        },
+//        on(atom("kill")) >> [=]()
+//        {
+//            // TODO: flush bitmap indexes.
+//        });
+//  }
+//
+//  behavior init_state;
+//
+//private:
+//  Bitstream lookup(std::vector<size_t> const& offsets,
+//                   value const& argument,
+//                   relational_operator op) const
+//  {
+//    auto i = bitmaps_.find(offsets);
+//    if (i == bitmaps_.end())
+//      return {};
+//    return i->second->lookup(argument, op);
+//  };
+//
+//  std::map<std::vector<size_t>, std::unique_ptr<bitmap_index<Bitstream>>> bitmaps_;
+//  uint64_t last_ = 0;
+//};
 
 /// Determines whether a query expression has clauses that may benefit from an
 /// index lookup.

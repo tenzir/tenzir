@@ -10,10 +10,9 @@ namespace vast {
 namespace detail {
 
 /// A bitmap index for IP addresses.
-template <typename Bitstream>
-class address_bitmap_index : public bitmap_index<Bitstream>
+class address_bitmap_index : public bitmap_index
 {
-  typedef bitmap_index<Bitstream> super;
+  using bitstream_type = null_bitstream; // TODO: Use compressed bitstream.
 
 public:
   virtual bool patch(size_t /* n */) override
@@ -25,7 +24,7 @@ public:
     return v4_.append(1, false) && success;
   }
 
-  virtual option<Bitstream>
+  virtual option<bitstream>
   lookup(relational_operator op, value const& val) const override
   {
     if (! (op == equal || op == not_equal || op == in || op == not_in))
@@ -48,10 +47,10 @@ public:
   virtual std::string to_string() const override
   {
     using vast::to_string;
-    std::vector<Bitstream> v;
+    std::vector<bitstream_type> v;
     v.reserve(128);
     for (size_t i = 0; i < 128; ++i)
-      v.push_back(*bitmaps_[i / 8].storage().find(7 - i % 8));
+      v.emplace_back(*bitmaps_[i / 8].storage().find(7 - i % 8));
     std::string str;
     for (auto& row : transpose(v))
       str += to_string(row) + '\n';
@@ -72,16 +71,17 @@ private:
     return success;
   }
 
-  option<Bitstream> lookup(address const& addr, relational_operator op) const
+  option<bitstream> lookup(address const& addr, relational_operator op) const
   {
     auto& bytes = addr.data();
     auto is_v4 = addr.is_v4();
-    option<Bitstream> result = is_v4 ? v4_ : Bitstream(v4_.size(), true);
+    option<bitstream> result;
+    result = bitstream{is_v4 ? v4_ : bitstream_type{v4_.size(), true}};
     for (size_t i = is_v4 ? 12 : 0; i < 16; ++ i)
       if (auto bs = bitmaps_[i][bytes[i]])
         *result &= *bs;
       else if (op == not_equal)
-        return std::move(Bitstream(v4_.size(), true));
+        return bitstream{bitstream_type{v4_.size(), true}};
       else
         return {};
 
@@ -90,7 +90,7 @@ private:
     return result;
   }
 
-  option<Bitstream> lookup(prefix const& pfx, relational_operator op) const
+  option<bitstream> lookup(prefix const& pfx, relational_operator op) const
   {
     if (! (op == in || op == not_in))
       throw error::operation("unsupported relational operator", op);
@@ -104,7 +104,8 @@ private:
     if ((is_v4 ? topk + 96 : topk) == 128)
       return lookup(pfx.network(), op == in ? equal : not_equal);
 
-    option<Bitstream> result = is_v4 ? v4_ : Bitstream(v4_.size(), true);
+    option<bitstream> result;
+    result = bitstream{is_v4 ? v4_ : bitstream_type{v4_.size(), true}};
     auto bit = topk;
     auto& bytes = net.data();
     for (size_t i = is_v4 ? 12 : 0; i < 16; ++ i)
@@ -126,8 +127,8 @@ private:
     return {};
   }
 
-  std::array<bitmap<uint8_t, Bitstream, binary_encoder>, 16> bitmaps_;
-  Bitstream v4_;
+  std::array<bitmap<uint8_t, bitstream_type, binary_encoder>, 16> bitmaps_;
+  bitstream_type v4_;
 };
 
 } // namespace detail

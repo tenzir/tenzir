@@ -11,10 +11,9 @@ namespace vast {
 namespace detail {
 
 /// A bitmap index for transport-layer ports.
-template <typename Bitstream>
-class port_bitmap_index : public bitmap_index<Bitstream>
+class port_bitmap_index : public bitmap_index
 {
-  typedef bitmap_index<Bitstream> super;
+  using bitstream_type = null_bitstream; // TODO: Use compressed bitstream.
   typedef std::underlying_type<port::port_type>::type proto_type;
 
 public:
@@ -24,7 +23,7 @@ public:
     return proto_.patch(n) && success;
   }
 
-  virtual option<Bitstream>
+  virtual option<bitstream>
   lookup(relational_operator op, value const& val) const override
   {
     if (op == in || op == not_in)
@@ -38,7 +37,7 @@ public:
     if (p.type() != port::unknown)
       if (auto tbs = num_[p.type()])
           *nbs &= *tbs;
-    return nbs;
+    return {std::move(*nbs)};
   };
 
   virtual std::string to_string() const override
@@ -56,8 +55,8 @@ private:
     return true;
   }
 
-  bitmap<uint16_t, Bitstream, range_encoder> num_;
-  bitmap<proto_type, Bitstream> proto_;
+  bitmap<uint16_t, bitstream_type, range_encoder> num_;
+  bitmap<proto_type, bitstream_type> proto_;
 };
 
 } // namespace detail

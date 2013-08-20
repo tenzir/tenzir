@@ -10,23 +10,25 @@ namespace vast {
 namespace detail {
 
 /// A bitmap index for arithmetic types.
-template <value_type T, typename Bitstream>
-class arithmetic_bitmap_index : public bitmap_index<Bitstream>
+template <value_type T>
+class arithmetic_bitmap_index : public bitmap_index
 {
-  typedef underlying_value_type<T> underlying_value_type;
-  typedef typename std::conditional<
-    std::is_same<underlying_value_type, bool>::value,
-    bitmap<bool, Bitstream>,
+  using bitstream_type = null_bitstream; // TODO: Use compressed bitstream.
+  using underlying_value_type = underlying_value_type<T>;
+  using bitmap_type =
     typename std::conditional<
-      std::is_same<underlying_value_type, double>::value,
-      bitmap<double, Bitstream, range_encoder, precision_binner>,
+      std::is_same<underlying_value_type, bool>::value,
+      bitmap<bool, bitstream_type>,
       typename std::conditional<
-        std::is_integral<underlying_value_type>::value,
-        bitmap<underlying_value_type, Bitstream, range_encoder>,
-        std::false_type
+        std::is_same<underlying_value_type, double>::value,
+        bitmap<double, bitstream_type, range_encoder, precision_binner>,
+        typename std::conditional<
+          std::is_integral<underlying_value_type>::value,
+          bitmap<underlying_value_type, bitstream_type, range_encoder>,
+          std::false_type
+        >::type
       >::type
-    >::type
-  >::type bitmap_type;
+    >::type;
 
 public:
   arithmetic_bitmap_index() = default;
@@ -48,14 +50,17 @@ public:
     return bitmap_.patch(n);
   }
 
-  virtual option<Bitstream>
+  virtual option<bitstream>
   lookup(relational_operator op, value const& val) const override
   {
     if (op == in || op == not_in)
       throw error::operation("unsupported relational operator", op);
     if (bitmap_.empty())
       return {};
-    return bitmap_.lookup(op, val.get<underlying_value_type>());
+    auto result = bitmap_.lookup(op, val.get<underlying_value_type>());
+    if (! result)
+      return {};
+    return {std::move(*result)};
   };
 
   virtual std::string to_string() const override

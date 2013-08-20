@@ -14,11 +14,10 @@ namespace detail {
 /// A bitmap index for strings. It uses a @link dictionary
 /// vast::util::dictionary@endlink to map each string to a unique numeric value
 /// to be used by the bitmap.
-template <typename Bitstream>
-class string_bitmap_index : public bitmap_index<Bitstream>
+class string_bitmap_index : public bitmap_index
 {
-  typedef bitmap_index<Bitstream> super;
-  typedef uint64_t dictionary_codomain;
+  using bitstream_type = null_bitstream; // TODO: Use compressed bitstream.
+  using dictionary_codomain = uint64_t;
 
 public:
   virtual bool patch(size_t n) override
@@ -26,7 +25,7 @@ public:
     return bitmap_.patch(n);
   }
 
-  virtual option<Bitstream>
+  virtual option<bitstream>
   lookup(relational_operator op, value const& val) const override
   {
     if (! (op == equal || op == not_equal))
@@ -41,7 +40,7 @@ public:
     if (! bs)
       return {};
 
-    return op == equal ? bs : std::move(bs->flip());
+    return {std::move(op == equal ? *bs : bs->flip())};
   };
 
   virtual std::string to_string() const override
@@ -64,7 +63,7 @@ private:
     return bitmap_.push_back(*i);
   }
 
-  bitmap<dictionary_codomain, Bitstream> bitmap_;
+  bitmap<dictionary_codomain, bitstream_type> bitmap_;
   util::map_dictionary<dictionary_codomain> dictionary_;
 };
 

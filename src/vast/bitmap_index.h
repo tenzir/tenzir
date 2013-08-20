@@ -7,8 +7,9 @@
 
 namespace vast {
 
+class bitstream;
+
 /// The abstract base class for bitmap indexes.
-template <typename Bitstream>
 class bitmap_index
 {
 public:
@@ -18,10 +19,7 @@ public:
   /// Appends a single value.
   /// @param val The value to add to the index.
   /// @return `true` if appending succeeded.
-  bool push_back(value const& val)
-  {
-    return (val == nil) ? patch(1) : push_back_impl(val);
-  }
+  bool push_back(value const& val);
 
   /// Appends fill material (i.e., invalid bits).
   /// @param n The number of elements to append.
@@ -31,7 +29,7 @@ public:
   /// Looks up a value with a given relational operator.
   /// @param op The relation operator.
   /// @param val The value to lookup.
-  virtual option<Bitstream>
+  virtual option<bitstream>
   lookup(relational_operator op, value const& val) const = 0;
 
   /// Creates a string representation of the bitmap index.
