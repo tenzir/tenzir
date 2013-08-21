@@ -22,7 +22,7 @@ struct storage_policy
 template <typename T, typename Bitstream>
 struct vector_storage : storage_policy
 {
-  typedef Bitstream bitstream_type;
+  using bitstream_type = Bitstream;
 
   Bitstream const* find(T const& x) const
   {
@@ -99,7 +99,7 @@ private:
 template <typename T, typename Bitstream>
 struct list_storage : storage_policy
 {
-  typedef Bitstream bitstream_type;
+  using bitstream_type = Bitstream;
 
   Bitstream const* find(T const& x) const
   {
@@ -156,9 +156,9 @@ struct list_storage : storage_policy
   }
 
 private:
-  typedef std::list<std::pair<T, Bitstream>> list_type;
-  typedef typename list_type::value_type list_value_type;
-  typedef typename list_type::iterator iterator_type;
+  using list_type = std::list<std::pair<T, Bitstream>>;
+  using list_value_type = typename list_type::value_type;
+  using iterator_type = typename list_type::iterator;
 
   struct key_comp
   {
@@ -179,7 +179,7 @@ private:
 template <typename T, typename Bitstream>
 struct unordered_storage : storage_policy
 {
-  typedef Bitstream bitstream_type;
+  using bitstream_type = Bitstream;
 
   Bitstream const* find(T const& x) const
   {
@@ -246,7 +246,7 @@ struct equality_encoder
       if (! store.emplace(x, {store.rows, 0}))
         return false;
 
-    typedef typename Storage::bitstream_type bs_type;
+    using bs_type = typename Storage::bitstream_type;
     store.each([&](T const& k, bs_type& bs) { bs.push_back(x == k); });
     ++store.rows;
     return true;
@@ -296,7 +296,7 @@ struct binary_encoder
         store.emplace(i, {});
     }
 
-    typedef typename Storage::bitstream_type bs_type;
+    using bs_type = typename Storage::bitstream_type;
     store.each([&](T const& i, bs_type& bs) { bs.push_back((x >> i) & 1); });
 
     ++store.rows;
@@ -349,7 +349,7 @@ struct range_encoder
       if (! store.emplace(x, make_bitstream(store, x)))
         return false;
 
-    typedef typename Storage::bitstream_type bs_type;
+    using bs_type = typename Storage::bitstream_type;
     store.each([&](T const& k, bs_type& bs) { bs.push_back(x <= k); });
     ++store.rows;
     return true;
@@ -505,21 +505,22 @@ template <
 >
 class bitmap
 {
-  typedef typename std::conditional<
-    std::is_same<Encoder<T>, range_encoder<T>>::value,
-    detail::list_storage<T, Bitstream>,
+  using storage_type = 
     typename std::conditional<
-      std::is_same<Encoder<T>, binary_encoder<T>>::value,
-        detail::vector_storage<T, Bitstream>,
-        detail::unordered_storage<T, Bitstream>
-    >::type
-  >::type storage_type;
+      std::is_same<Encoder<T>, range_encoder<T>>::value,
+      detail::list_storage<T, Bitstream>,
+      typename std::conditional<
+        std::is_same<Encoder<T>, binary_encoder<T>>::value,
+          detail::vector_storage<T, Bitstream>,
+          detail::unordered_storage<T, Bitstream>
+      >::type
+    >::type;
 
 public:
-  typedef T value_type;
-  typedef Bitstream bitstream_type;
-  typedef Encoder<T> encoder_type;
-  typedef Binner<T> binner_type;
+  using value_type = T;
+  using bitstream_type = Bitstream;
+  using encoder_type = Encoder<T>;
+  using binner_type = Binner<T>;
 
   /// Constructs an empty bitmap.
   bitmap(Encoder<T> encoder = Encoder<T>(), Binner<T> binner = Binner<T>())
@@ -653,9 +654,9 @@ template <
 class bitmap<bool, Bitstream, Encoder, Binner>
 {
 public:
-  typedef bool value_type;
-  typedef Bitstream bitstream_type;
-  typedef Bitstream storage_type;
+  using value_type = bool;
+  using bitstream_type = Bitstream;
+  using storage_type = Bitstream;
 
   bitmap() = default;
 
@@ -733,7 +734,7 @@ private:
     return str;
   }
 
-  Bitstream bool_;
+  storage_type bool_;
   Bitstream valid_;
 };
 
