@@ -40,7 +40,7 @@ std::string address_bitmap_index::to_string() const
   std::vector<bitstream_type> v;
   v.reserve(128);
   for (size_t i = 0; i < 128; ++i)
-    v.emplace_back(*bitmaps_[i / 8].storage().find(7 - i % 8));
+    v.emplace_back(*bitmaps_[i / 8].lookup_raw(7 - i % 8));
   std::string str;
   for (auto& row : transpose(v))
     str += to_string(row) + '\n';
@@ -102,7 +102,7 @@ address_bitmap_index::lookup(prefix const& pfx, relational_operator op) const
   for (size_t i = is_v4 ? 12 : 0; i < 16; ++ i)
     for (size_t j = 8; j --> 0; )
     {
-      if (auto bs = bitmaps_[i].storage().find(j))
+      if (auto bs = bitmaps_[i].lookup_raw(j))
         *result &= ((bytes[i] >> j) & 1) ? *bs : ~*bs;
       else
         throw error::index("corrupt index: bit must exist");

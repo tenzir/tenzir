@@ -8,32 +8,32 @@ BOOST_AUTO_TEST_CASE(vector_storage)
 {
   typedef null_bitstream bitstream_type;
   detail::vector_storage<uint8_t, bitstream_type> s;
-  BOOST_CHECK(s.emplace(0, {}));
-  BOOST_CHECK(s.emplace(1, bitstream_type(10, true)));
-  BOOST_CHECK(s.emplace(2, {}));
-  BOOST_CHECK(s.emplace(3, bitstream_type(5, false)));
-  BOOST_CHECK(s.emplace(4, {}));
+  BOOST_CHECK(s.insert(0));
+  BOOST_CHECK(s.insert(1, bitstream_type(10, true)));
+  BOOST_CHECK(s.insert(2));
+  BOOST_CHECK(s.insert(3, bitstream_type(5, false)));
+  BOOST_CHECK(s.insert(4));
   BOOST_CHECK_EQUAL(s.cardinality(), 5);
-  auto b = s.bounds(2);
+  auto b = s.find_bounds(2);
   BOOST_CHECK(b.first && b.second);
   BOOST_CHECK_EQUAL(b.first->size(), 10);
   BOOST_CHECK_EQUAL(b.second->size(), 5);
-  auto c = s.bounds(0);
+  auto c = s.find_bounds(0);
   BOOST_CHECK(! c.first && c.second);
-  auto d = s.bounds(4);
+  auto d = s.find_bounds(4);
   BOOST_CHECK(d.first && ! d.second);
 
   detail::vector_storage<uint8_t, bitstream_type> t;
-  BOOST_CHECK(t.emplace(2, bitstream_type(10, true)));
-  BOOST_CHECK(t.emplace(4, bitstream_type(5, false)));
+  BOOST_CHECK(t.insert(2, bitstream_type(10, true)));
+  BOOST_CHECK(t.insert(4, bitstream_type(5, false)));
   BOOST_CHECK_EQUAL(t.cardinality(), 2);
-  auto e = t.bounds(3);
+  auto e = t.find_bounds(3);
   BOOST_CHECK(e.first && e.second);
   BOOST_CHECK_EQUAL(e.first->size(), 10);
   BOOST_CHECK_EQUAL(e.second->size(), 5);
-  auto f = t.bounds(0);
+  auto f = t.find_bounds(0);
   BOOST_CHECK(! f.first && f.second);
-  auto g = t.bounds(8);
+  auto g = t.find_bounds(8);
   BOOST_CHECK(g.first && ! g.second);
 }
 
@@ -61,7 +61,7 @@ BOOST_AUTO_TEST_CASE(basic_bitmap)
 
 BOOST_AUTO_TEST_CASE(range_encoded_bitmap)
 {
-  bitmap<int, null_bitstream, range_encoder> bm;
+  bitmap<int, null_bitstream, range_coder> bm;
   BOOST_REQUIRE(bm.push_back(42));
   BOOST_REQUIRE(bm.push_back(84));
   BOOST_REQUIRE(bm.push_back(42));
@@ -96,7 +96,7 @@ BOOST_AUTO_TEST_CASE(range_encoded_bitmap)
 
 BOOST_AUTO_TEST_CASE(binary_encoded_bitmap)
 {
-  bitmap<int8_t, null_bitstream, binary_encoder> bm;
+  bitmap<int8_t, null_bitstream, binary_coder> bm;
   BOOST_REQUIRE(bm.push_back(0));
   BOOST_REQUIRE(bm.push_back(1));
   BOOST_REQUIRE(bm.push_back(1));
@@ -122,7 +122,7 @@ BOOST_AUTO_TEST_CASE(binary_encoded_bitmap)
 
 BOOST_AUTO_TEST_CASE(bitmap_precision_binning_integral)
 {
-  bitmap<int, null_bitstream, equality_encoder, precision_binner> bm({}, 2);
+  bitmap<int, null_bitstream, equality_coder, precision_binner> bm(2);
   BOOST_REQUIRE(bm.push_back(183));
   BOOST_REQUIRE(bm.push_back(215));
   BOOST_REQUIRE(bm.push_back(350));
@@ -136,7 +136,7 @@ BOOST_AUTO_TEST_CASE(bitmap_precision_binning_integral)
 
 BOOST_AUTO_TEST_CASE(bitmap_precision_binning_double_negative)
 {
-  bitmap<double, null_bitstream, equality_encoder, precision_binner> bm({}, -3);
+  bitmap<double, null_bitstream, equality_coder, precision_binner> bm(-3);
 
   // These end up in different bins...
   BOOST_REQUIRE(bm.push_back(42.001));
@@ -157,7 +157,7 @@ BOOST_AUTO_TEST_CASE(bitmap_precision_binning_double_negative)
 
 BOOST_AUTO_TEST_CASE(bitmap_precision_binning_double_positive)
 {
-  bitmap<double, null_bitstream, equality_encoder, precision_binner> bm({}, 1);
+  bitmap<double, null_bitstream, equality_coder, precision_binner> bm(1);
 
   // These end up in different bins...
   BOOST_REQUIRE(bm.push_back(42.123));

@@ -6,6 +6,11 @@
 
 namespace vast {
 
+time_bitmap_index::time_bitmap_index(int precision)
+  : bitmap_({precision}, {})
+{
+}
+
 bool time_bitmap_index::patch(size_t n)
 {
   return bitmap_.patch(n);

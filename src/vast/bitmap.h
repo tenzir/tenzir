@@ -32,7 +32,7 @@ struct vector_storage : storage_policy
     return &*vector_[i];
   }
 
-  std::pair<Bitstream const*, Bitstream const*> bounds(T const& x) const
+  std::pair<Bitstream const*, Bitstream const*> find_bounds(T const& x) const
   {
     if (vector_.empty())
       return {nullptr, nullptr};
@@ -70,7 +70,7 @@ struct vector_storage : storage_policy
       f(i, *vector_[i]);
   }
 
-  bool emplace(T const& x, Bitstream b)
+  bool insert(T const& x, Bitstream b = {})
   {
     auto i = static_cast<size_t>(x);
     if (i >= vector_.size())
@@ -107,7 +107,7 @@ struct list_storage : storage_policy
     return i == map_.end() ? nullptr : &i->second->second;
   }
 
-  std::pair<Bitstream const*, Bitstream const*> bounds(T const& x) const
+  std::pair<Bitstream const*, Bitstream const*> find_bounds(T const& x) const
   {
     if (map_.empty())
       return {nullptr, nullptr};
@@ -138,7 +138,7 @@ struct list_storage : storage_policy
       f(p.first, p.second);
   }
 
-  bool emplace(T const& x, Bitstream b)
+  bool insert(T const& x, Bitstream b = {})
   {
     auto i = std::lower_bound(
         list_.begin(), list_.end(), list_value_type(x, {}), key_comp_);
@@ -187,7 +187,7 @@ struct unordered_storage : storage_policy
     return i == map_.end() ? nullptr : &i->second;
   }
 
-  std::pair<Bitstream const*, Bitstream const*> bounds(T const& x) const
+  std::pair<Bitstream const*, Bitstream const*> find_bounds(T const& x) const
   {
     if (map_.empty())
       return {nullptr, nullptr};
@@ -218,7 +218,7 @@ struct unordered_storage : storage_policy
       f(p.first, p.second);
   }
 
-  bool emplace(T const& x, Bitstream b)
+  bool insert(T const& x, Bitstream b = {})
   {
     auto p = map_.emplace(x, std::move(b));
     return p.second;
@@ -235,26 +235,44 @@ private:
 
 } // detail
 
-/// An equality encoding policy for bitmaps.
-template <typename T>
-struct equality_encoder
+template <typename T, typename Bitstream, typename Storage>
+struct coder
 {
-  template <typename Storage>
-  bool encode(Storage& store, T const& x)
+  bool patch(size_t n = 1)
+  {
+    auto success = true;
+    store.each(
+        [&](T const&, Bitstream& bs)
+        {
+          if (! bs.append(n, false))
+            success = false;
+        });
+    return success;
+  }
+
+  Storage store;
+};
+
+/// An equality encoding policy for bitmaps.
+template <typename T, typename Bitstream>
+struct equality_coder
+  : coder<T, Bitstream, detail::unordered_storage<T, Bitstream>>
+{
+  using super = coder<T, Bitstream, detail::unordered_storage<T, Bitstream>>;
+  using super::store;
+
+  bool encode(T const& x)
   {
     if (! store.find(x))
-      if (! store.emplace(x, {store.rows, 0}))
+      if (! store.insert(x, {store.rows, 0}))
         return false;
 
-    using bs_type = typename Storage::bitstream_type;
-    store.each([&](T const& k, bs_type& bs) { bs.push_back(x == k); });
+    store.each([&](T const& k, Bitstream& bs) { bs.push_back(x == k); });
     ++store.rows;
     return true;
   }
 
-  template <typename Storage>
-  option<typename Storage::bitstream_type>
-  decode(Storage& store, T const& x, relational_operator op = equal) const
+  option<Bitstream> decode(T const& x, relational_operator op = equal) const
   {
     auto result = store.find(x);
     switch (op)
@@ -277,87 +295,91 @@ struct equality_encoder
 
 /// A binary encoding policy for bitmaps.
 /// This scheme is also known as *bit-sliced* encoding.
-template <typename T>
-struct binary_encoder
+template <typename T, typename Bitstream>
+struct binary_coder
+  : coder<T, Bitstream, detail::vector_storage<uint8_t, Bitstream>>
 {
   static_assert(std::is_integral<T>::value,
                 "binary encoding requires an integral type");
 
-  static size_t constexpr bits = std::numeric_limits<T>::digits;
+  using super = coder<T, Bitstream, detail::vector_storage<uint8_t, Bitstream>>;
+  using super::store;
 
-  template <typename Storage>
-  bool encode(Storage& store, T const& x)
+  static uint8_t constexpr bits = std::numeric_limits<T>::digits;
+
+  binary_coder()
   {
-    if (! initialized)
-    {
-      initialized = true;
-      assert(store.cardinality() == 0);
-      for (size_t i = 0; i < bits; ++i)
-        store.emplace(i, {});
-    }
+    for (uint8_t i = 0; i < bits; ++i)
+      store.insert(i);
+  }
 
-    using bs_type = typename Storage::bitstream_type;
-    store.each([&](T const& i, bs_type& bs) { bs.push_back((x >> i) & 1); });
-
+  bool encode(T const& x)
+  {
+    store.each([&](uint8_t i, Bitstream& bs) { bs.push_back((x >> i) & 1); });
     ++store.rows;
     return true;
   }
 
-  template <typename Storage>
-  option<typename Storage::bitstream_type>
-  decode(Storage& store, T const& x, relational_operator op = equal) const
+  option<Bitstream> decode(T const& x, relational_operator op = equal) const
   {
-    if (! initialized)
-      return {};
-
     switch (op)
     {
       default:
         throw error::operation("unsupported relational operator", op);
       case equal:
         {
-          typename Storage::bitstream_type result(store.rows, true);
-          for (size_t i = 0; i < bits; ++i)
+          Bitstream result{store.rows, true};
+          for (uint8_t i = 0; i < bits; ++i)
             result &= ((x >> i) & 1) ? *store.find(i) : ~*store.find(i);
-          if (result.find_first() == Storage::bitstream_type::npos)
+          if (result.find_first() == Bitstream::npos)
             return {};
           else
             return std::move(result);
         }
       case not_equal:
-        if (auto result = decode(store, x, equal))
+        if (auto result = decode(x, equal))
           return std::move((*result).flip());
         else
           return {{store.rows, true}};
     }
   }
-
-  bool initialized = false;
 };
 
 /// A less-than-or-equal range encoding policy for bitmaps.
-template <typename T>
-struct range_encoder
+template <typename T, typename Bitstream>
+struct range_coder : coder<T, Bitstream, detail::list_storage<T, Bitstream>>
 {
   static_assert(! std::is_same<T, bool>::value,
                 "range encoding for boolean value does not make sense");
 
-  template <typename Storage>
-  bool encode(Storage& store, T const& x)
+  using super = coder<T, Bitstream, detail::list_storage<T, Bitstream>>;
+  using super::store;
+
+  bool encode(T const& x)
   {
     if (! store.find(x))
-      if (! store.emplace(x, make_bitstream(store, x)))
+    {
+      auto range = store.find_bounds(x);
+      auto success = true;
+      if (range.first && range.second)
+        success = store.insert(x, {*range.first});
+      else if (range.first)
+        success = store.insert(x, {store.rows, true});
+      else if (range.second)
+        success = store.insert(x, {store.rows, false});
+      else
+        success = store.insert(x, {store.rows, true});
+      if (! success)
         return false;
+    }
 
-    using bs_type = typename Storage::bitstream_type;
-    store.each([&](T const& k, bs_type& bs) { bs.push_back(x <= k); });
+    store.each([&](T const& k, Bitstream& bs) { bs.push_back(x <= k); });
     ++store.rows;
     return true;
   }
 
-  template <typename Storage>
-  option<typename Storage::bitstream_type>
-  decode(Storage& store, T const& x, relational_operator op = less_equal) const
+  option<Bitstream>
+  decode(T const& x, relational_operator op = less_equal) const
   {
     switch (op)
     {
@@ -367,23 +389,23 @@ struct range_encoder
         if (! std::is_integral<T>::value)
           throw error::operation("operator needs integral type", op);
         else if (x == std::numeric_limits<T>::lowest())
-          return decode(store, x, less_equal);
+          return decode(x, less_equal);
         else
-          return decode(store, x - 1, less_equal);
+          return decode(x - 1, less_equal);
       case less_equal:
         if (auto result = store.find(x))
           return *result;
-        else if (auto lower = store.bounds(x).first)
+        else if (auto lower = store.find_bounds(x).first)
           return *lower;
         else
           return {};
       case greater:
-        if (auto result = decode(store, x, less_equal))
+        if (auto result = decode(x, less_equal))
           return std::move((*result).flip());
         else
           return {{store.rows, true}};
       case greater_equal:
-        if (auto result = decode(store, x, less))
+        if (auto result = decode(x, less))
           return std::move((*result).flip());
         else
           return {{store.rows, true}};
@@ -391,36 +413,21 @@ struct range_encoder
         {
           // For a range-encoded bitstream v == x means z <= x & ~pred(z). If
           // pred(z) does not exist, the query reduces to z <= x.
-          auto le = decode(store, x, less_equal);
+          auto le = decode(x, less_equal);
           if (! le)
             return {};
-          auto range = store.bounds(x);
+          auto range = store.find_bounds(x);
           if (! range.first)
             return le;
           *le &= ~*range.first;
           return le;
         }
       case not_equal:
-        if (auto result = decode(store, x, equal))
+        if (auto result = decode(x, equal))
           return std::move((*result).flip());
         else
           return {{store.rows, true}};
     }
-  }
-
-  template <typename Storage>
-  typename Storage::bitstream_type
-  make_bitstream(Storage& store, T const& x)
-  {
-    auto range = store.bounds(x);
-    if (range.first && range.second)
-      return *range.first;
-    else if (range.first)
-      return {store.rows, true};
-    else if (range.second)
-      return {store.rows, false};
-    else
-      return {store.rows, true};
   }
 };
 
@@ -500,31 +507,18 @@ struct precision_binner
 template <
   typename T,
   typename Bitstream = null_bitstream,
-  template <typename> class Encoder = equality_encoder,
+  template <typename, typename> class Coder = equality_coder,
   template <typename> class Binner = null_binner
 >
 class bitmap
 {
-  using storage_type = 
-    typename std::conditional<
-      std::is_same<Encoder<T>, range_encoder<T>>::value,
-      detail::list_storage<T, Bitstream>,
-      typename std::conditional<
-        std::is_same<Encoder<T>, binary_encoder<T>>::value,
-          detail::vector_storage<T, Bitstream>,
-          detail::unordered_storage<T, Bitstream>
-      >::type
-    >::type;
-
 public:
-  using value_type = T;
-  using bitstream_type = Bitstream;
-  using encoder_type = Encoder<T>;
+  using coder_type = Coder<T, Bitstream>;
   using binner_type = Binner<T>;
 
   /// Constructs an empty bitmap.
-  bitmap(Encoder<T> encoder = Encoder<T>(), Binner<T> binner = Binner<T>())
-    : encoder_(encoder), binner_(binner)
+  bitmap(binner_type binner = binner_type{}, coder_type coder = coder_type{})
+    : coder_(coder), binner_(binner)
   {
   }
 
@@ -538,7 +532,7 @@ public:
   /// `2^std::numeric_limits<size_t>::digits() - 1` elements.
   bool push_back(T const& x)
   {
-    auto success = encoder_.encode(bitstreams_, binner_(x));
+    auto success = coder_.encode(binner_(x));
     return success && valid_.push_back(true);
   }
 
@@ -547,16 +541,7 @@ public:
   /// @return `true` on success and `false` if the bitmap is full.
   bool patch(size_t n = 1)
   {
-    auto success = valid_.append(n, false);
-    if (! success)
-      return false;
-    bitstreams_.each(
-        [&](T const&, Bitstream& bs)
-        {
-          if (! bs.append(n, false))
-            success = false;
-        });
-    return success;
+    return valid_.append(n, false) && coder_.patch(n);
   }
 
   /// Shorthand for `lookup(equal, x)`.
@@ -575,17 +560,26 @@ public:
   /// for all values *v* such that *op(v,x)* is `true`.
   option<Bitstream> lookup(relational_operator op, T const& x) const
   {
-    auto result = encoder_.decode(bitstreams_, binner_(x), op);
+    auto result = coder_.decode(binner_(x), op);
     if (result)
       *result &= valid_;
     return result;
+  }
+
+  /// Retrieves the raw bistream without decoding the result.
+  /// @param x The raw value to lookup.
+  /// @return A pointer to the bitstream for *x* or `nullptr` if not found.
+  template <typename U>
+  Bitstream const* lookup_raw(U const& x) const
+  {
+    return coder_.store.find(x);
   }
 
   /// Retrieves the bitmap size.
   /// @return The number of elements contained in the bitmap.
   size_t size() const
   {
-    return bitstreams_.rows;
+    return coder_.store.rows;
   }
 
   /// Checks whether the bitmap is empty.
@@ -594,14 +588,6 @@ public:
   {
     return size() == 0;
   }
-
-  /// Retrieves the raw storage of the bitmap for inspection.
-  /// @return The underlying bitmap storage.
-  storage_type const& storage() const
-  {
-    return bitstreams_;
-  }
-
 
   /// Converts a bitmap to a `std::string`.
   ///
@@ -623,14 +609,14 @@ public:
     {
       using std::to_string;
       //using vast::to_string;
-      bm.bitstreams_.each(
+      bm.coder_.store.each(
           [&](T const& x, Bitstream const&) { str += to_string(x) + delim; });
       str.pop_back();
       str += '\n';
     }
     std::vector<Bitstream> cols;
-    cols.reserve(bm.bitstreams_.rows);
-    bm.bitstreams_.each(
+    cols.reserve(bm.coder_.store.rows);
+    bm.coder_.store.each(
         [&](T const&, Bitstream const& bs) { cols.push_back(bs); });
     for (auto& row : transpose(cols))
       str += to_string(row) + '\n';
@@ -639,19 +625,18 @@ public:
   }
 
 private:
-  Encoder<T> encoder_;
-  Binner<T> binner_;
-  storage_type bitstreams_;
+  coder_type coder_;
+  binner_type binner_;
   Bitstream valid_;
 };
 
 /// A bitmap specialization for `bool`.
 template <
   typename Bitstream,
-  template <typename> class Encoder,
+  template <typename, typename> class Coder,
   template <typename> class Binner
 >
-class bitmap<bool, Bitstream, Encoder, Binner>
+class bitmap<bool, Bitstream, Coder, Binner>
 {
 public:
   using value_type = bool;
@@ -698,11 +683,6 @@ public:
   bool empty() const
   {
     return bool_.empty();
-  }
-
-  storage_type const& storage() const
-  {
-    return bool_;
   }
 
 private:

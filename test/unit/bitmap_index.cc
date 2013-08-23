@@ -65,7 +65,7 @@ BOOST_AUTO_TEST_CASE(integral_bitmap_index)
 
 BOOST_AUTO_TEST_CASE(floating_point_bitmap_index)
 {
-  arithmetic_bitmap_index<double_type> abi(-2);
+  arithmetic_bitmap_index<double_type> abi{-2};
   bitmap_index* bi = &abi;
   BOOST_REQUIRE(bi->push_back(-7.8));
   BOOST_REQUIRE(bi->push_back(42.123));
@@ -85,7 +85,7 @@ BOOST_AUTO_TEST_CASE(floating_point_bitmap_index)
 
 BOOST_AUTO_TEST_CASE(temporal_bitmap_index)
 {
-  time_bitmap_index trbi(8);  // 0.1 sec resolution
+  time_bitmap_index trbi{8};  // 0.1 sec resolution
   bitmap_index* bi = &trbi;
   BOOST_REQUIRE(bi->push_back(std::chrono::milliseconds(1000)));
   BOOST_REQUIRE(bi->push_back(std::chrono::milliseconds(2000)));
