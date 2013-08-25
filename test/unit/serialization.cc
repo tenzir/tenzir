@@ -60,6 +60,32 @@ BOOST_AUTO_TEST_CASE(byte_swapping)
   BOOST_CHECK_EQUAL(y64, x64);
 }
 
+BOOST_AUTO_TEST_CASE(containers)
+{
+  std::vector<double> v0{4.2, 8.4, 16.8};
+  std::list<int> l0{4, 2};
+  std::unordered_map<int, int> u0{{4, 2}, {8, 4}};
+
+  std::vector<uint8_t> buf;
+  {
+    auto sink = io::make_container_output_stream(buf);
+    binary_serializer serializer(sink);
+    serializer << v0 << l0 << u0;
+  };
+
+  std::vector<double> v1;
+  std::list<int> l1;
+  std::unordered_map<int, int> u1;
+
+  auto source = io::make_container_input_stream(buf);
+  binary_deserializer deserializer(source);
+  deserializer >> v1 >> l1 >> u1;
+
+  BOOST_CHECK(v0 == v1);
+  BOOST_CHECK(l0 == l1);
+  BOOST_CHECK(u0 == u1);
+}
+
 // A serializable class.
 class serializable
 {

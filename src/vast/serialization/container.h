@@ -1,7 +1,9 @@
 #ifndef VAST_SERIALIZATION_CONTAINER_H
 #define VAST_SERIALIZATION_CONTAINER_H
 
+#include <list>
 #include <vector>
+#include <unordered_map>
 #include "vast/exception.h"
 #include "vast/traits.h"
 #include "vast/serialization/arithmetic.h"
@@ -87,7 +89,7 @@ deserialize(deserializer& source, std::vector<T>& v)
   source.begin_sequence(size);
   if (size > 0)
   {
-    typedef typename std::vector<T>::size_type size_type;
+    using size_type = typename std::vector<T>::size_type;
     if (size > std::numeric_limits<size_type>::max())
       throw std::length_error("size too large for architecture");
     v.resize(size);
@@ -109,6 +111,67 @@ void deserialize(deserializer& source, std::pair<T, U>& pair)
 {
   source >> pair.first;
   source >> pair.second;
+}
+
+template <typename Key, typename T>
+void serialize(serializer& sink, std::unordered_map<Key, T> const& map)
+{
+  sink.begin_sequence(map.size());
+  if (! map.empty())
+    for (auto& i : map)
+      sink << i;
+  sink.end_sequence();
+}
+
+template <typename Key, typename T>
+void deserialize(deserializer& source, std::unordered_map<Key, T>& map)
+{
+  uint64_t size;
+  source.begin_sequence(size);
+  if (size > 0)
+  {
+    using size_type = typename std::unordered_map<Key, T>::size_type;
+    if (size > std::numeric_limits<size_type>::max())
+      throw std::length_error("size too large for architecture");
+    map.reserve(size);
+    for (size_type i = 0; i < size; ++i)
+    {
+      std::pair<Key, T> p;
+      source >> p;
+      map.insert(std::move(p));
+    }
+  }
+  source.end_sequence();
+}
+
+template <typename T>
+void serialize(serializer& sink, std::list<T> const& list)
+{
+  sink.begin_sequence(list.size());
+  if (! list.empty())
+    for (auto& i : list)
+      sink << i;
+  sink.end_sequence();
+}
+
+template <typename T>
+void deserialize(deserializer& source, std::list<T>& list)
+{
+  uint64_t size;
+  source.begin_sequence(size);
+  if (size > 0)
+  {
+    using size_type = typename std::list<T>::size_type;
+    if (size > std::numeric_limits<size_type>::max())
+      throw std::length_error("size too large for architecture");
+    for (size_type i = 0; i < size; ++i)
+    {
+      T x;
+      source >> x;
+      list.push_back(std::move(x));
+    }
+  }
+  source.end_sequence();
 }
 
 } // namespace vast
