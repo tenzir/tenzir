@@ -1,6 +1,6 @@
 #include "test.h"
 #include "vast/cow.h"
-#include "vast/io/container_stream.h"
+#include "vast/io/serialization.h"
 
 using namespace vast;
 
@@ -43,22 +43,9 @@ BOOST_AUTO_TEST_CASE(copy_on_write)
 
 BOOST_AUTO_TEST_CASE(cow_serialization)
 {
-  cow<int> x{42};
+  cow<int> x{42}, y;
   std::vector<uint8_t> buf;
-
-  {
-    auto sink = io::make_container_output_stream(buf);
-    binary_serializer serializer(sink);
-    serializer << x;
-  }
-
-  cow<int> y;
-
-  {
-    auto source = io::make_container_input_stream(buf);
-    binary_deserializer deserializer(source);
-    deserializer >> y;
-  }
-
+  io::archive(buf, x);
+  io::unarchive(buf, y);
   BOOST_CHECK_EQUAL(*x, *y);
 }

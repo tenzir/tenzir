@@ -1,7 +1,7 @@
 #include "test.h"
 #include "vast/bitstream.h"
 #include "vast/to_string.h"
-#include "vast/io/container_stream.h"
+#include "vast/io/serialization.h"
 
 using namespace vast;
 
@@ -10,22 +10,15 @@ BOOST_AUTO_TEST_CASE(polymorphic_bitstream)
   bitstream empty;
   BOOST_CHECK(! empty);
 
-  bitstream x(null_bitstream{});
+  bitstream x(null_bitstream{}), y;
   BOOST_REQUIRE(x);
   BOOST_CHECK(x.append(3, true));
   BOOST_CHECK_EQUAL(x.size(), 3);
   BOOST_CHECK_EQUAL(to_string(x),  "111");
 
   std::vector<uint8_t> buf;
-  {
-    auto sink = io::make_container_output_stream(buf);
-    binary_serializer bs{sink};
-    bs << x;
-  }
-  auto source = io::make_container_input_stream(buf);
-  binary_deserializer bd{source};
-  bitstream y;
-  bd >> y;
+  io::archive(buf, x);
+  io::unarchive(buf, y);
   BOOST_CHECK_EQUAL(y.size(), 3);
   BOOST_CHECK_EQUAL(to_string(y),  "111");
 }

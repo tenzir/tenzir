@@ -3,9 +3,7 @@
 
 #include "vast/object.h"
 #include "vast/serialization.h"
-#include "vast/io/array_stream.h"
-#include "vast/io/container_stream.h"
-#include "vast/io/compressed_stream.h"
+#include "vast/io/serialization.h"
 
 using namespace vast;
 
@@ -62,24 +60,13 @@ BOOST_AUTO_TEST_CASE(byte_swapping)
 
 BOOST_AUTO_TEST_CASE(containers)
 {
-  std::vector<double> v0{4.2, 8.4, 16.8};
-  std::list<int> l0{4, 2};
-  std::unordered_map<int, int> u0{{4, 2}, {8, 4}};
+  std::vector<double> v0{4.2, 8.4, 16.8}, v1;
+  std::list<int> l0{4, 2}, l1;
+  std::unordered_map<int, int> u0{{4, 2}, {8, 4}}, u1;
 
   std::vector<uint8_t> buf;
-  {
-    auto sink = io::make_container_output_stream(buf);
-    binary_serializer serializer(sink);
-    serializer << v0 << l0 << u0;
-  };
-
-  std::vector<double> v1;
-  std::list<int> l1;
-  std::unordered_map<int, int> u1;
-
-  auto source = io::make_container_input_stream(buf);
-  binary_deserializer deserializer(source);
-  deserializer >> v1 >> l1 >> u1;
+  io::archive(buf, v0, l0, u0);
+  io::unarchive(buf, v1, l1, u1);
 
   BOOST_CHECK(v0 == v1);
   BOOST_CHECK(l0 == l1);
@@ -119,52 +106,33 @@ BOOST_AUTO_TEST_CASE(io_serialization_interface)
 #endif // VAST_HAVE_SNAPPY
   for (auto method : methods)
   {
-    std::vector<int> input(1u << 10);
+    std::vector<int> input(1u << 10), output;
     BOOST_REQUIRE(input.size() % 2 == 0);
     for (size_t i = 0; i < input.size() / 2; ++i)
       input[i] = i % 128;
     for (size_t i = input.size() / 2; i < input.size(); ++i)
       input[i] = i % 2;
 
-    std::vector<uint8_t> tmp;
-    {
-      auto out = io::make_container_output_stream(tmp);
-      std::unique_ptr<io::compressed_output_stream> comp_out(
-          io::make_compressed_output_stream(method, out));
-      binary_serializer sink(*comp_out);
-      sink << input;
-      sink << serializable();
-    }
+    std::vector<uint8_t> buf;
+    serializable x;
+    io::compress(method, buf, input, serializable());
+    io::decompress(method, buf, output, x);
 
-    std::vector<int> output;
-    auto in = io::make_array_input_stream(tmp);
-    std::unique_ptr<io::compressed_input_stream> comp_in(
-        io::make_compressed_input_stream(method, in));
-    binary_deserializer source(*comp_in);
-    source >> output;
     BOOST_REQUIRE_EQUAL(input.size(), output.size());
     for (size_t i = 0; i < input.size(); ++i)
       BOOST_CHECK_EQUAL(output[i], input[i]);
-
-    serializable x;
-    source >> x;
     BOOST_CHECK_EQUAL(x.i(), 42);
   }
 }
 
 BOOST_AUTO_TEST_CASE(object_serialization)
 {
-  auto o = object::adopt(new vector{42, 84, 1337});
+  object o, p;
+  o = object::adopt(new vector{42, 84, 1337});
+
   std::vector<uint8_t> buf;
-
-  auto out = io::make_container_output_stream(buf);
-  binary_serializer sink(out);
-  sink << o;
-
-  auto in = io::make_array_input_stream(buf);
-  binary_deserializer source(in);
-  object p;
-  source >> p;
+  io::archive(buf, o);
+  io::unarchive(buf, p);
 
   BOOST_CHECK(o == p);
 }
@@ -238,10 +206,8 @@ BOOST_AUTO_TEST_CASE(polymorphic_object_serialization)
   {
     // Similarly, it should always be possible to retrieve an opaque object and
     // get the derived type via a type-checked invocation of get<T>.
-    auto in = io::make_array_input_stream(buf);
-    binary_deserializer source(in);
     object o;
-    source >> o;
+    io::unarchive(buf, o);
     BOOST_CHECK(o.convertible_to<derived>());
     BOOST_CHECK_EQUAL(get<derived>(o).f(), 42);
     // Since we've announced the type as being convertible to its base class,
