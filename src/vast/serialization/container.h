@@ -62,6 +62,7 @@ deserialize(deserializer& source, std::vector<T>& v)
   source.begin_sequence(size);
   if (size > 0)
   {
+    v.clear();
     typedef typename std::vector<T>::size_type size_type;
     if (size > std::numeric_limits<size_type>::max())
       throw std::length_error("size too large for architecture");
@@ -89,6 +90,7 @@ deserialize(deserializer& source, std::vector<T>& v)
   source.begin_sequence(size);
   if (size > 0)
   {
+    v.clear();
     using size_type = typename std::vector<T>::size_type;
     if (size > std::numeric_limits<size_type>::max())
       throw std::length_error("size too large for architecture");
@@ -130,6 +132,7 @@ void deserialize(deserializer& source, std::unordered_map<Key, T>& map)
   source.begin_sequence(size);
   if (size > 0)
   {
+    map.clear();
     using size_type = typename std::unordered_map<Key, T>::size_type;
     if (size > std::numeric_limits<size_type>::max())
       throw std::length_error("size too large for architecture");
@@ -161,6 +164,7 @@ void deserialize(deserializer& source, std::list<T>& list)
   source.begin_sequence(size);
   if (size > 0)
   {
+    list.clear();
     using size_type = typename std::list<T>::size_type;
     if (size > std::numeric_limits<size_type>::max())
       throw std::length_error("size too large for architecture");
