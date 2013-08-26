@@ -13,7 +13,7 @@ class address_bitmap_index : public bitmap_index
   using bitstream_type = null_bitstream; // TODO: Use compressed bitstream.
 
 public:
-  virtual bool patch(size_t /* n */) override;
+  virtual bool append(size_t n, bool bit) override;
 
   virtual option<bitstream>
   lookup(relational_operator op, value const& val) const override;

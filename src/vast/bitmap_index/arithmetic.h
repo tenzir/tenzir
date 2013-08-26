@@ -41,9 +41,9 @@ public:
   {
   }
 
-  virtual bool patch(size_t n) override
+  virtual bool append(size_t n, bool bit) override
   {
-    return bitmap_.patch(n);
+    return bitmap_.append(n, bit);
   }
 
   virtual option<bitstream>

@@ -11,9 +11,9 @@ time_bitmap_index::time_bitmap_index(int precision)
 {
 }
 
-bool time_bitmap_index::patch(size_t n)
+bool time_bitmap_index::append(size_t n, bool bit)
 {
-  return bitmap_.patch(n);
+  return bitmap_.append(n, bit);
 }
 
 option<bitstream>

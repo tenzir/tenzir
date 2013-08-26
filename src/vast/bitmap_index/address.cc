@@ -5,13 +5,13 @@
 
 namespace vast {
 
-bool address_bitmap_index::patch(size_t /* n */)
+bool address_bitmap_index::append(size_t n, bool bit)
 {
   bool success = true;
   for (size_t i = 0; i < 16; ++i)
-    if (! bitmaps_[i].patch(1))
+    if (! bitmaps_[i].append(n, bit))
       success = false;
-  return v4_.append(1, false) && success;
+  return v4_.append(n, bit) && success;
 }
 
 option<bitstream>

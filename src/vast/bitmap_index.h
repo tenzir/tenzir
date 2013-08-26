@@ -22,8 +22,9 @@ public:
 
   /// Appends fill material (i.e., invalid bits).
   /// @param n The number of elements to append.
+  /// @param bit The value of the bits to append.
   /// @return `true` on success.
-  virtual bool patch(size_t n) = 0;
+  virtual bool append(size_t n, bool bit) = 0;
 
   /// Looks up a value with a given relational operator.
   /// @param op The relation operator.

@@ -6,7 +6,7 @@ namespace vast {
 
 bool bitmap_index::push_back(value const& val)
 {
-  return (val == nil) ? patch(1) : push_back_impl(val);
+  return (val == nil) ? append(1, false) : push_back_impl(val);
 }
 
 } // namespace vast

@@ -16,7 +16,7 @@ class string_bitmap_index : public bitmap_index
   using dictionary_codomain = uint64_t;
 
 public:
-  virtual bool patch(size_t n) override;
+  virtual bool append(size_t n, bool bit) override;
 
   virtual option<bitstream>
   lookup(relational_operator op, value const& val) const override;

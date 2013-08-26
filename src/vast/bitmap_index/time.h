@@ -18,7 +18,7 @@ public:
   /// @param precision The granularity of the index. Defaults to seconds.
   time_bitmap_index(int precision = 7);
 
-  virtual bool patch(size_t n) override;
+  virtual bool append(size_t n, bool bit) override;
 
   virtual option<bitstream>
   lookup(relational_operator op, value const& val) const override;

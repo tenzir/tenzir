@@ -14,7 +14,7 @@ class port_bitmap_index : public bitmap_index
   using proto_type = std::underlying_type<port::port_type>::type;
 
 public:
-  virtual bool patch(size_t n) override;
+  virtual bool append(size_t n, bool bit) override;
 
   virtual option<bitstream>
   lookup(relational_operator op, value const& val) const override;

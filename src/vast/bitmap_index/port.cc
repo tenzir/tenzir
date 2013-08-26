@@ -6,10 +6,10 @@
 
 namespace vast {
 
-bool port_bitmap_index::patch(size_t n)
+bool port_bitmap_index::append(size_t n, bool bit)
 {
-  auto success = num_.patch(n);
-  return proto_.patch(n) && success;
+  auto success = num_.append(n, bit);
+  return proto_.append(n, bit) && success;
 }
 
 option<bitstream>

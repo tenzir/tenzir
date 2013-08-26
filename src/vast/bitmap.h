@@ -288,13 +288,13 @@ template <typename T, typename Bitstream, typename Storage>
 class coder
 {
 public:
-  bool patch(size_t n = 1)
+  bool append(size_t n, bool bit)
   {
     auto success = true;
     store_.each(
         [&](T const&, Bitstream& bs)
         {
-          if (! bs.append(n, false))
+          if (! bs.append(n, bit))
             success = false;
         });
     return success;
@@ -630,10 +630,11 @@ public:
 
   /// Appends a given number of invalid rows/elements to the bitmaps.
   /// @param n The number of elements to append.
+  /// @param bit The value of the bit to append.
   /// @return `true` on success and `false` if the bitmap is full.
-  bool patch(size_t n = 1)
+  bool append(size_t n = 1, bool bit = false)
   {
-    return valid_.append(n, false) && coder_.patch(n);
+    return valid_.append(n, bit) && coder_.append(n, bit);
   }
 
   /// Shorthand for `lookup(equal, x)`.
@@ -754,10 +755,9 @@ public:
     return valid_.push_back(true) && success;
   }
 
-  bool patch(size_t n = 1)
+  bool append(size_t n = 1, bool bit = false)
   {
-    auto success = bool_.append(n, false);
-    return valid_.append(n, false) && success;
+    return bool_.append(n, bit) && valid_.append(n, bit);
   }
 
   option<Bitstream> operator[](bool x) const
