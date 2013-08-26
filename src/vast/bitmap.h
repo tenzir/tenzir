@@ -7,6 +7,7 @@
 #include "vast/exception.h"
 #include "vast/operator.h"
 #include "vast/option.h"
+#include "vast/serialization.h"
 
 namespace vast {
 namespace detail {
@@ -14,6 +15,19 @@ namespace detail {
 struct storage_policy
 {
   size_t rows = 0;
+
+private:
+  friend access;
+
+  void serialize(serializer& sink) const
+  {
+    sink << rows;
+  }
+
+  void deserialize(deserializer& source)
+  {
+    source >> rows;
+  }
 };
 
 /// A vector-based random access bitstream storage policy.
@@ -22,8 +36,6 @@ struct storage_policy
 template <typename T, typename Bitstream>
 struct vector_storage : storage_policy
 {
-  using bitstream_type = Bitstream;
-
   Bitstream const* find(T const& x) const
   {
     auto i = static_cast<size_t>(x);
@@ -83,14 +95,28 @@ struct vector_storage : storage_policy
     return true;
   }
 
-  size_t cardinality() const
+  uint64_t cardinality() const
   {
     return cardinality_;
   }
 
 private:
+  friend access;
+
+  void serialize(serializer& sink) const
+  {
+    sink << static_cast<storage_policy const&>(*this);
+    sink << cardinality_ << vector_;
+  }
+
+  void deserialize(deserializer& source)
+  {
+    source >> static_cast<storage_policy&>(*this);
+    source >> cardinality_ >> vector_;
+  }
+
   std::vector<option<Bitstream>> vector_;
-  size_t cardinality_ = 0;
+  uint64_t cardinality_ = 0;
 };
 
 /// A linked-list-plus-hash-table-based bitstream storage policy.
@@ -99,8 +125,6 @@ private:
 template <typename T, typename Bitstream>
 struct list_storage : storage_policy
 {
-  using bitstream_type = Bitstream;
-
   Bitstream const* find(T const& x) const
   {
     auto i = map_.find(x);
@@ -150,7 +174,7 @@ struct list_storage : storage_policy
     return false;
   }
 
-  size_t cardinality() const
+  uint64_t cardinality() const
   {
     return list_.size();
   }
@@ -158,7 +182,23 @@ struct list_storage : storage_policy
 private:
   using list_type = std::list<std::pair<T, Bitstream>>;
   using list_value_type = typename list_type::value_type;
-  using iterator_type = typename list_type::iterator;
+
+  friend access;
+
+  void serialize(serializer& sink) const
+  {
+    sink << static_cast<storage_policy const&>(*this);
+    sink << list_;
+  }
+
+  void deserialize(deserializer& source)
+  {
+    source >> static_cast<storage_policy&>(*this);
+    source >> list_;
+    map_.reserve(list_.size());
+    for (auto i = list_.begin(); i != list_.end(); ++i)
+      map_.emplace(i->first, i);
+  }
 
   struct key_comp
   {
@@ -170,7 +210,7 @@ private:
 
   list_type list_;
   key_comp key_comp_;
-  std::unordered_map<T, iterator_type> map_;
+  std::unordered_map<T, typename list_type::iterator> map_;
 };
 
 /// A purely hash-table-based bitstream storage policy.
@@ -179,8 +219,6 @@ private:
 template <typename T, typename Bitstream>
 struct unordered_storage : storage_policy
 {
-  using bitstream_type = Bitstream;
-
   Bitstream const* find(T const& x) const
   {
     auto i = map_.find(x);
@@ -224,24 +262,36 @@ struct unordered_storage : storage_policy
     return p.second;
   }
 
-  size_t cardinality() const
+  uint64_t cardinality() const
   {
     return map_.size();
   }
 
-private:
+  void serialize(serializer& sink) const
+  {
+    sink << static_cast<storage_policy const&>(*this);
+    sink << map_;
+  }
+
+  void deserialize(deserializer& source)
+  {
+    source >> static_cast<storage_policy&>(*this);
+    source >> map_;
+  }
+
   std::unordered_map<T, Bitstream> map_;
 };
 
 } // detail
 
 template <typename T, typename Bitstream, typename Storage>
-struct coder
+class coder
 {
+public:
   bool patch(size_t n = 1)
   {
     auto success = true;
-    store.each(
+    store_.each(
         [&](T const&, Bitstream& bs)
         {
           if (! bs.append(n, false))
@@ -250,7 +300,26 @@ struct coder
     return success;
   }
 
-  Storage store;
+  Storage const& store() const
+  {
+    return store_;
+  }
+
+protected:
+  Storage store_;
+
+private:
+  friend access;
+
+  void serialize(serializer& sink) const
+  {
+    sink << store_;
+  }
+
+  void deserialize(deserializer& source)
+  {
+    source >> store_;
+  }
 };
 
 /// An equality encoding policy for bitmaps.
@@ -259,22 +328,22 @@ struct equality_coder
   : coder<T, Bitstream, detail::unordered_storage<T, Bitstream>>
 {
   using super = coder<T, Bitstream, detail::unordered_storage<T, Bitstream>>;
-  using super::store;
+  using super::store_;
 
   bool encode(T const& x)
   {
-    if (! store.find(x))
-      if (! store.insert(x, {store.rows, 0}))
+    if (! store_.find(x))
+      if (! store_.insert(x, {store_.rows, 0}))
         return false;
 
-    store.each([&](T const& k, Bitstream& bs) { bs.push_back(x == k); });
-    ++store.rows;
+    store_.each([&](T const& k, Bitstream& bs) { bs.push_back(x == k); });
+    ++store_.rows;
     return true;
   }
 
   option<Bitstream> decode(T const& x, relational_operator op = equal) const
   {
-    auto result = store.find(x);
+    auto result = store_.find(x);
     switch (op)
     {
       default:
@@ -288,7 +357,7 @@ struct equality_coder
         if (result)
           return ~*result;
         else
-          return {{store.rows, true}};
+          return {{store_.rows, true}};
     }
   }
 };
@@ -303,20 +372,20 @@ struct binary_coder
                 "binary encoding requires an integral type");
 
   using super = coder<T, Bitstream, detail::vector_storage<uint8_t, Bitstream>>;
-  using super::store;
+  using super::store_;
 
   static uint8_t constexpr bits = std::numeric_limits<T>::digits;
 
   binary_coder()
   {
     for (uint8_t i = 0; i < bits; ++i)
-      store.insert(i);
+      store_.insert(i);
   }
 
   bool encode(T const& x)
   {
-    store.each([&](uint8_t i, Bitstream& bs) { bs.push_back((x >> i) & 1); });
-    ++store.rows;
+    store_.each([&](uint8_t i, Bitstream& bs) { bs.push_back((x >> i) & 1); });
+    ++store_.rows;
     return true;
   }
 
@@ -328,9 +397,9 @@ struct binary_coder
         throw error::operation("unsupported relational operator", op);
       case equal:
         {
-          Bitstream result{store.rows, true};
+          Bitstream result{store_.rows, true};
           for (uint8_t i = 0; i < bits; ++i)
-            result &= ((x >> i) & 1) ? *store.find(i) : ~*store.find(i);
+            result &= ((x >> i) & 1) ? *store_.find(i) : ~*store_.find(i);
           if (result.find_first() == Bitstream::npos)
             return {};
           else
@@ -340,7 +409,7 @@ struct binary_coder
         if (auto result = decode(x, equal))
           return std::move((*result).flip());
         else
-          return {{store.rows, true}};
+          return {{store_.rows, true}};
     }
   }
 };
@@ -353,28 +422,28 @@ struct range_coder : coder<T, Bitstream, detail::list_storage<T, Bitstream>>
                 "range encoding for boolean value does not make sense");
 
   using super = coder<T, Bitstream, detail::list_storage<T, Bitstream>>;
-  using super::store;
+  using super::store_;
 
   bool encode(T const& x)
   {
-    if (! store.find(x))
+    if (! store_.find(x))
     {
-      auto range = store.find_bounds(x);
+      auto range = store_.find_bounds(x);
       auto success = true;
       if (range.first && range.second)
-        success = store.insert(x, {*range.first});
+        success = store_.insert(x, {*range.first});
       else if (range.first)
-        success = store.insert(x, {store.rows, true});
+        success = store_.insert(x, {store_.rows, true});
       else if (range.second)
-        success = store.insert(x, {store.rows, false});
+        success = store_.insert(x, {store_.rows, false});
       else
-        success = store.insert(x, {store.rows, true});
+        success = store_.insert(x, {store_.rows, true});
       if (! success)
         return false;
     }
 
-    store.each([&](T const& k, Bitstream& bs) { bs.push_back(x <= k); });
-    ++store.rows;
+    store_.each([&](T const& k, Bitstream& bs) { bs.push_back(x <= k); });
+    ++store_.rows;
     return true;
   }
 
@@ -393,9 +462,9 @@ struct range_coder : coder<T, Bitstream, detail::list_storage<T, Bitstream>>
         else
           return decode(x - 1, less_equal);
       case less_equal:
-        if (auto result = store.find(x))
+        if (auto result = store_.find(x))
           return *result;
-        else if (auto lower = store.find_bounds(x).first)
+        else if (auto lower = store_.find_bounds(x).first)
           return *lower;
         else
           return {};
@@ -403,12 +472,12 @@ struct range_coder : coder<T, Bitstream, detail::list_storage<T, Bitstream>>
         if (auto result = decode(x, less_equal))
           return std::move((*result).flip());
         else
-          return {{store.rows, true}};
+          return {{store_.rows, true}};
       case greater_equal:
         if (auto result = decode(x, less))
           return std::move((*result).flip());
         else
-          return {{store.rows, true}};
+          return {{store_.rows, true}};
       case equal:
         {
           // For a range-encoded bitstream v == x means z <= x & ~pred(z). If
@@ -416,7 +485,7 @@ struct range_coder : coder<T, Bitstream, detail::list_storage<T, Bitstream>>
           auto le = decode(x, less_equal);
           if (! le)
             return {};
-          auto range = store.find_bounds(x);
+          auto range = store_.find_bounds(x);
           if (! range.first)
             return le;
           *le &= ~*range.first;
@@ -426,7 +495,7 @@ struct range_coder : coder<T, Bitstream, detail::list_storage<T, Bitstream>>
         if (auto result = decode(x, equal))
           return std::move((*result).flip());
         else
-          return {{store.rows, true}};
+          return {{store_.rows, true}};
     }
   }
 };
@@ -439,11 +508,15 @@ struct null_binner
   {
     return std::move(x);
   }
+
+  // Nothing to do here.
+  void serialize(serializer&) const { }
+  void deserialize(deserializer&) { }
 };
 
 /// A binning policy that reduces value to a given precision.
 template <typename T>
-struct precision_binner
+class precision_binner
 {
   template <typename B>
   using is_bool = typename std::is_same<B, bool>::type;
@@ -454,6 +527,13 @@ struct precision_binner
   static_assert(std::is_arithmetic<T>::value && !is_bool<T>::value,
       "precision binning works only with number types");
 
+  constexpr static int default_precision =
+    Conditional<is_double<T>,
+      std::integral_constant<int, -2>,
+      std::integral_constant<int, 1>
+    >::value;
+
+public:
   /// Constructs a precision binner.
   ///
   /// @param precision The number of decimal digits. For example, a value of 3
@@ -466,32 +546,11 @@ struct precision_binner
   /// 42.04 end up in the same bin 42.00.
   ///
   /// @note Integral types are truncated and fractional types are rounded.
-  precision_binner(int precision)
+  precision_binner(int precision = default_precision)
   {
-    integral = std::pow(10, precision < 0 ? -precision : precision);
+    integral_ = std::pow(10, precision < 0 ? -precision : precision);
     if (precision < 0)
-      fractional = integral;
-  }
-
-  T dispatch(T x, std::true_type) const
-  {
-    if (fractional != 0.0)
-    {
-      double i;
-      auto f = std::modf(x, &i);
-      return i + std::round(f * fractional) / fractional;
-    }
-    else if (integral)
-    {
-      return std::round(x / integral);
-    }
-
-    return x;
-  }
-
-  T dispatch(T x, std::false_type) const
-  {
-    return x / integral;
+      fractional_ = integral_;
   }
 
   T operator()(T x) const
@@ -499,8 +558,41 @@ struct precision_binner
     return dispatch(x, is_double<T>());
   }
 
-  T integral;
-  double fractional = 0.0;
+private:
+  friend access;
+
+  void serialize(serializer& sink) const
+  {
+    sink << integral_ << fractional_;
+  }
+
+  void deserialize(deserializer& source)
+  {
+    source >> integral_ >> fractional_;
+  }
+
+  T dispatch(T x, std::true_type) const
+  {
+    if (fractional_ != 0.0)
+    {
+      double i;
+      auto f = std::modf(x, &i);
+      return i + std::round(f * fractional_) / fractional_;
+    }
+    else if (integral_)
+    {
+      return std::round(x / integral_);
+    }
+    return x;
+  }
+
+  T dispatch(T x, std::false_type) const
+  {
+    return x / integral_;
+  }
+
+  T integral_;
+  double fractional_ = 0.0;
 };
 
 /// A bitmap which maps values to @link bitstream bitstreams@endlink.
@@ -572,14 +664,14 @@ public:
   template <typename U>
   Bitstream const* lookup_raw(U const& x) const
   {
-    return coder_.store.find(x);
+    return coder_.store().find(x);
   }
 
   /// Retrieves the bitmap size.
   /// @return The number of elements contained in the bitmap.
   size_t size() const
   {
-    return coder_.store.rows;
+    return coder_.store().rows;
   }
 
   /// Checks whether the bitmap is empty.
@@ -587,6 +679,19 @@ public:
   bool empty() const
   {
     return size() == 0;
+  }
+
+private:
+  friend access;
+
+  void serialize(serializer& sink) const
+  {
+    sink << binner_ << valid_ << coder_;
+  }
+
+  void deserialize(deserializer& source)
+  {
+    source >> binner_ >> valid_ >> coder_;
   }
 
   /// Converts a bitmap to a `std::string`.
@@ -609,14 +714,14 @@ public:
     {
       using std::to_string;
       //using vast::to_string;
-      bm.coder_.store.each(
+      bm.coder_.store().each(
           [&](T const& x, Bitstream const&) { str += to_string(x) + delim; });
       str.pop_back();
       str += '\n';
     }
     std::vector<Bitstream> cols;
-    cols.reserve(bm.coder_.store.rows);
-    bm.coder_.store.each(
+    cols.reserve(bm.coder_.store().rows);
+    bm.coder_.store().each(
         [&](T const&, Bitstream const& bs) { cols.push_back(bs); });
     for (auto& row : transpose(cols))
       str += to_string(row) + '\n';
@@ -624,7 +729,6 @@ public:
     return str;
   }
 
-private:
   coder_type coder_;
   binner_type binner_;
   Bitstream valid_;
@@ -639,9 +743,8 @@ template <
 class bitmap<bool, Bitstream, Coder, Binner>
 {
 public:
-  using value_type = bool;
-  using bitstream_type = Bitstream;
-  using storage_type = Bitstream;
+  using coder_type = Coder<bool, Bitstream>;
+  using binner_type = Binner<bool>;
 
   bitmap() = default;
 
@@ -686,6 +789,18 @@ public:
   }
 
 private:
+  friend access;
+
+  void serialize(serializer& sink) const
+  {
+    sink << valid_ << bool_;
+  }
+
+  void deserialize(deserializer& source)
+  {
+    source >> valid_ >> bool_;
+  }
+
   friend std::string to_string(bitmap const& bm)
   {
     std::string str;
@@ -714,7 +829,7 @@ private:
     return str;
   }
 
-  storage_type bool_;
+  Bitstream bool_;
   Bitstream valid_;
 };
 

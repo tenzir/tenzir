@@ -1,6 +1,7 @@
 #include "test.h"
 #include "vast/bitmap.h"
 #include "vast/to_string.h"
+#include "vast/io/serialization.h"
 
 using namespace vast;
 
@@ -39,7 +40,7 @@ BOOST_AUTO_TEST_CASE(vector_storage)
 
 BOOST_AUTO_TEST_CASE(basic_bitmap)
 {
-  bitmap<int> bm;
+  bitmap<int> bm, bm2;
   BOOST_REQUIRE(bm.push_back(42));
   BOOST_REQUIRE(bm.push_back(84));
   BOOST_REQUIRE(bm.push_back(42));
@@ -57,11 +58,24 @@ BOOST_AUTO_TEST_CASE(basic_bitmap)
   BOOST_CHECK_EQUAL(to_string(*bm.lookup(not_equal, 42)), "01011");
   BOOST_CHECK_EQUAL(to_string(*bm.lookup(not_equal, 84)), "10111");
   BOOST_CHECK_EQUAL(to_string(*bm.lookup(not_equal, 13)), "11111");
+
+  std::vector<uint8_t> buf;
+  io::archive(buf, bm);
+  io::unarchive(buf, bm2);
+  // The default bitmap storage is unordered, so the the following commented
+  // check may fail due to different underlying hash tables. However, the
+  // bitmaps should still be equivalent.
+  //BOOST_CHECK_EQUAL(to_string(bm), to_string(bm2));
+  BOOST_CHECK_EQUAL(bm.size(), bm2.size());
+  BOOST_CHECK_EQUAL(to_string(*bm[21]), to_string(*bm2[21]));
+  BOOST_CHECK_EQUAL(to_string(*bm[30]), to_string(*bm2[30]));
+  BOOST_CHECK_EQUAL(to_string(*bm[42]), to_string(*bm2[42]));
+  BOOST_CHECK_EQUAL(to_string(*bm[84]), to_string(*bm2[84]));
 }
 
 BOOST_AUTO_TEST_CASE(range_encoded_bitmap)
 {
-  bitmap<int, null_bitstream, range_coder> bm;
+  bitmap<int, null_bitstream, range_coder> bm, bm2;
   BOOST_REQUIRE(bm.push_back(42));
   BOOST_REQUIRE(bm.push_back(84));
   BOOST_REQUIRE(bm.push_back(42));
@@ -92,11 +106,19 @@ BOOST_AUTO_TEST_CASE(range_encoded_bitmap)
   BOOST_CHECK_EQUAL(to_string(*bm.lookup(greater_equal, 84)), "01000");
   BOOST_CHECK_EQUAL(to_string(*bm.lookup(greater_equal, -42)), "11111");
   BOOST_CHECK_EQUAL(to_string(*bm.lookup(greater_equal, 22)), "11101");
+
+  std::vector<uint8_t> buf;
+  io::archive(buf, bm);
+  io::unarchive(buf, bm2);
+  BOOST_CHECK_EQUAL(to_string(bm), to_string(bm2));
+  BOOST_CHECK_EQUAL(to_string(*bm2.lookup(greater, 84)), "00000");
+  BOOST_CHECK_EQUAL(to_string(*bm2.lookup(less, 84)), "10111");
+  BOOST_CHECK_EQUAL(to_string(*bm2.lookup(greater_equal, -42)), "11111");
 }
 
 BOOST_AUTO_TEST_CASE(binary_encoded_bitmap)
 {
-  bitmap<int8_t, null_bitstream, binary_coder> bm;
+  bitmap<int8_t, null_bitstream, binary_coder> bm, bm2;
   BOOST_REQUIRE(bm.push_back(0));
   BOOST_REQUIRE(bm.push_back(1));
   BOOST_REQUIRE(bm.push_back(1));
@@ -118,11 +140,19 @@ BOOST_AUTO_TEST_CASE(binary_encoded_bitmap)
   BOOST_CHECK_EQUAL(to_string(*bm.lookup(not_equal, 1)), "1001111");
   BOOST_CHECK_EQUAL(to_string(*bm.lookup(not_equal, 2)), "1110100");
   BOOST_CHECK_EQUAL(to_string(*bm.lookup(not_equal, 3)), "1111011");
+
+  std::vector<uint8_t> buf;
+  io::archive(buf, bm);
+  io::unarchive(buf, bm2);
+  BOOST_CHECK_EQUAL(to_string(bm), to_string(bm2));
+  BOOST_CHECK_EQUAL(to_string(*bm2[0]), "1000000");
+  BOOST_CHECK_EQUAL(to_string(*bm2[1]), "0110000");
+  BOOST_CHECK_EQUAL(to_string(*bm2[2]), "0001011");
 }
 
 BOOST_AUTO_TEST_CASE(bitmap_precision_binning_integral)
 {
-  bitmap<int, null_bitstream, equality_coder, precision_binner> bm(2);
+  bitmap<int, null_bitstream, equality_coder, precision_binner> bm{2};
   BOOST_REQUIRE(bm.push_back(183));
   BOOST_REQUIRE(bm.push_back(215));
   BOOST_REQUIRE(bm.push_back(350));
@@ -136,7 +166,7 @@ BOOST_AUTO_TEST_CASE(bitmap_precision_binning_integral)
 
 BOOST_AUTO_TEST_CASE(bitmap_precision_binning_double_negative)
 {
-  bitmap<double, null_bitstream, equality_coder, precision_binner> bm(-3);
+  bitmap<double, null_bitstream, equality_coder, precision_binner> bm{-3}, bm2;
 
   // These end up in different bins...
   BOOST_REQUIRE(bm.push_back(42.001));
@@ -153,11 +183,22 @@ BOOST_AUTO_TEST_CASE(bitmap_precision_binning_double_negative)
   BOOST_CHECK_EQUAL(to_string(*bm[42.002]), "010000");
   BOOST_CHECK_EQUAL(to_string(*bm[43.001]), "001110");
   BOOST_CHECK_EQUAL(to_string(*bm[43.002]), "000001");
+
+  std::vector<uint8_t> buf;
+  io::archive(buf, bm);
+  io::unarchive(buf, bm2);
+  BOOST_CHECK_EQUAL(to_string(*bm2[43.001]), "001110");
+  BOOST_CHECK_EQUAL(to_string(*bm2[43.002]), "000001");
+
+  // Check if the precision got serialized properly and that adding a new
+  // element lands in the right bin.
+  BOOST_REQUIRE(bm2.push_back(43.0022));
+  BOOST_CHECK_EQUAL(to_string(*bm2[43.002]), "0000011");
 }
 
 BOOST_AUTO_TEST_CASE(bitmap_precision_binning_double_positive)
 {
-  bitmap<double, null_bitstream, equality_coder, precision_binner> bm(1);
+  bitmap<double, null_bitstream, equality_coder, precision_binner> bm{1};
 
   // These end up in different bins...
   BOOST_REQUIRE(bm.push_back(42.123));
