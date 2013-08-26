@@ -47,6 +47,8 @@ public:
   }
 
 private:
+  friend access;
+
   void serialize(serializer& sink) const
   {
     if (this->valid())
@@ -55,16 +57,15 @@ private:
       sink << false;
   }
 
-  void deserialize(deserializer& source) const
+  void deserialize(deserializer& source)
   {
     bool flag;
     source >> flag;
     if (! flag)
       return;
-    
     T x;
     source >> x;
-    *this = std::move(x);
+    *this = {std::move(x)};
   }
 };
 
