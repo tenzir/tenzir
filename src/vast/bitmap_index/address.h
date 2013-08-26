@@ -25,6 +25,10 @@ private:
   option<bitstream> lookup(address const& addr, relational_operator op) const;
   option<bitstream> lookup(prefix const& pfx, relational_operator op) const;
 
+  friend access;
+  virtual void serialize(serializer& sink) const override;
+  virtual void deserialize(deserializer& source) override;
+
   std::array<bitmap<uint8_t, bitstream_type, binary_coder>, 16> bitmaps_;
   bitstream_type v4_;
 };

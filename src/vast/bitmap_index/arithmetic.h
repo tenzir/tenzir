@@ -71,6 +71,18 @@ private:
     return bitmap_.push_back(val.get<underlying_value_type>());
   }
 
+  friend access;
+
+  virtual void serialize(serializer& sink) const override
+  {
+    sink << bitmap_;
+  }
+
+  virtual void deserialize(deserializer& source) override
+  {
+    source >> bitmap_;
+  }
+
   bitmap_type bitmap_;
 };
 

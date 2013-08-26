@@ -10,4 +10,3 @@ bool bitmap_index::push_back(value const& val)
 }
 
 } // namespace vast
-

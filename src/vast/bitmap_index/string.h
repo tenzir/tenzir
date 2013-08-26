@@ -26,6 +26,10 @@ public:
 private:
   virtual bool push_back_impl(value const& val) override;
 
+  friend access;
+  virtual void serialize(serializer& sink) const override;
+  virtual void deserialize(deserializer& source) override;
+
   bitmap<dictionary_codomain, bitstream_type> bitmap_;
   util::map_dictionary<dictionary_codomain> dictionary_;
 };

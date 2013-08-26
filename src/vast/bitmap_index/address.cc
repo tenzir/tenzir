@@ -118,4 +118,14 @@ address_bitmap_index::lookup(prefix const& pfx, relational_operator op) const
   return {};
 }
 
+void address_bitmap_index::serialize(serializer& sink) const
+{
+  sink << bitmaps_ << v4_;
+}
+
+void address_bitmap_index::deserialize(deserializer& source)
+{
+  source >> bitmaps_ >> v4_;
+}
+
 } // namespace vast

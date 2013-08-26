@@ -47,4 +47,14 @@ bool string_bitmap_index::push_back_impl(value const& val)
   return bitmap_.push_back(*i);
 }
 
+void string_bitmap_index::serialize(serializer& sink) const
+{
+  sink << dictionary_ << bitmap_;
+}
+
+void string_bitmap_index::deserialize(deserializer& source)
+{
+  source >> dictionary_ >> bitmap_;
+}
+
 } // namespace vast

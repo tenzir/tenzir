@@ -35,12 +35,6 @@ std::string time_bitmap_index::to_string() const
   return to_string(bitmap_);
 }
 
-bool time_bitmap_index::push_back_impl(value const& val)
-{
-  bitmap_.push_back(extract(val));
-  return true;
-}
-
 time_range::rep time_bitmap_index::extract(value const& val)
 {
   switch (val.which())
@@ -52,6 +46,22 @@ time_range::rep time_bitmap_index::extract(value const& val)
     case time_point_type:
       return val.get<time_point>().since_epoch().count();
   }
+}
+
+bool time_bitmap_index::push_back_impl(value const& val)
+{
+  bitmap_.push_back(extract(val));
+  return true;
+}
+
+void time_bitmap_index::serialize(serializer& sink) const
+{
+  sink << bitmap_;
+}
+
+void time_bitmap_index::deserialize(deserializer& source)
+{
+  source >> bitmap_;
 }
 
 } // namespace vast

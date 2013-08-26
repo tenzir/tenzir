@@ -43,4 +43,14 @@ bool port_bitmap_index::push_back_impl(value const& val)
   return true;
 }
 
+void port_bitmap_index::serialize(serializer& sink) const
+{
+  sink << num_ << proto_;
+}
+
+void port_bitmap_index::deserialize(deserializer& source)
+{
+  source >> num_ >> proto_;
+}
+
 } // namespace vast

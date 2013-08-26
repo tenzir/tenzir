@@ -3,6 +3,7 @@
 
 #include <string>
 #include <unordered_map>
+#include "vast/serialization.h"
 
 namespace vast {
 namespace util {
@@ -53,6 +54,7 @@ class map_dictionary : public dictionary<Codomain>
 {
   typedef dictionary<Codomain> super;
   using typename super::string_type;
+
 public:
   virtual Codomain const* locate(string_type const& str) const
   {
@@ -83,6 +85,17 @@ public:
   }
 
 private:
+  friend access;
+  void serialize(serializer& sink) const
+  {
+    sink << map_;
+  }
+
+  void deserialize(deserializer& source)
+  {
+    source >> map_;
+  }
+
   std::unordered_map<string_type, Codomain> map_;
 };
 

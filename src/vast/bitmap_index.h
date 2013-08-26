@@ -37,6 +37,10 @@ public:
 
 private:
   virtual bool push_back_impl(value const& val) = 0;
+
+  friend access;
+  virtual void serialize(serializer& sink) const = 0;
+  virtual void deserialize(deserializer& source) = 0;
 };
 
 } // namespace vast
