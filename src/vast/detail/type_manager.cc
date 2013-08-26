@@ -9,6 +9,12 @@
 #include "vast/type_info.h"
 #include "vast/event.h"
 #include "vast/value.h"
+#include "vast/bitmap_index/arithmetic.h"
+#include "vast/bitmap_index/address.h"
+#include "vast/bitmap_index/port.h"
+#include "vast/bitmap_index/string.h"
+#include "vast/bitmap_index/time.h"
+#include "vast/util/tuple.h"
 
 namespace vast {
 namespace detail {
@@ -99,41 +105,56 @@ type_manager* type_manager::create()
   return new type_manager;
 }
 
+
+// TODO: Use polymorphic lambdas in C++14.
+namespace {
+
+struct announcer
+{
+  template <typename T>
+  void operator()(T /* x */) const
+  {
+    announce<T>();
+  }
+};
+
+} // namespace <anonymous>
+
 void type_manager::initialize()
 {
-  announce<bool>();
-  announce<int8_t>();
-  announce<int16_t>();
-  announce<int32_t>();
-  announce<int64_t>();
-  announce<uint8_t>();
-  announce<uint16_t>();
-  announce<uint32_t>();
-  announce<uint64_t>();
-  announce<double>();
+  std::tuple<
+    bool, double,
+    int8_t, int16_t, int32_t, int64_t,
+    uint8_t, uint16_t, uint32_t, uint64_t
+  > integral_types;
 
-  announce<std::string>();
-  announce<std::vector<std::string>>();
+  std::tuple<
+    std::string,
+    std::vector<std::string>
+  > stl_types;
 
-  announce<address>();
-  announce<time_range>();
-  announce<time_point>();
-  announce<port>();
-  announce<prefix>();
-  announce<record>();
-  announce<regex>();
-  announce<set>();
-  announce<string>();
-  announce<table>();
-  announce<vector>();
+  std::tuple<
+    address,
+    time_range,
+    time_point,
+    port,
+    prefix,
+    record,
+    regex,
+    set,
+    string,
+    table,
+    vector,
+    value_type,
+    value, std::vector<value>,
+    event, std::vector<event>,
+    detail::bitstream_model<null_bitstream>
+  > vast_types;
 
-  announce<value_type>();
-  announce<value>();
-  announce<std::vector<value>>();
-  announce<event>();
-  announce<std::vector<event>>();
+  util::for_each(integral_types, announcer{});
+  util::for_each(stl_types, announcer{});
+  util::for_each(vast_types, announcer{});
 
-  announce<detail::bitstream_model<null_bitstream>>();
   make_convertible<
     detail::bitstream_model<null_bitstream>,
     detail::bitstream_concept
