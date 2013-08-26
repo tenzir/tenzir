@@ -1,6 +1,7 @@
 #ifndef VAST_SERIALIZATION_CONTAINER_H
 #define VAST_SERIALIZATION_CONTAINER_H
 
+#include <array>
 #include <list>
 #include <vector>
 #include <unordered_map>
@@ -42,6 +43,20 @@ typename std::enable_if<is_byte<T>::value>::type
 deserialize(deserializer& source, T (&array)[N])
 {
   source.read_raw(&array, N);
+}
+
+template <typename T, size_t N>
+void serialize(serializer& sink, std::array<T, N> const& a)
+{
+  for (auto& x : a)
+    sink << x;
+}
+
+template <typename T, size_t N>
+void deserialize(deserializer& source, std::array<T, N>& a)
+{
+  for (auto& x : a)
+    source >> x;
 }
 
 template <typename T>
