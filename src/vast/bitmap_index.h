@@ -34,7 +34,7 @@ public:
 
   /// Retrieves the number of elements in the bitmap index.
   /// @return The number of rows, i.e., values in the bitmap.
-  virtual uint64_t size() const;
+  virtual uint64_t size() const = 0;
 
   /// Checks whether the bitmap is empty.
   /// @return `true` if `size() == 0`.
