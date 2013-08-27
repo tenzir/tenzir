@@ -29,6 +29,11 @@ time_bitmap_index::lookup(relational_operator op, value const& val) const
   return {std::move(*result)};
 }
 
+uint64_t time_bitmap_index::size() const
+{
+  return bitmap_.size();
+}
+
 std::string time_bitmap_index::to_string() const
 {
   using vast::to_string;

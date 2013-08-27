@@ -32,6 +32,14 @@ public:
   virtual option<bitstream>
   lookup(relational_operator op, value const& val) const = 0;
 
+  /// Retrieves the number of elements in the bitmap index.
+  /// @return The number of rows, i.e., values in the bitmap.
+  virtual uint64_t size() const;
+
+  /// Checks whether the bitmap is empty.
+  /// @return `true` if `size() == 0`.
+  bool empty() const;
+
   /// Creates a string representation of the bitmap index.
   /// @return An `std::string` of the bitmap index.
   virtual std::string to_string() const = 0;

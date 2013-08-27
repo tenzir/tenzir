@@ -29,6 +29,11 @@ string_bitmap_index::lookup(relational_operator op, value const& val) const
   return {std::move(op == equal ? *bs : bs->flip())};
 }
 
+uint64_t string_bitmap_index::size() const
+{
+  return bitmap_.size();
+}
+
 std::string string_bitmap_index::to_string() const
 {
   using vast::to_string;

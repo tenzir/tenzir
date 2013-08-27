@@ -21,6 +21,7 @@ public:
   virtual option<bitstream>
   lookup(relational_operator op, value const& val) const override;
 
+  virtual uint64_t size() const override;
   virtual std::string to_string() const override;
 
 private:

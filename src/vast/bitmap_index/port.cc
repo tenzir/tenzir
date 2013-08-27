@@ -29,6 +29,11 @@ port_bitmap_index::lookup(relational_operator op, value const& val) const
   return {std::move(*nbs)};
 }
 
+uint64_t port_bitmap_index::size() const
+{
+  return proto_.size();
+}
+
 std::string port_bitmap_index::to_string() const
 {
   using vast::to_string;

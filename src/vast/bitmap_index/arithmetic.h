@@ -59,6 +59,11 @@ public:
     return {std::move(*result)};
   };
 
+  virtual uint64_t size() const override
+  {
+    return bitmap_.size();
+  }
+
   virtual std::string to_string() const override
   {
     using vast::to_string;

@@ -34,6 +34,11 @@ address_bitmap_index::lookup(relational_operator op, value const& val) const
   }
 }
 
+uint64_t address_bitmap_index::size() const
+{
+  return v4_.size();
+}
+
 std::string address_bitmap_index::to_string() const
 {
   using vast::to_string;
