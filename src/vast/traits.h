@@ -82,6 +82,10 @@ using Not = Bool<!T::value>;
 template <typename If, typename Then, typename Else>
 using Conditional = typename std::conditional<If::value, Then, Else>::type;
 
+// Same as above, but takes a value as boolean expression.
+template <bool If, typename Then, typename Else>
+using IfThenElse = typename std::conditional<If, Then, Else>::type;
+
 // Disjunction.
 template <typename...>
 struct Any : Bool<false> { };

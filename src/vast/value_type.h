@@ -3,8 +3,8 @@
 
 #include <iosfwd>
 #include <string>
-#include <type_traits>
 #include "vast/fwd.h"
+#include "vast/traits.h"
 
 namespace vast {
 
@@ -56,30 +56,26 @@ void deserialize(deserializer& source, value_type& x);
 std::string to_string(value_type t);
 std::ostream& operator<<(std::ostream& out, value_type const& t);
 
-/// Synactic sugar for `std::conditional`.
-template <bool If, typename Then, typename Else>
-using Condition = typename std::conditional<If, Then, Else>::type;
-
 /// Meta function to retrieve the underlying type of a given value type.
 /// @tparam T The value type to get the underlying type from.
 template <value_type T>
 using underlying_value_type =
-  Condition<T == invalid_type, invalid_value,
-    Condition<T == nil_type, nil_value,
-      Condition<T == bool_type, bool,
-        Condition<T == int_type, int64_t,
-          Condition<T == uint_type, uint64_t,
-            Condition<T == double_type, double,
-              Condition<T == time_range_type, time_range,
-                Condition<T == time_point_type, time_point,
-                  Condition<T == string_type, string,
-                    Condition<T == vector_type, vector,
-                      Condition<T == set_type, set,
-                        Condition<T == table_type, table,
-                          Condition<T == record_type, record,
-                            Condition<T == address_type, address,
-                              Condition<T == prefix_type, prefix,
-                                Condition<T == port_type, port,
+  IfThenElse<T == invalid_type, invalid_value,
+    IfThenElse<T == nil_type, nil_value,
+      IfThenElse<T == bool_type, bool,
+        IfThenElse<T == int_type, int64_t,
+          IfThenElse<T == uint_type, uint64_t,
+            IfThenElse<T == double_type, double,
+              IfThenElse<T == time_range_type, time_range,
+                IfThenElse<T == time_point_type, time_point,
+                  IfThenElse<T == string_type, string,
+                    IfThenElse<T == vector_type, vector,
+                      IfThenElse<T == set_type, set,
+                        IfThenElse<T == table_type, table,
+                          IfThenElse<T == record_type, record,
+                            IfThenElse<T == address_type, address,
+                              IfThenElse<T == prefix_type, prefix,
+                                IfThenElse<T == port_type, port,
                                   std::false_type>>>>>>>>>>>>>>>>;
                   
 } // namespace vast
