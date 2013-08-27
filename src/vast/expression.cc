@@ -757,9 +757,4 @@ bool operator==(expression const& x, expression const& y)
   return x.str_ == y.str_ && x.schema_ == y.schema_;
 }
 
-bool operator!=(expression const& x, expression const& y)
-{
-  return ! (x == y);
-}
-
 } // namespace vast

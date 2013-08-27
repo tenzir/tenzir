@@ -1,10 +1,11 @@
 #ifndef VAST_EXPRESSION_H
 #define VAST_EXPRESSION_H
 
-#include "vast/util/visitor.h"
 #include "vast/event.h"
 #include "vast/operator.h"
 #include "vast/schema.h"
+#include "vast/util/operators.h"
+#include "vast/util/visitor.h"
 
 namespace vast {
 
@@ -250,7 +251,7 @@ private:
 } // namespace expr
 
 /// A query expression.
-class expression
+class expression : util::equality_comparable<expression>
 {
 public:
   /// Constructs an empty expression.
@@ -292,7 +293,6 @@ private:
   void deserialize(deserializer& source);
 
   friend bool operator==(expression const& x, expression const& y);
-  friend bool operator!=(expression const& x, expression const& y);
 
   std::string str_;
   schema schema_;
