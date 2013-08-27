@@ -15,29 +15,6 @@ event::event(std::initializer_list<value> args)
 {
 }
 
-event::event(event const& other)
-  : record(other)
-  , id_(other.id_)
-  , timestamp_(other.timestamp_)
-  , name_(other.name_)
-{
-}
-
-event::event(event&& other)
-  : record(std::move(other))
-  , id_(std::move(other.id_))
-  , timestamp_(std::move(other.timestamp_))
-  , name_(std::move(other.name_))
-{
-}
-
-event& event::operator=(event other)
-{
-  using std::swap;
-  swap(*this, other);
-  return *this;
-}
-
 uint64_t event::id() const
 {
   return id_;

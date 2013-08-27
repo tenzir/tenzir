@@ -24,17 +24,6 @@ public:
   /// @param args The initializer list with values.
   event(std::initializer_list<value> args);
 
-  /// Copy constructor.
-  /// @param other The event to copy.
-  event(event const& other);
-
-  /// Move constructor.
-  /// @param other The event to move.
-  event(event&& other);
-
-  /// Assignment operator.
-  event& operator=(event other);
-
   /// Retrieves the event ID.
   /// @return The name of the event.
   uint64_t id() const;

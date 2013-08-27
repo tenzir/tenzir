@@ -54,16 +54,6 @@ public:
   /// @param str The string representing of a path.
   path(string str);
 
-  /// Copy-constructs a path.
-  /// @param other The path to copty.
-  path(path const& other);
-
-  /// Move-constructs a path.
-  /// @param other The path to move.
-  path(path&& other) = default;
-
-  path& operator=(path const& other) = default;
-  path& operator=(path&& other) = default;
   path& operator/=(path const& p);
   path& operator+=(path const& p);
 

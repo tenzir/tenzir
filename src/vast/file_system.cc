@@ -55,11 +55,6 @@ path::path(string str)
 {
 }
 
-path::path(path const& other)
-  : str_(other.str_)
-{
-}
-
 path& path::operator/=(path const& p)
 {
   str_ = str_ + separator + p.str_;
