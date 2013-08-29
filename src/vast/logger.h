@@ -167,6 +167,9 @@ Stream& operator<<(Stream& stream, logger::level lvl)
     }                                                                       \
   } VAST_VOID
 
+#define VAST_ACTOR(name)    \
+#  name << " @" << self->id()
+
 #if VAST_LOG_LEVEL > 0
 #  define VAST_LOG_ERROR(message)   VAST_LOG(::vast::logger::error, message)
 #else
