@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include "vast/exception.h"
+#include "vast/serialization.h"
 
 #ifdef VAST_POSIX
 #  include <cerrno>
@@ -154,6 +155,16 @@ bool path::is_directory() const
 bool path::is_symlink() const
 {
   return kind() == symlink;
+}
+
+void path::serialize(serializer& sink) const
+{
+  sink << str_;
+}
+
+void path::deserialize(deserializer& source)
+{
+  source >> str_;
 }
 
 bool operator==(path const& x, path const& y)

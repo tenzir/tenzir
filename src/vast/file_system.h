@@ -4,6 +4,7 @@
 #include <functional>
 #include <string>
 #include "vast/config.h"
+#include "vast/fwd.h"
 #include "vast/string.h"
 #include "vast/util/operators.h"
 
@@ -96,6 +97,10 @@ public:
   friend bool operator<(path const& x, path const& y);
 
 private:
+  friend access;
+  void serialize(serializer& sink) const;
+  void deserialize(deserializer& source);
+
   string str_;
 };
 
