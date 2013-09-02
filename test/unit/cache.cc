@@ -3,9 +3,8 @@
 
 BOOST_AUTO_TEST_CASE(lru_cache)
 {
-  typedef vast::util::lru_cache<std::string, size_t> lru_cache;
-
-  lru_cache c(2, [](std::string const& str) { return str.length(); });
+  using lru_cache = vast::util::lru_cache<std::string, size_t>;
+  lru_cache c{2, [](std::string const& str) { return str.length(); }};
 
   // Perform some accesses.
   c.retrieve("x");
@@ -14,6 +13,8 @@ BOOST_AUTO_TEST_CASE(lru_cache)
   c.retrieve("quux");
   c.retrieve("corge");
   c.retrieve("foo");
+
+  BOOST_CHECK_EQUAL(c.retrieve_latest(), 3);
 
   std::vector<std::string> v;
   std::transform(
