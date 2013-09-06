@@ -3,7 +3,7 @@
 
 #include <cstdint>
 #include <memory>
-#include "vast/config.h"
+#include "vast/access.h"
 #include "vast/intrusive.h"
 #include "vast/traits.h"
 #include "vast/type_info.h"
@@ -198,7 +198,7 @@ private:
 
 /// Provides clean access of private class internals to the serialization
 /// framework.
-struct access
+struct access::serializable
 {
   template <typename T>
   static inline auto save(serializer& sink, T const& x, int)
@@ -239,7 +239,7 @@ namespace detail {
 template <typename T>
 void save(serializer& sink, T const& x)
 {
-  access::save(sink, x, 0);
+  access::serializable::save(sink, x, 0);
 }
 
 /// Deserializes an instance.
@@ -249,7 +249,7 @@ void save(serializer& sink, T const& x)
 template <typename T>
 void load(deserializer& source, T& x)
 {
-  access::load(source, x, 0);
+  access::serializable::load(source, x, 0);
 }
 
 } // namespace detail
