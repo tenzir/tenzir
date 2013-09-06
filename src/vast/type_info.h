@@ -20,13 +20,11 @@ class type_manager;
 } // namespace detail
 
 /// Enhanced RTTI.
-class global_type_info
-  : util::equality_comparable<global_type_info>,
-    util::equality_comparable<std::type_info>,
-    util::totally_ordered<global_type_info>
+class global_type_info : util::totally_ordered<global_type_info>
 {
   friend bool operator==(global_type_info const& x, global_type_info const& y);
   friend bool operator==(global_type_info const& x, std::type_info const& y);
+  friend bool operator!=(global_type_info const& x, std::type_info const& y);
   friend bool operator<(global_type_info const& x, global_type_info const& y);
 
 public:

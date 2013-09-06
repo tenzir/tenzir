@@ -36,6 +36,11 @@ bool operator==(global_type_info const& x, std::type_info const& y)
   return x.equals(y);
 }
 
+bool operator!=(global_type_info const& x, std::type_info const& y)
+{
+  return ! (x == y);
+}
+
 bool operator<(global_type_info const& x, global_type_info const& y)
 {
   return x.id_ < y.id_;
