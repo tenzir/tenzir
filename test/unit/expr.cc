@@ -1,5 +1,4 @@
 #include "test.h"
-#include "vast/convert.h"
 #include "vast/exception.h"
 #include "vast/event.h"
 #include "vast/expression.h"
@@ -83,8 +82,7 @@ BOOST_AUTO_TEST_CASE(offset_queries)
   event e{42u};
 
   BOOST_CHECK(expression::parse("@0 == 42").eval(e));
-  std::cout << to<std::string>(expression::parse("@1 != T")) << std::endl;
-  BOOST_CHECK(! expression::parse("@1 != T").eval(e));    // Out of bounds.
+  BOOST_CHECK(expression::parse("@1 != T").eval(e)); // Out of bounds, yet !=.
   BOOST_CHECK(! expression::parse("@0,3 > 4.2").eval(e)); // Too deep.
 
   e = {42u, record{"foo", true, 4.2}};
