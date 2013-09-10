@@ -4,58 +4,12 @@
 #include "vast/logger.h"
 #include "vast/segment.h"
 #include "vast/expression.h"
+#include "vast/partition.h"
 
 using namespace cppa;
+
 namespace vast {
 namespace {
-
-/// Owns a several bitmap indexes for a arguments of a specific event.
-//template <typename Bitstream>
-//class filament : public sb_actor<filament<Bitstream>>
-//{
-//public:
-//  /// Spawns an event index with a given directory.
-//  /// @param dir The directory containing the event argument indexes.
-//  filament(std::string const& dir)
-//  {
-//    self->chaining(false);
-//    init_state = (
-//        on_arg_match >> [=](event const& e)
-//        {
-//          auto delta = e.id() - last_;
-//          for (auto& p : bitmaps_)
-//          {
-//            if (delta > 1)
-//              p.second->patch(delta - 1, false);
-//            p.second->push_back(e.at(p.first));
-//          }
-//          last_ = e.id();
-//        },
-//        on(atom("lookup")) >> [=]()
-//        {
-//        },
-//        on(atom("kill")) >> [=]()
-//        {
-//            // TODO: flush bitmap indexes.
-//        });
-//  }
-//
-//  behavior init_state;
-//
-//private:
-//  Bitstream lookup(std::vector<size_t> const& offsets,
-//                   value const& argument,
-//                   relational_operator op) const
-//  {
-//    auto i = bitmaps_.find(offsets);
-//    if (i == bitmaps_.end())
-//      return {};
-//    return i->second->lookup(argument, op);
-//  };
-//
-//  std::map<std::vector<size_t>, std::unique_ptr<bitmap_index<Bitstream>>> bitmaps_;
-//  uint64_t last_ = 0;
-//};
 
 /// Determines whether a query expression has clauses that may benefit from an
 /// index lookup.
@@ -126,65 +80,78 @@ private:
   bool positive_ = false;
 };
 
-} // namespace
+} // namespace <anonymous>
 
 
-index::index(std::string directory)
-  : dir_(directory)
+index::index(path directory)
+  : dir_{std::move(directory)}
 {
-  chaining(false);
-  init_state = (
+}
+
+void index::init()
+{
+  VAST_LOG_VERBOSE(VAST_ACTOR("index") << " spawned");
+
+  if (! exists(dir_))
+  {
+    VAST_LOG_INFO(VAST_ACTOR("index") << " creates new directory " << dir_);
+    if (! mkdir(dir_))
+    {
+      VAST_LOG_ERROR(VAST_ACTOR("index") << " failed to create " << dir_);
+      quit();
+    }
+  }
+
+  become(
       on(atom("load")) >> [=]
       {
-        VAST_LOG_VERBOSE("spawning index @" << id());
-        if (! exists(dir_))
-        {
-          VAST_LOG_INFO("index @" << id() << " creates new directory " << dir_);
-          mkdir(dir_);
-        }
-
-        assert(exists(dir_));
         traverse(
             dir_,
             [&](path const& p) -> bool
             {
-              VAST_LOG_VERBOSE("index @" << id() << " found file " << p);
-
-              // TODO:
-              //fs::ifstream file(p, std::ios::binary | std::ios::in);
-              //serialization::stream_iarchive ia(file);
-              //segment::header hdr;
-              //ia >> hdr;
-              //build(hdr);
+              VAST_LOG_VERBOSE(VAST_ACTOR("index") << " found partition " << p);
+              auto part = spawn<partition>(p);
+              auto id = uuid{to_string(p.basename())};
+              partitions_.emplace(id, part);
               return true;
             });
-      },
-      on(atom("create"), arg_match) >> [=](schema const& sch)
-      {
-        for (auto& e : sch.events())
+
+        for (auto p : partitions_)
+          sync_send(p.second, atom("get"), atom("timestamp")).then(
+              on_arg_match >> [=]()
+              {
+              });
+
+        if (partitions_.empty())
         {
-          if (! e.indexed)
-            continue;
-
-          VAST_LOG_DEBUG("index @" << id() <<
-                         " creates index for event " << e.name);
-
-          for (auto& arg : e.args)
-          {
-            if (! arg.indexed)
-              continue;
-
-            VAST_LOG_DEBUG("index @" << id() <<
-                           " creates index for argument " << arg.name);
-          }
+          auto id = uuid::random();
+          auto p = spawn<partition>(dir_ / to<string>(id));
+          active_ = p;
+          partitions_.emplace(std::move(id), std::move(p));
         }
+
       },
-      on(atom("hit"), atom("all")) >> [=]
-      {
-        // TODO: see whether we still need this.
-        reply(atom("miss"));
-      },
-      on(atom("hit"), arg_match) >> [=](expression const& expr)
+//      on(atom("create"), arg_match) >> [=](schema const& sch)
+//      {
+//        for (auto& e : sch.events())
+//        {
+//          if (! e.indexed)
+//            continue;
+//
+//          VAST_LOG_DEBUG("index @" << id() <<
+//                         " creates index for event " << e.name);
+//
+//          for (auto& arg : e.args)
+//          {
+//            if (! arg.indexed)
+//              continue;
+//
+//            VAST_LOG_DEBUG("index @" << id() <<
+//                           " creates index for argument " << arg.name);
+//          }
+//        }
+//      },
+      on(atom("query"), arg_match) >> [=](expression const& expr)
       {
         checker chkr;
         expr.accept(chkr);
@@ -198,14 +165,30 @@ index::index(std::string directory)
       },
       on(arg_match) >> [=](segment const& s)
       {
-        // TODO: index each event in segment.
+        assert(active_);
+
+        segment::reader r(&s);
+        event e;
+        while (r.read(e))
+          send(active_, std::move(e));
+
         reply(atom("segment"), atom("ack"), s.id());
       },
-      on(atom("kill")) >> [=]()
+      on(atom("kill")) >> [=]
       {
+        for (auto p : partitions_)
+          p.second << last_dequeued();
         quit();
-        VAST_LOG_VERBOSE("index @" << id() << " terminated");
       });
+}
+
+void index::on_exit()
+{
+  VAST_LOG_VERBOSE(VAST_ACTOR("index") << " terminated");
+}
+
+void index::load()
+{
 }
 
 } // namespace vast
