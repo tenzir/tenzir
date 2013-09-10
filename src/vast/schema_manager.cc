@@ -2,7 +2,6 @@
 
 #include "vast/schema.h"
 #include "vast/logger.h"
-#include "vast/to_string.h"
 
 namespace vast {
 

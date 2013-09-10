@@ -29,8 +29,9 @@ public:
   };
 
   /// A formatted message containing timestamp and thread ID.
-  struct message : public std::ostringstream
+  class message
   {
+  public:
     enum fill_type
     {
       left_arrow,
@@ -46,27 +47,45 @@ public:
     void append_function(char const* f);
 
     void append_fill(fill_type t);
+
+    bool fast_forward();
+
+    void clear();
+
+    std::string str() const;
+
+    template <typename T>
+    message& operator<<(T&& x)
+    {
+      ss_ << std::forward<T>(x);
+      return *this;
+    }
+
+  private:
+    std::ostringstream ss_;
+
+    friend message& operator<<(message& msg, std::nullptr_t);
   };
 
   /// Facilitates RAII-style tracing.
   class tracer
   {
   public:
-    tracer(char const* pretty_function);
+    tracer(char const* fun);
     ~tracer();
 
     template <typename T>
-    message& operator<<(T&& x)
+    friend tracer& operator<<(tracer& t, T&& x)
     {
-      msg_ << std::forward<T>(x);
-      return msg_;
+      t.msg_ << std::forward<T>(x);
+      return t;
     }
 
     void commit();
     void reset(bool exit);
 
   private:
-    std::string fun_;
+    char const* fun_;
     message msg_;
   };
 
@@ -108,42 +127,9 @@ private:
   void run();
 
   impl* impl_;
+
+  friend std::ostream& operator<<(std::ostream& stream, logger::level lvl);
 };
-
-logger::message& operator<<(logger::message& msg, std::nullptr_t);
-
-template <typename Stream>
-Stream& operator<<(Stream& stream, logger::level lvl)
-{
-  switch (lvl)
-  {
-    default:
-      stream << "invalid";
-      break;
-    case logger::quiet:
-      stream << "quiet  ";
-      break;
-    case logger::error:
-      stream << "error  ";
-      break;
-    case logger::warn:
-      stream << "warning";
-      break;
-    case logger::info:
-      stream << "info   ";
-      break;
-    case logger::verbose:
-      stream << "verbose";
-      break;
-    case logger::debug:
-      stream << "debug  ";
-      break;
-    case logger::trace:
-      stream << "trace  ";
-      break;
-  }
-  return stream;
-}
 
 } // namespace vast
 
@@ -168,7 +154,7 @@ Stream& operator<<(Stream& stream, logger::level lvl)
   } VAST_VOID
 
 #define VAST_ACTOR(name)    \
-#  name << " @" << self->id()
+#  name << " @" << cppa::self->id()
 
 #if VAST_LOG_LEVEL > 0
 #  define VAST_LOG_ERROR(message)   VAST_LOG(::vast::logger::error, message)

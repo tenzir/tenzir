@@ -3,26 +3,24 @@
 
 #include <iterator>
 #include <limits>
+#include <string>
 #include <vector>
 #include "vast/fwd.h"
+#include "vast/traits.h"
 #include "vast/util/operators.h"
+#include "vast/util/print.h"
 
 namespace vast {
 
-// Forward declarations.
-class bitvector;
-std::string to_string(bitvector const&, bool, size_t);
-
 /// A vector of bits.
-class bitvector : util::totally_ordered<bitvector>
+class bitvector : util::totally_ordered<bitvector>,
+                  util::printable<bitvector>
 {
-  friend std::string to_string(bitvector const&, bool, size_t);
-
 public:
   typedef size_t block_type;
   typedef size_t size_type;
   static size_type constexpr npos = static_cast<size_type>(-1);
-  static block_type constexpr bits_per_block = 
+  static block_type constexpr bits_per_block =
     std::numeric_limits<block_type>::digits;
 
 public:
@@ -121,12 +119,12 @@ public:
   /// sequence.
   template <
     typename Iterator,
-    typename std::enable_if<
+    typename = EnableIf<
       std::is_same<
         typename std::iterator_traits<Iterator>::iterator_category,
         std::forward_iterator_tag
-      >::value
-    >::type = 0
+      >
+    >
   >
   void append(Iterator first, Iterator last)
   {
@@ -141,8 +139,8 @@ public:
       bits_.back() |= (*first << excess);
       do
       {
-        auto b = *first++ >> (bits_per_block - excess);
-        bits_.push_back(b | (first == last ? 0 : *first << excess));
+        auto bv = *first++ >> (bits_per_block - excess);
+        bits_.push_back(bv | (first == last ? 0 : *first << excess));
       } while (first != last);
     }
     else
@@ -193,7 +191,7 @@ public:
   /// @return A reference to the bit vector instance.
   bitvector& flip(size_type i);
 
-  /// Computes the complement 
+  /// Computes the complement
   /// @return A reference to the bit vector instance.
   bitvector& flip();
 
@@ -263,7 +261,7 @@ private:
   /// @return The number of blocks to represent *bits* number of bits.
   static size_type constexpr bits_to_blocks(size_type bits)
   {
-    return bits / bits_per_block 
+    return bits / bits_per_block
       + static_cast<size_type>(bits % bits_per_block != 0);
   }
 
@@ -288,33 +286,54 @@ private:
   /// `bitvector::npos` if no 1-bit exists.
   size_type find_from(size_type i) const;
 
+  std::vector<block_type> bits_;
+  size_type num_bits_;
+
+private:
   friend access;
+
   void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
 
-  std::vector<block_type> bits_;
-  size_type num_bits_;
-};
+  /// Prints a bitvector.
+  ///
+  /// @param out An iterator modeling the OutputIterator concept.
+  ///
+  /// @param msb: The order of display. If `true`, display bits from MSB
+  /// to LSB and in the reverse order otherwise.
+  ///
+  /// @param all: Indicates whether to include also the unused bits of the last
+  /// block if the number of `b.size()` is not a multiple of
+  /// `bitvector::bits_per_block`.
+  ///
+  /// @param max: Specifies a maximum size on the output. If 0, no cutting
+  /// occurs.
+  template <typename Iterator>
+  bool
+  print(Iterator& out, bool msb = true, bool all = false, size_t max = 0) const
+  {
+    std::string str;
+    auto str_size = all ? bitvector::bits_per_block * blocks() : size();
+    if (max == 0 || str_size <= max)
+    {
+      str.assign(str_size, '0');
+    }
+    else
+    {
+      str.assign(max + 2, '0');
+      str[max + 0] = '.';
+      str[max + 1] = '.';
+      str_size = max;
+    }
 
-/// Converts a bitvector to a `std::string`.
-///
-/// @param b The bitvector to convert.
-///
-/// @param msb_to_lsb The order of display. If `true`, display bits from MSB to
-/// LSB and in the reverse order otherwise.
-///
-/// @param all Indicates whether to include also the unused bits of the last
-/// block if the number of `b.size()` is not a multiple of
-/// `bitvector::bits_per_block`.
-///
-/// @param cut_off Specifies a maximum size on the output. If 0, no cutting
-/// occurs.
-///
-/// @return A `std::string` representation of *b*.
-std::string to_string(bitvector const& b,
-                      bool msb_to_lsb = true,
-                      bool all = false,
-                      size_t cut_off = 0);
+    for (size_type i = 0; i < std::min(str_size, size()); ++i)
+      if (operator[](i))
+        str[msb ? str_size - i - 1 : i] = '1';
+
+    out = std::copy(str.begin(), str.end(), out);
+    return true;
+  }
+};
 
 } // namespace vast
 

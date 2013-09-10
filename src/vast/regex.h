@@ -10,11 +10,15 @@
 #endif
 
 #include "vast/string.h"
+#include "vast/util/parse.h"
+#include "vast/util/print.h"
 
 namespace vast {
 
 /// A regular expression.
-class regex : util::totally_ordered<regex>
+class regex : util::totally_ordered<regex>,
+              util::parsable<regex>,
+              util::printable<regex>
 {
 public:
   /// Constructs a regex from a glob expression. A glob expression consists
@@ -104,22 +108,54 @@ public:
   bool match(std::string const& str,
              std::function<void(std::string const&)> f) const;
 
+  bool convert(std::string& str);
+
+  template <typename Iterator>
+  bool parse(Iterator& start, Iterator end)
+  {
+    if (*start != '/')
+      return false;
+
+    string s;
+    auto success = extract(start, end, s);
+    if (! success)
+      return false;
+
+    if (s.empty() || s[s.size() - 1] != '/')
+      return false;
+
+    str_ = s.thin("/", "\\");
+    return true;
+  }
+
+  template <typename Iterator>
+  bool print(Iterator& out) const
+  {
+    *out++ = '/';
+    if (! render(out, str_))
+      return false;
+    *out++ = '/';
+    return true;
+  }
+
 private:
-  friend access;
-  void serialize(serializer& sink) const;
-  void deserialize(deserializer& source);
-
-  friend bool operator==(regex const& x, regex const& y);
-  friend bool operator<(regex const& x, regex const& y);
-  friend std::string to_string(regex const& rx);
-  friend std::ostream& operator<<(std::ostream& out, regex const& r);
-
 #ifdef VAST_CLANG
   std::regex rx_;
 #else
   boost::regex rx_;
 #endif
   string str_;
+
+private:
+  friend access;
+  friend util::parsable<regex>;
+  friend util::printable<regex>;
+
+  void serialize(serializer& sink) const;
+  void deserialize(deserializer& source);
+
+  friend bool operator==(regex const& x, regex const& y);
+  friend bool operator<(regex const& x, regex const& y);
 };
 
 } // namespace vast

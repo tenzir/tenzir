@@ -1,6 +1,5 @@
 #include "test.h"
 #include "vast/bitmap.h"
-#include "vast/to_string.h"
 #include "vast/io/serialization.h"
 
 using namespace vast;

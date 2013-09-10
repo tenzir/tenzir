@@ -2,6 +2,7 @@
 #define VAST_OPERATOR_H
 
 #include <cstdint>
+#include <string>
 
 namespace vast {
 
@@ -23,6 +24,8 @@ enum arithmetic_operator : uint8_t
   mod
 };
 
+bool convert(arithmetic_operator op, std::string& to);
+
 /// A (binary) relational operator.
 enum relational_operator : uint8_t
 {
@@ -38,6 +41,8 @@ enum relational_operator : uint8_t
   greater_equal
 };
 
+bool convert(relational_operator op, std::string& to);
+
 /// A boolean operator.
 enum boolean_operator : uint8_t
 {
@@ -45,6 +50,8 @@ enum boolean_operator : uint8_t
   logical_and,
   logical_or
 };
+
+bool convert(boolean_operator op, std::string& to);
 
 /// Negates a relational operator, i.e., creates the complementary operator.
 /// @param op The operator to negate.

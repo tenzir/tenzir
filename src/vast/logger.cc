@@ -165,19 +165,19 @@ struct logger::impl
 
 void logger::message::append_header(level lvl)
 {
-  *this
+  ss_
     << std::setprecision(15) << std::setw(16) << std::left << std::setfill('0')
-    << now().to_double()
+    << to<double>(now())
     << ' '
     << std::setw(14) << std::setfill(' ') << std::this_thread::get_id()
     << ' ';
   if (lvl != quiet)
-    *this << lvl << ' ';
+    ss_ << lvl << ' ';
 }
 
 void logger::message::append_function(char const* f)
 {
-  *this << prettify(f) << ' ';
+  ss_ << prettify(f) << ' ';
 }
 
 void logger::message::append_fill(fill_type t)
@@ -199,7 +199,24 @@ void logger::message::append_fill(fill_type t)
   {
     fill[fill.size() - 2] = '|';
   }
-  *this << fill << ' ';
+  ss_ << fill << ' ';
+}
+
+bool logger::message::fast_forward()
+{
+  ss_.seekp(0, std::ios::end);
+  return ss_.tellp() != 0;
+}
+
+void logger::message::clear()
+{
+  ss_.clear();
+  ss_.str(std::string());
+}
+
+std::string logger::message::str() const
+{
+  return ss_.str();
 }
 
 logger::message& operator<<(logger::message& msg, std::nullptr_t)
@@ -207,20 +224,51 @@ logger::message& operator<<(logger::message& msg, std::nullptr_t)
   return msg;
 }
 
-logger::tracer::tracer(char const* pretty_func)
-  : fun_(prettify(pretty_func))
+std::ostream& operator<<(std::ostream& stream, logger::level lvl)
+{
+  switch (lvl)
+  {
+    default:
+      stream << "invalid";
+      break;
+    case logger::quiet:
+      stream << "quiet  ";
+      break;
+    case logger::error:
+      stream << "error  ";
+      break;
+    case logger::warn:
+      stream << "warning";
+      break;
+    case logger::info:
+      stream << "info   ";
+      break;
+    case logger::verbose:
+      stream << "verbose";
+      break;
+    case logger::debug:
+      stream << "debug  ";
+      break;
+    case logger::trace:
+      stream << "trace  ";
+      break;
+  }
+  return stream;
+}
+
+logger::tracer::tracer(char const* fun)
+  : fun_(fun)
 {
   ++call_depth;
   msg_.append_header(trace);
   msg_.append_fill(message::right_arrow);
-  msg_ << fun_ << ' ';
+  msg_.append_function(fun_);
 }
 
 void logger::tracer::commit()
 {
   instance()->log(trace, msg_.str());
   msg_.clear();
-  msg_.str(std::string());
 }
 
 void logger::tracer::reset(bool exit)
@@ -233,18 +281,17 @@ void logger::tracer::reset(bool exit)
   else
   {
     msg_.append_fill(message::left_arrow);
-    msg_ << fun_ << ' ';
+    msg_.append_function(fun_);
   }
 }
 
 logger::tracer::~tracer()
 {
-  msg_.seekp(0, std::ios::end);
-  if (msg_.tellp() == 0)
+  if (! msg_.fast_forward())
   {
     msg_.append_header(trace);
     msg_.append_fill(message::left_arrow);
-    msg_ << fun_;
+    msg_.append_function(fun_);
   }
   commit();
   --call_depth;

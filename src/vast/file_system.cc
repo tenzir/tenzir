@@ -3,6 +3,7 @@
 #include <cassert>
 #include "vast/exception.h"
 #include "vast/serialization.h"
+#include "vast/convert.h"
 
 #ifdef VAST_POSIX
 #  include <cerrno>
@@ -40,19 +41,19 @@ path path::current()
 {
 #ifdef VAST_POSIX
   char buf[max_len];
-  return string(::getcwd(buf, max_len));
+  return string{::getcwd(buf, max_len)};
 #else
   return {};
 #endif
 }
 
 path::path(char const* str)
-  : path(string(str))
+  : path{string(str)}
 {
 }
 
 path::path(string str)
-  : str_(std::move(str))
+  : str_{std::move(str)}
 {
 }
 
@@ -122,7 +123,7 @@ path::type path::kind() const
 {
 #ifdef VAST_POSIX
   struct stat st;
-  if (::lstat(to_string(*this).data(), &st))
+  if (::lstat(to<std::string>(*this).data(), &st))
     return unknown;
   if (S_ISREG(st.st_mode))
     return regular_file;
@@ -175,17 +176,6 @@ bool operator==(path const& x, path const& y)
 bool operator<(path const& x, path const& y)
 {
   return x.str_ < y.str_;
-}
-
-std::string to_string(path const& p)
-{
-  return {p.str_.begin(), p.str_.end()};
-}
-
-std::ostream& operator<<(std::ostream& out, path const& p)
-{
-  out << to_string(p);
-  return out;
 }
 
 
@@ -249,7 +239,7 @@ bool file::open(open_mode mode, bool append)
   }
   if (append)
     flags |= O_APPEND;
-  handle_ = ::open(to_string(path_).data(), flags, 0644);
+  handle_ = ::open(to<std::string>(path_).data(), flags, 0644);
   if (handle_ > 0)
     is_open_ = true;
   return is_open_;
@@ -361,7 +351,7 @@ bool exists(path const& p)
 {
 #ifdef VAST_POSIX
   struct stat st;
-  return ::lstat(to_string(p).data(), &st) == 0;
+  return ::lstat(to<std::string>(p).data(), &st) == 0;
 #else
   return false;
 #endif // VAST_POSIX
@@ -372,7 +362,7 @@ bool rm(const path& p)
   // Because a file system only offers primitives to delete empty directories,
   // we have to recursively delete all files in a directory before deleting it.
   auto t = p.kind();
-  auto str = to_string(p);
+  auto str = to<std::string>(p);
   if (t == path::type::directory)
   {
     traverse(p, [](path const& inner) { return rm(inner); });
@@ -390,7 +380,7 @@ bool mkdir(path const& p)
   string::size_type pos = 0;
   while (pos != string::npos)
   {
-    auto str = to_string(p);
+    auto str = to<std::string>(p);
     pos = str.find(path::separator, pos);
     if (pos != string::npos)
       ++pos;
@@ -407,7 +397,7 @@ bool mkdir(path const& p)
 void traverse(path const& p, std::function<bool(path const&)> f)
 {
 #ifdef VAST_POSIX
-  DIR* d = ::opendir(to_string(p).data());
+  DIR* d = ::opendir(to<std::string>(p).data());
   if (! d)
     return;
   struct dirent* ent;

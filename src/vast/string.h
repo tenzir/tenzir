@@ -4,7 +4,10 @@
 #include <string>
 #include <vector>
 #include "vast/fwd.h"
+#include "vast/traits.h"
 #include "vast/util/operators.h"
+#include "vast/util/parse.h"
+#include "vast/util/print.h"
 
 namespace vast {
 
@@ -25,7 +28,9 @@ namespace vast {
 /// That is, 13 bytes on a 64-bit and 9 bytes on 32-bit machine.
 ///
 /// NULs may occur inside the string, hence it is not NUL-terminated.
-class string : util::totally_ordered<string>
+class string : util::totally_ordered<string>,
+               util::parsable<string>,
+               util::printable<string>
 {
 public:
   /// The size type of the counter.
@@ -318,10 +323,6 @@ public:
   void tag(char t);
 
 private:
-  friend access;
-  void serialize(serializer& sink) const;
-  void deserialize(deserializer& source);
-
   template <typename Iterator>
   void assign(Iterator begin, Iterator end)
   {
@@ -334,13 +335,32 @@ private:
   char const* heap_str() const;
 
   char buf_[buf_size];
+
+private:
+  friend access;
+
+  void serialize(serializer& sink) const;
+  void deserialize(deserializer& source);
+
+  template <typename Iterator>
+  bool parse(Iterator& start, Iterator end)
+  {
+    *this = string{start, end}.unescape();
+    start += end - start;
+    return true;
+  }
+
+  template <typename Iterator>
+  bool print(Iterator& out) const
+  {
+    auto esc = escape();
+    out = std::copy(esc.begin(), esc.end(), out);
+    return true;
+  }
 };
 
 bool operator==(string const& x, string const& y);
 bool operator<(string const& x, string const& y);
-
-std::string to_string(string const& str);
-std::ostream& operator<<(std::ostream& out, string const& str);
 
 } // namespace vast
 

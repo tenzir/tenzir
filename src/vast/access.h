@@ -6,9 +6,10 @@ namespace vast {
 /// Provides clean access of private class internals. Used by various concepts.
 struct access
 {
-  struct serializable;  // serialization.h
-  struct parsable;      // util/parse.h
-  struct printable;     // util/print.h
+  struct convertible;
+  struct serializable;
+  struct parsable;
+  struct printable;
 };
 
 } // namespace vast

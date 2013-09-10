@@ -8,7 +8,9 @@
 #include "vast/regex.h"
 #include "vast/string.h"
 #include "vast/time.h"
-#include "value_type.h"
+#include "vast/value_type.h"
+#include "vast/util/parse.h"
+#include "vast/util/print.h"
 
 namespace vast {
 
@@ -25,10 +27,35 @@ invalid_value const invalid = {};
 struct nil_value {};
 nil_value const nil = {};
 
+template <typename Iterator>
+bool print(Iterator& out, invalid_value)
+{
+  static constexpr auto str = "<invalid>";
+  out = std::copy(str, str + 9, out);
+  return true;
+}
+
+template <typename Iterator>
+bool print(Iterator& out, nil_value)
+{
+  static constexpr auto str = "<nil>";
+  out = std::copy(str, str + 5, out);
+  return true;
+}
+
 /// A value.
-class value
+class value : util::parsable<value>,
+              util::printable<value>
 {
 public:
+  /// Parses an arbitrary value.
+  ///
+  /// @param str The string to parse as value.
+  ///
+  /// @return `invalid` if *str* does not describe a value and the parsed
+  /// valued otherwise.
+  static value parse(std::string const& str);
+
   /// Default-constructs a value.
   value(invalid_value = invalid);
 
@@ -135,14 +162,6 @@ private:
   friend struct detail::visit_impl;
 
   //
-  // Serialization
-  //
-
-  friend access;
-  void serialize(serializer& sink) const;
-  void deserialize(deserializer& source);
-
-  //
   // Internal state management
   //
   
@@ -183,6 +202,78 @@ private:
   };
 
   data data_;
+
+private:
+  friend access;
+
+  void serialize(serializer& sink) const;
+  void deserialize(deserializer& source);
+
+  template <typename Iterator>
+  bool parse(Iterator& start, Iterator end, value_type type)
+  {
+#define VAST_PARSE_CASE(type)                      \
+        {                                          \
+          type t;                                  \
+          if (! extract(start, end, t))            \
+            return false;                          \
+          *this = t;                               \
+          return true;                             \
+        }
+    switch (type)
+    {
+      default:
+        throw std::logic_error("unknown value parser");
+      case bool_type:
+        VAST_PARSE_CASE(bool)
+      case int_type:
+        VAST_PARSE_CASE(int64_t)
+      case uint_type:
+        VAST_PARSE_CASE(uint64_t)
+      case double_type:
+        VAST_PARSE_CASE(double)
+      case time_range_type:
+        VAST_PARSE_CASE(time_range)
+      case time_point_type:
+        VAST_PARSE_CASE(time_point)
+      case string_type:
+        VAST_PARSE_CASE(string)
+      case regex_type:
+        VAST_PARSE_CASE(regex)
+      case address_type:
+        VAST_PARSE_CASE(address)
+      case prefix_type:
+        VAST_PARSE_CASE(prefix)
+      case port_type:
+        VAST_PARSE_CASE(port)
+    }
+#undef VAST_PARSE_CASE
+  }
+
+  template <typename Iterator>
+  struct value_printer
+  {
+    typedef bool result_type;
+
+    value_printer(Iterator& out)
+      : out(out)
+    {
+    }
+
+    template <typename T>
+    bool operator()(T const& x) const
+    {
+      return render(out, x);
+    }
+
+    Iterator& out;
+  };
+
+  template <typename Iterator>
+  bool print(Iterator& out) const
+  {
+    return value::visit(*this, value_printer<Iterator>(out));
+  }
 };
 
 // Relational operators
@@ -214,11 +305,6 @@ value operator<<(value const& x, value const& y);
 value operator>>(value const& x, value const& y);
 value operator~(value const& x);
 
-std::string to_string(value const& v);
-std::string to_string(invalid_value);
-std::string to_string(nil_value);
-std::ostream& operator<<(std::ostream& out, value const& v);
-
 namespace detail {
 
 template <typename F, typename T>
@@ -227,8 +313,8 @@ struct value_bind_impl
   typedef typename F::result_type result_type;
 
   value_bind_impl(F f, T& x)
-    : x(x)
-      , f(f)
+    : x(x),
+      f(f)
   {
   }
 

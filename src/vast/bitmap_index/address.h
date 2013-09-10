@@ -19,19 +19,20 @@ public:
   lookup(relational_operator op, value const& val) const override;
 
   virtual uint64_t size() const override;
-  virtual std::string to_string() const override;
 
 private:
   virtual bool push_back_impl(value const& val) override;
   option<bitstream> lookup(address const& addr, relational_operator op) const;
   option<bitstream> lookup(prefix const& pfx, relational_operator op) const;
 
+  std::array<bitmap<uint8_t, bitstream_type, binary_coder>, 16> bitmaps_;
+  bitstream_type v4_;
+
+private:
   friend access;
   virtual void serialize(serializer& sink) const override;
   virtual void deserialize(deserializer& source) override;
-
-  std::array<bitmap<uint8_t, bitstream_type, binary_coder>, 16> bitmaps_;
-  bitstream_type v4_;
+  virtual bool convert(std::string& str) const override;
 };
 
 } // namespace vast

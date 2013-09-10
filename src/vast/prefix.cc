@@ -7,41 +7,27 @@
 namespace vast {
 
 prefix::prefix()
-  : length_(0u)
+  : length_{0u}
 {
 }
 
 prefix::prefix(address addr, uint8_t length)
-  : network_(std::move(addr))
-  , length_(length)
+  : network_{std::move(addr)},
+    length_{length}
 {
   initialize();
 }
 
-prefix::prefix(prefix const& other)
-  : network_(other.network_)
-  , length_(other.length_)
-{
-}
-
 prefix::prefix(prefix&& other)
-  : network_(std::move(other.network_))
-  , length_(other.length_)
+  : network_{std::move(other.network_)},
+    length_{other.length_}
 {
   other.length_ = 0;
 }
 
-prefix& prefix::operator=(prefix other)
-{
-  using std::swap;
-  swap(network_, other.network_);
-  swap(length_, other.length_);
-  return *this;
-}
-
 bool prefix::contains(address const& addr) const
 {
-  address p(addr);
+  address p{addr};
   p.mask(length_);
   return p == network_;
 }
@@ -90,27 +76,12 @@ void prefix::deserialize(deserializer& source)
 
 bool operator==(prefix const& x, prefix const& y)
 {
-  return x.network() == y.network() && x.length() == y.length();
+  return x.network_ == y.network_ && x.length_ == y.length_;
 }
 
 bool operator<(prefix const& x, prefix const& y)
 {
-  return std::make_tuple(x.network(), x.length()) <
-    std::make_tuple(y.network(), y.length());
-}
-
-std::string to_string(prefix const& p)
-{
-  auto str = to_string(p.network());
-  str.push_back('/');
-  str += std::to_string(p.length());
-  return str;
-}
-
-std::ostream& operator<<(std::ostream& out, prefix const& pfx)
-{
-  out << to_string(pfx);
-  return out;
+  return std::tie(x.network_, x.length_) < std::tie(y.network_, y.length_);
 }
 
 } // namespace vast

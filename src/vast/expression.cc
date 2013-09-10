@@ -1,13 +1,15 @@
 #include "vast/expression.h"
 
 #include <boost/variant/apply_visitor.hpp>
+#include "vast/convert.h"
 #include "vast/exception.h"
 #include "vast/logger.h"
 #include "vast/regex.h"
-#include "vast/detail/ast/query.h"
-#include "vast/detail/parser/parse.h"
-#include "vast/detail/parser/query.h"
 #include "vast/serialization.h"
+#include "vast/detail/ast/query.h"
+#include "vast/detail/parser/error_handler.h"
+#include "vast/detail/parser/skipper.h"
+#include "vast/detail/parser/query.h"
 #include "vast/util/make_unique.h"
 
 namespace vast {
@@ -58,7 +60,7 @@ void id_extractor::eval()
 }
 
 offset_extractor::offset_extractor(std::vector<size_t> offsets)
-  : offsets_(std::move(offsets))
+  : offsets_{std::move(offsets)}
 {
 }
 
@@ -104,7 +106,7 @@ void offset_extractor::eval()
 }
 
 type_extractor::type_extractor(value_type type)
-  : type_(type)
+  : type_{type}
 {
 }
 
@@ -233,7 +235,7 @@ void disjunction::eval()
 }
 
 relation::relation(relational_operator op)
-  : op_type_(op)
+  : op_type_{op}
 {
   switch (op_type_)
   {
@@ -392,9 +394,9 @@ public:
   expressionizer(expr::n_ary_operator* parent,
                  std::vector<expr::extractor*>& extractors,
                  schema const& sch)
-    : parent_(parent)
-    , extractors_(extractors)
-    , schema_(sch)
+    : parent_(parent),
+      extractors_(extractors),
+      schema_(sch)
   {
   }
 
@@ -624,52 +626,37 @@ private:
   bool invert_ = false;
 };
 
-expression::expression(expression const& other)
+expression expression::parse(std::string const& str, schema sch)
 {
-  parse(other.str_, other.schema_);
-}
-
-expression::expression(expression&& other)
-  : str_(std::move(other.str_))
-  , schema_(std::move(other.schema_))
-  , root_(std::move(other.root_))
-  , extractors_(std::move(other.extractors_))
-{
-}
-
-expression& expression::operator=(expression other)
-{
-  using std::swap;
-  swap(str_, other.str_);
-  swap(schema_, other.schema_);
-  swap(root_, other.root_);
-  swap(extractors_, other.extractors_);
-  return *this;
-}
-
-void expression::parse(std::string str, schema sch)
-{
+  expression e;
   if (str.empty())
       throw error::query("empty expression");
 
-  str_ = std::move(str);
-  schema_ = std::move(sch);
-  extractors_.clear();
+  e.str_ = std::move(str);
+  e.schema_ = std::move(sch);
+  e.extractors_.clear();
 
+  auto i = str.begin();
+  auto end = str.end();
+  using iterator = std::string::const_iterator;
+  detail::parser::error_handler<iterator> on_error{i, end};
+  detail::parser::query<iterator> grammar{on_error};
+  detail::parser::skipper<iterator> skipper;
   detail::ast::query::query ast;
-  if (! detail::parser::parse<detail::parser::query>(str_, ast))
-    throw error::query("syntax error", str_);
+  bool success = phrase_parse(i, end, grammar, skipper, ast);
+  if (! success || i != end)
+    throw error::query("syntax error", e.str_);
 
   if (! detail::ast::query::validate(ast))
-    throw error::query("semantic error", str_);
+    throw error::query("semantic error", e.str_);
 
   if (ast.rest.empty())
   {
     /// WLOG, we can always add a conjunction as root.
     auto conjunction = make_unique<expr::conjunction>();
-    expressionizer visitor(conjunction.get(), extractors_, schema_);
+    expressionizer visitor{conjunction.get(), e.extractors_, e.schema_};
     boost::apply_visitor(std::ref(visitor), ast.first);
-    root_ = std::move(conjunction);
+    e.root_ = std::move(conjunction);
   }
   else
   {
@@ -688,13 +675,13 @@ void expression::parse(std::string str, schema sch)
     for (auto& ands : ors)
       if (ands.rest.empty())
       {
-        expressionizer visitor(disjunction.get(), extractors_, schema_);
+        expressionizer visitor(disjunction.get(), e.extractors_, e.schema_);
         boost::apply_visitor(std::ref(visitor), ands.first);
       }
       else
       {
         auto conjunction = make_unique<expr::conjunction>();
-        expressionizer visitor(conjunction.get(), extractors_, schema_);
+        expressionizer visitor(conjunction.get(), e.extractors_, e.schema_);
         boost::apply_visitor(std::ref(visitor), ands.first);
         for (auto clause : ands.rest)
         {
@@ -705,10 +692,25 @@ void expression::parse(std::string str, schema sch)
         disjunction->add(std::move(conjunction));
       }
 
-    root_ = std::move(disjunction);
+    e.root_ = std::move(disjunction);
   }
+  assert(! e.extractors_.empty());
+  return e;
+}
 
-  assert(! extractors_.empty());
+
+
+expression::expression(expression const& other)
+{
+  *this = parse(other.str_, other.schema_);
+}
+
+expression::expression(expression&& other)
+  : str_{std::move(other.str_)},
+    schema_{std::move(other.schema_)},
+    root_{std::move(other.root_)},
+    extractors_{std::move(other.extractors_)}
+{
 }
 
 bool expression::eval(event const& e)
@@ -749,7 +751,159 @@ void expression::deserialize(deserializer& source)
   source >> str;
   schema sch;
   source >> sch;
-  parse(std::move(str), std::move(sch));
+  *this = parse(std::move(str), std::move(sch));
+}
+
+namespace {
+
+class stringifier : public expr::const_visitor
+{
+public:
+  stringifier(std::string& str)
+    : str_(str)
+  {
+  }
+
+  virtual void visit(expr::node const&)
+  {
+    assert(! "should never happen");
+  }
+
+  virtual void visit(expr::timestamp_extractor const&)
+  {
+    indent();
+    str_ += "&time\n";
+  }
+
+  virtual void visit(expr::name_extractor const&)
+  {
+    indent();
+    str_ += "&name\n";
+  }
+
+  virtual void visit(expr::id_extractor const&)
+  {
+    indent();
+    str_ += "&id\n";
+  }
+
+  virtual void visit(expr::offset_extractor const& o)
+  {
+    indent();
+    str_ += '@';
+    auto first = o.offsets().begin();
+    auto last = o.offsets().end();
+    while (first != last)
+    {
+      str_ += to<std::string>(*first);
+      if (++first != last)
+        str_ += ",";
+    }
+    str_ += '\n';
+  }
+
+  virtual void visit(expr::type_extractor const& e)
+  {
+    indent();
+    str_ += "type(";
+    str_ += to<std::string>(e.type());
+    str_ += ")\n";
+  }
+
+  virtual void visit(expr::conjunction const& conj)
+  {
+    indent();
+    str_ += "&&\n";
+    ++depth_;
+    for (auto& op : conj.operands())
+      op->accept(*this);
+    --depth_;
+  }
+
+  virtual void visit(expr::disjunction const& disj)
+  {
+    indent();
+    str_ += "||\n";
+    ++depth_;
+    for (auto& op : disj.operands())
+      op->accept(*this);
+    --depth_;
+  }
+
+  virtual void visit(expr::relation const& rel)
+  {
+    assert(rel.operands().size() == 2);
+
+    indent();
+    switch (rel.type())
+    {
+      default:
+        assert(! "invalid operator type");
+        break;
+      case match:
+        str_ += "~";
+        break;
+      case not_match:
+        str_ += "!~";
+        break;
+      case in:
+        str_ += "in";
+        break;
+      case not_in:
+        str_ += "!in";
+        break;
+      case equal:
+        str_ += "==";
+        break;
+      case not_equal:
+        str_ += "!=";
+        break;
+      case less:
+        str_ += "<";
+        break;
+      case less_equal:
+        str_ += "<=";
+        break;
+      case greater:
+        str_ += ">";
+        break;
+      case greater_equal:
+        str_ += ">=";
+        break;
+    }
+    str_ += '\n';
+
+    ++depth_;
+    rel.operands()[0]->accept(*this);
+    rel.operands()[1]->accept(*this);
+    --depth_;
+  }
+
+  virtual void visit(expr::constant const& c)
+  {
+    indent();
+    str_ += to<std::string>(c.result()) + '\n';
+  }
+
+private:
+  void indent()
+  {
+    str_ += std::string(depth_ * 2, indent_);
+  }
+
+  unsigned depth_ = 0;
+  char indent_ = ' ';
+  std::string& str_;
+};
+
+} // namespace <anonymous>
+
+bool expression::convert(std::string& str) const
+{
+  str.clear();
+  stringifier visitor(str);
+  accept(visitor);
+  return true;
 }
 
 bool operator==(expression const& x, expression const& y)

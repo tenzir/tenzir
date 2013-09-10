@@ -6,9 +6,17 @@
 
 namespace vast {
 
+class string;
+
 /// Meta function to determine whether a type is a byte.
 template <typename T>
 using is_byte = std::integral_constant<bool, sizeof(T) == 1>;
+
+template <typename T>
+using is_string = std::integral_constant<
+  bool,
+  std::is_same<T, std::string>::value || std::is_same<T, string>::value
+>;
 
 template <typename T>
 struct is_unique_ptr : std::false_type { };
@@ -98,15 +106,27 @@ struct All : Bool<true> { };
 template <typename Head, typename... Tail>
 struct All<Head, Tail...> : Conditional<Head, All<Tail...>, Bool<false>> { };
 
-// A single-argument wrapper around enable_if.
+// SFINAE helpers
 namespace detail { enum class enabler { }; }
+
+template <typename T, typename U = void>
+using EnableIf = typename std::enable_if<T::value, U>::type;
+
+template <typename T, typename U = void>
+using DisableIf = typename std::enable_if<! T::value, U>::type;
+
 template <typename... Condition>
-using EnableIf =
+using EnableIfAll =
   typename std::enable_if<All<Condition...>::value, detail::enabler>::type;
+
 template <typename... Condition>
-using DisableIf =
+using DisableIfAll =
   typename std::enable_if<!All<Condition...>::value, detail::enabler>::type;
 
+template <typename T, typename U>
+using EnableIfIsSame = EnableIf<std::is_same<T, U>, T>;
+
+// Type qualifiers
 template <typename T>
 using RemovePointer = typename std::remove_pointer<T>::type;
 

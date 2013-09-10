@@ -9,27 +9,14 @@
 
 namespace vast {
 
-// Forward declarations.
-class schema;
-std::string to_string(schema const&);
-
 class schema
 {
-  friend std::string to_string(schema const& s);
-
 public:
   struct type : intrusive_base<type>
   {
     type() = default;
-#ifdef __clang__
     virtual ~type() = default;
-#else
-    // TODO: There is a bug in GCC 4.7
-    // (http://gcc.gnu.org/bugzilla/show_bug.cgi?id=53613) prevents us from
-    // using the =default version of the destructor. We can change this once
-    // 4.8 is the new standard.
-    virtual ~type() {}
-#endif
+    virtual bool convert(std::string& to) const = 0;
   };
 
   struct type_info
@@ -42,49 +29,71 @@ public:
       return type.get() != nullptr;
     }
 
+    bool convert(std::string& to) const;
+
     std::string name;
     std::vector<std::string> aliases;
     intrusive_ptr<schema::type> type;
   };
 
   struct basic_type : type { };
+
+#define VAST_DEFINE_BASIC_TYPE(concrete_type)               \
+  struct concrete_type : basic_type                         \
+  {                                                         \
+    virtual bool convert(std::string& to) const override;   \
+  };
+
+  VAST_DEFINE_BASIC_TYPE(bool_type)
+  VAST_DEFINE_BASIC_TYPE(int_type)
+  VAST_DEFINE_BASIC_TYPE(uint_type)
+  VAST_DEFINE_BASIC_TYPE(double_type)
+  VAST_DEFINE_BASIC_TYPE(time_frame_type)
+  VAST_DEFINE_BASIC_TYPE(time_point_type)
+  VAST_DEFINE_BASIC_TYPE(string_type)
+  VAST_DEFINE_BASIC_TYPE(regex_type)
+  VAST_DEFINE_BASIC_TYPE(address_type)
+  VAST_DEFINE_BASIC_TYPE(prefix_type)
+  VAST_DEFINE_BASIC_TYPE(port_type)
+
+#undef VAST_DEFINE_BASIC_TYPE
+
   struct complex_type : type { };
   struct container_type : complex_type { };
-  struct bool_type : basic_type { };
-  struct int_type : basic_type { };
-  struct uint_type : basic_type { };
-  struct double_type : basic_type { };
-  struct time_point_type : basic_type { };
-  struct time_frame_type : basic_type { };
-  struct string_type : basic_type { };
-  struct regex_type : basic_type { };
-  struct address_type : basic_type { };
-  struct prefix_type : basic_type { };
-  struct port_type : basic_type { };
 
   struct enum_type : complex_type
   {
+    virtual bool convert(std::string& to) const override;
+
     std::vector<std::string> fields;
   };
 
   struct vector_type : complex_type
   {
+    virtual bool convert(std::string& to) const override;
+
     type_info elem_type;
   };
 
   struct set_type : complex_type
   {
+    virtual bool convert(std::string& to) const override;
+
     type_info elem_type;
   };
 
   struct table_type : complex_type
   {
+    virtual bool convert(std::string& to) const override;
+
     type_info key_type;
     type_info value_type;
   };
 
   struct argument
   {
+    bool convert(std::string& to) const;
+
     std::string name;
     type_info type;
     bool optional = false;
@@ -93,11 +102,15 @@ public:
 
   struct record_type : complex_type
   {
+    virtual bool convert(std::string& to) const override;
+
     std::vector<argument> args;
   };
 
   struct event : record_type
   {
+    virtual bool convert(std::string& to) const override;
+
     std::string name;
     bool indexed = true;
   };
@@ -175,14 +188,17 @@ public:
   void add_event(event e);
 
 private:
+  std::vector<type_info> types_;
+  std::vector<event> events_;
+
+private:
   friend access;
   void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
+  bool convert(std::string& to) const;
+
   friend bool operator==(schema const& x, schema const& y);
   friend bool operator!=(schema const& x, schema const& y);
-
-  std::vector<type_info> types_;
-  std::vector<event> events_;
 };
 
 bool operator==(schema::type_info const& x, schema::type_info const& y);

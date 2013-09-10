@@ -1,5 +1,5 @@
 #include "test.h"
-#include "vast/to_string.h"
+#include "vast/convert.h"
 #include "vast/bitmap_index/address.h"
 #include "vast/bitmap_index/arithmetic.h"
 #include "vast/bitmap_index/port.h"
@@ -39,12 +39,12 @@ BOOST_AUTO_TEST_CASE(boolean_bitmap_index)
     "0\n"
     "1";
 
-  BOOST_CHECK_EQUAL(bi->to_string(), str);
+  BOOST_CHECK_EQUAL(to_string(*bi), str);
 
   std::vector<uint8_t> buf;
   io::archive(buf, bbi);
   io::unarchive(buf, bbi2);
-  BOOST_CHECK_EQUAL(bbi2.to_string(), str);
+  BOOST_CHECK_EQUAL(to_string(bbi2), str);
 }
 
 BOOST_AUTO_TEST_CASE(integral_bitmap_index)
@@ -114,12 +114,12 @@ BOOST_AUTO_TEST_CASE(temporal_bitmap_index)
     "00111\n"
     "00011";
 
-  BOOST_CHECK_EQUAL(bi->to_string(), str);
+  BOOST_CHECK_EQUAL(to_string(*bi), str);
 
   std::vector<uint8_t> buf;
   io::archive(buf, trbi);
   io::unarchive(buf, trbi2);
-  BOOST_CHECK_EQUAL(trbi2.to_string(), str);
+  BOOST_CHECK_EQUAL(to_string(trbi2), str);
 }
 
 BOOST_AUTO_TEST_CASE(strings_bitmap_index)
@@ -145,7 +145,7 @@ BOOST_AUTO_TEST_CASE(strings_bitmap_index)
   BOOST_CHECK_EQUAL(to_string(*not_foo), "011001");
 
   BOOST_CHECK(! bi->lookup(equal, "qux"));
-  BOOST_CHECK_THROW(bi->lookup(match, "foo"), error::operation);
+  BOOST_CHECK_THROW(bi->lookup(match, "foo"), std::runtime_error);
 
   auto str =
     "2\t1\t0\n"
@@ -156,7 +156,7 @@ BOOST_AUTO_TEST_CASE(strings_bitmap_index)
     "001\n"
     "010";
 
-  BOOST_CHECK_EQUAL(bi->to_string(), str);
+  BOOST_CHECK_EQUAL(to_string(*bi), str);
 
   std::vector<uint8_t> buf;
   io::archive(buf, sbi);
@@ -182,8 +182,8 @@ BOOST_AUTO_TEST_CASE(ip_address_bitmap_index)
   BOOST_CHECK_EQUAL(to_string(*bs), "100110");
   auto nbs = bi->lookup(not_equal, addr);
   BOOST_CHECK_EQUAL(to_string(*nbs), "011001");
-  BOOST_CHECK(! bi->lookup(equal, address("192.168.0.5")));
-  BOOST_CHECK_THROW(bi->lookup(match, address("::")), error::operation);
+  BOOST_CHECK(! bi->lookup(equal, address{"192.168.0.5"}));
+  BOOST_CHECK_THROW(bi->lookup(match, address{"::"}), std::runtime_error);
 
   bi->push_back(address("192.168.0.128"));
   bi->push_back(address("192.168.0.130"));
@@ -224,12 +224,12 @@ BOOST_AUTO_TEST_CASE(ip_address_bitmap_index)
     "0000000000000000000000000000000000000000000000000000000000000000"
     "0000000000000000000000000000000011000000101010000000000001111111";
 
-  BOOST_CHECK_EQUAL(bi->to_string(), str);
+  BOOST_CHECK_EQUAL(to_string(*bi), str);
 
   std::vector<uint8_t> buf;
   io::archive(buf, abi);
   io::unarchive(buf, abi2);
-  BOOST_CHECK_EQUAL(abi2.to_string(), str);
+  BOOST_CHECK_EQUAL(to_string(abi2), str);
 }
 
 BOOST_AUTO_TEST_CASE(transport_port_bitmap_index)
@@ -255,7 +255,7 @@ BOOST_AUTO_TEST_CASE(transport_port_bitmap_index)
   BOOST_CHECK_EQUAL(to_string(*pbs2), "1111010");
 
   BOOST_CHECK_EQUAL(
-      bi->to_string(),
+      to_string(*bi),
       "8\t53\t80\t443\t8080\t31337\n"
       "001111\n"
       "000111\n"

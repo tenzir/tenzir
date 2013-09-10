@@ -254,25 +254,16 @@ private:
 class expression : util::equality_comparable<expression>
 {
 public:
-  /// Constructs an empty expression.
-  expression() = default;
-
-  /// Copy-constructs an expression
-  /// @param other The expression to copy.
-  expression(expression const& other);
-
-  /// Move-constructs an expression.
-  /// @param other The expression to move.
-  expression(expression&& other);
-
-  /// Assigns an expression.
-  /// @param other The RHS of the assignment.
-  expression& operator=(expression other);
-
   /// Parses a given expression.
   /// @param str The query expression to transform into an AST.
   /// @param sch The schema to use to resolve event clauses.
-  void parse(std::string str, schema sch = {});
+  static expression parse(std::string const& str, schema sch = {});
+
+  expression() = default;
+  expression(expression const& other);
+  expression(expression&& other);
+  expression& operator=(expression const& other) = default;
+  expression& operator=(expression&& other) = default;
 
   /// Evaluates an event with respect to the root node.
   /// @param e The event to evaluate against the expression.
@@ -288,16 +279,18 @@ public:
   void accept(expr::visitor& v);
 
 private:
-  friend access;
-  void serialize(serializer& sink) const;
-  void deserialize(deserializer& source);
-
-  friend bool operator==(expression const& x, expression const& y);
-
   std::string str_;
   schema schema_;
   std::unique_ptr<expr::node> root_;
   std::vector<expr::extractor*> extractors_;
+
+private:
+  friend access;
+  void serialize(serializer& sink) const;
+  void deserialize(deserializer& source);
+  bool convert(std::string& str) const;
+
+  friend bool operator==(expression const& x, expression const& y);
 };
 
 } // namespace vast

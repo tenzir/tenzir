@@ -2,7 +2,6 @@
 
 #include <random>
 #include "vast/logger.h"
-#include "vast/to_string.h"
 #include "vast/serialization.h"
 
 namespace vast {
@@ -202,12 +201,6 @@ bool operator==(uuid const& x, uuid const& y)
 bool operator<(uuid const& x, uuid const& y)
 {
   return std::lexicographical_compare(x.begin(), x.end(), y.begin(), y.end());
-}
-
-std::ostream& operator<<(std::ostream& out, uuid const& u)
-{
-  out << to<std::string>(u);
-  return out;
 }
 
 } // namespace vast

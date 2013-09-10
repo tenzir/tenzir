@@ -90,26 +90,4 @@ void swap(event& x, event& y)
   swap(x.name_, y.name_);
 }
 
-std::ostream& operator<<(std::ostream& out, event const& e)
-{
-  out 
-    << (e.name().empty() ? "<unnamed>" : e.name())
-    << " [" 
-    << e.id() 
-    << '|'
-    << e.timestamp()
-    << "] ";
-
-  auto first = e.begin();
-  auto last = e.end();
-  while (first != last)
-  {
-    out << *first;
-    if (++first != last)
-      out << ", ";
-  }
-
-  return out;
-}
-
 } // namespace vast

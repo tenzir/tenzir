@@ -4,7 +4,10 @@
 #include <chrono>
 #include <string>
 #include "vast/fwd.h"
+#include "vast/convert.h"
 #include "vast/util/operators.h"
+#include "vast/util/parse.h"
+#include "vast/util/print.h"
 
 namespace vast {
 
@@ -15,7 +18,9 @@ class time_point;
 time_point now();
 
 /// A time duration.
-class time_range : util::totally_ordered<time_range>
+class time_range : util::totally_ordered<time_range>,
+                   util::parsable<time_range>,
+                   util::printable<time_range>
 {
   friend class time_point;
   typedef std::chrono::duration<double, std::ratio<1>> double_seconds;
@@ -30,7 +35,7 @@ public:
   template <typename T>
   static time_range nanoseconds(T ns)
   {
-    return std::chrono::nanoseconds(ns);
+    return std::chrono::nanoseconds{ns};
   }
 
   /// Constructs a microsecond time range.
@@ -39,7 +44,7 @@ public:
   template <typename T>
   static time_range microseconds(T us)
   {
-    return std::chrono::microseconds(us);
+    return std::chrono::microseconds{us};
   }
 
   /// Constructs a millisecond time range.
@@ -48,7 +53,7 @@ public:
   template <typename T>
   static time_range milliseconds(T ms)
   {
-    return std::chrono::milliseconds(ms);
+    return std::chrono::milliseconds{ms};
   }
 
   /// Constructs a second time range.
@@ -57,7 +62,7 @@ public:
   template <typename T>
   static time_range seconds(T s)
   {
-    return std::chrono::seconds(s);
+    return std::chrono::seconds{s};
   }
 
   /// Constructs a second time range.
@@ -65,7 +70,7 @@ public:
   /// @return A time range of *f* fractional seconds.
   static time_range fractional(double f)
   {
-    return double_seconds(f);
+    return double_seconds{f};
   }
 
   /// Constructs a minute time range.
@@ -74,7 +79,7 @@ public:
   template <typename T>
   static time_range minutes(T m)
   {
-    return std::chrono::minutes(m);
+    return std::chrono::minutes{m};
   }
 
   /// Constructs a hour time range.
@@ -83,7 +88,7 @@ public:
   template <typename T>
   static time_range hours(T h)
   {
-    return std::chrono::hours(h);
+    return std::chrono::hours{h};
   }
 
   /// Constructs a zero time range.
@@ -118,29 +123,85 @@ public:
   friend bool operator==(time_range const& x, time_range const& y);
   friend bool operator<(time_range const& x, time_range const& y);
 
-  /// Returns a `std::chrono::duration` from the range.
-  /// @return A `std::chrono::duration`.
-  duration_type to_duration() const;
-
-  /// Converts the time range to a `double`.
-  double to_double() const;
-
   /// Lifts `std::chrono::duration::count`.
   rep count() const;
 
 private:
+  duration_type duration_{0};
+
+private:
   friend access;
+
   void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
 
-  duration_type duration_{0};
+  template <typename Iterator>
+  bool parse(Iterator& start, Iterator end)
+  {
+    double d;
+    bool is_double;
+    if (! util::parse_numeric(start, end, d, &is_double))
+      return false;
+
+    if (is_double)
+    {
+      *this = time_range::fractional(d);
+      return true;
+    }
+
+    time_range::rep i = d;
+
+    // Parse suffix.
+    if (start == end)
+      *this = time_range::seconds(i);
+    else
+      switch (*start++)
+      {
+        default:
+          return false;
+        case 'n':
+          if (start != end && *start++ == 's')
+            *this = time_range::nanoseconds(i);
+          break;
+        case 'u':
+          if (start != end && *start++ == 's')
+            *this = time_range::microseconds(i);
+          break;
+        case 'm':
+          if (start != end && *start++ == 's')
+            *this = time_range::milliseconds(i);
+          else
+            *this = time_range::minutes(i);
+          break;
+        case 's':
+          *this = time_range::seconds(i);
+          break;
+        case 'h':
+          *this = time_range::hours(i);
+          break;
+      }
+
+    return true;
+  }
+
+  template <typename Iterator>
+  bool print(Iterator& out) const
+  {
+    if (! render(out, to<double>(*this)))
+      return false;
+    *out++ = 's';
+    return true;
+  }
+
+  bool convert(double& d) const;
+  bool convert(duration_type& dur) const;
 };
 
-std::string to_string(time_range r);
-std::ostream& operator<<(std::ostream& out, time_range r);
 
 /// An absolute point in time having UTC time zone.
-class time_point : util::totally_ordered<time_point>
+class time_point : util::totally_ordered<time_point>,
+                   util::parsable<time_point>,
+                   util::printable<time_point>
 {
 public:
   typedef time_range::duration_type duration;
@@ -225,23 +286,43 @@ public:
   /// Returns a time range representing the duration since the UNIX epoch.
   time_range since_epoch() const;
 
-  /// Converts a time point to a `double`.
-  /// @return The time point as fractional timestamp since the UNIX epoch.
-  double to_double() const;
-
-  /// Converts the time point to a `std::tm` structure.
-  std::tm to_tm() const;
+  template <typename Iterator>
+  bool parse(Iterator& start, Iterator end, char const* fmt = nullptr)
+  {
+    if (fmt)
+    {
+      *this = {{start, end}, fmt};
+      start += end - start;
+    }
+    else
+    {
+      time_range tr;
+      if (! extract(start, end, tr))
+        return false;
+      *this = {tr};
+    }
+    return true;
+  }
 
 private:
   friend access;
+
   void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
 
+  template <typename Iterator>
+  bool print(Iterator& out) const
+  {
+    auto str = to<std::string>(*this);
+    return render(out, str);
+  }
+
+  bool convert(double& d) const;
+  bool convert(std::tm& tm) const;
+  bool convert(std::string& str) const;
+
   time_point_type time_point_;
 };
-
-std::string to_string(time_point p);
-std::ostream& operator<<(std::ostream& out, time_point p);
 
 namespace detail {
 

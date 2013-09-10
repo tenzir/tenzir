@@ -77,32 +77,4 @@ bool operator<(port const& x, port const& y)
   return std::tie(x.number_, x.type_) < std::tie(y.number_, y.type_);
 }
 
-std::string to_string(port const& p)
-{
-  auto str = std::to_string(p.number());
-  str.push_back('/');
-  switch (p.type())
-  {
-    default:
-      str += "?";
-      break;
-    case port::tcp:
-      str += "tcp";
-      break;
-    case port::udp:
-      str += "udp";
-      break;
-    case port::icmp:
-      str += "icmp";
-      break;
-  }
-  return str;
-}
-
-std::ostream& operator<<(std::ostream& out, port const& p)
-{
-  out << to_string(p);
-  return out;
-}
-
 } // namespace vast

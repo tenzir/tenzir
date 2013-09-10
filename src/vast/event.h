@@ -49,21 +49,51 @@ public:
   void timestamp(time_point time);
 
 private:
-  friend bool operator==(event const& x, event const& y);
-  friend bool operator<(event const& x, event const& y);
-  friend void swap(event& x, event& y);
-
-  friend access;
-  void serialize(serializer& sink) const;
-  void deserialize(deserializer& source);
-
   uint64_t id_ = 0;
   time_point timestamp_;
   string name_;
-};
 
-std::string to_string(event const& e);
-std::ostream& operator<<(std::ostream& out, event const& e);
+private:
+  friend access;
+
+  void serialize(serializer& sink) const;
+  void deserialize(deserializer& source);
+
+  template <typename Iterator>
+  bool print(Iterator& out) const
+  {
+    if (name().empty())
+    {
+      if (! render(out, "<unnamed>"))
+        return false;
+    }
+    else
+    {
+      if (! render(out, name()))
+        return false;
+    }
+    render(out, " [");
+    render(out, id());
+    *out++ = '|';
+    render(out, timestamp());
+    render(out, "] "); 
+    auto first = begin();
+    auto last = end();
+    while (first != last)
+    {
+      if (! render(out, *first))
+        return false;
+      if (++first != last)
+        if (! render(out, ", "))
+          return false;
+    }
+    return true;
+  }
+
+  friend bool operator==(event const& x, event const& y);
+  friend bool operator<(event const& x, event const& y);
+  friend void swap(event& x, event& y);
+};
 
 } // namespace vast
 

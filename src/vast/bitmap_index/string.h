@@ -22,17 +22,18 @@ public:
   lookup(relational_operator op, value const& val) const override;
 
   virtual uint64_t size() const override;
-  virtual std::string to_string() const override;
 
 private:
   virtual bool push_back_impl(value const& val) override;
 
+  bitmap<dictionary_codomain, bitstream_type> bitmap_;
+  util::map_dictionary<dictionary_codomain> dictionary_;
+
+private:
   friend access;
   virtual void serialize(serializer& sink) const override;
   virtual void deserialize(deserializer& source) override;
-
-  bitmap<dictionary_codomain, bitstream_type> bitmap_;
-  util::map_dictionary<dictionary_codomain> dictionary_;
+  virtual bool convert(std::string& str) const override;
 };
 
 } // namespace vast

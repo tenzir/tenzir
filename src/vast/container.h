@@ -4,6 +4,8 @@
 #include "vast/value.h"
 #include "vast/fwd.h"
 #include "vast/util/operators.h"
+#include "vast/util/parse.h"
+#include "vast/util/print.h"
 
 namespace vast {
 namespace detail {
@@ -87,10 +89,11 @@ struct homogeneous
 
 } // namespace detail
 
-class vector : std::vector<value>
-             , public detail::enumerable<set>
-             , detail::homogeneous<vector>
-             , util::totally_ordered<vector>
+class vector : std::vector<value>,
+               public detail::enumerable<set>,
+               detail::homogeneous<vector>,
+               util::totally_ordered<vector>,
+               util::printable<vector>
 {
   friend detail::homogeneous<vector>;
   friend detail::enumerable<vector>;
@@ -187,27 +190,49 @@ public:
   vast::value_type type() const;
 
 private:
-  friend access;
-  void serialize(serializer& sink) const;
-  void deserialize(deserializer& source);
-
   bool any_impl(std::function<bool(value const&)> f) const;
   bool all_impl(std::function<bool(value const&)> f) const;
 
+  vast::value_type type_;
+
+private:
+  friend access;
+
+  void serialize(serializer& sink) const;
+  void deserialize(deserializer& source);
+  bool convert(std::string& str) const;
+
+  template <typename Iterator>
+  bool print(Iterator& out) const
+  {
+    *out++ = '[';
+    auto first = begin();
+    auto last = end();
+    while (first != last)
+    {
+      if (! render(out, *first))
+        return false;
+      if (++first != last)
+      {
+        *out++ = ',';
+        *out++ = ' ';
+      }
+    }
+    *out++ = ']';
+    return true;
+  }
+
   friend bool operator==(vector const& x, vector const& y);
   friend bool operator<(vector const& x, vector const& y);
-
-  vast::value_type type_;
 };
 
-std::string to_string(vector const& v);
-std::ostream& operator<<(std::ostream& out, vector const& v);
-
 /// A set.
-class set : std::vector<value>
-          , public detail::enumerable<set>
-          , detail::homogeneous<set>
-          , util::totally_ordered<set>
+class set : std::vector<value>,
+            public detail::enumerable<set>,
+            detail::homogeneous<set>,
+            util::totally_ordered<set>,
+            util::parsable<set>,
+            util::printable<set>
 {
   friend detail::homogeneous<set>;
   friend detail::enumerable<set>;
@@ -313,28 +338,79 @@ public:
   vast::value_type type() const;
 
 private:
-  friend access;
-  void serialize(serializer& sink) const;
-  void deserialize(deserializer& source);
-
   bool any_impl(std::function<bool(value const&)> f) const;
   bool all_impl(std::function<bool(value const&)> f) const;
 
-  friend bool operator==(set const& x, set const& y);
-  friend bool operator<(set const& x, set const& y);
-
   static compare const comp;
   vast::value_type type_;
+
+private:
+  friend access;
+
+  void serialize(serializer& sink) const;
+  void deserialize(deserializer& source);
+
+  template <typename Iterator>
+  bool parse(Iterator& start,
+             Iterator end,
+             vast::value_type elem_type,
+             string const& sep = ", ",
+             string const& esc = "\\")
+  {
+    if (start == end)
+      return false;
+
+    string str;
+    auto success = extract(start, end, str);
+    if (! success || str.empty())
+      return false;
+
+    auto l = str.starts_with("{");
+    auto r = str.ends_with("}");
+    if (l && r)
+      str = str.trim("{", "}");
+    else if (l || r)
+      return false;
+
+    clear();
+    value v;
+    for (auto p : str.split(sep, esc))
+      if (extract(p.first, p.second, v, elem_type))
+        insert(std::move(v));
+
+    return true;
+  }
+
+  template <typename Iterator>
+  bool print(Iterator& out) const
+  {
+    *out++ = '{';
+    auto first = begin();
+    auto last = end();
+    while (first != last)
+    {
+      if (! render(out, *first))
+        return false;
+      if (++first != last)
+      {
+        *out++ = ',';
+        *out++ = ' ';
+      }
+    }
+    *out++ = '}';
+    return true;
+  }
+
+  friend bool operator==(set const& x, set const& y);
+  friend bool operator<(set const& x, set const& y);
 };
 
-std::string to_string(set const& s);
-std::ostream& operator<<(std::ostream& out, set const& s);
-
 /// An associative array.
-class table : std::vector<std::pair<value, value>>
-            , public detail::enumerable<table>
-            , detail::homogeneous<table>
-            , util::totally_ordered<table>
+class table : std::vector<std::pair<value, value>>,
+              public detail::enumerable<table>,
+              detail::homogeneous<table>,
+              util::totally_ordered<table>,
+              util::printable<table>
 {
   friend detail::homogeneous<table>;
   friend detail::enumerable<table>;
@@ -439,28 +515,51 @@ public:
   const_iterator find(key_type const& key) const;
 
 private:
-  friend access;
-  void serialize(serializer& sink) const;
-  void deserialize(deserializer& source);
-
   bool any_impl(std::function<bool(value const&)> f) const;
   bool all_impl(std::function<bool(value const&)> f) const;
-
-  friend bool operator==(table const& x, table const& y);
-  friend bool operator<(table const& x, table const& y);
 
   static compare const comp;
   vast::value_type key_type_;
   vast::value_type map_type_;
+
+private:
+  friend access;
+  friend util::printable<table>;
+
+  void serialize(serializer& sink) const;
+  void deserialize(deserializer& source);
+
+  template <typename Iterator>
+  bool print(Iterator& out) const
+  {
+    *out++ = '{';
+    auto first = begin();
+    auto last = end();
+    while (first != last)
+    {
+      if (! render(out, first->first))
+        return false;
+      if (! render(out, " -> "))
+        return false;
+      if (! render(out, first->second))
+        return false;
+      if (++first != last)
+      if (! render(out, ", "))
+        return false;
+    }
+    *out++ = '}';
+    return true;
+  }
+
+  friend bool operator==(table const& x, table const& y);
+  friend bool operator<(table const& x, table const& y);
 };
 
-std::string to_string(table const& t);
-std::ostream& operator<<(std::ostream& out, table const& t);
-
 /// A vector of values with arbitrary value types.
-class record : public std::vector<value>
-             , public detail::enumerable<record>
-             , util::totally_ordered<record>
+class record : public std::vector<value>,
+               public detail::enumerable<record>,
+               util::totally_ordered<record>,
+               util::printable<record>
 {
   friend detail::enumerable<record>;
 
@@ -509,20 +608,40 @@ public:
   void each(std::function<void(value const&)> f, bool recurse = false) const;
 
 private:
-  friend access;
-  void serialize(serializer& sink) const;
-  void deserialize(deserializer& source);
-
   value const* do_flat_at(size_t i, size_t& base) const;
   bool any_impl(std::function<bool(value const&)> f) const;
   bool all_impl(std::function<bool(value const&)> f) const;
 
+private:
+  friend access;
+
+  void serialize(serializer& sink) const;
+  void deserialize(deserializer& source);
+
+  template <typename Iterator>
+  bool print(Iterator& out) const
+  {
+    *out++ = '(';
+    auto first = begin();
+    auto last = end();
+    while (first != last)
+    {
+      if (! render(out, *first))
+        return false;
+      if (++first != last)
+      {
+        *out++ = ',';
+        *out++ = ' ';
+      }
+    }
+    *out++ = ')';
+    return true;
+  }
+
+
   friend bool operator==(record const& x, record const& y);
   friend bool operator<(record const& x, record const& y);
 };
-
-std::string to_string(record const& r);
-std::ostream& operator<<(std::ostream& out, record const& r);
 
 } // namespace vast
 

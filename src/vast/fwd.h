@@ -9,6 +9,8 @@ struct access;
 class serializer;
 class deserializer;
 
+struct invalid_value;
+struct nil_value;
 class value;
 enum value_type : uint8_t;
 
@@ -23,6 +25,13 @@ class set;
 class string;
 class table;
 class vector;
+
+template <typename Iterator, typename T, typename... Opts>
+bool extract(Iterator&, Iterator, T&, Opts&&...);
+
+template <typename Iterator, typename T, typename... Opts>
+bool render(Iterator&, T const&, Opts&&...);
+
 
 namespace detail {
 template <typename T> void save(serializer& sink, T const& x);

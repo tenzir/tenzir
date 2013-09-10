@@ -1,7 +1,6 @@
 #include "vast/bitmap_index/string.h"
 
 #include "vast/exception.h"
-#include "vast/to_string.h"
 #include "vast/value.h"
 
 namespace vast {
@@ -15,10 +14,10 @@ option<bitstream>
 string_bitmap_index::lookup(relational_operator op, value const& val) const
 {
   if (! (op == equal || op == not_equal))
-    throw error::operation("unsupported relational operator", op);
+    throw std::runtime_error("unsupported relational operator " + 
+                             to<std::string>(op));
 
-  auto str = vast::to_string(val.get<string>());
-  auto i = dictionary_[str];
+  auto i = dictionary_[to<std::string>(val.get<string>())];
   if (! i)
     return {};
 
@@ -34,16 +33,9 @@ uint64_t string_bitmap_index::size() const
   return bitmap_.size();
 }
 
-std::string string_bitmap_index::to_string() const
-{
-  using vast::to_string;
-  return to_string(bitmap_);
-}
-
 bool string_bitmap_index::push_back_impl(value const& val)
 {
-  using vast::to_string;
-  auto str = to_string(val.get<string>());
+  auto str = to<std::string>(val.get<string>());
   auto i = dictionary_[str];
   if (!i)
     i = dictionary_.insert(str);
@@ -60,6 +52,12 @@ void string_bitmap_index::serialize(serializer& sink) const
 void string_bitmap_index::deserialize(deserializer& source)
 {
   source >> dictionary_ >> bitmap_;
+}
+
+bool string_bitmap_index::convert(std::string& str) const
+{
+  using vast::convert;
+  return convert(bitmap_, str);
 }
 
 } // namespace vast

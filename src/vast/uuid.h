@@ -4,13 +4,15 @@
 #include <array>
 #include <functional>
 #include "vast/fwd.h"
-#include "vast/to.h"
 #include "vast/traits.h"
+#include "vast/util/coding.h"
 #include "vast/util/operators.h"
+#include "vast/util/print.h"
 
 namespace vast {
 
-class uuid : util::totally_ordered<uuid>
+class uuid : util::totally_ordered<uuid>,
+             util::printable<uuid>
 {
 public:
   using value_type = uint8_t;
@@ -36,40 +38,31 @@ public:
   void swap(uuid& other);
 
 private:
+  std::array<uint8_t, 16> id_;
+
+private:
   friend access;
+
   void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
 
-  friend bool operator==(uuid const& x, uuid const& y);
-  friend bool operator<(uuid const& x, uuid const& y);
-
-  template <typename To>
-  friend auto to(uuid const& u) -> EnableIfIsSame<To, std::string>
+  template <typename Iterator>
+  bool print(Iterator& out) const
   {
-    std::string str;
-    str.reserve(36);
     for (size_t i = 0; i < 16; ++i)
     {
-      auto& byte = u.id_[i];
-      str += to<char>((byte >> 4) & 0x0f);
-      str += to<char>(byte & 0x0f);
+      auto& byte = id_[i];
+      *out++ = util::byte_to_char((byte >> 4) & 0x0f);
+      *out++ = util::byte_to_char(byte & 0x0f);
       if (i == 3 || i == 5 || i == 7 || i == 9)
-        str += '-';
+        *out++ = '-';
     }
-    return str;
+    return true;
   }
 
-  template <typename To>
-  friend auto to(uuid const& u) -> EnableIfIsSame<To, string>
-  {
-    auto str = to<std::string>(u);
-    return {str};
-  }
-
-  std::array<uint8_t, 16> id_;
+  friend bool operator==(uuid const& x, uuid const& y);
+  friend bool operator<(uuid const& x, uuid const& y);
 };
-
-std::ostream& operator<<(std::ostream& out, uuid const& u);
 
 } // namespace vast
 

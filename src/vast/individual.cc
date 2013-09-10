@@ -28,9 +28,4 @@ void individual::deserialize(deserializer& source)
   source >> id_;
 }
 
-void swap(individual& x, individual& y)
-{
-  swap(x.id_, y.id_);
-}
-
 } // namespace vast

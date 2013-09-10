@@ -67,19 +67,4 @@ bool operator<(regex const& x, regex const& y)
   return x.str_ < y.str_;
 }
 
-std::string to_string(regex const& rx)
-{
-  std::string str;
-  str += '/';
-  str += to_string(rx.str_);
-  str += '/';
-  return str;
-}
-
-std::ostream& operator<<(std::ostream& out, regex const& r)
-{
-  out << '/' << r.str_ << '/';
-  return out;
-}
-
 } // namespace vast

@@ -1,6 +1,5 @@
 #include "vast/bitmap_index/address.h"
 
-#include "vast/exception.h"
 #include "vast/value.h"
 
 namespace vast {
@@ -18,15 +17,15 @@ option<bitstream>
 address_bitmap_index::lookup(relational_operator op, value const& val) const
 {
   if (! (op == equal || op == not_equal || op == in || op == not_in))
-    throw error::operation("unsupported relational operator", op);
-
+    throw std::runtime_error("unsupported relational operator " + 
+                             to<std::string>(op));
   if (v4_.empty())
     return {};
 
   switch (val.which())
   {
     default:
-      throw error::index("invalid value type");
+      throw std::runtime_error("invalid value type");
     case address_type:
       return lookup(val.get<address>(), op);
     case prefix_type:
@@ -37,20 +36,6 @@ address_bitmap_index::lookup(relational_operator op, value const& val) const
 uint64_t address_bitmap_index::size() const
 {
   return v4_.size();
-}
-
-std::string address_bitmap_index::to_string() const
-{
-  using vast::to_string;
-  std::vector<bitstream_type> v;
-  v.reserve(128);
-  for (size_t i = 0; i < 128; ++i)
-    v.emplace_back(*bitmaps_[i / 8].lookup_raw(7 - i % 8));
-  std::string str;
-  for (auto& row : transpose(v))
-    str += to_string(row) + '\n';
-  str.pop_back();
-  return str;
 }
 
 bool address_bitmap_index::push_back_impl(value const& val)
@@ -89,11 +74,11 @@ option<bitstream>
 address_bitmap_index::lookup(prefix const& pfx, relational_operator op) const
 {
   if (! (op == in || op == not_in))
-    throw error::operation("unsupported relational operator", op);
-
+    throw std::runtime_error("unsupported relational operator " + 
+                             to<std::string>(op));
   auto topk = pfx.length();
   if (topk == 0)
-    throw error::index("invalid IP prefix length");
+    throw std::runtime_error("invalid IP prefix length");
 
   auto net = pfx.network();
   auto is_v4 = net.is_v4();
@@ -110,7 +95,7 @@ address_bitmap_index::lookup(prefix const& pfx, relational_operator op) const
       if (auto bs = bitmaps_[i].lookup_raw(j))
         *result &= ((bytes[i] >> j) & 1) ? *bs : ~*bs;
       else
-        throw error::index("corrupt index: bit must exist");
+        throw std::runtime_error("corrupt index: bit must exist");
 
       if (! --bit)
       {
@@ -131,6 +116,18 @@ void address_bitmap_index::serialize(serializer& sink) const
 void address_bitmap_index::deserialize(deserializer& source)
 {
   source >> bitmaps_ >> v4_;
+}
+
+bool address_bitmap_index::convert(std::string& str) const
+{
+  std::vector<bitstream_type> v;
+  v.reserve(128);
+  for (size_t i = 0; i < 128; ++i)
+    v.emplace_back(*bitmaps_[i / 8].lookup_raw(7 - i % 8));
+  for (auto& row : transpose(v))
+    str += to<std::string>(row) + '\n';
+  str.pop_back();
+  return true;
 }
 
 } // namespace vast

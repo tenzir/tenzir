@@ -2,11 +2,36 @@
 #define VAST_UTIL_CODING_H
 
 #include <cassert>
-#include <type_traits>
 #include <limits>
+#include "vast/traits.h"
 
 namespace vast {
 namespace util {
+
+/// Converts a byte value into a character.
+/// @param b The byte to convert
+template <
+  typename T,
+  typename = EnableIf<std::is_integral<T>>
+>
+char byte_to_char(T b)
+{
+  return b < 10 ? '0' + b : 'a' + b - 10;
+}
+
+/// Converts two characters representing a hex byte into a single byte value.
+template <
+  typename T,
+  typename = EnableIf<std::is_integral<T>>
+>
+char hex_to_byte(T hi, T lo)
+{
+  char byte;
+  byte =  (hi > '9' ? hi - 'a' + 10 : hi - '0') << 4;
+  byte |= (lo > '9' ? lo - 'a' + 10 : lo - '0');
+  return byte;
+}
+
 namespace varbyte {
 namespace detail {
 

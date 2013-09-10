@@ -40,16 +40,15 @@ public:
   /// @return `true` if `size() == 0`.
   bool empty() const;
 
-  /// Creates a string representation of the bitmap index.
-  /// @return An `std::string` of the bitmap index.
-  virtual std::string to_string() const = 0;
-
 private:
   virtual bool push_back_impl(value const& val) = 0;
 
+private:
   friend access;
+
   virtual void serialize(serializer& sink) const = 0;
   virtual void deserialize(deserializer& source) = 0;
+  virtual bool convert(std::string& str) const = 0;
 };
 
 } // namespace vast

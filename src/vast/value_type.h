@@ -8,20 +8,6 @@
 
 namespace vast {
 
-// Forward declarations.
-struct invalid_value;
-struct nil_value;
-class time_range;
-class time_point;
-class string;
-class vector;
-class set;
-class table;
-class record;
-class address;
-class port;
-class prefix;
-
 /// The type of a value.
 enum value_type : uint8_t
 {
@@ -53,8 +39,70 @@ enum value_type : uint8_t
 void serialize(serializer& sink, value_type x);
 void deserialize(deserializer& source, value_type& x);
 
-std::string to_string(value_type t);
-std::ostream& operator<<(std::ostream& out, value_type const& t);
+template <typename Iterator>
+bool print(Iterator& out, value_type t)
+{
+  auto str = "unknown";
+  switch (t)
+  {
+    default:
+      break;
+    case invalid_type:
+      str = "invalid";
+      break;
+    case nil_type:
+      str = "nil";
+      break;
+    case bool_type:
+      str = "bool";
+      break;
+    case int_type:
+      str = "int";
+      break;
+    case uint_type:
+      str = "uint";
+      break;
+    case double_type:
+      str = "double";
+      break;
+    case time_range_type:
+      str = "duration";
+      break;
+    case time_point_type:
+      str = "time";
+      break;
+    case string_type:
+      str = "string";
+      break;
+    case regex_type:
+      str = "regex";
+      break;
+    case vector_type:
+      str = "vector";
+      break;
+    case set_type:
+      str = "set";
+      break;
+    case table_type:
+      str = "table";
+      break;
+    case record_type:
+      str = "record";
+      break;
+    case address_type:
+      str = "address";
+      break;
+    case prefix_type:
+      str = "prefix";
+      break;
+    case port_type:
+      str = "port";
+      break;
+  }
+  // TODO: replace strlen with appropriate compile-time constructs.
+  out = std::copy(str, str + std::strlen(str), out);
+  return true;
+}
 
 /// Meta function to retrieve the underlying type of a given value type.
 /// @tparam T The value type to get the underlying type from.

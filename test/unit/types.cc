@@ -389,23 +389,23 @@ BOOST_AUTO_TEST_CASE(addresses_v6)
 BOOST_AUTO_TEST_CASE(prefixes)
 {
   prefix p;
-  BOOST_CHECK(p.network() == address("::"));
-  BOOST_CHECK(p.length() == 0);
-  BOOST_CHECK(to_string(p) == "::/0");
+  BOOST_CHECK_EQUAL(p.network(), address{"::"});
+  BOOST_CHECK_EQUAL(p.length(), 0);
+  BOOST_CHECK_EQUAL(to_string(p), "::/0");
 
-  address a("192.168.0.1");
-  prefix q(a, 24);
-  BOOST_CHECK(q.network() == address("192.168.0.0"));
-  BOOST_CHECK(q.length() == 24);
-  BOOST_CHECK(to_string(q) == "192.168.0.0/24");
+  address a{"192.168.0.1"};
+  prefix q{a, 24};
+  BOOST_CHECK_EQUAL(q.network(), address("192.168.0.0"));
+  BOOST_CHECK_EQUAL(q.length(), 24);
+  BOOST_CHECK_EQUAL(to_string(q), "192.168.0.0/24");
   BOOST_CHECK(q.contains(address("192.168.0.73")));
   BOOST_CHECK(! q.contains(address("192.168.244.73")));
 
-  address b("2001:db8:0000:0000:0202:b3ff:fe1e:8329");
-  prefix r(b, 64);
-  BOOST_CHECK(r.length() == 64);
-  BOOST_CHECK(r.network() == address("2001:db8::"));
-  BOOST_CHECK(to_string(r) == "2001:db8::/64");
+  address b{"2001:db8:0000:0000:0202:b3ff:fe1e:8329"};
+  prefix r{b, 64};
+  BOOST_CHECK_EQUAL(r.length(), 64);
+  BOOST_CHECK_EQUAL(r.network(), address{"2001:db8::"});
+  BOOST_CHECK_EQUAL(to_string(r), "2001:db8::/64");
   BOOST_CHECK(r.contains(address("2001:db8::cafe:babe")));
   BOOST_CHECK(! r.contains(address("ff00::")));
 }

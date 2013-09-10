@@ -50,7 +50,8 @@ public:
   lookup(relational_operator op, value const& val) const override
   {
     if (op == in || op == not_in)
-      throw error::operation("unsupported relational operator", op);
+        throw std::runtime_error(
+            "unsupported relational operator: " + to<std::string>(op));
     if (bitmap_.empty())
       return {};
     auto result = bitmap_.lookup(op, val.get<underlying_value_type>());
@@ -64,18 +65,15 @@ public:
     return bitmap_.size();
   }
 
-  virtual std::string to_string() const override
-  {
-    using vast::to_string;
-    return to_string(bitmap_);
-  }
-
 private:
   virtual bool push_back_impl(value const& val) override
   {
     return bitmap_.push_back(val.get<underlying_value_type>());
   }
 
+  bitmap_type bitmap_;
+
+private:
   friend access;
 
   virtual void serialize(serializer& sink) const override
@@ -88,7 +86,11 @@ private:
     source >> bitmap_;
   }
 
-  bitmap_type bitmap_;
+  virtual bool convert(std::string& str) const override
+  {
+    using vast::convert;
+    return convert(bitmap_, str);
+  }
 };
 
 } // namespace vast

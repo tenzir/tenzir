@@ -4,10 +4,12 @@
 #include <list>
 #include <unordered_map>
 #include "vast/bitstream.h"
+#include "vast/convert.h"
 #include "vast/exception.h"
 #include "vast/operator.h"
 #include "vast/option.h"
 #include "vast/serialization.h"
+#include "vast/util/print.h"
 
 namespace vast {
 namespace detail {
@@ -347,7 +349,8 @@ struct equality_coder
     switch (op)
     {
       default:
-        throw error::operation("unsupported relational operator", op);
+        throw std::runtime_error(
+            "unsupported relational operator: " + to<std::string>(op));
       case equal:
         if (result)
           return *result;
@@ -394,7 +397,8 @@ struct binary_coder
     switch (op)
     {
       default:
-        throw error::operation("unsupported relational operator", op);
+        throw std::runtime_error(
+            "unsupported relational operator: " + to<std::string>(op));
       case equal:
         {
           Bitstream result{store_.rows, true};
@@ -453,10 +457,11 @@ struct range_coder : coder<T, Bitstream, detail::list_storage<T, Bitstream>>
     switch (op)
     {
       default:
-        throw error::operation("unsupported relational operator", op);
+        throw std::runtime_error(
+            "unsupported relational operator: " + to<std::string>(op));
       case less:
         if (! std::is_integral<T>::value)
-          throw error::operation("operator needs integral type", op);
+        throw std::runtime_error("operator less requires integral type");
         else if (x == std::numeric_limits<T>::lowest())
           return decode(x, less_equal);
         else
@@ -602,7 +607,7 @@ template <
   template <typename, typename> class Coder = equality_coder,
   template <typename> class Binner = null_binner
 >
-class bitmap
+class bitmap : util::printable<bitmap<T, Bitstream, Coder, Binner>>
 {
 public:
   using coder_type = Coder<T, Bitstream>;
@@ -682,6 +687,10 @@ public:
     return size() == 0;
   }
 
+  coder_type coder_;
+  binner_type binner_;
+  Bitstream valid_;
+
 private:
   friend access;
 
@@ -695,44 +704,32 @@ private:
     source >> binner_ >> valid_ >> coder_;
   }
 
-  /// Converts a bitmap to a `std::string`.
-  ///
-  /// @param bm The bitmap to convert.
-  ///
-  /// @param with_header If `true`, include a header with bitmap values as first
-  /// row in the output.
-  ///
-  /// @param delim The delimiting character separating header values.
-  ///
-  /// @return A `std::string` representation of *bm*.
-  friend std::string
-  to_string(bitmap const& bm, bool with_header = true, char delim = '\t')
+  template <typename Iterator>
+  bool print(Iterator& out, bool with_header = true, char delim = '\t') const
   {
-    if (bm.empty())
-      return {};
+    if (empty())
+      return true;
     std::string str;
     if (with_header)
     {
-      using std::to_string;
-      //using vast::to_string;
-      bm.coder_.store().each(
-          [&](T const& x, Bitstream const&) { str += to_string(x) + delim; });
+      coder_.store().each(
+          [&](T const& x, Bitstream const&)
+          {
+            str += to<std::string>(x) + delim;
+          });
       str.pop_back();
       str += '\n';
     }
     std::vector<Bitstream> cols;
-    cols.reserve(bm.coder_.store().rows);
-    bm.coder_.store().each(
+    cols.reserve(coder_.store().rows);
+    coder_.store().each(
         [&](T const&, Bitstream const& bs) { cols.push_back(bs); });
     for (auto& row : transpose(cols))
-      str += to_string(row) + '\n';
+      str += to<std::string>(row) + '\n';
     str.pop_back();
-    return str;
+    out = std::copy(str.begin(), str.end(), out);
+    return true;
   }
-
-  coder_type coder_;
-  binner_type binner_;
-  Bitstream valid_;
 };
 
 /// A bitmap specialization for `bool`.
@@ -770,7 +767,8 @@ public:
     switch (op)
     {
       default:
-        throw error::operation("unsupported relational operator", op);
+        throw std::runtime_error(
+            "unsupported relational operator: " + to<std::string>(op));
       case not_equal:
         return {(x ? ~bool_ : bool_) & valid_};
       case equal:
@@ -789,6 +787,10 @@ public:
   }
 
 private:
+  Bitstream bool_;
+  Bitstream valid_;
+
+private:
   friend access;
 
   void serialize(serializer& sink) const
@@ -801,19 +803,20 @@ private:
     source >> valid_ >> bool_;
   }
 
-  friend std::string to_string(bitmap const& bm)
+  template <typename Iterator>
+  bool print(Iterator& out) const
   {
     std::string str;
-    auto i = bm.bool_.find_first();
+    auto i = bool_.find_first();
     if (i == Bitstream::npos)
-      throw exception("bitstream too large to convert to string");
-    str.reserve(bm.bool_.size() * 2);
+      throw std::invalid_argument("bitstream too large to generate");
+    str.reserve(bool_.size() * 2);
     if (i > 0)
       for (size_t j = 0; j < i; ++j)
         str += "0\n";
     str += "1\n";
     auto j = i;
-    while ((j = bm.bool_.find_next(i)) != Bitstream::npos)
+    while ((j = bool_.find_next(i)) != Bitstream::npos)
     {
       auto delta = j - i;
       for (i = 1; i < delta; ++i)
@@ -822,15 +825,13 @@ private:
       i = j;
     }
     assert(j == Bitstream::npos);
-    for (j = 1; j < bm.bool_.size() - i; ++i)
+    for (j = 1; j < bool_.size() - i; ++i)
       str += "0\n";
     if (str.back() == '\n')
       str.pop_back();
-    return str;
+    out = std::copy(str.begin(), str.end(), out);
+    return true;
   }
-
-  Bitstream bool_;
-  Bitstream valid_;
 };
 
 } // namespace vast

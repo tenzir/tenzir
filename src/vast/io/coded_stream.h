@@ -51,7 +51,7 @@ public:
   typename std::enable_if<std::is_arithmetic<T>::value, bool>::type
   read(void* x)
   {
-    VAST_ENTER(VAST_ARG(x));
+    VAST_ENTER();
     auto val = reinterpret_cast<T*>(x);
     if (buffer_.size() >= sizeof(T))
     {
@@ -73,7 +73,7 @@ public:
   typename std::enable_if<std::is_integral<T>::value, bool>::type
   read_varbyte(T* x)
   {
-    VAST_ENTER(VAST_ARG(x));
+    VAST_ENTER();
     size_t n = 0;
     if (buffer_.size() >= util::varbyte::max_size<T>())
     {
@@ -155,7 +155,7 @@ public:
   typename std::enable_if<std::is_arithmetic<T>::value, size_t>::type
   write(void const* x)
   {
-    VAST_ENTER(VAST_ARG(x));
+    VAST_ENTER();
     auto ptr = reinterpret_cast<T const*>(x);
     T val = util::byte_swap<host_endian, network_endian>(*ptr);
     if (buffer_.size() < sizeof(T))
@@ -177,7 +177,7 @@ public:
   typename std::enable_if<std::is_integral<T>::value, size_t>::type
   write_varbyte(T const* x)
   {
-    VAST_ENTER(VAST_ARG(*x));
+    VAST_ENTER();
     size_t n;
     if (buffer_.size() >= util::varbyte::max_size<T>() ||
         buffer_.size() >= util::varbyte::size(*x))

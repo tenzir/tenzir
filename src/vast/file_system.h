@@ -7,16 +7,16 @@
 #include "vast/fwd.h"
 #include "vast/string.h"
 #include "vast/util/operators.h"
+#include "vast/util/print.h"
 
 namespace vast {
 
 /// A filesystem path abstraction.
 class path : util::totally_ordered<path>,
              util::addable<path>,
-             util::dividable<path>
+             util::dividable<path>,
+             util::printable<path>
 {
-  friend std::string to_string(path const& str);
-
 public:
 #ifdef VAST_WINDOWS
   static constexpr char const* separator = "\\";
@@ -98,13 +98,18 @@ public:
 
 private:
   friend access;
+
   void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
 
+  template <typename Iterator>
+  bool print(Iterator& out) const
+  {
+    return render(out, str_);
+  }
+
   string str_;
 };
-
-std::ostream& operator<<(std::ostream& out, path const& p);
 
 /// A file abstraction.
 class file

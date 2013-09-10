@@ -4,15 +4,18 @@
 #include <array>
 #include <string>
 #include "vast/fwd.h"
+#include "vast/string.h"
 #include "vast/util/operators.h"
+#include "vast/util/parse.h"
+#include "vast/util/print.h"
 
 namespace vast {
 
-// Forward declaration
-class string;
-
 /// An IP address.
-class address : util::totally_ordered<address>, util::bitwise<address>
+class address : util::totally_ordered<address>,
+                util::bitwise<address>,
+                util::parsable<address>,
+                util::printable<address>
 {
   /// Top 96 bits of v4-mapped-addr.
   static std::array<uint8_t, 12> const v4_mapped_prefix;
@@ -32,20 +35,13 @@ public:
     network
   };
 
-  /// Constructs an empty address.
+  /// Default-constructs an (empty) address.
   address();
 
-  /// Copies another address into this instance.
-  /// @param other The address to copy.
-  address(address const& other);
-
-  /// Moves another address.
-  /// @param other The address to move.
+  address(address const&) = default;
   address(address&& other);
-
-  /// Assigns another address to this instance.
-  /// @param other The right-hand side of the assignment.
-  address& operator=(address other);
+  address& operator=(address const&) = default;
+  address& operator=(address&&) = default;
 
   /// Constructs an address from a raw bytes.
   ///
@@ -132,20 +128,37 @@ public:
 private:
   void from_v4(char const* str);
   void from_v6(char const* str);
+  string to_string() const;
 
+  std::array<uint8_t, 16> bytes_;
+
+private:
   friend access;
+
   void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
 
+  template <typename Iterator>
+  bool parse(Iterator& start, Iterator end)
+  {
+    string str;
+    if (! extract(start, end, str))
+      return false;
+    *this = {str};
+    return true;
+  }
+
+  template <typename Iterator>
+  bool print(Iterator& out) const
+  {
+    auto str = to_string();
+    out = std::copy(str.begin(), str.end(), out);
+    return true;
+  }
+
   friend bool operator==(address const& x, address const& y);
   friend bool operator<(address const& x, address const& y);
-
-  friend std::string to_string(address const& a);
-
-  std::array<uint8_t, 16> bytes_;
 };
-
-std::ostream& operator<<(std::ostream& out, address const& addr);
 
 } // namespace vast
 

@@ -24,19 +24,20 @@ public:
   lookup(relational_operator op, value const& val) const override;
 
   virtual uint64_t size() const override;
-  virtual std::string to_string() const override;
 
 private:
   static time_range::rep extract(value const& val);
 
   virtual bool push_back_impl(value const& val) override;
 
+  bitmap<time_range::rep, bitstream_type, range_coder, precision_binner>
+    bitmap_;
+
+private:
   friend access;
   virtual void serialize(serializer& sink) const override;
   virtual void deserialize(deserializer& source) override;
-
-  bitmap<time_range::rep, bitstream_type, range_coder, precision_binner>
-    bitmap_;
+  virtual bool convert(std::string& str) const override;
 };
 
 } // namespace vast

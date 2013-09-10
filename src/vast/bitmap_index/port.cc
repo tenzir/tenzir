@@ -1,7 +1,5 @@
 #include "vast/bitmap_index/port.h"
 
-#include "vast/exception.h"
-#include "vast/to_string.h"
 #include "vast/value.h"
 
 namespace vast {
@@ -16,7 +14,8 @@ option<bitstream>
 port_bitmap_index::lookup(relational_operator op, value const& val) const
 {
   if (op == in || op == not_in)
-    throw error::operation("unsupported relational operator", op);
+    throw std::runtime_error("unsupported relational operator " + 
+                             to<std::string>(op));
   if (num_.empty())
     return {};
   auto& p = val.get<port>();
@@ -32,12 +31,6 @@ port_bitmap_index::lookup(relational_operator op, value const& val) const
 uint64_t port_bitmap_index::size() const
 {
   return proto_.size();
-}
-
-std::string port_bitmap_index::to_string() const
-{
-  using vast::to_string;
-  return to_string(num_);
 }
 
 bool port_bitmap_index::push_back_impl(value const& val)
@@ -56,6 +49,12 @@ void port_bitmap_index::serialize(serializer& sink) const
 void port_bitmap_index::deserialize(deserializer& source)
 {
   source >> num_ >> proto_;
+}
+
+bool port_bitmap_index::convert(std::string& str) const
+{
+  using vast::convert;
+  return convert(num_, str);
 }
 
 } // namespace vast

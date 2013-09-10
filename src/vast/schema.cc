@@ -1,9 +1,9 @@
 #include "vast/schema.h"
 
 #include <fstream>
+#include "vast/convert.h"
 #include "vast/exception.h"
 #include "vast/logger.h"
-#include "vast/to_string.h"
 #include "vast/detail/ast/schema.h"
 #include "vast/detail/parser/schema.h"
 #include "vast/io/container_stream.h"
@@ -164,9 +164,110 @@ private:
 } // namespace detail
 
 schema::type_info::type_info(std::string name, intrusive_ptr<schema::type> t)
-  : name(std::move(name))
-  , type(std::move(t))
+  : name(std::move(name)),
+    type(std::move(t))
 {
+}
+
+bool schema::type_info::convert(std::string& str) const
+{
+  str = name != "<anonymous>" ? name : to<std::string>(*type);
+  return true;
+}
+
+#define VAST_DEFINE_BASIC_TYPE_CONVERT(concrete_type, desc)    \
+bool schema::concrete_type::convert(std::string& str) const    \
+{                                                              \
+  str = desc;                                                  \
+  return true;                                                 \
+}
+
+VAST_DEFINE_BASIC_TYPE_CONVERT(bool_type, "bool")
+VAST_DEFINE_BASIC_TYPE_CONVERT(int_type, "int")
+VAST_DEFINE_BASIC_TYPE_CONVERT(uint_type, "count")
+VAST_DEFINE_BASIC_TYPE_CONVERT(double_type, "double")
+VAST_DEFINE_BASIC_TYPE_CONVERT(time_frame_type, "interval")
+VAST_DEFINE_BASIC_TYPE_CONVERT(time_point_type, "time")
+VAST_DEFINE_BASIC_TYPE_CONVERT(string_type, "string")
+VAST_DEFINE_BASIC_TYPE_CONVERT(regex_type, "pattern")
+VAST_DEFINE_BASIC_TYPE_CONVERT(address_type, "addr")
+VAST_DEFINE_BASIC_TYPE_CONVERT(prefix_type, "subnet")
+VAST_DEFINE_BASIC_TYPE_CONVERT(port_type, "port")
+
+#undef VAST_DEFINE_BASIC_TYPE_CONVERT
+
+bool schema::enum_type::convert(std::string& str) const
+{
+  str.clear();
+  str += "enum {";
+  auto first = fields.begin();
+  auto last = fields.end();
+  while (first != last)
+  {
+    str += *first;
+    if (++first != last)
+      str += ", ";
+  }
+  str += '}';
+  return true;
+}
+
+bool schema::vector_type::convert(std::string& str) const
+{
+  str = "vector of " + to<std::string>(elem_type);
+  return true;
+}
+
+bool schema::set_type::convert(std::string& str) const
+{
+  str = "set[" + to<std::string>(elem_type) + ']';
+  return true;
+}
+
+bool schema::table_type::convert(std::string& str) const
+{
+  str = "table[" 
+    + to<std::string>(key_type) 
+    + "] of " 
+    + to<std::string>(value_type);
+  return true;
+}
+
+bool schema::record_type::convert(std::string& str) const
+{
+  str = "record {";
+  auto first = args.begin();
+  auto last = args.end();
+  while (first != last)
+  {
+    str += to<std::string>(*first);
+    if (++first != last)
+      str += ", ";
+  }
+  str += '}';
+  return true;
+}
+
+bool schema::event::convert(std::string& str) const
+{
+  str = "event ";
+  str += name + "(";
+  auto first = args.begin();
+  auto last = args.end();
+  while (first != last)
+  {
+    str += to<std::string>(*first);
+    if (++first != last)
+      str += ", ";
+  }
+  str += ')';
+  return true;
+}
+
+bool schema::argument::convert(std::string& str) const
+{
+  str = name + ": " + to<std::string>(type);
+  return true;
 }
 
 void schema::load(std::string const& contents)
@@ -359,6 +460,35 @@ void schema::deserialize(deserializer& source)
   std::string str;
   source >> str;
   load(str);
+}
+
+bool schema::convert(std::string& to) const
+{
+  // Ignore aliases and built-in types.
+  std::set<std::string> aliases;
+  static std::set<std::string> builtin{"bool", "int", "count", "double",
+                                       "interval", "time", "string", "pattern",
+                                       "addr", "subnet", "port"};
+  for (auto& t : types_)
+  {
+    if (! (builtin.count(t.name) || aliases.count(t.name)))
+    {
+      to += "type " + t.name + ": " + to_string(*t.type) + '\n';
+      for (auto& a : t.aliases)
+      {
+        to += "type " + a + ": " + t.name + '\n';
+        aliases.insert(a);
+      }
+    }
+  }
+
+  if (! events_.empty())
+    to += '\n';
+
+  for (auto& e : events_)
+    to += to_string(e) + '\n';
+
+  return true;
 }
 
 bool operator==(schema const& x, schema const& y)

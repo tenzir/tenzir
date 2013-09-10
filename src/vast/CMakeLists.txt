@@ -3,12 +3,8 @@ include_directories(BEFORE ..)
 set(libvast_sources
   address.cc
   archive.cc
-  bitmap_index.cc
-  bitmap_index/address.cc
-  bitmap_index/port.cc
-  bitmap_index/string.cc
-  bitmap_index/time.cc
   bitvector.cc
+  bitmap_index.cc
   bitstream.cc
   chunk.cc
   configuration.cc
@@ -17,6 +13,7 @@ set(libvast_sources
   expression.cc
   event.cc
   file_system.cc
+  fragment.cc
   id_tracker.cc
   index.cc
   individual.cc
@@ -24,7 +21,7 @@ set(libvast_sources
   logger.cc
   object.cc
   operator.cc
-  parse.cc
+  partition.cc
   port.cc
   prefix.cc
   program.cc
@@ -42,16 +39,18 @@ set(libvast_sources
   string.cc
   system_monitor.cc
   time.cc
-  to_string.cc
   type_info.cc
   uuid.cc
   value.cc
   value_type.cc
+  bitmap_index/address.cc
+  bitmap_index/port.cc
+  bitmap_index/string.cc
+  bitmap_index/time.cc
   detail/cppa_serialization.cc
   detail/cppa_type_info.cc
   detail/demangle.cc
   detail/type_manager.cc
-  detail/parse.cc
   detail/ast/query.cc
   detail/parser/address.cc
   detail/parser/expression.cc

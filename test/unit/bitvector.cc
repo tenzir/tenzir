@@ -1,13 +1,14 @@
 #include "test.h"
 #include "vast/bitvector.h"
+#include "vast/convert.h"
 
 using namespace vast;
 
 BOOST_AUTO_TEST_CASE(bitvector_to_string)
 {
   bitvector a;
-  bitvector b(10);
-  bitvector c(78, true);
+  bitvector b{10};
+  bitvector c{78, true};
 
   BOOST_CHECK_EQUAL(to_string(a), "");
   BOOST_CHECK_EQUAL(to_string(b), "0000000000");
@@ -32,7 +33,7 @@ BOOST_AUTO_TEST_CASE(bitvector_basic_ops)
 
 BOOST_AUTO_TEST_CASE(bitvector_bitwise_ops)
 {
-  bitvector a(6);
+  bitvector a{6};
   BOOST_CHECK_EQUAL(a.size(), 6);
   BOOST_CHECK_EQUAL(a.blocks(), 1);
 
@@ -46,7 +47,7 @@ BOOST_AUTO_TEST_CASE(bitvector_bitwise_ops)
   BOOST_CHECK_EQUAL(to_string(a >> 3), "000001");
   BOOST_CHECK_EQUAL(to_string(a >> 4), "000000");
 
-  bitvector b(a);
+  bitvector b{a};
   b[5] = b[1] = 1;
   BOOST_CHECK_EQUAL(to_string(b), "101010");
   BOOST_CHECK_EQUAL(to_string(~b), "010101");

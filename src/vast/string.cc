@@ -3,6 +3,7 @@
 #include <cstring>
 #include "vast/logger.h"
 #include "vast/serialization.h"
+#include "vast/util/coding.h"
 
 namespace vast {
 
@@ -105,10 +106,7 @@ char const* string::data() const
 string::size_type string::size() const
 {
   if (is_heap_allocated())
-  {
-    auto size = reinterpret_cast<size_type const*>(&buf_[cnt_off]);
-    return *size;
-  }
+    return *reinterpret_cast<size_type const*>(&buf_[cnt_off]);
   else
     return buf_[in_situ_len];
 }
@@ -409,11 +407,7 @@ string string::unescape() const
   {
     std::copy(prev, pos, data);
     data += pos - prev;
-    char h = *(pos + 2);
-    char l = *(pos + 3);
-    char byte = (h > '9' ? h - 'a' + 10 : h - '0') << 4;
-    byte |= (l > '9' ? l - 'a' + 10 : l - '0');
-    *data++ = byte;
+    *data++ = util::hex_to_byte(*(pos + 2), *(pos + 3));
     prev = pos + 4;
   }
   std::copy(prev, end(), data);
@@ -454,31 +448,6 @@ void string::tag(char t)
   buf_[tag_off] = (t << 1) | (buf_[tag_off] & 1);
 }
 
-void string::serialize(serializer& sink) const
-{
-  VAST_ENTER(VAST_THIS);
-  sink.begin_sequence(size());
-  if (! empty())
-    sink.write_raw(data(), size());
-  sink.end_sequence();
-}
-
-void string::deserialize(deserializer& source)
-{
-  VAST_ENTER();
-  uint64_t size;
-  source.begin_sequence(size);
-  if (size > 0)
-  {
-    if (size > std::numeric_limits<size_type>::max())
-      throw error::io("size too large for architecture");
-    auto data = prepare(size);
-    source.read_raw(data, size);
-  }
-  source.end_sequence();
-  VAST_LEAVE(VAST_THIS);
-}
-
 char* string::prepare(size_type size)
 {
   char* str;
@@ -513,11 +482,35 @@ char const* string::heap_str() const
   return *str;
 }
 
+void string::serialize(serializer& sink) const
+{
+  VAST_ENTER(VAST_THIS);
+  sink.begin_sequence(size());
+  if (! empty())
+    sink.write_raw(data(), size());
+  sink.end_sequence();
+}
+
+void string::deserialize(deserializer& source)
+{
+  VAST_ENTER();
+  uint64_t size;
+  source.begin_sequence(size);
+  if (size > 0)
+  {
+    if (size > std::numeric_limits<size_type>::max())
+      throw std::runtime_error("size too large for architecture");
+    auto data = prepare(size);
+    source.read_raw(data, size);
+  }
+  source.end_sequence();
+  VAST_LEAVE(VAST_THIS);
+}
+
 bool operator==(string const& x, string const& y)
 {
   if (x.size() != y.size())
     return false;
-
   return std::equal(x.begin(), x.end(), y.begin());
 }
 
@@ -526,20 +519,6 @@ bool operator<(string const& x, string const& y)
   return std::lexicographical_compare(
       x.begin(), x.end(),
       y.begin(), y.end());
-}
-
-std::string to_string(string const& str)
-{
-  return {str.begin(), str.end()};
-}
-
-std::ostream& operator<<(std::ostream& out, string const& str)
-{
-  auto esc = str.escape();
-  //    out << '"';
-  std::copy(esc.begin(), esc.end(), std::ostreambuf_iterator<char>(out));
-  //    out << '"';
-  return out;
 }
 
 } // namespace vast

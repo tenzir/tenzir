@@ -7,8 +7,11 @@
 #include "vast/exception.h"
 #include "vast/logger.h"
 #include "vast/serialization.h"
+#include "vast/util/print.h"
 
 namespace vast {
+
+constexpr char const* time_point::format;
 
 namespace {
 std::mutex time_zone_mutex;
@@ -96,16 +99,6 @@ bool operator<(time_range const& x, time_range const& y)
   return x.duration_ < y.duration_;
 }
 
-double time_range::to_double() const
-{
-  return std::chrono::duration_cast<double_seconds>(duration_).count();
-}
-
-time_range::duration_type time_range::to_duration() const
-{
-  return duration_;
-}
-
 time_range::rep time_range::count() const
 {
   return duration_.count();
@@ -124,15 +117,16 @@ void time_range::deserialize(deserializer& source)
   VAST_LEAVE(VAST_THIS);
 }
 
-std::string to_string(time_range r)
+bool time_range::convert(double& d) const
 {
-  return std::to_string(r.to_double()) + "s";
+  d = std::chrono::duration_cast<double_seconds>(duration_).count();
+  return true;
 }
 
-std::ostream& operator<<(std::ostream& out, time_range r)
+bool time_range::convert(duration_type& dur) const
 {
-  out << to_string(r);
-  return out;
+  dur = duration_;
+  return true;
 }
 
 time_point::time_point(std::string const& str, char const* fmt, char const* locale)
@@ -271,7 +265,7 @@ time_point time_point::delta(int secs,
                              int months,
                              int years)
 {
-  auto tm = to_tm();
+  auto tm = to<std::tm>(*this);
 
   if (secs)
     tm.tm_sec += secs;
@@ -299,25 +293,9 @@ time_range time_point::since_epoch() const
   return time_range(time_point_.time_since_epoch());
 }
 
-double time_point::to_double() const
-{
-  return time_range(time_point_.time_since_epoch()).to_double();
-}
-
-std::tm time_point::to_tm() const
-{
-  auto d = std::chrono::duration_cast<clock::duration>(
-      time_point_.time_since_epoch());
-
-  auto tt = clock::to_time_t(clock::time_point(d));
-  std::tm t;
-  ::gmtime_r(&tt, &t);
-  return t;
-}
-
 void time_point::serialize(serializer& sink) const
 {
-  VAST_ENTER(VAST_THIS);;
+  VAST_ENTER(VAST_THIS);
   sink << time_point_;
 }
 
@@ -328,24 +306,33 @@ void time_point::deserialize(deserializer& source)
   VAST_LEAVE(VAST_THIS);
 }
 
-std::string to_string(time_point p)
+bool time_point::convert(double &d) const
 {
-  auto tm = p.to_tm();
+  d = to<double>(time_range{time_point_.time_since_epoch()});
+  return true;
+}
+
+bool time_point::convert(std::tm& tm) const
+{
+  auto d = std::chrono::duration_cast<clock::duration>(
+      time_point_.time_since_epoch());
+  auto tt = clock::to_time_t(clock::time_point(d));
+  return ::gmtime_r(&tt, &tm) != nullptr;
+}
+
+bool time_point::convert(std::string& str) const
+{
+  auto tm = to<std::tm>(*this);
   std::ostringstream ss;
 #ifdef VAST_CLANG
   ss << std::put_time(&tm, time_point::format);
-  return ss.str();
+  str = ss.str();
 #else
   char buf[256];
   strftime(buf, sizeof(buf), time_point::format, &tm);
-  return buf;
+  str = buf;
 #endif
-}
-
-std::ostream& operator<<(std::ostream& out, time_point t)
-{
-  out << to_string(t);
-  return out;
+  return true;
 }
 
 

@@ -17,7 +17,6 @@
 #include "vast/search.h"
 #include "vast/shutdown.h"
 #include "vast/system_monitor.h"
-#include "vast/to_string.h"
 #include "vast/detail/cppa_type_info.h"
 #include "vast/util/profiler.h"
 
@@ -176,7 +175,7 @@ bool program::start()
 
     if (config_.check("index-actor") || config_.check("all-server"))
     {
-      index_ = spawn<index>(to_string(vast_dir / "index"));
+      index_ = spawn<index>(vast_dir / "index");
       send(index_, atom("load"));
 
       VAST_LOG_VERBOSE("publishing index at *:" <<

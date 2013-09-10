@@ -18,22 +18,10 @@ address::address()
   bytes_.fill(0);
 }
 
-address::address(address const& other)
-  : bytes_(other.bytes_)
-{
-}
-
 address::address(address&& other)
   : bytes_(std::move(other.bytes_))
 {
   other.bytes_.fill(0);
-}
-
-address& address::operator=(address other)
-{
-  using std::swap;
-  swap(bytes_, other.bytes_);
-  return *this;
 }
 
 address::address(uint32_t const* bytes, family fam, byte_order order)
@@ -189,27 +177,6 @@ std::array<uint8_t, 16> const& address::data() const
   return bytes_;
 }
 
-void address::serialize(serializer& sink) const
-{
-  VAST_ENTER(VAST_THIS);
-  for (size_t i = 0; i < 16; i += 8)
-  {
-    auto p = reinterpret_cast<uint64_t const*>(&bytes_[i]);
-    sink << *p;
-  }
-}
-
-void address::deserialize(deserializer& source)
-{
-  VAST_ENTER();
-  for (size_t i = 0; i < 16; i += 8)
-  {
-    auto p = reinterpret_cast<uint64_t*>(&bytes_[i]);
-    source >> *p;
-  }
-  VAST_LEAVE(VAST_THIS);
-}
-
 void address::from_v4(char const* str)
 {
   std::copy(v4_mapped_prefix.begin(),
@@ -235,6 +202,45 @@ void address::from_v6(char const* str)
     throw error::bad_value(str, address_type);
 }
 
+string address::to_string() const
+{
+  if (is_v4())
+  {
+    char buf[INET_ADDRSTRLEN];
+    if (inet_ntop(AF_INET, &bytes_[12], buf, INET_ADDRSTRLEN) == nullptr)
+      throw error::bad_value(buf, address_type);
+    return {buf};
+  }
+  else
+  {
+    char buf[INET6_ADDRSTRLEN];
+    if (inet_ntop(AF_INET6, &bytes_, buf, INET6_ADDRSTRLEN) == nullptr)
+      throw error::bad_value(buf, address_type);
+    return {buf};
+  }
+}
+
+void address::serialize(serializer& sink) const
+{
+  VAST_ENTER(VAST_THIS);
+  for (size_t i = 0; i < 16; i += 8)
+  {
+    auto p = reinterpret_cast<uint64_t const*>(&bytes_[i]);
+    sink << *p;
+  }
+}
+
+void address::deserialize(deserializer& source)
+{
+  VAST_ENTER();
+  for (size_t i = 0; i < 16; i += 8)
+  {
+    auto p = reinterpret_cast<uint64_t*>(&bytes_[i]);
+    source >> *p;
+  }
+  VAST_LEAVE(VAST_THIS);
+}
+
 bool operator==(address const& x, address const& y)
 {
   return x.bytes_ == y.bytes_;
@@ -243,32 +249,6 @@ bool operator==(address const& x, address const& y)
 bool operator<(address const& x, address const& y)
 {
   return x.bytes_ < y.bytes_;
-}
-
-std::string to_string(address const& a)
-{
-  if (a.is_v4())
-  {
-    char str[INET_ADDRSTRLEN];
-    if (inet_ntop(AF_INET, &a.bytes_[12], str, INET_ADDRSTRLEN) == nullptr)
-      return "<bad IPv4 address conversion>";
-    else
-      return str;
-  }
-  else
-  {
-    char str[INET6_ADDRSTRLEN];
-    if (inet_ntop(AF_INET6, &a.bytes_, str, INET6_ADDRSTRLEN) == nullptr)
-      return "<bad IPv6 address conversion>";
-    else
-      return str;
-  }
-}
-
-std::ostream& operator<<(std::ostream& out, address const& addr)
-{
-  out << to_string(addr);
-  return out;
 }
 
 } // namespace vast

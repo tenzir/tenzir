@@ -7,9 +7,12 @@
 namespace vast {
 
 /// Stores IPv4 and IPv6 prefixes, e.g., @c 192.168.1.1/16 and @c FD00::/8.
-class prefix : util::totally_ordered<prefix>
+class prefix : util::totally_ordered<prefix>,
+               util::parsable<prefix>,
+               util::printable<prefix>
 {
 public:
+
   /// Constructs the empty prefix, i.e., @c ::/0.
   prefix();
 
@@ -18,17 +21,10 @@ public:
   /// @param length The prefix length.
   prefix(address addr, uint8_t length);
 
-  /// Constructs a prefix from another one.
-  /// @param other The prefix to copy.
-  prefix(prefix const& other);
-
-  /// Moves a prefix.
-  /// @param other The prefix to move.
+  prefix(prefix const& other) = default;
   prefix(prefix&& other);
-
-  /// Assigns another prefix to this instance.
-  /// @param other The right-hand side of the assignment.
-  prefix& operator=(prefix other);
+  prefix& operator=(prefix&&) = default;
+  prefix& operator=(prefix const&) = default;
 
   /// Checks whether this prefix includes a given address.
   /// @param addr The address to test for .
@@ -45,19 +41,56 @@ public:
 private:
   void initialize();
 
+  address network_;
+  uint8_t length_;
+
+private:
   friend access;
+
   void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
 
-  address network_;
-  uint8_t length_;
+  template <typename Iterator>
+  bool parse(Iterator& start, Iterator end)
+  {
+    char buf[64];
+    auto p = buf;
+    while (*start != '/' && start != end && p < &buf[63])
+      *p++ = *start++;
+    *p = '\0';
+
+    address addr{buf};
+
+    if (*start++ != '/')
+      return false;
+
+    p = buf;
+    while (start != end && p < &buf[3])
+      *p++ = *start++;
+    *p = '\0';
+
+    uint8_t length;
+    auto s = buf;
+    if (! util::parse_positive_decimal(s, p, length))
+      return false;
+
+    *this = {std::move(addr), length};
+
+    return true;
+  }
+
+  template <typename Iterator>
+  bool print(Iterator& out) const
+  {
+    if (! render(out, network_))
+      return false;
+    *out++ = '/';
+    return render(out, length());
+  }
+
+  friend bool operator==(prefix const& x, prefix const& y);
+  friend bool operator<(prefix const& x, prefix const& y);
 };
-
-bool operator==(prefix const& x, prefix const& y);
-bool operator<(prefix const& x, prefix const& y);
-
-std::string to_string(prefix const& p);
-std::ostream& operator<<(std::ostream& out, prefix const& pfx);
 
 } // namespace vast
 

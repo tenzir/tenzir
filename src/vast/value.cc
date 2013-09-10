@@ -6,8 +6,9 @@
 #include <type_traits>
 #include "vast/container.h"
 #include "vast/logger.h"
-#include "vast/to_string.h"
 #include "vast/serialization.h"
+#include "vast/detail/parser/value.h"
+#include "vast/detail/parser/skipper.h"
 #include "vast/util/make_unique.h"
 
 namespace vast {
@@ -256,6 +257,20 @@ void value::clear()
 value_type value::which() const
 {
   return type();
+}
+
+value value::parse(std::string const& str)
+{
+  value v;
+  auto i = str.begin();
+  auto end = str.end();
+  using iterator = std::string::const_iterator;
+  detail::parser::value<iterator> grammar;
+  detail::parser::skipper<iterator> skipper;
+  bool success = phrase_parse(i, end, grammar, skipper, v);
+  if (! success || i != end)
+    v = invalid;
+  return v;
 }
 
 void value::serialize(serializer& sink) const
@@ -524,6 +539,8 @@ void value::data::type(value_type i)
   str.tag(static_cast<char>(i));
 }
 
+namespace {
+
 template <typename T, typename U>
 struct are_comparable :
   std::integral_constant<
@@ -533,7 +550,7 @@ struct are_comparable :
    (std::is_unsigned<T>::value && std::is_unsigned<U>::value))> { };
 
 
-#define VAST_DEFINE_BINARY_PREDICATE(name, invalid_nil, op)               \
+#define VAST_DEFINE_BINARY_PREDICATE(name, comparable, invalid_nil, op) \
   struct name                                                           \
   {                                                                     \
     typedef bool result_type;                                           \
@@ -541,7 +558,7 @@ struct are_comparable :
     template <typename T, typename U>                                   \
     bool dispatch(T const&, U const&, std::false_type) const            \
     {                                                                   \
-      return false;                                                     \
+      return comparable;                                                \
     }                                                                   \
                                                                         \
     template <typename T, typename U>                                   \
@@ -571,14 +588,39 @@ struct are_comparable :
     {                                                                   \
       return invalid_nil;                                               \
     }                                                                   \
-  }
+  };
 
-VAST_DEFINE_BINARY_PREDICATE(value_is_equal, true, ==);
-VAST_DEFINE_BINARY_PREDICATE(value_is_not_equal, false, !=);
-VAST_DEFINE_BINARY_PREDICATE(value_is_less_than, false, <);
-VAST_DEFINE_BINARY_PREDICATE(value_is_less_equal, false, <=);
-VAST_DEFINE_BINARY_PREDICATE(value_is_greater_than, false, >);
-VAST_DEFINE_BINARY_PREDICATE(value_is_greater_equal, false, >=);
+//struct value_is_not_equal
+//{
+//  typedef bool result_type;
+//
+//  template <typename T, typename U>
+//  bool operator()(T const&, U const&) const
+//  {
+//    return true;
+//  }
+//
+//  bool operator()(invalid_value, invalid_value) const
+//  {
+//    return false;
+//  }
+//
+//  bool operator()(nil_value, nil_value) const
+//  {
+//    return false;
+//  }
+//};
+
+VAST_DEFINE_BINARY_PREDICATE(value_is_equal, false, true, ==)
+VAST_DEFINE_BINARY_PREDICATE(value_is_not_equal, true, false, !=)
+VAST_DEFINE_BINARY_PREDICATE(value_is_less_than, false, false, <)
+VAST_DEFINE_BINARY_PREDICATE(value_is_less_equal, false, false, <=)
+VAST_DEFINE_BINARY_PREDICATE(value_is_greater_than, false, false, >)
+VAST_DEFINE_BINARY_PREDICATE(value_is_greater_equal, false, false, >=)
+
+#undef VAST_DEFINE_BINARY_PREDICATE
+
+} // namespace <anonymous>
 
 bool operator==(value const& x, value const& y)
 {
@@ -608,91 +650,6 @@ bool operator<=(value const& x, value const& y)
 bool operator>=(value const& x, value const& y)
 {
   return value::visit(x, y, value_is_greater_equal());
-}
-
-namespace {
-
-struct value_to_string
-{
-  typedef std::string result_type;
-
-  template <typename T>
-  std::string operator()(T const& x) const
-  {
-    return to_string(x);
-  }
-};
-
-struct value_streamer
-{
-  typedef void result_type;
-
-  value_streamer(std::ostream& out)
-    : out(out)
-  {
-  }
-
-  void operator()(invalid_value) const
-  {
-    out << "<invalid>";
-  }
-
-  void operator()(nil_value) const
-  {
-    out << "<nil>";
-  }
-
-  template <typename T>
-  void operator()(T const& val) const
-  {
-    out << val;
-  }
-
-  void operator()(int64_t i) const
-  {
-    if (i >= 0)
-      out << '+';
-
-    out << i;
-  }
-
-  void operator()(double d) const
-  {
-    char buf[32];
-    std::snprintf(buf, 32, "%.10f", d);
-    out.write(buf, std::strlen(buf));
-  }
-
-  void operator()(bool b) const
-  {
-    out << (b ? 'T' : 'F');
-  }
-
-  std::ostream& out;
-};
-
-} // namespace <anonymous>
-
-std::string to_string(value const& v)
-{
-  std::string str;
-  return value::visit(v, value_to_string());
-}
-
-std::string to_string(invalid_value /* invalid */)
-{
-  return "<invalid>";
-}
-
-std::string to_string(nil_value /* nil */)
-{
-  return "<nil>";
-}
-
-std::ostream& operator<<(std::ostream& out, value const& v)
-{
-  value::visit(v, value_streamer(out));
-  return out;
 }
 
 } // namespace vast

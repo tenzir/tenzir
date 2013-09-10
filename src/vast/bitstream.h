@@ -7,6 +7,7 @@
 #include "vast/traits.h"
 #include "vast/util/make_unique.h"
 #include "vast/util/operators.h"
+#include "vast/util/print.h"
 
 namespace vast {
 namespace detail {
@@ -159,6 +160,9 @@ public:
   }
 
 private:
+  Bitstream bitstream_;
+
+private:
   friend access;
 
   virtual void serialize(serializer& sink) const final
@@ -170,16 +174,16 @@ private:
   {
     source >> bitstream_;
   }
-
-  Bitstream bitstream_;
 };
 
 } // namespace detail
 
 /// The base class for concrete bitstream implementations.
 template <typename Derived>
-class bitstream_base
+class bitstream_base : util::printable<bitstream_base<Derived>>
 {
+  friend Derived;
+
 public:
   bitstream_base(bitstream_base const&) = default;
   bitstream_base(bitstream_base&&) = default;
@@ -340,6 +344,14 @@ private:
   {
     derived().deserialize(source);
   }
+
+  // Unlike a plain bitvector, we print bitstreams from LSB to MSB.
+  template <typename Iterator>
+  bool print(Iterator& out) const
+  {
+    render(out, bits(), false, false, 0);
+    return true;
+  };
 };
 
 /// An append-only sequence of bits.
@@ -385,25 +397,14 @@ private:
   size_type find_next_impl(size_type i) const;
   bitvector const& bits_impl() const;
 
+  std::unique_ptr<detail::bitstream_concept> concept_;
+
+private:
   friend access;
   void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
-
-  std::unique_ptr<detail::bitstream_concept> concept_;
 };
 
-
-/// Converts a bitstream to a `std::string`. Unlike a plain bitvector, we
-/// print bitstreams from LSB to MSB.
-///
-/// @param bs The bitstream to convert.
-///
-/// @return A `std::string` representation of *bs*.
-template <typename Derived>
-std::string to_string(bitstream_base<Derived> const& bs)
-{
-  return to_string(bs.bits(), false, false, 0);
-}
 
 /// An uncompressed bitstream that simply forwards all operations to the
 /// underlying ::bitvector.
@@ -435,14 +436,15 @@ private:
   size_type find_next_impl(size_type i) const;
   bitvector const& bits_impl() const;
 
+  bitvector bits_;
+
+private:
   friend access;
   void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
 
   friend bool operator==(null_bitstream const& x, null_bitstream const& y);
   friend bool operator<(null_bitstream const& x, null_bitstream const& y);
-
-  bitvector bits_;
 };
 
 /// Transposes a vector of equal-sized bitstreams.

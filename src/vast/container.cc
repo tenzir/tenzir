@@ -133,6 +133,16 @@ vast::value_type vector::type() const
   return type_;
 }
 
+bool vector::any_impl(std::function<bool(value const&)> f) const
+{
+  return std::any_of(begin(), end(), unary_any(f));
+}
+
+bool vector::all_impl(std::function<bool(value const&)> f) const
+{
+  return std::all_of(begin(), end(), unary_all(f));
+}
+
 void vector::serialize(serializer& sink) const
 {
   VAST_ENTER(VAST_THIS);
@@ -148,17 +158,6 @@ void vector::deserialize(deserializer& source)
   VAST_LEAVE(VAST_THIS);
 }
 
-
-bool vector::any_impl(std::function<bool(value const&)> f) const
-{
-  return std::any_of(begin(), end(), unary_any(f));
-}
-
-bool vector::all_impl(std::function<bool(value const&)> f) const
-{
-  return std::all_of(begin(), end(), unary_all(f));
-}
-
 bool operator==(vector const& x, vector const& y)
 {
   return static_cast<vector::super const&>(x) ==
@@ -169,28 +168,6 @@ bool operator<(vector const& x, vector const& y)
 {
   return static_cast<vector::super const&>(x) <
     static_cast<vector::super const&>(y);
-}
-
-std::string to_string(vector const& v)
-{
-  std::string str;
-  str += '[';
-  auto first = v.begin();
-  auto last = v.end();
-  while (first != last)
-  {
-    str += to_string(*first);
-    if (++first != last)
-      str += ", ";
-  }
-  str += ']';
-  return str;
-}
-
-std::ostream& operator<<(std::ostream& out, vector const& v)
-{
-  out << to_string(v);
-  return out;
 }
 
 bool set::compare::operator()(super::value_type const& v1,
@@ -287,6 +264,16 @@ vast::value_type set::type() const
   return type_;
 }
 
+bool set::any_impl(std::function<bool(value const&)> f) const
+{
+  return std::any_of(begin(), end(), unary_any(f));
+}
+
+bool set::all_impl(std::function<bool(value const&)> f) const
+{
+  return std::all_of(begin(), end(), unary_all(f));
+}
+
 void set::serialize(serializer& sink) const
 {
   VAST_ENTER(VAST_THIS);
@@ -302,16 +289,6 @@ void set::deserialize(deserializer& source)
   VAST_LEAVE(VAST_THIS);
 }
 
-bool set::any_impl(std::function<bool(value const&)> f) const
-{
-  return std::any_of(begin(), end(), unary_any(f));
-}
-
-bool set::all_impl(std::function<bool(value const&)> f) const
-{
-  return std::all_of(begin(), end(), unary_all(f));
-}
-
 bool operator==(set const& x, set const& y)
 {
   return static_cast<set::super const&>(x) ==
@@ -322,28 +299,6 @@ bool operator<(set const& x, set const& y)
 {
   return static_cast<set::super const&>(x) <
     static_cast<set::super const&>(y);
-}
-
-std::string to_string(set const& s)
-{
-  std::string str;
-  str += '{';
-  auto first = s.begin();
-  auto last = s.end();
-  while (first != last)
-  {
-    str += to_string(*first);
-    if (++first != last)
-      str += ", ";
-  }
-  str += '}';
-  return str;
-}
-
-std::ostream& operator<<(std::ostream& out, set const& s)
-{
-  out << to_string(s);
-  return out;
 }
 
 
@@ -492,23 +447,6 @@ table::const_iterator table::find(key_type const& key) const
   return (i != cend() && comp(key, *i)) ? cend() : i;
 }
 
-void table::serialize(serializer& sink) const
-{
-  VAST_ENTER(VAST_THIS);
-  sink << key_type_;
-  sink << map_type_;
-  sink << static_cast<super const&>(*this);
-}
-
-void table::deserialize(deserializer& source)
-{
-  VAST_ENTER();
-  source >> key_type_;
-  source >> map_type_;
-  source >> static_cast<super&>(*this);
-  VAST_LEAVE(VAST_THIS);
-}
-
 bool table::any_impl(std::function<bool(value const&)> f) const
 {
   return std::any_of(
@@ -531,6 +469,23 @@ bool table::all_impl(std::function<bool(value const&)> f) const
       });
 }
 
+void table::serialize(serializer& sink) const
+{
+  VAST_ENTER(VAST_THIS);
+  sink << key_type_;
+  sink << map_type_;
+  sink << static_cast<super const&>(*this);
+}
+
+void table::deserialize(deserializer& source)
+{
+  VAST_ENTER();
+  source >> key_type_;
+  source >> map_type_;
+  source >> static_cast<super&>(*this);
+  VAST_LEAVE(VAST_THIS);
+}
+
 bool operator==(table const& x, table const& y)
 {
   return static_cast<table::super const&>(x) ==
@@ -541,28 +496,6 @@ bool operator<(table const& x, table const& y)
 {
   return static_cast<table::super const&>(x) <
     static_cast<table::super const&>(y);
-}
-
-std::string to_string(table const& t)
-{
-  std::string str;
-  str += '{';
-  auto first = t.begin();
-  auto last = t.end();
-  while (first != last)
-  {
-    str += to_string(first->first) + " -> " + to_string(first->second);
-    if (++first != last)
-      str += ", ";
-  }
-  str += '}';
-  return str;
-}
-
-std::ostream& operator<<(std::ostream& out, table const& t)
-{
-  out << to_string(t);
-  return out;
 }
 
 
@@ -641,19 +574,6 @@ void record::each(std::function<void(value const&)> f, bool recurse) const
       f(v);
 }
 
-void record::serialize(serializer& sink) const
-{
-  VAST_ENTER(VAST_THIS);
-  sink << static_cast<super const&>(*this);
-}
-
-void record::deserialize(deserializer& source)
-{
-  VAST_ENTER();
-  source >> static_cast<super&>(*this);
-  VAST_LEAVE(VAST_THIS);
-}
-
 value const* record::do_flat_at(size_t i, size_t& base) const
 {
   assert(base <= i);
@@ -682,6 +602,19 @@ bool record::all_impl(std::function<bool(value const&)> f) const
   return std::all_of(begin(), end(), unary_all(f));
 }
 
+void record::serialize(serializer& sink) const
+{
+  VAST_ENTER(VAST_THIS);
+  sink << static_cast<super const&>(*this);
+}
+
+void record::deserialize(deserializer& source)
+{
+  VAST_ENTER();
+  source >> static_cast<super&>(*this);
+  VAST_LEAVE(VAST_THIS);
+}
+
 bool operator==(record const& x, record const& y)
 {
   return static_cast<record::super const&>(x) ==
@@ -692,28 +625,6 @@ bool operator<(record const& x, record const& y)
 {
   return static_cast<record::super const&>(x) <
     static_cast<record::super const&>(y);
-}
-
-std::string to_string(record const& r)
-{
-  std::string str;
-  str += '(';
-  auto first = r.begin();
-  auto last = r.end();
-  while (first != last)
-  {
-    str += to_string(*first);
-    if (++first != last)
-      str += ", ";
-  }
-  str += ')';
-  return str;
-}
-
-std::ostream& operator<<(std::ostream& out, record const& r)
-{
-  out << to_string(r);
-  return out;
 }
 
 } // namespace vast

@@ -3,7 +3,6 @@
 #include "vast/event.h"
 #include "vast/exception.h"
 #include "vast/logger.h"
-#include "vast/to_string.h"
 
 namespace vast {
 

@@ -6,7 +6,6 @@
 #include "vast/expression.h"
 #include "vast/schema.h"
 #include "vast/segment.h"
-#include "vast/to_string.h"
 #include "vast/uuid.h"
 
 namespace vast {
