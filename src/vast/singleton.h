@@ -8,7 +8,7 @@ namespace vast {
 /// A singleton mixin.
 /// Clients must provide the following functions:
 ///
-/// - `T* create()`: constructs an intance of type `T`. (static)
+/// - `static T* create()`: constructs an intance of type `T`.
 /// - `void initialize()`: Initializes a successfully created `T`.
 /// - `void dispose()`: Destroys an unsucessfully created `T`.
 /// - `void destroy()`: Destroys a successfully created `T`.
@@ -37,14 +37,13 @@ public:
     while (result == nullptr)
     {
       T* tmp = T::create();
-      if (ptr.compare_exchange_weak(result, tmp))
+      if (ptr.load() == nullptr)
       {
         tmp->initialize();
-        result = tmp;
-      }
-      else
-      {
-        tmp->dispose();
+        if (ptr.compare_exchange_weak(result, tmp))
+          result = tmp;
+        else
+          tmp->dispose();
       }
     }
     return result;
