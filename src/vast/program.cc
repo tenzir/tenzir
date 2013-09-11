@@ -109,10 +109,11 @@ bool program::start()
       auto ms = config_.as<unsigned>("profile");
       profiler_ = spawn<util::profiler>(to_string(vast_dir / "log"),
                                         std::chrono::seconds(ms));
-      send(profiler_,
-           atom("run"),
-           config_.check("profile-cpu"),
-           config_.check("profile-heap"));
+      if (config_.check("profile-cpu"))
+        send(profiler_, atom("start"), atom("perftools"), atom("cpu"));
+      if (config_.check("profile-heap"))
+        send(profiler_, atom("start"), atom("perftools"), atom("heap"));
+      send(profiler_, atom("start"), atom("rusage"));
     }
 
     schema_manager_ = spawn<schema_manager, monitored>();

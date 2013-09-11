@@ -83,28 +83,28 @@ void profiler::init()
     << std::endl;
 
   become(
-      on(atom("run"), arg_match) >> [=](bool perftools_cpu, bool perftools_heap)
-      {
 #ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
-        if (perftools_cpu)
-        {
-          VAST_LOG_INFO(
-              VAST_ACTOR("profiler") << " starts Gperftools CPU profiler");
+      on(atom("start"), atom("perftools"), atom("cpu")) >> [=]
+      {
+        VAST_LOG_INFO(
+            VAST_ACTOR("profiler") << " starts Gperftools CPU profiler");
 
-          auto f = to_string(path(log_dir_) / path("perftools.cpu"));
-          ProfilerStart(f.c_str());
-        }
+        auto f = to_string(path(log_dir_) / path("perftools.cpu"));
+        ProfilerStart(f.c_str());
+      },
 #endif
 #ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
-        if (perftools_heap)
-        {
-          VAST_LOG_INFO(
-              VAST_ACTOR("profiler") << " starts Gperftools heap profiler");
+      on(atom("start"), atom("perftools"), atom("heap")) >> [=]
+      {
+        VAST_LOG_INFO(
+            VAST_ACTOR("profiler") << " starts Gperftools heap profiler");
 
-          auto f = to_string(path(log_dir_) / path("perftools.heap"));
-          HeapProfilerStart(f.c_str());
-        }
+        auto f = to_string(path(log_dir_) / path("perftools.heap"));
+        HeapProfilerStart(f.c_str());
+      },
 #endif
+      on(atom("start"), atom("rusage")) >> [=]
+      {
         measurement now;
         delayed_send(self, secs_, atom("data"), now.clock, now.usr, now.sys);
       },
