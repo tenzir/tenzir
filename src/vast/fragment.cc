@@ -103,9 +103,9 @@ void meta_fragment::index(const event& e)
   }
 }
 
+// TODO: Implement this function.
 option<bitstream> meta_fragment::lookup(expression const& e)
 {
-  // TODO.
   return {};
 }
 
@@ -143,8 +143,13 @@ void type_fragment::store(path const& p)
 
 void type_fragment::index(const event& e)
 {
+  std::set<value> unique;
   for (auto& v : e)
-    index(e.id(), v);
+    if (! unique.count(v))
+    {
+      index(e.id(), v);
+      unique.insert(v);
+    }
 }
 
 bool type_fragment::index(uint64_t event_id, const value& v)

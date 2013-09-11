@@ -29,7 +29,7 @@ public:
   /// Writes a fragment to the file system.
   virtual void store(path const& p) = 0;
 
-  /// Records an events to the interneal indexes.
+  /// Records an event into the internal indexes.
   /// @param e The event to index.
   virtual void index(event const& e) = 0;
 
