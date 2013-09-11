@@ -21,12 +21,12 @@ ingestor::ingestor(actor_ptr receiver,
     max_segment_size_(max_segment_size),
     batch_size_(batch_size)
 {
-  VAST_LOG_VERBOSE("spawning ingestor @" << id());
   chaining(false);
 }
 
 void ingestor::init()
 {
+  VAST_LOG_ACT_VERBOSE("ingestor", "spawned");
   become(
       on(atom("DOWN"), arg_match) >> [=](uint32_t /* reason */)
       {
@@ -66,7 +66,7 @@ void ingestor::init()
       },
       on(atom("ingest"), val<std::string>, arg_match) >> [=](std::string const&)
       {
-        VAST_LOG_ERROR("invalid ingestion file type");
+        VAST_LOG_ACT_ERROR("ingestor", "got invalid ingestion file type");
       },
       on(atom("run")) >> [=]
       {
@@ -87,8 +87,8 @@ void ingestor::init()
           sum += pair.second;
 
         if (sum != last)
-          VAST_LOG_INFO("ingestor @" << id() <<
-                        " ingests at rate " << sum << " events/sec");
+          VAST_LOG_ACT_INFO("ingestor",
+                            "ingests at rate " << sum << " events/sec");
 
         if (! sinks_.empty())
           delayed_send(
@@ -98,21 +98,19 @@ void ingestor::init()
       },
       on_arg_match >> [=](segment& s)
       {
-        VAST_LOG_DEBUG("ingestor @" << id() <<
-                       " relays segment " << s.id() <<
-                       " to receiver @" << receiver_->id());
+        VAST_LOG_ACT_DEBUG("ingestor", "relays segment " << s.id() <<
+                           " to receiver @" << receiver_->id());
 
         sync_send(receiver_, s).then(
             on(atom("ack"), arg_match) >> [=](uuid const& segment_id)
             {
-              VAST_LOG_DEBUG("ingestor @" << id() <<
-                             " received ack for " << segment_id);
+              VAST_LOG_ACT_DEBUG("ingestor", "got ack for " << segment_id);
             },
             after(std::chrono::seconds(30)) >> [=]
             {
-              VAST_LOG_ERROR("ingestor @" << id() <<
-                             " did not receive ack from receiver @" <<
-                             receiver_->id());
+              VAST_LOG_ACT_ERROR("ingestor",
+                                 "did not get ack from receiver @" <<
+                                 receiver_->id());
 
               // TODO: Handle the failed segment, e.g., by sending it again or
               // saving it to the file system.
@@ -122,7 +120,7 @@ void ingestor::init()
 
 void ingestor::on_exit()
 {
-  VAST_LOG_VERBOSE("ingestor @" << id() << " terminated");
+  VAST_LOG_ACT_VERBOSE("ingestor", "terminated");
 }
 
 } // namespace vast

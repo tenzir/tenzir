@@ -59,13 +59,14 @@ profiler::profiler(std::string const& log_dir, std::chrono::seconds secs)
 
 void profiler::init()
 {
-  VAST_LOG_VERBOSE(VAST_ACTOR("profiler") << "spawned");
+  VAST_LOG_ACT_VERBOSE("profiler", "spawned");
 
   auto filename = to<std::string>(path(log_dir_) / path("profile.log"));
   file_.open(filename);
 
-  VAST_LOG_INFO(
-      "enabling getrusage profiling every " <<
+  VAST_LOG_ACT_INFO(
+      "profiler",
+      "enables getrusage profiling every " <<
       (secs_.count() == 1 ?
         std::string("second") :
         std::to_string(secs_.count()) + " seconds") <<
@@ -86,8 +87,7 @@ void profiler::init()
 #ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
       on(atom("start"), atom("perftools"), atom("cpu")) >> [=]
       {
-        VAST_LOG_INFO(
-            VAST_ACTOR("profiler") << " starts Gperftools CPU profiler");
+        VAST_LOG_ACT_INFO("profiler", "starts Gperftools CPU profiler");
 
         auto f = to_string(path(log_dir_) / path("perftools.cpu"));
         ProfilerStart(f.c_str());
@@ -96,8 +96,7 @@ void profiler::init()
 #ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
       on(atom("start"), atom("perftools"), atom("heap")) >> [=]
       {
-        VAST_LOG_INFO(
-            VAST_ACTOR("profiler") << " starts Gperftools heap profiler");
+        VAST_LOG_ACT_INFO("profiler", "starts Gperftools heap profiler");
 
         auto f = to_string(path(log_dir_) / path("perftools.heap"));
         HeapProfilerStart(f.c_str());
@@ -127,20 +126,18 @@ void profiler::init()
         if (state.enabled)
         {
           ProfilerStop();
-          VAST_LOG_INFO(
-              VAST_ACTOR("profiler") <<
-              " let Gperftools CPU profiler gather " <<
+          VAST_LOG_ACT_INFO(
+              "profiler",
+              "let Gperftools CPU profiler gather " <<
               state.samples_gathered << " samples" <<
               " in file " << state.profile_name);
-          VAST_LOG_INFO(
-              VAST_ACTOR("profiler") << " stops Gperftools CPU profiler");
+          VAST_LOG_ACT_INFO("profiler", " stops Gperftools CPU profiler");
         }
 #endif
 #ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
         if (IsHeapProfilerRunning())
         {
-          VAST_LOG_INFO(VAST_ACTOR("profiler") <<
-                        " stops Gperftools heap profiler");
+          VAST_LOG_ACT_INFO("profiler", " stops Gperftools heap profiler");
 
           HeapProfilerDump("cleanup");
           HeapProfilerStop();
@@ -153,7 +150,7 @@ void profiler::init()
 
 void profiler::on_exit()
 {
-  VAST_LOG_VERBOSE(VAST_ACTOR("profiler") << " terminated");
+  VAST_LOG_ACT_VERBOSE("profiler", "terminated");
 }
 
 } // namespace util

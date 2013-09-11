@@ -11,7 +11,7 @@ using namespace cppa;
 
 void asynchronous::init()
 {
-  VAST_LOG_VERBOSE("spawning sink @" << id());
+  VAST_LOG_ACT_VERBOSE("sink", "spawned");
   self->trap_exit(true);
   become(
       on(atom("kill")) >> [=]
@@ -25,32 +25,30 @@ void asynchronous::init()
       },
       on_arg_match >> [=](event const& e)
       {
-        VAST_LOG_DEBUG("sink @" << id() << " got 1 event");
+        VAST_LOG_ACT_DEBUG("sink", "got 1 event");
         process(e);
         ++total_events_;
       },
       on_arg_match >> [=](std::vector<event> const& v)
       {
-        VAST_LOG_DEBUG("sink @" << id() << " got " << v.size() << " events");
+        VAST_LOG_ACT_DEBUG("sink", "got " << v.size() << " events");
         process(v);
         total_events_ += v.size();
       },
       others() >> [=]
       {
-        VAST_LOG_ERROR("sink @" << id() <<
-                       " received unexpected message from @" <<
-                       last_sender()->id() << ": " <<
-                       to_string(last_dequeued()));
+        VAST_LOG_ACT_ERROR("sink","received unexpected message from @" <<
+                           last_sender()->id() << ": " <<
+                           to_string(last_dequeued()));
       });
 }
 
 void asynchronous::on_exit()
 {
   if (total_events_ > 0)
-    VAST_LOG_VERBOSE("sink @" << id() << " processed " <<
-                     total_events_ << " events in total");
-
-  VAST_LOG_VERBOSE("sink @" << id() << " terminated");
+    VAST_LOG_ACT_VERBOSE("sink", "processed " <<
+                         total_events_ << " events in total");
+  VAST_LOG_ACT_VERBOSE("sink", "terminated");
 }
 
 size_t asynchronous::total_events() const

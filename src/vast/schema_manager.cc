@@ -3,13 +3,18 @@
 #include "vast/schema.h"
 #include "vast/logger.h"
 
+using namespace cppa;
+
 namespace vast {
 
-schema_manager::schema_manager()
+void schema_manager::init()
 {
-  VAST_LOG_VERBOSE("spawning schema manager @" << id());
-  using namespace cppa;
-  init_state = (
+  VAST_LOG_ACT_VERBOSE("schema-manager", "spawned");
+  become(
+      on(atom("kill")) >> [=]
+      {
+        quit();
+      },
       on(atom("load"), arg_match) >> [=](std::string const& file)
       {
         schema_.read(file);
@@ -17,12 +22,12 @@ schema_manager::schema_manager()
       on(atom("schema")) >> [=]()
       {
         reply(schema_);
-      },
-      on(atom("kill")) >> [=]
-      {
-        quit();
-        VAST_LOG_VERBOSE("schema manager @" << id() << " terminated");
       });
+}
+
+void schema_manager::on_exit()
+{
+  VAST_LOG_ACT_VERBOSE("schema-manager", "terminated");
 }
 
 } // namespace vast

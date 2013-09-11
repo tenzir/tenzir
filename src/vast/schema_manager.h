@@ -7,17 +7,20 @@
 namespace vast {
 
 /// Manages the existing taxonomies.
-class schema_manager : public cppa::sb_actor<schema_manager>
+class schema_manager : public cppa::event_based_actor
 {
-  friend class cppa::sb_actor<schema_manager>;
-
 public:
   /// Spawns the schema manager.
-  schema_manager();
+  schema_manager() = default;
+
+  /// Implements `event_based_actor::init`.
+  virtual void init() final;
+
+  /// Overrides `event_based_actor::on_exit`.
+  virtual void on_exit() final;
 
 private:
   schema schema_;
-  cppa::behavior init_state;
 };
 
 } // namespace vast

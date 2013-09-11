@@ -125,7 +125,7 @@ using underlying_value_type =
                               IfThenElse<T == prefix_type, prefix,
                                 IfThenElse<T == port_type, port,
                                   std::false_type>>>>>>>>>>>>>>>>;
-                  
+
 } // namespace vast
 
 #endif

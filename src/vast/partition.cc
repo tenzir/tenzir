@@ -17,14 +17,21 @@ partition::partition(path dir)
 
 void partition::init()
 {
-  VAST_LOG_VERBOSE(VAST_ACTOR("partition") << " spawned");
+  VAST_LOG_ACT_VERBOSE("partition", "spawned");
+
+  if (! exists(dir_))
+  {
+    VAST_LOG_ACT_DEBUG("partition", "creates new directory " << dir_);
+    mkdir(dir_);
+  }
 
   auto last_modified_file = dir_ / "last_modified";
   if (exists(last_modified_file))
   {
     io::unarchive(last_modified_file, last_modified_);
-    VAST_LOG_DEBUG(VAST_ACTOR("partition") << 
-                   " loaded last modification time: " << last_modified_);
+    VAST_LOG_ACT_DEBUG("partition",
+                       "loads last modification time from " <<
+                       last_modified_file << ": " << last_modified_);
   }
 
   become(
@@ -47,6 +54,9 @@ void partition::init()
       },
       on(atom("kill")) >> [=]
       {
+        VAST_LOG_ACT_DEBUG("partition",
+                           "saves last modification time " << last_modified_ <<
+                           " to " << last_modified_file);
         io::archive(last_modified_file, last_modified_);
         meta_ << last_dequeued();
         type_ << last_dequeued();
@@ -56,7 +66,7 @@ void partition::init()
 
 void partition::on_exit()
 {
-  VAST_LOG_VERBOSE(VAST_ACTOR("partition") << " terminated");
+  VAST_LOG_ACT_VERBOSE("partition", "terminated");
 }
 
 

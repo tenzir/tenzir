@@ -25,9 +25,9 @@ void segmentizer::process(event const& e)
     if (stats_.timed_add(1) && stats_.last() > 0)
     {
       send(upstream_, atom("statistics"), stats_.last());
-      VAST_LOG_VERBOSE(
-          "segmentizer @" << id() <<
-          " ingests at rate " << stats_.last() << " events/sec" <<
+      VAST_LOG_ACT_VERBOSE(
+          "segmentizer",
+          "ingests at rate " << stats_.last() << " events/sec" <<
           " (mean " << stats_.mean() <<
           ", median " << stats_.median() <<
           ", standard deviation " << std::sqrt(stats_.variance()) << ")");
@@ -35,9 +35,9 @@ void segmentizer::process(event const& e)
     return;
   }
 
-  VAST_LOG_DEBUG("segmentizer @" << id() <<
-                 " sends segment " << segment_.id() << " with " <<
-                 segment_.events() << " events to @" << upstream_->id());
+  VAST_LOG_ACT_DEBUG("segmentizer", "sends segment " << segment_.id() <<
+                     " with " << segment_.events() << " events to @" <<
+                     upstream_->id());
 
   auto max_segment_size = segment_.max_size();
   send(upstream_, std::move(segment_));
@@ -52,14 +52,13 @@ void segmentizer::before_exit()
     segment_ = segment(uuid::random());
     writer_.attach_to(&segment_);
     if (! writer_.flush())
-      VAST_LOG_ERROR("segmentizer @" << id() <<
-                     " failed to flush a fresh segment");
+      VAST_LOG_ACT_ERROR("segmentizer", "failed to flush a fresh segment");
     assert(segment_.events() > 0);
   }
 
-  VAST_LOG_DEBUG("segmentizer @" << id() <<
-                 " sends final segment " << segment_.id() << " with " <<
-                 segment_.events() << " events to @" << upstream_->id());
+  VAST_LOG_ACT_DEBUG("segmentizer", "sends final segment " << segment_.id() <<
+                     " with " << segment_.events() << " events to @" <<
+                     upstream_->id());
 
   send(upstream_, std::move(segment_));
 }

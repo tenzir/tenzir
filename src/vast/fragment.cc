@@ -17,9 +17,14 @@ fragment::fragment(path dir)
 void fragment::init()
 {
   // TODO: traverse the directory and load existing indexes.
-  VAST_LOG_VERBOSE(VAST_ACTOR("fragment") << "spawned");
+  VAST_LOG_ACT_VERBOSE("fragment", "spawned");
 
   become(
+      on(atom("kill")) >> [=]
+      {
+        store(dir_);
+        quit();
+      },
       on(atom("load")) >> [=]
       {
         if (exists(dir_))
@@ -39,25 +44,20 @@ void fragment::init()
           reply(std::move(*result));
         else
           reply(atom("miss"));
-      },
-      on(atom("kill")) >> [=]
-      {
-        store(dir_);
-        quit();
       });
 }
 
 void fragment::on_exit()
 {
-  VAST_LOG_VERBOSE(VAST_ACTOR("fragment") << " terminated");
+  VAST_LOG_ACT_VERBOSE("fragment", "terminated");
 }
 
 bool fragment::append(bitmap_index& bmi, uint64_t event_id, value const& val)
 {
   if (event_id < bmi.size())
   {
-    VAST_LOG_ERROR(VAST_ACTOR("fragment") <<
-                   " encoutered event with incompatible ID: " << event_id);
+    VAST_LOG_ACT_ERROR("fragment",
+                       "encoutered event with incompatible ID: " << event_id);
     return false;
   }
 
@@ -90,15 +90,15 @@ void meta_fragment::index(const event& e)
 {
   if (! append(timestamp_, e.id(), e.timestamp()))
   {
-    VAST_LOG_ERROR(VAST_ACTOR("fragment") << 
-                   " failed to index event timestamp " << e.timestamp());
+    VAST_LOG_ACT_ERROR("fragment",
+                       "failed to index event timestamp " << e.timestamp());
     quit();
   }
 
   if (! append(name_, e.id(), e.name()))
   {
-    VAST_LOG_ERROR(VAST_ACTOR("fragment") << 
-                   " failed to index event name " << e.name());
+    VAST_LOG_ACT_ERROR("fragment",
+                       "failed to index event name " << e.name());
     quit();
   }
 }
@@ -157,8 +157,8 @@ bool type_fragment::index(uint64_t event_id, const value& v)
   switch (v.which())
   {
     default:
-      VAST_LOG_ERROR(VAST_ACTOR("fragment") <<
-                     " cannot index a value of type " << v.which());
+    VAST_LOG_ACT_ERROR("fragment",
+                       "cannot index a value of type " << v.which());
       break;
     case bool_type:
       return append(bool_, event_id, v);

@@ -64,11 +64,11 @@ bool line::next()
 bro2::bro2(cppa::actor_ptr sink, std::string const& filename)
   : line(sink, filename)
 {
-  VAST_LOG_VERBOSE("spawning bro 2 source @" << id() << " for " << filename);
+  VAST_LOG_ACT_VERBOSE("bro2-source", "spawned for " << filename);
 
   if (! parse_header())
   {
-    VAST_LOG_ERROR("not a valid Bro 2.x log file: " << filename);
+    VAST_LOG_ACT_ERROR("bro2-source", "cannot parse Bro 2.x log file header");
     finished_ = true;
   }
 }
@@ -85,7 +85,7 @@ bool bro2::parse_header()
   fs.split(line_.begin(), line_.end());
   if (fs.fields() != 2 || ! fs.equals(0, "#separator"))
   {
-    VAST_LOG_ERROR("invalid #separator definition");
+    VAST_LOG_ACT_ERROR("bro2-source", "got invalid #separator");
     return false;
   }
 
@@ -115,7 +115,7 @@ bool bro2::parse_header()
     fs.split(line_.begin(), line_.end());
     if (fs.fields() != 2 || ! fs.equals(0, "#set_separator"))
     {
-      VAST_LOG_ERROR("invalid #set_separator definition");
+      VAST_LOG_ACT_ERROR("bro2-source", "got invalid #set_separator");
       return false;
     }
 
@@ -130,7 +130,7 @@ bool bro2::parse_header()
     fs.split(line_.begin(), line_.end());
     if (fs.fields() != 2 || ! fs.equals(0, "#empty_field"))
     {
-      VAST_LOG_ERROR("invalid #empty_field definition");
+      VAST_LOG_ACT_ERROR("bro2-source", "invalid #empty_field");
       return false;
     }
 
@@ -145,7 +145,7 @@ bool bro2::parse_header()
     fs.split(line_.begin(), line_.end());
     if (fs.fields() != 2 || ! fs.equals(0, "#unset_field"))
     {
-      VAST_LOG_ERROR("invalid #unset_field definition");
+      VAST_LOG_ACT_ERROR("bro2-source", "invalid #unset_field");
       return false;
     }
 
@@ -160,7 +160,7 @@ bool bro2::parse_header()
     fs.split(line_.begin(), line_.end());
     if (fs.fields() != 2 || ! fs.equals(0, "#path"))
     {
-      VAST_LOG_ERROR("invalid #path definition");
+      VAST_LOG_ACT_ERROR("bro2-source", "invalid #path");
       return false;
     }
 
@@ -175,7 +175,7 @@ bool bro2::parse_header()
     fs.split(line_.begin(), line_.end());
     if (! fs.equals(0, "#fields"))
     {
-      VAST_LOG_ERROR("invalid #fields definition");
+      VAST_LOG_ACT_ERROR("bro2-source", "got invalid #fields");
       return false;
     }
 
@@ -190,7 +190,7 @@ bool bro2::parse_header()
     fs.split(line_.begin(), line_.end());
     if (! fs.equals(0, "#types"))
     {
-      VAST_LOG_ERROR("invalid #types definition");
+      VAST_LOG_ACT_ERROR("bro2-source", "got invalid #types");
       return false;
     }
 
@@ -216,31 +216,30 @@ bool bro2::parse_header()
 
   line_.clear(); // Triggers call to next().
 
-  VAST_LOG_DEBUG(
-      "event source @" << id() << " parsed bro2 header:" <<
-      " #separator " << separator_ <<
-      " #set_separator " << set_separator_ <<
-      " #empty_field " << empty_field_ <<
-      " #unset_field " << unset_field_ <<
-      " #path " << path_);
+  VAST_LOG_ACT_DEBUG("bro2-source", "parsed bro2 header:" <<
+                     " #separator " << separator_ <<
+                     " #set_separator " << set_separator_ <<
+                     " #empty_field " << empty_field_ <<
+                     " #unset_field " << unset_field_ <<
+                     " #path " << path_);
   {
     std::ostringstream str;
     for (auto& name : field_names_)
       str << " " << name;
-    VAST_LOG_DEBUG("event source @" << id() << " has field names:" << str.str());
+    VAST_LOG_ACT_DEBUG("bro2-source", "has field names:" << str.str());
   }
   {
     std::ostringstream str;
     for (auto& type : field_types_)
       str << " " << type;
-    VAST_LOG_DEBUG("event source @" << id() << " has field types:" << str.str());
+    VAST_LOG_ACT_DEBUG("bro2-source", "has field types:" << str.str());
   }
   if (! set_types_.empty())
   {
     std::ostringstream str;
     for (auto& type : set_types_)
       str << " " << type;
-    VAST_LOG_DEBUG("event source @" << id() << " has set types:" << str.str());
+    VAST_LOG_ACT_DEBUG("bro2-source", "has set types:" << str.str());
   }
 
   path_ = "bro::" + path_;
@@ -289,13 +288,16 @@ option<event> bro2::parse(std::string const& line)
 
   if (fs.fields() > 0 && *fs.start(0) == '#')
   {
-    VAST_LOG_DEBUG("ignoring commented line: " << line);
+    VAST_LOG_ACT_VERBOSE("bro2-source", "ignored commented line: " << line <<
+                         " (line " << current_ << ')');
     return {};
   }
 
   if (fs.fields() != field_types_.size())
   {
-    VAST_LOG_ERROR("inconsistent number of fields (line " << current_ << ')');
+    VAST_LOG_ACT_ERROR("bro2-source",
+                       "found inconsistent number of fields (line " << current_
+                       << ')');
     return {};
   }
 
@@ -346,7 +348,7 @@ option<event> bro2::parse(std::string const& line)
       if (! extract(start, end, s, set_types_[sets++], set_separator_))
       {
         // TODO: take care of escaped set separators.
-        VAST_LOG_ERROR("invalid set syntax");
+        VAST_LOG_ACT_ERROR("bro2-source", "got invalid set syntax");
         return {};
       }
       e.emplace_back(std::move(s));
@@ -356,7 +358,8 @@ option<event> bro2::parse(std::string const& line)
       value v;
       if (! extract(start, end, v, field_types_[f]))
       {
-        VAST_LOG_ERROR("could not parse field");
+        VAST_LOG_ACT_ERROR("bro2-source", "could not parse field: " <<
+                           std::string(start, end));
         return {};
       }
       e.push_back(std::move(v));
@@ -369,8 +372,8 @@ option<event> bro2::parse(std::string const& line)
 bro15conn::bro15conn(cppa::actor_ptr sink, std::string const& filename)
   : line(sink, filename)
 {
-  VAST_LOG_VERBOSE(
-      VAST_ACTOR("source") << "spawned (bro 1.5 conn.log: " << filename << ')');
+  VAST_LOG_ACT_VERBOSE("bro15conn",
+                       "spawned with conn.log: " << filename << ')');
 }
 
 option<event> bro15conn::parse(std::string const& line)

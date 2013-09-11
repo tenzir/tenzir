@@ -31,16 +31,15 @@ void synchronous::init()
       },
       others() >> [=]
       {
-        VAST_LOG_ERROR("source @" << id() <<
-                       " received unexpected message from @" <<
-                       last_sender()->id() << ": " <<
-                       to_string(last_dequeued()));
+        VAST_LOG_ACT_ERROR("source", "received unexpected message from @" <<
+                           last_sender()->id() << ": " <<
+                           to_string(last_dequeued()));
       });
 }
 
 void synchronous::on_exit()
 {
-  VAST_LOG_VERBOSE("source @" << id() << " terminated");
+  VAST_LOG_ACT_VERBOSE("source", "terminated");
 }
 
 void synchronous::run()
@@ -61,19 +60,19 @@ void synchronous::run()
       ++errors_;
       if (errors_ < 1000)
       {
-        VAST_LOG_ERROR("source @" << id() << " experienced extraction error");
+        VAST_LOG_ACT_ERROR("source", "experienced extraction error");
       }
       else if (errors_ == 1000)
       {
-        VAST_LOG_ERROR("source @" << id() << " won't report further errors");
+        VAST_LOG_ACT_ERROR("source", "won't report further errors");
       }
     }
   }
 
   if (! events_.empty())
   {
-    VAST_LOG_DEBUG("source @" << id() << " sends " << events_.size() <<
-                   " events to sink @" << sink_->id());
+    VAST_LOG_ACT_DEBUG("source", "sends " << events_.size() <<
+                       " events to sink @" << sink_->id());
 
     send(sink_, std::move(events_));
     events_.clear();

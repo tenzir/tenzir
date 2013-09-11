@@ -14,7 +14,7 @@ search::search(actor_ptr archive, actor_ptr index, actor_ptr schema_manager)
   , index_(index)
   , schema_manager_(schema_manager)
 {
-  VAST_LOG_VERBOSE("spawning search @" << id());
+  VAST_LOG_ACT_VERBOSE("search", "spawned");
   init_state = (
       on(atom("query"), atom("create"), arg_match)
         >> [=](std::string const& str, uint32_t batch_size)
@@ -41,33 +41,23 @@ search::search(actor_ptr archive, actor_ptr index, actor_ptr schema_manager)
               catch (error::query const& e)
               {
                 std::stringstream msg;
-                msg << "query @" << id() << " is invalid: " << e.what();
-                VAST_LOG_ERROR(msg.str());
+                msg << "got invalid query: " << e.what();
+                VAST_LOG_ACT_ERROR("search", msg.str());
                 send(client, atom("query"), atom("failure"), msg.str());
               }
-            },
-            after(std::chrono::seconds(1)) >> [=]
-            {
-              std::stringstream msg;
-              msg << "query @" << id()
-                << " timed out trying to reach schema manager @"
-                << schema_manager->id();
-              VAST_LOG_ERROR(msg.str());
-              send(client, atom("query"), atom("failure"), msg.str());
             });
       },
       on(atom("DOWN"), arg_match) >> [=](uint32_t /* reason */)
       {
-        VAST_LOG_VERBOSE("client @" << last_sender()->id() <<
-                         " went down, removing associated queries");
+        VAST_LOG_ACT_VERBOSE("search", "noticed client @" <<
+                             last_sender()->id() <<
+                             " went down, removing associated queries");
 
         for (auto i = queries_.begin(); i != queries_.end(); )
         {
           if (i->second == last_sender())
           {
-            VAST_LOG_DEBUG("search @" << id() <<
-                           " erases query @" << i->first->id());
-
+            VAST_LOG_ACT_DEBUG("search", "erases query @" << i->first->id());
             send(i->first, atom("kill"));
             i = queries_.erase(i);
           }
@@ -82,13 +72,13 @@ search::search(actor_ptr archive, actor_ptr index, actor_ptr schema_manager)
         for (auto& i : queries_)
         {
           i.first << last_dequeued();
-          VAST_LOG_VERBOSE("search @" << id() <<
-                           " shuts down query @" << i.first->id());
+          VAST_LOG_ACT_VERBOSE("search", "shuts down query @" <<
+                               i.first->id());
         }
 
         queries_.clear();
         quit();
-        VAST_LOG_VERBOSE("search @" << id() << " terminated");
+        VAST_LOG_ACT_VERBOSE("search", "terminated");
       });
 }
 

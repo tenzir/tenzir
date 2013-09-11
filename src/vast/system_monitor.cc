@@ -37,9 +37,9 @@ system_monitor::system_monitor(actor_ptr receiver)
 
 void system_monitor::init()
 {
+  VAST_LOG_ACT_VERBOSE("system-monitor", "spawned");
+  VAST_LOG_ACT_DEBUG("system-monitor", "sends events to @" << upstream_->id());
   util::console::unbuffer();
-  VAST_LOG_VERBOSE("spawning system monitor @" << id());
-  VAST_LOG_DEBUG("sending system events to @" << upstream_->id());
 
   signals.fill(0);
   for (auto s : { SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGUSR1, SIGUSR2 })
@@ -72,7 +72,7 @@ void system_monitor::init()
 void system_monitor::on_exit()
 {
   util::console::buffer();
-  VAST_LOG_VERBOSE("system monitor @" << id() << " terminated");
+  VAST_LOG_ACT_VERBOSE("system-monitor", "terminated");
 }
 
 } // namespace vast

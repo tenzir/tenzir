@@ -13,25 +13,24 @@ namespace vast {
 archive::archive(std::string const& directory, size_t max_segments)
   : directory_(directory)
 {
-  VAST_LOG_VERBOSE("spawning archive @" << id());
   segment_manager_ = spawn<segment_manager>(max_segments, directory_);
 }
 
 void archive::init()
 {
+  VAST_LOG_ACT_VERBOSE("archive", "spawned");
   become(
       on(atom("init")) >> [=]
       {
         path p(directory_);
         if (! exists(p))
         {
-          VAST_LOG_INFO("archive @" << id() <<
-                        " creates new directory " << directory_);
+          VAST_LOG_ACT_INFO("archive", "creates new directory " << directory_);
 
           if (! mkdir(p))
           {
-            VAST_LOG_ERROR("archive @" << id() <<
-                           " failed to create directory " << directory_);
+            VAST_LOG_ACT_ERROR("archive", " failed to create directory " <<
+                               directory_);
             quit();
           }
         }
@@ -58,7 +57,7 @@ void archive::init()
 
 void archive::on_exit()
 {
-  VAST_LOG_VERBOSE("archive @" << id() << " terminated");
+  VAST_LOG_ACT_VERBOSE("archive", "terminated");
 }
 
 

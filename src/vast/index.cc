@@ -90,50 +90,7 @@ index::index(path directory)
 
 void index::init()
 {
-  VAST_LOG_VERBOSE(VAST_ACTOR("index") << " spawned");
-
-  if (! exists(dir_))
-  {
-    VAST_LOG_INFO(VAST_ACTOR("index") << " creates new directory " << dir_);
-    if (! mkdir(dir_))
-    {
-      VAST_LOG_ERROR(VAST_ACTOR("index") << " failed to create " << dir_);
-      quit();
-    }
-  }
-  else
-  {
-    auto latest = std::make_shared<time_point>(0);
-    traverse(
-        dir_,
-        [&](path const& p) -> bool
-        {
-          VAST_LOG_VERBOSE(VAST_ACTOR("index") << " found partition " << p);
-          auto part = spawn<partition>(p);
-          auto id = uuid{to_string(p.basename())};
-
-          sync_send(part, atom("meta"), atom("modified")).then(
-              on_arg_match >> [=](time_point tp)
-              {
-                if (tp >= *latest)
-                {
-                  *latest = tp;
-                  active_ = part;
-                }
-              });
-
-          partitions_.emplace(id, part);
-          return true;
-        });
-  }
-
-  if (partitions_.empty())
-  {
-    auto id = uuid::random();
-    auto p = spawn<partition>(dir_ / to<string>(id));
-    active_ = p;
-    partitions_.emplace(std::move(id), std::move(p));
-  }
+  VAST_LOG_ACT_VERBOSE("index", "spawned");
 
   become(
 //      on(atom("create"), arg_match) >> [=](schema const& sch)
@@ -185,11 +142,57 @@ void index::init()
           p.second << last_dequeued();
         quit();
       });
+
+  if (! exists(dir_))
+  {
+    VAST_LOG_ACT_INFO("index", "creates new directory " << dir_);
+    if (! mkdir(dir_))
+    {
+      VAST_LOG_ACT_ERROR("index", "failed to create " << dir_);
+      quit();
+    }
+  }
+  else
+  {
+    auto latest = std::make_shared<time_point>(0);
+    traverse(
+        dir_,
+        [&](path const& p) -> bool
+        {
+          VAST_LOG_ACT_VERBOSE("index", "found partition " << p);
+          auto part = spawn<partition>(p);
+          auto id = uuid{to_string(p.basename())};
+
+          sync_send(part, atom("meta"), atom("timestamp")).then(
+              on_arg_match >> [=](time_point tp)
+              {
+                if (tp >= *latest)
+                {
+                  VAST_LOG_ACT_DEBUG("index",
+                                     "marked partition " << p <<
+                                     " as active (" << tp << ")");
+                  *latest = tp;
+                  active_ = part;
+                }
+              });
+
+          partitions_.emplace(id, part);
+          return true;
+        });
+  }
+
+  if (partitions_.empty())
+  {
+    auto id = uuid::random();
+    auto p = spawn<partition>(dir_ / to<string>(id));
+    active_ = p;
+    partitions_.emplace(std::move(id), std::move(p));
+  }
 }
 
 void index::on_exit()
 {
-  VAST_LOG_VERBOSE(VAST_ACTOR("index") << " terminated");
+  VAST_LOG_ACT_VERBOSE("index", "terminated");
 }
 
 void index::load()
