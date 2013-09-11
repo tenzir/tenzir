@@ -89,6 +89,7 @@ bool program::start()
   logger::instance()->init(
       static_cast<logger::level>(config_.as<uint32_t>("log.console-verbosity")),
       static_cast<logger::level>(config_.as<uint32_t>("log.file-verbosity")),
+      config_.check("log.function-names"),
       vast_dir / "log");
 
   VAST_LOG_VERBOSE(" _   _____   __________");

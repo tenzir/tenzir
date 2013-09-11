@@ -21,6 +21,7 @@ configuration::configuration()
   auto& log = create_block("logger options", "log");
   log.add('v', "console-verbosity", "console verbosity").init(3);
   log.add('V', "file-verbosity", "log file verbosity").init(4);
+  log.add("function-names", "log function names");
 
   auto& advanced = create_block("advanced options");
   advanced.add('P', "profile", "enable getrusage profiling at a given interval (seconds)").single();

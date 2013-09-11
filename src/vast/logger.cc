@@ -98,8 +98,9 @@ struct logger::impl
     std::string msg;
   };
 
-  bool init(level console, level file, path dir)
+  bool init(level console, level file, bool show_fns, path dir)
   {
+    show_functions = show_fns;
     console_level = console;
     file_level = file;
 
@@ -155,6 +156,7 @@ struct logger::impl
     log_thread.join();
   }
 
+  bool show_functions;
   level console_level;
   level file_level;
   std::ofstream log_file;
@@ -308,9 +310,9 @@ logger::~logger()
   delete impl_;
 }
 
-bool logger::init(level console, level file, path dir)
+bool logger::init(level console, level file, bool show_fns, path dir)
 {
-  return impl_->init(console, file, dir);
+  return impl_->init(console, file, show_fns, dir);
 }
 
 void logger::log(level lvl, std::string&& msg)
@@ -321,6 +323,20 @@ void logger::log(level lvl, std::string&& msg)
 bool logger::takes(logger::level lvl) const
 {
   return impl_->takes(lvl);
+}
+
+logger::message logger::make_message(logger::level lvl,
+                                     char const* facility,
+                                     char const* fun) const
+{
+  assert(facility != nullptr);
+  message m;
+  m.append_header(lvl);
+  if (impl_->show_functions)
+    m.append_function(fun);
+  if (*facility)
+    m << " [" << facility << "] ";
+  return m;
 }
 
 logger* logger::create()

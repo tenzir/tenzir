@@ -96,9 +96,10 @@ public:
   /// This function must be called once prior to using any logging macro.
   /// @param console The log level of the console.
   /// @param file The log level of the logfile.
+  /// @param show_fns Whether to print function names in the output.
   /// @param dir The directory to create the log file in.
   /// @return `true` on success.
-  bool init(level console, level file, path dir);
+  bool init(level console, level file, bool show_fns, path dir);
 
   /// Logs a record.
   /// @param lvl The log level.
@@ -109,6 +110,8 @@ public:
   /// @param lvl The level to check.
   /// @param `true` if the logger takes at least *lvl*.
   bool takes(level lvl) const;
+
+  message make_message(level lvl, char const* facility, char const* fun) const;
 
 private:
   /// Implementation of the logger. We use PIMPL here to reduce the footprint
@@ -127,6 +130,7 @@ private:
   void run();
 
   impl* impl_;
+  bool show_fns_;
 
   friend std::ostream& operator<<(std::ostream& stream, logger::level lvl);
 };
@@ -136,21 +140,18 @@ private:
 #define VAST_VOID static_cast<void>(0)
 
 #ifndef VAST_LOG_FACILITY
-#  define VAST_LOG_FACILITY '\0'
+#  define VAST_LOG_FACILITY "\0"
 #endif
 
-#define VAST_LOG(lvl, msg)                                                  \
-  {                                                                         \
-    if (::vast::logger::instance()->takes(lvl))                             \
-    {                                                                       \
-      ::vast::logger::message m;                                            \
-      m.append_header(lvl);                                                 \
-      m.append_function(__PRETTY_FUNCTION__);                               \
-      if (VAST_LOG_FACILITY)                                                \
-        m << " [" << VAST_LOG_FACILITY << ']';                              \
-      m << ' ' << msg;                                                      \
-      ::vast::logger::instance()->log(lvl, m.str());                        \
-    }                                                                       \
+#define VAST_LOG(lvl, msg)                                                    \
+  {                                                                           \
+    if (::vast::logger::instance()->takes(lvl))                               \
+    {                                                                         \
+      auto m = ::vast::logger::instance()->make_message(                      \
+          lvl, VAST_LOG_FACILITY, __PRETTY_FUNCTION__);                       \
+      m << msg;                                                               \
+      ::vast::logger::instance()->log(lvl, m.str());                          \
+    }                                                                         \
   } VAST_VOID
 
 #define VAST_ACTOR(name) \
@@ -183,14 +184,14 @@ private:
 #endif
 #if VAST_LOG_LEVEL > 5
 #  define VAST_ENTER_ARGS(args)                                              \
-     ::vast::logger::tracer ze_tracer(__PRETTY_FUNCTION__);                    \
-     ze_tracer << " -->(" << args << ')';                                    \
-     ze_tracer.commit();                                                     \
+     ::vast::logger::tracer vast_tracer(__PRETTY_FUNCTION__);                \
+     vast_tracer << " -->(" << args << ')';                                  \
+     vast_tracer.commit();                                                   \
      VAST_VOID
 #  define VAST_ENTER_ARGS_MSG(args, msg)                                     \
-     ::vast::logger::tracer ze_tracer(__PRETTY_FUNCTION__);                    \
-     ze_tracer << " -->(" << args << ") " << msg;                            \
-     ze_tracer.commit();                                                     \
+     ::vast::logger::tracer vast_tracer(__PRETTY_FUNCTION__);                    \
+     vast_tracer << " -->(" << args << ") " << msg;                          \
+     vast_tracer.commit();                                                   \
      VAST_VOID
 #  define VAST_ENTER_MSG(msg) VAST_ENTER_ARGS_MSG('*', msg)
 
@@ -215,23 +216,23 @@ private:
 #  define VAST_ARGM(arg, m) #arg << " = " << arg.m()
 #  define VAST_THIS "*this = " << *this
 #  define VAST_MSG(msg)                                                      \
-     ze_tracer.reset(false);                                                 \
-     ze_tracer << msg;                                                       \
-     ze_tracer.commit();                                                     \
+     vast_tracer.reset(false);                                               \
+     vast_tracer << msg;                                                     \
+     vast_tracer.commit();                                                   \
      VAST_VOID
 #  define VAST_LEAVE(msg)                                                    \
      {                                                                       \
-       ze_tracer.reset(true);                                                \
-       ze_tracer << " <--(void) " << msg;                                    \
+       vast_tracer.reset(true);                                              \
+       vast_tracer << " <--(void) " << msg;                                  \
        return;                                                               \
      }                                                                       \
      VAST_VOID
 #  define VAST_RETURN_VAL_MSG(value, msg)                                    \
      {                                                                       \
-       auto&& ze_result = value;                                             \
-       ze_tracer.reset(true);                                                \
-       ze_tracer << " <--(" << ze_result << ") " << msg;                     \
-       return ze_result;                                                     \
+       auto&& vast_result = value;                                           \
+       vast_tracer.reset(true);                                              \
+       vast_tracer << " <--(" << vast_result << ") " << msg;                 \
+       return vast_result;                                                   \
      }                                                                       \
      VAST_VOID
 #  define VAST_RETURN_1(val)       VAST_RETURN_VAL_MSG(val, "")
