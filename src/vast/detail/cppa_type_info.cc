@@ -6,6 +6,7 @@
 #include "vast/expression.h"
 #include "vast/schema.h"
 #include "vast/segment.h"
+#include "vast/time.h"
 #include "vast/uuid.h"
 
 namespace vast {
@@ -19,6 +20,8 @@ void cppa_announce()
 
 void cppa_announce_types()
 {
+  cppa_announce<time_range>();
+  cppa_announce<time_point>();
   cppa_announce<uuid>();
   cppa_announce<event>();
   cppa_announce<chunk>();

@@ -101,36 +101,41 @@ void index::init()
       quit();
     }
   }
+  else
+  {
+    auto latest = std::make_shared<time_point>(0);
+    traverse(
+        dir_,
+        [&](path const& p) -> bool
+        {
+          VAST_LOG_VERBOSE(VAST_ACTOR("index") << " found partition " << p);
+          auto part = spawn<partition>(p);
+          auto id = uuid{to_string(p.basename())};
 
-  become(
-      on(atom("load")) >> [=]
-      {
-        traverse(
-            dir_,
-            [&](path const& p) -> bool
-            {
-              VAST_LOG_VERBOSE(VAST_ACTOR("index") << " found partition " << p);
-              auto part = spawn<partition>(p);
-              auto id = uuid{to_string(p.basename())};
-              partitions_.emplace(id, part);
-              return true;
-            });
-
-        for (auto p : partitions_)
-          sync_send(p.second, atom("get"), atom("timestamp")).then(
-              on_arg_match >> [=]()
+          sync_send(part, atom("meta"), atom("modified")).then(
+              on_arg_match >> [=](time_point tp)
               {
+                if (tp >= *latest)
+                {
+                  *latest = tp;
+                  active_ = part;
+                }
               });
 
-        if (partitions_.empty())
-        {
-          auto id = uuid::random();
-          auto p = spawn<partition>(dir_ / to<string>(id));
-          active_ = p;
-          partitions_.emplace(std::move(id), std::move(p));
-        }
+          partitions_.emplace(id, part);
+          return true;
+        });
+  }
 
-      },
+  if (partitions_.empty())
+  {
+    auto id = uuid::random();
+    auto p = spawn<partition>(dir_ / to<string>(id));
+    active_ = p;
+    partitions_.emplace(std::move(id), std::move(p));
+  }
+
+  become(
 //      on(atom("create"), arg_match) >> [=](schema const& sch)
 //      {
 //        for (auto& e : sch.events())

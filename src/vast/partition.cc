@@ -3,6 +3,7 @@
 #include "vast/event.h"
 #include "vast/fragment.h"
 #include "vast/logger.h"
+#include "vast/io/serialization.h"
 
 using namespace cppa;
 
@@ -18,9 +19,18 @@ void partition::init()
 {
   VAST_LOG_VERBOSE(VAST_ACTOR("partition") << " spawned");
 
+  auto last_modified_file = dir_ / "last_modified";
+  if (exists(last_modified_file))
+  {
+    io::unarchive(last_modified_file, last_modified_);
+    VAST_LOG_DEBUG(VAST_ACTOR("partition") << 
+                   " loaded last modification time: " << last_modified_);
+  }
+
   become(
-      on(atom("get"), atom("timestamp")) >> [=]
+      on(atom("meta"), atom("timestamp")) >> [=]
       {
+        reply(last_modified_);
       },
       on(atom("load")) >> [=]
       {
@@ -37,6 +47,7 @@ void partition::init()
       },
       on(atom("kill")) >> [=]
       {
+        io::archive(last_modified_file, last_modified_);
         meta_ << last_dequeued();
         type_ << last_dequeued();
         quit();

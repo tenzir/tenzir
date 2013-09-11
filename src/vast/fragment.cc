@@ -10,7 +10,7 @@ using namespace cppa;
 namespace vast {
 
 fragment::fragment(path dir)
-  : dir_(std::move(dir))
+  : dir_{std::move(dir)}
 {
 }
 
@@ -18,6 +18,7 @@ void fragment::init()
 {
   // TODO: traverse the directory and load existing indexes.
   VAST_LOG_VERBOSE(VAST_ACTOR("fragment") << "spawned");
+
   become(
       on(atom("load")) >> [=]
       {

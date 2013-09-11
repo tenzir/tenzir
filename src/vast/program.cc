@@ -176,7 +176,6 @@ bool program::start()
     if (config_.check("index-actor") || config_.check("all-server"))
     {
       index_ = spawn<index>(vast_dir / "index");
-      send(index_, atom("load"));
 
       VAST_LOG_VERBOSE("publishing index at *:" <<
                        config_.as<unsigned>("index.port"));
