@@ -44,7 +44,7 @@ void id_tracker::init()
                        " could not save current event id");
       quit();
     },
-    on(atom("request"), arg_match) >> [=](size_t n)
+    on(atom("request"), arg_match) >> [=](uint64_t n)
     {
       assert(file_);
       if (std::numeric_limits<uint64_t>::max() - id_ < n)
@@ -61,13 +61,13 @@ void id_tracker::init()
                      " to @" << last_sender()->id());
 
       file_ << id_ + n << std::endl;
+      file_.seekp(0);
       if (file_)
         reply(atom("id"), id_, id_ + n);
       else
         reply(atom("id"), atom("failure"));
 
       id_ += n;
-      file_.seekp(0);
     });
 }
 
