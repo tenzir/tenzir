@@ -16,19 +16,18 @@ fragment::fragment(path dir)
 
 void fragment::init()
 {
-  // TODO: traverse the directory and load existing indexes.
   VAST_LOG_ACT_VERBOSE("fragment", "spawned");
+
+  if (exists(dir_))
+    load(dir_);
+  else
+    mkdir(dir_);
 
   become(
       on(atom("kill")) >> [=]
       {
         store(dir_);
         quit();
-      },
-      on(atom("load")) >> [=]
-      {
-        if (exists(dir_))
-          load(dir_);
       },
       on(atom("store")) >> [=]
       {
@@ -52,16 +51,15 @@ void fragment::on_exit()
   VAST_LOG_ACT_VERBOSE("fragment", "terminated");
 }
 
-bool fragment::append(bitmap_index& bmi, uint64_t event_id, value const& val)
+bool fragment::append(bitmap_index& bmi, uint64_t id, value const& val)
 {
-  if (event_id < bmi.size())
+  if (id < bmi.size())
   {
-    VAST_LOG_ACT_ERROR("fragment",
-                       "encoutered event with incompatible ID: " << event_id);
+    VAST_LOG_ACT_ERROR("fragment", "got event with incompatible ID: " << id);
     return false;
   }
 
-  auto delta = event_id - bmi.size();
+  auto delta = id - bmi.size();
   if (delta > 1)
     if (! bmi.append(delta - 1, false))
       return false;
@@ -76,14 +74,16 @@ meta_fragment::meta_fragment(path dir)
 
 void meta_fragment::load(path const& p)
 {
-  io::archive(p / "timestamp.idx", timestamp_);
-  io::archive(p / "name.idx", name_);
+  VAST_LOG_ACT_DEBUG("meta-fragment", "loads indexes from disk");
+  io::unarchive(p / "timestamp.idx", timestamp_);
+  io::unarchive(p / "name.idx", name_);
 }
 
 void meta_fragment::store(path const& p)
 {
-  io::unarchive(p / "timestamp.idx", timestamp_);
-  io::unarchive(p / "name.idx", name_);
+  VAST_LOG_ACT_DEBUG("meta-fragment", "writes indexes to disk");
+  io::archive(p / "timestamp.idx", timestamp_);
+  io::archive(p / "name.idx", name_);
 }
 
 void meta_fragment::index(const event& e)
@@ -117,19 +117,6 @@ type_fragment::type_fragment(path dir)
 
 void type_fragment::load(path const& p)
 {
-  io::archive(p / "bool.idx", bool_);
-  io::archive(p / "int.idx", int_);
-  io::archive(p / "uint.idx", uint_);
-  io::archive(p / "double.idx", double_);
-  io::archive(p / "time-range.idx", time_range_);
-  io::archive(p / "time-point.idx", time_point_);
-  io::archive(p / "string.idx", string_);
-  io::archive(p / "address.idx", address_);
-  io::archive(p / "port.idx", port_);
-}
-
-void type_fragment::store(path const& p)
-{
   io::unarchive(p / "bool.idx", bool_);
   io::unarchive(p / "int.idx", int_);
   io::unarchive(p / "uint.idx", uint_);
@@ -139,6 +126,19 @@ void type_fragment::store(path const& p)
   io::unarchive(p / "string.idx", string_);
   io::unarchive(p / "address.idx", address_);
   io::unarchive(p / "port.idx", port_);
+}
+
+void type_fragment::store(path const& p)
+{
+  io::archive(p / "bool.idx", bool_);
+  io::archive(p / "int.idx", int_);
+  io::archive(p / "uint.idx", uint_);
+  io::archive(p / "double.idx", double_);
+  io::archive(p / "time-range.idx", time_range_);
+  io::archive(p / "time-point.idx", time_point_);
+  io::archive(p / "string.idx", string_);
+  io::archive(p / "address.idx", address_);
+  io::archive(p / "port.idx", port_);
 }
 
 void type_fragment::index(const event& e)

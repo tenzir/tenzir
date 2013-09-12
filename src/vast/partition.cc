@@ -30,21 +30,16 @@ void partition::init()
   {
     io::unarchive(last_modified_file, last_modified_);
     VAST_LOG_ACT_DEBUG("partition",
-                       "loads last modification time from " <<
-                       last_modified_file << ": " << last_modified_);
+                       "loads last modification time: " << last_modified_);
   }
+
+  meta_ = spawn<meta_fragment>(dir_ / "meta");
+  type_ = spawn<type_fragment>(dir_ / "type");
 
   become(
       on(atom("meta"), atom("timestamp")) >> [=]
       {
         reply(last_modified_);
-      },
-      on(atom("load")) >> [=]
-      {
-        meta_ = spawn<meta_fragment>(dir_ / "meta");
-        meta_ = spawn<type_fragment>(dir_ / "type");
-        meta_ << last_dequeued();
-        type_ << last_dequeued();
       },
       on_arg_match >> [=](event const&)
       {
@@ -54,9 +49,8 @@ void partition::init()
       },
       on(atom("kill")) >> [=]
       {
-        VAST_LOG_ACT_DEBUG("partition",
-                           "saves last modification time " << last_modified_ <<
-                           " to " << last_modified_file);
+        VAST_LOG_ACT_DEBUG("partition", "saves last modification time " <<
+                           last_modified_ << " to " << last_modified_file);
         io::archive(last_modified_file, last_modified_);
         meta_ << last_dequeued();
         type_ << last_dequeued();

@@ -93,26 +93,12 @@ void index::init()
   VAST_LOG_ACT_VERBOSE("index", "spawned");
 
   become(
-//      on(atom("create"), arg_match) >> [=](schema const& sch)
-//      {
-//        for (auto& e : sch.events())
-//        {
-//          if (! e.indexed)
-//            continue;
-//
-//          VAST_LOG_DEBUG("index @" << id() <<
-//                         " creates index for event " << e.name);
-//
-//          for (auto& arg : e.args)
-//          {
-//            if (! arg.indexed)
-//              continue;
-//
-//            VAST_LOG_DEBUG("index @" << id() <<
-//                           " creates index for argument " << arg.name);
-//          }
-//        }
-//      },
+      on(atom("kill")) >> [=]
+      {
+        for (auto p : partitions_)
+          p.second << last_dequeued();
+        quit();
+      },
       on(atom("query"), arg_match) >> [=](expression const& expr)
       {
         checker chkr;
@@ -128,21 +114,31 @@ void index::init()
       on(arg_match) >> [=](segment const& s)
       {
         assert(active_);
+        VAST_LOG_ACT_DEBUG("index", "sending events from segment " << s.id() <<
+                           " to " << VAST_ACTOR("partition", active_));
 
-        segment::reader r(&s);
+        segment::reader r{&s};
         event e;
         while (r.read(e))
           send(active_, std::move(e));
 
         reply(atom("segment"), atom("ack"), s.id());
-      },
-      on(atom("kill")) >> [=]
-      {
-        for (auto p : partitions_)
-          p.second << last_dequeued();
-        quit();
       });
 
+  // FIXME: There's a libcppa problem with sync_send's following a become()
+  // statement. If we copy the entire body of load() into this context, then
+  // the sync_send replies won't arrive. But if we go through a function call,
+  // it works. Weird. Race?
+  load();
+}
+
+void index::on_exit()
+{
+  VAST_LOG_ACT_VERBOSE("index", "terminated");
+}
+
+void index::load()
+{
   if (! exists(dir_))
   {
     VAST_LOG_ACT_INFO("index", "creates new directory " << dir_);
@@ -162,21 +158,20 @@ void index::init()
           VAST_LOG_ACT_VERBOSE("index", "found partition " << p);
           auto part = spawn<partition>(p);
           auto id = uuid{to_string(p.basename())};
+          partitions_.emplace(id, part);
 
           sync_send(part, atom("meta"), atom("timestamp")).then(
               on_arg_match >> [=](time_point tp)
               {
                 if (tp >= *latest)
                 {
-                  VAST_LOG_ACT_DEBUG("index",
-                                     "marked partition " << p <<
+                  VAST_LOG_ACT_DEBUG("index", "marked partition " << p <<
                                      " as active (" << tp << ")");
                   *latest = tp;
                   active_ = part;
                 }
               });
 
-          partitions_.emplace(id, part);
           return true;
         });
   }
@@ -188,15 +183,6 @@ void index::init()
     active_ = p;
     partitions_.emplace(std::move(id), std::move(p));
   }
-}
-
-void index::on_exit()
-{
-  VAST_LOG_ACT_VERBOSE("index", "terminated");
-}
-
-void index::load()
-{
 }
 
 } // namespace vast

@@ -1,6 +1,5 @@
 #include "vast/bitmap_index/time.h"
 
-#include "vast/exception.h"
 #include "vast/value.h"
 
 namespace vast {
@@ -19,8 +18,8 @@ option<bitstream>
 time_bitmap_index::lookup(relational_operator op, value const& val) const
 {
   if (op == in || op == not_in)
-    throw std::runtime_error("unsupported relational operator " + 
-                             to<std::string>(op));
+    throw std::runtime_error(
+        "unsupported relational operator " + to<std::string>(op));
   if (bitmap_.empty())
     return {};
   auto result = bitmap_.lookup(op, extract(val));
@@ -45,7 +44,7 @@ time_range::rep time_bitmap_index::extract(value const& val)
   switch (val.which())
   {
     default:
-      throw error::index("not a time type");
+      throw std::runtime_error("value not a time type");
     case time_range_type:
       return val.get<time_range>().count();
     case time_point_type:
