@@ -6,11 +6,13 @@
 #include "vast/value.h"
 #include "vast/fwd.h"
 #include "vast/util/operators.h"
+#include "vast/util/print.h"
 
 namespace vast {
 
 class event : public record,
-              util::totally_ordered<event>
+              util::totally_ordered<event>,
+              util::printable<event>
 {
 public:
   /// Constructs an empty event.
