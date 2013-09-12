@@ -3,6 +3,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <ostream>
 #include "vast/access.h"
 #include "vast/util/coding.h"
