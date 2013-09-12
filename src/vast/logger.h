@@ -154,48 +154,51 @@ private:
     }                                                                         \
   } VAST_VOID
 
-#define VAST_ACTOR(name) \
-  "@" << cppa::self->id() << ":" << name
+#define VAST_ACTOR(name, actor) \
+  "@" << actor->id() << ":" << name
+
+#define VAST_THIS_ACTOR(name) \
+  VAST_ACTOR(name, cppa::self)
 
 #if VAST_LOG_LEVEL > 0
 #  define VAST_LOG_ERROR(message)   VAST_LOG(::vast::logger::error, message)
-#  define VAST_LOG_ACT_ERROR(actor, message) \
-     VAST_LOG(::vast::logger::error, VAST_ACTOR(actor) << ' ' << message)
+#  define VAST_LOG_ACT_ERROR(name, message) \
+     VAST_LOG(::vast::logger::error, VAST_THIS_ACTOR(name) << ' ' << message)
 #else
-#  define VAST_LOG_ERROR(message)               VAST_VOID
-#  define VAST_LOG_ACT_ERROR(actor, message)    VAST_VOID
+#  define VAST_LOG_ERROR(message)              VAST_VOID
+#  define VAST_LOG_ACT_ERROR(name, message)    VAST_VOID
 #endif
 #if VAST_LOG_LEVEL > 1
 #  define VAST_LOG_WARN(message)    VAST_LOG(::vast::logger::warn, message)
-#  define VAST_LOG_ACT_WARN(actor, message) \
-     VAST_LOG(::vast::logger::warn, VAST_ACTOR(actor) << ' ' << message)
+#  define VAST_LOG_ACT_WARN(name, message) \
+     VAST_LOG(::vast::logger::warn, VAST_THIS_ACTOR(name) << ' ' << message)
 #else
-#  define VAST_LOG_WARN(message)                VAST_VOID
-#  define VAST_LOG_ACT_WARN(actor, message)     VAST_VOID
+#  define VAST_LOG_WARN(message)               VAST_VOID
+#  define VAST_LOG_ACT_WARN(name, message)     VAST_VOID
 #endif
 #if VAST_LOG_LEVEL > 2
 #  define VAST_LOG_INFO(message)    VAST_LOG(::vast::logger::info, message)
-#  define VAST_LOG_ACT_INFO(actor, message) \
-     VAST_LOG(::vast::logger::info, VAST_ACTOR(actor) << ' ' << message)
+#  define VAST_LOG_ACT_INFO(name, message) \
+     VAST_LOG(::vast::logger::info, VAST_THIS_ACTOR(name) << ' ' << message)
 #else
-#  define VAST_LOG_INFO(message)                VAST_VOID
-#  define VAST_LOG_ACT_INFO(actor, message)     VAST_VOID
+#  define VAST_LOG_INFO(message)               VAST_VOID
+#  define VAST_LOG_ACT_INFO(name, message)     VAST_VOID
 #endif
 #if VAST_LOG_LEVEL > 3
 #  define VAST_LOG_VERBOSE(message) VAST_LOG(::vast::logger::verbose, message)
-#  define VAST_LOG_ACT_VERBOSE(actor, message) \
-     VAST_LOG(::vast::logger::verbose, VAST_ACTOR(actor) << ' ' << message)
+#  define VAST_LOG_ACT_VERBOSE(name, message) \
+     VAST_LOG(::vast::logger::verbose, VAST_THIS_ACTOR(name) << ' ' << message)
 #else
-#  define VAST_LOG_VERBOSE(message)             VAST_VOID
-#  define VAST_LOG_ACT_VERBOSE(actor, message)  VAST_VOID
+#  define VAST_LOG_VERBOSE(message)            VAST_VOID
+#  define VAST_LOG_ACT_VERBOSE(name, message)  VAST_VOID
 #endif
 #if VAST_LOG_LEVEL > 4
 #  define VAST_LOG_DEBUG(message)   VAST_LOG(::vast::logger::debug, message)
-#  define VAST_LOG_ACT_DEBUG(actor, message) \
-     VAST_LOG(::vast::logger::debug, VAST_ACTOR(actor) << ' ' << message)
+#  define VAST_LOG_ACT_DEBUG(name, message) \
+     VAST_LOG(::vast::logger::debug, VAST_THIS_ACTOR(name) << ' ' << message)
 #else
-#  define VAST_LOG_DEBUG(message)               VAST_VOID
-#  define VAST_LOG_ACT_DEBUG(actor, message)    VAST_VOID
+#  define VAST_LOG_DEBUG(message)              VAST_VOID
+#  define VAST_LOG_ACT_DEBUG(name, message)    VAST_VOID
 #endif
 #if VAST_LOG_LEVEL > 5
 #  define VAST_ENTER_ARGS(args)                                              \

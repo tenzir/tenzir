@@ -2,8 +2,6 @@
 
 #include "vast/logger.h"
 
-#define VAST_THIS_ACTOR "receiver"
-
 namespace vast {
 
 using namespace cppa;
