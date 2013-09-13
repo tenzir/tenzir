@@ -6,56 +6,6 @@
 
 namespace vast {
 
-class string;
-
-/// Meta function to determine whether a type is a byte.
-template <typename T>
-using is_byte = std::integral_constant<bool, sizeof(T) == 1>;
-
-template <typename T>
-using is_string = std::integral_constant<
-  bool,
-  std::is_same<T, std::string>::value || std::is_same<T, string>::value
->;
-
-template <typename T>
-struct is_unique_ptr : std::false_type { };
-
-template <typename T>
-struct is_unique_ptr<std::unique_ptr<T>> : std::true_type { };
-
-
-template <typename T>
-struct is_shared_ptr : std::false_type { };
-
-template <typename T>
-struct is_shared_ptr<std::shared_ptr<T>> : std::true_type { };
-
-
-template <typename T>
-struct is_weak_ptr : std::false_type { };
-
-template <typename T>
-struct is_weak_ptr<std::weak_ptr<T>> : std::true_type { };
-
-
-template <typename T>
-struct is_intrusive_ptr : std::false_type { };
-
-template <typename T>
-struct is_intrusive_ptr<intrusive_ptr<T>> : std::true_type { };
-
-
-template <typename T>
-using is_pointer_type = std::integral_constant<
- bool,
- std::is_pointer<T>::value ||
-    is_unique_ptr<T>::value ||
-    is_shared_ptr<T>::value ||
-    is_weak_ptr<T>::value ||
-    is_intrusive_ptr<T>::value
->;
-
 /// See
 /// http://ericniebler.com/2013/08/07/universal-references-and-the-copy-constructo
 /// for details.
@@ -130,6 +80,8 @@ using EnableIfIsSame = EnableIf<std::is_same<T, U>, T>;
 template <typename T>
 using RemovePointer = typename std::remove_pointer<T>::type;
 
+/// Retrieves the unqualified type by removing const/volatile and reference
+/// from a type.
 template <typename T>
 using Unqualified = 
   typename std::remove_cv<
@@ -153,6 +105,53 @@ constexpr decltype(F<Head>::value) max()
     ? max<F, Head>()
     : max<F, Next, Tail...>();
 }
+
+// Various meta functions mostly used to sfinae out certain types.
+
+template <typename T>
+using is_byte = Bool<sizeof(T) == 1>;
+
+class string;
+
+template <typename T>
+using is_string = 
+  Bool<std::is_same<T, std::string>::value || std::is_same<T, string>::value>;
+
+template <typename T>
+struct is_unique_ptr : std::false_type { };
+
+template <typename T>
+struct is_unique_ptr<std::unique_ptr<T>> : std::true_type { };
+
+template <typename T>
+struct is_shared_ptr : std::false_type { };
+
+template <typename T>
+struct is_shared_ptr<std::shared_ptr<T>> : std::true_type { };
+
+template <typename T>
+struct is_weak_ptr : std::false_type { };
+
+template <typename T>
+struct is_weak_ptr<std::weak_ptr<T>> : std::true_type { };
+
+template <typename T>
+struct is_intrusive_ptr : std::false_type { };
+
+template <typename T>
+struct is_intrusive_ptr<intrusive_ptr<T>> : std::true_type { };
+
+template <typename T>
+using is_smart_ptr =
+  Bool<
+    is_unique_ptr<T>::value ||
+    is_shared_ptr<T>::value ||
+    is_weak_ptr<T>::value ||
+    is_intrusive_ptr<T>::value
+  >;
+
+template <typename T>
+using is_ptr = Bool<std::is_pointer<T>::value || is_smart_ptr<T>::value>;
 
 } // namespace vast
 
