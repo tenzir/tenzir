@@ -37,13 +37,30 @@ public:
     while (result == nullptr)
     {
       T* tmp = T::create();
-      if (ptr.load() == nullptr)
+      // FIXME: Dominik introduced the fix below in 258c14db of libcppa.
+      // However, this causes VAST's unit test suite to fail with an endless
+      // loop. We'll stick with the earlier version fo now.
+      //
+      //if (ptr.load() == nullptr)
+      //{
+      //  tmp->initialize();
+      //  if (ptr.compare_exchange_weak(result, tmp))
+      //    result = tmp;
+      //  else
+      //    tmp->destroy();
+      //}
+      //else
+      //{
+      //  tmp->dispose();
+      //}
+      if (ptr.compare_exchange_weak(result, tmp))
       {
         tmp->initialize();
-        if (ptr.compare_exchange_weak(result, tmp))
-          result = tmp;
-        else
-          tmp->dispose();
+        result = tmp;
+      }
+      else
+      {
+        tmp->dispose();
       }
     }
     return result;
