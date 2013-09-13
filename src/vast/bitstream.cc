@@ -96,16 +96,12 @@ bitvector const& bitstream::bits_impl() const
 
 void bitstream::serialize(serializer& sink) const
 {
-  write_object(sink, *concept_);
+  sink << concept_;
 }
 
 void bitstream::deserialize(deserializer& source)
 {
-  object o;
-  source >> o;
-  assert(o.convertible_to<detail::bitstream_concept>());
-  auto ptr = o.release_as<detail::bitstream_concept>();
-  concept_ = std::unique_ptr<detail::bitstream_concept>{ptr};
+  source >> concept_;
 }
 
 
