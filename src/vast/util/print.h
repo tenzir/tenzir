@@ -9,6 +9,14 @@
 #include "vast/util/coding.h"
 
 namespace vast {
+
+template <typename T>
+bool stream_to(std::ostream& out, T const& x)
+{
+  std::ostreambuf_iterator<char> i{out};
+  return render(i, x);
+}
+
 namespace util {
 
 /// Allows classes to model the `Printable` concept. Requires that derived
@@ -29,8 +37,7 @@ struct printable
 {
   friend std::ostream& operator<<(std::ostream& out, Derived const& d)
   {
-    std::ostreambuf_iterator<char> i{out};
-    if (! render(i, d))
+    if (! stream_to(out, d))
       throw std::runtime_error("print error");
     return out;
   }

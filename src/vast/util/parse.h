@@ -40,6 +40,14 @@ bool parse_negative_decimal(Iterator& start, Iterator end, T& n)
   return true;
 }
 
+template <typename T>
+bool stream_from(std::istream& in, T& x)
+{
+  std::istreambuf_iterator<char> start{in}, end;
+  return extract(start, end, x);
+    throw std::runtime_error("parse error");
+}
+
 /// Implements the `Parsable` concept. Requires that derived types provide a
 /// member function with the following signature:
 ///
@@ -56,8 +64,7 @@ struct parsable
 {
   friend std::istream& operator>>(std::istream& in, Derived& d)
   {
-    std::istreambuf_iterator<char> start{in}, end;
-    if (! extract(start, end, d))
+    if (! stream_from(in, d))
       throw std::runtime_error("parse error");
     return in;
   }

@@ -104,6 +104,8 @@ bool print(Iterator& out, value_type t)
   return true;
 }
 
+std::ostream& operator<<(std::ostream& out, value_type t);
+
 /// Meta function to retrieve the underlying type of a given value type.
 /// @tparam T The value type to get the underlying type from.
 template <value_type T>
