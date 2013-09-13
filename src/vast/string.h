@@ -11,23 +11,40 @@
 
 namespace vast {
 
-/// An immutable POD string that allows to store an extra 7-bit tag in the last
-/// byte. If the content is small enough, the internal buffer holds the data in
-/// situ. If there is not enough space, the string allocates space on the heap
-/// and stores the 32-bit size followed by a pointer to in the buffer.
+/// An immutable POD string that that internally holds a NUL-terminated
+/// C-string. However, the terminating NUL byte does not indicate the string
+/// end as NUL bytes may naturally arise in the string.
 ///
+/// The string also allows for storing an extra 7-bit tag in the last byte. If
+/// the content is small enough, the internal buffer holds the data in situ. If
+/// there is not enough space, the string allocates space on the heap and
+/// stores a pointer to the buffer followed by the 32-bit size of the string.
 /// The last bit of the tag indicates whether the string uses the heap or
 /// stores its characters in situ.
 ///
+///
+/// If the string is stack-allocated, it looks schematically like this:
+///
+///              in_situ_size              8         8       7    1
+///     +-----------------------...---+---------+---------+-----+---+
+///     |                             |   \0    |   size  | tag | 0 |
+///     +-----------------------...---+---------+---------+-----+---+
+///
+/// If allocated on the heap, it has the following structure:
+///
+///           32/64           32                             7    1
+///     +-----------------+--------+-----------...--------+-----+---+
+///     |      ptr        |  size  |                      | tag | 0 |
+///     +-----------------+--------+-----------...--------+-----+---+
+///
+///
 /// The minimum space requirements are:
 ///
-///     - 4 bytes for the string size
 ///     - 4/8 bytes for the pointer size on 32/64-bit architectures
+///     - 4 bytes for the string size
 ///     - 1 byte for the tag.
 ///
 /// That is, 13 bytes on a 64-bit and 9 bytes on 32-bit machine.
-///
-/// NULs may occur inside the string, hence it is not NUL-terminated.
 class string : util::totally_ordered<string>,
                util::parsable<string>,
                util::printable<string>
@@ -37,35 +54,37 @@ public:
   typedef uint32_t size_type;
 
 private:
-  //static size_type const min_buf_size =
-  //    (sizeof(size_type) + sizeof(char*) + sizeof(char)) / sizeof(char);
-
-  /// The minimum number of bytes needed.
   // TODO: we currently hard-code the size of the largest value union member
-  // in here, which is 16. Eventually we would like to constrain the largest
+  // in here, which is 16.
   // union member to 8 bytes.
-  static size_type const min_buf_size =
-    (16 + sizeof(size_type) + sizeof(char)) / sizeof(char);
+  /// The minimum number of bytes needed.
+  static size_type const min_buf_size = 16 + sizeof(size_type) + sizeof(char);
 
   /// The actual buffer size.
   static size_type const buf_size =
     sizeof(std::aligned_storage<min_buf_size>::type);
 
   /// The position of the pointer to the heap-allocated buffer.
-  static size_type const str_off = 0;
+  static size_type const heap_str_off = 0;
 
-  /// The position of the counter (used for the heap string.).
-  static size_type const cnt_off = sizeof(char*) / sizeof(char);
+  /// The position of the string size in case the string is heap-allocated.
+  static size_type const heap_cnt_off = sizeof(char*);
 
   /// The position of the tag.
-  static size_type const tag_off = buf_size - sizeof(char);
+  static size_type const tag_off = buf_size - 1;
+
+  /// The position of the string size in case the string is heap-allocated.
+  static size_type const in_situ_cnt_off = tag_off - 1;
+
+  /// The position of the terminating NUL byte.
+  static size_type const in_situ_nul_off = in_situ_cnt_off - 1;
 
 public:
   typedef char* iterator;
   typedef char const* const_iterator;
 
   /// The maximum size of the string when stored in situ.
-  static size_type const in_situ_len = tag_off - sizeof(char);
+  static size_type const in_situ_size = buf_size - 3;
 
   /// The end-of-string indicator.
   static size_type const npos = -1;
@@ -130,7 +149,7 @@ public:
   //
   // Inspectors
   //
-  
+
   /// Retrieves the first character in the string.
   /// @pre `empty() == false`
   char front() const;

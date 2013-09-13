@@ -106,9 +106,9 @@ char const* string::data() const
 string::size_type string::size() const
 {
   if (is_heap_allocated())
-    return *reinterpret_cast<size_type const*>(&buf_[cnt_off]);
+    return *reinterpret_cast<size_type const*>(&buf_[heap_cnt_off]);
   else
-    return buf_[in_situ_len];
+    return buf_[in_situ_cnt_off];
 }
 
 bool string::empty() const
@@ -427,8 +427,7 @@ bool string::is_escape_seq(const_iterator i) const
 void string::clear()
 {
   if (is_heap_allocated())
-    delete heap_str();
-
+    delete[] heap_str();
   std::memset(buf_, 0, buf_size);
 }
 
@@ -451,34 +450,34 @@ void string::tag(char t)
 char* string::prepare(size_type size)
 {
   char* str;
-  if (size > in_situ_len)
+  if (size > in_situ_size)
   {
-    str = new char[size];
-    auto p = reinterpret_cast<char**>(&buf_[str_off]);
+    str = new char[size + 1];
+    str[size] = '\0';
+    auto p = reinterpret_cast<char**>(&buf_[heap_str_off]);
     *p = str;
-    auto q = reinterpret_cast<size_type*>(&buf_[cnt_off]);
+    auto q = reinterpret_cast<size_type*>(&buf_[heap_cnt_off]);
     *q = size;
     buf_[tag_off] |= 0x1;
   }
   else
   {
     str = buf_;
-    buf_[in_situ_len] = static_cast<char>(size);
+    buf_[in_situ_cnt_off] = static_cast<char>(size);
     buf_[tag_off] &= ~0x1;
   }
-
   return str;
 }
 
 char* string::heap_str()
 {
-  auto str = reinterpret_cast<char**>(&buf_[str_off]);
+  auto str = reinterpret_cast<char**>(&buf_[heap_str_off]);
   return *str;
 }
 
 char const* string::heap_str() const
 {
-  auto str = reinterpret_cast<char const* const*>(&buf_[str_off]);
+  auto str = reinterpret_cast<char const* const*>(&buf_[heap_str_off]);
   return *str;
 }
 

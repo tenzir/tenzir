@@ -149,7 +149,7 @@ BOOST_AUTO_TEST_CASE(strings)
   BOOST_CHECK_EQUAL(to_string(v2), "quux");
 
   // Testing the limits.
-  std::string str(string::in_situ_len, 'x');
+  std::string str(string::in_situ_size, 'x');
   value v3(str.data());
   BOOST_CHECK(! v3.get<string>().is_heap_allocated());
   BOOST_CHECK(v3 == str.data());
