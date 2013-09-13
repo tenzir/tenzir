@@ -345,10 +345,10 @@ private:
     derived().deserialize(source);
   }
 
-  // Unlike a plain bitvector, we print bitstreams from LSB to MSB.
   template <typename Iterator>
   bool print(Iterator& out) const
   {
+    // Unlike a plain bitvector, we print bitstreams from LSB to MSB.
     render(out, bits(), false, false, 0);
     return true;
   };
