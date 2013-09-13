@@ -3,6 +3,7 @@
 
 #include <boost/variant/recursive_variant.hpp>
 #include <boost/fusion/include/adapt_struct.hpp>
+#include "vast/offset.h"
 #include "vast/operator.h"
 #include "vast/value.h"
 
@@ -59,7 +60,7 @@ struct tag_clause
 
 struct offset_clause
 {
-  std::vector<size_t> offsets;
+  offset off;
   relational_operator op;
   expression rhs;
 };
@@ -142,7 +143,7 @@ BOOST_FUSION_ADAPT_STRUCT(
 
   BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::query::offset_clause,
-    (std::vector<size_t>, offsets)
+    (vast::offset, off)
     (vast::relational_operator, op)
     (vast::detail::ast::query::expression, rhs))
 

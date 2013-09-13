@@ -59,14 +59,14 @@ void id_extractor::eval()
   ready_ = true;
 }
 
-offset_extractor::offset_extractor(std::vector<size_t> offsets)
-  : offsets_{std::move(offsets)}
+offset_extractor::offset_extractor(offset o)
+  : offset_{std::move(o)}
 {
 }
 
-std::vector<size_t> const& offset_extractor::offsets() const
+offset const& offset_extractor::off() const
 {
-  return offsets_;
+  return offset_;
 }
 
 void offset_extractor::eval()
@@ -79,9 +79,9 @@ void offset_extractor::eval()
   {
     record const* rec = event_;
     size_t i = 0;
-    while (i < offsets_.size() - 1)
+    while (i < offset_.size() - 1)
     {
-      auto off = offsets_[i++];
+      auto off = offset_[i++];
       if (off >= rec->size())
       {
         result_ = invalid;
@@ -98,7 +98,7 @@ void offset_extractor::eval()
       rec = &val.get<record>();
     }
 
-    auto last = offsets_[i];
+    auto last = offset_[i];
     result_ = last < rec->size() ? (*rec)[last] : invalid;
   }
 
@@ -464,7 +464,7 @@ public:
     }
     auto relation = make_unique<expr::relation>(op);
 
-    auto lhs = make_unique<expr::offset_extractor>(clause.offsets);
+    auto lhs = make_unique<expr::offset_extractor>(clause.off);
     extractors_.push_back(lhs.get());
 
     auto rhs = make_unique<expr::constant>(
@@ -585,9 +585,9 @@ public:
 
 private:
   std::unique_ptr<expr::offset_extractor>
-  make_offset_extractor(std::vector<size_t> offsets)
+  make_offset_extractor(offset o)
   {
-    auto node = make_unique<expr::offset_extractor>(std::move(offsets));
+    auto node = make_unique<expr::offset_extractor>(std::move(o));
     extractors_.push_back(node.get());
     return std::move(node);
   }
@@ -791,8 +791,8 @@ public:
   {
     indent();
     str_ += '@';
-    auto first = o.offsets().begin();
-    auto last = o.offsets().end();
+    auto first = o.off().begin();
+    auto last = o.off().end();
     while (first != last)
     {
       str_ += to<std::string>(*first);

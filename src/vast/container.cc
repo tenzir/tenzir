@@ -530,17 +530,17 @@ record& record::operator=(record other)
   return *this;
 }
 
-value const* record::at(std::vector<size_t> const& indices) const
+value const* record::at(offset const& o) const
 {
   record const* r = this;
-  for (size_t i = 0; i < indices.size(); ++i)
+  for (size_t i = 0; i < o.size(); ++i)
   {
-    auto& idx = indices[i];
+    auto& idx = o[i];
     if (idx >= r->size())
       return nullptr;
 
     auto v = &(*r)[idx];
-    if (i + 1 == indices.size())
+    if (i + 1 == o.size())
       return v;
 
     if (v->which() != record_type)

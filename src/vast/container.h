@@ -1,8 +1,9 @@
 #ifndef VAST_CONTAINER_H
 #define VAST_CONTAINER_H
 
-#include "vast/value.h"
 #include "vast/fwd.h"
+#include "vast/offset.h"
+#include "vast/value.h"
 #include "vast/util/operators.h"
 #include "vast/util/parse.h"
 #include "vast/util/print.h"
@@ -577,15 +578,15 @@ public:
   record(record&& other);
   record& operator=(record other);
 
-  /// Recursively access a value via a given list of indices.
+  /// Recursively accesses a record via a list of offsets serving as indices.
   ///
-  /// @param indices The list of indices.
+  /// @param o The list of offset.
   ///
-  /// @return A pointer to the value given by *indices* or `nullptr` if
-  /// *indices* does not resolve.
-  value const* at(std::vector<size_t> const& indices) const;
+  /// @return A pointer to the value given by *o* or `nullptr` if
+  /// *o* does not resolve.
+  value const* at(offset const& o) const;
 
-  /// Recursively access a value at a given offset.
+  /// Recursively access a value at a given index.
   ///
   /// @param i The recursive index.
   ///
@@ -594,7 +595,9 @@ public:
   /// flat size of the record.
   value const* flat_at(size_t i) const;
 
-  /// Computes the size of the flat record in *O(n)* time.
+  /// Computes the size of the flat record in *O(n)* time with *n* being the
+  /// number of leaf elements in the record..
+  ///
   /// @return The size of the flattened record.
   size_t flat_size() const;
 
@@ -637,7 +640,6 @@ private:
     *out++ = ')';
     return true;
   }
-
 
   friend bool operator==(record const& x, record const& y);
   friend bool operator<(record const& x, record const& y);

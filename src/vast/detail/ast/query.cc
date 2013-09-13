@@ -124,7 +124,7 @@ struct validator : public boost::static_visitor<bool>
   bool operator()(offset_clause const& clause) const
   {
     auto rhs = fold(clause.rhs);
-    return ! (rhs == invalid || clause.offsets.empty());
+    return ! (rhs == invalid || clause.off.empty());
   }
 
   bool operator()(event_clause const& clause) const

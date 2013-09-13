@@ -2,6 +2,7 @@
 #define VAST_EXPRESSION_H
 
 #include "vast/event.h"
+#include "vast/offset.h"
 #include "vast/operator.h"
 #include "vast/schema.h"
 #include "vast/util/operators.h"
@@ -140,16 +141,16 @@ private:
 class offset_extractor : public extractor
 {
 public:
-  offset_extractor(std::vector<size_t> offsets);
+  offset_extractor(offset o);
 
   VAST_ACCEPT_CONST(const_visitor)
   VAST_ACCEPT(visitor)
 
-  std::vector<size_t> const& offsets() const;
+  offset const& off() const;
 
 private:
   virtual void eval();
-  std::vector<size_t> offsets_;
+  offset offset_;
 };
 
 class type_extractor : public extractor
