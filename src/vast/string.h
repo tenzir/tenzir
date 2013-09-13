@@ -345,7 +345,7 @@ private:
   template <typename Iterator>
   void assign(Iterator begin, Iterator end)
   {
-    char* str = prepare(std::distance(begin, end));
+    auto str = prepare(std::distance(begin, end));
     std::copy(begin, end, str);
   }
 
@@ -376,6 +376,14 @@ private:
     out = std::copy(esc.begin(), esc.end(), out);
     return true;
   }
+
+  bool convert(int& n) const;
+  bool convert(long& n) const;
+  bool convert(long long& n) const;
+  bool convert(unsigned int& n) const;
+  bool convert(unsigned long& n) const;
+  bool convert(unsigned long long& n) const;
+  bool convert(double& n) const;
 };
 
 bool operator==(string const& x, string const& y);
