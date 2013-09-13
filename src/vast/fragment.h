@@ -3,6 +3,7 @@
 
 #include <cppa/cppa.hpp>
 #include "vast/file_system.h"
+#include "vast/offset.h"
 #include "vast/bitmap_index/address.h"
 #include "vast/bitmap_index/arithmetic.h"
 #include "vast/bitmap_index/port.h"
@@ -23,11 +24,12 @@ public:
   fragment(path dir);
 
   virtual ~fragment() = default;
+
   /// Loads a fragment from the file system.
-  virtual void load(path const& dir) = 0;
+  virtual void load() = 0;
 
   /// Writes a fragment to the file system.
-  virtual void store(path const& p) = 0;
+  virtual void store() = 0;
 
   /// Records an event into the internal indexes.
   /// @param e The event to index.
@@ -47,10 +49,10 @@ public:
 protected:
   /// Appends a value to a bitmap index and adds fill if necessary.
   /// @param bmi The bitmap index.
-  /// @param event_id The event id.
+  /// @param id The ID of the event *val* belongs to.
   /// @param val The value to append.
   /// @return `true` on success.
-  static bool append(bitmap_index& bmi, uint64_t event_id, value const& val);
+  static bool append(bitmap_index& bmi, uint64_t id, value const& val);
 
   path const dir_;
 };
@@ -59,9 +61,9 @@ class meta_fragment : public fragment
 {
 public:
   meta_fragment(path dir);
-  virtual void load(path const& dir) override;
-  virtual void store(path const& dir) override;
-  virtual void index(const event& e) final;
+  virtual void load() override;
+  virtual void store() override;
+  virtual void index(event const& e) final;
   virtual option<bitstream> lookup(expression const& e) final;
 
 private:
@@ -73,13 +75,13 @@ class type_fragment : public fragment
 {
 public:
   type_fragment(path dir);
-  virtual void load(path const& dir) override;
-  virtual void store(path const& dir) override;
-  virtual void index(const event& e) final;
+  virtual void load() override;
+  virtual void store() override;
+  virtual void index(event const& e) final;
   virtual option<bitstream> lookup(expression const& e) final;
 
 private:
-  bool index(uint64_t event_id, value const& v);
+  bool index_impl(uint64_t id, value const& v);
 
   arithmetic_bitmap_index<bool_type> bool_;
   arithmetic_bitmap_index<int_type> int_;
@@ -90,6 +92,21 @@ private:
   string_bitmap_index string_;
   address_bitmap_index address_;
   port_bitmap_index port_;
+};
+
+class argument_fragment : public fragment
+{
+public:
+  argument_fragment(path dir);
+  virtual void load() override;
+  virtual void store() override;
+  virtual void index(event const& e) final;
+  virtual option<bitstream> lookup(expression const& e) final;
+
+private:
+  bool index_impl(record const& r, uint64_t id, offset& o);
+
+  std::map<offset, std::unique_ptr<bitmap_index>> indexes_;
 };
 
 } // namespace vast
