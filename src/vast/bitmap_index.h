@@ -12,6 +12,11 @@ class bitstream;
 class bitmap_index
 {
 public:
+  /// Factory function to construct a bitmap index for a given value type.
+  /// @param t The value type to create an index for.
+  /// @return A bitmap index suited for type *t*.
+  static std::unique_ptr<bitmap_index> create(value_type t);
+
   /// Destroys a bitmap index.
   virtual ~bitmap_index() = default;
 
