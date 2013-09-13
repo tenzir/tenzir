@@ -92,6 +92,10 @@ public:
   /// Constructs an empty string.
   string();
 
+  /// Constructs a string from a single character.
+  /// @param c The character.
+  string(char c);
+
   /// Constructs a string from a NUL-terminated C string.
   /// @param str The C string.
   string(char const* str);

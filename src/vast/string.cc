@@ -17,6 +17,11 @@ string::string()
   std::memset(buf_, 0, buf_size);
 }
 
+string::string(char c)
+  : string{&c, &c + 1}
+{
+}
+
 string::string(char const* str)
   : string{str, str + std::strlen(str)}
 {

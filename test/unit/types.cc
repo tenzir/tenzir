@@ -93,6 +93,9 @@ BOOST_AUTO_TEST_CASE(time_points)
 
 BOOST_AUTO_TEST_CASE(strings)
 {
+  string c('c');
+  BOOST_CHECK_EQUAL(c, "c");
+
   string a("foo");
   string b("bar");
   string ab = a + b;
