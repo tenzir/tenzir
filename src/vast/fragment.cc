@@ -204,10 +204,14 @@ void argument_fragment::load()
 
   for (auto& p : paths)
   {
+    offset o;
+    auto str = p.basename(true).str();
+    assert(str[0] == '@');
+    for (auto& pair : str.substr(1).split(','))
+      o.push_back(to<size_t>(string{pair.first, pair.second}));
+
     std::unique_ptr<bitmap_index> bi;
     io::unarchive(p, bi);
-    offset o;
-    // TODO: convert path into an offset.
     indexes_.emplace(o, std::move(bi));
   }
 }
@@ -218,8 +222,18 @@ void argument_fragment::store()
   static string suffix{".idx"};
   for (auto& p : indexes_)
   {
-    // TODO: convert offset into a path.
-    path const filename = dir_ / (prefix + "p.first" + suffix);
+    auto f = p.first.begin();
+    auto l = p.first.end();
+    string o;
+    while (f != l)
+    {
+      o = o + to<string>(*f);
+      if (++f != l)
+        o = o + ',';
+    }
+
+    path const filename = dir_ / (prefix + o + suffix);
+    VAST_LOG_ACT_DEBUG("arg-fragment", "stores " << prefix << filename);
     io::archive(filename, p.second);
   }
 }
@@ -240,6 +254,7 @@ option<bitstream> argument_fragment::lookup(expression const&)
 
 bool argument_fragment::index_impl(record const& r, uint64_t id, offset& o)
 {
+  VAST_LOG_ACT_DEBUG("arg-fragment", "processes record " << r);
   if (o.empty())
     return true;
 
@@ -260,6 +275,8 @@ bool argument_fragment::index_impl(record const& r, uint64_t id, offset& o)
       auto idx = indexes_[o].get();
       if (! idx)
       {
+        VAST_LOG_ACT_DEBUG("arg-fragment",
+                           "creates new index for value type " << v.which());
         auto bi = bitmap_index::create(v.which());
         idx = bi.get();
         indexes_.emplace(o, std::move(bi));

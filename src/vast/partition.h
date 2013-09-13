@@ -4,6 +4,7 @@
 #include <cppa/cppa.hpp>
 #include "vast/file_system.h"
 #include "vast/time.h"
+#include "vast/string.h"
 
 namespace vast {
 
@@ -26,6 +27,7 @@ private:
   time_point last_modified_;
   cppa::actor_ptr meta_;
   cppa::actor_ptr type_;
+  std::map<string, cppa::actor_ptr> events_;
 };
 
 } // namespace vast
