@@ -74,6 +74,10 @@ public:
   /// @param The extension including ".".
   path extension() const;
 
+  /// Retrieves the underlying string representation.
+  /// @return The string representation of the path.
+  string const& str() const;
+
   //
   // Filesystem operations
   //

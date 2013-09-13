@@ -29,7 +29,7 @@
 #  define VAST_CREATE_HARD_LINK(F,T)(create_hard_link_api(F, T, 0) != 0)
 #  define VAST_CREATE_SYMBOLIC_LINK(F,T,Flag)(create_symbolic_link_api(F, T, Flag) != 0)
 #  define VAST_DELETE_FILE(P)(::DeleteFileW(P) != 0)
-#  define VAST_DELETE_DIRECTORY(P)(::RemoveDirectoryW(P) != 0)
+#  define VAST_DELETE_DIRECTORY(P)(::RemoveDirectoryW(P) != 0) \
    (::CopyFileW(F, T, FailIfExistsBool) != 0)
 #  define VAST_MOVE_FILE(F,T) \
    (::MoveFileExW(\ F, T, MOVEFILE_REPLACE_EXISTING|MOVEFILE_COPY_ALLOWED) != 0)
@@ -119,11 +119,16 @@ path path::extension() const
   return base.str_.substr(ext);
 }
 
+string const& path::str() const
+{
+  return str_;
+}
+
 path::type path::kind() const
 {
 #ifdef VAST_POSIX
   struct stat st;
-  if (::lstat(to<std::string>(*this).data(), &st))
+  if (::lstat(str_.data(), &st))
     return unknown;
   if (S_ISREG(st.st_mode))
     return regular_file;
@@ -239,7 +244,7 @@ bool file::open(open_mode mode, bool append)
   }
   if (append)
     flags |= O_APPEND;
-  handle_ = ::open(to<std::string>(path_).data(), flags, 0644);
+  handle_ = ::open(path_.str().data(), flags, 0644);
   if (handle_ > 0)
     is_open_ = true;
   return is_open_;
@@ -351,7 +356,7 @@ bool exists(path const& p)
 {
 #ifdef VAST_POSIX
   struct stat st;
-  return ::lstat(to<std::string>(p).data(), &st) == 0;
+  return ::lstat(p.str().data(), &st) == 0;
 #else
   return false;
 #endif // VAST_POSIX
@@ -362,14 +367,13 @@ bool rm(const path& p)
   // Because a file system only offers primitives to delete empty directories,
   // we have to recursively delete all files in a directory before deleting it.
   auto t = p.kind();
-  auto str = to<std::string>(p);
   if (t == path::type::directory)
   {
     traverse(p, [](path const& inner) { return rm(inner); });
-    return VAST_DELETE_DIRECTORY(str.data());
+    return VAST_DELETE_DIRECTORY(p.str().data());
   }
   if (t == path::type::regular_file || t == path::type::symlink)
-    return VAST_DELETE_FILE(str.data());
+    return VAST_DELETE_FILE(p.str().data());
   return false;
 }
 
@@ -380,12 +384,12 @@ bool mkdir(path const& p)
   string::size_type pos = 0;
   while (pos != string::npos)
   {
-    auto str = to<std::string>(p);
+    string str = p.str();
     pos = str.find(path::separator, pos);
     if (pos != string::npos)
       ++pos;
     str = str.substr(0, pos);
-    path component(str);
+    path component{str};
     if (! exists(component) && ! VAST_CREATE_DIRECTORY(str.data()))
       return false;
     if (! (component.is_directory() || component.is_symlink()))
@@ -397,7 +401,7 @@ bool mkdir(path const& p)
 void traverse(path const& p, std::function<bool(path const&)> f)
 {
 #ifdef VAST_POSIX
-  DIR* d = ::opendir(to<std::string>(p).data());
+  DIR* d = ::opendir(p.str().data());
   if (! d)
     return;
   struct dirent* ent;
