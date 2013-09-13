@@ -195,6 +195,16 @@ BOOST_AUTO_TEST_CASE(polymorphic_object_serialization)
     BOOST_REQUIRE(write_object(sink, b));
   }
   {
+    // Actually, this is the same as serializing through a pointer directory,
+    // because serializing a pointer assumes reference semantics and hence
+    // writes an instance out as object.
+    decltype(buf) buf2;
+    base* bp = &d;
+    io::archive(buf2, bp);
+    BOOST_CHECK_EQUAL_COLLECTIONS(buf.begin(), buf.end(),
+                                  buf2.begin(), buf2.end());
+  }
+  {
     // It should always be possible to deserialize an instance of the exact
     // derived type. This technically does not require any virtual functions.
     auto in = io::make_array_input_stream(buf);
@@ -219,6 +229,16 @@ BOOST_AUTO_TEST_CASE(polymorphic_object_serialization)
     base* b = o.release_as<base>();
     BOOST_CHECK_EQUAL(b->f(), 42);
     BOOST_REQUIRE(b != nullptr);
+    delete b;
+  }
+  {
+    // Finally, since all serializations of pointers are assumed to pertain to
+    // objects with reference semantics, we can just serialize the pointer
+    // directly.
+    base* b = nullptr;
+    io::unarchive(buf, b);
+    BOOST_REQUIRE(b != nullptr);
+    BOOST_CHECK_EQUAL(b->f(), 42);
     delete b;
   }
 }

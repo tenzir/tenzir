@@ -3,39 +3,41 @@
 
 #include <memory>
 #include "vast/intrusive.h"
+#include "vast/object.h"
 #include "vast/traits.h"
 
 namespace vast {
 
+// We serialize all pointers as objects because we have to assume reference
+// semantics for such types. Otherwise we could just directly serialize the
+// pointee. As a result, all pointer-based serializations require announced
+// types.
+
 template <typename T>
-typename std::enable_if<is_pointer_type<T>::value>::type
+EnableIf<is_ptr<T>>
 serialize(serializer& sink, T const& x)
 {
-  sink << *x;
+  write_object(sink, *x);
 }
 
 template <typename T>
-void deserialize(deserializer& source, std::unique_ptr<T>& x)
+EnableIf<std::is_pointer<T>>
+deserialize(deserializer& source, T& x)
 {
-  if (! x)
-    x.reset(new T());
-  source >> *x;
+  using raw = typename std::remove_pointer<T>::type;
+  object o;
+  source >> o;
+  assert(o.convertible_to<raw>());
+  x = o.release_as<raw>();
 }
 
 template <typename T>
-void deserialize(deserializer& source, std::shared_ptr<T>& x)
+EnableIf<is_smart_ptr<T>>
+deserialize(deserializer& source, T& x)
 {
-  if (! x)
-    x = std::make_shared<T>();
-  source >> *x;
-}
-
-template <typename T>
-void deserialize(deserializer& source, intrusive_ptr<T>& x)
-{
-  if (! x)
-    x = new T();
-  source >> *x;
+  typename T::element_type* e;
+  source >> e;
+  x = T{e};
 }
 
 } // namespace vast
