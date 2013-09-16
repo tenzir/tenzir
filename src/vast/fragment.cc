@@ -51,7 +51,7 @@ void fragment::on_exit()
   VAST_LOG_ACT_VERBOSE("fragment", "terminated");
 }
 
-bool fragment::append(bitmap_index& bmi, uint64_t id, value const& val)
+bool fragment::append_value(bitmap_index& bmi, uint64_t id, value const& val)
 {
   if (id < bmi.size())
   {
@@ -89,14 +89,14 @@ void meta_fragment::store()
 
 void meta_fragment::index(event const& e)
 {
-  if (! append(timestamp_, e.id(), e.timestamp()))
+  if (! append_value(timestamp_, e.id(), e.timestamp()))
   {
     VAST_LOG_ACT_ERROR("fragment",
                        "failed to index event timestamp " << e.timestamp());
     quit();
   }
 
-  if (! append(name_, e.id(), e.name()))
+  if (! append_value(name_, e.id(), e.name()))
   {
     VAST_LOG_ACT_ERROR("fragment",
                        "failed to index event name " << e.name());
@@ -161,23 +161,23 @@ bool type_fragment::index_impl(uint64_t id, const value& v)
       VAST_LOG_ACT_ERROR("fragment", "cannot handle value type " << v.which());
       break;
     case bool_type:
-      return append(bool_, id, v);
+      return append_value(bool_, id, v);
     case int_type:
-      return append(int_, id, v);
+      return append_value(int_, id, v);
     case uint_type:
-      return append(uint_, id, v);
+      return append_value(uint_, id, v);
     case double_type:
-      return append(double_, id, v);
+      return append_value(double_, id, v);
     case time_range_type:
-      return append(time_range_, id, v);
+      return append_value(time_range_, id, v);
     case time_point_type:
-      return append(time_point_, id, v);
+      return append_value(time_point_, id, v);
     case string_type:
-      return append(string_, id, v);
+      return append_value(string_, id, v);
     case address_type:
-      return append(address_, id, v);
+      return append_value(address_, id, v);
     case port_type:
-      return append(port_, id, v);
+      return append_value(port_, id, v);
     case record_type:
       for (auto& rv : v.get<record>())
         if (! index_impl(id, rv))
@@ -260,6 +260,8 @@ bool argument_fragment::index_impl(record const& r, uint64_t id, offset& o)
 
   for (auto& v : r)
   {
+    VAST_LOG_ACT_DEBUG("arg-fragment", "processes value " << v << " (" <<
+                       v.which() << ')');
     if (v.which() == record_type)
     {
       auto& inner = v.get<record>();
@@ -272,17 +274,23 @@ bool argument_fragment::index_impl(record const& r, uint64_t id, offset& o)
     }
     else
     {
-      auto idx = indexes_[o].get();
-      if (! idx)
+      bitmap_index* idx;
+      auto i = indexes_.find(o);
+      if (i != indexes_.end())
+      {
+        idx = i->second.get();
+      }
+      else
       {
         VAST_LOG_ACT_DEBUG("arg-fragment",
                            "creates new index for value type " << v.which());
-        auto bi = bitmap_index::create(v.which());
-        idx = bi.get();
-        indexes_.emplace(o, std::move(bi));
-        assert(idx);
+        auto bmi = bitmap_index::create(v.which());
+        idx = bmi.get();
+        indexes_.emplace(o, std::move(bmi));
       }
-      if (! append(*idx, id, v))
+      assert(idx != nullptr);
+
+      if (! append_value(*idx, id, v))
         return false;
       ++o.back();
     }

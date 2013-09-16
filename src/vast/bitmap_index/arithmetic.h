@@ -36,7 +36,7 @@ public:
     typename U = underlying_value_type,
     typename = EnableIf<std::is_same<U, double>>
   >
-  arithmetic_bitmap_index(int precision)
+  explicit arithmetic_bitmap_index(int precision)
     : bitmap_({precision}, {})
   {
   }

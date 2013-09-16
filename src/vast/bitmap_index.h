@@ -25,13 +25,13 @@ public:
   /// @return `true` if appending succeeded.
   bool push_back(value const& val);
 
-  /// Appends fill material (i.e., invalid bits).
+  /// Appends a sequence of bits.
   /// @param n The number of elements to append.
   /// @param bit The value of the bits to append.
   /// @return `true` on success.
   virtual bool append(size_t n, bool bit) = 0;
 
-  /// Looks up a value with a given relational operator.
+  /// Looks up a value given a relational operator.
   /// @param op The relation operator.
   /// @param val The value to lookup.
   virtual option<bitstream>

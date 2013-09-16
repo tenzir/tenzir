@@ -16,7 +16,7 @@ class time_bitmap_index : public bitmap_index
 public:
   /// Constructs a time bitmap index.
   /// @param precision The granularity of the index. Defaults to seconds.
-  time_bitmap_index(int precision = 7);
+  explicit time_bitmap_index(int precision = 7);
 
   virtual bool append(size_t n, bool bit) override;
 

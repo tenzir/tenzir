@@ -52,7 +52,7 @@ protected:
   /// @param id The ID of the event *val* belongs to.
   /// @param val The value to append.
   /// @return `true` on success.
-  static bool append(bitmap_index& bmi, uint64_t id, value const& val);
+  static bool append_value(bitmap_index& bmi, uint64_t id, value const& val);
 
   path const dir_;
 };
