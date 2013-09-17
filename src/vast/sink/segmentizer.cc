@@ -56,11 +56,14 @@ void segmentizer::before_exit()
     assert(segment_.events() > 0);
   }
 
-  VAST_LOG_ACT_DEBUG("segmentizer", "sends final segment " << segment_.id() <<
-                     " with " << segment_.events() << " events to @" <<
-                     upstream_->id());
+  if (segment_.events() > 0)
+  {
+    VAST_LOG_ACT_DEBUG("segmentizer", "sends final segment " << segment_.id() <<
+                       " with " << segment_.events() << " events to @" <<
+                       upstream_->id());
 
-  send(upstream_, std::move(segment_));
+    send(upstream_, std::move(segment_));
+  }
 }
 
 } // namespace sink
