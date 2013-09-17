@@ -234,52 +234,9 @@ BOOST_AUTO_TEST_CASE(regexes)
   }
 }
 
-BOOST_AUTO_TEST_CASE(vectors)
-{
-  vector bools(bool_type);
-  bools = { true, true, false, false, true };
-
-  vector v{"foo", "bar", "baz"};
-  std::sort(v.begin(), v.end());
-  BOOST_CHECK(v == vector({"bar", "baz", "foo"}));
-  try
-  {
-    v.push_back(42);
-    v.emplace_back(42u);
-  }
-  catch (error::bad_type const& e)
-  {
-    BOOST_CHECK(v.size() == 3);
-  }
-
-  v.push_back("qux");
-  auto i = std::lower_bound(v.begin(), v.end(), "baz");
-  BOOST_CHECK(std::distance(v.begin(), i) == 1);
-}
-
-BOOST_AUTO_TEST_CASE(sets)
-{
-  set primes{2, 3, 5, 7, 11};
-  BOOST_CHECK(! primes.emplace(11));
-  BOOST_CHECK(primes.size() == 5);
-  BOOST_CHECK(! primes.emplace(2));
-  BOOST_CHECK(primes.size() == 5);
-  BOOST_CHECK(! primes.emplace(3));
-  BOOST_CHECK(primes.size() == 5);
-  BOOST_CHECK(primes.emplace(13));
-  BOOST_CHECK(primes.size() == 6);
-
-  BOOST_CHECK(primes.insert(17));
-  BOOST_CHECK(primes.size() == 7);
-  primes.erase(primes.end() - 1);
-  BOOST_CHECK(primes.size() == 6);
-  auto i = primes.find(5);
-  BOOST_CHECK(std::distance(primes.begin(), i) == 2);
-}
-
 BOOST_AUTO_TEST_CASE(tables)
 {
-  table ports{"ssh", 22u, "http", 80u, "https", 443u, "imaps", 993u};
+  table ports{{"ssh", 22u}, {"http", 80u}, {"https", 443u}, {"imaps", 993u}};
   BOOST_CHECK(ports.size() == 4);
 
   auto i = ports.find("ssh");
@@ -289,19 +246,19 @@ BOOST_AUTO_TEST_CASE(tables)
   BOOST_REQUIRE(i != ports.end());
   BOOST_CHECK(i->second == 993u);
 
-  BOOST_CHECK(ports.emplace("telnet", 23u));
-  BOOST_CHECK(! ports.emplace("http", 8080u));
+  BOOST_CHECK(ports.emplace("telnet", 23u).second);
+  BOOST_CHECK(! ports.emplace("http", 8080u).second);
 }
 
 BOOST_AUTO_TEST_CASE(records)
 {
-  record r{"foo", -42, 1001u, 'x', port(443, port::tcp)};
+  record r{"foo", -42, 1001u, 'x', port{443, port::tcp}};
   record s{100, "bar", r};
   BOOST_CHECK_EQUAL(r.size(), 5);
 
   BOOST_CHECK_EQUAL(*s.at({0}), 100);
   BOOST_CHECK_EQUAL(*s.at({1}), "bar");
-  BOOST_CHECK_EQUAL(*s.at({2}), r);
+  BOOST_CHECK_EQUAL(*s.at({2}), value(r));
   BOOST_CHECK_EQUAL(*s.at({2, 3}), 'x');
 
   BOOST_CHECK_EQUAL(s.flat_size(), r.size() + 2);

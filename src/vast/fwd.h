@@ -19,12 +19,10 @@ class time_range;
 class time_point;
 class port;
 class prefix;
-class record;
-class regex;
-class set;
 class string;
+class regex;
+class record;
 class table;
-class vector;
 
 template <typename Iterator, typename T, typename... Opts>
 bool extract(Iterator&, Iterator, T&, Opts&&...);

@@ -73,7 +73,7 @@ private:
   string path_;
   std::vector<string> field_names_;
   std::vector<value_type> field_types_;
-  std::vector<value_type> set_types_;
+  std::vector<value_type> complex_types_;
 };
 
 /// A Bro 1.5 `conn.log` source.

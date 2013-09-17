@@ -11,29 +11,26 @@ namespace vast {
 /// The type of a value.
 enum value_type : uint8_t
 {
-  invalid_type    = 0x00, ///< The value has not been initialized.
-  nil_type        = 0x01, ///< The sentinel (empty) value type.
+  invalid_type    = 0x00, ///< An invalid value.
 
   // Basic types
-  bool_type       = 0x02, ///< A boolean value.
-  int_type        = 0x03, ///< An integer (@c int) value.
-  uint_type       = 0x04, ///< An unsigned integer (@c int) value.
-  double_type     = 0x05, ///< A floating point (@c double) value.
-  time_range_type = 0x06, ///< A time duration value.
-  time_point_type = 0x07, ///< A time point value.
-  string_type     = 0x08, ///< A string value.
-  regex_type      = 0x09, ///< A regular expression value.
-
-  // Containers
-  vector_type     = 0x0a, ///< A vector value.
-  set_type        = 0x0b, ///< A set value.
-  table_type      = 0x0c, ///< A table value.
-  record_type     = 0x0d, ///< A record value.
+  bool_type       = 0x01, ///< A boolean value.
+  int_type        = 0x02, ///< An integer (`int`) value.
+  uint_type       = 0x03, ///< An unsigned integer (`int`) value.
+  double_type     = 0x04, ///< A floating point (`double`) value.
+  time_range_type = 0x05, ///< A time duration value.
+  time_point_type = 0x06, ///< A time point value.
+  string_type     = 0x07, ///< A string value.
+  regex_type      = 0x08, ///< A regular expression value.
 
   // Network types
-  address_type    = 0x0e, ///< An IP address value.
-  prefix_type     = 0x0f, ///< An IP prefix value.
-  port_type       = 0x10  ///< A transport-layer port value.
+  address_type    = 0x09, ///< An IP address value.
+  prefix_type     = 0x0a, ///< An IP prefix value.
+  port_type       = 0x0b, ///< A transport-layer port value.
+
+  // Containers
+  record_type     = 0x0c, ///< A sequenced vector value.
+  table_type      = 0x0d  ///< An associative array value.
 };
 
 void serialize(serializer& sink, value_type x);
@@ -49,9 +46,6 @@ bool print(Iterator& out, value_type t)
       break;
     case invalid_type:
       str = "invalid";
-      break;
-    case nil_type:
-      str = "nil";
       break;
     case bool_type:
       str = "bool";
@@ -77,18 +71,6 @@ bool print(Iterator& out, value_type t)
     case regex_type:
       str = "regex";
       break;
-    case vector_type:
-      str = "vector";
-      break;
-    case set_type:
-      str = "set";
-      break;
-    case table_type:
-      str = "table";
-      break;
-    case record_type:
-      str = "record";
-      break;
     case address_type:
       str = "address";
       break;
@@ -97,6 +79,12 @@ bool print(Iterator& out, value_type t)
       break;
     case port_type:
       str = "port";
+      break;
+    case record_type:
+      str = "record";
+      break;
+    case table_type:
+      str = "table";
       break;
   }
   // TODO: replace strlen with appropriate compile-time constructs.
@@ -111,22 +99,19 @@ std::ostream& operator<<(std::ostream& out, value_type t);
 template <value_type T>
 using underlying_value_type =
   IfThenElse<T == invalid_type, invalid_value,
-    IfThenElse<T == nil_type, nil_value,
-      IfThenElse<T == bool_type, bool,
-        IfThenElse<T == int_type, int64_t,
-          IfThenElse<T == uint_type, uint64_t,
-            IfThenElse<T == double_type, double,
-              IfThenElse<T == time_range_type, time_range,
-                IfThenElse<T == time_point_type, time_point,
-                  IfThenElse<T == string_type, string,
-                    IfThenElse<T == vector_type, vector,
-                      IfThenElse<T == set_type, set,
-                        IfThenElse<T == table_type, table,
-                          IfThenElse<T == record_type, record,
-                            IfThenElse<T == address_type, address,
-                              IfThenElse<T == prefix_type, prefix,
-                                IfThenElse<T == port_type, port,
-                                  std::false_type>>>>>>>>>>>>>>>>;
+    IfThenElse<T == bool_type, bool,
+      IfThenElse<T == int_type, int64_t,
+        IfThenElse<T == uint_type, uint64_t,
+          IfThenElse<T == double_type, double,
+            IfThenElse<T == time_range_type, time_range,
+              IfThenElse<T == time_point_type, time_point,
+                IfThenElse<T == string_type, string,
+                  IfThenElse<T == address_type, address,
+                    IfThenElse<T == prefix_type, prefix,
+                      IfThenElse<T == port_type, port,
+                        IfThenElse<T == record_type, record,
+                          IfThenElse<T == table_type, table,
+                            std::false_type>>>>>>>>>>>>>;
 
 } // namespace vast
 

@@ -155,25 +155,25 @@ BOOST_AUTO_TEST_CASE(parse_regex)
 }
 #endif
 
-BOOST_AUTO_TEST_CASE(parse_set)
+BOOST_AUTO_TEST_CASE(parse_record)
 {
   {
-    string str("{1, 2, 3}");
+    string str("(1, 2, 3)");
     auto i = str.begin();
-    set s;
-    BOOST_CHECK(extract(i, str.end(), s, int_type));
+    record r;
+    BOOST_CHECK(extract(i, str.end(), r, int_type));
     BOOST_CHECK(i == str.end());
-    set expected{1, 2, 3};
-    BOOST_CHECK_EQUAL(s, expected);
+    record expected{1, 2, 3};
+    BOOST_CHECK_EQUAL(r, expected);
   }
   {
     string str("a--b--c");
     auto i = str.begin();
-    set s;
-    BOOST_CHECK(extract(i, str.end(), s, string_type, "--"));
+    record r;
+    BOOST_CHECK(extract(i, str.end(), r, string_type, "--"));
     BOOST_CHECK(i == str.end());
-    set expected{"a", "b", "c"};
-    BOOST_CHECK_EQUAL(s, expected);
+    record expected{"a", "b", "c"};
+    BOOST_CHECK_EQUAL(r, expected);
   }
 }
 
@@ -386,33 +386,33 @@ BOOST_AUTO_TEST_CASE(parse_value)
   // Vectors
   {
     auto v = value::parse("[1, 2, 3]");
-    BOOST_CHECK_EQUAL(v.which(), vector_type);
-    BOOST_CHECK_EQUAL(v, vector({1u, 2u, 3u}));
+    BOOST_CHECK_EQUAL(v.which(), record_type);
+    BOOST_CHECK_EQUAL(v, value(record{1u, 2u, 3u}));
   }
 
   // Sets
   {
     auto v = value::parse("{+1, +2, +3}");
-    BOOST_CHECK_EQUAL(v.which(), set_type);
-    BOOST_CHECK_EQUAL(v, set({1, 2, 3}));
+    BOOST_CHECK_EQUAL(v.which(), record_type);
+    BOOST_CHECK_EQUAL(v, value(record{1, 2, 3}));
 
     v = value::parse("{\"foo\", \"bar\"}");
-    BOOST_CHECK_EQUAL(v.which(), set_type);
-    BOOST_CHECK_EQUAL(v, set({"foo", "bar"}));
+    BOOST_CHECK_EQUAL(v.which(), record_type);
+    BOOST_CHECK_EQUAL(v, value(record{"foo", "bar"}));
   }
 
   // Tables
   {
     auto v = value::parse("{\"x\" -> T, \"y\" -> F}");
     BOOST_CHECK_EQUAL(v.which(), table_type);
-    BOOST_CHECK_EQUAL(v, table({"x", true, "y", false}));
+    BOOST_CHECK_EQUAL(v, value(table{{"x", true}, {"y", false}}));
   }
 
   // Records
   {
     auto v = value::parse("(\"x\", T, 42, +42)");
     BOOST_CHECK_EQUAL(v.which(), record_type);
-    BOOST_CHECK_EQUAL(v, record({"x", true, 42u, 42}));
+    BOOST_CHECK_EQUAL(v, value(record{"x", true, 42u, 42}));
   }
 
   // Addresses

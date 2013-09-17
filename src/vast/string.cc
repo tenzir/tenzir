@@ -443,12 +443,12 @@ void swap(string& x, string& y)
   swap(x.buf_, y.buf_);
 }
 
-char string::tag() const
+uint8_t string::tag() const
 {
   return buf_[tag_off] >> 1;
 }
 
-void string::tag(char t)
+void string::tag(uint8_t t)
 {
   buf_[tag_off] = (t << 1) | (buf_[tag_off] & 1);
 }

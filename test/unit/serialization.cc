@@ -128,7 +128,7 @@ BOOST_AUTO_TEST_CASE(io_serialization_interface)
 BOOST_AUTO_TEST_CASE(object_serialization)
 {
   object o, p;
-  o = object::adopt(new vector{42, 84, 1337});
+  o = object::adopt(new record{42, 84, 1337});
 
   std::vector<uint8_t> buf;
   io::archive(buf, o);

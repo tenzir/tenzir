@@ -5,13 +5,13 @@
 
 namespace vast {
 
-event::event(std::vector<value> values)
+event::event(record values)
   : record(std::move(values))
 {
 }
 
-event::event(std::initializer_list<value> args)
-  : record(std::move(args))
+event::event(std::initializer_list<value> list)
+  : record(std::move(list))
 {
 }
 

@@ -339,11 +339,11 @@ public:
 
   /// Retrieves the string tag.
   /// @return The new tag byte.
-  char tag() const;
+  uint8_t tag() const;
 
   /// Sets the string tag.
   /// @param t the new tag.
-  void tag(char t);
+  void tag(uint8_t t);
 
 private:
   template <typename Iterator>

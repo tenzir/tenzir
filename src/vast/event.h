@@ -20,11 +20,11 @@ public:
 
   /// Constructs an event with a list of zero or more arguments.
   /// @param values The list of values.
-  event(std::vector<value> values);
+  event(record values);
 
   /// Constructs an event with a list of zero or more arguments.
   /// @param args The initializer list with values.
-  event(std::initializer_list<value> args);
+  event(std::initializer_list<value> list);
 
   /// Retrieves the event ID.
   /// @return The name of the event.

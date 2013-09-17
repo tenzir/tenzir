@@ -17,25 +17,13 @@ struct vector_inserter
     typedef void type;
   };
 
-  template <typename C>
-  typename std::enable_if<
-    std::is_same<C, vector>::value ||
-    std::is_same<C, record>::value
-  >::type
-  operator()(C& c, vast::value x) const
+  void operator()(record& r, vast::value x) const
   {
-    c.push_back(std::move(x));
-  }
-
-  template <typename C>
-  typename std::enable_if<std::is_same<C, set>::value>::type
-  operator()(C& c, vast::value x) const
-  {
-    c.insert(std::move(x));
+    r.push_back(std::move(x));
   }
 };
 
-struct table_inserter
+struct map_inserter
 {
   template <typename, typename, typename>
   struct result
@@ -69,7 +57,7 @@ value<Iterator>::value()
   qi::real_parser<double, qi::strict_real_policies<double>> strict_double;
 
   boost::phoenix::function<vector_inserter> vector_insert;
-  boost::phoenix::function<table_inserter> table_insert;
+  boost::phoenix::function<map_inserter> map_insert;
 
   val
     =   time_pt               [_val = construct<vast::value>(_1)]
@@ -80,40 +68,41 @@ value<Iterator>::value()
     |   strict_double         [_val = construct<vast::value>(_1)]
     |   uint                  [_val = construct<vast::value>(_1)]
     |   sint                  [_val = construct<vast::value>(_1)]
-    |   vector                [_val = construct<vast::value>(_1)]
-    |   table                 [_val = construct<vast::value>(_1)]
+    |   vec                   [_val = construct<vast::value>(_1)]
+    |   tbl                   [_val = construct<vast::value>(_1)]
     |   set                   [_val = construct<vast::value>(_1)]
-    |   record                [_val = construct<vast::value>(_1)]
+    |   rec                   [_val = construct<vast::value>(_1)]
     |   lit("T")              [_val = construct<vast::value>(true)]
     |   lit("F")              [_val = construct<vast::value>(false)]
     |   rx                    [_val = construct<regex>(_1)]
     |   str                   [_val = construct<vast::value>(_1)]
     ;
 
-  vector
-    =   '[' 
-    >>  val [vector_insert(_val, _1)] % ',' 
+  vec
+    =   '['
+    >>  val [vector_insert(_val, _1)] % ','
     >>  ']'
     ;
 
-  table
-    =   '{' 
+  tbl
+    =   '{'
     >>  (   val
-        >>  "->" 
+        >>  "->"
         >>  val
-        )   [table_insert(_val, _1, _2)] % ','
+        )   [map_insert(_val, _1, _2)] % ','
     >>  '}'
     ;
 
+  // TODO: perform uniqueness check.
   set
-    =   '{' 
-    >>  val [vector_insert(_val, _1)] % ',' 
+    =   '{'
+    >>  val [vector_insert(_val, _1)] % ','
     >>  '}'
     ;
 
-  record
-    =   '(' 
-    >>  val [vector_insert(_val, _1)] % ',' 
+  rec
+    =   '('
+    >>  val [vector_insert(_val, _1)] % ','
     >>  ')'
     ;
 

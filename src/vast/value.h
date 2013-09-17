@@ -14,18 +14,9 @@
 
 namespace vast {
 
-namespace detail {
-template <typename, typename>
-struct visit_impl;
-} // namespace detail
-
 /// The invalid or optional value.
-struct invalid_value {};
-invalid_value const invalid = {};
-
-/// The nil (empty) value.
-struct nil_value {};
-nil_value const nil = {};
+struct invalid_value { };
+constexpr invalid_value invalid = {};
 
 template <typename Iterator>
 bool print(Iterator& out, invalid_value)
@@ -35,13 +26,10 @@ bool print(Iterator& out, invalid_value)
   return true;
 }
 
-template <typename Iterator>
-bool print(Iterator& out, nil_value)
-{
-  static constexpr auto str = "<nil>";
-  out = std::copy(str, str + 5, out);
-  return true;
-}
+namespace detail {
+template <typename, typename>
+struct visit_impl;
+} // namespace detail
 
 /// A value.
 class value : util::parsable<value>,
@@ -56,13 +44,13 @@ public:
   /// valued otherwise.
   static value parse(std::string const& str);
 
-  /// Default-constructs a value.
+  /// Default-constructs an invalid value.
   value(invalid_value = invalid);
 
-  /// Constructs a nil value.
-  value(nil_value);
-
+  /// Constructs a disengaged value with a given type.
+  /// @param t The type of the value.
   value(value_type t);
+
   value(bool b);
   value(int i);
   value(unsigned int i);
@@ -79,43 +67,40 @@ public:
   value(std::string const& s);
   value(string s);
   value(regex r);
-  value(vector v);
-  value(set s);
-  value(table t);
-  value(record r);
-  value(value_type type, std::initializer_list<value> list);
   value(address a);
   value(prefix p);
   value(port p);
+  value(record r);
+  value(table t);
+  value(std::initializer_list<value> list);
+  value(std::initializer_list<std::pair<value const, value>> list);
 
   template <typename Rep, typename Period>
   value(std::chrono::duration<Rep, Period> duration)
   {
-    new (&data_.range) time_range(duration);
-    type(time_range_type);
+    new (&data_.time_range_) time_range{duration};
+    data_.type(time_range_type);
+    data_.engage();
   }
 
   template <typename Clock, typename Duration>
   value(std::chrono::time_point<Clock, Duration> time)
   {
-    new (&data_.time) time_point(time);
-    type(time_point_type);
+    new (&data_.time_point_) time_point{time};
+    data_.type(time_point_type);
+    data_.engage();
   }
 
-  /// Copy-constructs a value.
-  /// @param other The value to copy.
-  value(value const& other);
-
-  /// Move-constructs a value.
-  /// @param other The value to move.
-  value(value&& other);
-
-  /// Destroys a value.
   ~value() = default;
+  value(value const& other) = default;
+  value(value&& other) = default;
+  value& operator=(value const&) = default;
+  value& operator=(value&&) = default;
 
-  /// Assigns another value to this instance.
-  /// @param other The RHS of the assignment.
-  value& operator=(value other);
+  /// Checks whether the value is engaged.
+  /// @return `true` iff the value is engaged.
+  /// @note An invalid value is always disengaged.
+  explicit operator bool() const;
 
   /// Releases all internal resources and resets the value to the invalid type.
   void clear();
@@ -125,8 +110,9 @@ public:
   value_type which() const;
 
   /// Accesses the currently stored data in a type safe manner.
-  /// Throws an @c std::bad_cast if the currently stored data is not of type
-  /// @a T.
+  ///
+  /// @throws `std::bad_cast` if the contained data is not of type `T` or
+  /// if the value is not engaged.
   template <typename T>
   T& get();
 
@@ -161,18 +147,6 @@ private:
   template <class V1, class V2>
   friend struct detail::visit_impl;
 
-  //
-  // Internal state management
-  //
-  
-  /// Retrieves the type information of the value.
-  /// @return The type of this value.
-  value_type type() const;
-
-  /// Sets the type information of the value.
-  /// @param i The type of this value.
-  void type(value_type i);
-
   union data
   {
     data();
@@ -181,24 +155,30 @@ private:
     ~data();
     data& operator=(data other);
 
+    void construct(value_type t);
+
     value_type type() const;
     void type(value_type t);
+    void engage();
+    bool engaged() const;
+    uint8_t tag() const;
 
-    bool boolean;
-    int64_t integer;
-    uint64_t uinteger;
-    double dbl;
-    time_range range;
-    time_point time;
-    string str;
-    std::unique_ptr<regex> rx;
-    std::unique_ptr<vector> vec;
-    std::unique_ptr<set> st;
-    std::unique_ptr<table> tbl;
-    std::unique_ptr<record> rec;
-    address addr;
-    prefix pfx;
-    port prt;
+    void serialize(serializer& sink) const;
+    void deserialize(deserializer& source);
+
+    bool bool_;
+    int64_t int_;
+    uint64_t uint_;
+    double double_;
+    time_range time_range_;
+    time_point time_point_;
+    string string_;
+    std::unique_ptr<regex> regex_;
+    address address_;
+    prefix prefix_;
+    port port_;
+    std::unique_ptr<record> record_;
+    std::unique_ptr<table> table_;
   };
 
   data data_;
@@ -272,6 +252,14 @@ private:
   template <typename Iterator>
   bool print(Iterator& out) const
   {
+    if (! *this && which() != invalid_type)
+    {
+      *out++ = '<';
+      if (! render(out, which()))
+        return false;
+      *out++ = '>';
+      return true;
+    }
     return value::visit(*this, value_printer<Iterator>(out));
   }
 };
@@ -283,11 +271,6 @@ bool operator!=(value const& x, value const& y);
 bool operator>(value const& x, value const& y);
 bool operator<=(value const& x, value const& y);
 bool operator>=(value const& x, value const& y);
-
-// Logical operators
-bool operator&&(value const& x, value const& y);
-bool operator||(value const& x, value const& y);
-bool operator!(value const& x);
 
 // Arithmetic operators
 value operator+(value const& x, value const& y);
@@ -313,8 +296,7 @@ struct value_bind_impl
   typedef typename F::result_type result_type;
 
   value_bind_impl(F f, T& x)
-    : x(x),
-      f(f)
+    : x(x), f(f)
   {
   }
 
@@ -354,45 +336,39 @@ struct visit_impl
   typename F::result_type
   static apply(V1& x, F f)
   {
-    switch (x.type())
+    switch (x.which())
     {
       default:
-        throw error::bad_type("corrupt value type", x.type());
+        throw error::bad_type("corrupt value type", x.which());
         break;
       case invalid_type:
         return f(invalid);
-      case nil_type:
-        return f(nil);
       case bool_type:
-        return f(x.data_.boolean);
+        return f(x.data_.bool_);
       case int_type:
-        return f(x.data_.integer);
+        return f(x.data_.int_);
       case uint_type:
-        return f(x.data_.uinteger);
+        return f(x.data_.uint_);
       case double_type:
-        return f(x.data_.dbl);
+        return f(x.data_.double_);
       case time_range_type:
-        return f(x.data_.range);
+        return f(x.data_.time_range_);
       case time_point_type:
-        return f(x.data_.time);
+        return f(x.data_.time_point_);
       case string_type:
-        return f(x.data_.str);
+        return f(x.data_.string_);
       case regex_type:
-        return f(*x.data_.rx);
-      case vector_type:
-        return f(*x.data_.vec);
-      case set_type:
-        return f(*x.data_.st);
-      case table_type:
-        return f(*x.data_.tbl);
-      case record_type:
-        return f(*x.data_.rec);
+        return f(*x.data_.regex_);
       case address_type:
-        return f(x.data_.addr);
+        return f(x.data_.address_);
       case prefix_type:
-        return f(x.data_.pfx);
+        return f(x.data_.prefix_);
       case port_type:
-        return f(x.data_.prt);
+        return f(x.data_.port_);
+      case record_type:
+        return f(*x.data_.record_);
+      case table_type:
+        return f(*x.data_.table_);
     }
   }
 
@@ -401,45 +377,39 @@ struct visit_impl
   typename F::result_type
   static apply(V1& x, V2& y, F f)
   {
-    switch (x.type())
+    switch (x.which())
     {
       default:
-        throw error::bad_type("corrupt value type", x.type());
+        throw error::bad_type("corrupt value type", x.which());
         break;
       case invalid_type:
         return visit_impl::apply(y, value_bind(f, invalid));
-      case nil_type:
-        return visit_impl::apply(y, value_bind(f, nil));
       case bool_type:
-        return visit_impl::apply(y, value_bind(f, x.data_.boolean));
+        return visit_impl::apply(y, value_bind(f, x.data_.bool_));
       case int_type:
-        return visit_impl::apply(y, value_bind(f, x.data_.integer));
+        return visit_impl::apply(y, value_bind(f, x.data_.int_));
       case uint_type:
-        return visit_impl::apply(y, value_bind(f, x.data_.uinteger));
+        return visit_impl::apply(y, value_bind(f, x.data_.uint_));
       case double_type:
-        return visit_impl::apply(y, value_bind(f, x.data_.dbl));
+        return visit_impl::apply(y, value_bind(f, x.data_.double_));
       case time_range_type:
-        return visit_impl::apply(y, value_bind(f, x.data_.range));
+        return visit_impl::apply(y, value_bind(f, x.data_.time_range_));
       case time_point_type:
-        return visit_impl::apply(y, value_bind(f, x.data_.time));
+        return visit_impl::apply(y, value_bind(f, x.data_.time_point_));
       case string_type:
-        return visit_impl::apply(y, value_bind(f, x.data_.str));
+        return visit_impl::apply(y, value_bind(f, x.data_.string_));
       case regex_type:
-        return visit_impl::apply(y, value_bind(f, *x.data_.rx));
-      case vector_type:
-        return visit_impl::apply(y, value_bind(f, *x.data_.vec));
-      case set_type:
-        return visit_impl::apply(y, value_bind(f, *x.data_.st));
-      case table_type:
-        return visit_impl::apply(y, value_bind(f, *x.data_.tbl));
-      case record_type:
-        return visit_impl::apply(y, value_bind(f, *x.data_.rec));
+        return visit_impl::apply(y, value_bind(f, *x.data_.regex_));
       case address_type:
-        return visit_impl::apply(y, value_bind(f, x.data_.addr));
+        return visit_impl::apply(y, value_bind(f, x.data_.address_));
       case prefix_type:
-        return visit_impl::apply(y, value_bind(f, x.data_.pfx));
+        return visit_impl::apply(y, value_bind(f, x.data_.prefix_));
       case port_type:
-        return visit_impl::apply(y, value_bind(f, x.data_.prt));
+        return visit_impl::apply(y, value_bind(f, x.data_.port_));
+      case record_type:
+        return visit_impl::apply(y, value_bind(f, *x.data_.record_));
+      case table_type:
+        return visit_impl::apply(y, value_bind(f, *x.data_.table_));
     }
   }
 };
@@ -513,14 +483,19 @@ struct getter
 template <typename T>
 inline T& value::get()
 {
+  if (! data_.engaged())
+    throw std::bad_cast();
   return *value::visit(*this, detail::getter<T>());
 }
 
 template <typename T>
 inline T const& value::get() const
 {
+  if (! data_.engaged())
+    throw std::bad_cast();
   return *value::visit(*this, detail::getter<T const>());
 }
+
 } // namespace vast
 
 #endif

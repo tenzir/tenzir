@@ -52,6 +52,11 @@ struct pusher
     e.push_back(x);
   }
 
+  void operator()(event& e, value v) const
+  {
+    e.push_back(std::move(v));
+  }
+
   // All doubles are timestamps in Bro's 1.5 conn.log.
   void operator()(event& e, double d) const
   {
@@ -102,6 +107,20 @@ struct string_maker
   }
 };
 
+struct empty_maker
+{
+  template <typename>
+  struct result
+  {
+    typedef value type;
+  };
+
+  value operator()(value_type t) const
+  {
+    return value(t);
+  }
+};
+
 template <typename Iterator>
 connection<Iterator>::connection()
   : connection::base_type(conn)
@@ -128,26 +147,27 @@ connection<Iterator>::connection()
   boost::phoenix::function<pusher> push_back;
   boost::phoenix::function<port_maker> make_port;
   boost::phoenix::function<string_maker> make_string;
+  boost::phoenix::function<empty_maker> make_empty;
 
   conn
     =   strict_double       [stamp(_val, _1)]
-    >   (   lit('?')        [push_back(_val, nil)]
+    >   (   lit('?')        [push_back(_val, make_empty(time_range_type))]
         |   strict_double   [push_back(_val, _1)]       // Duration
         )
     >   addr                [push_back(_val, _1)]       // Originator addr
     >   addr                [push_back(_val, _1)]       // Responder addr
-    >   (   lit('?')        [push_back(_val, nil)]      // Service
-        |   id              [push_back(_val, _1)]
+    >   (   lit('?')        [push_back(_val, make_empty(string_type))]
+        |   id              [push_back(_val, _1)]       // Service
         )
     >   uint16              [_a = _1]                   // Originator port
     >   uint16              [_b = _1]                   // Responder port
     >   id                  [push_back(_val, make_port(_a, _1))]
                             [push_back(_val, make_port(_b, _1))]
                             [push_back(_val, _1)]       // Transport proto
-    >   (   lit('?')        [push_back(_val, nil)]      // Originator bytes
-        |   uint64          [push_back(_val, _1)]       
+    >   (   lit('?')        [push_back(_val, make_empty(uint_type))]
+        |   uint64          [push_back(_val, _1)]       // Originator bytes
         )
-    >   (   lit('?')        [push_back(_val, nil)]
+    >   (   lit('?')        [push_back(_val, make_empty(uint_type))]
         |   uint64          [push_back(_val, _1)]       // Responder bytes
         )
     >   id                  [push_back(_val, _1)]       // State

@@ -1,4 +1,4 @@
-#include <vast/source/file.h>
+#include "vast/source/file.h"
 
 #include "vast/logger.h"
 #include "vast/io/getline.h"
@@ -199,13 +199,13 @@ bool bro2::parse_header()
       string t(fs.start(i), fs.end(i));
       if (t.starts_with("table") || t.starts_with("vector"))
       {
-        field_types_.push_back(set_type);
+        field_types_.push_back(record_type);
         auto open = t.find("[");
         assert(open != string::npos);
         auto close = t.find("]", open);
         assert(close != string::npos);
         auto elem = t.substr(open + 1, close - open - 1);
-        set_types_.push_back(bro_to_vast(elem));
+        complex_types_.push_back(bro_to_vast(elem));
       }
       else
       {
@@ -234,10 +234,10 @@ bool bro2::parse_header()
       str << " " << type;
     VAST_LOG_ACT_DEBUG("bro2-source", "has field types:" << str.str());
   }
-  if (! set_types_.empty())
+  if (! complex_types_.empty())
   {
     std::ostringstream str;
-    for (auto& type : set_types_)
+    for (auto& type : complex_types_)
       str << " " << type;
     VAST_LOG_ACT_DEBUG("bro2-source", "has set types:" << str.str());
   }
@@ -304,7 +304,7 @@ option<event> bro2::parse(std::string const& line)
   event e;
   e.name(path_);
   e.timestamp(now());
-  size_t sets = 0;
+  size_t containers = 0;
   for (size_t f = 0; f < fs.fields(); ++f)
   {
     auto start = fs.start(f);
@@ -322,7 +322,7 @@ option<event> bro2::parse(std::string const& line)
     }
     if (unset)
     {
-      e.push_back(nil);
+      e.push_back(value{field_types_[f]});
       continue;
     }
 
@@ -342,16 +342,17 @@ option<event> bro2::parse(std::string const& line)
       continue;
     }
 
-    if (field_types_[f] == set_type)
+    if (field_types_[f] == record_type)
     {
-      set s;
-      if (! extract(start, end, s, set_types_[sets++], set_separator_))
+      record r;
+      if (! extract(start, end, r, complex_types_[containers++],
+                    set_separator_, "{", "}"))
       {
         // TODO: take care of escaped set separators.
         VAST_LOG_ACT_ERROR("bro2-source", "got invalid set syntax");
         return {};
       }
-      e.emplace_back(std::move(s));
+      e.emplace_back(std::move(r));
     }
     else
     {
@@ -411,7 +412,7 @@ option<event> bro15conn::parse(std::string const& line)
   j = fs.end(1);
   if (*i == '?')
   {
-    e.emplace_back(nil);
+    e.emplace_back(value{time_range_type});
   }
   else
   {
@@ -453,7 +454,7 @@ option<event> bro15conn::parse(std::string const& line)
   j = fs.end(4);
   if (*i == '?')
   {
-    e.emplace_back(nil);
+    e.emplace_back(value{string_type});
   }
   else
   {
@@ -516,7 +517,7 @@ option<event> bro15conn::parse(std::string const& line)
   j = fs.end(8);
   if (*i == '?')
   {
-    e.emplace_back(nil);
+    e.emplace_back(value{uint_type});
   }
   else
   {
@@ -534,7 +535,7 @@ option<event> bro15conn::parse(std::string const& line)
   j = fs.end(8);
   if (*i == '?')
   {
-    e.emplace_back(nil);
+    e.emplace_back(value{uint_type});
   }
   else
   {
