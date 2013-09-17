@@ -4,6 +4,7 @@
 #include <array>
 #include <list>
 #include <vector>
+#include <map>
 #include <unordered_map>
 #include "vast/exception.h"
 #include "vast/traits.h"
@@ -128,6 +129,37 @@ void deserialize(deserializer& source, std::pair<T, U>& pair)
 {
   source >> pair.first;
   source >> pair.second;
+}
+
+template <typename Key, typename T>
+void serialize(serializer& sink, std::map<Key, T> const& map)
+{
+  sink.begin_sequence(map.size());
+  if (! map.empty())
+    for (auto& i : map)
+      sink << i;
+  sink.end_sequence();
+}
+
+template <typename Key, typename T>
+void deserialize(deserializer& source, std::map<Key, T>& map)
+{
+  uint64_t size;
+  source.begin_sequence(size);
+  if (size > 0)
+  {
+    map.clear();
+    using size_type = typename std::map<Key, T>::size_type;
+    if (size > std::numeric_limits<size_type>::max())
+      throw std::length_error("size too large for architecture");
+    for (size_type i = 0; i < size; ++i)
+    {
+      std::pair<Key, T> p;
+      source >> p;
+      map.insert(std::move(p));
+    }
+  }
+  source.end_sequence();
 }
 
 template <typename Key, typename T>
