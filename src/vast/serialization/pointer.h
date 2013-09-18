@@ -27,7 +27,6 @@ deserialize(deserializer& source, T& x)
   using raw = typename std::remove_pointer<T>::type;
   object o;
   source >> o;
-  assert(o.convertible_to<raw>());
   x = o.release_as<raw>();
 }
 
