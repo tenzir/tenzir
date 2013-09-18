@@ -35,7 +35,43 @@ struct visit_impl;
 class value : util::parsable<value>,
               util::printable<value>
 {
+  template <typename, typename>
+  friend struct detail::visit_impl;
+
 public:
+  /// Visits a value (single-dispatch).
+  /// @param v The value to visit.
+  /// @param f The visitor to apply to *v*.
+  /// @pre *v* must be engaged.
+  template <typename F>
+  typename F::result_type
+  static visit(value const& v, F f);
+
+  template <typename F>
+  typename F::result_type
+  static visit(value&, F);
+
+  /// Visits a value (single-dispatch).
+  /// @param v1 The first value.
+  /// @param v2 The second value.
+  /// @param f The visitor to apply to *v1* and *v2*.
+  /// @pre *v1* and *v2* must be engaged.
+  template <typename F>
+  typename F::result_type
+  static visit(value const& v1, value const& v2, F f);
+
+  template <typename F>
+  typename F::result_type
+  static visit(value&, value const&, F);
+
+  template <typename F>
+  typename F::result_type
+  static visit(value const&, value&, F);
+
+  template <typename F>
+  typename F::result_type
+  static visit(value&, value&, F);
+
   /// Parses an arbitrary value.
   ///
   /// @param str The string to parse as value.
@@ -102,14 +138,12 @@ public:
   /// @note An invalid value is always disengaged.
   explicit operator bool() const;
 
-  /// Releases all internal resources and resets the value to the invalid type.
-  void clear();
-
   /// Returns the type information of the value.
   /// @return The type of the value.
   value_type which() const;
 
-  /// Accesses the currently stored data in a type safe manner.
+  /// Accesses the currently stored data in a type safe manner. The caller
+  /// shall ensure that that value is engaged beforehand.
   ///
   /// @throws `std::bad_cast` if the contained data is not of type `T` or
   /// if the value is not engaged.
@@ -119,34 +153,11 @@ public:
   template <typename T>
   T const& get() const;
 
-  template <typename F>
-  typename F::result_type
-  static visit(value const&, F);
-
-  template <typename F>
-  typename F::result_type
-  static visit(value&, F);
-
-  template <typename F>
-  typename F::result_type
-  static visit(value const&, value const&, F);
-
-  template <typename F>
-  typename F::result_type
-  static visit(value&, value const&, F);
-
-  template <typename F>
-  typename F::result_type
-  static visit(value const&, value&, F);
-
-  template <typename F>
-  typename F::result_type
-  static visit(value&, value&, F);
+  /// Disengages the value while keeping the type information. After calling
+  /// this function, the value has relinquished its internal resources.
+  void clear();
 
 private:
-  template <class V1, class V2>
-  friend struct detail::visit_impl;
-
   union data
   {
     data();
@@ -336,6 +347,7 @@ struct visit_impl
   typename F::result_type
   static apply(V1& x, F f)
   {
+    assert(x.which() == invalid_type || x.data_.engaged());
     switch (x.which())
     {
       default:
@@ -377,6 +389,7 @@ struct visit_impl
   typename F::result_type
   static apply(V1& x, V2& y, F f)
   {
+    assert(x.which() == invalid_type || x.data_.engaged());
     switch (x.which())
     {
       default:

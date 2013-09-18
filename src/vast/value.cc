@@ -13,6 +13,20 @@
 
 namespace vast {
 
+value value::parse(std::string const& str)
+{
+  value v;
+  auto i = str.begin();
+  auto end = str.end();
+  using iterator = std::string::const_iterator;
+  detail::parser::value<iterator> grammar;
+  detail::parser::skipper<iterator> skipper;
+  bool success = phrase_parse(i, end, grammar, skipper, v);
+  if (! success || i != end)
+    v = invalid;
+  return v;
+}
+
 value::value(invalid_value)
 {
 }
@@ -183,28 +197,18 @@ value::operator bool() const
   return data_.engaged();
 }
 
-void value::clear()
-{
-  data_ = data{};
-}
-
 value_type value::which() const
 {
   return data_.type();
 }
 
-value value::parse(std::string const& str)
+void value::clear()
 {
-  value v;
-  auto i = str.begin();
-  auto end = str.end();
-  using iterator = std::string::const_iterator;
-  detail::parser::value<iterator> grammar;
-  detail::parser::skipper<iterator> skipper;
-  bool success = phrase_parse(i, end, grammar, skipper, v);
-  if (! success || i != end)
-    v = invalid;
-  return v;
+  if (which() == invalid_type)
+    return;
+  auto t = data_.type();
+  data_ = data{};
+  data_.type(t);
 }
 
 void value::serialize(serializer& sink) const
