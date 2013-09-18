@@ -33,6 +33,12 @@ enum value_type : uint8_t
   table_type      = 0x0d  ///< An associative array value.
 };
 
+/// Checks whether a type is container type.
+inline bool is_container_type(value_type t)
+{
+  return t == record_type || t == table_type;
+}
+
 void serialize(serializer& sink, value_type x);
 void deserialize(deserializer& source, value_type& x);
 

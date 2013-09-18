@@ -23,7 +23,7 @@ value value::parse(std::string const& str)
   detail::parser::skipper<iterator> skipper;
   bool success = phrase_parse(i, end, grammar, skipper, v);
   if (! success || i != end)
-    v = invalid;
+    v = vast::invalid;
   return v;
 }
 
@@ -199,6 +199,11 @@ value::operator bool() const
 bool value::nil() const
 {
   return which() != invalid_type && ! data_.engaged();
+}
+
+bool value::invalid() const
+{
+  return which() == invalid_type;
 }
 
 value_type value::which() const

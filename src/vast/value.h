@@ -79,7 +79,7 @@ public:
   static value parse(std::string const& str);
 
   /// Default-constructs an invalid value.
-  value(invalid_value = invalid);
+  value(invalid_value = vast::invalid);
 
   /// Constructs a disengaged value with a given type.
   /// @param t The type of the value.
@@ -136,10 +136,15 @@ public:
   /// @note An invalid value is always disengaged.
   explicit operator bool() const;
 
-  /// Checks whether the value is nil.
+  /// Checks whether the value is *nil*.
   /// @return `true` if the value has a type but has not yet been set.
-  /// @note An invalid value is *not* nil.
+  /// @note An invalid value is not *nil*.
   bool nil() const;
+
+  /// Checks whether the value is the invalid value.
+  /// @return `true` if `*this == invalid`.
+  /// @note An invalid value is not *nil*.
+  bool invalid() const;
 
   /// Returns the type information of the value.
   /// @return The type of the value.

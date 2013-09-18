@@ -35,6 +35,8 @@ BOOST_AUTO_TEST_CASE(types)
 BOOST_AUTO_TEST_CASE(trivial)
 {
   value v1;
+  BOOST_CHECK(! v1.nil());
+  BOOST_CHECK(v1.invalid());
   BOOST_CHECK_EQUAL(v1.which(), invalid_type);
   BOOST_CHECK_EQUAL(to_string(v1), "<invalid>");
 
@@ -43,6 +45,7 @@ BOOST_AUTO_TEST_CASE(trivial)
   v2.clear();
   BOOST_CHECK(! v2);
   BOOST_CHECK(v2.nil());
+  BOOST_CHECK(! v2.invalid());
   BOOST_CHECK_THROW(v2.get<record>(), std::bad_cast);
   v2 = "foo";
   BOOST_CHECK_EQUAL(v2.which(), string_type);
@@ -50,6 +53,7 @@ BOOST_AUTO_TEST_CASE(trivial)
 
   value v3(v2);
   BOOST_CHECK(v3.nil());
+  BOOST_CHECK(! v3.invalid());
   BOOST_CHECK_EQUAL(v3.which(), string_type);
 }
 
