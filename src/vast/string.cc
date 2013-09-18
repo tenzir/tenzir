@@ -43,6 +43,7 @@ string::string(string const& other)
   : string{}
 {
   assign(other.data(), other.data() + other.size());
+  tag(other.tag());
 }
 
 string::string(string&& other)
