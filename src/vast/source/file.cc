@@ -199,6 +199,9 @@ bool bro2::parse_header()
       string t(fs.start(i), fs.end(i));
       if (t.starts_with("table") || t.starts_with("vector"))
       {
+        // We lump all container types together as record_type for now. Once
+        // Bro's output format gets more sophisticated, we can still
+        // differentiate.
         field_types_.push_back(record_type);
         auto open = t.find("[");
         assert(open != string::npos);
@@ -282,13 +285,14 @@ option<event> bro2::parse(std::string const& line)
   VAST_ENTER();
 
   // TODO: switch to grammar-based parsing.
-  util::field_splitter<std::string::const_iterator> fs{separator_.data(),
-                                                       separator_.size()};
+  util::field_splitter<std::string::const_iterator>
+    fs{separator_.data(), separator_.size()};
+
   fs.split(line.begin(), line.end());
 
   if (fs.fields() > 0 && *fs.start(0) == '#')
   {
-    VAST_LOG_ACT_VERBOSE("bro2-source", "ignored commented line: " << line <<
+    VAST_LOG_ACT_VERBOSE("bro2-source", "ignored comment: " << line <<
                          " (line " << current_ << ')');
     return {};
   }
@@ -322,11 +326,11 @@ option<event> bro2::parse(std::string const& line)
     }
     if (unset)
     {
-      e.push_back(value{field_types_[f]});
+      e.emplace_back(field_types_[f]);
       continue;
     }
 
-    // Check whether the field empty. (Not "(empty)" by default.)
+    // Check whether the field is empty. (Not "(empty)" by default.)
     auto empty = true;
     for (size_t i = 0; i < empty_field_.size(); ++i)
     {

@@ -48,25 +48,11 @@ void synchronous::run()
   while (events_.size() < batch_size_)
   {
     if (finished())
-    {
       break;
-    }
     else if (auto e = extract())
-    {
       events_.push_back(std::move(*e));
-    }
-    else
-    {
-      ++errors_;
-      if (errors_ < 1000)
-      {
-        VAST_LOG_ACT_ERROR("source", "experienced extraction error");
-      }
-      else if (errors_ == 1000)
-      {
-        VAST_LOG_ACT_ERROR("source", "won't report further errors");
-      }
-    }
+    else if (++errors_ % 100 == 0)
+      VAST_LOG_ACT_ERROR("source", "failed on " << errors_ << " events");
   }
 
   if (! events_.empty())
