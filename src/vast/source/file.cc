@@ -197,22 +197,16 @@ bool bro2::parse_header()
     for (size_t i = 1; i < fs.fields(); ++i)
     {
       string t(fs.start(i), fs.end(i));
-      if (t.starts_with("table") || t.starts_with("vector"))
+      auto type = bro_to_vast(t);
+      field_types_.push_back(type);
+      if (type == record_type || type == table_type)
       {
-        // We lump all container types together as record_type for now. Once
-        // Bro's output format gets more sophisticated, we can still
-        // differentiate.
-        field_types_.push_back(record_type);
         auto open = t.find("[");
         assert(open != string::npos);
         auto close = t.find("]", open);
         assert(close != string::npos);
         auto elem = t.substr(open + 1, close - open - 1);
         complex_types_.push_back(bro_to_vast(elem));
-      }
-      else
-      {
-        field_types_.push_back(bro_to_vast(t));
       }
     }
   }
@@ -274,6 +268,10 @@ value_type bro2::bro_to_vast(string const& type)
     return regex_type;
   else if (type == "subnet")
     return prefix_type;
+  else if (type.starts_with("set") || type.starts_with("vector"))
+    return record_type;
+  else if (type.starts_with("table"))
+    return table_type;
   else
     return invalid_type;
 }
