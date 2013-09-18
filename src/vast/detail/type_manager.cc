@@ -160,34 +160,22 @@ void type_manager::initialize()
     detail::bitstream_concept
   >();
 
-  //announce<arithmetic_bitmap_index<bool>>();
-  //announce<arithmetic_bitmap_index<int8_t>>();
-  //announce<arithmetic_bitmap_index<int16_t>>();
-  //announce<arithmetic_bitmap_index<int32_t>>();
-  //announce<arithmetic_bitmap_index<int64_t>>();
-  //announce<arithmetic_bitmap_index<uint8_t>>();
-  //announce<arithmetic_bitmap_index<uint16_t>>();
-  //announce<arithmetic_bitmap_index<uint32_t>>();
-  //announce<arithmetic_bitmap_index<uint64_t>>();
-  //announce<arithmetic_bitmap_index<double>>();
-  //make_convertible<arithmetic_bitmap_index<bool>, bitmap_index>();
-  //make_convertible<arithmetic_bitmap_index<int8_t>, bitmap_index>();
-  //make_convertible<arithmetic_bitmap_index<int16_t>, bitmap_index>();
-  //make_convertible<arithmetic_bitmap_index<int32_t>, bitmap_index>();
-  //make_convertible<arithmetic_bitmap_index<int64_t>, bitmap_index>();
-  //make_convertible<arithmetic_bitmap_index<uint8_t>, bitmap_index>();
-  //make_convertible<arithmetic_bitmap_index<uint16_t>, bitmap_index>();
-  //make_convertible<arithmetic_bitmap_index<uint32_t>, bitmap_index>();
-  //make_convertible<arithmetic_bitmap_index<uint64_t>, bitmap_index>();
-  //make_convertible<arithmetic_bitmap_index<double>, bitmap_index>();
-  //announce<address_bitmap_index>();
-  //make_convertible<address_bitmap_index, bitmap_index>();
-  //announce<port_bitmap_index>();
-  //make_convertible<port_bitmap_index, bitmap_index>();
-  //announce<time_bitmap_index>();
-  //make_convertible<time_bitmap_index, bitmap_index>();
-  //announce<string_bitmap_index>();
-  //make_convertible<string_bitmap_index, bitmap_index>();
+  announce<arithmetic_bitmap_index<bool_type>>();
+  announce<arithmetic_bitmap_index<int_type>>();
+  announce<arithmetic_bitmap_index<uint_type>>();
+  announce<arithmetic_bitmap_index<double_type>>();
+  announce<address_bitmap_index>();
+  announce<port_bitmap_index>();
+  announce<time_bitmap_index>();
+  announce<string_bitmap_index>();
+  make_convertible<arithmetic_bitmap_index<bool_type>, bitmap_index>();
+  make_convertible<arithmetic_bitmap_index<int_type>, bitmap_index>();
+  make_convertible<arithmetic_bitmap_index<uint_type>, bitmap_index>();
+  make_convertible<arithmetic_bitmap_index<double_type>, bitmap_index>();
+  make_convertible<address_bitmap_index, bitmap_index>();
+  make_convertible<port_bitmap_index, bitmap_index>();
+  make_convertible<time_bitmap_index, bitmap_index>();
+  make_convertible<string_bitmap_index, bitmap_index>();
 }
 
 void type_manager::destroy()

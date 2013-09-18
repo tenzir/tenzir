@@ -46,4 +46,9 @@ bool bitmap_index::empty() const
   return size() == 0;
 }
 
+bool operator==(bitmap_index const& x, bitmap_index const& y)
+{
+  return x.equals(y);
+}
+
 } // namespace vast

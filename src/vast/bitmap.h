@@ -888,6 +888,11 @@ private:
     out = std::copy(str.begin(), str.end(), out);
     return true;
   }
+
+  friend bool operator==(bitmap const& x, bitmap const& y)
+  {
+    return x.bool_ == y.bool_ && x.valid_ == y.valid_;
+  }
 };
 
 } // namespace vast

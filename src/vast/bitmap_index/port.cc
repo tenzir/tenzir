@@ -41,6 +41,14 @@ bool port_bitmap_index::push_back_impl(value const& val)
   return true;
 }
 
+bool port_bitmap_index::equals(bitmap_index const& other) const
+{
+  if (typeid(*this) != typeid(other))
+    return false;
+  auto& o = static_cast<port_bitmap_index const&>(other);
+  return num_ == o.num_ && proto_ == o.proto_;
+}
+
 void port_bitmap_index::serialize(serializer& sink) const
 {
   sink << num_ << proto_;

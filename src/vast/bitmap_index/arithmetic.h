@@ -71,6 +71,14 @@ private:
     return bitmap_.push_back(val.get<underlying_value_type>());
   }
 
+  virtual bool equals(bitmap_index const& other) const override
+  {
+    if (typeid(*this) != typeid(other))
+      return false;
+    auto& o = static_cast<arithmetic_bitmap_index<T> const&>(other);
+    return bitmap_ == o.bitmap_;
+  }
+
   bitmap_type bitmap_;
 
 private:

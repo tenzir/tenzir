@@ -44,6 +44,14 @@ bool string_bitmap_index::push_back_impl(value const& val)
   return bitmap_.push_back(*i);
 }
 
+bool string_bitmap_index::equals(bitmap_index const& other) const
+{
+  if (typeid(*this) != typeid(other))
+    return false;
+  auto& o = static_cast<string_bitmap_index const&>(other);
+  return bitmap_ == o.bitmap_;
+}
+
 void string_bitmap_index::serialize(serializer& sink) const
 {
   sink << dictionary_ << bitmap_;

@@ -29,6 +29,7 @@ private:
   static time_range::rep extract(value const& val);
 
   virtual bool push_back_impl(value const& val) override;
+  virtual bool equals(bitmap_index const& other) const override;
 
   bitmap<time_range::rep, bitstream_type, range_coder, precision_binner>
     bitmap_;

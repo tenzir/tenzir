@@ -58,6 +58,14 @@ bool time_bitmap_index::push_back_impl(value const& val)
   return true;
 }
 
+bool time_bitmap_index::equals(bitmap_index const& other) const
+{
+  if (typeid(*this) != typeid(other))
+    return false;
+  auto& o = static_cast<time_bitmap_index const&>(other);
+  return bitmap_ == o.bitmap_;
+}
+
 void time_bitmap_index::serialize(serializer& sink) const
 {
   sink << bitmap_;

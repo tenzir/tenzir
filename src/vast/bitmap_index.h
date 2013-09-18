@@ -3,13 +3,14 @@
 
 #include "vast/operator.h"
 #include "vast/option.h"
+#include "vast/util/operators.h"
 
 namespace vast {
 
 class bitstream;
 
 /// The abstract base class for bitmap indexes.
-class bitmap_index
+class bitmap_index : util::equality_comparable<bitmap_index>
 {
 public:
   /// Factory function to construct a bitmap index for a given value type.
@@ -47,6 +48,7 @@ public:
 
 private:
   virtual bool push_back_impl(value const& val) = 0;
+  virtual bool equals(bitmap_index const& other) const = 0;
 
 private:
   friend access;
@@ -54,6 +56,8 @@ private:
   virtual void serialize(serializer& sink) const = 0;
   virtual void deserialize(deserializer& source) = 0;
   virtual bool convert(std::string& str) const = 0;
+
+  friend bool operator==(bitmap_index const& x, bitmap_index const& y);
 };
 
 } // namespace vast

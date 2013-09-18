@@ -50,6 +50,14 @@ bool address_bitmap_index::push_back_impl(value const& val)
   return success;
 }
 
+bool address_bitmap_index::equals(bitmap_index const& other) const
+{
+  if (typeid(*this) != typeid(other))
+    return false;
+  auto& o = static_cast<address_bitmap_index const&>(other);
+  return bitmaps_ == o.bitmaps_ && v4_ == o.v4_;
+}
+
 option<bitstream>
 address_bitmap_index::lookup(address const& addr, relational_operator op) const
 {

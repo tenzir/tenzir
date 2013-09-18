@@ -44,6 +44,7 @@ BOOST_AUTO_TEST_CASE(boolean_bitmap_index)
   std::vector<uint8_t> buf;
   io::archive(buf, bbi);
   io::unarchive(buf, bbi2);
+  BOOST_CHECK(bbi == bbi2);
   BOOST_CHECK_EQUAL(to_string(bbi2), str);
 }
 
@@ -119,6 +120,7 @@ BOOST_AUTO_TEST_CASE(temporal_bitmap_index)
   std::vector<uint8_t> buf;
   io::archive(buf, trbi);
   io::unarchive(buf, trbi2);
+  BOOST_CHECK(trbi == trbi2);
   BOOST_CHECK_EQUAL(to_string(trbi2), str);
 }
 
@@ -161,6 +163,7 @@ BOOST_AUTO_TEST_CASE(strings_bitmap_index)
   std::vector<uint8_t> buf;
   io::archive(buf, sbi);
   io::unarchive(buf, sbi2);
+  BOOST_CHECK(sbi == sbi2);
   BOOST_CHECK_EQUAL(to_string(*sbi2.lookup(equal, "foo")), "100110");
   BOOST_CHECK_EQUAL(to_string(*sbi2.lookup(equal, "bar")), "010001");
 }
@@ -229,6 +232,7 @@ BOOST_AUTO_TEST_CASE(ip_address_bitmap_index)
   std::vector<uint8_t> buf;
   io::archive(buf, abi);
   io::unarchive(buf, abi2);
+  BOOST_CHECK(abi == abi2);
   BOOST_CHECK_EQUAL(to_string(abi2), str);
 }
 

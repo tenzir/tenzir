@@ -22,6 +22,8 @@ public:
 
 private:
   virtual bool push_back_impl(value const& val) override;
+  virtual bool equals(bitmap_index const& other) const override;
+
   option<bitstream> lookup(address const& addr, relational_operator op) const;
   option<bitstream> lookup(prefix const& pfx, relational_operator op) const;
 

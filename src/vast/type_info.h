@@ -183,8 +183,11 @@ struct converter<From, To>
 } // namespace detail
 
 /// Registers a type with VAST's runtime type system.
+///
 /// @tparam T The type to register.
+///
 /// @tparam TypeInfo The type information to associate with *T*.
+///
 /// @note The order of invocations determines the underlying type
 /// identifier. For example:
 ///

@@ -23,6 +23,7 @@ public:
 
 private:
   virtual bool push_back_impl(value const& val) override;
+  virtual bool equals(bitmap_index const& other) const override;
 
   bitmap<uint16_t, bitstream_type, range_coder> num_;
   bitmap<proto_type, bitstream_type> proto_;
