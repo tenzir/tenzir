@@ -193,16 +193,6 @@ public:
   using size_type = detail::bitstream_concept::size_type;
   static size_type constexpr npos = bitvector::npos;
 
-  friend bool operator==(Derived const& x, Derived const& y)
-  {
-    return x.equals(y);
-  }
-
-  friend bool operator!=(Derived const& x, Derived const& y)
-  {
-    return ! (x == y);
-  }
-
   Derived& operator&=(Derived const& other)
   {
     derived().bitwise_and(other);
@@ -355,7 +345,8 @@ private:
 };
 
 /// An append-only sequence of bits.
-class bitstream : public bitstream_base<bitstream>
+class bitstream : public bitstream_base<bitstream>,
+                  util::equality_comparable<bitstream>
 {
   friend bitstream_base<bitstream>;
 
@@ -403,6 +394,7 @@ private:
   friend access;
   void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
+  friend bool operator==(bitstream const& x, bitstream const& y);
 };
 
 

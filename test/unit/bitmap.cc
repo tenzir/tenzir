@@ -63,8 +63,9 @@ BOOST_AUTO_TEST_CASE(basic_bitmap)
   io::unarchive(buf, bm2);
   // The default bitmap storage is unordered, so the the following commented
   // check may fail due to different underlying hash tables. However, the
-  // bitmaps should still be equivalent.
+  // bitmaps should still be equal.
   //BOOST_CHECK_EQUAL(to_string(bm), to_string(bm2));
+  BOOST_CHECK_EQUAL(bm, bm2);
   BOOST_CHECK_EQUAL(bm.size(), bm2.size());
   BOOST_CHECK_EQUAL(to_string(*bm[21]), to_string(*bm2[21]));
   BOOST_CHECK_EQUAL(to_string(*bm[30]), to_string(*bm2[30]));
@@ -109,6 +110,7 @@ BOOST_AUTO_TEST_CASE(range_encoded_bitmap)
   std::vector<uint8_t> buf;
   io::archive(buf, bm);
   io::unarchive(buf, bm2);
+  BOOST_CHECK_EQUAL(bm, bm2);
   BOOST_CHECK_EQUAL(to_string(bm), to_string(bm2));
   BOOST_CHECK_EQUAL(to_string(*bm2.lookup(greater, 84)), "00000");
   BOOST_CHECK_EQUAL(to_string(*bm2.lookup(less, 84)), "10111");
@@ -143,6 +145,7 @@ BOOST_AUTO_TEST_CASE(binary_encoded_bitmap)
   std::vector<uint8_t> buf;
   io::archive(buf, bm);
   io::unarchive(buf, bm2);
+  BOOST_CHECK_EQUAL(bm, bm2);
   BOOST_CHECK_EQUAL(to_string(bm), to_string(bm2));
   BOOST_CHECK_EQUAL(to_string(*bm2[0]), "1000000");
   BOOST_CHECK_EQUAL(to_string(*bm2[1]), "0110000");

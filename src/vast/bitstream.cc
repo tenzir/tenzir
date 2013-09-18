@@ -104,6 +104,10 @@ void bitstream::deserialize(deserializer& source)
   source >> concept_;
 }
 
+bool operator==(bitstream const& x, bitstream const& y)
+{
+  return x.equals(y);
+}
 
 null_bitstream::null_bitstream(bitvector::size_type n, bool bit)
   : bits_(n, bit)

@@ -9,6 +9,7 @@
 #include "vast/operator.h"
 #include "vast/option.h"
 #include "vast/serialization.h"
+#include "vast/util/operators.h"
 #include "vast/util/print.h"
 
 namespace vast {
@@ -36,8 +37,27 @@ private:
 /// This storage policy maps values to indices. It provides *O(1)* access and
 /// requires *O(max(T))* space. Hence it is only useful for very dense domains.
 template <typename T, typename Bitstream>
-struct vector_storage : storage_policy
+struct vector_storage : storage_policy,
+                        util::equality_comparable<vector_storage<T, Bitstream>>
 {
+  friend bool operator==(vector_storage const& x, vector_storage const& y)
+  {
+    if (x.cardinality_ != y.cardinality_)
+      return false;
+    // FIXME: std::vector<T>::operator== chokes on optional<T> and finds too
+    // many overloads, so we'll do the comparison by hand.
+    auto& xv = x.vector_;
+    auto& yv = y.vector_;
+    if (xv.size() != yv.size())
+      return false;
+    for (size_t i = 0; i < xv.size(); ++i)
+      if ((xv[i] && ! yv[i]) || (! xv[i] && yv[i]))
+        return false;
+      else if (xv[i] && yv[i] && *xv[i] != *yv[i])
+        return false;
+    return true;
+  }
+
   Bitstream const* find(T const& x) const
   {
     auto i = static_cast<size_t>(x);
@@ -125,8 +145,14 @@ private:
 /// This storage policy offers *O(1)* lookup and *O(log(n))* bounds checks, at
 /// the cost of *O(n * b + n)* space.
 template <typename T, typename Bitstream>
-struct list_storage : storage_policy
+struct list_storage : storage_policy,
+                      util::equality_comparable<list_storage<T, Bitstream>>
 {
+  friend bool operator==(list_storage const& x, list_storage const& y)
+  {
+    return x.list_ == y.list_;
+  }
+
   Bitstream const* find(T const& x) const
   {
     auto i = map_.find(x);
@@ -219,8 +245,15 @@ private:
 /// This storage policy offers *O(1)* lookup and *O(n)* bounds check,
 /// requiring *O(n * b)* space.
 template <typename T, typename Bitstream>
-struct unordered_storage : storage_policy
+struct unordered_storage
+  : storage_policy,
+    util::equality_comparable<unordered_storage<T, Bitstream>>
 {
+  friend bool operator==(unordered_storage const& x, unordered_storage const& y)
+  {
+    return x.map_ == y.map_;
+  }
+
   Bitstream const* find(T const& x) const
   {
     auto i = map_.find(x);
@@ -287,9 +320,14 @@ struct unordered_storage : storage_policy
 } // detail
 
 template <typename T, typename Bitstream, typename Storage>
-class coder
+class coder : util::equality_comparable<coder<T, Bitstream, Storage>>
 {
 public:
+  friend bool operator==(coder const& x, coder const& y)
+  {
+    return x.store_ == y.store_;
+  }
+
   bool append(size_t n, bool bit)
   {
     auto success = true;
@@ -507,8 +545,13 @@ struct range_coder : coder<T, Bitstream, detail::list_storage<T, Bitstream>>
 
 /// A null binning policy acting as identity function.
 template <typename T>
-struct null_binner
+struct null_binner : util::equality_comparable<null_binner<T>>
 {
+  friend bool operator==(null_binner const&, null_binner const&)
+  {
+    return true;
+  }
+
   T operator()(T x) const
   {
     return std::move(x);
@@ -596,18 +639,24 @@ private:
     return x / integral_;
   }
 
+  friend bool operator==(precision_binner const& x, precision_binner const& y)
+  {
+    return x.integral_ == y.integral_ && x.fractional_ == y.fractional_;
+  }
+
   T integral_;
   double fractional_ = 0.0;
 };
 
-/// A bitmap which maps values to @link bitstream bitstreams@endlink.
+/// A bitmap which maps values to [bitstreams](@ref bitstream).
 template <
   typename T,
   typename Bitstream = null_bitstream,
   template <typename, typename> class Coder = equality_coder,
   template <typename> class Binner = null_binner
 >
-class bitmap : util::printable<bitmap<T, Bitstream, Coder, Binner>>
+class bitmap : util::equality_comparable<bitmap<T, Bitstream, Coder, Binner>>,
+               util::printable<bitmap<T, Bitstream, Coder, Binner>>
 {
 public:
   using coder_type = Coder<T, Bitstream>;
@@ -617,6 +666,13 @@ public:
   bitmap(binner_type binner = binner_type{}, coder_type coder = coder_type{})
     : coder_(coder), binner_(binner)
   {
+  }
+
+  friend bool operator==(bitmap const& x, bitmap const& y)
+  {
+    return x.coder_ == y.coder_
+        && x.binner_ == y.binner_
+        && x.valid_ == y.valid_;
   }
 
   /// Adds a value to the bitmap. For example, in the case of equality
