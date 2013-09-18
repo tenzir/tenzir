@@ -15,7 +15,7 @@ int main(int argc, char* argv[])
   detail::cppa_announce_types();
 
   auto delete_logs = true;
-  if (argc == 2 && ! std::strcmp(argv[1], "keep"))
+  if (argc >= 2 && ! std::strcmp(argv[1], "keep"))
     delete_logs = false;
 
   auto log_dir = "/tmp/vast-unit-test";

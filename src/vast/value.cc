@@ -33,7 +33,6 @@ value::value(invalid_value)
 
 value::value(value_type t)
 {
-  data_.construct(t);
   data_.type(t);
 }
 
@@ -197,6 +196,11 @@ value::operator bool() const
   return data_.engaged();
 }
 
+bool value::nil() const
+{
+  return which() != invalid_type && ! data_.engaged();
+}
+
 value_type value::which() const
 {
   return data_.type();
@@ -230,12 +234,17 @@ value::data::data()
 }
 
 value::data::data(data const& other)
-  : string_()
+  : data()
 {
+  if (! other.engaged())
+  {
+    type(other.type());
+    return;
+  }
   switch (other.type())
   {
     default:
-      throw error::bad_type("corrupt value type", other.type());
+      throw error::bad_type{"corrupt value type", other.type()};
       break;
     case invalid_type:
       return;
@@ -259,7 +268,7 @@ value::data::data(data const& other)
       break;
     case string_type:
       new (&string_) string{other.string_};
-      break;
+      return; // The string tag already contains the type information.
     case regex_type:
       new (&regex_) std::unique_ptr<regex>{new regex{*other.regex_}};
       break;
@@ -321,7 +330,7 @@ void value::data::construct(value_type t)
   switch (t)
   {
     default:
-      throw error::bad_type("corrupt value type", t);
+      throw error::bad_type{"corrupt value type", t};
       break;
     case invalid_type:
       break;
@@ -386,7 +395,7 @@ void value::data::serialize(serializer& sink) const
   switch (type())
   {
     default:
-      throw error::bad_type("corrupt value type", type());
+      throw error::bad_type{"corrupt value type", type()};
       break;
     case bool_type:
       sink << bool_;
@@ -438,10 +447,11 @@ void value::data::deserialize(deserializer& source)
   string_.tag(tag);
   if (! engaged())
     return;
+
   switch (type())
   {
     default:
-      throw error::bad_type("corrupt value type", type());
+      throw error::bad_type{"corrupt value type", type()};
       break;
     case bool_type:
       source >> bool_;

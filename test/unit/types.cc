@@ -237,14 +237,14 @@ BOOST_AUTO_TEST_CASE(regexes)
 BOOST_AUTO_TEST_CASE(tables)
 {
   table ports{{"ssh", 22u}, {"http", 80u}, {"https", 443u}, {"imaps", 993u}};
-  BOOST_CHECK(ports.size() == 4);
+  BOOST_CHECK_EQUAL(ports.size(), 4);
 
   auto i = ports.find("ssh");
   BOOST_REQUIRE(i != ports.end());
-  BOOST_CHECK(i->second == 22u);
+  BOOST_CHECK_EQUAL(i->second, 22u);
   i = ports.find("imaps");
   BOOST_REQUIRE(i != ports.end());
-  BOOST_CHECK(i->second == 993u);
+  BOOST_CHECK_EQUAL(i->second, 993u);
 
   BOOST_CHECK(ports.emplace("telnet", 23u).second);
   BOOST_CHECK(! ports.emplace("http", 8080u).second);

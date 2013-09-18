@@ -39,10 +39,9 @@ class value : util::parsable<value>,
   friend struct detail::visit_impl;
 
 public:
-  /// Visits a value (single-dispatch).
+  /// Visits a value (single dispatch).
   /// @param v The value to visit.
   /// @param f The visitor to apply to *v*.
-  /// @pre *v* must be engaged.
   template <typename F>
   typename F::result_type
   static visit(value const& v, F f);
@@ -51,11 +50,10 @@ public:
   typename F::result_type
   static visit(value&, F);
 
-  /// Visits a value (single-dispatch).
+  /// Visits a value (double dispatch).
   /// @param v1 The first value.
   /// @param v2 The second value.
   /// @param f The visitor to apply to *v1* and *v2*.
-  /// @pre *v1* and *v2* must be engaged.
   template <typename F>
   typename F::result_type
   static visit(value const& v1, value const& v2, F f);
@@ -85,7 +83,7 @@ public:
 
   /// Constructs a disengaged value with a given type.
   /// @param t The type of the value.
-  value(value_type t);
+  explicit value(value_type t);
 
   value(bool b);
   value(int i);
@@ -137,6 +135,11 @@ public:
   /// @return `true` iff the value is engaged.
   /// @note An invalid value is always disengaged.
   explicit operator bool() const;
+
+  /// Checks whether the value is nil.
+  /// @return `true` if the value has a type but has not yet been set.
+  /// @note An invalid value is *not* nil.
+  bool nil() const;
 
   /// Returns the type information of the value.
   /// @return The type of the value.
@@ -251,6 +254,15 @@ private:
     {
     }
 
+    bool operator()(value_type t) const
+    {
+      *out++ = '<';
+      if (! render(out, t))
+        return false;
+      *out++ = '>';
+      return true;
+    }
+
     template <typename T>
     bool operator()(T const& x) const
     {
@@ -263,14 +275,6 @@ private:
   template <typename Iterator>
   bool print(Iterator& out) const
   {
-    if (! *this && which() != invalid_type)
-    {
-      *out++ = '<';
-      if (! render(out, which()))
-        return false;
-      *out++ = '>';
-      return true;
-    }
     return value::visit(*this, value_printer<Iterator>(out));
   }
 };
@@ -342,12 +346,13 @@ value_bind_impl<F, T> value_bind(F f, T& x)
 template <typename V1, typename V2 = V1>
 struct visit_impl
 {
-  /// Single dispatch.
+  // Single dispatch.
   template <typename F>
   typename F::result_type
   static apply(V1& x, F f)
   {
-    assert(x.which() == invalid_type || x.data_.engaged());
+    if (x.nil())
+      return f(x.which());
     switch (x.which())
     {
       default:
@@ -384,12 +389,13 @@ struct visit_impl
     }
   }
 
-  /// Double dispatch.
+  // Double dispatch.
   template <typename F>
   typename F::result_type
   static apply(V1& x, V2& y, F f)
   {
-    assert(x.which() == invalid_type || x.data_.engaged());
+    if (x.nil())
+      return visit_impl::apply(y, value_bind(f, x.which()));
     switch (x.which())
     {
       default:
@@ -487,7 +493,6 @@ struct getter
   result_type operator()(U const&) const
   {
     throw std::bad_cast();
-    return nullptr;
   }
 };
 
@@ -496,16 +501,12 @@ struct getter
 template <typename T>
 inline T& value::get()
 {
-  if (! data_.engaged())
-    throw std::bad_cast();
   return *value::visit(*this, detail::getter<T>());
 }
 
 template <typename T>
 inline T const& value::get() const
 {
-  if (! data_.engaged())
-    throw std::bad_cast();
   return *value::visit(*this, detail::getter<T const>());
 }
 

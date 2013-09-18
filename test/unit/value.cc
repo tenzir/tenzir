@@ -42,7 +42,15 @@ BOOST_AUTO_TEST_CASE(trivial)
   BOOST_CHECK_EQUAL(v2.which(), record_type);
   v2.clear();
   BOOST_CHECK(! v2);
+  BOOST_CHECK(v2.nil());
   BOOST_CHECK_THROW(v2.get<record>(), std::bad_cast);
+  v2 = "foo";
+  BOOST_CHECK_EQUAL(v2.which(), string_type);
+  v2.clear();
+
+  value v3(v2);
+  BOOST_CHECK(v3.nil());
+  BOOST_CHECK_EQUAL(v3.which(), string_type);
 }
 
 BOOST_AUTO_TEST_CASE(relational_operators)
