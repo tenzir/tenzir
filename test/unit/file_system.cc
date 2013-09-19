@@ -3,6 +3,35 @@
 
 using namespace vast;
 
+BOOST_AUTO_TEST_CASE(path_operations)
+{
+  path p = "/usr/local/bin/foo";
+  BOOST_CHECK_EQUAL(p.parent(), "/usr/local/bin");
+  BOOST_CHECK_EQUAL(p.basename(), "foo");
+  BOOST_CHECK_EQUAL(path("/usr/local/bin/foo.bin").basename(true), "foo");
+
+  auto pieces = p.split();
+  BOOST_REQUIRE_EQUAL(pieces.size(), 5);
+  BOOST_CHECK_EQUAL(pieces[0], "/");
+  BOOST_CHECK_EQUAL(pieces[1], "usr");
+  BOOST_CHECK_EQUAL(pieces[2], "local");
+  BOOST_CHECK_EQUAL(pieces[3], "bin");
+  BOOST_CHECK_EQUAL(pieces[4], "foo");
+
+  BOOST_CHECK_EQUAL(p.trim(0), p);
+  BOOST_CHECK_EQUAL(p.trim(1), "/usr/local/bin");
+  BOOST_CHECK_EQUAL(p.trim(2), "/usr/local");
+  BOOST_CHECK_EQUAL(p.trim(3), "/usr");
+  BOOST_CHECK_EQUAL(p.trim(4), "/");
+  BOOST_CHECK_EQUAL(p.trim(5), "");
+  BOOST_CHECK_EQUAL(p.trim(-1), "foo");
+  BOOST_CHECK_EQUAL(p.trim(-2), "bin/foo");
+  BOOST_CHECK_EQUAL(p.trim(-3), "local/bin/foo");
+  BOOST_CHECK_EQUAL(p.trim(-4), "usr/local/bin/foo");
+  BOOST_CHECK_EQUAL(p.trim(-5), p);
+  BOOST_CHECK_EQUAL(p.trim(-6), "");
+}
+
 BOOST_AUTO_TEST_CASE(basic_filesystem_tests)
 {
   using std::to_string;

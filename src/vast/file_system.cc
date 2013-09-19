@@ -37,6 +37,8 @@
 
 namespace vast {
 
+constexpr char const* path::separator;
+
 path path::current()
 {
 #ifdef VAST_POSIX
@@ -59,7 +61,14 @@ path::path(string str)
 
 path& path::operator/=(path const& p)
 {
-  str_ = str_ + separator + p.str_;
+  if (p.empty() || (str_.ends_with(separator) && p == separator))
+    return *this;
+  if (str_.empty())
+    str_ = p.str_;
+  else if (str_.ends_with(separator) || p == separator)
+    str_ = str_ + p.str_;
+  else
+    str_ = str_ + separator + p.str_;
   return *this;
 }
 
@@ -105,7 +114,7 @@ path path::basename(bool strip_extension) const
     return {};
   if (ext == string::npos)
     return base;
-  return base.substr(0, ext - 1);
+  return base.substr(0, ext);
 }
 
 path path::extension() const
@@ -117,6 +126,41 @@ path path::extension() const
   if (base == path(string(".")) || ext == string::npos)
     return {};
   return base.str_.substr(ext);
+}
+
+std::vector<path> path::split() const
+{
+  if (empty())
+    return {};
+  auto components = str_.split(separator, "\\", -1, true);
+  assert(! components.empty());
+  std::vector<path> result;
+  size_t begin = 0;
+  if (string{components[0].first, components[0].second}.empty())
+  {
+    // Path starts with "/".
+    result.emplace_back(separator);
+    begin = 2;
+  }
+  for (size_t i = begin; i < components.size(); i += 2)
+    result.emplace_back(string{components[i].first, components[i].second});
+  return result;
+}
+
+path path::trim(int offset) const
+{
+  path r;
+  if (empty() || offset == 0)
+    return *this;
+  auto pieces = split();
+  std::pair<size_t, size_t> range{0, 0};
+  if (offset > 0 && size_t(offset) < pieces.size())
+    range.second = pieces.size() - size_t(offset);
+  else if (offset < 0 && size_t(-offset) <= pieces.size())
+    range = {pieces.size() - size_t(-offset), pieces.size()};
+  for (size_t i = range.first; i < range.second; ++i)
+    r /= pieces[i];
+  return r;
 }
 
 string const& path::str() const

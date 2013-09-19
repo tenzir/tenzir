@@ -74,6 +74,18 @@ public:
   /// @param The extension including ".".
   path extension() const;
 
+  /// Splits the string at the path separator.
+  /// @return A vector of the path components.
+  std::vector<path> split() const;
+
+  /// Retrieves a sub-path from beginning or end.
+  ///
+  /// @param offset If positive, the function returns the first *offset*
+  /// components of the path. If negative, it returns last *offset* components.
+  ///
+  /// @return The path trimmed according to *offset*.
+  path trim(int offset) const;
+
   /// Retrieves the underlying string representation.
   /// @return The string representation of the path.
   string const& str() const;
