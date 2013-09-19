@@ -65,6 +65,10 @@ public:
   /// @returns `true` iff *from* is convertible to *to*.
   bool check_link(global_type_info const* from, std::type_info const& to) const;
 
+  /// Invokes a function on each known type information.
+  /// @param f The function to invoke on each global_type_info instance.
+  void each(std::function<void(global_type_info const&)> f) const;
+
 private:
   // Singleton implementation.
   static type_manager* create();

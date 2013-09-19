@@ -18,6 +18,7 @@
 #include "vast/shutdown.h"
 #include "vast/system_monitor.h"
 #include "vast/detail/cppa_type_info.h"
+#include "vast/detail/type_manager.h"
 #include "vast/util/profiler.h"
 
 #ifdef VAST_HAVE_BROCCOLI
@@ -103,6 +104,16 @@ bool program::start()
   VAST_LOG_VERBOSE("| |/ / __ |_\\ \\  / / ");
   VAST_LOG_VERBOSE("|___/_/ |_/___/ /_/  " << VAST_VERSION);
   VAST_LOG_VERBOSE("");
+
+  // FIXME: We call the type manager here because it is not thread-safe and
+  // later invocations would lead to reaces. The call creates the singleton
+  // and announces the known types during initialize(). Thereafter, the type
+  // manager can only tolerate const access. We may need to figure out a
+  // cleaner way to handle this shared state.
+  size_t n_types = 0;
+  detail::type_manager::instance()->each(
+      [&](global_type_info const&) { ++n_types; });
+  VAST_LOG_DEBUG("type manager announced " << n_types << " types");
 
   try
   {

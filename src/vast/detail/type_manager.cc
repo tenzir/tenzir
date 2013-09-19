@@ -100,6 +100,24 @@ bool type_manager::check_link(global_type_info const* from,
   return s->second.count(std::type_index(to));
 }
 
+namespace {
+struct gti_key_cmp
+{
+  bool operator()(global_type_info const* x, global_type_info const* y) const
+  {
+    return x->id() < y->id();
+  };
+};
+} // namespace <anonymous>
+
+void type_manager::each(std::function<void(global_type_info const&)> f) const
+{
+  std::set<global_type_info const*, gti_key_cmp> sorted;
+  for (auto& p : by_ti_)
+    sorted.insert(p.second.get());
+  for (auto gti : sorted)
+    f(*gti);
+}
 
 type_manager* type_manager::create()
 {
