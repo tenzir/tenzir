@@ -75,16 +75,20 @@ meta_fragment::meta_fragment(path dir)
 
 void meta_fragment::load()
 {
-  VAST_LOG_ACT_DEBUG("meta-fragment", "loads indexes from disk");
+  VAST_LOG_ACT_DEBUG("meta-fragment", "reads indexes from filesystem");
   io::unarchive(dir_ / "timestamp.idx", timestamp_);
   io::unarchive(dir_ / "name.idx", name_);
+  VAST_LOG_ACT_DEBUG("meta-fragment", "read timestamp/name index with " <<
+                     timestamp_.size() << '/' << name_.size() << " events");
 }
 
 void meta_fragment::store()
 {
-  VAST_LOG_ACT_DEBUG("meta-fragment", "writes indexes to disk");
+  VAST_LOG_ACT_DEBUG("meta-fragment", "writes indexes to filesystem");
   io::archive(dir_ / "timestamp.idx", timestamp_);
   io::archive(dir_ / "name.idx", name_);
+  VAST_LOG_ACT_DEBUG("meta-fragment", "stored timestamp/name index with " <<
+                     timestamp_.size() << '/' << name_.size() << " events");
 }
 
 void meta_fragment::index(event const& e)
@@ -118,6 +122,7 @@ type_fragment::type_fragment(path dir)
 
 void type_fragment::load()
 {
+  VAST_LOG_ACT_DEBUG("type-fragment", "reads indexes from filesystem");
   io::unarchive(dir_ / "bool.idx", bool_);
   io::unarchive(dir_ / "int.idx", int_);
   io::unarchive(dir_ / "uint.idx", uint_);
@@ -127,10 +132,21 @@ void type_fragment::load()
   io::unarchive(dir_ / "string.idx", string_);
   io::unarchive(dir_ / "address.idx", address_);
   io::unarchive(dir_ / "port.idx", port_);
+  VAST_LOG_ACT_DEBUG("type-fragment", "read indexes with " <<
+                     bool_.size() << '/' <<
+                     int_.size() << '/' <<
+                     uint_.size() << '/' <<
+                     double_.size() << '/' <<
+                     time_range_.size() << '/' <<
+                     time_point_.size() << '/' <<
+                     string_.size() << '/' <<
+                     address_.size() << '/' <<
+                     port_.size() << " events");
 }
 
 void type_fragment::store()
 {
+  VAST_LOG_ACT_DEBUG("type-fragment", "writes indexes to filesystem");
   io::archive(dir_ / "bool.idx", bool_);
   io::archive(dir_ / "int.idx", int_);
   io::archive(dir_ / "uint.idx", uint_);
@@ -140,6 +156,16 @@ void type_fragment::store()
   io::archive(dir_ / "string.idx", string_);
   io::archive(dir_ / "address.idx", address_);
   io::archive(dir_ / "port.idx", port_);
+  VAST_LOG_ACT_DEBUG("type-fragment", "wrote indexes with " <<
+                     bool_.size() << '/' <<
+                     int_.size() << '/' <<
+                     uint_.size() << '/' <<
+                     double_.size() << '/' <<
+                     time_range_.size() << '/' <<
+                     time_point_.size() << '/' <<
+                     string_.size() << '/' <<
+                     address_.size() << '/' <<
+                     port_.size() << " events");
 }
 
 void type_fragment::index(event const& e)
@@ -148,8 +174,11 @@ void type_fragment::index(event const& e)
   for (auto& v : e)
     if (! unique.count(v))
     {
-      index_impl(e.id(), v); // TODO: Handle error case.
-      unique.insert(v);
+      if (index_impl(e.id(), v))
+        unique.insert(v);
+      else
+        VAST_LOG_ACT_ERROR("type-fragment", "failed to index value " << v <<
+                           " in event: " << e);
     }
 }
 
@@ -158,7 +187,8 @@ bool type_fragment::index_impl(uint64_t id, const value& v)
   switch (v.which())
   {
     default:
-      VAST_LOG_ACT_ERROR("fragment", "cannot handle value type " << v.which());
+      VAST_LOG_ACT_ERROR("type-fragment",
+                         "cannot index value type " << v.which());
       break;
     case bool_type:
       return append_value(bool_, id, v);
@@ -199,6 +229,7 @@ argument_fragment::argument_fragment(path dir)
 
 void argument_fragment::load()
 {
+  VAST_LOG_ACT_DEBUG("arg-fragment", "reads indexes from filesystem");
   std::set<path> paths;
   traverse(dir_, [&](path const& p) -> bool { paths.insert(p); return true; });
 
@@ -212,16 +243,27 @@ void argument_fragment::load()
 
     std::unique_ptr<bitmap_index> bi;
     io::unarchive(p, bi);
+    if (! bi)
+    {
+      VAST_LOG_ACT_ERROR("arg-fragment", "got corrupt index: " << p.basename());
+      break;
+    }
+    VAST_LOG_ACT_DEBUG("arg-fragment", "read: " << p.trim(-3) << " with " <<
+                      bi->size() << " events");
     indexes_.emplace(o, std::move(bi));
   }
 }
 
 void argument_fragment::store()
 {
+  VAST_LOG_ACT_DEBUG("arg-fragment", "writes indexes to filesystem");
   static string prefix{"@"};
   static string suffix{".idx"};
   for (auto& p : indexes_)
   {
+    if (p.second->empty())
+      continue;
+
     auto f = p.first.begin();
     auto l = p.first.end();
     string o;
@@ -233,8 +275,9 @@ void argument_fragment::store()
     }
 
     path const filename = dir_ / (prefix + o + suffix);
-    VAST_LOG_ACT_DEBUG("arg-fragment", "stores " << prefix << filename);
     io::archive(filename, p.second);
+    VAST_LOG_ACT_DEBUG("arg-fragment", "wrote index " << filename.trim(-3) <<
+                       " with " << p.second->size() << " events");
   }
 }
 
@@ -243,7 +286,9 @@ void argument_fragment::index(event const& e)
   if (e.empty())
     return;
   offset o{0};
-  index_impl(e, e.id(), o); // TODO: Handle error case.
+  if (! index_impl(e, e.id(), o))
+    VAST_LOG_ACT_ERROR("arg-fragment",
+                       "failed to index arguments of event: " << e);
 }
 
 // TODO: Implement this function.
@@ -254,21 +299,27 @@ option<bitstream> argument_fragment::lookup(expression const&)
 
 bool argument_fragment::index_impl(record const& r, uint64_t id, offset& o)
 {
-  VAST_LOG_ACT_DEBUG("arg-fragment", "processes record " << r);
   if (o.empty())
     return true;
 
   for (auto& v : r)
   {
-    VAST_LOG_ACT_DEBUG("arg-fragment", "processes value " << v << " (" <<
-                       v.which() << ')');
+    if (v.which() == invalid_type || is_container_type(v.which()))
+    {
+      // TODO: support container types.
+      ++o.back();
+      continue;
+    }
     if (v.which() == record_type)
     {
+      if (v.nil())
+        continue;
       auto& inner = v.get<record>();
       if (! inner.empty())
       {
         o.push_back(0);
-        index_impl(inner, id, o);
+        if (! index_impl(inner, id, o))
+          return false;
         o.pop_back();
       }
     }
@@ -282,14 +333,11 @@ bool argument_fragment::index_impl(record const& r, uint64_t id, offset& o)
       }
       else
       {
-        VAST_LOG_ACT_DEBUG("arg-fragment",
-                           "creates new index for value type " << v.which());
         auto bmi = bitmap_index::create(v.which());
         idx = bmi.get();
         indexes_.emplace(o, std::move(bmi));
       }
       assert(idx != nullptr);
-
       if (! append_value(*idx, id, v))
         return false;
       ++o.back();

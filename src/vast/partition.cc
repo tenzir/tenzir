@@ -29,8 +29,8 @@ void partition::init()
   if (exists(last_modified_file))
   {
     io::unarchive(last_modified_file, last_modified_);
-    VAST_LOG_ACT_DEBUG("partition",
-                       "loads last modification time: " << last_modified_);
+    VAST_LOG_ACT_DEBUG("partition", "loads last modification time: " << 
+                       last_modified_);
   }
 
   meta_ = spawn<meta_fragment>(dir_ / "meta");
@@ -39,8 +39,9 @@ void partition::init()
   become(
       on(atom("kill")) >> [=]
       {
-        VAST_LOG_ACT_DEBUG("partition", "saves last modification time " <<
-                           last_modified_ << " to " << last_modified_file);
+        VAST_LOG_ACT_DEBUG(
+            "partition", "saves last modification time " << last_modified_ << 
+            " to " << last_modified_file.trim(-2));
         io::archive(last_modified_file, last_modified_);
         meta_ << last_dequeued();
         type_ << last_dequeued();
@@ -69,6 +70,5 @@ void partition::on_exit()
 {
   VAST_LOG_ACT_VERBOSE("partition", "terminated");
 }
-
 
 } // namespace vast
