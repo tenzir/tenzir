@@ -40,7 +40,7 @@ public:
   ///
   /// @param o The list of offset.
   ///
-  /// @return A pointer to the value given by *o* or `nullptr` if
+  /// @returns A pointer to the value given by *o* or `nullptr` if
   /// *o* does not resolve.
   value const* at(offset const& o) const;
 
@@ -48,14 +48,14 @@ public:
   ///
   /// @param i The recursive index.
   ///
-  /// @return A pointer to the value at position *i* as if the record was
+  /// @returns A pointer to the value at position *i* as if the record was
   /// flattened or `nullptr` if *i* i exceeds the flat size of the record.
   value const* flat_at(size_t i) const;
 
   /// Computes the size of the flat record in *O(n)* time with *n* being the
   /// number of leaf elements in the record..
   ///
-  /// @return The size of the flattened record.
+  /// @returns The size of the flattened record.
   size_t flat_size() const;
 
   void each(std::function<void(value const&)> f, bool recurse = true) const;

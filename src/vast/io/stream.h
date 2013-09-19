@@ -25,7 +25,7 @@ public:
   /// @param size A result parameter that contains the size of *data* *iff*
   /// next() returned `true`.
   ///
-  /// @return `true` if the input has still data available, and `false` if an
+  /// @returns `true` if the input has still data available, and `false` if an
   /// error occurred or the input has no more data.
   virtual bool next(void const** data, size_t* size) = 0;
 
@@ -37,11 +37,11 @@ public:
 
   /// Skips a given number of bytes.
   /// @param bytes The number of bytes to advance.
-  /// @return `true` if skipping was successful and `false` otherwise.
+  /// @returns `true` if skipping was successful and `false` otherwise.
   virtual bool skip(size_t bytes) = 0;
 
   /// Retrieves the number of bytes this input stream processed.
-  /// @return The number of bytes this input stream processed.
+  /// @returns The number of bytes this input stream processed.
   virtual uint64_t bytes() const = 0;
 
 protected:
@@ -64,7 +64,7 @@ public:
   /// @param size A result parameter that contains the size of *data* *iff*
   /// next() returned `true`.
   ///
-  /// @return `true` if the output has a buffer available, and `false` if an
+  /// @returns `true` if the output has a buffer available, and `false` if an
   /// error occurred.
   virtual bool next(void** data, size_t* size) = 0;
 
@@ -76,7 +76,7 @@ public:
   virtual void rewind(size_t bytes) = 0;
 
   /// Retrieves the number of bytes this output stream processed.
-  /// @return The number of bytes this output stream processed.
+  /// @returns The number of bytes this output stream processed.
   virtual uint64_t bytes() const = 0;
 
 protected:
@@ -87,7 +87,7 @@ protected:
 /// Copies data from an input stream into an output stream.
 /// @param source The input stream.
 /// @param sink The output stream.
-/// @return The number of bytes copied for source and sink.
+/// @returns The number of bytes copied for source and sink.
 std::pair<size_t, size_t> copy(input_stream& source, output_stream& sink);
 
 } // namespace io

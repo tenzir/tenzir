@@ -34,7 +34,7 @@ protected:
   /// Decompresses a block of data.
   /// @param source The compressed block of data.
   /// @param source_size The size of *source*.
-  /// @return The number of bytes written from *source* into *sink*.
+  /// @returns The number of bytes written from *source* into *sink*.
   virtual size_t uncompress(void const* source, size_t size) = 0;
 
   std::vector<uint8_t> compressed_;
@@ -74,13 +74,13 @@ protected:
 
   /// Retrieves a bound on the compressed size of uncompressed data.
   /// @param output The size in bytes of the data.
-  /// @return The maximum number of bytes data of size *output* requires.
+  /// @returns The maximum number of bytes data of size *output* requires.
   virtual size_t compressed_size(size_t output) const = 0;
 
   /// Compresses a block of data.
   /// @param sink The sink receiving the compressed data.
   /// @param sink_size The size of *sink*.
-  /// @return The number of bytes written from *source* into *sink*.
+  /// @returns The number of bytes written from *source* into *sink*.
   virtual size_t compress(void* sink, size_t sink_size) = 0;
 
 protected:

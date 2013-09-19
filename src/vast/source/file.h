@@ -44,7 +44,7 @@ protected:
   virtual option<event> parse(std::string const& line) = 0;
 
   /// Retrieves the next line from the file.
-  /// @return `true` if extracting was successful.
+  /// @returns `true` if extracting was successful.
   bool next();
 
   size_t current_ = 0;

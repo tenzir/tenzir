@@ -41,7 +41,7 @@ private:
     window() = default;
 
     /// Determines whether the window is ready to extract events.
-    /// @return `true` *iff* at 1 or more events can be extracted.
+    /// @returns `true` *iff* at 1 or more events can be extracted.
     bool ready() const;
 
     /// Adds a new segment to the window.
@@ -51,7 +51,7 @@ private:
     ///
     /// @param e Receives the next event.
     ///
-    /// @return `true` if extracting an event from the current segment into
+    /// @returns `true` if extracting an event from the current segment into
     /// *event* succeeded and `false` if there are no more events in the
     /// current segment.
     bool extract(event& e);

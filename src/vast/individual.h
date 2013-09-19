@@ -15,7 +15,7 @@ public:
   individual(uuid id = uuid::random());
 
   /// Retrieves the individual's ID.
-  /// @return A UUID describing the instance.
+  /// @returns A UUID describing the instance.
   uuid const& id() const;
 
   /// Sets the individual's ID.

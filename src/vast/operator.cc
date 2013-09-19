@@ -104,7 +104,7 @@ bool convert(boolean_operator op, std::string& to)
 
 /// Negates a relational operator, i.e., creates the complementary operator.
 /// @param op The operator to negate.
-/// @return The complement of *op*.
+/// @returns The complement of *op*.
 relational_operator negate(relational_operator op)
 {
   switch (op)

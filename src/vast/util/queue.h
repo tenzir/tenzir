@@ -82,7 +82,7 @@ public:
   /// Tries to get the top-most queue element.
   /// @param x The reference parameter receiving the result.
   ///
-  /// @return `true` if the top-most element could be returned and `false` if the
+  /// @returns `true` if the top-most element could be returned and `false` if the
   /// queue is empty.
   bool try_pop(value_type& x)
   {

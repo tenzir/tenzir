@@ -20,7 +20,7 @@ void buffer();
 ///
 /// @param timeout The maximum number of milliseconds to block.
 ///
-/// @return `true` *iff* extracting a character from STDIN was successful
+/// @returns `true` *iff* extracting a character from STDIN was successful
 /// within *timeout* milliseconds.
 ///
 /// @post Iff the function returned `true`, *c* contains the next character

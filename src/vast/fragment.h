@@ -37,7 +37,7 @@ public:
 
   /// Looks up an expression.
   /// @param e The expression to throw at the index.
-  /// @return A bitstream representing the result of the lookup.
+  /// @returns A bitstream representing the result of the lookup.
   virtual option<bitstream> lookup(expression const& e) = 0;
 
   /// Implements `event_based_actor::init`.
@@ -51,7 +51,7 @@ protected:
   /// @param bmi The bitmap index.
   /// @param id The ID of the event *val* belongs to.
   /// @param val The value to append.
-  /// @return `true` on success.
+  /// @returns `true` on success.
   static bool append_value(bitmap_index& bmi, uint64_t id, value const& val);
 
   path const dir_;

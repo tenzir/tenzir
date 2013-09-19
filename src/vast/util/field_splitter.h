@@ -107,7 +107,7 @@ public:
   /// @param str The beginning of the string.
   /// @param str_len The size of the string or 0 for auto-detection.
   /// @pre `field < fields()`
-  /// @return `true` *iff* the string at *field* matches *str*.
+  /// @returns `true` *iff* the string at *field* matches *str*.
   bool equals(size_t field, char const* str, size_t str_len = 0)
   {
     assert(field < fields());

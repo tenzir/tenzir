@@ -16,7 +16,7 @@ class input_stream;
 ///
 /// @param line The result parameter which contains a single line.
 ///
-/// @return `true` *iff* extracting a line from *in* succeeded.
+/// @returns `true` *iff* extracting a line from *in* succeeded.
 bool getline(input_stream& in, std::string& line);
 
 } // namespace io

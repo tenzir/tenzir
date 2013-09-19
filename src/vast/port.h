@@ -47,11 +47,11 @@ public:
   port& operator=(port other);
 
   /// Retrieves the port number.
-  /// @return The port number.
+  /// @returns The port number.
   uint16_t number() const;
 
   /// Retrieves the transport protocol type.
-  /// @return The port type.
+  /// @returns The port type.
   port_type type() const;
 
   /// Sets the port type.

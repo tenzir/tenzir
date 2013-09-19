@@ -15,7 +15,7 @@ public:
   /// Creates an object by transferring ownership of an heap-allocated pointer.
   /// @tparam T An announced type.
   /// @param x The instance to move.
-  /// @return An object encapsulating *x*.
+  /// @returns An object encapsulating *x*.
   /// @pre *x* must be a heap-allocated instance of `T`.
   template <typename T>
   static object adopt(T* x)
@@ -69,20 +69,20 @@ public:
   friend bool operator==(object const& x, object const& y);
 
   /// Retrieves the type of the object.
-  /// @return The type information for this object.
+  /// @returns The type information for this object.
   global_type_info const* type() const;
 
   /// Retrieves the raw object.
-  /// @return The raw `void const` pointer of this object.
+  /// @returns The raw `void const` pointer of this object.
   void const* value() const;
 
   /// Retrieves the raw object.
-  /// @return The raw `void` pointer of this object.
+  /// @returns The raw `void` pointer of this object.
   void* value();
 
   /// Checks whether the object is convertible to a given type.
   /// @tparam T The type to check.
-  /// @return `true` iff the object is convertible to `T`.
+  /// @returns `true` iff the object is convertible to `T`.
   template <typename T>
   bool convertible_to() const
   {
@@ -92,7 +92,7 @@ public:
 
   /// Relinquishes ownership of the object's contained instance.
   ///
-  /// @return A `void*` pointing to an heap-allocated pointer that the caller
+  /// @returns A `void*` pointing to an heap-allocated pointer that the caller
   /// must now properly cast and delete.
   ///
   /// @post `! *this`
@@ -100,7 +100,7 @@ public:
 
   /// Checks whether the object is convertible to a given type.
   /// @tparam T The type to check.
-  /// @return `true` iff the object is convertible to `T`.
+  /// @returns `true` iff the object is convertible to `T`.
   template <typename T>
   T* release_as()
   {
@@ -118,7 +118,7 @@ private:
 
 /// Retrieves an object value in a type-safe manner.
 /// @tparam T The type to convert the object to.
-/// @return A reference of type `T`.
+/// @returns A reference of type `T`.
 template <typename T>
 T& get(object& o)
 {

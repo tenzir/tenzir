@@ -74,7 +74,7 @@ public:
   ///
   /// @param str The string to parse as value.
   ///
-  /// @return `invalid` if *str* does not describe a value and the parsed
+  /// @returns `invalid` if *str* does not describe a value and the parsed
   /// valued otherwise.
   static value parse(std::string const& str);
 
@@ -132,22 +132,22 @@ public:
   value& operator=(value&&) = default;
 
   /// Checks whether the value is engaged.
-  /// @return `true` iff the value is engaged.
+  /// @returns `true` iff the value is engaged.
   /// @note An invalid value is always disengaged.
   explicit operator bool() const;
 
   /// Checks whether the value is *nil*.
-  /// @return `true` if the value has a type but has not yet been set.
+  /// @returns `true` if the value has a type but has not yet been set.
   /// @note An invalid value is not *nil*.
   bool nil() const;
 
   /// Checks whether the value is the invalid value.
-  /// @return `true` if `*this == invalid`.
+  /// @returns `true` if `*this == invalid`.
   /// @note An invalid value is not *nil*.
   bool invalid() const;
 
   /// Returns the type information of the value.
-  /// @return The type of the value.
+  /// @returns The type of the value.
   value_type which() const;
 
   /// Accesses the currently stored data in a type safe manner. The caller

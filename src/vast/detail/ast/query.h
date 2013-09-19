@@ -106,13 +106,13 @@ struct query
 
 /// Folds a constant expression into a single value.
 /// @param expr The constant expression.
-/// @return The folded value.
+/// @returns The folded value.
 value fold(expression const& expr);
 
 /// Validates a query with respect to semantic correctness. This means ensuring
 /// that LHS and RHS of clause operators have the correct types.
 /// @param q The query to validate.
-/// @return `true` *iff* *q* is semantically correct.
+/// @returns `true` *iff* *q* is semantically correct.
 bool validate(query& q);
 
 } // namespace query

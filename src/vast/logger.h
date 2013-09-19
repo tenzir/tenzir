@@ -98,7 +98,7 @@ public:
   /// @param file The log level of the logfile.
   /// @param show_fns Whether to print function names in the output.
   /// @param dir The directory to create the log file in.
-  /// @return `true` on success.
+  /// @returns `true` on success.
   bool init(level console, level file, bool show_fns, path dir);
 
   /// Logs a record.

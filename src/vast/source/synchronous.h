@@ -25,11 +25,11 @@ public:
 
 protected:
   /// Extracts a single event.
-  /// @return The parsed event.
+  /// @returns The parsed event.
   virtual option<event> extract() = 0;
   
   /// Checks whether the source has finished generating events.
-  /// @return `true` if the source cannot provide more events.
+  /// @returns `true` if the source cannot provide more events.
   virtual bool finished() = 0;
 
 private:

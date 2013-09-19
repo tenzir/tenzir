@@ -19,7 +19,7 @@ public:
 
   /// Retrieves the ID of a given string.
   /// @param str The string to lookup.
-  /// @return The ID of *str*.
+  /// @returns The ID of *str*.
   Codomain const* operator[](string_type const& str) const
   {
     return locate(str);
@@ -27,7 +27,7 @@ public:
 
   /// Retrieves the string corresponding to a given ID.
   /// @param id The ID to lookup.
-  /// @return The string having ID *id*.
+  /// @returns The string having ID *id*.
   string_type const* operator[](Codomain id) const
   {
     return extract(id);
@@ -37,7 +37,7 @@ public:
   ///
   /// @param str The string mapping to *id*.
   ///
-  /// @return A pointer to the inserted value that *str* maps to or `nullptr`
+  /// @returns A pointer to the inserted value that *str* maps to or `nullptr`
   /// on failure.
   virtual Codomain const* insert(string_type const& str) = 0;
 

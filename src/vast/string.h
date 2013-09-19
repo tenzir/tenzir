@@ -127,7 +127,7 @@ public:
 
   /// Assigns a string.
   /// @param other The string to assign to this instance.
-  /// @return A reference to the LHS of the assignment.
+  /// @returns A reference to the LHS of the assignment.
   string& operator=(string other);
 
   /// Destroys a string. If the string was heap-allocated, it releases its
@@ -142,7 +142,7 @@ public:
   ///
   /// @param i The character position.
   ///
-  /// @return The character at position *i*.
+  /// @returns The character at position *i*.
   char operator[](size_type i) const;
 
   const_iterator begin() const;
@@ -163,20 +163,20 @@ public:
   char back() const;
 
   /// Determines whether the string is heap-allocated.
-  /// @return `true` if the string lives on heap, and `false` if the string
+  /// @returns `true` if the string lives on heap, and `false` if the string
   /// resides on the stack.
   bool is_heap_allocated() const;
 
   /// Retrieves a pointer to the underlying character array.
-  /// @return A const pointer to the beginning of the string.
+  /// @returns A const pointer to the beginning of the string.
   char const* data() const;
 
   /// Retrieves the string size.
-  /// @return The number of characters of the string.
+  /// @returns The number of characters of the string.
   size_type size() const;
 
   /// Tests whether the string is empty.
-  /// @return `true` iff the string has zero length.
+  /// @returns `true` iff the string has zero length.
   bool empty() const;
 
   //
@@ -207,7 +207,7 @@ public:
   ///
   /// @param length The number of characters.
   ///
-  /// @return The substring starting at *pos* of size *length*.
+  /// @returns The substring starting at *pos* of size *length*.
   string substr(size_type pos, size_type length = npos) const;
 
   /// Splits a string into a vector of iterator pairs representing the
@@ -223,7 +223,7 @@ public:
   /// @param include_sep If `true`, also include the separator after each
   /// match.
   ///
-  /// @return A vector of iterator pairs each of which delimit a single field
+  /// @returns A vector of iterator pairs each of which delimit a single field
   /// with a range *[start, end)*.
   ///
   /// @todo Implement regex-based splitting. At this point the parameter
@@ -238,14 +238,14 @@ public:
   ///
   /// @param str The substring to test.
   ///
-  /// @return `true` iff *str* occurs at the beginning of this string.
+  /// @returns `true` iff *str* occurs at the beginning of this string.
   bool starts_with(string const& str) const;
 
   /// Determines whether a given string occurs at the end of this string.
   ///
   /// @param str The substring to test.
   ///
-  /// @return `true` iff *str* occurs at the end of this string.
+  /// @returns `true` iff *str* occurs at the end of this string.
   bool ends_with(string const& str) const;
 
   /// Tries to find a substring from a given position.
@@ -254,7 +254,7 @@ public:
   ///
   /// @param pos The position where to start looking.
   ///
-  /// @return If *needle* lies within the string the position of *needle*, and
+  /// @returns If *needle* lies within the string the position of *needle*, and
   /// `string::npos` otherwise.
   size_type find(string const& needle, size_type pos = npos) const;
 
@@ -264,7 +264,7 @@ public:
   ///
   /// @param pos The position where to start looking backwards.
   ///
-  /// @return If *needle* lies within the string the position of *needle*, and
+  /// @returns If *needle* lies within the string the position of *needle*, and
   /// `string::npos` otherwise.
   size_type rfind(string const& needle, size_type pos = npos) const;
 
@@ -273,7 +273,7 @@ public:
   /// @param str The string to remove from both ends. This may occur mulitple
   /// times until it is no longer possible ot remove *str* from the ends.
   ///
-  /// @return The trimmed string.
+  /// @returns The trimmed string.
   string trim(string const& str = " ") const;
 
   /// Trims a string sequences from beginning and end.
@@ -286,7 +286,7 @@ public:
   /// occur mulitple times until it is no longer possible ot remove *right*
   /// from the end.
   ///
-  /// @return The trimmed string.
+  /// @returns The trimmed string.
   string trim(string const& left, string const& right) const;
 
   /// Trims a string from both ends and removes non-escaped occurrences
@@ -301,16 +301,16 @@ public:
   /// does not thin Escaped occurrences of `str`; it only removes the escape
   /// string itself.
   ///
-  /// @return The thinned string.
+  /// @returns The thinned string.
   string thin(string const& str, string const& esc = "") const;
 
   /// Escapes all non-printable characters in the string.
   /// @param all If `true`, escapes every single character in the string.
-  /// @return The escaped string.
+  /// @returns The escaped string.
   string escape(bool all = false) const;
 
   /// Unescapes all escaped characters in the string.
-  /// @return The unescaped string.
+  /// @returns The unescaped string.
   string unescape() const;
 
   /// Checks whether a given iterator points to an escape sequence of the
@@ -318,7 +318,7 @@ public:
   ///
   /// @param i The iterator to test.
   ///
-  /// @return `true` if *i* points to an escape sequence.
+  /// @returns `true` if *i* points to an escape sequence.
   bool is_escape_seq(const_iterator i) const;
 
   //
@@ -338,7 +338,7 @@ public:
   //
 
   /// Retrieves the string tag.
-  /// @return The new tag byte.
+  /// @returns The new tag byte.
   uint8_t tag() const;
 
   /// Sets the string tag.

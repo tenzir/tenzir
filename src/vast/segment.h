@@ -48,7 +48,7 @@ public:
 
     /// Serializes an event into the underlying segment.
     /// @param e The event to write.
-    /// @return `true` on success and `false` if the segment is full.
+    /// @returns `true` on success and `false` if the segment is full.
     bool write(event const& e);
 
     /// Attaches the writer to a new segment.
@@ -59,7 +59,7 @@ public:
     /// Seals the current chunk and appends it to the list of chunks in the
     /// underlying segment.
     ///
-    /// @return `false` on failure, `true` on success or if there
+    /// @returns `false` on failure, `true` on success or if there
     /// were no events to flush.
     bool flush();
 
@@ -67,12 +67,12 @@ public:
     /// chunks because they would exceed the maximum segment size provided at
     /// construction time of this writer.
     ///
-    /// @return `true` *iff* the writer has a maximum segment size and the
+    /// @returns `true` *iff* the writer has a maximum segment size and the
     /// current chunk exceeds it.
     bool full() const;
 
     /// Retrieves the number of bytes processed in total.
-    /// @return The number of bytes written into this writer.
+    /// @returns The number of bytes written into this writer.
     size_t bytes() const;
 
   private:
@@ -95,17 +95,17 @@ public:
 
     /// Deserializes an event from the segment.
     /// @param e The event to deserialize into.
-    /// @return The number of events left for extraction in the current chunk.
+    /// @returns The number of events left for extraction in the current chunk.
     bool read(event& e);
 
     /// Fast-forwards the reader an event with a given ID.
     /// @param The event ID to forward to.
-    /// @return `true` if skipping to *id* succeeded.
+    /// @returns `true` if skipping to *id* succeeded.
     /// @post The next call to ::read exctracts the event with ID *id*.
     bool skip_to(uint64_t id);
 
     /// Checks whether the reader has still events that can be read.
-    /// @return `true` iff the reader is empty.
+    /// @returns `true` iff the reader is empty.
     bool empty() const;
 
   private:
@@ -129,7 +129,7 @@ public:
           io::compression method = io::lz4);
 
   /// Retrieves the segment ID.
-  /// @return A UUID identifying the segment.
+  /// @returns A UUID identifying the segment.
   uuid const& id() const;
 
   /// Sets the segment base ID for events.
@@ -137,7 +137,7 @@ public:
   void base(uint64_t id);
 
   /// Retrieves the segment base ID for events.
-  /// @return The base event ID for this segment.
+  /// @returns The base event ID for this segment.
   uint64_t base() const;
 
   /// Retrieves the number of events in the segment.
@@ -148,19 +148,19 @@ public:
 
   /// Retrieves the maximum number of bytes this segment can occupy.
   ///
-  /// @return The maximum number of bytes this segment can occupy or 0 if its
+  /// @returns The maximum number of bytes this segment can occupy or 0 if its
   /// size is unbounded.
   size_t max_size() const;
 
   /// Writes a vector of events into the segment.
   /// @param v The vector of events to write.
   /// @param max_events_per_chunk The maximum number of events per chunk.
-  /// @return The number of events successfully written.
+  /// @returns The number of events successfully written.
   size_t store(std::vector<event> const& v, size_t max_events_per_chunk = 0);
 
   /// Extracts a single event with a given ID.
   /// @param id The ID of the event.
-  /// @return The event having ID *id* or an disengaged option otherwise.
+  /// @returns The event having ID *id* or an disengaged option otherwise.
   option<event> load(uint64_t id) const;
 
 private:

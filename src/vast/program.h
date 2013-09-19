@@ -18,13 +18,13 @@ public:
   program(configuration const& config);
 
   /// Starts the program and blocks until all actors have terminated.
-  /// @return `true` if the program terminated without errors and `false`
+  /// @returns `true` if the program terminated without errors and `false`
   /// otherwise.
   bool run();
 
 private:
   /// Starts all actors.
-  /// @return `true` if starting the actors succeeded.
+  /// @returns `true` if starting the actors succeeded.
   bool start();
 
   /// Sends a shutdown message to all actors.

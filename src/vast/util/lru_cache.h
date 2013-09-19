@@ -54,7 +54,7 @@ public:
   ///
   /// @param key The key to lookup
   ///
-  /// @return A reference to the value corresponding to *key*.
+  /// @returns A reference to the value corresponding to *key*.
   value_type& retrieve(key_type const& key)
   {
     auto i = cache_.find(key);
@@ -67,7 +67,7 @@ public:
   }
 
   /// Retrieves the most recently accessed value.
-  /// @return A reference to the value which has been accessed most recently.
+  /// @returns A reference to the value which has been accessed most recently.
   /// @pre `! empty()`
   value_type& retrieve_latest()
   {
@@ -78,7 +78,7 @@ public:
   /// Inserts a fresh entry in the cache.
   /// @param key The key mapping to *value*.
   /// @param value The value for *key*.
-  /// @return An iterator to the freshly inserted element.
+  /// @returns An iterator to the freshly inserted element.
   /// @pre `key` must not exist in the cache.
   iterator insert(key_type const& key, value_type value)
   {
@@ -115,14 +115,14 @@ public:
   }
 
   /// Retrieves the current number of elements in the cache.
-  /// @return The number of elements in the cache.
+  /// @returns The number of elements in the cache.
   size_t size() const
   {
     return cache_.size();
   }
 
   /// Checks whether the cache is empty.
-  /// @return `true` iff the cache holds no elements.
+  /// @returns `true` iff the cache holds no elements.
   bool empty() const
   {
     return cache_.empty();

@@ -63,11 +63,11 @@ public:
   bool empty() const;
 
   /// Retrieves the parent directory.
-  /// @return The parent of this path.
+  /// @returns The parent of this path.
   path parent() const;
 
   /// Retrieves the basename of this path.
-  /// @return The basename of this path.
+  /// @returns The basename of this path.
   path basename(bool strip_extension = false) const;
 
   /// Retrieves the extension of this path.
@@ -75,7 +75,7 @@ public:
   path extension() const;
 
   /// Splits the string at the path separator.
-  /// @return A vector of the path components.
+  /// @returns A vector of the path components.
   std::vector<path> split() const;
 
   /// Retrieves a sub-path from beginning or end.
@@ -83,11 +83,11 @@ public:
   /// @param offset If positive, the function returns the first *offset*
   /// components of the path. If negative, it returns last *offset* components.
   ///
-  /// @return The path trimmed according to *offset*.
+  /// @returns The path trimmed according to *offset*.
   path trim(int offset) const;
 
   /// Retrieves the underlying string representation.
-  /// @return The string representation of the path.
+  /// @returns The string representation of the path.
   string const& str() const;
 
   //
@@ -98,15 +98,15 @@ public:
   type kind() const;
 
   /// Checks whether the file type is a regular file.
-  /// @return `true` if the path points to a regular file.
+  /// @returns `true` if the path points to a regular file.
   bool is_regular_file() const;
 
   /// Checks whether the file type is a directory.
-  /// @return `true` if the path points to a directory.
+  /// @returns `true` if the path points to a directory.
   bool is_directory() const;
 
   /// Checks whether the file type is a symlink.
-  /// @return `true` if the path is a symlink.
+  /// @returns `true` if the path is a symlink.
   bool is_symlink() const;
 
   friend bool operator==(path const& x, path const& y);
@@ -175,29 +175,29 @@ public:
   /// Opens the file.
   /// @param mode How to open the file.
   /// @param append If `false`, the first write truncates the file.
-  /// @return `true` on success.
+  /// @returns `true` on success.
   bool open(open_mode mode = read_write, bool append = false);
 
   /// Closes the file.
-  /// @return `true` on success.
+  /// @returns `true` on success.
   bool close();
 
   /// Checks whether the file is open.
-  /// @return `true` iff the file is open
+  /// @returns `true` iff the file is open
   bool is_open() const;
 
   /// Reads a given number of bytes in to a buffer.
   /// @param sink The destination of the read.
   /// @param size The number of bytes to read.
   /// @param got The number of bytes read.
-  /// @return `true` on success.
+  /// @returns `true` on success.
   bool read(void* sink, size_t size, size_t* got = nullptr);
 
   /// Writes a given number of bytes into a buffer.
   /// @param source The source of the write.
   /// @param size The number of bytes to write.
   /// @param put The number of bytes written.
-  /// @return `true` on success.
+  /// @returns `true` on success.
   bool write(void const* source, size_t size, size_t* put = nullptr);
 
   /// Seeks the file forward.
@@ -207,7 +207,7 @@ public:
   ///
   /// @param skipped Set to the number of bytes skipped.
   ///
-  /// @return `true` on success.
+  /// @returns `true` on success.
   bool seek(size_t bytes, size_t* skipped = nullptr);
 
 private:
@@ -219,17 +219,17 @@ private:
 
 /// Checks whether the path exists on the filesystem.
 /// @param p The path to check for existance.
-/// @return `true` if *p* exists.
+/// @returns `true` if *p* exists.
 bool exists(path const& p);
 
 /// Deletes the path on the filesystem.
 /// @param p The path to a directory to delete.
-/// @return `true` if *p* has been successfully deleted.
+/// @returns `true` if *p* has been successfully deleted.
 bool rm(path const& p);
 
 /// If the path does not exist, create it as directory.
 /// @param p The path to a directory to create.
-/// @return `true` on success or if *p* exists already.
+/// @returns `true` on success or if *p* exists already.
 bool mkdir(path const& p);
 
 /// Traverses each entry of a directory.

@@ -170,44 +170,44 @@ public:
   /// Sets a bit at a specific position to a given value.
   /// @param i The bit position.
   /// @param bit The value assigned to position *i*.
-  /// @return A reference to the bit vector instance.
+  /// @returns A reference to the bit vector instance.
   bitvector& set(size_type i, bool bit = true);
 
   /// Sets all bits to 1.
-  /// @return A reference to the bit vector instance.
+  /// @returns A reference to the bit vector instance.
   bitvector& set();
 
   /// Resets a bit at a specific position, i.e., sets it to 0.
   /// @param i The bit position.
-  /// @return A reference to the bit vector instance.
+  /// @returns A reference to the bit vector instance.
   bitvector& reset(size_type i);
 
   /// Sets all bits to 0.
-  /// @return A reference to the bit vector instance.
+  /// @returns A reference to the bit vector instance.
   bitvector& reset();
 
   /// Toggles/flips a bit at a specific position.
   /// @param i The bit position.
-  /// @return A reference to the bit vector instance.
+  /// @returns A reference to the bit vector instance.
   bitvector& flip(size_type i);
 
   /// Computes the complement
-  /// @return A reference to the bit vector instance.
+  /// @returns A reference to the bit vector instance.
   bitvector& flip();
 
   /// Retrieves a single bit.
   /// @param i The bit position.
-  /// @return A mutable reference to the bit at position *i*.
+  /// @returns A mutable reference to the bit at position *i*.
   reference operator[](size_type i);
 
   /// Retrieves a single bit.
   /// @param i The bit position.
-  /// @return A const-reference to the bit at position *i*.
+  /// @returns A const-reference to the bit at position *i*.
   const_reference operator[](size_type i) const;
 
   /// Counts the number of 1-bits in the bit vector. Also known as *population
   /// count* or *Hamming weight*.
-  /// @return The number of bits set to 1.
+  /// @returns The number of bits set to 1.
   size_type count() const;
 
   /// Retrieves the number of blocks of the underlying storage.
@@ -215,16 +215,16 @@ public:
   size_type blocks() const;
 
   /// Retrieves the number of bits the bitvector consist of.
-  /// @return The length of the bit vector in bits.
+  /// @returns The length of the bit vector in bits.
   size_type size() const;
 
   /// Checks whether the bit vector is empty.
-  /// @return `true` iff the bitvector has zero length.
+  /// @returns `true` iff the bitvector has zero length.
   bool empty() const;
 
   /// Finds the bit position of of the first 1-bit.
   ///
-  /// @return The position of the first bit that equals to one or `npos` if no
+  /// @returns The position of the first bit that equals to one or `npos` if no
   /// such bit exists.
   size_type find_first() const;
 
@@ -232,7 +232,7 @@ public:
   ///
   /// @param i The index where to start looking.
   ///
-  /// @return The position of the first bit that equals to 1 after position
+  /// @returns The position of the first bit that equals to 1 after position
   /// *i*  or `npos` if no such bit exists.
   size_type find_next(size_type i) const;
 
@@ -258,7 +258,7 @@ private:
   /// Computes the number of blocks needed to represent a given number of
   /// bits.
   /// @param bits the number of bits.
-  /// @return The number of blocks to represent *bits* number of bits.
+  /// @returns The number of blocks to represent *bits* number of bits.
   static size_type constexpr bits_to_blocks(size_type bits)
   {
     return bits / bits_per_block
@@ -267,7 +267,7 @@ private:
 
   /// Computes the bit position first 1-bit in a given block.
   /// @param block The block to inspect.
-  /// @return The bit position where *block* has its first bit set to 1.
+  /// @returns The bit position where *block* has its first bit set to 1.
   static size_type lowest_bit(block_type block);
 
   /// Computes the number of excess/unused bits in the bit vector.
@@ -282,7 +282,7 @@ private:
   ///
   /// @param i The block index to start looking.
   ///
-  /// @return The block index of the first 1-bit starting from *i* or
+  /// @returns The block index of the first 1-bit starting from *i* or
   /// `bitvector::npos` if no 1-bit exists.
   size_type find_from(size_type i) const;
 

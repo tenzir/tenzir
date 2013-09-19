@@ -33,7 +33,7 @@ public:
   ///
   /// @param ti The C++ RTTI object to lookup.
   ///
-  /// @return A pointer to VAST's type information for *ti* or `nullptr` if no
+  /// @returns A pointer to VAST's type information for *ti* or `nullptr` if no
   /// such information exists.
   global_type_info const* lookup(std::type_info const& ti) const;
 
@@ -41,7 +41,7 @@ public:
   ///
   /// @param id The type ID to lookup.
   ///
-  /// @return A pointer to VAST's type information for *id* or `nullptr` if no
+  /// @returns A pointer to VAST's type information for *id* or `nullptr` if no
   /// such information exists.
   global_type_info const* lookup(type_id id) const;
 
@@ -49,20 +49,20 @@ public:
   ///
   /// @param name The type name to lookup.
   ///
-  /// @return A pointer to VAST's type information for *name* or `nullptr` if
+  /// @returns A pointer to VAST's type information for *name* or `nullptr` if
   /// no such information exists.
   global_type_info const* lookup(std::string const& name) const;
 
   /// Registers a convertible-to relationship for an announced type.
   /// @param from The announced type information to convert to *to*.
   /// @param to The type information to convert *from* to.
-  /// @return `true` iff the type registration succeeded.
+  /// @returns `true` iff the type registration succeeded.
   bool add_link(global_type_info const* from, std::type_info const& to);
 
   /// Checks a convertible-to relationship for an announced type.
   /// @param from The announced type information to convert to *to*.
   /// @param to The type information to convert *from* to.
-  /// @return `true` iff *from* is convertible to *to*.
+  /// @returns `true` iff *from* is convertible to *to*.
   bool check_link(global_type_info const* from, std::type_info const& to) const;
 
 private:

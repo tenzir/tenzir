@@ -49,7 +49,7 @@ public:
   void close_on_delete(bool flag);
 
   /// Closes the file.
-  /// @return `true` on success.
+  /// @returns `true` on success.
   bool close();
 
   virtual bool next(void const** data, size_t* size) override;
@@ -104,7 +104,7 @@ public:
   void close_on_delete(bool flag);
 
   /// Flushes data to the underying output streambuffer.
-  /// @return `true` *iff* flushing succeeded.
+  /// @returns `true` *iff* flushing succeeded.
   bool flush();
 
   virtual bool next(void** data, size_t* size) override;

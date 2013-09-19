@@ -681,7 +681,7 @@ public:
   ///
   /// @param x The value to add.
   ///
-  /// @return `true` on success and `false` if the bitmap is full, i.e., has
+  /// @returns `true` on success and `false` if the bitmap is full, i.e., has
   /// `2^std::numeric_limits<size_t>::digits() - 1` elements.
   bool push_back(T const& x)
   {
@@ -692,7 +692,7 @@ public:
   /// Appends a given number of invalid rows/elements to the bitmaps.
   /// @param n The number of elements to append.
   /// @param bit The value of the bit to append.
-  /// @return `true` on success and `false` if the bitmap is full.
+  /// @returns `true` on success and `false` if the bitmap is full.
   bool append(size_t n = 1, bool bit = false)
   {
     return valid_.append(n, bit) && coder_.append(n, bit);
@@ -710,7 +710,7 @@ public:
   ///
   /// @param x The value to find the bitstream for.
   ///
-  /// @return An @link option vast::option@endlink containing a bitstream
+  /// @returns An @link option vast::option@endlink containing a bitstream
   /// for all values *v* such that *op(v,x)* is `true`.
   option<Bitstream> lookup(relational_operator op, T const& x) const
   {
@@ -722,7 +722,7 @@ public:
 
   /// Retrieves the raw bistream without decoding the result.
   /// @param x The raw value to lookup.
-  /// @return A pointer to the bitstream for *x* or `nullptr` if not found.
+  /// @returns A pointer to the bitstream for *x* or `nullptr` if not found.
   template <typename U>
   Bitstream const* lookup_raw(U const& x) const
   {
@@ -730,14 +730,14 @@ public:
   }
 
   /// Retrieves the bitmap size.
-  /// @return The number of elements contained in the bitmap.
+  /// @returns The number of elements contained in the bitmap.
   size_t size() const
   {
     return coder_.store().rows;
   }
 
   /// Checks whether the bitmap is empty.
-  /// @return `true` *iff* the bitmap has 0 entries.
+  /// @returns `true` *iff* the bitmap has 0 entries.
   bool empty() const
   {
     return size() == 0;

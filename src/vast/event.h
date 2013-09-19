@@ -27,7 +27,7 @@ public:
   event(std::initializer_list<value> list);
 
   /// Retrieves the event ID.
-  /// @return The name of the event.
+  /// @returns The name of the event.
   uint64_t id() const;
 
   /// Sets the event ID.
@@ -35,7 +35,7 @@ public:
   void id(uint64_t i);
 
   /// Retrieves the event name.
-  /// @return The name of the event.
+  /// @returns The name of the event.
   string const& name() const;
 
   /// Sets the event name.
@@ -43,7 +43,7 @@ public:
   void name(string str);
 
   /// Retrieves the event timestamp.
-  /// @return The event timestamp.
+  /// @returns The event timestamp.
   time_point timestamp() const;
 
   /// Sets the event timestamp.

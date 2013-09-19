@@ -29,7 +29,7 @@ class global_type_info : util::totally_ordered<global_type_info>
 
 public:
   /// Retrieves the ID of this type.
-  /// @return The ID of this type.
+  /// @returns The ID of this type.
   type_id id() const;
 
   /// Retrieves the demangled and globally unique type name.
@@ -37,18 +37,18 @@ public:
   std::string const& name() const;
 
   /// Default-constructs an object of this type.
-  /// @return an object with this type.
+  /// @returns an object with this type.
   object create() const;
 
   /// Determines whether this type corresponds to C++ type information.
   /// @param ti The C++ type information.
-  /// @return `true` if this type corresponds to *ti*.
+  /// @returns `true` if this type corresponds to *ti*.
   virtual bool equals(std::type_info const& ti) const = 0;
 
   /// Determines whether two instances of this type are equal.
   /// @param instance1 An instance of this type.
   /// @param instance2 An instance of this type.
-  /// @return `true` iff `*instance1 == *instance2`.
+  /// @returns `true` iff `*instance1 == *instance2`.
   /// @pre Both *instance1* and *instance2* must be of this type.
   virtual bool equals(void const* instance1, void const* instance2) const = 0;
 
@@ -62,7 +62,7 @@ public:
   /// instance of this type and creates a copy of the given parameter
   /// otherwise.
   ///
-  /// @return A heap-allocated instance of this type.
+  /// @returns A heap-allocated instance of this type.
   virtual void* construct(void const* instance = nullptr) const = 0;
 
   /// Serializes an instance of this type.
@@ -215,22 +215,22 @@ bool announce()
 
 /// Retrieves runtime type information about a given type.
 /// @param ti A C++ type info instance.
-/// @return A global_type_info instance if `T` is known and `nullptr` otherwise.
+/// @returns A global_type_info instance if `T` is known and `nullptr` otherwise.
 global_type_info const* global_typeid(std::type_info const& ti);
 
 /// Retrieves runtime type information about a given type.
 /// @param id A unique type identifier.
-/// @return A global_type_info instance if `T` is known and `nullptr` otherwise.
+/// @returns A global_type_info instance if `T` is known and `nullptr` otherwise.
 global_type_info const* global_typeid(type_id id);
 
 /// Retrieves runtime type information about a given type.
 /// @param name A unique type name.
-/// @return A global_type_info instance if `T` is known and `nullptr` otherwise.
+/// @returns A global_type_info instance if `T` is known and `nullptr` otherwise.
 global_type_info const* global_typeid(std::string const& name);
 
 /// Retrieves runtime type information about a given type.
 /// @tparam T The type to inquire information about.
-/// @return A global_type_info instance if `T` is known and `nullptr` otherwise.
+/// @returns A global_type_info instance if `T` is known and `nullptr` otherwise.
 template <typename T>
 global_type_info const* global_typeid()
 {
@@ -240,7 +240,7 @@ global_type_info const* global_typeid()
 /// Registers a convertible-to relationship for an announced type.
 /// @tparam From The announced type to convert to *To*.
 /// @tparam To The type to convert *From* to.
-/// @return `true` iff the runtime accepted the conversion registration.
+/// @returns `true` iff the runtime accepted the conversion registration.
 template <typename From, typename To, typename... Ts>
 bool make_convertible()
 {
@@ -250,7 +250,7 @@ bool make_convertible()
 /// Checks a convertible-to relationship for an announced type.
 /// @tparam From The announced type to convert to *To*.
 /// @tparam To The type to convert *From* to.
-/// @return `true` iff it is feasible to convert between *From* and *To*.
+/// @returns `true` iff it is feasible to convert between *From* and *To*.
 template <typename From, typename To>
 bool is_convertible()
 {
@@ -260,7 +260,7 @@ bool is_convertible()
 /// Checks a convertible-to relationship for an announced type.
 /// @param from The announced type to convert to *to*.
 /// @param to The type to convert *from* to.
-/// @return `true` iff it is feasible to convert between *from* and *to*.
+/// @returns `true` iff it is feasible to convert between *from* and *to*.
 bool is_convertible(global_type_info const* from, std::type_info const& to);
 
 } // namespace vast

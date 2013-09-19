@@ -15,7 +15,7 @@ class bitmap_index : util::equality_comparable<bitmap_index>
 public:
   /// Factory function to construct a bitmap index for a given value type.
   /// @param t The value type to create an index for.
-  /// @return A bitmap index suited for type *t*.
+  /// @returns A bitmap index suited for type *t*.
   static std::unique_ptr<bitmap_index> create(value_type t);
 
   /// Destroys a bitmap index.
@@ -23,13 +23,13 @@ public:
 
   /// Appends a single value.
   /// @param val The value to add to the index.
-  /// @return `true` if appending succeeded.
+  /// @returns `true` if appending succeeded.
   bool push_back(value const& val);
 
   /// Appends a sequence of bits.
   /// @param n The number of elements to append.
   /// @param bit The value of the bits to append.
-  /// @return `true` on success.
+  /// @returns `true` on success.
   virtual bool append(size_t n, bool bit) = 0;
 
   /// Looks up a value given a relational operator.
@@ -39,11 +39,11 @@ public:
   lookup(relational_operator op, value const& val) const = 0;
 
   /// Retrieves the number of elements in the bitmap index.
-  /// @return The number of rows, i.e., values in the bitmap.
+  /// @returns The number of rows, i.e., values in the bitmap.
   virtual uint64_t size() const = 0;
 
   /// Checks whether the bitmap is empty.
-  /// @return `true` if `size() == 0`.
+  /// @returns `true` if `size() == 0`.
   bool empty() const;
 
 private:

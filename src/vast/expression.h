@@ -63,12 +63,12 @@ public:
   virtual ~node() = default;
 
   /// Gets the result of the sub-tree induced by this node.
-  /// @return The value of this node.
+  /// @returns The value of this node.
   value const& result() const;
 
   /// Determines whether the result is available without evaluation.
   ///
-  /// @return `true` if the result can be obtained without a call to
+  /// @returns `true` if the result can be obtained without a call to
   /// node::eval.
   bool ready() const;
 
@@ -268,7 +268,7 @@ public:
 
   /// Evaluates an event with respect to the root node.
   /// @param e The event to evaluate against the expression.
-  /// @return `true` if @a event matches the expression.
+  /// @returns `true` if @a event matches the expression.
   bool eval(event const& e);
 
   /// Allow a visitor to process the expression.

@@ -96,7 +96,7 @@ size_t constexpr max_size()
 /// @tparam An integral type.
 /// @param x The value to encode.
 /// @param sink the output buffer to write into.
-/// @return The number of bytes written into *sink*.
+/// @returns The number of bytes written into *sink*.
 template <typename T>
 typename std::enable_if<std::is_integral<T>::value, size_t>::type
 encode(T x, void* sink)
@@ -115,7 +115,7 @@ encode(T x, void* sink)
 /// @tparam An integral type.
 /// @param source The source buffer.
 /// @param x The result of the decoding.
-/// @return The number of bytes read from *source*.
+/// @returns The number of bytes read from *source*.
 template <typename T>
 typename std::enable_if<std::is_integral<T>::value, size_t>::type
 decode(void const* source, T* x)

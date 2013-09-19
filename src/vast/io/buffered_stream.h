@@ -20,7 +20,7 @@ public:
   /// @param got The number of bytes actually read into *data*. A value of 0
   /// means that EOF has been encountered.
   ///
-  /// @return `true` if *bytes* bytes could be copied into *data*  and `false`
+  /// @returns `true` if *bytes* bytes could be copied into *data*  and `false`
   /// if an error occurred.
   virtual bool read(void* data, size_t bytes, size_t* got = nullptr) = 0;
 
@@ -32,7 +32,7 @@ public:
   ///
   /// @param skipped The number of bytes actually skipped.
   ///
-  /// @return `true` if *bytes* bytes were successfully skipped and false
+  /// @returns `true` if *bytes* bytes were successfully skipped and false
   /// otherwise.
   virtual bool skip(size_t bytes, size_t *skipped = nullptr);
 };
@@ -49,7 +49,7 @@ public:
   ///
   /// @param put The number of bytes actually read from *data*.
   ///
-  /// @return `true` if *bytes* bytes could be copied from *data* and false if
+  /// @returns `true` if *bytes* bytes could be copied from *data* and false if
   /// an error occurred.
   virtual bool write(void const* data, size_t bytes, size_t* put = nullptr) = 0;
 };
@@ -100,7 +100,7 @@ public:
   virtual ~buffered_output_stream();
 
   /// Flushes data to the underying output streambuffer.
-  /// @return `true` *iff* flushing succeeded.
+  /// @returns `true` *iff* flushing succeeded.
   bool flush();
 
   virtual bool next(void** data, size_t* size) override;

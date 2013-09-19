@@ -31,7 +31,7 @@ public:
 
   /// Constructs a nanosecond time range.
   /// @param ns The number of nanoseconds.
-  /// @return A time range of *ns* nanoseconds.
+  /// @returns A time range of *ns* nanoseconds.
   template <typename T>
   static time_range nanoseconds(T ns)
   {
@@ -40,7 +40,7 @@ public:
 
   /// Constructs a microsecond time range.
   /// @param us The number of microseconds.
-  /// @return A time range of *us* microseconds.
+  /// @returns A time range of *us* microseconds.
   template <typename T>
   static time_range microseconds(T us)
   {
@@ -49,7 +49,7 @@ public:
 
   /// Constructs a millisecond time range.
   /// @param ms The number of milliseconds.
-  /// @return A time range of *ms* milliseconds.
+  /// @returns A time range of *ms* milliseconds.
   template <typename T>
   static time_range milliseconds(T ms)
   {
@@ -58,7 +58,7 @@ public:
 
   /// Constructs a second time range.
   /// @param s The number of seconds.
-  /// @return A time range of *s* seconds.
+  /// @returns A time range of *s* seconds.
   template <typename T>
   static time_range seconds(T s)
   {
@@ -67,7 +67,7 @@ public:
 
   /// Constructs a second time range.
   /// @param f The number of fractional seconds.
-  /// @return A time range of *f* fractional seconds.
+  /// @returns A time range of *f* fractional seconds.
   static time_range fractional(double f)
   {
     return double_seconds{f};
@@ -75,7 +75,7 @@ public:
 
   /// Constructs a minute time range.
   /// @param m The number of minutes.
-  /// @return A time range of *m* minutes.
+  /// @returns A time range of *m* minutes.
   template <typename T>
   static time_range minutes(T m)
   {
@@ -84,7 +84,7 @@ public:
 
   /// Constructs a hour time range.
   /// @param h The number of hours.
-  /// @return A time range of *h* hours.
+  /// @returns A time range of *h* hours.
   template <typename T>
   static time_range hours(T h)
   {
@@ -275,7 +275,7 @@ public:
   ///
   /// @param years The years to to add/subtract.
   ///
-  /// @return The relative time from now according to the unit specifications.
+  /// @returns The relative time from now according to the unit specifications.
   time_point delta(int secs = 0,
                    int mins = 0,
                    int hours = 0,
@@ -328,13 +328,13 @@ namespace detail {
 
 /// Determines whether a given year is a leap year.
 /// @param year The year to check.
-/// @return `true` iff *year* is a leap year.
+/// @returns `true` iff *year* is a leap year.
 bool is_leap_year(int year);
 
 /// Retrieves the number days in a given month of a particular year.
 /// @param year The year.
 /// @param month The month.
-/// @return The number of days that *month* has in *year*.
+/// @returns The number of days that *month* has in *year*.
 int days_in_month(int year, int month);
 
 /// Computes the number of days relative to a given year and month.
@@ -346,13 +346,13 @@ int days_in_month(int year, int month);
 /// @param n The number of months to convert to days relative to *year* and
 /// *month*.
 ///
-/// @return The number months in days since *year*/*month*.
+/// @returns The number months in days since *year*/*month*.
 int days_from(int year, int month, int n);
 
 time_t to_time_t(std::tm const& t);
 
 /// Creates a new `std::tm` initialized to the 1970 epoch.
-/// @return The `std::tm`.
+/// @returns The `std::tm`.
 std::tm make_tm();
 
 /// Propagates underflowed and overflowed values up to the next higher unit.

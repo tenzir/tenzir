@@ -31,11 +31,11 @@ public:
   bool contains(address const& addr) const;
 
   /// Retrieves the network address of the prefix.
-  /// @return The prefix address.
+  /// @returns The prefix address.
   address const& network() const;
 
   /// Retrieves the prefix length.
-  /// @return The prefix length.
+  /// @returns The prefix length.
   uint8_t length() const;
 
 private:

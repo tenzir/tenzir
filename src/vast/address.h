@@ -71,30 +71,30 @@ public:
 
   /// Determines whether the address is IPv4.
   ///
-  /// @return @c true iff the address is an IPv4 address.
+  /// @returns @c true iff the address is an IPv4 address.
   bool is_v4() const;
 
   /// Determines whether the address is IPv4.
   ///
-  /// @return `true` iff the address is an IPv4 address.
+  /// @returns `true` iff the address is an IPv4 address.
   bool is_v6() const;
 
   /// Determines whether the address is an IPv4 loopback address.
   ///
-  /// @return `true` if the address is v4 and its first byte has the
+  /// @returns `true` if the address is v4 and its first byte has the
   /// value 127.
   bool is_loopback() const;
 
   /// Determines whether the address is an IPv4 broadcast address.
   ///
-  /// @return `true` if the address is v4 and has the value 255.255.255.255.
+  /// @returns `true` if the address is v4 and has the value 255.255.255.255.
   bool is_broadcast() const;
 
   /// Determines whether the address is a multicast address. For v4
   /// addresses, this means the first byte equals to 224. For v6 addresses,
   /// this means the first bytes equals 255.
   ///
-  /// @return `true` if the address is a multicast address.
+  /// @returns `true` if the address is a multicast address.
   bool is_multicast() const;
 
   /// Masks out lower bits of the address.
@@ -108,21 +108,21 @@ public:
 
   /// AND's another address to this instance.
   /// @param other The other address.
-  /// @return A reference to `*this`.
+  /// @returns A reference to `*this`.
   address& operator&=(address const& other);
 
   /// OR's another address to this instance.
   /// @param other The other address.
-  /// @return A reference to `*this`.
+  /// @returns A reference to `*this`.
   address& operator|=(address const& other);
 
   /// XOR's another address to this instance.
   /// @param other The other address.
-  /// @return A reference to `*this`.
+  /// @returns A reference to `*this`.
   address& operator^=(address const& other);
 
   /// Retrieves the underlying byte array.
-  /// @return A reference to an array of 16 bytes.
+  /// @returns A reference to an array of 16 bytes.
   std::array<uint8_t, 16> const& data() const;
 
 private:

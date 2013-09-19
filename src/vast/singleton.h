@@ -30,7 +30,7 @@ class singleton
 
 public:
   /// Retrieves the one-and-only instance of `T`.
-  /// @return A pointer to access the instance of `T`.
+  /// @returns A pointer to access the instance of `T`.
   static T* instance()
   {
     T* result = ptr.load();

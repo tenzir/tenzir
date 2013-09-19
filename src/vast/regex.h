@@ -32,7 +32,7 @@ public:
   ///
   /// @param str The glob expression.
   ///
-  /// @return A regex for *str*.
+  /// @returns A regex for *str*.
   static regex glob(std::string const& str);
 
   /// Constructs an empty regex.
@@ -77,7 +77,7 @@ public:
 
   /// Matches a string against the regex.
   /// @param str The string to match.
-  /// @return @c true if the regex matches @a str.
+  /// @returns @c true if the regex matches @a str.
   template <typename String>
   bool match(String const& str) const
   {
@@ -90,7 +90,7 @@ public:
 
   /// Searches a pattern in a string.
   /// @param str The string to search.
-  /// @return @c true if the regex matches inside @a str.
+  /// @returns @c true if the regex matches inside @a str.
   template <typename String>
   bool search(String const& str) const
   {
@@ -104,7 +104,7 @@ public:
   /// Matches a string against the regex.
   /// @param str The string to match.
   /// @param f A function to invoke on each captured submatch.
-  /// @return @c true if the regex matches @a str.
+  /// @returns @c true if the regex matches @a str.
   bool match(std::string const& str,
              std::function<void(std::string const&)> f) const;
 

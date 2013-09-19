@@ -19,28 +19,28 @@ public:
 
   /// Begins writing an instance of a given type.
   /// @param ti The type information describing the object to write afterwards.
-  /// @return `true` on success.
+  /// @returns `true` on success.
   /// @note The default implementation does nothing.
   virtual bool begin_instance(std::type_info const& ti);
 
   /// Finishes writing an object.
-  /// @return `true` on success.
+  /// @returns `true` on success.
   /// @note The default implementation does nothing.
   virtual bool end_instance();
 
   /// Begins writing a sequence.
   /// @param size The size of the sequence.
-  /// @return `true` on success.
+  /// @returns `true` on success.
   virtual bool begin_sequence(uint64_t size) = 0;
 
   /// Finishes writing a sequence.
-  /// @return `true` on success.
+  /// @returns `true` on success.
   /// @note The default implementation does nothing.
   virtual bool end_sequence();
 
   /// Writes a value.
   /// @param x The value to write.
-  /// @return `true` on success.
+  /// @returns `true` on success.
   virtual bool write_bool(bool x) = 0;
   virtual bool write_int8(int8_t x) = 0;
   virtual bool write_uint8(uint8_t x) = 0;
@@ -55,18 +55,18 @@ public:
   /// Writes a string
   /// @param data The beginning of the string.
   /// @param size The number of bytes to write.
-  /// @return `true` on success.
+  /// @returns `true` on success.
   virtual bool write_string(char const* data, size_t size);
 
   /// Writes raw bytes.
   /// @param data The data to write.
   /// @param size The number of bytes to write.
-  /// @return `true` on success.
+  /// @returns `true` on success.
   virtual bool write_raw(void const* data, size_t size) = 0;
 
   /// Writes type information.
   /// @param gti The type information to write.
-  /// @return `true` on success.
+  /// @returns `true` on success.
   /// @note The default implementation writes out the type ID.
   /// @pre `gti != nullptr`
   virtual bool write_type(global_type_info const* gti);
@@ -83,28 +83,28 @@ public:
 
   /// Begins reading an object of a given type.
   /// @param ti The type information describing the object to read afterwards.
-  /// @return `true` on success.
+  /// @returns `true` on success.
   /// @note The default implementation does nothing.
   virtual bool begin_instance(std::type_info const& ti);
 
   /// Finishes reading an object.
   /// The default implementation does nothing.
-  /// @return `true` on success.
+  /// @returns `true` on success.
   virtual bool end_instance();
 
   /// Begins reading a sequence.
   /// @param size The size of the sequence.
-  /// @return `true` on success.
+  /// @returns `true` on success.
   virtual bool begin_sequence(uint64_t& size) = 0;
 
   /// Finishes reading a sequence.
   /// The default implementation does nothing.
-  /// @return `true` on success.
+  /// @returns `true` on success.
   virtual bool end_sequence();
 
   /// Reads a value.
   /// @param x The value to read into.
-  /// @return `true` on success.
+  /// @returns `true` on success.
   virtual bool read_bool(bool& x) = 0;
   virtual bool read_int8(int8_t& x) = 0;
   virtual bool read_uint8(uint8_t& x) = 0;
@@ -119,13 +119,13 @@ public:
   /// Reads a string.
   /// @param data The beginning of the string.
   /// @param size The number of bytes to read.
-  /// @return `true` on success.
+  /// @returns `true` on success.
   virtual bool read_string(char* data, size_t size);
 
   /// Reads raw bytes.
   /// @param data The location to read into.
   /// @param size The number of bytes to read.
-  /// @return `true` on success.
+  /// @returns `true` on success.
   virtual bool read_raw(void* data, size_t size) = 0;
 
   /// Reads type information.
@@ -134,7 +134,7 @@ public:
   /// announced type or `nullptr` if the type identifer does not map to an
   /// announced type.
   ///
-  /// @return `true` on success.
+  /// @returns `true` on success.
   virtual bool read_type(global_type_info const*& gti);
 
 protected:
@@ -259,7 +259,7 @@ void load(deserializer& source, T& x)
 /// @tparam T A serializable type.
 /// @param sink The serializer to write into.
 /// @param x An instance of type `T`.
-/// @return `true` on success.
+/// @returns `true` on success.
 template <typename T>
 bool write_object(serializer& sink, T const& x)
 {
@@ -276,7 +276,7 @@ bool write_object(serializer& sink, T const& x)
 /// @tparam T A deserializable type.
 /// @param source The deserializer to read from.
 /// @param x An instance of type `T`.
-/// @return `true` on success.
+/// @returns `true` on success.
 template <typename T>
 bool read_object(deserializer& source, T& x)
 {
@@ -296,7 +296,7 @@ bool read_object(deserializer& source, T& x)
 /// @tparam T A serializable type.
 /// @param sink The serializer to write into.
 /// @param x An instance of type `T`.
-/// @return `true` on success.
+/// @returns `true` on success.
 template <typename T>
 bool write(serializer& sink, T const& x)
 {
@@ -310,7 +310,7 @@ bool write(serializer& sink, T const& x)
 /// @tparam T A deserializable type.
 /// @param source The deserializer to read from.
 /// @param x An instance of type `T`.
-/// @return `true` on success.
+/// @returns `true` on success.
 template <typename T>
 bool read(deserializer& source, T& x)
 {
@@ -325,7 +325,7 @@ bool read(deserializer& source, T& x)
 /// @tparam T the type of the instance to serialize.
 /// @param sink The serializer to write a `T` into.
 /// @param x An instance of type `T`.
-/// @return A reference to *sink*.
+/// @returns A reference to *sink*.
 template <typename T>
 serializer& operator<<(serializer& sink, T const& x)
 {
@@ -338,7 +338,7 @@ serializer& operator<<(serializer& sink, T const& x)
 /// @tparam T the type of the instance to serialize.
 /// @param source The deserializer to extract a `T` from.
 /// @param x An instance of type `T`.
-/// @return A reference to *source*.
+/// @returns A reference to *source*.
 template <typename T>
 deserializer& operator>>(deserializer& source, T& x)
 {

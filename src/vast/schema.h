@@ -125,7 +125,7 @@ public:
   /// and each subsequent elements of *ids* then represent further argument
   /// names to dereference.
   ///
-  /// @return A vector of offset vectors. Each offset vector represents a
+  /// @returns A vector of offset vectors. Each offset vector represents a
   /// sequence of offsets which have to be used in order to get to *name*.
   /// Since *record* may contain multiple arguments of type *name*, the result
   /// is a vector of vectors.
@@ -136,7 +136,7 @@ public:
   /// Computes the offsets vector for a given argument name sequence.
   /// @param record The event/record to search.
   /// @param ids The argument names to look for in *record*.
-  /// @return A vector of offsets to get to *ids*.
+  /// @returns A vector of offsets to get to *ids*.
   static std::vector<size_t> argument_offsets(
       record_type const* record,
       std::vector<std::string> const& ids);
@@ -157,18 +157,18 @@ public:
   void write(std::string const& filename) const;
 
   /// Retrieves the list of all types in the schema.
-  /// @return a vector with type information objects.
+  /// @returns a vector with type information objects.
   std::vector<type_info> const& types() const;
 
   /// Retrieves the list of all events in the schema.
-  /// @return a vector with event schema objects.
+  /// @returns a vector with event schema objects.
   std::vector<event> const& events() const;
 
   /// Retrieves the type information for a given type name.
   ///
   /// @param name The name of the type to lookup.
   ///
-  /// @return A schema::type_info object for the type *name* or and empty
+  /// @returns A schema::type_info object for the type *name* or and empty
   /// schema:type_info object if *name* does not reference an existing type.
   type_info info(std::string const& name) const;
 
@@ -180,7 +180,7 @@ public:
   /// Creates a type alias.
   /// @param type The name of the type to create an alias for.
   /// @param alias Another name for *type*.
-  /// @return `true` if aliasing succeeded and `false` if *type* does not exist.
+  /// @returns `true` if aliasing succeeded and `false` if *type* does not exist.
   bool add_type_alias(std::string const& type, std::string const& alias);
 
   /// Adds an event schema.

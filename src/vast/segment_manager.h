@@ -38,7 +38,7 @@ private:
 
   /// Loads a segment into memory after a cache miss.
   /// @param uuid The ID which could not be found in the cache.
-  /// @return The loaded segment.
+  /// @returns The loaded segment.
   cow<segment> on_miss(uuid const& id);
 
   path const dir_;

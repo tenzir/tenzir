@@ -46,7 +46,7 @@ public:
 
     /// Retrieves the number of bytes serialized so far.
     ///
-    /// @return The number of serialized bytes.
+    /// @returns The number of serialized bytes.
     ///
     /// @note In order to compute the space reduction, use the following
     /// formula *after* the writer has been destructed:
@@ -84,11 +84,11 @@ public:
     }
 
     /// Retrieves the number of objects available for deserialization.
-    /// @return The number of times one can call ::read on this chunk.
+    /// @returns The number of times one can call ::read on this chunk.
     uint32_t elements() const;
 
     /// Retrieves the number of bytes deserialized so far.
-    /// @return The number of deserialized bytes.
+    /// @returns The number of deserialized bytes.
     size_t bytes() const;
 
   private:
@@ -104,19 +104,19 @@ public:
   explicit chunk(io::compression method = io::lz4);
 
   /// Checks whether the chunk is empty.
-  /// @return `true` if the chunk has no elements.
+  /// @returns `true` if the chunk has no elements.
   bool empty() const;
 
   /// Retrieves the number of serialized elements in the chunk.
-  /// @return The number of elements in the chunk.
+  /// @returns The number of elements in the chunk.
   uint32_t elements() const;
 
   /// Retrieves the size in bytes of the compressed/serialized buffer.
-  /// @return The number of bytes of the serialized/compressed buffer.
+  /// @returns The number of bytes of the serialized/compressed buffer.
   size_t compressed_bytes() const;
 
   /// Retrieves the size in bytes of the compressed/serialized buffer.
-  /// @return The number of bytes of the serialized/compressed buffer.
+  /// @returns The number of bytes of the serialized/compressed buffer.
   size_t uncompressed_bytes() const;
 
   friend bool operator==(chunk const& x, chunk const& y);

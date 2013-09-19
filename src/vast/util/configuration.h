@@ -22,7 +22,7 @@ public:
 
   /// Initializes the configuration from a configuration file.
   /// @param filename The name of the configuration file.
-  /// @return `true` if configuration initialization was successful.
+  /// @returns `true` if configuration initialization was successful.
   /// @throw error::config
   void load(std::string const& filename);
 
@@ -34,20 +34,20 @@ public:
 
   /// Checks whether the given option is set.
   /// @param option Name of the option to check.
-  /// @return @c true if the given option is set.
+  /// @returns @c true if the given option is set.
   /// @throw error::config
   bool check(std::string const& option) const;
 
   /// Returns the value of the given option.
   /// @param opt The name of the option.
-  /// @return The option value.
+  /// @returns The option value.
   /// @throw error::config
   std::string const& get(std::string const& opt) const;
 
   /// Retrieves an option as a specific type.
   /// @tparam T The type to convert the option to.
   /// @param opt The name of the option.
-  /// @return The converted option value.
+  /// @returns The converted option value.
   /// @throw error::config
   template <typename T>
   T as(std::string const& opt) const
@@ -154,7 +154,7 @@ protected:
   /// Creates a new option block.
   /// @param name The name of the option block.
   /// @param prefix The prefix of the block.
-  /// @return The option block.
+  /// @returns The option block.
   block& create_block(std::string name, std::string prefix = "");
 
   /// Verifies that two given options are not specified at the same time.

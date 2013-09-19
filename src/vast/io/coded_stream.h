@@ -28,7 +28,7 @@ public:
 
   /// Skips a given number of bytes of the wrapped stream.
   /// @param n The number of bytes to skip.
-  /// @return `true` on success.
+  /// @returns `true` on success.
   bool skip(size_t n);
 
   /// Retrieves the raw buffer of the wrapped stream. In combination with skip,
@@ -38,14 +38,14 @@ public:
   ///
   /// @param size Set to the size of *data*.
   ///
-  /// @return `true` if obtaining the raw buffer succeeded, i.e., the
+  /// @returns `true` if obtaining the raw buffer succeeded, i.e., the
   /// underlying buffer was not empty.
   bool raw(void const** data, size_t* size);
 
   /// Reads an arithmetic type from the input.
   /// @tparam T an arithmetic type.
   /// @param x The value to read into.
-  /// @return `true` if reading *x* succeeded.
+  /// @returns `true` if reading *x* succeeded.
   /// @pre *x* must point to valid instance of type *T*.
   template <typename T>
   typename std::enable_if<std::is_arithmetic<T>::value, bool>::type
@@ -68,7 +68,7 @@ public:
   /// Reads a variable-byte encoded integral type from the input.
   /// @tparam T an integral type.
   /// @param x The value to read.
-  /// @return `true` if reading *x* succeeded.
+  /// @returns `true` if reading *x* succeeded.
   template <typename T>
   typename std::enable_if<std::is_integral<T>::value, bool>::type
   read_varbyte(T* x)
@@ -103,7 +103,7 @@ public:
   /// Reads raw bytes.
   /// @param sink The buffer to copy into.
   /// @param size The number of bytes to copy into *sink*.
-  /// @return The number of bytes read.
+  /// @returns The number of bytes read.
   size_t read_raw(void* sink, size_t size);
 
 private:
@@ -131,7 +131,7 @@ public:
 
   /// Skips a given number of bytes in the wrapped stream.
   /// @param n The number of bytes to skip.
-  /// @return `true` on success.
+  /// @returns `true` on success.
   bool skip(size_t n);
 
   /// Retrieves the raw buffer of the unwritten data portions. In combination
@@ -142,14 +142,14 @@ public:
   ///
   /// @param size Set to the size of *data*.
   ///
-  /// @return `true` if obtaining the raw buffer succeeded, i.e., the
+  /// @returns `true` if obtaining the raw buffer succeeded, i.e., the
   /// underlying buffer was not empty.
   bool raw(void** data, size_t* size);
 
   /// Writes an arithmetic type to the input.
   /// @tparam T an arithmetic type.
   /// @param x The value to write from.
-  /// @return The number of bytes written.
+  /// @returns The number of bytes written.
   /// @pre *x* must point to an instance of type *T*.
   template <typename T>
   typename std::enable_if<std::is_arithmetic<T>::value, size_t>::type
@@ -172,7 +172,7 @@ public:
   /// Writes a variable-byte encoded integral type to the output.
   /// @tparam T an integral type.
   /// @param x The value to write.
-  /// @return The number of bytes written.
+  /// @returns The number of bytes written.
   template <typename T>
   typename std::enable_if<std::is_integral<T>::value, size_t>::type
   write_varbyte(T const* x)
@@ -198,7 +198,7 @@ public:
   /// Writes raw bytes.
   /// @param source The buffer to copy from.
   /// @param size The number of bytes to copy from *source*.
-  /// @return The number of bytes written.
+  /// @returns The number of bytes written.
   size_t write_raw(void const* source, size_t size);
 
 private:
