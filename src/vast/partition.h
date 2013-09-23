@@ -25,9 +25,8 @@ public:
 private:
   path dir_;
   time_point last_modified_;
-  cppa::actor_ptr meta_;
-  cppa::actor_ptr type_;
-  std::map<string, cppa::actor_ptr> events_;
+  std::map<string, cppa::actor_ptr> event_arg_indexes_;
+  cppa::actor_ptr event_meta_index_;
 };
 
 } // namespace vast

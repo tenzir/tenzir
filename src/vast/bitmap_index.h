@@ -23,8 +23,9 @@ public:
 
   /// Appends a single value.
   /// @param val The value to add to the index.
+  /// @param id The ID to associate with *val*.
   /// @returns `true` if appending succeeded.
-  bool push_back(value const& val);
+  bool push_back(value const& val, uint64_t id = 0);
 
   /// Appends a sequence of bits.
   /// @param n The number of elements to append.

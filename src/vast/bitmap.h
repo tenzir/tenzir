@@ -337,6 +337,8 @@ public:
           if (! bs.append(n, bit))
             success = false;
         });
+    if (success)
+      store_.rows += n;
     return success;
   }
 

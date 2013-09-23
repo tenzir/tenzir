@@ -12,8 +12,8 @@ set(libvast_sources
   exception.cc
   expression.cc
   event.cc
+  event_index.cc
   file_system.cc
-  fragment.cc
   id_tracker.cc
   index.cc
   individual.cc

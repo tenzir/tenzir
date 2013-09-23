@@ -1,11 +1,12 @@
 #include "vast/bitmap_index.h"
+
+#include "vast/container.h"
+#include "vast/value.h"
 #include "vast/bitmap_index/address.h"
 #include "vast/bitmap_index/arithmetic.h"
 #include "vast/bitmap_index/port.h"
 #include "vast/bitmap_index/string.h"
 #include "vast/bitmap_index/time.h"
-
-#include "vast/value.h"
 
 namespace vast {
 
@@ -36,9 +37,22 @@ std::unique_ptr<bitmap_index> bitmap_index::create(value_type t)
   }
 }
 
-bool bitmap_index::push_back(value const& val)
+bool bitmap_index::push_back(value const& val, uint64_t id)
 {
-  return val ? push_back_impl(val) : append(1, false) ;
+  if (id > 0)
+  {
+    if (id < size())
+    {
+      VAST_LOG_ERROR("got value " << val << " incompatible ID " << id <<
+                     " (required: ID > " << size() << ')');
+      return false;
+    }
+    auto delta = id - size();
+    if (delta > 1)
+      if (! append(delta - 1, false))
+        return false;
+  }
+  return val ? push_back_impl(val) : append(1, false);
 }
 
 bool bitmap_index::empty() const

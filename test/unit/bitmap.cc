@@ -58,6 +58,9 @@ BOOST_AUTO_TEST_CASE(basic_bitmap)
   BOOST_CHECK_EQUAL(to_string(*bm.lookup(not_equal, 84)), "10111");
   BOOST_CHECK_EQUAL(to_string(*bm.lookup(not_equal, 13)), "11111");
 
+  BOOST_CHECK(bm.append(5, false));
+  BOOST_CHECK_EQUAL(bm.size(), 10);
+
   std::vector<uint8_t> buf;
   io::archive(buf, bm);
   io::unarchive(buf, bm2);

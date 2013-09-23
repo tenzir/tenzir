@@ -55,6 +55,11 @@ BOOST_AUTO_TEST_CASE(trivial)
   BOOST_CHECK(v3.nil());
   BOOST_CHECK(! v3.invalid());
   BOOST_CHECK_EQUAL(v3.which(), string_type);
+
+  value v4(string_type);
+  BOOST_CHECK(! v4);
+  BOOST_CHECK(! v4.invalid());
+  BOOST_CHECK(v4.nil());
 }
 
 BOOST_AUTO_TEST_CASE(relational_operators)
