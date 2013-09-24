@@ -77,7 +77,7 @@ public:
 
   /// Matches a string against the regex.
   /// @param str The string to match.
-  /// @returns @c true if the regex matches @a str.
+  /// @returns `true` if the regex matches exactly *str*.
   template <typename String>
   bool match(String const& str) const
   {
@@ -90,7 +90,7 @@ public:
 
   /// Searches a pattern in a string.
   /// @param str The string to search.
-  /// @returns @c true if the regex matches inside @a str.
+  /// @returns `true` if the regex matches inside *str*.
   template <typename String>
   bool search(String const& str) const
   {
@@ -104,11 +104,23 @@ public:
   /// Matches a string against the regex.
   /// @param str The string to match.
   /// @param f A function to invoke on each captured submatch.
-  /// @returns @c true if the regex matches @a str.
+  /// @returns `true` if the regex matches *str*.
   bool match(std::string const& str,
              std::function<void(std::string const&)> f) const;
 
-  bool convert(std::string& str);
+private:
+#ifdef VAST_CLANG
+  std::regex rx_;
+#else
+  boost::regex rx_;
+#endif
+  string str_;
+
+private:
+  friend access;
+
+  void serialize(serializer& sink) const;
+  void deserialize(deserializer& source);
 
   template <typename Iterator>
   bool parse(Iterator& start, Iterator end)
@@ -138,21 +150,7 @@ public:
     return true;
   }
 
-private:
-#ifdef VAST_CLANG
-  std::regex rx_;
-#else
-  boost::regex rx_;
-#endif
-  string str_;
-
-private:
-  friend access;
-  friend util::parsable<regex>;
-  friend util::printable<regex>;
-
-  void serialize(serializer& sink) const;
-  void deserialize(deserializer& source);
+  bool convert(std::string& str);
 
   friend bool operator==(regex const& x, regex const& y);
   friend bool operator<(regex const& x, regex const& y);
