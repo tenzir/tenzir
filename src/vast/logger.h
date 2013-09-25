@@ -161,44 +161,64 @@ private:
   VAST_ACTOR(name, cppa::self)
 
 #if VAST_LOG_LEVEL > 0
-#  define VAST_LOG_ERROR(message)   VAST_LOG(::vast::logger::error, message)
-#  define VAST_LOG_ACT_ERROR(name, message) \
+#  define VAST_LOG_ERROR(message)     VAST_LOG(::vast::logger::error, message)
+#  define VAST_LOG_ACTOR_ERROR_2(name, message)                               \
      VAST_LOG(::vast::logger::error, VAST_THIS_ACTOR(name) << ' ' << message)
+#  define VAST_LOG_ACTOR_ERROR_1(message)                                     \
+     VAST_LOG_ACTOR_ERROR_2(this->description(), message)
+#  define VAST_LOG_ACTOR_ERROR(...)   VAST_PP_OVERLOAD(VAST_LOG_ACTOR_ERROR_, \
+                                              __VA_ARGS__)(__VA_ARGS__)
 #else
-#  define VAST_LOG_ERROR(message)              VAST_VOID
-#  define VAST_LOG_ACT_ERROR(name, message)    VAST_VOID
+#  define VAST_LOG_ERROR(message)     VAST_VOID
+#  define VAST_LOG_ACTOR_ERROR(...)   VAST_VOID
 #endif
 #if VAST_LOG_LEVEL > 1
-#  define VAST_LOG_WARN(message)    VAST_LOG(::vast::logger::warn, message)
-#  define VAST_LOG_ACT_WARN(name, message) \
+#  define VAST_LOG_WARN(message)      VAST_LOG(::vast::logger::warn, message)
+#  define VAST_LOG_ACTOR_WARN_2(name, message)                                \
      VAST_LOG(::vast::logger::warn, VAST_THIS_ACTOR(name) << ' ' << message)
+#  define VAST_LOG_ACTOR_WARN_1(message)                                      \
+     VAST_LOG_ACTOR_WARN_2(this->description(), message)
+#  define VAST_LOG_ACTOR_WARN(...)    VAST_PP_OVERLOAD(VAST_LOG_ACTOR_WARN_,  \
+                                              __VA_ARGS__)(__VA_ARGS__)
 #else
-#  define VAST_LOG_WARN(message)               VAST_VOID
-#  define VAST_LOG_ACT_WARN(name, message)     VAST_VOID
+#  define VAST_LOG_WARN(message)      VAST_VOID
+#  define VAST_LOG_ACTOR_WARN(...)    VAST_VOID
 #endif
 #if VAST_LOG_LEVEL > 2
-#  define VAST_LOG_INFO(message)    VAST_LOG(::vast::logger::info, message)
-#  define VAST_LOG_ACT_INFO(name, message) \
+#  define VAST_LOG_INFO(message)     VAST_LOG(::vast::logger::info, message)
+#  define VAST_LOG_ACTOR_INFO_2(name, message)                               \
      VAST_LOG(::vast::logger::info, VAST_THIS_ACTOR(name) << ' ' << message)
+#  define VAST_LOG_ACTOR_INFO_1(message)                                     \
+     VAST_LOG_ACTOR_INFO_2(this->description(), message)
+#  define VAST_LOG_ACTOR_INFO(...)   VAST_PP_OVERLOAD(VAST_LOG_ACTOR_INFO_,  \
+                                              __VA_ARGS__)(__VA_ARGS__)
 #else
-#  define VAST_LOG_INFO(message)               VAST_VOID
-#  define VAST_LOG_ACT_INFO(name, message)     VAST_VOID
+#  define VAST_LOG_INFO(message)     VAST_VOID
+#  define VAST_LOG_ACTOR_INFO(...)   VAST_VOID
 #endif
 #if VAST_LOG_LEVEL > 3
-#  define VAST_LOG_VERBOSE(message) VAST_LOG(::vast::logger::verbose, message)
-#  define VAST_LOG_ACT_VERBOSE(name, message) \
+#  define VAST_LOG_VERBOSE(message)     VAST_LOG(::vast::logger::verbose, message)
+#  define VAST_LOG_ACTOR_VERBOSE_2(name, message)                                 \
      VAST_LOG(::vast::logger::verbose, VAST_THIS_ACTOR(name) << ' ' << message)
+#  define VAST_LOG_ACTOR_VERBOSE_1(message)                                       \
+     VAST_LOG_ACTOR_VERBOSE_2(this->description(), message)
+#  define VAST_LOG_ACTOR_VERBOSE(...)   VAST_PP_OVERLOAD(VAST_LOG_ACTOR_VERBOSE_, \
+                                              __VA_ARGS__)(__VA_ARGS__)
 #else
-#  define VAST_LOG_VERBOSE(message)            VAST_VOID
-#  define VAST_LOG_ACT_VERBOSE(name, message)  VAST_VOID
+#  define VAST_LOG_VERBOSE(message)     VAST_VOID
+#  define VAST_LOG_ACTOR_VERBOSE(...)   VAST_VOID
 #endif
 #if VAST_LOG_LEVEL > 4
-#  define VAST_LOG_DEBUG(message)   VAST_LOG(::vast::logger::debug, message)
-#  define VAST_LOG_ACT_DEBUG(name, message) \
+#  define VAST_LOG_DEBUG(message)     VAST_LOG(::vast::logger::debug, message)
+#  define VAST_LOG_ACTOR_DEBUG_2(name, message)                               \
      VAST_LOG(::vast::logger::debug, VAST_THIS_ACTOR(name) << ' ' << message)
+#  define VAST_LOG_ACTOR_DEBUG_1(message)                                     \
+     VAST_LOG_ACTOR_DEBUG_2(this->description(), message)
+#  define VAST_LOG_ACTOR_DEBUG(...)   VAST_PP_OVERLOAD(VAST_LOG_ACTOR_DEBUG_, \
+                                              __VA_ARGS__)(__VA_ARGS__)
 #else
-#  define VAST_LOG_DEBUG(message)              VAST_VOID
-#  define VAST_LOG_ACT_DEBUG(name, message)    VAST_VOID
+#  define VAST_LOG_DEBUG(message)     VAST_VOID
+#  define VAST_LOG_ACTOR_DEBUG(...)   VAST_VOID
 #endif
 #if VAST_LOG_LEVEL > 5
 #  define VAST_ENTER_ARGS(args)                                              \

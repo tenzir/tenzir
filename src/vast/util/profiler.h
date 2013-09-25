@@ -3,13 +3,13 @@
 
 #include <chrono>
 #include <fstream>
-#include <cppa/cppa.hpp>
+#include "vast/actor.h"
 
 namespace vast {
 namespace util {
 
 /// A simple CPU profiler.
-class profiler : public cppa::event_based_actor
+class profiler : public actor<profiler>
 {
 public:
   /// A resoure measurement.
@@ -30,11 +30,8 @@ public:
   /// @param secs The number of seconds between subsequent measurements.
   profiler(std::string const& log_dir, std::chrono::seconds secs);
 
-  /// Implements `event_based_actor::init`.
-  virtual void init() final;
-
-  /// Overrides `event_based_actor::on_exit`.
-  virtual void on_exit() final;
+  void act();
+  char const* description() const;
 
 private:
   std::string const log_dir_;

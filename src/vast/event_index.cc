@@ -14,7 +14,7 @@ event_meta_index::event_meta_index(path dir)
 {
 }
 
-char const* event_meta_index::name() const
+char const* event_meta_index::description() const
 {
   return "event-meta-index";
 }
@@ -23,7 +23,7 @@ void event_meta_index::load()
 {
   io::unarchive(dir_ / "timestamp.idx", timestamp_);
   io::unarchive(dir_ / "name.idx", name_);
-  VAST_LOG_ACT_DEBUG(name(), "loaded timestamp/name index with " <<
+  VAST_LOG_ACTOR_DEBUG("loaded timestamp/name index with " <<
                      timestamp_.size() << '/' << name_.size() << " events");
 }
 
@@ -31,8 +31,8 @@ void event_meta_index::store()
 {
   io::archive(dir_ / "timestamp.idx", timestamp_);
   io::archive(dir_ / "name.idx", name_);
-  VAST_LOG_ACT_DEBUG(name(), "stored timestamp/name index with " <<
-                     timestamp_.size() << '/' << name_.size() << " events");
+  VAST_LOG_ACTOR_DEBUG("stored timestamp/name index with " <<
+                       timestamp_.size() << '/' << name_.size() << " events");
 }
 
 bool event_meta_index::index(event const& e)
@@ -61,7 +61,7 @@ event_arg_index::event_arg_index(path dir)
 {
 }
 
-char const* event_arg_index::name() const
+char const* event_arg_index::description() const
 {
   return "event-arg-index";
 }
@@ -77,7 +77,7 @@ void event_arg_index::load()
     auto start = str.begin();
     if (! extract(start, str.end(), o))
     {
-      VAST_LOG_ACT_ERROR(name(), "invalid offset: " << p.basename());
+      VAST_LOG_ACTOR_ERROR("got invalid offset: " << p.basename());
       quit();
     }
 
@@ -86,11 +86,11 @@ void event_arg_index::load()
     io::unarchive(p, vt, bmi);
     if (! bmi)
     {
-      VAST_LOG_ACT_ERROR(name(), "got corrupt index: " << p.basename());
+      VAST_LOG_ACTOR_ERROR("got corrupt index: " << p.basename());
       quit();
     }
-    VAST_LOG_ACT_DEBUG(name(), "read: " << p.trim(-3) << " with " <<
-                      bmi->size() << " events");
+    VAST_LOG_ACTOR_DEBUG("read: " << p.trim(-3) << " with " <<
+                         bmi->size() << " events");
     args_.emplace(o, bmi);
     types_[vt].push_back(bmi);
   }
@@ -98,7 +98,7 @@ void event_arg_index::load()
 
 void event_arg_index::store()
 {
-  VAST_LOG_ACT_DEBUG(name(), "saves indexes to filesystem");
+  VAST_LOG_ACTOR_DEBUG("saves indexes to filesystem");
 
   std::map<std::shared_ptr<bitmap_index>, value_type> inverse;
   for (auto& p : types_)
@@ -115,8 +115,8 @@ void event_arg_index::store()
     path const filename = dir_ / (prefix + to<string>(p.first) + suffix);
     assert(inverse.count(p.second));
     io::archive(filename, inverse[p.second], p.second);
-    VAST_LOG_ACT_DEBUG(name(), "wrote index " << filename.trim(-3) <<
-                       " with " << p.second->size() << " events");
+    VAST_LOG_ACTOR_DEBUG("wrote index " << filename.trim(-3) <<
+                         " with " << p.second->size() << " events");
   }
 }
 

@@ -2,7 +2,6 @@
 
 #include "vast/exception.h"
 #include "vast/file_system.h"
-#include "vast/logger.h"
 #include "vast/segment.h"
 #include "vast/segment_manager.h"
 
@@ -16,21 +15,18 @@ archive::archive(std::string const& directory, size_t max_segments)
   segment_manager_ = spawn<segment_manager>(max_segments, directory_);
 }
 
-void archive::init()
+void archive::act()
 {
-  VAST_LOG_ACT_VERBOSE("archive", "spawned");
   become(
       on(atom("init")) >> [=]
       {
         path p(directory_);
         if (! exists(p))
         {
-          VAST_LOG_ACT_INFO("archive", "creates new directory " << directory_);
-
+          VAST_LOG_ACTOR_INFO("creates new directory " << directory_);
           if (! mkdir(p))
           {
-            VAST_LOG_ACT_ERROR("archive", " failed to create directory " <<
-                               directory_);
+            VAST_LOG_ACTOR_ERROR("failed to create directory " << directory_);
             quit();
           }
         }
@@ -55,9 +51,9 @@ void archive::init()
       });
 }
 
-void archive::on_exit()
+char const* archive::description() const
 {
-  VAST_LOG_ACT_VERBOSE("archive", "terminated");
+  return "archive";
 }
 
 

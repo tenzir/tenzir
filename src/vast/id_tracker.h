@@ -2,23 +2,20 @@
 #define VAST_ID_TRACKER_H
 
 #include <fstream>
-#include <cppa/cppa.hpp>
+#include "vast/actor.h"
 
 namespace vast {
 
 /// Keeps track of the event ID space.
-class id_tracker : public cppa::event_based_actor
+class id_tracker : public actor<id_tracker>
 {
 public:
   /// Constructs the ID tracker.
   /// @param filename The filename containing the current ID.
   id_tracker(std::string filename);
 
-  /// Implements `cppa::event_based_actor::init`.
-  virtual void init() final;
-
-  /// Overrides `cppa::event_based_actor::init`.
-  virtual void on_exit() final;
+  void act();
+  char const* description() const;
 
 private:
   std::string filename_;

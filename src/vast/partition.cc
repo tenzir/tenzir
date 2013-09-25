@@ -1,8 +1,8 @@
 #include "vast/partition.h"
 
+#include <cppa/cppa.hpp>
 #include "vast/event.h"
 #include "vast/event_index.h"
-#include "vast/logger.h"
 #include "vast/io/serialization.h"
 
 using namespace cppa;
@@ -19,13 +19,11 @@ partition::partition(path dir)
 {
 }
 
-void partition::init()
+void partition::act()
 {
-  VAST_LOG_ACT_VERBOSE("partition", "spawned");
-
   if (! exists(dir_))
   {
-    VAST_LOG_ACT_DEBUG("partition", "creates new directory " << dir_);
+    VAST_LOG_ACTOR_DEBUG("creates new directory " << dir_);
     mkdir(dir_);
   }
 
@@ -90,10 +88,13 @@ void partition::init()
 
 void partition::on_exit()
 {
-  VAST_LOG_ACT_DEBUG(
-      "partition", "saves last modification time " << last_modified_);
   io::archive(dir_ / "last_modified", last_modified_);
-  VAST_LOG_ACT_VERBOSE("partition", "terminated");
+  actor<partition>::on_exit();
+}
+
+char const* partition::description() const
+{
+  return "partition";
 }
 
 } // namespace vast

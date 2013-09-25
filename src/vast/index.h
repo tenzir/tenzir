@@ -2,25 +2,22 @@
 #define VAST_INDEX_H
 
 #include <unordered_map>
-#include <cppa/cppa.hpp>
+#include "vast/actor.h"
 #include "vast/file_system.h"
 #include "vast/uuid.h"
 
 namespace vast {
 
 /// The event index.
-class index : public cppa::event_based_actor
+class index : public actor<index>
 {
 public:
   /// Spawns the index.
   /// @param directory The root directory of the index.
   index(path directory);
 
-  /// Implements `event_based_actor::init`.
-  virtual void init() final;
-
-  /// Overrides `event_based_actor::on_exit`.
-  virtual void on_exit() final;
+  void act();
+  char const* description() const;
 
 private:
   void load();

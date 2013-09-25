@@ -57,6 +57,8 @@ class bro2 : public line
 public:
   bro2(cppa::actor_ptr sink, std::string const& filename);
 
+  virtual char const* description() const final;
+
 private:
   /// Extracts the first `#`-lines of log meta data.
   bool parse_header();
@@ -81,6 +83,8 @@ class bro15conn : public line
 {
 public:
   bro15conn(cppa::actor_ptr sink, std::string const& filename);
+
+  virtual char const* description() const final;
 
 private:
   /// Parses a single log line.

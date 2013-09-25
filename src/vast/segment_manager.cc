@@ -2,7 +2,6 @@
 
 #include "vast/file_system.h"
 #include "vast/segment.h"
-#include "vast/logger.h"
 #include "vast/io/file_stream.h"
 #include "vast/serialization.h"
 
@@ -17,9 +16,8 @@ segment_manager::segment_manager(size_t capacity, std::string const& dir)
   chaining(false);
 }
 
-void segment_manager::init()
+void segment_manager::act()
 {
-  VAST_LOG_ACT_VERBOSE("segment-manager", "spawned");
   become(
       on(atom("init")) >> [=]
       {
@@ -27,14 +25,13 @@ void segment_manager::init()
             dir_,
             [&](path const& p) -> bool
             {
-              VAST_LOG_ACT_VERBOSE("segment-manager", "found segment " << p);
+              VAST_LOG_ACTOR_VERBOSE("found segment " << p);
               segment_files_.emplace(to_string(p.basename()), p);
               return true;
             });
 
         if (segment_files_.empty())
-          VAST_LOG_ACT_VERBOSE("segment-manager",
-                               "did not find any segments in " << dir_);
+          VAST_LOG_ACTOR_VERBOSE("did not find any segments in " << dir_);
       },
       on(atom("kill")) >> [=]
       {
@@ -49,7 +46,7 @@ void segment_manager::init()
       },
       on(atom("get"), atom("ids")) >> [=]
       {
-        VAST_LOG_ACT_DEBUG("segment-manager", "retrieves all ids");
+        VAST_LOG_ACTOR_DEBUG("retrieves all ids");
         std::vector<uuid> ids;
         std::transform(segment_files_.begin(),
                        segment_files_.end(),
@@ -59,14 +56,14 @@ void segment_manager::init()
       },
       on(atom("get"), arg_match) >> [=](uuid const& uid)
       {
-        VAST_LOG_ACT_DEBUG("segment-manager", "retrieves segment " << uid);
+        VAST_LOG_ACTOR_DEBUG("retrieves segment " << uid);
         reply_tuple(cache_.retrieve(uid));
       });
 }
 
-void segment_manager::on_exit()
+char const* segment_manager::description() const
 {
-  VAST_LOG_ACT_VERBOSE("segment-manager", "terminated");
+  return "segment-manager";
 }
 
 void segment_manager::store(cow<segment> const& s)
@@ -83,14 +80,14 @@ void segment_manager::store(cow<segment> const& s)
   }
 
   cache_.insert(s->id(), s);
-  VAST_LOG_ACT_VERBOSE("segment-manager", "wrote segment to " << filename);
+  VAST_LOG_ACTOR_VERBOSE("wrote segment to " << filename);
 }
 
 cow<segment> segment_manager::on_miss(uuid const& uid)
 {
   assert(segment_files_.find(uid) != segment_files_.end());
-  VAST_LOG_ACT_DEBUG("segment-manager", "experienced cache miss for " << uid <<
-                     ", going to stable storage");
+  VAST_LOG_ACTOR_DEBUG("experienced cache miss for " << uid <<
+                       ", going to stable storage");
 
   file f(dir_ / path(to_string(uid)));
   f.open(file::read_only);

@@ -1,6 +1,6 @@
 #include "vast/receiver.h"
 
-#include "vast/logger.h"
+#include <cppa/cppa.hpp>
 
 namespace vast {
 
@@ -13,10 +13,8 @@ receiver::receiver(actor_ptr tracker, actor_ptr archive, actor_ptr index)
 {
 }
 
-void receiver::init()
+void receiver::act()
 {
-  VAST_LOG_ACT_VERBOSE("receiver", "spawned");
-
   become(
       on(atom("kill")) >> [=]
       {
@@ -24,25 +22,23 @@ void receiver::init()
       },
       on_arg_match >> [=](segment& s)
       {
-        VAST_LOG_ACT_DEBUG("receiver", "got segment " << s.id());
+        VAST_LOG_ACTOR_DEBUG("got segment " << s.id());
         reply(atom("ack"), s.id());
         send(tracker_, atom("request"), uint64_t(s.events()));
         segments_.push_back(std::move(s));
       },
       on(atom("id"), arg_match) >> [=](uint64_t from, uint64_t to)
       {
-        VAST_LOG_ACT_DEBUG("receiver",
-                           "got " << to - from <<
-                           " IDs in [" << from << ", " << to << ")");
+        VAST_LOG_ACTOR_DEBUG("got " << to - from <<
+                             " IDs in [" << from << ", " << to << ")");
         assert(! segments_.empty());
         auto& s = segments_.front();
         auto n = to - from;
         assert(n <= s.events());
         if (n < s.events())
         {
-          VAST_LOG_ACT_ERROR("receiver",
-                             "did not get enough ids " <<
-                             "(got " << n << ", needed " << s.events());
+          VAST_LOG_ACTOR_ERROR("did not get enough ids " <<
+                               "(got " << n << ", needed " << s.events());
           quit();
         }
         s.base(from);
@@ -53,9 +49,9 @@ void receiver::init()
       });
 }
 
-void receiver::on_exit()
+char const* receiver::description() const
 {
-  VAST_LOG_ACT_VERBOSE("receiver", "terminated");
+  return "receiver";
 }
 
 } // namespace vast

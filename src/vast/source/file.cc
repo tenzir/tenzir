@@ -1,6 +1,5 @@
 #include "vast/source/file.h"
 
-#include "vast/logger.h"
 #include "vast/io/getline.h"
 #include "vast/util/field_splitter.h"
 
@@ -12,7 +11,6 @@ file::file(cppa::actor_ptr sink, std::string const& filename)
     file_handle_(path(filename)),
     file_stream_(file_handle_)
 {
-  VAST_ENTER();
   if (! file_handle_.open(vast::file::read_only))
     finished_ = true;
 }
@@ -64,13 +62,16 @@ bool line::next()
 bro2::bro2(cppa::actor_ptr sink, std::string const& filename)
   : line(sink, filename)
 {
-  VAST_LOG_ACT_VERBOSE("bro2-source", "spawned for " << filename);
-
   if (! parse_header())
   {
-    VAST_LOG_ACT_ERROR("bro2-source", "cannot parse Bro 2.x log file header");
+    VAST_LOG_ACTOR_ERROR("cannot parse Bro 2.x log file header");
     finished_ = true;
   }
+}
+
+char const* bro2::description() const
+{
+  return "bro2-source";
 }
 
 bool bro2::parse_header()
@@ -85,7 +86,7 @@ bool bro2::parse_header()
   fs.split(line_.begin(), line_.end());
   if (fs.fields() != 2 || ! fs.equals(0, "#separator"))
   {
-    VAST_LOG_ACT_ERROR("bro2-source", "got invalid #separator");
+    VAST_LOG_ACTOR_ERROR("got invalid #separator");
     return false;
   }
 
@@ -115,7 +116,7 @@ bool bro2::parse_header()
     fs.split(line_.begin(), line_.end());
     if (fs.fields() != 2 || ! fs.equals(0, "#set_separator"))
     {
-      VAST_LOG_ACT_ERROR("bro2-source", "got invalid #set_separator");
+      VAST_LOG_ACTOR_ERROR("got invalid #set_separator");
       return false;
     }
 
@@ -130,7 +131,7 @@ bool bro2::parse_header()
     fs.split(line_.begin(), line_.end());
     if (fs.fields() != 2 || ! fs.equals(0, "#empty_field"))
     {
-      VAST_LOG_ACT_ERROR("bro2-source", "invalid #empty_field");
+      VAST_LOG_ACTOR_ERROR("invalid #empty_field");
       return false;
     }
 
@@ -145,7 +146,7 @@ bool bro2::parse_header()
     fs.split(line_.begin(), line_.end());
     if (fs.fields() != 2 || ! fs.equals(0, "#unset_field"))
     {
-      VAST_LOG_ACT_ERROR("bro2-source", "invalid #unset_field");
+      VAST_LOG_ACTOR_ERROR("invalid #unset_field");
       return false;
     }
 
@@ -160,7 +161,7 @@ bool bro2::parse_header()
     fs.split(line_.begin(), line_.end());
     if (fs.fields() != 2 || ! fs.equals(0, "#path"))
     {
-      VAST_LOG_ACT_ERROR("bro2-source", "invalid #path");
+      VAST_LOG_ACTOR_ERROR("invalid #path");
       return false;
     }
 
@@ -175,7 +176,7 @@ bool bro2::parse_header()
     fs.split(line_.begin(), line_.end());
     if (! fs.equals(0, "#fields"))
     {
-      VAST_LOG_ACT_ERROR("bro2-source", "got invalid #fields");
+      VAST_LOG_ACTOR_ERROR("got invalid #fields");
       return false;
     }
 
@@ -190,7 +191,7 @@ bool bro2::parse_header()
     fs.split(line_.begin(), line_.end());
     if (! fs.equals(0, "#types"))
     {
-      VAST_LOG_ACT_ERROR("bro2-source", "got invalid #types");
+      VAST_LOG_ACTOR_ERROR("got invalid #types");
       return false;
     }
 
@@ -213,30 +214,30 @@ bool bro2::parse_header()
 
   line_.clear(); // Triggers call to next().
 
-  VAST_LOG_ACT_DEBUG("bro2-source", "parsed bro2 header:" <<
-                     " #separator " << separator_ <<
-                     " #set_separator " << set_separator_ <<
-                     " #empty_field " << empty_field_ <<
-                     " #unset_field " << unset_field_ <<
-                     " #path " << path_);
+  VAST_LOG_ACTOR_DEBUG("parsed bro2 header:" <<
+                       " #separator " << separator_ <<
+                       " #set_separator " << set_separator_ <<
+                       " #empty_field " << empty_field_ <<
+                       " #unset_field " << unset_field_ <<
+                       " #path " << path_);
   {
     std::ostringstream str;
     for (auto& name : field_names_)
       str << " " << name;
-    VAST_LOG_ACT_DEBUG("bro2-source", "has field names:" << str.str());
+    VAST_LOG_ACTOR_DEBUG("has field names:" << str.str());
   }
   {
     std::ostringstream str;
     for (auto& type : field_types_)
       str << " " << type;
-    VAST_LOG_ACT_DEBUG("bro2-source", "has field types:" << str.str());
+    VAST_LOG_ACTOR_DEBUG("has field types:" << str.str());
   }
   if (! complex_types_.empty())
   {
     std::ostringstream str;
     for (auto& type : complex_types_)
       str << " " << type;
-    VAST_LOG_ACT_DEBUG("bro2-source", "has set types:" << str.str());
+    VAST_LOG_ACTOR_DEBUG("has set types:" << str.str());
   }
 
   path_ = "bro::" + path_;
@@ -290,16 +291,15 @@ option<event> bro2::parse(std::string const& line)
 
   if (fs.fields() > 0 && *fs.start(0) == '#')
   {
-    VAST_LOG_ACT_VERBOSE("bro2-source", "ignored comment: " << line <<
-                         " (line " << current_ << ')');
+    VAST_LOG_ACTOR_VERBOSE("ignored comment: " << line << 
+                           " (line " << current_ << ')');
     return {};
   }
 
   if (fs.fields() != field_types_.size())
   {
-    VAST_LOG_ACT_ERROR("bro2-source",
-                       "found inconsistent number of fields (line " << current_
-                       << ')');
+    VAST_LOG_ACTOR_ERROR("found inconsistent number of fields (line " <<
+                         current_ << ')');
     return {};
   }
 
@@ -351,7 +351,7 @@ option<event> bro2::parse(std::string const& line)
                     set_separator_, "{", "}"))
       {
         // TODO: take care of escaped set separators.
-        VAST_LOG_ACT_ERROR("bro2-source", "got invalid set syntax");
+        VAST_LOG_ACTOR_ERROR("got invalid set syntax");
         return {};
       }
       e.emplace_back(std::move(r));
@@ -361,8 +361,7 @@ option<event> bro2::parse(std::string const& line)
       value v;
       if (! extract(start, end, v, field_types_[f]))
       {
-        VAST_LOG_ACT_ERROR("bro2-source", "could not parse field: " <<
-                           std::string(start, end));
+        VAST_LOG_ACTOR_ERROR("could not parse field: " << string(start, end));
         return {};
       }
       e.push_back(std::move(v));
@@ -375,8 +374,13 @@ option<event> bro2::parse(std::string const& line)
 bro15conn::bro15conn(cppa::actor_ptr sink, std::string const& filename)
   : line(sink, filename)
 {
-  VAST_LOG_ACT_VERBOSE("bro15conn",
+  VAST_LOG_ACTOR_VERBOSE("bro15conn",
                        "spawned with conn.log: " << filename << ')');
+}
+
+char const* bro15conn::description() const
+{
+  return "bro15conn";
 }
 
 option<event> bro15conn::parse(std::string const& line)
@@ -393,7 +397,7 @@ option<event> bro15conn::parse(std::string const& line)
   fs.split(line.begin(), line.end(), 13);
   if (fs.fields() < 12)
   {
-    VAST_LOG_ERROR("less than 12 conn.log fields (line " << current_ << ')');
+    VAST_LOG_ACTOR_ERROR("less than 12 fields (line " << current_ << ')');
     return {};
   }
 
@@ -403,7 +407,7 @@ option<event> bro15conn::parse(std::string const& line)
   time_range range;
   if (! extract(i, j, range) || i != j)
   {
-    VAST_LOG_ERROR(
+    VAST_LOG_ACTOR_ERROR(
         "invalid conn.log timestamp (field 1) (line " << current_ << ')');
     return {};
   }
@@ -421,7 +425,7 @@ option<event> bro15conn::parse(std::string const& line)
     time_range range;
     if (! extract(i, j, range) || i != j)
     {
-      VAST_LOG_ERROR(
+      VAST_LOG_ACTOR_ERROR(
           "invalid conn.log duration (field 2) (line " << current_ << ')');
       return {};
     }
@@ -434,8 +438,8 @@ option<event> bro15conn::parse(std::string const& line)
   address addr;
   if (! extract(i, j, addr) || i != j)
   {
-    VAST_LOG_ERROR("invalid conn.log originating address (field 3) (line " <<
-                     current_ << ')');
+    VAST_LOG_ACTOR_ERROR("invalid conn.log origaddress (field 3) (line " <<
+                         current_ << ')');
     return {};
   }
   e.emplace_back(std::move(addr));
@@ -445,8 +449,8 @@ option<event> bro15conn::parse(std::string const& line)
   j = fs.end(3);
   if (! extract(i, j, addr) || i != j)
   {
-    VAST_LOG_ERROR("invalid conn.log responding address (field 4) (line " <<
-                     current_ << ')');
+    VAST_LOG_ACTOR_ERROR("invalid conn.log respaddress (field 4) (line " <<
+                         current_ << ')');
     return {};
   }
   e.emplace_back(std::move(addr));
@@ -463,8 +467,8 @@ option<event> bro15conn::parse(std::string const& line)
     string service;
     if (! extract(i, j, service) || i != j)
     {
-      VAST_LOG_ERROR("invalid conn.log service (field 5) (line " <<
-                       current_ << ')');
+      VAST_LOG_ACTOR_ERROR("invalid conn.log service (field 5) (line " <<
+                           current_ << ')');
       return {};
     }
     e.emplace_back(std::move(service));
@@ -476,8 +480,8 @@ option<event> bro15conn::parse(std::string const& line)
   port orig_p;
   if (! extract(i, j, orig_p) || i != j)
   {
-    VAST_LOG_ERROR("invalid conn.log originating port (field 6) (line " <<
-                     current_ << ')');
+    VAST_LOG_ACTOR_ERROR("invalid conn.log orig port (field 6) (line " <<
+                         current_ << ')');
     return {};
   }
 
@@ -486,8 +490,8 @@ option<event> bro15conn::parse(std::string const& line)
   port resp_p;
   if (! extract(i, j, resp_p) || i != j)
   {
-    VAST_LOG_ERROR("invalid conn.log responding port (field 7) (line " <<
-                     current_ << ')');
+    VAST_LOG_ACTOR_ERROR("invalid conn.log resp port (field 7) (line " <<
+                         current_ << ')');
     return {};
   }
 
@@ -496,8 +500,8 @@ option<event> bro15conn::parse(std::string const& line)
   string proto;
   if (! extract(i, j, proto) || i != j)
   {
-    VAST_LOG_ERROR("invalid conn.log proto (field 8) (line " <<
-                     current_ << ')');
+    VAST_LOG_ACTOR_ERROR("invalid conn.log proto (field 8) (line " <<
+                         current_ << ')');
     return {};
   }
 
@@ -526,8 +530,8 @@ option<event> bro15conn::parse(std::string const& line)
     uint64_t orig_bytes;
     if (! extract(i, j, orig_bytes) || i != j)
     {
-      VAST_LOG_ERROR("invalid conn.log originating bytes (field 9) (line " <<
-                     current_ << ')');
+      VAST_LOG_ACTOR_ERROR("invalid conn.log orig bytes (field 9) (line " <<
+                           current_ << ')');
       return {};
     }
     e.emplace_back(orig_bytes);
@@ -544,8 +548,8 @@ option<event> bro15conn::parse(std::string const& line)
     uint64_t resp_bytes;
     if (! extract(i, j, resp_bytes) || i != j)
     {
-      VAST_LOG_ERROR("invalid conn.log responding bytes (field 10) (line " <<
-                     current_ << ')');
+      VAST_LOG_ACTOR_ERROR("invalid conn.log resp bytes (field 10) (line " <<
+                           current_ << ')');
       return {};
     }
     e.emplace_back(resp_bytes);
@@ -557,8 +561,8 @@ option<event> bro15conn::parse(std::string const& line)
   string state;
   if (! extract(i, j, state) || i != j)
   {
-    VAST_LOG_ERROR("invalid conn.log connection state (field 11) (line " <<
-                   current_ << ')');
+    VAST_LOG_ACTOR_ERROR("invalid conn.log conn state (field 11) (line " <<
+                         current_ << ')');
     return {};
   }
   e.emplace_back(std::move(state));
@@ -569,8 +573,8 @@ option<event> bro15conn::parse(std::string const& line)
   string direction;
   if (! extract(i, j, direction) || i != j)
   {
-    VAST_LOG_ERROR("invalid conn.log direction (field 12) (line " <<
-                   current_ << ')');
+    VAST_LOG_ACTOR_ERROR("invalid conn.log direction (field 12) (line " <<
+                         current_ << ')');
     return {};
   }
   e.emplace_back(std::move(direction));
@@ -583,8 +587,8 @@ option<event> bro15conn::parse(std::string const& line)
     string addl;
     if (! extract(i, j, addl) || i != j)
     {
-      VAST_LOG_ERROR("invalid conn.log additional data (field 13) (line " <<
-                     current_ << ')');
+      VAST_LOG_ACTOR_ERROR("invalid conn.log add data (field 13) (line " <<
+                           current_ << ')');
       return {};
     }
     e.emplace_back(std::move(addl));

@@ -1,7 +1,7 @@
 #include "vast/index.h"
 
+#include <cppa/cppa.hpp>
 #include "vast/bitmap_index.h"
-#include "vast/logger.h"
 #include "vast/segment.h"
 #include "vast/expression.h"
 #include "vast/partition.h"
@@ -136,10 +136,13 @@ index::index(path directory)
 {
 }
 
-void index::init()
+char const* index::description() const
 {
-  VAST_LOG_ACT_VERBOSE("index", "spawned");
+  return "index";
+}
 
+void index::act()
+{
   become(
       on(atom("kill")) >> [=]
       {
@@ -155,17 +158,17 @@ void index::init()
         // FIXME: we support only one partition for now.
         assert(! partitions_.empty());
         auto part = partitions_.begin()->second;
-        VAST_LOG_ACT_DEBUG("index", "sends " << commands.size() <<
-                           " commands to partition " <<
-                           partitions_.begin()->first);
+        VAST_LOG_ACTOR_DEBUG("sends " << commands.size() <<
+                             " commands to partition " <<
+                             partitions_.begin()->first);
         for (auto& cmd : commands)
           part << cmd;
       },
       on(arg_match) >> [=](segment const& s)
       {
         assert(active_);
-        VAST_LOG_ACT_DEBUG("index", "sending events from segment " << s.id() <<
-                           " to " << VAST_ACTOR("partition", active_));
+        VAST_LOG_ACTOR_DEBUG("sending events from segment " << s.id() <<
+                             " to " << VAST_ACTOR("partition", active_));
 
         segment::reader r{&s};
         event e;
@@ -182,19 +185,14 @@ void index::init()
   load();
 }
 
-void index::on_exit()
-{
-  VAST_LOG_ACT_VERBOSE("index", "terminated");
-}
-
 void index::load()
 {
   if (! exists(dir_))
   {
-    VAST_LOG_ACT_INFO("index", "creates new directory " << dir_);
+    VAST_LOG_ACTOR_INFO("creates new directory " << dir_);
     if (! mkdir(dir_))
     {
-      VAST_LOG_ACT_ERROR("index", "failed to create " << dir_);
+      VAST_LOG_ACTOR_ERROR("failed to create " << dir_);
       quit();
     }
   }
@@ -205,7 +203,7 @@ void index::load()
         dir_,
         [&](path const& p) -> bool
         {
-          VAST_LOG_ACT_VERBOSE("index", "found partition " << p);
+          VAST_LOG_ACTOR_VERBOSE("found partition " << p);
           auto part = spawn<partition>(p);
           auto id = uuid{to_string(p.basename())};
           partitions_.emplace(id, part);
@@ -215,8 +213,8 @@ void index::load()
               {
                 if (tp >= *latest)
                 {
-                  VAST_LOG_ACT_DEBUG("index", "marked partition " << p <<
-                                     " as active (" << tp << ")");
+                  VAST_LOG_ACTOR_DEBUG("marked partition " << p <<
+                                       " as active (" << tp << ")");
                   *latest = tp;
                   active_ = part;
                 }

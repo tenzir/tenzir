@@ -1,21 +1,19 @@
 #include "vast/source/synchronous.h"
 
-#include "vast/logger.h"
-
 namespace vast {
 namespace source {
 
 using namespace cppa;
 
 synchronous::synchronous(actor_ptr sink, size_t batch_size)
-  : sink_(sink),
-    batch_size_(batch_size)
-{
-}
-
-void synchronous::init()
+  : sink_{std::move(sink)},
+    batch_size_{batch_size}
 {
   chaining(false);
+}
+
+void synchronous::act()
+{
   become(
       on(atom("batch size"), arg_match) >> [=](size_t batch_size)
       {
@@ -31,15 +29,11 @@ void synchronous::init()
       },
       others() >> [=]
       {
-        VAST_LOG_ACT_ERROR("source", "received unexpected message from @" <<
-                           last_sender()->id() << ": " <<
-                           to_string(last_dequeued()));
+        VAST_LOG_ACTOR_ERROR(description(),
+                             "received unexpected message from @" <<
+                             last_sender()->id() << ": " <<
+                             to_string(last_dequeued()));
       });
-}
-
-void synchronous::on_exit()
-{
-  VAST_LOG_ACT_VERBOSE("source", "terminated");
 }
 
 void synchronous::run()
@@ -52,13 +46,13 @@ void synchronous::run()
     else if (auto e = extract())
       events_.push_back(std::move(*e));
     else if (++errors_ % 100 == 0)
-      VAST_LOG_ACT_ERROR("source", "failed on " << errors_ << " events");
+      VAST_LOG_ACTOR_ERROR(description(), "failed on " << errors_ << " events");
   }
 
   if (! events_.empty())
   {
-    VAST_LOG_ACT_DEBUG("source", "sends " << events_.size() <<
-                       " events to sink @" << sink_->id());
+    VAST_LOG_ACTOR_DEBUG(description(), "sends " << events_.size() <<
+                         " events to sink @" << sink_->id());
 
     send(sink_, std::move(events_));
     events_.clear();

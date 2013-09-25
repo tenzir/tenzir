@@ -1,7 +1,7 @@
 #ifndef VAST_SINK_ASYNCHRONOUS_H
 #define VAST_SINK_ASYNCHRONOUS_H
 
-#include <cppa/cppa.hpp>
+#include "vast/actor.h"
 
 namespace vast {
 
@@ -10,11 +10,12 @@ class event;
 namespace sink {
 
 /// A sink that processes events asynchronously.
-class asynchronous : public cppa::event_based_actor
+class asynchronous : public actor<asynchronous>
 {
 public:
-  virtual void init() override;
-  virtual void on_exit() override;
+  virtual void on_exit() final;
+  void act();
+  virtual char const* description() const = 0;
 
   /// Retrieves the total number of events processed.
   /// @returns The number of events this sink received.
@@ -36,7 +37,6 @@ protected:
 
   size_t total_events_ = 0;
 };
-
 
 } // namespace sink
 } // namespace vast

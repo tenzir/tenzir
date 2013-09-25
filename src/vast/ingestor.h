@@ -3,6 +3,7 @@
 
 #include <unordered_map>
 #include <cppa/cppa.hpp>
+#include "vast/actor.h"
 #include "vast/uuid.h"
 #include "vast/sink/segmentizer.h"
 
@@ -10,7 +11,7 @@ namespace vast {
 
 /// The ingestor. This component manages different types of event sources, each
 /// of which generate events in a different manner.
-class ingestor : public cppa::event_based_actor
+class ingestor : public actor<ingestor>
 {
 public:
   /// Spawns an ingestor.
@@ -20,11 +21,8 @@ public:
            size_t max_segment_size,
            size_t batch_size);
 
-  /// Implements `cppa::event_based_actor::init`.
-  virtual void init() final;
-
-  /// Overrides `cppa::event_based_actor::on_exit`.
-  virtual void on_exit() override;
+  void act();
+  char const* description() const;
 
 private:
   template <typename Source, typename... Args>

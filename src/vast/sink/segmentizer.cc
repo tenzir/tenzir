@@ -1,5 +1,6 @@
 #include "vast/sink/segmentizer.h"
 
+#include <cppa/cppa.hpp>
 #include "vast/event.h"
 #include "vast/exception.h"
 #include "vast/logger.h"
@@ -18,6 +19,11 @@ segmentizer::segmentizer(actor_ptr upstream,
 {
 }
 
+char const* segmentizer::description() const
+{
+  return "segmentizer";
+}
+
 void segmentizer::process(event const& e)
 {
   if (writer_.write(e))
@@ -25,8 +31,7 @@ void segmentizer::process(event const& e)
     if (stats_.timed_add(1) && stats_.last() > 0)
     {
       send(upstream_, atom("statistics"), stats_.last());
-      VAST_LOG_ACT_VERBOSE(
-          "segmentizer",
+      VAST_LOG_ACTOR_VERBOSE(
           "ingests at rate " << stats_.last() << " events/sec" <<
           " (mean " << stats_.mean() <<
           ", median " << stats_.median() <<
@@ -35,9 +40,9 @@ void segmentizer::process(event const& e)
     return;
   }
 
-  VAST_LOG_ACT_DEBUG("segmentizer", "sends segment " << segment_.id() <<
-                     " with " << segment_.events() << " events to @" <<
-                     upstream_->id());
+  VAST_LOG_ACTOR_DEBUG("sends segment " << segment_.id() <<
+                       " with " << segment_.events() << " events to @" <<
+                       upstream_->id());
 
   auto max_segment_size = segment_.max_size();
   send(upstream_, std::move(segment_));
@@ -52,15 +57,15 @@ void segmentizer::before_exit()
     segment_ = segment(uuid::random());
     writer_.attach_to(&segment_);
     if (! writer_.flush())
-      VAST_LOG_ACT_ERROR("segmentizer", "failed to flush a fresh segment");
+      VAST_LOG_ACTOR_ERROR("failed to flush a fresh segment");
     assert(segment_.events() > 0);
   }
 
   if (segment_.events() > 0)
   {
-    VAST_LOG_ACT_DEBUG("segmentizer", "sends final segment " << segment_.id() <<
-                       " with " << segment_.events() << " events to @" <<
-                       upstream_->id());
+    VAST_LOG_ACTOR_DEBUG("sends final segment " << segment_.id() <<
+                         " with " << segment_.events() << " events to @" <<
+                         upstream_->id());
 
     send(upstream_, std::move(segment_));
   }

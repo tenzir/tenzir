@@ -1,15 +1,14 @@
 #include "vast/schema_manager.h"
 
+#include <cppa/cppa.hpp>
 #include "vast/schema.h"
-#include "vast/logger.h"
 
 using namespace cppa;
 
 namespace vast {
 
-void schema_manager::init()
+void schema_manager::act()
 {
-  VAST_LOG_ACT_VERBOSE("schema-manager", "spawned");
   become(
       on(atom("kill")) >> [=]
       {
@@ -25,9 +24,9 @@ void schema_manager::init()
       });
 }
 
-void schema_manager::on_exit()
+char const* schema_manager::description() const
 {
-  VAST_LOG_ACT_VERBOSE("schema-manager", "terminated");
+  return "schema-manager";
 }
 
 } // namespace vast

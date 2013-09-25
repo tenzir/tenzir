@@ -3,7 +3,6 @@
 #include <array>
 #include <csignal>
 #include <cstdlib>
-#include "vast/logger.h"
 #include "vast/util/console.h"
 
 namespace vast {
@@ -31,14 +30,19 @@ void signal_handler(int signo)
 using namespace cppa;
 
 system_monitor::system_monitor(actor_ptr receiver)
-  : upstream_(receiver)
+  : upstream_{std::move(receiver)}
 {
 }
 
-void system_monitor::init()
+void system_monitor::on_exit()
 {
-  VAST_LOG_ACT_VERBOSE("system-monitor", "spawned");
-  VAST_LOG_ACT_DEBUG("system-monitor", "sends events to @" << upstream_->id());
+  util::console::buffer();
+  actor<system_monitor>::on_exit();
+}
+
+void system_monitor::act()
+{
+  VAST_LOG_ACTOR_DEBUG("sends events to @" << upstream_->id());
   util::console::unbuffer();
 
   signals.fill(0);
@@ -65,14 +69,12 @@ void system_monitor::init()
       on(atom("kill")) >> [=]
       {
         quit();
-      }
-  );
+      });
 }
 
-void system_monitor::on_exit()
+char const* system_monitor::description() const
 {
-  util::console::buffer();
-  VAST_LOG_ACT_VERBOSE("system-monitor", "terminated");
+  return "system-monitor";
 }
 
 } // namespace vast
