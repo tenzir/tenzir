@@ -203,8 +203,13 @@ option<bitstream> event_arg_index::type_lookup(
     return {};
   for (auto& bmi : i->second)
     if (auto r = bmi->lookup(op, v))
-      result |= *r;
-  if (result.empty())
+    {
+      if (result)
+        result |= *r;
+      else
+        result = std::move(*r);
+    }
+  if (! result || result.empty())
     return {};
   else
     return {std::move(result)};
@@ -213,7 +218,6 @@ option<bitstream> event_arg_index::type_lookup(
 option<bitstream> event_arg_index::offset_lookup(
     relational_operator op, value const& v, offset const& o) const
 {
-  bitstream result;
   auto i = args_.find(o);
   if (i == args_.end())
     return {};
