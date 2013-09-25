@@ -32,6 +32,14 @@ void partition::act()
 
   event_meta_index_ = spawn<event_meta_index>(dir_ / "meta");
 
+  traverse(dir_ / "event",
+           [&](path const& p) -> bool
+           {
+             event_arg_indexes_.emplace(p.basename().str(),
+                                        spawn<event_arg_index>(p));
+             return true;
+           });
+
   become(
       on(atom("kill")) >> [=]
       {
