@@ -15,6 +15,7 @@
 #include "vast/bitmap_index/port.h"
 #include "vast/bitmap_index/string.h"
 #include "vast/bitmap_index/time.h"
+#include "vast/detail/cppa_type_info.h"
 #include "vast/util/tuple.h"
 
 namespace vast {
@@ -194,6 +195,8 @@ void type_manager::initialize()
   make_convertible<port_bitmap_index, bitmap_index>();
   make_convertible<time_bitmap_index, bitmap_index>();
   make_convertible<string_bitmap_index, bitmap_index>();
+
+  cppa_announce_types();
 }
 
 void type_manager::destroy()

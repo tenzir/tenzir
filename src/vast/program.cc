@@ -15,9 +15,7 @@
 #include "vast/schema.h"
 #include "vast/schema_manager.h"
 #include "vast/search.h"
-#include "vast/shutdown.h"
 #include "vast/system_monitor.h"
-#include "vast/detail/cppa_type_info.h"
 #include "vast/detail/type_manager.h"
 #include "vast/util/profiler.h"
 
@@ -25,73 +23,17 @@
 #include "vast/util/broccoli.h"
 #endif
 
-namespace vast {
-
 using namespace cppa;
 
+namespace vast {
+
 program::program(configuration const& config)
-  : config_(config)
-{ }
-
-bool program::run()
+  : config_{config}
 {
-  if (! start())
-    return false;
-
-  bool done = false;
-  do_receive(
-      on(atom("system"), atom("key"), arg_match) >> [&](char key)
-      {
-        switch (key)
-        {
-          default:
-          {
-            std::string desc;
-            if (key == '\n')
-              desc = "<enter>";
-            else if (key == ' ')
-              desc = "<space>";
-            else
-              desc = std::string{"'"} + key + "'";
-            VAST_LOG_ACTOR_VERBOSE(
-                "program", "got invalid key " << desc << " (press Q to quit)");
-          }
-          break;
-          case 'Q':
-            done = true;
-            break;
-        }
-      },
-      on(atom("system"), atom("signal"), arg_match) >> [&](int signal)
-      {
-        VAST_LOG_ACTOR_VERBOSE("program", "received signal " << signal);
-        if (signal == SIGINT || signal == SIGTERM)
-          done = true;
-      },
-      others() >> [=]
-      {
-        VAST_LOG_ACTOR_ERROR("program", "received unexpected message from @" <<
-                           self->last_sender()->id() << ": " <<
-                           to_string(self->last_dequeued()));
-      })
-  .until(gref(done));
-
-  stop();
-  await_all_others_done();
-  cppa::shutdown();
-  vast::shutdown();
-
-  return true;
-}
-
-bool program::start()
-{
-  detail::cppa_announce_types();
-
   path vast_dir = string(config_.get("directory"));
   if (! exists(vast_dir))
     if (! mkdir(vast_dir))
-      return false;
+      quit(exit_reason::user_defined);
 
   logger::instance()->init(
       static_cast<logger::level>(config_.as<uint32_t>("log.console-verbosity")),
@@ -114,19 +56,22 @@ bool program::start()
   detail::type_manager::instance()->each(
       [&](global_type_info const&) { ++n_types; });
   VAST_LOG_DEBUG("type manager announced " << n_types << " types");
+}
 
+void program::act()
+{
+  path vast_dir = string(config_.get("directory"));
   try
   {
-    VAST_LOG_ACTOR_VERBOSE("program", "spawned");
     system_monitor_ = spawn<system_monitor, detached>(self);
-    self->monitor(system_monitor_);
+    link_to(system_monitor_);
     send(system_monitor_, atom("act"));
 
     if (config_.check("profile"))
     {
       auto ms = config_.as<unsigned>("profile");
-      profiler_ = spawn<util::profiler>(to_string(vast_dir / "log"),
-                                        std::chrono::seconds(ms));
+      profiler_ = spawn<util::profiler, linked>(
+          to_string(vast_dir / "log"), std::chrono::seconds(ms));
       if (config_.check("profile-cpu"))
         send(profiler_, atom("start"), atom("perftools"), atom("cpu"));
       if (config_.check("profile-heap"))
@@ -134,22 +79,18 @@ bool program::start()
       send(profiler_, atom("start"), atom("rusage"));
     }
 
-    schema_manager_ = spawn<schema_manager, monitored>();
+    schema_manager_ = spawn<schema_manager, linked>();
     if (config_.check("schema.file"))
     {
       send(schema_manager_, atom("load"), config_.get("schema.file"));
       if (config_.check("schema.print"))
       {
-        send(schema_manager_, atom("schema"));
-        receive(
-            on_arg_match >> [](schema const& s) { std::cout << to_string(s); },
-            after(std::chrono::seconds(1)) >> [=]
+        sync_send(schema_manager_, atom("schema")).then(
+            on_arg_match >> [](schema const& s)
             {
-              VAST_LOG_ACTOR_ERROR("program",
-                  "schema manager " << schema_manager_->id() <<
-                  " did not answer after one second");
+              std::cout << to_string(s);
             });
-        return false;
+        quit();
       }
     }
 
@@ -157,14 +98,14 @@ bool program::start()
     auto tracker_port = config_.as<unsigned>("tracker.port");
     if (config_.check("tracker-actor") || config_.check("all-server"))
     {
-      tracker_ = spawn<id_tracker>(to_string(vast_dir / "id"));
-      VAST_LOG_ACTOR_VERBOSE("program", "publishes tracker at " <<
+      tracker_ = spawn<id_tracker, linked>(to_string(vast_dir / "id"));
+      VAST_LOG_ACTOR_VERBOSE("publishes tracker at " <<
                            tracker_host << ':' << tracker_port);
       publish(tracker_, tracker_port, tracker_host.c_str());
     }
     else
     {
-      VAST_LOG_ACTOR_VERBOSE("program", "connects to tracker at " <<
+      VAST_LOG_ACTOR_VERBOSE("connects to tracker at " <<
                            tracker_host << ':' << tracker_port);
 
       tracker_ = remote_actor(tracker_host, tracker_port);
@@ -176,17 +117,17 @@ bool program::start()
     auto archive_port = config_.as<unsigned>("archive.port");
     if (config_.check("archive-actor") || config_.check("all-server"))
     {
-      archive_ = spawn<archive>(
+      archive_ = spawn<archive, linked>(
           to_string(vast_dir / "archive"),
           config_.as<size_t>("archive.max-segments"));
       send(archive_, atom("init"));
-      VAST_LOG_ACTOR_VERBOSE("program", "publishes archive at " <<
+      VAST_LOG_ACTOR_VERBOSE("publishes archive at " <<
                            archive_host << ':' << archive_port);
       publish(archive_, archive_port, archive_host.c_str());
     }
     else
     {
-      VAST_LOG_ACTOR_VERBOSE("program", "connects to tracker at " <<
+      VAST_LOG_ACTOR_VERBOSE("connects to tracker at " <<
                            tracker_host << ':' << tracker_port);
       archive_ = remote_actor(archive_host, archive_port);
       VAST_LOG_ACTOR_VERBOSE("program",
@@ -197,14 +138,14 @@ bool program::start()
     auto index_port = config_.as<unsigned>("index.port");
     if (config_.check("index-actor") || config_.check("all-server"))
     {
-      index_ = spawn<index>(vast_dir / "index");
-      VAST_LOG_ACTOR_VERBOSE("program", "publishes index " <<
+      index_ = spawn<index, linked>(vast_dir / "index");
+      VAST_LOG_ACTOR_VERBOSE("publishes index " <<
                            index_host << ':' << index_port);
       publish(index_, index_port, index_host.c_str());
     }
     else
     {
-      VAST_LOG_ACTOR_VERBOSE("program", "connects to index at " <<
+      VAST_LOG_ACTOR_VERBOSE("connects to index at " <<
                            index_host << ":" << index_port);
       index_ = remote_actor(index_host, index_port);
       VAST_LOG_ACTOR_VERBOSE("program",
@@ -217,14 +158,14 @@ bool program::start()
         || config_.check("index-actor")
         || config_.check("all-server"))
     {
-      receiver_ = spawn<receiver>(tracker_, archive_, index_);
-      VAST_LOG_ACTOR_VERBOSE("program", "publishes receiver at " <<
+      receiver_ = spawn<receiver, linked>(tracker_, archive_, index_);
+      VAST_LOG_ACTOR_VERBOSE("publishes receiver at " <<
                            receiver_host << ':' << receiver_port);
       publish(receiver_, receiver_port, receiver_host.c_str());
     }
     else
     {
-      VAST_LOG_ACTOR_VERBOSE("program", "connects to receiver at " <<
+      VAST_LOG_ACTOR_VERBOSE("connects to receiver at " <<
                            receiver_host << ":" << receiver_port);
       receiver_ = remote_actor(receiver_host, receiver_port);
       VAST_LOG_ACTOR_VERBOSE("program",
@@ -233,7 +174,7 @@ bool program::start()
 
     if (config_.check("ingestor-actor"))
     {
-      ingestor_ = spawn<ingestor, monitored>(receiver_,
+      ingestor_ = spawn<ingestor, linked>(receiver_,
           config_.as<size_t>("ingest.max-events-per-chunk"),
           config_.as<size_t>("ingest.max-segment-size") * 1000000,
           config_.as<size_t>("ingest.batch-size"));
@@ -275,14 +216,14 @@ bool program::start()
     auto search_port = config_.as<unsigned>("search.port");
     if (config_.check("search-actor") || config_.check("all-server"))
     {
-      search_ = spawn<search>(archive_, index_, schema_manager_);
-      VAST_LOG_ACTOR_VERBOSE("program", "publishes search at " <<
+      search_ = spawn<search, linked>(archive_, index_, schema_manager_);
+      VAST_LOG_ACTOR_VERBOSE("publishes search at " <<
                        search_host << ':' << search_port);
       publish(search_, search_port, search_host.c_str());
     }
     else if (config_.check("client.expression"))
     {
-      VAST_LOG_ACTOR_VERBOSE("program", "connects to search at " <<
+      VAST_LOG_ACTOR_VERBOSE("connects to search at " <<
                            search_host << ":" << search_port);
       search_ = remote_actor(search_host, search_port);
       VAST_LOG_ACTOR_VERBOSE("program",
@@ -290,57 +231,56 @@ bool program::start()
 
       auto paginate = config_.as<unsigned>("client.paginate");
       auto& expression = config_.get("client.expression");
-      query_client_ = spawn<query_client, monitored>(search_, expression,
-                                                     paginate);
+      query_client_ = spawn<query_client, linked>(
+          search_, expression, paginate);
       send(query_client_, atom("start"));
     }
-
-    return true;
   }
   catch (network_error const& e)
   {
-    VAST_LOG_ACTOR_ERROR("program", "encountered network error: " << e.what());
+    VAST_LOG_ACTOR_ERROR("encountered network error: " << e.what());
   }
 
-  return false;
+  become(
+      on(atom("system"), atom("key"), arg_match) >> [&](char key)
+      {
+        switch (key)
+        {
+          default:
+            {
+              std::string desc;
+              if (key == '\n')
+                desc = "<enter>";
+              else if (key == ' ')
+                desc = "<space>";
+              else
+                desc = std::string{"'"} + key + "'";
+              VAST_LOG_ACTOR_VERBOSE(
+                  "got invalid key " << desc << " (press Q to quit)");
+            }
+            break;
+          case 'Q':
+            quit();
+            break;
+        }
+      },
+      on(atom("system"), atom("signal"), arg_match) >> [&](int signal)
+      {
+        VAST_LOG_ACTOR_VERBOSE("received signal " << signal);
+        if (signal == SIGINT || signal == SIGTERM)
+          quit();
+      },
+      others() >> [=]
+      {
+        VAST_LOG_ACTOR_ERROR("received unexpected message from @" <<
+                             self->last_sender()->id() << ": " <<
+                             to_string(self->last_dequeued()));
+      });
 }
 
-void program::stop()
+char const* program::description() const
 {
-  auto kill = make_any_tuple(atom("kill"));
-
-  if (query_client_)
-    query_client_ << kill;
-
-  if (config_.check("search-actor") || config_.check("all-server"))
-    search_ << kill;
-
-  if (config_.check("ingestor-actor"))
-    ingestor_ << kill;
-
-  if (config_.check("archive-actor") ||
-      config_.check("index-actor") ||
-      config_.check("all-server"))
-    receiver_ << kill;
-
-  if (config_.check("index-actor") || config_.check("all-server"))
-    index_ << kill;
-
-  if (config_.check("archive-actor") || config_.check("all-server"))
-    archive_ << kill;
-
-  if (config_.check("tracker-actor") || config_.check("all-server"))
-    tracker_ << kill;
-
-  if (schema_manager_)
-    schema_manager_ << kill;
-
-  if (profiler_)
-    profiler_ << kill;
-
-  if (system_monitor_)
-    system_monitor_ << kill;
-
+  return "program";
 }
 
 } // namespace vast

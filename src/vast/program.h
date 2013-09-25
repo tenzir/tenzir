@@ -2,36 +2,27 @@
 #define VAST_PROGRAM_H
 
 #include <cppa/cppa.hpp>
+#include "vast/actor.h"
 #include "vast/configuration.h"
 
 namespace vast {
 
 /// The main program.
-class program
+class program : public actor<program>
 {
   program(program const&) = delete;
   program& operator=(program) = delete;
 
 public:
-  /// Constructs the program.
+  /// Spawns the program.
   /// @param config The program configuration.
   program(configuration const& config);
 
-  /// Starts the program and blocks until all actors have terminated.
-  /// @returns `true` if the program terminated without errors and `false`
-  /// otherwise.
-  bool run();
+  void act();
+  char const* description() const;
 
 private:
-  /// Starts all actors.
-  /// @returns `true` if starting the actors succeeded.
-  bool start();
-
-  /// Sends a shutdown message to all actors.
-  void stop();
-
   configuration const& config_;
-
   cppa::actor_ptr receiver_;
   cppa::actor_ptr archive_;
   cppa::actor_ptr index_;

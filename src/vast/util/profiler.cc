@@ -114,33 +114,6 @@ void profiler::act()
         now.usr -= usr;
         now.sys -= sys;
         file_ << now << std::endl;
-      },
-      on(atom("kill")) >> [=]
-      {
-#ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
-        ProfilerState state;
-        ProfilerGetCurrentState(&state);
-        if (state.enabled)
-        {
-          ProfilerStop();
-          VAST_LOG_ACTOR_INFO(
-              "let Gperftools CPU profiler gather " <<
-              state.samples_gathered << " samples" <<
-              " in file " << state.profile_name);
-          VAST_LOG_ACTOR_INFO(" stops Gperftools CPU profiler");
-        }
-#endif
-#ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
-        if (IsHeapProfilerRunning())
-        {
-          VAST_LOG_ACTOR_INFO(" stops Gperftools heap profiler");
-
-          HeapProfilerDump("cleanup");
-          HeapProfilerStop();
-        }
-#endif
-        file_.close();
-        quit();
       });
 }
 
@@ -148,6 +121,34 @@ char const* profiler::description() const
 {
   return "profiler";
 }
+
+void profiler::on_exit()
+{
+#ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
+  ProfilerState state;
+  ProfilerGetCurrentState(&state);
+  if (state.enabled)
+  {
+    VAST_LOG_ACTOR_INFO(" stops Gperftools CPU profiler");
+    ProfilerStop();
+    VAST_LOG_ACTOR_INFO(
+        "recorded " << state.samples_gathered <<
+        "Gperftools CPU profiler samples in " << state.profile_name);
+  }
+#endif
+#ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
+  if (IsHeapProfilerRunning())
+  {
+    VAST_LOG_ACTOR_INFO(" stops Gperftools heap profiler");
+    HeapProfilerDump("cleanup");
+    HeapProfilerStop();
+  }
+#endif
+  file_.close();
+
+  actor<profiler>::on_exit();
+}
+
 
 } // namespace util
 } // namespace vast

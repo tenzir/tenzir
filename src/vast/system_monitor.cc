@@ -42,7 +42,7 @@ void system_monitor::on_exit()
 
 void system_monitor::act()
 {
-  VAST_LOG_ACTOR_DEBUG("sends events to @" << upstream_->id());
+  VAST_LOG_ACTOR_DEBUG("will send its events to @" << upstream_->id());
   util::console::unbuffer();
 
   signals.fill(0);
@@ -65,10 +65,6 @@ void system_monitor::act()
           send(upstream_, atom("system"), atom("key"), c);
 
         self << last_dequeued();
-      },
-      on(atom("kill")) >> [=]
-      {
-        quit();
       });
 }
 
