@@ -1,7 +1,20 @@
 #include "vast/operator.h"
 #include "vast/logger.h"
+#include "vast/serialization.h"
 
 namespace vast {
+
+void serialize(serializer& sink, arithmetic_operator op)
+{
+  sink << static_cast<std::underlying_type<arithmetic_operator>::type>(op);
+}
+
+void deserialize(deserializer& source, arithmetic_operator& op)
+{
+  std::underlying_type<arithmetic_operator>::type u;
+  source >> u;
+  op = static_cast<arithmetic_operator>(u);
+}
 
 bool convert(arithmetic_operator op, std::string& to)
 {
@@ -40,6 +53,18 @@ bool convert(arithmetic_operator op, std::string& to)
       break;
   }
   return true;
+}
+
+void serialize(serializer& sink, relational_operator op)
+{
+  sink << static_cast<std::underlying_type<relational_operator>::type>(op);
+}
+
+void deserialize(deserializer& source, relational_operator& op)
+{
+  std::underlying_type<relational_operator>::type u;
+  source >> u;
+  op = static_cast<relational_operator>(u);
 }
 
 bool convert(relational_operator op, std::string& to)
@@ -82,6 +107,18 @@ bool convert(relational_operator op, std::string& to)
   return true;
 }
 
+
+void serialize(serializer& sink, boolean_operator op)
+{
+  sink << static_cast<std::underlying_type<boolean_operator>::type>(op);
+}
+
+void deserialize(deserializer& source, boolean_operator& op)
+{
+  std::underlying_type<boolean_operator>::type u;
+  source >> u;
+  op = static_cast<boolean_operator>(u);
+}
 
 bool convert(boolean_operator op, std::string& to)
 {

@@ -41,10 +41,18 @@ bool event_meta_index::index(event const& e)
       && name_.push_back(e.name(), e.id());
 }
 
-option<bitstream> event_meta_index::lookup(expression const&)
+behavior event_meta_index::actor_behavior() const
 {
-  // TODO: Implement this function.
-  return {};
+  return (
+      on(atom("lookup"), atom("time"), arg_match)
+        >> [=](relational_operator op, value const& v, actor_ptr sink)
+      {
+        send(sink, atom("result"), atom("expected"), self);
+        if (auto result = timestamp_.lookup(op, v))
+          send(sink, atom("result"), std::move(*result));
+        else
+          send(sink, atom("result"), atom("miss"));
+      });
 }
 
 
@@ -117,16 +125,34 @@ bool event_arg_index::index(event const& e)
   if (e.empty())
     return true;
   offset o{0};
-  return index_impl(e, e.id(), o);
+  return index_record(e, e.id(), o);
 }
 
-option<bitstream> event_arg_index::lookup(expression const&)
+behavior event_arg_index::actor_behavior() const
 {
-  // TODO: Implement this function.
-  return {};
+  return (
+      on(atom("lookup"), atom("type"), arg_match)
+        >> [=](relational_operator op, value const& v, actor_ptr sink)
+      {
+        send(sink, atom("result"), atom("expected"), self);
+        if (auto result = type_lookup(op, v))
+          send(sink, atom("result"), std::move(*result));
+        else
+          send(sink, atom("result"), atom("miss"));
+      },
+      on(atom("lookup"), atom("offset"), arg_match)
+        >> [=](relational_operator op, value const& v,
+               offset const& off, actor_ptr sink)
+      {
+        send(sink, atom("result"), atom("expected"), self);
+        if (auto result = offset_lookup(op, v, off))
+          send(sink, atom("result"), std::move(*result));
+        else
+          send(sink, atom("result"), atom("miss"));
+      });
 }
 
-bool event_arg_index::index_impl(record const& r, uint64_t id, offset& o)
+bool event_arg_index::index_record(record const& r, uint64_t id, offset& o)
 {
   if (o.empty())
     return true;
@@ -138,7 +164,7 @@ bool event_arg_index::index_impl(record const& r, uint64_t id, offset& o)
       if (! inner.empty())
       {
         o.push_back(0);
-        if (! index_impl(inner, id, o))
+        if (! index_record(inner, id, o))
           return false;
         o.pop_back();
       }
@@ -166,6 +192,37 @@ bool event_arg_index::index_impl(record const& r, uint64_t id, offset& o)
     ++o.back();
   }
   return true;
+}
+
+option<bitstream> event_arg_index::type_lookup(
+    relational_operator op, value const& v) const
+{
+  bitstream result;
+  auto i = types_.find(v.which());
+  if (i == types_.end())
+    return {};
+  for (auto& bmi : i->second)
+    if (auto r = bmi->lookup(op, v))
+      result |= *r;
+  if (result.empty())
+    return {};
+  else
+    return {std::move(result)};
+}
+
+option<bitstream> event_arg_index::offset_lookup(
+    relational_operator op, value const& v, offset const& o) const
+{
+  bitstream result;
+  auto i = args_.find(o);
+  if (i == args_.end())
+    return {};
+  auto& bmi = i->second;
+  assert(bmi != nullptr);
+  if (auto r = bmi->lookup(op, v))
+    return r;
+  else
+    return {};
 }
 
 } // namespace vast

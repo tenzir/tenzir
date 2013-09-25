@@ -9,6 +9,10 @@ using namespace cppa;
 
 namespace vast {
 
+namespace {
+
+} // namespace <anonymous>
+
 partition::partition(path dir)
   : dir_{std::move(dir)},
     last_modified_{now()}
@@ -42,6 +46,36 @@ void partition::init()
       {
         reply(last_modified_);
       },
+      on(atom("lookup"), atom("type"), arg_match) >>
+        [=](regex const& events, relational_operator op,
+            value const& v, actor_ptr sink)
+      {
+        auto t = make_any_tuple(atom("lookup"), atom("type"), op, v, sink);
+        for (auto& p : event_arg_indexes_)
+          if (events.match(p.first))
+            p.second << t;
+      },
+      on(atom("lookup"), atom("offset"), arg_match) >>
+        [=](regex const& events, relational_operator op,
+            value const& v, offset const& off, actor_ptr sink)
+      {
+        auto t = make_any_tuple(
+            atom("lookup"), atom("offset"), op, off, v, sink);
+
+        for (auto& p : event_arg_indexes_)
+          if (events.match(p.first))
+            p.second << t;
+      },
+//      on(atom("lookup"), atom("tag"), atom("name"), arg_match) >>
+//        [=](relational_operator op, value const& v)
+//      {
+//        // TODO.
+//      },
+//      on(atom("lookup"), atom("tag"), atom("timestamp"), arg_match) >>
+//        [=](relational_operator op, value const& v)
+//      {
+//        // TODO.
+//      },
       on_arg_match >> [=](event const& e)
       {
         last_modified_ = now();

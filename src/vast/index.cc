@@ -11,74 +11,122 @@ using namespace cppa;
 namespace vast {
 namespace {
 
-/// Determines whether a query expression has clauses that may benefit from an
-/// index lookup.
-class checker : public expr::const_visitor
+class query_builder : public expr::const_visitor
 {
 public:
-  operator bool() const
+  query_builder(actor_ptr sink, std::vector<any_tuple>& cmds)
+    : sink_(sink),
+      commands_(cmds)
   {
-    return positive_;
   }
 
-  virtual void visit(expr::node const&)
-  {
-    assert(! "should never happen");
-  }
+  virtual void visit(expr::node const&) { }
 
   virtual void visit(expr::timestamp_extractor const&)
   {
-    positive_ = true;
+    assert(current_value_);
+    commands_.push_back(
+        make_any_tuple(
+            atom("lookup"),
+            atom("time"),
+            regex{".*"},
+            current_operator_,
+            current_value_,
+            sink_));
   }
 
   virtual void visit(expr::name_extractor const&)
   {
-    positive_ = true;
+    VAST_LOG_DEBUG("building lookup with name for '" << current_value_ << "'" <<
+                   " under " << current_operator_);
+    assert(current_value_);
+    commands_.push_back(
+        make_any_tuple(
+            atom("lookup"),
+            atom("name"),
+            regex{".*"},
+            current_operator_,
+            current_value_,
+            sink_));
   }
 
   virtual void visit(expr::id_extractor const&)
   {
-    /* Do exactly nothing. */
+    // TODO: construct bitstream that represents the RHS.
   }
 
-  virtual void visit(expr::offset_extractor const&)
+  virtual void visit(expr::offset_extractor const& oe)
   {
-    /* Do exactly nothing. */
+    assert(current_value_);
+    VAST_LOG_DEBUG("building lookup with offset " << oe.off() <<
+                   " for '" << current_value_ << "'" <<
+                   " under " << current_operator_);
+    commands_.push_back(
+        make_any_tuple(
+            atom("lookup"),
+            atom("offset"),
+            regex{".*"},
+            current_operator_,
+            current_value_,
+            oe.off(),
+            sink_));
   }
 
-  virtual void visit(expr::type_extractor const&)
+  virtual void visit(expr::type_extractor const& te)
   {
-    /* Do exactly nothing. */
+    VAST_LOG_DEBUG("building lookup with type " << te.type() <<
+                   " for '" << current_value_ << "'" <<
+                   " under " << current_operator_);
+    assert(current_value_);
+    assert(te.type() == current_value_.which());
+    commands_.push_back(
+        make_any_tuple(
+            atom("lookup"),
+            atom("type"),
+            regex{".*"},
+            current_operator_,
+            current_value_,
+            sink_));
   }
 
   virtual void visit(expr::conjunction const& conj)
   {
+    // TODO: create one actor per clause
     for (auto& op : conj.operands())
-      if (! positive_)
-        op->accept(*this);
+      op->accept(*this);
   }
 
   virtual void visit(expr::disjunction const& disj)
   {
+    // TODO: create one actor per clause
     for (auto& op : disj.operands())
-      if (! positive_)
-        op->accept(*this);
+      op->accept(*this);
   }
 
   virtual void visit(expr::relation const& rel)
   {
     assert(rel.operands().size() == 2);
+    current_operator_ = rel.type();
+    // FIXME: We currently require that values appear on the RHS and extractor
+    // nodes on the LHS of the clause.
+    rel.operands()[1]->accept(*this);
     rel.operands()[0]->accept(*this);
+    current_value_ = invalid;
   }
 
-  virtual void visit(expr::constant const&)
+  virtual void visit(expr::constant const& c)
   {
-    /* Do exactly nothing. */
+    assert(c.ready());
+    current_value_ = c.result();
   }
 
 private:
-  bool positive_ = false;
+  value current_value_;
+  relational_operator current_operator_;
+  actor_ptr sink_;
+  std::vector<any_tuple>& commands_;
 };
+
 
 } // namespace <anonymous>
 
@@ -99,17 +147,19 @@ void index::init()
           p.second << last_dequeued();
         quit();
       },
-      on(atom("query"), arg_match) >> [=](expression const& expr)
+      on(atom("lookup"), arg_match) >> [=](expression const& expr)
       {
-        checker chkr;
-        expr.accept(chkr);
-        if (! chkr)
-        {
-          reply(atom("impossible"));
-          return;
-        }
-
-        // TODO: parse expression and hit indexes.
+        std::vector<any_tuple> commands;
+        query_builder builder{last_sender(), commands};
+        expr.accept(builder);
+        // FIXME: we support only one partition for now.
+        assert(! partitions_.empty());
+        auto part = partitions_.begin()->second;
+        VAST_LOG_ACT_DEBUG("index", "sends " << commands.size() <<
+                           " commands to partition " <<
+                           partitions_.begin()->first);
+        for (auto& cmd : commands)
+          part << cmd;
       },
       on(arg_match) >> [=](segment const& s)
       {
