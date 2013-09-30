@@ -15,8 +15,8 @@ class query_builder : public expr::const_visitor
 {
 public:
   query_builder(actor_ptr sink, std::vector<any_tuple>& cmds)
-    : sink_(sink),
-      commands_(cmds)
+    : sink_{std::move(sink)},
+      commands_{cmds}
   {
   }
 
@@ -127,7 +127,6 @@ private:
   std::vector<any_tuple>& commands_;
 };
 
-
 } // namespace <anonymous>
 
 
@@ -155,7 +154,7 @@ void index::act()
         std::vector<any_tuple> commands;
         query_builder builder{last_sender(), commands};
         expr.accept(builder);
-        // FIXME: we support only one partition for now.
+        // FIXME: Support more than one partition.
         assert(! partitions_.empty());
         auto part = partitions_.begin()->second;
         VAST_LOG_ACTOR_DEBUG("sends " << commands.size() <<
