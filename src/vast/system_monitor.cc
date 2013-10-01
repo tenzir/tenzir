@@ -29,8 +29,10 @@ void signal_handler(int signo)
 
 using namespace cppa;
 
-system_monitor::system_monitor(actor_ptr receiver)
-  : upstream_{std::move(receiver)}
+system_monitor::system_monitor(actor_ptr key_receiver,
+                               actor_ptr signal_receiver)
+  : key_receiver_{std::move(key_receiver)},
+    signal_receiver_{std::move(signal_receiver)}
 {
 }
 
@@ -42,7 +44,8 @@ void system_monitor::on_exit()
 
 void system_monitor::act()
 {
-  VAST_LOG_ACTOR_DEBUG("will send its events to @" << upstream_->id());
+  VAST_LOG_ACTOR_DEBUG("sends keystrokes to @" << key_receiver_->id());
+  VAST_LOG_ACTOR_DEBUG("sends signals to @" << signal_receiver_->id());
   util::console::unbuffer();
 
   signals.fill(0);
@@ -58,11 +61,11 @@ void system_monitor::act()
           signals[0] = 0;
           for (int i = 0; size_t(i) < signals.size(); ++i)
             while (signals[i]-- > 0)
-              send(upstream_, atom("system"), atom("signal"), i);
+              send(signal_receiver_, atom("system"), atom("signal"), i);
         }
 
         if (util::console::get(c, 100))
-          send(upstream_, atom("system"), atom("key"), c);
+          send(key_receiver_, atom("system"), atom("key"), c);
 
         self << last_dequeued();
       });

@@ -22,7 +22,6 @@ public:
   char const* description() const;
 
 private:
-  configuration const& config_;
   cppa::actor_ptr receiver_;
   cppa::actor_ptr archive_;
   cppa::actor_ptr index_;
@@ -33,6 +32,8 @@ private:
   cppa::actor_ptr schema_manager_;
   cppa::actor_ptr system_monitor_;
   cppa::actor_ptr profiler_;
+  configuration const& config_;
+  bool server_ = true;
 };
 
 } // namespace vast

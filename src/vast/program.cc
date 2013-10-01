@@ -28,7 +28,8 @@ using namespace cppa;
 namespace vast {
 
 program::program(configuration const& config)
-  : config_{config}
+  : config_{config},
+    server_{! config_.check("console-actor")}
 {
   path vast_dir = string(config_.get("directory"));
   if (! exists(vast_dir))
@@ -63,9 +64,6 @@ void program::act()
   path vast_dir = string(config_.get("directory"));
   try
   {
-    system_monitor_ = spawn<system_monitor, detached+linked>(self);
-    send(system_monitor_, atom("act"));
-
     if (config_.check("profile"))
     {
       auto ms = config_.as<unsigned>("profile");
@@ -106,10 +104,7 @@ void program::act()
     {
       VAST_LOG_ACTOR_VERBOSE("connects to tracker at " <<
                            tracker_host << ':' << tracker_port);
-
       tracker_ = remote_actor(tracker_host, tracker_port);
-      VAST_LOG_ACTOR_VERBOSE("program",
-                           "connected to tracker actor @" << tracker_->id());
     }
 
     auto archive_host = config_.get("archive.host");
@@ -126,11 +121,9 @@ void program::act()
     }
     else
     {
-      VAST_LOG_ACTOR_VERBOSE("connects to tracker at " <<
-                           tracker_host << ':' << tracker_port);
+      VAST_LOG_ACTOR_VERBOSE("connects to archive at " <<
+                           archive_host << ':' << archive_port);
       archive_ = remote_actor(archive_host, archive_port);
-      VAST_LOG_ACTOR_VERBOSE("program",
-                           "connected to archive actor @" << archive_->id());
     }
 
     auto index_host = config_.get("index.host");
@@ -147,8 +140,6 @@ void program::act()
       VAST_LOG_ACTOR_VERBOSE("connects to index at " <<
                            index_host << ":" << index_port);
       index_ = remote_actor(index_host, index_port);
-      VAST_LOG_ACTOR_VERBOSE("program",
-                           "connected to index actor @" << index_->id());
     }
 
     auto receiver_host = config_.get("receiver.host");
@@ -167,8 +158,6 @@ void program::act()
       VAST_LOG_ACTOR_VERBOSE("connects to receiver at " <<
                            receiver_host << ":" << receiver_port);
       receiver_ = remote_actor(receiver_host, receiver_port);
-      VAST_LOG_ACTOR_VERBOSE("program",
-                           "connected to receiver actor @" << receiver_->id());
     }
 
     if (config_.check("ingestor-actor"))
@@ -220,26 +209,18 @@ void program::act()
                        search_host << ':' << search_port);
       publish(search_, search_port, search_host.c_str());
     }
-    else if (config_.check("client.expression"))
+
+    if (! server_)
     {
       VAST_LOG_ACTOR_VERBOSE("connects to search at " <<
                            search_host << ":" << search_port);
       search_ = remote_actor(search_host, search_port);
-      VAST_LOG_ACTOR_VERBOSE("program",
-                           "connected to search actor @" << search_->id());
-
-      //auto paginate = config_.as<unsigned>("client.paginate");
-      auto& expr = config_.get("client.expression");
-      console_ = spawn<console>();
-      sync_send(search_, atom("query"), atom("create"), expr, console_).then(
-          on_arg_match >> [=](actor_ptr qry)
-          {
-            if (qry)
-              send(console_, atom("query"), qry);
-            else
-              send(console_, atom("kill"));
-          });
+      console_ = spawn<console, detached>(search_);
     }
+
+    system_monitor_ = 
+      spawn<system_monitor, detached+linked>(server_ ? self : console_, self);
+    send(system_monitor_, atom("act"));
   }
   catch (network_error const& e)
   {

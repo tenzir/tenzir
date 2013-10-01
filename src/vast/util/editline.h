@@ -2,6 +2,7 @@
 #define VAST_UTIL_EDITLINE_H
 
 #include <string>
+#include <functional>
 
 namespace vast {
 namespace util {
@@ -24,6 +25,10 @@ public:
   /// @return `true` on success.
   bool source(char const* filename = nullptr);
 
+  /// Sets the prompt.
+  /// @param str The new prompt string.
+  void prompt(std::string str);
+
   /// Retrieves a character from the TTY.
   /// @param c The result parameter containing the character.
   /// @returns `true` on success.
@@ -36,7 +41,7 @@ public:
 
   /// Pushes a string back into the input queue.
   /// @param str The string to put back.
-  void put(std::string const& str);
+  void put(char const* str);
 
   /// Resets the TTY and the editline parser.
   void reset();
@@ -46,6 +51,10 @@ public:
 
   /// Makes the TTY beep.
   void beep();
+
+  /// Adds a command to the history.
+  /// @param line The line to record.
+  void history_add(char const* line);
 
 private:
   struct impl;
