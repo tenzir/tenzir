@@ -6,8 +6,7 @@ using namespace vast;
 
 bool run(configuration const& config)
 {
-  auto prog = spawn<program, detached>(config);
-  self->monitor(prog);
+  auto prog = spawn<program, detached+monitored>(config);
   bool error = false;
   receive(
       on(atom("DOWN"), exit_reason::user_defined) >> [&]

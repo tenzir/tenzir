@@ -63,8 +63,7 @@ void program::act()
   path vast_dir = string(config_.get("directory"));
   try
   {
-    system_monitor_ = spawn<system_monitor, detached>(self);
-    link_to(system_monitor_);
+    system_monitor_ = spawn<system_monitor, detached+linked>(self);
     send(system_monitor_, atom("act"));
 
     if (config_.check("profile"))
