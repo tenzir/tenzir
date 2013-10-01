@@ -18,7 +18,7 @@ public:
   char const* description() const;
   
 private:
-  /// Maps queries to clients.
+  // Maps queries to clients.
   std::unordered_map<cppa::actor_ptr, cppa::actor_ptr> queries_;
 
   cppa::actor_ptr archive_;

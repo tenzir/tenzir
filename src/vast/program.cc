@@ -5,12 +5,12 @@
 #include "vast/archive.h"
 #include "vast/exception.h"
 #include "vast/config.h"
+#include "vast/console.h"
 #include "vast/file_system.h"
 #include "vast/id_tracker.h"
 #include "vast/index.h"
 #include "vast/ingestor.h"
 #include "vast/logger.h"
-#include "vast/query_client.h"
 #include "vast/receiver.h"
 #include "vast/schema.h"
 #include "vast/schema_manager.h"
@@ -288,11 +288,17 @@ bool program::start()
       VAST_LOG_ACTOR_VERBOSE("program",
                            "connected to search actor @" << search_->id());
 
-      auto paginate = config_.as<unsigned>("client.paginate");
-      auto& expression = config_.get("client.expression");
-      query_client_ = spawn<query_client, monitored>(search_, expression,
-                                                     paginate);
-      send(query_client_, atom("start"));
+      //auto paginate = config_.as<unsigned>("client.paginate");
+      auto& expr = config_.get("client.expression");
+      console_ = spawn<console>();
+      sync_send(search_, atom("query"), atom("create"), expr, console_).then(
+          on_arg_match >> [=](actor_ptr qry)
+          {
+            if (qry)
+              send(console_, atom("query"), qry);
+            else
+              send(console_, atom("kill"));
+          });
     }
 
     return true;
@@ -309,8 +315,8 @@ void program::stop()
 {
   auto kill = make_any_tuple(atom("kill"));
 
-  if (query_client_)
-    query_client_ << kill;
+  if (console_)
+    console_ << kill;
 
   if (config_.check("search-actor") || config_.check("all-server"))
     search_ << kill;
