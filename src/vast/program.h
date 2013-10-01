@@ -29,7 +29,7 @@ private:
   cppa::actor_ptr tracker_;
   cppa::actor_ptr ingestor_;
   cppa::actor_ptr search_;
-  cppa::actor_ptr query_client_;
+  cppa::actor_ptr console_;
   cppa::actor_ptr schema_manager_;
   cppa::actor_ptr system_monitor_;
   cppa::actor_ptr profiler_;

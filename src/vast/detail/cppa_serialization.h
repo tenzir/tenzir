@@ -12,7 +12,7 @@ namespace detail {
 class cppa_serializer : public serializer
 {
 public:
-  cppa_serializer(cppa::serializer* sink, std::string const& name);
+  cppa_serializer(cppa::serializer* sink);
   virtual ~cppa_serializer();
   virtual bool begin_sequence(uint64_t size) override;
   virtual bool end_sequence() override;
@@ -47,7 +47,7 @@ private:
 class cppa_deserializer : public deserializer
 {
 public:
-  cppa_deserializer(cppa::deserializer* source, std::string const& name);
+  cppa_deserializer(cppa::deserializer* source);
   virtual ~cppa_deserializer();
   virtual bool begin_sequence(uint64_t& size) override;
   virtual bool end_sequence() override;

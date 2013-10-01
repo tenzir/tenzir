@@ -1,21 +1,22 @@
 #ifndef VAST_OPTION_HPP
 #define VAST_OPTION_HPP
 
-#include <cppa/option.hpp>
+#include <cppa/optional.hpp>
 #include "vast/serialization.h"
 
 namespace vast {
 
 /// An optional value of `T` with similar semantics as `std::optional`.
 template <typename T>
-class option : public cppa::option<T>
+class option : public cppa::optional<T>
 {
-  typedef cppa::option<T> super;
+  using super = cppa::optional<T>;
+
 public:
-#ifdef VAST_HAVE_INHERTING_CONSTRUCTORS
-  using super::option;
-#else
-  option() = default;
+  option()
+    : super(cppa::none_t())
+  {
+  }
 
   option(T x)
     : super(std::move(x))
@@ -34,16 +35,15 @@ public:
   option(option&&) = default;
   option& operator=(option const&) = default;
   option& operator=(option&&) = default;
-#endif
 
   T const* operator->() const
   {
-    return &cppa::option<T>::get();
+    return &cppa::optional<T>::get();
   }
 
   T* operator->()
   {
-    return &cppa::option<T>::get();
+    return &cppa::optional<T>::get();
   }
 
 private:

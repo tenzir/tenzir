@@ -3,16 +3,13 @@
 namespace vast {
 namespace detail {
 
-cppa_serializer::cppa_serializer(cppa::serializer* sink,
-                                 std::string const& name)
+cppa_serializer::cppa_serializer(cppa::serializer* sink)
   : sink_(sink)
 {
-  sink_->begin_object(name);
 }
 
 cppa_serializer::~cppa_serializer()
 {
-  sink_->end_object();
 }
 
 bool cppa_serializer::begin_sequence(uint64_t size)
@@ -89,16 +86,13 @@ size_t cppa_serializer::bytes() const
 }
 
 
-cppa_deserializer::cppa_deserializer(cppa::deserializer* source,
-                                     std::string const& name)
+cppa_deserializer::cppa_deserializer(cppa::deserializer* source)
   : source_(source)
 {
-  source_->begin_object(name);
 }
 
 cppa_deserializer::~cppa_deserializer()
 {
-  source_->end_object();
 }
 
 bool cppa_deserializer::begin_sequence(uint64_t& size)
