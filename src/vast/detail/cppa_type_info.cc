@@ -1,6 +1,6 @@
 #include "vast/detail/cppa_type_info.h"
 
-#include <cppa/announce.hpp>
+#include <cppa/cppa.hpp>
 #include "vast/bitstream.h"
 #include "vast/chunk.h"
 #include "vast/event.h"
@@ -13,6 +13,7 @@
 #include "vast/time.h"
 #include "vast/uuid.h"
 #include "vast/value.h"
+#include "vast/util/make_unique.h"
 
 namespace vast {
 namespace detail {
@@ -20,7 +21,7 @@ namespace detail {
 template <typename T>
 void cppa_announce()
 {
-  cppa::announce(typeid(T), new cppa_type_info<T>);
+  cppa::announce(typeid(T), make_unique<cppa_type_info<T>>());
 }
 
 void cppa_announce_types()

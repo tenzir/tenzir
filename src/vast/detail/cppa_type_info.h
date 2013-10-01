@@ -16,16 +16,15 @@ protected:
   {
     VAST_ENTER();
     auto x = reinterpret_cast<T const*>(ptr);
-    cppa_serializer serializer(sink, this->name());
+    cppa_serializer serializer{sink};
     serializer << *x;
   }
 
   void deserialize(void* ptr, cppa::deserializer* source) const final
   {
     VAST_ENTER();
-    this->assert_type_name(source);
     auto x = reinterpret_cast<T*>(ptr);
-    cppa_deserializer deserializer(source, this->name());
+    cppa_deserializer deserializer{source};
     deserializer >> *x;
   }
 };
