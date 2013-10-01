@@ -8,6 +8,7 @@ set(libvast_sources
   bitstream.cc
   chunk.cc
   configuration.cc
+  console.cc
   container.cc
   exception.cc
   expression.cc
@@ -26,7 +27,6 @@ set(libvast_sources
   prefix.cc
   program.cc
   query.cc
-  query_client.cc
   receiver.cc
   regex.cc
   schema.cc
@@ -85,10 +85,19 @@ if (BROCCOLI_FOUND)
     util/broccoli.cc)
 endif ()
 
+if (EDITLINE_FOUND)
+  set(libvast_sources ${libvast_sources}
+    util/editline.cc)
+endif ()
+
 set(libvast_libs lz4 ${LIBCPPA_LIBRARIES})
 
 if (BROCCOLI_FOUND)
   set(libvast_libs ${libvast_libs} ${BROCCOLI_LIBRARIES})
+endif ()
+
+if (EDITLINE_FOUND)
+  set(libvast_libs ${libvast_libs} ${EDITLINE_LIBRARIES})
 endif ()
 
 # Always link with -lprofile if we have Gperftools.

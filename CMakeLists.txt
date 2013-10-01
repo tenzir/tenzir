@@ -86,6 +86,12 @@ if (BROCCOLI_FOUND)
   include_directories(${BROCCOLI_INCLUDE_DIR})
 endif ()
 
+find_package(Editline QUIET)
+if (EDITLINE_FOUND)
+  set(VAST_HAVE_EDITLINE true)
+  include_directories(${EDITLINE_INCLUDE_DIR})
+endif ()
+
 find_package(Gperftools QUIET)
 if (GPERFTOOLS_FOUND)
   set(VAST_USE_PERFTOOLS_CPU_PROFILER true)
@@ -125,6 +131,7 @@ set(build_summary
     "\nBoost:            ${Boost_INCLUDE_DIR}"
     "\nLibcppa:          ${LIBCPPA_INCLUDE_DIR}"
     "\nBroccoli:         ${BROCCOLI_FOUND}"
+    "\nEditline:         ${EDITLINE_FOUND}"
     "\nGperftools:       ${GPERFTOOLS_FOUND}"
     "\nUse tcmalloc:     ${VAST_USE_PERFTOOLS_HEAP_PROFILER}"
     "\n"
