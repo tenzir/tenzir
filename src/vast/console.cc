@@ -10,18 +10,48 @@ namespace vast {
 
 using namespace cppa;
 
+console::console(cppa::actor_ptr search)
+  : search_{std::move(search)}
+{
+}
+
 void console::act()
 {
   become(
       on(atom("kill")) >> [=]
       {
-        quit();
+        quit(exit_reason::user_defined);
       },
-      on(atom("query"), arg_match) >> [=](actor_ptr query)
+      on(atom("system"), atom("key"), arg_match) >> [&](char key)
       {
-        query_ = query;
-        VAST_LOG_ACTOR_VERBOSE("successfully created query @" << query_->id());
-        send(query_, atom("start"));
+        std::string desc;
+        if (key == '\n')
+          desc = "<enter>";
+        else if (key == ' ')
+          desc = "<space>";
+        else
+          desc = std::string{"'"} + key + "'";
+        VAST_LOG_ACTOR_VERBOSE("got key " << desc);
+
+        editline_.put(&key);
+      },
+      on(atom("query"), atom("create"), arg_match) >> [=](std::string const& s)
+      {
+        sync_send(search_, atom("query"), atom("create"), s, self).then(
+            on_arg_match >> [=](actor_ptr qry)
+            {
+              if (qry)
+              {
+                query_ = qry;
+                VAST_LOG_ACTOR_VERBOSE("connected to query @" << query_->id());
+                send(query_, atom("start"));
+              }
+              else
+              {
+                VAST_LOG_ACTOR_ERROR("invalid query: " << s);
+                quit(exit_reason::user_defined);
+              }
+            });
       }
 //    on(atom("query"), atom("failure"), arg_match) >> [=](std::string const& e)
 //    {

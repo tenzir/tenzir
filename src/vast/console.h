@@ -15,13 +15,15 @@ class console : public actor<console>
 {
 public:
   /// Spawns the console client.
-  console() = default;
+  /// @param search The search actor the console interacts with.
+  console(cppa::actor_ptr search);
 
   void act();
   char const* description() const;
 
 private:
   std::deque<cow<event>> results_;
+  cppa::actor_ptr search_;
   cppa::actor_ptr query_;
   util::editline editline_;
 };

@@ -38,6 +38,7 @@ configuration::configuration()
   advanced.visible(false);
 
   auto& actor = create_block("actor options");
+  actor.add('C', "console-actor", "spawn the console client actor");
   actor.add('a', "all-server", "spawn all server actors");
   actor.add('A', "archive-actor", "spawn the archive");
   actor.add('I', "ingestor-actor", "spawn the ingestor");
@@ -89,11 +90,6 @@ configuration::configuration()
   search.add("host", "hostname/address of the archive").init("127.0.0.1");
   search.add("port", "TCP port of the search").init(42001);
   search.visible(false);
-
-  auto& client = create_block("client options", "client");
-  client.add("expression", "query expression").single();
-  client.add("paginate", "number of query results per page").init(10);
-  client.visible(false);
 }
 
 void configuration::verify()
@@ -103,14 +99,12 @@ void configuration::verify()
   if (check("profile") && as<unsigned>("profile") == 0)
     throw error::config("profiling interval must be non-zero", "profile");
 
-  depends("client.paginate", "client.expression");
-  conflicts("client.expression", "tracker-actor");
-  conflicts("client.expression", "archive-actor");
-  conflicts("client.expression", "index-actor");
-  conflicts("client.expression", "search-actor");
-
-  if (as<unsigned>("client.paginate") == 0)
-    throw error::config("pagination must be non-zero", "client.paginate");
+  conflicts("console-actor", "all-server");
+  conflicts("console-actor", "tracker-actor");
+  conflicts("console-actor", "archive-actor");
+  conflicts("console-actor", "index-actor");
+  conflicts("console-actor", "ingestor-actor");
+  conflicts("console-actor", "search-actor");
 }
 
 } // namespace vast

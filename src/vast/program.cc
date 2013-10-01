@@ -30,8 +30,10 @@ namespace vast {
 using namespace cppa;
 
 program::program(configuration const& config)
-  : config_(config)
-{ }
+  : config_{config},
+    server_{! config_.check("console-actor")}
+{
+}
 
 bool program::run()
 {
@@ -115,13 +117,10 @@ bool program::start()
       [&](global_type_info const&) { ++n_types; });
   VAST_LOG_DEBUG("type manager announced " << n_types << " types");
 
+  VAST_LOG_ACTOR_VERBOSE("program", "spawned");
+
   try
   {
-    VAST_LOG_ACTOR_VERBOSE("program", "spawned");
-    system_monitor_ = spawn<system_monitor, detached>(self);
-    self->monitor(system_monitor_);
-    send(system_monitor_, atom("act"));
-
     if (config_.check("profile"))
     {
       auto ms = config_.as<unsigned>("profile");
@@ -166,10 +165,7 @@ bool program::start()
     {
       VAST_LOG_ACTOR_VERBOSE("program", "connects to tracker at " <<
                            tracker_host << ':' << tracker_port);
-
       tracker_ = remote_actor(tracker_host, tracker_port);
-      VAST_LOG_ACTOR_VERBOSE("program",
-                           "connected to tracker actor @" << tracker_->id());
     }
 
     auto archive_host = config_.get("archive.host");
@@ -186,11 +182,9 @@ bool program::start()
     }
     else
     {
-      VAST_LOG_ACTOR_VERBOSE("program", "connects to tracker at " <<
-                           tracker_host << ':' << tracker_port);
+      VAST_LOG_ACTOR_VERBOSE("program", "connects to acrhive at " <<
+                           archive_host << ':' << archive_port);
       archive_ = remote_actor(archive_host, archive_port);
-      VAST_LOG_ACTOR_VERBOSE("program",
-                           "connected to archive actor @" << archive_->id());
     }
 
     auto index_host = config_.get("index.host");
@@ -207,8 +201,6 @@ bool program::start()
       VAST_LOG_ACTOR_VERBOSE("program", "connects to index at " <<
                            index_host << ":" << index_port);
       index_ = remote_actor(index_host, index_port);
-      VAST_LOG_ACTOR_VERBOSE("program",
-                           "connected to index actor @" << index_->id());
     }
 
     auto receiver_host = config_.get("receiver.host");
@@ -227,8 +219,6 @@ bool program::start()
       VAST_LOG_ACTOR_VERBOSE("program", "connects to receiver at " <<
                            receiver_host << ":" << receiver_port);
       receiver_ = remote_actor(receiver_host, receiver_port);
-      VAST_LOG_ACTOR_VERBOSE("program",
-                           "connected to receiver actor @" << receiver_->id());
     }
 
     if (config_.check("ingestor-actor"))
@@ -280,26 +270,18 @@ bool program::start()
                        search_host << ':' << search_port);
       publish(search_, search_port, search_host.c_str());
     }
-    else if (config_.check("client.expression"))
+
+    if (! server_)
     {
       VAST_LOG_ACTOR_VERBOSE("program", "connects to search at " <<
                            search_host << ":" << search_port);
       search_ = remote_actor(search_host, search_port);
-      VAST_LOG_ACTOR_VERBOSE("program",
-                           "connected to search actor @" << search_->id());
-
-      //auto paginate = config_.as<unsigned>("client.paginate");
-      auto& expr = config_.get("client.expression");
-      console_ = spawn<console>();
-      sync_send(search_, atom("query"), atom("create"), expr, console_).then(
-          on_arg_match >> [=](actor_ptr qry)
-          {
-            if (qry)
-              send(console_, atom("query"), qry);
-            else
-              send(console_, atom("kill"));
-          });
+      console_ = spawn<console, detached>(search_);
     }
+
+    auto key_receiver = server_ ? self : console_;
+    system_monitor_ = spawn<system_monitor, detached>(key_receiver, self);
+    send(system_monitor_, atom("act"));
 
     return true;
   }
@@ -314,6 +296,9 @@ bool program::start()
 void program::stop()
 {
   auto kill = make_any_tuple(atom("kill"));
+
+  if (system_monitor_)
+    system_monitor_ << kill;
 
   if (console_)
     console_ << kill;
@@ -343,10 +328,6 @@ void program::stop()
 
   if (profiler_)
     profiler_ << kill;
-
-  if (system_monitor_)
-    system_monitor_ << kill;
-
 }
 
 } // namespace vast

@@ -44,7 +44,8 @@ void system_monitor::on_exit()
 
 void system_monitor::act()
 {
-  VAST_LOG_ACTOR_DEBUG("sends events to @" << key_receiver_->id());
+  VAST_LOG_ACTOR_DEBUG("sends keystrokes to @" << key_receiver_->id());
+  VAST_LOG_ACTOR_DEBUG("sends signals to @" << signal_receiver_->id());
   util::console::unbuffer();
 
   signals.fill(0);
