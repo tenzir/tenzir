@@ -4,7 +4,7 @@
 #include <cppa/cppa.hpp>
 #include "vast/actor.h"
 #include "vast/event.h"
-#include "vast/option.h"
+#include "vast/optional.h"
 
 namespace vast {
 namespace source {
@@ -24,7 +24,7 @@ public:
 protected:
   /// Extracts a single event.
   /// @returns The parsed event.
-  virtual option<event> extract() = 0;
+  virtual optional<event> extract() = 0;
   
   /// Checks whether the source has finished generating events.
   /// @returns `true` if the source cannot provide more events.

@@ -40,8 +40,8 @@ public:
   line(cppa::actor_ptr sink, std::string const& filename);
 
 protected:
-  virtual option<event> extract() override;
-  virtual option<event> parse(std::string const& line) = 0;
+  virtual optional<event> extract() override;
+  virtual optional<event> parse(std::string const& line) = 0;
 
   /// Retrieves the next line from the file.
   /// @returns `true` if extracting was successful.
@@ -66,7 +66,7 @@ private:
   /// Converts a Bro type to a VAST type. Does not support container types.
   value_type bro_to_vast(string const& str);
 
-  virtual option<event> parse(std::string const& line) override;
+  virtual optional<event> parse(std::string const& line) override;
 
   string separator_;
   string set_separator_;
@@ -88,7 +88,7 @@ public:
 
 private:
   /// Parses a single log line.
-  virtual option<event> parse(std::string const& line) override;
+  virtual optional<event> parse(std::string const& line) override;
 };
 
 } // namespace source

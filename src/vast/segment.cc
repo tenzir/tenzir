@@ -246,7 +246,7 @@ size_t segment::store(std::vector<event> const& v, size_t max_events_per_chunk)
   return i;
 }
 
-option<event> segment::load(uint64_t id) const
+optional<event> segment::load(uint64_t id) const
 {
   reader r(this);
   if (! r.skip_to(id))

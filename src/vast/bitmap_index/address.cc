@@ -13,7 +13,7 @@ bool address_bitmap_index::append(size_t n, bool bit)
   return v4_.append(n, bit) && success;
 }
 
-option<bitstream>
+optional<bitstream>
 address_bitmap_index::lookup(relational_operator op, value const& val) const
 {
   if (! (op == equal || op == not_equal || op == in || op == not_in))
@@ -58,12 +58,12 @@ bool address_bitmap_index::equals(bitmap_index const& other) const
   return bitmaps_ == o.bitmaps_ && v4_ == o.v4_;
 }
 
-option<bitstream>
+optional<bitstream>
 address_bitmap_index::lookup(address const& addr, relational_operator op) const
 {
   auto& bytes = addr.data();
   auto is_v4 = addr.is_v4();
-  option<bitstream> result;
+  optional<bitstream> result;
   result = bitstream{is_v4 ? v4_ : bitstream_type{v4_.size(), true}};
   for (size_t i = is_v4 ? 12 : 0; i < 16; ++ i)
     if (auto bs = bitmaps_[i][bytes[i]])
@@ -78,7 +78,7 @@ address_bitmap_index::lookup(address const& addr, relational_operator op) const
   return result;
 }
 
-option<bitstream>
+optional<bitstream>
 address_bitmap_index::lookup(prefix const& pfx, relational_operator op) const
 {
   if (! (op == in || op == not_in))
@@ -93,7 +93,7 @@ address_bitmap_index::lookup(prefix const& pfx, relational_operator op) const
   if ((is_v4 ? topk + 96 : topk) == 128)
     return lookup(pfx.network(), op == in ? equal : not_equal);
 
-  option<bitstream> result;
+  optional<bitstream> result;
   result = bitstream{is_v4 ? v4_ : bitstream_type{v4_.size(), true}};
   auto bit = topk;
   auto& bytes = net.data();

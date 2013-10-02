@@ -1,12 +1,12 @@
 #include "test.h"
-#include "vast/option.h"
+#include "vast/optional.h"
 #include "vast/io/serialization.h"
 
 using namespace vast;
 
 BOOST_AUTO_TEST_CASE(option_serialization)
 {
-  option<std::string> o1 = std::string{"foo"};
+  optional<std::string> o1 = std::string{"foo"};
   decltype(o1) o2;
   std::vector<uint8_t> buf;
   io::archive(buf, o1);
@@ -19,7 +19,7 @@ BOOST_AUTO_TEST_CASE(option_serialization)
 
 BOOST_AUTO_TEST_CASE(vector_option_serialization)
 {
-  std::vector<option<int>> v1, v2;
+  std::vector<optional<int>> v1, v2;
   v1.emplace_back(42);
   v1.emplace_back(84);
   std::vector<uint8_t> buf;
