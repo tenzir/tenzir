@@ -194,7 +194,7 @@ bool event_arg_index::index_record(record const& r, uint64_t id, offset& o)
   return true;
 }
 
-option<bitstream> event_arg_index::type_lookup(
+optional<bitstream> event_arg_index::type_lookup(
     relational_operator op, value const& v) const
 {
   bitstream result;
@@ -215,7 +215,7 @@ option<bitstream> event_arg_index::type_lookup(
     return {std::move(result)};
 }
 
-option<bitstream> event_arg_index::offset_lookup(
+optional<bitstream> event_arg_index::offset_lookup(
     relational_operator op, value const& v, offset const& o) const
 {
   auto i = args_.find(o);

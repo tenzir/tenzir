@@ -20,7 +20,7 @@ public:
 
   virtual bool append(size_t n, bool bit) override;
 
-  virtual option<bitstream>
+  virtual optional<bitstream>
   lookup(relational_operator op, value const& val) const override;
 
   virtual uint64_t size() const override;

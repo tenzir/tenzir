@@ -2,7 +2,7 @@
 #define VAST_BITMAP_INDEX_H
 
 #include "vast/operator.h"
-#include "vast/option.h"
+#include "vast/optional.h"
 #include "vast/util/operators.h"
 
 namespace vast {
@@ -36,7 +36,7 @@ public:
   /// Looks up a value given a relational operator.
   /// @param op The relation operator.
   /// @param val The value to lookup.
-  virtual option<bitstream>
+  virtual optional<bitstream>
   lookup(relational_operator op, value const& val) const = 0;
 
   /// Retrieves the number of elements in the bitmap index.

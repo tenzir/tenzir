@@ -113,8 +113,8 @@ public:
 
 private:
   bool index_record(record const& r, uint64_t id, offset& o);
-  option<bitstream> type_lookup(relational_operator op, value const& v) const;
-  option<bitstream> offset_lookup(relational_operator op,
+  optional<bitstream> type_lookup(relational_operator op, value const& v) const;
+  optional<bitstream> offset_lookup(relational_operator op,
                                   value const& v, offset const& o) const;
 
 
