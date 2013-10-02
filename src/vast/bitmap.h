@@ -7,7 +7,7 @@
 #include "vast/convert.h"
 #include "vast/exception.h"
 #include "vast/operator.h"
-#include "vast/option.h"
+#include "vast/optional.h"
 #include "vast/serialization.h"
 #include "vast/util/operators.h"
 #include "vast/util/print.h"
@@ -137,7 +137,7 @@ private:
     source >> cardinality_ >> vector_;
   }
 
-  std::vector<option<Bitstream>> vector_;
+  std::vector<optional<Bitstream>> vector_;
   uint64_t cardinality_ = 0;
 };
 
@@ -383,7 +383,7 @@ struct equality_coder
     return true;
   }
 
-  option<Bitstream> decode(T const& x, relational_operator op = equal) const
+  optional<Bitstream> decode(T const& x, relational_operator op = equal) const
   {
     auto result = store_.find(x);
     switch (op)
@@ -432,7 +432,7 @@ struct binary_coder
     return true;
   }
 
-  option<Bitstream> decode(T const& x, relational_operator op = equal) const
+  optional<Bitstream> decode(T const& x, relational_operator op = equal) const
   {
     switch (op)
     {
@@ -491,7 +491,7 @@ struct range_coder : coder<T, Bitstream, detail::list_storage<T, Bitstream>>
     return true;
   }
 
-  option<Bitstream>
+  optional<Bitstream>
   decode(T const& x, relational_operator op = less_equal) const
   {
     switch (op)
@@ -701,7 +701,7 @@ public:
   }
 
   /// Shorthand for `lookup(equal, x)`.
-  option<Bitstream> operator[](T const& x) const
+  optional<Bitstream> operator[](T const& x) const
   {
     return lookup(equal, x);
   }
@@ -714,7 +714,7 @@ public:
   ///
   /// @returns An @link option vast::option@endlink containing a bitstream
   /// for all values *v* such that *op(v,x)* is `true`.
-  option<Bitstream> lookup(relational_operator op, T const& x) const
+  optional<Bitstream> lookup(relational_operator op, T const& x) const
   {
     auto result = coder_.decode(binner_(x), op);
     if (result)
@@ -815,12 +815,12 @@ public:
     return bool_.append(n, bit) && valid_.append(n, bit);
   }
 
-  option<Bitstream> operator[](bool x) const
+  optional<Bitstream> operator[](bool x) const
   {
     return lookup(x);
   }
 
-  option<Bitstream> lookup(relational_operator op, bool x) const
+  optional<Bitstream> lookup(relational_operator op, bool x) const
   {
     switch (op)
     {

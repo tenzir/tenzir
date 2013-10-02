@@ -6,7 +6,7 @@
 #include "vast/chunk.h"
 #include "vast/cow.h"
 #include "vast/time.h"
-#include "vast/option.h"
+#include "vast/optional.h"
 #include "vast/uuid.h"
 #include "vast/io/compression.h"
 #include "vast/util/operators.h"
@@ -161,7 +161,7 @@ public:
   /// Extracts a single event with a given ID.
   /// @param id The ID of the event.
   /// @returns The event having ID *id* or an disengaged option otherwise.
-  option<event> load(uint64_t id) const;
+  optional<event> load(uint64_t id) const;
 
 private:
   friend access;

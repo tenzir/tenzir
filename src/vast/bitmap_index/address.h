@@ -15,7 +15,7 @@ class address_bitmap_index : public bitmap_index
 public:
   virtual bool append(size_t n, bool bit) override;
 
-  virtual option<bitstream>
+  virtual optional<bitstream>
   lookup(relational_operator op, value const& val) const override;
 
   virtual uint64_t size() const override;
@@ -24,8 +24,8 @@ private:
   virtual bool push_back_impl(value const& val) override;
   virtual bool equals(bitmap_index const& other) const override;
 
-  option<bitstream> lookup(address const& addr, relational_operator op) const;
-  option<bitstream> lookup(prefix const& pfx, relational_operator op) const;
+  optional<bitstream> lookup(address const& addr, relational_operator op) const;
+  optional<bitstream> lookup(prefix const& pfx, relational_operator op) const;
 
   std::array<bitmap<uint8_t, bitstream_type, binary_coder>, 16> bitmaps_;
   bitstream_type v4_;

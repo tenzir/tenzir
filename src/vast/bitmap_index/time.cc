@@ -14,7 +14,7 @@ bool time_bitmap_index::append(size_t n, bool bit)
   return bitmap_.append(n, bit);
 }
 
-option<bitstream>
+optional<bitstream>
 time_bitmap_index::lookup(relational_operator op, value const& val) const
 {
   if (op == in || op == not_in)

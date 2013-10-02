@@ -46,7 +46,7 @@ public:
     return bitmap_.append(n, bit);
   }
 
-  virtual option<bitstream>
+  virtual optional<bitstream>
   lookup(relational_operator op, value const& val) const override
   {
     if (op == in || op == not_in)

@@ -29,11 +29,11 @@ line::line(cppa::actor_ptr sink, std::string const& filename)
     finished_ = true;
 }
 
-option<event> line::extract()
+optional<event> line::extract()
 {
   VAST_ENTER();
 
-  option<event> e;
+  optional<event> e;
   if (! line_.empty())
     e = parse(line_);
 
@@ -277,7 +277,7 @@ value_type bro2::bro_to_vast(string const& type)
     return invalid_type;
 }
 
-option<event> bro2::parse(std::string const& line)
+optional<event> bro2::parse(std::string const& line)
 {
   using vast::extract;
   using vast::parse;
@@ -383,7 +383,7 @@ char const* bro15conn::description() const
   return "bro15conn";
 }
 
-option<event> bro15conn::parse(std::string const& line)
+optional<event> bro15conn::parse(std::string const& line)
 {
   using vast::extract;
   VAST_ENTER();

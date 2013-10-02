@@ -10,7 +10,7 @@ bool string_bitmap_index::append(size_t n, bool bit)
   return bitmap_.append(n, bit);
 }
 
-option<bitstream>
+optional<bitstream>
 string_bitmap_index::lookup(relational_operator op, value const& val) const
 {
   if (! (op == equal || op == not_equal))
