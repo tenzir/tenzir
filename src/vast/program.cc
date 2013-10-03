@@ -16,7 +16,7 @@
 #include "vast/schema_manager.h"
 #include "vast/search.h"
 #include "vast/shutdown.h"
-#include "vast/system_monitor.h"
+#include "vast/signal_monitor.h"
 #include "vast/detail/cppa_type_info.h"
 #include "vast/detail/type_manager.h"
 #include "vast/util/profiler.h"
@@ -42,28 +42,6 @@ bool program::run()
 
   bool done = false;
   do_receive(
-      on(atom("system"), atom("key"), arg_match) >> [&](char key)
-      {
-        switch (key)
-        {
-          default:
-          {
-            std::string desc;
-            if (key == '\n')
-              desc = "<enter>";
-            else if (key == ' ')
-              desc = "<space>";
-            else
-              desc = std::string{"'"} + key + "'";
-            VAST_LOG_ACTOR_VERBOSE(
-                "program", "got invalid key " << desc << " (press Q to quit)");
-          }
-          break;
-          case 'Q':
-            done = true;
-            break;
-        }
-      },
       on(atom("system"), atom("signal"), arg_match) >> [&](int signal)
       {
         VAST_LOG_ACTOR_VERBOSE("program", "received signal " << signal);
@@ -277,11 +255,11 @@ bool program::start()
                            search_host << ":" << search_port);
       search_ = remote_actor(search_host, search_port);
       console_ = spawn<console, detached>(search_);
+      send(console_, atom("run"));
     }
 
-    auto key_receiver = server_ ? self : console_;
-    system_monitor_ = spawn<system_monitor, detached>(key_receiver, self);
-    send(system_monitor_, atom("act"));
+    signal_monitor_ = spawn<signal_monitor, detached>(self);
+    send(signal_monitor_, atom("act"));
 
     return true;
   }
@@ -297,8 +275,8 @@ void program::stop()
 {
   auto kill = make_any_tuple(atom("kill"));
 
-  if (system_monitor_)
-    system_monitor_ << kill;
+  if (signal_monitor_)
+    signal_monitor_ << kill;
 
   if (console_)
     console_ << kill;
