@@ -13,7 +13,8 @@ using namespace cppa;
 console::console(cppa::actor_ptr search)
   : search_{std::move(search)}
 {
-  editline_.source();
+  if (! editline_.source())
+    VAST_LOG_ACTOR_ERROR("failed to source .editrc");
   editline_.complete("help", "display command help");
   editline_.complete("quit", "exit the console");
 }

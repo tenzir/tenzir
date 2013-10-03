@@ -214,7 +214,7 @@ void program::act()
       VAST_LOG_ACTOR_VERBOSE("connects to search at " <<
                            search_host << ":" << search_port);
       search_ = remote_actor(search_host, search_port);
-      console_ = spawn<console, detached>(search_);
+      console_ = spawn<console, detached+linked>(search_);
       send(console_, atom("run"));
     }
 
