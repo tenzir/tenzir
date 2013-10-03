@@ -1,15 +1,14 @@
-#ifndef VAST_UTIL_CONSOLE_H
-#define VAST_UTIL_CONSOLE_H
+#ifndef VAST_UTIL_TERMINAL_H
+#define VAST_UTIL_TERMINAL_H
 
 namespace vast {
 namespace util {
-namespace console {
+namespace terminal {
 
-/// Makes the console unbuffered.
+/// Makes the stdin unbuffered.
 void unbuffer();
 
-/// Makes the console buffered again after a call to ::unbuffer.
-/// @pre `unbuffer()` must have been called beforehand.
+/// Makes the stdin buffered again after a call to ::unbuffer.
 void buffer();
 
 /// Tries to extract a single a character from STDIN within a short time
@@ -27,7 +26,7 @@ void buffer();
 /// from STDIN.
 bool get(char& c, int timeout = 100);
 
-} // namespace console
+} // namespace terminal
 } // namespace util
 } // namespace vast
 
