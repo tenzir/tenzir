@@ -28,7 +28,7 @@ struct editline::impl
     for (auto& p : instance->completions)
     {
       auto& full = p.first;
-      if (snippet.size() > full.size())
+      if (snippet.size() >= full.size())
         continue;
       auto result = std::mismatch(snippet.begin(), snippet.end(), full.begin());
       if (result.first == snippet.end())
