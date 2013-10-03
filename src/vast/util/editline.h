@@ -14,7 +14,6 @@ public:
   /// @param The name of the edit line context.
   editline(char const* name = "");
 
-  /// Destructs the editline instance and releases internal resources.
   ~editline();
 
   /// Sources an editline config.
@@ -24,6 +23,11 @@ public:
   ///
   /// @return `true` on success.
   bool source(char const* filename = nullptr);
+
+  /// Adds a completion.
+  /// @param cmd The name of the command.
+  /// @param desc A description of *cmd*.
+  bool complete(std::string cmd, std::string desc = "");
 
   /// Sets the prompt.
   /// @param str The new prompt string.
@@ -39,22 +43,31 @@ public:
   /// @returns `true` on success.
   bool get(std::string& line);
 
-  /// Pushes a string back into the input queue.
-  /// @param str The string to put back.
-  void put(char const* str);
+  /// Adds a string to the current line.
+  /// @param str The string to add.
+  void put(std::string const& str);
 
-  /// Resets the TTY and the editline parser.
-  void reset();
+  /// Retrieves the current line.
+  /// @return The current line.
+  std::string line();
 
-  /// Adapts to a changing TTY size.
-  void resize();
+  /// Retrieves the current cursor position.
+  /// @return The position of the cursor.
+  size_t cursor();
 
-  /// Makes the TTY beep.
-  void beep();
+  /// Appends to the current element of the history.
+  /// @param str The string to append.
+  void history_add(std::string const& str);
 
-  /// Adds a command to the history.
-  /// @param line The line to record.
-  void history_add(char const* line);
+  /// Appends to the last new element of the history.
+  /// @param str The string to add.
+  void history_append(std::string const& str);
+
+  /// Adds a new element to the history, and, if necessary, removes the oldest
+  /// entry to keep the list to the history size.
+  ///
+  /// @param str The string to enter.
+  void history_enter(std::string const& str);
 
 private:
   struct impl;

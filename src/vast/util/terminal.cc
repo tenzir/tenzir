@@ -1,30 +1,32 @@
-#include <vast/util/console.h>
+#include "vast/util/terminal.h"
 
 #include <sys/select.h>
 #include <stdio.h>
 #include <termios.h>
 #include <cassert>
-#include "vast/exception.h"
+#include <stdexcept>
 #include "vast/util/poll.h"
 
 namespace vast {
 namespace util {
-namespace console {
+namespace terminal {
 
-static bool initialized = false;
-static struct termios buffered;
-static struct termios unbuffered;
+namespace {
+
+bool initialized = false;
+struct termios buffered;
+struct termios unbuffered;
+
+} // namespace <anonymous>
 
 static void initialize()
 {
   if (tcgetattr(0, &buffered) < 0)
-    throw exception("tcgetattr");
-
+    throw std::runtime_error{"tcgetattr"};
   unbuffered = buffered;
   unbuffered.c_lflag &= (~ICANON & ~ECHO);
   unbuffered.c_cc[VMIN] = 1;
   unbuffered.c_cc[VTIME] = 0;
-
   initialized = true;
 }
 
@@ -32,32 +34,29 @@ void unbuffer()
 {
   if (! initialized)
     initialize();
-
   if (tcsetattr(::fileno(stdin), TCSANOW, &unbuffered) < 0)
-    throw exception("tcsetattr");
+    throw std::runtime_error{"tcsetattr"};
 }
 
 void buffer()
 {
-  assert(initialized);
-
+  if (! initialized)
+    return;
   if (tcsetattr(::fileno(stdin), TCSANOW, &buffered) < 0)
-    throw exception("tcsetattr");
+    throw std::runtime_error{"tcsetattr"};
 }
 
 bool get(char& c, int timeout)
 {
   if (! poll(::fileno(stdin), timeout))
     return false;
-
   auto i = ::fgetc(stdin);
   if (::feof(stdin))
     return false;
-
   c = static_cast<char>(i);
   return true;
 }
 
-} // namespace console
+} // namespace terminal
 } // namespace util
 } // namespace vast

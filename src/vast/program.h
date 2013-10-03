@@ -30,7 +30,7 @@ private:
   cppa::actor_ptr search_;
   cppa::actor_ptr console_;
   cppa::actor_ptr schema_manager_;
-  cppa::actor_ptr system_monitor_;
+  cppa::actor_ptr signal_monitor_;
   cppa::actor_ptr profiler_;
   configuration const& config_;
   bool server_ = true;

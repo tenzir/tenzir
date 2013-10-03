@@ -35,9 +35,9 @@ set(libvast_sources
   segment.cc
   segment_manager.cc
   serialization.cc
+  signal_monitor.cc
   shutdown.cc
   string.cc
-  system_monitor.cc
   time.cc
   type_info.cc
   uuid.cc
@@ -74,9 +74,9 @@ set(libvast_sources
   source/file.cc
   source/synchronous.cc
   util/configuration.cc
-  util/console.cc
   util/poll.cc
   util/profiler.cc
+  util/terminal.cc
   )
 
 if (BROCCOLI_FOUND)

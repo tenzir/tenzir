@@ -1,9 +1,8 @@
-#include "vast/system_monitor.h"
+#include "vast/signal_monitor.h"
 
 #include <array>
 #include <csignal>
 #include <cstdlib>
-#include "vast/util/console.h"
 
 namespace vast {
 
@@ -29,24 +28,19 @@ void signal_handler(int signo)
 
 using namespace cppa;
 
-system_monitor::system_monitor(actor_ptr key_receiver,
-                               actor_ptr signal_receiver)
-  : key_receiver_{std::move(key_receiver)},
-    signal_receiver_{std::move(signal_receiver)}
+signal_monitor::signal_monitor(actor_ptr receiver)
+  : receiver_{std::move(receiver)}
 {
 }
 
-void system_monitor::on_exit()
+void signal_monitor::on_exit()
 {
-  util::console::buffer();
-  actor<system_monitor>::on_exit();
+  actor<signal_monitor>::on_exit();
 }
 
-void system_monitor::act()
+void signal_monitor::act()
 {
-  VAST_LOG_ACTOR_DEBUG("sends keystrokes to @" << key_receiver_->id());
-  VAST_LOG_ACTOR_DEBUG("sends signals to @" << signal_receiver_->id());
-  util::console::unbuffer();
+  VAST_LOG_ACTOR_DEBUG("sends signals to @" << receiver_->id());
 
   signals.fill(0);
   for (auto s : { SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGUSR1, SIGUSR2 })
@@ -55,23 +49,18 @@ void system_monitor::act()
   become(
       on(atom("act")) >> [=]
       {
-        char c;
         if (signals[0] > 0)
         {
           signals[0] = 0;
           for (int i = 0; size_t(i) < signals.size(); ++i)
             while (signals[i]-- > 0)
-              send(signal_receiver_, atom("system"), atom("signal"), i);
+              send(receiver_, atom("system"), atom("signal"), i);
         }
-
-        if (util::console::get(c, 100))
-          send(key_receiver_, atom("system"), atom("key"), c);
-
         self << last_dequeued();
       });
 }
 
-char const* system_monitor::description() const
+char const* signal_monitor::description() const
 {
   return "system-monitor";
 }

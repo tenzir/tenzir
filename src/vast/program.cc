@@ -15,7 +15,7 @@
 #include "vast/schema.h"
 #include "vast/schema_manager.h"
 #include "vast/search.h"
-#include "vast/system_monitor.h"
+#include "vast/signal_monitor.h"
 #include "vast/detail/type_manager.h"
 #include "vast/util/profiler.h"
 
@@ -216,11 +216,11 @@ void program::act()
                            search_host << ":" << search_port);
       search_ = remote_actor(search_host, search_port);
       console_ = spawn<console, detached>(search_);
+      send(console_, atom("run"));
     }
 
-    system_monitor_ = 
-      spawn<system_monitor, detached+linked>(server_ ? self : console_, self);
-    send(system_monitor_, atom("act"));
+    signal_monitor_ = spawn<signal_monitor, detached+linked>(self);
+    send(signal_monitor_, atom("act"));
   }
   catch (network_error const& e)
   {
@@ -228,28 +228,6 @@ void program::act()
   }
 
   become(
-      on(atom("system"), atom("key"), arg_match) >> [&](char key)
-      {
-        switch (key)
-        {
-          default:
-            {
-              std::string desc;
-              if (key == '\n')
-                desc = "<enter>";
-              else if (key == ' ')
-                desc = "<space>";
-              else
-                desc = std::string{"'"} + key + "'";
-              VAST_LOG_ACTOR_VERBOSE(
-                  "got invalid key " << desc << " (press Q to quit)");
-            }
-            break;
-          case 'Q':
-            quit();
-            break;
-        }
-      },
       on(atom("system"), atom("signal"), arg_match) >> [&](int signal)
       {
         VAST_LOG_ACTOR_VERBOSE("received signal " << signal);
@@ -258,7 +236,8 @@ void program::act()
       },
       others() >> [=]
       {
-        VAST_LOG_ACTOR_ERROR("received unexpected message from @" <<
+        quit(exit_reason::user_defined);
+        VAST_LOG_ACTOR_ERROR("terminated after unexpected message from @" <<
                              self->last_sender()->id() << ": " <<
                              to_string(self->last_dequeued()));
       });

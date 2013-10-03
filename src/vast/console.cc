@@ -13,6 +13,8 @@ using namespace cppa;
 console::console(cppa::actor_ptr search)
   : search_{std::move(search)}
 {
+  editline_.complete("help", "display command help");
+  editline_.complete("quit", "exit the console");
 }
 
 void console::act()
@@ -22,18 +24,26 @@ void console::act()
       {
         quit(exit_reason::user_defined);
       },
-      on(atom("system"), atom("key"), arg_match) >> [&](char key)
+      on(atom("run")) >> [=]
       {
-        std::string desc;
-        if (key == '\n')
-          desc = "<enter>";
-        else if (key == ' ')
-          desc = "<space>";
-        else
-          desc = std::string{"'"} + key + "'";
-        VAST_LOG_ACTOR_VERBOSE("got key " << desc);
+        // Allows for logging messages to trickle through.
+        delayed_send(self, std::chrono::milliseconds(100), atom("read"));
+      },
+      on(atom("read")) >> [=]
+      {
+        std::string line;
+        if (! editline_.get(line))
+          VAST_LOG_ERROR("failed to get line from console");
 
-        editline_.put(&key);
+        if (line == "exit" || line == "quit")
+        {
+          quit(exit_reason::user_defined);
+        }
+        else
+        {
+          editline_.history_enter(line);
+          self << last_dequeued();
+        }
       },
       on(atom("query"), atom("create"), arg_match) >> [=](std::string const& s)
       {
