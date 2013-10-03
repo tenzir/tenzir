@@ -87,6 +87,7 @@ endif ()
 
 if (EDITLINE_FOUND)
   set(libvast_sources ${libvast_sources}
+    util/command_line.cc
     util/editline.cc)
 endif ()
 

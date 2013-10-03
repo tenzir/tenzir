@@ -4,7 +4,7 @@
 #include <deque>
 #include "vast/actor.h"
 #include "vast/cow.h"
-#include "vast/util/editline.h"
+#include "vast/util/command_line.h"
 
 namespace vast {
 
@@ -25,7 +25,7 @@ private:
   std::deque<cow<event>> results_;
   cppa::actor_ptr search_;
   cppa::actor_ptr query_;
-  util::editline editline_;
+  util::command_line cmdline_;
 };
 
 } // namespace vast

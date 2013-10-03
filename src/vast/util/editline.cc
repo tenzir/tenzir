@@ -69,6 +69,12 @@ void editline::history::enter(std::string const& str)
   impl_->enter(str);
 }
 
+editline::prompt::prompt(std::string s, char e)
+  : str{std::move(s)},
+    esc{e}
+{
+}
+
 
 namespace {
 
@@ -99,7 +105,7 @@ struct editline::impl
   {
     impl* instance;
     el_get(el, EL_CLIENTDATA, &instance);
-    return const_cast<char*>(instance->prompt_.prompt.c_str());
+    return const_cast<char*>(instance->prompt_.str.c_str());
   }
 
   static unsigned char handle_completion(EditLine* el, int)
@@ -296,6 +302,11 @@ std::string editline::line()
 size_t editline::cursor()
 {
   return impl_->cursor();
+}
+
+void editline::reset()
+{
+  impl_->reset();
 }
 
 } // namespace util

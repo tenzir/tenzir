@@ -33,8 +33,10 @@ public:
   /// The prompt to display in front of each command.
   struct prompt
   {
-    std::string prompt = ">> ";
-    char esc = 0;
+    prompt(std::string s = ">> ", char e = 0);
+
+    std::string str;
+    char esc;
   };
 
   /// Constructs an editline context.
@@ -85,6 +87,9 @@ public:
   /// Retrieves the current cursor position.
   /// @return The position of the cursor.
   size_t cursor();
+
+  /// Resets the TTY and editline parser.
+  void reset();
 
 private:
   struct impl;
