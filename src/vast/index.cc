@@ -143,12 +143,6 @@ char const* index::description() const
 void index::act()
 {
   become(
-      on(atom("kill")) >> [=]
-      {
-        for (auto p : partitions_)
-          p.second << last_dequeued();
-        quit();
-      },
       on(atom("lookup"), arg_match) >> [=](expression const& expr)
       {
         std::vector<any_tuple> commands;
@@ -192,7 +186,8 @@ void index::load()
     if (! mkdir(dir_))
     {
       VAST_LOG_ACTOR_ERROR("failed to create " << dir_);
-      quit();
+      quit(exit::error);
+      return;
     }
   }
   else
@@ -203,7 +198,7 @@ void index::load()
         [&](path const& p) -> bool
         {
           VAST_LOG_ACTOR_VERBOSE("found partition " << p);
-          auto part = spawn<partition>(p);
+          auto part = spawn<partition, linked>(p);
           auto id = uuid{to_string(p.basename())};
           partitions_.emplace(id, part);
 

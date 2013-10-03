@@ -3,6 +3,7 @@
 
 #include <string>
 #include <cppa/cppa.hpp>
+#include "vast/actor.h"
 #include "vast/expression.h"
 #include "vast/segment.h"
 #include "vast/uuid.h"

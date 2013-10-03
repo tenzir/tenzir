@@ -114,7 +114,6 @@ void program::act()
       archive_ = spawn<archive, linked>(
           to_string(vast_dir / "archive"),
           config_.as<size_t>("archive.max-segments"));
-      send(archive_, atom("init"));
       VAST_LOG_ACTOR_VERBOSE("publishes archive at " <<
                            archive_host << ':' << archive_port);
       publish(archive_, archive_port, archive_host.c_str());
@@ -228,15 +227,15 @@ void program::act()
   }
 
   become(
-      on(atom("system"), atom("signal"), arg_match) >> [&](int signal)
+      on(atom("signal"), arg_match) >> [&](int signal)
       {
         VAST_LOG_ACTOR_VERBOSE("received signal " << signal);
         if (signal == SIGINT || signal == SIGTERM)
-          quit();
+          quit(exit::stop);
       },
       others() >> [=]
       {
-        quit(exit_reason::user_defined);
+        quit(exit::error);
         VAST_LOG_ACTOR_ERROR("terminated after unexpected message from @" <<
                              self->last_sender()->id() << ": " <<
                              to_string(self->last_dequeued()));

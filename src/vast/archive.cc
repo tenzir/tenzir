@@ -12,31 +12,24 @@ namespace vast {
 archive::archive(std::string const& directory, size_t max_segments)
   : directory_(directory)
 {
-  segment_manager_ = spawn<segment_manager>(max_segments, directory_);
+  segment_manager_ = spawn<segment_manager, linked>(max_segments, directory_);
 }
 
 void archive::act()
 {
+  path p(directory_);
+  if (! exists(p))
+  {
+    VAST_LOG_ACTOR_INFO("creates new directory " << directory_);
+    if (! mkdir(p))
+    {
+      VAST_LOG_ACTOR_ERROR("failed to create directory " << directory_);
+      quit(exit::error);
+      return;
+    }
+  }
+
   become(
-      on(atom("init")) >> [=]
-      {
-        path p(directory_);
-        if (! exists(p))
-        {
-          VAST_LOG_ACTOR_INFO("creates new directory " << directory_);
-          if (! mkdir(p))
-          {
-            VAST_LOG_ACTOR_ERROR("failed to create directory " << directory_);
-            quit();
-          }
-        }
-        segment_manager_ << last_dequeued();
-      },
-      on(atom("kill")) >> [=]()
-      {
-        segment_manager_ << last_dequeued();
-        quit();
-      },
       on(atom("get"), atom("ids")) >> [=]
       {
         forward_to(segment_manager_);

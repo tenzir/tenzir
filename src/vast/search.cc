@@ -28,11 +28,12 @@ void search::act()
               try
               {
                 expression ex = expression::parse(str, sch);
-                auto q = spawn<query>(archive_, index_, client, std::move(ex));
-                assert(queries_.find(q) == queries_.end());
-                queries_.emplace(q, client);
-                monitor(client);
+                auto q = spawn<query, linked>(
+                    archive_, index_, client, std::move(ex));
+                q->link_to(client);
+                assert(queries_.count(q) == 0);
                 send(creator, q);
+                queries_.insert(q);
               }
               catch (error::query const& e)
               {
@@ -42,34 +43,6 @@ void search::act()
                 send(creator, actor_ptr{});
               }
             });
-      },
-      on(atom("DOWN"), arg_match) >> [=](uint32_t /* reason */)
-      {
-        VAST_LOG_ACTOR_VERBOSE("noticed client @" << last_sender()->id() <<
-                               " went down, removing associated queries");
-        for (auto i = queries_.begin(); i != queries_.end(); )
-        {
-          if (i->second == last_sender())
-          {
-            VAST_LOG_ACTOR_DEBUG("erases query @" << i->first->id());
-            send(i->first, atom("kill"));
-            i = queries_.erase(i);
-          }
-          else
-          {
-            ++i;
-          }
-        }
-      },
-      on(atom("kill")) >> [=]
-      {
-        for (auto& i : queries_)
-        {
-          i.first << last_dequeued();
-          VAST_LOG_ACTOR_VERBOSE("shuts down query @" << i.first->id());
-        }
-        queries_.clear();
-        quit();
       });
 }
 

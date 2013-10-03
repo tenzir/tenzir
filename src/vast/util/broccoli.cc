@@ -493,18 +493,32 @@ void init(bool messages, bool calltrace)
   bro_init(&ctx);
 }
 
-connection::connection(
-    cppa::io::input_stream_ptr in,
-    cppa::io::output_stream_ptr out)
-  : in_(std::move(in))
-  , out_(std::move(out))
+connection::connection(cppa::io::input_stream_ptr in,
+                       cppa::io::output_stream_ptr out)
+  : in_{std::move(in)},
+    out_{std::move(out)}
+{
+}
+
+void connection::on_exit()
+{
+  if (bc_)
+    bro_conn_delete(bc_);
+  actor<connection>::on_exit();
+}
+
+void connection::act()
 {
   auto fd = in_->read_handle();
   bc_ = bro_conn_new_socket(fd, BRO_CFLAG_DONTCACHE);
   if (bc_ < 0)
-    throw error::broccoli("bro_conn_new_socket");
+  {
+    VAST_LOG_ACTOR_ERROR("failed to create socket (bro_conn_new_socket)");
+    quit(exit::error);
+    return;
+  }
 
-  init_state = (
+  become(
     on(atom("subscribe"), arg_match) >> [=](std::string const& event)
     {
       bro_event_registry_add_compact(bc_,
@@ -517,19 +531,23 @@ connection::connection(
       event_handler_ = [=](event e) { send(receiver, std::move(e)); };
       bro_event_registry_request(bc_);
       if (! bro_conn_connect(bc_))
-        throw error::broccoli("bro_conn_connect()");
-
+      {
+        VAST_LOG_ACTOR_ERROR("failed to connect (bro_conn_connect)");
+        quit(exit::error);
+        return;
+      }
       send(self, atom("io"));
     },
     on(atom("io")) >> [=]
     {
       if (! bc_)
       {
-        send(self, atom("kill"));
+        VAST_LOG_ACTOR_ERROR("noticed invalid connection");
+        quit(exit::error);
         return;
       }
 
-      VAST_LOG_DEBUG("polling fd");
+      VAST_LOG_ACTOR_DEBUG("polls fd");
       if (poll(fd))
         bro_conn_process_input(bc_);
 
@@ -537,23 +555,21 @@ connection::connection(
     },
     on_arg_match >> [=](std::vector<uint8_t> const& raw)
     {
-      VAST_LOG_DEBUG("sending raw event of size " << raw.size());
+      VAST_LOG_ACTOR_DEBUG("sends raw event of size " << raw.size());
       bro_event_send_raw(bc_, raw.data(), raw.size());
     },
     on_arg_match >> [=](event const& e)
     {
       auto bro_event = make_event(e);
       if (! bro_event_send(bc_, bro_event))
-        VAST_LOG_ERROR("broccoli @ " << id() << " could not send event: " << e);
-
+        VAST_LOG_ACTOR_ERROR("could not send event: " << e);
       bro_event_free(bro_event);
-    },
-    on(atom("kill")) >> [=]
-    {
-      bro_conn_delete(bc_);
-      bc_ = nullptr;
-      quit();
     });
+}
+
+char const* connection::description() const
+{
+  return "broccoli";
 }
 
 } // namespace broccoli

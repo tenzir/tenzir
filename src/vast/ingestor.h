@@ -21,6 +21,9 @@ public:
            size_t max_segment_size,
            size_t batch_size);
 
+  /// Overrides `event_based_actor::on_exit`.
+  virtual void on_exit() final;
+
   void act();
   char const* description() const;
 
@@ -29,12 +32,12 @@ private:
   cppa::actor_ptr make_source(Args&&... args)
   {
     using namespace cppa;
-    auto snk = spawn<sink::segmentizer>(self, max_events_per_chunk_,
-                                        max_segment_size_);
-    auto src = spawn<Source, detached>(snk, std::forward<Args>(args)...);
+    auto snk = spawn<sink::segmentizer>(
+        self, max_events_per_chunk_, max_segment_size_);
+    auto src = spawn<Source, detached+linked>(
+        snk, std::forward<Args>(args)...);
     send(src, atom("batch size"), batch_size_);
     src->link_to(snk);
-    src->establish_backlink(snk);
     self->monitor(snk);
     sinks_.emplace(std::move(snk), 0);
     return src;

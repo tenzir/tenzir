@@ -101,8 +101,8 @@ query::query(cppa::actor_ptr archive,
         if (ids.empty())
         {
           VAST_LOG_DEBUG("query @" << id() << " received empty id set");
-          send(self, atom("kill"));
           send(sink_, atom("query"), atom("finished"));
+          quit(exit::done);
           return;
         }
 
@@ -217,11 +217,6 @@ query::query(cppa::actor_ptr archive,
       on(atom("statistics")) >> [=]
       {
         reply(atom("statistics"), stats_.evaluated, stats_.results);
-      },
-      on(atom("kill")) >> [=]
-      {
-        quit();
-        VAST_LOG_VERBOSE("query @" << id() << " terminated");
       });
 }
 

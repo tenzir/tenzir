@@ -25,11 +25,13 @@ public:
   segmentizer(cppa::actor_ptr upstream,
               size_t max_events_per_chunk, size_t max_segment_size);
 
+  /// Overrides `event_based_actor::on_exit`.
+  virtual void on_exit() final;
+
   virtual char const* description() const final;
 
 protected:
   virtual void process(event const& e) override;
-  virtual void before_exit() override;
 
 private:
   cppa::actor_ptr upstream_;

@@ -36,10 +36,6 @@ public:
       mkdir(dir_);
 
     cppa::partial_function base_behavior = (
-        on(atom("kill")) >> [=]
-        {
-          this->quit();
-        },
         on(atom("flush")) >> [=]
         {
           derived()->store();
@@ -50,7 +46,7 @@ public:
           {
             VAST_LOG_ACTOR_ERROR(derived()->description(),
                                  "failed to index event " << e);
-            this->quit();
+            this->quit(exit::error);
           }
         });
 

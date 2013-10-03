@@ -30,24 +30,17 @@ void partition::act()
   if (exists(dir_ / "last_modified"))
     io::unarchive(dir_ / "last_modified", last_modified_);
 
-  event_meta_index_ = spawn<event_meta_index>(dir_ / "meta");
+  event_meta_index_ = spawn<event_meta_index, linked>(dir_ / "meta");
 
   traverse(dir_ / "event",
            [&](path const& p) -> bool
            {
-             event_arg_indexes_.emplace(p.basename().str(),
-                                        spawn<event_arg_index>(p));
+             event_arg_indexes_.emplace(
+                 p.basename().str(), spawn<event_arg_index, linked>(p));
              return true;
            });
 
   become(
-      on(atom("kill")) >> [=]
-      {
-        event_meta_index_ << last_dequeued();
-        for (auto& p : event_arg_indexes_)
-          p.second << last_dequeued();
-        quit();
-      },
       on(atom("meta"), atom("timestamp")) >> [=]
       {
         reply(last_modified_);
@@ -89,7 +82,7 @@ void partition::act()
 
         auto& a = event_arg_indexes_[e.name()];
         if (! a)
-          a = spawn<event_arg_index>(dir_ / "event"/ e.name());
+          a = spawn<event_arg_index, linked>(dir_ / "event"/ e.name());
         a << last_dequeued();
       });
 }

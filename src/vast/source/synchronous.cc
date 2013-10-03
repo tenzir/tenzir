@@ -19,10 +19,6 @@ void synchronous::act()
       {
         batch_size_ = batch_size;
       },
-      on(atom("kill")) >> [=]
-      {
-        quit();
-      },
       on(atom("run")) >> [=]
       {
         run();
@@ -58,7 +54,10 @@ void synchronous::run()
     events_.clear();
   }
 
-  send(self, finished() ? atom("kill") : atom("run"));
+  if (finished())
+    quit(exit::done);
+  else
+    send(self, atom("run"));
 }
 
 } // namespace source

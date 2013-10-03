@@ -4,19 +4,6 @@
 using namespace cppa;
 using namespace vast;
 
-bool run(configuration const& config)
-{
-  auto prog = spawn<program, detached+monitored>(config);
-  bool error = false;
-  receive(
-      on(atom("DOWN"), exit_reason::user_defined) >> [&]
-      {
-        error = true;
-      });
-
-  return ! error;
-}
-
 int main(int argc, char *argv[])
 {
   configuration config;
@@ -35,10 +22,10 @@ int main(int argc, char *argv[])
     return 1;
   }
 
-  auto exit_code = run(config) ? 0 : 1;
+  auto prog = spawn<program, detached>(config);
   await_all_others_done();
   cppa::shutdown();
   vast::shutdown();
 
-  return exit_code;
+  return 0;
 }

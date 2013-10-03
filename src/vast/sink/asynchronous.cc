@@ -11,17 +11,7 @@ namespace sink {
 
 void asynchronous::act()
 {
-  self->trap_exit(true);
   become(
-      on(atom("kill")) >> [=]
-      {
-        before_exit();
-        quit();
-      },
-      on(atom("EXIT"), arg_match) >> [=](uint32_t /* reason */)
-      {
-        send(self, atom("kill"));
-      },
       on_arg_match >> [=](event const& e)
       {
         VAST_LOG_ACTOR_DEBUG(description(), "got 1 event");
@@ -59,10 +49,6 @@ void asynchronous::process(std::vector<event> const& v)
 {
   for (auto& e : v)
     process(e);
-}
-
-void asynchronous::before_exit()
-{
 }
 
 } // namespace sink
