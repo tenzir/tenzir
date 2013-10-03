@@ -12,7 +12,7 @@ class editline
 public:
   /// Constructs an editline context.
   /// @param The name of the edit line context.
-  editline(char const* name = "");
+  editline(char const* name = "vast");
 
   ~editline();
 

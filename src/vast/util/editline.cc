@@ -66,11 +66,6 @@ struct editline::impl
     // Make ourselves available in callbacks.
     el_set(el, EL_CLIENTDATA, this);
 
-    // Setup history.
-    history(hist, &hist_event, H_SETSIZE, 1000);
-    history(hist, &hist_event, H_SETUNIQUE, 1);
-    el_set(el, EL_HIST, history, hist);
-
     // Setup completion.
     el_set(el, EL_ADDFN, "vast-complete", "VAST complete", &handle_completion);
     el_set(el, EL_BIND, completion_key, "vast-complete", NULL);
@@ -83,6 +78,11 @@ struct editline::impl
 
     // Setup prompt.
     el_set(el, EL_PROMPT, &prompt_function);
+
+    // Setup history.
+    history(hist, &hist_event, H_SETSIZE, 1000);
+    history(hist, &hist_event, H_SETUNIQUE, 1);
+    el_set(el, EL_HIST, history, hist);
   }
 
   ~impl()
@@ -101,7 +101,6 @@ struct editline::impl
   {
     if (completions.count(cmd))
       return false;
-    el_set(el, EL_ADDFN, cmd.c_str(), desc.c_str(), &handle_completion);
     completions.emplace(std::move(cmd), std::move(desc));
     return true;
   }
