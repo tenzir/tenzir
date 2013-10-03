@@ -75,6 +75,12 @@ struct editline::impl
     el_set(el, EL_ADDFN, "vast-complete", "VAST complete", &handle_completion);
     el_set(el, EL_BIND, completion_key, "vast-complete", NULL);
 
+    // FIXME: this is a fix for folks that have "bind -v" in their .editrc.
+    // Most of these also have "bind ^I rl_complete" in there to re-enable tab
+    // completion, which "bind -v" somehow disabled. A better solution to
+    // handle this problem would be desirable.
+    el_set(el, EL_ADDFN, "rl_complete", "default complete", &handle_completion);
+
     // Setup prompt.
     el_set(el, EL_PROMPT, &prompt_function);
   }
