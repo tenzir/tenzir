@@ -18,27 +18,19 @@ segment_manager::segment_manager(size_t capacity, std::string const& dir)
 
 void segment_manager::act()
 {
-  become(
-      on(atom("init")) >> [=]
+  traverse(
+      dir_,
+      [&](path const& p) -> bool
       {
-        traverse(
-            dir_,
-            [&](path const& p) -> bool
-            {
-              VAST_LOG_ACTOR_VERBOSE("found segment " << p);
-              segment_files_.emplace(to_string(p.basename()), p);
-              return true;
-            });
+        VAST_LOG_ACTOR_VERBOSE("found segment " << p);
+        segment_files_.emplace(to_string(p.basename()), p);
+        return true;
+      });
 
-        if (segment_files_.empty())
-          VAST_LOG_ACTOR_VERBOSE("did not find any segments in " << dir_);
-      },
-      on(atom("kill")) >> [=]
-      {
-        segment_files_.clear();
-        cache_.clear();
-        quit();
-      },
+  if (segment_files_.empty())
+    VAST_LOG_ACTOR_VERBOSE("did not find any segments in " << dir_);
+
+  become(
       on_arg_match >> [=](segment const& s)
       {
         store(*tuple_cast<segment>(last_dequeued()));
@@ -78,7 +70,6 @@ void segment_manager::store(cow<segment> const& s)
     binary_serializer sink(out);
     sink << *s;
   }
-
   cache_.insert(s->id(), s);
   VAST_LOG_ACTOR_VERBOSE("wrote segment to " << filename);
 }

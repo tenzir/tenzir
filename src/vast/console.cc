@@ -13,6 +13,7 @@ using namespace cppa;
 console::console(cppa::actor_ptr search)
   : search_{std::move(search)}
 {
+  editline_.source();
   editline_.complete("help", "display command help");
   editline_.complete("quit", "exit the console");
 }
@@ -20,13 +21,10 @@ console::console(cppa::actor_ptr search)
 void console::act()
 {
   become(
-      on(atom("kill")) >> [=]
-      {
-        quit(exit_reason::user_defined);
-      },
       on(atom("run")) >> [=]
       {
-        // Allows for logging messages to trickle through.
+        // The delay allows for logging messages to trickle through first
+        // before we print the prompt.
         delayed_send(self, std::chrono::milliseconds(100), atom("read"));
       },
       on(atom("read")) >> [=]
@@ -37,7 +35,7 @@ void console::act()
 
         if (line == "exit" || line == "quit")
         {
-          quit(exit_reason::user_defined);
+          quit(exit::stop);
         }
         else
         {

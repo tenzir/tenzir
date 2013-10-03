@@ -13,7 +13,7 @@ namespace sink {
 class asynchronous : public actor<asynchronous>
 {
 public:
-  virtual void on_exit() final;
+  virtual void on_exit() override;
   void act();
   virtual char const* description() const = 0;
 
@@ -31,9 +31,6 @@ protected:
   /// @param v The vector of events to process process.
   /// @returns `true` *iff* the sink processed all events successfully.
   virtual void process(std::vector<event> const& v);
-
-  /// A hook which executes before the sink terminates.
-  virtual void before_exit();
 
   size_t total_events_ = 0;
 };

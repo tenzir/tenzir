@@ -23,6 +23,12 @@ ingestor::ingestor(actor_ptr receiver,
   chaining(false);
 }
 
+void ingestor::on_exit()
+{
+  for (auto& p : sinks_)
+    send_exit(p.first, exit::done);
+}
+
 void ingestor::act()
 {
   become(
@@ -33,14 +39,7 @@ void ingestor::act()
         sinks_.erase(i);
 
         if (sinks_.empty())
-          quit();
-      },
-      on(atom("kill")) >> [=]
-      {
-        if (sinks_.empty())
-          quit();
-        for (auto& pair : sinks_)
-          pair.first << last_dequeued();
+          quit(exit::done);
       },
 #ifdef VAST_HAVE_BROCCOLI
       on(atom("ingest"), atom("broccoli"), arg_match) >>

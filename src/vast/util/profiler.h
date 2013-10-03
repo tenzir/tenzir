@@ -30,6 +30,8 @@ public:
   /// @param secs The number of seconds between subsequent measurements.
   profiler(std::string const& log_dir, std::chrono::seconds secs);
 
+  virtual void on_exit() final;
+
   void act();
   char const* description() const;
 

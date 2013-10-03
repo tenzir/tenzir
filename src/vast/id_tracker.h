@@ -14,6 +14,9 @@ public:
   /// @param filename The filename containing the current ID.
   id_tracker(std::string filename);
 
+  /// Overrides `event_based_actor::on_exit`.
+  virtual void on_exit() final;
+
   void act();
   char const* description() const;
 

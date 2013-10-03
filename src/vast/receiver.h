@@ -7,7 +7,8 @@
 
 namespace vast {
 
-/// Receives segments and relays them to archive and index.
+/// Receives segments, imbues them with an ID from the tracker, and relays them
+/// to archive and index.
 class receiver : public actor<receiver>
 {
 public:

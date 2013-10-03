@@ -6,6 +6,14 @@
 
 namespace vast {
 
+namespace exit {
+
+constexpr uint32_t done   = cppa::exit_reason::user_defined;
+constexpr uint32_t stop   = cppa::exit_reason::user_defined + 1;
+constexpr uint32_t error  = cppa::exit_reason::user_defined + 2;
+
+} // namespace exit
+
 /// An actor enhanced in 
 template <typename Derived>
 class actor : public cppa::event_based_actor

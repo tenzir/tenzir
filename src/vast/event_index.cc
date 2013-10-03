@@ -78,7 +78,8 @@ void event_arg_index::load()
     if (! extract(start, str.end(), o))
     {
       VAST_LOG_ACTOR_ERROR("got invalid offset: " << p.basename());
-      quit();
+      quit(exit::error);
+      return;
     }
 
     value_type vt;
@@ -87,7 +88,8 @@ void event_arg_index::load()
     if (! bmi)
     {
       VAST_LOG_ACTOR_ERROR("got corrupt index: " << p.basename());
-      quit();
+      quit(exit::error);
+      return;
     }
     VAST_LOG_ACTOR_DEBUG("read: " << p.trim(-3) << " with " <<
                          bmi->size() << " events");

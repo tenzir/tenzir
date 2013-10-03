@@ -54,19 +54,15 @@ void signal_monitor::act()
           signals[0] = 0;
           for (int i = 0; size_t(i) < signals.size(); ++i)
             while (signals[i]-- > 0)
-              send(receiver_, atom("system"), atom("signal"), i);
+              send(receiver_, atom("signal"), i);
         }
         self << last_dequeued();
-      },
-      on(atom("kill")) >> [=]
-      {
-        quit();
       });
 }
 
 char const* signal_monitor::description() const
 {
-  return "system-monitor";
+  return "signal-monitor";
 }
 
 } // namespace vast

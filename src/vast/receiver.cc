@@ -16,10 +16,6 @@ receiver::receiver(actor_ptr tracker, actor_ptr archive, actor_ptr index)
 void receiver::act()
 {
   become(
-      on(atom("kill")) >> [=]
-      {
-        quit();
-      },
       on_arg_match >> [=](segment& s)
       {
         VAST_LOG_ACTOR_DEBUG("got segment " << s.id());

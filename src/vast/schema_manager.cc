@@ -10,10 +10,6 @@ namespace vast {
 void schema_manager::act()
 {
   become(
-      on(atom("kill")) >> [=]
-      {
-        quit();
-      },
       on(atom("load"), arg_match) >> [=](std::string const& file)
       {
         schema_.read(file);

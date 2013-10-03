@@ -9,8 +9,17 @@ using namespace cppa;
 namespace vast {
 
 id_tracker::id_tracker(std::string filename)
-  : filename_(std::move(filename))
+  : filename_{std::move(filename)}
 {
+}
+
+void id_tracker::on_exit()
+{
+  VAST_LOG_ACTOR_DEBUG("saves last event id " << id_);
+  if (file_)
+    file_ << id_ << std::endl;
+  else
+    VAST_LOG_ACTOR_ERROR("could not save current event id: " << id_);
 }
 
 void id_tracker::act()
@@ -20,7 +29,7 @@ void id_tracker::act()
     std::ifstream ifs{filename_};
     if (! ifs)
     {
-      quit(); // TODO: use actor exit code denoting failure.
+      quit(exit::error);
       return;
     }
     ifs >> id_;
@@ -31,14 +40,6 @@ void id_tracker::act()
   file_.seekp(0);
 
   become(
-    on(atom("kill")) >> [=]
-    {
-      VAST_LOG_ACTOR_DEBUG("saves last event id " << id_);
-      file_ << id_ << std::endl;
-      if (! file_)
-        VAST_LOG_ACTOR_ERROR("could not save current event id");
-      quit();
-    },
     on(atom("request"), arg_match) >> [=](uint64_t n)
     {
       assert(file_);

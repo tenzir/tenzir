@@ -12,11 +12,33 @@ using namespace cppa;
 
 segmentizer::segmentizer(actor_ptr upstream,
                          size_t max_events_per_chunk, size_t max_segment_size)
-  : upstream_(upstream),
-    stats_(std::chrono::seconds(1)),
-    segment_(uuid::random(), max_segment_size),
-    writer_(&segment_, max_events_per_chunk)
+  : upstream_{upstream},
+    stats_{std::chrono::seconds(1)},
+    segment_{uuid::random(), max_segment_size},
+    writer_{&segment_, max_events_per_chunk}
 {
+}
+
+void segmentizer::on_exit()
+{
+  if (! writer_.flush())
+  {
+    segment_ = segment{uuid::random()};
+    writer_.attach_to(&segment_);
+    if (! writer_.flush())
+      VAST_LOG_ACTOR_ERROR("failed to flush a fresh segment");
+    assert(segment_.events() > 0);
+  }
+
+  if (segment_.events() > 0)
+  {
+    VAST_LOG_ACTOR_DEBUG("sends final segment " << segment_.id() <<
+                         " with " << segment_.events() << " events to @" <<
+                         upstream_->id());
+
+    send(upstream_, std::move(segment_));
+  }
+  asynchronous::on_exit();
 }
 
 char const* segmentizer::description() const
@@ -48,27 +70,6 @@ void segmentizer::process(event const& e)
   send(upstream_, std::move(segment_));
   segment_ = segment(uuid::random(), max_segment_size);
   writer_.attach_to(&segment_);
-}
-
-void segmentizer::before_exit()
-{
-  if (! writer_.flush())
-  {
-    segment_ = segment(uuid::random());
-    writer_.attach_to(&segment_);
-    if (! writer_.flush())
-      VAST_LOG_ACTOR_ERROR("failed to flush a fresh segment");
-    assert(segment_.events() > 0);
-  }
-
-  if (segment_.events() > 0)
-  {
-    VAST_LOG_ACTOR_DEBUG("sends final segment " << segment_.id() <<
-                         " with " << segment_.events() << " events to @" <<
-                         upstream_->id());
-
-    send(upstream_, std::move(segment_));
-  }
 }
 
 } // namespace sink
