@@ -10,35 +10,109 @@
 namespace vast {
 namespace util {
 
+struct editline::history::impl
+{
+  impl(int size, bool unique)
+  {
+    hist = history_init();
+    assert(hist != nullptr);
+    ::history(hist, &hist_event, H_SETSIZE, size);
+    ::history(hist, &hist_event, H_SETUNIQUE, unique ? 1 : 0);
+  }
+
+  ~impl()
+  {
+    history_end(hist);
+  }
+
+  void add(std::string const& str)
+  {
+    ::history(hist, &hist_event, H_ADD, str.c_str());
+  }
+
+  void append(std::string const& str)
+  {
+    ::history(hist, &hist_event, H_APPEND, str.c_str());
+  }
+
+  void enter(std::string const& str)
+  {
+    ::history(hist, &hist_event, H_ENTER, str.c_str());
+  }
+
+  History* hist;
+  HistEvent hist_event;
+};
+
+
+editline::history::history(int size, bool unique)
+  : impl_{new impl{size, unique}}
+{
+}
+
+editline::history::~history()
+{
+}
+
+void editline::history::add(std::string const& str)
+{
+  impl_->add(str);
+}
+
+void editline::history::append(std::string const& str)
+{
+  impl_->append(str);
+}
+
+void editline::history::enter(std::string const& str)
+{
+  impl_->enter(str);
+}
+
+
+namespace {
+
+// Given a query string *pfx* and map *m* whose keys represent the full
+// matches, retrieves all matching entries in *m* where *pfx* is a full prefix
+// of the key.
+std::vector<std::string>
+match(std::map<std::string, std::string> const& m, std::string const& pfx)
+{
+  std::vector<std::string> matches;
+  for (auto& p : m)
+  {
+    auto& key = p.first;
+    if (pfx.size() >= key.size())
+      continue;
+    auto result = std::mismatch(pfx.begin(), pfx.end(), key.begin());
+    if (result.first == pfx.end())
+      matches.push_back(key);
+  }
+  return matches;
+}
+
+} // namespace <anonymous>
+
 struct editline::impl
 {
   static char* prompt_function(EditLine* el)
   {
     impl* instance;
     el_get(el, EL_CLIENTDATA, &instance);
-    return const_cast<char*>(instance->prompt_str.c_str());
+    return const_cast<char*>(instance->prompt_.prompt.c_str());
   }
 
   static unsigned char handle_completion(EditLine* el, int)
   {
     impl* instance;
     el_get(el, EL_CLIENTDATA, &instance);
-    auto snippet = instance->cursor_line();
-    std::vector<std::string> matches;
-    for (auto& p : instance->completions)
-    {
-      auto& full = p.first;
-      if (snippet.size() >= full.size())
-        continue;
-      auto result = std::mismatch(snippet.begin(), snippet.end(), full.begin());
-      if (result.first == snippet.end())
-        matches.push_back(full);
-    }
+    auto prefix = instance->cursor_line();
+    auto matches = match(instance->completions_, prefix);
     if (matches.empty())
       return CC_REFRESH_BEEP;
     if (matches.size() == 1)
     {
-      instance->insert(matches.front().substr(snippet.size()));
+      instance->insert(matches.front().substr(prefix.size()));
     }
     else
     {
@@ -50,75 +124,71 @@ struct editline::impl
   }
 
   impl(char const* name, char const* comp_key = "\t")
-    : completion_key{comp_key}
+    : el_{el_init(name, stdin, stdout, stderr)},
+      completion_key_{comp_key}
   {
-    // Bring editline to life.
-    el = el_init(name, stdin, stdout, stderr);
-    hist = history_init();
-    assert(el != nullptr);
-    assert(hist != nullptr);
-    el_set(el, EL_PREP_TERM, 1);
-    //el_set(el, EL_UNBUFFERED, 1);
+    assert(el_ != nullptr);
+    el_set(el_, EL_PREP_TERM, 1);
+    //el_set(el_, EL_UNBUFFERED, 1);
 
     // Sane defaults.
-    el_set(el, EL_EDITOR, "vi");
+    el_set(el_, EL_EDITOR, "vi");
 
     // Make ourselves available in callbacks.
-    el_set(el, EL_CLIENTDATA, this);
+    el_set(el_, EL_CLIENTDATA, this);
 
     // Setup completion.
-    el_set(el, EL_ADDFN, "vast-complete", "VAST complete", &handle_completion);
-    el_set(el, EL_BIND, completion_key, "vast-complete", NULL);
+    el_set(el_, EL_ADDFN, "vast-complete", "VAST complete", &handle_completion);
+    el_set(el_, EL_BIND, completion_key_, "vast-complete", NULL);
 
     // FIXME: this is a fix for folks that have "bind -v" in their .editrc.
     // Most of these also have "bind ^I rl_complete" in there to re-enable tab
     // completion, which "bind -v" somehow disabled. A better solution to
     // handle this problem would be desirable.
-    el_set(el, EL_ADDFN, "rl_complete", "default complete", &handle_completion);
+    el_set(el_, EL_ADDFN, "rl_complete", "default complete", &handle_completion);
 
-    // Setup prompt.
-    el_set(el, EL_PROMPT, &prompt_function);
-
-    // Setup history.
-    history(hist, &hist_event, H_SETSIZE, 1000);
-    history(hist, &hist_event, H_SETUNIQUE, 1);
-    el_set(el, EL_HIST, history, hist);
+    // Setup prompt configuration.
+    el_set(el_, EL_PROMPT, &prompt_function);
   }
 
   ~impl()
   {
-    el_set(el, EL_PREP_TERM, 0);
-    history_end(hist);
-    el_end(el);
+    el_set(el_, EL_PREP_TERM, 0);
+    el_end(el_);
   }
 
   bool source(char const* filename)
   {
-    return el_source(el, filename) != -1;
+    return el_source(el_, filename) != -1;
+  }
+
+  void set(prompt p)
+  {
+    prompt_ = std::move(p);
+  }
+
+  void set(history& hist)
+  {
+    el_set(el_, EL_HIST, ::history, hist.impl_->hist);
   }
 
   bool complete(std::string cmd, std::string desc)
   {
-    if (completions.count(cmd))
+    if (completions_.count(cmd))
       return false;
-    completions.emplace(std::move(cmd), std::move(desc));
+    completions_.emplace(std::move(cmd), std::move(desc));
     return true;
-  }
-
-  void prompt(std::string str)
-  {
-    prompt_str = std::move(str);
   }
 
   bool get(char& c)
   {
-    return el_getc(el, &c) == 1;
+    return el_getc(el_, &c) == 1;
   }
 
   bool get(std::string& line)
   {
     int n;
-    auto str = el_gets(el, &n);
+    auto str = el_gets(el_, &n);
     if (n == -1)
       return false;
     if (str == nullptr)
@@ -132,63 +202,46 @@ struct editline::impl
 
   void insert(std::string const& str)
   {
-    el_insertstr(el, str.c_str());
+    el_insertstr(el_, str.c_str());
   }
 
   size_t cursor()
   {
-    auto info = el_line(el);
+    auto info = el_line(el_);
     return info->cursor - info->buffer;
   }
 
   std::string line()
   {
-    auto info = el_line(el);
+    auto info = el_line(el_);
     return {info->buffer, info->lastchar - info->buffer};
   }
 
   std::string cursor_line()
   {
-    auto info = el_line(el);
+    auto info = el_line(el_);
     return {info->buffer, info->cursor - info->buffer};
   }
 
   void reset()
   {
-    el_reset(el);
+    el_reset(el_);
   }
 
   void resize()
   {
-    el_resize(el);
+    el_resize(el_);
   }
 
   void beep()
   {
-    el_beep(el);
+    el_beep(el_);
   }
 
-  void history_add(std::string const& str)
-  {
-    history(hist, &hist_event, H_ADD, str.c_str());
-  }
-
-  void history_append(std::string const& str)
-  {
-    history(hist, &hist_event, H_APPEND, str.c_str());
-  }
-
-  void history_enter(std::string const& str)
-  {
-    history(hist, &hist_event, H_ENTER, str.c_str());
-  }
-
-  EditLine* el;
-  History* hist;
-  HistEvent hist_event;
-  char const* completion_key;
-  std::map<std::string, std::string> completions;
-  std::string prompt_str{">> "};
+  EditLine* el_;
+  char const* completion_key_;
+  prompt prompt_;
+  std::map<std::string, std::string> completions_;
 };
 
 editline::editline(char const* name)
@@ -205,14 +258,19 @@ bool editline::source(char const* filename)
   return impl_->source(filename);
 }
 
+void editline::set(prompt p)
+{
+  impl_->set(std::move(p));
+}
+
+void editline::set(history& hist)
+{
+  impl_->set(hist);
+}
+
 bool editline::complete(std::string cmd, std::string desc)
 {
   return impl_->complete(std::move(cmd), std::move(desc));
-}
-
-void editline::prompt(std::string str)
-{
-  impl_->prompt(std::move(str));
 }
 
 bool editline::get(char& c)
@@ -238,21 +296,6 @@ std::string editline::line()
 size_t editline::cursor()
 {
   return impl_->cursor();
-}
-
-void editline::history_add(std::string const& str)
-{
-  impl_->history_add(str);
-}
-
-void editline::history_append(std::string const& str)
-{
-  impl_->history_append(str);
-}
-
-void editline::history_enter(std::string const& str)
-{
-  impl_->history_enter(str);
 }
 
 } // namespace util
