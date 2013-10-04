@@ -73,16 +73,17 @@ bool command_line::process(bool& callback_result)
   auto key = cmd.substr(0, first_space);
   if (! current->callbacks.count(key))
   {
-    if (current->unknown_command)
-      current->unknown_command(std::move(cmd));
-    return false;
+    if (! current->unknown_command)
+      return false;
+    callback_result = current->unknown_command(std::move(cmd));
+    return true;
   }
   auto args = first_space == std::string::npos ? cmd : cmd.substr(first_space);
   callback_result = current->callbacks[key](std::move(args));
   current->hist.enter(cmd);
   return true;
 }
-    
+
 command_line::mode::mode(std::string name, std::string desc, std::string prompt)
   : name{std::move(name)},
     description{std::move(desc)}
