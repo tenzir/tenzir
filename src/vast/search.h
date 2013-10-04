@@ -21,7 +21,7 @@ private:
   cppa::actor_ptr archive_;
   cppa::actor_ptr index_;
   cppa::actor_ptr schema_manager_;
-  std::set<cppa::actor_ptr> queries_;
+  std::map<cppa::actor_ptr, cppa::actor_ptr> queries_;
 };
 
 } // namespace vast

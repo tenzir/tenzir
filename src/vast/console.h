@@ -22,6 +22,8 @@ public:
   char const* description() const;
 
 private:
+  void delayed_prompt_display(size_t ms = 100);
+
   std::deque<cow<event>> results_;
   cppa::actor_ptr search_;
   cppa::actor_ptr query_;

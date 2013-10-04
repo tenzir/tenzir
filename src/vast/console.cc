@@ -62,10 +62,30 @@ console::console(cppa::actor_ptr search)
 
   cmdline_.on_unknown_command(
       "query",
-      [=](std::string qry)
+      [=](std::string q)
       {
-        std::cout << "processing query: " << qry << std::endl;
-        cmdline_.append_to_history(qry);
+        if (q.empty())
+          return true;
+        sync_send(search_, atom("query"), atom("create"), q).then(
+            on_arg_match >> [=](actor_ptr qry)
+            {
+              if (! qry)
+              {
+                VAST_LOG_ACTOR_ERROR("invalid query: " << q);
+                return true;
+              }
+              VAST_LOG_ACTOR_VERBOSE("got query @" << qry->id());
+              cmdline_.append_to_history(q);
+              query_ = qry;
+              monitor(qry);
+              send(query_, atom("run"));
+              return false;
+            },
+            others() >> [=]
+            {
+              VAST_LOG_ACTOR_ERROR("got unexpected message: " <<
+                                   to_string(last_dequeued()));
+            });
         return true;
       });
 }
@@ -73,11 +93,15 @@ console::console(cppa::actor_ptr search)
 void console::act()
 {
   become(
+      on(atom("DOWN"), arg_match) >> [=](uint32_t)
+      {
+        VAST_LOG_ACTOR_ERROR("got DOWN from query @" << last_sender()->id());
+        query_ = nullptr;
+        delayed_prompt_display();
+      },
       on(atom("run")) >> [=]
       {
-        // The delay allows for logging messages to trickle through first
-        // before we print the prompt.
-        delayed_send(self, std::chrono::milliseconds(100), atom("prompt"));
+        delayed_prompt_display();
       },
       on(atom("prompt")) >> [=]
       {
@@ -85,47 +109,13 @@ void console::act()
         if (! cmdline_.process(callback_result) || callback_result)
           self << last_dequeued();
       },
-      on(atom("query"), atom("create"), arg_match) >> [=](std::string const& s)
+      on_arg_match >> [=](event const& /* e */)
       {
-        sync_send(search_, atom("query"), atom("create"), s, self).then(
-            on_arg_match >> [=](actor_ptr qry)
-            {
-              if (qry)
-              {
-                query_ = qry;
-                VAST_LOG_ACTOR_VERBOSE("connected to query @" << query_->id());
-                send(query_, atom("start"));
-              }
-              else
-              {
-                VAST_LOG_ACTOR_ERROR("invalid query: " << s);
-                quit(exit_reason::user_defined);
-              }
-            });
-      }
-//    on(atom("query"), atom("failure"), arg_match) >> [=](std::string const& e)
-//    {
-//      VAST_LOG_ERROR(e);
-//    },
-//      on(atom("statistics")) >> [=]
-//      {
-//        VAST_LOG_DEBUG("query client @" << id() <<
-//                       " asks for statistics of query @" << query_->id());
-//
-//        forward_to(query_);
-//      },
-//      on(atom("statistics"), arg_match)
-//        >> [=](uint64_t processed, uint64_t matched)
-//      {
-//        auto selectvity =
-//          static_cast<double>(processed) / static_cast<double>(matched);
-//
-//        VAST_LOG_VERBOSE(
-//            "query @" << query_->id() <<
-//            " processed " << processed << " events," <<
-//            " matched " << matched << " events" <<
-//            " (selectivity " << std::setprecision(3) << selectvity << "%)");
-//      },
+        auto opt = tuple_cast<event>(last_dequeued());
+        assert(opt);
+        results_.push_back(*opt);
+        std::cout << *results_.back() << std::endl;
+      },
 //    on(atom("results")) >> [=]
 //    {
 //      size_t i = 0;
@@ -151,26 +141,24 @@ void console::act()
 //            " resuming query @" << query_->id());
 //      }
 //    },
-//    on_arg_match >> [=](event const& /* e */)
-//    {
-//      auto opt = tuple_cast<event>(last_dequeued());
-//      assert(opt);
-//      results_.push_back(*opt);
-//      if (running_ && results_.size() >= buffer_size_)
-//      {
-//        send(query_, atom("pause"));
-//        running_ = false;
-//        VAST_LOG_DEBUG(
-//            "query client @" << id() <<
-//            " overflowed local result buffer (" << buffer_size_ << ")," <<
-//            " pausing query @" << query_->id());
-//      }
-    );
+      others() >> [=]
+      {
+        VAST_LOG_ACTOR_ERROR("got unexpected message from @" <<
+                             last_sender()->id() << ": " <<
+                             to_string(last_dequeued()));
+      });
 }
 
 char const* console::description() const
 {
   return "console";
+}
+
+void console::delayed_prompt_display(size_t ms)
+{
+  // The delay allows for logging messages to trickle through first
+  // before we print the prompt.
+  delayed_send(self, std::chrono::milliseconds(ms), atom("prompt"));
 }
 
 } // namespace vast
