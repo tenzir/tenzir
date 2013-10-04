@@ -243,7 +243,7 @@ relation::relation(relational_operator op)
       assert(! "invalid operator");
       break;
     case match:
-      op_ = [](value const& lhs, value const& rhs) -> bool
+      pred_ = [](value const& lhs, value const& rhs) -> bool
       {
         if (lhs.which() != string_type || rhs.which() != regex_type)
           return false;
@@ -252,7 +252,7 @@ relation::relation(relational_operator op)
       };
       break;
     case not_match:
-      op_ = [](value const& lhs, value const& rhs) -> bool
+      pred_ = [](value const& lhs, value const& rhs) -> bool
       {
         if (lhs.which() != string_type || rhs.which() != regex_type)
           return false;
@@ -261,7 +261,7 @@ relation::relation(relational_operator op)
       };
       break;
     case in:
-      op_ = [](value const& lhs, value const& rhs) -> bool
+      pred_ = [](value const& lhs, value const& rhs) -> bool
       {
         if (lhs.which() == string_type &&
             rhs.which() == regex_type)
@@ -275,7 +275,7 @@ relation::relation(relational_operator op)
       };
       break;
     case not_in:
-      op_ = [](value const& lhs, value const& rhs) -> bool
+      pred_ = [](value const& lhs, value const& rhs) -> bool
       {
         if (lhs.which() == string_type &&
             rhs.which() == regex_type)
@@ -289,37 +289,37 @@ relation::relation(relational_operator op)
       };
       break;
     case equal:
-      op_ = [](value const& lhs, value const& rhs)
+      pred_ = [](value const& lhs, value const& rhs)
       {
         return lhs == rhs;
       };
       break;
     case not_equal:
-      op_ = [](value const& lhs, value const& rhs)
+      pred_ = [](value const& lhs, value const& rhs)
       {
         return lhs != rhs;
       };
       break;
     case less:
-      op_ = [](value const& lhs, value const& rhs)
+      pred_ = [](value const& lhs, value const& rhs)
       {
         return lhs < rhs;
       };
       break;
     case less_equal:
-      op_ = [](value const& lhs, value const& rhs)
+      pred_ = [](value const& lhs, value const& rhs)
       {
         return lhs <= rhs;
       };
       break;
     case greater:
-      op_ = [](value const& lhs, value const& rhs)
+      pred_ = [](value const& lhs, value const& rhs)
       {
         return lhs > rhs;
       };
       break;
     case greater_equal:
-      op_ = [](value const& lhs, value const& rhs)
+      pred_ = [](value const& lhs, value const& rhs)
       {
         return lhs >= rhs;
       };
@@ -329,7 +329,7 @@ relation::relation(relational_operator op)
 
 bool relation::test(value const& lhs, value const& rhs) const
 {
-  return op_(lhs, rhs);
+  return pred_(lhs, rhs);
 }
 
 relational_operator relation::type() const
@@ -389,7 +389,7 @@ void constant::eval()
 class expressionizer
 {
 public:
-  typedef void result_type;
+  using result_type = void;
 
   expressionizer(expr::n_ary_operator* parent,
                  std::vector<expr::extractor*>& extractors,
@@ -505,7 +505,7 @@ public:
 
     if (event)
     {
-      // Ignore the event name in lhs[0]. 
+      // Ignore the event name in lhs[0].
       auto& ids = clause.lhs;
       auto offs = schema::argument_offsets(event, {ids.begin() + 1, ids.end()});
       if (offs.empty())
@@ -551,7 +551,7 @@ public:
         auto offsets = schema::symbol_offsets(&e, clause.lhs);
         if (offsets.empty())
           continue;
-        
+
         // TODO: factor rest of block in separate function to promote DRY.
         if (offsets.size() > 1)
           throw error::schema("multiple offsets not yet implemented");

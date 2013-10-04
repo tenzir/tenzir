@@ -9,11 +9,6 @@
 #include "vast/util/visitor.h"
 
 namespace vast {
-
-// Forward declarations
-class expression;
-std::string to_string(expression const&);
-
 namespace expr {
 
 // Forward declarations
@@ -28,38 +23,39 @@ class disjunction;
 class relation;
 class constant;
 
-typedef util::const_visitor<
-    node
- ,  timestamp_extractor
- ,  name_extractor
- ,  id_extractor
- ,  offset_extractor
- ,  type_extractor
- ,  conjunction
- ,  disjunction
- ,  relation
- ,  constant
-> const_visitor;
+using const_visitor = util::const_visitor<
+  node,
+  timestamp_extractor,
+  name_extractor,
+  id_extractor,
+  offset_extractor,
+  type_extractor,
+  conjunction,
+  disjunction,
+  relation,
+  constant
+>;
 
-typedef util::visitor<
-    node
- ,  timestamp_extractor
- ,  name_extractor
- ,  id_extractor
- ,  offset_extractor
- ,  type_extractor
- ,  conjunction
- ,  disjunction
- ,  relation
- ,  constant
-> visitor;
+using visitor = util::visitor<
+  node,
+  timestamp_extractor,
+  name_extractor,
+  id_extractor,
+  offset_extractor,
+  type_extractor,
+  conjunction,
+  disjunction,
+  relation,
+  constant
+>;
 
 /// The base class for nodes in the expression tree.
 class node
 {
-  node(node const&) = delete;
-
 public:
+  node(node const&) = delete;
+  node& operator=(node const&) = delete;
+  node& operator=(node&&) = delete;
   virtual ~node() = default;
 
   /// Gets the result of the sub-tree induced by this node.
@@ -217,8 +213,7 @@ private:
 class relation : public n_ary_operator
 {
 public:
-  typedef std::function<bool(value const&, value const&)>
-    binary_predicate;
+  using binary_predicate = std::function<bool(value const&, value const&)>;
 
   relation(relational_operator op);
 
@@ -231,7 +226,7 @@ public:
 private:
   virtual void eval();
 
-  binary_predicate op_;
+  binary_predicate pred_;
   relational_operator op_type_;
 };
 
