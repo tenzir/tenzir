@@ -733,11 +733,11 @@ void expression::accept(expr::const_visitor& v) const
   root_->accept(v);
 }
 
-void expression::accept(expr::visitor& v)
-{
-  assert(root_);
-  root_->accept(v);
-}
+//void expression::accept(expr::visitor& v)
+//{
+//  assert(root_);
+//  root_->accept(v);
+//}
 
 void expression::serialize(serializer& sink) const
 {

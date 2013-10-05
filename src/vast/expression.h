@@ -24,7 +24,6 @@ class relation;
 class constant;
 
 using const_visitor = util::const_visitor<
-  node,
   timestamp_extractor,
   name_extractor,
   id_extractor,
@@ -37,7 +36,6 @@ using const_visitor = util::const_visitor<
 >;
 
 using visitor = util::visitor<
-  node,
   timestamp_extractor,
   name_extractor,
   id_extractor,
@@ -50,7 +48,7 @@ using visitor = util::visitor<
 >;
 
 /// The base class for nodes in the expression tree.
-class node
+class node : public util::visitable_with<const_visitor>
 {
 public:
   node(node const&) = delete;
@@ -74,9 +72,6 @@ public:
   /// Evaluates the sub-tree induced by this node.
   virtual void eval() = 0;
 
-  VAST_ACCEPT_CONST(const_visitor)
-  VAST_ACCEPT(visitor)
-
 protected:
   node() = default;
 
@@ -85,14 +80,10 @@ protected:
 };
 
 /// The base class for extractor nodes.
-class extractor : public node
+class extractor : public util::abstract_visitable<node, const_visitor>
 {
 public:
   virtual void feed(event const* event);
-  //event const* event() const;
-
-  VAST_ACCEPT_CONST(const_visitor)
-  VAST_ACCEPT(visitor)
 
 protected:
   virtual void eval() = 0;
@@ -101,46 +92,32 @@ protected:
 };
 
 /// Extracts the event timestamp.
-class timestamp_extractor : public extractor
+class timestamp_extractor
+  : public util::visitable<extractor, timestamp_extractor, const_visitor>
 {
-public:
-  VAST_ACCEPT_CONST(const_visitor)
-  VAST_ACCEPT(visitor)
-
-private:
   virtual void eval();
 };
 
 /// Extracts the event name.
-class name_extractor : public extractor
+class name_extractor
+  : public util::visitable<extractor, name_extractor, const_visitor>
 {
-public:
-  VAST_ACCEPT_CONST(const_visitor)
-  VAST_ACCEPT(visitor)
-
-private:
   virtual void eval();
 };
 
 /// Extracts the event ID.
-class id_extractor : public extractor
+class id_extractor
+  : public util::visitable<extractor, id_extractor, const_visitor>
 {
-public:
-  VAST_ACCEPT_CONST(const_visitor)
-  VAST_ACCEPT(visitor)
-
-private:
   virtual void eval();
 };
 
 /// Extracts an argument at a given offset.
-class offset_extractor : public extractor
+class offset_extractor
+  : public util::visitable<extractor, offset_extractor, const_visitor>
 {
 public:
   offset_extractor(offset o);
-
-  VAST_ACCEPT_CONST(const_visitor)
-  VAST_ACCEPT(visitor)
 
   offset const& off() const;
 
@@ -149,16 +126,15 @@ private:
   offset offset_;
 };
 
-class type_extractor : public extractor
+/// Extracts arguments of a given type.
+class type_extractor
+  : public util::visitable<extractor, type_extractor, const_visitor>
 {
 public:
   type_extractor(value_type type);
 
   virtual void feed(event const* e);
   virtual void reset();
-
-  VAST_ACCEPT_CONST(const_visitor)
-  VAST_ACCEPT(visitor)
 
   value_type type() const;
 
@@ -170,14 +146,11 @@ private:
 };
 
 /// An n-ary operator.
-class n_ary_operator : public node
+class n_ary_operator : public util::abstract_visitable<node, const_visitor>
 {
 public:
   void add(std::unique_ptr<node> operand);
   virtual void reset();
-
-  VAST_ACCEPT_CONST(const_visitor)
-  VAST_ACCEPT(visitor)
 
   std::vector<std::unique_ptr<node>>& operands();
   std::vector<std::unique_ptr<node>> const& operands() const;
@@ -188,29 +161,22 @@ protected:
 };
 
 /// A conjunction.
-class conjunction : public n_ary_operator
+class conjunction
+  : public util::visitable<n_ary_operator, conjunction, const_visitor>
 {
-public:
-  VAST_ACCEPT_CONST(const_visitor)
-  VAST_ACCEPT(visitor)
-
-private:
   virtual void eval();
 };
 
 /// A disjunction.
-class disjunction : public n_ary_operator
+class disjunction
+  : public util::visitable<n_ary_operator, disjunction, const_visitor>
 {
-public:
-  VAST_ACCEPT_CONST(const_visitor)
-  VAST_ACCEPT(visitor)
-
-private:
   virtual void eval();
 };
 
 /// A relational operator.
-class relation : public n_ary_operator
+class relation
+  : public util::visitable<n_ary_operator, relation, const_visitor>
 {
 public:
   using binary_predicate = std::function<bool(value const&, value const&)>;
@@ -220,9 +186,6 @@ public:
   bool test(value const& lhs, value const& rhs) const;
   relational_operator type() const;
 
-  VAST_ACCEPT_CONST(const_visitor)
-  VAST_ACCEPT(visitor)
-
 private:
   virtual void eval();
 
@@ -231,14 +194,11 @@ private:
 };
 
 /// A constant value.
-class constant : public node
+class constant : public util::visitable<node, constant, const_visitor>
 {
 public:
   constant(value val);
   virtual void reset();
-
-  VAST_ACCEPT_CONST(const_visitor)
-  VAST_ACCEPT(visitor)
 
 private:
   virtual void eval();
