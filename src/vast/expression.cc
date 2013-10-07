@@ -313,12 +313,14 @@ bool conjunction::equals(node const& other) const
   return n_ary_operator::equals(other);
 }
 
-void conjunction::serialize(serializer&) const
+void conjunction::serialize(serializer& sink) const
 {
+  n_ary_operator::serialize(sink);
 }
 
-void conjunction::deserialize(deserializer&)
+void conjunction::deserialize(deserializer& source)
 {
+  n_ary_operator::deserialize(source);
 }
 
 
@@ -334,12 +336,14 @@ bool disjunction::equals(node const& other) const
   return n_ary_operator::equals(other);
 }
 
-void disjunction::serialize(serializer&) const
+void disjunction::serialize(serializer& sink) const
 {
+  n_ary_operator::serialize(sink);
 }
 
-void disjunction::deserialize(deserializer&)
+void disjunction::deserialize(deserializer& source)
 {
+  n_ary_operator::deserialize(source);
 }
 
 
