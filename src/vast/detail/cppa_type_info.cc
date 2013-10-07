@@ -44,7 +44,7 @@ void cppa_announce_types()
   cppa_announce<arithmetic_operator>();
   cppa_announce<boolean_operator>();
   cppa_announce<relational_operator>();
-  cppa_announce<expression>();
+  cppa_announce<expr::ast>();
   cppa_announce<schema>();
 
   cppa_announce<null_bitstream>();

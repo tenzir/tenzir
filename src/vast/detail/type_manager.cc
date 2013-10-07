@@ -4,6 +4,7 @@
 #include <exception>
 #include "vast/bitstream.h"
 #include "vast/container.h"
+#include "vast/expression.h"
 #include "vast/file_system.h"
 #include "vast/logger.h"
 #include "vast/serialization.h"
@@ -129,12 +130,22 @@ type_manager* type_manager::create()
 // TODO: Use polymorphic lambdas in C++14.
 namespace {
 
-struct announcer
+struct type_announcer
 {
   template <typename T>
   void operator()(T /* x */) const
   {
     announce<T>();
+  }
+};
+
+template <typename To>
+struct type_converter
+{
+  template <typename T>
+  void operator()(T /* x */) const
+  {
+    make_convertible<T, To>();
   }
 };
 
@@ -167,34 +178,46 @@ void type_manager::initialize()
     value, std::vector<value>,
     event, std::vector<event>,
     path,
-    detail::bitstream_model<null_bitstream>
+    expr::ast
   > vast_types;
 
-  util::for_each(integral_types, announcer{});
-  util::for_each(stl_types, announcer{});
-  util::for_each(vast_types, announcer{});
+  std::tuple<
+    expr::constant,
+    expr::timestamp_extractor,
+    expr::name_extractor,
+    expr::id_extractor,
+    expr::offset_extractor,
+    expr::type_extractor,
+    expr::relation,
+    expr::conjunction,
+    expr::disjunction
+  > expr_node_types;
 
-  make_convertible<
-    detail::bitstream_model<null_bitstream>,
-    detail::bitstream_concept
-  >();
+  std::tuple<
+    detail::bitstream_model<null_bitstream>
+  > bitstream_types;
 
-  announce<arithmetic_bitmap_index<bool_type>>();
-  announce<arithmetic_bitmap_index<int_type>>();
-  announce<arithmetic_bitmap_index<uint_type>>();
-  announce<arithmetic_bitmap_index<double_type>>();
-  announce<address_bitmap_index>();
-  announce<port_bitmap_index>();
-  announce<time_bitmap_index>();
-  announce<string_bitmap_index>();
-  make_convertible<arithmetic_bitmap_index<bool_type>, bitmap_index>();
-  make_convertible<arithmetic_bitmap_index<int_type>, bitmap_index>();
-  make_convertible<arithmetic_bitmap_index<uint_type>, bitmap_index>();
-  make_convertible<arithmetic_bitmap_index<double_type>, bitmap_index>();
-  make_convertible<address_bitmap_index, bitmap_index>();
-  make_convertible<port_bitmap_index, bitmap_index>();
-  make_convertible<time_bitmap_index, bitmap_index>();
-  make_convertible<string_bitmap_index, bitmap_index>();
+  std::tuple<
+    arithmetic_bitmap_index<bool_type>,
+    arithmetic_bitmap_index<int_type>,
+    arithmetic_bitmap_index<uint_type>,
+    arithmetic_bitmap_index<double_type>,
+    address_bitmap_index,
+    port_bitmap_index,
+    time_bitmap_index,
+    string_bitmap_index
+  > bitmap_index_types;
+
+  util::for_each(integral_types, type_announcer{});
+  util::for_each(stl_types, type_announcer{});
+  util::for_each(vast_types, type_announcer{});
+  util::for_each(expr_node_types, type_announcer{});
+  util::for_each(bitstream_types, type_announcer{});
+  util::for_each(bitmap_index_types, type_announcer{});
+
+  util::for_each(expr_node_types, type_converter<expr::node>{});
+  util::for_each(bitmap_index_types, type_converter<bitmap_index>{});
+  util::for_each(bitstream_types, type_converter<detail::bitstream_concept>{});
 
   cppa_announce_types();
 }

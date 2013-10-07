@@ -15,14 +15,11 @@ value const* record::at(offset const& o) const
     auto& idx = o[i];
     if (idx >= r->size())
       return nullptr;
-
     auto v = &(*r)[idx];
     if (i + 1 == o.size())
       return v;
-
-    if (v->which() != record_type)
+    if (! (v->which() == record_type && *v))
       return nullptr;
-
     r = &v->get<record>();
   }
 

@@ -12,233 +12,189 @@ namespace vast {
 namespace expr {
 
 // Forward declarations
-class node;
-class timestamp_extractor;
-class name_extractor;
-class id_extractor;
-class offset_extractor;
-class type_extractor;
-class conjunction;
-class disjunction;
-class relation;
-class constant;
+struct constant;
+struct timestamp_extractor;
+struct name_extractor;
+struct id_extractor;
+struct offset_extractor;
+struct type_extractor;
+struct relation;
+struct conjunction;
+struct disjunction;
 
 using const_visitor = util::const_visitor<
+  constant,
   timestamp_extractor,
   name_extractor,
   id_extractor,
   offset_extractor,
   type_extractor,
-  conjunction,
-  disjunction,
   relation,
-  constant
->;
-
-using visitor = util::visitor<
-  timestamp_extractor,
-  name_extractor,
-  id_extractor,
-  offset_extractor,
-  type_extractor,
   conjunction,
-  disjunction,
-  relation,
-  constant
+  disjunction
 >;
 
 /// The base class for nodes in the expression tree.
-class node : public util::visitable_with<const_visitor>
+struct node : public util::visitable_with<const_visitor>,
+              util::equality_comparable<node>
 {
-public:
-  node(node const&) = delete;
-  node& operator=(node const&) = delete;
-  node& operator=(node&&) = delete;
   virtual ~node() = default;
-
-  /// Gets the result of the sub-tree induced by this node.
-  /// @returns The value of this node.
-  value const& result() const;
-
-  /// Determines whether the result is available without evaluation.
-  ///
-  /// @returns `true` if the result can be obtained without a call to
-  /// node::eval.
-  bool ready() const;
-
-  /// Resets the sub-tree induced by this node.
-  virtual void reset();
-
-  /// Evaluates the sub-tree induced by this node.
-  virtual void eval() = 0;
-
-protected:
-  node() = default;
-
-  value result_ = invalid;
-  bool ready_ = false;
-};
-
-/// The base class for extractor nodes.
-class extractor : public util::abstract_visitable<node, const_visitor>
-{
-public:
-  virtual void feed(event const* event);
-
-protected:
-  virtual void eval() = 0;
-
-  event const* event_;
-};
-
-/// Extracts the event timestamp.
-class timestamp_extractor
-  : public util::visitable<extractor, timestamp_extractor, const_visitor>
-{
-  virtual void eval();
-};
-
-/// Extracts the event name.
-class name_extractor
-  : public util::visitable<extractor, name_extractor, const_visitor>
-{
-  virtual void eval();
-};
-
-/// Extracts the event ID.
-class id_extractor
-  : public util::visitable<extractor, id_extractor, const_visitor>
-{
-  virtual void eval();
-};
-
-/// Extracts an argument at a given offset.
-class offset_extractor
-  : public util::visitable<extractor, offset_extractor, const_visitor>
-{
-public:
-  offset_extractor(offset o);
-
-  offset const& off() const;
-
-private:
-  virtual void eval();
-  offset offset_;
-};
-
-/// Extracts arguments of a given type.
-class type_extractor
-  : public util::visitable<extractor, type_extractor, const_visitor>
-{
-public:
-  type_extractor(value_type type);
-
-  virtual void feed(event const* e);
-  virtual void reset();
-
-  value_type type() const;
-
-private:
-  virtual void eval();
-
-  value_type type_;
-  std::vector<std::pair<record const*, size_t>> pos_;
-};
-
-/// An n-ary operator.
-class n_ary_operator : public util::abstract_visitable<node, const_visitor>
-{
-public:
-  void add(std::unique_ptr<node> operand);
-  virtual void reset();
-
-  std::vector<std::unique_ptr<node>>& operands();
-  std::vector<std::unique_ptr<node>> const& operands() const;
-
-protected:
-  virtual void eval() = 0;
-  std::vector<std::unique_ptr<node>> operands_;
-};
-
-/// A conjunction.
-class conjunction
-  : public util::visitable<n_ary_operator, conjunction, const_visitor>
-{
-  virtual void eval();
-};
-
-/// A disjunction.
-class disjunction
-  : public util::visitable<n_ary_operator, disjunction, const_visitor>
-{
-  virtual void eval();
-};
-
-/// A relational operator.
-class relation
-  : public util::visitable<n_ary_operator, relation, const_visitor>
-{
-public:
-  using binary_predicate = std::function<bool(value const&, value const&)>;
-
-  relation(relational_operator op);
-
-  bool test(value const& lhs, value const& rhs) const;
-  relational_operator type() const;
-
-private:
-  virtual void eval();
-
-  binary_predicate pred_;
-  relational_operator op_type_;
+  virtual node* clone() const = 0;
+  virtual bool equals(node const& other) const = 0;
+  virtual void serialize(serializer& sink) const = 0;
+  virtual void deserialize(deserializer& source) = 0;
+  friend bool operator==(node const& x, node const& y);
 };
 
 /// A constant value.
-class constant : public util::visitable<node, constant, const_visitor>
+struct constant : public util::visitable<node, constant, const_visitor>
 {
-public:
-  constant(value val);
-  virtual void reset();
+  constant() = default;
+  constant(value v);
+  virtual constant* clone() const override;
+  virtual bool equals(node const& other) const override;
+  virtual void serialize(serializer& sink) const override;
+  virtual void deserialize(deserializer& source) override;
 
-private:
-  virtual void eval();
+  value val;
 };
 
-} // namespace expr
+/// The base class for extractor nodes.
+struct extractor : public util::abstract_visitable<node, const_visitor>
+{
+  extractor* clone() const = 0;
+  virtual bool equals(node const& other) const override;
+};
 
-/// A query expression.
-class expression : util::equality_comparable<expression>
+/// Extracts the event timestamp.
+struct timestamp_extractor
+  : public util::visitable<extractor, timestamp_extractor, const_visitor>
+{
+  timestamp_extractor* clone() const override;
+  virtual void serialize(serializer& sink) const override;
+  virtual void deserialize(deserializer& source) override;
+};
+
+/// Extracts the event name.
+struct name_extractor
+  : public util::visitable<extractor, name_extractor, const_visitor>
+{
+  name_extractor* clone() const override;
+  virtual void serialize(serializer& sink) const override;
+  virtual void deserialize(deserializer& source) override;
+};
+
+/// Extracts the event ID.
+struct id_extractor
+  : public util::visitable<extractor, id_extractor, const_visitor>
+{
+  id_extractor* clone() const override;
+  virtual void serialize(serializer& sink) const override;
+  virtual void deserialize(deserializer& source) override;
+};
+
+/// Extracts an argument at a given offset.
+struct offset_extractor
+  : public util::visitable<extractor, offset_extractor, const_visitor>
+{
+  offset_extractor() = default;
+  offset_extractor(offset o);
+
+  virtual offset_extractor* clone() const override;
+  virtual bool equals(node const& other) const override;
+  virtual void serialize(serializer& sink) const override;
+  virtual void deserialize(deserializer& source) override;
+
+  offset off;
+};
+
+/// Extracts arguments of a given type.
+struct type_extractor
+  : public util::visitable<extractor, type_extractor, const_visitor>
+{
+  type_extractor() = default;
+  type_extractor(value_type t);
+
+  virtual type_extractor* clone() const override;
+  virtual bool equals(node const& other) const override;
+  virtual void serialize(serializer& sink) const override;
+  virtual void deserialize(deserializer& source) override;
+
+  value_type type;
+};
+
+/// An n-ary operator.
+struct n_ary_operator : public util::abstract_visitable<node, const_visitor>
+{
+  n_ary_operator() = default;
+  n_ary_operator(n_ary_operator const& other);
+  virtual n_ary_operator* clone() const = 0;
+  virtual bool equals(node const& other) const override;
+  virtual void serialize(serializer& sink) const override;
+  virtual void deserialize(deserializer& source) override;
+  void add(std::unique_ptr<node> n);
+
+  std::vector<std::unique_ptr<node>> operands;
+};
+
+/// A relational operator.
+struct relation
+  : public util::visitable<n_ary_operator, relation, const_visitor>
+{
+  using binary_predicate = std::function<bool(value const&, value const&)>;
+  static binary_predicate make_predicate(relational_operator op);
+
+  relation() = default;
+  relation(relational_operator op);
+  virtual relation* clone() const override;
+  virtual bool equals(node const& other) const override;
+  virtual void serialize(serializer& sink) const override;
+  virtual void deserialize(deserializer& source) override;
+
+  binary_predicate predicate;
+  relational_operator op;
+};
+
+/// A conjunction.
+struct conjunction
+  : public util::visitable<n_ary_operator, conjunction, const_visitor>
+{
+  virtual conjunction* clone() const override;
+  virtual bool equals(node const& other) const override;
+  virtual void serialize(serializer& sink) const override;
+  virtual void deserialize(deserializer& source) override;
+};
+
+/// A disjunction.
+struct disjunction
+  : public util::visitable<n_ary_operator, disjunction, const_visitor>
+{
+  virtual disjunction* clone() const override;
+  virtual bool equals(node const& other) const override;
+  virtual void serialize(serializer& sink) const override;
+  virtual void deserialize(deserializer& source) override;
+};
+
+/// A wrapper around an expression node with value semantics.
+class ast : util::equality_comparable<ast>
 {
 public:
-  /// Parses a given expression.
-  /// @param str The query expression to transform into an AST.
-  /// @param sch The schema to use to resolve event clauses.
-  static expression parse(std::string const& str, schema sch = {});
+  ast() = default;
+  ast(std::string const& str, schema const& sch = {});
+  ast(std::unique_ptr<node> n);
+  ast(ast const& other);
+  ast(ast&&) = default;
+  ast& operator=(ast const&) = default;
+  ast& operator=(ast&&) = default;
+  explicit operator bool() const;
 
-  expression() = default;
-  expression(expression const& other);
-  expression(expression&& other);
-  expression& operator=(expression const& other) = default;
-  expression& operator=(expression&& other) = default;
+  void accept(const_visitor& v);
+  void accept(const_visitor& v) const;
 
-  /// Evaluates an event with respect to the root node.
-  /// @param e The event to evaluate against the expression.
-  /// @returns `true` if @a event matches the expression.
-  bool eval(event const& e);
-
-  /// Allow a visitor to process the expression.
-  /// @param v The visitor
-  void accept(expr::const_visitor& v) const;
-
-  /// Allow a visitor to process the expression.
-  /// @param v The visitor
-  void accept(expr::visitor& v);
+  node const* root() const;
 
 private:
-  std::string str_;
-  schema schema_;
-  std::unique_ptr<expr::node> root_;
-  std::vector<expr::extractor*> extractors_;
+  std::unique_ptr<node> node_;
 
 private:
   friend access;
@@ -246,9 +202,22 @@ private:
   void deserialize(deserializer& source);
   bool convert(std::string& str) const;
 
-  friend bool operator==(expression const& x, expression const& y);
+  friend bool operator==(ast const& x, ast const& y);
 };
 
+/// Creates an expression tree.
+/// @param str The string representing the expression.
+/// @param sch The schema to use to resolve event clauses.
+std::unique_ptr<node> create(std::string const& str, schema const& sch = {});
+
+/// Evaluates an expression node for a given event.
+/// @relates evaluator
+value evaluate(node const& n, event const& e);
+value evaluate(ast const& a, event const& e);
+
+bool convert(node const& n, std::string& str);
+
+} // namespace expr
 } // namespace vast
 
 #endif

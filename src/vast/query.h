@@ -18,11 +18,11 @@ public:
   /// @param archive The archive actor.
   /// @param index The index actor.
   /// @param sink The sink receiving the query results.
-  /// @param expr The query expression.
+  /// @param ast The query expression ast.
   query(cppa::actor_ptr archive,
         cppa::actor_ptr index,
         cppa::actor_ptr sink,
-        expression expr);
+        expr::ast ast);
 
   void act();
   char const* description() const;
@@ -31,7 +31,7 @@ private:
   cppa::actor_ptr archive_;
   cppa::actor_ptr index_;
   cppa::actor_ptr sink_;
-  expression expr_;
+  expr::ast ast_;
 };
 
 } // namespace vast

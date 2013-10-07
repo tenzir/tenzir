@@ -11,11 +11,11 @@ namespace vast {
 query::query(cppa::actor_ptr archive,
              cppa::actor_ptr index,
              cppa::actor_ptr sink,
-             expression expr)
+             expr::ast ast)
   : archive_{std::move(archive)},
     index_{std::move(index)},
     sink_{std::move(sink)},
-    expr_{std::move(expr)}
+    ast_{std::move(ast)}
 {
 }
 
@@ -25,7 +25,7 @@ void query::act()
       on(atom("run")) >> [=]
       {
         VAST_LOG_ACTOR_DEBUG("hits index");
-        send(index_, atom("lookup"), expr_);
+        send(index_, atom("lookup"), ast_);
       },
       others() >> [=]
       {

@@ -20,8 +20,6 @@ public:
   {
   }
 
-  virtual void visit(expr::node const&) { }
-
   virtual void visit(expr::timestamp_extractor const&)
   {
     assert(current_value_);
@@ -58,7 +56,7 @@ public:
   virtual void visit(expr::offset_extractor const& oe)
   {
     assert(current_value_);
-    VAST_LOG_DEBUG("building lookup with offset " << oe.off() <<
+    VAST_LOG_DEBUG("building lookup with offset " << oe.off <<
                    " for '" << current_value_ << "'" <<
                    " under " << current_operator_);
     commands_.push_back(
@@ -68,17 +66,17 @@ public:
             regex{".*"},
             current_operator_,
             current_value_,
-            oe.off(),
+            oe.off,
             sink_));
   }
 
   virtual void visit(expr::type_extractor const& te)
   {
-    VAST_LOG_DEBUG("building lookup with type " << te.type() <<
+    VAST_LOG_DEBUG("building lookup with type " << te.type <<
                    " for '" << current_value_ << "'" <<
                    " under " << current_operator_);
     assert(current_value_);
-    assert(te.type() == current_value_.which());
+    assert(te.type == current_value_.which());
     commands_.push_back(
         make_any_tuple(
             atom("lookup"),
@@ -92,32 +90,31 @@ public:
   virtual void visit(expr::conjunction const& conj)
   {
     // TODO: create one actor per clause
-    for (auto& op : conj.operands())
+    for (auto& op : conj.operands)
       op->accept(*this);
   }
 
   virtual void visit(expr::disjunction const& disj)
   {
     // TODO: create one actor per clause
-    for (auto& op : disj.operands())
+    for (auto& op : disj.operands)
       op->accept(*this);
   }
 
   virtual void visit(expr::relation const& rel)
   {
-    assert(rel.operands().size() == 2);
-    current_operator_ = rel.type();
+    assert(rel.operands.size() == 2);
+    current_operator_ = rel.op;
     // FIXME: We currently require that values appear on the RHS and extractor
     // nodes on the LHS of the clause.
-    rel.operands()[1]->accept(*this);
-    rel.operands()[0]->accept(*this);
+    rel.operands[1]->accept(*this);
+    rel.operands[0]->accept(*this);
     current_value_ = invalid;
   }
 
   virtual void visit(expr::constant const& c)
   {
-    assert(c.ready());
-    current_value_ = c.result();
+    current_value_ = c.val;
   }
 
 private:
@@ -143,11 +140,11 @@ char const* index::description() const
 void index::act()
 {
   become(
-      on(atom("lookup"), arg_match) >> [=](expression const& expr)
+      on(atom("lookup"), arg_match) >> [=](expr::ast const& ast)
       {
         std::vector<any_tuple> commands;
         query_builder builder{last_sender(), commands};
-        expr.accept(builder);
+        ast.accept(builder);
         // FIXME: Support more than one partition.
         assert(! partitions_.empty());
         auto part = partitions_.begin()->second;

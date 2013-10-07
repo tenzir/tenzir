@@ -26,7 +26,6 @@ struct offset : std::vector<size_t>,
   {
   }
 
-
   template <typename Iterator>
   bool print(Iterator& out) const
   {

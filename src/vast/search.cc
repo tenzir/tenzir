@@ -33,8 +33,7 @@ void search::act()
         auto client = last_sender();
         try
         {
-          auto qry =
-            spawn<query>(archive_, index_, client, expression::parse(q));
+          auto qry = spawn<query>(archive_, index_, client, expr::ast{q});
           monitor(client);
           assert(queries_.count(client) == 0);
           queries_.emplace(client, qry);

@@ -4,6 +4,7 @@
 #include "vast/convert.h"
 #include "vast/exception.h"
 #include "vast/logger.h"
+#include "vast/optional.h"
 #include "vast/regex.h"
 #include "vast/serialization.h"
 #include "vast/detail/ast/query.h"
@@ -15,253 +16,202 @@
 namespace vast {
 namespace expr {
 
-value const& node::result() const
+bool operator==(node const& x, node const& y)
 {
-  return result_;
+  return x.equals(y);
 }
 
-bool node::ready() const
+constant::constant(value v)
+  : val(std::move(v))
 {
-  return ready_;
 }
 
-void node::reset()
+constant* constant::clone() const
 {
-  ready_ = false;
+  return new constant{*this};
 }
 
-void extractor::feed(event const* e)
+bool constant::equals(node const& other) const
 {
-  event_ = e;
-  ready_ = false;
+  if (typeid(*this) != typeid(other))
+    return false;
+  return val == static_cast<constant const&>(other).val;
 }
 
-//event const* extractor::event() const
-//{
-//  return event_;
-//}
-
-void timestamp_extractor::eval()
+void constant::serialize(serializer& sink) const
 {
-  result_ = event_->timestamp();
-  ready_ = true;
+  sink << val;
 }
 
-void name_extractor::eval()
+void constant::deserialize(deserializer& source)
 {
-  result_ = event_->name();
-  ready_ = true;
+  source >> val;
 }
 
-void id_extractor::eval()
+bool extractor::equals(node const& other) const
 {
-  result_ = event_->id();
-  ready_ = true;
+  return (typeid(*this) == typeid(other));
 }
+
+
+timestamp_extractor* timestamp_extractor::clone() const
+{
+  return new timestamp_extractor{*this};
+}
+
+void timestamp_extractor::serialize(serializer&) const
+{
+}
+
+void timestamp_extractor::deserialize(deserializer&)
+{
+}
+
+
+name_extractor* name_extractor::clone() const
+{
+  return new name_extractor{*this};
+}
+
+void name_extractor::serialize(serializer&) const
+{
+}
+
+void name_extractor::deserialize(deserializer&)
+{
+}
+
+
+id_extractor* id_extractor::clone() const
+{
+  return new id_extractor{*this};
+}
+
+void id_extractor::serialize(serializer&) const
+{
+}
+
+void id_extractor::deserialize(deserializer&)
+{
+}
+
 
 offset_extractor::offset_extractor(offset o)
-  : offset_{std::move(o)}
+  : off(std::move(o))
 {
 }
 
-offset const& offset_extractor::off() const
+offset_extractor* offset_extractor::clone() const
 {
-  return offset_;
+  return new offset_extractor{*this};
 }
 
-void offset_extractor::eval()
+void offset_extractor::serialize(serializer& sink) const
 {
-  if (event_->empty())
-  {
-    result_ = invalid;
-  }
-  else
-  {
-    record const* rec = event_;
-    size_t i = 0;
-    while (i < offset_.size() - 1)
-    {
-      auto off = offset_[i++];
-      if (off >= rec->size())
-      {
-        result_ = invalid;
-        break;
-      }
-
-      auto& val = (*rec)[off];
-      if (val.which() != record_type)
-      {
-        result_ = invalid;
-        break;
-      }
-
-      rec = &val.get<record>();
-    }
-
-    auto last = offset_[i];
-    result_ = last < rec->size() ? (*rec)[last] : invalid;
-  }
-
-  ready_ = true;
+  sink << off;
 }
 
-type_extractor::type_extractor(value_type type)
-  : type_{type}
+void offset_extractor::deserialize(deserializer& source)
+{
+  source >> off;
+}
+
+bool offset_extractor::equals(node const& other) const
+{
+  if (typeid(*this) != typeid(other))
+    return false;
+  return off == static_cast<offset_extractor const&>(other).off;
+}
+
+
+type_extractor::type_extractor(value_type t)
+  : type{t}
 {
 }
 
-void type_extractor::feed(event const* e)
+type_extractor* type_extractor::clone() const
 {
-  if (e->empty())
-  {
-    ready_ = true;
-  }
-  else
-  {
-    event_ = e;
-    pos_.clear();
-    pos_.emplace_back(e, 0);
-    ready_ = false;
-  }
+  return new type_extractor{*this};
 }
 
-void type_extractor::reset()
+bool type_extractor::equals(node const& other) const
 {
-  pos_.clear();
-  result_ = invalid;
-  ready_ = false;
+  if (typeid(*this) != typeid(other))
+    return false;
+  return type == static_cast<type_extractor const&>(other).type;
 }
 
-value_type type_extractor::type() const
+void type_extractor::serialize(serializer& sink) const
 {
-  return type_;
+  sink << type;
 }
 
-void type_extractor::eval()
+void type_extractor::deserialize(deserializer& source)
 {
-  while (! pos_.empty())
-  {
-    auto& rec = *pos_.back().first;
-    auto& idx = pos_.back().second;
-    auto& arg = rec[idx];
-
-    if (idx == rec.size())
-    {
-      pos_.pop_back();
-      continue;
-    }
-
-    ++idx;
-    if (arg.which() == record_type)
-    {
-      pos_.emplace_back(&arg.get<record>(), 0);
-    }
-    else if (arg.which() == type_)
-    {
-      result_ = arg;
-      if (pos_.size() == 1 && idx == rec.size())
-      {
-        pos_.clear();
-        ready_ = true;
-      }
-
-      return;
-    }
-  }
-
-  ready_ = true;
+  source >> type;
 }
 
-void n_ary_operator::add(std::unique_ptr<node> operand)
+
+n_ary_operator::n_ary_operator(n_ary_operator const& other)
 {
-  operands_.push_back(std::move(operand));
+  for (auto& o : other.operands)
+    operands.emplace_back(o->clone());
 }
 
-void n_ary_operator::reset()
+bool n_ary_operator::equals(node const& other) const
 {
-  for (auto& op : operands_)
-    op->reset();
-
-  ready_ = false;
+  if (typeid(*this) != typeid(other))
+    return false;
+  auto& that = static_cast<n_ary_operator const&>(other);
+  if (operands.size() != that.operands.size())
+    return false;
+  for (size_t i = 0; i < operands.size(); ++i)
+    if (*operands[i] != *that.operands[i])
+      return false;
+  return true;
 }
 
-std::vector<std::unique_ptr<node>>& n_ary_operator::operands()
+void n_ary_operator::serialize(serializer& sink) const
 {
-  return operands_;
+  sink << operands;
 }
 
-std::vector<std::unique_ptr<node>> const& n_ary_operator::operands() const
+void n_ary_operator::deserialize(deserializer& source)
 {
-  return operands_;
+  source >> operands;
 }
 
-void conjunction::eval()
+void n_ary_operator::add(std::unique_ptr<node> n)
 {
-  ready_ = true;
-  result_ = std::all_of(
-      operands_.begin(),
-      operands_.end(),
-      [&](std::unique_ptr<node> const& operand) -> bool
-      {
-        if (! operand->ready())
-          operand->eval();
-        if (! operand->ready())
-          ready_ = false;
-
-        assert(operand->result().which() == bool_type);
-        return operand->result().get<bool>();
-      });
+  operands.push_back(std::move(n));
 }
 
-void disjunction::eval()
+
+relation::binary_predicate relation::make_predicate(relational_operator op)
 {
-  ready_ = true;
-  result_ = std::any_of(
-      operands_.begin(),
-      operands_.end(),
-      [&](std::unique_ptr<node> const& operand) -> bool
-      {
-        if (! operand->ready())
-          operand->eval();
-        if (! operand->ready())
-          ready_ = false;
-
-        assert(operand->result().which() == bool_type);
-        return operand->result().get<bool>();
-      });
-
-  if (result_.get<bool>() && ! ready_)
-    ready_ = true;
-}
-
-relation::relation(relational_operator op)
-  : op_type_{op}
-{
-  switch (op_type_)
+  switch (op)
   {
     default:
       assert(! "invalid operator");
-      break;
+      return {};
     case match:
-      pred_ = [](value const& lhs, value const& rhs) -> bool
+      return [](value const& lhs, value const& rhs) -> bool
       {
         if (lhs.which() != string_type || rhs.which() != regex_type)
           return false;
 
         return rhs.get<regex>().match(lhs.get<string>());
       };
-      break;
     case not_match:
-      pred_ = [](value const& lhs, value const& rhs) -> bool
+      return [](value const& lhs, value const& rhs) -> bool
       {
         if (lhs.which() != string_type || rhs.which() != regex_type)
           return false;
 
         return ! rhs.get<regex>().match(lhs.get<string>());
       };
-      break;
     case in:
-      pred_ = [](value const& lhs, value const& rhs) -> bool
+      return [](value const& lhs, value const& rhs) -> bool
       {
         if (lhs.which() == string_type &&
             rhs.which() == regex_type)
@@ -273,9 +223,8 @@ relation::relation(relational_operator op)
 
         return false;
       };
-      break;
     case not_in:
-      pred_ = [](value const& lhs, value const& rhs) -> bool
+      return [](value const& lhs, value const& rhs) -> bool
       {
         if (lhs.which() == string_type &&
             rhs.which() == regex_type)
@@ -287,103 +236,175 @@ relation::relation(relational_operator op)
 
         return false;
       };
-      break;
     case equal:
-      pred_ = [](value const& lhs, value const& rhs)
+      return [](value const& lhs, value const& rhs)
       {
         return lhs == rhs;
       };
-      break;
     case not_equal:
-      pred_ = [](value const& lhs, value const& rhs)
+      return [](value const& lhs, value const& rhs)
       {
         return lhs != rhs;
       };
-      break;
     case less:
-      pred_ = [](value const& lhs, value const& rhs)
+      return [](value const& lhs, value const& rhs)
       {
         return lhs < rhs;
       };
-      break;
     case less_equal:
-      pred_ = [](value const& lhs, value const& rhs)
+      return [](value const& lhs, value const& rhs)
       {
         return lhs <= rhs;
       };
-      break;
     case greater:
-      pred_ = [](value const& lhs, value const& rhs)
+      return [](value const& lhs, value const& rhs)
       {
         return lhs > rhs;
       };
-      break;
     case greater_equal:
-      pred_ = [](value const& lhs, value const& rhs)
+      return [](value const& lhs, value const& rhs)
       {
         return lhs >= rhs;
       };
-      break;
   }
 }
 
-bool relation::test(value const& lhs, value const& rhs) const
+relation::relation(relational_operator op)
+  : op{op}
 {
-  return pred_(lhs, rhs);
+  predicate = make_predicate(op);
 }
 
-relational_operator relation::type() const
+relation* relation::clone() const
 {
-  return op_type_;
+  return new relation{*this};
 }
 
-void relation::eval()
+bool relation::equals(node const& other) const
 {
-  assert(operands_.size() == 2);
-  auto& lhs = operands_[0];
-  auto& rhs = operands_[1];
-  do
-  {
-    if (! lhs->ready())
-      lhs->eval();
-
-    do
-    {
-      if (! rhs->ready())
-        rhs->eval();
-
-      ready_ = test(lhs->result(), rhs->result());
-      if (ready_)
-        break;
-    }
-    while (! rhs->ready());
-
-    if (ready_)
-      break;
-  }
-  while (! lhs->ready());
-
-  result_ = ready_;
-  ready_ = true;
+  if (typeid(*this) != typeid(other))
+    return false;
+  return op == static_cast<relation const&>(other).op
+      && n_ary_operator::equals(other);
 }
 
-constant::constant(value val)
+void relation::serialize(serializer& sink) const
 {
-  result_ = std::move(val);
-  ready_ = true;
+  n_ary_operator::serialize(sink);
+  sink << op;
 }
 
-void constant::reset()
+void relation::deserialize(deserializer& source)
 {
-  // Do exactly nothing.
+  n_ary_operator::deserialize(source);
+  source >> op;
+  predicate = make_predicate(op);
 }
 
-void constant::eval()
+conjunction* conjunction::clone() const
 {
-  // Do exactly nothing.
+  return new conjunction{*this};
 }
 
-} // namespace expr
+bool conjunction::equals(node const& other) const
+{
+  if (typeid(*this) != typeid(other))
+    return false;
+  return n_ary_operator::equals(other);
+}
+
+void conjunction::serialize(serializer&) const
+{
+}
+
+void conjunction::deserialize(deserializer&)
+{
+}
+
+
+disjunction* disjunction::clone() const
+{
+  return new disjunction{*this};
+}
+
+bool disjunction::equals(node const& other) const
+{
+  if (typeid(*this) != typeid(other))
+    return false;
+  return n_ary_operator::equals(other);
+}
+
+void disjunction::serialize(serializer&) const
+{
+}
+
+void disjunction::deserialize(deserializer&)
+{
+}
+
+
+ast::ast(std::string const& str, schema const& sch)
+  : node_{create(str, sch)}
+{
+}
+
+ast::ast(std::unique_ptr<node> n)
+  : node_{std::move(n)}
+{
+}
+
+ast::ast(ast const& other)
+  : node_{other.node_ ? other.node_->clone() : nullptr}
+{
+}
+
+ast::operator bool() const
+{
+  return node_ != nullptr;
+}
+
+void ast::accept(const_visitor& v)
+{
+  if (node_)
+    node_->accept(v);
+}
+
+void ast::accept(const_visitor& v) const
+{
+  if (node_)
+    node_->accept(v);
+}
+
+node const* ast::root() const
+{
+  return node_ ? node_.get() : nullptr;
+}
+
+void ast::serialize(serializer& sink) const
+{
+  sink << node_;
+}
+
+void ast::deserialize(deserializer& source)
+{
+  source >> node_;
+}
+
+bool ast::convert(std::string& str) const
+{
+  if (node_)
+    return expr::convert(*node_, str);
+  str = "";
+  return true;
+}
+
+bool operator==(ast const& x, ast const& y)
+{
+  return x.node_ && y.node_ ? *x.node_ == *y.node_ : false;
+}
+
+
+namespace {
 
 /// Takes a query AST and generates a polymorphic query expression tree.
 class expressionizer
@@ -391,11 +412,8 @@ class expressionizer
 public:
   using result_type = void;
 
-  expressionizer(expr::n_ary_operator* parent,
-                 std::vector<expr::extractor*>& extractors,
-                 schema const& sch)
+  expressionizer(n_ary_operator* parent, schema const& sch)
     : parent_(parent),
-      extractors_(extractors),
       schema_(sch)
   {
   }
@@ -413,24 +431,18 @@ public:
       op = negate(op);
       invert_ = false;
     }
-    auto relation = make_unique<expr::relation>(op);
-
-    std::unique_ptr<expr::extractor> lhs;
+    auto rel = make_unique<relation>(op);
+    std::unique_ptr<extractor> lhs;
     if (clause.lhs == "name")
-      lhs = make_unique<expr::name_extractor>();
+      lhs = make_unique<name_extractor>();
     else if (clause.lhs == "time")
-      lhs = make_unique<expr::timestamp_extractor>();
+      lhs = make_unique<timestamp_extractor>();
     else if (clause.lhs == "id")
-      lhs = make_unique<expr::id_extractor>();
-    assert(lhs);
-    extractors_.push_back(lhs.get());
-
-    auto rhs = make_unique<expr::constant>(
-        detail::ast::query::fold(clause.rhs));
-
-    relation->add(std::move(lhs));
-    relation->add(std::move(rhs));
-    parent_->add(std::move(relation));
+      lhs = make_unique<id_extractor>();
+    auto rhs = make_unique<constant>(detail::ast::query::fold(clause.rhs));
+    rel->add(std::move(lhs));
+    rel->add(std::move(rhs));
+    parent_->add(std::move(rel));
   }
 
   void operator()(detail::ast::query::type_clause const& clause)
@@ -441,17 +453,12 @@ public:
       op = negate(op);
       invert_ = false;
     }
-    auto relation = make_unique<expr::relation>(op);
-
-    auto lhs = make_unique<expr::type_extractor>(clause.lhs);
-    extractors_.push_back(lhs.get());
-
-    auto rhs = make_unique<expr::constant>(
-        detail::ast::query::fold(clause.rhs));
-
-    relation->add(std::move(lhs));
-    relation->add(std::move(rhs));
-    parent_->add(std::move(relation));
+    auto rel = make_unique<relation>(op);
+    auto lhs = make_unique<type_extractor>(clause.lhs);
+    auto rhs = make_unique<constant>(detail::ast::query::fold(clause.rhs));
+    rel->add(std::move(lhs));
+    rel->add(std::move(rhs));
+    parent_->add(std::move(rel));
   }
 
   void operator()(detail::ast::query::offset_clause const& clause)
@@ -462,17 +469,12 @@ public:
       op = negate(op);
       invert_ = false;
     }
-    auto relation = make_unique<expr::relation>(op);
-
-    auto lhs = make_unique<expr::offset_extractor>(clause.off);
-    extractors_.push_back(lhs.get());
-
-    auto rhs = make_unique<expr::constant>(
-        detail::ast::query::fold(clause.rhs));
-
-    relation->add(std::move(lhs));
-    relation->add(std::move(rhs));
-    parent_->add(std::move(relation));
+    auto rel = make_unique<relation>(op);
+    auto lhs = make_unique<offset_extractor>(clause.off);
+    auto rhs = make_unique<constant>(detail::ast::query::fold(clause.rhs));
+    rel->add(std::move(lhs));
+    rel->add(std::move(rhs));
+    parent_->add(std::move(rel));
   }
 
   void operator()(detail::ast::query::event_clause const& clause)
@@ -483,10 +485,8 @@ public:
       op = negate(op);
       invert_ = false;
     }
-
     if (schema_.events().empty())
       throw error::query("no events in schema");
-
     // An event clause always consists of two components: the event name
     // extractor and offset extractor. For event dereference sequences (e.g.,
     // http_request$c$..) the event name is explict, for type dereference
@@ -502,7 +502,6 @@ public:
         break;
       }
     }
-
     if (event)
     {
       // Ignore the event name in lhs[0].
@@ -510,23 +509,21 @@ public:
       auto offs = schema::argument_offsets(event, {ids.begin() + 1, ids.end()});
       if (offs.empty())
         throw error::schema("unknown argument name");
-
       // TODO: factor rest of block in separate function to promote DRY.
-      auto relation = make_unique<expr::relation>(op);
+      auto rel = make_unique<relation>(op);
       auto lhs = make_offset_extractor(std::move(offs));
       auto rhs = make_constant(clause.rhs);
-      relation->add(std::move(lhs));
-      relation->add(std::move(rhs));
-
-      expr::conjunction* conj;
-      if (! (conj = dynamic_cast<expr::conjunction*>(parent_)))
+      rel->add(std::move(lhs));
+      rel->add(std::move(rhs));
+      conjunction* conj;
+      if (! (conj = dynamic_cast<conjunction*>(parent_)))
       {
-        auto c = make_unique<expr::conjunction>();
+        auto c = make_unique<conjunction>();
         conj = c.get();
         parent_->add(std::move(c));
       }
       conj->add(make_glob_node(symbol));
-      conj->add(std::move(relation));
+      conj->add(std::move(rel));
     }
     else
     {
@@ -542,35 +539,30 @@ public:
           break;
         }
       }
-
       if (! found)
         throw error::query("lhs[0] of clause names neither event nor type");
-
       for (auto& e : schema_.events())
       {
         auto offsets = schema::symbol_offsets(&e, clause.lhs);
         if (offsets.empty())
           continue;
-
         // TODO: factor rest of block in separate function to promote DRY.
         if (offsets.size() > 1)
           throw error::schema("multiple offsets not yet implemented");
-
-        auto relation = make_unique<expr::relation>(op);
+        auto rel = make_unique<relation>(op);
         auto lhs = make_offset_extractor(std::move(offsets[0]));
         auto rhs = make_constant(clause.rhs);
-        relation->add(std::move(lhs));
-        relation->add(std::move(rhs));
-
-        expr::conjunction* conj;
-        if (! (conj = dynamic_cast<expr::conjunction*>(parent_)))
+        rel->add(std::move(lhs));
+        rel->add(std::move(rhs));
+        conjunction* conj;
+        if (! (conj = dynamic_cast<conjunction*>(parent_)))
         {
-          auto c = make_unique<expr::conjunction>();
+          auto c = make_unique<conjunction>();
           conj = c.get();
           parent_->add(std::move(c));
         }
         conj->add(make_glob_node(e.name));
-        conj->add(std::move(relation));
+        conj->add(std::move(rel));
       }
     }
   }
@@ -584,57 +576,46 @@ public:
   }
 
 private:
-  std::unique_ptr<expr::offset_extractor>
+  std::unique_ptr<offset_extractor>
   make_offset_extractor(offset o)
   {
-    auto node = make_unique<expr::offset_extractor>(std::move(o));
-    extractors_.push_back(node.get());
+    auto node = make_unique<offset_extractor>(std::move(o));
     return std::move(node);
   }
 
-  std::unique_ptr<expr::constant>
+  std::unique_ptr<constant>
   make_constant(detail::ast::query::expression const& expr)
   {
-    return make_unique<expr::constant>(detail::ast::query::fold(expr));
+    return make_unique<constant>(detail::ast::query::fold(expr));
   }
 
-  std::unique_ptr<expr::node> make_glob_node(std::string const& expr)
+  std::unique_ptr<node> make_glob_node(std::string const& expr)
   {
     // Determine whether we need a regular expression node or whether basic
     // equality comparison suffices. This check is relatively crude at the
     // moment: we just look whether the expression contains * or ?.
     auto glob = regex("\\*|\\?").search(expr);
-    auto relation = make_unique<expr::relation>(glob ? match : equal);
-    auto lhs = make_unique<expr::name_extractor>();
-    extractors_.push_back(lhs.get());
-    relation->add(std::move(lhs));
+    auto rel = make_unique<relation>(glob ? match : equal);
+    auto lhs = make_unique<name_extractor>();
+    rel->add(std::move(lhs));
     if (glob)
-      relation->add(make_unique<expr::constant>(regex::glob(expr)));
+      rel->add(make_unique<constant>(regex::glob(expr)));
     else
-      relation->add(make_unique<expr::constant>(expr));
-    return std::move(relation);
+      rel->add(make_unique<constant>(expr));
+    return std::move(rel);
   }
 
-  std::unique_ptr<expr::relation> make_relation(relational_operator op)
-  {
-    return make_unique<expr::relation>(op);
-  }
-
-  expr::n_ary_operator* parent_;
-  std::vector<expr::extractor*>& extractors_;
+  n_ary_operator* parent_;
   schema const& schema_;
   bool invert_ = false;
 };
 
-expression expression::parse(std::string const& str, schema sch)
-{
-  expression e;
-  if (str.empty())
-      throw error::query("empty expression");
+} // namespace <anonymous>
 
-  e.str_ = std::move(str);
-  e.schema_ = std::move(sch);
-  e.extractors_.clear();
+std::unique_ptr<node> create(std::string const& str, schema const& sch)
+{
+  if (str.empty())
+    return {};
 
   auto i = str.begin();
   auto end = str.end();
@@ -645,118 +626,204 @@ expression expression::parse(std::string const& str, schema sch)
   detail::ast::query::query ast;
   bool success = phrase_parse(i, end, grammar, skipper, ast);
   if (! success || i != end)
-    throw error::query("syntax error", e.str_);
-
+    return {};
   if (! detail::ast::query::validate(ast))
-    throw error::query("semantic error", e.str_);
-
+    // TODO: propagate error to user.
+    return {};
   if (ast.rest.empty())
   {
-    /// WLOG, we can always add a conjunction as root.
-    auto conjunction = make_unique<expr::conjunction>();
-    expressionizer visitor{conjunction.get(), e.extractors_, e.schema_};
+    // WLOG, we can always add a conjunction as root.
+    auto conj = make_unique<conjunction>();
+    expressionizer visitor{conj.get(), sch};
     boost::apply_visitor(std::ref(visitor), ast.first);
-    e.root_ = std::move(conjunction);
+    return std::move(conj);
   }
-  else
+  // First, split the query expression at each OR node.
+  std::vector<detail::ast::query::query> ors;
+  ors.emplace_back(detail::ast::query::query{ast.first, {}});
+  for (auto& clause : ast.rest)
+    if (clause.op == logical_or)
+      ors.emplace_back(detail::ast::query::query{clause.operand, {}});
+    else
+      ors.back().rest.push_back(clause);
+  // Then create a conjunction for each set of subsequent AND nodes between
+  // two OR nodes.
+  auto disj = make_unique<disjunction>();
+  for (auto& ands : ors)
   {
-    // First, split the query expression at each OR node.
-    std::vector<detail::ast::query::query> ors;
-    ors.emplace_back(detail::ast::query::query{ast.first, {}});
-    for (auto& clause : ast.rest)
-      if (clause.op == logical_or)
-        ors.emplace_back(detail::ast::query::query{clause.operand, {}});
-      else
-        ors.back().rest.push_back(clause);
-
-    // Then create a conjunction for each set of subsequent AND nodes between
-    // two OR nodes.
-    auto disjunction = make_unique<expr::disjunction>();
-    for (auto& ands : ors)
-      if (ands.rest.empty())
+    if (ands.rest.empty())
+    {
+      expressionizer visitor{disj.get(), sch};
+      boost::apply_visitor(std::ref(visitor), ands.first);
+    }
+    else
+    {
+      auto conj = make_unique<conjunction>();
+      expressionizer visitor{conj.get(), sch};
+      boost::apply_visitor(std::ref(visitor), ands.first);
+      for (auto clause : ands.rest)
       {
-        expressionizer visitor(disjunction.get(), e.extractors_, e.schema_);
-        boost::apply_visitor(std::ref(visitor), ands.first);
+        assert(clause.op == logical_and);
+        boost::apply_visitor(std::ref(visitor), clause.operand);
       }
-      else
-      {
-        auto conjunction = make_unique<expr::conjunction>();
-        expressionizer visitor(conjunction.get(), e.extractors_, e.schema_);
-        boost::apply_visitor(std::ref(visitor), ands.first);
-        for (auto clause : ands.rest)
-        {
-          assert(clause.op == logical_and);
-          boost::apply_visitor(std::ref(visitor), clause.operand);
-        }
-
-        disjunction->add(std::move(conjunction));
-      }
-
-    e.root_ = std::move(disjunction);
+      disj->add(std::move(conj));
+    }
   }
-  assert(! e.extractors_.empty());
-  return e;
-}
-
-
-
-expression::expression(expression const& other)
-{
-  *this = parse(other.str_, other.schema_);
-}
-
-expression::expression(expression&& other)
-  : str_{std::move(other.str_)},
-    schema_{std::move(other.schema_)},
-    root_{std::move(other.root_)},
-    extractors_{std::move(other.extractors_)}
-{
-}
-
-bool expression::eval(event const& e)
-{
-  for (auto ext : extractors_)
-    ext->feed(&e);
-
-  while (! root_->ready())
-    root_->eval();
-
-  auto& r = root_->result();
-  assert(r.which() == bool_type);
-  root_->reset();
-  return r.get<bool>();
-}
-
-void expression::accept(expr::const_visitor& v) const
-{
-  assert(root_);
-  root_->accept(v);
-}
-
-//void expression::accept(expr::visitor& v)
-//{
-//  assert(root_);
-//  root_->accept(v);
-//}
-
-void expression::serialize(serializer& sink) const
-{
-  sink << str_;
-  sink << schema_;
-}
-
-void expression::deserialize(deserializer& source)
-{
-  std::string str;
-  source >> str;
-  schema sch;
-  source >> sch;
-  *this = parse(std::move(str), std::move(sch));
+  return std::move(disj);
 }
 
 namespace {
 
-class stringifier : public expr::const_visitor
+class evaluator : public const_visitor
+{
+public:
+  evaluator(event const& e)
+    : event_{e}
+  {
+  }
+
+  value const& result() const
+  {
+    return result_;
+  }
+
+  virtual void visit(constant const& c)
+  {
+    result_ = c.val;
+  }
+
+  virtual void visit(timestamp_extractor const&)
+  {
+    result_ = event_.timestamp();
+  }
+
+  virtual void visit(name_extractor const&)
+  {
+    result_ = event_.name();
+  }
+
+  virtual void visit(id_extractor const&)
+  {
+    result_ = event_.id();
+  }
+
+  virtual void visit(offset_extractor const& o)
+  {
+    auto v = event_.at(o.off);
+    result_ = v ? *v : invalid;
+  }
+
+  virtual void visit(type_extractor const& t)
+  {
+    if (! extractor_state_)
+    {
+      extractor_state_ = extractor_state{};
+      extractor_state_->pos.emplace_back(&event_, 0);
+    }
+    result_ = invalid;
+    while (! extractor_state_->pos.empty())
+    {
+      auto& rec = *extractor_state_->pos.back().first;
+      auto& idx = extractor_state_->pos.back().second;
+      if (idx == rec.size())
+      {
+        // Out of bounds.
+        extractor_state_->pos.pop_back();
+        continue;
+      }
+      auto& arg = rec[idx++];
+      if (extractor_state_->pos.size() == 1 && idx == rec.size())
+        extractor_state_->complete = true; // Finished with top-most record.
+      if (! arg)
+        continue;
+      if (arg.which() == record_type)
+      {
+        extractor_state_->pos.emplace_back(&arg.get<record>(), 0);
+        continue;
+      }
+      if (arg.which() == t.type)
+      {
+        result_ = arg;
+        break;
+      }
+    }
+  }
+
+  virtual void visit(relation const& r)
+  {
+    bool p = false;
+    do
+    {
+      r.operands[0]->accept(*this);
+      auto lhs = result_;
+      r.operands[1]->accept(*this);
+      auto& rhs = result_;
+      p = r.predicate(lhs, rhs);
+      if (p)
+        break;
+    }
+    while (extractor_state_ && ! extractor_state_->complete);
+    if (extractor_state_)
+      extractor_state_ = {};
+    result_ = p;
+  }
+
+  virtual void visit(conjunction const& c)
+  {
+    result_ = std::all_of(
+        c.operands.begin(),
+        c.operands.end(),
+        [&](std::unique_ptr<node> const& operand) -> bool
+        {
+          operand->accept(*this);
+          assert(result_ && result_.which() == bool_type);
+          return result_.get<bool>();
+        });
+  }
+
+  virtual void visit(disjunction const& d)
+  {
+    result_ = std::any_of(
+        d.operands.begin(),
+        d.operands.end(),
+        [&](std::unique_ptr<node> const& operand) -> bool
+        {
+          operand->accept(*this);
+          assert(result_ && result_.which() == bool_type);
+          return result_.get<bool>();
+        });
+  }
+
+private:
+  struct extractor_state
+  {
+    std::vector<std::pair<record const*, size_t>> pos;
+    bool complete = false; // Flag that indicates whether the type extractor
+                           // has gone through all values with the given type.
+  };
+
+  event const& event_;
+  value result_;
+  optional<extractor_state> extractor_state_;
+};
+
+} // namespace <anonymous>
+
+value evaluate(node const& n, event const& e)
+{
+  evaluator v{e};
+  n.accept(v);
+  return v.result();
+}
+
+value evaluate(ast const& a, event const& e)
+{
+  return a.root() ? evaluate(*a.root(), e) : invalid;
+}
+
+namespace {
+
+class stringifier : public const_visitor
 {
 public:
   stringifier(std::string& str)
@@ -764,35 +831,36 @@ public:
   {
   }
 
-  virtual void visit(expr::node const&)
+  virtual void visit(constant const& c)
   {
-    assert(! "should never happen");
+    indent();
+    str_ += to<std::string>(c.val) + '\n';
   }
 
-  virtual void visit(expr::timestamp_extractor const&)
+  virtual void visit(timestamp_extractor const&)
   {
     indent();
     str_ += "&time\n";
   }
 
-  virtual void visit(expr::name_extractor const&)
+  virtual void visit(name_extractor const&)
   {
     indent();
     str_ += "&name\n";
   }
 
-  virtual void visit(expr::id_extractor const&)
+  virtual void visit(id_extractor const&)
   {
     indent();
     str_ += "&id\n";
   }
 
-  virtual void visit(expr::offset_extractor const& o)
+  virtual void visit(offset_extractor const& o)
   {
     indent();
     str_ += '@';
-    auto first = o.off().begin();
-    auto last = o.off().end();
+    auto first = o.off.begin();
+    auto last = o.off.end();
     while (first != last)
     {
       str_ += to<std::string>(*first);
@@ -802,40 +870,18 @@ public:
     str_ += '\n';
   }
 
-  virtual void visit(expr::type_extractor const& e)
+  virtual void visit(type_extractor const& t)
   {
     indent();
     str_ += "type(";
-    str_ += to<std::string>(e.type());
+    str_ += to<std::string>(t.type);
     str_ += ")\n";
   }
 
-  virtual void visit(expr::conjunction const& conj)
+  virtual void visit(relation const& rel)
   {
     indent();
-    str_ += "&&\n";
-    ++depth_;
-    for (auto& op : conj.operands())
-      op->accept(*this);
-    --depth_;
-  }
-
-  virtual void visit(expr::disjunction const& disj)
-  {
-    indent();
-    str_ += "||\n";
-    ++depth_;
-    for (auto& op : disj.operands())
-      op->accept(*this);
-    --depth_;
-  }
-
-  virtual void visit(expr::relation const& rel)
-  {
-    assert(rel.operands().size() == 2);
-
-    indent();
-    switch (rel.type())
+    switch (rel.op)
     {
       default:
         assert(! "invalid operator type");
@@ -874,15 +920,30 @@ public:
     str_ += '\n';
 
     ++depth_;
-    rel.operands()[0]->accept(*this);
-    rel.operands()[1]->accept(*this);
+    assert(rel.operands.size() == 2);
+    rel.operands[0]->accept(*this);
+    rel.operands[1]->accept(*this);
     --depth_;
   }
 
-  virtual void visit(expr::constant const& c)
+  virtual void visit(conjunction const& conj)
   {
     indent();
-    str_ += to<std::string>(c.result()) + '\n';
+    str_ += "&&\n";
+    ++depth_;
+    for (auto& op : conj.operands)
+      op->accept(*this);
+    --depth_;
+  }
+
+  virtual void visit(disjunction const& disj)
+  {
+    indent();
+    str_ += "||\n";
+    ++depth_;
+    for (auto& op : disj.operands)
+      op->accept(*this);
+    --depth_;
   }
 
 private:
@@ -898,17 +959,13 @@ private:
 
 } // namespace <anonymous>
 
-bool expression::convert(std::string& str) const
+bool convert(node const& n, std::string& str)
 {
   str.clear();
-  stringifier visitor(str);
-  accept(visitor);
+  stringifier v{str};
+  n.accept(v);
   return true;
 }
 
-bool operator==(expression const& x, expression const& y)
-{
-  return x.str_ == y.str_ && x.schema_ == y.schema_;
-}
-
+} // namespace expr
 } // namespace vast
