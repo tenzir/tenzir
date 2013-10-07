@@ -8,26 +8,37 @@
 
 namespace vast {
 
-// We serialize all pointers as objects because we have to assume reference
-// semantics for such types. Otherwise we could just directly serialize the
-// pointee. As a result, all pointer-based serializations require announced
-// types.
+// If we encounter a pointer, we assume that the element type has reference
+// semantics and may exhibit runtime polymorphism. (Otherwise we could directly
+// serialize the pointee.) As such, all pointer-based serializations require
+// announced types.
 
 template <typename T>
 EnableIf<is_ptr<T>>
 serialize(serializer& sink, T const& x)
 {
-  write_object(sink, *x);
+  if (! x)
+  {
+    sink << false;
+  }
+  else
+  {
+    sink << true;
+    write_object(sink, *x);
+  }
 }
 
 template <typename T>
 EnableIf<std::is_pointer<T>>
 deserialize(deserializer& source, T& x)
 {
-  using raw = typename std::remove_pointer<T>::type;
+  bool valid;
+  source >> valid;
+  if (! valid)
+    return;
   object o;
   source >> o;
-  x = o.release_as<raw>();
+  x = o.release_as<typename std::remove_pointer<T>::type>();
 }
 
 template <typename T>
