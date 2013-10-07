@@ -21,6 +21,11 @@ bool operator==(node const& x, node const& y)
   return x.equals(y);
 }
 
+bool operator<(node const& x, node const& y)
+{
+  return x.is_less_than(y);
+}
+
 constant::constant(value v)
   : val(std::move(v))
 {
@@ -38,6 +43,13 @@ bool constant::equals(node const& other) const
   return val == static_cast<constant const&>(other).val;
 }
 
+bool constant::is_less_than(node const& other) const
+{
+  if (typeid(*this) != typeid(other))
+    return false;
+  return val < static_cast<constant const&>(other).val;
+}
+
 void constant::serialize(serializer& sink) const
 {
   sink << val;
@@ -49,6 +61,11 @@ void constant::deserialize(deserializer& source)
 }
 
 bool extractor::equals(node const& other) const
+{
+  return (typeid(*this) == typeid(other));
+}
+
+bool extractor::is_less_than(node const& other) const
 {
   return (typeid(*this) == typeid(other));
 }
@@ -123,6 +140,13 @@ bool offset_extractor::equals(node const& other) const
   return off == static_cast<offset_extractor const&>(other).off;
 }
 
+bool offset_extractor::is_less_than(node const& other) const
+{
+  if (typeid(*this) != typeid(other))
+    return false;
+  return off < static_cast<offset_extractor const&>(other).off;
+}
+
 
 type_extractor::type_extractor(value_type t)
   : type{t}
@@ -139,6 +163,13 @@ bool type_extractor::equals(node const& other) const
   if (typeid(*this) != typeid(other))
     return false;
   return type == static_cast<type_extractor const&>(other).type;
+}
+
+bool type_extractor::is_less_than(node const& other) const
+{
+  if (typeid(*this) != typeid(other))
+    return false;
+  return type < static_cast<type_extractor const&>(other).type;
 }
 
 void type_extractor::serialize(serializer& sink) const
@@ -169,6 +200,20 @@ bool n_ary_operator::equals(node const& other) const
     if (*operands[i] != *that.operands[i])
       return false;
   return true;
+}
+
+bool n_ary_operator::is_less_than(node const& other) const
+{
+  if (typeid(*this) != typeid(other))
+    return false;
+  auto& that = static_cast<n_ary_operator const&>(other);
+  return std::lexicographical_compare(
+      operands.begin(), operands.end(),
+      that.operands.begin(), that.operands.end(),
+      [](std::unique_ptr<node> const& x, std::unique_ptr<node> const& y)
+      {
+        return *x < *y;
+      });
 }
 
 void n_ary_operator::serialize(serializer& sink) const
@@ -288,6 +333,14 @@ bool relation::equals(node const& other) const
       && n_ary_operator::equals(other);
 }
 
+bool relation::is_less_than(node const& other) const
+{
+  if (typeid(*this) != typeid(other))
+    return false;
+  return op < static_cast<relation const&>(other).op
+      && n_ary_operator::is_less_than(other);
+}
+
 void relation::serialize(serializer& sink) const
 {
   n_ary_operator::serialize(sink);
@@ -313,6 +366,13 @@ bool conjunction::equals(node const& other) const
   return n_ary_operator::equals(other);
 }
 
+bool conjunction::is_less_than(node const& other) const
+{
+  if (typeid(*this) != typeid(other))
+    return false;
+  return n_ary_operator::is_less_than(other);
+}
+
 void conjunction::serialize(serializer& sink) const
 {
   n_ary_operator::serialize(sink);
@@ -334,6 +394,13 @@ bool disjunction::equals(node const& other) const
   if (typeid(*this) != typeid(other))
     return false;
   return n_ary_operator::equals(other);
+}
+
+bool disjunction::is_less_than(node const& other) const
+{
+  if (typeid(*this) != typeid(other))
+    return false;
+  return n_ary_operator::is_less_than(other);
 }
 
 void disjunction::serialize(serializer& sink) const
@@ -386,12 +453,23 @@ node const* ast::root() const
 
 void ast::serialize(serializer& sink) const
 {
-  sink << node_;
+  if (node_)
+  {
+    sink << true;
+    sink << node_;
+  }
+  else
+  {
+    sink << false;
+  }
 }
 
 void ast::deserialize(deserializer& source)
 {
-  source >> node_;
+  bool valid;
+  source >> valid;
+  if (valid)
+    source >> node_;
 }
 
 bool ast::convert(std::string& str) const
@@ -405,6 +483,11 @@ bool ast::convert(std::string& str) const
 bool operator==(ast const& x, ast const& y)
 {
   return x.node_ && y.node_ ? *x.node_ == *y.node_ : false;
+}
+
+bool operator<(ast const& x, ast const& y)
+{
+  return x.node_ && y.node_ ? *x.node_ < *y.node_ : false;
 }
 
 

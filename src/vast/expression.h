@@ -36,11 +36,12 @@ using const_visitor = util::const_visitor<
 
 /// The base class for nodes in the expression tree.
 struct node : public util::visitable_with<const_visitor>,
-              util::equality_comparable<node>
+              util::totally_ordered<node>
 {
   virtual ~node() = default;
   virtual node* clone() const = 0;
   virtual bool equals(node const& other) const = 0;
+  virtual bool is_less_than(node const& other) const = 0;
   virtual void serialize(serializer& sink) const = 0;
   virtual void deserialize(deserializer& source) = 0;
   friend bool operator==(node const& x, node const& y);
@@ -53,6 +54,7 @@ struct constant : public util::visitable<node, constant, const_visitor>
   constant(value v);
   virtual constant* clone() const override;
   virtual bool equals(node const& other) const override;
+  virtual bool is_less_than(node const& other) const override;
   virtual void serialize(serializer& sink) const override;
   virtual void deserialize(deserializer& source) override;
 
@@ -64,6 +66,7 @@ struct extractor : public util::abstract_visitable<node, const_visitor>
 {
   extractor* clone() const = 0;
   virtual bool equals(node const& other) const override;
+  virtual bool is_less_than(node const& other) const override;
 };
 
 /// Extracts the event timestamp.
@@ -102,6 +105,7 @@ struct offset_extractor
 
   virtual offset_extractor* clone() const override;
   virtual bool equals(node const& other) const override;
+  virtual bool is_less_than(node const& other) const override;
   virtual void serialize(serializer& sink) const override;
   virtual void deserialize(deserializer& source) override;
 
@@ -117,6 +121,7 @@ struct type_extractor
 
   virtual type_extractor* clone() const override;
   virtual bool equals(node const& other) const override;
+  virtual bool is_less_than(node const& other) const override;
   virtual void serialize(serializer& sink) const override;
   virtual void deserialize(deserializer& source) override;
 
@@ -130,6 +135,7 @@ struct n_ary_operator : public util::abstract_visitable<node, const_visitor>
   n_ary_operator(n_ary_operator const& other);
   virtual n_ary_operator* clone() const = 0;
   virtual bool equals(node const& other) const override;
+  virtual bool is_less_than(node const& other) const override;
   virtual void serialize(serializer& sink) const override;
   virtual void deserialize(deserializer& source) override;
   void add(std::unique_ptr<node> n);
@@ -148,6 +154,7 @@ struct relation
   relation(relational_operator op);
   virtual relation* clone() const override;
   virtual bool equals(node const& other) const override;
+  virtual bool is_less_than(node const& other) const override;
   virtual void serialize(serializer& sink) const override;
   virtual void deserialize(deserializer& source) override;
 
@@ -161,6 +168,7 @@ struct conjunction
 {
   virtual conjunction* clone() const override;
   virtual bool equals(node const& other) const override;
+  virtual bool is_less_than(node const& other) const override;
   virtual void serialize(serializer& sink) const override;
   virtual void deserialize(deserializer& source) override;
 };
@@ -171,12 +179,13 @@ struct disjunction
 {
   virtual disjunction* clone() const override;
   virtual bool equals(node const& other) const override;
+  virtual bool is_less_than(node const& other) const override;
   virtual void serialize(serializer& sink) const override;
   virtual void deserialize(deserializer& source) override;
 };
 
 /// A wrapper around an expression node with value semantics.
-class ast : util::equality_comparable<ast>
+class ast : util::totally_ordered<ast>
 {
 public:
   ast() = default;
@@ -202,6 +211,7 @@ private:
   void deserialize(deserializer& source);
   bool convert(std::string& str) const;
 
+  friend bool operator<(ast const& x, ast const& y);
   friend bool operator==(ast const& x, ast const& y);
 };
 
