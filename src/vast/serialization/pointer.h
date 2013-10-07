@@ -17,25 +17,13 @@ template <typename T>
 EnableIf<is_ptr<T>>
 serialize(serializer& sink, T const& x)
 {
-  if (! x)
-  {
-    sink << false;
-  }
-  else
-  {
-    sink << true;
-    write_object(sink, *x);
-  }
+  write_object(sink, *x);
 }
 
 template <typename T>
 EnableIf<std::is_pointer<T>>
 deserialize(deserializer& source, T& x)
 {
-  bool valid;
-  source >> valid;
-  if (! valid)
-    return;
   object o;
   source >> o;
   x = o.release_as<typename std::remove_pointer<T>::type>();
