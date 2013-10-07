@@ -193,8 +193,8 @@ public:
   ast(std::unique_ptr<node> n);
   ast(ast const& other);
   ast(ast&&) = default;
-  ast& operator=(ast const&) = default;
-  ast& operator=(ast&&) = default;
+  ast& operator=(ast const& other);
+  ast& operator=(ast&& other);
   explicit operator bool() const;
 
   void accept(const_visitor& v);

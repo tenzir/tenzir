@@ -429,6 +429,18 @@ ast::ast(ast const& other)
 {
 }
 
+ast& ast::operator=(ast const& other)
+{
+  node_.reset(other.node_ ? other.node_->clone() : nullptr);
+  return *this;
+}
+
+ast& ast::operator=(ast&& other)
+{
+  node_ = std::move(other.node_);
+  return *this;
+}
+
 ast::operator bool() const
 {
   return node_ != nullptr;
