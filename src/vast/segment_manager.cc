@@ -13,11 +13,12 @@ segment_manager::segment_manager(size_t capacity, std::string const& dir)
   : dir_(dir),
     cache_(capacity, [&](uuid const& id) { return on_miss(id); })
 {
-  chaining(false);
 }
 
 void segment_manager::act()
 {
+  chaining(false);
+
   traverse(
       dir_,
       [&](path const& p) -> bool

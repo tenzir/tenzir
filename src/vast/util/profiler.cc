@@ -54,11 +54,11 @@ profiler::profiler(std::string const& log_dir, std::chrono::seconds secs)
   : log_dir_(log_dir),
     secs_(secs)
 {
-  chaining(false);
 }
 
 void profiler::act()
 {
+  chaining(false);
   auto filename = to<std::string>(path(log_dir_) / path("profile.log"));
   file_.open(filename);
 

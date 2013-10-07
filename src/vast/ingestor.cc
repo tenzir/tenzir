@@ -20,26 +20,36 @@ ingestor::ingestor(actor_ptr receiver,
     max_segment_size_(max_segment_size),
     batch_size_(batch_size)
 {
-  chaining(false);
 }
 
 void ingestor::on_exit()
 {
   for (auto& p : sinks_)
     send_exit(p.first, exit::done);
+  actor<ingestor>::on_exit();
 }
 
 void ingestor::act()
 {
+  trap_exit(true);
   become(
+      on(atom("EXIT"), arg_match) >> [=](uint32_t /* reason */)
+      {
+        // Tell all sources to exit, they will in turn propagate the exit
+        // message to the sinks.
+        for (auto& src : sources_)
+          send_exit(src, exit::stop);
+      },
       on(atom("DOWN"), arg_match) >> [=](uint32_t /* reason */)
       {
         auto i = sinks_.find(last_sender());
-        assert(i != sinks_.end());
-        sinks_.erase(i);
-
-        if (sinks_.empty())
-          quit(exit::done);
+        if (i != sinks_.end())
+        {
+          // We caught one of the registered sinks.
+          sinks_.erase(i);
+          if (sinks_.empty())
+            quit(exit::done);
+        }
       },
 #ifdef VAST_HAVE_BROCCOLI
       on(atom("ingest"), atom("broccoli"), arg_match) >>

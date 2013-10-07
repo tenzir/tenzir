@@ -1,16 +1,15 @@
-#ifndef VAST_SINK_SEGMENTIZER_H
-#define VAST_SINK_SEGMENTIZER_H
+#ifndef VAST_SEGMENTIZER_H
+#define VAST_SEGMENTIZER_H
 
+#include "vast/actor.h"
 #include "vast/segment.h"
-#include "vast/sink/asynchronous.h"
 #include "vast/util/accumulator.h"
 
 namespace vast {
-namespace sink {
 
 /// Receives events from sources, writes them into segments, and then relays
 /// them upstream.
-class segmentizer : public asynchronous
+class segmentizer : public actor<segmentizer>
 {
 public:
   /// Spawns a segmentizer.
@@ -25,22 +24,19 @@ public:
   segmentizer(cppa::actor_ptr upstream,
               size_t max_events_per_chunk, size_t max_segment_size);
 
-  /// Overrides `event_based_actor::on_exit`.
-  virtual void on_exit() final;
-
-  virtual char const* description() const final;
-
-protected:
-  virtual void process(event const& e) override;
+  void act();
+  char const* description() const;
 
 private:
+  void process(event const& e);
+
   cppa::actor_ptr upstream_;
   util::temporal_accumulator<size_t> stats_;
   segment segment_;
   segment::writer writer_;
+  size_t total_events_ = 0;
 };
 
-} // namespace sink
 } // namespace vast
 
 #endif

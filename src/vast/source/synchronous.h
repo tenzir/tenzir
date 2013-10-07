@@ -31,7 +31,7 @@ protected:
   virtual bool finished() = 0;
 
 private:
-  void run();
+  void send_events();
 
   cppa::actor_ptr sink_;
   size_t batch_size_ = 0;

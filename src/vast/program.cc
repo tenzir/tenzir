@@ -61,6 +61,7 @@ program::program(configuration const& config)
 
 void program::act()
 {
+  chaining(false);
   path vast_dir = string(config_.get("directory"));
   try
   {
@@ -91,7 +92,7 @@ void program::act()
       }
     }
 
-    auto tracker_host = config_.get("tracker.host");
+    auto& tracker_host = config_.get("tracker.host");
     auto tracker_port = config_.as<unsigned>("tracker.port");
     if (config_.check("tracker-actor") || config_.check("all-server"))
     {
@@ -107,7 +108,7 @@ void program::act()
       tracker_ = remote_actor(tracker_host, tracker_port);
     }
 
-    auto archive_host = config_.get("archive.host");
+    auto& archive_host = config_.get("archive.host");
     auto archive_port = config_.as<unsigned>("archive.port");
     if (config_.check("archive-actor") || config_.check("all-server"))
     {
@@ -125,7 +126,7 @@ void program::act()
       archive_ = remote_actor(archive_host, archive_port);
     }
 
-    auto index_host = config_.get("index.host");
+    auto& index_host = config_.get("index.host");
     auto index_port = config_.as<unsigned>("index.port");
     if (config_.check("index-actor") || config_.check("all-server"))
     {
@@ -141,7 +142,7 @@ void program::act()
       index_ = remote_actor(index_host, index_port);
     }
 
-    auto receiver_host = config_.get("receiver.host");
+    auto& receiver_host = config_.get("receiver.host");
     auto receiver_port = config_.as<unsigned>("receiver.port");
     if (config_.check("archive-actor")
         || config_.check("index-actor")
@@ -171,7 +172,7 @@ void program::act()
                            config_.check("broccoli-calltrace"));
       if (config_.check("ingest.broccoli-events"))
       {
-        auto host = config_.get("ingest.broccoli-host");
+        auto& host = config_.get("ingest.broccoli-host");
         auto port = config_.as<unsigned>("ingest.broccoli-port");
         auto events =
           config_.as<std::vector<std::string>>("ingest.broccoli-events");
@@ -184,22 +185,21 @@ void program::act()
 
       if (config_.check("ingest.file-names"))
       {
-        auto type = config_.get("ingest.file-type");
+        auto& type = config_.get("ingest.file-type");
         auto files = config_.as<std::vector<std::string>>("ingest.file-names");
         for (auto& file : files)
         {
           if (exists(string(file)))
             send(ingestor_, atom("ingest"), type, file);
           else
-            VAST_LOG_ACTOR_ERROR("program",
-                               "could not find file to ingest: " << file);
+            VAST_LOG_ACTOR_ERROR("no such file: " << file);
         }
       }
 
       send(ingestor_, atom("run"));
     }
 
-    auto search_host = config_.get("search.host");
+    auto& search_host = config_.get("search.host");
     auto search_port = config_.as<unsigned>("search.port");
     if (config_.check("search-actor") || config_.check("all-server"))
     {

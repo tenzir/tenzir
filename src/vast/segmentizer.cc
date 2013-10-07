@@ -1,4 +1,4 @@
-#include "vast/sink/segmentizer.h"
+#include "vast/segmentizer.h"
 
 #include <cppa/cppa.hpp>
 #include "vast/event.h"
@@ -6,7 +6,6 @@
 #include "vast/logger.h"
 
 namespace vast {
-namespace sink {
 
 using namespace cppa;
 
@@ -19,26 +18,45 @@ segmentizer::segmentizer(actor_ptr upstream,
 {
 }
 
-void segmentizer::on_exit()
+void segmentizer::act()
 {
-  if (! writer_.flush())
-  {
-    segment_ = segment{uuid::random()};
-    writer_.attach_to(&segment_);
-    if (! writer_.flush())
-      VAST_LOG_ACTOR_ERROR("failed to flush a fresh segment");
-    assert(segment_.events() > 0);
-  }
-
-  if (segment_.events() > 0)
-  {
-    VAST_LOG_ACTOR_DEBUG("sends final segment " << segment_.id() <<
-                         " with " << segment_.events() << " events to @" <<
-                         upstream_->id());
-
-    send(upstream_, std::move(segment_));
-  }
-  asynchronous::on_exit();
+  trap_exit(true);
+  become(
+      on(atom("EXIT"), arg_match) >> [=](uint32_t reason)
+      {
+        if (! writer_.flush())
+        {
+          segment_ = segment{uuid::random()};
+          writer_.attach_to(&segment_);
+          if (! writer_.flush())
+            VAST_LOG_ACTOR_ERROR("failed to flush a fresh segment");
+          assert(segment_.events() > 0);
+        }
+        if (segment_.events() > 0)
+        {
+          VAST_LOG_ACTOR_DEBUG(
+              "sends final segment " << segment_.id() << " with " <<
+              segment_.events() << " events to @" << upstream_->id());
+          send(upstream_, std::move(segment_));
+        }
+        if (total_events_ > 0)
+          VAST_LOG_ACTOR_VERBOSE("processed " << total_events_ <<
+                                 " events in total");
+        quit(reason);
+      },
+      on_arg_match >> [=](std::vector<event> const& v)
+      {
+        VAST_LOG_ACTOR_DEBUG("got " << v.size() << " events");
+        for (auto& e : v)
+          process(e);
+        total_events_ += v.size();
+      },
+      others() >> [=]
+      {
+        VAST_LOG_ACTOR_ERROR(
+            "received unexpected message from @" <<
+            last_sender()->id() << ": " << to_string(last_dequeued()));
+      });
 }
 
 char const* segmentizer::description() const
@@ -72,5 +90,4 @@ void segmentizer::process(event const& e)
   writer_.attach_to(&segment_);
 }
 
-} // namespace sink
 } // namespace vast

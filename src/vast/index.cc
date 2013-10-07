@@ -218,7 +218,7 @@ void index::load()
   if (partitions_.empty())
   {
     auto id = uuid::random();
-    auto p = spawn<partition>(dir_ / to<string>(id));
+    auto p = spawn<partition, linked>(dir_ / to<string>(id));
     active_ = p;
     partitions_.emplace(std::move(id), std::move(p));
   }

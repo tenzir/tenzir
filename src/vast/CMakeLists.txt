@@ -34,6 +34,7 @@ set(libvast_sources
   search.cc
   segment.cc
   segment_manager.cc
+  segmentizer.cc
   serialization.cc
   signal_monitor.cc
   shutdown.cc
@@ -68,9 +69,6 @@ set(libvast_sources
   io/file_stream.cc
   io/getline.cc
   io/stream.cc
-  sink/file.cc
-  sink/asynchronous.cc
-  sink/segmentizer.cc
   source/file.cc
   source/synchronous.cc
   util/configuration.cc

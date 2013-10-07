@@ -5,7 +5,7 @@
 #include <cppa/cppa.hpp>
 #include "vast/actor.h"
 #include "vast/uuid.h"
-#include "vast/sink/segmentizer.h"
+#include "vast/segmentizer.h"
 
 namespace vast {
 
@@ -32,23 +32,21 @@ private:
   cppa::actor_ptr make_source(Args&&... args)
   {
     using namespace cppa;
-    auto snk = spawn<sink::segmentizer>(
-        self, max_events_per_chunk_, max_segment_size_);
-    auto src = spawn<Source, detached+linked>(
-        snk, std::forward<Args>(args)...);
+    auto snk = spawn<segmentizer, monitored>(self, max_events_per_chunk_,
+                                             max_segment_size_);
+    auto src = spawn<Source, detached>(snk, std::forward<Args>(args)...);
+    snk->link_to(src);
     send(src, atom("batch size"), batch_size_);
-    src->link_to(snk);
-    self->monitor(snk);
     sinks_.emplace(std::move(snk), 0);
+    sources_.insert(src);
     return src;
   }
-
-  void init_source(cppa::actor_ptr src);
 
   cppa::actor_ptr receiver_;
   size_t max_events_per_chunk_;
   size_t max_segment_size_;
   size_t batch_size_;
+  std::set<cppa::actor_ptr> sources_;
   std::unordered_map<cppa::actor_ptr, size_t> sinks_;
 };
 
