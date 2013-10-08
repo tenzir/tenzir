@@ -210,7 +210,6 @@ private:
   void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
   bool convert(std::string& str) const;
-
   friend bool operator<(ast const& x, ast const& y);
   friend bool operator==(ast const& x, ast const& y);
 };
