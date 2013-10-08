@@ -5,13 +5,25 @@
 namespace vast {
 
 bitstream::bitstream(bitstream const& other)
-  : concept_{other.concept_->copy()}
+  : concept_{other.concept_ ? other.concept_->copy() : nullptr}
 {
 }
 
 bitstream::bitstream(bitstream&& other)
   : concept_{std::move(other.concept_)}
 {
+}
+
+bitstream& bitstream::operator=(bitstream const& other)
+{
+  concept_ = other.concept_ ? other.concept_->copy() : nullptr;
+  return *this;
+}
+
+bitstream& bitstream::operator=(bitstream&& other)
+{
+  concept_ = std::move(other.concept_);
+  return *this;
 }
 
 bitstream::operator bool() const
@@ -21,87 +33,113 @@ bitstream::operator bool() const
 
 bool bitstream::equals(bitstream const& other) const
 {
+  assert(concept_);
+  assert(other.concept_);
   return concept_->equals(*other.concept_);
 }
 
 void bitstream::bitwise_not()
 {
+  assert(concept_);
   concept_->bitwise_not();
 }
 
 void bitstream::bitwise_and(bitstream const& other)
 {
+  assert(concept_);
+  assert(other.concept_);
   concept_->bitwise_and(*other.concept_);
 }
 
 void bitstream::bitwise_or(bitstream const& other)
 {
+  assert(concept_);
+  assert(other.concept_);
   concept_->bitwise_or(*other.concept_);
 }
 
 void bitstream::bitwise_xor(bitstream const& other)
 {
+  assert(concept_);
+  assert(other.concept_);
   concept_->bitwise_xor(*other.concept_);
 }
 
 void bitstream::bitwise_subtract(bitstream const& other)
 {
+  assert(concept_);
+  assert(other.concept_);
   concept_->bitwise_subtract(*other.concept_);
 }
 
 void bitstream::append_impl(size_type n, bool bit)
 {
+  assert(concept_);
   concept_->append_impl(n, bit);
 }
 
 void bitstream::push_back_impl(bool bit)
 {
+  assert(concept_);
   concept_->push_back_impl(bit);
 }
 
 void bitstream::clear_impl() noexcept
 {
+  assert(concept_);
   concept_->clear_impl();
 }
 
 bool bitstream::at(size_type i) const
 {
+  assert(concept_);
   return concept_->at(i);
 }
 
 bitstream::size_type bitstream::size_impl() const
 {
+  assert(concept_);
   return concept_->size_impl();
 }
 
 bool bitstream::empty_impl() const
 {
+  assert(concept_);
   return concept_->empty_impl();
 }
 
 bitstream::size_type bitstream::find_first_impl() const
 {
+  assert(concept_);
   return concept_->find_first_impl();
 }
 
 bitstream::size_type bitstream::find_next_impl(size_type i) const
 {
+  assert(concept_);
   return concept_->find_next_impl(i);
 }
 
 bitvector const& bitstream::bits_impl() const
 {
+  assert(concept_);
   return concept_->bits_impl();
 }
 
 void bitstream::serialize(serializer& sink) const
 {
-  sink << concept_;
+  if (concept_)
+    sink << true << concept_;
+  else
+    sink << false;
 }
 
 void bitstream::deserialize(deserializer& source)
 {
-  source >> concept_;
+  bool valid;
+  source >> valid;
+  if (valid)
+    source >> concept_;
 }
 
 bool operator==(bitstream const& x, bitstream const& y)

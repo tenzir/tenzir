@@ -366,8 +366,8 @@ public:
   {
   }
 
-  bitstream& operator=(bitstream const&) = default;
-  bitstream& operator=(bitstream&&) = default;
+  bitstream& operator=(bitstream const& other);
+  bitstream& operator=(bitstream&& other);
 
   explicit operator bool() const;
 
