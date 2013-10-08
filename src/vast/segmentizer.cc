@@ -84,7 +84,7 @@ void segmentizer::process(event const& e)
                        " with " << segment_.events() << " events to @" <<
                        upstream_->id());
 
-  auto max_segment_size = segment_.max_size();
+  auto max_segment_size = segment_.max_bytes();
   send(upstream_, std::move(segment_));
   segment_ = segment(uuid::random(), max_segment_size);
   writer_.attach_to(&segment_);

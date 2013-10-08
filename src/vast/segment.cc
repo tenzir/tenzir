@@ -199,10 +199,10 @@ bool segment::reader::load(event* e)
 }
 
 
-segment::segment(uuid id, size_t max_size, io::compression method)
+segment::segment(uuid id, size_t max_bytes, io::compression method)
   : id_(id),
     compression_(method),
-    max_size_(max_size)
+    max_bytes_(max_bytes)
 {
 }
 
@@ -231,9 +231,9 @@ uint32_t segment::bytes() const
   return occupied_bytes_;
 }
 
-size_t segment::max_size() const
+size_t segment::max_bytes() const
 {
-  return max_size_;
+  return max_bytes_;
 }
 
 size_t segment::store(std::vector<event> const& v, size_t max_events_per_chunk)
@@ -294,7 +294,7 @@ void segment::deserialize(deserializer& source)
 
 bool segment::append(chunk& c)
 {
-  if (max_size_ > 0 && bytes() + c.compressed_bytes() > max_size_)
+  if (max_bytes_ > 0 && bytes() + c.compressed_bytes() > max_bytes_)
     return false;
 
   n_ += c.elements();

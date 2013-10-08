@@ -123,9 +123,9 @@ public:
 
   /// Constructs a segment.
   /// @param id The UUID of the segment.
-  /// @param max_size The maximum segment size.
+  /// @param max_bytes The maximum segment size.
   /// @param method The compression method to use for each chunk.
-  segment(uuid id = uuid::nil(), size_t max_size = 0,
+  segment(uuid id = uuid::nil(), size_t max_bytes = 0,
           io::compression method = io::lz4);
 
   /// Retrieves the segment ID.
@@ -150,7 +150,7 @@ public:
   ///
   /// @returns The maximum number of bytes this segment can occupy or 0 if its
   /// size is unbounded.
-  size_t max_size() const;
+  size_t max_bytes() const;
 
   /// Writes a vector of events into the segment.
   /// @param v The vector of events to write.
@@ -174,7 +174,7 @@ private:
   io::compression compression_;
   uint64_t base_ = 0;
   uint32_t n_ = 0;
-  uint32_t max_size_ = 0;
+  uint32_t max_bytes_ = 0;
   uint32_t occupied_bytes_ = 0;
   std::vector<uint32_t> offsets_;
   std::vector<cow<chunk>> chunks_;
