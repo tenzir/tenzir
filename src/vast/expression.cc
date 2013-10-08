@@ -484,10 +484,10 @@ void ast::deserialize(deserializer& source)
     source >> node_;
 }
 
-bool ast::convert(std::string& str) const
+bool ast::convert(std::string& str, bool tree) const
 {
   if (node_)
-    return expr::convert(*node_, str);
+    return expr::convert(*node_, str, tree);
   str = "";
   return true;
 }
@@ -922,10 +922,10 @@ value evaluate(ast const& a, event const& e)
 
 namespace {
 
-class stringifier : public const_visitor
+class tree_printer : public const_visitor
 {
 public:
-  stringifier(std::string& str)
+  tree_printer(std::string& str)
     : str_(str)
   {
   }
@@ -1056,13 +1056,126 @@ private:
   std::string& str_;
 };
 
+class expr_printer : public const_visitor
+{
+public:
+  expr_printer(std::string& str)
+    : str_(str)
+  {
+  }
+
+  virtual void visit(constant const& c)
+  {
+    str_ += to<std::string>(c.val);
+  }
+
+  virtual void visit(timestamp_extractor const&)
+  {
+    str_ += "&time";
+  }
+
+  virtual void visit(name_extractor const&)
+  {
+    str_ += "&name";
+  }
+
+  virtual void visit(id_extractor const&)
+  {
+    str_ += "&id";
+  }
+
+  virtual void visit(offset_extractor const& o)
+  {
+    str_ += to<std::string>(o.off);
+  }
+
+  virtual void visit(type_extractor const& t)
+  {
+    str_ += ':' + to<std::string>(t.type);
+  }
+
+  virtual void visit(relation const& rel)
+  {
+    rel.operands[0]->accept(*this);
+    str_ += ' ';
+    switch (rel.op)
+    {
+      default:
+        assert(! "invalid operator type");
+        break;
+      case match:
+        str_ += "~";
+        break;
+      case not_match:
+        str_ += "!~";
+        break;
+      case in:
+        str_ += "in";
+        break;
+      case not_in:
+        str_ += "!in";
+        break;
+      case equal:
+        str_ += "==";
+        break;
+      case not_equal:
+        str_ += "!=";
+        break;
+      case less:
+        str_ += "<";
+        break;
+      case less_equal:
+        str_ += "<=";
+        break;
+      case greater:
+        str_ += ">";
+        break;
+      case greater_equal:
+        str_ += ">=";
+        break;
+    }
+    str_ += ' ';
+    rel.operands[1]->accept(*this);
+  }
+
+  virtual void visit(conjunction const& conj)
+  {
+    for (size_t i = 0; i < conj.operands.size(); ++i)
+    {
+      conj.operands[i]->accept(*this);
+      if (i + 1 != conj.operands.size())
+        str_ += " && ";
+    }
+  }
+
+  virtual void visit(disjunction const& disj)
+  {
+    for (size_t i = 0; i < disj.operands.size(); ++i)
+    {
+      disj.operands[i]->accept(*this);
+      if (i + 1 != disj.operands.size())
+        str_ += " || ";
+    }
+  }
+
+private:
+  std::string& str_;
+};
 } // namespace <anonymous>
 
-bool convert(node const& n, std::string& str)
+bool convert(node const& n, std::string& str, bool tree)
 {
   str.clear();
-  stringifier v{str};
-  n.accept(v);
+  if (tree)
+  {
+    tree_printer v{str};
+    n.accept(v);
+  }
+  else
+  {
+    expr_printer v{str};
+    n.accept(v);
+  }
   return true;
 }
 

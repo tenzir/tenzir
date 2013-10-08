@@ -34,6 +34,19 @@ using const_visitor = util::const_visitor<
   disjunction
 >;
 
+struct default_const_visitor : expr::const_visitor
+{
+  virtual void visit(expr::constant const&) { }
+  virtual void visit(expr::name_extractor const&) { }
+  virtual void visit(expr::timestamp_extractor const&) { }
+  virtual void visit(expr::id_extractor const&) { }
+  virtual void visit(expr::offset_extractor const&) { }
+  virtual void visit(expr::type_extractor const&) { }
+  virtual void visit(expr::relation const&) { }
+  virtual void visit(expr::conjunction const&) { }
+  virtual void visit(expr::disjunction const&) { }
+};
+
 /// The base class for nodes in the expression tree.
 struct node : public util::visitable_with<const_visitor>,
               util::totally_ordered<node>
@@ -209,7 +222,7 @@ private:
   friend access;
   void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
-  bool convert(std::string& str) const;
+  bool convert(std::string& str, bool tree = false) const;
   friend bool operator<(ast const& x, ast const& y);
   friend bool operator==(ast const& x, ast const& y);
 };
@@ -224,7 +237,7 @@ std::unique_ptr<node> create(std::string const& str, schema const& sch = {});
 value evaluate(node const& n, event const& e);
 value evaluate(ast const& a, event const& e);
 
-bool convert(node const& n, std::string& str);
+bool convert(node const& n, std::string& str, bool tree = false);
 
 } // namespace expr
 } // namespace vast
