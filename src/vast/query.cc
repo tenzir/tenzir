@@ -22,11 +22,6 @@ query::query(cppa::actor_ptr archive,
 void query::act()
 {
   become(
-      on(atom("run")) >> [=]
-      {
-        VAST_LOG_ACTOR_DEBUG("hits index");
-        send(index_, atom("lookup"), ast_);
-      },
       others() >> [=]
       {
         VAST_LOG_ACTOR_ERROR("got unexpected message from @" <<

@@ -77,8 +77,7 @@ console::console(cppa::actor_ptr search)
               VAST_LOG_ACTOR_VERBOSE("got query @" << qry->id());
               cmdline_.append_to_history(q);
               query_ = qry;
-              monitor(qry);
-              send(query_, atom("run"));
+              link_to(qry);
               return false;
             },
             others() >> [=]

@@ -15,7 +15,6 @@ public:
   {
     bitstream result;
     bitstream coverage;
-    std::set<cppa::actor_ptr> queries;
     std::set<expr::ast> parents;
   };
 
@@ -27,11 +26,13 @@ public:
   char const* description() const;
   
 private:
+  void shutdown_client(cppa::actor_ptr const& client);
+
   cppa::actor_ptr archive_;
   cppa::actor_ptr index_;
   cppa::actor_ptr schema_manager_;
   std::multimap<cppa::actor_ptr, expr::ast> clients_;
-  std::map<expr::ast, cppa::actor_ptr> queries_;
+  std::multimap<expr::ast, cppa::actor_ptr> queries_;
   std::map<expr::ast, state> state_;
 };
 

@@ -35,7 +35,7 @@ public:
     else
       mkdir(dir_);
 
-    cppa::partial_function base_behavior = (
+    become(
         on(atom("flush")) >> [=]
         {
           derived()->store();
@@ -44,13 +44,16 @@ public:
         {
           if (! derived()->index(e))
           {
-            VAST_LOG_ACTOR_ERROR(derived()->description(),
-                                 "failed to index event " << e);
+            VAST_LOG_ACTOR_ERROR("failed to index event " << e);
             this->quit(exit::error);
           }
+        },
+        on_arg_match >> [=](expr::ast const& ast, bitstream const& coverage,
+                            actor_ptr const& sink)
+        {
+          auto result = derived()->lookup(ast);
+          send(sink, ast, std::move(result), coverage);
         });
-
-    become(base_behavior.or_else(derived()->actor_behavior()));
   }
 
   char const* description()
@@ -85,12 +88,15 @@ public:
   event_meta_index(path dir);
 
   char const* description() const;
-  cppa::behavior actor_behavior() const;
+
   void load();
   void store();
   bool index(event const& e);
+  bitstream lookup(expr::ast const& ast) const;
 
 private:
+  struct querier;
+
   time_bitmap_index timestamp_;
   string_bitmap_index name_;
 };
@@ -101,18 +107,16 @@ public:
   event_arg_index(path dir);
 
   char const* description() const;
-  cppa::behavior actor_behavior() const;
 
   void load();
   void store();
   bool index(event const& e);
+  bitstream lookup(expr::ast const& ast) const;
 
 private:
-  bool index_record(record const& r, uint64_t id, offset& o);
-  optional<bitstream> type_lookup(relational_operator op, value const& v) const;
-  optional<bitstream> offset_lookup(relational_operator op,
-                                    value const& v, offset const& o) const;
+  struct querier;
 
+  bool index_record(record const& r, uint64_t id, offset& o);
 
   std::map<offset, std::shared_ptr<bitmap_index>> args_;
   std::map<value_type, std::vector<std::shared_ptr<bitmap_index>>> types_;

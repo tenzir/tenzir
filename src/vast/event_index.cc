@@ -9,6 +9,53 @@ using namespace cppa;
 
 namespace vast {
 
+struct event_meta_index::querier : expr::default_const_visitor
+{
+  querier(event_meta_index const& idx)
+    : idx{idx}
+  {
+  }
+
+  virtual void visit(expr::constant const& c)
+  {
+    val = &c.val;
+  }
+
+  virtual void visit(expr::relation const& rel)
+  {
+    op = &rel.op;
+    rel.operands[1]->accept(*this);
+    rel.operands[0]->accept(*this);
+  }
+
+  virtual void visit(expr::name_extractor const&)
+  {
+    assert(op);
+    assert(val);
+    if (auto r = idx.name_.lookup(*op, *val))
+      result = std::move(*r);
+  }
+
+  virtual void visit(expr::timestamp_extractor const&)
+  {
+    assert(op);
+    assert(val);
+    if (auto r = idx.timestamp_.lookup(*op, *val))
+      result = std::move(*r);
+  }
+
+  virtual void visit(expr::id_extractor const&)
+  {
+    assert(! "not yet implemented");
+  }
+
+  bitstream result;
+  event_meta_index const& idx;
+  value const* val = nullptr;
+  relational_operator const* op = nullptr;
+};
+
+
 event_meta_index::event_meta_index(path dir)
   : event_index<event_meta_index>{std::move(dir)}
 {
@@ -41,19 +88,67 @@ bool event_meta_index::index(event const& e)
       && name_.push_back(e.name(), e.id());
 }
 
-behavior event_meta_index::actor_behavior() const
+bitstream event_meta_index::lookup(expr::ast const& ast) const
 {
-  return (
-      on(atom("lookup"), atom("time"), arg_match)
-        >> [=](relational_operator op, value const& v, actor_ptr sink)
-      {
-        send(sink, atom("result"), atom("expected"), self);
-        if (auto result = timestamp_.lookup(op, v))
-          send(sink, atom("result"), std::move(*result));
-        else
-          send(sink, atom("result"), atom("miss"));
-      });
+  querier visitor{*this};
+  ast.accept(visitor);
+  return std::move(visitor.result);
 }
+
+
+struct event_arg_index::querier : expr::default_const_visitor
+{
+  querier(event_arg_index const& idx)
+    : idx{idx}
+  {
+  }
+
+  virtual void visit(expr::constant const& c)
+  {
+    val = &c.val;
+  }
+
+  virtual void visit(expr::relation const& rel)
+  {
+    op = &rel.op;
+    rel.operands[1]->accept(*this);
+    rel.operands[0]->accept(*this);
+  }
+
+  virtual void visit(expr::offset_extractor const& oe)
+  {
+    assert(op);
+    assert(val);
+    auto i = idx.args_.find(oe.off);
+    if (i == idx.args_.end())
+      return;
+    if (auto r = i->second->lookup(*op, *val))
+      result = std::move(*r);
+  }
+
+  virtual void visit(expr::type_extractor const& te)
+  {
+    assert(op);
+    assert(val);
+    assert(te.type == val->which());
+    auto i = idx.types_.find(te.type);
+    if (i == idx.types_.end())
+      return;
+    for (auto& bmi : i->second)
+      if (auto r = bmi->lookup(*op, *val))
+      {
+        if (result)
+          result |= bitstream{std::move(*r)};
+        else
+          result = std::move(*r);
+      }
+  }
+
+  bitstream result;
+  event_arg_index const& idx;
+  value const* val = nullptr;
+  relational_operator const* op = nullptr;
+};
 
 
 event_arg_index::event_arg_index(path dir)
@@ -130,28 +225,11 @@ bool event_arg_index::index(event const& e)
   return index_record(e, e.id(), o);
 }
 
-behavior event_arg_index::actor_behavior() const
+bitstream event_arg_index::lookup(expr::ast const& ast) const
 {
-  return (
-      on(atom("lookup"), atom("type"), arg_match)
-        >> [=](relational_operator op, value const& v, actor_ptr sink)
-      {
-        send(sink, atom("result"), atom("expected"), self);
-        if (auto result = type_lookup(op, v))
-          send(sink, atom("result"), std::move(*result));
-        else
-          send(sink, atom("result"), atom("miss"));
-      },
-      on(atom("lookup"), atom("offset"), arg_match)
-        >> [=](relational_operator op, value const& v,
-               offset const& off, actor_ptr sink)
-      {
-        send(sink, atom("result"), atom("expected"), self);
-        if (auto result = offset_lookup(op, v, off))
-          send(sink, atom("result"), std::move(*result));
-        else
-          send(sink, atom("result"), atom("miss"));
-      });
+  querier visitor{*this};
+  ast.accept(visitor);
+  return std::move(visitor.result);
 }
 
 bool event_arg_index::index_record(record const& r, uint64_t id, offset& o)
@@ -194,41 +272,6 @@ bool event_arg_index::index_record(record const& r, uint64_t id, offset& o)
     ++o.back();
   }
   return true;
-}
-
-optional<bitstream> event_arg_index::type_lookup(
-    relational_operator op, value const& v) const
-{
-  bitstream result;
-  auto i = types_.find(v.which());
-  if (i == types_.end())
-    return {};
-  for (auto& bmi : i->second)
-    if (auto r = bmi->lookup(op, v))
-    {
-      if (result)
-        result |= *r;
-      else
-        result = std::move(*r);
-    }
-  if (! result || result.empty())
-    return {};
-  else
-    return {std::move(result)};
-}
-
-optional<bitstream> event_arg_index::offset_lookup(
-    relational_operator op, value const& v, offset const& o) const
-{
-  auto i = args_.find(o);
-  if (i == args_.end())
-    return {};
-  auto& bmi = i->second;
-  assert(bmi != nullptr);
-  if (auto r = bmi->lookup(op, v))
-    return r;
-  else
-    return {};
 }
 
 } // namespace vast
