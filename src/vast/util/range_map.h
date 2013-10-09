@@ -7,6 +7,8 @@
 namespace vast {
 namespace util {
 
+/// An associative data structure that maps half-open intervals to values and
+/// supports point lookups.
 template <typename Point, typename Value>
 class range_map
 {
@@ -27,6 +29,12 @@ public:
     return false;
   }
 
+  /// Retrieves a value for a given point.
+  ///
+  /// @param p The point to lookup.
+  ///
+  /// @return A pointer to the value associated with the half-open interval
+  /// *[a,b)* iff *a <= p < b*, and `nullptr` otherwise.
   Value const* lookup(Point const& p) const
   {
     return find(p, map_.lower_bound(p));
