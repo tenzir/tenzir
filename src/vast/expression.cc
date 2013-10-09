@@ -419,6 +419,11 @@ ast::ast(std::string const& str, schema const& sch)
 {
 }
 
+ast::ast(node const& n)
+  : ast{std::unique_ptr<node>{n.clone()}}
+{
+}
+
 ast::ast(std::unique_ptr<node> n)
   : node_{std::move(n)}
 {

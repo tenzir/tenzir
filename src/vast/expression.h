@@ -204,6 +204,7 @@ public:
   ast() = default;
   ast(std::string const& str, schema const& sch = {});
   ast(std::unique_ptr<node> n);
+  ast(node const& n);
   ast(ast const& other);
   ast(ast&&) = default;
   ast& operator=(ast const& other);
