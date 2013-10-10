@@ -40,6 +40,15 @@ public:
     return find(p, map_.lower_bound(p));
   }
 
+  /// Applies a function over each range and associated value.
+  /// @param f The function to apply.
+  void
+  each(std::function<void(Point const&, Point const&, Value const&)> f) const
+  {
+    for (auto& p : map_)
+      f(p.first, p.second.first, p.second.second);
+  }
+
 private:
   using map_type = std::map<Point, std::pair<Point, Value>>;
 
