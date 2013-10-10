@@ -1145,22 +1145,32 @@ public:
 
   virtual void visit(conjunction const& conj)
   {
+    auto singular = conj.operands.size() == 1;
+    if (singular)
+      str_ += '{';
     for (size_t i = 0; i < conj.operands.size(); ++i)
     {
       conj.operands[i]->accept(*this);
       if (i + 1 != conj.operands.size())
         str_ += " && ";
     }
+    if (singular)
+      str_ += '}';
   }
 
   virtual void visit(disjunction const& disj)
   {
+    auto singular = disj.operands.size() == 1;
+    if (singular)
+      str_ += '[';
     for (size_t i = 0; i < disj.operands.size(); ++i)
     {
       disj.operands[i]->accept(*this);
       if (i + 1 != disj.operands.size())
         str_ += " || ";
     }
+    if (singular)
+      str_ += ']';
   }
 
 private:

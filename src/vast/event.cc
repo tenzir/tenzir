@@ -15,12 +15,12 @@ event::event(std::initializer_list<value> list)
 {
 }
 
-uint64_t event::id() const
+event_id event::id() const
 {
   return id_;
 }
 
-void event::id(uint64_t i)
+void event::id(event_id i)
 {
   id_ = i;
 }

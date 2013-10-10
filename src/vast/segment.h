@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <string>
+#include "vast/aliases.h"
 #include "vast/chunk.h"
 #include "vast/cow.h"
 #include "vast/time.h"
@@ -18,8 +19,6 @@ class event;
 /// Contains a vector of chunks with additional meta data.
 class segment : util::equality_comparable<segment>
 {
-  friend bool operator==(segment const& x, segment const& y);
-
 public:
   /// A proxy class for writing into a segment. Each writer maintains a local
   /// chunk that receives events to serialize. Upon flushing, the writer
@@ -102,7 +101,7 @@ public:
     /// @param The event ID to forward to.
     /// @returns `true` if skipping to *id* succeeded.
     /// @post The next call to ::read exctracts the event with ID *id*.
-    bool skip_to(uint64_t id);
+    bool skip_to(event_id id);
 
     /// Checks whether the reader has still events that can be read.
     /// @returns `true` iff the reader is empty.
@@ -115,7 +114,7 @@ public:
     segment const* segment_;
     std::unique_ptr<chunk::reader> reader_;
     size_t next_ = 0;
-    uint64_t current_id_ = 0;
+    event_id current_id_ = 0;
   };
 
   static uint32_t const magic = 0x2a2a2a2a;
@@ -134,11 +133,11 @@ public:
 
   /// Sets the segment base ID for events.
   /// @param id The base event ID for this segment.
-  void base(uint64_t id);
+  void base(event_id id);
 
   /// Retrieves the segment base ID for events.
   /// @returns The base event ID for this segment.
-  uint64_t base() const;
+  event_id base() const;
 
   /// Retrieves the number of events in the segment.
   uint32_t events() const;
@@ -161,23 +160,26 @@ public:
   /// Extracts a single event with a given ID.
   /// @param id The ID of the event.
   /// @returns The event having ID *id* or an disengaged option otherwise.
-  optional<event> load(uint64_t id) const;
+  optional<event> load(event_id id) const;
+
+private:
+  bool append(chunk& c);
+
+  uuid id_;
+  io::compression compression_;
+  event_id base_ = 0;
+  uint32_t n_ = 0;
+  uint32_t max_bytes_ = 0;
+  uint32_t occupied_bytes_ = 0;
+  std::vector<uint32_t> offsets_;
+  std::vector<cow<chunk>> chunks_;
 
 private:
   friend access;
   void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
 
-  bool append(chunk& c);
-
-  uuid id_;
-  io::compression compression_;
-  uint64_t base_ = 0;
-  uint32_t n_ = 0;
-  uint32_t max_bytes_ = 0;
-  uint32_t occupied_bytes_ = 0;
-  std::vector<uint32_t> offsets_;
-  std::vector<cow<chunk>> chunks_;
+  friend bool operator==(segment const& x, segment const& y);
 };
 
 } // namespace vast

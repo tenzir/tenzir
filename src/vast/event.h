@@ -1,6 +1,7 @@
 #ifndef VAST_EVENT_H
 #define VAST_EVENT_H
 
+#include "vast/aliases.h"
 #include "vast/container.h"
 #include "vast/string.h"
 #include "vast/value.h"
@@ -28,11 +29,11 @@ public:
 
   /// Retrieves the event ID.
   /// @returns The name of the event.
-  uint64_t id() const;
+  event_id id() const;
 
   /// Sets the event ID.
   /// @param i The new event ID.
-  void id(uint64_t i);
+  void id(event_id i);
 
   /// Retrieves the event name.
   /// @returns The name of the event.
@@ -51,7 +52,7 @@ public:
   void timestamp(time_point time);
 
 private:
-  uint64_t id_ = 0;
+  event_id id_ = 0;
   time_point timestamp_;
   string name_;
 

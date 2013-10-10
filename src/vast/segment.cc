@@ -100,7 +100,7 @@ bool segment::reader::read(event& e)
   return read(&e);
 }
 
-bool segment::reader::skip_to(uint64_t id)
+bool segment::reader::skip_to(event_id id)
 {
   if (! reader_)
     return false;
@@ -211,12 +211,12 @@ uuid const& segment::id() const
   return id_;
 }
 
-void segment::base(uint64_t id)
+void segment::base(event_id id)
 {
   base_ = id;
 }
 
-uint64_t segment::base() const
+event_id segment::base() const
 {
   return base_;
 }
@@ -246,7 +246,7 @@ size_t segment::store(std::vector<event> const& v, size_t max_events_per_chunk)
   return i;
 }
 
-optional<event> segment::load(uint64_t id) const
+optional<event> segment::load(event_id id) const
 {
   reader r(this);
   if (! r.skip_to(id))
@@ -257,6 +257,17 @@ optional<event> segment::load(uint64_t id) const
     return {};
 
   return {std::move(e)};
+}
+
+bool segment::append(chunk& c)
+{
+  if (max_bytes_ > 0 && bytes() + c.compressed_bytes() > max_bytes_)
+    return false;
+
+  n_ += c.elements();
+  occupied_bytes_ += c.compressed_bytes();
+  chunks_.emplace_back(std::move(c));
+  return true;
 }
 
 void segment::serialize(serializer& sink) const
@@ -290,17 +301,6 @@ void segment::deserialize(deserializer& source)
   source >> n_;
   source >> occupied_bytes_;
   source >> chunks_;
-}
-
-bool segment::append(chunk& c)
-{
-  if (max_bytes_ > 0 && bytes() + c.compressed_bytes() > max_bytes_)
-    return false;
-
-  n_ += c.elements();
-  occupied_bytes_ += c.compressed_bytes();
-  chunks_.emplace_back(std::move(c));
-  return true;
 }
 
 } // namespace vast

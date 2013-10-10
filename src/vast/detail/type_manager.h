@@ -7,8 +7,8 @@
 #include <unordered_map>
 #include <set>
 #include <string>
+#include "vast/aliases.h"
 #include "vast/singleton.h"
-#include "vast/typedefs.h"
 
 namespace vast {
 

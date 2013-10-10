@@ -3,6 +3,9 @@
 
 #include <unordered_map>
 #include "vast/actor.h"
+#include "vast/aliases.h"
+#include "vast/uuid.h"
+#include "vast/util/range_map.h"
 
 namespace vast {
 
@@ -21,6 +24,7 @@ public:
 private:
   std::string directory_;
   cppa::actor_ptr segment_manager_;
+  util::range_map<event_id, uuid> ranges_;
 };
 
 } // namespace vast

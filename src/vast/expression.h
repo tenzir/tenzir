@@ -6,6 +6,7 @@
 #include "vast/operator.h"
 #include "vast/schema.h"
 #include "vast/util/operators.h"
+#include "vast/util/print.h"
 #include "vast/util/visitor.h"
 
 namespace vast {
@@ -198,7 +199,8 @@ struct disjunction
 };
 
 /// A wrapper around an expression node with value semantics.
-class ast : util::totally_ordered<ast>
+class ast : util::totally_ordered<ast>,
+            util::printable<ast>
 {
 public:
   ast() = default;
@@ -226,6 +228,15 @@ private:
   bool convert(std::string& str, bool tree = false) const;
   friend bool operator<(ast const& x, ast const& y);
   friend bool operator==(ast const& x, ast const& y);
+
+  template <typename Iterator>
+  bool print(Iterator& out) const
+  {
+    // FIXME: don't use poor man's printing via copying.
+    auto str = to<std::string>(*this);
+    out = std::copy(str.begin(), str.end(), out);
+    return true;
+  }
 };
 
 /// Creates an expression tree.

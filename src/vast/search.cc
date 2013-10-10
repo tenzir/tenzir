@@ -138,7 +138,7 @@ void search::act()
           reply(actor_ptr{});
           return;
         }
-        auto qry = spawn<query>(archive_, index_, self, ast);
+        auto qry = spawn<query_actor>(archive_, self, ast);
         queries_.emplace(ast, qry);
         dissector d{state_};
         ast.accept(d);
@@ -162,10 +162,10 @@ void search::act()
         assert(state_.count(ast));
         if (! result)
         {
-          VAST_LOG_ACTOR_DEBUG("got empty result for: " << to_string(ast));
+          VAST_LOG_ACTOR_DEBUG("got empty result for: " << ast);
           return;
         }
-        VAST_LOG_ACTOR_DEBUG("got result for: " << to_string(ast));
+        VAST_LOG_ACTOR_DEBUG("got result for: " << ast);
         auto& s = state_[ast];
         if (! s.result)
           s.result = std::move(result);
@@ -206,8 +206,9 @@ void search::act()
           for (auto i = er.first; i != queries_.end(); ++i)
           {
             VAST_LOG_ACTOR_DEBUG(
-                "propagates updates for " << to_string(i->first) <<
-                " to query @" << i->second->id()); send(i->second, s.result);
+                "propagates new result for " << i->first <<
+                " to query @" << i->second->id());
+            send(i->second, s.result);
           }
         }
       },

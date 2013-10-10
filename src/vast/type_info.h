@@ -6,9 +6,9 @@
 #include <string>
 #include <functional>
 #include <typeinfo>
+#include "vast/aliases.h"
 #include "vast/traits.h"
 #include "vast/fwd.h"
-#include "vast/typedefs.h"
 #include "vast/detail/demangle.h"
 #include "vast/util/operators.h"
 
