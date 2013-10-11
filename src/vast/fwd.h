@@ -30,6 +30,9 @@ bool extract(Iterator&, Iterator, T&, Opts&&...);
 template <typename Iterator, typename T, typename... Opts>
 bool render(Iterator&, T const&, Opts&&...);
 
+namespace expr {
+class ast;
+}
 
 namespace detail {
 template <typename T> void save(serializer& sink, T const& x);

@@ -9,18 +9,14 @@
 namespace vast {
 
 /// The event index.
-class index : public actor<index>
+struct index : actor<index>
 {
-public:
   /// Spawns the index.
   /// @param directory The root directory of the index.
   index(path directory);
 
   void act();
   char const* description() const;
-
-private:
-  void load();
 
   path dir_;
   cppa::actor_ptr active_;

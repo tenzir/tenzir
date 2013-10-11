@@ -16,7 +16,7 @@ segment_manager::segment_manager(size_t capacity, std::string const& dir)
       dir_,
       [&](path const& p) -> bool
       {
-        VAST_LOG_VERBOSE("found segment " << p);
+        VAST_LOG_VERBOSE("found segment " << p.trim(-2));
         segment_files_.emplace(to_string(p.basename()), p);
         return true;
       });

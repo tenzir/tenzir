@@ -35,40 +35,100 @@ public:
 
 } // namespace <anonymous>
 
+bool partition::is_meta_query(expr::ast const& ast)
+{
+  discriminator visitor;
+  ast.accept(visitor);
+  return visitor.meta;
+}
+
 partition::partition(path dir)
   : dir_{std::move(dir)},
     last_modified_{now()}
 {
 }
 
-void partition::act()
+path partition::meta_dir() const
+{
+  return dir_ / "meta";
+}
+
+path partition::arg_dir() const
+{
+  return dir_ / "event";
+}
+
+time_point partition::last_modified() const
+{
+  return last_modified_;
+}
+
+bitstream const& partition::coverage() const
+{
+  return coverage_;
+}
+
+void partition::load()
+{
+  if (! exists(dir_))
+    mkdir(dir_);
+  if (exists(dir_ / "last_modified"))
+    io::unarchive(dir_ / "last_modified", last_modified_);
+  if (exists(dir_ / "coverage"))
+    io::unarchive(dir_ / "coverage", coverage_);
+}
+
+void partition::save()
+{
+  assert(exists(dir_));
+  io::archive(dir_ / "last_modified", last_modified_);
+  io::archive(dir_ / "coverage", coverage_);
+}
+
+void partition::update(event_id base, size_t n)
+{
+  // FIXME: use a compressed bitstream.
+  null_bitstream bs;
+  assert(base > 0);
+  bs.append(base - 1, false);
+  bs.append(n, true);
+  if (! coverage_)
+    coverage_ = std::move(bs);
+  else
+    coverage_ |= bs;
+  last_modified_ = now();
+}
+
+partition_actor::partition_actor(path dir)
+  : partition_{std::move(dir)}
+{
+}
+
+void partition_actor::act()
 {
   trap_exit(true);
   become(
       on(atom("EXIT"), arg_match) >> [=](uint32_t reason)
       {
-        io::archive(dir_ / "last_modified", last_modified_);
-        io::archive(dir_ / "coverage", coverage_);
-        actor<partition>::on_exit();
+        partition_.save();
         quit(reason);
       },
       on(atom("timestamp")) >> [=]
       {
-        reply(last_modified_);
+        reply(partition_.last_modified());
       },
       on_arg_match >> [=](expr::ast const& ast, actor_ptr const& sink)
       {
-        discriminator visitor;
-        ast.accept(visitor);
-        auto t = make_any_tuple(ast, coverage_, sink);
-        if (visitor.meta)
+        auto t = make_any_tuple(ast, partition_.coverage(), sink);
+        if (partition::is_meta_query(ast))
           event_meta_index_ << t;
-        else // TODO: restrict to relevant indexes.
+        else
           for (auto& p : event_arg_indexes_)
-            p.second << t;
+            p.second << t; // TODO: restrict to relevant indexes.
       },
       on_arg_match >> [=](segment const& s)
       {
+        VAST_LOG_ACTOR_DEBUG("processes events from segment " << s.id());
         segment::reader r{&s};
         event e;
         while (r.read(e))
@@ -77,36 +137,16 @@ void partition::act()
           event_meta_index_ << ce;
           auto& a = event_arg_indexes_[ce->name()];
           if (! a)
-            a = spawn<event_arg_index, linked>(dir_ / "event" / ce->name());
+            a = spawn<event_arg_index, linked>(
+                partition_.arg_dir() / ce->name());
           a << ce;
         }
-
-        last_modified_ = now();
-
-        // FIXME: use compressed bitstream.
-        null_bitstream bs;
-        assert(s.base() > 0);
-        bs.append(s.base() - 1, false);
-        bs.append(s.events(), true);
-        if (! coverage_)
-          coverage_ = std::move(bs);
-        else
-          coverage_ |= bs;
+        partition_.update(s.base(), s.events());
       });
 
-  if (! exists(dir_))
-  {
-    VAST_LOG_ACTOR_DEBUG("creates new directory " << dir_);
-    mkdir(dir_);
-  }
-
-  if (exists(dir_ / "last_modified"))
-    io::unarchive(dir_ / "last_modified", last_modified_);
-  if (exists(dir_ / "coverage"))
-    io::unarchive(dir_ / "coverage", last_modified_);
-
-  event_meta_index_ = spawn<event_meta_index, linked>(dir_ / "meta");
-  traverse(dir_ / "event",
+  partition_.load();
+  event_meta_index_ = spawn<event_meta_index, linked>(partition_.meta_dir());
+  traverse(partition_.arg_dir(),
            [&](path const& p) -> bool
            {
              VAST_LOG_ACTOR_DEBUG("found existing event index: " << p);
@@ -114,10 +154,9 @@ void partition::act()
                  p.basename().str(), spawn<event_arg_index, linked>(p));
              return true;
            });
-
 }
 
-char const* partition::description() const
+char const* partition_actor::description() const
 {
   return "partition";
 }

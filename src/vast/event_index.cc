@@ -191,7 +191,7 @@ void event_arg_index::load()
       quit(exit::error);
       return;
     }
-    VAST_LOG_ACTOR_DEBUG("loaded index " << p.trim(-3) << " with " <<
+    VAST_LOG_ACTOR_DEBUG("loaded index " << p.trim(-4) << " with " <<
                          bmi->size() - 1<< " events");
     args_.emplace(o, bmi);
     types_[vt].push_back(bmi);
@@ -217,7 +217,7 @@ void event_arg_index::store()
     path const filename = dir_ / (prefix + to<string>(p.first) + suffix);
     assert(inverse.count(p.second));
     io::archive(filename, inverse[p.second], p.second);
-    VAST_LOG_ACTOR_DEBUG("stored index " << filename.trim(-3) <<
+    VAST_LOG_ACTOR_DEBUG("stored index " << filename.trim(-4) <<
                          " with " << p.second->size() - 1 << " events");
   }
 }

@@ -96,7 +96,7 @@ void program::act()
     auto tracker_port = config_.as<unsigned>("tracker.port");
     if (config_.check("tracker-actor") || config_.check("all-server"))
     {
-      tracker_ = spawn<id_tracker, linked>(to_string(vast_dir / "id"));
+      tracker_ = spawn<id_tracker_actor, linked>(vast_dir);
       VAST_LOG_ACTOR_VERBOSE("publishes tracker at " <<
                            tracker_host << ':' << tracker_port);
       publish(tracker_, tracker_port, tracker_host.c_str());

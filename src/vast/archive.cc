@@ -17,45 +17,45 @@ archive::archive(std::string directory)
 {
 }
 
-void archive::init()
+path const& archive::dir() const
 {
-  if (! exists(directory_))
-  {
-    VAST_LOG_INFO("creating new directory " << directory_);
-    if (! mkdir(directory_))
-    {
-      VAST_LOG_ERROR("failed to create directory " << directory_);
-      return;
-    }
-  }
-  else
-  {
-    traverse(
-        directory_,
-        [&](path const& p) -> bool
+  return directory_;
+}
+
+void archive::load()
+{
+  assert(exists(directory_));
+  traverse(
+      directory_,
+      [&](path const& p) -> bool
+      {
+        file f{p};
+        // FIXME: factor the segment header and load it as a single unit.
+        uint32_t m;
+        uint8_t v;
+        uuid id;
+        io::compression c;
+        event_id base;
+        uint32_t n;
+        f.open(file::read_only);
+        io::file_input_stream source(f);
+        binary_deserializer d{source};
+        d >> m >> v >> id >> c >> base >> n;
+        VAST_LOG_DEBUG("found segment " << p.basename() <<
+                       " for ID range [" << base << ", " << base + n << ")");
+        if (m != segment::magic)
         {
-          file f{p};
-          // FIXME: factoring the segment header and load it as a single unit.
-          uint32_t m;
-          uint8_t v;
-          uuid id;
-          io::compression c;
-          event_id base;
-          uint32_t n;
-          f.open(file::read_only);
-          io::file_input_stream source(f);
-          binary_deserializer d{source};
-          d >> m >> v >> id >> c >> base >> n;
-          VAST_LOG_DEBUG(
-              "got meta data for segment " << p.basename() <<
-              ": ID range [" << base << ", " << base + n << ")");
-          if (m == segment::magic)
-            ranges_.insert(base, base + n, std::move(id));
-          else
-            VAST_LOG_ERROR("got invalid segment magic for " << id);
-          return true;
-        });
-  }
+          VAST_LOG_ERROR("got invalid segment magic for " << id);
+          return false;
+        }
+        else if (! ranges_.insert(base, base + n, std::move(id)))
+        {
+          VAST_LOG_ERROR("inconsistency in ID space for [" << base
+                         << ", " << base + n << ")");
+          return false;
+        }
+        return true;
+      });
 }
 
 void archive::store(segment const& s)
@@ -80,7 +80,13 @@ archive_actor::archive_actor(std::string const& directory, size_t max_segments)
 
 void archive_actor::act()
 {
-  archive_.init();
+  if (! exists(archive_.dir()) && ! mkdir(archive_.dir()))
+  {
+    VAST_LOG_ACTOR_ERROR("failed to create directory " << archive_.dir());
+    quit(exit::error);
+    return;
+  }
+  archive_.load();
   become(
       on_arg_match >> [=](uuid const&)
       {
@@ -95,7 +101,7 @@ void archive_actor::act()
         }
         else
         {
-          VAST_LOG_ACTOR_VERBOSE("no segment found for event " << eid);
+          VAST_LOG_ACTOR_WARN("no segment found for event " << eid);
           reply(eid);
         }
       },
@@ -105,7 +111,6 @@ void archive_actor::act()
         forward_to(segment_manager_);
         reply(atom("segment"), atom("ack"), s.id());
       });
-
 }
 
 char const* archive_actor::description() const

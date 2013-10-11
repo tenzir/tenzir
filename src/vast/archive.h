@@ -20,10 +20,13 @@ public:
   /// @param directory The root directory of the archive.
   archive(std::string directory);
 
+  /// Retrieves the directory of the archive.
+  path const& dir() const;
+
   /// Initializes the archive. This involves parsing the meta data of existing
   /// segments from disk an reconstructing the internal data structures to map
   /// event IDs to segments.
-  void init();
+  void load();
 
   /// Stores segment meta data.
   /// @param s The segment to record meta data from.
