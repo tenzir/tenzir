@@ -73,12 +73,12 @@ void partition::act()
         event e;
         while (r.read(e))
         {
-          auto t = make_any_tuple(std::move(e));
-          event_meta_index_ << t;
-          auto& a = event_arg_indexes_[e.name()];
+          cow<event> ce{std::move(e)};
+          event_meta_index_ << ce;
+          auto& a = event_arg_indexes_[ce->name()];
           if (! a)
-            a = spawn<event_arg_index, linked>(dir_ / "event"/ e.name());
-          a << t;
+            a = spawn<event_arg_index, linked>(dir_ / "event" / ce->name());
+          a << ce;
         }
 
         last_modified_ = now();
@@ -109,6 +109,7 @@ void partition::act()
   traverse(dir_ / "event",
            [&](path const& p) -> bool
            {
+             VAST_LOG_ACTOR_DEBUG("found existing event index: " << p);
              event_arg_indexes_.emplace(
                  p.basename().str(), spawn<event_arg_index, linked>(p));
              return true;

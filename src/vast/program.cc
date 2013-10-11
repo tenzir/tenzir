@@ -112,7 +112,7 @@ void program::act()
     auto archive_port = config_.as<unsigned>("archive.port");
     if (config_.check("archive-actor") || config_.check("all-server"))
     {
-      archive_ = spawn<archive, linked>(
+      archive_ = spawn<archive_actor, linked>(
           to_string(vast_dir / "archive"),
           config_.as<size_t>("archive.max-segments"));
       VAST_LOG_ACTOR_VERBOSE("publishes archive at " <<

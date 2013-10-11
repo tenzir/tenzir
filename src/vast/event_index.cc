@@ -59,6 +59,9 @@ struct event_meta_index::querier : expr::default_const_visitor
 event_meta_index::event_meta_index(path dir)
   : event_index<event_meta_index>{std::move(dir)}
 {
+  // ID 0 is not a valid event.
+  timestamp_.append(1, false);
+  name_.append(1, false);
 }
 
 char const* event_meta_index::description() const
@@ -70,16 +73,18 @@ void event_meta_index::load()
 {
   io::unarchive(dir_ / "timestamp.idx", timestamp_);
   io::unarchive(dir_ / "name.idx", name_);
-  VAST_LOG_ACTOR_DEBUG("loaded timestamp/name index with " <<
-                     timestamp_.size() << '/' << name_.size() << " events");
+  VAST_LOG_ACTOR_DEBUG(
+      "loaded timestamp/name index with " <<
+      timestamp_.size() - 1 << '/' << name_.size() - 1 << " events");
 }
 
 void event_meta_index::store()
 {
   io::archive(dir_ / "timestamp.idx", timestamp_);
   io::archive(dir_ / "name.idx", name_);
-  VAST_LOG_ACTOR_DEBUG("stored timestamp/name index with " <<
-                       timestamp_.size() << '/' << name_.size() << " events");
+  VAST_LOG_ACTOR_DEBUG(
+      "stored timestamp/name index with " <<
+      timestamp_.size() - 1 << '/' << name_.size() - 1 << " events");
 }
 
 bool event_meta_index::index(event const& e)
@@ -186,8 +191,8 @@ void event_arg_index::load()
       quit(exit::error);
       return;
     }
-    VAST_LOG_ACTOR_DEBUG("read: " << p.trim(-3) << " with " <<
-                         bmi->size() << " events");
+    VAST_LOG_ACTOR_DEBUG("loaded index " << p.trim(-3) << " with " <<
+                         bmi->size() - 1<< " events");
     args_.emplace(o, bmi);
     types_[vt].push_back(bmi);
   }
@@ -212,8 +217,8 @@ void event_arg_index::store()
     path const filename = dir_ / (prefix + to<string>(p.first) + suffix);
     assert(inverse.count(p.second));
     io::archive(filename, inverse[p.second], p.second);
-    VAST_LOG_ACTOR_DEBUG("wrote index " << filename.trim(-3) <<
-                         " with " << p.second->size() << " events");
+    VAST_LOG_ACTOR_DEBUG("stored index " << filename.trim(-3) <<
+                         " with " << p.second->size() - 1 << " events");
   }
 }
 
@@ -262,6 +267,7 @@ bool event_arg_index::index_record(record const& r, uint64_t id, offset& o)
         auto unique = bitmap_index::create(v.which());
         auto bmi = std::shared_ptr<bitmap_index>{unique.release()};
         idx = bmi.get();
+        idx->append(1, false); // ID 0 is not a valid event.
         args_.emplace(o, bmi);
         types_[v.which()].push_back(bmi);
       }

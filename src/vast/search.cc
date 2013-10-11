@@ -131,19 +131,18 @@ void search::act()
       },
       on(atom("query"), atom("create"), arg_match) >> [=](std::string const& q)
       {
-        auto client = last_sender();
         expr::ast ast{q};
         if (! ast)
         {
           reply(actor_ptr{});
           return;
         }
-        auto qry = spawn<query_actor>(archive_, self, ast);
+        auto qry = spawn<query_actor>(archive_, last_sender(), ast);
         queries_.emplace(ast, qry);
         dissector d{state_};
         ast.accept(d);
         auto found = false;
-        auto er = clients_.equal_range(client);
+        auto er = clients_.equal_range(last_sender());
         for (auto i = er.first; i != er.second; ++i)
           if (i->second == ast)
           {
@@ -151,8 +150,8 @@ void search::act()
             break;
           }
         if (! found)
-          clients_.emplace(client, ast);
-        monitor(client);
+          clients_.emplace(last_sender(), ast);
+        monitor(last_sender());
         send(index_, ast);
         reply(qry);
       },

@@ -11,6 +11,8 @@ namespace vast {
 query::query(expr::ast ast)
   : ast_{std::move(ast)}
 {
+  // FIXME: Use something better than a null bitstream.
+  processed_ = null_bitstream{};
 }
 
 void query::update(bitstream result)
@@ -85,7 +87,7 @@ void query_actor::act()
       {
         if (eid == current_)
         {
-          VAST_LOG_ACTOR_ERROR("could not obtain segment for event ID" << eid);
+          VAST_LOG_ACTOR_ERROR("could not obtain segment for event ID " << eid);
           quit(exit::error);
         }
       },
