@@ -69,8 +69,8 @@ bool command_line::process(bool& callback_result)
   current->el.reset();  // Fixes TTY weirdness when switching between modes.
   if (! current->el.get(cmd))
     return false;
-  auto first_space = cmd.find(' ');
-  auto key = cmd.substr(0, first_space);
+  auto space = cmd.find(' ');
+  auto key = cmd.substr(0, space);
   if (! current->callbacks.count(key))
   {
     if (! current->unknown_command)
@@ -78,7 +78,7 @@ bool command_line::process(bool& callback_result)
     callback_result = current->unknown_command(std::move(cmd));
     return true;
   }
-  auto args = first_space == std::string::npos ? cmd : cmd.substr(first_space);
+  auto args = space == std::string::npos ? cmd : cmd.substr(++space);
   callback_result = current->callbacks[key](std::move(args));
   current->hist.enter(cmd);
   return true;
