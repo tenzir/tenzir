@@ -37,4 +37,8 @@ BOOST_AUTO_TEST_CASE(range_map_tests)
   BOOST_CHECK(! rm.insert(10, 300, "baz"));
   BOOST_CHECK(! rm.insert(90, 300, "baz"));
   BOOST_CHECK(rm.insert(200, 300, "baz"));
+
+  range_map<size_t, char> rm2;
+  BOOST_CHECK(rm2.insert(50, 99, 'a'));
+  BOOST_CHECK(rm2.insert(1, 50, 'b'));
 }

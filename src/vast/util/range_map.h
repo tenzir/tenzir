@@ -23,7 +23,7 @@ public:
     auto lb = map_.lower_bound(l);
     if (find(l, lb))
       return false;
-    if (lb == map_.end() || (++lb != map_.end() && lb->first >= r))
+    if (lb == map_.end() || lb->first >= r)
       return map_.emplace(
           std::move(l), std::make_pair(std::move(r), std::move(v))).second;
     return false;
