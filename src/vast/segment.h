@@ -171,7 +171,6 @@ private:
   uint32_t n_ = 0;
   uint32_t max_bytes_ = 0;
   uint32_t occupied_bytes_ = 0;
-  std::vector<uint32_t> offsets_;
   std::vector<cow<chunk>> chunks_;
 
 private:
