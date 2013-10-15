@@ -97,6 +97,25 @@ match(std::map<std::string, std::string> const& m, std::string const& pfx)
   return matches;
 }
 
+// Scope-wise setting of terminal editing mode via EL_PREP_TERM.
+struct edit_mode
+{
+  edit_mode(EditLine* el)
+    : el(el)
+  {
+    el_set(el, EL_PREP_TERM, 1);
+  }
+
+  ~edit_mode()
+  {
+    assert(el);
+    el_set(el, EL_PREP_TERM, 0);
+  }
+
+  EditLine* el;
+};
+
+
 } // namespace <anonymous>
 
 struct editline::impl
@@ -108,7 +127,7 @@ struct editline::impl
     return const_cast<char*>(instance->prompt_.str.c_str());
   }
 
-  static unsigned char handle_completion(EditLine* el, int)
+  static unsigned char handle_complete(EditLine* el, int)
   {
     impl* instance;
     el_get(el, EL_CLIENTDATA, &instance);
@@ -134,8 +153,6 @@ struct editline::impl
       completion_key_{comp_key}
   {
     assert(el_ != nullptr);
-    el_set(el_, EL_PREP_TERM, 1);
-    //el_set(el_, EL_UNBUFFERED, 1);
 
     // Sane defaults.
     el_set(el_, EL_EDITOR, "vi");
@@ -144,14 +161,14 @@ struct editline::impl
     el_set(el_, EL_CLIENTDATA, this);
 
     // Setup completion.
-    el_set(el_, EL_ADDFN, "vast-complete", "VAST complete", &handle_completion);
+    el_set(el_, EL_ADDFN, "vast-complete", "VAST complete", &handle_complete);
     el_set(el_, EL_BIND, completion_key_, "vast-complete", NULL);
 
     // FIXME: this is a fix for folks that have "bind -v" in their .editrc.
     // Most of these also have "bind ^I rl_complete" in there to re-enable tab
     // completion, which "bind -v" somehow disabled. A better solution to
     // handle this problem would be desirable.
-    el_set(el_, EL_ADDFN, "rl_complete", "default complete", &handle_completion);
+    el_set(el_, EL_ADDFN, "rl_complete", "default complete", &handle_complete);
 
     // Setup prompt configuration.
     el_set(el_, EL_PROMPT, &prompt_function);
@@ -159,7 +176,6 @@ struct editline::impl
 
   ~impl()
   {
-    el_set(el_, EL_PREP_TERM, 0);
     el_end(el_);
   }
 
@@ -193,6 +209,7 @@ struct editline::impl
 
   bool get(std::string& line)
   {
+    edit_mode em{el_};
     int n;
     auto str = el_gets(el_, &n);
     if (n == -1)
