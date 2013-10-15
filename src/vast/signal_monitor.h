@@ -14,9 +14,6 @@ public:
   /// @param receiver the actor receiving the signals.
   signal_monitor(cppa::actor_ptr receiver);
 
-  /// Overrides `cppa::event_based_actor::on_exit`.
-  void on_exit() final;
-
   void act();
   char const* description() const;
 

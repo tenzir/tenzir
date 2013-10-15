@@ -33,11 +33,6 @@ signal_monitor::signal_monitor(actor_ptr receiver)
 {
 }
 
-void signal_monitor::on_exit()
-{
-  actor<signal_monitor>::on_exit();
-}
-
 void signal_monitor::act()
 {
   VAST_LOG_ACTOR_DEBUG("sends signals to @" << receiver_->id());
