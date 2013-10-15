@@ -14,7 +14,7 @@ struct editline::history::impl
 {
   impl(int size, bool unique)
   {
-    hist = history_init();
+    hist = ::history_init();
     assert(hist != nullptr);
     ::history(hist, &hist_event, H_SETSIZE, size);
     ::history(hist, &hist_event, H_SETUNIQUE, unique ? 1 : 0);
@@ -22,7 +22,7 @@ struct editline::history::impl
 
   ~impl()
   {
-    history_end(hist);
+    ::history_end(hist);
   }
 
   void add(std::string const& str)
