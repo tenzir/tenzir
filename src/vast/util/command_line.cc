@@ -84,6 +84,11 @@ bool command_line::process(bool& callback_result)
   return true;
 }
 
+bool command_line::get(char& c)
+{
+  return mode_stack_.empty() ? false : mode_stack_.back()->el.get(c);
+}
+
 command_line::mode::mode(std::string name, std::string desc, std::string prompt)
   : name{std::move(name)},
     description{std::move(desc)}
