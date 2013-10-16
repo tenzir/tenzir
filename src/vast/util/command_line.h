@@ -27,29 +27,40 @@ public:
   /// @param prompt The prompt of the mode.
   ///
   /// @returns `true` on success.
-  bool add_mode(std::string name, std::string desc, std::string prompt);
+  bool mode_add(std::string name, std::string desc, std::string prompt);
+
+  /// Removes an existing mode.
+  /// @param name The name of the mode.
+  /// @returns `true` on success.
+  bool mode_rm(std::string const& name);
+
+  /// Enters a given mode.
+  /// @param mode The name of mode.
+  /// @returns `true` on success.
+  bool mode_push(std::string const& mode);
+
+  /// Leaves the current mode.
+  /// @returns `true` on success.
+  bool mode_pop();
 
   /// Adds a command to an existing mode.
   /// @param mode The name of the mode.
   /// @param cmd The name of the command to add.
   /// @param f The callback to invoke on the arguments of *cmd*.
   /// @returns `true` on success.
-  bool add_command(std::string const& mode, std::string cmd, callback f);
+  bool cmd_add(std::string const& mode, std::string cmd, callback f);
+
+  /// Removes a command from an existing mode.
+  /// @param mode The name of the mode.
+  /// @param cmd The name of the command to remove.
+  /// @returns `true` on success.
+  bool cmd_rm(std::string const& mode, std::string const& cmd);
 
   /// Adds a callback for unknown (i.e., not added) commands.
   /// @param mode The name of the mode.
   /// @param f The callback to invoke on the arguments of *cmd*.
   /// @returns `true` on success.
   bool on_unknown_command(std::string const& mode, callback f);
-
-  /// Enters a given mode.
-  /// @param mode The name of mode.
-  /// @returns `true` on success.
-  bool push_mode(std::string const& mode);
-
-  /// Leaves the current mode.
-  /// @returns `true` on success.
-  bool pop_mode();
 
   /// Appends an entry to the history of the current mode.
   /// @param entry The history entry to add.

@@ -3,7 +3,7 @@
 namespace vast {
 namespace util {
 
-bool command_line::add_mode(std::string name, std::string desc,
+bool command_line::mode_add(std::string name, std::string desc,
                             std::string prompt)
 {
   if (modes_.count(name))
@@ -14,8 +14,31 @@ bool command_line::add_mode(std::string name, std::string desc,
   return true;
 }
 
-bool command_line::add_command(std::string const& mode, std::string cmd,
-                               callback f)
+bool command_line::mode_rm(std::string const& name)
+{
+  if (! modes_.count(name))
+    return false;
+  modes_.erase(name);
+  return true;
+}
+
+bool command_line::mode_push(std::string const& mode)
+{
+  if (! modes_.count(mode))
+    return false;
+  mode_stack_.push_back(modes_[mode]);
+  return true;
+}
+
+bool command_line::mode_pop()
+{
+  if (mode_stack_.empty())
+    return false;
+  mode_stack_.pop_back();
+  return true;
+}
+
+bool command_line::cmd_add(std::string const& mode, std::string cmd, callback f)
 {
   if (! modes_.count(mode))
     return false;
@@ -27,28 +50,23 @@ bool command_line::add_command(std::string const& mode, std::string cmd,
   return true;
 }
 
+bool command_line::cmd_rm(std::string const& mode, std::string const& cmd)
+{
+  if (! modes_.count(mode))
+    return false;
+  auto& m = *modes_[mode];
+  if (! m.callbacks.count(cmd))
+    return false;
+  m.callbacks.erase(cmd);
+  return true;
+}
+
 bool command_line::on_unknown_command(std::string const& mode, callback f)
 {
   if (! modes_.count(mode))
     return false;
   auto& m = *modes_[mode];
   m.unknown_command = f;
-  return true;
-}
-
-bool command_line::push_mode(std::string const& mode)
-{
-  if (! modes_.count(mode))
-    return false;
-  mode_stack_.push_back(modes_[mode]);
-  return true;
-}
-
-bool command_line::pop_mode()
-{
-  if (mode_stack_.empty())
-    return false;
-  mode_stack_.pop_back();
   return true;
 }
 
