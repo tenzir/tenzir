@@ -3,8 +3,8 @@
 #include <sys/select.h>
 #include <stdio.h>
 #include <termios.h>
-#include <cassert>
-#include <stdexcept>
+#include <unistd.h>
+#include <cstdlib>
 #include "vast/util/poll.h"
 
 namespace vast {
@@ -14,36 +14,74 @@ namespace terminal {
 namespace {
 
 bool initialized = false;
-struct termios buffered;
-struct termios unbuffered;
+struct termios backup;
+struct termios current;
+
+void restore()
+{
+  if (initialized)
+    tcsetattr(::fileno(stdin), TCSANOW, &backup);
+}
+
+bool initialize()
+{
+  if (! ::isatty(::fileno(stdin)))
+    return false;
+  std::atexit(&restore);
+  if (initialized)
+    return false;
+  if (tcgetattr(0, &current) < 0 || tcgetattr(0, &backup) < 0)
+    return false;
+  initialized = true;
+  return true;
+}
 
 } // namespace <anonymous>
 
-static void initialize()
+unbufferer::unbufferer()
 {
-  if (tcgetattr(0, &buffered) < 0)
-    throw std::runtime_error{"tcgetattr"};
-  unbuffered = buffered;
-  unbuffered.c_lflag &= (~ICANON & ~ECHO);
-  unbuffered.c_cc[VMIN] = 1;
-  unbuffered.c_cc[VTIME] = 0;
-  initialized = true;
+  unbuffer();
 }
 
-void unbuffer()
+unbufferer::~unbufferer()
 {
-  if (! initialized)
-    initialize();
-  if (tcsetattr(::fileno(stdin), TCSANOW, &unbuffered) < 0)
-    throw std::runtime_error{"tcsetattr"};
+  buffer();
 }
 
-void buffer()
+bool unbuffer()
 {
-  if (! initialized)
-    return;
-  if (tcsetattr(::fileno(stdin), TCSANOW, &buffered) < 0)
-    throw std::runtime_error{"tcsetattr"};
+  if (! (initialized || initialize()))
+    return false;
+  current.c_lflag &= ~(ICANON | ECHO);
+  current.c_cc[VMIN] = 1;
+  current.c_cc[VTIME] = 0;
+  return true;
+}
+
+bool buffer()
+{
+  if (! (initialized || initialize()))
+    return false;
+  current.c_lflag |= ICANON | ECHO;
+  current.c_cc[VMIN] = backup.c_cc[VMIN];
+  current.c_cc[VTIME] = backup.c_cc[VTIME];
+  return tcsetattr(::fileno(stdin), TCSANOW, &current) < 0;
+}
+
+bool disable_echo()
+{
+  if (! (initialized || initialize()))
+    return false;
+  current.c_lflag &= ~ECHO;
+  return tcsetattr(::fileno(stdin), TCSANOW, &current) < 0;
+}
+
+bool enable_echo()
+{
+  if (! (initialized || initialize()))
+    return false;
+  current.c_lflag |= ECHO;
+  return tcsetattr(::fileno(stdin), TCSANOW, &current) < 0;
 }
 
 bool get(char& c, int timeout)
