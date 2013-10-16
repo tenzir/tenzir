@@ -3,11 +3,12 @@
 
 #include "vast/uuid.h"
 #include "vast/fwd.h"
+#include "vast/util/operators.h"
 
 namespace vast {
 
 /// An object with a unique ID.
-class individual
+class individual : util::totally_ordered<individual>
 {
 public:
   /// Constructs an object with a random ID.
@@ -23,11 +24,15 @@ public:
   void id(uuid id);
 
 private:
+  uuid id_;
+
+private:
   friend access;
   void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
 
-  uuid id_;
+  friend bool operator<(individual const& x, individual const& y);
+  friend bool operator==(individual const& x, individual const& y);
 };
 
 } // namespace vast

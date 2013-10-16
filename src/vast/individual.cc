@@ -28,4 +28,14 @@ void individual::deserialize(deserializer& source)
   source >> id_;
 }
 
+bool operator<(individual const& x, individual const& y)
+{
+  return x.id() < y.id();
+}
+
+bool operator==(individual const& x, individual const& y)
+{
+  return x.id() == y.id();
+}
+
 } // namespace vast
