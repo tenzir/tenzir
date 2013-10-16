@@ -94,7 +94,7 @@ void query_actor::act()
       on_arg_match >> [=](segment const&)
       {
         auto s = cow<segment>{*tuple_cast<segment>(last_dequeued())};
-        VAST_LOG_ACTOR_ERROR("processes segment " << s->id());
+        VAST_LOG_ACTOR_DEBUG("processes segment " << s->id());
         query_.apply(*s, [=](event e) { send(sink_, std::move(e)); });
       },
       others() >> [=]

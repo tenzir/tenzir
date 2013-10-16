@@ -8,9 +8,8 @@
 
 namespace vast {
 
-class search : public actor<search>
+struct search : actor<search>
 {
-public:
   struct state
   {
     bitstream result;
@@ -25,7 +24,6 @@ public:
   void act();
   char const* description() const;
   
-private:
   void shutdown_client(cppa::actor_ptr const& client);
 
   cppa::actor_ptr archive_;

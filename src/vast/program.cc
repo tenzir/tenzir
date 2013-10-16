@@ -215,7 +215,7 @@ void program::act()
                            search_host << ":" << search_port);
       search_ = remote_actor(search_host, search_port);
       console_ = spawn<console, detached+linked>(search_);
-      send(console_, atom("run"));
+      delayed_send(console_, std::chrono::milliseconds(200), atom("prompt"));
     }
 
     signal_monitor_ = spawn<signal_monitor, detached+linked>(self);

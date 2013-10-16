@@ -134,7 +134,7 @@ void search::act()
         expr::ast ast{q};
         if (! ast)
         {
-          reply(actor_ptr{});
+          reply(actor_ptr{}, ast);
           return;
         }
         auto qry = spawn<query_actor>(archive_, last_sender(), ast);
@@ -153,7 +153,7 @@ void search::act()
           clients_.emplace(last_sender(), ast);
         monitor(last_sender());
         send(index_, ast);
-        reply(qry);
+        reply(std::move(qry), std::move(ast));
       },
       on_arg_match >> [=](expr::ast const& ast,
                           bitstream const& result, bitstream const& coverage)
@@ -226,6 +226,7 @@ char const* search::description() const
 
 void search::shutdown_client(actor_ptr const& client)
 {
+  VAST_LOG_ACTOR_DEBUG("shutting down client @" << client->id());
   assert(clients_.count(client));
   auto cer = clients_.equal_range(client);
   for (auto i = cer.first; i != cer.second; ++i)
