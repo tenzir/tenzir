@@ -133,7 +133,7 @@ void search::act()
       on(atom("DOWN"), arg_match) >> [=](uint32_t)
       {
         VAST_LOG_ACTOR_DEBUG(
-            "received DOWN from client @" << p.second.second->id());
+            "received DOWN from client @" << last_sender()->id());
         std::set<actor_ptr> doomed;
         for (auto& p : actors_)
         {

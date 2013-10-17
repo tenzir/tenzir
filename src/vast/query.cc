@@ -28,13 +28,13 @@ void query::update(bitstream result)
 
 size_t query::apply(cow<segment> const& s, std::function<void(event)> f)
 {
-  assert(s.base() > 0);
-  if (current_ < s.base() || current_ > s.base() + s.events)
+  assert(s->base() > 0);
+  if (current_ < s->base() || current_ > s->base() + s->events())
   {
     VAST_LOG_DEBUG(
         "query got segment out of range: current: " << current_ <<
-        ", segment [" << s.base() << ", " << s.base() + s.events() << ')');
-    current_ = unprocessed_.find_next(s.base() - 1);
+        ", segment [" << s->base() << ", " << (s->base() + s->events()) << ')');
+    current_ = unprocessed_.find_next(s->base() - 1);
     VAST_LOG_DEBUG("query adjusted position to" << current_);
   }
   segment::reader r{&s.read()};
