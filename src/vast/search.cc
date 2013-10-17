@@ -120,14 +120,31 @@ void search::act()
   become(
       on(atom("EXIT"), arg_match) >> [=](uint32_t reason)
       {
-        auto& mm = clients_;
-        for (auto i = mm.begin(); i != mm.end(); i = mm.upper_bound(i->first))
-          shutdown_client(i->first);
+        std::set<actor_ptr> doomed;
+        for (auto& p : actors_)
+        {
+          doomed.insert(p.second.first);
+          doomed.insert(p.second.second);
+        }
+        for (auto& d : doomed)
+          send_exit(d, exit::stop);
         quit(reason);
       },
       on(atom("DOWN"), arg_match) >> [=](uint32_t)
       {
-        shutdown_client(last_sender());
+        VAST_LOG_ACTOR_DEBUG(
+            "received DOWN from client @" << p.second.second->id());
+        std::set<actor_ptr> doomed;
+        for (auto& p : actors_)
+        {
+          if (p.second.second == last_sender())
+          {
+            doomed.insert(p.second.first);
+            doomed.insert(p.second.second);
+          }
+        }
+        for (auto& d : doomed)
+          send_exit(d, exit::stop);
       },
       on(atom("query"), atom("create"), arg_match) >> [=](std::string const& q)
       {
@@ -137,21 +154,12 @@ void search::act()
           reply(actor_ptr{}, ast);
           return;
         }
+        monitor(last_sender());
         auto qry = spawn<query_actor>(archive_, last_sender(), ast);
-        queries_.emplace(ast, qry);
+        actors_.emplace(ast, std::make_pair(qry, last_sender()));
         dissector d{state_};
         ast.accept(d);
-        auto found = false;
-        auto er = clients_.equal_range(last_sender());
-        for (auto i = er.first; i != er.second; ++i)
-          if (i->second == ast)
-          {
-            found = true;
-            break;
-          }
-        if (! found)
-          clients_.emplace(last_sender(), ast);
-        monitor(last_sender());
+        // TODO: reuse results from existing queries before asking index.
         send(index_, ast);
         reply(std::move(qry), std::move(ast));
       },
@@ -201,13 +209,13 @@ void search::act()
             parent_state.result = std::move(cu.result);
           }
           // Update all related queries with the latest result.
-          auto er = queries_.equal_range(parent);
-          for (auto i = er.first; i != queries_.end(); ++i)
+          auto er = actors_.equal_range(parent);
+          for (auto i = er.first; i != er.second; ++i)
           {
             VAST_LOG_ACTOR_DEBUG(
                 "propagates new result for " << i->first <<
-                " to query @" << i->second->id());
-            send(i->second, s.result);
+                " to query @" << i->second.first->id());
+            send(i->second.first, s.result);
           }
         }
       },
@@ -224,20 +232,5 @@ char const* search::description() const
   return "search";
 }
 
-void search::shutdown_client(actor_ptr const& client)
-{
-  VAST_LOG_ACTOR_DEBUG("shutting down client @" << client->id());
-  assert(clients_.count(client));
-  auto cer = clients_.equal_range(client);
-  for (auto i = cer.first; i != cer.second; ++i)
-  {
-    assert(queries_.count(i->second));
-    auto qer = queries_.equal_range(i->second);
-    for (auto j = qer.first; j != qer.second; ++j)
-      send_exit(j->second, exit::stop);
-    queries_.erase(i->second);
-  }
-  clients_.erase(client);
-}
 
 } // namespace vast

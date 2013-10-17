@@ -24,14 +24,13 @@ struct search : actor<search>
   void act();
   char const* description() const;
   
-  void shutdown_client(cppa::actor_ptr const& client);
-
   cppa::actor_ptr archive_;
   cppa::actor_ptr index_;
   cppa::actor_ptr schema_manager_;
-  std::multimap<cppa::actor_ptr, expr::ast> clients_;
-  std::multimap<expr::ast, cppa::actor_ptr> queries_;
+  // Keeps track of all partial ASTs.
   std::map<expr::ast, state> state_;
+  // Maps all query ASTs to <query, client> actors.
+  std::multimap<expr::ast, std::pair<cppa::actor_ptr, cppa::actor_ptr>> actors_;
 };
 
 } // namespace vast
