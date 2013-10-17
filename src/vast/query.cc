@@ -17,31 +17,33 @@ query::query(expr::ast ast)
 
 void query::update(bitstream result)
 {
-  if (result_)
-    result -= result_;
-  result_ = std::move(result);
-  current_ = result_.find_first();
-  VAST_LOG_DEBUG("query sets current event ID to " << current_);
-}
-
-event_id query::advance(size_t n)
-{
-  if (bitstream::npos - n < current_)
-    current_ = bitstream::npos;
+  assert(result);
+  if (hits_)
+    hits_ |= result;
   else
-    current_ += n;
-  return current_;
+    hits_ = std::move(result);
+  unprocessed_ = hits_ - processed_;
+  current_ = unprocessed_.find_first();
 }
 
 size_t query::apply(cow<segment> const& s, std::function<void(event)> f)
 {
+  assert(s.base() > 0);
+  if (current_ < s.base() || current_ > s.base() + s.events)
+  {
+    VAST_LOG_DEBUG(
+        "query got segment out of range: current: " << current_ <<
+        ", segment [" << s.base() << ", " << s.base() + s.events() << ')');
+    current_ = unprocessed_.find_next(s.base() - 1);
+    VAST_LOG_DEBUG("query adjusted position to" << current_);
+  }
   segment::reader r{&s.read()};
   event e;
   size_t n = 0;
   while (r.skip_to(current_) && r.read(e))
   {
-    if (result_ && current_ != bitstream::npos)
-      current_ = result_.find_next(current_);
+    if (current_ != bitstream::npos)
+      current_ = unprocessed_.find_next(current_);
     processed_.append(e.id() - processed_.size(), false);
     processed_.append(1, true);
     auto v = evaluate(ast_, e);
@@ -54,6 +56,8 @@ size_t query::apply(cow<segment> const& s, std::function<void(event)> f)
     f(std::move(e));
     ++n;
   }
+  if (n == 0)
+    VAST_LOG_WARN("query got segment but did not apply function once");
   return n;
 }
 
@@ -76,16 +80,18 @@ void query_actor::act()
   become(
       on_arg_match >> [=](bitstream const& bs)
       {
-        VAST_LOG_ACTOR_DEBUG("got new result");
         assert(bs);
         auto cbs = cow<bitstream>{*tuple_cast<bitstream>(last_dequeued())};
+        VAST_LOG_ACTOR_DEBUG("got new result of size " << cbs->size());
         query_.update(*cbs);
-        current_ = query_.current();
-        send(archive_, current_);
+        if (query_.current() != bitstream::npos)
+          send(archive_, query_.current());
+        else
+          VAST_LOG_ACTOR_DEBUG("has no more events to extract");
       },
       on_arg_match >> [=](event_id eid)
       {
-        if (eid == current_)
+        if (eid == query_.current())
         {
           VAST_LOG_ACTOR_ERROR("could not obtain segment for event ID " << eid);
           quit(exit::error);

@@ -25,11 +25,6 @@ public:
   /// @returns The first event ID of the computed delta result.
   void update(bitstream result);
 
-  /// Advances the current position in the ID space by a given value.
-  /// @param n The number of events to fast-forward.
-  /// @returns The next
-  event_id advance(size_t n);
-
   /// Applies a function over each extracted event from a given segment.
   /// @param s The segment to extract events from.
   /// @param f The function to apply to each event.
@@ -41,8 +36,9 @@ public:
   event_id current() const;
 
 private:
-  bitstream result_;
+  bitstream hits_;
   bitstream processed_;
+  bitstream unprocessed_;
   event_id current_ = 0;
   expr::ast ast_;
 };
