@@ -102,7 +102,7 @@ console::console(cppa::actor_ptr search)
       "ask",
       [=](std::string)
       {
-        cmdline_.mode_push("query-ask");
+        cmdline_.mode_push("ask");
         return true;
       });
 
@@ -156,10 +156,10 @@ console::console(cppa::actor_ptr search)
         return true;
       });
 
-  cmdline_.mode_add("query-ask", "query asking mode", "-=> ");
+  cmdline_.mode_add("ask", "query asking mode", "-=> ");
 
   cmdline_.cmd_add(
-      "query-ask",
+      "ask",
       "exit",
       [=](std::string)
       {
@@ -168,7 +168,7 @@ console::console(cppa::actor_ptr search)
       });
 
   cmdline_.on_unknown_command(
-      "query-ask",
+      "ask",
       [=](std::string q)
       {
         if (q.empty())
