@@ -19,7 +19,7 @@ console::console(cppa::actor_ptr search)
       "main",
       [=](std::string arg)
       {
-        std::cout
+        std::cerr
           << "[error] invalid command: " << arg << ", try 'help'" << std::endl;
         return true;
       });
@@ -45,7 +45,7 @@ console::console(cppa::actor_ptr search)
           "query <id>  enter control mode of given query\n"
           "set <..>    settings\n"
           "exit        exit the console";
-        std::cout << help << std::endl;
+        std::cerr << help << std::endl;
         return true;
       });
 
@@ -63,7 +63,7 @@ console::console(cppa::actor_ptr search)
               if (extract(begin, str.end(), n))
                 opts_.paginate = n;
               else
-                std::cout
+                std::cerr
                   << "[error] paginate requires numeric argument" << std::endl;
             },
             on("auto-follow", "T") >> [=](std::string const&)
@@ -76,7 +76,7 @@ console::console(cppa::actor_ptr search)
             },
             on("show") >> [=]
             {
-              std::cout
+              std::cerr
                 << "paginate = " << opts_.paginate << '\n'
                 << "auto-follow = " << (opts_.auto_follow ? "T" : "F")
                 << std::endl;
@@ -87,11 +87,11 @@ console::console(cppa::actor_ptr search)
                 "paginate <n>       number of results to display\n"
                 "auto-follow <T|F>  follow query after creation\n"
                 "show               shows current settings";
-              std::cout << help << std::endl;
+              std::cerr << help << std::endl;
             },
             others() >> [=]
             {
-              std::cout
+              std::cerr
                 << "[error] invalid argument, check 'set help'" << std::endl;
             });
         return true;
@@ -141,7 +141,7 @@ console::console(cppa::actor_ptr search)
       {
         if (arg.empty())
         {
-          std::cout
+          std::cerr
             << "[error] argument required, check 'query help'"
             << std::endl;
           return true;
@@ -180,13 +180,13 @@ console::console(cppa::actor_ptr search)
               cmdline_.append_to_history(q);
               if (! qry)
               {
-                std::cout << "[error] invalid query: " << q << std::endl;
+                std::cerr << "[error] invalid query: " << q << std::endl;
                 return;
               }
               monitor(qry);
               current_result_ = &results_.emplace(qry, ast).first->second;
               cmdline_.mode_pop();
-              std::cout
+              std::cerr
                 << "new query " << current_result_->id()
                 << " -> " << ast << std::endl;
               if (opts_.auto_follow)
@@ -332,7 +332,7 @@ void console::act()
                 desc = "space";
               else
                 desc.push_back(key);
-              std::cout << "invalid key: '" << desc << "'" << std::endl;
+              std::cerr << "invalid key: '" << desc << "'" << std::endl;
             }
             break;
           case '':
@@ -350,7 +350,7 @@ void console::act()
           case 'p':
             {
               auto n = current_result_->seek_backward(opts_.paginate);
-              std::cout
+              std::cerr
                 << "[query " << current_result_->id() << "] seeked -"
                 << n << " events" << std::endl;
             }
@@ -358,7 +358,7 @@ void console::act()
           case 'n':
             {
               auto n = current_result_->seek_forward(opts_.paginate);
-              std::cout
+              std::cerr
                 << "[query " << current_result_->id() << "] seeked +"
                 << n << " events" << std::endl;
             }
@@ -404,9 +404,9 @@ console::result* console::to_result(std::string const& str)
       matches.push_back(&p.second);
   }
   if (matches.empty())
-    std::cout << "[error] no such query: " << str << std::endl;
+    std::cerr << "[error] no such query: " << str << std::endl;
   else if (matches.size() > 1)
-    std::cout << "[error] ambiguous query: " << str << std::endl;
+    std::cerr << "[error] ambiguous query: " << str << std::endl;
   else
     return matches[0];
   return nullptr;
