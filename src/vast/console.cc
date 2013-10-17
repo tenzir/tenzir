@@ -39,13 +39,17 @@ console::console(cppa::actor_ptr search)
       [=](std::string)
       {
         auto help =
-          "query  ask|list|stats|<id>   query control commands\n"
-          "set    paginate|auto-follow  settings\n"
-          "exit                         exit the console";
+          "ask         enter query mode (leave with 'exit')\n"
+          "list        show all queries (active prefixed with *)\n"
+          "stats       show query statistics\n"
+          "query <id>  enter control mode of given query\n"
+          "set <..>    settings\n"
+          "exit        exit the console";
         std::cout << help << std::endl;
         return true;
       });
 
+  // TODO: consider using a settings mode instead of just a single command.
   cmdline_.cmd_add(
       "main",
       "set",
@@ -95,64 +99,61 @@ console::console(cppa::actor_ptr search)
 
   cmdline_.cmd_add(
       "main",
+      "ask",
+      [=](std::string)
+      {
+        cmdline_.mode_push("query-ask");
+        return true;
+      });
+
+
+  cmdline_.cmd_add(
+      "main",
+      "list",
+      [=](std::string)
+      {
+        for (auto& p : results_)
+          std::cout
+            << (&p.second == current_result_ ? " * " : "   ")
+            << p.second.id() << '\t' << p.second.ast()
+            << std::endl;
+        return true;
+      });
+
+  cmdline_.cmd_add(
+      "main",
+      "stats",
+      [=](std::string)
+      {
+        for (auto& p : results_)
+          std::cout
+            << (&p.second == current_result_ ? " * " : "   ")
+            << p.second.id() << '\t'
+            << p.second.consumable() << '/' << p.second.size()
+            << std::endl;
+        return true;
+      });
+
+  cmdline_.cmd_add(
+      "main",
       "query",
       [=](std::string arg)
       {
-        bool return_to_prompt = false;
-        match_split(arg, ' ')(
-            on("ask") >> [=]
-            {
-              cmdline_.mode_push("query-ask");
-            },
-            on("list") >> [=]
-            {
-              for (auto& p : results_)
-                std::cout
-                  << (&p.second == current_result_ ? " * " : "   ")
-                  << p.second.id() << '\t' << p.second.ast()
-                  << std::endl;
-            },
-            on("stats") >> [=]
-            {
-              for (auto& p : results_)
-                std::cout
-                  << (&p.second == current_result_ ? " * " : "   ")
-                  << p.second.id() << '\t'
-                  << p.second.consumable() << '/' << p.second.size()
-                  << std::endl;
-            },
-            on("help") >> [=]
-            {
-              auto help =
-                "ask         enter query mode (leave with 'exit')\n"
-                "list        show all queries (active prefixed with *)\n"
-                "stats       show query statistics\n"
-                "<id>        enter control mode of given query";
-              std::cout << help << std::endl;
-            },
-            on_arg_match >> [=, &return_to_prompt](std::string const& str)
-            {
-              if (str.empty())
-              {
-                std::cout
-                  << "[error] argument required, check 'query help'"
-                  << std::endl;
-                return;
-              }
-              if (auto r = to_result(str))
-              {
-                VAST_LOG_ACTOR_DEBUG("enters query " << r->id());
-                current_result_ = r;
-                send(self, atom("key"), atom("get"));
-                return_to_prompt = true;
-              }
-            },
-            others() >> [=]
-            {
-              std::cout
-                << "[error] invalid argument, check 'query help'" << std::endl;
-            });
-        return ! return_to_prompt;
+        if (arg.empty())
+        {
+          std::cout
+            << "[error] argument required, check 'query help'"
+            << std::endl;
+          return true;
+        }
+        if (auto r = to_result(arg))
+        {
+          VAST_LOG_ACTOR_DEBUG("enters query " << r->id());
+          current_result_ = r;
+          send(self, atom("key"), atom("get"));
+          return false;
+        }
+        return true;
       });
 
   cmdline_.mode_add("query-ask", "query asking mode", "-=> ");
