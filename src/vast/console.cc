@@ -338,6 +338,7 @@ void console::act()
           case '':
           case 'q':
             {
+              follow_mode_ = false;
               show_prompt();
             }
             return;
