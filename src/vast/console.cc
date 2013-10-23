@@ -181,6 +181,7 @@ console::console(cppa::actor_ptr search)
               if (! qry)
               {
                 std::cerr << "[error] invalid query: " << q << std::endl;
+                show_prompt();
                 return;
               }
               monitor(qry);
