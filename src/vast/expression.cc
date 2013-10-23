@@ -46,7 +46,7 @@ bool constant::equals(node const& other) const
 bool constant::is_less_than(node const& other) const
 {
   if (typeid(*this) != typeid(other))
-    return false;
+    return typeid(*this).hash_code() < typeid(other).hash_code();
   return val < static_cast<constant const&>(other).val;
 }
 
@@ -67,7 +67,7 @@ bool extractor::equals(node const& other) const
 
 bool extractor::is_less_than(node const& other) const
 {
-  return (typeid(*this) == typeid(other));
+  return typeid(*this).hash_code() < typeid(other).hash_code();
 }
 
 
@@ -143,7 +143,7 @@ bool offset_extractor::equals(node const& other) const
 bool offset_extractor::is_less_than(node const& other) const
 {
   if (typeid(*this) != typeid(other))
-    return false;
+    return typeid(*this).hash_code() < typeid(other).hash_code();
   return off < static_cast<offset_extractor const&>(other).off;
 }
 
@@ -168,7 +168,7 @@ bool type_extractor::equals(node const& other) const
 bool type_extractor::is_less_than(node const& other) const
 {
   if (typeid(*this) != typeid(other))
-    return false;
+    return typeid(*this).hash_code() < typeid(other).hash_code();
   return type < static_cast<type_extractor const&>(other).type;
 }
 
@@ -205,7 +205,7 @@ bool n_ary_operator::equals(node const& other) const
 bool n_ary_operator::is_less_than(node const& other) const
 {
   if (typeid(*this) != typeid(other))
-    return false;
+    return typeid(*this).hash_code() < typeid(other).hash_code();
   auto& that = static_cast<n_ary_operator const&>(other);
   return std::lexicographical_compare(
       operands.begin(), operands.end(),
@@ -336,9 +336,16 @@ bool relation::equals(node const& other) const
 bool relation::is_less_than(node const& other) const
 {
   if (typeid(*this) != typeid(other))
-    return false;
+    return typeid(*this).hash_code() < typeid(other).hash_code();
+  auto& that = static_cast<n_ary_operator const&>(other);
   return op < static_cast<relation const&>(other).op
-      && n_ary_operator::is_less_than(other);
+      || std::lexicographical_compare(
+          operands.begin(), operands.end(),
+          that.operands.begin(), that.operands.end(),
+          [](std::unique_ptr<node> const& x, std::unique_ptr<node> const& y)
+          {
+            return *x < *y;
+          });
 }
 
 void relation::serialize(serializer& sink) const
@@ -369,8 +376,15 @@ bool conjunction::equals(node const& other) const
 bool conjunction::is_less_than(node const& other) const
 {
   if (typeid(*this) != typeid(other))
-    return false;
-  return n_ary_operator::is_less_than(other);
+    return typeid(*this).hash_code() < typeid(other).hash_code();
+  auto& that = static_cast<n_ary_operator const&>(other);
+  return std::lexicographical_compare(
+      operands.begin(), operands.end(),
+      that.operands.begin(), that.operands.end(),
+      [](std::unique_ptr<node> const& x, std::unique_ptr<node> const& y)
+      {
+        return *x < *y;
+      });
 }
 
 void conjunction::serialize(serializer& sink) const
@@ -399,8 +413,15 @@ bool disjunction::equals(node const& other) const
 bool disjunction::is_less_than(node const& other) const
 {
   if (typeid(*this) != typeid(other))
-    return false;
-  return n_ary_operator::is_less_than(other);
+    return typeid(*this).hash_code() < typeid(other).hash_code();
+  auto& that = static_cast<n_ary_operator const&>(other);
+  return std::lexicographical_compare(
+      operands.begin(), operands.end(),
+      that.operands.begin(), that.operands.end(),
+      [](std::unique_ptr<node> const& x, std::unique_ptr<node> const& y)
+      {
+        return *x < *y;
+      });
 }
 
 void disjunction::serialize(serializer& sink) const

@@ -23,9 +23,10 @@ struct expression_fixture
 
 BOOST_FIXTURE_TEST_SUITE(expression_tests, expression_fixture)
 
-bool bool_eval(expr::ast const& a, event const& e)
+BOOST_AUTO_TEST_CASE(partial_order_test)
 {
-  return evaluate(a, e).get<bool>();
+  BOOST_CHECK_LT(expr::ast{":port == 53/tcp"}, expr::ast{":port == 54/tcp"});
+  BOOST_CHECK_LT(expr::ast{":port == 54/tcp"}, expr::ast{":port > 53/tcp"});
 }
 
 // TODO: Implement constant folding.
@@ -68,7 +69,12 @@ BOOST_AUTO_TEST_CASE(parser_tests)
   for (auto& e : exprs)
     BOOST_CHECK(expr::ast(e));
 
-  BOOST_CHECK(! expr::ast(":foo == -42"));
+  BOOST_CHECK(! expr::ast{":foo == -42"});
+}
+
+bool bool_eval(expr::ast const& a, event const& e)
+{
+  return evaluate(a, e).get<bool>();
 }
 
 BOOST_AUTO_TEST_CASE(type_queries)
