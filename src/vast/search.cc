@@ -17,11 +17,13 @@ search::search(actor_ptr archive, actor_ptr index, actor_ptr schema_manager)
 
 namespace {
 
+// Deconstructs an entire query AST into its individual sub-trees.
 class dissector : public expr::default_const_visitor
 {
 public:
-  dissector(std::map<expr::ast, search::state>& state)
-    : state_{state}
+  dissector(std::map<expr::ast, search::state>& state, expr::ast const& base)
+    : state_{state},
+      base_{base}
   {
   }
 
@@ -30,6 +32,8 @@ public:
     expr::ast ast{conj};
     if (parent_)
       state_[ast].parents.insert(parent_);
+    else if (ast == base_)
+      state_.emplace(ast, search::state{});
     parent_ = std::move(ast);
     for (auto& clause : conj.operands)
       clause->accept(*this);
@@ -40,6 +44,8 @@ public:
     expr::ast ast{disj};
     if (parent_)
       state_[ast].parents.insert(parent_);
+    else if (ast == base_)
+      state_.emplace(ast, search::state{});
     parent_ = std::move(ast);
     for (auto& term : disj.operands)
       term->accept(*this);
@@ -55,6 +61,7 @@ public:
 private:
   expr::ast parent_;
   std::map<expr::ast, search::state>& state_;
+  expr::ast const& base_;
 };
 
 
@@ -157,7 +164,7 @@ void search::act()
         monitor(last_sender());
         auto qry = spawn<query_actor>(archive_, last_sender(), ast);
         actors_.emplace(ast, std::make_pair(qry, last_sender()));
-        dissector d{state_};
+        dissector d{state_, ast};
         ast.accept(d);
         // TODO: reuse results from existing queries before asking index.
         send(index_, ast);
@@ -174,14 +181,16 @@ void search::act()
         }
         VAST_LOG_ACTOR_DEBUG("got result for: " << ast);
         auto& s = state_[ast];
-        if (! s.result)
-          s.result = std::move(result);
-        else
-          s.result |= result;
+        // Update coverage.
         if (! s.coverage)
           s.coverage = std::move(coverage);
         else
           s.coverage |= coverage;
+        // Update result.
+        if (! s.result)
+          s.result = std::move(result);
+        else
+          s.result |= result;
         for (auto& parent : s.parents)
         {
           assert(state_.count(parent));
