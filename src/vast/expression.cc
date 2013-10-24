@@ -771,30 +771,28 @@ std::unique_ptr<node> create(std::string const& str, schema const& sch)
       ors.emplace_back(detail::ast::query::query{clause.operand, {}});
     else
       ors.back().rest.push_back(clause);
+  // Our AST root will be disjunction iff we have at least two terms.
+  std::unique_ptr<n_ary_operator> parent;
+  if (ors.size() > 1)
+    parent = make_unique<disjunction>();
   // Then create a conjunction for each set of subsequent AND nodes between
   // two OR nodes.
-  auto disj = make_unique<disjunction>();
+  std::unique_ptr<conjunction> conj;
   for (auto& ands : ors)
   {
-    if (ands.rest.empty())
+    conj = make_unique<conjunction>();
+    expressionizer visitor{conj.get(), sch};
+    for (auto clause : ands.rest)
     {
-      expressionizer visitor{disj.get(), sch};
-      boost::apply_visitor(std::ref(visitor), ands.first);
+      assert(clause.op == logical_and);
+      boost::apply_visitor(std::ref(visitor), clause.operand);
     }
+    if (! parent)
+      parent = std::move(conj);
     else
-    {
-      auto conj = make_unique<conjunction>();
-      expressionizer visitor{conj.get(), sch};
-      boost::apply_visitor(std::ref(visitor), ands.first);
-      for (auto clause : ands.rest)
-      {
-        assert(clause.op == logical_and);
-        boost::apply_visitor(std::ref(visitor), clause.operand);
-      }
-      disj->add(std::move(conj));
-    }
+      parent->add(std::move(conj));
   }
-  return std::move(disj);
+  return std::move(parent);
 }
 
 namespace {
