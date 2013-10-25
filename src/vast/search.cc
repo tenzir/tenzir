@@ -171,7 +171,11 @@ expr::ast search::add_query(std::string const& str)
 std::vector<expr::ast> search::update(expr::ast const& ast,
                                       search_result const& result)
 {
-  assert(result);
+  if (! result)
+  {
+    VAST_LOG_DEBUG("aborting ast propagation due to empty result");
+    return {};
+  }
   assert(state_.count(ast));
   auto& ast_state = state_[ast];
   node_tester nt;
@@ -181,7 +185,7 @@ std::vector<expr::ast> search::update(expr::ast const& ast,
   {
     if (*nt.type == logical_and)
     {
-      VAST_LOG_VERBOSE("evaluating conjunction " << ast);
+      VAST_LOG_DEBUG("evaluating conjunction " << ast);
       conjunction_evaluator ce{state_};
       ast.accept(ce);
       if (ce.complete)
@@ -190,7 +194,7 @@ std::vector<expr::ast> search::update(expr::ast const& ast,
     }
     else if (*nt.type == logical_or)
     {
-      VAST_LOG_VERBOSE("evaluating disjunction " << ast);
+      VAST_LOG_DEBUG("evaluating disjunction " << ast);
       disjunction_evaluator de{state_};
       ast.accept(de);
       if (! ast_state.result || (de.result && de.result != ast_state.result))
@@ -199,18 +203,16 @@ std::vector<expr::ast> search::update(expr::ast const& ast,
   }
   else if (! ast_state.result)
   {
-    VAST_LOG_VERBOSE("assigning result to " << ast);
+    VAST_LOG_DEBUG("assigning result to " << ast);
     ast_state.result = std::move(result);
   }
   else if (ast_state.result == result)
   {
-    assert(ast_state.result.hits());
-    assert(ast_state.result == result);
-    VAST_LOG_VERBOSE("ignoring unchanged result for " << ast);
+    VAST_LOG_DEBUG("ignoring unchanged result for " << ast);
   }
   else
   {
-    VAST_LOG_VERBOSE("computing new result for " << ast);
+    VAST_LOG_DEBUG("computing new result for " << ast);
     ast_state.result |= result;
   }
   // Phase 2: Update the parents recursively.
