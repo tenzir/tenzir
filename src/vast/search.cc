@@ -202,9 +202,6 @@ std::vector<expr::ast> search::update(expr::ast const& ast,
     VAST_LOG_VERBOSE("assigning result to " << ast);
     ast_state.result = std::move(result);
   }
-  else if (nt.type && *nt.type == logical_or)
-  {
-  }
   else if (ast_state.result == result)
   {
     assert(ast_state.result.hits());
