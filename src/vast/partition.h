@@ -21,11 +21,9 @@ public:
   /// @param dir The absolute path of the partition.
   partition(path dir);
 
-  /// Retrieves the directory name for event meta data.
-  path meta_dir() const;
-
-  /// Retrieves the directory name for event argument data.
-  path arg_dir() const;
+  /// Retrieves the directory of the partition.
+  /// @returns The absolute path to the partition directory.
+  path const& dir() const;
 
   /// Retrieves the time point of last modification.
   time_point last_modified() const;

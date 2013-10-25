@@ -24,12 +24,14 @@ public:
   event_index(path dir)
     : dir_{std::move(dir)}
   {
-    this->chaining(false);
   }
 
   void act()
   {
     using namespace cppa;
+
+    this->chaining(false);
+    this->trap_exit(true);
 
     if (exists(dir_))
       derived()->load();
@@ -37,6 +39,11 @@ public:
       mkdir(dir_);
 
     become(
+        on(atom("EXIT"), arg_match) >> [=](uint32_t reason)
+        {
+          derived()->store();
+          this->quit(reason);
+        },
         on(atom("flush")) >> [=]
         {
           derived()->store();
@@ -60,12 +67,6 @@ public:
   char const* description()
   {
     return derived()->description();
-  }
-
-  virtual void on_exit() final
-  {
-    derived()->store();
-    actor<event_index<Derived>>::on_exit();
   }
 
 protected:

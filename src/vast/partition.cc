@@ -48,14 +48,9 @@ partition::partition(path dir)
 {
 }
 
-path partition::meta_dir() const
+path const& partition::dir() const
 {
-  return dir_ / "meta";
-}
-
-path partition::arg_dir() const
-{
-  return dir_ / "event";
+  return dir_;
 }
 
 time_point partition::last_modified() const
@@ -138,15 +133,16 @@ void partition_actor::act()
           auto& a = event_arg_indexes_[ce->name()];
           if (! a)
             a = spawn<event_arg_index, linked>(
-                partition_.arg_dir() / ce->name());
+                partition_.dir() / "event" / ce->name());
           a << ce;
         }
         partition_.update(s.base(), s.events());
       });
 
   partition_.load();
-  event_meta_index_ = spawn<event_meta_index, linked>(partition_.meta_dir());
-  traverse(partition_.arg_dir(),
+  event_meta_index_
+    = spawn<event_meta_index, linked>(partition_.dir() / "meta");
+  traverse(partition_.dir() / "event",
            [&](path const& p) -> bool
            {
              VAST_LOG_ACTOR_DEBUG("found existing event index: " << p);
