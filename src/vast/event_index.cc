@@ -80,11 +80,18 @@ void event_meta_index::load()
 
 void event_meta_index::store()
 {
-  io::archive(dir_ / "timestamp.idx", timestamp_);
-  io::archive(dir_ / "name.idx", name_);
-  VAST_LOG_ACTOR_DEBUG(
-      "stored timestamp/name index with " <<
-      timestamp_.size() - 1 << '/' << name_.size() - 1 << " events");
+  if (timestamp_.appended() > 0)
+  {
+    io::archive(dir_ / "timestamp.idx", timestamp_);
+    VAST_LOG_ACTOR_DEBUG(
+        "stored timestamp index with " << timestamp_.size() - 1 << " events");
+  }
+  if (name_.appended() > 0)
+  {
+    io::archive(dir_ / "name.idx", name_);
+    VAST_LOG_ACTOR_DEBUG(
+        "stored name index with " << name_.size() - 1 << " events");
+  }
 }
 
 bool event_meta_index::index(event const& e)
@@ -212,7 +219,7 @@ void event_arg_index::store()
   static string suffix{".idx"};
   for (auto& p : args_)
   {
-    if (p.second->empty())
+    if (p.second->empty() || p.second->appended() == 0)
       continue;
     path const filename = dir_ / (prefix + to<string>(p.first) + suffix);
     assert(inverse.count(p.second));

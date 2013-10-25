@@ -74,6 +74,7 @@ void time_bitmap_index::serialize(serializer& sink) const
 void time_bitmap_index::deserialize(deserializer& source)
 {
   source >> bitmap_;
+  checkpoint();
 }
 
 } // namespace vast

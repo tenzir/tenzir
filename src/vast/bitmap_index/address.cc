@@ -124,6 +124,7 @@ void address_bitmap_index::serialize(serializer& sink) const
 void address_bitmap_index::deserialize(deserializer& source)
 {
   source >> bitmaps_ >> v4_;
+  checkpoint();
 }
 
 bool address_bitmap_index::convert(std::string& str) const

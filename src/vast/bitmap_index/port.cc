@@ -57,6 +57,7 @@ void port_bitmap_index::serialize(serializer& sink) const
 void port_bitmap_index::deserialize(deserializer& source)
 {
   source >> num_ >> proto_;
+  checkpoint();
 }
 
 bool port_bitmap_index::convert(std::string& str) const

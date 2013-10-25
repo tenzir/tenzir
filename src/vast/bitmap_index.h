@@ -47,9 +47,18 @@ public:
   /// @returns `true` if `size() == 0`.
   bool empty() const;
 
+  /// Retrieves the number of bits appended since the last call to ::checkpoint.
+  /// @returns Then number of bits since the last checkpoint.
+  uint64_t appended() const;
+
+  /// Performs a checkpoint of the number of bits appended.
+  void checkpoint();
+
 private:
   virtual bool push_back_impl(value const& val) = 0;
   virtual bool equals(bitmap_index const& other) const = 0;
+
+  uint64_t checkpoint_size_ = 0;
 
 private:
   friend access;

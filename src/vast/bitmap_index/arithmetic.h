@@ -92,6 +92,7 @@ private:
   virtual void deserialize(deserializer& source) override
   {
     source >> bitmap_;
+    checkpoint();
   }
 
   virtual bool convert(std::string& str) const override

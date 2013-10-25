@@ -60,6 +60,7 @@ void string_bitmap_index::serialize(serializer& sink) const
 void string_bitmap_index::deserialize(deserializer& source)
 {
   source >> dictionary_ >> bitmap_;
+  checkpoint();
 }
 
 bool string_bitmap_index::convert(std::string& str) const
