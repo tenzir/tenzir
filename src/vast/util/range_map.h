@@ -17,6 +17,7 @@ public:
   /// @param l The left endpoint of the interval.
   /// @param r The right endpoint of the interval.
   /// @param v The value r associate with *[l, r]*.
+  /// @returns `true` on success.
   bool insert(Point l, Point r, Value v)
   {
     assert(l < r);
@@ -33,7 +34,7 @@ public:
   ///
   /// @param p The point to lookup.
   ///
-  /// @return A pointer to the value associated with the half-open interval
+  /// @returns A pointer to the value associated with the half-open interval
   /// *[a,b)* iff *a <= p < b*, and `nullptr` otherwise.
   Value const* lookup(Point const& p) const
   {
