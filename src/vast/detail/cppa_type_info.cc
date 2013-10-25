@@ -8,6 +8,7 @@
 #include "vast/operator.h"
 #include "vast/regex.h"
 #include "vast/schema.h"
+#include "vast/search_result.h"
 #include "vast/segment.h"
 #include "vast/string.h"
 #include "vast/time.h"
@@ -46,6 +47,7 @@ void cppa_announce_types()
   cppa_announce<relational_operator>();
   cppa_announce<expr::ast>();
   cppa_announce<schema>();
+  cppa_announce<search_result>();
 
   cppa_announce<null_bitstream>();
   cppa_announce<bitstream>();

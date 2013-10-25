@@ -203,7 +203,7 @@ void program::act()
     auto search_port = config_.as<unsigned>("search.port");
     if (config_.check("search-actor") || config_.check("all-server"))
     {
-      search_ = spawn<search, linked>(archive_, index_, schema_manager_);
+      search_ = spawn<search_actor, linked>(archive_, index_, schema_manager_);
       VAST_LOG_ACTOR_VERBOSE("publishes search at " <<
                        search_host << ':' << search_port);
       publish(search_, search_port, search_host.c_str());

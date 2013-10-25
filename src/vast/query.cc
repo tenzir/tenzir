@@ -82,7 +82,8 @@ void query_actor::act()
       {
         assert(bs);
         auto cbs = cow<bitstream>{*tuple_cast<bitstream>(last_dequeued())};
-        VAST_LOG_ACTOR_DEBUG("got new result of size " << cbs->size());
+        VAST_LOG_ACTOR_DEBUG(
+            "got new result of size " << (cbs->empty() ? 0 : cbs->size() - 1));
         query_.update(*cbs);
         if (query_.current() != bitstream::npos)
           send(archive_, query_.current());

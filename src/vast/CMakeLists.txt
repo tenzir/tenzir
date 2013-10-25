@@ -32,6 +32,7 @@ set(libvast_sources
   schema.cc
   schema_manager.cc
   search.cc
+  search_result.cc
   segment.cc
   segment_manager.cc
   segmentizer.cc

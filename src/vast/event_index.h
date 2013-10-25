@@ -7,6 +7,7 @@
 #include "vast/expression.h"
 #include "vast/file_system.h"
 #include "vast/offset.h"
+#include "vast/search_result.h"
 #include "vast/bitmap_index/string.h"
 #include "vast/bitmap_index/time.h"
 #include "vast/io/serialization.h"
@@ -52,7 +53,7 @@ public:
                             actor_ptr const& sink)
         {
           auto result = derived()->lookup(ast);
-          send(sink, ast, std::move(result), coverage);
+          send(sink, ast, search_result{std::move(result), coverage});
         });
   }
 
