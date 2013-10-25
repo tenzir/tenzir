@@ -88,11 +88,18 @@ void archive_actor::act()
   }
   archive_.load();
   become(
-      on_arg_match >> [=](uuid const&)
+      on_arg_match >> [=](uuid const& id)
       {
-        forward_to(segment_manager_);
+        send(segment_manager_, id, last_sender());
       },
-      on_arg_match >> [=](event_id eid)
+      on(atom("uuid"), arg_match) >> [=](event_id eid)
+      {
+        if (auto id = archive_.lookup(eid))
+         reply(*id);
+        else
+          reply(eid);
+      },
+      on(atom("segment"), arg_match) >> [=](event_id eid)
       {
         if (auto id = archive_.lookup(eid))
         {
