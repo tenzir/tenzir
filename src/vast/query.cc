@@ -24,20 +24,30 @@ void query::update(bitstream result)
     hits_ = std::move(result);
   unprocessed_ = hits_ - processed_;
   current_ = unprocessed_.find_first();
+  VAST_LOG_DEBUG("query adjusted cursor to " << current_);
 }
 
-size_t query::apply(cow<segment> const& s, std::function<void(event)> f)
+bool query::add(cow<segment> s)
 {
-  assert(s->base() > 0);
-  if (current_ < s->base() || current_ > s->base() + s->events())
+  return segments_.insert(s->base(), s->base() + s->events(), s);
+}
+
+bool query::executable() const
+{
+  return segments_.lookup(current_) != nullptr;
+}
+
+size_t query::process(std::function<void(event)> f)
+{
+  auto seg = segments_.lookup(current_);
+  if (! seg)
   {
-    VAST_LOG_DEBUG(
-        "query got segment out of range: current: " << current_ <<
-        ", segment [" << s->base() << ", " << (s->base() + s->events()) << ')');
-    current_ = unprocessed_.find_next(s->base() - 1);
-    VAST_LOG_DEBUG("query adjusted position to" << current_);
+    VAST_LOG_ERROR("no segment for current event id " << current_);
+    // TODO: seek to next available segment.
+    return 0;
   }
-  segment::reader r{&s.read()};
+  auto& s = **seg;
+  segment::reader r{&s};
   event e;
   size_t n = 0;
   while (r.skip_to(current_) && r.read(e))
@@ -57,7 +67,7 @@ size_t query::apply(cow<segment> const& s, std::function<void(event)> f)
     ++n;
   }
   if (n == 0)
-    VAST_LOG_WARN("query got segment but did not apply function once");
+    VAST_LOG_WARN("did not apply function once in segment " << s.id());
   return n;
 }
 
@@ -85,9 +95,9 @@ void query_actor::act()
         VAST_LOG_ACTOR_DEBUG(
             "got new result of size " << (cbs->empty() ? 0 : cbs->size() - 1));
         query_.update(*cbs);
-        if (query_.current() != bitstream::npos)
-          send(archive_, query_.current());
-        else
+        if (! query_.executable())
+          send(archive_, atom("segment"), query_.current());
+        else if (query_.current() == bitstream::npos)
           VAST_LOG_ACTOR_DEBUG("has no more events to extract");
       },
       on_arg_match >> [=](event_id eid)
@@ -101,8 +111,11 @@ void query_actor::act()
       on_arg_match >> [=](segment const&)
       {
         auto s = cow<segment>{*tuple_cast<segment>(last_dequeued())};
-        VAST_LOG_ACTOR_DEBUG("processes segment " << s->id());
-        query_.apply(*s, [=](event e) { send(sink_, std::move(e)); });
+        VAST_LOG_ACTOR_DEBUG("adds segment " << s->id());
+        if (! query_.add(s))
+          VAST_LOG_ACTOR_WARN("ignores duplicate segment " << s->id());
+        if (query_.executable())
+          query_.process([=](event e) { send(sink_, std::move(e)); });
       },
       others() >> [=]
       {
