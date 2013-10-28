@@ -95,10 +95,10 @@ void query_actor::act()
         VAST_LOG_ACTOR_DEBUG(
             "got new result of size " << (cbs->empty() ? 0 : cbs->size() - 1));
         query_.update(*cbs);
-        if (! query_.executable())
+        if (query_.executable())
+          send(self, atom("process"));
+        else
           send(archive_, atom("segment"), query_.current());
-        else if (query_.current() == bitstream::npos)
-          VAST_LOG_ACTOR_DEBUG("has no more events to extract");
       },
       on_arg_match >> [=](event_id eid)
       {
@@ -115,7 +115,13 @@ void query_actor::act()
         if (! query_.add(s))
           VAST_LOG_ACTOR_WARN("ignores duplicate segment " << s->id());
         if (query_.executable())
-          query_.process([=](event e) { send(sink_, std::move(e)); });
+          send(self, atom("process"));
+      },
+      on(atom("process")) >> [=]
+      {
+        if (query_.current() == bitstream::npos)
+          VAST_LOG_ACTOR_DEBUG("has no more events to extract");
+        query_.process([=](event e) { send(sink_, std::move(e)); });
       },
       others() >> [=]
       {
