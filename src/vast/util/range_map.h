@@ -22,13 +22,29 @@ public:
   {
     assert(l < r);
     auto lb = map_.lower_bound(l);
-    if (find(l, lb))
+    if (find(l, lb) != map_.end())
       return false;
     if (lb == map_.end() || lb->first >= r)
       return map_.emplace(
           std::move(l), std::make_pair(std::move(r), std::move(v))).second;
     return false;
   }
+
+  /// Removes a value given a point from a right-open range.
+  ///
+  /// @param p A point from a range that maps to a value.
+  ///
+  /// @returns `true` if the value associated with the interval containing *p*
+  /// has been successfully removed, and `false` if *p* does not map to an
+  /// existing value.
+  bool erase(Point p)
+  {
+    auto i = find(p, map_.lower_bound(p));
+    if (i == map_.end())
+      return false;
+    map_.erase(i);
+    return true;
+  } 
 
   /// Retrieves a value for a given point.
   ///
@@ -38,7 +54,8 @@ public:
   /// *[a,b)* iff *a <= p < b*, and `nullptr` otherwise.
   Value const* lookup(Point const& p) const
   {
-    return find(p, map_.lower_bound(p));
+    auto i = find(p, map_.lower_bound(p));
+    return i != map_.end() ? &i->second.second : nullptr;
   }
 
   /// Applies a function over each range and associated value.
@@ -50,18 +67,33 @@ public:
       f(p.first, p.second.first, p.second.second);
   }
 
+  /// Retrieves the size of the range map.
+  /// @returns The number of entries in the map.
+  size_t size() const
+  {
+    return map_.size();
+  }
+
+  /// Checks whether the range map is empty.
+  /// @return `true` iff the map is empty.
+  bool empty() const
+  {
+    return map_.empty();
+  }
+
 private:
   using map_type = std::map<Point, std::pair<Point, Value>>;
+  using map_const_iterator = typename map_type::const_iterator;
 
-  Value const* find(Point const& p, typename map_type::const_iterator lb) const
+  map_const_iterator find(Point const& p, map_const_iterator lb) const
   {
     if ((lb != map_.end() && lb->first == p) ||
         (lb != map_.begin() && p < (--lb)->second.first))
-      return &lb->second.second;
-    return nullptr;
+      return lb;
+    return map_.end();
   }
 
-  std::map<Point, std::pair<Point, Value>> map_;
+  map_type map_;
 };
 
 } // namespace util
