@@ -9,6 +9,46 @@ using namespace cppa;
 
 namespace vast {
 
+struct event_meta_index::loader : expr::default_const_visitor
+{
+  loader(event_meta_index& idx)
+    : idx{idx}
+  {
+  }
+
+  virtual void visit(expr::relation const& rel)
+  {
+    rel.operands[0]->accept(*this);
+  }
+
+  virtual void visit(expr::name_extractor const&)
+  {
+    if (idx.exists_ && idx.name_.empty())
+    {
+      io::unarchive(idx.dir_ / "name.idx", idx.name_);
+      VAST_LOG_DEBUG(
+          "loaded name index (" << idx.name_.size() - 1 << " events)");
+    }
+  }
+
+  virtual void visit(expr::timestamp_extractor const&)
+  {
+    if (idx.exists_ && idx.timestamp_.empty())
+    {
+      io::unarchive(idx.dir_ / "timestamp.idx", idx.timestamp_);
+      VAST_LOG_DEBUG(
+          "loaded time index (" << idx.timestamp_.size() - 1 << " events)");
+    }
+  }
+
+  virtual void visit(expr::id_extractor const&)
+  {
+    assert(! "not yet implemented");
+  }
+
+  event_meta_index& idx;
+};
+
 struct event_meta_index::querier : expr::default_const_visitor
 {
   querier(event_meta_index const& idx)
@@ -69,25 +109,32 @@ char const* event_meta_index::description() const
   return "event-meta-index";
 }
 
-void event_meta_index::load()
+void event_meta_index::scan()
 {
-  io::unarchive(dir_ / "timestamp.idx", timestamp_);
-  io::unarchive(dir_ / "name.idx", name_);
-  VAST_LOG_ACTOR_DEBUG(
-      "loaded timestamp/name index with " <<
-      timestamp_.size() - 1 << '/' << name_.size() - 1 << " events");
+  if (exists(dir_ / "name.idx") || exists(dir_ / "timestamp.idx"))
+    exists_ = true;
+}
+
+void event_meta_index::load(expr::ast const& ast)
+{
+  loader visitor{*this};
+  ast.accept(visitor);
 }
 
 void event_meta_index::store()
 {
   if (timestamp_.appended() > 0)
   {
+    if (! exists(dir_))
+      mkdir(dir_);
     io::archive(dir_ / "timestamp.idx", timestamp_);
     VAST_LOG_ACTOR_DEBUG(
         "stored timestamp index with " << timestamp_.size() - 1 << " events");
   }
   if (name_.appended() > 0)
   {
+    if (! exists(dir_))
+      mkdir(dir_);
     io::archive(dir_ / "name.idx", name_);
     VAST_LOG_ACTOR_DEBUG(
         "stored name index with " << name_.size() - 1 << " events");
@@ -107,6 +154,76 @@ bitstream event_meta_index::lookup(expr::ast const& ast) const
   return std::move(visitor.result);
 }
 
+
+struct event_arg_index::loader : expr::default_const_visitor
+{
+  loader(event_arg_index& idx)
+    : idx{idx}
+  {
+  }
+
+  virtual void visit(expr::relation const& rel)
+  {
+    rel.operands[0]->accept(*this);
+  }
+
+  virtual void visit(expr::offset_extractor const& oe)
+  {
+    if (idx.args_.count(oe.off))
+      return;
+    auto filename = idx.pathify(oe.off);
+    if (! exists(filename))
+      return;
+    value_type vt;
+    std::shared_ptr<bitmap_index> bmi;
+    io::unarchive(filename, vt, bmi);
+    if (! bmi)
+    {
+      VAST_LOG_ERROR("got corrupt index: " << filename.basename());
+      return;
+    }
+    VAST_LOG_DEBUG("loaded index " << filename.trim(-4) << " with " <<
+                   bmi->size() - 1 << " events");
+    idx.args_.emplace(oe.off, bmi);
+    assert(! idx.types_.count(vt));
+    idx.types_.emplace(vt, std::move(bmi));
+  }
+
+  virtual void visit(expr::type_extractor const& te)
+  {
+    auto t = te.type;
+    if (idx.types_.count(t))
+      return;
+    auto er = idx.files_.equal_range(t);
+    for (auto i = er.first; i != er.second; ++i)
+    {
+      offset o;
+      auto str = i->second.basename(true).str().substr(1);
+      auto start = str.begin();
+      if (! extract(start, str.end(), o))
+      {
+        VAST_LOG_ERROR("got invalid offset in path: " << i->second);
+        return;
+      }
+      assert(! idx.args_.count(o));
+      value_type vt;
+      std::shared_ptr<bitmap_index> bmi;
+      io::unarchive(i->second, vt, bmi);
+      if (! bmi)
+      {
+        VAST_LOG_ERROR("got corrupt index: " << i->second.basename());
+        return;
+      }
+      VAST_LOG_DEBUG("loaded index " << i->second.trim(-4) << " with " <<
+                     bmi->size() - 1 << " events");
+      assert(! idx.args_.count(o));
+      idx.args_.emplace(o, bmi);
+      idx.types_.emplace(vt, bmi);
+    }
+  }
+
+  event_arg_index& idx;
+};
 
 struct event_arg_index::querier : expr::default_const_visitor
 {
@@ -146,14 +263,17 @@ struct event_arg_index::querier : expr::default_const_visitor
     auto i = idx.types_.find(te.type);
     if (i == idx.types_.end())
       return;
-    for (auto& bmi : i->second)
-      if (auto r = bmi->lookup(*op, *val))
+    auto er = idx.types_.equal_range(te.type);
+    for (auto j = er.first; j != er.second; ++j)
+    {
+      if (auto r = j->second->lookup(*op, *val))
       {
         if (result)
           result |= bitstream{std::move(*r)};
         else
           result = std::move(*r);
       }
+    }
   }
 
   bitstream result;
@@ -173,36 +293,27 @@ char const* event_arg_index::description() const
   return "event-arg-index";
 }
 
-void event_arg_index::load()
+void event_arg_index::scan()
 {
-  std::set<path> paths;
-  traverse(dir_, [&](path const& p) -> bool { paths.insert(p); return true; });
-  for (auto& p : paths)
+  if (exists(dir_))
   {
-    offset o;
-    auto str = p.basename(true).str().substr(1);
-    auto start = str.begin();
-    if (! extract(start, str.end(), o))
-    {
-      VAST_LOG_ACTOR_ERROR("got invalid offset: " << p.basename());
-      quit(exit::error);
-      return;
-    }
-
-    value_type vt;
-    std::shared_ptr<bitmap_index> bmi;
-    io::unarchive(p, vt, bmi);
-    if (! bmi)
-    {
-      VAST_LOG_ACTOR_ERROR("got corrupt index: " << p.basename());
-      quit(exit::error);
-      return;
-    }
-    VAST_LOG_ACTOR_DEBUG("loaded index " << p.trim(-4) << " with " <<
-                         bmi->size() - 1<< " events");
-    args_.emplace(o, bmi);
-    types_[vt].push_back(bmi);
+    traverse(
+        dir_,
+        [&](path const& p) -> bool
+        {
+          value_type vt;
+          io::unarchive(p, vt);
+          files_.emplace(vt, p);
+          return true;
+        });
+    assert(! files_.empty());
   }
+}
+
+void event_arg_index::load(expr::ast const& ast)
+{
+  loader visitor{*this};
+  ast.accept(visitor);
 }
 
 void event_arg_index::store()
@@ -211,17 +322,16 @@ void event_arg_index::store()
 
   std::map<std::shared_ptr<bitmap_index>, value_type> inverse;
   for (auto& p : types_)
-    for (auto& bmi : p.second)
-      if (inverse.find(bmi) == inverse.end())
-        inverse.emplace(bmi, p.first);
+    if (inverse.find(p.second) == inverse.end())
+      inverse.emplace(p.second, p.first);
 
-  static string prefix{"@"};
-  static string suffix{".idx"};
   for (auto& p : args_)
   {
     if (p.second->empty() || p.second->appended() == 0)
       continue;
-    path const filename = dir_ / (prefix + to<string>(p.first) + suffix);
+    if (! exists(dir_))
+      mkdir(dir_);
+    path const filename = pathify(p.first);
     assert(inverse.count(p.second));
     io::archive(filename, inverse[p.second], p.second);
     VAST_LOG_ACTOR_DEBUG("stored index " << filename.trim(-4) <<
@@ -242,6 +352,13 @@ bitstream event_arg_index::lookup(expr::ast const& ast) const
   querier visitor{*this};
   ast.accept(visitor);
   return std::move(visitor.result);
+}
+
+path event_arg_index::pathify(offset const& o) const
+{
+  static string prefix{"@"};
+  static string suffix{".idx"};
+  return dir_ / (prefix + to<string>(o) + suffix);
 }
 
 bool event_arg_index::index_record(record const& r, uint64_t id, offset& o)
@@ -276,7 +393,7 @@ bool event_arg_index::index_record(record const& r, uint64_t id, offset& o)
         idx = bmi.get();
         idx->append(1, false); // ID 0 is not a valid event.
         args_.emplace(o, bmi);
-        types_[v.which()].push_back(bmi);
+        types_.emplace(v.which(), std::move(bmi));
       }
       assert(idx != nullptr);
       if (! idx->push_back(v, id))

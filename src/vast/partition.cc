@@ -119,7 +119,7 @@ void partition_actor::act()
           event_meta_index_ << t;
         else
           for (auto& p : event_arg_indexes_)
-            p.second << t; // TODO: restrict to relevant indexes.
+            p.second << t; // TODO: restrict to relevant events.
       },
       on_arg_match >> [=](segment const& s)
       {
