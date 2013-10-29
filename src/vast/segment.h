@@ -101,7 +101,7 @@ public:
     /// @param The event ID to forward to.
     /// @returns `true` if skipping to *id* succeeded.
     /// @post The next call to ::read exctracts the event with ID *id*.
-    bool skip_to(event_id id);
+    bool seek(event_id id);
 
     /// Checks whether the reader has still events that can be read.
     /// @returns `true` iff the reader is empty.
@@ -138,6 +138,11 @@ public:
   /// Retrieves the segment base ID for events.
   /// @returns The base event ID for this segment.
   event_id base() const;
+
+  /// Checks whether the segment contains the event with the given ID.
+  /// @param eid The event ID to check.
+  /// @returns `true` iff the segment contains the event having id *eid*.
+  bool contains(event_id eid) const;
 
   /// Retrieves the number of events in the segment.
   uint32_t events() const;
