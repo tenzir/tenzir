@@ -36,6 +36,8 @@ public:
   virtual bool empty_impl() const = 0;
   virtual size_type find_first_impl() const = 0;
   virtual size_type find_next_impl(size_type i) const = 0;
+  virtual size_type find_last_impl() const = 0;
+  virtual size_type find_prev_impl(size_type i) const = 0;
   virtual bitvector const& bits_impl() const = 0;
 
 protected:
@@ -152,6 +154,16 @@ public:
   virtual size_type find_next_impl(size_type i) const final
   {
     return bitstream_.find_next_impl(i);
+  }
+
+  virtual size_type find_last_impl() const final
+  {
+    return bitstream_.find_last_impl();
+  }
+
+  virtual size_type find_prev_impl(size_type i) const final
+  {
+    return bitstream_.find_prev_impl(i);
   }
 
   virtual bitvector const& bits_impl() const final
@@ -304,6 +316,16 @@ public:
     return derived().find_next_impl(i);
   }
 
+  size_type find_last() const
+  {
+    return derived().find_last_impl();
+  }
+
+  size_type find_prev(size_type i) const
+  {
+    return derived().find_prev_impl(i);
+  }
+
 protected:
   bitstream_base() = default;
 
@@ -386,6 +408,8 @@ private:
   bool empty_impl() const;
   size_type find_first_impl() const;
   size_type find_next_impl(size_type i) const;
+  size_type find_last_impl() const;
+  size_type find_prev_impl(size_type i) const;
   bitvector const& bits_impl() const;
 
   std::unique_ptr<detail::bitstream_concept> concept_;
@@ -426,6 +450,8 @@ private:
   bool empty_impl() const;
   size_type find_first_impl() const;
   size_type find_next_impl(size_type i) const;
+  size_type find_last_impl() const;
+  size_type find_prev_impl(size_type i) const;
   bitvector const& bits_impl() const;
 
   bitvector bits_;

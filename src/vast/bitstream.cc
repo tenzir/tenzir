@@ -120,6 +120,18 @@ bitstream::size_type bitstream::find_next_impl(size_type i) const
   return concept_->find_next_impl(i);
 }
 
+bitstream::size_type bitstream::find_last_impl() const
+{
+  assert(concept_);
+  return concept_->find_last_impl();
+}
+
+bitstream::size_type bitstream::find_prev_impl(size_type i) const
+{
+  assert(concept_);
+  return concept_->find_prev_impl(i);
+}
+
 bitvector const& bitstream::bits_impl() const
 {
   assert(concept_);
@@ -228,6 +240,16 @@ null_bitstream::size_type null_bitstream::find_first_impl() const
 null_bitstream::size_type null_bitstream::find_next_impl(size_type i) const
 {
   return bits_.find_next(i);
+}
+
+null_bitstream::size_type null_bitstream::find_last_impl() const
+{
+  return bits_.find_last();
+}
+
+null_bitstream::size_type null_bitstream::find_prev_impl(size_type i) const
+{
+  return bits_.find_prev(i);
 }
 
 bitvector const& null_bitstream::bits_impl() const
