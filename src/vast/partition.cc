@@ -15,9 +15,9 @@ namespace {
 class discriminator : public expr::default_const_visitor
 {
 public:
-  virtual void visit(expr::relation const& rel)
+  virtual void visit(expr::predicate const& pred)
   {
-    rel.operands[0]->accept(*this);
+    pred.lhs().accept(*this);
   }
 
   virtual void visit(expr::offset_extractor const&)

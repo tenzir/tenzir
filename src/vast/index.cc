@@ -11,12 +11,12 @@ using namespace cppa;
 namespace vast {
 namespace {
 
-// Extracts all leaf relations from the AST.
-class relationizer : public expr::default_const_visitor
+// Extracts all (leaf) predicates from an AST.
+class predicator : public expr::default_const_visitor
 {
 public:
-  relationizer(std::vector<expr::ast>& relations)
-    : relations_{relations}
+  predicator(std::vector<expr::ast>& predicates)
+    : predicates_{predicates}
   {
   }
 
@@ -32,13 +32,13 @@ public:
       op->accept(*this);
   }
 
-  virtual void visit(expr::relation const& rel)
+  virtual void visit(expr::predicate const& pred)
   {
-    relations_.emplace_back(rel);
+    predicates_.emplace_back(pred);
   }
 
 private:
-  std::vector<expr::ast>& relations_;
+  std::vector<expr::ast>& predicates_;
 };
 
 } // namespace <anonymous>
@@ -61,7 +61,7 @@ void index::act()
       on_arg_match >> [=](expr::ast const& ast)
       {
         std::vector<expr::ast> relations;
-        relationizer visitor{relations};
+        predicator visitor{relations};
         ast.accept(visitor);
         // FIXME: Support more than 1 partition.
         auto part = partitions_.begin()->second;

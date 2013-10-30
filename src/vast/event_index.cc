@@ -16,9 +16,9 @@ struct event_meta_index::loader : expr::default_const_visitor
   {
   }
 
-  virtual void visit(expr::relation const& rel)
+  virtual void visit(expr::predicate const& pred)
   {
-    rel.operands[0]->accept(*this);
+    pred.lhs().accept(*this);
   }
 
   virtual void visit(expr::name_extractor const&)
@@ -61,11 +61,11 @@ struct event_meta_index::querier : expr::default_const_visitor
     val = &c.val;
   }
 
-  virtual void visit(expr::relation const& rel)
+  virtual void visit(expr::predicate const& pred)
   {
-    op = &rel.op;
-    rel.operands[1]->accept(*this);
-    rel.operands[0]->accept(*this);
+    op = &pred.op;
+    pred.rhs().accept(*this);
+    pred.lhs().accept(*this);
   }
 
   virtual void visit(expr::name_extractor const&)
@@ -162,9 +162,9 @@ struct event_arg_index::loader : expr::default_const_visitor
   {
   }
 
-  virtual void visit(expr::relation const& rel)
+  virtual void visit(expr::predicate const& pred)
   {
-    rel.operands[0]->accept(*this);
+    pred.lhs().accept(*this);
   }
 
   virtual void visit(expr::offset_extractor const& oe)
@@ -237,11 +237,11 @@ struct event_arg_index::querier : expr::default_const_visitor
     val = &c.val;
   }
 
-  virtual void visit(expr::relation const& rel)
+  virtual void visit(expr::predicate const& pred)
   {
-    op = &rel.op;
-    rel.operands[1]->accept(*this);
-    rel.operands[0]->accept(*this);
+    op = &pred.op;
+    pred.rhs().accept(*this);
+    pred.lhs().accept(*this);
   }
 
   virtual void visit(expr::offset_extractor const& oe)

@@ -44,10 +44,10 @@ public:
       term->accept(*this);
   }
 
-  virtual void visit(expr::relation const& rel)
+  virtual void visit(expr::predicate const& pred)
   {
     assert(parent_);
-    expr::ast ast{rel};
+    expr::ast ast{pred};
     state_[ast].parents.insert(parent_);
   }
 
@@ -96,10 +96,10 @@ struct conjunction_evaluator : public expr::default_const_visitor
       update(disj);
   }
 
-  virtual void visit(expr::relation const& rel)
+  virtual void visit(expr::predicate const& pred)
   {
     if (complete)
-      update(rel);
+      update(pred);
   }
 
   void update(expr::ast const& child)
@@ -138,9 +138,9 @@ struct disjunction_evaluator : public expr::default_const_visitor
       operand->accept(*this);
   }
 
-  virtual void visit(expr::relation const& rel)
+  virtual void visit(expr::predicate const& pred)
   {
-    update(rel);
+    update(pred);
   }
 
   void update(expr::ast const& child)

@@ -232,7 +232,7 @@ void n_ary_operator::add(std::unique_ptr<node> n)
 }
 
 
-relation::binary_predicate relation::make_predicate(relational_operator op)
+predicate::binary_predicate predicate::make_predicate(relational_operator op)
 {
   switch (op)
   {
@@ -314,31 +314,45 @@ relation::binary_predicate relation::make_predicate(relational_operator op)
   }
 }
 
-relation::relation(relational_operator op)
+predicate::predicate(relational_operator op)
   : op{op}
 {
-  predicate = make_predicate(op);
+  pred = make_predicate(op);
 }
 
-relation* relation::clone() const
+node const& predicate::lhs() const
 {
-  return new relation{*this};
+  assert(operands.size() == 2);
+  assert(operands[0]);
+  return *operands[0];
 }
 
-bool relation::equals(node const& other) const
+node const& predicate::rhs() const
+{
+  assert(operands.size() == 2);
+  assert(operands[1]);
+  return *operands[1];
+}
+
+predicate* predicate::clone() const
+{
+  return new predicate{*this};
+}
+
+bool predicate::equals(node const& other) const
 {
   if (typeid(*this) != typeid(other))
     return false;
-  return op == static_cast<relation const&>(other).op
+  return op == static_cast<predicate const&>(other).op
       && n_ary_operator::equals(other);
 }
 
-bool relation::is_less_than(node const& other) const
+bool predicate::is_less_than(node const& other) const
 {
   if (typeid(*this) != typeid(other))
     return typeid(*this).hash_code() < typeid(other).hash_code();
   auto& that = static_cast<n_ary_operator const&>(other);
-  return op < static_cast<relation const&>(other).op
+  return op < static_cast<predicate const&>(other).op
       || std::lexicographical_compare(
           operands.begin(), operands.end(),
           that.operands.begin(), that.operands.end(),
@@ -348,17 +362,17 @@ bool relation::is_less_than(node const& other) const
           });
 }
 
-void relation::serialize(serializer& sink) const
+void predicate::serialize(serializer& sink) const
 {
   n_ary_operator::serialize(sink);
   sink << op;
 }
 
-void relation::deserialize(deserializer& source)
+void predicate::deserialize(deserializer& source)
 {
   n_ary_operator::deserialize(source);
   source >> op;
-  predicate = make_predicate(op);
+  pred = make_predicate(op);
 }
 
 conjunction* conjunction::clone() const
@@ -556,7 +570,7 @@ public:
       op = negate(op);
       invert_ = false;
     }
-    auto rel = make_unique<relation>(op);
+    auto p = make_unique<predicate>(op);
     std::unique_ptr<extractor> lhs;
     if (clause.lhs == "name")
       lhs = make_unique<name_extractor>();
@@ -565,9 +579,9 @@ public:
     else if (clause.lhs == "id")
       lhs = make_unique<id_extractor>();
     auto rhs = make_unique<constant>(detail::ast::query::fold(clause.rhs));
-    rel->add(std::move(lhs));
-    rel->add(std::move(rhs));
-    parent_->add(std::move(rel));
+    p->add(std::move(lhs));
+    p->add(std::move(rhs));
+    parent_->add(std::move(p));
   }
 
   void operator()(detail::ast::query::type_clause const& clause)
@@ -578,12 +592,12 @@ public:
       op = negate(op);
       invert_ = false;
     }
-    auto rel = make_unique<relation>(op);
+    auto p = make_unique<predicate>(op);
     auto lhs = make_unique<type_extractor>(clause.lhs);
     auto rhs = make_unique<constant>(detail::ast::query::fold(clause.rhs));
-    rel->add(std::move(lhs));
-    rel->add(std::move(rhs));
-    parent_->add(std::move(rel));
+    p->add(std::move(lhs));
+    p->add(std::move(rhs));
+    parent_->add(std::move(p));
   }
 
   void operator()(detail::ast::query::offset_clause const& clause)
@@ -594,12 +608,12 @@ public:
       op = negate(op);
       invert_ = false;
     }
-    auto rel = make_unique<relation>(op);
+    auto p = make_unique<predicate>(op);
     auto lhs = make_unique<offset_extractor>(clause.off);
     auto rhs = make_unique<constant>(detail::ast::query::fold(clause.rhs));
-    rel->add(std::move(lhs));
-    rel->add(std::move(rhs));
-    parent_->add(std::move(rel));
+    p->add(std::move(lhs));
+    p->add(std::move(rhs));
+    parent_->add(std::move(p));
   }
 
   void operator()(detail::ast::query::event_clause const& clause)
@@ -635,11 +649,11 @@ public:
       if (offs.empty())
         throw error::schema("unknown argument name");
       // TODO: factor rest of block in separate function to promote DRY.
-      auto rel = make_unique<relation>(op);
+      auto p = make_unique<predicate>(op);
       auto lhs = make_offset_extractor(std::move(offs));
       auto rhs = make_constant(clause.rhs);
-      rel->add(std::move(lhs));
-      rel->add(std::move(rhs));
+      p->add(std::move(lhs));
+      p->add(std::move(rhs));
       conjunction* conj;
       if (! (conj = dynamic_cast<conjunction*>(parent_)))
       {
@@ -648,7 +662,7 @@ public:
         parent_->add(std::move(c));
       }
       conj->add(make_glob_node(symbol));
-      conj->add(std::move(rel));
+      conj->add(std::move(p));
     }
     else
     {
@@ -674,11 +688,11 @@ public:
         // TODO: factor rest of block in separate function to promote DRY.
         if (offsets.size() > 1)
           throw error::schema("multiple offsets not yet implemented");
-        auto rel = make_unique<relation>(op);
+        auto p = make_unique<predicate>(op);
         auto lhs = make_offset_extractor(std::move(offsets[0]));
         auto rhs = make_constant(clause.rhs);
-        rel->add(std::move(lhs));
-        rel->add(std::move(rhs));
+        p->add(std::move(lhs));
+        p->add(std::move(rhs));
         conjunction* conj;
         if (! (conj = dynamic_cast<conjunction*>(parent_)))
         {
@@ -687,7 +701,7 @@ public:
           parent_->add(std::move(c));
         }
         conj->add(make_glob_node(e.name));
-        conj->add(std::move(rel));
+        conj->add(std::move(p));
       }
     }
   }
@@ -720,14 +734,14 @@ private:
     // equality comparison suffices. This check is relatively crude at the
     // moment: we just look whether the expression contains * or ?.
     auto glob = regex("\\*|\\?").search(expr);
-    auto rel = make_unique<relation>(glob ? match : equal);
+    auto p = make_unique<predicate>(glob ? match : equal);
     auto lhs = make_unique<name_extractor>();
-    rel->add(std::move(lhs));
+    p->add(std::move(lhs));
     if (glob)
-      rel->add(make_unique<constant>(regex::glob(expr)));
+      p->add(make_unique<constant>(regex::glob(expr)));
     else
-      rel->add(make_unique<constant>(expr));
-    return std::move(rel);
+      p->add(make_unique<constant>(expr));
+    return std::move(p);
   }
 
   n_ary_operator* parent_;
@@ -881,23 +895,23 @@ public:
     }
   }
 
-  virtual void visit(relation const& r)
+  virtual void visit(predicate const& p)
   {
-    bool p = false;
+    bool result = false;
     do
     {
-      r.operands[0]->accept(*this);
+      p.lhs().accept(*this);
       auto lhs = result_;
-      r.operands[1]->accept(*this);
+      p.rhs().accept(*this);
       auto& rhs = result_;
-      p = r.predicate(lhs, rhs);
-      if (p)
+      result = p.pred(lhs, rhs);
+      if (result)
         break;
     }
     while (extractor_state_ && ! extractor_state_->complete);
     if (extractor_state_)
       extractor_state_ = {};
-    result_ = p;
+    result_ = result;
   }
 
   virtual void visit(conjunction const& c)
@@ -1010,10 +1024,10 @@ public:
     str_ += ")\n";
   }
 
-  virtual void visit(relation const& rel)
+  virtual void visit(predicate const& p)
   {
     indent();
-    switch (rel.op)
+    switch (p.op)
     {
       default:
         assert(! "invalid operator type");
@@ -1052,9 +1066,8 @@ public:
     str_ += '\n';
 
     ++depth_;
-    assert(rel.operands.size() == 2);
-    rel.operands[0]->accept(*this);
-    rel.operands[1]->accept(*this);
+    p.lhs().accept(*this);
+    p.rhs().accept(*this);
     --depth_;
   }
 
@@ -1127,11 +1140,11 @@ public:
     str_ += ':' + to<std::string>(t.type);
   }
 
-  virtual void visit(relation const& rel)
+  virtual void visit(predicate const& p)
   {
-    rel.operands[0]->accept(*this);
+    p.lhs().accept(*this);
     str_ += ' ';
-    switch (rel.op)
+    switch (p.op)
     {
       default:
         assert(! "invalid operator type");
@@ -1168,7 +1181,7 @@ public:
         break;
     }
     str_ += ' ';
-    rel.operands[1]->accept(*this);
+    p.rhs().accept(*this);
   }
 
   virtual void visit(conjunction const& conj)

@@ -19,7 +19,7 @@ struct name_extractor;
 struct id_extractor;
 struct offset_extractor;
 struct type_extractor;
-struct relation;
+struct predicate;
 struct conjunction;
 struct disjunction;
 
@@ -30,7 +30,7 @@ using const_visitor = util::const_visitor<
   id_extractor,
   offset_extractor,
   type_extractor,
-  relation,
+  predicate,
   conjunction,
   disjunction
 >;
@@ -43,7 +43,7 @@ struct default_const_visitor : expr::const_visitor
   virtual void visit(expr::id_extractor const&) { }
   virtual void visit(expr::offset_extractor const&) { }
   virtual void visit(expr::type_extractor const&) { }
-  virtual void visit(expr::relation const&) { }
+  virtual void visit(expr::predicate const&) { }
   virtual void visit(expr::conjunction const&) { }
   virtual void visit(expr::disjunction const&) { }
 };
@@ -157,22 +157,26 @@ struct n_ary_operator : public util::abstract_visitable<node, const_visitor>
   std::vector<std::unique_ptr<node>> operands;
 };
 
-/// A relational operator.
-struct relation
-  : public util::visitable<n_ary_operator, relation, const_visitor>
+/// A predicate.
+struct predicate
+  : public util::visitable<n_ary_operator, predicate, const_visitor>
 {
   using binary_predicate = std::function<bool(value const&, value const&)>;
   static binary_predicate make_predicate(relational_operator op);
 
-  relation() = default;
-  relation(relational_operator op);
-  virtual relation* clone() const override;
+  predicate() = default;
+  predicate(relational_operator op);
+
+  node const& lhs() const;
+  node const& rhs() const;
+
+  virtual predicate* clone() const override;
   virtual bool equals(node const& other) const override;
   virtual bool is_less_than(node const& other) const override;
   virtual void serialize(serializer& sink) const override;
   virtual void deserialize(deserializer& source) override;
 
-  binary_predicate predicate;
+  binary_predicate pred;
   relational_operator op;
 };
 

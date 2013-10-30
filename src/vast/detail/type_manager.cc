@@ -188,7 +188,7 @@ void type_manager::initialize()
     expr::id_extractor,
     expr::offset_extractor,
     expr::type_extractor,
-    expr::relation,
+    expr::predicate,
     expr::conjunction,
     expr::disjunction
   > expr_node_types;
