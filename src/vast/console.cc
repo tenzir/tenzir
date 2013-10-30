@@ -10,6 +10,20 @@ using namespace cppa;
 
 namespace vast {
 
+namespace {
+
+struct cow_event_less_than
+{
+  bool operator()(cow<event> const& x, cow<event> const& y) const
+  {
+    return *x < *y;
+  }
+};
+
+cow_event_less_than cow_event_lt;
+
+} // namespace <anonymous>
+
 console::console(cppa::actor_ptr search)
   : search_{std::move(search)}
 {
@@ -19,8 +33,10 @@ console::console(cppa::actor_ptr search)
       "main",
       [=](std::string arg)
       {
-        std::cerr
-          << "[error] invalid command: " << arg << ", try 'help'" << std::endl;
+        if (! arg.empty())
+          std::cerr
+            << "[error] invalid command: " << arg
+            << ", try 'help'" << std::endl;
         return true;
       });
 
@@ -58,7 +74,7 @@ console::console(cppa::actor_ptr search)
         match_split(arg, ' ')(
             on("paginate", arg_match) >> [=](std::string const& str)
             {
-              uint32_t n;
+              uint64_t n;
               auto begin = str.begin();
               if (extract(begin, str.end(), n))
                 opts_.paginate = n;
@@ -129,7 +145,7 @@ console::console(cppa::actor_ptr search)
           std::cout
             << (&p.second == current_result_ ? " * " : "   ")
             << p.second.id() << '\t'
-            << p.second.consumable() << '/' << p.second.size()
+            << p.second.size_new() << '/' << p.second.size()
             << std::endl;
         return true;
       });
@@ -190,6 +206,8 @@ console::console(cppa::actor_ptr search)
               std::cerr
                 << "new query " << current_result_->id()
                 << " -> " << ast << std::endl;
+              send(qry, atom("batch size"), opts_.paginate);
+              send(qry, atom("extract"));
               if (opts_.auto_follow)
               {
                 follow_mode_ = true;
@@ -216,7 +234,12 @@ console::result::result(expr::ast ast)
 
 void console::result::add(cow<event> e)
 {
-  events_.push_back(std::move(e));
+  auto i = std::lower_bound(events_.begin(), events_.end(), e, cow_event_lt);
+  assert(i == events_.end() || cow_event_lt(e, *i));
+  events_.insert(i, e);
+  auto j = std::lower_bound(new_.begin(), new_.end(), e, cow_event_lt);
+  assert(j == new_.end() || cow_event_lt(e, *j));
+  new_.insert(j, e);
 }
 
 size_t console::result::apply(size_t n, std::function<void(event const&)> f)
@@ -230,6 +253,23 @@ size_t console::result::apply(size_t n, std::function<void(event const&)> f)
   return i;
 }
 
+size_t console::result::absorb(size_t n, std::function<void(event const&)> f)
+{
+  auto cap = std::min(n, new_.size());
+  if (f)
+  {
+    size_t i = 0;
+    while (i < cap)
+      f(*new_[i++]);
+    new_.erase(new_.begin(), new_.begin() + i);
+    return i;
+  }
+  else
+  {
+    new_.erase(new_.begin(), new_.begin() + cap);
+    return cap;
+  }
+}
 
 size_t console::result::seek_forward(size_t n)
 {
@@ -261,13 +301,6 @@ size_t console::result::seek_backward(size_t n)
   }
 }
 
-size_t console::result::consumable() const
-{
-  assert(pos_ <= events_.size());
-  return static_cast<size_t>(pos_type(events_.size()) - pos_);
-}
-
-
 expr::ast const& console::result::ast() const
 {
   return ast_;
@@ -276,6 +309,11 @@ expr::ast const& console::result::ast() const
 size_t console::result::size() const
 {
   return events_.size();
+}
+
+size_t console::result::size_new() const
+{
+  return new_.size();
 }
 
 void console::act()
@@ -300,6 +338,11 @@ void console::act()
         VAST_LOG_ACTOR_ERROR("got DOWN from query @" << last_sender()->id());
         results_.erase(last_sender());
       },
+      on(atom("done")) >> [=]
+      {
+        VAST_LOG_ACTOR_DEBUG("got done from query @" << last_sender()->id());
+        // TODO: seal corresponding query.
+      },
       on(atom("prompt")) >> [=]
       {
         bool callback_result;
@@ -310,11 +353,20 @@ void console::act()
       {
         auto i = results_.find(last_sender());
         assert(i != results_.end());
-        i->second.add(*tuple_cast<event>(last_dequeued()));
-        if (&i->second == current_result_ && follow_mode_)
-          current_result_->apply(
-              1,
-              [](event const& e) { std::cout << e << std::endl; });
+        auto r = &i->second;
+        cow<event> ce = *tuple_cast<event>(last_dequeued());
+        r->add(ce);
+        if (r == current_result_ && follow_mode_)
+        {
+          std::cout << *ce << std::endl;
+          r->absorb(1);
+        }
+        if (r->size() % opts_.paginate == opts_.paginate / 2)
+        {
+          send(last_sender(), atom("extract"), opts_.paginate);
+          VAST_LOG_ACTOR_DEBUG(
+              "asks for " << opts_.paginate << " more results");
+        }
       },
       on(atom("key"), atom("get")) >> [=]
       {
@@ -327,50 +379,69 @@ void console::act()
           default:
             {
               std::string desc;
-              if (key == '\n')
-                desc = "\\n";
-              else if (key == ' ')
-                desc = "space";
+              if (key == ' ')
+                desc = "<space>";
               else
-                desc.push_back(key);
+                desc = key;
               std::cerr << "invalid key: '" << desc << "'" << std::endl;
             }
             break;
+          case '\t':
+            {
+              auto n = current_result_->absorb(
+                  opts_.paginate,
+                  [](event const& e) { std::cout << e << std::endl; });
+              if (n == 0)
+                std::cerr
+                  << "[query " << current_result_->id() << "] "
+                  << "no new results available (" << current_result_->size()
+                  << " existing)" << std::endl;
+            }
+            break;
+          case ' ':
+            {
+              auto n = current_result_->apply(
+                  opts_.paginate,
+                  [](event const& e) { std::cout << e << std::endl; });
+              if (n == 0)
+                std::cerr
+                  << "[query " << current_result_->id() << "] "
+                  << "reached end of results" << std::endl;
+            }
+            break;
+          case 'f':
+            {
+              follow_mode_ = ! follow_mode_;
+              std::cerr
+                << "[query " << current_result_->id() << "] "
+                << "toggled follow-mode to " << (follow_mode_ ? "on" : "off")
+                << std::endl;
+            }
+            break;
+          case 'j':
+            {
+              auto n = current_result_->seek_forward(opts_.paginate);
+              std::cerr
+                << "[query " << current_result_->id() << "] "
+                << "seeked +" << n << " events" << std::endl;
+            }
+            break;
+          case 'k':
+            {
+              auto n = current_result_->seek_backward(opts_.paginate);
+              std::cerr
+                << "[query " << current_result_->id() << "] "
+                << "seeked -" << n << " events" << std::endl;
+            }
+            break;
           case '':
+          case '\n':
           case 'q':
             {
               follow_mode_ = false;
               show_prompt();
             }
             return;
-          case 'f':
-            {
-              follow_mode_ = ! follow_mode_;
-            }
-            break;
-          case 'p':
-            {
-              auto n = current_result_->seek_backward(opts_.paginate);
-              std::cerr
-                << "[query " << current_result_->id() << "] seeked -"
-                << n << " events" << std::endl;
-            }
-            break;
-          case 'n':
-            {
-              auto n = current_result_->seek_forward(opts_.paginate);
-              std::cerr
-                << "[query " << current_result_->id() << "] seeked +"
-                << n << " events" << std::endl;
-            }
-            break;
-          case ' ':
-            {
-              current_result_->apply(
-                  opts_.paginate,
-                  [](event const& e) { std::cout << e << std::endl; });
-            }
-            break;
         }
         send(keystroke_monitor, atom("get"));
       },

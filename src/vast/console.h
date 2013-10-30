@@ -10,14 +10,12 @@
 
 namespace vast {
 
-class event;
-
 /// A console-based, interactive query client.
 struct console : actor<console>
 {
   struct options
   {
-    size_t paginate = 10;
+    uint64_t paginate = 10;
     bool auto_follow = true;
   };
 
@@ -30,17 +28,28 @@ struct console : actor<console>
     result(expr::ast ast);
 
     /// Adds a new event to this result.
-    ///
     /// @param e The event to add.
     void add(cow<event> e);
 
-    /// Applies a function to a number of events and advances the internal
-    /// position.
+    /// Applies a function to a given number of existing events and advances
+    /// the internal position.
     ///
-    /// @param n The number of events to print.
+    /// @param n The number of events to apply *f* to.
     ///
-    /// @returns The number of events displayed.
+    /// @param f The function to apply to the *n* next events.
+    ///
+    /// @returns The number of events that *f* has been applied to.
     size_t apply(size_t n, std::function<void(event const&)> f);
+
+    /// Applies a function to a given number of new events and removes the
+    /// affected events from the list of new events.
+    ///
+    /// @param n The number of events to apply *f* to.
+    ///
+    /// @param f The function to apply to the *n* next events.
+    ///
+    /// @returns The number of inspected events.
+    size_t absorb(size_t n, std::function<void(event const&)> f = {});
 
     /// Adjusts the stream position.
     /// @param n The number of events.
@@ -52,21 +61,23 @@ struct console : actor<console>
     /// @returns The number of events seeked.
     size_t seek_backward(size_t n);
 
-    /// Retrieves the number of events ready for consumption.
-    /// @returns The number of events that can be processed.
-    size_t consumable() const;
-
-    /// Retrieves the AST of this query.
+    /// Retrieves the AST of this query result.
     expr::ast const& ast() const;
 
     /// Retrieves the number of events in the result.
+    /// @returns The number of all events.
     size_t size() const;
+
+    /// Retrieves the number of new events in the result.
+    /// @returns The number of new events.
+    size_t size_new() const;
 
   private:
     using pos_type = uint64_t;
 
     pos_type pos_ = 0;
     std::deque<cow<event>> events_;
+    std::deque<cow<event>> new_;
     expr::ast ast_;
   };
 
