@@ -77,8 +77,8 @@ bool operator==(event const& x, event const& y)
 bool operator<(event const& x, event const& y)
 {
   return
-    std::tie(x.name_, x.timestamp_, static_cast<record const&>(x)) <
-    std::tie(y.name_, y.timestamp_, static_cast<record const&>(y));
+    std::tie(x.id_, x.timestamp_, x.name_, static_cast<record const&>(x)) <
+    std::tie(y.id_, y.timestamp_, y.name_, static_cast<record const&>(y));
 }
 
 void swap(event& x, event& y)
