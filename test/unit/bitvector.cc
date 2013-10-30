@@ -59,3 +59,23 @@ BOOST_AUTO_TEST_CASE(bitvector_bitwise_ops)
 
   BOOST_CHECK_EQUAL(to_string(b, false), "010101");
 }
+
+BOOST_AUTO_TEST_CASE(bitvector_backward_search)
+{
+  bitvector x;
+  x.append(0xffff);
+  x.append(0x30abffff7000ffff);
+
+  auto i = x.find_last();
+  BOOST_CHECK_EQUAL(i, 125);
+  i = x.find_prev(i);
+  BOOST_CHECK_EQUAL(i, 124);
+  i = x.find_prev(i);
+  BOOST_CHECK_EQUAL(i, 119);
+  BOOST_CHECK_EQUAL(x.find_prev(63), 15);
+
+  bitvector y;
+  y.append(0xf0ffffffffffff0f);
+  BOOST_CHECK_EQUAL(y.find_last(), 63);
+  BOOST_CHECK_EQUAL(y.find_prev(59), 55);
+}

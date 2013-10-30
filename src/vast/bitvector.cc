@@ -64,7 +64,7 @@ bitvector::reference& bitvector::reference::operator=(reference const& other)
 
 bitvector::reference& bitvector::reference::operator|=(bool x)
 {
-  if (x) 
+  if (x)
     block_ |= mask_;
   return *this;
 }
@@ -75,7 +75,7 @@ bitvector::reference& bitvector::reference::operator&=(bool x)
     block_ &= ~mask_;
   return *this;
 }
-    
+
 bitvector::reference& bitvector::reference::operator^=(bool x)
 {
   if (x)
@@ -269,25 +269,6 @@ bitvector operator-(bitvector const& x, bitvector const& y)
   return b -= y;
 }
 
-bool operator==(bitvector const& x, bitvector const& y)
-{
-  return x.num_bits_ == y.num_bits_ && x.bits_ == y.bits_;
-}
-
-bool operator<(bitvector const& x, bitvector const& y)
-{
-  assert(x.size() == y.size());
-  for (size_type r = x.blocks(); r > 0; --r)
-  {
-    auto i = r - 1;
-    if (x.bits_[i] < y.bits_[i])
-      return true;
-    else if (x.bits_[i] > y.bits_[i])
-      return false;
-  }
-  return false;
-}
-
 void bitvector::resize(size_type n, bool value)
 {
   auto old = blocks();
@@ -429,17 +410,35 @@ bool bitvector::empty() const
 
 size_type bitvector::find_first() const
 {
-  return find_from(0);
+  return find_forward(0);
 }
 
 size_type bitvector::find_next(size_type i) const
 {
   if (i >= (size() - 1) || size() == 0)
     return npos;
-  ++i;
-  auto bi = block_index(i);
+  auto bi = block_index(++i);
   auto block = bits_[bi] & (~block_type(0) << bit_index(i));
-  return block ? bi * bits_per_block + lowest_bit(block) : find_from(bi + 1);
+  return block ? bi * bits_per_block + lowest_bit(block) : find_forward(bi + 1);
+}
+
+size_type bitvector::find_last() const
+{
+  return size() == 0 ? npos : find_backward(blocks() - 1);
+}
+
+size_type bitvector::find_prev(size_type i) const
+{
+  if (i >= (size() - 1) || size() == 0)
+    return npos;
+  auto bi = block_index(--i);
+  auto block = bits_[bi] & ~(~block_type(0) << bit_index(i) + 1);
+  if (block)
+    return bi * bits_per_block + highest_bit(block);
+  else if (bi > 0)
+    return find_backward(bi - 1);
+  else
+    return npos;
 }
 
 size_type bitvector::lowest_bit(block_type block)
@@ -447,6 +446,14 @@ size_type bitvector::lowest_bit(block_type block)
   auto x = block - (block & (block - 1)); // Extract right-most 1-bit.
   size_type log = 0;
   while (x >>= 1)
+    ++log;
+  return log;
+}
+
+size_type bitvector::highest_bit(block_type block)
+{
+  size_type log = 0;
+  while (block >>= 1)
     ++log;
   return log;
 }
@@ -462,13 +469,23 @@ void bitvector::zero_unused_bits()
     bits_.back() &= ~(~block_type(0) << extra_bits());
 }
 
-size_type bitvector::find_from(size_type i) const
+size_type bitvector::find_forward(size_type i) const
 {
   while (i < blocks() && bits_[i] == 0)
     ++i;
   if (i >= blocks())
     return npos;
   return i * bits_per_block + lowest_bit(bits_[i]);
+}
+
+size_type bitvector::find_backward(size_type i) const
+{
+  if (i >= blocks())
+    return npos;
+  while (i > 0 && bits_[i] == 0)
+    --i;
+  auto result = i * bits_per_block + highest_bit(bits_[i]);
+  return result == 0 ? npos : result;
 }
 
 void bitvector::serialize(serializer& sink) const
@@ -481,6 +498,25 @@ void bitvector::deserialize(deserializer& source)
 {
   source >> num_bits_;
   source >> bits_;
+}
+
+bool operator==(bitvector const& x, bitvector const& y)
+{
+  return x.num_bits_ == y.num_bits_ && x.bits_ == y.bits_;
+}
+
+bool operator<(bitvector const& x, bitvector const& y)
+{
+  assert(x.size() == y.size());
+  for (size_type r = x.blocks(); r > 0; --r)
+  {
+    auto i = r - 1;
+    if (x.bits_[i] < y.bits_[i])
+      return true;
+    else if (x.bits_[i] > y.bits_[i])
+      return false;
+  }
+  return false;
 }
 
 } // namespace vast

@@ -104,12 +104,6 @@ public:
   friend bitvector operator-(bitvector const& x, bitvector const& y);
 
   //
-  // Relational operators
-  //
-  friend bool operator==(bitvector const& x, bitvector const& y);
-  friend bool operator<(bitvector const& x, bitvector const& y);
-
-  //
   // Basic operations
   //
   /// Appends the bits in a sequence of values.
@@ -230,11 +224,25 @@ public:
 
   /// Finds the next 1-bit from a given starting position.
   ///
-  /// @param i The index where to start looking.
+  /// @param i The index where to start looking forward.
   ///
   /// @returns The position of the first bit that equals to 1 after position
   /// *i*  or `npos` if no such bit exists.
   size_type find_next(size_type i) const;
+
+  /// Finds the bit position of of the last 1-bit.
+  ///
+  /// @returns The position of the last bit that equals to one or `npos` if no
+  /// such bit exists.
+  size_type find_last() const;
+
+  /// Finds the previous 1-bit from a given starting position.
+  ///
+  /// @param i The index where to start looking backward.
+  ///
+  /// @returns The position of the first bit that equals to 1 before position
+  /// *i* or `npos` if no such bit exists.
+  size_type find_prev(size_type i) const;
 
 private:
   /// Computes the block index for a given bit position.
@@ -270,6 +278,11 @@ private:
   /// @returns The bit position where *block* has its first bit set to 1.
   static size_type lowest_bit(block_type block);
 
+  /// Computes the bit position last 1-bit in a given block.
+  /// @param block The block to inspect.
+  /// @returns The bit position where *block* has its last bit set to 1.
+  static size_type highest_bit(block_type block);
+
   /// Computes the number of excess/unused bits in the bit vector.
   block_type extra_bits() const;
 
@@ -278,13 +291,21 @@ private:
   // this function resets.
   void zero_unused_bits();
 
-  /// Looks for the first 1-bit starting at a given position.
+  /// Looks forward for the first 1-bit starting at a given position.
   ///
   /// @param i The block index to start looking.
   ///
   /// @returns The block index of the first 1-bit starting from *i* or
   /// `bitvector::npos` if no 1-bit exists.
-  size_type find_from(size_type i) const;
+  size_type find_forward(size_type i) const;
+
+  /// Looks backward for the first 1-bit starting at a given position.
+  ///
+  /// @param i The block index to start looking backward.
+  ///
+  /// @returns The block index of the first 1-bit going backward from *i* or
+  /// `bitvector::npos` if no 1-bit exists.
+  size_type find_backward(size_type i) const;
 
   std::vector<block_type> bits_;
   size_type num_bits_;
@@ -333,6 +354,9 @@ private:
     out = std::copy(str.begin(), str.end(), out);
     return true;
   }
+
+  friend bool operator==(bitvector const& x, bitvector const& y);
+  friend bool operator<(bitvector const& x, bitvector const& y);
 };
 
 } // namespace vast
