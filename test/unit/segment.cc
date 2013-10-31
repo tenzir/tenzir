@@ -39,15 +39,46 @@ BOOST_AUTO_TEST_CASE(segment_reading_and_writing)
   segment::reader r1(&s1);
   event e;
   size_t n = 0;
-  while (r1.read(e))
+  while (r1.read(&e))
     BOOST_CHECK_EQUAL(e, (event{n++}));
   BOOST_CHECK_EQUAL(n, 1124);
 
   segment::reader r2(&s2);
   n = 0;
-  while (r2.read(e))
+  while (r2.read(&e))
     BOOST_CHECK_EQUAL(e, (event{n++}));
   BOOST_CHECK_EQUAL(n, 50);
+}
+
+BOOST_AUTO_TEST_CASE(segment_seeking)
+{
+  segment s;
+  s.base(1000);
+  segment::writer w{&s, 256};
+  for (auto i = 0; i < 1024; ++i)
+    BOOST_CHECK(w.write(event{1000 + i}));
+  BOOST_CHECK(w.flush());
+  BOOST_REQUIRE_EQUAL(s.events(), 1024);
+
+  segment::reader r{&s};
+  event e;
+  BOOST_CHECK(r.seek(1042));
+  BOOST_CHECK(r.read(&e));
+  BOOST_CHECK_EQUAL(e[0], 1042);
+  BOOST_CHECK(r.seek(1010));
+  BOOST_CHECK(r.read(&e));
+  BOOST_CHECK_EQUAL(e[0], 1010);
+  BOOST_CHECK(! r.seek(10));
+  BOOST_CHECK(r.seek(1011));
+  BOOST_CHECK(r.read(&e));
+  BOOST_CHECK_EQUAL(e[0], 1011);
+  BOOST_CHECK(r.seek(1720));
+  BOOST_CHECK(r.read(&e));
+  BOOST_CHECK_EQUAL(e[0], 1720);
+  BOOST_CHECK(! r.seek(2024));
+  BOOST_CHECK(r.seek(2023));
+  BOOST_CHECK(r.read(&e));
+  BOOST_CHECK_EQUAL(e[0], 2023);
 }
 
 BOOST_AUTO_TEST_CASE(segment_event_extraction)

@@ -85,7 +85,7 @@ public:
 
     /// Retrieves the number of objects available for deserialization.
     /// @returns The number of times one can call ::read on this chunk.
-    uint32_t elements() const;
+    uint32_t available() const;
 
     /// Retrieves the number of bytes deserialized so far.
     /// @returns The number of deserialized bytes.

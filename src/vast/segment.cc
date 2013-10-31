@@ -88,16 +88,29 @@ bool segment::writer::store(event const& e)
 
 
 segment::reader::reader(segment const* s)
-  : segment_(s),
-    current_id_(segment_->base_)
+  : segment_{s},
+    id_{segment_->base_}
 {
   if (! segment_->chunks_.empty())
-    reader_ = make_unique<chunk::reader>(*segment_->chunks_[next_++]);
+    reader_ = make_unique<chunk::reader>(*segment_->chunks_[chunk_idx_]);
 }
 
-bool segment::reader::read(event& e)
+bool segment::reader::read(event* e)
 {
-  return read(&e);
+  if (! reader_)
+    return false;
+
+  if (reader_->available() == 0)
+  {
+    if (++chunk_idx_ == segment_->chunks_.size()) // No more events available.
+      return false;
+
+    auto& next_chunk = *segment_->chunks_[chunk_idx_];
+    reader_ = make_unique<chunk::reader>(next_chunk);
+    return read(e);
+  }
+
+  return load(e);
 }
 
 bool segment::reader::seek(event_id id)
@@ -108,88 +121,57 @@ bool segment::reader::seek(event_id id)
   if (segment_->base_ == 0)
     return false;
 
-  if (current_id_ == id)
-    return true;
-
-  if (id < segment_->base_ || id > segment_->base_ + segment_->n_)
+  if (id < segment_->base_ || id >= segment_->base_ + segment_->n_)
     return false;
 
   chunk const* chk;
-  if (id < current_id_)
+  if (id < id_)
   {
-    current_id_ = segment_->base_;
+    id_ = segment_->base_;
     size_t i = 0;
     while (i < segment_->chunks_.size())
     {
       chk = &segment_->chunks_[i].read();
-      if (current_id_ + chk->elements() > id)
+      if (id_ + chk->elements() > id)
         break;
-      current_id_ += chk->elements();
+      id_ += chk->elements();
       ++i;
     }
 
     reader_ = make_unique<chunk::reader>(*chk);
-
-    while (current_id_ < id)
-      if (! read(nullptr))
-        return false;
-
-    return true;
   }
   else
   {
-    auto elements = reader_->elements();
-    do
+    auto elements = reader_->available();
+    while (chunk_idx_ < segment_->chunks_.size() && id_ + elements < id)
     {
-      if (current_id_ + elements < id)
-      {
-        current_id_ += elements;
-        chk = &segment_->chunks_[next_].read();
-        elements = chk->elements();
+      id_ += elements;
+      chk = &segment_->chunks_[++chunk_idx_].read();
+      elements = chk->elements();
+      if (reader_)
         reader_.reset();
-        continue;
-      }
-
-      if (! reader_)
-        reader_ = make_unique<chunk::reader>(*chk);
-
-      while (current_id_ < id)
-        if (! read(nullptr))
-          return false;
-
-      return true;
     }
-    while (next_++ < segment_->chunks_.size());
+
+    if (! reader_)
+      reader_ = make_unique<chunk::reader>(*chk);
   }
 
-  return false;
+  while (id_ < id)
+    if (! read(nullptr))
+      return false;
+
+  return true;
 }
 
 bool segment::reader::empty() const
 {
-  return reader_ ? reader_->elements() == 0 : true;
-}
-
-bool segment::reader::read(event* e)
-{
-  if (! reader_)
-    return false;
-
-  if (reader_->elements() == 0)
-  {
-    if (next_ == segment_->chunks_.size()) // No more events available.
-      return false;
-
-    auto& next_chunk = *segment_->chunks_[next_++];
-    reader_ = make_unique<chunk::reader>(next_chunk);
-    return read(e);
-  }
-
-  return load(e);
+  return reader_ ? reader_->available() == 0 : true;
 }
 
 bool segment::reader::load(event* e)
 {
+  assert(reader_);
+
   string name;
   if (! reader_->read(name, 0))
   {
@@ -216,13 +198,14 @@ bool segment::reader::load(event* e)
     event r(std::move(v));
     r.name(std::move(name));
     r.timestamp(t);
-    if (current_id_ > 0)
-      r.id(current_id_);
+    if (id_ > 0)
+      r.id(id_);
     *e = std::move(r);
   }
 
-  if (current_id_ > 0)
-    ++current_id_;
+  if (id_ > 0)
+    ++id_;
+
   return true;
 }
 
@@ -286,7 +269,7 @@ optional<event> segment::load(event_id id) const
     return {};
 
   event e;
-  if (! r.read(e))
+  if (! r.read(&e))
     return {};
 
   return {std::move(e)};

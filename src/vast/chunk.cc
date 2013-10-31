@@ -32,7 +32,7 @@ chunk::reader::reader(chunk const& chk)
 {
 }
 
-uint32_t chunk::reader::elements() const
+uint32_t chunk::reader::available() const
 {
   return available_;
 }

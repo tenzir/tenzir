@@ -92,14 +92,22 @@ public:
     /// @param s The segment to read from.
     explicit reader(segment const* s);
 
-    /// Deserializes an event from the segment.
-    /// @param e The event to deserialize into.
-    /// @returns The number of events left for extraction in the current chunk.
-    bool read(event& e);
+    /// Reads the next event from the current position.
+    ///
+    /// @param e The event to deserialize into. If `nullptr`, an event will
+    /// still be deserialized but discarded afterwards. This can be useful to
+    /// fast-forward to a specific event.
+    ///
+    /// @returns `true` if reading the event into *e* succeeded.
+    bool read(event* e);
 
-    /// Fast-forwards the reader an event with a given ID.
-    /// @param The event ID to forward to.
-    /// @returns `true` if skipping to *id* succeeded.
+    /// Seeks to an event with a given ID.
+    ///
+    /// @param id The event ID to seek to.
+    ///
+    /// @returns `true` if seeking to *id* succeeded, and `false` if *id* is
+    /// out-of-bounds or if the reader uses a mask which does not contain *id*.
+    ///
     /// @post The next call to ::read exctracts the event with ID *id*.
     bool seek(event_id id);
 
@@ -108,13 +116,12 @@ public:
     bool empty() const;
 
   private:
-    bool read(event* e);
     bool load(event* e);
 
     segment const* segment_;
+    event_id id_ = 0;
+    size_t chunk_idx_ = 0;
     std::unique_ptr<chunk::reader> reader_;
-    size_t next_ = 0;
-    event_id current_id_ = 0;
   };
 
   static uint32_t const magic = 0x2a2a2a2a;
