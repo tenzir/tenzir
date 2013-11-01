@@ -432,7 +432,7 @@ size_type bitvector::find_prev(size_type i) const
   if (i >= (size() - 1) || size() == 0)
     return npos;
   auto bi = block_index(--i);
-  auto block = bits_[bi] & ~(~block_type(0) << bit_index(i) + 1);
+  auto block = bits_[bi] & ~(~block_type(0) << (bit_index(i) + 1));
   if (block)
     return bi * bits_per_block + highest_bit(block);
   else if (bi > 0)
