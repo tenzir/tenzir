@@ -31,13 +31,13 @@ list(GET version_numbers 0 VERSION_MAJOR)
 list(GET version_numbers 1 VERSION_MINOR)
 set(VERSION_MAJ_MIN "${VERSION_MAJOR}.${VERSION_MINOR}")
 
-# TODO: Fix variadic logging and then add -pedantic again.
-#set(CMAKE_CXX_FLAGS                "-Wall -Wextra -pedantic -std=c++11")
-set(CMAKE_CXX_FLAGS                "-Wall -Wextra -std=c++11")
+# We need -ftemplate-depth=256 to make Boost Spirit happy.
+set(CMAKE_CXX_FLAGS                "-Wall -Wextra -std=c++11 -ftemplate-depth=256")
 set(CMAKE_CXX_FLAGS_DEBUG          "-O0 -g")
 set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os")
 set(CMAKE_CXX_FLAGS_RELEASE        "-O4")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g")
+# TODO: Fix variadic logging and then add -pedantic again.
 
 if (ENABLE_DEBUG)
   set(CMAKE_BUILD_TYPE Debug)
