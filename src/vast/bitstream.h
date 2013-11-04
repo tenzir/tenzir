@@ -366,6 +366,9 @@ private:
   };
 };
 
+template <typename Derived>
+typename bitstream_base<Derived>::size_type const bitstream_base<Derived>::npos;
+
 /// An append-only sequence of bits.
 class bitstream : public bitstream_base<bitstream>,
                   util::equality_comparable<bitstream>
