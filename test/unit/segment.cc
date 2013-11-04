@@ -1,4 +1,5 @@
 #include "test.h"
+#include "vast/bitstream.h"
 #include "vast/event.h"
 #include "vast/segment.h"
 
@@ -36,17 +37,16 @@ BOOST_AUTO_TEST_CASE(segment_reading_and_writing)
   BOOST_CHECK(w.flush());
   BOOST_REQUIRE_EQUAL(s2.events(), 50);
 
-  segment::reader r1(&s1);
-  event e;
+  segment::reader r1{&s1};
   size_t n = 0;
-  while (r1.read(&e))
-    BOOST_CHECK_EQUAL(e, (event{n++}));
+  while (auto e = r1.read())
+    BOOST_CHECK_EQUAL(*e, (event{n++}));
   BOOST_CHECK_EQUAL(n, 1124);
 
-  segment::reader r2(&s2);
+  segment::reader r2{&s2};
   n = 0;
-  while (r2.read(&e))
-    BOOST_CHECK_EQUAL(e, (event{n++}));
+  while (auto e = r2.read())
+    BOOST_CHECK_EQUAL(*e, (event{n++}));
   BOOST_CHECK_EQUAL(n, 50);
 }
 
@@ -61,60 +61,114 @@ BOOST_AUTO_TEST_CASE(segment_seeking)
   BOOST_REQUIRE_EQUAL(s.events(), 1024);
 
   segment::reader r{&s};
-  event e;
+  optional<event> e;
+
   BOOST_CHECK(r.seek(1042));
-  BOOST_CHECK(r.read(&e));
-  BOOST_CHECK_EQUAL(e[0], 1042);
+  e = r.read();
+  BOOST_REQUIRE(e);
+  BOOST_CHECK_EQUAL(e->front(), 1042);
+
   BOOST_CHECK(r.seek(1010));
-  BOOST_CHECK(r.read(&e));
-  BOOST_CHECK_EQUAL(e[0], 1010);
+  e = r.read();
+  BOOST_REQUIRE(e);
+  BOOST_CHECK_EQUAL(e->front(), 1010);
+
   BOOST_CHECK(! r.seek(10));
-  BOOST_CHECK(r.seek(1011));
-  BOOST_CHECK(r.read(&e));
-  BOOST_CHECK_EQUAL(e[0], 1011);
-  BOOST_CHECK(r.seek(1720));
-  BOOST_CHECK(r.read(&e));
-  BOOST_CHECK_EQUAL(e[0], 1720);
+  BOOST_CHECK(! r.seek(999));
   BOOST_CHECK(! r.seek(2024));
+
+  BOOST_CHECK(r.seek(1011));
+  e = r.read();
+  BOOST_REQUIRE(e);
+  BOOST_CHECK_EQUAL(e->front(), 1011);
+
+  BOOST_CHECK(r.seek(1720));
+  e = r.read();
+  BOOST_REQUIRE(e);
+  BOOST_CHECK_EQUAL(e->front(), 1720);
+
   BOOST_CHECK(r.seek(2023));
-  BOOST_CHECK(r.read(&e));
-  BOOST_CHECK_EQUAL(e[0], 2023);
+  e = r.read();
+  BOOST_REQUIRE(e);
+  BOOST_CHECK_EQUAL(e->front(), 2023);
 }
 
-BOOST_AUTO_TEST_CASE(segment_event_extraction)
+BOOST_AUTO_TEST_CASE(segment_event_loading)
 {
-  segment s1;
+  segment s;
   {
-    segment::writer w(&s1, 10);
+    segment::writer w{&s, 10};
     for (size_t i = 0; i < 256; ++i)
       BOOST_CHECK(w.write(event{i}));
   }
-  BOOST_CHECK_EQUAL(s1.events(), 256);
+  BOOST_CHECK_EQUAL(s.events(), 256);
 
   auto b = 42u;
-  s1.base(b);
+  s.base(b);
 
-  auto o = s1.load(b);
+  auto o = s.load(b);
   BOOST_REQUIRE(o);
   auto& first = *o;
   BOOST_CHECK_EQUAL(first.id(), b);
   BOOST_CHECK_EQUAL(first[0], 0u);
 
-  o = s1.load(b + 42);
+  o = s.load(b + 42);
   BOOST_REQUIRE(o);
   auto& mid1 = *o;
   BOOST_CHECK_EQUAL(mid1.id(), b + 42);
   BOOST_CHECK_EQUAL(mid1[0], 42u);
 
-  o = s1.load(256);
+  o = s.load(256);
   BOOST_REQUIRE(o);
   auto& mid2 = *o;
   BOOST_CHECK_EQUAL(mid2.id(), 256);
   BOOST_CHECK_EQUAL(mid2[0], 256u - b);
 
-  o = s1.load(b + 255);
+  o = s.load(b + 255);
   BOOST_REQUIRE(o);
   auto& last = *o;
   BOOST_CHECK_EQUAL(last.id(), b + 255);
   BOOST_CHECK_EQUAL(last[0], 255u);
+}
+
+BOOST_AUTO_TEST_CASE(segment_event_extraction)
+{
+  segment s;
+  {
+    segment::writer w{&s, 10};
+    for (size_t i = 0; i < 256; ++i)
+      BOOST_CHECK(w.write(event{i}));
+  }
+  s.base(1000);
+
+  null_bitstream mask;
+  mask.append(1000, false);
+  for (auto i = 0; i < 256; ++i)
+    mask.push_back(i % 4 == 0);
+  mask.append(1000, false);
+
+  segment::reader r{&s};
+  BOOST_CHECK(r.seek(1000));
+  std::vector<event> v;
+  auto i = r.extract_forward(
+      mask,
+      [&v](event e) { v.push_back(std::move(e)); });
+
+  BOOST_CHECK(i);
+  BOOST_CHECK_EQUAL(*i, v.size());
+  for (auto& e : v )
+    BOOST_CHECK_EQUAL((e.id() - s.base()) % 4, 0);
+
+  v.clear();
+  BOOST_CHECK(r.seek(1200));
+  i = r.extract_backward(
+      mask,
+      [&v](event e) { v.push_back(std::move(e)); });
+  BOOST_CHECK(i);
+  BOOST_CHECK_EQUAL(*i, v.size());
+
+  while (i)
+    i = r.extract_backward(
+        mask,
+        [&s](event e) { BOOST_CHECK_EQUAL((e.id() - s.base()) % 4, 0); });
 }

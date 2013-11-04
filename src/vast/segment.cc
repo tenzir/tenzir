@@ -1,5 +1,6 @@
 #include "vast/segment.h"
 
+#include "vast/bitstream.h"
 #include "vast/event.h"
 #include "vast/logger.h"
 #include "vast/serialization.h"
@@ -77,7 +78,7 @@ bool segment::writer::store(event const& e)
 {
   auto success =
     writer_->write(e.name(), 0) &&
-    writer_->write(e.timestamp(), 0);
+    writer_->write(e.timestamp(), 0) &&
     writer_->write(static_cast<std::vector<value> const&>(e));
 
   if (! success)
@@ -89,88 +90,171 @@ bool segment::writer::store(event const& e)
 
 segment::reader::reader(segment const* s)
   : segment_{s},
-    id_{segment_->base_}
+    navigator_{*s}
 {
-  if (! segment_->chunks_.empty())
-    reader_ = make_unique<chunk::reader>(*segment_->chunks_[chunk_idx_]);
 }
 
-bool segment::reader::read(event* e)
+optional<event> segment::reader::read()
 {
-  if (! reader_)
-    return false;
-
-  if (reader_->available() == 0)
-  {
-    if (++chunk_idx_ == segment_->chunks_.size()) // No more events available.
-      return false;
-
-    auto& next_chunk = *segment_->chunks_[chunk_idx_];
-    reader_ = make_unique<chunk::reader>(next_chunk);
-    return read(e);
-  }
-
-  return load(e);
+  event e;
+  if (! navigator_.load(&e))
+    return {};
+  return {std::move(e)};
 }
 
 bool segment::reader::seek(event_id id)
 {
-  if (! reader_)
-    return false;
-
-  if (segment_->base_ == 0)
-    return false;
-
-  if (id < segment_->base_ || id >= segment_->base_ + segment_->n_)
-    return false;
-
-  chunk const* chk;
-  if (id < id_)
+  if (! segment_->contains(id))
   {
-    id_ = segment_->base_;
-    size_t i = 0;
-    while (i < segment_->chunks_.size())
-    {
-      chk = &segment_->chunks_[i].read();
-      if (id_ + chk->elements() > id)
-        break;
-      id_ += chk->elements();
-      ++i;
-    }
-
-    reader_ = make_unique<chunk::reader>(*chk);
+    return false;
+  }
+  else if (id == navigator_.id())
+  {
+    return true;
+  }
+  else if (id < navigator_.id())
+  {
+    if (navigator_.within_current(id))
+      navigator_.backup();
+    else
+      while (navigator_.id() > id)
+        if (! navigator_.prev())
+          return false;
   }
   else
   {
-    auto elements = reader_->available();
-    while (chunk_idx_ < segment_->chunks_.size() && id_ + elements < id)
-    {
-      id_ += elements;
-      chk = &segment_->chunks_[++chunk_idx_].read();
-      elements = chk->elements();
-      if (reader_)
-        reader_.reset();
-    }
-
-    if (! reader_)
-      reader_ = make_unique<chunk::reader>(*chk);
+    while (! navigator_.within_current(id))
+      if (! navigator_.next())
+        return false;
   }
 
-  while (id_ < id)
-    if (! read(nullptr))
-      return false;
-
-  return true;
+  auto n = id - navigator_.id();
+  return navigator_.skip(n) == n;
 }
 
-bool segment::reader::empty() const
+optional<size_t> segment::reader::extract_forward(bitstream const& mask,
+                                                  std::function<void(event)> f)
 {
-  return reader_ ? reader_->available() == 0 : true;
+  return extract(mask, 0, 0, f);
 }
 
-bool segment::reader::load(event* e)
+optional<size_t> segment::reader::extract_backward(bitstream const& mask,
+                                                  std::function<void(event)> f)
 {
-  assert(reader_);
+  auto last = mask.find_prev(navigator_.id());
+
+  if (navigator_.backup() == 0 || ! navigator_.within_current(last))
+    if (! navigator_.prev())
+      return {};
+
+  auto result = extract(mask, 0, last + 1, f);
+  navigator_.backup();
+  return result;
+}
+
+
+segment::reader::navigator::navigator(segment const& s)
+  : segment_{s},
+    next_{segment_.base_},
+    chunk_base_{segment_.base_}
+{
+  if (auto chk = current())
+    reader_ = make_unique<chunk::reader>(*chk);
+}
+
+chunk const* segment::reader::navigator::current() const
+{
+  if (segment_.chunks_.empty())
+    return nullptr;
+  assert(chunk_idx_ < segment_.chunks_.size());
+  return &segment_.chunks_[chunk_idx_].read();
+}
+
+chunk const* segment::reader::navigator::next()
+{
+  auto chk = current();
+  if (! chk || chunk_idx_ + 1 == segment_.chunks_.size())
+    return nullptr;
+
+  if (next_ > 0)
+  {
+    chunk_base_ += chk->elements();
+    next_ = chunk_base_;
+  }
+
+  chk = &segment_.chunks_[++chunk_idx_].read();
+  reader_ = make_unique<chunk::reader>(*chk);
+
+  return chk;
+}
+
+chunk const* segment::reader::navigator::prev()
+{
+  if (segment_.chunks_.empty() || chunk_idx_ == 0)
+    return nullptr;
+
+  auto chk = &segment_.chunks_[--chunk_idx_].read();
+  reader_ = make_unique<chunk::reader>(*chk);
+
+  if (next_ > 0)
+  {
+    chunk_base_ -= chk->elements();
+    next_ = chunk_base_;
+  }
+
+  return chk;
+}
+
+event_id segment::reader::navigator::backup()
+{
+  auto chk = current();
+  if (chk && next_ != chunk_base_)
+  {
+    auto distance = next_ - chunk_base_;
+    reader_ = make_unique<chunk::reader>(*chk);
+    if (next_ > 0)
+      next_ = chunk_base_;
+
+    return distance;
+  }
+
+  return 0;
+}
+
+event_id segment::reader::navigator::skip(size_t n)
+{
+  if (n == 0)
+    return 0;
+
+  event_id skipped = 0;
+  while (n --> 0)
+  {
+    if (! load(nullptr))
+      break;
+    ++skipped;
+  }
+
+  return skipped;
+}
+
+
+event_id segment::reader::navigator::id() const
+{
+  return next_;
+}
+
+bool segment::reader::navigator::within_current(event_id eid) const
+{
+  assert(current() != nullptr);
+  return next_ > 0 
+      && eid >= chunk_base_
+      && eid < chunk_base_ + current()->elements();
+}
+
+bool segment::reader::navigator::load(event* e)
+{
+  if (! reader_ || reader_->available() == 0)
+    return next() ? load(e) : false;
 
   string name;
   if (! reader_->read(name, 0))
@@ -198,15 +282,56 @@ bool segment::reader::load(event* e)
     event r(std::move(v));
     r.name(std::move(name));
     r.timestamp(t);
-    if (id_ > 0)
-      r.id(id_);
+    if (next_ > 0)
+      r.id(next_);
     *e = std::move(r);
   }
 
-  if (id_ > 0)
-    ++id_;
+  if (next_ > 0)
+    ++next_;
 
   return true;
+}
+
+optional<size_t> segment::reader::extract(bitstream const& mask,
+                                          event_id begin,
+                                          event_id end,
+                                          std::function<void(event)> f)
+{
+  if (! f ||
+      ! mask ||
+      (begin > 0 && begin < segment_->base_) || 
+      (end > 0 && end >= segment_->base_ + segment_->n_) ||
+      navigator_.id() == 0)
+    return {};
+
+  if (begin > 0 && ! seek(begin))
+    return {};
+
+  optional<size_t> n = 0;
+  for (auto i = mask.find_next(navigator_.id() - 1);
+       i != bitstream::npos && 
+           ((end == 0 && navigator_.within_current(i)) || i < end);
+       i = mask.find_next(i))
+  {
+    if (! seek(i))
+    {
+      VAST_LOG_ERROR("could not seek to event " << i << " although in range");
+      return {};
+    }
+
+    auto e = read();
+    if (! e)
+    {
+      VAST_LOG_ERROR("failed to read event " << i << " from chunk");
+      return {};
+    }
+
+    f(std::move(*e));
+    ++*n;
+  }
+
+  return n;
 }
 
 
@@ -234,7 +359,12 @@ event_id segment::base() const
 
 bool segment::contains(event_id eid) const
 {
-  return base_ <= eid && eid < base_ + n_;
+  return base_ != 0 && base_ <= eid && eid < base_ + n_;
+}
+
+bool segment::contains(event_id from, event_id to) const
+{
+  return base_ != 0 && from < to && base_ <= from && to < base_ + n_;
 }
 
 uint32_t segment::events() const
@@ -267,12 +397,7 @@ optional<event> segment::load(event_id id) const
   reader r(this);
   if (! r.seek(id))
     return {};
-
-  event e;
-  if (! r.read(&e))
-    return {};
-
-  return {std::move(e)};
+  return r.read();
 }
 
 bool segment::append(chunk& c)

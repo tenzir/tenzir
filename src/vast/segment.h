@@ -14,6 +14,7 @@
 
 namespace vast {
 
+class bitstream;
 class event;
 
 /// Contains a vector of chunks with additional meta data.
@@ -93,13 +94,8 @@ public:
     explicit reader(segment const* s);
 
     /// Reads the next event from the current position.
-    ///
-    /// @param e The event to deserialize into. If `nullptr`, an event will
-    /// still be deserialized but discarded afterwards. This can be useful to
-    /// fast-forward to a specific event.
-    ///
-    /// @returns `true` if reading the event into *e* succeeded.
-    bool read(event* e);
+    /// @returns An engaged event upon success.
+    optional<event> read();
 
     /// Seeks to an event with a given ID.
     ///
@@ -111,17 +107,74 @@ public:
     /// @post The next call to ::read exctracts the event with ID *id*.
     bool seek(event_id id);
 
-    /// Checks whether the reader has still events that can be read.
-    /// @returns `true` iff the reader is empty.
-    bool empty() const;
+    /// Extracts events forward from the current position according to a mask.
+    ///
+    /// @param mask Represents the events to extract.
+    ///
+    /// @param f The function to invoke on each extracted event.
+    ///
+    /// @returns An engaged value with the number of times *f* has been
+    /// applied, and a disengaged value if an error occurred.
+    optional<size_t> extract_forward(bitstream const& mask,
+                                     std::function<void(event)> f);
+
+    /// Extracts events backward from the current position according to a mask.
+    ///
+    /// @param mask Represents the events to extract.
+    ///
+    /// @param f The function to invoke on each extracted event.
+    ///
+    /// @returns An engaged value with the number of times *f* has been
+    /// applied, and a disengaged value if an error occurred.
+    optional<size_t> extract_backward(bitstream const& mask,
+                                      std::function<void(event)> f);
 
   private:
-    bool load(event* e);
+    // Helps navigation segment chunks.
+    class navigator
+    {
+    public:
+      navigator(segment const& s);
+
+      chunk const* current() const;
+      chunk const* next();
+      chunk const* prev();
+      event_id backup();
+      event_id skip(size_t n);
+
+      event_id id() const;
+      bool within_current(event_id eid) const;
+      bool load(event* e);
+
+    private:
+      segment const& segment_;
+      event_id next_ = 0;
+      event_id chunk_base_ = 0;
+      size_t chunk_idx_ = 0;
+      std::unique_ptr<chunk::reader> reader_;
+    };
+
+    /// Extracts events according to a mask and given boundaries.
+    ///
+    /// @param mask Represents the events to extract.
+    ///
+    /// @param from The ID where to start extraction. If 0, will use the
+    /// current navigator position.
+    ///
+    /// @param to The ID where to end extraction. If 0, will extract until the
+    /// end of the current chunk.
+    ///
+    /// @param f The function to invoke on each extracted event.
+    ///
+    /// @returns An engaged value with the number of times *f* has been
+    /// applied, and a disengaged value if an error occurred.
+    optional<size_t> extract(bitstream const& mask,
+                             event_id from,
+                             event_id to,
+                             std::function<void(event)> f);
 
     segment const* segment_;
-    event_id id_ = 0;
-    size_t chunk_idx_ = 0;
-    std::unique_ptr<chunk::reader> reader_;
+    navigator navigator_;
   };
 
   static uint32_t const magic = 0x2a2a2a2a;
@@ -150,6 +203,12 @@ public:
   /// @param eid The event ID to check.
   /// @returns `true` iff the segment contains the event having id *eid*.
   bool contains(event_id eid) const;
+
+  /// Checks whether the segment contains the given event half-open ID range.
+  /// @param from The left side of the interval.
+  /// @param to The right side of the interval.
+  /// @returns `true` iff the segment contains *[from, to]*.
+  bool contains(event_id from, event_id to) const;
 
   /// Retrieves the number of events in the segment.
   uint32_t events() const;
