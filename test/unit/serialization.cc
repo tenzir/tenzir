@@ -76,7 +76,6 @@ BOOST_AUTO_TEST_CASE(containers)
 // A serializable class.
 class serializable
 {
-  friend struct access;
 public:
   int i() const
   {
@@ -84,6 +83,8 @@ public:
   }
 
 private:
+  friend vast::access;
+
   void serialize(serializer& sink) const
   {
     sink << i_ - 10;
