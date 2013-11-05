@@ -93,16 +93,22 @@ public:
     /// @param s The segment to read from.
     explicit reader(segment const* s);
 
+    /// Retrieves the current position of the reader.
+    /// @returns The ID of the next event to ::read.
+    event_id position() const;
+
     /// Reads the next event from the current position.
+    /// @param id If non-zero, specifies the ID of the event to extract.
     /// @returns An engaged event upon success.
-    optional<event> read();
+    optional<event> read(event_id id = 0);
 
     /// Seeks to an event with a given ID.
     ///
     /// @param id The event ID to seek to.
     ///
     /// @returns `true` if seeking to *id* succeeded, and `false` if *id* is
-    /// out-of-bounds or if the reader uses a mask which does not contain *id*.
+    /// out-of-bounds or if the reader uses a mask which does not contain
+    /// *id*.
     ///
     /// @post The next call to ::read exctracts the event with ID *id*.
     bool seek(event_id id);
@@ -130,30 +136,6 @@ public:
                                       std::function<void(event)> f);
 
   private:
-    // Helps navigation segment chunks.
-    class navigator
-    {
-    public:
-      navigator(segment const& s);
-
-      chunk const* current() const;
-      chunk const* next();
-      chunk const* prev();
-      event_id backup();
-      event_id skip(size_t n);
-
-      event_id id() const;
-      bool within_current(event_id eid) const;
-      bool load(event* e);
-
-    private:
-      segment const& segment_;
-      event_id next_ = 0;
-      event_id chunk_base_ = 0;
-      size_t chunk_idx_ = 0;
-      std::unique_ptr<chunk::reader> reader_;
-    };
-
     /// Extracts events according to a mask and given boundaries.
     ///
     /// @param mask Represents the events to extract.
@@ -173,8 +155,41 @@ public:
                              event_id to,
                              std::function<void(event)> f);
 
-    segment const* segment_;
-    navigator navigator_;
+    /// Moves to the next chunk.
+    /// @returns A pointer to the next chunk or `nullptr` on failure.
+    chunk const* next();
+
+    /// Moves to the previous chunk.
+    /// @returns A pointer to the previous chunk or `nullptr` on failure.
+    chunk const* prev();
+
+    /// Resets the internal reading position to the beginning of the current
+    /// chunk.
+    ///
+    /// @returns The number of events backed up.
+    event_id backup();
+
+    /// Skips over a given number of events.
+    /// @param n The number of events to skip.
+    /// @returns The number of events actually skipped.
+    event_id skip(size_t n);
+
+    /// Loads the next event.
+    /// @param e The event to load into. If `nullptr`, equivalent to skipping.
+    /// @returns `true` on success.
+    bool load(event* e);
+
+    /// Checks whether a given ID falls into the current chunk.
+    /// @param eid The event ID to check.
+    /// @returns `true` if *eid* falls into the current chunk.
+    bool within_current_chunk(event_id eid) const;
+
+    segment const& segment_;
+    chunk const* current_ = nullptr;
+    event_id next_ = 0;
+    event_id chunk_base_ = 0;
+    size_t chunk_idx_ = 0;
+    std::unique_ptr<chunk::reader> reader_;
   };
 
   static uint32_t const magic = 0x2a2a2a2a;

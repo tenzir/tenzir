@@ -167,8 +167,15 @@ BOOST_AUTO_TEST_CASE(segment_event_extraction)
   BOOST_CHECK(i);
   BOOST_CHECK_EQUAL(*i, v.size());
 
+  v.clear();
   while (i)
     i = r.extract_backward(
         mask,
-        [&s](event e) { BOOST_CHECK_EQUAL((e.id() - s.base()) % 4, 0); });
+        [&s, &v](event e)
+        {
+          BOOST_CHECK_EQUAL((e.id() - s.base()) % 4, 0);
+          v.push_back(std::move(e));
+        });
+
+  BOOST_CHECK_EQUAL(v.size(), (200 / 4) - 2);
 }
