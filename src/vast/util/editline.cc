@@ -5,29 +5,44 @@
 #include <map>
 #include <vector>
 #include <histedit.h>
-#include "vast/logger.h"
 
 namespace vast {
 namespace util {
 
 struct editline::history::impl
 {
-  impl(int size, bool unique)
+  impl(int size, bool unique, std::string filename)
+    : filename_{std::move(filename)}
   {
     hist = ::history_init();
     assert(hist != nullptr);
     ::history(hist, &hist_event, H_SETSIZE, size);
     ::history(hist, &hist_event, H_SETUNIQUE, unique ? 1 : 0);
+    load();
   }
 
   ~impl()
   {
+    save();
     ::history_end(hist);
+  }
+
+  void save()
+  {
+    if (! filename_.empty())
+      ::history(hist, &hist_event, H_SAVE, filename_.c_str());
+  }
+
+  void load()
+  {
+    if (! filename_.empty())
+      ::history(hist, &hist_event, H_LOAD, filename_.c_str());
   }
 
   void add(std::string const& str)
   {
     ::history(hist, &hist_event, H_ADD, str.c_str());
+    save();
   }
 
   void append(std::string const& str)
@@ -42,16 +57,27 @@ struct editline::history::impl
 
   History* hist;
   HistEvent hist_event;
+  std::string filename_;
 };
 
 
-editline::history::history(int size, bool unique)
-  : impl_{new impl{size, unique}}
+editline::history::history(int size, bool unique, std::string filename)
+  : impl_{new impl{size, unique, std::move(filename)}}
 {
 }
 
 editline::history::~history()
 {
+}
+
+void editline::history::save()
+{
+  impl_->save();
+}
+
+void editline::history::load()
+{
+  impl_->load();
 }
 
 void editline::history::add(std::string const& str)

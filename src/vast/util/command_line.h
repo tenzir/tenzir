@@ -13,8 +13,8 @@ class command_line
 {
 public:
   /// The callback function for commands. The argument represents the argument
-  /// ot the command. The return value indicates whether the callback
-  /// succeeded; it's up to the application to put semantics on it.
+  /// of the command. The return value indicates whether the callback
+  /// succeeded; it's up to the application to attach semantics to it.
   using callback = std::function<bool(std::string)>;
 
   /// Creates a new mode for a set of related commands. Only one mode can
@@ -26,8 +26,13 @@ public:
   ///
   /// @param prompt The prompt of the mode.
   ///
+  /// @param history_file The filename of the history.
+  ///
   /// @returns `true` on success.
-  bool mode_add(std::string name, std::string desc, std::string prompt);
+  bool mode_add(std::string name,
+                std::string desc,
+                std::string prompt,
+                std::string history_file = "");
 
   /// Removes an existing mode.
   /// @param name The name of the mode.
@@ -84,7 +89,10 @@ public:
 private:
   struct mode
   {
-    mode(std::string name = "", std::string desc = "", std::string prompt = "");
+    mode(std::string name = "",
+         std::string desc = "",
+         std::string prompt = "",
+         std::string history_file = "");
 
     std::string name;
     std::string description;

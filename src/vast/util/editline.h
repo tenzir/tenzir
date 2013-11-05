@@ -15,8 +15,12 @@ public:
   class history
   {
   public:
-    history(int size = 1000, bool unique = true);
+    history(int size = 1000, bool unique = true, std::string filename = "");
     ~history();
+
+    void save();
+
+    void load();
 
     void add(std::string const& str);
 

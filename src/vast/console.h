@@ -5,6 +5,7 @@
 #include "vast/actor.h"
 #include "vast/cow.h"
 #include "vast/expression.h"
+#include "vast/file_system.h"
 #include "vast/individual.h"
 #include "vast/util/command_line.h"
 
@@ -68,7 +69,8 @@ struct console : actor<console>
 
   /// Spawns the console client.
   /// @param search The search actor the console interacts with.
-  console(cppa::actor_ptr search);
+  /// @param dir The directory where to save state.
+  console(cppa::actor_ptr search, path dir);
 
   void act();
   char const* description() const;
@@ -76,6 +78,7 @@ struct console : actor<console>
   void show_prompt(size_t ms = 100);
   std::pair<cppa::actor_ptr, result*> to_result(std::string const& str);
 
+  path dir_;
   std::map<cppa::actor_ptr, result> results_;
   result* current_result_;
   cppa::actor_ptr current_query_;

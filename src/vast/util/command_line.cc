@@ -3,13 +3,16 @@
 namespace vast {
 namespace util {
 
-bool command_line::mode_add(std::string name, std::string desc,
-                            std::string prompt)
+bool command_line::mode_add(std::string name,
+                            std::string desc,
+                            std::string prompt,
+                            std::string history_file)
 {
   if (modes_.count(name))
     return false;
   auto m = std::make_shared<mode>(
-      std::move(name), std::move(desc), std::move(prompt));
+      std::move(name), std::move(desc),
+      std::move(prompt), std::move(history_file));
   modes_.emplace(m->name, m);
   return true;
 }
@@ -75,6 +78,7 @@ bool command_line::append_to_history(std::string const& entry)
   if (mode_stack_.empty())
     return false;
   mode_stack_.back()->hist.enter(entry);
+  mode_stack_.back()->hist.save();
   return true;
 }
 
@@ -99,6 +103,7 @@ bool command_line::process(bool& callback_result)
   auto args = space == std::string::npos ? cmd : cmd.substr(++space);
   callback_result = current->callbacks[key](std::move(args));
   current->hist.enter(cmd);
+  current->hist.save();
   return true;
 }
 
@@ -107,9 +112,13 @@ bool command_line::get(char& c)
   return mode_stack_.empty() ? false : mode_stack_.back()->el.get(c);
 }
 
-command_line::mode::mode(std::string name, std::string desc, std::string prompt)
+command_line::mode::mode(std::string name,
+                         std::string desc,
+                         std::string prompt,
+                         std::string filename)
   : name{std::move(name)},
-    description{std::move(desc)}
+    description{std::move(desc)},
+    hist{1000, true, std::move(filename)}
 {
   el.source();
   el.set(hist);

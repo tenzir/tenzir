@@ -24,10 +24,19 @@ cow_event_less_than cow_event_lt;
 
 } // namespace <anonymous>
 
-console::console(cppa::actor_ptr search)
-  : search_{std::move(search)}
+console::console(cppa::actor_ptr search, path dir)
+  : dir_{std::move(dir)},
+    search_{std::move(search)}
 {
-  cmdline_.mode_add("main", "main mode", "::: ");
+  if (! exists(dir_))
+    if (mkdir(dir_))
+      VAST_LOG_ACTOR_ERROR("failed to create console directory: " << dir_);
+
+  cmdline_.mode_add("main",
+                    "main mode",
+                    "::: ",
+                    to<std::string>(dir_ / "history_main"));
+
   cmdline_.mode_push("main");
   cmdline_.on_unknown_command(
       "main",
@@ -174,7 +183,10 @@ console::console(cppa::actor_ptr search)
         return true;
       });
 
-  cmdline_.mode_add("ask", "query asking mode", "-=> ");
+  cmdline_.mode_add("ask",
+                    "query asking mode",
+                    "-=> ",
+                    to<std::string>(dir_ / "history_query"));
 
   cmdline_.cmd_add(
       "ask",
