@@ -27,7 +27,7 @@ struct console : actor<console>
     /// Constructs a result from a valid AST.
     result(expr::ast ast);
 
-    /// Adds a new event to this result.
+    /// Adds an event to this result.
     /// @param e The event to add.
     void add(cow<event> e);
 
@@ -40,16 +40,6 @@ struct console : actor<console>
     ///
     /// @returns The number of events that *f* has been applied to.
     size_t apply(size_t n, std::function<void(event const&)> f);
-
-    /// Applies a function to a given number of new events and removes the
-    /// affected events from the list of new events.
-    ///
-    /// @param n The number of events to apply *f* to.
-    ///
-    /// @param f The function to apply to the *n* next events.
-    ///
-    /// @returns The number of inspected events.
-    size_t absorb(size_t n, std::function<void(event const&)> f = {});
 
     /// Adjusts the stream position.
     /// @param n The number of events.
@@ -68,16 +58,11 @@ struct console : actor<console>
     /// @returns The number of all events.
     size_t size() const;
 
-    /// Retrieves the number of new events in the result.
-    /// @returns The number of new events.
-    size_t size_new() const;
-
   private:
     using pos_type = uint64_t;
 
     pos_type pos_ = 0;
     std::deque<cow<event>> events_;
-    std::deque<cow<event>> new_;
     expr::ast ast_;
   };
 
@@ -89,10 +74,11 @@ struct console : actor<console>
   char const* description() const;
 
   void show_prompt(size_t ms = 100);
-  result* to_result(std::string const& str);
+  std::pair<cppa::actor_ptr, result*> to_result(std::string const& str);
 
   std::map<cppa::actor_ptr, result> results_;
   result* current_result_;
+  cppa::actor_ptr current_query_;
   cppa::actor_ptr search_;
   util::command_line cmdline_;
   options opts_;

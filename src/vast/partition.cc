@@ -125,16 +125,15 @@ void partition_actor::act()
       {
         VAST_LOG_ACTOR_DEBUG("processes events from segment " << s.id());
         segment::reader r{&s};
-        event e;
-        while (r.read(e))
+        while (auto e = r.read())
         {
-          cow<event> ce{std::move(e)};
-          event_meta_index_ << ce;
-          auto& a = event_arg_indexes_[ce->name()];
+          auto& a = event_arg_indexes_[e->name()];
           if (! a)
             a = spawn<event_arg_index, linked>(
-                partition_.dir() / "event" / ce->name());
-          a << ce;
+                partition_.dir() / "event" / e->name());
+          auto t = make_any_tuple(std::move(*e));
+          event_meta_index_ << t;
+          a << t;
         }
         partition_.update(s.base(), s.events());
       });

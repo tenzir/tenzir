@@ -145,7 +145,7 @@ console::console(cppa::actor_ptr search)
           std::cout
             << (&p.second == current_result_ ? " * " : "   ")
             << p.second.id() << '\t'
-            << p.second.size_new() << '/' << p.second.size()
+            << p.second.size()
             << std::endl;
         return true;
       });
@@ -162,10 +162,12 @@ console::console(cppa::actor_ptr search)
             << std::endl;
           return true;
         }
-        if (auto r = to_result(arg))
+        auto r = to_result(arg);
+        if (r.first)
         {
-          VAST_LOG_ACTOR_DEBUG("enters query " << r->id());
-          current_result_ = r;
+          VAST_LOG_ACTOR_DEBUG("enters query " << r.second->id());
+          current_result_ = r.second;
+          current_query_ = r.first;
           send(self, atom("key"), atom("get"));
           return false;
         }
@@ -196,17 +198,17 @@ console::console(cppa::actor_ptr search)
               cmdline_.append_to_history(q);
               if (! qry)
               {
-                std::cerr << "[error] invalid query: " << q << std::endl;
+                std::cerr << "[error] syntax error: " << q << std::endl;
                 show_prompt();
                 return;
               }
               monitor(qry);
+              current_query_ = qry;
               current_result_ = &results_.emplace(qry, ast).first->second;
               cmdline_.mode_pop();
               std::cerr
                 << "new query " << current_result_->id()
                 << " -> " << ast << std::endl;
-              send(qry, atom("batch size"), opts_.paginate);
               send(qry, atom("extract"));
               if (opts_.auto_follow)
               {
@@ -237,9 +239,6 @@ void console::result::add(cow<event> e)
   auto i = std::lower_bound(events_.begin(), events_.end(), e, cow_event_lt);
   assert(i == events_.end() || cow_event_lt(e, *i));
   events_.insert(i, e);
-  auto j = std::lower_bound(new_.begin(), new_.end(), e, cow_event_lt);
-  assert(j == new_.end() || cow_event_lt(e, *j));
-  new_.insert(j, e);
 }
 
 size_t console::result::apply(size_t n, std::function<void(event const&)> f)
@@ -251,24 +250,6 @@ size_t console::result::apply(size_t n, std::function<void(event const&)> f)
     ++i;
   }
   return i;
-}
-
-size_t console::result::absorb(size_t n, std::function<void(event const&)> f)
-{
-  auto cap = std::min(n, new_.size());
-  if (f)
-  {
-    size_t i = 0;
-    while (i < cap)
-      f(*new_[i++]);
-    new_.erase(new_.begin(), new_.begin() + i);
-    return i;
-  }
-  else
-  {
-    new_.erase(new_.begin(), new_.begin() + cap);
-    return cap;
-  }
 }
 
 size_t console::result::seek_forward(size_t n)
@@ -309,11 +290,6 @@ expr::ast const& console::result::ast() const
 size_t console::result::size() const
 {
   return events_.size();
-}
-
-size_t console::result::size_new() const
-{
-  return new_.size();
 }
 
 void console::act()
@@ -357,16 +333,7 @@ void console::act()
         cow<event> ce = *tuple_cast<event>(last_dequeued());
         r->add(ce);
         if (r == current_result_ && follow_mode_)
-        {
           std::cout << *ce << std::endl;
-          r->absorb(1);
-        }
-        if (r->size() % opts_.paginate == opts_.paginate / 2)
-        {
-          send(last_sender(), atom("extract"), opts_.paginate);
-          VAST_LOG_ACTOR_DEBUG(
-              "asks for " << opts_.paginate << " more results");
-        }
       },
       on(atom("key"), atom("get")) >> [=]
       {
@@ -386,18 +353,6 @@ void console::act()
               std::cerr << "invalid key: '" << desc << "'" << std::endl;
             }
             break;
-          case '\t':
-            {
-              auto n = current_result_->absorb(
-                  opts_.paginate,
-                  [](event const& e) { std::cout << e << std::endl; });
-              if (n == 0)
-                std::cerr
-                  << "[query " << current_result_->id() << "] "
-                  << "no new results available (" << current_result_->size()
-                  << " existing)" << std::endl;
-            }
-            break;
           case ' ':
             {
               auto n = current_result_->apply(
@@ -407,6 +362,14 @@ void console::act()
                 std::cerr
                   << "[query " << current_result_->id() << "] "
                   << "reached end of results" << std::endl;
+            }
+            break;
+          case 'e':
+            {
+              send(current_query_, atom("extract"));
+              std::cerr
+                << "[query " << current_result_->id() << "] "
+                << "asks for more results" << std::endl;
             }
             break;
           case 'f':
@@ -465,23 +428,28 @@ void console::show_prompt(size_t ms)
   delayed_send(self, std::chrono::milliseconds(ms), atom("prompt"));
 }
 
-console::result* console::to_result(std::string const& str)
+std::pair<actor_ptr, console::result*>
+console::to_result(std::string const& str)
 {
   std::vector<result*> matches;
+  actor_ptr qry = nullptr;
   for (auto& p : results_)
   {
     auto candidate = to<std::string>(p.second.id());
     auto i = std::mismatch(str.begin(), str.end(), candidate.begin());
     if (i.first == str.end())
+    {
+      qry = p.first;
       matches.push_back(&p.second);
+    }
   }
   if (matches.empty())
     std::cerr << "[error] no such query: " << str << std::endl;
   else if (matches.size() > 1)
     std::cerr << "[error] ambiguous query: " << str << std::endl;
   else
-    return matches[0];
-  return nullptr;
+    return {qry, matches[0]};
+  return {nullptr, nullptr};
 }
 
 } // namespace vast

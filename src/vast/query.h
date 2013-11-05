@@ -33,27 +33,28 @@ public:
   bool add(cow<segment> s);
 
   /// Purges segments according to the given boundaries.
-  /// @param before The number of segments to purge before the cursor.
-  /// @param after The number of segments to purge after the cursor.
+  /// @param before The number of segments to purge before the current one.
+  /// @param after The number of segments to purge after the current one.
   /// @returns The number of segments purged.
-  size_t consolidate(size_t before, size_t after);
+  size_t consolidate(size_t before = 1, size_t after = 1);
 
-  /// Extracts a given number of results.
-  /// @param n The maximum number of results to process before returning.
-  /// @returns The number of processed results (less than or equal to *n*).
-  size_t extract(size_t n = 0);
+  /// Extracts results from the current segment.
+  /// @returns The number of processed results or a disengaged value on failure.
+  optional<size_t> extract();
 
   /// Scans for uncovered hits at the borders of all known segments.
   /// @returns A list of event IDs for which the query still needs segments.
   std::vector<event_id> scan() const;
 
-  /// Retrieves the event ID of the next unprocessed hit.
-  /// @returns The current position of the query in the event ID space.
-  event_id cursor() const;
-
   /// Retrieves the number segments the query buffers.
   /// @returns The number of cached segments in the query.
   size_t segments() const;
+
+  /// Retrieves the last ID in the unprocessed set of results.
+  ///
+  /// @returns The last ID of the unprocessed events or a disengaged value if
+  /// no such event exists.
+  optional<event_id> last() const;
 
 private:
   expr::ast ast_;
@@ -61,10 +62,10 @@ private:
   bitstream hits_;
   bitstream processed_;
   bitstream unprocessed_;
-  event_id cursor_ = bitstream::npos;
-  std::deque<cow<segment>> segments_;
+  bitstream extracted_;
   cow<segment> current_;
   std::unique_ptr<segment::reader> reader_;
+  std::deque<cow<segment>> segments_;
 };
 
 struct query_actor : actor<query_actor>
@@ -81,7 +82,6 @@ struct query_actor : actor<query_actor>
   cppa::actor_ptr archive_;
   cppa::actor_ptr sink_;
   query query_;
-  uint64_t batch_size_ = 0;
 };
 
 } // namespace vast
