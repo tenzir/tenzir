@@ -5,8 +5,8 @@
 
 namespace vast {
 
-typedef bitvector::size_type size_type;
-typedef bitvector::block_type block_type;
+using size_type = bitvector::size_type;
+using block_type = bitvector::block_type;
 
 namespace {
 

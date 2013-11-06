@@ -17,8 +17,8 @@ class bitvector : util::totally_ordered<bitvector>,
                   util::printable<bitvector>
 {
 public:
-  typedef size_t block_type;
-  typedef size_t size_type;
+  using block_type = size_t;
+  using size_type = size_t;
   static size_type constexpr npos = static_cast<size_type>(-1);
   static block_type constexpr bits_per_block =
     std::numeric_limits<block_type>::digits;
@@ -53,7 +53,7 @@ public:
 
   /// Unlike the reference type, a const_reference does not need lvalue
   /// semantics and can thus represent simply a boolean (bit) value.
-  typedef bool const_reference;
+  using const_reference = bool;
 
   /// Constructs an empty bit vector.
   bitvector();
