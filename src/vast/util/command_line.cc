@@ -48,7 +48,7 @@ bool command_line::cmd_add(std::string const& mode, std::string cmd, callback f)
   auto& m = *modes_[mode];
   if (m.callbacks.count(cmd))
     return false;
-  m.el.complete(cmd);
+  m.el.complete(cmd + ' ');
   m.callbacks.emplace(std::move(cmd), std::move(f));
   return true;
 }
