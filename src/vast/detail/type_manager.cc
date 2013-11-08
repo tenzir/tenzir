@@ -194,6 +194,7 @@ void type_manager::initialize()
   > expr_node_types;
 
   std::tuple<
+    detail::bitstream_model<ewah_bitstream>,
     detail::bitstream_model<null_bitstream>
   > bitstream_types;
 

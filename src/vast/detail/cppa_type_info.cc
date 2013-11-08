@@ -49,6 +49,7 @@ void cppa_announce_types()
   cppa_announce<schema>();
   cppa_announce<search_result>();
 
+  cppa_announce<ewah_bitstream>();
   cppa_announce<null_bitstream>();
   cppa_announce<bitstream>();
 }

@@ -202,8 +202,17 @@ public:
   bitstream_base& operator=(bitstream_base const&) = default;
   bitstream_base& operator=(bitstream_base&&) = default;
 
-  using size_type = detail::bitstream_concept::size_type;
-  static size_type constexpr npos = bitvector::npos;
+  using block_type = bitvector::block_type;
+  static constexpr auto block_width = bitvector::block_width;
+
+  /// A block with all 1s.
+  static constexpr block_type all_one = ~block_type(0);
+
+  /// A block with only its MSB set to 1.
+  static constexpr block_type msb_one = ~(all_one >> 1);
+
+  using size_type = bitvector::size_type;
+  static constexpr size_type npos = bitvector::npos;
 
   Derived& operator&=(Derived const& other)
   {
@@ -466,6 +475,156 @@ private:
 
   friend bool operator==(null_bitstream const& x, null_bitstream const& y);
   friend bool operator<(null_bitstream const& x, null_bitstream const& y);
+};
+
+/// A bitstream encoded using the *Enhanced World-Aligned Hybrid (EWAH)*
+/// algorithm.
+///
+/// @note An EWAH bitstream internally maintains the following invariants:
+///
+///   1. The first block is a marker
+///   2. The last block is always dirty
+///   3. Corollary: the last marker word always has a dirty count >= 1
+class ewah_bitstream : public bitstream_base<ewah_bitstream>,
+                       util::totally_ordered<ewah_bitstream>,
+                       util::printable<ewah_bitstream>
+{
+  template <typename>
+  friend class detail::bitstream_model;
+  friend bitstream_base<ewah_bitstream>;
+
+public:
+  ewah_bitstream() = default;
+  ewah_bitstream(bitvector::size_type n, bool bit);
+
+private:
+  bool equals(ewah_bitstream const& other) const;
+  void bitwise_not();
+  void bitwise_and(ewah_bitstream const& other);
+  void bitwise_or(ewah_bitstream const& other);
+  void bitwise_xor(ewah_bitstream const& other);
+  void bitwise_subtract(ewah_bitstream const& other);
+  void append_impl(size_type n, bool bit);
+  void push_back_impl(bool bit);
+  void clear_impl() noexcept;
+  bool at(size_type i) const;
+  size_type size_impl() const;
+  bool empty_impl() const;
+  size_type find_first_impl() const;
+  size_type find_next_impl(size_type i) const;
+  size_type find_last_impl() const;
+  size_type find_prev_impl(size_type i) const;
+  bitvector const& bits_impl() const;
+
+  /// The offset from the LSB which separates clean and dirty counters.
+  static constexpr auto clean_dirty_divide = block_width / 2 - 1;
+
+  /// The mask to apply to a marker word to extract the counter of dirty words.
+  static constexpr auto marker_dirty_mask = ~(all_one << clean_dirty_divide);
+
+  /// The maximum value of the counter of dirty words.
+  static constexpr auto marker_dirty_max = marker_dirty_mask;
+
+  /// The mask to apply to a marker word to extract the counter of clean words.
+  static constexpr auto marker_clean_mask = ~(marker_dirty_mask | msb_one);
+
+  /// The maximum value of the counter of clean words.
+  static constexpr auto marker_clean_max =
+    marker_clean_mask >> clean_dirty_divide;
+
+  /// Retrieves the type of the clean word in a marker word.
+  /// @param block The block to check.
+  /// @returns `true` if *block* represents a sequence of 1s and `false` if 0s.
+  static constexpr bool marker_type(block_type block)
+  {
+    return (block & msb_one) == msb_one;
+  }
+
+  static constexpr block_type marker_type(block_type block, bool type)
+  {
+    return (block & ~msb_one) | (type ? msb_one : 0);
+  }
+
+  /// Retrieves the number of clean words in a marker word.
+  /// @param block The block to check.
+  /// @returns The number of clean words in *block*.
+  static constexpr block_type marker_num_clean(block_type block)
+  {
+    return (block & marker_clean_mask) >> clean_dirty_divide;
+  }
+
+  /// Sets the number of clean words in a marker word.
+  /// @param block The block to check.
+  /// @param n The new value for the number of clean words.
+  /// @returns The updated block that has a new clean word length of *n*.
+  static constexpr block_type marker_num_clean(block_type block, block_type n)
+  {
+    return (block & ~marker_clean_mask) | (n << clean_dirty_divide);
+  }
+
+  /// Retrieves the number of dirty words following a marker word.
+  /// @param block The block to check.
+  /// @returns The number of dirty words following *block*.
+  static constexpr block_type marker_num_dirty(block_type block)
+  {
+    return block & marker_dirty_mask;
+  }
+
+  /// Sets the number of dirty words in a marker word.
+  /// @param block The block to check.
+  /// @param n The new value for the number of dirty words.
+  /// @returns The updated block that has a new dirty word length of *n*.
+  static constexpr block_type marker_num_dirty(block_type block, block_type n)
+  {
+    return (block & ~marker_dirty_mask) | n;
+  }
+
+  /// Incorporates the most recent (complete) dirty block.
+  /// @pre `num_bits_ % block_width == 0`
+  void integrate_last_block();
+
+  /// Bumps up the dirty count of the current marker up or creates a new marker
+  /// if the dirty count reached its maximum.
+  /// @pre `num_bits_ % block_width == 0`
+  void bump_dirty_count();
+
+  bitvector bits_;
+  size_type num_bits_ = 0;
+  size_type last_marker_ = 0;
+
+private:
+  friend access;
+  void serialize(serializer& sink) const;
+  void deserialize(deserializer& source);
+
+  template <typename Iterator>
+  bool print(Iterator& out) const
+  {
+    for (size_t i = 0; i < bits_.blocks(); ++i)
+    {
+      if (i != bits_.blocks() - 1)
+      {
+        if (! bitvector::print(out, bits_.block(i)))
+          return false;
+        *out++ = '\n';
+      }
+      else
+      {
+        auto remaining = num_bits_ % block_width;
+        if (remaining == 0)
+          remaining = block_width;
+        for (size_t i = 0; i < block_width - remaining; ++i)
+          *out++ = ' ';
+        if (! bitvector::print(out, bits_.block(i), true, 0, remaining))
+          return false;
+      }
+    }
+
+    return true;
+  };
+
+  friend bool operator==(ewah_bitstream const& x, ewah_bitstream const& y);
+  friend bool operator<(ewah_bitstream const& x, ewah_bitstream const& y);
 };
 
 /// Transposes a vector of equal-sized bitstreams.
