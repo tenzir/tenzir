@@ -28,7 +28,7 @@ BOOST_AUTO_TEST_CASE(bitvector_basic_ops)
   x.append(0xffff);
 
   BOOST_REQUIRE_EQUAL(x.blocks(), 2);
-  BOOST_CHECK_EQUAL(x.size(), 3 + bitvector::bits_per_block);
+  BOOST_CHECK_EQUAL(x.size(), 3 + bitvector::block_width);
 }
 
 BOOST_AUTO_TEST_CASE(bitvector_bitwise_ops)

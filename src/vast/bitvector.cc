@@ -8,6 +8,8 @@ namespace vast {
 using size_type = bitvector::size_type;
 using block_type = bitvector::block_type;
 
+block_type const bitvector::block_width;
+
 namespace {
 
 uint8_t count_table[] =
@@ -31,7 +33,7 @@ bitvector::reference::reference(block_type& block, block_type i)
   : block_(block)
   , mask_(block_type(1) << i)
 {
-  assert(i < bits_per_block);
+  assert(i < block_width);
 }
 
 bitvector::reference& bitvector::reference::flip()
@@ -155,7 +157,7 @@ bitvector& bitvector::operator<<=(size_type n)
   if (n > 0)
   {
     auto last = blocks() - 1;
-    auto div = n / bits_per_block;
+    auto div = n / block_width;
     auto r = bit_index(n);
     auto b = &bits_[0];
     assert(blocks() >= 1);
@@ -164,7 +166,7 @@ bitvector& bitvector::operator<<=(size_type n)
     if (r != 0)
     {
       for (size_type i = last - div; i > 0; --i)
-        b[i + div] = (b[i] << r) | (b[i - 1] >> (bits_per_block - r));
+        b[i + div] = (b[i] << r) | (b[i - 1] >> (block_width - r));
       b[div] = b[0] << r;
     }
     else
@@ -189,7 +191,7 @@ bitvector& bitvector::operator>>=(size_type n)
   if (n > 0)
   {
     auto last = blocks() - 1;
-    auto div = n / bits_per_block;
+    auto div = n / block_width;
     auto r = bit_index(n);
     auto b = &bits_[0];
     assert(blocks() >= 1);
@@ -198,7 +200,7 @@ bitvector& bitvector::operator>>=(size_type n)
     if (r != 0)
     {
       for (size_type i = last - div; i > 0; --i)
-        b[i - div] = (b[i] >> r) | (b[i + 1] << (bits_per_block - r));
+        b[i - div] = (b[i] >> r) | (b[i + 1] << (block_width - r));
       b[last - div] = b[last] >> r;
     }
     else
@@ -304,14 +306,14 @@ void bitvector::append(block_type block)
   if (excess)
   {
     assert(! bits_.empty());
-    bits_.push_back(block >> (bits_per_block - excess));
+    bits_.push_back(block >> (block_width - excess));
     bits_[bits_.size() - 2] |= (block << excess);
   }
   else
   {
     bits_.push_back(block);
   }
-  num_bits_ += bits_per_block;
+  num_bits_ += block_width;
 }
 
 bitvector& bitvector::set(size_type i, bool bit)
@@ -373,6 +375,26 @@ bitvector::reference bitvector::operator[](size_type i)
   return {bits_[block_index(i)], bit_index(i)};
 }
 
+block_type bitvector::block(size_type b) const
+{
+  return bits_[b];
+}
+
+block_type& bitvector::block(size_type b)
+{
+  return bits_[b];
+}
+
+block_type bitvector::block_at_bit(size_type i) const
+{
+  return bits_[block_index(i)];
+}
+
+block_type& bitvector::block_at_bit(size_type i)
+{
+  return bits_[block_index(i)];
+}
+
 size_type bitvector::count() const
 {
   auto first = bits_.begin();
@@ -419,7 +441,7 @@ size_type bitvector::find_next(size_type i) const
     return npos;
   auto bi = block_index(++i);
   auto block = bits_[bi] & (~block_type(0) << bit_index(i));
-  return block ? bi * bits_per_block + lowest_bit(block) : find_forward(bi + 1);
+  return block ? bi * block_width + lowest_bit(block) : find_forward(bi + 1);
 }
 
 size_type bitvector::find_last() const
@@ -434,7 +456,7 @@ size_type bitvector::find_prev(size_type i) const
   auto bi = block_index(--i);
   auto block = bits_[bi] & ~(~block_type(0) << (bit_index(i) + 1));
   if (block)
-    return bi * bits_per_block + highest_bit(block);
+    return bi * block_width + highest_bit(block);
   else if (bi > 0)
     return find_backward(bi - 1);
   else
@@ -475,7 +497,7 @@ size_type bitvector::find_forward(size_type i) const
     ++i;
   if (i >= blocks())
     return npos;
-  return i * bits_per_block + lowest_bit(bits_[i]);
+  return i * block_width + lowest_bit(bits_[i]);
 }
 
 size_type bitvector::find_backward(size_type i) const
@@ -484,7 +506,7 @@ size_type bitvector::find_backward(size_type i) const
     return npos;
   while (i > 0 && bits_[i] == 0)
     --i;
-  auto result = i * bits_per_block + highest_bit(bits_[i]);
+  auto result = i * block_width + highest_bit(bits_[i]);
   return result == 0 ? npos : result;
 }
 

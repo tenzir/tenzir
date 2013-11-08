@@ -19,8 +19,8 @@ class bitvector : util::totally_ordered<bitvector>,
 public:
   using block_type = size_t;
   using size_type = size_t;
-  static size_type constexpr npos = static_cast<size_type>(-1);
-  static block_type constexpr bits_per_block =
+  static constexpr size_type npos = static_cast<size_type>(-1);
+  static constexpr block_type block_width =
     std::numeric_limits<block_type>::digits;
 
 public:
@@ -55,6 +55,29 @@ public:
   /// semantics and can thus represent simply a boolean (bit) value.
   using const_reference = bool;
 
+  /// Prints a single block.
+  /// @param out The iterator to print to.
+  /// @param block The block to print to *out*.
+  /// @param msb Whether to start from the MSB or not.
+  /// @param begin The offset in *block* from the LSB where to start printing.
+  /// @param end One past the last offset to print.
+  template <typename Iterator>
+  static bool print(Iterator& out,
+                    block_type block,
+                    bool msb = true,
+                    block_type begin = 0,
+                    block_type end = block_width)
+  {
+    if (msb)
+      while (begin < end)
+        *out++ = (block & (block_type(1) << (end - begin++ - 1))) ? '1' : '0';
+    else
+      while (begin < end)
+        *out++ = (block & (block_type(1) << begin++)) ? '1' : '0';
+
+    return true;
+  }
+
   /// Constructs an empty bit vector.
   bitvector();
 
@@ -68,7 +91,7 @@ public:
   bitvector(InputIterator first, InputIterator last)
   {
     bits_.insert(bits_.end(), first, last);
-    num_bits_ = bits_.size() * bits_per_block;
+    num_bits_ = bits_.size() * block_width;
   }
 
   /// Copy-constructs a bit vector.
@@ -133,7 +156,7 @@ public:
       bits_.back() |= (*first << excess);
       do
       {
-        auto bv = *first++ >> (bits_per_block - excess);
+        auto bv = *first++ >> (block_width - excess);
         bits_.push_back(bv | (first == last ? 0 : *first << excess));
       } while (first != last);
     }
@@ -142,7 +165,7 @@ public:
       bits_.insert(bits_.end(), first, last);
     }
 
-    num_bits_ += bits_per_block * delta;
+    num_bits_ += block_width * delta;
   }
 
   /// Appends the bits in a given block.
@@ -199,6 +222,30 @@ public:
   /// @returns A const-reference to the bit at position *i*.
   const_reference operator[](size_type i) const;
 
+  /// Retrieves an entire block at a given block index.
+  /// @param *b* The block index.
+  /// @returns The *b*th block.
+  /// @pre *b < blocks()*.
+  block_type block(size_type b) const;
+
+  /// Retrieves an entire block at a given block index.
+  /// @param *b* The block index.
+  /// @returns The *b*th block.
+  /// @pre *b < blocks()*.
+  block_type& block(size_type b);
+
+  /// Retrieves an entire block at a given bit position.
+  /// @param *i* The bit position.
+  /// @returns The entire block corresponding to bit position *i*.
+  /// @pre *i < bits()*
+  block_type block_at_bit(size_type i) const;
+
+  /// Retrieves an entire block at a given bit position.
+  /// @param *i* The bit position.
+  /// @returns The entire block corresponding to bit position *i*.
+  /// @pre *i < bits()*
+  block_type& block_at_bit(size_type i);
+
   /// Counts the number of 1-bits in the bit vector. Also known as *population
   /// count* or *Hamming weight*.
   /// @returns The number of bits set to 1.
@@ -246,19 +293,19 @@ public:
 
 private:
   /// Computes the block index for a given bit position.
-  static size_type constexpr block_index(size_type i)
+  static constexpr size_type block_index(size_type i)
   {
-    return i / bits_per_block;
+    return i / block_width;
   }
 
   /// Computes the bit index within a given block for a given bit position.
-  static block_type constexpr bit_index(size_type i)
+  static constexpr block_type bit_index(size_type i)
   {
-    return i % bits_per_block;
+    return i % block_width;
   }
 
   /// Computes the bitmask block to extract a bit a given bit position.
-  static block_type constexpr bit_mask(size_type i)
+  static constexpr block_type bit_mask(size_type i)
   {
     return block_type(1) << bit_index(i);
   }
@@ -267,10 +314,9 @@ private:
   /// bits.
   /// @param bits the number of bits.
   /// @returns The number of blocks to represent *bits* number of bits.
-  static size_type constexpr bits_to_blocks(size_type bits)
+  static constexpr size_type bits_to_blocks(size_type bits)
   {
-    return bits / bits_per_block
-      + static_cast<size_type>(bits % bits_per_block != 0);
+    return bits / block_width + static_cast<size_type>(bits % block_width != 0);
   }
 
   /// Computes the bit position first 1-bit in a given block.
@@ -287,7 +333,7 @@ private:
   block_type extra_bits() const;
 
   // If the number of bits in the vector are not not a multiple of
-  // bitvector::bits_per_block, then the last block exhibits unused bits which
+  // bitvector::block_width, then the last block exhibits unused bits which
   // this function resets.
   void zero_unused_bits();
 
@@ -325,7 +371,7 @@ private:
   ///
   /// @param all: Indicates whether to include also the unused bits of the last
   /// block if the number of `b.size()` is not a multiple of
-  /// `bitvector::bits_per_block`.
+  /// `bitvector::block_width`.
   ///
   /// @param max: Specifies a maximum size on the output. If 0, no cutting
   /// occurs.
@@ -334,7 +380,7 @@ private:
   print(Iterator& out, bool msb = true, bool all = false, size_t max = 0) const
   {
     std::string str;
-    auto str_size = all ? bitvector::bits_per_block * blocks() : size();
+    auto str_size = all ? bitvector::block_width * blocks() : size();
     if (max == 0 || str_size <= max)
     {
       str.assign(str_size, '0');
