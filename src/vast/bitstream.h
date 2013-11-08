@@ -483,8 +483,7 @@ private:
 /// @note An EWAH bitstream internally maintains the following invariants:
 ///
 ///   1. The first block is a marker
-///   2. The last block is always dirty
-///   3. Corollary: the last marker word always has a dirty count >= 1
+///   2. The last block is always dirty.
 class ewah_bitstream : public bitstream_base<ewah_bitstream>,
                        util::totally_ordered<ewah_bitstream>,
                        util::printable<ewah_bitstream>
