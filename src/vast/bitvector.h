@@ -1,6 +1,7 @@
 #ifndef VAST_BITVECTOR_H
 #define VAST_BITVECTOR_H
 
+#include <cassert>
 #include <iterator>
 #include <limits>
 #include <string>
@@ -8,6 +9,7 @@
 #include "vast/fwd.h"
 #include "vast/traits.h"
 #include "vast/util/operators.h"
+#include "vast/util/iterator.h"
 #include "vast/util/print.h"
 
 namespace vast {
@@ -19,9 +21,19 @@ class bitvector : util::totally_ordered<bitvector>,
 public:
   using block_type = size_t;
   using size_type = size_t;
-  static constexpr size_type npos = static_cast<size_type>(-1);
+
+  /// Bits per block.
   static constexpr block_type block_width =
     std::numeric_limits<block_type>::digits;
+
+  /// A block with all 1s.
+  static constexpr block_type all_one = ~block_type{0};
+
+  /// A block with only its MSB set to 1.
+  static constexpr block_type msb_one = ~(all_one >> 1);
+
+  /// One past the last addressable bit index; analogue to an `end` iterator.
+  static constexpr size_type npos = ~size_type{0};
 
 public:
   /// An lvalue proxy for single bits.
@@ -54,6 +66,89 @@ public:
   /// Unlike the reference type, a const_reference does not need lvalue
   /// semantics and can thus represent simply a boolean (bit) value.
   using const_reference = bool;
+
+  template <typename Bitvector>
+  class iterator_base :
+    public util::iterator_facade<
+             iterator_base<Bitvector>,
+             std::random_access_iterator_tag,
+             bool,
+             Conditional<std::is_const<Bitvector>, const_reference, reference>
+           >
+  {
+  public:
+    using reference_type =
+      Conditional<std::is_const<Bitvector>, const_reference, reference>;
+
+    using reverse_iterator = std::reverse_iterator<iterator_base>;
+
+    iterator_base() = default;
+
+    iterator_base(Bitvector& bits, size_type off = 0)
+      : bits_{&bits},
+        offset_{off}
+    {
+      assert(bits_);
+      assert(! bits_->empty());
+    }
+
+    static iterator_base begin(Bitvector& bits)
+    {
+      return iterator_base{bits};
+    }
+
+    static iterator_base end(Bitvector& bits)
+    {
+      return iterator_base{bits, bits.size()};
+    }
+
+    static reverse_iterator rbegin(Bitvector& bits)
+    {
+      return reverse_iterator{end(bits)};
+    }
+
+    static reverse_iterator rend(Bitvector& bits)
+    {
+      return reverse_iterator{begin(bits)};
+    }
+
+  private:
+    friend util::iterator_access;
+
+    bool equals(iterator_base const& other) const
+    {
+      return offset_ == other.offset_;
+    }
+
+    void increment()
+    {
+      assert(offset_ != npos);
+      ++offset_;
+    }
+
+    void decrement()
+    {
+      --offset_;
+    }
+
+    void advance(size_type n)
+    {
+      offset_ += n;
+    }
+
+    reference_type dereference() const
+    {
+      assert(bits_);
+      assert(offset_ != npos);
+      return const_cast<Bitvector&>(*bits_)[offset_];
+    }
+
+    Bitvector* bits_ = nullptr;
+    size_type offset_ = npos;
+  };
+
+  using iterator = iterator_base<bitvector>;
+  using const_iterator = iterator_base<bitvector const>;
 
   /// Prints a single block.
   /// @param out The iterator to print to.

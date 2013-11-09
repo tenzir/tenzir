@@ -1,6 +1,5 @@
 #include "vast/bitvector.h"
 
-#include <cassert>
 #include "vast/serialization.h"
 
 namespace vast {
@@ -31,7 +30,7 @@ uint8_t count_table[] =
 
 bitvector::reference::reference(block_type& block, block_type i)
   : block_(block)
-  , mask_(block_type(1) << i)
+  , mask_(block_type{1} << i)
 {
   assert(i < block_width);
 }
@@ -91,7 +90,6 @@ bitvector::reference& bitvector::reference::operator-=(bool x)
     block_ &= ~mask_;
   return *this;
 }
-
 
 bitvector::bitvector()
   : num_bits_(0)
@@ -363,7 +361,7 @@ bitvector& bitvector::flip()
   return *this;
 }
 
-bool bitvector::operator[](size_type i) const
+bitvector::const_reference bitvector::operator[](size_type i) const
 {
   assert(i < num_bits_);
   return (bits_[block_index(i)] & bit_mask(i)) != 0;

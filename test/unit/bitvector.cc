@@ -79,3 +79,28 @@ BOOST_AUTO_TEST_CASE(bitvector_backward_search)
   BOOST_CHECK_EQUAL(y.find_last(), 63);
   BOOST_CHECK_EQUAL(y.find_prev(59), 55);
 }
+
+BOOST_AUTO_TEST_CASE(bitvector_iteration)
+{
+  bitvector x;
+  x.append(0x30abffff7000ffff);
+
+  std::string str;
+  std::transform(
+      bitvector::const_iterator::begin(x),
+      bitvector::const_iterator::end(x),
+      std::back_inserter(str),
+      [](bitvector::const_reference bit) { return bit ? '1' : '0'; });
+
+  BOOST_CHECK_EQUAL(to_string(x, false), str);
+
+  std::string rts;
+  std::transform(
+      bitvector::const_iterator::rbegin(x),
+      bitvector::const_iterator::rend(x),
+      std::back_inserter(rts),
+      [](bitvector::const_reference bit) { return bit ? '1' : '0'; });
+
+  std::reverse(str.begin(), str.end());
+  BOOST_CHECK_EQUAL(str, str);
+}
