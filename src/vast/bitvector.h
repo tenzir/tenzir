@@ -67,6 +67,7 @@ public:
   /// semantics and can thus represent simply a boolean (bit) value.
   using const_reference = bool;
 
+  /// The base class for iterators which inspect every single bit.
   template <typename Bitvector>
   class iterator_base :
     public util::iterator_facade<
@@ -77,16 +78,13 @@ public:
            >
   {
   public:
-    using reference_type =
-      Conditional<std::is_const<Bitvector>, const_reference, reference>;
-
     using reverse_iterator = std::reverse_iterator<iterator_base>;
 
     iterator_base() = default;
 
     iterator_base(Bitvector& bits, size_type off = 0)
       : bits_{&bits},
-        offset_{off}
+        i_{off}
     {
       assert(bits_);
       assert(! bits_->empty());
@@ -117,38 +115,126 @@ public:
 
     bool equals(iterator_base const& other) const
     {
-      return offset_ == other.offset_;
+      return i_ == other.i_;
     }
 
     void increment()
     {
-      assert(offset_ != npos);
-      ++offset_;
+      assert(i_ != npos);
+      ++i_;
     }
 
     void decrement()
     {
-      --offset_;
+      assert(i_ != npos);
+      --i_;
     }
 
     void advance(size_type n)
     {
-      offset_ += n;
+      i_ += n;
     }
 
-    reference_type dereference() const
+    auto dereference() const
+      -> Conditional<std::is_const<Bitvector>, const_reference, reference>
     {
       assert(bits_);
-      assert(offset_ != npos);
-      return const_cast<Bitvector&>(*bits_)[offset_];
+      assert(i_ != npos);
+      return const_cast<Bitvector&>(*bits_)[i_];
     }
 
     Bitvector* bits_ = nullptr;
-    size_type offset_ = npos;
+    size_type i_ = npos;
   };
 
   using iterator = iterator_base<bitvector>;
   using const_iterator = iterator_base<bitvector const>;
+
+  /// The base class for iterators which inspect 1 bits only.
+  template <typename Bitvector>
+  class one_iterator_base :
+    public util::iterator_facade<
+             one_iterator_base<Bitvector>,
+             std::bidirectional_iterator_tag,
+             bool,
+             Conditional<std::is_const<Bitvector>, const_reference, reference>
+           >
+  {
+  public:
+    using reverse_iterator = std::reverse_iterator<one_iterator_base>;
+
+    one_iterator_base() = default;
+
+    one_iterator_base(Bitvector& bits, bool forward)
+      : bits_{&bits}
+    {
+      assert(bits_);
+      assert(! bits_->empty());
+      i_ = forward ? bits_->find_first() : bits_->find_last();
+    }
+
+    static one_iterator_base begin(Bitvector& bits)
+    {
+      return one_iterator_base{bits, true};
+    }
+
+    static one_iterator_base end(Bitvector&)
+    {
+      return one_iterator_base{};
+    }
+
+    static reverse_iterator rbegin(Bitvector& bits)
+    {
+      return reverse_iterator{one_iterator_base{bits, false}};
+    }
+
+    static reverse_iterator rend(Bitvector& bits)
+    {
+      return reverse_iterator{begin(bits)};
+    }
+
+    size_type pos() const
+    {
+      return i_;
+    }
+
+  private:
+    friend util::iterator_access;
+
+    bool equals(one_iterator_base const& other) const
+    {
+      return i_ == other.i_;
+    }
+
+    void increment()
+    {
+      assert(bits_);
+      i_ = bits_->find_next(i_);
+    }
+
+    void decrement()
+    {
+      assert(bits_);
+      assert(i_ != npos);
+      i_ = bits_->find_prev(i_);
+    }
+
+    auto dereference() const
+      -> Conditional<std::is_const<Bitvector>, const_reference, reference>
+    {
+      assert(bits_);
+      assert(i_ != npos);
+      return const_cast<Bitvector&>(*bits_)[i_];
+    }
+
+    Bitvector* bits_ = nullptr;
+    size_type i_ = npos;
+    bool first_ = false;
+    bool last_ = false;
+  };
+
+  using one_iterator = one_iterator_base<bitvector>;
+  using one_const_iterator = one_iterator_base<bitvector const>;
 
   /// Prints a single block.
   /// @param out The iterator to print to.

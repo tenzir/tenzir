@@ -102,5 +102,32 @@ BOOST_AUTO_TEST_CASE(bitvector_iteration)
       [](bitvector::const_reference bit) { return bit ? '1' : '0'; });
 
   std::reverse(str.begin(), str.end());
-  BOOST_CHECK_EQUAL(str, str);
+  BOOST_CHECK_EQUAL(str, rts);
+
+  std::string ones;
+  std::transform(
+      bitvector::one_const_iterator::begin(x),
+      bitvector::one_const_iterator::end(x),
+      std::back_inserter(ones),
+      [](bitvector::const_reference bit) { return bit ? '1' : '0'; });
+
+  BOOST_CHECK_EQUAL(ones, "111111111111111111111111111111111111111111");
+
+  auto i = bitvector::one_const_iterator::rbegin(x);
+  BOOST_CHECK_EQUAL(i.base().pos(), 61);
+  ++i;
+  BOOST_CHECK_EQUAL(i.base().pos(), 60);
+  ++i;
+  BOOST_CHECK_EQUAL(i.base().pos(), 55);
+  while (i != bitvector::one_const_iterator::rend(x))
+    ++i;
+  BOOST_CHECK_EQUAL(i.base().pos(), 0);
+
+  auto j = bitvector::one_iterator::rbegin(x);
+  BOOST_CHECK_EQUAL(j.base().pos(), 61);
+  *j.base() = false;
+  ++j;
+  *j.base() = false;
+  j = bitvector::one_iterator::rbegin(x);
+  BOOST_CHECK_EQUAL(j.base().pos(), 55);
 }
