@@ -82,14 +82,6 @@ public:
 
     iterator_base() = default;
 
-    iterator_base(Bitvector& bits, size_type off = 0)
-      : bits_{&bits},
-        i_{off}
-    {
-      assert(bits_);
-      assert(! bits_->empty());
-    }
-
     static iterator_base begin(Bitvector& bits)
     {
       return iterator_base{bits};
@@ -112,6 +104,14 @@ public:
 
   private:
     friend util::iterator_access;
+
+    iterator_base(Bitvector& bits, size_type off = 0)
+      : bits_{&bits},
+        i_{off}
+    {
+      assert(bits_);
+      assert(! bits_->empty());
+    }
 
     bool equals(iterator_base const& other) const
     {
@@ -165,14 +165,6 @@ public:
 
     one_iterator_base() = default;
 
-    one_iterator_base(Bitvector& bits, bool forward)
-      : bits_{&bits}
-    {
-      assert(bits_);
-      assert(! bits_->empty());
-      i_ = forward ? bits_->find_first() : bits_->find_last();
-    }
-
     static one_iterator_base begin(Bitvector& bits)
     {
       return one_iterator_base{bits, true};
@@ -200,6 +192,14 @@ public:
 
   private:
     friend util::iterator_access;
+
+    one_iterator_base(Bitvector& bits, bool forward)
+      : bits_{&bits}
+    {
+      assert(bits_);
+      assert(! bits_->empty());
+      i_ = forward ? bits_->find_first() : bits_->find_last();
+    }
 
     bool equals(one_iterator_base const& other) const
     {
