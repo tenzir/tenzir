@@ -229,8 +229,6 @@ public:
 
     Bitvector* bits_ = nullptr;
     size_type i_ = npos;
-    bool first_ = false;
-    bool last_ = false;
   };
 
   using one_iterator = one_iterator_base<bitvector>;
