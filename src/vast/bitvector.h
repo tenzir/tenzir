@@ -185,7 +185,7 @@ public:
       return reverse_iterator{begin(bits)};
     }
 
-    size_type pos() const
+    size_type position() const
     {
       return i_;
     }

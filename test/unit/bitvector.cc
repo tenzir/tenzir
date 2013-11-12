@@ -114,20 +114,20 @@ BOOST_AUTO_TEST_CASE(bitvector_iteration)
   BOOST_CHECK_EQUAL(ones, "111111111111111111111111111111111111111111");
 
   auto i = bitvector::one_const_iterator::rbegin(x);
-  BOOST_CHECK_EQUAL(i.base().pos(), 61);
+  BOOST_CHECK_EQUAL(i.base().position(), 61);
   ++i;
-  BOOST_CHECK_EQUAL(i.base().pos(), 60);
+  BOOST_CHECK_EQUAL(i.base().position(), 60);
   ++i;
-  BOOST_CHECK_EQUAL(i.base().pos(), 55);
+  BOOST_CHECK_EQUAL(i.base().position(), 55);
   while (i != bitvector::one_const_iterator::rend(x))
     ++i;
-  BOOST_CHECK_EQUAL(i.base().pos(), 0);
+  BOOST_CHECK_EQUAL(i.base().position(), 0);
 
   auto j = bitvector::one_iterator::rbegin(x);
-  BOOST_CHECK_EQUAL(j.base().pos(), 61);
+  BOOST_CHECK_EQUAL(j.base().position(), 61);
   *j.base() = false;
   ++j;
   *j.base() = false;
   j = bitvector::one_iterator::rbegin(x);
-  BOOST_CHECK_EQUAL(j.base().pos(), 55);
+  BOOST_CHECK_EQUAL(j.base().position(), 55);
 }
