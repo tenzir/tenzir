@@ -228,3 +228,20 @@ BOOST_AUTO_TEST_CASE(ewah_bitstream_operations)
   BOOST_CHECK_EQUAL(to_string(ewah), str);
   BOOST_CHECK_EQUAL(ewah.size(), 2473901163905);
 }
+
+BOOST_AUTO_TEST_CASE(polymorphic_bitstream_iterators)
+{
+  bitstream bs = null_bitstream{};
+  bs.push_back(true);
+  bs.append(10, false);
+  bs.append(2, true);
+
+  auto begin = bs.begin();
+  BOOST_CHECK_EQUAL(begin.position(), 0);
+  ++begin;
+  BOOST_CHECK_EQUAL(begin.position(), 11);
+  ++begin;
+  BOOST_CHECK_EQUAL(begin.position(), 12);
+  ++begin;
+  BOOST_CHECK(begin == bs.end());
+}

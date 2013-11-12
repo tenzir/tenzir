@@ -106,6 +106,18 @@ bool bitstream::empty_impl() const
   return concept_->empty_impl();
 }
 
+bitstream::const_iterator bitstream::begin_impl() const
+{
+  assert(concept_);
+  return concept_->begin_impl();
+}
+
+bitstream::const_iterator bitstream::end_impl() const
+{
+  assert(concept_);
+  return concept_->end_impl();
+}
+
 bitstream::size_type bitstream::find_first_impl() const
 {
   assert(concept_);
@@ -156,6 +168,7 @@ bool operator==(bitstream const& x, bitstream const& y)
 {
   return x.equals(y);
 }
+
 
 null_bitstream::null_bitstream(bitvector::size_type n, bool bit)
   : bits_(n, bit)
@@ -228,6 +241,16 @@ null_bitstream::size_type null_bitstream::size_impl() const
 bool null_bitstream::empty_impl() const
 {
   return bits_.empty();
+}
+
+null_bitstream::const_iterator null_bitstream::begin_impl() const
+{
+  return const_iterator::begin(bits_);
+}
+
+null_bitstream::const_iterator null_bitstream::end_impl() const
+{
+  return const_iterator::end(bits_);
 }
 
 null_bitstream::size_type null_bitstream::find_first_impl() const
@@ -453,6 +476,20 @@ ewah_bitstream::size_type ewah_bitstream::size_impl() const
 bool ewah_bitstream::empty_impl() const
 {
   return num_bits_ == 0;
+}
+
+ewah_bitstream::const_iterator ewah_bitstream::begin_impl() const
+{
+  // TODO
+  assert(! "not yet implemented");
+  return {};
+}
+
+ewah_bitstream::const_iterator ewah_bitstream::end_impl() const
+{
+  // TODO
+  assert(! "not yet implemented");
+  return {};
 }
 
 ewah_bitstream::size_type ewah_bitstream::find_first_impl() const
