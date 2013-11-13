@@ -435,7 +435,7 @@ size_type bitvector::find_first() const
 
 size_type bitvector::find_next(size_type i) const
 {
-  if (i >= (size() - 1) || size() == 0)
+  if (size() == 0 || i >= size() - 1)
     return npos;
   auto bi = block_index(++i);
   auto block = bits_[bi] & (~block_type(0) << bit_index(i));
