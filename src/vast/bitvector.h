@@ -234,6 +234,68 @@ public:
   using one_iterator = one_iterator_base<bitvector>;
   using one_const_iterator = one_iterator_base<bitvector const>;
 
+  /// Computes the block index for a given bit position.
+  static constexpr size_type block_index(size_type i)
+  {
+    return i / block_width;
+  }
+
+  /// Computes the bit index within a given block for a given bit position.
+  static constexpr block_type bit_index(size_type i)
+  {
+    return i % block_width;
+  }
+
+  /// Computes the bitmask block to extract a bit a given bit position.
+  static constexpr block_type bit_mask(size_type i)
+  {
+    return block_type(1) << bit_index(i);
+  }
+
+  /// Computes the number of blocks needed to represent a given number of
+  /// bits.
+  /// @param bits the number of bits.
+  /// @returns The number of blocks to represent *bits* number of bits.
+  static constexpr size_type bits_to_blocks(size_type bits)
+  {
+    return bits / block_width + static_cast<size_type>(bits % block_width != 0);
+  }
+
+  /// Computes the number of 1-bits in a given block (aka. *population count*).
+  /// @param block The block to inspect.
+  /// @returns The number of 1-bits in *block*.
+  static size_type count(block_type block);
+
+  /// Computes the bit position first 1-bit in a given block.
+  /// @param block The block to inspect.
+  /// @returns The bit position where *block* has its first bit set to 1.
+  static size_type lowest_bit(block_type block);
+
+  /// Computes the bit position last 1-bit in a given block.
+  /// @param block The block to inspect.
+  /// @returns The bit position where *block* has its last bit set to 1.
+  static size_type highest_bit(block_type block);
+
+  /// Finds the next bit in a block starting from a given offset.
+  ///
+  /// @param block The block to inspect.
+  ///
+  /// @param i The offset from the LSB where to begin searching.
+  ///
+  /// @returns The index in the block where the next 1-bit after *i* occurs or
+  /// `npos` if no such bit exists.
+  static size_type next_bit(block_type block, size_type i);
+
+  /// Finds the previous bit in a block starting from a given offset.
+  ///
+  /// @param block The block to inspect.
+  ///
+  /// @param i The offset from the LSB where to begin searching.
+  ///
+  /// @returns The index in the block where the 1-bit before *i* occurs or
+  /// `npos` if no such bit exists.
+  static size_type prev_bit(block_type block, size_type i);
+
   /// Prints a single block.
   /// @param out The iterator to print to.
   /// @param block The block to print to *out*.
@@ -471,43 +533,6 @@ public:
   size_type find_prev(size_type i) const;
 
 private:
-  /// Computes the block index for a given bit position.
-  static constexpr size_type block_index(size_type i)
-  {
-    return i / block_width;
-  }
-
-  /// Computes the bit index within a given block for a given bit position.
-  static constexpr block_type bit_index(size_type i)
-  {
-    return i % block_width;
-  }
-
-  /// Computes the bitmask block to extract a bit a given bit position.
-  static constexpr block_type bit_mask(size_type i)
-  {
-    return block_type(1) << bit_index(i);
-  }
-
-  /// Computes the number of blocks needed to represent a given number of
-  /// bits.
-  /// @param bits the number of bits.
-  /// @returns The number of blocks to represent *bits* number of bits.
-  static constexpr size_type bits_to_blocks(size_type bits)
-  {
-    return bits / block_width + static_cast<size_type>(bits % block_width != 0);
-  }
-
-  /// Computes the bit position first 1-bit in a given block.
-  /// @param block The block to inspect.
-  /// @returns The bit position where *block* has its first bit set to 1.
-  static size_type lowest_bit(block_type block);
-
-  /// Computes the bit position last 1-bit in a given block.
-  /// @param block The block to inspect.
-  /// @returns The bit position where *block* has its last bit set to 1.
-  static size_type highest_bit(block_type block);
-
   /// Computes the number of excess/unused bits in the bit vector.
   block_type extra_bits() const;
 

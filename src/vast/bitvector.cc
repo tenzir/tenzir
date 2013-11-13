@@ -91,6 +91,53 @@ bitvector::reference& bitvector::reference::operator-=(bool x)
   return *this;
 }
 
+size_type bitvector::count(block_type block)
+{
+  size_type n = 0;
+  while (block)
+  {
+    // TODO: use __popcnt if available.
+    n += count_table[block & ((1u << 8) - 1)];
+    block >>= 8;
+  }
+  return n;
+}
+
+size_type bitvector::lowest_bit(block_type block)
+{
+  auto x = block - (block & (block - 1)); // Extract right-most 1-bit.
+  size_type log = 0;
+  while (x >>= 1)
+    ++log;
+  return log;
+}
+
+size_type bitvector::highest_bit(block_type block)
+{
+  size_type log = 0;
+  while (block >>= 1)
+    ++log;
+  return log;
+}
+
+size_type bitvector::next_bit(block_type block, size_type i)
+{
+  if (i >= block_width - 1)
+    return npos;
+  auto masked = block & (all_one << ++i);
+  return masked ? lowest_bit(masked) : npos;
+}
+
+size_type bitvector::prev_bit(block_type block, size_type i)
+{
+  if (i == 0)
+    return npos;
+  if (i > block_width)
+    i = block_width;
+  auto masked = block & ~(all_one << (i % block_width));
+  return masked ? highest_bit(masked) : npos;
+}
+
 bitvector::bitvector()
   : num_bits_(0)
 {
@@ -395,19 +442,13 @@ block_type& bitvector::block_at_bit(size_type i)
 
 size_type bitvector::count() const
 {
-  auto first = bits_.begin();
-  size_t n = 0;
+  auto i = bits_.begin();
+  size_type n = 0;
   auto length = blocks();
   while (length)
   {
-    auto block = *first;
-    while (block)
-    {
-      // TODO: use __popcnt if available.
-      n += count_table[block & ((1u << 8) - 1)];
-      block >>= 8;
-    }
-    ++first;
+    n += count(*i);
+    ++i;
     --length;
   }
   return n;
@@ -459,23 +500,6 @@ size_type bitvector::find_prev(size_type i) const
     return find_backward(bi - 1);
   else
     return npos;
-}
-
-size_type bitvector::lowest_bit(block_type block)
-{
-  auto x = block - (block & (block - 1)); // Extract right-most 1-bit.
-  size_type log = 0;
-  while (x >>= 1)
-    ++log;
-  return log;
-}
-
-size_type bitvector::highest_bit(block_type block)
-{
-  size_type log = 0;
-  while (block >>= 1)
-    ++log;
-  return log;
 }
 
 block_type bitvector::extra_bits() const
