@@ -70,7 +70,7 @@ private:
   iterator_access() = default;
 };
 
-/// A simple reimplementation of `boost::iterator_facade`.
+/// A simple version of `boost::iterator_facade`.
 template <
   typename Derived,
   typename Category,
@@ -240,6 +240,82 @@ public:
 protected:
   using iterator_facade_type =
     iterator_facade<Derived, Category, Value, Reference, Difference>;
+};
+
+/// A simple version of `boost::iterator_adaptor`.
+template <
+  typename Derived,
+  typename Base,
+  typename Category,
+  typename Value,
+  typename Reference = Value&,
+  typename Difference = std::ptrdiff_t
+>
+class iterator_adaptor
+  : public iterator_facade<
+             Derived, Category, Value, Reference, Difference
+           >
+{
+ public:
+    using base_iterator = Base;
+    using super =
+      iterator_adaptor<
+        Derived, Base, Category, Value, Reference, Difference
+      >;
+
+    iterator_adaptor() = default;
+
+    explicit iterator_adaptor(Base const& b)
+      : iterator_{b}
+    {
+    }
+
+    Base const& base() const
+    {
+      return iterator_;
+    }
+
+ protected:
+    Base& base()
+    {
+      return iterator_;
+    }
+
+ private:
+    friend iterator_access;
+
+    Reference dereference() const
+    {
+      return *iterator_;
+    }
+
+    bool equals(iterator_adaptor const& other) const
+    {
+      return iterator_ == other.base();
+    }
+
+    void advance(Difference n)
+    {
+      iterator_ += n;
+    }
+
+    void increment()
+    {
+      ++iterator_;
+    }
+
+    void decrement()
+    {
+      --iterator_;
+    }
+
+    Difference distance_to(iterator_adaptor const& other) const
+    {
+      return other.base() - iterator_;
+    }
+
+ private:
+    Base iterator_;
 };
 
 } // namspace util
