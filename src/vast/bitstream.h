@@ -21,32 +21,20 @@ public:
   virtual ~bitstream_iterator_concept() = default;
   virtual std::unique_ptr<bitstream_iterator_concept> copy() const = 0;
 
-  virtual size_type position() const = 0;
   virtual bool equals(bitstream_iterator_concept const& other) const = 0;
   virtual void increment() = 0;
-  virtual bool dereference() const = 0;
-
-  // TODO: I have a hunch that it's possible to make this a bidirectional
-  // iterator with little to no extra effort.
-  //virtual void decrement() = 0;
+  virtual size_type dereference() const = 0;
 };
 
 template <typename Iterator>
 class bitstream_iterator_model : public bitstream_iterator_concept
 {
 public:
-  using size_type = bitvector::size_type;
-
   bitstream_iterator_model() = default;
 
   bitstream_iterator_model(Iterator&& i)
     : iterator_{std::move(i)}
   {
-  }
-
-  virtual size_type position() const final
-  {
-    return iterator_.position();
   }
 
 private:
@@ -69,7 +57,7 @@ private:
     ++iterator_;
   }
 
-  virtual bool dereference() const final
+  virtual size_type dereference() const final
   {
     return *iterator_;
   }
@@ -80,10 +68,15 @@ private:
 
 class bitstream_iterator
   : public util::iterator_facade<
-             bitstream_iterator, std::forward_iterator_tag, bool, bool
-           >
+             bitstream_iterator,
+             std::forward_iterator_tag,
+             bitvector::size_type,
+             bitvector::size_type
+          >
 {
 public:
+  using size_type = bitvector::size_type;
+
   bitstream_iterator() = default;
 
   template <
@@ -121,12 +114,6 @@ public:
     return *this;
   }
 
-  bitstream_iterator_concept::size_type position() const
-  {
-    assert(concept_);
-    return concept_->position();
-  }
-
 private:
   bool equals(bitstream_iterator const& other) const
   {
@@ -141,7 +128,7 @@ private:
     concept_->increment();
   }
 
-  bool dereference() const
+  size_type dereference() const
   {
     assert(concept_);
     return concept_->dereference();
@@ -611,10 +598,33 @@ private:
 
 class null_bitstream;
 
+class null_bitstream_iterator
+  : public util::iterator_adaptor<
+      null_bitstream_iterator,
+      bitvector::one_const_iterator,
+      std::forward_iterator_tag,
+      bitvector::size_type,
+      bitvector::size_type
+    >
+{
+public:
+  null_bitstream_iterator() = default;
+
+  static null_bitstream_iterator begin(null_bitstream const& null);
+  static null_bitstream_iterator end(null_bitstream const& null);
+
+private:
+  friend util::iterator_access;
+
+  explicit null_bitstream_iterator(base_iterator const& i);
+
+  auto dereference() const -> decltype(this->base().position());
+};
+
 template <>
 struct detail::bitstream_traits<null_bitstream>
 {
-  using const_iterator = bitvector::one_const_iterator;
+  using const_iterator = null_bitstream_iterator;
 };
 
 /// An uncompressed bitstream that simply forwards all operations to the
@@ -667,29 +677,50 @@ private:
 
 class ewah_bitstream;
 
+namespace detail {
+
+class ewah_bitstream_iterator
+  : public util::iterator_facade<
+             ewah_bitstream_iterator,
+             std::forward_iterator_tag,
+             bitvector::size_type,
+             bitvector::size_type
+           >
+{
+public:
+  using size_type = bitvector::size_type;
+
+  ewah_bitstream_iterator() = default;
+
+  static ewah_bitstream_iterator begin(ewah_bitstream const& ewah);
+  static ewah_bitstream_iterator end(ewah_bitstream const& ewah);
+
+private:
+  friend util::iterator_access;
+
+  ewah_bitstream_iterator(ewah_bitstream const& ewah);
+
+  bool equals(ewah_bitstream_iterator const& other) const;
+  void increment();
+  size_type dereference() const;
+
+  void scan();
+
+  static constexpr auto npos = bitvector::npos;
+
+  ewah_bitstream const* ewah_ = nullptr;
+  size_type pos_ = npos;
+  size_type num_clean_ = 0;
+  size_type num_dirty_ = 0; // Excludes the last dirty block.
+  size_type idx_ = 0;
+};
+
+} // namespace detail
+
 template <>
 struct detail::bitstream_traits<ewah_bitstream>
 {
-  using const_iterator = struct iterator
-    : util::iterator_facade<iterator, std::forward_iterator_tag, bool, bool>
-  {
-  public:
-    iterator() = default;
-
-    static iterator begin(ewah_bitstream const& ewah);
-    static iterator end(ewah_bitstream const& ewah);
-
-  private:
-    friend util::iterator_access;
-
-    iterator(ewah_bitstream const& ewah);
-
-    bool equals(iterator const& other) const;
-    void increment();
-    bool dereference() const;
-
-    ewah_bitstream const* ewah_ = nullptr;
-  };
+  using const_iterator = ewah_bitstream_iterator;
 };
 
 /// A bitstream encoded using the *Enhanced World-Aligned Hybrid (EWAH)*
@@ -706,10 +737,11 @@ class ewah_bitstream : public detail::bitstream_base<ewah_bitstream>,
   template <typename>
   friend class detail::bitstream_model;
   friend detail::bitstream_base<ewah_bitstream>;
+  friend detail::ewah_bitstream_iterator;
 
 public:
   using const_iterator =
-    typename detail::bitstream_traits<bitstream>::const_iterator;
+    typename detail::bitstream_traits<ewah_bitstream>::const_iterator;
 
   ewah_bitstream() = default;
   ewah_bitstream(bitvector::size_type n, bool bit);
@@ -734,6 +766,9 @@ private:
   size_type find_last_impl() const;
   size_type find_prev_impl(size_type i) const;
   bitvector const& bits_impl() const;
+
+  size_type
+  find_next_from_marker(size_type bit_pos, size_type& marker_pos) const;
 
   /// The offset from the LSB which separates clean and dirty counters.
   static constexpr auto clean_dirty_divide = block_width / 2 - 1;

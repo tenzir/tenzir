@@ -170,6 +170,27 @@ bool operator==(bitstream const& x, bitstream const& y)
 }
 
 
+null_bitstream_iterator null_bitstream_iterator::begin(null_bitstream const& n)
+{
+  return null_bitstream_iterator{base_iterator::begin(n.bits())};
+}
+
+null_bitstream_iterator null_bitstream_iterator::end(null_bitstream const& n)
+{
+  return null_bitstream_iterator{base_iterator::end(n.bits())};
+}
+
+null_bitstream_iterator::null_bitstream_iterator(base_iterator const& i)
+  : super{i}
+{
+}
+
+auto null_bitstream_iterator::dereference() const
+  -> decltype(this->base().position())
+{
+  return base().position();
+}
+
 null_bitstream::null_bitstream(bitvector::size_type n, bool bit)
   : bits_(n, bit)
 {
@@ -245,12 +266,12 @@ bool null_bitstream::empty_impl() const
 
 null_bitstream::const_iterator null_bitstream::begin_impl() const
 {
-  return const_iterator::begin(bits_);
+  return const_iterator::begin(*this);
 }
 
 null_bitstream::const_iterator null_bitstream::end_impl() const
 {
-  return const_iterator::end(bits_);
+  return const_iterator::end(*this);
 }
 
 null_bitstream::size_type null_bitstream::find_first_impl() const
@@ -297,6 +318,142 @@ bool operator<(null_bitstream const& x, null_bitstream const& y)
 {
   return x.bits_ < y.bits_;
 }
+
+
+namespace detail {
+
+ewah_bitstream_iterator
+ewah_bitstream_iterator::begin(ewah_bitstream const& ewah)
+{
+  return {ewah};
+}
+
+ewah_bitstream_iterator
+ewah_bitstream_iterator::end(ewah_bitstream const& ewah)
+{
+  return {ewah};
+}
+
+ewah_bitstream_iterator::ewah_bitstream_iterator(ewah_bitstream const& ewah)
+  : ewah_{&ewah},
+    pos_{0}
+{
+  assert(ewah_);
+  assert(ewah_->bits_.blocks() >= 2);
+
+  scan();
+}
+
+bool ewah_bitstream_iterator::equals(ewah_bitstream_iterator const& other) const
+{
+  return pos_ == other.pos_;
+}
+
+void ewah_bitstream_iterator::increment()
+{
+  assert(ewah_);
+  assert(pos_ != npos);
+
+  if (pos_ == npos)
+    return;
+
+  // First check whether we're still processing clean 1-blocks.
+  if (num_clean_ > 0)
+  {
+    if (bitvector::bit_index(++pos_) == 0)
+      --num_clean_;
+    if (num_clean_ > 0)
+      return;
+  }
+
+  // Time for the dirty stuff.
+  while (num_dirty_ > 0)
+  {
+    auto i = bitvector::bit_index(pos_);
+    if (i == bitvector::block_width - 1)
+    {
+      // We are at last bit in a block and have to move on to the next.
+      ++idx_;
+      ++pos_;
+      if (--num_dirty_ == 0)
+        break;
+
+      // There's at least one more dirty block coming afterwards.
+      auto next = bitvector::lowest_bit(ewah_->bits_.block(idx_));
+      if (next != npos)
+      {
+        pos_ += next;
+        return;
+      }
+
+      // We will never see a dirty block made up entirely of 0s (except for
+      // potentially the very last one and here we're only looking at
+      // *full* dirty blocks).
+      assert(! "should never happen");
+    }
+    else
+    {
+      // We're still in the middle of a dirty block.
+      auto next = bitvector::next_bit(ewah_->bits_.block(idx_), i);
+      if (next != npos)
+      {
+        pos_ += next - i;
+        return;
+      }
+      else
+      {
+        // We're done with this block and set the position to end of last block
+        // so that we can continue with the code above.
+        pos_ += bitvector::block_width - i - 1;
+        continue;
+      }
+    }
+  }
+
+  // Now we have another marker in front of us and have to scan and recurse.
+  scan();
+}
+
+ewah_bitstream_iterator::size_type ewah_bitstream_iterator::dereference() const
+{
+  assert(ewah_);
+  return pos_;
+}
+
+void ewah_bitstream_iterator::scan()
+{
+  assert(pos_ % bitvector::block_width == 0);
+
+  // We skip over all clean 0-blocks which don't have dirty blocks after them.
+  while (idx_ < ewah_->bits_.blocks() - 2 && num_dirty_ == 0)
+  {
+    auto marker = ewah_->bits_.block(idx_++);
+    auto zeros = ! ewah_bitstream::marker_type(marker);
+    num_dirty_ = ewah_bitstream::marker_num_dirty(marker);
+    auto num_clean = ewah_bitstream::marker_num_clean(marker);
+
+    if (zeros)
+    {
+      pos_ += bitvector::block_width * num_clean;
+    }
+    else
+    {
+      num_clean_ += num_clean;
+      break;
+    }
+  }
+
+  // If we have clean 1-blocks, we don't need to do anything because we know
+  // that the first 1-bit will be at the current position.
+  if (num_clean_ > 0)
+    return;
+
+  // Otherwise we need to find the first 1-bit in the next block, which is
+  // dirty.
+  pos_ = bitvector::lowest_bit(ewah_->bits_.block(idx_));
+}
+
+} // namespace detail
 
 
 ewah_bitstream::ewah_bitstream(bitvector::size_type n, bool bit)
@@ -480,23 +637,19 @@ bool ewah_bitstream::empty_impl() const
 
 ewah_bitstream::const_iterator ewah_bitstream::begin_impl() const
 {
-  // TODO
-  assert(! "not yet implemented");
-  return {};
+  return const_iterator::begin(*this);
 }
 
 ewah_bitstream::const_iterator ewah_bitstream::end_impl() const
 {
-  // TODO
-  assert(! "not yet implemented");
-  return {};
+  return const_iterator::end(*this);
 }
 
 ewah_bitstream::size_type ewah_bitstream::find_first_impl() const
 {
   // TODO
   assert(! "not yet implemented");
-  return bits_.find_first();
+  return {};
 }
 
 ewah_bitstream::size_type ewah_bitstream::find_next_impl(size_type i) const
@@ -565,9 +718,8 @@ void ewah_bitstream::integrate_last_block()
     }
     else
     {
-      // Decrement dirty count and replace the last block with a new marker.
-      marker = marker_num_dirty(marker, marker_num_dirty(marker) - 1);
-      auto m = marker_num_clean(marker_type(1, last_block_type), 1);
+      // Replace the last block with a new marker.
+      auto m = marker_num_clean(marker_type(0, last_block_type), 1);
       last_block = m;
       last_marker_ = bits_.blocks() - 1;
     }
