@@ -10,326 +10,14 @@
 #include "vast/util/print.h"
 
 namespace vast {
-namespace detail {
 
-class bitstream_iterator_concept
-{
-public:
-  using size_type = bitvector::size_type;
-
-  bitstream_iterator_concept() = default;
-  virtual ~bitstream_iterator_concept() = default;
-  virtual std::unique_ptr<bitstream_iterator_concept> copy() const = 0;
-
-  virtual bool equals(bitstream_iterator_concept const& other) const = 0;
-  virtual void increment() = 0;
-  virtual size_type dereference() const = 0;
-};
-
-template <typename Iterator>
-class bitstream_iterator_model : public bitstream_iterator_concept
-{
-public:
-  bitstream_iterator_model() = default;
-
-  bitstream_iterator_model(Iterator&& i)
-    : iterator_{std::move(i)}
-  {
-  }
-
-private:
-  virtual std::unique_ptr<bitstream_iterator_concept> copy() const final
-  {
-    return make_unique<bitstream_iterator_model>(*this);
-  }
-
-  virtual bool equals(bitstream_iterator_concept const& other) const final
-  {
-    if (typeid(*this) != typeid(other))
-      throw std::runtime_error{"incompatible iterator types"};
-
-    return iterator_ ==
-        static_cast<bitstream_iterator_model const&>(other).iterator_;
-  }
-
-  virtual void increment() final
-  {
-    ++iterator_;
-  }
-
-  virtual size_type dereference() const final
-  {
-    return *iterator_;
-  }
-
-  Iterator iterator_;
-};
-
-
-class bitstream_iterator
-  : public util::iterator_facade<
-             bitstream_iterator,
-             std::forward_iterator_tag,
-             bitvector::size_type,
-             bitvector::size_type
-          >
-{
-public:
-  using size_type = bitvector::size_type;
-
-  bitstream_iterator() = default;
-
-  template <
-    typename Iterator,
-    typename = DisableIfSameOrDerived<bitstream_iterator, Iterator>
-  >
-  bitstream_iterator(Iterator&& i)
-    : concept_{
-        new bitstream_iterator_model<Unqualified<Iterator>>{
-            std::forward<Iterator>(i)}}
-  {
-  }
-
-  // TODO: move implementation into *.cc file.
-
-  bitstream_iterator(bitstream_iterator const& other)
-    : concept_{other.concept_ ? other.concept_->copy() : nullptr}
-  {
-  }
-
-  bitstream_iterator(bitstream_iterator&& other)
-    : concept_{std::move(other.concept_)}
-  {
-  }
-
-  bitstream_iterator& operator=(bitstream_iterator const& other)
-  {
-    concept_ = other.concept_ ? other.concept_->copy() : nullptr;
-    return *this;
-  }
-
-  bitstream_iterator& operator=(bitstream_iterator&& other)
-  {
-    concept_ = std::move(other.concept_);
-    return *this;
-  }
-
-private:
-  bool equals(bitstream_iterator const& other) const
-  {
-    assert(concept_);
-    assert(other.concept_);
-    return concept_->equals(*other.concept_);
-  }
-
-  void increment()
-  {
-    assert(concept_);
-    concept_->increment();
-  }
-
-  size_type dereference() const
-  {
-    assert(concept_);
-    return concept_->dereference();
-  }
-
-  friend util::iterator_access;
-
-  std::unique_ptr<bitstream_iterator_concept> concept_;
-};
-
-
-class bitstream_concept
-{
-public:
-  using size_type = bitvector::size_type;
-
-  virtual ~bitstream_concept() = default;
-  virtual std::unique_ptr<bitstream_concept> copy() const = 0;
-
-  // Interface as required by bitstream_base<T>.
-  virtual bool equals(bitstream_concept const& other) const = 0;
-  virtual void bitwise_not() = 0;
-  virtual void bitwise_and(bitstream_concept const& other) = 0;
-  virtual void bitwise_or(bitstream_concept const& other) = 0;
-  virtual void bitwise_xor(bitstream_concept const& other) = 0;
-  virtual void bitwise_subtract(bitstream_concept const& other) = 0;
-  virtual void append_impl(size_type n, bool bit) = 0;
-  virtual void push_back_impl(bool bit) = 0;
-  virtual void clear_impl() noexcept = 0;
-  virtual bool at(size_type i) const = 0;
-  virtual size_type size_impl() const = 0;
-  virtual bool empty_impl() const = 0;
-  virtual bitstream_iterator begin_impl() const = 0;
-  virtual bitstream_iterator end_impl() const = 0;
-  virtual size_type find_first_impl() const = 0;
-  virtual size_type find_next_impl(size_type i) const = 0;
-  virtual size_type find_last_impl() const = 0;
-  virtual size_type find_prev_impl(size_type i) const = 0;
-  virtual bitvector const& bits_impl() const = 0;
-
-protected:
-  bitstream_concept() = default;
-
-private:
-  friend access;
-  virtual void serialize(serializer& sink) const = 0;
-  virtual void deserialize(deserializer& source) = 0;
-};
-
-template <typename Bitstream>
-class bitstream_model : public bitstream_concept,
-                        util::equality_comparable<bitstream_model<Bitstream>>
-{
-  Bitstream const& cast(bitstream_concept const& c) const
-  {
-    if (typeid(c) != typeid(*this))
-      throw std::bad_cast();
-    return static_cast<bitstream_model const&>(c).bitstream_;
-  }
-
-  Bitstream& cast(bitstream_concept& c)
-  {
-    if (typeid(c) != typeid(*this))
-      throw std::bad_cast();
-    return static_cast<bitstream_model&>(c).bitstream_;
-  }
-
-  friend bool operator==(bitstream_model const& x, bitstream_model const& y)
-  {
-    return x.bitstream_ == y.bitstream_;
-  }
-
-public:
-  bitstream_model() = default;
-
-  bitstream_model(Bitstream bs)
-    : bitstream_(std::move(bs))
-  {
-  }
-
-  virtual std::unique_ptr<bitstream_concept> copy() const final
-  {
-    return make_unique<bitstream_model>(*this);
-  }
-
-  virtual bool equals(bitstream_concept const& other) const final
-  {
-    return bitstream_.equals(cast(other));
-  }
-
-  virtual void bitwise_not() final
-  {
-    bitstream_.bitwise_not();
-  }
-
-  virtual void bitwise_and(bitstream_concept const& other) final
-  {
-    bitstream_.bitwise_and(cast(other));
-  }
-
-  virtual void bitwise_or(bitstream_concept const& other) final
-  {
-    bitstream_.bitwise_or(cast(other));
-  }
-
-  virtual void bitwise_xor(bitstream_concept const& other) final
-  {
-    bitstream_.bitwise_xor(cast(other));
-  }
-
-  virtual void bitwise_subtract(bitstream_concept const& other) final
-  {
-    bitstream_.bitwise_subtract(cast(other));
-  }
-
-  virtual void append_impl(size_type n, bool bit) final
-  {
-    bitstream_.append_impl(n, bit);
-  }
-
-  virtual void push_back_impl(bool bit) final
-  {
-    bitstream_.push_back_impl(bit);
-  }
-
-  virtual void clear_impl() noexcept final
-  {
-    bitstream_.clear_impl();
-  }
-
-  virtual bool at(size_type i) const final
-  {
-    return bitstream_.at(i);
-  }
-
-  virtual size_type size_impl() const final
-  {
-    return bitstream_.size_impl();
-  }
-
-  virtual bool empty_impl() const final
-  {
-    return bitstream_.empty_impl();
-  }
-
-  virtual bitstream_iterator begin_impl() const final
-  {
-    return bitstream_.begin_impl();
-  }
-
-  virtual bitstream_iterator end_impl() const final
-  {
-    return bitstream_.end_impl();
-  }
-
-  virtual size_type find_first_impl() const final
-  {
-    return bitstream_.find_first_impl();
-  }
-
-  virtual size_type find_next_impl(size_type i) const final
-  {
-    return bitstream_.find_next_impl(i);
-  }
-
-  virtual size_type find_last_impl() const final
-  {
-    return bitstream_.find_last_impl();
-  }
-
-  virtual size_type find_prev_impl(size_type i) const final
-  {
-    return bitstream_.find_prev_impl(i);
-  }
-
-  virtual bitvector const& bits_impl() const final
-  {
-    return bitstream_.bits_impl();
-  }
-
-private:
-  Bitstream bitstream_;
-
-private:
-  friend access;
-
-  virtual void serialize(serializer& sink) const final
-  {
-    sink << bitstream_;
-  }
-
-  virtual void deserialize(deserializer& source) final
-  {
-    source >> bitstream_;
-  }
-};
-
+/// Traits for bitstreams.
+/// @note We need this mechanism because ::bitstream_base cannot access types
+/// inside its CRTP template parameter.
 template <typename Derived>
 struct bitstream_traits;
 
-/// The base class for concrete bitstream implementations.
+/// The base class for all bitstream implementations.
 template <typename Derived>
 class bitstream_base : util::printable<bitstream_base<Derived>>
 {
@@ -524,26 +212,349 @@ private:
 template <typename Derived>
 typename bitstream_base<Derived>::size_type const bitstream_base<Derived>::npos;
 
+namespace detail {
+
+/// The concept for bitstream iterators.
+class bitstream_iterator_concept
+{
+public:
+  using size_type = bitvector::size_type;
+
+  bitstream_iterator_concept() = default;
+  virtual ~bitstream_iterator_concept() = default;
+  virtual std::unique_ptr<bitstream_iterator_concept> copy() const = 0;
+
+  virtual bool equals(bitstream_iterator_concept const& other) const = 0;
+  virtual void increment() = 0;
+  virtual size_type dereference() const = 0;
+};
+
+/// A concrete model for a specific bitstream iterator.
+template <typename Iterator>
+class bitstream_iterator_model : public bitstream_iterator_concept
+{
+public:
+  bitstream_iterator_model() = default;
+
+  bitstream_iterator_model(Iterator&& i)
+    : iterator_{std::move(i)}
+  {
+  }
+
+private:
+  virtual std::unique_ptr<bitstream_iterator_concept> copy() const final
+  {
+    return make_unique<bitstream_iterator_model>(*this);
+  }
+
+  virtual bool equals(bitstream_iterator_concept const& other) const final
+  {
+    if (typeid(*this) != typeid(other))
+      throw std::runtime_error{"incompatible iterator types"};
+
+    return iterator_ ==
+        static_cast<bitstream_iterator_model const&>(other).iterator_;
+  }
+
+  virtual void increment() final
+  {
+    ++iterator_;
+  }
+
+  virtual size_type dereference() const final
+  {
+    return *iterator_;
+  }
+
+  Iterator iterator_;
+};
+
 } // namespace detail
 
+
+/// The polymorphic iterator for polymorphic bitstreams.
+class bitstream_iterator
+  : public util::iterator_facade<
+             bitstream_iterator,
+             std::forward_iterator_tag,
+             bitvector::size_type,
+             bitvector::size_type
+          >
+{
+public:
+  using size_type = bitvector::size_type;
+
+  bitstream_iterator() = default;
+
+  template <
+    typename Iterator,
+    typename = DisableIfSameOrDerived<bitstream_iterator, Iterator>
+  >
+  bitstream_iterator(Iterator&& i)
+    : concept_{
+        new detail::bitstream_iterator_model<Unqualified<Iterator>>{
+            std::forward<Iterator>(i)}}
+  {
+  }
+
+  // TODO: move implementation into *.cc file.
+
+  bitstream_iterator(bitstream_iterator const& other)
+    : concept_{other.concept_ ? other.concept_->copy() : nullptr}
+  {
+  }
+
+  bitstream_iterator(bitstream_iterator&& other)
+    : concept_{std::move(other.concept_)}
+  {
+  }
+
+  bitstream_iterator& operator=(bitstream_iterator const& other)
+  {
+    concept_ = other.concept_ ? other.concept_->copy() : nullptr;
+    return *this;
+  }
+
+  bitstream_iterator& operator=(bitstream_iterator&& other)
+  {
+    concept_ = std::move(other.concept_);
+    return *this;
+  }
+
+private:
+  bool equals(bitstream_iterator const& other) const
+  {
+    assert(concept_);
+    assert(other.concept_);
+    return concept_->equals(*other.concept_);
+  }
+
+  void increment()
+  {
+    assert(concept_);
+    concept_->increment();
+  }
+
+  size_type dereference() const
+  {
+    assert(concept_);
+    return concept_->dereference();
+  }
+
+  friend util::iterator_access;
+
+  std::unique_ptr<detail::bitstream_iterator_concept> concept_;
+};
+
+namespace detail {
+
+/// The concept for bitstreams.
+class bitstream_concept
+{
+public:
+  using size_type = bitvector::size_type;
+
+  virtual ~bitstream_concept() = default;
+  virtual std::unique_ptr<bitstream_concept> copy() const = 0;
+
+  // Interface as required by bitstream_base<T>.
+  virtual bool equals(bitstream_concept const& other) const = 0;
+  virtual void bitwise_not() = 0;
+  virtual void bitwise_and(bitstream_concept const& other) = 0;
+  virtual void bitwise_or(bitstream_concept const& other) = 0;
+  virtual void bitwise_xor(bitstream_concept const& other) = 0;
+  virtual void bitwise_subtract(bitstream_concept const& other) = 0;
+  virtual void append_impl(size_type n, bool bit) = 0;
+  virtual void push_back_impl(bool bit) = 0;
+  virtual void clear_impl() noexcept = 0;
+  virtual bool at(size_type i) const = 0;
+  virtual size_type size_impl() const = 0;
+  virtual bool empty_impl() const = 0;
+  virtual bitstream_iterator begin_impl() const = 0;
+  virtual bitstream_iterator end_impl() const = 0;
+  virtual size_type find_first_impl() const = 0;
+  virtual size_type find_next_impl(size_type i) const = 0;
+  virtual size_type find_last_impl() const = 0;
+  virtual size_type find_prev_impl(size_type i) const = 0;
+  virtual bitvector const& bits_impl() const = 0;
+
+protected:
+  bitstream_concept() = default;
+
+private:
+  friend access;
+  virtual void serialize(serializer& sink) const = 0;
+  virtual void deserialize(deserializer& source) = 0;
+};
+
+/// A concrete bitstream.
+template <typename Bitstream>
+class bitstream_model : public bitstream_concept,
+                        util::equality_comparable<bitstream_model<Bitstream>>
+{
+  Bitstream const& cast(bitstream_concept const& c) const
+  {
+    if (typeid(c) != typeid(*this))
+      throw std::bad_cast();
+    return static_cast<bitstream_model const&>(c).bitstream_;
+  }
+
+  Bitstream& cast(bitstream_concept& c)
+  {
+    if (typeid(c) != typeid(*this))
+      throw std::bad_cast();
+    return static_cast<bitstream_model&>(c).bitstream_;
+  }
+
+  friend bool operator==(bitstream_model const& x, bitstream_model const& y)
+  {
+    return x.bitstream_ == y.bitstream_;
+  }
+
+public:
+  bitstream_model() = default;
+
+  bitstream_model(Bitstream bs)
+    : bitstream_(std::move(bs))
+  {
+  }
+
+  virtual std::unique_ptr<bitstream_concept> copy() const final
+  {
+    return make_unique<bitstream_model>(*this);
+  }
+
+  virtual bool equals(bitstream_concept const& other) const final
+  {
+    return bitstream_.equals(cast(other));
+  }
+
+  virtual void bitwise_not() final
+  {
+    bitstream_.bitwise_not();
+  }
+
+  virtual void bitwise_and(bitstream_concept const& other) final
+  {
+    bitstream_.bitwise_and(cast(other));
+  }
+
+  virtual void bitwise_or(bitstream_concept const& other) final
+  {
+    bitstream_.bitwise_or(cast(other));
+  }
+
+  virtual void bitwise_xor(bitstream_concept const& other) final
+  {
+    bitstream_.bitwise_xor(cast(other));
+  }
+
+  virtual void bitwise_subtract(bitstream_concept const& other) final
+  {
+    bitstream_.bitwise_subtract(cast(other));
+  }
+
+  virtual void append_impl(size_type n, bool bit) final
+  {
+    bitstream_.append_impl(n, bit);
+  }
+
+  virtual void push_back_impl(bool bit) final
+  {
+    bitstream_.push_back_impl(bit);
+  }
+
+  virtual void clear_impl() noexcept final
+  {
+    bitstream_.clear_impl();
+  }
+
+  virtual bool at(size_type i) const final
+  {
+    return bitstream_.at(i);
+  }
+
+  virtual size_type size_impl() const final
+  {
+    return bitstream_.size_impl();
+  }
+
+  virtual bool empty_impl() const final
+  {
+    return bitstream_.empty_impl();
+  }
+
+  virtual bitstream_iterator begin_impl() const final
+  {
+    return bitstream_.begin_impl();
+  }
+
+  virtual bitstream_iterator end_impl() const final
+  {
+    return bitstream_.end_impl();
+  }
+
+  virtual size_type find_first_impl() const final
+  {
+    return bitstream_.find_first_impl();
+  }
+
+  virtual size_type find_next_impl(size_type i) const final
+  {
+    return bitstream_.find_next_impl(i);
+  }
+
+  virtual size_type find_last_impl() const final
+  {
+    return bitstream_.find_last_impl();
+  }
+
+  virtual size_type find_prev_impl(size_type i) const final
+  {
+    return bitstream_.find_prev_impl(i);
+  }
+
+  virtual bitvector const& bits_impl() const final
+  {
+    return bitstream_.bits_impl();
+  }
+
+private:
+  Bitstream bitstream_;
+
+private:
+  friend access;
+
+  virtual void serialize(serializer& sink) const final
+  {
+    sink << bitstream_;
+  }
+
+  virtual void deserialize(deserializer& source) final
+  {
+    source >> bitstream_;
+  }
+};
+
+} // namespace detail
 
 class bitstream;
 
 template <>
-struct detail::bitstream_traits<bitstream>
+struct bitstream_traits<bitstream>
 {
-  using const_iterator = detail::bitstream_iterator;
+  using iterator = bitstream_iterator;
+  using const_iterator = iterator;
 };
 
-/// A append-only sequence of bits.
-class bitstream : public detail::bitstream_base<bitstream>,
+/// A polymorphic bitstream with value semantics.
+class bitstream : public bitstream_base<bitstream>,
                   util::equality_comparable<bitstream>
 {
-  friend detail::bitstream_base<bitstream>;
+  friend bitstream_base<bitstream>;
 
 public:
-  using const_iterator =
-    typename detail::bitstream_traits<bitstream>::const_iterator;
+  using const_iterator = typename bitstream_traits<bitstream>::const_iterator;
 
   bitstream() = default;
   bitstream(bitstream const& other);
@@ -595,7 +606,6 @@ private:
   friend bool operator==(bitstream const& x, bitstream const& y);
 };
 
-
 class null_bitstream;
 
 class null_bitstream_iterator
@@ -622,23 +632,24 @@ private:
 };
 
 template <>
-struct detail::bitstream_traits<null_bitstream>
+struct bitstream_traits<null_bitstream>
 {
-  using const_iterator = null_bitstream_iterator;
+  using iterator = null_bitstream_iterator;
+  using const_iterator = iterator;
 };
 
-/// An uncompressed bitstream that simply forwards all operations to the
+/// An uncompressed bitstream that simply forwards all operations to its
 /// underlying ::bitvector.
-class null_bitstream : public detail::bitstream_base<null_bitstream>,
+class null_bitstream : public bitstream_base<null_bitstream>,
                        util::totally_ordered<null_bitstream>
 {
   template <typename>
   friend class detail::bitstream_model;
-  friend detail::bitstream_base<null_bitstream>;
+  friend bitstream_base<null_bitstream>;
 
 public:
   using const_iterator =
-    typename detail::bitstream_traits<null_bitstream>::const_iterator;
+    typename bitstream_traits<null_bitstream>::const_iterator;
 
   null_bitstream() = default;
   null_bitstream(bitvector::size_type n, bool bit);
@@ -677,8 +688,6 @@ private:
 
 class ewah_bitstream;
 
-namespace detail {
-
 class ewah_bitstream_iterator
   : public util::iterator_facade<
              ewah_bitstream_iterator,
@@ -715,33 +724,32 @@ private:
   size_type idx_ = 0;
 };
 
-} // namespace detail
-
 template <>
-struct detail::bitstream_traits<ewah_bitstream>
+struct bitstream_traits<ewah_bitstream>
 {
-  using const_iterator = ewah_bitstream_iterator;
+  using iterator = ewah_bitstream_iterator;
+  using const_iterator = iterator;
 };
 
 /// A bitstream encoded using the *Enhanced World-Aligned Hybrid (EWAH)*
 /// algorithm.
 ///
-/// @note An EWAH bitstream internally maintains the following invariants:
+/// @note This implementation internally maintains the following invariants:
 ///
-///   1. The first block is a marker
+///   1. The first block is a marker.
 ///   2. The last block is always dirty.
-class ewah_bitstream : public detail::bitstream_base<ewah_bitstream>,
+class ewah_bitstream : public bitstream_base<ewah_bitstream>,
                        util::totally_ordered<ewah_bitstream>,
                        util::printable<ewah_bitstream>
 {
   template <typename>
   friend class detail::bitstream_model;
-  friend detail::bitstream_base<ewah_bitstream>;
-  friend detail::ewah_bitstream_iterator;
+  friend bitstream_base<ewah_bitstream>;
+  friend ewah_bitstream_iterator;
 
 public:
   using const_iterator =
-    typename detail::bitstream_traits<ewah_bitstream>::const_iterator;
+    typename bitstream_traits<ewah_bitstream>::const_iterator;
 
   ewah_bitstream() = default;
   ewah_bitstream(bitvector::size_type n, bool bit);

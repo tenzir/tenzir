@@ -320,8 +320,6 @@ bool operator<(null_bitstream const& x, null_bitstream const& y)
 }
 
 
-namespace detail {
-
 ewah_bitstream_iterator
 ewah_bitstream_iterator::begin(ewah_bitstream const& ewah)
 {
@@ -410,7 +408,7 @@ void ewah_bitstream_iterator::increment()
     }
   }
 
-  // Now we have another marker in front of us and have to scan and recurse.
+  // Now we have another marker in front of us and have to scan it.
   scan();
 }
 
@@ -452,8 +450,6 @@ void ewah_bitstream_iterator::scan()
   // dirty.
   pos_ = bitvector::lowest_bit(ewah_->bits_.block(idx_));
 }
-
-} // namespace detail
 
 
 ewah_bitstream::ewah_bitstream(bitvector::size_type n, bool bit)

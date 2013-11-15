@@ -74,7 +74,8 @@ public:
              iterator_base<Bitvector>,
              std::random_access_iterator_tag,
              bool,
-             Conditional<std::is_const<Bitvector>, const_reference, reference>
+             Conditional<std::is_const<Bitvector>, const_reference, reference>,
+             size_type
            >
   {
   public:
@@ -157,7 +158,8 @@ public:
              one_iterator_base<Bitvector>,
              std::bidirectional_iterator_tag,
              bool,
-             Conditional<std::is_const<Bitvector>, const_reference, reference>
+             Conditional<std::is_const<Bitvector>, const_reference, reference>,
+             size_type
            >
   {
   public:
