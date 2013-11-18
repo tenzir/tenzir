@@ -7,7 +7,10 @@ namespace vast {
 using size_type = bitvector::size_type;
 using block_type = bitvector::block_type;
 
-block_type const bitvector::block_width;
+constexpr bitvector::block_type bitvector::all_one;
+constexpr bitvector::block_type bitvector::msb_one;
+constexpr bitvector::size_type bitvector::block_width;
+constexpr bitvector::size_type bitvector::npos;
 
 namespace {
 

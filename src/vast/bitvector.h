@@ -26,14 +26,14 @@ public:
   static constexpr block_type block_width =
     std::numeric_limits<block_type>::digits;
 
+  /// One past the last addressable bit index; analogue to an `end` iterator.
+  static constexpr size_type npos = ~size_type{0};
+
   /// A block with all 1s.
   static constexpr block_type all_one = ~block_type{0};
 
   /// A block with only its MSB set to 1.
   static constexpr block_type msb_one = ~(all_one >> 1);
-
-  /// One past the last addressable bit index; analogue to an `end` iterator.
-  static constexpr size_type npos = ~size_type{0};
 
 public:
   /// An lvalue proxy for single bits.
