@@ -36,37 +36,12 @@ public:
   }
 };
 
-template <typename ForwardIterator>
-class iterator_range : range<iterator_range<ForwardIterator>>
-{
-public:
-  template <typename Iterator>
-  iterator_range(Iterator begin, Iterator end)
-    : begin_{begin}, end_{end}
-  {
-  }
-
-  ForwardIterator begin() const
-  {
-    return begin_;
-  }
-
-  ForwardIterator end() const
-  {
-    return end_;
-  }
-
-private:
-  ForwardIterator begin_;
-  ForwardIterator end_;
-};
-
 template <typename Range>
 class range_iterator
   : public iterator_facade<
       range_iterator<Range>,
       std::forward_iterator_tag,
-      typename Range::state_type
+      decltype(std::declval<Range>().dereference())
     >
 {
   friend Range;
@@ -93,7 +68,8 @@ private:
       rng_ = nullptr;
   }
 
-  typename Range::state_type& dereference() const
+  auto dereference() const
+    -> decltype(std::declval<Range>().dereference())
   {
     return rng_->dereference();
   }
@@ -101,13 +77,11 @@ private:
   Range* rng_ = nullptr;
 };
 
-template <typename Derived, typename State>
-class range_facade : public range<range_facade<Derived, State>>
+template <typename Derived>
+class range_facade : public range<range_facade<Derived>>
 {
 public:
-  using state_type = typename std::add_const<State>::type;
-
-  using iterator = range_iterator<range_facade<Derived, State>>;
+  using iterator = range_iterator<range_facade<Derived>>;
   using const_iterator = iterator;
 
   iterator begin() const
@@ -128,10 +102,38 @@ private:
     return static_cast<Derived*>(this)->next();
   }
 
-  state_type& dereference() const
+  template <typename Hack = Derived>
+  auto dereference() const
+    -> decltype(std::declval<Hack>().state())
   {
+    static_assert(std::is_same<Hack, Derived>::value, ":-P");
     return static_cast<Derived const*>(this)->state();
   }
+};
+
+template <typename ForwardIterator>
+class iterator_range : range<iterator_range<ForwardIterator>>
+{
+public:
+  template <typename Iterator>
+  iterator_range(Iterator begin, Iterator end)
+    : begin_{begin}, end_{end}
+  {
+  }
+
+  ForwardIterator begin() const
+  {
+    return begin_;
+  }
+
+  ForwardIterator end() const
+  {
+    return end_;
+  }
+
+private:
+  ForwardIterator begin_;
+  ForwardIterator end_;
 };
 
 } // namespace util
