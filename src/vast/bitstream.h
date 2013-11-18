@@ -8,8 +8,59 @@
 #include "vast/util/make_unique.h"
 #include "vast/util/operators.h"
 #include "vast/util/print.h"
+#include "vast/util/range.h"
 
 namespace vast {
+
+/// The base class for bit sequence ranges which provide an abstraction for
+/// traversal.
+template <typename Derived>
+class bitstream_sequence_range
+  : public util::range_facade<bitstream_sequence_range<Derived>>
+{
+public:
+  enum block_type { fill, literal };
+
+  // A block-based abstraction over a contiguous sequence of bits from of a
+  // bitstream. A sequence can have two types: a *fill* sequence represents a
+  // homogenous bits, typically greater than or equal to the block size, while
+  // a *literal* sequence represents bits from a single block, typically less
+  // than or equal to the block size.
+  struct bitsequence
+  {
+    bool is_fill() const
+    {
+      return type == fill;
+    }
+
+    bool is_literal() const
+    {
+      return type == literal;
+    }
+
+    block_type type = literal;
+    bitvector::size_type offset = bitvector::npos;
+    bitvector::block_type data = 0;
+    bitvector::size_type length = 0;
+  };
+
+protected:
+  bool next()
+  {
+    return static_cast<Derived*>(this)->next_sequence(seq_);
+  }
+
+private:
+  friend util::range_facade<bitstream_sequence_range<Derived>>;
+
+  bitsequence const& state() const
+  {
+    return seq_;
+  }
+
+  bitsequence seq_;
+};
+
 
 /// Traits for bitstreams.
 /// @note We need this mechanism because ::bitstream_base cannot access types
@@ -636,6 +687,8 @@ struct bitstream_traits<null_bitstream>
 {
   using iterator = null_bitstream_iterator;
   using const_iterator = iterator;
+  //using seq_iterator = null_bitstream_seq_iterator;
+  //using const_seq_iterator = seq_iterator;
 };
 
 /// An uncompressed bitstream that simply forwards all operations to its
@@ -651,8 +704,21 @@ public:
   using const_iterator =
     typename bitstream_traits<null_bitstream>::const_iterator;
 
+  class sequence_range : public bitstream_sequence_range<sequence_range>
+  {
+  public:
+    bool next_sequence(bitsequence& seq);
+
+    explicit sequence_range(null_bitstream const& bs);
+  private:
+    bitvector const* bits_;
+    bitvector::size_type next_ = 0;
+  };
+
   null_bitstream() = default;
   null_bitstream(bitvector::size_type n, bool bit);
+
+  sequence_range sequences() const;
 
 private:
   bool equals(null_bitstream const& other) const;

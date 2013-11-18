@@ -191,9 +191,44 @@ auto null_bitstream_iterator::dereference() const
   return base().position();
 }
 
-null_bitstream::null_bitstream(bitvector::size_type n, bool bit)
-  : bits_(n, bit)
+
+null_bitstream::sequence_range::sequence_range(null_bitstream const& bs)
+  : bits_{&bs.bits_}
 {
+  if (bits_->empty())
+    next_ = bitvector::npos;
+  else
+    next();
+}
+
+bool null_bitstream::sequence_range::next_sequence(bitsequence& seq)
+{
+  if (next_ >= bits_->blocks())
+    return false;
+
+  seq.offset = next_ * bitvector::block_width;
+  seq.data = bits_->block(next_);
+  seq.type = seq.data == 0 || seq.data == bitvector::all_one ? fill : literal;
+  seq.length = bitvector::block_width;
+
+  while (++next_ < bits_->blocks())
+    if (seq.type == fill && seq.data == bits_->block(next_))
+      seq.length += bitvector::block_width;
+    else
+      break;
+
+  return true;
+}
+
+
+null_bitstream::null_bitstream(bitvector::size_type n, bool bit)
+  : bits_{n, bit}
+{
+}
+
+null_bitstream::sequence_range null_bitstream::sequences() const
+{
+  return sequence_range{*this};
 }
 
 bool null_bitstream::equals(null_bitstream const& other) const

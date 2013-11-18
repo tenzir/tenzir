@@ -271,3 +271,36 @@ BOOST_AUTO_TEST_CASE(polymorphic_bitstream_iterators)
   BOOST_CHECK_EQUAL(*++begin, 12);
   BOOST_CHECK(++begin == bs.end());
 }
+
+BOOST_AUTO_TEST_CASE(sequence_iteration)
+{
+  null_bitstream bs;
+  bs.push_back(true);
+  bs.push_back(false);
+  bs.append(62, true);
+  bs.append(320, false);
+  bs.append(512, true);
+
+  auto range = bs.sequences();
+  auto i = range.begin();
+  BOOST_CHECK(i != range.end());
+  BOOST_CHECK_EQUAL(i->offset, 0);
+  BOOST_CHECK(i->is_literal());
+  BOOST_CHECK_EQUAL(i->data, bitvector::all_one & ~2);
+
+  ++i;
+  BOOST_CHECK(i != range.end());
+  BOOST_CHECK_EQUAL(i->offset, 64);
+  BOOST_CHECK(i->is_fill());
+  BOOST_CHECK_EQUAL(i->data, 0);
+  BOOST_CHECK_EQUAL(i->length, 320);
+
+  ++i;
+  BOOST_CHECK(i != range.end());
+  BOOST_CHECK_EQUAL(i->offset, 64 + 320);
+  BOOST_CHECK(i->is_fill());
+  BOOST_CHECK_EQUAL(i->data, bitvector::all_one);
+  BOOST_CHECK_EQUAL(i->length, 512);
+
+  BOOST_CHECK(++i == range.end());
+}
