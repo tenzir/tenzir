@@ -69,9 +69,9 @@ public:
 
   /// The base class for iterators which inspect every single bit.
   template <typename Bitvector>
-  class iterator_base :
+  class bit_iterator_base :
     public util::iterator_facade<
-             iterator_base<Bitvector>,
+             bit_iterator_base<Bitvector>,
              std::random_access_iterator_tag,
              bool,
              Conditional<std::is_const<Bitvector>, const_reference, reference>,
@@ -79,18 +79,18 @@ public:
            >
   {
   public:
-    using reverse_iterator = std::reverse_iterator<iterator_base>;
+    using reverse_iterator = std::reverse_iterator<bit_iterator_base>;
 
-    iterator_base() = default;
+    bit_iterator_base() = default;
 
-    static iterator_base begin(Bitvector& bits)
+    static bit_iterator_base begin(Bitvector& bits)
     {
-      return iterator_base{bits};
+      return bit_iterator_base{bits};
     }
 
-    static iterator_base end(Bitvector& bits)
+    static bit_iterator_base end(Bitvector& bits)
     {
-      return iterator_base{bits, bits.size()};
+      return bit_iterator_base{bits, bits.size()};
     }
 
     static reverse_iterator rbegin(Bitvector& bits)
@@ -106,7 +106,7 @@ public:
   private:
     friend util::iterator_access;
 
-    iterator_base(Bitvector& bits, size_type off = 0)
+    bit_iterator_base(Bitvector& bits, size_type off = 0)
       : bits_{&bits},
         i_{off}
     {
@@ -114,7 +114,7 @@ public:
       assert(! bits_->empty());
     }
 
-    bool equals(iterator_base const& other) const
+    bool equals(bit_iterator_base const& other) const
     {
       return i_ == other.i_;
     }
@@ -148,14 +148,14 @@ public:
     size_type i_ = npos;
   };
 
-  using iterator = iterator_base<bitvector>;
-  using const_iterator = iterator_base<bitvector const>;
+  using bit_iterator = bit_iterator_base<bitvector>;
+  using const_bit_iterator = bit_iterator_base<bitvector const>;
 
   /// The base class for iterators which inspect 1 bits only.
   template <typename Bitvector>
-  class one_iterator_base :
+  class ones_iterator_base :
     public util::iterator_facade<
-             one_iterator_base<Bitvector>,
+             ones_iterator_base<Bitvector>,
              std::bidirectional_iterator_tag,
              bool,
              Conditional<std::is_const<Bitvector>, const_reference, reference>,
@@ -163,23 +163,23 @@ public:
            >
   {
   public:
-    using reverse_iterator = std::reverse_iterator<one_iterator_base>;
+    using reverse_iterator = std::reverse_iterator<ones_iterator_base>;
 
-    one_iterator_base() = default;
+    ones_iterator_base() = default;
 
-    static one_iterator_base begin(Bitvector& bits)
+    static ones_iterator_base begin(Bitvector& bits)
     {
-      return one_iterator_base{bits, true};
+      return ones_iterator_base{bits, true};
     }
 
-    static one_iterator_base end(Bitvector&)
+    static ones_iterator_base end(Bitvector&)
     {
-      return one_iterator_base{};
+      return ones_iterator_base{};
     }
 
     static reverse_iterator rbegin(Bitvector& bits)
     {
-      return reverse_iterator{one_iterator_base{bits, false}};
+      return reverse_iterator{ones_iterator_base{bits, false}};
     }
 
     static reverse_iterator rend(Bitvector& bits)
@@ -195,7 +195,7 @@ public:
   private:
     friend util::iterator_access;
 
-    one_iterator_base(Bitvector& bits, bool forward)
+    ones_iterator_base(Bitvector& bits, bool forward)
       : bits_{&bits}
     {
       assert(bits_);
@@ -203,7 +203,7 @@ public:
       i_ = forward ? bits_->find_first() : bits_->find_last();
     }
 
-    bool equals(one_iterator_base const& other) const
+    bool equals(ones_iterator_base const& other) const
     {
       return i_ == other.i_;
     }
@@ -233,8 +233,8 @@ public:
     size_type i_ = npos;
   };
 
-  using one_iterator = one_iterator_base<bitvector>;
-  using one_const_iterator = one_iterator_base<bitvector const>;
+  using ones_iterator = ones_iterator_base<bitvector>;
+  using const_ones_iterator = ones_iterator_base<bitvector const>;
 
   /// Computes the block index for a given bit position.
   static constexpr size_type block_index(size_type i)

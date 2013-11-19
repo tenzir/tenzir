@@ -87,8 +87,8 @@ BOOST_AUTO_TEST_CASE(bitvector_iteration)
 
   std::string str;
   std::transform(
-      bitvector::const_iterator::begin(x),
-      bitvector::const_iterator::end(x),
+      bitvector::const_bit_iterator::begin(x),
+      bitvector::const_bit_iterator::end(x),
       std::back_inserter(str),
       [](bitvector::const_reference bit) { return bit ? '1' : '0'; });
 
@@ -96,8 +96,8 @@ BOOST_AUTO_TEST_CASE(bitvector_iteration)
 
   std::string rts;
   std::transform(
-      bitvector::const_iterator::rbegin(x),
-      bitvector::const_iterator::rend(x),
+      bitvector::const_bit_iterator::rbegin(x),
+      bitvector::const_bit_iterator::rend(x),
       std::back_inserter(rts),
       [](bitvector::const_reference bit) { return bit ? '1' : '0'; });
 
@@ -106,28 +106,28 @@ BOOST_AUTO_TEST_CASE(bitvector_iteration)
 
   std::string ones;
   std::transform(
-      bitvector::one_const_iterator::begin(x),
-      bitvector::one_const_iterator::end(x),
+      bitvector::const_ones_iterator::begin(x),
+      bitvector::const_ones_iterator::end(x),
       std::back_inserter(ones),
       [](bitvector::const_reference bit) { return bit ? '1' : '0'; });
 
   BOOST_CHECK_EQUAL(ones, "111111111111111111111111111111111111111111");
 
-  auto i = bitvector::one_const_iterator::rbegin(x);
+  auto i = bitvector::const_ones_iterator::rbegin(x);
   BOOST_CHECK_EQUAL(i.base().position(), 61);
   ++i;
   BOOST_CHECK_EQUAL(i.base().position(), 60);
   ++i;
   BOOST_CHECK_EQUAL(i.base().position(), 55);
-  while (i != bitvector::one_const_iterator::rend(x))
+  while (i != bitvector::const_ones_iterator::rend(x))
     ++i;
   BOOST_CHECK_EQUAL(i.base().position(), 0);
 
-  auto j = bitvector::one_iterator::rbegin(x);
+  auto j = bitvector::ones_iterator::rbegin(x);
   BOOST_CHECK_EQUAL(j.base().position(), 61);
   *j.base() = false;
   ++j;
   *j.base() = false;
-  j = bitvector::one_iterator::rbegin(x);
+  j = bitvector::ones_iterator::rbegin(x);
   BOOST_CHECK_EQUAL(j.base().position(), 55);
 }
