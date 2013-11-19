@@ -2,6 +2,53 @@
 
 namespace vast {
 
+detail::bitstream_concept::iterator::iterator(iterator const& other)
+  : concept_{other.concept_ ? other.concept_->copy() : nullptr}
+{
+}
+
+detail::bitstream_concept::iterator::iterator(iterator&& other)
+  : concept_{std::move(other.concept_)}
+{
+}
+
+detail::bitstream_concept::iterator&
+detail::bitstream_concept::iterator::operator=(
+    iterator const& other)
+{
+  concept_ = other.concept_ ? other.concept_->copy() : nullptr;
+  return *this;
+}
+
+detail::bitstream_concept::iterator&
+detail::bitstream_concept::iterator::operator=(
+    iterator&& other)
+{
+  concept_ = std::move(other.concept_);
+  return *this;
+}
+
+bool detail::bitstream_concept::iterator::equals(iterator const& other) const
+{
+  assert(concept_);
+  assert(other.concept_);
+  return concept_->equals(*other.concept_);
+}
+
+void detail::bitstream_concept::iterator::increment()
+{
+  assert(concept_);
+  concept_->increment();
+}
+
+detail::bitstream_concept::size_type
+detail::bitstream_concept::iterator::dereference() const
+{
+  assert(concept_);
+  return concept_->dereference();
+}
+
+
 bitstream::bitstream(bitstream const& other)
   : concept_{other.concept_ ? other.concept_->copy() : nullptr}
 {
@@ -106,13 +153,13 @@ bool bitstream::empty_impl() const
   return concept_->empty_impl();
 }
 
-bitstream_iterator bitstream::begin_impl() const
+bitstream::const_iterator bitstream::begin_impl() const
 {
   assert(concept_);
   return concept_->begin_impl();
 }
 
-bitstream_iterator bitstream::end_impl() const
+bitstream::const_iterator bitstream::end_impl() const
 {
   assert(concept_);
   return concept_->end_impl();
@@ -170,22 +217,24 @@ bool operator==(bitstream const& x, bitstream const& y)
 }
 
 
-null_bitstream_iterator null_bitstream_iterator::begin(null_bitstream const& n)
+null_bitstream::iterator
+null_bitstream::iterator::begin(null_bitstream const& n)
 {
-  return null_bitstream_iterator{base_iterator::begin(n.bits())};
+  return iterator{base_iterator::begin(n.bits())};
 }
 
-null_bitstream_iterator null_bitstream_iterator::end(null_bitstream const& n)
+null_bitstream::iterator
+null_bitstream::iterator::end(null_bitstream const& n)
 {
-  return null_bitstream_iterator{base_iterator::end(n.bits())};
+  return iterator{base_iterator::end(n.bits())};
 }
 
-null_bitstream_iterator::null_bitstream_iterator(base_iterator const& i)
+null_bitstream::iterator::iterator(base_iterator const& i)
   : super{i}
 {
 }
 
-auto null_bitstream_iterator::dereference() const
+auto null_bitstream::iterator::dereference() const
   -> decltype(this->base().position())
 {
   return base().position();
@@ -299,14 +348,14 @@ bool null_bitstream::empty_impl() const
   return bits_.empty();
 }
 
-null_bitstream_iterator null_bitstream::begin_impl() const
+null_bitstream::const_iterator null_bitstream::begin_impl() const
 {
-  return null_bitstream_iterator::begin(*this);
+  return const_iterator::begin(*this);
 }
 
-null_bitstream_iterator null_bitstream::end_impl() const
+null_bitstream::const_iterator null_bitstream::end_impl() const
 {
-  return null_bitstream_iterator::end(*this);
+  return const_iterator::end(*this);
 }
 
 null_bitstream::size_type null_bitstream::find_first_impl() const
@@ -355,19 +404,19 @@ bool operator<(null_bitstream const& x, null_bitstream const& y)
 }
 
 
-ewah_bitstream_iterator
-ewah_bitstream_iterator::begin(ewah_bitstream const& ewah)
+ewah_bitstream::iterator
+ewah_bitstream::iterator::begin(ewah_bitstream const& ewah)
 {
   return {ewah};
 }
 
-ewah_bitstream_iterator
-ewah_bitstream_iterator::end(ewah_bitstream const& ewah)
+ewah_bitstream::iterator
+ewah_bitstream::iterator::end(ewah_bitstream const& ewah)
 {
   return {ewah};
 }
 
-ewah_bitstream_iterator::ewah_bitstream_iterator(ewah_bitstream const& ewah)
+ewah_bitstream::iterator::iterator(ewah_bitstream const& ewah)
   : ewah_{&ewah},
     pos_{0}
 {
@@ -377,12 +426,13 @@ ewah_bitstream_iterator::ewah_bitstream_iterator(ewah_bitstream const& ewah)
   scan();
 }
 
-bool ewah_bitstream_iterator::equals(ewah_bitstream_iterator const& other) const
+bool
+ewah_bitstream::iterator::equals(ewah_bitstream::iterator const& other) const
 {
   return pos_ == other.pos_;
 }
 
-void ewah_bitstream_iterator::increment()
+void ewah_bitstream::iterator::increment()
 {
   assert(ewah_);
   assert(pos_ != npos);
@@ -447,13 +497,13 @@ void ewah_bitstream_iterator::increment()
   scan();
 }
 
-ewah_bitstream_iterator::size_type ewah_bitstream_iterator::dereference() const
+ewah_bitstream::iterator::size_type ewah_bitstream::iterator::dereference() const
 {
   assert(ewah_);
   return pos_;
 }
 
-void ewah_bitstream_iterator::scan()
+void ewah_bitstream::iterator::scan()
 {
   assert(pos_ % bitvector::block_width == 0);
 
@@ -666,14 +716,14 @@ bool ewah_bitstream::empty_impl() const
   return num_bits_ == 0;
 }
 
-ewah_bitstream_iterator ewah_bitstream::begin_impl() const
+ewah_bitstream::const_iterator ewah_bitstream::begin_impl() const
 {
-  return ewah_bitstream_iterator::begin(*this);
+  return const_iterator::begin(*this);
 }
 
-ewah_bitstream_iterator ewah_bitstream::end_impl() const
+ewah_bitstream::const_iterator ewah_bitstream::end_impl() const
 {
-  return ewah_bitstream_iterator::end(*this);
+  return const_iterator::end(*this);
 }
 
 ewah_bitstream::size_type ewah_bitstream::find_first_impl() const
