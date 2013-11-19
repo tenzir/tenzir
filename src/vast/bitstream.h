@@ -62,12 +62,6 @@ private:
 };
 
 
-/// Traits for bitstreams.
-/// @note We need this mechanism because ::bitstream_base cannot access types
-/// inside its CRTP template parameter.
-template <typename Derived>
-struct bitstream_traits;
-
 /// The base class for all bitstream implementations.
 template <typename Derived>
 class bitstream_base : util::printable<bitstream_base<Derived>>
@@ -82,7 +76,6 @@ public:
 
   using size_type = bitvector::size_type;
   using block_type = bitvector::block_type;
-  using const_iterator = typename bitstream_traits<Derived>::const_iterator;
 
   static constexpr auto npos = bitvector::npos;
   static constexpr auto block_width = bitvector::block_width;
@@ -185,12 +178,16 @@ public:
     derived().clear_impl();
   }
 
-  const_iterator begin() const
+  template <typename Hack = Derived>
+  auto begin() const
+    -> decltype(std::declval<Hack>().begin_impl())
   {
     return derived().begin_impl();
   }
 
-  const_iterator end() const
+  template <typename Hack = Derived>
+  auto end() const
+    -> decltype(std::declval<Hack>().end_impl())
   {
     return derived().end_impl();
   }
@@ -591,13 +588,6 @@ private:
 
 class bitstream;
 
-template <>
-struct bitstream_traits<bitstream>
-{
-  using iterator = bitstream_iterator;
-  using const_iterator = iterator;
-};
-
 /// A polymorphic bitstream with value semantics.
 class bitstream : public bitstream_base<bitstream>,
                   util::equality_comparable<bitstream>
@@ -605,8 +595,6 @@ class bitstream : public bitstream_base<bitstream>,
   friend bitstream_base<bitstream>;
 
 public:
-  using const_iterator = typename bitstream_traits<bitstream>::const_iterator;
-
   bitstream() = default;
   bitstream(bitstream const& other);
   bitstream(bitstream&& other);
@@ -640,8 +628,8 @@ private:
   bool at(size_type i) const;
   size_type size_impl() const;
   bool empty_impl() const;
-  const_iterator begin_impl() const;
-  const_iterator end_impl() const;
+  bitstream_iterator begin_impl() const;
+  bitstream_iterator end_impl() const;
   size_type find_first_impl() const;
   size_type find_next_impl(size_type i) const;
   size_type find_last_impl() const;
@@ -682,15 +670,6 @@ private:
   auto dereference() const -> decltype(this->base().position());
 };
 
-template <>
-struct bitstream_traits<null_bitstream>
-{
-  using iterator = null_bitstream_iterator;
-  using const_iterator = iterator;
-  //using seq_iterator = null_bitstream_seq_iterator;
-  //using const_seq_iterator = seq_iterator;
-};
-
 /// An uncompressed bitstream that simply forwards all operations to its
 /// underlying ::bitvector.
 class null_bitstream : public bitstream_base<null_bitstream>,
@@ -701,9 +680,6 @@ class null_bitstream : public bitstream_base<null_bitstream>,
   friend bitstream_base<null_bitstream>;
 
 public:
-  using const_iterator =
-    typename bitstream_traits<null_bitstream>::const_iterator;
-
   class sequence_range : public bitstream_sequence_range<sequence_range>
   {
   public:
@@ -733,8 +709,8 @@ private:
   bool at(size_type i) const;
   size_type size_impl() const;
   bool empty_impl() const;
-  const_iterator begin_impl() const;
-  const_iterator end_impl() const;
+  null_bitstream_iterator begin_impl() const;
+  null_bitstream_iterator end_impl() const;
   size_type find_first_impl() const;
   size_type find_next_impl(size_type i) const;
   size_type find_last_impl() const;
@@ -790,13 +766,6 @@ private:
   size_type idx_ = 0;
 };
 
-template <>
-struct bitstream_traits<ewah_bitstream>
-{
-  using iterator = ewah_bitstream_iterator;
-  using const_iterator = iterator;
-};
-
 /// A bitstream encoded using the *Enhanced World-Aligned Hybrid (EWAH)*
 /// algorithm.
 ///
@@ -814,9 +783,6 @@ class ewah_bitstream : public bitstream_base<ewah_bitstream>,
   friend ewah_bitstream_iterator;
 
 public:
-  using const_iterator =
-    typename bitstream_traits<ewah_bitstream>::const_iterator;
-
   ewah_bitstream() = default;
   ewah_bitstream(bitvector::size_type n, bool bit);
 
@@ -833,8 +799,8 @@ private:
   bool at(size_type i) const;
   size_type size_impl() const;
   bool empty_impl() const;
-  const_iterator begin_impl() const;
-  const_iterator end_impl() const;
+  ewah_bitstream_iterator begin_impl() const;
+  ewah_bitstream_iterator end_impl() const;
   size_type find_first_impl() const;
   size_type find_next_impl(size_type i) const;
   size_type find_last_impl() const;
