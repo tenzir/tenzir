@@ -245,23 +245,23 @@ null_bitstream::sequence_range::sequence_range(null_bitstream const& bs)
   : bits_{&bs.bits_}
 {
   if (bits_->empty())
-    next_ = bitvector::npos;
+    next_block_ = bitvector::npos;
   else
     next();
 }
 
 bool null_bitstream::sequence_range::next_sequence(bitsequence& seq)
 {
-  if (next_ >= bits_->blocks())
+  if (next_block_ >= bits_->blocks())
     return false;
 
-  seq.offset = next_ * bitvector::block_width;
-  seq.data = bits_->block(next_);
+  seq.offset = next_block_ * bitvector::block_width;
+  seq.data = bits_->block(next_block_);
   seq.type = seq.data == 0 || seq.data == bitvector::all_one ? fill : literal;
   seq.length = bitvector::block_width;
 
-  while (++next_ < bits_->blocks())
-    if (seq.type == fill && seq.data == bits_->block(next_))
+  while (++next_block_ < bits_->blocks())
+    if (seq.type == fill && seq.data == bits_->block(next_block_))
       seq.length += bitvector::block_width;
     else
       break;
@@ -273,11 +273,6 @@ bool null_bitstream::sequence_range::next_sequence(bitsequence& seq)
 null_bitstream::null_bitstream(bitvector::size_type n, bool bit)
   : bits_{n, bit}
 {
-}
-
-null_bitstream::sequence_range null_bitstream::sequences() const
-{
-  return sequence_range{*this};
 }
 
 bool null_bitstream::equals(null_bitstream const& other) const
@@ -497,7 +492,7 @@ void ewah_bitstream::iterator::increment()
   scan();
 }
 
-ewah_bitstream::iterator::size_type ewah_bitstream::iterator::dereference() const
+ewah_bitstream::size_type ewah_bitstream::iterator::dereference() const
 {
   assert(ewah_);
   return pos_;
@@ -534,6 +529,72 @@ void ewah_bitstream::iterator::scan()
   // Otherwise we need to find the first 1-bit in the next block, which is
   // dirty.
   pos_ = bitvector::lowest_bit(ewah_->bits_.block(idx_));
+}
+
+
+ewah_bitstream::sequence_range::sequence_range(ewah_bitstream const& bs)
+  : bits_{&bs.bits_}
+{
+  if (bits_->empty())
+    next_block_ = bitvector::npos;
+  else
+    next();
+}
+
+bool ewah_bitstream::sequence_range::next_sequence(bitsequence& seq)
+{
+  if (next_block_ >= bits_->blocks())
+    return false;
+
+  auto block = bits_->block(next_block_++);
+  if (num_dirty_ > 0 || next_block_ == bits_->blocks())
+  {
+    // The next block must be a dirty block (unless it's the last block, which
+    // we don't count in the number of dirty blocks).
+    --num_dirty_;
+    seq.type = literal;
+    seq.data = block;
+    seq.offset += seq.length;
+    seq.length = next_block_ == bits_->blocks()
+      ? bitvector::bit_index(bits_->size() - 1) + 1
+      : bitvector::block_width;
+  }
+  else
+  {
+    // The next block is a marker.
+    auto clean = marker_num_clean(block);
+    num_dirty_ = marker_num_dirty(block);
+    if (clean == 0)
+    {
+      // If the marker has no clean blocks, we can't record a fill sequence and
+      // have to go to the next (literal) block.
+      return next();
+    }
+    else
+    {
+      seq.type = fill;
+      seq.data = marker_type(block) ? bitvector::all_one : 0;
+      seq.offset += seq.length;
+      seq.length = clean * bitvector::block_width;
+
+      // If no dirty blocks follow this marker and we have not reached the
+      // final dirty block yet, we know that the next block must be a marker as
+      // well and check whether we can merge it into the current sequence.
+      while (num_dirty_ == 0 && next_block_ + 1 < bits_->blocks())
+      {
+        auto next_marker = bits_->block(next_block_);
+        auto next_type = marker_type(next_marker);
+        if ((next_type && ! seq.data) || (! next_type && seq.data))
+          break;
+
+        seq.length += marker_num_clean(next_marker) * bitvector::block_width;
+        num_dirty_ = marker_num_dirty(next_marker);
+        ++next_block_;
+      }
+    }
+  }
+
+  return true;
 }
 
 

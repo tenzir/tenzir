@@ -214,8 +214,7 @@ typename bitstream_base<Derived>::size_type const bitstream_base<Derived>::npos;
 
 namespace detail {
 
-/// The base class for bit sequence ranges which provide an abstraction for
-/// traversal.
+/// The base class for bit sequence ranges.
 template <typename Derived>
 class bitstream_sequence_range
   : public util::range_facade<bitstream_sequence_range<Derived>>
@@ -326,10 +325,7 @@ private:
 public:
   using const_iterator = class iterator
     : public util::iterator_facade<
-               iterator,
-               std::forward_iterator_tag,
-               bitvector::size_type,
-               bitvector::size_type
+               iterator, std::forward_iterator_tag, size_type, size_type
             >
   {
   public:
@@ -493,12 +489,12 @@ public:
 
   virtual const_iterator begin_impl() const final
   {
-    return bitstream_.begin_impl();
+    return const_iterator{bitstream_.begin_impl()};
   }
 
   virtual const_iterator end_impl() const final
   {
-    return bitstream_.end_impl();
+    return const_iterator{bitstream_.begin_impl()};
   }
 
   virtual size_type find_first_impl() const final
@@ -614,7 +610,7 @@ public:
   using const_iterator = class iterator
     : public util::iterator_adaptor<
         iterator,
-        bitvector::one_const_iterator,
+        bitvector::const_ones_iterator,
         std::forward_iterator_tag,
         bitvector::size_type,
         bitvector::size_type
@@ -633,10 +629,10 @@ public:
     auto dereference() const -> decltype(this->base().position());
   };
 
-  class bit_range : public util::iterator_range<iterator>
+  class ones_range : public util::iterator_range<iterator>
   {
   public:
-    explicit bit_range(null_bitstream const& bs)
+    explicit ones_range(null_bitstream const& bs)
       : util::iterator_range<iterator>{iterator::begin(bs), iterator::end(bs)}
     {
     }
@@ -646,17 +642,18 @@ public:
   {
   public:
     explicit sequence_range(null_bitstream const& bs);
-    bool next_sequence(bitsequence& seq);
 
   private:
+    friend detail::bitstream_sequence_range<sequence_range>;
+
+    bool next_sequence(bitsequence& seq);
+
     bitvector const* bits_;
-    bitvector::size_type next_ = 0;
+    bitvector::size_type next_block_ = 0;
   };
 
   null_bitstream() = default;
   null_bitstream(bitvector::size_type n, bool bit);
-
-  sequence_range sequences() const;
 
 private:
   template <typename>
@@ -677,6 +674,7 @@ private:
   bool empty_impl() const;
   const_iterator begin_impl() const;
   const_iterator end_impl() const;
+
   size_type find_first_impl() const;
   size_type find_next_impl(size_type i) const;
   size_type find_last_impl() const;
@@ -706,17 +704,14 @@ class ewah_bitstream : public bitstream_base<ewah_bitstream>,
                        util::printable<ewah_bitstream>
 {
 public:
+  using size_type = bitvector::size_type;
+
   using const_iterator = class iterator
     : public util::iterator_facade<
-               iterator,
-               std::forward_iterator_tag,
-               bitvector::size_type,
-               bitvector::size_type
+               iterator, std::forward_iterator_tag, size_type, size_type
              >
   {
   public:
-    using size_type = bitvector::size_type;
-
     iterator() = default;
 
     static iterator begin(ewah_bitstream const& ewah);
@@ -742,8 +737,33 @@ public:
     size_type idx_ = 0;
   };
 
+  class ones_range : public util::iterator_range<iterator>
+  {
+  public:
+    explicit ones_range(ewah_bitstream const& bs)
+      : util::iterator_range<iterator>{iterator::begin(bs), iterator::end(bs)}
+    {
+    }
+  };
+
+  class sequence_range : public detail::bitstream_sequence_range<sequence_range>
+  {
+  public:
+    explicit sequence_range(ewah_bitstream const& bs);
+
+  private:
+    friend detail::bitstream_sequence_range<sequence_range>;
+
+    bool next_sequence(bitsequence& seq);
+
+    bitvector const* bits_;
+    size_type next_block_ = 0;
+    size_type num_dirty_ = 0;
+    size_type num_bits_ = 0;
+  };
+
   ewah_bitstream() = default;
-  ewah_bitstream(bitvector::size_type n, bool bit);
+  ewah_bitstream(size_type n, bool bit);
 
 private:
   template <typename>
@@ -769,9 +789,6 @@ private:
   size_type find_last_impl() const;
   size_type find_prev_impl(size_type i) const;
   bitvector const& bits_impl() const;
-
-  size_type
-  find_next_from_marker(size_type bit_pos, size_type& marker_pos) const;
 
   /// The offset from the LSB which separates clean and dirty counters.
   static constexpr auto clean_dirty_divide = block_width / 2 - 1;

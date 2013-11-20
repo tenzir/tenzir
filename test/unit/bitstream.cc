@@ -256,6 +256,55 @@ BOOST_AUTO_TEST_CASE(ewah_bitstream_operations)
   BOOST_CHECK_EQUAL(*i, next);
 
   // Now we're facing 2^32 clean 1-blocks. That's too much to iterate over.
+  // Let's use sequence-based traversal instead.
+  auto range = ewah_bitstream::sequence_range{ewah};
+
+  // The first two blocks are literal.
+  auto r = range.begin();
+  BOOST_CHECK(r->is_literal());
+  BOOST_CHECK_EQUAL(r->length, bitvector::block_width);
+  BOOST_CHECK_EQUAL(r->data, ewah.bits().block(1));
+  ++r;
+  BOOST_CHECK(r->is_literal());
+  BOOST_CHECK_EQUAL(r->length, bitvector::block_width);
+  BOOST_CHECK_EQUAL(r->data, ewah.bits().block(2));
+
+  ++r;
+  BOOST_CHECK(r->is_fill());
+  BOOST_CHECK_EQUAL(r->data, bitvector::all_one);
+  BOOST_CHECK_EQUAL(r->length, 3 * bitvector::block_width);
+
+  ++r;
+  BOOST_CHECK(r->is_fill());
+  BOOST_CHECK_EQUAL(r->data, 0);
+  BOOST_CHECK_EQUAL(r->length, (1 << 4) * bitvector::block_width);
+
+  ++r;
+  BOOST_CHECK(r->is_fill());
+  BOOST_CHECK_EQUAL(r->data, bitvector::all_one);
+  BOOST_CHECK_EQUAL(r->length, ((1ull << 32) - 1) * bitvector::block_width);
+
+  ++r;
+  BOOST_CHECK(r->is_literal());
+  BOOST_CHECK_EQUAL(r->data, ewah.bits().block(6));
+  BOOST_CHECK_EQUAL(r->length, bitvector::block_width);
+
+  ++r;
+  BOOST_CHECK(r->is_literal());
+  BOOST_CHECK_EQUAL(r->data, ewah.bits().block(7));
+  BOOST_CHECK_EQUAL(r->length, bitvector::block_width);
+
+  ++r;
+  BOOST_CHECK(r->is_fill());
+  BOOST_CHECK_EQUAL(r->data, 0);
+  BOOST_CHECK_EQUAL(r->length, (1ull << (32 + 3)) * 64);
+
+  ++r;
+  BOOST_CHECK(r->is_literal());
+  BOOST_CHECK_EQUAL(r->data, 1);
+  BOOST_CHECK_EQUAL(r->length, 1);
+
+  BOOST_CHECK(++r == range.end());
 }
 
 BOOST_AUTO_TEST_CASE(polymorphic_bitstream_iterators)
@@ -274,14 +323,14 @@ BOOST_AUTO_TEST_CASE(polymorphic_bitstream_iterators)
 
 BOOST_AUTO_TEST_CASE(sequence_iteration)
 {
-  null_bitstream bs;
-  bs.push_back(true);
-  bs.push_back(false);
-  bs.append(62, true);
-  bs.append(320, false);
-  bs.append(512, true);
+  null_bitstream nbs;
+  nbs.push_back(true);
+  nbs.push_back(false);
+  nbs.append(62, true);
+  nbs.append(320, false);
+  nbs.append(512, true);
 
-  auto range = bs.sequences();
+  auto range = null_bitstream::sequence_range{nbs};
   auto i = range.begin();
   BOOST_CHECK(i != range.end());
   BOOST_CHECK_EQUAL(i->offset, 0);
