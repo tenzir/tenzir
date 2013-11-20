@@ -406,9 +406,9 @@ ewah_bitstream::iterator::begin(ewah_bitstream const& ewah)
 }
 
 ewah_bitstream::iterator
-ewah_bitstream::iterator::end(ewah_bitstream const& ewah)
+ewah_bitstream::iterator::end(ewah_bitstream const& /* ewah */)
 {
-  return {ewah};
+  return {};
 }
 
 ewah_bitstream::iterator::iterator(ewah_bitstream const& ewah)
@@ -416,9 +416,10 @@ ewah_bitstream::iterator::iterator(ewah_bitstream const& ewah)
     pos_{0}
 {
   assert(ewah_);
-  assert(ewah_->bits_.blocks() >= 2);
-
-  scan();
+  if (ewah_->bits_.blocks() >= 2)
+    scan();
+  else
+    pos_ = npos;
 }
 
 bool
@@ -435,7 +436,17 @@ void ewah_bitstream::iterator::increment()
   if (pos_ == npos)
     return;
 
-  // First check whether we're still processing clean 1-blocks.
+  // First check whether we're processing the last (dirty) block.
+  // special one.
+  if (idx_ == ewah_->bits_.blocks() - 1)
+  {
+    auto i = bitvector::bit_index(pos_);
+    auto next = bitvector::next_bit(ewah_->bits_.block(idx_), i);
+    pos_ += next == npos ? npos - pos_ : next - i;
+    return;
+  }
+
+  // Check whether we're still processing clean 1-blocks.
   if (num_clean_ > 0)
   {
     if (bitvector::bit_index(++pos_) == 0)
@@ -503,7 +514,7 @@ void ewah_bitstream::iterator::scan()
   assert(pos_ % bitvector::block_width == 0);
 
   // We skip over all clean 0-blocks which don't have dirty blocks after them.
-  while (idx_ < ewah_->bits_.blocks() - 2 && num_dirty_ == 0)
+  while (idx_ < ewah_->bits_.blocks() - 1 && num_dirty_ == 0)
   {
     auto marker = ewah_->bits_.block(idx_++);
     auto zeros = ! ewah_bitstream::marker_type(marker);
@@ -528,7 +539,7 @@ void ewah_bitstream::iterator::scan()
 
   // Otherwise we need to find the first 1-bit in the next block, which is
   // dirty.
-  pos_ = bitvector::lowest_bit(ewah_->bits_.block(idx_));
+  pos_ += bitvector::lowest_bit(ewah_->bits_.block(idx_));
 }
 
 
@@ -762,9 +773,13 @@ void ewah_bitstream::clear_impl() noexcept
 
 bool ewah_bitstream::at(size_type i) const
 {
-  // TODO
-  assert(! "not yet implemented");
-  return bits_[i];
+  for (auto& seq : sequence_range{*this})
+    if (i >= seq.offset && i < seq.offset + seq.length)
+      return seq.is_fill()
+        ? seq.data : seq.data & (1ull << bitvector::bit_index(i));
+
+  auto msg = "EWAH element out-of-range element access at index ";
+  throw std::out_of_range{msg + std::to_string(i)};
 }
 
 ewah_bitstream::size_type ewah_bitstream::size_impl() const

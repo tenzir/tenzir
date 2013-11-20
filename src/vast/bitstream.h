@@ -240,7 +240,7 @@ public:
     }
 
     block_type type = literal;
-    bitvector::size_type offset = bitvector::npos;
+    bitvector::size_type offset = 0;
     bitvector::block_type data = 0;
     bitvector::size_type length = 0;
   };
@@ -494,7 +494,7 @@ public:
 
   virtual const_iterator end_impl() const final
   {
-    return const_iterator{bitstream_.begin_impl()};
+    return const_iterator{bitstream_.end_impl()};
   }
 
   virtual size_type find_first_impl() const final
@@ -612,8 +612,8 @@ public:
         iterator,
         bitvector::const_ones_iterator,
         std::forward_iterator_tag,
-        bitvector::size_type,
-        bitvector::size_type
+        size_type,
+        size_type
       >
   {
   public:
@@ -649,11 +649,11 @@ public:
     bool next_sequence(bitsequence& seq);
 
     bitvector const* bits_;
-    bitvector::size_type next_block_ = 0;
+    size_type next_block_ = 0;
   };
 
   null_bitstream() = default;
-  null_bitstream(bitvector::size_type n, bool bit);
+  null_bitstream(size_type n, bool bit);
 
 private:
   template <typename>
@@ -704,8 +704,6 @@ class ewah_bitstream : public bitstream_base<ewah_bitstream>,
                        util::printable<ewah_bitstream>
 {
 public:
-  using size_type = bitvector::size_type;
-
   using const_iterator = class iterator
     : public util::iterator_facade<
                iterator, std::forward_iterator_tag, size_type, size_type
@@ -900,7 +898,6 @@ private:
   friend bool operator==(ewah_bitstream const& x, ewah_bitstream const& y);
   friend bool operator<(ewah_bitstream const& x, ewah_bitstream const& y);
 };
-
 
 /// Transposes a vector of equal-sized bitstreams.
 /// @param v A vector of bitstreams.

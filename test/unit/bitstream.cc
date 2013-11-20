@@ -5,6 +5,174 @@
 
 using namespace vast;
 
+struct bitstream_fixture
+{
+  bitstream_fixture()
+  {
+    ewah.append(10, true);
+    ewah.append(20, false);
+
+    // Cause the first dirty block to overflow and bumps the dirty counter of
+    // the first marker to 1.
+    ewah.append(40, true);
+
+    // Fill up another dirty block.
+    ewah.push_back(false);
+    ewah.push_back(true);
+    ewah.push_back(false);
+    ewah.append(53, true);
+    ewah.push_back(false);
+    ewah.push_back(false);
+
+    BOOST_CHECK_EQUAL(ewah.size(), 128);
+
+    // Bump the dirty count to 2 and fill up the current dirty block.
+    ewah.push_back(true);
+    ewah.append(63, true);
+
+    auto str =
+      "0000000000000000000000000000000000000000000000000000000000000010\n"
+      "1111111111111111111111111111111111000000000000000000001111111111\n"
+      "0011111111111111111111111111111111111111111111111111111010111111\n"
+      "1111111111111111111111111111111111111111111111111111111111111111";
+
+    BOOST_REQUIRE_EQUAL(to_string(ewah), str);
+
+    // Appending anything now transforms the last block into a marker, because
+    // it it turns out it was all 1s.
+    ewah.push_back(true);
+
+    str =
+      "0000000000000000000000000000000000000000000000000000000000000010\n"
+      "1111111111111111111111111111111111000000000000000000001111111111\n"
+      "0011111111111111111111111111111111111111111111111111111010111111\n"
+      "1000000000000000000000000000000010000000000000000000000000000000\n"
+      "                                                               1";
+
+    BOOST_REQUIRE_EQUAL(to_string(ewah), str);
+    BOOST_CHECK_EQUAL(ewah.size(), 193);
+
+    // Fill up the dirty block and append another full block. This bumps the
+    // clean count of the last marker to 2.
+    ewah.append(63, true);
+    ewah.append(64, true);
+
+    // Now we'll add some 0 bits. We had a complete block left, so that make the
+    // clean count of the last marker 3.
+    ewah.append(64, false);
+
+    BOOST_CHECK_EQUAL(ewah.size(), 384);
+
+    // Add 15 clean blocks of 0, of which 14 get merged with the previous
+    // marker and 1 remains a non-marker block. That yields a marker count of
+    // 1111 (15).
+    ewah.append(64 * 15, false);
+
+    str =
+      "0000000000000000000000000000000000000000000000000000000000000010\n"
+      "1111111111111111111111111111111111000000000000000000001111111111\n"
+      "0011111111111111111111111111111111111111111111111111111010111111\n"
+      "1000000000000000000000000000000110000000000000000000000000000000\n"
+      "0000000000000000000000000000011110000000000000000000000000000000\n"
+      "0000000000000000000000000000000000000000000000000000000000000000";
+
+    BOOST_REQUIRE_EQUAL(to_string(ewah), str);
+    BOOST_CHECK_EQUAL(ewah.size(), 384 + 64 * 15);
+
+
+    // Now we're add the maximum number of new blocks with value 1. This
+    // amounts to 64 * (2^32-1) = 274,877,906,880 bits in 2^32-2 blocks. Note
+    // that the maximum value of a clean block is 2^32-1, but the invariant
+    // requires the last block to be dirty, so we have to subtract yet another
+    // block.
+    ewah.append(64ull * ((1ull << 32) - 1), true);
+
+    // Appending a single bit here just triggers the coalescing of the last
+    // block with the current marker, making the clean count have the maximum
+    // value of 2^32-1.
+    ewah.push_back(false);
+
+    str =
+      "0000000000000000000000000000000000000000000000000000000000000010\n"
+      "1111111111111111111111111111111111000000000000000000001111111111\n"
+      "0011111111111111111111111111111111111111111111111111111010111111\n"
+      "1000000000000000000000000000000110000000000000000000000000000000\n"
+      "0000000000000000000000000000100000000000000000000000000000000000\n"
+      "1111111111111111111111111111111110000000000000000000000000000000\n"
+      "                                                               0";
+
+    BOOST_REQUIRE_EQUAL(to_string(ewah), str);
+    BOOST_CHECK_EQUAL(ewah.size(), 1344 + 274877906880ull + 1);
+
+    /// Complete the block as dirty.
+    ewah.append(63, true);
+
+    /// Create another full dirty block, just so that we can check that the
+    /// dirty counter works properly.
+    for (auto i = 0; i < 64; ++i) ewah.push_back(i % 2 == 0);
+
+    BOOST_CHECK_EQUAL(ewah.size(), 274877908352ull);
+
+    // Now we add 2^3 full markers. Because the maximum clean count is 2^32-1,
+    // we end up with 8 full markers and 7 clean blocks.
+    ewah.append((1ull << (32 + 3)) * 64, false);
+
+    str =
+      "0000000000000000000000000000000000000000000000000000000000000010\n"
+      "1111111111111111111111111111111111000000000000000000001111111111\n"
+      "0011111111111111111111111111111111111111111111111111111010111111\n"
+      "1000000000000000000000000000000110000000000000000000000000000000\n"
+      "0000000000000000000000000000100000000000000000000000000000000000\n"
+      "1111111111111111111111111111111110000000000000000000000000000010\n"
+      "1111111111111111111111111111111111111111111111111111111111111110\n"
+      "0101010101010101010101010101010101010101010101010101010101010101\n"
+      "0111111111111111111111111111111110000000000000000000000000000000\n"
+      "0111111111111111111111111111111110000000000000000000000000000000\n"
+      "0111111111111111111111111111111110000000000000000000000000000000\n"
+      "0111111111111111111111111111111110000000000000000000000000000000\n"
+      "0111111111111111111111111111111110000000000000000000000000000000\n"
+      "0111111111111111111111111111111110000000000000000000000000000000\n"
+      "0111111111111111111111111111111110000000000000000000000000000000\n"
+      "0111111111111111111111111111111110000000000000000000000000000000\n"
+      "0000000000000000000000000000001110000000000000000000000000000000\n"
+      "0000000000000000000000000000000000000000000000000000000000000000";
+
+    BOOST_REQUIRE_EQUAL(to_string(ewah), str);
+    BOOST_CHECK_EQUAL(ewah.size(), 274877908352ull + 2199023255552ull);
+
+    /// Adding another bit just consolidates the last clean block with the
+    /// last marker.
+    ewah.push_back(true);
+
+    str =
+      "0000000000000000000000000000000000000000000000000000000000000010\n"
+      "1111111111111111111111111111111111000000000000000000001111111111\n"
+      "0011111111111111111111111111111111111111111111111111111010111111\n"
+      "1000000000000000000000000000000110000000000000000000000000000000\n"
+      "0000000000000000000000000000100000000000000000000000000000000000\n"
+      "1111111111111111111111111111111110000000000000000000000000000010\n"
+      "1111111111111111111111111111111111111111111111111111111111111110\n"
+      "0101010101010101010101010101010101010101010101010101010101010101\n"
+      "0111111111111111111111111111111110000000000000000000000000000000\n"
+      "0111111111111111111111111111111110000000000000000000000000000000\n"
+      "0111111111111111111111111111111110000000000000000000000000000000\n"
+      "0111111111111111111111111111111110000000000000000000000000000000\n"
+      "0111111111111111111111111111111110000000000000000000000000000000\n"
+      "0111111111111111111111111111111110000000000000000000000000000000\n"
+      "0111111111111111111111111111111110000000000000000000000000000000\n"
+      "0111111111111111111111111111111110000000000000000000000000000000\n"
+      "0000000000000000000000000000010000000000000000000000000000000000\n"
+      "                                                               1";
+
+    BOOST_REQUIRE_EQUAL(to_string(ewah), str);
+    BOOST_CHECK_EQUAL(ewah.size(), 2473901163905);
+  }
+
+  ewah_bitstream ewah;
+};
+
+BOOST_FIXTURE_TEST_SUITE(bitstream_testsuite, bitstream_fixture)
+
 BOOST_AUTO_TEST_CASE(polymorphic_bitstream)
 {
   bitstream empty;
@@ -76,166 +244,8 @@ BOOST_AUTO_TEST_CASE(null_bitstream_operations)
       );
 }
 
-BOOST_AUTO_TEST_CASE(ewah_bitstream_operations)
+BOOST_AUTO_TEST_CASE(ewah_bitstream_bitwise_iteration)
 {
-  ewah_bitstream ewah;
-  ewah.append(10, true);
-  ewah.append(20, false);
-
-  // Cause the first dirty block to overflow and bumps the dirty counter of
-  // the first marker to 1.
-  ewah.append(40, true);
-
-  // Fill up another dirty block.
-  ewah.push_back(false);
-  ewah.push_back(true);
-  ewah.push_back(false);
-  ewah.append(53, true);
-  ewah.push_back(false);
-  ewah.push_back(false);
-
-  BOOST_CHECK_EQUAL(ewah.size(), 128);
-
-  // Bump the dirty count to 2 and fill up the current dirty block.
-  ewah.push_back(true);
-  ewah.append(63, true);
-
-  auto str =
-    "0000000000000000000000000000000000000000000000000000000000000010\n"
-    "1111111111111111111111111111111111000000000000000000001111111111\n"
-    "0011111111111111111111111111111111111111111111111111111010111111\n"
-    "1111111111111111111111111111111111111111111111111111111111111111";
-
-  BOOST_REQUIRE_EQUAL(to_string(ewah), str);
-
-  // Appending anything now transforms the last block into a marker, because it
-  // it turns out it was all 1s.
-  ewah.push_back(true);
-
-  str =
-    "0000000000000000000000000000000000000000000000000000000000000010\n"
-    "1111111111111111111111111111111111000000000000000000001111111111\n"
-    "0011111111111111111111111111111111111111111111111111111010111111\n"
-    "1000000000000000000000000000000010000000000000000000000000000000\n"
-    "                                                               1";
-
-  BOOST_REQUIRE_EQUAL(to_string(ewah), str);
-  BOOST_CHECK_EQUAL(ewah.size(), 193);
-
-  // Fill up the dirty block and append another full block. This bumps the
-  // clean count of the last marker to 2.
-  ewah.append(63, true);
-  ewah.append(64, true);
-
-  // Now we'll add some 0 bits. We had a complete block left, so that make the
-  // clean count of the last marker 3.
-  ewah.append(64, false);
-
-  BOOST_CHECK_EQUAL(ewah.size(), 384);
-
-  // Add 15 clean blocks of 0, of which 14 get merged with the previous marker
-  // and 1 remains a non-marker block. That yields a marker count of 1111 (15).
-  ewah.append(64 * 15, false);
-
-  str =
-    "0000000000000000000000000000000000000000000000000000000000000010\n"
-    "1111111111111111111111111111111111000000000000000000001111111111\n"
-    "0011111111111111111111111111111111111111111111111111111010111111\n"
-    "1000000000000000000000000000000110000000000000000000000000000000\n"
-    "0000000000000000000000000000011110000000000000000000000000000000\n"
-    "0000000000000000000000000000000000000000000000000000000000000000";
-
-  BOOST_REQUIRE_EQUAL(to_string(ewah), str);
-  BOOST_CHECK_EQUAL(ewah.size(), 384 + 64 * 15);
-
-
-  // Now we're add the maximum number of new blocks with value 1. This amounts
-  // to 64 * (2^32-1) = 274,877,906,880 bits in 2^32-2 blocks. Note that the
-  // maximum value of a clean block is 2^32-1, but the invariant requires the
-  // last block to be dirty, so we have to subtract yet another block.
-  ewah.append(64ull * ((1ull << 32) - 1), true);
-
-  // Appending a single bit here just triggers the coalescing of the last
-  // block with the current marker, making the clean count have the maximum
-  // value of 2^32-1.
-  ewah.push_back(false);
-
-  str =
-    "0000000000000000000000000000000000000000000000000000000000000010\n"
-    "1111111111111111111111111111111111000000000000000000001111111111\n"
-    "0011111111111111111111111111111111111111111111111111111010111111\n"
-    "1000000000000000000000000000000110000000000000000000000000000000\n"
-    "0000000000000000000000000000100000000000000000000000000000000000\n"
-    "1111111111111111111111111111111110000000000000000000000000000000\n"
-    "                                                               0";
-
-  BOOST_REQUIRE_EQUAL(to_string(ewah), str);
-  BOOST_CHECK_EQUAL(ewah.size(), 1344 + 274877906880ull + 1);
-
-  /// Complete the block as dirty.
-  ewah.append(63, true);
-
-  /// Create another full dirty block, just so that we can check that the dirty
-  /// counter works properly.
-  for (auto i = 0; i < 64; ++i)
-    ewah.push_back(i % 2 == 0);
-
-  BOOST_CHECK_EQUAL(ewah.size(), 274877908352ull);
-
-  // Now we add 2^3 full markers. Because the maximum clean count is 2^32-1, we
-  // end up with 8 full markers and 7 clean blocks.
-  ewah.append((1ull << (32 + 3)) * 64, false);
-
-  str =
-    "0000000000000000000000000000000000000000000000000000000000000010\n"
-    "1111111111111111111111111111111111000000000000000000001111111111\n"
-    "0011111111111111111111111111111111111111111111111111111010111111\n"
-    "1000000000000000000000000000000110000000000000000000000000000000\n"
-    "0000000000000000000000000000100000000000000000000000000000000000\n"
-    "1111111111111111111111111111111110000000000000000000000000000010\n"
-    "1111111111111111111111111111111111111111111111111111111111111110\n"
-    "0101010101010101010101010101010101010101010101010101010101010101\n"
-    "0111111111111111111111111111111110000000000000000000000000000000\n"
-    "0111111111111111111111111111111110000000000000000000000000000000\n"
-    "0111111111111111111111111111111110000000000000000000000000000000\n"
-    "0111111111111111111111111111111110000000000000000000000000000000\n"
-    "0111111111111111111111111111111110000000000000000000000000000000\n"
-    "0111111111111111111111111111111110000000000000000000000000000000\n"
-    "0111111111111111111111111111111110000000000000000000000000000000\n"
-    "0111111111111111111111111111111110000000000000000000000000000000\n"
-    "0000000000000000000000000000001110000000000000000000000000000000\n"
-    "0000000000000000000000000000000000000000000000000000000000000000";
-
-  BOOST_REQUIRE_EQUAL(to_string(ewah), str);
-  BOOST_CHECK_EQUAL(ewah.size(), 274877908352ull + 2199023255552ull);
-
-  /// Adding another bit just consolidates the last clean block with the
-  /// last marker.
-  ewah.push_back(true);
-
-  str =
-    "0000000000000000000000000000000000000000000000000000000000000010\n"
-    "1111111111111111111111111111111111000000000000000000001111111111\n"
-    "0011111111111111111111111111111111111111111111111111111010111111\n"
-    "1000000000000000000000000000000110000000000000000000000000000000\n"
-    "0000000000000000000000000000100000000000000000000000000000000000\n"
-    "1111111111111111111111111111111110000000000000000000000000000010\n"
-    "1111111111111111111111111111111111111111111111111111111111111110\n"
-    "0101010101010101010101010101010101010101010101010101010101010101\n"
-    "0111111111111111111111111111111110000000000000000000000000000000\n"
-    "0111111111111111111111111111111110000000000000000000000000000000\n"
-    "0111111111111111111111111111111110000000000000000000000000000000\n"
-    "0111111111111111111111111111111110000000000000000000000000000000\n"
-    "0111111111111111111111111111111110000000000000000000000000000000\n"
-    "0111111111111111111111111111111110000000000000000000000000000000\n"
-    "0111111111111111111111111111111110000000000000000000000000000000\n"
-    "0111111111111111111111111111111110000000000000000000000000000000\n"
-    "0000000000000000000000000000010000000000000000000000000000000000\n"
-    "                                                               1";
-
-  BOOST_REQUIRE_EQUAL(to_string(ewah), str);
-  BOOST_CHECK_EQUAL(ewah.size(), 2473901163905);
-
   auto i = ewah.begin();
   for (size_t j = 0; j < 10; ++j)
     BOOST_CHECK_EQUAL(*i++, j);
@@ -256,55 +266,101 @@ BOOST_AUTO_TEST_CASE(ewah_bitstream_operations)
   BOOST_CHECK_EQUAL(*i, next);
 
   // Now we're facing 2^32 clean 1-blocks. That's too much to iterate over.
-  // Let's use sequence-based traversal instead.
+  // Let's try something simpler.
+
+  ewah_bitstream ewah2;
+  ewah2.push_back(false);
+  ewah2.push_back(true);
+
+  ewah2.append(421, false);
+  ewah2.push_back(true);
+  ewah2.push_back(true);
+
+  i = ewah2.begin();
+  BOOST_CHECK_EQUAL(*i, 1);
+  BOOST_CHECK_EQUAL(*++i, 423);
+  BOOST_CHECK_EQUAL(*++i, 424);
+  BOOST_CHECK(++i == ewah2.end());
+
+  // While we're at it, let's test operator[] access as well.
+  BOOST_CHECK(! ewah2[0]);
+  BOOST_CHECK(ewah2[1]);
+  BOOST_CHECK(! ewah2[2]);
+  BOOST_CHECK(! ewah2[63]);
+  BOOST_CHECK(! ewah2[64]);
+  BOOST_CHECK(! ewah2[65]);
+  BOOST_CHECK(! ewah2[384]);
+  BOOST_CHECK(! ewah2[385]);
+  BOOST_CHECK(! ewah2[422]);
+  BOOST_CHECK(ewah2[423]);
+  BOOST_CHECK(ewah2[424]);
+}
+
+BOOST_AUTO_TEST_CASE(ewah_bitstream_element_access)
+{
+  BOOST_CHECK(ewah[0]);
+  BOOST_CHECK(ewah[9]);
+  BOOST_CHECK(! ewah[10]);
+  BOOST_CHECK(ewah[64]);
+  BOOST_CHECK(! ewah[1024]);
+  BOOST_CHECK(ewah[1344]);
+  BOOST_CHECK(ewah[2473901163905 - 1]);
+}
+
+BOOST_AUTO_TEST_CASE(ewah_bitstream_sequence_iteration)
+{
   auto range = ewah_bitstream::sequence_range{ewah};
 
   // The first two blocks are literal.
-  auto r = range.begin();
-  BOOST_CHECK(r->is_literal());
-  BOOST_CHECK_EQUAL(r->length, bitvector::block_width);
-  BOOST_CHECK_EQUAL(r->data, ewah.bits().block(1));
-  ++r;
-  BOOST_CHECK(r->is_literal());
-  BOOST_CHECK_EQUAL(r->length, bitvector::block_width);
-  BOOST_CHECK_EQUAL(r->data, ewah.bits().block(2));
+  auto i = range.begin();
+  BOOST_CHECK(i->is_literal());
+  BOOST_CHECK_EQUAL(i->length, bitvector::block_width);
+  BOOST_CHECK_EQUAL(i->data, ewah.bits().block(1));
+  ++i;
+  BOOST_CHECK(i->is_literal());
+  BOOST_CHECK_EQUAL(i->length, bitvector::block_width);
+  BOOST_CHECK_EQUAL(i->data, ewah.bits().block(2));
 
-  ++r;
-  BOOST_CHECK(r->is_fill());
-  BOOST_CHECK_EQUAL(r->data, bitvector::all_one);
-  BOOST_CHECK_EQUAL(r->length, 3 * bitvector::block_width);
+  ++i;
+  BOOST_CHECK(i->is_fill());
+  BOOST_CHECK_EQUAL(i->data, bitvector::all_one);
+  BOOST_CHECK_EQUAL(i->length, 3 * bitvector::block_width);
 
-  ++r;
-  BOOST_CHECK(r->is_fill());
-  BOOST_CHECK_EQUAL(r->data, 0);
-  BOOST_CHECK_EQUAL(r->length, (1 << 4) * bitvector::block_width);
+  ++i;
+  BOOST_CHECK(i->is_fill());
+  BOOST_CHECK_EQUAL(i->data, 0);
+  BOOST_CHECK_EQUAL(i->length, (1 << 4) * bitvector::block_width);
 
-  ++r;
-  BOOST_CHECK(r->is_fill());
-  BOOST_CHECK_EQUAL(r->data, bitvector::all_one);
-  BOOST_CHECK_EQUAL(r->length, ((1ull << 32) - 1) * bitvector::block_width);
+  ++i;
+  BOOST_CHECK(i->is_fill());
+  BOOST_CHECK_EQUAL(i->data, bitvector::all_one);
+  BOOST_CHECK_EQUAL(i->length, ((1ull << 32) - 1) * bitvector::block_width);
 
-  ++r;
-  BOOST_CHECK(r->is_literal());
-  BOOST_CHECK_EQUAL(r->data, ewah.bits().block(6));
-  BOOST_CHECK_EQUAL(r->length, bitvector::block_width);
+  ++i;
+  BOOST_CHECK(i->is_literal());
+  BOOST_CHECK_EQUAL(i->data, ewah.bits().block(6));
+  BOOST_CHECK_EQUAL(i->length, bitvector::block_width);
 
-  ++r;
-  BOOST_CHECK(r->is_literal());
-  BOOST_CHECK_EQUAL(r->data, ewah.bits().block(7));
-  BOOST_CHECK_EQUAL(r->length, bitvector::block_width);
+  ++i;
+  BOOST_CHECK(i->is_literal());
+  BOOST_CHECK_EQUAL(i->data, ewah.bits().block(7));
+  BOOST_CHECK_EQUAL(i->length, bitvector::block_width);
 
-  ++r;
-  BOOST_CHECK(r->is_fill());
-  BOOST_CHECK_EQUAL(r->data, 0);
-  BOOST_CHECK_EQUAL(r->length, (1ull << (32 + 3)) * 64);
+  ++i;
+  BOOST_CHECK(i->is_fill());
+  BOOST_CHECK_EQUAL(i->data, 0);
+  BOOST_CHECK_EQUAL(i->length, (1ull << (32 + 3)) * 64);
 
-  ++r;
-  BOOST_CHECK(r->is_literal());
-  BOOST_CHECK_EQUAL(r->data, 1);
-  BOOST_CHECK_EQUAL(r->length, 1);
+  ++i;
+  BOOST_CHECK(i->is_literal());
+  BOOST_CHECK_EQUAL(i->data, 1);
+  BOOST_CHECK_EQUAL(i->length, 1);
 
-  BOOST_CHECK(++r == range.end());
+  BOOST_CHECK(++i == range.end());
+}
+
+BOOST_AUTO_TEST_CASE(ewah_bitstream_random_access)
+{
 }
 
 BOOST_AUTO_TEST_CASE(polymorphic_bitstream_iterators)
@@ -314,11 +370,24 @@ BOOST_AUTO_TEST_CASE(polymorphic_bitstream_iterators)
   bs.append(10, false);
   bs.append(2, true);
 
-  auto begin = bs.begin();
-  BOOST_CHECK_EQUAL(*begin, 0);
-  BOOST_CHECK_EQUAL(*++begin, 11);
-  BOOST_CHECK_EQUAL(*++begin, 12);
-  BOOST_CHECK(++begin == bs.end());
+  auto i = bs.begin();
+  BOOST_CHECK_EQUAL(*i, 0);
+  BOOST_CHECK_EQUAL(*++i, 11);
+  BOOST_CHECK_EQUAL(*++i, 12);
+  BOOST_CHECK(++i == bs.end());
+
+  bs = ewah_bitstream{};
+  bs.push_back(false);
+  bs.push_back(true);
+  bs.append(421, false);
+  bs.push_back(true);
+  bs.push_back(true);
+
+  i = bs.begin();
+  BOOST_CHECK_EQUAL(*i, 1);
+  BOOST_CHECK_EQUAL(*++i, 422);
+  BOOST_CHECK_EQUAL(*++i, 423);
+  BOOST_CHECK(++i == bs.end());
 }
 
 BOOST_AUTO_TEST_CASE(sequence_iteration)
@@ -353,3 +422,5 @@ BOOST_AUTO_TEST_CASE(sequence_iteration)
 
   BOOST_CHECK(++i == range.end());
 }
+
+BOOST_AUTO_TEST_SUITE_END()
