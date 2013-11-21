@@ -621,9 +621,30 @@ bool ewah_bitstream::equals(ewah_bitstream const& other) const
 
 void ewah_bitstream::bitwise_not()
 {
-  // TODO
-  assert(! "not yet implemented");
-  bits_.flip();
+  if (bits_.empty())
+    return;
+
+  assert(bits_.blocks() >= 2);
+  size_type next_marker = 0;
+  size_type i;
+  for (i = 0; i < bits_.blocks() - 1; ++i)
+  {
+    auto& block = bits_.block(i);
+    if (i == next_marker)
+    {
+      next_marker += marker_num_dirty(block) + 1;
+      if (marker_num_clean(block) > 0)
+        block ^= bitvector::msb_one;
+    }
+    else
+    {
+      block = ~block;
+    }
+  }
+
+  // We only flip the active bits in the last block.
+  auto idx = bitvector::bit_index(bits_.size() - 1);
+  bits_.block(i) ^= all_one >> (block_width - idx - 1);
 }
 
 void ewah_bitstream::bitwise_and(ewah_bitstream const& other)
