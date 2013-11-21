@@ -506,6 +506,9 @@ public:
   /// @returns `true` iff the bitvector has zero length.
   bool empty() const;
 
+  /// Computes the number of excess/unused bits in the bit vector.
+  block_type extra_bits() const;
+
   /// Finds the bit position of of the first 1-bit.
   ///
   /// @returns The position of the first bit that equals to one or `npos` if no
@@ -535,9 +538,6 @@ public:
   size_type find_prev(size_type i) const;
 
 private:
-  /// Computes the number of excess/unused bits in the bit vector.
-  block_type extra_bits() const;
-
   // If the number of bits in the vector are not not a multiple of
   // bitvector::block_width, then the last block exhibits unused bits which
   // this function resets.

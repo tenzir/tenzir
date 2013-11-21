@@ -472,6 +472,11 @@ bool bitvector::empty() const
   return bits_.empty();
 }
 
+block_type bitvector::extra_bits() const
+{
+  return bit_index(size());
+}
+
 size_type bitvector::find_first() const
 {
   return find_forward(0);
@@ -503,11 +508,6 @@ size_type bitvector::find_prev(size_type i) const
     return find_backward(bi - 1);
   else
     return npos;
-}
-
-block_type bitvector::extra_bits() const
-{
-  return bit_index(size());
 }
 
 void bitvector::zero_unused_bits()
