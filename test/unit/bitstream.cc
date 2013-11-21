@@ -244,7 +244,7 @@ BOOST_AUTO_TEST_CASE(null_bitstream_operations)
       );
 }
 
-BOOST_AUTO_TEST_CASE(ewah_bitstream_bitwise_iteration)
+BOOST_AUTO_TEST_CASE(ewah_bitwise_iteration)
 {
   auto i = ewah.begin();
   for (size_t j = 0; j < 10; ++j)
@@ -296,7 +296,7 @@ BOOST_AUTO_TEST_CASE(ewah_bitstream_bitwise_iteration)
   BOOST_CHECK(ewah2[424]);
 }
 
-BOOST_AUTO_TEST_CASE(ewah_bitstream_element_access)
+BOOST_AUTO_TEST_CASE(ewah_element_access)
 {
   BOOST_CHECK(ewah[0]);
   BOOST_CHECK(ewah[9]);
@@ -332,7 +332,7 @@ BOOST_AUTO_TEST_CASE(ewah_bitwise_not)
   BOOST_CHECK_EQUAL(to_string(~ewah), str);
 }
 
-BOOST_AUTO_TEST_CASE(ewah_bitstream_sequence_iteration)
+BOOST_AUTO_TEST_CASE(ewah_sequence_iteration)
 {
   auto range = ewah_bitstream::sequence_range{ewah};
 
@@ -384,8 +384,31 @@ BOOST_AUTO_TEST_CASE(ewah_bitstream_sequence_iteration)
   BOOST_CHECK(++i == range.end());
 }
 
-BOOST_AUTO_TEST_CASE(ewah_bitstream_random_access)
+BOOST_AUTO_TEST_CASE(ewah_block_append)
 {
+  ewah_bitstream ebs;
+  ebs.append(10, true);
+  ebs.append(0xf00);
+  BOOST_CHECK_EQUAL(ebs.size(), 10 + bitvector::block_width);
+  BOOST_CHECK(! ebs[17]);
+  BOOST_CHECK(ebs[18]);
+  BOOST_CHECK(ebs[19]);
+  BOOST_CHECK(ebs[20]);
+  BOOST_CHECK(ebs[21]);
+  BOOST_CHECK(! ebs[22]);
+
+  ebs.append(2048, true);
+  ebs.append(0xff00);
+
+  auto str =
+    "0000000000000000000000000000000000000000000000000000000000000010\n"
+    "0000000000000000000000000000000000000000001111000000001111111111\n"
+    "1111111111111111111111111111111111111111111111111111110000000000\n"
+    "1000000000000000000000000000111110000000000000000000000000000001\n"
+    "0000000000000000000000000000000000000011111111000000001111111111\n"
+    "                                                      0000000000";
+
+  BOOST_CHECK_EQUAL(to_string(ebs), str);
 }
 
 BOOST_AUTO_TEST_CASE(polymorphic_bitstream_iterators)
@@ -410,8 +433,8 @@ BOOST_AUTO_TEST_CASE(polymorphic_bitstream_iterators)
 
   i = bs.begin();
   BOOST_CHECK_EQUAL(*i, 1);
-  BOOST_CHECK_EQUAL(*++i, 422);
   BOOST_CHECK_EQUAL(*++i, 423);
+  BOOST_CHECK_EQUAL(*++i, 424);
   BOOST_CHECK(++i == bs.end());
 }
 

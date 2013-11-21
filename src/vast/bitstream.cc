@@ -123,6 +123,12 @@ void bitstream::append_impl(size_type n, bool bit)
   concept_->append_impl(n, bit);
 }
 
+void bitstream::append_impl(block_type block)
+{
+  assert(concept_);
+  concept_->append_impl(block);
+}
+
 void bitstream::push_back_impl(bool bit)
 {
   assert(concept_);
@@ -316,6 +322,11 @@ void null_bitstream::bitwise_subtract(null_bitstream const& other)
 void null_bitstream::append_impl(size_type n, bool bit)
 {
   bits_.resize(bits_.size() + n, bit);
+}
+
+void null_bitstream::append_impl(block_type block)
+{
+  bits_.append(block);
 }
 
 void null_bitstream::push_back_impl(bool bit)
@@ -687,10 +698,6 @@ void ewah_bitstream::append_impl(size_type n, bool bit)
 {
   assert(n > 0);
 
-  // TODO: make the function return a boolean and indicate false.
-  if (std::numeric_limits<size_type>::max() - num_bits_ < n)
-    return;
-
   if (bits_.empty())
   {
     bits_.append(0); // Always begin with an empty marker.
@@ -773,6 +780,34 @@ void ewah_bitstream::append_impl(size_type n, bool bit)
   }
 
   bits_.resize(bits_.size() + remaining_bits, bit);
+}
+
+void ewah_bitstream::append_impl(block_type block)
+{
+  if (bits_.empty())
+    bits_.append(0); // Always begin with an empty marker.
+
+  if (num_bits_ % block_width == 0)
+  {
+    integrate_last_block();
+    bits_.append(block);
+    num_bits_ += block_width;
+  }
+  else
+  {
+    auto used = bits_.extra_bits();
+    auto unused = block_width - used;
+
+    bits_.resize(bits_.size() + unused);
+    num_bits_ += unused;
+    bits_.last_block() |= (block << used);
+
+    integrate_last_block();
+
+    bits_.resize(bits_.size() + used, false);
+    bits_.last_block() |= (block >> unused);
+    num_bits_ += used;
+  }
 }
 
 void ewah_bitstream::push_back_impl(bool bit)
@@ -860,7 +895,7 @@ void ewah_bitstream::integrate_last_block()
 {
   assert(num_bits_ % block_width == 0);
   assert(last_marker_ != bits_.blocks() - 1);
-  auto& last_block = bits_.block(bits_.blocks() - 1);
+  auto& last_block = bits_.last_block();
   auto blocks_after_marker = bits_.blocks() - last_marker_ - 1;
 
   // Check whether we can coalesce the current dirty block with the last
@@ -918,7 +953,7 @@ void ewah_bitstream::bump_dirty_count()
   {
     // We need a new marker: replace the current dirty block with a marker and
     // append a new block.
-    auto& last_block = bits_.block(bits_.blocks() - 1);
+    auto& last_block = bits_.last_block();
     auto dirty_block = last_block;
     last_block = marker_num_dirty(1);
     last_marker_ = bits_.blocks() - 1;

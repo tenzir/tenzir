@@ -109,9 +109,17 @@ public:
 
   bool append(size_type n, bool bit)
   {
-    if (std::numeric_limits<size_type>::max() - n < size())
+    if (npos - n < size())
       return false;
     derived().append_impl(n, bit);
+    return true;
+  }
+
+  bool append(block_type block)
+  {
+    if (npos - block_width < size())
+      return false;
+    derived().append_impl(block);
     return true;
   }
 
@@ -268,6 +276,7 @@ class bitstream_concept
 {
 public:
   using size_type = bitvector::size_type;
+  using block_type = bitvector::block_type;
 
 private:
   class iterator_concept
@@ -367,6 +376,7 @@ public:
   virtual void bitwise_xor(bitstream_concept const& other) = 0;
   virtual void bitwise_subtract(bitstream_concept const& other) = 0;
   virtual void append_impl(size_type n, bool bit) = 0;
+  virtual void append_impl(block_type block) = 0;
   virtual void push_back_impl(bool bit) = 0;
   virtual void clear_impl() noexcept = 0;
   virtual bool at(size_type i) const = 0;
@@ -460,6 +470,11 @@ public:
   virtual void append_impl(size_type n, bool bit) final
   {
     bitstream_.append_impl(n, bit);
+  }
+
+  virtual void append_impl(block_type block) final
+  {
+    bitstream_.append_impl(block);
   }
 
   virtual void push_back_impl(bool bit) final
@@ -579,6 +594,7 @@ private:
   void bitwise_xor(bitstream const& other);
   void bitwise_subtract(bitstream const& other);
   void append_impl(size_type n, bool bit);
+  void append_impl(block_type block);
   void push_back_impl(bool bit);
   void clear_impl() noexcept;
   bool at(size_type i) const;
@@ -667,6 +683,7 @@ private:
   void bitwise_xor(null_bitstream const& other);
   void bitwise_subtract(null_bitstream const& other);
   void append_impl(size_type n, bool bit);
+  void append_impl(block_type block);
   void push_back_impl(bool bit);
   void clear_impl() noexcept;
   bool at(size_type i) const;
@@ -775,6 +792,7 @@ private:
   void bitwise_xor(ewah_bitstream const& other);
   void bitwise_subtract(ewah_bitstream const& other);
   void append_impl(size_type n, bool bit);
+  void append_impl(block_type block);
   void push_back_impl(bool bit);
   void clear_impl() noexcept;
   bool at(size_type i) const;
@@ -898,6 +916,7 @@ private:
   friend bool operator==(ewah_bitstream const& x, ewah_bitstream const& y);
   friend bool operator<(ewah_bitstream const& x, ewah_bitstream const& y);
 };
+
 
 /// Transposes a vector of equal-sized bitstreams.
 /// @param v A vector of bitstreams.
