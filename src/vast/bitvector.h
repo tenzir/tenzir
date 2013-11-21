@@ -29,8 +29,11 @@ public:
   /// One past the last addressable bit index; analogue to an `end` iterator.
   static constexpr size_type npos = ~size_type{0};
 
+  /// A block with all 0s.
+  static constexpr block_type all_zero = block_type{0};
+
   /// A block with all 1s.
-  static constexpr block_type all_one = ~block_type{0};
+  static constexpr block_type all_one = ~all_zero;
 
   /// A block with only its MSB set to 1.
   static constexpr block_type msb_one = ~(all_one >> 1);
@@ -526,7 +529,8 @@ public:
   /// @returns `true` iff the bitvector has zero length.
   bool empty() const;
 
-  /// Computes the number of excess/unused bits in the bit vector.
+  /// Computes the number of bits of the last block.
+  /// @returns The number of bits the last block occupies.
   block_type extra_bits() const;
 
   /// Finds the bit position of of the first 1-bit.

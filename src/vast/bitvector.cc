@@ -7,6 +7,7 @@ namespace vast {
 using size_type = bitvector::size_type;
 using block_type = bitvector::block_type;
 
+constexpr bitvector::block_type bitvector::all_zero;
 constexpr bitvector::block_type bitvector::all_one;
 constexpr bitvector::block_type bitvector::msb_one;
 constexpr bitvector::size_type bitvector::block_width;
@@ -147,7 +148,7 @@ bitvector::bitvector()
 }
 
 bitvector::bitvector(size_type size, bool value)
-  : bits_(bits_to_blocks(size), value ? ~block_type(0) : 0)
+  : bits_(bits_to_blocks(size), value ? all_one : 0)
   , num_bits_(size)
 {
 }
@@ -224,7 +225,7 @@ bitvector& bitvector::operator<<=(size_type n)
       b[div] = b[0];
     }
 
-    std::fill_n(b, div, block_type(0));
+    std::fill_n(b, div, all_zero);
     zero_unused_bits();
   }
 
@@ -257,7 +258,7 @@ bitvector& bitvector::operator>>=(size_type n)
         b[i-div] = b[i];
     }
 
-    std::fill_n(b + (blocks() - div), div, block_type(0));
+    std::fill_n(b + (blocks() - div), div, all_zero);
   }
 
   return *this;
@@ -323,12 +324,12 @@ void bitvector::resize(size_type n, bool value)
 {
   auto old = blocks();
   auto required = bits_to_blocks(n);
-  auto block_value = value ? ~block_type(0) : block_type(0);
+  auto block_value = value ? all_one : all_zero;
 
   if (required != old)
     bits_.resize(required, block_value);
 
-  if (value && (n > num_bits_) && extra_bits())
+  if (value && n > num_bits_ && extra_bits())
     bits_[old - 1] |= (block_value << extra_bits());
 
   num_bits_ = n;
@@ -378,7 +379,7 @@ bitvector& bitvector::set(size_type i, bool bit)
 
 bitvector& bitvector::set()
 {
-  std::fill(bits_.begin(), bits_.end(), ~block_type(0));
+  std::fill(bits_.begin(), bits_.end(), all_one);
   zero_unused_bits();
   return *this;
 }
@@ -392,7 +393,7 @@ bitvector& bitvector::reset(size_type i)
 
 bitvector& bitvector::reset()
 {
-  std::fill(bits_.begin(), bits_.end(), block_type(0));
+  std::fill(bits_.begin(), bits_.end(), all_zero);
   return *this;
 }
 
@@ -511,7 +512,7 @@ size_type bitvector::find_next(size_type i) const
   if (size() == 0 || i >= size() - 1)
     return npos;
   auto bi = block_index(++i);
-  auto block = bits_[bi] & (~block_type(0) << bit_index(i));
+  auto block = bits_[bi] & (all_one << bit_index(i));
   return block ? bi * block_width + lowest_bit(block) : find_forward(bi + 1);
 }
 
@@ -525,7 +526,7 @@ size_type bitvector::find_prev(size_type i) const
   if (i >= (size() - 1) || size() == 0)
     return npos;
   auto bi = block_index(--i);
-  auto block = bits_[bi] & ~(~block_type(0) << (bit_index(i) + 1));
+  auto block = bits_[bi] & ~(all_one << (bit_index(i) + 1));
   if (block)
     return bi * block_width + highest_bit(block);
   else if (bi > 0)
@@ -537,7 +538,7 @@ size_type bitvector::find_prev(size_type i) const
 void bitvector::zero_unused_bits()
 {
   if (extra_bits())
-    bits_.back() &= ~(~block_type(0) << extra_bits());
+    bits_.back() &= ~(all_one << extra_bits());
 }
 
 size_type bitvector::find_forward(size_type i) const
