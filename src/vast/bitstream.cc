@@ -744,9 +744,11 @@ void ewah_bitstream::append_impl(size_type n, bool bit)
 
   auto& marker = bits_.block(last_marker_);
 
-  // If there are no more dirty blocks and the current marker is of the same
-  // type, we reuse it.
-  if (last_marker_ == bits_.blocks() - 1 && marker_type(marker) == bit)
+  // If we have currently no dirty blocks and the current marker is of the same
+  // type, we reuse it. We also reuse the very first marker if it's still
+  // empty.
+  if ((last_marker_ == bits_.blocks() - 1 && marker_type(marker) == bit)
+      || (last_marker_ == 0 && marker == 0))
   {
     auto marker_clean_length = marker_num_clean(marker);
     auto available = marker_clean_max - marker_clean_length;
