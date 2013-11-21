@@ -489,6 +489,26 @@ public:
   /// @pre *i < bits()*
   block_type& block_at_bit(size_type i);
 
+  /// Retrieves the first block of the bitvector.
+  /// @returns The first block.
+  /// @pre *! empty()*
+  block_type first_block() const;
+
+  /// Retrieves the first block of the bitvector.
+  /// @returns The first block.
+  /// @pre *! empty()*
+  block_type& first_block();
+
+  /// Retrieves the last block of the bitvector.
+  /// @returns The last block.
+  /// @pre *! empty()*
+  block_type last_block() const;
+
+  /// Retrieves the last block of the bitvector.
+  /// @returns The last block.
+  /// @pre *! empty()*
+  block_type& last_block();
+
   /// Counts the number of 1-bits in the bit vector. Also known as *population
   /// count* or *Hamming weight*.
   /// @returns The number of bits set to 1.

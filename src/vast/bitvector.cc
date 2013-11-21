@@ -443,6 +443,30 @@ block_type& bitvector::block_at_bit(size_type i)
   return bits_[block_index(i)];
 }
 
+block_type bitvector::first_block() const
+{
+  assert(! bits_.empty());
+  return bits_.front();
+}
+
+block_type& bitvector::first_block()
+{
+  assert(! bits_.empty());
+  return bits_.front();
+}
+
+block_type bitvector::last_block() const
+{
+  assert(! bits_.empty());
+  return bits_.back();
+}
+
+block_type& bitvector::last_block()
+{
+  assert(! bits_.empty());
+  return bits_.back();
+}
+
 size_type bitvector::count() const
 {
   auto i = bits_.begin();
