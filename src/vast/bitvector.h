@@ -416,7 +416,9 @@ public:
 
   /// Appends the bits in a given block.
   /// @param block The block containing bits to append.
-  void append(block_type block);
+  /// @param bits The number of bits (from the LSB) to append.
+  /// @pre `bits <= block_width`
+  void append(block_type block, size_type bits = block_width);
 
   /// Appends a single bit to the end of the bit vector.
   /// @param bit The value of the bit.

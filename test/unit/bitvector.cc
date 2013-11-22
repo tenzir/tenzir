@@ -22,13 +22,25 @@ BOOST_AUTO_TEST_CASE(bitvector_basic_ops)
   x.push_back(false);
   x.push_back(true);
 
+  BOOST_CHECK(x[0]);
+  BOOST_CHECK(! x[1]);
+  BOOST_CHECK(x[2]);
+
   BOOST_CHECK_EQUAL(x.size(), 3);
   BOOST_CHECK_EQUAL(x.blocks(), 1);
 
-  x.append(0xffff);
+  x.append(0xf00f, 16);
+  BOOST_CHECK(x[3]);
+  BOOST_CHECK(x[18]);
+  x.append(0xf0, 8);
 
-  BOOST_REQUIRE_EQUAL(x.blocks(), 2);
-  BOOST_CHECK_EQUAL(x.size(), 3 + bitvector::block_width);
+  BOOST_CHECK_EQUAL(x.blocks(), 1);
+  BOOST_CHECK_EQUAL(x.size(), 3 + 16 + 8);
+
+  x.append(0);
+  x.append(0xff, 8);
+  BOOST_CHECK_EQUAL(x.blocks(), 2);
+  BOOST_CHECK_EQUAL(x.size(), 3 + 16 + 8 + bitvector::block_width + 8);
 }
 
 BOOST_AUTO_TEST_CASE(bitvector_bitwise_ops)

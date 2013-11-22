@@ -349,20 +349,23 @@ void bitvector::push_back(bool bit)
   set(s, bit);
 }
 
-void bitvector::append(block_type block)
+void bitvector::append(block_type block, size_type bits)
 {
-  auto excess = extra_bits();
-  if (excess)
+  assert(bits <= block_width);
+  auto used = extra_bits();
+  auto unused = block_width - used;
+  auto masked_block = bits == block_width ? block : block & ~(all_one << bits);
+  if (used == 0)
   {
-    assert(! bits_.empty());
-    bits_.push_back(block >> (block_width - excess));
-    bits_[bits_.size() - 2] |= (block << excess);
+    bits_.push_back(masked_block);
   }
   else
   {
-    bits_.push_back(block);
+    bits_.back() |= masked_block << used;
+    if (bits > unused)
+      bits_.push_back(masked_block >> unused);
   }
-  num_bits_ += block_width;
+  num_bits_ += bits;
 }
 
 bitvector& bitvector::set(size_type i, bool bit)
