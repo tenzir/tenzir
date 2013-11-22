@@ -755,6 +755,7 @@ void ewah_bitstream::append_impl(size_type n, bool bit)
     auto new_blocks = std::min(available, clean_blocks);
 
     marker = marker_num_clean(marker, marker_clean_length + new_blocks);
+    marker = marker_type(marker, bit);
     clean_blocks -= new_blocks;
   }
 
