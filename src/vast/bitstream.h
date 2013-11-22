@@ -1002,6 +1002,40 @@ Bitstream apply(Bitstream const& x, Bitstream const& y, Operation op)
   return result;
 }
 
+template <typename Bitstream>
+Bitstream and_(Bitstream const& lhs, Bitstream const& rhs)
+{
+  using block_type = typename Bitstream::block_type;
+  return apply(lhs, rhs, [](block_type x, block_type y) { return x & y; });
+}
+
+template <typename Bitstream>
+Bitstream or_(Bitstream const& lhs, Bitstream const& rhs)
+{
+  using block_type = typename Bitstream::block_type;
+  return apply(lhs, rhs, [](block_type x, block_type y) { return x | y; });
+}
+
+template <typename Bitstream>
+Bitstream xor_(Bitstream const& lhs, Bitstream const& rhs)
+{
+  using block_type = typename Bitstream::block_type;
+  return apply(lhs, rhs, [](block_type x, block_type y) { return x ^ y; });
+}
+
+template <typename Bitstream>
+Bitstream nand_(Bitstream const& lhs, Bitstream const& rhs)
+{
+  using block_type = typename Bitstream::block_type;
+  return apply(lhs, rhs, [](block_type x, block_type y) { return x & ~y; });
+}
+
+template <typename Bitstream>
+Bitstream nor_(Bitstream const& lhs, Bitstream const& rhs)
+{
+  using block_type = typename Bitstream::block_type;
+  return apply(lhs, rhs, [](block_type x, block_type y) { return x | ~y; });
+}
 
 /// Transposes a vector of equal-sized bitstreams.
 /// @param v A vector of bitstreams.

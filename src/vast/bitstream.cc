@@ -660,26 +660,22 @@ void ewah_bitstream::bitwise_not()
 
 void ewah_bitstream::bitwise_and(ewah_bitstream const& other)
 {
-  *this =
-    apply(*this, other, [](block_type x, block_type y) { return x & y; });
+  *this = and_(*this, other);
 }
 
 void ewah_bitstream::bitwise_or(ewah_bitstream const& other)
 {
-  *this =
-    apply(*this, other, [](block_type x, block_type y) { return x | y; });
+  *this = or_(*this, other);
 }
 
 void ewah_bitstream::bitwise_xor(ewah_bitstream const& other)
 {
-  *this =
-    apply(*this, other, [](block_type x, block_type y) { return x ^ y; });
+  *this = xor_(*this, other);
 }
 
 void ewah_bitstream::bitwise_subtract(ewah_bitstream const& other)
 {
-  *this =
-    apply(*this, other, [](block_type x, block_type y) { return x & ~y; });
+  *this = nand_(*this, other);
 }
 
 void ewah_bitstream::append_impl(size_type n, bool bit)
