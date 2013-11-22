@@ -340,20 +340,10 @@ public:
     num_bits_ = bits_.size() * block_width;
   }
 
-  /// Copy-constructs a bit vector.
-  /// @param other The bit vector to copy.
-  bitvector(bitvector const& other);
-
-  /// Move-constructs a bit vector.
-  /// @param other The bit vector to move.
-  bitvector(bitvector&& other);
-
-  /// Assigns another bit vector to this instance.
-  /// @param other The RHS of the assignment.
-  bitvector& operator=(bitvector other);
-
-  /// Swaps two bit vectors.
-  friend void swap(bitvector x, bitvector y);
+  bitvector(bitvector const&) = default;
+  bitvector(bitvector&&) = default;
+  bitvector& operator=(bitvector const&) = default;
+  bitvector& operator=(bitvector&&) = default;
 
   //
   // Bitwise operations

@@ -143,27 +143,14 @@ size_type bitvector::prev_bit(block_type block, size_type i)
 }
 
 bitvector::bitvector()
-  : num_bits_(0)
+  : num_bits_{0}
 {
 }
 
 bitvector::bitvector(size_type size, bool value)
-  : bits_(bits_to_blocks(size), value ? all_one : 0)
-  , num_bits_(size)
+  : bits_(bits_to_blocks(size), value ? all_one : 0),
+    num_bits_{size}
 {
-}
-
-bitvector::bitvector(bitvector const& other)
-  : bits_(other.bits_)
-  , num_bits_(other.num_bits_)
-{
-}
-
-bitvector::bitvector(bitvector&& other)
-  : bits_(std::move(other.bits_))
-  , num_bits_(other.num_bits_)
-{
-  other.num_bits_ = 0;
 }
 
 bitvector bitvector::operator~() const
@@ -171,19 +158,6 @@ bitvector bitvector::operator~() const
   bitvector b(*this);
   b.flip();
   return b;
-}
-
-bitvector& bitvector::operator=(bitvector other)
-{
-  swap(*this, other);
-  return *this;
-}
-
-void swap(bitvector x, bitvector y)
-{
-  using std::swap;
-  swap(x.bits_, y.bits_);
-  swap(x.num_bits_, y.num_bits_);
 }
 
 bitvector bitvector::operator<<(size_type n) const
