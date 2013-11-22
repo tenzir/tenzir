@@ -123,10 +123,10 @@ void bitstream::append_impl(size_type n, bool bit)
   concept_->append_impl(n, bit);
 }
 
-void bitstream::append_impl(block_type block)
+void bitstream::append_block_impl(block_type block, size_type bits)
 {
   assert(concept_);
-  concept_->append_impl(block);
+  concept_->append_block_impl(block, bits);
 }
 
 void bitstream::push_back_impl(bool bit)
@@ -251,7 +251,7 @@ null_bitstream::sequence_range::sequence_range(null_bitstream const& bs)
   : bits_{&bs.bits_}
 {
   if (bits_->empty())
-    next_block_ = bitvector::npos;
+    next_block_ = npos;
   else
     next();
 }
@@ -261,14 +261,14 @@ bool null_bitstream::sequence_range::next_sequence(bitsequence& seq)
   if (next_block_ >= bits_->blocks())
     return false;
 
-  seq.offset = next_block_ * bitvector::block_width;
+  seq.offset = next_block_ * block_width;
   seq.data = bits_->block(next_block_);
-  seq.type = seq.data == 0 || seq.data == bitvector::all_one ? fill : literal;
-  seq.length = bitvector::block_width;
+  seq.type = seq.data == 0 || seq.data == all_one ? fill : literal;
+  seq.length = block_width;
 
   while (++next_block_ < bits_->blocks())
     if (seq.type == fill && seq.data == bits_->block(next_block_))
-      seq.length += bitvector::block_width;
+      seq.length += block_width;
     else
       break;
 
@@ -276,7 +276,7 @@ bool null_bitstream::sequence_range::next_sequence(bitsequence& seq)
 }
 
 
-null_bitstream::null_bitstream(bitvector::size_type n, bool bit)
+null_bitstream::null_bitstream(size_type n, bool bit)
   : bits_{n, bit}
 {
 }
@@ -324,9 +324,9 @@ void null_bitstream::append_impl(size_type n, bool bit)
   bits_.resize(bits_.size() + n, bit);
 }
 
-void null_bitstream::append_impl(block_type block)
+void null_bitstream::append_block_impl(block_type block, size_type bits)
 {
-  bits_.append(block);
+  bits_.append(block, bits);
 }
 
 void null_bitstream::push_back_impl(bool bit)
@@ -504,7 +504,7 @@ void ewah_bitstream::iterator::increment()
       {
         // We're done with this block and set the position to end of last block
         // so that we can continue with the code above.
-        pos_ += bitvector::block_width - i - 1;
+        pos_ += block_width - i - 1;
         continue;
       }
     }
@@ -522,7 +522,7 @@ ewah_bitstream::size_type ewah_bitstream::iterator::dereference() const
 
 void ewah_bitstream::iterator::scan()
 {
-  assert(pos_ % bitvector::block_width == 0);
+  assert(pos_ % block_width == 0);
 
   // We skip over all clean 0-blocks which don't have dirty blocks after them.
   while (idx_ < ewah_->bits_.blocks() - 1 && num_dirty_ == 0)
@@ -534,7 +534,7 @@ void ewah_bitstream::iterator::scan()
 
     if (zeros)
     {
-      pos_ += bitvector::block_width * num_clean;
+      pos_ += block_width * num_clean;
     }
     else
     {
@@ -558,7 +558,7 @@ ewah_bitstream::sequence_range::sequence_range(ewah_bitstream const& bs)
   : bits_{&bs.bits_}
 {
   if (bits_->empty())
-    next_block_ = bitvector::npos;
+    next_block_ = npos;
   else
     next();
 }
@@ -579,7 +579,7 @@ bool ewah_bitstream::sequence_range::next_sequence(bitsequence& seq)
     seq.offset += seq.length;
     seq.length = next_block_ == bits_->blocks()
       ? bitvector::bit_index(bits_->size() - 1) + 1
-      : bitvector::block_width;
+      : block_width;
   }
   else
   {
@@ -595,9 +595,9 @@ bool ewah_bitstream::sequence_range::next_sequence(bitsequence& seq)
     else
     {
       seq.type = fill;
-      seq.data = marker_type(block) ? bitvector::all_one : 0;
+      seq.data = marker_type(block) ? all_one : 0;
       seq.offset += seq.length;
-      seq.length = clean * bitvector::block_width;
+      seq.length = clean * block_width;
 
       // If no dirty blocks follow this marker and we have not reached the
       // final dirty block yet, we know that the next block must be a marker as
@@ -609,7 +609,7 @@ bool ewah_bitstream::sequence_range::next_sequence(bitsequence& seq)
         if ((next_type && ! seq.data) || (! next_type && seq.data))
           break;
 
-        seq.length += marker_num_clean(next_marker) * bitvector::block_width;
+        seq.length += marker_num_clean(next_marker) * block_width;
         num_dirty_ = marker_num_dirty(next_marker);
         ++next_block_;
       }
@@ -620,9 +620,9 @@ bool ewah_bitstream::sequence_range::next_sequence(bitsequence& seq)
 }
 
 
-ewah_bitstream::ewah_bitstream(bitvector::size_type n, bool bit)
-  : bits_{n, bit}
+ewah_bitstream::ewah_bitstream(size_type n, bool bit)
 {
+  append(n, bit);
 }
 
 bool ewah_bitstream::equals(ewah_bitstream const& other) const
@@ -645,7 +645,7 @@ void ewah_bitstream::bitwise_not()
     {
       next_marker += marker_num_dirty(block) + 1;
       if (marker_num_clean(block) > 0)
-        block ^= bitvector::msb_one;
+        block ^= msb_one;
     }
     else
     {
@@ -660,44 +660,30 @@ void ewah_bitstream::bitwise_not()
 
 void ewah_bitstream::bitwise_and(ewah_bitstream const& other)
 {
-  // TODO
-  assert(! "not yet implemented");
-  if (bits_.size() < other.bits_.size())
-    bits_.resize(other.bits_.size());
-  bits_ &= other.bits_;
+  *this =
+    apply(*this, other, [](block_type x, block_type y) { return x & y; });
 }
 
 void ewah_bitstream::bitwise_or(ewah_bitstream const& other)
 {
-  // TODO
-  assert(! "not yet implemented");
-  if (bits_.size() < other.bits_.size())
-    bits_.resize(other.bits_.size());
-  bits_ |= other.bits_;
+  *this =
+    apply(*this, other, [](block_type x, block_type y) { return x | y; });
 }
 
 void ewah_bitstream::bitwise_xor(ewah_bitstream const& other)
 {
-  // TODO
-  assert(! "not yet implemented");
-  if (bits_.size() < other.bits_.size())
-    bits_.resize(other.bits_.size());
-  bits_ ^= other.bits_;
+  *this =
+    apply(*this, other, [](block_type x, block_type y) { return x ^ y; });
 }
 
 void ewah_bitstream::bitwise_subtract(ewah_bitstream const& other)
 {
-  // TODO
-  assert(! "not yet implemented");
-  if (bits_.size() < other.bits_.size())
-    bits_.resize(other.bits_.size());
-  bits_ -= other.bits_;
+  *this =
+    apply(*this, other, [](block_type x, block_type y) { return x & ~y; });
 }
 
 void ewah_bitstream::append_impl(size_type n, bool bit)
 {
-  assert(n > 0);
-
   if (bits_.empty())
   {
     bits_.append(0); // Always begin with an empty marker.
@@ -785,31 +771,36 @@ void ewah_bitstream::append_impl(size_type n, bool bit)
   bits_.resize(bits_.size() + remaining_bits, bit);
 }
 
-void ewah_bitstream::append_impl(block_type block)
+void ewah_bitstream::append_block_impl(block_type block, size_type bits)
 {
   if (bits_.empty())
     bits_.append(0); // Always begin with an empty marker.
+  else if (num_bits_ % block_width == 0)
+    integrate_last_block();
 
   if (num_bits_ % block_width == 0)
   {
-    integrate_last_block();
-    bits_.append(block);
-    num_bits_ += block_width;
+    bits_.append(block, bits);
+    num_bits_ += bits;
   }
   else
   {
     auto used = bits_.extra_bits();
     auto unused = block_width - used;
-
-    bits_.resize(bits_.size() + unused);
-    num_bits_ += unused;
-    bits_.last_block() |= (block << used);
-
-    integrate_last_block();
-
-    bits_.resize(bits_.size() + used, false);
-    bits_.last_block() |= (block >> unused);
-    num_bits_ += used;
+    if (bits <= unused)
+    {
+      bits_.append(block, bits);
+      num_bits_ += bits;
+    }
+    else
+    {
+      bits_.append(block, unused);
+      num_bits_ += unused;
+      integrate_last_block();
+      auto remaining = bits - unused;
+      bits_.append(block >> unused, remaining);
+      num_bits_ += remaining;
+    }
   }
 }
 

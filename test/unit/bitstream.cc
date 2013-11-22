@@ -166,9 +166,41 @@ struct bitstream_fixture
 
     BOOST_REQUIRE_EQUAL(to_string(ewah), str);
     BOOST_CHECK_EQUAL(ewah.size(), 2473901163905);
+
+    ewah2.push_back(false);
+    ewah2.push_back(true);
+    ewah2.append(421, false);
+    ewah2.push_back(true);
+    ewah2.push_back(true);
+
+    str =
+      "0000000000000000000000000000000000000000000000000000000000000001\n"
+      "0000000000000000000000000000000000000000000000000000000000000010\n"
+      "0000000000000000000000000000001010000000000000000000000000000000\n"
+      "                       11000000000000000000000000000000000000000";
+
+    BOOST_REQUIRE_EQUAL(to_string(ewah2), str);
+
+
+    ewah3.append(222, true);
+    ewah3.push_back(false);
+    ewah3.push_back(true);
+    ewah3.push_back(false);
+    ewah3.append_block(0xcccccccccc);
+    ewah3.push_back(false);
+    ewah3.push_back(true);
+
+    str =
+      "1000000000000000000000000000000110000000000000000000000000000001\n"
+      "1001100110011001100110011001100010111111111111111111111111111111\n"
+      "                             10000000000000000000000000110011001";
+
+    BOOST_REQUIRE_EQUAL(to_string(ewah3), str);
   }
 
   ewah_bitstream ewah;
+  ewah_bitstream ewah2;
+  ewah_bitstream ewah3;
 };
 
 BOOST_FIXTURE_TEST_SUITE(bitstream_testsuite, bitstream_fixture)
@@ -268,14 +300,6 @@ BOOST_AUTO_TEST_CASE(ewah_bitwise_iteration)
   // Now we're facing 2^32 clean 1-blocks. That's too much to iterate over.
   // Let's try something simpler.
 
-  ewah_bitstream ewah2;
-  ewah2.push_back(false);
-  ewah2.push_back(true);
-
-  ewah2.append(421, false);
-  ewah2.push_back(true);
-  ewah2.push_back(true);
-
   i = ewah2.begin();
   BOOST_CHECK_EQUAL(*i, 1);
   BOOST_CHECK_EQUAL(*++i, 423);
@@ -330,6 +354,56 @@ BOOST_AUTO_TEST_CASE(ewah_bitwise_not)
     "                                                               0";
 
   BOOST_CHECK_EQUAL(to_string(~ewah), str);
+}
+
+BOOST_AUTO_TEST_CASE(ewah_bitwise_and)
+{
+  auto str =
+    "0000000000000000000000000000000000000000000000000000000000000001\n"
+    "0000000000000000000000000000000000000000000000000000000000000010\n"
+    "0000000000000000000000000000001010000000000000000000000000000000\n"
+    "                       11000000000000000000000000000000000000000";
+
+
+  auto anded = ewah2 & ewah3;
+  BOOST_CHECK_EQUAL(to_string(anded), str);
+  BOOST_CHECK_GE(ewah2.size(), ewah3.size());
+  BOOST_CHECK_EQUAL(anded.size(), ewah2.size());
+}
+
+BOOST_AUTO_TEST_CASE(ewah_bitwise_or)
+{
+  auto str =
+    "1000000000000000000000000000000110000000000000000000000000000010\n"
+    "1001100110011001100110011001100010111111111111111111111111111111\n"
+    "0000000000000000000000000000010000000000000000000000000110011001\n"
+    "0000000000000000000000000000000010000000000000000000000000000000\n"
+    "                       11000000000000000000000000000000000000000";
+
+  BOOST_CHECK_EQUAL(to_string(ewah2 | ewah3), str);
+}
+
+BOOST_AUTO_TEST_CASE(ewah_bitwise_xor)
+{
+  auto str =
+    "0000000000000000000000000000000000000000000000000000000000000001\n"
+    "1111111111111111111111111111111111111111111111111111111111111101\n"
+    "1000000000000000000000000000000100000000000000000000000000000010\n"
+    "1001100110011001100110011001100010111111111111111111111111111111\n"
+    "0000000000000000000000000000010000000000000000000000000110011001\n"
+    "0000000000000000000000000000000010000000000000000000000000000000\n"
+    "                       11000000000000000000000000000000000000000";
+
+  BOOST_CHECK_EQUAL(to_string(ewah2 ^ ewah3), str);
+}
+
+BOOST_AUTO_TEST_CASE(ewah_bitwise_nand)
+{
+  auto str =
+    "0000000000000000000000000000001100000000000000000000000000000000\n"
+    "                       11000000000000000000000000000000000000000";
+
+  BOOST_CHECK_EQUAL(to_string(ewah2 - ewah3), str);
 }
 
 BOOST_AUTO_TEST_CASE(ewah_sequence_iteration)
@@ -388,7 +462,7 @@ BOOST_AUTO_TEST_CASE(ewah_block_append)
 {
   ewah_bitstream ebs;
   ebs.append(10, true);
-  ebs.append(0xf00);
+  ebs.append_block(0xf00);
   BOOST_CHECK_EQUAL(ebs.size(), 10 + bitvector::block_width);
   BOOST_CHECK(! ebs[17]);
   BOOST_CHECK(ebs[18]);
@@ -398,7 +472,7 @@ BOOST_AUTO_TEST_CASE(ewah_block_append)
   BOOST_CHECK(! ebs[22]);
 
   ebs.append(2048, true);
-  ebs.append(0xff00);
+  ebs.append_block(0xff00);
 
   auto str =
     "0000000000000000000000000000000000000000000000000000000000000010\n"

@@ -19,18 +19,19 @@ class bitstream_base : util::printable<bitstream_base<Derived>>
   friend Derived;
 
 public:
-  bitstream_base(bitstream_base const&) = default;
-  bitstream_base(bitstream_base&&) = default;
-  bitstream_base& operator=(bitstream_base const&) = default;
-  bitstream_base& operator=(bitstream_base&&) = default;
-
   using size_type = bitvector::size_type;
   using block_type = bitvector::block_type;
-
   static constexpr auto npos = bitvector::npos;
   static constexpr auto block_width = bitvector::block_width;
   static constexpr auto all_one = bitvector::all_one;
   static constexpr auto msb_one = bitvector::msb_one;
+
+  bitstream_base() = default;
+
+  bitstream_base(bitstream_base const&) = default;
+  bitstream_base(bitstream_base&&) = default;
+  bitstream_base& operator=(bitstream_base const&) = default;
+  bitstream_base& operator=(bitstream_base&&) = default;
 
   Derived& operator&=(Derived const& other)
   {
@@ -109,17 +110,18 @@ public:
 
   bool append(size_type n, bool bit)
   {
-    if (npos - n < size())
+    if (n == 0 || npos - n < size())
       return false;
     derived().append_impl(n, bit);
     return true;
   }
 
-  bool append(block_type block)
+  bool append_block(block_type block, size_type bits = block_width)
   {
-    if (npos - block_width < size())
+    assert(bits <= block_width);
+    if (npos - bits < size())
       return false;
-    derived().append_impl(block);
+    derived().append_block_impl(block, bits);
     return true;
   }
 
@@ -178,13 +180,6 @@ public:
   }
 
 protected:
-  bitstream_base() = default;
-
-  bitstream_base(size_type n, bool bit)
-  {
-    derived().append_impl(n, bit);
-  }
-
   Derived& derived()
   {
     return *static_cast<Derived*>(this);
@@ -376,7 +371,7 @@ public:
   virtual void bitwise_xor(bitstream_concept const& other) = 0;
   virtual void bitwise_subtract(bitstream_concept const& other) = 0;
   virtual void append_impl(size_type n, bool bit) = 0;
-  virtual void append_impl(block_type block) = 0;
+  virtual void append_block_impl(block_type block, size_type bits) = 0;
   virtual void push_back_impl(bool bit) = 0;
   virtual void clear_impl() noexcept = 0;
   virtual bool at(size_type i) const = 0;
@@ -472,9 +467,9 @@ public:
     bitstream_.append_impl(n, bit);
   }
 
-  virtual void append_impl(block_type block) final
+  virtual void append_block_impl(block_type block, size_type bits) final
   {
-    bitstream_.append_impl(block);
+    bitstream_.append_block_impl(block, bits);
   }
 
   virtual void push_back_impl(bool bit) final
@@ -594,7 +589,7 @@ private:
   void bitwise_xor(bitstream const& other);
   void bitwise_subtract(bitstream const& other);
   void append_impl(size_type n, bool bit);
-  void append_impl(block_type block);
+  void append_block_impl(block_type block, size_type bits);
   void push_back_impl(bool bit);
   void clear_impl() noexcept;
   bool at(size_type i) const;
@@ -683,7 +678,7 @@ private:
   void bitwise_xor(null_bitstream const& other);
   void bitwise_subtract(null_bitstream const& other);
   void append_impl(size_type n, bool bit);
-  void append_impl(block_type block);
+  void append_block_impl(block_type block, size_type bits);
   void push_back_impl(bool bit);
   void clear_impl() noexcept;
   bool at(size_type i) const;
@@ -779,6 +774,10 @@ public:
 
   ewah_bitstream() = default;
   ewah_bitstream(size_type n, bool bit);
+  ewah_bitstream(ewah_bitstream const&) = default;
+  ewah_bitstream(ewah_bitstream&&) = default;
+  ewah_bitstream& operator=(ewah_bitstream const&) = default;
+  ewah_bitstream& operator=(ewah_bitstream&&) = default;
 
 private:
   template <typename>
@@ -792,7 +791,7 @@ private:
   void bitwise_xor(ewah_bitstream const& other);
   void bitwise_subtract(ewah_bitstream const& other);
   void append_impl(size_type n, bool bit);
-  void append_impl(block_type block);
+  void append_block_impl(block_type block, size_type bits);
   void push_back_impl(bool bit);
   void clear_impl() noexcept;
   bool at(size_type i) const;
@@ -916,6 +915,92 @@ private:
   friend bool operator==(ewah_bitstream const& x, ewah_bitstream const& y);
   friend bool operator<(ewah_bitstream const& x, ewah_bitstream const& y);
 };
+
+
+/// Performs a bitwise operation on two bitstreams.
+/// The algorithm traverses the two bitstreams side by side.
+template <typename Bitstream, typename Operation>
+Bitstream apply(Bitstream const& x, Bitstream const& y, Operation op)
+{
+  auto rx = typename Bitstream::sequence_range{x};
+  auto ry = typename Bitstream::sequence_range{y};
+  auto ix = rx.begin();
+  auto iy = ry.begin();
+
+  if (ix == rx.end() && iy == ry.end())
+    return {};
+  if (ix == rx.end())
+    return y;
+  else if (iy == ry.end())
+    return x;
+
+  Bitstream result;
+  auto first = std::min(ix->offset, iy->offset);
+  if (first > 0)
+    result.append(first, false);
+
+  auto lx = ix->length;
+  auto ly = iy->length;
+  while (ix != rx.end() && iy != rx.end())
+  {
+    auto n = std::min(lx, ly);
+    auto block = op(ix->data, iy->data);
+
+    if (ix->is_fill() && iy->is_fill())
+    {
+      result.append(n, block != 0);
+    }
+    else if (n >= Bitstream::block_width)
+    {
+      result.append_block(block);
+    }
+    else if (ix->is_fill() || iy->is_fill())
+    {
+      result.append_block(block);
+      if (ix->is_fill())
+        lx -= Bitstream::block_width - n;
+      if (iy->is_fill())
+        ly -= Bitstream::block_width - n;
+    }
+    else
+    {
+      result.append_block(block, n);
+    }
+
+    lx -= n;
+    ly -= n;
+
+    if (lx == 0)
+      if (++ix != rx.end())
+        lx = ix->length;
+
+    if (ly == 0)
+      if (++iy != ry.end())
+        ly = iy->length;
+  }
+
+  // Add the remaining sequences of the longer bitstream to the result.
+  while (ix != rx.end())
+  {
+    if (ix->is_fill())
+      result.append(lx, ix->data);
+    else
+      result.append_block(ix->data, ix->length);
+    if (++ix != rx.end())
+      lx = ix->length;
+  }
+  while (iy != ry.end())
+  {
+    if (iy->is_fill())
+      result.append(ly, iy->data);
+    else
+      result.append_block(iy->data, iy->length);
+    if (++iy != ry.end())
+      ly = iy->length;
+  }
+
+  return result;
+}
 
 
 /// Transposes a vector of equal-sized bitstreams.
