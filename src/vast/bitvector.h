@@ -274,11 +274,13 @@ public:
   /// Computes the bit position first 1-bit in a given block.
   /// @param block The block to inspect.
   /// @returns The bit position where *block* has its first bit set to 1.
+  /// @pre At least one bit in *block* must be 1.
   static size_type lowest_bit(block_type block);
 
   /// Computes the bit position last 1-bit in a given block.
   /// @param block The block to inspect.
   /// @returns The bit position where *block* has its last bit set to 1.
+  /// @pre At least one bit in *block* must be 1.
   static size_type highest_bit(block_type block);
 
   /// Finds the next bit in a block starting from a given offset.
