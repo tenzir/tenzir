@@ -821,8 +821,7 @@ bool ewah_bitstream::at(size_type i) const
 {
   for (auto& seq : sequence_range{*this})
     if (i >= seq.offset && i < seq.offset + seq.length)
-      return seq.is_fill()
-        ? seq.data : seq.data & (1ull << bitvector::bit_index(i));
+      return seq.is_fill() ? seq.data : seq.data & bitvector::bit_mask(i);
 
   auto msg = "EWAH element out-of-range element access at index ";
   throw std::out_of_range{msg + std::to_string(i)};
@@ -850,30 +849,22 @@ ewah_bitstream::const_iterator ewah_bitstream::end_impl() const
 
 ewah_bitstream::size_type ewah_bitstream::find_first_impl() const
 {
-  // TODO
-  assert(! "not yet implemented");
-  return {};
+  return find_forward(0);
 }
 
 ewah_bitstream::size_type ewah_bitstream::find_next_impl(size_type i) const
 {
-  // TODO
-  assert(! "not yet implemented");
-  return bits_.find_next(i);
+  return i == npos || i + 1 == npos ? npos : find_forward(i + 1);
 }
 
 ewah_bitstream::size_type ewah_bitstream::find_last_impl() const
 {
-  // TODO
-  assert(! "not yet implemented");
-  return bits_.find_last();
+  return find_backward(npos);
 }
 
 ewah_bitstream::size_type ewah_bitstream::find_prev_impl(size_type i) const
 {
-  // TODO
-  assert(! "not yet implemented");
-  return bits_.find_prev(i);
+  return i == 0 ? npos : find_backward(i - 1);
 }
 
 bitvector const& ewah_bitstream::bits_impl() const
@@ -954,6 +945,65 @@ void ewah_bitstream::bump_dirty_count()
     // We can still bump the counter of the current marker.
     marker = marker_num_dirty(marker, num_dirty + 1);
   }
+}
+
+ewah_bitstream::size_type ewah_bitstream::find_forward(size_type i) const
+{
+  auto range = sequence_range{*this};
+
+  for (auto& seq : range)
+    if (seq.offset + seq.length > i)
+      break;
+
+  for (auto& seq : range)
+  {
+    if (seq.data)
+    {
+      if (seq.is_fill())
+        return i >= seq.offset && i < seq.offset + seq.length ? i : seq.offset;
+
+      auto const idx = bitvector::bit_index(i);
+      if (idx == 0)
+        return seq.offset + bitvector::lowest_bit(seq.data);
+
+      auto next = bitvector::next_bit(seq.data, idx - 1);
+      if (next != npos)
+        return seq.offset + next;
+    }
+  }
+
+  return npos;
+}
+
+ewah_bitstream::size_type ewah_bitstream::find_backward(size_type i) const
+{
+  size_type last = npos;
+  auto range = sequence_range{*this};
+
+  for (auto& seq : range)
+  {
+    if (seq.offset + seq.length > i)
+    {
+      if (! seq.data)
+        return last;
+
+      if (seq.is_fill())
+        return seq.offset + seq.length - 1;
+
+      auto const idx = bitvector::bit_index(i);
+      if (idx == bitvector::block_width - 1)
+        return seq.offset + bitvector::highest_bit(seq.data);
+
+      auto const prev = bitvector::prev_bit(seq.data, idx + 1);
+      return prev == npos ? last : seq.offset + prev;
+    }
+
+    if (seq.data)
+      last = seq.offset +
+        (seq.is_fill() ? seq.length - 1 : bitvector::highest_bit(seq.data));
+  }
+
+  return last;
 }
 
 void ewah_bitstream::serialize(serializer& sink) const

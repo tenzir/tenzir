@@ -330,6 +330,39 @@ BOOST_AUTO_TEST_CASE(ewah_element_access)
   BOOST_CHECK(ewah[2473901163905 - 1]);
 }
 
+BOOST_AUTO_TEST_CASE(ewah_finding)
+{
+  BOOST_CHECK_EQUAL(ewah.find_first(), 0);
+  BOOST_CHECK_EQUAL(ewah.find_next(0), 1);
+  BOOST_CHECK_EQUAL(ewah.find_next(8), 9);
+  BOOST_CHECK_EQUAL(ewah.find_next(9), 30);
+  BOOST_CHECK_EQUAL(ewah.find_next(10), 30);
+  BOOST_CHECK_EQUAL(ewah.find_next(63), 64);
+  BOOST_CHECK_EQUAL(ewah.find_next(64), 65);
+  BOOST_CHECK_EQUAL(ewah.find_next(69), 71);
+  BOOST_CHECK_EQUAL(ewah.find_next(319), 1344);
+  BOOST_CHECK_EQUAL(ewah.find_next(320), 1344);
+  BOOST_CHECK_EQUAL(ewah.find_next(2473901163903), 2473901163904);
+  BOOST_CHECK_EQUAL(ewah.find_next(2473901163904), ewah_bitstream::npos);
+  BOOST_CHECK_EQUAL(ewah.find_last(), 2473901163905 - 1);
+  BOOST_CHECK_EQUAL(ewah.find_prev(2473901163904), 274877908288 + 62);
+  BOOST_CHECK_EQUAL(ewah.find_prev(320), 319);
+  BOOST_CHECK_EQUAL(ewah.find_prev(128), 125);
+
+  BOOST_CHECK_EQUAL(ewah2.find_first(), 1);
+  BOOST_CHECK_EQUAL(ewah2.find_next(1), 423);
+  BOOST_CHECK_EQUAL(ewah2.find_last(), 424);
+  BOOST_CHECK_EQUAL(ewah2.find_prev(424), 423);
+  BOOST_CHECK_EQUAL(ewah2.find_prev(423), 1);
+  BOOST_CHECK_EQUAL(ewah2.find_prev(1), ewah_bitstream::npos);
+
+  BOOST_CHECK_EQUAL(ewah3.find_first(), 0);
+  BOOST_CHECK_EQUAL(ewah3.find_next(3 * 64 + 29), 3 * 64 + 29 + 2 /* = 223 */);
+  BOOST_CHECK_EQUAL(ewah3.find_next(223), 223 + 4); // Skip 3 zeros.
+  BOOST_CHECK_EQUAL(ewah3.find_last(), ewah3.size() - 1);
+  BOOST_CHECK_EQUAL(ewah3.find_prev(ewah3.size() - 1), ewah3.size() - 1 - 26);
+}
+
 BOOST_AUTO_TEST_CASE(ewah_bitwise_not)
 {
   auto str =

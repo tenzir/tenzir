@@ -877,6 +877,9 @@ private:
   /// @pre `num_bits_ % block_width == 0`
   void bump_dirty_count();
 
+  size_type find_forward(size_type i) const;
+  size_type find_backward(size_type i) const;
+
   bitvector bits_;
   size_type num_bits_ = 0;
   size_type last_marker_ = 0;
