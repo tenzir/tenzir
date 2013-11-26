@@ -49,7 +49,7 @@ bool bitmap_index::push_back(value const& val, uint64_t id)
     }
     auto delta = id - size();
     if (delta > 1)
-      if (! append(delta - 1, false))
+      if (! append(delta, false))
         return false;
   }
   return val ? push_back_impl(val) : append(1, false);
