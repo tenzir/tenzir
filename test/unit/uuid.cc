@@ -1,7 +1,7 @@
 #include "test.h"
 #include <unordered_set>
-#include "vast/convert.h"
 #include "vast/uuid.h"
+#include "vast/util/convert.h"
 
 using namespace vast;
 

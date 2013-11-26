@@ -3,7 +3,7 @@
 #include <cassert>
 #include <fstream>
 #include <cppa/cppa.hpp>
-#include "vast/convert.h"
+#include "vast/util/convert.h"
 
 using namespace cppa;
 

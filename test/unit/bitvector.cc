@@ -1,6 +1,6 @@
 #include "test.h"
 #include "vast/bitvector.h"
-#include "vast/convert.h"
+#include "vast/util/convert.h"
 
 using namespace vast;
 

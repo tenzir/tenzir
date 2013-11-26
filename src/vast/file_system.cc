@@ -3,7 +3,7 @@
 #include <cassert>
 #include "vast/exception.h"
 #include "vast/serialization.h"
-#include "vast/convert.h"
+#include "vast/util/convert.h"
 
 #ifdef VAST_POSIX
 #  include <cerrno>

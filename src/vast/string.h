@@ -393,6 +393,16 @@ private:
 bool operator==(string const& x, string const& y);
 bool operator<(string const& x, string const& y);
 
+template <typename From, typename... Opts>
+bool convert(From const& from, string& str, Opts&&... opts)
+{
+  std::string tmp;
+  if (! convert(from, tmp, std::forward<Opts>(opts)...))
+    return false;
+  str = {tmp};
+  return true;
+}
+
 } // namespace vast
 
 #endif

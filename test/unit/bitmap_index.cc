@@ -1,11 +1,11 @@
 #include "test.h"
-#include "vast/convert.h"
 #include "vast/bitmap_index/address.h"
 #include "vast/bitmap_index/arithmetic.h"
 #include "vast/bitmap_index/port.h"
 #include "vast/bitmap_index/string.h"
 #include "vast/bitmap_index/time.h"
 #include "vast/io/serialization.h"
+#include "vast/util/convert.h"
 
 using namespace vast;
 

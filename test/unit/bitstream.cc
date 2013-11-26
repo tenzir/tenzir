@@ -1,7 +1,7 @@
 #include "test.h"
-#include "vast/convert.h"
 #include "vast/bitstream.h"
 #include "vast/io/serialization.h"
+#include "vast/util/convert.h"
 
 using namespace vast;
 

@@ -4,7 +4,7 @@
 #include <chrono>
 #include <string>
 #include "vast/fwd.h"
-#include "vast/convert.h"
+#include "vast/util/convert.h"
 #include "vast/util/operators.h"
 #include "vast/util/parse.h"
 #include "vast/util/print.h"

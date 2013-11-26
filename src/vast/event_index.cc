@@ -3,7 +3,7 @@
 #include "vast/bitmap_index/address.h"
 #include "vast/bitmap_index/arithmetic.h"
 #include "vast/bitmap_index/port.h"
-#include "vast/convert.h"
+#include "vast/util/convert.h"
 
 using namespace cppa;
 

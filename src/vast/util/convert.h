@@ -1,8 +1,7 @@
-#ifndef VAST_CONVERT_H
-#define VAST_CONVERT_H
+#ifndef VAST_UTIL_CONVERT_H
+#define VAST_UTIL_CONVERT_H
 
 #include <stdexcept>
-#include "vast/string.h"
 #include "vast/util/print.h"
 
 namespace vast {
@@ -21,6 +20,20 @@ convert(From from, std::string& to)
   return true;
 }
 
+// Any type modeling the `Printable` concept should also be convertible to an
+// STL string.
+template <typename From, typename... Opts>
+auto convert(From const& from, std::string& str, Opts&&... opts)
+  -> decltype(
+      render(std::declval<std::back_insert_iterator<std::string>&>(),
+             from,
+             std::forward<Opts>(opts)...))
+{
+  str.clear();
+  auto i = std::back_inserter(str);
+  return render(i, from, std::forward<Opts>(opts)...);
+}
+
 struct access::convertible
 {
   template <typename From, typename To, typename... Opts>
@@ -37,30 +50,6 @@ struct access::convertible
     return convert(from, to, std::forward<Opts>(opts)...);
   }
 };
-
-// Any type modeling the `Printable` concept should also be convertible to a
-// string.
-template <typename From, typename... Opts>
-auto convert(From const& from, std::string& str, Opts&&... opts)
-  -> decltype(
-      render(std::declval<std::back_insert_iterator<std::string>&>(),
-             from,
-             std::forward<Opts>(opts)...))
-{
-  str.clear();
-  auto i = std::back_inserter(str);
-  return render(i, from, std::forward<Opts>(opts)...);
-}
-
-template <typename From, typename... Opts>
-bool convert(From const& from, string& str, Opts&&... opts)
-{
-  std::string tmp;
-  if (! convert(from, tmp, std::forward<Opts>(opts)...))
-    return false;
-  str = {tmp};
-  return true;
-}
 
 // A single-argument convenience shortcut for conversion.
 template <typename To, typename From, typename... Opts>

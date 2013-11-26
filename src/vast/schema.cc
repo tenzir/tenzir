@@ -1,13 +1,13 @@
 #include "vast/schema.h"
 
 #include <fstream>
-#include "vast/convert.h"
 #include "vast/exception.h"
 #include "vast/logger.h"
+#include "vast/serialization.h"
 #include "vast/detail/ast/schema.h"
 #include "vast/detail/parser/schema.h"
 #include "vast/io/container_stream.h"
-#include "vast/serialization.h"
+#include "vast/util/convert.h"
 
 namespace vast {
 namespace detail {

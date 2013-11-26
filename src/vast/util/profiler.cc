@@ -6,8 +6,8 @@
 #include <sys/time.h>       // gettimeofday
 #include <cppa/cppa.hpp>
 #include "vast/config.h"
-#include "vast/convert.h"
 #include "vast/file_system.h"
+#include "vast/util/convert.h"
 
 #ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
 #include <google/profiler.h>

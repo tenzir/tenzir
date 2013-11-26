@@ -4,11 +4,11 @@
 #include <list>
 #include <unordered_map>
 #include "vast/bitstream.h"
-#include "vast/convert.h"
 #include "vast/exception.h"
 #include "vast/operator.h"
 #include "vast/optional.h"
 #include "vast/serialization.h"
+#include "vast/util/convert.h"
 #include "vast/util/operators.h"
 #include "vast/util/print.h"
 
@@ -774,7 +774,7 @@ private:
       coder_.store().each(
           [&](T const& x, Bitstream const&)
           {
-            str += to<std::string>(x) + delim;
+            str += to_string(x) + delim;
           });
       str.pop_back();
       str += '\n';

@@ -1,7 +1,6 @@
 #include "vast/expression.h"
 
 #include <boost/variant/apply_visitor.hpp>
-#include "vast/convert.h"
 #include "vast/exception.h"
 #include "vast/logger.h"
 #include "vast/optional.h"
@@ -11,6 +10,7 @@
 #include "vast/detail/parser/error_handler.h"
 #include "vast/detail/parser/skipper.h"
 #include "vast/detail/parser/query.h"
+#include "vast/util/convert.h"
 #include "vast/util/make_unique.h"
 
 namespace vast {

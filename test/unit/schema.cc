@@ -1,7 +1,7 @@
 #include "test.h"
 #include <fstream>
-#include "vast/convert.h"
 #include "vast/schema.h"
+#include "vast/util/convert.h"
 
 using namespace vast;
 
