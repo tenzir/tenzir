@@ -433,8 +433,7 @@ ewah_bitstream::iterator::iterator(ewah_bitstream const& ewah)
     pos_ = npos;
 }
 
-bool
-ewah_bitstream::iterator::equals(ewah_bitstream::iterator const& other) const
+bool ewah_bitstream::iterator::equals(iterator const& other) const
 {
   return pos_ == other.pos_;
 }
