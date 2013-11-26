@@ -219,8 +219,8 @@ namespace detail {
 
 /// The base class for bit sequence ranges.
 template <typename Derived>
-class bitstream_sequence_range
-  : public util::range_facade<bitstream_sequence_range<Derived>>
+class sequence_range_base
+  : public util::range_facade<sequence_range_base<Derived>>
 {
 public:
   enum block_type { fill, literal };
@@ -255,7 +255,7 @@ protected:
   }
 
 private:
-  friend util::range_facade<bitstream_sequence_range<Derived>>;
+  friend util::range_facade<sequence_range_base<Derived>>;
 
   bitsequence const& state() const
   {
@@ -649,13 +649,13 @@ public:
     }
   };
 
-  class sequence_range : public detail::bitstream_sequence_range<sequence_range>
+  class sequence_range : public detail::sequence_range_base<sequence_range>
   {
   public:
     explicit sequence_range(null_bitstream const& bs);
 
   private:
-    friend detail::bitstream_sequence_range<sequence_range>;
+    friend detail::sequence_range_base<sequence_range>;
 
     bool next_sequence(bitsequence& seq);
 
@@ -756,13 +756,13 @@ public:
     }
   };
 
-  class sequence_range : public detail::bitstream_sequence_range<sequence_range>
+  class sequence_range : public detail::sequence_range_base<sequence_range>
   {
   public:
     explicit sequence_range(ewah_bitstream const& bs);
 
   private:
-    friend detail::bitstream_sequence_range<sequence_range>;
+    friend detail::sequence_range_base<sequence_range>;
 
     bool next_sequence(bitsequence& seq);
 
