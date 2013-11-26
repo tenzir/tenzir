@@ -141,41 +141,24 @@ BOOST_AUTO_TEST_CASE(segment_event_extraction)
   }
   s.base(1000);
 
-  null_bitstream mask;
+  ewah_bitstream mask;
   mask.append(1000, false);
   for (auto i = 0; i < 256; ++i)
     mask.push_back(i % 4 == 0);
   mask.append(1000, false);
-
   segment::reader r{&s};
-  BOOST_CHECK(r.seek(1000));
-  std::vector<event> v;
-  auto i = r.extract_forward(
-      mask,
-      [&v](event e) { v.push_back(std::move(e)); });
 
-  BOOST_CHECK(i);
-  BOOST_CHECK_EQUAL(*i, v.size());
-  for (auto& e : v )
-    BOOST_CHECK_EQUAL((e.id() - s.base()) % 4, 0);
+  auto mi = mask.begin();
+  auto mend = mask.end();
+  BOOST_CHECK_EQUAL(*mi, 1000);
 
-  v.clear();
-  BOOST_CHECK(r.seek(1200));
-  i = r.extract_backward(
-      mask,
-      [&v](event e) { v.push_back(std::move(e)); });
-  BOOST_CHECK(i);
-  BOOST_CHECK_EQUAL(*i, v.size());
-
-  v.clear();
-  while (i)
-    i = r.extract_backward(
-        mask,
-        [&s, &v](event e)
-        {
-          BOOST_CHECK_EQUAL((e.id() - s.base()) % 4, 0);
-          v.push_back(std::move(e));
-        });
-
-  BOOST_CHECK_EQUAL(v.size(), (200 / 4) - 2);
+  event_id id = s.base();
+  while (mi != mend)
+  {
+    auto e = r.read(*mi);
+    BOOST_REQUIRE(e);
+    BOOST_CHECK_EQUAL(e->id(), id);
+    id += 4;
+    ++mi;
+  }
 }

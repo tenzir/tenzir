@@ -1,6 +1,5 @@
 #include "vast/segment.h"
 
-#include "vast/bitstream.h"
 #include "vast/event.h"
 #include "vast/logger.h"
 #include "vast/serialization.h"
@@ -148,33 +147,12 @@ bool segment::reader::seek(event_id id)
   return skip(n) == n;
 }
 
-optional<size_t> segment::reader::extract_forward(bitstream const& mask,
-                                                  std::function<void(event)> f)
-{
-  return extract(mask, 0, 0, f);
-}
-
-optional<size_t> segment::reader::extract_backward(bitstream const& mask,
-                                                  std::function<void(event)> f)
-{
-  auto last = mask.find_prev(next_);
-  if (backup() == 0 || ! within_current_chunk(last))
-    if (! prev())
-      return {};
-
-  auto result = extract(mask, 0, last, f);
-  backup();
-  return result;
-}
-
-optional<size_t> segment::reader::extract(bitstream const& mask,
-                                          event_id begin,
+optional<size_t> segment::reader::extract(event_id begin,
                                           event_id end,
                                           std::function<void(event)> f)
 {
   if (! segment_.contains(next_) ||
       ! f ||
-      ! mask ||
       (begin > 0 && begin < segment_.base() && ! seek(begin)) ||
       (end > 0 && end >= segment_.base() + segment_.events()))
     return {};
@@ -183,14 +161,7 @@ optional<size_t> segment::reader::extract(bitstream const& mask,
   event_id i = next_ - 1;
   do
   {
-    i = mask.find_next(i);
-    if (i == bitstream::npos)
-    {
-      next_ = bitstream::npos;
-      break;
-    }
-
-    auto e = read(i);
+    auto e = read(++i);
     if (! e)
     {
       VAST_LOG_ERROR("failed to read event " << i << " from chunk");

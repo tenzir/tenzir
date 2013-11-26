@@ -14,7 +14,6 @@
 
 namespace vast {
 
-class bitstream;
 class event;
 
 /// Contains a vector of chunks with additional meta data.
@@ -31,19 +30,16 @@ public:
     ///
     /// @param s The segment to write to.
     ///
-    /// @param max_events_per_chunk The maximum number of events per chunk. If
-    /// non-zero and *max_segment_size* has not yet been reached, the writer
-    /// will create a new chunk
+    /// @param max_events_per_chunk The maximum number of events per chunk.
     ///
     /// @pre `s != nullptr`
-    explicit writer(segment* s, size_t max_segment_size = 0);
+    explicit writer(segment* s, size_t max_events_per_chunk = 0);
 
     /// Destructs a writer and flushes the event chunk into the underlying
     /// segment.
     ///
-    /// @warning If the segment has no more room (only if the
-    /// `max_segment_size` parameter given at construction time was non-zero),
-    /// flushing may fail and events may get lost.
+    /// @warning If the segment has no more room, flushing may fail and events
+    /// may get lost.
     ~writer();
 
     /// Serializes an event into the underlying segment.
@@ -107,41 +103,16 @@ public:
     /// @param id The event ID to seek to.
     ///
     /// @returns `true` if seeking to *id* succeeded, and `false` if *id* is
-    /// out-of-bounds or if the reader uses a mask which does not contain
-    /// *id*.
+    /// out-of-bounds.
     ///
     /// @post The next call to ::read exctracts the event with ID *id*.
     bool seek(event_id id);
 
-    /// Extracts events forward from the current position according to a mask.
-    ///
-    /// @param mask Represents the events to extract.
-    ///
-    /// @param f The function to invoke on each extracted event.
-    ///
-    /// @returns An engaged value with the number of times *f* has been
-    /// applied, and a disengaged value if an error occurred.
-    optional<size_t> extract_forward(bitstream const& mask,
-                                     std::function<void(event)> f);
-
-    /// Extracts events backward from the current position according to a mask.
-    ///
-    /// @param mask Represents the events to extract.
-    ///
-    /// @param f The function to invoke on each extracted event.
-    ///
-    /// @returns An engaged value with the number of times *f* has been
-    /// applied, and a disengaged value if an error occurred.
-    optional<size_t> extract_backward(bitstream const& mask,
-                                      std::function<void(event)> f);
-
   private:
-    /// Extracts events according to a mask and given boundaries.
-    ///
-    /// @param mask Represents the events to extract.
+    /// Extracts events according to given boundaries.
     ///
     /// @param from The ID where to start extraction. If 0, will use the
-    /// current navigator position.
+    /// current position of the reader.
     ///
     /// @param to The ID where to end extraction. If 0, will extract until the
     /// end of the current chunk.
@@ -150,8 +121,7 @@ public:
     ///
     /// @returns An engaged value with the number of times *f* has been
     /// applied, and a disengaged value if an error occurred.
-    optional<size_t> extract(bitstream const& mask,
-                             event_id from,
+    optional<size_t> extract(event_id from,
                              event_id to,
                              std::function<void(event)> f);
 
