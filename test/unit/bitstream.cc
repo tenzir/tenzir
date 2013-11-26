@@ -317,6 +317,21 @@ BOOST_AUTO_TEST_CASE(ewah_bitwise_iteration)
   BOOST_CHECK(! ewah2[422]);
   BOOST_CHECK(ewah2[423]);
   BOOST_CHECK(ewah2[424]);
+
+  ewah_bitstream ebs;
+  ebs.append(1000, false);
+  for (auto i = 0; i < 256; ++i)
+    ebs.push_back(i % 4 == 0);
+  ebs.append(1000, false);
+
+  ewah_bitstream::size_type cnt = 1000;
+  i = ebs.begin();
+  while (i != ebs.end())
+  {
+    BOOST_CHECK_EQUAL(*i, cnt);
+    cnt += 4;
+    ++i;
+  }
 }
 
 BOOST_AUTO_TEST_CASE(ewah_element_access)

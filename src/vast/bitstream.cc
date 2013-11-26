@@ -548,8 +548,18 @@ void ewah_bitstream::iterator::scan()
     return;
 
   // Otherwise we need to find the first 1-bit in the next block, which is
-  // dirty.
-  pos_ += bitvector::lowest_bit(ewah_->bits_.block(idx_));
+  // dirty. However, this dirty block may be the last block and if it doesn't
+  // have a single 1-bit we're done.
+  auto block = ewah_->bits_.block(idx_);
+  if (idx_ == ewah_->bits_.blocks() - 1 && ! block)
+  {
+    pos_ = npos;
+  }
+  else
+  {
+    assert(block);
+    pos_ += bitvector::lowest_bit(block);
+  }
 }
 
 
