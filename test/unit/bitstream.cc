@@ -257,22 +257,21 @@ BOOST_AUTO_TEST_CASE(null_bitstream_operations)
   // 11000011101
   // 00100000000
   std::string str;
-  auto t = transpose(v);
-  for (auto& i : t)
-    str += to_string(i);
+  auto i = std::back_inserter(str);
+  BOOST_REQUIRE(render(i, v));
   BOOST_CHECK_EQUAL(
       str,
-      "110"
-      "110"
-      "101"
-      "000"
-      "000"
-      "000"
-      "010"
-      "010"
-      "010"
-      "000"
-      "110"
+      "110\n"
+      "110\n"
+      "101\n"
+      "000\n"
+      "000\n"
+      "000\n"
+      "010\n"
+      "010\n"
+      "010\n"
+      "000\n"
+      "110\n"
       );
 }
 

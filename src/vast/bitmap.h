@@ -767,6 +767,7 @@ private:
   {
     if (empty())
       return true;
+
     std::string str;
     if (with_header)
     {
@@ -778,15 +779,13 @@ private:
       str.pop_back();
       str += '\n';
     }
+    std::copy(str.begin(), str.end(), out);
+
     std::vector<Bitstream> cols;
-    cols.reserve(coder_.store().rows);
     coder_.store().each(
         [&](T const&, Bitstream const& bs) { cols.push_back(bs); });
-    for (auto& row : transpose(cols))
-      str += to<std::string>(row) + '\n';
-    str.pop_back();
-    out = std::copy(str.begin(), str.end(), out);
-    return true;
+
+    return render(out, cols);
   }
 };
 
@@ -864,30 +863,36 @@ private:
   template <typename Iterator>
   bool print(Iterator& out) const
   {
-    std::string str;
-    auto i = bool_.find_first();
-    if (i == Bitstream::npos)
-      throw std::invalid_argument("bitstream too large to generate");
-    str.reserve(bool_.size() * 2);
-    if (i > 0)
-      for (size_t j = 0; j < i; ++j)
-        str += "0\n";
-    str += "1\n";
-    auto j = i;
-    while ((j = bool_.find_next(i)) != Bitstream::npos)
+    typename Bitstream::size_type last = 0;
+    auto i = bool_.begin();
+    auto end = bool_.end();
+
+    while (i != end)
     {
-      auto delta = j - i;
-      for (i = 1; i < delta; ++i)
-        str += "0\n";
-      str += "1\n";
-      i = j;
+      auto delta = *i - last;
+      last = *i + 1;
+
+      for (decltype(delta) zero = 0; zero < delta; ++zero)
+      {
+        *out++ = '0';
+        *out++ = '\n';
+      }
+
+      *out++ = '1';
+      if (++i != end)
+        *out++ = '\n';
     }
-    assert(j == Bitstream::npos);
-    for (j = 1; j < bool_.size() - i; ++i)
-      str += "0\n";
-    if (str.back() == '\n')
-      str.pop_back();
-    out = std::copy(str.begin(), str.end(), out);
+
+    auto remaining_zeros = last < bool_.size() ? bool_.size() - last : 0;
+    for (decltype(last) zero = 0; zero < remaining_zeros; ++zero)
+    {
+      *out++ = '0';
+      if (zero != remaining_zeros)
+        *out++ = '\n';
+    }
+
+    *out++ = '\n';
+
     return true;
   }
 

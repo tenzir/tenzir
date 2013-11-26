@@ -1037,54 +1037,61 @@ Bitstream nor_(Bitstream const& lhs, Bitstream const& rhs)
   return apply(lhs, rhs, [](block_type x, block_type y) { return x | ~y; });
 }
 
-/// Transposes a vector of equal-sized bitstreams.
+/// Transposes a vector of bitstreams into a character matrix of 0s and 1s.
+/// @param out The output iterator.
 /// @param v A vector of bitstreams.
-/// @pre All elements of *v* must have the same size.
-template <
-  typename Bitstream,
-  typename = DisableIfSameOrDerived<Bitstream, bitstream>
->
-std::vector<Bitstream> transpose(std::vector<Bitstream> const& v)
+template <typename Iterator, typename Bitstream>
+bool print(Iterator& out, std::vector<Bitstream> const& v)
 {
   if (v.empty())
-    return {};
-  auto vsize = v.size();
-  auto bsize = v[0].size();
-  if (bsize == 0)
-    return {};
-  for (size_t i = 0; i < vsize; ++i)
-    if (v[i].size() != bsize)
-      throw std::logic_error("tranpose requires same-size bitstreams");
+    return true;
 
-  std::vector<typename Bitstream::size_type> next(vsize);
-  auto min = Bitstream::npos;
-  for (size_t i = 0; i < vsize; ++i)
+  using const_iterator = typename Bitstream::const_iterator;
+  using ipair = std::pair<const_iterator, const_iterator>;
+  std::vector<ipair> is(v.size());
+  for (size_t i = 0; i < v.size(); ++i)
+    is[i] = {v[i].begin(), v[i].end()};
+
+  auto const zero_row = std::string(v.size(), '0') + '\n';
+  typename Bitstream::size_type last = 0;
+  bool done = false;
+  while (! done)
   {
-    next[i] = v[i].find_first();
-    if (next[i] < min)
-      min = next[i];
-  }
-  auto all_zero = min;
-  std::vector<Bitstream> result;
-  while (result.size() != bsize)
-  {
-    assert(min != Bitstream::npos);
-    if (all_zero > 0)
-      result.resize(result.size() + all_zero, {vsize, false});
-    result.emplace_back(Bitstream());
-    auto& row = result.back();
-    for (size_t i = 0; i < vsize; ++i)
-      row.push_back(next[i] == min);
-    for (size_t i = 0; i < vsize; ++i)
+    // Compute the minimum.
+    typename Bitstream::size_type min = Bitstream::npos;
+    for (auto& p : is)
+      if (p.first != p.second && *p.first < min)
+        min = *p.first;
+
+    if (min == Bitstream::npos)
+      break;
+
+    // Fill up the distance to the last row with 0 rows.
+    auto distance = min - last;
+    for (decltype(min) i = 0; i < distance; ++i)
+      std::copy(zero_row.begin(), zero_row.end(), out);
+    last = min + 1;
+
+    // Print the current transposed row.
+    done = true;
+    for (auto& p : is)
     {
-      if (next[i] != Bitstream::npos && next[i] == min)
-        next[i] = v[i].find_next(next[i]);
+      if (p.first != p.second && *p.first == min)
+      {
+        *out++ = '1';
+        done = false;
+        ++p.first;
+      }
+      else
+      {
+        *out++ = '0';
+      }
     }
-    auto new_min = std::min_element(next.begin(), next.end());
-    all_zero = *new_min - min - 1;
-    min = *new_min;
+
+    *out++ = '\n';
   }
-  return result;
+
+  return true;
 }
 
 } // namespace vast

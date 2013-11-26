@@ -37,7 +37,7 @@ BOOST_AUTO_TEST_CASE(boolean_bitmap_index)
     "0\n"
     "0\n"
     "0\n"
-    "1";
+    "1\n";
 
   BOOST_CHECK_EQUAL(to_string(*bi), str);
 
@@ -113,7 +113,7 @@ BOOST_AUTO_TEST_CASE(temporal_bitmap_index)
     "00001\n"
     "11111\n"
     "00111\n"
-    "00011";
+    "00011\n";
 
   BOOST_CHECK_EQUAL(to_string(*bi), str);
 
@@ -156,7 +156,7 @@ BOOST_AUTO_TEST_CASE(strings_bitmap_index)
     "100\n"
     "001\n"
     "001\n"
-    "010";
+    "010\n";
 
   BOOST_CHECK_EQUAL(to_string(*bi), str);
 
@@ -225,7 +225,7 @@ BOOST_AUTO_TEST_CASE(ip_address_bitmap_index)
     "0000000000000000000000000000000000000000000000000000000000000000"
     "0000000000000000000000000000000011000000101010000000000011110000\n"
     "0000000000000000000000000000000000000000000000000000000000000000"
-    "0000000000000000000000000000000011000000101010000000000001111111";
+    "0000000000000000000000000000000011000000101010000000000001111111\n";
 
   BOOST_CHECK_EQUAL(to_string(*bi), str);
 
@@ -267,5 +267,5 @@ BOOST_AUTO_TEST_CASE(transport_port_bitmap_index)
       "111111\n"
       "000001\n"
       "001111\n"
-      "000011");
+      "000011\n");
 }

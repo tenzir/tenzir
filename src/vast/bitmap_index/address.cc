@@ -133,10 +133,9 @@ bool address_bitmap_index::convert(std::string& str) const
   v.reserve(128);
   for (size_t i = 0; i < 128; ++i)
     v.emplace_back(*bitmaps_[i / 8].lookup_raw(7 - i % 8));
-  for (auto& row : transpose(v))
-    str += to<std::string>(row) + '\n';
-  str.pop_back();
-  return true;
+
+  auto i = std::back_inserter(str);
+  return render(i, v);
 }
 
 } // namespace vast
