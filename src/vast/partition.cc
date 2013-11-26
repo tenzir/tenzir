@@ -91,6 +91,7 @@ void partition::update(event_id base, size_t n)
     coverage_ = std::move(bs);
   else
     coverage_ |= bs;
+
   last_modified_ = now();
 }
 
@@ -114,6 +115,7 @@ void partition_actor::act()
       },
       on_arg_match >> [=](expr::ast const& ast, actor_ptr const& sink)
       {
+        VAST_LOG_ACTOR_DEBUG("got AST for " << VAST_ACTOR_ID(sink));
         auto t = make_any_tuple(ast, partition_.coverage(), sink);
         if (partition::is_meta_query(ast))
           event_meta_index_ << t;
@@ -123,14 +125,18 @@ void partition_actor::act()
       },
       on_arg_match >> [=](segment const& s)
       {
-        VAST_LOG_ACTOR_DEBUG("processes events from segment " << s.id());
+        VAST_LOG_ACTOR_DEBUG(
+            "processes " << s.events() << " events from segment " << s.id());
+
         segment::reader r{&s};
         while (auto e = r.read())
         {
           auto& a = event_arg_indexes_[e->name()];
           if (! a)
-            a = spawn<event_arg_index, linked>(
-                partition_.dir() / "event" / e->name());
+          {
+            auto dir = partition_.dir() / "event" / e->name();
+            a = spawn<event_arg_index, linked>(dir);
+          }
           auto t = make_any_tuple(std::move(*e));
           event_meta_index_ << t;
           a << t;
@@ -139,8 +145,9 @@ void partition_actor::act()
       });
 
   partition_.load();
-  event_meta_index_
-    = spawn<event_meta_index, linked>(partition_.dir() / "meta");
+  event_meta_index_ =
+    spawn<event_meta_index, linked>(partition_.dir() / "meta");
+
   traverse(partition_.dir() / "event",
            [&](path const& p) -> bool
            {

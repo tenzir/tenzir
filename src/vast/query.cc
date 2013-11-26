@@ -24,9 +24,8 @@ query::query(expr::ast ast, std::function<void(event)> fn)
   : ast_{std::move(ast)},
     fn_{fn}
 {
-  // FIXME: Use something better than a null bitstream.
-  processed_ = null_bitstream{};
-  extracted_ = null_bitstream{};
+  processed_ = bitstream_type{};
+  extracted_ = bitstream_type{};
 }
 
 void query::update(bitstream result)
@@ -83,17 +82,13 @@ size_t query::consolidate(size_t before, size_t after)
 optional<size_t> query::extract()
 {
   if (! unprocessed_)
+  {
+    VAST_LOG_DEBUG("query has no unprocessed hits available");
     return {};
+  }
 
   if (! reader_ || ! current_->contains(reader_->position()))
   {
-    if (! extracted_.empty())
-    {
-      processed_ |= extracted_;
-      unprocessed_ -= extracted_;
-      extracted_ = null_bitstream{};
-    }
-
     auto last = unprocessed_.find_last();
     if (last == bitstream::npos)
       return {};
@@ -108,51 +103,61 @@ optional<size_t> query::extract()
         break;
       }
     }
+
     if (! found)
     {
-      VAST_LOG_DEBUG("query has no segment for id " << last << " available");
+      VAST_LOG_DEBUG("query has no segment for id " << last);
       return {};
     }
 
     reader_ = make_unique<segment::reader>(&current_.read());
-    VAST_LOG_DEBUG("query attached reader to segment " << current_->id());
+    VAST_LOG_DEBUG("query instantiates reader for segment " <<
+                   current_->id() << " covering [" << current_->base() << ','
+                   << current_->base() + current_->events() << ')');
+
+    masked_ = bitstream_type{};
+    masked_.append(current_->base(), false);
+    masked_.append(current_->events(), true);
+    masked_ &= unprocessed_;
   }
 
-  size_t results = 0;
-  auto n = reader_->extract_forward(
-      unprocessed_,
-      [&](event e)
-      {
-        extracted_.append(e.id() - extracted_.size(), false);
-        extracted_.append(1, true);
-        if (evaluate(ast_, e).get<bool>())
-        {
-          fn_(std::move(e));
-          ++results;
-        }
-        else
-        {
-          VAST_LOG_WARN("query ignores false positive " << ast_ << ": " << e);
-        }
-      });
+  size_t n = 0;
+  for (auto id : masked_)
+  {
+    auto e = reader_->read(id);
+    if (! e)
+    {
+      VAST_LOG_ERROR("query failed to extract event " << id);
+      break;
+    }
 
-  if (! n)
-  {
-    VAST_LOG_DEBUG("query finished extraction (" << results << ')');
-    if (results > 0)
-      return results;
-    return {};
+    extracted_.append(e->id() - extracted_.size(), false);
+    extracted_.push_back(true);
+
+    if (evaluate(ast_, *e).get<bool>())
+    {
+      fn_(std::move(*e));
+      ++n;
+    }
+    else
+    {
+      VAST_LOG_WARN("query " << ast_ << " ignores false positive: " << *e);
+    }
   }
-  else if (*n == 0)
+
+  if (! extracted_.empty())
   {
+    processed_ |= extracted_;
+    unprocessed_ -= extracted_;
+    masked_ -= extracted_;
+    extracted_ = bitstream_type{};
+  }
+
+  if (n == 0)
     VAST_LOG_WARN("query could not extract a single result from segment " <<
                   current_->id());
-    return 0;
-  }
-  else
-  {
-    return results;
-  }
+
+  return n;
 }
 
 std::vector<event_id> query::scan() const
@@ -164,12 +169,12 @@ std::vector<event_id> query::scan() const
     auto prev_hit = unprocessed_.find_prev(s->base());
     if (prev_hit != bitstream::npos
         && ! ((i != segments_.begin() && (*(i - 1))->contains(prev_hit))))
-      eids.push_back(prev_hit - 1);
+      eids.push_back(prev_hit);
 
-    auto next_hit = unprocessed_.find_next(s->base() + s->events());
+    auto next_hit = unprocessed_.find_next(s->base() + s->events() - 1);
     if (next_hit != bitstream::npos
         && ! (i + 1 != segments_.end() && (*(i + 1))->contains(next_hit)))
-      eids.push_back(next_hit - 1);
+      eids.push_back(next_hit);
   }
 
   return eids;
@@ -244,8 +249,9 @@ void query_actor::act()
         {
           for (auto eid : query_.scan())
           {
-            VAST_LOG_ACTOR_DEBUG("asks for segment containing id " << eid);
             send(archive_, atom("segment"), eid);
+            VAST_LOG_ACTOR_DEBUG(
+                "asks for neighboring segment containing id " << eid);
           }
         }
       },
@@ -253,11 +259,7 @@ void query_actor::act()
       {
         VAST_LOG_ACTOR_DEBUG("asked to extract events");
         if (auto got = query_.extract())
-        {
           VAST_LOG_ACTOR_DEBUG("extracted " << *got << " events");
-          if (*got == 0)
-            self << last_dequeued();
-        }
       },
       others() >> [=]
       {

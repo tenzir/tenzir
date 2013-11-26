@@ -57,12 +57,16 @@ public:
   optional<event_id> last() const;
 
 private:
+  // TODO: Use something better than a null bitstream.
+  using bitstream_type = null_bitstream;
+
   expr::ast ast_;
   std::function<void(event)> fn_;
   bitstream hits_;
   bitstream processed_;
   bitstream unprocessed_;
   bitstream extracted_;
+  bitstream masked_;
   cow<segment> current_;
   std::unique_ptr<segment::reader> reader_;
   std::deque<cow<segment>> segments_;

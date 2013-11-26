@@ -27,7 +27,7 @@ struct event_meta_index::loader : expr::default_const_visitor
     {
       io::unarchive(idx.dir_ / "name.idx", idx.name_);
       VAST_LOG_DEBUG(
-          "loaded name index (" << idx.name_.size() - 1 << " events)");
+          "loaded name index (" << idx.name_.size() << " bits)");
     }
   }
 
@@ -37,7 +37,7 @@ struct event_meta_index::loader : expr::default_const_visitor
     {
       io::unarchive(idx.dir_ / "timestamp.idx", idx.timestamp_);
       VAST_LOG_DEBUG(
-          "loaded time index (" << idx.timestamp_.size() - 1 << " events)");
+          "loaded time index (" << idx.timestamp_.size() << " bits)");
     }
   }
 
@@ -123,21 +123,21 @@ void event_meta_index::load(expr::ast const& ast)
 
 void event_meta_index::store()
 {
-  if (timestamp_.appended() > 0)
+  if (timestamp_.appended() > 1)
   {
     if (! exists(dir_))
       mkdir(dir_);
     io::archive(dir_ / "timestamp.idx", timestamp_);
     VAST_LOG_ACTOR_DEBUG(
-        "stored timestamp index with " << timestamp_.size() - 1 << " events");
+        "stored timestamp index (" << timestamp_.size() << " bits)");
   }
-  if (name_.appended() > 0)
+  if (name_.appended() > 1)
   {
     if (! exists(dir_))
       mkdir(dir_);
     io::archive(dir_ / "name.idx", name_);
     VAST_LOG_ACTOR_DEBUG(
-        "stored name index with " << name_.size() - 1 << " events");
+        "stored name index (" << name_.size() << " bits)");
   }
 }
 
@@ -171,9 +171,11 @@ struct event_arg_index::loader : expr::default_const_visitor
   {
     if (idx.args_.count(oe.off))
       return;
+
     auto filename = idx.pathify(oe.off);
     if (! exists(filename))
       return;
+
     value_type vt;
     std::shared_ptr<bitmap_index> bmi;
     io::unarchive(filename, vt, bmi);
@@ -182,8 +184,10 @@ struct event_arg_index::loader : expr::default_const_visitor
       VAST_LOG_ERROR("got corrupt index: " << filename.basename());
       return;
     }
-    VAST_LOG_DEBUG("loaded index " << filename.trim(-4) << " with " <<
-                   bmi->size() - 1 << " events");
+
+    VAST_LOG_DEBUG("loaded index " << filename.trim(-4) <<
+                   " (" << bmi->size() << " bits)");
+
     idx.args_.emplace(oe.off, bmi);
     assert(! idx.types_.count(vt));
     idx.types_.emplace(vt, std::move(bmi));
@@ -194,6 +198,7 @@ struct event_arg_index::loader : expr::default_const_visitor
     auto t = te.type;
     if (idx.types_.count(t))
       return;
+
     auto er = idx.files_.equal_range(t);
     for (auto i = er.first; i != er.second; ++i)
     {
@@ -205,6 +210,7 @@ struct event_arg_index::loader : expr::default_const_visitor
         VAST_LOG_ERROR("got invalid offset in path: " << i->second);
         return;
       }
+
       assert(! idx.args_.count(o));
       value_type vt;
       std::shared_ptr<bitmap_index> bmi;
@@ -214,8 +220,10 @@ struct event_arg_index::loader : expr::default_const_visitor
         VAST_LOG_ERROR("got corrupt index: " << i->second.basename());
         return;
       }
-      VAST_LOG_DEBUG("loaded index " << i->second.trim(-4) << " with " <<
-                     bmi->size() - 1 << " events");
+
+      VAST_LOG_DEBUG("loaded index " << i->second.trim(-4) << " (" <<
+                     bmi->size() << " bits)");
+
       assert(! idx.args_.count(o));
       idx.args_.emplace(o, bmi);
       idx.types_.emplace(vt, bmi);
@@ -306,6 +314,7 @@ void event_arg_index::scan()
           files_.emplace(vt, p);
           return true;
         });
+
     assert(! files_.empty());
   }
 }
@@ -335,7 +344,7 @@ void event_arg_index::store()
     assert(inverse.count(p.second));
     io::archive(filename, inverse[p.second], p.second);
     VAST_LOG_ACTOR_DEBUG("stored index " << filename.trim(-4) <<
-                         " with " << p.second->size() - 1 << " events");
+                         " (" << p.second->size() << " bits)");
   }
 }
 
