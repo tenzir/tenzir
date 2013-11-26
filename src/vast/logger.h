@@ -154,8 +154,11 @@ private:
     }                                                                         \
   } VAST_VOID
 
+#define VAST_ACTOR_ID(actor) \
+  "@" << actor->id()
+
 #define VAST_ACTOR(name, actor) \
-  "@" << actor->id() << ":" << name
+  VAST_ACTOR_ID(actor) << ":" << name
 
 #define VAST_THIS_ACTOR(name) \
   VAST_ACTOR(name, cppa::self)
