@@ -121,6 +121,9 @@ optional<size_t> query::extract()
     masked_ &= unprocessed_;
   }
 
+  if (masked_.empty())
+    return {};
+
   size_t n = 0;
   for (auto id : masked_)
   {
@@ -154,7 +157,7 @@ optional<size_t> query::extract()
   }
 
   if (n == 0)
-    VAST_LOG_WARN("query could not extract a single result from segment " <<
+    VAST_LOG_WARN("query could not find a single result in segment " <<
                   current_->id());
 
   return n;
