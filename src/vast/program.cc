@@ -224,6 +224,7 @@ void program::act()
   catch (network_error const& e)
   {
     VAST_LOG_ACTOR_ERROR("encountered network error: " << e.what());
+    send_exit(self, exit::error);
   }
 
   become(
@@ -237,7 +238,7 @@ void program::act()
       {
         quit(exit::error);
         VAST_LOG_ACTOR_ERROR("terminated after unexpected message from @" <<
-                             self->last_sender()->id() << ": " <<
+                             last_sender()->id() << ": " <<
                              to_string(self->last_dequeued()));
       });
 }
