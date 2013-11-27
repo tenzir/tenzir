@@ -28,7 +28,7 @@ public:
     {
       VAST_LOG_ACTOR_ERROR(derived()->description(),
                            "act() did not set a behavior, terminating");
-      quit();
+      quit(exit::error);
     }
   }
 
