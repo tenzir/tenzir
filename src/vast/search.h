@@ -28,9 +28,9 @@ public:
 
   /// Updates the query state of a given AST with a new result.
   /// @param ast The predicate to update.
-  /// @param sr The new result for *ast*.
-  /// @returns The set of affected nodes.
-  std::vector<expr::ast> update(expr::ast const& ast, search_result const& sr);
+  /// @param r The new result for *ast*.
+  /// @returns The set of affected parent nodes.
+  std::vector<expr::ast> update(expr::ast const& ast, search_result const& r);
 
   /// Retrieves the result for a given AST.
   ///

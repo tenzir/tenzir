@@ -9,40 +9,6 @@
 using namespace cppa;
 
 namespace vast {
-namespace {
-
-// Extracts all (leaf) predicates from an AST.
-class predicator : public expr::default_const_visitor
-{
-public:
-  predicator(std::vector<expr::ast>& predicates)
-    : predicates_{predicates}
-  {
-  }
-
-  virtual void visit(expr::conjunction const& conj)
-  {
-    for (auto& op : conj.operands)
-      op->accept(*this);
-  }
-
-  virtual void visit(expr::disjunction const& disj)
-  {
-    for (auto& op : disj.operands)
-      op->accept(*this);
-  }
-
-  virtual void visit(expr::predicate const& pred)
-  {
-    predicates_.emplace_back(pred);
-  }
-
-private:
-  std::vector<expr::ast>& predicates_;
-};
-
-} // namespace <anonymous>
-
 
 index::index(path directory)
   : dir_{std::move(directory)}
@@ -60,15 +26,11 @@ void index::act()
   become(
       on_arg_match >> [=](expr::ast const& ast)
       {
-        std::vector<expr::ast> relations;
-        predicator visitor{relations};
-        ast.accept(visitor);
         // FIXME: Support more than 1 partition.
         auto part = partitions_.begin()->second;
-        VAST_LOG_ACTOR_DEBUG("sends " << relations.size() <<
-                             " ASTs to partition @" << part->id());
-        for (auto& rel : relations)
-          send(part, std::move(rel), last_sender());
+        send(part, ast, last_sender());
+        VAST_LOG_ACTOR_DEBUG("sends predicate " << ast <<
+                             " to partition " << VAST_ACTOR_ID(part));
       },
       on(arg_match) >> [=](segment const& s)
       {

@@ -53,13 +53,12 @@ public:
             this->quit(exit::error);
           }
         },
-        on_arg_match >> [=](expr::ast const& ast, bitstream& coverage,
+        on_arg_match >> [=](expr::ast const& ast, bitstream const& coverage,
                             actor_ptr const& sink)
         {
           derived()->load(ast);
           auto r = derived()->lookup(ast);
-          VAST_LOG_ACTOR_DEBUG("sends result to " << VAST_ACTOR_ID(sink));
-          send(sink, ast, search_result{std::move(r), std::move(coverage)});
+          send(sink, ast, search_result{std::move(r), coverage});
         });
   }
 

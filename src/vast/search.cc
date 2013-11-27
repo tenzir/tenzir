@@ -9,68 +9,34 @@ namespace vast {
 
 namespace {
 
-// Deconstructs an entire query AST into its individual sub-trees and adds
-// each to the state map.
-class dissector : public expr::default_const_visitor
+// Extracts all (leaf) predicates from an AST.
+class predicator : public expr::default_const_visitor
 {
 public:
-  dissector(std::map<expr::ast, search::state>& state, expr::ast const& base)
-    : state_{state},
-      base_{base}
+  predicator(std::vector<expr::ast>& predicates)
+    : predicates_{predicates}
   {
   }
 
   virtual void visit(expr::conjunction const& conj)
   {
-    expr::ast ast{conj};
-    if (parent_)
-      state_[ast].parents.insert(parent_);
-    else if (ast == base_)
-      state_.emplace(ast, search::state{});
-    parent_ = std::move(ast);
-    for (auto& clause : conj.operands)
-      clause->accept(*this);
+    for (auto& op : conj.operands)
+      op->accept(*this);
   }
 
   virtual void visit(expr::disjunction const& disj)
   {
-    expr::ast ast{disj};
-    if (parent_)
-      state_[ast].parents.insert(parent_);
-    else if (ast == base_)
-      state_.emplace(ast, search::state{});
-    parent_ = std::move(ast);
-    for (auto& term : disj.operands)
-      term->accept(*this);
+    for (auto& op : disj.operands)
+      op->accept(*this);
   }
 
   virtual void visit(expr::predicate const& pred)
   {
-    assert(parent_);
-    expr::ast ast{pred};
-    state_[ast].parents.insert(parent_);
+    predicates_.emplace_back(pred);
   }
 
 private:
-  expr::ast parent_;
-  std::map<expr::ast, search::state>& state_;
-  expr::ast const& base_;
-};
-
-
-struct node_tester : public expr::default_const_visitor
-{
-  virtual void visit(expr::conjunction const&)
-  {
-    type = logical_and;
-  }
-
-  virtual void visit(expr::disjunction const&)
-  {
-    type = logical_or;
-  }
-
-  optional<boolean_operator> type;
+  std::vector<expr::ast>& predicates_;
 };
 
 
@@ -120,6 +86,8 @@ struct conjunction_evaluator : public expr::default_const_visitor
   std::map<expr::ast, search::state> const& state;
 };
 
+// Computes the result of a disjunction by ORing the results of all of its
+// child nodes.
 struct disjunction_evaluator : public expr::default_const_visitor
 {
   disjunction_evaluator(std::map<expr::ast, search::state>& state)
@@ -156,6 +124,67 @@ struct disjunction_evaluator : public expr::default_const_visitor
   std::map<expr::ast, search::state> const& state;
 };
 
+// Deconstructs an entire query AST into its individual sub-trees and adds
+// each sub-tree to the state map.
+class dissector : public expr::default_const_visitor
+{
+public:
+  dissector(std::map<expr::ast, search::state>& state, expr::ast const& base)
+    : state_{state},
+      base_{base}
+  {
+  }
+
+  virtual void visit(expr::conjunction const& conj)
+  {
+    expr::ast ast{conj};
+
+    if (parent_)
+      state_[ast].parents.insert(parent_);
+    else if (ast == base_)
+      state_.emplace(ast, search::state{});
+
+    parent_ = std::move(ast);
+    for (auto& clause : conj.operands)
+      clause->accept(*this);
+
+    conjunction_evaluator ce{state_};
+    ast.accept(ce);
+    if (ce.complete)
+      state_[ast].result = std::move(ce.result);
+  }
+
+  virtual void visit(expr::disjunction const& disj)
+  {
+    expr::ast ast{disj};
+
+    if (parent_)
+      state_[ast].parents.insert(parent_);
+    else if (ast == base_)
+      state_.emplace(ast, search::state{});
+
+    parent_ = std::move(ast);
+    for (auto& term : disj.operands)
+      term->accept(*this);
+
+    disjunction_evaluator de{state_};
+    ast.accept(de);
+    state_[ast].result = std::move(de.result);
+  }
+
+  virtual void visit(expr::predicate const& pred)
+  {
+    assert(parent_);
+    expr::ast ast{pred};
+    state_[ast].parents.insert(parent_);
+  }
+
+private:
+  expr::ast parent_;
+  std::map<expr::ast, search::state>& state_;
+  expr::ast const& base_;
+};
+
 } // namespace <anonymous>
 
 expr::ast search::add_query(std::string const& str)
@@ -171,35 +200,30 @@ expr::ast search::add_query(std::string const& str)
 std::vector<expr::ast> search::update(expr::ast const& ast,
                                       search_result const& result)
 {
+  assert(state_.count(ast));
   if (! result)
   {
     VAST_LOG_DEBUG("aborting ast propagation due to empty result");
     return {};
   }
-  assert(state_.count(ast));
+
+  // Phase 1: Update result of AST node (and potentially its direct children).
   auto& ast_state = state_[ast];
-  node_tester nt;
-  ast.accept(nt);
-  // Phase 1: update the current AST node's state.
-  if (nt.type)
+  if (ast.is_conjunction())
   {
-    if (*nt.type == logical_and)
-    {
-      VAST_LOG_DEBUG("evaluating conjunction " << ast);
-      conjunction_evaluator ce{state_};
-      ast.accept(ce);
-      if (ce.complete)
-        ast_state.result = std::move(ce.result);
-      VAST_LOG_DEBUG((ce.complete ? "" : "in") << "complete evaluation");
-    }
-    else if (*nt.type == logical_or)
-    {
-      VAST_LOG_DEBUG("evaluating disjunction " << ast);
-      disjunction_evaluator de{state_};
-      ast.accept(de);
-      if (! ast_state.result || (de.result && de.result != ast_state.result))
-        ast_state.result = std::move(de.result);
-    }
+    VAST_LOG_DEBUG("evaluating conjunction " << ast);
+    conjunction_evaluator ce{state_};
+    ast.accept(ce);
+    if (ce.complete)
+      ast_state.result = std::move(ce.result);
+  }
+  else if (ast.is_disjunction())
+  {
+    VAST_LOG_DEBUG("evaluating disjunction " << ast);
+    disjunction_evaluator de{state_};
+    ast.accept(de);
+    if (! ast_state.result || (de.result && de.result != ast_state.result))
+      ast_state.result = std::move(de.result);
   }
   else if (! ast_state.result)
   {
@@ -215,16 +239,19 @@ std::vector<expr::ast> search::update(expr::ast const& ast,
     VAST_LOG_DEBUG("computing new result for " << ast);
     ast_state.result |= result;
   }
-  // Phase 2: Update the parents recursively.
+
+  // Phase 2: Propagate the result to the parents recursively.
   std::vector<expr::ast> path;
   for (auto& parent : ast_state.parents)
   {
     auto pp = update(parent, ast_state.result);
     std::move(pp.begin(), pp.end(), std::back_inserter(path));
   }
+
   path.push_back(ast);
   std::sort(path.begin(), path.end());
   path.erase(std::unique(path.begin(), path.end()), path.end());
+
   return path;
 }
 
@@ -270,7 +297,7 @@ void search_actor::act()
       on(atom("DOWN"), arg_match) >> [=](uint32_t)
       {
         VAST_LOG_ACTOR_DEBUG(
-            "received DOWN from client @" << last_sender()->id());
+            "received DOWN from client " << VAST_ACTOR_ID(last_sender()));
         std::set<actor_ptr> doomed;
         for (auto& p : query_state_)
         {
@@ -291,13 +318,40 @@ void search_actor::act()
           reply(actor_ptr{}, ast);
           return;
         }
+
         VAST_LOG_ACTOR_DEBUG("received new query: " << ast);
         monitor(last_sender());
         auto qry = spawn<query_actor>(archive_, last_sender(), ast);
-        query_state_.emplace(ast, query_state{qry, last_sender()});
-        // TODO: reuse results from existing queries before asking index again.
-        send(index_, ast);
-        reply(std::move(qry), std::move(ast));
+        auto i = query_state_.emplace(ast, query_state{qry, last_sender()});
+
+        // Deconstruct the AST into its predicates and ask the index for those
+        // we have no results for.
+        std::vector<expr::ast> predicates;
+        predicator visitor{predicates};
+        ast.accept(visitor);
+        for (auto& pred : predicates)
+        {
+          auto r = search_.result(pred);
+          if (! r || ! *r)
+          {
+            VAST_LOG_ACTOR_DEBUG("hits index with " << pred);
+            send(index_, pred);
+          }
+          else
+          {
+            VAST_LOG_ACTOR_DEBUG("reuses existing result for " << pred);
+          }
+        }
+
+        auto r = search_.result(ast);
+        if (r && *r)
+        {
+          VAST_LOG_ACTOR_DEBUG("could answer query from existing predicates");
+          i->second.result = *r;
+          send(i->second.query, r->hits());
+        }
+
+        reply(qry, ast);
       },
       on_arg_match >> [=](expr::ast const& ast, search_result const& result)
       {
@@ -306,6 +360,7 @@ void search_actor::act()
           VAST_LOG_ACTOR_DEBUG("ignores empty result for: " << ast);
           return;
         }
+
         for (auto& node : search_.update(ast, result))
         {
           auto er = query_state_.equal_range(node);
@@ -315,8 +370,8 @@ void search_actor::act()
             if (r && *r && *r != i->second.result)
             {
               VAST_LOG_ACTOR_DEBUG(
-                  "propagates updated result to query @" <<
-                  i->second.query->id() << " from " << i->first);
+                  "propagates updated result to query " <<
+                  VAST_ACTOR_ID(i->second.query) << " from " << i->first);
               i->second.result = *r;
               send(i->second.query, r->hits());
             }
@@ -325,8 +380,8 @@ void search_actor::act()
       },
       others() >> [=]
       {
-        VAST_LOG_ACTOR_ERROR("got unexpected message from @" <<
-                             last_sender()->id() << ": " <<
+        VAST_LOG_ACTOR_ERROR("got unexpected message from " <<
+                             VAST_ACTOR_ID(last_sender()) << ": " <<
                              to_string(last_dequeued()));
       });
 }
