@@ -503,6 +503,61 @@ node const* ast::root() const
   return node_ ? node_.get() : nullptr;
 }
 
+namespace {
+
+struct conjunction_tester : public expr::default_const_visitor
+{
+  virtual void visit(expr::conjunction const&)
+  {
+    flag = true;
+  }
+
+  bool flag = false;
+};
+
+struct disjunction_tester : public expr::default_const_visitor
+{
+  virtual void visit(expr::disjunction const&)
+  {
+    flag = true;
+  }
+
+  bool flag = false;
+};
+
+struct predicate_tester : public expr::default_const_visitor
+{
+  virtual void visit(expr::predicate const&)
+  {
+    flag = true;
+  }
+
+  bool flag = false;
+};
+
+} // namespace <anonymous>
+
+bool ast::is_conjunction() const
+{
+  conjunction_tester visitor;
+  accept(visitor);
+  return visitor.flag;
+}
+
+bool ast::is_disjunction() const
+{
+  disjunction_tester visitor;
+  accept(visitor);
+  return visitor.flag;
+}
+
+bool ast::is_predicate() const
+{
+  predicate_tester visitor;
+  accept(visitor);
+  return visitor.flag;
+}
+
 void ast::serialize(serializer& sink) const
 {
   if (node_)

@@ -222,6 +222,11 @@ public:
 
   node const* root() const;
 
+  // Introspection
+  bool is_conjunction() const;
+  bool is_disjunction() const;
+  bool is_predicate() const;
+
 private:
   std::unique_ptr<node> node_;
 
