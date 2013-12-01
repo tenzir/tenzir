@@ -357,7 +357,9 @@ void search_actor::act()
       {
         if (! result)
         {
-          VAST_LOG_ACTOR_DEBUG("ignores empty result for: " << ast);
+          VAST_LOG_ACTOR_DEBUG(
+              "ignores empty result from " << VAST_ACTOR_ID(last_sender()) <<
+              " for: " << ast);
           return;
         }
 

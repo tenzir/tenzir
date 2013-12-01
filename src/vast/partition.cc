@@ -1,6 +1,7 @@
 #include "vast/partition.h"
 
 #include <cppa/cppa.hpp>
+#include "vast/bitmap_index.h"
 #include "vast/event.h"
 #include "vast/event_index.h"
 #include "vast/segment.h"
@@ -66,24 +67,30 @@ bitstream const& partition::coverage() const
 void partition::load()
 {
   if (! exists(dir_))
+  {
     mkdir(dir_);
-  if (exists(dir_ / "last_modified"))
+  }
+  else if (exists(dir_ / "coverage"))
+  {
+    assert(exists(dir_ / "last_modified"));
     io::unarchive(dir_ / "last_modified", last_modified_);
-  if (exists(dir_ / "coverage"))
     io::unarchive(dir_ / "coverage", coverage_);
+  }
 }
 
 void partition::save()
 {
   assert(exists(dir_));
-  io::archive(dir_ / "last_modified", last_modified_);
-  io::archive(dir_ / "coverage", coverage_);
+  if (coverage_)
+  {
+    io::archive(dir_ / "last_modified", last_modified_);
+    io::archive(dir_ / "coverage", coverage_);
+  }
 }
 
 void partition::update(event_id base, size_t n)
 {
-  // FIXME: use a compressed bitstream.
-  null_bitstream bs;
+  bitmap_index::bitstream_type bs;
   assert(base > 0);
   bs.append(base - 1, false);
   bs.append(n, true);
@@ -117,6 +124,8 @@ void partition_actor::act()
       {
         VAST_LOG_ACTOR_DEBUG("got AST " << ast <<
                              " for " << VAST_ACTOR_ID(sink));
+
+        assert(partition_.coverage());
         auto t = make_any_tuple(ast, partition_.coverage(), sink);
         if (partition::is_meta_query(ast))
           event_meta_index_ << t;
@@ -138,10 +147,12 @@ void partition_actor::act()
             auto dir = partition_.dir() / "event" / e->name();
             a = spawn<event_arg_index, linked>(dir);
           }
+
           auto t = make_any_tuple(std::move(*e));
           event_meta_index_ << t;
           a << t;
         }
+
         partition_.update(s.base(), s.events());
       });
 

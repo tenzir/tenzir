@@ -157,8 +157,9 @@ bitstream event_meta_index::lookup(expr::ast const& ast) const
 
 struct event_arg_index::loader : expr::default_const_visitor
 {
-  loader(event_arg_index& idx)
-    : idx{idx}
+  loader(event_arg_index& idx, value_type type)
+    : idx{idx},
+      type_{type}
   {
   }
 
@@ -177,6 +178,13 @@ struct event_arg_index::loader : expr::default_const_visitor
       return;
 
     value_type vt;
+    io::unarchive(filename, vt);
+    if (vt != type_)
+    {
+      VAST_LOG_WARN("type mismatch: requested " << type_ << ", got " << vt);
+      return;
+    }
+
     std::shared_ptr<bitmap_index> bmi;
     io::unarchive(filename, vt, bmi);
     if (! bmi)
@@ -189,8 +197,6 @@ struct event_arg_index::loader : expr::default_const_visitor
                    " (" << bmi->size() << " bits)");
 
     idx.args_.emplace(oe.off, bmi);
-    assert(! idx.types_.count(vt));
-    idx.types_.emplace(vt, std::move(bmi));
   }
 
   virtual void visit(expr::type_extractor const& te)
@@ -211,7 +217,11 @@ struct event_arg_index::loader : expr::default_const_visitor
         return;
       }
 
-      assert(! idx.args_.count(o));
+      if (idx.args_.count(o))
+        // We have issued an offset query in the past and loaded the
+        // corresponding index already.
+        return;
+
       value_type vt;
       std::shared_ptr<bitmap_index> bmi;
       io::unarchive(i->second, vt, bmi);
@@ -231,6 +241,7 @@ struct event_arg_index::loader : expr::default_const_visitor
   }
 
   event_arg_index& idx;
+  value_type type_;
 };
 
 struct event_arg_index::querier : expr::default_const_visitor
@@ -256,9 +267,11 @@ struct event_arg_index::querier : expr::default_const_visitor
   {
     assert(op);
     assert(val);
+
     auto i = idx.args_.find(oe.off);
     if (i == idx.args_.end())
       return;
+
     if (auto r = i->second->lookup(*op, *val))
       result = std::move(*r);
   }
@@ -268,9 +281,11 @@ struct event_arg_index::querier : expr::default_const_visitor
     assert(op);
     assert(val);
     assert(te.type == val->which());
+
     auto i = idx.types_.find(te.type);
     if (i == idx.types_.end())
       return;
+
     auto er = idx.types_.equal_range(te.type);
     for (auto j = er.first; j != er.second; ++j)
     {
@@ -319,9 +334,31 @@ void event_arg_index::scan()
   }
 }
 
+namespace {
+
+struct type_finder : expr::default_const_visitor
+{
+  virtual void visit(expr::predicate const& pred)
+  {
+    pred.rhs().accept(*this);
+  }
+
+  virtual void visit(expr::constant const& c)
+  {
+    type = c.val.which();
+  }
+
+  value_type type;
+};
+
+} // namespace <anonymous>
+
 void event_arg_index::load(expr::ast const& ast)
 {
-  loader visitor{*this};
+  type_finder tf;
+  ast.accept(tf);
+
+  loader visitor{*this, tf.type};
   ast.accept(visitor);
 }
 

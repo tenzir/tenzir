@@ -58,6 +58,7 @@ public:
         {
           derived()->load(ast);
           auto r = derived()->lookup(ast);
+          assert(coverage);
           send(sink, ast, search_result{std::move(r), coverage});
         });
   }
