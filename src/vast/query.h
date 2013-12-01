@@ -4,6 +4,7 @@
 #include <string>
 #include "vast/actor.h"
 #include "vast/aliases.h"
+#include "vast/bitmap_index.h"
 #include "vast/bitstream.h"
 #include "vast/cow.h"
 #include "vast/expression.h"
@@ -57,8 +58,7 @@ public:
   optional<event_id> last() const;
 
 private:
-  // TODO: Use something better than a null bitstream.
-  using bitstream_type = null_bitstream;
+  using bitstream_type = bitmap_index::bitstream_type;
 
   expr::ast ast_;
   std::function<void(event)> fn_;

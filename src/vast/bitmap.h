@@ -653,7 +653,7 @@ private:
 /// A bitmap which maps values to [bitstreams](@ref bitstream).
 template <
   typename T,
-  typename Bitstream = null_bitstream,
+  typename Bitstream = ewah_bitstream,
   template <typename, typename> class Coder = equality_coder,
   template <typename> class Binner = null_binner
 >

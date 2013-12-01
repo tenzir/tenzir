@@ -12,7 +12,6 @@ namespace vast {
 template <value_type T>
 class arithmetic_bitmap_index : public bitmap_index
 {
-  using bitstream_type = null_bitstream; // TODO: Use compressed bitstream.
   using underlying_value_type = underlying_value_type<T>;
   using bitmap_type =
     typename std::conditional<

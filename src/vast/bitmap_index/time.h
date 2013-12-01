@@ -11,8 +11,6 @@ namespace vast {
 /// A bitmap index for time range and time point types.
 class time_bitmap_index : public bitmap_index
 {
-  using bitstream_type = null_bitstream; // TODO: Use compressed bitstream.
-
 public:
   /// Constructs a time bitmap index.
   /// @param precision The granularity of the index. Defaults to seconds.

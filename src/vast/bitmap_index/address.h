@@ -10,8 +10,6 @@ namespace vast {
 /// A bitmap index for IP addresses.
 class address_bitmap_index : public bitmap_index
 {
-  using bitstream_type = null_bitstream; // TODO: Use compressed bitstream.
-
 public:
   virtual bool append(size_t n, bool bit) override;
 

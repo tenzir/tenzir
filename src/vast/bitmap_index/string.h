@@ -12,7 +12,6 @@ namespace vast {
 /// to be used by the bitmap.
 class string_bitmap_index : public bitmap_index
 {
-  using bitstream_type = null_bitstream; // TODO: Use compressed bitstream.
   using dictionary_codomain = uint64_t;
 
 public:

@@ -8,11 +8,15 @@
 namespace vast {
 
 class bitstream;
+class ewah_bitstream;
+class null_bitstream;
 
 /// The abstract base class for bitmap indexes.
 class bitmap_index : util::equality_comparable<bitmap_index>
 {
 public:
+  using bitstream_type = null_bitstream;
+
   /// Factory function to construct a bitmap index for a given value type.
   /// @param t The value type to create an index for.
   /// @returns A bitmap index suited for type *t*.
