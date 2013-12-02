@@ -12,7 +12,7 @@
 
 namespace vast {
 
-archive::archive(std::string directory)
+archive::archive(path directory)
   : directory_{std::move(directory)}
 {
 }
@@ -71,11 +71,11 @@ uuid const* archive::lookup(event_id eid) const
 
 using namespace cppa;
 
-archive_actor::archive_actor(std::string const& directory, size_t max_segments)
-  : archive_{directory}
+archive_actor::archive_actor(path directory, size_t max_segments)
+  : archive_{std::move(directory)}
 {
   segment_manager_ =
-    spawn<segment_manager_actor, linked>(max_segments, directory);
+    spawn<segment_manager_actor, linked>(max_segments, archive_.dir());
 }
 
 void archive_actor::act()

@@ -8,9 +8,9 @@
 
 namespace vast {
 
-segment_manager::segment_manager(size_t capacity, std::string const& dir)
-  : dir_(dir),
-    cache_(capacity, [&](uuid const& id) { return on_miss(id); })
+segment_manager::segment_manager(size_t capacity, path dir)
+  : dir_{std::move(dir)},
+    cache_{capacity, [&](uuid const& id) { return on_miss(id); }}
 {
   traverse(
       dir_,
@@ -59,9 +59,8 @@ cow<segment> segment_manager::on_miss(uuid const& uid)
 
 using namespace cppa;
 
-segment_manager_actor::segment_manager_actor(size_t capacity,
-                                             std::string const& dir)
-  : segment_manager_{capacity, dir}
+segment_manager_actor::segment_manager_actor(size_t capacity, path dir)
+  : segment_manager_{capacity, std::move(dir)}
 {
 }
 

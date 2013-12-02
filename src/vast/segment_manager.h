@@ -22,7 +22,7 @@ public:
   /// should be evicted.
   ///
   /// @param dir The directory with the segments.
-  segment_manager(size_t capacity, std::string const& dir);
+  segment_manager(size_t capacity, path dir);
 
   /// Records a given segment to disk and puts it in the cache.
   /// @param cs The segment to store.
@@ -43,7 +43,7 @@ private:
 
 struct segment_manager_actor : actor<segment_manager_actor>
 {
-  segment_manager_actor(size_t capacity, std::string const& dir);
+  segment_manager_actor(size_t capacity, path dir);
 
   void act();
   char const* description() const;

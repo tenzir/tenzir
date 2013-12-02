@@ -18,7 +18,7 @@ class archive
 public:
   /// Constructs the archive.
   /// @param directory The root directory of the archive.
-  archive(std::string directory);
+  archive(path directory);
 
   /// Retrieves the directory of the archive.
   path const& dir() const;
@@ -47,7 +47,7 @@ private:
 
 struct archive_actor : actor<archive_actor>
 {
-  archive_actor(std::string const& directory, size_t max_segments);
+  archive_actor(path directory, size_t max_segments);
 
   void act();
   char const* description() const;
