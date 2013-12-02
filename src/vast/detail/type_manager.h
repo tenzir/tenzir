@@ -76,7 +76,7 @@ private:
   void destroy();
   void dispose();
 
-  type_id id_;
+  type_id id_ = 0;
   std::unordered_map<std::type_index, std::unique_ptr<global_type_info>> by_ti_;
   std::unordered_map<type_id, global_type_info const*> by_id_;
   std::unordered_map<std::string, global_type_info const*> by_name_;
