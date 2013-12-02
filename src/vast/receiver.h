@@ -8,7 +8,8 @@
 namespace vast {
 
 /// Receives segments, imbues them with an ID from the tracker, and relays them
-/// to archive and index.
+/// to archive and index. The receiver forms the server-sdie counterpart to an
+/// ingestor.
 class receiver : public actor<receiver>
 {
 public:
