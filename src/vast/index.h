@@ -9,11 +9,11 @@
 namespace vast {
 
 /// The event index.
-struct index : actor<index>
+struct index_actor : actor<index_actor>
 {
   /// Spawns the index.
   /// @param directory The root directory of the index.
-  index(path directory);
+  index_actor(path directory);
 
   void act();
   char const* description() const;

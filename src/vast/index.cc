@@ -10,17 +10,17 @@ using namespace cppa;
 
 namespace vast {
 
-index::index(path directory)
+index_actor::index_actor(path directory)
   : dir_{std::move(directory)}
 {
 }
 
-char const* index::description() const
+char const* index_actor::description() const
 {
   return "index";
 }
 
-void index::act()
+void index_actor::act()
 {
   chaining(false);
   become(

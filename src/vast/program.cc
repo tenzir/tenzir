@@ -104,7 +104,7 @@ void program::act()
     auto index_port = config_.as<unsigned>("index.port");
     if (config_.check("index-actor") || config_.check("all-server"))
     {
-      index_ = spawn<index, linked>(vast_dir / "index");
+      index_ = spawn<index_actor, linked>(vast_dir / "index");
       VAST_LOG_ACTOR_VERBOSE("publishes index " <<
                            index_host << ':' << index_port);
       publish(index_, index_port, index_host.c_str());
