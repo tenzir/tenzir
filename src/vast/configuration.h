@@ -15,10 +15,12 @@ protected:
   virtual void verify() override;
 };
 
-/// Initializes VAST. This function must be called exactly once before creating
-/// an instance of vast::program.
-/// @param The program configuration.
-void init(configuration const& config);
+/// Initializes all singletons and creates global state.
+/// @param config The configuration.
+bool initialize(configuration const& config);
+
+/// Destroys all singletons and deletes global state.
+void shutdown();
 
 } // namespace vast
 

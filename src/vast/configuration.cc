@@ -1,4 +1,9 @@
 #include "vast/configuration.h"
+#include "vast/file_system.h"
+#include "vast/logger.h"
+#include "vast/string.h"
+#include "vast/type_info.h"
+#include "vast/detail/type_manager.h"
 
 namespace vast {
 
@@ -105,6 +110,41 @@ void configuration::verify()
   conflicts("console-actor", "index-actor");
   conflicts("console-actor", "ingestor-actor");
   conflicts("console-actor", "search-actor");
+}
+
+bool initialize(configuration const& config)
+{
+  path vast_dir = string(config.get("directory"));
+  if (! exists(vast_dir))
+    if (! mkdir(vast_dir))
+      return false;
+
+  logger::instance()->init(
+      static_cast<logger::level>(config.as<uint32_t>("log.console-verbosity")),
+      static_cast<logger::level>(config.as<uint32_t>("log.file-verbosity")),
+      config.check("log.function-names"),
+      vast_dir / "log");
+
+  VAST_LOG_VERBOSE(" _   _____   __________");
+  VAST_LOG_VERBOSE("| | / / _ | / __/_  __/");
+  VAST_LOG_VERBOSE("| |/ / __ |_\\ \\  / / ");
+  VAST_LOG_VERBOSE("|___/_/ |_/___/ /_/  " << VAST_VERSION);
+  VAST_LOG_VERBOSE("");
+
+  announce_builtin_types();
+
+  size_t n = 0;
+  detail::type_manager::instance()->each([&](global_type_info const&) { ++n; });
+  VAST_LOG_DEBUG("type manager announced " << n << " types");
+
+  return true;
+}
+
+void shutdown()
+{
+  std::atomic_thread_fence(std::memory_order_seq_cst);
+  detail::type_manager::destruct();
+  logger::destruct();
 }
 
 } // namespace vast

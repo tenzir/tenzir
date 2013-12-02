@@ -25,7 +25,7 @@ public:
   /// Registers a type with the type system.
   /// @param ti The type information of the type to register.
   /// @param f The factory constructing a `global_type_info` instance for *ti*.
-  /// @throw `std::logic_error` if *ti* has already been registered.
+  /// @returns `true` on sucess, `false` iff *ti* has already been registered.
   bool add(std::type_info const& ti,
            std::function<global_type_info*(type_id)> f);
 

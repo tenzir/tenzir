@@ -38,7 +38,6 @@ set(libvast_sources
   segmentizer.cc
   serialization.cc
   signal_monitor.cc
-  shutdown.cc
   string.cc
   time.cc
   type_info.cc

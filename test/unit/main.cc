@@ -7,12 +7,13 @@
 #include "vast/configuration.h"
 #include "vast/file_system.h"
 #include "vast/logger.h"
-#include "vast/detail/cppa_type_info.h"
+#include "vast/type_info.h"
 
 int main(int argc, char* argv[])
 {
   using namespace vast;
-  detail::cppa_announce_types();
+
+  announce_builtin_types();
 
   auto delete_logs = true;
   if (argc >= 2 && ! std::strcmp(argv[1], "keep"))

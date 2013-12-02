@@ -263,6 +263,11 @@ bool is_convertible()
 /// @returns `true` iff it is feasible to convert between *from* and *to*.
 bool is_convertible(global_type_info const* from, std::type_info const& to);
 
+/// Announces all known builtin types.
+/// This function shall be called if one uses the serialization.
+/// @see ::announce
+void announce_builtin_types();
+
 } // namespace vast
 
 #endif

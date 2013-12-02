@@ -1,5 +1,4 @@
 #include "vast/program.h"
-#include "vast/shutdown.h"
 
 using namespace cppa;
 using namespace vast;
@@ -21,6 +20,9 @@ int main(int argc, char *argv[])
     std::cerr << e.what() << ", try -h or --help" << std::endl;
     return 1;
   }
+
+  if (! vast::initialize(config))
+    return 1;
 
   auto prog = spawn<program, detached>(config);
   await_all_others_done();

@@ -1,8 +1,21 @@
 #include "vast/type_info.h"
 
+#include "vast/bitstream.h"
+#include "vast/container.h"
+#include "vast/expression.h"
+#include "vast/event.h"
+#include "vast/file_system.h"
 #include "vast/object.h"
+#include "vast/value.h"
 #include "vast/serialization.h"
+#include "vast/bitmap_index/arithmetic.h"
+#include "vast/bitmap_index/address.h"
+#include "vast/bitmap_index/port.h"
+#include "vast/bitmap_index/string.h"
+#include "vast/bitmap_index/time.h"
+#include "vast/detail/cppa_type_info.h"
 #include "vast/detail/type_manager.h"
+#include "vast/util/tuple.h"
 
 namespace vast {
 
@@ -81,6 +94,101 @@ bool is_convertible(global_type_info const* from, std::type_info const& to)
   return detail::type_manager::instance()->check_link(from, to);
 }
 
+namespace {
+// TODO: Use polymorphic lambdas in C++14.
+
+struct type_announcer
+{
+  template <typename T>
+  void operator()(T /* x */) const
+  {
+    announce<T>();
+  }
+};
+
+template <typename To>
+struct type_converter
+{
+  template <typename T>
+  void operator()(T /* x */) const
+  {
+    make_convertible<T, To>();
+  }
+};
+
+} // namespace <anonymous>
+
+void announce_builtin_types()
+{
+  std::tuple<
+    bool, double,
+    int8_t, int16_t, int32_t, int64_t,
+    uint8_t, uint16_t, uint32_t, uint64_t
+  > integral_types;
+
+  std::tuple<
+    std::string,
+    std::vector<std::string>
+  > stl_types;
+
+  std::tuple<
+    address,
+    time_range,
+    time_point,
+    port,
+    prefix,
+    regex,
+    string,
+    record,
+    table,
+    value_type,
+    value, std::vector<value>,
+    event, std::vector<event>,
+    path,
+    expr::ast
+  > vast_types;
+
+  std::tuple<
+    expr::constant,
+    expr::timestamp_extractor,
+    expr::name_extractor,
+    expr::id_extractor,
+    expr::offset_extractor,
+    expr::type_extractor,
+    expr::predicate,
+    expr::conjunction,
+    expr::disjunction
+  > expr_node_types;
+
+  std::tuple<
+    detail::bitstream_model<ewah_bitstream>,
+    detail::bitstream_model<null_bitstream>
+  > bitstream_types;
+
+  std::tuple<
+    arithmetic_bitmap_index<bool_type>,
+    arithmetic_bitmap_index<int_type>,
+    arithmetic_bitmap_index<uint_type>,
+    arithmetic_bitmap_index<double_type>,
+    address_bitmap_index,
+    port_bitmap_index,
+    time_bitmap_index,
+    string_bitmap_index
+  > bitmap_index_types;
+
+  util::for_each(integral_types, type_announcer{});
+  util::for_each(stl_types, type_announcer{});
+  util::for_each(vast_types, type_announcer{});
+  util::for_each(expr_node_types, type_announcer{});
+  util::for_each(bitstream_types, type_announcer{});
+  util::for_each(bitmap_index_types, type_announcer{});
+
+  util::for_each(expr_node_types, type_converter<expr::node>{});
+  util::for_each(bitmap_index_types, type_converter<bitmap_index>{});
+  util::for_each(bitstream_types, type_converter<detail::bitstream_concept>{});
+
+  detail::cppa_announce_types();
+}
 
 } // namespace vast
 

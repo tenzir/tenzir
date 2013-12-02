@@ -31,32 +31,6 @@ program::program(configuration const& config)
   : config_{config},
     server_{! config_.check("console-actor")}
 {
-  path vast_dir = string(config_.get("directory"));
-  if (! exists(vast_dir))
-    if (! mkdir(vast_dir))
-      quit(exit_reason::user_defined);
-
-  logger::instance()->init(
-      static_cast<logger::level>(config_.as<uint32_t>("log.console-verbosity")),
-      static_cast<logger::level>(config_.as<uint32_t>("log.file-verbosity")),
-      config_.check("log.function-names"),
-      vast_dir / "log");
-
-  VAST_LOG_VERBOSE(" _   _____   __________");
-  VAST_LOG_VERBOSE("| | / / _ | / __/_  __/");
-  VAST_LOG_VERBOSE("| |/ / __ |_\\ \\  / / ");
-  VAST_LOG_VERBOSE("|___/_/ |_/___/ /_/  " << VAST_VERSION);
-  VAST_LOG_VERBOSE("");
-
-  // FIXME: We call the type manager here because it is not thread-safe and
-  // later invocations would lead to reaces. The call creates the singleton
-  // and announces the known types during initialize(). Thereafter, the type
-  // manager can only tolerate const access. We may need to figure out a
-  // cleaner way to handle this shared state.
-  size_t n_types = 0;
-  detail::type_manager::instance()->each(
-      [&](global_type_info const&) { ++n_types; });
-  VAST_LOG_DEBUG("type manager announced " << n_types << " types");
 }
 
 void program::act()
