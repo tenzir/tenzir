@@ -144,7 +144,9 @@ public:
     else if (ast == base_)
       state_.emplace(ast, search::state{});
 
-    parent_ = std::move(ast);
+    assert(state_.find(ast) != state_.end());
+
+    parent_ = ast;
     for (auto& clause : conj.operands)
       clause->accept(*this);
 
@@ -163,7 +165,9 @@ public:
     else if (ast == base_)
       state_.emplace(ast, search::state{});
 
-    parent_ = std::move(ast);
+    assert(state_.find(ast) != state_.end());
+
+    parent_ = ast;
     for (auto& term : disj.operands)
       term->accept(*this);
 
