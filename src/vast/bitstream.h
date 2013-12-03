@@ -946,32 +946,32 @@ Bitstream apply(Bitstream const& x, Bitstream const& y, Operation op)
   auto ly = iy->length;
   while (ix != rx.end() && iy != rx.end())
   {
-    auto n = std::min(lx, ly);
+    auto min = std::min(lx, ly);
     auto block = op(ix->data, iy->data);
 
     if (ix->is_fill() && iy->is_fill())
     {
-      result.append(n, block != 0);
+      result.append(min, block != 0);
+      lx -= min;
+      ly -= min;
     }
-    else if (n >= Bitstream::block_width)
+    else if (ix->is_fill())
     {
       result.append_block(block);
+      lx -= Bitstream::block_width;
+      ly = 0;
     }
-    else if (ix->is_fill() || iy->is_fill())
+    else if (iy->is_fill())
     {
       result.append_block(block);
-      if (ix->is_fill())
-        lx -= Bitstream::block_width - n;
-      if (iy->is_fill())
-        ly -= Bitstream::block_width - n;
+      ly -= Bitstream::block_width;
+      lx = 0;
     }
     else
     {
-      result.append_block(block, n);
+      result.append_block(block, std::max(lx, ly));
+      lx = ly = 0;
     }
-
-    lx -= n;
-    ly -= n;
 
     if (lx == 0)
       if (++ix != rx.end())
@@ -983,6 +983,7 @@ Bitstream apply(Bitstream const& x, Bitstream const& y, Operation op)
   }
 
   // Add the remaining sequences of the longer bitstream to the result.
+
   while (ix != rx.end())
   {
     if (ix->is_fill())
@@ -992,6 +993,7 @@ Bitstream apply(Bitstream const& x, Bitstream const& y, Operation op)
     if (++ix != rx.end())
       lx = ix->length;
   }
+
   while (iy != ry.end())
   {
     if (iy->is_fill())

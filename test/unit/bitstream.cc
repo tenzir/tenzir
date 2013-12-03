@@ -428,6 +428,17 @@ BOOST_AUTO_TEST_CASE(ewah_bitwise_or)
     "                       11000000000000000000000000000000000000000";
 
   BOOST_CHECK_EQUAL(to_string(ewah2 | ewah3), str);
+
+  ewah_bitstream ebs1, ebs2;
+  ebs1.append(50, true);
+  ebs2.append(50, false);
+  ebs2.append(50, true);
+
+  str =
+    "1000000000000000000000000000000010000000000000000000000000000000\n"
+    "                            111111111111111111111111111111111111";
+  
+  BOOST_CHECK_EQUAL(to_string(ebs1 | ebs2), str);
 }
 
 BOOST_AUTO_TEST_CASE(ewah_bitwise_xor)
