@@ -92,7 +92,7 @@ void partition::update(event_id base, size_t n)
 {
   bitmap_index::bitstream_type bs;
   assert(base > 0);
-  bs.append(base - 1, false);
+  bs.append(base, false);
   bs.append(n, true);
   if (! coverage_)
     coverage_ = std::move(bs);
