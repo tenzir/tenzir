@@ -14,7 +14,7 @@ namespace vast {
 
 /// The base class for all bitstream implementations.
 template <typename Derived>
-class bitstream_base : util::printable<bitstream_base<Derived>>
+class bitstream_base
 {
   friend Derived;
 
@@ -207,14 +207,6 @@ private:
   {
     derived().deserialize(source);
   }
-
-  template <typename Iterator>
-  bool print(Iterator& out) const
-  {
-    // Unlike a plain bitvector, we print bitstreams from LSB to MSB.
-    render(out, bits(), false, false, 0);
-    return true;
-  };
 };
 
 template <typename Derived>
@@ -564,7 +556,8 @@ private:
 
 /// A polymorphic bitstream with value semantics.
 class bitstream : public bitstream_base<bitstream>,
-                  util::equality_comparable<bitstream>
+                  util::equality_comparable<bitstream>,
+                  util::printable<bitstream>
 {
 public:
   using iterator = detail::bitstream_concept::iterator;
@@ -619,15 +612,44 @@ private:
 
 private:
   friend access;
+
   void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
+
+  template <typename Iterator>
+  bool print(Iterator& out) const
+  {
+    for (size_t i = 0; i < bits().blocks(); ++i)
+    {
+      if (i != bits().blocks() - 1)
+      {
+        if (! bitvector::print(out, bits().block(i)))
+          return false;
+        *out++ = '\n';
+      }
+      else
+      {
+        auto remaining = size() % block_width;
+        if (remaining == 0)
+          remaining = block_width;
+        for (size_t i = 0; i < block_width - remaining; ++i)
+          *out++ = ' ';
+        if (! bitvector::print(out, bits().block(i), true, 0, remaining))
+          return false;
+      }
+    }
+
+    return true;
+  };
+
   friend bool operator==(bitstream const& x, bitstream const& y);
 };
 
 /// An uncompressed bitstream that simply forwards all operations to its
 /// underlying ::bitvector.
 class null_bitstream : public bitstream_base<null_bitstream>,
-                       util::totally_ordered<null_bitstream>
+                       util::totally_ordered<null_bitstream>,
+                       util::printable<null_bitstream>
 {
 public:
   using const_iterator = class iterator
@@ -712,6 +734,14 @@ private:
   friend access;
   void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
+
+  template <typename Iterator>
+  bool print(Iterator& out) const
+  {
+    // We print NULL bitstreams from LSB to MSB to underline the stream
+    // character.
+    return render(out, bits(), false, false, 0);
+  };
 
   friend bool operator==(null_bitstream const& x, null_bitstream const& y);
   friend bool operator<(null_bitstream const& x, null_bitstream const& y);
