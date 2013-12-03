@@ -15,7 +15,7 @@ class null_bitstream;
 class bitmap_index : util::equality_comparable<bitmap_index>
 {
 public:
-  using bitstream_type = null_bitstream;
+  using bitstream_type = ewah_bitstream;
 
   /// Factory function to construct a bitmap index for a given value type.
   /// @param t The value type to create an index for.
