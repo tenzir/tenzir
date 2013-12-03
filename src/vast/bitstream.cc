@@ -135,6 +135,12 @@ void bitstream::push_back_impl(bool bit)
   concept_->push_back_impl(bit);
 }
 
+void bitstream::trim_impl()
+{
+  assert(concept_);
+  concept_->trim_impl();
+}
+
 void bitstream::clear_impl() noexcept
 {
   assert(concept_);
@@ -332,6 +338,15 @@ void null_bitstream::append_block_impl(block_type block, size_type bits)
 void null_bitstream::push_back_impl(bool bit)
 {
   bits_.push_back(bit);
+}
+
+void null_bitstream::trim_impl()
+{
+  auto last = find_last();
+  if (last == npos)
+    bits_.clear();
+  else
+    bits_.resize(last + 1);
 }
 
 void null_bitstream::clear_impl() noexcept
@@ -818,6 +833,129 @@ void ewah_bitstream::push_back_impl(bool bit)
 
   bits_.push_back(bit);
   ++num_bits_;
+}
+
+void ewah_bitstream::trim_impl()
+{
+  if (empty())
+    return;
+
+  auto marker = bits_.block(last_marker_);
+  auto num_dirty = marker_num_dirty(marker);
+  auto num_clean = marker_num_clean(marker);
+
+  if (bits_.last_block() != 0)
+  {
+    auto last_pos = (num_bits_ - 1) % block_width;
+    auto high_pos = bitvector::highest_bit(bits_.last_block());
+    assert(last_pos >= high_pos);
+    num_bits_ -= last_pos - high_pos;
+    return;
+  }
+  else if (last_marker_ == 0 && ! marker)
+  {
+    clear();
+    return;
+  }
+
+  // Strip the last block of zeros.
+  auto last_bits = (num_bits_ - 1) % block_width + 1;
+  bits_.resize(bits_.size() - last_bits);
+  num_bits_ -= last_bits;
+
+  if (num_dirty != 0)
+  {
+    // We have dirty blocks and can simply use the last one, of which we also
+    // trim the 0s.
+    auto last_pos = (num_bits_ - 1) % block_width;
+    auto high_pos = bitvector::highest_bit(bits_.last_block());
+
+    assert(last_pos >= high_pos);
+    num_bits_ -= last_pos - high_pos;
+
+    bits_.block(last_marker_) = marker_num_dirty(marker, --num_dirty);
+  }
+  else if (marker_type(marker)) // [*]
+  {
+    // If there are no more dirty blocks, the last block contains no 1-bit, but
+    // the last sequence describes a 1-fill, we can take out a block of 1s and
+    // make it the new last block. If this was the last clean block, we have to
+    // replace the (now stale) marker with a block of 1s.
+    if (num_clean > 1)
+    {
+      bits_.block(last_marker_) = marker_num_clean(marker, --num_clean);
+      bits_.resize(bits_.size() + block_width);
+    }
+
+    bits_.last_block() = all_one;
+  }
+  else if (last_marker_ == 0)
+  {
+    // We have only one marker with no dirty blocks and at most 0-fills.
+    clear();
+  }
+  else
+  {
+    // The last sequence is a 0-fill with unknown blocks before the last
+    // marker. Thus we have to perform a sequential scan from the beginning and
+    // stop at the point where no further 1-bits occur.
+    size_type total_bits = 0, num_bits = 0, i = 0, prev = 0;
+    while (true)
+    {
+      auto m = bits_.block(i);
+      num_dirty = marker_num_dirty(m);
+      num_clean = marker_num_clean(m);
+      total_bits += (num_clean + num_dirty) * block_width;
+
+      if (marker_type(m) || num_dirty > 0)
+      {
+        prev = i;
+        num_bits = total_bits;
+      }
+
+      auto off = num_dirty + 1;
+      if (i + off + 1 >= bits_.blocks())
+        break;
+
+      i += off;
+    }
+
+    // If they were the same, it would mean that the last marker was the very
+    // first one, which we handle already above.
+    assert(i != last_marker_);
+
+    last_marker_ = prev;
+    marker = bits_.block(last_marker_);
+    num_dirty = marker_num_dirty(marker);
+    num_clean = marker_num_clean(marker);
+
+    // Everything after 'prev' is 0-fill, which we ditch.
+    num_bits_ = num_bits;
+    bits_.resize((prev + 1 + num_dirty) * block_width);
+
+    if (num_dirty > 0)
+    {
+      // We have dirty blocks and just use the last one as our new ultimate
+      // dirty block.
+      bits_.block(last_marker_) = marker_num_dirty(marker, --num_dirty);
+      auto last_pos = (num_bits_ - 1) % block_width;
+      auto high_pos = bitvector::highest_bit(bits_.last_block());
+      assert(last_pos >= high_pos);
+      num_bits_ -= last_pos - high_pos;
+    }
+    else
+    {
+      // We have a 1-fill and cut out one for our last dirty block (or replace
+      // the block if it was the last).
+      if (num_clean > 1)
+      {
+        bits_.block(last_marker_) = marker_num_clean(marker, --num_clean);
+        bits_.resize(bits_.size() + block_width);
+      }
+
+      bits_.last_block() = all_one;
+    }
+  }
 }
 
 void ewah_bitstream::clear_impl() noexcept

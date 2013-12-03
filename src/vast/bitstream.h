@@ -133,6 +133,11 @@ public:
     return true;
   }
 
+  void trim()
+  {
+    derived().trim_impl();
+  }
+
   void clear() noexcept
   {
     derived().clear_impl();
@@ -373,6 +378,7 @@ public:
   virtual void append_impl(size_type n, bool bit) = 0;
   virtual void append_block_impl(block_type block, size_type bits) = 0;
   virtual void push_back_impl(bool bit) = 0;
+  virtual void trim_impl() = 0;
   virtual void clear_impl() noexcept = 0;
   virtual bool at(size_type i) const = 0;
   virtual size_type size_impl() const = 0;
@@ -475,6 +481,11 @@ public:
   virtual void push_back_impl(bool bit) final
   {
     bitstream_.push_back_impl(bit);
+  }
+
+  virtual void trim_impl() final
+  {
+    bitstream_.trim_impl();
   }
 
   virtual void clear_impl() noexcept final
@@ -591,6 +602,7 @@ private:
   void append_impl(size_type n, bool bit);
   void append_block_impl(block_type block, size_type bits);
   void push_back_impl(bool bit);
+  void trim_impl();
   void clear_impl() noexcept;
   bool at(size_type i) const;
   size_type size_impl() const;
@@ -680,6 +692,7 @@ private:
   void append_impl(size_type n, bool bit);
   void append_block_impl(block_type block, size_type bits);
   void push_back_impl(bool bit);
+  void trim_impl();
   void clear_impl() noexcept;
   bool at(size_type i) const;
   size_type size_impl() const;
@@ -793,6 +806,7 @@ private:
   void append_impl(size_type n, bool bit);
   void append_block_impl(block_type block, size_type bits);
   void push_back_impl(bool bit);
+  void trim_impl();
   void clear_impl() noexcept;
   bool at(size_type i) const;
   size_type size_impl() const;
@@ -919,23 +933,42 @@ private:
   friend bool operator<(ewah_bitstream const& x, ewah_bitstream const& y);
 };
 
-
 /// Performs a bitwise operation on two bitstreams.
 /// The algorithm traverses the two bitstreams side by side.
+///
+/// @param lhs The LHS of the operation.
+///
+/// @param rhs The RHS of the operation
+///
+/// @param fill_lhs A boolean flag that controls the algorithm behavior after
+/// one sequence has reached its end. If `true`, the algorithm will append the
+/// remaining bits of *lhs* to the result iff *lhs* is the longer bitstream. If
+/// `false`, the algorithm returns the result after the first sequence has
+/// reached an end.
+///
+/// @param fill_rhs The same as *fill_lhs*, except that it concerns *rhs*.
+///
+/// @param op The bitwise operation as block-wise lambda, e.g., for XOR:
+///
+///     [](block_type lhs, block_type rhs) { return lhs ^ rhs; }
+///
+/// @returns The result of a bitwise operation between *lhs* and *rhs*
+/// according to *op*.
 template <typename Bitstream, typename Operation>
-Bitstream apply(Bitstream const& x, Bitstream const& y, Operation op)
+Bitstream apply(Bitstream const& lhs, Bitstream const& rhs,
+                bool fill_lhs, bool fill_rhs, Operation op)
 {
-  auto rx = typename Bitstream::sequence_range{x};
-  auto ry = typename Bitstream::sequence_range{y};
+  auto rx = typename Bitstream::sequence_range{lhs};
+  auto ry = typename Bitstream::sequence_range{rhs};
   auto ix = rx.begin();
   auto iy = ry.begin();
 
   if (ix == rx.end() && iy == ry.end())
     return {};
   if (ix == rx.end())
-    return y;
+    return rhs;
   else if (iy == ry.end())
-    return x;
+    return lhs;
 
   Bitstream result;
   auto first = std::min(ix->offset, iy->offset);
@@ -982,27 +1015,33 @@ Bitstream apply(Bitstream const& x, Bitstream const& y, Operation op)
         ly = iy->length;
   }
 
-  // Add the remaining sequences of the longer bitstream to the result.
-
-  while (ix != rx.end())
+  if (fill_rhs)
   {
-    if (ix->is_fill())
-      result.append(lx, ix->data);
-    else
-      result.append_block(ix->data, ix->length);
-    if (++ix != rx.end())
-      lx = ix->length;
+    while (ix != rx.end())
+    {
+      if (ix->is_fill())
+        result.append(lx, ix->data);
+      else
+        result.append_block(ix->data, ix->length);
+      if (++ix != rx.end())
+        lx = ix->length;
+    }
   }
 
-  while (iy != ry.end())
+  if (fill_lhs)
   {
-    if (iy->is_fill())
-      result.append(ly, iy->data);
-    else
-      result.append_block(iy->data, iy->length);
-    if (++iy != ry.end())
-      ly = iy->length;
+    while (iy != ry.end())
+    {
+      if (iy->is_fill())
+        result.append(ly, iy->data);
+      else
+        result.append_block(iy->data, iy->length);
+      if (++iy != ry.end())
+        ly = iy->length;
+    }
   }
+
+  result.trim();
 
   return result;
 }
@@ -1011,35 +1050,40 @@ template <typename Bitstream>
 Bitstream and_(Bitstream const& lhs, Bitstream const& rhs)
 {
   using block_type = typename Bitstream::block_type;
-  return apply(lhs, rhs, [](block_type x, block_type y) { return x & y; });
+  return apply(lhs, rhs, false, false,
+               [](block_type x, block_type y) { return x & y; });
 }
 
 template <typename Bitstream>
 Bitstream or_(Bitstream const& lhs, Bitstream const& rhs)
 {
   using block_type = typename Bitstream::block_type;
-  return apply(lhs, rhs, [](block_type x, block_type y) { return x | y; });
+  return apply(lhs, rhs, true, true,
+               [](block_type x, block_type y) { return x | y; });
 }
 
 template <typename Bitstream>
 Bitstream xor_(Bitstream const& lhs, Bitstream const& rhs)
 {
   using block_type = typename Bitstream::block_type;
-  return apply(lhs, rhs, [](block_type x, block_type y) { return x ^ y; });
+  return apply(lhs, rhs, true, true,
+               [](block_type x, block_type y) { return x ^ y; });
 }
 
 template <typename Bitstream>
 Bitstream nand_(Bitstream const& lhs, Bitstream const& rhs)
 {
   using block_type = typename Bitstream::block_type;
-  return apply(lhs, rhs, [](block_type x, block_type y) { return x & ~y; });
+  return apply(lhs, rhs, true, false,
+               [](block_type x, block_type y) { return x & ~y; });
 }
 
 template <typename Bitstream>
 Bitstream nor_(Bitstream const& lhs, Bitstream const& rhs)
 {
   using block_type = typename Bitstream::block_type;
-  return apply(lhs, rhs, [](block_type x, block_type y) { return x | ~y; });
+  return apply(lhs, rhs, true, true,
+               [](block_type x, block_type y) { return x | ~y; });
 }
 
 /// Transposes a vector of bitstreams into a character matrix of 0s and 1s.
