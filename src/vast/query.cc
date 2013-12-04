@@ -170,7 +170,8 @@ std::vector<event_id> query::scan() const
   {
     auto& s = *i;
     auto prev_hit = unprocessed_.find_prev(s->base());
-    if (prev_hit != bitstream::npos
+    if (prev_hit != 0 // May occur when results get bitwise flipped.
+        && prev_hit != bitstream::npos
         && ! ((i != segments_.begin() && (*(i - 1))->contains(prev_hit))))
       eids.push_back(prev_hit);
 
