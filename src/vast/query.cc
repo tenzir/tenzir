@@ -215,7 +215,7 @@ void query_actor::act()
         cow<bitstream> cbs = *tuple_cast<bitstream>(last_dequeued());
         VAST_LOG_ACTOR_DEBUG("got new result starting at " <<
                              (cbs->empty() ? 0 : cbs->find_first()));
-        query_.update(*cbs);
+        query_.update(std::move(*cbs));
 
         send(self, atom("fetch"));
         send(self, atom("extract"));
