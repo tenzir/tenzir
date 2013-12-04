@@ -963,6 +963,9 @@ private:
   friend bool operator<(ewah_bitstream const& x, ewah_bitstream const& y);
 };
 
+/// The default type for encoded bitstream.
+using default_encoded_bitstream = ewah_bitstream;
+
 /// Performs a bitwise operation on two bitstreams.
 /// The algorithm traverses the two bitstreams side by side.
 ///

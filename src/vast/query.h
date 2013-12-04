@@ -58,7 +58,7 @@ public:
   optional<event_id> last() const;
 
 private:
-  using bitstream_type = bitmap_index::bitstream_type;
+  using bitstream_type = default_encoded_bitstream;
 
   expr::ast ast_;
   std::function<void(event)> fn_;

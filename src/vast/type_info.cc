@@ -8,11 +8,7 @@
 #include "vast/object.h"
 #include "vast/value.h"
 #include "vast/serialization.h"
-#include "vast/bitmap_index/arithmetic.h"
-#include "vast/bitmap_index/address.h"
-#include "vast/bitmap_index/port.h"
-#include "vast/bitmap_index/string.h"
-#include "vast/bitmap_index/time.h"
+#include "vast/bitmap_index.h"
 #include "vast/detail/cppa_type_info.h"
 #include "vast/detail/type_manager.h"
 #include "vast/util/tuple.h"
@@ -166,14 +162,22 @@ void announce_builtin_types()
   > bitstream_types;
 
   std::tuple<
-    arithmetic_bitmap_index<bool_type>,
-    arithmetic_bitmap_index<int_type>,
-    arithmetic_bitmap_index<uint_type>,
-    arithmetic_bitmap_index<double_type>,
-    address_bitmap_index,
-    port_bitmap_index,
-    time_bitmap_index,
-    string_bitmap_index
+    arithmetic_bitmap_index<null_bitstream, bool_type>,
+    arithmetic_bitmap_index<null_bitstream, int_type>,
+    arithmetic_bitmap_index<null_bitstream, uint_type>,
+    arithmetic_bitmap_index<null_bitstream, double_type>,
+    address_bitmap_index<null_bitstream>,
+    port_bitmap_index<null_bitstream>,
+    time_bitmap_index<null_bitstream>,
+    string_bitmap_index<null_bitstream>,
+    arithmetic_bitmap_index<ewah_bitstream, bool_type>,
+    arithmetic_bitmap_index<ewah_bitstream, int_type>,
+    arithmetic_bitmap_index<ewah_bitstream, uint_type>,
+    arithmetic_bitmap_index<ewah_bitstream, double_type>,
+    address_bitmap_index<ewah_bitstream>,
+    port_bitmap_index<ewah_bitstream>,
+    time_bitmap_index<ewah_bitstream>,
+    string_bitmap_index<ewah_bitstream>
   > bitmap_index_types;
 
   util::for_each(integral_types, type_announcer{});

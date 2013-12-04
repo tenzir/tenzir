@@ -1,8 +1,5 @@
 #include "vast/event_index.h"
 
-#include "vast/bitmap_index/address.h"
-#include "vast/bitmap_index/arithmetic.h"
-#include "vast/bitmap_index/port.h"
 #include "vast/util/convert.h"
 
 using namespace cppa;
@@ -434,7 +431,7 @@ bool event_arg_index::index_record(record const& r, uint64_t id, offset& o)
       }
       else
       {
-        auto unique = bitmap_index::create(v.which());
+        auto unique = make_bitmap_index<bitstream_type>(v.which());
         auto bmi = std::shared_ptr<bitmap_index>{unique.release()};
         idx = bmi.get();
         idx->append(1, false); // ID 0 is not a valid event.

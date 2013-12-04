@@ -44,10 +44,6 @@ set(libvast_sources
   uuid.cc
   value.cc
   value_type.cc
-  bitmap_index/address.cc
-  bitmap_index/port.cc
-  bitmap_index/string.cc
-  bitmap_index/time.cc
   detail/cppa_serialization.cc
   detail/cppa_type_info.cc
   detail/demangle.cc

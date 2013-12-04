@@ -8,8 +8,7 @@
 #include "vast/file_system.h"
 #include "vast/offset.h"
 #include "vast/search_result.h"
-#include "vast/bitmap_index/string.h"
-#include "vast/bitmap_index/time.h"
+#include "vast/bitmap_index.h"
 #include "vast/io/serialization.h"
 
 namespace vast {
@@ -69,6 +68,8 @@ public:
   }
 
 protected:
+  using bitstream_type = default_encoded_bitstream;
+
   path const dir_;
 
 private:
@@ -102,8 +103,8 @@ private:
   struct loader;
   struct querier;
 
-  time_bitmap_index timestamp_;
-  string_bitmap_index name_;
+  time_bitmap_index<bitstream_type> timestamp_;
+  string_bitmap_index<bitstream_type> name_;
   bool exists_ = false;
 };
 

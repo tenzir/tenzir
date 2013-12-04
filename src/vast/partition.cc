@@ -90,7 +90,7 @@ void partition::save()
 
 void partition::update(event_id base, size_t n)
 {
-  bitmap_index::bitstream_type bs;
+  default_encoded_bitstream bs;
   assert(base > 0);
   bs.append(base, false);
   bs.append(n, true);

@@ -39,7 +39,7 @@ BOOST_AUTO_TEST_CASE(vector_storage)
 
 BOOST_AUTO_TEST_CASE(basic_bitmap)
 {
-  bitmap<int> bm, bm2;
+  bitmap<int, null_bitstream> bm, bm2;
   BOOST_REQUIRE(bm.push_back(42));
   BOOST_REQUIRE(bm.push_back(84));
   BOOST_REQUIRE(bm.push_back(42));
