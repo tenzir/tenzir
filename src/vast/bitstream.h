@@ -5,12 +5,15 @@
 #include "vast/bitvector.h"
 #include "vast/serialization.h"
 #include "vast/traits.h"
+#include "vast/util/convert.h"
 #include "vast/util/make_unique.h"
 #include "vast/util/operators.h"
 #include "vast/util/print.h"
 #include "vast/util/range.h"
 
 namespace vast {
+
+class bitstream;
 
 /// The base class for all bitstream implementations.
 template <typename Derived>
@@ -207,6 +210,11 @@ private:
   {
     derived().deserialize(source);
   }
+
+  bool convert(std::string& str) const
+  {
+    return derived().convert(str);
+  }
 };
 
 template <typename Derived>
@@ -261,7 +269,6 @@ private:
 
   bitsequence seq_;
 };
-
 
 /// The concept for bitstreams.
 class bitstream_concept
@@ -388,8 +395,10 @@ protected:
 
 private:
   friend access;
+  friend bitstream;
   virtual void serialize(serializer& sink) const = 0;
   virtual void deserialize(deserializer& source) = 0;
+  virtual bool convert(std::string& str) const = 0;
 };
 
 
@@ -550,6 +559,11 @@ private:
   {
     source >> bitstream_;
   }
+
+  virtual bool convert(std::string& str) const final
+  {
+    return vast::convert(bitstream_, str);
+  }
 };
 
 } // namespace detail
@@ -615,6 +629,7 @@ private:
 
   void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
+  bool convert(std::string& str) const;
 
   template <typename Iterator>
   bool print(Iterator& out) const
@@ -734,6 +749,7 @@ private:
   friend access;
   void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
+  bool convert(std::string& str) const;
 
   template <typename Iterator>
   bool print(Iterator& out) const
@@ -932,6 +948,7 @@ private:
   friend access;
   void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
+  bool convert(std::string& str) const;
 
   template <typename Iterator>
   bool print(Iterator& out) const

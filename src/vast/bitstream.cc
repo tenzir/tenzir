@@ -223,6 +223,12 @@ void bitstream::deserialize(deserializer& source)
     source >> concept_;
 }
 
+bool bitstream::convert(std::string& str) const
+{
+  assert(concept_);
+  return concept_->convert(str);
+}
+
 bool operator==(bitstream const& x, bitstream const& y)
 {
   return x.equals(y);
@@ -412,6 +418,12 @@ void null_bitstream::serialize(serializer& sink) const
 void null_bitstream::deserialize(deserializer& source)
 {
   source >> bits_;
+}
+
+bool null_bitstream::convert(std::string& str) const
+{
+  str = to<std::string>(bits_, false, false, 0);
+  return true;
 }
 
 bool operator==(null_bitstream const& x, null_bitstream const& y)
@@ -1161,6 +1173,11 @@ void ewah_bitstream::serialize(serializer& sink) const
 void ewah_bitstream::deserialize(deserializer& source)
 {
   source >> num_bits_ >> last_marker_ >> bits_;
+}
+
+bool ewah_bitstream::convert(std::string& str) const
+{
+  return vast::convert(*this, str);
 }
 
 bool operator==(ewah_bitstream const& x, ewah_bitstream const& y)
