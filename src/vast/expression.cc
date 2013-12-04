@@ -351,9 +351,10 @@ bool predicate::is_less_than(node const& other) const
 {
   if (typeid(*this) != typeid(other))
     return typeid(*this).hash_code() < typeid(other).hash_code();
-  auto& that = static_cast<n_ary_operator const&>(other);
-  return op < static_cast<predicate const&>(other).op
-      || std::lexicographical_compare(
+  auto& that = static_cast<predicate const&>(other);
+  return op != that.op
+    ? op < that.op
+    : std::lexicographical_compare(
           operands.begin(), operands.end(),
           that.operands.begin(), that.operands.end(),
           [](std::unique_ptr<node> const& x, std::unique_ptr<node> const& y)

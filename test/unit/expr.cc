@@ -25,8 +25,21 @@ BOOST_FIXTURE_TEST_SUITE(expression_tests, expression_fixture)
 
 BOOST_AUTO_TEST_CASE(partial_order_test)
 {
-  BOOST_CHECK_LT(expr::ast{":port == 53/tcp"}, expr::ast{":port == 54/tcp"});
-  BOOST_CHECK_LT(expr::ast{":port == 54/tcp"}, expr::ast{":port > 53/tcp"});
+  auto lhs = expr::ast{":string == \"tcp\""};
+  auto rhs = expr::ast{":string != \"http\""};
+  BOOST_CHECK_LT(lhs, rhs);
+
+  lhs = expr::ast{":string == \"http\""};
+  rhs = expr::ast{":string != \"http\""};
+  BOOST_CHECK_LT(lhs, rhs);
+
+  lhs = expr::ast{":port == 53/tcp"};
+  rhs = expr::ast{":port == 54/tcp"};
+  BOOST_CHECK_LT(lhs, rhs);
+
+  lhs = expr::ast{":port == 54/tcp"};
+  rhs = expr::ast{":port > 53/tcp"};
+  BOOST_CHECK_LT(lhs, rhs);
 }
 
 // TODO: Implement constant folding.
