@@ -52,19 +52,19 @@ struct conjunction_evaluator : public expr::default_const_visitor
   virtual void visit(expr::conjunction const& conj)
   {
     for (auto& operand : conj.operands)
-      if (complete)
+      if (complete_)
         operand->accept(*this);
   }
 
   virtual void visit(expr::disjunction const& disj)
   {
-    if (complete)
+    if (complete_)
       update(disj);
   }
 
   virtual void visit(expr::predicate const& pred)
   {
-    if (complete)
+    if (complete_)
       update(pred);
   }
 
@@ -75,14 +75,14 @@ struct conjunction_evaluator : public expr::default_const_visitor
     auto& child_result = i->second.result;
     if (! child_result)
     {
-      complete = false;
+      complete_ = false;
       return;
     }
-    result &= child_result;
+    result_ &= child_result;
   }
 
-  bool complete = true;
-  search_result result;
+  bool complete_ = true;
+  search_result result_;
   std::map<expr::ast, search::state> const& state;
 };
 
@@ -117,10 +117,10 @@ struct disjunction_evaluator : public expr::default_const_visitor
     assert(i != state.end());
     auto& child_result = i->second.result;
     if (child_result)
-      result |= child_result;
+      result_ |= child_result;
   }
 
-  search_result result;
+  search_result result_;
   std::map<expr::ast, search::state> const& state;
 };
 
@@ -152,8 +152,8 @@ public:
 
     conjunction_evaluator ce{state_};
     ast.accept(ce);
-    if (ce.complete)
-      state_[ast].result = std::move(ce.result);
+    if (ce.complete_)
+      state_[ast].result = std::move(ce.result_);
   }
 
   virtual void visit(expr::disjunction const& disj)
@@ -173,7 +173,7 @@ public:
 
     disjunction_evaluator de{state_};
     ast.accept(de);
-    state_[ast].result = std::move(de.result);
+    state_[ast].result = std::move(de.result_);
   }
 
   virtual void visit(expr::predicate const& pred)
@@ -218,16 +218,16 @@ std::vector<expr::ast> search::update(expr::ast const& ast,
     VAST_LOG_DEBUG("evaluating conjunction " << ast);
     conjunction_evaluator ce{state_};
     ast.accept(ce);
-    if (ce.complete)
-      ast_state.result = std::move(ce.result);
+    if (ce.complete_)
+      ast_state.result = std::move(ce.result_);
   }
   else if (ast.is_disjunction())
   {
     VAST_LOG_DEBUG("evaluating disjunction " << ast);
     disjunction_evaluator de{state_};
     ast.accept(de);
-    if (! ast_state.result || (de.result && de.result != ast_state.result))
-      ast_state.result = std::move(de.result);
+    if (! ast_state.result || (de.result_ && de.result_ != ast_state.result))
+      ast_state.result = std::move(de.result_);
   }
   else if (! ast_state.result)
   {
