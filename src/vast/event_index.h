@@ -82,8 +82,6 @@ private:
   {
     return static_cast<Derived*>(this);
   }
-
-  bool loadable_ = false;
 };
 
 class event_meta_index : public event_index<event_meta_index>
@@ -129,9 +127,9 @@ private:
 
   bool index_record(record const& r, uint64_t id, offset& o);
 
-  std::map<offset, std::shared_ptr<bitmap_index>> args_;
-  std::multimap<value_type, std::shared_ptr<bitmap_index>> types_;
   std::multimap<value_type, path> files_;
+  std::map<offset, std::shared_ptr<bitmap_index>> offsets_;
+  std::multimap<value_type, std::shared_ptr<bitmap_index>> types_;
 };
 
 } // namespace vast

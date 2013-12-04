@@ -167,7 +167,7 @@ struct event_arg_index::loader : expr::default_const_visitor
 
   virtual void visit(expr::offset_extractor const& oe)
   {
-    if (idx.args_.count(oe.off))
+    if (idx.offsets_.count(oe.off))
       return;
 
     auto filename = idx.pathify(oe.off);
@@ -193,7 +193,7 @@ struct event_arg_index::loader : expr::default_const_visitor
     VAST_LOG_DEBUG("loaded index " << filename.trim(-4) <<
                    " (" << bmi->size() << " bits)");
 
-    idx.args_.emplace(oe.off, bmi);
+    idx.offsets_.emplace(oe.off, bmi);
   }
 
   virtual void visit(expr::type_extractor const& te)
@@ -214,7 +214,7 @@ struct event_arg_index::loader : expr::default_const_visitor
         return;
       }
 
-      if (idx.args_.count(o))
+      if (idx.offsets_.count(o))
         // We have issued an offset query in the past and loaded the
         // corresponding index already.
         return;
@@ -231,8 +231,8 @@ struct event_arg_index::loader : expr::default_const_visitor
       VAST_LOG_DEBUG("loaded index " << i->second.trim(-4) << " (" <<
                      bmi->size() << " bits)");
 
-      assert(! idx.args_.count(o));
-      idx.args_.emplace(o, bmi);
+      assert(! idx.offsets_.count(o));
+      idx.offsets_.emplace(o, bmi);
       idx.types_.emplace(vt, bmi);
     }
   }
@@ -265,8 +265,8 @@ struct event_arg_index::querier : expr::default_const_visitor
     assert(op);
     assert(val);
 
-    auto i = idx.args_.find(oe.off);
-    if (i == idx.args_.end())
+    auto i = idx.offsets_.find(oe.off);
+    if (i == idx.offsets_.end())
       return;
 
     if (auto r = i->second->lookup(*op, *val))
@@ -368,7 +368,7 @@ void event_arg_index::store()
     if (inverse.find(p.second) == inverse.end())
       inverse.emplace(p.second, p.first);
 
-  for (auto& p : args_)
+  for (auto& p : offsets_)
   {
     if (p.second->empty() || p.second->appended() == 0)
       continue;
@@ -424,8 +424,8 @@ bool event_arg_index::index_record(record const& r, uint64_t id, offset& o)
     else if (! v.invalid() && v.which() != table_type)
     {
       bitmap_index* idx;
-      auto i = args_.find(o);
-      if (i != args_.end())
+      auto i = offsets_.find(o);
+      if (i != offsets_.end())
       {
         idx = i->second.get();
       }
@@ -435,7 +435,7 @@ bool event_arg_index::index_record(record const& r, uint64_t id, offset& o)
         auto bmi = std::shared_ptr<bitmap_index>{unique.release()};
         idx = bmi.get();
         idx->append(1, false); // ID 0 is not a valid event.
-        args_.emplace(o, bmi);
+        offsets_.emplace(o, bmi);
         types_.emplace(v.which(), std::move(bmi));
       }
       assert(idx != nullptr);
