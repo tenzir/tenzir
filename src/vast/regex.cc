@@ -6,14 +6,8 @@ namespace vast {
 
 regex regex::glob(std::string const& str)
 {
-#ifdef VAST_CLANG
   auto rx = std::regex_replace(str, std::regex("\\*"), ".*");
-  rx = std::regex_replace(rx, std::regex("\\?"), ".");
-#else
-  auto rx = boost::regex_replace(str, boost::regex("\\*"), ".*");
-  rx = boost::regex_replace(rx, boost::regex("\\?"), ".");
-#endif
-  return regex(rx);
+  return {std::regex_replace(rx, std::regex("\\?"), ".")};
 }
 
 regex::regex(string str)
@@ -23,23 +17,17 @@ regex::regex(string str)
 }
 
 bool regex::match(std::string const& str,
-                  std::function<void(std::string const&)> f) const
+           std::function<void(std::string const&)> f) const
 {
-#ifdef VAST_CLANG
-  std::sregex_token_iterator i(str.begin(), str.end(), rx_);
+  std::sregex_token_iterator i{str.begin(), str.end(), rx_};
   std::sregex_token_iterator const end;
-#else
-  boost::sregex_token_iterator i(str.begin(), str.end(), rx_);
-  boost::sregex_token_iterator const end;
-#endif
 
-  if (i == end)
-    return false;
   while (i != end)
   {
-    f(*i);
+    f(i->str());
     ++i;
   }
+
   return true;
 }
 

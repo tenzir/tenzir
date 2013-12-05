@@ -66,7 +66,7 @@ if (BOOST_ROOT)
   # Prevent falling back to system paths when using a custom Boost prefix.
   set(Boost_NO_SYSTEM_PATHS true)
 endif ()
-find_package(Boost 1.50.0 COMPONENTS regex unit_test_framework)
+find_package(Boost 1.50.0 COMPONENTS unit_test_framework)
 if (Boost_FOUND)
   include_directories(${Boost_INCLUDE_DIRS})
 else ()
