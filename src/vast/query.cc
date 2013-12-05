@@ -154,6 +154,11 @@ optional<size_t> query::extract()
     unprocessed_ -= extracted_;
     masked_ -= extracted_;
     extracted_ = bitstream_type{};
+
+    // We've processed this segment entirely and the next call to extract
+    // should instantiate a new reader for a different segment.
+    assert(masked_.empty());
+    reader_.reset();
   }
 
   if (n == 0)
