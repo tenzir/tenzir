@@ -20,7 +20,7 @@ type_manager::add(std::type_info const& ti,
   auto gti = f(++id_);
 
   VAST_LOG_DEBUG("registering new type " << detail::demangle(ti.name()) <<
-                 " with id " << id_ << " (mangled name: " << ti.name() << ")");
+                 " with id " << id_);
 
   by_id_.emplace(gti->id(), gti);
   by_name_.emplace(gti->name(), gti);
