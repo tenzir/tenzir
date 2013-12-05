@@ -279,17 +279,13 @@ struct event_arg_index::querier : expr::default_const_visitor
     assert(val);
     assert(te.type == val->which());
 
-    auto i = idx.types_.find(te.type);
-    if (i == idx.types_.end())
-      return;
-
     auto er = idx.types_.equal_range(te.type);
     for (auto j = er.first; j != er.second; ++j)
     {
       if (auto r = j->second->lookup(*op, *val))
       {
         if (result)
-          result |= bitstream{std::move(*r)};
+          result |= *r;
         else
           result = std::move(*r);
       }
