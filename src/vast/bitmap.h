@@ -666,15 +666,8 @@ public:
 
   /// Constructs an empty bitmap.
   bitmap(binner_type binner = binner_type{}, coder_type coder = coder_type{})
-    : coder_(coder), binner_(binner)
+    : coder_{coder}, binner_{binner}
   {
-  }
-
-  friend bool operator==(bitmap const& x, bitmap const& y)
-  {
-    return x.coder_ == y.coder_
-        && x.binner_ == y.binner_
-        && x.valid_ == y.valid_;
   }
 
   /// Adds a value to the bitmap. For example, in the case of equality
@@ -729,6 +722,13 @@ public:
   Bitstream const* lookup_raw(U const& x) const
   {
     return coder_.store().find(x);
+  }
+
+  /// Retrieves the bitstream marking the valid results.
+  /// @returns The bitstream holding the valid results.
+  Bitstream const& valid() const
+  {
+    return valid_;
   }
 
   /// Retrieves the bitmap size.
@@ -787,6 +787,13 @@ private:
 
     return render(out, cols);
   }
+
+  friend bool operator==(bitmap const& x, bitmap const& y)
+  {
+    return x.coder_ == y.coder_
+        && x.binner_ == y.binner_
+        && x.valid_ == y.valid_;
+  }
 };
 
 /// A bitmap specialization for `bool`.
@@ -831,6 +838,11 @@ public:
       case equal:
         return {(x ? bool_ : ~bool_) & valid_};
     }
+  }
+
+  Bitstream const& valid() const
+  {
+    return valid_;
   }
 
   size_t size() const

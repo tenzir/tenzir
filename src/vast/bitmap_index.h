@@ -273,11 +273,21 @@ public:
 
     auto i = dictionary_[to<std::string>(val.get<string>())];
     if (! i)
-      return {};
+    {
+      if (op == not_equal)
+        return {bitmap_.valid()};
+      else
+        return {};
+    }
 
     auto bs = bitmap_[*i];
     if (! bs)
-      return {};
+    {
+      if (op == not_equal)
+        return {bitmap_.valid()};
+      else
+        return {};
+    }
 
     return {std::move(op == equal ? *bs : bs->flip())};
   }
