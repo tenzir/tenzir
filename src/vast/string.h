@@ -210,6 +210,28 @@ public:
   /// @returns The substring starting at *pos* of size *length*.
   string substr(size_type pos, size_type length = npos) const;
 
+  /// Substitutes a replacement string for the first occurrence of a
+  /// pattern.
+  ///
+  /// @param pat The pattern to find in this string.
+  ///
+  /// @param repl The string to substitute for the first occurrence of *pat*.
+  ///
+  /// @returns A new string with the first occurrence of *pat* replaced with
+  /// *repl* or a copy of `*this` if *pat* does not exist.
+  string sub(string const& pat, string const& repl) const;
+
+  /// Substitutes a replacement string for the all occurrences of a
+  /// pattern.
+  ///
+  /// @param pat The pattern to find in this string.
+  ///
+  /// @param repl The string to substitute for each occurrence of *pat*.
+  ///
+  /// @returns A new string with each occurrence of *pat* replaced with *repl*
+  /// or a copy of `*this` if *pat* does not exist.
+  string gsub(string const& pat, string const& repl) const;
+
   /// Splits a string into a vector of iterator pairs representing the
   /// *[start, end)* range of each element.
   ///

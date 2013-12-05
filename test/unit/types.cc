@@ -121,6 +121,13 @@ BOOST_AUTO_TEST_CASE(strings)
   BOOST_CHECK_EQUAL(str.substr(3), "caramba");
   BOOST_CHECK_EQUAL(str.substr(20, 7), "");
 
+  BOOST_CHECK_EQUAL(str.sub("a", "o"), "oi caramba");
+  BOOST_CHECK_EQUAL(str.sub("car", "dog"), "ai dogamba");
+  BOOST_CHECK_EQUAL(str.gsub("ai", "mai"), "mai caramba");
+  BOOST_CHECK_EQUAL(str.gsub("a", "o"), "oi coromba");
+  auto z = string("foo bar foo baz foo qux");
+  BOOST_CHECK_EQUAL(z.gsub("foo", "quux"), "quux bar quux baz quux qux");
+
   str = "yo,my,bud";
   auto pos = str.split(",");
   BOOST_REQUIRE_EQUAL(pos.size(), 3);
@@ -210,7 +217,7 @@ BOOST_AUTO_TEST_CASE(regexes)
     BOOST_CHECK(regex("^\\w{3}\\w{3}\\w{3}$").match(str));
 
     std::string built;
-    regex("\\w+").match(
+    regex(std::string{"\\w+"}).match(
         str,
         [&built](std::string const& s) { built += s; });
 

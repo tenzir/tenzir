@@ -159,6 +159,60 @@ string string::substr(size_type pos, size_type length) const
   return {begin() + pos, begin() + pos + std::min(length, size() - pos)};
 }
 
+string string::sub(string const& pat, string const& repl) const
+{
+  if (pat.size() > size())
+    return *this;
+
+  auto pos = end();
+  for (auto i = begin(); pos == end() && i != end() - pat.size(); ++i)
+    if (std::equal(i, i + pat.size(), pat.begin()))
+      pos = i;
+
+  if (pos == end())
+    return *this;
+
+  string substituted;
+  auto data = substituted.prepare(size() - pat.size() + repl.size());
+
+  std::copy(begin(), pos, data);
+  data += pos - begin();
+  std::copy(repl.begin(), repl.end(), data);
+  data += repl.size();
+  std::copy(pos + pat.size(), end(), data);
+
+  return substituted;
+}
+
+string string::gsub(string const& pat, string const& repl) const
+{
+  if (pat.size() > size())
+    return *this;
+
+  std::vector<const_iterator> positions;
+  for (auto i = begin(); i != end() - pat.size(); ++i)
+    if (std::equal(i, i + pat.size(), pat.begin()))
+      positions.push_back(i);
+
+  auto new_size =
+    (size() - (positions.size() * pat.size())) + positions.size() * repl.size();
+
+  string substituted;
+  auto data = substituted.prepare(new_size);
+  auto prev = begin();
+  for (auto pos : positions)
+  {
+    std::copy(prev, pos, data);
+    data += pos - prev;
+    std::copy(repl.begin(), repl.end(), data);
+    data += repl.size();
+    prev = pos + pat.size();
+  }
+  std::copy(prev, end(), data);
+
+  return substituted;
+}
+
 std::vector<std::pair<string::const_iterator, string::const_iterator>>
 string::split(string const& sep,
               string const& esc,
