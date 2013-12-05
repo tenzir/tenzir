@@ -540,7 +540,24 @@ BOOST_AUTO_TEST_CASE(ewah_bitwise_xor)
 
 BOOST_AUTO_TEST_CASE(ewah_bitwise_nand)
 {
-  BOOST_CHECK((ewah2 - ewah3).empty());
+  auto str =
+    "0000000000000000000000000000001100000000000000000000000000000000\n"
+    "                       11000000000000000000000000000000000000000";
+
+  BOOST_CHECK_EQUAL(to_string(ewah2 - ewah3), str);
+
+  ewah_bitstream ebs1, ebs2;
+  ebs1.append(100, true);
+  ebs2.push_back(true);
+  ebs2.append(50, false);
+  ebs2.append(13, true);
+
+  str =
+    "0000000000000000000000000000000000000000000000000000000000000001\n"
+    "0000000000000111111111111111111111111111111111111111111111111110\n"
+    "                            111111111111111111111111111111111111";
+
+  BOOST_CHECK_EQUAL(to_string(ebs1 - ebs2), str);
 }
 
 BOOST_AUTO_TEST_CASE(ewah_sequence_iteration)

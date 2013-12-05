@@ -1065,7 +1065,7 @@ Bitstream apply(Bitstream const& lhs, Bitstream const& rhs,
         ly = iy->length;
   }
 
-  if (fill_rhs)
+  if (fill_lhs)
   {
     while (ix != rx.end())
     {
@@ -1078,7 +1078,7 @@ Bitstream apply(Bitstream const& lhs, Bitstream const& rhs,
     }
   }
 
-  if (fill_lhs)
+  if (fill_rhs)
   {
     while (iy != ry.end())
     {
