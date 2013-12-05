@@ -1188,7 +1188,7 @@ public:
 
   virtual void visit(offset_extractor const& o)
   {
-    str_ += to<std::string>(o.off);
+    str_ += '@' + to<std::string>(o.off);
   }
 
   virtual void visit(type_extractor const& t)
