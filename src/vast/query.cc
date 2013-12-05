@@ -215,8 +215,10 @@ void query_actor::act()
         cow<bitstream> cbs = *tuple_cast<bitstream>(last_dequeued());
         VAST_LOG_ACTOR_DEBUG("got new result starting at " <<
                              (cbs->empty() ? 0 : cbs->find_first()));
+
         query_.update(std::move(*cbs));
 
+        // TODO: figure out a strategy to avoid asking for duplicate segments.
         send(self, atom("fetch"));
         send(self, atom("extract"));
       },

@@ -148,6 +148,10 @@ bitstream event_meta_index::lookup(expr::ast const& ast) const
 {
   querier visitor{*this};
   ast.accept(visitor);
+
+  if (! visitor.result)
+    VAST_LOG_ACTOR_DEBUG("found no result for " << ast);
+
   return std::move(visitor.result);
 }
 
@@ -266,11 +270,9 @@ struct event_arg_index::querier : expr::default_const_visitor
     assert(val);
 
     auto i = idx.offsets_.find(oe.off);
-    if (i == idx.offsets_.end())
-      return;
-
-    if (auto r = i->second->lookup(*op, *val))
-      result = std::move(*r);
+    if (i != idx.offsets_.end())
+      if (auto r = i->second->lookup(*op, *val))
+        result = std::move(*r);
   }
 
   virtual void visit(expr::type_extractor const& te)
@@ -382,6 +384,7 @@ bool event_arg_index::index(event const& e)
 {
   if (e.empty())
     return true;
+
   offset o{0};
   return index_record(e, e.id(), o);
 }
@@ -390,6 +393,10 @@ bitstream event_arg_index::lookup(expr::ast const& ast) const
 {
   querier visitor{*this};
   ast.accept(visitor);
+
+  if (! visitor.result)
+    VAST_LOG_ACTOR_DEBUG("no result for " << ast);
+
   return std::move(visitor.result);
 }
 

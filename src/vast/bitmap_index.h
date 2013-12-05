@@ -113,12 +113,14 @@ public:
     if (op == in || op == not_in)
         throw std::runtime_error(
             "unsupported relational operator: " + to<std::string>(op));
+
     if (bitmap_.empty())
       return {};
-    auto result = bitmap_.lookup(op, val.get<underlying_value_type>());
-    if (! result)
+
+    if (auto result = bitmap_.lookup(op, val.get<underlying_value_type>()))
+      return {std::move(*result)};
+    else
       return {};
-    return {std::move(*result)};
   };
 
   virtual uint64_t size() const override
