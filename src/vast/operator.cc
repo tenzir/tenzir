@@ -16,44 +16,6 @@ void deserialize(deserializer& source, arithmetic_operator& op)
   op = static_cast<arithmetic_operator>(u);
 }
 
-bool convert(arithmetic_operator op, std::string& to)
-{
-  switch (op)
-  {
-    default:
-      throw std::logic_error("missing case for arithmetic operator");
-    case positive:
-    case plus:
-      to = '+';
-      break;
-    case minus:
-    case negative:
-      to = "-";
-      break;
-    case bitwise_not:
-      to = '~';
-      break;
-    case bitwise_or:
-      to = '|';
-      break;
-    case bitwise_xor:
-      to = '^';
-      break;
-    case bitwise_and:
-      to = '|';
-      break;
-    case times:
-      to = '*';
-      break;
-    case divides:
-      to = '/';
-      break;
-    case mod:
-      to = '%';
-      break;
-  }
-  return true;
-}
 
 void serialize(serializer& sink, relational_operator op)
 {
@@ -67,46 +29,6 @@ void deserialize(deserializer& source, relational_operator& op)
   op = static_cast<relational_operator>(u);
 }
 
-bool convert(relational_operator op, std::string& to)
-{
-  switch (op)
-  {
-    default:
-      throw std::logic_error("missing case for relational operator");
-    case match:
-      to = '~';
-      break;
-    case not_match:
-      to = "!~";
-      break;
-    case in:
-      to = "in";
-      break;
-    case not_in:
-      to = "!in";
-      break;
-    case equal:
-      to = "==";
-      break;
-    case not_equal:
-      to = "!=";
-      break;
-    case less:
-      to = '<';
-      break;
-    case less_equal:
-      to = "<=";
-      break;
-    case greater:
-      to = '>';
-      break;
-    case greater_equal:
-      to = ">=";
-      break;
-  }
-  return true;
-}
-
 
 void serialize(serializer& sink, boolean_operator op)
 {
@@ -118,25 +40,6 @@ void deserialize(deserializer& source, boolean_operator& op)
   std::underlying_type<boolean_operator>::type u;
   source >> u;
   op = static_cast<boolean_operator>(u);
-}
-
-bool convert(boolean_operator op, std::string& to)
-{
-  switch (op)
-  {
-    default:
-      throw std::logic_error("missing case for boolean operator");
-    case logical_not:
-      to = '!';
-      break;
-    case logical_and:
-      to = "&&";
-      break;
-    case logical_or:
-      to = "||";
-      break;
-  }
-  return true;
 }
 
 /// Negates a relational operator, i.e., creates the complementary operator.
