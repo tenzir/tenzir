@@ -274,6 +274,15 @@ private:
       return render(out, x);
     }
 
+    bool operator()(string const& str) const
+    {
+      *out++ = '"';
+      if (! render(out, str.escape()))
+        return false;
+      *out++ = '"';
+      return true;
+    }
+
     Iterator& out;
   };
 

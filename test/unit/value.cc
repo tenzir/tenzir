@@ -160,19 +160,19 @@ BOOST_AUTO_TEST_CASE(strings)
 
   value v1('c');
   BOOST_CHECK(v1.which() == string_type);
-  BOOST_CHECK_EQUAL(to_string(v1), "c");
+  BOOST_CHECK_EQUAL(to_string(v1), "\"c\"");
   v1 = 'x';
-  BOOST_CHECK_EQUAL(to_string(v1), "x");
+  BOOST_CHECK_EQUAL(to_string(v1), "\"x\"");
 
   value v2("foo");
   BOOST_CHECK_EQUAL(v2, "foo");
-  BOOST_CHECK_EQUAL(to_string(v2), "foo");
+  BOOST_CHECK_EQUAL(to_string(v2), "\"foo\"");
   BOOST_CHECK(v2.get<string>().size() == 3);
   v2 = "quux";
   BOOST_CHECK_EQUAL(v2, "quux");
-  BOOST_CHECK_EQUAL(to_string(v2), "quux");
+  BOOST_CHECK_EQUAL(to_string(v2), "\"quux\"");
   BOOST_CHECK(v2.get<string>().size() == 4);
-  BOOST_CHECK_EQUAL(to_string(v2), "quux");
+  BOOST_CHECK_EQUAL(to_string(v2), "\"quux\"");
 
   // Testing the limits.
   std::string str(string::in_situ_size, 'x');
@@ -234,7 +234,7 @@ BOOST_AUTO_TEST_CASE(containers)
 {
   record r{"foo", 42u, -4711, address{"dead::beef"}};
   value vr(std::move(r));
-  BOOST_CHECK_EQUAL(to_string(vr), "(foo, 42, -4711, dead::beef)");
+  BOOST_CHECK_EQUAL(to_string(vr), "(\"foo\", 42, -4711, dead::beef)");
   vr.get<record>().emplace_back("qux");
   vr.get<record>().emplace_back("corge");
   BOOST_CHECK(vr.get<record>().size() == 6);
