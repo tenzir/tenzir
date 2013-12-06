@@ -43,19 +43,13 @@ public:
   /// @returns The number of processed results or a disengaged value on failure.
   optional<size_t> extract();
 
-  /// Scans for uncovered hits at the borders of all known segments.
+  /// Scans for event IDs of unprocessed hits. If the query has no buffered
+  /// segments, then the result only includes the singleton set with the last
+  /// unprocessed hit. Otherwise the function searches for hits at the borders
+  /// of known segments.
+  ///
   /// @returns A list of event IDs for which the query still needs segments.
   std::vector<event_id> scan() const;
-
-  /// Retrieves the number segments the query buffers.
-  /// @returns The number of cached segments in the query.
-  size_t segments() const;
-
-  /// Retrieves the last ID in the unprocessed set of results.
-  ///
-  /// @returns The last ID of the unprocessed events or a disengaged value if
-  /// no such event exists.
-  optional<event_id> last() const;
 
 private:
   using bitstream_type = default_encoded_bitstream;

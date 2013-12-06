@@ -25,6 +25,7 @@ query::query(expr::ast ast, std::function<void(event)> fn)
     fn_{fn}
 {
   processed_ = bitstream_type{};
+  unprocessed_ = bitstream_type{};
   extracted_ = bitstream_type{};
 }
 
@@ -81,7 +82,7 @@ size_t query::consolidate(size_t before, size_t after)
 
 optional<size_t> query::extract()
 {
-  if (! unprocessed_)
+  if (unprocessed_.empty())
   {
     VAST_LOG_DEBUG("query has no unprocessed hits available");
     return {};
@@ -103,7 +104,6 @@ optional<size_t> query::extract()
         break;
       }
     }
-
     if (! found)
     {
       VAST_LOG_DEBUG("query has no segment for id " << last);
@@ -121,6 +121,7 @@ optional<size_t> query::extract()
     masked_ &= unprocessed_;
   }
 
+  assert(masked_);
   if (masked_.empty())
     return {};
 
@@ -171,35 +172,32 @@ optional<size_t> query::extract()
 std::vector<event_id> query::scan() const
 {
   std::vector<event_id> eids;
-  for (auto i = segments_.begin(); i != segments_.end(); ++i)
-  {
-    auto& s = *i;
-    auto prev_hit = unprocessed_.find_prev(s->base());
-    if (prev_hit != 0 // May occur when results get bitwise flipped.
-        && prev_hit != bitstream::npos
-        && ! ((i != segments_.begin() && (*(i - 1))->contains(prev_hit))))
-      eids.push_back(prev_hit);
 
-    auto next_hit = unprocessed_.find_next(s->base() + s->events() - 1);
-    if (next_hit != bitstream::npos
-        && ! (i + 1 != segments_.end() && (*(i + 1))->contains(next_hit)))
-      eids.push_back(next_hit);
+  if (segments_.empty())
+  {
+    if (auto id = unprocessed_.find_last())
+      if (id != bitstream::npos)
+        eids.push_back(id);
+  }
+  else
+  {
+    for (auto i = segments_.begin(); i != segments_.end(); ++i)
+    {
+      auto& s = *i;
+      auto prev_hit = unprocessed_.find_prev(s->base());
+      if (prev_hit != 0 // May occur when results get bitwise flipped.
+          && prev_hit != bitstream::npos
+          && ! ((i != segments_.begin() && (*(i - 1))->contains(prev_hit))))
+        eids.push_back(prev_hit);
+
+      auto next_hit = unprocessed_.find_next(s->base() + s->events() - 1);
+      if (next_hit != bitstream::npos
+          && ! (i + 1 != segments_.end() && (*(i + 1))->contains(next_hit)))
+        eids.push_back(next_hit);
+    }
   }
 
   return eids;
-}
-
-size_t query::segments() const
-{
-  return segments_.size();
-}
-
-optional<event_id> query::last() const
-{
-  auto id = unprocessed_.find_last();
-  if (id != bitstream::npos)
-    return id;
-  return {};
 }
 
 using namespace cppa;
@@ -213,18 +211,20 @@ query_actor::query_actor(actor_ptr archive, actor_ptr sink, expr::ast ast)
 
 void query_actor::act()
 {
+  chaining(false);
+
   become(
       on_arg_match >> [=](bitstream const& bs)
       {
         assert(bs);
-        cow<bitstream> cbs = *tuple_cast<bitstream>(last_dequeued());
-        VAST_LOG_ACTOR_DEBUG("got new result starting at " <<
-                             (cbs->empty() ? 0 : cbs->find_first()));
+        assert(! bs.empty());
+        VAST_LOG_ACTOR_DEBUG("got new result covering [" << bs.find_first()
+                             << ',' << bs.find_last() << ']');
 
+        cow<bitstream> cbs = *tuple_cast<bitstream>(last_dequeued());
         query_.update(std::move(*cbs));
 
         // TODO: figure out a strategy to avoid asking for duplicate segments.
-        send(self, atom("fetch"));
         send(self, atom("extract"));
       },
       on_arg_match >> [=](event_id eid)
@@ -243,32 +243,16 @@ void query_actor::act()
         if (n > 0)
           VAST_LOG_ACTOR_DEBUG("purged " << n << " segments");
 
-        send(self, atom("fetch"));
         send(self, atom("extract"));
-      },
-      on(atom("fetch")) >> [=]
-      {
-        if (query_.segments() == 0)
-        {
-          if (auto last = query_.last())
-          {
-            VAST_LOG_ACTOR_DEBUG("asks for segment containing id " << *last);
-            send(archive_, atom("segment"), *last);
-          }
-        }
-        else if (query_.segments() <= 3) // TODO: Make configurable.
-        {
-          for (auto eid : query_.scan())
-          {
-            send(archive_, atom("segment"), eid);
-            VAST_LOG_ACTOR_DEBUG(
-                "asks for neighboring segment containing id " << eid);
-          }
-        }
       },
       on(atom("extract")) >> [=]
       {
-        VAST_LOG_ACTOR_DEBUG("asked to extract events");
+        for (auto eid : query_.scan())
+        {
+          send(archive_, atom("segment"), eid);
+          VAST_LOG_ACTOR_DEBUG("asks for segment containing id " << eid);
+        }
+
         if (auto got = query_.extract())
           VAST_LOG_ACTOR_DEBUG("extracted " << *got << " events");
       },
