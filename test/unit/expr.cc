@@ -77,6 +77,11 @@ BOOST_AUTO_TEST_CASE(parser_tests)
     "@5 in {1, 2, 3}",
     "@10,3 < now - 5d10m3s",
     "@0,3,2 ~ /yikes/",
+
+    // Groups
+    "(:double > 4.2)",
+    ":double > 4.2 && (@4 < now || :port == 53/?)",
+    "(:double > 4.2 && (@4 < now || :port == 53/?))"
   };
 
   for (auto& e : exprs)

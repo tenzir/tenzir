@@ -71,7 +71,7 @@ struct folder : public boost::static_visitor<value>
     return boost::apply_visitor(*this, operand);
   }
 
-  value operator()(expression const& expr) const
+  value operator()(value_expr const& expr) const
   {
     auto value = boost::apply_visitor(*this, expr.first);
     if (expr.rest.empty())
@@ -89,57 +89,73 @@ struct folder : public boost::static_visitor<value>
 
 struct validator : public boost::static_visitor<bool>
 {
-  bool operator()(clause const& operand) const
+  static bool apply(query const& q)
+  {
+    if (! boost::apply_visitor(validator(), q.first))
+      return false;
+
+    for (auto& operation : q.rest)
+      if (! boost::apply_visitor(validator(), operation.operand))
+        return false;
+
+    return true;
+  }
+
+  bool operator()(query const& q) const
+  {
+    return apply(q);
+  }
+
+  bool operator()(predicate const& operand) const
   {
     return boost::apply_visitor(*this, operand);
   }
 
-  bool operator()(tag_clause const& clause) const
+  bool operator()(tag_predicate const& pred) const
   {
-    auto rhs = fold(clause.rhs);
+    auto rhs = fold(pred.rhs);
     auto rhs_type = rhs.which();
-    auto& lhs = clause.lhs;
+    auto& lhs = pred.lhs;
     return
-      (lhs == "name" && (rhs_type == string_type
-                         || rhs_type == regex_type))
+      (lhs == "name" && (rhs_type == string_type || rhs_type == regex_type))
       || (lhs == "time" && rhs_type == time_point_type)
       || (lhs == "id" && rhs_type == uint_type);
   }
 
-  bool operator()(type_clause const& clause) const
+  bool operator()(type_predicate const& pred) const
   {
-    auto rhs = fold(clause.rhs);
+    auto rhs = fold(pred.rhs);
     auto rhs_type = rhs.which();
-    auto& lhs_type = clause.lhs;
-    auto& op = clause.op;
+    auto& lhs_type = pred.lhs;
+    auto& op = pred.op;
     return
       lhs_type == rhs_type
       || (lhs_type == string_type
           && (op == match || op == not_match || op == in || op == not_in)
           && rhs_type == regex_type)
-      || (lhs_type == address_type && clause.op == in
+      || (lhs_type == address_type && pred.op == in
           && rhs_type == prefix_type);
   }
 
-  bool operator()(offset_clause const& clause) const
+  bool operator()(offset_predicate const& pred) const
   {
-    auto rhs = fold(clause.rhs);
-    return ! (rhs == invalid || clause.off.empty());
+    auto rhs = fold(pred.rhs);
+    return ! (rhs == invalid || pred.off.empty());
   }
 
-  bool operator()(event_clause const& clause) const
+  bool operator()(event_predicate const& pred) const
   {
-    auto rhs = fold(clause.rhs);
-    return ! (rhs == invalid || clause.lhs.size() < 2);
+    auto rhs = fold(pred.rhs);
+    return ! (rhs == invalid || pred.lhs.size() < 2);
   }
 
-  bool operator()(negated_clause const& clause) const
+  bool operator()(negated_predicate const& pred) const
   {
-    return boost::apply_visitor(*this, clause.operand);
+    return boost::apply_visitor(*this, pred.operand);
   }
 };
 
-value fold(expression const& expr)
+value fold(value_expr const& expr)
 {
   auto value = boost::apply_visitor(folder(), expr.first);
   if (expr.rest.empty())
@@ -154,16 +170,9 @@ value fold(expression const& expr)
   return value;
 }
 
-bool validate(query& q)
+bool validate(query const& q)
 {
-  if (! boost::apply_visitor(validator(), q.first))
-    return false;
-
-  for (auto& operation : q.rest)
-    if (! boost::apply_visitor(validator(), operation.operand))
-      return false;
-
-  return true;
+  return validator::apply(q);
 };
 
 } // namespace query

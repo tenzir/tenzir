@@ -15,11 +15,12 @@ namespace qi = boost::spirit::qi;
 namespace ascii = boost::spirit::ascii;
 
 template <typename Iterator>
-struct expression : qi::grammar<Iterator, ast::query::expression(), skipper<Iterator>>
+struct value_expression
+  : qi::grammar<Iterator, ast::query::value_expr(), skipper<Iterator>>
 {
-    expression(error_handler<Iterator>& on_error);
+    value_expression(error_handler<Iterator>& on_error);
 
-    qi::rule<Iterator, ast::query::expression(), skipper<Iterator>>
+    qi::rule<Iterator, ast::query::value_expr(), skipper<Iterator>>
         expr;
 
     qi::rule<Iterator, ast::query::expr_operand(), skipper<Iterator>>

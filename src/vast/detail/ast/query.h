@@ -13,9 +13,6 @@ namespace ast {
 namespace query {
 
 struct nil {};
-struct unary_expr;
-struct negated_clause;
-struct expression;
 
 struct identifier
 {
@@ -27,11 +24,14 @@ struct identifier
   std::string name;
 };
 
-typedef boost::variant<
+struct unary_expr;
+struct value_expr;
+
+using expr_operand = boost::variant<
   value,
   boost::recursive_wrapper<unary_expr>,
-  boost::recursive_wrapper<expression>
-> expr_operand;
+  boost::recursive_wrapper<value_expr>
+>;
 
 struct unary_expr
 {
@@ -45,75 +45,84 @@ struct expr_operation
   expr_operand operand;
 };
 
-struct expression
+struct value_expr
 {
   expr_operand first;
   std::vector<expr_operation> rest;
 };
 
-struct tag_clause
+struct tag_predicate
 {
   std::string lhs;
   relational_operator op;
-  expression rhs;
+  value_expr rhs;
 };
 
-struct offset_clause
+struct offset_predicate
 {
   offset off;
   relational_operator op;
-  expression rhs;
+  value_expr rhs;
 };
 
-struct type_clause
+struct type_predicate
 {
   value_type lhs;
   relational_operator op;
-  expression rhs;
+  value_expr rhs;
 };
 
-struct event_clause
+struct event_predicate
 {
   std::vector<std::string> lhs;
   relational_operator op;
-  expression rhs;
+  value_expr rhs;
 };
 
-typedef boost::variant<
-    tag_clause
-  , offset_clause
-  , type_clause
-  , event_clause
-  , boost::recursive_wrapper<negated_clause>
-> clause;
+struct negated_predicate;
 
-struct negated_clause
+using predicate = boost::variant<
+  tag_predicate,
+  offset_predicate,
+  type_predicate,
+  event_predicate,
+  boost::recursive_wrapper<negated_predicate>
+>;
+
+struct negated_predicate
 {
-  clause operand;
+  predicate operand;
 };
 
-struct clause_operation
+struct query;
+
+using group = boost::variant<
+  predicate,
+  boost::recursive_wrapper<query>
+>;
+
+struct query_operation
 {
   boolean_operator op;
-  clause operand;
+  group operand;
 };
 
 struct query
 {
-  clause first;
-  std::vector<clause_operation> rest;
+  group first;
+  std::vector<query_operation> rest;
 };
 
 /// Folds a constant expression into a single value.
 /// @param expr The constant expression.
 /// @returns The folded value.
-value fold(expression const& expr);
+value fold(value_expr const& expr);
 
 /// Validates a query with respect to semantic correctness. This means ensuring
-/// that LHS and RHS of clause operators have the correct types.
+/// that LHS and RHS of predicate operators have the correct types.
 /// @param q The query to validate.
 /// @returns `true` *iff* *q* is semantically correct.
-bool validate(query& q);
+bool validate(query const& q);
 
 } // namespace query
 } // namespace ast
@@ -131,46 +140,46 @@ BOOST_FUSION_ADAPT_STRUCT(
     (vast::detail::ast::query::expr_operand, operand))
 
   BOOST_FUSION_ADAPT_STRUCT(
-    vast::detail::ast::query::expression,
+    vast::detail::ast::query::value_expr,
     (vast::detail::ast::query::expr_operand, first)
     (std::vector<vast::detail::ast::query::expr_operation>, rest))
 
   BOOST_FUSION_ADAPT_STRUCT(
-    vast::detail::ast::query::tag_clause,
+    vast::detail::ast::query::tag_predicate,
     (std::string, lhs)
     (vast::relational_operator, op)
-    (vast::detail::ast::query::expression, rhs))
+    (vast::detail::ast::query::value_expr, rhs))
 
   BOOST_FUSION_ADAPT_STRUCT(
-    vast::detail::ast::query::offset_clause,
+    vast::detail::ast::query::offset_predicate,
     (vast::offset, off)
     (vast::relational_operator, op)
-    (vast::detail::ast::query::expression, rhs))
+    (vast::detail::ast::query::value_expr, rhs))
 
   BOOST_FUSION_ADAPT_STRUCT(
-    vast::detail::ast::query::type_clause,
+    vast::detail::ast::query::type_predicate,
     (vast::value_type, lhs)
     (vast::relational_operator, op)
-    (vast::detail::ast::query::expression, rhs))
+    (vast::detail::ast::query::value_expr, rhs))
 
   BOOST_FUSION_ADAPT_STRUCT(
-    vast::detail::ast::query::event_clause,
+    vast::detail::ast::query::event_predicate,
     (std::vector<std::string>, lhs)
     (vast::relational_operator, op)
-    (vast::detail::ast::query::expression, rhs))
+    (vast::detail::ast::query::value_expr, rhs))
 
   BOOST_FUSION_ADAPT_STRUCT(
-    vast::detail::ast::query::negated_clause,
-    (vast::detail::ast::query::clause, operand))
+    vast::detail::ast::query::negated_predicate,
+    (vast::detail::ast::query::predicate, operand))
 
   BOOST_FUSION_ADAPT_STRUCT(
-    vast::detail::ast::query::clause_operation,
+    vast::detail::ast::query::query_operation,
     (vast::boolean_operator, op)
-    (vast::detail::ast::query::clause, operand))
+    (vast::detail::ast::query::group, operand))
 
   BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::query::query,
-    (vast::detail::ast::query::clause, first)
-    (std::vector<vast::detail::ast::query::clause_operation>, rest))
+    (vast::detail::ast::query::group, first)
+    (std::vector<vast::detail::ast::query::query_operation>, rest))
 
 #endif

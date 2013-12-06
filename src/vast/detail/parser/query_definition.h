@@ -1,5 +1,5 @@
-#ifndef VAST_DETAIL_PARSER_CLAUSE_DEFINITION_H
-#define VAST_DETAIL_PARSER_CLAUSE_DEFINITION_H
+#ifndef VAST_DETAIL_PARSER_QUERY_DEFINITION_H
+#define VAST_DETAIL_PARSER_QUERY_DEFINITION_H
 
 #include "vast/detail/parser/query.h"
 
@@ -9,8 +9,8 @@ namespace parser {
 
 template <typename Iterator>
 query<Iterator>::query(error_handler<Iterator>& on_error)
-  : query::base_type(qry)
-  , expr(on_error)
+  : query::base_type{start},
+    value_expr{on_error}
 {
   qi::_1_type _1;
   qi::_2_type _2;
@@ -28,7 +28,7 @@ query<Iterator>::query(error_handler<Iterator>& on_error)
     ("&&", logical_and)
     ;
 
-  clause_op.add
+  pred_op.add
     ("~",   match)
     ("!~",  not_match)
     ("==",  equal)
@@ -58,48 +58,52 @@ query<Iterator>::query(error_handler<Iterator>& on_error)
     ("port",      port_type)
     ;
 
-  qry
-    =   clause
-    >>  *(boolean_op > clause)
+  start
+    =   group >> *(boolean_op > group)
     ;
 
-  clause
-    =   tag_clause
-    |   type_clause
-    |   offset_clause
-    |   event_clause
-    |   ('!' > not_clause)
+  group
+    =   '(' >> start >> ')'
+    |   pred
     ;
 
-  tag_clause
+  pred
+    =   tag_pred
+    |   type_pred
+    |   offset_pred
+    |   event_pred
+    |   ('!' > not_pred)
+    ;
+
+  tag_pred
     =   '&'
     >   identifier
-    >   clause_op
-    >   expr
+    >   pred_op
+    >   value_expr
     ;
 
-  type_clause
+  type_pred
     =   ':'
     >   type
-    >   clause_op
-    >   expr
+    >   pred_op
+    >   value_expr
     ;
 
-  offset_clause
+  offset_pred
     =   '@'
     >   ulong % ','
-    >   clause_op
-    >   expr
+    >   pred_op
+    >   value_expr
     ;
 
-  event_clause
+  event_pred
     =   glob >> *('$' > identifier)
-    >   clause_op
-    >   expr
+    >   pred_op
+    >   value_expr
     ;
 
-  not_clause
-    =   clause
+  not_pred
+    =   pred
     ;
 
   identifier
@@ -127,27 +131,27 @@ query<Iterator>::query(error_handler<Iterator>& on_error)
     ;
 
   BOOST_SPIRIT_DEBUG_NODES(
-      (qry)
-      (clause)
-      (tag_clause)
-      (type_clause)
-      (offset_clause)
-      (event_clause)
+      (start)
+      (pred)
+      (tag_pred)
+      (type_pred)
+      (offset_pred)
+      (event_pred)
       (identifier)
       );
 
-  on_error.set(qry, _4, _3);
+  on_error.set(start, _4, _3);
 
   boolean_op.name("binary boolean operator");
-  clause_op.name("binary clause operator");
+  pred_op.name("predicate operator");
   type.name("type");
-  qry.name("query");
-  clause.name("clause");
-  tag_clause.name("tag clause");
-  offset_clause.name("offset clause");
-  type_clause.name("type clause");
-  event_clause.name("event clause");
-  not_clause.name("negated clause");
+  start.name("query");
+  pred.name("predicate");
+  tag_pred.name("tag predicate");
+  offset_pred.name("offset predicate");
+  type_pred.name("type predicate");
+  event_pred.name("event predicate");
+  not_pred.name("negated predicate");
   identifier.name("identifier");
 }
 

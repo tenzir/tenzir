@@ -607,88 +607,161 @@ class expressionizer
 public:
   using result_type = void;
 
+  static std::unique_ptr<node>
+  apply(detail::ast::query::query const& q, schema const& sch)
+  {
+    std::unique_ptr<n_ary_operator> root;
+
+    if (q.rest.empty())
+    {
+      // WLOG, we can always add a conjunction as parent if we just have a
+      // single predicate.
+      root = make_unique<conjunction>();
+      expressionizer visitor{root.get(), sch};
+      boost::apply_visitor(std::ref(visitor), q.first);
+      return std::move(root); // FIXME: add to parent.
+    }
+
+    // First, split the query expression at each OR node.
+    std::vector<detail::ast::query::query> ors;
+    ors.push_back({q.first, {}});
+    for (auto& pred : q.rest)
+      if (pred.op == logical_or)
+        ors.push_back({pred.operand, {}});
+      else
+        ors.back().rest.push_back(pred);
+
+    // Our AST root will be a disjunction iff we have at least two terms.
+    if (ors.size() >= 2)
+      root = make_unique<disjunction>();
+
+    // Then create a conjunction for each set of subsequent AND nodes between
+    // two OR nodes.
+    std::unique_ptr<conjunction> conj;
+    for (auto& ands : ors)
+    {
+      n_ary_operator* local_root;
+      if (! root)
+      {
+        root = make_unique<conjunction>();
+        local_root = root.get();
+      }
+      else if (! ands.rest.empty())
+      {
+        auto conj = make_unique<conjunction>();
+        local_root = conj.get();
+        root->add(std::move(conj));
+      }
+      else
+      {
+        local_root = root.get();
+      }
+
+      expressionizer visitor{local_root, sch};
+      boost::apply_visitor(std::ref(visitor), ands.first);
+      for (auto pred : ands.rest)
+        boost::apply_visitor(std::ref(visitor), pred.operand);
+    }
+
+    return std::move(root);
+  }
+
   expressionizer(n_ary_operator* parent, schema const& sch)
     : parent_(parent),
       schema_(sch)
   {
   }
 
-  void operator()(detail::ast::query::clause const& operand)
+  void operator()(detail::ast::query::query const& q)
+  {
+    parent_->add(apply(q, schema_));
+  }
+
+  void operator()(detail::ast::query::predicate const& operand)
   {
     boost::apply_visitor(*this, operand);
   }
 
-  void operator()(detail::ast::query::tag_clause const& clause)
+  void operator()(detail::ast::query::tag_predicate const& pred)
   {
-    auto op = clause.op;
+    auto op = pred.op;
     if (invert_)
     {
       op = negate(op);
       invert_ = false;
     }
-    auto p = make_unique<predicate>(op);
+
     std::unique_ptr<extractor> lhs;
-    if (clause.lhs == "name")
+    if (pred.lhs == "name")
       lhs = make_unique<name_extractor>();
-    else if (clause.lhs == "time")
+    else if (pred.lhs == "time")
       lhs = make_unique<timestamp_extractor>();
-    else if (clause.lhs == "id")
+    else if (pred.lhs == "id")
       lhs = make_unique<id_extractor>();
-    auto rhs = make_unique<constant>(detail::ast::query::fold(clause.rhs));
-    p->add(std::move(lhs));
-    p->add(std::move(rhs));
-    parent_->add(std::move(p));
-  }
 
-  void operator()(detail::ast::query::type_clause const& clause)
-  {
-    auto op = clause.op;
-    if (invert_)
-    {
-      op = negate(op);
-      invert_ = false;
-    }
+    auto rhs = make_unique<constant>(detail::ast::query::fold(pred.rhs));
     auto p = make_unique<predicate>(op);
-    auto lhs = make_unique<type_extractor>(clause.lhs);
-    auto rhs = make_unique<constant>(detail::ast::query::fold(clause.rhs));
     p->add(std::move(lhs));
     p->add(std::move(rhs));
+
     parent_->add(std::move(p));
   }
 
-  void operator()(detail::ast::query::offset_clause const& clause)
+  void operator()(detail::ast::query::type_predicate const& pred)
   {
-    auto op = clause.op;
+    auto op = pred.op;
     if (invert_)
     {
       op = negate(op);
       invert_ = false;
     }
+
+    auto lhs = make_unique<type_extractor>(pred.lhs);
+    auto rhs = make_unique<constant>(detail::ast::query::fold(pred.rhs));
     auto p = make_unique<predicate>(op);
-    auto lhs = make_unique<offset_extractor>(clause.off);
-    auto rhs = make_unique<constant>(detail::ast::query::fold(clause.rhs));
     p->add(std::move(lhs));
     p->add(std::move(rhs));
+
     parent_->add(std::move(p));
   }
 
-  void operator()(detail::ast::query::event_clause const& clause)
+  void operator()(detail::ast::query::offset_predicate const& pred)
   {
-    auto op = clause.op;
+    auto op = pred.op;
     if (invert_)
     {
       op = negate(op);
       invert_ = false;
     }
+
+    auto lhs = make_unique<offset_extractor>(pred.off);
+    auto rhs = make_unique<constant>(detail::ast::query::fold(pred.rhs));
+    auto p = make_unique<predicate>(op);
+    p->add(std::move(lhs));
+    p->add(std::move(rhs));
+
+    parent_->add(std::move(p));
+  }
+
+  void operator()(detail::ast::query::event_predicate const& pred)
+  {
+    auto op = pred.op;
+    if (invert_)
+    {
+      op = negate(op);
+      invert_ = false;
+    }
+
     if (schema_.events().empty())
       throw error::query("no events in schema");
-    // An event clause always consists of two components: the event name
+
+    // An event predicate always consists of two components: the event name
     // extractor and offset extractor. For event dereference sequences (e.g.,
     // http_request$c$..) the event name is explict, for type dereference
     // sequences (e.g., connection$id$...), we need to find all events and
     // types that have an argument of the given type.
     schema::record_type const* event = nullptr;
-    auto& symbol = clause.lhs.front();
+    auto& symbol = pred.lhs.front();
     for (auto& e : schema_.events())
     {
       if (e.name == symbol)
@@ -700,14 +773,15 @@ public:
     if (event)
     {
       // Ignore the event name in lhs[0].
-      auto& ids = clause.lhs;
+      auto& ids = pred.lhs;
       auto offs = schema::argument_offsets(event, {ids.begin() + 1, ids.end()});
       if (offs.empty())
         throw error::schema("unknown argument name");
+
       // TODO: factor rest of block in separate function to promote DRY.
       auto p = make_unique<predicate>(op);
       auto lhs = make_offset_extractor(std::move(offs));
-      auto rhs = make_constant(clause.rhs);
+      auto rhs = make_constant(pred.rhs);
       p->add(std::move(lhs));
       p->add(std::move(rhs));
       conjunction* conj;
@@ -734,19 +808,23 @@ public:
           break;
         }
       }
+
       if (! found)
-        throw error::query("lhs[0] of clause names neither event nor type");
+        throw error::query("lhs[0] of predicate names neither event nor type");
+
       for (auto& e : schema_.events())
       {
-        auto offsets = schema::symbol_offsets(&e, clause.lhs);
+        auto offsets = schema::symbol_offsets(&e, pred.lhs);
         if (offsets.empty())
           continue;
-        // TODO: factor rest of block in separate function to promote DRY.
+
         if (offsets.size() > 1)
           throw error::schema("multiple offsets not yet implemented");
+
+        // TODO: factor rest of block in separate function to promote DRY.
         auto p = make_unique<predicate>(op);
         auto lhs = make_offset_extractor(std::move(offsets[0]));
-        auto rhs = make_constant(clause.rhs);
+        auto rhs = make_constant(pred.rhs);
         p->add(std::move(lhs));
         p->add(std::move(rhs));
         conjunction* conj;
@@ -762,24 +840,22 @@ public:
     }
   }
 
-  void operator()(detail::ast::query::negated_clause const& clause)
+  void operator()(detail::ast::query::negated_predicate const& pred)
   {
     // Since all operators have a complement, we can push down the negation to
-    // the operator-level (as opposed to leaving it at the clause level).
+    // the operator-level (as opposed to leaving it at the predicate level).
     invert_ = true;
-    boost::apply_visitor(*this, clause.operand);
+    boost::apply_visitor(*this, pred.operand);
   }
 
 private:
-  std::unique_ptr<offset_extractor>
-  make_offset_extractor(offset o)
+  std::unique_ptr<offset_extractor> make_offset_extractor(offset o)
   {
-    auto node = make_unique<offset_extractor>(std::move(o));
-    return std::move(node);
+    return make_unique<offset_extractor>(std::move(o));
   }
 
   std::unique_ptr<constant>
-  make_constant(detail::ast::query::expression const& expr)
+  make_constant(detail::ast::query::value_expr const& expr)
   {
     return make_unique<constant>(detail::ast::query::fold(expr));
   }
@@ -818,60 +894,15 @@ std::unique_ptr<node> create(std::string const& str, schema const& sch)
   detail::parser::error_handler<iterator> on_error{i, end};
   detail::parser::query<iterator> grammar{on_error};
   detail::parser::skipper<iterator> skipper;
-  detail::ast::query::query ast;
-  bool success = phrase_parse(i, end, grammar, skipper, ast);
+  detail::ast::query::query q;
+  bool success = phrase_parse(i, end, grammar, skipper, q);
   if (! success || i != end)
     return {};
-  if (! detail::ast::query::validate(ast))
-    // TODO: propagate error to user.
-    return {};
-  if (ast.rest.empty())
-  {
-    // WLOG, we can always add a conjunction as root.
-    auto conj = make_unique<conjunction>();
-    expressionizer visitor{conj.get(), sch};
-    boost::apply_visitor(std::ref(visitor), ast.first);
-    return std::move(conj);
-  }
-  // First, split the query expression at each OR node.
-  std::vector<detail::ast::query::query> ors;
-  ors.push_back({ast.first, {}});
-  for (auto& clause : ast.rest)
-    if (clause.op == logical_or)
-      ors.push_back({clause.operand, {}});
-    else
-      ors.back().rest.push_back(clause);
-  // Our AST root will be a disjunction iff we have at least two terms.
-  std::unique_ptr<n_ary_operator> root;
-  if (ors.size() >= 2)
-    root = make_unique<disjunction>();
-  // Then create a conjunction for each set of subsequent AND nodes between
-  // two OR nodes.
-  std::unique_ptr<conjunction> conj;
-  for (auto& ands : ors)
-  {
-    n_ary_operator* local_root;
-    if (! root)
-    {
-      root = make_unique<conjunction>();
-      local_root = root.get();
-    }
-    else if (! ands.rest.empty())
-    {
-      auto conj = make_unique<conjunction>();
-      local_root = conj.get();
-      root->add(std::move(conj));
-    }
-    else
-    {
-      local_root = root.get();
-    }
-    expressionizer visitor{local_root, sch};
-    boost::apply_visitor(std::ref(visitor), ands.first);
-    for (auto clause : ands.rest)
-      boost::apply_visitor(std::ref(visitor), clause.operand);
-  }
-  return std::move(root);
+
+  if (! detail::ast::query::validate(q))
+    return {}; // TODO: propagate validation error to user.
+
+  return expressionizer::apply(q, sch);
 }
 
 namespace {

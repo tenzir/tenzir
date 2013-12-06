@@ -8,8 +8,8 @@ namespace detail {
 namespace parser {
 
 template <typename Iterator>
-expression<Iterator>::expression(error_handler<Iterator>& on_error)
-  : expression::base_type(expr)
+value_expression<Iterator>::value_expression(error_handler<Iterator>& on_error)
+  : value_expression::base_type(expr)
 {
     qi::_1_type _1;
     qi::_2_type _2;
