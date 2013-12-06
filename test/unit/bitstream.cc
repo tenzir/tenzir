@@ -451,6 +451,20 @@ BOOST_AUTO_TEST_CASE(ewah_finding)
   BOOST_CHECK_EQUAL(ewah3.find_next(223), 223 + 4); // Skip 3 zeros.
   BOOST_CHECK_EQUAL(ewah3.find_last(), ewah3.size() - 1);
   BOOST_CHECK_EQUAL(ewah3.find_prev(ewah3.size() - 1), ewah3.size() - 1 - 26);
+
+  ewah_bitstream ebs;
+  ebs.append(44, false);
+  ebs.append(3, true);
+  ebs.append(17, false);
+  ebs.append(31, false);
+  ebs.append(4, true);
+
+  BOOST_CHECK_EQUAL(ebs.find_first(), 44);
+  BOOST_CHECK_EQUAL(ebs.find_next(44), 45);
+  BOOST_CHECK_EQUAL(ebs.find_next(45), 46);
+  BOOST_CHECK_EQUAL(ebs.find_next(46), 44 + 3 + 17 + 31);
+  BOOST_CHECK_EQUAL(ebs.find_next(49), 44 + 3 + 17 + 31);
+  BOOST_CHECK_EQUAL(ebs.find_last(), ebs.size() - 1);
 }
 
 BOOST_AUTO_TEST_CASE(ewah_bitwise_not)

@@ -1122,7 +1122,7 @@ ewah_bitstream::size_type ewah_bitstream::find_forward(size_type i) const
         return i >= seq.offset && i < seq.offset + seq.length ? i : seq.offset;
 
       auto const idx = bitvector::bit_index(i);
-      if (idx == 0)
+      if (idx == 0 || idx > seq.length)
         return seq.offset + bitvector::lowest_bit(seq.data);
 
       auto next = bitvector::next_bit(seq.data, idx - 1);
