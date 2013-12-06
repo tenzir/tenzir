@@ -129,17 +129,17 @@ void profiler::on_exit()
   ProfilerGetCurrentState(&state);
   if (state.enabled)
   {
-    VAST_LOG_ACTOR_INFO(" stops Gperftools CPU profiler");
+    VAST_LOG_ACTOR_INFO("stops Gperftools CPU profiler");
     ProfilerStop();
     VAST_LOG_ACTOR_INFO(
         "recorded " << state.samples_gathered <<
-        "Gperftools CPU profiler samples in " << state.profile_name);
+        " Gperftools CPU profiler samples in " << state.profile_name);
   }
 #endif
 #ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
   if (IsHeapProfilerRunning())
   {
-    VAST_LOG_ACTOR_INFO(" stops Gperftools heap profiler");
+    VAST_LOG_ACTOR_INFO("stops Gperftools heap profiler");
     HeapProfilerDump("cleanup");
     HeapProfilerStop();
   }
