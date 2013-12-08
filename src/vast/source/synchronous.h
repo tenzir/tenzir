@@ -15,8 +15,8 @@ struct synchronous : public actor<synchronous>
 public:
   /// Spawns a synchronous source.
   /// @param The actor receiving the generated events.
-  /// @param batch_size The number of events
-  synchronous(cppa::actor_ptr sink, size_t batch_size = 0);
+  /// @param batch_size The number of events to extract in one batch.
+  synchronous(cppa::actor_ptr sink, uint64_t batch_size = 0);
 
   void act();
   virtual char const* description() const = 0;
@@ -34,7 +34,7 @@ private:
   void send_events();
 
   cppa::actor_ptr sink_;
-  size_t batch_size_ = 0;
+  uint64_t batch_size_ = 0;
   size_t errors_ = 0;
   std::vector<event> events_;
 };

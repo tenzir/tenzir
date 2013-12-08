@@ -20,7 +20,9 @@ segmentizer::segmentizer(actor_ptr upstream,
 
 void segmentizer::act()
 {
+  chaining(false);
   trap_exit(true);
+
   become(
       on(atom("EXIT"), arg_match) >> [=](uint32_t reason)
       {
@@ -32,30 +34,38 @@ void segmentizer::act()
             VAST_LOG_ACTOR_ERROR("failed to flush a fresh segment");
           assert(segment_.events() > 0);
         }
+
         if (segment_.events() > 0)
         {
           VAST_LOG_ACTOR_DEBUG(
               "sends final segment " << segment_.id() << " with " <<
-              segment_.events() << " events to @" << upstream_->id());
+              segment_.events() << " events to " << VAST_ACTOR_ID(upstream_));
+
           send(upstream_, std::move(segment_));
         }
+
         if (total_events_ > 0)
-          VAST_LOG_ACTOR_VERBOSE("processed " << total_events_ <<
-                                 " events in total");
+          VAST_LOG_ACTOR_VERBOSE("processed " << total_events_ << " events");
+
         quit(reason);
       },
+
       on_arg_match >> [=](std::vector<event> const& v)
       {
         VAST_LOG_ACTOR_DEBUG("got " << v.size() << " events");
+        total_events_ += v.size();
+
         for (auto& e : v)
           process(e);
-        total_events_ += v.size();
+
+        VAST_LOG_ACTOR_DEBUG("checkpoint");
       },
+
       others() >> [=]
       {
         VAST_LOG_ACTOR_ERROR(
-            "received unexpected message from @" <<
-            last_sender()->id() << ": " << to_string(last_dequeued()));
+            "received unexpected message from " <<
+            VAST_ACTOR_ID(last_sender()) << ": " << to_string(last_dequeued()));
       });
 }
 
@@ -66,7 +76,9 @@ char const* segmentizer::description() const
 
 void segmentizer::process(event const& e)
 {
-  if (writer_.write(e))
+  auto success = writer_.write(e);
+
+  if (success)
   {
     if (stats_.timed_add(1) && stats_.last() > 0)
     {
@@ -77,17 +89,18 @@ void segmentizer::process(event const& e)
           ", median " << stats_.median() <<
           ", standard deviation " << std::sqrt(stats_.variance()) << ")");
     }
-    return;
   }
+  else
+  {
+    VAST_LOG_ACTOR_DEBUG("sends segment " << segment_.id() <<
+                         " with " << segment_.events() << " events to " <<
+                         VAST_ACTOR_ID(upstream_));
 
-  VAST_LOG_ACTOR_DEBUG("sends segment " << segment_.id() <<
-                       " with " << segment_.events() << " events to @" <<
-                       upstream_->id());
-
-  auto max_segment_size = segment_.max_bytes();
-  send(upstream_, std::move(segment_));
-  segment_ = segment(uuid::random(), max_segment_size);
-  writer_.attach_to(&segment_);
+    auto max_segment_size = segment_.max_bytes();
+    send(upstream_, std::move(segment_));
+    segment_ = segment(uuid::random(), max_segment_size);
+    writer_.attach_to(&segment_);
+  }
 }
 
 } // namespace vast

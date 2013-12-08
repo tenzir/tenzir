@@ -14,11 +14,11 @@ using namespace cppa;
 ingestor::ingestor(actor_ptr receiver,
                    size_t max_events_per_chunk,
                    size_t max_segment_size,
-                   size_t batch_size)
-  : receiver_(receiver),
-    max_events_per_chunk_(max_events_per_chunk),
-    max_segment_size_(max_segment_size),
-    batch_size_(batch_size)
+                   uint64_t batch_size)
+  : receiver_{receiver},
+    max_events_per_chunk_{max_events_per_chunk},
+    max_segment_size_{max_segment_size},
+    batch_size_{batch_size}
 {
 }
 
@@ -43,13 +43,10 @@ void ingestor::act()
       on(atom("DOWN"), arg_match) >> [=](uint32_t /* reason */)
       {
         auto i = sinks_.find(last_sender());
-        if (i != sinks_.end())
-        {
-          // We caught one of the registered sinks.
-          sinks_.erase(i);
-          if (sinks_.empty())
-            quit(exit::done);
-        }
+        assert(i != sinks_.end());  // We only monitor sinks.
+        sinks_.erase(i);
+        if (sinks_.empty())
+          quit(exit::done);
       },
 #ifdef VAST_HAVE_BROCCOLI
       on(atom("ingest"), atom("broccoli"), arg_match) >>
@@ -80,16 +77,16 @@ void ingestor::act()
         delayed_send(
             self,
             std::chrono::seconds(2),
-            atom("statistics"), atom("print"), size_t(0));
+            atom("statistics"), atom("print"), uint64_t(0));
       },
-      on(atom("statistics"), arg_match) >> [=](size_t rate)
+      on(atom("statistics"), arg_match) >> [=](uint64_t rate)
       {
         assert(sinks_.find(last_sender()) != sinks_.end());
         sinks_[last_sender()] = rate;
       },
-      on(atom("statistics"), atom("print"), arg_match) >> [=](size_t last)
+      on(atom("statistics"), atom("print"), arg_match) >> [=](uint64_t last)
       {
-        size_t sum = 0;
+        uint64_t sum = 0;
         for (auto& pair : sinks_)
           sum += pair.second;
 
@@ -105,7 +102,7 @@ void ingestor::act()
       on_arg_match >> [=](segment& s)
       {
         VAST_LOG_ACTOR_DEBUG(
-            "relays segment " << s.id() << " to @" << receiver_->id());
+            "relays segment " << s.id() << " to @" << VAST_ACTOR_ID(receiver_));
 
         sync_send(receiver_, s).then(
             on(atom("ack"), arg_match) >> [=](uuid const& segment_id)
@@ -115,7 +112,7 @@ void ingestor::act()
             after(std::chrono::seconds(30)) >> [=]
             {
               VAST_LOG_ACTOR_ERROR("did not get ack from receiver @" <<
-                                   receiver_->id());
+                                   VAST_ACTOR_ID(receiver_));
 
               // TODO: Handle the failed segment, e.g., by sending it again or
               // saving it to the file system.

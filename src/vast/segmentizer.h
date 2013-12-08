@@ -31,7 +31,7 @@ private:
   void process(event const& e);
 
   cppa::actor_ptr upstream_;
-  util::temporal_accumulator<size_t> stats_;
+  util::temporal_accumulator<uint64_t> stats_;
   segment segment_;
   segment::writer writer_;
   size_t total_events_ = 0;
