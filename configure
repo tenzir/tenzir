@@ -91,6 +91,7 @@ levelize() {
 builddir=build
 CMakeCacheEntries=""
 append_cache_entry CMAKE_INSTALL_PREFIX   PATH      /usr/local/vast
+append_cache_entry VAST_LOG_LEVEL         INTEGER   $(levelize verbose)
 append_cache_entry ENABLE_DEBUG           BOOL      false
 append_cache_entry ENABLE_PERFTOOLS_HEAP  BOOL      false
 append_cache_entry CPACK_SOURCE_IGNORE_FILES STRING
