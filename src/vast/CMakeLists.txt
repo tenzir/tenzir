@@ -8,7 +8,6 @@ set(libvast_sources
   bitstream.cc
   chunk.cc
   configuration.cc
-  console.cc
   container.cc
   exception.cc
   expression.cc
@@ -81,6 +80,7 @@ endif ()
 
 if (EDITLINE_FOUND)
   set(libvast_sources ${libvast_sources}
+    console.cc
     util/command_line.cc
     util/editline.cc)
 endif ()

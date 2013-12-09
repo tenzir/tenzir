@@ -109,6 +109,8 @@ endif ()
 
 include_directories(BEFORE ${CMAKE_CURRENT_BINARY_DIR})
 
+include_directories(BEFORE ${CMAKE_SOURCE_DIR}/aux/lz4)
+
 add_subdirectory(aux)
 add_subdirectory(src)
 add_subdirectory(test)

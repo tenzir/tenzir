@@ -43,7 +43,9 @@ configuration::configuration()
   advanced.visible(false);
 
   auto& actor = create_block("actor options");
+#ifdef VAST_HAVE_EDITLINE
   actor.add('C', "console-actor", "spawn the console client actor");
+#endif
   actor.add('a', "all-server", "spawn all server actors");
   actor.add('A', "archive-actor", "spawn the archive");
   actor.add('I', "ingestor-actor", "spawn the ingestor");
@@ -104,12 +106,14 @@ void configuration::verify()
   if (check("profile") && as<unsigned>("profile") == 0)
     throw error::config("profiling interval must be non-zero", "profile");
 
+#ifdef VAST_HAVE_EDITLINE
   conflicts("console-actor", "all-server");
   conflicts("console-actor", "tracker-actor");
   conflicts("console-actor", "archive-actor");
   conflicts("console-actor", "index-actor");
   conflicts("console-actor", "ingestor-actor");
   conflicts("console-actor", "search-actor");
+#endif
 }
 
 bool initialize(configuration const& config)

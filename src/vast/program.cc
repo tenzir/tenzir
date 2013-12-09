@@ -1,11 +1,10 @@
 #include "vast/program.h"
 
 #include <cstdlib>
+#include <csignal>
 #include <iostream>
 #include "vast/archive.h"
 #include "vast/exception.h"
-#include "vast/config.h"
-#include "vast/console.h"
 #include "vast/file_system.h"
 #include "vast/id_tracker.h"
 #include "vast/index.h"
@@ -23,13 +22,19 @@
 #include "vast/util/broccoli.h"
 #endif
 
+#ifdef VAST_HAVE_EDITLINE
+#include "vast/console.h"
+#endif
+
 using namespace cppa;
 
 namespace vast {
 
 program::program(configuration const& config)
-  : config_{config},
-    server_{! config_.check("console-actor")}
+  : config_{config}
+#ifdef VAST_HAVE_EDITLINE
+  , server_{! config_.check("console-actor")}
+#endif
 {
 }
 
@@ -182,6 +187,7 @@ void program::act()
       publish(search_, search_port, search_host.c_str());
     }
 
+#ifdef VAST_HAVE_EDITLINE
     if (! server_)
     {
       VAST_LOG_ACTOR_VERBOSE("connects to search at " <<
@@ -190,6 +196,7 @@ void program::act()
       console_ = spawn<console, detached+linked>(search_, vast_dir / "console");
       delayed_send(console_, std::chrono::milliseconds(200), atom("prompt"));
     }
+#endif
 
     signal_monitor_ = spawn<signal_monitor, detached+linked>(self);
     send(signal_monitor_, atom("act"));
@@ -211,7 +218,7 @@ void program::act()
       {
         quit(exit::error);
         VAST_LOG_ACTOR_ERROR("terminated after unexpected message from @" <<
-                             last_sender()->id() << ": " <<
+                             VAST_ACTOR_ID(last_sender()) << ": " <<
                              to_string(self->last_dequeued()));
       });
 }

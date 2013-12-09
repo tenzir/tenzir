@@ -3,6 +3,7 @@
 
 #include <cppa/cppa.hpp>
 #include "vast/actor.h"
+#include "vast/config.h"
 #include "vast/configuration.h"
 
 namespace vast {
@@ -28,12 +29,16 @@ private:
   cppa::actor_ptr tracker_;
   cppa::actor_ptr ingestor_;
   cppa::actor_ptr search_;
-  cppa::actor_ptr console_;
   cppa::actor_ptr schema_manager_;
   cppa::actor_ptr signal_monitor_;
   cppa::actor_ptr profiler_;
-  configuration const& config_;
+
+#ifdef VAST_HAVE_EDITLINE
+  cppa::actor_ptr console_;
   bool server_ = true;
+#endif
+
+  configuration const& config_;
 };
 
 } // namespace vast

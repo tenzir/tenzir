@@ -35,8 +35,10 @@ string::string(char const* str, size_type size)
 }
 
 string::string(std::string const& str)
-  : string{str.data(), str.size()}
+  : string{str.data(), static_cast<size_type>(str.size())}
 {
+  if (str.size() > std::numeric_limits<size_type>::max())
+    throw std::runtime_error("string too large");
 }
 
 string::string(string const& other)
