@@ -226,9 +226,9 @@ bool schema::set_type::convert(std::string& str) const
 
 bool schema::table_type::convert(std::string& str) const
 {
-  str = "table[" 
-    + to<std::string>(key_type) 
-    + "] of " 
+  str = "table["
+    + to<std::string>(key_type)
+    + "] of "
     + to<std::string>(value_type);
   return true;
 }
@@ -280,13 +280,14 @@ void schema::load(std::string const& contents)
   auto i = contents.begin();
   auto end = contents.end();
   typedef std::string::const_iterator iterator_type;
-  detail::parser::error_handler<iterator_type> on_error(i, end);
+  std::string error;
+  detail::parser::error_handler<iterator_type> on_error{i, end, error};
   detail::parser::schema<iterator_type> grammar(on_error);
   detail::parser::skipper<iterator_type> skipper;
   detail::ast::schema::schema ast;
   bool success = phrase_parse(i, end, grammar, skipper, ast);
   if (! success || i != end)
-    throw error::schema("syntax error");
+    throw error::schema(error.c_str());
 
   detail::type_maker type_maker(*this);
   grammar.basic_type_.for_each(

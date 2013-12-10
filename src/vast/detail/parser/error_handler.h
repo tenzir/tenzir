@@ -3,7 +3,6 @@
 
 #include <string>
 #include <vector>
-#include "vast/logger.h"
 #include "vast/detail/parser/boost.h"
 
 namespace vast {
@@ -20,8 +19,8 @@ struct error_handler
     typedef void type;
   };
 
-  error_handler(Iterator first, Iterator last)
-    : first(first), last(last)
+  error_handler(Iterator first, Iterator last, std::string& error)
+    : first{first}, last{last}, error{error}
   {
   }
 
@@ -30,7 +29,7 @@ struct error_handler
   {
     using boost::spirit::qi::on_error;
     using boost::spirit::qi::fail;
-    typedef boost::phoenix::function<error_handler<Iterator>> functor;
+    using functor = boost::phoenix::function<error_handler<Iterator>>;
     on_error<fail>(production, functor(*this)(std::forward<Args>(args)...));
   }
 
@@ -39,18 +38,18 @@ struct error_handler
   {
     int line;
     Iterator line_start = get_pos(err_pos, line);
+    std::stringstream ss;
+
     if (err_pos != last)
-    {
-      VAST_LOG_ERROR("parse error, expecting " << production <<
-                     " at line " << line << ':');
-      VAST_LOG_ERROR(get_line(line_start));
-      VAST_LOG_ERROR(std::string(err_pos - line_start, ' ') << '^');
-    }
+      ss
+        << "parse error, expecting " << production
+        << " at line " << line << ":\n"
+        << get_line(line_start) << '\n'
+        << std::string(err_pos - line_start, ' ') << '^';
     else
-    {
-      VAST_LOG_ERROR("unexpected end of input in " << production <<
-                     " at line " << line);
-    }
+      ss << "unexpected end of input in " << production << " at line " << line;
+
+    error = ss.str();
   }
 
   Iterator get_pos(Iterator err_pos, int& line) const
@@ -94,6 +93,7 @@ struct error_handler
   Iterator first;
   Iterator last;
   std::vector<Iterator> iters;
+  std::string& error;
 };
 
 } // namespace parser

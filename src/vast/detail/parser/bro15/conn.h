@@ -34,13 +34,15 @@ struct skipper : qi::grammar<Iterator>
 template <typename Iterator>
 struct connection : qi::grammar<Iterator, event(), qi::locals<uint16_t, uint16_t>, skipper<Iterator>>
 {
-  connection();
+  connection(std::string& error);
 
   qi::rule<Iterator, event(), qi::locals<uint16_t, uint16_t>, skipper<Iterator>> conn;
   qi::rule<Iterator, string()> id;
   qi::rule<Iterator, string()> addl;
 
   detail::parser::address<Iterator> addr;
+
+  std::string& error;
 };
 
 } // namespace bro15

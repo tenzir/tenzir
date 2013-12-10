@@ -1,7 +1,6 @@
 #ifndef VAST_DETAIL_PARSER_BRO15_CONN_DEFINITION_H
 #define VAST_DETAIL_PARSER_BRO15_CONN_DEFINITION_H
 
-#include "vast/logger.h"
 #include "vast/detail/parser/bro15/conn.h"
 
 namespace vast {
@@ -17,11 +16,20 @@ struct error_handler
     typedef void type;
   };
 
+  error_handler(std::string& error)
+    : error{error}
+  {
+  }
+
   template <typename Production>
   void operator()(Production const& production) const
   {
-    VAST_LOG_ERROR("parse error at production " << production);
+    std::stringstream ss;
+    ss << "parse error at production " << production;
+    error = ss.str();
   }
+
+  std::string& error;
 };
 
 struct stamper
@@ -122,8 +130,8 @@ struct empty_maker
 };
 
 template <typename Iterator>
-connection<Iterator>::connection()
-  : connection::base_type(conn)
+connection<Iterator>::connection(std::string& error)
+  : connection::base_type{conn}, error{error}
 {
   using boost::phoenix::begin;
   using boost::phoenix::end;
@@ -187,7 +195,7 @@ connection<Iterator>::connection()
       =   raw[+(printable - '\n')] [_val = make_string(begin(_1), end(_1))]
       ;
 
-  on_error<fail>(conn, boost::phoenix::function<error_handler>()(_4));
+  on_error<fail>(conn, boost::phoenix::function<error_handler>(error)(_4));
 
   conn.name("connection");
   id.name("identifier");

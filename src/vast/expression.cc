@@ -891,13 +891,17 @@ std::unique_ptr<node> create(std::string const& str, schema const& sch)
   auto i = str.begin();
   auto end = str.end();
   using iterator = std::string::const_iterator;
-  detail::parser::error_handler<iterator> on_error{i, end};
+  std::string error;
+  detail::parser::error_handler<iterator> on_error{i, end, error};
   detail::parser::query<iterator> grammar{on_error};
   detail::parser::skipper<iterator> skipper;
   detail::ast::query::query q;
   bool success = phrase_parse(i, end, grammar, skipper, q);
   if (! success || i != end)
-    return {};
+  {
+    VAST_LOG_ERROR("parse error in '" << str << "'\n" << error);
+    return {}; // TODO: propagate parse error to user.
+  }
 
   if (! detail::ast::query::validate(q))
     return {}; // TODO: propagate validation error to user.
