@@ -21,7 +21,7 @@ file(GLOB_RECURSE tests *.cc)
 # library. So when this happens, we ensure that the right library gets picked
 # by adding a -L directive for the affected libraries.
 # We should remove this fix after having gotten rid of # Boost.Test.
-set(CMAKE_EXE_LINKER_FLAGS -L${Boost_LIBRARY_DIRS})
+set(CMAKE_EXE_LINKER_FLAGS "-L${Boost_LIBRARY_DIRS} ${CMAKE_EXE_LINKER_FLAGS}")
 add_executable(unit-test ${tests})
 target_link_libraries(unit-test libvast ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY})
 
