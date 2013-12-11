@@ -144,6 +144,7 @@ private:
 #endif
 
 #define VAST_LOG(lvl, msg)                                                    \
+  do                                                                          \
   {                                                                           \
     if (::vast::logger::instance()->takes(lvl))                               \
     {                                                                         \
@@ -152,7 +153,8 @@ private:
       m << msg;                                                               \
       ::vast::logger::instance()->log(lvl, m.str());                          \
     }                                                                         \
-  } VAST_VOID
+  }                                                                           \
+  while (false)
 
 #define VAST_ACTOR_ID(actor) \
   "@" << actor->id()

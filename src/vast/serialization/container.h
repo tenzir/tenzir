@@ -5,8 +5,8 @@
 #include <list>
 #include <vector>
 #include <map>
+#include <stdexcept>
 #include <unordered_map>
-#include "vast/exception.h"
 #include "vast/traits.h"
 #include "vast/serialization/arithmetic.h"
 

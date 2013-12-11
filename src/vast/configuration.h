@@ -12,7 +12,7 @@ public:
   configuration();
 
 protected:
-  virtual void verify() override;
+  virtual bool verify() override;
 };
 
 /// Initializes all singletons and creates global state.

@@ -99,21 +99,27 @@ configuration::configuration()
   search.visible(false);
 }
 
-void configuration::verify()
+bool configuration::verify()
 {
-  depends("schema.print", "schema.file");
-
-  if (check("profile") && as<unsigned>("profile") == 0)
-    throw error::config("profiling interval must be non-zero", "profile");
+  if (! add_dependency("schema.print", "schema.file"))
+    return false;
 
 #ifdef VAST_HAVE_EDITLINE
-  conflicts("console-actor", "all-server");
-  conflicts("console-actor", "tracker-actor");
-  conflicts("console-actor", "archive-actor");
-  conflicts("console-actor", "index-actor");
-  conflicts("console-actor", "ingestor-actor");
-  conflicts("console-actor", "search-actor");
+  if (! add_conflict("console-actor", "all-server"))
+    return false;
+  if (! conflicts("console-actor", "tracker-actor"));
+    return false;
+  if (! conflicts("console-actor", "archive-actor"));
+    return false;
+  if (! conflicts("console-actor", "index-actor"));
+    return false;
+  if (! conflicts("console-actor", "ingestor-actor"));
+    return false;
+  if (! conflicts("console-actor", "search-actor"));
+    return false;
 #endif
+
+  return true;
 }
 
 bool initialize(configuration const& config)
@@ -124,8 +130,8 @@ bool initialize(configuration const& config)
       return false;
 
   logger::instance()->init(
-      static_cast<logger::level>(config.as<uint32_t>("log.console-verbosity")),
-      static_cast<logger::level>(config.as<uint32_t>("log.file-verbosity")),
+      static_cast<logger::level>(*config.as<uint32_t>("log.console-verbosity")),
+      static_cast<logger::level>(*config.as<uint32_t>("log.file-verbosity")),
       config.check("log.function-names"),
       vast_dir / "log");
 

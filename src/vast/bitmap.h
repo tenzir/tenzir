@@ -2,9 +2,9 @@
 #define VAST_BITMAP_H
 
 #include <list>
+#include <stdexcept>
 #include <unordered_map>
 #include "vast/bitstream.h"
-#include "vast/exception.h"
 #include "vast/operator.h"
 #include "vast/optional.h"
 #include "vast/serialization.h"

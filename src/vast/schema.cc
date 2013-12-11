@@ -1,8 +1,8 @@
 #include "vast/schema.h"
 
 #include <fstream>
-#include "vast/exception.h"
 #include "vast/logger.h"
+#include "vast/optional.h"
 #include "vast/serialization.h"
 #include "vast/detail/ast/schema.h"
 #include "vast/detail/parser/schema.h"
@@ -15,7 +15,7 @@ namespace detail {
 class type_maker
 {
 public:
-  typedef intrusive_ptr<schema::type> result_type;
+  using result_type = intrusive_ptr<schema::type>;
 
   type_maker(schema const& s)
     : schema_(s)
@@ -27,7 +27,7 @@ public:
     switch (type)
     {
       default:
-        throw exception("missing type implementation");
+        assert(! "missing type implementation");
       case ast::schema::bool_type:
         return new schema::bool_type;
       case ast::schema::int_type:
@@ -124,41 +124,44 @@ private:
   schema const& schema_;
 };
 
-class schema_maker
+struct schema_maker
 {
-public:
-  typedef void result_type;
+  using result_type = void;
 
   schema_maker(schema& s)
-    : maker_(s)
-    , schema_(s)
+    : tm_{s}, schema_{s}
   {
   }
 
-  result_type operator()(ast::schema::type_declaration const& td) const
+  result_type operator()(ast::schema::type_declaration const& td)
   {
     if (auto p = boost::get<ast::schema::type_type>(&td.type))
-      schema_.add_type(td.name, boost::apply_visitor(std::ref(maker_), *p));
+    {
+      if (! schema_.add_type(td.name, boost::apply_visitor(std::ref(tm_), *p)))
+        error_ = error{"erroneous type declaration: " + td.name};
+    }
     else if (auto p = boost::get<ast::schema::type_info>(&td.type))
+    {
       if (! schema_.add_type_alias(p->name, td.name))
-        throw error::schema("could not create type alias");
+        error_ = error{"could not create type alias"};
+    }
   }
 
-  result_type operator()(ast::schema::event_declaration const& ed) const
+  result_type operator()(ast::schema::event_declaration const& ed)
   {
     schema::event e;
     e.name = ed.name;
 
     if (ed.args)
       for (auto& arg : *ed.args)
-        e.args.emplace_back(maker_.create_argument(arg));
+        e.args.emplace_back(tm_.create_argument(arg));
 
     schema_.add_event(std::move(e));
   }
 
-private:
-  type_maker maker_;
+  type_maker tm_;
   schema& schema_;
+  optional<error> error_;
 };
 
 } // namespace detail
@@ -270,41 +273,44 @@ bool schema::argument::convert(std::string& str) const
   return true;
 }
 
-void schema::load(std::string const& contents)
+trial<schema> schema::load(std::string const& contents)
 {
-  types_.clear();
-  events_.clear();
+  schema sch;
 
   VAST_LOG_DEBUG("parsing schema");
 
   auto i = contents.begin();
   auto end = contents.end();
-  typedef std::string::const_iterator iterator_type;
-  std::string error;
-  detail::parser::error_handler<iterator_type> on_error{i, end, error};
+  using iterator_type = std::string::const_iterator;
+  std::string err;
+  detail::parser::error_handler<iterator_type> on_error{i, end, err};
   detail::parser::schema<iterator_type> grammar(on_error);
   detail::parser::skipper<iterator_type> skipper;
   detail::ast::schema::schema ast;
   bool success = phrase_parse(i, end, grammar, skipper, ast);
   if (! success || i != end)
-    throw error::schema(error.c_str());
+    return error{std::move(err)};
 
-  detail::type_maker type_maker(*this);
+  detail::type_maker type_maker{sch};
   grammar.basic_type_.for_each(
       [&](std::string const& name, detail::ast::schema::type_info const& info)
       {
         auto t = boost::apply_visitor(std::ref(type_maker), info.type);
-        add_type(name, t);
+        sch.add_type(name, t);
       });
 
-  detail::schema_maker schema_maker(*this);
+  detail::schema_maker schema_maker{sch};
   for (auto& statement : ast)
+  {
     boost::apply_visitor(std::ref(schema_maker), statement);
+    if (schema_maker.error_)
+      return *schema_maker.error_;
+  }
 
-  VAST_LOG_DEBUG("parsed schema successfully");
+  return {std::move(sch)};
 }
 
-void schema::read(const std::string& filename)
+trial<schema> schema::read(const std::string& filename)
 {
   std::ifstream in(filename);
   std::string storage;
@@ -312,7 +318,8 @@ void schema::read(const std::string& filename)
   std::copy(std::istream_iterator<char>(in),
             std::istream_iterator<char>(),
             std::back_inserter(storage));
-  load(storage);
+
+  return load(storage);
 }
 
 void schema::write(std::string const& filename) const
@@ -341,17 +348,17 @@ schema::type_info schema::info(std::string const& name) const
 }
 
 
-std::vector<std::vector<size_t>> schema::symbol_offsets(
-    record_type const* record,
-    std::vector<std::string> const& ids)
+trial<std::vector<std::vector<size_t>>>
+schema::symbol_offsets(record_type const* rec,
+                       std::vector<std::string> const& ids)
 {
   if (ids.empty())
-    throw error::schema("empty symbol ids vector");
+    return error{"empty ID sequence"};
 
   std::vector<std::vector<size_t>> offs;
-  for (size_t i = 0; i < record->args.size(); ++i)
+  for (size_t i = 0; i < rec->args.size(); ++i)
   {
-    auto& ti = record->args[i].type;
+    auto& ti = rec->args[i].type;
     auto r = dynamic_cast<record_type const*>(ti.type.get());
     if (ti.name == ids.front())
     {
@@ -362,50 +369,56 @@ std::vector<std::vector<size_t>> schema::symbol_offsets(
       else if (r)
       {
         auto arg_offs = argument_offsets(r, {ids.begin() + 1, ids.end()});
-        arg_offs.insert(arg_offs.begin(), i);
-        offs.push_back(std::move(arg_offs));
+        if (! arg_offs)
+          return arg_offs.failure();
+
+        arg_offs->insert(arg_offs->begin(), i);
+        offs.push_back(std::move(*arg_offs));
       }
     }
     else if (auto r = dynamic_cast<record_type const*>(ti.type.get()))
     {
       auto inner = symbol_offsets(r, ids);
-      for (auto& v : inner)
+      if (! inner)
+        return inner.failure();
+
+      for (auto& v : *inner)
         v.insert(v.begin(), i);
 
-      offs.insert(offs.end(), inner.begin(), inner.end());
+      offs.insert(offs.end(), inner->begin(), inner->end());
     }
   }
 
-  return offs;
+  return {std::move(offs)};
 }
 
-std::vector<size_t> schema::argument_offsets(
-    record_type const* record,
+trial<std::vector<size_t>> schema::argument_offsets(
+    record_type const* rec,
     std::vector<std::string> const& ids)
 {
   if (ids.empty())
-    throw error::schema("empty argument name vector");
+    return error{"empty ID sequence"};
 
   std::vector<size_t> offs;
   auto found = true;
   for (auto sym = ids.begin(); sym != ids.end() && found; ++sym)
   {
     found = false;
-    assert(record != nullptr);
-    for (size_t i = 0; i < record->args.size(); ++i)
+    assert(rec != nullptr);
+    for (size_t i = 0; i < rec->args.size(); ++i)
     {
-      if (record->args[i].name == *sym)
+      if (rec->args[i].name == *sym)
       {
         // There can be only exactly one argument with the given name.
         found = true;
 
         // If the name matches, we have to check whether we're dealing
         // with the last argument name or yet another intermediate
-        // record.
-        auto type_ptr = record->args[i].type.type.get();
-        record = dynamic_cast<record_type const*>(type_ptr);
-        if (sym + 1 != ids.end() && ! record)
-          throw error::schema("intermediate arguments must be records");
+        // rec.
+        auto type_ptr = rec->args[i].type.type.get();
+        rec = dynamic_cast<record_type const*>(type_ptr);
+        if (sym + 1 != ids.end() && ! rec)
+          return error{"intermediate arguments must be records"};
 
         offs.push_back(i);
         break;
@@ -414,18 +427,23 @@ std::vector<size_t> schema::argument_offsets(
   }
 
   if (! found)
-    throw error::schema("non-existant argument name");
+    return error{"non-existant argument name"};
 
-  return offs;
+  return {std::move(offs)};
 }
 
-void schema::add_type(std::string name, intrusive_ptr<type> t)
+bool schema::add_type(std::string name, intrusive_ptr<type> t)
 {
   if (info(name))
-    throw error::schema("duplicate type");
+  {
+    VAST_LOG_ERROR("duplicate type: " << name);
+    return false;
+  }
 
   VAST_LOG_DEBUG("adding type " << name << ": " << to_string(*t));
   types_.emplace_back(std::move(name), std::move(t));
+
+  return true;
 }
 
 bool schema::add_type_alias(std::string const& type, std::string const& alias)
@@ -460,7 +478,10 @@ void schema::deserialize(deserializer& source)
 {
   std::string str;
   source >> str;
-  load(str);
+  if (auto s = load(str))
+    *this = std::move(*s);
+  else
+    VAST_LOG_ERROR("failed during schema deserialization");
 }
 
 bool schema::convert(std::string& to) const

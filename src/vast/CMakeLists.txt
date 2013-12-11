@@ -9,7 +9,6 @@ set(libvast_sources
   chunk.cc
   configuration.cc
   container.cc
-  exception.cc
   expression.cc
   event.cc
   event_index.cc

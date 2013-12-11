@@ -1,7 +1,6 @@
 #include "vast/file_system.h"
 
 #include <cassert>
-#include "vast/exception.h"
 #include "vast/serialization.h"
 #include "vast/util/convert.h"
 
@@ -269,9 +268,9 @@ file& file::operator=(file&& other)
 bool file::open(open_mode mode, bool append)
 {
   if (is_open_)
-    throw error::io("cannot open file twice");
+    return false;
   if (mode == read_only && append)
-    throw error::io("cannot open file in read mode and append");
+    return false; // Cannot open file in read mode and append simultaneously.
 #ifdef VAST_POSIX
   int flags = O_CREAT;
   switch (mode)

@@ -204,16 +204,18 @@ console::console(cppa::actor_ptr search, path dir)
         if (q.empty())
           return true;
         sync_send(search_, atom("query"), atom("create"), q).then(
+            on_arg_match >> [=](std::string const& error) // TODO: use error class.
+            {
+              std::cerr << "[error] syntax error: " << error << std::endl;
+              show_prompt();
+            },
             on_arg_match >> [=](actor_ptr const& qry, expr::ast const& ast)
             {
               assert(! results_.count(qry));
+              assert(qry);
+              assert(ast);
+
               cmdline_.append_to_history(q);
-              if (! qry)
-              {
-                std::cerr << "[error] syntax error: " << q << std::endl;
-                show_prompt();
-                return;
-              }
               monitor(qry);
               current_query_ = qry;
               current_result_ = &results_.emplace(qry, ast).first->second;

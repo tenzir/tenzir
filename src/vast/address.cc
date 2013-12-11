@@ -13,9 +13,74 @@ std::array<uint8_t, 12> const vast::address::v4_mapped_prefix =
 
 namespace vast {
 
+optional<address> address::from_string(char const* str)
+{
+  auto p = str;
+  while (*p != '\0' && *p != ':')
+    ++p;
+  return *p != '\0' ? from_v6(str) : from_v4(str);
+}
+
+optional<address> address::from_string(std::string const& str)
+{
+  if (str.size() > 63)
+    return {};
+  return from_string(str.c_str());
+}
+
+optional<address> address::from_string(string const& str)
+{
+  return from_string(str.data());
+}
+
+optional<address> address::from_v4(char const* str)
+{
+  address r;
+  std::copy(v4_mapped_prefix.begin(), v4_mapped_prefix.end(), r.bytes_.begin());
+
+  int a[4];
+  int n = sscanf(str, "%d.%d.%d.%d", a + 0, a + 1, a + 2, a + 3);
+
+  if (n != 4
+      || a[0] < 0 || a[1] < 0 || a[2] < 0 || a[3] < 0
+      || a[0] > 255 || a[1] > 255 || a[2] > 255 || a[3] > 255)
+    return {};
+
+  uint32_t addr = (a[0] << 24) | (a[1] << 16) | (a[2] << 8) | a[3];
+  auto p = reinterpret_cast<uint32_t*>(&r.bytes_[12]);
+  *p = util::byte_swap<host_endian, network_endian>(addr);
+
+  return {std::move(r)};
+}
+
+optional<address> address::from_v6(char const* str)
+{
+  address r;
+  if (inet_pton(AF_INET6, str, r.bytes_.data()) <= 0)
+    return {};
+
+  return {std::move(r)};
+}
+
 address::address()
 {
   bytes_.fill(0);
+}
+
+address::address(char const* str)
+{
+  if (auto a = from_string(str))
+    *this = std::move(*a);
+}
+
+address::address(std::string const& str)
+  : address{str.c_str()}
+{
+}
+
+address::address(string const& str)
+  : address{str.data()}
+{
 }
 
 address::address(address&& other)
@@ -28,9 +93,7 @@ address::address(uint32_t const* bytes, family fam, byte_order order)
 {
   if (fam == ipv4)
   {
-    std::copy(v4_mapped_prefix.begin(),
-              v4_mapped_prefix.end(),
-              bytes_.begin());
+    std::copy(v4_mapped_prefix.begin(), v4_mapped_prefix.end(), bytes_.begin());
 
     auto p = reinterpret_cast<uint32_t*>(&bytes_[12]);
     if (order == host)
@@ -50,40 +113,6 @@ address::address(uint32_t const* bytes, family fam, byte_order order)
   {
     std::copy(bytes, bytes + 4, reinterpret_cast<uint32_t*>(bytes_.data()));
   }
-}
-
-address::address(char const* str)
-{
-  auto p = str;
-  while (*p != '\0' && *p != ':')
-    ++p;
-
-  if (*p != '\0')
-    from_v6(str);
-  else
-    from_v4(str);
-}
-
-address::address(std::string const& str)
-  : address(str.data())
-{
-}
-
-address::address(string const& str)
-{
-  if (str.size() > 63)
-    throw error::bad_value("address string too long", address_type);
-
-  // We need a NUL-termianted string for inet_pton,
-  // hence this extra copy :-/.
-  char buf[64];
-  std::copy(str.begin(), str.end(), buf);
-  buf[str.size()] = '\0';
-
-  if (str.find(":") != string::npos)
-    from_v6(buf);
-  else
-    from_v4(buf);
 }
 
 bool address::is_v4() const
@@ -123,10 +152,10 @@ bool address::is_multicast() const
   return is_v4() ? bytes_[12] == 224 : bytes_[0] == 0xff;
 }
 
-void address::mask(unsigned top_bits_to_keep)
+bool address::mask(unsigned top_bits_to_keep)
 {
   if (top_bits_to_keep > 128)
-    throw error::bad_value("bad mask value", address_type);
+    return false;
 
   auto i = 12u;
   auto bits_to_chop = 128 - top_bits_to_keep;
@@ -143,6 +172,8 @@ void address::mask(unsigned top_bits_to_keep)
   val >>= bits_to_chop;
   val <<= bits_to_chop;
   *last = util::byte_swap<host_endian, network_endian>(val);
+
+  return true;
 }
 
 address& address::operator&=(address const& other)
@@ -161,63 +192,19 @@ address& address::operator|=(address const& other)
 
 address& address::operator^=(address const& other)
 {
-  if (is_v4() && other.is_v4())
+  if (is_v4() || other.is_v4())
     for (auto i = 12u; i < 16u; ++i)
       bytes_[i] ^= other.bytes_[i];
-  else if (is_v6() && other.is_v6())
+  else
     for (auto i = 0u; i < 16u; ++i)
       bytes_[i] ^= other.bytes_[i];
-  else
-    throw error::bad_value("cannot XOR v4 and v6 addresses", address_type);
+
   return *this;
 }
 
 std::array<uint8_t, 16> const& address::data() const
 {
   return bytes_;
-}
-
-void address::from_v4(char const* str)
-{
-  std::copy(v4_mapped_prefix.begin(),
-            v4_mapped_prefix.end(),
-            bytes_.begin());
-
-  int a[4];
-  int n = sscanf(str, "%d.%d.%d.%d", a + 0, a + 1, a + 2, a + 3);
-
-  if (n != 4 ||
-      a[0] < 0 || a[1] < 0 || a[2] < 0 || a[3] < 0 ||
-      a[0] > 255 || a[1] > 255 || a[2] > 255 || a[3] > 255)
-    throw error::bad_value(str, address_type);
-
-  uint32_t addr = (a[0] << 24) | (a[1] << 16) | (a[2] << 8) | a[3];
-  auto p = reinterpret_cast<uint32_t*>(&bytes_[12]);
-  *p = util::byte_swap<host_endian, network_endian>(addr);
-}
-
-void address::from_v6(char const* str)
-{
-  if (inet_pton(AF_INET6, str, bytes_.data()) <= 0)
-    throw error::bad_value(str, address_type);
-}
-
-string address::to_string() const
-{
-  if (is_v4())
-  {
-    char buf[INET_ADDRSTRLEN];
-    if (inet_ntop(AF_INET, &bytes_[12], buf, INET_ADDRSTRLEN) == nullptr)
-      throw error::bad_value(buf, address_type);
-    return {buf};
-  }
-  else
-  {
-    char buf[INET6_ADDRSTRLEN];
-    if (inet_ntop(AF_INET6, &bytes_, buf, INET6_ADDRSTRLEN) == nullptr)
-      throw error::bad_value(buf, address_type);
-    return {buf};
-  }
 }
 
 void address::serialize(serializer& sink) const
@@ -239,6 +226,26 @@ void address::deserialize(deserializer& source)
     source >> *p;
   }
   VAST_LEAVE(VAST_THIS);
+}
+
+bool address::convert(string& str) const
+{
+  if (is_v4())
+  {
+    char buf[INET_ADDRSTRLEN];
+    if (inet_ntop(AF_INET, &bytes_[12], buf, INET_ADDRSTRLEN) == nullptr)
+      return false;
+    str = {buf};
+  }
+  else
+  {
+    char buf[INET6_ADDRSTRLEN];
+    if (inet_ntop(AF_INET6, &bytes_, buf, INET6_ADDRSTRLEN) == nullptr)
+      return false;
+    str = {buf};
+  }
+
+  return true;
 }
 
 bool operator==(address const& x, address const& y)

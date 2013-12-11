@@ -2,7 +2,6 @@
 
 #include <cppa/cppa.hpp>
 #include "vast/event.h"
-#include "vast/exception.h"
 #include "vast/logger.h"
 
 namespace vast {

@@ -1,7 +1,7 @@
 #include "vast/io/array_stream.h"
 
+#include <algorithm>
 #include <cassert>
-#include "vast/exception.h"
 
 namespace vast {
 namespace io {
@@ -32,9 +32,9 @@ bool array_input_stream::next(void const** data, size_t* size)
 void array_input_stream::rewind(size_t bytes)
 {
   if (last_size_ == 0)
-    throw error::io("rewind can only be called after successful next");
+    return; // We can only be called after successful next().
   if (bytes > last_size_)
-    throw error::io("rewind cannot rewind more bytes than available");
+    return; // Cannot rewind more bytes than available. TODO: rewind max?
   position_ -= bytes;
   last_size_ = 0;
 }
@@ -83,9 +83,9 @@ bool array_output_stream::next(void** data, size_t* size)
 void array_output_stream::rewind(size_t bytes)
 {
   if (last_size_ == 0)
-    throw error::io("rewind can only be called after successful next");
+    return; // We can only be called after successful next().
   if (bytes > last_size_)
-    throw error::io("rewind cannot rewind more bytes than available");
+    return; // Cannot rewind more bytes than available. TODO: rewind max?
   position_ -= bytes;
   last_size_ = 0;
 }

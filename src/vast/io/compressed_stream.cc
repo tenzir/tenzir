@@ -1,7 +1,6 @@
 #include "vast/io/compressed_stream.h"
 
 #include "vast/config.h"
-#include "vast/exception.h"
 #include "vast/logger.h"
 
 #include <lz4.h>
@@ -29,7 +28,7 @@ bool compressed_input_stream::next(void const** data, size_t* size)
   if (! source_.read<uint32_t>(&compressed_block_size))
     VAST_RETURN(false);
   if (compressed_block_size == 0)
-    throw error::io("compressed blocks may never have size 0");
+    VAST_RETURN(false); // Compressed blocks shall never have size 0.
 
   void const* src_data;
   size_t src_size;
@@ -104,7 +103,7 @@ compressed_input_stream* make_compressed_input_stream(
   switch (method)
   {
     default:
-      throw error::io("invalid compression method");
+      throw std::runtime_error("invalid compression method");
     case null:
       return new null_input_stream(source);
     case lz4:
@@ -198,7 +197,7 @@ compressed_output_stream* make_compressed_output_stream(
   switch (method)
   {
     default:
-      throw error::io("invalid compression method");
+      throw std::runtime_error("invalid compression method");
     case null:
       return new null_output_stream(sink);
     case lz4:

@@ -6,6 +6,7 @@
 #include "vast/bitstream.h"
 #include "vast/expression.h"
 #include "vast/search_result.h"
+#include "vast/util/trial.h"
 
 namespace vast {
 
@@ -24,7 +25,7 @@ public:
   /// Creates a new query for a given string and creates internal state.
   /// @param str The query string.
   /// @returns The AST respresentation of *str*.
-  expr::ast add_query(std::string const& str);
+  trial<expr::ast> add_query(std::string const& str);
 
   /// Updates the query state of a given AST with a new result.
   /// @param ast The predicate to update.

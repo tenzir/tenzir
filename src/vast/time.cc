@@ -4,7 +4,6 @@
 #include <sstream>
 #include <iomanip>
 #include "vast/config.h"
-#include "vast/exception.h"
 #include "vast/logger.h"
 #include "vast/serialization.h"
 #include "vast/util/print.h"
@@ -155,42 +154,42 @@ time_point::time_point(int year,
   if (sec)
   {
     if (sec < 0 || sec > 59)
-      throw error::out_of_range("time_point: second");
+      throw std::out_of_range("time_point: second");
 
     t.tm_sec = sec;
   }
   if (min)
   {
     if (min < 0 || min > 59)
-      throw error::out_of_range("time_at: minute");
+      throw std::out_of_range("time_at: minute");
 
     t.tm_min = min;
   }
   if (hour)
   {
     if (hour < 0 || hour > 59)
-      throw error::out_of_range("time_at: hour");
+      throw std::out_of_range("time_at: hour");
 
     t.tm_hour = hour;
   }
   if (day)
   {
     if (day < 1 || day > 31)
-      throw error::out_of_range("time_at: day");
+      throw std::out_of_range("time_at: day");
 
     t.tm_mday = day;
   }
   if (month)
   {
     if (month < 1 || month > 12)
-      throw error::out_of_range("time_at: month");
+      throw std::out_of_range("time_at: month");
 
     t.tm_mon = month - 1;
   }
   if (year)
   {
     if (year < 1970)
-      throw error::out_of_range("time_at: year");
+      throw std::out_of_range("time_at: year");
 
     t.tm_year = year - 1900;
   }
@@ -248,12 +247,12 @@ time_point::time_point(std::tm const& tm)
   {
     std::lock_guard<std::mutex> lock(time_zone_mutex);
     if (::setenv("TZ", "GMT", 1))
-      throw exception("could not set timzone variable");
+      throw std::runtime_error("could not set timzone variable");
   }
 
   auto t = std::mktime(const_cast<std::tm*>(&tm));
   if (t == -1)
-    throw exception("time_point(): invalid std::tm");
+    throw std::runtime_error("time_point(): invalid std::tm");
 
   time_point_ = clock::from_time_t(t);
 }
@@ -403,12 +402,12 @@ time_t to_time_t(std::tm const& tm)
   {
     std::lock_guard<std::mutex> lock(time_zone_mutex);
     if (::setenv("TZ", "GMT", 1))
-      throw exception("could not set timzone variable");
+      throw std::runtime_error("could not set timzone variable");
   }
 
   auto t = std::mktime(const_cast<std::tm*>(&tm));
   if (t == -1)
-    throw exception("time_point(): invalid std::tm");
+    throw std::runtime_error("time_point(): invalid std::tm");
 
   return t;
 }

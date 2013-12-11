@@ -4,7 +4,6 @@
 #include <csignal>
 #include <iostream>
 #include "vast/archive.h"
-#include "vast/exception.h"
 #include "vast/file_system.h"
 #include "vast/id_tracker.h"
 #include "vast/index.h"
@@ -46,7 +45,7 @@ void program::act()
   {
     if (config_.check("profile"))
     {
-      auto ms = config_.as<unsigned>("profile");
+      auto ms = *config_.as<unsigned>("profile");
       profiler_ = spawn<util::profiler, linked>(
           to_string(vast_dir / "log"), std::chrono::seconds(ms));
       if (config_.check("profile-cpu"))
@@ -72,7 +71,7 @@ void program::act()
     }
 
     auto& tracker_host = config_.get("tracker.host");
-    auto tracker_port = config_.as<unsigned>("tracker.port");
+    auto tracker_port = *config_.as<unsigned>("tracker.port");
     if (config_.check("tracker-actor") || config_.check("all-server"))
     {
       tracker_ = spawn<id_tracker_actor, linked>(vast_dir);
@@ -88,11 +87,11 @@ void program::act()
     }
 
     auto& archive_host = config_.get("archive.host");
-    auto archive_port = config_.as<unsigned>("archive.port");
+    auto archive_port = *config_.as<unsigned>("archive.port");
     if (config_.check("archive-actor") || config_.check("all-server"))
     {
       archive_ = spawn<archive_actor, linked>(
-          vast_dir / "archive", config_.as<size_t>("archive.max-segments"));
+          vast_dir / "archive", *config_.as<size_t>("archive.max-segments"));
       VAST_LOG_ACTOR_VERBOSE("publishes archive at " <<
                            archive_host << ':' << archive_port);
       publish(archive_, archive_port, archive_host.c_str());
@@ -105,7 +104,7 @@ void program::act()
     }
 
     auto& index_host = config_.get("index.host");
-    auto index_port = config_.as<unsigned>("index.port");
+    auto index_port = *config_.as<unsigned>("index.port");
     if (config_.check("index-actor") || config_.check("all-server"))
     {
       index_ = spawn<index_actor, linked>(vast_dir / "index");
@@ -121,7 +120,7 @@ void program::act()
     }
 
     auto& receiver_host = config_.get("receiver.host");
-    auto receiver_port = config_.as<unsigned>("receiver.port");
+    auto receiver_port = *config_.as<unsigned>("receiver.port");
     if (config_.check("archive-actor")
         || config_.check("index-actor")
         || config_.check("all-server"))
@@ -141,9 +140,9 @@ void program::act()
     if (config_.check("ingestor-actor"))
     {
       ingestor_ = spawn<ingestor, linked>(receiver_,
-          config_.as<size_t>("ingest.max-events-per-chunk"),
-          config_.as<size_t>("ingest.max-segment-size") * 1000000,
-          config_.as<size_t>("ingest.batch-size"));
+          *config_.as<size_t>("ingest.max-events-per-chunk"),
+          *config_.as<size_t>("ingest.max-segment-size") * 1000000,
+          *config_.as<size_t>("ingest.batch-size"));
 
 #ifdef VAST_HAVE_BROCCOLI
       util::broccoli::init(config_.check("broccoli-messages"),
@@ -151,9 +150,9 @@ void program::act()
       if (config_.check("ingest.broccoli-events"))
       {
         auto& host = config_.get("ingest.broccoli-host");
-        auto port = config_.as<unsigned>("ingest.broccoli-port");
+        auto port = *config_.as<unsigned>("ingest.broccoli-port");
         auto events =
-          config_.as<std::vector<std::string>>("ingest.broccoli-events");
+          *config_.as<std::vector<std::string>>("ingest.broccoli-events");
         send(ingestor_,
              atom("ingest"), atom("broccoli"),
              host, port,
@@ -164,7 +163,7 @@ void program::act()
       if (config_.check("ingest.file-names"))
       {
         auto& type = config_.get("ingest.file-type");
-        auto files = config_.as<std::vector<std::string>>("ingest.file-names");
+        auto files = *config_.as<std::vector<std::string>>("ingest.file-names");
         for (auto& file : files)
         {
           if (exists(string(file)))
@@ -178,7 +177,7 @@ void program::act()
     }
 
     auto& search_host = config_.get("search.host");
-    auto search_port = config_.as<unsigned>("search.port");
+    auto search_port = *config_.as<unsigned>("search.port");
     if (config_.check("search-actor") || config_.check("all-server"))
     {
       search_ = spawn<search_actor, linked>(archive_, index_, schema_manager_);

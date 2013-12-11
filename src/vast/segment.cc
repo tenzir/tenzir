@@ -4,8 +4,6 @@
 #include "vast/logger.h"
 #include "vast/serialization.h"
 #include "vast/util/make_unique.h"
-#include "vast/exception.h"
-#include "vast/logger.h"
 
 namespace vast {
 
@@ -379,12 +377,12 @@ void segment::deserialize(deserializer& source)
   uint32_t m;
   source >> m;
   if (m != magic)
-    throw error::segment("invalid segment magic");
+    throw std::runtime_error("invalid segment magic");
 
   uint8_t v;
   source >> v;
   if (v > segment::version)
-    throw error::segment("segment version too high");
+    throw std::runtime_error("segment version too high");
 
   source >> id_;
   source >> compression_;

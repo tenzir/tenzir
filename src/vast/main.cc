@@ -15,7 +15,7 @@ int main(int argc, char *argv[])
       return 0;
     }
   }
-  catch (error::config const& e)
+  catch (std::logic_error const& e)
   {
     std::cerr << e.what() << ", try -h or --help" << std::endl;
     return 1;

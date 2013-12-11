@@ -7,6 +7,7 @@
 #include "vast/schema.h"
 #include "vast/util/operators.h"
 #include "vast/util/print.h"
+#include "vast/util/trial.h"
 #include "vast/util/visitor.h"
 
 namespace vast {
@@ -207,6 +208,11 @@ class ast : util::totally_ordered<ast>,
             util::printable<ast>
 {
 public:
+  /// Creates an AST.
+  /// @param str The string representing the expression.
+  /// @param sch The schema to use to resolve event clauses.
+  static trial<ast> parse(std::string const& str, schema const& sch = {});
+
   ast() = default;
   ast(std::string const& str, schema const& sch = {});
   ast(std::unique_ptr<node> n);
@@ -247,11 +253,6 @@ private:
     return true;
   }
 };
-
-/// Creates an expression tree.
-/// @param str The string representing the expression.
-/// @param sch The schema to use to resolve event clauses.
-std::unique_ptr<node> create(std::string const& str, schema const& sch = {});
 
 /// Evaluates an expression node for a given event.
 /// @relates evaluator

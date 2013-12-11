@@ -249,7 +249,7 @@ value::data::data(data const& other)
   switch (other.type())
   {
     default:
-      throw error::bad_type{"corrupt value type", other.type()};
+      throw std::runtime_error("corrupt value type");
       break;
     case invalid_type:
       return;
@@ -335,7 +335,7 @@ void value::data::construct(value_type t)
   switch (t)
   {
     default:
-      throw error::bad_type{"corrupt value type", t};
+      throw std::runtime_error("corrupt value type");
       break;
     case invalid_type:
       break;
@@ -400,7 +400,7 @@ void value::data::serialize(serializer& sink) const
   switch (type())
   {
     default:
-      throw error::bad_type{"corrupt value type", type()};
+      throw std::runtime_error("corrupt value type");
       break;
     case bool_type:
       sink << bool_;
@@ -456,7 +456,7 @@ void value::data::deserialize(deserializer& source)
   switch (type())
   {
     default:
-      throw error::bad_type{"corrupt value type", type()};
+      throw std::runtime_error("corrupt value type");
       break;
     case bool_type:
       source >> bool_;

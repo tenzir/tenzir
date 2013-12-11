@@ -6,6 +6,7 @@
 #include <string>
 #include "vast/intrusive.h"
 #include "vast/fwd.h"
+#include "vast/util/trial.h"
 
 namespace vast {
 
@@ -115,42 +116,42 @@ public:
     bool indexed = true;
   };
 
+  /// Loads schema contents.
+  /// @param contents The contents of a schema file.
+  /// @returns An engaged trial on success.
+  static trial<schema> load(std::string const& contents);
+
+  /// Loads a schema from a file.
+  /// @param filename The schema file.
+  /// @returns An engaged trial on success.
+  static trial<schema> read(std::string const& filename);
+
   /// Computes the offsets vectors for a given symbol sequence.
   ///
-  /// @param record The record to search for symbol types whose name matches
+  /// @param rec The record to search for symbol types whose name matches
   /// the first element of *ids*.
   ///
-  /// @param ids The name sequence to look for in *record*. If
+  /// @param ids The name sequence to look for in *rec*. If
   /// `ids.size() > 1`, the first element represents a symbol of type record
   /// and each subsequent elements of *ids* then represent further argument
   /// names to dereference.
   ///
   /// @returns A vector of offset vectors. Each offset vector represents a
   /// sequence of offsets which have to be used in order to get to *name*.
-  /// Since *record* may contain multiple arguments of type *name*, the result
+  /// Since *rec* may contain multiple arguments of type *name*, the result
   /// is a vector of vectors.
-  static std::vector<std::vector<size_t>> symbol_offsets(
-      record_type const* record,
-      std::vector<std::string> const& ids);
+  static trial<std::vector<std::vector<size_t>>>
+  symbol_offsets(record_type const* rec, std::vector<std::string> const& ids);
 
   /// Computes the offsets vector for a given argument name sequence.
-  /// @param record The event/record to search.
-  /// @param ids The argument names to look for in *record*.
+  /// @param rec The event/record to search.
+  /// @param ids The argument names to look for in *rec*.
   /// @returns A vector of offsets to get to *ids*.
-  static std::vector<size_t> argument_offsets(
-      record_type const* record,
-      std::vector<std::string> const& ids);
+  static trial<std::vector<size_t>>
+  argument_offsets(record_type const* rec, std::vector<std::string> const& ids);
 
   /// Default-constructs a schema.
   schema() = default;
-
-  /// Loads schema contents.
-  /// @param contents The contents of a schema file.
-  void load(std::string const& contents);
-
-  /// Loads a schema from a file.
-  /// @param filename The schema file.
-  void read(std::string const& filename);
 
   /// Saves the schema to a file.
   /// @param filename The schema file.
@@ -175,7 +176,8 @@ public:
   /// Creates a new type information object.
   /// @param name The name of *t*.
   /// @param t The schema type.
-  void add_type(std::string name, intrusive_ptr<type> t);
+  /// @returns `true` on success.
+  bool add_type(std::string name, intrusive_ptr<type> t);
 
   /// Creates a type alias.
   /// @param type The name of the type to create an alias for.

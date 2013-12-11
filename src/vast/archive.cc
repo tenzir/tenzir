@@ -3,7 +3,6 @@
 #include <cppa/cppa.hpp>
 #include "vast/aliases.h"
 #include "vast/bitstream.h"
-#include "vast/exception.h"
 #include "vast/file_system.h"
 #include "vast/segment.h"
 #include "vast/segment_manager.h"

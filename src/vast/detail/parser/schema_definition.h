@@ -1,7 +1,6 @@
 #ifndef VAST_DETAIL_PARSER_SCHEMA_DEFINITION_H
 #define VAST_DETAIL_PARSER_SCHEMA_DEFINITION_H
 
-#include "vast/exception.h"
 #include "vast/detail/parser/boost.h"
 #include "vast/detail/parser/schema.h"
 
@@ -51,7 +50,7 @@ schema<Iterator>::schema(error_handler<Iterator>& on_error)
     {
       auto& name = decl.name;
       if (basic_type_.find(name) || type_.find(name) || event_.find(name))
-        throw error::schema("conflicting type name");
+        throw std::runtime_error("conflicting type name");
 
       if (auto p = boost::get<ast::schema::type_type>(&decl.type))
       {
@@ -67,9 +66,9 @@ schema<Iterator>::schema(error_handler<Iterator>& on_error)
     [&](ast::schema::event_declaration const& ed, qi::unused_type, qi::unused_type)
     {
       if (event_.find(ed.name))
-        throw error::schema("duplicate event name");
+        throw std::runtime_error("duplicate event name");
       else if (type_.find(ed.name))
-        throw error::schema("conflicting event name");
+        throw std::runtime_error("conflicting event name");
 
       event_.add(ed.name, ed);
     };

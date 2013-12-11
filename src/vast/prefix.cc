@@ -15,7 +15,11 @@ prefix::prefix(address addr, uint8_t length)
   : network_{std::move(addr)},
     length_{length}
 {
-  initialize();
+  if (! initialize())
+  {
+    network_ = address{};
+    length_ = 0;
+  }
 }
 
 prefix::prefix(prefix&& other)
@@ -42,21 +46,23 @@ uint8_t prefix::length() const
   return network_.is_v4() ? length_ - 96 : length_;
 }
 
-void prefix::initialize()
+bool prefix::initialize()
 {
   if (network_.is_v4())
   {
     if (length_ > 32)
-      throw error::bad_value("invalid prefix", prefix_type);
+      return false;
 
     length_ += 96;
   }
   else if (length_ > 128)
   {
-    throw error::bad_value("invalid prefix", prefix_type);
+    return false;
   }
 
   network_.mask(length_);
+
+  return true;
 }
 
 void prefix::serialize(serializer& sink) const

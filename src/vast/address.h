@@ -4,6 +4,7 @@
 #include <array>
 #include <string>
 #include "vast/fwd.h"
+#include "vast/optional.h"
 #include "vast/string.h"
 #include "vast/util/operators.h"
 #include "vast/util/parse.h"
@@ -35,8 +36,44 @@ public:
     network
   };
 
-  /// Default-constructs an (empty) address.
+  /// Constructs an address from a C string.
+  /// @param start The string holding and IPv4 or IPv6 address.
+  /// @returns An engaged option iff parsing succeeded.
+  static optional<address> from_string(char const* str);
+
+  /// Constructs an address from a C++ string.
+  /// @param start The string holding and IPv4 or IPv6 address.
+  /// @returns An engaged option iff parsing succeeded.
+  static optional<address> from_string(std::string const& str);
+
+  /// Constructs an address from a VAST string.
+  /// @param start The string holding and IPv4 or IPv6 address.
+  /// @returns An engaged option iff parsing succeeded.
+  static optional<address> from_string(string const& str);
+
+  /// Constructs an IPv4 address from a string.
+  /// @param str The string holding the IPv4 address.
+  static optional<address> from_v4(char const* str);
+
+  /// Constructs an IPv6 address from a string.
+  /// @param str The string holding the IPv6 address.
+  static optional<address> from_v6(char const* str);
+
   address();
+
+  /// Constructs an address from a C string.
+  /// @param start The string holding and IPv4 or IPv6 address.
+  explicit address(char const* str);
+
+  /// Constructs an address from a C++ string.
+  /// @param start The string holding and IPv4 or IPv6 address.
+  /// @returns An engaged option iff parsing succeeded.
+  explicit address(std::string const& str);
+
+  /// Constructs an address from a VAST string.
+  /// @param start The string holding and IPv4 or IPv6 address.
+  /// @returns An engaged option iff parsing succeeded.
+  explicit address(string const& str);
 
   address(address const&) = default;
   address(address&& other);
@@ -53,21 +90,6 @@ public:
   /// @param order The byte order in which the address pointed to by *bytes*
   /// is stored in.
   address(uint32_t const* bytes, family fam, byte_order order);
-
-  /// Constructs an address from a C string.
-  ///
-  /// @param start The string holding and IPv4 or IPv6 address.
-  address(char const* str);
-
-  /// Constructs an address from a C++ string.
-  ///
-  /// @param str The string holding and IPv4 or IPv6 address.
-  address(std::string const& str);
-
-  /// Constructs an address from a VAST++ string.
-  ///
-  /// @param str The string holding and IPv4 or IPv6 address.
-  address(string const& str);
 
   /// Determines whether the address is IPv4.
   ///
@@ -104,7 +126,9 @@ public:
   /// interpreted relative to the IPv6 bit width, even if the address
   /// is IPv4. That means if we compute 192.168.1.2/16, we need to pass in
   /// 112 (i.e., 96 + 16). The value must be in the range from 0 to 128.
-  void mask(unsigned top_bits_to_keep);
+  ///
+  /// @returns `true` on success.
+  bool mask(unsigned top_bits_to_keep);
 
   /// AND's another address to this instance.
   /// @param other The other address.
@@ -126,10 +150,6 @@ public:
   std::array<uint8_t, 16> const& data() const;
 
 private:
-  void from_v4(char const* str);
-  void from_v6(char const* str);
-  string to_string() const;
-
   std::array<uint8_t, 16> bytes_;
 
 private:
@@ -144,17 +164,28 @@ private:
     string str;
     if (! extract(start, end, str))
       return false;
-    *this = {str};
-    return true;
+
+    if (auto a = from_string(str))
+    {
+      *this = std::move(*a);
+      return true;
+    }
+
+    return false;
   }
 
   template <typename Iterator>
   bool print(Iterator& out) const
   {
-    auto str = to_string();
+    string str;
+    if (! convert(str))
+      return false;
+
     out = std::copy(str.begin(), str.end(), out);
     return true;
   }
+
+  bool convert(string& str) const;
 
   friend bool operator==(address const& x, address const& y);
   friend bool operator<(address const& x, address const& y);

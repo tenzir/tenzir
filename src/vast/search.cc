@@ -1,6 +1,5 @@
 #include "vast/search.h"
 
-#include "vast/exception.h"
 #include "vast/optional.h"
 #include "vast/query.h"
 #include "vast/util/make_unique.h"
@@ -191,13 +190,14 @@ private:
 
 } // namespace <anonymous>
 
-expr::ast search::add_query(std::string const& str)
+trial<expr::ast> search::add_query(std::string const& str)
 {
-  expr::ast ast{str};
-  if (! ast)
-    return ast;
-  dissector d{state_, ast};
-  ast.accept(d);
+  auto ast = expr::ast::parse(str);
+  if (ast)
+  {
+    dissector d{state_, *ast};
+    ast->accept(d);
+  }
   return ast;
 }
 
@@ -319,20 +319,20 @@ void search_actor::act()
         auto ast = search_.add_query(q);
         if (! ast)
         {
-          reply(actor_ptr{}, ast);
+          reply(ast.failure());
           return;
         }
 
-        VAST_LOG_ACTOR_DEBUG("received new query: " << ast);
+        VAST_LOG_ACTOR_DEBUG("received new query: " << *ast);
         monitor(last_sender());
-        auto qry = spawn<query_actor>(archive_, last_sender(), ast);
-        auto i = query_state_.emplace(ast, query_state{qry, last_sender()});
+        auto qry = spawn<query_actor>(archive_, last_sender(), *ast);
+        auto i = query_state_.emplace(*ast, query_state{qry, last_sender()});
 
         // Deconstruct the AST into its predicates and ask the index for those
         // we have no results for.
         std::vector<expr::ast> predicates;
         predicator visitor{predicates};
-        ast.accept(visitor);
+        ast->accept(visitor);
         for (auto& pred : predicates)
         {
           auto r = search_.result(pred);
@@ -347,7 +347,7 @@ void search_actor::act()
           }
         }
 
-        auto r = search_.result(ast);
+        auto r = search_.result(*ast);
         if (r && *r)
         {
           VAST_LOG_ACTOR_DEBUG("could answer query from existing predicates");
@@ -355,7 +355,7 @@ void search_actor::act()
           send(i->second.query, r->hits());
         }
 
-        reply(qry, ast);
+        reply(qry, *ast);
       },
       on_arg_match >> [=](expr::ast const& ast, search_result const& result)
       {

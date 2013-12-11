@@ -184,19 +184,19 @@ BOOST_AUTO_TEST_CASE(ip_address_bitmap_index)
   BOOST_CHECK(! bi->lookup(equal, address{"192.168.0.5"}));
   BOOST_CHECK_THROW(bi->lookup(match, address{"::"}), std::runtime_error);
 
-  bi->push_back(address("192.168.0.128"));
-  bi->push_back(address("192.168.0.130"));
-  bi->push_back(address("192.168.0.240"));
-  bi->push_back(address("192.168.0.127"));
+  bi->push_back(address{"192.168.0.128"});
+  bi->push_back(address{"192.168.0.130"});
+  bi->push_back(address{"192.168.0.240"});
+  bi->push_back(address{"192.168.0.127"});
 
-  prefix pfx{"192.168.0.128", 25};
+  auto pfx = prefix{address{"192.168.0.128"}, 25};
   auto pbs = bi->lookup(in, pfx);
   BOOST_REQUIRE(pbs);
   BOOST_CHECK_EQUAL(to_string(*pbs), "0000001110");
   auto npbs = bi->lookup(not_in, pfx);
   BOOST_REQUIRE(npbs);
   BOOST_CHECK_EQUAL(to_string(*npbs), "1111110001");
-  pfx = {"192.168.0.0", 24};
+  pfx = {address{"192.168.0.0"}, 24};
   auto pbs2 = bi->lookup(in, pfx);
   BOOST_REQUIRE(pbs2);
   BOOST_CHECK_EQUAL(to_string(*pbs2), "1111111111");

@@ -5,7 +5,7 @@
 #include <string>
 #include <map>
 #include <vector>
-#include "vast/exception.h"
+#include "vast/util/trial.h"
 
 namespace vast {
 namespace util {
@@ -13,56 +13,64 @@ namespace util {
 /// A command line parser and program option utility.
 class configuration
 {
-  configuration(configuration const&) = delete;
-  configuration& operator=(configuration) = delete;
-
 public:
-  /// Default-constructs a configuration.
-  configuration() = default;
+  struct error : util::error
+  {
+    using util::error::error;
+
+    error(std::string msg, char c)
+      : util::error{msg + " (-" + c + ')'}
+    {
+    }
+    error(std::string msg, std::string opt)
+      : util::error{msg + " (--" + opt + ')'}
+    {
+    }
+  };
 
   /// Initializes the configuration from a configuration file.
   /// @param filename The name of the configuration file.
-  /// @returns `true` if configuration initialization was successful.
-  /// @throw error::config
-  void load(std::string const& filename);
+  /// @returns An engaged trial on success.
+  static trial<configuration> load(std::string const& filename);
 
   /// Initializes the configuration from command line parameters.
   /// @argc The argc parameter from main.
   /// @param argv The argv parameter from main.
-  /// @throw error::config
-  void load(int argc, char *argv[]);
+  static trial<configuration> load(int argc, char *argv[]);
+
+  /// Default-constructs a configuration.
+  configuration() = default;
 
   /// Checks whether the given option is set.
   /// @param option Name of the option to check.
   /// @returns @c true if the given option is set.
-  /// @throw error::config
   bool check(std::string const& option) const;
 
   /// Returns the value of the given option.
   /// @param opt The name of the option.
   /// @returns The option value.
-  /// @throw error::config
   std::string const& get(std::string const& opt) const;
 
   /// Retrieves an option as a specific type.
   /// @tparam T The type to convert the option to.
   /// @param opt The name of the option.
   /// @returns The converted option value.
-  /// @throw error::config
   template <typename T>
-  T as(std::string const& opt) const
+  trial<T> as(std::string const& opt) const
   {
     auto o = find_option(opt);
     if (! o)
-      throw error::config("unknown option", opt);
+      return error{"unknown option", opt};
     if (o->values_.empty())
-      throw error::config("option has no value", opt);
+      return error{"option has no value", opt};
     if (o->max_vals_ > 1)
-      throw error::config("cannot cast multi-value option", opt);
+      return error{"cannot cast multi-value option", opt};
+
     T x;
     std::istringstream ss(o->values_.front());
     ss >> x;
-    return x;
+
+    return {std::move(x)};
   }
 
   /// Prints the usage into a given output stream.
@@ -160,12 +168,15 @@ protected:
   /// Verifies that two given options are not specified at the same time.
   /// @param opt1 The first option.
   /// @param opt2 The second option.
-  void conflicts(std::string const& opt1, std::string const& opt2) const;
+  /// @returns `true` iff *opt1* and *opt2* do not cause a conflict.
+  bool add_conflict(std::string const& opt1, std::string const& opt2) const;
 
   /// Verifies an option dependency.
   /// @param needy The option that depends on *required*.
   /// @param required The option that must exist when *needy* exists.
-  void depends(std::string const& needy, std::string const& required) const;
+  /// @returns `true` iff *required* and exists.
+  bool add_dependency(std::string const& needy,
+                      std::string const& required) const;
 
   /// Sets the option banner for the usage.
   /// @param The banner string.
@@ -173,7 +184,7 @@ protected:
 
   /// Called after successfully loading the configuration to check the
   /// integrity of the options.
-  virtual void verify();
+  virtual bool verify();
 
 private:
   option* find_option(std::string const& opt);
@@ -185,12 +196,13 @@ private:
 };
 
 template <>
-inline std::vector<std::string> configuration::as(std::string const& opt) const
+inline trial<std::vector<std::string>>
+configuration::as(std::string const& opt) const
 {
   auto o = find_option(opt);
   if (! o)
-    throw error::config("invalid option cast", opt);
-  return o->values_;
+    return error{"invalid option cast", opt};
+  return {o->values_};
 }
 
 } // namespace util

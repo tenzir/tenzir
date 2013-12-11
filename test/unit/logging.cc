@@ -4,6 +4,7 @@
 
 using namespace vast;
 
+#if VAST_LOG_LEVEL > 5
 int foo()
 {
   VAST_ENTER();
@@ -24,3 +25,4 @@ BOOST_AUTO_TEST_CASE(logging_test)
   foo();
   bar(42, "***", 'A');
 }
+#endif

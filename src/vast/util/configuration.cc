@@ -10,17 +10,24 @@ namespace vast {
 namespace util {
 
 // TODO: Implement this function.
-void configuration::load(std::string const& filename)
+trial<configuration> configuration::load(std::string const& filename)
 {
+  configuration cfg;
+
   std::ifstream ifs(filename);
   if (! ifs)
-    throw error::config("could not open configuration file");
+    error{"could not open configuration file"};
 
-  verify();
+  if (! cfg.verify())
+    return error{"configuration verification failed"};
+
+  return {std::move(cfg)};
 }
 
-void configuration::load(int argc, char *argv[])
+trial<configuration> configuration::load(int argc, char *argv[])
 {
+  configuration cfg;
+
   for (int i = 1; i < argc; ++i)
   {
     std::vector<std::string> values;
@@ -28,13 +35,13 @@ void configuration::load(int argc, char *argv[])
     if (arg.size() < 2)
     {
       // We need at least a '-' followed by one character.
-      throw error::config("ill-formed option specificiation", argv[i]);
+      return error{"ill-formed option specificiation", argv[i]};
     }
     else if (arg[0] == '-' && arg[1] == '-')
     {
       // Argument must begin with '--'.
       if (arg.size() == 2)
-        throw error::config("ill-formed option specification", argv[i]);
+        return error{"ill-formed option specification", argv[i]};
       arg = arg.substr(2);
     }
     else if (arg[0] == '-')
@@ -43,27 +50,31 @@ void configuration::load(int argc, char *argv[])
         // The short option comes with a value.
         values.push_back(arg.substr(2));
       arg = arg[1];
-      auto s = shortcuts_.find(arg);
-      if (s == shortcuts_.end())
-        throw error::config("unknown short option", arg[0]);
+      auto s = cfg.shortcuts_.find(arg);
+      if (s == cfg.shortcuts_.end())
+        return error{"unknown short option", arg[0]};
       arg = s->second;
     }
 
-    auto o = find_option(arg);
+    auto o = cfg.find_option(arg);
     if (! o)
-      throw error::config("unknown option", arg);
+      return error{"unknown option", arg};
     o->defaulted_ = false;
 
     while (i+1 < argc && std::strlen(argv[i+1]) > 0 && argv[i+1][0] != '-')
       values.emplace_back(argv[++i]);
     if (values.size() > o->max_vals_)
-      throw error::config("too many values", arg);
+      return error{"too many values", arg};
     if (o->max_vals_ == 1 && values.size() != 1)
-      throw error::config("option value required", arg);
+      return error{"option value required", arg};
     if (! values.empty())
       o->values_ = std::move(values);
   }
-  verify();
+
+  if (! cfg.verify())
+    return error{"configuration verification failed"};
+
+  return {std::move(cfg)};
 }
 
 bool configuration::check(std::string const& opt) const
@@ -76,11 +87,11 @@ std::string const& configuration::get(std::string const& opt) const
 {
   auto o = find_option(opt);
   if (! o)
-    throw error::config("invalid option cast", opt);
+    throw std::logic_error{"option does not exist"};
   if (o->values_.empty())
-    throw error::config("option has no value", opt);
+    throw std::logic_error{"option has no value"};
   if (o->max_vals_ > 1)
-    throw error::config("cannot get multi-value option", opt);
+    throw std::logic_error{"cannot get multi-value option"};
   assert(o->values_.size() == 1);
   return o->values_.front();
 }
@@ -152,7 +163,7 @@ configuration::block::add(std::string const& name, std::string desc)
 {
   std::string fqn = qualify(name);
   if (config_->find_option(fqn))
-    throw error::config("option already exists", std::move(fqn));
+    throw std::logic_error{"duplicate option"};
   options_.emplace_back(std::move(fqn), std::move(desc));
   return options_.back();
 }
@@ -162,11 +173,11 @@ configuration::block::add(char shortcut, std::string const& name,
                           std::string desc)
 {
   if (config_->shortcuts_.count({shortcut}))
-    throw error::config("option shortcut already exists", shortcut);
+    throw std::logic_error{"duplicate shortcut"};
   std::string fqn = qualify(name);
   config_->shortcuts_.insert({{shortcut}, fqn});
   if (config_->find_option(fqn))
-    throw error::config("option already exists", std::move(fqn));
+    throw std::logic_error{"duplicate option"};
   options_.emplace_back(std::move(fqn), std::move(desc), shortcut);
   return options_.back();
 }
@@ -203,18 +214,16 @@ std::string configuration::block::qualify(std::string const& name) const
   return prefix_.empty() ? name : prefix_ + separator + name;
 }
 
-void configuration::conflicts(std::string const& opt1,
-                              std::string const& opt2) const
+bool configuration::add_conflict(std::string const& opt1,
+                                 std::string const& opt2) const
 {
-  if (check(opt1) && check(opt2))
-    throw error::config("conflicting options", opt1, opt2);
+  return ! (check(opt1) && check(opt2));
 }
 
-void configuration::depends(std::string const& needy,
-                            std::string const& required) const
+bool configuration::add_dependency(std::string const& needy,
+                                   std::string const& required) const
 {
-  if (check(needy) && ! check(required))
-    throw error::config("missing option dependency", needy, required);
+  return ! (check(needy) && ! check(required));
 }
 
 void configuration::banner(std::string banner)
@@ -222,9 +231,10 @@ void configuration::banner(std::string banner)
   banner_ = std::move(banner);
 }
 
-void configuration::verify()
+bool configuration::verify()
 {
   // The default implementation doesn't do anything.
+  return true;
 }
 
 configuration::option*

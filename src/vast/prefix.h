@@ -39,7 +39,7 @@ public:
   uint8_t length() const;
 
 private:
-  void initialize();
+  bool initialize();
 
   address network_;
   uint8_t length_;
@@ -59,7 +59,9 @@ private:
       *p++ = *start++;
     *p = '\0';
 
-    address addr{buf};
+    auto addr = address::from_string(buf);
+    if (! addr)
+      return false;
 
     if (*start++ != '/')
       return false;
@@ -74,7 +76,7 @@ private:
     if (! util::parse_positive_decimal(s, p, length))
       return false;
 
-    *this = {std::move(addr), length};
+    *this = {std::move(*addr), length};
 
     return true;
   }

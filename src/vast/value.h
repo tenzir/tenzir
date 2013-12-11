@@ -2,7 +2,6 @@
 #define VAST_VALUE_H
 
 #include "vast/address.h"
-#include "vast/exception.h"
 #include "vast/port.h"
 #include "vast/prefix.h"
 #include "vast/regex.h"
@@ -370,7 +369,7 @@ struct visit_impl
     switch (x.which())
     {
       default:
-        throw error::bad_type("corrupt value type", x.which());
+        throw std::runtime_error("corrupt value type");
         break;
       case invalid_type:
         return f(invalid);
@@ -413,7 +412,7 @@ struct visit_impl
     switch (x.which())
     {
       default:
-        throw error::bad_type("corrupt value type", x.which());
+        throw std::runtime_error("corrupt value type");
         break;
       case invalid_type:
         return visit_impl::apply(y, value_bind(f, invalid));

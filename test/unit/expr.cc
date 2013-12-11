@@ -1,5 +1,4 @@
 #include "test.h"
-#include "vast/exception.h"
 #include "vast/event.h"
 #include "vast/expression.h"
 #include "vast/io/serialization.h"
@@ -121,33 +120,35 @@ BOOST_AUTO_TEST_CASE(type_queries)
 
 BOOST_AUTO_TEST_CASE(event_queries)
 {
-  schema sch;
-  sch.load("event foo(s1: string, d1: double, "
-              "c: count, i: int, s2: string, d2: double) "
-              "event bar(s1: string, r: record { b: bool, s: string })");
+  auto sch = schema::load(
+      "event foo(s1: string, d1: double, "
+                 "c: count, i: int, s2: string, d2: double) "
+      "event bar(s1: string, r: record { b: bool, s: string })");;
 
-  auto ast = expr::ast("foo$s1 == \"babba\"", sch);
+  BOOST_REQUIRE(sch);
+
+  auto ast = expr::ast("foo$s1 == \"babba\"", *sch);
   BOOST_CHECK(bool_eval(ast, events[0]));
-  ast = expr::ast("foo$d1 > 0.5", sch);
+  ast = expr::ast("foo$d1 > 0.5", *sch);
   BOOST_CHECK(bool_eval(ast, events[0]));
-  ast = expr::ast("foo$d2 < 0.5", sch);
+  ast = expr::ast("foo$d2 < 0.5", *sch);
   BOOST_CHECK(bool_eval(ast, events[0]));
-  ast = expr::ast("bar$r$b == F", sch);
+  ast = expr::ast("bar$r$b == F", *sch);
   BOOST_CHECK(bool_eval(ast, events[1]));
-  ast = expr::ast("bar$r$s == \"baz\"", sch);
+  ast = expr::ast("bar$r$s == \"baz\"", *sch);
   BOOST_CHECK(bool_eval(ast, events[1]));
 
-  BOOST_CHECK_THROW(
-      (expr::ast("not$there ~ /nil/", sch)), // invalid event name.
-      error::query);
+  // Invalid event name.
+  auto a = expr::ast::parse("not$there ~ /nil/", *sch);
+  BOOST_REQUIRE(! a);
 
-  BOOST_CHECK_THROW(
-      (expr::ast("bar$puff ~ /nil/", sch)), // 'puff' is no argument.
-      error::schema);
+  // 'puff' is no argument.
+  a = expr::ast::parse("bar$puff ~ /nil/", *sch);
+  BOOST_REQUIRE(! a);
 
-  BOOST_CHECK_THROW(
-      (expr::ast("bar$r$q == \"baz\"", sch)), // 'q' doesn't exist.
-      error::schema);
+  // 'q' doesn't exist.
+  a = expr::ast::parse("bar$r$q == \"baz\"", *sch);
+  BOOST_REQUIRE(! a);
 }
 
 BOOST_AUTO_TEST_CASE(offset_queries)
