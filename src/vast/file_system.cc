@@ -58,6 +58,11 @@ path::path(string str)
 {
 }
 
+path::path(std::string const& str)
+  : path{str.c_str()}
+{
+}
+
 path& path::operator/=(path const& p)
 {
   if (p.empty() || (str_.ends_with(separator) && p == separator))

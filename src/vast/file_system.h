@@ -47,13 +47,16 @@ public:
   /// Default-constructs an empty path.
   path() = default;
 
-  /// Constructs a path from a C-string.
+  /// Constructs a path from a C string.
   /// @param str The string representing of a path.
   path(char const* str);
   
   /// Constructs a path from a VAST string.
   /// @param str The string representing of a path.
   path(string str);
+
+  /// Constructs a path from a C++ string.
+  explicit path(std::string const& str);
 
   path& operator/=(path const& p);
   path& operator+=(path const& p);
