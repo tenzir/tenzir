@@ -7,7 +7,7 @@
 #include "vast/segment.h"
 #include "vast/segment_manager.h"
 #include "vast/serialization.h"
-#include "vast/io/file_stream.h"
+#include "vast/io/serialization.h"
 
 namespace vast {
 
@@ -23,26 +23,22 @@ path const& archive::dir() const
 
 void archive::load()
 {
-  assert(exists(directory_));
   traverse(
       directory_,
       [&](path const& p) -> bool
       {
-        file f{p};
         // FIXME: factor the segment header and load it as a single unit.
-        uint32_t m;
-        uint8_t v;
+        uint32_t magic;
+        uint8_t version;
         uuid id;
         io::compression c;
         event_id base;
         uint32_t n;
-        f.open(file::read_only);
-        io::file_input_stream source(f);
-        binary_deserializer d{source};
-        d >> m >> v >> id >> c >> base >> n;
+        io::unarchive(p, magic, version, id, c, base, n);
         VAST_LOG_DEBUG("found segment " << p.basename() <<
                        " for ID range [" << base << ", " << base + n << ")");
-        if (m != segment::magic)
+
+        if (magic != segment::magic)
         {
           VAST_LOG_ERROR("got invalid segment magic for " << id);
           return false;
@@ -53,6 +49,7 @@ void archive::load()
                          << ", " << base + n << ")");
           return false;
         }
+
         return true;
       });
 }
@@ -79,12 +76,6 @@ archive_actor::archive_actor(path directory, size_t max_segments)
 
 void archive_actor::act()
 {
-  if (! exists(archive_.dir()) && ! mkdir(archive_.dir()))
-  {
-    VAST_LOG_ACTOR_ERROR("failed to create directory " << archive_.dir());
-    quit(exit::error);
-    return;
-  }
   archive_.load();
   become(
       on_arg_match >> [=](uuid const& id)

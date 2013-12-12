@@ -26,7 +26,8 @@ public:
 
   /// Records a given segment to disk and puts it in the cache.
   /// @param cs The segment to store.
-  void store(cow<segment> const& cs);
+  /// @returns `true` on success.
+  bool store(cow<segment> const& cs);
 
   /// Retrieves a segment.
   /// @param id The ID of the segment to retrieve.

@@ -116,10 +116,6 @@ void partition_actor::act()
         partition_.save();
         quit(reason);
       },
-      on(atom("timestamp")) >> [=]
-      {
-        return make_any_tuple(partition_.last_modified());
-      },
       on_arg_match >> [=](expr::ast const& ast, actor_ptr const& sink)
       {
         VAST_LOG_ACTOR_DEBUG("got AST " << ast <<

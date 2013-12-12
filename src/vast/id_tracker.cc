@@ -18,22 +18,29 @@ bool id_tracker::load()
 {
   if (! exists(dir_ / "id"))
     return true;
+
   std::ifstream file{to<std::string>(dir_ / "id")};
   if (! file)
     return false;
+
   file >> id_;
+
   VAST_LOG_INFO("tracker found existing next event ID " << id_);
   return true;
 }
 
 bool id_tracker::save()
 {
-  if (! exists(dir_))
-      return false;
+  assert(exists(dir_));
+  if (id_ == 1)
+    return true;
+
   std::ofstream file{to<std::string>(dir_ / "id")};
   if (! file)
     return false;
+
   file << id_ << std::endl;
+
   return true;
 }
 
@@ -46,12 +53,15 @@ bool id_tracker::hand_out(uint64_t n)
 {
   if (std::numeric_limits<event_id>::max() - id_ < n)
     return false;
+
   id_ += n;
+
   if (! save())
   {
     id_ -= n;
     return false;
   }
+
   return true;
 }
 
@@ -68,7 +78,9 @@ void id_tracker_actor::act()
     on(atom("EXIT"), arg_match) >> [=](uint32_t reason)
     {
       if (! id_tracker_.save())
-        VAST_LOG_ACTOR_ERROR("could not save current event ID");
+        VAST_LOG_ACTOR_ERROR(
+            "could not save current event ID " << id_tracker_.next_id());
+
       quit(reason);
     },
     on(atom("request"), arg_match) >> [=](uint64_t n)
