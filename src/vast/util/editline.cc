@@ -263,13 +263,15 @@ struct editline::impl
   std::string line()
   {
     auto info = el_line(el_);
-    return {info->buffer, info->lastchar - info->buffer};
+    return {info->buffer,
+            static_cast<std::string::size_type>(info->lastchar - info->buffer)};
   }
 
   std::string cursor_line()
   {
     auto info = el_line(el_);
-    return {info->buffer, info->cursor - info->buffer};
+    return {info->buffer,
+            static_cast<std::string::size_type>(info->cursor - info->buffer)};
   }
 
   void reset()
