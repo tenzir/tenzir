@@ -7,7 +7,7 @@
 
 namespace vast {
 
-configuration::configuration()
+std::string configuration::banner() const
 {
   std::stringstream ss;
   ss << " _   _____   __________\n"
@@ -15,8 +15,11 @@ configuration::configuration()
         "| |/ / __ |_\\ \\  / /\n"
         "|___/_/ |_/___/ /_/  " << VAST_VERSION;
 
-  banner(ss.str());
+  return ss.str();
+}
 
+void configuration::initialize()
+{
   auto& general = create_block("general options");
   general.add('c', "config", "configuration file");
   general.add('h', "help", "display this help");
@@ -97,64 +100,17 @@ configuration::configuration()
   search.add("host", "hostname/address of the archive").init("127.0.0.1");
   search.add("port", "TCP port of the search").init(42001);
   search.visible(false);
-}
 
-bool configuration::verify()
-{
-  if (! add_dependency("schema.print", "schema.file"))
-    return false;
+  add_dependency("schema.print", "schema.file");
 
 #ifdef VAST_HAVE_EDITLINE
-  if (! add_conflict("console-actor", "all-server"))
-    return false;
-  if (! conflicts("console-actor", "tracker-actor"));
-    return false;
-  if (! conflicts("console-actor", "archive-actor"));
-    return false;
-  if (! conflicts("console-actor", "index-actor"));
-    return false;
-  if (! conflicts("console-actor", "ingestor-actor"));
-    return false;
-  if (! conflicts("console-actor", "search-actor"));
-    return false;
+  add_conflict("console-actor", "all-server");
+  add_conflict("console-actor", "tracker-actor");
+  add_conflict("console-actor", "archive-actor");
+  add_conflict("console-actor", "index-actor");
+  add_conflict("console-actor", "ingestor-actor");
+  add_conflict("console-actor", "search-actor");
 #endif
-
-  return true;
-}
-
-bool initialize(configuration const& config)
-{
-  path vast_dir = string(config.get("directory"));
-  if (! exists(vast_dir))
-    if (! mkdir(vast_dir))
-      return false;
-
-  logger::instance()->init(
-      static_cast<logger::level>(*config.as<uint32_t>("log.console-verbosity")),
-      static_cast<logger::level>(*config.as<uint32_t>("log.file-verbosity")),
-      config.check("log.function-names"),
-      vast_dir / "log");
-
-  VAST_LOG_VERBOSE(" _   _____   __________");
-  VAST_LOG_VERBOSE("| | / / _ | / __/_  __/");
-  VAST_LOG_VERBOSE("| |/ / __ |_\\ \\  / / ");
-  VAST_LOG_VERBOSE("|___/_/ |_/___/ /_/  " << VAST_VERSION);
-  VAST_LOG_VERBOSE("");
-
-  announce_builtin_types();
-
-  size_t n = 0;
-  detail::type_manager::instance()->each([&](global_type_info const&) { ++n; });
-  VAST_LOG_DEBUG("type manager announced " << n << " types");
-
-  return true;
-}
-
-void shutdown()
-{
-  std::atomic_thread_fence(std::memory_order_seq_cst);
-  detail::type_manager::destruct();
-  logger::destruct();
 }
 
 } // namespace vast

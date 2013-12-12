@@ -6,21 +6,14 @@
 namespace vast {
 
 /// The program configuration.
-class configuration : public util::configuration
+class configuration : public util::configuration<configuration>
 {
 public:
-  configuration();
+  configuration() = default;
 
-protected:
-  virtual bool verify() override;
+  void initialize();
+  std::string banner() const;
 };
-
-/// Initializes all singletons and creates global state.
-/// @param config The configuration.
-bool initialize(configuration const& config);
-
-/// Destroys all singletons and deletes global state.
-void shutdown();
 
 } // namespace vast
 
