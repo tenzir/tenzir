@@ -2,12 +2,13 @@
 #define VAST_UTIL_ERROR_H
 
 #include <string>
+#include "vast/util/print.h"
 
 namespace vast {
 namespace util {
 
 /// Holds an error message.
-class error
+class error : printable<error>
 {
 public:
   /// Default-constructs an empty error message.
@@ -46,6 +47,15 @@ public:
 
 private:
   std::string msg_;
+
+private:
+  friend access;
+
+  template <typename Iterator>
+  bool print(Iterator& out) const
+  {
+    return render(out, msg_);
+  }
 };
 
 } // namespace util
