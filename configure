@@ -118,6 +118,7 @@ while [ $# -ne 0 ]; do
             append_cache_entry VAST_LOG_LEVEL INTEGER $(levelize $optarg)
             ;;
         --prefix=*)
+            append_cache_entry VAST_PREFIX PATH $optarg
             append_cache_entry CMAKE_INSTALL_PREFIX PATH $optarg
             ;;
         --enable-debug)
