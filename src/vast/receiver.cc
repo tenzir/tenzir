@@ -18,10 +18,11 @@ void receiver::act()
   become(
       on_arg_match >> [=](segment& s)
       {
-        VAST_LOG_ACTOR_DEBUG("got segment " << s.id());
-        reply(atom("ack"), s.id());
+        auto sid = s.id();
+        VAST_LOG_ACTOR_DEBUG("got segment " << sid);
         send(tracker_, atom("request"), uint64_t(s.events()));
         segments_.push_back(std::move(s));
+        return make_any_tuple(atom("ack"), sid);
       },
       on(atom("id"), arg_match) >> [=](uint64_t from, uint64_t to)
       {

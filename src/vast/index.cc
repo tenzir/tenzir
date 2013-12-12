@@ -35,8 +35,8 @@ void index_actor::act()
       on(arg_match) >> [=](segment const& s)
       {
         assert(active_);
-        reply(atom("segment"), atom("ack"), s.id());
         forward_to(active_);
+        return make_any_tuple(atom("segment"), atom("ack"), s.id());
       });
 
   if (! exists(dir_))

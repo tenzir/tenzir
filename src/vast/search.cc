@@ -318,10 +318,7 @@ void search_actor::act()
       {
         auto ast = search_.add_query(q);
         if (! ast)
-        {
-          reply(ast.failure());
-          return;
-        }
+          return make_any_tuple(ast.failure());
 
         VAST_LOG_ACTOR_DEBUG("received new query: " << *ast);
         monitor(last_sender());
@@ -355,7 +352,7 @@ void search_actor::act()
           send(i->second.query, r->hits());
         }
 
-        reply(qry, *ast);
+        return make_any_tuple(qry, *ast);
       },
       on_arg_match >> [=](expr::ast const& ast, search_result const& result)
       {

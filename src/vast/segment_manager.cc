@@ -70,7 +70,7 @@ void segment_manager_actor::act()
       on_arg_match >> [=](segment const& s)
       {
         segment_manager_.store(*tuple_cast<segment>(last_dequeued()));
-        reply(atom("segment"), atom("ack"), s.id());
+        return make_any_tuple(atom("segment"), atom("ack"), s.id());
       },
       on_arg_match >> [=](uuid const& id, actor_ptr const& sink)
       {

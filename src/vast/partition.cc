@@ -118,7 +118,7 @@ void partition_actor::act()
       },
       on(atom("timestamp")) >> [=]
       {
-        reply(partition_.last_modified());
+        return make_any_tuple(partition_.last_modified());
       },
       on_arg_match >> [=](expr::ast const& ast, actor_ptr const& sink)
       {

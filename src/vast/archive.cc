@@ -94,9 +94,9 @@ void archive_actor::act()
       on(atom("uuid"), arg_match) >> [=](event_id eid)
       {
         if (auto id = archive_.lookup(eid))
-         reply(*id);
+         return make_any_tuple(*id);
         else
-          reply(eid);
+          return make_any_tuple(eid);
       },
       on(atom("segment"), arg_match) >> [=](event_id eid)
       {
@@ -108,14 +108,14 @@ void archive_actor::act()
         else
         {
           VAST_LOG_ACTOR_WARN("no segment found for event " << eid);
-          reply(eid);
+          send(last_sender(), eid);
         }
       },
       on(arg_match) >> [=](segment const& s)
       {
         archive_.store(s);
         forward_to(segment_manager_);
-        reply(atom("segment"), atom("ack"), s.id());
+        return make_any_tuple(atom("segment"), atom("ack"), s.id());
       });
 }
 

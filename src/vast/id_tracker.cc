@@ -78,12 +78,12 @@ void id_tracker_actor::act()
       {
         VAST_LOG_ACTOR_ERROR(
             "failed to hand out " << n << " ids (current ID: " << next << ")");
-        reply(atom("id"), atom("failure"));
+        return make_any_tuple(atom("id"), atom("failure"));
       }
       else
       {
         VAST_LOG_ACTOR_DEBUG("hands out [" << next << ',' << next + n << ')');
-        reply(atom("id"), next, next + n);
+        return make_any_tuple(atom("id"), next, next + n);
       }
     });
   

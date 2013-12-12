@@ -16,7 +16,7 @@ void schema_manager::act()
       },
       on(atom("schema")) >> [=]()
       {
-        reply(schema_);
+        return make_any_tuple(schema_);
       });
 }
 
