@@ -6,6 +6,7 @@
 #include "vast/singleton.h"
 #include "vast/traits.h"
 #include "vast/util/pp.h"
+#include "vast/util/trial.h"
 
 namespace vast {
 
@@ -27,6 +28,11 @@ public:
     debug     = 5,
     trace     = 6
   };
+
+  /// Attempts to parse a textual representation of a log-level.
+  /// @param str The string holding the level description
+  /// @returns An engaged trial on success.
+  static trial<level> parse_level(std::string const& str);
 
   /// A formatted message containing timestamp and thread ID.
   class message

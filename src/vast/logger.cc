@@ -165,6 +165,27 @@ struct logger::impl
 };
 
 
+trial<logger::level> logger::parse_level(std::string const& str)
+{
+  if (str == "quiet" || str == "0")
+    return quiet;
+  if (str == "error" || str == "1")
+    return error;
+  if (str == "warn" || str == "2")
+    return warn;
+  if (str == "info" || str == "3")
+    return info;
+  if (str == "verbose" || str == "4")
+    return verbose;
+  if (str == "debug" || str == "5")
+    return debug;
+  if (str == "trace" || str == "6")
+    return trace;
+
+  return util::error{"could not parse log level"};
+}
+
+
 void logger::message::append_header(level lvl)
 {
   ss_
