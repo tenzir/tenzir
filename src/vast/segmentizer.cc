@@ -55,9 +55,32 @@ void segmentizer::act()
         total_events_ += v.size();
 
         for (auto& e : v)
-          process(e);
+        {
+          if (writer_.write(e))
+          {
+            if (stats_.timed_add(1) && stats_.last() > 0)
+            {
+              send(upstream_, atom("statistics"), stats_.last());
+              VAST_LOG_ACTOR_VERBOSE(
+                  "ingests at rate " << stats_.last() << " events/sec" <<
+                  " (mean " << stats_.mean() <<
+                  ", median " << stats_.median() <<
+                  ", standard deviation " << std::sqrt(stats_.variance()) <<
+                  ")");
+            }
+          }
+          else
+          {
+            VAST_LOG_ACTOR_DEBUG("sends segment " << segment_.id() <<
+                                 " with " << segment_.events() <<
+                                 " events to " << VAST_ACTOR_ID(upstream_));
 
-        VAST_LOG_ACTOR_DEBUG("checkpoint");
+            auto max_segment_size = segment_.max_bytes();
+            send(upstream_, std::move(segment_));
+            segment_ = segment(uuid::random(), max_segment_size);
+            writer_.attach_to(&segment_);
+          }
+        }
       },
 
       others() >> [=]
@@ -73,33 +96,5 @@ char const* segmentizer::description() const
   return "segmentizer";
 }
 
-void segmentizer::process(event const& e)
-{
-  auto success = writer_.write(e);
-
-  if (success)
-  {
-    if (stats_.timed_add(1) && stats_.last() > 0)
-    {
-      send(upstream_, atom("statistics"), stats_.last());
-      VAST_LOG_ACTOR_VERBOSE(
-          "ingests at rate " << stats_.last() << " events/sec" <<
-          " (mean " << stats_.mean() <<
-          ", median " << stats_.median() <<
-          ", standard deviation " << std::sqrt(stats_.variance()) << ")");
-    }
-  }
-  else
-  {
-    VAST_LOG_ACTOR_DEBUG("sends segment " << segment_.id() <<
-                         " with " << segment_.events() << " events to " <<
-                         VAST_ACTOR_ID(upstream_));
-
-    auto max_segment_size = segment_.max_bytes();
-    send(upstream_, std::move(segment_));
-    segment_ = segment(uuid::random(), max_segment_size);
-    writer_.attach_to(&segment_);
-  }
-}
 
 } // namespace vast

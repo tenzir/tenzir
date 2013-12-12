@@ -28,8 +28,6 @@ public:
   char const* description() const;
 
 private:
-  void process(event const& e);
-
   cppa::actor_ptr upstream_;
   util::temporal_accumulator<uint64_t> stats_;
   segment segment_;

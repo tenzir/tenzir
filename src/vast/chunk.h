@@ -72,6 +72,7 @@ public:
 
     /// Deserializes an object from the chunk.
     /// @param x The object to deserialize into.
+    /// @param count The number of elements *x* should count for.
     template <typename T>
     bool read(T& x, size_t count = 1)
     {
