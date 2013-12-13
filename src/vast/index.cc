@@ -27,34 +27,14 @@ void index_actor::act()
   become(
       on_arg_match >> [=](expr::ast const& ast)
       {
-        if (partitions_.empty())
-        {
-          assert(! exists(dir_));
-          if (! mkdir(dir_))
-          {
-            VAST_LOG_ACTOR_ERROR("failed to create " << dir_);
-            quit(exit::error);
-            return;
-          }
-
-          auto id = uuid::random();
-          VAST_LOG_ACTOR_INFO("creates new partition " << id);
-          auto p = spawn<partition_actor, linked>(dir_ / to<string>(id));
-          active_ = p;
-          partitions_.emplace(std::move(id), std::move(p));
-        }
-
-        assert(! partitions_.empty());
-
-        // FIXME: Support more than 1 partition.
-        auto part = partitions_.begin()->second;
-        send(part, ast, last_sender());
+        check_partition();
+        send(active_, ast, last_sender());
         VAST_LOG_ACTOR_DEBUG("sends predicate " << ast <<
-                             " to partition " << VAST_ACTOR_ID(part));
+                             " to partition " << VAST_ACTOR_ID(active_));
       },
       on(arg_match) >> [=](segment const& s)
       {
-        assert(active_);
+        check_partition();
         forward_to(active_);
         return make_any_tuple(atom("segment"), atom("ack"), s.id());
       });
@@ -84,6 +64,26 @@ void index_actor::act()
     VAST_LOG_ACTOR_DEBUG(
         "marked partition " << VAST_ACTOR_ID(active_) <<
         " as active (" << latest << ")");
+}
+
+void index_actor::check_partition()
+{
+  if (partitions_.empty())
+    return;
+
+  assert(! exists(dir_));
+  if (! mkdir(dir_))
+  {
+    VAST_LOG_ACTOR_ERROR("failed to create " << dir_);
+    quit(exit::error);
+    return;
+  }
+
+  auto id = uuid::random();
+  VAST_LOG_ACTOR_INFO("creates new partition " << id);
+  auto p = spawn<partition_actor, linked>(dir_ / to<string>(id));
+  active_ = p;
+  partitions_.emplace(std::move(id), std::move(p));
 }
 
 } // namespace vast
