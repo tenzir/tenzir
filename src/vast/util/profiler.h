@@ -4,6 +4,7 @@
 #include <chrono>
 #include <fstream>
 #include "vast/actor.h"
+#include "vast/file_system.h"
 
 namespace vast {
 namespace util {
@@ -28,15 +29,13 @@ public:
   /// Spawns the profiler.
   /// @param log_dir The directory where to write profiler output to.
   /// @param secs The number of seconds between subsequent measurements.
-  profiler(std::string const& log_dir, std::chrono::seconds secs);
-
-  virtual void on_exit() final;
+  profiler(path log_dir, std::chrono::seconds secs);
 
   void act();
   char const* description() const;
 
 private:
-  std::string const log_dir_;
+  path const log_dir_;
   std::ofstream file_;
   std::chrono::seconds secs_;
 };

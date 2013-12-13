@@ -40,14 +40,14 @@ program::program(configuration const& config)
 void program::act()
 {
   chaining(false);
-  path vast_dir = string(*config_.get("directory"));
+  auto vast_dir = path{*config_.get("directory")};
   try
   {
     if (config_.check("profile"))
     {
       auto ms = *config_.as<unsigned>("profile");
       profiler_ = spawn<util::profiler, linked>(
-          to_string(vast_dir / "log"), std::chrono::seconds(ms));
+          vast_dir / "log", std::chrono::seconds(ms));
       if (config_.check("profile-cpu"))
         send(profiler_, atom("start"), atom("perftools"), atom("cpu"));
       if (config_.check("profile-heap"))
