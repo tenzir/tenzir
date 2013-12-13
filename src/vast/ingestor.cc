@@ -37,11 +37,13 @@ void ingestor::act()
       {
         // Tell all sources to exit, they will in turn propagate the exit
         // message to the sinks.
+        VAST_LOG_ACTOR_DEBUG("got EXIT from " << VAST_ACTOR_ID(last_sender()));
         for (auto& src : sources_)
           send_exit(src, exit::stop);
       },
       on(atom("DOWN"), arg_match) >> [=](uint32_t /* reason */)
       {
+        VAST_LOG_ACTOR_DEBUG("got DOWN from " << VAST_ACTOR_ID(last_sender()));
         auto i = sinks_.find(last_sender());
         assert(i != sinks_.end());  // We only monitor sinks.
         sinks_.erase(i);
@@ -102,20 +104,26 @@ void ingestor::act()
       on_arg_match >> [=](segment& s)
       {
         VAST_LOG_ACTOR_DEBUG(
-            "relays segment " << s.id() << " to @" << VAST_ACTOR_ID(receiver_));
+            "relays segment " << s.id() << " to " << VAST_ACTOR_ID(receiver_));
 
         sync_send(receiver_, s).then(
             on(atom("ack"), arg_match) >> [=](uuid const& segment_id)
             {
               VAST_LOG_ACTOR_DEBUG("got ack for " << segment_id);
             },
-            after(std::chrono::seconds(30)) >> [=]
+            on(atom("nack"), arg_match) >> [=](uuid const& segment_id)
             {
-              VAST_LOG_ACTOR_ERROR("did not get ack from receiver @" <<
+              VAST_LOG_ACTOR_DEBUG("got nack for " << segment_id);
+              quit(exit::error);
+            },
+            after(std::chrono::seconds(10)) >> [=]
+            {
+              VAST_LOG_ACTOR_ERROR("did not get ack from receiver " <<
                                    VAST_ACTOR_ID(receiver_));
 
-              // TODO: Handle the failed segment, e.g., by sending it again or
-              // saving it to the file system.
+              // TODO: Handle the failed segment properly, e.g., by sending it
+              // again or saving it to the file system.
+              quit(exit::error);
             });
       });
 }

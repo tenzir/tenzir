@@ -41,10 +41,14 @@ private:
   {
     using namespace cppa;
 
+    // FIXME: figure out why detaching the segmentizer yields a two-fold
+    // performance increase in the ingestion rate.
     auto snk = spawn<segmentizer, monitored>(
         self, max_events_per_chunk_, max_segment_size_);
+
     auto src = spawn<Source, detached>(snk, std::forward<Args>(args)...);
     send(src, atom("batch size"), batch_size_);
+
     snk->link_to(src);
 
     sinks_.emplace(std::move(snk), 0);

@@ -318,7 +318,7 @@ void console::act()
             {
               char c;
               if (cmdline_.get(c))
-                return make_any_tuple(atom("key"), c);
+                send(last_sender(), atom("key"), c);
             });
       });
 

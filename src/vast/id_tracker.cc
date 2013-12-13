@@ -100,7 +100,10 @@ void id_tracker_actor::act()
     });
   
   if (! id_tracker_.load())
+  {
     VAST_LOG_ACTOR_ERROR("failed to load existing tracker ID from filesystem");
+    quit(exit::error);
+  }
 }
 
 char const* id_tracker_actor::description() const

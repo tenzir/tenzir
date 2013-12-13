@@ -76,7 +76,7 @@ public:
 
     segment* segment_;
     std::unique_ptr<chunk> chunk_;
-    std::unique_ptr<chunk::writer> writer_;
+    std::unique_ptr<chunk::writer> chunk_writer_;
     size_t max_events_per_chunk_;
   };
 
@@ -159,7 +159,7 @@ public:
     event_id next_ = 0;
     event_id chunk_base_ = 0;
     size_t chunk_idx_ = 0;
-    std::unique_ptr<chunk::reader> reader_;
+    std::unique_ptr<chunk::reader> chunk_reader_;
   };
 
   static uint32_t const magic = 0x2a2a2a2a;
@@ -169,7 +169,7 @@ public:
   /// @param id The UUID of the segment.
   /// @param max_bytes The maximum segment size.
   /// @param method The compression method to use for each chunk.
-  segment(uuid id = uuid::nil(), size_t max_bytes = 0,
+  segment(uuid id = uuid::nil(), uint64_t max_bytes = 0,
           io::compression method = io::lz4);
 
   /// Retrieves the segment ID.
@@ -199,13 +199,13 @@ public:
   uint32_t events() const;
 
   /// Retrieves the number of bytes the segment occupies in memory.
-  uint32_t bytes() const;
+  uint64_t bytes() const;
 
   /// Retrieves the maximum number of bytes this segment can occupy.
   ///
   /// @returns The maximum number of bytes this segment can occupy or 0 if its
   /// size is unbounded.
-  size_t max_bytes() const;
+  uint64_t max_bytes() const;
 
   /// Writes a vector of events into the segment.
   /// @param v The vector of events to write.
@@ -219,14 +219,12 @@ public:
   optional<event> load(event_id id) const;
 
 private:
-  bool append(chunk& c);
-
   uuid id_;
   io::compression compression_;
   event_id base_ = 0;
   uint32_t n_ = 0;
-  uint32_t max_bytes_ = 0;
-  uint32_t occupied_bytes_ = 0;
+  uint64_t max_bytes_ = 0;
+  uint64_t occupied_bytes_ = 0;
   std::vector<cow<chunk>> chunks_;
 
 private:

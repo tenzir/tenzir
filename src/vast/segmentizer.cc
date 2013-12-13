@@ -51,7 +51,6 @@ void segmentizer::act()
 
       on_arg_match >> [=](std::vector<event> const& v)
       {
-        VAST_LOG_ACTOR_DEBUG("got " << v.size() << " events");
         total_events_ += v.size();
 
         for (auto& e : v)
@@ -77,8 +76,23 @@ void segmentizer::act()
 
             auto max_segment_size = segment_.max_bytes();
             send(upstream_, std::move(segment_));
-            segment_ = segment(uuid::random(), max_segment_size);
+            segment_ = segment{uuid::random(), max_segment_size};
+
             writer_.attach_to(&segment_);
+
+            if (! writer_.flush())
+            {
+              VAST_LOG_ACTOR_ERROR("failed to flush chunk to fresh segment");
+              quit(exit::error);
+              return;
+            }
+
+            if (! writer_.write(e))
+            {
+              VAST_LOG_ACTOR_ERROR("failed to write event to fresh segment");
+              quit(exit::error);
+              return;
+            }
           }
         }
       },

@@ -56,9 +56,6 @@ void synchronous::send_events()
 {
   if (! events_.empty())
   {
-    VAST_LOG_ACTOR_DEBUG("sends " << events_.size() <<
-                         " events to " << VAST_ACTOR_ID(sink_));
-
     send(sink_, std::move(events_));
     events_.clear();
   }

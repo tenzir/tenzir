@@ -63,8 +63,8 @@ void configuration::initialize()
   schema.visible(false);
 
   auto& ingest = create_block("ingest options", "ingest");
-  ingest.add("max-events-per-chunk", "maximum number of events per chunk").init(1000);
-  ingest.add("max-segment-size", "maximum segment size in MB").init("1");
+  ingest.add("max-events-per-chunk", "maximum number of events per chunk").init(5000);
+  ingest.add("max-segment-size", "maximum segment size in MB").init("128");
   ingest.add("batch-size", "number of events to ingest in one run").init(4000);
   ingest.add("file-names", "file(s) to ingest").multi();
   ingest.add("file-type", "file type of the file(s) to ingest").init("bro2");

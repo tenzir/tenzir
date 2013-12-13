@@ -24,7 +24,7 @@ void receiver::act()
         segments_.push_back(std::move(s));
         return make_any_tuple(atom("ack"), sid);
       },
-      on(atom("id"), arg_match) >> [=](uint64_t from, uint64_t to)
+      on(atom("id"), arg_match) >> [=](event_id from, event_id to)
       {
         VAST_LOG_ACTOR_DEBUG("got " << to - from <<
                              " IDs in [" << from << ", " << to << ")");

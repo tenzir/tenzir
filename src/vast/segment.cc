@@ -19,9 +19,9 @@ bool operator==(segment const& x, segment const& y)
 
 segment::writer::writer(segment* s, size_t max_events_per_chunk)
   : segment_(s),
-    chunk_(make_unique<chunk>(segment_->compression_)),
-    writer_(make_unique<chunk::writer>(*chunk_)),
-    max_events_per_chunk_(max_events_per_chunk)
+    chunk_{make_unique<chunk>(segment_->compression_)},
+    chunk_writer_{make_unique<chunk::writer>(*chunk_)},
+    max_events_per_chunk_{max_events_per_chunk}
 {
   assert(s != nullptr);
 }
@@ -35,12 +35,11 @@ segment::writer::~writer()
 
 bool segment::writer::write(event const& e)
 {
-  if (! (writer_ && store(e)))
+  if (! (chunk_writer_ && store(e)))
     return false;
 
-  if (max_events_per_chunk_ > 0 &&
-      chunk_->elements() % max_events_per_chunk_ == 0)
-    flush();
+  if (max_events_per_chunk_ && chunk_->elements() % max_events_per_chunk_ == 0)
+    return flush();
 
   return true;
 }
@@ -56,30 +55,36 @@ bool segment::writer::flush()
   if (chunk_->empty())
     return true;
 
-  writer_.reset();
-  if (! segment_->append(*chunk_))
+  chunk_writer_.reset();
+
+  if (segment_->max_bytes() > 0
+      && segment_->bytes() + chunk_->compressed_bytes() > segment_->max_bytes())
     return false;
 
+  segment_->n_ += chunk_->elements();
+  segment_->occupied_bytes_ += chunk_->compressed_bytes();
+  segment_->chunks_.emplace_back(*chunk_);
+
   chunk_ = make_unique<chunk>(segment_->compression_);
-  writer_ = make_unique<chunk::writer>(*chunk_);
+  chunk_writer_ = make_unique<chunk::writer>(*chunk_);
 
   return true;
 }
 
 size_t segment::writer::bytes() const
 {
-  return writer_ ? writer_->bytes() : chunk_->uncompressed_bytes();
+  return chunk_writer_ ? chunk_writer_->bytes() : chunk_->uncompressed_bytes();
 }
 
 bool segment::writer::store(event const& e)
 {
   auto success =
-    writer_->write(e.name(), 0) &&
-    writer_->write(e.timestamp(), 0) &&
-    writer_->write(static_cast<std::vector<value> const&>(e));
+    chunk_writer_->write(e.name(), 0) &&
+    chunk_writer_->write(e.timestamp(), 0) &&
+    chunk_writer_->write(static_cast<std::vector<value> const&>(e));
 
   if (! success)
-    VAST_LOG_ERROR("failed to write event entirely to chunk");
+    VAST_LOG_ERROR("failed to write event to chunk");
 
   return success;
 }
@@ -93,7 +98,7 @@ segment::reader::reader(segment const* s)
   if (! segment_.chunks_.empty())
   {
     current_ = &segment_.chunks_.front().read();
-    reader_ = make_unique<chunk::reader>(*current_);
+    chunk_reader_ = make_unique<chunk::reader>(*current_);
   }
 }
 
@@ -186,7 +191,7 @@ chunk const* segment::reader::next()
   }
 
   current_ = &segment_.chunks_[++chunk_idx_].read();
-  reader_ = make_unique<chunk::reader>(*current_);
+  chunk_reader_ = make_unique<chunk::reader>(*current_);
 
   return current_;
 }
@@ -197,7 +202,7 @@ chunk const* segment::reader::prev()
     return nullptr;
 
   current_ = &segment_.chunks_[--chunk_idx_].read();
-  reader_ = make_unique<chunk::reader>(*current_);
+  chunk_reader_ = make_unique<chunk::reader>(*current_);
 
   if (next_ > 0)
   {
@@ -215,31 +220,31 @@ event_id segment::reader::backup()
 
   auto distance = next_ - chunk_base_;
   next_ = chunk_base_;
-  reader_ = make_unique<chunk::reader>(*current_);
+  chunk_reader_ = make_unique<chunk::reader>(*current_);
   return distance;
 }
 
 bool segment::reader::load(event* e)
 {
-  if (! reader_ || reader_->available() == 0)
+  if (! chunk_reader_ || chunk_reader_->available() == 0)
     return next() ? load(e) : false;
 
   string name;
-  if (! reader_->read(name, 0))
+  if (! chunk_reader_->read(name, 0))
   {
     VAST_LOG_ERROR("failed to read event name from chunk");
     return false;
   }
 
   time_point t;
-  if (! reader_->read(t, 0))
+  if (! chunk_reader_->read(t, 0))
   {
     VAST_LOG_ERROR("failed to read event timestamp from chunk");
     return false;
   }
 
   std::vector<value> v;
-  if (! reader_->read(v))
+  if (! chunk_reader_->read(v))
   {
     VAST_LOG_ERROR("failed to read event arguments from chunk");
     return false;
@@ -252,6 +257,7 @@ bool segment::reader::load(event* e)
     r.timestamp(t);
     if (next_ > 0)
       r.id(next_);
+
     *e = std::move(r);
   }
 
@@ -286,10 +292,10 @@ bool segment::reader::within_current_chunk(event_id eid) const
 }
 
 
-segment::segment(uuid id, size_t max_bytes, io::compression method)
-  : id_(id),
-    compression_(method),
-    max_bytes_(max_bytes)
+segment::segment(uuid id, uint64_t max_bytes, io::compression method)
+  : id_{id},
+    compression_{method},
+    max_bytes_{max_bytes}
 {
 }
 
@@ -323,12 +329,12 @@ uint32_t segment::events() const
   return n_;
 }
 
-uint32_t segment::bytes() const
+uint64_t segment::bytes() const
 {
   return occupied_bytes_;
 }
 
-size_t segment::max_bytes() const
+uint64_t segment::max_bytes() const
 {
   return max_bytes_;
 }
@@ -348,28 +354,18 @@ optional<event> segment::load(event_id id) const
   return reader{this}.read(id);
 }
 
-bool segment::append(chunk& c)
-{
-  if (max_bytes_ > 0 && bytes() + c.compressed_bytes() > max_bytes_)
-    return false;
-
-  n_ += c.elements();
-  occupied_bytes_ += c.compressed_bytes();
-  chunks_.emplace_back(std::move(c));
-  return true;
-}
-
 void segment::serialize(serializer& sink) const
 {
-  sink << magic;
-  sink << version;
+  sink << magic << version;
 
-  sink << id_;
-  sink << compression_;
-  sink << base_;
-  sink << n_;
-  sink << occupied_bytes_;
-  sink << chunks_;
+  sink
+    << id_
+    << compression_
+    << base_
+    << n_
+    << max_bytes_
+    << occupied_bytes_
+    << chunks_;
 }
 
 void segment::deserialize(deserializer& source)
@@ -377,19 +373,21 @@ void segment::deserialize(deserializer& source)
   uint32_t m;
   source >> m;
   if (m != magic)
-    throw std::runtime_error("invalid segment magic");
+    throw std::runtime_error{"invalid segment magic"};
 
   uint8_t v;
   source >> v;
-  if (v > segment::version)
-    throw std::runtime_error("segment version too high");
+  if (v > version)
+    throw std::runtime_error{"segment version too high"};
 
-  source >> id_;
-  source >> compression_;
-  source >> base_;
-  source >> n_;
-  source >> occupied_bytes_;
-  source >> chunks_;
+  source
+    >> id_
+    >> compression_
+    >> base_
+    >> n_
+    >> max_bytes_
+    >> occupied_bytes_
+    >> chunks_;
 }
 
 } // namespace vast
