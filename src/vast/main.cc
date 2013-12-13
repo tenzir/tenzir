@@ -23,7 +23,10 @@ int main(int argc, char *argv[])
 
   auto vast_dir = path{*config->get("directory")};
   if (! exists(vast_dir) && ! mkdir(vast_dir))
+  {
+    std::cerr << "could not create directory: " << vast_dir << std::endl;
     return 1;
+  }
 
   logger::instance()->init(
       *logger::parse_level(*config->get("log.console-verbosity")),
@@ -43,7 +46,7 @@ int main(int argc, char *argv[])
   VAST_LOG_DEBUG("type manager announced " << n << " types");
 
   // Hand control to libcppa.
-  auto prog = cppa::spawn<program, cppa::detached>(*config);
+  auto prog = cppa::spawn<program>(*config);
   cppa::await_all_others_done();
   cppa::shutdown();
 
