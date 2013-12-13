@@ -26,13 +26,22 @@ void configuration::initialize()
   general.add('d', "directory", "VAST directory").init("vast");
   general.add('z', "advanced", "show advanced options");
 
+
+  auto min = 0;
+  auto max = VAST_LOG_LEVEL;
+  auto range = '[' + std::to_string(min) + '-' + std::to_string(max) + ']';
+
   auto& log = create_block("logger options", "log");
-  log.add('v', "console-verbosity", "console verbosity").init(3);
-  log.add('V', "file-verbosity", "log file verbosity").init(4);
+  log.add('v', "console-verbosity", "console verbosity " + range)
+     .init(std::max(3, max));
+  log.add('V', "file-verbosity", "log file verbosity " + range)
+     .init(std::max(4, max));
   log.add("function-names", "log function names");
 
   auto& advanced = create_block("advanced options");
-  advanced.add('P', "profile", "enable getrusage profiling at a given interval (seconds)").single();
+  advanced.add('P', "profile",
+               "enable getrusage profiling at a given interval (seconds)")
+          .single();
 #ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
   advanced.add("profile-cpu", "also enable Google perftools CPU profiling");
 #endif
@@ -63,15 +72,18 @@ void configuration::initialize()
   schema.visible(false);
 
   auto& ingest = create_block("ingest options", "ingest");
-  ingest.add("max-events-per-chunk", "maximum number of events per chunk").init(5000);
-  ingest.add("max-segment-size", "maximum segment size in MB").init("128");
+  ingest.add("max-events-per-chunk", "maximum number of events per chunk")
+        .init(5000);
+  ingest.add("max-segment-size", "maximum segment size in MB").init(128);
   ingest.add("batch-size", "number of events to ingest in one run").init(4000);
   ingest.add("file-names", "file(s) to ingest").multi();
   ingest.add("file-type", "file type of the file(s) to ingest").init("bro2");
 #ifdef VAST_HAVE_BROCCOLI
-  ingest.add("broccoli-host", "hostname/address of the broccoli source").init("127.0.0.1");
+  ingest.add("broccoli-host", "hostname/address of the broccoli source")
+        .init("127.0.0.1");
   ingest.add("broccoli-port", "port of the broccoli source").init(42000);
-  ingest.add("broccoli-events", "list of events for broccoli to subscribe to").multi();
+  ingest.add("broccoli-events", "list of events for broccoli to subscribe to")
+        .multi();
 #endif
   ingest.visible(false);
 
@@ -83,7 +95,8 @@ void configuration::initialize()
   auto& archive = create_block("archive options", "archive");
   archive.add("host", "hostname/address of the archive").init("127.0.0.1");
   archive.add("port", "TCP port of the archive").init(42003);
-  archive.add("max-segments", "maximum number of segments to keep in memory").init(500);
+  archive.add("max-segments", "maximum number of segments to keep in memory")
+         .init(500);
   archive.visible(false);
 
   auto& index = create_block("index options", "index");
