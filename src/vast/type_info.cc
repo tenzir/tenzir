@@ -9,7 +9,6 @@
 #include "vast/value.h"
 #include "vast/serialization.h"
 #include "vast/bitmap_index.h"
-#include "vast/detail/cppa_type_info.h"
 #include "vast/detail/type_manager.h"
 #include "vast/util/tuple.h"
 
@@ -190,8 +189,6 @@ void announce_builtin_types()
   util::for_each(expr_node_types, type_converter<expr::node>{});
   util::for_each(bitmap_index_types, type_converter<bitmap_index>{});
   util::for_each(bitstream_types, type_converter<detail::bitstream_concept>{});
-
-  detail::cppa_announce_types();
 }
 
 } // namespace vast

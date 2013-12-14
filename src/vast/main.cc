@@ -2,6 +2,7 @@
 #include "vast/logger.h"
 #include "vast/program.h"
 #include "vast/type_info.h"
+#include "vast/detail/cppa_type_info.h"
 #include "vast/detail/type_manager.h"
 
 using namespace vast;
@@ -45,12 +46,13 @@ int main(int argc, char *argv[])
   detail::type_manager::instance()->each([&](global_type_info const&) { ++n; });
   VAST_LOG_DEBUG("type manager announced " << n << " types");
 
-  // Hand control to libcppa.
-  auto prog = cppa::spawn<program>(*config);
+  detail::cppa_announce_types();
+  // FIXME: if we do not detach the program actor, it becomes impossible to
+  // intercept and handle SIGINT. Why?
+  cppa::spawn<program, cppa::detached>(*config);
   cppa::await_all_others_done();
   cppa::shutdown();
 
-  // Shutdown singletons.
   std::atomic_thread_fence(std::memory_order_seq_cst);
   detail::type_manager::destruct();
   logger::destruct();
