@@ -61,9 +61,10 @@ void configuration::initialize()
   actor.add('a', "all-server", "spawn all server actors");
   actor.add('A', "archive-actor", "spawn the archive");
   actor.add('I', "ingestor-actor", "spawn the ingestor");
-  actor.add('X', "index-actor", "spawn the index");
+  actor.add('R', "receiver-actor", "spawn the receiver");
   actor.add('S', "search-actor", "spawn the search");
   actor.add('T', "tracker-actor", "spawn the ID tracker");
+  actor.add('X', "index-actor", "spawn the index");
   actor.visible(false);
 
   auto& schema = create_block("schema options", "schema");

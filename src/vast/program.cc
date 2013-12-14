@@ -76,10 +76,10 @@ void program::act()
     {
       tracker_ = spawn<id_tracker_actor, linked>(vast_dir);
       VAST_LOG_ACTOR_VERBOSE("publishes tracker at " <<
-                           tracker_host << ':' << tracker_port);
+                             tracker_host << ':' << tracker_port);
       publish(tracker_, tracker_port, tracker_host.c_str());
     }
-    else
+    else if (config_.check("receiver-actor"))
     {
       VAST_LOG_ACTOR_VERBOSE("connects to tracker at " <<
                            tracker_host << ':' << tracker_port);
@@ -96,7 +96,7 @@ void program::act()
                            archive_host << ':' << archive_port);
       publish(archive_, archive_port, archive_host.c_str());
     }
-    else
+    else if (config_.check("receiver-actor") || config_.check("search-actor"))
     {
       VAST_LOG_ACTOR_VERBOSE("connects to archive at " <<
                            archive_host << ':' << archive_port);
@@ -112,7 +112,7 @@ void program::act()
                            index_host << ':' << index_port);
       publish(index_, index_port, index_host.c_str());
     }
-    else
+    else if (config_.check("receiver-actor") || config_.check("search-actor"))
     {
       VAST_LOG_ACTOR_VERBOSE("connects to index at " <<
                            index_host << ":" << index_port);
