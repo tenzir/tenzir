@@ -47,6 +47,8 @@ int main(int argc, char *argv[])
   VAST_LOG_DEBUG("type manager announced " << n << " types");
 
   detail::cppa_announce_types();
+  cppa::max_msg_size(512 * 1024 * 1024);
+
   // FIXME: if we do not detach the program actor, it becomes impossible to
   // intercept and handle SIGINT. Why?
   cppa::spawn<program, cppa::detached>(*config);
