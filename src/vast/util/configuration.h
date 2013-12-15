@@ -351,13 +351,26 @@ protected:
     conflicts_.emplace(std::move(opt1), std::move(opt2));
   }
 
-  /// Verifies an option dependency.
+  /// Adds a disjunction of option dependencies.
+  ///
   /// @param needy The option that depends on *required*.
-  /// @param required The option that must exist when *needy* exists.
-  /// @returns `true` iff *required* and exists.
-  void add_dependency(std::string needy, std::string required)
+  ///
+  /// @param required A set of options where at least one must exist with
+  /// when needy is given.
+  ///
+  /// @returns `true` iff *needy* and one or more optiosn in *required* exist.
+  void add_dependencies(std::string needy, std::vector<std::string> required)
   {
     dependencies_.emplace(std::move(needy), std::move(required));
+  }
+
+  /// Adds an option dependency.
+  /// @param needy The option that depends on *required*.
+  /// @param required The option that must exist when *needy* exists.
+  /// @returns `true` iff *required* and *needy* exists.
+  void add_dependency(std::string needy, std::string required)
+  {
+    add_dependencies(std::move(needy), {std::move(required)});
   }
 
 private:
@@ -378,8 +391,15 @@ private:
         return false;
 
     for (auto& p : dependencies_)
-      if (check(p.first) && ! check(p.second))
+    {
+      auto any = std::any_of(
+          p.second.begin(),
+          p.second.end(),
+          [&](std::string const& dep) { return check(dep); });
+
+      if (! check(p.first) && any)
         return false;
+    }
 
     return true;
   }
@@ -429,7 +449,7 @@ private:
   std::vector<block> blocks_;
   std::map<std::string, std::string> shortcuts_;
   std::multimap<std::string, std::string> conflicts_;
-  std::multimap<std::string, std::string> dependencies_;
+  std::multimap<std::string, std::vector<std::string>> dependencies_;
 };
 
 } // namespace util
