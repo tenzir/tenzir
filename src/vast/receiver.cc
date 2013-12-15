@@ -6,14 +6,16 @@ namespace vast {
 
 using namespace cppa;
 
-receiver::receiver(actor_ptr tracker, actor_ptr archive, actor_ptr index)
+receiver_actor::receiver_actor(actor_ptr tracker,
+                               actor_ptr archive,
+                               actor_ptr index)
   : tracker_(tracker),
     archive_(archive),
     index_(index)
 {
 }
 
-void receiver::act()
+void receiver_actor::act()
 {
   become(
       on_arg_match >> [=](segment& s)
@@ -46,7 +48,7 @@ void receiver::act()
       });
 }
 
-char const* receiver::description() const
+char const* receiver_actor::description() const
 {
   return "receiver";
 }

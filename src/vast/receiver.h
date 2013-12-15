@@ -10,15 +10,16 @@ namespace vast {
 /// Receives segments, imbues them with an ID from the tracker, and relays them
 /// to archive and index. The receiver forms the server-sdie counterpart to an
 /// ingestor.
-class receiver : public actor<receiver>
+class receiver_actor : public actor<receiver_actor>
 {
 public:
   /// Spawns a receiver.
   /// @param tracker The tracker actor.
   /// @param archive The archive actor.
   /// @param index The index actor.
-  receiver(cppa::actor_ptr tracker, cppa::actor_ptr archive,
-           cppa::actor_ptr index);
+  receiver_actor(cppa::actor_ptr tracker,
+                 cppa::actor_ptr archive,
+                 cppa::actor_ptr index);
 
   void act();
   char const* description() const;

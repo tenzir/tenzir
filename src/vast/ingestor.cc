@@ -11,10 +11,10 @@ namespace vast {
 
 using namespace cppa;
 
-ingestor::ingestor(actor_ptr receiver,
-                   size_t max_events_per_chunk,
-                   size_t max_segment_size,
-                   uint64_t batch_size)
+ingestor_actor::ingestor_actor(actor_ptr receiver,
+                               size_t max_events_per_chunk,
+                               size_t max_segment_size,
+                               uint64_t batch_size)
   : receiver_{receiver},
     max_events_per_chunk_{max_events_per_chunk},
     max_segment_size_{max_segment_size},
@@ -22,14 +22,7 @@ ingestor::ingestor(actor_ptr receiver,
 {
 }
 
-void ingestor::on_exit()
-{
-  for (auto& p : sinks_)
-    send_exit(p.first, exit::done);
-  actor<ingestor>::on_exit();
-}
-
-void ingestor::act()
+void ingestor_actor::act()
 {
   trap_exit(true);
   become(
@@ -128,7 +121,7 @@ void ingestor::act()
       });
 }
 
-char const* ingestor::description() const
+char const* ingestor_actor::description() const
 {
   return "ingestor";
 }

@@ -1,3 +1,4 @@
+#include <cppa/cppa.hpp>
 #include "vast/file_system.h"
 #include "vast/logger.h"
 #include "vast/program.h"

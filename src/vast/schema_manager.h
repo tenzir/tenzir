@@ -7,11 +7,11 @@
 namespace vast {
 
 /// Manages the existing taxonomies.
-class schema_manager : public actor<schema_manager>
+class schema_manager_actor : public actor<schema_manager_actor>
 {
 public:
   /// Spawns the schema manager.
-  schema_manager() = default;
+  schema_manager_actor() = default;
 
   void act();
   char const* description() const;

@@ -11,7 +11,7 @@ namespace vast {
 
 /// The ingestor. This component manages different types of event sources, each
 /// of which generate events in a different manner.
-class ingestor : public actor<ingestor>
+class ingestor_actor : public actor<ingestor_actor>
 {
 public:
   /// Spawns an ingestor.
@@ -24,13 +24,10 @@ public:
   ///
   /// @param batch_size The number of events a synchronous source buffers until
   /// relaying them to the segmentizer
-  ingestor(cppa::actor_ptr receiver,
-           size_t max_events_per_chunk,
-           size_t max_segment_size,
-           uint64_t batch_size);
-
-  /// Overrides `event_based_actor::on_exit`.
-  virtual void on_exit() final;
+  ingestor_actor(cppa::actor_ptr receiver,
+                 size_t max_events_per_chunk,
+                 size_t max_segment_size,
+                 uint64_t batch_size);
 
   void act();
   char const* description() const;

@@ -7,7 +7,7 @@ using namespace cppa;
 
 namespace vast {
 
-void schema_manager::act()
+void schema_manager_actor::act()
 {
   become(
       on(atom("load"), arg_match) >> [=](std::string const& file)
@@ -20,7 +20,7 @@ void schema_manager::act()
       });
 }
 
-char const* schema_manager::description() const
+char const* schema_manager_actor::description() const
 {
   return "schema-manager";
 }

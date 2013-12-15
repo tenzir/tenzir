@@ -31,9 +31,6 @@ namespace vast {
 
 program::program(configuration const& config)
   : config_{config}
-#ifdef VAST_HAVE_EDITLINE
-  , server_{! config_.check("console-actor")}
-#endif
 {
 }
 
@@ -46,22 +43,22 @@ void program::act()
     if (config_.check("profile"))
     {
       auto ms = *config_.as<unsigned>("profile");
-      profiler_ = spawn<util::profiler, linked>(
+      auto profiler = spawn<util::profiler, linked>(
           vast_dir / "log", std::chrono::seconds(ms));
       if (config_.check("profile-cpu"))
-        send(profiler_, atom("start"), atom("perftools"), atom("cpu"));
+        send(profiler, atom("start"), atom("perftools"), atom("cpu"));
       if (config_.check("profile-heap"))
-        send(profiler_, atom("start"), atom("perftools"), atom("heap"));
-      send(profiler_, atom("start"), atom("rusage"));
+        send(profiler, atom("start"), atom("perftools"), atom("heap"));
+      send(profiler, atom("start"), atom("rusage"));
     }
 
-    schema_manager_ = spawn<schema_manager, linked>();
+    auto schema_manager = spawn<schema_manager_actor, linked>();
     if (config_.check("schema.file"))
     {
-      send(schema_manager_, atom("load"), *config_.get("schema.file"));
+      send(schema_manager, atom("load"), *config_.get("schema.file"));
       if (config_.check("schema.print"))
       {
-        sync_send(schema_manager_, atom("schema")).then(
+        sync_send(schema_manager, atom("schema")).then(
             on_arg_match >> [](schema const& s)
             {
               std::cout << to_string(s);
@@ -70,76 +67,83 @@ void program::act()
       }
     }
 
+    actor_ptr tracker;
     auto tracker_host = *config_.get("tracker.host");
     auto tracker_port = *config_.as<unsigned>("tracker.port");
     if (config_.check("tracker-actor") || config_.check("all-server"))
     {
-      tracker_ = spawn<id_tracker_actor, linked>(vast_dir);
-      VAST_LOG_ACTOR_VERBOSE("publishes tracker at " <<
-                             tracker_host << ':' << tracker_port);
-      publish(tracker_, tracker_port, tracker_host.c_str());
+      tracker = spawn<id_tracker_actor, linked>(vast_dir);
+      VAST_LOG_ACTOR_VERBOSE(
+          "publishes tracker at " << tracker_host << ':' << tracker_port);
+      publish(tracker, tracker_port, tracker_host.c_str());
     }
     else if (config_.check("receiver-actor"))
     {
-      VAST_LOG_ACTOR_VERBOSE("connects to tracker at " <<
-                           tracker_host << ':' << tracker_port);
-      tracker_ = remote_actor(tracker_host, tracker_port);
+      VAST_LOG_ACTOR_VERBOSE(
+          "connects to tracker at " << tracker_host << ':' << tracker_port);
+      tracker = remote_actor(tracker_host, tracker_port);
     }
 
+    actor_ptr archive;
     auto archive_host = *config_.get("archive.host");
     auto archive_port = *config_.as<unsigned>("archive.port");
     if (config_.check("archive-actor") || config_.check("all-server"))
     {
-      archive_ = spawn<archive_actor, linked>(
+      archive = spawn<archive_actor, linked>(
           vast_dir / "archive", *config_.as<size_t>("archive.max-segments"));
-      VAST_LOG_ACTOR_VERBOSE("publishes archive at " <<
-                           archive_host << ':' << archive_port);
-      publish(archive_, archive_port, archive_host.c_str());
+      VAST_LOG_ACTOR_VERBOSE(
+          "publishes archive at " << archive_host << ':' << archive_port);
+      publish(archive, archive_port, archive_host.c_str());
     }
-    else if (config_.check("receiver-actor") || config_.check("search-actor"))
+    else if (config_.check("receiver-actor")
+             || config_.check("search-actor")
+             || config_.check("index.rebuild"))
     {
-      VAST_LOG_ACTOR_VERBOSE("connects to archive at " <<
-                           archive_host << ':' << archive_port);
-      archive_ = remote_actor(archive_host, archive_port);
+      VAST_LOG_ACTOR_VERBOSE(
+          "connects to archive at " << archive_host << ':' << archive_port);
+      archive = remote_actor(archive_host, archive_port);
     }
 
+    actor_ptr index;
     auto index_host = *config_.get("index.host");
     auto index_port = *config_.as<unsigned>("index.port");
     if (config_.check("index-actor") || config_.check("all-server"))
     {
-      index_ = spawn<index_actor, linked>(vast_dir / "index");
-      VAST_LOG_ACTOR_VERBOSE("publishes index " <<
-                           index_host << ':' << index_port);
-      publish(index_, index_port, index_host.c_str());
+      index = spawn<index_actor, linked>(vast_dir / "index");
+      VAST_LOG_ACTOR_VERBOSE(
+          "publishes index " << index_host << ':' << index_port);
+      publish(index, index_port, index_host.c_str());
     }
-    else if (config_.check("receiver-actor") || config_.check("search-actor"))
+    else if (config_.check("receiver-actor")
+             || config_.check("search-actor")
+             || config_.check("index.rebuild"))
     {
       VAST_LOG_ACTOR_VERBOSE("connects to index at " <<
                            index_host << ":" << index_port);
-      index_ = remote_actor(index_host, index_port);
+      index = remote_actor(index_host, index_port);
     }
 
+    actor_ptr receiver;
     auto receiver_host = *config_.get("receiver.host");
     auto receiver_port = *config_.as<unsigned>("receiver.port");
-    if (config_.check("archive-actor")
-        || config_.check("index-actor")
-        || config_.check("all-server"))
+    if (config_.check("receiver-actor") || config_.check("all-server"))
     {
-      receiver_ = spawn<receiver, linked>(tracker_, archive_, index_);
-      VAST_LOG_ACTOR_VERBOSE("publishes receiver at " <<
-                           receiver_host << ':' << receiver_port);
-      publish(receiver_, receiver_port, receiver_host.c_str());
+      receiver = spawn<receiver_actor, linked>(tracker, archive, index);
+      VAST_LOG_ACTOR_VERBOSE(
+          "publishes receiver at " << receiver_host << ':' << receiver_port);
+      publish(receiver, receiver_port, receiver_host.c_str());
     }
-    else
+    else if (config_.check("ingestor-actor"))
     {
-      VAST_LOG_ACTOR_VERBOSE("connects to receiver at " <<
-                           receiver_host << ":" << receiver_port);
-      receiver_ = remote_actor(receiver_host, receiver_port);
+      VAST_LOG_ACTOR_VERBOSE(
+          "connects to receiver at " << receiver_host << ":" << receiver_port);
+      receiver = remote_actor(receiver_host, receiver_port);
     }
 
+    actor_ptr ingestor;
     if (config_.check("ingestor-actor"))
     {
-      ingestor_ = spawn<ingestor, linked>(receiver_,
+      ingestor = spawn<ingestor_actor, linked>(receiver,
           *config_.as<size_t>("ingest.max-events-per-chunk"),
           *config_.as<size_t>("ingest.max-segment-size") * 1000000,
           *config_.as<size_t>("ingest.batch-size"));
@@ -153,9 +157,8 @@ void program::act()
         auto port = *config_.as<unsigned>("ingest.broccoli-port");
         auto events =
           *config_.as<std::vector<std::string>>("ingest.broccoli-events");
-        send(ingestor_,
-             atom("ingest"), atom("broccoli"),
-             host, port,
+
+        send(ingestor, atom("ingest"), atom("broccoli"), host, port,
              std::move(events));
       }
 #endif
@@ -167,38 +170,39 @@ void program::act()
         for (auto& file : files)
         {
           if (exists(string(file)))
-            send(ingestor_, atom("ingest"), type, file);
+            send(ingestor, atom("ingest"), type, file);
           else
             VAST_LOG_ACTOR_ERROR("no such file: " << file);
         }
       }
 
-      send(ingestor_, atom("run"));
+      send(ingestor, atom("run"));
     }
 
+    actor_ptr search;
     auto search_host = *config_.get("search.host");
     auto search_port = *config_.as<unsigned>("search.port");
     if (config_.check("search-actor") || config_.check("all-server"))
     {
-      search_ = spawn<search_actor, linked>(archive_, index_, schema_manager_);
-      VAST_LOG_ACTOR_VERBOSE("publishes search at " <<
-                       search_host << ':' << search_port);
-      publish(search_, search_port, search_host.c_str());
+      search = spawn<search_actor, linked>(archive, index, schema_manager);
+      VAST_LOG_ACTOR_VERBOSE(
+          "publishes search at " << search_host << ':' << search_port);
+      publish(search, search_port, search_host.c_str());
     }
-
 #ifdef VAST_HAVE_EDITLINE
-    if (! server_)
+    else if (config_.check("console-actor"))
     {
-      VAST_LOG_ACTOR_VERBOSE("connects to search at " <<
-                           search_host << ":" << search_port);
-      search_ = remote_actor(search_host, search_port);
-      console_ = spawn<console, detached+linked>(search_, vast_dir / "console");
-      delayed_send(console_, std::chrono::milliseconds(200), atom("prompt"));
+      VAST_LOG_ACTOR_VERBOSE(
+          "connects to search at " << search_host << ":" << search_port);
+      search = remote_actor(search_host, search_port);
+
+      auto c = spawn<console, detached+linked>(search, vast_dir / "console");
+      delayed_send(c, std::chrono::milliseconds(200), atom("prompt"));
     }
 #endif
 
-    signal_monitor_ = spawn<signal_monitor, detached+linked>(self);
-    send(signal_monitor_, atom("act"));
+    auto monitor = spawn<signal_monitor, detached+linked>(self);
+    send(monitor, atom("act"));
   }
   catch (network_error const& e)
   {
