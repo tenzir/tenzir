@@ -68,7 +68,7 @@ void index_actor::act()
 
 void index_actor::check_partition()
 {
-  if (partitions_.empty())
+  if (! partitions_.empty())
     return;
 
   assert(! exists(dir_));
