@@ -18,8 +18,6 @@ struct index_actor : actor<index_actor>
   void act();
   char const* description() const;
 
-  void check_partition();
-
   path dir_;
   cppa::actor_ptr active_;
   std::unordered_map<uuid, cppa::actor_ptr> partitions_;
