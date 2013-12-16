@@ -29,9 +29,6 @@ protected:
   }
 };
 
-/// Announces all necessary types we use in VAST.
-void cppa_announce_types();
-
 } // namespace detail
 } // namespace vast
 

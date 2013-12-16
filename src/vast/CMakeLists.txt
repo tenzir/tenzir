@@ -43,7 +43,6 @@ set(libvast_sources
   value.cc
   value_type.cc
   detail/cppa_serialization.cc
-  detail/cppa_type_info.cc
   detail/demangle.cc
   detail/type_manager.cc
   detail/ast/query.cc

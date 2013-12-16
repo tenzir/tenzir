@@ -1,14 +1,19 @@
 #include "vast/type_info.h"
 
+#include <cppa/cppa.hpp>
 #include "vast/bitstream.h"
 #include "vast/container.h"
+#include "vast/cow.h"
 #include "vast/expression.h"
 #include "vast/event.h"
 #include "vast/file_system.h"
 #include "vast/object.h"
 #include "vast/value.h"
+#include "vast/search_result.h"
+#include "vast/segment.h"
 #include "vast/serialization.h"
 #include "vast/bitmap_index.h"
+#include "vast/detail/cppa_type_info.h"
 #include "vast/detail/type_manager.h"
 #include "vast/util/tuple.h"
 
@@ -98,6 +103,7 @@ struct type_announcer
   void operator()(T /* x */) const
   {
     announce<T>();
+    cppa::announce(typeid(T), make_unique<detail::cppa_type_info<T>>());
   }
 };
 
@@ -138,9 +144,19 @@ void announce_builtin_types()
     table,
     value_type,
     value, std::vector<value>,
-    event, std::vector<event>,
+    event, std::vector<event>, std::vector<cow<event>>,
+
+    chunk,
+    offset,
     path,
-    expr::ast
+    segment,
+    uuid, std::vector<uuid>,
+
+    arithmetic_operator, boolean_operator, relational_operator,
+    bitstream,
+    expr::ast,
+    schema,
+    search_result
   > vast_types;
 
   std::tuple<
