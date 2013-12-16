@@ -143,7 +143,9 @@ void program::act()
     actor_ptr ingestor;
     if (config_.check("ingestor-actor"))
     {
-      ingestor = spawn<ingestor_actor, linked>(receiver,
+      ingestor = spawn<ingestor_actor, linked>(
+          vast_dir,
+          receiver,
           *config_.as<size_t>("ingest.max-events-per-chunk"),
           *config_.as<size_t>("ingest.max-segment-size") * 1000000,
           *config_.as<size_t>("ingest.batch-size"));

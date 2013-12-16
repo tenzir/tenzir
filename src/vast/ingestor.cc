@@ -2,6 +2,7 @@
 
 #include "vast/segment.h"
 #include "vast/source/file.h"
+#include "vast/io/serialization.h"
 
 #ifdef VAST_HAVE_BROCCOLI
 #include "vast/source/broccoli.h"
@@ -11,11 +12,13 @@ namespace vast {
 
 using namespace cppa;
 
-ingestor_actor::ingestor_actor(actor_ptr receiver,
+ingestor_actor::ingestor_actor(path dir,
+                               actor_ptr receiver,
                                size_t max_events_per_chunk,
                                size_t max_segment_size,
                                uint64_t batch_size)
-  : receiver_{receiver},
+  : dir_{std::move(dir)},
+    receiver_{receiver},
     max_events_per_chunk_{max_events_per_chunk},
     max_segment_size_{max_segment_size},
     batch_size_{batch_size}
@@ -26,6 +29,41 @@ void ingestor_actor::act()
 {
   trap_exit(true);
   become(
+      on(atom("terminate")) >> [=]
+      {
+        assert(! segments_.empty());
+        VAST_LOG_ACTOR_INFO("writes un-acked segments to stable storage");
+
+        auto segment_dir = dir_ / "segments";
+        if (! exists(segment_dir) && ! mkdir(segment_dir))
+        {
+          VAST_LOG_ACTOR_ERROR("failed to create directory " << segment_dir);
+        }
+        else
+        {
+          for (auto& p : segments_)
+          {
+            auto const path = segment_dir / to<string>(p.first);
+            VAST_LOG_ACTOR_INFO("saves " << path);
+            io::archive(path, p.second);
+          }
+        }
+
+        quit(exit::error);
+      },
+      on(atom("shutdown"), arg_match) >> [=](uint32_t reason)
+      {
+        if (segments_.empty())
+        {
+          quit(reason);
+        }
+        else
+        {
+          delayed_send(self, std::chrono::seconds(30), atom("terminate"));
+          VAST_LOG_ACTOR_INFO(
+              "waits 30 seconds for " << segments_.size() << "segment ACKs");
+        }
+      },
       on(atom("EXIT"), arg_match) >> [=](uint32_t /* reason */)
       {
         // Tell all sources to exit, they will in turn propagate the exit
@@ -41,7 +79,7 @@ void ingestor_actor::act()
         assert(i != sinks_.end());  // We only monitor sinks.
         sinks_.erase(i);
         if (sinks_.empty())
-          quit(exit::done);
+          delayed_send(self, std::chrono::seconds(5), atom("shutdown"), exit::done);
       },
 #ifdef VAST_HAVE_BROCCOLI
       on(atom("ingest"), atom("broccoli"), arg_match) >>
@@ -99,25 +137,21 @@ void ingestor_actor::act()
         VAST_LOG_ACTOR_DEBUG(
             "relays segment " << s.id() << " to " << VAST_ACTOR_ID(receiver_));
 
-        sync_send(receiver_, s).then(
-            on(atom("ack"), arg_match) >> [=](uuid const& segment_id)
-            {
-              VAST_LOG_ACTOR_DEBUG("got ack for " << segment_id);
-            },
-            on(atom("nack"), arg_match) >> [=](uuid const& segment_id)
-            {
-              VAST_LOG_ACTOR_DEBUG("got nack for " << segment_id);
-              quit(exit::error);
-            },
-            after(std::chrono::seconds(10)) >> [=]
-            {
-              VAST_LOG_ACTOR_ERROR("did not get ack from receiver " <<
-                                   VAST_ACTOR_ID(receiver_));
-
-              // TODO: Handle the failed segment properly, e.g., by sending it
-              // again or saving it to the file system.
-              quit(exit::error);
-            });
+        auto cs = cow<segment>{std::move(s)};
+        segments_[cs->id()] = cs;
+        receiver_ << cs;
+      },
+      on(atom("ack"), arg_match) >> [=](uuid const& id)
+      {
+        VAST_LOG_ACTOR_DEBUG("got ack for segment " << id);
+        auto i = segments_.find(id);
+        assert(i != segments_.end());
+        segments_.erase(i);
+      },
+      on(atom("nack"), arg_match) >> [=](uuid const& id)
+      {
+        VAST_LOG_ACTOR_ERROR("got nack for segment " << id);
+        quit(exit::error);
       });
 }
 

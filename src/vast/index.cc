@@ -36,7 +36,6 @@ void index_actor::act()
       {
         check_partition();
         forward_to(active_);
-        return make_any_tuple(atom("segment"), atom("ack"), s.id());
       });
 
   auto latest = time_point{0};

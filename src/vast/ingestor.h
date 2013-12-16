@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <cppa/cppa.hpp>
 #include "vast/actor.h"
+#include "vast/file_system.h"
 #include "vast/uuid.h"
 #include "vast/segmentizer.h"
 
@@ -16,6 +17,8 @@ class ingestor_actor : public actor<ingestor_actor>
 public:
   /// Spawns an ingestor.
   ///
+  /// @param dir The directory where to save persistent state.
+  ///
   /// @param receiver The actor receiving the generated segments.
   ///
   /// @param max_events_per_chunk The maximum number of events per chunk.
@@ -24,7 +27,8 @@ public:
   ///
   /// @param batch_size The number of events a synchronous source buffers until
   /// relaying them to the segmentizer
-  ingestor_actor(cppa::actor_ptr receiver,
+  ingestor_actor(path dir,
+                 cppa::actor_ptr receiver,
                  size_t max_events_per_chunk,
                  size_t max_segment_size,
                  uint64_t batch_size);
@@ -54,12 +58,14 @@ private:
     return src;
   }
 
+  path dir_;
   cppa::actor_ptr receiver_;
   size_t max_events_per_chunk_;
   size_t max_segment_size_;
   uint64_t batch_size_;
   std::set<cppa::actor_ptr> sources_;
   std::unordered_map<cppa::actor_ptr, uint64_t> sinks_;
+  std::map<uuid, cow<segment>> segments_;
 };
 
 } // namespace vast
