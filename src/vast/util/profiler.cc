@@ -59,6 +59,8 @@ profiler::profiler(path log_dir, std::chrono::seconds secs)
 void profiler::act()
 {
   chaining(false);
+  trap_exit(true);
+
   auto filename = to<std::string>(log_dir_ / "profile.log");
   file_.open(filename);
 
