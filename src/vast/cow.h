@@ -5,6 +5,7 @@
 #include <cppa/cow_tuple.hpp>
 #include "vast/serialization.h"
 #include "vast/traits.h"
+#include "vast/util/operators.h"
 
 namespace vast {
 
@@ -13,7 +14,7 @@ namespace vast {
 /// forwarded as a message without incurring an unnecessary copy.
 /// @tparam T A copy-constructible type.
 template <typename T>
-class cow
+class cow : util::equality_comparable<cow<T>>
 {
 public:
   /// Default-constructs a cow instance.
@@ -73,6 +74,11 @@ private:
     T x;
     source >> x;
     tuple_ = cppa::make_cow_tuple(std::move(x));
+  }
+
+  friend bool operator==(cow<T> const& x, cow<T> const& y)
+  {
+    return x.tuple_ == y.tuple_;
   }
 
   cppa::cow_tuple<T> tuple_;
