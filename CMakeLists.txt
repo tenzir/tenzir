@@ -35,7 +35,7 @@ set(VERSION_MAJ_MIN "${VERSION_MAJOR}.${VERSION_MINOR}")
 set(CMAKE_CXX_FLAGS                "-Wall -Wextra -std=c++11 -ftemplate-depth=256")
 set(CMAKE_CXX_FLAGS_DEBUG          "-O0 -g")
 set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os")
-set(CMAKE_CXX_FLAGS_RELEASE        "-O4")
+set(CMAKE_CXX_FLAGS_RELEASE        "-O3")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g")
 # TODO: Fix variadic logging and then add -pedantic again.
 
