@@ -99,7 +99,7 @@ void archive_actor::act()
         else
         {
           VAST_LOG_ACTOR_WARN("no segment found for event " << eid);
-          send(last_sender(), eid);
+          send(last_sender(), atom("no segment"), eid);
         }
       },
       on(arg_match) >> [=](segment const& s)

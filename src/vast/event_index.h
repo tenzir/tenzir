@@ -3,6 +3,7 @@
 
 #include <cppa/cppa.hpp>
 #include "vast/actor.h"
+#include "vast/cow.h"
 #include "vast/event.h"
 #include "vast/expression.h"
 #include "vast/file_system.h"
@@ -29,7 +30,6 @@ public:
   {
     using namespace cppa;
 
-    this->chaining(false);
     this->trap_exit(true);
 
     derived()->scan();
@@ -37,20 +37,24 @@ public:
     become(
         on(atom("EXIT"), arg_match) >> [=](uint32_t reason)
         {
-          derived()->store();
+          if (reason != exit::kill)
+            derived()->store();
+
           this->quit(reason);
         },
         on(atom("flush")) >> [=]
         {
           derived()->store();
         },
-        on_arg_match >> [=](event const& e)
+        on_arg_match >> [=](std::vector<cow<event>> const& v)
         {
-          if (! derived()->index(e))
-          {
-            VAST_LOG_ACTOR_ERROR("failed to index event " << e);
-            this->quit(exit::error);
-          }
+          VAST_LOG_ACTOR_DEBUG("indexes " << v.size() << " events");
+          for (auto& e : v)
+            if (! derived()->index(*e))
+            {
+              VAST_LOG_ACTOR_ERROR("failed to index event " << *e);
+              this->quit(exit::error);
+            }
         },
         on_arg_match >> [=](expr::ast const& ast, bitstream const& coverage,
                             actor_ptr const& sink)
@@ -128,8 +132,8 @@ private:
   bool index_record(record const& r, uint64_t id, offset& o);
 
   std::multimap<value_type, path> files_;
-  std::map<offset, std::shared_ptr<bitmap_index>> offsets_;
-  std::multimap<value_type, std::shared_ptr<bitmap_index>> types_;
+  std::map<offset, std::unique_ptr<bitmap_index>> offsets_;
+  std::multimap<value_type, bitmap_index*> types_;
 };
 
 } // namespace vast

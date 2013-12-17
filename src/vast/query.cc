@@ -227,7 +227,7 @@ void query_actor::act()
         // TODO: figure out a strategy to avoid asking for duplicate segments.
         send(self, atom("extract"));
       },
-      on_arg_match >> [=](event_id eid)
+      on(atom("no segment"), arg_match) >> [=](event_id eid)
       {
         VAST_LOG_ACTOR_ERROR("could not obtain segment for event ID " << eid);
         quit(exit::error);

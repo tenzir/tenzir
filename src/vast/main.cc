@@ -47,7 +47,6 @@ int main(int argc, char *argv[])
   detail::type_manager::instance()->each([&](global_type_info const&) { ++n; });
   VAST_LOG_DEBUG("type manager announced " << n << " types");
 
-  detail::cppa_announce_types();
   cppa::max_msg_size(512 * 1024 * 1024);
 
   // FIXME: if we do not detach the program actor, it becomes impossible to

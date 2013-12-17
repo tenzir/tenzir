@@ -1,10 +1,9 @@
 #ifndef VAST_INDEX_H
 #define VAST_INDEX_H
 
-#include <unordered_map>
+#include <set>
 #include "vast/actor.h"
 #include "vast/file_system.h"
-#include "vast/uuid.h"
 
 namespace vast {
 
@@ -20,7 +19,7 @@ struct index_actor : actor<index_actor>
 
   path dir_;
   cppa::actor_ptr active_;
-  std::unordered_map<uuid, cppa::actor_ptr> partitions_;
+  std::set<cppa::actor_ptr> partitions_;
 };
 
 } // namespace vast

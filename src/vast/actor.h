@@ -11,6 +11,7 @@ namespace exit {
 constexpr uint32_t done   = cppa::exit_reason::user_defined;
 constexpr uint32_t stop   = cppa::exit_reason::user_defined + 1;
 constexpr uint32_t error  = cppa::exit_reason::user_defined + 2;
+constexpr uint32_t kill   = cppa::exit_reason::user_defined + 3;
 
 } // namespace exit
 

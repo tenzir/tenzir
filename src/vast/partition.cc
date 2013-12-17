@@ -109,11 +109,28 @@ partition_actor::partition_actor(path dir)
 
 void partition_actor::act()
 {
+  chaining(false);
   trap_exit(true);
+
+  partition_.load();
+  event_meta_index_ =
+    spawn<event_meta_index, linked>(partition_.dir() / "meta");
+
+  traverse(partition_.dir() / "event",
+           [&](path const& p) -> bool
+           {
+             VAST_LOG_ACTOR_DEBUG("found existing event index: " << p);
+             event_arg_indexes_.emplace(
+                 p.basename().str(), spawn<event_arg_index, linked>(p));
+             return true;
+           });
+
   become(
       on(atom("EXIT"), arg_match) >> [=](uint32_t reason)
       {
-        partition_.save();
+        if (reason != exit::kill)
+          partition_.save();
+
         quit(reason);
       },
       on_arg_match >> [=](expr::ast const& ast, actor_ptr const& sink)
@@ -134,36 +151,57 @@ void partition_actor::act()
         VAST_LOG_ACTOR_DEBUG(
             "processes " << s.events() << " events from segment " << s.id());
 
+        size_t const batch_size = 5000;  // TODO: Make configurable.
+        std::vector<cow<event>> meta_events;
+        std::map<string, std::vector<cow<event>>> arg_events;
+
         segment::reader r{&s};
         while (auto e = r.read())
         {
-          auto& a = event_arg_indexes_[e->name()];
-          if (! a)
+          assert(e);
+          auto ce = cow<event>{std::move(*e)};
+
+          meta_events.push_back(ce);
+          if (meta_events.size() == batch_size)
           {
-            auto dir = partition_.dir() / "event" / e->name();
-            a = spawn<event_arg_index, linked>(dir);
+            send(event_meta_index_, std::move(meta_events));
+            meta_events.clear();
           }
 
-          auto t = make_any_tuple(std::move(*e));
-          event_meta_index_ << t;
-          a << t;
+          auto& v = arg_events[ce->name()];
+          v.push_back(ce);
+          if (v.size() == batch_size)
+          {
+            auto& a = event_arg_indexes_[ce->name()];
+            if (! a)
+            {
+              auto dir = partition_.dir() / "event" / e->name();
+              a = spawn<event_arg_index, linked>(dir);
+            }
+
+            send(a, std::move(v));
+            v.clear();
+          }
         }
+
+        if (! meta_events.empty())
+          send(event_meta_index_, std::move(meta_events));
+
+        for (auto& p : arg_events)
+          if (! p.second.empty())
+          {
+            auto& a = event_arg_indexes_[p.first];
+            if (! a)
+            {
+              auto dir = partition_.dir() / "event" / p.first;
+              a = spawn<event_arg_index, linked>(dir);
+            }
+
+            send(a, std::move(p.second));
+          }
 
         partition_.update(s.base(), s.events());
       });
-
-  partition_.load();
-  event_meta_index_ =
-    spawn<event_meta_index, linked>(partition_.dir() / "meta");
-
-  traverse(partition_.dir() / "event",
-           [&](path const& p) -> bool
-           {
-             VAST_LOG_ACTOR_DEBUG("found existing event index: " << p);
-             event_arg_indexes_.emplace(
-                 p.basename().str(), spawn<event_arg_index, linked>(p));
-             return true;
-           });
 }
 
 char const* partition_actor::description() const

@@ -103,6 +103,7 @@ void configuration::initialize()
   auto& index = create_block("index options", "index");
   index.add("host", "hostname/address of the archive").init("127.0.0.1");
   index.add("port", "TCP port of the index").init(42004);
+  index.add("rebuild", "rebuild indexes from archive");
   index.visible(false);
 
   auto& tracker = create_block("ID tracker options", "tracker");

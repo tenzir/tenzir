@@ -186,7 +186,7 @@ struct event_arg_index::loader : expr::default_const_visitor
       return;
     }
 
-    std::shared_ptr<bitmap_index> bmi;
+    std::unique_ptr<bitmap_index> bmi;
     io::unarchive(filename, vt, bmi);
     if (! bmi)
     {
@@ -197,7 +197,7 @@ struct event_arg_index::loader : expr::default_const_visitor
     VAST_LOG_DEBUG("loaded index " << filename.trim(-4) <<
                    " (" << bmi->size() << " bits)");
 
-    idx.offsets_.emplace(oe.off, bmi);
+    idx.offsets_.emplace(oe.off, std::move(bmi));
   }
 
   virtual void visit(expr::type_extractor const& te)
@@ -224,7 +224,7 @@ struct event_arg_index::loader : expr::default_const_visitor
         return;
 
       value_type vt;
-      std::shared_ptr<bitmap_index> bmi;
+      std::unique_ptr<bitmap_index> bmi;
       io::unarchive(i->second, vt, bmi);
       if (! bmi)
       {
@@ -236,8 +236,8 @@ struct event_arg_index::loader : expr::default_const_visitor
                      bmi->size() << " bits)");
 
       assert(! idx.offsets_.count(o));
-      idx.offsets_.emplace(o, bmi);
-      idx.types_.emplace(vt, bmi);
+      idx.types_.emplace(vt, bmi.get());
+      idx.offsets_.emplace(o, std::move(bmi));
     }
   }
 
@@ -361,7 +361,7 @@ void event_arg_index::store()
 {
   VAST_LOG_ACTOR_DEBUG("saves indexes to filesystem");
 
-  std::map<std::shared_ptr<bitmap_index>, value_type> inverse;
+  std::map<bitmap_index*, value_type> inverse;
   for (auto& p : types_)
     if (inverse.find(p.second) == inverse.end())
       inverse.emplace(p.second, p.first);
@@ -372,9 +372,10 @@ void event_arg_index::store()
       continue;
     if (! exists(dir_))
       mkdir(dir_);
-    path const filename = pathify(p.first);
-    assert(inverse.count(p.second));
-    io::archive(filename, inverse[p.second], p.second);
+
+    auto const filename = pathify(p.first);
+    assert(inverse.count(p.second.get()));
+    io::archive(filename, inverse[p.second.get()], p.second);
     VAST_LOG_ACTOR_DEBUG("stored index " << filename.trim(-4) <<
                          " (" << p.second->size() << " bits)");
   }
@@ -434,12 +435,11 @@ bool event_arg_index::index_record(record const& r, uint64_t id, offset& o)
       }
       else
       {
-        auto unique = make_bitmap_index<bitstream_type>(v.which());
-        auto bmi = std::shared_ptr<bitmap_index>{unique.release()};
+        auto bmi = make_bitmap_index<bitstream_type>(v.which());
         idx = bmi.get();
         idx->append(1, false); // ID 0 is not a valid event.
-        offsets_.emplace(o, bmi);
-        types_.emplace(v.which(), std::move(bmi));
+        types_.emplace(v.which(), idx);
+        offsets_.emplace(o, std::move(bmi));
       }
       assert(idx != nullptr);
       if (! idx->push_back(v, id))

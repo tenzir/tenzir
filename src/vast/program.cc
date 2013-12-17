@@ -37,6 +37,27 @@ program::program(configuration const& config)
 void program::act()
 {
   chaining(false);
+
+  behavior default_behavior = (
+      on(atom("signal"), arg_match) >> [&](int signal)
+      {
+        VAST_LOG_ACTOR_VERBOSE("received signal " << signal);
+        if (signal == SIGINT || signal == SIGTERM)
+          quit(exit::stop);
+      },
+      others() >> [=]
+      {
+        quit(exit::error);
+        VAST_LOG_ACTOR_ERROR("terminated after unexpected message from " <<
+                             VAST_ACTOR_ID(last_sender()) << ": " <<
+                             to_string(self->last_dequeued()));
+      });
+
+  become(default_behavior);
+
+  auto monitor = spawn<signal_monitor, detached+linked>(self);
+  send(monitor, atom("act"));
+
   auto vast_dir = path{*config_.get("directory")};
   try
   {
@@ -123,6 +144,26 @@ void program::act()
       index = remote_actor(index_host, index_port);
     }
 
+    if (config_.check("index.rebuild"))
+    {
+      become(
+        on_arg_match >> [=](segment const& s)
+        {
+          event_id next = s.base() + s.events();
+          send(archive, atom("segment"), next);
+          forward_to(index);
+        },
+        on(atom("no segment"), arg_match) >> [=](event_id eid)
+        {
+          VAST_LOG_INFO("sent all segments to index (" << eid - 1 << " events)");
+          become(default_behavior);
+        });
+
+      VAST_LOG_INFO("begins rebuilding index");
+      send(index, atom("delete"));
+      send(archive, atom("segment"), event_id{1});
+    }
+
     actor_ptr receiver;
     auto receiver_host = *config_.get("receiver.host");
     auto receiver_port = *config_.as<unsigned>("receiver.port");
@@ -202,30 +243,12 @@ void program::act()
       delayed_send(c, std::chrono::milliseconds(200), atom("prompt"));
     }
 #endif
-
-    auto monitor = spawn<signal_monitor, detached+linked>(self);
-    send(monitor, atom("act"));
   }
   catch (network_error const& e)
   {
     VAST_LOG_ACTOR_ERROR("encountered network error: " << e.what());
     send_exit(self, exit::error);
   }
-
-  become(
-      on(atom("signal"), arg_match) >> [&](int signal)
-      {
-        VAST_LOG_ACTOR_VERBOSE("received signal " << signal);
-        if (signal == SIGINT || signal == SIGTERM)
-          quit(exit::stop);
-      },
-      others() >> [=]
-      {
-        quit(exit::error);
-        VAST_LOG_ACTOR_ERROR("terminated after unexpected message from @" <<
-                             VAST_ACTOR_ID(last_sender()) << ": " <<
-                             to_string(self->last_dequeued()));
-      });
 }
 
 char const* program::description() const
