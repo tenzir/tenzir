@@ -270,7 +270,7 @@ public:
       throw std::runtime_error("unsupported relational operator " +
                                to<std::string>(op));
 
-    auto i = dictionary_[to<std::string>(val.get<string>())];
+    auto i = dictionary_[val.get<string>()];
     if (! i)
     {
       if (op == not_equal)
@@ -299,7 +299,7 @@ public:
 private:
   virtual bool push_back_impl(value const& val) override
   {
-    auto str = to<std::string>(val.get<string>());
+    auto& str = val.get<string>();
     auto i = dictionary_[str];
     if (! i)
       i = dictionary_.insert(str);
@@ -317,7 +317,7 @@ private:
   }
 
   bitmap<dictionary_codomain, Bitstream> bitmap_;
-  util::map_dictionary<dictionary_codomain> dictionary_;
+  util::map_dictionary<string, dictionary_codomain> dictionary_;
 
 private:
   friend access;

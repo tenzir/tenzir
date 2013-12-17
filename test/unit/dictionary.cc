@@ -1,11 +1,12 @@
 #include "test.h"
+#include "vast/string.h"
 #include "vast/util/dictionary.h"
 
 using namespace vast;
 
 BOOST_AUTO_TEST_CASE(map_dictionary)
 {
-  util::map_dictionary<size_t> dict;
+  util::map_dictionary<string, size_t> dict;
   auto i0 = dict.insert("foo");
   auto i1 = dict.insert("bar");
   auto i2 = dict.insert("baz");
