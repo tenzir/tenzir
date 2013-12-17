@@ -51,9 +51,6 @@ public:
   /// Performs a checkpoint of the number of bits appended.
   void checkpoint();
 
-protected:
-  using super = bitmap_index;
-
 private:
   virtual bool push_back_impl(value const& val) = 0;
   virtual bool equals(bitmap_index const& other) const = 0;

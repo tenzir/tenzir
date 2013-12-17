@@ -347,9 +347,9 @@ bitvector& bitvector::set(size_type i, bool bit)
   assert(i < num_bits_);
 
   if (bit)
-      bits_[block_index(i)] |= bit_mask(i);
+    bits_[block_index(i)] |= bit_mask(i);
   else
-      reset(i);
+    reset(i);
 
   return *this;
 }
