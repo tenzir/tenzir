@@ -427,4 +427,20 @@ bool convert(From const& from, string& str, Opts&&... opts)
 
 } // namespace vast
 
+namespace std {
+
+template <>
+struct hash<vast::string>
+{
+  size_t operator()(vast::string const& str) const
+  {
+    size_t x = 0;
+    for (auto byte : str)
+      x ^= static_cast<size_t>(byte) + 0x9e3779b9 + (x << 6) + (x >> 2);
+    return x;
+  }
+};
+
+} // namespace std
+
 #endif
