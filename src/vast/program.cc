@@ -64,7 +64,7 @@ void program::act()
     if (config_.check("profile"))
     {
       auto ms = *config_.as<unsigned>("profile");
-      auto profiler = spawn<util::profiler, linked>(
+      auto profiler = spawn<util::profiler, detached+linked>(
           vast_dir / "log", std::chrono::seconds(ms));
       if (config_.check("profile-cpu"))
         send(profiler, atom("start"), atom("perftools"), atom("cpu"));

@@ -117,6 +117,13 @@ void profiler::act()
 
         auto f = to_string(log_dir_ / "perftools.cpu");
         ProfilerStart(f.c_str());
+        delayed_send(self, secs_, atom("flush"));
+      },
+
+      on(atom("flush")) >> [=]
+      {
+        ProfilerFlush();
+        delayed_send(self, secs_, atom("flush"));
       },
 #endif
 
