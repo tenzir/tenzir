@@ -30,6 +30,11 @@ public:
     return derived()->find_impl(x);
   }
 
+  Bitstream* find(T const& x)
+  {
+    return derived()->find_impl(x);
+  }
+
   std::pair<Bitstream const*, Bitstream const*> find_bounds(T const& x) const
   {
     return derived()->find_bounds_impl(x);
@@ -84,6 +89,14 @@ private:
   }
 
   Bitstream const* find_impl(T const& x) const
+  {
+    auto i = static_cast<size_t>(x);
+    if (i >= vector_.size() || ! vector_[i])
+      return nullptr;
+    return &*vector_[i];
+  }
+
+  Bitstream* find_impl(T const& x)
   {
     auto i = static_cast<size_t>(x);
     if (i >= vector_.size() || ! vector_[i])
@@ -203,6 +216,12 @@ private:
     return i == map_.end() ? nullptr : &i->second->second;
   }
 
+  Bitstream* find_impl(T const& x)
+  {
+    auto i = map_.find(x);
+    return i == map_.end() ? nullptr : &i->second->second;
+  }
+
   std::pair<Bitstream const*, Bitstream const*> find_bounds_impl(T const& x) const
   {
     if (map_.empty())
@@ -303,6 +322,12 @@ private:
   }
 
   Bitstream const* find_impl(T const& x) const
+  {
+    auto i = map_.find(x);
+    return i == map_.end() ? nullptr : &i->second;
+  }
+
+  Bitstream* find_impl(T const& x)
   {
     auto i = map_.find(x);
     return i == map_.end() ? nullptr : &i->second;
@@ -445,7 +470,7 @@ private:
   }
 };
 
-/// An equality encoding policy for bitmaps.
+/// An equality coding policy for bitmaps.
 template <typename T, typename Bitstream>
 class equality_coder
   : public coder<
@@ -468,12 +493,15 @@ public:
 private:
   bool encode_impl(T const& x)
   {
-    if (! store_.find(x))
-      if (! store_.insert(x, {size(), 0}))
-        return false;
+    if (auto bs = store_.find(x))
+    {
+      bs->append(size() - bs->size(), false);
+      return bs->push_back(true);
+    }
 
-    store_.each([&](T const& k, Bitstream& bs) { bs.push_back(x == k); });
-    return true;
+    Bitstream bs{size(), false};
+    bs.push_back(true);
+    return store_.insert(x, std::move(bs));
   }
 
   optional<Bitstream> decode_impl(T const& x, relational_operator op) const
@@ -486,14 +514,26 @@ private:
             "unsupported relational operator: " + to<std::string>(op));
       case equal:
         if (result)
-          return *result;
+        {
+          auto r = *result;
+          r.append(size() - r.size(), false);
+          return std::move(r);
+        }
         else
+        {
           return {};
+        }
       case not_equal:
         if (result)
-          return ~*result;
+        {
+          auto r = *result;
+          r.append(size() - r.size(), false);
+          return std::move(~r);
+        }
         else
+        {
           return {{size(), true}};
+        }
     }
   }
 
