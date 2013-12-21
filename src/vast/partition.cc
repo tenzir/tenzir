@@ -175,7 +175,7 @@ void partition_actor::act()
             auto& a = event_arg_indexes_[ce->name()];
             if (! a)
             {
-              auto dir = partition_.dir() / "event" / e->name();
+              auto dir = partition_.dir() / "event" / ce->name();
               a = spawn<event_arg_index, linked>(dir);
             }
 
