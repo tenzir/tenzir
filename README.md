@@ -12,19 +12,19 @@ Dependencies
 Required:
 
 - [CMake](http://www.cmake.org)
-- [Clang >= 3.2](http://clang.llvm.org/) or [g++ >= 4.7](http://gcc.gnu.org)
-- [C++ Boost Libraries](http://www.boost.org)
+- [Clang >= 3.3](http://clang.llvm.org/) or [g++ >= 4.8](http://gcc.gnu.org)
 - [libcppa](https://github.com/Neverlord/libcppa)
+- [Boost](http://www.boost.org)
 
 Optional:
 
 - [Broccoli](http://www.bro-ids.org)
-- [Google perftools](http://code.google.com/p/google-perftools)
+- [Editline](http://thrysoee.dk/editline/)
+- [Gperftools](http://code.google.com/p/google-perftools)
 - [Doxygen](http://www.doxygen.org)
 
-Please consult
-[INSTALL.md](https://github.com/mavam/vast/blob/master/INSTALL.md) for guidance
-on installing the dependencies.
+Please consult [INSTALL.md](INSTALL.md) for guidance on installing the
+dependencies. VAST currently runs only on Mac OSX (Darwin) and Linux.
 
 Installation
 ------------
