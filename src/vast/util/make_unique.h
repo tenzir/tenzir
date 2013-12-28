@@ -1,4 +1,3 @@
-/// Interim std::make_unique until the standard ships with an implementation.
 #ifndef VAST_UTIL_MAKE_UNIQUE_H
 #define VAST_UTIL_MAKE_UNIQUE_H
 
@@ -8,6 +7,7 @@
 namespace vast {
 namespace util {
 
+/// Interim `std::make_unique` until the standard ships with an implementation.
 template<typename T, typename ...Args>
 std::unique_ptr<T> make_unique(Args&& ...args)
 {
