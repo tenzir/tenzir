@@ -4,6 +4,7 @@
 #include <cassert>
 #include <unordered_map>
 #include <list>
+#include "vast/serialization.h"
 
 namespace vast {
 namespace util {
@@ -13,9 +14,9 @@ namespace util {
 // @tparam V The value type of the cache lookup table.
 // @tparam Map The map type used as cache table.
 template <
-    typename K
-  , typename V
-  , template <typename...> class Map = std::unordered_map
+  typename K,
+  typename V,
+  template <typename...> class Map = std::unordered_map
 >
 class lru_cache
 {
@@ -31,8 +32,8 @@ public:
 
   /// The cache table holding the hot entries.
   using cache = Map<
-    key_type
-  , std::pair<value_type, typename tracker::iterator>
+    key_type,
+    std::pair<value_type, typename tracker::iterator>
   >;
 
   using iterator = typename cache::iterator;
@@ -42,8 +43,8 @@ public:
   /// @param capacity The maximum number of elements in the cache.
   /// @param f The function to invoke for each cache miss.
   lru_cache(size_t capacity, miss_function f)
-    : capacity_(capacity),
-      miss_function_(f)
+    : capacity_{capacity},
+      miss_function_{f}
   {
     assert(capacity_ > 0);
   }
@@ -150,6 +151,34 @@ private:
   miss_function miss_function_;
   tracker tracker_;
   cache cache_;
+
+private:
+  friend access;
+
+  void serialize(serializer& sink) const
+  {
+    sink << capacity_;
+    sink << static_cast<uint64_t>(tracker_.size());
+    for (auto& key : tracker_)
+      sink << key << cache_[key].first;
+  }
+
+  void deserialize(deserializer& source)
+  {
+    source >> capacity_;
+
+    uint64_t size;
+    source >> size;
+
+    key_type k;
+    value_type v;
+    for (uint64_t i = 0; i < size; ++i)
+    {
+      source >> k >> v;
+      auto it = tracker_.insert(tracker_.end(), k);
+      cache_.emplace(std::move(k), {std::move(v), it});
+    }
+  }
 };
 
 } // namespace vast
