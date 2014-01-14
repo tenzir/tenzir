@@ -17,6 +17,8 @@ class port : util::totally_ordered<port>,
              util::printable<port>
 {
 public:
+  using number_type = uint16_t;
+
   /// The transport layer type.
   enum port_type : uint8_t
   {
@@ -32,7 +34,7 @@ public:
   /// Constructs a port.
   /// @param number The port number.
   /// @param type The port type.
-  port(uint16_t number, port_type type = unknown);
+  port(number_type number, port_type type = unknown);
 
   /// Constructs a port from another one.
   /// @param other The port to copy.
@@ -48,7 +50,7 @@ public:
 
   /// Retrieves the port number.
   /// @returns The port number.
-  uint16_t number() const;
+  number_type number() const;
 
   /// Retrieves the transport protocol type.
   /// @returns The port type.
@@ -59,7 +61,7 @@ public:
   void type(port_type t);
 
 private:
-  uint16_t number_ = 0;
+  number_type number_ = 0;
   port_type type_ = unknown;
 
 private:
@@ -78,7 +80,7 @@ private:
            start != end && p < &buf[15])
       *p++ = *start++;
 
-    uint16_t number;
+    number_type number;
     auto s = buf;
     if (! util::parse_positive_decimal(s, p, number))
       return false;

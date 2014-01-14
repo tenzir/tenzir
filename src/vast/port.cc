@@ -6,7 +6,7 @@
 
 namespace vast {
 
-port::port(uint16_t number, port_type type)
+port::port(number_type number, port_type type)
   : number_(number)
   , type_(type)
 {
@@ -34,7 +34,7 @@ port& port::operator=(port other)
   return *this;
 }
 
-uint16_t port::number() const
+port::number_type port::number() const
 {
   return number_;
 }
