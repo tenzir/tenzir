@@ -4,39 +4,6 @@
 
 using namespace vast;
 
-BOOST_AUTO_TEST_CASE(vector_storage)
-{
-  typedef null_bitstream bitstream_type;
-  detail::vector_storage<uint8_t, bitstream_type> s;
-  BOOST_CHECK(s.insert(0));
-  BOOST_CHECK(s.insert(1, bitstream_type(10, true)));
-  BOOST_CHECK(s.insert(2));
-  BOOST_CHECK(s.insert(3, bitstream_type(5, false)));
-  BOOST_CHECK(s.insert(4));
-  BOOST_CHECK_EQUAL(s.cardinality(), 5);
-  auto b = s.find_bounds(2);
-  BOOST_CHECK(b.first && b.second);
-  BOOST_CHECK_EQUAL(b.first->size(), 10);
-  BOOST_CHECK_EQUAL(b.second->size(), 5);
-  auto c = s.find_bounds(0);
-  BOOST_CHECK(! c.first && c.second);
-  auto d = s.find_bounds(4);
-  BOOST_CHECK(d.first && ! d.second);
-
-  detail::vector_storage<uint8_t, bitstream_type> t;
-  BOOST_CHECK(t.insert(2, bitstream_type(10, true)));
-  BOOST_CHECK(t.insert(4, bitstream_type(5, false)));
-  BOOST_CHECK_EQUAL(t.cardinality(), 2);
-  auto e = t.find_bounds(3);
-  BOOST_CHECK(e.first && e.second);
-  BOOST_CHECK_EQUAL(e.first->size(), 10);
-  BOOST_CHECK_EQUAL(e.second->size(), 5);
-  auto f = t.find_bounds(0);
-  BOOST_CHECK(! f.first && f.second);
-  auto g = t.find_bounds(8);
-  BOOST_CHECK(g.first && ! g.second);
-}
-
 BOOST_AUTO_TEST_CASE(basic_bitmap)
 {
   bitmap<int, null_bitstream> bm, bm2;
@@ -47,6 +14,7 @@ BOOST_AUTO_TEST_CASE(basic_bitmap)
   BOOST_REQUIRE(bm.push_back(30));
 
   BOOST_CHECK_EQUAL(to_string(*bm[21]), "00010");
+
   BOOST_CHECK_EQUAL(to_string(*bm[30]), "00001");
   BOOST_CHECK_EQUAL(to_string(*bm[42]), "10100");
   BOOST_CHECK_EQUAL(to_string(*bm[84]), "01000");
@@ -56,6 +24,7 @@ BOOST_AUTO_TEST_CASE(basic_bitmap)
   BOOST_CHECK_EQUAL(to_string(*bm.lookup(not_equal, 30)), "11110");
   BOOST_CHECK_EQUAL(to_string(*bm.lookup(not_equal, 42)), "01011");
   BOOST_CHECK_EQUAL(to_string(*bm.lookup(not_equal, 84)), "10111");
+  BOOST_CHECK(bm.lookup(not_equal, 13));
   BOOST_CHECK_EQUAL(to_string(*bm.lookup(not_equal, 13)), "11111");
 
   BOOST_CHECK(bm.append(5, false));
@@ -76,32 +45,70 @@ BOOST_AUTO_TEST_CASE(basic_bitmap)
   BOOST_CHECK_EQUAL(to_string(*bm[84]), to_string(*bm2[84]));
 }
 
+BOOST_AUTO_TEST_CASE(range_coding)
+{
+  range_bitslice_coder<uint8_t, null_bitstream> r;
+
+  // Some manual tests first.
+  BOOST_REQUIRE(r.encode(0));
+  BOOST_REQUIRE(r.encode(6));
+  BOOST_REQUIRE(r.encode(9));
+  BOOST_REQUIRE(r.encode(77));
+  BOOST_REQUIRE(r.encode(255));
+  BOOST_REQUIRE(r.encode(254));
+
+  //r.each(
+  //    [&](size_t, uint8_t x, null_bitstream const& bs)
+  //    {
+  //      std::cout << (uint64_t)x << "\t" << bs << std::endl;
+  //    });
+
+  BOOST_CHECK_EQUAL(to_string(*r.decode(0, less_equal)), "100000");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(8, less_equal)), "110000");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(9, less_equal)), "111000");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(10, less_equal)), "111000");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(100, less_equal)), "111100");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(255, less_equal)), "111111");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(254, less_equal)), "111101");
+
+  r = decltype(r){};
+
+  for (size_t i = 0; i < 256; ++i)
+    BOOST_CHECK(r.encode(i));
+
+  BOOST_CHECK(r.size() == 256);
+
+  std::string str(256, '0');
+  for (size_t i = 0; i < 256; ++i)
+  {
+    str[i] = '1';
+    BOOST_CHECK_EQUAL(to_string(*r.decode(i, less_equal)), str);
+  }
+}
+
 BOOST_AUTO_TEST_CASE(range_encoded_bitmap)
 {
-  bitmap<int, null_bitstream, range_coder> bm, bm2;
+  bitmap<int8_t, null_bitstream, range_bitslice_coder> bm, bm2;
   BOOST_REQUIRE(bm.push_back(42));
   BOOST_REQUIRE(bm.push_back(84));
   BOOST_REQUIRE(bm.push_back(42));
   BOOST_REQUIRE(bm.push_back(21));
   BOOST_REQUIRE(bm.push_back(30));
 
-  BOOST_CHECK_EQUAL(to_string(*bm[21]), "00010");
-  BOOST_CHECK_EQUAL(to_string(*bm[30]), "00001");
-  BOOST_CHECK_EQUAL(to_string(*bm[42]), "10100");
-  BOOST_CHECK_EQUAL(to_string(*bm[84]), "01000");
-  BOOST_CHECK(! bm[13]);
-
+  BOOST_CHECK_EQUAL(to_string(*bm.lookup(not_equal, 13)), "11111");
+  BOOST_CHECK_EQUAL(to_string(*bm.lookup(not_equal, 42)), "01011");
+  BOOST_CHECK_EQUAL(to_string(*bm.lookup(equal, 21)), "00010");
+  BOOST_CHECK_EQUAL(to_string(*bm.lookup(equal, 30)), "00001");
+  BOOST_CHECK_EQUAL(to_string(*bm.lookup(equal, 42)), "10100");
+  BOOST_CHECK_EQUAL(to_string(*bm.lookup(equal, 84)), "01000");
   BOOST_CHECK_EQUAL(to_string(*bm.lookup(less_equal, 21)), "00010");
   BOOST_CHECK_EQUAL(to_string(*bm.lookup(less_equal, 30)), "00011");
   BOOST_CHECK_EQUAL(to_string(*bm.lookup(less_equal, 42)), "10111");
   BOOST_CHECK_EQUAL(to_string(*bm.lookup(less_equal, 84)), "11111");
   BOOST_CHECK_EQUAL(to_string(*bm.lookup(less_equal, 25)), "00010");
   BOOST_CHECK_EQUAL(to_string(*bm.lookup(less_equal, 80)), "10111");
-  BOOST_CHECK_EQUAL(to_string(*bm.lookup(equal, 30)), "00001");
   BOOST_CHECK_EQUAL(to_string(*bm.lookup(not_equal, 30)), "11110");
   BOOST_CHECK_EQUAL(to_string(*bm.lookup(greater, 42)), "01000");
-  BOOST_CHECK_EQUAL(to_string(*bm.lookup(not_equal, 42)), "01011");
-  BOOST_CHECK_EQUAL(to_string(*bm.lookup(not_equal, 13)), "11111");
   BOOST_CHECK_EQUAL(to_string(*bm.lookup(greater, 13)), "11111");
   BOOST_CHECK_EQUAL(to_string(*bm.lookup(greater, 84)), "00000");
   BOOST_CHECK_EQUAL(to_string(*bm.lookup(less, 42)), "00011");
@@ -122,7 +129,7 @@ BOOST_AUTO_TEST_CASE(range_encoded_bitmap)
 
 BOOST_AUTO_TEST_CASE(binary_encoded_bitmap)
 {
-  bitmap<int8_t, null_bitstream, binary_coder> bm, bm2;
+  bitmap<int8_t, null_bitstream, binary_bitslice_coder> bm, bm2;
   BOOST_REQUIRE(bm.push_back(0));
   BOOST_REQUIRE(bm.push_back(1));
   BOOST_REQUIRE(bm.push_back(1));

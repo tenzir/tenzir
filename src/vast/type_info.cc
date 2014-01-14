@@ -181,17 +181,19 @@ void announce_builtin_types()
     arithmetic_bitmap_index<null_bitstream, int_type>,
     arithmetic_bitmap_index<null_bitstream, uint_type>,
     arithmetic_bitmap_index<null_bitstream, double_type>,
+    arithmetic_bitmap_index<null_bitstream, time_range_type>,
+    arithmetic_bitmap_index<null_bitstream, time_point_type>,
     address_bitmap_index<null_bitstream>,
     port_bitmap_index<null_bitstream>,
-    time_bitmap_index<null_bitstream>,
     string_bitmap_index<null_bitstream>,
     arithmetic_bitmap_index<ewah_bitstream, bool_type>,
     arithmetic_bitmap_index<ewah_bitstream, int_type>,
     arithmetic_bitmap_index<ewah_bitstream, uint_type>,
     arithmetic_bitmap_index<ewah_bitstream, double_type>,
+    arithmetic_bitmap_index<ewah_bitstream, time_range_type>,
+    arithmetic_bitmap_index<ewah_bitstream, time_point_type>,
     address_bitmap_index<ewah_bitstream>,
     port_bitmap_index<ewah_bitstream>,
-    time_bitmap_index<ewah_bitstream>,
     string_bitmap_index<ewah_bitstream>
   > bitmap_index_types;
 

@@ -82,14 +82,15 @@ BOOST_AUTO_TEST_CASE(floating_point_bitmap_index)
   auto fourty_two = bi->lookup(equal, 42.12);
   BOOST_REQUIRE(fourty_two);
   BOOST_CHECK_EQUAL(to_string(*fourty_two), "0100010");
-  auto g_hun = bi->lookup(greater, 100.000001);
-  BOOST_REQUIRE(g_hun);
-  BOOST_CHECK_EQUAL(to_string(*g_hun), "0011100");
+  auto ne4711 = bi->lookup(not_equal, 4711.14);
+  BOOST_REQUIRE(ne4711);
+  BOOST_CHECK_EQUAL(to_string(*ne4711), "1110111");
 }
 
 BOOST_AUTO_TEST_CASE(temporal_bitmap_index)
 {
-  time_bitmap_index<null_bitstream> trbi{8}, trbi2;  // 0.1 sec resolution
+  // A precision of 8 translates into a resolution of 0.1 sec.
+  arithmetic_bitmap_index<null_bitstream, time_range_type> trbi{8}, trbi2;
   bitmap_index* bi = &trbi;
   BOOST_REQUIRE(bi->push_back(std::chrono::milliseconds(1000)));
   BOOST_REQUIRE(bi->push_back(std::chrono::milliseconds(2000)));
@@ -102,22 +103,18 @@ BOOST_AUTO_TEST_CASE(temporal_bitmap_index)
   BOOST_REQUIRE(hun);
   BOOST_CHECK_EQUAL(to_string(*hun), "100100");
 
-  auto str =
-    "10\t20\t22\t23\t30\n"
-    "11111\n"
-    "01111\n"
-    "00001\n"
-    "11111\n"
-    "00111\n"
-    "00011\n";
+  auto twokay = bi->lookup(less_equal, std::chrono::milliseconds(2000));
+  BOOST_REQUIRE(twokay);
+  BOOST_CHECK_EQUAL(to_string(*twokay), "110100");
 
-  BOOST_CHECK_EQUAL(to_string(*bi), str);
+  auto twelve = bi->lookup(greater, std::chrono::milliseconds(1200));
+  BOOST_REQUIRE(twelve);
+  BOOST_CHECK_EQUAL(to_string(*twelve), "011011");
 
   std::vector<uint8_t> buf;
   io::archive(buf, trbi);
   io::unarchive(buf, trbi2);
   BOOST_CHECK(trbi == trbi2);
-  BOOST_CHECK_EQUAL(to_string(trbi2), str);
 }
 
 BOOST_AUTO_TEST_CASE(strings_bitmap_index)
@@ -244,24 +241,13 @@ BOOST_AUTO_TEST_CASE(transport_port_bitmap_index)
   bi->push_back(port(80, port::tcp));
   bi->push_back(port(8080, port::tcp));
 
-  port http(80, port::tcp);
+  port http{80, port::tcp};
   auto pbs = bi->lookup(equal, http);
   BOOST_REQUIRE(pbs);
   BOOST_CHECK_EQUAL(to_string(*pbs), "1000010");
 
-  port priv(1024, port::unknown);
+  port priv{1024, port::unknown};
   auto pbs2 = bi->lookup(less_equal, priv);
   BOOST_REQUIRE(pbs2);
   BOOST_CHECK_EQUAL(to_string(*pbs2), "1111010");
-
-  BOOST_CHECK_EQUAL(
-      to_string(*bi),
-      "8\t53\t80\t443\t8080\t31337\n"
-      "001111\n"
-      "000111\n"
-      "011111\n"
-      "111111\n"
-      "000001\n"
-      "001111\n"
-      "000011\n");
 }

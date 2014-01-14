@@ -13,417 +13,33 @@
 #include "vast/util/print.h"
 
 namespace vast {
-namespace detail {
 
-template <typename Derived, typename T, typename Bitstream>
-class bitmap_storage
-  : util::equality_comparable<bitmap_storage<Derived, T, Bitstream>>
+/// The base class for bitmap coders.
+template <typename Derived>
+class coder : util::equality_comparable<coder<Derived>>
 {
 public:
+  uint64_t size() const
+  {
+    return rows_;
+  }
+
   uint64_t cardinality() const
   {
     return derived()->cardinality_impl();
   }
 
-  Bitstream const* find(T const& x) const
-  {
-    return derived()->find_impl(x);
-  }
-
-  Bitstream* find(T const& x)
-  {
-    return derived()->find_impl(x);
-  }
-
-  std::pair<Bitstream const*, Bitstream const*> find_bounds(T const& x) const
-  {
-    return derived()->find_bounds_impl(x);
-  }
-
-  void each(std::function<void(T const&, Bitstream const&)> f) const
-  {
-    derived()->each_impl(f);
-  }
-
-  void each(std::function<void(T const&, Bitstream&)> f)
-  {
-    derived()->each_impl(f);
-  }
-
-  bool insert(T const& x, Bitstream b = {})
-  {
-    return derived()->insert_impl(x, b);
-  }
-
-private:
-  friend bool operator==(bitmap_storage const& x, bitmap_storage const& y)
-  {
-    return x.derived()->equals(*y.derived());
-  }
-
-  Derived* derived()
-  {
-    return static_cast<Derived*>(this);
-  }
-
-  Derived const* derived() const
-  {
-    return static_cast<Derived const*>(this);
-  }
-};
-
-/// A vector-based random access bitstream storage policy.
-/// This storage policy maps values to indices. It provides *O(1)* access and
-/// requires *O(max(T))* space. Hence it is only useful for very dense domains.
-template <typename T, typename Bitstream>
-class vector_storage
-  : public bitmap_storage<vector_storage<T, Bitstream>, T, Bitstream>
-{
-  using super = bitmap_storage<vector_storage<T, Bitstream>, T, Bitstream>;
-  friend super;
-
-private:
-  uint64_t cardinality_impl() const
-  {
-    return cardinality_;
-  }
-
-  Bitstream const* find_impl(T const& x) const
-  {
-    auto i = static_cast<size_t>(x);
-    if (i >= vector_.size() || ! vector_[i])
-      return nullptr;
-    return &*vector_[i];
-  }
-
-  Bitstream* find_impl(T const& x)
-  {
-    auto i = static_cast<size_t>(x);
-    if (i >= vector_.size() || ! vector_[i])
-      return nullptr;
-    return &*vector_[i];
-  }
-
-  std::pair<Bitstream const*, Bitstream const*> find_bounds_impl(T const& x) const
-  {
-    if (vector_.empty())
-      return {nullptr, nullptr};
-    else if (x >= vector_.size())
-      return {&*vector_.back(), nullptr};
-
-    Bitstream const* lower = nullptr;
-    Bitstream const* upper = nullptr;
-    bool found = false;
-    for (size_t i = 0; ! found && i < vector_.size(); ++i)
-      if (vector_[i] && i < x)
-        lower = &*vector_[i];
-      else if (lower && i >= x)
-        found = true;
-
-    found = false;
-    for (size_t i = vector_.size(); ! found && i > 0; --i)
-      if (vector_[i - 1] && i - 1 > x)
-        upper = &*vector_[i - 1];
-      else if (upper && i - 1 < x)
-        found = true;
-
-    return {lower, upper};
-  }
-
-  void each_impl(std::function<void(T const&, Bitstream const&)> f) const
-  {
-    for (size_t i = 0; i < vector_.size(); ++i)
-      f(i, *vector_[i]);
-  }
-
-  void each_impl(std::function<void(T const&, Bitstream&)> f)
-  {
-    for (size_t i = 0; i < vector_.size(); ++i)
-      f(i, *vector_[i]);
-  }
-
-  bool insert_impl(T const& x, Bitstream b)
-  {
-    auto i = static_cast<size_t>(x);
-    if (i >= vector_.size())
-      vector_.resize(i + 1);
-    else if (i < vector_.size() && vector_[i])
-      return false;
-
-    vector_[i] = std::move(b);
-    ++cardinality_;
-    return true;
-  }
-
-  std::vector<optional<Bitstream>> vector_;
-  uint64_t cardinality_ = 0;
-
-private:
-  friend access;
-
-  void serialize(serializer& sink) const
-  {
-    sink << cardinality_ << vector_;
-  }
-
-  void deserialize(deserializer& source)
-  {
-    source >> cardinality_ >> vector_;
-  }
-
-  bool equals(vector_storage const& other) const
-  {
-    if (cardinality_ != other.cardinality_)
-      return false;
-
-    // FIXME: std::vector<T>::operator== chokes on optional<T> and finds too
-    // many overloads, so we'll do the comparison by hand.
-    auto& xv = vector_;
-    auto& yv = other.vector_;
-    if (xv.size() != yv.size())
-      return false;
-
-    for (size_t i = 0; i < xv.size(); ++i)
-      if ((xv[i] && ! yv[i]) || (! xv[i] && yv[i]))
-        return false;
-      else if (xv[i] && yv[i] && *xv[i] != *yv[i])
-        return false;
-
-    return true;
-  }
-};
-
-/// A linked-list-plus-hash-table-based bitstream storage policy.
-/// This storage policy offers *O(1)* lookup and *O(log(n))* bounds checks, at
-/// the cost of *O(n * b + n)* space.
-template <typename T, typename Bitstream>
-class list_storage
-  : public bitmap_storage<list_storage<T, Bitstream>, T, Bitstream>
-{
-public:
-  using super = bitmap_storage<list_storage<T, Bitstream>, T, Bitstream>;
-  friend super;
-
-private:
-  uint64_t cardinality_impl() const
-  {
-    return list_.size();
-  }
-
-  Bitstream const* find_impl(T const& x) const
-  {
-    auto i = map_.find(x);
-    return i == map_.end() ? nullptr : &i->second->second;
-  }
-
-  Bitstream* find_impl(T const& x)
-  {
-    auto i = map_.find(x);
-    return i == map_.end() ? nullptr : &i->second->second;
-  }
-
-  std::pair<Bitstream const*, Bitstream const*> find_bounds_impl(T const& x) const
-  {
-    if (map_.empty())
-      return {nullptr, nullptr};
-
-    auto i = std::equal_range(
-        list_.begin(), list_.end(), list_value_type(x, {}), key_comp_);
-
-    // Note that std::lower_bound returns the first element that is *not* less
-    // than x, but we want the element that *is* less than x, and nullptr
-    // otherwise.
-    auto upper = i.second != list_.end() ? &i.second->second : nullptr;
-    auto lower = i.first != list_.begin() && (--i.first)->first < x
-      ? &i.first->second
-      : nullptr;
-
-    return {lower, upper};
-  }
-
-  void each_impl(std::function<void(T const&, Bitstream const&)> f) const
-  {
-    for (auto& p : list_)
-      f(p.first, p.second);
-  }
-
-  void each_impl(std::function<void(T const&, Bitstream&)> f)
-  {
-    for (auto& p : list_)
-      f(p.first, p.second);
-  }
-
-  bool insert_impl(T const& x, Bitstream b)
-  {
-    auto i = std::lower_bound(
-        list_.begin(), list_.end(), list_value_type(x, {}), key_comp_);
-
-    if (i == list_.end() || x < i->first)
-    {
-      i = list_.emplace(i, x, std::move(b));
-      return map_.emplace(x, i).second;
-    }
-
-    return false;
-  }
-
-  using list_type = std::list<std::pair<T, Bitstream>>;
-  using list_value_type = typename list_type::value_type;
-
-  struct key_comp
-  {
-    bool operator()(list_value_type const& x, list_value_type const& y)
-    {
-      return x.first < y.first;
-    };
-  };
-
-  list_type list_;
-  key_comp key_comp_;
-  std::unordered_map<T, typename list_type::iterator> map_;
-
-private:
-  friend access;
-
-  void serialize(serializer& sink) const
-  {
-    sink << list_;
-  }
-
-  void deserialize(deserializer& source)
-  {
-    source >> list_;
-    map_.reserve(list_.size());
-    for (auto i = list_.begin(); i != list_.end(); ++i)
-      map_.emplace(i->first, i);
-  }
-
-  bool equals(list_storage const& other) const
-  {
-    return list_ == other.list_;
-  }
-};
-
-/// A purely hash-table-based bitstream storage policy.
-/// This storage policy offers *O(1)* lookup and *O(n)* bounds check,
-/// requiring *O(n * b)* space.
-template <typename T, typename Bitstream>
-class unordered_storage
-  : public bitmap_storage<unordered_storage<T, Bitstream>, T, Bitstream>
-{
-public:
-  using super = bitmap_storage<unordered_storage<T, Bitstream>, T, Bitstream>;
-  friend super;
-
-private:
-  uint64_t cardinality_impl() const
-  {
-    return map_.size();
-  }
-
-  Bitstream const* find_impl(T const& x) const
-  {
-    auto i = map_.find(x);
-    return i == map_.end() ? nullptr : &i->second;
-  }
-
-  Bitstream* find_impl(T const& x)
-  {
-    auto i = map_.find(x);
-    return i == map_.end() ? nullptr : &i->second;
-  }
-
-  std::pair<Bitstream const*, Bitstream const*> find_bounds_impl(T const& x) const
-  {
-    if (map_.empty())
-      return {nullptr, nullptr};
-
-    auto l = map_.end();
-    auto u = map_.end();
-    for (auto p = map_.begin(); p != map_.end(); ++p)
-    {
-      if (p->first > x && (u == map_.end() || p->first < u->first))
-        u = p;
-      if (p->first < x && (l == map_.end() || p->first > u->first))
-        l = p;
-    }
-
-    return {l == map_.end() ? nullptr : &l->second,
-            u == map_.end() ? nullptr : &u->second};
-  }
-
-  void each_impl(std::function<void(T const&, Bitstream const&)> f) const
-  {
-    for (auto& p : map_)
-      f(p.first, p.second);
-  }
-
-  void each_impl(std::function<void(T const&, Bitstream&)> f)
-  {
-    for (auto& p : map_)
-      f(p.first, p.second);
-  }
-
-  bool insert_impl(T const& x, Bitstream b = {})
-  {
-    auto p = map_.emplace(x, std::move(b));
-    return p.second;
-  }
-
-  std::unordered_map<T, Bitstream> map_;
-
-private:
-  friend access;
-
-  void serialize(serializer& sink) const
-  {
-    sink << map_;
-  }
-
-  void deserialize(deserializer& source)
-  {
-    source >> map_;
-  }
-
-  bool equals(unordered_storage const& other) const
-  {
-    return map_ == other.map_;
-  }
-};
-
-} // detail
-
-template <typename Derived, typename T, typename Bitstream, typename Storage>
-class coder : util::equality_comparable<coder<Derived, T, Bitstream, Storage>>
-{
-public:
-  size_t size() const
-  {
-    return rows_;
-  }
-
-  Storage const& store() const
-  {
-    return store_;
-  }
-
   bool append(size_t n, bool bit)
   {
-    auto success = true;
-    store_.each(
-        [&](T const&, Bitstream& bs)
-        {
-          if (! bs.append(n, bit))
-            success = false;
-        });
-
+    auto success = derived()->append_impl(n, bit);
     if (success)
       rows_ += n;
 
     return success;
   }
 
-  bool encode(T const& x)
+  template <typename T>
+  bool encode(T x)
   {
     auto success = derived()->encode_impl(x);
     if (success)
@@ -432,33 +48,38 @@ public:
     return success;
   }
 
-  optional<Bitstream> decode(T const& x, relational_operator op = equal) const
+  template <typename T, typename Hack = Derived>
+  auto decode(T x, relational_operator op = equal) const
+    -> decltype(std::declval<Hack>().decode_impl(x, op))
   {
     return derived()->decode_impl(x, op);
   }
 
-protected:
-  Storage store_;
-  size_t rows_ = 0;
+  template <typename F>
+  void each(F f) const
+  {
+    derived()->each_impl(f);
+  }
 
-private:
+protected:
   friend access;
 
   void serialize(serializer& sink) const
   {
-    sink << rows_ << store_;
+    sink << static_cast<uint64_t>(rows_);
   }
 
   void deserialize(deserializer& source)
   {
-    source >> rows_ >> store_;
+    source >> rows_;
   }
 
   friend bool operator==(coder const& x, coder const& y)
   {
-    return x.rows_ == y.rows_ && x.store_ == y.store_;
+    return x.rows_ == y.rows_;
   }
 
+private:
   Derived* derived()
   {
     return static_cast<Derived*>(this);
@@ -468,118 +89,173 @@ private:
   {
     return static_cast<Derived const*>(this);
   }
+
+  uint64_t rows_ = 0;
 };
 
-/// An equality coding policy for bitmaps.
+/// An equality bitmap coder. It uses a hash table to provide a one-to-one
+/// mapping of values to bitstreams. Consequently, it occupies *O(c)* space
+/// where *c* is the attribute cardinality. Because range queries of the form
+/// *x < v*, where *v* is a fixed value, would run in time *O(v)*, we only
+/// support equality and inequality operations with this coder.
 template <typename T, typename Bitstream>
 class equality_coder
-  : public coder<
-      equality_coder<T, Bitstream>,
-      T,
-      Bitstream,
-      detail::unordered_storage<T, Bitstream>
-    >
+  : public coder<equality_coder<T, Bitstream>>,
+    util::equality_comparable<equality_coder<T, Bitstream>>
 {
-  using super = coder<
-    equality_coder<T, Bitstream>, T, Bitstream,
-    detail::unordered_storage<T, Bitstream>
-  >;
-
+  using super = coder<equality_coder<T, Bitstream>>;
   friend super;
 
-public:
-  using super::size;
-
 private:
-  bool encode_impl(T const& x)
+  uint64_t cardinality_impl() const
   {
-    if (auto bs = store_.find(x))
-    {
-      bs->append(size() - bs->size(), false);
-      return bs->push_back(true);
-    }
-
-    Bitstream bs{size(), false};
-    bs.push_back(true);
-    return store_.insert(x, std::move(bs));
+    return bitstreams_.size();
   }
 
-  optional<Bitstream> decode_impl(T const& x, relational_operator op) const
+  bool append_impl(size_t n, bool bit)
   {
-    auto result = store_.find(x);
+    if (bit)
+      for (auto& p : bitstreams_)
+        if (! p.second.append(n, bit))
+          return false;
+
+    return true;
+  }
+
+  bool encode_impl(T x)
+  {
+    auto i = bitstreams_.find(x);
+    if (i != bitstreams_.end())
+    {
+      auto& bs = i->second;
+      bs.append(this->size() - bs.size(), false);
+      return bs.push_back(true);
+    }
+    else
+    {
+      Bitstream bs{this->size(), false};
+      bs.push_back(true);
+      return bitstreams_.emplace(x, std::move(bs)).second;
+    }
+  }
+
+  optional<Bitstream> decode_impl(T x, relational_operator op) const
+  {
+    auto i = bitstreams_.find(x);
     switch (op)
     {
       default:
-        throw std::runtime_error(
-            "unsupported relational operator: " + to<std::string>(op));
+        throw std::logic_error(
+            "unsupported relational operator: " + to_string(op));
       case equal:
-        if (result)
         {
-          auto r = *result;
-          r.append(size() - r.size(), false);
-          return std::move(r);
-        }
-        else
-        {
-          return {};
+          if (i == bitstreams_.end() || i->second.empty())
+            return {};
+
+          auto result = i->second;
+          result.append(this->size() - result.size(), false);
+          return std::move(result);
         }
       case not_equal:
-        if (result)
         {
-          auto r = *result;
-          r.append(size() - r.size(), false);
-          return std::move(~r);
-        }
-        else
-        {
-          return {{size(), true}};
+          if (i == bitstreams_.end() || i->second.empty())
+            return {{this->size(), true}};
+
+          auto result = i->second;
+          result.append(this->size() - result.size(), false);
+          return std::move(~result);
         }
     }
   }
 
-  using super::store_;
+  template <typename F>
+  void each_impl(F f) const
+  {
+    for (auto& p : bitstreams_)
+      f(1, p.first, p.second);
+  }
+
+  std::unordered_map<T, Bitstream> bitstreams_;
+
+private:
+  friend access;
+
+  void serialize(serializer& sink) const
+  {
+    super::serialize(sink);
+    sink << bitstreams_;
+  }
+
+  void deserialize(deserializer& source)
+  {
+    super::deserialize(source);
+    source >> bitstreams_;
+  }
+
+  friend bool operator==(equality_coder const& x, equality_coder const& y)
+  {
+    return static_cast<super const&>(x) == static_cast<super const&>(y)
+        && x.bitstreams_ == y.bitstreams_;
+  }
 };
 
-/// A binary encoding policy for bitmaps.
-/// This scheme is also known as *bit-sliced* encoding.
+/// An binary bit-slice coder (aka. *binary bit-sliced index*). It uses
+/// *O(log(b))* space, with *b* being the number of bits needed to represent
+/// the given type `T`. Adding a value *x* decomposes it into it's individual
+/// bits and records each bit value in a separate bitstream. For example, the
+/// value 4, would entail appending a 1 to the bitstream for 2^2 and a 0 to to
+/// all other bitstreams.
 template <typename T, typename Bitstream>
-class binary_coder
-  : public coder<
-      binary_coder<T, Bitstream>,
-      T, Bitstream,
-      detail::vector_storage<uint8_t, Bitstream>
-    >
+class binary_bitslice_coder
+  : public coder<binary_bitslice_coder<T, Bitstream>>,
+    util::equality_comparable<binary_bitslice_coder<T, Bitstream>>
 {
   static_assert(std::is_integral<T>::value,
                 "binary encoding requires an integral type");
 
-  static uint8_t constexpr bits = std::numeric_limits<T>::digits;
-
-  using super = coder<
-      binary_coder<T, Bitstream>,
-      T, Bitstream,
-      detail::vector_storage<uint8_t, Bitstream>
-    >;
-
+  using super = coder<binary_bitslice_coder<T, Bitstream>>;
   friend super;
 
-public:
-  using super::size;
+  static uint8_t constexpr bits = std::numeric_limits<T>::digits;
 
-  binary_coder()
+public:
+  binary_bitslice_coder()
+    : bitstreams_(bits)
   {
-    for (uint8_t i = 0; i < bits; ++i)
-      store_.insert(i);
+  }
+
+  /// Retrieves a bitstream for a given power of 2.
+  /// @param mag The order of magnitude.
+  /// @pre `mag < bits` where *bits* represents the number of bits in `T`.
+  Bitstream const& get(size_t mag) const
+  {
+    return bitstreams_[mag];
   }
 
 private:
-  bool encode_impl(T const& x)
+  uint64_t cardinality_impl() const
   {
-    store_.each([&](uint8_t i, Bitstream& bs) { bs.push_back((x >> i) & 1); });
+    return bits;
+  }
+
+  bool append_impl(size_t n, bool bit)
+  {
+    for (auto& bs : bitstreams_)
+      if (! bs.append(n, bit))
+        return false;
+
     return true;
   }
 
-  optional<Bitstream> decode_impl(T const& x, relational_operator op) const
+  bool encode_impl(T x)
+  {
+    for (size_t i = 0; i < bitstreams_.size(); ++i)
+      bitstreams_[i].push_back((x >> i) & 1);
+
+    return true;
+  }
+
+  optional<Bitstream> decode_impl(T x, relational_operator op) const
   {
     switch (op)
     {
@@ -588,9 +264,9 @@ private:
             "unsupported relational operator: " + to<std::string>(op));
       case equal:
         {
-          Bitstream result{size(), true};
-          for (uint8_t i = 0; i < bits; ++i)
-            result &= ((x >> i) & 1) ? *store_.find(i) : ~*store_.find(i);
+          Bitstream result{this->size(), true};
+            for (size_t i = 0; i < bitstreams_.size(); ++i)
+              result &= ((x >> i) & 1) ? bitstreams_[i] : ~bitstreams_[i];
           if (result.find_first() == Bitstream::npos)
             return {};
           else
@@ -600,131 +276,387 @@ private:
         if (auto result = decode_impl(x, equal))
           return std::move((*result).flip());
         else
-          return {{size(), true}};
+          return {{this->size(), true}};
     }
   }
 
-  using super::store_;
+  template <typename F>
+  void each_impl(F f) const
+  {
+    for (size_t i = 0; i < bitstreams_.size(); ++i)
+      f(1, i, bitstreams_[i]);
+  }
+
+  std::vector<Bitstream> bitstreams_;
+
+private:
+  friend access;
+
+  void serialize(serializer& sink) const
+  {
+    super::serialize(sink);
+    sink << bitstreams_;
+  }
+
+  void deserialize(deserializer& source)
+  {
+    super::deserialize(source);
+    source >> bitstreams_;
+  }
+
+  friend bool operator==(binary_bitslice_coder const& x,
+                         binary_bitslice_coder const& y)
+  {
+    return static_cast<super const&>(x) == static_cast<super const&>(y)
+        && x.bitstreams_ == y.bitstreams_;
+  }
 };
 
-/// A less-than-or-equal range encoding policy for bitmaps.
-template <typename T, typename Bitstream>
-struct range_coder
-  : public coder<
-      range_coder<T, Bitstream>,
-      T, Bitstream,
-      detail::list_storage<T, Bitstream>
-    >
+/// The base class for multi-component bit-slice coders. Given a *base* it
+/// decomposes a value into a *value list*. For example, the value list 846 for
+/// a 3-component base of <10,10,10> would be <8, 4, 6>.
+template <typename Derived, typename T, typename Bitstream>
+class bitslice_coder
+  : public coder<bitslice_coder<Derived, T, Bitstream>>,
+    util::equality_comparable<bitslice_coder<Derived, T, Bitstream>>
 {
-  static_assert(! std::is_same<T, bool>::value,
-                "range encoding for boolean value does not make sense");
+  static_assert(std::is_integral<T>::value,
+                "bitslice coding requires an integral type");
 
-  using super = coder<
-    range_coder<T, Bitstream>,
-    T, Bitstream,
-    detail::list_storage<T, Bitstream>
-  >;
-
+  using super = coder<bitslice_coder<Derived, T, Bitstream>>;
   friend super;
 
 public:
-  using super::size;
+  using unsigned_type = typename std::make_unsigned<T>::type;
+  using value_list = std::vector<unsigned_type>;
+
+  /// Constructs a slicer with a given (potentially non-uniform) base.
+  /// @param base The sequence of bases.
+  explicit bitslice_coder(value_list base)
+    : base_{std::move(base)},
+      v_(base_.size()),
+      bitstreams_(base_.size())
+  {
+    assert(! base_.empty());
+    if (std::any_of(base_.begin(), base_.end(), [](size_t b) { return b < 2; }))
+      throw std::logic_error{"not a well-defined base"};
+
+    initialize();
+  }
+
+  /// Constructs a bit-slice coder with a *uniform* base.
+  /// @param base The base for all components.
+  /// @param n The number of components.
+  /// @pre `base >= 2 && n > 0`
+  bitslice_coder(unsigned_type base, size_t n)
+    : base_(n, base),
+      v_(base_.size()),
+      bitstreams_(base_.size())
+  {
+    assert(base >= 2);
+    assert(n > 0);
+
+    initialize();
+  }
+
+
+protected:
+  /// Decomposes a value into vector of values according to the given base.
+  void decompose(T x, value_list& v) const
+  {
+    assert(v.size() == base_.size());
+    slice(x, v, std::is_unsigned<T>{});
+  }
+
+  value_list base_;
+  value_list v_;
+  std::vector<std::vector<Bitstream>> bitstreams_;
 
 private:
-  bool encode_impl(T const& x)
+  void initialize()
   {
-    if (! store_.find(x))
-    {
-      auto range = store_.find_bounds(x);
-      auto success = true;
-      if (range.first && range.second)
-        success = store_.insert(x, {*range.first});
-      else if (range.first)
-        success = store_.insert(x, {size(), true});
-      else if (range.second)
-        success = store_.insert(x, {size(), false});
-      else
-        success = store_.insert(x, {size(), true});
-      if (! success)
-        return false;
-    }
+    for (size_t i = 0; i < bitstreams_.size(); ++i)
+      bitstreams_[i].resize(base_[i]);
 
-    store_.each([&](T const& k, Bitstream& bs) { bs.push_back(x <= k); });
+    // Any base b requires only b-1 bitstreams because one can obtain any
+    // bitstream through conjunction/disjunction of the others. While this
+    // decreases space requirements by 1/b, it increases query time by b-1.
+    // Only for the special case of b == 2 we use 1 bitstream because it
+    // does not impair query performance.
+    //for (size_t i = 0; i < bitstreams_.size(); ++i)
+    //  if (base_[i] == 2)
+    //    bitstreams_[i].resize(1);
+  }
+
+  void slice(unsigned_type x, value_list& v, std::true_type) const
+  {
+    size_t i = base_.size();
+    while (i --> 0)
+    {
+      unsigned_type b = 1;
+      for (size_t j = 0; j < i; ++j)
+        b *= base_[j];
+
+      v[i] = x / b;
+
+      if (x >= b)
+        x -= v[i] * b;
+    }
+  }
+
+  void slice(T x, value_list& v, std::false_type) const
+  {
+    // We shift the entire domain by 2^w to the left, where w is the size of T
+    // in bits. This allows us to have a total ordering at the bit-level for
+    // the entire domain, which is not the case for 2's-complement
+    // representation.
+    x += unsigned_type{1} << std::numeric_limits<T>::digits;
+
+    slice(x, v, std::true_type{});
+  }
+
+private:
+  bool append_impl(size_t n, bool bit)
+  {
+    for (auto& bitstreams : bitstreams_)
+      for (auto& bs : bitstreams)
+        if (! bs.append(n, bit))
+          return false;
+
     return true;
   }
 
-  optional<Bitstream> decode_impl(T const& x, relational_operator op) const
+  bool encode_impl(T x)
   {
+    return static_cast<Derived*>(this)->encode_value(x);
+  }
+
+  optional<Bitstream> decode_impl(T x, relational_operator op) const
+  {
+    return static_cast<Derived const*>(this)->decode_value(x, op);
+  }
+
+  template <typename F>
+  void each_impl(F f) const
+  {
+    assert(base_.size() == bitstreams_.size());
+    for (size_t i = 0; i < bitstreams_.size(); ++i)
+      for (size_t j = 0; j < bitstreams_[i].size(); ++j)
+        f(i, j, bitstreams_[i][j]);
+  }
+
+private:
+  friend access;
+
+  void serialize(serializer& sink) const
+  {
+    super::serialize(sink);
+    sink << base_ << v_ << bitstreams_;
+  }
+
+  void deserialize(deserializer& source)
+  {
+    super::deserialize(source);
+    source >> base_ >> v_ >> bitstreams_;
+  }
+
+  friend bool operator==(bitslice_coder const& x, bitslice_coder const& y)
+  {
+    return static_cast<super const&>(x) == static_cast<super const&>(y)
+        && x.base_ == y.base_
+        && x.bitstreams_ == y.bitstreams_;
+  }
+};
+
+/// An equality bit-slice coder.
+template <typename T, typename Bitstream>
+class equality_bitslice_coder
+  : public bitslice_coder<
+      equality_bitslice_coder<T, Bitstream>, T, Bitstream
+    >
+{
+  using super = bitslice_coder<
+      equality_bitslice_coder<T, Bitstream>, T, Bitstream
+    >;
+
+  friend super;
+  using super::v_;
+  using super::base_;
+  using super::bitstreams_;
+
+public:
+  using super::super;
+
+  equality_bitslice_coder()
+    : super{10, std::numeric_limits<T>::digits10 + 1}
+  {
+  }
+
+private:
+  bool encode_value(T x)
+  {
+    this->decompose(x, v_);
+
+    for (size_t i = 0; i < v_.size(); ++i)
+      if (v_[i] > 0)
+      {
+        auto idx = base_[i] == 2 ? 0 : v_[i];
+        auto& bs = bitstreams_[i][idx];
+        bs.append(this->size() - bs->size(), false);
+        if (! bs.push_back(true))
+          return false;
+      }
+
+    return true;
+  }
+
+  optional<Bitstream> decode_value(T x, relational_operator op) const
+  {
+    this->decompose(x, const_cast<typename super::value_list&>(v_));
+
+    Bitstream result{this->size(), true};
+    for (size_t i = 0; i < v_.size(); ++i)
+    {
+      auto idx = v_[i];
+      if (base_[i] == 2 && idx != 0)
+        --idx;
+
+      result &= bitstreams_[i][idx];
+    }
+
+    switch (op)
+    {
+      default:
+        throw std::runtime_error(
+            "unsupported relational operator: " + to<std::string>(op));
+      case equal:
+        return std::move(result);
+      case not_equal:
+        return std::move(~result);
+    }
+  }
+};
+
+/// A range bit-slice coder.
+/// To evaluate equality and range predicates, it uses the *RangeEval-Opt*
+/// algorithm by Chee-Yong Chan and Yannis E. Ioannidis.
+template <typename T, typename Bitstream>
+class range_bitslice_coder
+  : public bitslice_coder<
+      range_bitslice_coder<T, Bitstream>, T, Bitstream
+    >
+{
+  using super = bitslice_coder<
+      range_bitslice_coder<T, Bitstream>, T, Bitstream
+    >;
+
+  friend super;
+  using super::v_;
+  using super::base_;
+  using super::bitstreams_;
+
+public:
+  range_bitslice_coder()
+    : super{10, std::numeric_limits<T>::digits10 + 1}
+  {
+    for (auto& component : bitstreams_)
+      component.resize(component.size() - 1);
+  }
+
+private:
+  bool encode_value(T x)
+  {
+    this->decompose(x, v_);
+
+    for (size_t i = 0; i < bitstreams_.size(); ++i)
+      for (size_t j = 0; j < bitstreams_[i].size(); ++j)
+        if (! bitstreams_[i][j].push_back(j >= v_[i]))
+          return false;
+
+    return true;
+  }
+
+  // Implements the RangeEval-Opt algorithm.
+  //
+  // @todo Add some optimizations from Ming-Chuan Wu to reduce the number of
+  // bitstream scans (and bitwise operations).
+  optional<Bitstream> decode_value(T x, relational_operator op) const
+  {
+    Bitstream result{this->size(), true};
+
+    if (x > std::numeric_limits<T>::min())
+      if (op == less || op == greater_equal)
+        --x;
+
+    this->decompose(x, const_cast<typename super::value_list&>(v_));
+
     switch (op)
     {
       default:
         throw std::runtime_error(
             "unsupported relational operator: " + to<std::string>(op));
       case less:
-        if (! std::is_integral<T>::value)
-        throw std::runtime_error("operator less requires integral type");
-        else if (x == std::numeric_limits<T>::lowest())
-          return decode_impl(x, less_equal);
-        else
-          return decode_impl(x - 1, less_equal);
       case less_equal:
-        if (auto result = store_.find(x))
-          return *result;
-        else if (auto lower = store_.find_bounds(x).first)
-          return *lower;
-        else
-          return {};
       case greater:
-        if (auto result = decode_impl(x, less_equal))
-          return std::move((*result).flip());
-        else
-          return {{size(), true}};
       case greater_equal:
-        if (auto result = decode_impl(x, less))
-          return std::move((*result).flip());
-        else
-          return {{size(), true}};
-      case equal:
         {
-          // For a range-encoded bitstream v == x means z <= x & ~pred(z). If
-          // pred(z) does not exist, the query reduces to z <= x.
-          auto le = decode_impl(x, less_equal);
-          if (! le)
-            return {};
-          auto range = store_.find_bounds(x);
-          if (! range.first)
-            return le;
-          *le &= ~*range.first;
-          return le;
-        }
-      case not_equal:
-        if (auto result = decode_impl(x, equal))
-          return std::move((*result).flip());
-        else
-          return {{size(), true}};
-    }
-  }
+          if (v_[0] < base_[0] - 1) // && bitstream != all_ones
+            result = bitstreams_[0][v_[0]];
 
-  using super::store_;
+          for (size_t i = 1; i < v_.size(); ++i)
+          {
+            if (v_[i] != base_[i] - 1) // && bitstream != all_ones
+              result &= bitstreams_[i][v_[i]];
+
+            if (v_[i] != 0) // && bitstream != all_ones
+              result |= bitstreams_[i][v_[i] - 1];
+          }
+        }
+        break;
+      case equal:
+      case not_equal:
+        {
+          for (size_t i = 0; i < v_.size(); ++i)
+          {
+            if (v_[i] == 0) // && bitstream != all_ones
+              result &= bitstreams_[i][0];
+            else if (v_[i] == base_[i] - 1)
+              result &= ~bitstreams_[i][base_[i] - 2];
+            else
+              result &= bitstreams_[i][v_[i]] ^ bitstreams_[i][v_[i] - 1];
+          }
+        }
+        break;
+    }
+
+    if (op == greater || op == greater_equal || op == not_equal)
+      return std::move(~result);
+    else
+      return std::move(result);
+  }
 };
 
 /// A null binning policy acting as identity function.
 template <typename T>
 struct null_binner : util::equality_comparable<null_binner<T>>
 {
+  T operator()(T x) const
+  {
+    return x;
+  }
+
+  void serialize(serializer&) const
+  {
+  }
+
+  void deserialize(deserializer&)
+  {
+  }
+
   friend bool operator==(null_binner const&, null_binner const&)
   {
     return true;
   }
-
-  T operator()(T x) const
-  {
-    return std::move(x);
-  }
-
-  // Nothing to do here.
-  void serialize(serializer&) const { }
-  void deserialize(deserializer&) { }
 };
 
 /// A binning policy that reduces value to a given precision.
@@ -772,18 +704,6 @@ public:
   }
 
 private:
-  friend access;
-
-  void serialize(serializer& sink) const
-  {
-    sink << integral_ << fractional_;
-  }
-
-  void deserialize(deserializer& source)
-  {
-    source >> integral_ >> fractional_;
-  }
-
   T dispatch(T x, std::true_type) const
   {
     if (fractional_ != 0.0)
@@ -804,13 +724,26 @@ private:
     return x / integral_;
   }
 
+  T integral_;
+  double fractional_ = 0.0;
+
+private:
+  friend access;
+
+  void serialize(serializer& sink) const
+  {
+    sink << integral_ << fractional_;
+  }
+
+  void deserialize(deserializer& source)
+  {
+    source >> integral_ >> fractional_;
+  }
+
   friend bool operator==(precision_binner const& x, precision_binner const& y)
   {
     return x.integral_ == y.integral_ && x.fractional_ == y.fractional_;
   }
-
-  T integral_;
-  double fractional_ = 0.0;
 };
 
 /// A bitmap which maps values to [bitstreams](@ref bitstream).
@@ -823,12 +756,14 @@ template <
 class bitmap : util::equality_comparable<bitmap<T, Bitstream, Coder, Binner>>,
                util::printable<bitmap<T, Bitstream, Coder, Binner>>
 {
+  static_assert(std::is_arithmetic<T>::value, "arithmetic type required");
+
 public:
-  using coder_type = Coder<T, Bitstream>;
   using binner_type = Binner<T>;
+  using coder_type = Coder<T, Bitstream>;
 
   /// Constructs an empty bitmap.
-  bitmap(binner_type binner = binner_type{}, coder_type coder = coder_type{})
+  bitmap(binner_type binner = {}, coder_type coder = {})
     : coder_{coder}, binner_{binner}
   {
   }
@@ -841,7 +776,7 @@ public:
   ///
   /// @returns `true` on success and `false` if the bitmap is full, i.e., has
   /// `2^std::numeric_limits<size_t>::digits() - 1` elements.
-  bool push_back(T const& x)
+  bool push_back(T x)
   {
     auto success = coder_.encode(binner_(x));
     return success && valid_.push_back(true);
@@ -857,7 +792,7 @@ public:
   }
 
   /// Shorthand for `lookup(equal, x)`.
-  optional<Bitstream> operator[](T const& x) const
+  optional<Bitstream> operator[](T x) const
   {
     return lookup(equal, x);
   }
@@ -868,23 +803,14 @@ public:
   ///
   /// @param x The value to find the bitstream for.
   ///
-  /// @returns An @link option vast::option@endlink containing a bitstream
-  /// for all values *v* such that *op(v,x)* is `true`.
-  optional<Bitstream> lookup(relational_operator op, T const& x) const
+  /// @returns An engaged bitstream for all values *v* where *op(v,x)* is
+  /// `true` or a disengaged bitstream if *x* does not exist.
+  optional<Bitstream> lookup(relational_operator op, T x) const
   {
     auto result = coder_.decode(binner_(x), op);
     if (result)
       *result &= valid_;
     return result;
-  }
-
-  /// Retrieves the raw bistream without decoding the result.
-  /// @param x The raw value to lookup.
-  /// @returns A pointer to the bitstream for *x* or `nullptr` if not found.
-  template <typename U>
-  Bitstream const* lookup_raw(U const& x) const
-  {
-    return coder_.store().find(x);
   }
 
   /// Retrieves the bitstream marking the valid results.
@@ -896,7 +822,7 @@ public:
 
   /// Retrieves the bitmap size.
   /// @returns The number of elements contained in the bitmap.
-  size_t size() const
+  uint64_t size() const
   {
     return coder_.size();
   }
@@ -908,6 +834,14 @@ public:
     return size() == 0;
   }
 
+  /// Accesses the underlying coder of the bitmap.
+  /// @returns The coder of this bitmap.
+  coder_type const& coder() const
+  {
+    return coder_;
+  }
+
+private:
   coder_type coder_;
   binner_type binner_;
   Bitstream valid_;
@@ -934,19 +868,17 @@ private:
     std::string str;
     if (with_header)
     {
-      coder_.store().each(
-          [&](T const& x, Bitstream const&)
-          {
-            str += to_string(x) + delim;
-          });
+      coder_.each(
+          [&](size_t, T x, Bitstream const&) { str += to_string(x) + delim; });
+
       str.pop_back();
       str += '\n';
     }
+
     std::copy(str.begin(), str.end(), out);
 
     std::vector<Bitstream> cols;
-    coder_.store().each(
-        [&](T const&, Bitstream const& bs) { cols.push_back(bs); });
+    coder_.each([&](size_t, T, Bitstream const& bs) { cols.push_back(bs); });
 
     return render(out, cols);
   }
@@ -968,8 +900,8 @@ template <
 class bitmap<bool, Bitstream, Coder, Binner>
 {
 public:
-  using coder_type = Coder<bool, Bitstream>;
   using binner_type = Binner<bool>;
+  using coder_type = Coder<bool, Bitstream>;
 
   bitmap() = default;
 
@@ -1008,7 +940,7 @@ public:
     return valid_;
   }
 
-  size_t size() const
+  uint64_t size() const
   {
     return bool_.size();
   }

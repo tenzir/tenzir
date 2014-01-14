@@ -67,21 +67,45 @@ private:
   friend bool operator==(bitmap_index const& x, bitmap_index const& y);
 };
 
-/// A bitmap index for arithmetic types.
+/// A bitmap index for arithmetic value types.
 template <typename Bitstream, value_type T>
 class arithmetic_bitmap_index : public bitmap_index
 {
   using underlying_value_type = underlying_value_type<T>;
+
   using bitmap_type =
     typename std::conditional<
-      std::is_same<underlying_value_type, bool>::value,
-      bitmap<bool, Bitstream>,
+      T == time_range_type || T == time_point_type,
+      time_range::rep,
       typename std::conditional<
-        std::is_same<underlying_value_type, double>::value,
-        bitmap<double, Bitstream, range_coder, precision_binner>,
+        T == bool_type || T == int_type || T == uint_type || T == double_type,
+        underlying_value_type,
+        std::false_type
+      >::type
+    >::type;
+
+  template <typename U>
+  using bitmap_binner =
+    typename std::conditional<
+      T == double_type || T == time_range_type || T == time_point_type,
+      precision_binner<U>,
+      null_binner<U>
+    >::type;
+
+  template <typename B, typename U>
+  using bitmap_coder =
+    typename std::conditional<
+      T == bool_type,
+      equality_coder<B, U>,
+      typename std::conditional<
+        // TODO: until we have mapped the IEEE 754 format of doubles to a
+        // bitwise total ordering, we will only support equality comparisons on
+        // floating point values (with respect to their bin).
+        T == double_type,
+        equality_coder<B, U>,
         typename std::conditional<
-          std::is_integral<underlying_value_type>::value,
-          bitmap<underlying_value_type, Bitstream, range_coder>,
+          std::is_integral<bitmap_type>::value,
+          range_bitslice_coder<B, U>,
           std::false_type
         >::type
       >::type
@@ -91,11 +115,13 @@ public:
   arithmetic_bitmap_index() = default;
 
   template <
-    typename U = underlying_value_type,
-    typename = EnableIf<std::is_same<U, double>>
+    typename U = bitmap_type,
+    typename... Args,
+    typename = EnableIf<
+      std::is_same<bitmap_binner<U>, precision_binner<U>>>
   >
-  explicit arithmetic_bitmap_index(int precision)
-    : bitmap_({precision}, {})
+  explicit arithmetic_bitmap_index(Args&&... args)
+    : bitmap_{{std::forward<Args>(args)...}}
   {
   }
 
@@ -114,7 +140,7 @@ public:
     if (bitmap_.empty())
       return {};
 
-    if (auto result = bitmap_.lookup(op, val.get<underlying_value_type>()))
+    if (auto result = bitmap_.lookup(op, extract(val)))
       return {std::move(*result)};
     else
       return {};
@@ -126,9 +152,22 @@ public:
   }
 
 private:
+  static bitmap_type extract(value const& val)
+  {
+    switch (val.which())
+    {
+      default:
+        return val.get<bitmap_type>();
+      case time_range_type:
+        return val.get<time_range>().count();
+      case time_point_type:
+        return val.get<time_point>().since_epoch().count();
+    }
+  }
+
   virtual bool push_back_impl(value const& val) override
   {
-    return bitmap_.push_back(val.get<underlying_value_type>());
+    return bitmap_.push_back(extract(val));
   }
 
   virtual bool equals(bitmap_index const& other) const override
@@ -139,94 +178,7 @@ private:
     return bitmap_ == o.bitmap_;
   }
 
-  bitmap_type bitmap_;
-
-private:
-  friend access;
-
-  virtual void serialize(serializer& sink) const override
-  {
-    sink << bitmap_;
-  }
-
-  virtual void deserialize(deserializer& source) override
-  {
-    source >> bitmap_;
-    checkpoint();
-  }
-
-  virtual bool convert(std::string& str) const override
-  {
-    using vast::convert;
-    return convert(bitmap_, str);
-  }
-};
-
-/// A bitmap index for time range and time point types.
-template <typename Bitstream>
-class time_bitmap_index : public bitmap_index
-{
-public:
-  /// Constructs a time bitmap index.
-  /// @param precision The granularity of the index. Defaults to seconds.
-  explicit time_bitmap_index(int precision = 7)
-    : bitmap_({precision}, {})
-  {
-  }
-
-  virtual bool append(size_t n, bool bit) override
-  {
-    return bitmap_.append(n, bit);
-  }
-
-  virtual optional<bitstream>
-  lookup(relational_operator op, value const& val) const override
-  {
-    if (op == in || op == not_in)
-      throw std::runtime_error(
-          "unsupported relational operator " + to<std::string>(op));
-    if (bitmap_.empty())
-      return {};
-    auto result = bitmap_.lookup(op, extract(val));
-    if (! result)
-      return {};
-    return {std::move(*result)};
-  }
-
-  virtual uint64_t size() const override
-  {
-    return bitmap_.size();
-  }
-
-private:
-  static time_range::rep extract(value const& val)
-  {
-    switch (val.which())
-    {
-      default:
-        throw std::runtime_error("value not a time type");
-      case time_range_type:
-        return val.get<time_range>().count();
-      case time_point_type:
-        return val.get<time_point>().since_epoch().count();
-    }
-  }
-
-  virtual bool push_back_impl(value const& val) override
-  {
-    bitmap_.push_back(extract(val));
-    return true;
-  }
-
-  virtual bool equals(bitmap_index const& other) const override
-  {
-    if (typeid(*this) != typeid(other))
-      return false;
-    auto& o = static_cast<time_bitmap_index const&>(other);
-    return bitmap_ == o.bitmap_;
-  }
-
-  bitmap<time_range::rep, Bitstream, range_coder, precision_binner> bitmap_;
+  bitmap<bitmap_type, Bitstream, bitmap_coder, bitmap_binner> bitmap_;
 
 private:
   friend access;
@@ -360,6 +312,7 @@ public:
     if (! (op == equal || op == not_equal || op == in || op == not_in))
       throw std::runtime_error("unsupported relational operator " +
                                to<std::string>(op));
+
     if (v4_.empty())
       return {};
 
@@ -424,6 +377,7 @@ private:
     if (! (op == in || op == not_in))
       throw std::runtime_error("unsupported relational operator " +
                                to<std::string>(op));
+
     auto topk = pfx.length();
     if (topk == 0)
       throw std::runtime_error("invalid IP prefix length");
@@ -440,10 +394,8 @@ private:
     for (size_t i = is_v4 ? 12 : 0; i < 16; ++ i)
       for (size_t j = 8; j --> 0; )
       {
-        if (auto bs = bitmaps_[i].lookup_raw(j))
-          *result &= ((bytes[i] >> j) & 1) ? *bs : ~*bs;
-        else
-          throw std::runtime_error("corrupt index: bit must exist");
+        auto& bs = bitmaps_[i].coder().get(j);
+        *result &= ((bytes[i] >> j) & 1) ? bs : ~bs;
 
         if (! --bit)
         {
@@ -456,7 +408,7 @@ private:
     return {};
   }
 
-  std::array<bitmap<uint8_t, Bitstream, binary_coder>, 16> bitmaps_;
+  std::array<bitmap<uint8_t, Bitstream, binary_bitslice_coder>, 16> bitmaps_;
   Bitstream v4_;
 
 private:
@@ -478,7 +430,7 @@ private:
     std::vector<Bitstream> v;
     v.reserve(128);
     for (size_t i = 0; i < 128; ++i)
-      v.emplace_back(*bitmaps_[i / 8].lookup_raw(7 - i % 8));
+      v.emplace_back(bitmaps_[i / 8].coder().get(7 - i % 8));
 
     auto i = std::back_inserter(str);
     return render(i, v);
@@ -489,8 +441,6 @@ private:
 template <typename Bitstream>
 class port_bitmap_index : public bitmap_index
 {
-  using proto_type = std::underlying_type<port::port_type>::type;
-
 public:
   virtual bool append(size_t n, bool bit) override
   {
@@ -506,13 +456,16 @@ public:
                                to<std::string>(op));
     if (num_.empty())
       return {};
+
     auto& p = val.get<port>();
     auto nbs = num_.lookup(op, p.number());
     if (! nbs)
       return {};
+
     if (p.type() != port::unknown)
-      if (auto tbs = num_[p.type()])
+      if (auto tbs = proto_[p.type()])
           *nbs &= *tbs;
+
     return {std::move(*nbs)};
   }
 
@@ -526,7 +479,7 @@ private:
   {
     auto& p = val.get<port>();
     num_.push_back(p.number());
-    proto_.push_back(static_cast<proto_type>(p.type()));
+    proto_.push_back(p.type());
     return true;
   }
 
@@ -538,8 +491,8 @@ private:
     return num_ == o.num_ && proto_ == o.proto_;
   }
 
-  bitmap<uint16_t, Bitstream, range_coder> num_;
-  bitmap<proto_type, Bitstream> proto_;
+  bitmap<port::number_type, Bitstream, range_bitslice_coder> num_;
+  bitmap<std::underlying_type<port::port_type>::type, Bitstream> proto_;
 
 private:
   friend access;
@@ -562,34 +515,49 @@ private:
   }
 };
 
-/// Factory function to construct a bitmap index for a given value type.
+/// Factory function to construct a bitmap index from a given value type.
+///
 /// @param t The value type to create an index for.
-/// @returns A bitmap index suited for type *t*.
-template <typename Bitstream>
-std::unique_ptr<bitmap_index> make_bitmap_index(value_type t)
+///
+/// @param args The arguments to forward to the corresponding bitmap index
+/// constructor.
+///
+/// @returns A bitmap index for type *t*.
+template <typename Bitstream, typename... Args>
+std::unique_ptr<bitmap_index> make_bitmap_index(value_type t, Args&&... args)
 {
   switch (t)
   {
     default:
       throw std::runtime_error("unsupported bitmap index type");
     case bool_type:
-      return make_unique<arithmetic_bitmap_index<Bitstream, bool_type>>();
+      return make_unique<arithmetic_bitmap_index<Bitstream, bool_type>>(
+          std::forward<Args>(args)...);
     case int_type:
-      return make_unique<arithmetic_bitmap_index<Bitstream, int_type>>();
+      return make_unique<arithmetic_bitmap_index<Bitstream, int_type>>(
+          std::forward<Args>(args)...);
     case uint_type:
-      return make_unique<arithmetic_bitmap_index<Bitstream, uint_type>>();
+      return make_unique<arithmetic_bitmap_index<Bitstream, uint_type>>(
+          std::forward<Args>(args)...);
     case double_type:
-      return make_unique<arithmetic_bitmap_index<Bitstream, double_type>>();
+      return make_unique<arithmetic_bitmap_index<Bitstream, double_type>>(
+          std::forward<Args>(args)...);
     case time_range_type:
+      return make_unique<arithmetic_bitmap_index<Bitstream, time_range_type>>(
+          std::forward<Args>(args)...);
     case time_point_type:
-      return make_unique<time_bitmap_index<Bitstream>>();
+      return make_unique<arithmetic_bitmap_index<Bitstream, time_point_type>>(
+          std::forward<Args>(args)...);
     case string_type:
     case regex_type:
-      return make_unique<string_bitmap_index<Bitstream>>();
+      return make_unique<string_bitmap_index<Bitstream>>(
+          std::forward<Args>(args)...);
     case address_type:
-      return make_unique<address_bitmap_index<Bitstream>>();
+      return make_unique<address_bitmap_index<Bitstream>>(
+          std::forward<Args>(args)...);
     case port_type:
-      return make_unique<port_bitmap_index<Bitstream>>();
+      return make_unique<port_bitmap_index<Bitstream>>(
+          std::forward<Args>(args)...);
   }
 }
 

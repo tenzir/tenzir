@@ -105,7 +105,7 @@ private:
   struct loader;
   struct querier;
 
-  time_bitmap_index<bitstream_type> timestamp_;
+  arithmetic_bitmap_index<bitstream_type, time_point_type> timestamp_;
   string_bitmap_index<bitstream_type> name_;
   bool exists_ = false;
 };
