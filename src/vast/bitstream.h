@@ -162,6 +162,12 @@ public:
     return derived().end_impl();
   }
 
+  bool back() const
+  {
+    assert(! empty());
+    return derived().back_impl();
+  }
+
   size_type find_first() const
   {
     return derived().find_first_impl();
@@ -384,6 +390,7 @@ public:
   virtual bool empty_impl() const = 0;
   virtual const_iterator begin_impl() const = 0;
   virtual const_iterator end_impl() const = 0;
+  virtual bool back_impl() const = 0;
   virtual size_type find_first_impl() const = 0;
   virtual size_type find_next_impl(size_type i) const = 0;
   virtual size_type find_last_impl() const = 0;
@@ -519,6 +526,11 @@ public:
     return const_iterator{bitstream_.end_impl()};
   }
 
+  virtual bool back_impl() const final
+  {
+    return bitstream_.back_impl();
+  }
+
   virtual size_type find_first_impl() const final
   {
     return bitstream_.find_first_impl();
@@ -616,6 +628,7 @@ private:
   bool empty_impl() const;
   const_iterator begin_impl() const;
   const_iterator end_impl() const;
+  bool back_impl() const;
   size_type find_first_impl() const;
   size_type find_next_impl(size_type i) const;
   size_type find_last_impl() const;
@@ -736,7 +749,7 @@ private:
   bool empty_impl() const;
   const_iterator begin_impl() const;
   const_iterator end_impl() const;
-
+  bool back_impl() const;
   size_type find_first_impl() const;
   size_type find_next_impl(size_type i) const;
   size_type find_last_impl() const;
@@ -859,6 +872,7 @@ private:
   bool empty_impl() const;
   const_iterator begin_impl() const;
   const_iterator end_impl() const;
+  bool back_impl() const;
   size_type find_first_impl() const;
   size_type find_next_impl(size_type i) const;
   size_type find_last_impl() const;

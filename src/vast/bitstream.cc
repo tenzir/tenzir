@@ -177,6 +177,12 @@ bitstream::const_iterator bitstream::end_impl() const
   return concept_->end_impl();
 }
 
+bool bitstream::back_impl() const
+{
+  assert(concept_);
+  return concept_->back_impl();
+}
+
 bitstream::size_type bitstream::find_first_impl() const
 {
   assert(concept_);
@@ -383,6 +389,11 @@ null_bitstream::const_iterator null_bitstream::begin_impl() const
 null_bitstream::const_iterator null_bitstream::end_impl() const
 {
   return const_iterator::end(*this);
+}
+
+bool null_bitstream::back_impl() const
+{
+  return bits_[bits_.size() - 1];
 }
 
 null_bitstream::size_type null_bitstream::find_first_impl() const
@@ -1004,6 +1015,11 @@ ewah_bitstream::const_iterator ewah_bitstream::begin_impl() const
 ewah_bitstream::const_iterator ewah_bitstream::end_impl() const
 {
   return const_iterator::end(*this);
+}
+
+bool ewah_bitstream::back_impl() const
+{
+  return bits_[bits_.size() - 1];
 }
 
 ewah_bitstream::size_type ewah_bitstream::find_first_impl() const
