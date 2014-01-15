@@ -2,13 +2,14 @@
 #define VAST_UTIL_ERROR_H
 
 #include <string>
+#include "vast/util/operators.h"
 #include "vast/util/print.h"
 
 namespace vast {
 namespace util {
 
 /// Holds an error message.
-class error : printable<error>
+class error : printable<error>, totally_ordered<error>
 {
 public:
   /// Default-constructs an empty error message.
@@ -55,6 +56,16 @@ private:
   bool print(Iterator& out) const
   {
     return render(out, msg_);
+  }
+
+  friend bool operator<(error const& x, error const& y)
+  {
+    return x.msg_ < y.msg_;
+  }
+
+  friend bool operator==(error const& x, error const& y)
+  {
+    return x.msg_ == y.msg_;
   }
 };
 
