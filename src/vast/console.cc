@@ -204,6 +204,14 @@ console::console(cppa::actor_ptr search, path dir)
         if (q.empty())
           return true;
         sync_send(search_, atom("query"), atom("create"), q).then(
+            on(atom("EXITED"), arg_match) >> [](uint32_t reason)
+            {
+              std::cerr
+                << "[error] search terminated with exit code "
+                << reason << std::endl;
+
+              send_exit(self, exit::error);
+            },
             on_arg_match >> [=](std::string const& error) // TODO: use error class.
             {
               std::cerr << "[error] syntax error: " << error << std::endl;
@@ -238,6 +246,7 @@ console::console(cppa::actor_ptr search, path dir)
             {
               VAST_LOG_ACTOR_ERROR("got unexpected message: " <<
                                    to_string(last_dequeued()));
+              show_prompt();
             });
       return false;
     });

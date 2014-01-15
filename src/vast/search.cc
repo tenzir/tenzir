@@ -318,7 +318,7 @@ void search_actor::act()
       {
         auto ast = search_.add_query(q);
         if (! ast)
-          return make_any_tuple(ast.failure());
+          return make_any_tuple(ast.failure().msg());
 
         VAST_LOG_ACTOR_DEBUG("received new query: " << *ast);
         monitor(last_sender());
