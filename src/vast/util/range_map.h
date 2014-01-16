@@ -3,6 +3,7 @@
 
 #include <cassert>
 #include <map>
+#include <tuple>
 
 namespace vast {
 namespace util {
@@ -46,16 +47,33 @@ public:
     return true;
   } 
 
-  /// Retrieves a value for a given point.
+  /// Retrieves the value for a given point.
   ///
   /// @param p The point to lookup.
   ///
   /// @returns A pointer to the value associated with the half-open interval
-  /// *[a,b)* iff *a <= p < b*, and `nullptr` otherwise.
+  /// *[a,b)* if *a <= p < b* and `nullptr` otherwise.
   Value const* lookup(Point const& p) const
   {
     auto i = find(p, map_.lower_bound(p));
     return i != map_.end() ? &i->second.second : nullptr;
+  }
+
+  /// Retrieves value and interval for a given point.
+  ///
+  /// @param p The point to lookup.
+  ///
+  /// @returns A tuple with the first component holding a pointer to the value
+  /// associated with the half-open interval *[a,b)* if *a <= p < b*, and
+  /// `nullptr` otherwise. If the first component points to a valid value, then
+  /// the remaining two represent *[a,b)* and are set to *[0,0)* otherwise.
+  std::tuple<Value const*, Point, Point> find(Point const& p) const
+  {
+    auto i = find(p, map_.lower_bound(p));
+    if (i == map_.end())
+      return {nullptr, 0, 0};
+    else
+      return {&i->second.second, i->first, i->second.first};
   }
 
   /// Applies a function over each range and associated value.
