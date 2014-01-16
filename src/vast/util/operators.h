@@ -14,12 +14,19 @@ struct equality_comparable
     return ! (x == y);
   }
 
-  template <typename V = U>
-  friend DisableIf<std::is_same<V, T>, bool>
-  operator!=(T const& x, V const& y)
-  {
-    return ! (x == y);
-  }
+  // FIXME: Clang spit out an error with this definition:
+  //
+  //  use of overloaded operator '!=' is ambiguous
+  //
+  // For now we just comment this extra ability to perform inequality
+  // comparisons with different types.
+  //
+  //template <typename V = U>
+  //friend DisableIf<std::is_same<V, T>, bool>
+  //operator!=(T const& x, V const& y)
+  //{
+  //  return ! (x == y);
+  //}
 };
 
 template <typename T, typename U = T>
@@ -106,7 +113,7 @@ template <typename T, typename U = T>
 struct totally_ordered : equality_comparable<T, U>, less_than_comparable<T, U>
 {
 };
-  
+
 #define VAST_BINARY_OPERATOR_NON_COMMUTATIVE(NAME, OP)                      \
 template <typename T, typename U = T>                                       \
 struct NAME                                                                 \
@@ -161,32 +168,32 @@ VAST_BINARY_OPERATOR_COMMUTATIVE(orable, |);
 #undef VAST_BINARY_OPERATOR_COMMUTATIVE
 
 template <typename T, typename U = T>
-struct additive 
+struct additive
   : addable<T, U>, subtractable<T, U>
 {};
 
 template <typename T, typename U = T>
-struct multiplicative 
+struct multiplicative
   : multipliable<T, U>, dividable<T, U>
 {};
 
 template <typename T, typename U = T>
-struct integer_multiplicative 
+struct integer_multiplicative
   : multiplicative<T, U>, modable<T, U>
 {};
 
 template <typename T, typename U = T>
-struct arithmetic 
+struct arithmetic
   : additive<T, U>, multiplicative<T, U>
 {};
 
 template <typename T, typename U = T>
-struct integer_arithmetic 
+struct integer_arithmetic
   : additive<T, U>, integer_multiplicative<T, U>
 {};
 
 template <typename T, typename U = T>
-struct bitwise 
+struct bitwise
   : andable<T, U>, orable<T, U>, xorable<T, U>
 {};
 
