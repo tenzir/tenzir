@@ -335,7 +335,7 @@ void console::act()
       on(atom("DOWN"), arg_match) >> [=](uint32_t)
       {
         VAST_LOG_ACTOR_ERROR("got DOWN from query @" << last_sender()->id());
-        results_.erase(last_sender());
+        // TODO: seal corresponding result
       },
       on(atom("done")) >> [=]
       {
