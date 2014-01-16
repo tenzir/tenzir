@@ -54,15 +54,14 @@ void archive::load()
       });
 }
 
-void archive::store(segment const& s)
+bool archive::store(segment const& s)
 {
-  if (! ranges_.insert(s.base(), s.base() + s.events(), s.id()))
-    VAST_LOG_ERROR("failed to register segment " << s.id());
+  return ranges_.insert(s.base(), s.base() + s.events(), s.id());
 }
 
-uuid const* archive::lookup(event_id eid) const
+std::tuple<uuid const*, event_id, event_id> archive::lookup(event_id eid) const
 {
-  return ranges_.lookup(eid);
+  return ranges_.find(eid);
 }
 
 using namespace cppa;
@@ -84,14 +83,18 @@ void archive_actor::act()
       },
       on(atom("uuid"), arg_match) >> [=](event_id eid)
       {
-        if (auto id = archive_.lookup(eid))
-         return make_any_tuple(*id);
+        auto t = archive_.lookup(eid);
+        auto id = get<0>(t);
+        if (id)
+         return make_any_tuple(*id, get<1>(t), get<2>(t));
         else
           return make_any_tuple(eid);
       },
       on(atom("segment"), arg_match) >> [=](event_id eid)
       {
-        if (auto id = archive_.lookup(eid))
+        auto t = archive_.lookup(eid);
+        auto id = get<0>(t);
+        if (id)
         {
           VAST_LOG_ACTOR_VERBOSE("got segment " << *id << " for event " << eid);
           send(segment_manager_, *id, last_sender());
@@ -104,7 +107,12 @@ void archive_actor::act()
       },
       on(arg_match) >> [=](segment const& s)
       {
-        archive_.store(s);
+        if (! archive_.store(s))
+        {
+          VAST_LOG_ACTOR_ERROR("failed to register segment " << s.id());
+          quit(exit::error);
+        }
+
         forward_to(segment_manager_);
         return make_any_tuple(atom("segment"), atom("ack"), s.id());
       });

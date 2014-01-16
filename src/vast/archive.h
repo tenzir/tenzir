@@ -30,15 +30,19 @@ public:
 
   /// Stores segment meta data.
   /// @param s The segment to record meta data from.
-  void store(segment const& s);
+  /// @returns `true` on success.
+  bool store(segment const& s);
 
   /// Retrieves the segment UUID for a given event id.
   ///
   /// @param eid The event ID.
   ///
-  /// @returns A pointer to the segment ID corresponding to *eid* and `nullptr`
-  /// if *eid* does not map to a valid segment.
-  uuid const* lookup(event_id eid) const;
+  /// @returns A tuple with the first component holding a pointer to the
+  /// segment ID corresponding to *eid* and `nullptr` if *eid* does not map to
+  /// a valid segment. If the first component is valid, the remaining two
+  /// represent the ID interval for the segment and are set to *<0,0>*
+  /// otherwise..
+  std::tuple<uuid const*, event_id, event_id> lookup(event_id eid) const;
 
 private:
   path directory_;
