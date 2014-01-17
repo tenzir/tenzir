@@ -59,6 +59,12 @@ BOOST_AUTO_TEST_CASE(parser_tests)
 {
   auto exprs = 
   {
+    // Event tags.
+    "&name == \"foo\"",
+    "&time < now - 5d10m3s",
+    "&id == 42",
+
+    // Offsets.
     // Type queries.
     ":port < 53/udp",
     ":set != {T, F}",
@@ -67,12 +73,6 @@ BOOST_AUTO_TEST_CASE(parser_tests)
     ":addr == 1.2.3.4 || :prefix != 10.0.0.0/8",
     "! :int == +8 || ! :count < 4",
 
-    // Event tags.
-    "&name == \"foo\"",
-    "&time < now - 5d10m3s",
-    "&id == 42",
-
-    // Offsets.
     "@5 in {1, 2, 3}",
     "@10,3 < now - 5d10m3s",
     "@0,3,2 ~ /yikes/",
@@ -92,6 +92,23 @@ BOOST_AUTO_TEST_CASE(parser_tests)
 bool bool_eval(expr::ast const& a, event const& e)
 {
   return evaluate(a, e).get<bool>();
+}
+
+BOOST_AUTO_TEST_CASE(tag_queries)
+{
+  event e;
+  e.name("foo");
+  e.timestamp({"2014-01-16+05:30:12"});
+
+  auto ast = expr::ast{"&time == 2014-01-16+05:30:12"};
+  BOOST_CHECK_EQUAL(evaluate(ast, e), true);
+
+  ast = expr::ast{"&name == \"foo\""};
+  BOOST_CHECK_EQUAL(evaluate(ast, e), true);
+  ast = expr::ast{"&name != \"bar\""};
+  BOOST_CHECK_EQUAL(evaluate(ast, e), true);
+  ast = expr::ast{"&name != \"foo\""};
+  BOOST_CHECK_EQUAL(evaluate(ast, e), false);
 }
 
 BOOST_AUTO_TEST_CASE(type_queries)
