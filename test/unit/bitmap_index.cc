@@ -87,7 +87,33 @@ BOOST_AUTO_TEST_CASE(floating_point_bitmap_index)
   BOOST_CHECK_EQUAL(to_string(*ne4711), "1110111");
 }
 
-BOOST_AUTO_TEST_CASE(temporal_bitmap_index)
+BOOST_AUTO_TEST_CASE(time_point_bitmap_index)
+{
+  arithmetic_bitmap_index<null_bitstream, time_point_type> trbi{9}, trbi2;
+  bitmap_index* bi = &trbi;
+  BOOST_REQUIRE(bi->push_back(time_point{"2014-01-16+05:30:15"}));
+  BOOST_REQUIRE(bi->push_back(time_point{"2014-01-16+05:30:12"}));
+  BOOST_REQUIRE(bi->push_back(time_point{"2014-01-16+05:30:15"}));
+  BOOST_REQUIRE(bi->push_back(time_point{"2014-01-16+05:30:18"}));
+  BOOST_REQUIRE(bi->push_back(time_point{"2014-01-16+05:30:15"}));
+  BOOST_REQUIRE(bi->push_back(time_point{"2014-01-16+05:30:19"}));
+
+  auto fifteen = bi->lookup(equal, time_point{"2014-01-16+05:30:15"});
+  BOOST_CHECK_EQUAL(to_string(*fifteen), "101010");
+
+  auto twenty = bi->lookup(less, time_point{"2014-01-16+05:30:20"});
+  BOOST_CHECK_EQUAL(to_string(*twenty), "111111");
+
+  auto eighteen = bi->lookup(greater_equal, time_point{"2014-01-16+05:30:18"});
+  BOOST_CHECK_EQUAL(to_string(*eighteen), "000101");
+
+  std::vector<uint8_t> buf;
+  io::archive(buf, trbi);
+  io::unarchive(buf, trbi2);
+  BOOST_CHECK(trbi == trbi2);
+}
+
+BOOST_AUTO_TEST_CASE(time_range_bitmap_index)
 {
   // A precision of 8 translates into a resolution of 0.1 sec.
   arithmetic_bitmap_index<null_bitstream, time_range_type> trbi{8}, trbi2;
