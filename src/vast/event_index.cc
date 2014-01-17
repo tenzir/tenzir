@@ -20,8 +20,10 @@ struct event_meta_index::loader : expr::default_const_visitor
 
   virtual void visit(expr::name_extractor const&)
   {
-    if (idx.exists_ && idx.name_.empty())
+    if (idx.name_exists_ && idx.name_.size() == 1)
     {
+      // We only hit the file system if the index has exactly one ID, namely 0,
+      // representing the default-constructed state.
       io::unarchive(idx.dir_ / "name.idx", idx.name_);
       VAST_LOG_DEBUG(
           "loaded name index (" << idx.name_.size() << " bits)");
@@ -30,7 +32,7 @@ struct event_meta_index::loader : expr::default_const_visitor
 
   virtual void visit(expr::timestamp_extractor const&)
   {
-    if (idx.exists_ && idx.timestamp_.empty())
+    if (idx.time_exists_ && idx.timestamp_.size() == 1)
     {
       io::unarchive(idx.dir_ / "timestamp.idx", idx.timestamp_);
       VAST_LOG_DEBUG(
@@ -94,7 +96,8 @@ struct event_meta_index::querier : expr::default_const_visitor
 
 
 event_meta_index::event_meta_index(path dir)
-  : event_index<event_meta_index>{std::move(dir)}
+  : event_index<event_meta_index>{std::move(dir)},
+    timestamp_{9} // Granularity of seconds
 {
   // ID 0 is not a valid event.
   timestamp_.append(1, false);
@@ -108,8 +111,11 @@ char const* event_meta_index::description() const
 
 void event_meta_index::scan()
 {
-  if (exists(dir_ / "name.idx") || exists(dir_ / "timestamp.idx"))
-    exists_ = true;
+  if (exists(dir_ / "name.idx"))
+    name_exists_ = true;
+
+  if (exists(dir_ / "timestamp.idx"))
+    time_exists_ = true;
 }
 
 void event_meta_index::load(expr::ast const& ast)

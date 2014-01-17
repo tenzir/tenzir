@@ -107,7 +107,8 @@ private:
 
   arithmetic_bitmap_index<bitstream_type, time_point_type> timestamp_;
   string_bitmap_index<bitstream_type> name_;
-  bool exists_ = false;
+  bool name_exists_ = false;
+  bool time_exists_ = false;
 };
 
 class event_arg_index : public event_index<event_arg_index>
