@@ -124,21 +124,22 @@ match(std::map<std::string, std::string> const& m, std::string const& pfx)
 }
 
 // Scope-wise setting of terminal editing mode via EL_PREP_TERM.
-struct edit_mode
+struct scope_setter
 {
-  edit_mode(EditLine* el)
-    : el(el)
+  scope_setter(EditLine* el, int flag)
+    : el{el}, flag{flag}
   {
-    el_set(el, EL_PREP_TERM, 1);
+    el_set(el, flag, 1);
   }
 
-  ~edit_mode()
+  ~scope_setter()
   {
     assert(el);
-    el_set(el, EL_PREP_TERM, 0);
+    el_set(el, flag, 0);
   }
 
   EditLine* el;
+  int flag;
 };
 
 
@@ -235,7 +236,7 @@ struct editline::impl
 
   bool get(std::string& line)
   {
-    edit_mode em{el_};
+    scope_setter ss{el_, EL_PREP_TERM};
     int n;
     auto str = el_gets(el_, &n);
     if (n == -1)
