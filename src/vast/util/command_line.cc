@@ -86,16 +86,19 @@ bool command_line::process(bool& callback_result)
 {
   if (mode_stack_.empty())
     return false;
+
   auto current = mode_stack_.back();
   current->el.reset();  // Fixes TTY weirdness when switching between modes.
   std::string cmd;
   if (! current->el.get(cmd))
     return false;
+
   // Trim string.
   auto first_non_ws = cmd.find_first_not_of(" \t");
   auto last_non_ws = cmd.find_last_not_of(" \t");
   if (first_non_ws != std::string::npos)
     cmd = cmd.substr(first_non_ws, last_non_ws - first_non_ws + 1);
+
   auto space = cmd.find(' ');
   auto key = cmd.substr(0, space);
   if (! current->callbacks.count(key))
@@ -105,10 +108,13 @@ bool command_line::process(bool& callback_result)
     callback_result = current->unknown_command(std::move(cmd));
     return true;
   }
-  auto args = space == std::string::npos ? cmd : cmd.substr(++space);
+
+  auto args = space == std::string::npos ? "" : cmd.substr(++space);
   callback_result = current->callbacks[key](std::move(args));
+
   current->hist.enter(cmd);
   current->hist.save();
+
   return true;
 }
 
