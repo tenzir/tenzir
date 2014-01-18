@@ -231,7 +231,7 @@ console::console(cppa::actor_ptr search, path dir)
               std::cerr
                 << "new query " << current_result_->id()
                 << " -> " << ast << std::endl;
-              send(qry, atom("extract"));
+
               if (opts_.auto_follow)
               {
                 follow_mode_ = true;
@@ -326,8 +326,7 @@ void console::act()
             on(atom("get")) >> [=]
             {
               char c;
-              if (cmdline_.get(c))
-                send(last_sender(), atom("key"), c);
+              return make_any_tuple(atom("key"), cmdline_.get(c) ? c : 'q');
             });
       });
 
@@ -340,6 +339,7 @@ void console::act()
       on(atom("done")) >> [=]
       {
         VAST_LOG_ACTOR_DEBUG("got done from query @" << last_sender()->id());
+        show_prompt();
         // TODO: seal corresponding query.
       },
       on(atom("prompt")) >> [=]
