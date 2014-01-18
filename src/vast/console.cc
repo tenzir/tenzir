@@ -66,7 +66,6 @@ console::console(cppa::actor_ptr search, path dir)
         auto help =
           "ask         enter query mode (leave with 'exit')\n"
           "list        show all queries (active prefixed with *)\n"
-          "stats       show query statistics\n"
           "query <id>  enter control mode of given query\n"
           "set <..>    settings\n"
           "exit        exit the console";
@@ -80,6 +79,30 @@ console::console(cppa::actor_ptr search, path dir)
       "set",
       [=](std::string arg)
       {
+        auto help = [=]()
+        {
+          auto help =
+            "paginate <n>       number of results to display\n"
+            "auto-follow <T|F>  follow query after creation\n"
+            "show               shows current settings";
+
+          std::cerr << help << std::endl;
+        };
+
+        auto show = [=]
+        {
+          std::cerr
+            << "paginate = " << opts_.paginate << '\n'
+            << "auto-follow = " << (opts_.auto_follow ? "T" : "F")
+            << std::endl;
+        };
+
+        if (arg.empty())
+        {
+          show();
+          return true;
+        }
+
         match_split(arg, ' ')(
             on("paginate", arg_match) >> [=](std::string const& str)
             {
@@ -99,26 +122,15 @@ console::console(cppa::actor_ptr search, path dir)
             {
               opts_.auto_follow = false;
             },
-            on("show") >> [=]
-            {
-              std::cerr
-                << "paginate = " << opts_.paginate << '\n'
-                << "auto-follow = " << (opts_.auto_follow ? "T" : "F")
-                << std::endl;
-            },
-            on("help") >> [=]
-            {
-              auto help =
-                "paginate <n>       number of results to display\n"
-                "auto-follow <T|F>  follow query after creation\n"
-                "show               shows current settings";
-              std::cerr << help << std::endl;
-            },
+            on("show") >> show,
+            on("help") >> help,
+            on("?") >> help,
             others() >> [=]
             {
-              std::cerr
-                << "[error] invalid argument, check 'set help'" << std::endl;
+              std::cerr << "[error] invalid argument '" << arg << "'";
+              help();
             });
+
         return true;
       });
 
@@ -135,19 +147,6 @@ console::console(cppa::actor_ptr search, path dir)
   cmdline_.cmd_add(
       "main",
       "list",
-      [=](std::string)
-      {
-        for (auto& p : results_)
-          std::cout
-            << (&p.second == current_result_ ? " * " : "   ")
-            << p.second.id() << '\t' << p.second.ast()
-            << std::endl;
-        return true;
-      });
-
-  cmdline_.cmd_add(
-      "main",
-      "stats",
       [=](std::string)
       {
         for (auto& p : results_)
@@ -368,12 +367,23 @@ void console::act()
         {
           default:
             {
-              std::string desc;
-              if (key == ' ')
-                desc = "<space>";
-              else
-                desc = key;
-              std::cerr << "invalid key: '" << desc << "'" << std::endl;
+              std::cerr
+                << "invalid key: '" << key << "', press '?' for help"
+                << std::endl;
+            }
+            break;
+          case '?':
+            {
+              std::cerr
+                << "interactive query control mode:\n\n"
+                << "    <space>  display the next batch of available results\n"
+                << "       e     ask query for more results\n"
+                << "       f     toggle follow mode\n"
+                << "       j     seek one batch forward\n"
+                << "       k     seek one batch backword\n"
+                << "       ?     display this help\n"
+                << "       q     leave query control mode\n"
+                << std::endl;
             }
             break;
           case ' ':
