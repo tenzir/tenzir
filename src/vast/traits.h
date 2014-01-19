@@ -2,7 +2,7 @@
 #define VAST_TRAITS_H
 
 #include <memory>
-#include "vast/intrusive.h"
+#include "vast/util/intrusive.h"
 
 namespace vast {
 

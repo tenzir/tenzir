@@ -1,5 +1,5 @@
 #include "test.h"
-#include "vast/intrusive.h"
+#include "vast/util/intrusive.h"
 
 using namespace vast;
 

@@ -4,8 +4,8 @@
 #include <functional>
 #include <vector>
 #include <string>
-#include "vast/intrusive.h"
 #include "vast/fwd.h"
+#include "vast/util/intrusive.h"
 #include "vast/util/trial.h"
 
 namespace vast {

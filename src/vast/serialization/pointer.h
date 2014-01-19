@@ -2,9 +2,9 @@
 #define VAST_SERIALIZATION_POINTER_H
 
 #include <memory>
-#include "vast/intrusive.h"
 #include "vast/object.h"
 #include "vast/traits.h"
+#include "vast/util/intrusive.h"
 
 namespace vast {
 

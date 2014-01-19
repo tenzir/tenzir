@@ -1,5 +1,5 @@
-#ifndef VAST_INTRUSIVE_H
-#define VAST_INTRUSIVE_H
+#ifndef VAST_UTIL_INTRUSIVE_H
+#define VAST_UTIL_INTRUSIVE_H
 
 #include <atomic>
 #include <cassert>
@@ -7,6 +7,7 @@
 #include <functional>
 
 namespace vast {
+namespace util {
 
 /// The base class for intrusively reference-counted objects.
 /// @see http://drdobbs.com/article/print?articleId=229218807&dept_url=/cpp/.
@@ -230,6 +231,12 @@ intrusive_ptr<T> make_intrusive(Args&& ...args)
 {
   return intrusive_ptr<T>(new T(std::forward<Args>(args)...));
 }
+
+} // namespace util
+
+using util::intrusive_base;
+using util::intrusive_ptr;
+using util::make_intrusive;
 
 } // namespace vast
 
