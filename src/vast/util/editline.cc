@@ -195,9 +195,9 @@ struct editline::impl
     }
     else
     {
-      std::cout << '\n';
+      std::cerr << '\n';
       for (auto& match : matches)
-        std::cout
+        std::cerr
           << util::color::yellow << prefix << util::color::reset
           << match.substr(prefix.size()) << std::endl;
     }
