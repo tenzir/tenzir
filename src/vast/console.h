@@ -16,8 +16,14 @@ struct console : actor<console>
 {
   struct options
   {
-    uint64_t paginate = 10;
+    uint64_t batch_size = 10;
     bool auto_follow = true;
+  };
+
+  enum print_mode
+  {
+    error,
+    query
   };
 
   /// A stream of events representing a result. One can add events to the
@@ -75,6 +81,7 @@ struct console : actor<console>
   void act();
   char const* description() const;
 
+  std::ostream& print(print_mode mode) const;
   void show_prompt(size_t ms = 100);
   std::pair<cppa::actor_ptr, result*> to_result(std::string const& str);
 

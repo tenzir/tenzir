@@ -4,6 +4,7 @@
 #include <iomanip>
 #include <cppa/cppa.hpp>
 #include "vast/event.h"
+#include "vast/util/color.h"
 #include "vast/util/parse.h"
 
 using namespace cppa;
@@ -11,6 +12,27 @@ using namespace cppa;
 namespace vast {
 
 namespace {
+
+// Generates a callback function for a mode or command.
+struct help_printer
+{
+  template <typename T>
+  auto operator()(T x) const -> util::command_line::callback
+  {
+    return [=](std::string) -> util::result<bool>
+    {
+      std::cerr
+        << "\noptions for "
+        << util::color::cyan << x->name() << util::color::reset << ":\n\n"
+        << x->help(4)
+        << std::endl;
+
+      return true;
+    };
+  }
+};
+
+help_printer help;
 
 struct cow_event_less_than
 {
@@ -32,122 +54,82 @@ console::console(cppa::actor_ptr search, path dir)
     if (mkdir(dir_))
       VAST_LOG_ACTOR_ERROR("failed to create console directory: " << dir_);
 
-  cmdline_.mode_add("main",
-                    "main mode",
-                    "::: ",
-                    to<std::string>(dir_ / "history_main"));
+  auto main
+    = cmdline_.mode_add("main", "::: ", to<std::string>(dir_ / "history_main"));
 
-  cmdline_.mode_push("main");
-  cmdline_.on_unknown_command(
-      "main",
-      [=](std::string arg)
-      {
-        if (! arg.empty())
-          std::cerr
-            << "[error] invalid command: " << arg
-            << ", try 'help'" << std::endl;
-        return true;
-      });
+  main->on_unknown_command(help(main));
 
-  cmdline_.cmd_add(
-      "main",
-      "exit",
-      [=](std::string)
+  main->add("exit", "exit the console")->on(
+      [=](std::string) -> util::result<bool>
       {
         quit(exit::stop);
-        return false;
+        return {};
       });
 
-  cmdline_.cmd_add(
-      "main",
-      "help",
-      [=](std::string)
+  auto set = main->add("set", "adjust console settings");
+  set->on(help(set));
+
+  set->add("batch-size", "number of results to display")->on(
+      [=](std::string args) -> util::result<bool>
       {
-        auto help =
-          "ask         enter query mode (leave with 'exit')\n"
-          "list        show all queries (active prefixed with *)\n"
-          "query <id>  enter control mode of given query\n"
-          "set <..>    settings\n"
-          "exit        exit the console";
-        std::cerr << help << std::endl;
-        return true;
-      });
-
-  // TODO: consider using a settings mode instead of just a single command.
-  cmdline_.cmd_add(
-      "main",
-      "set",
-      [=](std::string arg)
-      {
-        auto help = [=]()
+        uint64_t n;
+        auto begin = args.begin();
+        if (! extract(begin, args.end(), n))
         {
-          auto help =
-            "paginate <n>       number of results to display\n"
-            "auto-follow <T|F>  follow query after creation\n"
-            "show               shows current settings";
-
-          std::cerr << help << std::endl;
-        };
-
-        auto show = [=]
-        {
-          std::cerr
-            << "paginate = " << opts_.paginate << '\n'
-            << "auto-follow = " << (opts_.auto_follow ? "T" : "F")
-            << std::endl;
-        };
-
-        if (arg.empty())
-        {
-          show();
+          opts_.batch_size = n;
           return true;
         }
+        else
+        {
+          print(error) << "batch-size requires numeric argument" << std::endl;
+          return false;
+        }
+      });
 
-        match_split(arg, ' ')(
-            on("paginate", arg_match) >> [=](std::string const& str)
-            {
-              uint64_t n;
-              auto begin = str.begin();
-              if (extract(begin, str.end(), n))
-                opts_.paginate = n;
-              else
-                std::cerr
-                  << "[error] paginate requires numeric argument" << std::endl;
-            },
-            on("auto-follow", "T") >> [=](std::string const&)
+  auto auto_follow = set->add("auto-follow",
+                              "enter interactive control mode after query creation");
+  auto_follow->on(
+      [=](std::string args) -> util::result<bool>
+      {
+        match_split(args, ' ')(
+            on("T") >> [=](std::string const&)
             {
               opts_.auto_follow = true;
             },
-            on("auto-follow", "F") >> [=](std::string const&)
+            on("F") >> [=](std::string const&)
             {
               opts_.auto_follow = false;
             },
-            on("show") >> show,
-            on("help") >> help,
-            on("?") >> help,
             others() >> [=]
             {
-              std::cerr << "[error] invalid argument '" << arg << "'";
-              help();
+              print(error) << "need 'T' or 'F' as argument" << std::endl;
+              return false;
             });
 
         return true;
       });
 
-  cmdline_.cmd_add(
-      "main",
-      "ask",
-      [=](std::string)
+  set->add("show", "display the current settings")->on(
+      [=](std::string) -> util::result<bool>
+      {
+        std::cerr
+          << "batch-size = " << opts_.batch_size << '\n'
+          << "auto-follow = " << (opts_.auto_follow ? "T" : "F")
+          << std::endl;
+
+        return true;
+      });
+
+  main->add("ask", "enter query mode")->on(
+      [=](std::string) -> util::result<bool>
       {
         cmdline_.mode_push("ask");
         return true;
       });
 
 
-  cmdline_.cmd_add(
-      "main",
-      "list",
-      [=](std::string)
+  main->add("list", "list existing queries")->on(
+      [=](std::string) -> util::result<bool>
       {
         for (auto& p : results_)
           std::cout
@@ -155,65 +137,59 @@ console::console(cppa::actor_ptr search, path dir)
             << p.second.id() << '\t'
             << p.second.size()
             << std::endl;
+
         return true;
       });
 
-  cmdline_.cmd_add(
-      "main",
-      "query",
-      [=](std::string arg)
+  main->add("query", "enter a query")->on(
+      [=](std::string args) -> util::result<bool>
       {
-        if (arg.empty())
+        if (args.empty())
         {
-          std::cerr
-            << "[error] argument required, check 'query help'"
-            << std::endl;
-          return true;
+          print(error) << "missing query UUID" << std::endl;
+          return false;
         }
-        auto r = to_result(arg);
+
+        auto r = to_result(args);
         if (r.first)
         {
           VAST_LOG_ACTOR_DEBUG("enters query " << r.second->id());
           current_result_ = r.second;
           current_query_ = r.first;
           send(self, atom("key"), atom("get"));
-          return false;
+          return {};
         }
+
         return true;
       });
 
-  cmdline_.mode_add("ask",
-                    "query asking mode",
-                    "-=> ",
-                    to<std::string>(dir_ / "history_query"));
+  auto ask = cmdline_.mode_add("ask", "-=> ",
+                               to<std::string>(dir_ / "history_query"));
 
-  cmdline_.cmd_add(
-      "ask",
-      "exit",
-      [=](std::string)
+  ask->add("exit", "leave query asking mode")->on(
+      [=](std::string) -> util::result<bool>
       {
         cmdline_.mode_pop();
         return true;
       });
 
-  cmdline_.on_unknown_command(
-      "ask",
-      [=](std::string q)
+  ask->on_unknown_command(
+      [=](std::string args) -> util::result<bool>
       {
-        if (q.empty())
+        if (args.empty())
           return true;
-        sync_send(search_, atom("query"), atom("create"), q).then(
-            on(atom("EXITED"), arg_match) >> [](uint32_t reason)
+
+        sync_send(search_, atom("query"), atom("create"), args).then(
+            on(atom("EXITED"), arg_match) >> [=](uint32_t reason)
             {
-              std::cerr
-                << "[error] search terminated with exit code "
-                << reason << std::endl;
+              print(error)
+                << "search terminated with exit code " << reason << std::endl;
 
               send_exit(self, exit::error);
             },
-            on_arg_match >> [=](std::string const& error) // TODO: use error class.
+            on_arg_match >> [=](std::string const& failure) // TODO: use error class.
             {
-              std::cerr << "[error] syntax error: " << error << std::endl;
+              print(error) << "syntax error: " << failure << std::endl;
               show_prompt();
             },
             on_arg_match >> [=](actor_ptr const& qry, expr::ast const& ast)
@@ -222,7 +198,8 @@ console::console(cppa::actor_ptr search, path dir)
               assert(qry);
               assert(ast);
 
-              cmdline_.append_to_history(q);
+              // FIXME: remove
+              //cmdline_.append_to_history(args);
               monitor(qry);
               current_query_ = qry;
               current_result_ = &results_.emplace(qry, ast).first->second;
@@ -247,8 +224,11 @@ console::console(cppa::actor_ptr search, path dir)
                                    to_string(last_dequeued()));
               show_prompt();
             });
-      return false;
+
+      return {};
     });
+
+  cmdline_.mode_push("main");
 }
 
 console::result::result(expr::ast ast)
@@ -343,9 +323,19 @@ void console::act()
       },
       on(atom("prompt")) >> [=]
       {
-        bool callback_result;
-        if (! cmdline_.process(callback_result) || callback_result)
+        // An empty result means that we should not go back to the prompt.
+        auto result = cmdline_.process();
+        if (result.engaged())
+        {
+          // TODO: give visual clue if result failed.
+
           show_prompt();
+        }
+        else if (result.failed())
+        {
+          print(error) << result.failure() << std::endl;
+          show_prompt();
+        }
       },
       on_arg_match >> [=](event const&)
       {
@@ -367,7 +357,7 @@ void console::act()
         {
           default:
             {
-              std::cerr
+              print(error)
                 << "invalid key: '" << key << "', press '?' for help"
                 << std::endl;
             }
@@ -389,45 +379,36 @@ void console::act()
           case ' ':
             {
               auto n = current_result_->apply(
-                  opts_.paginate,
+                  opts_.batch_size,
                   [](event const& e) { std::cout << e << std::endl; });
               if (n == 0)
-                std::cerr
-                  << "[query " << current_result_->id() << "] "
-                  << "reached end of results" << std::endl;
+                print(query) << "reached end of results" << std::endl;
             }
             break;
           case 'e':
             {
               send(current_query_, atom("extract"));
-              std::cerr
-                << "[query " << current_result_->id() << "] "
-                << "asks for more results" << std::endl;
+              print(query) << "asks for more results" << std::endl;
             }
             break;
           case 'f':
             {
               follow_mode_ = ! follow_mode_;
-              std::cerr
-                << "[query " << current_result_->id() << "] "
+              print(query)
                 << "toggled follow-mode to " << (follow_mode_ ? "on" : "off")
                 << std::endl;
             }
             break;
           case 'j':
             {
-              auto n = current_result_->seek_forward(opts_.paginate);
-              std::cerr
-                << "[query " << current_result_->id() << "] "
-                << "seeked +" << n << " events" << std::endl;
+              auto n = current_result_->seek_forward(opts_.batch_size);
+              print(query) << "seeked +" << n << " events" << std::endl;
             }
             break;
           case 'k':
             {
-              auto n = current_result_->seek_backward(opts_.paginate);
-              std::cerr
-                << "[query " << current_result_->id() << "] "
-                << "seeked -" << n << " events" << std::endl;
+              auto n = current_result_->seek_backward(opts_.batch_size);
+              print(query) << "seeked -" << n << " events" << std::endl;
             }
             break;
           case '':
@@ -454,6 +435,27 @@ char const* console::description() const
   return "console";
 }
 
+std::ostream& console::print(print_mode mode) const
+{
+  switch (mode)
+  {
+    default:
+      std::cerr << util::color::red << "[???] ";
+      break;
+    case error:
+      std::cerr << util::color::red << "[error] ";
+      break;
+    case query:
+      std::cerr
+        << util::color::cyan << "[query " << current_result_->id() << "] ";
+      break;
+  }
+
+  std::cerr << util::color::reset;
+
+  return std::cerr;
+}
+
 void console::show_prompt(size_t ms)
 {
   // The delay allows for logging messages to trickle through first
@@ -477,9 +479,9 @@ console::to_result(std::string const& str)
     }
   }
   if (matches.empty())
-    std::cerr << "[error] no such query: " << str << std::endl;
+    print(error) << "no such query: " << str << std::endl;
   else if (matches.size() > 1)
-    std::cerr << "[error] ambiguous query: " << str << std::endl;
+    print(error) << "ambiguous query: " << str << std::endl;
   else
     return {qry, matches[0]};
   return {nullptr, nullptr};
