@@ -35,12 +35,31 @@ public:
   };
 
   /// The prompt to display in front of each command.
-  struct prompt
+  class prompt
   {
-    prompt(std::string s = ">> ", char e = 0);
+  public:
+    /// Constructs a prompt.
+    /// @param str The initial prompt string.
+    /// @param color The color of *str*.
+    /// @param e The escape character to be used in the prompt.
+    prompt(std::string str = ">> ", char const* color = nullptr, char e = '\1');
 
-    std::string str;
-    char esc;
+    /// Adds a (colored) string to the end of the prompt.
+    /// @param str The string to append.
+    /// @param color The color of *str*.
+    void push(std::string str, char const* color = nullptr);
+
+    /// Gets the prompt string to be passed to the editline prompt function.
+    /// @param The prompt string.
+    char const* display() const;
+
+    /// Retrieves the escape character of the prompt.
+    /// @returns The escape character for the prompt function.
+    char escape() const;
+
+  private:
+    std::string str_;
+    char esc_;
   };
 
   /// Constructs an editline context.

@@ -5,6 +5,7 @@
 #include <map>
 #include <vector>
 #include <histedit.h>
+#include "vast/util/color.h"
 
 namespace vast {
 namespace util {
@@ -95,12 +96,35 @@ void editline::history::enter(std::string const& str)
   impl_->enter(str);
 }
 
-editline::prompt::prompt(std::string s, char e)
-  : str{std::move(s)},
-    esc{e}
+editline::prompt::prompt(std::string str, char const* color, char esc)
+  : esc_{esc}
 {
+  push(std::move(str), color);
 }
 
+void editline::prompt::push(std::string str, char const* color)
+{
+  if (str.empty())
+    return;
+
+  if (color)
+    str_ += esc_ + std::string{color} + esc_;
+
+  str_ += std::move(str);
+
+  if (color)
+    str_ += esc_ + std::string{util::color::reset} + esc_;
+}
+
+char const* editline::prompt::display() const
+{
+  return str_.c_str();
+}
+
+char editline::prompt::escape() const
+{
+  return esc_;
+}
 
 namespace {
 
@@ -151,7 +175,7 @@ struct editline::impl
   {
     impl* instance;
     el_get(el, EL_CLIENTDATA, &instance);
-    return const_cast<char*>(instance->prompt_.str.c_str());
+    return const_cast<char*>(instance->prompt_.display());
   }
 
   static unsigned char handle_complete(EditLine* el, int)
@@ -196,9 +220,6 @@ struct editline::impl
     // completion, which "bind -v" somehow disabled. A better solution to
     // handle this problem would be desirable.
     el_set(el_, EL_ADDFN, "rl_complete", "default complete", &handle_complete);
-
-    // Setup prompt configuration.
-    el_set(el_, EL_PROMPT, &prompt_function);
   }
 
   ~impl()
@@ -214,6 +235,7 @@ struct editline::impl
   void set(prompt p)
   {
     prompt_ = std::move(p);
+    el_set(el_, EL_PROMPT_ESC, &prompt_function, prompt_.escape());
   }
 
   void set(history& hist)
