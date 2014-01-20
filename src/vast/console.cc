@@ -54,8 +54,8 @@ console::console(cppa::actor_ptr search, path dir)
     if (mkdir(dir_))
       VAST_LOG_ACTOR_ERROR("failed to create console directory: " << dir_);
 
-  auto main
-    = cmdline_.mode_add("main", "::: ", to<std::string>(dir_ / "history_main"));
+  auto main = cmdline_.mode_add("main", "::: ", util::color::cyan,
+                                to<std::string>(dir_ / "history_main"));
 
   main->on_unknown_command(help(main));
 
@@ -165,7 +165,7 @@ console::console(cppa::actor_ptr search, path dir)
         return true;
       });
 
-  auto ask = cmdline_.mode_add("ask", "-=> ",
+  auto ask = cmdline_.mode_add("ask", "-=> ", util::color::green,
                                to<std::string>(dir_ / "history_query"));
 
   ask->add("exit", "leave query asking mode")->on(

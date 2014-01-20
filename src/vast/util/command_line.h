@@ -92,8 +92,9 @@ public:
     /// Constructs a mode.
     /// @param name The name of the mode.
     /// @param prompt The prompt string.
+    /// @param prompt_color The color of *prompt*.
     /// @param history_file The file where to store the mode history.
-    mode(std::string name, std::string prompt, std::string history_file);
+    mode(std::string name, std::string prompt, char const* prompt_color, std::string history_file);
 
     /// Adds a sub-command to this command.
     /// @param name The name of the command.
@@ -134,11 +135,14 @@ public:
   ///
   /// @param prompt The prompt of the mode.
   ///
+  /// @param prompt_color The color of *prompt*.
+  ///
   /// @param history_file The filename of the history.
   ///
   /// @returns A valid pointer to the new mode on success.
   intrusive_ptr<mode> mode_add(std::string name,
                                std::string prompt,
+                               char const* prompt_color = nullptr,
                                std::string history_file = "");
 
   /// Removes an existing mode.

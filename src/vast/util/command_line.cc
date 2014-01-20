@@ -109,13 +109,14 @@ std::string command_line::command::help(size_t indent) const
 
 command_line::mode::mode(std::string name,
                          std::string prompt,
+                         char const* prompt_color,
                          std::string history_file)
   : history_{1000, true, std::move(history_file)}
 {
   el_.source();
   el_.set(history_);
   if (! prompt.empty())
-    el_.set(editline::prompt{std::move(prompt), util::color::cyan});
+    el_.set(editline::prompt{std::move(prompt), prompt_color});
 
   root_ = make_intrusive<command>(this, nullptr, std::move(name), "");
 }
@@ -155,6 +156,7 @@ std::string command_line::mode::help(size_t indent) const
 intrusive_ptr<command_line::mode>
 command_line::mode_add(std::string name,
                        std::string prompt,
+                       char const* prompt_color,
                        std::string history_file)
 {
   if (modes_.count(name))
@@ -162,6 +164,7 @@ command_line::mode_add(std::string name,
 
   auto m = make_intrusive<mode>(std::move(name),
                                 std::move(prompt),
+                                prompt_color,
                                 std::move(history_file));
 
   return modes_.emplace(m->root_->name(), m).first->second;
