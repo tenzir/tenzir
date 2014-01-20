@@ -108,12 +108,12 @@ void editline::prompt::push(std::string str, char const* color)
     return;
 
   if (color)
-    str_ += esc_ + std::string{color} + esc_;
+    str_ += esc_ + std::string{color};
 
   str_ += std::move(str);
 
   if (color)
-    str_ += esc_ + std::string{util::color::reset} + esc_;
+    str_ += std::string{util::color::reset} + esc_;
 }
 
 char const* editline::prompt::display() const
