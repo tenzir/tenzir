@@ -140,14 +140,16 @@ match(std::map<std::string, std::string> const& m, std::string const& pfx)
     auto& key = p.first;
     if (pfx.size() >= key.size())
       continue;
+
     auto result = std::mismatch(pfx.begin(), pfx.end(), key.begin());
     if (result.first == pfx.end())
       matches.push_back(key);
   }
+
   return matches;
 }
 
-// Scope-wise setting of terminal editing mode via EL_PREP_TERM.
+// RAII enabling of editline settings.
 struct scope_setter
 {
   scope_setter(EditLine* el, int flag)
@@ -186,6 +188,7 @@ struct editline::impl
     auto matches = match(instance->completions_, prefix);
     if (matches.empty())
       return CC_REFRESH_BEEP;
+
     if (matches.size() == 1)
     {
       instance->insert(matches.front().substr(prefix.size()));
@@ -194,8 +197,11 @@ struct editline::impl
     {
       std::cout << '\n';
       for (auto& match : matches)
-        std::cout << match << std::endl;
+        std::cout
+          << util::color::yellow << prefix << util::color::reset
+          << match.substr(prefix.size()) << std::endl;
     }
+
     return CC_REDISPLAY;
   }
 
