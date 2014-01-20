@@ -132,10 +132,12 @@ console::console(cppa::actor_ptr search, path dir)
       [=](std::string) -> util::result<bool>
       {
         for (auto& p : results_)
-          std::cout
+          std::cerr
+            << util::color::green
             << (&p.second == current_result_ ? " * " : "   ")
-            << p.second.id() << '\t'
-            << p.second.size()
+            << util::color::reset
+            << p.second.id() << ": "
+            << p.second.size() << " events"
             << std::endl;
 
         return true;
@@ -395,8 +397,10 @@ void console::act()
             {
               follow_mode_ = ! follow_mode_;
               print(query)
-                << "toggled follow-mode to " << (follow_mode_ ? "on" : "off")
-                << std::endl;
+                << "toggled follow-mode to "
+                << util::color::cyan
+                << (follow_mode_ ? "on" : "off")
+                << util::color::reset << std::endl;
             }
             break;
           case 'j':
