@@ -98,16 +98,9 @@ class arithmetic_bitmap_index : public bitmap_index
       T == bool_type,
       equality_coder<B, U>,
       typename std::conditional<
-        // TODO: until we have mapped the IEEE 754 format of doubles to a
-        // bitwise total ordering, we will only support equality comparisons on
-        // floating point values (with respect to their bin).
-        T == double_type,
-        equality_coder<B, U>,
-        typename std::conditional<
-          std::is_integral<bitmap_type>::value,
-          range_bitslice_coder<B, U>,
-          std::false_type
-        >::type
+        std::is_arithmetic<bitmap_type>::value,
+        range_bitslice_coder<B, U>,
+        std::false_type
       >::type
     >::type;
 

@@ -79,12 +79,10 @@ BOOST_AUTO_TEST_CASE(floating_point_bitmap_index)
   BOOST_REQUIRE(bi->push_back(42.12258));
   BOOST_REQUIRE(bi->push_back(42.125799));
 
-  auto fourty_two = bi->lookup(equal, 42.12);
-  BOOST_REQUIRE(fourty_two);
-  BOOST_CHECK_EQUAL(to_string(*fourty_two), "0100010");
-  auto ne4711 = bi->lookup(not_equal, 4711.14);
-  BOOST_REQUIRE(ne4711);
-  BOOST_CHECK_EQUAL(to_string(*ne4711), "1110111");
+  BOOST_CHECK_EQUAL(to_string(*bi->lookup(less, 100.0)), "1100011");
+  BOOST_CHECK_EQUAL(to_string(*bi->lookup(less, 43.0)), "1100011");
+  BOOST_CHECK_EQUAL(to_string(*bi->lookup(greater_equal, 42.0)), "0111111");
+  BOOST_CHECK_EQUAL(to_string(*bi->lookup(not_equal, 4711.14)), "1110111");
 }
 
 BOOST_AUTO_TEST_CASE(time_point_bitmap_index)

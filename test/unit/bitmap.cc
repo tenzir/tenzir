@@ -4,6 +4,64 @@
 
 using namespace vast;
 
+// Prints doubles as IEEE 754 and with our custom offset binary encoding.
+void print(double d)
+{
+  std::cout << d << "\t = ";
+  auto o = detail::order(d, 4);
+  auto x = *reinterpret_cast<uint64_t*>(&d);
+  auto y = *reinterpret_cast<uint64_t*>(&o);
+
+  for (size_t i = 0; i < 64; ++i)
+  {
+    if (i == 1 || i == 12)
+      std::cout << ' ';
+    std::cout << ((x >> (64 - i - 1)) & 1);
+  }
+
+  std::cout << '\t';
+
+  for (size_t i = 0; i < 64; ++i)
+  {
+    if (i == 1 || i == 12)
+      std::cout << ' ';
+    std::cout << ((y >> (64 - i - 1)) & 1);
+  }
+
+  std::cout << std::endl;
+}
+
+
+BOOST_AUTO_TEST_CASE(bitwise_total_ordering)
+{
+  BOOST_CHECK_EQUAL(detail::order(0u), 0);
+  BOOST_CHECK_EQUAL(detail::order(4u), 4);
+
+  int32_t i = -4;
+  BOOST_CHECK_EQUAL(detail::order(i), 2147483644);
+  i = 4;
+  BOOST_CHECK_EQUAL(detail::order(i), 2147483652);
+
+  print(-1111.2);
+  print(-10.0);
+  print(-2.4);
+  print(-2.2);
+  print(-2.0);
+  print(-1.0);
+  print(-0.1);
+  print(-0.001);
+  print(-0.0);
+  print(0.0);
+  print(0.001);
+  print(0.1);
+  print(1.0);
+  print(2.0);
+  print(2.2);
+  print(2.4);
+  print(10.0);;
+  print(1111.2);
+}
+
 BOOST_AUTO_TEST_CASE(basic_bitmap)
 {
   bitmap<int, null_bitstream> bm, bm2;

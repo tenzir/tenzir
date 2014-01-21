@@ -14,6 +14,81 @@
 
 namespace vast {
 
+namespace detail {
+
+/// Takes any arithmetic type and creates and maps it to an unsigned integral
+/// type whose values have a bitwise total ordering. That is, it contructs an
+/// *offset binary* encoding, which bitmap range coders rely upon.
+template <
+  typename T,
+  typename = EnableIf<
+    Bool<std::is_unsigned<T>::value && std::is_integral<T>::value>
+  >
+>
+T order(T x)
+{
+  // Unsigned integral types already exhibit a bitwise total order.
+  return x;
+}
+
+template <
+  typename T,
+  typename = EnableIf<
+    Bool<std::is_signed<T>::value && std::is_integral<T>::value>
+  >
+>
+auto order(T x) -> typename std::make_unsigned<T>::type
+{
+  // For signed integral types, We shift the entire domain by 2^w to the left,
+  // where w is the size of T in bits. By ditching 2's-complete, we get a total
+  // bitwise ordering.
+  using unsigned_type = typename std::make_unsigned<T>::type;
+  x += unsigned_type{1} << std::numeric_limits<T>::digits;
+  return static_cast<unsigned_type>(x);
+}
+
+template <
+  typename T,
+  typename = EnableIf<Bool<std::is_floating_point<T>::value>>
+>
+uint64_t order(T x, size_t sig_bits = 5)
+{
+  static_assert(std::numeric_limits<T>::is_iec559,
+                "can only order IEEE 754 double types");
+
+  assert(sig_bits >= 0 && sig_bits <= 52);
+
+  static constexpr auto exp_mask = (~0ull << 53) >> 1;
+  static constexpr auto sig_mask = ~0ull >> 12;
+
+  auto p = reinterpret_cast<uint64_t*>(&x);
+  bool positive = ~*p & (1ull << 63);
+  auto exp = (*p & exp_mask) >> 52;
+  auto sig = *p & sig_mask;
+
+  // If the value is positive we add a 1 as MSB left of the exponent and if
+  // the value is negative, we make the MSB 0. If the value is negative we
+  // also have to reverse the exponent to ensure that, e.g., -1 is considered
+  // *smaller* than -0.1, although the exponent of -1 is *larger* than -0.1.
+  // Because the exponent already has a offset-binary encoding, this merely
+  // involves subtracting it from 2^11-1.
+  auto result = positive ? exp | (1ull << 12) : (exp_mask >> 52) - exp;
+
+  // Next, we add the desired bits of the significand. Because the
+  // significand is always great or equal to 0, we can use the same
+  // subtraction method for negative values as for the offset-binary encoded
+  // exponent.
+  if (sig_bits > 0)
+  {
+    result <<= sig_bits;
+    result |= (positive ? sig : sig_mask - sig) >> (52 - sig_bits);
+  }
+
+  return result;
+}
+
+} // namespace detail
+
 /// The base class for bitmap coders.
 template <typename Derived>
 class coder : util::equality_comparable<coder<Derived>>
@@ -320,24 +395,26 @@ class bitslice_coder
   : public coder<bitslice_coder<Derived, T, Bitstream>>,
     util::equality_comparable<bitslice_coder<Derived, T, Bitstream>>
 {
-  static_assert(std::is_integral<T>::value,
-                "bitslice coding requires an integral type");
+  static_assert(std::is_arithmetic<T>::value,
+                "bitslice coding requires an arithmetic type");
 
   using super = coder<bitslice_coder<Derived, T, Bitstream>>;
   friend super;
 
 public:
-  using unsigned_type = typename std::make_unsigned<T>::type;
-  using value_list = std::vector<unsigned_type>;
+  using offset_binary_type = decltype(detail::order(T()));
+  using value_list = std::vector<offset_binary_type>;
 
   /// Constructs a slicer with a given (potentially non-uniform) base.
   /// @param base The sequence of bases.
+  /// @pre `! base.empty()`
   explicit bitslice_coder(value_list base)
     : base_{std::move(base)},
       v_(base_.size()),
       bitstreams_(base_.size())
   {
     assert(! base_.empty());
+
     if (std::any_of(base_.begin(), base_.end(), [](size_t b) { return b < 2; }))
       throw std::logic_error{"not a well-defined base"};
 
@@ -348,7 +425,7 @@ public:
   /// @param base The base for all components.
   /// @param n The number of components.
   /// @pre `base >= 2 && n > 0`
-  bitslice_coder(unsigned_type base, size_t n)
+  bitslice_coder(offset_binary_type base, size_t n)
     : base_(n, base),
       v_(base_.size()),
       bitstreams_(base_.size())
@@ -362,10 +439,23 @@ public:
 
 protected:
   /// Decomposes a value into vector of values according to the given base.
-  void decompose(T x, value_list& v) const
+  void decompose(T x) const
   {
-    assert(v.size() == base_.size());
-    slice(x, v, std::is_unsigned<T>{});
+    auto o = detail::order(x);
+    auto& v = const_cast<value_list&>(v_);
+
+    size_t i = base_.size();
+    while (i --> 0)
+    {
+      offset_binary_type b = 1;
+      for (size_t j = 0; j < i; ++j)
+        b *= base_[j];
+
+      v[i] = o / b;
+
+      if (o >= b)
+        o -= v[i] * b;
+    }
   }
 
   value_list base_;
@@ -386,33 +476,6 @@ private:
     //for (size_t i = 0; i < bitstreams_.size(); ++i)
     //  if (base_[i] == 2)
     //    bitstreams_[i].resize(1);
-  }
-
-  void slice(unsigned_type x, value_list& v, std::true_type) const
-  {
-    size_t i = base_.size();
-    while (i --> 0)
-    {
-      unsigned_type b = 1;
-      for (size_t j = 0; j < i; ++j)
-        b *= base_[j];
-
-      v[i] = x / b;
-
-      if (x >= b)
-        x -= v[i] * b;
-    }
-  }
-
-  void slice(T x, value_list& v, std::false_type) const
-  {
-    // We shift the entire domain by 2^w to the left, where w is the size of T
-    // in bits. This allows us to have a total ordering at the bit-level for
-    // the entire domain, which is not the case for 2's-complement
-    // representation.
-    x += unsigned_type{1} << std::numeric_limits<T>::digits;
-
-    slice(x, v, std::true_type{});
   }
 
 private:
@@ -495,7 +558,7 @@ public:
 private:
   bool encode_value(T x)
   {
-    this->decompose(x, v_);
+    this->decompose(x);
 
     for (size_t i = 0; i < v_.size(); ++i)
       if (v_[i] > 0)
@@ -512,7 +575,7 @@ private:
 
   optional<Bitstream> decode_value(T x, relational_operator op) const
   {
-    this->decompose(x, const_cast<typename super::value_list&>(v_));
+    this->decompose(x);
 
     Bitstream result{this->size(), true};
     for (size_t i = 0; i < v_.size(); ++i)
@@ -566,7 +629,7 @@ public:
 private:
   bool encode_value(T x)
   {
-    this->decompose(x, v_);
+    this->decompose(x);
 
     for (size_t i = 0; i < bitstreams_.size(); ++i)
       for (size_t j = 0; j < bitstreams_[i].size(); ++j)
@@ -586,9 +649,9 @@ private:
 
     if (x > std::numeric_limits<T>::min())
       if (op == less || op == greater_equal)
-        --x;
+        --x; // FIXME: Treat floating point properly.
 
-    this->decompose(x, const_cast<typename super::value_list&>(v_));
+    this->decompose(x);
 
     switch (op)
     {
