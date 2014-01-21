@@ -1,9 +1,6 @@
 #include "vast/util/editline.h"
 
 #include <cassert>
-#include <iostream>
-#include <map>
-#include <vector>
 #include <histedit.h>
 #include "vast/util/color.h"
 
@@ -126,28 +123,60 @@ char editline::prompt::escape() const
   return esc_;
 }
 
-namespace {
-
-// Given a query string *pfx* and map *m* whose keys represent the full
-// matches, retrieves all matching entries in *m* where *pfx* is a full prefix
-// of the key.
-std::vector<std::string>
-match(std::map<std::string, std::string> const& m, std::string const& pfx)
+bool editline::completer::add(std::string str)
 {
+  if (std::find(strings_.begin(), strings_.end(), str) != strings_.end())
+    return false;
+
+  strings_.push_back(std::move(str));
+  return true;
+}
+
+bool editline::completer::remove(std::string const& str)
+{
+  if (std::find(strings_.begin(), strings_.end(), str) == strings_.end())
+    return false;
+
+  strings_.erase(
+      std::remove(strings_.begin(), strings_.end(), str),
+      strings_.end());
+
+  return true;
+}
+
+void editline::completer::replace(std::vector<std::string> completions)
+{
+  strings_ = std::move(completions);
+}
+
+void editline::completer::on(callback f)
+{
+  callback_ = f;
+};
+
+trial<std::string> editline::completer::complete(std::string const& prefix) const
+{
+  if (! callback_)
+    return error{"no completion handler registered"};
+
+  if (strings_.empty())
+    return error{"no completions registered"};
+
   std::vector<std::string> matches;
-  for (auto& p : m)
+  for (auto& str : strings_)
   {
-    auto& key = p.first;
-    if (pfx.size() >= key.size())
+    if (prefix.size() >= str.size())
       continue;
 
-    auto result = std::mismatch(pfx.begin(), pfx.end(), key.begin());
-    if (result.first == pfx.end())
-      matches.push_back(key);
+    auto result = std::mismatch(prefix.begin(), prefix.end(), str.begin());
+    if (result.first == prefix.end())
+      matches.push_back(str);
   }
 
-  return matches;
-}
+  return callback_(prefix, std::move(matches));
+};
+
+namespace {
 
 // RAII enabling of editline settings.
 struct scope_setter
@@ -184,24 +213,14 @@ struct editline::impl
   {
     impl* instance;
     el_get(el, EL_CLIENTDATA, &instance);
-    auto prefix = instance->cursor_line();
-    auto matches = match(instance->completions_, prefix);
-    if (matches.empty())
+    auto line = instance->cursor_line();
+    auto line_size = line.size();
+    auto t = instance->completer_.complete(std::move(line));
+
+    if (! t || t->empty())
       return CC_REFRESH_BEEP;
 
-    if (matches.size() == 1)
-    {
-      instance->insert(matches.front().substr(prefix.size()));
-    }
-    else
-    {
-      std::cerr << '\n';
-      for (auto& match : matches)
-        std::cerr
-          << util::color::yellow << prefix << util::color::reset
-          << match.substr(prefix.size()) << std::endl;
-    }
-
+    instance->insert(t->substr(line_size));
     return CC_REDISPLAY;
   }
 
@@ -249,12 +268,9 @@ struct editline::impl
     el_set(el_, EL_HIST, ::history, hist.impl_->hist);
   }
 
-  bool complete(std::string cmd, std::string desc)
+  void set(completer comp)
   {
-    if (completions_.count(cmd))
-      return false;
-    completions_.emplace(std::move(cmd), std::move(desc));
-    return true;
+    completer_ = std::move(comp);
   }
 
   bool get(char& c)
@@ -321,7 +337,7 @@ struct editline::impl
   EditLine* el_;
   char const* completion_key_;
   prompt prompt_;
-  std::map<std::string, std::string> completions_;
+  completer completer_;
 };
 
 editline::editline(char const* name)
@@ -348,9 +364,9 @@ void editline::set(history& hist)
   impl_->set(hist);
 }
 
-bool editline::complete(std::string cmd, std::string desc)
+void editline::set(completer comp)
 {
-  return impl_->complete(std::move(cmd), std::move(desc));
+  impl_->set(comp);
 }
 
 bool editline::get(char& c)
@@ -381,6 +397,11 @@ size_t editline::cursor()
 void editline::reset()
 {
   impl_->reset();
+}
+
+editline::completer& editline::completion()
+{
+  return impl_->completer_;
 }
 
 } // namespace util
