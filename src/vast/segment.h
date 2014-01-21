@@ -207,16 +207,37 @@ public:
   /// size is unbounded.
   uint64_t max_bytes() const;
 
+  /// Extracts a single event with a given ID.
+  /// @param id The ID of the event.
+  /// @returns The event having ID *id* or an disengaged option otherwise.
+  optional<event> load(event_id id) const;
+
   /// Writes a vector of events into the segment.
   /// @param v The vector of events to write.
   /// @param max_events_per_chunk The maximum number of events per chunk.
   /// @returns The number of events successfully written.
   size_t store(std::vector<event> const& v, size_t max_events_per_chunk = 0);
 
-  /// Extracts a single event with a given ID.
-  /// @param id The ID of the event.
-  /// @returns The event having ID *id* or an disengaged option otherwise.
-  optional<event> load(event_id id) const;
+  /// Writes a sequence of events into the segment.
+  /// @param begin The start iterator.
+  /// @param end The one-past-the-end iterator.
+  /// @param max_events_per_chunk The maximum number of events per chunk.
+  /// @returns The number of events successfully written.
+  template <typename Iterator>
+  size_t store(Iterator begin, Iterator end, size_t max_events_per_chunk = 0)
+  {
+    writer w(this, max_events_per_chunk);
+
+    size_t n;
+    while (begin != end)
+    {
+      if (! w.write(*begin++))
+        break;
+      ++n;
+    }
+
+    return n;
+  }
 
 private:
   uuid id_;

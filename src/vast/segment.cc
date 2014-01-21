@@ -339,6 +339,11 @@ uint64_t segment::max_bytes() const
   return max_bytes_;
 }
 
+optional<event> segment::load(event_id id) const
+{
+  return reader{this}.read(id);
+}
+
 size_t segment::store(std::vector<event> const& v, size_t max_events_per_chunk)
 {
   writer w(this, max_events_per_chunk);
@@ -347,11 +352,6 @@ size_t segment::store(std::vector<event> const& v, size_t max_events_per_chunk)
     if (! w.write(v[i]))
       break;
   return i;
-}
-
-optional<event> segment::load(event_id id) const
-{
-  return reader{this}.read(id);
 }
 
 void segment::serialize(serializer& sink) const
