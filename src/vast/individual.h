@@ -26,7 +26,7 @@ public:
 private:
   uuid id_;
 
-private:
+protected:
   friend access;
   void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
