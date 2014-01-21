@@ -106,9 +106,17 @@ public:
     /// @param f The function to execute for unknown commands.
     void on_unknown_command(callback f);
 
+    /// Assigns a callback handler for unknown commands.
+    /// @param f The function to execute for unknown commands.
+    void on_complete(editline::completer::callback f);
+
     /// Registers a completion with this mode.
     /// @param The string to register.
-    void complete(std::string const& str);
+    void complete(std::string str);
+
+    /// Replaces the completions associated with a set of new ones.
+    /// @param completiosn The new completions.
+    void complete(std::vector<std::string> completions);
 
     /// Execute a command line.
     result<bool> execute(std::string args) const;
@@ -165,13 +173,19 @@ public:
   bool append_to_history(std::string const& entry);
 
   /// Processes a single command from the command line.
+  /// @param cmd The command to process.
   /// @returns A valid result if the callback executed and an error on failure.
-  result<bool> process();
+  result<bool> process(std::string cmd);
 
-  /// Retrieves a single character from the user in a blocking fashion.
+  /// Retrieves a single character from the command lien in a blocking fashion.
   /// @param c The result parameter containing the character from STDIN.
   /// @returns `true` on success.
   bool get(char& c);
+
+  /// Retrieves a fulle line from the command line in a blocking fashion.
+  /// @param line The result parameter containing the line.
+  /// @returns `true` on success.
+  bool get(std::string& line);
 
 private:
   std::vector<intrusive_ptr<mode>> mode_stack_;

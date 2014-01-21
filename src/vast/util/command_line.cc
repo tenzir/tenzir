@@ -14,7 +14,7 @@ command_line::command::command(intrusive_ptr<mode> mode,
     description_{std::move(desc)}
 {
   if (parent_)
-    mode_->complete(absolute_name());
+    mode_->complete(absolute_name() + ' ');
 }
 
 intrusive_ptr<command_line::command>
@@ -132,9 +132,19 @@ void command_line::mode::on_unknown_command(callback f)
   root_->on(f);
 }
 
-void command_line::mode::complete(std::string const& str)
+void command_line::mode::on_complete(editline::completer::callback f)
 {
-  el_.complete(str + ' ');
+  el_.completion().on(f);
+}
+
+void command_line::mode::complete(std::string str)
+{
+  el_.completion().add(std::move(str));
+}
+
+void command_line::mode::complete(std::vector<std::string> completions)
+{
+  el_.completion().replace(std::move(completions));
 }
 
 result<bool> command_line::mode::execute(std::string args) const
@@ -211,35 +221,34 @@ bool command_line::append_to_history(std::string const& entry)
   return true;
 }
 
-result<bool> command_line::process()
+result<bool> command_line::process(std::string cmd)
 {
   if (mode_stack_.empty())
     return error{"mode stack empty"};
 
-  auto current = mode_stack_.back();
-
   // Fixes TTY weirdness which may occur when switching between modes.
-  current->el_.reset();
+  mode_stack_.back()->el_.reset();
 
-  std::string cmd;
-  if (! current->el_.get(cmd))
-    return error{"could not retrieve command line"};
-
-  // Trim command from whitespace.
-  auto first_non_ws = cmd.find_first_not_of(" \t");
-  auto last_non_ws = cmd.find_last_not_of(" \t");
-  if (first_non_ws != std::string::npos)
-    cmd = cmd.substr(first_non_ws, last_non_ws - first_non_ws + 1);
-
-  current->history_.enter(cmd);
-  current->history_.save();
-
-  return current->execute(std::move(cmd));
+  return mode_stack_.back()->execute(std::move(cmd));
 }
 
 bool command_line::get(char& c)
 {
   return mode_stack_.empty() ? false : mode_stack_.back()->el_.get(c);
+}
+
+bool command_line::get(std::string& line)
+{
+  if (mode_stack_.empty() || ! mode_stack_.back()->el_.get(line))
+    return false;
+
+  // Trim command from leading/trailing whitespace.
+  auto first_non_ws = line.find_first_not_of(" \t");
+  auto last_non_ws = line.find_last_not_of(" \t");
+  if (first_non_ws != std::string::npos)
+    line = line.substr(first_non_ws, last_non_ws - first_non_ws + 1);
+
+  return true;
 }
 
 } // namespace util
