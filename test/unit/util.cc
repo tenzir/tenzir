@@ -36,6 +36,7 @@ BOOST_AUTO_TEST_CASE(results)
   BOOST_REQUIRE(! t.empty());
   BOOST_REQUIRE(t.engaged());
   BOOST_REQUIRE(! t.failed());
+  BOOST_REQUIRE_EQUAL(*t, 42);
 
   t = error{"whoops"};
   BOOST_REQUIRE(! t.empty());

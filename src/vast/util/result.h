@@ -71,7 +71,7 @@ public:
   T& value()
   {
     assert(engaged());
-    return *super();
+    return *super().value();
   }
 
   /// Retrieves the value of the result.
@@ -80,7 +80,7 @@ public:
   T const& value() const
   {
     assert(engaged());
-    return *super();
+    return *super().value();
   }
 
   /// Retrieves the error..
