@@ -23,7 +23,8 @@ struct console : actor<console>
   enum print_mode
   {
     error,
-    query
+    query,
+    warn
   };
 
   /// A stream of events representing a result. One can add events to the
@@ -71,6 +72,11 @@ struct console : actor<console>
     pos_type pos_ = 0;
     std::deque<cow<event>> events_;
     expr::ast ast_;
+
+  private:
+    friend access;
+    void serialize(serializer& sink) const;
+    void deserialize(deserializer& source);
   };
 
   /// Spawns the console client.

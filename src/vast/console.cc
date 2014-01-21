@@ -4,6 +4,7 @@
 #include <iomanip>
 #include <cppa/cppa.hpp>
 #include "vast/event.h"
+#include "vast/io/serialization.h"
 #include "vast/util/color.h"
 #include "vast/util/parse.h"
 
@@ -50,14 +51,41 @@ console::console(cppa::actor_ptr search, path dir)
   : dir_{std::move(dir)},
     search_{std::move(search)}
 {
-  if (! exists(dir_))
-    if (mkdir(dir_))
-      VAST_LOG_ACTOR_ERROR("failed to create console directory: " << dir_);
+  if (! exists(dir_) && ! mkdir(dir_))
+  {
+    VAST_LOG_ACTOR_ERROR("failed to create console directory: " << dir_);
+    quit(exit::error);
+    return;
+  }
 
-  auto main = cmdline_.mode_add("main", "::: ", util::color::cyan,
+  if (! exists(dir_ / "results") && ! mkdir(dir_ / "results"))
+  {
+    VAST_LOG_ACTOR_ERROR("failed to create console result directory");
+    quit(exit::error);
+    return;
+  }
+
+
+  auto complete = [](std::string const& prefix, std::vector<std::string> match)
+    -> std::string
+  {
+    if (match.size() == 1)
+      return match[0];
+
+    std::cerr << '\n';
+    for (auto& m : match)
+      std::cerr
+        << util::color::yellow << prefix << util::color::reset
+        << m.substr(prefix.size()) << std::endl;
+
+    return "";
+  };
+
+  auto main = cmdline_.mode_add("main", "::: ", nullptr,
                                 to<std::string>(dir_ / "history_main"));
 
   main->on_unknown_command(help(main));
+  main->on_complete(complete);
 
   main->add("exit", "exit the console")->on(
       [=](std::string) -> util::result<bool>
@@ -124,20 +152,40 @@ console::console(cppa::actor_ptr search, path dir)
       [=](std::string) -> util::result<bool>
       {
         cmdline_.mode_push("ask");
-        return true;
+        return false;
       });
 
 
   main->add("list", "list existing queries")->on(
       [=](std::string) -> util::result<bool>
       {
+        std::map<uuid, std::pair<expr::ast, bool>> all;
+        traverse(dir_ / "results",
+                [&](path const& p)
+                {
+                  uuid id;
+                  expr::ast ast;
+                  io::unarchive(p, id, ast);
+                  all.emplace(std::move(id), std::make_pair(std::move(ast), false));
+                  return true;
+                });
+
         for (auto& p : results_)
+        {
+          auto i = all.find(p.second.id());
+          if (i != all.end())
+            i->second.second = true;
+          else
+            all.emplace(p.second.id(), std::make_pair(p.second.ast(), true));
+        }
+
+        for (auto& p : all)
           std::cerr
             << util::color::green
-            << (&p.second == current_result_ ? " * " : "   ")
+            << (p.second.second ? " * " : "   ")
             << util::color::reset
-            << p.second.id() << ": "
-            << p.second.size() << " events"
+            << p.first
+            //<< ": " << p.second.size() << " events"
             << std::endl;
 
         return true;
@@ -165,21 +213,23 @@ console::console(cppa::actor_ptr search, path dir)
         return true;
       });
 
-  auto ask = cmdline_.mode_add("ask", "-=> ", util::color::green,
+  auto ask = cmdline_.mode_add("ask", "-=> ", nullptr,
                                to<std::string>(dir_ / "history_query"));
 
   ask->add("exit", "leave query asking mode")->on(
       [=](std::string) -> util::result<bool>
       {
         cmdline_.mode_pop();
-        return true;
+        return false;
       });
+
+  ask->on_complete(complete);
 
   ask->on_unknown_command(
       [=](std::string args) -> util::result<bool>
       {
         if (args.empty())
-          return true;
+          return false;
 
         sync_send(search_, atom("query"), atom("create"), args).then(
             on(atom("EXITED"), arg_match) >> [=](uint32_t reason)
@@ -200,8 +250,7 @@ console::console(cppa::actor_ptr search, path dir)
               assert(qry);
               assert(ast);
 
-              // FIXME: remove
-              //cmdline_.append_to_history(args);
+              cmdline_.append_to_history(args);
               monitor(qry);
               current_query_ = qry;
               current_result_ = &results_.emplace(qry, ast).first->second;
@@ -229,6 +278,107 @@ console::console(cppa::actor_ptr search, path dir)
 
       return {};
     });
+
+  // TODO: this mode is not yet fully fleshed out.
+  auto fs = cmdline_.mode_add("file-system", "/// ");
+
+  auto list_directory = [](path const& dir) -> std::vector<std::string>
+  {
+    std::vector<std::string> files;
+    traverse(dir,
+             [&](path const& p)
+             {
+               auto str = to_string(p.basename());
+               if (str.size() >= 2 && str[0] == '.' && str[1] == '/')
+                 str = str.substr(2);
+               if (p.is_directory())
+                 str += '/';
+               files.push_back(std::move(str));
+               std::sort(files.begin(), files.end());
+               return true;
+             });
+
+    return files;
+  };
+
+  auto file_list = std::make_shared<std::vector<std::string>>(list_directory("."));
+  fs->complete(*file_list);
+
+  fs->on_complete(
+    [=](std::string const& pfx, std::vector<std::string> match) -> std::string
+    {
+      path next;
+      if (match.empty())
+        next = path{pfx};
+      else if (match.size() == 1)
+        next = path{match[0]};
+
+      if (! next.empty())
+      {
+        if (next.is_directory())
+        {
+          // If we complete deep in the diretory hierarchy, we may not have a
+          // '/' at the end.
+          if (next.str().back() != '/')
+            next = path{next.str() + '/'};
+
+          auto contents = list_directory(next);
+
+          // TODO: only show the relevant entries relative to the current
+          // directory.
+          for (auto& f : contents)
+            std::cerr
+              << util::color::yellow << next << util::color::reset
+              << f << std::endl;
+
+          for (auto& f : contents)
+            f.insert(0, to_string(next));
+
+          auto n = file_list->size();
+          file_list->insert(file_list->end(), contents.begin(), contents.end());
+          std::inplace_merge(file_list->begin(),
+                             file_list->begin() + n,
+                             file_list->end());
+
+
+          fs->complete(*file_list);
+        }
+
+        return to_string(next);
+      }
+
+      auto min_len = pfx.size();
+      std::string const* shortest = nullptr;
+
+      for (auto& m : match)
+      {
+        if (m.size() < min_len)
+        {
+          min_len = m.size();
+          shortest = &m;
+        }
+
+        std::cerr
+          << '\n' << util::color::yellow << pfx << util::color::reset
+          << m.substr(pfx.size());
+      }
+
+      if (! match.empty())
+        std::cerr << '\n';
+
+      return shortest ? *shortest : pfx;
+    });
+
+
+  fs->on_unknown_command(
+      [=](std::string) -> util::result<bool>
+      {
+        *file_list = list_directory(".");
+        fs->complete(*file_list);
+
+        cmdline_.mode_pop();
+        return true;
+      });
 
   cmdline_.mode_push("main");
 }
@@ -296,6 +446,34 @@ size_t console::result::size() const
   return events_.size();
 }
 
+void console::result::serialize(serializer& sink) const
+{
+  individual::serialize(sink);
+
+  sink << ast_ << pos_;
+
+  sink << static_cast<uint64_t>(events_.size());
+  for (auto& e : events_)
+    sink << e;
+}
+
+void console::result::deserialize(deserializer& source)
+{
+  individual::deserialize(source);
+
+  source >> ast_ >> pos_;
+
+  uint64_t size;
+  source >> size;
+  if (size > 0)
+  {
+    events_.resize(size);
+    for (size_t i = 0; i < size; ++i)
+      source >> events_[i];
+  }
+}
+
+
 void console::act()
 {
   chaining(false);
@@ -325,12 +503,25 @@ void console::act()
       },
       on(atom("prompt")) >> [=]
       {
+        std::string line;
+        if (! cmdline_.get(line))
+        {
+          VAST_LOG_ACTOR_ERROR("failed to retrieve command line");
+          quit(exit::error);
+        }
+
+        if (line.empty())
+        {
+          self << last_dequeued();
+          return;
+        }
+
         // An empty result means that we should not go back to the prompt.
-        auto result = cmdline_.process();
+        auto result = cmdline_.process(line);
         if (result.engaged())
         {
-          // TODO: give visual clue if result failed.
-
+          if (*result)
+            cmdline_.append_to_history(line);
           show_prompt();
         }
         else if (result.failed())
@@ -373,8 +564,9 @@ void console::act()
                 << "       f     toggle follow mode\n"
                 << "       j     seek one batch forward\n"
                 << "       k     seek one batch backword\n"
-                << "       ?     display this help\n"
                 << "       q     leave query control mode\n"
+                << "       s     save the result to file system\n"
+                << "       ?     display this help\n"
                 << std::endl;
             }
             break;
@@ -423,6 +615,28 @@ void console::act()
               show_prompt();
             }
             return;
+          case 's':
+            {
+              // TODO: look if same AST already exists under a different file.
+              auto const file =
+                dir_ / "results" / path{to_string(current_result_->id())};
+
+              if (exists(file))
+              {
+                print(error) << "results already saved " << std::endl;
+                // TODO: allow overwriting
+              }
+              else
+              {
+                auto n = current_result_->size();
+                print(query) << "saving result to " << file  << std::endl;
+                io::archive(file, *current_result_);
+                print(query) << "saved " << n << " events" << std::endl;
+              }
+
+              show_prompt();
+            }
+            return;
         }
         send(keystroke_monitor, atom("get"));
       },
@@ -452,6 +666,9 @@ std::ostream& console::print(print_mode mode) const
     case query:
       std::cerr
         << util::color::cyan << "[query " << current_result_->id() << "] ";
+      break;
+    case warn:
+      std::cerr << util::color::yellow << "[warning] ";
       break;
   }
 
