@@ -226,9 +226,6 @@ result<bool> command_line::process(std::string cmd)
   if (mode_stack_.empty())
     return error{"mode stack empty"};
 
-  // Fixes TTY weirdness which may occur when switching between modes.
-  mode_stack_.back()->el_.reset();
-
   return mode_stack_.back()->execute(std::move(cmd));
 }
 
@@ -239,7 +236,13 @@ bool command_line::get(char& c)
 
 bool command_line::get(std::string& line)
 {
-  if (mode_stack_.empty() || ! mode_stack_.back()->el_.get(line))
+  if (mode_stack_.empty())
+    return false;
+
+  // Fixes TTY weirdness which may occur when switching between modes.
+  mode_stack_.back()->el_.reset();
+
+  if (! mode_stack_.back()->el_.get(line))
     return false;
 
   // Trim command from leading/trailing whitespace.
