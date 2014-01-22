@@ -20,20 +20,26 @@ struct console : actor<console>
     bool auto_follow = true;
   };
 
-  enum print_mode
-  {
-    error,
-    query,
-    warn
-  };
-
   /// A stream of events representing a result. One can add events to the
   /// result and seek forward/backward.
-  class result : public individual
+  class result : intrusive_base<result>, public individual
   {
   public:
+    /// Default-constructs a result.
+    result() = default;
+
     /// Constructs a result from a valid AST.
     result(expr::ast ast);
+
+    /// Saves the current result state to a given directory.
+    /// @param p The directory to save the results under.
+    /// @returns `true` on success.
+    bool save(path const& p) const;
+
+    /// Loads the result state from a given directory.
+    /// @param p The directory to load the results from.
+    /// @returns `true` on success.
+    bool load(path const& p);
 
     /// Adds an event to this result.
     /// @param e The event to add.
@@ -69,14 +75,21 @@ struct console : actor<console>
   private:
     using pos_type = uint64_t;
 
+    expr::ast ast_;
     pos_type pos_ = 0;
     std::deque<cow<event>> events_;
-    expr::ast ast_;
 
   private:
     friend access;
     void serialize(serializer& sink) const;
     void deserialize(deserializer& source);
+  };
+
+  enum print_mode
+  {
+    error,
+    query,
+    warn
   };
 
   /// Spawns the console client.
@@ -87,14 +100,13 @@ struct console : actor<console>
   void act();
   char const* description() const;
 
-  std::ostream& print(print_mode mode) const;
   void show_prompt(size_t ms = 100);
-  std::pair<cppa::actor_ptr, result*> to_result(std::string const& str);
+  std::ostream& print(print_mode mode);
 
   path dir_;
-  std::map<cppa::actor_ptr, result> results_;
-  result* current_result_;
-  cppa::actor_ptr current_query_;
+  std::vector<intrusive_ptr<result>> results_;
+  std::map<cppa::actor_ptr, intrusive_ptr<result>> active_;
+  std::pair<cppa::actor_ptr, intrusive_ptr<result>> current_;
   cppa::actor_ptr search_;
   util::command_line cmdline_;
   options opts_;

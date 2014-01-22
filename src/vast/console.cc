@@ -65,6 +65,18 @@ console::console(cppa::actor_ptr search, path dir)
     return;
   }
 
+  // Look for persistent queries.
+  traverse(
+      dir_ / "results",
+      [this](path const& p)
+      {
+        auto r = make_intrusive<result>();
+        io::unarchive(p / "meta", *r);
+        r->load(p / "data");
+        results_.push_back(r);
+        return true;
+      });
+
 
   auto complete = [](std::string const& prefix, std::vector<std::string> match)
     -> std::string
@@ -159,33 +171,17 @@ console::console(cppa::actor_ptr search, path dir)
   main->add("list", "list existing queries")->on(
       [=](std::string) -> util::result<bool>
       {
-        std::map<uuid, std::pair<expr::ast, bool>> all;
-        traverse(dir_ / "results",
-                [&](path const& p)
-                {
-                  uuid id;
-                  expr::ast ast;
-                  io::unarchive(p, id, ast);
-                  all.emplace(std::move(id), std::make_pair(std::move(ast), false));
-                  return true;
-                });
+        std::set<intrusive_ptr<result>> active;
+        for (auto& p : active_)
+          active.insert(p.second);
 
-        for (auto& p : results_)
-        {
-          auto i = all.find(p.second.id());
-          if (i != all.end())
-            i->second.second = true;
-          else
-            all.emplace(p.second.id(), std::make_pair(p.second.ast(), true));
-        }
-
-        for (auto& p : all)
+        for (auto& r : results_)
           std::cerr
             << util::color::green
-            << (p.second.second ? " * " : "   ")
+            << (active.count(r) ? " * " : "   ")
             << util::color::reset
-            << p.first
-            //<< ": " << p.second.size() << " events"
+            << r->id()
+            << " | " << r->ast()
             << std::endl;
 
         return true;
@@ -200,17 +196,43 @@ console::console(cppa::actor_ptr search, path dir)
           return false;
         }
 
-        auto r = to_result(args);
-        if (r.first)
+        std::vector<intrusive_ptr<result>> matches;
+        actor_ptr qry = nullptr;
+        for (auto& r : results_)
         {
-          VAST_LOG_ACTOR_DEBUG("enters query " << r.second->id());
-          current_result_ = r.second;
-          current_query_ = r.first;
-          send(self, atom("key"), atom("get"));
-          return {};
+          auto candidate = to<std::string>(r->id());
+          auto i = std::mismatch(args.begin(), args.end(), candidate.begin());
+          if (i.first == args.end())
+          {
+            for (auto& p : active_)
+              if (p.second == r)
+              {
+                qry = p.first;
+                break;
+              }
+
+            matches.push_back(r);
+          }
         }
 
-        return true;
+        if (matches.empty())
+        {
+          print(error) << "no such query: " << args << std::endl;
+          return false;
+        }
+        else if (matches.size() > 1)
+        {
+          print(error) << "ambiguous query: " << args << std::endl;
+          return false;
+        }
+
+        if (qry)
+          current_.first = qry;
+        current_.second = matches[0];
+
+        send(self, atom("key"), atom("get"));
+        VAST_LOG_ACTOR_DEBUG("enters query " << current_.second->id());
+        return {};
       });
 
   auto ask = cmdline_.mode_add("ask", "-=> ", nullptr,
@@ -246,17 +268,28 @@ console::console(cppa::actor_ptr search, path dir)
             },
             on_arg_match >> [=](actor_ptr const& qry, expr::ast const& ast)
             {
-              assert(! results_.count(qry));
+              assert(! active_.count(qry));
               assert(qry);
               assert(ast);
 
               cmdline_.append_to_history(args);
               monitor(qry);
-              current_query_ = qry;
-              current_result_ = &results_.emplace(qry, ast).first->second;
+              current_.first = qry;
+              current_.second = make_intrusive<result>(ast);
+
+
+              auto i = std::find_if(
+                  results_.begin(), results_.end(),
+                  [&](intrusive_ptr<result> r) { return r->ast() == ast; });
+
+              if (i != results_.end())
+                print(warn) << "duplicate query for " << (*i)->id() << std::endl;
+
+              active_.insert(current_);
+              results_.push_back(current_.second);
               cmdline_.mode_pop();
               std::cerr
-                << "new query " << current_result_->id()
+                << "new query " << current_.second->id()
                 << " -> " << ast << std::endl;
 
               if (opts_.auto_follow)
@@ -388,6 +421,45 @@ console::result::result(expr::ast ast)
 {
 }
 
+bool console::result::save(path const& p) const
+{
+  file f{p};
+  f.open(file::write_only);
+  io::file_output_stream fos{f};
+  std::unique_ptr<io::compressed_output_stream>
+    cos{io::make_compressed_output_stream(io::lz4, fos)};
+  binary_serializer sink{*cos};
+
+  // TODO: use segments.
+  sink << static_cast<uint64_t>(events_.size());
+  for (auto& e : events_)
+    sink << e;
+
+  return true;
+}
+
+bool console::result::load(path const& p)
+{
+  file f{p};
+  f.open(file::read_only);
+  io::file_input_stream fis{f};
+  std::unique_ptr<io::compressed_input_stream>
+    cos{io::make_compressed_input_stream(io::lz4, fis)};
+  binary_deserializer source{*cos};
+
+  // TODO: use segments.
+  uint64_t size;
+  source >> size;
+  if (size > 0)
+  {
+    events_.resize(size);
+    for (size_t i = 0; i < size; ++i)
+      source >> events_[i];
+  }
+
+  return true;
+}
+
 void console::result::add(cow<event> e)
 {
   auto i = std::lower_bound(events_.begin(), events_.end(), e, cow_event_lt);
@@ -449,28 +521,13 @@ size_t console::result::size() const
 void console::result::serialize(serializer& sink) const
 {
   individual::serialize(sink);
-
   sink << ast_ << pos_;
-
-  sink << static_cast<uint64_t>(events_.size());
-  for (auto& e : events_)
-    sink << e;
 }
 
 void console::result::deserialize(deserializer& source)
 {
   individual::deserialize(source);
-
   source >> ast_ >> pos_;
-
-  uint64_t size;
-  source >> size;
-  if (size > 0)
-  {
-    events_.resize(size);
-    for (size_t i = 0; i < size; ++i)
-      source >> events_[i];
-  }
 }
 
 
@@ -532,12 +589,12 @@ void console::act()
       },
       on_arg_match >> [=](event const&)
       {
-        auto i = results_.find(last_sender());
-        assert(i != results_.end());
-        auto r = &i->second;
+        auto i = active_.find(last_sender());
+        assert(i != active_.end());
+        auto r = i->second;
         cow<event> ce = *tuple_cast<event>(last_dequeued());
         r->add(ce);
-        if (r == current_result_ && follow_mode_)
+        if (r == current_.second && follow_mode_)
           std::cout << *ce << std::endl;
       },
       on(atom("key"), atom("get")) >> [=]
@@ -572,7 +629,7 @@ void console::act()
             break;
           case ' ':
             {
-              auto n = current_result_->apply(
+              auto n = current_.second->apply(
                   opts_.batch_size,
                   [](event const& e) { std::cout << e << std::endl; });
               if (n == 0)
@@ -581,8 +638,15 @@ void console::act()
             break;
           case 'e':
             {
-              send(current_query_, atom("extract"));
-              print(query) << "asks for more results" << std::endl;
+              if (current_.first)
+              {
+                send(current_.first, atom("extract"));
+                print(query) << "asks for more results" << std::endl;
+              }
+              else
+              {
+                print(query) << "not connected" << std::endl;
+              }
             }
             break;
           case 'f':
@@ -597,13 +661,13 @@ void console::act()
             break;
           case 'j':
             {
-              auto n = current_result_->seek_forward(opts_.batch_size);
+              auto n = current_.second->seek_forward(opts_.batch_size);
               print(query) << "seeked +" << n << " events" << std::endl;
             }
             break;
           case 'k':
             {
-              auto n = current_result_->seek_backward(opts_.batch_size);
+              auto n = current_.second->seek_backward(opts_.batch_size);
               print(query) << "seeked -" << n << " events" << std::endl;
             }
             break;
@@ -618,19 +682,26 @@ void console::act()
           case 's':
             {
               // TODO: look if same AST already exists under a different file.
-              auto const file =
-                dir_ / "results" / path{to_string(current_result_->id())};
+              auto const dir =
+                dir_ / "results" / path{to_string(current_.second->id())};
 
-              if (exists(file))
+              if (exists(dir))
               {
-                print(error) << "results already saved " << std::endl;
-                // TODO: allow overwriting
+                // TODO: support option to overwrite/append.
+                print(error) << "results already exists" << std::endl;
               }
               else
               {
-                auto n = current_result_->size();
-                print(query) << "saving result to " << file  << std::endl;
-                io::archive(file, *current_result_);
+                if (! mkdir(dir))
+                {
+                  print(error) << "failed to create dir: " << dir << std::endl;
+                  quit(exit::error);
+                  return;
+                }
+                auto n = current_.second->size();
+                print(query) << "saving result to " << dir  << std::endl;
+                io::archive(dir / "meta", *current_.second);
+                current_.second->save(dir / "data");
                 print(query) << "saved " << n << " events" << std::endl;
               }
 
@@ -653,7 +724,14 @@ char const* console::description() const
   return "console";
 }
 
-std::ostream& console::print(print_mode mode) const
+void console::show_prompt(size_t ms)
+{
+  // The delay allows for logging messages to trickle through first
+  // before we print the prompt.
+  delayed_send(self, std::chrono::milliseconds(ms), atom("prompt"));
+}
+
+std::ostream& console::print(print_mode mode)
 {
   switch (mode)
   {
@@ -665,7 +743,7 @@ std::ostream& console::print(print_mode mode) const
       break;
     case query:
       std::cerr
-        << util::color::cyan << "[query " << current_result_->id() << "] ";
+        << util::color::cyan << "[query " << current_.second->id() << "] ";
       break;
     case warn:
       std::cerr << util::color::yellow << "[warning] ";
@@ -675,37 +753,6 @@ std::ostream& console::print(print_mode mode) const
   std::cerr << util::color::reset;
 
   return std::cerr;
-}
-
-void console::show_prompt(size_t ms)
-{
-  // The delay allows for logging messages to trickle through first
-  // before we print the prompt.
-  delayed_send(self, std::chrono::milliseconds(ms), atom("prompt"));
-}
-
-std::pair<actor_ptr, console::result*>
-console::to_result(std::string const& str)
-{
-  std::vector<result*> matches;
-  actor_ptr qry = nullptr;
-  for (auto& p : results_)
-  {
-    auto candidate = to<std::string>(p.second.id());
-    auto i = std::mismatch(str.begin(), str.end(), candidate.begin());
-    if (i.first == str.end())
-    {
-      qry = p.first;
-      matches.push_back(&p.second);
-    }
-  }
-  if (matches.empty())
-    print(error) << "no such query: " << str << std::endl;
-  else if (matches.size() > 1)
-    print(error) << "ambiguous query: " << str << std::endl;
-  else
-    return {qry, matches[0]};
-  return {nullptr, nullptr};
 }
 
 } // namespace vast
