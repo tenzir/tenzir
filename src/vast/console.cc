@@ -114,7 +114,7 @@ console::console(cppa::actor_ptr search, path dir)
       {
         uint64_t n;
         auto begin = args.begin();
-        if (! extract(begin, args.end(), n))
+        if (extract(begin, args.end(), n))
         {
           opts_.batch_size = n;
           return true;
@@ -640,8 +640,10 @@ void console::act()
             {
               if (current_.first)
               {
-                send(current_.first, atom("extract"));
-                print(query) << "asks for more results" << std::endl;
+                send(current_.first, atom("extract"), opts_.batch_size);
+                print(query)
+                  << "asks for " << opts_.batch_size
+                  << " more results" << std::endl;
               }
               else
               {
