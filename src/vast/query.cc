@@ -15,126 +15,19 @@ query::query(expr::ast ast, std::function<void(event)> fn)
 {
 }
 
-void query::update(bitstream hits)
+query::query_state query::state() const
 {
-  assert(hits);
-
-  if (hits_)
-    hits_ |= hits;
-  else
-    hits_ = std::move(hits);
-
-  unprocessed_ = hits_ - processed_;
+  return state_;
 }
 
-bool query::add(cow<segment> s)
+size_t query::segments() const
 {
-  return segments_.insert(s->base(), s->base() + s->events(), std::move(s));
+  return segments_.size();
 }
 
-void query::consolidate(size_t before, size_t after)
-{
-  std::vector<event_id> remove;
-  auto id = current_->base();
-  segments_.each(
-      [&](event_id l, event_id r, cow<segment> const&)
-      {
-        if (l < id)
-        {
-          remove.push_back(l);
-        }
-        else if (id == l)
-        {
-          if (remove.size() >= before)
-            remove.resize(remove.size() - before);
-        }
-        else if (id < r)
-        {
-          if (after > 0)
-            --after;
-          else
-            remove.push_back(r);
-        }
-        else
-        {
-          assert(! "should never happen");
-        }
-      });
-
-  for (auto i : remove)
-  {
-    VAST_LOG_DEBUG("purging segment with base " << i);
-    segments_.erase(i);
-  }
-}
-
-trial<size_t> query::extract()
-{
-  if (unprocessed_.empty())
-    return error{"query has no unprocessed hits available"};
-
-  if (! reader_)
-  {
-    auto last = unprocessed_.find_last();
-    assert(last != bitstream::npos);
-
-    if (auto s = segments_.lookup(last))
-      current_ = *s;
-    else
-      return error{"query has not (yet) a segment for id " + to_string(last)};
-
-    reader_ = make_unique<segment::reader>(&current_.read());
-    VAST_LOG_DEBUG("query instantiates reader for segment " <<
-                   current_->id() << " [" << current_->base() << ','
-                   << current_->base() + current_->events() << ')');
-
-    // The masked bitstream represents all unprocessed hits in the current
-    // segment.
-    masked_.append(current_->base(), false);
-    masked_.append(current_->events(), true);
-    masked_ &= unprocessed_;
-  }
-
-  if (masked_.empty())
-    VAST_LOG_WARN("query has no hits for current segment " << current_->id());
-
-  size_t n = 0;
-  for (auto id : masked_)
-  {
-    auto e = reader_->read(id);
-    if (! e)
-      return error{"query failed to extract event " + to_string(id)};
-
-    if (evaluate(ast_, *e).get<bool>())
-    {
-      fn_(std::move(*e));
-      ++n;
-    }
-    else
-    {
-      VAST_LOG_WARN("query " << ast_ << " ignores false positive: " << *e);
-    }
-  }
-
-  processed_ |= masked_;
-  unprocessed_ -= masked_;
-  masked_.clear();
-
-  // We've processed this segment entirely and the next call to extract
-  // should instantiate a new reader for a different segment.
-  reader_.reset();
-
-  if (n == 0)
-    VAST_LOG_WARN("query could not find a single result in segment " <<
-                  current_->id());
-
-  return n;
-}
-
-std::vector<event_id> query::scan() const
+std::vector<event_id> query::next() const
 {
   std::vector<event_id> eids;
-
   if (segments_.empty())
   {
     if (auto id = unprocessed_.find_last())
@@ -157,8 +50,135 @@ std::vector<event_id> query::scan() const
         });
   }
 
+  std::reverse(eids.begin(), eids.end());
+
   return eids;
 }
+
+void query::add(bitstream hits)
+{
+  assert(hits);
+
+  if (hits_)
+    hits_ |= hits;
+  else
+    hits_ = std::move(hits);
+
+  unprocessed_ = hits_ - processed_;
+
+  if (unprocessed_.empty())
+    state_ = idle;
+  else if (state_ == idle)
+    state_ = waiting;
+}
+
+bool query::add(cow<segment> s)
+{
+  auto ok = segments_.insert(s->base(), s->base() + s->events(), std::move(s));
+  if (! ok)
+    return false;
+
+  if (state_ == waiting && instantiate())
+    state_ = ready;
+
+  return true;
+}
+
+trial<uint64_t> query::extract(uint64_t max)
+{
+  assert(state_ == ready || state_ == extracting);
+
+  state_ = extracting;
+
+  uint64_t n = 0;
+  for (auto id : masked_)
+  {
+    auto e = reader_->read(id);
+    if (! e)
+    {
+      state_ = failed;
+      return error{"query failed to extract event " + to_string(id)};
+    }
+
+    if (evaluate(ast_, *e).get<bool>())
+    {
+      fn_(std::move(*e));
+      if (++n == max && id != masked_.find_last())
+      {
+        bitstream partial = bitstream_type{id + 1, true};
+        partial &= masked_;
+        processed_ |= partial;
+        unprocessed_ -= partial;
+        masked_ -= partial;
+
+        return max;
+      }
+    }
+    else
+    {
+      VAST_LOG_WARN("query " << ast_ << " ignores false positive: " << *e);
+    }
+  }
+
+  if (n == 0)
+    VAST_LOG_WARN("query could not find a single result in segment " <<
+                  current_->id());
+
+  processed_ |= masked_;
+  unprocessed_ -= masked_;
+  masked_.clear();
+  reader_.reset();
+
+  if (segments_.erase(current_->base()))
+  {
+    VAST_LOG_DEBUG("query removed segment with base " << current_->base());
+  }
+  else
+  {
+    state_ = failed;
+    return error{"failed to remove fully processed segment with base " +
+                 to_string(current_->base())};
+  }
+
+  // We technically could also instantiate a prefetched segment at this point,
+  // but doing so avoids the ability to prefetch another one.
+  if (unprocessed_.empty())
+    state_ = idle;
+  else if (instantiate())
+    state_ = ready;
+  else
+    state_ = waiting;
+
+  return n;
+}
+
+bool query::instantiate()
+{
+  assert(state_ == waiting || state_ == extracting);
+  assert(! unprocessed_.empty());
+  assert(! reader_);
+
+  auto last = unprocessed_.find_last();
+
+  if (auto s = segments_.lookup(last))
+    current_ = *s;
+  else
+    return false;
+
+  reader_ = make_unique<segment::reader>(&current_.read());
+  VAST_LOG_DEBUG("query instantiates reader for segment " <<
+                 current_->id() << " [" << current_->base() << ','
+                 << current_->base() + current_->events() << ')');
+
+  masked_.append(current_->base(), false);
+  masked_.append(current_->events(), true);
+  masked_ &= unprocessed_;
+
+  assert(! masked_.empty());
+
+  return true;
+}
+
 
 using namespace cppa;
 
@@ -173,24 +193,78 @@ void query_actor::act()
 {
   chaining(false);
 
-  auto scan = [=]()
+  auto prefetch = [=](size_t max)
   {
-    for (auto eid : query_.scan())
+    // Don't count the instantiated segment.
+    if (query_.state() == query::ready || query_.state() == query::extracting)
+      ++max;
+
+    auto segments = query_.segments();
+    auto ids = query_.next();
+    if (segments >= max)
+      return;
+
+    ids.resize(std::min(ids.size(), max - segments));
+    for (auto i : ids)
     {
-      send(archive_, atom("segment"), eid);
-      VAST_LOG_ACTOR_DEBUG("asks for segment containing id " << eid);
+      if (std::find(inflight_.begin(), inflight_.end(), i) == inflight_.end())
+      {
+        inflight_.push_back(i);
+        send(archive_, atom("segment"), i);
+        VAST_LOG_ACTOR_DEBUG("asks for segment containing id " << i);
+      }
     }
   };
 
-  auto extract = [=]()
+  auto extract = [=](uint64_t n)
   {
-    auto got = query_.extract();
-    if (got)
-      VAST_LOG_ACTOR_DEBUG("extracted " << got.value() << " events");
-    else
-      VAST_LOG_ACTOR_DEBUG("extract failed: " << got.failure());
-  };
+    auto s = query_.state();
 
+    if (s == query::idle)
+    {
+      VAST_LOG_ACTOR_DEBUG("ignores extraction request in idle state");
+    }
+    else if (s == query::waiting)
+    {
+      VAST_LOG_ACTOR_DEBUG("scans for new segments");
+      prefetch(prefetch_);
+    }
+    else if (s == query::done)
+    {
+      VAST_LOG_ACTOR_DEBUG("completed processing");
+      send(sink_, atom("done"));
+      quit(exit::done);
+    }
+    else if (s == query::failed)
+    {
+      send(sink_, atom("failed"));
+      quit(exit::error);
+    }
+    else
+    {
+      assert(s == query::ready || s == query::extracting);
+
+      auto t = query_.extract(n);
+      if (! t)
+      {
+        VAST_LOG_ACTOR_ERROR(t.failure().msg());
+        quit(exit::error);
+        return;
+      }
+
+      VAST_LOG_ACTOR_DEBUG("extracted " << *t << " events");
+
+      // When we finished processing a segment we remove it. If we have more
+      // segments left, we land back in "ready" state. At this point we check
+      // again because we may continue extracting for a while.
+      if (query_.state() == query::ready)
+        prefetch(prefetch_);
+
+      total_extracted_ += *t;
+      if (n > *t)
+        send(self, atom("extract"), n - *t);
+    }
+  };
 
   become(
       on_arg_match >> [=](bitstream const& hits)
@@ -201,19 +275,21 @@ void query_actor::act()
         VAST_LOG_ACTOR_DEBUG("got index hit [" << hits.find_first()
                              << ',' << hits.find_last() << ']');
 
-        query_.update(hits);
+        query_.add(hits);
 
-        scan();
-        extract();
-      },
-      on(atom("no segment"), arg_match) >> [=](event_id eid)
-      {
-        VAST_LOG_ACTOR_ERROR("could not obtain segment for event ID " << eid);
-        quit(exit::error);
+        if (query_.state() == query::waiting)
+          prefetch(prefetch_);
       },
       on_arg_match >> [=](segment const&)
       {
         cow<segment> s = *tuple_cast<segment>(last_dequeued());
+
+        auto i = std::remove_if(
+            inflight_.begin(),
+            inflight_.end(),
+            [&s](event_id eid) { return s->contains(eid); });
+
+        inflight_.erase(i, inflight_.end());
 
         if (! query_.add(s))
           VAST_LOG_ACTOR_WARN("ignores duplicate segment " << s->id());
@@ -222,10 +298,16 @@ void query_actor::act()
               "added segment " << s->id() <<
               " [" << s->base() << ", " << s->base() + s->events() << ")");
 
-        query_.consolidate();
+        prefetch(prefetch_);
 
-        scan();
-        extract();
+        if (total_extracted_ == 0 && query_.state() == query::ready)
+          extract(uint64_t{100});
+      },
+      on(atom("extract"), arg_match) >> extract,
+      on(atom("no segment"), arg_match) >> [=](event_id eid)
+      {
+        VAST_LOG_ACTOR_ERROR("could not obtain segment for event ID " << eid);
+        quit(exit::error);
       },
       others() >> [=]
       {
