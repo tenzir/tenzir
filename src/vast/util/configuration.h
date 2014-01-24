@@ -397,7 +397,7 @@ private:
           p.second.end(),
           [&](std::string const& dep) { return check(dep); });
 
-      if (! check(p.first) && any)
+      if (check(p.first) && ! any)
         return false;
     }
 
