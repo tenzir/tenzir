@@ -60,17 +60,19 @@ bitstream const& partition::coverage() const
 
 void partition::load()
 {
-  if (! exists(dir_))
-    mkdir(dir_);
-  else if (exists(dir_ / "coverage"))
+  if (exists(dir_ / "coverage"))
     io::unarchive(dir_ / "coverage", coverage_);
 }
 
 void partition::save()
 {
-  assert(exists(dir_));
   if (coverage_)
+  {
+    if (! exists(dir_))
+      mkdir(dir_);
+
     io::archive(dir_ / "coverage", coverage_);
+  }
 }
 
 void partition::update(event_id base, size_t n)

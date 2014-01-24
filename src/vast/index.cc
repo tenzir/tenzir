@@ -48,9 +48,9 @@ void index_actor::act()
 
   if (! partitions_.empty())
   {
-    active_ = partitions_.rbegin()->second;
-    VAST_LOG_ACTOR_DEBUG("sets active partition to " <<
-                         partitions_.rbegin()->first);
+    auto active = partitions_.rbegin();
+    VAST_LOG_ACTOR_INFO("sets existing partition as active: " << active->first);
+    active_ = active->second;
   }
 
   become(
@@ -93,9 +93,9 @@ void index_actor::act()
         auto part_dir = path{part};
 
         if (exists(dir_ / part_dir))
-          VAST_LOG_ACTOR_ERROR("appending to existing partition " << part);
+          VAST_LOG_ACTOR_INFO("appends to existing partition " << part);
         else
-          VAST_LOG_ACTOR_INFO("creating new partition " << part);
+          VAST_LOG_ACTOR_INFO("creates new partition " << part);
 
         if (! partitions_.count(part_dir))
         {
@@ -103,6 +103,7 @@ void index_actor::act()
           partitions_.emplace(part_dir, a);
         }
 
+        VAST_LOG_ACTOR_INFO("sets active partition to " << part_dir);
         active_ = partitions_[part_dir];
         assert(active_);
       },
@@ -125,16 +126,10 @@ void index_actor::act()
       {
         if (partitions_.empty())
         {
-          if (! exists(dir_) && ! mkdir(dir_))
-          {
-            VAST_LOG_ACTOR_ERROR("failed to create index directory: " << dir_);
-            return make_any_tuple(atom("segment"), atom("nack"), s.id());
-            quit(exit::error);
-          }
-
           auto id = uuid::random();
           VAST_LOG_ACTOR_INFO("creates new random partition " << id);
           auto part_dir = dir_ / to<string>(id);
+          assert(! exists(part_dir));
           auto p = spawn<partition_actor, monitored>(part_dir);
           active_ = p;
           partitions_.emplace(part_dir.basename(), std::move(p));
