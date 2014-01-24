@@ -1,7 +1,6 @@
 #ifndef VAST_INDEX_H
 #define VAST_INDEX_H
 
-#include <set>
 #include "vast/actor.h"
 #include "vast/file_system.h"
 
@@ -19,7 +18,7 @@ struct index_actor : actor<index_actor>
 
   path dir_;
   cppa::actor_ptr active_;
-  std::set<cppa::actor_ptr> partitions_;
+  std::map<path, cppa::actor_ptr> partitions_;
 };
 
 } // namespace vast

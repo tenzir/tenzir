@@ -103,6 +103,7 @@ void configuration::initialize()
   auto& index = create_block("index options", "index");
   index.add("host", "hostname/address of the archive").init("127.0.0.1");
   index.add("port", "TCP port of the index").init(42004);
+  index.add("partition", "name of the partition to append to");
   index.add("rebuild", "rebuild indexes from archive");
   index.visible(false);
 
@@ -126,6 +127,9 @@ void configuration::initialize()
   add_conflict("console-actor", "ingestor-actor");
   add_conflict("console-actor", "search-actor");
 #endif
+
+  add_dependencies("index.partition", {"index-actor", "all-server"});
+  add_conflict("index.rebuild", "index.partition");
 }
 
 } // namespace vast

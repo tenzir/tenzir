@@ -144,7 +144,11 @@ void program::act()
       index = remote_actor(index_host, index_port);
     }
 
-    if (config_.check("index.rebuild"))
+    if (auto partition = config_.get("index.partition"))
+    {
+      send(index, atom("partition"), *partition);
+    }
+    else if (config_.check("index.rebuild"))
     {
       become(
         on_arg_match >> [=](segment const& s)

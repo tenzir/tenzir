@@ -34,29 +34,23 @@ public:
   bool meta = true;
 };
 
-} // namespace <anonymous>
-
-bool partition::is_meta_query(expr::ast const& ast)
+bool is_meta_query(expr::ast const& ast)
 {
   discriminator visitor;
   ast.accept(visitor);
   return visitor.meta;
 }
 
+} // namespace <anonymous>
+
 partition::partition(path dir)
-  : dir_{std::move(dir)},
-    last_modified_{now()}
+  : dir_{std::move(dir)}
 {
 }
 
 path const& partition::dir() const
 {
   return dir_;
-}
-
-time_point partition::last_modified() const
-{
-  return last_modified_;
 }
 
 bitstream const& partition::coverage() const
@@ -67,25 +61,16 @@ bitstream const& partition::coverage() const
 void partition::load()
 {
   if (! exists(dir_))
-  {
     mkdir(dir_);
-  }
   else if (exists(dir_ / "coverage"))
-  {
-    assert(exists(dir_ / "last_modified"));
-    io::unarchive(dir_ / "last_modified", last_modified_);
     io::unarchive(dir_ / "coverage", coverage_);
-  }
 }
 
 void partition::save()
 {
   assert(exists(dir_));
   if (coverage_)
-  {
-    io::archive(dir_ / "last_modified", last_modified_);
     io::archive(dir_ / "coverage", coverage_);
-  }
 }
 
 void partition::update(event_id base, size_t n)
@@ -98,8 +83,6 @@ void partition::update(event_id base, size_t n)
     coverage_ = std::move(bs);
   else
     coverage_ |= bs;
-
-  last_modified_ = now();
 }
 
 partition_actor::partition_actor(path dir)
@@ -140,7 +123,7 @@ void partition_actor::act()
 
         assert(partition_.coverage());
         auto t = make_any_tuple(ast, partition_.coverage(), sink);
-        if (partition::is_meta_query(ast))
+        if (is_meta_query(ast))
           event_meta_index_ << t;
         else
           for (auto& p : event_arg_indexes_)

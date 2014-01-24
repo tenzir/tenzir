@@ -27,37 +27,31 @@ void index_actor::act()
   chaining(false);
   trap_exit(true);
 
-  auto latest = time_point{0};
   traverse(
       dir_,
       [&](path const& p) -> bool
       {
-        // If the meta data of a partition does not exist, we have a file
-        // system inconsistency and ignore the partition entirely.
-        if (! exists(p / "last_modified") || ! exists(p / "coverage"))
+        if (! exists(p / "coverage"))
         {
-          VAST_LOG_ACTOR_WARN("missing meta data for partition " << p);
-          return true;
+          // If the meta data of a partition does not exist, we have a file
+          // system inconsistency and ignore the partition.
+          VAST_LOG_ACTOR_WARN("couldn't find meta data for partition " << p);
         }
-
-        auto part = spawn<partition_actor, monitored>(p);
-        partitions_.emplace(part);
-
-        time_point tp;
-        io::unarchive(p / "last_modified", tp);
-        if (tp > latest)
+        else
         {
-          latest = tp;
-          active_ = part;
+          auto part = spawn<partition_actor, monitored>(p);
+          partitions_.emplace(p.basename(), part);
         }
 
         return true;
       });
 
-  if (active_)
-    VAST_LOG_ACTOR_DEBUG(
-        "marked partition " << VAST_ACTOR_ID(active_) <<
-        " as active (" << latest << ")");
+  if (! partitions_.empty())
+  {
+    active_ = partitions_.rbegin()->second;
+    VAST_LOG_ACTOR_DEBUG("sets active partition to " <<
+                         partitions_.rbegin()->first);
+  }
 
   become(
       on(atom("EXIT"), arg_match) >> [=](uint32_t reason)
@@ -66,14 +60,18 @@ void index_actor::act()
           quit(reason);
         else
           for (auto& p : partitions_)
-            send_exit(p, reason);
+            send_exit(p.second, reason);
       },
-
       on(atom("DOWN"), arg_match) >> [=](uint32_t reason)
       {
         VAST_LOG_ACTOR_DEBUG("got DOWN from " << VAST_ACTOR_ID(last_sender()));
 
-        partitions_.erase(last_sender());
+        for (auto i = partitions_.begin(); i != partitions_.end(); ++i)
+          if (i->second == last_sender())
+          {
+            partitions_.erase(i);
+            break;
+          }
 
         if (reason == exit::stop)
         {
@@ -90,7 +88,24 @@ void index_actor::act()
           quit(exit::error);
         }
       },
+      on(atom("partition"), arg_match) >> [=](std::string const& part)
+      {
+        auto part_dir = path{part};
 
+        if (exists(dir_ / part_dir))
+          VAST_LOG_ACTOR_ERROR("appending to existing partition " << part);
+        else
+          VAST_LOG_ACTOR_INFO("creating new partition " << part);
+
+        if (! partitions_.count(part_dir))
+        {
+          auto a = spawn<partition_actor, monitored>(dir_ / part_dir);
+          partitions_.emplace(part_dir, a);
+        }
+
+        active_ = partitions_[part_dir];
+        assert(active_);
+      },
       on_arg_match >> [=](expr::ast const& ast)
       {
         if (partitions_.empty())
@@ -99,12 +114,13 @@ void index_actor::act()
           return;
         }
 
-        VAST_LOG_ACTOR_DEBUG("sends predicate " << ast <<
-                             " to partition " << VAST_ACTOR_ID(active_));
-
-        send(active_, ast, last_sender());
+        for (auto i = partitions_.rbegin(); i != partitions_.rend(); ++i)
+        {
+          send(i->second, ast, last_sender());
+          VAST_LOG_ACTOR_DEBUG("sent predicate " << ast <<
+                               " to partition " << VAST_ACTOR_ID(i->second));
+        }
       },
-
       on_arg_match >> [=](segment const& s)
       {
         if (partitions_.empty())
@@ -117,16 +133,16 @@ void index_actor::act()
           }
 
           auto id = uuid::random();
-          VAST_LOG_ACTOR_INFO("creates new partition " << id);
-          auto p = spawn<partition_actor, monitored>(dir_ / to<string>(id));
+          VAST_LOG_ACTOR_INFO("creates new random partition " << id);
+          auto part_dir = dir_ / to<string>(id);
+          auto p = spawn<partition_actor, monitored>(part_dir);
           active_ = p;
-          partitions_.emplace(std::move(p));
+          partitions_.emplace(part_dir.basename(), std::move(p));
         }
 
         forward_to(active_);
         return make_any_tuple(atom("segment"), atom("ack"), s.id());
       },
-
       on(atom("delete")) >> [=]
       {
         if (partitions_.empty())
@@ -144,7 +160,13 @@ void index_actor::act()
                     "got DOWN from " << VAST_ACTOR_ID(last_sender()) <<
                     " with unexpected exit code " << reason);
 
-              partitions_.erase(last_sender());
+              for (auto i = partitions_.begin(); i != partitions_.end(); ++i)
+                if (i->second == last_sender())
+                {
+                  partitions_.erase(i);
+                  break;
+                }
+
               if (partitions_.empty())
               {
                 if (! rm(dir_))
@@ -162,9 +184,8 @@ void index_actor::act()
         );
 
         for (auto& p : partitions_)
-          send_exit(p, exit::kill);
+          send_exit(p.second, exit::kill);
       });
-
 }
 
 } // namespace vast

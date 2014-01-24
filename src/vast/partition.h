@@ -5,7 +5,6 @@
 #include "vast/bitstream.h"
 #include "vast/file_system.h"
 #include "vast/fwd.h"
-#include "vast/time.h"
 #include "vast/string.h"
 
 namespace vast {
@@ -14,9 +13,6 @@ namespace vast {
 class partition
 {
 public:
-  /// Checks whether an expression looks at event meta data or not.
-  static bool is_meta_query(expr::ast const& ast);
-
   /// Constructs a partition.
   /// @param dir The absolute path of the partition.
   partition(path dir);
@@ -25,16 +21,13 @@ public:
   /// @returns The absolute path to the partition directory.
   path const& dir() const;
 
-  /// Retrieves the time point of last modification.
-  time_point last_modified() const;
-
   /// Retrieves the coverage bitmap.
   bitstream const& coverage() const;
 
-  /// Loads the partition meta data from the filesystem.
+  /// Loads the partition meta index from the filesystem.
   void load();
 
-  /// Saves the partition meta data to the filesystem.
+  /// Saves the partition meta index to the filesystem.
   void save();
 
   /// Updates the partition meta data for a given event range.
@@ -42,7 +35,6 @@ public:
 
 private:
   path dir_;
-  time_point last_modified_;
   bitstream coverage_;
 };
 
@@ -54,7 +46,7 @@ struct partition_actor : actor<partition_actor>
   char const* description() const;
 
   partition partition_;
-  std::map<string, cppa::actor_ptr> event_arg_indexes_;
+  std::unordered_map<string, cppa::actor_ptr> event_arg_indexes_;
   cppa::actor_ptr event_meta_index_;
 };
 
