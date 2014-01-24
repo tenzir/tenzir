@@ -153,7 +153,7 @@ void partition_actor::act()
 
         size_t const batch_size = 5000;  // TODO: Make configurable.
         std::vector<cow<event>> meta_events;
-        std::map<string, std::vector<cow<event>>> arg_events;
+        std::unordered_map<string, std::vector<cow<event>>> arg_events;
 
         segment::reader r{&s};
         while (auto e = r.read())
