@@ -112,7 +112,7 @@ private:
 };
 
 template <typename ForwardIterator>
-class iterator_range : range<iterator_range<ForwardIterator>>
+class iterator_range : public range<iterator_range<ForwardIterator>>
 {
 public:
   template <typename Iterator>
