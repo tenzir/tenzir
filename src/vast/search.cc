@@ -8,37 +8,6 @@ namespace vast {
 
 namespace {
 
-// Extracts all (leaf) predicates from an AST.
-class predicator : public expr::default_const_visitor
-{
-public:
-  predicator(std::vector<expr::ast>& predicates)
-    : predicates_{predicates}
-  {
-  }
-
-  virtual void visit(expr::conjunction const& conj)
-  {
-    for (auto& op : conj.operands)
-      op->accept(*this);
-  }
-
-  virtual void visit(expr::disjunction const& disj)
-  {
-    for (auto& op : disj.operands)
-      op->accept(*this);
-  }
-
-  virtual void visit(expr::predicate const& pred)
-  {
-    predicates_.emplace_back(pred);
-  }
-
-private:
-  std::vector<expr::ast>& predicates_;
-};
-
-
 // Computes the result of a conjunction by ANDing the results of all of its
 // child nodes.
 struct conjunction_evaluator : public expr::default_const_visitor
@@ -325,12 +294,7 @@ void search_actor::act()
         auto qry = spawn<query_actor>(archive_, last_sender(), *ast);
         auto i = query_state_.emplace(*ast, query_state{qry, last_sender()});
 
-        // Deconstruct the AST into its predicates and ask the index for those
-        // we have no results for.
-        std::vector<expr::ast> predicates;
-        predicator visitor{predicates};
-        ast->accept(visitor);
-        for (auto& pred : predicates)
+        for (auto& pred : expr::predicatize(*ast))
         {
           auto r = search_.result(pred);
           if (! r || ! *r)

@@ -255,9 +255,13 @@ private:
 };
 
 /// Evaluates an expression node for a given event.
-/// @relates evaluator
 value evaluate(node const& n, event const& e);
 value evaluate(ast const& a, event const& e);
+
+// Extracts all (leaf) predicates from an AST.
+// @param a The AST to predicatize.
+// @returns All leaf predicates of *a*.
+std::vector<ast> predicatize(ast const& a);
 
 bool convert(node const& n, std::string& str, bool tree = false);
 

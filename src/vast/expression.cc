@@ -1336,7 +1336,45 @@ private:
   std::string& str_;
 };
 
+class predicator : public expr::default_const_visitor
+{
+public:
+  predicator(std::vector<expr::ast>& predicates)
+    : predicates_{predicates}
+  {
+  }
+
+  virtual void visit(expr::conjunction const& conj)
+  {
+    for (auto& op : conj.operands)
+      op->accept(*this);
+  }
+
+  virtual void visit(expr::disjunction const& disj)
+  {
+    for (auto& op : disj.operands)
+      op->accept(*this);
+  }
+
+  virtual void visit(expr::predicate const& pred)
+  {
+    predicates_.emplace_back(pred);
+  }
+
+private:
+  std::vector<expr::ast>& predicates_;
+};
+
 } // namespace <anonymous>
+
+std::vector<ast> predicatize(ast const& a)
+{
+  std::vector<ast> predicates;
+  predicator p{predicates};
+  a.accept(p);
+  return predicates;
+}
+
 
 bool convert(node const& n, std::string& str, bool tree)
 {
