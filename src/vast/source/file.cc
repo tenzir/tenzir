@@ -344,7 +344,7 @@ optional<event> bro2::parse(std::string const& line)
       continue;
     }
 
-    if (field_types_[f] == record_type)
+    if (field_types_[f] == record_type || field_types_[f] == table_type)
     {
       record r;
       if (! extract(start, end, r, complex_types_[containers++],
