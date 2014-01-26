@@ -30,7 +30,18 @@ template <typename, typename>
 struct visit_impl;
 } // namespace detail
 
-/// A value.
+/// A discriminated union container for numerous types with value semantics.
+/// A value has one of three states:
+///
+///     1. invalid
+///     2. empty but typed
+///     3. engaged with a value.
+///
+/// An *invalid* value is untyped and has not been set. An empty or *nil* value
+/// has a type, but has not yet been set. This state exists to model
+/// `optional<T>` semantics where `T` is a value type. A nil value is thus
+/// equivalent to a disengaged optional value. Finally, an *engaged* type
+/// contains a valid instance of some value type `T`.
 class value : util::parsable<value>,
               util::printable<value>
 {
