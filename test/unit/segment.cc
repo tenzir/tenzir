@@ -61,7 +61,7 @@ BOOST_AUTO_TEST_CASE(segment_seeking)
   BOOST_REQUIRE_EQUAL(s.events(), 1024);
 
   segment::reader r{&s};
-  optional<event> e;
+  trial<event> e = error{"not yet assigned"};
 
   BOOST_CHECK(r.seek(1042));
   e = r.read();

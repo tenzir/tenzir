@@ -11,6 +11,7 @@
 #include "vast/uuid.h"
 #include "vast/io/compression.h"
 #include "vast/util/operators.h"
+#include "vast/util/result.h"
 
 namespace vast {
 
@@ -78,14 +79,6 @@ public:
     /// were no events to flush.
     bool flush();
 
-    /// Tests whether the underlying segment is full, i.e., can no longer take
-    /// chunks because they would exceed the maximum segment size provided at
-    /// construction time of this writer.
-    ///
-    /// @returns `true` *iff* the writer has a maximum segment size and the
-    /// current chunk exceeds it.
-    bool full() const;
-
     /// Retrieves the number of bytes processed in total.
     /// @returns The number of bytes written into this writer.
     size_t bytes() const;
@@ -114,8 +107,8 @@ public:
 
     /// Reads the next event from the current position.
     /// @param id If non-zero, specifies the ID of the event to extract.
-    /// @returns An engaged event upon success.
-    optional<event> read(event_id id = 0);
+    /// @returns The extracted event on success.
+    trial<event> read(event_id id = 0);
 
     /// Seeks to an event with a given ID.
     ///
@@ -160,13 +153,17 @@ public:
 
     /// Skips over a given number of events.
     /// @param n The number of events to skip.
-    /// @returns The number of events actually skipped.
-    event_id skip(size_t n);
+    /// @returns The number of events skipped on success.
+    trial<event_id> skip(size_t n);
 
     /// Loads the next event.
-    /// @param e The event to load into. If `nullptr`, equivalent to skipping.
-    /// @returns `true` on success.
-    bool load(event* e);
+    ///
+    /// @param discard Flag indicating whether to discard or return the
+    /// deserialized event.
+    ///
+    /// @returns An event if *discard* was `false` and an empty result if
+    /// *discard* was `true`.
+    result<event> load(bool discard = false);
 
     /// Checks whether a given ID falls into the current chunk.
     /// @param eid The event ID to check.
@@ -225,8 +222,8 @@ public:
 
   /// Extracts a single event with a given ID.
   /// @param id The ID of the event.
-  /// @returns The event having ID *id* or an disengaged option otherwise.
-  optional<event> load(event_id id) const;
+  /// @returns The event having ID *id* on success
+  trial<event> load(event_id id) const;
 
   /// Writes a vector of events into the segment.
   /// @param v The vector of events to write.

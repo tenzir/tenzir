@@ -145,16 +145,19 @@ event_id segment::reader::position() const
   return next_;
 }
 
-optional<event> segment::reader::read(event_id id)
+trial<event> segment::reader::read(event_id id)
 {
   if (id > 0 && ! seek(id))
-    return {};
+    return error{"event id " + to_string(id) + " out of bounds"};
 
-  event e;
-  if (! load(&e))
-    return {};
+  auto r = load();
+  if (r.engaged())
+    return {std::move(r.value())};
+  else if (r.failed())
+    return r.failure();
 
-  return {std::move(e)};
+  assert(! r.empty());
+  return error{"empty event"}; // should never happen.
 }
 
 bool segment::reader::seek(event_id id)
@@ -185,7 +188,13 @@ bool segment::reader::seek(event_id id)
 
   assert(id >= next_);
   auto n = id - next_;
-  return skip(n) == n;
+
+  auto r = skip(n);
+  if (r)
+    return *r == n;
+
+  VAST_LOG_ERROR(r.failure().msg());
+  return false;
 }
 
 optional<size_t> segment::reader::extract(event_id begin,
@@ -262,50 +271,41 @@ event_id segment::reader::backup()
   return distance;
 }
 
-bool segment::reader::load(event* e)
+result<event> segment::reader::load(bool discard)
 {
   if (! chunk_reader_ || chunk_reader_->available() == 0)
-    return next() ? load(e) : false;
+    return next() ? load(discard) : error{"no more events to load"};
 
   string name;
   if (! chunk_reader_->read(name, 0))
-  {
-    VAST_LOG_ERROR("failed to read event name from chunk");
-    return false;
-  }
+    return error{"failed to read event name from chunk"};
 
   time_point t;
   if (! chunk_reader_->read(t, 0))
-  {
-    VAST_LOG_ERROR("failed to read event timestamp from chunk");
-    return false;
-  }
+    return error{"failed to read event timestamp from chunk"};
 
   std::vector<value> v;
   if (! chunk_reader_->read(v))
-  {
-    VAST_LOG_ERROR("failed to read event arguments from chunk");
-    return false;
-  }
+    return error{"failed to read event arguments from chunk"};
 
-  if (e != nullptr)
+  if (! discard)
   {
-    event r(std::move(v));
-    r.name(std::move(name));
-    r.timestamp(t);
+    event e(std::move(v));
+    e.name(std::move(name));
+    e.timestamp(t);
     if (next_ > 0)
-      r.id(next_);
+      e.id(next_++);
 
-    *e = std::move(r);
+    return {std::move(e)};
   }
 
   if (next_ > 0)
     ++next_;
 
-  return true;
+  return {};
 }
 
-event_id segment::reader::skip(size_t n)
+trial<event_id> segment::reader::skip(size_t n)
 {
   if (n == 0)
     return 0;
@@ -313,8 +313,11 @@ event_id segment::reader::skip(size_t n)
   event_id skipped = 0;
   while (n --> 0)
   {
-    if (! load(nullptr))
-      break;
+    auto r = load(true);
+    assert(! r.engaged());
+    if (r.failed())
+      return r.failure();
+
     ++skipped;
   }
 
@@ -381,7 +384,7 @@ uint64_t segment::max_bytes() const
   return header_.max_bytes;
 }
 
-optional<event> segment::load(event_id id) const
+trial<event> segment::load(event_id id) const
 {
   return reader{this}.read(id);
 }
