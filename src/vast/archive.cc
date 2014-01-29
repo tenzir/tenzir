@@ -27,26 +27,16 @@ void archive::load()
       directory_,
       [&](path const& p) -> bool
       {
-        // FIXME: factor the segment header and load it as a single unit.
-        uint32_t magic;
-        uint8_t version;
-        uuid id;
-        io::compression c;
-        event_id base;
-        uint32_t n;
-        io::unarchive(p, magic, version, id, c, base, n);
+        segment::header header;
+        io::unarchive(p, header);
         VAST_LOG_DEBUG("found segment " << p.basename() <<
-                       " for ID range [" << base << ", " << base + n << ")");
+                       " for ID range [" << header.base << ", " <<
+                       header.base + header.n << ")");
 
-        if (magic != segment::magic)
+        if (! ranges_.insert(header.base, header.base + header.n, header.id))
         {
-          VAST_LOG_ERROR("got invalid segment magic for " << id);
-          return false;
-        }
-        else if (! ranges_.insert(base, base + n, std::move(id)))
-        {
-          VAST_LOG_ERROR("inconsistency in ID space for [" << base
-                         << ", " << base + n << ")");
+          VAST_LOG_ERROR("inconsistency in ID space for [" <<
+                         header.base << ", " << header.base + header.n << ")");
           return false;
         }
 

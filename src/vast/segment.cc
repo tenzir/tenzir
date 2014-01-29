@@ -9,17 +9,55 @@ namespace vast {
 
 // FIXME: Why does the linker complain without these definitions? These are
 // redundant to those in the header file.
-uint32_t const segment::magic;
-uint8_t const segment::version;
+uint32_t const segment::header::magic;
+uint32_t const segment::header::version;
 
-bool operator==(segment const& x, segment const& y)
+void segment::header::serialize(serializer& sink) const
 {
-  return x.id_ == y.id_;
+  sink
+    << magic << version
+    << id
+    << compression
+    << base
+    << n
+    << max_bytes
+    << occupied_bytes;
+}
+
+void segment::header::deserialize(deserializer& source)
+{
+  uint32_t m;
+  source >> m;
+  if (m != magic)
+    throw std::runtime_error{"invalid segment magic"};
+
+  uint32_t v;
+  source >> v;
+  if (v > version)
+    throw std::runtime_error{"segment version too high"};
+
+  source
+    >> id
+    >> compression
+    >> base
+    >> n
+    >> max_bytes
+    >> occupied_bytes;
+}
+
+bool operator==(segment::header const& x, segment::header const& y)
+{
+  return x.id == y.id
+      && x.compression == y.compression
+      && x.base == y.base
+      && x.n == y.n
+      && x.max_bytes == y.max_bytes
+      && x.occupied_bytes == y.occupied_bytes;
 }
 
 segment::writer::writer(segment* s, size_t max_events_per_chunk)
   : segment_(s),
-    chunk_{make_unique<chunk>(segment_->compression_)},
+    chunk_{make_unique<chunk>(segment_->header_.compression)},
     chunk_writer_{make_unique<chunk::writer>(*chunk_)},
     max_events_per_chunk_{max_events_per_chunk}
 {
@@ -61,11 +99,11 @@ bool segment::writer::flush()
       && segment_->bytes() + chunk_->compressed_bytes() > segment_->max_bytes())
     return false;
 
-  segment_->n_ += chunk_->elements();
-  segment_->occupied_bytes_ += chunk_->compressed_bytes();
+  segment_->header_.n += chunk_->elements();
+  segment_->header_.occupied_bytes += chunk_->compressed_bytes();
   segment_->chunks_.emplace_back(*chunk_);
 
-  chunk_ = make_unique<chunk>(segment_->compression_);
+  chunk_ = make_unique<chunk>(segment_->header_.compression);
   chunk_writer_ = make_unique<chunk::writer>(*chunk_);
 
   return true;
@@ -92,8 +130,8 @@ bool segment::writer::store(event const& e)
 
 segment::reader::reader(segment const* s)
   : segment_{*s},
-    next_{segment_.base_},
-    chunk_base_{segment_.base_}
+    next_{segment_.header_.base},
+    chunk_base_{segment_.header_.base}
 {
   if (! segment_.chunks_.empty())
   {
@@ -293,50 +331,54 @@ bool segment::reader::within_current_chunk(event_id eid) const
 
 
 segment::segment(uuid id, uint64_t max_bytes, io::compression method)
-  : id_{id},
-    compression_{method},
-    max_bytes_{max_bytes}
 {
+  header_.id = id;
+  header_.compression = method;
+  header_.max_bytes = max_bytes;
 }
 
 uuid const& segment::id() const
 {
-  return id_;
+  return header_.id;
 }
 
 void segment::base(event_id id)
 {
-  base_ = id;
+  header_.base = id;
 }
 
 event_id segment::base() const
 {
-  return base_;
+  return header_.base;
 }
 
 bool segment::contains(event_id eid) const
 {
-  return base_ != 0 && base_ <= eid && eid < base_ + n_;
+  return header_.base != 0
+      && header_.base <= eid
+      && eid < header_.base + header_.n;
 }
 
 bool segment::contains(event_id from, event_id to) const
 {
-  return base_ != 0 && from < to && base_ <= from && to < base_ + n_;
+  return header_.base != 0
+      && from < to && header_.base <= from
+      && to < header_.base + header_.n;
 }
 
-uint32_t segment::events() const
+uint64_t segment::events() const
 {
-  return n_;
+  return header_.n;
 }
 
 uint64_t segment::bytes() const
 {
-  return occupied_bytes_;
+  return header_.occupied_bytes;
 }
 
 uint64_t segment::max_bytes() const
 {
-  return max_bytes_;
+  return header_.max_bytes;
 }
 
 optional<event> segment::load(event_id id) const
@@ -356,38 +398,17 @@ size_t segment::store(std::vector<event> const& v, size_t max_events_per_chunk)
 
 void segment::serialize(serializer& sink) const
 {
-  sink << magic << version;
-
-  sink
-    << id_
-    << compression_
-    << base_
-    << n_
-    << max_bytes_
-    << occupied_bytes_
-    << chunks_;
+  sink << header_ << chunks_;
 }
 
 void segment::deserialize(deserializer& source)
 {
-  uint32_t m;
-  source >> m;
-  if (m != magic)
-    throw std::runtime_error{"invalid segment magic"};
+  source >> header_ >> chunks_;
+}
 
-  uint8_t v;
-  source >> v;
-  if (v > version)
-    throw std::runtime_error{"segment version too high"};
-
-  source
-    >> id_
-    >> compression_
-    >> base_
-    >> n_
-    >> max_bytes_
-    >> occupied_bytes_
-    >> chunks_;
+bool operator==(segment const& x, segment const& y)
+{
+  return x.header_ == y.header_;
 }
 
 } // namespace vast

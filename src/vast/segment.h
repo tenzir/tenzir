@@ -20,6 +20,25 @@ class event;
 class segment : util::equality_comparable<segment>
 {
 public:
+  /// Segment meta data.
+  struct header : util::equality_comparable<header>
+  {
+    static uint32_t const magic = 0x2a2a2a2a;
+    static uint32_t const version = 1;
+
+    uuid id;
+    io::compression compression;
+    event_id base = 0;
+    uint64_t n = 0;
+    uint64_t max_bytes = 0;
+    uint64_t occupied_bytes = 0;
+
+    void serialize(serializer& sink) const;
+    void deserialize(deserializer& source);
+
+    friend bool operator==(header const& x, header const& y);
+  };
+
   /// A proxy class for writing into a segment. Each writer maintains a local
   /// chunk that receives events to serialize. Upon flushing, the writer
   /// appends the chunk to the underlying segment.
@@ -162,9 +181,6 @@ public:
     std::unique_ptr<chunk::reader> chunk_reader_;
   };
 
-  static uint32_t const magic = 0x2a2a2a2a;
-  static uint8_t const version = 1;
-
   /// Constructs a segment.
   /// @param id The UUID of the segment.
   /// @param max_bytes The maximum segment size.
@@ -196,7 +212,7 @@ public:
   bool contains(event_id from, event_id to) const;
 
   /// Retrieves the number of events in the segment.
-  uint32_t events() const;
+  uint64_t events() const;
 
   /// Retrieves the number of bytes the segment occupies in memory.
   uint64_t bytes() const;
@@ -240,12 +256,7 @@ public:
   }
 
 private:
-  uuid id_;
-  io::compression compression_;
-  event_id base_ = 0;
-  uint32_t n_ = 0;
-  uint64_t max_bytes_ = 0;
-  uint64_t occupied_bytes_ = 0;
+  header header_;
   std::vector<cow<chunk>> chunks_;
 
 private:
