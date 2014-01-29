@@ -21,7 +21,7 @@ public:
   trial(T x)
     : engaged_{true}
   {
-    new (&value_) T{std::move(x)};
+    new (&value_) T(std::move(x));
   }
 
   /// Constructs a trial from an error.
@@ -70,7 +70,7 @@ public:
   {
     destroy();
     engaged_ = true;
-    new (&value_) T{std::move(x)};
+    new (&value_) T(std::move(x));
     return *this;
   }
 
@@ -150,7 +150,7 @@ private:
     if (other.engaged_)
     {
       engaged_ = true;
-      new (&value_) T{other.value_};
+      new (&value_) T(other.value_);
     }
     else
     {
@@ -164,7 +164,7 @@ private:
     if (other.engaged_)
     {
       engaged_ = true;
-      new (&value_) T{std::move(other.value_)};
+      new (&value_) T(std::move(other.value_));
     }
     else
     {
