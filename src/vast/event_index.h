@@ -135,6 +135,7 @@ private:
   std::multimap<value_type, path> files_;
   std::map<offset, std::unique_ptr<bitmap_index>> offsets_;
   std::multimap<value_type, bitmap_index*> types_;
+  offset idx_off_;
 };
 
 } // namespace vast

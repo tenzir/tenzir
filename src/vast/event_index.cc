@@ -392,8 +392,9 @@ bool event_arg_index::index(event const& e)
   if (e.empty())
     return true;
 
-  offset o{0};
-  return index_record(e, e.id(), o);
+  idx_off_.clear();
+  idx_off_.push_back(0);
+  return index_record(e, e.id(), idx_off_);
 }
 
 bitstream event_arg_index::lookup(expr::ast const& ast) const
