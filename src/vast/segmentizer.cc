@@ -48,7 +48,6 @@ void segmentizer::act()
 
         quit(reason);
       },
-
       on_arg_match >> [=](std::vector<event> const& v)
       {
         total_events_ += v.size();
@@ -57,15 +56,14 @@ void segmentizer::act()
         {
           if (writer_.write(e))
           {
-            if (stats_.timed_add(1) && stats_.last() > 0)
+            if (stats_.increment())
             {
               send(upstream_, atom("statistics"), stats_.last());
               VAST_LOG_ACTOR_VERBOSE(
                   "ingests at rate " << stats_.last() << " events/sec" <<
                   " (mean " << stats_.mean() <<
                   ", median " << stats_.median() <<
-                  ", standard deviation " << std::sqrt(stats_.variance()) <<
-                  ")");
+                  ", standard deviation " << stats_.sd() << ")");
             }
           }
           else
@@ -96,7 +94,6 @@ void segmentizer::act()
           }
         }
       },
-
       others() >> [=]
       {
         VAST_LOG_ACTOR_ERROR(

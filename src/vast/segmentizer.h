@@ -29,7 +29,7 @@ public:
 
 private:
   cppa::actor_ptr upstream_;
-  util::temporal_accumulator<uint64_t> stats_;
+  util::rate_accumulator<uint64_t> stats_;
   segment segment_;
   segment::writer writer_;
   size_t total_events_ = 0;
