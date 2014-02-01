@@ -38,13 +38,13 @@ public:
         on(atom("EXIT"), arg_match) >> [=](uint32_t reason)
         {
           if (reason != exit::kill)
-            derived()->store();
+            derived()->save();
 
           this->quit(reason);
         },
         on(atom("flush")) >> [=]
         {
-          derived()->store();
+          derived()->save();
         },
         on_arg_match >> [=](std::vector<cow<event>> const& v)
         {
@@ -97,7 +97,7 @@ public:
 
   void scan();
   void load(expr::ast const& ast);
-  void store();
+  void save();
   bool index(event const& e);
   bitstream lookup(expr::ast const& ast) const;
 
@@ -120,7 +120,7 @@ public:
 
   void scan();
   void load(expr::ast const& ast);
-  void store();
+  void save();
   bool index(event const& e);
   bitstream lookup(expr::ast const& ast) const;
 

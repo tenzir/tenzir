@@ -124,7 +124,7 @@ void event_meta_index::load(expr::ast const& ast)
   ast.accept(visitor);
 }
 
-void event_meta_index::store()
+void event_meta_index::save()
 {
   if (timestamp_.appended() > 1)
   {
@@ -363,7 +363,7 @@ void event_arg_index::load(expr::ast const& ast)
   ast.accept(visitor);
 }
 
-void event_arg_index::store()
+void event_arg_index::save()
 {
   VAST_LOG_ACTOR_DEBUG("saves indexes to filesystem");
 
