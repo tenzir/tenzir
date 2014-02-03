@@ -386,19 +386,19 @@ BOOST_AUTO_TEST_CASE(parse_value)
   // Vectors
   {
     auto v = value::parse("[1, 2, 3]");
-    BOOST_CHECK_EQUAL(v.which(), record_type);
-    BOOST_CHECK_EQUAL(v, value(record{1u, 2u, 3u}));
+    BOOST_CHECK_EQUAL(v.which(), vector_type);
+    BOOST_CHECK_EQUAL(v, value(vector{1u, 2u, 3u}));
   }
 
   // Sets
   {
     auto v = value::parse("{+1, +2, +3}");
-    BOOST_CHECK_EQUAL(v.which(), record_type);
-    BOOST_CHECK_EQUAL(v, value(record{1, 2, 3}));
+    BOOST_CHECK_EQUAL(v.which(), set_type);
+    BOOST_CHECK_EQUAL(v, value(set{1, 2, 3}));
 
     v = value::parse("{\"foo\", \"bar\"}");
-    BOOST_CHECK_EQUAL(v.which(), record_type);
-    BOOST_CHECK_EQUAL(v, value(record{"foo", "bar"}));
+    BOOST_CHECK_EQUAL(v.which(), set_type);
+    BOOST_CHECK_EQUAL(v, value(set{"foo", "bar"}));
   }
 
   // Tables

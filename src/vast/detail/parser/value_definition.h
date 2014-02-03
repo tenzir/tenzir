@@ -9,7 +9,7 @@ namespace vast {
 namespace detail {
 namespace parser {
 
-struct vector_inserter
+struct container_inserter
 {
   template <typename, typename>
   struct result
@@ -17,9 +17,10 @@ struct vector_inserter
     typedef void type;
   };
 
-  void operator()(record& r, vast::value x) const
+  template <typename Container>
+  void operator()(Container& c, vast::value x) const
   {
-    r.push_back(std::move(x));
+    c.push_back(std::move(x));
   }
 };
 
@@ -56,7 +57,7 @@ value<Iterator>::value()
   qi::uint_type uint;
   qi::real_parser<double, qi::strict_real_policies<double>> strict_double;
 
-  boost::phoenix::function<vector_inserter> vector_insert;
+  boost::phoenix::function<container_inserter> container_insert;
   boost::phoenix::function<map_inserter> map_insert;
 
   val
@@ -70,7 +71,7 @@ value<Iterator>::value()
     |   sint                  [_val = construct<vast::value>(_1)]
     |   vec                   [_val = construct<vast::value>(_1)]
     |   tbl                   [_val = construct<vast::value>(_1)]
-    |   set                   [_val = construct<vast::value>(_1)]
+    |   st                    [_val = construct<vast::value>(_1)]
     |   rec                   [_val = construct<vast::value>(_1)]
     |   lit("T")              [_val = construct<vast::value>(true)]
     |   lit("F")              [_val = construct<vast::value>(false)]
@@ -78,10 +79,22 @@ value<Iterator>::value()
     |   str                   [_val = construct<vast::value>(_1)]
     ;
 
+  rec
+    =   '('
+    >>  val [container_insert(_val, _1)] % ','
+    >>  ')'
+    ;
+
   vec
     =   '['
-    >>  val [vector_insert(_val, _1)] % ','
+    >>  val [container_insert(_val, _1)] % ','
     >>  ']'
+    ;
+
+  st 
+    =   '{'
+    >>  val [container_insert(_val, _1)] % ','
+    >>  '}'
     ;
 
   tbl
@@ -92,20 +105,6 @@ value<Iterator>::value()
         )   [map_insert(_val, _1, _2)] % ','
     >>  '}'
     ;
-
-  // TODO: perform uniqueness check.
-  set
-    =   '{'
-    >>  val [vector_insert(_val, _1)] % ','
-    >>  '}'
-    ;
-
-  rec
-    =   '('
-    >>  val [vector_insert(_val, _1)] % ','
-    >>  ')'
-    ;
-
 }
 
 } // namespace parser

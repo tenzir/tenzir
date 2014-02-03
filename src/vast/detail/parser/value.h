@@ -20,8 +20,8 @@ struct value : qi::grammar<Iterator, vast::value(), skipper<Iterator>>
 
   qi::rule<Iterator, vast::value(), skipper<Iterator>> val;
   qi::rule<Iterator, record(), skipper<Iterator>> rec;
-  qi::rule<Iterator, record(), skipper<Iterator>> vec;
-  qi::rule<Iterator, record(), skipper<Iterator>> set;
+  qi::rule<Iterator, vector(), skipper<Iterator>> vec;
+  qi::rule<Iterator, set(), skipper<Iterator>> st;
   qi::rule<Iterator, table(), skipper<Iterator>> tbl;
 
   duration<Iterator> time_dur;

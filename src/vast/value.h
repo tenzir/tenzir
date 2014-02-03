@@ -91,7 +91,7 @@ public:
   /// Default-constructs an invalid value.
   value(invalid_value = vast::invalid);
 
-  /// Constructs a disengaged value with a given type.
+  /// Constructs a disengaged value of a given type.
   /// @param t The type of the value.
   explicit value(value_type t);
 
@@ -115,6 +115,8 @@ public:
   value(prefix p);
   value(port p);
   value(record r);
+  value(vector v);
+  value(set s);
   value(table t);
   value(std::initializer_list<value> list);
   value(std::initializer_list<std::pair<value const, value>> list);
@@ -207,6 +209,8 @@ private:
     prefix prefix_;
     port port_;
     std::unique_ptr<record> record_;
+    std::unique_ptr<vector> vector_;
+    std::unique_ptr<set> set_;
     std::unique_ptr<table> table_;
   };
 
@@ -408,6 +412,10 @@ struct visit_impl
         return f(x.data_.port_);
       case record_type:
         return f(*x.data_.record_);
+      case vector_type:
+        return f(*x.data_.vector_);
+      case set_type:
+        return f(*x.data_.set_);
       case table_type:
         return f(*x.data_.table_);
     }
@@ -451,6 +459,10 @@ struct visit_impl
         return visit_impl::apply(y, value_bind(f, x.data_.port_));
       case record_type:
         return visit_impl::apply(y, value_bind(f, *x.data_.record_));
+      case vector_type:
+        return visit_impl::apply(y, value_bind(f, *x.data_.vector_));
+      case set_type:
+        return visit_impl::apply(y, value_bind(f, *x.data_.set_));
       case table_type:
         return visit_impl::apply(y, value_bind(f, *x.data_.table_));
     }

@@ -67,13 +67,11 @@ BOOST_AUTO_TEST_CASE(parser_tests)
     // Offsets.
     // Type queries.
     ":port < 53/udp",
-    ":set != {T, F}",
     ":addr == 192.168.0.1 && :port == 80/tcp",
     ":string ~ /evil.*/ && :prefix >= 10.0.0.0/8",
     ":addr == 1.2.3.4 || :prefix != 10.0.0.0/8",
     "! :int == +8 || ! :count < 4",
 
-    "@5 in {1, 2, 3}",
     "@10,3 < now - 5d10m3s",
     "@0,3,2 ~ /yikes/",
 

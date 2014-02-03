@@ -170,6 +170,20 @@ value::value(record r)
   data_.engage();
 }
 
+value::value(vector v)
+{
+  new (&data_.vector_) std::unique_ptr<vector>{new vector(std::move(v))};
+  data_.type(vector_type);
+  data_.engage();
+}
+
+value::value(set s)
+{
+  new (&data_.set_) std::unique_ptr<set>{new set(std::move(s))};
+  data_.type(set_type);
+  data_.engage();
+}
+
 value::value(table t)
 {
   new (&data_.table_) std::unique_ptr<table>{new table(std::move(t))};
@@ -289,6 +303,12 @@ value::data::data(data const& other)
     case record_type:
       new (&record_) std::unique_ptr<record>{new record(*other.record_)};
       break;
+    case vector_type:
+      new (&vector_) std::unique_ptr<vector>{new vector(*other.vector_)};
+      break;
+    case set_type:
+      new (&set_) std::unique_ptr<set>{new set(*other.set_)};
+      break;
     case table_type:
       new (&table_) std::unique_ptr<table>{new table(*other.table_)};
       break;
@@ -366,6 +386,12 @@ void value::data::construct(value_type t)
     case record_type:
       new (&record_) std::unique_ptr<record>{new record};
       break;
+    case vector_type:
+      new (&vector_) std::unique_ptr<vector>{new vector};
+      break;
+    case set_type:
+      new (&set_) std::unique_ptr<set>{new set};
+      break;
     case table_type:
       new (&table_) std::unique_ptr<table>{new table};
       break;
@@ -438,6 +464,12 @@ void value::data::serialize(serializer& sink) const
     case record_type:
       sink << *record_;
       break;
+    case vector_type:
+      sink << *vector_;
+      break;
+    case set_type:
+      sink << *set_;
+      break;
     case table_type:
       sink << *table_;
       break;
@@ -498,6 +530,18 @@ void value::data::deserialize(deserializer& source)
       {
         record_ = make_unique<record>();
         source >> *record_;
+      }
+      break;
+    case vector_type:
+      {
+        vector_ = make_unique<vector>();
+        source >> *vector_;
+      }
+      break;
+    case set_type:
+      {
+        set_ = make_unique<set>();
+        source >> *set_;
       }
       break;
     case table_type:

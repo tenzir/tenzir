@@ -15,11 +15,15 @@ enum value_type : uint8_t
 
   // Basic types
   bool_type       = 0x01, ///< A boolean value.
-  int_type        = 0x02, ///< An integer (`int`) value.
-  uint_type       = 0x03, ///< An unsigned integer (`int`) value.
+  int_type        = 0x02, ///< An integer (`int64_t`) value.
+  uint_type       = 0x03, ///< An unsigned integer (`uint64_t`) value.
   double_type     = 0x04, ///< A floating point (`double`) value.
+
+  // Time types
   time_range_type = 0x05, ///< A time duration value.
   time_point_type = 0x06, ///< A time point value.
+
+  // String types
   string_type     = 0x07, ///< A string value.
   regex_type      = 0x08, ///< A regular expression value.
 
@@ -28,15 +32,20 @@ enum value_type : uint8_t
   prefix_type     = 0x0a, ///< An IP prefix value.
   port_type       = 0x0b, ///< A transport-layer port value.
 
-  // Containers
-  record_type     = 0x0c, ///< A sequenced vector value.
-  table_type      = 0x0d  ///< An associative array value.
+  // Container types
+  record_type     = 0x0c, ///< A sequence of heterogeneous values.
+  vector_type     = 0x0d, ///< A sequence of homogeneous values.
+  set_type        = 0x0e, ///< A collection of unique values.
+  table_type      = 0x0f  ///< A mapping of values to values.
 };
 
 /// Checks whether a type is container type.
 inline bool is_container_type(value_type t)
 {
-  return t == record_type || t == table_type;
+  return t == record_type 
+      || t == vector_type
+      || t == set_type 
+      || t == table_type;
 }
 
 void serialize(serializer& sink, value_type x);
@@ -89,6 +98,12 @@ bool print(Iterator& out, value_type t)
     case record_type:
       str = "record";
       break;
+    case vector_type:
+      str = "vector";
+      break;
+    case set_type:
+      str = "set";
+      break;
     case table_type:
       str = "table";
       break;
@@ -116,8 +131,10 @@ using underlying_value_type =
                     IfThenElse<T == prefix_type, prefix,
                       IfThenElse<T == port_type, port,
                         IfThenElse<T == record_type, record,
-                          IfThenElse<T == table_type, table,
-                            std::false_type>>>>>>>>>>>>>;
+                          IfThenElse<T == vector_type, record,
+                            IfThenElse<T == set_type, record,
+                              IfThenElse<T == table_type, table,
+                                std::false_type>>>>>>>>>>>>>>>;
 
 } // namespace vast
 

@@ -128,6 +128,22 @@ private:
   friend bool operator<(record const& x, record const& y);
 };
 
+
+// For now, we distinguish vectors and sets only logically.
+
+class vector : public record
+{
+public:
+  using record::record;
+};
+
+class set : public record
+{
+public:
+  using record::record;
+};
+
+
 /// An associative array.
 class table : public std::map<value, value>,
               util::totally_ordered<table>,

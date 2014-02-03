@@ -22,6 +22,8 @@ class prefix;
 class string;
 class regex;
 class record;
+class vector;
+class set;
 class table;
 
 template <typename Iterator, typename T, typename... Opts>
