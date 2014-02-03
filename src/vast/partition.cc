@@ -120,8 +120,8 @@ void partition_actor::act()
       },
       on_arg_match >> [=](expr::ast const& ast, actor_ptr const& sink)
       {
-        VAST_LOG_ACTOR_DEBUG("got AST " << ast <<
-                             " for " << VAST_ACTOR_ID(sink));
+        VAST_LOG_ACTOR_DEBUG("got AST for " << VAST_ACTOR_ID(sink) <<
+                             ": " << ast);
 
         assert(partition_.coverage());
         auto t = make_any_tuple(ast, partition_.coverage(), sink);

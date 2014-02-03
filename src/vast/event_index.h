@@ -11,6 +11,7 @@
 #include "vast/search_result.h"
 #include "vast/bitmap_index.h"
 #include "vast/io/serialization.h"
+#include "vast/util/accumulator.h"
 
 namespace vast {
 
@@ -22,7 +23,8 @@ public:
   /// Spawns an event index.
   /// @param dir The absolute path on the file system.
   event_index(path dir)
-    : dir_{std::move(dir)}
+    : dir_{std::move(dir)},
+      stats_{std::chrono::seconds{1}}
   {
   }
 
@@ -48,13 +50,24 @@ public:
         },
         on_arg_match >> [=](std::vector<cow<event>> const& v)
         {
-          VAST_LOG_ACTOR_DEBUG("indexes " << v.size() << " events");
           for (auto& e : v)
             if (! derived()->index(*e))
             {
               VAST_LOG_ACTOR_ERROR("failed to index event " << *e);
               this->quit(exit::error);
+              return;
             }
+
+          if (stats_.increment(v.size()))
+          {
+            VAST_LOG_ACTOR_INFO(
+                "indexes at rate " << stats_.last() << " events/sec" <<
+                " (mean " << stats_.mean() <<
+                ", median " << stats_.median() <<
+                ", standard deviation " << std::round(stats_.sd()) << ")");
+
+            //send(last_sender(), atom("statistics"), stats_.last());
+          }
         },
         on_arg_match >> [=](expr::ast const& ast, bitstream const& coverage,
                             actor_ptr const& sink)
@@ -86,6 +99,8 @@ private:
   {
     return static_cast<Derived*>(this);
   }
+
+  util::rate_accumulator<uint64_t> stats_;
 };
 
 class event_meta_index : public event_index<event_meta_index>

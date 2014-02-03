@@ -63,7 +63,7 @@ void segmentizer::act()
                   "ingests at rate " << stats_.last() << " events/sec" <<
                   " (mean " << stats_.mean() <<
                   ", median " << stats_.median() <<
-                  ", standard deviation " << stats_.sd() << ")");
+                  ", standard deviation " << std::round(stats_.sd()) << ")");
             }
           }
           else
