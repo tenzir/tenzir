@@ -517,41 +517,54 @@ private:
 ///
 /// @returns A bitmap index for type *t*.
 template <typename Bitstream, typename... Args>
-std::unique_ptr<bitmap_index> make_bitmap_index(value_type t, Args&&... args)
+trial<std::unique_ptr<bitmap_index>>
+make_bitmap_index(value_type t, Args&&... args)
 {
+  std::unique_ptr<bitmap_index> bmi;
   switch (t)
   {
     default:
-      throw std::runtime_error("unsupported bitmap index type");
+      return error{"unsupported bitmap index type: " + to_string(t)};
     case bool_type:
-      return make_unique<arithmetic_bitmap_index<Bitstream, bool_type>>(
+      bmi = make_unique<arithmetic_bitmap_index<Bitstream, bool_type>>(
           std::forward<Args>(args)...);
+      break;
     case int_type:
-      return make_unique<arithmetic_bitmap_index<Bitstream, int_type>>(
+      bmi = make_unique<arithmetic_bitmap_index<Bitstream, int_type>>(
           std::forward<Args>(args)...);
+      break;
     case uint_type:
-      return make_unique<arithmetic_bitmap_index<Bitstream, uint_type>>(
+      bmi = make_unique<arithmetic_bitmap_index<Bitstream, uint_type>>(
           std::forward<Args>(args)...);
+      break;
     case double_type:
-      return make_unique<arithmetic_bitmap_index<Bitstream, double_type>>(
+      bmi = make_unique<arithmetic_bitmap_index<Bitstream, double_type>>(
           std::forward<Args>(args)...);
+      break;
     case time_range_type:
-      return make_unique<arithmetic_bitmap_index<Bitstream, time_range_type>>(
+      bmi = make_unique<arithmetic_bitmap_index<Bitstream, time_range_type>>(
           std::forward<Args>(args)...);
+      break;
     case time_point_type:
-      return make_unique<arithmetic_bitmap_index<Bitstream, time_point_type>>(
+      bmi = make_unique<arithmetic_bitmap_index<Bitstream, time_point_type>>(
           std::forward<Args>(args)...);
+      break;
     case string_type:
     case regex_type:
-      return make_unique<string_bitmap_index<Bitstream>>(
+      bmi = make_unique<string_bitmap_index<Bitstream>>(
           std::forward<Args>(args)...);
+      break;
     case address_type:
-      return make_unique<address_bitmap_index<Bitstream>>(
+      bmi = make_unique<address_bitmap_index<Bitstream>>(
           std::forward<Args>(args)...);
+      break;
     case port_type:
-      return make_unique<port_bitmap_index<Bitstream>>(
+      bmi = make_unique<port_bitmap_index<Bitstream>>(
           std::forward<Args>(args)...);
+      break;
   }
+
+  return std::move(bmi);
 }
 
 } // namespace vast

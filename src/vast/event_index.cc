@@ -419,41 +419,54 @@ bool event_arg_index::index_record(record const& r, uint64_t id, offset& o)
 {
   if (o.empty())
     return true;
+
   for (auto& v : r)
   {
-    if (v.which() == record_type && v)
+    if (v)
     {
-      auto& inner = v.get<record>();
-      if (! inner.empty())
+      if (v.which() == record_type)
       {
-        o.push_back(0);
-        if (! index_record(inner, id, o))
+        auto& inner = v.get<record>();
+        if (! inner.empty())
+        {
+          o.push_back(0);
+          if (! index_record(inner, id, o))
+            return false;
+          o.pop_back();
+        }
+      }
+      else if (! is_container_type(v.which()))
+      {
+        bitmap_index* idx;
+        auto i = offsets_.find(o);
+        if (i != offsets_.end())
+        {
+          idx = i->second.get();
+        }
+        else
+        {
+          auto bmi = make_bitmap_index<bitstream_type>(v.which());
+          if (! bmi)
+          {
+            VAST_LOG_ACTOR_ERROR(bmi.failure().msg());
+            quit(exit::error);
+            return false;
+          }
+
+          idx = bmi->get();
+          idx->append(1, false); // ID 0 is not a valid event.
+          types_.emplace(v.which(), idx);
+          offsets_.emplace(o, std::move(*bmi));
+        }
+        assert(idx != nullptr);
+        if (! idx->push_back(v, id))
           return false;
-        o.pop_back();
       }
     }
-    else if (! v.invalid() && v.which() != table_type)
-    {
-      bitmap_index* idx;
-      auto i = offsets_.find(o);
-      if (i != offsets_.end())
-      {
-        idx = i->second.get();
-      }
-      else
-      {
-        auto bmi = make_bitmap_index<bitstream_type>(v.which());
-        idx = bmi.get();
-        idx->append(1, false); // ID 0 is not a valid event.
-        types_.emplace(v.which(), idx);
-        offsets_.emplace(o, std::move(bmi));
-      }
-      assert(idx != nullptr);
-      if (! idx->push_back(v, id))
-        return false;
-    }
+
     ++o.back();
   }
+
   return true;
 }
 
