@@ -28,18 +28,18 @@ public:
   /// Constructs a result from an instance of type `T`.
   /// @param x The instance to move.
   result(T x)
-    : trial<optional<T>>{optional<T>{std::move(x)}}
+    : trial<optional<T>>{std::move(x)}
   {
   }
 
   result& operator=(T x)
   {
-    super() = optional<T>{std::move(x)};
+    super() = std::move(x);
     return *this;
   }
 
   result& operator=(result const&) = default;
-  result& operator=(result&) = default;
+  result& operator=(result&&) = default;
 
   /// Shorthand for ::value.
   T& operator*()
