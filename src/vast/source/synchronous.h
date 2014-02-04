@@ -4,7 +4,7 @@
 #include <cppa/cppa.hpp>
 #include "vast/actor.h"
 #include "vast/event.h"
-#include "vast/optional.h"
+#include "vast/util/result.h"
 
 namespace vast {
 namespace source {
@@ -23,9 +23,9 @@ public:
 
 protected:
   /// Extracts a single event.
-  /// @returns The parsed event.
-  virtual optional<event> extract() = 0;
-  
+  /// @returns The parsed event. An empty result shall indicate EOF.
+  virtual result<event> extract() = 0;
+
   /// Checks whether the source has finished generating events.
   /// @returns `true` if the source cannot provide more events.
   virtual bool finished() = 0;
@@ -35,7 +35,6 @@ private:
 
   cppa::actor_ptr sink_;
   uint64_t batch_size_ = 0;
-  size_t errors_ = 0;
   std::vector<event> events_;
 };
 

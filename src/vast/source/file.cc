@@ -29,13 +29,13 @@ line::line(cppa::actor_ptr sink, std::string const& filename)
     finished_ = true;
 }
 
-optional<event> line::extract()
+result<event> line::extract()
 {
   VAST_ENTER();
 
-  optional<event> e;
+  result<event> e;
   if (! line_.empty())
-    e = parse(line_);
+    e = std::move(parse(line_));
 
   do
   {
@@ -200,7 +200,7 @@ bool bro2::parse_header()
       string t(fs.start(i), fs.end(i));
       auto type = bro_to_vast(t);
       field_types_.push_back(type);
-      if (type == record_type || type == table_type)
+      if (is_container_type(type))
       {
         auto open = t.find("[");
         assert(open != string::npos);
@@ -237,7 +237,7 @@ bool bro2::parse_header()
     std::ostringstream str;
     for (auto& type : complex_types_)
       str << " " << type;
-    VAST_LOG_ACTOR_DEBUG("has set types:" << str.str());
+    VAST_LOG_ACTOR_DEBUG("has container types:" << str.str());
   }
 
   path_ = "bro::" + path_;
@@ -269,18 +269,21 @@ value_type bro2::bro_to_vast(string const& type)
     return regex_type;
   else if (type == "subnet")
     return prefix_type;
-  else if (type.starts_with("set") || type.starts_with("vector"))
+  else if (type.starts_with("record"))
     return record_type;
+  else if (type.starts_with("vector"))
+    return vector_type;
+  else if (type.starts_with("set"))
+    return set_type;
   else if (type.starts_with("table"))
     return table_type;
   else
     return invalid_type;
 }
 
-optional<event> bro2::parse(std::string const& line)
+result<event> bro2::parse(std::string const& line)
 {
   using vast::extract;
-  using vast::parse;
   VAST_ENTER();
 
   // TODO: switch to grammar-based parsing.
@@ -290,18 +293,12 @@ optional<event> bro2::parse(std::string const& line)
   fs.split(line.begin(), line.end());
 
   if (fs.fields() > 0 && *fs.start(0) == '#')
-  {
-    VAST_LOG_ACTOR_VERBOSE("ignored comment: " << line << 
-                           " (line " << current_ << ')');
-    return {};
-  }
+    return error{"ignored comment: " + line +
+                 " (line " + to_string(current_) + ')'};
 
   if (fs.fields() != field_types_.size())
-  {
-    VAST_LOG_ACTOR_ERROR("found inconsistent number of fields (line " <<
-                         current_ << ')');
-    return {};
-  }
+    return error{"inconsistent number of fields"
+                 " (line " + to_string(current_) + ')'};
 
   event e;
   e.name(path_);
@@ -344,257 +341,44 @@ optional<event> bro2::parse(std::string const& line)
       continue;
     }
 
-    if (field_types_[f] == record_type || field_types_[f] == table_type)
+    if (field_types_[f] == record_type)
     {
       record r;
       if (! extract(start, end, r, complex_types_[containers++],
                     set_separator_, "{", "}"))
-      {
-        // TODO: take care of escaped set separators.
-        VAST_LOG_ACTOR_ERROR("got invalid set syntax");
-        return {};
-      }
+        return error{"got invalid record syntax"};
+
       e.emplace_back(std::move(r));
+    }
+    else if (field_types_[f] == vector_type)
+    {
+      vector v;
+      if (! extract(start, end, v, complex_types_[containers++],
+                    set_separator_, "{", "}"))
+        return error{"got invalid vector syntax"};
+
+      e.emplace_back(std::move(v));
+    }
+    else if (field_types_[f] == set_type || field_types_[f] == table_type)
+    {
+      set s;
+      if (! extract(start, end, s, complex_types_[containers++],
+                    set_separator_, "{", "}"))
+        return error{"got invalid set/table syntax"};
+
+      e.emplace_back(std::move(s));
     }
     else
     {
       value v;
       if (! extract(start, end, v, field_types_[f]))
-      {
-        VAST_LOG_ACTOR_ERROR("could not parse field: " << string(start, end));
-        return {};
-      }
+        return error{"could not parse field: " + std::string{start, end}};
+
       e.push_back(std::move(v));
     }
   }
 
-  return e;
-}
-
-bro15conn::bro15conn(cppa::actor_ptr sink, std::string const& filename)
-  : line(sink, filename)
-{
-  VAST_LOG_ACTOR_VERBOSE("bro15conn",
-                       "spawned with conn.log: " << filename << ')');
-}
-
-char const* bro15conn::description() const
-{
-  return "bro15conn";
-}
-
-optional<event> bro15conn::parse(std::string const& line)
-{
-  using vast::extract;
-  VAST_ENTER();
-
-  // TODO: switch to grammar-based parsing.
-  event e;
-  e.name("bro::conn");
-  e.timestamp(now());
-
-  util::field_splitter<std::string::const_iterator> fs;
-  fs.split(line.begin(), line.end(), 13);
-  if (fs.fields() < 12)
-  {
-    VAST_LOG_ACTOR_ERROR("less than 12 fields (line " << current_ << ')');
-    return {};
-  }
-
-  // Timestamp
-  auto i = fs.start(0);
-  auto j = fs.end(0);
-  time_range range;
-  if (! extract(i, j, range) || i != j)
-  {
-    VAST_LOG_ACTOR_ERROR(
-        "invalid conn.log timestamp (field 1) (line " << current_ << ')');
-    return {};
-  }
-  e.emplace_back(time_point(range));
-
-  // Duration
-  i = fs.start(1);
-  j = fs.end(1);
-  if (*i == '?')
-  {
-    e.emplace_back(value{time_range_type});
-  }
-  else
-  {
-    time_range range;
-    if (! extract(i, j, range) || i != j)
-    {
-      VAST_LOG_ACTOR_ERROR(
-          "invalid conn.log duration (field 2) (line " << current_ << ')');
-      return {};
-    }
-    e.emplace_back(range);
-  }
-
-  // Originator address
-  i = fs.start(2);
-  j = fs.end(2);
-  address addr;
-  if (! extract(i, j, addr) || i != j)
-  {
-    VAST_LOG_ACTOR_ERROR("invalid conn.log origaddress (field 3) (line " <<
-                         current_ << ')');
-    return {};
-  }
-  e.emplace_back(std::move(addr));
-
-  // Responder address
-  i = fs.start(3);
-  j = fs.end(3);
-  if (! extract(i, j, addr) || i != j)
-  {
-    VAST_LOG_ACTOR_ERROR("invalid conn.log respaddress (field 4) (line " <<
-                         current_ << ')');
-    return {};
-  }
-  e.emplace_back(std::move(addr));
-
-  // Service
-  i = fs.start(4);
-  j = fs.end(4);
-  if (*i == '?')
-  {
-    e.emplace_back(value{string_type});
-  }
-  else
-  {
-    string service;
-    if (! extract(i, j, service) || i != j)
-    {
-      VAST_LOG_ACTOR_ERROR("invalid conn.log service (field 5) (line " <<
-                           current_ << ')');
-      return {};
-    }
-    e.emplace_back(std::move(service));
-  }
-
-  // Ports and protocol
-  i = fs.start(5);
-  j = fs.end(5);
-  port orig_p;
-  if (! extract(i, j, orig_p) || i != j)
-  {
-    VAST_LOG_ACTOR_ERROR("invalid conn.log orig port (field 6) (line " <<
-                         current_ << ')');
-    return {};
-  }
-
-  i = fs.start(6);
-  j = fs.end(6);
-  port resp_p;
-  if (! extract(i, j, resp_p) || i != j)
-  {
-    VAST_LOG_ACTOR_ERROR("invalid conn.log resp port (field 7) (line " <<
-                         current_ << ')');
-    return {};
-  }
-
-  i = fs.start(7);
-  j = fs.end(7);
-  string proto;
-  if (! extract(i, j, proto) || i != j)
-  {
-    VAST_LOG_ACTOR_ERROR("invalid conn.log proto (field 8) (line " <<
-                         current_ << ')');
-    return {};
-  }
-
-  auto p = port::unknown;
-  if (proto == "tcp")
-    p = port::tcp;
-  else if (proto == "udp")
-    p = port::udp;
-  else if (proto == "icmp")
-    p = port::icmp;
-  orig_p.type(p);
-  resp_p.type(p);
-  e.emplace_back(std::move(orig_p));
-  e.emplace_back(std::move(resp_p));
-  e.emplace_back(std::move(proto));
-
-  // Originator and responder bytes
-  i = fs.start(8);
-  j = fs.end(8);
-  if (*i == '?')
-  {
-    e.emplace_back(value{uint_type});
-  }
-  else
-  {
-    uint64_t orig_bytes;
-    if (! extract(i, j, orig_bytes) || i != j)
-    {
-      VAST_LOG_ACTOR_ERROR("invalid conn.log orig bytes (field 9) (line " <<
-                           current_ << ')');
-      return {};
-    }
-    e.emplace_back(orig_bytes);
-  }
-
-  i = fs.start(8);
-  j = fs.end(8);
-  if (*i == '?')
-  {
-    e.emplace_back(value{uint_type});
-  }
-  else
-  {
-    uint64_t resp_bytes;
-    if (! extract(i, j, resp_bytes) || i != j)
-    {
-      VAST_LOG_ACTOR_ERROR("invalid conn.log resp bytes (field 10) (line " <<
-                           current_ << ')');
-      return {};
-    }
-    e.emplace_back(resp_bytes);
-  }
-
-  // Connection state
-  i = fs.start(10);
-  j = fs.end(10);
-  string state;
-  if (! extract(i, j, state) || i != j)
-  {
-    VAST_LOG_ACTOR_ERROR("invalid conn.log conn state (field 11) (line " <<
-                         current_ << ')');
-    return {};
-  }
-  e.emplace_back(std::move(state));
-
-  // Direction
-  i = fs.start(11);
-  j = fs.end(11);
-  string direction;
-  if (! extract(i, j, direction) || i != j)
-  {
-    VAST_LOG_ACTOR_ERROR("invalid conn.log direction (field 12) (line " <<
-                         current_ << ')');
-    return {};
-  }
-  e.emplace_back(std::move(direction));
-
-  // Additional information
-  if (fs.fields() == 13)
-  {
-    i = fs.start(12);
-    j = fs.end(12);
-    string addl;
-    if (! extract(i, j, addl) || i != j)
-    {
-      VAST_LOG_ACTOR_ERROR("invalid conn.log add data (field 13) (line " <<
-                           current_ << ')');
-      return {};
-    }
-    e.emplace_back(std::move(addl));
-  }
-
-  return e;
+  return std::move(e);
 }
 
 } // namespace source

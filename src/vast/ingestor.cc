@@ -29,27 +29,33 @@ void ingestor_actor::act()
 {
   trap_exit(true);
   become(
-      on(atom("terminate")) >> [=]
+      on(atom("terminate"), arg_match) >> [=](uint32_t reason)
       {
-        assert(! segments_.empty());
-        VAST_LOG_ACTOR_INFO("writes un-acked segments to stable storage");
-
-        auto segment_dir = dir_ / "segments";
-        if (! exists(segment_dir) && ! mkdir(segment_dir))
+        if (segments_.empty())
         {
-          VAST_LOG_ACTOR_ERROR("failed to create directory " << segment_dir);
+          quit(reason);
         }
         else
         {
-          for (auto& p : segments_)
-          {
-            auto const path = segment_dir / to<string>(p.first);
-            VAST_LOG_ACTOR_INFO("saves " << path);
-            io::archive(path, p.second);
-          }
-        }
+          VAST_LOG_ACTOR_INFO("writes un-acked segments to stable storage");
 
-        quit(exit::error);
+          auto segment_dir = dir_ / "ingest" / "segments";
+          if (! exists(segment_dir) && ! mkdir(segment_dir))
+          {
+            VAST_LOG_ACTOR_ERROR("failed to create directory " << segment_dir);
+          }
+          else
+          {
+            for (auto& p : segments_)
+            {
+              auto const path = segment_dir / to<string>(p.first);
+              VAST_LOG_ACTOR_INFO("saves " << path);
+              io::archive(path, p.second);
+            }
+          }
+
+          quit(exit::error);
+        }
       },
       on(atom("shutdown"), arg_match) >> [=](uint32_t reason)
       {
@@ -59,15 +65,18 @@ void ingestor_actor::act()
         }
         else
         {
-          delayed_send(self, std::chrono::seconds(30), atom("terminate"));
+          delayed_send(self, std::chrono::seconds(30),
+                       atom("terminate"), reason);
+
           VAST_LOG_ACTOR_INFO(
-              "waits 30 seconds for " << segments_.size() << "segment ACKs");
+              "waits 30 seconds for " << segments_.size() << " segment ACKs");
         }
       },
       on(atom("EXIT"), arg_match) >> [=](uint32_t /* reason */)
       {
         // Tell all sources to exit, they will in turn propagate the exit
-        // message to the sinks.
+        // message to the sinks. Once we have received DOWN from all sinks, the
+        // ingestor has nothing else left todo and can shutdown.
         VAST_LOG_ACTOR_DEBUG("got EXIT from " << VAST_ACTOR_ID(last_sender()));
         for (auto& src : sources_)
           send_exit(src, exit::stop);
@@ -91,11 +100,6 @@ void ingestor_actor::act()
         send(src, atom("run"));
       },
 #endif
-      on(atom("ingest"), "bro15conn", arg_match) >> [=](std::string const& file)
-      {
-        auto src = make_source<source::bro15conn>(file);
-        send(src, atom("run"));
-      },
       on(atom("ingest"), "bro2", arg_match) >> [=](std::string const& file)
       {
         auto src = make_source<source::bro2>(file);

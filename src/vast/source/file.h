@@ -40,8 +40,8 @@ public:
   line(cppa::actor_ptr sink, std::string const& filename);
 
 protected:
-  virtual optional<event> extract() override;
-  virtual optional<event> parse(std::string const& line) = 0;
+  virtual result<event> extract() override;
+  virtual result<event> parse(std::string const& line) = 0;
 
   /// Retrieves the next line from the file.
   /// @returns `true` if extracting was successful.
@@ -63,10 +63,11 @@ private:
   /// Extracts the first `#`-lines of log meta data.
   bool parse_header();
 
-  /// Converts a Bro type to a VAST type. Does not support container types.
-  value_type bro_to_vast(string const& str);
+  /// Converts a Bro type to a VAST type.
+  /// Does not support recursive container types.
+  static value_type bro_to_vast(string const& str);
 
-  virtual optional<event> parse(std::string const& line) override;
+  virtual result<event> parse(std::string const& line) override;
 
   string separator_;
   string set_separator_;
@@ -76,19 +77,6 @@ private:
   std::vector<string> field_names_;
   std::vector<value_type> field_types_;
   std::vector<value_type> complex_types_;
-};
-
-/// A Bro 1.5 `conn.log` source.
-class bro15conn : public line
-{
-public:
-  bro15conn(cppa::actor_ptr sink, std::string const& filename);
-
-  virtual char const* description() const final;
-
-private:
-  /// Parses a single log line.
-  virtual optional<event> parse(std::string const& line) override;
 };
 
 } // namespace source

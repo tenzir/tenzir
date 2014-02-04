@@ -31,10 +31,13 @@ void synchronous::act()
         {
           if (finished())
             break;
-          else if (auto e = extract())
-            events_.push_back(std::move(*e));
-          else if (++errors_ % 100 == 0)
-            VAST_LOG_ACTOR_ERROR("failed on " << errors_ << " events");
+
+          auto r = extract();
+          if (r.engaged())
+            events_.push_back(std::move(r.value()));
+          else if (r.failed())
+            VAST_LOG_ACTOR_ERROR("failed to extract event: " <<
+                                 r.failure().msg());
         }
 
         send_events();
