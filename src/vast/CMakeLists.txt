@@ -63,7 +63,6 @@ set(libvast_sources
   io/getline.cc
   io/stream.cc
   source/file.cc
-  source/synchronous.cc
   util/poll.cc
   util/profiler.cc
   util/terminal.cc

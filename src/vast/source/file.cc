@@ -1,251 +1,14 @@
 #include "vast/source/file.h"
 
-#include "vast/io/getline.h"
 #include "vast/util/field_splitter.h"
 
 namespace vast {
 namespace source {
 
-file::file(cppa::actor_ptr sink, std::string const& filename)
-  : synchronous(sink),
-    file_handle_(path(filename)),
-    file_stream_(file_handle_)
-{
-  if (! file_handle_.open(vast::file::read_only))
-    finished_ = true;
-}
+namespace {
 
-bool file::finished()
-{
-  VAST_ENTER();
-  VAST_RETURN(finished_);
-}
-
-line::line(cppa::actor_ptr sink, std::string const& filename)
-  : file(sink, filename)
-{
-  VAST_ENTER();
-  if (! next())
-    finished_ = true;
-}
-
-result<event> line::extract()
-{
-  VAST_ENTER();
-
-  result<event> e;
-  if (! line_.empty())
-    e = std::move(parse(line_));
-
-  do
-  {
-    if (! next())
-    {
-      finished_ = true;
-      return {};
-    }
-  }
-  while (line_.empty());
-
-  return e;
-}
-
-bool line::next()
-{
-  VAST_ENTER();
-  bool success;
-  if ((success = io::getline(file_stream_, line_)))
-    ++current_;
-  VAST_RETURN(success);
-}
-
-bro2::bro2(cppa::actor_ptr sink, std::string const& filename)
-  : line(sink, filename)
-{
-  if (! parse_header())
-  {
-    VAST_LOG_ACTOR_ERROR("cannot parse Bro 2.x log file header");
-    finished_ = true;
-  }
-}
-
-char const* bro2::description() const
-{
-  return "bro2-source";
-}
-
-bool bro2::parse_header()
-{
-  VAST_ENTER();
-
-  while (line_.empty())
-    if (! next())
-      break;
-
-  util::field_splitter<std::string::const_iterator> fs;
-  fs.split(line_.begin(), line_.end());
-  if (fs.fields() != 2 || ! fs.equals(0, "#separator"))
-  {
-    VAST_LOG_ACTOR_ERROR("got invalid #separator");
-    return false;
-  }
-
-  {
-    std::string sep;
-    std::string bro_sep(fs.start(1), fs.end(1));
-    std::string::size_type pos = 0;
-    while (pos != std::string::npos)
-    {
-      pos = bro_sep.find("\\x", pos);
-      if (pos != std::string::npos)
-      {
-        auto i = std::stoi(bro_sep.substr(pos + 2, 2), nullptr, 16);
-        assert(i >= 0 && i <= 255);
-        sep.push_back(i);
-        pos += 2;
-      }
-    }
-
-    separator_ = string(sep.begin(), sep.end());
-  }
-  if (! next())
-    return false;
-  {
-    util::field_splitter<std::string::const_iterator> fs(separator_.data(),
-                                                         separator_.size());
-    fs.split(line_.begin(), line_.end());
-    if (fs.fields() != 2 || ! fs.equals(0, "#set_separator"))
-    {
-      VAST_LOG_ACTOR_ERROR("got invalid #set_separator");
-      return false;
-    }
-
-    auto set_sep = std::string(fs.start(1), fs.end(1));
-    set_separator_ = string(set_sep.begin(), set_sep.end());
-  }
-  if (! next())
-    return false;
-  {
-    util::field_splitter<std::string::const_iterator> fs(separator_.data(),
-                                                         separator_.size());
-    fs.split(line_.begin(), line_.end());
-    if (fs.fields() != 2 || ! fs.equals(0, "#empty_field"))
-    {
-      VAST_LOG_ACTOR_ERROR("invalid #empty_field");
-      return false;
-    }
-
-    auto empty = std::string(fs.start(1), fs.end(1));
-    empty_field_ = string(empty.begin(), empty.end());
-  }
-  if (! next())
-    return false;
-  {
-    util::field_splitter<std::string::const_iterator> fs(separator_.data(),
-                                                         separator_.size());
-    fs.split(line_.begin(), line_.end());
-    if (fs.fields() != 2 || ! fs.equals(0, "#unset_field"))
-    {
-      VAST_LOG_ACTOR_ERROR("invalid #unset_field");
-      return false;
-    }
-
-    auto unset = std::string(fs.start(1), fs.end(1));
-    unset_field_ = string(unset.begin(), unset.end());
-  }
-  if (! next())
-    return false;
-  {
-    util::field_splitter<std::string::const_iterator> fs(separator_.data(),
-                                                         separator_.size());
-    fs.split(line_.begin(), line_.end());
-    if (fs.fields() != 2 || ! fs.equals(0, "#path"))
-    {
-      VAST_LOG_ACTOR_ERROR("invalid #path");
-      return false;
-    }
-
-    path_ = string(fs.start(1), fs.end(1));
-  }
-  // Skip #open tag.
-  if (! (next() && next()))
-    return false;
-  {
-    util::field_splitter<std::string::const_iterator> fs(separator_.data(),
-                                                         separator_.size());
-    fs.split(line_.begin(), line_.end());
-    if (! fs.equals(0, "#fields"))
-    {
-      VAST_LOG_ACTOR_ERROR("got invalid #fields");
-      return false;
-    }
-
-    for (size_t i = 1; i < fs.fields(); ++i)
-      field_names_.emplace_back(fs.start(i), fs.end(i));
-  }
-  if (! next())
-    return false;
-  {
-    util::field_splitter<std::string::const_iterator> fs(separator_.data(),
-                                                         separator_.size());
-    fs.split(line_.begin(), line_.end());
-    if (! fs.equals(0, "#types"))
-    {
-      VAST_LOG_ACTOR_ERROR("got invalid #types");
-      return false;
-    }
-
-    for (size_t i = 1; i < fs.fields(); ++i)
-    {
-      string t(fs.start(i), fs.end(i));
-      auto type = bro_to_vast(t);
-      field_types_.push_back(type);
-      if (is_container_type(type))
-      {
-        auto open = t.find("[");
-        assert(open != string::npos);
-        auto close = t.find("]", open);
-        assert(close != string::npos);
-        auto elem = t.substr(open + 1, close - open - 1);
-        complex_types_.push_back(bro_to_vast(elem));
-      }
-    }
-  }
-
-  line_.clear(); // Triggers call to next().
-
-  VAST_LOG_ACTOR_DEBUG("parsed bro2 header:" <<
-                       " #separator " << separator_ <<
-                       " #set_separator " << set_separator_ <<
-                       " #empty_field " << empty_field_ <<
-                       " #unset_field " << unset_field_ <<
-                       " #path " << path_);
-  {
-    std::ostringstream str;
-    for (auto& name : field_names_)
-      str << " " << name;
-    VAST_LOG_ACTOR_DEBUG("has field names:" << str.str());
-  }
-  {
-    std::ostringstream str;
-    for (auto& type : field_types_)
-      str << " " << type;
-    VAST_LOG_ACTOR_DEBUG("has field types:" << str.str());
-  }
-  if (! complex_types_.empty())
-  {
-    std::ostringstream str;
-    for (auto& type : complex_types_)
-      str << " " << type;
-    VAST_LOG_ACTOR_DEBUG("has container types:" << str.str());
-  }
-
-  path_ = "bro::" + path_;
-
-  return true;
-}
-
-value_type bro2::bro_to_vast(string const& type)
+// Converts a Bro type to a VAST type.
+value_type bro_to_vast(string const& type)
 {
   if (type == "enum" || type == "string" || type == "file")
     return string_type;
@@ -281,24 +44,174 @@ value_type bro2::bro_to_vast(string const& type)
     return invalid_type;
 }
 
-result<event> bro2::parse(std::string const& line)
+} // namespace <anonymous>
+
+bro2::bro2(cppa::actor_ptr sink, std::string const& filename)
+  : line<bro2>{std::move(sink), filename}
+{
+}
+
+// TODO: switch to grammar-based parsing.
+result<event> bro2::extract_impl_impl()
 {
   using vast::extract;
-  VAST_ENTER();
 
-  // TODO: switch to grammar-based parsing.
   util::field_splitter<std::string::const_iterator>
     fs{separator_.data(), separator_.size()};
 
-  fs.split(line.begin(), line.end());
+  // We assume that each Bro log comes with more than zero field names.
+  // Consequently, if we have not yet recorded any field names, we still need
+  // to parse the header.
+  if (field_names_.empty())
+  {
+    auto line = this->next();
+    if (! line)
+      return {};
 
+    fs.split(line->begin(), line->end());
+    if (fs.fields() != 2 || ! fs.equals(0, "#separator"))
+      return error{"got invalid #separator"};
+
+    std::string sep;
+    std::string bro_sep(fs.start(1), fs.end(1));
+    std::string::size_type pos = 0;
+    while (pos != std::string::npos)
+    {
+      pos = bro_sep.find("\\x", pos);
+      if (pos != std::string::npos)
+      {
+        auto i = std::stoi(bro_sep.substr(pos + 2, 2), nullptr, 16);
+        assert(i >= 0 && i <= 255);
+        sep.push_back(i);
+        pos += 2;
+      }
+    }
+    separator_ = string(sep.begin(), sep.end());
+    fs = {separator_.data(), separator_.size()};
+
+    line = this->next();
+    if (! line)
+      return {};
+
+    fs.split(line->begin(), line->end());
+    if (fs.fields() != 2 || ! fs.equals(0, "#set_separator"))
+      return error{"got invalid #set_separator"};
+
+    auto set_sep = std::string(fs.start(1), fs.end(1));
+    set_separator_ = string(set_sep.begin(), set_sep.end());
+
+    line = this->next();
+    if (! line)
+      return {};
+
+    fs.split(line->begin(), line->end());
+    if (fs.fields() != 2 || ! fs.equals(0, "#empty_field"))
+      return error{"invalid #empty_field"};
+
+    auto empty = std::string(fs.start(1), fs.end(1));
+    empty_field_ = string(empty.begin(), empty.end());
+
+    line = this->next();
+    if (! line)
+      return {};
+
+    fs.split(line->begin(), line->end());
+    if (fs.fields() != 2 || ! fs.equals(0, "#unset_field"))
+      return error{"invalid #unset_field"};
+
+    auto unset = std::string(fs.start(1), fs.end(1));
+    unset_field_ = string(unset.begin(), unset.end());
+
+    line = this->next();
+    if (! line)
+      return {};
+
+    fs.split(line->begin(), line->end());
+    if (fs.fields() != 2 || ! fs.equals(0, "#path"))
+      return error{"invalid #path"};
+
+    path_ = "bro::" + string(fs.start(1), fs.end(1));
+
+    // Skip #open tag.
+    line = this->next();
+    line = this->next();
+    if (! line)
+      return {};
+
+    fs.split(line->begin(), line->end());
+    if (! fs.equals(0, "#fields"))
+      return error{"got invalid #fields"};
+
+    for (size_t i = 1; i < fs.fields(); ++i)
+      field_names_.emplace_back(fs.start(i), fs.end(i));
+
+    line = this->next();
+    if (! line)
+      return {};
+
+    fs.split(line->begin(), line->end());
+    if (! fs.equals(0, "#types"))
+      return error{"got invalid #types"};
+
+    for (size_t i = 1; i < fs.fields(); ++i)
+    {
+      string t(fs.start(i), fs.end(i));
+      auto type = bro_to_vast(t);
+      field_types_.push_back(type);
+      if (is_container_type(type))
+      {
+        auto open = t.find("[");
+        assert(open != string::npos);
+        auto close = t.find("]", open);
+        assert(close != string::npos);
+        auto elem = t.substr(open + 1, close - open - 1);
+        complex_types_.push_back(bro_to_vast(elem));
+      }
+    }
+
+    VAST_LOG_ACTOR_DEBUG("parsed bro2 header:" <<
+                         " #separator " << separator_ <<
+                         " #set_separator " << set_separator_ <<
+                         " #empty_field " << empty_field_ <<
+                         " #unset_field " << unset_field_ <<
+                         " #path " << path_);
+
+    std::ostringstream str;
+    for (auto& name : field_names_)
+      str << " " << name;
+    VAST_LOG_ACTOR_DEBUG("has field names:" << str.str());
+
+    str.str("");
+    str.clear();
+    for (auto& type : field_types_)
+      str << " " << type;
+    VAST_LOG_ACTOR_DEBUG("has field types:" << str.str());
+
+    if (! complex_types_.empty())
+    {
+      str.str("");
+      str.clear();
+      for (auto& type : complex_types_)
+        str << " " << type;
+      VAST_LOG_ACTOR_DEBUG("has container types:" << str.str());
+    }
+  }
+
+  auto line = this->next();
+  if (! line)
+    return {};
+
+  fs.split(line->begin(), line->end());
   if (fs.fields() > 0 && *fs.start(0) == '#')
-    return error{"ignored comment: " + line +
-                 " (line " + to_string(current_) + ')'};
+    return error{"ignored comment at line " + to_string(number()) +
+                 ": " + *line};
 
   if (fs.fields() != field_types_.size())
-    return error{"inconsistent number of fields"
-                 " (line " + to_string(current_) + ')'};
+    return error{"inconsistent number of fields at line " +
+                 to_string(number()) + ": expected " +
+                 to_string(field_types_.size()) + ", got " +
+//                 to_string(fs.fields())};
+                 to_string(fs.fields()) + " (" + *line + ')'};
 
   event e;
   e.name(path_);
@@ -379,6 +292,11 @@ result<event> bro2::parse(std::string const& line)
   }
 
   return std::move(e);
+}
+
+char const* bro2::description_impl_impl() const
+{
+  return "bro2-source";
 }
 
 } // namespace source

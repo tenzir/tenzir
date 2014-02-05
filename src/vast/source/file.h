@@ -5,6 +5,7 @@
 #include "vast/value_type.h"
 #include "vast/string.h"
 #include "vast/io/file_stream.h"
+#include "vast/io/getline.h"
 #include "vast/source/synchronous.h"
 #include "vast/util/convert.h"
 
@@ -15,61 +16,104 @@ class event;
 namespace source {
 
 /// A file source that transforms file contents into events.
-class file : public synchronous
+template <typename Derived>
+class file : public synchronous<file<Derived>>
 {
 public:
   /// Constructs a file source.
   /// @param sink The actor to send the generated events to.
   /// @param filename The name of the file to ingest.
-  file(cppa::actor_ptr sink, std::string const& filename);
+  file(cppa::actor_ptr sink, std::string const& filename)
+    : synchronous<file<Derived>>{std::move(sink)},
+      file_handle_{path{filename}},
+      file_stream_{file_handle_}
+  {
+    file_handle_.open(vast::file::read_only);
+  }
 
-  /// Implements `synchronous::finished`.
-  virtual bool finished() final;
+  result<event> extract()
+  {
+    return static_cast<Derived*>(this)->extract_impl();
+  }
+
+  char const* description() const
+  {
+    return static_cast<Derived const*>(this)->description_impl();
+  }
+
+  bool good() const
+  {
+    return file_handle_.is_open();
+  }
+
+private:
+  vast::file file_handle_;
 
 protected:
-  vast::file file_handle_;
   io::file_input_stream file_stream_;
-  bool finished_ = false;
 };
 
 
 /// A file source that processes input line by line.
-class line : public file
+template <typename Derived>
+class line : public file<line<Derived>>
 {
 public:
-  line(cppa::actor_ptr sink, std::string const& filename);
+  line(cppa::actor_ptr sink, std::string const& filename)
+    : file<line<Derived>>{std::move(sink), filename}
+  {
+  }
 
-protected:
-  virtual result<event> extract() override;
-  virtual result<event> parse(std::string const& line) = 0;
+  result<event> extract_impl()
+  {
+    return static_cast<Derived*>(this)->extract_impl_impl();
+  }
+
+  char const* description_impl() const
+  {
+    return static_cast<Derived const*>(this)->description_impl_impl();
+  }
 
   /// Retrieves the next line from the file.
-  /// @returns `true` if extracting was successful.
-  bool next();
+  ///
+  /// @returns A pointer to the next line if extracting was successful and
+  /// `nullptr` on failure or EOF.
+  std::string const* next()
+  {
+    if (! this->good())
+      return nullptr;
 
-  size_t current_ = 0;
+    line_.clear();
+    while (line_.empty())
+      if (io::getline(this->file_stream_, line_))
+        ++current_;
+      else
+        return nullptr;
+
+    return &line_;
+  }
+
+  uint64_t number() const
+  {
+    return current_;
+  }
+
+private:
+  uint64_t current_ = 0;
   std::string line_;
 };
 
 /// A generic Bro 2.x log file source.
-class bro2 : public line
+class bro2 : public line<bro2>
 {
 public:
   bro2(cppa::actor_ptr sink, std::string const& filename);
 
-  virtual char const* description() const final;
+  result<event> extract_impl_impl();
+  char const* description_impl_impl() const;
 
 private:
-  /// Extracts the first `#`-lines of log meta data.
-  bool parse_header();
-
-  /// Converts a Bro type to a VAST type.
-  /// Does not support recursive container types.
-  static value_type bro_to_vast(string const& str);
-
-  virtual result<event> parse(std::string const& line) override;
-
-  string separator_;
+  string separator_ = " ";
   string set_separator_;
   string empty_field_;
   string unset_field_;
