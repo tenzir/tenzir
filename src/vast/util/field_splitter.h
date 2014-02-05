@@ -42,6 +42,7 @@ public:
   /// the range *[p, end)* will constitute the final element.
   void split(Iterator start, Iterator end, int max_fields = -1)
   {
+    fields_.clear();
     auto begin = start;
     while (start != end)
     {
@@ -118,8 +119,7 @@ public:
   }
 
 private:
-  typedef std::pair<Iterator, Iterator> iterator_pair;
-  std::vector<iterator_pair> fields_;
+  std::vector<std::pair<Iterator, Iterator>> fields_;
 
   char const* sep_;
   size_t sep_len_;
