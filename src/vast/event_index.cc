@@ -131,6 +131,7 @@ void event_meta_index::save()
     if (! exists(dir_))
       mkdir(dir_);
     io::archive(dir_ / "timestamp.idx", timestamp_);
+    timestamp_.checkpoint();
     VAST_LOG_ACTOR_DEBUG(
         "stored timestamp index (" << timestamp_.size() << " bits)");
   }
@@ -139,6 +140,7 @@ void event_meta_index::save()
     if (! exists(dir_))
       mkdir(dir_);
     io::archive(dir_ / "name.idx", name_);
+    name_.checkpoint();
     VAST_LOG_ACTOR_DEBUG(
         "stored name index (" << name_.size() << " bits)");
   }
@@ -383,6 +385,7 @@ void event_arg_index::save()
     auto const filename = pathify(p.first);
     assert(inverse.count(p.second.get()));
     io::archive(filename, inverse[p.second.get()], p.second);
+    p.second->checkpoint();
     VAST_LOG_ACTOR_DEBUG("stored index " << filename.trim(-4) <<
                          " (" << p.second->size() << " bits)");
   }
