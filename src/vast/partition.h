@@ -40,12 +40,13 @@ private:
 
 struct partition_actor : actor<partition_actor>
 {
-  partition_actor(path dir);
+  partition_actor(path dir, size_t batch_size);
 
   void act();
   char const* description() const;
 
   partition partition_;
+  size_t batch_size_;
   std::unordered_map<string, cppa::actor_ptr> event_arg_indexes_;
   cppa::actor_ptr event_meta_index_;
 };

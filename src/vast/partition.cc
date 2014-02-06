@@ -87,8 +87,9 @@ void partition::update(event_id base, size_t n)
     coverage_ |= bs;
 }
 
-partition_actor::partition_actor(path dir)
-  : partition_{std::move(dir)}
+partition_actor::partition_actor(path dir, size_t batch_size)
+  : partition_{std::move(dir)},
+    batch_size_{batch_size}
 {
 }
 
@@ -136,11 +137,10 @@ void partition_actor::act()
         VAST_LOG_ACTOR_DEBUG(
             "processes " << s.events() << " events from segment " << s.id());
 
-        size_t const batch_size = 5000;  // TODO: Make configurable.
         std::vector<cow<event>> meta_events;
         std::unordered_map<string, std::vector<cow<event>>> arg_events;
-        meta_events.reserve(batch_size);
-        arg_events.reserve(batch_size);
+        meta_events.reserve(batch_size_);
+        arg_events.reserve(batch_size_);
 
         segment::reader r{&s};
         while (auto e = r.read())
@@ -149,7 +149,7 @@ void partition_actor::act()
           auto ce = cow<event>{std::move(*e)};
 
           meta_events.push_back(ce);
-          if (meta_events.size() == batch_size)
+          if (meta_events.size() == batch_size_)
           {
             send(event_meta_index_, std::move(meta_events));
             meta_events.clear();
@@ -157,7 +157,7 @@ void partition_actor::act()
 
           auto& v = arg_events[ce->name()];
           v.push_back(ce);
-          if (v.size() == batch_size)
+          if (v.size() == batch_size_)
           {
             auto& a = event_arg_indexes_[ce->name()];
             if (! a)

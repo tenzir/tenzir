@@ -66,10 +66,13 @@ void program::act()
       auto ms = *config_.as<unsigned>("profile");
       auto profiler = spawn<util::profiler, detached+linked>(
           vast_dir / "log", std::chrono::seconds(ms));
+
       if (config_.check("profile-cpu"))
         send(profiler, atom("start"), atom("perftools"), atom("cpu"));
+
       if (config_.check("profile-heap"))
         send(profiler, atom("start"), atom("perftools"), atom("heap"));
+
       send(profiler, atom("start"), atom("rusage"));
     }
 
@@ -96,6 +99,7 @@ void program::act()
       tracker = spawn<id_tracker_actor, linked>(vast_dir);
       VAST_LOG_ACTOR_VERBOSE(
           "publishes tracker at " << tracker_host << ':' << tracker_port);
+
       publish(tracker, tracker_port, tracker_host.c_str());
     }
     else if (config_.check("receiver-actor"))
@@ -111,9 +115,12 @@ void program::act()
     if (config_.check("archive-actor") || config_.check("all-server"))
     {
       archive = spawn<archive_actor, linked>(
-          vast_dir / "archive", *config_.as<size_t>("archive.max-segments"));
+          vast_dir / "archive",
+          *config_.as<size_t>("archive.max-segments"));
+
       VAST_LOG_ACTOR_VERBOSE(
           "publishes archive at " << archive_host << ':' << archive_port);
+
       publish(archive, archive_port, archive_host.c_str());
     }
     else if (config_.check("receiver-actor")
@@ -122,6 +129,7 @@ void program::act()
     {
       VAST_LOG_ACTOR_VERBOSE(
           "connects to archive at " << archive_host << ':' << archive_port);
+
       archive = remote_actor(archive_host, archive_port);
     }
 
@@ -130,9 +138,12 @@ void program::act()
     auto index_port = *config_.as<unsigned>("index.port");
     if (config_.check("index-actor") || config_.check("all-server"))
     {
-      index = spawn<index_actor, linked>(vast_dir / "index");
+      index = spawn<index_actor, linked>(
+          vast_dir / "index", *config_.as<size_t>("index.batch-size"));
+
       VAST_LOG_ACTOR_VERBOSE(
           "publishes index " << index_host << ':' << index_port);
+
       publish(index, index_port, index_host.c_str());
     }
     else if (config_.check("receiver-actor")
@@ -141,6 +152,7 @@ void program::act()
     {
       VAST_LOG_ACTOR_VERBOSE("connects to index at " <<
                            index_host << ":" << index_port);
+
       index = remote_actor(index_host, index_port);
     }
 
@@ -176,12 +188,14 @@ void program::act()
       receiver = spawn<receiver_actor, linked>(tracker, archive, index);
       VAST_LOG_ACTOR_VERBOSE(
           "publishes receiver at " << receiver_host << ':' << receiver_port);
+
       publish(receiver, receiver_port, receiver_host.c_str());
     }
     else if (config_.check("ingestor-actor"))
     {
       VAST_LOG_ACTOR_VERBOSE(
           "connects to receiver at " << receiver_host << ":" << receiver_port);
+
       receiver = remote_actor(receiver_host, receiver_port);
     }
 
@@ -234,6 +248,7 @@ void program::act()
       search = spawn<search_actor, linked>(archive, index, schema_manager);
       VAST_LOG_ACTOR_VERBOSE(
           "publishes search at " << search_host << ':' << search_port);
+
       publish(search, search_port, search_host.c_str());
     }
 #ifdef VAST_HAVE_EDITLINE
@@ -241,6 +256,7 @@ void program::act()
     {
       VAST_LOG_ACTOR_VERBOSE(
           "connects to search at " << search_host << ":" << search_port);
+
       search = remote_actor(search_host, search_port);
 
       auto c = spawn<console, detached+linked>(search, vast_dir / "console");

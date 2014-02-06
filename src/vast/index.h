@@ -11,12 +11,14 @@ struct index_actor : actor<index_actor>
 {
   /// Spawns the index.
   /// @param directory The root directory of the index.
-  index_actor(path directory);
+  /// @param batch_size The number
+  index_actor(path directory, size_t batch_size);
 
   void act();
   char const* description() const;
 
   path dir_;
+  size_t batch_size_;
   cppa::actor_ptr active_;
   std::map<path, cppa::actor_ptr> partitions_;
 };

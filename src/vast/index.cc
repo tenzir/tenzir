@@ -12,8 +12,9 @@ using namespace cppa;
 
 namespace vast {
 
-index_actor::index_actor(path directory)
-  : dir_{std::move(directory)}
+index_actor::index_actor(path directory, size_t batch_size)
+  : dir_{std::move(directory)},
+    batch_size_{batch_size}
 {
 }
 
@@ -39,7 +40,7 @@ void index_actor::act()
         }
         else
         {
-          auto part = spawn<partition_actor, monitored>(p);
+          auto part = spawn<partition_actor, monitored>(p, batch_size_);
           partitions_.emplace(p.basename(), part);
         }
 
@@ -99,7 +100,8 @@ void index_actor::act()
 
         if (! partitions_.count(part_dir))
         {
-          auto a = spawn<partition_actor, monitored>(dir_ / part_dir);
+          auto d = dir_ / part_dir;
+          auto a = spawn<partition_actor, monitored>(d, batch_size_);
           partitions_.emplace(part_dir, a);
         }
 
@@ -130,7 +132,7 @@ void index_actor::act()
           VAST_LOG_ACTOR_INFO("creates new random partition " << id);
           auto part_dir = dir_ / to<string>(id);
           assert(! exists(part_dir));
-          auto p = spawn<partition_actor, monitored>(part_dir);
+          auto p = spawn<partition_actor, monitored>(part_dir, batch_size_);
           active_ = p;
           partitions_.emplace(part_dir.basename(), std::move(p));
         }
