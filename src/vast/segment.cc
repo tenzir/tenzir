@@ -101,7 +101,7 @@ bool segment::writer::flush()
 
   segment_->header_.n += chunk_->elements();
   segment_->header_.occupied_bytes += chunk_->compressed_bytes();
-  segment_->chunks_.emplace_back(*chunk_);
+  segment_->chunks_.push_back(std::move(*chunk_));
 
   chunk_ = make_unique<chunk>(segment_->header_.compression);
   chunk_writer_ = make_unique<chunk::writer>(*chunk_);
