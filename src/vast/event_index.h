@@ -122,8 +122,7 @@ private:
 
   arithmetic_bitmap_index<bitstream_type, time_point_type> timestamp_;
   string_bitmap_index<bitstream_type> name_;
-  bool name_exists_ = false;
-  bool time_exists_ = false;
+  bool exists_ = false;
 };
 
 class event_arg_index : public event_index<event_arg_index>
@@ -139,12 +138,26 @@ public:
   bool index(event const& e);
   bitstream lookup(expr::ast const& ast) const;
 
-  path pathify(offset const& o) const;
-
 private:
   struct loader;
   struct querier;
 
+  /// Constructs a filesystem path from an offset.
+  /// @param o The offset to convert.
+  /// @returns The path corresponding to *o*.
+  path pathify(offset const& o) const;
+
+  /// Loads a path of an event argument index into memory.
+  /// @param p The path to pointing to the index file.
+  /// @param type If not `nullptr`, expect that *p* has this type.
+  /// @returns The bitmap for *p* on success and `nullptr` otherwise.
+  bitmap_index* load(path const& p, value_type const* type = nullptr);
+
+  /// Index an event/record starting at a given offset.
+  /// @param r The record to index.
+  /// @param id The event ID to associate with values in *r*.
+  /// @param o The current offset.
+  /// @returns `true` on success.
   bool index_record(record const& r, uint64_t id, offset& o);
 
   std::multimap<value_type, path> files_;

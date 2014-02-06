@@ -20,7 +20,7 @@ struct event_meta_index::loader : expr::default_const_visitor
 
   virtual void visit(expr::name_extractor const&)
   {
-    if (idx.name_exists_ && idx.name_.size() == 1)
+    if (idx.exists_ && idx.name_.size() == 1)
     {
       // We only hit the file system if the index has exactly one ID, namely 0,
       // representing the default-constructed state.
@@ -32,7 +32,7 @@ struct event_meta_index::loader : expr::default_const_visitor
 
   virtual void visit(expr::timestamp_extractor const&)
   {
-    if (idx.time_exists_ && idx.timestamp_.size() == 1)
+    if (idx.exists_ && idx.timestamp_.size() == 1)
     {
       io::unarchive(idx.dir_ / "timestamp.idx", idx.timestamp_);
       VAST_LOG_DEBUG(
@@ -102,6 +102,9 @@ event_meta_index::event_meta_index(path dir)
   // ID 0 is not a valid event.
   timestamp_.append(1, false);
   name_.append(1, false);
+
+  timestamp_.checkpoint();
+  name_.checkpoint();
 }
 
 char const* event_meta_index::description() const
@@ -111,11 +114,8 @@ char const* event_meta_index::description() const
 
 void event_meta_index::scan()
 {
-  if (exists(dir_ / "name.idx"))
-    name_exists_ = true;
-
-  if (exists(dir_ / "timestamp.idx"))
-    time_exists_ = true;
+  if (exists(dir_ / "name.idx") || exists(dir_ / "timestamp.idx"))
+    exists_ = true;
 }
 
 void event_meta_index::load(expr::ast const& ast)
@@ -126,28 +126,38 @@ void event_meta_index::load(expr::ast const& ast)
 
 void event_meta_index::save()
 {
-  if (timestamp_.appended() > 1)
+  if (timestamp_.appended() > 0 || name_.appended() > 0)
   {
     if (! exists(dir_))
       mkdir(dir_);
+
     io::archive(dir_ / "timestamp.idx", timestamp_);
-    timestamp_.checkpoint();
     VAST_LOG_ACTOR_DEBUG(
         "stored timestamp index (" << timestamp_.size() << " bits)");
-  }
-  if (name_.appended() > 1)
-  {
-    if (! exists(dir_))
-      mkdir(dir_);
+
     io::archive(dir_ / "name.idx", name_);
-    name_.checkpoint();
     VAST_LOG_ACTOR_DEBUG(
         "stored name index (" << name_.size() << " bits)");
+
+    timestamp_.checkpoint();
+    name_.checkpoint();
   }
 }
 
 bool event_meta_index::index(event const& e)
 {
+  if (exists_ && timestamp_.size() == 1)
+  {
+    VAST_LOG_ACTOR_DEBUG("appending to existing event meta data");
+
+    io::unarchive(dir_ / "name.idx", name_);
+    VAST_LOG_ACTOR_DEBUG("loaded name index (" << name_.size() << " bits)");
+
+    io::unarchive(dir_ / "timestamp.idx", timestamp_);
+    VAST_LOG_ACTOR_DEBUG(
+        "loaded time index (" << timestamp_.size() << " bits)");
+  }
+
   return timestamp_.push_back(e.timestamp(), e.id())
       && name_.push_back(e.name(), e.id());
 }
@@ -186,26 +196,7 @@ struct event_arg_index::loader : expr::default_const_visitor
     if (! exists(filename))
       return;
 
-    value_type vt;
-    io::unarchive(filename, vt);
-    if (vt != type_)
-    {
-      VAST_LOG_WARN("type mismatch: requested " << type_ << ", got " << vt);
-      return;
-    }
-
-    std::unique_ptr<bitmap_index> bmi;
-    io::unarchive(filename, vt, bmi);
-    if (! bmi)
-    {
-      VAST_LOG_ERROR("got corrupt index: " << filename.basename());
-      return;
-    }
-
-    VAST_LOG_DEBUG("loaded index " << filename.trim(-4) <<
-                   " (" << bmi->size() << " bits)");
-
-    idx.offsets_.emplace(oe.off, std::move(bmi));
+    idx.load(filename, &type_);
   }
 
   virtual void visit(expr::type_extractor const& te)
@@ -216,37 +207,7 @@ struct event_arg_index::loader : expr::default_const_visitor
 
     auto er = idx.files_.equal_range(t);
     for (auto i = er.first; i != er.second; ++i)
-    {
-      offset o;
-      auto str = i->second.basename(true).str().substr(1);
-      auto start = str.begin();
-      if (! extract(start, str.end(), o))
-      {
-        VAST_LOG_ERROR("got invalid offset in path: " << i->second);
-        return;
-      }
-
-      if (idx.offsets_.count(o))
-        // We have issued an offset query in the past and loaded the
-        // corresponding index already.
-        return;
-
-      value_type vt;
-      std::unique_ptr<bitmap_index> bmi;
-      io::unarchive(i->second, vt, bmi);
-      if (! bmi)
-      {
-        VAST_LOG_ERROR("got corrupt index: " << i->second.basename());
-        return;
-      }
-
-      VAST_LOG_DEBUG("loaded index " << i->second.trim(-4) << " (" <<
-                     bmi->size() << " bits)");
-
-      assert(! idx.offsets_.count(o));
-      idx.types_.emplace(vt, bmi.get());
-      idx.offsets_.emplace(o, std::move(bmi));
-    }
+      idx.load(i->second);
   }
 
   event_arg_index& idx;
@@ -419,6 +380,53 @@ path event_arg_index::pathify(offset const& o) const
   return dir_ / (prefix + to<string>(o) + suffix);
 }
 
+bitmap_index* event_arg_index::load(path const& p, value_type const* type)
+{
+  offset o;
+  auto str = p.basename(true).str().substr(1);
+  auto start = str.begin();
+  if (! extract(start, str.end(), o))
+  {
+    VAST_LOG_ACTOR_ERROR("got invalid offset in path: " << p);
+    return nullptr;
+  }
+
+  // We have issued an offset query in the past and loaded the corresponding
+  // index already.
+  auto i = offsets_.find(o);
+  if (i != offsets_.end())
+    return i->second.get();
+
+  value_type vt;
+  std::unique_ptr<bitmap_index> bmi;
+
+  if (type)
+  {
+    io::unarchive(p, vt);
+    if (vt != *type)
+    {
+      VAST_LOG_ACTOR_ERROR("type mismatch: wanted " << *type << ", got " << vt);
+      return nullptr;
+    }
+  }
+
+  io::unarchive(p, vt, bmi);
+  if (! bmi)
+  {
+    VAST_LOG_ACTOR_ERROR("got corrupt index: " << p.basename());
+    return nullptr;
+  }
+
+  VAST_LOG_ACTOR_DEBUG("loaded index " << p.trim(-4) <<
+                       " (" << bmi->size() << " bits)");
+
+  auto idx = bmi.get();
+  types_.emplace(vt, idx);
+  offsets_.emplace(o, std::move(bmi));
+
+  return idx;
+}
+
 bool event_arg_index::index_record(record const& r, uint64_t id, offset& o)
 {
   if (o.empty())
@@ -441,7 +449,7 @@ bool event_arg_index::index_record(record const& r, uint64_t id, offset& o)
       }
       else if (! is_container_type(v.which()))
       {
-        bitmap_index* idx;
+        bitmap_index* idx = nullptr;
         auto i = offsets_.find(o);
         if (i != offsets_.end())
         {
@@ -449,6 +457,37 @@ bool event_arg_index::index_record(record const& r, uint64_t id, offset& o)
         }
         else
         {
+          // Check if we have an exisiting persistent index to append to.
+          for (auto& p : files_)
+          {
+            offset off;
+            auto str = p.second.basename(true).str().substr(1);
+            auto start = str.begin();
+            if (! extract(start, str.end(), off))
+            {
+              VAST_LOG_ACTOR_ERROR("got invalid offset in path: " << p.second);
+              quit(exit::error);
+              return false;
+            }
+
+            if (o == off)
+            {
+              idx = load(p.second);
+              if (! idx)
+              {
+                quit(exit::error);
+                return false;
+              }
+
+              VAST_LOG_ACTOR_DEBUG("appending to: " << p.second);
+              break;
+            }
+          }
+        }
+
+        if (! idx)
+        {
+          // If we haven't found an index to append to, we create a new one.
           auto bmi = make_bitmap_index<bitstream_type>(v.which());
           if (! bmi)
           {
@@ -462,7 +501,7 @@ bool event_arg_index::index_record(record const& r, uint64_t id, offset& o)
           types_.emplace(v.which(), idx);
           offsets_.emplace(o, std::move(*bmi));
         }
-        assert(idx != nullptr);
+
         if (! idx->push_back(v, id))
           return false;
       }
