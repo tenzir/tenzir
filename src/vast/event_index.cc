@@ -376,6 +376,7 @@ void event_arg_index::save()
   {
     if (p.second->empty() || p.second->appended() == 0)
       continue;
+
     if (! exists(dir_))
       mkdir(dir_);
 
