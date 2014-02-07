@@ -37,34 +37,13 @@ public:
   char const* description() const;
 
 private:
-  template <typename Source, typename... Args>
-  cppa::actor_ptr make_source(Args&&... args)
-  {
-    using namespace cppa;
-
-    // FIXME: figure out why detaching the segmentizer yields a two-fold
-    // performance increase in the ingestion rate.
-    auto snk = spawn<segmentizer, monitored>(
-        self, max_events_per_chunk_, max_segment_size_);
-
-    auto src = spawn<Source, detached>(snk, std::forward<Args>(args)...);
-    send(src, atom("batch size"), batch_size_);
-
-    snk->link_to(src);
-
-    sinks_.emplace(std::move(snk), 0);
-    sources_.insert(src);
-
-    return src;
-  }
-
   path dir_;
   cppa::actor_ptr receiver_;
+  cppa::actor_ptr source_;
+  cppa::actor_ptr sink_;
   size_t max_events_per_chunk_;
   size_t max_segment_size_;
   uint64_t batch_size_;
-  std::set<cppa::actor_ptr> sources_;
-  std::unordered_map<cppa::actor_ptr, uint64_t> sinks_;
   std::map<uuid, cow<segment>> segments_;
 };
 

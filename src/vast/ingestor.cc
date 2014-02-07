@@ -28,6 +28,12 @@ ingestor_actor::ingestor_actor(path dir,
 void ingestor_actor::act()
 {
   trap_exit(true);
+
+  // FIXME: figure out why detaching the segmentizer yields a two-fold
+  // performance increase in the ingestion rate.
+  sink_ = spawn<segmentizer, monitored>(
+      self, max_events_per_chunk_, max_segment_size_);
+
   become(
       on(atom("terminate"), arg_match) >> [=](uint32_t reason)
       {
@@ -65,79 +71,46 @@ void ingestor_actor::act()
         }
         else
         {
-          delayed_send(self, std::chrono::seconds(30),
+          delayed_send(self, std::chrono::seconds(10),
                        atom("terminate"), reason);
 
           VAST_LOG_ACTOR_INFO(
-              "waits 30 seconds for " << segments_.size() << " segment ACKs");
+              "waits 10 seconds for " << segments_.size() << " segment ACKs");
         }
       },
       on(atom("EXIT"), arg_match) >> [=](uint32_t reason)
       {
-        VAST_LOG_ACTOR_DEBUG("got EXIT from " << VAST_ACTOR_ID(last_sender()));
-        if (sources_.empty())
+        if (! source_)
           send(self, atom("shutdown"), reason);
         else
-          // Tell all sources to exit, they will in turn propagate the exit
-          // message to the sinks. Once we have received DOWN from all sinks,
-          // the ingestor has nothing else left todo and can shutdown.
-          for (auto& src : sources_)
-            send_exit(src, exit::stop);
+          // Tell the source to exit, it will in turn propagate the exit
+          // message to the sink.
+          send_exit(source_, exit::stop);
       },
       on(atom("DOWN"), arg_match) >> [=](uint32_t /* reason */)
       {
-        VAST_LOG_ACTOR_DEBUG("got DOWN from " << VAST_ACTOR_ID(last_sender()));
-        auto i = sinks_.find(last_sender());
-        assert(i != sinks_.end());  // We only monitor sinks.
-        sinks_.erase(i);
-        if (sinks_.empty())
-          delayed_send(self, std::chrono::seconds(5), atom("shutdown"), exit::done);
+        // Once we have received DOWN from the sink, the ingestor has nothing
+        // else left todo and can shutdown.
+        delayed_send(self, std::chrono::seconds(5), atom("shutdown"), exit::done);
       },
 #ifdef VAST_HAVE_BROCCOLI
       on(atom("ingest"), atom("broccoli"), arg_match) >>
         [=](std::string const& host, unsigned port,
             std::vector<std::string> const& events)
       {
-        auto src = make_source<source::broccoli>(host, port);
-        send(src, atom("subscribe"), events);
-        send(src, atom("run"));
+        // TODO.
       },
 #endif
       on(atom("ingest"), "bro2", arg_match) >> [=](std::string const& file)
       {
-        auto src = make_source<source::bro2>(file);
-        send(src, atom("run"));
+        source_ = spawn<source::bro2, detached>(sink_, file);
+        source_->link_to(sink_);
+        send(source_, atom("batch size"), batch_size_);
+        send(source_, atom("run"));
       },
       on(atom("ingest"), val<std::string>, arg_match) >> [=](std::string const&)
       {
         VAST_LOG_ACTOR_ERROR("got invalid ingestion file type");
-      },
-      on(atom("run")) >> [=]
-      {
-        delayed_send(
-            self,
-            std::chrono::seconds(2),
-            atom("statistics"), atom("print"), uint64_t(0));
-      },
-      on(atom("statistics"), arg_match) >> [=](uint64_t rate)
-      {
-        assert(sinks_.find(last_sender()) != sinks_.end());
-        sinks_[last_sender()] = rate;
-      },
-      on(atom("statistics"), atom("print"), arg_match) >> [=](uint64_t last)
-      {
-        uint64_t sum = 0;
-        for (auto& pair : sinks_)
-          sum += pair.second;
-
-        if (sum != last)
-          VAST_LOG_ACTOR_INFO("ingests at rate " << sum << " events/sec");
-
-        if (! sinks_.empty())
-          delayed_send(
-              self,
-              std::chrono::seconds(1),
-              atom("statistics"), atom("print"), sum);
       },
       on_arg_match >> [=](segment& s)
       {
@@ -158,7 +131,7 @@ void ingestor_actor::act()
       on(atom("nack"), arg_match) >> [=](uuid const& id)
       {
         VAST_LOG_ACTOR_ERROR("got nack for segment " << id);
-        quit(exit::error);
+        send(self, atom("shutdown"), exit::error);
       });
 }
 

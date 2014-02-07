@@ -224,24 +224,22 @@ void program::act()
       }
 #endif
 
-      if (config_.check("ingest.file-names"))
+      if (auto file = config_.get("ingest.file-name"))
       {
         auto type = *config_.get("ingest.file-type");
-        auto files = *config_.as<std::vector<std::string>>("ingest.file-names");
+        if (! exists(string(*file)))
+        {
+          VAST_LOG_ACTOR_ERROR("no such file: " << *file);
+          send_exit(self, exit::error);
+          return;
+        }
 
-        for (auto& file : files)
-          if (! exists(string(file)))
-          {
-            VAST_LOG_ACTOR_ERROR("no such file: " << file);
-            send_exit(self, exit::error);
-            return;
-          }
-
-        for (auto& file : files)
-          send(ingestor, atom("ingest"), type, file);
+        send(ingestor, atom("ingest"), type, *file);
       }
-
-      send(ingestor, atom("run"));
+      else
+      {
+        send_exit(ingestor, exit::done);
+      }
     }
 
     actor_ptr search;

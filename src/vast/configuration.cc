@@ -77,8 +77,8 @@ void configuration::initialize()
         .init(5000);
   ingest.add("max-segment-size", "maximum segment size in MB").init(128);
   ingest.add("batch-size", "number of events to ingest in one run").init(4000);
-  ingest.add("file-names", "file(s) to ingest").multi();
-  ingest.add("file-type", "file type of the file(s) to ingest").init("bro2");
+  ingest.add("file-name", "path to file to ingest").single();
+  ingest.add("file-type", "file type of the file to ingest").init("bro2");
 #ifdef VAST_HAVE_BROCCOLI
   ingest.add("broccoli-host", "hostname/address of the broccoli source")
         .init("127.0.0.1");
@@ -129,6 +129,8 @@ void configuration::initialize()
   add_conflict("console-actor", "search-actor");
 #endif
 
+  add_dependency("ingest.file-name", "ingestor-actor");
+  add_dependency("ingest.file-type", "ingest.file-name");
   add_dependencies("index.partition", {"index-actor", "all-server"});
   add_conflict("index.rebuild", "index.partition");
 }
