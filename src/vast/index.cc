@@ -74,10 +74,10 @@ void index_actor::act()
             break;
           }
 
-        if (reason == exit::stop)
+        if (reason == exit::stop || reason == exit::done)
         {
           if (partitions_.empty())
-            quit(exit::stop);
+            quit(reason);
         }
         else
         {
