@@ -232,6 +232,7 @@ public:
   bool is_conjunction() const;
   bool is_disjunction() const;
   bool is_predicate() const;
+  bool is_meta_predicate() const;
 
 private:
   std::unique_ptr<node> node_;

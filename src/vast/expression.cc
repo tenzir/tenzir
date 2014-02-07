@@ -847,30 +847,51 @@ struct conjunction_tester : public expr::default_const_visitor
 {
   virtual void visit(expr::conjunction const&)
   {
-    flag = true;
+    flag_ = true;
   }
 
-  bool flag = false;
+  bool flag_ = false;
 };
 
 struct disjunction_tester : public expr::default_const_visitor
 {
   virtual void visit(expr::disjunction const&)
   {
-    flag = true;
+    flag_ = true;
   }
 
-  bool flag = false;
+  bool flag_ = false;
 };
 
 struct predicate_tester : public expr::default_const_visitor
 {
   virtual void visit(expr::predicate const&)
   {
-    flag = true;
+    flag_ = true;
   }
 
-  bool flag = false;
+  bool flag_ = false;
+};
+
+class meta_predicate_tester : public expr::default_const_visitor
+{
+public:
+  virtual void visit(expr::predicate const& pred)
+  {
+    pred.lhs().accept(*this);
+  }
+
+  virtual void visit(expr::name_extractor const&)
+  {
+    flag_ = true;
+  }
+
+  virtual void visit(expr::timestamp_extractor const&)
+  {
+    flag_ = true;
+  }
+
+  bool flag_ = false;
 };
 
 } // namespace <anonymous>
@@ -879,21 +900,28 @@ bool ast::is_conjunction() const
 {
   conjunction_tester visitor;
   accept(visitor);
-  return visitor.flag;
+  return visitor.flag_;
 }
 
 bool ast::is_disjunction() const
 {
   disjunction_tester visitor;
   accept(visitor);
-  return visitor.flag;
+  return visitor.flag_;
 }
 
 bool ast::is_predicate() const
 {
   predicate_tester visitor;
   accept(visitor);
-  return visitor.flag;
+  return visitor.flag_;
+}
+
+bool ast::is_meta_predicate() const
+{
+  meta_predicate_tester visitor;
+  accept(visitor);
+  return visitor.flag_;
 }
 
 void ast::serialize(serializer& sink) const
