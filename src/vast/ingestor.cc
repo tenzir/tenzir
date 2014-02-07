@@ -72,14 +72,17 @@ void ingestor_actor::act()
               "waits 30 seconds for " << segments_.size() << " segment ACKs");
         }
       },
-      on(atom("EXIT"), arg_match) >> [=](uint32_t /* reason */)
+      on(atom("EXIT"), arg_match) >> [=](uint32_t reason)
       {
-        // Tell all sources to exit, they will in turn propagate the exit
-        // message to the sinks. Once we have received DOWN from all sinks, the
-        // ingestor has nothing else left todo and can shutdown.
         VAST_LOG_ACTOR_DEBUG("got EXIT from " << VAST_ACTOR_ID(last_sender()));
-        for (auto& src : sources_)
-          send_exit(src, exit::stop);
+        if (sources_.empty())
+          send(self, atom("shutdown"), reason);
+        else
+          // Tell all sources to exit, they will in turn propagate the exit
+          // message to the sinks. Once we have received DOWN from all sinks,
+          // the ingestor has nothing else left todo and can shutdown.
+          for (auto& src : sources_)
+            send_exit(src, exit::stop);
       },
       on(atom("DOWN"), arg_match) >> [=](uint32_t /* reason */)
       {
