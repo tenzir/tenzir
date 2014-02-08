@@ -13,33 +13,90 @@ namespace vast {
 
 namespace {
 
-class discriminator : public expr::default_const_visitor
+// If the given predicate is a name extractor, extracts the name.
+struct name_checker : public expr::default_const_visitor
 {
-public:
   virtual void visit(expr::predicate const& pred)
   {
     pred.lhs().accept(*this);
+    if (check_)
+      pred.rhs().accept(*this);
   }
 
-  virtual void visit(expr::offset_extractor const&)
+  virtual void visit(expr::name_extractor const&)
   {
-    meta = false;
+    check_ = true;
   }
 
-  virtual void visit(expr::type_extractor const&)
+  virtual void visit(expr::constant const& c)
   {
-    meta = false;
+    value_ = c.val;
   }
 
-  bool meta = true;
+  bool check_ = false;
+  value value_;
 };
 
-bool is_meta_query(expr::ast const& ast)
+// Partitions the AST predicates into meta and data predicates. Moreover, it
+// assigns each data predicate a name if a it coexists with name-extractor
+// predicate that restricts the scope of the data predicate.
+struct predicatizer : public expr::default_const_visitor
 {
-  discriminator visitor;
-  ast.accept(visitor);
-  return visitor.meta;
-}
+  virtual void visit(expr::conjunction const& conj)
+  {
+    std::vector<expr::ast> flat;
+    std::vector<expr::ast> deep;
+
+    // Partition terms into leaves and others.
+    for (auto& operand : conj.operands)
+    {
+      auto op = expr::ast{*operand};
+      if (op.is_predicate())
+        flat.push_back(std::move(op));
+      else
+        deep.push_back(std::move(op));
+    }
+
+    // Extract the name for all predicates in this conjunction.
+    //
+    // TODO: add a check to the semantic pass after constructing queries to
+    // flag multiple name/offset/time extractors in the same conjunction.
+    name_.clear();
+    for (auto& pred : flat)
+    {
+      name_checker checker;
+      pred.accept(checker);
+      if (checker.check_)
+        name_ = checker.value_.get<string>();
+    }
+
+    for (auto& pred : flat)
+      pred.accept(*this);
+
+    // Proceed with the remaining conjunctions deeper in the tree.
+    name_.clear();
+    for (auto& n : deep)
+      n.accept(*this);
+  }
+
+  virtual void visit(expr::disjunction const& disj)
+  {
+    for (auto& operand : disj.operands)
+      operand->accept(*this);
+  }
+
+  virtual void visit(expr::predicate const& pred)
+  {
+    if (! expr::ast{pred}.is_meta_predicate())
+      data_predicates_.emplace(name_, pred);
+    else
+      meta_predicates_.push_back(pred);
+  }
+
+  string name_;
+  std::multimap<string, expr::ast> data_predicates_;
+  std::vector<expr::ast> meta_predicates_;
+};
 
 } // namespace <anonymous>
 
@@ -121,16 +178,17 @@ void partition_actor::act()
       },
       on_arg_match >> [=](expr::ast const& ast, actor_ptr const& sink)
       {
+        assert(partition_.coverage());
         VAST_LOG_ACTOR_DEBUG("got AST for " << VAST_ACTOR_ID(sink) <<
                              ": " << ast);
 
-        assert(partition_.coverage());
         auto t = make_any_tuple(ast, partition_.coverage(), sink);
-        if (is_meta_query(ast))
+        if (ast.is_meta_predicate())
           event_meta_index_ << t;
         else
+          // TODO: restrict to relevant events.
           for (auto& p : event_arg_indexes_)
-            p.second << t; // TODO: restrict to relevant events.
+            p.second << t;
       },
       on_arg_match >> [=](segment const& s)
       {
