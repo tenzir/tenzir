@@ -91,30 +91,38 @@ void bitstream::bitwise_not()
 
 void bitstream::bitwise_and(bitstream const& other)
 {
-  assert(concept_);
   assert(other.concept_);
-  concept_->bitwise_and(*other.concept_);
+  if (concept_)
+    concept_->bitwise_and(*other.concept_);
+  else
+    concept_ = other.concept_->copy();
 }
 
 void bitstream::bitwise_or(bitstream const& other)
 {
-  assert(concept_);
   assert(other.concept_);
-  concept_->bitwise_or(*other.concept_);
+  if (concept_)
+    concept_->bitwise_or(*other.concept_);
+  else
+    concept_ = other.concept_->copy();
 }
 
 void bitstream::bitwise_xor(bitstream const& other)
 {
-  assert(concept_);
   assert(other.concept_);
-  concept_->bitwise_xor(*other.concept_);
+  if (concept_)
+    concept_->bitwise_xor(*other.concept_);
+  else
+    concept_ = other.concept_->copy();
 }
 
 void bitstream::bitwise_subtract(bitstream const& other)
 {
-  assert(concept_);
   assert(other.concept_);
-  concept_->bitwise_subtract(*other.concept_);
+  if (concept_)
+    concept_->bitwise_subtract(*other.concept_);
+  else
+    concept_ = other.concept_->copy();
 }
 
 void bitstream::append_impl(size_type n, bool bit)
