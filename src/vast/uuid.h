@@ -28,6 +28,7 @@ public:
 
   uuid() = default;
   uuid(std::string const& str);
+  uuid(string const& str);
 
   iterator begin();
   iterator end();

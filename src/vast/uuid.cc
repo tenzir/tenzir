@@ -3,6 +3,7 @@
 #include <random>
 #include "vast/logger.h"
 #include "vast/serialization.h"
+#include "vast/string.h"
 
 namespace vast {
 namespace {
@@ -145,6 +146,12 @@ uuid uuid::nil()
 }
 
 uuid::uuid(std::string const& str)
+{
+  auto u = string_generator()(str.begin(), str.end());
+  swap(u);
+}
+
+uuid::uuid(string const& str)
 {
   auto u = string_generator()(str.begin(), str.end());
   swap(u);
