@@ -195,10 +195,13 @@ private:
 /// would otherwise return `void`.
 struct nothing { };
 
+static constexpr auto nil = nothing{};
+
 } // namespace util
 
 using util::trial;
 using util::nothing;
+using util::nil;
 
 } // namespace vast
 
