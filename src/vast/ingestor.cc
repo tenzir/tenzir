@@ -34,6 +34,16 @@ void ingestor_actor::act()
   sink_ = spawn<segmentizer, monitored>(
       self, max_events_per_chunk_, max_segment_size_);
 
+  auto segment_dir = dir_ / "ingest" / "segments";
+  traverse(
+      segment_dir,
+      [&](path const& p) -> bool
+      {
+        VAST_LOG_ACTOR_INFO("found orphaned segment: " << p.basename());
+        orphaned_.insert(p.basename());
+        return true;
+      });
+
   become(
       on(atom("terminate"), arg_match) >> [=](uint32_t reason)
       {
@@ -45,7 +55,6 @@ void ingestor_actor::act()
         {
           VAST_LOG_ACTOR_INFO("writes un-acked segments to stable storage");
 
-          auto segment_dir = dir_ / "ingest" / "segments";
           if (! exists(segment_dir) && ! mkdir(segment_dir))
           {
             VAST_LOG_ACTOR_ERROR("failed to create directory " << segment_dir);
@@ -56,7 +65,8 @@ void ingestor_actor::act()
             {
               auto const path = segment_dir / to<string>(p.first);
               VAST_LOG_ACTOR_INFO("saves " << path);
-              io::archive(path, p.second);
+              if (! io::archive(path, p.second))
+                VAST_LOG_ACTOR_ERROR("failed to save " << path);
             }
           }
 
@@ -93,6 +103,21 @@ void ingestor_actor::act()
         // else left todo and can shutdown.
         delayed_send(self, std::chrono::seconds(5), atom("shutdown"), exit::done);
       },
+      on(atom("submit")) >> [=]
+      {
+        for (auto& base : orphaned_)
+        {
+          auto p = segment_dir / base;
+          segment s;
+          if (! io::unarchive(p, s))
+          {
+            VAST_LOG_ACTOR_ERROR("failed to load orphaned segment " << base);
+            continue;
+          }
+
+          send(self, std::move(s));
+        }
+      },
 #ifdef VAST_HAVE_BROCCOLI
       on(atom("ingest"), atom("broccoli"), arg_match) >>
         [=](std::string const& host, unsigned port,
@@ -127,6 +152,14 @@ void ingestor_actor::act()
         auto i = segments_.find(id);
         assert(i != segments_.end());
         segments_.erase(i);
+
+        auto j = orphaned_.find(path{to<string>(id)});
+        if (j != orphaned_.end())
+        {
+          VAST_LOG_ACTOR_INFO("deletes accepted segment " << id);
+          rm(segment_dir / *j);
+          orphaned_.erase(j);
+        }
       },
       on(atom("nack"), arg_match) >> [=](uuid const& id)
       {

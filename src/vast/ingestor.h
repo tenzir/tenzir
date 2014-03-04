@@ -45,6 +45,7 @@ private:
   size_t max_segment_size_;
   uint64_t batch_size_;
   std::map<uuid, cow<segment>> segments_;
+  std::set<path> orphaned_;
 };
 
 } // namespace vast

@@ -209,6 +209,9 @@ void program::act()
           *config_.as<size_t>("ingest.max-segment-size") * 1000000,
           *config_.as<size_t>("ingest.batch-size"));
 
+      if (config_.check("ingest.submit"))
+        send(ingestor, atom("submit"));
+
 #ifdef VAST_HAVE_BROCCOLI
       util::broccoli::init(config_.check("broccoli-messages"),
                            config_.check("broccoli-calltrace"));
