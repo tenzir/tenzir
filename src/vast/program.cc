@@ -97,7 +97,7 @@ void program::act()
     if (config_.check("tracker-actor") || config_.check("all-server"))
     {
       tracker = spawn<id_tracker_actor, linked>(vast_dir);
-      VAST_LOG_ACTOR_VERBOSE(
+      VAST_LOG_ACTOR_INFO(
           "publishes tracker at " << tracker_host << ':' << tracker_port);
 
       publish(tracker, tracker_port, tracker_host.c_str());
@@ -118,7 +118,7 @@ void program::act()
           vast_dir / "archive",
           *config_.as<size_t>("archive.max-segments"));
 
-      VAST_LOG_ACTOR_VERBOSE(
+      VAST_LOG_ACTOR_INFO(
           "publishes archive at " << archive_host << ':' << archive_port);
 
       publish(archive, archive_port, archive_host.c_str());
@@ -141,7 +141,7 @@ void program::act()
       index = spawn<index_actor, linked>(
           vast_dir / "index", *config_.as<size_t>("index.batch-size"));
 
-      VAST_LOG_ACTOR_VERBOSE(
+      VAST_LOG_ACTOR_INFO(
           "publishes index " << index_host << ':' << index_port);
 
       publish(index, index_port, index_host.c_str());
@@ -186,7 +186,7 @@ void program::act()
     if (config_.check("receiver-actor") || config_.check("all-server"))
     {
       receiver = spawn<receiver_actor, linked>(tracker, archive, index);
-      VAST_LOG_ACTOR_VERBOSE(
+      VAST_LOG_ACTOR_INFO(
           "publishes receiver at " << receiver_host << ':' << receiver_port);
 
       publish(receiver, receiver_port, receiver_host.c_str());
@@ -251,7 +251,7 @@ void program::act()
     if (config_.check("search-actor") || config_.check("all-server"))
     {
       search = spawn<search_actor, linked>(archive, index, schema_manager);
-      VAST_LOG_ACTOR_VERBOSE(
+      VAST_LOG_ACTOR_INFO(
           "publishes search at " << search_host << ':' << search_port);
 
       publish(search, search_port, search_host.c_str());
