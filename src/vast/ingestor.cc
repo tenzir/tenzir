@@ -91,11 +91,16 @@ void ingestor_actor::act()
       on(atom("EXIT"), arg_match) >> [=](uint32_t reason)
       {
         if (! source_)
+        {
           send(self, atom("shutdown"), reason);
+          send_exit(sink_, reason);
+        }
         else
+        {
           // Tell the source to exit, it will in turn propagate the exit
           // message to the sink.
           send_exit(source_, exit::stop);
+        }
       },
       on(atom("DOWN"), arg_match) >> [=](uint32_t /* reason */)
       {
