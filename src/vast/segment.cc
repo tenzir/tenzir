@@ -18,6 +18,8 @@ void segment::header::serialize(serializer& sink) const
     << magic << version
     << id
     << compression
+    << first
+    << last
     << base
     << n
     << max_bytes
@@ -39,6 +41,8 @@ void segment::header::deserialize(deserializer& source)
   source
     >> id
     >> compression
+    >> first
+    >> last
     >> base
     >> n
     >> max_bytes
@@ -49,6 +53,8 @@ bool operator==(segment::header const& x, segment::header const& y)
 {
   return x.id == y.id
       && x.compression == y.compression
+      && x.first == y.first
+      && x.last == y.last
       && x.base == y.base
       && x.n == y.n
       && x.max_bytes == y.max_bytes
@@ -99,12 +105,16 @@ bool segment::writer::flush()
       && segment_->bytes() + chunk_->compressed_bytes() > segment_->max_bytes())
     return false;
 
+  segment_->header_.first = first_;
+  segment_->header_.last = last_;
   segment_->header_.n += chunk_->elements();
   segment_->header_.occupied_bytes += chunk_->compressed_bytes();
   segment_->chunks_.push_back(std::move(*chunk_));
 
   chunk_ = make_unique<chunk>(segment_->header_.compression);
   chunk_writer_ = make_unique<chunk::writer>(*chunk_);
+  first_ = {};
+  last_ = {};
 
   return true;
 }
@@ -120,6 +130,12 @@ bool segment::writer::store(event const& e)
     chunk_writer_->write(e.name(), 0) &&
     chunk_writer_->write(e.timestamp(), 0) &&
     chunk_writer_->write(static_cast<std::vector<value> const&>(e));
+
+  if (e.timestamp() < first_)
+    first_ = e.timestamp();
+
+  if (e.timestamp() > last_)
+    last_ = e.timestamp();
 
   if (! success)
     VAST_LOG_ERROR("failed to write event to chunk");
@@ -343,6 +359,16 @@ segment::segment(uuid id, uint64_t max_bytes, io::compression method)
 uuid const& segment::id() const
 {
   return header_.id;
+}
+
+time_point segment::first() const
+{
+  return header_.first;
+}
+
+time_point segment::last() const
+{
+  return header_.last;
 }
 
 void segment::base(event_id id)

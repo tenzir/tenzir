@@ -29,6 +29,8 @@ public:
 
     uuid id;
     io::compression compression;
+    time_point first;
+    time_point last;
     event_id base = 0;
     uint64_t n = 0;
     uint64_t max_bytes = 0;
@@ -90,6 +92,8 @@ public:
     std::unique_ptr<chunk> chunk_;
     std::unique_ptr<chunk::writer> chunk_writer_;
     size_t max_events_per_chunk_;
+    time_point first_;
+    time_point last_;
   };
 
   /// A proxy class for reading from a segment. Multiple readers can safely
@@ -188,6 +192,12 @@ public:
   /// Retrieves the segment ID.
   /// @returns A UUID identifying the segment.
   uuid const& id() const;
+
+  /// Retrieves the timestamp of the earliest event in the segment.
+  time_point first() const;
+
+  /// Retrieves the timestamp of the oldest event in the segment.
+  time_point last() const;
 
   /// Sets the segment base ID for events.
   /// @param id The base event ID for this segment.
