@@ -163,6 +163,7 @@ console::console(cppa::actor_ptr search, path dir)
   main->add("ask", "enter query mode")->on(
       [=](std::string) -> util::result<bool>
       {
+        cmdline_.append_to_history("ask");
         cmdline_.mode_push("ask");
         return false;
       });
@@ -266,7 +267,7 @@ console::console(cppa::actor_ptr search, path dir)
               print(error) << "syntax error: " << failure << std::endl;
               show_prompt();
             },
-            on_arg_match >> [=](actor_ptr const& qry, expr::ast const& ast)
+            on_arg_match >> [=](expr::ast const& ast, actor_ptr const& qry)
             {
               assert(! active_.count(qry));
               assert(qry);
@@ -574,16 +575,16 @@ void console::act()
         }
 
         // An empty result means that we should not go back to the prompt.
-        auto result = cmdline_.process(line);
-        if (result.engaged())
+        auto r = cmdline_.process(line);
+        if (r.engaged())
         {
-          if (*result)
+          if (*r)
             cmdline_.append_to_history(line);
           show_prompt();
         }
-        else if (result.failed())
+        else if (r.failed())
         {
-          print(error) << result.failure() << std::endl;
+          print(error) << r.failure() << std::endl;
           show_prompt();
         }
       },
