@@ -469,7 +469,28 @@ BOOST_AUTO_TEST_CASE(ewah_finding)
 
 BOOST_AUTO_TEST_CASE(ewah_bitwise_not)
 {
+  ewah_bitstream ebs;
+  ebs.push_back(true);
+  ebs.push_back(false);
+  ebs.append(30, true);
+  ebs.push_back(false);
+
+  ewah_bitstream comp;
+  comp.push_back(false);
+  comp.push_back(true);
+  comp.append(30, false);
+  comp.push_back(true);
+
   auto str =
+    "0000000000000000000000000000000000000000000000000000000000000000\n"
+    "                               100000000000000000000000000000010";
+
+  BOOST_CHECK_EQUAL(~ebs, comp);
+  BOOST_CHECK_EQUAL(ebs, ~comp);
+  BOOST_CHECK_EQUAL(~~ebs, ebs);
+  BOOST_CHECK_EQUAL(to_string(~ebs), str);
+
+  str =
     "0000000000000000000000000000000000000000000000000000000000000010\n"
     "0000000000000000000000000000000000111111111111111111110000000000\n"
     "1100000000000000000000000000000000000000000000000000000101000000\n"
@@ -492,15 +513,19 @@ BOOST_AUTO_TEST_CASE(ewah_bitwise_not)
   BOOST_CHECK_EQUAL(to_string(~ewah), str);
 }
 
+
 BOOST_AUTO_TEST_CASE(ewah_bitwise_and)
 {
   auto str =
-    "0000000000000000000000000000000000000000000000000000000000000000\n"
-    "                                                              10";
+      "0000000000000000000000000000000000000000000000000000000000000001\n"
+      "0000000000000000000000000000000000000000000000000000000000000010\n"
+      "0000000000000000000000000000001010000000000000000000000000000000\n"
+      "                       00000000000000000000000000000000000000000";
 
-  auto anded = ewah2 & ewah3;
-  BOOST_CHECK_EQUAL(to_string(anded), str);
-  BOOST_CHECK_EQUAL(anded.size(), 2);
+  auto max_size = std::max(ewah2.size(), ewah3.size());
+  BOOST_CHECK_EQUAL(to_string(ewah2 & ewah3), str);
+  BOOST_CHECK_EQUAL((ewah2 & ewah3).size(), max_size);
+  BOOST_CHECK_EQUAL((ewah3 & ewah2).size(), max_size);
 
   ewah_bitstream ebs1, ebs2;
   ebs1.push_back(false);
@@ -509,10 +534,14 @@ BOOST_AUTO_TEST_CASE(ewah_bitwise_and)
   ebs2.append_block(0xfcfcfcfc, 48);
 
   str =
-    "0000000000000000000000000000000000000000000000000000000000000000\n"
-    "                                11111100111111001111110011111100";
+    "0000000000000000000000000000000000000000000000000000000000000001\n"
+    "0000000000000000000000000000000011111100111111001111110011111100\n"
+    "                                00000000000000000000000000000000";
 
+  max_size = std::max(ebs1.size(), ebs2.size());
   BOOST_CHECK_EQUAL(to_string(ebs1 & ebs2), str);
+  BOOST_CHECK_EQUAL((ebs1 & ebs2).size(), max_size);
+  BOOST_CHECK_EQUAL((ebs2 & ebs1).size(), max_size);
 }
 
 BOOST_AUTO_TEST_CASE(ewah_bitwise_or)
@@ -654,38 +683,6 @@ BOOST_AUTO_TEST_CASE(ewah_block_append)
 }
 
 BOOST_AUTO_TEST_SUITE_END()
-
-BOOST_AUTO_TEST_CASE(ewah_small_bitwise_ops)
-{
-  ewah_bitstream ebs1, ebs2, ebs3;
-
-  ebs1.push_back(1);
-  ebs1.push_back(0);
-  ebs1.push_back(0);
-  ebs1.push_back(1);
-
-  ebs2.push_back(0);
-  ebs2.push_back(1);
-  ebs2.push_back(0);
-  ebs2.push_back(0);
-
-  ebs3.push_back(0);
-  ebs3.push_back(0);
-  ebs3.push_back(1);
-  ebs3.push_back(0);
-
-  bitstream bs1 = std::move(ebs1);
-  bitstream bs2 = std::move(ebs2);
-  bitstream bs3 = std::move(ebs3);
-
-  bitstream r;
-  r &= bs1;
-  std::cout << r << std::endl;
-  r |= bs2;
-  std::cout << r << std::endl;
-  r |= bs3;
-  std::cout << r << std::endl;
-}
 
 BOOST_AUTO_TEST_CASE(polymorphic_bitstream_iterators)
 {

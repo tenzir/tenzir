@@ -1028,7 +1028,7 @@ Bitstream apply(Bitstream const& lhs, Bitstream const& rhs,
     return {};
   if (ix == rx.end())
     return rhs;
-  else if (iy == ry.end())
+  if (iy == ry.end())
     return lhs;
 
   Bitstream result;
@@ -1067,13 +1067,11 @@ Bitstream apply(Bitstream const& lhs, Bitstream const& rhs,
       lx = ly = 0;
     }
 
-    if (lx == 0)
-      if (++ix != rx.end())
-        lx = ix->length;
+    if (lx == 0 && ++ix != rx.end())
+      lx = ix->length;
 
-    if (ly == 0)
-      if (++iy != ry.end())
-        ly = iy->length;
+    if (ly == 0 && ++iy != ry.end())
+      ly = iy->length;
   }
 
   if (fill_lhs)
@@ -1084,6 +1082,7 @@ Bitstream apply(Bitstream const& lhs, Bitstream const& rhs,
         result.append(lx, ix->data);
       else
         result.append_block(ix->data, ix->length);
+
       if (++ix != rx.end())
         lx = ix->length;
     }
@@ -1097,12 +1096,18 @@ Bitstream apply(Bitstream const& lhs, Bitstream const& rhs,
         result.append(ly, iy->data);
       else
         result.append_block(iy->data, iy->length);
+
       if (++iy != ry.end())
         ly = iy->length;
     }
   }
 
-  result.trim();
+  // If the result has not yet been filled with the remaining bits of either
+  // LHS or RHS, we have to fill it up with zeros. This is necessary, for
+  // example, to ensure that the complement of the result can still be used in
+  // further bitwise operations with bitstreams having the size of
+  // max(size(LHS), size(RHS)).
+  result.append(std::max(lhs.size(), rhs.size()) - result.size(), false);
 
   return result;
 }

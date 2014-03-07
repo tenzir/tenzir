@@ -31,7 +31,7 @@ class null_bitstream;
 class ewah_bitstream;
 
 // TODO: move to ../config.h?
-using default_encoded_bitstream = null_bitstream;
+using default_encoded_bitstream = ewah_bitstream;
 
 template <typename Iterator, typename T, typename... Opts>
 bool extract(Iterator&, Iterator, T&, Opts&&...);

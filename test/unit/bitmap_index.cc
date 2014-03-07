@@ -279,3 +279,51 @@ BOOST_AUTO_TEST_CASE(transport_port_bitmap_index)
   BOOST_REQUIRE(pbs);
   BOOST_CHECK_EQUAL(to_string(*pbs), "1111111");
 }
+
+BOOST_AUTO_TEST_CASE(transport_port_bitmap_index_ewah)
+{
+  bitmap<uint16_t, ewah_bitstream, range_bitslice_coder> bm;
+  bm.push_back(80);
+  bm.push_back(443);
+  bm.push_back(53);
+  bm.push_back(8);
+  bm.push_back(31337);
+  bm.push_back(80);
+  bm.push_back(8080);
+
+  ewah_bitstream all_ones;
+  all_ones.append(7, true);
+
+  ewah_bitstream greater_eight;
+  greater_eight.push_back(1);
+  greater_eight.push_back(1);
+  greater_eight.push_back(1);
+  greater_eight.push_back(0);
+  greater_eight.push_back(1);
+  greater_eight.push_back(1);
+  greater_eight.push_back(1);
+
+  ewah_bitstream greater_eighty;
+  greater_eighty.push_back(0);
+  greater_eighty.push_back(1);
+  greater_eighty.push_back(0);
+  greater_eighty.push_back(0);
+  greater_eighty.push_back(1);
+  greater_eighty.push_back(0);
+  greater_eighty.push_back(1);
+
+  BOOST_CHECK_EQUAL(*bm.lookup(greater, 1), all_ones);
+  BOOST_CHECK_EQUAL(*bm.lookup(greater, 2), all_ones);
+  BOOST_CHECK_EQUAL(*bm.lookup(greater, 3), all_ones);
+  BOOST_CHECK_EQUAL(*bm.lookup(greater, 4), all_ones);
+  BOOST_CHECK_EQUAL(*bm.lookup(greater, 5), all_ones);
+  BOOST_CHECK_EQUAL(*bm.lookup(greater, 6), all_ones);
+  BOOST_CHECK_EQUAL(*bm.lookup(greater, 7), all_ones);
+  BOOST_CHECK_EQUAL(*bm.lookup(greater, 8), greater_eight);
+  BOOST_CHECK_EQUAL(*bm.lookup(greater, 9), greater_eight);
+  BOOST_CHECK_EQUAL(*bm.lookup(greater, 10), greater_eight);
+  BOOST_CHECK_EQUAL(*bm.lookup(greater, 11), greater_eight);
+  BOOST_CHECK_EQUAL(*bm.lookup(greater, 12), greater_eight);
+  BOOST_CHECK_EQUAL(*bm.lookup(greater, 13), greater_eight);
+  BOOST_CHECK_EQUAL(*bm.lookup(greater, 80), greater_eighty);
+}
