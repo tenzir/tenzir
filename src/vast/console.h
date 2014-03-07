@@ -72,10 +72,24 @@ struct console : actor<console>
     /// @returns The number of all events.
     size_t size() const;
 
+    /// Sets the progress.
+    /// @param p the new progress in *[0,1]*.
+    void progress(double p);
+
+    /// Retrieves the progress.
+    /// @returns The progress result progress.
+    double progress() const;
+
+    /// Retrieves the progress in percent.
+    /// @param precision The number of decimal digits.
+    /// @returns The progress result progress.
+    double percent(size_t precision = 2) const;
+
   private:
     using pos_type = uint64_t;
 
     expr::ast ast_;
+    double progress_ = 0.0;
     pos_type pos_ = 0;
     std::deque<cow<event>> events_;
 
@@ -100,7 +114,6 @@ struct console : actor<console>
   void act();
   char const* description() const;
 
-  void show_prompt(size_t ms = 100);
   std::ostream& print(print_mode mode);
 
   path dir_;

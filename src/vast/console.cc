@@ -174,7 +174,8 @@ console::console(cppa::actor_ptr search, path dir)
       {
         std::set<intrusive_ptr<result>> active;
         for (auto& p : active_)
-          active.insert(p.second);
+          if (p.first)
+            active.insert(p.second);
 
         for (auto& r : results_)
           std::cerr
@@ -182,6 +183,7 @@ console::console(cppa::actor_ptr search, path dir)
             << (active.count(r) ? " * " : "   ")
             << util::color::reset
             << r->id()
+            << " | " << r->percent(true) << "%"
             << " | " << r->ast()
             << std::endl;
 
@@ -265,7 +267,7 @@ console::console(cppa::actor_ptr search, path dir)
             on_arg_match >> [=](std::string const& failure) // TODO: use error class.
             {
               print(error) << "syntax error: " << failure << std::endl;
-              show_prompt();
+              send(self, atom("prompt"));
             },
             on_arg_match >> [=](expr::ast const& ast, actor_ptr const& qry)
             {
@@ -300,14 +302,14 @@ console::console(cppa::actor_ptr search, path dir)
               }
               else
               {
-                show_prompt();
+                send(self, atom("prompt"));
               }
             },
             others() >> [=]
             {
               VAST_LOG_ACTOR_ERROR("got unexpected message: " <<
                                    to_string(last_dequeued()));
-              show_prompt();
+              send(self, atom("prompt"));
             });
 
       return {};
@@ -519,16 +521,36 @@ size_t console::result::size() const
   return events_.size();
 }
 
+void console::result::progress(double p)
+{
+  progress_ = p;
+}
+
+double console::result::progress() const
+{
+  return progress_;
+}
+
+double console::result::percent(size_t precision) const
+{
+  double i;
+  auto m = std::pow(10, precision);
+  auto f = std::modf(progress_ * 100, &i) * m;
+  return i + std::trunc(f) / m;
+
+  return progress_;
+}
+
 void console::result::serialize(serializer& sink) const
 {
   individual::serialize(sink);
-  sink << ast_ << pos_;
+  sink << ast_ << progress_ << pos_;
 }
 
 void console::result::deserialize(deserializer& source)
 {
   individual::deserialize(source);
-  source >> ast_ >> pos_;
+  source >> ast_ >> progress_ >> pos_;
 }
 
 
@@ -547,45 +569,95 @@ void console::act()
             });
       });
 
+  auto prompt = [=](size_t ms = 100)
+  {
+    if (ms > 0)
+      std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+
+    std::cout.flush();
+    std::cerr.flush();
+    std::string line;
+    if (! cmdline_.get(line))
+    {
+      VAST_LOG_ACTOR_ERROR("failed to retrieve command line");
+      quit(exit::error);
+      return;
+    }
+
+    if (line.empty())
+    {
+      send(self, atom("prompt"));
+      return;
+    }
+
+    // Only an empty result means that we should not go back to the prompt. If
+    // we have a result, then the boolean return value indicates whether to
+    // append the command line to the history.
+    auto r = cmdline_.process(line);
+    if (r.engaged())
+    {
+      if (*r)
+        cmdline_.append_to_history(line);
+      send(self, atom("prompt"));
+    }
+    else if (r.failed())
+    {
+      print(error) << r.failure() << std::endl;
+      send(self, atom("prompt"));
+    }
+  };
+
   become(
+      on(atom("exited")) >> [=]
+      {
+        print(error) << "search terminated" << std::endl;
+        send_exit(self, exit::error);
+      },
       on(atom("DOWN"), arg_match) >> [=](uint32_t)
       {
-        VAST_LOG_ACTOR_ERROR("got DOWN from query @" << last_sender()->id());
-        // TODO: seal corresponding result
+        VAST_LOG_ACTOR_DEBUG("got DOWN from query " <<
+                             VAST_ACTOR_ID(last_sender()));
+
+        // FIXME: we only delay the send operation here because there exists a
+        // message reordering bug in libcpppa that causes events to arrive
+        // receiving this DOWN message. Giving the actor some time prevents the
+        // result state from premature eviction.
+        delayed_send(self, std::chrono::seconds(10), atom("remove"),
+                     last_sender());
       },
       on(atom("done")) >> [=]
       {
-        VAST_LOG_ACTOR_DEBUG("got done from query @" << last_sender()->id());
-        show_prompt();
-        // TODO: seal corresponding query.
+        VAST_LOG_ACTOR_DEBUG("got done notification from query "
+                             << VAST_ACTOR_ID(last_sender()));
+
+        // FIXME: see note above.
+        delayed_send(self, std::chrono::seconds(10), atom("remove"),
+                     last_sender());
+      },
+      on(atom("remove"), arg_match) >> [=](actor_ptr doomed)
+      {
+        VAST_LOG_ACTOR_DEBUG("detaches query " << VAST_ACTOR_ID(doomed));
+        if (current_.first == doomed)
+          current_ = {};
+
+        active_.erase(doomed);
+
+        // TODO: seal corresponding result
       },
       on(atom("prompt")) >> [=]
       {
-        std::string line;
-        if (! cmdline_.get(line))
-        {
-          VAST_LOG_ACTOR_ERROR("failed to retrieve command line");
-          quit(exit::error);
-        }
+        prompt();
+      },
+      on(atom("progress"), arg_match) >> [=](double progress)
+      {
+        auto i = active_.find(last_sender());
+        assert(i != active_.end());
+        auto r = i->second;
 
-        if (line.empty())
+        if (follow_mode_ && r->progress() != progress)
         {
-          self << last_dequeued();
-          return;
-        }
-
-        // An empty result means that we should not go back to the prompt.
-        auto r = cmdline_.process(line);
-        if (r.engaged())
-        {
-          if (*r)
-            cmdline_.append_to_history(line);
-          show_prompt();
-        }
-        else if (r.failed())
-        {
-          print(error) << r.failure() << std::endl;
-          show_prompt();
+          r->progress(progress);
+          print(query) << "completed " << r->percent() << '%' << std::endl;
         }
       },
       on_arg_match >> [=](event const&)
@@ -593,9 +665,10 @@ void console::act()
         auto i = active_.find(last_sender());
         assert(i != active_.end());
         auto r = i->second;
+
         cow<event> ce = *tuple_cast<event>(last_dequeued());
         r->add(ce);
-        if (r == current_.second && follow_mode_)
+        if (follow_mode_ && r == current_.second)
           std::cout << *ce << std::endl;
       },
       on(atom("key"), atom("get")) >> [=]
@@ -616,23 +689,31 @@ void console::act()
           case '?':
             {
               std::cerr
-                << "interactive query control mode:\n\n"
-                << "    <space>  display the next batch of available results\n"
-                << "       e     ask query for more results\n"
-                << "       f     toggle follow mode\n"
-                << "       j     seek one batch forward\n"
-                << "       k     seek one batch backword\n"
-                << "       q     leave query control mode\n"
-                << "       s     save the result to file system\n"
-                << "       ?     display this help\n"
+                << "interactive query control mode:\n"
+                << "\n"
+                << "     <space>  display the next batch of available results\n"
+                << "  " << util::color::green << '*' << util::color::reset <<
+                      "     e     ask query for more results\n"
+                << "        f     toggle follow mode\n"
+                << "        j     seek one batch forward\n"
+                << "        k     seek one batch backword\n"
+                << "        q     leave query control mode\n"
+                << "        s     save the result to file system\n"
+                << "        ?     display this help\n"
+                << "\n"
+                << "entries marked with " <<
+                   util::color::green << '*' << util::color::reset <<
+                   " require a connected query\n"
                 << std::endl;
             }
             break;
           case ' ':
             {
+              assert(current_.second);
               auto n = current_.second->apply(
                   opts_.batch_size,
                   [](event const& e) { std::cout << e << std::endl; });
+
               if (n == 0)
                 print(query) << "reached end of results" << std::endl;
             }
@@ -664,12 +745,14 @@ void console::act()
             break;
           case 'j':
             {
+              assert(current_.second);
               auto n = current_.second->seek_forward(opts_.batch_size);
               print(query) << "seeked +" << n << " events" << std::endl;
             }
             break;
           case 'k':
             {
+              assert(current_.second);
               auto n = current_.second->seek_backward(opts_.batch_size);
               print(query) << "seeked -" << n << " events" << std::endl;
             }
@@ -679,11 +762,13 @@ void console::act()
           case 'q':
             {
               follow_mode_ = false;
-              show_prompt();
+              prompt();
             }
             return;
           case 's':
             {
+              assert(current_.second);
+
               // TODO: look if same AST already exists under a different file.
               auto const dir =
                 dir_ / "results" / path{to_string(current_.second->id())};
@@ -708,10 +793,12 @@ void console::act()
                 print(query) << "saved " << n << " events" << std::endl;
               }
 
-              show_prompt();
+              prompt();
             }
+
             return;
         }
+
         send(keystroke_monitor, atom("get"));
       },
       others() >> [=]
@@ -725,13 +812,6 @@ void console::act()
 char const* console::description() const
 {
   return "console";
-}
-
-void console::show_prompt(size_t ms)
-{
-  // The delay allows for logging messages to trickle through first
-  // before we print the prompt.
-  delayed_send(self, std::chrono::milliseconds(ms), atom("prompt"));
 }
 
 std::ostream& console::print(print_mode mode)

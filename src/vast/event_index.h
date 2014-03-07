@@ -3,13 +3,13 @@
 
 #include <cppa/cppa.hpp>
 #include "vast/actor.h"
+#include "vast/bitmap_index.h"
 #include "vast/cow.h"
 #include "vast/event.h"
 #include "vast/expression.h"
 #include "vast/file_system.h"
 #include "vast/offset.h"
-#include "vast/search_result.h"
-#include "vast/bitmap_index.h"
+#include "vast/uuid.h"
 #include "vast/io/serialization.h"
 #include "vast/util/accumulator.h"
 
@@ -33,6 +33,7 @@ public:
     using namespace cppa;
 
     this->trap_exit(true);
+    this->chaining(false);
 
     derived()->scan();
 
@@ -65,17 +66,13 @@ public:
                 " (mean " << stats_.mean() <<
                 ", median " << stats_.median() <<
                 ", standard deviation " << std::round(stats_.sd()) << ")");
-
-            //send(last_sender(), atom("statistics"), stats_.last());
           }
         },
-        on_arg_match >> [=](expr::ast const& ast, bitstream const& coverage,
+        on_arg_match >> [=](expr::ast const& pred, uuid const& part,
                             actor_ptr const& sink)
         {
-          derived()->load(ast);
-          auto r = derived()->lookup(ast);
-          assert(coverage);
-          send(sink, ast, search_result{std::move(r), coverage});
+          send(sink, pred, part, derived()->load(pred));
+          send(sink, pred, part, derived()->lookup(pred));
         });
   }
 
@@ -111,7 +108,7 @@ public:
   char const* description() const;
 
   void scan();
-  void load(expr::ast const& ast);
+  uint32_t load(expr::ast const& ast);
   void save();
   bool index(event const& e);
   bitstream lookup(expr::ast const& ast) const;
@@ -125,15 +122,15 @@ private:
   bool exists_ = false;
 };
 
-class event_arg_index : public event_index<event_arg_index>
+class event_data_index : public event_index<event_data_index>
 {
 public:
-  event_arg_index(path dir);
+  event_data_index(path dir);
 
   char const* description() const;
 
   void scan();
-  void load(expr::ast const& ast);
+  uint32_t load(expr::ast const& ast);
   void save();
   bool index(event const& e);
   bitstream lookup(expr::ast const& ast) const;

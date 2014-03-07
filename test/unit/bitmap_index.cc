@@ -271,7 +271,11 @@ BOOST_AUTO_TEST_CASE(transport_port_bitmap_index)
   BOOST_CHECK_EQUAL(to_string(*pbs), "1000010");
 
   port priv{1024, port::unknown};
-  auto pbs2 = bi->lookup(less_equal, priv);
-  BOOST_REQUIRE(pbs2);
-  BOOST_CHECK_EQUAL(to_string(*pbs2), "1111010");
+  pbs = bi->lookup(less_equal, priv);
+  BOOST_REQUIRE(pbs);
+  BOOST_CHECK_EQUAL(to_string(*pbs), "1111010");
+
+  pbs = bi->lookup(greater, port{2, port::unknown});
+  BOOST_REQUIRE(pbs);
+  BOOST_CHECK_EQUAL(to_string(*pbs), "1111111");
 }

@@ -7,9 +7,11 @@
 #include "vast/segment.h"
 #include "vast/io/serialization.h"
 
-using namespace cppa;
-
 namespace vast {
+
+path const partition::part_meta_file = "partition";
+path const partition::event_meta_dir = "meta";
+path const partition::event_data_dir = "data";
 
 namespace {
 
@@ -100,53 +102,77 @@ struct predicatizer : public expr::default_const_visitor
 
 } // namespace <anonymous>
 
-partition::partition(path dir)
-  : dir_{std::move(dir)}
+partition::meta_data::meta_data(uuid id)
+  : id{id}
 {
 }
 
-path const& partition::dir() const
+void partition::meta_data::update(segment const& s)
 {
-  return dir_;
+  if (first_event < s.first())
+    first_event = s.first();
+
+  if (last_event > s.last())
+    last_event = s.last();
+
+  last_modified = now();
+
+  assert(s.coverage());
+  coverage |= *s.coverage();
 }
 
-bitstream const& partition::coverage() const
+void partition::meta_data::serialize(serializer& sink) const
 {
-  return coverage_;
+  sink << id << first_event << last_event << last_modified << coverage;
 }
 
-void partition::load()
+void partition::meta_data::deserialize(deserializer& source)
 {
-  if (exists(dir_ / "coverage"))
-    io::unarchive(dir_ / "coverage", coverage_);
+  source >> id >> first_event >> last_event >> last_modified >> coverage;
 }
 
-void partition::save()
+bool operator==(partition::meta_data const& x, partition::meta_data const& y)
 {
-  if (coverage_)
-  {
-    if (! exists(dir_))
-      mkdir(dir_);
-
-    io::archive(dir_ / "coverage", coverage_);
-  }
+  return x.id == y.id
+      && x.first_event == y.first_event
+      && x.last_event == y.last_event
+      && x.last_modified == y.last_modified
+      && x.coverage == y.coverage;
 }
 
-void partition::update(event_id base, size_t n)
+
+partition::partition(uuid id)
+  : meta_{std::move(id)}
 {
-  default_encoded_bitstream bs;
-  assert(base > 0);
-  bs.append(base, false);
-  bs.append(n, true);
-  if (! coverage_)
-    coverage_ = std::move(bs);
-  else
-    coverage_ |= bs;
 }
 
-partition_actor::partition_actor(path dir, size_t batch_size)
-  : partition_{std::move(dir)},
-    batch_size_{batch_size}
+void partition::update(segment const& s)
+{
+  meta_.update(s);
+}
+
+partition::meta_data const& partition::meta() const
+{
+  return meta_;
+}
+
+void partition::serialize(serializer& sink) const
+{
+  sink << meta_;
+}
+
+void partition::deserialize(deserializer& source)
+{
+  source >> meta_;
+}
+
+
+using namespace cppa;
+
+partition_actor::partition_actor(path dir, size_t batch_size, uuid id)
+  : dir_{std::move(dir)},
+    batch_size_{batch_size},
+    partition_{std::move(id)}
 {
 }
 
@@ -155,16 +181,23 @@ void partition_actor::act()
   chaining(false);
   trap_exit(true);
 
-  partition_.load();
-  event_meta_index_ =
-    spawn<event_meta_index, linked>(partition_.dir() / "meta");
+  if (exists(dir_))
+    if (! io::unarchive(dir_ / partition::part_meta_file, partition_))
+    {
+      VAST_LOG_ACTOR_ERROR("failed to load partition " << dir_);
+      quit(exit::error);
+      return;
+    }
 
-  traverse(partition_.dir() / "event",
+  auto meta_index_dir = dir_ / partition::event_meta_dir;
+  meta_index_ = spawn<event_meta_index, linked>(meta_index_dir);
+
+  traverse(dir_ / partition::event_data_dir,
            [&](path const& p) -> bool
            {
-             VAST_LOG_ACTOR_DEBUG("found existing event index: " << p);
-             event_arg_indexes_.emplace(
-                 p.basename().str(), spawn<event_arg_index, linked>(p));
+             VAST_LOG_ACTOR_DEBUG("found existing event data index: " << p);
+             auto a = spawn<event_data_index, linked>(p);
+             data_indexes_.emplace(p.basename().str(), std::move(a));
              return true;
            });
 
@@ -172,22 +205,26 @@ void partition_actor::act()
       on(atom("EXIT"), arg_match) >> [=](uint32_t reason)
       {
         if (reason != exit::kill)
-          partition_.save();
+          if (partition_.meta().coverage)
+            if (! io::archive(dir_ / partition::part_meta_file, partition_))
+            {
+              VAST_LOG_ACTOR_ERROR("failed to save partition " << dir_);
+              quit(exit::error);
+              return;
+            }
 
         quit(reason);
       },
-      on_arg_match >> [=](expr::ast const& ast, actor_ptr const& sink)
+      on_arg_match >> [=](expr::ast const& pred, actor_ptr const& sink)
       {
-        assert(partition_.coverage());
-        VAST_LOG_ACTOR_DEBUG("got AST for " << VAST_ACTOR_ID(sink) <<
-                             ": " << ast);
+        VAST_LOG_ACTOR_DEBUG("got predicate " << pred <<
+                             " for " << VAST_ACTOR_ID(sink));
 
-        auto t = make_any_tuple(ast, partition_.coverage(), sink);
-        if (ast.is_meta_predicate())
-          event_meta_index_ << t;
+        auto t = make_any_tuple(pred, partition_.meta().id, sink);
+        if (pred.is_meta_predicate())
+          meta_index_ << t;
         else
-          // TODO: restrict to relevant events.
-          for (auto& p : event_arg_indexes_)
+          for (auto& p : data_indexes_)
             p.second << t;
       },
       on_arg_match >> [=](segment const& s)
@@ -207,21 +244,22 @@ void partition_actor::act()
           auto ce = cow<event>{std::move(*e)};
 
           meta_events.push_back(ce);
+          auto& v = arg_events[ce->name()];
+          v.push_back(ce);
+
           if (meta_events.size() == batch_size_)
           {
-            send(event_meta_index_, std::move(meta_events));
+            send(meta_index_, std::move(meta_events));
             meta_events.clear();
           }
 
-          auto& v = arg_events[ce->name()];
-          v.push_back(ce);
           if (v.size() == batch_size_)
           {
-            auto& a = event_arg_indexes_[ce->name()];
+            auto& a = data_indexes_[ce->name()];
             if (! a)
             {
-              auto dir = partition_.dir() / "event" / ce->name();
-              a = spawn<event_arg_index, linked>(dir);
+              auto dir = dir_ / "data" / ce->name();
+              a = spawn<event_data_index, linked>(dir);
             }
 
             send(a, std::move(v));
@@ -229,29 +267,39 @@ void partition_actor::act()
           }
         }
 
+        // Send away final events.
         if (! meta_events.empty())
-          send(event_meta_index_, std::move(meta_events));
+          send(meta_index_, std::move(meta_events));
 
         for (auto& p : arg_events)
         {
           if (! p.second.empty())
           {
-            auto& a = event_arg_indexes_[p.first];
+            auto& a = data_indexes_[p.first];
             if (! a)
             {
-              auto dir = partition_.dir() / "event" / p.first;
-              a = spawn<event_arg_index, linked>(dir);
+              auto dir = dir_ / partition::event_data_dir / p.first;
+              a = spawn<event_data_index, linked>(dir);
             }
 
             send(a, std::move(p.second));
           }
         }
 
-        partition_.update(s.base(), s.events());
+        // Record segment and flush both partition meta data and event indexes.
+        partition_.update(s);
 
-        send(event_meta_index_, atom("flush"));
+        assert(partition_.meta().coverage); // Also checked by index_actor.
+        if (! io::archive(dir_ / partition::part_meta_file, partition_))
+        {
+          VAST_LOG_ACTOR_ERROR("failed to save partition " << dir_);
+          quit(exit::error);
+          return;
+        }
+
+        send(meta_index_, atom("flush"));
         for (auto& p : arg_events)
-          send(event_arg_indexes_[p.first], atom("flush"));
+          send(data_indexes_[p.first], atom("flush"));
       });
 }
 

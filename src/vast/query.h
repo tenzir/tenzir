@@ -63,11 +63,16 @@ public:
   /// @pre `state() == ready || state() == extracting`
   trial<uint64_t> extract(uint64_t max = 0);
 
+  /// Tells the query that all hits have arrived.
+  /// @post `state() == done` if state was `idle` and no more unprocessed hits.
+  void finish();
+
 private:
   bool instantiate();
 
   using bitstream_type = default_encoded_bitstream;
 
+  bool finishing_ = false;
   query_state state_ = idle;
   expr::ast ast_;
   std::function<void(event)> fn_;
@@ -91,12 +96,15 @@ struct query_actor : actor<query_actor>
   void act();
   char const* description() const;
 
+  void prefetch(size_t max);
+  void extract(uint64_t n);
+
   cppa::actor_ptr archive_;
   cppa::actor_ptr sink_;
   query query_;
 
   std::vector<event_id> inflight_;
-  uint64_t total_extracted_ = 0;
+  uint64_t requested_ = 10; // TODO: make configurable
   size_t prefetch_ = 2; // TODO: make configurable
 };
 

@@ -142,14 +142,22 @@ trial<uint64_t> query::extract(uint64_t max)
 
   // We technically could also instantiate a prefetched segment at this point,
   // but doing so avoids the ability to prefetch another one.
-  if (unprocessed_.empty())
-    state_ = idle;
+  if (unprocessed_.find_first() == bitstream::npos)
+    state_ = finishing_ ? done : idle;
   else if (instantiate())
     state_ = ready;
   else
     state_ = waiting;
 
   return n;
+}
+
+void query::finish()
+{
+  finishing_ = true;
+
+  if (unprocessed_.find_first() == bitstream::npos && state_ == idle)
+    state_ = done;
 }
 
 bool query::instantiate()
@@ -189,91 +197,109 @@ query_actor::query_actor(actor_ptr archive, actor_ptr sink, expr::ast ast)
 {
 }
 
+void query_actor::prefetch(size_t max)
+{
+  // Don't count the instantiated segment.
+  if (query_.state() == query::ready || query_.state() == query::extracting)
+    ++max;
+
+  auto segments = query_.segments();
+  auto ids = query_.next();
+  if (segments >= max)
+    return;
+
+  ids.resize(std::min(ids.size(), max - segments));
+  for (auto i : ids)
+  {
+    if (std::find(inflight_.begin(), inflight_.end(), i) == inflight_.end())
+    {
+      inflight_.push_back(i);
+      send(archive_, atom("segment"), i);
+      VAST_LOG_ACTOR_DEBUG("asks for segment containing id " << i);
+    }
+  }
+}
+
+void query_actor::extract(uint64_t n)
+{
+  auto s = query_.state();
+
+  if (s == query::idle)
+  {
+    VAST_LOG_ACTOR_DEBUG("ignores extraction request in idle state");
+  }
+  else if (s == query::waiting)
+  {
+    VAST_LOG_ACTOR_DEBUG("scans for new segments");
+    prefetch(prefetch_);
+  }
+  else if (s == query::done)
+  {
+    VAST_LOG_ACTOR_DEBUG("completed processing");
+    send(sink_, atom("done"));
+    quit(exit::done);
+  }
+  else if (s == query::failed)
+  {
+    send(sink_, atom("failed"));
+    quit(exit::error);
+  }
+  else
+  {
+    assert(s == query::ready || s == query::extracting);
+
+    auto t = query_.extract(n);
+    if (! t)
+    {
+      VAST_LOG_ACTOR_ERROR(t.failure().msg());
+      quit(exit::error);
+      return;
+    }
+
+    VAST_LOG_ACTOR_DEBUG("extracted " << *t << " events");
+
+    // When we finished processing a segment we remove it. If we have more
+    // segments left, we land back in "ready" state. At this point we check
+    // again because we may continue extracting for a while.
+    if (query_.state() == query::ready)
+      prefetch(prefetch_);
+
+    requested_ -= std::min(requested_, *t);
+    if (n > *t)
+      extract(n - *t);
+  }
+}
+
 void query_actor::act()
 {
   chaining(false);
 
-  auto prefetch = [=](size_t max)
-  {
-    // Don't count the instantiated segment.
-    if (query_.state() == query::ready || query_.state() == query::extracting)
-      ++max;
-
-    auto segments = query_.segments();
-    auto ids = query_.next();
-    if (segments >= max)
-      return;
-
-    ids.resize(std::min(ids.size(), max - segments));
-    for (auto i : ids)
-    {
-      if (std::find(inflight_.begin(), inflight_.end(), i) == inflight_.end())
-      {
-        inflight_.push_back(i);
-        send(archive_, atom("segment"), i);
-        VAST_LOG_ACTOR_DEBUG("asks for segment containing id " << i);
-      }
-    }
-  };
-
-  auto extract = [=](uint64_t n)
-  {
-    auto s = query_.state();
-
-    if (s == query::idle)
-    {
-      VAST_LOG_ACTOR_DEBUG("ignores extraction request in idle state");
-    }
-    else if (s == query::waiting)
-    {
-      VAST_LOG_ACTOR_DEBUG("scans for new segments");
-      prefetch(prefetch_);
-    }
-    else if (s == query::done)
-    {
-      VAST_LOG_ACTOR_DEBUG("completed processing");
-      send(sink_, atom("done"));
-      quit(exit::done);
-    }
-    else if (s == query::failed)
-    {
-      send(sink_, atom("failed"));
-      quit(exit::error);
-    }
-    else
-    {
-      assert(s == query::ready || s == query::extracting);
-
-      auto t = query_.extract(n);
-      if (! t)
-      {
-        VAST_LOG_ACTOR_ERROR(t.failure().msg());
-        quit(exit::error);
-        return;
-      }
-
-      VAST_LOG_ACTOR_DEBUG("extracted " << *t << " events");
-
-      // When we finished processing a segment we remove it. If we have more
-      // segments left, we land back in "ready" state. At this point we check
-      // again because we may continue extracting for a while.
-      if (query_.state() == query::ready)
-        prefetch(prefetch_);
-
-      total_extracted_ += *t;
-      if (n > *t)
-        send(self, atom("extract"), n - *t);
-    }
-  };
-
   become(
-      on_arg_match >> [=](bitstream const& hits)
+      on(atom("progress"), arg_match) >> [=](double progress)
+      {
+        if (progress == 1.0)
+        {
+          VAST_LOG_ACTOR_DEBUG("completed index interaction");
+          query_.finish();
+
+          if (query_.state() == query::done)
+          {
+            send(sink_, atom("done"));
+            quit(exit::done);
+          }
+        }
+
+        send(sink_, atom("progress"), progress);
+      },
+      on_arg_match >> [=](bitstream const& hits, double progress)
       {
         assert(hits);
         assert(! hits.empty());
+        assert(hits.find_first() != bitstream::npos);
 
-        VAST_LOG_ACTOR_DEBUG("got index hit [" << hits.find_first()
-                             << ',' << hits.find_last() << ']');
+        VAST_LOG_ACTOR_DEBUG("got index hit covering [" << hits.find_first()
+                             << ',' << hits.find_last() << "] (" <<
+                             int(progress * 100) << "%)");
 
         query_.add(hits);
 
@@ -300,10 +326,14 @@ void query_actor::act()
 
         prefetch(prefetch_);
 
-        if (total_extracted_ == 0 && query_.state() == query::ready)
-          extract(uint64_t{100});
+        if (requested_ > 0 && query_.state() == query::ready)
+          extract(requested_);
       },
-      on(atom("extract"), arg_match) >> extract,
+      on(atom("extract"), arg_match) >> [=](uint64_t n)
+      {
+        requested_ += n;
+        extract(n);
+      },
       on(atom("no segment"), arg_match) >> [=](event_id eid)
       {
         VAST_LOG_ACTOR_ERROR("could not obtain segment for event ID " << eid);

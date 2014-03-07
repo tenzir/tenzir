@@ -118,10 +118,11 @@ void event_meta_index::scan()
     exists_ = true;
 }
 
-void event_meta_index::load(expr::ast const& ast)
+uint32_t event_meta_index::load(expr::ast const& ast)
 {
   loader visitor{*this};
   ast.accept(visitor);
+  return 1;
 }
 
 void event_meta_index::save()
@@ -174,9 +175,9 @@ bitstream event_meta_index::lookup(expr::ast const& ast) const
 }
 
 
-struct event_arg_index::loader : expr::default_const_visitor
+struct event_data_index::loader : expr::default_const_visitor
 {
-  loader(event_arg_index& idx, value_type type)
+  loader(event_data_index& idx, value_type type)
     : idx{idx},
       type_{type}
   {
@@ -210,13 +211,13 @@ struct event_arg_index::loader : expr::default_const_visitor
       idx.load(i->second);
   }
 
-  event_arg_index& idx;
+  event_data_index& idx;
   value_type type_;
 };
 
-struct event_arg_index::querier : expr::default_const_visitor
+struct event_data_index::querier : expr::default_const_visitor
 {
-  querier(event_arg_index const& idx)
+  querier(event_data_index const& idx)
     : idx{idx}
   {
   }
@@ -264,23 +265,23 @@ struct event_arg_index::querier : expr::default_const_visitor
   }
 
   bitstream result;
-  event_arg_index const& idx;
+  event_data_index const& idx;
   value const* val = nullptr;
   relational_operator const* op = nullptr;
 };
 
 
-event_arg_index::event_arg_index(path dir)
-  : event_index<event_arg_index>{std::move(dir)}
+event_data_index::event_data_index(path dir)
+  : event_index<event_data_index>{std::move(dir)}
 {
 }
 
-char const* event_arg_index::description() const
+char const* event_data_index::description() const
 {
   return "event-arg-index";
 }
 
-void event_arg_index::scan()
+void event_data_index::scan()
 {
   if (exists(dir_))
   {
@@ -317,16 +318,17 @@ struct type_finder : expr::default_const_visitor
 
 } // namespace <anonymous>
 
-void event_arg_index::load(expr::ast const& ast)
+uint32_t event_data_index::load(expr::ast const& ast)
 {
   type_finder tf;
   ast.accept(tf);
 
   loader visitor{*this, tf.type};
   ast.accept(visitor);
+  return 1;
 }
 
-void event_arg_index::save()
+void event_data_index::save()
 {
   VAST_LOG_ACTOR_DEBUG("saves indexes to filesystem");
 
@@ -352,7 +354,7 @@ void event_arg_index::save()
   }
 }
 
-bool event_arg_index::index(event const& e)
+bool event_data_index::index(event const& e)
 {
   if (e.empty())
     return true;
@@ -362,25 +364,25 @@ bool event_arg_index::index(event const& e)
   return index_record(e, e.id(), idx_off_);
 }
 
-bitstream event_arg_index::lookup(expr::ast const& ast) const
+bitstream event_data_index::lookup(expr::ast const& ast) const
 {
   querier visitor{*this};
   ast.accept(visitor);
 
   if (! visitor.result)
-    VAST_LOG_ACTOR_DEBUG("no result for " << ast);
+    VAST_LOG_ACTOR_DEBUG("found no result for " << ast);
 
   return std::move(visitor.result);
 }
 
-path event_arg_index::pathify(offset const& o) const
+path event_data_index::pathify(offset const& o) const
 {
   static string prefix{"@"};
   static string suffix{".idx"};
   return dir_ / (prefix + to<string>(o) + suffix);
 }
 
-bitmap_index* event_arg_index::load(path const& p, value_type const* type)
+bitmap_index* event_data_index::load(path const& p, value_type const* type)
 {
   offset o;
   auto str = p.basename(true).str().substr(1);
@@ -427,7 +429,7 @@ bitmap_index* event_arg_index::load(path const& p, value_type const* type)
   return idx;
 }
 
-bool event_arg_index::index_record(record const& r, uint64_t id, offset& o)
+bool event_data_index::index_record(record const& r, uint64_t id, offset& o)
 {
   if (o.empty())
     return true;

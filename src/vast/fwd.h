@@ -26,6 +26,13 @@ class vector;
 class set;
 class table;
 
+class bitstream;
+class null_bitstream;
+class ewah_bitstream;
+
+// TODO: move to ../config.h?
+using default_encoded_bitstream = null_bitstream;
+
 template <typename Iterator, typename T, typename... Opts>
 bool extract(Iterator&, Iterator, T&, Opts&&...);
 

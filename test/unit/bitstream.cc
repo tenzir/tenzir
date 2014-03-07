@@ -653,6 +653,40 @@ BOOST_AUTO_TEST_CASE(ewah_block_append)
   BOOST_CHECK_EQUAL(to_string(ebs), str);
 }
 
+BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_AUTO_TEST_CASE(ewah_small_bitwise_ops)
+{
+  ewah_bitstream ebs1, ebs2, ebs3;
+
+  ebs1.push_back(1);
+  ebs1.push_back(0);
+  ebs1.push_back(0);
+  ebs1.push_back(1);
+
+  ebs2.push_back(0);
+  ebs2.push_back(1);
+  ebs2.push_back(0);
+  ebs2.push_back(0);
+
+  ebs3.push_back(0);
+  ebs3.push_back(0);
+  ebs3.push_back(1);
+  ebs3.push_back(0);
+
+  bitstream bs1 = std::move(ebs1);
+  bitstream bs2 = std::move(ebs2);
+  bitstream bs3 = std::move(ebs3);
+
+  bitstream r;
+  r &= bs1;
+  std::cout << r << std::endl;
+  r |= bs2;
+  std::cout << r << std::endl;
+  r |= bs3;
+  std::cout << r << std::endl;
+}
+
 BOOST_AUTO_TEST_CASE(polymorphic_bitstream_iterators)
 {
   bitstream bs = null_bitstream{};
@@ -712,5 +746,3 @@ BOOST_AUTO_TEST_CASE(sequence_iteration)
 
   BOOST_CHECK(++i == range.end());
 }
-
-BOOST_AUTO_TEST_SUITE_END()
