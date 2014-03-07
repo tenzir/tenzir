@@ -262,7 +262,7 @@ console::console(cppa::actor_ptr search, path dir)
               print(error)
                 << "search terminated with exit code " << reason << std::endl;
 
-              send_exit(self, exit::error);
+              quit(exit::error);
             },
             on_arg_match >> [=](std::string const& failure) // TODO: use error class.
             {
@@ -611,7 +611,7 @@ void console::act()
       on(atom("exited")) >> [=]
       {
         print(error) << "search terminated" << std::endl;
-        send_exit(self, exit::error);
+        quit(exit::error);
       },
       on(atom("DOWN"), arg_match) >> [=](uint32_t)
       {
@@ -641,8 +641,6 @@ void console::act()
           current_ = {};
 
         active_.erase(doomed);
-
-        // TODO: seal corresponding result
       },
       on(atom("prompt")) >> [=]
       {
