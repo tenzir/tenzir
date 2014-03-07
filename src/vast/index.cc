@@ -377,6 +377,7 @@ void index::update_partition(uuid const& id, time_point first, time_point last,
   if (last > p.last)
     p.last = last;
 
+  assert(coverage);
   p.coverage |= coverage;
 }
 
