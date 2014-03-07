@@ -649,8 +649,8 @@ private:
     {
       if (op == less)  // A < min => false
         return Bitstream{this->size(), false};
-      else if (op == greater_equal) // A >= min <=> A <= max
-        return decode_value(std::numeric_limits<T>::max(), less_equal);
+      else if (op == greater_equal) // A >= min => true
+        return Bitstream{this->size(), true};
     }
     else if (op == less || op == greater_equal)
     {
