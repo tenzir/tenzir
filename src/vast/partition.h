@@ -29,9 +29,9 @@ public:
     void update(segment const& s);
 
     uuid id;
-    time_point first_event;
-    time_point last_event;
-    time_point last_modified;
+    time_point first_event = time_range{};
+    time_point last_event = time_range{};
+    time_point last_modified = now();
     bitstream coverage;
 
     void serialize(serializer& sink) const;

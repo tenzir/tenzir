@@ -109,10 +109,10 @@ partition::meta_data::meta_data(uuid id)
 
 void partition::meta_data::update(segment const& s)
 {
-  if (first_event < s.first())
+  if (first_event == time_range{} || s.first() < first_event)
     first_event = s.first();
 
-  if (last_event > s.last())
+  if (last_event == time_range{} || s.last() > last_event)
     last_event = s.last();
 
   last_modified = now();

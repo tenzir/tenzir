@@ -144,9 +144,20 @@ public:
       auto ts = v_->get<time_point>();
 
       restriction_map::mapped_type partitions;
+      VAST_LOG_DEBUG("checking restrictors for " << expr::ast{pred});
       for (auto& p : index_.partitions_)
-        if (ts >= p.second.first && ts <= p.second.last)
+      {
+        if (pred.pred(p.second.first, ts))
+        {
+          VAST_LOG_DEBUG("  - " << p.second.first << " for " << p.first);
           partitions.push_back(p.first);
+        }
+        else if (pred.pred(p.second.last, ts))
+        {
+          VAST_LOG_DEBUG("  - " << p.second.last << " for " << p.first);
+          partitions.push_back(p.first);
+        }
+      }
 
       std::sort(partitions.begin(), partitions.end());
       restrictions_[pred] = std::move(partitions);
@@ -371,10 +382,10 @@ void index::update_partition(uuid const& id, time_point first, time_point last,
 {
   auto& p = partitions_[id];
 
-  if (first < p.first)
+  if (p.first == time_range{} || first < p.first)
     p.first = first;
 
-  if (last > p.last)
+  if (p.last == time_range{} || last > p.last)
     p.last = last;
 
   assert(coverage);
@@ -599,6 +610,9 @@ void index_actor::act()
           active_ = *part_actors_.find(first->second);
           VAST_LOG_ACTOR_INFO("created new partition " << first->first);
         }
+
+        VAST_LOG_ACTOR_DEBUG("got segment covering [" <<
+                             s.first() << ',' << s.last() << ']');
 
         auto coverage = s.coverage();
         assert(coverage);

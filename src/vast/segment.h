@@ -29,8 +29,8 @@ public:
 
     uuid id;
     io::compression compression;
-    time_point first;
-    time_point last;
+    time_point first = time_range{};
+    time_point last = time_range{};
     event_id base = 0;
     uint64_t n = 0;
     uint64_t max_bytes = 0;
@@ -92,8 +92,8 @@ public:
     std::unique_ptr<chunk> chunk_;
     std::unique_ptr<chunk::writer> chunk_writer_;
     size_t max_events_per_chunk_;
-    time_point first_;
-    time_point last_;
+    time_point first_ = time_range{};
+    time_point last_ = time_range{};
   };
 
   /// A proxy class for reading from a segment. Multiple readers can safely

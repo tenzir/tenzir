@@ -40,8 +40,8 @@ public:
 
   struct partition_state
   {
-    time_point first;
-    time_point last;
+    time_point first = time_range{};
+    time_point last = time_range{};
     bitstream coverage;
   };
 

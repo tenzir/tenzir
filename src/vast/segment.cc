@@ -113,8 +113,8 @@ bool segment::writer::flush()
 
   chunk_ = make_unique<chunk>(segment_->header_.compression);
   chunk_writer_ = make_unique<chunk::writer>(*chunk_);
-  first_ = {};
-  last_ = {};
+  first_ = time_range{};
+  last_ = time_range{};
 
   return true;
 }
@@ -131,10 +131,10 @@ bool segment::writer::store(event const& e)
     chunk_writer_->write(e.timestamp(), 0) &&
     chunk_writer_->write(static_cast<std::vector<value> const&>(e));
 
-  if (e.timestamp() < first_)
+  if (first_ == time_range{} || e.timestamp() < first_)
     first_ = e.timestamp();
 
-  if (e.timestamp() > last_)
+  if (last_ == time_range{} || e.timestamp() > last_)
     last_ = e.timestamp();
 
   if (! success)
