@@ -274,7 +274,7 @@ public:
     result_.hits = {};
     double got = 0.0;
     double need = 0.0;
-    double misses = 0;
+    double misses = 0.0;
 
     auto& parts = index_.cache_[pred].parts;
     VAST_LOG_DEBUG("evaluating " << expr::ast{pred});
@@ -306,12 +306,15 @@ public:
                      (parts[r].expected ? to_string(*parts[r].expected) : "-"));
     }
 
-    auto completion = double(parts.size() - misses) / double(parts.size());
-    auto progress = (need == 0 || completion == 0) ? 0.0 : (got / need);
-    VAST_LOG_DEBUG("  -> completion:  " << int(completion * 100) <<
-                   "%, progress: " << int(progress * 100) << "%");
+    if (! parts.empty())
+    {
+      auto completion = double(parts.size() - misses) / double(parts.size());
+      auto progress = (need == 0 || completion == 0) ? 0.0 : (got / need);
+      VAST_LOG_DEBUG("  -> completion:  " << int(completion * 100) <<
+                     "%, progress: " << int(progress * 100) << "%");
 
-    result_.predicate_progress[pred] = completion * progress;
+      result_.predicate_progress[pred] = completion * progress;
+    }
   }
 
   index& index_;
@@ -346,18 +349,21 @@ trial<index::evaluation> index::evaluate(expr::ast const& ast)
   ast.accept(p);
   ast.accept(e);
 
-  auto& eval_result = e.result_;
-  double sum = 0.0;
-  for (auto& p : eval_result.predicate_progress)
-    sum += p.second;
-  eval_result.total_progress = sum / eval_result.predicate_progress.size();
+  auto& er = e.result_;
+  if (er.total_progress != 1.0 && ! er.predicate_progress.empty())
+  {
+    double sum = 0.0;
+    for (auto& p : er.predicate_progress)
+      sum += p.second;
+    er.total_progress = sum / er.predicate_progress.size();
+  }
 
   VAST_LOG_DEBUG("evaluated " << ast <<
-                 " (" << int(eval_result.total_progress * 100) << "%)");
-  for (auto& pair : eval_result.predicate_progress)
+                 " (" << int(er.total_progress * 100) << "%)");
+  for (auto& pair : er.predicate_progress)
     VAST_LOG_DEBUG("  -  " << int(pair.second * 100) << "% of " << pair.first);
 
-  return std::move(eval_result);
+  return std::move(er);
 }
 
 trial<index::evaluation> index::add_query(expr::ast const& qry)

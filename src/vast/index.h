@@ -23,7 +23,7 @@ public:
   {
     bitstream hits;
     std::map<expr::ast, double> predicate_progress;
-    double total_progress;
+    double total_progress = 0.0;
   };
 
   struct cache_entry
