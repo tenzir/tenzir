@@ -107,11 +107,13 @@ BOOST_AUTO_TEST_CASE(range_coding)
 {
   range_bitslice_coder<uint8_t, null_bitstream> r;
 
-  // Some manual tests first.
   BOOST_REQUIRE(r.encode(0));
   BOOST_REQUIRE(r.encode(6));
   BOOST_REQUIRE(r.encode(9));
+  BOOST_REQUIRE(r.encode(10));
   BOOST_REQUIRE(r.encode(77));
+  BOOST_REQUIRE(r.encode(99));
+  BOOST_REQUIRE(r.encode(100));
   BOOST_REQUIRE(r.encode(255));
   BOOST_REQUIRE(r.encode(254));
 
@@ -121,15 +123,53 @@ BOOST_AUTO_TEST_CASE(range_coding)
   //      std::cout << (uint64_t)x << "\t" << bs << std::endl;
   //    });
 
-  BOOST_CHECK_EQUAL(to_string(*r.decode(0, less_equal)), "100000");
-  BOOST_CHECK_EQUAL(to_string(*r.decode(8, less_equal)), "110000");
-  BOOST_CHECK_EQUAL(to_string(*r.decode(9, less_equal)), "111000");
-  BOOST_CHECK_EQUAL(to_string(*r.decode(10, less_equal)), "111000");
-  BOOST_CHECK_EQUAL(to_string(*r.decode(100, less_equal)), "111100");
-  BOOST_CHECK_EQUAL(to_string(*r.decode(255, less_equal)), "111111");
-  BOOST_CHECK_EQUAL(to_string(*r.decode(254, less_equal)), "111101");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(0,   less)),          "000000000");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(8,   less)),          "110000000");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(9,   less)),          "110000000");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(10,  less)),          "111000000");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(100, less)),          "111111000");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(254, less)),          "111111100");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(255, less)),          "111111101");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(0,   less_equal)),    "100000000");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(8,   less_equal)),    "110000000");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(9,   less_equal)),    "111000000");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(10,  less_equal)),    "111100000");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(100, less_equal)),    "111111100");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(254, less_equal)),    "111111101");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(255, less_equal)),    "111111111");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(0,   greater)),       "011111111");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(8,   greater)),       "001111111");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(9,   greater)),       "000111111");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(10,  greater)),       "000011111");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(100, greater)),       "000000011");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(254, greater)),       "000000010");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(255, greater)),       "000000000");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(0,   greater_equal)), "111111111");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(8,   greater_equal)), "001111111");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(9,   greater_equal)), "001111111");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(10,  greater_equal)), "000111111");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(100, greater_equal)), "000000111");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(254, greater_equal)), "000000011");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(255, greater_equal)), "000000010");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(0,   equal)),         "100000000");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(6,   equal)),         "010000000");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(8,   equal)),         "000000000");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(9,   equal)),         "001000000");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(10,  equal)),         "000100000");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(77,  equal)),         "000010000");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(100, equal)),         "000000100");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(254, equal)),         "000000001");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(255, equal)),         "000000010");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(0,   not_equal)),     "011111111");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(6,   not_equal)),     "101111111");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(8,   not_equal)),     "111111111");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(9,   not_equal)),     "110111111");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(10,  not_equal)),     "111011111");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(100, not_equal)),     "111111011");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(254, not_equal)),     "111111110");
+  BOOST_CHECK_EQUAL(to_string(*r.decode(255, not_equal)),     "111111101");
 
-  r = decltype(r){};
+  r = {};
 
   for (size_t i = 0; i < 256; ++i)
     BOOST_CHECK(r.encode(i));

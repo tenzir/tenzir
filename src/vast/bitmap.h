@@ -645,11 +645,19 @@ private:
   // bitstream scans (and bitwise operations).
   optional<Bitstream> decode_value(T x, relational_operator op) const
   {
-    Bitstream result{this->size(), true};
+    if (x == std::numeric_limits<T>::min())
+    {
+      if (op == less)  // A < min => false
+        return Bitstream{this->size(), false};
+      else if (op == greater_equal) // A >= min <=> A <= max
+        return decode_value(std::numeric_limits<T>::max(), less_equal);
+    }
+    else if (op == less || op == greater_equal)
+    {
+      --x;
+    }
 
-    if (x > std::numeric_limits<T>::min())
-      if (op == less || op == greater_equal)
-        --x; // FIXME: Treat floating point properly.
+    Bitstream result{this->size(), true};
 
     this->decompose(x);
 
