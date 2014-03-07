@@ -221,6 +221,21 @@ public:
   /// Retrieves the number of events in the segment.
   uint64_t events() const;
 
+  /// Generates a bitstream representing the segment coverage based on the
+  /// contained event IDs.
+  template <typename Bitstream = default_encoded_bitstream>
+  optional<Bitstream> coverage() const
+  {
+    if (base() == 0 || events() == 0)
+      return {};
+
+    Bitstream bs;
+    bs.append(base(), false);
+    bs.append(events(), true);
+
+    return bs;
+  }
+
   /// Retrieves the number of bytes the segment occupies in memory.
   uint64_t bytes() const;
 
