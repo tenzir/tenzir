@@ -232,6 +232,7 @@ void program::act()
       else if (auto file = config_.get("ingest.file-name"))
       {
         auto type = *config_.get("ingest.file-type");
+        auto ts_field = *config_.as<int32_t>("ingest.time-field");
         if (! exists(string(*file)))
         {
           VAST_LOG_ACTOR_ERROR("no such file: " << *file);
@@ -239,7 +240,7 @@ void program::act()
           return;
         }
 
-        send(ingestor, atom("ingest"), type, *file);
+        send(ingestor, atom("ingest"), type, *file, ts_field);
       }
       else
       {

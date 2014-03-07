@@ -107,12 +107,14 @@ private:
 class bro2 : public line<bro2>
 {
 public:
-  bro2(cppa::actor_ptr sink, std::string const& filename);
+  bro2(cppa::actor_ptr sink, std::string const& filename,
+       int32_t timestamp_field);
 
   result<event> extract_impl_impl();
   char const* description_impl_impl() const;
 
 private:
+  int32_t timestamp_field_ = -1;
   string separator_ = " ";
   string set_separator_;
   string empty_field_;

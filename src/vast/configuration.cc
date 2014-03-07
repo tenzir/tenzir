@@ -79,6 +79,7 @@ void configuration::initialize()
   ingest.add("batch-size", "number of events to ingest in one run").init(4000);
   ingest.add("file-name", "path to file to ingest").single();
   ingest.add("file-type", "file type of the file to ingest").init("bro2");
+  ingest.add("time-field", "field to extract event timestamp from").init(-1);
   ingest.add("submit", "send orphaned segments on startup");
 #ifdef VAST_HAVE_BROCCOLI
   ingest.add("broccoli-host", "hostname/address of the broccoli source")
@@ -130,6 +131,7 @@ void configuration::initialize()
   add_conflict("console-actor", "search-actor");
 #endif
 
+  add_dependency("ingest.time-field", "ingestor-actor");
   add_dependency("ingest.submit", "ingestor-actor");
   add_dependency("ingest.file-name", "ingestor-actor");
   add_dependency("ingest.file-type", "ingest.file-name");

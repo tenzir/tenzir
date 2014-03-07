@@ -131,9 +131,10 @@ void ingestor_actor::act()
         // TODO.
       },
 #endif
-      on(atom("ingest"), "bro2", arg_match) >> [=](std::string const& file)
+      on(atom("ingest"), "bro2", arg_match)
+        >> [=](std::string const& file, int32_t ts_field)
       {
-        source_ = spawn<source::bro2, detached>(sink_, file);
+        source_ = spawn<source::bro2, detached>(sink_, file, ts_field);
         source_->link_to(sink_);
         send(source_, atom("batch size"), batch_size_);
         send(source_, atom("run"));

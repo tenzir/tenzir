@@ -46,8 +46,10 @@ value_type bro_to_vast(string const& type)
 
 } // namespace <anonymous>
 
-bro2::bro2(cppa::actor_ptr sink, std::string const& filename)
-  : line<bro2>{std::move(sink), filename}
+bro2::bro2(cppa::actor_ptr sink, std::string const& filename,
+           int32_t timestamp_field)
+  : line<bro2>{std::move(sink), filename},
+    timestamp_field_{timestamp_field}
 {
 }
 
@@ -195,6 +197,10 @@ result<event> bro2::extract_impl_impl()
         str << " " << type;
       VAST_LOG_ACTOR_DEBUG("has container types:" << str.str());
     }
+
+    if (timestamp_field_ > -1)
+      VAST_LOG_ACTOR_DEBUG("attempts to extract timestamp from field " <<
+                           timestamp_field_);
   }
 
   auto line = this->next();
@@ -286,6 +292,10 @@ result<event> bro2::extract_impl_impl()
       value v;
       if (! extract(start, end, v, field_types_[f]))
         return error{"could not parse field: " + std::string{start, end}};
+
+      if (f == static_cast<size_t>(timestamp_field_)
+          && v.which() == time_point_type)
+        e.timestamp(v.get<time_point>());
 
       e.push_back(std::move(v));
     }
