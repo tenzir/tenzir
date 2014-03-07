@@ -177,12 +177,12 @@ public:
   /// @returns A valid result if the callback executed and an error on failure.
   result<bool> process(std::string cmd);
 
-  /// Retrieves a single character from the command lien in a blocking fashion.
+  /// Retrieves a single character from the command line in a blocking fashion.
   /// @param c The result parameter containing the character from STDIN.
   /// @returns `true` on success.
   bool get(char& c);
 
-  /// Retrieves a fulle line from the command line in a blocking fashion.
+  /// Retrieves a full line from the command line in a blocking fashion.
   /// @param line The result parameter containing the line.
   /// @returns `true` on success.
   bool get(std::string& line);

@@ -245,7 +245,7 @@ bool command_line::get(std::string& line)
   if (! mode_stack_.back()->el_.get(line))
     return false;
 
-  // Trim command from leading/trailing whitespace.
+  // Trim line from leading/trailing whitespace.
   auto first_non_ws = line.find_first_not_of(" \t");
   auto last_non_ws = line.find_last_not_of(" \t");
   if (first_non_ws != std::string::npos)
