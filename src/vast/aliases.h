@@ -9,6 +9,9 @@ namespace vast {
 /// Uniquely identifies a VAST event.
 using event_id = uint64_t;
 
+/// The invalid event ID.
+static constexpr event_id invalid_event_id = 0;
+
 /// The smallest possible event ID.
 static constexpr event_id min_event_id = 1;
 
