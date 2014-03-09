@@ -65,6 +65,13 @@ public:
     return &value();
   }
 
+  /// Checks whether the result is engaged.
+  /// @returns `true` iff the result is engaged.
+  explicit operator bool() const
+  {
+    return engaged();
+  }
+
   /// Retrieves the value of the result.
   /// @returns A mutable reference to the contained value.
   /// @pre `engaged() == true`.
