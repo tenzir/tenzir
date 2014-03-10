@@ -274,6 +274,26 @@ BOOST_AUTO_TEST_CASE(records)
   BOOST_CHECK_EQUAL(*s.flat_at(2), "foo");
   BOOST_CHECK_EQUAL(s.flat_at(6)->which(), port_type);
   BOOST_CHECK(s.flat_at(7) == nullptr);
+
+  std::vector<offset> expected =
+  {
+    {0},
+    {1},
+    {2, 0},
+    {2, 1},
+    {2, 2},
+    {2, 3},
+    {2, 4}
+  };
+
+  std::vector<offset> offsets;
+  s.each_offset(
+      [&](value const&, offset const& o)
+      {
+        offsets.push_back(o);
+      });
+
+  BOOST_CHECK(offsets == expected);
 }
 
 BOOST_AUTO_TEST_CASE(addresses_v4)

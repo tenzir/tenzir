@@ -78,6 +78,13 @@ bool record::all(std::function<bool(value const&)> f, bool recurse) const
   return true;
 }
 
+void
+record::each_offset(std::function<void(value const&, offset const&)> f) const
+{
+  offset o;
+  do_each_offset(f, o);
+}
+
 value const* record::do_flat_at(size_t i, size_t& base) const
 {
   assert(base <= i);
@@ -94,6 +101,23 @@ value const* record::do_flat_at(size_t i, size_t& base) const
   }
 
   return nullptr;
+}
+
+void record::do_each_offset(std::function<void(value const&, offset const&)> f,
+                           offset& o) const
+{
+  o.push_back(0);
+  for (auto& v : *this)
+  {
+    if (v && v.which() == record_type)
+      v.get<record>().do_each_offset(f, o);
+    else
+      f(v, o);
+
+    ++o.back();
+  }
+
+  o.pop_back();
 }
 
 void record::serialize(serializer& sink) const

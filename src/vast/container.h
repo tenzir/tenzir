@@ -62,8 +62,13 @@ public:
   bool any(std::function<bool(value const&)> f, bool recurse = true) const;
   bool all(std::function<bool(value const&)> f, bool recurse = true) const;
 
+  void each_offset(std::function<void(value const&, offset const&)> f) const;
+
 private:
   value const* do_flat_at(size_t i, size_t& base) const;
+
+  void do_each_offset(std::function<void(value const&, offset const&)> f,
+                      offset& o) const;
 
 private:
   friend access;
