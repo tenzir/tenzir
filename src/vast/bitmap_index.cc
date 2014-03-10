@@ -2,7 +2,7 @@
 
 namespace vast {
 
-bool bitmap_index::push_back(value const& val, uint64_t id)
+bool bitmap_index::push_back(value const& val, event_id id)
 {
   if (id > 0)
   {

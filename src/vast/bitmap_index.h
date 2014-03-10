@@ -22,7 +22,7 @@ public:
   /// @param val The value to add to the index.
   /// @param id The ID to associate with *val*.
   /// @returns `true` if appending succeeded.
-  bool push_back(value const& val, uint64_t id = 0);
+  bool push_back(value const& val, event_id id = 0);
 
   /// Appends a sequence of bits.
   /// @param n The number of elements to append.
@@ -200,7 +200,7 @@ private:
 template <typename Bitstream>
 class string_bitmap_index : public bitmap_index
 {
-  using dictionary_codomain = uint64_t;
+  using dictionary_codomain = event_id;
 
 public:
   virtual bool append(size_t n, bool bit) override
