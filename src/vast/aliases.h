@@ -6,6 +6,11 @@
 
 namespace vast {
 
+class ewah_bitstream;
+
+/// The default bitstream to use.
+using default_encoded_bitstream = ewah_bitstream;
+
 /// Uniquely identifies a VAST event.
 using event_id = uint64_t;
 
