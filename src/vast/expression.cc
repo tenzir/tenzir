@@ -891,7 +891,87 @@ public:
     flag_ = true;
   }
 
+  virtual void visit(expr::id_extractor const&)
+  {
+    flag_ = true;
+  }
+
   bool flag_ = false;
+};
+
+class time_predicate_tester : public expr::default_const_visitor
+{
+public:
+  virtual void visit(expr::predicate const& pred)
+  {
+    pred.lhs().accept(*this);
+  }
+
+  virtual void visit(expr::timestamp_extractor const&)
+  {
+    flag_ = true;
+  }
+
+  bool flag_ = false;
+};
+
+class name_predicate_tester : public expr::default_const_visitor
+{
+public:
+  virtual void visit(expr::predicate const& pred)
+  {
+    pred.lhs().accept(*this);
+  }
+
+  virtual void visit(expr::name_extractor const&)
+  {
+    flag_ = true;
+  }
+
+  bool flag_ = false;
+};
+
+class constant_finder : public expr::default_const_visitor
+{
+public:
+  virtual void visit(expr::predicate const& pred)
+  {
+    pred.rhs().accept(*this);
+  }
+
+  virtual void visit(expr::constant const& c)
+  {
+    val_ = &c.val;
+  }
+
+  value const* val_ = nullptr;
+};
+
+class offset_finder : public expr::default_const_visitor
+{
+public:
+  virtual void visit(expr::predicate const& pred)
+  {
+    pred.lhs().accept(*this);
+  }
+
+  virtual void visit(expr::offset_extractor const& oe)
+  {
+    off_ = &oe.off;
+  }
+
+  offset const* off_ = nullptr;
+};
+
+class operator_finder : public expr::default_const_visitor
+{
+public:
+  virtual void visit(expr::predicate const& pred)
+  {
+    op_ = &pred.op;
+  }
+
+  relational_operator const* op_ = nullptr;
 };
 
 } // namespace <anonymous>
@@ -922,6 +1002,41 @@ bool ast::is_meta_predicate() const
   meta_predicate_tester visitor;
   accept(visitor);
   return visitor.flag_;
+}
+
+bool ast::is_time_predicate() const
+{
+  time_predicate_tester visitor;
+  accept(visitor);
+  return visitor.flag_;
+}
+
+bool ast::is_name_predicate() const
+{
+  name_predicate_tester visitor;
+  accept(visitor);
+  return visitor.flag_;
+}
+
+value const* ast::find_constant() const
+{
+  constant_finder visitor;
+  accept(visitor);
+  return visitor.val_;
+}
+
+offset const* ast::find_offset() const
+{
+  offset_finder visitor;
+  accept(visitor);
+  return visitor.off_;
+}
+
+relational_operator const* ast::find_operator() const
+{
+  operator_finder visitor;
+  accept(visitor);
+  return visitor.op_;
 }
 
 void ast::serialize(serializer& sink) const

@@ -233,6 +233,11 @@ public:
   bool is_disjunction() const;
   bool is_predicate() const;
   bool is_meta_predicate() const;
+  bool is_time_predicate() const;
+  bool is_name_predicate() const;
+  value const* find_constant() const;
+  offset const* find_offset() const;
+  relational_operator const* find_operator() const;
 
 private:
   std::unique_ptr<node> node_;
