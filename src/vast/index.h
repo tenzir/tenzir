@@ -30,8 +30,8 @@ public:
   {
     struct partition_state
     {
-      size_t got = 0;
-      optional<size_t> expected;
+      uint64_t got = 0;
+      optional<uint64_t> expected;
       bitstream hits;
     };
 
@@ -64,7 +64,7 @@ public:
   /// @param pred The (existing) predicate to update.
   /// @param part The partition *pred* came from.
   /// @param n The number of expected hits for *pred* from *part*.
-  void expect(expr::ast const& pred, uuid const& part, size_t n);
+  void expect(expr::ast const& pred, uuid const& part, uint64_t n);
 
   /// Updates the state of a given partition.
   /// @param id The UUID of the partition to update.

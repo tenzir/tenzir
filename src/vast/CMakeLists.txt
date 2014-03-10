@@ -11,7 +11,6 @@ set(libvast_sources
   container.cc
   expression.cc
   event.cc
-  event_index.cc
   file_system.cc
   id_tracker.cc
   index.cc

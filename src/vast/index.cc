@@ -378,7 +378,7 @@ trial<index::evaluation> index::add_query(expr::ast const& qry)
   return evaluate(qry);
 }
 
-void index::expect(expr::ast const& pred, uuid const& part, size_t n)
+void index::expect(expr::ast const& pred, uuid const& part, uint64_t n)
 {
   cache_[pred].parts[part].expected = n;
 }
@@ -531,6 +531,8 @@ void index_actor::act()
       dir_,
       [&](path const& p) -> bool
       {
+        VAST_LOG_ACTOR_INFO("found partition " << p.basename());
+
         auto r = make_partition(p);
         if (! r)
           VAST_LOG_ACTOR_ERROR(r.failure().msg());
@@ -541,7 +543,8 @@ void index_actor::act()
   if (! parts_.empty())
   {
     active_ = *part_actors_.find(parts_.rbegin()->second);
-    VAST_LOG_ACTOR_INFO("sets existing partition as active: " << active_.first);
+    VAST_LOG_ACTOR_INFO("sets existing partition as active: " <<
+                        parts_.rbegin()->first << " (" << active_.first << ')');
   }
 
   become(
@@ -654,7 +657,7 @@ void index_actor::act()
           return make_any_tuple(atom("error"), e.failure().msg());
         }
       },
-      on_arg_match >> [=](expr::ast const& pred, uuid const& part, uint32_t n)
+      on_arg_match >> [=](expr::ast const& pred, uuid const& part, uint64_t n)
       {
         VAST_LOG_ACTOR_DEBUG("expects partition " << part <<
                              " to deliver " << n << " predicates " << pred);
