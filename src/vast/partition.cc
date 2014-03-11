@@ -183,11 +183,25 @@ struct dispatcher : expr::default_const_visitor
 
   virtual void visit(expr::timestamp_extractor const&)
   {
+    if (! actor_.time_indexer_)
+    {
+      auto p = actor_.dir_ / "time.idx";
+      actor_.time_indexer_ =
+        spawn<event_time_indexer<default_bitstream>>(std::move(p));
+    }
+
     indexes_.push_back(actor_.time_indexer_);
   }
 
   virtual void visit(expr::name_extractor const&)
   {
+    if (! actor_.name_indexer_)
+    {
+      auto p = actor_.dir_ / "name.idx";
+      actor_.name_indexer_ =
+        spawn<event_name_indexer<default_bitstream>>(std::move(p));
+    }
+
     indexes_.push_back(actor_.name_indexer_);
   }
 
