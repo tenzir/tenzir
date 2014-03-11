@@ -299,7 +299,7 @@ void partition_actor::act()
               if (idx_file.extension() != ".idx")
                 return true;
 
-              VAST_LOG_ACTOR_WARN("found index " << idx_file);
+              VAST_LOG_ACTOR_DEBUG("found index " << idx_file);
               auto str = idx_file.basename(true).str();
               auto start = str.begin();
               offset o;
