@@ -82,29 +82,34 @@ public:
                             actor_ptr const& sink)
         {
           assert(pred.is_predicate());
-          auto o = pred.find_operator();
-          auto c = pred.find_constant();
 
+          auto o = pred.find_operator();
           if (! o)
           {
             VAST_LOG_ACTOR_ERROR("failed to extract operator from " << pred);
             send(sink, pred, part, bitstream{});
             this->quit(exit::error);
+            return;
           }
-          else if (! c)
+
+          auto c = pred.find_constant();
+          if (! c)
           {
             VAST_LOG_ACTOR_ERROR("failed to extract constant from " << pred);
             send(sink, pred, part, bitstream{});
             this->quit(exit::error);
+            return;
           }
-          else if (auto r = bmi_.lookup(*o, *c))
+
+          auto r = bmi_.lookup(*o, *c);
+          if (! r)
           {
-            send(sink, pred, part, std::move(*r));
-          }
-          else
-          {
+            VAST_LOG_ACTOR_ERROR(r.failure().msg());
             send(sink, pred, part, bitstream{});
+            return;
           }
+
+          send(sink, pred, part, std::move(*r));
         });
   }
 

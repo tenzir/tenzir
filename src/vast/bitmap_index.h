@@ -4,10 +4,10 @@
 #include "vast/bitmap.h"
 #include "vast/container.h"
 #include "vast/operator.h"
-#include "vast/optional.h"
 #include "vast/value.h"
 #include "vast/util/dictionary.h"
 #include "vast/util/operators.h"
+#include "vast/util/trial.h"
 
 namespace vast {
 
@@ -33,7 +33,7 @@ public:
   /// Looks up a value given a relational operator.
   /// @param op The relation operator.
   /// @param val The value to lookup.
-  virtual optional<bitstream>
+  virtual trial<bitstream>
   lookup(relational_operator op, value const& val) const = 0;
 
   /// Retrieves the number of elements in the bitmap index.
@@ -123,20 +123,20 @@ public:
     return bitmap_.append(n, bit);
   }
 
-  virtual optional<bitstream>
+  virtual trial<bitstream>
   lookup(relational_operator op, value const& val) const override
   {
     if (op == in || op == not_in)
-        throw std::runtime_error(
-            "unsupported relational operator: " + to<std::string>(op));
+      return error{"unsupported relational operator: " + to<std::string>(op)};
 
     if (bitmap_.empty())
-      return {};
+      return {Bitstream{}};
 
-    if (auto result = bitmap_.lookup(op, extract(val)))
-      return {std::move(*result)};
+    auto r = bitmap_.lookup(op, extract(val));
+    if (r)
+      return {std::move(*r)};
     else
-      return {};
+      return r.failure();
   };
 
   virtual uint64_t size() const override
@@ -215,7 +215,7 @@ public:
     return size_.append(n, bit);
   }
 
-  virtual optional<bitstream>
+  virtual trial<bitstream>
   lookup(relational_operator op, value const& val) const override
   {
     auto str = val.get<string>();
@@ -223,8 +223,7 @@ public:
     switch (op)
     {
       default:
-        throw std::runtime_error("unsupported relational operator " +
-                                 to<std::string>(op));
+        return error{"unsupported relational operator " + to<std::string>(op)};
       case equal:
       case not_equal:
         {
@@ -233,26 +232,30 @@ public:
             if (auto s = size_.lookup(equal, 0))
               return {std::move(op == equal ? *s : s->flip())};
             else
-              return {};
+              return s.failure();
           }
 
           if (str.size() > bitmaps_.size())
             return {Bitstream{size(), op == not_equal}};
 
-          auto r = bitmaps_[0].lookup(equal, byte_at(str, 0));
+          auto r = size_.lookup(less_equal, str.size());
           if (! r)
+            return r.failure();
+
+          if (r->find_first() == Bitstream::npos)
             return {Bitstream{size(), op == not_equal}};
 
-          for (size_t i = 1; i < str.size(); ++i)
-            if (auto b = bitmaps_[i].lookup(equal, byte_at(str, i)))
+          for (size_t i = 0; i < str.size(); ++i)
+          {
+            auto b = bitmaps_[i].lookup(equal, byte_at(str, i));
+            if (! b)
+              return b.failure();
+
+            if (b->find_first() != Bitstream::npos)
               *r &= *b;
             else
               return {Bitstream{size(), op == not_equal}};
-
-          if (auto s = size_.lookup(less_equal, str.size()))
-            *r &= *s;
-          else
-            return {Bitstream{size(), op == not_equal}};
+          }
 
           return {std::move(op == equal ? *r : r->flip())};
         }
@@ -274,7 +277,10 @@ public:
             for (size_t j = 0; j < str.size(); ++j)
             {
               auto bs = bitmaps_[i + j].lookup(equal, str[j]);
-              if (! bs || bs->find_first() == bitstream::npos)
+              if (! bs)
+                return bs.failure();
+
+              if (bs->find_first() == Bitstream::npos)
               {
                 skip = true;
                 break;
@@ -382,24 +388,23 @@ public:
     return v4_.append(n, bit) && success;
   }
 
-  virtual optional<bitstream>
+  virtual trial<bitstream>
   lookup(relational_operator op, value const& val) const override
   {
     if (! (op == equal || op == not_equal || op == in || op == not_in))
-      throw std::runtime_error("unsupported relational operator " +
-                               to<std::string>(op));
+      return error{"unsupported relational operator " + to<std::string>(op)};
 
     if (v4_.empty())
-      return {};
+      return {Bitstream{}};
 
     switch (val.which())
     {
       default:
-        throw std::runtime_error("invalid value type");
+        return error{"invalid value type"};
       case address_type:
-        return lookup(val.get<address>(), op);
+        return lookup_impl(op, val.get<address>());
       case prefix_type:
-        return lookup(val.get<prefix>(), op);
+        return lookup_impl(op, val.get<prefix>());
     }
   }
 
@@ -414,11 +419,15 @@ private:
     auto& addr = val.get<address>();
     auto& bytes = addr.data();
     size_t const start = addr.is_v4() ? 12 : 0;
-    auto success = v4_.push_back(start == 12);
+
+    if (! v4_.push_back(start == 12))
+      return false;
+
     for (size_t i = 0; i < 16; ++i)
       if (! bitmaps_[i].push_back(i < start ? 0x00 : bytes[i]))
-        success = false;
-    return success;
+        return false;
+
+    return true;
   }
 
   virtual bool equals(bitmap_index const& other) const override
@@ -429,59 +438,59 @@ private:
     return bitmaps_ == o.bitmaps_ && v4_ == o.v4_;
   }
 
-  optional<bitstream> lookup(address const& addr, relational_operator op) const
+  trial<bitstream> lookup_impl(relational_operator op, address const& addr) const
   {
     auto& bytes = addr.data();
     auto is_v4 = addr.is_v4();
-    optional<bitstream> result;
-    result = bitstream{is_v4 ? v4_ : Bitstream{v4_.size(), true}};
-    for (size_t i = is_v4 ? 12 : 0; i < 16; ++ i)
-      if (auto bs = bitmaps_[i][bytes[i]])
-        *result &= *bs;
-      else if (op == not_equal)
-        return bitstream{Bitstream{v4_.size(), true}};
-      else
-        return {};
+    auto r = is_v4 ? v4_ : Bitstream{size(), true};
 
-    if (op == not_equal)
-      result->flip();
-    return result;
+    for (size_t i = is_v4 ? 12 : 0; i < 16; ++ i)
+    {
+      auto bs = bitmaps_[i][bytes[i]];
+      if (! bs)
+        return bs.failure();
+
+      if (bs->find_first() != Bitstream::npos)
+        r &= *bs;
+      else
+        return {Bitstream{size(), op == not_equal}};
+    }
+
+    return {std::move(op == equal ? r : r.flip())};
   }
 
-  optional<bitstream> lookup(prefix const& pfx, relational_operator op) const
+  trial<bitstream> lookup_impl(relational_operator op, prefix const& pfx) const
   {
     if (! (op == in || op == not_in))
-      throw std::runtime_error("unsupported relational operator " +
-                               to<std::string>(op));
+      return error{"unsupported relational operator " + to<std::string>(op)};
 
     auto topk = pfx.length();
     if (topk == 0)
-      throw std::runtime_error("invalid IP prefix length");
+      return error{"invalid IP prefix length: " + to<std::string>(topk)};
 
     auto net = pfx.network();
     auto is_v4 = net.is_v4();
     if ((is_v4 ? topk + 96 : topk) == 128)
-      return lookup(pfx.network(), op == in ? equal : not_equal);
+      return lookup_impl(op == in ? equal : not_equal, pfx.network());
 
-    optional<bitstream> result;
-    result = bitstream{is_v4 ? v4_ : Bitstream{v4_.size(), true}};
+    auto r = is_v4 ? v4_ : Bitstream{size(), true};
     auto bit = topk;
     auto& bytes = net.data();
     for (size_t i = is_v4 ? 12 : 0; i < 16; ++ i)
       for (size_t j = 8; j --> 0; )
       {
         auto& bs = bitmaps_[i].coder().get(j);
-        *result &= ((bytes[i] >> j) & 1) ? bs : ~bs;
+        r &= ((bytes[i] >> j) & 1) ? bs : ~bs;
 
         if (! --bit)
         {
           if (op == not_in)
-            result->flip();
-          return result;
+            r.flip();
+          return {std::move(r)};
         }
       }
 
-    return {};
+    return {Bitstream{size(), false}};
   }
 
   std::array<bitmap<uint8_t, Bitstream, binary_bitslice_coder>, 16> bitmaps_;
@@ -524,25 +533,33 @@ public:
     return proto_.append(n, bit) && success;
   }
 
-  virtual optional<bitstream>
+  virtual trial<bitstream>
   lookup(relational_operator op, value const& val) const override
   {
     if (op == in || op == not_in)
-      throw std::runtime_error("unsupported relational operator " +
-                               to<std::string>(op));
+      return error{"unsupported relational operator " + to<std::string>(op)};
+
     if (num_.empty())
-      return {};
+      return {Bitstream{size(), false}};
 
     auto& p = val.get<port>();
-    auto nbs = num_.lookup(op, p.number());
-    if (! nbs)
-      return {};
+    auto n = num_.lookup(op, p.number());
+    if (! n)
+      return n.failure();
+
+    if (n->find_first() == Bitstream::npos)
+      return {Bitstream(size(), false)};
 
     if (p.type() != port::unknown)
-      if (auto tbs = proto_[p.type()])
-          *nbs &= *tbs;
+    {
+      auto t = proto_[p.type()];
+      if (! t)
+        return t.failure();
 
-    return {std::move(*nbs)};
+      *n &= *t;
+    }
+
+    return {std::move(*n)};
   }
 
   virtual uint64_t size() const override

@@ -176,7 +176,8 @@ BOOST_AUTO_TEST_CASE(strings_bitmap_index)
   BOOST_CHECK_EQUAL(to_string(*bi->lookup(ni, "ar")),   "0100010000");
   BOOST_CHECK_EQUAL(to_string(*bi->lookup(ni, "rge")),  "0000000010");
 
-  BOOST_CHECK_THROW(bi->lookup(match, "foo"), std::runtime_error);
+  auto e = bi->lookup(match, "foo");
+  BOOST_CHECK(! e);
 
   std::vector<uint8_t> buf;
   io::archive(buf, sbi);
@@ -197,14 +198,16 @@ BOOST_AUTO_TEST_CASE(ip_address_bitmap_index)
   BOOST_REQUIRE(bi->push_back(address("192.168.0.1")));
   BOOST_REQUIRE(bi->push_back(address("192.168.0.2")));
 
-  address addr("192.168.0.1");
+  address addr{"192.168.0.1"};
   auto bs = bi->lookup(equal, addr);
   BOOST_REQUIRE(bs);
   BOOST_CHECK_EQUAL(to_string(*bs), "100110");
   auto nbs = bi->lookup(not_equal, addr);
   BOOST_CHECK_EQUAL(to_string(*nbs), "011001");
-  BOOST_CHECK(! bi->lookup(equal, address{"192.168.0.5"}));
-  BOOST_CHECK_THROW(bi->lookup(match, address{"::"}), std::runtime_error);
+
+  addr = address{"192.168.0.5"};
+  BOOST_CHECK_EQUAL(to_string(*bi->lookup(equal, addr)), "000000");
+  BOOST_CHECK(! bi->lookup(match, address{"::"}));
 
   bi->push_back(address{"192.168.0.128"});
   bi->push_back(address{"192.168.0.130"});

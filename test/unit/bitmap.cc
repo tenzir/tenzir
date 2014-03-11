@@ -289,19 +289,18 @@ BOOST_AUTO_TEST_CASE(binary_encoded_bitmap)
   BOOST_REQUIRE(bm.push_back(2));
   BOOST_REQUIRE(bm.push_back(2));
 
-  BOOST_CHECK_EQUAL(to_string(*bm[0]), "1000000");
-  BOOST_CHECK_EQUAL(to_string(*bm[1]), "0110000");
-  BOOST_CHECK_EQUAL(to_string(*bm[2]), "0001011");
-  BOOST_CHECK_EQUAL(to_string(*bm[3]), "0000100");
-  BOOST_CHECK(! bm[-42]);
-  BOOST_CHECK(! bm[4]);
-  BOOST_CHECK(! bm[5]);
+  BOOST_CHECK_EQUAL(to_string(*bm[0]),   "1000000");
+  BOOST_CHECK_EQUAL(to_string(*bm[1]),   "0110000");
+  BOOST_CHECK_EQUAL(to_string(*bm[2]),   "0001011");
+  BOOST_CHECK_EQUAL(to_string(*bm[3]),   "0000100");
+  BOOST_CHECK_EQUAL(to_string(*bm[-42]), "0000000");
+  BOOST_CHECK_EQUAL(to_string(*bm[4]),   "0000000");
 
   BOOST_CHECK_EQUAL(to_string(*bm.lookup(not_equal, -42)), "1111111");
-  BOOST_CHECK_EQUAL(to_string(*bm.lookup(not_equal, 0)), "0111111");
-  BOOST_CHECK_EQUAL(to_string(*bm.lookup(not_equal, 1)), "1001111");
-  BOOST_CHECK_EQUAL(to_string(*bm.lookup(not_equal, 2)), "1110100");
-  BOOST_CHECK_EQUAL(to_string(*bm.lookup(not_equal, 3)), "1111011");
+  BOOST_CHECK_EQUAL(to_string(*bm.lookup(not_equal, 0)),   "0111111");
+  BOOST_CHECK_EQUAL(to_string(*bm.lookup(not_equal, 1)),   "1001111");
+  BOOST_CHECK_EQUAL(to_string(*bm.lookup(not_equal, 2)),   "1110100");
+  BOOST_CHECK_EQUAL(to_string(*bm.lookup(not_equal, 3)),   "1111011");
 
   std::vector<uint8_t> buf;
   io::archive(buf, bm);

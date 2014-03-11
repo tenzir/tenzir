@@ -6,11 +6,11 @@
 #include <unordered_map>
 #include "vast/bitstream.h"
 #include "vast/operator.h"
-#include "vast/optional.h"
 #include "vast/serialization.h"
 #include "vast/util/convert.h"
 #include "vast/util/operators.h"
 #include "vast/util/print.h"
+#include "vast/util/trial.h"
 
 namespace vast {
 
@@ -214,11 +214,10 @@ private:
     }
   }
 
-  optional<Bitstream> decode_impl(T x, relational_operator op) const
+  trial<Bitstream> decode_impl(T x, relational_operator op) const
   {
     if (! (op == equal || op == not_equal))
-      throw std::logic_error("unsupported relational operator: " +
-                             to_string(op));
+      return error{"unsupported relational operator: " + to_string(op)};
 
     auto i = bitstreams_.find(x);
     if (i == bitstreams_.end() || i->second.empty())
@@ -317,28 +316,21 @@ private:
     return true;
   }
 
-  optional<Bitstream> decode_impl(T x, relational_operator op) const
+  trial<Bitstream> decode_impl(T x, relational_operator op) const
   {
     switch (op)
     {
       default:
-        throw std::runtime_error(
-            "unsupported relational operator: " + to<std::string>(op));
+        return error{"unsupported relational operator: " + to<std::string>(op)};
       case equal:
-        {
-          Bitstream result{this->size(), true};
-            for (size_t i = 0; i < bitstreams_.size(); ++i)
-              result &= ((x >> i) & 1) ? bitstreams_[i] : ~bitstreams_[i];
-          if (result.find_first() == Bitstream::npos)
-            return {};
-          else
-            return std::move(result);
-        }
       case not_equal:
-        if (auto result = decode_impl(x, equal))
-          return std::move((*result).flip());
-        else
-          return {{this->size(), true}};
+        {
+          Bitstream r{this->size(), true};
+          for (size_t i = 0; i < bitstreams_.size(); ++i)
+            r &= ((x >> i) & 1) ? bitstreams_[i] : ~bitstreams_[i];
+
+          return {std::move(op == equal ? r : r.flip())};
+        }
     }
   }
 
@@ -394,16 +386,16 @@ public:
 
   /// Constructs a slicer with a given (potentially non-uniform) base.
   /// @param base The sequence of bases.
-  /// @pre `! base.empty()`
+  /// @pre `! base.empty()` and `b >= 2` for all *b* in *base*.
   explicit bitslice_coder(value_list base)
     : base_{std::move(base)},
       v_(base_.size()),
       bitstreams_(base_.size())
   {
     assert(! base_.empty());
-
-    if (std::any_of(base_.begin(), base_.end(), [](size_t b) { return b < 2; }))
-      throw std::logic_error{"not a well-defined base"};
+    assert(std::all_of(base_.begin(),
+                       base_.end(),
+                       [](size_t b) { return b >= 2; }));
 
     initialize();
   }
@@ -481,7 +473,7 @@ private:
     return static_cast<Derived*>(this)->encode_value(x);
   }
 
-  optional<Bitstream> decode_impl(T x, relational_operator op) const
+  trial<Bitstream> decode_impl(T x, relational_operator op) const
   {
     return static_cast<Derived const*>(this)->decode_value(x, op);
   }
@@ -560,29 +552,28 @@ private:
     return true;
   }
 
-  optional<Bitstream> decode_value(T x, relational_operator op) const
+  trial<Bitstream> decode_value(T x, relational_operator op) const
   {
     this->decompose(x);
 
-    Bitstream result{this->size(), true};
+    Bitstream r{this->size(), true};
     for (size_t i = 0; i < v_.size(); ++i)
     {
       auto idx = v_[i];
       if (base_[i] == 2 && idx != 0)
         --idx;
 
-      result &= bitstreams_[i][idx];
+      r &= bitstreams_[i][idx];
     }
 
     switch (op)
     {
       default:
-        throw std::runtime_error(
-            "unsupported relational operator: " + to<std::string>(op));
+        return error{"unsupported relational operator: " + to<std::string>(op)};
       case equal:
-        return std::move(result);
+        return std::move(r);
       case not_equal:
-        return std::move(~result);
+        return std::move(~r);
     }
   }
 };
@@ -630,7 +621,7 @@ private:
   //
   // @todo Add some optimizations from Ming-Chuan Wu to reduce the number of
   // bitstream scans (and bitwise operations).
-  optional<Bitstream> decode_value(T x, relational_operator op) const
+  trial<Bitstream> decode_value(T x, relational_operator op) const
   {
     if (x == std::numeric_limits<T>::min())
     {
@@ -651,8 +642,7 @@ private:
     switch (op)
     {
       default:
-        throw std::runtime_error(
-            "unsupported relational operator: " + to<std::string>(op));
+        return error{"unsupported relational operator: " + to<std::string>(op)};
       case less:
       case less_equal:
       case greater:
@@ -849,7 +839,7 @@ public:
   }
 
   /// Shorthand for `lookup(equal, x)`.
-  optional<Bitstream> operator[](T x) const
+  trial<Bitstream> operator[](T x) const
   {
     return lookup(equal, x);
   }
@@ -862,7 +852,7 @@ public:
   ///
   /// @returns An engaged bitstream for all values *v* where *op(v,x)* is
   /// `true` or a disengaged bitstream if *x* does not exist.
-  optional<Bitstream> lookup(relational_operator op, T x) const
+  trial<Bitstream> lookup(relational_operator op, T x) const
   {
     return coder_.decode(binner_(x), op);
   }
@@ -959,18 +949,17 @@ public:
     return bool_.append(n, bit);
   }
 
-  optional<Bitstream> operator[](bool x) const
+  trial<Bitstream> operator[](bool x) const
   {
     return lookup(x);
   }
 
-  optional<Bitstream> lookup(relational_operator op, bool x) const
+  trial<Bitstream> lookup(relational_operator op, bool x) const
   {
     switch (op)
     {
       default:
-        throw std::runtime_error(
-            "unsupported relational operator: " + to<std::string>(op));
+        return error{"unsupported relational operator: " + to<std::string>(op)};
       case not_equal:
         return {x ? ~bool_ : bool_};
       case equal:
