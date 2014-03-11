@@ -209,8 +209,11 @@ result<event> bro2::extract_impl_impl()
 
   fs.split(line->begin(), line->end());
   if (fs.fields() > 0 && *fs.start(0) == '#')
-    return error{"ignored comment at line " + to_string(number()) +
-                 ": " + *line};
+  {
+    VAST_LOG_ACTOR_INFO("ignored comment at line " << number() <<
+                 ": " << *line);
+    return {};
+  }
 
   if (fs.fields() != field_types_.size())
     return error{"inconsistent number of fields at line " +
