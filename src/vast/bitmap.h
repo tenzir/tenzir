@@ -216,31 +216,18 @@ private:
 
   optional<Bitstream> decode_impl(T x, relational_operator op) const
   {
+    if (! (op == equal || op == not_equal))
+      throw std::logic_error("unsupported relational operator: " +
+                             to_string(op));
+
     auto i = bitstreams_.find(x);
-    switch (op)
-    {
-      default:
-        throw std::logic_error(
-            "unsupported relational operator: " + to_string(op));
-      case equal:
-        {
-          if (i == bitstreams_.end() || i->second.empty())
-            return {};
+    if (i == bitstreams_.end() || i->second.empty())
+      return {{this->size(), op == not_equal}};
 
-          auto result = i->second;
-          result.append(this->size() - result.size(), false);
-          return std::move(result);
-        }
-      case not_equal:
-        {
-          if (i == bitstreams_.end() || i->second.empty())
-            return {{this->size(), true}};
+    auto result = i->second;
+    result.append(this->size() - result.size(), false);
 
-          auto result = i->second;
-          result.append(this->size() - result.size(), false);
-          return std::move(~result);
-        }
-    }
+    return std::move(op == equal ? result : result.flip());
   }
 
   template <typename F>

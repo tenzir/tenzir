@@ -76,7 +76,7 @@ BOOST_AUTO_TEST_CASE(basic_bitmap)
   BOOST_CHECK_EQUAL(to_string(*bm[30]), "00001");
   BOOST_CHECK_EQUAL(to_string(*bm[42]), "10100");
   BOOST_CHECK_EQUAL(to_string(*bm[84]), "01000");
-  BOOST_CHECK(! bm[39]);
+  BOOST_CHECK_EQUAL(to_string(*bm[39]), "00000");
 
   BOOST_CHECK_EQUAL(to_string(*bm.lookup(not_equal, 21)), "11101");
   BOOST_CHECK_EQUAL(to_string(*bm.lookup(not_equal, 30)), "11110");
