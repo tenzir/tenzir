@@ -256,11 +256,38 @@ public:
 
           return {std::move(op == equal ? *r : r->flip())};
         }
-      case in:
-      case not_in:
+      case ni:
+      case not_ni:
         {
-          // TODO
-          return {};
+          if (str.empty())
+            return {Bitstream{size(), op == ni}};
+
+          if (str.size() > bitmaps_.size())
+            return {Bitstream{size(), op == not_ni}};
+
+          // Iterate through all k-grams.
+          Bitstream r{size(), 0};
+          for (size_t i = 0; i < bitmaps_.size() - str.size() + 1; ++i)
+          {
+            Bitstream substr{size(), 1};;
+            auto skip = false;
+            for (size_t j = 0; j < str.size(); ++j)
+            {
+              auto bs = bitmaps_[i + j].lookup(equal, str[j]);
+              if (! bs || bs->find_first() == bitstream::npos)
+              {
+                skip = true;
+                break;
+              }
+
+              substr &= *bs;
+            }
+
+            if (! skip)
+              r |= substr;
+          }
+
+          return {std::move(op == ni ? r : r.flip())};
         }
     }
   }

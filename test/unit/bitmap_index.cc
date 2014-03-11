@@ -167,6 +167,15 @@ BOOST_AUTO_TEST_CASE(strings_bitmap_index)
   BOOST_CHECK_EQUAL(to_string(*bi->lookup(not_equal, "")),    "1111110111");
   BOOST_CHECK_EQUAL(to_string(*bi->lookup(not_equal, "foo")), "0110011111");
 
+  BOOST_CHECK_EQUAL(to_string(*bi->lookup(not_ni, "")), "0000000000");
+  BOOST_CHECK_EQUAL(to_string(*bi->lookup(ni, "")),     "1111111111");
+  BOOST_CHECK_EQUAL(to_string(*bi->lookup(ni, "o")),    "1001100010");
+  BOOST_CHECK_EQUAL(to_string(*bi->lookup(ni, "oo")),   "1001100000");
+  BOOST_CHECK_EQUAL(to_string(*bi->lookup(ni, "z")),    "0010000001");
+  BOOST_CHECK_EQUAL(to_string(*bi->lookup(ni, "zz")),   "0000000001");
+  BOOST_CHECK_EQUAL(to_string(*bi->lookup(ni, "ar")),   "0100010000");
+  BOOST_CHECK_EQUAL(to_string(*bi->lookup(ni, "rge")),  "0000000010");
+
   BOOST_CHECK_THROW(bi->lookup(match, "foo"), std::runtime_error);
 
   std::vector<uint8_t> buf;
