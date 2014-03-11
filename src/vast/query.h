@@ -68,9 +68,9 @@ public:
   void finish();
 
 private:
-  bool instantiate();
+  using bitstream_type = default_bitstream;
 
-  using bitstream_type = default_encoded_bitstream;
+  bool instantiate();
 
   bool finishing_ = false;
   query_state state_ = idle;

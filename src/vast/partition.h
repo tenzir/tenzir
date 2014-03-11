@@ -77,7 +77,7 @@ struct partition_actor : actor<partition_actor>
   void act();
   char const* description() const;
 
-  template <typename Bitstream = default_encoded_bitstream>
+  template <typename Bitstream = default_bitstream>
   result<cppa::actor_ptr> load_indexer(string const& e, offset const& o)
   {
     auto i = indexers_.find(e);
@@ -101,7 +101,7 @@ struct partition_actor : actor<partition_actor>
     return *a;
   }
 
-  template <typename Bitstream = default_encoded_bitstream>
+  template <typename Bitstream = default_bitstream>
   trial<cppa::actor_ptr> create_indexer(string const& e, offset const& o, value_type t)
   {
     auto& is = indexers_[e][o];

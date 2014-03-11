@@ -329,14 +329,14 @@ void partition_actor::act()
     {
       auto p = dir_ / "name.idx";
       name_indexer_ =
-        spawn<event_name_indexer<default_encoded_bitstream>>(std::move(p));
+        spawn<event_name_indexer<default_bitstream>>(std::move(p));
     }
 
     if (! time_indexer_)
     {
       auto p = dir_ / "time.idx";
       time_indexer_ =
-        spawn<event_time_indexer<default_encoded_bitstream>>(std::move(p));
+        spawn<event_time_indexer<default_bitstream>>(std::move(p));
     }
 
     auto t = make_any_tuple(std::move(events));

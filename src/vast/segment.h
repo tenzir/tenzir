@@ -223,7 +223,7 @@ public:
 
   /// Generates a bitstream representing the segment coverage based on the
   /// contained event IDs.
-  template <typename Bitstream = default_encoded_bitstream>
+  template <typename Bitstream = default_bitstream>
   optional<Bitstream> coverage() const
   {
     if (base() == 0 || events() == 0)
