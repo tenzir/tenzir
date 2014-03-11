@@ -385,6 +385,36 @@ void partition_actor::act()
         });
   };
 
+  auto flush = [=]
+  {
+    std::map<string, std::map<offset, value_type>> types;
+
+    send(name_indexer_, atom("flush"));
+    send(time_indexer_, atom("flush"));
+    for (auto& p0 : indexers_)
+      for (auto& p1 : p0.second)
+      {
+        types[p0.first][p1.first] = p1.second.type;
+
+        if (p1.second.actor)
+          send(p1.second.actor, atom("flush"));
+      }
+
+    if (! io::archive(dir_ / "types", types))
+    {
+      VAST_LOG_ACTOR_ERROR("failed to save type data for " << dir_);
+      quit(exit::error);
+      return;
+    }
+
+    if (! io::archive(dir_ / partition::part_meta_file, partition_))
+    {
+      VAST_LOG_ACTOR_ERROR("failed to save partition " << dir_);
+      quit(exit::error);
+      return;
+    }
+  };
+
   become(
       on(atom("EXIT"), arg_match) >> [=](uint32_t reason)
       {
@@ -396,6 +426,8 @@ void partition_actor::act()
               quit(exit::error);
               return;
             }
+
+        flush();
 
         send_exit(time_indexer_, reason);
         send_exit(name_indexer_, reason);
@@ -432,35 +464,7 @@ void partition_actor::act()
         for (auto& a : d.indexes_)
           a << t;
       },
-      on(atom("flush")) >> [=]
-      {
-        std::map<string, std::map<offset, value_type>> types;
-
-        send(name_indexer_, atom("flush"));
-        send(time_indexer_, atom("flush"));
-        for (auto& p0 : indexers_)
-          for (auto& p1 : p0.second)
-          {
-            types[p0.first][p1.first] = p1.second.type;
-
-            if (p1.second.actor)
-              send(p1.second.actor, atom("flush"));
-          }
-
-        if (! io::archive(dir_ / "types", types))
-        {
-          VAST_LOG_ACTOR_ERROR("failed to save type data for " << dir_);
-          quit(exit::error);
-          return;
-        }
-
-        if (! io::archive(dir_ / partition::part_meta_file, partition_))
-        {
-          VAST_LOG_ACTOR_ERROR("failed to save partition " << dir_);
-          quit(exit::error);
-          return;
-        }
-      },
+      on(atom("flush")) >> flush,
       on_arg_match >> [=](segment const& s)
       {
         VAST_LOG_ACTOR_DEBUG(
@@ -505,7 +509,7 @@ void partition_actor::act()
         partition_.update(s);
 
         // Flush partition meta data and data indexes.
-        send(self, atom("flush"));
+        flush();
         send(self, atom("stats"), atom("show"));
       },
       on(atom("stats"), arg_match) >> [=](uint64_t n, uint64_t rate, uint64_t mean)
