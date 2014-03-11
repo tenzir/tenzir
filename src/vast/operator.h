@@ -76,6 +76,8 @@ enum relational_operator : uint8_t
   not_match,
   in,
   not_in,
+  ni,
+  not_ni,
   equal,
   not_equal,
   less,
@@ -114,6 +116,19 @@ bool print(Iterator& out, relational_operator op)
         *out++ = '!';
         *out++ = 'i';
         *out++ = 'n';
+      }
+      break;
+    case ni:
+      {
+        *out++ = 'n';
+        *out++ = 'i';
+      }
+      break;
+    case not_ni:
+      {
+        *out++ = '!';
+        *out++ = 'n';
+        *out++ = 'i';
       }
       break;
     case equal:

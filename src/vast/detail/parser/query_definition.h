@@ -39,6 +39,12 @@ query<Iterator>::query(error_handler<Iterator>& on_error)
     (">=",  greater_equal)
     ("in",  in)
     ("!in", not_in)
+    ("ni",  ni)
+    ("!ni", not_ni)
+    ("[+",  in)
+    ("[-",  not_in)
+    ("+]",  ni)
+    ("-]",  not_ni)
     ;
 
   type.add

@@ -257,9 +257,13 @@ predicate::binary_predicate predicate::make_predicate(relational_operator op)
     case in:
       return [](value const& lhs, value const& rhs) -> bool
       {
-        if (lhs.which() == string_type &&
-            rhs.which() == regex_type)
-          return rhs.get<regex>().search(lhs.get<string>());
+        if (lhs.which() == string_type)
+        {
+          if (rhs.which() == string_type)
+            return rhs.get<string>().find(lhs.get<string>());
+          else if (rhs.which() == regex_type)
+            return rhs.get<regex>().search(lhs.get<string>());
+        }
 
         if (lhs.which() == address_type &&
             rhs.which() == prefix_type)
@@ -270,13 +274,51 @@ predicate::binary_predicate predicate::make_predicate(relational_operator op)
     case not_in:
       return [](value const& lhs, value const& rhs) -> bool
       {
-        if (lhs.which() == string_type &&
-            rhs.which() == regex_type)
-          return ! rhs.get<regex>().search(lhs.get<string>());
+        if (lhs.which() == string_type)
+        {
+          if (rhs.which() == string_type)
+            return ! rhs.get<string>().find(lhs.get<string>());
+          else if (rhs.which() == regex_type)
+            return ! rhs.get<regex>().search(lhs.get<string>());
+        }
 
         if (lhs.which() == address_type &&
             rhs.which() == prefix_type)
           return ! rhs.get<prefix>().contains(lhs.get<address>());
+
+        return false;
+      };
+    case ni:
+      return [](value const& lhs, value const& rhs) -> bool
+      {
+        if (rhs.which() == string_type)
+        {
+          if (lhs.which() == string_type)
+            return lhs.get<string>().find(rhs.get<string>());
+          else if (lhs.which() == regex_type)
+            return lhs.get<regex>().search(rhs.get<string>());
+        }
+
+        if (lhs.which() == prefix_type &&
+            rhs.which() == address_type)
+          return lhs.get<prefix>().contains(rhs.get<address>());
+
+        return false;
+      };
+    case not_ni:
+      return [](value const& lhs, value const& rhs) -> bool
+      {
+        if (rhs.which() == string_type)
+        {
+          if (lhs.which() == string_type)
+            return ! lhs.get<string>().find(rhs.get<string>());
+          else if (lhs.which() == regex_type)
+            return ! lhs.get<regex>().search(rhs.get<string>());
+        }
+
+        if (lhs.which() == prefix_type &&
+            rhs.which() == address_type)
+          return ! lhs.get<prefix>().contains(rhs.get<address>());
 
         return false;
       };
@@ -1305,6 +1347,12 @@ public:
       case not_in:
         str_ += "!in";
         break;
+      case ni:
+        str_ += "ni";
+        break;
+      case not_ni:
+        str_ += "!ni";
+        break;
       case equal:
         str_ += "==";
         break;
@@ -1421,6 +1469,12 @@ public:
         break;
       case not_in:
         str_ += "!in";
+        break;
+      case ni:
+        str_ += "ni";
+        break;
+      case not_ni:
+        str_ += "!ni";
         break;
       case equal:
         str_ += "==";

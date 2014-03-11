@@ -71,6 +71,10 @@ relational_operator negate(relational_operator op)
       return not_in;
     case not_in:
       return in;
+    case ni:
+      return not_ni;
+    case not_ni:
+      return ni;
   }
 }
 

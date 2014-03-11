@@ -75,6 +75,15 @@ BOOST_AUTO_TEST_CASE(parser_tests)
     "@10,3 < now - 5d10m3s",
     "@0,3,2 ~ /yikes/",
 
+    ":string [+ \"foo\"",
+    ":string +] \"foo\"",
+    ":string [- \"foo\"",
+    ":string -] \"foo\"",
+    ":string in \"foo\"",
+    ":string !in \"foo\"",
+    ":string ni \"foo\"",
+    ":string !ni \"foo\"",
+
     // Groups
     "(:double > 4.2)",
     ":double > 4.2 && (@4 < now || :port == 53/?)",
