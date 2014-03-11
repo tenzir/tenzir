@@ -151,38 +151,30 @@ BOOST_AUTO_TEST_CASE(strings_bitmap_index)
   BOOST_REQUIRE(bi->push_back("foo"));
   BOOST_REQUIRE(bi->push_back("foo"));
   BOOST_REQUIRE(bi->push_back("bar"));
+  BOOST_REQUIRE(bi->push_back(""));
+  BOOST_REQUIRE(bi->push_back("qux"));
+  BOOST_REQUIRE(bi->push_back("corge"));
+  BOOST_REQUIRE(bi->push_back("bazz"));
 
-  auto foo = bi->lookup(equal, "foo");
-  auto bar = bi->lookup(equal, "bar");
-  BOOST_REQUIRE(foo);
-  BOOST_REQUIRE(bar);
-  BOOST_CHECK_EQUAL(to_string(*foo), "100110");
-  BOOST_CHECK_EQUAL(to_string(*bar), "010001");
+  BOOST_CHECK_EQUAL(to_string(*bi->lookup(equal, "foo")),   "1001100000");
+  BOOST_CHECK_EQUAL(to_string(*bi->lookup(equal, "bar")),   "0100010000");
+  BOOST_CHECK_EQUAL(to_string(*bi->lookup(equal, "baz")),   "0010000000");
+  BOOST_CHECK_EQUAL(to_string(*bi->lookup(equal, "")),      "0000001000");
+  BOOST_CHECK_EQUAL(to_string(*bi->lookup(equal, "qux")),   "0000000100");
+  BOOST_CHECK_EQUAL(to_string(*bi->lookup(equal, "corge")), "0000000010");
+  BOOST_CHECK_EQUAL(to_string(*bi->lookup(equal, "bazz")),  "0000000001");
 
-  auto not_foo = bi->lookup(not_equal, "foo");
-  BOOST_REQUIRE(not_foo);
-  BOOST_CHECK_EQUAL(to_string(*not_foo), "011001");
+  BOOST_CHECK_EQUAL(to_string(*bi->lookup(not_equal, "")),    "1111110111");
+  BOOST_CHECK_EQUAL(to_string(*bi->lookup(not_equal, "foo")), "0110011111");
 
-  BOOST_CHECK(! bi->lookup(equal, "qux"));
   BOOST_CHECK_THROW(bi->lookup(match, "foo"), std::runtime_error);
-
-  auto str =
-    "2\t1\t0\n"
-    "001\n"
-    "010\n"
-    "100\n"
-    "001\n"
-    "001\n"
-    "010\n";
-
-  BOOST_CHECK_EQUAL(to_string(*bi), str);
 
   std::vector<uint8_t> buf;
   io::archive(buf, sbi);
   io::unarchive(buf, sbi2);
   BOOST_CHECK(sbi == sbi2);
-  BOOST_CHECK_EQUAL(to_string(*sbi2.lookup(equal, "foo")), "100110");
-  BOOST_CHECK_EQUAL(to_string(*sbi2.lookup(equal, "bar")), "010001");
+  BOOST_CHECK_EQUAL(to_string(*sbi2.lookup(equal, "foo")), "1001100000");
+  BOOST_CHECK_EQUAL(to_string(*sbi2.lookup(equal, "bar")), "0100010000");
 }
 
 BOOST_AUTO_TEST_CASE(ip_address_bitmap_index)

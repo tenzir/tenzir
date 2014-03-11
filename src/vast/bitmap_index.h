@@ -200,57 +200,113 @@ private:
 template <typename Bitstream>
 class string_bitmap_index : public bitmap_index
 {
-  using dictionary_codomain = event_id;
+  static uint8_t byte_at(string const& s, size_t i)
+  {
+    return static_cast<uint8_t>(s[i]);
+  }
 
 public:
   virtual bool append(size_t n, bool bit) override
   {
-    return bitmap_.append(n, bit);
+    for (auto& bm : bitmaps_)
+      if (! bm.append(n, bit))
+        return false;
+
+    return size_.append(n, bit);
   }
 
   virtual optional<bitstream>
   lookup(relational_operator op, value const& val) const override
   {
-    if (! (op == equal || op == not_equal))
-      throw std::runtime_error("unsupported relational operator " +
-                               to<std::string>(op));
+    auto str = val.get<string>();
 
-    auto i = dictionary_[val.get<string>()];
-    if (! i)
+    switch (op)
     {
-      if (op == not_equal)
-        return {bitmap_.valid()};
-      else
-        return {};
-    }
+      default:
+        throw std::runtime_error("unsupported relational operator " +
+                                 to<std::string>(op));
+      case equal:
+      case not_equal:
+        {
+          if (str.empty())
+          {
+            if (auto s = size_.lookup(equal, 0))
+              return {std::move(op == equal ? *s : s->flip())};
+            else
+              return {};
+          }
 
-    auto bs = bitmap_[*i];
-    if (! bs)
-    {
-      if (op == not_equal)
-        return {bitmap_.valid()};
-      else
-        return {};
-    }
+          if (str.size() > bitmaps_.size())
+            return {Bitstream{size(), op == not_equal}};
 
-    return {std::move(op == equal ? *bs : bs->flip())};
+          auto r = bitmaps_[0].lookup(equal, byte_at(str, 0));
+          if (! r)
+            return {Bitstream{size(), op == not_equal}};
+
+          for (size_t i = 1; i < str.size(); ++i)
+            if (auto b = bitmaps_[i].lookup(equal, byte_at(str, i)))
+              *r &= *b;
+            else
+              return {Bitstream{size(), op == not_equal}};
+
+          if (auto s = size_.lookup(less_equal, str.size()))
+            *r &= *s;
+          else
+            return {Bitstream{size(), op == not_equal}};
+
+          return {std::move(op == equal ? *r : r->flip())};
+        }
+      case in:
+      case not_in:
+        {
+          // TODO
+          return {};
+        }
+    }
   }
 
   virtual uint64_t size() const override
   {
-    return bitmap_.size();
+    return size_.size();
   }
 
 private:
   virtual bool push_back_impl(value const& val) override
   {
     auto& str = val.get<string>();
-    auto i = dictionary_[str];
-    if (! i)
-      i = dictionary_.insert(str);
-    if (! i)
+
+    if (! size_.push_back(str.size()))
       return false;
-    return bitmap_.push_back(*i);
+
+    if (str.empty())
+    {
+      for (auto& bm : bitmaps_)
+        if (! bm.append(1, 0))
+          return false;
+
+      return true;
+    }
+
+    if (str.size() > bitmaps_.size())
+    {
+      auto current = size() - 1;
+      auto fresh = str.size() - bitmaps_.size();
+      bitmaps_.resize(str.size());
+      if (current > 0)
+        for (size_t i = bitmaps_.size() - fresh; i < bitmaps_.size(); ++i)
+          if (! bitmaps_[i].append(current, 0))
+            return false;
+    }
+
+    for (size_t i = 0; i < str.size(); ++i)
+      if (! bitmaps_[i].push_back(byte_at(str, i)))
+        return false;
+
+    for (size_t i = str.size(); i < bitmaps_.size(); ++i)
+      if (! bitmaps_[i].append(1, 0))
+        return false;
+
+    return true;
   }
 
   virtual bool equals(bitmap_index const& other) const override
@@ -258,30 +314,30 @@ private:
     if (typeid(*this) != typeid(other))
       return false;
     auto& o = static_cast<string_bitmap_index const&>(other);
-    return bitmap_ == o.bitmap_;
+    return bitmaps_ == o.bitmaps_;
   }
 
-  bitmap<dictionary_codomain, Bitstream> bitmap_;
-  util::map_dictionary<string, dictionary_codomain> dictionary_;
+  std::vector<bitmap<uint8_t, Bitstream, binary_bitslice_coder>> bitmaps_;
+  bitmap<string::size_type, Bitstream, range_bitslice_coder> size_;
 
 private:
   friend access;
 
   virtual void serialize(serializer& sink) const override
   {
-    sink << dictionary_ << bitmap_;
+    sink << size_ << bitmaps_;
   }
 
   virtual void deserialize(deserializer& source) override
   {
-    source >> dictionary_ >> bitmap_;
+    source >> size_ >> bitmaps_;
     checkpoint();
   }
 
   virtual bool convert(std::string& str) const override
   {
-    using vast::convert;
-    return convert(bitmap_, str);
+    str = "not yet implemented"; // TODO
+    return false;
   }
 };
 
