@@ -531,7 +531,7 @@ void index_actor::act()
       dir_,
       [&](path const& p) -> bool
       {
-        VAST_LOG_ACTOR_INFO("found partition " << p.basename());
+        VAST_LOG_ACTOR_VERBOSE("found partition " << p.basename());
 
         auto r = make_partition(p);
         if (! r)
@@ -543,8 +543,8 @@ void index_actor::act()
   if (! parts_.empty())
   {
     active_ = *part_actors_.find(parts_.rbegin()->second);
-    VAST_LOG_ACTOR_INFO("sets existing partition as active: " <<
-                        parts_.rbegin()->first << " (" << active_.first << ')');
+    VAST_LOG_ACTOR_INFO("appends to existing partition " <<
+                        parts_.rbegin()->first);
   }
 
   become(
@@ -599,7 +599,7 @@ void index_actor::act()
         assert(part_actors_.count(parts_[dir]));
 
         active_ = *part_actors_.find(parts_[dir]);
-        VAST_LOG_ACTOR_INFO("set active partition to " << dir);
+        VAST_LOG_ACTOR_INFO("now appends to partition " << dir);
 
         assert(active_.second);
       },

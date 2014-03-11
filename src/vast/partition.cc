@@ -531,9 +531,10 @@ void partition_actor::act()
           total_mean += p.second.mean;
         }
 
-        VAST_LOG_ACTOR_INFO(
-            "indexed " << total_values << " values at rate " <<
-            total_rate << " values/sec" << " (mean " << total_mean << ')');
+        if (total_rate > 0)
+          VAST_LOG_ACTOR_INFO(
+              "indexed " << total_values << " values at rate " <<
+              total_rate << " values/sec" << " (mean " << total_mean << ')');
       });
 }
 
