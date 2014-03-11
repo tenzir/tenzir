@@ -134,6 +134,8 @@ void ingestor_actor::act()
       on(atom("ingest"), "bro2", arg_match)
         >> [=](std::string const& file, int32_t ts_field)
       {
+        VAST_LOG_ACTOR_INFO("ingests " << file);
+
         source_ = spawn<source::bro2, detached>(sink_, file, ts_field);
         source_->link_to(sink_);
         send(source_, atom("batch size"), batch_size_);
