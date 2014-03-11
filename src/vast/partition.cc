@@ -511,25 +511,25 @@ void partition_actor::act()
       on(atom("stats"), arg_match) >> [=](uint64_t n, uint64_t rate, uint64_t mean)
       {
         auto& s = stats_[last_sender()];
-        s.events += n;
+        s.values += n;
         s.rate = rate;
         s.mean = mean;
       },
       on(atom("stats"), atom("show")) >> [=]
       {
-        uint64_t total_events = 0;
+        uint64_t total_values = 0;
         uint64_t total_rate = 0;
         uint64_t total_mean = 0;
         for (auto& p : stats_)
         {
-          total_events += p.second.events;
+          total_values += p.second.values;
           total_rate += p.second.rate;
           total_mean += p.second.mean;
         }
 
         VAST_LOG_ACTOR_INFO(
-            "indexed " << total_events << " events at rate " <<
-            total_rate << " events/sec" << " (mean " << total_mean << ')');
+            "indexed " << total_values << " values at rate " <<
+            total_rate << " values/sec" << " (mean " << total_mean << ')');
       });
 }
 

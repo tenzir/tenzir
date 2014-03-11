@@ -67,7 +67,7 @@ struct partition_actor : actor<partition_actor>
 
   struct indexer_stats
   {
-    uint64_t events = 0;
+    uint64_t values = 0;
     uint64_t rate = 0;
     uint64_t mean = 0;
   };
