@@ -419,15 +419,7 @@ void partition_actor::act()
       on(atom("EXIT"), arg_match) >> [=](uint32_t reason)
       {
         if (reason != exit::kill)
-          if (partition_.meta().coverage)
-            if (! io::archive(dir_ / partition::part_meta_file, partition_))
-            {
-              VAST_LOG_ACTOR_ERROR("failed to save partition " << dir_);
-              quit(exit::error);
-              return;
-            }
-
-        flush();
+          flush();
 
         send_exit(time_indexer_, reason);
         send_exit(name_indexer_, reason);
