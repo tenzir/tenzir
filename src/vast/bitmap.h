@@ -836,8 +836,7 @@ public:
   /// `2^std::numeric_limits<size_t>::digits() - 1` elements.
   bool push_back(T x)
   {
-    auto success = coder_.encode(binner_(x));
-    return success && valid_.push_back(true);
+    return coder_.encode(binner_(x));
   }
 
   /// Appends a given number of invalid rows/elements to the bitmaps.
@@ -846,7 +845,7 @@ public:
   /// @returns `true` on success and `false` if the bitmap is full.
   bool append(size_t n = 1, bool bit = false)
   {
-    return valid_.append(n, bit) && coder_.append(n, bit);
+    return coder_.append(n, bit);
   }
 
   /// Shorthand for `lookup(equal, x)`.
@@ -865,17 +864,7 @@ public:
   /// `true` or a disengaged bitstream if *x* does not exist.
   optional<Bitstream> lookup(relational_operator op, T x) const
   {
-    auto result = coder_.decode(binner_(x), op);
-    if (result)
-      *result &= valid_;
-    return result;
-  }
-
-  /// Retrieves the bitstream marking the valid results.
-  /// @returns The bitstream holding the valid results.
-  Bitstream const& valid() const
-  {
-    return valid_;
+    return coder_.decode(binner_(x), op);
   }
 
   /// Retrieves the bitmap size.
@@ -902,19 +891,18 @@ public:
 private:
   coder_type coder_;
   binner_type binner_;
-  Bitstream valid_;
 
 private:
   friend access;
 
   void serialize(serializer& sink) const
   {
-    sink << binner_ << valid_ << coder_;
+    sink << binner_ << coder_;
   }
 
   void deserialize(deserializer& source)
   {
-    source >> binner_ >> valid_ >> coder_;
+    source >> binner_ >> coder_;
   }
 
   template <typename Iterator>
@@ -943,9 +931,7 @@ private:
 
   friend bool operator==(bitmap const& x, bitmap const& y)
   {
-    return x.coder_ == y.coder_
-        && x.binner_ == y.binner_
-        && x.valid_ == y.valid_;
+    return x.coder_ == y.coder_ && x.binner_ == y.binner_;
   }
 };
 
@@ -965,13 +951,12 @@ public:
 
   bool push_back(bool x)
   {
-    auto success = bool_.push_back(x);
-    return valid_.push_back(true) && success;
+    return bool_.push_back(x);
   }
 
   bool append(size_t n = 1, bool bit = false)
   {
-    return bool_.append(n, bit) && valid_.append(n, bit);
+    return bool_.append(n, bit);
   }
 
   optional<Bitstream> operator[](bool x) const
@@ -987,15 +972,10 @@ public:
         throw std::runtime_error(
             "unsupported relational operator: " + to<std::string>(op));
       case not_equal:
-        return {(x ? ~bool_ : bool_) & valid_};
+        return {x ? ~bool_ : bool_};
       case equal:
-        return {(x ? bool_ : ~bool_) & valid_};
+        return {x ? bool_ : ~bool_};
     }
-  }
-
-  Bitstream const& valid() const
-  {
-    return valid_;
   }
 
   uint64_t size() const
@@ -1010,19 +990,18 @@ public:
 
 private:
   Bitstream bool_;
-  Bitstream valid_;
 
 private:
   friend access;
 
   void serialize(serializer& sink) const
   {
-    sink << valid_ << bool_;
+    sink << bool_;
   }
 
   void deserialize(deserializer& source)
   {
-    source >> valid_ >> bool_;
+    source >> bool_;
   }
 
   template <typename Iterator>
@@ -1063,7 +1042,7 @@ private:
 
   friend bool operator==(bitmap const& x, bitmap const& y)
   {
-    return x.bool_ == y.bool_ && x.valid_ == y.valid_;
+    return x.bool_ == y.bool_;
   }
 };
 
