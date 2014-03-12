@@ -4,16 +4,29 @@
 #include "vast/string.h"
 #include "vast/type_info.h"
 #include "vast/detail/type_manager.h"
+#include "vast/util/color.h"
 
 namespace vast {
 
 std::string configuration::banner() const
 {
   std::stringstream ss;
-  ss << " _   _____   __________\n"
-        "| | / / _ | / __/_  __/\n"
-        "| |/ / __ |_\\ \\  / /\n"
-        "|___/_/ |_/___/ /_/  " << VAST_VERSION;
+  auto colorize = ! check("log.no-colors");
+  if (colorize)
+    ss << util::color::red;
+
+  ss << "     _   _____   __________\n"
+        "    | | / / _ | / __/_  __/\n"
+        "    | |/ / __ |_\\ \\  / /\n"
+        "    |___/_/ |_/___/ /_/  ";
+
+  if (colorize)
+    ss << util::color::yellow;
+
+  ss << VAST_VERSION;
+
+  if (colorize)
+    ss << util::color::reset;
 
   return ss.str();
 }
