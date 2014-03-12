@@ -466,9 +466,16 @@ void partition_actor::act()
         uint64_t n = d.indexes_.size();
         send(last_sender(), pred, partition_.meta().id, n);
 
-        auto t = make_any_tuple(pred, partition_.meta().id, sink);
-        for (auto& a : d.indexes_)
-          a << t;
+        if (n == 0)
+        {
+          send(last_sender(), pred, partition_.meta().id, bitstream{});
+        }
+        else
+        {
+          auto t = make_any_tuple(pred, partition_.meta().id, sink);
+          for (auto& a : d.indexes_)
+            a << t;
+        }
       },
       on(atom("flush")) >> flush,
       on_arg_match >> [=](segment const& s)

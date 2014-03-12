@@ -309,7 +309,7 @@ public:
     if (! parts.empty())
     {
       auto completion = double(parts.size() - misses) / double(parts.size());
-      auto progress = (need == 0 || completion == 0) ? 0.0 : (got / need);
+      auto progress = need == 0 ? 1.0 : got / need;
       VAST_LOG_DEBUG("  -> completion:  " << int(completion * 100) <<
                      "%, progress: " << int(progress * 100) << "%");
 
@@ -406,10 +406,13 @@ std::vector<expr::ast> index::update_hits(expr::ast const& pred,
 
   auto& entry = cache_[pred].parts[part];
 
-  ++entry.got;
-  assert(! entry.expected || entry.got <= *entry.expected);
   if (hits)
+  {
+    ++entry.got;
     entry.hits |= hits;
+  }
+
+  assert(! entry.expected || entry.got <= *entry.expected);
 
   std::vector<expr::ast> roots;
   walk(
