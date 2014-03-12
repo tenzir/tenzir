@@ -78,10 +78,10 @@ void search_actor::act()
               clients_[client].queries.insert(qry);
               return make_any_tuple(ast, qry);
             },
-            on(atom("error"), arg_match) >> [=](std::string& msg)
+            on(atom("error"), arg_match) >> [=](std::string const&)
             {
               send_exit(qry, exit::error);
-              return make_any_tuple(std::move(msg));
+              return last_dequeued();
             });
       },
       on(atom("query"), atom("create"), arg_match) >> [=](std::string const&)

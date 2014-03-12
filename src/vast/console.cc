@@ -152,9 +152,11 @@ console::console(cppa::actor_ptr search, path dir)
   set->add("show", "display the current settings")->on(
       [=](std::string) -> util::result<bool>
       {
-        std::cerr
-          << "batch-size = " << opts_.batch_size << '\n'
-          << "auto-follow = " << (opts_.auto_follow ? "T" : "F")
+        print(none)
+          << "batch-size = " << util::color::cyan
+          << opts_.batch_size << util::color::reset << '\n'
+          << "auto-follow = " << util::color::cyan
+          << (opts_.auto_follow ? "T" : "F") << util::color::reset
           << std::endl;
 
         return true;
@@ -178,13 +180,15 @@ console::console(cppa::actor_ptr search, path dir)
             active.insert(p.second);
 
         for (auto& r : results_)
-          std::cerr
+          print(none)
             << util::color::green
             << (active.count(r) ? " * " : "   ")
-            << util::color::reset
+            << util::color::cyan
             << r->id()
-            << " | " << r->percent(true) << "%"
-            << " | " << r->ast()
+            << util::color::blue << " | " << util::color::reset
+            << r->percent(true) << "%"
+            << util::color::blue << " | " << util::color::reset
+            << r->ast()
             << std::endl;
 
         return true;
@@ -291,7 +295,8 @@ console::console(cppa::actor_ptr search, path dir)
               active_.insert(current_);
               results_.push_back(current_.second);
               cmdline_.mode_pop();
-              std::cerr
+
+              print(info)
                 << "new query " << current_.second->id()
                 << " -> " << ast << std::endl;
 
@@ -625,6 +630,11 @@ void console::act()
         delayed_send(self, std::chrono::seconds(10), atom("remove"),
                      last_sender());
       },
+      on(atom("error"), arg_match) >> [=](std::string const& msg)
+      {
+        print(error) << msg << std::endl;
+        prompt();
+      },
       on(atom("done")) >> [=]
       {
         VAST_LOG_ACTOR_DEBUG("got done notification from query "
@@ -652,20 +662,57 @@ void console::act()
         assert(i != active_.end());
         auto r = i->second;
 
-        r->progress(progress);
-        if (follow_mode_ && r->progress() != progress)
-          print(query) << "completed " << r->percent() << '%' << std::endl;
+        if (r->progress() <= progress + 0.05 || progress == 1.0)
+        {
+          if (follow_mode_)
+          {
+            auto base = r->progress();
+            if (! append_mode_)
+            {
+              print(query)
+                << "progress "
+                << util::color::blue << '|' << util::color::reset;
+
+              base = 0.0;
+              append_mode_ = true;
+            }
+
+            print(none) << util::color::green;
+            for (auto d = base; d < progress; d += 0.05)
+              print(none) << '*';
+            print(none) << util::color::reset << std::flush;
+
+            if (progress == 1.0)
+            {
+              print(none)
+                << util::color::green << '*'
+                << util::color::blue << '|' << util::color::reset << std::endl;
+
+              append_mode_ = false;
+            }
+          }
+
+          r->progress(progress);
+        }
       },
       on_arg_match >> [=](event const&)
       {
         auto i = active_.find(last_sender());
         assert(i != active_.end());
-        auto r = i->second;
+        auto& r = i->second;
 
         cow<event> ce = *tuple_cast<event>(last_dequeued());
         r->add(ce);
         if (follow_mode_ && r == current_.second)
+        {
+          if (append_mode_)
+          {
+            print(none) << std::endl;
+            append_mode_ = false;
+          }
+
           std::cout << *ce << std::endl;
+        }
       },
       on(atom("key"), atom("get")) >> [=]
       {
@@ -677,14 +724,27 @@ void console::act()
         {
           default:
             {
+              std::string desc;
+              switch (key)
+              {
+                default:
+                  desc = key;
+                  break;
+                case '\t':
+                  desc = "\\t";
+                case '\n':
+                  desc = "\\n";
+                  break;
+              }
+
               print(error)
-                << "invalid key: '" << key << "', press '?' for help"
+                << "invalid key: '" << desc << "', press '?' for help"
                 << std::endl;
             }
             break;
           case '?':
             {
-              std::cerr
+              print(none)
                 << "interactive query control mode:\n"
                 << "\n"
                 << "     <space>  display the next batch of available results\n"
@@ -693,6 +753,7 @@ void console::act()
                 << "        f     toggle follow mode\n"
                 << "        j     seek one batch forward\n"
                 << "        k     seek one batch backword\n"
+                << "        p     show progress of index lookup\n"
                 << "        q     leave query control mode\n"
                 << "        s     save the result to file system\n"
                 << "        ?     display this help\n"
@@ -753,8 +814,25 @@ void console::act()
               print(query) << "seeked -" << n << " events" << std::endl;
             }
             break;
+          case 'p':
+            {
+              assert(current_.second);
+              auto p = static_cast<int>(current_.second->percent(0) / 5);
+
+              print(query)
+                << "progress "
+                << util::color::blue << '|' << util::color::green;
+
+              for (int i = 0; i < p; ++i)
+                print(none) << '*';
+              for (int i = 0; i < 20 - p; ++i)
+                print(none) << ' ';
+
+              print(none)
+                << util::color::blue << '|' << util::color::reset << std::endl;
+            }
+            break;
           case '':
-          case '\n':
           case 'q':
             {
               follow_mode_ = false;
@@ -812,20 +890,32 @@ char const* console::description() const
 
 std::ostream& console::print(print_mode mode)
 {
+  if (mode == none)
+    return std::cerr;
+
+  if (append_mode_)
+  {
+    std::cerr << std::endl;
+    append_mode_ = false;
+  }
+
   switch (mode)
   {
     default:
       std::cerr << util::color::red << "[???] ";
       break;
     case error:
-      std::cerr << util::color::red << "[error] ";
+      std::cerr << util::color::red << "[!!] ";
+      break;
+    case warn:
+      std::cerr << util::color::yellow << "[!!] ";
+      break;
+    case info:
+      std::cerr << util::color::blue << "[::] ";
       break;
     case query:
       std::cerr
-        << util::color::cyan << "[query " << current_.second->id() << "] ";
-      break;
-    case warn:
-      std::cerr << util::color::yellow << "[warning] ";
+        << util::color::cyan << "[" << current_.second->id() << "] ";
       break;
   }
 

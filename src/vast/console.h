@@ -101,9 +101,11 @@ struct console : actor<console>
 
   enum print_mode
   {
-    error,
+    none,
     query,
-    warn
+    error,
+    warn,
+    info
   };
 
   /// Spawns the console client.
@@ -124,6 +126,7 @@ struct console : actor<console>
   util::command_line cmdline_;
   options opts_;
   bool follow_mode_ = false;
+  bool append_mode_ = false;
 };
 
 } // namespace vast
