@@ -652,11 +652,9 @@ void console::act()
         assert(i != active_.end());
         auto r = i->second;
 
+        r->progress(progress);
         if (follow_mode_ && r->progress() != progress)
-        {
-          r->progress(progress);
           print(query) << "completed " << r->percent() << '%' << std::endl;
-        }
       },
       on_arg_match >> [=](event const&)
       {
