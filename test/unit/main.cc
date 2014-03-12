@@ -4,23 +4,22 @@
 
 #include <cstring>
 #include "test.h"
-#include "vast/configuration.h"
+#include "vast.h"
 #include "vast/file_system.h"
 #include "vast/logger.h"
-#include "vast/type_info.h"
 
 int main(int argc, char* argv[])
 {
   using namespace vast;
 
-  announce_builtin_types();
+  initialize();
 
   auto delete_logs = true;
   if (argc >= 2 && ! std::strcmp(argv[1], "keep"))
     delete_logs = false;
 
   auto log_dir = "/tmp/vast-unit-test";
-  if (! logger::instance()->init(logger::trace, logger::trace, false, true,
+  if (! logger::instance()->init(logger::quiet, logger::trace, false, true,
                                  log_dir))
   {
     std::cerr << "failed to initialize logger" << std::endl;
@@ -34,5 +33,5 @@ int main(int argc, char* argv[])
   if (delete_logs)
     rm(log_dir);
 
-  return rc;
+  return cleanup() && rc;
 }

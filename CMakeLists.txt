@@ -123,6 +123,12 @@ endif ()
 include_directories(BEFORE ${CMAKE_CURRENT_BINARY_DIR})
 include_directories(BEFORE ${CMAKE_SOURCE_DIR}/aux/lz4)
 
+set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/bin
+  CACHE PATH "Single directory for all executables")
+
+set (LIBRARY_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/lib CACHE
+  PATH "Single directory for all libraries")
+
 add_subdirectory(aux)
 add_subdirectory(src)
 add_subdirectory(test)

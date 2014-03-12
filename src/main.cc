@@ -1,4 +1,5 @@
 #include <cppa/cppa.hpp>
+#include "vast.h"
 #include "vast/file_system.h"
 #include "vast/logger.h"
 #include "vast/program.h"
@@ -10,6 +11,8 @@ using namespace vast;
 
 int main(int argc, char *argv[])
 {
+  initialize();
+
   auto config = configuration::parse(argc, argv);
   if (! config)
   {
@@ -33,6 +36,7 @@ int main(int argc, char *argv[])
   logger::instance()->init(
       *logger::parse_level(*config->get("log.console-verbosity")),
       *logger::parse_level(*config->get("log.file-verbosity")),
+      ! config->check("log.no-colors"),
       config->check("log.function-names"),
       vast_dir / "log");
 
@@ -42,7 +46,6 @@ int main(int argc, char *argv[])
   VAST_LOG_VERBOSE("|___/_/ |_/___/ /_/  " << VAST_VERSION);
   VAST_LOG_VERBOSE("");
 
-  announce_builtin_types();
   auto n = 0;
   detail::type_manager::instance()->each([&](global_type_info const&) { ++n; });
   VAST_LOG_DEBUG("type manager announced " << n << " types");
@@ -55,9 +58,7 @@ int main(int argc, char *argv[])
   cppa::await_all_others_done();
   cppa::shutdown();
 
-  std::atomic_thread_fence(std::memory_order_seq_cst);
-  detail::type_manager::destruct();
-  logger::destruct();
+  cleanup();
 
   return 0;
 }

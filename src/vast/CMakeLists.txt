@@ -1,6 +1,8 @@
-include_directories(BEFORE ..)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in
+               ${CMAKE_CURRENT_BINARY_DIR}/config.h)
 
 set(libvast_sources
+  ../vast.cc
   address.cc
   archive.cc
   bitvector.cc
@@ -104,8 +106,3 @@ add_library(libvast SHARED ${libvast_sources})
 set_target_properties(libvast PROPERTIES OUTPUT_NAME vast)
 target_link_libraries(libvast ${libvast_libs})
 install(TARGETS libvast DESTINATION lib)
-
-add_executable(vast main.cc)
-set_target_properties(vast PROPERTIES OUTPUT_NAME vast)
-target_link_libraries(vast libvast)
-install(TARGETS vast DESTINATION bin)

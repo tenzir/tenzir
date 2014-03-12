@@ -19,5 +19,5 @@ add_executable(unit-test ${tests})
 target_link_libraries(unit-test libvast ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY})
 
 add_custom_target(
-  test ${CMAKE_CURRENT_BINARY_DIR}/unit-test -v 0
+  test ${EXECUTABLE_OUTPUT_PATH}/unit-test -v 0
   DEPENDS libvast unit-test)
