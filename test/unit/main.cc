@@ -20,7 +20,8 @@ int main(int argc, char* argv[])
     delete_logs = false;
 
   auto log_dir = "/tmp/vast-unit-test";
-  if (! logger::instance()->init(logger::quiet, logger::trace, true, log_dir))
+  if (! logger::instance()->init(logger::trace, logger::trace, false, true,
+                                 log_dir))
   {
     std::cerr << "failed to initialize logger" << std::endl;
     return 1;

@@ -37,28 +37,18 @@ public:
   /// A formatted message containing timestamp and thread ID.
   class message
   {
+    friend logger;
+
   public:
-    enum fill_type
-    {
-      left_arrow,
-      right_arrow,
-      bar
-    };
+    /// Sets thread ID, timestamp, and log level.
+    /// @param lvl The level of the message.
+    void coin(level lvl);
 
-    /// Appends the current timestamp and the thread ID.
-    void append_header(level lvl = quiet);
-
-    /// Appends the name of a function.
+    /// Sets the function.
     /// @param The value of `__PRETTY_FUNCTION__`.
-    void append_function(char const* f);
-
-    void append_fill(fill_type t);
+    void function(char const* f);
 
     bool fast_forward();
-
-    void clear();
-
-    std::string str() const;
 
     template <typename T>
     message& operator<<(T&& x)
@@ -67,7 +57,24 @@ public:
       return *this;
     }
 
+    level lvl() const;
+
+    double timestamp() const;
+
+    std::string const& thread_id() const;
+
+    std::string const& facility() const;
+
+    std::string const& function() const;
+
+    std::string msg() const;
+
   private:
+    level lvl_ = quiet;
+    double timestamp_ = 0.0;
+    std::string thread_id_;
+    std::string facility_;
+    std::string function_;
     std::ostringstream ss_;
 
     friend message& operator<<(message& msg, std::nullptr_t);
@@ -77,6 +84,13 @@ public:
   class tracer
   {
   public:
+    enum fill_type
+    {
+      left_arrow,
+      right_arrow,
+      bar
+    };
+
     tracer(char const* fun);
     ~tracer();
 
@@ -87,36 +101,39 @@ public:
       return t;
     }
 
+    void fill(fill_type t);
     void commit();
     void reset(bool exit);
 
   private:
-    char const* fun_;
     message msg_;
   };
 
-  /// Destroys the logger.
   ~logger();
 
   /// Initializes the logger.
   /// This function must be called once prior to using any logging macro.
   /// @param console The log level of the console.
+  /// @param colors Whether to use colors in the console output.
   /// @param file The log level of the logfile.
   /// @param show_fns Whether to print function names in the output.
   /// @param dir The directory to create the log file in.
   /// @returns `true` on success.
-  bool init(level console, level file, bool show_fns, path dir);
+  bool init(level console, level file, bool colors, bool show_fns, path dir);
 
   /// Logs a record.
-  /// @param lvl The log level.
   /// @param msg The log message.
-  void log(level lvl, std::string&& msg);
+  void log(message&& msg);
 
   /// Checks whether the logger takes a given level.
   /// @param lvl The level to check.
   /// @param `true` if the logger takes at least *lvl*.
   bool takes(level lvl) const;
 
+  /// Constructs a message which accepts arbitrary values via `operator<<`.
+  /// @param lvl The log level.
+  /// @param facility The facility or component.
+  /// @param fun The caller function, typically `__PRETTY_FUNCTION__`.
   message make_message(level lvl, char const* facility, char const* fun) const;
 
 private:
@@ -157,7 +174,7 @@ private:
       auto m = ::vast::logger::instance()->make_message(                      \
           lvl, VAST_LOG_FACILITY, __PRETTY_FUNCTION__);                       \
       m << msg;                                                               \
-      ::vast::logger::instance()->log(lvl, m.str());                          \
+      ::vast::logger::instance()->log(std::move(m));                          \
     }                                                                         \
   }                                                                           \
   while (false)

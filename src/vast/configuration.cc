@@ -36,6 +36,7 @@ void configuration::initialize()
      .init(std::min(3, max));
   log.add('V', "file-verbosity", "log file verbosity " + range)
      .init(std::min(4, max));
+  log.add("no-colors", "don't use colors for console output");
   log.add("function-names", "log function names");
 
   auto& advanced = create_block("advanced options");
