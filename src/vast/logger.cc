@@ -157,7 +157,6 @@ struct logger::impl
           << std::endl;
       }
 
-
       if (m.lvl() <= console_level_)
       {
         if (use_colors_)
@@ -249,15 +248,27 @@ trial<logger::level> logger::parse_level(std::string const& str)
   return util::error{"could not parse log level"};
 }
 
-
-void logger::message::coin(level lvl)
+logger::message::message(level lvl)
+  : lvl_{lvl}
 {
-  lvl_ = lvl;
-  timestamp_ = to<double>(now());
-
   std::ostringstream ss;
   ss << std::hex << std::this_thread::get_id();
   thread_id_ = ss.str();
+}
+
+logger::message::message(message const& other)
+  : lvl_{other.lvl_},
+    timestamp_{other.timestamp_},
+    thread_id_{other.thread_id_},
+    facility_{other.facility_},
+    function_{other.function_}
+{
+  ss_ << other.msg();
+}
+
+void logger::message::coin()
+{
+  timestamp_ = to<double>(now());
 }
 
 void logger::message::function(char const* f)
@@ -265,10 +276,15 @@ void logger::message::function(char const* f)
   function_ = prettify(f);
 }
 
-bool logger::message::fast_forward()
+void logger::message::clear()
 {
-  ss_.seekp(0, std::ios::end);
-  return ss_.tellp() != 0;
+  ss_.str("");
+  ss_.clear();
+}
+
+bool logger::message::empty()
+{
+  return ss_.tellp() == 0;
 }
 
 logger::level logger::message::lvl() const
@@ -338,16 +354,12 @@ std::ostream& operator<<(std::ostream& stream, logger::level lvl)
   return stream;
 }
 
-logger::tracer::tracer(char const* fun)
+logger::tracer::tracer(message&& msg)
+  : msg_{std::move(msg)}
 {
   ++call_depth;
-
-  msg_.coin(trace);
-  msg_.function(fun);
-
   fill(right_arrow);
-
-  msg_ << msg_.function() << ' ';
+  msg_ << "::" << msg_.function() << ' ';
 }
 
 void logger::tracer::fill(fill_type t)
@@ -357,52 +369,45 @@ void logger::tracer::fill(fill_type t)
   std::string f(3 + call_depth, '-');
   f[f.size() - 1] = ' ';
 
+  f[0] = '|';
   if (t == right_arrow)
-  {
-    f[0] = '+';
     f[f.size() - 2] = '\\';
-  }
   else if (t == left_arrow)
-  {
     f[f.size() - 2] = '/';
-    f[0] = '<';
-  }
   else if (t == bar)
-  {
     f[f.size() - 2] = '|';
-  }
 
   msg_ << f << ' ';
 }
 
 void logger::tracer::commit()
 {
-  instance()->log(std::move(msg_));
-  msg_ = {};
+  msg_.coin();
+  instance()->log(msg_);
+  msg_.clear();
 }
 
 void logger::tracer::reset(bool exit)
 {
-  msg_.coin(trace);
+  msg_.clear();
 
-  if (! exit)
+  if (exit)
   {
-    fill(bar);
+    fill(left_arrow);
+    msg_ << "::" << msg_.function() << ' ';
   }
   else
   {
-    fill(left_arrow);
-    msg_ << msg_.function() << ' ';
+    fill(bar);
   }
 }
 
 logger::tracer::~tracer()
 {
-  if (! msg_.fast_forward())
+  if (msg_.empty())
   {
-    msg_.coin(trace);
     fill(left_arrow);
-    msg_ << msg_.function();
+    msg_ << "::" << msg_.function();
   }
 
   commit();
@@ -426,7 +431,7 @@ bool logger::init(level console, level file, bool colors, bool show_fns,
   return impl_->init(console, file, colors, show_fns, dir);
 }
 
-void logger::log(message&& msg)
+void logger::log(message msg)
 {
   impl_->log(std::move(msg));
 }
@@ -442,15 +447,12 @@ logger::message logger::make_message(logger::level lvl,
 {
   assert(facility != nullptr);
 
-  message m;
-  m.coin(lvl);
-
-  if (impl_->show_functions_)
-    m.function_ = prettify(fun);
-
+  message m{lvl};
+  m.function_ = prettify(fun);
   if (*facility)
     m.facility_ = facility;
 
+  m.coin();
   return m;
 }
 

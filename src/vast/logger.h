@@ -40,15 +40,19 @@ public:
     friend logger;
 
   public:
-    /// Sets thread ID, timestamp, and log level.
+    /// Constructs a message with a certain level.
     /// @param lvl The level of the message.
-    void coin(level lvl);
+    message(level lvl = quiet);
+
+    message(message const& other);
+    message(message&&) = default;
+
+    /// Sets thread ID and timestamp.
+    void coin();
 
     /// Sets the function.
     /// @param The value of `__PRETTY_FUNCTION__`.
     void function(char const* f);
-
-    bool fast_forward();
 
     template <typename T>
     message& operator<<(T&& x)
@@ -56,6 +60,10 @@ public:
       ss_ << std::forward<T>(x);
       return *this;
     }
+
+    void clear();
+
+    bool empty();
 
     level lvl() const;
 
@@ -91,7 +99,7 @@ public:
       bar
     };
 
-    tracer(char const* fun);
+    tracer(message&& msg);
     ~tracer();
 
     template <typename T>
@@ -123,7 +131,7 @@ public:
 
   /// Logs a record.
   /// @param msg The log message.
-  void log(message&& msg);
+  void log(message msg);
 
   /// Checks whether the logger takes a given level.
   /// @param lvl The level to check.
@@ -249,15 +257,19 @@ private:
 #  define VAST_LOG_ACTOR_DEBUG(...)   VAST_VOID
 #endif
 #if VAST_LOG_LEVEL > 5
-#  define VAST_ENTER_ARGS(args)                                              \
-     ::vast::logger::tracer vast_tracer(__PRETTY_FUNCTION__);                \
-     vast_tracer << " -->(" << args << ')';                                  \
-     vast_tracer.commit();                                                   \
+#  define VAST_ENTER_ARGS(args)                                               \
+      auto vast_msg = ::vast::logger::instance()->make_message(               \
+          ::vast::logger::level::trace,                                       \
+          VAST_LOG_FACILITY, __PRETTY_FUNCTION__);                            \
+                                                                              \
+     ::vast::logger::tracer vast_tracer(std::move(vast_msg));                 \
+     vast_tracer << "--> (" << args << ')';                                   \
+     vast_tracer.commit();                                                    \
      VAST_VOID
-#  define VAST_ENTER_ARGS_MSG(args, msg)                                     \
-     ::vast::logger::tracer vast_tracer(__PRETTY_FUNCTION__);                    \
-     vast_tracer << " -->(" << args << ") " << msg;                          \
-     vast_tracer.commit();                                                   \
+#  define VAST_ENTER_ARGS_MSG(args, msg)                                      \
+     ::vast::logger::tracer vast_tracer(__PRETTY_FUNCTION__);                 \
+     vast_tracer << "--> (" << args << ") " << msg;                           \
+     vast_tracer.commit();                                                    \
      VAST_VOID
 #  define VAST_ENTER_MSG(msg) VAST_ENTER_ARGS_MSG('*', msg)
 
@@ -289,7 +301,7 @@ private:
 #  define VAST_LEAVE(msg)                                                    \
      {                                                                       \
        vast_tracer.reset(true);                                              \
-       vast_tracer << " <--(void) " << msg;                                  \
+       vast_tracer << "<-- (void) " << msg;                                  \
        return;                                                               \
      }                                                                       \
      VAST_VOID
@@ -297,7 +309,7 @@ private:
      {                                                                       \
        auto&& vast_result = value;                                           \
        vast_tracer.reset(true);                                              \
-       vast_tracer << " <--(" << vast_result << ") " << msg;                 \
+       vast_tracer << "<-- (" << vast_result << ") " << msg;                 \
        return vast_result;                                                   \
      }                                                                       \
      VAST_VOID
