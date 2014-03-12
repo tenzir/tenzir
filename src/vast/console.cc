@@ -732,8 +732,6 @@ void console::act()
                   break;
                 case '\t':
                   desc = "\\t";
-                case '\n':
-                  desc = "\\n";
                   break;
               }
 
@@ -741,6 +739,9 @@ void console::act()
                 << "invalid key: '" << desc << "', press '?' for help"
                 << std::endl;
             }
+            break;
+          case '\n':
+            print(none) << std::endl;
             break;
           case '?':
             {
