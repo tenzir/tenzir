@@ -563,6 +563,17 @@ void console::act()
 {
   chaining(false);
 
+  print(none)
+    << util::color::red
+    << "     _   _____   __________\n"
+       "    | | / / _ | / __/_  __/\n"
+       "    | |/ / __ |_\\ \\  / /\n"
+       "    |___/_/ |_/___/ /_/  "
+    << util::color::yellow
+    << VAST_VERSION << '\n'
+    << util::color::reset
+    << std::endl;
+
   auto keystroke_monitor = spawn<detached+linked>(
       [=]
       {
