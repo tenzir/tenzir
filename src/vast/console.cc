@@ -294,7 +294,6 @@ console::console(cppa::actor_ptr search, path dir)
 
               active_.insert(current_);
               results_.push_back(current_.second);
-              cmdline_.mode_pop();
 
               print(info)
                 << "new query " << current_.second->id()
