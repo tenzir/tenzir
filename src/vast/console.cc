@@ -719,12 +719,6 @@ void console::act()
                 << util::color::blue << '|' << util::color::reset << std::endl;
 
               append_mode_ = false;
-
-              if (r->size() == 0)
-              {
-                send(keystroke_monitor, atom("put"), "qqqqqq");
-                //prompt();
-              }
             }
           }
 
