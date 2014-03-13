@@ -164,8 +164,8 @@ public:
   bool mode_push(std::string const& mode);
 
   /// Leaves the current mode.
-  /// @returns `true` on success.
-  bool mode_pop();
+  /// @returns The number of modes left on the stack.
+  size_t mode_pop();
 
   /// Appends an entry to the history of the current mode.
   /// @param entry The history entry to add.
@@ -179,13 +179,13 @@ public:
 
   /// Retrieves a single character from the command line in a blocking fashion.
   /// @param c The result parameter containing the character from STDIN.
-  /// @returns `true` on success.
-  bool get(char& c);
+  /// @returns `true` on success, `false` on EOF, and an error otherwise.
+  trial<bool> get(char& c);
 
   /// Retrieves a full line from the command line in a blocking fashion.
   /// @param line The result parameter containing the line.
-  /// @returns `true` on success.
-  bool get(std::string& line);
+  /// @returns `true` on success, `false` on EOF, and an error otherwise.
+  trial<bool> get(std::string& line);
 
 private:
   std::vector<intrusive_ptr<mode>> mode_stack_;

@@ -576,11 +576,21 @@ void console::act()
   auto keystroke_monitor = spawn<detached+linked>(
       [=]
       {
+        auto el = std::make_shared<util::editline>();
+
         become(
             on(atom("get")) >> [=]
             {
               char c;
-              return make_any_tuple(atom("key"), cmdline_.get(c) ? c : 'q');
+              auto t = el->get(c);
+              if (! t)
+              {
+                VAST_LOG_ACTOR_ERROR(t.failure().msg());
+                self->quit(exit::error);
+                return make_any_tuple(atom("error"), t.failure().msg());
+              }
+
+              return make_any_tuple(atom("key"), *t ? c : '\0');
             });
       });
 
@@ -589,13 +599,23 @@ void console::act()
     if (ms > 0)
       std::this_thread::sleep_for(std::chrono::milliseconds(ms));
 
-    std::cout.flush();
-    std::cerr.flush();
     std::string line;
-    if (! cmdline_.get(line))
+    auto t = cmdline_.get(line);
+    if (! t)
     {
-      VAST_LOG_ACTOR_ERROR("failed to retrieve command line");
+      VAST_LOG_ACTOR_ERROR("failed to retrieve command line: " << t.failure());
       quit(exit::error);
+      return;
+    }
+
+    // Check for CTRL+D.
+    if (! *t)
+    {
+      print(none) << std::endl;
+      if (cmdline_.mode_pop() > 0)
+        send(self, atom("prompt"));
+      else
+        send_exit(self, exit::stop);
       return;
     }
 
@@ -699,6 +719,12 @@ void console::act()
                 << util::color::blue << '|' << util::color::reset << std::endl;
 
               append_mode_ = false;
+
+              if (r->size() == 0)
+              {
+                send(keystroke_monitor, atom("put"), "qqqqqq");
+                //prompt();
+              }
             }
           }
 
@@ -843,6 +869,7 @@ void console::act()
                 << util::color::blue << '|' << util::color::reset << std::endl;
             }
             break;
+          case '\0':
           case '':
           case 'q':
             {

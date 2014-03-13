@@ -200,14 +200,10 @@ bool command_line::mode_push(std::string const& mode)
   return true;
 }
 
-bool command_line::mode_pop()
+size_t command_line::mode_pop()
 {
-  if (mode_stack_.empty())
-    return false;
-
   mode_stack_.pop_back();
-
-  return true;
+  return mode_stack_.size();
 }
 
 bool command_line::append_to_history(std::string const& entry)
@@ -229,21 +225,25 @@ result<bool> command_line::process(std::string cmd)
   return mode_stack_.back()->execute(std::move(cmd));
 }
 
-bool command_line::get(char& c)
-{
-  return mode_stack_.empty() ? false : mode_stack_.back()->el_.get(c);
-}
-
-bool command_line::get(std::string& line)
+trial<bool> command_line::get(char& c)
 {
   if (mode_stack_.empty())
-    return false;
+    return error{"mode stack empty"};
+
+  return mode_stack_.back()->el_.get(c);
+}
+
+trial<bool> command_line::get(std::string& line)
+{
+  if (mode_stack_.empty())
+    return error{"mode stack empty"};
 
   // Fixes TTY weirdness which may occur when switching between modes.
   mode_stack_.back()->el_.reset();
 
-  if (! mode_stack_.back()->el_.get(line))
-    return false;
+  auto t = mode_stack_.back()->el_.get(line);
+  if (! t || ! *t)
+    return t;
 
   // Trim line from leading/trailing whitespace.
   auto first_non_ws = line.find_first_not_of(" \t");
@@ -251,7 +251,7 @@ bool command_line::get(std::string& line)
   if (first_non_ws != std::string::npos)
     line = line.substr(first_non_ws, last_non_ws - first_non_ws + 1);
 
-  return true;
+  return t;
 }
 
 } // namespace util
