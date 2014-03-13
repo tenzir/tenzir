@@ -6,7 +6,6 @@ set(libvast_sources
   address.cc
   archive.cc
   bitvector.cc
-  bitmap_index.cc
   bitstream.cc
   chunk.cc
   configuration.cc

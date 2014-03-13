@@ -205,7 +205,6 @@ void announce_builtin_types()
   util::for_each(bitmap_index_types, type_announcer{});
 
   util::for_each(expr_node_types, type_converter<expr::node>{});
-  util::for_each(bitmap_index_types, type_converter<bitmap_index>{});
   util::for_each(bitstream_types, type_converter<detail::bitstream_concept>{});
 }
 
