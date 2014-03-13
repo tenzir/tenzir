@@ -233,43 +233,15 @@ struct editline::impl
     impl* instance;
     el_get(el, EL_CLIENTDATA, &instance);
     assert(instance);
+    assert(instance->on_char_read_);
 
-    while (true)
-    {
-      errno = 0;
-      char ch = ::fgetc(instance->input_file_ptr());
-
-      if (ch == '\x04' && instance->empty_line())
-      {
-        errno = 0;
-        ch = EOF;
-      }
-
-      if (ch == EOF)
-      {
-        if (errno == EINTR)
-        {
-          continue;
-        }
-        else
-        {
-          instance->eof_ = true;
-          break;
-        }
-      }
-      else
-      {
-        *c = ch;
-        return 1;
-      }
-    }
-
-    return 0;
+    return instance->on_char_read_(c);
   }
 
   impl(char const* name, char const* comp_key = "\t")
     : el_{el_init(name, stdin, stdout, stderr)},
-      completion_key_{comp_key}
+      completion_key_{comp_key},
+      on_char_read_{[&](char *c) { return read_char_from_input_stream(c); }}
   {
     assert(el_ != nullptr);
 
@@ -278,8 +250,8 @@ struct editline::impl
 
     // Keyboard defaults.
     el_set(el_, EL_EDITOR, "vi");
-    el_set (el_, EL_BIND, "^r", "em-inc-search-prev", NULL);
-    el_set (el_, EL_BIND, "^w", "ed-delete-prev-word", NULL);
+    el_set(el_, EL_BIND, "^r", "em-inc-search-prev", NULL);
+    el_set(el_, EL_BIND, "^w", "ed-delete-prev-word", NULL);
 
     // Setup completion.
     el_set(el_, EL_ADDFN, "vast-complete", "VAST complete", &handle_complete);
@@ -299,6 +271,47 @@ struct editline::impl
   ~impl()
   {
     el_end(el_);
+  }
+
+  void on_char_read(std::function<int(char*)> handler)
+  {
+    assert(handler);
+    on_char_read_ = handler;
+  }
+
+  int read_char_from_input_stream(char *c)
+  {
+    while (true)
+    {
+      errno = 0;
+      char ch = ::fgetc(input_file_ptr());
+
+      if (ch == '\x04' && empty_line())
+      {
+        errno = 0;
+        ch = EOF;
+      }
+
+      if (ch == EOF)
+      {
+        if (errno == EINTR)
+        {
+          continue;
+        }
+        else
+        {
+          eof_ = true;
+          break;
+        }
+      }
+      else
+      {
+        *c = ch;
+        return 1;
+      }
+    }
+
+    return 0;
   }
 
   bool source(char const* filename)
@@ -439,6 +452,7 @@ struct editline::impl
   char const* completion_key_;
   prompt prompt_;
   completer completer_;
+  std::function<int(char*)> on_char_read_;
   bool eof_ = false;
 };
 
@@ -449,6 +463,11 @@ editline::editline(char const* name)
 
 editline::~editline()
 {
+}
+
+void editline::on_char_read(std::function<int(char*)> handler)
+{
+  return impl_->on_char_read(handler);
 }
 
 bool editline::source(char const* filename)

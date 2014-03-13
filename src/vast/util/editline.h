@@ -109,6 +109,13 @@ public:
 
   ~editline();
 
+  /// Defines the character reading function, which should store the character
+  /// in its argument and return the number of characters read. This is the
+  /// equivalent of `EL_GETCFN`.
+  ///
+  /// @param handler The handler to read a character.
+  void on_char_read(std::function<int(char*)> handler);
+
   /// Sources an editline config.
   ///
   /// @param filename If not `nullptr` the config file name and otherwise
