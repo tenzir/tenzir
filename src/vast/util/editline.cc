@@ -206,6 +206,8 @@ struct editline::impl
   {
     impl* instance;
     el_get(el, EL_CLIENTDATA, &instance);
+    assert(instance);
+
     return const_cast<char*>(instance->prompt_.display());
   }
 
@@ -213,6 +215,8 @@ struct editline::impl
   {
     impl* instance;
     el_get(el, EL_CLIENTDATA, &instance);
+    assert(instance);
+
     auto line = instance->cursor_line();
     auto line_size = line.size();
     auto t = instance->completer_.complete(std::move(line));
@@ -224,17 +228,58 @@ struct editline::impl
     return CC_REDISPLAY;
   }
 
+  static int handle_char_read(EditLine* el, char* c)
+  {
+    impl* instance;
+    el_get(el, EL_CLIENTDATA, &instance);
+    assert(instance);
+
+    while (true)
+    {
+      errno = 0;
+      char ch = ::fgetc(instance->input_file_ptr());
+
+      if (ch == '\x04' && instance->empty_line())
+      {
+        errno = 0;
+        ch = EOF;
+      }
+
+      if (ch == EOF)
+      {
+        if (errno == EINTR)
+        {
+          continue;
+        }
+        else
+        {
+          instance->eof_ = true;
+          break;
+        }
+      }
+      else
+      {
+        *c = ch;
+        return 1;
+      }
+    }
+
+    return 0;
+  }
+
   impl(char const* name, char const* comp_key = "\t")
     : el_{el_init(name, stdin, stdout, stderr)},
       completion_key_{comp_key}
   {
     assert(el_ != nullptr);
 
-    // Sane defaults.
-    el_set(el_, EL_EDITOR, "vi");
-
     // Make ourselves available in callbacks.
     el_set(el_, EL_CLIENTDATA, this);
+
+    // Keyboard defaults.
+    el_set(el_, EL_EDITOR, "vi");
+    el_set (el_, EL_BIND, "^r", "em-inc-search-prev", NULL);
+    el_set (el_, EL_BIND, "^w", "ed-delete-prev-word", NULL);
 
     // Setup completion.
     el_set(el_, EL_ADDFN, "vast-complete", "VAST complete", &handle_complete);
@@ -245,6 +290,10 @@ struct editline::impl
     // completion, which "bind -v" somehow disabled. A better solution to
     // handle this problem would be desirable.
     el_set(el_, EL_ADDFN, "rl_complete", "default complete", &handle_complete);
+
+    // Let all character reads go through our custom handler so that we can
+    // figure out when we receive EOF.
+    el_set(el_, EL_GETCFN, &handle_char_read);
   }
 
   ~impl()
@@ -275,23 +324,38 @@ struct editline::impl
 
   bool get(char& c)
   {
-    return el_getc(el_, &c) == 1;
+    return ! eof() && el_getc(el_, &c) == 1;
   }
 
   bool get(std::string& line)
   {
+    if (eof())
+      return false;
+
+    line.clear();
     scope_setter ss{el_, EL_PREP_TERM};
+
     int n;
     auto str = el_gets(el_, &n);
-    if (n == -1)
+    if (n == -1 || eof())
       return false;
+
     if (str == nullptr)
+    {
       line.clear();
-    else
-      line.assign(str);
-    if (! line.empty() && (line.back() == '\n' || line.back() == '\r'))
-      line.pop_back();
+      return true;
+    }
+
+    while (n > 0 && (str[n - 1] == '\n' || str[n - 1] == '\r'))
+      --n;
+
+    line.assign(str, n);
     return true;
+  }
+
+  void push(char const* str)
+  {
+    el_push(el_, str);
   }
 
   void insert(std::string const& str)
@@ -319,6 +383,12 @@ struct editline::impl
             static_cast<std::string::size_type>(info->cursor - info->buffer)};
   }
 
+  bool empty_line()
+  {
+    auto info = el_line(el_);
+    return info->buffer == info->cursor && info->buffer == info->lastchar;
+  }
+
   void reset()
   {
     el_reset(el_);
@@ -334,10 +404,42 @@ struct editline::impl
     el_beep(el_);
   }
 
+  FILE* file_ptr(int fd)
+  {
+    FILE* f = nullptr;
+    return el_get(el_, EL_GETFP, fd, &f) == 0 ? f : nullptr;
+  }
+
+  FILE* input_file_ptr()
+  {
+    return file_ptr(0);
+  }
+
+  FILE* output_file_ptr()
+  {
+    return file_ptr(1);
+  }
+
+  FILE* error_file_ptr()
+  {
+    return file_ptr(2);
+  }
+
+  bool eof()
+  {
+    return eof_;
+  }
+
+  void unset_eof()
+  {
+    eof_ = false;
+  }
+
   EditLine* el_;
   char const* completion_key_;
   prompt prompt_;
   completer completer_;
+  bool eof_ = false;
 };
 
 editline::editline(char const* name)
@@ -369,19 +471,49 @@ void editline::set(completer comp)
   impl_->set(comp);
 }
 
-bool editline::get(char& c)
+trial<bool> editline::get(char& c)
 {
-  return impl_->get(c);
+  auto success = impl_->get(c);
+  if (success)
+    return true;
+
+  if (eof())
+  {
+    impl_->unset_eof();
+    return false;
+  }
+
+  return error{std::strerror(errno)};
 }
 
-bool editline::get(std::string& line)
+trial<bool> editline::get(std::string& line)
 {
-  return impl_->get(line);
+  auto success = impl_->get(line);
+  if (success)
+    return true;
+
+  if (eof())
+  {
+    impl_->unset_eof();
+    return false;
+  }
+
+  return error{std::strerror(errno)};
+}
+
+void editline::push(char const* str)
+{
+  return impl_->push(str);
 }
 
 void editline::put(std::string const& str)
 {
   impl_->insert(str);
+}
+
+bool editline::eof()
+{
+  return impl_->eof();
 }
 
 std::string editline::line()

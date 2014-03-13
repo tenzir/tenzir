@@ -131,17 +131,25 @@ public:
 
   /// Retrieves a character from the TTY.
   /// @param c The result parameter containing the character.
-  /// @returns `true` on success.
-  bool get(char& c);
+  /// @returns `true` on success, `false` on EOF, and an error otherwise.
+  trial<bool> get(char& c);
 
   /// Retrieves a line from the TTY.
   /// @param line The result parameter containing the line.
-  /// @returns `true` on success.
-  bool get(std::string& line);
+  /// @returns `true` on success, `false` on EOF, and an error otherwise.
+  trial<bool> get(std::string& line);
+
+  /// Pushes a string back into the input stream.
+  /// @param str The string to push.
+  void push(char const* str);
 
   /// Adds a string to the current line.
   /// @param str The string to add.
   void put(std::string const& str);
+
+  /// Checks whether editline received EOF on an empty line.
+  /// @returns `true` if EOF occurred on an empty line.
+  bool eof();
 
   /// Retrieves the current line.
   /// @return The current line.
