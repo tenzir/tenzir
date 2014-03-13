@@ -308,6 +308,8 @@ private:
 
   trial<bitstream> lookup_impl(relational_operator op, value const& val) const
   {
+    assert(val.which() == string_type);
+
     auto str = val.get<string>();
 
     switch (op)
@@ -583,6 +585,8 @@ private:
 
   trial<bitstream> lookup_impl(relational_operator op, value const& val) const
   {
+    assert(val.which() == port_type);
+
     if (op == in || op == not_in)
       return error{"unsupported relational operator " + to<std::string>(op)};
 

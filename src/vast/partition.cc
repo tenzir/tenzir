@@ -178,6 +178,8 @@ struct dispatcher : expr::default_const_visitor
 
   virtual void visit(expr::predicate const& pred)
   {
+    pred.rhs().accept(*this);
+    assert(value_);
     pred.lhs().accept(*this);
   }
 
@@ -238,6 +240,11 @@ struct dispatcher : expr::default_const_visitor
       {
         VAST_LOG_WARN("no index for offset " << oe.off);
       }
+      else if (i->second.type != value_->which())
+      {
+        VAST_LOG_WARN("type mismatch: requested " << value_->which() <<
+                      " but offset " << oe.off << " has " << i->second.type);
+      }
       else if (! i->second.actor)
       {
         auto a = actor_.load_indexer(p0.first, oe.off);
@@ -255,6 +262,12 @@ struct dispatcher : expr::default_const_visitor
     }
   }
 
+  virtual void visit(expr::constant const& c)
+  {
+    value_ = &c.val;
+  }
+
+  value const* value_ = nullptr;
   partition_actor& actor_;
   std::vector<actor_ptr> indexes_;
 };
