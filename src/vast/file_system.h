@@ -50,7 +50,7 @@ public:
   /// Constructs a path from a C string.
   /// @param str The string representing of a path.
   path(char const* str);
-  
+
   /// Constructs a path from a VAST string.
   /// @param str The string representing of a path.
   path(string str);
@@ -83,11 +83,19 @@ public:
 
   /// Retrieves a sub-path from beginning or end.
   ///
-  /// @param offset If positive, the function returns the first *offset*
-  /// components of the path. If negative, it returns last *offset* components.
+  /// @param n If positive, the function returns the first *n*
+  /// components of the path. If negative, it returns last *n* components.
   ///
-  /// @returns The path trimmed according to *offset*.
-  path trim(int offset) const;
+  /// @returns The path trimmed according to *n*.
+  path trim(int n) const;
+
+  /// Chops away path components from beginning or end.
+  ///
+  /// @param n If positive, the function chops away the first *n*
+  /// components of the path. If negative, it removes the last *n* components.
+  ///
+  /// @returns The path trimmed according to *n*.
+  path chop(int n) const;
 
   /// Retrieves the underlying string representation.
   /// @returns The string representation of the path.

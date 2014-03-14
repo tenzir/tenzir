@@ -151,19 +151,47 @@ std::vector<path> path::split() const
   return result;
 }
 
-path path::trim(int offset) const
+path path::trim(int n) const
 {
-  path r;
-  if (empty() || offset == 0)
+  if (empty())
     return *this;
+  else if (n == 0)
+    return {};
+
   auto pieces = split();
-  std::pair<size_t, size_t> range{0, 0};
-  if (offset > 0 && size_t(offset) < pieces.size())
-    range.second = pieces.size() - size_t(offset);
-  else if (offset < 0 && size_t(-offset) <= pieces.size())
-    range = {pieces.size() - size_t(-offset), pieces.size()};
-  for (size_t i = range.first; i < range.second; ++i)
+  size_t first = 0;
+  size_t last = pieces.size();
+
+  if (n < 0)
+    first = last - std::min(size_t(-n), pieces.size());
+  else
+    last = std::min(size_t(n), pieces.size());
+
+  path r;
+  for (size_t i = first; i < last; ++i)
     r /= pieces[i];
+
+  return r;
+}
+
+path path::chop(int n) const
+{
+  if (empty() || n == 0)
+    return *this;
+
+  auto pieces = split();
+  size_t first = 0;
+  size_t last = pieces.size();
+
+  if (n < 0)
+    last -= std::min(size_t(-n), pieces.size());
+  else
+    first += std::min(size_t(n), pieces.size());
+
+  path r;
+  for (size_t i = first; i < last; ++i)
+    r /= pieces[i];
+
   return r;
 }
 
