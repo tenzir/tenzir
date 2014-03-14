@@ -43,8 +43,7 @@ public:
     /// Constructs a prompt.
     /// @param str The initial prompt string.
     /// @param color The color of *str*.
-    /// @param e The escape character to be used in the prompt.
-    prompt(std::string str = ">> ", char const* color = nullptr, char e = '\1');
+    prompt(std::string str = ">> ", char const* color = nullptr);
 
     /// Adds a (colored) string to the end of the prompt.
     /// @param str The string to append.
@@ -55,13 +54,8 @@ public:
     /// @param The prompt string.
     char const* display() const;
 
-    /// Retrieves the escape character of the prompt.
-    /// @returns The escape character for the prompt function.
-    char escape() const;
-
   private:
     std::string str_;
-    char esc_;
   };
 
   /// A completion context.

@@ -93,8 +93,7 @@ void editline::history::enter(std::string const& str)
   impl_->enter(str);
 }
 
-editline::prompt::prompt(std::string str, char const* color, char esc)
-  : esc_{esc}
+editline::prompt::prompt(std::string str, char const* color)
 {
   push(std::move(str), color);
 }
@@ -105,22 +104,17 @@ void editline::prompt::push(std::string str, char const* color)
     return;
 
   if (color)
-    str_ += esc_ + std::string{color};
+    str_ += color;
 
   str_ += std::move(str);
 
   if (color)
-    str_ += std::string{util::color::reset} + esc_;
+    str_ += util::color::reset;
 }
 
 char const* editline::prompt::display() const
 {
   return str_.c_str();
-}
-
-char editline::prompt::escape() const
-{
-  return esc_;
 }
 
 bool editline::completer::add(std::string str)
@@ -322,7 +316,7 @@ struct editline::impl
   void set(prompt p)
   {
     prompt_ = std::move(p);
-    el_set(el_, EL_PROMPT_ESC, &prompt_function, prompt_.escape());
+    el_set(el_, EL_PROMPT, &prompt_function);
   }
 
   void set(history& hist)
