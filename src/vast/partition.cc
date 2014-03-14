@@ -290,7 +290,8 @@ void partition_actor::act()
   {
     if (! io::unarchive(dir_ / partition::part_meta_file, partition_))
     {
-      VAST_LOG_ACTOR_ERROR("failed to load partition meta data from " << dir_);
+      VAST_LOG_ACTOR_ERROR("failed to load partition meta data from " <<
+                           dir_.chop(2));
       quit(exit::error);
       return;
     }
@@ -314,7 +315,8 @@ void partition_actor::act()
       {
         if (! event_dir.is_directory())
         {
-          VAST_LOG_ACTOR_WARN("found unrecognized file in " << event_dir);
+          VAST_LOG_ACTOR_WARN("found unrecognized file in " <<
+                              event_dir.chop(2));
           return true;
         }
 
@@ -326,20 +328,22 @@ void partition_actor::act()
               if (idx_file.extension() != ".idx")
                 return true;
 
-              VAST_LOG_ACTOR_DEBUG("found index " << idx_file);
+              VAST_LOG_ACTOR_DEBUG("found index " << idx_file.chop(2));
               auto str = idx_file.basename(true).str();
               auto start = str.begin();
               offset o;
               if (! extract(start, str.end(), o))
               {
-                VAST_LOG_ACTOR_ERROR("got invalid offset in " << idx_file);
+                VAST_LOG_ACTOR_ERROR("got invalid offset in " <<
+                                     idx_file.chop(2));
                 quit(exit::error);
                 return false;
               }
 
               if (! indexers_[event_name].count(o))
               {
-                VAST_LOG_ACTOR_ERROR("has no meta data for " << idx_file);
+                VAST_LOG_ACTOR_ERROR("has no meta data for " <<
+                                     idx_file.chop(2));
                 quit(exit::error);
                 return false;
               }
@@ -429,14 +433,14 @@ void partition_actor::act()
 
     if (! io::archive(dir_ / "types", types))
     {
-      VAST_LOG_ACTOR_ERROR("failed to save type data for " << dir_);
+      VAST_LOG_ACTOR_ERROR("failed to save type data for " << dir_.chop(2));
       quit(exit::error);
       return;
     }
 
     if (! io::archive(dir_ / partition::part_meta_file, partition_))
     {
-      VAST_LOG_ACTOR_ERROR("failed to save partition " << dir_);
+      VAST_LOG_ACTOR_ERROR("failed to save partition " << dir_.chop(2));
       quit(exit::error);
       return;
     }
@@ -493,7 +497,7 @@ void partition_actor::act()
       on(atom("flush")) >> flush,
       on_arg_match >> [=](segment const& s)
       {
-        VAST_LOG_ACTOR_DEBUG(
+        VAST_LOG_ACTOR_VERBOSE(
             "processes " << s.events() << " events from segment " << s.id());
 
         std::vector<cow<event>> all_events;

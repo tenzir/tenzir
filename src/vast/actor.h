@@ -23,7 +23,7 @@ public:
   /// Implements `cppa::event_based_actor::init`.
   virtual void init() override
   {
-    VAST_LOG_ACTOR_VERBOSE(derived()->description(), "spawned");
+    VAST_LOG_ACTOR_DEBUG(derived()->description(), "spawned");
     derived()->act();
     if (! has_behavior())
     {
@@ -36,7 +36,7 @@ public:
   /// Overrides `event_based_actor::on_exit`.
   virtual void on_exit() override
   {
-    VAST_LOG_ACTOR_VERBOSE(derived()->description(), "terminated");
+    VAST_LOG_ACTOR_DEBUG(derived()->description(), "terminated");
   }
 
 private:

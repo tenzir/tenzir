@@ -86,7 +86,7 @@ void archive_actor::act()
         auto id = get<0>(t);
         if (id)
         {
-          VAST_LOG_ACTOR_VERBOSE("got segment " << *id << " for event " << eid);
+          VAST_LOG_ACTOR_DEBUG("got segment " << *id << " for event " << eid);
           send(segment_manager_, *id, last_sender());
         }
         else
