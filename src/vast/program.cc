@@ -226,26 +226,12 @@ void program::act()
 #endif
 
       if (config_.check("ingest.submit"))
-      {
         send(ingestor, atom("submit"));
-      }
       else if (auto file = config_.get("ingest.file-name"))
-      {
-        auto type = *config_.get("ingest.file-type");
-        auto ts_field = *config_.as<int32_t>("ingest.time-field");
-        if (! exists(string(*file)))
-        {
-          VAST_LOG_ACTOR_ERROR("no such file: " << *file);
-          send_exit(self, exit::error);
-          return;
-        }
-
-        send(ingestor, atom("ingest"), type, *file, ts_field);
-      }
+        send(ingestor, atom("ingest"), *config_.get("ingest.file-type"), *file,
+             *config_.as<int32_t>("ingest.time-field"));
       else
-      {
         send_exit(ingestor, exit::done);
-      }
     }
 
     actor_ptr search;

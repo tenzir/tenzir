@@ -25,7 +25,10 @@ public:
   /// @param filename The name of the file to ingest.
   file(cppa::actor_ptr sink, std::string const& filename)
     : synchronous<file<Derived>>{std::move(sink)},
-      file_handle_{path{filename}},
+      file_handle_{
+          filename == "-"
+            ? vast::file{path{filename}, ::fileno(stdin)}
+            : vast::file{path{filename}}},
       file_stream_{file_handle_}
   {
     file_handle_.open(vast::file::read_only);
@@ -111,6 +114,7 @@ public:
        int32_t timestamp_field);
 
   result<event> extract_impl_impl();
+
   char const* description_impl_impl() const;
 
 private:
