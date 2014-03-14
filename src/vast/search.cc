@@ -66,7 +66,6 @@ void search_actor::act()
         >> [=](expr::ast const& ast) -> continue_helper
       {
         auto client = last_sender();
-        monitor(client);
 
         VAST_LOG_ACTOR_INFO("got new client " << VAST_ACTOR_ID(client) <<
                             " asking for " << ast);
@@ -76,6 +75,7 @@ void search_actor::act()
         return sync_send(index_, atom("query"), ast, qry).then(
             on(atom("success")) >> [=]
             {
+              monitor(client);
               clients_[client].queries.insert(qry);
               return make_any_tuple(ast, qry);
             },
