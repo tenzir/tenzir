@@ -10,7 +10,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
-#include "vast/util/trial.h"
+#include "vast/util/result.h"
 
 namespace vast {
 namespace util {
@@ -64,42 +64,37 @@ public:
     for (int i = 1; i < argc; ++i)
     {
       std::vector<std::string> values;
-      std::string arg(argv[i]);
-      if (arg.size() < 2)
-      {
-        // We need at least a '-' followed by one character.
-        return error{"ill-formed option specificiation", argv[i]};
-      }
-      else if (arg[0] == '-' && arg[1] == '-')
-      {
-        // Argument must begin with '--'.
-        if (arg.size() == 2)
-          return error{"ill-formed option specification", argv[i]};
-        arg = arg.substr(2);
-      }
-      else if (arg[0] == '-')
-      {
-        if (arg.size() > 2)
-          // The short option comes with a value.
-          values.push_back(arg.substr(2));
-        arg = arg[1];
-        auto s = cfg.shortcuts_.find(arg);
-        if (s == cfg.shortcuts_.end())
-          return error{"unknown short option", arg[0]};
-        arg = s->second;
-      }
+
+      std::string arg{argv[i]};
+      auto val = cfg.optionize(arg);
+      if (val)
+        values.emplace_back(*val);
+      else if (val.failed())
+        return val.failure();
 
       auto o = cfg.find_option(arg);
-      if (! o)
+      if (o)
+        o->defaulted_ = false;
+      else
         return error{"unknown option", arg};
-      o->defaulted_ = false;
 
-      while (i+1 < argc && std::strlen(argv[i+1]) > 0 && argv[i+1][0] != '-')
-        values.emplace_back(argv[++i]);
+      // Consume everything until the next option.
+      while (i + 1 < argc)
+      {
+        std::string next{argv[i + 1]};
+        if (! cfg.optionize(next).failed())
+          break;
+
+        values.emplace_back(std::move(next));
+        ++i;
+      }
+
       if (values.size() > o->max_vals_)
         return error{"too many values", arg};
+
       if (o->max_vals_ == 1 && values.size() != 1)
         return error{"option value required", arg};
+
       if (! values.empty())
         o->values_ = std::move(values);
     }
@@ -193,7 +188,7 @@ public:
 
     sink << std::endl;
   }
-  
+
 protected:
   class option
   {
@@ -374,6 +369,39 @@ protected:
   }
 
 private:
+  result<std::string> optionize(std::string& str) const
+  {
+    if (str.size() < 2)
+    {
+      // We need at least a dash followed by one character.
+      return error{"ill-formed option specificiation", str};
+    }
+    else if (str[0] == '-' && str[1] == '-')
+    {
+      // Argument begins with '--'.
+      if (str.size() == 2)
+        return error{"ill-formed option specification", str};
+
+      str = str.substr(2);
+    }
+    else if (str[0] == '-')
+    {
+      auto s = shortcuts_.find({str[1]});
+      if (s == shortcuts_.end())
+        return error{"unknown short option", str[1]};
+
+      // Check if the short option comes with a value, like -v5.
+      auto val = str.size() > 2 ? str.substr(2) : "";
+
+      str = s->second;
+
+      if (! val.empty())
+        return val;
+    }
+
+    return {};
+  }
+
   Derived* derived()
   {
     return static_cast<Derived*>(this);
