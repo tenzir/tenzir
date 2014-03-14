@@ -648,10 +648,11 @@ void index_actor::act()
         auto e = index_.add_query(ast);
         if (e)
         {
+          send(sink, atom("progress"), e->total_progress,
+               e->hits ? e->hits.count() : 0);
+
           if (e->hits && e->hits.find_first() != bitstream::npos)
             notify(ast, sink, std::move(*e));
-
-          send(sink, atom("progress"), e->total_progress);
 
           return make_any_tuple(atom("success"));
         }
@@ -670,8 +671,9 @@ void index_actor::act()
       on_arg_match >> [=](expr::ast const& pred, uuid const& part,
                           bitstream const& hits)
       {
-        VAST_LOG_ACTOR_DEBUG("received new hits from " << part <<
-                             " for predicate " << pred);
+        VAST_LOG_ACTOR_DEBUG(
+            "received " << (hits ? hits.count() : 0) <<
+            " hits from " << part << " for predicate " << pred);
 
         for (auto& q : index_.update_hits(pred, part, hits))
         {
@@ -689,7 +691,8 @@ void index_actor::act()
             }
 
             for (auto& s : qs.subscribers)
-              send(s, atom("progress"), e->total_progress);
+              send(s, atom("progress"), e->total_progress,
+                   qs.hits ? qs.hits.count() : 0);
           }
           else
           {

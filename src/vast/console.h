@@ -123,6 +123,7 @@ struct console : actor<console>
   std::map<cppa::actor_ptr, intrusive_ptr<result>> active_;
   std::pair<cppa::actor_ptr, intrusive_ptr<result>> current_;
   cppa::actor_ptr search_;
+  cppa::actor_ptr keystroke_monitor_;
   util::command_line cmdline_;
   options opts_;
   bool follow_mode_ = false;

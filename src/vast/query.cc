@@ -275,7 +275,7 @@ void query_actor::act()
   chaining(false);
 
   become(
-      on(atom("progress"), arg_match) >> [=](double progress)
+      on(atom("progress"), arg_match) >> [=](double progress, uint64_t hits)
       {
         if (progress == 1.0)
         {
@@ -289,7 +289,7 @@ void query_actor::act()
           }
         }
 
-        send(sink_, atom("progress"), progress);
+        send(sink_, atom("progress"), progress, hits);
       },
       on_arg_match >> [=](bitstream const& hits, double progress)
       {

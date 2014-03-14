@@ -6,13 +6,72 @@
 #include "vast/event.h"
 #include "vast/io/serialization.h"
 #include "vast/util/color.h"
+#include "vast/util/make_unique.h"
 #include "vast/util/parse.h"
+#include "vast/util/poll.h"
 
 using namespace cppa;
 
 namespace vast {
 
 namespace {
+
+struct keystroke_monitor : actor<keystroke_monitor>
+{
+  keystroke_monitor(actor_ptr sink)
+    : sink_{sink}
+  {
+    el_.on_char_read(
+        [](char *c) -> int
+        {
+          if (! util::poll(::fileno(stdin), 100000))
+            return 0;
+
+          auto ch = ::fgetc(stdin);
+          if (ch == '\x04')
+            ch = EOF;
+
+          *c = static_cast<char>(ch);
+
+          return 1;
+        });
+  }
+
+  void act()
+  {
+    become(
+        on(atom("start")) >> [=]
+        {
+          running_ = true;
+          send(self, atom("get"));
+        },
+        on(atom("stop")) >> [=]
+        {
+          running_ = false;
+        },
+        on(atom("get")) >> [=]
+        {
+          if (! running_)
+            return;
+
+          char c;
+          if (el_.get(c))
+            send(sink_, atom("key"), c);
+          else
+            send(self, atom("get"));
+        });
+  };
+
+  char const* description() const
+  {
+    return "keystroke-monitor";
+  };
+
+  bool running_ = true;
+  util::editline el_;
+  actor_ptr sink_;
+};
+
 
 // Generates a callback function for a mode or command.
 struct help_printer
@@ -237,7 +296,7 @@ console::console(cppa::actor_ptr search, path dir)
           current_.first = qry;
         current_.second = matches[0];
 
-        send(self, atom("key"), atom("get"));
+        send(keystroke_monitor_, atom("start"));
         VAST_LOG_ACTOR_DEBUG("enters query " << current_.second->id());
         return {};
       });
@@ -302,7 +361,7 @@ console::console(cppa::actor_ptr search, path dir)
               if (opts_.auto_follow)
               {
                 follow_mode_ = true;
-                send(self, atom("key"), atom("get"));
+                send(keystroke_monitor_, atom("start"));
               }
               else
               {
@@ -573,26 +632,7 @@ void console::act()
     << util::color::reset
     << std::endl;
 
-  auto keystroke_monitor = spawn<detached+linked>(
-      [=]
-      {
-        auto el = std::make_shared<util::editline>();
-
-        become(
-            on(atom("get")) >> [=]
-            {
-              char c;
-              auto t = el->get(c);
-              if (! t)
-              {
-                VAST_LOG_ACTOR_ERROR(t.failure().msg());
-                self->quit(exit::error);
-                return make_any_tuple(atom("error"), t.failure().msg());
-              }
-
-              return make_any_tuple(atom("key"), *t ? c : '\0');
-            });
-      });
+  keystroke_monitor_ = spawn<keystroke_monitor, detached+linked>(self);
 
   auto prompt = [=](size_t ms = 100)
   {
@@ -686,7 +726,7 @@ void console::act()
       {
         prompt();
       },
-      on(atom("progress"), arg_match) >> [=](double progress)
+      on(atom("progress"), arg_match) >> [=](double progress, uint64_t hits)
       {
         auto i = active_.find(last_sender());
         assert(i != active_.end());
@@ -719,6 +759,13 @@ void console::act()
                 << util::color::blue << '|' << util::color::reset << std::endl;
 
               append_mode_ = false;
+
+              if (hits == 0)
+              {
+                send(keystroke_monitor_, atom("stop"));
+                follow_mode_ = false;
+                prompt();
+              }
             }
           }
 
@@ -743,10 +790,6 @@ void console::act()
 
           std::cout << *ce << std::endl;
         }
-      },
-      on(atom("key"), atom("get")) >> [=]
-      {
-        send(keystroke_monitor, atom("get"));
       },
       on(atom("key"), arg_match) >> [=](char key)
       {
@@ -863,7 +906,7 @@ void console::act()
                 << util::color::blue << '|' << util::color::reset << std::endl;
             }
             break;
-          case '\0':
+          case EOF:
           case '':
           case 'q':
             {
@@ -905,7 +948,7 @@ void console::act()
             return;
         }
 
-        send(keystroke_monitor, atom("get"));
+        send(keystroke_monitor_, atom("get"));
       },
       others() >> [=]
       {
