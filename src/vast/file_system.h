@@ -8,6 +8,7 @@
 #include "vast/string.h"
 #include "vast/util/operators.h"
 #include "vast/util/print.h"
+#include "vast/util/trial.h"
 
 namespace vast {
 
@@ -187,7 +188,7 @@ public:
   /// @param mode How to open the file.
   /// @param append If `false`, the first write truncates the file.
   /// @returns `true` on success.
-  bool open(open_mode mode = read_write, bool append = false);
+  trial<nothing> open(open_mode mode = read_write, bool append = false);
 
   /// Closes the file.
   /// @returns `true` on success.

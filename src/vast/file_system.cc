@@ -13,7 +13,7 @@
 #  include <unistd.h>
 #  include <sys/stat.h>
 #  include <sys/types.h>
-#  define VAST_ERRNO errno 
+#  define VAST_ERRNO errno
 #  define VAST_CHDIR(P)(::chdir(P) == 0)
 #  define VAST_CREATE_DIRECTORY(P)(::mkdir(P, S_IRWXU|S_IRWXG|S_IRWXO) == 0)
 #  define VAST_CREATE_HARD_LINK(F, T)(::link(T, F) == 0)
@@ -261,22 +261,22 @@ bool operator<(path const& x, path const& y)
 
 
 file::file(path p)
-  : path_(std::move(p))
+  : path_{std::move(p)}
 {
 }
 
 file::file(path p, native_type handle)
-  : handle_(handle),
-    is_open_(true),
-    path_(std::move(p))
+  : handle_{handle},
+    is_open_{true},
+    path_{std::move(p)}
 {
 }
 
 file::file(file&& other)
-  : handle_(other.handle_),
-    is_open_(other.is_open_),
-    seek_failed_(other.seek_failed_),
-    path_(std::move(other.path_))
+  : handle_{other.handle_},
+    is_open_{other.is_open_},
+    seek_failed_{other.seek_failed_},
+    path_{std::move(other.path_)}
 {
   other.handle_ = 0;
   other.is_open_ = false;
@@ -298,12 +298,14 @@ file& file::operator=(file&& other)
   return *this;
 }
 
-bool file::open(open_mode mode, bool append)
+trial<nothing> file::open(open_mode mode, bool append)
 {
   if (is_open_)
-    return false;
+    return error{"file already open"};
+
   if (mode == read_only && append)
-    return false; // Cannot open file in read mode and append simultaneously.
+    return error{"cannot open file in read mode and append simultaneously"};
+
 #ifdef VAST_POSIX
   int flags = O_CREAT;
   switch (mode)
@@ -318,14 +320,22 @@ bool file::open(open_mode mode, bool append)
       flags |= O_WRONLY;
       break;
   }
+
   if (append)
     flags |= O_APPEND;
+
+  VAST_ERRNO = 0;
   handle_ = ::open(path_.str().data(), flags, 0644);
+
   if (handle_ > 0)
+  {
     is_open_ = true;
-  return is_open_;
+    return nil;
+  }
+
+  return error{std::strerror(VAST_ERRNO)};
 #else
-  return false;
+  return error{"not yet implemented"};
 #endif // VAST_POSIX
 }
 
