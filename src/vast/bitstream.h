@@ -106,6 +106,11 @@ public:
     return derived().size_impl();
   }
 
+  size_type count() const
+  {
+    return derived().count_impl();
+  }
+
   bool empty() const
   {
     return derived().empty_impl();
@@ -387,6 +392,7 @@ public:
   virtual void clear_impl() noexcept = 0;
   virtual bool at(size_type i) const = 0;
   virtual size_type size_impl() const = 0;
+  virtual size_type count_impl() const = 0;
   virtual bool empty_impl() const = 0;
   virtual const_iterator begin_impl() const = 0;
   virtual const_iterator end_impl() const = 0;
@@ -511,6 +517,11 @@ public:
     return bitstream_.size_impl();
   }
 
+  virtual size_type count_impl() const final
+  {
+    return bitstream_.count_impl();
+  }
+
   virtual bool empty_impl() const final
   {
     return bitstream_.empty_impl();
@@ -625,6 +636,7 @@ private:
   void clear_impl() noexcept;
   bool at(size_type i) const;
   size_type size_impl() const;
+  size_type count_impl() const;
   bool empty_impl() const;
   const_iterator begin_impl() const;
   const_iterator end_impl() const;
@@ -746,6 +758,7 @@ private:
   void clear_impl() noexcept;
   bool at(size_type i) const;
   size_type size_impl() const;
+  size_type count_impl() const;
   bool empty_impl() const;
   const_iterator begin_impl() const;
   const_iterator end_impl() const;
@@ -869,6 +882,7 @@ private:
   void clear_impl() noexcept;
   bool at(size_type i) const;
   size_type size_impl() const;
+  size_type count_impl() const;
   bool empty_impl() const;
   const_iterator begin_impl() const;
   const_iterator end_impl() const;

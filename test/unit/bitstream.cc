@@ -743,3 +743,24 @@ BOOST_AUTO_TEST_CASE(sequence_iteration)
 
   BOOST_CHECK(++i == range.end());
 }
+
+BOOST_AUTO_TEST_CASE(pop_count)
+{
+  null_bitstream nbs;
+  nbs.push_back(true);
+  nbs.push_back(false);
+  nbs.append(62, true);
+  nbs.append(320, false);
+  nbs.append(512, true);
+  nbs.append(47, false);
+  BOOST_CHECK(nbs.count() == 575);
+
+  ewah_bitstream ebs;
+  ebs.push_back(true);
+  ebs.push_back(false);
+  ebs.append(62, true);
+  ebs.append(320, false);
+  ebs.append(512, true);
+  ebs.append(47, false);
+  BOOST_CHECK(ebs.count() == 575);
+}

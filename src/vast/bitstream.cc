@@ -167,6 +167,12 @@ bitstream::size_type bitstream::size_impl() const
   return concept_->size_impl();
 }
 
+bitstream::size_type bitstream::count_impl() const
+{
+  assert(concept_);
+  return concept_->count_impl();
+}
+
 bool bitstream::empty_impl() const
 {
   assert(concept_);
@@ -382,6 +388,11 @@ bool null_bitstream::at(size_type i) const
 null_bitstream::size_type null_bitstream::size_impl() const
 {
   return bits_.size();
+}
+
+null_bitstream::size_type null_bitstream::count_impl() const
+{
+  return bits_.count();
 }
 
 bool null_bitstream::empty_impl() const
@@ -1008,6 +1019,18 @@ bool ewah_bitstream::at(size_type i) const
 ewah_bitstream::size_type ewah_bitstream::size_impl() const
 {
   return num_bits_;
+}
+
+ewah_bitstream::size_type ewah_bitstream::count_impl() const
+{
+  size_type n = 0;
+  for (auto& seq : sequence_range{*this})
+    if (seq.is_literal())
+      n += bitvector::count(seq.data);
+    else if (seq.data)
+      n += seq.length;
+
+  return n;
 }
 
 bool ewah_bitstream::empty_impl() const
