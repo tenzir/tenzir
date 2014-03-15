@@ -53,7 +53,7 @@ void ingestor_actor::act()
         }
         else
         {
-          VAST_LOG_ACTOR_INFO("writes un-acked segments to stable storage");
+          VAST_LOG_ACTOR_WARN("writes un-acked segments to stable storage");
 
           if (! exists(segment_dir) && ! mkdir(segment_dir))
           {

@@ -40,7 +40,7 @@ bool segment_manager::store(cow<segment> const& s)
   segment_files_.emplace(s->id(), filename);
   cache_.insert(s->id(), s);
 
-  VAST_LOG_VERBOSE("wrote segment to " << filename.chop(2));
+  VAST_LOG_VERBOSE("wrote segment to " << filename.chop(1));
   return true;
 }
 

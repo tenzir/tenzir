@@ -82,11 +82,8 @@ public:
       while (i + 1 < argc)
       {
         std::string next{argv[i + 1]};
-        std::cout << "checking: " << next << std::endl;
         if (! cfg.optionize(next).failed())
           break;
-
-        std::cout << "!!!" << std::endl;
 
         values.emplace_back(std::move(next));
         ++i;

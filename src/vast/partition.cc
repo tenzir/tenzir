@@ -288,18 +288,21 @@ void partition_actor::act()
 
   if (exists(dir_))
   {
-    if (! io::unarchive(dir_ / partition::part_meta_file, partition_))
+    auto t = io::unarchive(dir_ / partition::part_meta_file, partition_);
+    if (! t)
     {
       VAST_LOG_ACTOR_ERROR("failed to load partition meta data from " <<
-                           dir_.chop(2));
+                           dir_.chop(1) << ": " << t.failure().msg());
       quit(exit::error);
       return;
     }
 
     std::map<string, std::map<offset, value_type>> types;
-    if (! io::unarchive(dir_ / "types", types))
+    t = io::unarchive(dir_ / "types", types);
+    if (! t)
     {
-      VAST_LOG_ACTOR_ERROR("failed to load type data from " << dir_ / "types");
+      VAST_LOG_ACTOR_ERROR("failed to load type data types: " <<
+                           t.failure().msg());
       quit(exit::error);
       return;
     }
@@ -316,7 +319,7 @@ void partition_actor::act()
         if (! event_dir.is_directory())
         {
           VAST_LOG_ACTOR_WARN("found unrecognized file in " <<
-                              event_dir.chop(2));
+                              event_dir.chop(1));
           return true;
         }
 
@@ -328,14 +331,14 @@ void partition_actor::act()
               if (idx_file.extension() != ".idx")
                 return true;
 
-              VAST_LOG_ACTOR_DEBUG("found index " << idx_file.chop(2));
+              VAST_LOG_ACTOR_DEBUG("found index " << idx_file.chop(1));
               auto str = idx_file.basename(true).str();
               auto start = str.begin();
               offset o;
               if (! extract(start, str.end(), o))
               {
                 VAST_LOG_ACTOR_ERROR("got invalid offset in " <<
-                                     idx_file.chop(2));
+                                     idx_file.chop(1));
                 quit(exit::error);
                 return false;
               }
@@ -343,7 +346,7 @@ void partition_actor::act()
               if (! indexers_[event_name].count(o))
               {
                 VAST_LOG_ACTOR_ERROR("has no meta data for " <<
-                                     idx_file.chop(2));
+                                     idx_file.chop(1));
                 quit(exit::error);
                 return false;
               }
@@ -418,6 +421,7 @@ void partition_actor::act()
 
   auto flush = [=]
   {
+    VAST_LOG_ACTOR_DEBUG("flushes its indexes in " << dir_.chop(1));
     std::map<string, std::map<offset, value_type>> types;
 
     send(name_indexer_, atom("flush"));
@@ -431,16 +435,20 @@ void partition_actor::act()
           send(p1.second.actor, atom("flush"));
       }
 
-    if (! io::archive(dir_ / "types", types))
+    auto t = io::archive(dir_ / "types", types);
+    if (! t)
     {
-      VAST_LOG_ACTOR_ERROR("failed to save type data for " << dir_.chop(2));
+      VAST_LOG_ACTOR_ERROR("failed to save type data for " << dir_.chop(1) <<
+                           ": " << t.failure().msg());
       quit(exit::error);
       return;
     }
 
-    if (! io::archive(dir_ / partition::part_meta_file, partition_))
+    t = io::archive(dir_ / partition::part_meta_file, partition_);
+    if (! t)
     {
-      VAST_LOG_ACTOR_ERROR("failed to save partition " << dir_.chop(2));
+      VAST_LOG_ACTOR_ERROR("failed to save partition " << dir_.chop(1) <<
+                           ": " << t.failure().msg());
       quit(exit::error);
       return;
     }
