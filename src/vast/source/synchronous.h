@@ -42,25 +42,30 @@ public:
         },
         on(atom("run")) >> [=]
         {
-          while (events_.size() < batch_size_)
+          bool done = false;
+          while (events_.size() < batch_size_ && ! done)
           {
             result<event> r{static_cast<Derived*>(this)->extract()};
-
-            if (r.empty())
+            if (r)
             {
-              send_events();
-              this->quit(exit::done);
-              return;
+              events_.push_back(std::move(*r));
+            }
+            else if (r.failed())
+            {
+              VAST_LOG_ACTOR_ERROR(r.failure().msg());
+              done = true;
+              break;
             }
 
-            if (r.engaged())
-              events_.push_back(std::move(r.value()));
-            else
-              VAST_LOG_ACTOR_ERROR(r.failure().msg());
+            done = static_cast<Derived const*>(this)->done();
           }
 
           send_events();
-          send(self, atom("run"));
+
+          if (done)
+            this->quit(exit::done);
+          else
+            send(self, atom("run"));
         },
         others() >> [=]
         {

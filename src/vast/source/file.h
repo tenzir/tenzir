@@ -39,6 +39,11 @@ public:
     return static_cast<Derived*>(this)->extract_impl();
   }
 
+  bool done() const
+  {
+    return static_cast<Derived const*>(this)->done_impl();
+  }
+
   char const* description() const
   {
     return static_cast<Derived const*>(this)->description_impl();
@@ -72,12 +77,17 @@ public:
     return static_cast<Derived*>(this)->extract_impl_impl();
   }
 
+  bool done_impl() const
+  {
+    return current() == nullptr;
+  }
+
   char const* description_impl() const
   {
     return static_cast<Derived const*>(this)->description_impl_impl();
   }
 
-  /// Retrieves the next line from the file.
+  /// Retrieves the next non-empty line from the file.
   ///
   /// @returns A pointer to the next line if extracting was successful and
   /// `nullptr` on failure or EOF.
@@ -101,6 +111,11 @@ public:
     return current_;
   }
 
+  std::string const* current() const
+  {
+    return line_.empty() ? nullptr : &line_;
+  }
+
 private:
   uint64_t current_ = 0;
   std::string line_;
@@ -118,6 +133,8 @@ public:
   char const* description_impl_impl() const;
 
 private:
+  trial<nothing> parse_header();
+
   int32_t timestamp_field_ = -1;
   string separator_ = " ";
   string set_separator_;

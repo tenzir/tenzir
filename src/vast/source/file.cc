@@ -68,139 +68,11 @@ result<event> bro2::extract_impl_impl()
   {
     auto line = this->next();
     if (! line)
-      return {};
+      return error{"could not read first line of header"};
 
-    fs.split(line->begin(), line->end());
-    if (fs.fields() != 2 || ! fs.equals(0, "#separator"))
-      return error{"got invalid #separator"};
-
-    std::string sep;
-    std::string bro_sep(fs.start(1), fs.end(1));
-    std::string::size_type pos = 0;
-    while (pos != std::string::npos)
-    {
-      pos = bro_sep.find("\\x", pos);
-      if (pos != std::string::npos)
-      {
-        auto i = std::stoi(bro_sep.substr(pos + 2, 2), nullptr, 16);
-        assert(i >= 0 && i <= 255);
-        sep.push_back(i);
-        pos += 2;
-      }
-    }
-    separator_ = string(sep.begin(), sep.end());
-    fs = {separator_.data(), separator_.size()};
-
-    line = this->next();
-    if (! line)
-      return {};
-
-    fs.split(line->begin(), line->end());
-    if (fs.fields() != 2 || ! fs.equals(0, "#set_separator"))
-      return error{"got invalid #set_separator"};
-
-    auto set_sep = std::string(fs.start(1), fs.end(1));
-    set_separator_ = string(set_sep.begin(), set_sep.end());
-
-    line = this->next();
-    if (! line)
-      return {};
-
-    fs.split(line->begin(), line->end());
-    if (fs.fields() != 2 || ! fs.equals(0, "#empty_field"))
-      return error{"invalid #empty_field"};
-
-    auto empty = std::string(fs.start(1), fs.end(1));
-    empty_field_ = string(empty.begin(), empty.end());
-
-    line = this->next();
-    if (! line)
-      return {};
-
-    fs.split(line->begin(), line->end());
-    if (fs.fields() != 2 || ! fs.equals(0, "#unset_field"))
-      return error{"invalid #unset_field"};
-
-    auto unset = std::string(fs.start(1), fs.end(1));
-    unset_field_ = string(unset.begin(), unset.end());
-
-    line = this->next();
-    if (! line)
-      return {};
-
-    fs.split(line->begin(), line->end());
-    if (fs.fields() != 2 || ! fs.equals(0, "#path"))
-      return error{"invalid #path"};
-
-    path_ = "bro::" + string(fs.start(1), fs.end(1));
-
-    // Skip #open tag.
-    line = this->next();
-    line = this->next();
-    if (! line)
-      return {};
-
-    fs.split(line->begin(), line->end());
-    if (! fs.equals(0, "#fields"))
-      return error{"got invalid #fields"};
-
-    for (size_t i = 1; i < fs.fields(); ++i)
-      field_names_.emplace_back(fs.start(i), fs.end(i));
-
-    line = this->next();
-    if (! line)
-      return {};
-
-    fs.split(line->begin(), line->end());
-    if (! fs.equals(0, "#types"))
-      return error{"got invalid #types"};
-
-    for (size_t i = 1; i < fs.fields(); ++i)
-    {
-      string t(fs.start(i), fs.end(i));
-      auto type = bro_to_vast(t);
-      field_types_.push_back(type);
-      if (is_container_type(type))
-      {
-        auto open = t.find("[");
-        assert(open != string::npos);
-        auto close = t.find("]", open);
-        assert(close != string::npos);
-        auto elem = t.substr(open + 1, close - open - 1);
-        complex_types_.push_back(bro_to_vast(elem));
-      }
-    }
-
-    VAST_LOG_ACTOR_DEBUG("parsed bro2 header:" <<
-                         " #separator " << separator_ <<
-                         " #set_separator " << set_separator_ <<
-                         " #empty_field " << empty_field_ <<
-                         " #unset_field " << unset_field_ <<
-                         " #path " << path_);
-
-    std::ostringstream str;
-    for (auto& name : field_names_)
-      str << " " << name;
-    VAST_LOG_ACTOR_DEBUG("has field names:" << str.str());
-
-    str.str("");
-    str.clear();
-    for (auto& type : field_types_)
-      str << " " << type;
-    VAST_LOG_ACTOR_DEBUG("has field types:" << str.str());
-
-    if (! complex_types_.empty())
-    {
-      str.str("");
-      str.clear();
-      for (auto& type : complex_types_)
-        str << " " << type;
-      VAST_LOG_ACTOR_DEBUG("has container types:" << str.str());
-    }
-
-    if (timestamp_field_ > -1)
-      VAST_LOG_ACTOR_DEBUG("attempts to extract timestamp from field " <<
-                           timestamp_field_);
+    auto t = parse_header();
+    if (! t)
+      return t.failure();
   }
 
   auto line = this->next();
@@ -210,9 +82,34 @@ result<event> bro2::extract_impl_impl()
   fs.split(line->begin(), line->end());
   if (fs.fields() > 0 && *fs.start(0) == '#')
   {
-    VAST_LOG_ACTOR_INFO("ignored comment at line " << number() <<
-                 ": " << *line);
-    return {};
+    auto first = string{fs.start(0), fs.end(0)};
+    if (first.starts_with("#separator"))
+    {
+      VAST_LOG_ACTOR_VERBOSE("restarts with new log");
+
+      timestamp_field_ = -1;
+      separator_ = " ";
+      field_names_.clear();
+      field_types_.clear();
+      complex_types_.clear();
+
+      auto t = parse_header();
+      if (! t)
+        return t.failure();
+
+      auto line = this->next();
+      if (! line)
+        return {};
+
+      fs = {separator_.data(), separator_.size()};
+      fs.split(line->begin(), line->end());
+    }
+    else
+    {
+      VAST_LOG_ACTOR_INFO("ignored comment at line " << number() <<
+                   ": " << *line);
+      return {};
+    }
   }
 
   if (fs.fields() != field_types_.size())
@@ -310,6 +207,158 @@ result<event> bro2::extract_impl_impl()
 char const* bro2::description_impl_impl() const
 {
   return "bro2-source";
+}
+
+trial<nothing> bro2::parse_header()
+{
+  auto line = this->current();
+  if (! line)
+    return error{"failed to retrieve first header line"};
+
+  util::field_splitter<std::string::const_iterator>
+    fs{separator_.data(), separator_.size()};
+
+  fs.split(line->begin(), line->end());
+
+  if (fs.fields() != 2 || ! fs.equals(0, "#separator"))
+    return error{"got invalid #separator"};
+
+  std::string sep;
+  std::string bro_sep(begin, end);
+  std::string::size_type pos = 0;
+  while (pos != std::string::npos)
+  {
+    pos = bro_sep.find("\\x", pos);
+    if (pos != std::string::npos)
+    {
+      auto i = std::stoi(bro_sep.substr(pos + 2, 2), nullptr, 16);
+      assert(i >= 0 && i <= 255);
+      sep.push_back(i);
+      pos += 2;
+    }
+  }
+
+  separator_ = string{sep.begin(), sep.end()};
+  fs = {separator_.data(), separator_.size()};
+
+  line = this->next();
+  if (! line)
+    return error{"failed to retrieve next header line"};
+
+  fs.split(line->begin(), line->end());
+  if (fs.fields() != 2 || ! fs.equals(0, "#set_separator"))
+    return error{"got invalid #set_separator"};
+
+  auto set_sep = std::string(fs.start(1), fs.end(1));
+  set_separator_ = string(set_sep.begin(), set_sep.end());
+
+  line = this->next();
+  if (! line)
+    return error{"failed to retrieve next header line"};
+
+  fs.split(line->begin(), line->end());
+  if (fs.fields() != 2 || ! fs.equals(0, "#empty_field"))
+    return error{"invalid #empty_field"};
+
+  auto empty = std::string(fs.start(1), fs.end(1));
+  empty_field_ = string(empty.begin(), empty.end());
+
+  line = this->next();
+  if (! line)
+    return error{"failed to retrieve next header line"};
+
+  fs.split(line->begin(), line->end());
+  if (fs.fields() != 2 || ! fs.equals(0, "#unset_field"))
+    return error{"invalid #unset_field"};
+
+  auto unset = std::string(fs.start(1), fs.end(1));
+  unset_field_ = string(unset.begin(), unset.end());
+
+  line = this->next();
+  if (! line)
+    return error{"failed to retrieve next header line"};
+
+  fs.split(line->begin(), line->end());
+  if (fs.fields() != 2 || ! fs.equals(0, "#path"))
+    return error{"invalid #path"};
+
+  path_ = "bro::" + string(fs.start(1), fs.end(1));
+
+  // Skip #open tag.
+  line = this->next();
+  line = this->next();
+  if (! line)
+    return error{"failed to retrieve next header line"};
+
+  fs.split(line->begin(), line->end());
+  if (! fs.equals(0, "#fields"))
+    return error{"got invalid #fields"};
+
+  for (size_t i = 1; i < fs.fields(); ++i)
+    field_names_.emplace_back(fs.start(i), fs.end(i));
+
+  line = this->next();
+  if (! line)
+    return error{"failed to retrieve next header line"};
+
+  fs.split(line->begin(), line->end());
+  if (! fs.equals(0, "#types"))
+    return error{"got invalid #types"};
+
+  for (size_t i = 1; i < fs.fields(); ++i)
+  {
+    string t(fs.start(i), fs.end(i));
+    auto type = bro_to_vast(t);
+    field_types_.push_back(type);
+    if (is_container_type(type))
+    {
+      auto open = t.find("[");
+      assert(open != string::npos);
+      auto close = t.find("]", open);
+      assert(close != string::npos);
+      auto elem = t.substr(open + 1, close - open - 1);
+      complex_types_.push_back(bro_to_vast(elem));
+    }
+  }
+
+  VAST_LOG_ACTOR_DEBUG("parsed bro2 header:");
+  VAST_LOG_ACTOR_DEBUG("    #separator " << separator_);
+  VAST_LOG_ACTOR_DEBUG("    #set_separator " << set_separator_);
+  VAST_LOG_ACTOR_DEBUG("    #empty_field " << empty_field_);
+  VAST_LOG_ACTOR_DEBUG("    #unset_field " << unset_field_);
+  VAST_LOG_ACTOR_DEBUG("    #path " << path_);
+
+  assert(field_names_.size() == field_types_.size());
+  VAST_LOG_ACTOR_DEBUG("  fields:");
+  for (size_t i = 0; i < field_names_.size(); ++i)
+    VAST_LOG_ACTOR_DEBUG("    " << i << ") " << field_names_[i] <<
+                         " (" << field_types_[i] << ')');
+
+  //if (! complex_types_.empty())
+  //{
+  //  VAST_LOG_ACTOR_DEBUG("  complex fields:");
+  //  for (size_t i = 0; i < complex_types_.size(); ++i)
+  //    VAST_LOG_ACTOR_DEBUG("    " << i << ") " << complex_types_[i]);
+  //}
+
+  if (timestamp_field_ > -1)
+  {
+    VAST_LOG_ACTOR_VERBOSE("attempts to extract timestamp from field " <<
+                           timestamp_field_);
+  }
+  else
+  {
+    for (size_t i = 0; i < field_types_.size(); ++i)
+      if (field_types_[0] == time_point_type)
+      {
+        VAST_LOG_ACTOR_VERBOSE("auto-detected field " << i <<
+                               " as event timestamp");
+        timestamp_field_ = static_cast<int32_t>(i);
+        break;
+      }
+  }
+
+  return nil;
 }
 
 } // namespace source
