@@ -6,6 +6,7 @@
 #include "vast/io/container_stream.h"
 #include "vast/io/compressed_stream.h"
 #include "vast/io/file_stream.h"
+#include "vast/util/trial.h"
 
 namespace vast {
 namespace io {
@@ -45,13 +46,13 @@ template <
   typename Container,
   typename Serializer = binary_serializer
 >
-bool archive(Container& c, Ts const&... xs)
+trial<nothing> archive(Container& c, Ts const&... xs)
 {
   auto sink = io::make_container_output_stream(c);
   Serializer s{sink};
   detail::do_serialize(s, xs...);
 
-  return true;
+  return nil;
 }
 
 template <
@@ -59,54 +60,57 @@ template <
   typename Container,
   typename Deserializer = binary_deserializer
 >
-bool unarchive(Container const& c, Ts&... xs)
+trial<nothing> unarchive(Container const& c, Ts&... xs)
 {
   auto source = make_container_input_stream(c);
   Deserializer d{source};
   detail::do_deserialize(d, xs...);
 
-  return true;
+  return nil;
 }
 
 template <
   typename... Ts,
   typename Serializer = binary_serializer
 >
-bool archive(path const& filename, Ts const&... xs)
+trial<nothing> archive(path const& filename, Ts const&... xs)
 {
   if (! exists(filename.parent()) && ! mkdir(filename.parent()))
-    return false;
+    return error{"could not mkdir parent of " +
+                 std::string{filename.str().data()}};
 
   file f{filename};
-  if (! f.open(file::write_only))
-    return false;
+  auto t = f.open(file::write_only);
+  if (! t)
+    return t;
 
   io::file_output_stream sink{f};
   Serializer s{sink};
   detail::do_serialize(s, xs...);
 
-  return true;
+  return nil;
 }
 
 template <
   typename... Ts,
   typename Deserializer = binary_deserializer
 >
-bool unarchive(path const& filename, Ts&... xs)
+trial<nothing> unarchive(path const& filename, Ts&... xs)
 {
   file f{filename};
-  if (! f.open(file::read_only))
-    return false;
+  auto t = f.open(file::read_only);
+  if (! t)
+    return t;
 
   io::file_input_stream source{f};
   Deserializer d{source};
   detail::do_deserialize(d, xs...);
 
-  return true;
+  return nil;
 }
 
 template <typename... Ts, typename Container>
-bool compress(compression method, Container& c, Ts const&... xs)
+trial<nothing> compress(compression method, Container& c, Ts const&... xs)
 {
   auto buf = make_container_output_stream(c);
   std::unique_ptr<compressed_output_stream> out{
@@ -115,11 +119,11 @@ bool compress(compression method, Container& c, Ts const&... xs)
   binary_serializer s{*out};
   detail::do_serialize(s, xs...);
 
-  return true;
+  return nil;
 }
 
 template <typename... Ts, typename Container>
-bool decompress(compression method, Container const& c, Ts&... xs)
+trial<nothing> decompress(compression method, Container const& c, Ts&... xs)
 {
   auto buf = make_array_input_stream(c);
   std::unique_ptr<compressed_input_stream> in{
@@ -128,18 +132,20 @@ bool decompress(compression method, Container const& c, Ts&... xs)
   binary_deserializer d{*in};
   detail::do_deserialize(d, xs...);
 
-  return true;
+  return nil;
 }
 
 template <typename... Ts>
-bool compress(compression method, path const& filename, Ts const&... xs)
+trial<nothing> compress(compression method, path const& filename, Ts const&... xs)
 {
   if (! exists(filename.parent()) && ! mkdir(filename.parent()))
-    return false;
+    return error{"could not mkdir parent of " +
+                 std::string{filename.str().data()}};
 
   file f{filename};
-  if (! f.open(file::write_only))
-    return false;
+  auto t = f.open(file::write_only);
+  if (! t)
+    return t;
 
   io::file_output_stream sink{f};
   std::unique_ptr<compressed_output_stream> out{
@@ -148,15 +154,16 @@ bool compress(compression method, path const& filename, Ts const&... xs)
   binary_serializer s{*out};
   detail::do_serialize(s, xs...);
 
-  return true;
+  return nil;
 }
 
 template <typename... Ts>
-bool decompress(compression method, path const& filename, Ts&... xs)
+trial<nothing> decompress(compression method, path const& filename, Ts&... xs)
 {
   file f{filename};
-  if (! f.open(file::read_only))
-    return false;
+  auto t = f.open(file::read_only);
+  if (! t)
+    return t;
 
   io::file_input_stream source{f};
   std::unique_ptr<compressed_input_stream> in{
@@ -165,7 +172,7 @@ bool decompress(compression method, path const& filename, Ts&... xs)
   binary_deserializer d{*in};
   detail::do_deserialize(d, xs...);
 
-  return true;
+  return nil;
 }
 
 } // namespace io
