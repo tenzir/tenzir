@@ -230,6 +230,77 @@ void n_ary_operator::add(std::unique_ptr<node> n)
   operands.push_back(std::move(n));
 }
 
+namespace {
+
+struct match_visitor
+{
+  using result_type = bool;
+
+  result_type operator()(string const& lhs, regex const& rhs) const
+  {
+    return rhs.match(lhs);
+  }
+
+  template <typename T, typename U>
+  result_type operator()(T const&, U const&) const
+  {
+    return false;
+  }
+};
+
+struct in_visitor
+{
+  using result_type = bool;
+
+  result_type operator()(string const& lhs, string const& rhs) const
+  {
+    return rhs.find(lhs);
+  }
+
+  result_type operator()(string const& lhs, regex const& rhs) const
+  {
+    return rhs.search(lhs);
+  }
+
+  result_type operator()(address const& lhs, prefix const& rhs) const
+  {
+    return rhs.contains(lhs);
+  }
+
+  template <typename T, typename U>
+  result_type operator()(T const&, U const&) const
+  {
+    return false;
+  }
+};
+
+struct ni_visitor
+{
+  using result_type = bool;
+
+  result_type operator()(string const& lhs, string const& rhs) const
+  {
+    return lhs.find(rhs);
+  }
+
+  result_type operator()(regex const& lhs, string const& rhs) const
+  {
+    return lhs.search(rhs);
+  }
+
+  result_type operator()(prefix const& lhs, address const& rhs) const
+  {
+    return lhs.contains(rhs);
+  }
+
+  template <typename T, typename U>
+  result_type operator()(T const&, U const&) const
+  {
+    return false;
+  }
+};
+
+} // namespace <anonymous>
 
 predicate::binary_predicate predicate::make_predicate(relational_operator op)
 {
@@ -241,86 +312,32 @@ predicate::binary_predicate predicate::make_predicate(relational_operator op)
     case match:
       return [](value const& lhs, value const& rhs) -> bool
       {
-        if (lhs.which() != string_type || rhs.which() != regex_type)
-          return false;
-
-        return rhs.get<regex>().match(lhs.get<string>());
+        return value::visit(lhs, rhs, match_visitor{});
       };
     case not_match:
       return [](value const& lhs, value const& rhs) -> bool
       {
-        if (lhs.which() != string_type || rhs.which() != regex_type)
-          return false;
-
-        return ! rhs.get<regex>().match(lhs.get<string>());
+        return ! value::visit(lhs, rhs, match_visitor{});
       };
     case in:
       return [](value const& lhs, value const& rhs) -> bool
       {
-        if (lhs.which() == string_type)
-        {
-          if (rhs.which() == string_type)
-            return rhs.get<string>().find(lhs.get<string>());
-          else if (rhs.which() == regex_type)
-            return rhs.get<regex>().search(lhs.get<string>());
-        }
-
-        if (lhs.which() == address_type &&
-            rhs.which() == prefix_type)
-          return rhs.get<prefix>().contains(lhs.get<address>());
-
-        return false;
+        return value::visit(lhs, rhs, in_visitor{});
       };
     case not_in:
       return [](value const& lhs, value const& rhs) -> bool
       {
-        if (lhs.which() == string_type)
-        {
-          if (rhs.which() == string_type)
-            return ! rhs.get<string>().find(lhs.get<string>());
-          else if (rhs.which() == regex_type)
-            return ! rhs.get<regex>().search(lhs.get<string>());
-        }
-
-        if (lhs.which() == address_type &&
-            rhs.which() == prefix_type)
-          return ! rhs.get<prefix>().contains(lhs.get<address>());
-
-        return false;
+        return ! value::visit(lhs, rhs, in_visitor{});
       };
     case ni:
       return [](value const& lhs, value const& rhs) -> bool
       {
-        if (rhs.which() == string_type)
-        {
-          if (lhs.which() == string_type)
-            return lhs.get<string>().find(rhs.get<string>());
-          else if (lhs.which() == regex_type)
-            return lhs.get<regex>().search(rhs.get<string>());
-        }
-
-        if (lhs.which() == prefix_type &&
-            rhs.which() == address_type)
-          return lhs.get<prefix>().contains(rhs.get<address>());
-
-        return false;
+        return value::visit(lhs, rhs, ni_visitor{});
       };
     case not_ni:
       return [](value const& lhs, value const& rhs) -> bool
       {
-        if (rhs.which() == string_type)
-        {
-          if (lhs.which() == string_type)
-            return ! lhs.get<string>().find(rhs.get<string>());
-          else if (lhs.which() == regex_type)
-            return ! lhs.get<regex>().search(rhs.get<string>());
-        }
-
-        if (lhs.which() == prefix_type &&
-            rhs.which() == address_type)
-          return ! lhs.get<prefix>().contains(rhs.get<address>());
-
-        return false;
+        return ! value::visit(lhs, rhs, ni_visitor{});
       };
     case equal:
       return [](value const& lhs, value const& rhs)
