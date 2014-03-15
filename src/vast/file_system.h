@@ -242,7 +242,7 @@ bool rm(path const& p);
 /// If the path does not exist, create it as directory.
 /// @param p The path to a directory to create.
 /// @returns `true` on success or if *p* exists already.
-bool mkdir(path const& p);
+trial<nothing> mkdir(path const& p);
 
 /// Traverses each entry of a directory.
 ///

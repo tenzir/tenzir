@@ -463,25 +463,38 @@ bool rm(const path& p)
   return false;
 }
 
-bool mkdir(path const& p)
+trial<nothing> mkdir(path const& p)
 {
-  // Ideally we iterate over the path with a custom iterator.
-  // This is the lazy version.
-  string::size_type pos = 0;
-  while (pos != string::npos)
+  auto components = p.split();
+  if (components.empty())
+    return error{"cannot mkdir empty path"};
+
+  path c;
+  for (size_t i = 0; i < components.size() - 1; ++i)
   {
-    string str = p.str();
-    pos = str.find(path::separator, pos);
-    if (pos != string::npos)
-      ++pos;
-    str = str.substr(0, pos);
-    path component{str};
-    if (! exists(component) && ! VAST_CREATE_DIRECTORY(str.data()))
-      return false;
-    if (! (component.is_directory() || component.is_symlink()))
-      return false;
+    c /= components[i];
+    if (exists(c))
+    {
+      if (! (c.is_directory() || c.is_symlink()))
+        return error{"parent not a directory or symlink"};
+    }
+    else
+    {
+      VAST_ERRNO = 0;
+      if (! VAST_CREATE_DIRECTORY(c.str().data()))
+        return error{"failed to create parent directory"};
+    }
   }
-  return true;
+
+  c /= components.back();
+  if (! exists(c))
+  {
+    VAST_ERRNO = 0;
+    if (! VAST_CREATE_DIRECTORY(c.str().data()))
+      return error{"failed to make directory"};
+  }
+
+  return nil;
 }
 
 void traverse(path const& p, std::function<bool(path const&)> f)
