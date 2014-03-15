@@ -224,7 +224,7 @@ trial<nothing> bro2::parse_header()
     return error{"got invalid #separator"};
 
   std::string sep;
-  std::string bro_sep(begin, end);
+  std::string bro_sep(fs.start(1), fs.end(1));
   std::string::size_type pos = 0;
   while (pos != std::string::npos)
   {
