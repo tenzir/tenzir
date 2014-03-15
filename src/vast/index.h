@@ -42,7 +42,6 @@ public:
   {
     time_point first = time_range{};
     time_point last = time_range{};
-    bitstream coverage;
   };
 
   /// Sets the miss callback for failed partition hits lookups for a given
@@ -70,9 +69,7 @@ public:
   /// @param id The UUID of the partition to update.
   /// @param first The timestamp of the first event in partition *id*.
   /// @param last The timestamp of the last event in partition *id*.
-  /// @param coverage The coverage of partition *id*.
-  void update_partition(uuid const& id, time_point first, time_point last,
-                        bitstream const& coverage);
+  void update_partition(uuid const& id, time_point first, time_point last);
 
   /// Updates the cache with new hits.
   /// @param pred The predicate to update with *hits*.

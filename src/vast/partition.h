@@ -31,7 +31,6 @@ public:
     time_point first_event = time_range{};
     time_point last_event = time_range{};
     time_point last_modified = now();
-    bitstream coverage;
 
     void serialize(serializer& sink) const;
     void deserialize(deserializer& source);

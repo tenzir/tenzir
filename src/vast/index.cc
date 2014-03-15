@@ -383,8 +383,7 @@ void index::expect(expr::ast const& pred, uuid const& part, uint64_t n)
   cache_[pred].parts[part].expected = n;
 }
 
-void index::update_partition(uuid const& id, time_point first, time_point last,
-                             bitstream const& coverage)
+void index::update_partition(uuid const& id, time_point first, time_point last)
 {
   auto& p = partitions_[id];
 
@@ -393,9 +392,6 @@ void index::update_partition(uuid const& id, time_point first, time_point last,
 
   if (p.last == time_range{} || last > p.last)
     p.last = last;
-
-  assert(coverage);
-  p.coverage |= coverage;
 }
 
 std::vector<expr::ast> index::update_hits(expr::ast const& pred,
@@ -484,8 +480,7 @@ trial<nothing> index_actor::make_partition(path const& dir)
       else if (! io::unarchive(dir / partition::part_meta_file, meta))
         return error{"failed to read meta data of partition " + to_string(name)};
 
-      index_.update_partition(meta.id, meta.first_event, meta.last_event,
-                              meta.coverage);
+      index_.update_partition(meta.id, meta.first_event, meta.last_event);
 
       id = meta.id;
     }
@@ -626,9 +621,7 @@ void index_actor::act()
         VAST_LOG_ACTOR_DEBUG("got segment covering [" <<
                              s.first() << ',' << s.last() << ']');
 
-        auto coverage = s.coverage();
-        assert(coverage);
-        index_.update_partition(active_.first, s.first(), s.last(), *coverage);
+        index_.update_partition(active_.first, s.first(), s.last());
 
         forward_to(active_.second);
       },

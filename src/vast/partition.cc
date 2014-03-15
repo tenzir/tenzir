@@ -114,19 +114,16 @@ void partition::meta_data::update(segment const& s)
     last_event = s.last();
 
   last_modified = now();
-
-  assert(s.coverage());
-  coverage |= *s.coverage();
 }
 
 void partition::meta_data::serialize(serializer& sink) const
 {
-  sink << id << first_event << last_event << last_modified << coverage;
+  sink << id << first_event << last_event << last_modified;
 }
 
 void partition::meta_data::deserialize(deserializer& source)
 {
-  source >> id >> first_event >> last_event >> last_modified >> coverage;
+  source >> id >> first_event >> last_event >> last_modified;
 }
 
 bool operator==(partition::meta_data const& x, partition::meta_data const& y)
@@ -134,8 +131,7 @@ bool operator==(partition::meta_data const& x, partition::meta_data const& y)
   return x.id == y.id
       && x.first_event == y.first_event
       && x.last_event == y.last_event
-      && x.last_modified == y.last_modified
-      && x.coverage == y.coverage;
+      && x.last_modified == y.last_modified;
 }
 
 
