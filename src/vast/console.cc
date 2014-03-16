@@ -24,7 +24,7 @@ struct keystroke_monitor : actor<keystroke_monitor>
     el_.on_char_read(
         [](char *c) -> int
         {
-          if (! util::poll(::fileno(stdin), 100000))
+          if (! util::poll(::fileno(stdin), 500000))
             return 0;
 
           auto ch = ::fgetc(stdin);
@@ -42,8 +42,8 @@ struct keystroke_monitor : actor<keystroke_monitor>
     become(
         on(atom("start")) >> [=]
         {
-          running_ = true;
           el_.reset();
+          running_ = true;
           send(self, atom("get"));
         },
         on(atom("stop")) >> [=]
@@ -297,7 +297,8 @@ console::console(cppa::actor_ptr search, path dir)
           current_.first = qry;
         current_.second = matches[0];
 
-        send(keystroke_monitor_, atom("start"));
+        follow();
+
         VAST_LOG_ACTOR_DEBUG("enters query " << current_.second->id());
         return {};
       });
@@ -360,14 +361,9 @@ console::console(cppa::actor_ptr search, path dir)
                 << " -> " << ast << std::endl;
 
               if (opts_.auto_follow)
-              {
-                follow_mode_ = true;
-                send(keystroke_monitor_, atom("start"));
-              }
+                follow();
               else
-              {
                 send(self, atom("prompt"));
-              }
             },
             others() >> [=]
             {
@@ -635,54 +631,6 @@ void console::act()
 
   keystroke_monitor_ = spawn<keystroke_monitor, detached+linked>(self);
 
-  auto prompt = [=](size_t ms = 100)
-  {
-    if (ms > 0)
-      std::this_thread::sleep_for(std::chrono::milliseconds(ms));
-
-    std::string line;
-    auto t = cmdline_.get(line);
-    if (! t)
-    {
-      VAST_LOG_ACTOR_ERROR("failed to retrieve command line: " << t.failure());
-      quit(exit::error);
-      return;
-    }
-
-    // Check for CTRL+D.
-    if (! *t)
-    {
-      print(none) << std::endl;
-      if (cmdline_.mode_pop() > 0)
-        send(self, atom("prompt"));
-      else
-        send_exit(self, exit::stop);
-      return;
-    }
-
-    if (line.empty())
-    {
-      send(self, atom("prompt"));
-      return;
-    }
-
-    // Only an empty result means that we should not go back to the prompt. If
-    // we have a result, then the boolean return value indicates whether to
-    // append the command line to the history.
-    auto r = cmdline_.process(line);
-    if (r.engaged())
-    {
-      if (*r)
-        cmdline_.append_to_history(line);
-      send(self, atom("prompt"));
-    }
-    else if (r.failed())
-    {
-      print(error) << r.failure() << std::endl;
-      send(self, atom("prompt"));
-    }
-  };
-
   become(
       on(atom("exited")) >> [=]
       {
@@ -694,11 +642,16 @@ void console::act()
         VAST_LOG_ACTOR_DEBUG("got DOWN from query " <<
                              VAST_ACTOR_ID(last_sender()));
 
+        if (following_ && last_sender() == current_.first)
+          unfollow();
+
         // FIXME: we only delay the send operation here because there exists a
         // message reordering bug in libcpppa that causes events to arrive
-        // receiving this DOWN message. Giving the actor some time prevents the
-        // result state from premature eviction.
-        delayed_send(self, std::chrono::seconds(10), atom("remove"),
+        // *after* receiving this DOWN message. This should technically not
+        // happen because a query actor only terminates after having sent all
+        // events. Giving the actor some time prevents the result state from
+        // premature eviction.
+        delayed_send(self, std::chrono::seconds(5), atom("remove"),
                      last_sender());
       },
       on(atom("error"), arg_match) >> [=](std::string const& msg)
@@ -712,7 +665,7 @@ void console::act()
                              << VAST_ACTOR_ID(last_sender()));
 
         // FIXME: see note above.
-        delayed_send(self, std::chrono::seconds(10), atom("remove"),
+        delayed_send(self, std::chrono::seconds(5), atom("remove"),
                      last_sender());
       },
       on(atom("remove"), arg_match) >> [=](actor_ptr doomed)
@@ -735,17 +688,17 @@ void console::act()
 
         if (r->progress() <= progress + 0.05 || progress == 1.0)
         {
-          if (follow_mode_)
+          if (following_)
           {
             auto base = r->progress();
-            if (! append_mode_)
+            if (! appending_)
             {
               print(query)
                 << "progress "
                 << util::color::blue << '|' << util::color::reset;
 
               base = 0.0;
-              append_mode_ = true;
+              appending_ = true;
             }
 
             print(none) << util::color::green;
@@ -759,14 +712,10 @@ void console::act()
                 << util::color::green << '*'
                 << util::color::blue << '|' << util::color::reset << std::endl;
 
-              append_mode_ = false;
+              appending_ = false;
 
               if (hits == 0)
-              {
-                send(keystroke_monitor_, atom("stop"));
-                follow_mode_ = false;
-                prompt();
-              }
+                unfollow();
             }
           }
 
@@ -781,12 +730,12 @@ void console::act()
 
         cow<event> ce = *tuple_cast<event>(last_dequeued());
         r->add(ce);
-        if (follow_mode_ && r == current_.second)
+        if (following_ && r == current_.second)
         {
-          if (append_mode_)
+          if (appending_)
           {
             print(none) << std::endl;
-            append_mode_ = false;
+            appending_ = false;
           }
 
           std::cout << *ce << std::endl;
@@ -825,7 +774,6 @@ void console::act()
                 << "     <space>  display the next batch of available results\n"
                 << "  " << util::color::green << '*' << util::color::reset <<
                       "     e     ask query for more results\n"
-                << "        f     toggle follow mode\n"
                 << "        j     seek one batch forward\n"
                 << "        k     seek one batch backword\n"
                 << "        p     show progress of index lookup\n"
@@ -865,16 +813,6 @@ void console::act()
               }
             }
             break;
-          case 'f':
-            {
-              follow_mode_ = ! follow_mode_;
-              print(query)
-                << "toggled follow-mode to "
-                << util::color::cyan
-                << (follow_mode_ ? "on" : "off")
-                << util::color::reset << std::endl;
-            }
-            break;
           case 'j':
             {
               assert(current_.second);
@@ -911,8 +849,7 @@ void console::act()
           case '':
           case 'q':
             {
-              follow_mode_ = false;
-              prompt();
+              unfollow();
             }
             return;
           case 's':
@@ -969,10 +906,10 @@ std::ostream& console::print(print_mode mode)
   if (mode == none)
     return std::cerr;
 
-  if (append_mode_)
+  if (appending_)
   {
     std::cerr << std::endl;
-    append_mode_ = false;
+    appending_ = false;
   }
 
   switch (mode)
@@ -998,6 +935,67 @@ std::ostream& console::print(print_mode mode)
   std::cerr << util::color::reset;
 
   return std::cerr;
+}
+
+void console::prompt(size_t ms)
+{
+  if (ms > 0)
+    std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+
+  std::string line;
+  auto t = cmdline_.get(line);
+  if (! t)
+  {
+    VAST_LOG_ACTOR_ERROR("failed to retrieve command line: " << t.failure());
+    quit(exit::error);
+    return;
+  }
+
+  // Check for CTRL+D.
+  if (! *t)
+  {
+    print(none) << std::endl;
+    if (cmdline_.mode_pop() > 0)
+      prompt();
+    else
+      send_exit(self, exit::stop);
+    return;
+  }
+
+  if (line.empty())
+  {
+    prompt();
+    return;
+  }
+
+  // Only an empty result means that we should not go back to the prompt. If
+  // we have a result, then the boolean return value indicates whether to
+  // append the command line to the history.
+  auto r = cmdline_.process(line);
+  if (r.engaged())
+  {
+    if (*r)
+      cmdline_.append_to_history(line);
+    prompt();
+  }
+  else if (r.failed())
+  {
+    print(error) << r.failure() << std::endl;
+    prompt();
+  }
+};
+
+void console::follow()
+{
+  following_ = true;
+  send(keystroke_monitor_, atom("start"));
+}
+
+void console::unfollow()
+{
+  following_ = false;
+  send(keystroke_monitor_, atom("stop"));
+  prompt();
 }
 
 } // namespace vast

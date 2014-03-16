@@ -116,7 +116,18 @@ struct console : actor<console>
   void act();
   char const* description() const;
 
+  /// Prints status information to standard error.
   std::ostream& print(print_mode mode);
+
+  /// Shows the prompt.
+  /// @param ms The number of milliseconds to delay the prompt.
+  void prompt(size_t ms = 100);
+
+  /// Entes the query control mode.
+  void follow();
+
+  /// Leaves the query control mode.
+  void unfollow();
 
   path dir_;
   std::vector<intrusive_ptr<result>> results_;
@@ -126,8 +137,8 @@ struct console : actor<console>
   cppa::actor_ptr keystroke_monitor_;
   util::command_line cmdline_;
   options opts_;
-  bool follow_mode_ = false;
-  bool append_mode_ = false;
+  bool following_ = false;
+  bool appending_ = false;
 };
 
 } // namespace vast
