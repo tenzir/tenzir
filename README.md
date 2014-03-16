@@ -38,7 +38,7 @@ Start a server:
 
 Ingest data from standard input:
 
-    gunzip -c data | vast -I -r -
+    zcat *.log.gz | vast -I -r -
 
 Start the client and submit a query:
 
