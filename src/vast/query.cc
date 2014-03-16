@@ -279,9 +279,10 @@ void query_actor::act()
       {
         if (progress == 1.0)
         {
-          VAST_LOG_ACTOR_DEBUG("completed index interaction");
-          query_.finish();
+          VAST_LOG_ACTOR_DEBUG("completed index interaction with "
+                               << hits << " hits");
 
+          query_.finish();
           if (query_.state() == query::done)
           {
             send(sink_, atom("done"));
