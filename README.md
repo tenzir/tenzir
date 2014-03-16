@@ -12,7 +12,7 @@ Dependencies
 Required:
 
 - [CMake](http://www.cmake.org)
-- [Clang >= 3.3](http://clang.llvm.org/) or [g++ >= 4.8](http://gcc.gnu.org)
+- [Clang >= 3.4](http://clang.llvm.org/) or [g++ >= 4.8](http://gcc.gnu.org)
 - [libcppa](https://github.com/Neverlord/libcppa)
 - [Boost](http://www.boost.org)
 
@@ -23,25 +23,28 @@ Optional:
 - [Gperftools](http://code.google.com/p/google-perftools)
 - [Doxygen](http://www.doxygen.org)
 
-Please consult [INSTALL.md](INSTALL.md) for guidance on installing the
-dependencies. VAST currently runs only on Mac OSX (Darwin) and Linux.
-
 Installation
 ------------
 
-VAST uses CMake for the build process but ships with autotools-like wrapper
-scripts. Please see
+Please consult the [installation instructions](INSTALL.md) for guidance on how
+to get VAST up and running.
 
-    ./configure --help
+Synopsis
+--------
 
-for available configuration options. By default, the build takes place in the
-sub-directory `build`. After configuring you can kick off the compilation with
+Start a server:
 
-    make
+    vast -a
 
-and may optionally install VAST into your prefix with
+Ingest data from standard input:
 
-    make install
+    gunzip -c data | vast -I -r -
+
+Start the client and submit a query:
+
+    vast -C
+    ::: ask
+    -=> &time > now - 2d && :string == "http"
 
 Documentation
 -------------
