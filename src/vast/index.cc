@@ -641,11 +641,13 @@ void index_actor::act()
         auto e = index_.add_query(ast);
         if (e)
         {
-          send(sink, atom("progress"), e->total_progress,
-               e->hits ? e->hits.count() : 0);
+          auto progress = e->total_progress;
+          auto count =  e->hits ? e->hits.count() : 0;
 
           if (e->hits && e->hits.find_first() != bitstream::npos)
             notify(ast, sink, std::move(*e));
+
+          send(sink, atom("progress"), progress, count);
 
           return make_any_tuple(atom("success"));
         }
