@@ -19,18 +19,19 @@ Mac OS, a [similar issue](https://code.google.com/p/gperftools/issues/detail?id=
 
 ## Compiler Bootstrapping
 
-To bootstrap a Clang toolchain  we recommend Robin Sommer's
-[install-clang](https://github.com/rsmmr/install-clang).
+### Clang
 
-If your machine does not come with a recent GCC, you may have to build GCC
-manually. The [official installation
-guide](http://gcc.gnu.org/wiki/InstallingGCC) contains useful instructions. The
-following steps worked well for me.
+To bootstrap a Clang toolchain we recommend Robin Sommer's
+[install-clang](https://github.com/rsmmr/install-clang) configured with
+libcxxabi:
 
-First, the installation sequence becomes easier when working with the
-installation prefix as an environment variable:
+    ./install-clang -a libcxxabi -j 16 /opt/llvm
 
-    export PREFIX=/path/to/installation-prefix
+### GCC
+
+To bootstrap GCC, please first consult the [official installation
+guide](http://gcc.gnu.org/wiki/InstallingGCC). The following steps worked
+appear to work.
 
 After unpacking the source:
 
@@ -38,6 +39,7 @@ After unpacking the source:
     mkdir build
     cd build
 
+    export PREFIX=/path/to/installation-prefix
     export BUILD=x86_64-redhat-linux
     ../configure --prefix=$PREFIX --enable-languages=c++ \
         --enable-shared=libstdc++ --disable-multilib \
