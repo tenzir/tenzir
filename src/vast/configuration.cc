@@ -91,7 +91,7 @@ void configuration::initialize()
         .init(5000);
   ingest.add("max-segment-size", "maximum segment size in MB").init(128);
   ingest.add("batch-size", "number of events to ingest in one run").init(4000);
-  ingest.add("file-name", "path to file to ingest").single();
+  ingest.add('r', "file-name", "path to file to ingest").single();
   ingest.add("file-type", "file type of the file to ingest").init("bro2");
   ingest.add("time-field", "field to extract event timestamp from").init(-1);
   ingest.add("submit", "send orphaned segments on startup");
