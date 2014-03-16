@@ -43,6 +43,7 @@ struct keystroke_monitor : actor<keystroke_monitor>
         on(atom("start")) >> [=]
         {
           running_ = true;
+          el_.reset();
           send(self, atom("get"));
         },
         on(atom("stop")) >> [=]
