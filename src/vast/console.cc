@@ -568,6 +568,16 @@ size_t console::result::size() const
   return events_.size();
 }
 
+void console::result::hits(uint64_t n)
+{
+  hits_ = n;
+}
+
+uint64_t console::result::hits() const
+{
+  return hits_;
+}
+
 void console::result::progress(double p)
 {
   progress_ = p;
@@ -664,7 +674,9 @@ void console::act()
       {
         auto i = connected_.find(last_sender());
         assert(i != connected_.end());
+
         auto r = i->second;
+        r->hits(hits);
 
         if (r->progress() <= progress + 0.05 || progress == 1.0)
         {
@@ -835,7 +847,9 @@ void console::act()
                 print(none) << ' ';
 
               print(none)
-                << util::color::blue << '|' << util::color::reset << std::endl;
+                << util::color::blue << '|' << util::color::reset << ' '
+                << active_->size() << '/' << active_->hits() <<  " hits"
+                << std::endl;
             }
             break;
           case EOF:

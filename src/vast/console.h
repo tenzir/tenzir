@@ -72,6 +72,14 @@ struct console : actor<console>
     /// @returns The number of all events.
     size_t size() const;
 
+    /// Sets the hits.
+    /// @param n The number of hits of this result.
+    void hits(uint64_t n);
+
+    /// Retrieves the number of hits.
+    /// @returns The number of hits of this result.
+    uint64_t hits() const;
+
     /// Sets the progress.
     /// @param p the new progress in *[0,1]*.
     void progress(double p);
@@ -89,6 +97,7 @@ struct console : actor<console>
     using pos_type = uint64_t;
 
     expr::ast ast_;
+    uint64_t hits_ = 0;
     double progress_ = 0.0;
     pos_type pos_ = 0;
     std::deque<cow<event>> events_;
