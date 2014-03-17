@@ -277,6 +277,8 @@ void query_actor::act()
   become(
       on(atom("progress"), arg_match) >> [=](double progress, uint64_t hits)
       {
+        send(sink_, atom("progress"), progress, hits);
+
         if (progress == 1.0)
         {
           VAST_LOG_ACTOR_DEBUG("completed index interaction with "
@@ -289,8 +291,6 @@ void query_actor::act()
             quit(exit::done);
           }
         }
-
-        send(sink_, atom("progress"), progress, hits);
       },
       on_arg_match >> [=](bitstream const& hits, double progress)
       {
