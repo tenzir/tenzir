@@ -504,17 +504,6 @@ void index_actor::act()
   chaining(false);
   trap_exit(true);
 
-  auto notify = [=](expr::ast const& qry, actor_ptr sink, index::evaluation e)
-  {
-    assert(e.hits);
-
-    VAST_LOG_ACTOR_DEBUG(
-        "notifies " << VAST_ACTOR_ID(sink) << " with new result for " <<
-        qry << " (" << int(e.total_progress * 100) << "%)");
-
-    send(sink, std::move(e.hits), e.total_progress);
-  };
-
   index_.set_on_miss(
       [&](expr::ast const& pred, uuid const& id) -> bool
       {
@@ -641,13 +630,17 @@ void index_actor::act()
         auto e = index_.add_query(ast);
         if (e)
         {
-          auto progress = e->total_progress;
           auto count =  e->hits ? e->hits.count() : 0;
 
           if (e->hits && e->hits.find_first() != bitstream::npos)
-            notify(ast, sink, std::move(*e));
+          {
+            VAST_LOG_ACTOR_DEBUG("notifies " << VAST_ACTOR_ID(sink) <<
+                                 " with complete result for " << ast);
 
-          send(sink, atom("progress"), progress, count);
+            send(sink, std::move(e->hits), e->total_progress);
+          }
+
+          send(sink, atom("progress"), e->total_progress, count);
 
           return make_any_tuple(atom("success"));
         }
@@ -681,8 +674,14 @@ void index_actor::act()
                 && (! qs.hits || e->hits != qs.hits))
             {
               qs.hits = e->hits;
-              for (auto& s : qs.subscribers)
-                notify(q, s, std::move(*e));
+              for (auto& sink : qs.subscribers)
+              {
+                VAST_LOG_ACTOR_DEBUG("notifies " << VAST_ACTOR_ID(sink) <<
+                                     " with new result for " << q << " (" <<
+                                     int(e->total_progress * 100) << "%)");
+
+                send(sink, e->hits, e->total_progress);
+              }
             }
 
             for (auto& s : qs.subscribers)
