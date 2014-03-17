@@ -21,8 +21,8 @@ Ingest data from standard input:
 Start the client and submit a query:
 
     vast -C
-    ::: ask
-    -=> &time > now - 2d && :string == "http"
+    > ask
+    ? &time > now - 2d && :string == "http"
 
 
 Documentation
