@@ -702,7 +702,8 @@ void console::act()
             {
               print(none)
                 << util::color::green << '*'
-                << util::color::blue << '|' << util::color::reset << std::endl;
+                << util::color::blue << '|'
+                << util::color::reset << ' ' << hits << " hits" << std::endl;
 
               appending_ = false;
 
