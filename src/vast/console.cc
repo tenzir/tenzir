@@ -776,13 +776,13 @@ void console::act()
                 << "interactive query control mode:\n"
                 << "\n"
                 << "     <space>  display the next batch of available results\n"
+                << "        a     archive the result on the file system\n"
                 << "  " << util::color::green << '*' << util::color::reset <<
                       "     e     ask query for more results\n"
                 << "        j     seek one batch forward\n"
                 << "        k     seek one batch backword\n"
-                << "        p     show progress of index lookup\n"
+                << "        s     show query status\n"
                 << "        q     leave query control mode\n"
-                << "        s     save the result to file system\n"
                 << "        ?     display this help\n"
                 << "\n"
                 << "entries marked with " <<
@@ -802,6 +802,37 @@ void console::act()
                 print(query) << "reached end of results" << std::endl;
             }
             break;
+          case 'a':
+            {
+              assert(active_);
+
+              // TODO: look if same AST already exists under a different file.
+              auto const dir =
+                dir_ / "results" / path{to_string(active_->id())};
+
+              if (exists(dir))
+              {
+                // TODO: support option to overwrite/append.
+                print(error) << "results already exists" << std::endl;
+              }
+              else
+              {
+                if (! mkdir(dir))
+                {
+                  print(error) << "failed to create dir: " << dir << std::endl;
+                  quit(exit::error);
+                  return;
+                }
+                auto n = active_->size();
+                print(query) << "saving result to " << dir  << std::endl;
+                io::archive(dir / "meta", *active_);
+                active_->save(dir / "data");
+                print(query) << "saved " << n << " events" << std::endl;
+              }
+
+              prompt();
+            }
+            return;
           case 'e':
             {
               bool found = false;
@@ -833,26 +864,6 @@ void console::act()
               print(query) << "seeked -" << n << " events" << std::endl;
             }
             break;
-          case 'p':
-            {
-              assert(active_);
-              auto p = static_cast<int>(active_->percent(0) / 5);
-
-              print(query)
-                << "progress "
-                << util::color::blue << '|' << util::color::green;
-
-              for (int i = 0; i < p; ++i)
-                print(none) << '*';
-              for (int i = 0; i < 20 - p; ++i)
-                print(none) << ' ';
-
-              print(none)
-                << util::color::blue << '|' << util::color::reset << ' '
-                << active_->size() << '/' << active_->hits() <<  " hits"
-                << std::endl;
-            }
-            break;
           case EOF:
           case '':
           case 'q':
@@ -864,34 +875,24 @@ void console::act()
             {
               assert(active_);
 
-              // TODO: look if same AST already exists under a different file.
-              auto const dir =
-                dir_ / "results" / path{to_string(active_->id())};
+              print(query)
+                << "status: "
+                << active_->size() << '/' << active_->hits() <<  " hits, "
+                << active_->percent() << "% ";
 
-              if (exists(dir))
-              {
-                // TODO: support option to overwrite/append.
-                print(error) << "results already exists" << std::endl;
-              }
-              else
-              {
-                if (! mkdir(dir))
-                {
-                  print(error) << "failed to create dir: " << dir << std::endl;
-                  quit(exit::error);
-                  return;
-                }
-                auto n = active_->size();
-                print(query) << "saving result to " << dir  << std::endl;
-                io::archive(dir / "meta", *active_);
-                active_->save(dir / "data");
-                print(query) << "saved " << n << " events" << std::endl;
-              }
+              print(none)
+                << util::color::blue << '|' << util::color::green;
 
-              prompt();
+              auto p = static_cast<int>(active_->percent(0) / 5);
+              for (int i = 0; i < p; ++i)
+                print(none) << '*';
+              for (int i = 0; i < 20 - p; ++i)
+                print(none) << ' ';
+
+              print(none)
+                << util::color::blue << '|' << util::color::reset << ' ' << std::endl;
             }
-
-            return;
+            break;
         }
 
         send(keystroke_monitor_, atom("get"));
