@@ -235,7 +235,7 @@ console::console(cppa::actor_ptr search, path dir)
       [=](std::string) -> util::result<bool>
       {
         std::set<intrusive_ptr<result>> active;
-        for (auto& p : active_)
+        for (auto& p : connected_)
           if (p.first)
             active.insert(p.second);
 
@@ -264,22 +264,12 @@ console::console(cppa::actor_ptr search, path dir)
         }
 
         std::vector<intrusive_ptr<result>> matches;
-        actor_ptr qry = nullptr;
         for (auto& r : results_)
         {
           auto candidate = to<std::string>(r->id());
           auto i = std::mismatch(args.begin(), args.end(), candidate.begin());
           if (i.first == args.end())
-          {
-            for (auto& p : active_)
-              if (p.second == r)
-              {
-                qry = p.first;
-                break;
-              }
-
             matches.push_back(r);
-          }
         }
 
         if (matches.empty())
@@ -293,13 +283,11 @@ console::console(cppa::actor_ptr search, path dir)
           return false;
         }
 
-        if (qry)
-          current_.first = qry;
-        current_.second = matches[0];
+        active_ = matches[0];
 
         follow();
 
-        VAST_LOG_ACTOR_DEBUG("enters query " << current_.second->id());
+        VAST_LOG_ACTOR_DEBUG("enters query " << active_->id());
         return {};
       });
 
@@ -336,14 +324,13 @@ console::console(cppa::actor_ptr search, path dir)
             },
             on_arg_match >> [=](expr::ast const& ast, actor_ptr const& qry)
             {
-              assert(! active_.count(qry));
+              assert(! connected_.count(qry));
               assert(qry);
               assert(ast);
 
               cmdline_.append_to_history(args);
               monitor(qry);
-              current_.first = qry;
-              current_.second = make_intrusive<result>(ast);
+              active_ = make_intrusive<result>(ast);
 
 
               auto i = std::find_if(
@@ -353,11 +340,11 @@ console::console(cppa::actor_ptr search, path dir)
               if (i != results_.end())
                 print(warn) << "duplicate query for " << (*i)->id() << std::endl;
 
-              active_.insert(current_);
-              results_.push_back(current_.second);
+              connected_.emplace(qry, active_);
+              results_.push_back(active_);
 
               print(info)
-                << "new query " << current_.second->id()
+                << "new query " << active_->id()
                 << " -> " << ast << std::endl;
 
               if (opts_.auto_follow)
@@ -631,6 +618,18 @@ void console::act()
 
   keystroke_monitor_ = spawn<keystroke_monitor, detached+linked>(self);
 
+
+  auto remove = [=](actor_ptr doomed)
+  {
+    if (connected_.count(doomed))
+    {
+      if (active_->size() == 0)
+        unfollow();
+
+      connected_.erase(doomed);
+    }
+  };
+
   become(
       on(atom("exited")) >> [=]
       {
@@ -642,17 +641,8 @@ void console::act()
         VAST_LOG_ACTOR_DEBUG("got DOWN from query " <<
                              VAST_ACTOR_ID(last_sender()));
 
-        if (following_ && last_sender() == current_.first)
-          unfollow();
 
-        // FIXME: we only delay the send operation here because there exists a
-        // message reordering bug in libcpppa that causes events to arrive
-        // *after* receiving this DOWN message. This should technically not
-        // happen because a query actor only terminates after having sent all
-        // events. Giving the actor some time prevents the result state from
-        // premature eviction.
-        delayed_send(self, std::chrono::seconds(5), atom("remove"),
-                     last_sender());
+        remove(last_sender());
       },
       on(atom("error"), arg_match) >> [=](std::string const& msg)
       {
@@ -664,17 +654,7 @@ void console::act()
         VAST_LOG_ACTOR_DEBUG("got done notification from query "
                              << VAST_ACTOR_ID(last_sender()));
 
-        // FIXME: see note above.
-        delayed_send(self, std::chrono::seconds(5), atom("remove"),
-                     last_sender());
-      },
-      on(atom("remove"), arg_match) >> [=](actor_ptr doomed)
-      {
-        VAST_LOG_ACTOR_DEBUG("detaches query " << VAST_ACTOR_ID(doomed));
-        if (current_.first == doomed)
-          current_ = {};
-
-        active_.erase(doomed);
+        remove(last_sender());
       },
       on(atom("prompt")) >> [=]
       {
@@ -682,8 +662,8 @@ void console::act()
       },
       on(atom("progress"), arg_match) >> [=](double progress, uint64_t hits)
       {
-        auto i = active_.find(last_sender());
-        assert(i != active_.end());
+        auto i = connected_.find(last_sender());
+        assert(i != connected_.end());
         auto r = i->second;
 
         if (r->progress() <= progress + 0.05 || progress == 1.0)
@@ -722,15 +702,26 @@ void console::act()
           r->progress(progress);
         }
       },
-      on_arg_match >> [=](event const&)
+      on_arg_match >> [=](event const& e)
       {
-        auto i = active_.find(last_sender());
-        assert(i != active_.end());
-        auto& r = i->second;
+        auto i = connected_.find(last_sender());
+        if (i == connected_.end())
+        {
+          // FIXME: We're currently experiencing a message reordering bug in
+          // libcpppa that causes events to arrive *after* receiving the DOWN
+          // message from the corresponding query. This should technically not
+          // happen because a query actor only terminates after having sent all
+          // events. Only these cases we see "orphaned" results. But
+          // fortunately this will be fixed soon.
+          print(error) << "ignoring orphaned query result: " << e << std::endl;
+          return;
+        }
 
+        auto& r = i->second;
         cow<event> ce = *tuple_cast<event>(last_dequeued());
+
         r->add(ce);
-        if (following_ && r == current_.second)
+        if (following_ && r == active_)
         {
           if (appending_)
           {
@@ -789,8 +780,8 @@ void console::act()
             break;
           case ' ':
             {
-              assert(current_.second);
-              auto n = current_.second->apply(
+              assert(active_);
+              auto n = active_->apply(
                   opts_.batch_size,
                   [](event const& e) { std::cout << e << std::endl; });
 
@@ -800,37 +791,39 @@ void console::act()
             break;
           case 'e':
             {
-              if (current_.first)
-              {
-                send(current_.first, atom("extract"), opts_.batch_size);
-                print(query)
-                  << "asks for " << opts_.batch_size
-                  << " more results" << std::endl;
-              }
-              else
-              {
-                print(query) << "not connected" << std::endl;
-              }
+              bool found = false;
+              for (auto& p : connected_)
+                if (p.second == active_)
+                {
+                  found = true;
+                  send(p.first, atom("extract"), opts_.batch_size);
+                  print(query)
+                    << "asks for " << opts_.batch_size
+                    << " more results" << std::endl;
+                }
+
+              if (! found)
+                print(query) << "not connected to query" << std::endl;
             }
             break;
           case 'j':
             {
-              assert(current_.second);
-              auto n = current_.second->seek_forward(opts_.batch_size);
+              assert(active_);
+              auto n = active_->seek_forward(opts_.batch_size);
               print(query) << "seeked +" << n << " events" << std::endl;
             }
             break;
           case 'k':
             {
-              assert(current_.second);
-              auto n = current_.second->seek_backward(opts_.batch_size);
+              assert(active_);
+              auto n = active_->seek_backward(opts_.batch_size);
               print(query) << "seeked -" << n << " events" << std::endl;
             }
             break;
           case 'p':
             {
-              assert(current_.second);
-              auto p = static_cast<int>(current_.second->percent(0) / 5);
+              assert(active_);
+              auto p = static_cast<int>(active_->percent(0) / 5);
 
               print(query)
                 << "progress "
@@ -854,11 +847,11 @@ void console::act()
             return;
           case 's':
             {
-              assert(current_.second);
+              assert(active_);
 
               // TODO: look if same AST already exists under a different file.
               auto const dir =
-                dir_ / "results" / path{to_string(current_.second->id())};
+                dir_ / "results" / path{to_string(active_->id())};
 
               if (exists(dir))
               {
@@ -873,10 +866,10 @@ void console::act()
                   quit(exit::error);
                   return;
                 }
-                auto n = current_.second->size();
+                auto n = active_->size();
                 print(query) << "saving result to " << dir  << std::endl;
-                io::archive(dir / "meta", *current_.second);
-                current_.second->save(dir / "data");
+                io::archive(dir / "meta", *active_);
+                active_->save(dir / "data");
                 print(query) << "saved " << n << " events" << std::endl;
               }
 
@@ -928,7 +921,7 @@ std::ostream& console::print(print_mode mode)
       break;
     case query:
       std::cerr
-        << util::color::cyan << "[" << current_.second->id() << "] ";
+        << util::color::cyan << "[" << active_->id() << "] ";
       break;
   }
 

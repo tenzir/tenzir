@@ -131,8 +131,8 @@ struct console : actor<console>
 
   path dir_;
   std::vector<intrusive_ptr<result>> results_;
-  std::map<cppa::actor_ptr, intrusive_ptr<result>> active_;
-  std::pair<cppa::actor_ptr, intrusive_ptr<result>> current_;
+  std::map<cppa::actor_ptr, intrusive_ptr<result>> connected_;
+  intrusive_ptr<result> active_;
   cppa::actor_ptr search_;
   cppa::actor_ptr keystroke_monitor_;
   util::command_line cmdline_;
