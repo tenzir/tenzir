@@ -87,6 +87,15 @@ bool path::empty() const
   return str_.empty();
 }
 
+path path::root() const
+{
+#ifdef VAST_POSIX
+  if (! empty() && str_[0] == *separator)
+    return str_.size() > 1 && str_[1] == *separator ? "//" : separator;
+#endif
+  return {};
+}
+
 path path::parent() const
 {
   if (str_ == separator || str_ == "." || str_ == "..")
@@ -130,6 +139,11 @@ path path::extension() const
   if (base == path(string(".")) || ext == string::npos)
     return {};
   return base.str_.substr(ext);
+}
+
+path path::complete() const
+{
+  return root().empty() ? current() / *this : *this;
 }
 
 std::vector<path> path::split() const

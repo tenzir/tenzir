@@ -66,6 +66,10 @@ public:
   /// @param `true` if the path is empty.
   bool empty() const;
 
+  /// Retrieves the root of the path.
+  /// @returns The root of the path or the empty if path if not absolute.
+  path root() const;
+
   /// Retrieves the parent directory.
   /// @returns The parent of this path.
   path parent() const;
@@ -77,6 +81,10 @@ public:
   /// Retrieves the extension of this path.
   /// @param The extension including ".".
   path extension() const;
+
+  /// Completes the path to an absolute path.
+  /// @returns An absolute path.
+  path complete() const;
 
   /// Splits the string at the path separator.
   /// @returns A vector of the path components.

@@ -10,6 +10,12 @@ BOOST_AUTO_TEST_CASE(path_operations)
   BOOST_CHECK_EQUAL(p.basename(), "foo");
   BOOST_CHECK_EQUAL(path("/usr/local/bin/foo.bin").basename(true), "foo");
 
+  BOOST_CHECK_EQUAL(p.root(), "/");
+  BOOST_CHECK_EQUAL(path("usr/local").root(), "");
+
+  BOOST_CHECK_EQUAL(p.complete(), p);
+  BOOST_CHECK_EQUAL(path("foo/").complete(), path::current() / "foo/");
+
   auto pieces = p.split();
   BOOST_REQUIRE_EQUAL(pieces.size(), 5);
   BOOST_CHECK_EQUAL(pieces[0], "/");
