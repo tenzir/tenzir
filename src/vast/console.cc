@@ -153,7 +153,7 @@ console::console(cppa::actor_ptr search, path dir)
     return "";
   };
 
-  auto main = cmdline_.mode_add("main", "::: ", util::color::cyan,
+  auto main = cmdline_.mode_add("main", "> ", util::color::cyan,
                                 to<std::string>(dir_ / "history_main"));
 
   main->on_unknown_command(help(main));
@@ -291,7 +291,7 @@ console::console(cppa::actor_ptr search, path dir)
         return {};
       });
 
-  auto ask = cmdline_.mode_add("ask", "-=> ", util::color::green,
+  auto ask = cmdline_.mode_add("ask", "*> ", util::color::green,
                                to<std::string>(dir_ / "history_query"));
 
   ask->add("exit", "leave query asking mode")->on(
