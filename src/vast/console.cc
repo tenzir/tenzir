@@ -291,7 +291,7 @@ console::console(cppa::actor_ptr search, path dir)
         return {};
       });
 
-  auto ask = cmdline_.mode_add("ask", "*> ", util::color::green,
+  auto ask = cmdline_.mode_add("ask", "? ", util::color::green,
                                to<std::string>(dir_ / "history_query"));
 
   ask->add("exit", "leave query asking mode")->on(
