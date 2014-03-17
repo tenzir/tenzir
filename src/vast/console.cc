@@ -670,6 +670,12 @@ void console::act()
       {
         prompt();
       },
+      on(atom("1st batch"), arg_match) >> [=](uint64_t expected)
+      {
+        expected_ = expected;
+        VAST_LOG_ACTOR_DEBUG("expects " << expected <<
+                             " results as initial batch");
+      },
       on(atom("progress"), arg_match) >> [=](double progress, uint64_t hits)
       {
         auto i = connected_.find(last_sender());
@@ -743,6 +749,9 @@ void console::act()
           }
 
           std::cout << *ce << std::endl;
+
+          if (expected_ > 0 && --expected_ == 0)
+            send(self, atom("key"), 's');
         }
       },
       on(atom("key"), arg_match) >> [=](char key)
@@ -844,6 +853,8 @@ void console::act()
                   print(query)
                     << "asks for " << opts_.batch_size
                     << " more results" << std::endl;
+
+                  expected_ += opts_.batch_size;
                 }
 
               if (! found)

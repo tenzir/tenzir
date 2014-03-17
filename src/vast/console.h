@@ -148,6 +148,7 @@ struct console : actor<console>
   options opts_;
   bool following_ = false;
   bool appending_ = false;
+  size_t expected_ = 0;
 };
 
 } // namespace vast

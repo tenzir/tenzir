@@ -274,6 +274,8 @@ void query_actor::act()
 {
   chaining(false);
 
+  send(sink_, atom("1st batch"), requested_);
+
   become(
       on(atom("progress"), arg_match) >> [=](double progress, uint64_t hits)
       {
