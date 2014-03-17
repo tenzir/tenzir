@@ -42,7 +42,7 @@ public:
     if (exists(path_))
     {
       io::unarchive(path_, bmi_);
-      VAST_LOG_ACTOR_DEBUG("loaded bitmap index from " << path_.chop(2) <<
+      VAST_LOG_ACTOR_DEBUG("loaded bitmap index from " << path_ <<
                            " (" << bmi_.size() << " bits)");
     }
 
@@ -53,7 +53,7 @@ public:
         auto appended = bmi_.appended();
         bmi_.checkpoint();
         io::archive(path_, bmi_);
-        VAST_LOG_ACTOR_DEBUG("flushed bitmap index to " << path_.chop(2) <<
+        VAST_LOG_ACTOR_DEBUG("flushed bitmap index to " << path_ <<
                              " (" << appended << '/' << bmi_.size() <<
                              " new/total bits)");
       }

@@ -58,7 +58,7 @@ void program::act()
   auto monitor = spawn<signal_monitor, detached+linked>(self);
   send(monitor, atom("act"));
 
-  auto vast_dir = path{*config_.get("directory")};
+  auto vast_dir = path{*config_.get("directory")}.complete();
   try
   {
     if (config_.check("profile"))
