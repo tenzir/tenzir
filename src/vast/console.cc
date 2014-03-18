@@ -177,6 +177,7 @@ console::console(cppa::actor_ptr search, path dir)
         if (extract(begin, args.end(), n))
         {
           opts_.batch_size = n;
+          send(search_, atom("client"), atom("batch-size"), n);
           return true;
         }
         else
@@ -332,7 +333,6 @@ console::console(cppa::actor_ptr search, path dir)
               monitor(qry);
               active_ = make_intrusive<result>(ast);
 
-
               auto i = std::find_if(
                   results_.begin(), results_.end(),
                   [&](intrusive_ptr<result> r) { return r->ast() == ast; });
@@ -346,6 +346,10 @@ console::console(cppa::actor_ptr search, path dir)
               print(info)
                 << "new query " << active_->id()
                 << " -> " << ast << std::endl;
+
+              expected_ = opts_.batch_size;
+              VAST_LOG_ACTOR_DEBUG("expects " << expected_ <<
+                                   " results as initial batch");
 
               if (opts_.auto_follow)
                 follow();
@@ -628,7 +632,6 @@ void console::act()
 
   keystroke_monitor_ = spawn<keystroke_monitor, detached+linked>(self);
 
-
   auto remove = [=](actor_ptr doomed)
   {
     if (connected_.count(doomed))
@@ -639,6 +642,9 @@ void console::act()
       connected_.erase(doomed);
     }
   };
+
+  send(search_, atom("client"), atom("connected"));
+  send(search_, atom("client"), atom("batch size"), opts_.batch_size);
 
   become(
       on(atom("exited")) >> [=]
@@ -670,18 +676,26 @@ void console::act()
       {
         prompt();
       },
-      on(atom("1st batch"), arg_match) >> [=](uint64_t expected)
-      {
-        expected_ = expected;
-        VAST_LOG_ACTOR_DEBUG("expects " << expected <<
-                             " results as initial batch");
-      },
       on(atom("progress"), arg_match) >> [=](double progress, uint64_t hits)
       {
         auto i = connected_.find(last_sender());
-        assert(i != connected_.end());
+        //assert(i != connected_.end());
+        intrusive_ptr<result> r;
+        if (i == connected_.end())
+        {
+          // FIXME: see other note on messag reordering.
+          VAST_LOG_ACTOR_WARN(
+              "got orphaned progress update: " << int(progress * 100) <<
+              "%, " << hits << " hits");
 
-        auto r = i->second;
+          r = active_;
+        }
+        else
+        {
+          r = i->second;
+        }
+
+        assert(r);
         r->hits(hits);
 
         if (r->progress() <= progress + 0.05 || progress == 1.0)
@@ -724,22 +738,31 @@ void console::act()
       on_arg_match >> [=](event const& e)
       {
         auto i = connected_.find(last_sender());
+        intrusive_ptr<result> r;
         if (i == connected_.end())
         {
-          // FIXME: We're currently experiencing a message reordering bug in
-          // libcpppa that causes events to arrive *after* receiving the DOWN
-          // message from the corresponding query. This should technically not
-          // happen because a query actor only terminates after having sent all
-          // events. Only these cases we see "orphaned" results. But
-          // fortunately this will be fixed soon.
-          print(error) << "ignoring orphaned query result: " << e << std::endl;
-          return;
+          // FIXME: We're currently experiencing a message reordering issue in
+          // libcpppa that causes events (and progress reports) to arrive
+          // *after* receiving the DOWN message from the corresponding query.
+          // This should technically not happen because a query actor only
+          // terminates after having sent all events. Only these cases we see
+          // "orphaned" results.
+          //
+          // To fix this, we opportunisticly assume that the message comes from
+          // the last active result.
+          VAST_LOG_ACTOR_WARN("got orphaned query result: " << e);
+          r = active_;
+        }
+        else
+        {
+          r = i->second;
         }
 
-        auto& r = i->second;
-        cow<event> ce = *tuple_cast<event>(last_dequeued());
+        assert(r);
 
+        cow<event> ce = *tuple_cast<event>(last_dequeued());
         r->add(ce);
+
         if (following_ && r == active_)
         {
           if (appending_)

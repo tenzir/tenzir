@@ -12,6 +12,7 @@ struct search_actor : actor<search_actor>
   struct client_state
   {
     util::flat_set<cppa::actor_ptr> queries;
+    uint64_t batch_size = 1; // Overriden by client.
   };
 
   search_actor(cppa::actor_ptr archive,

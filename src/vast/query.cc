@@ -274,8 +274,6 @@ void query_actor::act()
 {
   chaining(false);
 
-  send(sink_, atom("1st batch"), requested_);
-
   become(
       on(atom("progress"), arg_match) >> [=](double progress, uint64_t hits)
       {
@@ -331,6 +329,11 @@ void query_actor::act()
 
         if (requested_ > 0 && query_.state() == query::ready)
           extract(requested_);
+      },
+      on(atom("1st batch"), arg_match) >> [=](uint64_t n)
+      {
+        VAST_LOG_ACTOR_DEBUG("sets size of first batch to " << n);
+        requested_ = n;
       },
       on(atom("extract"), arg_match) >> [=](uint64_t n)
       {

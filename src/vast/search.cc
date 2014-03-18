@@ -51,8 +51,8 @@ void search_actor::act()
       },
       on(atom("DOWN"), arg_match) >> [=](uint32_t reason)
       {
-        VAST_LOG_ACTOR_DEBUG(
-            "received DOWN from client " << VAST_ACTOR_ID(last_sender()));
+        VAST_LOG_ACTOR_INFO("got disconnect from client " <<
+                            VAST_ACTOR_ID(last_sender()));
 
         for (auto& q : clients_[last_sender()].queries)
         {
@@ -61,6 +61,17 @@ void search_actor::act()
         }
 
         clients_.erase(last_sender());
+      },
+      on(atom("client"), atom("connected")) >> [=]
+      {
+        VAST_LOG_ACTOR_INFO("accpeted connection from new client " <<
+                            VAST_ACTOR_ID(last_sender()));
+      },
+      on(atom("client"), atom("batch size"), arg_match)
+        >> [=](uint64_t batch_size)
+      {
+        clients_[last_sender()].batch_size = batch_size;
+        monitor(last_sender());
       },
       on(atom("query"), atom("create"), parse_ast)
         >> [=](expr::ast const& ast) -> continue_helper
@@ -71,11 +82,11 @@ void search_actor::act()
                             " asking for " << ast);
 
         auto qry = spawn<query_actor>(archive_, client, ast);
+        send(qry, atom("1st batch"), clients_[client].batch_size);
 
         return sync_send(index_, atom("query"), ast, qry).then(
             on(atom("success")) >> [=]
             {
-              monitor(client);
               clients_[client].queries.insert(qry);
               return make_any_tuple(ast, qry);
             },

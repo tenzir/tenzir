@@ -104,7 +104,7 @@ struct query_actor : actor<query_actor>
   query query_;
 
   std::vector<event_id> inflight_;
-  uint64_t requested_ = 10; // TODO: make initial batch configurable.
+  uint64_t requested_ = 0;
   size_t prefetch_ = 2; // TODO: make configurable.
 };
 
