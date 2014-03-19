@@ -29,7 +29,7 @@ public:
       stats_{std::chrono::seconds{1}}
   {
     bmi_.append(1, false); // Event ID 0 is not a valid event.
-    bmi_.checkpoint();
+    last_flush_ = 1;
   }
 
   void act()
@@ -41,20 +41,20 @@ public:
 
     if (exists(path_))
     {
-      io::unarchive(path_, bmi_);
+      io::unarchive(path_, last_flush_, bmi_);
       VAST_LOG_ACTOR_DEBUG("loaded bitmap index from " << path_ <<
                            " (" << bmi_.size() << " bits)");
     }
 
     auto flush = [=]
     {
-      if (bmi_.appended() > 0)
+      if (bmi_.size() > last_flush_)
       {
-        auto appended = bmi_.appended();
-        bmi_.checkpoint();
-        io::archive(path_, bmi_);
+        auto prev = last_flush_;
+        last_flush_ = bmi_.size();
+        io::archive(path_, last_flush_, bmi_);
         VAST_LOG_ACTOR_DEBUG("flushed bitmap index to " << path_ <<
-                             " (" << appended << '/' << bmi_.size() <<
+                             " (" << prev << '/' << bmi_.size() <<
                              " new/total bits)");
       }
     };
@@ -121,6 +121,7 @@ public:
   }
 
 private:
+  uint64_t last_flush_ = 0;
   BitmapIndex bmi_;
   path const path_;
   util::rate_accumulator<uint64_t> stats_;

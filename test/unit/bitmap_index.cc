@@ -5,6 +5,17 @@
 
 using namespace vast;
 
+BOOST_AUTO_TEST_CASE(polymorphic_bitmap_index)
+{
+  bitmap_index<null_bitstream> bmi;
+  BOOST_REQUIRE(! bmi);
+
+  bmi = string_bitmap_index<null_bitstream>{};
+  BOOST_REQUIRE(bmi);
+
+  BOOST_CHECK(bmi.push_back("foo"));
+}
+
 BOOST_AUTO_TEST_CASE(boolean_bitmap_index)
 {
   arithmetic_bitmap_index<null_bitstream, bool_type> bmi, bmi2;
@@ -284,4 +295,37 @@ BOOST_AUTO_TEST_CASE(transport_port_bitmap_index_ewah)
   BOOST_CHECK_EQUAL(*bm.lookup(greater, 12), greater_eight);
   BOOST_CHECK_EQUAL(*bm.lookup(greater, 13), greater_eight);
   BOOST_CHECK_EQUAL(*bm.lookup(greater, 80), greater_eighty);
+}
+
+BOOST_AUTO_TEST_CASE(container_bitmap_index)
+{
+  set_bitmap_index<null_bitstream> bmi{string_type};
+
+  set s;
+  s.emplace_back("foo");
+  s.emplace_back("bar");
+  BOOST_CHECK(bmi.push_back(s));
+
+  s.clear();
+  s.emplace_back("qux");
+  s.emplace_back("foo");
+  s.emplace_back("baz");
+  s.emplace_back("corge");
+  BOOST_CHECK(bmi.push_back(s));
+
+  s.clear();
+  s.emplace_back("bar");
+  BOOST_CHECK(bmi.push_back(s));
+
+  s.clear();
+  BOOST_CHECK(bmi.push_back(s));
+
+  null_bitstream r;
+  r.append(2, true);
+  r.append(2, false);
+  BOOST_CHECK_EQUAL(*bmi.lookup(in, "foo"), r);
+
+  r.clear();
+  r.append(4, false);
+  BOOST_CHECK_EQUAL(*bmi.lookup(in, "not"), r);
 }
