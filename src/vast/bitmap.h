@@ -807,6 +807,8 @@ class bitmap : util::equality_comparable<bitmap<T, Bitstream, Coder, Binner>>,
   static_assert(std::is_arithmetic<T>::value, "arithmetic type required");
 
 public:
+  using data_type = T;
+  using bitstream_type = Bitstream;
   using binner_type = Binner<T>;
   using coder_type = Coder<T, Bitstream>;
 
