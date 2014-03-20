@@ -4,36 +4,41 @@ notifications:
   email:
     on_success: change
     on_failure: change
+
 branches:
   only:
     - master
+
 language: cpp
+
 compiler:
   - gcc
   - clang
+
 env:
   global:
     - PREFIX=$HOME/builds/mavam/prefix # The prefix for dependencies.
+    - PATH=$PREFIX/bin:$PATH
+    - LD_LIBRARY_PATH=$PREFIX/lib
     - CONCURRENCY=4
   matrix:
     - BUILD_TYPE=--enable-debug
-matrix:
-  allow_failures:
-    - compiler: gcc
+
+#matrix:
+#  allow_failures:
+#    - compiler: gcc
+
 before_script:
   - set -e
-  - export PATH=$PREFIX/bin:$PATH
-  - export LD_LIBRARY_PATH=$PREFIX/lib
   - sh ./.travis.$CC
-  # Libcppa
   - git clone git://github.com/Neverlord/libcppa.git
   - cd libcppa
   - git checkout 1dfc3d4a # FIXME: remove after migration to master
   - ./configure --prefix=$PREFIX --no-examples
-  - make install
+  - make -j $CONCURRENCY install
   - cd ..
-  # VAST
   - ./configure --prefix=$PREFIX $BUILD_TYPE
+
 script:
-  - make
+  - make -j $CONCURRENCY
   - make test
