@@ -27,8 +27,8 @@ before_script:
   - sh ./.travis.$CC
   # Libcppa
   - git clone git://github.com/Neverlord/libcppa.git
-  - git checkout 1dfc3d4a # FIXME: remove after migration to master
   - cd libcppa
+  - git checkout 1dfc3d4a # FIXME: remove after migration to master
   - ./configure --prefix=$PREFIX --no-examples
   - make install
   - cd ..
