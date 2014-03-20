@@ -3,17 +3,17 @@
 set -e
 
 git clone git://github.com/rsmmr/install-clang.git
-pushd install-clang
+cd install-clang
 ./install-clang -a libcxxabi -j $CONCURRENCY $PREFIX
-popd
+cd ..
 
 TS=$(date +%s)
 wget -O boost.tar.gz "http://downloads.sourceforge.net/project/boost/boost/1.55.0/boost_1_55_0.tar.gz?r=http%3A%2F%2Fsourceforge.net%2Fprojects%2Fboost%2Ffiles%2Flatest%2Fdownload%3Fsource%3Dfiles&ts=${TS}&use_mirror=softlayer-ams"
 tar xzf boost.tar.gz
-pushd boost_1_55_0
+cd boost_1_55_0
 ./bootstrap.sh --with-toolset=clang --prefix=$PREFIX \
     --with-libraries=system,test
 ./b2 --layout=tagged variant=debug,release threading=multi \
     cxxflags="-std=c++11 -stdlib=libc++" linkflags="-stdlib=libc++" \
     install
-popd
+cd ..

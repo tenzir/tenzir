@@ -7,6 +7,8 @@ sudo add-apt-repository -y 'deb http://archive.ubuntu.com/ubuntu/ quantal main u
 sudo apt-get -qq update
 sudo apt-get -qq install libboost1.50-all-dev g++-4.8
 
+mkdir -p $PREFIX/bin
 cd $PREFIX/bin
 ln -s $(which gcc-4.8) gcc
 ln -s $(which g++-4.8) g++
+cd ..

@@ -28,10 +28,10 @@ before_script:
   # Libcppa
   - git clone git://github.com/Neverlord/libcppa.git
   - git checkout 1dfc3d4a # FIXME: remove after migration to master
-  - pushd libcppa
+  - cd libcppa
   - ./configure --prefix=$PREFIX --no-examples
   - make install
-  - popd
+  - cd ..
   # VAST
   - ./configure --prefix=$PREFIX $BUILD_TYPE
 script:
