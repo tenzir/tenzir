@@ -25,7 +25,8 @@ To bootstrap a Clang toolchain we recommend Robin Sommer's
 [install-clang](https://github.com/rsmmr/install-clang) configured with
 libcxxabi:
 
-    ./install-clang -a libcxxabi -j 16 /opt/llvm
+    export PREFIX=/opt/vast
+    ./install-clang -a libcxxabi -j 16 $PREFIX
 
 ### GCC
 
@@ -39,7 +40,7 @@ After unpacking the source:
     mkdir build
     cd build
 
-    export PREFIX=/path/to/installation-prefix
+    export PREFIX=/opt/vast
     export BUILD=x86_64-redhat-linux
     ../configure --prefix=$PREFIX --enable-languages=c++ \
         --enable-shared=libstdc++ --disable-multilib \
@@ -56,12 +57,18 @@ ready to be picked up by subsequent dependency configurations.
 
 ## Building VAST
 
-    export PREFIX=/opt/prefix
+Let us begin with defining a few environment variables used throughout the
+build process:
+
+    export PREFIX=/opt/vast
     export CC=/path/to/cc
     export CXX=/path/to/c++
-    export LD_LIBRARY_PATH=/opt/llvm/lib
+    export LD_LIBRARY_PATH=$PREFIX/lib
 
 ### [Boost](http://www.boost.org)
+
+Boost Jam does not honor the `CC` and `CXX` environment variables, so make sure
+that the correct compiler executable is in your `PATH`.
 
 #### Clang
 
@@ -83,6 +90,7 @@ ready to be picked up by subsequent dependency configurations.
 
 ### [Libcppa](https://github.com/Neverlord/libcppa)
 
+    git checkout 1dfc3d4a           # Temporarily only, master soon.
     ./configure --prefix=$PREFIX
     make
     make test
