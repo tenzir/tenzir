@@ -53,9 +53,9 @@ public:
         auto prev = last_flush_;
         last_flush_ = bmi_.size();
         io::archive(path_, last_flush_, bmi_);
-        VAST_LOG_ACTOR_DEBUG("flushed bitmap index to " << path_ <<
-                             " (" << prev << '/' << bmi_.size() <<
-                             " new/total bits)");
+        VAST_LOG_ACTOR_DEBUG(
+            "flushed bitmap index to " << path_ << " (" <<
+            (last_flush_ - prev) << '/' << bmi_.size() << " new/total bits)");
       }
     };
 
