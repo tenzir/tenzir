@@ -9,34 +9,31 @@ branches:
     - master
 language: cpp
 compiler:
-  #- gcc
+  - gcc
   - clang
 env:
   global:
     - PREFIX=$HOME/builds/mavam/prefix # The prefix for dependencies.
+    - CONCURRENCY=4
   matrix:
     - BUILD_TYPE=--enable-debug
 matrix:
   allow_failures:
-    - compiler: clang
+    - compiler: gcc
 before_script:
-  # FIXME: Remove the custom GCC installion after travis-ci/travis-core#195 has
-  # been resolved.
-  #- sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test # GCC 4.7
-  - sudo add-apt-repository -y
-    "deb http://archive.ubuntu.com/ubuntu/ quantal main universe" # Boost 1.50
-  - sudo apt-get -qq update
-  #- sudo apt-get -qq install g++-4.7
-  #- '[[ $CXX == "g++" ]] && export CXX=g++-4.7 && export CC=gcc-4.7'
-  - sudo apt-get -qq install libboost1.50-all-dev
+  - set -e
+  - export PATH=$PREFIX/bin:$PATH
+  - export LD_LIBRARY_PATH=$PREFIX/lib
+  - sh ./.travis.$CC
   # Libcppa
   - git clone git://github.com/Neverlord/libcppa.git
+  - git checkout 1dfc3d4a # FIXME: remove after migration to master
   - pushd libcppa
-  - ./configure --enable-debug --prefix=$PREFIX --no-examples
+  - ./configure --prefix=$PREFIX --no-examples
   - make install
   - popd
   # VAST
-  - ./configure $BUILD_TYPE --with-libcppa=$PREFIX
+  - ./configure --prefix=$PREFIX $BUILD_TYPE
 script:
   - make
-  #- make test
+  - make test
