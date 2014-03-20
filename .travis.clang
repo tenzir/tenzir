@@ -2,7 +2,7 @@
 
 set -e
 
-git clone git@github.com:rsmmr/install-clang.git
+git clone git://github.com/rsmmr/install-clang.git
 pushd install-clang
 ./install-clang -a libcxxabi -j $CONCURRENCY $PREFIX
 popd

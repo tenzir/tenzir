@@ -5,8 +5,8 @@ set -e
 sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
 sudo add-apt-repository -y 'deb http://archive.ubuntu.com/ubuntu/ quantal main universe'
 sudo apt-get -qq update
-sudo apt-get -qq install libboost1.50-all-dev g++-4.9
+sudo apt-get -qq install libboost1.50-all-dev g++-4.8
 
 cd $PREFIX/bin
-ln -s $(which gcc-4.9) gcc
-ln -s $(which g++-4.9) g++
+ln -s $(which gcc-4.8) gcc
+ln -s $(which g++-4.8) g++
