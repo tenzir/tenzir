@@ -15,6 +15,13 @@ of [libunwind](http://www.nongnu.org/libunwind/index.html) when enabling
 [bugs](https://code.google.com/p/gperftools/source/browse/README) that
 cause segmentation faults when linking against the system-provided version. On
 Mac OS, a [similar issue](https://code.google.com/p/gperftools/issues/detail?id=413) exists.
+When compiling gperftools with a libunwind from a custom prefix, then you need
+to specificy a few environment variables to make autoconf happy:
+
+    CFLAGS="-I$PREFIX/include" \
+    CXXFLAGS="-I$PREFIX/include" \
+    LDFLAGS="-L$PREFIX/lib" \
+    ./configure --prefix=$PREFIX
 
 
 ## Compiler Bootstrapping
