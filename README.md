@@ -1,7 +1,9 @@
 VAST
 ====
 
+<!--
 [![Build Status](https://secure.travis-ci.org/mavam/vast.png)](http://travis-ci.org/mavam/vast)
+-->
 
 **Visibility Across Space and Time (VAST)** is a real-time platform for network
 forensics and incident response.
