@@ -6,6 +6,17 @@ sudo add-apt-repository -y ppa:h-rayflood/llvm
 sudo apt-get -qq update
 sudo apt-get install --allow-unauthenticated -qq clang-3.4
 
+mkdir -p $PREFIX/bin
+cd $PREFIX/bin
+ln -s $(which clang-3.4) clang
+ln -s $(which clang++-3.4) clang++
+cd ..
+
+git clone git://github.com/rsmmr/install-clang.git
+cd install-clang
+./install-clang -a libcxxabi -j $CONCURRENCY $PREFIX
+cd ..
+
 TS=$(date +%s)
 wget -O boost.tar.gz "http://downloads.sourceforge.net/project/boost/boost/1.55.0/boost_1_55_0.tar.gz?r=http%3A%2F%2Fsourceforge.net%2Fprojects%2Fboost%2Ffiles%2Flatest%2Fdownload%3Fsource%3Dfiles&ts=${TS}&use_mirror=softlayer-ams"
 tar xzf boost.tar.gz
