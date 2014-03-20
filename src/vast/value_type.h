@@ -131,8 +131,8 @@ using underlying_value_type =
                     IfThenElse<T == prefix_type, prefix,
                       IfThenElse<T == port_type, port,
                         IfThenElse<T == record_type, record,
-                          IfThenElse<T == vector_type, record,
-                            IfThenElse<T == set_type, record,
+                          IfThenElse<T == vector_type, vector,
+                            IfThenElse<T == set_type, set,
                               IfThenElse<T == table_type, table,
                                 std::false_type>>>>>>>>>>>>>>>;
 
