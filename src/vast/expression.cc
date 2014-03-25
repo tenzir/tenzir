@@ -699,7 +699,7 @@ public:
     {
       // Ignore the event name in lhs[0].
       auto& ids = pred.lhs;
-      auto offs = schema::argument_offsets(event, {ids.begin() + 1, ids.end()});
+      auto offs = schema::resolve(event, {ids.begin() + 1, ids.end()});
       if (! offs)
       {
         error_ = offs.failure();
@@ -745,7 +745,7 @@ public:
 
       for (auto& e : schema_.events())
       {
-        auto offsets = schema::symbol_offsets(&e, pred.lhs);
+        auto offsets = schema::lookup(&e, pred.lhs);
         if (! offsets)
           continue;
 

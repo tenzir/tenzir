@@ -41,12 +41,12 @@ BOOST_AUTO_TEST_CASE(offset_computation)
 
   auto sch = schema::load(str);
   BOOST_REQUIRE(sch);
-  auto offsets = schema::symbol_offsets(&sch->events()[0], {"foo"});
+  auto offsets = schema::lookup(&sch->events()[0], {"foo"});
   BOOST_REQUIRE(offsets);
   BOOST_REQUIRE_EQUAL(offsets->size(), 3);
-  BOOST_CHECK((*offsets)[0] == std::vector<size_t>({0, 0}));
-  BOOST_CHECK((*offsets)[1] == std::vector<size_t>({0, 1, 0}));
-  BOOST_CHECK((*offsets)[2] == std::vector<size_t>({0, 2, 0}));
+  BOOST_CHECK((*offsets)[0] == offset({0, 0}));
+  BOOST_CHECK((*offsets)[1] == offset({0, 1, 0}));
+  BOOST_CHECK((*offsets)[2] == offset({0, 2, 0}));
 
   str =
     "type foo: record{ a: int, b: int, c: record{ x: int, y: addr, z: int}}"
@@ -54,12 +54,12 @@ BOOST_AUTO_TEST_CASE(offset_computation)
 
   sch = schema::load(str);
   BOOST_REQUIRE(sch);
-  offsets = schema::symbol_offsets(&sch->events()[0], {"foo", "c", "y"});
+  offsets = schema::lookup(&sch->events()[0], {"foo", "c", "y"});
   BOOST_REQUIRE(offsets);
   BOOST_REQUIRE_EQUAL(offsets->size(), 3);
-  BOOST_CHECK((*offsets)[0] == std::vector<size_t>({0, 0, 2, 1}));
-  BOOST_CHECK((*offsets)[1] == std::vector<size_t>({0, 1, 0, 2, 1}));
-  BOOST_CHECK((*offsets)[2] == std::vector<size_t>({0, 2, 0, 2, 1}));
+  BOOST_CHECK((*offsets)[0] == offset({0, 0, 2, 1}));
+  BOOST_CHECK((*offsets)[1] == offset({0, 1, 0, 2, 1}));
+  BOOST_CHECK((*offsets)[2] == offset({0, 2, 0, 2, 1}));
   //for (auto& inner : offsets)
   //{
   //  for (auto& i : inner)

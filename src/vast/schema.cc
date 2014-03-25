@@ -10,71 +10,71 @@
 #include "vast/util/convert.h"
 
 namespace vast {
-namespace detail {
+namespace {
 
-class type_maker
+class type_factory
 {
 public:
   using result_type = intrusive_ptr<schema::type>;
 
-  type_maker(schema const& s)
+  type_factory(schema const& s)
     : schema_(s)
   {
   }
 
-  result_type operator()(ast::schema::basic_type type) const
+  result_type operator()(detail::ast::schema::basic_type type) const
   {
     switch (type)
     {
       default:
         assert(! "missing type implementation");
-      case ast::schema::bool_type:
+      case detail::ast::schema::bool_type:
         return new schema::bool_type;
-      case ast::schema::int_type:
+      case detail::ast::schema::int_type:
         return new schema::int_type;
-      case ast::schema::uint_type:
+      case detail::ast::schema::uint_type:
         return new schema::uint_type;
-      case ast::schema::double_type:
+      case detail::ast::schema::double_type:
         return new schema::double_type;
-      case ast::schema::time_frame_type:
+      case detail::ast::schema::time_frame_type:
         return new schema::time_frame_type;
-      case ast::schema::time_point_type:
+      case detail::ast::schema::time_point_type:
         return new schema::time_point_type;
-      case ast::schema::string_type:
+      case detail::ast::schema::string_type:
         return new schema::string_type;
-      case ast::schema::regex_type:
+      case detail::ast::schema::regex_type:
         return new schema::regex_type;
-      case ast::schema::address_type:
+      case detail::ast::schema::address_type:
         return new schema::address_type;
-      case ast::schema::prefix_type:
+      case detail::ast::schema::prefix_type:
         return new schema::prefix_type;
-      case ast::schema::port_type:
+      case detail::ast::schema::port_type:
         return new schema::port_type;
     }
   }
 
-  result_type operator()(ast::schema::enum_type const& type) const
+  result_type operator()(detail::ast::schema::enum_type const& type) const
   {
     auto t = new schema::enum_type;
     t->fields = type.fields;
     return t;
   }
 
-  result_type operator()(ast::schema::vector_type const& type) const
+  result_type operator()(detail::ast::schema::vector_type const& type) const
   {
     auto t = new schema::vector_type;
     t->elem_type = create_type_info(type.element_type);
     return t;
   }
 
-  result_type operator()(ast::schema::set_type const& type) const
+  result_type operator()(detail::ast::schema::set_type const& type) const
   {
     auto t = new schema::set_type;
     t->elem_type = create_type_info(type.element_type);
     return t;
   }
 
-  result_type operator()(ast::schema::table_type const& type) const
+  result_type operator()(detail::ast::schema::table_type const& type) const
   {
     auto t = new schema::table_type;
     t->key_type = create_type_info(type.key_type);
@@ -82,7 +82,7 @@ public:
     return t;
   }
 
-  result_type operator()(ast::schema::record_type const& type) const
+  result_type operator()(detail::ast::schema::record_type const& type) const
   {
     auto record = new schema::record_type;
     for (auto& arg : type.args)
@@ -91,7 +91,7 @@ public:
   }
 
   schema::argument create_argument(
-      ast::schema::argument_declaration const& a) const
+      detail::ast::schema::argument_declaration const& a) const
   {
     schema::argument arg;
     arg.name = a.name;
@@ -112,7 +112,8 @@ public:
     return arg;
   }
 
-  schema::type_info create_type_info(ast::schema::type_info const& ti) const
+  schema::type_info create_type_info(
+      detail::ast::schema::type_info const& ti) const
   {
     auto info = schema_.info(ti.name);
     if (info)
@@ -124,30 +125,30 @@ private:
   schema const& schema_;
 };
 
-struct schema_maker
+struct schema_factory
 {
   using result_type = void;
 
-  schema_maker(schema& s)
+  schema_factory(schema& s)
     : tm_{s}, schema_{s}
   {
   }
 
-  result_type operator()(ast::schema::type_declaration const& td)
+  result_type operator()(detail::ast::schema::type_declaration const& td)
   {
-    if (auto p = boost::get<ast::schema::type_type>(&td.type))
+    if (auto p = boost::get<detail::ast::schema::type_type>(&td.type))
     {
       if (! schema_.add_type(td.name, boost::apply_visitor(std::ref(tm_), *p)))
         error_ = error{"erroneous type declaration: " + td.name};
     }
-    else if (auto p = boost::get<ast::schema::type_info>(&td.type))
+    else if (auto p = boost::get<detail::ast::schema::type_info>(&td.type))
     {
       if (! schema_.add_type_alias(p->name, td.name))
         error_ = error{"could not create type alias"};
     }
   }
 
-  result_type operator()(ast::schema::event_declaration const& ed)
+  result_type operator()(detail::ast::schema::event_declaration const& ed)
   {
     schema::event e;
     e.name = ed.name;
@@ -159,12 +160,12 @@ struct schema_maker
     schema_.add_event(std::move(e));
   }
 
-  type_maker tm_;
+  type_factory tm_;
   schema& schema_;
   optional<error> error_;
 };
 
-} // namespace detail
+} // namespace <anonymous>
 
 schema::type_info::type_info(std::string name, intrusive_ptr<schema::type> t)
   : name(std::move(name)),
@@ -291,20 +292,20 @@ trial<schema> schema::load(std::string const& contents)
   if (! success || i != end)
     return error{std::move(err)};
 
-  detail::type_maker type_maker{sch};
+  type_factory tf{sch};
   grammar.basic_type_.for_each(
       [&](std::string const& name, detail::ast::schema::type_info const& info)
       {
-        auto t = boost::apply_visitor(std::ref(type_maker), info.type);
+        auto t = boost::apply_visitor(std::ref(tf), info.type);
         sch.add_type(name, t);
       });
 
-  detail::schema_maker schema_maker{sch};
+  schema_factory sf{sch};
   for (auto& statement : ast)
   {
-    boost::apply_visitor(std::ref(schema_maker), statement);
-    if (schema_maker.error_)
-      return *schema_maker.error_;
+    boost::apply_visitor(std::ref(sf), statement);
+    if (sf.error_)
+      return *sf.error_;
   }
 
   return {std::move(sch)};
@@ -348,14 +349,14 @@ schema::type_info schema::info(std::string const& name) const
 }
 
 
-trial<std::vector<std::vector<size_t>>>
-schema::symbol_offsets(record_type const* rec,
+trial<std::vector<offset>>
+schema::lookup(record_type const* rec,
                        std::vector<std::string> const& ids)
 {
   if (ids.empty())
     return error{"empty ID sequence"};
 
-  std::vector<std::vector<size_t>> offs;
+  std::vector<offset> offs;
   for (size_t i = 0; i < rec->args.size(); ++i)
   {
     auto& ti = rec->args[i].type;
@@ -368,7 +369,7 @@ schema::symbol_offsets(record_type const* rec,
       }
       else if (r)
       {
-        auto arg_offs = argument_offsets(r, {ids.begin() + 1, ids.end()});
+        auto arg_offs = resolve(r, {ids.begin() + 1, ids.end()});
         if (! arg_offs)
           return arg_offs.failure();
 
@@ -378,7 +379,7 @@ schema::symbol_offsets(record_type const* rec,
     }
     else if (auto r = dynamic_cast<record_type const*>(ti.type.get()))
     {
-      auto inner = symbol_offsets(r, ids);
+      auto inner = lookup(r, ids);
       if (! inner)
         return inner.failure();
 
@@ -392,14 +393,14 @@ schema::symbol_offsets(record_type const* rec,
   return {std::move(offs)};
 }
 
-trial<std::vector<size_t>> schema::argument_offsets(
+trial<offset> schema::resolve(
     record_type const* rec,
     std::vector<std::string> const& ids)
 {
   if (ids.empty())
     return error{"empty ID sequence"};
 
-  std::vector<size_t> offs;
+  offset off;
   auto found = true;
   for (auto sym = ids.begin(); sym != ids.end() && found; ++sym)
   {
@@ -420,7 +421,7 @@ trial<std::vector<size_t>> schema::argument_offsets(
         if (sym + 1 != ids.end() && ! rec)
           return error{"intermediate arguments must be records"};
 
-        offs.push_back(i);
+        off.push_back(i);
         break;
       }
     }
@@ -429,7 +430,7 @@ trial<std::vector<size_t>> schema::argument_offsets(
   if (! found)
     return error{"non-existant argument name"};
 
-  return {std::move(offs)};
+  return {std::move(off)};
 }
 
 bool schema::add_type(std::string name, intrusive_ptr<type> t)

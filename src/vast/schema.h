@@ -5,6 +5,7 @@
 #include <vector>
 #include <string>
 #include "vast/fwd.h"
+#include "vast/offset.h"
 #include "vast/util/intrusive.h"
 #include "vast/util/trial.h"
 
@@ -13,12 +14,7 @@ namespace vast {
 class schema
 {
 public:
-  struct type : intrusive_base<type>
-  {
-    type() = default;
-    virtual ~type() = default;
-    virtual bool convert(std::string& to) const = 0;
-  };
+  struct type;
 
   struct type_info
   {
@@ -35,6 +31,13 @@ public:
     std::string name;
     std::vector<std::string> aliases;
     intrusive_ptr<schema::type> type;
+  };
+
+  struct type : intrusive_base<type>
+  {
+    type() = default;
+    virtual ~type() = default;
+    virtual bool convert(std::string& to) const = 0;
   };
 
   struct basic_type : type { };
@@ -126,7 +129,7 @@ public:
   /// @returns An engaged trial on success.
   static trial<schema> read(std::string const& filename);
 
-  /// Computes the offsets vectors for a given symbol sequence.
+  /// Finds the offsets vectors for a given symbol sequence.
   ///
   /// @param rec The record to search for symbol types whose name matches
   /// the first element of *ids*.
@@ -136,19 +139,17 @@ public:
   /// and each subsequent elements of *ids* then represent further argument
   /// names to dereference.
   ///
-  /// @returns A vector of offset vectors. Each offset vector represents a
-  /// sequence of offsets which have to be used in order to get to *name*.
-  /// Since *rec* may contain multiple arguments of type *name*, the result
-  /// is a vector of vectors.
-  static trial<std::vector<std::vector<size_t>>>
-  symbol_offsets(record_type const* rec, std::vector<std::string> const& ids);
+  /// @returns A vector of offsets. The size of the vector corresponds to the
+  /// number of different offsets that exist in *rec* and resolve for *ids*.
+  static trial<std::vector<offset>>
+  lookup(record_type const* rec, std::vector<std::string> const& ids);
 
-  /// Computes the offsets vector for a given argument name sequence.
+  /// Resolves a sequence of names into an offset.
   /// @param rec The event/record to search.
   /// @param ids The argument names to look for in *rec*.
-  /// @returns A vector of offsets to get to *ids*.
-  static trial<std::vector<size_t>>
-  argument_offsets(record_type const* rec, std::vector<std::string> const& ids);
+  /// @returns The offset corresponding to *ids*.
+  static trial<offset>
+  resolve(record_type const* rec, std::vector<std::string> const& ids);
 
   /// Default-constructs a schema.
   schema() = default;
