@@ -3,7 +3,7 @@
 #include "vast/config.h"
 #include "vast/logger.h"
 
-#include <lz4.h>
+#include "lz4/lz4.h"
 #ifdef VAST_HAVE_SNAPPY
 #include <snappy.h>
 #endif // VAST_HAVE_SNAPPY
