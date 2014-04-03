@@ -41,7 +41,7 @@ BOOST_AUTO_TEST_CASE(trivial)
   BOOST_CHECK_EQUAL(to_string(v1), "<invalid>");
 
   value v2{true};
-  BOOST_CHECK_EQUAL(v2.which(), record_value);
+  BOOST_CHECK_EQUAL(v2.which(), bool_value);
   v2.clear();
   BOOST_CHECK(! v2);
   BOOST_CHECK(v2.nil());

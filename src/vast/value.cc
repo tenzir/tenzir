@@ -191,20 +191,6 @@ value::value(table t)
   data_.engage();
 }
 
-value::value(std::initializer_list<value> list)
-{
-  new (&data_.record_) std::unique_ptr<record>{new record(std::move(list))};
-  data_.type(record_value);
-  data_.engage();
-}
-
-value::value(std::initializer_list<std::pair<value const, value>> list)
-{
-  new (&data_.table_) std::unique_ptr<table>{new table(std::move(list))};
-  data_.type(table_value);
-  data_.engage();
-}
-
 value::operator bool() const
 {
   return data_.engaged();

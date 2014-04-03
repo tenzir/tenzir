@@ -118,8 +118,6 @@ public:
   value(vector v);
   value(set s);
   value(table t);
-  value(std::initializer_list<value> list);
-  value(std::initializer_list<std::pair<value const, value>> list);
 
   template <typename Rep, typename Period>
   value(std::chrono::duration<Rep, Period> duration)
