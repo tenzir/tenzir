@@ -1202,7 +1202,7 @@ public:
         extractor_state_->complete = true; // Finished with top-most record.
       if (! arg)
         continue;
-      if (arg.which() == record_type)
+      if (arg.which() == record_value)
       {
         extractor_state_->pos.emplace_back(&arg.get<record>(), 0);
         continue;
@@ -1242,7 +1242,7 @@ public:
         [&](std::unique_ptr<node> const& operand) -> bool
         {
           operand->accept(*this);
-          assert(result_ && result_.which() == bool_type);
+          assert(result_ && result_.which() == bool_value);
           return result_.get<bool>();
         });
   }
@@ -1255,7 +1255,7 @@ public:
         [&](std::unique_ptr<node> const& operand) -> bool
         {
           operand->accept(*this);
-          assert(result_ && result_.which() == bool_type);
+          assert(result_ && result_.which() == bool_value);
           return result_.get<bool>();
         });
   }

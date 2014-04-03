@@ -31,7 +31,7 @@ BOOST_AUTO_TEST_CASE(event_construction)
                     "foo [123456789|1970-01-01+00:00:00] T, 42, -234987");
 
   // The initializer list ctor forwards the arguments to the base record.
-  BOOST_CHECK_EQUAL(event{42}[0].which(), int_type);
+  BOOST_CHECK_EQUAL(event{42}[0].which(), int_value);
 }
 
 BOOST_AUTO_TEST_CASE(quantifiers)
@@ -46,16 +46,16 @@ BOOST_AUTO_TEST_CASE(quantifiers)
     }
   };
 
-  BOOST_CHECK(e.any([](value const& v) { return v.which() == bool_type; }));
-  BOOST_CHECK(e.all([](value const& v) { return v.which() != record_type; }));
+  BOOST_CHECK(e.any([](value const& v) { return v.which() == bool_value; }));
+  BOOST_CHECK(e.all([](value const& v) { return v.which() != record_value; }));
 
   BOOST_CHECK(
-      e.any([](value const& v) { return v.which() == record_type; }, false));
+      e.any([](value const& v) { return v.which() == record_value; }, false));
 
   BOOST_CHECK(
       e.any([](value const& v)
             {
-              return v.which() == uint_type && v && v.get<uint64_t>() == 43;
+              return v.which() == uint_value && v && v.get<uint64_t>() == 43;
             }));
 
   // We currently don't recurse into tables. If such a semantic turns out to be
@@ -63,6 +63,6 @@ BOOST_AUTO_TEST_CASE(quantifiers)
   BOOST_CHECK(
       ! e.any([](value const& v)
           {
-            return v.which() == double_type && v && v.get<double>() == -2.4;
+            return v.which() == double_value && v && v.get<double>() == -2.4;
           }));
 }

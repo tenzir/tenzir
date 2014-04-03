@@ -305,10 +305,10 @@ class arithmetic_bitmap_index
 
   using bitmap_type =
     typename std::conditional<
-      T == time_range_type || T == time_point_type,
+      T == time_range_value || T == time_point_value,
       time_range::rep,
       typename std::conditional<
-        T == bool_type || T == int_type || T == uint_type || T == double_type,
+        T == bool_value || T == int_value || T == uint_value || T == double_value,
         underlying_value_type,
         std::false_type
       >::type
@@ -317,7 +317,7 @@ class arithmetic_bitmap_index
   template <typename U>
   using bitmap_binner =
     typename std::conditional<
-      T == double_type || T == time_range_type || T == time_point_type,
+      T == double_value || T == time_range_value || T == time_point_value,
       precision_binner<U>,
       null_binner<U>
     >::type;
@@ -325,7 +325,7 @@ class arithmetic_bitmap_index
   template <typename B, typename U>
   using bitmap_coder =
     typename std::conditional<
-      T == bool_type,
+      T == bool_value,
       equality_coder<B, U>,
       typename std::conditional<
         std::is_arithmetic<bitmap_type>::value,
@@ -355,9 +355,9 @@ private:
     {
       default:
         return val.get<bitmap_type>();
-      case time_range_type:
+      case time_range_value:
         return val.get<time_range>().count();
-      case time_point_type:
+      case time_point_value:
         return val.get<time_point>().since_epoch().count();
     }
   }
@@ -484,7 +484,7 @@ private:
 
   trial<bitstream> lookup_impl(relational_operator op, value const& val) const
   {
-    assert(val.which() == string_type);
+    assert(val.which() == string_value);
 
     auto str = val.get<string>();
 
@@ -645,9 +645,9 @@ private:
     {
       default:
         return error{"invalid value type"};
-      case address_type:
+      case address_value:
         return lookup_impl(op, val.get<address>());
-      case prefix_type:
+      case prefix_value:
         return lookup_impl(op, val.get<prefix>());
     }
   }
@@ -762,7 +762,7 @@ private:
 
   trial<bitstream> lookup_impl(relational_operator op, value const& val) const
   {
-    assert(val.which() == port_type);
+    assert(val.which() == port_value);
 
     if (op == in || op == not_in)
       return error{"unsupported relational operator " + to<std::string>(op)};
@@ -838,9 +838,9 @@ public:
 private:
   bool push_back_impl(value const& val)
   {
-    if (val.which() == set_type)
+    if (val.which() == set_value)
       return push_back_container<set>(val);
-    else if (val.which() == vector_type)
+    else if (val.which() == vector_value)
       return push_back_container<vector>(val);
     else
       return false;
@@ -972,23 +972,23 @@ trial<bitmap_index<Bitstream>> make_bitmap_index(value_type t, Args&&... args)
   {
     default:
       return error{"unspported value type: " + to_string(t)};
-    case bool_type:
-      return {arithmetic_bitmap_index<Bitstream, bool_type>(std::forward<Args>(args)...)};
-    case int_type:
-      return {arithmetic_bitmap_index<Bitstream, int_type>(std::forward<Args>(args)...)};
-    case uint_type:
-      return {arithmetic_bitmap_index<Bitstream, uint_type>(std::forward<Args>(args)...)};
-    case double_type:
-      return {arithmetic_bitmap_index<Bitstream, double_type>(std::forward<Args>(args)...)};
-    case time_range_type:
-      return {arithmetic_bitmap_index<Bitstream, time_range_type>(std::forward<Args>(args)...)};
-    case time_point_type:
-      return {arithmetic_bitmap_index<Bitstream, time_point_type>(std::forward<Args>(args)...)};
-    case string_type:
+    case bool_value:
+      return {arithmetic_bitmap_index<Bitstream, bool_value>(std::forward<Args>(args)...)};
+    case int_value:
+      return {arithmetic_bitmap_index<Bitstream, int_value>(std::forward<Args>(args)...)};
+    case uint_value:
+      return {arithmetic_bitmap_index<Bitstream, uint_value>(std::forward<Args>(args)...)};
+    case double_value:
+      return {arithmetic_bitmap_index<Bitstream, double_value>(std::forward<Args>(args)...)};
+    case time_range_value:
+      return {arithmetic_bitmap_index<Bitstream, time_range_value>(std::forward<Args>(args)...)};
+    case time_point_value:
+      return {arithmetic_bitmap_index<Bitstream, time_point_value>(std::forward<Args>(args)...)};
+    case string_value:
       return {string_bitmap_index<Bitstream>(std::forward<Args>(args)...)};
-    case address_type:
+    case address_value:
       return {address_bitmap_index<Bitstream>(std::forward<Args>(args)...)};
-    case port_type:
+    case port_value:
       return {port_bitmap_index<Bitstream>(std::forward<Args>(args)...)};
   }
 }

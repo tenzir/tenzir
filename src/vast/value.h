@@ -14,11 +14,11 @@
 namespace vast {
 
 /// The invalid or optional value.
-struct invalid_value { };
-constexpr invalid_value invalid = {};
+struct value_invalid { };
+constexpr value_invalid invalid = {};
 
 template <typename Iterator>
-bool print(Iterator& out, invalid_value)
+bool print(Iterator& out, value_invalid)
 {
   static constexpr auto str = "<invalid>";
   out = std::copy(str, str + 9, out);
@@ -89,7 +89,7 @@ public:
   static value parse(std::string const& str);
 
   /// Default-constructs an invalid value.
-  value(invalid_value = vast::invalid);
+  value(value_invalid = vast::invalid);
 
   /// Constructs a disengaged value of a given type.
   /// @param t The type of the value.
@@ -125,7 +125,7 @@ public:
   value(std::chrono::duration<Rep, Period> duration)
   {
     new (&data_.time_range_) time_range{duration};
-    data_.type(time_range_type);
+    data_.type(time_range_value);
     data_.engage();
   }
 
@@ -133,7 +133,7 @@ public:
   value(std::chrono::time_point<Clock, Duration> time)
   {
     new (&data_.time_point_) time_point{time};
-    data_.type(time_point_type);
+    data_.type(time_point_value);
     data_.engage();
   }
 
@@ -237,27 +237,27 @@ private:
     {
       default:
         throw std::logic_error("unknown value parser");
-      case bool_type:
+      case bool_value:
         VAST_PARSE_CASE(bool)
-      case int_type:
+      case int_value:
         VAST_PARSE_CASE(int64_t)
-      case uint_type:
+      case uint_value:
         VAST_PARSE_CASE(uint64_t)
-      case double_type:
+      case double_value:
         VAST_PARSE_CASE(double)
-      case time_range_type:
+      case time_range_value:
         VAST_PARSE_CASE(time_range)
-      case time_point_type:
+      case time_point_value:
         VAST_PARSE_CASE(time_point)
-      case string_type:
+      case string_value:
         VAST_PARSE_CASE(string)
-      case regex_type:
+      case regex_value:
         VAST_PARSE_CASE(regex)
-      case address_type:
+      case address_value:
         VAST_PARSE_CASE(address)
-      case prefix_type:
+      case prefix_value:
         VAST_PARSE_CASE(prefix)
-      case port_type:
+      case port_value:
         VAST_PARSE_CASE(port)
     }
 #undef VAST_PARSE_CASE
@@ -381,42 +381,43 @@ struct visit_impl
   {
     if (x.nil())
       return f(x.which());
+
     switch (x.which())
     {
       default:
         throw std::runtime_error("corrupt value type");
         break;
-      case invalid_type:
+      case invalid_value:
         return f(invalid);
-      case bool_type:
+      case bool_value:
         return f(x.data_.bool_);
-      case int_type:
+      case int_value:
         return f(x.data_.int_);
-      case uint_type:
+      case uint_value:
         return f(x.data_.uint_);
-      case double_type:
+      case double_value:
         return f(x.data_.double_);
-      case time_range_type:
+      case time_range_value:
         return f(x.data_.time_range_);
-      case time_point_type:
+      case time_point_value:
         return f(x.data_.time_point_);
-      case string_type:
+      case string_value:
         return f(x.data_.string_);
-      case regex_type:
+      case regex_value:
         return f(*x.data_.regex_);
-      case address_type:
+      case address_value:
         return f(x.data_.address_);
-      case prefix_type:
+      case prefix_value:
         return f(x.data_.prefix_);
-      case port_type:
+      case port_value:
         return f(x.data_.port_);
-      case record_type:
+      case record_value:
         return f(*x.data_.record_);
-      case vector_type:
+      case vector_value:
         return f(*x.data_.vector_);
-      case set_type:
+      case set_value:
         return f(*x.data_.set_);
-      case table_type:
+      case table_value:
         return f(*x.data_.table_);
     }
   }
@@ -428,42 +429,43 @@ struct visit_impl
   {
     if (x.nil())
       return visit_impl::apply(y, value_bind(f, x.which()));
+
     switch (x.which())
     {
       default:
         throw std::runtime_error("corrupt value type");
         break;
-      case invalid_type:
+      case invalid_value:
         return visit_impl::apply(y, value_bind(f, invalid));
-      case bool_type:
+      case bool_value:
         return visit_impl::apply(y, value_bind(f, x.data_.bool_));
-      case int_type:
+      case int_value:
         return visit_impl::apply(y, value_bind(f, x.data_.int_));
-      case uint_type:
+      case uint_value:
         return visit_impl::apply(y, value_bind(f, x.data_.uint_));
-      case double_type:
+      case double_value:
         return visit_impl::apply(y, value_bind(f, x.data_.double_));
-      case time_range_type:
+      case time_range_value:
         return visit_impl::apply(y, value_bind(f, x.data_.time_range_));
-      case time_point_type:
+      case time_point_value:
         return visit_impl::apply(y, value_bind(f, x.data_.time_point_));
-      case string_type:
+      case string_value:
         return visit_impl::apply(y, value_bind(f, x.data_.string_));
-      case regex_type:
+      case regex_value:
         return visit_impl::apply(y, value_bind(f, *x.data_.regex_));
-      case address_type:
+      case address_value:
         return visit_impl::apply(y, value_bind(f, x.data_.address_));
-      case prefix_type:
+      case prefix_value:
         return visit_impl::apply(y, value_bind(f, x.data_.prefix_));
-      case port_type:
+      case port_value:
         return visit_impl::apply(y, value_bind(f, x.data_.port_));
-      case record_type:
+      case record_value:
         return visit_impl::apply(y, value_bind(f, *x.data_.record_));
-      case vector_type:
+      case vector_value:
         return visit_impl::apply(y, value_bind(f, *x.data_.vector_));
-      case set_type:
+      case set_value:
         return visit_impl::apply(y, value_bind(f, *x.data_.set_));
-      case table_type:
+      case table_value:
         return visit_impl::apply(y, value_bind(f, *x.data_.table_));
     }
   }

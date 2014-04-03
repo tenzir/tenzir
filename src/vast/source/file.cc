@@ -1,6 +1,7 @@
 #include "vast/source/file.h"
 
 #include "vast/util/field_splitter.h"
+#include "vast/schema.h"
 
 namespace vast {
 namespace source {
@@ -11,37 +12,37 @@ namespace {
 value_type bro_to_vast(string const& type)
 {
   if (type == "enum" || type == "string" || type == "file")
-    return string_type;
+    return string_value;
   else if (type == "bool")
-    return bool_type;
+    return bool_value;
   else if (type == "int")
-    return int_type;
+    return int_value;
   else if (type == "count")
-    return uint_type;
+    return uint_value;
   else if (type == "double")
-    return double_type;
+    return double_value;
   else if (type == "interval")
-    return time_range_type;
+    return time_range_value;
   else if (type == "time")
-    return time_point_type;
+    return time_point_value;
   else if (type == "addr")
-    return address_type;
+    return address_value;
   else if (type == "port")
-    return port_type;
+    return port_value;
   else if (type == "pattern")
-    return regex_type;
+    return regex_value;
   else if (type == "subnet")
-    return prefix_type;
+    return prefix_value;
   else if (type.starts_with("record"))
-    return record_type;
+    return record_value;
   else if (type.starts_with("vector"))
-    return vector_type;
+    return vector_value;
   else if (type.starts_with("set"))
-    return set_type;
+    return set_value;
   else if (type.starts_with("table"))
-    return table_type;
+    return table_value;
   else
-    return invalid_type;
+    return invalid_value;
 }
 
 } // namespace <anonymous>
@@ -53,7 +54,6 @@ bro2::bro2(cppa::actor_ptr sink, std::string const& filename,
 {
 }
 
-// TODO: switch to grammar-based parsing.
 result<event> bro2::extract_impl_impl()
 {
   using vast::extract;
@@ -160,7 +160,7 @@ result<event> bro2::extract_impl_impl()
       continue;
     }
 
-    if (field_types_[f] == record_type)
+    if (field_types_[f] == record_value)
     {
       record r;
       if (! extract(start, end, r, complex_types_[containers++],
@@ -169,7 +169,7 @@ result<event> bro2::extract_impl_impl()
 
       e.emplace_back(std::move(r));
     }
-    else if (field_types_[f] == vector_type)
+    else if (field_types_[f] == vector_value)
     {
       vector v;
       if (! extract(start, end, v, complex_types_[containers++],
@@ -178,7 +178,7 @@ result<event> bro2::extract_impl_impl()
 
       e.emplace_back(std::move(v));
     }
-    else if (field_types_[f] == set_type || field_types_[f] == table_type)
+    else if (field_types_[f] == set_value || field_types_[f] == table_value)
     {
       set s;
       if (! extract(start, end, s, complex_types_[containers++],
@@ -194,7 +194,7 @@ result<event> bro2::extract_impl_impl()
         return error{"could not parse field: " + std::string{start, end}};
 
       if (f == static_cast<size_t>(timestamp_field_)
-          && v.which() == time_point_type)
+          && v.which() == time_point_value)
         e.timestamp(v.get<time_point>());
 
       e.push_back(std::move(v));
@@ -209,7 +209,7 @@ char const* bro2::description_impl_impl() const
   return "bro2-source";
 }
 
-trial<nothing> bro2::parse_header()
+trial<schema> bro2::parse_header()
 {
   auto line = this->current();
   if (! line)
@@ -349,7 +349,7 @@ trial<nothing> bro2::parse_header()
   else
   {
     for (size_t i = 0; i < field_types_.size(); ++i)
-      if (field_types_[0] == time_point_type)
+      if (field_types_[0] == time_point_value)
       {
         VAST_LOG_ACTOR_VERBOSE("auto-detected field " << i <<
                                " as event timestamp");
@@ -358,7 +358,19 @@ trial<nothing> bro2::parse_header()
       }
   }
 
-  return nil;
+  //std::vector<argument> args;
+  //for (size_t i = 0; i < field_names_; ++i)
+  //{
+  //  schema::argument a;
+  //  a.name = field_names_[i];
+
+  //  e.args.push_back(std::move(a));
+  //}
+
+  //event_info e{path_, ;
+  schema s;
+
+  return s;
 }
 
 } // namespace source

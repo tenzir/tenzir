@@ -18,7 +18,7 @@ BOOST_AUTO_TEST_CASE(polymorphic_bitmap_index)
 
 BOOST_AUTO_TEST_CASE(boolean_bitmap_index)
 {
-  arithmetic_bitmap_index<null_bitstream, bool_type> bmi, bmi2;
+  arithmetic_bitmap_index<null_bitstream, bool_value> bmi, bmi2;
   BOOST_REQUIRE(bmi.push_back(true));
   BOOST_REQUIRE(bmi.push_back(true));
   BOOST_REQUIRE(bmi.push_back(false));
@@ -43,7 +43,7 @@ BOOST_AUTO_TEST_CASE(boolean_bitmap_index)
 
 BOOST_AUTO_TEST_CASE(integral_bitmap_index)
 {
-  arithmetic_bitmap_index<null_bitstream, int_type> bmi;
+  arithmetic_bitmap_index<null_bitstream, int_value> bmi;
   BOOST_REQUIRE(bmi.push_back(-7));
   BOOST_REQUIRE(bmi.push_back(42));
   BOOST_REQUIRE(bmi.push_back(10000));
@@ -65,7 +65,7 @@ BOOST_AUTO_TEST_CASE(integral_bitmap_index)
 
 BOOST_AUTO_TEST_CASE(floating_point_bitmap_index)
 {
-  arithmetic_bitmap_index<null_bitstream, double_type> bmi{-2};
+  arithmetic_bitmap_index<null_bitstream, double_value> bmi{-2};
   BOOST_REQUIRE(bmi.push_back(-7.8));
   BOOST_REQUIRE(bmi.push_back(42.123));
   BOOST_REQUIRE(bmi.push_back(10000.0));
@@ -82,7 +82,7 @@ BOOST_AUTO_TEST_CASE(floating_point_bitmap_index)
 
 BOOST_AUTO_TEST_CASE(time_point_bitmap_index)
 {
-  arithmetic_bitmap_index<null_bitstream, time_point_type> bmi{9}, bmi2;
+  arithmetic_bitmap_index<null_bitstream, time_point_value> bmi{9}, bmi2;
   BOOST_REQUIRE(bmi.push_back(time_point{"2014-01-16+05:30:15"}));
   BOOST_REQUIRE(bmi.push_back(time_point{"2014-01-16+05:30:12"}));
   BOOST_REQUIRE(bmi.push_back(time_point{"2014-01-16+05:30:15"}));
@@ -108,7 +108,7 @@ BOOST_AUTO_TEST_CASE(time_point_bitmap_index)
 BOOST_AUTO_TEST_CASE(time_range_bitmap_index)
 {
   // A precision of 8 translates into a resolution of 0.1 sec.
-  arithmetic_bitmap_index<null_bitstream, time_range_type> bmi{8}, bmi2;
+  arithmetic_bitmap_index<null_bitstream, time_range_value> bmi{8}, bmi2;
   BOOST_REQUIRE(bmi.push_back(std::chrono::milliseconds(1000)));
   BOOST_REQUIRE(bmi.push_back(std::chrono::milliseconds(2000)));
   BOOST_REQUIRE(bmi.push_back(std::chrono::milliseconds(3000)));
@@ -299,7 +299,7 @@ BOOST_AUTO_TEST_CASE(transport_port_bitmap_index_ewah)
 
 BOOST_AUTO_TEST_CASE(container_bitmap_index)
 {
-  set_bitmap_index<null_bitstream> bmi{string_type};
+  set_bitmap_index<null_bitstream> bmi{string_value};
 
   set s;
   s.emplace_back("foo");

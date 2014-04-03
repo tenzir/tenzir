@@ -161,7 +161,7 @@ BOOST_AUTO_TEST_CASE(parse_record)
     string str("(1, 2, 3)");
     auto i = str.begin();
     record r;
-    BOOST_CHECK(extract(i, str.end(), r, int_type));
+    BOOST_CHECK(extract(i, str.end(), r, int_value));
     BOOST_CHECK(i == str.end());
     record expected{1, 2, 3};
     BOOST_CHECK_EQUAL(r, expected);
@@ -170,7 +170,7 @@ BOOST_AUTO_TEST_CASE(parse_record)
     string str("a--b--c");
     auto i = str.begin();
     record r;
-    BOOST_CHECK(extract(i, str.end(), r, string_type, "--"));
+    BOOST_CHECK(extract(i, str.end(), r, string_value, "--"));
     BOOST_CHECK(i == str.end());
     record expected{"a", "b", "c"};
     BOOST_CHECK_EQUAL(r, expected);
@@ -261,78 +261,78 @@ BOOST_AUTO_TEST_CASE(parse_value)
   // Booleans
   {
     auto v = value::parse("T");
-    BOOST_CHECK_EQUAL(v.which(), bool_type);
+    BOOST_CHECK_EQUAL(v.which(), bool_value);
     BOOST_CHECK(v.get<bool>());
 
     v = value::parse("F");
-    BOOST_CHECK_EQUAL(v.which(), bool_type);
+    BOOST_CHECK_EQUAL(v.which(), bool_value);
     BOOST_CHECK(! v.get<bool>());
   }
 
   // Numbers
   {
     auto v = value::parse("123456789");
-    BOOST_CHECK_EQUAL(v.which(), uint_type);
+    BOOST_CHECK_EQUAL(v.which(), uint_value);
     BOOST_CHECK_EQUAL(v.get<uint64_t>(), 123456789ll);
 
     v = value::parse("+123456789");
-    BOOST_CHECK_EQUAL(v.which(), int_type);
+    BOOST_CHECK_EQUAL(v.which(), int_value);
     BOOST_CHECK_EQUAL(v.get<int64_t>(), 123456789ll);
 
     v = value::parse("-123456789");
-    BOOST_CHECK_EQUAL(v.which(), int_type);
+    BOOST_CHECK_EQUAL(v.which(), int_value);
     BOOST_CHECK_EQUAL(v.get<int64_t>(), -123456789ll);
 
     v = value::parse("-123.456789");
-    BOOST_CHECK_EQUAL(v.which(), double_type);
+    BOOST_CHECK_EQUAL(v.which(), double_value);
     BOOST_CHECK_EQUAL(v.get<double>(), -123.456789);
   }
 
   // Time ranges
   {
     auto v = value::parse("42 nsecs");
-    BOOST_CHECK_EQUAL(v.which(), time_range_type);
+    BOOST_CHECK_EQUAL(v.which(), time_range_value);
     BOOST_CHECK_EQUAL(v.get<time_range>().count(), 42ll);
 
     v = value::parse("42 musec");
-    BOOST_CHECK_EQUAL(v.which(), time_range_type);
+    BOOST_CHECK_EQUAL(v.which(), time_range_value);
     BOOST_CHECK_EQUAL(v.get<time_range>().count(), 42000ll);
 
     v = value::parse("-42 msec");
-    BOOST_CHECK_EQUAL(v.which(), time_range_type);
+    BOOST_CHECK_EQUAL(v.which(), time_range_value);
     BOOST_CHECK_EQUAL(v.get<time_range>().count(), -42000000ll);
 
     v = value::parse("99 secs");
-    BOOST_CHECK_EQUAL(v.which(), time_range_type);
+    BOOST_CHECK_EQUAL(v.which(), time_range_value);
     BOOST_CHECK_EQUAL(v.get<time_range>().count(), 99000000000ll);
 
     v = value::parse("5 mins");
-    BOOST_CHECK_EQUAL(v.which(), time_range_type);
+    BOOST_CHECK_EQUAL(v.which(), time_range_value);
     BOOST_CHECK_EQUAL(v.get<time_range>().count(), 300000000000ll);
     
     v = value::parse("3 hours");
-    BOOST_CHECK_EQUAL(v.which(), time_range_type);
+    BOOST_CHECK_EQUAL(v.which(), time_range_value);
     BOOST_CHECK_EQUAL(v.get<time_range>().count(), 10800000000000ll);
 
     v = value::parse("4 days");
-    BOOST_CHECK_EQUAL(v.which(), time_range_type);
+    BOOST_CHECK_EQUAL(v.which(), time_range_value);
     BOOST_CHECK_EQUAL(v.get<time_range>().count(), 345600000000000ll);
 
     v = value::parse("7 weeks");
-    BOOST_CHECK_EQUAL(v.which(), time_range_type);
+    BOOST_CHECK_EQUAL(v.which(), time_range_value);
     BOOST_CHECK_EQUAL(v.get<time_range>().count(), 4233600000000000ll);
 
     v = value::parse("2 months");
-    BOOST_CHECK_EQUAL(v.which(), time_range_type);
+    BOOST_CHECK_EQUAL(v.which(), time_range_value);
     BOOST_CHECK_EQUAL(v.get<time_range>().count(), 5184000000000000ll);
 
     v= value::parse("-8 years");
-    BOOST_CHECK_EQUAL(v.which(), time_range_type);
+    BOOST_CHECK_EQUAL(v.which(), time_range_value);
     BOOST_CHECK_EQUAL(v.get<time_range>().count(), -252288000000000000ll);
   
     // Compound durations
     v = value::parse("5m99s");
-    BOOST_CHECK_EQUAL(v.which(), time_range_type);
+    BOOST_CHECK_EQUAL(v.which(), time_range_value);
     BOOST_CHECK_EQUAL(v.get<time_range>().count(), 399000000000ll);
   }
 
@@ -343,7 +343,7 @@ BOOST_AUTO_TEST_CASE(parse_value)
     BOOST_CHECK_EQUAL(t, time_point(2012, 8, 12, 23, 55, 4));
 
     v = value::parse("2012-08-12+00:00:00");
-    BOOST_CHECK_EQUAL(v.which(), time_point_type);
+    BOOST_CHECK_EQUAL(v.which(), time_point_value);
     BOOST_CHECK_EQUAL(v.get<time_point>().since_epoch().count(),
                       1344729600000000000ll);
 
@@ -368,83 +368,83 @@ BOOST_AUTO_TEST_CASE(parse_value)
   {
     // Escaped
     auto v = value::parse("\"new\\nline\\\"esc\"");
-    BOOST_CHECK_EQUAL(v.which(), string_type);
+    BOOST_CHECK_EQUAL(v.which(), string_value);
     BOOST_CHECK_EQUAL(v, "new\nline\"esc");
   }
 
   // Regexes
   {
     auto v = value::parse("/../");
-    BOOST_CHECK_EQUAL(v.which(), regex_type);
+    BOOST_CHECK_EQUAL(v.which(), regex_value);
     BOOST_CHECK_EQUAL(v, regex{".."});
   
     v = value::parse("/\\/../");
-    BOOST_CHECK_EQUAL(v.which(), regex_type);
+    BOOST_CHECK_EQUAL(v.which(), regex_value);
     BOOST_CHECK_EQUAL(v, regex{"/.."});
   }
 
   // Vectors
   {
     auto v = value::parse("[1, 2, 3]");
-    BOOST_CHECK_EQUAL(v.which(), vector_type);
+    BOOST_CHECK_EQUAL(v.which(), vector_value);
     BOOST_CHECK_EQUAL(v, value(vector{1u, 2u, 3u}));
   }
 
   // Sets
   {
     auto v = value::parse("{+1, +2, +3}");
-    BOOST_CHECK_EQUAL(v.which(), set_type);
+    BOOST_CHECK_EQUAL(v.which(), set_value);
     BOOST_CHECK_EQUAL(v, value(set{1, 2, 3}));
 
     v = value::parse("{\"foo\", \"bar\"}");
-    BOOST_CHECK_EQUAL(v.which(), set_type);
+    BOOST_CHECK_EQUAL(v.which(), set_value);
     BOOST_CHECK_EQUAL(v, value(set{"foo", "bar"}));
   }
 
   // Tables
   {
     auto v = value::parse("{\"x\" -> T, \"y\" -> F}");
-    BOOST_CHECK_EQUAL(v.which(), table_type);
+    BOOST_CHECK_EQUAL(v.which(), table_value);
     BOOST_CHECK_EQUAL(v, value(table{{"x", true}, {"y", false}}));
   }
 
   // Records
   {
     auto v = value::parse("(\"x\", T, 42, +42)");
-    BOOST_CHECK_EQUAL(v.which(), record_type);
+    BOOST_CHECK_EQUAL(v.which(), record_value);
     BOOST_CHECK_EQUAL(v, value(record{"x", true, 42u, 42}));
   }
 
   // Addresses
   {
     auto v = value::parse("127.0.0.1");
-    BOOST_CHECK_EQUAL(v.which(), address_type);
+    BOOST_CHECK_EQUAL(v.which(), address_value);
     BOOST_CHECK_EQUAL(v, address("127.0.0.1"));
 
     v = value::parse("::");
-    BOOST_CHECK_EQUAL(v.which(), address_type);
+    BOOST_CHECK_EQUAL(v.which(), address_value);
     BOOST_CHECK_EQUAL(v, address{"::"});
 
     v = value::parse("f00::");
-    BOOST_CHECK_EQUAL(v.which(), address_type);
+    BOOST_CHECK_EQUAL(v.which(), address_value);
     BOOST_CHECK_EQUAL(v, address{"f00::"});
   }
 
   // Prefixes
   {
     auto v = value::parse("10.0.0.0/8");
-    BOOST_CHECK_EQUAL(v.which(), prefix_type);
+    BOOST_CHECK_EQUAL(v.which(), prefix_value);
     BOOST_CHECK_EQUAL(v, (prefix{address{"10.0.0.0"}, 8}));
 
     v = value::parse("2001:db8:0:0:8:800:200c:417a/64");
-    BOOST_CHECK_EQUAL(v.which(), prefix_type);
+    BOOST_CHECK_EQUAL(v.which(), prefix_value);
     BOOST_CHECK_EQUAL(v, (prefix{address{"2001:db8:0:0:8:800:200c:417a"}, 64}));
   }
 
   // Ports
   {
     auto v = value::parse("53/udp");
-    BOOST_CHECK_EQUAL(v.which(), port_type);
+    BOOST_CHECK_EQUAL(v.which(), port_value);
     BOOST_CHECK_EQUAL(v, (port{53, port::udp}));
   }
 }

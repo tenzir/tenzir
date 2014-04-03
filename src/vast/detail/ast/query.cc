@@ -117,9 +117,9 @@ struct validator : public boost::static_visitor<bool>
     auto rhs_type = rhs.which();
     auto& lhs = pred.lhs;
     return
-      (lhs == "name" && (rhs_type == string_type || rhs_type == regex_type))
-      || (lhs == "time" && rhs_type == time_point_type)
-      || (lhs == "id" && rhs_type == uint_type);
+      (lhs == "name" && (rhs_type == string_value || rhs_type == regex_value))
+      || (lhs == "time" && rhs_type == time_point_value)
+      || (lhs == "id" && rhs_type == uint_value);
   }
 
   bool operator()(type_predicate const& pred) const
@@ -130,11 +130,11 @@ struct validator : public boost::static_visitor<bool>
     auto& op = pred.op;
     return
       lhs_type == rhs_type
-      || (lhs_type == string_type
+      || (lhs_type == string_value
           && (op == match || op == not_match || op == in || op == not_in)
-          && rhs_type == regex_type)
-      || (lhs_type == address_type && pred.op == in
-          && rhs_type == prefix_type);
+          && rhs_type == regex_value)
+      || (lhs_type == address_value && pred.op == in
+          && rhs_type == prefix_value);
   }
 
   bool operator()(offset_predicate const& pred) const

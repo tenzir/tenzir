@@ -9,8 +9,7 @@ struct access;
 class serializer;
 class deserializer;
 
-struct invalid_value;
-struct nil_value;
+struct value_invalid;
 class value;
 enum value_type : uint8_t;
 

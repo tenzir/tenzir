@@ -18,7 +18,7 @@ value const* record::at(offset const& o) const
     auto v = &(*r)[idx];
     if (i + 1 == o.size())
       return v;
-    if (! (v->which() == record_type && *v))
+    if (! (v->which() == record_value && *v))
       return nullptr;
     r = &v->get<record>();
   }
@@ -42,7 +42,7 @@ size_t record::flat_size() const
 void record::each(std::function<void(value const&)> f, bool recurse) const
 {
   for (auto& v : *this)
-    if (recurse && v.which() == record_type && v)
+    if (recurse && v.which() == record_value && v)
       v.get<record>().each(f, recurse);
     else
       f(v);
@@ -52,7 +52,7 @@ bool record::any(std::function<bool(value const&)> f, bool recurse) const
 {
   for (auto& v : *this)
   {
-    if (recurse && v.which() == record_type)
+    if (recurse && v.which() == record_value)
     {
       if (v && v.get<record>().any(f, true))
         return true;
@@ -67,7 +67,7 @@ bool record::all(std::function<bool(value const&)> f, bool recurse) const
 {
   for (auto& v : *this)
   {
-    if (recurse && v.which() == record_type)
+    if (recurse && v.which() == record_value)
     {
       if (v && ! v.get<record>().all(f, recurse))
         return false;
@@ -90,7 +90,7 @@ value const* record::do_flat_at(size_t i, size_t& base) const
   assert(base <= i);
   for (auto& v : *this)
   {
-    if (v.which() == record_type)
+    if (v.which() == record_value)
     {
       auto result = v.get<record>().do_flat_at(i, base);
       if (result)
@@ -109,7 +109,7 @@ void record::do_each_offset(std::function<void(value const&, offset const&)> f,
   o.push_back(0);
   for (auto& v : *this)
   {
-    if (v && v.which() == record_type)
+    if (v && v.which() == record_value)
       v.get<record>().do_each_offset(f, o);
     else
       f(v, o);

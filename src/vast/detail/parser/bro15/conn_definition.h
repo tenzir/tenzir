@@ -159,12 +159,12 @@ connection<Iterator>::connection(std::string& error)
 
   conn
     =   strict_double       [stamp(_val, _1)]
-    >   (   lit('?')        [push_back(_val, make_empty(time_range_type))]
+    >   (   lit('?')        [push_back(_val, make_empty(time_range_value))]
         |   strict_double   [push_back(_val, _1)]       // Duration
         )
     >   addr                [push_back(_val, _1)]       // Originator addr
     >   addr                [push_back(_val, _1)]       // Responder addr
-    >   (   lit('?')        [push_back(_val, make_empty(string_type))]
+    >   (   lit('?')        [push_back(_val, make_empty(string_value))]
         |   id              [push_back(_val, _1)]       // Service
         )
     >   uint16              [_a = _1]                   // Originator port
@@ -172,10 +172,10 @@ connection<Iterator>::connection(std::string& error)
     >   id                  [push_back(_val, make_port(_a, _1))]
                             [push_back(_val, make_port(_b, _1))]
                             [push_back(_val, _1)]       // Transport proto
-    >   (   lit('?')        [push_back(_val, make_empty(uint_type))]
+    >   (   lit('?')        [push_back(_val, make_empty(uint_value))]
         |   uint64          [push_back(_val, _1)]       // Originator bytes
         )
-    >   (   lit('?')        [push_back(_val, make_empty(uint_type))]
+    >   (   lit('?')        [push_back(_val, make_empty(uint_value))]
         |   uint64          [push_back(_val, _1)]       // Responder bytes
         )
     >   id                  [push_back(_val, _1)]       // State

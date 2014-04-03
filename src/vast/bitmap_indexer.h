@@ -149,12 +149,12 @@ template <typename Bitstream>
 struct event_time_indexer
   : bitmap_indexer<
       event_time_indexer<Bitstream>,
-      arithmetic_bitmap_index<Bitstream, time_point_type>
+      arithmetic_bitmap_index<Bitstream, time_point_value>
     >
 {
   using bitmap_indexer<
     event_time_indexer<Bitstream>,
-    arithmetic_bitmap_index<Bitstream, time_point_type>
+    arithmetic_bitmap_index<Bitstream, time_point_value>
   >::bitmap_indexer;
 
   time_point const* extract(event const& e)
@@ -172,17 +172,19 @@ struct event_data_indexer
 {
   using super = bitmap_indexer<event_data_indexer<BitmapIndex>, BitmapIndex>;
 
-  event_data_indexer(path p, offset o)
+  event_data_indexer(path p, string e, offset o)
     : super{std::move(p)},
+      event_{std::move(e)},
       offset_{std::move(o)}
   {
   }
 
   value const* extract(event const& e) const
   {
-    return e.at(offset_);
+    return e.name() == event_ ? e.at(offset_) : nullptr;
   }
 
+  string event_;
   offset offset_;
 };
 
@@ -208,23 +210,23 @@ trial<cppa::actor_ptr> make_indexer(value_type t, Args&&... args)
   {
     default:
       return error{"unspported value type: " + to_string(t)};
-    case bool_type:
-      return spawn<event_data_indexer<arithmetic_bitmap_index<Bitstream, bool_type>>>(std::forward<Args>(args)...);
-    case int_type:
-      return spawn<event_data_indexer<arithmetic_bitmap_index<Bitstream, int_type>>>(std::forward<Args>(args)...);
-    case uint_type:
-      return spawn<event_data_indexer<arithmetic_bitmap_index<Bitstream, uint_type>>>(std::forward<Args>(args)...);
-    case double_type:
-      return spawn<event_data_indexer<arithmetic_bitmap_index<Bitstream, double_type>>>(std::forward<Args>(args)...);
-    case time_range_type:
-      return spawn<event_data_indexer<arithmetic_bitmap_index<Bitstream, time_range_type>>>(std::forward<Args>(args)...);
-    case time_point_type:
-      return spawn<event_data_indexer<arithmetic_bitmap_index<Bitstream, time_point_type>>>(std::forward<Args>(args)...);
-    case string_type:
+    case bool_value:
+      return spawn<event_data_indexer<arithmetic_bitmap_index<Bitstream, bool_value>>>(std::forward<Args>(args)...);
+    case int_value:
+      return spawn<event_data_indexer<arithmetic_bitmap_index<Bitstream, int_value>>>(std::forward<Args>(args)...);
+    case uint_value:
+      return spawn<event_data_indexer<arithmetic_bitmap_index<Bitstream, uint_value>>>(std::forward<Args>(args)...);
+    case double_value:
+      return spawn<event_data_indexer<arithmetic_bitmap_index<Bitstream, double_value>>>(std::forward<Args>(args)...);
+    case time_range_value:
+      return spawn<event_data_indexer<arithmetic_bitmap_index<Bitstream, time_range_value>>>(std::forward<Args>(args)...);
+    case time_point_value:
+      return spawn<event_data_indexer<arithmetic_bitmap_index<Bitstream, time_point_value>>>(std::forward<Args>(args)...);
+    case string_value:
       return spawn<event_data_indexer<string_bitmap_index<Bitstream>>>(std::forward<Args>(args)...);
-    case address_type:
+    case address_value:
       return spawn<event_data_indexer<address_bitmap_index<Bitstream>>>(std::forward<Args>(args)...);
-    case port_type:
+    case port_value:
       return spawn<event_data_indexer<port_bitmap_index<Bitstream>>>(std::forward<Args>(args)...);
   }
 }

@@ -23,13 +23,13 @@ bool constexpr value_type_check()
 
 BOOST_AUTO_TEST_CASE(types)
 {
-  BOOST_CHECK((value_type_check<invalid_type, invalid_value>()));
-  BOOST_CHECK((value_type_check<bool_type, bool>()));
-  BOOST_CHECK((value_type_check<int_type, int64_t>()));
-  BOOST_CHECK((! value_type_check<int_type, int>()));
-  BOOST_CHECK((value_type_check<uint_type, uint64_t>()));
-  BOOST_CHECK((value_type_check<double_type, double>()));
-  BOOST_CHECK((value_type_check<string_type, string>()));
+  BOOST_CHECK((value_type_check<invalid_value, value_invalid>()));
+  BOOST_CHECK((value_type_check<bool_value, bool>()));
+  BOOST_CHECK((value_type_check<int_value, int64_t>()));
+  BOOST_CHECK((! value_type_check<int_value, int>()));
+  BOOST_CHECK((value_type_check<uint_value, uint64_t>()));
+  BOOST_CHECK((value_type_check<double_value, double>()));
+  BOOST_CHECK((value_type_check<string_value, string>()));
 }
 
 BOOST_AUTO_TEST_CASE(trivial)
@@ -37,26 +37,26 @@ BOOST_AUTO_TEST_CASE(trivial)
   value v1;
   BOOST_CHECK(! v1.nil());
   BOOST_CHECK(v1.invalid());
-  BOOST_CHECK_EQUAL(v1.which(), invalid_type);
+  BOOST_CHECK_EQUAL(v1.which(), invalid_value);
   BOOST_CHECK_EQUAL(to_string(v1), "<invalid>");
 
   value v2{true};
-  BOOST_CHECK_EQUAL(v2.which(), record_type);
+  BOOST_CHECK_EQUAL(v2.which(), record_value);
   v2.clear();
   BOOST_CHECK(! v2);
   BOOST_CHECK(v2.nil());
   BOOST_CHECK(! v2.invalid());
   BOOST_CHECK_THROW(v2.get<record>(), std::bad_cast);
   v2 = "foo";
-  BOOST_CHECK_EQUAL(v2.which(), string_type);
+  BOOST_CHECK_EQUAL(v2.which(), string_value);
   v2.clear();
 
   value v3(v2);
   BOOST_CHECK(v3.nil());
   BOOST_CHECK(! v3.invalid());
-  BOOST_CHECK_EQUAL(v3.which(), string_type);
+  BOOST_CHECK_EQUAL(v3.which(), string_value);
 
-  value v4(string_type);
+  value v4(string_value);
   BOOST_CHECK(! v4);
   BOOST_CHECK(! v4.invalid());
   BOOST_CHECK(v4.nil());
@@ -69,7 +69,7 @@ BOOST_AUTO_TEST_CASE(relational_operators)
   BOOST_CHECK(! (v1 != v2));
 
   v1 = "foo";
-  BOOST_CHECK(v1.which() == string_type);
+  BOOST_CHECK(v1.which() == string_value);
   BOOST_CHECK(v1 != v2);
   BOOST_CHECK(! (v1 == v2));
   BOOST_CHECK(! (v1 < v2));
@@ -78,7 +78,7 @@ BOOST_AUTO_TEST_CASE(relational_operators)
   BOOST_CHECK(! (v1 >= v2));
 
   v2 = 42;
-  BOOST_CHECK(v2.which() == int_type);
+  BOOST_CHECK(v2.which() == int_value);
   BOOST_CHECK(v1 != v2);
   BOOST_CHECK(! (v1 == v2));
   BOOST_CHECK(! (v1 < v2));
@@ -87,7 +87,7 @@ BOOST_AUTO_TEST_CASE(relational_operators)
   BOOST_CHECK(! (v1 >= v2));
 
   v2 = "foo";
-  BOOST_CHECK(v2.which() == string_type);
+  BOOST_CHECK(v2.which() == string_value);
   BOOST_CHECK(v1 == v2);
   BOOST_CHECK(! (v1 != v2));
   BOOST_CHECK(! (v1 < v2));
@@ -111,9 +111,9 @@ BOOST_AUTO_TEST_CASE(boolean)
   BOOST_CHECK(v1 == false);
   BOOST_CHECK(v2 == true);
 
-  value v3(bool_type);
+  value v3(bool_value);
   BOOST_CHECK_EQUAL(to_string(v3), "<bool>");
-  value v4(double_type);
+  value v4(double_value);
   BOOST_CHECK_EQUAL(to_string(v4), "<double>");
   BOOST_CHECK_THROW(v4.get<double>(), std::bad_cast);
 }
@@ -122,8 +122,8 @@ BOOST_AUTO_TEST_CASE(integers)
 {
   value v1(42);
   value v2(42u);
-  BOOST_CHECK(v1.which() == int_type);
-  BOOST_CHECK(v2.which() == uint_type);
+  BOOST_CHECK(v1.which() == int_value);
+  BOOST_CHECK(v2.which() == uint_value);
   BOOST_CHECK_EQUAL(to_string(v1), "+42");
   BOOST_CHECK_EQUAL(to_string(v2), "42");
   BOOST_CHECK(v1 != v2);  // Not comparable due to different signedness.
@@ -139,7 +139,7 @@ BOOST_AUTO_TEST_CASE(integers)
 BOOST_AUTO_TEST_CASE(floating_points)
 {
   value v1(0.0);
-  BOOST_CHECK_EQUAL(v1.which(), double_type);
+  BOOST_CHECK_EQUAL(v1.which(), double_value);
   BOOST_CHECK_EQUAL(to_string(v1), "0.0000000000");
   BOOST_CHECK_EQUAL(v1, 0.0);
 
@@ -159,7 +159,7 @@ BOOST_AUTO_TEST_CASE(strings)
   BOOST_CHECK(std::strcmp(empty.get<string>().data(), "") == 0);
 
   value v1('c');
-  BOOST_CHECK(v1.which() == string_type);
+  BOOST_CHECK(v1.which() == string_value);
   BOOST_CHECK_EQUAL(to_string(v1), "\"c\"");
   v1 = 'x';
   BOOST_CHECK_EQUAL(to_string(v1), "\"x\"");
@@ -209,7 +209,7 @@ BOOST_AUTO_TEST_CASE(regexes)
 {
   regex r{"."};
   value v1(r);
-  BOOST_CHECK(v1.which() == regex_type);
+  BOOST_CHECK(v1.which() == regex_value);
   BOOST_CHECK(v1.get<regex>() == r);
   BOOST_CHECK_EQUAL(to_string(v1), "/./");
 }
@@ -255,7 +255,7 @@ BOOST_AUTO_TEST_CASE(containers)
 BOOST_AUTO_TEST_CASE(addresses)
 {
   value v1(address{"10.1.1.2"});
-  BOOST_CHECK(v1.which() == address_type);
+  BOOST_CHECK(v1.which() == address_value);
   BOOST_CHECK_EQUAL(to_string(v1), "10.1.1.2");
   v1 = address{"127.0.0.1"};
   BOOST_CHECK(v1.get<address>().is_loopback());
@@ -269,7 +269,7 @@ BOOST_AUTO_TEST_CASE(addresses)
 BOOST_AUTO_TEST_CASE(prefixes)
 {
   value v1(prefix{address{"10.1.1.2"}, 8});
-  BOOST_CHECK_EQUAL(v1.which(), prefix_type);
+  BOOST_CHECK_EQUAL(v1.which(), prefix_value);
   BOOST_CHECK_EQUAL(to_string(v1), "10.0.0.0/8");
   BOOST_CHECK_EQUAL(v1.get<prefix>().length(), 8);
   v1 = prefix{address{"127.0.0.1"}, 32};
@@ -280,7 +280,7 @@ BOOST_AUTO_TEST_CASE(prefixes)
 BOOST_AUTO_TEST_CASE(ports)
 {
   value v1(port{8, port::icmp});
-  BOOST_CHECK(v1.which() == port_type);
+  BOOST_CHECK(v1.which() == port_value);
   BOOST_CHECK_EQUAL(to_string(v1), "8/icmp");
   v1 = port{25, port::tcp};
   BOOST_CHECK_EQUAL(to_string(v1), "25/tcp");
