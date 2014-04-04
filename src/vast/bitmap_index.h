@@ -301,15 +301,13 @@ class arithmetic_bitmap_index
   template <typename>
   friend struct detail::bitmap_index_model;
 
-  using underlying_value_type = underlying_value_type<T>;
-
   using bitmap_type =
     typename std::conditional<
       T == time_range_value || T == time_point_value,
       time_range::rep,
       typename std::conditional<
         T == bool_value || T == int_value || T == uint_value || T == double_value,
-        underlying_value_type,
+        value_type_type<T>,
         std::false_type
       >::type
     >::type;

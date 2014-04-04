@@ -17,7 +17,7 @@ namespace {
 template <value_type V, typename U>
 bool constexpr value_type_check()
 {
-  return std::is_same<underlying_value_type<V>, U>::value;
+  return std::is_same<value_type_type<V>, U>::value;
 }
 } // namespace anonymous
 

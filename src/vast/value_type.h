@@ -33,19 +33,19 @@ enum value_type : uint8_t
   port_value       = 0x0b, ///< A transport-layer port value.
 
   // Container types
-  record_value     = 0x0c, ///< A sequence of heterogeneous values.
-  vector_value     = 0x0d, ///< A sequence of homogeneous values.
-  set_value        = 0x0e, ///< A collection of unique values.
-  table_value      = 0x0f  ///< A mapping of values to values.
+  vector_value     = 0x0c, ///< A sequence of homogeneous values.
+  set_value        = 0x0d, ///< A collection of unique values.
+  table_value      = 0x0e, ///< A mapping of values to values.
+  record_value     = 0x0f  ///< A sequence of heterogeneous values.
 };
 
 /// Checks whether a type is container type.
-inline bool is_container_type(value_type t)
+inline bool is_container(value_type t)
 {
-  return t == record_value
-      || t == vector_value
+  return t == vector_value
       || t == set_value
-      || t == table_value;
+      || t == table_value
+      || t == record_value;
 }
 
 void serialize(serializer& sink, value_type x);
@@ -118,23 +118,23 @@ std::ostream& operator<<(std::ostream& out, value_type t);
 /// Meta function to retrieve the underlying type of a given value type.
 /// @tparam T The value type to get the underlying type from.
 template <value_type T>
-using underlying_value_type =
-  IfThenElse<T == invalid_value, value_invalid,
+using value_type_type =
+    IfThenElse<T == invalid_value, value_invalid,
     IfThenElse<T == bool_value, bool,
-      IfThenElse<T == int_value, int64_t,
-        IfThenElse<T == uint_value, uint64_t,
-          IfThenElse<T == double_value, double,
-            IfThenElse<T == time_range_value, time_range,
-              IfThenElse<T == time_point_value, time_point,
-                IfThenElse<T == string_value, string,
-                  IfThenElse<T == address_value, address,
-                    IfThenElse<T == prefix_value, prefix,
-                      IfThenElse<T == port_value, port,
-                        IfThenElse<T == record_value, record,
-                          IfThenElse<T == vector_value, vector,
-                            IfThenElse<T == set_value, set,
-                              IfThenElse<T == table_value, table,
-                                std::false_type>>>>>>>>>>>>>>>;
+    IfThenElse<T == int_value, int64_t,
+    IfThenElse<T == uint_value, uint64_t,
+    IfThenElse<T == double_value, double,
+    IfThenElse<T == time_range_value, time_range,
+    IfThenElse<T == time_point_value, time_point,
+    IfThenElse<T == string_value, string,
+    IfThenElse<T == address_value, address,
+    IfThenElse<T == prefix_value, prefix,
+    IfThenElse<T == port_value, port,
+    IfThenElse<T == record_value, record,
+    IfThenElse<T == vector_value, vector,
+    IfThenElse<T == set_value, set,
+    IfThenElse<T == table_value, table,
+    std::false_type>>>>>>>>>>>>>>>;
 
 } // namespace vast
 

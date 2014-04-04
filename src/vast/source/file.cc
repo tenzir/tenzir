@@ -310,7 +310,7 @@ trial<schema> bro2::parse_header()
     string t(fs.start(i), fs.end(i));
     auto type = bro_to_vast(t);
     field_types_.push_back(type);
-    if (is_container_type(type))
+    if (is_container(type))
     {
       auto open = t.find("[");
       assert(open != string::npos);
