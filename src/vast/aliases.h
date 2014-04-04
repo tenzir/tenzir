@@ -27,6 +27,16 @@ static constexpr event_id max_event_id =
 /// Uniquely identifies a VAST type.
 using type_id = uint64_t;
 
+namespace util {
+
+template <typename T>
+class intrusive_ptr;
+
+} // namespace util;
+
+class type;
+using type_ptr = util::intrusive_ptr<type>;
+
 } // namespace vast
 
 #endif

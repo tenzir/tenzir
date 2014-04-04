@@ -9,7 +9,6 @@ set(libvast_sources
   bitstream.cc
   chunk.cc
   configuration.cc
-  container.cc
   expression.cc
   event.cc
   file_system.cc
@@ -38,6 +37,7 @@ set(libvast_sources
   signal_monitor.cc
   string.cc
   time.cc
+  type.cc
   type_info.cc
   uuid.cc
   value.cc
