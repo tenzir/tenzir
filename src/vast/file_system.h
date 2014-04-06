@@ -261,6 +261,12 @@ trial<nothing> mkdir(path const& p);
 /// iterating.
 void traverse(path const& p, std::function<bool(path const&)> f);
 
+// Loads file contents into a string.
+// @param p The path of the file to load.
+// @param skip_whitespace Whether to ignore whitespace.
+// @returns The contents of the file *p*.
+trial<std::string> load(path const& p, bool skip_whitespace = false);
+
 } // namespace vast
 
 #endif

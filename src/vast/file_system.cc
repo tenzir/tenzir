@@ -1,6 +1,7 @@
 #include "vast/file_system.h"
 
 #include <cassert>
+#include <fstream>
 #include "vast/serialization.h"
 #include "vast/util/convert.h"
 
@@ -528,6 +529,27 @@ void traverse(path const& p, std::function<bool(path const&)> f)
 #else
   assert(false);
 #endif // VAST_POSIX
+}
+
+// Loads file contents into a string.
+trial<std::string> load(path const& p, bool skip_whitespace)
+{
+  if (p.is_directory())
+    return error{"cannot load directory"};
+
+  std::ifstream in{p.str().data()};
+  if (! in)
+    return error{"failed to open file: " + to_string(p)};
+
+  if (! skip_whitespace)
+    in.unsetf(std::ios::skipws);
+
+  std::string contents;
+  std::copy(std::istream_iterator<char>{in},
+            std::istream_iterator<char>{},
+            std::back_inserter(contents));
+
+  return contents;
 }
 
 } // namespace vast
