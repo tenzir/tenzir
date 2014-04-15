@@ -2,7 +2,6 @@
 #define VAST_BITMAP_INDEX_H
 
 #include "vast/bitmap.h"
-#include "vast/container.h"
 #include "vast/operator.h"
 #include "vast/logger.h"
 #include "vast/value.h"

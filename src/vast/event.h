@@ -2,7 +2,6 @@
 #define VAST_EVENT_H
 
 #include "vast/aliases.h"
-#include "vast/container.h"
 #include "vast/string.h"
 #include "vast/value.h"
 #include "vast/fwd.h"

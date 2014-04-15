@@ -2,7 +2,6 @@
 
 #include <cppa/cppa.hpp>
 #include "vast/bitstream.h"
-#include "vast/container.h"
 #include "vast/cow.h"
 #include "vast/expression.h"
 #include "vast/event.h"

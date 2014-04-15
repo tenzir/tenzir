@@ -1,7 +1,6 @@
 #define BOOST_SPIRIT_QI_DEBUG
 
 #include "test.h"
-#include "vast/container.h"
 #include "vast/expression.h"
 #include "vast/util/parse.h"
 #include "vast/detail/parser/query.h"
@@ -134,7 +133,6 @@ BOOST_AUTO_TEST_CASE(parse_string)
   BOOST_CHECK_EQUAL(s0.thin("\"", "\\"), v);
 }
 
-#ifdef ZE_CLANG
 BOOST_AUTO_TEST_CASE(parse_regex)
 {
   {
@@ -153,27 +151,27 @@ BOOST_AUTO_TEST_CASE(parse_regex)
     BOOST_CHECK_EQUAL(start, end);
   }
 }
-#endif
 
-BOOST_AUTO_TEST_CASE(parse_record)
+BOOST_AUTO_TEST_CASE(parse_containers)
 {
   {
-    string str("(1, 2, 3)");
+    string str{"{1, 2, 3}"};
     auto i = str.begin();
-    record r;
-    BOOST_CHECK(extract(i, str.end(), r, int_value));
+    set s;
+    BOOST_CHECK(extract(i, str.end(), s,
+                        type::make<int_type>(), ", ", "{", "}"));
     BOOST_CHECK(i == str.end());
-    record expected{1, 2, 3};
-    BOOST_CHECK_EQUAL(r, expected);
+    set expected{1, 2, 3};
+    BOOST_CHECK_EQUAL(s, expected);
   }
   {
     string str("a--b--c");
     auto i = str.begin();
-    record r;
-    BOOST_CHECK(extract(i, str.end(), r, string_value, "--"));
+    vector v;
+    BOOST_CHECK(extract(i, str.end(), v, type::make<string_type>(), "--"));
     BOOST_CHECK(i == str.end());
-    record expected{"a", "b", "c"};
-    BOOST_CHECK_EQUAL(r, expected);
+    vector expected{"a", "b", "c"};
+    BOOST_CHECK_EQUAL(v, expected);
   }
 }
 

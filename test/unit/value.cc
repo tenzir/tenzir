@@ -1,6 +1,5 @@
 #include "test.h"
 #include <sstream>
-#include "vast/container.h"
 #include "vast/value.h"
 
 using namespace vast;

@@ -1,13 +1,17 @@
 #ifndef VAST_VALUE_H
 #define VAST_VALUE_H
 
+#include <map>
 #include "vast/address.h"
+#include "vast/offset.h"
 #include "vast/port.h"
 #include "vast/prefix.h"
 #include "vast/regex.h"
 #include "vast/string.h"
 #include "vast/time.h"
+#include "vast/type.h"
 #include "vast/value_type.h"
+#include "vast/util/operators.h"
 #include "vast/util/parse.h"
 #include "vast/util/print.h"
 
@@ -221,45 +225,16 @@ private:
   void deserialize(deserializer& source);
 
   template <typename Iterator>
-  bool parse(Iterator& start, Iterator end, value_type type)
-  {
-#define VAST_PARSE_CASE(type)                      \
-        {                                          \
-          type t;                                  \
-          if (! extract(start, end, t))            \
-            return false;                          \
-          *this = t;                               \
-          return true;                             \
-        }
-    switch (type)
-    {
-      default:
-        throw std::logic_error("unknown value parser");
-      case bool_value:
-        VAST_PARSE_CASE(bool)
-      case int_value:
-        VAST_PARSE_CASE(int64_t)
-      case uint_value:
-        VAST_PARSE_CASE(uint64_t)
-      case double_value:
-        VAST_PARSE_CASE(double)
-      case time_range_value:
-        VAST_PARSE_CASE(time_range)
-      case time_point_value:
-        VAST_PARSE_CASE(time_point)
-      case string_value:
-        VAST_PARSE_CASE(string)
-      case regex_value:
-        VAST_PARSE_CASE(regex)
-      case address_value:
-        VAST_PARSE_CASE(address)
-      case prefix_value:
-        VAST_PARSE_CASE(prefix)
-      case port_value:
-        VAST_PARSE_CASE(port)
-    }
-#undef VAST_PARSE_CASE
-  }
+  bool parse(Iterator& start,
+             Iterator end,
+             type_ptr type,
+             string const& set_sep = ", ",
+             string const& set_left = "{",
+             string const& set_right = "}",
+             string const& vec_sep = ", ",
+             string const& vec_left = "[",
+             string const& vec_right = "]",
+             string const& esc = "\\");
 
   template <typename Iterator>
   struct value_printer
@@ -544,6 +519,304 @@ template <typename T>
 inline T const& value::get() const
 {
   return *value::visit(*this, detail::getter<T const>());
+}
+
+/// A vector of values with arbitrary value types.
+class record : public std::vector<value>,
+               util::totally_ordered<record>,
+               util::parsable<record>,
+               util::printable<record>
+{
+  using super = std::vector<value>;
+
+public:
+  record() = default;
+
+  template <
+    typename... Args,
+    typename = DisableIfSameOrDerived<record, Args...>
+  >
+  record(Args&&... args)
+    : super(std::forward<Args>(args)...)
+  {
+  }
+
+  record(std::initializer_list<value> list)
+    : super(std::move(list))
+  {
+  }
+
+  /// Recursively accesses a vector via a list of offsets serving as indices.
+  ///
+  /// @param o The list of offset.
+  ///
+  /// @returns A pointer to the value given by *o* or `nullptr` if
+  /// *o* does not resolve.
+  value const* at(offset const& o) const;
+
+  /// Recursively access a value at a given index.
+  ///
+  /// @param i The recursive index.
+  ///
+  /// @returns A pointer to the value at position *i* as if the record was
+  /// flattened or `nullptr` if *i* i exceeds the flat size of the record.
+  value const* flat_at(size_t i) const;
+
+  /// Computes the size of the flat record in *O(n)* time with *n* being the
+  /// number of leaf elements in the record..
+  ///
+  /// @returns The size of the flattened record.
+  size_t flat_size() const;
+
+  void each(std::function<void(value const&)> f, bool recurse = true) const;
+  bool any(std::function<bool(value const&)> f, bool recurse = true) const;
+  bool all(std::function<bool(value const&)> f, bool recurse = true) const;
+
+  void each_offset(std::function<void(value const&, offset const&)> f) const;
+
+private:
+  value const* do_flat_at(size_t i, size_t& base) const;
+
+  void do_each_offset(std::function<void(value const&, offset const&)> f,
+                      offset& o) const;
+
+private:
+  friend access;
+
+  void serialize(serializer& sink) const;
+  void deserialize(deserializer& source);
+
+  template <typename Iterator>
+  bool parse(Iterator& start,
+             Iterator end,
+             type_ptr const& elem_type,
+             string const& sep = ", ",
+             string const& left = "(",
+             string const& right = ")",
+             string const& esc = "\\")
+  {
+    if (start == end)
+      return false;
+
+    string str;
+    if (! extract(start, end, str) || str.empty())
+      return false;
+
+    clear();
+    value v;
+    for (auto p : str.trim(left, right).split(sep, esc))
+      if (extract(p.first, p.second, v, elem_type))
+        push_back(std::move(v));
+
+    return true;
+  }
+
+  template <typename Iterator>
+  bool print(Iterator& out) const
+  {
+    *out++ = '(';
+    auto first = begin();
+    auto last = end();
+    while (first != last)
+    {
+      if (! render(out, *first))
+        return false;
+      if (++first != last)
+      {
+        *out++ = ',';
+        *out++ = ' ';
+      }
+    }
+    *out++ = ')';
+    return true;
+  }
+
+  friend bool operator==(record const& x, record const& y);
+  friend bool operator<(record const& x, record const& y);
+};
+
+
+// For now, we distinguish vectors and sets only logically.
+
+class vector : public record
+{
+public:
+  using record::record;
+};
+
+class set : public record
+{
+public:
+  using record::record;
+};
+
+
+/// An associative array.
+class table : public std::map<value, value>,
+              util::totally_ordered<table>,
+              util::printable<table>
+{
+  using super = std::map<value, value>;
+
+public:
+  using super::super;
+
+  void each(std::function<void(value const&, value const&)> f) const;
+  bool any(std::function<bool(value const&, value const&)> f) const;
+  bool all(std::function<bool(value const&, value const&)> f) const;
+
+private:
+  friend access;
+
+  void serialize(serializer& sink) const;
+  void deserialize(deserializer& source);
+
+  template <typename Iterator>
+  bool print(Iterator& out) const
+  {
+    *out++ = '{';
+    auto first = begin();
+    auto last = end();
+    while (first != last)
+    {
+      if (! render(out, first->first))
+        return false;
+      if (! render(out, " -> "))
+        return false;
+      if (! render(out, first->second))
+        return false;
+      if (++first != last)
+      if (! render(out, ", "))
+        return false;
+    }
+    *out++ = '}';
+    return true;
+  }
+
+  friend bool operator==(table const& x, table const& y);
+  friend bool operator<(table const& x, table const& y);
+};
+
+
+namespace detail {
+
+template <typename Iterator>
+class value_parser
+{
+public:
+  using result_type = trial<value>;
+
+  value_parser(Iterator& start,
+               Iterator end,
+               string const& set_sep,
+               string const& set_left,
+               string const& set_right,
+               string const& vec_sep,
+               string const& vec_left,
+               string const& vec_right,
+               string const& esc)
+    : start_{start},
+      end_{end},
+      set_sep_{set_sep},
+      set_left_{set_left},
+      set_right_{set_right},
+      vec_sep_{vec_sep},
+      vec_left_{vec_left},
+      vec_right_{vec_right},
+      esc_{esc}
+  {
+  }
+
+  trial<value> operator()(invalid_type const&) const
+  {
+    return error{"cannot parse an invalid type"};
+  }
+
+  trial<value> operator()(enum_type const&) const
+  {
+    return error{"cannot parse an enum type"};
+  }
+
+  template <
+    typename T,
+    typename = EnableIf<is_basic_type<T>>
+  >
+  trial<value> operator()(T const&) const
+  {
+    type_type<T> x;
+    if (! extract(start_, end_, x))
+      return error{"failed to parse basic type"};
+
+    return {std::move(x)};
+  }
+
+  trial<value> operator()(vector_type const& t) const
+  {
+    vector x;
+    if (! extract(start_, end_, x, t.elem_type,
+                vec_sep_, vec_left_, vec_right_, esc_))
+      return error{"failed to parse vector type"};
+
+    return {std::move(x)};
+  }
+
+  trial<value> operator()(set_type const& t) const
+  {
+    set x;
+    if (extract(start_, end_, x, t.elem_type,
+                set_sep_, set_left_, set_right_, esc_))
+      return error{"failed to parse set type"};
+
+    return {std::move(x)};
+  }
+
+  trial<value> operator()(table_type const&) const
+  {
+    return error{"cannot parse tables (yet)"};
+  }
+
+  trial<value> operator()(record_type const&) const
+  {
+    return error{"cannot parse records (yet)"};
+  }
+
+private:
+  Iterator& start_;
+  Iterator end_;
+  string const& set_sep_;
+  string const& set_left_;
+  string const& set_right_;
+  string const& vec_sep_;
+  string const& vec_left_;
+  string const& vec_right_;
+  string const& esc_;
+};
+
+} // namespace detail
+
+template <typename Iterator>
+bool value::parse(Iterator& start,
+           Iterator end,
+           type_ptr type,
+           string const& set_sep,
+           string const& set_left,
+           string const& set_right,
+           string const& vec_sep,
+           string const& vec_left,
+           string const& vec_right,
+           string const& esc)
+{
+  detail::value_parser<Iterator> p{start, end,
+                                   set_sep, set_left, set_right,
+                                   vec_sep, vec_left, vec_right, esc};
+
+  auto t = apply_visitor(p, type->info());
+  if (! t)
+    return false;
+
+  *this = std::move(*t);
+
+  return true;
 }
 
 } // namespace vast

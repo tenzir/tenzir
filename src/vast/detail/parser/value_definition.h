@@ -2,7 +2,6 @@
 #define VAST_DETAIL_PARSER_VALUE_DEFINITION_H
 
 #include "vast/detail/parser/value.h"
-#include "vast/container.h"
 #include "vast/regex.h"
 
 namespace vast {

@@ -1,12 +1,7 @@
 #include "test.h"
 
-#include "vast/container.h"
 #include "vast/file_system.h"
-#include "vast/port.h"
-#include "vast/prefix.h"
-#include "vast/time.h"
-#include "vast/string.h"
-#include "vast/regex.h"
+#include "vast/value.h"
 
 using namespace vast;
 

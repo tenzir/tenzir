@@ -1,5 +1,4 @@
 #include "event_fixture.h"
-#include "vast/container.h"
 #include "vast/regex.h"
 
 using namespace vast;
