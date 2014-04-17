@@ -14,6 +14,7 @@ template <typename T>
 using recursive_wrapper = Juice::recursive_wrapper<T>;
 
 using Juice::apply_visitor;
+using Juice::apply_visitor_binary;
 
 template <typename T, typename Head, typename... Tail>
 auto get(variant<Head, Tail...>& v)
