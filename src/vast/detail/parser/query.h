@@ -30,8 +30,8 @@ struct query : qi::grammar<Iterator, ast::query::query(), skipper<Iterator>>
     qi::rule<Iterator, ast::query::offset_predicate(), skipper<Iterator>>
         offset_pred;
 
-    qi::rule<Iterator, ast::query::event_predicate(), skipper<Iterator>>
-        event_pred;
+    qi::rule<Iterator, ast::query::schema_predicate(), skipper<Iterator>>
+        schema_pred;
 
     qi::rule<Iterator, ast::query::negated_predicate(), skipper<Iterator>>
         not_pred;

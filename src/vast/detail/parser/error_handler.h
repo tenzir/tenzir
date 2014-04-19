@@ -9,7 +9,7 @@ namespace vast {
 namespace detail {
 namespace parser {
 
-/// A parser error handler that uses the logger to report the parse error.
+/// A parser error handler that exposes the error as string.
 template <typename Iterator>
 struct error_handler
 {

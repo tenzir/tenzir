@@ -42,28 +42,28 @@ typedef boost::variant<
   , boost::recursive_wrapper<set_type>
   , boost::recursive_wrapper<table_type>
   , boost::recursive_wrapper<record_type>
-> type_type;
+> type_info;
 
-struct type_info
+struct type
 {
   std::string name;
-  type_type type;
+  type_info info;
 };
 
 struct vector_type
 {
-  type_info element_type;
+  type element_type;
 };
 
 struct set_type
 {
-  type_info element_type;
+  type element_type;
 };
 
 struct table_type
 {
-  type_info key_type;
-  type_info value_type;
+  type key_type;
+  type value_type;
 };
 
 struct attribute
@@ -75,7 +75,7 @@ struct attribute
 struct argument_declaration
 {
   std::string name;
-  type_info type;
+  type type;
   boost::optional<std::vector<attribute>> attrs;
 };
 
@@ -86,7 +86,7 @@ struct record_type
 
 struct type_declaration
 {
-  typedef boost::variant<type_type, type_info> variant_type;
+  using variant_type = boost::variant<type_info, type>;
   std::string name;
   variant_type type;
 };
@@ -110,9 +110,9 @@ typedef std::vector<statement> schema;
 } // namespace vast
 
 BOOST_FUSION_ADAPT_STRUCT(
-    vast::detail::ast::schema::type_info,
+    vast::detail::ast::schema::type,
     (std::string, name)
-    (vast::detail::ast::schema::type_type, type))
+    (vast::detail::ast::schema::type_info, info))
 
 BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::schema::enum_type,
@@ -120,16 +120,16 @@ BOOST_FUSION_ADAPT_STRUCT(
 
 BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::schema::vector_type,
-    (vast::detail::ast::schema::type_info, element_type))
+    (vast::detail::ast::schema::type, element_type))
 
 BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::schema::set_type,
-    (vast::detail::ast::schema::type_info, element_type))
+    (vast::detail::ast::schema::type, element_type))
 
 BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::schema::table_type,
-    (vast::detail::ast::schema::type_info, key_type)
-    (vast::detail::ast::schema::type_info, value_type))
+    (vast::detail::ast::schema::type, key_type)
+    (vast::detail::ast::schema::type, value_type))
 
 BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::schema::attribute,
@@ -139,7 +139,7 @@ BOOST_FUSION_ADAPT_STRUCT(
 BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::schema::argument_declaration,
     (std::string, name)
-    (vast::detail::ast::schema::type_info, type)
+    (vast::detail::ast::schema::type, type)
     (boost::optional<std::vector<vast::detail::ast::schema::attribute>>, attrs))
 
 BOOST_FUSION_ADAPT_STRUCT(

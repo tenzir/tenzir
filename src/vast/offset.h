@@ -12,17 +12,22 @@ struct offset : std::vector<size_t>,
                 util::printable<offset>,
                 util::parsable<offset>
 {
-  //using offset::offset;
+  using super = std::vector<size_t>;
 
   offset() = default;
 
-  offset(std::vector<size_t> v)
-    : std::vector<size_t>(std::move(v))
+  offset(super::const_iterator begin, super::const_iterator end)
+    : super{begin, end}
+  {
+  }
+
+  offset(super v)
+    : super{std::move(v)}
   {
   }
 
   offset(std::initializer_list<size_t> list)
-    : std::vector<size_t>(std::move(list))
+    : super{std::move(list)}
   {
   }
 

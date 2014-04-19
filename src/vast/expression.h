@@ -116,7 +116,7 @@ struct offset_extractor
   : public util::visitable<extractor, offset_extractor, const_visitor>
 {
   offset_extractor() = default;
-  offset_extractor(offset o);
+  offset_extractor(string event, offset off);
 
   virtual offset_extractor* clone() const override;
   virtual bool equals(node const& other) const override;
@@ -124,6 +124,7 @@ struct offset_extractor
   virtual void serialize(serializer& sink) const override;
   virtual void deserialize(deserializer& source) override;
 
+  string event;
   offset off;
 };
 

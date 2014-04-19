@@ -112,8 +112,9 @@ void id_extractor::deserialize(deserializer&)
 }
 
 
-offset_extractor::offset_extractor(offset o)
-  : off(std::move(o))
+offset_extractor::offset_extractor(string event, offset off)
+  : event{std::move(event)},
+    off{std::move(off)}
 {
 }
 
@@ -124,26 +125,30 @@ offset_extractor* offset_extractor::clone() const
 
 void offset_extractor::serialize(serializer& sink) const
 {
-  sink << off;
+  sink << event << off;
 }
 
 void offset_extractor::deserialize(deserializer& source)
 {
-  source >> off;
+  source >> event >> off;
 }
 
 bool offset_extractor::equals(node const& other) const
 {
   if (typeid(*this) != typeid(other))
     return false;
-  return off == static_cast<offset_extractor const&>(other).off;
+
+  auto& that = static_cast<offset_extractor const&>(other);
+  return event == that.event && off == that.off;
 }
 
 bool offset_extractor::is_less_than(node const& other) const
 {
   if (typeid(*this) != typeid(other))
     return typeid(*this).hash_code() < typeid(other).hash_code();
-  return off < static_cast<offset_extractor const&>(other).off;
+
+  auto& that = static_cast<offset_extractor const&>(other);
+  return std::tie(event, off) < std::tie(that.event, that.off);
 }
 
 
@@ -656,7 +661,7 @@ public:
       invert_ = false;
     }
 
-    auto lhs = make_unique<offset_extractor>(pred.off);
+    auto lhs = make_offset_extractor(pred.event, pred.off);
     auto rhs = make_unique<constant>(detail::ast::query::fold(pred.rhs));
     auto p = make_unique<predicate>(op);
     p->add(std::move(lhs));
@@ -665,7 +670,7 @@ public:
     parent_->add(std::move(p));
   }
 
-  void operator()(detail::ast::query::event_predicate const& pred)
+  void operator()(detail::ast::query::schema_predicate const& pred)
   {
     auto op = pred.op;
     if (invert_)
@@ -674,104 +679,43 @@ public:
       invert_ = false;
     }
 
-    if (schema_.events().empty())
+    std::vector<string> ids;
+    for (auto& str : pred.lhs)
+      ids.emplace_back(str);
+
+    auto offs = schema_.find_offsets(ids);
+    if (offs.empty())
     {
-      error_ = error{"no events in schema"};
+      error_ = error{"invalid argument name sequence"};
       return;
     }
 
-    // An event predicate always consists of two components: the event name
-    // extractor and offset extractor. For event dereference sequences (e.g.,
-    // http_request$c$..) the event name is explict, for type dereference
-    // sequences (e.g., connection$id$...), we need to find all events and
-    // types that have an argument of the given type.
-    schema::record_type const* event = nullptr;
-    auto& symbol = pred.lhs.front();
-    for (auto& e : schema_.events())
-    {
-      if (e.name == symbol)
+    // Ensure that all types are compatible to each other.
+    std::vector<type_ptr> types;
+    for (auto& p : offs)
+      types.push_back(schema_.find_type(p.first, p.second));
+
+    assert(! types.empty());
+    for (auto& t : types)
+      if (! t->represents(types[0]))
       {
-        event = &e;
-        break;
-      }
-    }
-    if (event)
-    {
-      // Ignore the event name in lhs[0].
-      auto& ids = pred.lhs;
-      auto offs = schema::resolve(event, {ids.begin() + 1, ids.end()});
-      if (! offs)
-      {
-        error_ = offs.failure();
+        error_ =
+          error{"type clash: " + to_string(*t) + " <> " + to_string(*types[0])};
         return;
       }
 
-      // TODO: factor rest of block in separate function to promote DRY.
-      auto p = make_unique<predicate>(op);
-      auto lhs = make_offset_extractor(std::move(*offs));
+    auto disj = make_unique<disjunction>();
+    for (auto& p : offs)
+    {
+      auto pr = make_unique<predicate>(op);
+      auto lhs = make_offset_extractor(p.first, p.second);
       auto rhs = make_constant(pred.rhs);
-      p->add(std::move(lhs));
-      p->add(std::move(rhs));
-      conjunction* conj;
-      if (! (conj = dynamic_cast<conjunction*>(parent_)))
-      {
-        auto c = make_unique<conjunction>();
-        conj = c.get();
-        parent_->add(std::move(c));
-      }
-      conj->add(make_glob_node(symbol));
-      conj->add(std::move(p));
+      pr->add(std::move(lhs));
+      pr->add(std::move(rhs));
+      disj->add(std::move(pr));
     }
-    else
-    {
-      // The first element in the dereference sequence names a type, now we
-      // have to identify all events and records having argument of that
-      // type.
-      auto found = false;
-      for (auto& t : schema_.types())
-      {
-        if (symbol == t.name)
-        {
-          found = true;
-          break;
-        }
-      }
 
-      if (! found)
-      {
-        error_ = error{"lhs[0] of predicate names neither event nor type"};
-        return;
-      }
-
-      for (auto& e : schema_.events())
-      {
-        auto offsets = schema::lookup(&e, pred.lhs);
-        if (! offsets)
-          continue;
-
-        if (offsets->size() > 1)
-        {
-          error_ = error{"multiple offsets not yet implemented"};
-          return;
-        }
-
-        // TODO: factor rest of block in separate function to promote DRY.
-        auto p = make_unique<predicate>(op);
-        auto lhs = make_offset_extractor(std::move((*offsets)[0]));
-        auto rhs = make_constant(pred.rhs);
-        p->add(std::move(lhs));
-        p->add(std::move(rhs));
-        conjunction* conj;
-        if (! (conj = dynamic_cast<conjunction*>(parent_)))
-        {
-          auto c = make_unique<conjunction>();
-          conj = c.get();
-          parent_->add(std::move(c));
-        }
-        conj->add(make_glob_node(e.name));
-        conj->add(std::move(p));
-      }
-    }
+    parent_->add(std::move(disj));
   }
 
   void operator()(detail::ast::query::negated_predicate const& pred)
@@ -783,9 +727,9 @@ public:
   }
 
 private:
-  std::unique_ptr<offset_extractor> make_offset_extractor(offset o)
+  std::unique_ptr<offset_extractor> make_offset_extractor(string e, offset o)
   {
-    return make_unique<offset_extractor>(std::move(o));
+    return make_unique<offset_extractor>(std::move(e), std::move(o));
   }
 
   std::unique_ptr<constant>
@@ -1324,6 +1268,7 @@ public:
   virtual void visit(offset_extractor const& o)
   {
     indent();
+    str_ += to<std::string>(o.event);
     str_ += '@';
     auto first = o.off.begin();
     auto last = o.off.end();
@@ -1458,7 +1403,7 @@ public:
 
   virtual void visit(offset_extractor const& o)
   {
-    str_ += '@' + to<std::string>(o.off);
+    str_ += to<std::string>(o.event) + '@' + to<std::string>(o.off);
   }
 
   virtual void visit(type_extractor const& t)

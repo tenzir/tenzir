@@ -52,7 +52,7 @@ query<Iterator>::query(error_handler<Iterator>& on_error)
     ("int",       int_value)
     ("count",     uint_value)
     ("double",    double_value)
-    ("duration",  time_range_value)
+    ("interval",  time_range_value)
     ("time",      time_point_value)
     ("string",    string_value)
     ("record",    record_value)
@@ -60,7 +60,7 @@ query<Iterator>::query(error_handler<Iterator>& on_error)
     ("set",       record_value)
     ("table",     table_value)
     ("addr",      address_value)
-    ("prefix",    prefix_value)
+    ("subnet",    prefix_value)
     ("port",      port_value)
     ;
 
@@ -77,7 +77,7 @@ query<Iterator>::query(error_handler<Iterator>& on_error)
     =   tag_pred
     |   type_pred
     |   offset_pred
-    |   event_pred
+    |   schema_pred
     |   ('!' > not_pred)
     ;
 
@@ -96,14 +96,15 @@ query<Iterator>::query(error_handler<Iterator>& on_error)
     ;
 
   offset_pred
-    =   '@'
+    =   identifier
+    >>  '@'
     >   ulong % ','
     >   pred_op
     >   value_expr
     ;
 
-  event_pred
-    =   glob >> *('$' > identifier)
+  schema_pred
+    =   glob >> *('.' > glob)
     >   pred_op
     >   value_expr
     ;
@@ -116,20 +117,8 @@ query<Iterator>::query(error_handler<Iterator>& on_error)
     =   raw[lexeme[(alpha | '_') >> *(alnum | '_' )]]
     ;
 
-  // Supports currently only one level of scoping.
   glob
-    = raw
-      [
-        lexeme
-        [
-              (alpha | '_' | '*' | '?')
-          >> *(alnum | '_' | '*' | '?')
-          >> -(   repeat(2)[':']
-              >   (alpha | '_' | '*' | '?')
-              >> *(alnum | '_' | '*' | '?')
-              )
-         ]
-      ]
+    =   raw[lexeme[(alpha | '_' | '*' | '?') >> *(alnum | '_' | '*' | '?')]]
     ;
 
   event_name
@@ -142,7 +131,7 @@ query<Iterator>::query(error_handler<Iterator>& on_error)
       (tag_pred)
       (type_pred)
       (offset_pred)
-      (event_pred)
+      (schema_pred)
       (identifier)
       );
 
@@ -156,9 +145,10 @@ query<Iterator>::query(error_handler<Iterator>& on_error)
   tag_pred.name("tag predicate");
   offset_pred.name("offset predicate");
   type_pred.name("type predicate");
-  event_pred.name("event predicate");
+  schema_pred.name("schema predicate");
   not_pred.name("negated predicate");
   identifier.name("identifier");
+  glob.name("glob expression");
 }
 
 } // namespace ast

@@ -11,8 +11,10 @@ struct expression_fixture
   {
     event e0{"babba", 1.337, 42u, 100, "bar", -4.80};
     e0.name("foo");
+
     event e1{"yadda", record{false, "baz"}};
     e1.name("bar");
+
     events.push_back(std::move(e0));
     events.push_back(std::move(e1));
   }
@@ -57,7 +59,7 @@ BOOST_AUTO_TEST_CASE(partial_order_test)
 
 BOOST_AUTO_TEST_CASE(parser_tests)
 {
-  auto exprs = 
+  auto exprs =
   {
     // Event tags.
     "&name == \"foo\"",
@@ -65,15 +67,15 @@ BOOST_AUTO_TEST_CASE(parser_tests)
     "&id == 42",
 
     // Offsets.
+    "foo@10,3 < now - 5d10m3s",
+    "foo@0,3,2 ~ /yikes/",
+
     // Type queries.
     ":port < 53/udp",
     ":addr == 192.168.0.1 && :port == 80/tcp",
-    ":string ~ /evil.*/ && :prefix >= 10.0.0.0/8",
-    ":addr == 1.2.3.4 || :prefix != 10.0.0.0/8",
+    ":string ~ /evil.*/ && :subnet >= 10.0.0.0/8",
+    ":addr == 1.2.3.4 || :subnet != 10.0.0.0/8",
     "! :int == +8 || ! :count < 4",
-
-    "@10,3 < now - 5d10m3s",
-    "@0,3,2 ~ /yikes/",
 
     ":string [+ \"foo\"",
     ":string +] \"foo\"",
@@ -86,13 +88,14 @@ BOOST_AUTO_TEST_CASE(parser_tests)
 
     // Groups
     "(:double > 4.2)",
-    ":double > 4.2 && (@4 < now || :port == 53/?)",
-    "(:double > 4.2 && (@4 < now || :port == 53/?))"
+    ":double > 4.2 && (foo@4 < now || :port == 53/?)",
+    "(:double > 4.2 && (foo@4 < now || :port == 53/?))"
   };
 
   for (auto& e : exprs)
     BOOST_CHECK(expr::ast(e));
 
+  // Invalid type name.
   BOOST_CHECK(! expr::ast{":foo == -42"});
 }
 
@@ -142,56 +145,73 @@ BOOST_AUTO_TEST_CASE(type_queries)
   BOOST_CHECK(! bool_eval(ast, events[1]));
 }
 
-BOOST_AUTO_TEST_CASE(event_queries)
+BOOST_AUTO_TEST_CASE(schema_queries)
 {
-  auto sch = schema::load(
-      "event foo(s1: string, d1: double, "
-                 "c: count, i: int, s2: string, d2: double) "
-      "event bar(s1: string, r: record { b: bool, s: string })");;
+  schema sch;
 
-  BOOST_REQUIRE(sch);
+  event_info ei;
+  ei.name = "foo";
+  ei.args.emplace_back("s1", type::make<string_type>());
+  ei.args.emplace_back("d1", type::make<double_type>());
+  ei.args.emplace_back("c", type::make<uint_type>());
+  ei.args.emplace_back("i", type::make<int_type>());
+  ei.args.emplace_back("s2", type::make<string_type>());
+  ei.args.emplace_back("d2", type::make<double_type>());
+  sch.add(ei);
 
-  auto ast = expr::ast("foo$s1 == \"babba\"", *sch);
+  ei.name = "bar";
+  ei.args.clear();
+  ei.args.emplace_back("s1", type::make<string_type>());
+  record_type r;
+  r.args.emplace_back("b", type::make<bool_type>());
+  r.args.emplace_back("s", type::make<string_type>());
+  ei.args.emplace_back("r", type::make<record_type>(std::move(r)));
+  sch.add(std::move(ei));
+
+  auto ast = expr::ast("s1 == \"babba\"", sch);
   BOOST_CHECK(bool_eval(ast, events[0]));
-  ast = expr::ast("foo$d1 > 0.5", *sch);
+  ast = expr::ast("d1 > 0.5", sch);
   BOOST_CHECK(bool_eval(ast, events[0]));
-  ast = expr::ast("foo$d2 < 0.5", *sch);
+  ast = expr::ast("d2 < 0.5", sch);
   BOOST_CHECK(bool_eval(ast, events[0]));
-  ast = expr::ast("bar$r$b == F", *sch);
+  ast = expr::ast("r.b == F", sch);
   BOOST_CHECK(bool_eval(ast, events[1]));
-  ast = expr::ast("bar$r$s == \"baz\"", *sch);
+  ast = expr::ast("r.s == \"baz\"", sch);
   BOOST_CHECK(bool_eval(ast, events[1]));
 
   // Invalid event name.
-  auto a = expr::ast::parse("not$there ~ /nil/", *sch);
+  auto a = expr::ast::parse("not.there ~ /nil/", sch);
   BOOST_REQUIRE(! a);
 
   // 'puff' is no argument.
-  a = expr::ast::parse("bar$puff ~ /nil/", *sch);
+  a = expr::ast::parse("puff ~ /nil/", sch);
   BOOST_REQUIRE(! a);
 
   // 'q' doesn't exist.
-  a = expr::ast::parse("bar$r$q == \"baz\"", *sch);
+  a = expr::ast::parse("r.q == 80/tcp", sch);
   BOOST_REQUIRE(! a);
 }
 
 BOOST_AUTO_TEST_CASE(offset_queries)
 {
   event e{42u};
+  e.name("foo");
 
-  BOOST_CHECK(bool_eval(expr::ast{"@0 == 42"}, e));
-  BOOST_CHECK(bool_eval(expr::ast{"@1 != T"}, e)); // Out of bounds, yet !=.
-  BOOST_CHECK(! bool_eval(expr::ast{"@0,3 > 4.2"}, e)); // Too deep.
+  BOOST_CHECK(bool_eval(expr::ast{"foo@0 == 42"}, e));
+  BOOST_CHECK(bool_eval(expr::ast{"foo@1 != T"}, e)); // Out of bounds, yet !=.
+  BOOST_CHECK(! bool_eval(expr::ast{"foo@0,3 > 4.2"}, e)); // Too deep.
 
   e = {42u, record{"foo", true, 4.2}};
-  BOOST_CHECK(bool_eval(expr::ast("@1,0 ~ /foo/"), e));
-  BOOST_CHECK(bool_eval(expr::ast("@1,1 == T"), e));
-  BOOST_CHECK(bool_eval(expr::ast("@1,2 == 4.2"), e));
-  BOOST_CHECK(! bool_eval(expr::ast("@1,2,3 ~ /foo/"), e)); // Too deep.
+  e.name("bar");
+  BOOST_CHECK(bool_eval(expr::ast("bar@1,0 ~ /foo/"), e));
+  BOOST_CHECK(bool_eval(expr::ast("bar@1,1 == T"), e));
+  BOOST_CHECK(bool_eval(expr::ast("bar@1,2 == 4.2"), e));
+  BOOST_CHECK(! bool_eval(expr::ast("bar@1,2,3 ~ /bar/"), e)); // Too deep.
 
   e = {-1337, record{record{true, false}}};
-  BOOST_CHECK(bool_eval(expr::ast("@1,0,0 == T"), e));
-  BOOST_CHECK(bool_eval(expr::ast("@1,0,1 == F"), e));
+  e.name("baz");
+  BOOST_CHECK(bool_eval(expr::ast("baz@1,0,0 == T"), e));
+  BOOST_CHECK(bool_eval(expr::ast("baz@1,0,1 == F"), e));
 }
 
 BOOST_AUTO_TEST_CASE(serialization)

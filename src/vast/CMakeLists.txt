@@ -51,7 +51,6 @@ set(libvast_sources
   detail/parser/duration.cc
   detail/parser/query.cc
   detail/parser/time_point.cc
-  detail/parser/schema.cc
   detail/parser/value.cc
   detail/parser/bro15/conn.cc
   io/array_stream.cc

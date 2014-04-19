@@ -60,6 +60,7 @@ struct tag_predicate
 
 struct offset_predicate
 {
+  std::string event;
   offset off;
   relational_operator op;
   value_expr rhs;
@@ -72,7 +73,7 @@ struct type_predicate
   value_expr rhs;
 };
 
-struct event_predicate
+struct schema_predicate
 {
   std::vector<std::string> lhs;
   relational_operator op;
@@ -85,7 +86,7 @@ using predicate = boost::variant<
   tag_predicate,
   offset_predicate,
   type_predicate,
-  event_predicate,
+  schema_predicate,
   boost::recursive_wrapper<negated_predicate>
 >;
 
@@ -152,6 +153,7 @@ BOOST_FUSION_ADAPT_STRUCT(
 
   BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::query::offset_predicate,
+    (std::string, event)
     (vast::offset, off)
     (vast::relational_operator, op)
     (vast::detail::ast::query::value_expr, rhs))
@@ -163,7 +165,7 @@ BOOST_FUSION_ADAPT_STRUCT(
     (vast::detail::ast::query::value_expr, rhs))
 
   BOOST_FUSION_ADAPT_STRUCT(
-    vast::detail::ast::query::event_predicate,
+    vast::detail::ast::query::schema_predicate,
     (std::vector<std::string>, lhs)
     (vast::relational_operator, op)
     (vast::detail::ast::query::value_expr, rhs))

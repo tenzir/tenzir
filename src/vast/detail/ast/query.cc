@@ -140,13 +140,13 @@ struct validator : public boost::static_visitor<bool>
   bool operator()(offset_predicate const& pred) const
   {
     auto rhs = fold(pred.rhs);
-    return ! (rhs == invalid || pred.off.empty());
+    return rhs != invalid && ! pred.off.empty();
   }
 
-  bool operator()(event_predicate const& pred) const
+  bool operator()(schema_predicate const& pred) const
   {
     auto rhs = fold(pred.rhs);
-    return ! (rhs == invalid || pred.lhs.size() < 2);
+    return rhs != invalid && ! pred.lhs.empty();
   }
 
   bool operator()(negated_predicate const& pred) const
