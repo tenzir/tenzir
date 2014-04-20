@@ -92,3 +92,32 @@ BOOST_AUTO_TEST_CASE(offset_finding)
   BOOST_CHECK_EQUAL(t->name(), "inner");
   BOOST_CHECK(util::get<record_type>(t->info()));
 }
+
+BOOST_AUTO_TEST_CASE(merging)
+{
+  std::string str =
+    "type a : int\n"
+    "type inner : record { x: int, y: double }\n"
+    "event foo(a: int)";
+
+  auto f = str.begin();
+  auto l = str.end();
+  schema s1;
+  BOOST_REQUIRE(extract(f, l, s1));
+
+  str =
+    "type a : int\n"  // Same type allowed.
+    "type b : int\n"
+    "event bar(x: a)";
+
+  f = str.begin();
+  l = str.end();
+  schema s2;
+  BOOST_REQUIRE(extract(f, l, s2));
+
+  auto merged = schema::merge(s1, s2);
+  BOOST_REQUIRE(merged);
+  BOOST_CHECK(merged->find_event("foo"));
+  BOOST_CHECK(merged->find_type("a"));
+  BOOST_CHECK(merged->find_type("b"));
+}

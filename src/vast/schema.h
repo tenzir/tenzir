@@ -21,6 +21,12 @@ class schema : util::equality_comparable<schema>,
                util::printable<schema>
 {
 public:
+  /// Merges two schemata.
+  /// @param s1 The first schema.
+  /// @param s2 The second schema.
+  /// @returns The merged schema.
+  static trial<schema> merge(schema const& s1, schema const& s2);
+
   /// Adds a new type to the schema.
   /// @param t The type to add.
   /// @returns `true` on success and `false` if the type exists already.

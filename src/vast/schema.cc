@@ -7,6 +7,31 @@
 
 namespace vast {
 
+trial<schema> schema::merge(schema const& s1, schema const& s2)
+{
+  schema merged = s1;
+
+  for (auto& t2 : s2.types_)
+  {
+    auto t1 = s1.find_type(t2->name());
+    if (t1 && *t1 != *t2)
+      return error{"type clash: " + to_string(*t1) + " <--> " + to_string(*t2)};
+
+    merged.types_.push_back(t2);
+  }
+
+  for (auto& e2 : s2.events_)
+  {
+    auto e1 = s1.find_event(e2.name);
+    if (e1 && *e1 != e2)
+      return error{"event clash: " + to_string(*e1) + " <--> " + to_string(e2)};
+
+    merged.events_.push_back(e2);
+  }
+
+  return std::move(merged);
+}
+
 bool schema::add(type_ptr t)
 {
   // Do not allow types with duplicate names.
