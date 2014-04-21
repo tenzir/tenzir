@@ -227,7 +227,7 @@ private:
   template <typename Iterator>
   bool parse(Iterator& start,
              Iterator end,
-             type_ptr type,
+             type_const_ptr type,
              string const& set_sep = ", ",
              string const& set_left = "{",
              string const& set_right = "}",
@@ -589,7 +589,7 @@ private:
   template <typename Iterator>
   bool parse(Iterator& start,
              Iterator end,
-             type_ptr const& elem_type,
+             type_const_ptr const& elem_type,
              string const& sep = ", ",
              string const& left = "(",
              string const& right = ")",
@@ -797,7 +797,7 @@ private:
 template <typename Iterator>
 bool value::parse(Iterator& start,
            Iterator end,
-           type_ptr type,
+           type_const_ptr type,
            string const& set_sep,
            string const& set_left,
            string const& set_right,

@@ -24,12 +24,13 @@ class bitmap_indexer : public actor<bitmap_indexer<Derived, BitmapIndex>>
 public:
   /// Spawns a bitmap indexer.
   /// @param path The absolute file path on the file system.
-  bitmap_indexer(path path)
+  /// @param bmi The bitmap index.
+  bitmap_indexer(path path, BitmapIndex bmi = {})
     : path_{std::move(path)},
+      bmi_{std::move(bmi)},
       stats_{std::chrono::seconds{1}}
   {
     bmi_.append(1, false); // Event ID 0 is not a valid event.
-    last_flush_ = 1;
   }
 
   void act()
@@ -41,21 +42,35 @@ public:
 
     if (exists(path_))
     {
-      io::unarchive(path_, last_flush_, bmi_);
-      VAST_LOG_ACTOR_DEBUG("loaded bitmap index from " << path_ <<
-                           " (" << bmi_.size() << " bits)");
+      auto attempt = io::unarchive(path_, last_flush_, bmi_);
+      if (! attempt)
+        VAST_LOG_ACTOR_ERROR("failed to load bitmap index from " << path_ <<
+                             ": " << attempt.failure());
+      else
+        VAST_LOG_ACTOR_DEBUG("loaded bitmap index from " << path_ <<
+                             " (" << bmi_.size() << " bits)");
     }
 
     auto flush = [=]
     {
-      if (bmi_.size() > last_flush_)
+      auto size = static_cast<decltype(last_flush_)>(bmi_.size());
+      if (size > last_flush_)
       {
-        auto prev = last_flush_;
-        last_flush_ = bmi_.size();
-        io::archive(path_, last_flush_, bmi_);
-        VAST_LOG_ACTOR_DEBUG(
-            "flushed bitmap index to " << path_ << " (" <<
-            (last_flush_ - prev) << '/' << bmi_.size() << " new/total bits)");
+        auto attempt = io::archive(path_, size, bmi_);
+        if (! attempt)
+        {
+          VAST_LOG_ACTOR_ERROR("failed to flush " << (size - last_flush_) <<
+                               " bits to " << path_ << ": " <<
+                               attempt.failure());
+        }
+        else
+        {
+          VAST_LOG_ACTOR_DEBUG(
+              "flushed bitmap index to " << path_ << " (" <<
+              (size - last_flush_) << '/' << size << " new/total bits)");
+
+          last_flush_ = size;
+        }
       }
     };
 
@@ -68,13 +83,24 @@ public:
           this->quit(reason);
         },
         on(atom("flush")) >> flush,
-        on_arg_match >> [=](std::vector<cow<event>> const& events)
+        on_arg_match >> [=](std::vector<event> const& events)
         {
           uint64_t n = 0;
           for (auto& e : events)
-            if (auto v = static_cast<Derived*>(this)->extract(*e))
-              if (bmi_.push_back(*v, e->id()))
+            if (auto v = static_cast<Derived*>(this)->extract(e))
+            {
+              if (bmi_.push_back(*v, e.id()))
                 ++n;
+            }
+            else
+            {
+              VAST_LOG_ACTOR_DEBUG("failed to extract value from: " << e);
+            }
+              
+
+          if (n < events.size())
+            VAST_LOG_ACTOR_WARN("indexed only " << n << '/' << events.size() <<
+                                " events");
 
           stats_.increment(n);
 
@@ -121,9 +147,9 @@ public:
   }
 
 private:
-  uint64_t last_flush_ = 0;
-  BitmapIndex bmi_;
   path const path_;
+  BitmapIndex bmi_;
+  uint64_t last_flush_ = 1;
   util::rate_accumulator<uint64_t> stats_;
 };
 
@@ -172,63 +198,128 @@ struct event_data_indexer
 {
   using super = bitmap_indexer<event_data_indexer<BitmapIndex>, BitmapIndex>;
 
-  event_data_indexer(path p, string e, offset o)
-    : super{std::move(p)},
-      event_{std::move(e)},
+  event_data_indexer(path p, type_const_ptr t, offset o, BitmapIndex bmi = {})
+    : super{std::move(p), std::move(bmi)},
+      type_{std::move(t)},
       offset_{std::move(o)}
   {
   }
 
   value const* extract(event const& e) const
   {
-    return e.name() == event_ ? e.at(offset_) : nullptr;
+    return e.name() == type_->name() ? e.at(offset_) : nullptr;
   }
 
-  string event_;
+  type_const_ptr type_;
   offset offset_;
 };
 
-/// Factory to construct an indexer based on value type.
-template <typename Bitstream, typename... Args>
-trial<cppa::actor_ptr> make_indexer(value_type t, Args&&... args)
+namespace detail {
+
+template <typename Bitstream>
+struct event_data_index_factory
 {
-  // FIXME: why do these template aliases cause a compile error? It would be
-  // nice to have 'em in order to reduce the boilerplate below.
-  //template <value_type T>
-  //using basic_indexer = event_data_indexer<
-  //  arithmetic_bitmap_index<Bitstream, T>
-  //>;
+  using result_type = trial<cppa::actor_ptr>;
 
-  //template <template <typename> class BitmapIndex>
-  //using indexer = event_data_indexer<
-  //  BitmapIndex<Bitstream>
-  //>;
-
-  using cppa::spawn;
-
-  switch (t)
+  event_data_index_factory(path const& p, type_const_ptr const& t,
+                           offset const& o)
+    : path_{p},
+      type_{t},
+      off_{o}
   {
-    default:
-      return error{"unspported value type: " + to_string(t)};
-    case bool_value:
-      return spawn<event_data_indexer<arithmetic_bitmap_index<Bitstream, bool_value>>>(std::forward<Args>(args)...);
-    case int_value:
-      return spawn<event_data_indexer<arithmetic_bitmap_index<Bitstream, int_value>>>(std::forward<Args>(args)...);
-    case uint_value:
-      return spawn<event_data_indexer<arithmetic_bitmap_index<Bitstream, uint_value>>>(std::forward<Args>(args)...);
-    case double_value:
-      return spawn<event_data_indexer<arithmetic_bitmap_index<Bitstream, double_value>>>(std::forward<Args>(args)...);
-    case time_range_value:
-      return spawn<event_data_indexer<arithmetic_bitmap_index<Bitstream, time_range_value>>>(std::forward<Args>(args)...);
-    case time_point_value:
-      return spawn<event_data_indexer<arithmetic_bitmap_index<Bitstream, time_point_value>>>(std::forward<Args>(args)...);
-    case string_value:
-      return spawn<event_data_indexer<string_bitmap_index<Bitstream>>>(std::forward<Args>(args)...);
-    case address_value:
-      return spawn<event_data_indexer<address_bitmap_index<Bitstream>>>(std::forward<Args>(args)...);
-    case port_value:
-      return spawn<event_data_indexer<port_bitmap_index<Bitstream>>>(std::forward<Args>(args)...);
   }
+
+  template <typename T>
+  trial<cppa::actor_ptr> operator()(T const&) const
+  {
+    using bmi_t = arithmetic_bitmap_index<Bitstream, to_value_type<T>::value>;
+    return spawn<bmi_t>();
+  }
+
+  trial<cppa::actor_ptr> operator()(address_type const&) const
+  {
+    return spawn<address_bitmap_index<Bitstream>>();
+  }
+
+  trial<cppa::actor_ptr> operator()(port_type const&) const
+  {
+    return spawn<port_bitmap_index<Bitstream>>();
+  }
+
+  trial<cppa::actor_ptr> operator()(string_type const&) const
+  {
+    return spawn<string_bitmap_index<Bitstream>>();
+  }
+
+  trial<cppa::actor_ptr> operator()(enum_type const&) const
+  {
+    return spawn<string_bitmap_index<Bitstream>>();
+  }
+
+  trial<cppa::actor_ptr> operator()(set_type const& t) const
+  {
+    return spawn<set_bitmap_index<Bitstream>>(t.elem_type->tag());
+  }
+
+  trial<cppa::actor_ptr> operator()(invalid_type const&) const
+  {
+    return error{"bitmap index for invalid type not supported"};
+  }
+
+  trial<cppa::actor_ptr> operator()(regex_type const&) const
+  {
+    return error{"regular expressions not yet supported"};
+  }
+
+  trial<cppa::actor_ptr> operator()(vector_type const&) const
+  {
+    return error{"vectors not yet supported"};
+  }
+
+  trial<cppa::actor_ptr> operator()(prefix_type const&) const
+  {
+    return error{"prefixes not yet supported"};
+  }
+
+  trial<cppa::actor_ptr> operator()(table_type const&) const
+  {
+    return error{"tables not yet supported"};
+  }
+
+  trial<cppa::actor_ptr> operator()(record_type const&) const
+  {
+    return error{"records should be unrolled"};
+  }
+
+  template <typename BitmapIndex, typename... Args>
+  cppa::actor_ptr spawn(Args&&... args) const
+  {
+    using indexer_type = event_data_indexer<BitmapIndex>;
+
+    return cppa::spawn<indexer_type>(path_, type_, off_,
+                                     BitmapIndex{std::forward<Args>(args)...});
+  }
+
+  path const& path_;
+  type_const_ptr const& type_;
+  offset const& off_;
+};
+
+} // namespace detail
+
+/// Factory to construct an indexer based on a given type.
+template <typename Bitstream>
+trial<cppa::actor_ptr>
+make_event_data_indexer(path const& p, type_const_ptr const& t, offset const& o)
+{
+  detail::event_data_index_factory<Bitstream> v{p, t, o};
+
+  auto inner = t->at(o);
+  if (! inner)
+    return error{"no type at offset " + to_string(o) + " in type " +
+                 to_string(*inner)};
+
+  return apply_visitor(v, inner->info());
 }
 
 } // namespace vast

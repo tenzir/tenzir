@@ -3,6 +3,7 @@
 
 #include <cassert>
 #include "vast/value_type.h"
+#include "vast/schema.h"
 #include "vast/string.h"
 #include "vast/io/file_stream.h"
 #include "vast/io/getline.h"
@@ -25,10 +26,7 @@ public:
   /// @param filename The name of the file to ingest.
   file(cppa::actor_ptr sink, std::string const& filename)
     : synchronous<file<Derived>>{std::move(sink)},
-      file_handle_{
-          filename == "-"
-            ? vast::file{path{filename}, ::fileno(stdin)}
-            : vast::file{path{filename}}},
+      file_handle_{path{filename}},
       file_stream_{file_handle_}
   {
     file_handle_.open(vast::file::read_only);
@@ -41,50 +39,12 @@ public:
 
   bool done() const
   {
-    return static_cast<Derived const*>(this)->done_impl();
+    return current_line() == nullptr;
   }
 
   char const* description() const
   {
     return static_cast<Derived const*>(this)->description_impl();
-  }
-
-  bool good() const
-  {
-    return file_handle_.is_open();
-  }
-
-private:
-  vast::file file_handle_;
-
-protected:
-  io::file_input_stream file_stream_;
-};
-
-
-/// A file source that processes input line by line.
-template <typename Derived>
-class line : public file<line<Derived>>
-{
-public:
-  line(cppa::actor_ptr sink, std::string const& filename)
-    : file<line<Derived>>{std::move(sink), filename}
-  {
-  }
-
-  result<event> extract_impl()
-  {
-    return static_cast<Derived*>(this)->extract_impl_impl();
-  }
-
-  bool done_impl() const
-  {
-    return current() == nullptr;
-  }
-
-  char const* description_impl() const
-  {
-    return static_cast<Derived const*>(this)->description_impl_impl();
   }
 
   /// Retrieves the next non-empty line from the file.
@@ -93,12 +53,12 @@ public:
   /// `nullptr` on failure or EOF.
   std::string const* next()
   {
-    if (! this->good())
+    if (! file_handle_.is_open())
       return nullptr;
 
     line_.clear();
     while (line_.empty())
-      if (io::getline(this->file_stream_, line_))
+      if (io::getline(file_stream_, line_))
         ++current_;
       else
         return nullptr;
@@ -106,31 +66,34 @@ public:
     return &line_;
   }
 
-  uint64_t number() const
+  uint64_t line_number() const
   {
     return current_;
   }
 
-  std::string const* current() const
+  std::string const* current_line() const
   {
     return line_.empty() ? nullptr : &line_;
   }
 
 private:
+  vast::file file_handle_;
+  io::file_input_stream file_stream_;
   uint64_t current_ = 0;
   std::string line_;
 };
 
+
 /// A generic Bro 2.x log file source.
-class bro2 : public line<bro2>
+class bro2 : public file<bro2>
 {
 public:
   bro2(cppa::actor_ptr sink, std::string const& filename,
        int32_t timestamp_field);
 
-  result<event> extract_impl_impl();
+  result<event> extract_impl();
 
-  char const* description_impl_impl() const;
+  char const* description_impl() const;
 
 private:
   trial<nothing> parse_header();
@@ -140,10 +103,9 @@ private:
   string set_separator_;
   string empty_field_;
   string unset_field_;
-  string path_;
-  std::vector<string> field_names_;
-  std::vector<value_type> field_types_;
-  std::vector<value_type> complex_types_;
+  schema schema_;
+  type_ptr type_;
+  type_ptr flat_type_;
 };
 
 } // namespace source

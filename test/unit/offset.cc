@@ -21,4 +21,3 @@ BOOST_AUTO_TEST_CASE(offset_parsing)
   BOOST_CHECK(extract(f, l, o));
   BOOST_CHECK_EQUAL(o, offset({0,4,8,12}));
 }
-

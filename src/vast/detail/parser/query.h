@@ -27,9 +27,6 @@ struct query : qi::grammar<Iterator, ast::query::query(), skipper<Iterator>>
     qi::rule<Iterator, ast::query::type_predicate(), skipper<Iterator>>
         type_pred;
 
-    qi::rule<Iterator, ast::query::offset_predicate(), skipper<Iterator>>
-        offset_pred;
-
     qi::rule<Iterator, ast::query::schema_predicate(), skipper<Iterator>>
         schema_pred;
 

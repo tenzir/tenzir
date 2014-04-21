@@ -4,6 +4,7 @@
 #include "vast/actor.h"
 #include "vast/bitmap_indexer.h"
 #include "vast/file_system.h"
+#include "vast/schema.h"
 #include "vast/string.h"
 #include "vast/time.h"
 #include "vast/uuid.h"
@@ -18,7 +19,6 @@ class partition
 {
 public:
   static path const part_meta_file;
-  static path const event_data_dir;
 
   struct meta_data : util::equality_comparable<meta_data>
   {
@@ -60,15 +60,17 @@ struct partition_actor : actor<partition_actor>
 {
   struct indexer_state
   {
-    value_type type;
-    cppa::actor_ptr actor;
-  };
+    struct statistics
+    {
+      uint64_t values = 0;
+      uint64_t rate = 0;
+      uint64_t mean = 0;
+    };
 
-  struct indexer_stats
-  {
-    uint64_t values = 0;
-    uint64_t rate = 0;
-    uint64_t mean = 0;
+    cppa::actor_ptr actor;
+    type_const_ptr type;
+    offset off;
+    statistics stats;
   };
 
   partition_actor(path dir, size_t batch_size, uuid id = uuid::random());
@@ -77,43 +79,35 @@ struct partition_actor : actor<partition_actor>
   char const* description() const;
 
   template <typename Bitstream = default_bitstream>
-  result<cppa::actor_ptr> load_indexer(string const& e, offset const& o)
+  trial<cppa::actor_ptr> load_indexer(path const& p)
   {
-    auto i = indexers_.find(e);
+    auto i = indexers_.find(p);
     if (i == indexers_.end())
-      return {};
+      return error{"no such path: " + to<std::string>(p.str())};
 
-    auto j = i->second.find(o);
-    if (j == i->second.end())
-      return {};
+    if (i->second.actor)
+      return i->second.actor;
 
-    if (j->second.actor)
-      return j->second.actor;
-
-    auto a = create_indexer<Bitstream>(e, o, j->second.type);
-    if (! a)
-      return a.failure();
-
-    monitor(*a);
-    j->second.actor = *a;
-
-    return *a;
+    return create_indexer<Bitstream>(p, i->second.off, i->second.type);
   }
 
   template <typename Bitstream = default_bitstream>
-  trial<cppa::actor_ptr> create_indexer(string const& e, offset const& o, value_type t)
+  trial<cppa::actor_ptr>
+  create_indexer(path const& p, offset const& o, type_const_ptr t)
   {
-    auto& is = indexers_[e][o];
-    assert(! is.actor);
+    auto& state = indexers_[p];
+    assert(! state.actor);
 
-    auto p = dir_ / partition::event_data_dir / e / (to<string>(o) + ".idx");
-    auto a = make_indexer<Bitstream>(t, std::move(p), o);
+    auto abs = dir_ / "types" / p / "data.idx";
+    auto a = make_event_data_indexer<Bitstream>(abs, t, o);
     if (! a)
       return a;
 
     monitor(*a);
-    is.actor = *a;
-    is.type = t;
+
+    state.actor = *a;
+    state.type = t;
+    state.off = o;
 
     return *a;
   }
@@ -121,10 +115,10 @@ struct partition_actor : actor<partition_actor>
   path dir_;
   size_t batch_size_;
   partition partition_;
+  schema schema_;
   cppa::actor_ptr time_indexer_;
   cppa::actor_ptr name_indexer_;
-  std::unordered_map<string, std::map<offset, indexer_state>> indexers_;
-  std::unordered_map<cppa::actor_ptr, indexer_stats> stats_;
+  std::unordered_map<path, indexer_state> indexers_;
 };
 
 } // namespace vast

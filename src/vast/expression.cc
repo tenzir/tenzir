@@ -111,11 +111,16 @@ void id_extractor::deserialize(deserializer&)
 {
 }
 
+offset_extractor::offset_extractor()
+  : type{type_invalid}
+{
+}
 
-offset_extractor::offset_extractor(string event, offset off)
-  : event{std::move(event)},
+offset_extractor::offset_extractor(type_const_ptr type, offset off)
+  : type{type},
     off{std::move(off)}
 {
+  assert(type);
 }
 
 offset_extractor* offset_extractor::clone() const
@@ -125,12 +130,14 @@ offset_extractor* offset_extractor::clone() const
 
 void offset_extractor::serialize(serializer& sink) const
 {
-  sink << event << off;
+  sink << *type << off;
 }
 
 void offset_extractor::deserialize(deserializer& source)
 {
-  source >> event >> off;
+  auto t = type::make<invalid_type>();
+  source >> *t >> off;
+  type = t;
 }
 
 bool offset_extractor::equals(node const& other) const
@@ -139,7 +146,7 @@ bool offset_extractor::equals(node const& other) const
     return false;
 
   auto& that = static_cast<offset_extractor const&>(other);
-  return event == that.event && off == that.off;
+  return *type == *that.type && off == that.off;
 }
 
 bool offset_extractor::is_less_than(node const& other) const
@@ -148,7 +155,42 @@ bool offset_extractor::is_less_than(node const& other) const
     return typeid(*this).hash_code() < typeid(other).hash_code();
 
   auto& that = static_cast<offset_extractor const&>(other);
-  return std::tie(event, off) < std::tie(that.event, that.off);
+  return std::tie(*type, off) < std::tie(*that.type, that.off);
+}
+
+
+schema_extractor::schema_extractor(vast::key k)
+  : key{std::move(k)}
+{
+}
+
+schema_extractor* schema_extractor::clone() const
+{
+  return new schema_extractor{*this};
+}
+
+bool schema_extractor::equals(node const& other) const
+{
+  if (typeid(*this) != typeid(other))
+    return false;
+  return key == static_cast<schema_extractor const&>(other).key;
+}
+
+bool schema_extractor::is_less_than(node const& other) const
+{
+  if (typeid(*this) != typeid(other))
+    return typeid(*this).hash_code() < typeid(other).hash_code();
+  return key < static_cast<schema_extractor const&>(other).key;
+}
+
+void schema_extractor::serialize(serializer& sink) const
+{
+  sink << key;
+}
+
+void schema_extractor::deserialize(deserializer& source)
+{
+  source >> key;
 }
 
 
@@ -521,7 +563,7 @@ public:
   using result_type = void;
 
   static trial<std::unique_ptr<node>>
-  apply(detail::ast::query::query const& q, schema const& sch)
+  apply(detail::ast::query::query const& q)
   {
     std::unique_ptr<n_ary_operator> root;
 
@@ -531,7 +573,7 @@ public:
       // single predicate.
       root = make_unique<conjunction>();
 
-      expressionizer visitor{root.get(), sch};
+      expressionizer visitor{root.get()};
       boost::apply_visitor(std::ref(visitor), q.first);
       if (visitor.error_)
         return std::move(*visitor.error_);
@@ -574,7 +616,7 @@ public:
         local_root = root.get();
       }
 
-      expressionizer visitor{local_root, sch};
+      expressionizer visitor{local_root};
       boost::apply_visitor(std::ref(visitor), ands.first);
       if (visitor.error_)
         return std::move(*visitor.error_);
@@ -589,15 +631,14 @@ public:
     return {std::move(root)};
   }
 
-  expressionizer(n_ary_operator* parent, schema const& sch)
-    : parent_(parent),
-      schema_(sch)
+  expressionizer(n_ary_operator* parent)
+    : parent_(parent)
   {
   }
 
   void operator()(detail::ast::query::query const& q)
   {
-    auto n = apply(q, schema_);
+    auto n = apply(q);
     if (n)
       parent_->add(std::move(*n));
     else
@@ -652,24 +693,6 @@ public:
     parent_->add(std::move(p));
   }
 
-  void operator()(detail::ast::query::offset_predicate const& pred)
-  {
-    auto op = pred.op;
-    if (invert_)
-    {
-      op = negate(op);
-      invert_ = false;
-    }
-
-    auto lhs = make_offset_extractor(pred.event, pred.off);
-    auto rhs = make_unique<constant>(detail::ast::query::fold(pred.rhs));
-    auto p = make_unique<predicate>(op);
-    p->add(std::move(lhs));
-    p->add(std::move(rhs));
-
-    parent_->add(std::move(p));
-  }
-
   void operator()(detail::ast::query::schema_predicate const& pred)
   {
     auto op = pred.op;
@@ -679,43 +702,17 @@ public:
       invert_ = false;
     }
 
-    std::vector<string> ids;
+    key k;
     for (auto& str : pred.lhs)
-      ids.emplace_back(str);
+      k.emplace_back(str);
 
-    auto offs = schema_.find_offsets(ids);
-    if (offs.empty())
-    {
-      error_ = error{"invalid argument name sequence"};
-      return;
-    }
+    auto lhs = make_unique<schema_extractor>(std::move(k));
+    auto rhs = make_unique<constant>(detail::ast::query::fold(pred.rhs));
+    auto p = make_unique<predicate>(op);
+    p->add(std::move(lhs));
+    p->add(std::move(rhs));
 
-    // Ensure that all types are compatible to each other.
-    std::vector<type_ptr> types;
-    for (auto& p : offs)
-      types.push_back(schema_.find_type(p.first, p.second));
-
-    assert(! types.empty());
-    for (auto& t : types)
-      if (! t->represents(types[0]))
-      {
-        error_ =
-          error{"type clash: " + to_string(*t) + " <> " + to_string(*types[0])};
-        return;
-      }
-
-    auto disj = make_unique<disjunction>();
-    for (auto& p : offs)
-    {
-      auto pr = make_unique<predicate>(op);
-      auto lhs = make_offset_extractor(p.first, p.second);
-      auto rhs = make_constant(pred.rhs);
-      pr->add(std::move(lhs));
-      pr->add(std::move(rhs));
-      disj->add(std::move(pr));
-    }
-
-    parent_->add(std::move(disj));
+    parent_->add(std::move(p));
   }
 
   void operator()(detail::ast::query::negated_predicate const& pred)
@@ -727,9 +724,10 @@ public:
   }
 
 private:
-  std::unique_ptr<offset_extractor> make_offset_extractor(string e, offset o)
+  std::unique_ptr<offset_extractor> make_offset_extractor(type_const_ptr t,
+                                                          offset o)
   {
-    return make_unique<offset_extractor>(std::move(e), std::move(o));
+    return make_unique<offset_extractor>(t, std::move(o));
   }
 
   std::unique_ptr<constant>
@@ -755,14 +753,13 @@ private:
   }
 
   n_ary_operator* parent_;
-  schema const& schema_;
   bool invert_ = false;
   optional<error> error_;
 };
 
 } // namespace <anonymous>
 
-trial<ast> ast::parse(std::string const& str, schema const& sch)
+trial<ast> ast::parse(std::string const& str)
 {
   if (str.empty())
     return error{"cannot create AST from empty string"};
@@ -782,16 +779,16 @@ trial<ast> ast::parse(std::string const& str, schema const& sch)
   if (! detail::ast::query::validate(q))
     return error{"failed validation"};
 
-  auto n = expressionizer::apply(q, sch);
+  auto n = expressionizer::apply(q);
   if (n)
     return {std::move(*n)};
   else
     return n.failure();
 }
 
-ast::ast(std::string const& str, schema const& sch)
+ast::ast(std::string const& str)
 {
-  if (auto a = parse(str, sch))
+  if (auto a = parse(str))
     *this = std::move(*a);
 }
 
@@ -846,9 +843,9 @@ node const* ast::root() const
 
 namespace {
 
-struct conjunction_tester : public expr::default_const_visitor
+struct conjunction_tester : public default_const_visitor
 {
-  virtual void visit(expr::conjunction const&)
+  virtual void visit(conjunction const&)
   {
     flag_ = true;
   }
@@ -856,9 +853,9 @@ struct conjunction_tester : public expr::default_const_visitor
   bool flag_ = false;
 };
 
-struct disjunction_tester : public expr::default_const_visitor
+struct disjunction_tester : public default_const_visitor
 {
-  virtual void visit(expr::disjunction const&)
+  virtual void visit(disjunction const&)
   {
     flag_ = true;
   }
@@ -866,9 +863,9 @@ struct disjunction_tester : public expr::default_const_visitor
   bool flag_ = false;
 };
 
-struct predicate_tester : public expr::default_const_visitor
+struct predicate_tester : public default_const_visitor
 {
-  virtual void visit(expr::predicate const&)
+  virtual void visit(predicate const&)
   {
     flag_ = true;
   }
@@ -876,25 +873,25 @@ struct predicate_tester : public expr::default_const_visitor
   bool flag_ = false;
 };
 
-class meta_predicate_tester : public expr::default_const_visitor
+class meta_predicate_tester : public default_const_visitor
 {
 public:
-  virtual void visit(expr::predicate const& pred)
+  virtual void visit(predicate const& pred)
   {
     pred.lhs().accept(*this);
   }
 
-  virtual void visit(expr::name_extractor const&)
+  virtual void visit(name_extractor const&)
   {
     flag_ = true;
   }
 
-  virtual void visit(expr::timestamp_extractor const&)
+  virtual void visit(timestamp_extractor const&)
   {
     flag_ = true;
   }
 
-  virtual void visit(expr::id_extractor const&)
+  virtual void visit(id_extractor const&)
   {
     flag_ = true;
   }
@@ -902,15 +899,15 @@ public:
   bool flag_ = false;
 };
 
-class time_predicate_tester : public expr::default_const_visitor
+class time_predicate_tester : public default_const_visitor
 {
 public:
-  virtual void visit(expr::predicate const& pred)
+  virtual void visit(predicate const& pred)
   {
     pred.lhs().accept(*this);
   }
 
-  virtual void visit(expr::timestamp_extractor const&)
+  virtual void visit(timestamp_extractor const&)
   {
     flag_ = true;
   }
@@ -918,15 +915,15 @@ public:
   bool flag_ = false;
 };
 
-class name_predicate_tester : public expr::default_const_visitor
+class name_predicate_tester : public default_const_visitor
 {
 public:
-  virtual void visit(expr::predicate const& pred)
+  virtual void visit(predicate const& pred)
   {
     pred.lhs().accept(*this);
   }
 
-  virtual void visit(expr::name_extractor const&)
+  virtual void visit(name_extractor const&)
   {
     flag_ = true;
   }
@@ -934,15 +931,15 @@ public:
   bool flag_ = false;
 };
 
-class constant_finder : public expr::default_const_visitor
+class constant_finder : public default_const_visitor
 {
 public:
-  virtual void visit(expr::predicate const& pred)
+  virtual void visit(predicate const& pred)
   {
     pred.rhs().accept(*this);
   }
 
-  virtual void visit(expr::constant const& c)
+  virtual void visit(constant const& c)
   {
     val_ = &c.val;
   }
@@ -950,15 +947,15 @@ public:
   value const* val_ = nullptr;
 };
 
-class offset_finder : public expr::default_const_visitor
+class offset_finder : public default_const_visitor
 {
 public:
-  virtual void visit(expr::predicate const& pred)
+  virtual void visit(predicate const& pred)
   {
     pred.lhs().accept(*this);
   }
 
-  virtual void visit(expr::offset_extractor const& oe)
+  virtual void visit(offset_extractor const& oe)
   {
     off_ = &oe.off;
   }
@@ -966,10 +963,10 @@ public:
   offset const* off_ = nullptr;
 };
 
-class operator_finder : public expr::default_const_visitor
+class operator_finder : public default_const_visitor
 {
 public:
-  virtual void visit(expr::predicate const& pred)
+  virtual void visit(predicate const& pred)
   {
     op_ = &pred.op;
   }
@@ -1120,7 +1117,16 @@ public:
   virtual void visit(offset_extractor const& o)
   {
     auto v = event_.at(o.off);
-    result_ = v ? *v : invalid;
+    result_ =
+      v && (o.type == event_.type() || *o.type == *event_.type())
+      ? *v
+      : invalid;
+  }
+
+  virtual void visit(schema_extractor const&)
+  {
+    assert(! "must resolve AST before evaluating with schema extractor");
+    result_ = invalid;
   }
 
   virtual void visit(type_extractor const& t)
@@ -1268,7 +1274,7 @@ public:
   virtual void visit(offset_extractor const& o)
   {
     indent();
-    str_ += to<std::string>(o.event);
+    str_ += to<std::string>(*o.type);
     str_ += '@';
     auto first = o.off.begin();
     auto last = o.off.end();
@@ -1278,6 +1284,13 @@ public:
       if (++first != last)
         str_ += ",";
     }
+    str_ += '\n';
+  }
+
+  virtual void visit(schema_extractor const& s)
+  {
+    indent();
+    str_ += to<std::string>(s.key);
     str_ += '\n';
   }
 
@@ -1403,7 +1416,12 @@ public:
 
   virtual void visit(offset_extractor const& o)
   {
-    str_ += to<std::string>(o.event) + '@' + to<std::string>(o.off);
+    str_ += to<std::string>(*o.type) + '@' + to<std::string>(o.off);
+  }
+
+  virtual void visit(schema_extractor const& s)
+  {
+    str_ += to<std::string>(s.key);
   }
 
   virtual void visit(type_extractor const& t)
@@ -1495,45 +1513,152 @@ private:
   std::string& str_;
 };
 
-class predicator : public expr::default_const_visitor
+class predicator : public default_const_visitor
 {
 public:
-  predicator(std::vector<expr::ast>& predicates)
+  predicator(std::vector<ast>& predicates)
     : predicates_{predicates}
   {
   }
 
-  virtual void visit(expr::conjunction const& conj)
+  virtual void visit(conjunction const& conj)
   {
     for (auto& op : conj.operands)
       op->accept(*this);
   }
 
-  virtual void visit(expr::disjunction const& disj)
+  virtual void visit(disjunction const& disj)
   {
     for (auto& op : disj.operands)
       op->accept(*this);
   }
 
-  virtual void visit(expr::predicate const& pred)
+  virtual void visit(predicate const& pred)
   {
     predicates_.emplace_back(pred);
   }
 
 private:
-  std::vector<expr::ast>& predicates_;
+  std::vector<ast>& predicates_;
+};
+
+struct resolver : default_const_visitor
+{
+public:
+  resolver(schema const& sch)
+    : schema_{sch}
+  {
+  }
+
+  virtual void visit(conjunction const& conj)
+  {
+    // FIXME: Hack until we've switched to util::variant.
+    for (auto& op : const_cast<conjunction&>(conj).operands)
+    {
+      op->accept(*this);
+      if (! error_.msg().empty())
+        return;
+
+      if (schema_node_)
+        op = std::move(schema_node_);
+    }
+  }
+
+  virtual void visit(disjunction const& disj)
+  {
+    // FIXME: Hack until we've switched to util::variant.
+    for (auto& op : const_cast<disjunction&>(disj).operands)
+    {
+      op->accept(*this);
+      if (! error_.msg().empty())
+        return;
+
+      if (schema_node_)
+        op = std::move(schema_node_);
+    }
+  }
+
+  virtual void visit(predicate const& pred)
+  {
+    rhs_ = &pred.rhs();
+    op_ = pred.op;
+    pred.lhs().accept(*this);
+  }
+
+  virtual void visit(schema_extractor const& pred)
+  {
+    auto disj = make_unique<disjunction>();
+    for (auto& t : schema_)
+    {
+      auto trace = t->find_suffix(pred.key);
+      if (trace.empty())
+        continue;
+
+      // Make sure that all found keys resolve to arguments with the same type.
+      auto first_type = t->at(trace.front().first);
+      for (auto& p : trace)
+        if (! p.first.empty())
+          if (auto r = util::get<record_type>(t->info()))
+            if (! first_type->represents(r->at(p.first)))
+            {
+              error_ =
+                error{"type clash: " +
+                      to_string(*t) + " : " + to_string(*t, false) +
+                      " <--> " + to_string(*r->at(p.first)) + " : " +
+                      to_string(*r->at(p.first), false)};
+              return;
+            }
+
+      // Add all offsets from the trace to the disjunction, which will
+      // eventually replace this node.
+      for (auto& p : trace)
+      {
+        auto pr = make_unique<predicate>(op_);
+        auto lhs = make_unique<offset_extractor>(t, std::move(p.first));
+        pr->add(std::move(lhs));
+        pr->add(std::unique_ptr<node>{rhs_->clone()});
+        disj->add(std::move(pr));
+      }
+    }
+
+    if (disj->operands.empty())
+      error_ = error{"invalid key: " + to_string(pred.key)};
+    else if (disj->operands.size() == 1)
+      // Small optimization: if there is only one operand in the conjuncation,
+      // we can lift it directly.
+      schema_node_ = std::move(disj->operands[0]);
+    else
+      schema_node_ = std::move(disj);
+  }
+
+  error error_;
+  std::unique_ptr<node> schema_node_;
+  relational_operator op_;
+  node const* rhs_;
+  schema const& schema_;
 };
 
 } // namespace <anonymous>
 
-std::vector<ast> predicatize(ast const& a)
+std::vector<ast> ast::predicatize() const
 {
   std::vector<ast> predicates;
   predicator p{predicates};
-  a.accept(p);
+  accept(p);
   return predicates;
 }
 
+trial<ast> ast::resolve(schema const& sch) const
+{
+  auto a = *this;
+  resolver r{sch};
+  a.accept(r);
+
+  if (! r.error_.msg().empty())
+    return std::move(r.error_);
+  else
+    return std::move(a);
+}
 
 bool convert(node const& n, std::string& str, bool tree)
 {

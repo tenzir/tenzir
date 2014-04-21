@@ -74,11 +74,10 @@ query<Iterator>::query(error_handler<Iterator>& on_error)
     ;
 
   pred
-    =   tag_pred
+    =   ('!' > not_pred)
+    |   tag_pred
     |   type_pred
-    |   offset_pred
     |   schema_pred
-    |   ('!' > not_pred)
     ;
 
   tag_pred
@@ -91,14 +90,6 @@ query<Iterator>::query(error_handler<Iterator>& on_error)
   type_pred
     =   ':'
     >   type
-    >   pred_op
-    >   value_expr
-    ;
-
-  offset_pred
-    =   identifier
-    >>  '@'
-    >   ulong % ','
     >   pred_op
     >   value_expr
     ;
@@ -130,7 +121,6 @@ query<Iterator>::query(error_handler<Iterator>& on_error)
       (pred)
       (tag_pred)
       (type_pred)
-      (offset_pred)
       (schema_pred)
       (identifier)
       );
@@ -143,7 +133,6 @@ query<Iterator>::query(error_handler<Iterator>& on_error)
   start.name("query");
   pred.name("predicate");
   tag_pred.name("tag predicate");
-  offset_pred.name("offset predicate");
   type_pred.name("type predicate");
   schema_pred.name("schema predicate");
   not_pred.name("negated predicate");

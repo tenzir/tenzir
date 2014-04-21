@@ -10,17 +10,23 @@ BOOST_AUTO_TEST_CASE(event_construction)
   BOOST_CHECK_EQUAL(e.timestamp(), time_point());
   BOOST_CHECK(e.empty());
 
+  std::vector<argument> args;
+  args.emplace_back("", type::make<bool_type>());
+  args.emplace_back("", type::make<uint_type>());
+  args.emplace_back("", type::make<int_type>());
+  auto t = type::make<record_type>("foo", std::move(args));
+
+  e.type(t); // TODO: validate event data against type.
+
   auto jetzt = now();
   e.id(123456789);
   e.timestamp(jetzt);
-  e.name("foo");
   e.emplace_back(true);
   e.emplace_back(42u);
   e.emplace_back(-234987);
 
   BOOST_CHECK_EQUAL(e.id(), 123456789);
   BOOST_CHECK_EQUAL(e.timestamp(), jetzt);
-  BOOST_CHECK_EQUAL(e.name(), "foo");
   BOOST_CHECK_EQUAL(e.size(), 3);
   BOOST_CHECK_EQUAL(e[0], true);
   BOOST_CHECK_EQUAL(e[1], 42u);
@@ -30,7 +36,7 @@ BOOST_AUTO_TEST_CASE(event_construction)
   BOOST_CHECK_EQUAL(to_string(e),
                     "foo [123456789|1970-01-01+00:00:00] T, 42, -234987");
 
-  // The initializer list ctor forwards the arguments to the base record.
+  // The initializer_list ctor forwards the arguments to the base record.
   BOOST_CHECK_EQUAL(event{42}[0].which(), int_value);
 }
 

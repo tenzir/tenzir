@@ -8,6 +8,7 @@
 #include "vast/cow.h"
 #include "vast/time.h"
 #include "vast/optional.h"
+#include "vast/schema.h"
 #include "vast/uuid.h"
 #include "vast/io/compression.h"
 #include "vast/util/operators.h"
@@ -35,6 +36,10 @@ public:
     uint64_t n = 0;
     uint64_t max_bytes = 0;
     uint64_t occupied_bytes = 0;
+    vast::schema schema;
+
+  private:
+    friend access;
 
     void serialize(serializer& sink) const;
     void deserialize(deserializer& source);
@@ -44,16 +49,14 @@ public:
 
   /// A proxy class for writing into a segment. Each writer maintains a local
   /// chunk that receives events to serialize. Upon flushing, the writer
-  /// appends the chunk to the underlying segment.
+  /// appends the chunk to the underlying segment. Consequently,
+  /// multiple writers may exist simultaneously.
   class writer
   {
   public:
     /// Constructs a writer to serialize events into a segment.
-    ///
     /// @param s The segment to write to.
-    ///
     /// @param max_events_per_chunk The maximum number of events per chunk.
-    ///
     /// @pre `s != nullptr`
     explicit writer(segment* s, size_t max_events_per_chunk = 0);
 
@@ -64,9 +67,13 @@ public:
     /// may get lost.
     ~writer();
 
-    /// Serializes an event into the underlying segment.
+    /// Serializes an event into the writer. If the event type is not
+    /// [invalid](::invalid_type), then the writer adds the type to its local
+    /// schema, which gets merged with the segment-wide schema upon flushing.
+    ///
     /// @param e The event to write.
-    /// @returns `true` on success and `false` if the segment is full.
+    ///
+    /// @returns `true` on success and `false` if the writer is full.
     bool write(event const& e);
 
     /// Attaches the writer to a new segment.
@@ -77,9 +84,8 @@ public:
     /// Seals the current chunk and appends it to the list of chunks in the
     /// underlying segment.
     ///
-    /// @returns `false` on failure, `true` on success or if there
-    /// were no events to flush.
-    bool flush();
+    /// @returns `nothing` on success or if there were no events to flush.
+    trial<nothing> flush();
 
     /// Retrieves the number of bytes processed in total.
     /// @returns The number of bytes written into this writer.
@@ -91,6 +97,7 @@ public:
     segment* segment_;
     std::unique_ptr<chunk> chunk_;
     std::unique_ptr<chunk::writer> chunk_writer_;
+    schema schema_;
     size_t max_events_per_chunk_;
     time_point first_ = time_range{};
     time_point last_ = time_range{};
@@ -189,6 +196,42 @@ public:
   segment(uuid id = uuid::nil(), uint64_t max_bytes = 0,
           io::compression method = io::lz4);
 
+  /// Sets the segment base ID for events.
+  /// @param id The base event ID for this segment.
+  void base(event_id id);
+
+  /// Writes a vector of events into the segment.
+  /// @param v The vector of events to write.
+  /// @param max_events_per_chunk The maximum number of events per chunk.
+  /// @returns The number of events successfully written.
+  size_t store(std::vector<event> const& v, size_t max_events_per_chunk = 0);
+
+  /// Writes a sequence of events into the segment.
+  /// @param begin The start iterator.
+  /// @param end The one-past-the-end iterator.
+  /// @param max_events_per_chunk The maximum number of events per chunk.
+  /// @returns The number of events successfully written.
+  template <typename Iterator>
+  size_t store(Iterator begin, Iterator end, size_t max_events_per_chunk = 0)
+  {
+    writer w(this, max_events_per_chunk);
+
+    size_t n;
+    while (begin != end)
+    {
+      if (! w.write(*begin++))
+        break;
+      ++n;
+    }
+
+    return n;
+  }
+
+  /// Extracts a single event with a given ID.
+  /// @param id The ID of the event.
+  /// @returns The event having ID *id* on success
+  trial<event> load(event_id id) const;
+
   /// Retrieves the segment ID.
   /// @returns A UUID identifying the segment.
   uuid const& id() const;
@@ -198,10 +241,6 @@ public:
 
   /// Retrieves the timestamp of the oldest event in the segment.
   time_point last() const;
-
-  /// Sets the segment base ID for events.
-  /// @param id The base event ID for this segment.
-  void base(event_id id);
 
   /// Retrieves the segment base ID for events.
   /// @returns The base event ID for this segment.
@@ -245,37 +284,9 @@ public:
   /// size is unbounded.
   uint64_t max_bytes() const;
 
-  /// Extracts a single event with a given ID.
-  /// @param id The ID of the event.
-  /// @returns The event having ID *id* on success
-  trial<event> load(event_id id) const;
-
-  /// Writes a vector of events into the segment.
-  /// @param v The vector of events to write.
-  /// @param max_events_per_chunk The maximum number of events per chunk.
-  /// @returns The number of events successfully written.
-  size_t store(std::vector<event> const& v, size_t max_events_per_chunk = 0);
-
-  /// Writes a sequence of events into the segment.
-  /// @param begin The start iterator.
-  /// @param end The one-past-the-end iterator.
-  /// @param max_events_per_chunk The maximum number of events per chunk.
-  /// @returns The number of events successfully written.
-  template <typename Iterator>
-  size_t store(Iterator begin, Iterator end, size_t max_events_per_chunk = 0)
-  {
-    writer w(this, max_events_per_chunk);
-
-    size_t n;
-    while (begin != end)
-    {
-      if (! w.write(*begin++))
-        break;
-      ++n;
-    }
-
-    return n;
-  }
+  /// Retrieves the segment ::schema.
+  /// @returns The schema of the segment.
+  vast::schema const& schema() const;
 
 private:
   header header_;

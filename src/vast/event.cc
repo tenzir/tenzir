@@ -5,19 +5,21 @@
 
 namespace vast {
 
+event::event()
+  : type_{type_invalid}
+{
+}
+
 event::event(record values)
-  : record(std::move(values))
+  : record(std::move(values)),
+    type_{type_invalid}
 {
 }
 
 event::event(std::initializer_list<value> list)
-  : record(std::move(list))
+  : record(std::move(list)),
+    type_{type_invalid}
 {
-}
-
-event_id event::id() const
-{
-  return id_;
 }
 
 void event::id(event_id i)
@@ -25,14 +27,20 @@ void event::id(event_id i)
   id_ = i;
 }
 
-string const& event::name() const
+void event::timestamp(time_point time)
 {
-  return name_;
+  timestamp_ = time;
 }
 
-void event::name(string str)
+void event::type(type_const_ptr t)
 {
-  name_ = std::move(str);
+  assert(t);
+  type_ = std::move(t);
+}
+
+event_id event::id() const
+{
+  return id_;
 }
 
 time_point event::timestamp() const
@@ -40,54 +48,59 @@ time_point event::timestamp() const
   return timestamp_;
 }
 
-void event::timestamp(time_point time)
+type_const_ptr const& event::type() const
 {
-  timestamp_ = time;
+  return type_;
+}
+
+string const& event::name() const
+{
+  return type_->name();
 }
 
 void event::serialize(serializer& sink) const
 {
-  VAST_ENTER(VAST_THIS);
-  sink << id_;
-  sink << name_;
-  sink << timestamp_;
-  sink << static_cast<record const&>(*this);
+  assert(type_);
+  sink
+    << *type_
+    << id_
+    << timestamp_
+    << static_cast<record const&>(*this);
 }
 
 void event::deserialize(deserializer& source)
 {
-  VAST_ENTER();
-  source >> id_;
-  source >> name_;
-  source >> timestamp_;
-  source >> static_cast<record&>(*this);
-  VAST_LEAVE(VAST_THIS);
+  auto t = type::make<invalid_type>();
+
+  source
+    >> *t
+    >> id_
+    >> timestamp_
+    >> static_cast<record&>(*this);
+
+  type_ = t;
 }
 
 bool operator==(event const& x, event const& y)
 {
-  return
-    x.id() == y.id() &&
-    x.name_ == y.name_ &&
-    x.timestamp_ == y.timestamp_ &&
-    x.size() == y.size() &&
-    std::equal(x.begin(), x.end(), y.begin());
+  return x.id() == y.id()
+      && ((x.type_ && y.type_ && *x.type_ == *y.type_)
+          || (! x.type_ && ! y.type_))
+      && x.timestamp_ == y.timestamp_
+      && x.size() == y.size()
+      && std::equal(x.begin(), x.end(), y.begin());
 }
 
 bool operator<(event const& x, event const& y)
 {
-  return
-    std::tie(x.id_, x.timestamp_, x.name_, static_cast<record const&>(x)) <
-    std::tie(y.id_, y.timestamp_, y.name_, static_cast<record const&>(y));
-}
-
-void swap(event& x, event& y)
-{
-  using std::swap;
-  swap(static_cast<record&>(x), static_cast<record&>(y));
-  swap(x.id_, y.id_);
-  swap(x.timestamp_, y.timestamp_);
-  swap(x.name_, y.name_);
+  if (x.type_ && y.type_)
+    return
+      std::tie(x.id_, x.timestamp_, *x.type_, static_cast<record const&>(x)) <
+      std::tie(y.id_, y.timestamp_, *y.type_, static_cast<record const&>(y));
+  else
+    return
+      std::tie(x.id_, x.timestamp_, static_cast<record const&>(x)) <
+      std::tie(y.id_, y.timestamp_, static_cast<record const&>(y));
 }
 
 } // namespace vast

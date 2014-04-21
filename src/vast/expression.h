@@ -19,6 +19,7 @@ struct timestamp_extractor;
 struct name_extractor;
 struct id_extractor;
 struct offset_extractor;
+struct schema_extractor;
 struct type_extractor;
 struct predicate;
 struct conjunction;
@@ -30,6 +31,7 @@ using const_visitor = util::const_visitor<
   name_extractor,
   id_extractor,
   offset_extractor,
+  schema_extractor,
   type_extractor,
   predicate,
   conjunction,
@@ -38,15 +40,16 @@ using const_visitor = util::const_visitor<
 
 struct default_const_visitor : expr::const_visitor
 {
-  virtual void visit(expr::constant const&) { }
-  virtual void visit(expr::name_extractor const&) { }
-  virtual void visit(expr::timestamp_extractor const&) { }
-  virtual void visit(expr::id_extractor const&) { }
-  virtual void visit(expr::offset_extractor const&) { }
-  virtual void visit(expr::type_extractor const&) { }
-  virtual void visit(expr::predicate const&) { }
-  virtual void visit(expr::conjunction const&) { }
-  virtual void visit(expr::disjunction const&) { }
+  virtual void visit(constant const&) { }
+  virtual void visit(name_extractor const&) { }
+  virtual void visit(timestamp_extractor const&) { }
+  virtual void visit(id_extractor const&) { }
+  virtual void visit(offset_extractor const&) { }
+  virtual void visit(schema_extractor const&) { }
+  virtual void visit(type_extractor const&) { }
+  virtual void visit(predicate const&) { }
+  virtual void visit(conjunction const&) { }
+  virtual void visit(disjunction const&) { }
 };
 
 /// The base class for nodes in the expression tree.
@@ -111,12 +114,12 @@ struct id_extractor
   virtual void deserialize(deserializer& source) override;
 };
 
-/// Extracts an argument at a given offset.
+/// Extract a value at a given offset.
 struct offset_extractor
   : public util::visitable<extractor, offset_extractor, const_visitor>
 {
-  offset_extractor() = default;
-  offset_extractor(string event, offset off);
+  offset_extractor();
+  offset_extractor(type_const_ptr type, offset off);
 
   virtual offset_extractor* clone() const override;
   virtual bool equals(node const& other) const override;
@@ -124,8 +127,24 @@ struct offset_extractor
   virtual void serialize(serializer& sink) const override;
   virtual void deserialize(deserializer& source) override;
 
-  string event;
+  type_const_ptr type;
   offset off;
+};
+
+/// Extracts arguments according to a schema.
+struct schema_extractor
+  : public util::visitable<extractor, schema_extractor, const_visitor>
+{
+  schema_extractor() = default;
+  schema_extractor(key k);
+
+  virtual schema_extractor* clone() const override;
+  virtual bool equals(node const& other) const override;
+  virtual bool is_less_than(node const& other) const override;
+  virtual void serialize(serializer& sink) const override;
+  virtual void deserialize(deserializer& source) override;
+
+  vast::key key;
 };
 
 /// Extracts arguments of a given type.
@@ -211,11 +230,10 @@ class ast : util::totally_ordered<ast>,
 public:
   /// Creates an AST.
   /// @param str The string representing the expression.
-  /// @param sch The schema to use to resolve event clauses.
-  static trial<ast> parse(std::string const& str, schema const& sch = {});
+  static trial<ast> parse(std::string const& str);
 
   ast() = default;
-  ast(std::string const& str, schema const& sch = {});
+  ast(std::string const& str);
   ast(std::unique_ptr<node> n);
   ast(node const& n);
   ast(ast const& other);
@@ -229,7 +247,9 @@ public:
 
   node const* root() const;
 
+  //
   // Introspection
+  //
   bool is_conjunction() const;
   bool is_disjunction() const;
   bool is_predicate() const;
@@ -239,6 +259,19 @@ public:
   value const* find_constant() const;
   offset const* find_offset() const;
   relational_operator const* find_operator() const;
+
+  //
+  // Transformation
+  //
+
+  // Extracts all (leaf) predicates from an AST.
+  // @returns All leaf predicates of *a*.
+  std::vector<ast> predicatize() const;
+
+  /// Transforms a schema extractor into a sequence of offset extractors.
+  /// @param sch The schema used to resolve schema predicates.
+  /// @returns This AST with offset extractors instead of schema extractors.
+  trial<ast> resolve(schema const& sch) const;
 
 private:
   std::unique_ptr<node> node_;
@@ -264,11 +297,6 @@ private:
 /// Evaluates an expression node for a given event.
 value evaluate(node const& n, event const& e);
 value evaluate(ast const& a, event const& e);
-
-// Extracts all (leaf) predicates from an AST.
-// @param a The AST to predicatize.
-// @returns All leaf predicates of *a*.
-std::vector<ast> predicatize(ast const& a);
 
 bool convert(node const& n, std::string& str, bool tree = false);
 

@@ -17,7 +17,7 @@ BOOST_AUTO_TEST_CASE(segment_reading_and_writing)
   {
     // Since the segment has no size restriction, it is always possible to add
     // more events.
-    BOOST_CHECK(w.write(event{i}));
+    BOOST_REQUIRE(w.write(event{i}));
   }
 
   // At this point, the writer has still 100 events that have not yet been
@@ -28,7 +28,7 @@ BOOST_AUTO_TEST_CASE(segment_reading_and_writing)
   BOOST_CHECK(w.flush());
   BOOST_REQUIRE_EQUAL(s1.events(), 1124);
 
-  // Then add some more events, and attempt the second option.
+  // Let's add more events and then attempt the second option.
   for (size_t i = 0; i < 50; ++i)
     BOOST_CHECK(w.write(event{i}));
 
@@ -37,17 +37,48 @@ BOOST_AUTO_TEST_CASE(segment_reading_and_writing)
   BOOST_CHECK(w.flush());
   BOOST_REQUIRE_EQUAL(s2.events(), 50);
 
+  // Ensure that we get back what we put in the first segment.
   segment::reader r1{&s1};
   size_t n = 0;
   while (auto e = r1.read())
     BOOST_CHECK_EQUAL(*e, (event{n++}));
   BOOST_CHECK_EQUAL(n, 1124);
 
+  // Same thing for the second segment.
   segment::reader r2{&s2};
   n = 0;
   while (auto e = r2.read())
     BOOST_CHECK_EQUAL(*e, (event{n++}));
   BOOST_CHECK_EQUAL(n, 50);
+}
+
+BOOST_AUTO_TEST_CASE(auto_schematization)
+{
+  segment s;
+  segment::writer w{&s};
+
+  record_type rec;
+  rec.args.emplace_back("", type::make<int_type>());
+  rec.args.emplace_back("", type::make<bool_type>());
+  auto t = type::make<record_type>("foo", std::move(rec));
+
+  for (size_t i = 0; i < 100; ++i)
+  {
+    event e{42, true};
+    e.type(t);
+    BOOST_REQUIRE(w.write(e));
+  }
+
+  BOOST_REQUIRE(w.flush());
+  auto u = s.schema().find_type("foo");
+  BOOST_REQUIRE(u);
+  BOOST_CHECK(*t == *u);
+  BOOST_CHECK(t == u);
+
+  segment::reader r{&s};
+  auto e = r.read();
+  BOOST_REQUIRE(e);
+  BOOST_CHECK(e->type() == u);
 }
 
 BOOST_AUTO_TEST_CASE(segment_seeking)

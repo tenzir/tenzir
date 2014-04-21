@@ -3,20 +3,21 @@
 
 #include "vast/aliases.h"
 #include "vast/string.h"
+#include "vast/type.h"
 #include "vast/value.h"
-#include "vast/fwd.h"
 #include "vast/util/operators.h"
 #include "vast/util/print.h"
 
 namespace vast {
 
+/// A value with a named type plus additional meta data.
 class event : public record,
               util::totally_ordered<event>,
               util::printable<event>
 {
 public:
   /// Constructs an empty event.
-  event() = default;
+  event();
 
   /// Constructs an event with a list of zero or more arguments.
   /// @param values The list of values.
@@ -26,34 +27,39 @@ public:
   /// @param args The initializer list with values.
   event(std::initializer_list<value> list);
 
-  /// Retrieves the event ID.
-  /// @returns The name of the event.
-  event_id id() const;
-
   /// Sets the event ID.
   /// @param i The new event ID.
   void id(event_id i);
 
-  /// Retrieves the event name.
-  /// @returns The name of the event.
-  string const& name() const;
-
-  /// Sets the event name.
-  /// @param str The new name of event.
-  void name(string str);
-
-  /// Retrieves the event timestamp.
-  /// @returns The event timestamp.
-  time_point timestamp() const;
+  /// Sets the event type.
+  /// @param t The event type.
+  /// @pre `t != nullptr`
+  void type(type_const_ptr t);
 
   /// Sets the event timestamp.
   /// @param time The event timestamp.
   void timestamp(time_point time);
 
+  /// Retrieves the event ID.
+  /// @returns The name of the event.
+  event_id id() const;
+
+  /// Retrieves the event timestamp.
+  /// @returns The event timestamp.
+  time_point timestamp() const;
+
+  /// Retrieves the event type.
+  /// @returns The type of the event.
+  type_const_ptr const& type() const;
+
+  /// Retrieves the event name. Shorthand for `type()->name()`.
+  /// @returns The name of the event.
+  string const& name() const;
+
 private:
   event_id id_ = 0;
   time_point timestamp_;
-  string name_;
+  type_const_ptr type_;
 
 private:
   friend access;
@@ -74,11 +80,13 @@ private:
       if (! render(out, name()))
         return false;
     }
+
     render(out, " [");
     render(out, id());
     *out++ = '|';
     render(out, timestamp());
-    render(out, "] "); 
+    render(out, "] ");
+
     auto first = begin();
     auto last = end();
     while (first != last)
@@ -89,12 +97,12 @@ private:
         if (! render(out, ", "))
           return false;
     }
+
     return true;
   }
 
   friend bool operator==(event const& x, event const& y);
   friend bool operator<(event const& x, event const& y);
-  friend void swap(event& x, event& y);
 };
 
 } // namespace vast

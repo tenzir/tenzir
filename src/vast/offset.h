@@ -7,7 +7,7 @@
 
 namespace vast {
 
-/// A sequence of indexes to recursively access a record.
+/// A sequence of indexes to recursively access a type or value.
 struct offset : std::vector<size_t>,
                 util::printable<offset>,
                 util::parsable<offset>

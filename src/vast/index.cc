@@ -630,7 +630,7 @@ void index_actor::act()
         auto e = index_.add_query(ast);
         if (e)
         {
-          auto count =  e->hits ? e->hits.count() : 0;
+          uint64_t count = e->hits ? e->hits.count() : 0;
 
           if (e->hits && e->hits.find_first() != bitstream::npos)
           {
@@ -684,9 +684,9 @@ void index_actor::act()
               }
             }
 
+            uint64_t count = qs.hits ? qs.hits.count() : 0;
             for (auto& s : qs.subscribers)
-              send(s, atom("progress"), e->total_progress,
-                   qs.hits ? qs.hits.count() : 0);
+              send(s, atom("progress"), e->total_progress, count);
           }
           else
           {

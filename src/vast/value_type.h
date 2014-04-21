@@ -18,16 +18,10 @@ enum value_type : uint8_t
   int_value        = 0x02, ///< An integer (`int64_t`) value.
   uint_value       = 0x03, ///< An unsigned integer (`uint64_t`) value.
   double_value     = 0x04, ///< A floating point (`double`) value.
-
-  // Time types
   time_range_value = 0x05, ///< A time duration value.
   time_point_value = 0x06, ///< A time point value.
-
-  // String types
   string_value     = 0x07, ///< A string value.
   regex_value      = 0x08, ///< A regular expression value.
-
-  // Network types
   address_value    = 0x09, ///< An IP address value.
   prefix_value     = 0x0a, ///< An IP prefix value.
   port_value       = 0x0b, ///< A transport-layer port value.
@@ -39,13 +33,22 @@ enum value_type : uint8_t
   record_value     = 0x0f  ///< A sequence of heterogeneous values.
 };
 
-/// Checks whether a type is container type.
-inline bool is_container(value_type t)
+/// Checks whether a value type is a container.
+constexpr bool is_container(value_type t)
 {
-  return t == vector_value
-      || t == set_value
-      || t == table_value
-      || t == record_value;
+  return t == vector_value || t == set_value || t == table_value;
+}
+
+/// Checks whether a value type is basic.
+constexpr bool is_basic(value_type t)
+{
+  return t != invalid_value && ! is_container(t) && t != record_value;
+}
+
+/// Checks whether a value type is arithmetic.
+constexpr bool is_arithmetic(value_type t)
+{
+  return t > 0x00 && t < 0x07;
 }
 
 void serialize(serializer& sink, value_type x);

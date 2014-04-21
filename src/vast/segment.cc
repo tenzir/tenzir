@@ -23,7 +23,8 @@ void segment::header::serialize(serializer& sink) const
     << base
     << n
     << max_bytes
-    << occupied_bytes;
+    << occupied_bytes
+    << schema;
 }
 
 void segment::header::deserialize(deserializer& source)
@@ -46,7 +47,8 @@ void segment::header::deserialize(deserializer& source)
     >> base
     >> n
     >> max_bytes
-    >> occupied_bytes;
+    >> occupied_bytes
+    >> schema;
 }
 
 bool operator==(segment::header const& x, segment::header const& y)
@@ -58,7 +60,8 @@ bool operator==(segment::header const& x, segment::header const& y)
       && x.base == y.base
       && x.n == y.n
       && x.max_bytes == y.max_bytes
-      && x.occupied_bytes == y.occupied_bytes;
+      && x.occupied_bytes == y.occupied_bytes
+      && x.schema == y.schema;
 }
 
 segment::writer::writer(segment* s, size_t max_events_per_chunk)
@@ -79,11 +82,15 @@ segment::writer::~writer()
 
 bool segment::writer::write(event const& e)
 {
+  if (! util::get<invalid_type>(e.type()->info()) && ! e.type()->name().empty())
+    if (! schema_.find_type(e.type()->name()) && ! schema_.add(e.type()))
+      return false;
+
   if (! (chunk_writer_ && store(e)))
     return false;
 
   if (max_events_per_chunk_ && chunk_->elements() % max_events_per_chunk_ == 0)
-    return flush();
+    return !!flush();
 
   return true;
 }
@@ -94,16 +101,18 @@ void segment::writer::attach_to(segment* s)
   segment_ = s;
 }
 
-bool segment::writer::flush()
+trial<nothing> segment::writer::flush()
 {
   if (chunk_->empty())
-    return true;
+    return nil;
 
   chunk_writer_.reset();
 
   if (segment_->max_bytes() > 0
       && segment_->bytes() + chunk_->compressed_bytes() > segment_->max_bytes())
-    return false;
+    return error{"flushing " + to_string(chunk_->compressed_bytes()) +
+                 "B would exceed segment capacity " +
+                 to_string(segment_->max_bytes())};
 
   segment_->header_.first = first_;
   segment_->header_.last = last_;
@@ -113,10 +122,18 @@ bool segment::writer::flush()
 
   chunk_ = make_unique<chunk>(segment_->header_.compression);
   chunk_writer_ = make_unique<chunk::writer>(*chunk_);
+
+  auto s = schema::merge(schema_, segment_->header_.schema);
+  if (s)
+    segment_->header_.schema = std::move(*s);
+  else
+    return s.failure();
+
+
   first_ = time_range{};
   last_ = time_range{};
 
-  return true;
+  return nil;
 }
 
 size_t segment::writer::bytes() const
@@ -167,7 +184,7 @@ trial<event> segment::reader::read(event_id id)
     return error{"event id " + to_string(id) + " out of bounds"};
 
   auto r = load();
-  if (r.engaged())
+  if (r)
     return {std::move(r.value())};
   else if (r.failed())
     return r.failure();
@@ -294,10 +311,10 @@ result<event> segment::reader::load(bool discard)
 
   string name;
   if (! chunk_reader_->read(name, 0))
-    return error{"failed to read event name from chunk"};
+    return error{"failed to read type name from chunk"};
 
-  time_point t;
-  if (! chunk_reader_->read(t, 0))
+  time_point ts;
+  if (! chunk_reader_->read(ts, 0))
     return error{"failed to read event timestamp from chunk"};
 
   std::vector<value> v;
@@ -307,12 +324,16 @@ result<event> segment::reader::load(bool discard)
   if (! discard)
   {
     event e(std::move(v));
-    e.name(std::move(name));
-    e.timestamp(t);
+    e.timestamp(ts);
     if (next_ > 0)
       e.id(next_++);
 
-    return {std::move(e)};
+    if (auto t = segment_.header_.schema.find_type(name))
+      e.type(t);
+    else if (! name.empty())
+      VAST_LOG_WARN("schema inconsistency, missing type: " << name);
+
+    return std::move(e);
   }
 
   if (next_ > 0)
@@ -330,7 +351,7 @@ trial<event_id> segment::reader::skip(size_t n)
   while (n --> 0)
   {
     auto r = load(true);
-    assert(! r.engaged());
+    assert(! r);
     if (r.failed())
       return r.failure();
 
@@ -356,6 +377,16 @@ segment::segment(uuid id, uint64_t max_bytes, io::compression method)
   header_.max_bytes = max_bytes;
 }
 
+void segment::base(event_id id)
+{
+  header_.base = id;
+}
+
+trial<event> segment::load(event_id id) const
+{
+  return reader{this}.read(id);
+}
+
 uuid const& segment::id() const
 {
   return header_.id;
@@ -369,11 +400,6 @@ time_point segment::first() const
 time_point segment::last() const
 {
   return header_.last;
-}
-
-void segment::base(event_id id)
-{
-  header_.base = id;
 }
 
 event_id segment::base() const
@@ -410,9 +436,9 @@ uint64_t segment::max_bytes() const
   return header_.max_bytes;
 }
 
-trial<event> segment::load(event_id id) const
+schema const& segment::schema() const
 {
-  return reader{this}.read(id);
+  return header_.schema;
 }
 
 size_t segment::store(std::vector<event> const& v, size_t max_events_per_chunk)

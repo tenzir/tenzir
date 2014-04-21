@@ -137,12 +137,6 @@ struct validator : public boost::static_visitor<bool>
           && rhs_type == prefix_value);
   }
 
-  bool operator()(offset_predicate const& pred) const
-  {
-    auto rhs = fold(pred.rhs);
-    return rhs != invalid && ! pred.off.empty();
-  }
-
   bool operator()(schema_predicate const& pred) const
   {
     auto rhs = fold(pred.rhs);

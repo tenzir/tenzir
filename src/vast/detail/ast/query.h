@@ -1,9 +1,9 @@
 #ifndef VAST_DETAIL_AST_QUERY_H
 #define VAST_DETAIL_AST_QUERY_H
 
+#include <boost/optional.hpp>
 #include <boost/variant/recursive_variant.hpp>
 #include <boost/fusion/include/adapt_struct.hpp>
-#include "vast/offset.h"
 #include "vast/operator.h"
 #include "vast/value.h"
 
@@ -58,14 +58,6 @@ struct tag_predicate
   value_expr rhs;
 };
 
-struct offset_predicate
-{
-  std::string event;
-  offset off;
-  relational_operator op;
-  value_expr rhs;
-};
-
 struct type_predicate
 {
   value_type lhs;
@@ -84,7 +76,6 @@ struct negated_predicate;
 
 using predicate = boost::variant<
   tag_predicate,
-  offset_predicate,
   type_predicate,
   schema_predicate,
   boost::recursive_wrapper<negated_predicate>
@@ -148,13 +139,6 @@ BOOST_FUSION_ADAPT_STRUCT(
   BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::query::tag_predicate,
     (std::string, lhs)
-    (vast::relational_operator, op)
-    (vast::detail::ast::query::value_expr, rhs))
-
-  BOOST_FUSION_ADAPT_STRUCT(
-    vast::detail::ast::query::offset_predicate,
-    (std::string, event)
-    (vast::offset, off)
     (vast::relational_operator, op)
     (vast::detail::ast::query::value_expr, rhs))
 

@@ -9,7 +9,6 @@
 namespace vast {
 
 path const partition::part_meta_file = "partition.meta";
-path const partition::event_data_dir = "data";
 
 namespace {
 
@@ -205,57 +204,59 @@ struct dispatcher : expr::default_const_visitor
 
   virtual void visit(expr::type_extractor const& te)
   {
-    for (auto& p0 : actor_.indexers_)
-      for (auto& p1 : p0.second)
-        if (p1.second.type == te.type)
+    // TODO: Switch to strong typing.
+    for (auto& p : actor_.indexers_)
+      if (p.second.type->at(p.second.off)->tag() == te.type)
+      {
+        if (p.second.actor)
         {
-          if (p1.second.actor)
-          {
-            indexes_.push_back(p1.second.actor);
-          }
-          else
-          {
-            auto i = actor_.load_indexer(p0.first, p1.first);
-            if (i.failed())
-              VAST_LOG_ERROR(i.failure().msg());
-            else if (i.empty())
-              assert(! "file system inconsistency: index must exist");
-            else
-              indexes_.push_back(*i);
-          }
+          indexes_.push_back(p.second.actor);
         }
+        else
+        {
+          auto a = actor_.load_indexer(p.first);
+          if (! a)
+            VAST_LOG_ERROR(a.failure());
+          else
+            indexes_.push_back(*a);
+        }
+      }
   }
 
-  virtual void visit(expr::offset_extractor const& oe)
+  virtual void visit(expr::schema_extractor const& se)
   {
-    // TODO: restrict to the right name rather than going through all indexers.
-    for (auto& p0 : actor_.indexers_)
-    {
-      auto i = p0.second.find(oe.off);
-      if (i == p0.second.end())
+    for (auto& t : actor_.schema_)
+      for (auto& pair : t->find_suffix(se.key))
       {
-        VAST_LOG_WARN("no index for offset " << oe.off);
-      }
-      else if (i->second.type != value_->which())
-      {
-        VAST_LOG_WARN("type mismatch: requested " << value_->which() <<
-                      " but offset " << oe.off << " has " << i->second.type);
-      }
-      else if (! i->second.actor)
-      {
-        auto a = actor_.load_indexer(p0.first, oe.off);
-        if (a.failed())
-          VAST_LOG_ERROR(a.failure().msg());
-        else if (a.empty())
-          assert(! "file system inconsistency: index must exist");
+        path p;
+        for (auto& i : pair.second)
+          p /= i;
+        
+        auto i = actor_.indexers_.find(p);
+        if (i == actor_.indexers_.end())
+        {
+          VAST_LOG_WARN("no index for " << p);
+        }
+        else if (i->second.type->at(i->second.off)->tag() != value_->which())
+        {
+          VAST_LOG_WARN("type mismatch: requested type " << value_->which() <<
+                        " but " << p << " has type " <<
+                        i->second.type->at(i->second.off)->tag());
+        }
+        else if (! i->second.actor)
+        {
+          VAST_LOG_DEBUG("loading indexer for " << p);
+          auto a = actor_.load_indexer(i->first);
+          if (! a)
+            VAST_LOG_ERROR(a.failure());
+          else
+            indexes_.push_back(*a);
+        }
         else
-          indexes_.push_back(*a);
+        {
+          indexes_.push_back(i->second.actor);
+        }
       }
-      else
-      {
-        indexes_.push_back(i->second.actor);
-      }
-    }
   }
 
   virtual void visit(expr::constant const& c)
@@ -293,68 +294,37 @@ void partition_actor::act()
       return;
     }
 
-    std::map<string, std::map<offset, value_type>> types;
-    t = io::unarchive(dir_ / "types", types);
+    t = io::unarchive(dir_ / "schema", schema_);
     if (! t)
     {
-      VAST_LOG_ACTOR_ERROR("failed to load type data types: " <<
-                           t.failure().msg());
+      VAST_LOG_ACTOR_ERROR("failed to load schema: " << t.failure());
       quit(exit::error);
       return;
     }
 
-    for (auto& p0 : types)
-      for (auto& p1 : p0.second)
-        indexers_[p0.first][p1.first].type = p1.second;
+    for (auto& t : schema_)
+      t->each(
+          [&](key const& k, offset const& o)
+          {
+            path p = t->name();
+            for (auto& id : k)
+              p /= id;
+
+            VAST_LOG_ACTOR_DEBUG("initializing indexer for " << *t << '.' << k);
+
+            assert(indexers_.find(p) == indexers_.end());
+            auto& state = indexers_[p];
+            state.off = o;
+            state.type = t;
+          });
   }
 
-  traverse(
-      dir_ / partition::event_data_dir,
-      [&](path const& event_dir) -> bool
-      {
-        if (! event_dir.is_directory())
-        {
-          VAST_LOG_ACTOR_WARN("found unrecognized file in " <<
-                              event_dir);
-          return true;
-        }
-
-        auto event_name = event_dir.basename().str();
-        traverse(
-            event_dir,
-            [&](path const& idx_file) -> bool
-            {
-              if (idx_file.extension() != ".idx")
-                return true;
-
-              VAST_LOG_ACTOR_DEBUG("found index " << idx_file);
-              auto str = idx_file.basename(true).str();
-              auto start = str.begin();
-              offset o;
-              if (! extract(start, str.end(), o))
-              {
-                VAST_LOG_ACTOR_ERROR("got invalid offset in " <<
-                                     idx_file);
-                quit(exit::error);
-                return false;
-              }
-
-              if (! indexers_[event_name].count(o))
-              {
-                VAST_LOG_ACTOR_ERROR("has no meta data for " <<
-                                     idx_file);
-                quit(exit::error);
-                return false;
-              }
-
-              return true;
-            });
-
-        return true;
-      });
-
-  auto submit_meta = [=](std::vector<cow<event>> events)
+  auto submit = [=](std::vector<event> events)
   {
+    VAST_LOG_ACTOR_DEBUG("sends " << events.size() << " events to indexers");
+
+    auto t = make_any_tuple(std::move(events));
+
     if (! name_indexer_)
     {
       auto p = dir_ / "name.idx";
@@ -369,73 +339,29 @@ void partition_actor::act()
         spawn<event_time_indexer<default_bitstream>>(std::move(p));
     }
 
-    auto t = make_any_tuple(std::move(events));
     name_indexer_ << t;
     time_indexer_ << t;
-  };
+    for (auto& p : indexers_)
+      if (p.second.actor)
+        p.second.actor << t;
 
-  auto submit_data = [=](event const& e, std::vector<cow<event>> events)
-  {
-    auto t = make_any_tuple(std::move(events));
-
-    e.each_offset(
-        [&](value const& v, offset const& o)
-        {
-          // We can't handle container types (yet).
-          if (is_container_type(v.which()))
-            return;
-
-          actor_ptr indexer;
-
-          auto i = load_indexer(e.name(), o);
-          if (i.failed())
-          {
-            VAST_LOG_ACTOR_ERROR(i.failure().msg());
-            quit(exit::error);
-            return;
-          }
-          else if (i.empty())
-          {
-            auto a = create_indexer(e.name(), o, v.which());
-            if (! a)
-            {
-              VAST_LOG_ACTOR_ERROR(a.failure().msg());
-              quit(exit::error);
-              return;
-            }
-
-            indexer = *a;
-          }
-          else
-          {
-            indexer = *i;
-          }
-
-          indexer << t;
-        });
   };
 
   auto flush = [=]
   {
     VAST_LOG_ACTOR_DEBUG("flushes its indexes in " << dir_);
-    std::map<string, std::map<offset, value_type>> types;
 
     send(name_indexer_, atom("flush"));
     send(time_indexer_, atom("flush"));
-    for (auto& p0 : indexers_)
-      for (auto& p1 : p0.second)
-      {
-        types[p0.first][p1.first] = p1.second.type;
+    for (auto& p : indexers_)
+      if (p.second.actor)
+        send(p.second.actor, atom("flush"));
 
-        if (p1.second.actor)
-          send(p1.second.actor, atom("flush"));
-      }
-
-    auto t = io::archive(dir_ / "types", types);
+    auto t = io::archive(dir_ / "schema", schema_);
     if (! t)
     {
-      VAST_LOG_ACTOR_ERROR("failed to save type data for " << dir_ <<
-                           ": " << t.failure().msg());
+      VAST_LOG_ACTOR_ERROR("failed to save schema for " << dir_ << ": " <<
+                           t.failure().msg());
       quit(exit::error);
       return;
     }
@@ -458,10 +384,9 @@ void partition_actor::act()
 
         send_exit(time_indexer_, reason);
         send_exit(name_indexer_, reason);
-        for (auto& p0 : indexers_)
-          for (auto& p1 : p0.second)
-            if (p1.second.actor)
-              send_exit(p1.second.actor, reason);
+        for (auto& p : indexers_)
+          if (p.second.actor)
+            send_exit(p.second.actor, reason);
 
         quit(reason);
       },
@@ -469,12 +394,13 @@ void partition_actor::act()
       {
         VAST_LOG_ACTOR_DEBUG("got DOWN from " << VAST_ACTOR_ID(last_sender()));
 
-        for (auto& p0 : indexers_)
-          for (auto& p1 : p0.second)
-            if (p1.second.actor == last_sender())
-              p1.second.actor = {};
-
-        stats_.erase(last_sender());
+        for (auto& p : indexers_)
+          if (p.second.actor == last_sender())
+          {
+            p.second.actor = {};
+            p.second.stats = {};
+            break;
+          }
       },
       on_arg_match >> [=](expr::ast const& pred, actor_ptr const& sink)
       {
@@ -504,40 +430,68 @@ void partition_actor::act()
         VAST_LOG_ACTOR_VERBOSE(
             "processes " << s.events() << " events from segment " << s.id());
 
-        std::vector<cow<event>> all_events;
-        all_events.reserve(batch_size_);
-        std::unordered_map<string, std::vector<cow<event>>> groups;
+        auto sch = schema::merge(schema_, s.schema());
+        if (! sch)
+        {
+          VAST_LOG_ACTOR_ERROR("failed to merge schemata: " << sch.failure());
+          VAST_LOG_ACTOR_ERROR("ignoring segment with " << s.events() <<
+                               " events");
+          return;
+        }
+
+        schema_ = std::move(*sch);
+
+        for (auto& t : s.schema())
+          t->each(
+            [&](key const& k, offset const& o)
+            {
+              path p = t->name();
+              for (auto& id : k)
+                p /= id;
+
+              if (indexers_.find(p) != indexers_.end())
+                return;
+
+              VAST_LOG_ACTOR_DEBUG("creates indexer for key " << k <<
+                                   " at offset " << o << " in type " << *t);
+              auto i = create_indexer(p, o, t);
+              if (! i)
+              {
+                VAST_LOG_ACTOR_ERROR(i.failure());
+                quit(exit::error);
+              }
+            });
+
+        std::vector<event> events;
+        events.reserve(batch_size_);
 
         segment::reader r{&s};
-        while (auto ev = r.read())
+        while (auto e = r.read())
         {
-          assert(ev);
-          cow<event> e{std::move(*ev)};
+          assert(e);
 
-          all_events.push_back(e);
-          if (all_events.size() == batch_size_)
+          // We only supported fully typed events at this point, but may loosen
+          // this constraint in the future.
+          auto& t = e->type();
+          if (t->name().empty() || util::get<invalid_type>(t->info()))
           {
-            submit_meta(std::move(all_events));
-            all_events = {};
+            VAST_LOG_ACTOR_ERROR("encountered invalid event type: " << *t);
+            quit(exit::error);
+            return;
           }
 
-          auto& group = groups[e->name()];
-          group.push_back(e);
-          if (group.size() == batch_size_)
+          events.push_back(std::move(*e));
+          if (events.size() == batch_size_)
           {
-            submit_data(*e, std::move(group));
-            group = {};
+            events.shrink_to_fit();
+            submit(std::move(events));
+            events = {};
           }
         }
 
         // Send away final events.
-        submit_meta(std::move(all_events));
-        for (auto& p : groups)
-          if (! p.second.empty())
-          {
-            auto first = p.second[0];
-            submit_data(*first, std::move(p.second));
-          }
+        events.shrink_to_fit();
+        submit(std::move(events));
 
         // Record segment.
         partition_.update(s);
@@ -546,24 +500,30 @@ void partition_actor::act()
         flush();
         send(self, atom("stats"), atom("show"));
       },
-      on(atom("stats"), arg_match) >> [=](uint64_t n, uint64_t rate, uint64_t mean)
+      on(atom("stats"), arg_match)
+        >> [=](uint64_t n, uint64_t rate, uint64_t mean)
       {
-        auto& s = stats_[last_sender()];
-        s.values += n;
-        s.rate = rate;
-        s.mean = mean;
+        for (auto& p : indexers_)
+          if (p.second.actor == last_sender())
+          {
+            p.second.stats.values += n;
+            p.second.stats.rate = rate;
+            p.second.stats.mean = mean;
+            break;
+          }
       },
       on(atom("stats"), atom("show")) >> [=]
       {
         uint64_t total_values = 0;
         uint64_t total_rate = 0;
         uint64_t total_mean = 0;
-        for (auto& p : stats_)
-        {
-          total_values += p.second.values;
-          total_rate += p.second.rate;
-          total_mean += p.second.mean;
-        }
+        for (auto& p : indexers_)
+          if (p.second.actor)
+          {
+            total_values += p.second.stats.values;
+            total_rate += p.second.stats.rate;
+            total_mean += p.second.stats.mean;
+          }
 
         if (total_rate > 0)
           VAST_LOG_ACTOR_INFO(

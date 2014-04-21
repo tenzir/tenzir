@@ -2,6 +2,7 @@
 #define VAST_TYPE_H
 
 #include "vast/aliases.h"
+#include "vast/key.h"
 #include "vast/offset.h"
 #include "vast/string.h"
 #include "vast/value_type.h"
@@ -14,22 +15,37 @@ namespace vast {
 
 class type;
 
+extern type_const_ptr const type_invalid;
+
 #define VAST_DEFINE_BASIC_TYPE(name, desc)           \
-  struct name : util::equality_comparable<name>,     \
+  struct name : util::totally_ordered<name>,         \
                 util::printable<name>                \
   {                                                  \
   private:                                           \
     friend access;                                   \
                                                      \
-    friend bool operator==(name const&, name const&) \
+    void serialize(serializer&) const                \
     {                                                \
-      return true;                                   \
+    }                                                \
+                                                     \
+    void deserialize(deserializer&)                  \
+    {                                                \
     }                                                \
                                                      \
     template <typename Iterator>                     \
     bool print(Iterator out) const                   \
     {                                                \
       return render(out, desc);                      \
+    }                                                \
+                                                     \
+    friend bool operator==(name const&, name const&) \
+    {                                                \
+      return true;                                   \
+    }                                                \
+                                                     \
+    friend bool operator<(name const&, name const&)  \
+    {                                                \
+      return true;                                   \
     }                                                \
   };
 
@@ -48,7 +64,7 @@ VAST_DEFINE_BASIC_TYPE(port_type, "port")
 
 #undef VAST_DEFINE_BASIC_TYPE
 
-struct enum_type : util::equality_comparable<enum_type>,
+struct enum_type : util::totally_ordered<enum_type>,
                    util::printable<enum_type>
 {
   enum_type() = default;
@@ -59,7 +75,8 @@ struct enum_type : util::equality_comparable<enum_type>,
 private:
   friend access;
 
-  friend bool operator==(enum_type const& lhs, enum_type const& rhs);
+  void serialize(serializer& sink) const;
+  void deserialize(deserializer& source);
 
   template <typename Iterator>
   bool print(Iterator out) const
@@ -81,20 +98,24 @@ private:
 
     return render(out, "}");
   }
+
+  friend bool operator==(enum_type const& lhs, enum_type const& rhs);
+  friend bool operator<(enum_type const& lhs, enum_type const& rhs);
 };
 
-struct vector_type : util::equality_comparable<vector_type>,
+struct vector_type : util::totally_ordered<vector_type>,
                      util::printable<vector_type>
 {
   vector_type() = default;
-  vector_type(intrusive_ptr<type> elem);
+  vector_type(type_const_ptr elem);
 
-  intrusive_ptr<type> elem_type;
+  type_const_ptr elem_type;
 
 private:
   friend access;
 
-  friend bool operator==(vector_type const& lhs, vector_type const& rhs);
+  void serialize(serializer& sink) const;
+  void deserialize(deserializer& source);
 
   template <typename Iterator>
   bool print(Iterator out) const
@@ -104,20 +125,24 @@ private:
 
     return render(out, *elem_type);
   }
+
+  friend bool operator==(vector_type const& lhs, vector_type const& rhs);
+  friend bool operator<(vector_type const& lhs, vector_type const& rhs);
 };
 
-struct set_type : util::equality_comparable<set_type>,
+struct set_type : util::totally_ordered<set_type>,
                   util::printable<set_type>
 {
   set_type() = default;
-  set_type(intrusive_ptr<type> elem);
+  set_type(type_const_ptr elem);
 
-  intrusive_ptr<type> elem_type;
+  type_const_ptr elem_type;
 
 private:
   friend access;
 
-  friend bool operator==(set_type const& lhs, set_type const& rhs);
+  void serialize(serializer& sink) const;
+  void deserialize(deserializer& source);
 
   template <typename Iterator>
   bool print(Iterator out) const
@@ -130,21 +155,25 @@ private:
 
     return render(out, "]");
   }
+
+  friend bool operator==(set_type const& lhs, set_type const& rhs);
+  friend bool operator<(set_type const& lhs, set_type const& rhs);
 };
 
-struct table_type : util::equality_comparable<table_type>,
+struct table_type : util::totally_ordered<table_type>,
                     util::printable<table_type>
 {
   table_type() = default;
-  table_type(intrusive_ptr<type> key, intrusive_ptr<type> yield);
+  table_type(type_const_ptr key, type_const_ptr yield);
 
-  intrusive_ptr<type> key_type;
-  intrusive_ptr<type> yield_type;
+  type_const_ptr key_type;
+  type_const_ptr yield_type;
 
 private:
   friend access;
 
-  friend bool operator==(table_type const& lhs, table_type const& rhs);
+  void serialize(serializer& sink) const;
+  void deserialize(deserializer& source);
 
   template <typename Iterator>
   bool print(Iterator out) const
@@ -160,19 +189,25 @@ private:
 
     return render(out, *yield_type);
   }
+
+  friend bool operator==(table_type const& lhs, table_type const& rhs);
+  friend bool operator<(table_type const& lhs, table_type const& rhs);
 };
 
-struct argument : util::equality_comparable<argument>,
+struct argument : util::totally_ordered<argument>,
                   util::printable<argument>
 {
   argument() = default;
-  argument(string name, intrusive_ptr<type> type);
+  argument(string name, type_const_ptr type);
 
   string name;
-  intrusive_ptr<type> type;
+  type_const_ptr type;
 
 private:
   friend access;
+
+  void serialize(serializer& sink) const;
+  void deserialize(deserializer& source);
 
   template <typename Iterator>
   bool print(Iterator& out) const
@@ -181,44 +216,60 @@ private:
   }
 
   friend bool operator==(argument const& lhs, argument const& rhs);
+  friend bool operator<(argument const& lhs, argument const& rhs);
 };
 
-struct record_type : util::equality_comparable<record_type>,
+struct record_type : util::totally_ordered<record_type>,
                      util::printable<record_type>
 {
   record_type() = default;
   record_type(std::vector<argument> args);
 
-  /// Attemps to resolve a single sequence of symbols. Given a list of symbols
-  /// denoting names of nested records, this function tries to map the names to
-  /// an ::offset to be used for direct event access.
-  ///
-  /// @param ids The sequence of argument names to resolve.
-  ///
-  /// @returns The ::offset corresponding to *ids* if they resolve.
-  trial<offset> resolve(std::vector<string> const& ids) const;
+  /// Attemps to resolve a single ::key to an ::offset.
+  /// @param k The key to resolve.
+  /// @returns The ::offset corresponding to *k*.
+  trial<offset> resolve(key const& k) const;
 
-  /// Finds all offsets for a prefix symbol sequence in this and nested records.
-  /// @param ids The sequence of argument names to resolve.
-  /// @returns The offsets corresponding to the found *ids*.
-  std::vector<offset> find_prefix(std::vector<string> const& ids) const;
+  /// Finds all offset-key pairs for an *exact* key in this and nested records.
+  /// @param k The key to resolve.
+  /// @returns The offset-key pairs corresponding to the found *k*.
+  std::vector<std::pair<offset, key>> find(key const& k) const;
 
-  /// Finds all offsets for a suffix symbol equence in this and nested records.
-  /// @param ids The sequence of argument names to resolve.
-  /// @returns The offsets corresponding to the found *ids*.
-  std::vector<offset> find_suffix(std::vector<string> const& ids) const;
+  /// Finds all offset-key pairs for a *prefix* key in this and nested records.
+  /// @param k The key to resolve.
+  /// @returns The offset-key pairs corresponding to the found *k*.
+  std::vector<std::pair<offset, key>> find_prefix(key const& k) const;
+
+  /// Finds all offset-key pairs for a *suffix* key in this and nested records.
+  /// @param k The key to resolve.
+  /// @returns The offset-key pairs corresponding to the found *k*.
+  std::vector<std::pair<offset, key>> find_suffix(key const& k) const;
+
+  /// Recursively flattens the arguments of a record type.
+  /// @returns The flattened record type.
+  record_type flatten() const;
+
+  /// Undos a flattening operation.
+  /// @returns The unflattened record type.
+  record_type unflatten() const;
+
+  /// Retrieves the type at a given key.
+  /// @param k The key to resolve.
+  /// @returns The type at key *k* or `nullptr` if *k* doesn't resolve.
+  type_const_ptr at(key const& k) const;
 
   /// Retrieves the type at a given offset.
   /// @param o The offset to resolve.
   /// @returns The type at offset *o* or `nullptr` if *o* doesn't resolve.
-  intrusive_ptr<type> at(offset const& o) const;
+  type_const_ptr at(offset const& o) const;
 
   std::vector<argument> args;
 
 private:
   friend access;
 
-  friend bool operator==(record_type const& lhs, record_type const& rhs);
+  void serialize(serializer& sink) const;
+  void deserialize(deserializer& source);
 
   template <typename Iterator>
   bool print(Iterator out) const
@@ -240,42 +291,9 @@ private:
 
     return render(out, "}");
   }
-};
 
-struct event_info : record_type,
-                    util::equality_comparable<event_info>,
-                    util::printable<event_info>
-{
-  event_info() = default;
-  event_info(string name, std::vector<argument> args);
-
-  string name;
-
-private:
-  friend access;
-
-  template <typename Iterator>
-  bool print(Iterator& out) const
-  {
-    if (! render(out, name + "("))
-      return false;
-
-    auto first = args.begin();
-    auto last = args.end();
-    while (first != last)
-    {
-      if (! render(out, *first))
-        return false;
-
-      if (++first != last)
-        if (! render(out, ", "))
-          return false;
-    }
-
-    return render(out, ")");
-  }
-
-  friend bool operator==(event_info const& lhs, event_info const& rhs);
+  friend bool operator==(record_type const& lhs, record_type const& rhs);
+  friend bool operator<(record_type const& lhs, record_type const& rhs);
 };
 
 using type_info = util::variant<
@@ -292,10 +310,10 @@ using type_info = util::variant<
     prefix_type,
     port_type,
     enum_type,
-    record_type,
     vector_type,
     set_type,
-    table_type
+    table_type,
+    record_type
 >;
 
 /// Converts a ::type_info type into a value_type.
@@ -380,28 +398,39 @@ template <typename T>
 using type_type = value_type_type<to_value_type<T>::value>;
 
 /// Represents meta data of a ::value.
-class type : util::intrusive_base<type>,
-             util::equality_comparable<type>,
+class type : public std::enable_shared_from_this<type>,
+             util::totally_ordered<type>,
              util::printable<type>
 {
+  type() = default;
+
+  /// Constructs a type from a ::type_info instance.
+  /// @param ti The ::type_info instance.
+  explicit type(type_info ti);
+
+  type(type const&) = default;
+  type(type&&) = delete;
+  type& operator=(type const&) = default;
+  type& operator=(type&&) = delete;
+
 public:
   /// Factory-function to create a type.
   /// @param args The arguments to pass to the type.
   /// @returns A pointer to the ::type for `T`.
   template <typename T, typename... Args>
-  static intrusive_ptr<type> make(Args&&... args)
+  static type_ptr make(string name = "", Args&&... args = {})
   {
-    return new type{type_info{T{std::forward<Args>(args)...}}};
+    auto t = new type{type_info{T{std::forward<Args>(args)...}}};
+    if (! name.empty())
+      t->name_ = std::move(name);
+
+    return type_ptr{t};
   }
 
   /// Clones this type.
-  /// @returns A clone of this type.
-  intrusive_ptr<type> clone() const;
-
-  /// Names the type.
   /// @param name The new name for this type.
-  /// @returns `true` on success and `false` if *name* is empty.
-  bool name(string name);
+  /// @returns A clone of this type.
+  type_ptr clone(string name) const;
 
   /// Retrieves the ::type_info instance for this type.
   /// @return The ::type_info insance for this type.
@@ -411,30 +440,59 @@ public:
   /// @returns The name of the type.
   string const& name() const;
 
+  /// Retrieves the type at a given key.
+  /// @param k The key to resolve.
+  /// @returns The type at key *k* or `nullptr` if *k* doesn't resolve.
+  type_const_ptr at(key const& k) const;
+
+  /// Retrieves the type at a given offset.
+  /// @param o The offset to resolve.
+  /// @returns The type at offset *o* or `nullptr` if *o* doesn't resolve.
+  type_const_ptr at(offset const& o) const;
+
+  /// Recursively applies a function on each contained type.
+  /// @param f The function to invoke on each contained type.
+  void each(std::function<void(key const&, offset const&)> f) const;
+
+  /// Casts a key into an offset.
+  /// @param k The key to cast.
+  /// @returns The offset corresponding to *k*.
+  trial<offset> cast(key const& k) const;
+
+  /// Traces an exact key in this and nested records.
+  /// @param k The key to resolve.
+  /// @returns The trace corresponding to the found *k*.
+  std::vector<std::pair<offset, key>> find(key const& k) const;
+
+  /// Traces a prefix key in this and nested records.
+  /// @param k The key to resolve.
+  /// @returns The trace corresponding to the found *k*.
+  std::vector<std::pair<offset, key>> find_prefix(key const& k) const;
+
+  /// Traces a suffix key in this and nested records.
+  /// @param k The key to resolve.
+  /// @returns The trace corresponding to the found *k*.
+  std::vector<std::pair<offset, key>> find_suffix(key const& k) const;
+
   /// Checks whether this type is compatible to another type. Two types are
   /// compatible if they are *representationally equal*.
   /// @param other The type to compare with.
   /// @returns `true` iff `*this` is compatible to *other*.
-  /// @pre `other != nullptr`
-  bool represents(intrusive_ptr<type> const& other) const;
+  bool represents(type_const_ptr const& other) const;
 
   /// Retrieves the [value type](::value_type) for this type.
   /// @returns The value type corresponding to this type.
   value_type tag() const;
 
 private:
-  type() = default;
-  type(type const&) = default;
-
-  /// Constructs a type from a ::type_info instance.
-  /// @param ti The ::type_info instance.
-  explicit type(type_info ti);
-
   string name_;
   type_info info_;
 
 private:
   friend access;
+
+  void serialize(serializer& sink) const;
+  void deserialize(deserializer& source);
 
   template <typename Iterator>
   struct printer
@@ -465,6 +523,7 @@ private:
   }
 
   friend bool operator==(type const& lhs, type const& rhs);
+  friend bool operator<(type const& lhs, type const& rhs);
 };
 
 } // namespace vast

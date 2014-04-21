@@ -45,14 +45,14 @@ public:
           bool done = false;
           while (events_.size() < batch_size_ && ! done)
           {
-            result<event> r{static_cast<Derived*>(this)->extract()};
+            result<event> r = static_cast<Derived*>(this)->extract();
             if (r)
             {
               events_.push_back(std::move(*r));
             }
             else if (r.failed())
             {
-              VAST_LOG_ACTOR_ERROR(r.failure().msg());
+              VAST_LOG_ACTOR_ERROR(r.failure());
               done = true;
               break;
             }

@@ -10,7 +10,6 @@ using namespace vast;
 BOOST_AUTO_TEST_CASE(cppa_serialization)
 {
   event e0{42, "foo", -8.3, record{invalid, address{"10.0.0.1"}}};
-  e0.name("test");
   e0.id(101);
 
   cppa::util::buffer buf;

@@ -20,54 +20,40 @@ trial<schema> schema::merge(schema const& s1, schema const& s2)
     merged.types_.push_back(t2);
   }
 
-  for (auto& e2 : s2.events_)
-  {
-    auto e1 = s1.find_event(e2.name);
-    if (e1 && *e1 != e2)
-      return error{"event clash: " + to_string(*e1) + " <--> " + to_string(e2)};
-
-    merged.events_.push_back(e2);
-  }
-
   return std::move(merged);
 }
 
-bool schema::add(type_ptr t)
+trial<nothing> schema::add(type_const_ptr t)
 {
-  // Do not allow types with duplicate names.
-  if (! t->name().empty() && find_type(t->name()))
-    return false;
+  if (! t)
+    return error{"add empty type"};
 
-  // Do not allow an unnamed type twice.
-  if (! find_type_info(t->info()).empty() && t->name().empty())
-    return false;;
+  if (util::get<invalid_type>(t->info()))
+    return error{"instance of invalid_type"};
+
+  if (t->name().empty() && find_type_info(t->info()).empty())
+    return error{"duplicate unnamed typed: " + to_string(*t)};
+
+  if (! t->name().empty())
+    if (auto existing = find_type(t->name()))
+    {
+      if (*existing == *t)
+      {
+        existing = t;
+        return nil;
+      }
+
+      return error{"clash in types with same name (existing <--> added): " +
+                   to_string(*existing, false) + " <--> " +
+                   to_string(*t, false)};
+    }
 
   types_.push_back(std::move(t));
 
-  return true;
+  return nil;
 }
 
-bool schema::add(event_info ei)
-{
-  if (find_event(ei.name))
-    return false;
-
-  events_.push_back(std::move(ei));
-
-  return true;
-}
-
-size_t schema::types() const
-{
-  return types_.size();
-}
-
-size_t schema::events() const
-{
-  return events_.size();
-}
-
-type_ptr schema::find_type(string const& name) const
+type_const_ptr schema::find_type(string const& name) const
 {
   for (auto& t : types_)
     if (t->name() == name)
@@ -76,18 +62,9 @@ type_ptr schema::find_type(string const& name) const
   return {};
 }
 
-type_ptr schema::find_type(string const& name, offset const& off) const
+std::vector<type_const_ptr> schema::find_type_info(type_info const& ti) const
 {
-  if (off.empty())
-    return {};
-
-  auto ei = find_event(name);
-  return ei ? ei->at(off) : type_ptr{};
-}
-
-std::vector<type_ptr> schema::find_type_info(type_info const& ti) const
-{
-  std::vector<type_ptr> types;
+  std::vector<type_const_ptr> types;
   for (auto& t : types_)
     if (t->info() == ti)
       types.push_back(t);
@@ -95,27 +72,34 @@ std::vector<type_ptr> schema::find_type_info(type_info const& ti) const
   return types;
 }
 
-std::multimap<string, offset>
-schema::find_offsets(std::vector<string> const& ids) const
+schema::const_iterator schema::begin() const
 {
-  if (ids.empty())
-    return std::multimap<string, offset>{};
-
-  std::multimap<string, offset> result;
-  for (auto& ei : events_)
-    for (auto& o : ei.find_suffix(ids))
-      result.emplace(ei.name, std::move(o));
-
-  return result;
+  return types_.begin();
 }
 
-event_info const* schema::find_event(string const& name) const
+schema::const_iterator schema::end() const
 {
-  for (auto& ei : events_)
-    if (ei.name == name)
-      return &ei;
+  return types_.end();
+}
 
-  return nullptr;
+schema::iterator schema::begin()
+{
+  return types_.begin();
+}
+
+schema::iterator schema::end()
+{
+  return types_.end();
+}
+
+size_t schema::size() const
+{
+  return types_.size();
+}
+
+bool schema::empty() const
+{
+  return types_.empty();
 }
 
 void schema::serialize(serializer& sink) const
@@ -141,7 +125,7 @@ bool operator==(schema const& x, schema const& y)
     if (*x.types_[i] != *y.types_[i])
       return false;
 
-  return x.events_ == y.events_;
+  return true;
 }
 
 } // namespace vast
