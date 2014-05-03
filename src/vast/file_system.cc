@@ -278,6 +278,14 @@ bool operator<(path const& x, path const& y)
 file::file(path p)
   : path_{std::move(p)}
 {
+#ifdef VAST_POSIX
+  // Support reading from STDIN.
+  if (path_ == "-")
+  {
+    handle_ = ::fileno(stdin);
+    is_open_ = true;
+  }
+#endif // VAST_POSIX
 }
 
 file::file(path p, native_type handle)
