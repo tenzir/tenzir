@@ -65,6 +65,9 @@ set(libvast_sources
   util/poll.cc
   util/profiler.cc
   util/terminal.cc
+  util/hash/crc.cc
+  util/hash/murmur.cc
+  util/hash/xxhash.cc
   )
 
 if (BROCCOLI_FOUND)
