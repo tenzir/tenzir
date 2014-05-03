@@ -6,7 +6,8 @@ namespace vast {
 
 regex regex::glob(std::string const& str)
 {
-  auto rx = std::regex_replace(str, std::regex("\\*"), ".*");
+  auto rx = std::regex_replace(str, std::regex("\\."), "\\.");
+  rx = std::regex_replace(rx, std::regex("\\*"), ".*");
   return {std::regex_replace(rx, std::regex("\\?"), ".")};
 }
 
@@ -17,7 +18,7 @@ regex::regex(string str)
 }
 
 bool regex::match(std::string const& str,
-           std::function<void(std::string const&)> f) const
+                  std::function<void(std::string const&)> f) const
 {
   std::sregex_token_iterator i{str.begin(), str.end(), rx_};
   std::sregex_token_iterator const end;
