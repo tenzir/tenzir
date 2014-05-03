@@ -16,7 +16,7 @@ template <typename First, typename... Visitables>
 struct visitor<First, Visitables...> : visitor<Visitables...>
 {
   using visitor<Visitables...>::visit;
-  virtual void visit(First const&) = 0;
+  virtual void visit(First&) = 0;
 };
 
 template <typename First>

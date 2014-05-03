@@ -43,7 +43,7 @@ public:
     /// Constructs a prompt.
     /// @param str The initial prompt string.
     /// @param color The color of *str*.
-    prompt(std::string str = ">> ", char const* color = nullptr);
+    prompt(std::string str = "> ", char const* color = nullptr);
 
     /// Adds a (colored) string to the end of the prompt.
     /// @param str The string to append.

@@ -13,11 +13,11 @@ namespace vast {
 template <typename Iterator, typename T, typename... Opts>
 bool render(Iterator&, T const&, Opts&&...);
 
-template <typename T>
-bool stream_to(std::ostream& out, T const& x)
+template <typename T, typename... Opts>
+bool stream_to(std::ostream& out, T const& x, Opts&&... opts)
 {
   std::ostreambuf_iterator<char> i{out};
-  return render(i, x);
+  return render(i, x, std::forward<Opts>(opts)...);
 }
 
 namespace util {
