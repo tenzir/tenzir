@@ -269,4 +269,17 @@ trial<std::string> load(path const& p, bool skip_whitespace = false);
 
 } // namespace vast
 
+namespace std {
+
+template <>
+struct hash<vast::path>
+{
+  size_t operator()(vast::path const& p) const
+  {
+    return hash<vast::string>{}(p.str());
+  }
+};
+
+} // namespace std
+
 #endif
