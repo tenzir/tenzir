@@ -6,9 +6,8 @@ using namespace vast;
 BOOST_AUTO_TEST_CASE(offset_printing)
 {
   std::string str;
-  auto out = std::back_inserter(str);
   offset o{0, 10, 8};
-  BOOST_CHECK(render(out, o));
+  BOOST_CHECK(print(o, std::back_inserter(str)));
   BOOST_CHECK_EQUAL(str, "0,10,8");
 }
 

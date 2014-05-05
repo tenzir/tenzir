@@ -3,7 +3,6 @@
 #include <cassert>
 #include <fstream>
 #include "vast/serialization.h"
-#include "vast/util/convert.h"
 
 #ifdef VAST_POSIX
 #  include <cerrno>
@@ -321,7 +320,7 @@ file& file::operator=(file&& other)
   return *this;
 }
 
-trial<nothing> file::open(open_mode mode, bool append)
+trial<void> file::open(open_mode mode, bool append)
 {
   if (is_open_)
     return error{"file already open"};
@@ -353,7 +352,7 @@ trial<nothing> file::open(open_mode mode, bool append)
   if (handle_ > 0)
   {
     is_open_ = true;
-    return nil;
+    return nothing;
   }
 
   return error{std::strerror(VAST_ERRNO)};
@@ -486,7 +485,7 @@ bool rm(const path& p)
   return false;
 }
 
-trial<nothing> mkdir(path const& p)
+trial<void> mkdir(path const& p)
 {
   auto components = p.split();
   if (components.empty())
@@ -517,7 +516,7 @@ trial<nothing> mkdir(path const& p)
       return error{"failed to make directory"};
   }
 
-  return nil;
+  return nothing;
 }
 
 void traverse(path const& p, std::function<bool(path const&)> f)
@@ -543,11 +542,11 @@ void traverse(path const& p, std::function<bool(path const&)> f)
 trial<std::string> load(path const& p, bool skip_whitespace)
 {
   if (p.is_directory())
-    return error{"cannot load directory"};
+    return error{"cannot load directory:", p};
 
   std::ifstream in{p.str().data()};
   if (! in)
-    return error{"failed to open file: " + to_string(p)};
+    return error{"failed to open file:", p};
 
   if (! skip_whitespace)
     in.unsetf(std::ios::skipws);

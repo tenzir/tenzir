@@ -268,7 +268,7 @@ logger::message::message(message const& other)
 
 void logger::message::coin()
 {
-  timestamp_ = to<double>(now());
+  timestamp_ = *to<double>(now());
 }
 
 void logger::message::function(char const* f)

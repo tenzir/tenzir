@@ -251,7 +251,7 @@ void query_actor::extract(uint64_t n)
     auto t = query_.extract(n);
     if (! t)
     {
-      VAST_LOG_ACTOR_ERROR(t.failure().msg());
+      VAST_LOG_ACTOR_ERROR(t.error().msg());
       quit(exit::error);
       return;
     }

@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 #include "vast/fwd.h"
+#include "vast/print.h"
 
 namespace vast {
 
@@ -29,7 +30,7 @@ void serialize(serializer& sink, arithmetic_operator op);
 void deserialize(deserializer& source, arithmetic_operator& op);
 
 template <typename Iterator>
-bool print(Iterator& out, arithmetic_operator op)
+trial<void> print(arithmetic_operator op, Iterator&& out)
 {
   switch (op)
   {
@@ -37,36 +38,27 @@ bool print(Iterator& out, arithmetic_operator op)
       throw std::logic_error("missing case for arithmetic operator");
     case positive:
     case plus:
-      *out++ = '+';
-      break;
+      return print('+', out);
     case minus:
     case negative:
-      *out++ = "-";
-      break;
+      return print('-', out);
     case bitwise_not:
-      *out++ = '~';
-      break;
+      return print('~', out);
     case bitwise_or:
-      *out++ = '|';
-      break;
+      return print('|', out);
     case bitwise_xor:
-      *out++ = '^';
-      break;
+      return print('^', out);
     case bitwise_and:
-      *out++ = '|';
-      break;
+      return print('|', out);
     case times:
-      *out++ = '*';
-      break;
+      return print('*', out);
     case divides:
-      *out++ = '/';
-      break;
+      return print('/', out);
     case mod:
-      *out++ = '%';
-      break;
+      return print('%', out);
   }
 
-  return true;
+  return nothing;
 }
 
 /// A (binary) relational operator.
@@ -90,80 +82,39 @@ void serialize(serializer& sink, relational_operator op);
 void deserialize(deserializer& source, relational_operator& op);
 
 template <typename Iterator>
-bool print(Iterator& out, relational_operator op)
+trial<void> print(relational_operator op, Iterator&& out)
 {
   switch (op)
   {
     default:
       throw std::logic_error("missing case for relational operator");
     case match:
-      *out++ = '~';
-      break;
+      return print('~', out);
     case not_match:
-      {
-        *out++ = '!';
-        *out++ = '!';
-      }
-      break;
+      return print("!~", out);
     case in:
-      {
-        *out++ = 'i';
-        *out++ = 'n';
-      }
-      break;
+      return print("in", out);
     case not_in:
-      {
-        *out++ = '!';
-        *out++ = 'i';
-        *out++ = 'n';
-      }
-      break;
+      return print("!in", out);
     case ni:
-      {
-        *out++ = 'n';
-        *out++ = 'i';
-      }
-      break;
+      return print("ni", out);
     case not_ni:
-      {
-        *out++ = '!';
-        *out++ = 'n';
-        *out++ = 'i';
-      }
-      break;
+      return print("!ni", out);
     case equal:
-      {
-        *out++ = '=';
-        *out++ = '=';
-      }
-      break;
+      return print("==", out);
     case not_equal:
-      {
-        *out++ = '!';
-        *out++ = '=';
-      }
-      break;
+      return print("!=", out);
     case less:
-      *out++ = '<';
-      break;
+      return print('<', out);
     case less_equal:
-      {
-        *out++ = '<';
-        *out++ = '=';
-      }
-      break;
+      return print("<=", out);
     case greater:
-      *out++ = '>';
-      break;
+      return print('>', out);
     case greater_equal:
-      {
-        *out++ = '>';
-        *out++ = '=';
-      }
-      break;
+      return print(">=", out);
   }
 
-  return true;
+  return nothing;
 }
 
 
@@ -179,30 +130,21 @@ void serialize(serializer& sink, boolean_operator op);
 void deserialize(deserializer& source, boolean_operator& op);
 
 template <typename Iterator>
-bool print(Iterator& out, boolean_operator op)
+trial<void> print(boolean_operator op, Iterator&& out)
 {
   switch (op)
   {
     default:
       throw std::logic_error("missing case for boolean operator");
     case logical_not:
-      *out++ = '!';
-      break;
+      return print("!", out);
     case logical_and:
-      {
-        *out++ = '&';
-        *out++ = '&';
-      }
-      break;
+      return print("&&", out);
     case logical_or:
-      {
-        *out++ = '|';
-        *out++ = '|';
-      }
-      break;
+      return print("||", out);
   }
 
-  return true;
+  return nothing;
 }
 
 /// Negates a relational operator, i.e., creates the complementary operator.

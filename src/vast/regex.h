@@ -6,14 +6,12 @@
 #include <regex>
 #include "vast/string.h"
 #include "vast/util/parse.h"
-#include "vast/util/print.h"
 
 namespace vast {
 
 /// A regular expression.
 class regex : util::totally_ordered<regex>,
-              util::parsable<regex>,
-              util::printable<regex>
+              util::parsable<regex>
 {
 public:
   /// Constructs a regex from a glob expression. A glob expression consists
@@ -96,13 +94,17 @@ private:
   }
 
   template <typename Iterator>
-  bool print(Iterator& out) const
+  friend trial<void> print(regex const& rx, Iterator&& out)
   {
     *out++ = '/';
-    if (! render(out, str_.escape()))
-      return false;
+
+    auto t = print(rx.str_, out);
+    if (! t)
+      return t.error();
+
     *out++ = '/';
-    return true;
+
+    return nothing;
   }
 
   bool convert(std::string& str);

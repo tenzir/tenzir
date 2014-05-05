@@ -228,24 +228,22 @@ void address::deserialize(deserializer& source)
   VAST_LEAVE(VAST_THIS);
 }
 
-bool address::convert(string& str) const
+std::string to_string(address const& a)
 {
-  if (is_v4())
+  char buf[INET6_ADDRSTRLEN];
+  std::memset(buf, 0, INET6_ADDRSTRLEN);
+  if (a.is_v4())
   {
-    char buf[INET_ADDRSTRLEN];
-    if (inet_ntop(AF_INET, &bytes_[12], buf, INET_ADDRSTRLEN) == nullptr)
-      return false;
-    str = {buf};
+    if (inet_ntop(AF_INET, &a.bytes_[12], buf, INET_ADDRSTRLEN) == nullptr)
+      return {};
   }
   else
   {
-    char buf[INET6_ADDRSTRLEN];
-    if (inet_ntop(AF_INET6, &bytes_, buf, INET6_ADDRSTRLEN) == nullptr)
-      return false;
-    str = {buf};
+    if (inet_ntop(AF_INET6, &a.bytes_, buf, INET6_ADDRSTRLEN) == nullptr)
+      return {};
   }
 
-  return true;
+  return buf;
 }
 
 bool operator==(address const& x, address const& y)

@@ -5,14 +5,13 @@
 #include <functional>
 #include "vast/fwd.h"
 #include "vast/traits.h"
+#include "vast/trial.h"
 #include "vast/util/coding.h"
 #include "vast/util/operators.h"
-#include "vast/util/print.h"
 
 namespace vast {
 
-class uuid : util::totally_ordered<uuid>,
-             util::printable<uuid>
+class uuid : util::totally_ordered<uuid>
 {
 public:
   using value_type = uint8_t;
@@ -48,17 +47,18 @@ private:
   void deserialize(deserializer& source);
 
   template <typename Iterator>
-  bool print(Iterator& out) const
+  friend trial<void> print(uuid const& u, Iterator&& out)
   {
     for (size_t i = 0; i < 16; ++i)
     {
-      auto& byte = id_[i];
+      auto& byte = u.id_[i];
       *out++ = util::byte_to_char((byte >> 4) & 0x0f);
       *out++ = util::byte_to_char(byte & 0x0f);
       if (i == 3 || i == 5 || i == 7 || i == 9)
         *out++ = '-';
     }
-    return true;
+
+    return nothing;
   }
 
   friend bool operator==(uuid const& x, uuid const& y);

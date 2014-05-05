@@ -5,16 +5,15 @@
 #include <cstring>
 #include <string>
 #include "vast/fwd.h"
+#include "vast/print.h"
 #include "vast/util/operators.h"
 #include "vast/util/parse.h"
-#include "vast/util/print.h"
 
 namespace vast {
 
 /// A transport-layer port.
 class port : util::totally_ordered<port>,
-             util::parsable<port>,
-             util::printable<port>
+             util::parsable<port>
 {
 public:
   using number_type = uint16_t;
@@ -109,30 +108,25 @@ private:
   }
 
   template <typename Iterator>
-  bool print(Iterator& out) const
+  friend trial<void> print(port const& p, Iterator&& out)
   {
-    static constexpr auto tcp = "tcp";
-    static constexpr auto udp = "udp";
-    static constexpr auto icmp = "icmp";
-    if (! render(out, number_))
-      return false;
+    auto t = print(p.number_, out);
+    if (! t)
+      return t.error();
+
     *out++ = '/';
-    switch (type())
+
+    switch (p.type())
     {
       default:
-        *out++ = '?';
-        break;
+        return print('?', out);
       case port::tcp:
-        out = std::copy(tcp, tcp + 3, out);
-        break;
+        return print("tcp", out);
       case port::udp:
-        out = std::copy(udp, udp + 3, out);
-        break;
+        return print("udp", out);
       case port::icmp:
-        out = std::copy(icmp, icmp + 4, out);
-        break;
+        return print("icmp", out);
     }
-    return true;
   }
 
   friend bool operator==(port const& x, port const& y);

@@ -4,10 +4,9 @@
 #include <chrono>
 #include <string>
 #include "vast/fwd.h"
-#include "vast/util/convert.h"
+#include "vast/convert.h"
 #include "vast/util/operators.h"
 #include "vast/util/parse.h"
-#include "vast/util/print.h"
 
 namespace vast {
 
@@ -19,15 +18,14 @@ time_point now();
 
 /// A time duration.
 class time_range : util::totally_ordered<time_range>,
-                   util::parsable<time_range>,
-                   util::printable<time_range>
+                   util::parsable<time_range>
 {
   friend class time_point;
-  typedef std::chrono::duration<double, std::ratio<1>> double_seconds;
 
 public:
-  typedef int64_t rep;
-  typedef std::chrono::duration<rep, std::nano> duration_type;
+  using rep = int64_t;
+  using double_seconds = std::chrono::duration<double, std::ratio<1>>;
+  using duration_type = std::chrono::duration<rep, std::nano>;
 
   /// Constructs a nanosecond time range.
   /// @param ns The number of nanoseconds.
@@ -185,28 +183,33 @@ private:
   }
 
   template <typename Iterator>
-  bool print(Iterator& out) const
+  friend trial<void> print(time_range tr, Iterator&& out)
   {
-    if (! render(out, to<double>(*this)))
-      return false;
+    double d;
+    convert(tr, d);
+
+    auto t = print(d, out);
+    if (! t)
+      return t.error();
+
     *out++ = 's';
-    return true;
+
+    return nothing;
   }
 
-  bool convert(double& d) const;
-  bool convert(duration_type& dur) const;
+  friend trial<void> convert(time_range tr, double& d);
+  friend trial<void> convert(time_range tr, duration_type& dur);
 };
 
 
 /// An absolute point in time having UTC time zone.
 class time_point : util::totally_ordered<time_point>,
-                   util::parsable<time_point>,
-                   util::printable<time_point>
+                   util::parsable<time_point>
 {
 public:
-  typedef time_range::duration_type duration;
-  typedef std::chrono::system_clock clock;
-  typedef std::chrono::time_point<clock, duration> time_point_type;
+  using duration = time_range::duration_type;
+  using clock = std::chrono::system_clock;
+  using time_point_type = std::chrono::time_point<clock, duration>;
 
   // The default format string used to convert time points into calendar types.
   // It has the form `YYYY-MM-DD HH:MM:SS`.
@@ -311,15 +314,18 @@ private:
   void deserialize(deserializer& source);
 
   template <typename Iterator>
-  bool print(Iterator& out) const
+  friend trial<void> print(time_point tp, Iterator&& out)
   {
-    auto str = to<std::string>(*this);
-    return render(out, str);
+    auto t = to<std::string>(tp);
+    if (t)
+      return print(*t, out);
+    else
+      return t.error();
   }
 
-  bool convert(double& d) const;
-  bool convert(std::tm& tm) const;
-  bool convert(std::string& str) const;
+  friend trial<void> convert(time_point tp, double& d);
+  friend trial<void> convert(time_point tp, std::tm& tm);
+  friend trial<void> convert(time_point tp, std::string& str);
 
   time_point_type time_point_;
 };

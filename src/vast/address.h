@@ -4,19 +4,19 @@
 #include <array>
 #include <string>
 #include "vast/fwd.h"
+#include "vast/convert.h"
 #include "vast/optional.h"
+#include "vast/print.h"
 #include "vast/string.h"
 #include "vast/util/operators.h"
 #include "vast/util/parse.h"
-#include "vast/util/print.h"
 
 namespace vast {
 
 /// An IP address.
 class address : util::totally_ordered<address>,
                 util::bitwise<address>,
-                util::parsable<address>,
-                util::printable<address>
+                util::parsable<address>
 {
   /// Top 96 bits of v4-mapped-addr.
   static std::array<uint8_t, 12> const v4_mapped_prefix;
@@ -175,17 +175,13 @@ private:
   }
 
   template <typename Iterator>
-  bool print(Iterator& out) const
+  friend trial<void> print(address const& a, Iterator&& out)
   {
-    string str;
-    if (! convert(str))
-      return false;
-
-    out = std::copy(str.begin(), str.end(), out);
-    return true;
+    auto str = to_string(a);
+    return print(str, out);
   }
 
-  bool convert(string& str) const;
+  friend std::string to_string(address const& a);
 
   friend bool operator==(address const& x, address const& y);
   friend bool operator<(address const& x, address const& y);

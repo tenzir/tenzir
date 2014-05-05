@@ -3,177 +3,248 @@
 
 #include <cmath>
 #include <cstdio>
-#include <cstring>
 #include <ostream>
-#include "vast/access.h"
+#include <type_traits>
+#include "vast/util/trial.h"
 #include "vast/util/coding.h"
 
 namespace vast {
-
-template <typename Iterator, typename T, typename... Opts>
-bool render(Iterator&, T const&, Opts&&...);
-
-template <typename T, typename... Opts>
-bool stream_to(std::ostream& out, T const& x, Opts&&... opts)
-{
-  std::ostreambuf_iterator<char> i{out};
-  return render(i, x, std::forward<Opts>(opts)...);
-}
-
 namespace util {
 
-/// Allows classes to model the `Printable` concept. Requires that derived
-/// types provide a member function with the following signature:
-///
-///      bool print(Iterator& out)
-///
-/// This class injects two free functions: `print` and an overload for
-/// `operator<<`.
-///
-/// @tparam Derived The CRTP client.
-///
-/// @tparam Char The character type of the out stream.
-///
-/// @note Haskell calls this concept the `Show` typeclass.
-template <typename Derived>
-struct printable
-{
-  friend std::ostream& operator<<(std::ostream& out, Derived const& d)
-  {
-    if (! stream_to(out, d))
-      throw std::runtime_error("print error");
-    return out;
-  }
-};
-
-} // namespace util
-
-template <typename Iterator>
-bool print(Iterator& out, bool b)
-{
-  *out++ = b ? 'T' : 'F';
-  return true;
-}
+// Stifled forward declaration to let name lookup succeed in convert().
+// This declaration will always be removed from the overload set.
+namespace detail { struct dummy; }
+template <typename T, typename I, typename... Opts>
+auto print(T const&, I&&, Opts&&...)
+  -> typename std::enable_if<
+       std::is_same<T, detail::dummy>::value,
+       trial<void>
+     >::type;
 
 namespace detail {
 
-template <typename Iterator, typename T>
-bool print_integral(Iterator& out, T n)
+struct printable
 {
-  return render(out, std::to_string(n));
-  // TODO: Switch to a custom formatter.
-  //while (n > 10)
-  //{
-  //  auto magnitude = std::floor(std::log(n) / std::log(10));
-  //  T nearest_power_of_10 = std::pow(10, magnitude);
-  //  T digit = n / nearest_power_of_10;
-  //  *out++ = util::byte_to_char(digit);
-  //  n /= 10;
-  //}
-  //*out++ = util::byte_to_char(n);
-  //return true;
-}
+  template <typename T, typename I>
+  static auto test(T const* x, I*)
+    -> decltype(print(*x, std::declval<I&&>()), std::true_type());
 
-template <typename Iterator, typename T>
-EnableIf<All<std::is_signed<T>, Not<std::is_floating_point<T>>>, bool>
-print_numeric(Iterator& out, T n)
+  template <typename, typename>
+  static auto test(...) -> std::false_type;
+};
+
+struct streamable
 {
-  if (n >= 0)
-    *out++ = '+';
-  return print_integral(out, n);
-}
+  template <typename Stream, typename T>
+  static auto test(Stream* out, T const* x)
+    -> decltype(std::operator<<(*out, *x), std::true_type());
 
-template <typename Iterator, typename T>
-EnableIf<std::is_unsigned<T>, bool>
-print_numeric(Iterator& out, T n)
-{
-  return print_integral(out, n);
-}
-
-
-template <typename Iterator, typename T>
-EnableIf<std::is_floating_point<T>, bool>
-print_numeric(Iterator& out, T n)
-{
-  // TODO: do this manually at some point. We can't use std::to_string as
-  // intermediate solution because it doesn't allow for setting precision.
-  char buf[64];
-  std::memset(buf, 64, 0);
-  std::snprintf(buf, 64, "%.10f", n);
-  auto p = buf;
-  while (*p != '\0')
-    *out++ = *p++;
-  return true;
-}
+  template <typename, typename>
+  static auto test(...) -> std::false_type;
+};
 
 } // namespace detail
 
-#define VAST_DEFINE_PRINT_NUMERIC(type)     \
-  template <typename Iterator>              \
-  bool print(Iterator& out, type i)         \
-  {                                         \
-    return detail::print_numeric(out, i);   \
-  }
+/// Type trait that checks whether a type is printable.
+template <typename T, typename I>
+struct printable : decltype(detail::printable::test<T, I>(0, 0)) {};
 
-VAST_DEFINE_PRINT_NUMERIC(int8_t)
-VAST_DEFINE_PRINT_NUMERIC(int16_t)
-VAST_DEFINE_PRINT_NUMERIC(int32_t)
-VAST_DEFINE_PRINT_NUMERIC(int64_t)
-VAST_DEFINE_PRINT_NUMERIC(uint8_t)
-VAST_DEFINE_PRINT_NUMERIC(uint16_t)
-VAST_DEFINE_PRINT_NUMERIC(uint32_t)
-VAST_DEFINE_PRINT_NUMERIC(uint64_t)
-VAST_DEFINE_PRINT_NUMERIC(double)
-VAST_DEFINE_PRINT_NUMERIC(float)
+/// Type trait that checks whether a type is STL-streamable.
+template <typename Stream, typename T>
+struct stl_streamable : decltype(detail::streamable::test<Stream, T>(0, 0)) {};
 
-#undef VAST_DEFINE_PRINT_NUMERIC
+// Injects operator<< for all printable types that do not already have an
+// overload of std::operator<<.
+template <typename CharT, typename Traits, typename T>
+auto operator<<(std::basic_ostream<CharT, Traits>& out, T const& x)
+  -> typename std::enable_if<
+       printable<T, std::ostreambuf_iterator<CharT>>::value
+         && ! stl_streamable<decltype(out), T>::value,
+       decltype(out)
+     >::type
+{
+  if (! print(x, std::ostreambuf_iterator<CharT>{out}))
+    out.setstate(std::ios_base::failbit);
+
+  return out;
+}
+
+//
+// Implementation for built-in types and STL.
+//
+
+template <typename T, typename I>
+trial<void> print_numeric(T, I&&);
+
+template <typename D, typename I, typename O>
+trial<void> print_delimited(D&&, I, I, O&&);
+
 
 template <typename Iterator>
-bool print(Iterator& out, char const* str)
+trial<void> print(char c, Iterator&& out)
 {
-  while (*str != '\0')
-    *out++ = *str++;
-  return true;
+  *out++ = c;
+  return nothing;
+}
+
+template <typename Iterator>
+trial<void> print(bool b, Iterator&& out)
+{
+  return print(b ? 'T' : 'F', out);
 }
 
 template <typename Iterator, size_t N>
-bool print(Iterator& out, char str[N])
+trial<void> print(char str[N], Iterator&& out)
 {
   out = std::copy(str, str + N, out);
-  return true;
+  return nothing;
 }
 
 template <typename Iterator>
-bool print(Iterator& out, std::string const& str)
+trial<void> print(char const* str, Iterator&& out)
+{
+  while (*str != '\0')
+    *out++ = *str++;
+  return nothing;
+}
+
+template <typename Iterator>
+trial<void> print(char* str, Iterator&& out)
+{
+  return print(const_cast<char const*>(str), out);
+}
+
+template <typename Iterator>
+trial<void> print(std::string const& str, Iterator&& out)
 {
   out = std::copy(str.begin(), str.end(), out);
-  return true;
+  return nothing;
 }
 
-struct access::printable
+template <typename T, typename Iterator>
+auto print(T n, Iterator&& out)
+  -> typename std::enable_if<
+      std::is_signed<T>::value && ! std::is_floating_point<T>::value,
+      trial<void>
+    >::type
 {
-  template <typename Iterator, typename T, typename... Opts>
-  static auto show(Iterator& out, T const& x, int, Opts&&... opts)
-    -> decltype(x.print(out, std::forward<Opts>(opts)...), bool())
+  if (n < 0)
   {
-    return x.print(out, std::forward<Opts>(opts)...);
+    print('-', out);
+    return print_numeric(-n, out);
   }
 
-  template <typename Iterator, typename T, typename... Opts>
-  static auto show(Iterator& out, T const& x, long, Opts&&... opts)
-    -> decltype(print(out, x, std::forward<Opts>(opts)...), bool())
-  {
-    return print(out, x, std::forward<Opts>(opts)...);
-  }
-};
-
-template <typename Iterator, typename T, typename... Opts>
-bool render(Iterator& out, T const& x, Opts&&... opts)
-{
-  return access::printable::show(out, x, 0, std::forward<Opts>(opts)...);
+  print('+', out);
+  return print_numeric(n, out);
 }
 
+template <typename T, typename Iterator>
+auto print(T n, Iterator&& out)
+  -> typename std::enable_if<
+       std::is_unsigned<T>::value,
+       trial<void>
+     >::type
+{
+  return print_numeric(n, out);
+}
+
+template <typename T, typename Iterator>
+auto print(T n, Iterator&& out, size_t digits = 10)
+  -> typename std::enable_if<
+       std::is_floating_point<T>::value,
+       trial<void>
+     >::type
+{
+  if (n == 0)
+    return print("0.0000000000", out);
+
+  if (n < 0)
+  {
+    print('-', out);
+    n = -n;
+  }
+
+  double left;
+  uint64_t right = std::round(std::modf(n, &left) * std::pow(10, digits));
+
+  print_numeric(static_cast<uint64_t>(left), out);
+  print('.', out);
+  print_numeric(right, out);
+
+  return nothing;
+}
+
+//
+// Helpers
+//
+
+/// Prints a numeric type .
+template <typename T, typename Iterator>
+trial<void> print_numeric(T n, Iterator&& out)
+{
+  if (n == 0)
+    return print('0', out);
+
+  char buf[std::numeric_limits<T>::digits10 + 1];
+  auto p = buf;
+  while (n > 0)
+  {
+    *p++ = util::byte_to_char(n % 10);
+    n /= 10;
+  }
+
+  out = std::reverse_copy(buf, p, out);
+  return nothing;
+}
+
+/// Prints a delimited Iterator range.
+template <typename Delim, typename I, typename O>
+trial<void> print_delimited(Delim&& delim, I begin, I end, O&& out)
+{
+  while (begin != end)
+  {
+    auto t = print(*begin++, out);
+    if (! t)
+      return t.error();
+
+    if (begin != end)
+    {
+      t = print(delim, out);
+      if (! t)
+        return t.error();
+    }
+  }
+
+  return nothing;
+}
+
+//
+// The following definitions exist here because it would otherwise be
+// impossible to make use of the above defined (built-in) overloads.
+//
+
+template <typename T>
+void error::render(T&& x)
+{
+  print(x, std::back_inserter(msg_));
+}
+
+template <typename T, typename... Ts>
+void error::render(T&& x, Ts&&... xs)
+{
+  render(std::forward<T>(x));
+  render(' ');
+  render(std::forward<Ts>(xs)...);
+}
+
+template <typename Iterator>
+auto print(error const& e, Iterator&& out)
+  -> decltype(print(e.msg(), out))
+{
+  return print(e.msg(), out);
+}
+
+} // namespace util
 } // namespace vast
 
 #endif
-

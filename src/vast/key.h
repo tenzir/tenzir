@@ -10,7 +10,6 @@ namespace vast {
 
 /// A sequence of type/argument names to recursively access a type or value.
 struct key : std::vector<string>,
-             util::printable<key>,
              util::parsable<key>
 {
   using super = std::vector<string>;
@@ -33,15 +32,9 @@ struct key : std::vector<string>,
   }
 
   template <typename Iterator>
-  bool print(Iterator& out) const
+  friend trial<void> print(key const& k, Iterator&& out)
   {
-    auto f = begin();
-    auto l = end();
-    while (f != l)
-      if (render(out, *f) && ++f != l && ! render(out, "."))
-        return false;
-
-    return true;
+    return util::print_delimited('.', k.begin(), k.end(), out);
   }
 
   template <typename Iterator>

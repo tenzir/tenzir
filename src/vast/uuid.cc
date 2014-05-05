@@ -89,6 +89,7 @@ public:
           if (c == '-')
             c = advance_char(begin, end);
           else
+            // FIXME: get rid of exception.
             throw std::runtime_error("invalid dashes in UUID string");
         }
       }
@@ -104,6 +105,7 @@ public:
     {
       c = advance_char(begin, end);
       if (c == '}')
+        // FIXME: get rid of exception.
         throw std::runtime_error("missing closing brace in UUID string");
     }
 
@@ -126,6 +128,7 @@ private:
   advance_char(Iterator& begin, Iterator end) const
   {
     if (begin == end)
+        // FIXME: get rid of exception.
       throw std::runtime_error("invalid UUID");
     return *begin++;
   }

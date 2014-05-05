@@ -29,7 +29,7 @@ void search_actor::act()
     if (ast)
       return std::move(*ast);
 
-    last_parse_error_ = ast.failure().msg();
+    last_parse_error_ = ast.error().msg();
     return {};
   };
 

@@ -9,7 +9,6 @@
 #include "vast/detail/parser/error_handler.h"
 #include "vast/detail/parser/skipper.h"
 #include "vast/detail/parser/query.h"
-#include "vast/util/convert.h"
 #include "vast/util/make_unique.h"
 
 namespace vast {
@@ -24,6 +23,7 @@ bool operator<(node const& x, node const& y)
 {
   return x.is_less_than(y);
 }
+
 
 constant::constant(value v)
   : val(std::move(v))
@@ -578,7 +578,7 @@ public:
       if (visitor.error_)
         return std::move(*visitor.error_);
 
-      return {std::move(root)}; // FIXME: add to parent.
+      return std::unique_ptr<node>(std::move(root)); // FIXME: add to parent.
     }
 
     // First, split the query expression at each OR node.
@@ -628,7 +628,7 @@ public:
       }
     }
 
-    return {std::move(root)};
+    return std::unique_ptr<node>(std::move(root));
   }
 
   expressionizer(n_ary_operator* parent)
@@ -642,7 +642,7 @@ public:
     if (n)
       parent_->add(std::move(*n));
     else
-      error_ = n.failure();
+      error_ = n.error();
   }
 
   void operator()(detail::ast::query::predicate const& operand)
@@ -781,9 +781,9 @@ trial<ast> ast::parse(std::string const& str)
 
   auto n = expressionizer::apply(q);
   if (n)
-    return {std::move(*n)};
+    return ast{std::move(*n)};
   else
-    return n.failure();
+    return n.error();
 }
 
 ast::ast(std::string const& str)
@@ -1060,14 +1060,6 @@ void ast::deserialize(deserializer& source)
     source >> node_;
 }
 
-bool ast::convert(std::string& str, bool tree) const
-{
-  if (node_)
-    return expr::convert(*node_, str, tree);
-  str = "";
-  return true;
-}
-
 bool operator==(ast const& x, ast const& y)
 {
   return x.node_ && y.node_ ? *x.node_ == *y.node_ : false;
@@ -1250,7 +1242,7 @@ public:
   virtual void visit(constant const& c)
   {
     indent();
-    str_ += to<std::string>(c.val) + '\n';
+    str_ += to_string(c.val) + '\n';
   }
 
   virtual void visit(timestamp_extractor const&)
@@ -1274,23 +1266,16 @@ public:
   virtual void visit(offset_extractor const& o)
   {
     indent();
-    str_ += to<std::string>(*o.type);
+    str_ += to_string(*o.type);
     str_ += '@';
-    auto first = o.off.begin();
-    auto last = o.off.end();
-    while (first != last)
-    {
-      str_ += to<std::string>(*first);
-      if (++first != last)
-        str_ += ",";
-    }
+    str_ += to_string(o.off);
     str_ += '\n';
   }
 
   virtual void visit(schema_extractor const& s)
   {
     indent();
-    str_ += to<std::string>(s.key);
+    str_ += to_string(s.key);
     str_ += '\n';
   }
 
@@ -1298,7 +1283,7 @@ public:
   {
     indent();
     str_ += "type(";
-    str_ += to<std::string>(t.type);
+    str_ += to_string(t.type);
     str_ += ")\n";
   }
 
@@ -1396,7 +1381,7 @@ public:
 
   virtual void visit(constant const& c)
   {
-    str_ += to<std::string>(c.val);
+    str_ += to_string(c.val);
   }
 
   virtual void visit(timestamp_extractor const&)
@@ -1416,17 +1401,17 @@ public:
 
   virtual void visit(offset_extractor const& o)
   {
-    str_ += to<std::string>(*o.type) + '@' + to<std::string>(o.off);
+    str_ += to_string(*o.type) + '@' + to_string(o.off);
   }
 
   virtual void visit(schema_extractor const& s)
   {
-    str_ += to<std::string>(s.key);
+    str_ += to_string(s.key);
   }
 
   virtual void visit(type_extractor const& t)
   {
-    str_ += ':' + to<std::string>(t.type);
+    str_ += ':' + to_string(t.type);
   }
 
   virtual void visit(predicate const& p)
@@ -1660,20 +1645,20 @@ trial<ast> ast::resolve(schema const& sch) const
     return std::move(a);
 }
 
-bool convert(node const& n, std::string& str, bool tree)
+trial<void> convert(node const& n, std::string& s, bool tree)
 {
-  str.clear();
   if (tree)
   {
-    tree_printer v{str};
+    tree_printer v{s};
     n.accept(v);
   }
   else
   {
-    expr_printer v{str};
+    expr_printer v{s};
     n.accept(v);
   }
-  return true;
+
+  return nothing;
 }
 
 } // namespace expr

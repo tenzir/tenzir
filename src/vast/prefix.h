@@ -8,8 +8,7 @@ namespace vast {
 
 /// Stores IPv4 and IPv6 prefixes, e.g., @c 192.168.1.1/16 and @c FD00::/8.
 class prefix : util::totally_ordered<prefix>,
-               util::parsable<prefix>,
-               util::printable<prefix>
+               util::parsable<prefix>
 {
 public:
 
@@ -82,12 +81,15 @@ private:
   }
 
   template <typename Iterator>
-  bool print(Iterator& out) const
+  friend trial<void> print(prefix const& p, Iterator&& out)
   {
-    if (! render(out, network_))
-      return false;
+    auto t = print(p.network_, out);
+    if (! t)
+      return t.error();
+
     *out++ = '/';
-    return render(out, length());
+
+    return print(p.length(), out);
   }
 
   friend bool operator==(prefix const& x, prefix const& y);

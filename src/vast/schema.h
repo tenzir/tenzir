@@ -11,14 +11,10 @@
 #include "vast/detail/parser/schema.h"
 #include "vast/util/intrusive.h"
 #include "vast/util/operators.h"
-#include "vast/util/parse.h"
-#include "vast/util/print.h"
-#include "vast/util/trial.h"
 
 namespace vast {
 class schema : util::equality_comparable<schema>,
-               util::parsable<schema>,
-               util::printable<schema>
+               util::parsable<schema>
 {
 public:
   using const_iterator = std::vector<type_const_ptr>::const_iterator;
@@ -33,7 +29,7 @@ public:
   /// Adds a new type to the schema.
   /// @param t The type to add.
   /// @returns `nothing` on success.
-  trial<nothing> add(type_const_ptr t);
+  trial<void> add(type_const_ptr t);
 
   /// Retrieves the type for a given type name.
   /// @param name The name of the type to lookup.
@@ -49,7 +45,7 @@ public:
   /// Checks whether a given event complies with the schema.
   /// @param e The event to test.
   /// @returns `nothing` iff *e* complies with this schema.
-  //trial<nothing> complies(event const& e) const;
+  //trial<void> complies(event const& e) const;
 
   // Container API.
   const_iterator begin() const;
@@ -77,21 +73,22 @@ private:
   bool parse(Iterator& start, Iterator end);
 
   template <typename Iterator>
-  bool print(Iterator& out) const
+  friend trial<void> print(schema const& s, Iterator&& out)
   {
-    for (auto& t : types_)
+    for (auto& t : s.types_)
     {
       if (t->name().empty())
         continue;
 
-      render(out, "type ");
-      render(out, t->name());
-      render(out, ": ");
-      render(out, *t, false);
-      render(out, "\n");
+      // TODO: fix laziness.
+      print("type ", out);
+      print(t->name(), out);
+      print(": ", out);
+      print(*t, out, false);
+      print("\n", out);
     }
 
-    return true;
+    return nothing;
   }
 
   friend bool operator==(schema const& x, schema const& y);

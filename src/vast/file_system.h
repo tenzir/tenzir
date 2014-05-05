@@ -7,16 +7,13 @@
 #include "vast/fwd.h"
 #include "vast/string.h"
 #include "vast/util/operators.h"
-#include "vast/util/print.h"
-#include "vast/util/trial.h"
 
 namespace vast {
 
 /// A filesystem path abstraction.
 class path : util::totally_ordered<path>,
              util::addable<path>,
-             util::dividable<path>,
-             util::printable<path>
+             util::dividable<path>
 {
 public:
 #ifdef VAST_WINDOWS
@@ -139,9 +136,9 @@ private:
   void deserialize(deserializer& source);
 
   template <typename Iterator>
-  bool print(Iterator& out) const
+  friend trial<void> print(path const& p, Iterator&& out)
   {
-    return render(out, str_);
+    return print(p.str_, out);
   }
 
   string str_;
@@ -196,7 +193,7 @@ public:
   /// @param mode How to open the file.
   /// @param append If `false`, the first write truncates the file.
   /// @returns `true` on success.
-  trial<nothing> open(open_mode mode = read_write, bool append = false);
+  trial<void> open(open_mode mode = read_write, bool append = false);
 
   /// Closes the file.
   /// @returns `true` on success.
@@ -250,7 +247,7 @@ bool rm(path const& p);
 /// If the path does not exist, create it as directory.
 /// @param p The path to a directory to create.
 /// @returns `true` on success or if *p* exists already.
-trial<nothing> mkdir(path const& p);
+trial<void> mkdir(path const& p);
 
 /// Traverses each entry of a directory.
 ///

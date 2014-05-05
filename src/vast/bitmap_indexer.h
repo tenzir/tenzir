@@ -45,7 +45,7 @@ public:
       auto attempt = io::unarchive(path_, last_flush_, bmi_);
       if (! attempt)
         VAST_LOG_ACTOR_ERROR("failed to load bitmap index from " << path_ <<
-                             ": " << attempt.failure());
+                             ": " << attempt.error());
       else
         VAST_LOG_ACTOR_DEBUG("loaded bitmap index from " << path_ <<
                              " (" << bmi_.size() << " bits)");
@@ -61,7 +61,7 @@ public:
         {
           VAST_LOG_ACTOR_ERROR("failed to flush " << (size - last_flush_) <<
                                " bits to " << path_ << ": " <<
-                               attempt.failure());
+                               attempt.error());
         }
         else
         {
@@ -132,7 +132,7 @@ public:
           auto r = bmi_.lookup(*o, *c);
           if (! r)
           {
-            VAST_LOG_ACTOR_ERROR(r.failure().msg());
+            VAST_LOG_ACTOR_ERROR(r.error().msg());
             send(sink, pred, part, bitstream{});
             return;
           }

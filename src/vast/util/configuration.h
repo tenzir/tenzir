@@ -70,7 +70,7 @@ public:
       if (val)
         values.emplace_back(*val);
       else if (val.failed())
-        return val.failure();
+        return val.error();
 
       auto o = cfg.find_option(arg);
       if (o)

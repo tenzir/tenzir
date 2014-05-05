@@ -5,8 +5,8 @@
 #include "vast/config.h"
 #include "vast/singleton.h"
 #include "vast/traits.h"
+#include "vast/print.h"
 #include "vast/util/pp.h"
-#include "vast/util/trial.h"
 
 namespace vast {
 
@@ -55,10 +55,10 @@ public:
     void function(char const* f);
 
     template <typename T>
-    message& operator<<(T&& x)
+    friend message& operator<<(message& m, T&& x)
     {
-      ss_ << std::forward<T>(x);
-      return *this;
+      m.ss_ << std::forward<T>(x);
+      return m;
     }
 
     void clear();

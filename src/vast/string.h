@@ -5,9 +5,9 @@
 #include <vector>
 #include "vast/fwd.h"
 #include "vast/traits.h"
+#include "vast/trial.h"
 #include "vast/util/operators.h"
 #include "vast/util/parse.h"
-#include "vast/util/print.h"
 
 namespace vast {
 
@@ -46,8 +46,7 @@ namespace vast {
 ///
 /// That is, 13 bytes on a 64-bit and 9 bytes on 32-bit machine.
 class string : util::totally_ordered<string>,
-               util::parsable<string>,
-               util::printable<string>
+               util::parsable<string>
 {
 public:
   /// The size type of the counter.
@@ -396,11 +395,11 @@ private:
   }
 
   template <typename Iterator>
-  bool print(Iterator& out) const
+  friend trial<void> print(string const& str, Iterator&& out)
   {
-    auto esc = escape();
+    auto esc = str.escape();
     out = std::copy(esc.begin(), esc.end(), out);
-    return true;
+    return nothing;
   }
 
   bool convert(int& n) const;

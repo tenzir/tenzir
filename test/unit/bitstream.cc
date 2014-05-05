@@ -1,7 +1,7 @@
 #include "test.h"
+#include "vast/convert.h"
 #include "vast/bitstream.h"
 #include "vast/io/serialization.h"
-#include "vast/util/convert.h"
 
 using namespace vast;
 
@@ -255,8 +255,7 @@ BOOST_AUTO_TEST_CASE(null_operations)
   // 11000011101
   // 00100000000
   std::string str;
-  auto i = std::back_inserter(str);
-  BOOST_REQUIRE(render(i, v));
+  BOOST_REQUIRE(print(v, std::back_inserter(str)));
   BOOST_CHECK_EQUAL(
       str,
       "110\n"

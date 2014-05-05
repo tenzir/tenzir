@@ -5,12 +5,10 @@
 #include <stdexcept>
 #include <unordered_map>
 #include "vast/bitstream.h"
+#include "vast/convert.h"
 #include "vast/operator.h"
 #include "vast/serialization.h"
-#include "vast/util/convert.h"
 #include "vast/util/operators.h"
-#include "vast/util/print.h"
-#include "vast/util/trial.h"
 
 namespace vast {
 
@@ -217,7 +215,7 @@ private:
   trial<Bitstream> decode_impl(T x, relational_operator op) const
   {
     if (! (op == equal || op == not_equal))
-      return error{"unsupported relational operator: " + to_string(op)};
+      return error{"unsupported relational operator:", op};
 
     auto i = bitstreams_.find(x);
     if (i == bitstreams_.end() || i->second.empty())
@@ -321,7 +319,7 @@ private:
     switch (op)
     {
       default:
-        return error{"unsupported relational operator: " + to<std::string>(op)};
+        return error{"unsupported relational operator: ", op};
       case equal:
       case not_equal:
         {
@@ -569,7 +567,7 @@ private:
     switch (op)
     {
       default:
-        return error{"unsupported relational operator: " + to<std::string>(op)};
+        return error{"unsupported relational operator: ", op};
       case equal:
         return std::move(r);
       case not_equal:
@@ -642,7 +640,7 @@ private:
     switch (op)
     {
       default:
-        return error{"unsupported relational operator: " + to<std::string>(op)};
+        return error{"unsupported relational operator: ", op};
       case less:
       case less_equal:
       case greater:
@@ -801,8 +799,7 @@ template <
   template <typename, typename> class Coder = equality_coder,
   template <typename> class Binner = null_binner
 >
-class bitmap : util::equality_comparable<bitmap<T, Bitstream, Coder, Binner>>,
-               util::printable<bitmap<T, Bitstream, Coder, Binner>>
+class bitmap : util::equality_comparable<bitmap<T, Bitstream, Coder, Binner>>
 {
   static_assert(std::is_arithmetic<T>::value, "arithmetic type required");
 
@@ -898,27 +895,28 @@ private:
   }
 
   template <typename Iterator>
-  bool print(Iterator& out, bool with_header = true, char delim = '\t') const
+  friend trial<void> print(bitmap const& bm, Iterator&& out,
+                    bool with_header = true, char delim = '\t')
   {
-    if (empty())
-      return true;
+    if (bm.empty())
+      return nothing;
 
     std::string str;
     if (with_header)
     {
-      coder_.each(
+      bm.coder_.each(
           [&](size_t, T x, Bitstream const&) { str += to_string(x) + delim; });
 
       str.pop_back();
       str += '\n';
     }
 
-    std::copy(str.begin(), str.end(), out);
+    print(str, out);
 
     std::vector<Bitstream> cols;
-    coder_.each([&](size_t, T, Bitstream const& bs) { cols.push_back(bs); });
+    bm.coder_.each([&](size_t, T, Bitstream const& bs) { cols.push_back(bs); });
 
-    return render(out, cols);
+    return print(cols, out);
   }
 
   friend bool operator==(bitmap const& x, bitmap const& y)
@@ -961,7 +959,7 @@ public:
     switch (op)
     {
       default:
-        return error{"unsupported relational operator: " + to<std::string>(op)};
+        return error{"unsupported relational operator: ", op};
       case not_equal:
         return {x ? ~bool_ : bool_};
       case equal:
@@ -996,11 +994,11 @@ private:
   }
 
   template <typename Iterator>
-  bool print(Iterator& out) const
+  friend trial<void> print(bitmap const& bm, Iterator&& out)
   {
     typename Bitstream::size_type last = 0;
-    auto i = bool_.begin();
-    auto end = bool_.end();
+    auto i = bm.bool_.begin();
+    auto end = bm.bool_.end();
 
     while (i != end)
     {
@@ -1009,8 +1007,7 @@ private:
 
       for (decltype(delta) zero = 0; zero < delta; ++zero)
       {
-        *out++ = '0';
-        *out++ = '\n';
+        print("0\n", out);
       }
 
       *out++ = '1';
@@ -1018,7 +1015,7 @@ private:
         *out++ = '\n';
     }
 
-    auto remaining_zeros = last < bool_.size() ? bool_.size() - last : 0;
+    auto remaining_zeros = last < bm.bool_.size() ? bm.bool_.size() - last : 0;
     for (decltype(last) zero = 0; zero < remaining_zeros; ++zero)
     {
       *out++ = '0';
@@ -1028,7 +1025,7 @@ private:
 
     *out++ = '\n';
 
-    return true;
+    return nothing;
   }
 
   friend bool operator==(bitmap const& x, bitmap const& y)

@@ -154,7 +154,7 @@ console::console(cppa::actor_ptr search, path dir)
   };
 
   auto main = cmdline_.mode_add("main", "> ", util::color::cyan,
-                                to<std::string>(dir_ / "history_main"));
+                                to_string(dir_ / "history_main"));
 
   main->on_unknown_command(help(main));
   main->on_complete(complete);
@@ -267,7 +267,7 @@ console::console(cppa::actor_ptr search, path dir)
         std::vector<intrusive_ptr<result>> matches;
         for (auto& r : results_)
         {
-          auto candidate = to<std::string>(r->id());
+          auto candidate = to_string(r->id());
           auto i = std::mismatch(args.begin(), args.end(), candidate.begin());
           if (i.first == args.end())
             matches.push_back(r);
@@ -293,7 +293,7 @@ console::console(cppa::actor_ptr search, path dir)
       });
 
   auto ask = cmdline_.mode_add("ask", "? ", util::color::green,
-                               to<std::string>(dir_ / "history_query"));
+                               to_string(dir_ / "history_query"));
 
   ask->add("exit", "leave query asking mode")->on(
       [=](std::string) -> util::result<bool>
@@ -989,7 +989,7 @@ void console::prompt(size_t ms)
   auto t = cmdline_.get(line);
   if (! t)
   {
-    VAST_LOG_ACTOR_ERROR("failed to retrieve command line: " << t.failure());
+    VAST_LOG_ACTOR_ERROR("failed to retrieve command line: " << t.error());
     quit(exit::error);
     return;
   }
@@ -1023,7 +1023,7 @@ void console::prompt(size_t ms)
   }
   else if (r.failed())
   {
-    print(error) << r.failure() << std::endl;
+    print(error) << r.error() << std::endl;
     prompt();
   }
 };

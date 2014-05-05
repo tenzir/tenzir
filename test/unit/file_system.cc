@@ -1,4 +1,5 @@
 #include "test.h"
+#include "vast/convert.h"
 #include "vast/file_system.h"
 
 using namespace vast;

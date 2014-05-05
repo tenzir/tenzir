@@ -101,10 +101,10 @@ void segment::writer::attach_to(segment* s)
   segment_ = s;
 }
 
-trial<nothing> segment::writer::flush()
+trial<void> segment::writer::flush()
 {
   if (chunk_->empty())
-    return nil;
+    return nothing;
 
   chunk_writer_.reset();
 
@@ -127,13 +127,13 @@ trial<nothing> segment::writer::flush()
   if (s)
     segment_->header_.schema = std::move(*s);
   else
-    return s.failure();
+    return s.error();
 
 
   first_ = time_range{};
   last_ = time_range{};
 
-  return nil;
+  return nothing;
 }
 
 size_t segment::writer::bytes() const
@@ -187,7 +187,7 @@ trial<event> segment::reader::read(event_id id)
   if (r)
     return {std::move(r.value())};
   else if (r.failed())
-    return r.failure();
+    return r.error();
 
   assert(! r.empty());
   return error{"empty event"}; // should never happen.
@@ -226,7 +226,7 @@ bool segment::reader::seek(event_id id)
   if (r)
     return *r == n;
 
-  VAST_LOG_ERROR(r.failure().msg());
+  VAST_LOG_ERROR(r.error().msg());
   return false;
 }
 
@@ -353,7 +353,7 @@ trial<event_id> segment::reader::skip(size_t n)
     auto r = load(true);
     assert(! r);
     if (r.failed())
-      return r.failure();
+      return r.error();
 
     ++skipped;
   }

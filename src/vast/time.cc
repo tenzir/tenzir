@@ -116,16 +116,20 @@ void time_range::deserialize(deserializer& source)
   VAST_LEAVE(VAST_THIS);
 }
 
-bool time_range::convert(double& d) const
+trial<void> convert(time_range tr, double& d)
 {
-  d = std::chrono::duration_cast<double_seconds>(duration_).count();
-  return true;
+  auto duration =
+    std::chrono::duration_cast<time_range::double_seconds>(tr.duration_);
+
+  d = duration.count();
+
+  return nothing;
 }
 
-bool time_range::convert(duration_type& dur) const
+trial<void> convert(time_range tr, time_range::duration_type& dur)
 {
-  dur = duration_;
-  return true;
+  dur = tr.duration_;
+  return nothing;
 }
 
 time_point::time_point(std::string const& str, char const* fmt, char const* locale)
@@ -265,26 +269,28 @@ time_point time_point::delta(int secs,
                              int years)
 {
   auto tm = to<std::tm>(*this);
+  if (! tm)
+    return {};
 
   if (secs)
-    tm.tm_sec += secs;
+    tm->tm_sec += secs;
   if (mins)
-    tm.tm_min += mins;
+    tm->tm_min += mins;
   if (hours)
-    tm.tm_hour += hours;
+    tm->tm_hour += hours;
   if (days)
-    tm.tm_mday += days;
+    tm->tm_mday += days;
 
   // We assume that when someone says "three month from today," it means the
   // same day just the month number advanced by three.
   if (months)
-    tm.tm_mday += detail::days_from(tm.tm_year, tm.tm_mon, months);
+    tm->tm_mday += detail::days_from(tm->tm_year, tm->tm_mon, months);
   if (years)
-    tm.tm_mday += detail::days_from(tm.tm_year, tm.tm_mon, years * 12);
+    tm->tm_mday += detail::days_from(tm->tm_year, tm->tm_mon, years * 12);
 
-  detail::propagate(tm);
+  detail::propagate(*tm);
 
-  return time_point(tm);
+  return time_point(*tm);
 }
 
 time_range time_point::since_epoch() const
@@ -305,33 +311,37 @@ void time_point::deserialize(deserializer& source)
   VAST_LEAVE(VAST_THIS);
 }
 
-bool time_point::convert(double &d) const
+trial<void> convert(time_point tp, double &d)
 {
-  d = to<double>(time_range{time_point_.time_since_epoch()});
-  return true;
+  d = *to<double>(time_range{tp.time_point_.time_since_epoch()});
+  return nothing;
 }
 
-bool time_point::convert(std::tm& tm) const
+trial<void> convert(time_point tp, std::tm& tm)
 {
-  auto d = std::chrono::duration_cast<clock::duration>(
-      time_point_.time_since_epoch());
-  auto tt = clock::to_time_t(clock::time_point(d));
-  return ::gmtime_r(&tt, &tm) != nullptr;
+  auto d = std::chrono::duration_cast<time_point::clock::duration>(
+      tp.time_point_.time_since_epoch());
+
+  auto tt = time_point::clock::to_time_t(time_point::clock::time_point(d));
+  return ::gmtime_r(&tt, &tm) != nullptr
+    ? nothing 
+    : error{"failed to convert time_point"};
 }
 
-bool time_point::convert(std::string& str) const
+trial<void> convert(time_point tp, std::string& str)
 {
-  auto tm = to<std::tm>(*this);
+  auto tm = to<std::tm>(tp);
   std::ostringstream ss;
 #ifdef VAST_CLANG
-  ss << std::put_time(&tm, time_point::format);
+  ss << std::put_time(&*tm, time_point::time_point::format);
   str = ss.str();
 #else
   char buf[256];
-  strftime(buf, sizeof(buf), time_point::format, &tm);
+  strftime(buf, sizeof(buf), time_point::time_point::format, &tm);
   str = buf;
 #endif
-  return true;
+
+  return nothing;
 }
 
 

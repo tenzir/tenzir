@@ -8,15 +8,14 @@
 #include <vector>
 #include "vast/fwd.h"
 #include "vast/traits.h"
+#include "vast/trial.h"
 #include "vast/util/operators.h"
 #include "vast/util/iterator.h"
-#include "vast/util/print.h"
 
 namespace vast {
 
 /// A vector of bits.
-class bitvector : util::totally_ordered<bitvector>,
-                  util::printable<bitvector>
+class bitvector : util::totally_ordered<bitvector>
 {
 public:
   using block_type = size_t;
@@ -600,11 +599,11 @@ private:
   /// @param max: Specifies a maximum size on the output. If 0, no cutting
   /// occurs.
   template <typename Iterator>
-  bool
-  print(Iterator& out, bool msb = true, bool all = false, size_t max = 0) const
+  friend trial<void> print(bitvector const& b, Iterator&& out,
+                           bool msb = true, bool all = false, size_t max = 0)
   {
     std::string str;
-    auto str_size = all ? bitvector::block_width * blocks() : size();
+    auto str_size = all ? bitvector::block_width * b.blocks() : b.size();
     if (max == 0 || str_size <= max)
     {
       str.assign(str_size, '0');
@@ -617,12 +616,12 @@ private:
       str_size = max;
     }
 
-    for (size_type i = 0; i < std::min(str_size, size()); ++i)
-      if (operator[](i))
+    for (size_type i = 0; i < std::min(str_size, b.size()); ++i)
+      if (b[i])
         str[msb ? str_size - i - 1 : i] = '1';
 
     out = std::copy(str.begin(), str.end(), out);
-    return true;
+    return nothing;
   }
 
   friend bool operator==(bitvector const& x, bitvector const& y);

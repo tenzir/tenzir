@@ -16,7 +16,7 @@ void schema_manager_actor::act()
         auto contents = load(path{file});
         if (! contents)
         {
-          VAST_LOG_ERROR("could not load schema: " << contents.failure());
+          VAST_LOG_ERROR("could not load schema: " << contents.error());
           return;
         }
 

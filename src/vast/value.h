@@ -13,7 +13,6 @@
 #include "vast/value_type.h"
 #include "vast/util/operators.h"
 #include "vast/util/parse.h"
-#include "vast/util/print.h"
 
 namespace vast {
 
@@ -22,11 +21,9 @@ struct value_invalid { };
 constexpr value_invalid invalid = {};
 
 template <typename Iterator>
-bool print(Iterator& out, value_invalid)
+trial<void> print(value_invalid, Iterator&& out)
 {
-  static constexpr auto str = "<invalid>";
-  out = std::copy(str, str + 9, out);
-  return true;
+  return print("<invalid>", out);
 }
 
 namespace detail {
@@ -46,8 +43,7 @@ struct visit_impl;
 /// `optional<T>` semantics where `T` is a value type. A nil value is thus
 /// equivalent to a disengaged optional value. Finally, an *engaged* type
 /// contains a valid instance of some value type `T`.
-class value : util::parsable<value>,
-              util::printable<value>
+class value : util::parsable<value>
 {
   template <typename, typename>
   friend struct detail::visit_impl;
@@ -239,44 +235,52 @@ private:
   template <typename Iterator>
   struct value_printer
   {
-    typedef bool result_type;
+    using result_type = trial<void>;
 
     value_printer(Iterator& out)
-      : out(out)
+      : out_{out}
     {
     }
 
-    bool operator()(value_type t) const
+    trial<void> operator()(value_type vt) const
     {
-      *out++ = '<';
-      if (! render(out, t))
-        return false;
-      *out++ = '>';
-      return true;
+      *out_++ = '<';
+
+      auto t = print(vt, out_);
+      if (! t)
+        return t.error();
+
+      *out_++ = '>';
+
+      return nothing;
     }
 
     template <typename T>
-    bool operator()(T const& x) const
+    trial<void> operator()(T const& x) const
     {
-      return render(out, x);
+      return print(x, out_);
     }
 
-    bool operator()(string const& str) const
+    trial<void> operator()(string const& str) const
     {
-      *out++ = '"';
-      if (! render(out, str.escape()))
-        return false;
-      *out++ = '"';
-      return true;
+      *out_++ = '"';
+
+      auto t = print(str, out_);
+      if (! t)
+        return t.error();
+
+      *out_++ = '"';
+
+      return nothing;
     }
 
-    Iterator& out;
+    Iterator& out_;
   };
 
   template <typename Iterator>
-  bool print(Iterator& out) const
+  friend trial<void> print(value const& v, Iterator&& out)
   {
-    return value::visit(*this, value_printer<Iterator>(out));
+    return value::visit(v, value_printer<Iterator>(out));
   }
 };
 
@@ -524,8 +528,7 @@ inline T const& value::get() const
 /// A vector of values with arbitrary value types.
 class record : public std::vector<value>,
                util::totally_ordered<record>,
-               util::parsable<record>,
-               util::printable<record>
+               util::parsable<record>
 {
   using super = std::vector<value>;
 
@@ -612,23 +615,18 @@ private:
   }
 
   template <typename Iterator>
-  bool print(Iterator& out) const
+  friend trial<void> print(record const& r, Iterator&& out,
+                           char const* delim = ", ")
   {
     *out++ = '(';
-    auto first = begin();
-    auto last = end();
-    while (first != last)
-    {
-      if (! render(out, *first))
-        return false;
-      if (++first != last)
-      {
-        *out++ = ',';
-        *out++ = ' ';
-      }
-    }
+
+    auto t = util::print_delimited(delim, r.begin(), r.end(), out);
+    if (! t)
+      return t.error();
+
     *out++ = ')';
-    return true;
+
+    return nothing;
   }
 
   friend bool operator==(record const& x, record const& y);
@@ -653,8 +651,7 @@ public:
 
 /// An associative array.
 class table : public std::map<value, value>,
-              util::totally_ordered<table>,
-              util::printable<table>
+              util::totally_ordered<table>
 {
   using super = std::map<value, value>;
 
@@ -672,25 +669,36 @@ private:
   void deserialize(deserializer& source);
 
   template <typename Iterator>
-  bool print(Iterator& out) const
+  friend trial<void> print(table const& t, Iterator&& out)
   {
     *out++ = '{';
-    auto first = begin();
-    auto last = end();
+    auto first = t.begin();
+    auto last = t.end();
     while (first != last)
     {
-      if (! render(out, first->first))
-        return false;
-      if (! render(out, " -> "))
-        return false;
-      if (! render(out, first->second))
-        return false;
+      auto t = print(first->first, out);
+      if (! t)
+        return t.error();
+
+      t = print(" -> ", out);
+      if (! t)
+        return t.error();
+
+      t = print(first->second, out);
+      if (! t)
+        return t.error();
+
       if (++first != last)
-      if (! render(out, ", "))
-        return false;
+      {
+        t = print(", ", out);
+        if (! t)
+          return t.error();
+      }
     }
+
     *out++ = '}';
-    return true;
+
+    return nothing;
   }
 
   friend bool operator==(table const& x, table const& y);
@@ -747,7 +755,7 @@ public:
     if (! extract(start_, end_, x))
       return error{"failed to parse basic type"};
 
-    return {std::move(x)};
+    return value{std::move(x)};
   }
 
   trial<value> operator()(vector_type const& t) const
@@ -757,7 +765,7 @@ public:
                 vec_sep_, vec_left_, vec_right_, esc_))
       return error{"failed to parse vector type"};
 
-    return {std::move(x)};
+    return value{std::move(x)};
   }
 
   trial<value> operator()(set_type const& t) const
@@ -767,7 +775,7 @@ public:
                 set_sep_, set_left_, set_right_, esc_))
       return error{"failed to parse set type"};
 
-    return {std::move(x)};
+    return value{std::move(x)};
   }
 
   trial<value> operator()(table_type const&) const

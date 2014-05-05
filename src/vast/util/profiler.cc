@@ -7,7 +7,6 @@
 #include <cppa/cppa.hpp>
 #include "vast/config.h"
 #include "vast/file_system.h"
-#include "vast/util/convert.h"
 
 #ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
 #include <google/profiler.h>
@@ -61,8 +60,8 @@ void profiler::act()
   chaining(false);
   trap_exit(true);
 
-  auto filename = to<std::string>(log_dir_ / "profile.log");
-  file_.open(filename);
+  auto filename = log_dir_ / "profile.log";
+  file_.open(to_string(filename));
 
   VAST_LOG_ACTOR_INFO(
       "enables getrusage profiling every " <<

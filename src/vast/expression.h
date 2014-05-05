@@ -6,8 +6,6 @@
 #include "vast/operator.h"
 #include "vast/schema.h"
 #include "vast/util/operators.h"
-#include "vast/util/print.h"
-#include "vast/util/trial.h"
 #include "vast/util/visitor.h"
 
 namespace vast {
@@ -63,7 +61,10 @@ struct node : public util::visitable_with<const_visitor>,
   virtual void serialize(serializer& sink) const = 0;
   virtual void deserialize(deserializer& source) = 0;
   friend bool operator==(node const& x, node const& y);
+  friend bool operator<(node const& x, node const& y);
 };
+
+trial<void> convert(node const& n, std::string& s, bool tree = false);
 
 /// A constant value.
 struct constant : public util::visitable<node, constant, const_visitor>
@@ -224,8 +225,7 @@ struct disjunction
 };
 
 /// A wrapper around an expression node with value semantics.
-class ast : util::totally_ordered<ast>,
-            util::printable<ast>
+class ast : util::totally_ordered<ast>
 {
 public:
   /// Creates an AST.
@@ -280,25 +280,29 @@ private:
   friend access;
   void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
-  bool convert(std::string& str, bool tree = false) const;
   friend bool operator<(ast const& x, ast const& y);
   friend bool operator==(ast const& x, ast const& y);
 
   template <typename Iterator>
-  bool print(Iterator& out) const
+  friend trial<void> print(ast const& a, Iterator&& out, bool tree = false)
   {
-    // FIXME: don't use poor man's printing via copying.
-    auto str = to<std::string>(*this);
-    out = std::copy(str.begin(), str.end(), out);
-    return true;
+    // FIXME: don't use poor man's printing via string generation.
+    auto str = to<std::string>(a, tree);
+    if (! str)
+      return str.error();
+
+    return print(*str, out);
+  }
+
+  friend trial<void> convert(ast const& a, std::string& s, bool tree = false)
+  {
+    return a.node_ ? convert(*a.node_, s, tree) : nothing;
   }
 };
 
 /// Evaluates an expression node for a given event.
 value evaluate(node const& n, event const& e);
 value evaluate(ast const& a, event const& e);
-
-bool convert(node const& n, std::string& str, bool tree = false);
 
 } // namespace expr
 } // namespace vast
