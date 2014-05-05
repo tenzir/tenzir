@@ -22,18 +22,6 @@ struct convertible
   static auto test(...) -> std::false_type;
 };
 
-struct has_push_back
-{
-  template <typename Container>
-  static auto test(Container* c)
-    -> decltype(
-        c->push_back(typename Container::value_type{}),
-        std::true_type());
-
-  template <typename>
-  static auto test(...) -> std::false_type;
-};
-
 } // namespace detail
 
 /// Type trait that checks whether a type is convertible to another.
@@ -52,22 +40,6 @@ auto convert(From const& f, std::string& str, Opts&&... opts)
 {
   return print(f, std::back_inserter(str), std::forward<Opts>(opts)...);
 }
-
-/// Conversion function for a *printable* type. One should be able to convert
-/// any printable type into a type acting as container of characters, such as a
-/// std::string or std::vector<char>.
-//template <typename To, typename From, typename... Opts>
-//auto convert(From const& f, To& to, Opts&&... opts)
-//  -> typename std::enable_if<
-//         std::is_class<To>::value
-//         && decltype(detail::has_push_back::test<To>(0))::value
-//         && ! convertible<From, To>::value
-//         && printable<From, std::back_insert_iterator<To>>::value,
-//       trial<void>
-//     >::type
-//{
-//  return print(f, std::back_inserter(to), std::forward<Opts>(opts)...);
-//}
 
 /// Converts one type to another.
 /// @tparam To The type to convert `From` to.
