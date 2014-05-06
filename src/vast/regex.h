@@ -4,16 +4,13 @@
 #include "vast/config.h"
 
 #include <regex>
+#include "vast/parse.h"
 #include "vast/string.h"
-#include "vast/util/parse.h"
-#include "vast/util/print.h"
 
 namespace vast {
 
 /// A regular expression.
-class regex : util::totally_ordered<regex>,
-              util::parsable<regex>,
-              util::printable<regex>
+class regex : util::totally_ordered<regex>
 {
 public:
   /// Constructs a regex from a glob expression. A glob expression consists
@@ -78,34 +75,35 @@ private:
   void deserialize(deserializer& source);
 
   template <typename Iterator>
-  bool parse(Iterator& start, Iterator end)
+  friend trial<void> print(regex const& rx, Iterator&& out)
   {
-    if (*start != '/')
-      return false;
+    *out++ = '/';
 
-    string s;
-    auto success = extract(start, end, s);
-    if (! success)
-      return false;
+    auto t = print(rx.str_, out);
+    if (! t)
+      return t.error();
 
-    if (s.empty() || s[s.size() - 1] != '/')
-      return false;
+    *out++ = '/';
 
-    str_ = s.thin("/", "\\");
-    return true;
+    return nothing;
   }
 
   template <typename Iterator>
-  bool print(Iterator& out) const
+  friend trial<void> parse(regex& rx, Iterator& begin, Iterator end)
   {
-    *out++ = '/';
-    if (! render(out, str_.escape()))
-      return false;
-    *out++ = '/';
-    return true;
-  }
+    if (*begin != '/')
+      return error{"regex did not begin with a '/'"};
 
-  bool convert(std::string& str);
+    auto t = parse<string>(begin, end);
+    if (! t)
+      return t.error();
+
+    if (t->empty() || (*t)[t->size() - 1] != '/')
+      return error{"regex did not end with a '/'"};
+
+    rx = regex{t->thin("/", "\\")};
+    return nothing;
+  }
 
   friend bool operator==(regex const& x, regex const& y);
   friend bool operator<(regex const& x, regex const& y);

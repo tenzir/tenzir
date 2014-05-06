@@ -46,13 +46,13 @@ template <
   typename Container,
   typename Serializer = binary_serializer
 >
-trial<nothing> archive(Container& c, Ts const&... xs)
+trial<void> archive(Container& c, Ts const&... xs)
 {
   auto sink = io::make_container_output_stream(c);
   Serializer s{sink};
   detail::do_serialize(s, xs...);
 
-  return nil;
+  return nothing;
 }
 
 template <
@@ -60,20 +60,20 @@ template <
   typename Container,
   typename Deserializer = binary_deserializer
 >
-trial<nothing> unarchive(Container const& c, Ts&... xs)
+trial<void> unarchive(Container const& c, Ts&... xs)
 {
   auto source = make_container_input_stream(c);
   Deserializer d{source};
   detail::do_deserialize(d, xs...);
 
-  return nil;
+  return nothing;
 }
 
 template <
   typename... Ts,
   typename Serializer = binary_serializer
 >
-trial<nothing> archive(path const& filename, Ts const&... xs)
+trial<void> archive(path const& filename, Ts const&... xs)
 {
   if (! exists(filename.parent()) && ! mkdir(filename.parent()))
     return error{"could not mkdir parent of " +
@@ -88,14 +88,14 @@ trial<nothing> archive(path const& filename, Ts const&... xs)
   Serializer s{sink};
   detail::do_serialize(s, xs...);
 
-  return nil;
+  return nothing;
 }
 
 template <
   typename... Ts,
   typename Deserializer = binary_deserializer
 >
-trial<nothing> unarchive(path const& filename, Ts&... xs)
+trial<void> unarchive(path const& filename, Ts&... xs)
 {
   file f{filename};
   auto t = f.open(file::read_only);
@@ -106,11 +106,11 @@ trial<nothing> unarchive(path const& filename, Ts&... xs)
   Deserializer d{source};
   detail::do_deserialize(d, xs...);
 
-  return nil;
+  return nothing;
 }
 
 template <typename... Ts, typename Container>
-trial<nothing> compress(compression method, Container& c, Ts const&... xs)
+trial<void> compress(compression method, Container& c, Ts const&... xs)
 {
   auto buf = make_container_output_stream(c);
   std::unique_ptr<compressed_output_stream> out{
@@ -119,11 +119,11 @@ trial<nothing> compress(compression method, Container& c, Ts const&... xs)
   binary_serializer s{*out};
   detail::do_serialize(s, xs...);
 
-  return nil;
+  return nothing;
 }
 
 template <typename... Ts, typename Container>
-trial<nothing> decompress(compression method, Container const& c, Ts&... xs)
+trial<void> decompress(compression method, Container const& c, Ts&... xs)
 {
   auto buf = make_array_input_stream(c);
   std::unique_ptr<compressed_input_stream> in{
@@ -132,11 +132,11 @@ trial<nothing> decompress(compression method, Container const& c, Ts&... xs)
   binary_deserializer d{*in};
   detail::do_deserialize(d, xs...);
 
-  return nil;
+  return nothing;
 }
 
 template <typename... Ts>
-trial<nothing> compress(compression method, path const& filename, Ts const&... xs)
+trial<void> compress(compression method, path const& filename, Ts const&... xs)
 {
   if (! exists(filename.parent()) && ! mkdir(filename.parent()))
     return error{"could not mkdir parent of " +
@@ -154,11 +154,11 @@ trial<nothing> compress(compression method, path const& filename, Ts const&... x
   binary_serializer s{*out};
   detail::do_serialize(s, xs...);
 
-  return nil;
+  return nothing;
 }
 
 template <typename... Ts>
-trial<nothing> decompress(compression method, path const& filename, Ts&... xs)
+trial<void> decompress(compression method, path const& filename, Ts&... xs)
 {
   file f{filename};
   auto t = f.open(file::read_only);
@@ -172,7 +172,7 @@ trial<nothing> decompress(compression method, path const& filename, Ts&... xs)
   binary_deserializer d{*in};
   detail::do_deserialize(d, xs...);
 
-  return nil;
+  return nothing;
 }
 
 } // namespace io

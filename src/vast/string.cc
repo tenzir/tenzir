@@ -569,56 +569,6 @@ void string::deserialize(deserializer& source)
   VAST_LEAVE(VAST_THIS);
 }
 
-bool string::convert(int& n) const
-{
-  long l;
-  convert(l);
-  if (l > std::numeric_limits<int>::max())
-    return false;
-  n = static_cast<int>(l);
-  return true;
-}
-
-bool string::convert(long& n) const
-{
-  n = std::strtol(data(), nullptr, 0);
-  return true;
-}
-
-bool string::convert(long long& n) const
-{
-  n = std::strtoll(data(), nullptr, 0);
-  return true;
-}
-
-bool string::convert(unsigned int& n) const
-{
-  unsigned long l;
-  convert(l);
-  if (l > std::numeric_limits<unsigned int>::max())
-    return false;
-  n = static_cast<unsigned int>(l);
-  return true;
-}
-
-bool string::convert(unsigned long& n) const
-{
-  n = std::strtoul(data(), nullptr, 0);
-  return true;
-}
-
-bool string::convert(unsigned long long& n) const
-{
-  n = std::strtoull(data(), nullptr, 0);
-  return true;
-}
-
-bool string::convert(double& n) const
-{
-  n = std::atof(data());
-  return true;
-}
-
 bool operator==(string const& x, string const& y)
 {
   if (x.size() != y.size())

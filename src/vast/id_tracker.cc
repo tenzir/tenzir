@@ -3,7 +3,7 @@
 #include <cassert>
 #include <fstream>
 #include <cppa/cppa.hpp>
-#include "vast/util/convert.h"
+#include "vast/print.h"
 
 using namespace cppa;
 
@@ -19,7 +19,7 @@ bool id_tracker::load()
   if (! exists(dir_ / "id"))
     return true;
 
-  std::ifstream file{to<std::string>(dir_ / "id")};
+  std::ifstream file{to_string(dir_ / "id")};
   if (! file)
     return false;
 
@@ -35,7 +35,7 @@ bool id_tracker::save()
   if (id_ == 1)
     return true;
 
-  std::ofstream file{to<std::string>(dir_ / "id")};
+  std::ofstream file{to_string(dir_ / "id")};
   if (! file)
     return false;
 

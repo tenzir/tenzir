@@ -3,7 +3,6 @@
 #include <fstream>
 #include "vast/serialization.h"
 #include "vast/io/container_stream.h"
-#include "vast/util/convert.h"
 
 namespace vast {
 
@@ -15,7 +14,7 @@ trial<schema> schema::merge(schema const& s1, schema const& s2)
   {
     auto t1 = s1.find_type(t2->name());
     if (t1 && *t1 != *t2)
-      return error{"type clash: " + to_string(*t1) + " <--> " + to_string(*t2)};
+      return error{"type clash:", *t1, "<-->", *t2};
 
     merged.types_.push_back(t2);
   }
@@ -23,7 +22,7 @@ trial<schema> schema::merge(schema const& s1, schema const& s2)
   return std::move(merged);
 }
 
-trial<nothing> schema::add(type_const_ptr t)
+trial<void> schema::add(type_const_ptr t)
 {
   if (! t)
     return error{"add empty type"};
@@ -32,7 +31,7 @@ trial<nothing> schema::add(type_const_ptr t)
     return error{"instance of invalid_type"};
 
   if (t->name().empty() && find_type_info(t->info()).empty())
-    return error{"duplicate unnamed typed: " + to_string(*t)};
+    return error{"duplicate unnamed typed:", *t};
 
   if (! t->name().empty())
     if (auto existing = find_type(t->name()))
@@ -40,17 +39,16 @@ trial<nothing> schema::add(type_const_ptr t)
       if (*existing == *t)
       {
         existing = t;
-        return nil;
+        return nothing;
       }
 
-      return error{"clash in types with same name (existing <--> added): " +
-                   to_string(*existing, false) + " <--> " +
-                   to_string(*t, false)};
+      return error{"clash in types with same name (existing <--> added):",
+                   to_string(*existing, false), "<-->", to_string(*t, false)};
     }
 
   types_.push_back(std::move(t));
 
-  return nil;
+  return nothing;
 }
 
 type_const_ptr schema::find_type(string const& name) const
@@ -111,9 +109,10 @@ void schema::deserialize(deserializer& source)
 {
   std::string str;
   source >> str;
-  auto begin = str.begin();
-  auto end = str.end();
-  extract(begin, end, *this);
+  auto lval = str.begin();
+  auto s = parse<schema>(lval, str.end());
+  if (s)
+    *this = *s;
 }
 
 bool operator==(schema const& x, schema const& y)

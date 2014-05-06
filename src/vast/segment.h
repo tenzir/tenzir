@@ -85,7 +85,7 @@ public:
     /// underlying segment.
     ///
     /// @returns `nothing` on success or if there were no events to flush.
-    trial<nothing> flush();
+    trial<void> flush();
 
     /// Retrieves the number of bytes processed in total.
     /// @returns The number of bytes written into this writer.

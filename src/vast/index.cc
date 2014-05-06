@@ -5,6 +5,7 @@
 #include "vast/segment.h"
 #include "vast/expression.h"
 #include "vast/partition.h"
+#include "vast/print.h"
 #include "vast/io/serialization.h"
 
 namespace vast {
@@ -330,7 +331,7 @@ void index::set_on_miss(miss_callback f)
 trial<index::evaluation> index::evaluate(expr::ast const& ast)
 {
   if (! queries_.contains(ast))
-    return error{"not a registered query: " + to_string(ast)};
+    return error{"not a registered query: ", ast};
 
   restriction_map r;
   builder b{*this, r};
@@ -459,7 +460,7 @@ char const* index_actor::description() const
   return "index";
 }
 
-trial<nothing> index_actor::make_partition(path const& dir)
+trial<void> index_actor::make_partition(path const& dir)
 {
   auto name = dir.basename();
 
@@ -476,9 +477,9 @@ trial<nothing> index_actor::make_partition(path const& dir)
       partition::meta_data meta;
 
       if (! exists(dir / partition::part_meta_file))
-        return error{"couldn't find meta data of partition " + to_string(name)};
+        return error{"couldn't find meta data of partition ", name};
       else if (! io::unarchive(dir / partition::part_meta_file, meta))
-        return error{"failed to read meta data of partition " + to_string(name)};
+        return error{"failed to read meta data of partition ", name};
 
       index_.update_partition(meta.id, meta.first_event, meta.last_event);
 
@@ -496,7 +497,7 @@ trial<nothing> index_actor::make_partition(path const& dir)
   if (! a)
     a = spawn<partition_actor, monitored>(dir, batch_size_, id);
 
-  return nil;
+  return nothing;
 }
 
 void index_actor::act()
@@ -522,7 +523,7 @@ void index_actor::act()
 
         auto r = make_partition(p);
         if (! r)
-          VAST_LOG_ACTOR_ERROR(r.failure().msg());
+          VAST_LOG_ACTOR_ERROR(r.error());
 
         return true;
       });
@@ -577,7 +578,7 @@ void index_actor::act()
         auto r = make_partition(dir_ / path{dir});
         if (! r)
         {
-          VAST_LOG_ACTOR_ERROR(r.failure().msg());
+          VAST_LOG_ACTOR_ERROR(r.error().msg());
           quit(exit::error);
           return;
         }
@@ -594,10 +595,10 @@ void index_actor::act()
       {
         if (parts_.empty())
         {
-          auto r = make_partition(dir_ / to<string>(uuid::random()));
+          auto r = make_partition(dir_ / to_string(uuid::random()).data());
           if (! r)
           {
-            VAST_LOG_ACTOR_ERROR(r.failure().msg());
+            VAST_LOG_ACTOR_ERROR(r.error().msg());
             quit(exit::error);
             return;
           }
@@ -646,7 +647,7 @@ void index_actor::act()
         }
         else
         {
-          return make_any_tuple(atom("error"), e.failure().msg());
+          return make_any_tuple(atom("error"), e.error().msg());
         }
       },
       on_arg_match >> [=](expr::ast const& pred, uuid const& part, uint64_t n)
@@ -690,7 +691,7 @@ void index_actor::act()
           }
           else
           {
-            VAST_LOG_ACTOR_ERROR(e.failure().msg());
+            VAST_LOG_ACTOR_ERROR(e.error().msg());
             quit(exit::error);
             return;
           }

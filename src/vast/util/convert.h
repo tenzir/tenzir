@@ -1,77 +1,54 @@
 #ifndef VAST_UTIL_CONVERT_H
 #define VAST_UTIL_CONVERT_H
 
-#include <stdexcept>
-#include "vast/util/print.h"
+#include <string>
+#include "vast/util/trial.h"
 
 namespace vast {
+namespace util {
 
-inline bool convert(bool b, std::string& to)
+namespace detail {
+
+struct convertible
 {
-  to = b ? 'T' : 'F';
-  return true;
-}
+  template <typename From, typename To>
+  static auto test(From*, To*)
+    -> decltype(
+        convert(std::declval<From const&>(), std::declval<To&>()),
+        std::true_type());
 
-template <typename From>
-EnableIf<std::is_arithmetic<From>, bool>
-convert(From from, std::string& to)
-{
-  to = std::to_string(from);
-  return true;
-}
-
-// Any type modeling the `Printable` concept should also be convertible to an
-// STL string.
-template <typename From, typename... Opts>
-auto convert(From const& from, std::string& str, Opts&&... opts)
-  -> decltype(
-      render(std::declval<std::back_insert_iterator<std::string>&>(),
-             from,
-             std::forward<Opts>(opts)...))
-{
-  str.clear();
-  auto i = std::back_inserter(str);
-  return render(i, from, std::forward<Opts>(opts)...);
-}
-
-struct access::convertible
-{
-  template <typename From, typename To, typename... Opts>
-  static auto conv(From const& from, To& to, int, Opts&&... opts)
-    -> decltype(from.convert(to, std::forward<Opts>(opts)...), bool())
-  {
-    return from.convert(to, std::forward<Opts>(opts)...);
-  }
-
-  template <typename From, typename To, typename... Opts>
-  static auto conv(From const& from, To& to, long, Opts&&... opts)
-    -> decltype(convert(from, to, std::forward<Opts>(opts)...), bool())
-  {
-    return convert(from, to, std::forward<Opts>(opts)...);
-  }
+  template <typename, typename>
+  static auto test(...) -> std::false_type;
 };
 
-// A single-argument convenience shortcut for conversion.
+} // namespace detail
+
+/// Type trait that checks whether a type is convertible to another.
+template <typename From, typename To>
+struct convertible : decltype(detail::convertible::test<From, To>(0, 0)) {};
+
+/// Converts one type to another.
+/// @tparam To The type to convert `From` to.
+/// @tparam From The type to convert to `To`.
+/// @param f The instance to convert.
+/// @returns *f* converted to `T`.
 template <typename To, typename From, typename... Opts>
-auto to(From const& from, Opts&&... opts)
-  -> decltype(access::convertible::conv(from, std::declval<To&>(), 0, opts...),
-              To())
+auto to(From const& f, Opts&&... opts)
+  -> typename std::enable_if<
+       ! std::is_same<To, std::string>::value // Comes from Printable.
+         && convertible<From, To>::value,
+       trial<To>
+     >::type
 {
-  To x;
-  if (! access::convertible::conv(from, x, 0, std::forward<Opts>(opts)...))
-    throw std::invalid_argument("conversion error");
-  return x;
+  trial<To> x{To()};
+  auto t = convert(f, *x, std::forward<Opts>(opts)...);
+  if (t)
+    return x;
+  else
+    return t.error();
 }
 
-// STL compliance.
-template <typename From, typename... Opts>
-auto to_string(From const& from, Opts&&... opts)
-  -> decltype(convert(from, std::declval<std::string&>(), opts...),
-              std::string())
-{
-  return to<std::string>(from, std::forward<Opts>(opts)...);
-}
-
+} // namespace util
 } // namespace vast
 
 #endif

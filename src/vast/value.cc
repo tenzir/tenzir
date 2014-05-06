@@ -6,25 +6,9 @@
 #include <type_traits>
 #include "vast/logger.h"
 #include "vast/serialization.h"
-#include "vast/detail/parser/value.h"
-#include "vast/detail/parser/skipper.h"
 #include "vast/util/make_unique.h"
 
 namespace vast {
-
-value value::parse(std::string const& str)
-{
-  value v;
-  auto i = str.begin();
-  auto end = str.end();
-  using iterator = std::string::const_iterator;
-  detail::parser::value<iterator> grammar;
-  detail::parser::skipper<iterator> skipper;
-  bool success = phrase_parse(i, end, grammar, skipper, v);
-  if (! success || i != end)
-    v = vast::invalid;
-  return v;
-}
 
 value::value(value_invalid)
 {

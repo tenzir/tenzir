@@ -6,14 +6,12 @@
 #include "vast/type.h"
 #include "vast/value.h"
 #include "vast/util/operators.h"
-#include "vast/util/print.h"
 
 namespace vast {
 
 /// A value with a named type plus additional meta data.
 class event : public record,
-              util::totally_ordered<event>,
-              util::printable<event>
+              util::totally_ordered<event>
 {
 public:
   /// Constructs an empty event.
@@ -68,37 +66,31 @@ private:
   void deserialize(deserializer& source);
 
   template <typename Iterator>
-  bool print(Iterator& out) const
+  friend trial<void> print(event const& e, Iterator&& out)
   {
-    if (name().empty())
+    if (e.type_->name().empty())
     {
-      if (! render(out, "<unnamed>"))
-        return false;
+      auto t = print("<unnamed>", out);
+      if (! t)
+        return t.error();
     }
     else
     {
-      if (! render(out, name()))
-        return false;
+      auto t = print(e.type_->name(), out);
+      if (! t)
+        return t.error();
     }
 
-    render(out, " [");
-    render(out, id());
+    // TODO: Fix laziness.
+    print(" [", out);
+    print(e.id_, out);
     *out++ = '|';
-    render(out, timestamp());
-    render(out, "] ");
+    print(e.timestamp_, out);
+    print(']', out);
+    if (! e.empty())
+      print(' ', out);
 
-    auto first = begin();
-    auto last = end();
-    while (first != last)
-    {
-      if (! render(out, *first))
-        return false;
-      if (++first != last)
-        if (! render(out, ", "))
-          return false;
-    }
-
-    return true;
+    return util::print_delimited(", ", e.begin(), e.end(), out);
   }
 
   friend bool operator==(event const& x, event const& y);

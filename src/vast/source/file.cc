@@ -45,7 +45,7 @@ trial<type_const_ptr> make_type(schema& sch, string const& bro_type)
     auto elem = bro_type.substr(open + 1, close - open - 1);
     auto elem_type = make_type(sch, elem);
     if (! elem_type)
-      return elem_type.failure();
+      return elem_type.error();
 
     // Bro cannot log nested vectors/sets/tables, so we can safely assume that
     // we're dealing with a basic type here.
@@ -64,7 +64,7 @@ trial<type_const_ptr> make_type(schema& sch, string const& bro_type)
       if (t)
         return {t};
       else
-        return error{"failed to add type to schema: " + status.failure().msg()};
+        return error{"failed to add type to schema: " + status.error().msg()};
     }
 
     if (types.size() != 1)
@@ -87,8 +87,6 @@ bro2::bro2(cppa::actor_ptr sink, std::string const& filename,
 
 result<event> bro2::extract_impl()
 {
-  using vast::extract;
-
   util::field_splitter<std::string::const_iterator>
     fs{separator_.data(), separator_.size()};
 
@@ -100,7 +98,7 @@ result<event> bro2::extract_impl()
 
     auto t = parse_header();
     if (! t)
-      return t.failure();
+      return t.error();
   }
 
   auto line = this->next();
@@ -121,7 +119,7 @@ result<event> bro2::extract_impl()
 
       auto t = parse_header();
       if (! t)
-        return t.failure();
+        return t.error();
 
       auto line = this->next();
       if (! line)
@@ -180,17 +178,18 @@ result<event> bro2::extract_impl()
       continue;
     }
 
-    value v;
-    auto success = extract(start, end, v, type,
-                           set_separator_, "", "",
-                           set_separator_, "{", "}");
-    if (! success)
-      return error{"could not parse field: " + std::string{start, end}};
+    auto first = start;
+    auto last = end;
+    auto v = parse<value>(first, last, type,
+                          set_separator_, "", "",
+                          set_separator_, "{", "}");
+    if (! v)
+      return v.error() + error{std::string{start, end}};
 
-    if (f == size_t(timestamp_field_) && v.which() == time_point_value)
-      ts = v.get<time_point>();
+    if (f == size_t(timestamp_field_) && v->which() == time_point_value)
+      ts = v->get<time_point>();
 
-    rec.push_back(std::move(v));
+    rec.push_back(std::move(*v));
   }
 
   // Unflatten the record.
@@ -228,7 +227,7 @@ char const* bro2::description_impl() const
   return "bro2-source";
 }
 
-trial<nothing> bro2::parse_header()
+trial<void> bro2::parse_header()
 {
   auto line = this->current_line();
   if (! line)
@@ -330,7 +329,7 @@ trial<nothing> bro2::parse_header()
     string bro_type = {fs.start(i), fs.end(i)};
     auto t = make_type(schema_, bro_type);
     if (! t)
-      return t.failure();
+      return t.error();
 
     event_record.args.emplace_back(arg_names[i - 1], *t);
   }
@@ -339,7 +338,7 @@ trial<nothing> bro2::parse_header()
   flat_type_ = type::make<record_type>(event_name, std::move(event_record));
   auto status = schema_.add(type_);
   if (! status)
-    return error{"failed to add type to schema: " + status.failure().msg()};
+    return error{"failed to add type to schema: " + status.error().msg()};
 
   VAST_LOG_ACTOR_DEBUG("parsed bro2 header:");
   VAST_LOG_ACTOR_DEBUG("    #separator " << separator_);
@@ -376,7 +375,7 @@ trial<nothing> bro2::parse_header()
     }
   }
 
-  return nil;
+  return nothing;
 }
 
 } // namespace source

@@ -2,15 +2,8 @@
 
 #include "vast/logger.h"
 #include "vast/serialization.h"
-#include "vast/util/print.h"
 
 namespace vast {
-
-std::ostream& operator<<(std::ostream& out, value_type t)
-{
-  stream_to(out, t);
-  return out;
-}
 
 void serialize(serializer& sink, value_type x)
 {

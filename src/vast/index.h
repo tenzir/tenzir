@@ -114,7 +114,7 @@ struct index_actor : actor<index_actor>
   /// @param batch_size The number of events to index at once.
   index_actor(path dir, size_t batch_size);
 
-  trial<nothing> make_partition(path const& dir);
+  trial<void> make_partition(path const& dir);
 
   void act();
   char const* description() const;

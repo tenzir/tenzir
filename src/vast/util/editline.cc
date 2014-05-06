@@ -1,7 +1,9 @@
 #include "vast/util/editline.h"
 
 #include <cassert>
+#include <cerrno>
 #include <histedit.h>
+#include "vast/print.h"
 #include "vast/util/color.h"
 
 namespace vast {

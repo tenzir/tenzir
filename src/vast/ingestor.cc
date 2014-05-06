@@ -63,10 +63,13 @@ void ingestor_actor::act()
           {
             for (auto& p : segments_)
             {
-              auto const path = segment_dir / to<string>(p.first);
-              VAST_LOG_ACTOR_INFO("saves " << path);
-              if (! io::archive(path, p.second))
-                VAST_LOG_ACTOR_ERROR("failed to save " << path);
+              auto const spath = segment_dir / path{to_string(p.first)};
+              VAST_LOG_ACTOR_INFO("saves " << spath);
+
+              auto t = io::archive(spath, p.second);
+              if (! t)
+                VAST_LOG_ACTOR_ERROR("failed to save " << spath << ": " <<
+                                     t.error());
             }
           }
 
@@ -161,7 +164,7 @@ void ingestor_actor::act()
         assert(i != segments_.end());
         segments_.erase(i);
 
-        auto j = orphaned_.find(path{to<string>(id)});
+        auto j = orphaned_.find(path{to_string(id)});
         if (j != orphaned_.end())
         {
           VAST_LOG_ACTOR_INFO("deletes accepted segment " << id);

@@ -14,7 +14,7 @@ class result : trial<optional<T>>
 {
 public:
   using trial<optional<T>>::trial;
-  using trial<optional<T>>::failure;
+  using trial<optional<T>>::error;
 
   /// Default-constructs an empty-yet-valid result.
   result()
@@ -88,15 +88,6 @@ public:
   {
     assert(engaged());
     return *super().value();
-  }
-
-  /// Retrieves the error..
-  /// @returns The contained error.
-  /// @pre `failed() == true`
-  error const& failure() const
-  {
-    assert(failed());
-    return super().failure();
   }
 
   /// Checks whether the result is engaged, i.e., if it contains a usable

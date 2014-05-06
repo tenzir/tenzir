@@ -52,7 +52,7 @@ public:
             }
             else if (r.failed())
             {
-              VAST_LOG_ACTOR_ERROR(r.failure());
+              VAST_LOG_ACTOR_ERROR(r.error());
               done = true;
               break;
             }

@@ -5,6 +5,7 @@
 #include <string>
 #include "vast/fwd.h"
 #include "vast/traits.h"
+#include "vast/print.h"
 
 namespace vast {
 
@@ -55,68 +56,46 @@ void serialize(serializer& sink, value_type x);
 void deserialize(deserializer& source, value_type& x);
 
 template <typename Iterator>
-bool print(Iterator& out, value_type t)
+trial<void> print(value_type t, Iterator&& out)
 {
-  auto str = "unknown";
   switch (t)
   {
     default:
-      break;
+      return print("unknown", out);
     case invalid_value:
-      str = "invalid";
-      break;
+      return print("invalid", out);
     case bool_value:
-      str = "bool";
-      break;
+      return print("bool", out);
     case int_value:
-      str = "int";
-      break;
+      return print("int", out);
     case uint_value:
-      str = "uint";
-      break;
+      return print("uint", out);
     case double_value:
-      str = "double";
-      break;
+      return print("double", out);
     case time_range_value:
-      str = "duration";
-      break;
+      return print("duration", out);
     case time_point_value:
-      str = "time";
-      break;
+      return print("time", out);
     case string_value:
-      str = "string";
-      break;
+      return print("string", out);
     case regex_value:
-      str = "regex";
-      break;
+      return print("regex", out);
     case address_value:
-      str = "address";
-      break;
+      return print("address", out);
     case prefix_value:
-      str = "prefix";
-      break;
+      return print("prefix", out);
     case port_value:
-      str = "port";
-      break;
+      return print("port", out);
     case record_value:
-      str = "record";
-      break;
+      return print("record", out);
     case vector_value:
-      str = "vector";
-      break;
+      return print("vector", out);
     case set_value:
-      str = "set";
-      break;
+      return print("set", out);
     case table_value:
-      str = "table";
-      break;
+      return print("table", out);
   }
-  // TODO: replace strlen with appropriate compile-time constructs.
-  out = std::copy(str, str + std::strlen(str), out);
-  return true;
 }
-
-std::ostream& operator<<(std::ostream& out, value_type t);
 
 /// Meta function to retrieve the underlying type of a given value type.
 /// @tparam T The value type to get the underlying type from.

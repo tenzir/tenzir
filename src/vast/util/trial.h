@@ -27,10 +27,10 @@ public:
   /// Constructs a trial from an error.
   /// @param e The error.
   /// @post The trial is *disengaged*, i.e., `*this == false`.
-  trial(error e)
+  trial(util::error e)
     : engaged_{false}
   {
-    new (&error_) error{std::move(e)};
+    new (&error_) util::error{std::move(e)};
   }
 
   /// Copy-constructs a trial.
@@ -78,11 +78,11 @@ public:
   /// @param e The error.
   /// @returns A reference to `*this`.
   /// @post The trial is *disengaged*, i.e., `*this == false`.
-  trial& operator=(error e)
+  trial& operator=(util::error e)
   {
     destroy();
     engaged_ = false;
-    new (&value_) error{std::move(e)};
+    new (&value_) util::error{std::move(e)};
     return *this;
   }
 
@@ -138,7 +138,16 @@ public:
   /// Retrieves the error of the trial.
   /// @returns The contained error.
   /// @pre `*this == false`.
-  error const& failure() const
+  util::error const& error() const
+  {
+    assert(! engaged_);
+    return error_;
+  }
+
+  /// Retrieves the error of the trial.
+  /// @returns The contained error.
+  /// @pre `*this == false`.
+  util::error& error()
   {
     assert(! engaged_);
     return error_;
@@ -155,7 +164,7 @@ private:
     else
     {
       engaged_ = false;
-      new (&error_) error{other.error_};
+      new (&error_) util::error{other.error_};
     }
   }
 
@@ -169,7 +178,7 @@ private:
     else
     {
       engaged_ = false;
-      new (&error_) error{std::move(other.error_)};
+      new (&error_) util::error{std::move(other.error_)};
     }
   }
 
@@ -184,25 +193,46 @@ private:
   union
   {
     T value_;
-    error error_;
+    util::error error_;
   };
 
   bool engaged_;
 };
 
-/// An empty struct that represents a `void` ::trial. The pattern
-/// `trial<nothing>` shall be used for functions that may generate an error but
-/// would otherwise return `void`.
-struct nothing { };
+/// The pattern `trial<void>` shall be used for functions that may generate an
+/// error but would otherwise return `bool`. 
+template <>
+class trial<void>
+{
+public:
+  trial() = default;
 
-static constexpr auto nil = nothing{};
+  trial(error e)
+    : engaged_{false},
+      error_{std::move(e)}
+  {
+  }
+
+  explicit operator bool() const
+  {
+    return engaged_;
+  }
+
+  util::error const& error() const
+  {
+    return error_;
+  }
+
+private:
+  bool engaged_ = true;
+  util::error error_;
+};
+
+/// Represents success in a `trial<void` scenario.
+/// @relates trial
+auto const nothing = trial<void>{};
 
 } // namespace util
-
-using util::trial;
-using util::nothing;
-using util::nil;
-
 } // namespace vast
 
 #endif

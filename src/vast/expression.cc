@@ -3,14 +3,7 @@
 #include <boost/variant/apply_visitor.hpp>
 #include "vast/logger.h"
 #include "vast/optional.h"
-#include "vast/regex.h"
 #include "vast/serialization.h"
-#include "vast/detail/ast/query.h"
-#include "vast/detail/parser/error_handler.h"
-#include "vast/detail/parser/skipper.h"
-#include "vast/detail/parser/query.h"
-#include "vast/util/convert.h"
-#include "vast/util/make_unique.h"
 
 namespace vast {
 namespace expr {
@@ -24,6 +17,7 @@ bool operator<(node const& x, node const& y)
 {
   return x.is_less_than(y);
 }
+
 
 constant::constant(value v)
   : val(std::move(v))
@@ -554,243 +548,6 @@ void disjunction::deserialize(deserializer& source)
   n_ary_operator::deserialize(source);
 }
 
-namespace {
-
-/// Takes a query AST and generates a polymorphic query expression tree.
-class expressionizer
-{
-public:
-  using result_type = void;
-
-  static trial<std::unique_ptr<node>>
-  apply(detail::ast::query::query const& q)
-  {
-    std::unique_ptr<n_ary_operator> root;
-
-    if (q.rest.empty())
-    {
-      // WLOG, we can always add a conjunction as parent if we just have a
-      // single predicate.
-      root = make_unique<conjunction>();
-
-      expressionizer visitor{root.get()};
-      boost::apply_visitor(std::ref(visitor), q.first);
-      if (visitor.error_)
-        return std::move(*visitor.error_);
-
-      return {std::move(root)}; // FIXME: add to parent.
-    }
-
-    // First, split the query expression at each OR node.
-    std::vector<detail::ast::query::query> ors;
-    ors.push_back({q.first, {}});
-    for (auto& pred : q.rest)
-      if (pred.op == logical_or)
-        ors.push_back({pred.operand, {}});
-      else
-        ors.back().rest.push_back(pred);
-
-    // Our AST root will be a disjunction iff we have at least two terms.
-    if (ors.size() >= 2)
-      root = make_unique<disjunction>();
-
-    // Then create a conjunction for each set of subsequent AND nodes between
-    // two OR nodes.
-    std::unique_ptr<conjunction> conj;
-    for (auto& ands : ors)
-    {
-      n_ary_operator* local_root;
-      if (! root)
-      {
-        root = make_unique<conjunction>();
-        local_root = root.get();
-      }
-      else if (! ands.rest.empty())
-      {
-        auto conj = make_unique<conjunction>();
-        local_root = conj.get();
-        root->add(std::move(conj));
-      }
-      else
-      {
-        local_root = root.get();
-      }
-
-      expressionizer visitor{local_root};
-      boost::apply_visitor(std::ref(visitor), ands.first);
-      if (visitor.error_)
-        return std::move(*visitor.error_);
-      for (auto pred : ands.rest)
-      {
-        boost::apply_visitor(std::ref(visitor), pred.operand);
-        if (visitor.error_)
-          return std::move(*visitor.error_);
-      }
-    }
-
-    return {std::move(root)};
-  }
-
-  expressionizer(n_ary_operator* parent)
-    : parent_(parent)
-  {
-  }
-
-  void operator()(detail::ast::query::query const& q)
-  {
-    auto n = apply(q);
-    if (n)
-      parent_->add(std::move(*n));
-    else
-      error_ = n.failure();
-  }
-
-  void operator()(detail::ast::query::predicate const& operand)
-  {
-    boost::apply_visitor(*this, operand);
-  }
-
-  void operator()(detail::ast::query::tag_predicate const& pred)
-  {
-    auto op = pred.op;
-    if (invert_)
-    {
-      op = negate(op);
-      invert_ = false;
-    }
-
-    std::unique_ptr<extractor> lhs;
-    if (pred.lhs == "name")
-      lhs = make_unique<name_extractor>();
-    else if (pred.lhs == "time")
-      lhs = make_unique<timestamp_extractor>();
-    else if (pred.lhs == "id")
-      lhs = make_unique<id_extractor>();
-
-    auto rhs = make_unique<constant>(detail::ast::query::fold(pred.rhs));
-    auto p = make_unique<predicate>(op);
-    p->add(std::move(lhs));
-    p->add(std::move(rhs));
-
-    parent_->add(std::move(p));
-  }
-
-  void operator()(detail::ast::query::type_predicate const& pred)
-  {
-    auto op = pred.op;
-    if (invert_)
-    {
-      op = negate(op);
-      invert_ = false;
-    }
-
-    auto lhs = make_unique<type_extractor>(pred.lhs);
-    auto rhs = make_unique<constant>(detail::ast::query::fold(pred.rhs));
-    auto p = make_unique<predicate>(op);
-    p->add(std::move(lhs));
-    p->add(std::move(rhs));
-
-    parent_->add(std::move(p));
-  }
-
-  void operator()(detail::ast::query::schema_predicate const& pred)
-  {
-    auto op = pred.op;
-    if (invert_)
-    {
-      op = negate(op);
-      invert_ = false;
-    }
-
-    key k;
-    for (auto& str : pred.lhs)
-      k.emplace_back(str);
-
-    auto lhs = make_unique<schema_extractor>(std::move(k));
-    auto rhs = make_unique<constant>(detail::ast::query::fold(pred.rhs));
-    auto p = make_unique<predicate>(op);
-    p->add(std::move(lhs));
-    p->add(std::move(rhs));
-
-    parent_->add(std::move(p));
-  }
-
-  void operator()(detail::ast::query::negated_predicate const& pred)
-  {
-    // Since all operators have a complement, we can push down the negation to
-    // the operator-level (as opposed to leaving it at the predicate level).
-    invert_ = true;
-    boost::apply_visitor(*this, pred.operand);
-  }
-
-private:
-  std::unique_ptr<offset_extractor> make_offset_extractor(type_const_ptr t,
-                                                          offset o)
-  {
-    return make_unique<offset_extractor>(t, std::move(o));
-  }
-
-  std::unique_ptr<constant>
-  make_constant(detail::ast::query::value_expr const& expr)
-  {
-    return make_unique<constant>(detail::ast::query::fold(expr));
-  }
-
-  std::unique_ptr<node> make_glob_node(std::string const& expr)
-  {
-    // Determine whether we need a regular expression node or whether basic
-    // equality comparison suffices. This check is relatively crude at the
-    // moment: we just look whether the expression contains * or ?.
-    auto glob = regex("\\*|\\?").search(expr);
-    auto p = make_unique<predicate>(glob ? match : equal);
-    auto lhs = make_unique<name_extractor>();
-    p->add(std::move(lhs));
-    if (glob)
-      p->add(make_unique<constant>(regex::glob(expr)));
-    else
-      p->add(make_unique<constant>(expr));
-    return std::move(p);
-  }
-
-  n_ary_operator* parent_;
-  bool invert_ = false;
-  optional<error> error_;
-};
-
-} // namespace <anonymous>
-
-trial<ast> ast::parse(std::string const& str)
-{
-  if (str.empty())
-    return error{"cannot create AST from empty string"};
-
-  auto i = str.begin();
-  auto end = str.end();
-  using iterator = std::string::const_iterator;
-  std::string err;
-  detail::parser::error_handler<iterator> on_error{i, end, err};
-  detail::parser::query<iterator> grammar{on_error};
-  detail::parser::skipper<iterator> skipper;
-  detail::ast::query::query q;
-  bool success = phrase_parse(i, end, grammar, skipper, q);
-  if (! success || i != end)
-    return error{std::move(err)};
-
-  if (! detail::ast::query::validate(q))
-    return error{"failed validation"};
-
-  auto n = expressionizer::apply(q);
-  if (n)
-    return {std::move(*n)};
-  else
-    return n.failure();
-}
-
-ast::ast(std::string const& str)
-{
-  if (auto a = parse(str))
-    *this = std::move(*a);
-}
 
 ast::ast(node const& n)
   : ast{std::unique_ptr<node>{n.clone()}}
@@ -1060,14 +817,6 @@ void ast::deserialize(deserializer& source)
     source >> node_;
 }
 
-bool ast::convert(std::string& str, bool tree) const
-{
-  if (node_)
-    return expr::convert(*node_, str, tree);
-  str = "";
-  return true;
-}
-
 bool operator==(ast const& x, ast const& y)
 {
   return x.node_ && y.node_ ? *x.node_ == *y.node_ : false;
@@ -1250,7 +999,7 @@ public:
   virtual void visit(constant const& c)
   {
     indent();
-    str_ += to<std::string>(c.val) + '\n';
+    str_ += to_string(c.val) + '\n';
   }
 
   virtual void visit(timestamp_extractor const&)
@@ -1274,23 +1023,16 @@ public:
   virtual void visit(offset_extractor const& o)
   {
     indent();
-    str_ += to<std::string>(*o.type);
+    str_ += to_string(*o.type);
     str_ += '@';
-    auto first = o.off.begin();
-    auto last = o.off.end();
-    while (first != last)
-    {
-      str_ += to<std::string>(*first);
-      if (++first != last)
-        str_ += ",";
-    }
+    str_ += to_string(o.off);
     str_ += '\n';
   }
 
   virtual void visit(schema_extractor const& s)
   {
     indent();
-    str_ += to<std::string>(s.key);
+    str_ += to_string(s.key);
     str_ += '\n';
   }
 
@@ -1298,7 +1040,7 @@ public:
   {
     indent();
     str_ += "type(";
-    str_ += to<std::string>(t.type);
+    str_ += to_string(t.type);
     str_ += ")\n";
   }
 
@@ -1396,7 +1138,7 @@ public:
 
   virtual void visit(constant const& c)
   {
-    str_ += to<std::string>(c.val);
+    str_ += to_string(c.val);
   }
 
   virtual void visit(timestamp_extractor const&)
@@ -1416,17 +1158,17 @@ public:
 
   virtual void visit(offset_extractor const& o)
   {
-    str_ += to<std::string>(*o.type) + '@' + to<std::string>(o.off);
+    str_ += to_string(*o.type) + '@' + to_string(o.off);
   }
 
   virtual void visit(schema_extractor const& s)
   {
-    str_ += to<std::string>(s.key);
+    str_ += to_string(s.key);
   }
 
   virtual void visit(type_extractor const& t)
   {
-    str_ += ':' + to<std::string>(t.type);
+    str_ += ':' + to_string(t.type);
   }
 
   virtual void visit(predicate const& p)
@@ -1660,20 +1402,20 @@ trial<ast> ast::resolve(schema const& sch) const
     return std::move(a);
 }
 
-bool convert(node const& n, std::string& str, bool tree)
+trial<void> convert(node const& n, std::string& s, bool tree)
 {
-  str.clear();
   if (tree)
   {
-    tree_printer v{str};
+    tree_printer v{s};
     n.accept(v);
   }
   else
   {
-    expr_printer v{str};
+    expr_printer v{s};
     n.accept(v);
   }
-  return true;
+
+  return nothing;
 }
 
 } // namespace expr

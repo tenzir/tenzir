@@ -2,16 +2,14 @@
 #define VAST_KEY_H
 
 #include <vector>
+#include "vast/print.h"
+#include "vast/parse.h"
 #include "vast/string.h"
-#include "vast/util/print.h"
-#include "vast/util/parse.h"
 
 namespace vast {
 
 /// A sequence of type/argument names to recursively access a type or value.
-struct key : std::vector<string>,
-             util::printable<key>,
-             util::parsable<key>
+struct key : std::vector<string>
 {
   using super = std::vector<string>;
 
@@ -33,32 +31,22 @@ struct key : std::vector<string>,
   }
 
   template <typename Iterator>
-  bool print(Iterator& out) const
+  friend trial<void> parse(key& k, Iterator& begin, Iterator end)
   {
-    auto f = begin();
-    auto l = end();
-    while (f != l)
-      if (render(out, *f) && ++f != l && ! render(out, "."))
-        return false;
+    auto str = parse<string>(begin, end);
+    if (! str)
+      return str.error();
 
-    return true;
+    for (auto& p : str->split("."))
+      k.emplace_back(p.first, p.second);
+
+    return nothing;
   }
 
   template <typename Iterator>
-  bool parse(Iterator& begin, Iterator end)
+  friend trial<void> print(key const& k, Iterator&& out)
   {
-    string str;
-    if (! extract(begin, end, str))
-      return false;
-
-    auto s = str.split(".");
-    if (s.empty())
-      return false;
-
-    for (auto& p : s)
-      emplace_back(p.first, p.second);
-
-    return true;
+    return print_delimited('.', k.begin(), k.end(), out);
   }
 };
 

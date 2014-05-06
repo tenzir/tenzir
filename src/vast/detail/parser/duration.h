@@ -26,7 +26,7 @@ struct duration : qi::grammar<Iterator, time_range(), skipper<Iterator>>
     template <typename Range>
     time_range operator()(int64_t d, Range r) const
     {
-      std::string s(begin(r), end(r));
+      std::string s(boost::begin(r), boost::end(r));
       if (s == "nsec" || s == "nsecs" || s == "ns" || s == "n")
         return time_range(std::chrono::nanoseconds(d));
       else if (s == "musec" || s == "musecs" || s == "mu" || s == "u")
@@ -56,7 +56,58 @@ struct duration : qi::grammar<Iterator, time_range(), skipper<Iterator>>
     }
   };
 
-  duration();
+  duration()
+    : duration::base_type(dur)
+  {
+    qi::_val_type _val;
+    qi::_1_type _1;
+    qi::_2_type _2;
+    qi::raw_type raw;
+    qi::long_long_type num;
+
+    unit.add
+      ("n")
+      ("ns")
+      ("nsec")
+      ("nsecs")
+      ("u")
+      ("mu")
+      ("musec")
+      ("musecs")
+      ("i")
+      ("ms")
+      ("msec")
+      ("msecs")
+      ("s")
+      ("sec")
+      ("secs")
+      ("m")
+      ("min")
+      ("mins")
+      ("h")
+      ("hour")
+      ("hours")
+      ("d")
+      ("day")
+      ("days")
+      ("W")
+      ("w")
+      ("week")
+      ("weeks")
+      ("M")
+      ("mo")
+      ("month")
+      ("months")
+      ("Y")
+      ("y")
+      ("year")
+      ("years")
+      ;
+
+    dur
+        =   +((num >> raw[unit])     [_val += to_nano(_1, _2)])
+        ;
+  }
 
   qi::symbols<char> unit;
   qi::rule<Iterator, time_range(), skipper<Iterator>> dur;

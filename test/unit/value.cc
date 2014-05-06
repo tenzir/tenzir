@@ -231,7 +231,7 @@ BOOST_AUTO_TEST_CASE(times)
 
 BOOST_AUTO_TEST_CASE(containers)
 {
-  record r{"foo", 42u, -4711, address{"dead::beef"}};
+  record r{"foo", 42u, -4711, *address::from_v6("dead::beef")};
   value vr(std::move(r));
   BOOST_CHECK_EQUAL(to_string(vr), "(\"foo\", 42, -4711, dead::beef)");
   vr.get<record>().emplace_back("qux");
@@ -253,25 +253,27 @@ BOOST_AUTO_TEST_CASE(containers)
 
 BOOST_AUTO_TEST_CASE(addresses)
 {
-  value v1(address{"10.1.1.2"});
+  value v1(*address::from_v4("10.1.1.2"));
   BOOST_CHECK(v1.which() == address_value);
   BOOST_CHECK_EQUAL(to_string(v1), "10.1.1.2");
-  v1 = address{"127.0.0.1"};
+
+  v1 = *address::from_v4("127.0.0.1");
   BOOST_CHECK(v1.get<address>().is_loopback());
   BOOST_CHECK_EQUAL(to_string(v1), "127.0.0.1");
 
-  value v2(address{"f00::babe"});
+  value v2(*address::from_v6("f00::babe"));
   BOOST_CHECK(v2.get<address>().is_v6());
   BOOST_CHECK(v1 != v2);
 }
 
 BOOST_AUTO_TEST_CASE(prefixes)
 {
-  value v1(prefix{address{"10.1.1.2"}, 8});
+  value v1(prefix{*address::from_v4("10.1.1.2"), 8});
   BOOST_CHECK_EQUAL(v1.which(), prefix_value);
   BOOST_CHECK_EQUAL(to_string(v1), "10.0.0.0/8");
   BOOST_CHECK_EQUAL(v1.get<prefix>().length(), 8);
-  v1 = prefix{address{"127.0.0.1"}, 32};
+
+  v1 = prefix{*address::from_v4("127.0.0.1"), 32};
   BOOST_CHECK_EQUAL(to_string(v1), "127.0.0.1/32");
   BOOST_CHECK_EQUAL(v1.get<prefix>().length(), 32);
 }

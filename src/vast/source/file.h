@@ -8,7 +8,6 @@
 #include "vast/io/file_stream.h"
 #include "vast/io/getline.h"
 #include "vast/source/synchronous.h"
-#include "vast/util/convert.h"
 
 namespace vast {
 
@@ -96,7 +95,7 @@ public:
   char const* description_impl() const;
 
 private:
-  trial<nothing> parse_header();
+  trial<void> parse_header();
 
   int32_t timestamp_field_ = -1;
   string separator_ = " ";

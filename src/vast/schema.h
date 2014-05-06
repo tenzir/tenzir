@@ -11,14 +11,9 @@
 #include "vast/detail/parser/schema.h"
 #include "vast/util/intrusive.h"
 #include "vast/util/operators.h"
-#include "vast/util/parse.h"
-#include "vast/util/print.h"
-#include "vast/util/trial.h"
 
 namespace vast {
-class schema : util::equality_comparable<schema>,
-               util::parsable<schema>,
-               util::printable<schema>
+class schema : util::equality_comparable<schema>
 {
 public:
   using const_iterator = std::vector<type_const_ptr>::const_iterator;
@@ -33,7 +28,7 @@ public:
   /// Adds a new type to the schema.
   /// @param t The type to add.
   /// @returns `nothing` on success.
-  trial<nothing> add(type_const_ptr t);
+  trial<void> add(type_const_ptr t);
 
   /// Retrieves the type for a given type name.
   /// @param name The name of the type to lookup.
@@ -49,7 +44,7 @@ public:
   /// Checks whether a given event complies with the schema.
   /// @param e The event to test.
   /// @returns `nothing` iff *e* complies with this schema.
-  //trial<nothing> complies(event const& e) const;
+  //trial<void> complies(event const& e) const;
 
   // Container API.
   const_iterator begin() const;
@@ -74,25 +69,26 @@ private:
   void deserialize(deserializer& source);
 
   template <typename Iterator>
-  bool parse(Iterator& start, Iterator end);
-
-  template <typename Iterator>
-  bool print(Iterator& out) const
+  friend trial<void> print(schema const& s, Iterator&& out)
   {
-    for (auto& t : types_)
+    for (auto& t : s.types_)
     {
       if (t->name().empty())
         continue;
 
-      render(out, "type ");
-      render(out, t->name());
-      render(out, ": ");
-      render(out, *t, false);
-      render(out, "\n");
+      // TODO: fix laziness.
+      print("type ", out);
+      print(t->name(), out);
+      print(": ", out);
+      print(*t, out, false);
+      print("\n", out);
     }
 
-    return true;
+    return nothing;
   }
+
+  template <typename Iterator>
+  friend trial<void> parse(schema& sch, Iterator& begin, Iterator end);
 
   friend bool operator==(schema const& x, schema const& y);
 };
@@ -197,20 +193,20 @@ private:
 
 struct schema_factory
 {
-  using result_type = void;
+  using result_type = trial<void>;
 
   schema_factory(schema& s)
     : schema_{s}
   {
   }
 
-  void operator()(detail::ast::schema::type_declaration const& td)
+  trial<void> operator()(detail::ast::schema::type_declaration const& td)
   {
     if (auto ti = boost::get<detail::ast::schema::type_info>(&td.type))
     {
       auto t = boost::apply_visitor(type_factory{schema_, td.name}, *ti);
       if (! schema_.add(t))
-        error_ = error{"erroneous type declaration: " + td.name};
+        return error{"erroneous type declaration: " + td.name};
     }
     else if (auto x = boost::get<detail::ast::schema::type>(&td.type))
     {
@@ -223,43 +219,44 @@ struct schema_factory
       assert(t);
       schema_.add(t);
     }
+
+    return nothing;
   }
 
-  void operator()(detail::ast::schema::event_declaration const&)
+  trial<void> operator()(detail::ast::schema::event_declaration const&)
   {
     /* We will soon no longer treat events any different from types. */
+    return nothing;
   }
 
   schema& schema_;
-  error error_;
 };
 
 } // namespace detail
 
 template <typename Iterator>
-bool schema::parse(Iterator& start, Iterator end)
+trial<void> parse(schema& sch, Iterator& begin, Iterator end)
 {
   std::string err;
-  detail::parser::error_handler<Iterator> on_error{start, end, err};
+  detail::parser::error_handler<Iterator> on_error{begin, end, err};
   detail::parser::schema<Iterator> grammar{on_error};
   detail::parser::skipper<Iterator> skipper;
   detail::ast::schema::schema ast;
 
-  bool success = phrase_parse(start, end, grammar, skipper, ast);
-  if (! success || start != end)
-    return false;
-    // TODO: return error{std::move(err)};
+  bool success = phrase_parse(begin, end, grammar, skipper, ast);
+  if (! success || begin != end)
+    return error{std::move(err)};
 
-  detail::schema_factory sf{*this};
+  sch.types_.clear();
+  detail::schema_factory sf{sch};
   for (auto& statement : ast)
   {
-    boost::apply_visitor(std::ref(sf), statement);
-    if (! sf.error_.msg().empty())
-      return false;
-      // TODO: return error{*sf.error_};
+    auto t = boost::apply_visitor(std::ref(sf), statement);
+    if (! t)
+      return t.error();
   }
 
-  return true;
+  return nothing;
 }
 
 } // namespace vast

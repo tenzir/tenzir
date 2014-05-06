@@ -216,7 +216,7 @@ struct dispatcher : expr::default_const_visitor
         {
           auto a = actor_.load_indexer(p.first);
           if (! a)
-            VAST_LOG_ERROR(a.failure());
+            VAST_LOG_ERROR(a.error());
           else
             indexes_.push_back(*a);
         }
@@ -248,7 +248,7 @@ struct dispatcher : expr::default_const_visitor
           VAST_LOG_DEBUG("loading indexer for " << p);
           auto a = actor_.load_indexer(i->first);
           if (! a)
-            VAST_LOG_ERROR(a.failure());
+            VAST_LOG_ERROR(a.error());
           else
             indexes_.push_back(*a);
         }
@@ -289,7 +289,7 @@ void partition_actor::act()
     if (! t)
     {
       VAST_LOG_ACTOR_ERROR("failed to load partition meta data from " <<
-                           dir_ << ": " << t.failure().msg());
+                           dir_ << ": " << t.error().msg());
       quit(exit::error);
       return;
     }
@@ -297,7 +297,7 @@ void partition_actor::act()
     t = io::unarchive(dir_ / "schema", schema_);
     if (! t)
     {
-      VAST_LOG_ACTOR_ERROR("failed to load schema: " << t.failure());
+      VAST_LOG_ACTOR_ERROR("failed to load schema: " << t.error());
       quit(exit::error);
       return;
     }
@@ -361,7 +361,7 @@ void partition_actor::act()
     if (! t)
     {
       VAST_LOG_ACTOR_ERROR("failed to save schema for " << dir_ << ": " <<
-                           t.failure().msg());
+                           t.error().msg());
       quit(exit::error);
       return;
     }
@@ -370,7 +370,7 @@ void partition_actor::act()
     if (! t)
     {
       VAST_LOG_ACTOR_ERROR("failed to save partition " << dir_ <<
-                           ": " << t.failure().msg());
+                           ": " << t.error().msg());
       quit(exit::error);
       return;
     }
@@ -433,7 +433,7 @@ void partition_actor::act()
         auto sch = schema::merge(schema_, s.schema());
         if (! sch)
         {
-          VAST_LOG_ACTOR_ERROR("failed to merge schemata: " << sch.failure());
+          VAST_LOG_ACTOR_ERROR("failed to merge schemata: " << sch.error());
           VAST_LOG_ACTOR_ERROR("ignoring segment with " << s.events() <<
                                " events");
           return;
@@ -457,7 +457,7 @@ void partition_actor::act()
               auto i = create_indexer(p, o, t);
               if (! i)
               {
-                VAST_LOG_ACTOR_ERROR(i.failure());
+                VAST_LOG_ACTOR_ERROR(i.error());
                 quit(exit::error);
               }
             });

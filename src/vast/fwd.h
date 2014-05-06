@@ -29,12 +29,6 @@ class bitstream;
 class null_bitstream;
 class ewah_bitstream;
 
-template <typename Iterator, typename T, typename... Opts>
-bool extract(Iterator&, Iterator, T&, Opts&&...);
-
-template <typename Iterator, typename T, typename... Opts>
-bool render(Iterator&, T const&, Opts&&...);
-
 namespace expr {
 class ast;
 }

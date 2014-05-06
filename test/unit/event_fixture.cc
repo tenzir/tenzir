@@ -19,9 +19,9 @@ event_fixture::event_fixture()
         table{{22, "ssh"}, {25, "smtp"}, {80, "http"}},
         regex{"[0-9][a-z]?\\w+$"},
         record{invalid, true, -42, 4711u},
-        address{"192.168.0.1"},
-        address{"2001:db8:0000:0000:0202:b3ff:fe1e:8329"},
-        prefix{address{"10.1.33.22"}, 8},
+        *address::from_v4("192.168.0.1"),
+        *address::from_v6("2001:db8:0000:0000:0202:b3ff:fe1e:8329"),
+        prefix{*address::from_v4("10.1.33.22"), 8},
         port{139, port::tcp}
       });
 
@@ -40,9 +40,9 @@ event_fixture::event_fixture()
         regex{"[0-9][a-z]?\\w+$"},
         time_point{now()},
         time_range{now().since_epoch()},
-        address{"ff01::1"},
-        address{"2001:db8:0000:0000:0202:b3ff:fe1e:8329"},
-        prefix{address{"ff00::"}, 16},
+        *address::from_v6("ff01::1"),
+        *address::from_v6("2001:db8:0000:0000:0202:b3ff:fe1e:8329"),
+        prefix{*address::from_v6("ff00::"), 16},
         port{53, port::udp}
       });
 }

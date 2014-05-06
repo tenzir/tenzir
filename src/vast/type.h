@@ -7,8 +7,6 @@
 #include "vast/string.h"
 #include "vast/value_type.h"
 #include "vast/util/operators.h"
-#include "vast/util/print.h"
-#include "vast/util/trial.h"
 #include "vast/util/variant.h"
 
 namespace vast {
@@ -17,36 +15,35 @@ class type;
 
 extern type_const_ptr const type_invalid;
 
-#define VAST_DEFINE_BASIC_TYPE(name, desc)           \
-  struct name : util::totally_ordered<name>,         \
-                util::printable<name>                \
-  {                                                  \
-  private:                                           \
-    friend access;                                   \
-                                                     \
-    void serialize(serializer&) const                \
-    {                                                \
-    }                                                \
-                                                     \
-    void deserialize(deserializer&)                  \
-    {                                                \
-    }                                                \
-                                                     \
-    template <typename Iterator>                     \
-    bool print(Iterator out) const                   \
-    {                                                \
-      return render(out, desc);                      \
-    }                                                \
-                                                     \
-    friend bool operator==(name const&, name const&) \
-    {                                                \
-      return true;                                   \
-    }                                                \
-                                                     \
-    friend bool operator<(name const&, name const&)  \
-    {                                                \
-      return true;                                   \
-    }                                                \
+#define VAST_DEFINE_BASIC_TYPE(name, desc)                \
+  struct name : util::totally_ordered<name>               \
+  {                                                       \
+  private:                                                \
+    friend access;                                        \
+                                                          \
+    void serialize(serializer&) const                     \
+    {                                                     \
+    }                                                     \
+                                                          \
+    void deserialize(deserializer&)                       \
+    {                                                     \
+    }                                                     \
+                                                          \
+    template <typename Iterator>                          \
+    friend trial<void> print(name const&, Iterator&& out) \
+    {                                                     \
+      return print(desc, out);                            \
+    }                                                     \
+                                                          \
+    friend bool operator==(name const&, name const&)      \
+    {                                                     \
+      return true;                                        \
+    }                                                     \
+                                                          \
+    friend bool operator<(name const&, name const&)       \
+    {                                                     \
+      return true;                                        \
+    }                                                     \
   };
 
 VAST_DEFINE_BASIC_TYPE(invalid_type, "<invalid>")
@@ -64,8 +61,7 @@ VAST_DEFINE_BASIC_TYPE(port_type, "port")
 
 #undef VAST_DEFINE_BASIC_TYPE
 
-struct enum_type : util::totally_ordered<enum_type>,
-                   util::printable<enum_type>
+struct enum_type : util::totally_ordered<enum_type>
 {
   enum_type() = default;
   enum_type(std::vector<string> fields);
@@ -79,32 +75,24 @@ private:
   void deserialize(deserializer& source);
 
   template <typename Iterator>
-  bool print(Iterator out) const
+  friend trial<void> print(enum_type const& e, Iterator&& out)
   {
-    if (! render(out, "enum {"))
-      return false;
+    auto t = print("enum {", out);
+    if (! t)
+      return t.error();
 
-    auto first = fields.begin();
-    auto last = fields.end();
-    while (first != last)
-    {
-      if (! render(out, *first))
-        return false;
+    t = util::print_delimited(", ", e.fields.begin(), e.fields.end(), out);
+    if (! t)
+      return t.error();
 
-      if (++first != last)
-        if (! render(out, ", "))
-          return false;
-    }
-
-    return render(out, "}");
+    return print('}', out);
   }
 
   friend bool operator==(enum_type const& lhs, enum_type const& rhs);
   friend bool operator<(enum_type const& lhs, enum_type const& rhs);
 };
 
-struct vector_type : util::totally_ordered<vector_type>,
-                     util::printable<vector_type>
+struct vector_type : util::totally_ordered<vector_type>
 {
   vector_type() = default;
   vector_type(type_const_ptr elem);
@@ -118,20 +106,20 @@ private:
   void deserialize(deserializer& source);
 
   template <typename Iterator>
-  bool print(Iterator out) const
+  friend trial<void> print(vector_type const& v, Iterator&& out)
   {
-    if (! render(out, "vector of "))
-      return false;
+    auto t = print("vector of ", out);
+    if (! t)
+      return t.error();
 
-    return render(out, *elem_type);
+    return print(*v.elem_type, out);
   }
 
   friend bool operator==(vector_type const& lhs, vector_type const& rhs);
   friend bool operator<(vector_type const& lhs, vector_type const& rhs);
 };
 
-struct set_type : util::totally_ordered<set_type>,
-                  util::printable<set_type>
+struct set_type : util::totally_ordered<set_type>
 {
   set_type() = default;
   set_type(type_const_ptr elem);
@@ -145,23 +133,24 @@ private:
   void deserialize(deserializer& source);
 
   template <typename Iterator>
-  bool print(Iterator out) const
+  friend trial<void> print(set_type const& s, Iterator&& out)
   {
-    if (! render(out, "set["))
-      return false;
+    auto t = print("set[", out);
+    if (! t)
+      return t.error();
 
-    if (! render(out, *elem_type))
-      return false;
+    t = print(*s.elem_type, out);
+    if (! t)
+      return t.error();
 
-    return render(out, "]");
+    return print(']', out);
   }
 
   friend bool operator==(set_type const& lhs, set_type const& rhs);
   friend bool operator<(set_type const& lhs, set_type const& rhs);
 };
 
-struct table_type : util::totally_ordered<table_type>,
-                    util::printable<table_type>
+struct table_type : util::totally_ordered<table_type>
 {
   table_type() = default;
   table_type(type_const_ptr key, type_const_ptr yield);
@@ -176,26 +165,28 @@ private:
   void deserialize(deserializer& source);
 
   template <typename Iterator>
-  bool print(Iterator out) const
+  friend trial<void> print(table_type const& tt, Iterator&& out)
   {
-    if (! render(out, "table["))
-      return false;
+    auto t = print("table[", out);
+    if (! t)
+      return t.error();
 
-    if (! render(out, *key_type))
-      return false;
+    t = print(*tt.key_type, out);
+    if (! t)
+      return t.error();
 
-    if (! render(out, "] of "))
-      return false;
+    t = print("] of ", out);
+    if (! t)
+      return t.error();
 
-    return render(out, *yield_type);
+    return print(*tt.yield_type, out);
   }
 
   friend bool operator==(table_type const& lhs, table_type const& rhs);
   friend bool operator<(table_type const& lhs, table_type const& rhs);
 };
 
-struct argument : util::totally_ordered<argument>,
-                  util::printable<argument>
+struct argument : util::totally_ordered<argument>
 {
   argument() = default;
   argument(string name, type_const_ptr type);
@@ -210,17 +201,20 @@ private:
   void deserialize(deserializer& source);
 
   template <typename Iterator>
-  bool print(Iterator& out) const
+  friend trial<void> print(argument const& a, Iterator&& out)
   {
-    return render(out, name + ": ") && render(out, *type);
+    auto t = print(a.name + ": ", out);
+    if (! t)
+      return t.error();
+
+    return print(*a.type, out);
   }
 
   friend bool operator==(argument const& lhs, argument const& rhs);
   friend bool operator<(argument const& lhs, argument const& rhs);
 };
 
-struct record_type : util::totally_ordered<record_type>,
-                     util::printable<record_type>
+struct record_type : util::totally_ordered<record_type>
 {
   record_type() = default;
   record_type(std::vector<argument> args);
@@ -272,24 +266,17 @@ private:
   void deserialize(deserializer& source);
 
   template <typename Iterator>
-  bool print(Iterator out) const
+  friend trial<void> print(record_type const& r, Iterator&& out)
   {
-    if (! render(out, "record {"))
-      return false;
+    auto t = print("record {", out);
+    if (! t)
+      return t.error();
 
-    auto first = args.begin();
-    auto last = args.end();
-    while (first != last)
-    {
-      if (! render(out, *first))
-        return false;
+    t = util::print_delimited(", ", r.args.begin(), r.args.end(), out);
+    if (! t)
+      return t.error();
 
-      if (++first != last)
-        if (! render(out, ", "))
-          return false;
-    }
-
-    return render(out, "}");
+    return print('}', out);
   }
 
   friend bool operator==(record_type const& lhs, record_type const& rhs);
@@ -399,8 +386,7 @@ using type_type = value_type_type<to_value_type<T>::value>;
 
 /// Represents meta data of a ::value.
 class type : public std::enable_shared_from_this<type>,
-             util::totally_ordered<type>,
-             util::printable<type>
+             util::totally_ordered<type>
 {
   type() = default;
 
@@ -497,7 +483,7 @@ private:
   template <typename Iterator>
   struct printer
   {
-    using result_type = bool;
+    using result_type = trial<void>;
 
     printer(Iterator& out)
       : out_{out}
@@ -505,21 +491,21 @@ private:
     }
 
     template <typename T>
-    bool operator()(T const& x) const
+    trial<void> operator()(T const& x) const
     {
-      return render(out_, x);
+      return print(x, out_);
     }
 
     Iterator& out_;
   };
 
   template <typename Iterator>
-  bool print(Iterator& out, bool resolve = true) const
+  friend trial<void> print(type const& t, Iterator&& out, bool resolve = true)
   {
-    if (name_.empty() || ! resolve)
-      return apply_visitor(printer<Iterator>{out}, info_);
+    if (t.name_.empty() || ! resolve)
+      return apply_visitor(printer<Iterator>{out}, t.info_);
     else
-      return render(out, name_);
+      return print(t.name_, out);
   }
 
   friend bool operator==(type const& lhs, type const& rhs);

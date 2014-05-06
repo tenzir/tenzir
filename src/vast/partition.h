@@ -83,7 +83,7 @@ struct partition_actor : actor<partition_actor>
   {
     auto i = indexers_.find(p);
     if (i == indexers_.end())
-      return error{"no such path: " + to<std::string>(p.str())};
+      return error{"no such path:", };
 
     if (i->second.actor)
       return i->second.actor;

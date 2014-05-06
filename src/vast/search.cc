@@ -25,11 +25,11 @@ void search_actor::act()
 
   auto parse_ast = [=](std::string const& str) -> optional<expr::ast>
   {
-    auto ast = expr::ast::parse(str);
+    auto ast = to<expr::ast>(str);
     if (ast)
       return std::move(*ast);
 
-    last_parse_error_ = ast.failure().msg();
+    last_parse_error_ = ast.error().msg();
     return {};
   };
 

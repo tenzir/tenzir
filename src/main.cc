@@ -16,7 +16,7 @@ int main(int argc, char *argv[])
   auto config = configuration::parse(argc, argv);
   if (! config)
   {
-    std::cerr << config.failure() << ", try -h or --help" << std::endl;
+    std::cerr << config.error() << ", try -h or --help" << std::endl;
     return 1;
   }
 

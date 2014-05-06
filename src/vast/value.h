@@ -12,8 +12,6 @@
 #include "vast/type.h"
 #include "vast/value_type.h"
 #include "vast/util/operators.h"
-#include "vast/util/parse.h"
-#include "vast/util/print.h"
 
 namespace vast {
 
@@ -22,11 +20,15 @@ struct value_invalid { };
 constexpr value_invalid invalid = {};
 
 template <typename Iterator>
-bool print(Iterator& out, value_invalid)
+trial<void> print(value_invalid, Iterator&& out)
 {
-  static constexpr auto str = "<invalid>";
-  out = std::copy(str, str + 9, out);
-  return true;
+  return print("<invalid>", out);
+}
+
+template <typename Iterator>
+trial<void> parse(Iterator&& begin, Iterator&&)
+{
+  return {error{"cannot parse invalid value"}, begin};
 }
 
 namespace detail {
@@ -46,8 +48,7 @@ struct visit_impl;
 /// `optional<T>` semantics where `T` is a value type. A nil value is thus
 /// equivalent to a disengaged optional value. Finally, an *engaged* type
 /// contains a valid instance of some value type `T`.
-class value : util::parsable<value>,
-              util::printable<value>
+class value
 {
   template <typename, typename>
   friend struct detail::visit_impl;
@@ -83,14 +84,6 @@ public:
   template <typename F>
   typename F::result_type
   static visit(value&, value&, F);
-
-  /// Parses an arbitrary value.
-  ///
-  /// @param str The string to parse as value.
-  ///
-  /// @returns `invalid` if *str* does not describe a value and the parsed
-  /// valued otherwise.
-  static value parse(std::string const& str);
 
   /// Default-constructs an invalid value.
   value(value_invalid = vast::invalid);
@@ -225,58 +218,54 @@ private:
   void deserialize(deserializer& source);
 
   template <typename Iterator>
-  bool parse(Iterator& start,
-             Iterator end,
-             type_const_ptr type,
-             string const& set_sep = ", ",
-             string const& set_left = "{",
-             string const& set_right = "}",
-             string const& vec_sep = ", ",
-             string const& vec_left = "[",
-             string const& vec_right = "]",
-             string const& esc = "\\");
-
-  template <typename Iterator>
   struct value_printer
   {
-    typedef bool result_type;
+    using result_type = trial<void>;
 
     value_printer(Iterator& out)
-      : out(out)
+      : out_{out}
     {
     }
 
-    bool operator()(value_type t) const
+    trial<void> operator()(value_type vt) const
     {
-      *out++ = '<';
-      if (! render(out, t))
-        return false;
-      *out++ = '>';
-      return true;
+      *out_++ = '<';
+
+      auto t = print(vt, out_);
+      if (! t)
+        return t.error();
+
+      *out_++ = '>';
+
+      return nothing;
     }
 
     template <typename T>
-    bool operator()(T const& x) const
+    trial<void> operator()(T const& x) const
     {
-      return render(out, x);
+      return print(x, out_);
     }
 
-    bool operator()(string const& str) const
+    trial<void> operator()(string const& str) const
     {
-      *out++ = '"';
-      if (! render(out, str.escape()))
-        return false;
-      *out++ = '"';
-      return true;
+      *out_++ = '"';
+
+      auto t = print(str, out_);
+      if (! t)
+        return t.error();
+
+      *out_++ = '"';
+
+      return nothing;
     }
 
-    Iterator& out;
+    Iterator& out_;
   };
 
   template <typename Iterator>
-  bool print(Iterator& out) const
+  friend trial<void> print(value const& v, Iterator&& out)
   {
-    return value::visit(*this, value_printer<Iterator>(out));
+    return value::visit(v, value_printer<Iterator>(out));
   }
 };
 
@@ -523,9 +512,7 @@ inline T const& value::get() const
 
 /// A vector of values with arbitrary value types.
 class record : public std::vector<value>,
-               util::totally_ordered<record>,
-               util::parsable<record>,
-               util::printable<record>
+               util::totally_ordered<record>
 {
   using super = std::vector<value>;
 
@@ -587,54 +574,50 @@ private:
   void deserialize(deserializer& source);
 
   template <typename Iterator>
-  bool parse(Iterator& start,
-             Iterator end,
-             type_const_ptr const& elem_type,
-             string const& sep = ", ",
-             string const& left = "(",
-             string const& right = ")",
-             string const& esc = "\\")
+  friend trial<void> print(record const& r, Iterator&& out,
+                           char const* delim = ", ")
   {
-    if (start == end)
-      return false;
+    *out++ = '(';
 
-    string str;
-    if (! extract(start, end, str) || str.empty())
-      return false;
+    auto t = util::print_delimited(delim, r.begin(), r.end(), out);
+    if (! t)
+      return t.error();
 
-    clear();
-    value v;
-    for (auto p : str.trim(left, right).split(sep, esc))
-      if (extract(p.first, p.second, v, elem_type))
-        push_back(std::move(v));
+    *out++ = ')';
 
-    return true;
+    return nothing;
   }
 
   template <typename Iterator>
-  bool print(Iterator& out) const
+  friend trial<void> parse(record& r, Iterator& begin, Iterator end,
+                           type_const_ptr const& elem_type,
+                           string const& sep = ", ",
+                           string const& left = "(",
+                           string const& right = ")",
+                           string const& esc = "\\")
   {
-    *out++ = '(';
-    auto first = begin();
-    auto last = end();
-    while (first != last)
+    if (begin == end)
+      return error{"empty iterator range"};
+
+    auto str = parse<string>(begin, end);
+    if (! str)
+      return str.error();
+
+    for (auto p : str->trim(left, right).split(sep, esc))
     {
-      if (! render(out, *first))
-        return false;
-      if (++first != last)
-      {
-        *out++ = ',';
-        *out++ = ' ';
-      }
+      auto t = parse<value>(p.first, p.second, elem_type);
+      if (t)
+        r.push_back(std::move(*t));
+      else
+        return t.error();
     }
-    *out++ = ')';
-    return true;
+
+    return nothing;
   }
 
   friend bool operator==(record const& x, record const& y);
   friend bool operator<(record const& x, record const& y);
 };
-
 
 // For now, we distinguish vectors and sets only logically.
 
@@ -642,19 +625,57 @@ class vector : public record
 {
 public:
   using record::record;
+
+  vector() = default;
+
+  vector(record r)
+    : record(std::move(r))
+  {
+  }
+
+  template <typename Iterator>
+  friend trial<void> parse(vector& v, Iterator& begin, Iterator end,
+                           type_const_ptr const& elem_type,
+                           string const& sep = ", ",
+                           string const& left = "[",
+                           string const& right = "]",
+                           string const& esc = "\\")
+  {
+    return parse(static_cast<record&>(v), begin, end,
+                 elem_type, sep, left, right, esc);
+  }
 };
+
 
 class set : public record
 {
 public:
   using record::record;
+
+  set() = default;
+
+  set(record r)
+    : record(std::move(r))
+  {
+  }
+
+  template <typename Iterator>
+  friend trial<void> parse(set& v, Iterator& begin, Iterator end,
+                           type_const_ptr const& elem_type,
+                           string const& sep = ", ",
+                           string const& left = "{",
+                           string const& right = "}",
+                           string const& esc = "\\")
+  {
+    return parse(static_cast<record&>(v), begin, end,
+                 elem_type, sep, left, right, esc);
+  }
 };
 
 
 /// An associative array.
 class table : public std::map<value, value>,
-              util::totally_ordered<table>,
-              util::printable<table>
+              util::totally_ordered<table>
 {
   using super = std::map<value, value>;
 
@@ -672,25 +693,36 @@ private:
   void deserialize(deserializer& source);
 
   template <typename Iterator>
-  bool print(Iterator& out) const
+  friend trial<void> print(table const& t, Iterator&& out)
   {
     *out++ = '{';
-    auto first = begin();
-    auto last = end();
+    auto first = t.begin();
+    auto last = t.end();
     while (first != last)
     {
-      if (! render(out, first->first))
-        return false;
-      if (! render(out, " -> "))
-        return false;
-      if (! render(out, first->second))
-        return false;
+      auto t = print(first->first, out);
+      if (! t)
+        return t.error();
+
+      t = print(" -> ", out);
+      if (! t)
+        return t.error();
+
+      t = print(first->second, out);
+      if (! t)
+        return t.error();
+
       if (++first != last)
-      if (! render(out, ", "))
-        return false;
+      {
+        t = print(", ", out);
+        if (! t)
+          return t.error();
+      }
     }
+
     *out++ = '}';
-    return true;
+
+    return nothing;
   }
 
   friend bool operator==(table const& x, table const& y);
@@ -704,10 +736,9 @@ template <typename Iterator>
 class value_parser
 {
 public:
-  using result_type = trial<value>;
+  using result_type = trial<void>;
 
-  value_parser(Iterator& start,
-               Iterator end,
+  value_parser(value& v, Iterator& begin, Iterator end,
                string const& set_sep,
                string const& set_left,
                string const& set_right,
@@ -715,7 +746,8 @@ public:
                string const& vec_left,
                string const& vec_right,
                string const& esc)
-    : start_{start},
+    : v_{v},
+      begin_{begin},
       end_{end},
       set_sep_{set_sep},
       set_left_{set_left},
@@ -727,61 +759,62 @@ public:
   {
   }
 
-  trial<value> operator()(invalid_type const&) const
-  {
-    return error{"cannot parse an invalid type"};
-  }
-
-  trial<value> operator()(enum_type const&) const
-  {
-    return error{"cannot parse an enum type"};
-  }
-
   template <
     typename T,
     typename = EnableIf<is_basic_type<T>>
   >
-  trial<value> operator()(T const&) const
+  result_type operator()(T const&) const
   {
-    type_type<T> x;
-    if (! extract(start_, end_, x))
-      return error{"failed to parse basic type"};
-
-    return {std::move(x)};
+    return value_parse<type_type<T>>(begin_, end_);
   }
 
-  trial<value> operator()(vector_type const& t) const
+  result_type operator()(vector_type const& t) const
   {
-    vector x;
-    if (! extract(start_, end_, x, t.elem_type,
-                vec_sep_, vec_left_, vec_right_, esc_))
-      return error{"failed to parse vector type"};
-
-    return {std::move(x)};
+    return value_parse<vector>(begin_, end_, t.elem_type,
+                               vec_sep_, vec_left_, vec_right_, esc_);
   }
 
-  trial<value> operator()(set_type const& t) const
+  result_type operator()(set_type const& t) const
   {
-    set x;
-    if (extract(start_, end_, x, t.elem_type,
-                set_sep_, set_left_, set_right_, esc_))
-      return error{"failed to parse set type"};
-
-    return {std::move(x)};
+    return value_parse<set>(begin_, end_, t.elem_type,
+                            set_sep_, set_left_, set_right_, esc_);
   }
 
-  trial<value> operator()(table_type const&) const
+  result_type operator()(invalid_type const&) const
+  {
+    return error{"cannot parse an invalid type"};
+  }
+
+  result_type operator()(enum_type const&) const
+  {
+    return error{"cannot parse an enum type"};
+  }
+
+  result_type operator()(table_type const&) const
   {
     return error{"cannot parse tables (yet)"};
   }
 
-  trial<value> operator()(record_type const&) const
+  result_type operator()(record_type const&) const
   {
     return error{"cannot parse records (yet)"};
   }
 
+  template <typename T, typename... Args>
+  result_type value_parse(Args&&... args) const
+  {
+    T x;
+    auto t = parse(x, std::forward<Args>(args)...);
+    if (! t)
+      return t.error();
+
+    v_ = value{std::move(x)};
+    return nothing;
+  }
+
 private:
-  Iterator& start_;
+  value& v_;
+  Iterator& begin_;
   Iterator end_;
   string const& set_sep_;
   string const& set_left_;
@@ -793,30 +826,48 @@ private:
 };
 
 } // namespace detail
+} // namespace vast
+
+// These require a complete definition of the class value.
+#include "vast/detail/parser/value.h"
+#include "vast/detail/parser/skipper.h"
+
+namespace vast {
+namespace detail {
 
 template <typename Iterator>
-bool value::parse(Iterator& start,
-           Iterator end,
-           type_const_ptr type,
-           string const& set_sep,
-           string const& set_left,
-           string const& set_right,
-           string const& vec_sep,
-           string const& vec_left,
-           string const& vec_right,
-           string const& esc)
+trial<void> parse(value& v, Iterator& begin, Iterator end)
 {
-  detail::value_parser<Iterator> p{start, end,
+  detail::parser::value<Iterator> grammar;
+  detail::parser::skipper<Iterator> skipper;
+
+  if (phrase_parse(begin, end, grammar, skipper, v) && begin == end)
+    return nothing;
+  else
+    return error{"failed to parse value"};
+}
+
+} // namespace detail
+
+template <typename Iterator>
+trial<void> parse(value& v, Iterator& begin, Iterator end,
+                      type_const_ptr type = {},
+                      string const& set_sep = ", ",
+                      string const& set_left = "{",
+                      string const& set_right = "}",
+                      string const& vec_sep = ", ",
+                      string const& vec_left = "[",
+                      string const& vec_right = "]",
+                      string const& esc = "\\")
+{
+  if (! type)
+    return detail::parse(v, begin, end);
+
+  detail::value_parser<Iterator> p{v, begin, end,
                                    set_sep, set_left, set_right,
                                    vec_sep, vec_left, vec_right, esc};
 
-  auto t = apply_visitor(p, type->info());
-  if (! t)
-    return false;
-
-  *this = std::move(*t);
-
-  return true;
+  return apply_visitor(p, type->info());
 }
 
 } // namespace vast

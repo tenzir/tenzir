@@ -372,16 +372,16 @@ private:
   trial<bitstream> lookup_impl(relational_operator op, value const& val) const
   {
     if (op == in || op == not_in)
-      return error{"unsupported relational operator: " + to<std::string>(op)};
+      return error{"unsupported relational operator:", op};
 
     if (bitmap_.empty())
-      return {Bitstream{}};
+      return {bitstream{Bitstream{}}};
 
     auto r = bitmap_.lookup(op, extract(val));
     if (r)
-      return {std::move(*r)};
+      return bitstream{std::move(*r)};
     else
-      return r.failure();
+      return r.error();
   };
 
   uint64_t size_impl() const
@@ -488,7 +488,7 @@ private:
     switch (op)
     {
       default:
-        return error{"unsupported relational operator " + to<std::string>(op)};
+        return error{"unsupported relational operator", op};
       case equal:
       case not_equal:
         {
@@ -497,7 +497,7 @@ private:
             if (auto s = size_.lookup(equal, 0))
               return {std::move(op == equal ? *s : s->flip())};
             else
-              return s.failure();
+              return s.error();
           }
 
           if (str.size() > bitmaps_.size())
@@ -505,7 +505,7 @@ private:
 
           auto r = size_.lookup(less_equal, str.size());
           if (! r)
-            return r.failure();
+            return r.error();
 
           if (r->find_first() == Bitstream::npos)
             return {Bitstream{this->size(), op == not_equal}};
@@ -514,7 +514,7 @@ private:
           {
             auto b = bitmaps_[i].lookup(equal, byte_at(str, i));
             if (! b)
-              return b.failure();
+              return b.error();
 
             if (b->find_first() != Bitstream::npos)
               *r &= *b;
@@ -543,7 +543,7 @@ private:
             {
               auto bs = bitmaps_[i + j].lookup(equal, str[j]);
               if (! bs)
-                return bs.failure();
+                return bs.error();
 
               if (bs->find_first() == Bitstream::npos)
               {
@@ -633,7 +633,7 @@ private:
   trial<bitstream> lookup_impl(relational_operator op, value const& val) const
   {
     if (! (op == equal || op == not_equal || op == in || op == not_in))
-      return error{"unsupported relational operator " + to<std::string>(op)};
+      return error{"unsupported relational operator", op};
 
     if (v4_.empty())
       return {Bitstream{}};
@@ -659,7 +659,7 @@ private:
     {
       auto bs = bitmaps_[i][bytes[i]];
       if (! bs)
-        return bs.failure();
+        return bs.error();
 
       if (bs->find_first() != Bitstream::npos)
         r &= *bs;
@@ -673,11 +673,11 @@ private:
   trial<bitstream> lookup_impl(relational_operator op, prefix const& pfx) const
   {
     if (! (op == in || op == not_in))
-      return error{"unsupported relational operator " + to<std::string>(op)};
+      return error{"unsupported relational operator", op};
 
     auto topk = pfx.length();
     if (topk == 0)
-      return error{"invalid IP prefix length: " + to<std::string>(topk)};
+      return error{"invalid IP prefix length:", topk};
 
     auto net = pfx.network();
     auto is_v4 = net.is_v4();
@@ -762,7 +762,7 @@ private:
     assert(val.which() == port_value);
 
     if (op == in || op == not_in)
-      return error{"unsupported relational operator " + to<std::string>(op)};
+      return error{"unsupported relational operator", op};
 
     if (num_.empty())
       return {Bitstream{}};
@@ -770,7 +770,7 @@ private:
     auto& p = val.get<port>();
     auto n = num_.lookup(op, p.number());
     if (! n)
-      return n.failure();
+      return n.error();
 
     if (n->find_first() == Bitstream::npos)
       return {Bitstream{this->size(), false}};
@@ -779,7 +779,7 @@ private:
     {
       auto t = proto_[p.type()];
       if (! t)
-        return t.failure();
+        return t.error();
 
       *n &= *t;
     }
@@ -855,7 +855,7 @@ private:
   trial<bitstream> lookup_impl(relational_operator op, value const& val) const
   {
     if (! (op == in || op == not_in))
-      return error{"unsupported relational operator " + to<std::string>(op)};
+      return error{"unsupported relational operator", op};
 
     if (this->empty())
       return {Bitstream{}};
@@ -968,7 +968,7 @@ trial<bitmap_index<Bitstream>> make_bitmap_index(value_type t, Args&&... args)
   switch (t)
   {
     default:
-      return error{"unspported value type: " + to_string(t)};
+      return error{"unspported value type:", t};
     case bool_value:
       return {arithmetic_bitmap_index<Bitstream, bool_value>(std::forward<Args>(args)...)};
     case int_value:

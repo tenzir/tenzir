@@ -4,10 +4,10 @@
 #include <chrono>
 #include <string>
 #include "vast/fwd.h"
-#include "vast/util/convert.h"
+#include "vast/convert.h"
+#include "vast/parse.h"
+#include "vast/print.h"
 #include "vast/util/operators.h"
-#include "vast/util/parse.h"
-#include "vast/util/print.h"
 
 namespace vast {
 
@@ -18,16 +18,14 @@ class time_point;
 time_point now();
 
 /// A time duration.
-class time_range : util::totally_ordered<time_range>,
-                   util::parsable<time_range>,
-                   util::printable<time_range>
+class time_range : util::totally_ordered<time_range>
 {
   friend class time_point;
-  typedef std::chrono::duration<double, std::ratio<1>> double_seconds;
 
 public:
-  typedef int64_t rep;
-  typedef std::chrono::duration<rep, std::nano> duration_type;
+  using rep = int64_t;
+  using double_seconds = std::chrono::duration<double, std::ratio<1>>;
+  using duration_type = std::chrono::duration<rep, std::nano>;
 
   /// Constructs a nanosecond time range.
   /// @param ns The number of nanoseconds.
@@ -136,77 +134,82 @@ private:
   void deserialize(deserializer& source);
 
   template <typename Iterator>
-  bool parse(Iterator& start, Iterator end)
+  friend trial<void> print(time_range tr, Iterator&& out)
   {
     double d;
-    bool is_double;
-    if (! util::parse_numeric(start, end, d, &is_double))
-      return false;
+    convert(tr, d);
 
-    if (is_double)
-    {
-      *this = time_range::fractional(d);
-      return true;
-    }
+    auto t = print(d, out);
+    if (! t)
+      return t.error();
 
-    time_range::rep i = d;
+    *out++ = 's';
 
-    // Parse suffix.
-    if (start == end)
-      *this = time_range::seconds(i);
-    else
-      switch (*start++)
-      {
-        default:
-          return false;
-        case 'n':
-          if (start != end && *start++ == 's')
-            *this = time_range::nanoseconds(i);
-          break;
-        case 'u':
-          if (start != end && *start++ == 's')
-            *this = time_range::microseconds(i);
-          break;
-        case 'm':
-          if (start != end && *start++ == 's')
-            *this = time_range::milliseconds(i);
-          else
-            *this = time_range::minutes(i);
-          break;
-        case 's':
-          *this = time_range::seconds(i);
-          break;
-        case 'h':
-          *this = time_range::hours(i);
-          break;
-      }
-
-    return true;
+    return nothing;
   }
 
   template <typename Iterator>
-  bool print(Iterator& out) const
+  friend trial<void> parse(time_range& tr, Iterator& begin, Iterator end)
   {
-    if (! render(out, to<double>(*this)))
-      return false;
-    *out++ = 's';
-    return true;
+    bool is_double;
+    auto d = parse<double>(begin, end, &is_double);
+    if (! d)
+      return d.error();
+
+    if (is_double)
+    {
+      tr = time_range::fractional(*d);
+      return nothing;
+    }
+
+    time_range::rep i = *d;
+
+    if (begin == end)
+    {
+      tr = time_range::seconds(i);
+      return nothing;
+    }
+
+    switch (*begin++)
+    {
+      default:
+        return error{"invalid unit:", *begin};
+      case 'n':
+        if (begin != end && *begin++ == 's')
+          tr = time_range::nanoseconds(i);
+        break;
+      case 'u':
+        if (begin != end && *begin++ == 's')
+          tr = time_range::microseconds(i);
+        break;
+      case 'm':
+        if (begin != end && *begin++ == 's')
+          tr = time_range::milliseconds(i);
+        else
+          tr = time_range::minutes(i);
+        break;
+      case 's':
+        tr = time_range::seconds(i);
+        break;
+      case 'h':
+        tr = time_range::hours(i);
+        break;
+    }
+
+    return nothing;
   }
 
-  bool convert(double& d) const;
-  bool convert(duration_type& dur) const;
+  friend trial<void> convert(time_range tr, double& d);
+  friend trial<void> convert(time_range tr, duration_type& dur);
 };
 
-
 /// An absolute point in time having UTC time zone.
-class time_point : util::totally_ordered<time_point>,
-                   util::parsable<time_point>,
-                   util::printable<time_point>
+class time_point : util::totally_ordered<time_point>
 {
 public:
-  typedef time_range::duration_type duration;
-  typedef std::chrono::system_clock clock;
-  typedef std::chrono::time_point<clock, duration> time_point_type;
+  using duration = time_range::duration_type;
+  using clock = std::chrono::system_clock;
+  using time_point_type = std::chrono::time_point<clock, duration>;
 
   // The default format string used to convert time points into calendar types.
   // It has the form `YYYY-MM-DD HH:MM:SS`.
@@ -286,24 +289,6 @@ public:
   /// Returns a time range representing the duration since the UNIX epoch.
   time_range since_epoch() const;
 
-  template <typename Iterator>
-  bool parse(Iterator& start, Iterator end, char const* fmt = nullptr)
-  {
-    if (fmt)
-    {
-      *this = {{start, end}, fmt};
-      start += end - start;
-    }
-    else
-    {
-      time_range tr;
-      if (! extract(start, end, tr))
-        return false;
-      *this = {tr};
-    }
-    return true;
-  }
-
 private:
   friend access;
 
@@ -311,18 +296,42 @@ private:
   void deserialize(deserializer& source);
 
   template <typename Iterator>
-  bool print(Iterator& out) const
+  friend trial<void> print(time_point tp, Iterator&& out)
   {
-    auto str = to<std::string>(*this);
-    return render(out, str);
+    std::string str;
+    auto t = convert(tp, str);
+    if (t)
+      return print(str, out);
+    else
+      return t.error();
   }
 
-  bool convert(double& d) const;
-  bool convert(std::tm& tm) const;
-  bool convert(std::string& str) const;
+  template <typename Iterator>
+  friend trial<void> parse(time_point& tp, Iterator& begin, Iterator end,
+                    char const* fmt = nullptr)
+  {
+    if (fmt)
+    {
+      tp = {std::string{begin, end}, fmt};
+      begin = end;
+      return nothing;
+    }
+
+    auto t = parse<time_range>(begin, end);
+    if (! t)
+      return t.error();
+
+    tp = *t;
+    return nothing;
+  }
+
+  friend trial<void> convert(time_point tp, double& d);
+  friend trial<void> convert(time_point tp, std::tm& tm);
+  friend trial<void> convert(time_point tp, std::string& str);
 
   time_point_type time_point_;
 };
+
 
 namespace detail {
 

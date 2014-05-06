@@ -2,14 +2,13 @@
 #define VAST_PREFIX_H
 
 #include "vast/address.h"
+#include "vast/parse.h"
 #include "vast/util/operators.h"
 
 namespace vast {
 
 /// Stores IPv4 and IPv6 prefixes, e.g., @c 192.168.1.1/16 and @c FD00::/8.
-class prefix : util::totally_ordered<prefix>,
-               util::parsable<prefix>,
-               util::printable<prefix>
+class prefix : util::totally_ordered<prefix>
 {
 public:
 
@@ -51,43 +50,48 @@ private:
   void deserialize(deserializer& source);
 
   template <typename Iterator>
-  bool parse(Iterator& start, Iterator end)
+  friend trial<void> print(prefix const& p, Iterator&& out)
   {
-    char buf[64];
-    auto p = buf;
-    while (*start != '/' && start != end && p < &buf[63])
-      *p++ = *start++;
-    *p = '\0';
+    auto t = print(p.network_, out);
+    if (! t)
+      return t.error();
 
-    auto addr = address::from_string(buf);
-    if (! addr)
-      return false;
+    *out++ = '/';
 
-    if (*start++ != '/')
-      return false;
-
-    p = buf;
-    while (start != end && p < &buf[3])
-      *p++ = *start++;
-    *p = '\0';
-
-    uint8_t length;
-    auto s = buf;
-    if (! util::parse_positive_decimal(s, p, length))
-      return false;
-
-    *this = {std::move(*addr), length};
-
-    return true;
+    return print(p.length(), out);
   }
 
   template <typename Iterator>
-  bool print(Iterator& out) const
+  friend trial<void> parse(prefix& pfx, Iterator& begin, Iterator end)
   {
-    if (! render(out, network_))
-      return false;
-    *out++ = '/';
-    return render(out, length());
+    char buf[64];
+    auto p = buf;
+    while (*begin != '/' && begin != end && p < &buf[63])
+      *p++ = *begin++;
+    *p = '\0';
+
+    auto lval = buf;
+    auto t = parse(pfx.network_, lval, p);
+    if (! t)
+      return t.error();
+
+    if (*begin++ != '/')
+      return error{"missing / in:", buf};
+
+    p = buf;
+    while (begin != end && p < &buf[3])
+      *p++ = *begin++;
+    *p = '\0';
+
+    lval = buf;
+    t = parse(pfx.length_, lval, p);
+    if (! t)
+      return t.error();
+
+    if (! pfx.initialize())
+      return error{"invalid parameters"};
+
+    return nothing;
   }
 
   friend bool operator==(prefix const& x, prefix const& y);

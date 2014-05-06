@@ -3,7 +3,6 @@
 #include <iostream> // FIXME: remove
 #include "vast/regex.h"
 #include "vast/serialization.h"
-#include "vast/util/convert.h"
 
 namespace vast {
 
@@ -562,9 +561,9 @@ trial<offset> type::cast(key const& k) const
 {
   auto t = find(k);
   if (t.empty())
-    return error{"no such key: " + to_string(k)};
+    return error{"no such key:", k};
   else if (t.size() != 1)
-    return error{"ambiguous key: " + to_string(k)};
+    return error{"ambiguous key:", k};
   else
     return std::move(t[0].first);
 }

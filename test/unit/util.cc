@@ -43,5 +43,5 @@ BOOST_AUTO_TEST_CASE(results)
   BOOST_REQUIRE(! t.engaged());
   BOOST_REQUIRE(t.failed());
 
-  BOOST_CHECK_EQUAL(t.failure().msg(), "whoops");
+  BOOST_CHECK_EQUAL(t.error().msg(), "whoops");
 }

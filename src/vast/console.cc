@@ -4,10 +4,10 @@
 #include <iomanip>
 #include <cppa/cppa.hpp>
 #include "vast/event.h"
+#include "vast/parse.h"
 #include "vast/io/serialization.h"
 #include "vast/util/color.h"
 #include "vast/util/make_unique.h"
-#include "vast/util/parse.h"
 #include "vast/util/poll.h"
 
 using namespace cppa;
@@ -154,7 +154,7 @@ console::console(cppa::actor_ptr search, path dir)
   };
 
   auto main = cmdline_.mode_add("main", "> ", util::color::cyan,
-                                to<std::string>(dir_ / "history_main"));
+                                to_string(dir_ / "history_main"));
 
   main->on_unknown_command(help(main));
   main->on_complete(complete);
@@ -172,12 +172,11 @@ console::console(cppa::actor_ptr search, path dir)
   set->add("batch-size", "number of results to display")->on(
       [=](std::string args) -> util::result<bool>
       {
-        uint64_t n;
-        auto begin = args.begin();
-        if (extract(begin, args.end(), n))
+        auto lval = args.begin();
+        if (auto n = parse<uint64_t>(lval, args.end()))
         {
-          opts_.batch_size = n;
-          send(search_, atom("client"), atom("batch-size"), n);
+          opts_.batch_size = *n;
+          send(search_, atom("client"), atom("batch-size"), *n);
           return true;
         }
         else
@@ -187,8 +186,10 @@ console::console(cppa::actor_ptr search, path dir)
         }
       });
 
-  auto auto_follow = set->add("auto-follow",
-                              "enter interactive control mode after query creation");
+  auto auto_follow = set->add(
+      "auto-follow",
+      "enter interactive control mode after query creation");
+
   auto_follow->on(
       [=](std::string args) -> util::result<bool>
       {
@@ -267,7 +268,7 @@ console::console(cppa::actor_ptr search, path dir)
         std::vector<intrusive_ptr<result>> matches;
         for (auto& r : results_)
         {
-          auto candidate = to<std::string>(r->id());
+          auto candidate = to_string(r->id());
           auto i = std::mismatch(args.begin(), args.end(), candidate.begin());
           if (i.first == args.end())
             matches.push_back(r);
@@ -293,7 +294,7 @@ console::console(cppa::actor_ptr search, path dir)
       });
 
   auto ask = cmdline_.mode_add("ask", "? ", util::color::green,
-                               to<std::string>(dir_ / "history_query"));
+                               to_string(dir_ / "history_query"));
 
   ask->add("exit", "leave query asking mode")->on(
       [=](std::string) -> util::result<bool>
@@ -989,7 +990,7 @@ void console::prompt(size_t ms)
   auto t = cmdline_.get(line);
   if (! t)
   {
-    VAST_LOG_ACTOR_ERROR("failed to retrieve command line: " << t.failure());
+    VAST_LOG_ACTOR_ERROR("failed to retrieve command line: " << t.error());
     quit(exit::error);
     return;
   }
@@ -1023,7 +1024,7 @@ void console::prompt(size_t ms)
   }
   else if (r.failed())
   {
-    print(error) << r.failure() << std::endl;
+    print(error) << r.error() << std::endl;
     prompt();
   }
 };

@@ -46,13 +46,6 @@ set(libvast_sources
   detail/demangle.cc
   detail/type_manager.cc
   detail/ast/query.cc
-  detail/parser/address.cc
-  detail/parser/expression.cc
-  detail/parser/duration.cc
-  detail/parser/query.cc
-  detail/parser/time_point.cc
-  detail/parser/value.cc
-  detail/parser/bro15/conn.cc
   io/array_stream.cc
   io/buffered_stream.cc
   io/coded_stream.cc

@@ -4,19 +4,15 @@
 #include <array>
 #include <string>
 #include "vast/fwd.h"
-#include "vast/optional.h"
 #include "vast/string.h"
+#include "vast/print.h"
 #include "vast/util/operators.h"
-#include "vast/util/parse.h"
-#include "vast/util/print.h"
 
 namespace vast {
 
 /// An IP address.
 class address : util::totally_ordered<address>,
-                util::bitwise<address>,
-                util::parsable<address>,
-                util::printable<address>
+                util::bitwise<address>
 {
   /// Top 96 bits of v4-mapped-addr.
   static std::array<uint8_t, 12> const v4_mapped_prefix;
@@ -36,42 +32,27 @@ public:
     network
   };
 
-  /// Constructs an address from a C string.
-  /// @param start The string holding and IPv4 or IPv6 address.
-  /// @returns An engaged option iff parsing succeeded.
-  static optional<address> from_string(char const* str);
-
-  /// Constructs an address from a C++ string.
-  /// @param start The string holding and IPv4 or IPv6 address.
-  /// @returns An engaged option iff parsing succeeded.
-  static optional<address> from_string(std::string const& str);
-
-  /// Constructs an address from a VAST string.
-  /// @param start The string holding and IPv4 or IPv6 address.
-  /// @returns An engaged option iff parsing succeeded.
-  static optional<address> from_string(string const& str);
-
   /// Constructs an IPv4 address from a string.
   /// @param str The string holding the IPv4 address.
-  static optional<address> from_v4(char const* str);
+  static trial<address> from_v4(char const* str);
 
   /// Constructs an IPv6 address from a string.
   /// @param str The string holding the IPv6 address.
-  static optional<address> from_v6(char const* str);
+  static trial<address> from_v6(char const* str);
 
   address();
 
   /// Constructs an address from a C string.
-  /// @param start The string holding and IPv4 or IPv6 address.
+  /// @param str The string holding and IPv4 or IPv6 address.
   explicit address(char const* str);
 
   /// Constructs an address from a C++ string.
-  /// @param start The string holding and IPv4 or IPv6 address.
+  /// @param str The string holding and IPv4 or IPv6 address.
   /// @returns An engaged option iff parsing succeeded.
   explicit address(std::string const& str);
 
   /// Constructs an address from a VAST string.
-  /// @param start The string holding and IPv4 or IPv6 address.
+  /// @param str The string holding and IPv4 or IPv6 address.
   /// @returns An engaged option iff parsing succeeded.
   explicit address(string const& str);
 
@@ -159,33 +140,41 @@ private:
   void deserialize(deserializer& source);
 
   template <typename Iterator>
-  bool parse(Iterator& start, Iterator end)
+  friend trial<void> parse(address& a, Iterator& begin, Iterator end)
   {
-    string str;
-    if (! extract(start, end, str))
-      return false;
+    if (begin == end)
+      return error{"empty iterator range"};
 
-    if (auto a = from_string(str))
+    char buf[64];
+    auto p = buf;
+
+    auto v6 = false;
+    while (*begin != '\0' && begin != end && p - buf < 63)
     {
-      *this = std::move(*a);
-      return true;
+      if (*begin == ':')
+        v6 = true;
+
+      *p++ = *begin++;
     }
 
-    return false;
+    *p = '\0';
+
+    auto t = v6 ? address::from_v6(buf) : address::from_v4(buf);
+    if (! t)
+      return t.error();;
+
+    a = std::move(*t);
+    return nothing;
   }
 
   template <typename Iterator>
-  bool print(Iterator& out) const
+  friend trial<void> print(address const& a, Iterator&& out)
   {
-    string str;
-    if (! convert(str))
-      return false;
-
-    out = std::copy(str.begin(), str.end(), out);
-    return true;
+    auto str = to_string(a);
+    return print(str, out);
   }
 
-  bool convert(string& str) const;
+  friend std::string to_string(address const& a);
 
   friend bool operator==(address const& x, address const& y);
   friend bool operator<(address const& x, address const& y);

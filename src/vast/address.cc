@@ -13,30 +13,12 @@ std::array<uint8_t, 12> const vast::address::v4_mapped_prefix =
 
 namespace vast {
 
-optional<address> address::from_string(char const* str)
-{
-  auto p = str;
-  while (*p != '\0' && *p != ':')
-    ++p;
-  return *p != '\0' ? from_v6(str) : from_v4(str);
-}
-
-optional<address> address::from_string(std::string const& str)
-{
-  if (str.size() > 63)
-    return {};
-  return from_string(str.c_str());
-}
-
-optional<address> address::from_string(string const& str)
-{
-  return from_string(str.data());
-}
-
-optional<address> address::from_v4(char const* str)
+trial<address> address::from_v4(char const* str)
 {
   address r;
-  std::copy(v4_mapped_prefix.begin(), v4_mapped_prefix.end(), r.bytes_.begin());
+  std::copy(v4_mapped_prefix.begin(),
+            v4_mapped_prefix.end(),
+            r.bytes_.begin());
 
   int a[4];
   int n = sscanf(str, "%d.%d.%d.%d", a + 0, a + 1, a + 2, a + 3);
@@ -44,43 +26,27 @@ optional<address> address::from_v4(char const* str)
   if (n != 4
       || a[0] < 0 || a[1] < 0 || a[2] < 0 || a[3] < 0
       || a[0] > 255 || a[1] > 255 || a[2] > 255 || a[3] > 255)
-    return {};
+    return error{"failed to parse address: ", str};
 
   uint32_t addr = (a[0] << 24) | (a[1] << 16) | (a[2] << 8) | a[3];
   auto p = reinterpret_cast<uint32_t*>(&r.bytes_[12]);
   *p = util::byte_swap<host_endian, network_endian>(addr);
 
-  return {std::move(r)};
+  return std::move(r);
 }
 
-optional<address> address::from_v6(char const* str)
+trial<address> address::from_v6(char const* str)
 {
-  address r;
-  if (inet_pton(AF_INET6, str, r.bytes_.data()) <= 0)
-    return {};
+  address a;
+  if (inet_pton(AF_INET6, str, a.bytes_.data()) <= 0)
+    return error{"inet_pton() failed for:", str};
 
-  return {std::move(r)};
+  return std::move(a);
 }
 
 address::address()
 {
   bytes_.fill(0);
-}
-
-address::address(char const* str)
-{
-  if (auto a = from_string(str))
-    *this = std::move(*a);
-}
-
-address::address(std::string const& str)
-  : address{str.c_str()}
-{
-}
-
-address::address(string const& str)
-  : address{str.data()}
-{
 }
 
 address::address(address&& other)
@@ -228,24 +194,22 @@ void address::deserialize(deserializer& source)
   VAST_LEAVE(VAST_THIS);
 }
 
-bool address::convert(string& str) const
+std::string to_string(address const& a)
 {
-  if (is_v4())
+  char buf[INET6_ADDRSTRLEN];
+  std::memset(buf, 0, INET6_ADDRSTRLEN);
+  if (a.is_v4())
   {
-    char buf[INET_ADDRSTRLEN];
-    if (inet_ntop(AF_INET, &bytes_[12], buf, INET_ADDRSTRLEN) == nullptr)
-      return false;
-    str = {buf};
+    if (inet_ntop(AF_INET, &a.bytes_[12], buf, INET_ADDRSTRLEN) == nullptr)
+      return {};
   }
   else
   {
-    char buf[INET6_ADDRSTRLEN];
-    if (inet_ntop(AF_INET6, &bytes_, buf, INET6_ADDRSTRLEN) == nullptr)
-      return false;
-    str = {buf};
+    if (inet_ntop(AF_INET6, &a.bytes_, buf, INET6_ADDRSTRLEN) == nullptr)
+      return {};
   }
 
-  return true;
+  return buf;
 }
 
 bool operator==(address const& x, address const& y)

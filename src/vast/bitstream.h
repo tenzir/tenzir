@@ -5,10 +5,8 @@
 #include "vast/bitvector.h"
 #include "vast/serialization.h"
 #include "vast/traits.h"
-#include "vast/util/convert.h"
 #include "vast/util/make_unique.h"
 #include "vast/util/operators.h"
-#include "vast/util/print.h"
 #include "vast/util/range.h"
 
 namespace vast {
@@ -221,11 +219,6 @@ private:
   {
     derived().deserialize(source);
   }
-
-  bool convert(std::string& str) const
-  {
-    return derived().convert(str);
-  }
 };
 
 template <typename Derived>
@@ -411,7 +404,6 @@ private:
   friend bitstream;
   virtual void serialize(serializer& sink) const = 0;
   virtual void deserialize(deserializer& source) = 0;
-  virtual bool convert(std::string& str) const = 0;
 };
 
 
@@ -582,19 +574,13 @@ private:
   {
     source >> bitstream_;
   }
-
-  virtual bool convert(std::string& str) const final
-  {
-    return vast::convert(bitstream_, str);
-  }
 };
 
 } // namespace detail
 
 /// A polymorphic bitstream with value semantics.
 class bitstream : public bitstream_base<bitstream>,
-                  util::equality_comparable<bitstream>,
-                  util::printable<bitstream>
+                  util::equality_comparable<bitstream>
 {
 public:
   using iterator = detail::bitstream_concept::iterator;
@@ -654,33 +640,12 @@ private:
 
   void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
-  bool convert(std::string& str) const;
 
   template <typename Iterator>
-  bool print(Iterator& out) const
+  friend trial<void> print(bitstream const& bs, Iterator&& out)
   {
-    for (size_t i = 0; i < bits().blocks(); ++i)
-    {
-      if (i != bits().blocks() - 1)
-      {
-        if (! bitvector::print(out, bits().block(i)))
-          return false;
-        *out++ = '\n';
-      }
-      else
-      {
-        auto remaining = size() % block_width;
-        if (remaining == 0)
-          remaining = block_width;
-        for (size_t i = 0; i < block_width - remaining; ++i)
-          *out++ = ' ';
-        if (! bitvector::print(out, bits().block(i), true, 0, remaining))
-          return false;
-      }
-    }
-
-    return true;
-  };
+    return print(bs.bits(), out, false, false, 0);
+  }
 
   friend bool operator==(bitstream const& x, bitstream const& y);
 };
@@ -688,8 +653,7 @@ private:
 /// An uncompressed bitstream that simply forwards all operations to its
 /// underlying ::bitvector.
 class null_bitstream : public bitstream_base<null_bitstream>,
-                       util::totally_ordered<null_bitstream>,
-                       util::printable<null_bitstream>
+                       util::totally_ordered<null_bitstream>
 {
 public:
   using const_iterator = class iterator
@@ -775,14 +739,13 @@ private:
   friend access;
   void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
-  bool convert(std::string& str) const;
 
   template <typename Iterator>
-  bool print(Iterator& out) const
+  friend trial<void> print(null_bitstream const& bs, Iterator&& out)
   {
     // We print NULL bitstreams from LSB to MSB to underline the stream
     // character.
-    return render(out, bits(), false, false, 0);
+    return print(bs.bits(), out, false, false, 0);
   };
 
   friend bool operator==(null_bitstream const& x, null_bitstream const& y);
@@ -797,8 +760,7 @@ private:
 ///   1. The first block is a marker.
 ///   2. The last block is always dirty.
 class ewah_bitstream : public bitstream_base<ewah_bitstream>,
-                       util::totally_ordered<ewah_bitstream>,
-                       util::printable<ewah_bitstream>
+                       util::totally_ordered<ewah_bitstream>
 {
 public:
   using const_iterator = class iterator
@@ -976,32 +938,34 @@ private:
   friend access;
   void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
-  bool convert(std::string& str) const;
 
   template <typename Iterator>
-  bool print(Iterator& out) const
+  friend trial<void> print(ewah_bitstream const& bs, Iterator&& out)
   {
-    for (size_t i = 0; i < bits_.blocks(); ++i)
+    for (size_t i = 0; i < bs.bits_.blocks(); ++i)
     {
-      if (i != bits_.blocks() - 1)
+      if (i != bs.bits_.blocks() - 1)
       {
-        if (! bitvector::print(out, bits_.block(i)))
-          return false;
+        if (! bitvector::print(out, bs.bits_.block(i)))
+          return error{"failed to print block ", i};
+
         *out++ = '\n';
       }
       else
       {
-        auto remaining = num_bits_ % block_width;
+        auto remaining = bs.num_bits_ % block_width;
         if (remaining == 0)
           remaining = block_width;
+
         for (size_t i = 0; i < block_width - remaining; ++i)
           *out++ = ' ';
-        if (! bitvector::print(out, bits_.block(i), true, 0, remaining))
-          return false;
+
+        if (! bitvector::print(out, bs.bits_.block(i), true, 0, remaining))
+          return error{"failed to print block ", i};
       }
     }
 
-    return true;
+    return nothing;
   };
 
   friend bool operator==(ewah_bitstream const& x, ewah_bitstream const& y);
@@ -1170,10 +1134,10 @@ Bitstream nor_(Bitstream const& lhs, Bitstream const& rhs)
 /// @param out The output iterator.
 /// @param v A vector of bitstreams.
 template <typename Iterator, typename Bitstream>
-bool print(Iterator& out, std::vector<Bitstream> const& v)
+trial<void> print(std::vector<Bitstream> const& v, Iterator&& out)
 {
   if (v.empty())
-    return true;
+    return nothing;
 
   using const_iterator = typename Bitstream::const_iterator;
   using ipair = std::pair<const_iterator, const_iterator>;
@@ -1220,7 +1184,7 @@ bool print(Iterator& out, std::vector<Bitstream> const& v)
     *out++ = '\n';
   }
 
-  return true;
+  return nothing;
 }
 
 } // namespace vast
