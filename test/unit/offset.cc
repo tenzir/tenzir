@@ -14,9 +14,8 @@ BOOST_AUTO_TEST_CASE(offset_printing)
 BOOST_AUTO_TEST_CASE(offset_parsing)
 {
   auto str = std::string{"0,4,8,12"};
-  offset o;
-  auto f = str.begin();
-  auto l = str.end();
-  BOOST_CHECK(extract(f, l, o));
-  BOOST_CHECK_EQUAL(o, offset({0,4,8,12}));
+  auto lval = str.begin();
+  auto o = parse<offset>(lval, str.end());
+  BOOST_CHECK(o);
+  BOOST_CHECK_EQUAL(*o, offset({0,4,8,12}));
 }

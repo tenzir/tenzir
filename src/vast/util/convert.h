@@ -3,7 +3,6 @@
 
 #include <string>
 #include "vast/util/trial.h"
-#include "vast/util/print.h"
 
 namespace vast {
 namespace util {
@@ -28,19 +27,6 @@ struct convertible
 template <typename From, typename To>
 struct convertible : decltype(detail::convertible::test<From, To>(0, 0)) {};
 
-/// Converts a type that models the `Printable` conept to a std::string.
-template <typename From, typename... Opts>
-auto convert(From const& f, std::string& str, Opts&&... opts)
-  -> typename std::enable_if<
-       std::is_arithmetic<From>::value 
-         || (! convertible<From, std::string>::value
-             && printable<From, std::back_insert_iterator<std::string>>::value),
-       trial<void>
-     >::type
-{
-  return print(f, std::back_inserter(str), std::forward<Opts>(opts)...);
-}
-
 /// Converts one type to another.
 /// @tparam To The type to convert `From` to.
 /// @tparam From The type to convert to `To`.
@@ -48,7 +34,11 @@ auto convert(From const& f, std::string& str, Opts&&... opts)
 /// @returns *f* converted to `T`.
 template <typename To, typename From, typename... Opts>
 auto to(From const& f, Opts&&... opts)
-  -> decltype(convertible<From, To>(), trial<To>{To{}})
+  -> typename std::enable_if<
+       ! std::is_same<To, std::string>::value // Comes from Printable.
+         && convertible<From, To>::value,
+       trial<To>
+     >::type
 {
   trial<To> x{To()};
   auto t = convert(f, *x, std::forward<Opts>(opts)...);
@@ -56,16 +46,6 @@ auto to(From const& f, Opts&&... opts)
     return x;
   else
     return t.error();
-}
-
-/// Converts a *convertible* to a std::string.
-/// This function exists for STL compliance.
-template <typename From, typename... Opts>
-auto to_string(From const& f, Opts&&... opts)
-  -> decltype(convertible<From, std::string>(), std::string())
-{
-  auto t = to<std::string>(f, std::forward<Opts>(opts)...);
-  return t ? *t : std::string{"<" + t.error().msg() + ">"};
 }
 
 } // namespace util

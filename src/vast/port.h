@@ -5,15 +5,14 @@
 #include <cstring>
 #include <string>
 #include "vast/fwd.h"
+#include "vast/parse.h"
 #include "vast/print.h"
 #include "vast/util/operators.h"
-#include "vast/util/parse.h"
 
 namespace vast {
 
 /// A transport-layer port.
-class port : util::totally_ordered<port>,
-             util::parsable<port>
+class port : util::totally_ordered<port>
 {
 public:
   using number_type = uint16_t;
@@ -70,41 +69,36 @@ private:
   void deserialize(deserializer& source);
 
   template <typename Iterator>
-  bool parse(Iterator& start, Iterator end)
+  friend trial<void> parse(port& prt, Iterator& begin, Iterator end)
   {
     // Longest port: 42000/unknown = 5 + 1 + 7 = 13 bytes plus NUL.
     char buf[16];
     auto p = buf;
-    while (*start != '/' && std::isdigit(*start) &&
-           start != end && p < &buf[15])
-      *p++ = *start++;
+    while (*begin != '/' && std::isdigit(*begin) && begin != end
+           && p - buf < 16)
+      *p++ = *begin++;
 
-    number_type number;
-    auto s = buf;
-    if (! util::parse_positive_decimal(s, p, number))
-      return false;
+    auto lval = buf;
+    auto t = parse_positive_decimal(prt.number_, lval, p);
+    if (! t)
+      return t.error();
 
-    if (start == end || *start++ != '/')
-    {
-      *this = {number, port::unknown};
-      return true;
-    }
+    if (begin == end || *begin++ != '/')
+      return nothing;
 
     p = buf;
-    while (start != end && p < &buf[7])
-      *p++ = *start++;
+    while (begin != end && p < &buf[7])
+      *p++ = *begin++;
     *p = '\0';
 
     if (! std::strncmp(buf, "tcp", 3))
-      *this = {number, port::tcp};
+      prt.type_ = port::tcp;
     else if (! std::strncmp(buf, "udp", 3))
-      *this = {number, port::udp};
+      prt.type_ = port::udp;
     else if (! std::strncmp(buf, "icmp", 4))
-      *this = {number, port::icmp};
-    else
-      *this = {number, port::unknown};
+      prt.type_ = port::icmp;
 
-    return true;
+    return nothing;
   }
 
   template <typename Iterator>

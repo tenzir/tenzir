@@ -29,9 +29,6 @@ class bitstream;
 class null_bitstream;
 class ewah_bitstream;
 
-template <typename Iterator, typename T, typename... Opts>
-bool extract(Iterator&, Iterator, T&, Opts&&...);
-
 namespace expr {
 class ast;
 }

@@ -13,8 +13,7 @@
 #include "vast/util/operators.h"
 
 namespace vast {
-class schema : util::equality_comparable<schema>,
-               util::parsable<schema>
+class schema : util::equality_comparable<schema>
 {
 public:
   using const_iterator = std::vector<type_const_ptr>::const_iterator;
@@ -70,9 +69,6 @@ private:
   void deserialize(deserializer& source);
 
   template <typename Iterator>
-  bool parse(Iterator& start, Iterator end);
-
-  template <typename Iterator>
   friend trial<void> print(schema const& s, Iterator&& out)
   {
     for (auto& t : s.types_)
@@ -90,6 +86,9 @@ private:
 
     return nothing;
   }
+
+  template <typename Iterator>
+  friend trial<void> parse(schema& sch, Iterator& begin, Iterator end);
 
   friend bool operator==(schema const& x, schema const& y);
 };
@@ -194,20 +193,20 @@ private:
 
 struct schema_factory
 {
-  using result_type = void;
+  using result_type = trial<void>;
 
   schema_factory(schema& s)
     : schema_{s}
   {
   }
 
-  void operator()(detail::ast::schema::type_declaration const& td)
+  trial<void> operator()(detail::ast::schema::type_declaration const& td)
   {
     if (auto ti = boost::get<detail::ast::schema::type_info>(&td.type))
     {
       auto t = boost::apply_visitor(type_factory{schema_, td.name}, *ti);
       if (! schema_.add(t))
-        error_ = error{"erroneous type declaration: " + td.name};
+        return error{"erroneous type declaration: " + td.name};
     }
     else if (auto x = boost::get<detail::ast::schema::type>(&td.type))
     {
@@ -220,43 +219,44 @@ struct schema_factory
       assert(t);
       schema_.add(t);
     }
+
+    return nothing;
   }
 
-  void operator()(detail::ast::schema::event_declaration const&)
+  trial<void> operator()(detail::ast::schema::event_declaration const&)
   {
     /* We will soon no longer treat events any different from types. */
+    return nothing;
   }
 
   schema& schema_;
-  error error_;
 };
 
 } // namespace detail
 
 template <typename Iterator>
-bool schema::parse(Iterator& start, Iterator end)
+trial<void> parse(schema& sch, Iterator& begin, Iterator end)
 {
   std::string err;
-  detail::parser::error_handler<Iterator> on_error{start, end, err};
+  detail::parser::error_handler<Iterator> on_error{begin, end, err};
   detail::parser::schema<Iterator> grammar{on_error};
   detail::parser::skipper<Iterator> skipper;
   detail::ast::schema::schema ast;
 
-  bool success = phrase_parse(start, end, grammar, skipper, ast);
-  if (! success || start != end)
-    return false;
-    // TODO: return error{std::move(err)};
+  bool success = phrase_parse(begin, end, grammar, skipper, ast);
+  if (! success || begin != end)
+    return error{std::move(err)};
 
-  detail::schema_factory sf{*this};
+  sch.types_.clear();
+  detail::schema_factory sf{sch};
   for (auto& statement : ast)
   {
-    boost::apply_visitor(std::ref(sf), statement);
-    if (! sf.error_.msg().empty())
-      return false;
-      // TODO: return error{*sf.error_};
+    auto t = boost::apply_visitor(std::ref(sf), statement);
+    if (! t)
+      return t.error();
   }
 
-  return true;
+  return nothing;
 }
 
 } // namespace vast

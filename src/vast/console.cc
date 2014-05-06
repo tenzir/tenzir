@@ -4,10 +4,10 @@
 #include <iomanip>
 #include <cppa/cppa.hpp>
 #include "vast/event.h"
+#include "vast/parse.h"
 #include "vast/io/serialization.h"
 #include "vast/util/color.h"
 #include "vast/util/make_unique.h"
-#include "vast/util/parse.h"
 #include "vast/util/poll.h"
 
 using namespace cppa;
@@ -172,12 +172,11 @@ console::console(cppa::actor_ptr search, path dir)
   set->add("batch-size", "number of results to display")->on(
       [=](std::string args) -> util::result<bool>
       {
-        uint64_t n;
-        auto begin = args.begin();
-        if (extract(begin, args.end(), n))
+        auto lval = args.begin();
+        if (auto n = parse<uint64_t>(lval, args.end()))
         {
-          opts_.batch_size = n;
-          send(search_, atom("client"), atom("batch-size"), n);
+          opts_.batch_size = *n;
+          send(search_, atom("client"), atom("batch-size"), *n);
           return true;
         }
         else
@@ -187,8 +186,10 @@ console::console(cppa::actor_ptr search, path dir)
         }
       });
 
-  auto auto_follow = set->add("auto-follow",
-                              "enter interactive control mode after query creation");
+  auto auto_follow = set->add(
+      "auto-follow",
+      "enter interactive control mode after query creation");
+
   auto_follow->on(
       [=](std::string args) -> util::result<bool>
       {

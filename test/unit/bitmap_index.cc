@@ -182,37 +182,37 @@ BOOST_AUTO_TEST_CASE(strings_bitmap_index)
 BOOST_AUTO_TEST_CASE(ip_address_bitmap_index)
 {
   address_bitmap_index<null_bitstream> bmi, bmi2;
-  BOOST_REQUIRE(bmi.push_back(address("192.168.0.1")));
-  BOOST_REQUIRE(bmi.push_back(address("192.168.0.2")));
-  BOOST_REQUIRE(bmi.push_back(address("192.168.0.3")));
-  BOOST_REQUIRE(bmi.push_back(address("192.168.0.1")));
-  BOOST_REQUIRE(bmi.push_back(address("192.168.0.1")));
-  BOOST_REQUIRE(bmi.push_back(address("192.168.0.2")));
+  BOOST_REQUIRE(bmi.push_back(*address::from_v4("192.168.0.1")));
+  BOOST_REQUIRE(bmi.push_back(*address::from_v4("192.168.0.2")));
+  BOOST_REQUIRE(bmi.push_back(*address::from_v4("192.168.0.3")));
+  BOOST_REQUIRE(bmi.push_back(*address::from_v4("192.168.0.1")));
+  BOOST_REQUIRE(bmi.push_back(*address::from_v4("192.168.0.1")));
+  BOOST_REQUIRE(bmi.push_back(*address::from_v4("192.168.0.2")));
 
-  address addr{"192.168.0.1"};
+  auto addr = *address::from_v4("192.168.0.1");
   auto bs = bmi.lookup(equal, addr);
   BOOST_REQUIRE(bs);
   BOOST_CHECK_EQUAL(to_string(*bs), "100110");
   auto nbs = bmi.lookup(not_equal, addr);
   BOOST_CHECK_EQUAL(to_string(*nbs), "011001");
 
-  addr = address{"192.168.0.5"};
+  addr = *address::from_v4("192.168.0.5");
   BOOST_CHECK_EQUAL(to_string(*bmi.lookup(equal, addr)), "000000");
-  BOOST_CHECK(! bmi.lookup(match, address{"::"}));
+  BOOST_CHECK(! bmi.lookup(match, *address::from_v6("::")));
 
-  bmi.push_back(address{"192.168.0.128"});
-  bmi.push_back(address{"192.168.0.130"});
-  bmi.push_back(address{"192.168.0.240"});
-  bmi.push_back(address{"192.168.0.127"});
+  bmi.push_back(*address::from_v4("192.168.0.128"));
+  bmi.push_back(*address::from_v4("192.168.0.130"));
+  bmi.push_back(*address::from_v4("192.168.0.240"));
+  bmi.push_back(*address::from_v4("192.168.0.127"));
 
-  auto pfx = prefix{address{"192.168.0.128"}, 25};
+  auto pfx = prefix{*address::from_v4("192.168.0.128"), 25};
   auto pbs = bmi.lookup(in, pfx);
   BOOST_REQUIRE(pbs);
   BOOST_CHECK_EQUAL(to_string(*pbs), "0000001110");
   auto npbs = bmi.lookup(not_in, pfx);
   BOOST_REQUIRE(npbs);
   BOOST_CHECK_EQUAL(to_string(*npbs), "1111110001");
-  pfx = {address{"192.168.0.0"}, 24};
+  pfx = {*address::from_v4("192.168.0.0"), 24};
   auto pbs2 = bmi.lookup(in, pfx);
   BOOST_REQUIRE(pbs2);
   BOOST_CHECK_EQUAL(to_string(*pbs2), "1111111111");

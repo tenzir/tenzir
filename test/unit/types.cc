@@ -299,7 +299,7 @@ BOOST_AUTO_TEST_CASE(addresses_v4)
   BOOST_CHECK(! x.is_v4());
   BOOST_CHECK(x.is_v6());
 
-  address a("172.16.7.1");
+  auto a = *to<address>("172.16.7.1");
   BOOST_CHECK(to_string(a) == "172.16.7.1");
   BOOST_CHECK(a.is_v4());
   BOOST_CHECK(! a.is_v6());
@@ -307,7 +307,7 @@ BOOST_AUTO_TEST_CASE(addresses_v4)
   BOOST_CHECK(! a.is_multicast());
   BOOST_CHECK(! a.is_broadcast());
 
-  address localhost("127.0.0.1");
+  auto localhost = *to<address>("127.0.0.1");
   BOOST_CHECK(to_string(localhost) == "127.0.0.1");
   BOOST_CHECK(localhost.is_v4());
   BOOST_CHECK(localhost.is_loopback());
@@ -321,41 +321,41 @@ BOOST_AUTO_TEST_CASE(addresses_v4)
   address anded = a & localhost;
   address ored = a | localhost;
   address xored = a ^ localhost;
-  BOOST_CHECK(anded == address("44.0.0.1"));
-  BOOST_CHECK(ored == address("255.16.7.1"));
-  BOOST_CHECK(xored == address("211.16.7.0"));
+  BOOST_CHECK(anded == *to<address>("44.0.0.1"));
+  BOOST_CHECK(ored == *to<address>("255.16.7.1"));
+  BOOST_CHECK(xored == *to<address>("211.16.7.0"));
   BOOST_CHECK(anded.is_v4());
   BOOST_CHECK(ored.is_v4());
   BOOST_CHECK(xored.is_v4());
 
-  auto broadcast = address("255.255.255.255");
+  auto broadcast = *to<address>("255.255.255.255");
   BOOST_CHECK(broadcast.is_broadcast());
 
   uint32_t n = 3232235691;
-  address b(&n, address::ipv4, address::host);
+  address b{&n, address::ipv4, address::host};
   BOOST_CHECK(to_string(b) == "192.168.0.171");
 }
 
 BOOST_AUTO_TEST_CASE(addresses_v6)
 {
-  BOOST_CHECK(address() == address("::"));
+  BOOST_CHECK(address() == *to<address>("::"));
 
-  address a("2001:db8:0000:0000:0202:b3ff:fe1e:8329");
-  address b("2001:db8:0:0:202:b3ff:fe1e:8329");
-  address c("2001:db8::202:b3ff:fe1e:8329");
+  auto a = *to<address>("2001:db8:0000:0000:0202:b3ff:fe1e:8329");
+  auto b = *to<address>("2001:db8:0:0:202:b3ff:fe1e:8329");
+  auto c = *to<address>("2001:db8::202:b3ff:fe1e:8329");
   BOOST_CHECK(a.is_v6() && b.is_v6() && c.is_v6());
   BOOST_CHECK(! (a.is_v4() || b.is_v4() || c.is_v4()));
   BOOST_CHECK(a == b && b == c);
 
-  address d("ff01::1");
+  auto d = *to<address>("ff01::1");
   BOOST_CHECK(d.is_multicast());
 
-  BOOST_CHECK((a ^ b) == address("::"));
+  BOOST_CHECK((a ^ b) == *to<address>("::"));
   BOOST_CHECK((a & b) == a);
   BOOST_CHECK((a | b) == a);
-  BOOST_CHECK((a & d) == address("2001::1"));
-  BOOST_CHECK((a | d) == address("ff01:db8::202:b3ff:fe1e:8329"));
-  BOOST_CHECK((a ^ d) == address("df00:db8::202:b3ff:fe1e:8328"));
+  BOOST_CHECK((a & d) == *to<address>("2001::1"));
+  BOOST_CHECK((a | d) == *to<address>("ff01:db8::202:b3ff:fe1e:8329"));
+  BOOST_CHECK((a ^ d) == *to<address>("df00:db8::202:b3ff:fe1e:8328"));
 
   uint8_t raw8[16] = { 0xdf, 0x00, 0x0d, 0xb8,
   0x00, 0x00, 0x00, 0x00,
@@ -372,35 +372,35 @@ BOOST_AUTO_TEST_CASE(addresses_v6)
   BOOST_CHECK(f == e);
 
   a.mask(112);
-  BOOST_CHECK(a == address("2001:db8::202:b3ff:fe1e:0"));
+  BOOST_CHECK(a == *to<address>("2001:db8::202:b3ff:fe1e:0"));
   a.mask(100);
-  BOOST_CHECK(a == address("2001:db8::202:b3ff:f000:0"));
+  BOOST_CHECK(a == *to<address>("2001:db8::202:b3ff:f000:0"));
   a.mask(3);
-  BOOST_CHECK(a == address("2000::"));
+  BOOST_CHECK(a == *to<address>("2000::"));
 }
 
 BOOST_AUTO_TEST_CASE(prefixes)
 {
   prefix p;
-  BOOST_CHECK_EQUAL(p.network(), address{"::"});
+  BOOST_CHECK_EQUAL(p.network(), *to<address>("::"));
   BOOST_CHECK_EQUAL(p.length(), 0);
   BOOST_CHECK_EQUAL(to_string(p), "::/0");
 
-  address a{"192.168.0.1"};
+  auto a = *to<address>("192.168.0.1");
   prefix q{a, 24};
-  BOOST_CHECK_EQUAL(q.network(), address("192.168.0.0"));
+  BOOST_CHECK_EQUAL(q.network(), *to<address>("192.168.0.0"));
   BOOST_CHECK_EQUAL(q.length(), 24);
   BOOST_CHECK_EQUAL(to_string(q), "192.168.0.0/24");
-  BOOST_CHECK(q.contains(address("192.168.0.73")));
-  BOOST_CHECK(! q.contains(address("192.168.244.73")));
+  BOOST_CHECK(q.contains(*to<address>("192.168.0.73")));
+  BOOST_CHECK(! q.contains(*to<address>("192.168.244.73")));
 
-  address b{"2001:db8:0000:0000:0202:b3ff:fe1e:8329"};
+  auto b = *to<address>("2001:db8:0000:0000:0202:b3ff:fe1e:8329");
   prefix r{b, 64};
   BOOST_CHECK_EQUAL(r.length(), 64);
-  BOOST_CHECK_EQUAL(r.network(), address{"2001:db8::"});
+  BOOST_CHECK_EQUAL(r.network(), *to<address>("2001:db8::"));
   BOOST_CHECK_EQUAL(to_string(r), "2001:db8::/64");
-  BOOST_CHECK(r.contains(address("2001:db8::cafe:babe")));
-  BOOST_CHECK(! r.contains(address("ff00::")));
+  BOOST_CHECK(r.contains(*to<address>("2001:db8::cafe:babe")));
+  BOOST_CHECK(! r.contains(*to<address>("ff00::")));
 }
 
 BOOST_AUTO_TEST_CASE(ports)

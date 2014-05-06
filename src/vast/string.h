@@ -7,7 +7,6 @@
 #include "vast/traits.h"
 #include "vast/trial.h"
 #include "vast/util/operators.h"
-#include "vast/util/parse.h"
 
 namespace vast {
 
@@ -45,8 +44,7 @@ namespace vast {
 ///     - 1 byte for the tag.
 ///
 /// That is, 13 bytes on a 64-bit and 9 bytes on 32-bit machine.
-class string : util::totally_ordered<string>,
-               util::parsable<string>
+class string : util::totally_ordered<string>
 {
 public:
   /// The size type of the counter.
@@ -387,14 +385,6 @@ private:
   void deserialize(deserializer& source);
 
   template <typename Iterator>
-  bool parse(Iterator& start, Iterator end)
-  {
-    *this = string{start, end}.unescape();
-    start += end - start;
-    return true;
-  }
-
-  template <typename Iterator>
   friend trial<void> print(string const& str, Iterator&& out)
   {
     auto esc = str.escape();
@@ -402,27 +392,17 @@ private:
     return nothing;
   }
 
-  bool convert(int& n) const;
-  bool convert(long& n) const;
-  bool convert(long long& n) const;
-  bool convert(unsigned int& n) const;
-  bool convert(unsigned long& n) const;
-  bool convert(unsigned long long& n) const;
-  bool convert(double& n) const;
+  template <typename Iterator>
+  friend trial<void> parse(string& x, Iterator& begin, Iterator end)
+  {
+    x = string{begin, end}.unescape();
+    begin = end;
+    return nothing;
+  }
+
+  friend bool operator==(string const& x, string const& y);
+  friend bool operator<(string const& x, string const& y);
 };
-
-bool operator==(string const& x, string const& y);
-bool operator<(string const& x, string const& y);
-
-template <typename From, typename... Opts>
-bool convert(From const& from, string& str, Opts&&... opts)
-{
-  std::string tmp;
-  if (! convert(from, tmp, std::forward<Opts>(opts)...))
-    return false;
-  str = {tmp};
-  return true;
-}
 
 } // namespace vast
 

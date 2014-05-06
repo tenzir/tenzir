@@ -3,7 +3,6 @@
 #include <fstream>
 #include "vast/serialization.h"
 #include "vast/io/container_stream.h"
-#include "vast/convert.h"
 
 namespace vast {
 
@@ -110,9 +109,10 @@ void schema::deserialize(deserializer& source)
 {
   std::string str;
   source >> str;
-  auto begin = str.begin();
-  auto end = str.end();
-  extract(begin, end, *this);
+  auto lval = str.begin();
+  auto s = parse<schema>(lval, str.end());
+  if (s)
+    *this = *s;
 }
 
 bool operator==(schema const& x, schema const& y)

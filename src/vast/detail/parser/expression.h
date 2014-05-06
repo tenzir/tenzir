@@ -1,8 +1,9 @@
 #ifndef VAST_DETAIL_PARSER_EXPRESSION_H
 #define VAST_DETAIL_PARSER_EXPRESSION_H
 
-#include "vast/detail/ast/query.h"
 #include "vast/detail/parser/boost.h"
+
+#include "vast/detail/ast/query.h"
 #include "vast/detail/parser/error_handler.h"
 #include "vast/detail/parser/skipper.h"
 #include "vast/detail/parser/value.h"
@@ -18,21 +19,73 @@ template <typename Iterator>
 struct value_expression
   : qi::grammar<Iterator, ast::query::value_expr(), skipper<Iterator>>
 {
-    value_expression(error_handler<Iterator>& on_error);
+  value_expression(error_handler<Iterator>& on_error)
+    : value_expression::base_type(expr)
+  {
+      qi::_1_type _1;
+      qi::_2_type _2;
+      qi::_3_type _3;
+      qi::_4_type _4;
 
-    qi::rule<Iterator, ast::query::value_expr(), skipper<Iterator>>
-        expr;
+      binary_op.add
+          ("+", plus)
+          ("-", minus)
+          ("*", times)
+          ("/", divides)
+          ("%", mod)
+          ("|", bitwise_or)
+          ("^", bitwise_xor)
+          ("&", bitwise_and)
+          ;
 
-    qi::rule<Iterator, ast::query::expr_operand(), skipper<Iterator>>
-        unary, primary;
+      unary_op.add
+          ("+", positive)
+          ("-", negative)
+          ;
 
-    qi::rule<Iterator, std::string(), skipper<Iterator>>
-        identifier;
+      expr
+          =   unary
+          >>  *(binary_op >> unary)
+          ;
 
-    qi::symbols<char, arithmetic_operator>
-        unary_op, binary_op;
+      unary
+          =   primary
+          |   (unary_op > unary)
+          ;
 
-    value<Iterator> val;
+      primary
+          =   val
+          |   ('(' > expr > ')')
+          ;
+
+      BOOST_SPIRIT_DEBUG_NODES(
+          (expr)
+          (unary)
+          (primary)
+      );
+
+      on_error.set(expr, _4, _3);
+
+      binary_op.name("binary expression operator");
+      unary_op.name("unary expression operator");
+      expr.name("expression");
+      unary.name("unary expression");
+      primary.name("primary expression");
+  }
+
+  qi::rule<Iterator, ast::query::value_expr(), skipper<Iterator>>
+      expr;
+
+  qi::rule<Iterator, ast::query::expr_operand(), skipper<Iterator>>
+      unary, primary;
+
+  qi::rule<Iterator, std::string(), skipper<Iterator>>
+      identifier;
+
+  qi::symbols<char, arithmetic_operator>
+      unary_op, binary_op;
+
+  value<Iterator> val;
 };
 
 } // namespace ast

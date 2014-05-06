@@ -144,6 +144,15 @@ public:
     return error_;
   }
 
+  /// Retrieves the error of the trial.
+  /// @returns The contained error.
+  /// @pre `*this == false`.
+  util::error& error()
+  {
+    assert(! engaged_);
+    return error_;
+  }
+
 private:
   void construct(trial const& other)
   {

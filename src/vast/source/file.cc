@@ -87,8 +87,6 @@ bro2::bro2(cppa::actor_ptr sink, std::string const& filename,
 
 result<event> bro2::extract_impl()
 {
-  using vast::extract;
-
   util::field_splitter<std::string::const_iterator>
     fs{separator_.data(), separator_.size()};
 
@@ -180,17 +178,18 @@ result<event> bro2::extract_impl()
       continue;
     }
 
-    value v;
-    auto success = extract(start, end, v, type,
-                           set_separator_, "", "",
-                           set_separator_, "{", "}");
-    if (! success)
-      return error{"could not parse field: " + std::string{start, end}};
+    auto first = start;
+    auto last = end;
+    auto v = parse<value>(first, last, type,
+                          set_separator_, "", "",
+                          set_separator_, "{", "}");
+    if (! v)
+      return v.error() + error{std::string{start, end}};
 
-    if (f == size_t(timestamp_field_) && v.which() == time_point_value)
-      ts = v.get<time_point>();
+    if (f == size_t(timestamp_field_) && v->which() == time_point_value)
+      ts = v->get<time_point>();
 
-    rec.push_back(std::move(v));
+    rec.push_back(std::move(*v));
   }
 
   // Unflatten the record.

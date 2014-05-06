@@ -5,7 +5,6 @@
 #include <stdexcept>
 #include <unordered_map>
 #include "vast/bitstream.h"
-#include "vast/convert.h"
 #include "vast/operator.h"
 #include "vast/serialization.h"
 #include "vast/util/operators.h"

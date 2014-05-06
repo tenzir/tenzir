@@ -5,6 +5,7 @@
 #include "vast/segment.h"
 #include "vast/expression.h"
 #include "vast/partition.h"
+#include "vast/print.h"
 #include "vast/io/serialization.h"
 
 namespace vast {

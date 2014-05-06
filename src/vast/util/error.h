@@ -11,7 +11,7 @@ template <typename T>
 class trial;
 
 /// Holds an error message.
-class error : totally_ordered<error>
+class error : totally_ordered<error>, addable<error>
 {
 public:
   /// Default-constructs an empty error message.
@@ -30,6 +30,12 @@ public:
   error(error&&) = default;
   error& operator=(error const&) = default;
   error& operator=(error&&) = default;
+
+  error& operator+=(error const& e)
+  {
+    msg_ += ' ' + e.msg_;
+    return *this;
+  }
 
   /// Retrieves the error message.
   /// @returns The error string.

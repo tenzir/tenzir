@@ -11,6 +11,8 @@ using util::print;
 using util::print_numeric;
 using util::print_delimited;
 using util::operator<<;
+using util::to;
+using util::to_string;
 
 } // namespace vast
 

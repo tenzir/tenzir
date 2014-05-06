@@ -6,7 +6,6 @@
 #include "vast/config.h"
 #include "vast/logger.h"
 #include "vast/serialization.h"
-#include "vast/util/print.h"
 
 namespace vast {
 

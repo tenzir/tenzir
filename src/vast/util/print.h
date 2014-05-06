@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdio>
 #include <ostream>
+#include <string>
 #include <type_traits>
 #include "vast/util/trial.h"
 #include "vast/util/coding.h"
@@ -11,8 +12,7 @@
 namespace vast {
 namespace util {
 
-// Stifled forward declaration to let name lookup succeed in convert().
-// This declaration will always be removed from the overload set.
+// Forward declaration
 namespace detail { struct dummy; }
 template <typename T, typename I, typename... Opts>
 auto print(T const&, I&&, Opts&&...)
@@ -20,54 +20,6 @@ auto print(T const&, I&&, Opts&&...)
        std::is_same<T, detail::dummy>::value,
        trial<void>
      >::type;
-
-namespace detail {
-
-struct printable
-{
-  template <typename T, typename I>
-  static auto test(T const* x, I*)
-    -> decltype(print(*x, std::declval<I&&>()), std::true_type());
-
-  template <typename, typename>
-  static auto test(...) -> std::false_type;
-};
-
-struct streamable
-{
-  template <typename Stream, typename T>
-  static auto test(Stream* out, T const* x)
-    -> decltype(std::operator<<(*out, *x), std::true_type());
-
-  template <typename, typename>
-  static auto test(...) -> std::false_type;
-};
-
-} // namespace detail
-
-/// Type trait that checks whether a type is printable.
-template <typename T, typename I>
-struct printable : decltype(detail::printable::test<T, I>(0, 0)) {};
-
-/// Type trait that checks whether a type is STL-streamable.
-template <typename Stream, typename T>
-struct stl_streamable : decltype(detail::streamable::test<Stream, T>(0, 0)) {};
-
-// Injects operator<< for all printable types that do not already have an
-// overload of std::operator<<.
-template <typename CharT, typename Traits, typename T>
-auto operator<<(std::basic_ostream<CharT, Traits>& out, T const& x)
-  -> typename std::enable_if<
-       printable<T, std::ostreambuf_iterator<CharT>>::value
-         && ! stl_streamable<decltype(out), T>::value,
-       decltype(out)
-     >::type
-{
-  if (! print(x, std::ostreambuf_iterator<CharT>{out}))
-    out.setstate(std::ios_base::failbit);
-
-  return out;
-}
 
 //
 // Implementation for built-in types and STL.
@@ -238,10 +190,86 @@ void error::render(T&& x, Ts&&... xs)
 }
 
 template <typename Iterator>
-auto print(error const& e, Iterator&& out)
-  -> decltype(print(e.msg(), out))
+trial<void> print(error const& e, Iterator&& out)
 {
   return print(e.msg(), out);
+}
+
+//
+// Printable concept
+//
+
+namespace detail {
+
+struct printable
+{
+  template <typename T, typename I>
+  static auto test(T const* x, I*)
+    -> decltype(print(*x, std::declval<I&&>()), std::true_type());
+
+  template <typename, typename>
+  static auto test(...) -> std::false_type;
+};
+
+struct streamable
+{
+  template <typename Stream, typename T>
+  static auto test(Stream* out, T const* x)
+    -> decltype(std::operator<<(*out, *x), std::true_type());
+
+  template <typename, typename>
+  static auto test(...) -> std::false_type;
+};
+
+} // namespace detail
+
+/// Type trait that checks whether a type is printable.
+template <typename T, typename I>
+struct printable : decltype(detail::printable::test<T, I>(0, 0)) {};
+
+/// Type trait that checks whether a type is STL-streamable.
+template <typename Stream, typename T>
+struct stl_streamable : decltype(detail::streamable::test<Stream, T>(0, 0)) {};
+
+// Injects operator<< for all printable types that do not already have an
+// overload of std::operator<<.
+template <typename CharT, typename Traits, typename T>
+auto operator<<(std::basic_ostream<CharT, Traits>& out, T const& x)
+  -> typename std::enable_if<
+       printable<T, std::ostreambuf_iterator<CharT>>::value
+         && ! stl_streamable<decltype(out), T>::value,
+       decltype(out)
+     >::type
+{
+  if (! print(x, std::ostreambuf_iterator<CharT>{out}))
+    out.setstate(std::ios_base::failbit);
+
+  return out;
+}
+
+template <typename To, typename From, typename... Opts>
+auto to(From const& f, Opts&&... opts)
+  -> typename std::enable_if<
+       std::is_same<To, std::string>::value
+         && ! std::is_same<From, std::string>::value,
+       trial<std::string>
+     >::type
+{
+  trial<std::string> str{std::string{}};
+  auto t = print(f, std::back_inserter(*str), std::forward<Opts>(opts)...);
+  if (! t)
+    return t.error();
+  else
+    return str;
+}
+
+/// Converts a type modeling the Printable concept to a std::string.
+/// This function exists for STL compliance.
+template <typename From, typename... Opts>
+std::string to_string(From const& f, Opts&&... opts)
+{
+  auto t = to<std::string>(f, std::forward<Opts>(opts)...);
+  return t ? *t : std::string{"<" + t.error().msg() + ">"};
 }
 
 } // namespace util
