@@ -46,7 +46,8 @@ template <
   typename Container,
   typename Serializer = binary_serializer
 >
-trial<void> archive(Container& c, Ts const&... xs)
+auto archive(Container& c, Ts const&... xs)
+  -> decltype(detail::is_byte_container<Container>(), trial<void>())
 {
   auto sink = io::make_container_output_stream(c);
   Serializer s{sink};
@@ -60,7 +61,8 @@ template <
   typename Container,
   typename Deserializer = binary_deserializer
 >
-trial<void> unarchive(Container const& c, Ts&... xs)
+auto unarchive(Container const& c, Ts&... xs)
+  -> decltype(detail::is_byte_container<Container>(), trial<void>())
 {
   auto source = make_container_input_stream(c);
   Deserializer d{source};
@@ -110,7 +112,8 @@ trial<void> unarchive(path const& filename, Ts&... xs)
 }
 
 template <typename... Ts, typename Container>
-trial<void> compress(compression method, Container& c, Ts const&... xs)
+auto compress(compression method, Container& c, Ts const&... xs)
+  -> decltype(detail::is_byte_container<Container>(), trial<void>())
 {
   auto buf = make_container_output_stream(c);
   std::unique_ptr<compressed_output_stream> out{
@@ -123,7 +126,8 @@ trial<void> compress(compression method, Container& c, Ts const&... xs)
 }
 
 template <typename... Ts, typename Container>
-trial<void> decompress(compression method, Container const& c, Ts&... xs)
+auto decompress(compression method, Container const& c, Ts&... xs)
+  -> decltype(detail::is_byte_container<Container>(), trial<void>())
 {
   auto buf = make_array_input_stream(c);
   std::unique_ptr<compressed_input_stream> in{

@@ -6,6 +6,25 @@
 namespace vast {
 namespace io {
 
+namespace detail {
+
+template <typename T>
+using is_string = std::is_same<T, std::string>;
+
+template <typename T>
+using is_vector = std::is_same<T, std::vector<typename T::value_type,
+                                              typename T::allocator_type>>;
+
+template <typename T>
+using is_byte_container =
+  std::integral_constant<
+    bool,
+    sizeof(typename T::value_type) == 1
+      && (is_string<T>::value || is_vector<T>::value)
+  >;
+
+} // namespace detail
+
 /// An output stream that appends to an STL container.
 template <typename Container>
 class container_output_stream : public output_stream
@@ -13,19 +32,8 @@ class container_output_stream : public output_stream
   container_output_stream(container_output_stream const&) = delete;
   container_output_stream& operator=(container_output_stream const&) = delete;
 
-  template <typename T>
-  using is_string = std::is_same<T, std::string>;
-
-  template <typename T>
-  using is_vector = std::is_same<T, std::vector<typename T::value_type,
-                                                typename T::allocator_type>>;
-  static_assert(
-      is_string<Container>::value || is_vector<Container>::value,
-      "container_output_stream only supports strings and byte vectors");
-
-  static_assert(
-      sizeof(typename Container::value_type) == 1,
-      "container_output_stream requires a byte container");
+  static_assert(detail::is_byte_container<Container>::value,
+                "need byte container for container_output_stream");
 
 public:
   /// Constructs a container output stream.
