@@ -29,7 +29,7 @@ void search_actor::act()
     if (ast)
       return std::move(*ast);
 
-    last_parse_error_ = ast.error().msg();
+    last_parse_error_ = ast.error();
     return {};
   };
 
@@ -99,8 +99,7 @@ void search_actor::act()
       on(atom("query"), atom("create"), arg_match) >> [=](std::string const& q)
       {
         VAST_LOG_ACTOR_VERBOSE("ignores invalid query: " << q);
-
-        return make_any_tuple(atom("error"), last_parse_error_);
+        return make_any_tuple(last_parse_error_);
       },
       others() >> [=]
       {

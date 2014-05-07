@@ -181,7 +181,7 @@ console::console(cppa::actor_ptr search, path dir)
         }
         else
         {
-          print(error) << "batch-size requires numeric argument" << std::endl;
+          print(fail) << "batch-size requires numeric argument" << std::endl;
           return false;
         }
       });
@@ -204,7 +204,7 @@ console::console(cppa::actor_ptr search, path dir)
             },
             others() >> [=]
             {
-              print(error) << "need 'T' or 'F' as argument" << std::endl;
+              print(fail) << "need 'T' or 'F' as argument" << std::endl;
               return false;
             });
 
@@ -261,7 +261,7 @@ console::console(cppa::actor_ptr search, path dir)
       {
         if (args.empty())
         {
-          print(error) << "missing query UUID" << std::endl;
+          print(fail) << "missing query UUID" << std::endl;
           return false;
         }
 
@@ -276,12 +276,12 @@ console::console(cppa::actor_ptr search, path dir)
 
         if (matches.empty())
         {
-          print(error) << "no such query: " << args << std::endl;
+          print(fail) << "no such query: " << args << std::endl;
           return false;
         }
         else if (matches.size() > 1)
         {
-          print(error) << "ambiguous query: " << args << std::endl;
+          print(fail) << "ambiguous query: " << args << std::endl;
           return false;
         }
 
@@ -314,14 +314,14 @@ console::console(cppa::actor_ptr search, path dir)
         sync_send(search_, atom("query"), atom("create"), args).then(
             on(atom("EXITED"), arg_match) >> [=](uint32_t reason)
             {
-              print(error)
+              print(fail)
                 << "search terminated with exit code " << reason << std::endl;
 
               quit(exit::error);
             },
-            on_arg_match >> [=](std::string const& failure) // TODO: use error class.
+            on_arg_match >> [=](error const& e)
             {
-              print(error) << "syntax error: " << failure << std::endl;
+              print(fail) << "syntax error: " << e << std::endl;
               send(self, atom("prompt"));
             },
             on_arg_match >> [=](expr::ast const& ast, actor_ptr const& qry)
@@ -650,7 +650,7 @@ void console::act()
   become(
       on(atom("exited")) >> [=]
       {
-        print(error) << "search terminated" << std::endl;
+        print(fail) << "search terminated" << std::endl;
         quit(exit::error);
       },
       on(atom("DOWN"), arg_match) >> [=](uint32_t)
@@ -661,9 +661,9 @@ void console::act()
 
         remove(last_sender());
       },
-      on(atom("error"), arg_match) >> [=](std::string const& msg)
+      on_arg_match >> [=](error const& e)
       {
-        print(error) << msg << std::endl;
+        print(fail) << e << std::endl;
         prompt();
       },
       on(atom("done")) >> [=]
@@ -795,7 +795,7 @@ void console::act()
                   break;
               }
 
-              print(error)
+              print(fail)
                 << "invalid key: '" << desc << "', press '?' for help"
                 << std::endl;
             }
@@ -846,13 +846,13 @@ void console::act()
               if (exists(dir))
               {
                 // TODO: support option to overwrite/append.
-                print(error) << "results already exists" << std::endl;
+                print(fail) << "results already exists" << std::endl;
               }
               else
               {
                 if (! mkdir(dir))
                 {
-                  print(error) << "failed to create dir: " << dir << std::endl;
+                  print(fail) << "failed to create dir: " << dir << std::endl;
                   quit(exit::error);
                   return;
                 }
@@ -961,7 +961,7 @@ std::ostream& console::print(print_mode mode)
     default:
       std::cerr << util::color::red << "[???] ";
       break;
-    case error:
+    case fail:
       std::cerr << util::color::red << "[!!] ";
       break;
     case warn:
@@ -1024,7 +1024,7 @@ void console::prompt(size_t ms)
   }
   else if (r.failed())
   {
-    print(error) << r.error() << std::endl;
+    print(fail) << r.error() << std::endl;
     prompt();
   }
 };

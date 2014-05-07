@@ -3,6 +3,7 @@
 
 #include <cppa/cppa.hpp>
 #include "vast/actor.h"
+#include "vast/error.h"
 #include "vast/util/flat_set.h"
 
 namespace vast {
@@ -26,7 +27,7 @@ struct search_actor : actor<search_actor>
   cppa::actor_ptr index_;
   cppa::actor_ptr schema_manager_;
   std::map<cppa::actor_ptr, client_state> clients_;
-  std::string last_parse_error_;
+  error last_parse_error_;
 };
 
 } // namespace vast

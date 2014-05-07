@@ -16,16 +16,21 @@ void schema_manager_actor::act()
         auto contents = load(path{file});
         if (! contents)
         {
-          VAST_LOG_ERROR("could not load schema: " << contents.error());
+          VAST_LOG_ACTOR_ERROR("could not load schema: " << contents.error());
           return;
         }
 
-        auto lval = contents->begin();
-        auto sch = parse<schema>(lval, contents->end());
+        auto sch = to<schema>(*contents);
         if (! sch)
+        {
           VAST_LOG_ACTOR_ERROR(sch.error());
+          return;
+        }
 
         schema_ = *sch;
+
+        VAST_LOG_ACTOR_DEBUG("sucessfully parsed schema:");
+        VAST_LOG_ACTOR_DEBUG(*sch);
       },
       on(atom("schema")) >> [=]()
       {

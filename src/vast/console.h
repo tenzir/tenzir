@@ -112,7 +112,7 @@ struct console : actor<console>
   {
     none,
     query,
-    error,
+    fail,
     warn,
     info
   };
