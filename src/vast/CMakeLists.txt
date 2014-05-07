@@ -11,6 +11,7 @@ set(libvast_sources
   configuration.cc
   expression.cc
   event.cc
+  error.cc
   file_system.cc
   id_tracker.cc
   index.cc

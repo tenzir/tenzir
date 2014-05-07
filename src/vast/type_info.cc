@@ -5,6 +5,7 @@
 #include "vast/cow.h"
 #include "vast/expression.h"
 #include "vast/event.h"
+#include "vast/error.h"
 #include "vast/file_system.h"
 #include "vast/object.h"
 #include "vast/value.h"
@@ -144,6 +145,7 @@ void announce_builtin_types()
     value_type,
     value, std::vector<value>,
     event, std::vector<event>, std::vector<cow<event>>,
+    error,
 
     chunk,
     offset,
