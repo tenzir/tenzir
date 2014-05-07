@@ -11,6 +11,7 @@
 #include "vast/value.h"
 #include "vast/search_result.h"
 #include "vast/segment.h"
+#include "vast/type.h"
 #include "vast/serialization.h"
 #include "vast/bitmap_index.h"
 #include "vast/detail/cppa_type_info.h"
@@ -133,13 +134,33 @@ void announce_builtin_types()
   > stl_types;
 
   std::tuple<
+    invalid_type,
+    bool_type,
+    int_type,
+    uint_type,
+    double_type,
+    time_range_type,
+    time_point_type,
+    string_type,
+    regex_type,
+    address_type,
+    prefix_type,
+    port_type,
+    enum_type,
+    vector_type,
+    set_type,
+    table_type,
+    argument,
+    record_type,
+    type,
+
     address,
     time_range,
     time_point,
     port,
     prefix,
     regex,
-    string,
+    string, std::vector<string>,
     record,
     table,
     value_type,
@@ -167,6 +188,7 @@ void announce_builtin_types()
     expr::name_extractor,
     expr::id_extractor,
     expr::offset_extractor,
+    expr::schema_extractor,
     expr::type_extractor,
     expr::predicate,
     expr::conjunction,
@@ -211,4 +233,3 @@ void announce_builtin_types()
 }
 
 } // namespace vast
-

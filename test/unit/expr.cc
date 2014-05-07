@@ -231,15 +231,12 @@ BOOST_AUTO_TEST_CASE(schema_queries)
 BOOST_AUTO_TEST_CASE(serialization)
 {
   std::vector<uint8_t> buf;
-  auto a = to<expr::ast>(":int <= -3 || :int >= +100 && :string !~ /bar/");
-  expr::ast b;
+  BOOST_REQUIRE(io::archive(buf, sch));
 
-  BOOST_REQUIRE(a);
-  io::archive(buf, *a);
-  io::unarchive(buf, b);
-
-  BOOST_CHECK(*a == b);
-  BOOST_CHECK_EQUAL(to_string(*a), to_string(b));
+  schema s;
+  BOOST_REQUIRE(io::unarchive(buf, s));
+  BOOST_CHECK_EQUAL(s, sch);
+  BOOST_CHECK_EQUAL(to_string(s), to_string(sch));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

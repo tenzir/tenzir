@@ -388,18 +388,17 @@ using type_type = value_type_type<to_value_type<T>::value>;
 class type : public std::enable_shared_from_this<type>,
              util::totally_ordered<type>
 {
-  type() = default;
-
   /// Constructs a type from a ::type_info instance.
   /// @param ti The ::type_info instance.
   explicit type(type_info ti);
 
-  type(type const&) = default;
-  type(type&&) = delete;
-  type& operator=(type const&) = default;
-  type& operator=(type&&) = delete;
-
 public:
+  // FIXME: The serialization framework requires a regular type, so we have to
+  // provide a public default constructor. We should refactor this class to
+  // have value semantics and instead keep the shared type data internally, as
+  // an implemenation detail.
+  type() = default;
+
   /// Factory-function to create a type.
   /// @param args The arguments to pass to the type.
   /// @returns A pointer to the ::type for `T`.
