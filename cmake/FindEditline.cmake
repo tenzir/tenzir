@@ -7,7 +7,7 @@
 # Variables used by this module, they can change the default behaviour and need
 # to be set before calling find_package:
 #
-#  Editline_ROOT_DIR  Set this variable to the root installation of
+#  EDITLINE_ROOT_DIR  Set this variable to the root installation of
 #                     editline if the module has problems finding 
 #                     the proper installation path.
 #
@@ -19,11 +19,11 @@
 
 find_path(EDITLINE_INCLUDE_DIR
   NAMES histedit.h
-  HINTS ${Editline_ROOT_DIR}/include)
+  HINTS ${EDITLINE_ROOT_DIR}/include)
 
 find_library(EDITLINE_LIBRARIES
   NAMES edit
-  HINTS ${Editline_ROOT_DIR}/lib)
+  HINTS ${EDITLINE_ROOT_DIR}/lib)
 
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(
