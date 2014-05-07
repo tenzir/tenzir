@@ -81,15 +81,16 @@ bool deserializer::read_string(char* data, size_t size)
 bool deserializer::read_type(global_type_info const*& gti)
 {
   VAST_ENTER();
+
   type_id id = 0;
   detail::load(*this, id);
+
   gti = global_typeid(id);
-  if (gti == nullptr)
-  {
-    VAST_LOG_ERROR("no type info for id " << id);
-    VAST_RETURN(false);
-  }
-  VAST_RETURN(true);
+  if (gti)
+    VAST_RETURN(true);
+
+  VAST_LOG_ERROR("no type info for id " << id);
+  VAST_RETURN(false);
 }
 
 binary_serializer::binary_serializer(io::output_stream& sink)
