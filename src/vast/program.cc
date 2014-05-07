@@ -10,8 +10,6 @@
 #include "vast/ingestor.h"
 #include "vast/logger.h"
 #include "vast/receiver.h"
-#include "vast/schema.h"
-#include "vast/schema_manager.h"
 #include "vast/search.h"
 #include "vast/signal_monitor.h"
 #include "vast/detail/type_manager.h"
@@ -74,21 +72,6 @@ void program::act()
         send(profiler, atom("start"), atom("perftools"), atom("heap"));
 
       send(profiler, atom("start"), atom("rusage"));
-    }
-
-    auto schema_manager = spawn<schema_manager_actor, linked>();
-    if (config_.check("schema.file"))
-    {
-      send(schema_manager, atom("load"), *config_.get("schema.file"));
-      if (config_.check("schema.print"))
-      {
-        sync_send(schema_manager, atom("schema")).then(
-            on_arg_match >> [](schema const& s)
-            {
-              std::cout << to_string(s);
-            });
-        quit();
-      }
     }
 
     actor_ptr tracker;
@@ -180,12 +163,43 @@ void program::act()
       send(archive, atom("segment"), event_id{1});
     }
 
+    actor_ptr search;
+    auto search_host = *config_.get("search.host");
+    auto search_port = *config_.as<unsigned>("search.port");
+    if (config_.check("search-actor") || config_.check("all-server"))
+    {
+      search = spawn<search_actor, linked>(vast_dir, archive, index);
+      VAST_LOG_ACTOR_INFO(
+          "publishes search at " << search_host << ':' << search_port);
+
+      publish(search, search_port, search_host.c_str());
+    }
+#ifdef VAST_HAVE_EDITLINE
+    else if (config_.check("receiver-actor") || config_.check("console-actor"))
+#else
+    else if (config_.check("receiver-actor"))
+#endif
+    {
+      VAST_LOG_ACTOR_VERBOSE(
+          "connects to search at " << search_host << ":" << search_port);
+
+      search = remote_actor(search_host, search_port);
+
+#ifdef VAST_HAVE_EDITLINE
+      if (config_.check("console-actor"))
+      {
+        auto c = spawn<console, detached+linked>(search, vast_dir / "console");
+        delayed_send(c, std::chrono::milliseconds(200), atom("prompt"));
+      }
+#endif
+    }
+
     actor_ptr receiver;
     auto receiver_host = *config_.get("receiver.host");
     auto receiver_port = *config_.as<unsigned>("receiver.port");
     if (config_.check("receiver-actor") || config_.check("all-server"))
     {
-      receiver = spawn<receiver_actor, linked>(tracker, archive, index);
+      receiver = spawn<receiver_actor, linked>(tracker, archive, index, search);
       VAST_LOG_ACTOR_INFO(
           "publishes receiver at " << receiver_host << ':' << receiver_port);
 
@@ -233,30 +247,6 @@ void program::act()
       else
         send_exit(ingestor, exit::done);
     }
-
-    actor_ptr search;
-    auto search_host = *config_.get("search.host");
-    auto search_port = *config_.as<unsigned>("search.port");
-    if (config_.check("search-actor") || config_.check("all-server"))
-    {
-      search = spawn<search_actor, linked>(archive, index, schema_manager);
-      VAST_LOG_ACTOR_INFO(
-          "publishes search at " << search_host << ':' << search_port);
-
-      publish(search, search_port, search_host.c_str());
-    }
-#ifdef VAST_HAVE_EDITLINE
-    else if (config_.check("console-actor"))
-    {
-      VAST_LOG_ACTOR_VERBOSE(
-          "connects to search at " << search_host << ":" << search_port);
-
-      search = remote_actor(search_host, search_port);
-
-      auto c = spawn<console, detached+linked>(search, vast_dir / "console");
-      delayed_send(c, std::chrono::milliseconds(200), atom("prompt"));
-    }
-#endif
   }
   catch (network_error const& e)
   {

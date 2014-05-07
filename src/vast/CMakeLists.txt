@@ -28,7 +28,6 @@ set(libvast_sources
   receiver.cc
   regex.cc
   schema.cc
-  schema_manager.cc
   search.cc
   search_result.cc
   segment.cc

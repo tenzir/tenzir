@@ -578,8 +578,8 @@ void index_actor::act()
         auto r = make_partition(dir_ / path{dir});
         if (! r)
         {
-          VAST_LOG_ACTOR_ERROR(r.error().msg());
-          quit(exit::error);
+          VAST_LOG_ACTOR_ERROR(r.error());
+          send_exit(self, exit::error);
           return;
         }
 
@@ -598,8 +598,8 @@ void index_actor::act()
           auto r = make_partition(dir_ / to_string(uuid::random()).data());
           if (! r)
           {
-            VAST_LOG_ACTOR_ERROR(r.error().msg());
-            quit(exit::error);
+            VAST_LOG_ACTOR_ERROR(r.error());
+            send_exit(self, exit::error);
             return;
           }
 
@@ -620,9 +620,9 @@ void index_actor::act()
       {
         if (parts_.empty())
         {
-          auto msg = "has no partitions to answer queries";
-          VAST_LOG_ACTOR_WARN(msg);
-          return make_any_tuple(atom("error"), msg);
+          auto err = error{"has no partitions to answer queries"};
+          VAST_LOG_ACTOR_WARN(err);
+          return make_any_tuple(err);
         }
 
         assert(! queries_[ast].subscribers.contains(sink));
@@ -647,7 +647,7 @@ void index_actor::act()
         }
         else
         {
-          return make_any_tuple(atom("error"), e.error().msg());
+          return make_any_tuple(e.error());
         }
       },
       on_arg_match >> [=](expr::ast const& pred, uuid const& part, uint64_t n)
@@ -691,8 +691,8 @@ void index_actor::act()
           }
           else
           {
-            VAST_LOG_ACTOR_ERROR(e.error().msg());
-            quit(exit::error);
+            VAST_LOG_ACTOR_ERROR(e.error());
+            send_exit(self, exit::error);
             return;
           }
         }
@@ -727,7 +727,7 @@ void index_actor::act()
                 {
                   VAST_LOG_ACTOR_ERROR("failed to delete index directory: " <<
                                        dir_);
-                  quit(exit::error);
+                  send_exit(self, exit::error);
                   return;
                 }
 

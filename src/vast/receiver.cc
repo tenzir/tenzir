@@ -8,10 +8,12 @@ using namespace cppa;
 
 receiver_actor::receiver_actor(actor_ptr tracker,
                                actor_ptr archive,
-                               actor_ptr index)
+                               actor_ptr index,
+                               actor_ptr search)
   : tracker_(tracker),
     archive_(archive),
-    index_(index)
+    index_(index),
+    search_(search)
 {
 }
 
@@ -20,11 +22,15 @@ void receiver_actor::act()
   become(
       on_arg_match >> [=](segment& s)
       {
-        auto sid = s.id();
-        VAST_LOG_ACTOR_DEBUG("got segment " << sid);
+        VAST_LOG_ACTOR_DEBUG("got segment " << s.id());
+
+        send(search_, s.schema());
+
+        auto id = s.id();
         send(tracker_, atom("request"), uint64_t(s.events()));
         segments_.push_back(std::move(s));
-        return make_any_tuple(atom("ack"), sid);
+
+        return make_any_tuple(atom("ack"), id);
       },
       on(atom("id"), arg_match) >> [=](event_id from, event_id to)
       {

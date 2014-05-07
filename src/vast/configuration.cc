@@ -81,11 +81,6 @@ void configuration::initialize()
   actor.add('X', "index-actor", "spawn the index");
   actor.visible(false);
 
-  auto& schema = create_block("schema options", "schema");
-  schema.add('s', "file", "schema file").single();
-  schema.add("print", "print the parsed event schema");
-  schema.visible(false);
-
   auto& ingest = create_block("ingest options", "ingest");
   ingest.add("max-events-per-chunk", "maximum number of events per chunk")
         .init(5000);
@@ -134,8 +129,6 @@ void configuration::initialize()
   search.add("port", "TCP port of the search").init(42001);
   search.visible(false);
 
-  add_dependency("schema.print", "schema.file");
-
 #ifdef VAST_HAVE_EDITLINE
   add_conflict("console-actor", "all-server");
   add_conflict("console-actor", "tracker-actor");
@@ -143,6 +136,7 @@ void configuration::initialize()
   add_conflict("console-actor", "index-actor");
   add_conflict("console-actor", "ingestor-actor");
   add_conflict("console-actor", "search-actor");
+  add_conflict("console-actor", "receiver-actor");
 #endif
 
   add_dependency("ingest.time-field", "ingestor-actor");
