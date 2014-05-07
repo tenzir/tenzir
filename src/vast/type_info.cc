@@ -149,6 +149,7 @@ void announce_builtin_types()
 
     chunk,
     offset,
+    key,
     path,
     segment,
     uuid, std::vector<uuid>,
