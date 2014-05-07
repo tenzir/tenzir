@@ -4,7 +4,7 @@
 #define VAST_LOG_FACILITY "test"
 #include "vast/logger.h"
 
-#if VAST_LOG_LEVEL >= 5
+#if VAST_LOG_LEVEL > 5
 
 using namespace vast;
 
