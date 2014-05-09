@@ -432,6 +432,41 @@ type_const_ptr record_type::at(offset const& o) const
   return {};
 }
 
+namespace {
+
+trial<void> each_impl(record_type const& r,
+                      std::function<trial<void>(trace const&)> const& f,
+                      trace& t)
+{
+  for (auto& a : r.args)
+  {
+    t.push_back(&a);
+
+    if (auto inner = util::get<record_type>(a.type->info()))
+    {
+      each_impl(*inner, f, t);
+    }
+    else
+    {
+      auto x = f(t);
+      if (! x)
+        return x;
+    }
+
+    t.pop_back();
+  }
+
+  return nothing;
+}
+
+} // namespace <anonymous>
+
+trial<void> record_type::each(std::function<trial<void>(trace const&)> f) const
+{
+  trace t;
+  return each_impl(*this, f, t);
+}
+
 void record_type::serialize(serializer& sink) const
 {
   sink << args;

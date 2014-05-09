@@ -1,7 +1,5 @@
-// A stack-based allocator from Howard Hinnant.
-// http://home.roadrunner.com/~hinnant/stack_alloc.html.
-#ifndef VAST_UTIL_SHORT_ALLOC_H
-#define VAST_UTIL_SHORT_ALLOC_H
+#ifndef VAST_UTIL_ALLOC_H
+#define VAST_UTIL_ALLOC_H
 
 #include <cstddef>
 #include <cassert>
@@ -9,6 +7,10 @@
 namespace vast {
 namespace util {
 
+/// A fixed-size stack buffer for allocating/deallocating memory. When
+/// requesting memory after it reached its capacity, the arena uses the free
+/// store to retrieve further space.
+/// @tparam N The number of bytes in the arena.
 template <size_t N>
 class arena
 {
@@ -29,7 +31,7 @@ public:
 
   char* allocate(size_t n)
   {
-    assert(pointer_in_buffer(ptr_) && "short_alloc has outlived arena");
+    assert(pointer_in_buffer(ptr_) && "allocator has outlived arena");
     if (static_cast<size_t>(buf_ + N - ptr_) >= n)
     {
       auto r = ptr_;
@@ -42,7 +44,7 @@ public:
 
   void deallocate(char* p, size_t n) noexcept
   {
-    assert(pointer_in_buffer(ptr_) && "short_alloc has outlived arena");
+    assert(pointer_in_buffer(ptr_) && "allocator has outlived arena");
     if (pointer_in_buffer(p))
     {
       if (p + n == ptr_)
@@ -80,6 +82,9 @@ private:
 };
 
 
+/// A stack-based allocator referencing an existing arena.
+/// Originally from Howard Hinnant, see
+/// http://home.roadrunner.com/~hinnant/stack_alloc.html.
 template <class T, size_t N>
 class short_alloc
 {
@@ -109,12 +114,12 @@ public:
 
   T* allocate(size_t n)
   {
-    return reinterpret_cast<T*>(a_.allocate(n*sizeof(T)));
+    return reinterpret_cast<T*>(a_.allocate(n * sizeof(T)));
   }
 
   void deallocate(T* p, size_t n) noexcept
   {
-    a_.deallocate(reinterpret_cast<char*>(p), n*sizeof(T));
+    a_.deallocate(reinterpret_cast<char*>(p), n * sizeof(T));
   }
 
   template <class T1, size_t N1, class U, size_t M>
@@ -133,6 +138,31 @@ public:
 
 private:
   arena<N>& a_;
+};
+
+
+/// A stack-based allocator which comes with its own ::arena.
+template <class T, size_t N>
+class stack_alloc : public short_alloc<T, N>
+{
+  using super = short_alloc<T, N>;
+
+public:
+  stack_alloc() noexcept
+    : super{a_}
+  {}
+
+  template <class U>
+  stack_alloc(stack_alloc<U, N> const& a) noexcept
+    : super{a_},
+      a_{a.a_}
+  {}
+
+  stack_alloc(stack_alloc const&) = default;
+  stack_alloc& operator=(stack_alloc const&) = delete;
+
+private:
+  arena<N> a_;
 };
 
 } // namespace util

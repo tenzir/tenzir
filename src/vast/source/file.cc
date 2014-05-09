@@ -136,87 +136,63 @@ result<event> bro2::extract_impl()
     }
   }
 
-  record rec;
-  auto ts = now();
-
-  for (size_t f = 0; f < fs.fields(); ++f)
-  {
-    auto& args = util::get<record_type>(flat_type_->info())->args;
-    assert(f < args.size());
-
-    auto start = fs.start(f);
-    auto end = fs.end(f);
-    auto& type = args[f].type;
-
-    // Check whether the field is set. Default: '-'
-    auto unset = true;
-    for (size_t i = 0; i < unset_field_.size(); ++i)
-      if (unset_field_[i] != *(start + i))
-      {
-        unset = false;
-        break;
-      }
-
-    if (unset)
-    {
-      rec.emplace_back(type->tag());
-      continue;
-    }
-
-    // Check whether the field is empty. Default: "(empty)"
-    auto empty = true;
-    for (size_t i = 0; i < empty_field_.size(); ++i)
-      if (empty_field_[i] != *(start + i))
-      {
-        empty = false;
-        break;
-      }
-
-    if (empty)
-    {
-      rec.emplace_back(type->tag());
-      continue;
-    }
-
-    auto first = start;
-    auto last = end;
-    auto v = parse<value>(first, last, type,
-                          set_separator_, "", "",
-                          set_separator_, "{", "}");
-    if (! v)
-      return v.error() + error{std::string{start, end}};
-
-    if (f == size_t(timestamp_field_) && v->which() == time_point_value)
-      ts = v->get<time_point>();
-
-    rec.push_back(std::move(*v));
-  }
-
-  // Unflatten the record.
   event e;
   e.type(type_);
-  e.timestamp(ts);
+  e.timestamp(now());
   size_t f = 0;
-  size_t d = 1;
+  size_t depth = 1;
   record* r = &e;
-  type_->each(
-      [&](key const&, offset const& o)
+  util::get<record_type>(type_->info())->each(
+      [&](trace const& t) -> trial<void>
       {
-        if (o.size() > d)
+        if (f == fs.fields())
+          return error{"accessed field", f, "out of bounds"};
+
+        if (t.size() > depth)
         {
-          ++d;
-          e.emplace_back(record{});
-          r = &e.back().get<record>();
+          for (size_t i = 0; i < t.size() - depth; ++i)
+          {
+            ++depth;
+            r->emplace_back(record{});
+            r = &r->back().get<record>();
+          }
         }
-        else if (o.size() < d)
+        else if (t.size() < depth)
         {
-          --d;
           r = &e;
-          for (size_t i = 0; i < d - 1; ++i)
-            r = &(*r)[i].get<record>();
+          for (size_t i = 0; i < t.size() - 1; ++i)
+          {
+            --depth;
+            r = &r->back().get<record>();
+          }
         }
 
-        r->push_back(std::move(rec[f++]));
+        auto begin = fs.start(f);
+        auto end = fs.end(f);
+
+        // Check whether the field is unset or empty ('-' or "(empty"))
+        if (std::equal(unset_field_.begin(), unset_field_.end(), begin)
+            || std::equal(empty_field_.begin(), empty_field_.end(), begin))
+        {
+          r->emplace_back(t.back()->type->tag());
+        }
+        else
+        {
+          auto v = parse<value>(begin, end, t.back()->type,
+                                set_separator_, "", "",
+                                set_separator_, "{", "}");
+          if (! v)
+            return v.error() + error{std::string{begin, end}};
+
+          if (f == size_t(timestamp_field_) && v->which() == time_point_value)
+            e.timestamp(v->get<time_point>());
+
+          r->push_back(std::move(*v));
+        }
+
+        ++f;
+
+        return nothing;
       });
 
   return std::move(e);

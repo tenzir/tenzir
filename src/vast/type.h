@@ -8,6 +8,7 @@
 #include "vast/value_type.h"
 #include "vast/util/operators.h"
 #include "vast/util/variant.h"
+#include "vast/util/alloc.h"
 
 namespace vast {
 
@@ -214,6 +215,9 @@ private:
   friend bool operator<(argument const& lhs, argument const& rhs);
 };
 
+using trace = std::vector<argument const*,
+                          util::stack_alloc<argument const*, 32>>;
+
 struct record_type : util::totally_ordered<record_type>
 {
   record_type() = default;
@@ -256,6 +260,10 @@ struct record_type : util::totally_ordered<record_type>
   /// @param o The offset to resolve.
   /// @returns The type at offset *o* or `nullptr` if *o* doesn't resolve.
   type_const_ptr at(offset const& o) const;
+
+  /// Recursively applies a function on each contained argument.
+  /// @param f The function to invoke on each contained argument.
+  trial<void> each(std::function<trial<void>(trace const&)> f) const;
 
   std::vector<argument> args;
 
