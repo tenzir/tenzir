@@ -13,10 +13,10 @@ trial<schema> schema::merge(schema const& s1, schema const& s2)
   for (auto& t2 : s2.types_)
   {
     auto t1 = s1.find_type(t2->name());
-    if (t1 && *t1 != *t2)
+    if (! t1)
+      merged.types_.push_back(t2);
+    else if (*t1 != *t2)
       return error{"type clash:", *t1, "<-->", *t2};
-
-    merged.types_.push_back(t2);
   }
 
   return std::move(merged);

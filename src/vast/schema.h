@@ -243,9 +243,17 @@ trial<void> parse(schema& sch, Iterator& begin, Iterator end)
   detail::parser::skipper<Iterator> skipper;
   detail::ast::schema::schema ast;
 
-  bool success = phrase_parse(begin, end, grammar, skipper, ast);
-  if (! success || begin != end)
-    return error{std::move(err)};
+  // TODO: get rid of the exception in the schema grammar.
+  try
+  {
+    bool success = phrase_parse(begin, end, grammar, skipper, ast);
+    if (! success || begin != end)
+      return error{std::move(err)};
+  }
+  catch (std::runtime_error const& e)
+  {
+    return error{e.what()};
+  }
 
   sch.types_.clear();
   detail::schema_factory sf{sch};
