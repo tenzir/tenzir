@@ -104,7 +104,7 @@ void archive_actor::act()
         }
 
         forward_to(segment_manager_);
-        return make_any_tuple(atom("segment"), atom("ack"), s.id());
+        return make_any_tuple(atom("ack"), s.id());
       });
 }
 

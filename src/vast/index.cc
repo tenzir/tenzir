@@ -615,6 +615,10 @@ void index_actor::act()
 
         forward_to(active_.second);
       },
+      on(atom("backlog")) >> [=]
+      {
+        forward_to(active_.second);
+      },
       on(atom("query"), arg_match)
         >> [=](expr::ast const& ast, actor_ptr const& sink)
       {

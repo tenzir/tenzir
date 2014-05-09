@@ -17,7 +17,7 @@ ingestor_actor::ingestor_actor(path dir,
                                size_t max_events_per_chunk,
                                size_t max_segment_size,
                                uint64_t batch_size)
-  : dir_{std::move(dir)},
+  : dir_{dir / "ingest" / "segments"},
     receiver_{receiver},
     max_events_per_chunk_{max_events_per_chunk},
     max_segment_size_{max_segment_size},
@@ -34,9 +34,8 @@ void ingestor_actor::act()
   sink_ = spawn<segmentizer, monitored>(
       self, max_events_per_chunk_, max_segment_size_);
 
-  auto segment_dir = dir_ / "ingest" / "segments";
   traverse(
-      segment_dir,
+      dir_,
       [&](path const& p) -> bool
       {
         VAST_LOG_ACTOR_INFO("found orphaned segment: " << p.basename());
@@ -45,77 +44,68 @@ void ingestor_actor::act()
       });
 
   become(
-      on(atom("terminate"), arg_match) >> [=](uint32_t reason)
+      on(atom("shutdown"), arg_match) >> [=](uint32_t reason)
       {
-        if (segments_.empty())
+        if (buffer_.empty())
         {
           quit(reason);
         }
+        else if (! terminating_)
+        {
+          terminating_ = true;
+          VAST_LOG_ACTOR_INFO("waits 30 seconds for segment ACK");
+          delayed_send(self, std::chrono::seconds(30),
+                       atom("shutdown"), reason);
+        }
         else
         {
-          VAST_LOG_ACTOR_WARN("writes un-acked segments to stable storage");
+          VAST_LOG_ACTOR_WARN("writes un-acked segments to filesystem");
 
-          if (! exists(segment_dir) && ! mkdir(segment_dir))
+          if (! exists(dir_) && ! mkdir(dir_))
           {
-            VAST_LOG_ACTOR_ERROR("failed to create directory " << segment_dir);
+            VAST_LOG_ACTOR_ERROR("failed to create directory " << dir_);
           }
           else
           {
-            for (auto& p : segments_)
+            while (! buffer_.empty())
             {
-              auto const spath = segment_dir / path{to_string(p.first)};
-              VAST_LOG_ACTOR_INFO("saves " << spath);
+              auto p = dir_ / path{to_string(buffer_.front()->id())};
+              VAST_LOG_ACTOR_INFO("archives segment to " << p);
 
-              auto t = io::archive(spath, p.second);
+              auto t = io::archive(p, buffer_.front());
               if (! t)
-                VAST_LOG_ACTOR_ERROR("failed to save " << spath << ": " <<
+                VAST_LOG_ACTOR_ERROR("failed to archive " << p << ": " <<
                                      t.error());
+
+              buffer_.pop();
             }
           }
 
           quit(exit::error);
         }
       },
-      on(atom("shutdown"), arg_match) >> [=](uint32_t reason)
-      {
-        if (segments_.empty())
-        {
-          quit(reason);
-        }
-        else
-        {
-          delayed_send(self, std::chrono::seconds(10),
-                       atom("terminate"), reason);
-
-          VAST_LOG_ACTOR_INFO(
-              "waits 10 seconds for " << segments_.size() << " segment ACKs");
-        }
-      },
       on(atom("EXIT"), arg_match) >> [=](uint32_t reason)
       {
-        if (! source_)
-        {
-          send(self, atom("shutdown"), reason);
-          send_exit(sink_, reason);
-        }
-        else
-        {
+        if (source_)
           // Tell the source to exit, it will in turn propagate the exit
           // message to the sink.
           send_exit(source_, exit::stop);
-        }
+        else
+          // We have always a sink, and if the source doesn't shut it down, we
+          // have to do it ourselves.
+          send_exit(sink_, reason);
       },
       on(atom("DOWN"), arg_match) >> [=](uint32_t /* reason */)
       {
         // Once we have received DOWN from the sink, the ingestor has nothing
         // else left todo and can shutdown.
-        delayed_send(self, std::chrono::seconds(5), atom("shutdown"), exit::done);
+        send(self, atom("shutdown"), exit::done);
       },
       on(atom("submit")) >> [=]
       {
         for (auto& base : orphaned_)
         {
-          auto p = segment_dir / base;
+          auto p = dir_ / base;
           segment s;
           if (! io::unarchive(p, s))
           {
@@ -123,17 +113,13 @@ void ingestor_actor::act()
             continue;
           }
 
-          send(self, std::move(s));
+          // FIXME: insert segments in the order they have been received.
+          buffer_.emplace(std::move(s));
         }
+
+        if (! buffer_.empty())
+          send(self, atom("process"));
       },
-#ifdef VAST_HAVE_BROCCOLI
-      on(atom("ingest"), atom("broccoli"), arg_match) >>
-        [=](std::string const& host, unsigned port,
-            std::vector<std::string> const& events)
-      {
-        // TODO.
-      },
-#endif
       on(atom("ingest"), "bro2", arg_match)
         >> [=](std::string const& file, int32_t ts_field)
       {
@@ -150,32 +136,55 @@ void ingestor_actor::act()
       },
       on_arg_match >> [=](segment& s)
       {
-        VAST_LOG_ACTOR_DEBUG(
-            "relays segment " << s.id() << " to " << VAST_ACTOR_ID(receiver_));
+        buffer_.emplace(std::move(s));
 
-        auto cs = cow<segment>{std::move(s)};
-        segments_[cs->id()] = cs;
-        receiver_ << cs;
+        if (buffer_.size() == 1)
+          send(self, atom("process"));
+      },
+      on(atom("process")) >> [=]
+      {
+        assert(! buffer_.empty());
+
+        any_tuple s = buffer_.front();
+        if (delay_ > 0)
+        {
+          VAST_LOG_ACTOR_DEBUG("waits " << delay_ << " sec to send segment " <<
+                               buffer_.front()->id());
+
+          delayed_send_tuple(receiver_, std::chrono::seconds(delay_), s);
+        }
+        else
+        {
+          VAST_LOG_ACTOR_DEBUG("sends segment " << buffer_.front()->id());
+          receiver_ << s;
+        }
       },
       on(atom("ack"), arg_match) >> [=](uuid const& id)
       {
         VAST_LOG_ACTOR_DEBUG("got ack for segment " << id);
-        auto i = segments_.find(id);
-        assert(i != segments_.end());
-        segments_.erase(i);
 
-        auto j = orphaned_.find(path{to_string(id)});
-        if (j != orphaned_.end())
+        if (buffer_.front()->id() != id)
         {
-          VAST_LOG_ACTOR_INFO("deletes accepted segment " << id);
-          rm(segment_dir / *j);
-          orphaned_.erase(j);
+          auto i = orphaned_.find(path{to_string(id)});
+          if (i != orphaned_.end())
+          {
+            VAST_LOG_ACTOR_INFO("submitted orphaned segment " << id);
+            rm(dir_ / *i);
+            orphaned_.erase(i);
+          }
         }
+
+        buffer_.pop();
+
+        if (! buffer_.empty())
+          send(self, atom("process"));
+        else if (terminating_)
+          quit(exit::done);
       },
-      on(atom("nack"), arg_match) >> [=](uuid const& id)
+      on(atom("delay"), arg_match) >> [=](uint64_t delay)
       {
-        VAST_LOG_ACTOR_ERROR("got nack for segment " << id);
-        send(self, atom("shutdown"), exit::error);
+        VAST_LOG_ACTOR_DEBUG("got delay update: " << delay);
+        delay_ = delay;
       });
 }
 

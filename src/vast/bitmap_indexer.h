@@ -86,25 +86,25 @@ public:
         on_arg_match >> [=](std::vector<event> const& events)
         {
           uint64_t n = 0;
+          uint64_t total = events.size();
           for (auto& e : events)
             if (auto v = static_cast<Derived*>(this)->extract(e))
             {
               if (bmi_.push_back(*v, e.id()))
                 ++n;
+              else
+                VAST_LOG_ACTOR_ERROR("failed to append value: " << *v);
             }
             else
             {
-              VAST_LOG_ACTOR_DEBUG("failed to extract value from: " << e);
+              VAST_LOG_ACTOR_ERROR("failed to extract value from: " << e);
             }
               
-
-          if (n < events.size())
-            VAST_LOG_ACTOR_WARN("indexed only " << n << '/' << events.size() <<
-                                " events");
-
           stats_.increment(n);
+          if (n < total)
+            VAST_LOG_ACTOR_WARN("indexed " << n << '/' << total << " events");
 
-          return make_any_tuple(atom("stats"), n, stats_.last(), stats_.mean());
+          return make_any_tuple(total, n, stats_.last(), stats_.mean());
         },
         on_arg_match >> [=](expr::ast const& pred, uuid const& part,
                             actor_ptr const& sink)

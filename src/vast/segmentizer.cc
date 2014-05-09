@@ -31,6 +31,7 @@ void segmentizer::act()
           writer_.attach_to(&segment_);
           if (! writer_.flush())
             VAST_LOG_ACTOR_ERROR("failed to flush a fresh segment");
+
           assert(segment_.events() > 0);
         }
 
@@ -74,8 +75,8 @@ void segmentizer::act()
 
             auto max_segment_size = segment_.max_bytes();
             send(upstream_, std::move(segment_));
-            segment_ = segment{uuid::random(), max_segment_size};
 
+            segment_ = segment{uuid::random(), max_segment_size};
             writer_.attach_to(&segment_);
 
             if (! writer_.flush())

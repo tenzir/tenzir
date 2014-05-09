@@ -10,94 +10,94 @@ namespace vast {
 
 path const partition::part_meta_file = "partition.meta";
 
-namespace {
-
-// If the given predicate is a name extractor, extracts the name.
-struct name_checker : expr::default_const_visitor
-{
-  virtual void visit(expr::predicate const& pred)
-  {
-    pred.lhs().accept(*this);
-    if (check_)
-      pred.rhs().accept(*this);
-  }
-
-  virtual void visit(expr::name_extractor const&)
-  {
-    check_ = true;
-  }
-
-  virtual void visit(expr::constant const& c)
-  {
-    value_ = c.val;
-  }
-
-  bool check_ = false;
-  value value_;
-};
-
-// Partitions the AST predicates into meta and data predicates. Moreover, it
-// assigns each data predicate a name if a it coexists with name-extractor
-// predicate that restricts the scope of the data predicate.
-struct predicatizer : expr::default_const_visitor
-{
-  virtual void visit(expr::conjunction const& conj)
-  {
-    std::vector<expr::ast> flat;
-    std::vector<expr::ast> deep;
-
-    // Partition terms into leaves and others.
-    for (auto& operand : conj.operands)
-    {
-      auto op = expr::ast{*operand};
-      if (op.is_predicate())
-        flat.push_back(std::move(op));
-      else
-        deep.push_back(std::move(op));
-    }
-
-    // Extract the name for all predicates in this conjunction.
-    //
-    // TODO: add a check to the semantic pass after constructing queries to
-    // flag multiple name/offset/time extractors in the same conjunction.
-    name_.clear();
-    for (auto& pred : flat)
-    {
-      name_checker checker;
-      pred.accept(checker);
-      if (checker.check_)
-        name_ = checker.value_.get<string>();
-    }
-
-    for (auto& pred : flat)
-      pred.accept(*this);
-
-    // Proceed with the remaining conjunctions deeper in the tree.
-    name_.clear();
-    for (auto& n : deep)
-      n.accept(*this);
-  }
-
-  virtual void visit(expr::disjunction const& disj)
-  {
-    for (auto& operand : disj.operands)
-      operand->accept(*this);
-  }
-
-  virtual void visit(expr::predicate const& pred)
-  {
-    if (! expr::ast{pred}.is_meta_predicate())
-      data_predicates_.emplace(name_, pred);
-    else
-      meta_predicates_.push_back(pred);
-  }
-
-  string name_;
-  std::multimap<string, expr::ast> data_predicates_;
-  std::vector<expr::ast> meta_predicates_;
-};
-
-} // namespace <anonymous>
+//namespace {
+//
+//// If the given predicate is a name extractor, extracts the name.
+//struct name_checker : expr::default_const_visitor
+//{
+//  virtual void visit(expr::predicate const& pred)
+//  {
+//    pred.lhs().accept(*this);
+//    if (check_)
+//      pred.rhs().accept(*this);
+//  }
+//
+//  virtual void visit(expr::name_extractor const&)
+//  {
+//    check_ = true;
+//  }
+//
+//  virtual void visit(expr::constant const& c)
+//  {
+//    value_ = c.val;
+//  }
+//
+//  bool check_ = false;
+//  value value_;
+//};
+//
+//// Partitions the AST predicates into meta and data predicates. Moreover, it
+//// assigns each data predicate a name if a it coexists with name-extractor
+//// predicate that restricts the scope of the data predicate.
+//struct predicatizer : expr::default_const_visitor
+//{
+//  virtual void visit(expr::conjunction const& conj)
+//  {
+//    std::vector<expr::ast> flat;
+//    std::vector<expr::ast> deep;
+//
+//    // Partition terms into leaves and others.
+//    for (auto& operand : conj.operands)
+//    {
+//      auto op = expr::ast{*operand};
+//      if (op.is_predicate())
+//        flat.push_back(std::move(op));
+//      else
+//        deep.push_back(std::move(op));
+//    }
+//
+//    // Extract the name for all predicates in this conjunction.
+//    //
+//    // TODO: add a check to the semantic pass after constructing queries to
+//    // flag multiple name/offset/time extractors in the same conjunction.
+//    name_.clear();
+//    for (auto& pred : flat)
+//    {
+//      name_checker checker;
+//      pred.accept(checker);
+//      if (checker.check_)
+//        name_ = checker.value_.get<string>();
+//    }
+//
+//    for (auto& pred : flat)
+//      pred.accept(*this);
+//
+//    // Proceed with the remaining conjunctions deeper in the tree.
+//    name_.clear();
+//    for (auto& n : deep)
+//      n.accept(*this);
+//  }
+//
+//  virtual void visit(expr::disjunction const& disj)
+//  {
+//    for (auto& operand : disj.operands)
+//      operand->accept(*this);
+//  }
+//
+//  virtual void visit(expr::predicate const& pred)
+//  {
+//    if (! expr::ast{pred}.is_meta_predicate())
+//      data_predicates_.emplace(name_, pred);
+//    else
+//      meta_predicates_.push_back(pred);
+//  }
+//
+//  string name_;
+//  std::multimap<string, expr::ast> data_predicates_;
+//  std::vector<expr::ast> meta_predicates_;
+//};
+//
+//} // namespace <anonymous>
 
 partition::meta_data::meta_data(uuid id)
   : id{id}
@@ -180,33 +180,31 @@ struct dispatcher : expr::default_const_visitor
 
   virtual void visit(expr::timestamp_extractor const&)
   {
-    if (! actor_.time_indexer_)
-    {
-      auto p = actor_.dir_ / "time.idx";
-      actor_.time_indexer_ =
-        spawn<event_time_indexer<default_bitstream>>(std::move(p));
-    }
+    auto p = actor_.dir_ / "time.idx";
+    auto& s = actor_.indexers_[p];
+    if (! s.actor)
+      s.actor =
+        spawn<event_time_indexer<default_bitstream>, monitored>(std::move(p));
 
-    indexes_.push_back(actor_.time_indexer_);
+    indexes_.push_back(s.actor);
   }
 
   virtual void visit(expr::name_extractor const&)
   {
-    if (! actor_.name_indexer_)
-    {
-      auto p = actor_.dir_ / "name.idx";
-      actor_.name_indexer_ =
-        spawn<event_name_indexer<default_bitstream>>(std::move(p));
-    }
+    auto p = actor_.dir_ / "name.idx";
+    auto& s = actor_.indexers_[p];
+    if (! s.actor)
+      s.actor =
+        spawn<event_name_indexer<default_bitstream>, monitored>(std::move(p));
 
-    indexes_.push_back(actor_.name_indexer_);
+    indexes_.push_back(s.actor);
   }
 
   virtual void visit(expr::type_extractor const& te)
   {
     // TODO: Switch to strong typing.
     for (auto& p : actor_.indexers_)
-      if (p.second.type->at(p.second.off)->tag() == te.type)
+      if (p.second.type && p.second.type->at(p.second.off)->tag() == te.type)
       {
         if (p.second.actor)
         {
@@ -214,11 +212,11 @@ struct dispatcher : expr::default_const_visitor
         }
         else
         {
-          auto a = actor_.load_indexer(p.first);
+          auto a = actor_.load_data_indexer(p.first);
           if (! a)
             VAST_LOG_ERROR(a.error());
           else
-            indexes_.push_back(*a);
+            indexes_.push_back(p.second.actor);
         }
       }
   }
@@ -228,7 +226,7 @@ struct dispatcher : expr::default_const_visitor
     for (auto& t : actor_.schema_)
       for (auto& pair : t->find_suffix(se.key))
       {
-        path p;
+        path p = "types";
         for (auto& i : pair.second)
           p /= i;
         
@@ -246,11 +244,11 @@ struct dispatcher : expr::default_const_visitor
         else if (! i->second.actor)
         {
           VAST_LOG_DEBUG("loading indexer for " << p);
-          auto a = actor_.load_indexer(i->first);
+          auto a = actor_.load_data_indexer(i->first);
           if (! a)
             VAST_LOG_ERROR(a.error());
           else
-            indexes_.push_back(*a);
+            indexes_.push_back(i->second.actor);
         }
         else
         {
@@ -302,57 +300,54 @@ void partition_actor::act()
       return;
     }
 
-    for (auto& t : schema_)
-      t->each(
+    indexers_[dir_ / "name.idx"];
+    indexers_[dir_ / "type.idx"];
+    for (auto& type : schema_)
+      type->each(
           [&](key const& k, offset const& o)
           {
-            path p = t->name();
+            auto p = path{"types"} / type->name();
             for (auto& id : k)
               p /= id;
 
-            VAST_LOG_ACTOR_DEBUG("initializing indexer for " << *t << '.' << k);
+            VAST_LOG_ACTOR_DEBUG("found indexer for " << *type << '.' << k);
 
             assert(indexers_.find(p) == indexers_.end());
             auto& state = indexers_[p];
             state.off = o;
-            state.type = t;
+            state.type = type;
           });
   }
 
   auto submit = [=](std::vector<event> events)
   {
-    VAST_LOG_ACTOR_DEBUG("sends " << events.size() << " events to indexers");
-
+    auto n = events.size();
     auto t = make_any_tuple(std::move(events));
 
-    if (! name_indexer_)
-    {
-      auto p = dir_ / "name.idx";
-      name_indexer_ =
-        spawn<event_name_indexer<default_bitstream>>(std::move(p));
-    }
+    auto p = dir_ / "name.idx";
+    auto s = &indexers_[p];
+    if (! s->actor)
+      s->actor =
+        spawn<event_name_indexer<default_bitstream>, monitored>(std::move(p));
 
-    if (! time_indexer_)
-    {
-      auto p = dir_ / "time.idx";
-      time_indexer_ =
-        spawn<event_time_indexer<default_bitstream>>(std::move(p));
-    }
+    p = dir_ / "time.idx";
+    s = &indexers_[p];
+    if (! s->actor)
+      s->actor =
+        spawn<event_time_indexer<default_bitstream>, monitored>(std::move(p));
 
-    name_indexer_ << t;
-    time_indexer_ << t;
     for (auto& p : indexers_)
       if (p.second.actor)
+      {
         p.second.actor << t;
-
+        p.second.stats.backlog += n;
+      }
   };
 
   auto flush = [=]
   {
     VAST_LOG_ACTOR_DEBUG("flushes its indexes in " << dir_);
 
-    send(name_indexer_, atom("flush"));
-    send(time_indexer_, atom("flush"));
     for (auto& p : indexers_)
       if (p.second.actor)
         send(p.second.actor, atom("flush"));
@@ -382,8 +377,6 @@ void partition_actor::act()
         if (reason != exit::kill)
           flush();
 
-        send_exit(time_indexer_, reason);
-        send_exit(name_indexer_, reason);
         for (auto& p : indexers_)
           if (p.second.actor)
             send_exit(p.second.actor, reason);
@@ -433,9 +426,9 @@ void partition_actor::act()
         auto sch = schema::merge(schema_, s.schema());
         if (! sch)
         {
-          VAST_LOG_ACTOR_ERROR("failed to merge schemata: " << sch.error());
-          VAST_LOG_ACTOR_ERROR("ignoring segment with " << s.events() <<
-                               " events");
+          VAST_LOG_ACTOR_ERROR("failed to merge schema: " << sch.error());
+          VAST_LOG_ACTOR_ERROR("ignores segment " << s.id());
+          quit(exit::error);
           return;
         }
 
@@ -445,16 +438,11 @@ void partition_actor::act()
           t->each(
             [&](key const& k, offset const& o)
             {
-              path p = t->name();
+              auto p = path{"types"} / t->name();
               for (auto& id : k)
                 p /= id;
 
-              if (indexers_.find(p) != indexers_.end())
-                return;
-
-              VAST_LOG_ACTOR_DEBUG("creates indexer for key " << k <<
-                                   " at offset " << o << " in type " << *t);
-              auto i = create_indexer(p, o, t);
+              auto i = create_data_indexer(p, o, t);
               if (! i)
               {
                 VAST_LOG_ACTOR_ERROR(i.error());
@@ -470,12 +458,12 @@ void partition_actor::act()
         {
           assert(e);
 
-          // We only supported fully typed events at this point, but may loosen
+          // We only support fully typed events at this point, but may loosen
           // this constraint in the future.
           auto& t = e->type();
           if (t->name().empty() || util::get<invalid_type>(t->info()))
           {
-            VAST_LOG_ACTOR_ERROR("encountered invalid event type: " << *t);
+            VAST_LOG_ACTOR_ERROR("got invalid event " << *t << " for " << *e);
             quit(exit::error);
             return;
           }
@@ -500,26 +488,48 @@ void partition_actor::act()
         flush();
         send(self, atom("stats"), atom("show"));
       },
-      on(atom("stats"), arg_match)
-        >> [=](uint64_t n, uint64_t rate, uint64_t mean)
+      on(atom("backlog")) >> [=]
+      {
+        uint64_t max_backlog = 0;
+        uint64_t last_rate = 0;
+        for (auto& p : indexers_)
+          if (p.second.stats.backlog > max_backlog)
+          {
+            max_backlog = p.second.stats.backlog;
+            last_rate = p.second.stats.rate;
+          }
+
+        return make_any_tuple(atom("backlog"), max_backlog, last_rate);
+      },
+      on_arg_match >> [=](uint64_t processed, uint64_t indexed,
+                          uint64_t rate, uint64_t mean)
       {
         for (auto& p : indexers_)
           if (p.second.actor == last_sender())
           {
-            p.second.stats.values += n;
-            p.second.stats.rate = rate;
-            p.second.stats.mean = mean;
+            auto& stats = p.second.stats;
+
+            stats.backlog -= processed;
+            stats.values += indexed;
+            stats.rate = rate;
+            stats.mean = mean;
+
             break;
           }
       },
       on(atom("stats"), atom("show")) >> [=]
       {
+        std::pair<uint64_t, actor_ptr> max_backlog = {0, nullptr};
         uint64_t total_values = 0;
         uint64_t total_rate = 0;
         uint64_t total_mean = 0;
+
         for (auto& p : indexers_)
           if (p.second.actor)
           {
+            if (p.second.stats.backlog > max_backlog.first)
+              max_backlog = {p.second.stats.backlog, p.second.actor};
+
             total_values += p.second.stats.values;
             total_rate += p.second.stats.rate;
             total_mean += p.second.stats.mean;
@@ -529,6 +539,11 @@ void partition_actor::act()
           VAST_LOG_ACTOR_INFO(
               "indexed " << total_values << " values at rate " <<
               total_rate << " values/sec" << " (mean " << total_mean << ')');
+
+        if (max_backlog.first > 0)
+          VAST_LOG_ACTOR_INFO(
+              "has a maximum backlog of " << max_backlog.first <<
+              " events at " << max_backlog.second->id());
       });
 }
 

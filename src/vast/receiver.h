@@ -1,7 +1,8 @@
 #ifndef VAST_RECEIVER_H
 #define VAST_RECEIVER_H
 
-#include <deque>
+#include <queue>
+#include <set>
 #include "vast/actor.h"
 #include "vast/segment.h"
 
@@ -31,7 +32,8 @@ private:
   cppa::actor_ptr archive_;
   cppa::actor_ptr index_;
   cppa::actor_ptr search_;
-  std::deque<segment> segments_;
+  std::queue<segment> segments_;
+  std::set<cppa::actor_ptr> ingestors_;
 };
 
 } // namespace vast

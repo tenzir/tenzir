@@ -62,9 +62,10 @@ struct partition_actor : actor<partition_actor>
   {
     struct statistics
     {
-      uint64_t values = 0;
-      uint64_t rate = 0;
-      uint64_t mean = 0;
+      uint64_t backlog = 0; // Number of outstanding batches.
+      uint64_t values = 0;  // Total values indexed.
+      uint64_t rate = 0;    // Last indexing rate (values/sec).
+      uint64_t mean = 0;    // Mean indexing rate (values/sec).
     };
 
     cppa::actor_ptr actor;
@@ -79,29 +80,37 @@ struct partition_actor : actor<partition_actor>
   char const* description() const;
 
   template <typename Bitstream = default_bitstream>
-  trial<cppa::actor_ptr> load_indexer(path const& p)
+  trial<void> load_data_indexer(path const& p)
   {
     auto i = indexers_.find(p);
     if (i == indexers_.end())
       return error{"no such path:", };
 
     if (i->second.actor)
-      return i->second.actor;
+      return nothing;
 
-    return create_indexer<Bitstream>(p, i->second.off, i->second.type);
+    return create_data_indexer<Bitstream>(p, i->second.off, i->second.type);
   }
 
   template <typename Bitstream = default_bitstream>
-  trial<cppa::actor_ptr>
-  create_indexer(path const& p, offset const& o, type_const_ptr t)
+  trial<void>
+  create_data_indexer(path const& p, offset const& o, type_const_ptr t)
   {
+    assert(t);
     auto& state = indexers_[p];
-    assert(! state.actor);
+    if (state.type && *state.type != *t)
+      return error{"type mismatch:", *state.type, " vs", *t};
 
-    auto abs = dir_ / "types" / p / "data.idx";
+    if (state.actor)
+      return nothing;
+
+    VAST_LOG_ACTOR_DEBUG("creates indexer at " << p <<
+                         " @" << o << " with type " << *t);
+
+    auto abs = dir_ / p / "data.idx";
     auto a = make_event_data_indexer<Bitstream>(abs, t, o);
     if (! a)
-      return a;
+      return error{"failed to construct data indexer:", a.error()};
 
     monitor(*a);
 
@@ -109,15 +118,13 @@ struct partition_actor : actor<partition_actor>
     state.type = t;
     state.off = o;
 
-    return *a;
+    return nothing;
   }
 
   path dir_;
   size_t batch_size_;
   partition partition_;
   schema schema_;
-  cppa::actor_ptr time_indexer_;
-  cppa::actor_ptr name_indexer_;
   std::unordered_map<path, indexer_state> indexers_;
 };
 

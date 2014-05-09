@@ -125,7 +125,7 @@ void program::act()
           vast_dir / "index", *config_.as<size_t>("index.batch-size"));
 
       VAST_LOG_ACTOR_INFO(
-          "publishes index " << index_host << ':' << index_port);
+          "publishes index at " << index_host << ':' << index_port);
 
       publish(index, index_port, index_host.c_str());
     }

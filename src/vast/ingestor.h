@@ -1,6 +1,7 @@
 #ifndef VAST_INGESTOR_H
 #define VAST_INGESTOR_H
 
+#include <queue>
 #include <unordered_map>
 #include <cppa/cppa.hpp>
 #include "vast/actor.h"
@@ -44,7 +45,9 @@ private:
   size_t max_events_per_chunk_;
   size_t max_segment_size_;
   uint64_t batch_size_;
-  std::map<uuid, cow<segment>> segments_;
+  uint64_t delay_ = 0;
+  bool terminating_ = false;
+  std::queue<cow<segment>> buffer_;
   std::set<path> orphaned_;
 };
 

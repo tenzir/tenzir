@@ -33,15 +33,18 @@ public:
             send(sink_, std::move(e));
             return;
           }
+
           this->events_.push_back(std::move(e));
           send_events();
         },
-        on_arg_match >> [=](std::vector<event> v)
+        on_arg_match >> [=](std::vector<event>& v)
         {
           assert(sink_);
+
           events_.insert(events_.end(),
               std::make_move_iterator(v.begin()),
               std::make_move_iterator(v.end()));
+
           std::inplace_merge(events_.begin(),
                              events_.begin() + events_.size(),
                              events_.end());
@@ -59,6 +62,7 @@ public:
   {
     if (events_.size() < batch_size_)
       return;
+
     send(sink_, std::move(this->events_));
     this->events_.clear();
   }
