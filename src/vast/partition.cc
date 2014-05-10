@@ -4,6 +4,7 @@
 #include "vast/bitmap_index.h"
 #include "vast/event.h"
 #include "vast/segment.h"
+#include "vast/segment_pack.h"
 #include "vast/io/serialization.h"
 
 namespace vast {
@@ -318,31 +319,6 @@ behavior partition_actor::act()
           });
   }
 
-  auto submit = [=](std::vector<event> events)
-  {
-    auto n = events.size();
-    auto t = make_any_tuple(std::move(events));
-
-    auto p = dir_ / "name.idx";
-    auto s = &indexers_[p];
-    if (! s->actor)
-      s->actor =
-        spawn<event_name_indexer<default_bitstream>, monitored>(std::move(p));
-
-    p = dir_ / "time.idx";
-    s = &indexers_[p];
-    if (! s->actor)
-      s->actor =
-        spawn<event_time_indexer<default_bitstream>, monitored>(std::move(p));
-
-    for (auto& p : indexers_)
-      if (p.second.actor)
-      {
-        send_tuple(p.second.actor, t);
-        p.second.stats.backlog += n;
-      }
-  };
-
   auto flush = [=]
   {
     VAST_LOG_ACTOR_DEBUG("flushes its indexes in " << dir_);
@@ -372,6 +348,9 @@ behavior partition_actor::act()
 
   attach_functor([=](uint32_t) { indexers_.clear(); }); 
 
+
+  send(this, atom("stats"), atom("show"));
+
   return
   {
     [=](exit_msg const& e)
@@ -389,12 +368,24 @@ behavior partition_actor::act()
     {
       VAST_LOG_ACTOR_DEBUG("got DOWN from " << last_sender());
 
+      for (auto i = segments_.begin(); i != segments_.end(); ++i)
+        if (i->first.address() == last_sender())
+        {
+          auto& s = i->second.get_as<segment>(0);
+          partition_.update(s);
+
+          VAST_LOG_ACTOR_DEBUG("incorporated segment " << s.id());
+
+          segments_.erase(i);
+          return;
+        }
+
       for (auto& p : indexers_)
         if (p.second.actor == last_sender())
         {
           p.second.actor = invalid_actor;
           p.second.stats = {};
-          break;
+          return;
         }
     },
     [=](expr::ast const& pred, actor idx)
@@ -421,8 +412,7 @@ behavior partition_actor::act()
     on(atom("flush")) >> flush,
     [=](segment const& s)
     {
-      VAST_LOG_ACTOR_VERBOSE(
-          "processes " << s.events() << " events from segment " << s.id());
+      VAST_LOG_ACTOR_DEBUG("got segment with " << s.events());
 
       auto sch = schema::merge(schema_, s.schema());
       if (! sch)
@@ -451,43 +441,30 @@ behavior partition_actor::act()
             }
           });
 
-      std::vector<event> events;
-      events.reserve(batch_size_);
+      auto up = spawn<unpacker, monitored>(last_dequeued(), this, batch_size_);
+      segments_[up] = last_dequeued();
+      send(up, atom("run"));
+    },
+    [=](std::vector<event> const& events)
+    {
+      auto p = dir_ / "name.idx";
+      auto s = &indexers_[p];
+      if (! s->actor)
+        s->actor =
+          spawn<event_name_indexer<default_bitstream>, monitored>(std::move(p));
 
-      segment::reader r{&s};
-      while (auto e = r.read())
-      {
-        assert(e);
+      p = dir_ / "time.idx";
+      s = &indexers_[p];
+      if (! s->actor)
+        s->actor =
+          spawn<event_time_indexer<default_bitstream>, monitored>(std::move(p));
 
-        // We only support fully typed events at this point, but may loosen
-        // this constraint in the future.
-        auto& t = e->type();
-        if (t->name().empty() || util::get<invalid_type>(t->info()))
+      for (auto& p : indexers_)
+        if (p.second.actor)
         {
-          VAST_LOG_ACTOR_ERROR("got invalid event " << *t << " for " << *e);
-          quit(exit::error);
-          return;
+          send_tuple(p.second.actor, last_dequeued());
+          p.second.stats.backlog += events.size();
         }
-
-        events.push_back(std::move(*e));
-        if (events.size() == batch_size_)
-        {
-          events.shrink_to_fit();
-          submit(std::move(events));
-          events = {};
-        }
-      }
-
-      // Send away final events.
-      events.shrink_to_fit();
-      submit(std::move(events));
-
-      // Record segment.
-      partition_.update(s);
-
-      // Flush partition meta data and data indexes.
-      flush();
-      send(this, atom("stats"), atom("show"));
     },
     on(atom("backlog")) >> [=]
     {
@@ -544,6 +521,8 @@ behavior partition_actor::act()
         VAST_LOG_ACTOR_INFO(
             "has a maximum backlog of " << max_backlog.first <<
             " events at " << max_backlog.second);
+
+      delayed_send_tuple(this, std::chrono::seconds(3), last_dequeued());
     }
   };
 }

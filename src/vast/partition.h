@@ -126,6 +126,7 @@ struct partition_actor : actor_base
   partition partition_;
   schema schema_;
   std::unordered_map<path, indexer_state> indexers_;
+  std::unordered_map<cppa::actor, cppa::any_tuple> segments_;
 };
 
 } // namespace vast

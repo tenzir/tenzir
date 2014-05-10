@@ -28,6 +28,8 @@ behavior receiver_actor::act()
         search_ = invalid_actor;
       });
 
+  send(this, atom("backlog"));
+
   return
   {
     [=](down_msg const&)
@@ -76,8 +78,11 @@ behavior receiver_actor::act()
 
       send_tuple(archive_, t);
       send_tuple(index_, t);
-
-      send(index_, atom("backlog"));
+    },
+    on(atom("backlog")) >> [=]
+    {
+      send_tuple(index_, last_dequeued());
+      delayed_send_tuple(this, std::chrono::seconds(1), last_dequeued());
     },
     on(atom("backlog"), arg_match) >> [=](uint64_t backlog, uint64_t last_rate)
     {
@@ -88,9 +93,10 @@ behavior receiver_actor::act()
       // to send the next buffered segment.
       auto delay = last_rate > 0 ? backlog / last_rate : 0;
       for (auto& a : ingestors_)
+      {
         send(a, atom("delay"), delay);
-
-      VAST_LOG_ACTOR_DEBUG("relays delay to ingestors: " << delay << "sec");
+        VAST_LOG_ACTOR_DEBUG("relays delay of " << delay << "sec to " << a);
+      }
     }
   };
 

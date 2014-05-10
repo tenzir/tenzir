@@ -32,6 +32,7 @@ set(libvast_sources
   search.cc
   search_result.cc
   segment.cc
+  segment_pack.cc
   segmentizer.cc
   serialization.cc
   signal_monitor.cc

@@ -115,7 +115,7 @@ void configuration::initialize()
   index.add("host", "hostname/address of the archive").init("127.0.0.1");
   index.add("port", "TCP port of the index").init(42004);
   index.add("partition", "name of the partition to append to").single();
-  index.add("batch-size", "number of events to index in one run").init(10000);
+  index.add("batch-size", "number of events to index in one run").init(1000);
   index.add("rebuild", "rebuild indexes from archive");
   index.visible(false);
 
