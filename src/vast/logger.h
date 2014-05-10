@@ -187,21 +187,15 @@ private:
   }                                                                           \
   while (false)
 
-#define VAST_ACTOR_ID(actor) \
-  "@" << actor->id()
-
-#define VAST_ACTOR(name, actor) \
-  VAST_ACTOR_ID(actor) << ":" << name
-
 #define VAST_THIS_ACTOR(name) \
-  VAST_ACTOR(name, cppa::self)
+  *this << ":" << name
 
 #if VAST_LOG_LEVEL > 0
 #  define VAST_LOG_ERROR(message)     VAST_LOG(::vast::logger::error, message)
 #  define VAST_LOG_ACTOR_ERROR_2(name, message)                               \
      VAST_LOG(::vast::logger::error, VAST_THIS_ACTOR(name) << ' ' << message)
 #  define VAST_LOG_ACTOR_ERROR_1(message)                                     \
-     VAST_LOG_ACTOR_ERROR_2(this->description(), message)
+     VAST_LOG_ACTOR_ERROR_2(this->describe(), message)
 #  define VAST_LOG_ACTOR_ERROR(...)   VAST_PP_OVERLOAD(VAST_LOG_ACTOR_ERROR_, \
                                               __VA_ARGS__)(__VA_ARGS__)
 #else
@@ -213,7 +207,7 @@ private:
 #  define VAST_LOG_ACTOR_WARN_2(name, message)                                \
      VAST_LOG(::vast::logger::warn, VAST_THIS_ACTOR(name) << ' ' << message)
 #  define VAST_LOG_ACTOR_WARN_1(message)                                      \
-     VAST_LOG_ACTOR_WARN_2(this->description(), message)
+     VAST_LOG_ACTOR_WARN_2(this->describe(), message)
 #  define VAST_LOG_ACTOR_WARN(...)    VAST_PP_OVERLOAD(VAST_LOG_ACTOR_WARN_,  \
                                               __VA_ARGS__)(__VA_ARGS__)
 #else
@@ -225,7 +219,7 @@ private:
 #  define VAST_LOG_ACTOR_INFO_2(name, message)                               \
      VAST_LOG(::vast::logger::info, VAST_THIS_ACTOR(name) << ' ' << message)
 #  define VAST_LOG_ACTOR_INFO_1(message)                                     \
-     VAST_LOG_ACTOR_INFO_2(this->description(), message)
+     VAST_LOG_ACTOR_INFO_2(this->describe(), message)
 #  define VAST_LOG_ACTOR_INFO(...)   VAST_PP_OVERLOAD(VAST_LOG_ACTOR_INFO_,  \
                                               __VA_ARGS__)(__VA_ARGS__)
 #else
@@ -237,7 +231,7 @@ private:
 #  define VAST_LOG_ACTOR_VERBOSE_2(name, message)                                 \
      VAST_LOG(::vast::logger::verbose, VAST_THIS_ACTOR(name) << ' ' << message)
 #  define VAST_LOG_ACTOR_VERBOSE_1(message)                                       \
-     VAST_LOG_ACTOR_VERBOSE_2(this->description(), message)
+     VAST_LOG_ACTOR_VERBOSE_2(this->describe(), message)
 #  define VAST_LOG_ACTOR_VERBOSE(...)   VAST_PP_OVERLOAD(VAST_LOG_ACTOR_VERBOSE_, \
                                               __VA_ARGS__)(__VA_ARGS__)
 #else
@@ -249,7 +243,7 @@ private:
 #  define VAST_LOG_ACTOR_DEBUG_2(name, message)                               \
      VAST_LOG(::vast::logger::debug, VAST_THIS_ACTOR(name) << ' ' << message)
 #  define VAST_LOG_ACTOR_DEBUG_1(message)                                     \
-     VAST_LOG_ACTOR_DEBUG_2(this->description(), message)
+     VAST_LOG_ACTOR_DEBUG_2(this->describe(), message)
 #  define VAST_LOG_ACTOR_DEBUG(...)   VAST_PP_OVERLOAD(VAST_LOG_ACTOR_DEBUG_, \
                                               __VA_ARGS__)(__VA_ARGS__)
 #else

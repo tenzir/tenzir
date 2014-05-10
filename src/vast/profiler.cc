@@ -1,4 +1,4 @@
-#include "vast/util/profiler.h"
+#include "vast/profiler.h"
 
 #include <cassert>
 #include <iomanip>
@@ -18,7 +18,6 @@
 using namespace cppa;
 
 namespace vast {
-namespace util {
 
 profiler::measurement::measurement()
 {
@@ -55,9 +54,8 @@ profiler::profiler(path log_dir, std::chrono::seconds secs)
 {
 }
 
-void profiler::act()
+behavior profiler::act()
 {
-  chaining(false);
   trap_exit(true);
 
   auto filename = log_dir_ / "profile.log";
@@ -81,84 +79,85 @@ void profiler::act()
     << std::setw(14) << "sys (d)"
     << std::endl;
 
-  become(
-      on(atom("EXIT"), arg_match) >> [=](uint32_t reason)
-      {
+  return
+  {
+    [=](exit_msg const& e)
+    {
 #ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
-        ProfilerState state;
-        ProfilerGetCurrentState(&state);
-        if (state.enabled)
-        {
-          VAST_LOG_ACTOR_INFO("stops Gperftools CPU profiler");
-          ProfilerStop();
-          VAST_LOG_ACTOR_INFO(
-              "recorded " << state.samples_gathered <<
-              " Gperftools CPU profiler samples in " << state.profile_name);
-        }
+      ProfilerState state;
+      ProfilerGetCurrentState(&state);
+      if (state.enabled)
+      {
+        VAST_LOG_ACTOR_INFO("stops Gperftools CPU profiler");
+        ProfilerStop();
+        VAST_LOG_ACTOR_INFO(
+            "recorded " << state.samples_gathered <<
+            " Gperftools CPU profiler samples in " << state.profile_name);
+      }
 #endif
 #ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
-        if (IsHeapProfilerRunning())
-        {
-          VAST_LOG_ACTOR_INFO("stops Gperftools heap profiler");
-          HeapProfilerDump("cleanup");
-          HeapProfilerStop();
-        }
+      if (IsHeapProfilerRunning())
+      {
+        VAST_LOG_ACTOR_INFO("stops Gperftools heap profiler");
+        HeapProfilerDump("cleanup");
+        HeapProfilerStop();
+      }
 #endif
 
-        file_.close();
-        quit(reason);
-      },
+      file_.close();
+      quit(e.reason);
+    },
 
 #ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
-      on(atom("start"), atom("perftools"), atom("cpu")) >> [=]
-      {
-        VAST_LOG_ACTOR_INFO("starts Gperftools CPU profiler");
+    on(atom("start"), atom("perftools"), atom("cpu")) >> [=]
+    {
+      VAST_LOG_ACTOR_INFO("starts Gperftools CPU profiler");
 
-        auto f = to_string(log_dir_ / "perftools.cpu");
-        ProfilerStart(f.c_str());
-        delayed_send(self, secs_, atom("flush"));
-      },
+      auto f = to_string(log_dir_ / "perftools.cpu");
+      ProfilerStart(f.c_str());
+      delayed_send(this, secs_, atom("flush"));
+    },
 
-      on(atom("flush")) >> [=]
-      {
-        ProfilerFlush();
-        delayed_send(self, secs_, atom("flush"));
-      },
+    on(atom("flush")) >> [=]
+    {
+      ProfilerFlush();
+      delayed_send(this, secs_, atom("flush"));
+    },
 #endif
 
 #ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
-      on(atom("start"), atom("perftools"), atom("heap")) >> [=]
-      {
-        VAST_LOG_ACTOR_INFO("starts Gperftools heap profiler");
+    on(atom("start"), atom("perftools"), atom("heap")) >> [=]
+    {
+      VAST_LOG_ACTOR_INFO("starts Gperftools heap profiler");
 
-        auto f = to_string(log_dir_ / "perftools.heap");
-        HeapProfilerStart(f.c_str());
-      },
+      auto f = to_string(log_dir_ / "perftools.heap");
+      HeapProfilerStart(f.c_str());
+    },
 #endif
 
-      on(atom("start"), atom("rusage")) >> [=]
-      {
-        measurement now;
-        delayed_send(self, secs_, atom("data"), now.clock, now.usr, now.sys);
-      },
+    on(atom("start"), atom("rusage")) >> [=]
+    {
+      measurement now;
+      delayed_send(this, secs_, atom("data"), now.clock, now.usr, now.sys);
+    },
 
-      on(atom("data"), arg_match) >> [=](double clock, double usr, double sys)
-      {
-        measurement now;
-        file_ << now;
-        delayed_send(self, secs_, atom("data"), now.clock, now.usr, now.sys);
+    on(atom("data"), arg_match) >> [=](double clock, double usr, double sys)
+    {
+      measurement now;
+      file_ << now;
+      delayed_send(this, secs_, atom("data"), now.clock, now.usr, now.sys);
 
-        now.clock -= clock;
-        now.usr -= usr;
-        now.sys -= sys;
-        file_ << now << std::endl;
-      });
+      now.clock -= clock;
+      now.usr -= usr;
+      now.sys -= sys;
+      file_ << now << std::endl;
+    }
+  };
 }
 
-char const* profiler::description() const
+char const* profiler::describe() const
 {
   return "profiler";
 }
 
-} // namespace util
 } // namespace vast

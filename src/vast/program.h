@@ -7,18 +7,15 @@
 namespace vast {
 
 /// The main program.
-class program : public actor<program>
+class program : public actor_base
 {
-  program(program const&) = delete;
-  program& operator=(program) = delete;
-
 public:
   /// Spawns the program.
   /// @param config The program configuration.
   program(configuration const& config);
 
-  void act();
-  char const* description() const;
+  cppa::behavior act() final;
+  char const* describe() const final;
 
 private:
   configuration const& config_;

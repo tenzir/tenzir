@@ -16,41 +16,46 @@ constexpr uint32_t kill   = cppa::exit_reason::user_defined + 3;
 } // namespace exit
 
 /// An actor enhanced in 
-template <typename Derived>
-class actor : public cppa::event_based_actor
+struct actor_base : cppa::event_based_actor
 {
-public:
-  /// Implements `cppa::event_based_actor::init`.
-  virtual void init() override
+  cppa::behavior make_behavior() final
   {
-    VAST_LOG_ACTOR_DEBUG(derived()->description(), "spawned");
-    derived()->act();
-    if (! has_behavior())
-    {
-      VAST_LOG_ACTOR_ERROR(derived()->description(),
-                           "act() did not set a behavior, terminating");
-      quit(exit::error);
-    }
+    VAST_LOG_ACTOR_DEBUG(describe(), "spawned");
+    return act();
   }
 
-  /// Overrides `event_based_actor::on_exit`.
-  virtual void on_exit() override
+  void on_exit() final
   {
-    VAST_LOG_ACTOR_DEBUG(derived()->description(), "terminated");
+    VAST_LOG_ACTOR_DEBUG(describe(), "terminated");
   }
 
-private:
-  Derived const* derived() const
-  {
-    return static_cast<Derived const*>(this);
-  }
-
-  Derived* derived()
-  {
-    return static_cast<Derived*>(this);
-  }
+  virtual cppa::behavior act() = 0;
+  virtual char const* describe() const = 0;
 };
 
 } // namespace vast
+
+namespace cppa {
+
+inline auto operator<<(std::ostream& out, actor_addr const& a) -> decltype(out)
+{
+  out << '@' << a.id();
+  return out;
+}
+
+inline auto operator<<(std::ostream& out, actor const& a) -> decltype(out)
+{
+  out << a.address();
+  return out;
+}
+
+inline auto operator<<(std::ostream& out, abstract_actor const& a)
+  -> decltype(out)
+{
+  out << a.address();
+  return out;
+}
+
+} // namespace cppa
 
 #endif

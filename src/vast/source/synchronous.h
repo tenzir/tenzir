@@ -11,71 +11,74 @@ namespace source {
 
 /// A synchronous source that extracts events one by one.
 template <typename Derived>
-struct synchronous : public actor<synchronous<Derived>>
+struct synchronous : public actor_base
 {
 public:
   /// Spawns a synchronous source.
   /// @param The actor receiving the generated events.
   /// @param batch_size The number of events to extract in one batch.
-  synchronous(cppa::actor_ptr sink, uint64_t batch_size = 0)
+  synchronous(cppa::actor sink, uint64_t batch_size = 0)
     : sink_{std::move(sink)},
       batch_size_{batch_size}
   {
   }
 
-  void act()
+  cppa::behavior act() final
   {
     using namespace cppa;
 
-    this->chaining(false);
     this->trap_exit(true);
 
-    become(
-        on(atom("EXIT"), arg_match) >> [=](uint32_t reason)
-        {
-          send_events();
-          this->quit(reason);
-        },
-        on(atom("batch size"), arg_match) >> [=](uint64_t batch_size)
-        {
-          batch_size_ = batch_size;
-        },
-        on(atom("run")) >> [=]
-        {
-          bool done = false;
-          while (events_.size() < batch_size_ && ! done)
-          {
-            result<event> r = static_cast<Derived*>(this)->extract();
-            if (r)
-            {
-              events_.push_back(std::move(*r));
-            }
-            else if (r.failed())
-            {
-              VAST_LOG_ACTOR_ERROR(r.error());
-              done = true;
-              break;
-            }
+    attach_functor([=](uint32_t) { sink_ = invalid_actor; });
 
-            done = static_cast<Derived const*>(this)->done();
+    return
+    {
+      [=](exit_msg const& e)
+      {
+        send_events();
+        this->quit(e.reason);
+      },
+      on(atom("batch size"), arg_match) >> [=](uint64_t batch_size)
+      {
+        batch_size_ = batch_size;
+      },
+      on(atom("run")) >> [=]
+      {
+        bool done = false;
+        while (events_.size() < batch_size_ && ! done)
+        {
+          result<event> r = static_cast<Derived*>(this)->extract();
+          if (r)
+          {
+            events_.push_back(std::move(*r));
+          }
+          else if (r.failed())
+          {
+            VAST_LOG_ACTOR_ERROR(r.error());
+            done = true;
+            break;
           }
 
-          send_events();
+          done = static_cast<Derived const*>(this)->done();
+        }
 
-          if (done)
-            this->quit(exit::done);
-          else
-            send(self, atom("run"));
-        },
-        others() >> [=]
-        {
-          VAST_LOG_ACTOR_ERROR("received unexpected message from " <<
-                               VAST_ACTOR_ID(this->last_sender()) << ": " <<
-                               to_string(this->last_dequeued()));
-        });
+        send_events();
+
+        if (done)
+          this->quit(exit::done);
+        else
+          send(this, atom("run"));
+      },
+      others() >> [=]
+      {
+        VAST_LOG_ACTOR_ERROR("received unexpected message from " <<
+                             this->last_sender() << ": " <<
+                             to_string(this->last_dequeued()));
+      }
+    };
   }
 
-  char const* description() const
+  char const* describe() const final
   {
     return static_cast<Derived const*>(this)->description();
   }
@@ -90,7 +93,7 @@ private:
     }
   }
 
-  cppa::actor_ptr sink_;
+  cppa::actor sink_;
   uint64_t batch_size_ = 0;
   std::vector<event> events_;
 };

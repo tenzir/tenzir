@@ -28,12 +28,12 @@ private:
 };
 
 /// Keeps track of the event ID space.
-struct id_tracker_actor : actor<id_tracker_actor>
+struct id_tracker_actor : actor_base
 {
   id_tracker_actor(path dir);
 
-  void act();
-  char const* description() const;
+  cppa::behavior act() final;
+  char const* describe() const final;
 
   id_tracker id_tracker_;
 };

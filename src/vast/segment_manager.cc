@@ -67,27 +67,35 @@ segment_manager_actor::segment_manager_actor(size_t capacity, path dir)
 {
 }
 
-void segment_manager_actor::act()
+behavior segment_manager_actor::act()
 {
-  become(
-      on_arg_match >> [=](segment const& s)
+  return
+  {
+    [=](segment const& s)
+    {
+      if (! segment_manager_.store(*tuple_cast<segment>(last_dequeued())))
       {
-        if (! segment_manager_.store(*tuple_cast<segment>(last_dequeued())))
-        {
-          send_exit(self, exit::error);
-          return make_any_tuple(atom("segment"), atom("nack"), s.id());
-        }
+        quit(exit::error);
+        return make_any_tuple(atom("nack"), s.id());
+      }
 
-        return make_any_tuple(atom("segment"), atom("ack"), s.id());
-      },
-      on_arg_match >> [=](uuid const& id, actor_ptr const& sink)
-      {
-        VAST_LOG_ACTOR_DEBUG("retrieves segment " << id);
-        sink << segment_manager_.lookup(id);
-      });
+      return make_any_tuple(atom("ack"), s.id());
+    },
+    // FIXME: deprecated compatibility interface.
+    [=](uuid const& id, actor sink)
+    {
+      VAST_LOG_ACTOR_DEBUG("retrieves segment " << id);
+      send(sink, segment_manager_.lookup(id));
+    },
+    [=](uuid const& id)
+    {
+      VAST_LOG_ACTOR_DEBUG("retrieves segment " << id);
+      return segment_manager_.lookup(id);
+    }
+  };
 }
 
-char const* segment_manager_actor::description() const
+char const* segment_manager_actor::describe() const
 {
   return "segment-manager";
 }

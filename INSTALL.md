@@ -97,7 +97,6 @@ that the correct compiler executable is in your `PATH`.
 
 ### [Libcppa](https://github.com/Neverlord/libcppa)
 
-    git checkout 1dfc3d4a           # Temporarily only, master soon.
     ./configure --prefix=$PREFIX
     make
     make test

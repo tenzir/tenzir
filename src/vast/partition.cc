@@ -183,8 +183,8 @@ struct dispatcher : expr::default_const_visitor
     auto p = actor_.dir_ / "time.idx";
     auto& s = actor_.indexers_[p];
     if (! s.actor)
-      s.actor =
-        spawn<event_time_indexer<default_bitstream>, monitored>(std::move(p));
+      s.actor = actor_.spawn<event_time_indexer<default_bitstream>, monitored>(
+          std::move(p));
 
     indexes_.push_back(s.actor);
   }
@@ -194,8 +194,8 @@ struct dispatcher : expr::default_const_visitor
     auto p = actor_.dir_ / "name.idx";
     auto& s = actor_.indexers_[p];
     if (! s.actor)
-      s.actor =
-        spawn<event_name_indexer<default_bitstream>, monitored>(std::move(p));
+      s.actor = actor_.spawn<event_name_indexer<default_bitstream>, monitored>(
+          std::move(p));
 
     indexes_.push_back(s.actor);
   }
@@ -264,7 +264,7 @@ struct dispatcher : expr::default_const_visitor
 
   value const* value_ = nullptr;
   partition_actor& actor_;
-  std::vector<actor_ptr> indexes_;
+  std::vector<actor> indexes_;
 };
 
 } // namespace <anonymous>
@@ -276,9 +276,8 @@ partition_actor::partition_actor(path dir, size_t batch_size, uuid id)
 {
 }
 
-void partition_actor::act()
+behavior partition_actor::act()
 {
-  chaining(false);
   trap_exit(true);
 
   if (exists(dir_))
@@ -289,7 +288,7 @@ void partition_actor::act()
       VAST_LOG_ACTOR_ERROR("failed to load partition meta data from " <<
                            dir_ << ": " << t.error().msg());
       quit(exit::error);
-      return;
+      return {};
     }
 
     t = io::unarchive(dir_ / "schema", schema_);
@@ -297,7 +296,7 @@ void partition_actor::act()
     {
       VAST_LOG_ACTOR_ERROR("failed to load schema: " << t.error());
       quit(exit::error);
-      return;
+      return {};
     }
 
     indexers_[dir_ / "name.idx"];
@@ -339,7 +338,7 @@ void partition_actor::act()
     for (auto& p : indexers_)
       if (p.second.actor)
       {
-        p.second.actor << t;
+        send_tuple(p.second.actor, t);
         p.second.stats.backlog += n;
       }
   };
@@ -371,183 +370,185 @@ void partition_actor::act()
     }
   };
 
-  become(
-      on(atom("EXIT"), arg_match) >> [=](uint32_t reason)
+  attach_functor([=](uint32_t) { indexers_.clear(); }); 
+
+  return
+  {
+    [=](exit_msg const& e)
+    {
+      if (e.reason != exit::kill)
+        flush();
+
+      for (auto& p : indexers_)
+        if (p.second.actor)
+          send_exit(p.second.actor, e.reason);
+
+      quit(e.reason);
+    },
+    [=](down_msg const&)
+    {
+      VAST_LOG_ACTOR_DEBUG("got DOWN from " << last_sender());
+
+      for (auto& p : indexers_)
+        if (p.second.actor == last_sender())
+        {
+          p.second.actor = invalid_actor;
+          p.second.stats = {};
+          break;
+        }
+    },
+    [=](expr::ast const& pred, actor idx)
+    {
+      VAST_LOG_ACTOR_DEBUG("got predicate " << pred);
+
+      dispatcher d{*this};
+      pred.accept(d);
+
+      uint64_t n = d.indexes_.size();
+      send(idx, pred, partition_.meta().id, n);
+
+      if (n == 0)
       {
-        if (reason != exit::kill)
-          flush();
-
-        for (auto& p : indexers_)
-          if (p.second.actor)
-            send_exit(p.second.actor, reason);
-
-        quit(reason);
-      },
-      on(atom("DOWN"), arg_match) >> [=](uint32_t /* reason */)
+        send(idx, pred, partition_.meta().id, bitstream{});
+      }
+      else
       {
-        VAST_LOG_ACTOR_DEBUG("got DOWN from " << VAST_ACTOR_ID(last_sender()));
+        auto t = make_any_tuple(pred, partition_.meta().id, idx);
+        for (auto& a : d.indexes_)
+          send_tuple(a, t);
+      }
+    },
+    on(atom("flush")) >> flush,
+    [=](segment const& s)
+    {
+      VAST_LOG_ACTOR_VERBOSE(
+          "processes " << s.events() << " events from segment " << s.id());
 
-        for (auto& p : indexers_)
-          if (p.second.actor == last_sender())
+      auto sch = schema::merge(schema_, s.schema());
+      if (! sch)
+      {
+        VAST_LOG_ACTOR_ERROR("failed to merge schema: " << sch.error());
+        VAST_LOG_ACTOR_ERROR("ignores segment " << s.id());
+        quit(exit::error);
+        return;
+      }
+
+      schema_ = std::move(*sch);
+
+      for (auto& t : s.schema())
+        t->each(
+          [&](key const& k, offset const& o)
           {
-            p.second.actor = {};
-            p.second.stats = {};
-            break;
-          }
-      },
-      on_arg_match >> [=](expr::ast const& pred, actor_ptr const& sink)
+            auto p = path{"types"} / t->name();
+            for (auto& id : k)
+              p /= id;
+
+            auto i = create_data_indexer(p, o, t);
+            if (! i)
+            {
+              VAST_LOG_ACTOR_ERROR(i.error());
+              quit(exit::error);
+            }
+          });
+
+      std::vector<event> events;
+      events.reserve(batch_size_);
+
+      segment::reader r{&s};
+      while (auto e = r.read())
       {
-        VAST_LOG_ACTOR_DEBUG("got predicate " << pred <<
-                             " for " << VAST_ACTOR_ID(sink));
+        assert(e);
 
-        dispatcher d{*this};
-        pred.accept(d);
-
-        uint64_t n = d.indexes_.size();
-        send(last_sender(), pred, partition_.meta().id, n);
-
-        if (n == 0)
+        // We only support fully typed events at this point, but may loosen
+        // this constraint in the future.
+        auto& t = e->type();
+        if (t->name().empty() || util::get<invalid_type>(t->info()))
         {
-          send(last_sender(), pred, partition_.meta().id, bitstream{});
-        }
-        else
-        {
-          auto t = make_any_tuple(pred, partition_.meta().id, sink);
-          for (auto& a : d.indexes_)
-            a << t;
-        }
-      },
-      on(atom("flush")) >> flush,
-      on_arg_match >> [=](segment const& s)
-      {
-        VAST_LOG_ACTOR_VERBOSE(
-            "processes " << s.events() << " events from segment " << s.id());
-
-        auto sch = schema::merge(schema_, s.schema());
-        if (! sch)
-        {
-          VAST_LOG_ACTOR_ERROR("failed to merge schema: " << sch.error());
-          VAST_LOG_ACTOR_ERROR("ignores segment " << s.id());
+          VAST_LOG_ACTOR_ERROR("got invalid event " << *t << " for " << *e);
           quit(exit::error);
           return;
         }
 
-        schema_ = std::move(*sch);
-
-        for (auto& t : s.schema())
-          t->each(
-            [&](key const& k, offset const& o)
-            {
-              auto p = path{"types"} / t->name();
-              for (auto& id : k)
-                p /= id;
-
-              auto i = create_data_indexer(p, o, t);
-              if (! i)
-              {
-                VAST_LOG_ACTOR_ERROR(i.error());
-                quit(exit::error);
-              }
-            });
-
-        std::vector<event> events;
-        events.reserve(batch_size_);
-
-        segment::reader r{&s};
-        while (auto e = r.read())
+        events.push_back(std::move(*e));
+        if (events.size() == batch_size_)
         {
-          assert(e);
+          events.shrink_to_fit();
+          submit(std::move(events));
+          events = {};
+        }
+      }
 
-          // We only support fully typed events at this point, but may loosen
-          // this constraint in the future.
-          auto& t = e->type();
-          if (t->name().empty() || util::get<invalid_type>(t->info()))
-          {
-            VAST_LOG_ACTOR_ERROR("got invalid event " << *t << " for " << *e);
-            quit(exit::error);
-            return;
-          }
+      // Send away final events.
+      events.shrink_to_fit();
+      submit(std::move(events));
 
-          events.push_back(std::move(*e));
-          if (events.size() == batch_size_)
-          {
-            events.shrink_to_fit();
-            submit(std::move(events));
-            events = {};
-          }
+      // Record segment.
+      partition_.update(s);
+
+      // Flush partition meta data and data indexes.
+      flush();
+      send(this, atom("stats"), atom("show"));
+    },
+    on(atom("backlog")) >> [=]
+    {
+      uint64_t max_backlog = 0;
+      uint64_t last_rate = 0;
+      for (auto& p : indexers_)
+        if (p.second.stats.backlog > max_backlog)
+        {
+          max_backlog = p.second.stats.backlog;
+          last_rate = p.second.stats.rate;
         }
 
-        // Send away final events.
-        events.shrink_to_fit();
-        submit(std::move(events));
+      return make_any_tuple(atom("backlog"), max_backlog, last_rate);
+    },
+    [=](uint64_t processed, uint64_t indexed, uint64_t rate, uint64_t mean)
+    {
+      for (auto& p : indexers_)
+        if (p.second.actor == last_sender())
+        {
+          auto& stats = p.second.stats;
 
-        // Record segment.
-        partition_.update(s);
+          stats.backlog -= processed;
+          stats.values += indexed;
+          stats.rate = rate;
+          stats.mean = mean;
 
-        // Flush partition meta data and data indexes.
-        flush();
-        send(self, atom("stats"), atom("show"));
-      },
-      on(atom("backlog")) >> [=]
-      {
-        uint64_t max_backlog = 0;
-        uint64_t last_rate = 0;
-        for (auto& p : indexers_)
-          if (p.second.stats.backlog > max_backlog)
-          {
-            max_backlog = p.second.stats.backlog;
-            last_rate = p.second.stats.rate;
-          }
+          break;
+        }
+    },
+    on(atom("stats"), atom("show")) >> [=]
+    {
+      std::pair<uint64_t, actor> max_backlog = {0, invalid_actor};
+      uint64_t total_values = 0;
+      uint64_t total_rate = 0;
+      uint64_t total_mean = 0;
 
-        return make_any_tuple(atom("backlog"), max_backlog, last_rate);
-      },
-      on_arg_match >> [=](uint64_t processed, uint64_t indexed,
-                          uint64_t rate, uint64_t mean)
-      {
-        for (auto& p : indexers_)
-          if (p.second.actor == last_sender())
-          {
-            auto& stats = p.second.stats;
+      for (auto& p : indexers_)
+        if (p.second.actor)
+        {
+          if (p.second.stats.backlog > max_backlog.first)
+            max_backlog = {p.second.stats.backlog, p.second.actor};
 
-            stats.backlog -= processed;
-            stats.values += indexed;
-            stats.rate = rate;
-            stats.mean = mean;
+          total_values += p.second.stats.values;
+          total_rate += p.second.stats.rate;
+          total_mean += p.second.stats.mean;
+        }
 
-            break;
-          }
-      },
-      on(atom("stats"), atom("show")) >> [=]
-      {
-        std::pair<uint64_t, actor_ptr> max_backlog = {0, nullptr};
-        uint64_t total_values = 0;
-        uint64_t total_rate = 0;
-        uint64_t total_mean = 0;
+      if (total_rate > 0)
+        VAST_LOG_ACTOR_INFO(
+            "indexed " << total_values << " values at rate " <<
+            total_rate << " values/sec" << " (mean " << total_mean << ')');
 
-        for (auto& p : indexers_)
-          if (p.second.actor)
-          {
-            if (p.second.stats.backlog > max_backlog.first)
-              max_backlog = {p.second.stats.backlog, p.second.actor};
-
-            total_values += p.second.stats.values;
-            total_rate += p.second.stats.rate;
-            total_mean += p.second.stats.mean;
-          }
-
-        if (total_rate > 0)
-          VAST_LOG_ACTOR_INFO(
-              "indexed " << total_values << " values at rate " <<
-              total_rate << " values/sec" << " (mean " << total_mean << ')');
-
-        if (max_backlog.first > 0)
-          VAST_LOG_ACTOR_INFO(
-              "has a maximum backlog of " << max_backlog.first <<
-              " events at " << max_backlog.second->id());
-      });
+      if (max_backlog.first > 0)
+        VAST_LOG_ACTOR_INFO(
+            "has a maximum backlog of " << max_backlog.first <<
+            " events at " << max_backlog.second);
+    }
+  };
 }
 
-char const* partition_actor::description() const
+char const* partition_actor::describe() const
 {
   return "partition";
 }

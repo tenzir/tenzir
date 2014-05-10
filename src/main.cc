@@ -55,7 +55,7 @@ int main(int argc, char *argv[])
   // FIXME: if we do not detach the program actor, it becomes impossible to
   // intercept and handle SIGINT. Why?
   cppa::spawn<program, cppa::detached>(*config);
-  cppa::await_all_others_done();
+  cppa::await_all_actors_done();
   cppa::shutdown();
 
   cleanup();

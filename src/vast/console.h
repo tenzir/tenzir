@@ -12,7 +12,7 @@
 namespace vast {
 
 /// A console-based, interactive query client.
-struct console : actor<console>
+struct console : actor_base
 {
   struct options
   {
@@ -120,10 +120,10 @@ struct console : actor<console>
   /// Spawns the console client.
   /// @param search The search actor the console interacts with.
   /// @param dir The directory where to save state.
-  console(cppa::actor_ptr search, path dir);
+  console(cppa::actor search, path dir);
 
-  void act();
-  char const* description() const;
+  cppa::behavior act() final;
+  char const* describe() const final;
 
   /// Prints status information to standard error.
   std::ostream& print(print_mode mode);
@@ -139,11 +139,12 @@ struct console : actor<console>
   void unfollow();
 
   path dir_;
-  std::vector<intrusive_ptr<result>> results_;
-  std::map<cppa::actor_ptr, intrusive_ptr<result>> connected_;
   intrusive_ptr<result> active_;
-  cppa::actor_ptr search_;
-  cppa::actor_ptr keystroke_monitor_;
+  std::vector<intrusive_ptr<result>> results_;
+  std::map<cppa::actor_addr, std::pair<cppa::actor, intrusive_ptr<result>>>
+    connected_;
+  cppa::actor search_;
+  cppa::actor keystroke_monitor_;
   util::command_line cmdline_;
   options opts_;
   bool following_ = false;

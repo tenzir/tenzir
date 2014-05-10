@@ -7,18 +7,18 @@
 namespace vast {
 
 /// Monitors the application for UNIX signals and forwards them to an actor.
-class signal_monitor : public actor<signal_monitor>
+class signal_monitor : public actor_base
 {
 public:
   /// Spawns the system monitor with a given receiver.
   /// @param receiver the actor receiving the signals.
-  signal_monitor(cppa::actor_ptr receiver);
+  signal_monitor(cppa::actor receiver);
 
-  void act();
-  char const* description() const;
+  cppa::behavior act() final;
+  char const* describe() const final;
 
 private:
-  cppa::actor_ptr receiver_;
+  cppa::actor receiver_;
 };
 
 } // namespace vast

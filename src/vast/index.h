@@ -101,12 +101,12 @@ private:
 };
 
 /// The event index.
-struct index_actor : actor<index_actor>
+struct index_actor : actor_base
 {
   struct query_state
   {
     bitstream hits;
-    util::flat_set<cppa::actor_ptr> subscribers;
+    util::flat_set<cppa::actor> subscribers;
   };
 
   /// Spawns the index.
@@ -116,15 +116,15 @@ struct index_actor : actor<index_actor>
 
   trial<void> make_partition(path const& dir);
 
-  void act();
-  char const* description() const;
+  cppa::behavior act() final;
+  char const* describe() const final;
 
   path dir_;
   size_t batch_size_;
   std::map<expr::ast, query_state> queries_;
-  std::unordered_map<uuid, cppa::actor_ptr> part_actors_;
+  std::unordered_map<uuid, cppa::actor> part_actors_;
   std::map<string, uuid> parts_;
-  std::pair<uuid, cppa::actor_ptr> active_;
+  std::pair<uuid, cppa::actor> active_;
   index index_;
 };
 

@@ -11,7 +11,7 @@ namespace vast {
 /// Receives segments, imbues them with an ID from TRACKER, and relays them to
 /// ARCHIVE and INDEX. It also forwards the segment schema to SEARCH.
 /// The receiver forms the server-side counterpart to an ingestor.
-class receiver_actor : public actor<receiver_actor>
+class receiver_actor : public actor_base
 {
 public:
   /// Spawns a receiver.
@@ -19,21 +19,21 @@ public:
   /// @param archive The archive actor.
   /// @param index The index actor.
   /// @param search The search actor.
-  receiver_actor(cppa::actor_ptr tracker,
-                 cppa::actor_ptr archive,
-                 cppa::actor_ptr index,
-                 cppa::actor_ptr search);
+  receiver_actor(cppa::actor tracker,
+                 cppa::actor archive,
+                 cppa::actor index,
+                 cppa::actor search);
 
-  void act();
-  char const* description() const;
+  cppa::behavior act() final;
+  char const* describe() const final;
 
 private:
-  cppa::actor_ptr tracker_;
-  cppa::actor_ptr archive_;
-  cppa::actor_ptr index_;
-  cppa::actor_ptr search_;
+  cppa::actor tracker_;
+  cppa::actor archive_;
+  cppa::actor index_;
+  cppa::actor search_;
   std::queue<segment> segments_;
-  std::set<cppa::actor_ptr> ingestors_;
+  std::set<cppa::actor> ingestors_;
 };
 
 } // namespace vast

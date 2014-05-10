@@ -28,12 +28,12 @@ void signal_handler(int signo)
 
 using namespace cppa;
 
-signal_monitor::signal_monitor(actor_ptr receiver)
+signal_monitor::signal_monitor(actor receiver)
   : receiver_{std::move(receiver)}
 {
 }
 
-void signal_monitor::act()
+behavior signal_monitor::act()
 {
   VAST_LOG_ACTOR_DEBUG("sends signals to @" << receiver_->id());
 
@@ -41,21 +41,24 @@ void signal_monitor::act()
   for (auto s : { SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGUSR1, SIGUSR2 })
     std::signal(s, &signal_handler);
 
-  become(
-      on(atom("act")) >> [=]
+  return
+  {
+    on(atom("act")) >> [=]
+    {
+      if (signals[0] > 0)
       {
-        if (signals[0] > 0)
-        {
-          signals[0] = 0;
-          for (int i = 0; size_t(i) < signals.size(); ++i)
-            while (signals[i]-- > 0)
-              send(receiver_, atom("signal"), i);
-        }
-        self << last_dequeued();
-      });
+        signals[0] = 0;
+        for (int i = 0; size_t(i) < signals.size(); ++i)
+          while (signals[i]-- > 0)
+            send(receiver_, atom("signal"), i);
+      }
+
+      send_tuple(this, last_dequeued());
+      }
+  };
 }
 
-char const* signal_monitor::description() const
+char const* signal_monitor::describe() const
 {
   return "signal-monitor";
 }

@@ -190,7 +190,7 @@ bool query::instantiate()
 
 using namespace cppa;
 
-query_actor::query_actor(actor_ptr archive, actor_ptr sink, expr::ast ast)
+query_actor::query_actor(actor archive, actor sink, expr::ast ast)
   : archive_{std::move(archive)},
     sink_{std::move(sink)},
     query_{std::move(ast), [=](event e) { send(sink_, std::move(e)); }}
@@ -214,7 +214,7 @@ void query_actor::prefetch(size_t max)
     if (std::find(inflight_.begin(), inflight_.end(), i) == inflight_.end())
     {
       inflight_.push_back(i);
-      send(archive_, atom("segment"), i);
+      send(archive_, i, this);
       VAST_LOG_ACTOR_DEBUG("asks for segment containing id " << i);
     }
   }
@@ -270,90 +270,96 @@ void query_actor::extract(uint64_t n)
   }
 }
 
-void query_actor::act()
+behavior query_actor::act()
 {
-  chaining(false);
-
-  become(
-      on(atom("progress"), arg_match) >> [=](double progress, uint64_t hits)
+  attach_functor(
+      [=](uint32_t)
       {
-        send(sink_, atom("progress"), progress, hits);
-
-        if (progress == 1.0)
-        {
-          VAST_LOG_ACTOR_DEBUG("completed index interaction with "
-                               << hits << " hits");
-
-          query_.finish();
-          if (query_.state() == query::done)
-          {
-            send(sink_, atom("done"));
-            quit(exit::done);
-          }
-        }
-      },
-      on_arg_match >> [=](bitstream const& hits, double progress)
-      {
-        assert(hits);
-        assert(! hits.empty());
-        assert(hits.find_first() != bitstream::npos);
-
-        VAST_LOG_ACTOR_DEBUG("got index hit covering [" << hits.find_first()
-                             << ',' << hits.find_last() << "] (" <<
-                             int(progress * 100) << "%)");
-
-        query_.add(hits);
-
-        if (query_.state() == query::waiting)
-          prefetch(prefetch_);
-      },
-      on_arg_match >> [=](segment const&)
-      {
-        cow<segment> s = *tuple_cast<segment>(last_dequeued());
-
-        auto i = std::remove_if(
-            inflight_.begin(),
-            inflight_.end(),
-            [&s](event_id eid) { return s->contains(eid); });
-
-        inflight_.erase(i, inflight_.end());
-
-        if (! query_.add(s))
-          VAST_LOG_ACTOR_WARN("ignores duplicate segment " << s->id());
-        else
-          VAST_LOG_ACTOR_DEBUG(
-              "added segment " << s->id() <<
-              " [" << s->base() << ", " << s->base() + s->events() << ")");
-
-        prefetch(prefetch_);
-
-        if (requested_ > 0 && query_.state() == query::ready)
-          extract(requested_);
-      },
-      on(atom("1st batch"), arg_match) >> [=](uint64_t n)
-      {
-        VAST_LOG_ACTOR_DEBUG("sets size of first batch to " << n);
-        requested_ = n;
-      },
-      on(atom("extract"), arg_match) >> [=](uint64_t n)
-      {
-        requested_ += n;
-        extract(n);
-      },
-      on(atom("no segment"), arg_match) >> [=](event_id eid)
-      {
-        VAST_LOG_ACTOR_ERROR("could not obtain segment for event ID " << eid);
-        quit(exit::error);
-      },
-      others() >> [=]
-      {
-        VAST_LOG_ACTOR_ERROR("got unexpected message from @" <<
-                             last_sender()->id() << ": " <<
-                             to_string(last_dequeued()));
+        archive_ = invalid_actor;
+        sink_ = invalid_actor;
       });
+
+  return
+  {
+    on(atom("progress"), arg_match) >> [=](double progress, uint64_t hits)
+    {
+      send(sink_, atom("progress"), progress, hits);
+
+      if (progress == 1.0)
+      {
+        VAST_LOG_ACTOR_DEBUG("completed index interaction with "
+                             << hits << " hits");
+
+        query_.finish();
+        if (query_.state() == query::done)
+        {
+          send(sink_, atom("done"));
+          quit(exit::done);
+        }
+      }
+    },
+    [=](bitstream const& hits, double progress)
+    {
+      assert(hits);
+      assert(! hits.empty());
+      assert(hits.find_first() != bitstream::npos);
+
+      VAST_LOG_ACTOR_DEBUG("got index hit covering [" << hits.find_first()
+                           << ',' << hits.find_last() << "] (" <<
+                           int(progress * 100) << "%)");
+
+      query_.add(hits);
+
+      if (query_.state() == query::waiting)
+        prefetch(prefetch_);
+    },
+    [=](segment const&)
+    {
+      cow<segment> s = *tuple_cast<segment>(last_dequeued());
+
+      auto i = std::remove_if(
+          inflight_.begin(),
+          inflight_.end(),
+          [&s](event_id eid) { return s->contains(eid); });
+
+      inflight_.erase(i, inflight_.end());
+
+      if (! query_.add(s))
+        VAST_LOG_ACTOR_WARN("ignores duplicate segment " << s->id());
+      else
+        VAST_LOG_ACTOR_DEBUG(
+            "added segment " << s->id() <<
+            " [" << s->base() << ", " << s->base() + s->events() << ")");
+
+      prefetch(prefetch_);
+
+      if (requested_ > 0 && query_.state() == query::ready)
+        extract(requested_);
+    },
+    on(atom("1st batch"), arg_match) >> [=](uint64_t n)
+    {
+      VAST_LOG_ACTOR_DEBUG("sets size of first batch to " << n);
+      requested_ = n;
+    },
+    on(atom("extract"), arg_match) >> [=](uint64_t n)
+    {
+      requested_ += n;
+      extract(n);
+    },
+    on(atom("no segment"), arg_match) >> [=](event_id eid)
+    {
+      VAST_LOG_ACTOR_ERROR("could not obtain segment for event ID " << eid);
+      quit(exit::error);
+    },
+    others() >> [=]
+    {
+      VAST_LOG_ACTOR_ERROR("got unexpected message from " <<
+                           last_sender() << ": " << to_string(last_dequeued()));
+    }
+  };
 }
 
-char const* query_actor::description() const
+char const* query_actor::describe() const
 {
   return "query";
 }

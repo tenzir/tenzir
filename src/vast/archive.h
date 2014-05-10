@@ -7,6 +7,7 @@
 #include "vast/file_system.h"
 #include "vast/uuid.h"
 #include "vast/util/range_map.h"
+#include "vast/util/lru_cache.h"
 
 namespace vast {
 
@@ -18,7 +19,8 @@ class archive
 public:
   /// Constructs the archive.
   /// @param directory The root directory of the archive.
-  archive(path directory);
+  /// @param capacity The number of segments to hold in memory.
+  archive(path directory, size_t capacity);
 
   /// Retrieves the directory of the archive.
   path const& dir() const;
@@ -26,38 +28,35 @@ public:
   /// Initializes the archive. This involves parsing the meta data of existing
   /// segments from disk an reconstructing the internal data structures to map
   /// event IDs to segments.
-  void load();
+  void initialize();
 
-  /// Stores segment meta data.
-  /// @param s The segment to record meta data from.
+  /// Records a given segment to disk and puts it in the cache.
+  /// @param msg The segment to store.
   /// @returns `true` on success.
-  bool store(segment const& s);
+  bool store(cppa::any_tuple msg);
 
-  /// Retrieves the segment UUID for a given event id.
-  ///
-  /// @param eid The event ID.
-  ///
-  /// @returns A tuple with the first component holding a pointer to the
-  /// segment ID corresponding to *eid* and `nullptr` if *eid* does not map to
-  /// a valid segment. If the first component is valid, the remaining two
-  /// represent the ID interval for the segment and are set to *<0,0>*
-  /// otherwise..
-  std::tuple<uuid const*, event_id, event_id> lookup(event_id eid) const;
+  /// Retrieves a segment for a given event ID.
+  /// @param eid The event ID to find the segment for.
+  /// @return The segment containing the event with *id*.
+  trial<cppa::any_tuple> load(event_id eid);
 
 private:
-  path directory_;
+  cppa::any_tuple on_miss(uuid const& id);
+
+  path dir_;
+  std::unordered_map<uuid, path> segment_files_;
   util::range_map<event_id, uuid> ranges_;
+  util::lru_cache<uuid, cppa::any_tuple> cache_;
 };
 
-struct archive_actor : actor<archive_actor>
+struct archive_actor : actor_base
 {
   archive_actor(path directory, size_t max_segments);
 
-  void act();
-  char const* description() const;
+  cppa::behavior act() final;
+  char const* describe() const final;
 
   archive archive_;
-  cppa::actor_ptr segment_manager_;
 };
 
 } // namespace vast

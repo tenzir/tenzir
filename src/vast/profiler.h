@@ -1,5 +1,5 @@
-#ifndef VAST_UTIL_PROFILER_H
-#define VAST_UTIL_PROFILER_H
+#ifndef VAST_PROFILER_H
+#define VAST_PROFILER_H
 
 #include <chrono>
 #include <fstream>
@@ -7,10 +7,9 @@
 #include "vast/file_system.h"
 
 namespace vast {
-namespace util {
 
 /// A simple CPU profiler.
-class profiler : public actor<profiler>
+class profiler : public actor_base
 {
 public:
   /// A resoure measurement.
@@ -31,8 +30,8 @@ public:
   /// @param secs The number of seconds between subsequent measurements.
   profiler(path log_dir, std::chrono::seconds secs);
 
-  void act();
-  char const* description() const;
+  cppa::behavior act() final;
+  char const* describe() const final;
 
 private:
   path const log_dir_;
@@ -40,7 +39,6 @@ private:
   std::chrono::seconds secs_;
 };
 
-} // namespace util
 } // namespace vast
 
 #endif

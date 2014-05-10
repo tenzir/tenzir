@@ -85,22 +85,22 @@ private:
   util::range_map<event_id, cow<segment>> segments_;
 };
 
-struct query_actor : actor<query_actor>
+struct query_actor : actor_base
 {
   /// Spawns a query actor.
   /// @param archive The archive actor.
   /// @param sink The sink receiving the query results.
   /// @param ast The query expression ast.
-  query_actor(cppa::actor_ptr archive, cppa::actor_ptr sink, expr::ast ast);
+  query_actor(cppa::actor archive, cppa::actor sink, expr::ast ast);
 
-  void act();
-  char const* description() const;
+  cppa::behavior act() final;
+  char const* describe() const final;
 
   void prefetch(size_t max);
   void extract(uint64_t n);
 
-  cppa::actor_ptr archive_;
-  cppa::actor_ptr sink_;
+  cppa::actor archive_;
+  cppa::actor sink_;
   query query_;
 
   std::vector<event_id> inflight_;

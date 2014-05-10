@@ -23,6 +23,7 @@ set(libvast_sources
   partition.cc
   port.cc
   prefix.cc
+  profiler.cc
   program.cc
   query.cc
   receiver.cc
@@ -31,7 +32,6 @@ set(libvast_sources
   search.cc
   search_result.cc
   segment.cc
-  segment_manager.cc
   segmentizer.cc
   serialization.cc
   signal_monitor.cc
@@ -56,7 +56,6 @@ set(libvast_sources
   io/stream.cc
   source/file.cc
   util/poll.cc
-  util/profiler.cc
   util/terminal.cc
   util/hash/crc.cc
   util/hash/murmur.cc

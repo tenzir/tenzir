@@ -42,12 +42,12 @@ private:
   std::unordered_map<uuid, path> segment_files_;
 };
 
-struct segment_manager_actor : actor<segment_manager_actor>
+struct segment_manager_actor : actor_base
 {
   segment_manager_actor(size_t capacity, path dir);
 
-  void act();
-  char const* description() const;
+  cppa::behavior act() final;
+  char const* describe() const final;
 
   segment_manager segment_manager_;
 };

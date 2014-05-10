@@ -2,7 +2,7 @@
 #define VAST_SOURCE_ASYNCHRONOUS_H
 
 #include <cassert>
-#include <cppa/cppa.hpp>
+#include "vast/actor.h"
 #include "vast/event.h"
 
 namespace vast {
@@ -11,7 +11,7 @@ namespace source {
 /// An asynchronous source that buffers and relays events in batches.
 /// Any child deriving from this class must be an actor.
 template <typename Derived>
-class asynchronous : public cppa::event_based_actor
+class asynchronous : public actor_base
 {
 public:
   /// Spawns an asynchronous source.
@@ -25,7 +25,7 @@ public:
         {
           batch_size_ = batch_size;
         },
-        on_arg_match >> [=](event& e)
+        [=](event& e)
         {
           assert(sink_);
           if (batch_size_ == 0)
@@ -37,7 +37,7 @@ public:
           this->events_.push_back(std::move(e));
           send_events();
         },
-        on_arg_match >> [=](std::vector<event>& v)
+        [=](std::vector<event>& v)
         {
           assert(sink_);
 
@@ -53,9 +53,9 @@ public:
   }
 
   /// Implements `cppa::event_based_actor::init`.
-  void init() override
+  behavior act() final
   {
-    become(operating_.or_else(static_cast<Derived*>(this)->impl_));
+    return operating_.or_else(static_cast<Derived*>(this)->impl_);
   }
 
   void send_events()

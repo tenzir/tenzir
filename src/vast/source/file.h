@@ -23,7 +23,7 @@ public:
   /// Constructs a file source.
   /// @param sink The actor to send the generated events to.
   /// @param filename The name of the file to ingest.
-  file(cppa::actor_ptr sink, std::string const& filename)
+  file(cppa::actor sink, std::string const& filename)
     : synchronous<file<Derived>>{std::move(sink)},
       file_handle_{path{filename}},
       file_stream_{file_handle_}
@@ -87,7 +87,7 @@ private:
 class bro2 : public file<bro2>
 {
 public:
-  bro2(cppa::actor_ptr sink, std::string const& filename,
+  bro2(cppa::actor sink, std::string const& filename,
        int32_t timestamp_field);
 
   result<event> extract_impl();

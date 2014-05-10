@@ -56,7 +56,7 @@ private:
   meta_data meta_;
 };
 
-struct partition_actor : actor<partition_actor>
+struct partition_actor : actor_base
 {
   struct indexer_state
   {
@@ -68,7 +68,7 @@ struct partition_actor : actor<partition_actor>
       uint64_t mean = 0;    // Mean indexing rate (values/sec).
     };
 
-    cppa::actor_ptr actor;
+    cppa::actor actor;
     type_const_ptr type;
     offset off;
     statistics stats;
@@ -76,8 +76,8 @@ struct partition_actor : actor<partition_actor>
 
   partition_actor(path dir, size_t batch_size, uuid id = uuid::random());
 
-  void act();
-  char const* description() const;
+  cppa::behavior act() final;
+  char const* describe() const final;
 
   template <typename Bitstream = default_bitstream>
   trial<void> load_data_indexer(path const& p)

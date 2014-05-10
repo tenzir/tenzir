@@ -1,7 +1,7 @@
 #include "test.h"
 
 #include <forward_list>
-#include "vast/util/short_alloc.h"
+#include "vast/util/alloc.h"
 
 using namespace vast;
 

@@ -16,9 +16,9 @@ namespace vast {
 
 namespace {
 
-struct keystroke_monitor : actor<keystroke_monitor>
+struct keystroke_monitor : actor_base
 {
-  keystroke_monitor(actor_ptr sink)
+  keystroke_monitor(actor sink)
     : sink_{sink}
   {
     el_.on_char_read(
@@ -37,40 +37,42 @@ struct keystroke_monitor : actor<keystroke_monitor>
         });
   }
 
-  void act()
+  behavior act()
   {
-    become(
-        on(atom("start")) >> [=]
-        {
-          el_.reset();
-          running_ = true;
-          send(self, atom("get"));
-        },
-        on(atom("stop")) >> [=]
-        {
-          running_ = false;
-        },
-        on(atom("get")) >> [=]
-        {
-          if (! running_)
-            return;
+    return
+    {
+      on(atom("start")) >> [=]
+      {
+        el_.reset();
+        running_ = true;
+        send(this, atom("get"));
+      },
+      on(atom("stop")) >> [=]
+      {
+        running_ = false;
+      },
+      on(atom("get")) >> [=]
+      {
+        if (! running_)
+          return;
 
-          char c;
-          if (el_.get(c))
-            send(sink_, atom("key"), c);
-          else
-            send(self, atom("get"));
-        });
+        char c;
+        if (el_.get(c))
+          send(sink_, atom("key"), c);
+        else
+          send(this, atom("get"));
+      }
+    };
   };
 
-  char const* description() const
+  char const* describe() const
   {
     return "keystroke-monitor";
   };
 
   bool running_ = true;
   util::editline el_;
-  actor_ptr sink_;
+  actor sink_;
 };
 
 
@@ -107,7 +109,7 @@ cow_event_less_than cow_event_lt;
 
 } // namespace <anonymous>
 
-console::console(cppa::actor_ptr search, path dir)
+console::console(cppa::actor search, path dir)
   : dir_{std::move(dir)},
     search_{std::move(search)}
 {
@@ -238,8 +240,8 @@ console::console(cppa::actor_ptr search, path dir)
       {
         std::set<intrusive_ptr<result>> active;
         for (auto& p : connected_)
-          if (p.first)
-            active.insert(p.second);
+          if (p.second.first)
+            active.insert(p.second.second);
 
         for (auto& r : results_)
           print(none)
@@ -311,22 +313,22 @@ console::console(cppa::actor_ptr search, path dir)
         if (args.empty())
           return false;
 
-        sync_send(search_, atom("query"), atom("create"), args).then(
-            on(atom("EXITED"), arg_match) >> [=](uint32_t reason)
+        sync_send(search_, atom("query"), atom("create"), this, args).then(
+            on_arg_match >> [=](sync_exited_msg const& e)
             {
               print(fail)
-                << "search terminated with exit code " << reason << std::endl;
+                << "search terminated with exit code " << e.reason << std::endl;
 
               quit(exit::error);
             },
-            on_arg_match >> [=](error const& e)
+            [=](error const& e)
             {
               print(fail) << "syntax error: " << e << std::endl;
-              send(self, atom("prompt"));
+              send(this, atom("prompt"));
             },
-            on_arg_match >> [=](expr::ast const& ast, actor_ptr const& qry)
+            [=](expr::ast const& ast, actor const& qry)
             {
-              assert(! connected_.count(qry));
+              assert(! connected_.count(qry.address()));
               assert(qry);
               assert(ast);
 
@@ -341,7 +343,7 @@ console::console(cppa::actor_ptr search, path dir)
               if (i != results_.end())
                 print(warn) << "duplicate query for " << (*i)->id() << std::endl;
 
-              connected_.emplace(qry, active_);
+              connected_.emplace(qry->address(), std::make_pair(qry, active_));
               results_.push_back(active_);
 
               print(info)
@@ -355,13 +357,13 @@ console::console(cppa::actor_ptr search, path dir)
               if (opts_.auto_follow)
                 follow();
               else
-                send(self, atom("prompt"));
+                send(this, atom("prompt"));
             },
             others() >> [=]
             {
               VAST_LOG_ACTOR_ERROR("got unexpected message: " <<
                                    to_string(last_dequeued()));
-              send(self, atom("prompt"));
+              send(this, atom("prompt"));
             });
 
       return {};
@@ -616,10 +618,8 @@ void console::result::deserialize(deserializer& source)
 }
 
 
-void console::act()
+behavior console::act()
 {
-  chaining(false);
-
   print(none)
     << util::color::red
     << "     _   _____   __________\n"
@@ -631,9 +631,9 @@ void console::act()
     << util::color::reset
     << std::endl;
 
-  keystroke_monitor_ = spawn<keystroke_monitor, detached+linked>(self);
+  keystroke_monitor_ = spawn<keystroke_monitor, detached+linked>(this);
 
-  auto remove = [=](actor_ptr doomed)
+  auto remove = [=](actor_addr doomed)
   {
     if (connected_.count(doomed))
     {
@@ -647,300 +647,312 @@ void console::act()
   send(search_, atom("client"), atom("connected"));
   send(search_, atom("client"), atom("batch size"), opts_.batch_size);
 
-  become(
-      on(atom("exited")) >> [=]
+  attach_functor(
+      [=](uint32_t)
+      {
+        connected_.clear();
+        search_ = invalid_actor;
+        keystroke_monitor_ = invalid_actor;
+      });
+
+  return
+  {
+    [=](down_msg const&)
+    {
+      if (last_sender() == search_.address())
       {
         print(fail) << "search terminated" << std::endl;
         quit(exit::error);
-      },
-      on(atom("DOWN"), arg_match) >> [=](uint32_t)
+      }
+      else
       {
-        VAST_LOG_ACTOR_DEBUG("got DOWN from query " <<
-                             VAST_ACTOR_ID(last_sender()));
-
-
+        VAST_LOG_ACTOR_DEBUG("got DOWN from query " << last_sender());
         remove(last_sender());
-      },
-      on_arg_match >> [=](error const& e)
-      {
-        print(fail) << e << std::endl;
-        prompt();
-      },
-      on(atom("done")) >> [=]
-      {
-        VAST_LOG_ACTOR_DEBUG("got done notification from query "
-                             << VAST_ACTOR_ID(last_sender()));
+      }
+    },
+    [=](error const& e)
+    {
+      print(fail) << e << std::endl;
+      prompt();
+    },
+    on(atom("done")) >> [=]
+    {
+      VAST_LOG_ACTOR_DEBUG("got done notification from query "
+                           << last_sender());
 
-        remove(last_sender());
-      },
-      on(atom("prompt")) >> [=]
+      remove(last_sender());
+    },
+    on(atom("prompt")) >> [=]
+    {
+      prompt();
+    },
+    on(atom("progress"), arg_match) >> [=](double progress, uint64_t hits)
+    {
+      auto i = connected_.find(last_sender());
+      assert(i != connected_.end());
+      intrusive_ptr<result> r;
+      // FIXME: see other note on message reordering.
+      //if (i == connected_.end())
+      //{
+      //  VAST_LOG_ACTOR_WARN(
+      //      "got orphaned progress update: " << int(progress * 100) <<
+      //      "%, " << hits << " hits");
+
+      //  r = active_;
+      //}
+      //else
       {
-        prompt();
-      },
-      on(atom("progress"), arg_match) >> [=](double progress, uint64_t hits)
+        r = i->second.second;
+      }
+
+      assert(r);
+      r->hits(hits);
+
+      if (r->progress() <= progress + 0.05 || progress == 1.0)
       {
-        auto i = connected_.find(last_sender());
-        //assert(i != connected_.end());
-        intrusive_ptr<result> r;
-        if (i == connected_.end())
+        if (following_)
         {
-          // FIXME: see other note on messag reordering.
-          VAST_LOG_ACTOR_WARN(
-              "got orphaned progress update: " << int(progress * 100) <<
-              "%, " << hits << " hits");
-
-          r = active_;
-        }
-        else
-        {
-          r = i->second;
-        }
-
-        assert(r);
-        r->hits(hits);
-
-        if (r->progress() <= progress + 0.05 || progress == 1.0)
-        {
-          if (following_)
+          auto base = r->progress();
+          if (! appending_)
           {
-            auto base = r->progress();
-            if (! appending_)
-            {
-              print(query)
-                << "progress "
-                << util::color::blue << '|' << util::color::reset;
+            print(query)
+              << "progress "
+              << util::color::blue << '|' << util::color::reset;
 
-              base = 0.0;
-              appending_ = true;
-            }
-
-            print(none) << util::color::green;
-            for (auto d = base; d < progress; d += 0.05)
-              print(none) << '*';
-            print(none) << util::color::reset << std::flush;
-
-            if (progress == 1.0)
-            {
-              print(none)
-                << util::color::green << '*'
-                << util::color::blue << '|'
-                << util::color::reset << ' ' << hits << " hits" << std::endl;
-
-              appending_ = false;
-
-              if (hits == 0)
-                unfollow();
-            }
+            base = 0.0;
+            appending_ = true;
           }
 
-          r->progress(progress);
-        }
-      },
-      on_arg_match >> [=](event const& e)
-      {
-        auto i = connected_.find(last_sender());
-        intrusive_ptr<result> r;
-        if (i == connected_.end())
-        {
-          // FIXME: We're currently experiencing a message reordering issue in
-          // libcpppa that causes events (and progress reports) to arrive
-          // *after* receiving the DOWN message from the corresponding query.
-          // This should technically not happen because a query actor only
-          // terminates after having sent all events. Only these cases we see
-          // "orphaned" results.
-          //
-          // To fix this, we opportunisticly assume that the message comes from
-          // the last active result.
-          VAST_LOG_ACTOR_WARN("got orphaned query result: " << e);
-          r = active_;
-        }
-        else
-        {
-          r = i->second;
-        }
+          print(none) << util::color::green;
+          for (auto d = base; d < progress; d += 0.05)
+            print(none) << '*';
+          print(none) << util::color::reset << std::flush;
 
-        assert(r);
-
-        cow<event> ce = *tuple_cast<event>(last_dequeued());
-        r->add(ce);
-
-        if (following_ && r == active_)
-        {
-          if (appending_)
+          if (progress == 1.0)
           {
-            print(none) << std::endl;
+            print(none)
+              << util::color::green << '*'
+              << util::color::blue << '|'
+              << util::color::reset << ' ' << hits << " hits" << std::endl;
+
             appending_ = false;
-          }
 
-          std::cout << *ce << std::endl;
-
-          if (expected_ > 0 && --expected_ == 0)
-            send(self, atom("key"), 's');
-        }
-      },
-      on(atom("key"), arg_match) >> [=](char key)
-      {
-        switch (key)
-        {
-          default:
-            {
-              std::string desc;
-              switch (key)
-              {
-                default:
-                  desc = key;
-                  break;
-                case '\t':
-                  desc = "\\t";
-                  break;
-              }
-
-              print(fail)
-                << "invalid key: '" << desc << "', press '?' for help"
-                << std::endl;
-            }
-            break;
-          case '\n':
-            print(none) << std::endl;
-            break;
-          case '?':
-            {
-              print(none)
-                << "interactive query control mode:\n"
-                << "\n"
-                << "     <space>  display the next batch of available results\n"
-                << "        a     archive the result on the file system\n"
-                << "  " << util::color::green << '*' << util::color::reset <<
-                      "     e     ask query for more results\n"
-                << "        j     seek one batch forward\n"
-                << "        k     seek one batch backword\n"
-                << "        s     show query status\n"
-                << "        q     leave query control mode\n"
-                << "        ?     display this help\n"
-                << "\n"
-                << "entries marked with " <<
-                   util::color::green << '*' << util::color::reset <<
-                   " require a connected query\n"
-                << std::endl;
-            }
-            break;
-          case ' ':
-            {
-              assert(active_);
-              auto n = active_->apply(
-                  opts_.batch_size,
-                  [](event const& e) { std::cout << e << std::endl; });
-
-              if (n == 0)
-                print(query) << "reached end of results" << std::endl;
-            }
-            break;
-          case 'a':
-            {
-              assert(active_);
-
-              // TODO: look if same AST already exists under a different file.
-              auto const dir =
-                dir_ / "results" / path{to_string(active_->id())};
-
-              if (exists(dir))
-              {
-                // TODO: support option to overwrite/append.
-                print(fail) << "results already exists" << std::endl;
-              }
-              else
-              {
-                if (! mkdir(dir))
-                {
-                  print(fail) << "failed to create dir: " << dir << std::endl;
-                  quit(exit::error);
-                  return;
-                }
-                auto n = active_->size();
-                print(query) << "saving result to " << dir  << std::endl;
-                io::archive(dir / "meta", *active_);
-                active_->save(dir / "data");
-                print(query) << "saved " << n << " events" << std::endl;
-              }
-
-              prompt();
-            }
-            return;
-          case 'e':
-            {
-              bool found = false;
-              for (auto& p : connected_)
-                if (p.second == active_)
-                {
-                  found = true;
-                  send(p.first, atom("extract"), opts_.batch_size);
-                  print(query)
-                    << "asks for " << opts_.batch_size
-                    << " more results" << std::endl;
-
-                  expected_ += opts_.batch_size;
-                }
-
-              if (! found)
-                print(query) << "not connected to query" << std::endl;
-            }
-            break;
-          case 'j':
-            {
-              assert(active_);
-              auto n = active_->seek_forward(opts_.batch_size);
-              print(query) << "seeked +" << n << " events" << std::endl;
-            }
-            break;
-          case 'k':
-            {
-              assert(active_);
-              auto n = active_->seek_backward(opts_.batch_size);
-              print(query) << "seeked -" << n << " events" << std::endl;
-            }
-            break;
-          case EOF:
-          case '':
-          case 'q':
-            {
+            if (hits == 0)
               unfollow();
-            }
-            return;
-          case 's':
-            {
-              assert(active_);
-
-              print(query)
-                << "status: "
-                << active_->size() << '/' << active_->hits() <<  " hits, "
-                << active_->percent() << "% ";
-
-              print(none)
-                << util::color::blue << '|' << util::color::green;
-
-              auto p = static_cast<int>(active_->percent(0) / 5);
-              for (int i = 0; i < p; ++i)
-                print(none) << '*';
-              for (int i = 0; i < 20 - p; ++i)
-                print(none) << ' ';
-
-              print(none)
-                << util::color::blue << '|' << util::color::reset << ' ' << std::endl;
-            }
-            break;
+          }
         }
 
-        send(keystroke_monitor_, atom("get"));
-      },
-      others() >> [=]
+        r->progress(progress);
+      }
+    },
+    [=](event const&)
+    {
+      auto i = connected_.find(last_sender());
+      intrusive_ptr<result> r;
+      assert(i != connected_.end());
+
+      // FIXME: We're currently experiencing a message reordering issue in
+      // libcpppa that causes events (and progress reports) to arrive
+      // *after* receiving the DOWN message from the corresponding query.
+      // This should technically not happen because a query actor only
+      // terminates after having sent all events. Only these cases we see
+      // "orphaned" results.
+      //
+      // To fix this, we opportunisticly assume that the message comes from
+      // the last active result.
+      //if (i == connected_.end())
+      //{
+      //  VAST_LOG_ACTOR_WARN("got orphaned query result: " << e);
+      //  r = active_;
+      //}
+      //else
       {
-        VAST_LOG_ACTOR_ERROR("got unexpected message from @" <<
-                             last_sender()->id() << ": " <<
-                             to_string(last_dequeued()));
-      });
+        r = i->second.second;
+      }
+
+      assert(r);
+
+      cow<event> ce = *tuple_cast<event>(last_dequeued());
+      r->add(ce);
+
+      if (following_ && r == active_)
+      {
+        if (appending_)
+        {
+          print(none) << std::endl;
+          appending_ = false;
+        }
+
+        std::cout << *ce << std::endl;
+
+        if (expected_ > 0 && --expected_ == 0)
+          send(this, atom("key"), 's');
+      }
+    },
+    on(atom("key"), arg_match) >> [=](char key)
+    {
+      switch (key)
+      {
+        default:
+          {
+            std::string desc;
+            switch (key)
+            {
+              default:
+                desc = key;
+                break;
+              case '\t':
+                desc = "\\t";
+                break;
+            }
+
+            print(fail)
+              << "invalid key: '" << desc << "', press '?' for help"
+              << std::endl;
+          }
+          break;
+        case '\n':
+          print(none) << std::endl;
+          break;
+        case '?':
+          {
+            print(none)
+              << "interactive query control mode:\n"
+              << "\n"
+              << "     <space>  display the next batch of available results\n"
+              << "        a     archive the result on the file system\n"
+              << "  " << util::color::green << '*' << util::color::reset <<
+                    "     e     ask query for more results\n"
+              << "        j     seek one batch forward\n"
+              << "        k     seek one batch backword\n"
+              << "        s     show query status\n"
+              << "        q     leave query control mode\n"
+              << "        ?     display this help\n"
+              << "\n"
+              << "entries marked with " <<
+                 util::color::green << '*' << util::color::reset <<
+                 " require a connected query\n"
+              << std::endl;
+          }
+          break;
+        case ' ':
+          {
+            assert(active_);
+            auto n = active_->apply(
+                opts_.batch_size,
+                [](event const& e) { std::cout << e << std::endl; });
+
+            if (n == 0)
+              print(query) << "reached end of results" << std::endl;
+          }
+          break;
+        case 'a':
+          {
+            assert(active_);
+
+            // TODO: look if same AST already exists under a different file.
+            auto const dir =
+              dir_ / "results" / path{to_string(active_->id())};
+
+            if (exists(dir))
+            {
+              // TODO: support option to overwrite/append.
+              print(fail) << "results already exists" << std::endl;
+            }
+            else
+            {
+              if (! mkdir(dir))
+              {
+                print(fail) << "failed to create dir: " << dir << std::endl;
+                quit(exit::error);
+                return;
+              }
+              auto n = active_->size();
+              print(query) << "saving result to " << dir  << std::endl;
+              io::archive(dir / "meta", *active_);
+              active_->save(dir / "data");
+              print(query) << "saved " << n << " events" << std::endl;
+            }
+
+            prompt();
+          }
+          return;
+        case 'e':
+          {
+            bool found = false;
+            for (auto& p : connected_)
+              if (p.second.second == active_)
+              {
+                found = true;
+                send(p.second.first, atom("extract"), opts_.batch_size);
+                print(query)
+                  << "asks for " << opts_.batch_size
+                  << " more results" << std::endl;
+
+                expected_ += opts_.batch_size;
+              }
+
+            if (! found)
+              print(query) << "not connected to query" << std::endl;
+          }
+          break;
+        case 'j':
+          {
+            assert(active_);
+            auto n = active_->seek_forward(opts_.batch_size);
+            print(query) << "seeked +" << n << " events" << std::endl;
+          }
+          break;
+        case 'k':
+          {
+            assert(active_);
+            auto n = active_->seek_backward(opts_.batch_size);
+            print(query) << "seeked -" << n << " events" << std::endl;
+          }
+          break;
+        case EOF:
+        case '':
+        case 'q':
+          {
+            unfollow();
+          }
+          return;
+        case 's':
+          {
+            assert(active_);
+
+            print(query)
+              << "status: "
+              << active_->size() << '/' << active_->hits() <<  " hits, "
+              << active_->percent() << "% ";
+
+            print(none)
+              << util::color::blue << '|' << util::color::green;
+
+            auto p = static_cast<int>(active_->percent(0) / 5);
+            for (int i = 0; i < p; ++i)
+              print(none) << '*';
+            for (int i = 0; i < 20 - p; ++i)
+              print(none) << ' ';
+
+            print(none)
+              << util::color::blue << '|' << util::color::reset << ' ' << std::endl;
+          }
+          break;
+      }
+
+      send(keystroke_monitor_, atom("get"));
+    },
+    others() >> [=]
+    {
+      VAST_LOG_ACTOR_ERROR("got unexpected message from " <<
+                           last_sender() << ": " <<
+                           to_string(last_dequeued()));
+    }
+  };
 }
 
-char const* console::description() const
+char const* console::describe() const
 {
   return "console";
 }
@@ -1002,7 +1014,7 @@ void console::prompt(size_t ms)
     if (cmdline_.mode_pop() > 0)
       prompt();
     else
-      send_exit(self, exit::stop);
+      send_exit(this, exit::stop);
     return;
   }
 

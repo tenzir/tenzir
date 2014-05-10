@@ -71,17 +71,25 @@ id_tracker_actor::id_tracker_actor(path dir)
 {
 }
 
-void id_tracker_actor::act()
+behavior id_tracker_actor::act()
 {
   trap_exit(true);
-  become(
-    on(atom("EXIT"), arg_match) >> [=](uint32_t reason)
+
+  if (! id_tracker_.load())
+  {
+    VAST_LOG_ACTOR_ERROR("failed to load existing tracker ID from filesystem");
+    quit(exit::error);
+  }
+
+  return
+  {
+    [=](exit_msg const& e)
     {
       if (! id_tracker_.save())
         VAST_LOG_ACTOR_ERROR(
             "could not save current event ID " << id_tracker_.next_id());
 
-      quit(reason);
+      quit(e.reason);
     },
     on(atom("request"), arg_match) >> [=](uint64_t n)
     {
@@ -97,16 +105,11 @@ void id_tracker_actor::act()
         VAST_LOG_ACTOR_DEBUG("hands out [" << next << ',' << next + n << ')');
         return make_any_tuple(atom("id"), next, next + n);
       }
-    });
-  
-  if (! id_tracker_.load())
-  {
-    VAST_LOG_ACTOR_ERROR("failed to load existing tracker ID from filesystem");
-    quit(exit::error);
-  }
+    }
+  };
 }
 
-char const* id_tracker_actor::description() const
+char const* id_tracker_actor::describe() const
 {
   return "id-tracker";
 }

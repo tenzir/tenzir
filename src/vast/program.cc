@@ -9,11 +9,11 @@
 #include "vast/index.h"
 #include "vast/ingestor.h"
 #include "vast/logger.h"
+#include "vast/profiler.h"
 #include "vast/receiver.h"
 #include "vast/search.h"
 #include "vast/signal_monitor.h"
 #include "vast/detail/type_manager.h"
-#include "vast/util/profiler.h"
 
 #ifdef VAST_HAVE_BROCCOLI
 #include "vast/util/broccoli.h"
@@ -32,10 +32,8 @@ program::program(configuration const& config)
 {
 }
 
-void program::act()
+behavior program::act()
 {
-  chaining(false);
-
   behavior default_behavior = (
       on(atom("signal"), arg_match) >> [&](int signal)
       {
@@ -47,13 +45,11 @@ void program::act()
       {
         quit(exit::error);
         VAST_LOG_ACTOR_ERROR("terminated after unexpected message from " <<
-                             VAST_ACTOR_ID(last_sender()) << ": " <<
-                             to_string(self->last_dequeued()));
+                             last_sender() << ": " <<
+                             to_string(last_dequeued()));
       });
 
-  become(default_behavior);
-
-  auto monitor = spawn<signal_monitor, detached+linked>(self);
+  auto monitor = spawn<signal_monitor, detached+linked>(this);
   send(monitor, atom("act"));
 
   auto vast_dir = path{*config_.get("directory")}.complete();
@@ -62,19 +58,19 @@ void program::act()
     if (config_.check("profile"))
     {
       auto ms = *config_.as<unsigned>("profile");
-      auto profiler = spawn<util::profiler, detached+linked>(
+      auto prof = spawn<profiler, detached+linked>(
           vast_dir / "log", std::chrono::seconds(ms));
 
       if (config_.check("profile-cpu"))
-        send(profiler, atom("start"), atom("perftools"), atom("cpu"));
+        send(prof, atom("start"), atom("perftools"), atom("cpu"));
 
       if (config_.check("profile-heap"))
-        send(profiler, atom("start"), atom("perftools"), atom("heap"));
+        send(prof, atom("start"), atom("perftools"), atom("heap"));
 
-      send(profiler, atom("start"), atom("rusage"));
+      send(prof, atom("start"), atom("rusage"));
     }
 
-    actor_ptr tracker;
+    actor tracker;
     auto tracker_host = *config_.get("tracker.host");
     auto tracker_port = *config_.as<unsigned>("tracker.port");
     if (config_.check("tracker-actor") || config_.check("all-server"))
@@ -92,7 +88,7 @@ void program::act()
       tracker = remote_actor(tracker_host, tracker_port);
     }
 
-    actor_ptr archive;
+    actor archive;
     auto archive_host = *config_.get("archive.host");
     auto archive_port = *config_.as<unsigned>("archive.port");
     if (config_.check("archive-actor") || config_.check("all-server"))
@@ -116,7 +112,7 @@ void program::act()
       archive = remote_actor(archive_host, archive_port);
     }
 
-    actor_ptr index;
+    actor index;
     auto index_host = *config_.get("index.host");
     auto index_port = *config_.as<unsigned>("index.port");
     if (config_.check("index-actor") || config_.check("all-server"))
@@ -146,7 +142,7 @@ void program::act()
     else if (config_.check("index.rebuild"))
     {
       become(
-        on_arg_match >> [=](segment const& s)
+        [=](segment const& s)
         {
           event_id next = s.base() + s.events();
           send(archive, atom("segment"), next);
@@ -163,7 +159,7 @@ void program::act()
       send(archive, atom("segment"), event_id{1});
     }
 
-    actor_ptr search;
+    actor search;
     auto search_host = *config_.get("search.host");
     auto search_port = *config_.as<unsigned>("search.port");
     if (config_.check("search-actor") || config_.check("all-server"))
@@ -194,7 +190,7 @@ void program::act()
 #endif
     }
 
-    actor_ptr receiver;
+    actor receiver;
     auto receiver_host = *config_.get("receiver.host");
     auto receiver_port = *config_.as<unsigned>("receiver.port");
     if (config_.check("receiver-actor") || config_.check("all-server"))
@@ -213,7 +209,7 @@ void program::act()
       receiver = remote_actor(receiver_host, receiver_port);
     }
 
-    actor_ptr ingestor;
+    actor ingestor;
     if (config_.check("ingestor-actor"))
     {
       ingestor = spawn<ingestor_actor, linked>(
@@ -251,11 +247,14 @@ void program::act()
   catch (network_error const& e)
   {
     VAST_LOG_ACTOR_ERROR("encountered network error: " << e.what());
-    send_exit(self, exit::error);
+    send_exit(this, exit::error);
   }
+
+
+  return default_behavior;
 }
 
-char const* program::description() const
+char const* program::describe() const
 {
   return "program";
 }
