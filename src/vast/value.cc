@@ -14,7 +14,7 @@ value::value(value_invalid)
 {
 }
 
-value::value(value_type t)
+value::value(type_tag t)
 {
   data_.type(t);
 }
@@ -189,7 +189,7 @@ bool value::invalid() const
   return which() == invalid_value;
 }
 
-value_type value::which() const
+type_tag value::which() const
 {
   return data_.type();
 }
@@ -232,7 +232,7 @@ value::data::data(data const& other)
   switch (other.type())
   {
     default:
-      throw std::runtime_error("corrupt value type");
+      throw std::runtime_error("corrupt type tag");
       break;
     case invalid_value:
       return;
@@ -319,12 +319,12 @@ value::data& value::data::operator=(data other)
   return *this;
 }
 
-void value::data::construct(value_type t)
+void value::data::construct(type_tag t)
 {
   switch (t)
   {
     default:
-      throw std::runtime_error("corrupt value type");
+      throw std::runtime_error("corrupt type tag");
       break;
     case invalid_value:
       break;
@@ -367,12 +367,12 @@ void value::data::construct(value_type t)
   }
 }
 
-value_type value::data::type() const
+type_tag value::data::type() const
 {
-  return static_cast<value_type>(string_.tag() & 0x3f);
+  return static_cast<type_tag>(string_.tag() & 0x3f);
 }
 
-void value::data::type(value_type i)
+void value::data::type(type_tag i)
 {
   string_.tag(i | (string_.tag() & 0x40));
 }
@@ -395,7 +395,7 @@ void value::data::serialize(serializer& sink) const
   switch (type())
   {
     default:
-      throw std::runtime_error("corrupt value type");
+      throw std::runtime_error("corrupt type tag");
       break;
     case bool_value:
       sink << bool_;
@@ -457,7 +457,7 @@ void value::data::deserialize(deserializer& source)
   switch (type())
   {
     default:
-      throw std::runtime_error("corrupt value type");
+      throw std::runtime_error("corrupt type tag");
       break;
     case bool_value:
       source >> bool_;

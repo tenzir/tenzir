@@ -1,5 +1,5 @@
-#ifndef VAST_VALUE_TYPE_H
-#define VAST_VALUE_TYPE_H
+#ifndef VAST_TYPE_TAG_H
+#define VAST_TYPE_TAG_H
 
 #include <iosfwd>
 #include <string>
@@ -10,7 +10,7 @@
 namespace vast {
 
 /// The type of a value.
-enum value_type : uint8_t
+enum type_tag : uint8_t
 {
   invalid_value    = 0x00, ///< An invalid value.
 
@@ -34,29 +34,29 @@ enum value_type : uint8_t
   record_value     = 0x0f  ///< A sequence of heterogeneous values.
 };
 
-/// Checks whether a value type is a container.
-constexpr bool is_container(value_type t)
+/// Checks whether a type tag is a container.
+constexpr bool is_container(type_tag t)
 {
   return t == vector_value || t == set_value || t == table_value;
 }
 
-/// Checks whether a value type is basic.
-constexpr bool is_basic(value_type t)
+/// Checks whether a type tag is basic.
+constexpr bool is_basic(type_tag t)
 {
   return t != invalid_value && ! is_container(t) && t != record_value;
 }
 
-/// Checks whether a value type is arithmetic.
-constexpr bool is_arithmetic(value_type t)
+/// Checks whether a type tag is arithmetic.
+constexpr bool is_arithmetic(type_tag t)
 {
   return t > 0x00 && t < 0x07;
 }
 
-void serialize(serializer& sink, value_type x);
-void deserialize(deserializer& source, value_type& x);
+void serialize(serializer& sink, type_tag x);
+void deserialize(deserializer& source, type_tag& x);
 
 template <typename Iterator>
-trial<void> print(value_type t, Iterator&& out)
+trial<void> print(type_tag t, Iterator&& out)
 {
   switch (t)
   {
@@ -97,10 +97,10 @@ trial<void> print(value_type t, Iterator&& out)
   }
 }
 
-/// Meta function to retrieve the underlying type of a given value type.
-/// @tparam T The value type to get the underlying type from.
-template <value_type T>
-using value_type_type =
+/// Meta function to retrieve the underlying type of a given type tag.
+/// @tparam T The type tag to get the underlying type from.
+template <type_tag T>
+using type_tag_type =
     IfThenElse<T == invalid_value, value_invalid,
     IfThenElse<T == bool_value, bool,
     IfThenElse<T == int_value, int64_t,

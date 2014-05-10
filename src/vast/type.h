@@ -5,7 +5,7 @@
 #include "vast/key.h"
 #include "vast/offset.h"
 #include "vast/string.h"
-#include "vast/value_type.h"
+#include "vast/type_tag.h"
 #include "vast/util/operators.h"
 #include "vast/util/variant.h"
 #include "vast/util/alloc.h"
@@ -311,56 +311,56 @@ using type_info = util::variant<
     record_type
 >;
 
-/// Converts a ::type_info type into a value_type.
+/// Converts a ::type_info type into a type_tag.
 /// @tparam The ::type_info type.
 template <typename T>
-using to_value_type =
+using to_type_tag =
   Conditional<
     std::is_same<T, bool_type>,
-    std::integral_constant<value_type, bool_value>,
+    std::integral_constant<type_tag, bool_value>,
   Conditional<
     std::is_same<T, int_type>,
-    std::integral_constant<value_type, int_value>,
+    std::integral_constant<type_tag, int_value>,
   Conditional<
     std::is_same<T, uint_type>,
-    std::integral_constant<value_type, uint_value>,
+    std::integral_constant<type_tag, uint_value>,
   Conditional<
     std::is_same<T, double_type>,
-    std::integral_constant<value_type, double_value>,
+    std::integral_constant<type_tag, double_value>,
   Conditional<
     std::is_same<T, time_range_type>,
-    std::integral_constant<value_type, time_range_value>,
+    std::integral_constant<type_tag, time_range_value>,
   Conditional<
     std::is_same<T, time_point_type>,
-    std::integral_constant<value_type, time_point_value>,
+    std::integral_constant<type_tag, time_point_value>,
   Conditional<
     std::is_same<T, string_type>,
-    std::integral_constant<value_type, string_value>,
+    std::integral_constant<type_tag, string_value>,
   Conditional<
     std::is_same<T, regex_type>,
-    std::integral_constant<value_type, string_value>,
+    std::integral_constant<type_tag, string_value>,
   Conditional<
     std::is_same<T, address_type>,
-    std::integral_constant<value_type, address_value>,
+    std::integral_constant<type_tag, address_value>,
   Conditional<
     std::is_same<T, prefix_type>,
-    std::integral_constant<value_type, prefix_value>,
+    std::integral_constant<type_tag, prefix_value>,
   Conditional<
     std::is_same<T, port_type>,
-    std::integral_constant<value_type, port_value>,
+    std::integral_constant<type_tag, port_value>,
   Conditional<
     std::is_same<T, vector_type>,
-    std::integral_constant<value_type, vector_value>,
+    std::integral_constant<type_tag, vector_value>,
   Conditional<
     std::is_same<T, set_type>,
-    std::integral_constant<value_type, set_value>,
+    std::integral_constant<type_tag, set_value>,
   Conditional<
     std::is_same<T, table_type>,
-    std::integral_constant<value_type, table_value>,
+    std::integral_constant<type_tag, table_value>,
   Conditional<
     std::is_same<T, record_type>,
-    std::integral_constant<value_type, record_value>,
-    std::integral_constant<value_type, invalid_value>
+    std::integral_constant<type_tag, record_value>,
+    std::integral_constant<type_tag, invalid_value>
   >>>>>>>>>>>>>>>;
 
 /// Checks whether a ::type_info type is a *basic* type.
@@ -390,7 +390,7 @@ using is_container_type =
   Conditional<std::is_same<T, table_type>, Bool<true>, Bool<false>>>>;
 
 template <typename T>
-using type_type = value_type_type<to_value_type<T>::value>;
+using type_type = type_tag_type<to_type_tag<T>::value>;
 
 /// Represents meta data of a ::value.
 class type : public std::enable_shared_from_this<type>,
@@ -473,9 +473,9 @@ public:
   /// @returns `true` iff `*this` is compatible to *other*.
   bool represents(type_const_ptr const& other) const;
 
-  /// Retrieves the [value type](::value_type) for this type.
-  /// @returns The value type corresponding to this type.
-  value_type tag() const;
+  /// Retrieves the [type tag](::type_tag) for this type.
+  /// @returns The tag corresponding to this type.
+  type_tag tag() const;
 
 private:
   string name_;

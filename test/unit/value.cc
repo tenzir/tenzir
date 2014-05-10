@@ -13,22 +13,22 @@ BOOST_AUTO_TEST_CASE(size)
 }
 
 namespace {
-template <value_type V, typename U>
-bool constexpr value_type_check()
+template <type_tag T, typename U>
+bool constexpr type_tag_check()
 {
-  return std::is_same<value_type_type<V>, U>::value;
+  return std::is_same<type_tag_type<T>, U>::value;
 }
 } // namespace anonymous
 
 BOOST_AUTO_TEST_CASE(types)
 {
-  BOOST_CHECK((value_type_check<invalid_value, value_invalid>()));
-  BOOST_CHECK((value_type_check<bool_value, bool>()));
-  BOOST_CHECK((value_type_check<int_value, int64_t>()));
-  BOOST_CHECK((! value_type_check<int_value, int>()));
-  BOOST_CHECK((value_type_check<uint_value, uint64_t>()));
-  BOOST_CHECK((value_type_check<double_value, double>()));
-  BOOST_CHECK((value_type_check<string_value, string>()));
+  BOOST_CHECK((type_tag_check<invalid_value, value_invalid>()));
+  BOOST_CHECK((type_tag_check<bool_value, bool>()));
+  BOOST_CHECK((type_tag_check<int_value, int64_t>()));
+  BOOST_CHECK((! type_tag_check<int_value, int>()));
+  BOOST_CHECK((type_tag_check<uint_value, uint64_t>()));
+  BOOST_CHECK((type_tag_check<double_value, double>()));
+  BOOST_CHECK((type_tag_check<string_value, string>()));
 }
 
 BOOST_AUTO_TEST_CASE(trivial)

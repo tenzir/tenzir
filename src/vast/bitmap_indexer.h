@@ -242,7 +242,7 @@ struct event_data_index_factory
   template <typename T>
   trial<cppa::actor> operator()(T const&) const
   {
-    using bmi_t = arithmetic_bitmap_index<Bitstream, to_value_type<T>::value>;
+    using bmi_t = arithmetic_bitmap_index<Bitstream, to_type_tag<T>::value>;
     return spawn<bmi_t>();
   }
 

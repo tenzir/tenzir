@@ -53,7 +53,7 @@ int table_callback(void *key_data, void *val_data, table_data const* data)
 {
   value key = make_value(data->key_type, key_data);
   value val = make_value(data->val_type, val_data);
-  auto x = table::value_type(std::move(key), std::move(val));
+  auto x = table::type_tag(std::move(key), std::move(val));
   data->tbl->insert(std::move(x));
   return 1;
 }
@@ -66,7 +66,7 @@ int set_callback(void *key_data, set_data const* data)
 }
 
 /// Converts a Broccoli type to the corresponding VAST type.
-value_type to_vast_type(int broccoli_type)
+type_tag to_vast_type(int broccoli_type)
 {
   switch (broccoli_type)
   {

@@ -10,7 +10,6 @@
 #include "vast/string.h"
 #include "vast/time.h"
 #include "vast/type.h"
-#include "vast/value_type.h"
 #include "vast/util/operators.h"
 
 namespace vast {
@@ -90,7 +89,7 @@ public:
 
   /// Constructs a disengaged value of a given type.
   /// @param t The type of the value.
-  explicit value(value_type t);
+  explicit value(type_tag t);
 
   value(bool b);
   value(int i);
@@ -155,7 +154,7 @@ public:
 
   /// Returns the type information of the value.
   /// @returns The type of the value.
-  value_type which() const;
+  type_tag which() const;
 
   /// Accesses the currently stored data in a type safe manner. The caller
   /// shall ensure that that value is engaged beforehand.
@@ -181,10 +180,10 @@ private:
     ~data();
     data& operator=(data other);
 
-    void construct(value_type t);
+    void construct(type_tag t);
 
-    value_type type() const;
-    void type(value_type t);
+    type_tag type() const;
+    void type(type_tag t);
     void engage();
     bool engaged() const;
     uint8_t tag() const;
@@ -227,11 +226,11 @@ private:
     {
     }
 
-    trial<void> operator()(value_type vt) const
+    trial<void> operator()(type_tag tag) const
     {
       *out_++ = '<';
 
-      auto t = print(vt, out_);
+      auto t = print(tag, out_);
       if (! t)
         return t.error();
 
@@ -347,7 +346,7 @@ struct visit_impl
     switch (x.which())
     {
       default:
-        throw std::runtime_error("corrupt value type");
+        throw std::runtime_error("corrupt type tag");
         break;
       case invalid_value:
         return f(invalid);
@@ -395,7 +394,7 @@ struct visit_impl
     switch (x.which())
     {
       default:
-        throw std::runtime_error("corrupt value type");
+        throw std::runtime_error("corrupt type tag");
         break;
       case invalid_value:
         return visit_impl::apply(y, value_bind(f, invalid));
@@ -510,7 +509,7 @@ inline T const& value::get() const
   return *value::visit(*this, detail::getter<T const>());
 }
 
-/// A vector of values with arbitrary value types.
+/// A sequence of heterogenous values.
 class record : public std::vector<value>,
                util::totally_ordered<record>
 {

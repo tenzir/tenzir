@@ -289,8 +289,8 @@ private:
   }
 };
 
-/// A bitmap index for arithmetic value types.
-template <typename Bitstream, value_type T>
+/// A bitmap index for arithmetic values.
+template <typename Bitstream, type_tag T>
 class arithmetic_bitmap_index
   : public bitmap_index_base<arithmetic_bitmap_index<Bitstream, T>>,
     util::equality_comparable<arithmetic_bitmap_index<Bitstream, T>>
@@ -306,7 +306,7 @@ class arithmetic_bitmap_index
       time_range::rep,
       typename std::conditional<
         T == bool_value || T == int_value || T == uint_value || T == double_value,
-        value_type_type<T>,
+        type_tag_type<T>,
         std::false_type
       >::type
     >::type;
@@ -641,7 +641,7 @@ private:
     switch (val.which())
     {
       default:
-        return error{"invalid value type"};
+        return error{"invalid type tag"};
       case address_value:
         return lookup_impl(op, val.get<address>());
       case prefix_value:
@@ -815,7 +815,7 @@ private:
 };
 
 template <typename Bitstream, typename... Args>
-trial<bitmap_index<Bitstream>> make_bitmap_index(value_type t, Args&&... args);
+trial<bitmap_index<Bitstream>> make_bitmap_index(type_tag t, Args&&... args);
 
 /// A bitmap index for sets, vectors, and tuples.
 template <typename Bitstream>
@@ -827,7 +827,7 @@ class set_bitmap_index : public bitmap_index_base<set_bitmap_index<Bitstream>>
   friend struct detail::bitmap_index_model;
 
 public:
-  set_bitmap_index(value_type t)
+  set_bitmap_index(type_tag t)
     : elem_type_{t}
   {
   }
@@ -887,7 +887,7 @@ private:
     return size_.size();
   }
 
-  value_type elem_type_;
+  type_tag elem_type_;
   std::vector<bitmap_index<Bitstream>> bmis_;
   bitmap<uint32_t, Bitstream, range_bitslice_coder> size_;
 
@@ -961,14 +961,14 @@ private:
   }
 };
 
-/// Factory to construct a bitmap index based on a given value type.
+/// Factory to construct a bitmap index based on a given type tag.
 template <typename Bitstream, typename... Args>
-trial<bitmap_index<Bitstream>> make_bitmap_index(value_type t, Args&&... args)
+trial<bitmap_index<Bitstream>> make_bitmap_index(type_tag t, Args&&... args)
 {
   switch (t)
   {
     default:
-      return error{"unspported value type:", t};
+      return error{"unspported type tag:", t};
     case bool_value:
       return {arithmetic_bitmap_index<Bitstream, bool_value>(std::forward<Args>(args)...)};
     case int_value:

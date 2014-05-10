@@ -188,7 +188,7 @@ void schema_extractor::deserialize(deserializer& source)
 }
 
 
-type_extractor::type_extractor(value_type t)
+type_extractor::type_extractor(type_tag t)
   : type{t}
 {
 }

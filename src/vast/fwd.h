@@ -11,7 +11,7 @@ class deserializer;
 
 struct value_invalid;
 class value;
-enum value_type : uint8_t;
+enum type_tag : uint8_t;
 
 class address;
 class time_range;

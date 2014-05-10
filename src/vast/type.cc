@@ -10,14 +10,14 @@ type_const_ptr const type_invalid = type::make<invalid_type>();
 
 namespace {
 
-struct value_type_maker
+struct type_tag_maker
 {
-  using result_type = value_type;
+  using result_type = type_tag;
 
   template <typename T>
-  value_type operator()(T const&) const
+  type_tag operator()(T const&) const
   {
-    return to_value_type<T>::value;
+    return to_type_tag<T>::value;
   }
 };
 
@@ -680,9 +680,9 @@ bool type::represents(type_const_ptr const& other) const
   return apply_visitor_binary(compatibility_checker{}, info_, other->info_);
 }
 
-value_type type::tag() const
+type_tag type::tag() const
 {
-  return apply_visitor(value_type_maker{}, info_);
+  return apply_visitor(type_tag_maker{}, info_);
 }
 
 namespace {
@@ -723,9 +723,9 @@ struct type_deserializer
   deserializer& source_;
 };
 
-type_info construct(value_type vt)
+type_info construct(type_tag tag)
 {
-  switch (vt)
+  switch (tag)
   {
     default:
       return {};
@@ -778,9 +778,9 @@ void type::deserialize(deserializer& source)
 {
   source >> name_;
 
-  value_type vt;
-  source >> vt;
-  info_ = construct(vt);
+  type_tag tag;
+  source >> tag;
+  info_ = construct(tag);
   apply_visitor(type_deserializer{source}, info_);
 }
 

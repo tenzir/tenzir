@@ -2,7 +2,7 @@
 #define VAST_SOURCE_FILE_H
 
 #include <cassert>
-#include "vast/value_type.h"
+#include "vast/type_tag.h"
 #include "vast/schema.h"
 #include "vast/string.h"
 #include "vast/io/file_stream.h"

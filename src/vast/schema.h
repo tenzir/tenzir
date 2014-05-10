@@ -159,7 +159,7 @@ public:
   type_const_ptr operator()(detail::ast::schema::table_type const& t) const
   {
     auto k = make_type(t.key_type);
-    auto y = make_type(t.value_type);
+    auto y = make_type(t.type_tag);
     return type::make<table_type>(name_, k, y);
   }
 

@@ -161,7 +161,7 @@ struct type_extractor
   : public util::visitable<extractor, type_extractor, const_visitor>
 {
   type_extractor() = default;
-  type_extractor(value_type t);
+  type_extractor(type_tag t);
 
   virtual type_extractor* clone() const override;
   virtual bool equals(node const& other) const override;
@@ -169,7 +169,7 @@ struct type_extractor
   virtual void serialize(serializer& sink) const override;
   virtual void deserialize(deserializer& source) override;
 
-  value_type type;
+  type_tag type;
 };
 
 /// An n-ary operator.

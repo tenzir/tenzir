@@ -130,7 +130,7 @@ struct empty_maker
     typedef value type;
   };
 
-  value operator()(value_type t) const
+  value operator()(type_tag t) const
   {
     return value(t);
   }

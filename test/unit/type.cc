@@ -61,12 +61,12 @@ BOOST_AUTO_TEST_CASE(type_construction)
 
 BOOST_AUTO_TEST_CASE(type_mapping)
 {
-  BOOST_CHECK_EQUAL(to_value_type<invalid_type>::value, invalid_value);
-  BOOST_CHECK_EQUAL(to_value_type<bool_type>::value, bool_value);
-  BOOST_CHECK_EQUAL(to_value_type<int_type>::value, int_value);
-  BOOST_CHECK_EQUAL(to_value_type<uint_type>::value, uint_value);
+  BOOST_CHECK_EQUAL(to_type_tag<invalid_type>::value, invalid_value);
+  BOOST_CHECK_EQUAL(to_type_tag<bool_type>::value, bool_value);
+  BOOST_CHECK_EQUAL(to_type_tag<int_type>::value, int_value);
+  BOOST_CHECK_EQUAL(to_type_tag<uint_type>::value, uint_value);
   // ...
-  BOOST_CHECK_EQUAL(to_value_type<record_type>::value, record_value);
+  BOOST_CHECK_EQUAL(to_type_tag<record_type>::value, record_value);
 }
 
 BOOST_AUTO_TEST_CASE(record_resolving)

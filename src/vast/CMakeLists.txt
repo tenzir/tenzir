@@ -39,9 +39,9 @@ set(libvast_sources
   time.cc
   type.cc
   type_info.cc
+  type_tag.cc
   uuid.cc
   value.cc
-  value_type.cc
   detail/cppa_serialization.cc
   detail/demangle.cc
   detail/type_manager.cc

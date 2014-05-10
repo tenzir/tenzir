@@ -60,7 +60,7 @@ struct tag_predicate
 
 struct type_predicate
 {
-  value_type lhs;
+  type_tag lhs;
   relational_operator op;
   value_expr rhs;
 };
@@ -144,7 +144,7 @@ BOOST_FUSION_ADAPT_STRUCT(
 
   BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::query::type_predicate,
-    (vast::value_type, lhs)
+    (vast::type_tag, lhs)
     (vast::relational_operator, op)
     (vast::detail::ast::query::value_expr, rhs))
 

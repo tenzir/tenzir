@@ -163,7 +163,7 @@ void announce_builtin_types()
     string, std::vector<string>,
     record,
     table,
-    value_type,
+    type_tag,
     value, std::vector<value>,
     event, std::vector<event>, std::vector<cow<event>>,
     error,

@@ -56,9 +56,9 @@ template <
 struct factory
 {
   typedef typename std::remove_pointer<typename std::remove_cv<T>::type>::type
-    value_type;
+    type_tag;
 
-  typedef Constructor<value_type> constructor;
+  typedef Constructor<type_tag> constructor;
   typedef typename constructor::result_type result_type;
 
   template <typename... Args>
