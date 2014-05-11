@@ -318,9 +318,11 @@ void bitvector::clear() noexcept
 
 void bitvector::push_back(bool bit)
 {
-  auto s = size();
-  resize(s + 1);
-  set(s, bit);
+  if (extra_bits() == 0)
+    bits_.push_back(0);
+
+  ++num_bits_;
+  set(num_bits_ - 1, bit);
 }
 
 void bitvector::append(block_type block, size_type bits)

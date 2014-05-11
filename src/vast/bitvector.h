@@ -522,8 +522,8 @@ public:
   /// @returns `true` iff the bitvector has zero length.
   bool empty() const;
 
-  /// Computes the number of bits of the last block.
-  /// @returns The number of bits the last block occupies.
+  /// Computes the number of unused bits in the last block.
+  /// @returns The number of available free bits the last block.
   block_type extra_bits() const;
 
   /// Finds the bit position of of the first 1-bit.
