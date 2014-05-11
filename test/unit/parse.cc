@@ -186,6 +186,13 @@ BOOST_AUTO_TEST_CASE(parse_containers)
     vector expected{"a", "b", "c"};
     BOOST_CHECK_EQUAL(*v, expected);
   }
+
+  auto roots = "a.root-servers.net,b.root-servers.net,c.root-servers.net";
+  auto v = to<vector>(roots, type::make<string_type>(), ",");
+  BOOST_REQUIRE(v);
+  BOOST_REQUIRE_EQUAL(v->size(), 3);
+  BOOST_CHECK_EQUAL(v->front(), "a.root-servers.net");
+  BOOST_CHECK_EQUAL(v->back(), "c.root-servers.net");
 }
 
 BOOST_AUTO_TEST_CASE(parse_address)
@@ -321,7 +328,7 @@ BOOST_AUTO_TEST_CASE(parse_value)
     v = to<value>("5 mins");
     BOOST_CHECK_EQUAL(v->which(), time_range_value);
     BOOST_CHECK_EQUAL(v->get<time_range>().count(), 300000000000ll);
-    
+
     v = to<value>("3 hours");
     BOOST_CHECK_EQUAL(v->which(), time_range_value);
     BOOST_CHECK_EQUAL(v->get<time_range>().count(), 10800000000000ll);
@@ -341,7 +348,7 @@ BOOST_AUTO_TEST_CASE(parse_value)
     v= to<value>("-8 years");
     BOOST_CHECK_EQUAL(v->which(), time_range_value);
     BOOST_CHECK_EQUAL(v->get<time_range>().count(), -252288000000000000ll);
-  
+
     // Compound durations
     v = to<value>("5m99s");
     BOOST_CHECK_EQUAL(v->which(), time_range_value);
@@ -370,7 +377,7 @@ BOOST_AUTO_TEST_CASE(parse_value)
     v = to<value>("2012-08-12+23:55");
     BOOST_CHECK_EQUAL(v->get<time_point>().since_epoch().count(),
                       1344815700000000000ll);
-    
+
     v = to<value>("2012-08-12+23:55:04");
     BOOST_CHECK_EQUAL(v->get<time_point>().since_epoch().count(),
                       1344815704000000000ll);
@@ -389,7 +396,7 @@ BOOST_AUTO_TEST_CASE(parse_value)
     auto v = to<value>("/../");
     BOOST_CHECK_EQUAL(v->which(), regex_value);
     BOOST_CHECK_EQUAL(*v, regex{".."});
-  
+
     v = to<value>("/\\/../");
     BOOST_CHECK_EQUAL(v->which(), regex_value);
     BOOST_CHECK_EQUAL(*v, regex{"/.."});

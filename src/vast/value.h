@@ -598,11 +598,9 @@ private:
     if (begin == end)
       return error{"empty iterator range"};
 
-    auto str = parse<string>(begin, end);
-    if (! str)
-      return str.error();
-
-    for (auto p : str->trim(left, right).split(sep, esc))
+    auto str = string{begin, end};
+    auto trimmed = str.trim(left, right);
+    for (auto p : trimmed.split(sep, esc))
     {
       auto t = parse<value>(p.first, p.second, elem_type);
       if (t)
@@ -611,6 +609,7 @@ private:
         return t.error();
     }
 
+    begin = end;
     return nothing;
   }
 
