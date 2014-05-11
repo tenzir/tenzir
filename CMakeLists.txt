@@ -58,6 +58,9 @@ if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
   endif ()
 elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
   set(CXX_FLAGS "${CXX_FLAGS} -stdlib=libc++")
+  if (ENABLE_ADDRESS_SANITIZER)
+    set(CXX_FLAGS "${CXX_FLAGS} -fsanitize=address -g")
+  endif ()
 else ()
   message(FATAL_ERROR "Your C++ compiler does not support C++11.")
 endif ()
@@ -154,35 +157,38 @@ macro(display test desc summary)
 endmacro()
 
 display(ENABLE_DEBUG yes debug_summary)
+display(DOXYGEN_FOUND yes doxygen_summary)
 display(BROCCOLI_FOUND ${BROCCOLI_INCLUDE_DIR} broccoli_summary)
 display(EDITLINE_FOUND ${EDITLINE_INCLUDE_DIR} editline_summary)
 display(GPERFTOOLS_FOUND ${GPERFTOOLS_INCLUDE_DIR} perftools_summary)
 display(VAST_USE_PERFTOOLS_HEAP_PROFILER yes tcmalloc_summary)
-display(DOXYGEN_FOUND yes doxygen_summary)
+display(ENABLE_ADDRESS_SANITIZER yes asan_summary)
 
 set(build_summary
     "\n====================|  Build Summary  |===================="
     "\n"
-    "\nVersion:          ${VERSION_MAJ_MIN}"
+    "\nVersion:              ${VERSION_MAJ_MIN}"
     "\n"
-    "\nDebug mode:       ${debug_summary}"
-    "\nBuild type:       ${CMAKE_BUILD_TYPE}"
-    "\nSource directory: ${CMAKE_SOURCE_DIR}"
-    "\nBuild directory:  ${CMAKE_BINARY_DIR}"
-    "\nInstall prefix:   ${CMAKE_INSTALL_PREFIX}"
+    "\nDebug mode:           ${debug_summary}"
+    "\nBuild type:           ${CMAKE_BUILD_TYPE}"
+    "\nSource directory:     ${CMAKE_SOURCE_DIR}"
+    "\nBuild directory:      ${CMAKE_BINARY_DIR}"
+    "\nInstall prefix:       ${CMAKE_INSTALL_PREFIX}"
     "\n"
-    "\nBoost:            ${Boost_INCLUDE_DIR}"
-    "\nLibcppa:          ${LIBCPPA_INCLUDE_DIR}"
+    "\nBoost:                ${Boost_INCLUDE_DIR}"
+    "\nLibcppa:              ${LIBCPPA_INCLUDE_DIR}"
     "\n"
-    "\nBroccoli:         ${broccoli_summary}"
-    "\nEditline:         ${editline_summary}"
-    "\nGperftools:       ${perftools_summary}"
-    "\nDoxygen:          ${doxygen_summary}"
-    "\nUse tcmalloc:     ${tcmalloc_summary}"
+    "\nDoxygen:              ${doxygen_summary}"
+    "\nBroccoli:             ${broccoli_summary}"
+    "\nEditline:             ${editline_summary}"
+    "\nGperftools:           ${perftools_summary}"
     "\n"
-    "\nCC:               ${CMAKE_C_COMPILER}"
-    "\nCXX:              ${CMAKE_CXX_COMPILER}"
-    "\nCXXFLAGS:         ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${build_type}}"
+    "\nUse tcmalloc:         ${tcmalloc_summary}"
+    "\nUse AddressSanitizer: ${asan_summary}"
+    "\n"
+    "\nCC:                   ${CMAKE_C_COMPILER}"
+    "\nCXX:                  ${CMAKE_CXX_COMPILER}"
+    "\nCXXFLAGS:             ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${build_type}}"
     "\n"
     "\n===========================================================\n")
 
