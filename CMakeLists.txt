@@ -31,21 +31,24 @@ list(GET version_numbers 0 VERSION_MAJOR)
 list(GET version_numbers 1 VERSION_MINOR)
 set(VERSION_MAJ_MIN "${VERSION_MAJOR}.${VERSION_MINOR}")
 
-# We need -ftemplate-depth=256 to make Boost Spirit happy.
-set(CMAKE_CXX_FLAGS                "-Wall -Wextra -std=c++11 -ftemplate-depth=256")
-set(CMAKE_CXX_FLAGS_DEBUG          "-O0 -g")
-set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os")
-set(CMAKE_CXX_FLAGS_RELEASE        "-O3")
-set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g")
-# TODO: Fix variadic logging and then add -pedantic again.
+if (NOT CMAKE_CXX_FLAGS)
+  # TODO: Fix variadic logging macros and then add -pedantic again.
+  # We need -ftemplate-depth=256 to make Boost Spirit happy.
+  set(CXX_FLAGS                      "-Wall -Wextra -std=c++11 -ftemplate-depth=256")
+  set(CMAKE_CXX_FLAGS_DEBUG          "-O0 -g")
+  set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os")
+  set(CMAKE_CXX_FLAGS_RELEASE        "-O3")
+  set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g")
 
-if (ENABLE_DEBUG)
-  set(CMAKE_BUILD_TYPE Debug)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVAST_DEBUG")
-endif ()
-if (NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE RelWithDebInfo)
-endif ()
+  if (ENABLE_DEBUG)
+    set(CMAKE_BUILD_TYPE Debug)
+    set(CXX_FLAGS "${CXX_FLAGS} -DVAST_DEBUG")
+  endif ()
+
+  if (NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE RelWithDebInfo)
+  endif ()
+endif()
 
 if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
   execute_process(
@@ -54,9 +57,14 @@ if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
     message(FATAL_ERROR "${PROJECT_NAME} requires g++ 4.8 or greater.")
   endif ()
 elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
+  set(CXX_FLAGS "${CXX_FLAGS} -stdlib=libc++")
 else ()
   message(FATAL_ERROR "Your C++ compiler does not support C++11.")
+endif ()
+
+# Only set our flags if the environment variable CXXFLAGS is not present.
+if (NOT CMAKE_CXX_FLAGS)
+  set(CMAKE_CXX_FLAGS ${CXX_FLAGS})
 endif ()
 
 include(MacDependencyPaths)
@@ -137,33 +145,44 @@ add_subdirectory(tools)
 include(ConfigurePackaging)
 ConfigurePackaging(${VERSION})
 
-string(TOUPPER ${CMAKE_BUILD_TYPE} build_type)
+macro(display test desc summary)
+  if (${test})
+    set(${summary} ${desc})
+  else ()
+    set(${summary} no)
+  endif()
+endmacro()
+
+display(ENABLE_DEBUG yes debug_summary)
+display(BROCCOLI_FOUND ${BROCCOLI_INCLUDE_DIR} broccoli_summary)
+display(EDITLINE_FOUND ${EDITLINE_INCLUDE_DIR} editline_summary)
+display(GPERFTOOLS_FOUND ${GPERFTOOLS_INCLUDE_DIR} perftools_summary)
+display(VAST_USE_PERFTOOLS_HEAP_PROFILER yes tcmalloc_summary)
+display(DOXYGEN_FOUND yes doxygen_summary)
 
 set(build_summary
     "\n====================|  Build Summary  |===================="
     "\n"
     "\nVersion:          ${VERSION_MAJ_MIN}"
     "\n"
+    "\nDebug mode:       ${debug_summary}"
+    "\nBuild type:       ${CMAKE_BUILD_TYPE}"
     "\nSource directory: ${CMAKE_SOURCE_DIR}"
     "\nBuild directory:  ${CMAKE_BINARY_DIR}"
     "\nInstall prefix:   ${CMAKE_INSTALL_PREFIX}"
-    "\nDebug mode:       ${ENABLE_DEBUG}"
     "\n"
     "\nBoost:            ${Boost_INCLUDE_DIR}"
     "\nLibcppa:          ${LIBCPPA_INCLUDE_DIR}"
-    "\nBroccoli:         ${BROCCOLI_FOUND}"
-    "\nEditline:         ${EDITLINE_FOUND}"
-    "\nGperftools:       ${GPERFTOOLS_FOUND}"
-    "\nUse tcmalloc:     ${VAST_USE_PERFTOOLS_HEAP_PROFILER}"
     "\n"
+    "\nBroccoli:         ${broccoli_summary}"
+    "\nEditline:         ${editline_summary}"
+    "\nGperftools:       ${perftools_summary}"
+    "\nDoxygen:          ${doxygen_summary}"
+    "\nUse tcmalloc:     ${tcmalloc_summary}"
+    "\n"
+    "\nCC:               ${CMAKE_C_COMPILER}"
     "\nCXX:              ${CMAKE_CXX_COMPILER}"
-    "\nCXXFLAGS:         ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${build_type}}")
-if (BROCCOLI_FOUND)
-  set(build_summary ${build_summary}
-    "\nBroccoli:         ${BROCCOLI_INCLUDE_DIR}")
-endif ()
-set(build_summary ${build_summary}
-    "\nDoxygen:          ${DOXYGEN_FOUND}"
+    "\nCXXFLAGS:         ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${build_type}}"
     "\n"
     "\n===========================================================\n")
 

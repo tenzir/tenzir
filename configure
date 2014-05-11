@@ -19,14 +19,13 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --build-dir=DIR         place build files in directory [build]
     --log-level=LEVEL       maximum compile-time log level [verbose]
     --generator=GENERATOR   CMake generator to use (see cmake --help)
-    --with-cxx=PATH         path to a C++ compiler executable
 
   Installation directories:
     --prefix=PREFIX         installation directory [/usr/local]
 
   Optional features:
     --enable-debug          compile in debugging mode
-    --enable-perftools-heap use Gperftools' tcmalloc heap profiling
+    --enable-tcmalloc       link against tcmalloc (requires gperftools)
 
   Required packages in non-standard locations:
     --with-libcppa=PATH     path to libcppa install root
@@ -34,7 +33,7 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
 
   Optional packages in non-standard locations:
     --with-editline=PATH    path to editline install root
-    --with-perftools=PATH   path to Gperftools install root
+    --with-perftools=PATH   path to gperftools install root
     --with-broccoli=PATH    path to Broccoli install root
     --with-doxygen=PATH     path to Doxygen install root
 
@@ -54,11 +53,13 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
 #   $1 is the cache entry variable name
 #   $2 is the cache entry variable type
 #   $3 is the cache entry variable value
-append_cache_entry () {
-    CMakeCacheEntries="$CMakeCacheEntries -D $1:$2=$3"
+append_cache_entry ()
+{
+  CMakeCacheEntries="$CMakeCacheEntries -D $1:$2=$3"
 }
 
-levelize() {
+levelize()
+{
   case "$1" in
     quiet)
       echo 0
@@ -126,10 +127,7 @@ while [ $# -ne 0 ]; do
             append_cache_entry VAST_LOG_LEVEL INTEGER $(levelize trace)
             append_cache_entry ENABLE_DEBUG BOOL true
             ;;
-        --with-cxx=*)
-            append_cache_entry CMAKE_CXX_COMPILER FILEPATH $optarg
-            ;;
-        --enable-perftools-heap)
+        --enable-tcmalloc)
             append_cache_entry ENABLE_PERFTOOLS_HEAP BOOL true
             ;;
         --with-libcppa=*)
@@ -200,6 +198,10 @@ if [ -n "$CC" ]; then
 fi
 if [ -n "$CXX" ]; then
   printf "CXX=%s" $CXX >> config.status
+  printf ' ' >> config.status
+fi
+if [ -n "$CXXFLAGS" ]; then
+  printf "CXXFLAGS=%s" $CXXFLAGS >> config.status
   printf ' ' >> config.status
 fi
 echo $command >> config.status
