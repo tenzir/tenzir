@@ -311,6 +311,11 @@ using type_info = util::variant<
     record_type
 >;
 
+/// Factory to construct type info from a tag.
+/// @param t The type tag.
+/// @returns Default-contructed type information for *t*.
+type_info make_type_info(type_tag t);
+
 /// Converts a ::type_info type into a type_tag.
 /// @tparam The ::type_info type.
 template <typename T>

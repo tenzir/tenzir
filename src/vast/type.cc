@@ -487,6 +487,47 @@ bool operator<(record_type const& lhs, record_type const& rhs)
   return lhs.args < rhs.args;
 }
 
+type_info make_type_info(type_tag tag)
+{
+  switch (tag)
+  {
+    default:
+      return {};
+    case invalid_value:
+      return invalid_type{};
+    case bool_value:
+      return bool_type{};
+    case int_value:
+      return int_type{};
+    case uint_value:
+      return uint_type{};
+    case double_value:
+      return double_type{};
+    case time_range_value:
+      return time_range_type{};
+    case time_point_value:
+      return time_point_type{};
+    case string_value:
+      return string_type{};
+    case regex_value:
+      return regex_type{};
+    case address_value:
+      return address_type{};
+    case prefix_value:
+      return prefix_type{};
+    case port_value:
+      return port_type{};
+    case vector_value:
+      return vector_type{};
+    case set_value:
+      return set_type{};
+    case table_value:
+      return table_type{};
+    case record_value:
+      return record_type{};
+  }
+}
+
 type::type(type_info ti)
   : info_{std::move(ti)}
 {
@@ -723,47 +764,6 @@ struct type_deserializer
   deserializer& source_;
 };
 
-type_info construct(type_tag tag)
-{
-  switch (tag)
-  {
-    default:
-      return {};
-    case invalid_value:
-      return invalid_type{};
-    case bool_value:
-      return bool_type{};
-    case int_value:
-      return int_type{};
-    case uint_value:
-      return uint_type{};
-    case double_value:
-      return double_type{};
-    case time_range_value:
-      return time_range_type{};
-    case time_point_value:
-      return time_point_type{};
-    case string_value:
-      return string_type{};
-    case regex_value:
-      return regex_type{};
-    case address_value:
-      return address_type{};
-    case prefix_value:
-      return prefix_type{};
-    case port_value:
-      return port_type{};
-    case vector_value:
-      return vector_type{};
-    case set_value:
-      return set_type{};
-    case table_value:
-      return table_type{};
-    case record_value:
-      return record_type{};
-  }
-}
-
 } // namespace <anonymous>
 
 void type::serialize(serializer& sink) const
@@ -780,7 +780,7 @@ void type::deserialize(deserializer& source)
 
   type_tag tag;
   source >> tag;
-  info_ = construct(tag);
+  info_ = make_type_info(tag);
   apply_visitor(type_deserializer{source}, info_);
 }
 
