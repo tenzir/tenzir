@@ -254,6 +254,7 @@ struct dispatcher : expr::default_const_visitor
         }
         else
         {
+          VAST_LOG_DEBUG("found loaded indexer for " << p);
           indexes_.push_back(i->second.actor);
         }
       }
@@ -398,6 +399,7 @@ behavior partition_actor::act()
 
       if (n == 0)
       {
+        VAST_LOG_ACTOR_DEBUG("did not find a matching indexer for " << pred);
         send(idx, pred, partition_.meta().id, bitstream{});
       }
       else
