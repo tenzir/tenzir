@@ -174,8 +174,8 @@ struct dispatcher : expr::default_const_visitor
 
   virtual void visit(expr::predicate const& pred)
   {
+    op_ = pred.op;
     pred.rhs().accept(*this);
-    assert(value_);
     pred.lhs().accept(*this);
   }
 
@@ -236,11 +236,12 @@ struct dispatcher : expr::default_const_visitor
         {
           VAST_LOG_WARN("no index for " << p);
         }
-        else if (i->second.type->at(i->second.off)->tag() != value_->which())
+        else if (! expr::compatible(i->second.type->at(i->second.off)->tag(),
+                                    rhs_type_, op_))
         {
-          VAST_LOG_WARN("type mismatch: requested type " << value_->which() <<
-                        " but " << p << " has type " <<
-                        i->second.type->at(i->second.off)->tag());
+          VAST_LOG_WARN("incompatible types: " <<
+                        "LHS = " << i->second.type->at(i->second.off)->tag() <<
+                        " <--> RHS = " << rhs_type_);
         }
         else if (! i->second.actor)
         {
@@ -260,10 +261,11 @@ struct dispatcher : expr::default_const_visitor
 
   virtual void visit(expr::constant const& c)
   {
-    value_ = &c.val;
+    rhs_type_ = c.val.which();
   }
 
-  value const* value_ = nullptr;
+  relational_operator op_;
+  type_tag rhs_type_;
   partition_actor& actor_;
   std::vector<actor> indexes_;
 };

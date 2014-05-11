@@ -531,6 +531,21 @@ trial<void> parse(ast& a, Iterator& begin, Iterator end)
   return nothing;
 }
 
+/// Checks whether the types of two nodes in a predicate are compatible with
+/// each other, i.e., whether operator evaluation for the given types is
+/// semantically correct. Note that this function assumes the AST has already
+/// been normalized with the type of the extractor occurring at the LHS and the
+/// value at the RHS.
+///
+/// @param lhs The type of the extractor.
+///
+/// @param rhs The type of the value.
+///
+/// @param op The operator under which to compare *lhs* and *rhs*.
+///
+/// @returns `true` if *lhs* and *rhs* are compatible to each other under *op*.
+bool compatible(type_tag lhs, type_tag rhs, relational_operator op);
+
 /// Evaluates an expression node for a given event.
 value evaluate(node const& n, event const& e);
 value evaluate(ast const& a, event const& e);

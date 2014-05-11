@@ -974,6 +974,45 @@ private:
 
 } // namespace <anonymous>
 
+bool compatible(type_tag lhs, type_tag rhs, relational_operator op)
+{
+  switch (op)
+  {
+    default:
+      return false;
+    case match:
+    case not_match:
+      switch (lhs)
+      {
+        default:
+          return false;
+        case string_value:
+          return rhs == regex_value;
+      }
+    case equal:
+    case not_equal:
+    case less:
+    case less_equal:
+    case greater:
+    case greater_equal:
+      return lhs == rhs;
+    case in:
+    case not_in:
+      switch (lhs)
+      {
+        default:
+          return is_container(rhs);
+        case string_value:
+          return rhs == string_value;
+        case address_value:
+          return rhs == prefix_value;
+      }
+    case ni:
+    case not_ni:
+      return compatible(lhs, rhs, negate(op));
+  }
+}
+
 value evaluate(node const& n, event const& e)
 {
   evaluator v{e};
