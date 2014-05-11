@@ -70,7 +70,7 @@ if [ ! -d $vast_dir ]; then
 fi
 
 for file in $(eval ls "$log_dir/$logs.log" 2> /dev/null); do
-  vast -v $verbosity -d $vast_dir -I -R -A -X -T \
+  vast -v $verbosity -d $vast_dir -I -R -A -X -T -S \
     --receiver.host $receiver \
     --archive.max-segments 1 \
     --index.partition $partition \
