@@ -77,9 +77,12 @@ template <
 >
 trial<void> archive(path const& filename, Ts const&... xs)
 {
-  if (! exists(filename.parent()) && ! mkdir(filename.parent()))
-    return error{"could not mkdir parent of " +
-                 std::string{filename.str().data()}};
+  if (! exists(filename.parent()))
+  {
+    auto t = mkdir(filename.parent());
+    if (! t)
+      return t;
+  }
 
   file f{filename};
   auto t = f.open(file::write_only);
@@ -142,9 +145,12 @@ auto decompress(compression method, Container const& c, Ts&... xs)
 template <typename... Ts>
 trial<void> compress(compression method, path const& filename, Ts const&... xs)
 {
-  if (! exists(filename.parent()) && ! mkdir(filename.parent()))
-    return error{"could not mkdir parent of " +
-                 std::string{filename.str().data()}};
+  if (! exists(filename.parent()))
+  {
+    auto t = mkdir(filename.parent());
+    if (! t)
+      return t;
+  }
 
   file f{filename};
   auto t = f.open(file::write_only);

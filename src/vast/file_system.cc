@@ -497,20 +497,25 @@ trial<void> mkdir(path const& p)
     c /= comp;
     if (exists(c))
     {
-      if (! (c.is_directory() || c.is_symlink()))
-        return error{"not a symlink or directory:", c};
+      auto kind = c.kind();
+      if (! (kind == path::directory || kind == path::symlink))
+        return error{"not a directory or symlink:", c};
     }
     else
     {
-      VAST_ERRNO = 0;
       if (! VAST_CREATE_DIRECTORY(c.str().data()))
       {
-        auto e = VAST_ERRNO;
         // Because there exists a TOCTTOU issue here, we have to check again.
-        if (exists(c) && ! (c.is_directory() || c.is_symlink()))
-          return error{"not a directory or symlink:", c};
+        if (VAST_ERRNO == EEXIST)
+        {
+          auto kind = c.kind();
+          if (! (kind == path::directory || kind == path::symlink))
+            return error{"not a directory or symlink:", c};
+        }
         else
-          return error{"failed to make directory:", std::strerror(e)};
+        {
+          return error{std::strerror(VAST_ERRNO), c};
+        }
       }
     }
   }
