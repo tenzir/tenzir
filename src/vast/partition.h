@@ -63,10 +63,10 @@ struct partition_actor : actor_base
   {
     struct statistics
     {
-      uint64_t backlog = 0; // Number of outstanding batches.
-      uint64_t values = 0;  // Total values indexed.
-      uint64_t rate = 0;    // Last indexing rate (values/sec).
-      uint64_t mean = 0;    // Mean indexing rate (values/sec).
+      uint64_t backlog = 0;         // Number of outstanding batches.
+      uint64_t value_total = 0;     // Total values indexed.
+      uint64_t value_rate = 0;      // Last indexing rate (values/sec).
+      uint64_t value_rate_mean = 0; // Mean indexing rate (values/sec).
     };
 
     cppa::actor actor;
@@ -123,6 +123,7 @@ struct partition_actor : actor_base
   }
 
   path dir_;
+  bool updated_ = false;
   size_t batch_size_;
   uint64_t max_backlog_ = 0;
   partition partition_;

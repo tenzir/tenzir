@@ -200,12 +200,14 @@ behavior ingestor_actor::act()
     },
     on(atom("backlog"), arg_match) >> [=](bool backlogged)
     {
-      if (backlogged)
+      backlogged_ = backlogged;
+
+      if (backlogged_)
       {
-        if (state_ != waiting)
+        if (state_ == ready)
         {
-        VAST_LOG_ACTOR_DEBUG("pauses segment sending ("
-                             << buffer_.size() << " queued)");
+          VAST_LOG_ACTOR_DEBUG("pauses segment sending ("
+                               << buffer_.size() << " queued)");
           state_ = paused;
         }
       }
@@ -216,8 +218,6 @@ behavior ingestor_actor::act()
         state_ = ready;
         send(this, atom("process"));
       }
-
-      backlogged_ = backlogged;
 
       if (terminating_)
         quit(exit::done);

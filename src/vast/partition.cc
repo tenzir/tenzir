@@ -501,42 +501,59 @@ behavior partition_actor::act()
             max_backlog_ = stats.backlog;
 
           stats.backlog -= processed;
-          stats.values += indexed;
-          stats.rate = rate;
-          stats.mean = mean;
+          stats.value_total += indexed;
+          stats.value_rate = rate;
+          stats.value_rate_mean = mean;
 
           break;
         }
+
+      updated_ = true;
     },
     on(atom("stats"), atom("show")) >> [=]
     {
-      std::pair<uint64_t, actor> max_backlog = {0, invalid_actor};
-      uint64_t total_values = 0;
-      uint64_t total_rate = 0;
-      uint64_t total_mean = 0;
+      delayed_send_tuple(this, std::chrono::seconds(3), last_dequeued());
 
+      if (updated_)
+        updated_ = false;
+      else
+        return;
+
+      std::pair<uint64_t, actor> max_backlog = {0, invalid_actor};
+      uint64_t value_total = 0;
+      uint64_t value_rate = 0;
+      uint64_t value_rate_mean = 0;
+      uint64_t event_rate_min = -1;
+      uint64_t event_rate_max = 0;
+
+      auto n = 0;
       for (auto& p : indexers_)
         if (p.second.actor)
         {
-          if (p.second.stats.backlog > max_backlog.first)
-            max_backlog = {p.second.stats.backlog, p.second.actor};
+          ++n;
 
-          total_values += p.second.stats.values;
-          total_rate += p.second.stats.rate;
-          total_mean += p.second.stats.mean;
+          auto& stats = p.second.stats;
+          if (stats.backlog > max_backlog.first)
+            max_backlog = {stats.backlog, p.second.actor};
+
+          if (stats.value_rate < event_rate_min)
+            event_rate_min = stats.value_rate;
+          if (stats.value_rate > event_rate_max)
+            event_rate_max = stats.value_rate;
+
+          value_total += stats.value_total;
+          value_rate += stats.value_rate;
+          value_rate_mean += stats.value_rate_mean;
         }
 
-      if (total_rate > 0)
+      if (value_rate > 0 || max_backlog.first > 0)
         VAST_LOG_ACTOR_VERBOSE(
-            "indexed " << total_values << " values at rate " <<
-            total_rate << " values/sec" << " (mean " << total_mean << ')');
-
-      if (max_backlog.first > 0)
-        VAST_LOG_ACTOR_VERBOSE(
-            "has a maximum backlog of " << max_backlog.first <<
-            " events at " << max_backlog.second);
-
-      delayed_send_tuple(this, std::chrono::seconds(3), last_dequeued());
+            "indexes at " << value_rate << " values/sec" <<
+            " (mean " << value_rate_mean << ") and " <<
+            (value_rate / n) << " events/sec" <<
+            " (" << event_rate_min << '/' << event_rate_max << '/' <<
+            (value_rate_mean / n) << " min/max/mean) with max backlog of " <<
+            max_backlog.first << " at " << max_backlog.second);
     }
   };
 }
