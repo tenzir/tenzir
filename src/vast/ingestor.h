@@ -38,15 +38,23 @@ public:
   char const* describe() const final;
 
 private:
+  enum state
+  {
+    ready,
+    paused,
+    waiting
+  };
+
   path dir_;
+  state state_ = ready;
   cppa::actor receiver_;
   cppa::actor source_;
   cppa::actor sink_;
   size_t max_events_per_chunk_;
   size_t max_segment_size_;
   uint64_t batch_size_;
-  uint64_t delay_ = 0;
   bool terminating_ = false;
+  bool backlogged_ = false;
   std::queue<cppa::any_tuple> buffer_;
   std::set<path> orphaned_;
 };

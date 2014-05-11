@@ -150,29 +150,23 @@ behavior ingestor_actor::act()
     [=](segment& s)
     {
       buffer_.emplace(make_any_tuple(std::move(s), this));
-
-      if (buffer_.size() == 1)
-        send(this, atom("process"));
+      send(this, atom("process"));
     },
     on(atom("process")) >> [=]
     {
-      assert(! buffer_.empty());
-
-      any_tuple s = buffer_.front();
-      if (delay_ > 0)
+      if (state_ == ready && ! buffer_.empty())
       {
-        VAST_LOG_ACTOR_DEBUG("waits " << delay_ << " sec to send segment");
-        delayed_send_tuple(receiver_, std::chrono::seconds(delay_), s);
-      }
-      else
-      {
-        VAST_LOG_ACTOR_DEBUG("delivers segment upstream");
-        send_tuple(receiver_, s);
+        send_tuple(receiver_, buffer_.front());
+        state_ = waiting;
+        VAST_LOG_ACTOR_DEBUG("shipped segment (" <<
+                             buffer_.size() << " queued)");
       }
     },
     on(atom("ack"), arg_match) >> [=](uuid const& id)
     {
-      VAST_LOG_ACTOR_DEBUG("got ack for segment " << id);
+      assert(state_ == waiting);
+      VAST_LOG_ACTOR_DEBUG("got ack for segment " << id << " (" <<
+                           buffer_.size() << " queued)");
 
       match(buffer_.front())(
           on_arg_match >> [&](segment const& s, actor const&)
@@ -191,15 +185,42 @@ behavior ingestor_actor::act()
 
       buffer_.pop();
 
-      if (! buffer_.empty())
+      if (backlogged_)
+      {
+        state_ = paused;
+      }
+      else
+      {
+        state_ = ready;
         send(this, atom("process"));
-      else if (terminating_)
+      }
+
+      if (terminating_)
         quit(exit::done);
     },
-    on(atom("delay"), arg_match) >> [=](uint64_t delay)
+    on(atom("backlog"), arg_match) >> [=](bool backlogged)
     {
-      VAST_LOG_ACTOR_DEBUG("got delay update: " << delay);
-      delay_ = delay;
+      if (backlogged)
+      {
+        if (state_ != waiting)
+        {
+        VAST_LOG_ACTOR_DEBUG("pauses segment sending ("
+                             << buffer_.size() << " queued)");
+          state_ = paused;
+        }
+      }
+      else if (state_ == paused)
+      {
+        VAST_LOG_ACTOR_DEBUG("resumes segment sending ("
+                             << buffer_.size() << " queued)");
+        state_ = ready;
+        send(this, atom("process"));
+      }
+
+      backlogged_ = backlogged;
+
+      if (terminating_)
+        quit(exit::done);
     }
   };
 }

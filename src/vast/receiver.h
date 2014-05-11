@@ -28,6 +28,7 @@ public:
   char const* describe() const final;
 
 private:
+  bool paused_ = false;
   cppa::actor tracker_;
   cppa::actor archive_;
   cppa::actor index_;

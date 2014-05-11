@@ -82,24 +82,20 @@ behavior receiver_actor::act()
     on(atom("backlog")) >> [=]
     {
       send_tuple(index_, last_dequeued());
-      delayed_send_tuple(this, std::chrono::seconds(1), last_dequeued());
+      delayed_send_tuple(this, std::chrono::milliseconds(100), last_dequeued());
     },
-    on(atom("backlog"), arg_match)
-      >> [=](uint64_t segments, uint64_t backlog, uint64_t last_rate)
+    on(atom("backlog"), arg_match) >> [=](uint64_t segments, uint64_t backlog)
     {
-      // To make flow control decision, we respect the indexer with and the
-      // highest backlog b and its last indexing rate r in events/sec. We can
-      // then compute the delay as b / r, which tells us how many seconds
-      // behind the indexing is. The ingestors use the delay to decide when
-      // to send the next buffered segment.
-      auto delay = last_rate > 0 ? backlog / last_rate : 0;
-      for (auto& a : ingestors_)
-        send(a, atom("delay"), delay);
-
-      if (! ingestors_.empty())
+      // TODO: Make flow-control backlog dynamic.
+      auto backlogged = segments > 0 || backlog > 10000;
+      if ((backlogged && ! paused_) || (! backlogged && paused_))
       {
-        VAST_LOG_ACTOR_DEBUG("relays delay of " << delay << "sec");
-        VAST_LOG_ACTOR_DEBUG("found " << segments << " queued segments");
+        paused_ = ! paused_;
+        for (auto& a : ingestors_)
+          send(a, atom("backlog"), backlogged);
+
+        VAST_LOG_ACTOR_DEBUG("notifies ingestors to " <<
+                             (paused_ ? "pause" : "resume") << " processing");
       }
     }
   };

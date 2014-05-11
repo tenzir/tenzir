@@ -483,24 +483,18 @@ behavior partition_actor::act()
     on(atom("backlog")) >> [=]
     {
       uint64_t segments = segments_.size();
-      uint64_t max_backlog = 0;
-      uint64_t last_rate = 0;
-
-      for (auto& p : indexers_)
-        if (p.second.stats.backlog > max_backlog)
-        {
-          max_backlog = p.second.stats.backlog;
-          last_rate = p.second.stats.rate;
-        }
-
-      return make_any_tuple(atom("backlog"), segments, max_backlog, last_rate);
+      return make_any_tuple(atom("backlog"), segments, max_backlog_);
     },
     [=](uint64_t processed, uint64_t indexed, uint64_t rate, uint64_t mean)
     {
+      max_backlog_ = 0;
       for (auto& p : indexers_)
         if (p.second.actor == last_sender())
         {
           auto& stats = p.second.stats;
+
+          if (stats.backlog > max_backlog_)
+            max_backlog_ = stats.backlog;
 
           stats.backlog -= processed;
           stats.values += indexed;
