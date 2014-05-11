@@ -866,10 +866,7 @@ public:
   virtual void visit(offset_extractor const& o)
   {
     auto v = event_.at(o.off);
-    result_ =
-      v && (o.type == event_.type() || *o.type == *event_.type())
-      ? *v
-      : invalid;
+    result_ = v ? *v : invalid;
   }
 
   virtual void visit(schema_extractor const&)
