@@ -50,7 +50,7 @@ char const* packer::describe() const
 
 unpacker::unpacker(any_tuple segment, actor sink, size_t batch_size)
   : segment_{segment},
-    reader_{&segment.get_as<vast::segment>(0)},
+    reader_{&segment_.get_as<vast::segment>(0)},
     sink_{sink},
     batch_size_{batch_size}
 {
@@ -87,6 +87,7 @@ behavior unpacker::act()
 
       if (events_.empty())
       {
+        send(sink_, atom("unpacked"));
         quit(exit::done);
       }
       else

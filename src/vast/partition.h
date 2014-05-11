@@ -1,6 +1,7 @@
 #ifndef VAST_PARTITION_H
 #define VAST_PARTITION_H
 
+#include <queue>
 #include "vast/actor.h"
 #include "vast/bitmap_indexer.h"
 #include "vast/file_system.h"
@@ -126,7 +127,8 @@ struct partition_actor : actor_base
   partition partition_;
   schema schema_;
   std::unordered_map<path, indexer_state> indexers_;
-  std::unordered_map<cppa::actor, cppa::any_tuple> segments_;
+  std::queue<cppa::any_tuple> segments_;
+  cppa::actor unpacker_;
 };
 
 } // namespace vast

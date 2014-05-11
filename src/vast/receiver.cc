@@ -84,7 +84,8 @@ behavior receiver_actor::act()
       send_tuple(index_, last_dequeued());
       delayed_send_tuple(this, std::chrono::seconds(1), last_dequeued());
     },
-    on(atom("backlog"), arg_match) >> [=](uint64_t backlog, uint64_t last_rate)
+    on(atom("backlog"), arg_match)
+      >> [=](uint64_t segments, uint64_t backlog, uint64_t last_rate)
     {
       // To make flow control decision, we respect the indexer with and the
       // highest backlog b and its last indexing rate r in events/sec. We can
@@ -93,9 +94,12 @@ behavior receiver_actor::act()
       // to send the next buffered segment.
       auto delay = last_rate > 0 ? backlog / last_rate : 0;
       for (auto& a : ingestors_)
-      {
         send(a, atom("delay"), delay);
-        VAST_LOG_ACTOR_DEBUG("relays delay of " << delay << "sec to " << a);
+
+      if (! ingestors_.empty())
+      {
+        VAST_LOG_ACTOR_DEBUG("relays delay of " << delay << "sec");
+        VAST_LOG_ACTOR_DEBUG("found " << segments << " queued segments");
       }
     }
   };

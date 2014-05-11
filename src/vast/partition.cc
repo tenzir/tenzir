@@ -230,7 +230,7 @@ struct dispatcher : expr::default_const_visitor
         path p = "types";
         for (auto& i : pair.second)
           p /= i;
-        
+
         auto i = actor_.indexers_.find(p);
         if (i == actor_.indexers_.end())
         {
@@ -346,7 +346,19 @@ behavior partition_actor::act()
     }
   };
 
-  attach_functor([=](uint32_t) { indexers_.clear(); }); 
+  attach_functor(
+      [=](uint32_t reason)
+      {
+        if (unpacker_)
+          anon_send_exit(unpacker_, reason);
+
+        for (auto& p : indexers_)
+          if (p.second.actor)
+            anon_send_exit(p.second.actor, reason);
+
+        indexers_.clear();
+        unpacker_ = invalid_actor;
+      });
 
 
   send(this, atom("stats"), atom("show"));
@@ -358,27 +370,11 @@ behavior partition_actor::act()
       if (e.reason != exit::kill)
         flush();
 
-      for (auto& p : indexers_)
-        if (p.second.actor)
-          send_exit(p.second.actor, e.reason);
-
       quit(e.reason);
     },
     [=](down_msg const&)
     {
       VAST_LOG_ACTOR_DEBUG("got DOWN from " << last_sender());
-
-      for (auto i = segments_.begin(); i != segments_.end(); ++i)
-        if (i->first.address() == last_sender())
-        {
-          auto& s = i->second.get_as<segment>(0);
-          partition_.update(s);
-
-          VAST_LOG_ACTOR_DEBUG("incorporated segment " << s.id());
-
-          segments_.erase(i);
-          return;
-        }
 
       for (auto& p : indexers_)
         if (p.second.actor == last_sender())
@@ -441,24 +437,23 @@ behavior partition_actor::act()
             }
           });
 
-      auto up = spawn<unpacker, monitored>(last_dequeued(), this, batch_size_);
-      segments_[up] = last_dequeued();
-      send(up, atom("run"));
-    },
-    [=](std::vector<event> const& events)
-    {
       auto p = dir_ / "name.idx";
-      auto s = &indexers_[p];
-      if (! s->actor)
-        s->actor =
+      auto state = &indexers_[p];
+      if (! state->actor)
+        state->actor =
           spawn<event_name_indexer<default_bitstream>, monitored>(std::move(p));
 
       p = dir_ / "time.idx";
-      s = &indexers_[p];
-      if (! s->actor)
-        s->actor =
+      state = &indexers_[p];
+      if (! state->actor)
+        state->actor =
           spawn<event_time_indexer<default_bitstream>, monitored>(std::move(p));
 
+      segments_.push(last_dequeued());
+      send(this, atom("unpack"));
+    },
+    [=](std::vector<event> const& events)
+    {
       for (auto& p : indexers_)
         if (p.second.actor)
         {
@@ -466,10 +461,31 @@ behavior partition_actor::act()
           p.second.stats.backlog += events.size();
         }
     },
+    on(atom("unpack")) >> [=]
+    {
+      if (! unpacker_ && ! segments_.empty())
+      {
+        unpacker_ = spawn<unpacker>(segments_.front(), this, batch_size_);
+        send(unpacker_, atom("run"));
+      }
+    },
+    on(atom("unpacked")) >> [=]
+    {
+      auto& s = segments_.front().get_as<segment>(0);
+
+      VAST_LOG_ACTOR_VERBOSE("unpacking segment " << s.id());
+      partition_.update(s);
+
+      segments_.pop();
+      unpacker_ = invalid_actor;
+      send(this, atom("unpack"));
+    },
     on(atom("backlog")) >> [=]
     {
+      uint64_t segments = segments_.size();
       uint64_t max_backlog = 0;
       uint64_t last_rate = 0;
+
       for (auto& p : indexers_)
         if (p.second.stats.backlog > max_backlog)
         {
@@ -477,7 +493,7 @@ behavior partition_actor::act()
           last_rate = p.second.stats.rate;
         }
 
-      return make_any_tuple(atom("backlog"), max_backlog, last_rate);
+      return make_any_tuple(atom("backlog"), segments, max_backlog, last_rate);
     },
     [=](uint64_t processed, uint64_t indexed, uint64_t rate, uint64_t mean)
     {

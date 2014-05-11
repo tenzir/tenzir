@@ -61,6 +61,7 @@ public:
           VAST_LOG_ACTOR_ERROR("failed to flush " << (size - last_flush_) <<
                                " bits to " << path_ << ": " <<
                                attempt.error());
+          quit(exit::error);
         }
         else
         {
@@ -73,13 +74,17 @@ public:
       }
     };
 
+    attach_functor(
+        [=](uint32_t reason)
+        {
+          if (reason != exit::kill)
+            flush();
+        });
+
     return
     {
       [=](exit_msg const& e)
       {
-        if (e.reason != exit::kill)
-          flush();
-
         this->quit(e.reason);
       },
       on(atom("flush")) >> flush,
