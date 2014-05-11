@@ -492,28 +492,27 @@ trial<void> mkdir(path const& p)
     return error{"cannot mkdir empty path"};
 
   path c;
-  for (size_t i = 0; i < components.size() - 1; ++i)
+  for (auto& comp : components)
   {
-    c /= components[i];
+    c /= comp;
     if (exists(c))
     {
       if (! (c.is_directory() || c.is_symlink()))
-        return error{"parent not a directory or symlink"};
+        return error{"not a symlink or directory:", c};
     }
     else
     {
       VAST_ERRNO = 0;
       if (! VAST_CREATE_DIRECTORY(c.str().data()))
-        return error{"failed to create parent directory"};
+      {
+        auto e = VAST_ERRNO;
+        // Because there exists a TOCTTOU issue here, we have to check again.
+        if (exists(c) && ! (c.is_directory() || c.is_symlink()))
+          return error{"not a directory or symlink:", c};
+        else
+          return error{"failed to make directory:", std::strerror(e)};
+      }
     }
-  }
-
-  c /= components.back();
-  if (! exists(c))
-  {
-    VAST_ERRNO = 0;
-    if (! VAST_CREATE_DIRECTORY(c.str().data()))
-      return error{"failed to make directory"};
   }
 
   return nothing;
