@@ -366,16 +366,21 @@ string string::trim(string const& str) const
 
 string string::trim(string const& left, string const& right) const
 {
-  string s;
   auto front = begin();
   auto back = end();
   auto l = left.size();
   auto r = right.size();
-  while (front + l < back && std::equal(left.begin(), left.end(), front))
-    front += l;
 
-  while (front + r < back && std::equal(right.begin(), right.end(), back - r))
-    back -= r;
+  if (l == 0 && r == 0)
+    return *this;
+
+  if (l > 0)
+    while (front + l < back && std::equal(left.begin(), left.end(), front))
+      front += l;
+
+  if (r > 0)
+    while (front + r < back && std::equal(right.begin(), right.end(), back - r))
+      back -= r;
 
   return {front, back};
 }
