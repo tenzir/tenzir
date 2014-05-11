@@ -295,7 +295,7 @@ struct in_visitor
 
   result_type operator()(string const& lhs, string const& rhs) const
   {
-    return rhs.find(lhs);
+    return rhs.find(lhs) != string::npos;
   }
 
   result_type operator()(string const& lhs, regex const& rhs) const
@@ -321,7 +321,7 @@ struct ni_visitor
 
   result_type operator()(string const& lhs, string const& rhs) const
   {
-    return lhs.find(rhs);
+    return lhs.find(rhs) != string::npos;
   }
 
   result_type operator()(regex const& lhs, string const& rhs) const
@@ -1008,8 +1008,9 @@ bool compatible(type_tag lhs, type_tag rhs, relational_operator op)
           return rhs == prefix_value;
       }
     case ni:
+      return compatible(rhs, lhs, in);
     case not_ni:
-      return compatible(lhs, rhs, negate(op));
+      return compatible(rhs, lhs, not_in);
   }
 }
 
