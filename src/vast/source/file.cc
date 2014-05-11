@@ -180,7 +180,7 @@ result<event> bro2::extract_impl()
         {
           auto v = parse<value>(begin, end, t.back()->type,
                                 set_separator_, "", "",
-                                set_separator_, "{", "}");
+                                set_separator_, "", "");
           if (! v)
             return v.error() + error{std::string{begin, end}};
 
