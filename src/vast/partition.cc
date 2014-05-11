@@ -408,7 +408,7 @@ behavior partition_actor::act()
     on(atom("flush")) >> flush,
     [=](segment const& s)
     {
-      VAST_LOG_ACTOR_DEBUG("got segment with " << s.events());
+      VAST_LOG_ACTOR_DEBUG("got segment with " << s.events() << " events");
 
       auto sch = schema::merge(schema_, s.schema());
       if (! sch)
@@ -523,12 +523,12 @@ behavior partition_actor::act()
         }
 
       if (total_rate > 0)
-        VAST_LOG_ACTOR_INFO(
+        VAST_LOG_ACTOR_VERBOSE(
             "indexed " << total_values << " values at rate " <<
             total_rate << " values/sec" << " (mean " << total_mean << ')');
 
       if (max_backlog.first > 0)
-        VAST_LOG_ACTOR_INFO(
+        VAST_LOG_ACTOR_VERBOSE(
             "has a maximum backlog of " << max_backlog.first <<
             " events at " << max_backlog.second);
 

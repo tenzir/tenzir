@@ -82,8 +82,7 @@ void configuration::initialize()
   actor.visible(false);
 
   auto& ingest = create_block("ingest options", "ingest");
-  ingest.add("max-events-per-chunk", "maximum number of events per chunk")
-        .init(5000);
+  ingest.add("max-events-per-chunk", "maximum events per chunk").init(5000);
   ingest.add("max-segment-size", "maximum segment size in MB").init(128);
   ingest.add("batch-size", "number of events to ingest in one run").init(4000);
   ingest.add('r', "file-name", "path to file to ingest").single();
@@ -91,7 +90,7 @@ void configuration::initialize()
   ingest.add("time-field", "field to extract event timestamp from").init(-1);
   ingest.add("submit", "send orphaned segments on startup");
 #ifdef VAST_HAVE_BROCCOLI
-  ingest.add("broccoli-host", "hostname/address of the broccoli source")
+  ingest.add("broccoli-host", "hostname/address of broccoli source")
         .init("127.0.0.1");
   ingest.add("broccoli-port", "port of the broccoli source").init(42000);
   ingest.add("broccoli-events", "list of events for broccoli to subscribe to")
@@ -107,8 +106,7 @@ void configuration::initialize()
   auto& archive = create_block("archive options", "archive");
   archive.add("host", "hostname/address of the archive").init("127.0.0.1");
   archive.add("port", "TCP port of the archive").init(42003);
-  archive.add("max-segments", "maximum number of segments to keep in memory")
-         .init(500);
+  archive.add("max-segments", "maximum segments cached in memory").init(10);
   archive.visible(false);
 
   auto& index = create_block("index options", "index");
