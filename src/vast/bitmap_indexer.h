@@ -273,7 +273,12 @@ struct event_data_index_factory
 
   trial<cppa::actor> operator()(set_type const& t) const
   {
-    return spawn<set_bitmap_index<Bitstream>>(t.elem_type->tag());
+    return spawn<sequence_bitmap_index<Bitstream>>(t.elem_type->tag());
+  }
+
+  trial<cppa::actor> operator()(vector_type const& t) const
+  {
+    return spawn<sequence_bitmap_index<Bitstream>>(t.elem_type->tag());
   }
 
   trial<cppa::actor> operator()(invalid_type const&) const
@@ -284,11 +289,6 @@ struct event_data_index_factory
   trial<cppa::actor> operator()(regex_type const&) const
   {
     return error{"regular expressions not yet supported"};
-  }
-
-  trial<cppa::actor> operator()(vector_type const&) const
-  {
-    return error{"vectors not yet supported"};
   }
 
   trial<cppa::actor> operator()(prefix_type const&) const

@@ -299,7 +299,7 @@ BOOST_AUTO_TEST_CASE(transport_port_bitmap_index_ewah)
 
 BOOST_AUTO_TEST_CASE(container_bitmap_index)
 {
-  set_bitmap_index<null_bitstream> bmi{string_value};
+  sequence_bitmap_index<null_bitstream> bmi{string_value};
 
   set s;
   s.emplace_back("foo");
@@ -328,4 +328,8 @@ BOOST_AUTO_TEST_CASE(container_bitmap_index)
   r.clear();
   r.append(4, false);
   BOOST_CHECK_EQUAL(*bmi.lookup(in, "not"), r);
+
+  auto v = to<vector>("you won't believe it", type::make<string_type>(), " ");
+  BOOST_REQUIRE(v);
+  BOOST_CHECK(bmi.push_back(*v));
 }

@@ -819,15 +819,15 @@ trial<bitmap_index<Bitstream>> make_bitmap_index(type_tag t, Args&&... args);
 
 /// A bitmap index for sets, vectors, and tuples.
 template <typename Bitstream>
-class set_bitmap_index : public bitmap_index_base<set_bitmap_index<Bitstream>>
+class sequence_bitmap_index : public bitmap_index_base<sequence_bitmap_index<Bitstream>>
 {
-  friend bitmap_index_base<set_bitmap_index<Bitstream>>;
+  friend bitmap_index_base<sequence_bitmap_index<Bitstream>>;
 
   template <typename>
   friend struct detail::bitmap_index_model;
 
 public:
-  set_bitmap_index(type_tag t)
+  sequence_bitmap_index(type_tag t)
     : elem_type_{t}
   {
   }
@@ -953,7 +953,7 @@ private:
     source >> elem_type_ >> bmis_ >> size_;
   }
 
-  friend bool operator==(set_bitmap_index const& x, set_bitmap_index const& y)
+  friend bool operator==(sequence_bitmap_index const& x, sequence_bitmap_index const& y)
   {
     return x.elem_type_ == y.elem_type_
         && x.bmis_ == y.bmis_
