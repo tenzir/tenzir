@@ -1000,9 +1000,9 @@ bool compatible(type_tag lhs, type_tag rhs, relational_operator op)
         default:
           return is_container(rhs);
         case string_value:
-          return rhs == string_value;
+          return rhs == string_value || is_container(rhs);
         case address_value:
-          return rhs == prefix_value;
+          return rhs == prefix_value || is_container(rhs);
       }
     case ni:
       return compatible(rhs, lhs, in);
