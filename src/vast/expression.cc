@@ -308,6 +308,18 @@ struct in_visitor
     return rhs.contains(lhs);
   }
 
+  template <typename T>
+  result_type operator()(T const& lhs, set const& rhs) const
+  {
+    return std::find(rhs.begin(), rhs.end(), value{lhs}) != rhs.end();
+  }
+
+  template <typename T>
+  result_type operator()(T const& lhs, vector const& rhs) const
+  {
+    return std::find(rhs.begin(), rhs.end(), value{lhs}) != rhs.end();
+  }
+
   template <typename T, typename U>
   result_type operator()(T const&, U const&) const
   {
@@ -319,25 +331,10 @@ struct ni_visitor
 {
   using result_type = bool;
 
-  result_type operator()(string const& lhs, string const& rhs) const
-  {
-    return lhs.find(rhs) != string::npos;
-  }
-
-  result_type operator()(regex const& lhs, string const& rhs) const
-  {
-    return lhs.search(rhs);
-  }
-
-  result_type operator()(prefix const& lhs, address const& rhs) const
-  {
-    return lhs.contains(rhs);
-  }
-
   template <typename T, typename U>
-  result_type operator()(T const&, U const&) const
+  bool operator()(T const& lhs, U const& rhs) const
   {
-    return false;
+    return in_visitor{}(rhs, lhs);
   }
 };
 

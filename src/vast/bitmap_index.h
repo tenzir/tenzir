@@ -827,6 +827,8 @@ class sequence_bitmap_index : public bitmap_index_base<sequence_bitmap_index<Bit
   friend struct detail::bitmap_index_model;
 
 public:
+  sequence_bitmap_index() = default;
+
   sequence_bitmap_index(type_tag t)
     : elem_type_{t}
   {
@@ -854,6 +856,11 @@ private:
 
   trial<bitstream> lookup_impl(relational_operator op, value const& val) const
   {
+    if (op == ni)
+      op = in;
+    else if (op == not_ni)
+      op = not_in;
+
     if (! (op == in || op == not_in))
       return error{"unsupported relational operator", op};
 

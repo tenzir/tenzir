@@ -118,6 +118,20 @@ struct type_converter
   }
 };
 
+struct bmi_converter
+{
+  template <typename T>
+  void operator()(T /* x */) const
+  {
+    type_announcer{}(detail::bitmap_index_model<T>{});
+
+    make_convertible<
+      detail::bitmap_index_model<T>,
+      detail::bitmap_index_concept
+    >();
+  }
+};
+
 } // namespace <anonymous>
 
 void announce_builtin_types()
@@ -177,6 +191,8 @@ void announce_builtin_types()
 
     arithmetic_operator, boolean_operator, relational_operator,
     bitstream,
+    bitmap_index<null_bitstream>,
+    bitmap_index<ewah_bitstream>,
     expr::ast,
     schema,
     search_result
@@ -198,7 +214,7 @@ void announce_builtin_types()
   std::tuple<
     detail::bitstream_model<ewah_bitstream>,
     detail::bitstream_model<null_bitstream>
-  > bitstream_types;
+  > bitstream_models;
 
   std::tuple<
     arithmetic_bitmap_index<null_bitstream, bool_value>,
@@ -210,6 +226,7 @@ void announce_builtin_types()
     address_bitmap_index<null_bitstream>,
     port_bitmap_index<null_bitstream>,
     string_bitmap_index<null_bitstream>,
+    sequence_bitmap_index<null_bitstream>,
     arithmetic_bitmap_index<ewah_bitstream, bool_value>,
     arithmetic_bitmap_index<ewah_bitstream, int_value>,
     arithmetic_bitmap_index<ewah_bitstream, uint_value>,
@@ -218,18 +235,21 @@ void announce_builtin_types()
     arithmetic_bitmap_index<ewah_bitstream, time_point_value>,
     address_bitmap_index<ewah_bitstream>,
     port_bitmap_index<ewah_bitstream>,
-    string_bitmap_index<ewah_bitstream>
+    string_bitmap_index<ewah_bitstream>,
+    sequence_bitmap_index<ewah_bitstream>
   > bitmap_index_types;
 
   util::for_each(integral_types, type_announcer{});
   util::for_each(stl_types, type_announcer{});
   util::for_each(vast_types, type_announcer{});
   util::for_each(expr_node_types, type_announcer{});
-  util::for_each(bitstream_types, type_announcer{});
-  util::for_each(bitmap_index_types, type_announcer{});
+  util::for_each(bitstream_models, type_announcer{});
 
   util::for_each(expr_node_types, type_converter<expr::node>{});
-  util::for_each(bitstream_types, type_converter<detail::bitstream_concept>{});
+  util::for_each(bitstream_models, type_converter<detail::bitstream_concept>{});
+
+  util::for_each(bitmap_index_types, type_announcer{});
+  util::for_each(bitmap_index_types, bmi_converter{});
 }
 
 } // namespace vast
