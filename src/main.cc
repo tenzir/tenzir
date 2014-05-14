@@ -46,11 +46,15 @@ int main(int argc, char *argv[])
   VAST_LOG_VERBOSE("|___/_/ |_/___/ /_/  " << VAST_VERSION);
   VAST_LOG_VERBOSE("");
 
-  auto n = 0;
-  detail::type_manager::instance()->each([&](global_type_info const&) { ++n; });
-  VAST_LOG_DEBUG("type manager announced " << n << " types");
+  detail::type_manager::instance()->each(
+      [&](global_type_info const& gti)
+      {
+        VAST_LOG_DEBUG("registered type " << gti.id() << ": " << gti.name());
+      });
 
   cppa::max_msg_size(512 * 1024 * 1024);
+  VAST_LOG_DEBUG("set cppa maximum message size to " <<
+                 cppa::max_msg_size() / 1024 << " KB");
 
   // FIXME: if we do not detach the program actor, it becomes impossible to
   // intercept and handle SIGINT. Why?

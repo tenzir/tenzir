@@ -2,7 +2,6 @@
 
 #include <cassert>
 #include <exception>
-#include "vast/logger.h"
 #include "vast/type_info.h"
 
 namespace vast {
@@ -18,9 +17,6 @@ type_manager::add(std::type_info const& ti,
     return false;;
 
   auto gti = f(++id_);
-
-  VAST_LOG_DEBUG("registering new type " << detail::demangle(ti.name()) <<
-                 " with id " << id_);
 
   by_id_.emplace(gti->id(), gti);
   by_name_.emplace(gti->name(), gti);
@@ -57,19 +53,14 @@ global_type_info const* type_manager::lookup(std::string const& name) const
 bool type_manager::add_link(global_type_info const* from,
                             std::type_info const& to)
 {
-  if (! from)
+  if (! from || *from == to)
     return false;
-  if (*from == to)
-    return false; // We do not store reflexivity...
 
   auto& set = conversions_[from->id()];
   auto t = set.find(std::type_index(to));
   if (t != set.end())
-  {
-    VAST_LOG_WARN("attempted to register duplicate conversion from type " <<
-                  from->name() << " to type " << detail::demangle(to));
     return false;
-  }
+
   set.emplace(to);
   return true;
 }
