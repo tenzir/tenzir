@@ -449,23 +449,18 @@ private:
     }
 
     if (str.size() > bitmaps_.size())
-    {
-      auto current = this->size() - 1;
-      auto fresh = str.size() - bitmaps_.size();
       bitmaps_.resize(str.size());
-      if (current > 0)
-        for (size_t i = bitmaps_.size() - fresh; i < bitmaps_.size(); ++i)
-          if (! bitmaps_[i].append(current, 0))
-            return false;
-    }
 
     for (size_t i = 0; i < str.size(); ++i)
+    {
+      auto delta = this->size() - 1 - bitmaps_[i].size();
+      if (delta > 0)
+        if (! bitmaps_[i].append(delta, false))
+          return false;
+
       if (! bitmaps_[i].push_back(byte_at(str, i)))
         return false;
-
-    for (size_t i = str.size(); i < bitmaps_.size(); ++i)
-      if (! bitmaps_[i].append(1, 0))
-        return false;
+    }
 
     return true;
   }
