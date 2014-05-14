@@ -30,7 +30,7 @@ public:
       bmi_{std::move(bmi)},
       stats_{std::chrono::seconds{1}}
   {
-    bmi_.append(1, false); // Event ID 0 is not a valid event.
+    bmi_.stretch(1); // Event ID 0 is not a valid event.
   }
 
   cppa::behavior act() final

@@ -33,20 +33,21 @@ public:
 
       auto delta = id - size();
       if (delta > 1)
-        if (! append(delta, false))
+        if (! stretch(delta))
           return false;
     }
 
-    return val ? derived()->push_back_impl(val) : append(1, false);
+    // TODO: add explicit indexing support for empty values by putting them
+    // into a separate bitmap, as opposed to stretching the bitmap index.
+    return val ? derived()->push_back_impl(val) : stretch(1);
   }
 
-  /// Appends a sequence of bits.
-  /// @param n The number of elements to append.
-  /// @param bit The value of the bits to append.
+  /// Appends 0-bits to the index.
+  /// @param n The number of zeros to append.
   /// @returns `true` on success.
-  bool append(size_t n, bool bit)
+  bool stretch(size_t n)
   {
-    return derived()->append_impl(n, bit);
+    return derived()->stretch_impl(n);
   }
 
   /// Looks up a value given a relational operator.
@@ -94,7 +95,7 @@ struct bitmap_index_concept
   virtual ~bitmap_index_concept() = default;
 
   virtual bool push_back_impl(value const& val) = 0;
-  virtual bool append_impl(size_t n, bool bit) = 0;
+  virtual bool stretch_impl(size_t n) = 0;
   virtual trial<bitstream> lookup_impl(relational_operator op,
                                        value const& val) const = 0;
   virtual uint64_t size_impl() const = 0;
@@ -123,9 +124,9 @@ struct bitmap_index_model
     return bmi_.push_back_impl(val);
   }
 
-  virtual bool append_impl(size_t n, bool bit) final
+  virtual bool stretch_impl(size_t n) final
   {
-    return bmi_.append_impl(n, bit);
+    return bmi_.stretch_impl(n);
   }
 
   virtual trial<bitstream> lookup_impl(relational_operator op,
@@ -241,10 +242,10 @@ private:
     return concept_->push_back_impl(val);
   }
 
-  bool append_impl(size_t n, bool bit)
+  bool stretch_impl(size_t n)
   {
     assert(concept_);
-    return concept_->append_impl(n, bit);
+    return concept_->stretch_impl(n);
   }
 
   trial<bitstream> lookup_impl(relational_operator op, value const& val) const
@@ -364,9 +365,9 @@ private:
     return bitmap_.push_back(extract(val));
   }
 
-  bool append_impl(size_t n, bool bit)
+  bool stretch_impl(size_t n)
   {
-    return bitmap_.append(n, bit);
+    return bitmap_.append(n, false);
   }
 
   trial<bitstream> lookup_impl(relational_operator op, value const& val) const
@@ -436,24 +437,13 @@ private:
   {
     auto& str = val.get<string>();
 
-    if (! size_.push_back(str.size()))
-      return false;
-
-    if (str.empty())
-    {
-      for (auto& bm : bitmaps_)
-        if (! bm.append(1, 0))
-          return false;
-
-      return true;
-    }
-
     if (str.size() > bitmaps_.size())
       bitmaps_.resize(str.size());
 
     for (size_t i = 0; i < str.size(); ++i)
     {
-      auto delta = this->size() - 1 - bitmaps_[i].size();
+      assert(this->size() >= bitmaps_[i].size());
+      auto delta = this->size() - bitmaps_[i].size();
       if (delta > 0)
         if (! bitmaps_[i].append(delta, false))
           return false;
@@ -462,16 +452,12 @@ private:
         return false;
     }
 
-    return true;
+    return size_.push_back(str.size());
   }
 
-  bool append_impl(size_t n, bool bit)
+  bool stretch_impl(size_t n)
   {
-    for (auto& bm : bitmaps_)
-      if (! bm.append(n, bit))
-        return false;
-
-    return size_.append(n, bit);
+    return size_.append(n, false);
   }
 
   trial<bitstream> lookup_impl(relational_operator op, value const& val) const
@@ -616,13 +602,13 @@ private:
     return true;
   }
 
-  bool append_impl(size_t n, bool bit)
+  bool stretch_impl(size_t n)
   {
-    bool success = true;
     for (size_t i = 0; i < 16; ++i)
-      if (! bitmaps_[i].append(n, bit))
-        success = false;
-    return v4_.append(n, bit) && success;
+      if (! bitmaps_[i].append(n, false))
+        return false;
+
+    return v4_.append(n, false);
   }
 
   trial<bitstream> lookup_impl(relational_operator op, value const& val) const
@@ -747,9 +733,9 @@ private:
     return num_.push_back(p.number()) && proto_.push_back(p.type());
   }
 
-  bool append_impl(size_t n, bool bit)
+  bool stretch_impl(size_t n)
   {
-    return num_.append(n, bit) && proto_.append(n, bit);
+    return num_.append(n, false) && proto_.append(n, false);
   }
 
   trial<bitstream> lookup_impl(relational_operator op, value const& val) const
@@ -840,13 +826,9 @@ private:
       return false;
   }
 
-  bool append_impl(size_t n, bool bit)
+  bool stretch_impl(size_t n)
   {
-    for (auto& bmi : bmis_)
-      if (! bmi.append(n, bit))
-        return false;
-
-    return size_.append(n, bit);
+    return size_.append(n, false);
   }
 
   trial<bitstream> lookup_impl(relational_operator op, value const& val) const
@@ -878,6 +860,9 @@ private:
         return bs;
     }
 
+    if (r.size() < this->size())
+      r.append(this->size() - r.size(), false);
+
     if (op == not_in)
       r.flip();
 
@@ -900,16 +885,7 @@ private:
     auto& c = val.get<C>();
 
     if (c.empty())
-    {
-      for (auto& bmi : bmis_)
-        if (! bmi.append(1, false))
-          return false;
-
-      if (! size_.append(1, false))
-        return false;
-
-      return true;
-    }
+      return size_.append(1, false);
 
     if (bmis_.size() < c.size())
     {
@@ -921,25 +897,22 @@ private:
         if (! bmi)
           return false;
 
-        if (! this->empty() && ! bmi->append(this->size(), false))
-          return false;
-
         bmis_[i] = std::move(*bmi);
       }
     }
 
     for (size_t i = 0; i < c.size(); ++i)
+    {
+      auto delta = this->size() - bmis_[i].size();
+      if (delta > 0)
+        if (! bmis_[i].stretch(delta))
+          return false;
+
       if (! bmis_[i].push_back(c[i]))
         return false;
+    }
 
-    for (size_t i = c.size(); i < bmis_.size(); ++i)
-      if (! bmis_[i].append(1, false))
-        return false;
-
-    if (! size_.push_back(c.size()))
-      return false;
-
-    return true;
+    return size_.push_back(c.size());
   }
 
 private:
