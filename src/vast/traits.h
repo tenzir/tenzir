@@ -83,30 +83,14 @@ using RemovePointer = typename std::remove_pointer<T>::type;
 /// Retrieves the unqualified type by removing const/volatile and reference
 /// from a type.
 template <typename T>
-using Unqualified = 
+using Unqualified =
   typename std::remove_cv<
     typename std::remove_reference<T>::type
   >::type;
 
-/// Computes the maximum over a variadic list of types according to a given
-/// higher-order metafunction.
-template <template <typename> class F, typename Head>
-constexpr decltype(F<Head>::value) max()
-{
-  return F<Head>::value;
-}
-
-template <
-  template <typename> class F, typename Head, typename Next, typename... Tail
->
-constexpr decltype(F<Head>::value) max()
-{
-  return max<F, Head>() > max<F, Next, Tail...>()
-    ? max<F, Head>()
-    : max<F, Next, Tail...>();
-}
-
+//
 // Various meta functions mostly used to sfinae out certain types.
+//
 
 template <typename T>
 using is_byte = Bool<sizeof(T) == 1>;
@@ -114,7 +98,7 @@ using is_byte = Bool<sizeof(T) == 1>;
 class string;
 
 template <typename T>
-using is_string = 
+using is_string =
   Bool<std::is_same<T, std::string>::value || std::is_same<T, string>::value>;
 
 template <typename T>
