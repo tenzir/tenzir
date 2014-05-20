@@ -99,6 +99,9 @@ behavior ingestor_actor::act()
         orphaned_.erase(i);
       }
 
+      if (backlogged_)
+        VAST_LOG_ACTOR_DEBUG("pauses segment sending");
+
       become(backlogged_ ? paused_ : ready_);
     }
   };
@@ -110,7 +113,10 @@ behavior ingestor_actor::act()
     after(std::chrono::seconds(0)) >> [=]
     {
       if (! backlogged_)
+      {
+        VAST_LOG_ACTOR_DEBUG("resumes segment sending");
         become(ready_);
+      }
     }
   };
 
