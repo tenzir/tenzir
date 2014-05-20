@@ -305,7 +305,8 @@ private:
         &call_visitor<Internal&&, Ts, VoidPtrCV&&, Visitor, Args&&...>...
       };
 
-      assert(which >= 0 && which < sizeof...(Ts));
+      assert(static_cast<size_t>(which) >= 0
+             && static_cast<size_t>(which) < sizeof...(Ts));
 
       return (*callers[which])(
             std::forward<Internal>(internal),
@@ -554,7 +555,7 @@ struct binary_visitor
   template <typename T>
   result_type operator()(T const& x)
   {
-    return apply_visitor(visitor_, visitable_, x);
+    return visitable_.template apply<std::false_type>(visitor_, x);
   }
 
 private:
@@ -574,7 +575,7 @@ apply_visitor(Visitor&& visitor, Visitable&& visitable)
 
 template <typename Visitor, typename Visitable1, typename Visitable2>
 typename std::remove_reference<Visitor>::type::result_type
-apply_visitor_binary(Visitor&& visitor, Visitable1&& v1, Visitable2&& v2)
+apply_visitor(Visitor&& visitor, Visitable1&& v1, Visitable2&& v2)
 {
   detail::binary_visitor<Visitor, Visitable1> v{
     std::forward<Visitor>(visitor),

@@ -79,8 +79,8 @@ BOOST_AUTO_TEST_CASE(variant_test)
   apply_visitor(doppler{}, t1);
   BOOST_CHECK_EQUAL(*util::get<double>(t1), 1.337 * 2);
 
-  BOOST_CHECK(! apply_visitor_binary(binary{}, t0, t1));
-  BOOST_CHECK(! apply_visitor_binary(binary{}, t1, t0));
-  BOOST_CHECK(! apply_visitor_binary(binary{}, t0, t2));
-  BOOST_CHECK(apply_visitor_binary(binary{}, t0, triple{84}));
+  BOOST_CHECK(! apply_visitor(binary{}, t0, t1));
+  BOOST_CHECK(! apply_visitor(binary{}, t1, t0));
+  BOOST_CHECK(! apply_visitor(binary{}, t0, t2));
+  BOOST_CHECK(apply_visitor(binary{}, t0, triple{84}));
 }

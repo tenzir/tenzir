@@ -680,21 +680,19 @@ struct compatibility_checker
 
   bool operator()(vector_type const& x, vector_type const& y)
   {
-    return apply_visitor_binary(
-        *this, x.elem_type->info(), y.elem_type->info());
+    return apply_visitor(*this, x.elem_type->info(), y.elem_type->info());
   }
 
   bool operator()(set_type const& x, set_type const& y)
   {
-    return apply_visitor_binary(
-        *this, x.elem_type->info(), y.elem_type->info());
+    return apply_visitor(*this, x.elem_type->info(), y.elem_type->info());
   }
 
   bool operator()(table_type const& x, table_type const& y)
   {
     return
-      apply_visitor_binary(*this, x.key_type->info(), y.key_type->info()) &&
-      apply_visitor_binary(*this, x.yield_type->info(), y.yield_type->info());
+      apply_visitor(*this, x.key_type->info(), y.key_type->info()) &&
+      apply_visitor(*this, x.yield_type->info(), y.yield_type->info());
   }
 
   bool operator()(record_type const& x, record_type const& y)
@@ -703,7 +701,7 @@ struct compatibility_checker
       return false;
 
     for (size_t i = 0; i < x.args.size(); ++i)
-      if (! apply_visitor_binary(
+      if (! apply_visitor(
               *this, x.args[i].type->info(), y.args[i].type->info()))
         return false;
 
@@ -718,7 +716,7 @@ bool type::represents(type_const_ptr const& other) const
   if (! other)
     return false;
 
-  return apply_visitor_binary(compatibility_checker{}, info_, other->info_);
+  return apply_visitor(compatibility_checker{}, info_, other->info_);
 }
 
 type_tag type::tag() const
@@ -813,7 +811,7 @@ struct less_than
 bool operator<(type const& lhs, type const& rhs)
 {
   return lhs.name_ < rhs.name_
-      && apply_visitor_binary(less_than{}, lhs.info_, rhs.info_);
+      && apply_visitor(less_than{}, lhs.info_, rhs.info_);
 }
 
 } // namespace vast
