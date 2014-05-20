@@ -49,8 +49,6 @@ behavior ingestor_actor::act()
         segmentizer_ = invalid_actor;
       });
 
-  auto on_backlog = [=](bool backlogged) { backlogged_ = backlogged; };
-
   auto on_exit = [=](exit_msg const& e)
   {
     if (source_)
@@ -62,6 +60,19 @@ behavior ingestor_actor::act()
       send_exit(segmentizer_, e.reason);
   };
 
+  auto on_ack = [=](uuid const& id)
+  {
+    VAST_LOG_ACTOR_DEBUG("got ack for segment " << id);
+
+    auto i = orphaned_.find(path{to_string(id)});
+    if (i != orphaned_.end())
+    {
+      VAST_LOG_ACTOR_INFO("submitted orphaned segment " << id);
+      rm(dir_ / *i);
+      orphaned_.erase(i);
+    }
+  };
+
   ready_ =
   {
     on_exit,
@@ -69,12 +80,19 @@ behavior ingestor_actor::act()
     {
       segmentizer_ = invalid_actor;
     },
-    on(atom("backlog"), arg_match) >> on_backlog,
+    on(atom("ack"), arg_match) >> on_ack,
+    on(atom("backlog"), arg_match) >> [=](bool backlogged)
+    {
+      if (backlogged)
+      {
+        VAST_LOG_ACTOR_DEBUG("pauses segment sending");
+        become(paused_);
+      }
+    },
     [=](segment& s)
     {
-      VAST_LOG_ACTOR_DEBUG("sends segment " << s.id());
+      VAST_LOG_ACTOR_DEBUG("delivers segment " << s.id());
       send(receiver_, std::move(s), this);
-      become(waiting_);
     },
     after(std::chrono::seconds(0)) >> [=]
     {
@@ -83,41 +101,18 @@ behavior ingestor_actor::act()
     }
   };
 
-  waiting_ =
-  {
-    on_exit,
-    on(atom("backlog"), arg_match) >> on_backlog,
-    on(atom("ack"), arg_match) >> [=](uuid const& id)
-    {
-      VAST_LOG_ACTOR_DEBUG("got ack for segment " << id);
-
-      auto i = orphaned_.find(path{to_string(id)});
-      if (i != orphaned_.end())
-      {
-        VAST_LOG_ACTOR_INFO("submitted orphaned segment " << id);
-        rm(dir_ / *i);
-        orphaned_.erase(i);
-      }
-
-      if (backlogged_)
-        VAST_LOG_ACTOR_DEBUG("pauses segment sending");
-
-      become(backlogged_ ? paused_ : ready_);
-    }
-  };
-
   paused_ =
   {
     on_exit,
-    on(atom("backlog"), arg_match) >> on_backlog,
-    after(std::chrono::seconds(0)) >> [=]
+    on(atom("ack"), arg_match) >> on_ack,
+    on(atom("backlog"), arg_match) >> [=](bool backlogged)
     {
-      if (! backlogged_)
+      if (! backlogged)
       {
         VAST_LOG_ACTOR_DEBUG("resumes segment sending");
         become(ready_);
       }
-    }
+    },
   };
 
   terminating_ =

@@ -43,13 +43,11 @@ private:
   cppa::actor source_;
   cppa::actor segmentizer_;
   cppa::behavior ready_;
-  cppa::behavior waiting_;
   cppa::behavior paused_;
   cppa::behavior terminating_;
   size_t max_events_per_chunk_;
   size_t max_segment_size_;
   uint64_t batch_size_;
-  bool backlogged_ = false;
   std::set<path> orphaned_;
 };
 
