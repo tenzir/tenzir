@@ -29,9 +29,7 @@ behavior ingestor_actor::act()
 {
   trap_exit(true);
 
-  // FIXME: figure out why detaching the segmentizer yields a two-fold
-  // performance increase in the ingestion rate.
-  sink_ = spawn<segmentizer, monitored>(
+  segmentizer_ = spawn<segmentizer, monitored>(
       this, max_events_per_chunk_, max_segment_size_);
 
   traverse(
@@ -48,71 +46,103 @@ behavior ingestor_actor::act()
       {
         receiver_ = invalid_actor;
         source_ = invalid_actor;
-        sink_ = invalid_actor;
+        segmentizer_ = invalid_actor;
       });
+
+  auto on_backlog = [=](bool backlogged) { backlogged_ = backlogged; };
+
+  auto on_exit = [=](exit_msg const& e)
+  {
+    if (source_)
+      // Tell the source to exit, it will in turn propagate the exit
+      // message to the sink.
+      send_exit(source_, exit::stop);
+    else
+      // If we have no source, we just tell the segmentizer to exit.
+      send_exit(segmentizer_, e.reason);
+  };
+
+  ready_ =
+  {
+    on_exit,
+    [=](down_msg const&)
+    {
+      segmentizer_ = invalid_actor;
+    },
+    on(atom("backlog"), arg_match) >> on_backlog,
+    [=](segment& s)
+    {
+      VAST_LOG_ACTOR_DEBUG("sends segment " << s.id());
+      send(receiver_, std::move(s), this);
+      become(waiting_);
+    },
+    after(std::chrono::seconds(0)) >> [=]
+    {
+      if (! segmentizer_)
+        become(terminating_);
+    }
+  };
+
+  waiting_ =
+  {
+    on_exit,
+    on(atom("backlog"), arg_match) >> on_backlog,
+    on(atom("ack"), arg_match) >> [=](uuid const& id)
+    {
+      VAST_LOG_ACTOR_DEBUG("got ack for segment " << id);
+
+      auto i = orphaned_.find(path{to_string(id)});
+      if (i != orphaned_.end())
+      {
+        VAST_LOG_ACTOR_INFO("submitted orphaned segment " << id);
+        rm(dir_ / *i);
+        orphaned_.erase(i);
+      }
+
+      become(backlogged_ ? paused_ : ready_);
+    }
+  };
+
+  paused_ =
+  {
+    on_exit,
+    on(atom("backlog"), arg_match) >> on_backlog,
+    after(std::chrono::seconds(0)) >> [=]
+    {
+      if (! backlogged_)
+        become(ready_);
+    }
+  };
+
+  terminating_ =
+  {
+    [=](segment const& s)
+    {
+      if (! exists(dir_) && ! mkdir(dir_))
+      {
+        VAST_LOG_ACTOR_ERROR("failed to create directory " << dir_);
+        return;
+      }
+
+      auto p = dir_ / path{to_string(s.id())};
+      VAST_LOG_ACTOR_INFO("archives segment to " << p);
+
+      auto t = io::archive(p, s);
+      if (! t)
+        VAST_LOG_ACTOR_ERROR("failed to archive " << p << ": " << t.error());
+    },
+    after(std::chrono::seconds(0)) >> [=]
+    {
+      quit(exit::done);
+    }
+  };
 
   return
   {
-    on(atom("shutdown"), arg_match) >> [=](uint32_t reason)
+    on_exit,
+    [=](down_msg const& d)
     {
-      if (buffer_.empty())
-      {
-        quit(reason);
-      }
-      else if (! terminating_)
-      {
-        terminating_ = true;
-        VAST_LOG_ACTOR_INFO("waits 30 seconds for segment ACK");
-        delayed_send(this, std::chrono::seconds(30),
-                     atom("shutdown"), reason);
-      }
-      else
-      {
-        VAST_LOG_ACTOR_WARN("writes un-acked segments to filesystem");
-
-        if (! exists(dir_) && ! mkdir(dir_))
-        {
-          VAST_LOG_ACTOR_ERROR("failed to create directory " << dir_);
-        }
-        else
-        {
-          while (! buffer_.empty())
-          {
-            match(buffer_.front())(
-                on_arg_match >> [&](segment const& s, actor const&)
-                {
-                  auto p = dir_ / path{to_string(s.id())};
-                  VAST_LOG_ACTOR_INFO("archives segment to " << p);
-
-                  auto t = io::archive(p, s);
-                  if (! t)
-                    VAST_LOG_ACTOR_ERROR("failed to archive " << p << ": " <<
-                                         t.error());
-                });
-
-            buffer_.pop();
-          }
-        }
-
-        quit(exit::error);
-      }
-    },
-    [=](exit_msg const& e)
-    {
-      if (source_)
-        // Tell the source to exit, it will in turn propagate the exit
-        // message to the sink.
-        send_exit(source_, exit::stop);
-      else
-        // We have always a sink, and if the source doesn't shut it down, we
-        // have to do it ourselves.
-        send_exit(sink_, e.reason);
-    },
-    [=](down_msg const&)
-    {
-      // Once we have received DOWN from the sink, the ingestor has nothing
-      // else left todo and can shutdown.
-      send(this, atom("shutdown"), exit::done);
+      quit(d.reason);
     },
     on(atom("submit")) >> [=]
     {
@@ -126,102 +156,29 @@ behavior ingestor_actor::act()
           continue;
         }
 
-        // FIXME: insert segments in the order they have been received.
-        buffer_.emplace(make_any_tuple(std::move(s), this));
+        // FIXME: enqueue segments in the order they have been received.
+        send(this, std::move(s));
       }
 
-      if (! buffer_.empty())
-        send(this, atom("process"));
+      become(ready_);
     },
     on(atom("ingest"), "bro2", arg_match)
       >> [=](std::string const& file, int32_t ts_field)
     {
       VAST_LOG_ACTOR_INFO("ingests " << file);
 
-      source_ = spawn<source::bro2, detached>(sink_, file, ts_field);
-      source_->link_to(sink_);
+      source_ = spawn<source::bro2, detached>(segmentizer_, file, ts_field);
+      source_->link_to(segmentizer_);
       send(source_, atom("batch size"), batch_size_);
       send(source_, atom("run"));
+
+      become(ready_);
     },
     on(atom("ingest"), val<std::string>, arg_match) >> [=](std::string const&)
     {
       VAST_LOG_ACTOR_ERROR("got invalid ingestion file type");
+      quit(exit::error);
     },
-    [=](segment& s)
-    {
-      buffer_.emplace(make_any_tuple(std::move(s), this));
-      send(this, atom("process"));
-    },
-    on(atom("process")) >> [=]
-    {
-      if (state_ == ready && ! buffer_.empty())
-      {
-        send_tuple(receiver_, buffer_.front());
-        state_ = waiting;
-        VAST_LOG_ACTOR_DEBUG("shipped segment (" <<
-                             buffer_.size() << " queued)");
-      }
-    },
-    on(atom("ack"), arg_match) >> [=](uuid const& id)
-    {
-      assert(state_ == waiting);
-      VAST_LOG_ACTOR_DEBUG("got ack for segment " << id << " (" <<
-                           buffer_.size() << " queued)");
-
-      match(buffer_.front())(
-          on_arg_match >> [&](segment const& s, actor const&)
-          {
-            if (s.id() != id)
-            {
-              auto i = orphaned_.find(path{to_string(id)});
-              if (i != orphaned_.end())
-              {
-                VAST_LOG_ACTOR_INFO("submitted orphaned segment " << id);
-                rm(dir_ / *i);
-                orphaned_.erase(i);
-              }
-            }
-          });
-
-      buffer_.pop();
-
-      if (backlogged_)
-      {
-        state_ = paused;
-      }
-      else
-      {
-        state_ = ready;
-        send(this, atom("process"));
-      }
-
-      if (terminating_)
-        quit(exit::done);
-    },
-    on(atom("backlog"), arg_match) >> [=](bool backlogged)
-    {
-      backlogged_ = backlogged;
-
-      if (backlogged_)
-      {
-        if (state_ == ready)
-        {
-          VAST_LOG_ACTOR_DEBUG("pauses segment sending ("
-                               << buffer_.size() << " queued)");
-          state_ = paused;
-        }
-      }
-      else if (state_ == paused)
-      {
-        VAST_LOG_ACTOR_DEBUG("resumes segment sending ("
-                             << buffer_.size() << " queued)");
-        state_ = ready;
-        send(this, atom("process"));
-      }
-
-      if (terminating_)
-        quit(exit::done);
-    }
   };
 }
 
