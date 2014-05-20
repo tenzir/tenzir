@@ -44,6 +44,23 @@ struct binary
   }
 };
 
+struct ternary
+{
+  using result_type = double;
+
+  template <typename T, typename U>
+  double operator()(bool c, T const& t, U const& f) const
+  {
+    return c ? t : f;
+  }
+
+  template <typename T, typename U, typename V>
+  double operator()(T const&, U const&, V const&) const
+  {
+    return 42;
+  }
+};
+
 BOOST_AUTO_TEST_CASE(variant_test)
 {
   using triple = util::variant<int, double, std::string>;
@@ -74,13 +91,19 @@ BOOST_AUTO_TEST_CASE(variant_test)
   BOOST_CHECK_EQUAL(*util::get<double>(t1), 1.337);
   BOOST_CHECK_EQUAL(*util::get<std::string>(t2), "1337");
 
-  // Visitation
+  // Unary visitation
   apply_visitor(stateful{}, t1);
   apply_visitor(doppler{}, t1);
   BOOST_CHECK_EQUAL(*util::get<double>(t1), 1.337 * 2);
 
+  // Binary visitation.
   BOOST_CHECK(! apply_visitor(binary{}, t0, t1));
   BOOST_CHECK(! apply_visitor(binary{}, t1, t0));
   BOOST_CHECK(! apply_visitor(binary{}, t0, t2));
   BOOST_CHECK(apply_visitor(binary{}, t0, triple{84}));
+
+  // Ternary visitation.
+  using trio = util::variant<bool, double, int>;
+  BOOST_CHECK(apply_visitor(ternary{}, trio{true}, trio{4.2}, trio{42}) == 4.2);
+  BOOST_CHECK(apply_visitor(ternary{}, trio{false}, trio{4.2}, trio{1337}) == 1337.0);
 }

@@ -546,16 +546,17 @@ struct binary_visitor
   using result_type =
     typename std::remove_reference<Visitor>::type::result_type;
 
-  binary_visitor(Visitor&& visitor, Visitable&& visitable)
+  binary_visitor(Visitor& visitor, Visitable& visitable)
     : visitor_(visitor),
       visitable_(visitable)
   {
   }
 
-  template <typename T>
-  result_type operator()(T const& x)
+  template <typename... Ts>
+  result_type operator()(Ts&&... xs)
   {
-    return visitable_.template apply<std::false_type>(visitor_, x);
+    return visitable_.template apply<std::false_type>(
+        visitor_, std::forward<Ts>(xs)...);
   }
 
 private:
@@ -569,20 +570,14 @@ template <typename Visitor, typename Visitable>
 typename std::remove_reference<Visitor>::type::result_type
 apply_visitor(Visitor&& visitor, Visitable&& visitable)
 {
-  return visitable.template apply<std::false_type>(
-      std::forward<Visitor>(visitor));
+  return visitable.template apply<std::false_type>(visitor);
 }
 
-template <typename Visitor, typename Visitable1, typename Visitable2>
+template <typename Visitor, typename V, typename... Vs>
 typename std::remove_reference<Visitor>::type::result_type
-apply_visitor(Visitor&& visitor, Visitable1&& v1, Visitable2&& v2)
+apply_visitor(Visitor&& visitor, V&& v, Vs&&... vs)
 {
-  detail::binary_visitor<Visitor, Visitable1> v{
-    std::forward<Visitor>(visitor),
-    std::forward<Visitable1>(v1)
-  };
-
-  return apply_visitor(v, std::forward<Visitable2>(v2));
+  return apply_visitor(detail::binary_visitor<Visitor, V>{visitor, v}, vs...);
 }
 
 } // namespace util
