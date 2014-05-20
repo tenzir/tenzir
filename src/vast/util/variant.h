@@ -564,13 +564,12 @@ private:
 
 } // namespace detail
 
-template <typename Visitor, typename Visitable, typename... Args>
+template <typename Visitor, typename Visitable>
 typename std::remove_reference<Visitor>::type::result_type
-apply_visitor(Visitor&& visitor, Visitable&& visitable, Args&&... args)
+apply_visitor(Visitor&& visitor, Visitable&& visitable)
 {
   return visitable.template apply<std::false_type>(
-      std::forward<Visitor>(visitor),
-      std::forward<Args>(args)...);
+      std::forward<Visitor>(visitor));
 }
 
 template <typename Visitor, typename Visitable1, typename Visitable2>
