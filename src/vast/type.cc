@@ -12,8 +12,6 @@ namespace {
 
 struct type_tag_maker
 {
-  using result_type = type_tag;
-
   template <typename T>
   type_tag operator()(T const&) const
   {
@@ -733,8 +731,6 @@ struct type_serializer
   {
   }
 
-  using result_type = void;
-
   template <typename T>
   void operator()(T const& x)
   {
@@ -750,8 +746,6 @@ struct type_deserializer
     : source_{source}
   {
   }
-
-  using result_type = void;
 
   template <typename T>
   void operator()(T& x)
@@ -791,8 +785,6 @@ namespace {
 
 struct less_than
 {
-  using result_type = bool;
-
   template <typename T, typename U>
   bool operator()(T const&, U const&) const
   {

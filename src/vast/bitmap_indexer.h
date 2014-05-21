@@ -234,8 +234,6 @@ namespace detail {
 template <typename Bitstream>
 struct event_data_index_factory
 {
-  using result_type = trial<cppa::actor>;
-
   event_data_index_factory(path const& p, type_const_ptr const& t,
                            offset const& o)
     : path_{p},

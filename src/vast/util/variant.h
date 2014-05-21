@@ -129,16 +129,22 @@ private:
 };
 
 /// A variant class.
-template <typename First, typename... Types>
-class variant : equality_comparable<variant<First, Types...>>
+template <typename... Ts>
+class variant : equality_comparable<variant<Ts...>>
 {
-  using tag_type = size_t;
+  template <typename U, typename...>
+  using front_t = U;
 
 public:
+  using tag_type = size_t;
+
+  /// The first type in the variant; used for default-construction.
+  using front = front_t<Ts...>;
+
   /// Default-constructs a variant with the first type.
   variant()
   {
-    construct(First{});
+    construct(front{});
     which_ = tag_type{};
   }
 
@@ -156,7 +162,7 @@ public:
     typename T,
     typename = typename std::enable_if<
       ! std::is_same<
-        typename std::remove_reference<variant<First, Types...>>::type,
+        typename std::remove_reference<variant<Ts...>>::type,
         typename std::remove_reference<T>::type
       >::value,
       T
@@ -164,12 +170,12 @@ public:
   >
   variant(T&& x)
   {
-    static_assert(! std::is_same<variant<First, Types...>&, T>::value,
+    static_assert(! std::is_same<variant<Ts...>&, T>::value,
                   "should have been sfinaed out");
 
     // A compile error here means that T is not unambiguously convertible to
     // any of the variant types.
-    initializer<0, First, Types...>::initialize(*this, std::forward<T>(x));
+    initializer<0, Ts...>::initialize(*this, std::forward<T>(x));
   }
 
   variant(variant const& rhs)
@@ -210,23 +216,19 @@ public:
   }
 
   template <typename Internal, typename Visitor, typename... Args>
-  typename std::remove_reference<Visitor>::type::result_type
-  apply(Visitor&& visitor, Args&&... args)
+  auto apply(Visitor&& visitor, Args&&... args)
   {
-    return do_visit<First, Types...>()(
-        Internal(), which_, &storage_,
-        std::forward<Visitor>(visitor),
-        std::forward<Args>(args)...);
+    return visit_impl(Internal{}, which_, &storage_,
+                      std::forward<Visitor>(visitor),
+                      std::forward<Args>(args)...);
   }
 
   template <typename Internal, typename Visitor, typename... Args>
-  typename std::remove_reference<Visitor>::type::result_type
-  apply(Visitor&& visitor, Args&&... args) const
+  auto apply(Visitor&& visitor, Args&&... args) const
   {
-    return do_visit<First, Types...>()(
-        Internal(), which_, &storage_,
-        std::forward<Visitor>(visitor),
-        std::forward<Args>(args)...);
+    return visit_impl(Internal{}, which_, &storage_,
+                      std::forward<Visitor>(visitor),
+                      std::forward<Args>(args)...);
   }
 
   friend bool operator==(variant const& x, variant const& y)
@@ -236,23 +238,35 @@ public:
 
 private:
   template <typename T, typename Internal>
-  static T& get_value(T& x, Internal const&)
+  static T& get_value(T& x, Internal)
   {
     return x;
   }
 
   template <typename T>
-  static T& get_value(recursive_wrapper<T>& x, std::false_type const&)
+  static T& get_value(recursive_wrapper<T>& x, std::false_type)
   {
     return x.get();
   }
 
   template <typename T>
   static T const&
-  get_value(recursive_wrapper<T> const& x, std::false_type const&)
+  get_value(recursive_wrapper<T> const& x, std::false_type)
   {
     return x.get();
   }
+
+  template <typename T, typename Storage>
+  using const_type =
+    typename std::conditional<
+      std::is_const<
+        typename std::remove_pointer<
+          typename std::remove_reference<Storage>::type
+        >::type
+       >::value,
+       T const,
+       T
+     >::type;
 
   template <
     typename Internal,
@@ -261,65 +275,48 @@ private:
     typename Visitor,
     typename... Args
   >
-  static typename std::remove_reference<Visitor>::type::result_type
-  call_visitor(Internal&& internal, Storage&& storage, Visitor&& visitor,
-               Args&&... args)
+  static auto invoke(Internal internal, Storage&& storage, Visitor&& visitor,
+                     Args&&... args)
   {
-    using const_type =
-      typename std::conditional<
-        std::is_const<
-          typename std::remove_pointer<
-          typename std::remove_reference<Storage>::type
-        >::type
-       >::value,
-       T const,
-       T
-     >::type;
-
-    auto x = reinterpret_cast<const_type*>(storage);
-
+    auto x = reinterpret_cast<const_type<T, Storage>*>(storage);
     return visitor(get_value(*x, internal), std::forward<Args>(args)...);
   }
 
-  template <typename... Ts>
-  struct do_visit
+  template <
+    typename Internal,
+    typename Storage,
+    typename Visitor,
+    typename... Args
+  >
+  static auto visit_impl(Internal internal,
+                         tag_type which,
+                         Storage&& storage,
+                         Visitor&& visitor,
+                         Args&&... args)
   {
-    template <
-      typename Internal,
-      typename VoidPtrCV,
-      typename Visitor,
-      typename... Args
-    >
-    typename std::remove_reference<Visitor>::type::result_type
-    operator()(Internal&& internal,
-               tag_type which,
-               VoidPtrCV&& storage,
-               Visitor&& visitor,
-               Args&&... args)
+    // TODO: Consider all overloads, not just the one with the first type.
+    using result =
+      typename std::result_of<
+        Visitor(const_type<front, Storage>&, Args&&...)
+      >::type;
+
+    using fn = result (*)(Internal, Storage&&, Visitor&&, Args&&...);
+    static fn callers[sizeof...(Ts)] =
     {
-      typedef typename std::remove_reference<Visitor>::type::result_type
-        (*fn)(Internal&&, VoidPtrCV&&, Visitor&&, Args&&...);
+      &invoke<Internal, Ts, Storage&&, Visitor, Args&&...>...
+    };
 
-      static fn callers[sizeof...(Ts)] =
-      {
-        &call_visitor<Internal&&, Ts, VoidPtrCV&&, Visitor, Args&&...>...
-      };
+    assert(static_cast<size_t>(which) >= 0
+           && static_cast<size_t>(which) < sizeof...(Ts));
 
-      assert(static_cast<size_t>(which) >= 0
-             && static_cast<size_t>(which) < sizeof...(Ts));
-
-      return (*callers[which])(
-            std::forward<Internal>(internal),
-            std::forward<VoidPtrCV>(storage),
-            std::forward<Visitor>(visitor),
-            std::forward<Args>(args)...);
-    }
-  };
+    return (*callers[which])(internal,
+                             std::forward<Storage>(storage),
+                             std::forward<Visitor>(visitor),
+                             std::forward<Args>(args)...);
+  }
 
   struct constructor
   {
-    using result_type = void;
-
     constructor(variant& self)
       : self_(self)
     {
@@ -337,8 +334,6 @@ private:
 
   struct move_constructor
   {
-    using result_type = void;
-
     move_constructor(variant& self)
       : self_(self)
     {
@@ -356,8 +351,6 @@ private:
 
   struct assigner
   {
-    using result_type = void;
-
     assigner(variant& self, tag_type rhs_which)
       : self_(self), rhs_which_(rhs_which)
     {
@@ -386,8 +379,6 @@ private:
 
   struct move_assigner
   {
-    using result_type = void;
-
     move_assigner(variant& self, tag_type rhs_which)
       : self_(self), rhs_which_(rhs_which)
     {
@@ -417,8 +408,6 @@ private:
 
   struct equality
   {
-    using result_type = bool;
-
     equality(variant const& self)
       : self_(self)
     {
@@ -436,8 +425,6 @@ private:
 
   struct destructor
   {
-    using result_type = void;
-
     template <typename T>
     void operator()(T& x) const
     {
@@ -476,15 +463,15 @@ private:
   };
 
   template <typename Visitor>
-  typename Visitor::result_type apply_visitor_internal(Visitor&& v)
+  auto apply_visitor_internal(Visitor&& v)
   {
-    return apply<std::true_type, Visitor>(std::forward<Visitor>(v));
+    return apply<std::true_type>(std::forward<Visitor>(v));
   }
 
   template <typename Visitor>
-  typename Visitor::result_type apply_visitor_internal(Visitor&& v) const
+  auto apply_visitor_internal(Visitor&& v) const
   {
-    return apply<std::true_type, Visitor>(std::forward<Visitor>(v));
+    return apply<std::true_type>(std::forward<Visitor>(v));
   }
 
   template <typename T>
@@ -499,35 +486,33 @@ private:
     apply_visitor_internal(destructor());
   }
 
-  typename std::aligned_union<0, First, Types...>::type storage_;
+  typename std::aligned_union<0, Ts...>::type storage_;
   tag_type which_;
 };
 
 template <typename T>
 struct getter
 {
-  using result_type = T*;
-
-  result_type operator()(T& x) const
+  T* operator()(T& x) const
   {
     return &x;
   }
 
   template <typename U>
-  result_type operator()(U const&) const
+  T* operator()(U const&) const
   {
     return nullptr;
   }
 };
 
-template <typename T, typename First, typename... Types>
-T* get(variant<First, Types...>& var)
+template <typename T, typename... Ts>
+T* get(variant<Ts...>& var)
 {
   return apply_visitor(getter<T>(), var);
 }
 
-template <typename T, typename First, typename... Types>
-T const* get(variant<First, Types...> const& var)
+template <typename T, typename... Ts>
+T const* get(variant<Ts...> const& var)
 {
   return apply_visitor(getter<T const>(), var);
 }
@@ -543,9 +528,6 @@ namespace detail {
 template <typename Visitor, typename Visitable>
 struct binary_visitor
 {
-  using result_type =
-    typename std::remove_reference<Visitor>::type::result_type;
-
   binary_visitor(Visitor& visitor, Visitable& visitable)
     : visitor_(visitor),
       visitable_(visitable)
@@ -553,7 +535,7 @@ struct binary_visitor
   }
 
   template <typename... Ts>
-  result_type operator()(Ts&&... xs)
+  auto operator()(Ts&&... xs)
   {
     return visitable_.template apply<std::false_type>(
         visitor_, std::forward<Ts>(xs)...);
@@ -567,15 +549,13 @@ private:
 } // namespace detail
 
 template <typename Visitor, typename Visitable>
-typename std::remove_reference<Visitor>::type::result_type
-apply_visitor(Visitor&& visitor, Visitable&& visitable)
+auto apply_visitor(Visitor&& visitor, Visitable&& visitable)
 {
   return visitable.template apply<std::false_type>(visitor);
 }
 
 template <typename Visitor, typename V, typename... Vs>
-typename std::remove_reference<Visitor>::type::result_type
-apply_visitor(Visitor&& visitor, V&& v, Vs&&... vs)
+auto apply_visitor(Visitor&& visitor, V&& v, Vs&&... vs)
 {
   return apply_visitor(detail::binary_visitor<Visitor, V>{visitor, v}, vs...);
 }

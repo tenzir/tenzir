@@ -5,8 +5,6 @@ using namespace vast;
 
 struct stateful
 {
-  using result_type = void;
-
   template <typename T>
   void operator()(T&)
   {
@@ -18,8 +16,6 @@ struct stateful
 
 struct doppler
 {
-  using result_type = void;
-
   template <typename T>
   void operator()(T& x) const
   {
@@ -29,8 +25,6 @@ struct doppler
 
 struct binary
 {
-  using result_type = bool;
-
   template <typename T>
   bool operator()(T const&, T const&) const
   {
@@ -46,8 +40,6 @@ struct binary
 
 struct ternary
 {
-  using result_type = double;
-
   template <typename T, typename U>
   double operator()(bool c, T const& t, U const& f) const
   {
@@ -92,7 +84,9 @@ BOOST_AUTO_TEST_CASE(variant_test)
   BOOST_CHECK_EQUAL(*util::get<std::string>(t2), "1337");
 
   // Unary visitation
-  apply_visitor(stateful{}, t1);
+  stateful v;
+  apply_visitor(v, t1);           // lvalue
+  apply_visitor(stateful{}, t1);  // rvalue
   apply_visitor(doppler{}, t1);
   BOOST_CHECK_EQUAL(*util::get<double>(t1), 1.337 * 2);
 
