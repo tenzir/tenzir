@@ -100,6 +100,12 @@ BOOST_AUTO_TEST_CASE(variant_test)
   using trio = util::variant<bool, double, int>;
   BOOST_CHECK(apply_visitor(ternary{}, trio{true}, trio{4.2}, trio{42}) == 4.2);
   BOOST_CHECK(apply_visitor(ternary{}, trio{false}, trio{4.2}, trio{1337}) == 1337.0);
+
+  // Generic lambda visitation.
+  using pair = util::variant<double, int>;
+  auto fourty_two = pair{42};
+  auto r = apply_visitor([](auto x) -> int { return x + 42; }, fourty_two);
+  BOOST_CHECK(r == 42 + 42);
 }
 
 BOOST_AUTO_TEST_CASE(delayed_visitation)
