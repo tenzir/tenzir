@@ -143,14 +143,14 @@ public:
   using front = front_t<Ts...>;
 
   /// Default-constructs a variant with the first type.
-  variant()
+  variant() noexcept
   {
     construct(front{});
     which_ = tag_type{};
   }
 
   /// Destructs the variant by invoking the destructor of the active instance.
-  ~variant()
+  ~variant() noexcept
   {
     destruct();
   }
@@ -185,7 +185,7 @@ public:
     which_ = rhs.which_;
   }
 
-  variant(variant&& rhs)
+  variant(variant&& rhs) noexcept
   {
     rhs.apply_visitor_internal(move_constructor(*this));
     which_ = rhs.which_;
@@ -201,7 +201,7 @@ public:
     return *this;
   }
 
-  variant& operator=(variant&& rhs)
+  variant& operator=(variant&& rhs) noexcept
   {
     if (this != &rhs)
     {
@@ -238,6 +238,173 @@ public:
   }
 
 private:
+  struct constructor
+  {
+    constructor(variant& self)
+      : self_(self)
+    {
+    }
+
+    template <typename T>
+    void operator()(T const& rhs) const noexcept
+    {
+      self_.construct(rhs);
+    }
+
+  private:
+    variant& self_;
+  };
+
+  struct move_constructor
+  {
+    move_constructor(variant& self)
+      : self_(self)
+    {
+    }
+
+    template <typename T>
+    void operator()(T& rhs) const noexcept
+    {
+      static_assert(std::is_nothrow_move_constructible<T>::value,
+                    "T must not throw in move constructor");
+
+      self_.construct(std::move(rhs));
+    }
+
+  private:
+    variant& self_;
+  };
+
+  struct assigner
+  {
+    assigner(variant& self, tag_type rhs_which)
+      : self_(self), rhs_which_(rhs_which)
+    {
+    }
+
+    template <typename Rhs>
+    void operator()(Rhs const& rhs) const
+    {
+      static_assert(std::is_nothrow_destructible<Rhs>::value,
+                    "T must not throw in destructor");
+
+      static_assert(std::is_nothrow_move_constructible<Rhs>::value,
+                    "T must not throw in move constructor");
+
+      if (self_.which() == rhs_which_)
+      {
+        //the types are the same, so just assign into the lhs
+        *reinterpret_cast<Rhs*>(&self_.storage_) = rhs;
+      }
+      else
+      {
+        Rhs tmp(rhs);
+        self_.destruct();
+        self_.construct(std::move(tmp));
+      }
+    }
+
+  private:
+    variant& self_;
+    tag_type rhs_which_;
+  };
+
+  struct move_assigner
+  {
+    move_assigner(variant& self, tag_type rhs_which)
+      : self_(self), rhs_which_(rhs_which)
+    {
+    }
+
+    template <typename Rhs>
+    void operator()(Rhs& rhs) const noexcept
+    {
+      using rhs_no_const = typename std::remove_const<Rhs>::type;
+
+      static_assert(std::is_nothrow_destructible<rhs_no_const>::value,
+                    "T must not throw in destructor");
+
+      static_assert(std::is_nothrow_move_assignable<rhs_no_const>::value,
+                    "T must not throw in move assignment");
+
+      static_assert(std::is_nothrow_move_constructible<rhs_no_const>::value,
+                    "T must not throw in move constructor");
+
+      if (self_.which() == rhs_which_)
+      {
+        //the types are the same, so just assign into the lhs
+        *reinterpret_cast<rhs_no_const*>(&self_.storage_) = std::move(rhs);
+      }
+      else
+      {
+        self_.destruct();
+        self_.construct(std::move(rhs));
+      }
+    }
+
+  private:
+    variant& self_;
+    tag_type rhs_which_;
+  };
+
+  struct destructor
+  {
+    template <typename T>
+    void operator()(T& x) const noexcept
+    {
+      static_assert(std::is_nothrow_destructible<T>::value,
+                    "T must not throw in destructor");
+      x.~T();
+    }
+  };
+
+  template <tag_type Tag, typename... MyTypes>
+  struct initializer;
+
+  template <tag_type Tag, typename Current, typename... MyTypes>
+  struct initializer<Tag, Current, MyTypes...>
+    : public initializer<Tag + 1, MyTypes...>
+  {
+    using base = initializer<Tag + 1, MyTypes...>;
+    using base::initialize;
+
+    static void initialize(variant& v, Current&& current)
+    {
+      v.construct(std::move(current));
+      v.which_ = Tag;
+    }
+
+    static void initialize(variant& v, Current const& current)
+    {
+      v.construct(current);
+      v.which_ = Tag;
+    }
+  };
+
+  template <tag_type Tag>
+  struct initializer<Tag>
+  {
+    //this should never match
+    void initialize();
+  };
+
+  struct equality
+  {
+    equality(variant const& self)
+      : self_(self)
+    {
+    }
+
+    template <typename Rhs>
+    bool operator()(Rhs const& rhs) const
+    {
+      return *reinterpret_cast<Rhs const*>(&self_.storage_) == rhs;
+    }
+
+  private:
+    variant const& self_;
+  };
+
   template <typename T, typename Internal>
   static T& get_value(T& x, Internal)
   {
@@ -324,153 +491,6 @@ private:
                              std::forward<Args>(args)...);
   }
 
-  struct constructor
-  {
-    constructor(variant& self)
-      : self_(self)
-    {
-    }
-
-    template <typename T>
-    void operator()(T const& rhs) const
-    {
-      self_.construct(rhs);
-    }
-
-  private:
-    variant& self_;
-  };
-
-  struct move_constructor
-  {
-    move_constructor(variant& self)
-      : self_(self)
-    {
-    }
-
-    template <typename T>
-    void operator()(T& rhs) const
-    {
-      self_.construct(std::move(rhs));
-    }
-
-  private:
-    variant& self_;
-  };
-
-  struct assigner
-  {
-    assigner(variant& self, tag_type rhs_which)
-      : self_(self), rhs_which_(rhs_which)
-    {
-    }
-
-    template <typename Rhs>
-    void operator()(Rhs const& rhs) const
-    {
-      if (self_.which() == rhs_which_)
-      {
-        //the types are the same, so just assign into the lhs
-        *reinterpret_cast<Rhs*>(&self_.storage_) = rhs;
-      }
-      else
-      {
-        Rhs tmp(rhs);
-        self_.destruct(); //nothrow
-        self_.construct(std::move(tmp)); //nothrow (please)
-      }
-    }
-
-  private:
-    variant& self_;
-    tag_type rhs_which_;
-  };
-
-  struct move_assigner
-  {
-    move_assigner(variant& self, tag_type rhs_which)
-      : self_(self), rhs_which_(rhs_which)
-    {
-    }
-
-    template <typename Rhs>
-    void operator()(Rhs& rhs) const
-    {
-      using rhs_no_const = typename std::remove_const<Rhs>::type;
-
-      if (self_.which() == rhs_which_)
-      {
-        //the types are the same, so just assign into the lhs
-        *reinterpret_cast<rhs_no_const*>(&self_.storage_) = std::move(rhs);
-      }
-      else
-      {
-        self_.destruct(); //nothrow
-        self_.construct(std::move(rhs)); //nothrow (please)
-      }
-    }
-
-  private:
-    variant& self_;
-    tag_type rhs_which_;
-  };
-
-  struct equality
-  {
-    equality(variant const& self)
-      : self_(self)
-    {
-    }
-
-    template <typename Rhs>
-    bool operator()(Rhs& rhs) const
-    {
-      return *reinterpret_cast<Rhs*>(&self_.storage_) == rhs;
-    }
-
-  private:
-    variant const& self_;
-  };
-
-  struct destructor
-  {
-    template <typename T>
-    void operator()(T& x) const
-    {
-      x.~T();
-    }
-  };
-
-  template <tag_type Tag, typename... MyTypes>
-  struct initializer;
-
-  template <tag_type Tag, typename Current, typename... MyTypes>
-  struct initializer<Tag, Current, MyTypes...>
-    : public initializer<Tag + 1, MyTypes...>
-  {
-    using base = initializer<Tag + 1, MyTypes...>;
-    using base::initialize;
-
-    static void initialize(variant& v, Current&& current)
-    {
-      v.construct(std::move(current));
-      v.which_ = Tag;
-    }
-
-    static void initialize(variant& v, Current const& current)
-    {
-      v.construct(current);
-      v.which_ = Tag;
-    }
-  };
-
-  template <tag_type Tag>
-  struct initializer<Tag>
-  {
-    //this should never match
-    void initialize();
-  };
-
   template <typename Visitor>
   auto apply_visitor_internal(Visitor&& v)
   {
@@ -484,13 +504,17 @@ private:
   }
 
   template <typename T>
-  void construct(T&& x)
+  void construct(T&& x) noexcept
   {
     using type = typename std::remove_reference<T>::type;
+
+    static_assert(std::is_nothrow_constructible<type>::value,
+                  "constructor of T must not throw");
+
     new (&storage_) type(std::forward<T>(x));
   }
 
-  void destruct()
+  void destruct() noexcept
   {
     apply_visitor_internal(destructor());
   }
