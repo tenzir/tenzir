@@ -33,6 +33,7 @@ do so, all subject to the following:
 #include <type_traits>
 
 #include "vast/util/operators.h"
+#include "vast/util/meta.h"
 
 namespace vast {
 namespace util {
@@ -294,13 +295,21 @@ private:
                          Visitor&& visitor,
                          Args&&... args)
   {
-    // TODO: Consider all overloads, not just the one with the first type.
-    using result =
-      typename std::result_of<
-        Visitor(const_type<front, Storage>&, Args&&...)
-      >::type;
+    using visitor_type = std::decay_t<Visitor>;
 
-    using fn = result (*)(Internal, Storage&&, Visitor&&, Args&&...);
+    // TODO: Consider all overloads, not just the one with the first type.
+    static_assert(callable<visitor_type, front const&, Args&&...>::value
+                  || callable<visitor_type, front&, Args&&...>::value,
+                  "visitor has no viable overload for operator()");
+
+    using result_type =
+      std::conditional_t<
+        callable<visitor_type, front const&, Args&&...>::value,
+        std::result_of_t<visitor_type(front const&, Args&&...)>,
+        std::result_of_t<visitor_type(front&, Args&&...)>
+      >;
+
+    using fn = result_type (*)(Internal, Storage&&, Visitor&&, Args&&...);
     static fn callers[sizeof...(Ts)] =
     {
       &invoke<Internal, Ts, Storage&&, Visitor, Args&&...>...
@@ -525,9 +534,48 @@ bool variant_is_type(V const& v)
 
 namespace detail {
 
-template <typename Visitor, typename Visitable>
-struct binary_visitor
+template <typename Visitor>
+class delayed_visitor
 {
+public:
+  delayed_visitor(Visitor v)
+    : visitor_(std::move(v))
+  {
+  }
+
+  template <typename... Visitables>
+  auto operator()(Visitables&&... vs)
+  {
+    return apply_visitor(visitor_, std::forward<Visitables>(vs)...);
+  }
+
+private:
+  Visitor visitor_;
+};
+
+template <typename Visitor>
+class delayed_visitor_wrapper
+{
+public:
+  delayed_visitor_wrapper(Visitor& visitor)
+    : visitor_(visitor)
+  {
+  }
+
+  template <typename... Visitables>
+  auto operator()(Visitables&&... vs)
+  {
+    return apply_visitor(visitor_, std::forward<Visitables>(vs)...);
+  }
+
+private:
+  Visitor& visitor_;
+};
+
+template <typename Visitor, typename Visitable>
+class binary_visitor
+{
+public:
   binary_visitor(Visitor& visitor, Visitable& visitable)
     : visitor_(visitor),
       visitable_(visitable)
@@ -548,6 +596,18 @@ private:
 
 } // namespace detail
 
+template <typename Visitor>
+auto apply_visitor(Visitor&& visitor)
+{
+  return detail::delayed_visitor<Visitor>(std::move(visitor));
+}
+
+template <typename Visitor>
+auto apply_visitor(Visitor& visitor)
+{
+  return detail::delayed_visitor_wrapper<Visitor>(visitor);
+}
+
 template <typename Visitor, typename Visitable>
 auto apply_visitor(Visitor&& visitor, Visitable&& visitable)
 {
@@ -557,7 +617,7 @@ auto apply_visitor(Visitor&& visitor, Visitable&& visitable)
 template <typename Visitor, typename V, typename... Vs>
 auto apply_visitor(Visitor&& visitor, V&& v, Vs&&... vs)
 {
-  return apply_visitor(detail::binary_visitor<Visitor, V>{visitor, v}, vs...);
+  return apply_visitor(detail::binary_visitor<Visitor, V>(visitor, v), vs...);
 }
 
 } // namespace util

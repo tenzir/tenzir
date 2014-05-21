@@ -22,6 +22,32 @@ constexpr decltype(F<Head>::value) max()
     : max<F, Next, Tail...>();
 }
 
+namespace detail {
+
+struct can_call
+{
+  template <typename F, typename... A>
+  static auto test(int)
+    -> decltype(std::declval<F>()(std::declval<A>()...), std::true_type());
+
+  template <typename, typename...>
+  static auto test(...) -> std::false_type;
+};
+
+} // namespace detail
+
+template<typename F, typename... A>
+struct callable : decltype(detail::can_call::test<F, A...>(0)) {};
+
+template<typename F, typename... A>
+struct callable <F(A...)> : callable<F, A...> {};
+
+template<typename... A, typename F>
+constexpr callable<F, A...> is_callable_with(F&&)
+{
+ return callable<F(A...)>{};
+}
+
 } // namspace util
 } // namspace vast
 

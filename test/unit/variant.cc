@@ -101,3 +101,19 @@ BOOST_AUTO_TEST_CASE(variant_test)
   BOOST_CHECK(apply_visitor(ternary{}, trio{true}, trio{4.2}, trio{42}) == 4.2);
   BOOST_CHECK(apply_visitor(ternary{}, trio{false}, trio{4.2}, trio{1337}) == 1337.0);
 }
+
+BOOST_AUTO_TEST_CASE(delayed_visitation)
+{
+  std::vector<util::variant<double, int>> doubles;
+
+  doubles.emplace_back(1337);
+  doubles.emplace_back(4.2);
+  doubles.emplace_back(42);
+
+  stateful s;
+  std::for_each(doubles.begin(), doubles.end(), util::apply_visitor(s));
+  BOOST_CHECK(s.state == 3);
+
+  std::for_each(doubles.begin(), doubles.end(), util::apply_visitor(doppler{}));
+  BOOST_CHECK(*util::get<int>(doubles[2]) == 84);
+}
