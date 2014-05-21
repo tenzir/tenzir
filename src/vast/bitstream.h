@@ -148,13 +148,19 @@ public:
     derived().clear_impl();
   }
 
+  template <typename Hack = Derived>
   auto begin() const
+    -> decltype(std::declval<Hack>().begin_impl())
   {
+    static_assert(std::is_same<Hack, Derived>::value, ":-P");
     return derived().begin_impl();
   }
 
+  template <typename Hack = Derived>
   auto end() const
+    -> decltype(std::declval<Hack>().end_impl())
   {
+    static_assert(std::is_same<Hack, Derived>::value, ":-P");
     return derived().end_impl();
   }
 

@@ -6,7 +6,6 @@
 #include <type_traits>
 #include "vast/logger.h"
 #include "vast/serialization.h"
-#include "vast/util/make_unique.h"
 
 namespace vast {
 
@@ -482,7 +481,7 @@ void value::data::deserialize(deserializer& source)
       break;
     case regex_value:
       {
-        regex_ = make_unique<regex>();
+        regex_ = std::make_unique<regex>();
         source >> *regex_;
       }
       break;
@@ -497,25 +496,25 @@ void value::data::deserialize(deserializer& source)
       break;
     case record_value:
       {
-        record_ = make_unique<record>();
+        record_ = std::make_unique<record>();
         source >> *record_;
       }
       break;
     case vector_value:
       {
-        vector_ = make_unique<vector>();
+        vector_ = std::make_unique<vector>();
         source >> *vector_;
       }
       break;
     case set_value:
       {
-        set_ = make_unique<set>();
+        set_ = std::make_unique<set>();
         source >> *set_;
       }
       break;
     case table_value:
       {
-        table_ = make_unique<table>();
+        table_ = std::make_unique<table>();
         source >> *table_;
       }
       break;
