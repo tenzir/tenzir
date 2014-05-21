@@ -5,7 +5,6 @@
 #include "vast/bitvector.h"
 #include "vast/serialization.h"
 #include "vast/traits.h"
-#include "vast/util/make_unique.h"
 #include "vast/util/operators.h"
 #include "vast/util/range.h"
 
@@ -149,19 +148,13 @@ public:
     derived().clear_impl();
   }
 
-  template <typename Hack = Derived>
   auto begin() const
-    -> decltype(std::declval<Hack>().begin_impl())
   {
-    static_assert(std::is_same<Hack, Derived>::value, ":-P");
     return derived().begin_impl();
   }
 
-  template <typename Hack = Derived>
   auto end() const
-    -> decltype(std::declval<Hack>().end_impl())
   {
-    static_assert(std::is_same<Hack, Derived>::value, ":-P");
     return derived().end_impl();
   }
 
@@ -309,7 +302,7 @@ private:
   private:
     virtual std::unique_ptr<iterator_concept> copy() const final
     {
-      return make_unique<iterator_model>(*this);
+      return std::make_unique<iterator_model>(*this);
     }
 
     virtual bool equals(iterator_concept const& other) const final
@@ -441,7 +434,7 @@ public:
 
   virtual std::unique_ptr<bitstream_concept> copy() const final
   {
-    return make_unique<bitstream_model>(*this);
+    return std::make_unique<bitstream_model>(*this);
   }
 
   virtual bool equals(bitstream_concept const& other) const final

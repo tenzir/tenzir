@@ -173,7 +173,7 @@ bool query::instantiate()
   else
     return false;
 
-  reader_ = make_unique<segment::reader>(&current_.read());
+  reader_ = std::make_unique<segment::reader>(&current_.read());
   VAST_LOG_DEBUG("query instantiates reader for segment " <<
                  current_->id() << " [" << current_->base() << ','
                  << current_->base() + current_->events() << ')');

@@ -3,7 +3,6 @@
 #include "vast/event.h"
 #include "vast/logger.h"
 #include "vast/serialization.h"
-#include "vast/util/make_unique.h"
 
 namespace vast {
 
@@ -66,8 +65,8 @@ bool operator==(segment::header const& x, segment::header const& y)
 
 segment::writer::writer(segment* s, size_t max_events_per_chunk)
   : segment_(s),
-    chunk_{make_unique<chunk>(segment_->header_.compression)},
-    chunk_writer_{make_unique<chunk::writer>(*chunk_)},
+    chunk_{std::make_unique<chunk>(segment_->header_.compression)},
+    chunk_writer_{std::make_unique<chunk::writer>(*chunk_)},
     max_events_per_chunk_{max_events_per_chunk}
 {
   assert(s != nullptr);
@@ -120,8 +119,8 @@ trial<void> segment::writer::flush()
   segment_->header_.occupied_bytes += chunk_->compressed_bytes();
   segment_->chunks_.push_back(std::move(*chunk_));
 
-  chunk_ = make_unique<chunk>(segment_->header_.compression);
-  chunk_writer_ = make_unique<chunk::writer>(*chunk_);
+  chunk_ = std::make_unique<chunk>(segment_->header_.compression);
+  chunk_writer_ = std::make_unique<chunk::writer>(*chunk_);
 
   auto s = schema::merge(schema_, segment_->header_.schema);
   if (s)
@@ -169,7 +168,7 @@ segment::reader::reader(segment const* s)
   if (! segment_.chunks_.empty())
   {
     current_ = &segment_.chunks_.front().read();
-    chunk_reader_ = make_unique<chunk::reader>(*current_);
+    chunk_reader_ = std::make_unique<chunk::reader>(*current_);
   }
 }
 
@@ -271,7 +270,7 @@ chunk const* segment::reader::next()
   }
 
   current_ = &segment_.chunks_[++chunk_idx_].read();
-  chunk_reader_ = make_unique<chunk::reader>(*current_);
+  chunk_reader_ = std::make_unique<chunk::reader>(*current_);
 
   return current_;
 }
@@ -282,7 +281,7 @@ chunk const* segment::reader::prev()
     return nullptr;
 
   current_ = &segment_.chunks_[--chunk_idx_].read();
-  chunk_reader_ = make_unique<chunk::reader>(*current_);
+  chunk_reader_ = std::make_unique<chunk::reader>(*current_);
 
   if (next_ > 0)
   {
@@ -300,7 +299,7 @@ event_id segment::reader::backup()
 
   auto distance = next_ - chunk_base_;
   next_ = chunk_base_;
-  chunk_reader_ = make_unique<chunk::reader>(*current_);
+  chunk_reader_ = std::make_unique<chunk::reader>(*current_);
   return distance;
 }
 

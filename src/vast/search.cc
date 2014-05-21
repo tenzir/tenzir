@@ -4,7 +4,6 @@
 #include "vast/optional.h"
 #include "vast/query.h"
 #include "vast/io/serialization.h"
-#include "vast/util/make_unique.h"
 #include "vast/util/trial.h"
 
 namespace vast {

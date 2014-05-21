@@ -1,5 +1,5 @@
 Although modern C++ compiler offer a feature-complete implementation of the
-C++11 standard, installing a working build toolchain turns out to be
+C++14 standard, installing a working build toolchain turns out to be
 non-trivial on some platforms. This document bundles some tips that help to
 create a working build environment. Feedback about what works and what doesn't
 is very much appreciated.

@@ -34,7 +34,7 @@ set(VERSION_MAJ_MIN "${VERSION_MAJOR}.${VERSION_MINOR}")
 if (NOT CMAKE_CXX_FLAGS)
   # TODO: Fix variadic logging macros and then add -pedantic again.
   # We need -ftemplate-depth=256 to make Boost Spirit happy.
-  set(CXX_FLAGS                      "-Wall -Wextra -std=c++11 -ftemplate-depth=256")
+  set(CXX_FLAGS                      "-Wall -Wextra -std=c++1y -ftemplate-depth=256")
   set(CMAKE_CXX_FLAGS_DEBUG          "-O0 -g")
   set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os")
   set(CMAKE_CXX_FLAGS_RELEASE        "-O3")

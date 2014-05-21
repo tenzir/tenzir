@@ -5,7 +5,6 @@
 #include "vast/io/array_stream.h"
 #include "vast/io/container_stream.h"
 #include "vast/io/compressed_stream.h"
-#include "vast/util/make_unique.h"
 #include "vast/util/operators.h"
 
 namespace vast {

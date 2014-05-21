@@ -7,7 +7,6 @@
 #include "vast/parse.h"
 #include "vast/io/serialization.h"
 #include "vast/util/color.h"
-#include "vast/util/make_unique.h"
 #include "vast/util/poll.h"
 
 using namespace cppa;

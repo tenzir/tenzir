@@ -1363,7 +1363,7 @@ public:
 
   virtual void visit(schema_extractor const& pred)
   {
-    auto disj = make_unique<disjunction>();
+    auto disj = std::make_unique<disjunction>();
     for (auto& t : schema_)
     {
       auto trace = t->find_suffix(pred.key);
@@ -1389,8 +1389,8 @@ public:
       // eventually replace this node.
       for (auto& p : trace)
       {
-        auto pr = make_unique<predicate>(op_);
-        auto lhs = make_unique<offset_extractor>(t, std::move(p.first));
+        auto pr = std::make_unique<predicate>(op_);
+        auto lhs = std::make_unique<offset_extractor>(t, std::move(p.first));
         pr->add(std::move(lhs));
         pr->add(std::unique_ptr<node>{rhs_->clone()});
         disj->add(std::move(pr));

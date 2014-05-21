@@ -12,7 +12,6 @@
 #include "vast/detail/parser/error_handler.h"
 #include "vast/detail/parser/skipper.h"
 #include "vast/detail/parser/query.h"
-#include "vast/util/make_unique.h"
 #include "vast/util/operators.h"
 #include "vast/util/visitor.h"
 
@@ -316,7 +315,7 @@ public:
     {
       // WLOG, we can always add a conjunction as parent if we just have a
       // single predicate.
-      root = make_unique<conjunction>();
+      root = std::make_unique<conjunction>();
 
       expressionizer visitor{root.get()};
       boost::apply_visitor(std::ref(visitor), q.first);
@@ -337,7 +336,7 @@ public:
 
     // Our AST root will be a disjunction iff we have at least two terms.
     if (ors.size() >= 2)
-      root = make_unique<disjunction>();
+      root = std::make_unique<disjunction>();
 
     // Then create a conjunction for each set of subsequent AND nodes between
     // two OR nodes.
@@ -347,12 +346,12 @@ public:
       n_ary_operator* local_root;
       if (! root)
       {
-        root = make_unique<conjunction>();
+        root = std::make_unique<conjunction>();
         local_root = root.get();
       }
       else if (! ands.rest.empty())
       {
-        auto conj = make_unique<conjunction>();
+        auto conj = std::make_unique<conjunction>();
         local_root = conj.get();
         root->add(std::move(conj));
       }
@@ -407,14 +406,14 @@ public:
 
     std::unique_ptr<extractor> lhs;
     if (pred.lhs == "name")
-      lhs = make_unique<name_extractor>();
+      lhs = std::make_unique<name_extractor>();
     else if (pred.lhs == "time")
-      lhs = make_unique<timestamp_extractor>();
+      lhs = std::make_unique<timestamp_extractor>();
     else if (pred.lhs == "id")
-      lhs = make_unique<id_extractor>();
+      lhs = std::make_unique<id_extractor>();
 
-    auto rhs = make_unique<constant>(detail::ast::query::fold(pred.rhs));
-    auto p = make_unique<predicate>(op);
+    auto rhs = std::make_unique<constant>(detail::ast::query::fold(pred.rhs));
+    auto p = std::make_unique<predicate>(op);
     p->add(std::move(lhs));
     p->add(std::move(rhs));
 
@@ -430,9 +429,9 @@ public:
       invert_ = false;
     }
 
-    auto lhs = make_unique<type_extractor>(pred.lhs);
-    auto rhs = make_unique<constant>(detail::ast::query::fold(pred.rhs));
-    auto p = make_unique<predicate>(op);
+    auto lhs = std::make_unique<type_extractor>(pred.lhs);
+    auto rhs = std::make_unique<constant>(detail::ast::query::fold(pred.rhs));
+    auto p = std::make_unique<predicate>(op);
     p->add(std::move(lhs));
     p->add(std::move(rhs));
 
@@ -452,9 +451,9 @@ public:
     for (auto& str : pred.lhs)
       k.emplace_back(str);
 
-    auto lhs = make_unique<schema_extractor>(std::move(k));
-    auto rhs = make_unique<constant>(detail::ast::query::fold(pred.rhs));
-    auto p = make_unique<predicate>(op);
+    auto lhs = std::make_unique<schema_extractor>(std::move(k));
+    auto rhs = std::make_unique<constant>(detail::ast::query::fold(pred.rhs));
+    auto p = std::make_unique<predicate>(op);
     p->add(std::move(lhs));
     p->add(std::move(rhs));
 
@@ -473,13 +472,13 @@ private:
   std::unique_ptr<offset_extractor> make_offset_extractor(type_const_ptr t,
                                                           offset o)
   {
-    return make_unique<offset_extractor>(t, std::move(o));
+    return std::make_unique<offset_extractor>(t, std::move(o));
   }
 
   std::unique_ptr<constant>
   make_constant(detail::ast::query::value_expr const& expr)
   {
-    return make_unique<constant>(detail::ast::query::fold(expr));
+    return std::make_unique<constant>(detail::ast::query::fold(expr));
   }
 
   std::unique_ptr<node> make_glob_node(std::string const& expr)
@@ -488,13 +487,13 @@ private:
     // equality comparison suffices. This check is relatively crude at the
     // moment: we just look whether the expression contains * or ?.
     auto glob = regex("\\*|\\?").search(expr);
-    auto p = make_unique<predicate>(glob ? match : equal);
-    auto lhs = make_unique<name_extractor>();
+    auto p = std::make_unique<predicate>(glob ? match : equal);
+    auto lhs = std::make_unique<name_extractor>();
     p->add(std::move(lhs));
     if (glob)
-      p->add(make_unique<constant>(regex::glob(expr)));
+      p->add(std::make_unique<constant>(regex::glob(expr)));
     else
-      p->add(make_unique<constant>(expr));
+      p->add(std::make_unique<constant>(expr));
     return std::move(p);
   }
 

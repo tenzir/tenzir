@@ -3,7 +3,6 @@
 
 #include <map>
 #include <type_traits>
-#include "vast/util/make_unique.h"
 
 namespace vast {
 namespace util {
@@ -28,7 +27,7 @@ struct unique_pointer_construction
   template <typename... Args>
   static result_type construct(Args&&... args)
   {
-    return make_unique<T>(std::forward<Args>(args)...);
+    return std::make_unique<T>(std::forward<Args>(args)...);
   }
 };
 

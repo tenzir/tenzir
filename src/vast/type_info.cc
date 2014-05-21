@@ -104,7 +104,7 @@ struct type_announcer
   void operator()(T /* x */) const
   {
     announce<T>();
-    cppa::announce(typeid(T), make_unique<detail::cppa_type_info<T>>());
+    cppa::announce(typeid(T), std::make_unique<detail::cppa_type_info<T>>());
   }
 };
 

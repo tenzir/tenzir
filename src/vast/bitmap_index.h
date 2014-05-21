@@ -163,7 +163,7 @@ struct bitmap_index_model
 
   virtual std::unique_ptr<bitmap_index_concept> copy() const final
   {
-    return make_unique<bitmap_index_model>(*this);
+    return std::make_unique<bitmap_index_model>(*this);
   }
 
   virtual bool equals(bitmap_index_concept const& other) const final
