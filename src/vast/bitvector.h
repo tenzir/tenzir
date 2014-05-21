@@ -7,7 +7,6 @@
 #include <string>
 #include <vector>
 #include "vast/fwd.h"
-#include "vast/traits.h"
 #include "vast/trial.h"
 #include "vast/util/operators.h"
 #include "vast/util/iterator.h"
@@ -71,14 +70,17 @@ public:
 
   /// The base class for iterators which inspect every single bit.
   template <typename Bitvector>
-  class bit_iterator_base :
-    public util::iterator_facade<
-             bit_iterator_base<Bitvector>,
-             std::random_access_iterator_tag,
-             bool,
-             Conditional<std::is_const<Bitvector>, const_reference, reference>,
-             size_type
-           >
+  class bit_iterator_base : public util::iterator_facade<
+    bit_iterator_base<Bitvector>,
+    std::random_access_iterator_tag,
+    bool,
+    std::conditional_t<
+      std::is_const<Bitvector>::value,
+      const_reference,
+      reference
+    >,
+    size_type
+  >
   {
   public:
     using reverse_iterator = std::reverse_iterator<bit_iterator_base>;
@@ -139,7 +141,11 @@ public:
     }
 
     auto dereference() const
-      -> Conditional<std::is_const<Bitvector>, const_reference, reference>
+      -> std::conditional_t<
+           std::is_const<Bitvector>::value,
+           const_reference,
+           reference
+         >
     {
       assert(bits_);
       assert(i_ != npos);
@@ -160,7 +166,11 @@ public:
              ones_iterator_base<Bitvector>,
              std::bidirectional_iterator_tag,
              bool,
-             Conditional<std::is_const<Bitvector>, const_reference, reference>,
+             std::conditional_t<
+               std::is_const<Bitvector>::value,
+               const_reference,
+               reference
+             >,
              size_type
            >
   {
@@ -224,7 +234,11 @@ public:
     }
 
     auto dereference() const
-      -> Conditional<std::is_const<Bitvector>, const_reference, reference>
+      -> std::conditional_t<
+           std::is_const<Bitvector>::value,
+           const_reference,
+           reference
+         >
     {
       assert(bits_);
       assert(i_ != npos);
@@ -373,11 +387,11 @@ public:
   /// sequence.
   template <
     typename Iterator,
-    typename = EnableIf<
+    typename = std::enable_if_t<
       std::is_same<
         typename std::iterator_traits<Iterator>::iterator_category,
         std::forward_iterator_tag
-      >
+      >::value
     >
   >
   void append(Iterator first, Iterator last)

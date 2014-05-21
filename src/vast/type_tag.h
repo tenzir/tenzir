@@ -4,7 +4,6 @@
 #include <iosfwd>
 #include <string>
 #include "vast/fwd.h"
-#include "vast/traits.h"
 #include "vast/print.h"
 
 namespace vast {
@@ -101,21 +100,21 @@ trial<void> print(type_tag t, Iterator&& out)
 /// @tparam T The type tag to get the underlying type from.
 template <type_tag T>
 using type_tag_type =
-    IfThenElse<T == invalid_value, value_invalid,
-    IfThenElse<T == bool_value, bool,
-    IfThenElse<T == int_value, int64_t,
-    IfThenElse<T == uint_value, uint64_t,
-    IfThenElse<T == double_value, double,
-    IfThenElse<T == time_range_value, time_range,
-    IfThenElse<T == time_point_value, time_point,
-    IfThenElse<T == string_value, string,
-    IfThenElse<T == address_value, address,
-    IfThenElse<T == prefix_value, prefix,
-    IfThenElse<T == port_value, port,
-    IfThenElse<T == record_value, record,
-    IfThenElse<T == vector_value, vector,
-    IfThenElse<T == set_value, set,
-    IfThenElse<T == table_value, table,
+    std::conditional_t<T == invalid_value, value_invalid,
+    std::conditional_t<T == bool_value, bool,
+    std::conditional_t<T == int_value, int64_t,
+    std::conditional_t<T == uint_value, uint64_t,
+    std::conditional_t<T == double_value, double,
+    std::conditional_t<T == time_range_value, time_range,
+    std::conditional_t<T == time_point_value, time_point,
+    std::conditional_t<T == string_value, string,
+    std::conditional_t<T == address_value, address,
+    std::conditional_t<T == prefix_value, prefix,
+    std::conditional_t<T == port_value, port,
+    std::conditional_t<T == record_value, record,
+    std::conditional_t<T == vector_value, vector,
+    std::conditional_t<T == set_value, set,
+    std::conditional_t<T == table_value, table,
     std::false_type>>>>>>>>>>>>>>>;
 
 } // namespace vast

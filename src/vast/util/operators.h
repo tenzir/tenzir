@@ -1,69 +1,32 @@
 #ifndef VAST_UTIL_OPERATORS_H
 #define VAST_UTIL_OPERATORS_H
 
-#include "vast/traits.h"
-
 namespace vast {
 namespace util {
 
 template <typename T, typename U = T>
 struct equality_comparable
 {
-  friend bool operator!=(T const& x, T const& y)
+  friend bool operator!=(T const& x, U const& y)
   {
     return ! (x == y);
   }
-
-  // FIXME: Clang spit out an error with this definition:
-  //
-  //  use of overloaded operator '!=' is ambiguous
-  //
-  // For now we just comment this extra ability to perform inequality
-  // comparisons with different types.
-  //
-  //template <typename V = U>
-  //friend DisableIf<std::is_same<V, T>, bool>
-  //operator!=(T const& x, V const& y)
-  //{
-  //  return ! (x == y);
-  //}
 };
 
 template <typename T, typename U = T>
 struct less_than_comparable
 {
-  friend bool operator>(T const& x, T const& y)
+  friend bool operator>(T const& x, U const& y)
   {
     return y < x;
   }
 
-  friend bool operator<=(T const& x, T const& y)
+  friend bool operator<=(T const& x, U const& y)
   {
     return ! (y < x);
   }
 
-  friend bool operator>=(T const& x, T const& y)
-  {
-    return ! (x < y);
-  }
-
-  template <typename V>
-  friend DisableIf<std::is_same<V, T>, bool>
-  operator>(T const& x, V const& y)
-  {
-    return y < x;
-  }
-
-  template <typename V>
-  friend DisableIf<std::is_same<V, T>, bool>
-  operator<=(T const& x, V const& y)
-  {
-    return ! (y < x);
-  }
-
-  template <typename V>
-  friend DisableIf<std::is_same<V, T>, bool>
-  operator>=(V const& x, T const& y)
+  friend bool operator>=(T const& x, U const& y)
   {
     return ! (x < y);
   }
@@ -72,38 +35,17 @@ struct less_than_comparable
 template <typename T, typename U = T>
 struct partially_ordered
 {
-  friend bool operator>(T const& x, T const& y)
+  friend bool operator>(T const& x, U const& y)
   {
     return y < x;
   }
 
-  friend bool operator<=(T const& x, T const& y)
+  friend bool operator<=(T const& x, U const& y)
   {
     return x < y || x == y;
   }
 
-  friend bool operator>=(T const& x, T const& y)
-  {
-    return y < x || x == y;
-  }
-
-  template <typename V>
-  friend DisableIf<std::is_same<V, T>, bool>
-  operator>(T const& x, V const& y)
-  {
-    return y < x;
-  }
-
-  template <typename V>
-  friend DisableIf<std::is_same<V, T>, bool>
-  operator<=(T const& x, V const& y)
-  {
-    return x < y || x == y;
-  }
-
-  template <typename V>
-  friend DisableIf<std::is_same<V, T>, bool>
-  operator>=(T const& x, V const& y)
+  friend bool operator>=(T const& x, U const& y)
   {
     return y < x || x == y;
   }
@@ -118,16 +60,7 @@ struct totally_ordered : equality_comparable<T, U>, less_than_comparable<T, U>
 template <typename T, typename U = T>                                       \
 struct NAME                                                                 \
 {                                                                           \
-  friend T operator OP(T const& x, T const& y)                              \
-  {                                                                         \
-     T t(x);                                                                \
-     t OP##= y;                                                             \
-     return t;                                                              \
-  }                                                                         \
-                                                                            \
-  template <typename V = U>                                                 \
-  friend DisableIf<std::is_same<V, T>, T>                                   \
-  operator OP(T const& x, V const& y)                                       \
+  friend T operator OP(T const& x, U const& y)                              \
   {                                                                         \
      T t(x);                                                                \
      t OP##= y;                                                             \
@@ -139,16 +72,7 @@ struct NAME                                                                 \
 template <typename T, typename U = T>                                       \
 struct NAME                                                                 \
 {                                                                           \
-  friend T operator OP(T const& x, T const& y)                              \
-  {                                                                         \
-     T t(x);                                                                \
-     t OP##= y;                                                             \
-     return t;                                                              \
-  }                                                                         \
-                                                                            \
-  template <typename V = U>                                                 \
-  friend DisableIf<std::is_same<V, T>, T>                                   \
-  operator OP(T const& x, V const& y)                                       \
+  friend T operator OP(T const& x, U const& y)                              \
   {                                                                         \
      T t(x);                                                                \
      t OP##= y;                                                             \

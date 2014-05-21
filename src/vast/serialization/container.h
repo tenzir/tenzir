@@ -7,15 +7,13 @@
 #include <map>
 #include <stdexcept>
 #include <unordered_map>
-#include "vast/traits.h"
 #include "vast/serialization/arithmetic.h"
+#include "vast/util/meta.h"
 
 namespace vast {
 
 template <typename T, size_t N>
-typename std::enable_if<
-  std::is_arithmetic<T>::value && ! is_byte<T>::value
->::type
+std::enable_if_t<std::is_arithmetic<T>::value && ! util::is_byte<T>::value>
 serialize(serializer& sink, T const (&array)[N])
 {
   for (auto i = 0u; i < N; ++i)
@@ -23,9 +21,7 @@ serialize(serializer& sink, T const (&array)[N])
 }
 
 template <typename T, size_t N>
-typename std::enable_if<
-  std::is_arithmetic<T>::value && ! is_byte<T>::value
->::type
+std::enable_if_t<std::is_arithmetic<T>::value && ! util::is_byte<T>::value>
 deserialize(deserializer& source, T (&array)[N])
 {
   for (auto i = 0u; i < N; ++i)
@@ -33,14 +29,14 @@ deserialize(deserializer& source, T (&array)[N])
 }
 
 template <typename T, size_t N>
-typename std::enable_if<is_byte<T>::value>::type
+std::enable_if_t<util::is_byte<T>::value>
 serialize(serializer& sink, T const (&array)[N])
 {
   sink.write_raw(&array, N);
 }
 
 template <typename T, size_t N>
-typename std::enable_if<is_byte<T>::value>::type
+std::enable_if_t<util::is_byte<T>::value>
 deserialize(deserializer& source, T (&array)[N])
 {
   source.read_raw(&array, N);
@@ -61,7 +57,7 @@ void deserialize(deserializer& source, std::array<T, N>& a)
 }
 
 template <typename T>
-typename std::enable_if<is_byte<T>::value>::type
+std::enable_if_t<util::is_byte<T>::value>
 serialize(serializer& sink, std::vector<T> const& v)
 {
   sink.begin_sequence(v.size());
@@ -71,7 +67,7 @@ serialize(serializer& sink, std::vector<T> const& v)
 }
 
 template <typename T>
-typename std::enable_if<is_byte<T>::value>::type
+std::enable_if_t<util::is_byte<T>::value>
 deserialize(deserializer& source, std::vector<T>& v)
 {
   uint64_t size;
@@ -89,7 +85,7 @@ deserialize(deserializer& source, std::vector<T>& v)
 }
 
 template <typename T>
-typename std::enable_if<!is_byte<T>::value>::type
+std::enable_if_t<! util::is_byte<T>::value>
 serialize(serializer& sink, std::vector<T> const& v)
 {
   sink.begin_sequence(v.size());
@@ -99,7 +95,7 @@ serialize(serializer& sink, std::vector<T> const& v)
 }
 
 template <typename T>
-typename std::enable_if<!is_byte<T>::value>::type
+std::enable_if_t<!util::is_byte<T>::value>
 deserialize(deserializer& source, std::vector<T>& v)
 {
   uint64_t size;

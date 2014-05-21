@@ -4,7 +4,6 @@
 #include <array>
 #include <functional>
 #include "vast/fwd.h"
-#include "vast/traits.h"
 #include "vast/trial.h"
 #include "vast/util/coding.h"
 #include "vast/util/operators.h"

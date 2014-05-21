@@ -4,7 +4,6 @@
 #include <algorithm>
 #include "vast/bitvector.h"
 #include "vast/serialization.h"
-#include "vast/traits.h"
 #include "vast/util/operators.h"
 #include "vast/util/range.h"
 
@@ -344,11 +343,11 @@ public:
 
     template <
       typename Iterator,
-      typename = DisableIfSameOrDerived<iterator, Iterator>
+      typename = util::disable_if_same_or_derived<iterator, Iterator>
     >
     iterator(Iterator&& i)
       : concept_{
-          new iterator_model<Unqualified<Iterator>>{std::forward<Iterator>(i)}}
+          new iterator_model<std::decay_t<Iterator>>{std::forward<Iterator>(i)}}
     {
     }
 
@@ -591,11 +590,11 @@ public:
 
   template <
     typename Bitstream,
-    typename = DisableIfSameOrDerived<bitstream, Bitstream>
+    typename = util::disable_if_same_or_derived<bitstream, Bitstream>
   >
   bitstream(Bitstream&& bs)
     : concept_{
-        new detail::bitstream_model<Unqualified<Bitstream>>{
+        new detail::bitstream_model<std::decay_t<Bitstream>>{
             std::forward<Bitstream>(bs)}}
   {
   }

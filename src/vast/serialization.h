@@ -4,7 +4,6 @@
 #include <cstdint>
 #include <memory>
 #include "vast/access.h"
-#include "vast/traits.h"
 #include "vast/type_info.h"
 #include "vast/io/coded_stream.h"
 #include "vast/util/intrusive.h"

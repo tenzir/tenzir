@@ -4,8 +4,8 @@
 #include <cppa/any_tuple.hpp>
 #include <cppa/cow_tuple.hpp>
 #include "vast/serialization.h"
-#include "vast/traits.h"
 #include "vast/util/operators.h"
+#include "vast/util/meta.h"
 
 namespace vast {
 
@@ -24,7 +24,7 @@ public:
   /// @args The argument to forward to `cppa::cow_tuple`.
   template <
     typename... Args,
-    typename = DisableIfSameOrDerived<cow<T>, Args...>
+    typename = util::disable_if_same_or_derived<cow<T>, Args...>
   >
   cow(Args&&... args)
     : tuple_(std::forward<Args>(args)...)

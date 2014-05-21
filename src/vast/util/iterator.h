@@ -1,7 +1,6 @@
 #ifndef VAST_UTIL_ITERATOR_H
 #define VAST_UTIL_ITERATOR_H
 
-#include "vast/traits.h"
 #include "vast/util/operators.h"
 
 namespace vast {
@@ -85,8 +84,6 @@ class iterator_facade : totally_ordered<
                         >
 {
 private:
-  using is_immutable = typename std::is_const<Value>::type;
-
   template <typename R, typename P>
   struct operator_arrow_dispatch
   {
@@ -137,14 +134,18 @@ private:
 
 public:
   using iterator_category = Category;
-  using value_type = typename std::remove_cv<Value>::type;
+  using value_type = std::remove_cv_t<Value>;
   using reference = Reference;
   using difference_type = Difference;
   using arrow_dispatcher = operator_arrow_dispatch<
     reference,
-    typename std::add_pointer<
-      Conditional<is_immutable, value_type const, value_type>
-    >::type
+    std::add_pointer_t<
+      std::conditional_t<
+        std::is_const<Value>::value,
+        value_type const,
+        value_type
+      >
+    >
   >;
 
   using pointer = typename arrow_dispatcher::result_type;

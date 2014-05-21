@@ -10,6 +10,7 @@
 #include "vast/string.h"
 #include "vast/time.h"
 #include "vast/type.h"
+#include "vast/util/meta.h"
 #include "vast/util/operators.h"
 
 namespace vast {
@@ -520,7 +521,7 @@ public:
 
   template <
     typename... Args,
-    typename = DisableIfSameOrDerived<record, Args...>
+    typename = util::disable_if_same_or_derived<record, Args...>
   >
   record(Args&&... args)
     : super(std::forward<Args>(args)...)
@@ -759,7 +760,7 @@ public:
 
   template <
     typename T,
-    typename = EnableIf<is_basic_type<T>>
+    typename = std::enable_if_t<is_basic_type<T>::value>
   >
   result_type operator()(T const&) const
   {

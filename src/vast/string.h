@@ -4,7 +4,6 @@
 #include <string>
 #include <vector>
 #include "vast/fwd.h"
-#include "vast/traits.h"
 #include "vast/trial.h"
 #include "vast/util/operators.h"
 

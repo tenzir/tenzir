@@ -209,11 +209,11 @@ public:
 
   template <
     typename BitmapIndex,
-    typename = DisableIfSameOrDerived<bitmap_index, BitmapIndex>
+    typename = util::disable_if_same_or_derived<bitmap_index, BitmapIndex>
   >
   bitmap_index(BitmapIndex&& bmi)
     : concept_{
-        new detail::bitmap_index_model<Unqualified<BitmapIndex>>{
+        new detail::bitmap_index_model<std::decay_t<BitmapIndex>>{
             std::forward<BitmapIndex>(bmi)}}
   {
   }
@@ -302,35 +302,35 @@ class arithmetic_bitmap_index
   friend struct detail::bitmap_index_model;
 
   using bitmap_type =
-    typename std::conditional<
+    std::conditional_t<
       T == time_range_value || T == time_point_value,
       time_range::rep,
-      typename std::conditional<
+      std::conditional_t<
         T == bool_value || T == int_value || T == uint_value || T == double_value,
         type_tag_type<T>,
         std::false_type
-      >::type
-    >::type;
+      >
+    >;
 
   template <typename U>
   using bitmap_binner =
-    typename std::conditional<
+    std::conditional_t<
       T == double_value || T == time_range_value || T == time_point_value,
       precision_binner<U>,
       null_binner<U>
-    >::type;
+    >;
 
   template <typename B, typename U>
   using bitmap_coder =
-    typename std::conditional<
+    std::conditional_t<
       T == bool_value,
       equality_coder<B, U>,
-      typename std::conditional<
+      std::conditional_t<
         std::is_arithmetic<bitmap_type>::value,
         range_bitslice_coder<B, U>,
         std::false_type
-      >::type
-    >::type;
+      >
+    >;
 
 public:
   arithmetic_bitmap_index() = default;
@@ -338,8 +338,8 @@ public:
   template <
     typename U = bitmap_type,
     typename... Args,
-    typename = EnableIf<
-      std::is_same<bitmap_binner<U>, precision_binner<U>>>
+    typename = std::enable_if_t<
+      std::is_same<bitmap_binner<U>, precision_binner<U>>::value>
   >
   explicit arithmetic_bitmap_index(Args&&... args)
     : bitmap_{{std::forward<Args>(args)...}}

@@ -3,7 +3,7 @@
 
 #include <cassert>
 #include <limits>
-#include "vast/traits.h"
+#include <type_traits>
 
 namespace vast {
 namespace util {
@@ -12,7 +12,7 @@ namespace util {
 /// @param b The byte to convert
 template <
   typename T,
-  typename = EnableIf<std::is_integral<T>>
+  typename = std::enable_if_t<std::is_integral<T>::value>
 >
 char byte_to_char(T b)
 {
@@ -22,7 +22,7 @@ char byte_to_char(T b)
 /// Converts two characters representing a hex byte into a single byte value.
 template <
   typename T,
-  typename = EnableIf<std::is_integral<T>>
+  typename = std::enable_if_t<std::is_integral<T>::value>
 >
 char hex_to_byte(T hi, T lo)
 {
@@ -107,7 +107,9 @@ encode(T x, void* sink)
     *out++ = (static_cast<uint8_t>(x) & 0x7f) | 0x80;
     x >>= 7;
   }
+
   *out++ = static_cast<uint8_t>(x) & 0x7f;
+
   return out - reinterpret_cast<uint8_t*>(sink);
 }
 
@@ -124,6 +126,7 @@ decode(void const* source, T* x)
   size_t i = 0;
   T result = 0;
   uint8_t low7;
+
   do
   {
     low7 = *in++;
@@ -131,7 +134,9 @@ decode(void const* source, T* x)
     ++i;
   }
   while (low7 & 0x80);
+
   *x = result;
+
   return i;
 }
 

@@ -18,8 +18,8 @@ namespace detail {
 /// *offset binary* encoding, which bitmap range coders rely upon.
 template <
   typename T,
-  typename = EnableIf<
-    Bool<std::is_unsigned<T>::value && std::is_integral<T>::value>
+  typename = std::enable_if_t<
+    std::is_unsigned<T>::value && std::is_integral<T>::value
   >
 >
 T order(T x)
@@ -30,8 +30,8 @@ T order(T x)
 
 template <
   typename T,
-  typename = EnableIf<
-    Bool<std::is_signed<T>::value && std::is_integral<T>::value>
+  typename = std::enable_if_t<
+    std::is_signed<T>::value && std::is_integral<T>::value
   >
 >
 auto order(T x) -> typename std::make_unsigned<T>::type
@@ -46,7 +46,7 @@ auto order(T x) -> typename std::make_unsigned<T>::type
 
 template <
   typename T,
-  typename = EnableIf<Bool<std::is_floating_point<T>::value>>
+  typename = std::enable_if_t<std::is_floating_point<T>::value>
 >
 uint64_t order(T x, size_t sig_bits = 5)
 {
@@ -709,16 +709,16 @@ template <typename T>
 class precision_binner
 {
   template <typename B>
-  using is_bool = typename std::is_same<B, bool>::type;
+  using is_bool = std::is_same<B, bool>;
 
   template <typename F>
-  using is_double = typename std::is_same<F, double>::type;
+  using is_double = std::is_same<F, double>;
 
-  static_assert(std::is_arithmetic<T>::value && !is_bool<T>::value,
+  static_assert(std::is_arithmetic<T>::value && ! is_bool<T>::value,
       "precision binning works only with number types");
 
   constexpr static int default_precision =
-    Conditional<is_double<T>,
+    std::conditional_t<is_double<T>::value,
       std::integral_constant<int, -2>,
       std::integral_constant<int, 1>
     >::value;

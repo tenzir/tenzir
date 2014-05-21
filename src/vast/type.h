@@ -320,49 +320,49 @@ type_info make_type_info(type_tag t);
 /// @tparam The ::type_info type.
 template <typename T>
 using to_type_tag =
-  Conditional<
+  util::if_then_else<
     std::is_same<T, bool_type>,
     std::integral_constant<type_tag, bool_value>,
-  Conditional<
+  util::if_then_else<
     std::is_same<T, int_type>,
     std::integral_constant<type_tag, int_value>,
-  Conditional<
+  util::if_then_else<
     std::is_same<T, uint_type>,
     std::integral_constant<type_tag, uint_value>,
-  Conditional<
+  util::if_then_else<
     std::is_same<T, double_type>,
     std::integral_constant<type_tag, double_value>,
-  Conditional<
+  util::if_then_else<
     std::is_same<T, time_range_type>,
     std::integral_constant<type_tag, time_range_value>,
-  Conditional<
+  util::if_then_else<
     std::is_same<T, time_point_type>,
     std::integral_constant<type_tag, time_point_value>,
-  Conditional<
+  util::if_then_else<
     std::is_same<T, string_type>,
     std::integral_constant<type_tag, string_value>,
-  Conditional<
+  util::if_then_else<
     std::is_same<T, regex_type>,
     std::integral_constant<type_tag, string_value>,
-  Conditional<
+  util::if_then_else<
     std::is_same<T, address_type>,
     std::integral_constant<type_tag, address_value>,
-  Conditional<
+  util::if_then_else<
     std::is_same<T, prefix_type>,
     std::integral_constant<type_tag, prefix_value>,
-  Conditional<
+  util::if_then_else<
     std::is_same<T, port_type>,
     std::integral_constant<type_tag, port_value>,
-  Conditional<
+  util::if_then_else<
     std::is_same<T, vector_type>,
     std::integral_constant<type_tag, vector_value>,
-  Conditional<
+  util::if_then_else<
     std::is_same<T, set_type>,
     std::integral_constant<type_tag, set_value>,
-  Conditional<
+  util::if_then_else<
     std::is_same<T, table_type>,
     std::integral_constant<type_tag, table_value>,
-  Conditional<
+  util::if_then_else<
     std::is_same<T, record_type>,
     std::integral_constant<type_tag, record_value>,
     std::integral_constant<type_tag, invalid_value>
@@ -372,27 +372,31 @@ using to_type_tag =
 /// @tparam The ::type_info type.
 template <typename T>
 using is_basic_type =
-  Conditional<std::is_same<T, bool_type>, Bool<true>,
-  Conditional<std::is_same<T, int_type>, Bool<true>,
-  Conditional<std::is_same<T, uint_type>, Bool<true>,
-  Conditional<std::is_same<T, double_type>, Bool<true>,
-  Conditional<std::is_same<T, time_range_type>, Bool<true>,
-  Conditional<std::is_same<T, time_point_type>, Bool<true>,
-  Conditional<std::is_same<T, string_type>, Bool<true>,
-  Conditional<std::is_same<T, regex_type>, Bool<true>,
-  Conditional<std::is_same<T, address_type>, Bool<true>,
-  Conditional<std::is_same<T, prefix_type>, Bool<true>,
-  Conditional<std::is_same<T, port_type>, Bool<true>,
-  Conditional<std::is_same<T, table_type>, Bool<true>,
-    Bool<false>>>>>>>>>>>>>;
+  util::if_then_else<std::is_same<T, bool_type>, util::bool_t<true>,
+  util::if_then_else<std::is_same<T, int_type>, util::bool_t<true>,
+  util::if_then_else<std::is_same<T, uint_type>, util::bool_t<true>,
+  util::if_then_else<std::is_same<T, double_type>, util::bool_t<true>,
+  util::if_then_else<std::is_same<T, time_range_type>, util::bool_t<true>,
+  util::if_then_else<std::is_same<T, time_point_type>, util::bool_t<true>,
+  util::if_then_else<std::is_same<T, string_type>, util::bool_t<true>,
+  util::if_then_else<std::is_same<T, regex_type>, util::bool_t<true>,
+  util::if_then_else<std::is_same<T, address_type>, util::bool_t<true>,
+  util::if_then_else<std::is_same<T, prefix_type>, util::bool_t<true>,
+  util::if_then_else<std::is_same<T, port_type>, util::bool_t<true>,
+  util::if_then_else<std::is_same<T, table_type>, util::bool_t<true>,
+    util::bool_t<false>>>>>>>>>>>>>;
 
 /// Checks whether a ::type_info type is a *container* type.
 /// @tparam The ::type_info type.
 template <typename T>
 using is_container_type =
-  Conditional<std::is_same<T, vector_type>, Bool<true>,
-  Conditional<std::is_same<T, set_type>, Bool<true>,
-  Conditional<std::is_same<T, table_type>, Bool<true>, Bool<false>>>>;
+  util::if_then_else<std::is_same<T, vector_type>, util::bool_t<true>,
+  util::if_then_else<std::is_same<T, set_type>, util::bool_t<true>,
+  util::if_then_else<
+    std::is_same<T, table_type>,
+    util::bool_t<true>,
+    util::bool_t<false>
+  >>>;
 
 template <typename T>
 using type_type = type_tag_type<to_type_tag<T>::value>;

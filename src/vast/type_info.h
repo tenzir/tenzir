@@ -7,7 +7,6 @@
 #include <functional>
 #include <typeinfo>
 #include "vast/aliases.h"
-#include "vast/traits.h"
 #include "vast/fwd.h"
 #include "vast/detail/demangle.h"
 #include "vast/util/operators.h"
@@ -167,8 +166,8 @@ struct converter<From, To>
 {
   static bool link()
   {
-    using BareFrom = RemovePointer<Unqualified<From>>;
-    using BareTo = RemovePointer<Unqualified<To>>;
+    using BareFrom = std::remove_pointer_t<std::decay_t<From>>;
+    using BareTo = std::remove_pointer_t<std::decay_t<To>>;
     static_assert(std::is_convertible<BareFrom*, BareTo*>::value,
                   "From* not convertible to To*.");
 

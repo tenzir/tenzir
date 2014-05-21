@@ -4,7 +4,6 @@
 #include <sstream>
 #include "vast/config.h"
 #include "vast/singleton.h"
-#include "vast/traits.h"
 #include "vast/print.h"
 #include "vast/util/pp.h"
 

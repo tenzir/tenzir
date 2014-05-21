@@ -3,8 +3,8 @@
 
 #include <memory>
 #include "vast/object.h"
-#include "vast/traits.h"
 #include "vast/util/intrusive.h"
+#include "vast/util/meta.h"
 
 namespace vast {
 
@@ -14,14 +14,14 @@ namespace vast {
 // announced types.
 
 template <typename T>
-EnableIf<is_ptr<T>>
+std::enable_if_t<util::is_ptr<T>::value>
 serialize(serializer& sink, T const& x)
 {
   write_object(sink, *x);
 }
 
 template <typename T>
-EnableIf<std::is_pointer<T>>
+std::enable_if_t<std::is_pointer<T>::value>
 deserialize(deserializer& source, T& x)
 {
   object o;
@@ -30,7 +30,7 @@ deserialize(deserializer& source, T& x)
 }
 
 template <typename T>
-EnableIf<is_smart_ptr<T>>
+std::enable_if_t<util::is_smart_ptr<T>::value>
 deserialize(deserializer& source, T& x)
 {
   typename T::element_type* e;
