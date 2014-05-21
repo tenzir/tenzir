@@ -123,3 +123,11 @@ BOOST_AUTO_TEST_CASE(delayed_visitation)
   std::for_each(doubles.begin(), doubles.end(), util::apply_visitor(doppler{}));
   BOOST_CHECK(*util::get<int>(doubles[2]) == 84);
 }
+
+BOOST_AUTO_TEST_CASE(factory_construction)
+{
+  using pair = util::variant<double, int>;
+
+  BOOST_CHECK(util::get<double>(pair::make(0)));
+  BOOST_CHECK(util::get<int>(pair::make(1)));
+}

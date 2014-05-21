@@ -134,13 +134,21 @@ template <typename... Ts>
 class variant : equality_comparable<variant<Ts...>>
 {
   template <typename U, typename...>
-  using front_t = U;
+  using front_type = U;
 
 public:
+  /// The type of the variant discriminator.
   using tag_type = size_t;
 
   /// The first type in the variant; used for default-construction.
-  using front = front_t<Ts...>;
+  using front = front_type<Ts...>;
+
+  /// Construct a variant from a type tag.
+  /// @pre `0 <= tag < sizeof...(Ts)`
+  static variant make(tag_type tag)
+  {
+    return {factory{}, tag};
+  }
 
   /// Default-constructs a variant with the first type.
   variant() noexcept
@@ -238,6 +246,23 @@ public:
   }
 
 private:
+  struct default_constructor
+  {
+    default_constructor(variant& self)
+      : self_(self)
+    {
+    }
+
+    template <typename T>
+    void operator()(T const&) const noexcept
+    {
+      self_.construct(T());
+    }
+
+  private:
+    variant& self_;
+  };
+
   struct constructor
   {
     constructor(variant& self)
@@ -358,25 +383,24 @@ private:
     }
   };
 
-  template <tag_type Tag, typename... MyTypes>
+  template <tag_type Tag, typename... Tail>
   struct initializer;
 
-  template <tag_type Tag, typename Current, typename... MyTypes>
-  struct initializer<Tag, Current, MyTypes...>
-    : public initializer<Tag + 1, MyTypes...>
+  template <tag_type Tag, typename T, typename... Tail>
+  struct initializer<Tag, T, Tail...> : public initializer<Tag + 1, Tail...>
   {
-    using base = initializer<Tag + 1, MyTypes...>;
+    using base = initializer<Tag + 1, Tail...>;
     using base::initialize;
 
-    static void initialize(variant& v, Current&& current)
+    static void initialize(variant& v, T&& x)
     {
-      v.construct(std::move(current));
+      v.construct(std::move(x));
       v.which_ = Tag;
     }
 
-    static void initialize(variant& v, Current const& current)
+    static void initialize(variant& v, T const& x)
     {
-      v.construct(current);
+      v.construct(x);
       v.which_ = Tag;
     }
   };
@@ -384,8 +408,7 @@ private:
   template <tag_type Tag>
   struct initializer<Tag>
   {
-    //this should never match
-    void initialize();
+    void initialize(); //this should never match
   };
 
   struct equality
@@ -415,6 +438,13 @@ private:
   static T& get_value(recursive_wrapper<T>& x, std::false_type)
   {
     return x.get();
+  }
+
+  struct factory { };
+  variant(factory, tag_type tag)
+  {
+    which_ = tag;
+    apply<std::false_type>(default_constructor{*this});
   }
 
   template <typename T>
@@ -548,12 +578,6 @@ template <typename T, typename... Ts>
 T const* get(variant<Ts...> const& var)
 {
   return apply_visitor(getter<T const>(), var);
-}
-
-template <typename T, typename V>
-bool variant_is_type(V const& v)
-{
-  return get<T>(&v) != nullptr;
 }
 
 namespace detail {
