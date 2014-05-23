@@ -148,7 +148,7 @@ public:
   /// Prints the usage into a given output stream.
   /// @param sink The output stream to receive the configuration.
   /// @param show_all Whether to also print invisible options.
-  void usage(std::ostream& sink, bool show_all = false)
+  void usage(std::ostream& sink, bool show_all = false) const
   {
     sink << derived()->banner() << "\n";
 
