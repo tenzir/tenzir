@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cstdlib>
+#include <regex>
 
 char const* unit::color::reset        = "\033[0m";
 char const* unit::color::black        = "\033[30m";
@@ -186,17 +187,33 @@ int program::run(configuration const& cfg)
   size_t total_tests = 0;
   size_t total_good = 0;
   size_t total_bad = 0;
+
+  auto suite_rx = std::regex{*cfg.as<std::string>("suites")};
+  auto test_rx = std::regex{*cfg.as<std::string>("tests")};
   for (auto& p : instance().suites_)
   {
+    if (! std::regex_match(p.first, suite_rx))
+      continue;
+
     auto suite_name = p.first.empty() ? "<unnamed>" : p.first;
     auto pad = std::string((bar.size() - suite_name.size()) / 2, ' ');
 
-    log.verbose()
-      << color::yellow << bar << '\n' << pad << suite_name << '\n' << bar
-      << color::reset << "\n\n";
+    bool displayed_header = false;
 
     for (auto& t : p.second)
     {
+      if (! std::regex_match(t->__name(), test_rx))
+        continue;
+
+      if (! displayed_header)
+      {
+        log.verbose()
+          << color::yellow << bar << '\n' << pad << suite_name << '\n' << bar
+          << color::reset << "\n\n";
+
+        displayed_header = true;
+      }
+
       log.verbose()
           << color::yellow << "- " << color::reset << t->__name() << '\n';
 
@@ -243,7 +260,8 @@ int program::run(configuration const& cfg)
 
     total_tests += p.second.size();
 
-    log.verbose() << '\n';
+    if (displayed_header)
+      log.verbose() << '\n';
   }
 
   auto suites = instance().suites_.size();
