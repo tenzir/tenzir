@@ -54,9 +54,9 @@ public:
     void function(char const* f);
 
     template <typename T>
-    friend message& operator<<(message& m, T&& x)
+    friend message& operator<<(message& m, T const& x)
     {
-      m.ss_ << std::forward<T>(x);
+      m.ss_ << x;
       return m;
     }
 

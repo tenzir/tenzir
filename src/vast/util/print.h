@@ -206,7 +206,7 @@ struct streamable
 {
   template <typename Stream, typename T>
   static auto test(Stream* out, T const* x)
-    -> decltype(std::operator<<(*out, *x), std::true_type());
+    -> decltype(*out << *x, std::true_type());
 
   template <typename, typename>
   static auto test(...) -> std::false_type;
@@ -218,20 +218,23 @@ struct streamable
 template <typename T, typename I>
 struct printable : decltype(detail::printable::test<T, I>(0, 0)) {};
 
-/// Type trait that checks whether a type is STL-streamable.
+/// Type trait that checks whether a type is streamable via `operator<<`.
 template <typename Stream, typename T>
-struct stl_streamable : decltype(detail::streamable::test<Stream, T>(0, 0)) {};
+struct streamable : decltype(detail::streamable::test<Stream, T>(0, 0)) {};
 
 // Injects operator<< for all printable types that do not already have an
-// overload of std::operator<<.
+// overload of operator<< to a std::basic_ostream.
 template <typename CharT, typename Traits, typename T>
 auto operator<<(std::basic_ostream<CharT, Traits>& out, T const& x)
   -> std::enable_if_t<
        printable<T, std::ostreambuf_iterator<CharT>>::value
-         && ! stl_streamable<decltype(out), T>::value,
+         && ! streamable<decltype(out), T>::value,
        decltype(out)
      >
 {
+  static_assert(printable<T, std::ostreambuf_iterator<CharT>>::value,
+                "T must be a printable type");
+
   if (! print(x, std::ostreambuf_iterator<CharT>{out}))
     out.setstate(std::ios_base::failbit);
 
