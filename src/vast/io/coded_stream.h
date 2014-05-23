@@ -48,7 +48,7 @@ public:
   /// @returns `true` if reading *x* succeeded.
   /// @pre *x* must point to valid instance of type *T*.
   template <typename T>
-  typename std::enable_if<std::is_arithmetic<T>::value, bool>::type
+  std::enable_if_t<std::is_arithmetic<T>::value, bool>
   read(void* x)
   {
     VAST_ENTER();
@@ -70,7 +70,7 @@ public:
   /// @param x The value to read.
   /// @returns `true` if reading *x* succeeded.
   template <typename T>
-  typename std::enable_if<std::is_integral<T>::value, bool>::type
+  std::enable_if_t<std::is_integral<T>::value, bool>
   read_varbyte(T* x)
   {
     VAST_ENTER();
@@ -152,7 +152,7 @@ public:
   /// @returns The number of bytes written.
   /// @pre *x* must point to an instance of type *T*.
   template <typename T>
-  typename std::enable_if<std::is_arithmetic<T>::value, size_t>::type
+  std::enable_if_t<std::is_arithmetic<T>::value, size_t>
   write(void const* x)
   {
     VAST_ENTER();
@@ -174,7 +174,7 @@ public:
   /// @param x The value to write.
   /// @returns The number of bytes written.
   template <typename T>
-  typename std::enable_if<std::is_integral<T>::value, size_t>::type
+  std::enable_if_t<std::is_integral<T>::value, size_t>
   write_varbyte(T const* x)
   {
     VAST_ENTER();

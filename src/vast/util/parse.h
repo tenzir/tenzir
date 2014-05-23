@@ -13,14 +13,14 @@ namespace util {
 namespace detail { struct dummy; }
 template <typename T, typename I, typename... Opts>
 auto parse(T&, I&, I, Opts&&...)
-  -> typename std::enable_if<
+  -> std::enable_if_t<
        std::is_same<T, detail::dummy>::value,
        trial<void>
-     >::type;
+     >;
 
 /// A type alias helper that acts as return type for ::parse functions.
 template <bool B>
-using need = typename std::enable_if<B, trial<void>>::type;
+using need = std::enable_if_t<B, trial<void>>;
 
 //
 // Implementation for built-in types and STL.
@@ -211,10 +211,10 @@ struct parseable : decltype(detail::parseable::test<T, Iterator>(0, 0)) {};
 // Injects operator>> for all parseable types.
 template <typename CharT, typename Traits, typename T>
 auto operator>>(std::basic_istream<CharT, Traits>& in, T& x)
-  -> typename std::enable_if<
+  -> std::enable_if_t<
        parseable<T, std::istreambuf_iterator<CharT>>::value,
        decltype(in)
-     >::type
+     >
 {
   std::istreambuf_iterator<CharT> begin{in}, end;
   if (parse(x, begin, end))

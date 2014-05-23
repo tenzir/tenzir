@@ -44,7 +44,7 @@ public:
   }
 
   template <typename U = Byte>
-  typename std::enable_if<std::is_const<U>::value>::type
+  std::enable_if_t<std::is_const<U>::value>
   read(void* data, size_t n)
   {
     assert(n <= size());
@@ -53,7 +53,7 @@ public:
   }
 
   template <typename U = Byte>
-  typename std::enable_if<!std::is_const<U>::value>::type
+  std::enable_if_t<!std::is_const<U>::value>
   write(void const* data, size_t n)
   {
     assert(n <= size());

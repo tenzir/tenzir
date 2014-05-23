@@ -31,7 +31,7 @@ public:
 
 private:
   template <typename T>
-  typename std::enable_if<std::is_arithmetic<T>::value, bool>::type
+  std::enable_if_t<std::is_arithmetic<T>::value, bool>
   write(T x)
   {
     using namespace vast;
@@ -66,7 +66,7 @@ public:
 
 private:
   template <typename T>
-  typename std::enable_if<std::is_arithmetic<T>::value, bool>::type
+  std::enable_if_t<std::is_arithmetic<T>::value, bool>
   read(T& x)
   {
     using namespace vast;

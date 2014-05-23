@@ -15,21 +15,21 @@ void MurmurHash3_x86_128(const void* key, int len, uint32_t seed, void* out);
 void MurmurHash3_x64_128(const void* key, int len, uint32_t seed, void* out);
 
 template <size_t N>
-typename std::enable_if<(N== 32)>::type
+std::enable_if_t<(N== 32)>
 murmur3(void const* key, int len, uint32_t seed, void* out)
 {
   MurmurHash3_x86_32(key, len, seed, out);
 }
 
 template <size_t N>
-typename std::enable_if<(N == 128 && sizeof(void*) == 4)>::type
+std::enable_if_t<(N == 128 && sizeof(void*) == 4)>
 murmur3(void const* key, int len, uint32_t seed, void* out)
 {
   MurmurHash3_x86_128(key, len, seed, out);
 }
 
 template <size_t N>
-typename std::enable_if<(N == 128 && sizeof(void*) == 8)>::type
+std::enable_if_t<(N == 128 && sizeof(void*) == 8)>
 murmur3(void const* key, int len, uint32_t seed, void* out)
 {
   MurmurHash3_x64_128(key, len, seed, out);

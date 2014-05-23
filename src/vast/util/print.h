@@ -16,10 +16,7 @@ namespace util {
 namespace detail { struct dummy; }
 template <typename T, typename I, typename... Opts>
 auto print(T const&, I&&, Opts&&...)
-  -> typename std::enable_if<
-       std::is_same<T, detail::dummy>::value,
-       trial<void>
-     >::type;
+  -> std::enable_if_t<std::is_same<T, detail::dummy>::value, trial<void>>;
 
 //
 // Implementation for built-in types and STL.
@@ -75,10 +72,10 @@ trial<void> print(std::string const& str, Iterator&& out)
 
 template <typename T, typename Iterator>
 auto print(T n, Iterator&& out)
-  -> typename std::enable_if<
+  -> std::enable_if_t<
       std::is_signed<T>::value && ! std::is_floating_point<T>::value,
       trial<void>
-    >::type
+    >
 {
   if (n < 0)
   {
@@ -92,20 +89,14 @@ auto print(T n, Iterator&& out)
 
 template <typename T, typename Iterator>
 auto print(T n, Iterator&& out)
-  -> typename std::enable_if<
-       std::is_unsigned<T>::value,
-       trial<void>
-     >::type
+  -> std::enable_if_t<std::is_unsigned<T>::value, trial<void>>
 {
   return print_numeric(n, out);
 }
 
 template <typename T, typename Iterator>
 auto print(T n, Iterator&& out, size_t digits = 10)
-  -> typename std::enable_if<
-       std::is_floating_point<T>::value,
-       trial<void>
-     >::type
+  -> std::enable_if_t<std::is_floating_point<T>::value, trial<void>>
 {
   if (n == 0)
     return print("0.0000000000", out);
@@ -235,11 +226,11 @@ struct stl_streamable : decltype(detail::streamable::test<Stream, T>(0, 0)) {};
 // overload of std::operator<<.
 template <typename CharT, typename Traits, typename T>
 auto operator<<(std::basic_ostream<CharT, Traits>& out, T const& x)
-  -> typename std::enable_if<
+  -> std::enable_if_t<
        printable<T, std::ostreambuf_iterator<CharT>>::value
          && ! stl_streamable<decltype(out), T>::value,
        decltype(out)
-     >::type
+     >
 {
   if (! print(x, std::ostreambuf_iterator<CharT>{out}))
     out.setstate(std::ios_base::failbit);
@@ -249,11 +240,11 @@ auto operator<<(std::basic_ostream<CharT, Traits>& out, T const& x)
 
 template <typename To, typename From, typename... Opts>
 auto to(From const& f, Opts&&... opts)
-  -> typename std::enable_if<
+  -> std::enable_if_t<
        std::is_same<To, std::string>::value
          && ! std::is_same<From, std::string>::value,
        trial<std::string>
-     >::type
+     >
 {
   trial<std::string> str{std::string{}};
   auto t = print(f, std::back_inserter(*str), std::forward<Opts>(opts)...);

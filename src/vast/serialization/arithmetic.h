@@ -49,21 +49,21 @@ inline bool serialize(serializer& sink, uint64_t x)
 }
 
 template <typename T>
-typename std::enable_if<
+std::enable_if_t<
   std::is_same<T, long>::value || std::is_same<T, long long>::value,
   bool
->::type
+>
 serialize(serializer& sink, T x)
 {
   return sink.write_int64(x);
 }
 
 template <typename T>
-typename std::enable_if<
+std::enable_if_t<
   std::is_same<T, unsigned long>::value ||
     std::is_same<T, unsigned long long>::value,
   bool
->::type
+>
 serialize(serializer& sink, T x)
 {
   return sink.write_uint64(x);
@@ -121,10 +121,10 @@ inline bool deserialize(deserializer& source, uint64_t& x)
 }
 
 template <typename T>
-typename std::enable_if<
+std::enable_if_t<
   std::is_same<T, long>::value || std::is_same<T, long long>::value,
   bool
->::type
+>
 deserialize(deserializer& source, T& x)
 {
   int64_t l;
@@ -135,11 +135,11 @@ deserialize(deserializer& source, T& x)
 }
 
 template <typename T>
-typename std::enable_if<
+std::enable_if_t<
   std::is_same<T, unsigned long>::value ||
     std::is_same<T, unsigned long long>::value,
   bool
->::type
+>
 deserialize(deserializer& source, T& x)
 {
   uint64_t ul;

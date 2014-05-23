@@ -34,14 +34,13 @@ template <
     std::is_signed<T>::value && std::is_integral<T>::value
   >
 >
-auto order(T x) -> typename std::make_unsigned<T>::type
+auto order(T x) -> std::make_unsigned_t<T>
 {
   // For signed integral types, We shift the entire domain by 2^w to the left,
   // where w is the size of T in bits. By ditching 2's-complete, we get a total
   // bitwise ordering.
-  using unsigned_type = typename std::make_unsigned<T>::type;
-  x += unsigned_type{1} << std::numeric_limits<T>::digits;
-  return static_cast<unsigned_type>(x);
+  x += std::make_unsigned_t<T>{1} << std::numeric_limits<T>::digits;
+  return static_cast<std::make_unsigned_t<T>>(x);
 }
 
 template <

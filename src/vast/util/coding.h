@@ -44,7 +44,7 @@ size_t constexpr make_unsigned(T x)
 } // namespace detail
 
 template <typename T>
-typename std::enable_if<(sizeof(T) > 4), size_t>::type
+std::enable_if_t<(sizeof(T) > 4), size_t>
 constexpr size(T x)
 {
   return detail::make_unsigned(x) >= (T(1) << 63) ? 10 :
@@ -59,7 +59,7 @@ constexpr size(T x)
 }
 
 template <typename T>
-typename std::enable_if<(sizeof(T) > 2 && sizeof(T) <= 4), size_t>::type
+std::enable_if_t<(sizeof(T) > 2 && sizeof(T) <= 4), size_t>
 constexpr size(T x)
 {
   return detail::make_unsigned(x) >= (T(1) << 28) ? 5 :
@@ -69,7 +69,7 @@ constexpr size(T x)
 }
 
 template <typename T>
-typename std::enable_if<(sizeof(T) == 2), size_t>::type
+std::enable_if_t<(sizeof(T) == 2), size_t>
 constexpr size(T x)
 {
   return detail::make_unsigned(x) >= (T(1) << 14) ? 3 :
@@ -77,7 +77,7 @@ constexpr size(T x)
 }
 
 template <typename T>
-typename std::enable_if<sizeof(T) == 1, size_t>::type
+std::enable_if_t<sizeof(T) == 1, size_t>
 constexpr size(T x)
 {
   return detail::make_unsigned(x) >= (1 << 7) ? 2 : 1;
@@ -98,7 +98,7 @@ size_t constexpr max_size()
 /// @param sink the output buffer to write into.
 /// @returns The number of bytes written into *sink*.
 template <typename T>
-typename std::enable_if<std::is_integral<T>::value, size_t>::type
+std::enable_if_t<std::is_integral<T>::value, size_t>
 encode(T x, void* sink)
 {
   auto out = reinterpret_cast<uint8_t*>(sink);
@@ -119,7 +119,7 @@ encode(T x, void* sink)
 /// @param x The result of the decoding.
 /// @returns The number of bytes read from *source*.
 template <typename T>
-typename std::enable_if<std::is_integral<T>::value, size_t>::type
+std::enable_if_t<std::is_integral<T>::value, size_t>
 decode(void const* source, T* x)
 {
   auto in = reinterpret_cast<uint8_t const*>(source);

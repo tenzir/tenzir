@@ -44,8 +44,7 @@ class recursive_wrapper : equality_comparable<recursive_wrapper<T>>
 public:
   template <
     typename U,
-    typename Dummy =
-    typename std::enable_if<std::is_convertible<U, T>::value, U>::type
+    typename Dummy = std::enable_if_t<std::is_convertible<U, T>::value, U>
   >
   recursive_wrapper(U const& u)
     : x_(new T(u))
@@ -54,8 +53,7 @@ public:
 
   template <
     typename U,
-    typename Dummy =
-    typename std::enable_if<std::is_convertible<U, T>::value, U>::type
+    typename Dummy = std::enable_if_t<std::is_convertible<U, T>::value, U>
   >
   recursive_wrapper(U&& u)
     : x_(new T(std::forward<U>(u)))
@@ -169,13 +167,13 @@ public:
   /// unambiguously convertible to one of the types in the variant.
   template <
     typename T,
-    typename = typename std::enable_if<
+    typename = std::enable_if<
       ! std::is_same<
-        typename std::remove_reference<variant<Ts...>>::type,
-        typename std::remove_reference<T>::type
+        std::remove_reference_t<variant<Ts...>>,
+        std::remove_reference_t<T>
       >::value,
       T
-    >::type
+    >
   >
   variant(T&& x)
   {
@@ -344,7 +342,7 @@ private:
     template <typename Rhs>
     void operator()(Rhs& rhs) const noexcept
     {
-      using rhs_no_const = typename std::remove_const<Rhs>::type;
+      using rhs_no_const = std::remove_const_t<Rhs>;
 
       static_assert(std::is_nothrow_destructible<rhs_no_const>::value,
                     "T must not throw in destructor");
@@ -456,15 +454,13 @@ private:
 
   template <typename T, typename Storage>
   using const_type =
-    typename std::conditional<
+    std::conditional_t<
       std::is_const<
-        typename std::remove_pointer<
-          typename std::remove_reference<Storage>::type
-        >::type
-       >::value,
-       T const,
-       T
-     >::type;
+        std::remove_pointer_t<std::remove_reference_t<Storage>>
+      >::value,
+      T const,
+      T
+    >;
 
   template <
     typename Internal,
