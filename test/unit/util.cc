@@ -1,47 +1,50 @@
-#include "test.h"
+#include "framework/unit.h"
+
 #include "vast/util/trial.h"
 #include "vast/util/result.h"
 
+SUITE("util")
+
 using namespace vast;
 
-BOOST_AUTO_TEST_CASE(errors)
+TEST("error")
 {
   error e;
   error shoot{"holy cow"};
-  BOOST_CHECK_EQUAL(shoot.msg(), "holy cow");
+  CHECK(shoot.msg() == "holy cow");
 }
 
-BOOST_AUTO_TEST_CASE(trials)
+TEST("trial")
 {
   trial<int> t = 42;
-  BOOST_REQUIRE(t);
-  BOOST_CHECK_EQUAL(*t, 42);
+  REQUIRE(t);
+  CHECK(*t == 42);
 
   trial<int> u = std::move(t);
-  BOOST_REQUIRE(u);
-  BOOST_CHECK_EQUAL(*u, 42);
+  REQUIRE(u);
+  CHECK(*u == 42);
 
   t = error{"whoops"};
-  BOOST_CHECK(! t);
+  CHECK(! t);
 }
 
-BOOST_AUTO_TEST_CASE(results)
+TEST("result")
 {
   result<int> t;
-  BOOST_REQUIRE(t.empty());
-  BOOST_REQUIRE(! t.engaged());
-  BOOST_REQUIRE(! t.failed());
+  REQUIRE(t.empty());
+  REQUIRE(! t.engaged());
+  REQUIRE(! t.failed());
 
   t = 42;
-  BOOST_REQUIRE(! t.empty());
-  BOOST_REQUIRE(t.engaged());
-  BOOST_REQUIRE(! t.failed());
-  BOOST_REQUIRE_EQUAL(*t, 42);
+  REQUIRE(! t.empty());
+  REQUIRE(t.engaged());
+  REQUIRE(! t.failed());
+  REQUIRE(*t == 42);
 
   t = error{"whoops"};
-  BOOST_REQUIRE(! t.empty());
-  BOOST_REQUIRE(! t.engaged());
-  BOOST_REQUIRE(t.failed());
+  REQUIRE(! t.empty());
+  REQUIRE(! t.engaged());
+  REQUIRE(t.failed());
 
-  BOOST_CHECK_EQUAL(t.error().msg(), "whoops");
+  CHECK(t.error().msg() == "whoops");
 }

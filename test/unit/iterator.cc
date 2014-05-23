@@ -1,5 +1,8 @@
-#include "test.h"
+#include "framework/unit.h"
+
 #include "vast/util/iterator.h"
+
+SUITE("util")
 
 using namespace vast;
 
@@ -56,39 +59,37 @@ private:
   size_t i_ = N;
 };
 
-
-
-BOOST_AUTO_TEST_CASE(simple_custom_iterator)
+TEST("basic custom iterator")
 {
   int a[5] = { 1, 2, 3, 4, 5 };
   iterator<int, 5> begin{a}, end;
 
   int i = 0;
   while (begin != end)
-    BOOST_CHECK_EQUAL(*begin++, ++i);
+    CHECK(*begin++ == ++i);
 
   begin -= 3;
-  BOOST_CHECK_EQUAL(*begin, 3);
+  CHECK(*begin == 3);
   *begin = 42;
-  BOOST_CHECK_EQUAL(*begin, 42);
+  CHECK(*begin == 42);
 
-  BOOST_CHECK_EQUAL(*--begin, 2);
-  BOOST_CHECK_EQUAL(end - begin, 4);
-  BOOST_CHECK(begin + 4 == end);
+  CHECK(*--begin == 2);
+  CHECK((end - begin) == 4);
+  CHECK((begin + 4) == end);
 
-  BOOST_CHECK(! (begin == end));
-  BOOST_CHECK(begin != end);
-  BOOST_CHECK(begin < end);
-  BOOST_CHECK(! (end < begin));
-  BOOST_CHECK(begin <= end);
+  CHECK(! (begin == end));
+  CHECK(begin != end);
+  CHECK(begin < end);
+  CHECK(! (end < begin));
+  CHECK(begin <= end);
 }
 
-BOOST_AUTO_TEST_CASE(simple_custom_const_iterator)
+TEST("basic custom const-iterator")
 {
   int a[5] = { 1, 2, 3, 4, 5 };
   iterator<const int, 5> begin{a}, end;
 
   int i = 0;
   while (begin != end)
-    BOOST_CHECK_EQUAL(*begin++, ++i);
+    CHECK(*begin++ == ++i);
 }

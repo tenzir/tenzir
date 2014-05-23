@@ -1,7 +1,7 @@
 include_directories(
     ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_BINARY_DIR}/src
-    ${CMAKE_BINARY_DIR}/test/unit)
+    ${CMAKE_SOURCE_DIR}/test/unit
+    ${CMAKE_BINARY_DIR}/src)
 
 # Generate C++ header file that defines the schema test cases.
 file(GLOB schemas schemas/*.sch)
@@ -16,8 +16,12 @@ configure_file(schema_test_cases.h.in schema_test_cases.h)
 file(GLOB_RECURSE tests *.cc)
 
 add_executable(unit-test ${tests})
-target_link_libraries(unit-test libvast ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY})
+target_link_libraries(unit-test libvast)
 
 add_custom_target(
-  test ${EXECUTABLE_OUTPUT_PATH}/unit-test -v 0
+  test ${EXECUTABLE_OUTPUT_PATH}/unit-test -v 2
+  DEPENDS libvast unit-test)
+
+add_custom_target(
+  test-show ${EXECUTABLE_OUTPUT_PATH}/unit-test -v 3
   DEPENDS libvast unit-test)

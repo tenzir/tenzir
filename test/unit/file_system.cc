@@ -1,81 +1,85 @@
-#include "test.h"
+#include "framework/unit.h"
+
 #include "vast/print.h"
 #include "vast/file_system.h"
 
 using namespace vast;
 
-BOOST_AUTO_TEST_CASE(path_operations)
+SUITE("file system")
+
+TEST("path operations")
 {
   path p = "/usr/local/bin/foo";
-  BOOST_CHECK_EQUAL(p.parent(), "/usr/local/bin");
-  BOOST_CHECK_EQUAL(p.basename(), "foo");
-  BOOST_CHECK_EQUAL(path("/usr/local/bin/foo.bin").basename(true), "foo");
+  CHECK(p.parent() == "/usr/local/bin");
+  CHECK(p.basename() == "foo");
+  CHECK(path("/usr/local/bin/foo.bin").basename(true) == "foo");
 
-  BOOST_CHECK_EQUAL(p.root(), "/");
-  BOOST_CHECK_EQUAL(path("usr/local").root(), "");
+  CHECK(p.root() == "/");
+  CHECK(path("usr/local").root() == "");
 
-  BOOST_CHECK_EQUAL(p.complete(), p);
-  BOOST_CHECK_EQUAL(path("foo/").complete(), path::current() / "foo/");
+  CHECK(p.complete() == p);
+  CHECK(path("foo/").complete() == path::current() / "foo/");
 
   auto pieces = p.split();
-  BOOST_REQUIRE_EQUAL(pieces.size(), 5);
-  BOOST_CHECK_EQUAL(pieces[0], "/");
-  BOOST_CHECK_EQUAL(pieces[1], "usr");
-  BOOST_CHECK_EQUAL(pieces[2], "local");
-  BOOST_CHECK_EQUAL(pieces[3], "bin");
-  BOOST_CHECK_EQUAL(pieces[4], "foo");
+  REQUIRE(pieces.size() == 5);
+  CHECK(pieces[0] == "/");
+  CHECK(pieces[1] == "usr");
+  CHECK(pieces[2] == "local");
+  CHECK(pieces[3] == "bin");
+  CHECK(pieces[4] == "foo");
 }
 
-BOOST_AUTO_TEST_CASE(path_trimming)
+TEST("path trimming")
 {
   path p = "/usr/local/bin/foo";
 
-  BOOST_CHECK_EQUAL(p.trim(0), "");
-  BOOST_CHECK_EQUAL(p.trim(1), "/");
-  BOOST_CHECK_EQUAL(p.trim(2), "/usr");
-  BOOST_CHECK_EQUAL(p.trim(3), "/usr/local");
-  BOOST_CHECK_EQUAL(p.trim(4), "/usr/local/bin");
-  BOOST_CHECK_EQUAL(p.trim(5), p);
-  BOOST_CHECK_EQUAL(p.trim(6), p);
-  BOOST_CHECK_EQUAL(p.trim(-1), "foo");
-  BOOST_CHECK_EQUAL(p.trim(-2), "bin/foo");
-  BOOST_CHECK_EQUAL(p.trim(-3), "local/bin/foo");
-  BOOST_CHECK_EQUAL(p.trim(-4), "usr/local/bin/foo");
-  BOOST_CHECK_EQUAL(p.trim(-5), p);
-  BOOST_CHECK_EQUAL(p.trim(-6), p);
+  CHECK(p.trim(0) == "");
+  CHECK(p.trim(1) == "/");
+  CHECK(p.trim(2) == "/usr");
+  CHECK(p.trim(3) == "/usr/local");
+  CHECK(p.trim(4) == "/usr/local/bin");
+  CHECK(p.trim(5) == p);
+  CHECK(p.trim(6) == p);
+  CHECK(p.trim(-1) == "foo");
+  CHECK(p.trim(-2) == "bin/foo");
+  CHECK(p.trim(-3) == "local/bin/foo");
+  CHECK(p.trim(-4) == "usr/local/bin/foo");
+  CHECK(p.trim(-5) == p);
+  CHECK(p.trim(-6) == p);
 }
 
-BOOST_AUTO_TEST_CASE(path_chopping)
+TEST("path chopping")
 {
   path p = "/usr/local/bin/foo";
 
-  BOOST_CHECK_EQUAL(p.chop(0), p);
-  BOOST_CHECK_EQUAL(p.chop(-1), "/usr/local/bin");
-  BOOST_CHECK_EQUAL(p.chop(-2), "/usr/local");
-  BOOST_CHECK_EQUAL(p.chop(-3), "/usr");
-  BOOST_CHECK_EQUAL(p.chop(-4), "/");
-  BOOST_CHECK_EQUAL(p.chop(-5), "");
-  BOOST_CHECK_EQUAL(p.chop(1), "usr/local/bin/foo");
-  BOOST_CHECK_EQUAL(p.chop(2), "local/bin/foo");
-  BOOST_CHECK_EQUAL(p.chop(3), "bin/foo");
-  BOOST_CHECK_EQUAL(p.chop(4), "foo");
-  BOOST_CHECK_EQUAL(p.chop(5), "");
+  CHECK(p.chop(0) == p);
+  CHECK(p.chop(-1) == "/usr/local/bin");
+  CHECK(p.chop(-2) == "/usr/local");
+  CHECK(p.chop(-3) == "/usr");
+  CHECK(p.chop(-4) == "/");
+  CHECK(p.chop(-5) == "");
+  CHECK(p.chop(1) == "usr/local/bin/foo");
+  CHECK(p.chop(2) == "local/bin/foo");
+  CHECK(p.chop(3) == "bin/foo");
+  CHECK(p.chop(4) == "foo");
+  CHECK(p.chop(5) == "");
 }
 
-BOOST_AUTO_TEST_CASE(basic_filesystem_tests)
+TEST("file/directory manipulation")
 {
   using std::to_string;
+
   path base = "vast-unit-test-file-system-test";
   path p("/tmp");
   p /= base / string(to_string(getpid()));
-  BOOST_CHECK(! p.is_regular_file());
-  BOOST_CHECK(! exists(p));
-  BOOST_CHECK(mkdir(p));
-  BOOST_CHECK(exists(p));
-  BOOST_CHECK(p.is_directory());
-  BOOST_CHECK(rm(p));
-  BOOST_CHECK(! p.is_directory());
-  BOOST_CHECK(p.parent().is_directory());
-  BOOST_CHECK(rm(p.parent()));
-  BOOST_CHECK(! p.parent().is_directory());
+  CHECK(! p.is_regular_file());
+  CHECK(! exists(p));
+  CHECK(mkdir(p));
+  CHECK(exists(p));
+  CHECK(p.is_directory());
+  CHECK(rm(p));
+  CHECK(! p.is_directory());
+  CHECK(p.parent().is_directory());
+  CHECK(rm(p.parent()));
+  CHECK(! p.parent().is_directory());
 }

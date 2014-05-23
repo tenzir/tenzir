@@ -1,44 +1,46 @@
-#include "test.h"
+#include "framework/unit.h"
 
 #include "vast/util/range_map.h"
 
+SUITE("util")
+
 using namespace vast::util;
 
-BOOST_AUTO_TEST_CASE(range_map_tests)
+TEST("range_map")
 {
   range_map<int, std::string> rm;
-  BOOST_CHECK(rm.insert(42, 84, "foo"));
+  CHECK(rm.insert(42, 84, "foo"));
   auto foo = rm.lookup(42);
-  BOOST_REQUIRE(foo);
-  BOOST_CHECK_EQUAL(*foo, "foo");
+  REQUIRE(foo);
+  CHECK(*foo == "foo");
   foo = rm.lookup(50);
-  BOOST_REQUIRE(foo);
-  BOOST_CHECK_EQUAL(*foo, "foo");
+  REQUIRE(foo);
+  CHECK(*foo == "foo");
   foo = rm.lookup(83);
-  BOOST_REQUIRE(foo);
-  BOOST_CHECK_EQUAL(*foo, "foo");
+  REQUIRE(foo);
+  CHECK(*foo == "foo");
   foo = rm.lookup(84);
-  BOOST_CHECK(! foo);
+  CHECK(! foo);
 
-  BOOST_CHECK(! rm.insert(42, 84, "bar"));
-  BOOST_CHECK(! rm.insert(43, 100, "bar"));
-  BOOST_CHECK(! rm.insert(10, 50, "bar"));
-  BOOST_CHECK(! rm.insert(10, 85, "bar"));
-  BOOST_CHECK(rm.insert(100, 200, "bar"));
+  CHECK(! rm.insert(42, 84, "bar"));
+  CHECK(! rm.insert(43, 100, "bar"));
+  CHECK(! rm.insert(10, 50, "bar"));
+  CHECK(! rm.insert(10, 85, "bar"));
+  CHECK(rm.insert(100, 200, "bar"));
   auto bar = rm.lookup(100);
-  BOOST_REQUIRE(bar);
-  BOOST_CHECK_EQUAL(*bar, "bar");
+  REQUIRE(bar);
+  CHECK(*bar == "bar");
   bar = rm.lookup(150);
-  BOOST_REQUIRE(bar);
-  BOOST_CHECK_EQUAL(*bar, "bar");
+  REQUIRE(bar);
+  CHECK(*bar == "bar");
   bar = rm.lookup(200);
-  BOOST_CHECK(! bar);
+  CHECK(! bar);
 
-  BOOST_CHECK(! rm.insert(10, 300, "baz"));
-  BOOST_CHECK(! rm.insert(90, 300, "baz"));
-  BOOST_CHECK(rm.insert(200, 300, "baz"));
+  CHECK(! rm.insert(10, 300, "baz"));
+  CHECK(! rm.insert(90, 300, "baz"));
+  CHECK(rm.insert(200, 300, "baz"));
 
   range_map<size_t, char> rm2;
-  BOOST_CHECK(rm2.insert(50, 99, 'a'));
-  BOOST_CHECK(rm2.insert(1, 50, 'b'));
+  CHECK(rm2.insert(50, 99, 'a'));
+  CHECK(rm2.insert(1, 50, 'b'));
 }

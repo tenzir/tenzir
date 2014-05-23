@@ -1,31 +1,32 @@
-#include "test.h"
-
+#include "framework/unit.h"
 #include "vast/chunk.h"
 #include "vast/event.h"
 
 using namespace vast;
 
-BOOST_AUTO_TEST_CASE(chunking)
+TEST("chunks")
 {
   chunk chk;
 
-  // Upon destruction, the writer's IO streams flush their state into the
-  // referenced chunk.
   {
     chunk::writer w(chk);
     for (size_t i = 0; i < 1e3; ++i)
-      BOOST_CHECK(w.write(event{i}));
-    BOOST_CHECK(chk.elements() == 1e3);
+      CHECK(w.write(event{i}));
+
+    CHECK(chk.elements() == 1e3);
+
+    // Upon destruction, the writer's IO streams flush their state into the
+    // referenced chunk.
   }
 
   chunk::reader r(chk);
   for (size_t i = 0; i < 1e3; ++i)
   {
     event e;
-    BOOST_CHECK(r.read(e));
-    BOOST_CHECK(e == event{i});
+    CHECK(r.read(e));
+    CHECK(e == event{i});
   }
 
   chunk copy(chk);
-  BOOST_CHECK(chk == copy);
+  CHECK(chk == copy);
 }

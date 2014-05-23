@@ -1,7 +1,10 @@
-#include "test.h"
+#include "framework/unit.h"
+
 #include "vast/util/factory.h"
 
 using namespace vast;
+
+SUITE("util")
 
 struct base
 {
@@ -17,23 +20,23 @@ struct derived : public base
   }
 };
 
-BOOST_AUTO_TEST_CASE(value_factories)
+TEST("value factories")
 {
   util::factory<int, util::value_construction> int_factory;
-  BOOST_CHECK_EQUAL(int_factory(42), 42);
+  CHECK(int_factory(42) == 42);
 }
 
-BOOST_AUTO_TEST_CASE(pointer_factories)
+TEST("pointer factories")
 {
   util::factory<std::string, util::bare_pointer_construction> string_factory;
   std::string foo{"foo"};
-  BOOST_CHECK_EQUAL(*string_factory("foo"), foo);
+  CHECK(*string_factory("foo") == foo);
 
   util::factory<double, util::unique_pointer_construction> double_factory;
-  BOOST_CHECK_EQUAL(*double_factory(4.2), 4.2);
+  CHECK(*double_factory(4.2) == 4.2);
 }
 
-BOOST_AUTO_TEST_CASE(polymorphic_factories)
+TEST("polymorphic factories")
 {
   util::polymorphic_factory<base, std::string> poly_factory;
   poly_factory.announce<derived<42>>("foo");
@@ -41,8 +44,8 @@ BOOST_AUTO_TEST_CASE(polymorphic_factories)
 
   auto foo = poly_factory.construct("foo");
   auto bar = poly_factory.construct("bar");
-  BOOST_REQUIRE(foo);
-  BOOST_REQUIRE(bar);
-  BOOST_CHECK_EQUAL(foo->f(), 42);
-  BOOST_CHECK_EQUAL(bar->f(), 1337);
+  REQUIRE(!!foo);
+  REQUIRE(!!bar);
+  CHECK(foo->f() == 42);
+  CHECK(bar->f() == 1337);
 }

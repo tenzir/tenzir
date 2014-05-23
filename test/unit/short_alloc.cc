@@ -1,11 +1,13 @@
-#include "test.h"
+#include "framework/unit.h"
 
 #include <forward_list>
 #include "vast/util/alloc.h"
 
+SUITE("util")
+
 using namespace vast;
 
-BOOST_AUTO_TEST_CASE(test_short_alloc)
+TEST("stack allocator")
 {
   using allocator = util::short_alloc<uint64_t, 16>;
   using short_list = std::forward_list<uint64_t, allocator>;
@@ -18,7 +20,7 @@ BOOST_AUTO_TEST_CASE(test_short_alloc)
   list.push_front(21);
 
   // Arena is now full.
-  BOOST_CHECK_EQUAL(arena.used(), arena.size());
+  CHECK(arena.used() == arena.size());
 
   // Use the heap.
   list.push_front(42);

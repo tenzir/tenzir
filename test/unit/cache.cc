@@ -1,7 +1,9 @@
-#include "test.h"
-#include <vast/util/lru_cache.h>
+#include "framework/unit.h"
+#include "vast/util/lru_cache.h"
 
-BOOST_AUTO_TEST_CASE(lru_cache)
+SUITE("util")
+
+TEST("lru_cache")
 {
   using lru_cache = vast::util::lru_cache<std::string, size_t>;
   lru_cache c{2, [](std::string const& str) { return str.length(); }};
@@ -14,7 +16,7 @@ BOOST_AUTO_TEST_CASE(lru_cache)
   c.retrieve("corge");
   c.retrieve("foo");
 
-  BOOST_CHECK_EQUAL(c.retrieve_latest(), 3);
+  CHECK(c.retrieve_latest() == 3);
 
   std::vector<std::string> v;
   std::transform(
@@ -25,7 +27,5 @@ BOOST_AUTO_TEST_CASE(lru_cache)
 
   std::sort(v.begin(), v.end());
   decltype(v) expected{"corge", "foo"};
-  BOOST_CHECK_EQUAL_COLLECTIONS(
-      v.begin(), v.end(),
-      expected.begin(), expected.end());
+  CHECK(v == expected);
 }

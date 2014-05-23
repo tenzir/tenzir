@@ -1,10 +1,10 @@
-#include "test.h"
+#include "framework/unit.h"
 
-// When defining a facility, it has to occur before including the logger.
-#define VAST_LOG_FACILITY "test"
 #include "vast/logger.h"
 
 #if VAST_LOG_LEVEL > 5
+
+SUITE("core")
 
 using namespace vast;
 
@@ -23,7 +23,7 @@ void bar(int i, std::string s, char c)
   VAST_LEAVE("leaving with a message");
 };
 
-BOOST_AUTO_TEST_CASE(logging_test)
+TEST("logging")
 {
   foo();
   bar(42, "***", 'A');

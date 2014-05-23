@@ -1,98 +1,100 @@
-#include "test.h"
+#include "framework/unit.h"
 #include "vast/bitvector.h"
 #include "vast/util/print.h"
 
 using namespace vast;
 
-BOOST_AUTO_TEST_CASE(bitvector_to_string)
+SUITE("bitvector")
+
+TEST("to_string")
 {
   bitvector a;
   bitvector b{10};
   bitvector c{78, true};
 
-  BOOST_CHECK_EQUAL(to_string(a), "");
-  BOOST_CHECK_EQUAL(to_string(b), "0000000000");
-  BOOST_CHECK_EQUAL(to_string(c), std::string(78, '1'));
+  CHECK(to_string(a) == "");
+  CHECK(to_string(b) == "0000000000");
+  CHECK(to_string(c), std::string(78, '1'));
 }
 
-BOOST_AUTO_TEST_CASE(bitvector_basic_ops)
+TEST("basic operations")
 {
   bitvector x;
   x.push_back(true);
   x.push_back(false);
   x.push_back(true);
 
-  BOOST_CHECK(x[0]);
-  BOOST_CHECK(! x[1]);
-  BOOST_CHECK(x[2]);
+  CHECK(x[0]);
+  CHECK(! x[1]);
+  CHECK(x[2]);
 
-  BOOST_CHECK_EQUAL(x.size(), 3);
-  BOOST_CHECK_EQUAL(x.blocks(), 1);
+  CHECK(x.size() == 3);
+  CHECK(x.blocks() == 1);
 
   x.append(0xf00f, 16);
-  BOOST_CHECK(x[3]);
-  BOOST_CHECK(x[18]);
+  CHECK(x[3]);
+  CHECK(x[18]);
   x.append(0xf0, 8);
 
-  BOOST_CHECK_EQUAL(x.blocks(), 1);
-  BOOST_CHECK_EQUAL(x.size(), 3 + 16 + 8);
+  CHECK(x.blocks() == 1);
+  CHECK(x.size() == 3 + 16 + 8);
 
   x.append(0);
   x.append(0xff, 8);
-  BOOST_CHECK_EQUAL(x.blocks(), 2);
-  BOOST_CHECK_EQUAL(x.size(), 3 + 16 + 8 + bitvector::block_width + 8);
+  CHECK(x.blocks() == 2);
+  CHECK(x.size() == 3 + 16 + 8 + bitvector::block_width + 8);
 }
 
-BOOST_AUTO_TEST_CASE(bitvector_bitwise_ops)
+TEST("bitwise operations")
 {
   bitvector a{6};
-  BOOST_CHECK_EQUAL(a.size(), 6);
-  BOOST_CHECK_EQUAL(a.blocks(), 1);
+  CHECK(a.size() == 6);
+  CHECK(a.blocks() == 1);
 
   a.flip(3);
-  BOOST_CHECK_EQUAL(to_string(a), "001000");
-  BOOST_CHECK_EQUAL(to_string(a << 1), "010000");
-  BOOST_CHECK_EQUAL(to_string(a << 2), "100000");
-  BOOST_CHECK_EQUAL(to_string(a << 3), "000000");
-  BOOST_CHECK_EQUAL(to_string(a >> 1), "000100");
-  BOOST_CHECK_EQUAL(to_string(a >> 2), "000010");
-  BOOST_CHECK_EQUAL(to_string(a >> 3), "000001");
-  BOOST_CHECK_EQUAL(to_string(a >> 4), "000000");
+  CHECK(to_string(a) == "001000");
+  CHECK(to_string(a << 1) == "010000");
+  CHECK(to_string(a << 2) == "100000");
+  CHECK(to_string(a << 3) == "000000");
+  CHECK(to_string(a >> 1) == "000100");
+  CHECK(to_string(a >> 2) == "000010");
+  CHECK(to_string(a >> 3) == "000001");
+  CHECK(to_string(a >> 4) == "000000");
 
   bitvector b{a};
   b[5] = b[1] = 1;
-  BOOST_CHECK_EQUAL(to_string(b), "101010");
-  BOOST_CHECK_EQUAL(to_string(~b), "010101");
+  CHECK(to_string(b) == "101010");
+  CHECK(to_string(~b) == "010101");
 
-  BOOST_CHECK_EQUAL(to_string(a | ~b), "011101");
-  BOOST_CHECK_EQUAL(to_string((~a << 2) & b), to_string(a));
+  CHECK(to_string(a | ~b) == "011101");
+  CHECK(to_string((~a << 2) & b) == to_string(a));
 
-  BOOST_CHECK_EQUAL(b.count(), 3);
+  CHECK(b.count() == 3);
 
-  BOOST_CHECK_EQUAL(to_string(b, false), "010101");
+  CHECK(to_string(b, false) == "010101");
 }
 
-BOOST_AUTO_TEST_CASE(bitvector_backward_search)
+TEST("backward search")
 {
   bitvector x;
   x.append(0xffff);
   x.append(0x30abffff7000ffff);
 
   auto i = x.find_last();
-  BOOST_CHECK_EQUAL(i, 125);
+  CHECK(i == 125);
   i = x.find_prev(i);
-  BOOST_CHECK_EQUAL(i, 124);
+  CHECK(i == 124);
   i = x.find_prev(i);
-  BOOST_CHECK_EQUAL(i, 119);
-  BOOST_CHECK_EQUAL(x.find_prev(63), 15);
+  CHECK(i == 119);
+  CHECK(x.find_prev(63) == 15);
 
   bitvector y;
   y.append(0xf0ffffffffffff0f);
-  BOOST_CHECK_EQUAL(y.find_last(), 63);
-  BOOST_CHECK_EQUAL(y.find_prev(59), 55);
+  CHECK(y.find_last() == 63);
+  CHECK(y.find_prev(59) == 55);
 }
 
-BOOST_AUTO_TEST_CASE(bitvector_iteration)
+TEST("iteration")
 {
   bitvector x;
   x.append(0x30abffff7000ffff);
@@ -104,7 +106,7 @@ BOOST_AUTO_TEST_CASE(bitvector_iteration)
       std::back_inserter(str),
       [](bitvector::const_reference bit) { return bit ? '1' : '0'; });
 
-  BOOST_CHECK_EQUAL(to_string(x, false), str);
+  CHECK(to_string(x, false) == str);
 
   std::string rts;
   std::transform(
@@ -114,7 +116,7 @@ BOOST_AUTO_TEST_CASE(bitvector_iteration)
       [](bitvector::const_reference bit) { return bit ? '1' : '0'; });
 
   std::reverse(str.begin(), str.end());
-  BOOST_CHECK_EQUAL(str, rts);
+  CHECK(str == rts);
 
   std::string ones;
   std::transform(
@@ -123,23 +125,23 @@ BOOST_AUTO_TEST_CASE(bitvector_iteration)
       std::back_inserter(ones),
       [](bitvector::const_reference bit) { return bit ? '1' : '0'; });
 
-  BOOST_CHECK_EQUAL(ones, "111111111111111111111111111111111111111111");
+  CHECK(ones == "111111111111111111111111111111111111111111");
 
   auto i = bitvector::const_ones_iterator::rbegin(x);
-  BOOST_CHECK_EQUAL(i.base().position(), 61);
+  CHECK(i.base().position() == 61);
   ++i;
-  BOOST_CHECK_EQUAL(i.base().position(), 60);
+  CHECK(i.base().position() == 60);
   ++i;
-  BOOST_CHECK_EQUAL(i.base().position(), 55);
+  CHECK(i.base().position() == 55);
   while (i != bitvector::const_ones_iterator::rend(x))
     ++i;
-  BOOST_CHECK_EQUAL(i.base().position(), 0);
+  CHECK(i.base().position() == 0);
 
   auto j = bitvector::ones_iterator::rbegin(x);
-  BOOST_CHECK_EQUAL(j.base().position(), 61);
+  CHECK(j.base().position() == 61);
   *j.base() = false;
   ++j;
   *j.base() = false;
   j = bitvector::ones_iterator::rbegin(x);
-  BOOST_CHECK_EQUAL(j.base().position(), 55);
+  CHECK(j.base().position() == 55);
 }

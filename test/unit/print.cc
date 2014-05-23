@@ -1,9 +1,11 @@
-#include "test.h"
+#include "framework/unit.h"
 #include "vast/print.h"
+
+SUITE("print")
 
 using namespace vast;
 
-BOOST_AUTO_TEST_CASE(print_integral)
+TEST("integral")
 {
   std::string str;
   auto out = std::back_inserter(str);
@@ -17,5 +19,6 @@ BOOST_AUTO_TEST_CASE(print_integral)
   print(u64, out);
   size_t s = 5;
   print(s, out);
-  BOOST_CHECK_EQUAL(str, "12345");
+
+  CHECK(str == "12345");
 }

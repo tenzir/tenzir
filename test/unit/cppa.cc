@@ -1,13 +1,15 @@
-#include "test.h"
+#include "framework/unit.h"
+
 #include "cppa/cppa.hpp"
 #include "cppa/binary_serializer.hpp"
 #include "cppa/binary_deserializer.hpp"
 #include "cppa/util/buffer.hpp"
+
 #include "vast/event.h"
 
 using namespace vast;
 
-BOOST_AUTO_TEST_CASE(cppa_serialization)
+TEST("libcppa serialization")
 {
   event e0{42, "foo", -8.3, record{invalid, now()}};
   e0.id(101);
@@ -20,5 +22,5 @@ BOOST_AUTO_TEST_CASE(cppa_serialization)
   cppa::binary_deserializer bd(buf.data(), buf.size());
   cppa::uniform_typeid<event>()->deserialize(&e1, &bd);
 
-  BOOST_CHECK_EQUAL(e0, e1);
+  CHECK(e0 == e1);
 }

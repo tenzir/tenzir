@@ -1,7 +1,10 @@
-#include "test.h"
+#include "framework/unit.h"
+
 #include "vast/util/intrusive.h"
 
 using namespace vast;
+
+SUITE("util")
 
 struct T : public intrusive_base<T>
 {
@@ -10,41 +13,41 @@ struct T : public intrusive_base<T>
   std::vector<int> v{1, 2, 3, 4, 5};
 };
 
-BOOST_AUTO_TEST_CASE(auto_reffing)
+TEST("intrusive_ptr<T> automatic reffing")
 {
   intrusive_ptr<T> x;
-  BOOST_CHECK(! x);
+  CHECK(! x);
 
   x = new T;
-  BOOST_CHECK_EQUAL(x->ref_count(), 1);
+  CHECK(x->ref_count() == 1);
 
   {
     auto y = x;
-    BOOST_CHECK_EQUAL(x->ref_count(), 2);
-    BOOST_CHECK_EQUAL(y->ref_count(), 2);
+    CHECK(x->ref_count() == 2);
+    CHECK(y->ref_count() == 2);
   }
 
-  BOOST_CHECK_EQUAL(x->ref_count(), 1);
+  CHECK(x->ref_count() == 1);
 }
 
-BOOST_AUTO_TEST_CASE(manual_reffing)
+TEST("intrusive_ptr<T> manual reffing")
 {
   T* raw;
   intrusive_ptr<T> x;
-  BOOST_CHECK(! x);
+  CHECK(! x);
 
   x = new T;
-  BOOST_CHECK(x);
-  BOOST_CHECK_EQUAL(x->ref_count(), 1);
+  CHECK(x);
+  CHECK(x->ref_count() == 1);
 
   raw = x.get();
   ref(raw);
-  BOOST_CHECK_EQUAL(x->ref_count(), 2);
+  CHECK(x->ref_count() == 2);
 
   unref(raw);
-  BOOST_CHECK_EQUAL(x->ref_count(), 1);
+  CHECK(x->ref_count() == 1);
 
   auto ptr = x.release();
-  BOOST_CHECK_EQUAL(ptr, raw);
+  CHECK(ptr == raw);
   unref(raw); // Deletes x.
 }

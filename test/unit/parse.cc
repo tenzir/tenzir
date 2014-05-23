@@ -1,133 +1,132 @@
-#define BOOST_SPIRIT_QI_DEBUG
+#include "framework/unit.h"
 
-#include "test.h"
-#include "vast/expression.h"
 #include "vast/parse.h"
 #include "vast/detail/parser/query.h"
 
+SUITE("parse")
+
 using namespace vast;
 
-BOOST_AUTO_TEST_SUITE(parse_test_suite)
-
-BOOST_AUTO_TEST_CASE(parse_bool)
+TEST("bool")
 {
   char const* str = "T";
   auto start = str;
   auto end = str + 1;
   auto b = parse<bool>(start, end);
-  BOOST_CHECK_EQUAL(start, end);
-  BOOST_REQUIRE(b);
-  BOOST_CHECK(*b);
+  CHECK(start == end);
+  REQUIRE(b);
+  CHECK(*b);
 
   str = "F";
   start = str;
   b = parse<bool>(start, str + 1);
-  BOOST_CHECK_EQUAL(start, str + 1);
-  BOOST_REQUIRE(b);
-  BOOST_CHECK(! *b);
+  CHECK(start == str + 1);
+  REQUIRE(b);
+  CHECK(! *b);
 
   str = "x";
   start = str;
-  BOOST_CHECK(! parse<bool>(start, str + 1));
+  CHECK(! parse<bool>(start, str + 1));
 }
 
-BOOST_AUTO_TEST_CASE(parse_int)
+TEST("int")
 {
   auto str = "-1024";
   auto start = str;
   auto end = str + 5;
   auto i = parse<int64_t>(start, end);
-  BOOST_CHECK_EQUAL(start, end);
-  BOOST_CHECK_EQUAL(*i, -1024ll);
+  CHECK(start == end);
+  CHECK(*i == -1024ll);
 
   str = "+1024";
   start = str;
+  end = str + 5;
   i = parse<int64_t>(start, end);
-  BOOST_CHECK_EQUAL(start, end);
-  BOOST_CHECK_EQUAL(*i, 1024ll);
+  CHECK(start == end);
+  CHECK(*i == 1024ll);
 
   str = "1337";
   start = str;
   end = str + 4;
   i = parse<int64_t>(start, end);
-  BOOST_CHECK_EQUAL(start, end);
-  BOOST_CHECK_EQUAL(*i, 1337ll);
+  CHECK(start == end);
+  CHECK(*i == 1337ll);
 }
 
-BOOST_AUTO_TEST_CASE(parse_uint)
+TEST("uint")
 {
   auto str = "1024";
   auto start = str;
   auto end = str + 4;
   auto u = parse<int64_t>(start, end);
-  BOOST_CHECK_EQUAL(start, end);
-  BOOST_CHECK_EQUAL(*u, 1024ull);
+  CHECK(start == end);
+  CHECK(*u == 1024ull);
 
   str = "+1024";
   start = str;
   ++end;
-  BOOST_CHECK(! parse<uint64_t>(start, end));
+  CHECK(! parse<uint64_t>(start, end));
 }
 
-BOOST_AUTO_TEST_CASE(parse_double)
+TEST("double")
 {
   auto str = "-123.456789";
   auto start = str;
   auto end = str + std::strlen(str);
   auto d = parse<double>(start, end);
-  BOOST_CHECK_EQUAL(start, end);
-  BOOST_CHECK_EQUAL(*d, -123.456789);
+  CHECK(start == end);
+  CHECK(*d == -123.456789);
 
   bool is_double = true;
   d = to<double>("-123", &is_double);
-  BOOST_REQUIRE(d);
-  BOOST_CHECK(! is_double);
-  BOOST_CHECK_EQUAL(*d, -123.0);
+  REQUIRE(d);
+  CHECK(! is_double);
+  CHECK(*d == -123.0);
 
   is_double = false;
   d = to<double>("-123.0", &is_double);
-  BOOST_REQUIRE(d);
-  BOOST_CHECK(is_double);
-  BOOST_CHECK_EQUAL(*d, -123.0);
+  REQUIRE(d);
+  CHECK(is_double);
+  CHECK(*d == -123.0);
 }
 
-BOOST_AUTO_TEST_CASE(parse_time_range)
+TEST("time_range")
 {
   auto str = "1000ms";
   auto start = str;
   auto end = str + 6;
   auto r = parse<time_range>(start, end);
-  BOOST_CHECK_EQUAL(start, end);
-  BOOST_CHECK_EQUAL(*r, time_range::milliseconds(1000));
+  CHECK(start == end);
+  CHECK(*r == time_range::milliseconds(1000));
 
   str = "1000";
   start = str;
   end = str + 4;
   r = parse<time_range>(start, end);
-  BOOST_CHECK_EQUAL(start, end);
-  BOOST_CHECK_EQUAL(*r, time_range::seconds(1000));
+  CHECK(start == end);
+  CHECK(*r == time_range::seconds(1000));
 
   str = "123.456789";
   start = str;
   end = str + 10;
   r = parse<time_range>(start, end);
-  BOOST_CHECK_EQUAL(start, end);
-  BOOST_CHECK_EQUAL(*r, time_range::fractional(123.456789));
+  CHECK(start == end);
+  CHECK(*r == time_range::fractional(123.456789));
 }
 
-BOOST_AUTO_TEST_CASE(parse_time_point)
+TEST("time_point")
 {
   time_point expected(2012, 8, 12, 23, 55, 4);
   string str("2012-08-12+23:55:04");
-  BOOST_CHECK_EQUAL(time_point(to_string(str)), expected);
+  CHECK(time_point(to_string(str)) == expected);
 
   auto i = str.begin();
   auto t = parse<time_point>(i, str.end(), time_point::format);
-  BOOST_CHECK(i == str.end());
-  BOOST_CHECK_EQUAL(*t, expected);
+  CHECK(i == str.end());
+  CHECK(*t == expected);
 }
 
-BOOST_AUTO_TEST_CASE(parse_string)
+TEST("string")
 {
   // Here is a difference: the value parser grammar expects strings with
   // double quotes whereas this version does not.
@@ -136,110 +135,110 @@ BOOST_AUTO_TEST_CASE(parse_string)
   auto end = str + std::strlen(str);
 
   auto s0 = parse<string>(start, end);
-  BOOST_REQUIRE(s0);
-  BOOST_CHECK_EQUAL(start, end);
+  REQUIRE(s0);
+  CHECK(start == end);
 
   auto v = to<value>(str);
-  BOOST_REQUIRE(v);
-  BOOST_CHECK(*v != invalid);
-  BOOST_CHECK_EQUAL(s0->thin("\"", "\\"), *v);
+  REQUIRE(v);
+  CHECK(*v != invalid);
+  CHECK(s0->thin("\"", "\\") == *v);
 }
 
-BOOST_AUTO_TEST_CASE(parse_regex)
+TEST("regex")
 {
   {
     string str("/^\\w{3}\\w{3}\\w{3}$/");
     auto i = str.begin();
     auto rx = parse<regex>(i, str.end());
-    BOOST_CHECK(rx);
-    BOOST_CHECK(i == str.end());
+    CHECK(rx);
+    CHECK(i == str.end());
   }
   {
     auto str = "/foo\\+(bar){2}|\"baz\"*/";
     auto start = str;
     auto end = str + std::strlen(str);
     auto rx = parse<regex>(start, end);
-    BOOST_CHECK(rx);
-    BOOST_CHECK_EQUAL(start, end);
+    CHECK(rx);
+    CHECK(start == end);
   }
 }
 
-BOOST_AUTO_TEST_CASE(parse_containers)
+TEST("containers")
 {
   {
     string str{"{1, 2, 3}"};
     auto i = str.begin();
     auto s = parse<set>(i, str.end(), type::make<int_type>());
-    BOOST_REQUIRE(s);
-    BOOST_CHECK(i == str.end());
+    REQUIRE(s);
+    CHECK(i == str.end());
 
     set expected{1, 2, 3};
-    BOOST_CHECK_EQUAL(*s, expected);
+    CHECK(*s == expected);
   }
   {
     string str("a--b--c");
     auto i = str.begin();
     auto v = parse<vector>(i, str.end(), type::make<string_type>(), "--");
-    BOOST_REQUIRE(v);
-    BOOST_CHECK(i == str.end());
+    REQUIRE(v);
+    CHECK(i == str.end());
 
     vector expected{"a", "b", "c"};
-    BOOST_CHECK_EQUAL(*v, expected);
+    CHECK(*v == expected);
   }
 
   auto roots = "a.root-servers.net,b.root-servers.net,c.root-servers.net";
   auto v = to<vector>(roots, type::make<string_type>(), ",");
-  BOOST_REQUIRE(v);
-  BOOST_REQUIRE_EQUAL(v->size(), 3);
-  BOOST_CHECK_EQUAL(v->front(), "a.root-servers.net");
-  BOOST_CHECK_EQUAL(v->back(), "c.root-servers.net");
+  REQUIRE(v);
+  REQUIRE(v->size() == 3);
+  CHECK(v->front() == "a.root-servers.net");
+  CHECK(v->back() == "c.root-servers.net");
 }
 
-BOOST_AUTO_TEST_CASE(parse_address)
+TEST("address")
 {
   auto str = "192.168.0.1";
   auto start = str;
   auto end = str + std::strlen(str);
   auto a = parse<address>(start, end);
-  BOOST_REQUIRE(a);
-  BOOST_CHECK_EQUAL(start, end);
-  BOOST_CHECK_EQUAL(*a, *address::from_v4(str));
+  REQUIRE(a);
+  CHECK(start == end);
+  CHECK(*a == *address::from_v4(str));
 
   str = "f00::cafe";
   start = str;
   end = str + std::strlen(str);
   a = parse<address>(start, end);
-  BOOST_CHECK_EQUAL(start, end);
-  BOOST_CHECK_EQUAL(*a, *address::from_v6(str));
+  CHECK(start == end);
+  CHECK(*a == *address::from_v6(str));
 }
 
-BOOST_AUTO_TEST_CASE(parse_prefix)
+TEST("prefix")
 {
   auto str = "192.168.0.0/24";
   auto start = str;
   auto end = str + std::strlen(str);
   auto p = parse<prefix>(start, end);
-  BOOST_CHECK_EQUAL(start, end);
-  BOOST_CHECK_EQUAL(*p, prefix(*address::from_v4("192.168.0.0"), 24));
+  CHECK(start == end);
+  CHECK(*p == prefix{*address::from_v4("192.168.0.0"), 24});
 
   str = "::/40";
   start = str;
   end = str + std::strlen(str);
   p = parse<prefix>(start, end);
-  BOOST_CHECK_EQUAL(start, end);
-  BOOST_CHECK_EQUAL(*p, prefix(*address::from_v6("::"), 40));
+  CHECK(start == end);
+  CHECK(*p == prefix{*address::from_v6("::"), 40});
 }
 
-BOOST_AUTO_TEST_CASE(parse_port)
+TEST("port")
 {
   {
     auto s = "22/tcp";
     auto i = s;
     auto end = s + std::strlen(s);
     auto p = parse<port>(i, end);
-    BOOST_REQUIRE(p);
-    BOOST_CHECK_EQUAL(i, end);
-    BOOST_CHECK_EQUAL(*p, port(22, port::tcp));
+    REQUIRE(p);
+    CHECK(i == end);
+    CHECK(*p == port{22, port::tcp});
   }
 
   {
@@ -247,9 +246,9 @@ BOOST_AUTO_TEST_CASE(parse_port)
     auto i = s;
     auto end = s + std::strlen(s);
     auto p = parse<port>(i, end);
-    BOOST_REQUIRE(p);
-    BOOST_CHECK_EQUAL(i, end);
-    BOOST_CHECK_EQUAL(*p, port(42, port::unknown));
+    REQUIRE(p);
+    CHECK(i == end);
+    CHECK(*p, port{42, port::unknown});
   }
 
   {
@@ -257,9 +256,9 @@ BOOST_AUTO_TEST_CASE(parse_port)
     auto i = s;
     auto end = s + std::strlen(s);
     auto p = parse<port>(i, end);
-    BOOST_REQUIRE(p);
-    BOOST_CHECK_EQUAL(i, end);
-    BOOST_CHECK_EQUAL(*p, port(53, port::udp));
+    REQUIRE(p);
+    CHECK(i == end);
+    CHECK(*p == port{53, port::udp});
   }
 
   {
@@ -267,206 +266,199 @@ BOOST_AUTO_TEST_CASE(parse_port)
     auto i = s;
     auto end = s + std::strlen(s);
     auto p = parse<port>(i, end);
-    BOOST_REQUIRE(p);
-    BOOST_CHECK_EQUAL(i, end);
-    BOOST_CHECK_EQUAL(*p, port(7, port::icmp));
+    REQUIRE(p);
+    CHECK(i == end);
+    CHECK(*p == port{7, port::icmp});
   }
 }
 
-BOOST_AUTO_TEST_CASE(parse_value)
+TEST("value")
 {
   // Booleans
   {
     auto v = to<value>("T");
-    BOOST_REQUIRE(v);
-    BOOST_CHECK_EQUAL(v->which(), bool_value);
-    BOOST_CHECK(v->get<bool>());
+    REQUIRE(v);
+    CHECK(v->which() == bool_value);
+    CHECK(v->get<bool>());
 
     v = to<value>("F");
-    BOOST_REQUIRE(v);
-    BOOST_CHECK_EQUAL(v->which(), bool_value);
-    BOOST_CHECK(! v->get<bool>());
+    REQUIRE(v);
+    CHECK(v->which() == bool_value);
+    CHECK(! v->get<bool>());
   }
 
   // Numbers
   {
     auto v = to<value>("123456789");
-    BOOST_CHECK_EQUAL(v->which(), uint_value);
-    BOOST_CHECK_EQUAL(v->get<uint64_t>(), 123456789ll);
+    CHECK(v->which() == uint_value);
+    CHECK(v->get<uint64_t>() == 123456789ll);
 
     v = to<value>("+123456789");
-    BOOST_CHECK_EQUAL(v->which(), int_value);
-    BOOST_CHECK_EQUAL(v->get<int64_t>(), 123456789ll);
+    CHECK(v->which() == int_value);
+    CHECK(v->get<int64_t>() == 123456789ll);
 
     v = to<value>("-123456789");
-    BOOST_CHECK_EQUAL(v->which(), int_value);
-    BOOST_CHECK_EQUAL(v->get<int64_t>(), -123456789ll);
+    CHECK(v->which() == int_value);
+    CHECK(v->get<int64_t>() == -123456789ll);
 
     v = to<value>("-123.456789");
-    BOOST_CHECK_EQUAL(v->which(), double_value);
-    BOOST_CHECK_EQUAL(v->get<double>(), -123.456789);
+    CHECK(v->which() == double_value);
+    CHECK(v->get<double>() == -123.456789);
   }
 
   // Time ranges
   {
     auto v = to<value>("42 nsecs");
-    BOOST_CHECK_EQUAL(v->which(), time_range_value);
-    BOOST_CHECK_EQUAL(v->get<time_range>().count(), 42ll);
+    CHECK(v->which() == time_range_value);
+    CHECK(v->get<time_range>().count() == 42ll);
 
     v = to<value>("42 musec");
-    BOOST_CHECK_EQUAL(v->which(), time_range_value);
-    BOOST_CHECK_EQUAL(v->get<time_range>().count(), 42000ll);
+    CHECK(v->which() == time_range_value);
+    CHECK(v->get<time_range>().count() == 42000ll);
 
     v = to<value>("-42 msec");
-    BOOST_CHECK_EQUAL(v->which(), time_range_value);
-    BOOST_CHECK_EQUAL(v->get<time_range>().count(), -42000000ll);
+    CHECK(v->which() == time_range_value);
+    CHECK(v->get<time_range>().count() == -42000000ll);
 
     v = to<value>("99 secs");
-    BOOST_CHECK_EQUAL(v->which(), time_range_value);
-    BOOST_CHECK_EQUAL(v->get<time_range>().count(), 99000000000ll);
+    CHECK(v->which() == time_range_value);
+    CHECK(v->get<time_range>().count() == 99000000000ll);
 
     v = to<value>("5 mins");
-    BOOST_CHECK_EQUAL(v->which(), time_range_value);
-    BOOST_CHECK_EQUAL(v->get<time_range>().count(), 300000000000ll);
+    CHECK(v->which() == time_range_value);
+    CHECK(v->get<time_range>().count() == 300000000000ll);
 
     v = to<value>("3 hours");
-    BOOST_CHECK_EQUAL(v->which(), time_range_value);
-    BOOST_CHECK_EQUAL(v->get<time_range>().count(), 10800000000000ll);
+    CHECK(v->which() == time_range_value);
+    CHECK(v->get<time_range>().count() == 10800000000000ll);
 
     v = to<value>("4 days");
-    BOOST_CHECK_EQUAL(v->which(), time_range_value);
-    BOOST_CHECK_EQUAL(v->get<time_range>().count(), 345600000000000ll);
+    CHECK(v->which() == time_range_value);
+    CHECK(v->get<time_range>().count() == 345600000000000ll);
 
     v = to<value>("7 weeks");
-    BOOST_CHECK_EQUAL(v->which(), time_range_value);
-    BOOST_CHECK_EQUAL(v->get<time_range>().count(), 4233600000000000ll);
+    CHECK(v->which() == time_range_value);
+    CHECK(v->get<time_range>().count() == 4233600000000000ll);
 
     v = to<value>("2 months");
-    BOOST_CHECK_EQUAL(v->which(), time_range_value);
-    BOOST_CHECK_EQUAL(v->get<time_range>().count(), 5184000000000000ll);
+    CHECK(v->which() == time_range_value);
+    CHECK(v->get<time_range>().count() == 5184000000000000ll);
 
     v= to<value>("-8 years");
-    BOOST_CHECK_EQUAL(v->which(), time_range_value);
-    BOOST_CHECK_EQUAL(v->get<time_range>().count(), -252288000000000000ll);
+    CHECK(v->which() == time_range_value);
+    CHECK(v->get<time_range>().count() == -252288000000000000ll);
 
     // Compound durations
     v = to<value>("5m99s");
-    BOOST_CHECK_EQUAL(v->which(), time_range_value);
-    BOOST_CHECK_EQUAL(v->get<time_range>().count(), 399000000000ll);
+    CHECK(v->which() == time_range_value);
+    CHECK(v->get<time_range>().count() == 399000000000ll);
   }
 
   // Time points
   {
     auto v = to<value>("2012-08-12+23:55:04");
     auto t = v->get<time_point>();
-    BOOST_CHECK_EQUAL(t, time_point(2012, 8, 12, 23, 55, 4));
+    CHECK(t, time_point(2012, 8, 12, 23, 55 == 4));
 
     v = to<value>("2012-08-12+00:00:00");
-    BOOST_CHECK_EQUAL(v->which(), time_point_value);
-    BOOST_CHECK_EQUAL(v->get<time_point>().since_epoch().count(),
-                      1344729600000000000ll);
+    CHECK(v->which() == time_point_value);
+    CHECK(v->get<time_point>().since_epoch().count() == 1344729600000000000ll);
 
     v = to<value>("2012-08-12");
-    BOOST_CHECK_EQUAL(v->get<time_point>().since_epoch().count(),
-                      1344729600000000000ll);
+    CHECK(v->get<time_point>().since_epoch().count() == 1344729600000000000ll);
 
     v = to<value>("2012-08-12+23");
-    BOOST_CHECK_EQUAL(v->get<time_point>().since_epoch().count(),
-                      1344812400000000000ll);
+    CHECK(v->get<time_point>().since_epoch().count() == 1344812400000000000ll);
 
     v = to<value>("2012-08-12+23:55");
-    BOOST_CHECK_EQUAL(v->get<time_point>().since_epoch().count(),
-                      1344815700000000000ll);
+    CHECK(v->get<time_point>().since_epoch().count() == 1344815700000000000ll);
 
     v = to<value>("2012-08-12+23:55:04");
-    BOOST_CHECK_EQUAL(v->get<time_point>().since_epoch().count(),
-                      1344815704000000000ll);
+    CHECK(v->get<time_point>().since_epoch().count() == 1344815704000000000ll);
   }
 
   // Strings
   {
     // Escaped
     auto v = to<value>("\"new\\nline\\\"esc\"");
-    BOOST_CHECK_EQUAL(v->which(), string_value);
-    BOOST_CHECK_EQUAL(*v, "new\nline\"esc");
+    CHECK(v->which() == string_value);
+    CHECK(*v == "new\nline\"esc");
   }
 
   // Regexes
   {
     auto v = to<value>("/../");
-    BOOST_CHECK_EQUAL(v->which(), regex_value);
-    BOOST_CHECK_EQUAL(*v, regex{".."});
+    CHECK(v->which() == regex_value);
+    CHECK(*v == regex{".."});
 
     v = to<value>("/\\/../");
-    BOOST_CHECK_EQUAL(v->which(), regex_value);
-    BOOST_CHECK_EQUAL(*v, regex{"/.."});
+    CHECK(v->which() == regex_value);
+    CHECK(*v == regex{"/.."});
   }
 
   // Vectors
   {
     auto v = to<value>("[1, 2, 3]");
-    BOOST_CHECK_EQUAL(v->which(), vector_value);
-    BOOST_CHECK_EQUAL(*v, value(vector{1u, 2u, 3u}));
+    CHECK(v->which() == vector_value);
+    CHECK(*v == value(vector{1u, 2u, 3u}));
   }
 
   // Sets
   {
     auto v = to<value>("{+1, +2, +3}");
-    BOOST_CHECK_EQUAL(v->which(), set_value);
-    BOOST_CHECK_EQUAL(*v, value(set{1, 2, 3}));
+    CHECK(v->which() == set_value);
+    CHECK(*v == value(set{1, 2, 3}));
 
     v = to<value>("{\"foo\", \"bar\"}");
-    BOOST_CHECK_EQUAL(v->which(), set_value);
-    BOOST_CHECK_EQUAL(*v, value(set{"foo", "bar"}));
+    CHECK(v->which() == set_value);
+    CHECK(*v == value(set{"foo", "bar"}));
   }
 
   // Tables
   {
     auto v = to<value>("{\"x\" -> T, \"y\" -> F}");
-    BOOST_CHECK_EQUAL(v->which(), table_value);
-    BOOST_CHECK_EQUAL(*v, value(table{{"x", true}, {"y", false}}));
+    CHECK(v->which() == table_value);
+    CHECK(*v == value(table{{"x", true}, {"y", false}}));
   }
 
   // Records
   {
     auto v = to<value>("(\"x\", T, 42, +42)");
-    BOOST_CHECK_EQUAL(v->which(), record_value);
-    BOOST_CHECK_EQUAL(*v, value(record{"x", true, 42u, 42}));
+    CHECK(v->which() == record_value);
+    CHECK(*v, value(record{"x", true, 42u == 42}));
   }
 
   // Addresses
   {
     auto v = to<value>("127.0.0.1");
-    BOOST_CHECK_EQUAL(v->which(), address_value);
-    BOOST_CHECK_EQUAL(*v, *address::from_v4("127.0.0.1"));
+    CHECK(v->which() == address_value);
+    CHECK(*v == *address::from_v4("127.0.0.1"));
 
     v = to<value>("::");
-    BOOST_CHECK_EQUAL(v->which(), address_value);
-    BOOST_CHECK_EQUAL(*v, *address::from_v6("::"));
+    CHECK(v->which() == address_value);
+    CHECK(*v == *address::from_v6("::"));
 
     v = to<value>("f00::");
-    BOOST_CHECK_EQUAL(v->which(), address_value);
-    BOOST_CHECK_EQUAL(*v, *address::from_v6("f00::"));
+    CHECK(v->which() == address_value);
+    CHECK(*v == *address::from_v6("f00::"));
   }
 
   // Prefixes
   {
     auto v = to<value>("10.0.0.0/8");
-    BOOST_CHECK_EQUAL(v->which(), prefix_value);
-    BOOST_CHECK_EQUAL(*v, (prefix{*address::from_v4("10.0.0.0"), 8}));
+    CHECK(v->which() == prefix_value);
+    CHECK(*v == prefix{*address::from_v4("10.0.0.0"), 8});
 
     v = to<value>("2001:db8:0:0:8:800:200c:417a/64");
-    BOOST_CHECK_EQUAL(v->which(), prefix_value);
+    CHECK(v->which() == prefix_value);
     auto pfx = prefix{*address::from_v6("2001:db8:0:0:8:800:200c:417a"), 64};
-    BOOST_CHECK_EQUAL(*v, pfx);
+    CHECK(*v == pfx);
   }
 
   // Ports
   {
     auto v = to<value>("53/udp");
-    BOOST_CHECK_EQUAL(v->which(), port_value);
-    BOOST_CHECK_EQUAL(*v, (port{53, port::udp}));
+    CHECK(v->which() == port_value);
+    CHECK(*v, (port{53 == port::udp}));
   }
 }
-
-BOOST_AUTO_TEST_SUITE_END()
