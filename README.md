@@ -82,7 +82,7 @@ to specificy a few environment variables to make autoconf happy:
 
 #### Compiler Bootstrapping
 
-- Clang
+- **Clang**
 
   To bootstrap a Clang toolchain we recommend Robin Sommer's
   [install-clang](https://github.com/rsmmr/install-clang) configured with
@@ -91,7 +91,7 @@ to specificy a few environment variables to make autoconf happy:
       export PREFIX=/opt/vast
       ./install-clang -a libcxxabi -j 16 $PREFIX
 
-- GCC
+- **GCC**
 
   To bootstrap GCC, please first consult the [official installation
   guide](http://gcc.gnu.org/wiki/InstallingGCC). The following steps worked for
@@ -128,14 +128,7 @@ First define a few environment variables used by the build harnesses:
     export CXX=/path/to/c++
     export LD_LIBRARY_PATH=$PREFIX/lib
 
-1. [libcppa](https://github.com/Neverlord/libcppa)
-
-    ./configure --prefix=$PREFIX
-    make
-    make test
-    make install
-
-2. VAST
+Thereafter build and install VAST:
 
     ./configure --prefix=$PREFIX
     make
