@@ -26,7 +26,7 @@ template <typename T, typename I>
 trial<void> print_numeric(T, I&&);
 
 template <typename D, typename I, typename O>
-trial<void> print_delimited(D&&, I, I, O&&);
+trial<void> print_delimited(D const&, I, I, O&&);
 
 
 template <typename Iterator>
@@ -142,7 +142,7 @@ trial<void> print_numeric(T n, Iterator&& out)
 
 /// Prints a delimited Iterator range.
 template <typename Delim, typename I, typename O>
-trial<void> print_delimited(Delim&& delim, I begin, I end, O&& out)
+trial<void> print_delimited(Delim const& delim, I begin, I end, O&& out)
 {
   while (begin != end)
   {
