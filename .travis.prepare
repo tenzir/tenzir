@@ -8,7 +8,7 @@ mkdir -p $PREFIX/src && cd $PREFIX/src
 # Compiler
 #
 
-if [ "$CC" == "clang" ] ; then
+if [ "$CC" = "clang" ] ; then
   sudo add-apt-repository -y ppa:h-rayflood/llvm
   sudo apt-get -qq update
   sudo apt-get -qq install --allow-unauthenticated clang-3.4
@@ -20,7 +20,7 @@ if [ "$CC" == "clang" ] ; then
 
   git clone git://github.com/rsmmr/install-clang.git
   install-clang/install-clang -a libcxxabi -j $CONCURRENCY $PREFIX
-elif [ "$CC" == "gcc" ] ; then
+elif [ "$CC" = "gcc" ] ; then
   sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
   sudo apt-get -qq update
   sudo apt-get -qq install --allow-unauthenticated g++-4.9
