@@ -1,0 +1,11 @@
+#!/bin/sh
+
+set -e
+
+git clone git://github.com/Neverlord/libcppa.git
+cd libcppa
+
+./configure $BUILD_TYPE --prefix=$PREFIX --no-examples
+make -j $CONCURRENCY
+make test
+make install

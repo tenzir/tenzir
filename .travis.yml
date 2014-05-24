@@ -29,15 +29,11 @@ env:
 #    - compiler: gcc
 
 before_script:
-  - set -e
+  - mkdir -p $PREFIX/src && cd $PREFIX/src
   - sh ./.travis.$CC
-  - git clone git://github.com/Neverlord/libcppa.git
-  - cd libcppa
-  - git checkout 1dfc3d4a # FIXME: remove after migration to master
-  - ./configure --prefix=$PREFIX --no-examples
-  - make -j $CONCURRENCY install
-  - cd ..
-  - ./configure --prefix=$PREFIX $BUILD_TYPE
+  - sh ./.travis.boost
+  - sh ./.travis.libcppa
+  - ./configure $BUILD_TYPE --prefix=$PREFIX
 
 script:
   - make -j $CONCURRENCY
