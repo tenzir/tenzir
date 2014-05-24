@@ -51,33 +51,36 @@ behavior receiver_actor::act()
 
       send(search_, s.schema());
 
-      auto id = s.id();
-      send(tracker_, atom("request"), uint64_t(s.events()));
-      segments_.push(std::move(s));
+      any_tuple last = last_dequeued();
 
-      return make_any_tuple(atom("ack"), id);
-    },
-    on(atom("id"), arg_match) >> [=](event_id from, event_id to)
-    {
-      auto n = to - from;
-      assert(! segments_.empty());
-      VAST_LOG_ACTOR_DEBUG("got " << n <<
-                           " IDs in [" << from << ", " << to << ")");
+      sync_send(tracker_, atom("request"), uint64_t{s.events()}).then(
+        on(atom("id"), arg_match) >> [=](event_id from, event_id to)
+        {
+          VAST_LOG_ACTOR_DEBUG("got " << to - from <<
+                               " IDs in [" << from << ", " << to << ")");
+          match(last)(
+              on_arg_match >> [=](segment& s, actor)
+              {
+                auto n = to - from;
+                if (n < s.events())
+                {
+                  VAST_LOG_ACTOR_ERROR("got " << n << " IDs, needed " <<
+                                       s.events());
 
-      auto& s = segments_.front();
-      if (n < s.events())
-      {
-        VAST_LOG_ACTOR_ERROR("did not get enough ids " <<
-                             "(got " << n << ", needed " << s.events());
-        quit(exit::error);
-      }
+                  quit(exit::error);
+                  return make_any_tuple(atom("nack"), s.id());
+                }
 
-      s.base(from);
-      auto t = make_any_tuple(std::move(s));
-      segments_.pop();
+                s.base(from);
 
-      send_tuple(archive_, t);
-      send_tuple(index_, t);
+                auto id = s.id();
+                auto t = make_any_tuple(std::move(s));
+                send_tuple(archive_, t);
+                send_tuple(index_, t);
+
+                return make_any_tuple(atom("ack"), id);
+              });
+        });
     },
     on(atom("backlog")) >> [=]
     {

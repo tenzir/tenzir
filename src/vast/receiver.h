@@ -1,7 +1,6 @@
 #ifndef VAST_RECEIVER_H
 #define VAST_RECEIVER_H
 
-#include <queue>
 #include <set>
 #include "vast/actor.h"
 #include "vast/segment.h"
@@ -33,7 +32,6 @@ private:
   cppa::actor archive_;
   cppa::actor index_;
   cppa::actor search_;
-  std::queue<segment> segments_;
   std::set<cppa::actor> ingestors_;
 };
 
