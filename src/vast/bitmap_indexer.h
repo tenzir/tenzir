@@ -100,10 +100,6 @@ public:
             else
               VAST_LOG_ACTOR_ERROR("failed to append value: " << *v);
           }
-          else
-          {
-            VAST_LOG_ACTOR_ERROR("failed to extract value from: " << e);
-          }
 
         stats_.increment(n);
         if (n < total)
