@@ -2,6 +2,8 @@
 #define VAST_UTIL_TRIAL_H
 
 #include <cassert>
+#include <memory>
+
 #include "vast/util/error.h"
 
 namespace vast {
@@ -42,7 +44,7 @@ public:
 
   /// Move-constructs a trial.
   /// @param other The other trial.
-  trial(trial&& other)
+  trial(trial&& other) noexcept
   {
     construct(std::move(other));
   }
@@ -55,7 +57,13 @@ public:
   /// Assigns another trial to this instance.
   /// @param other The RHS of the assignment.
   /// @returns A reference to `*this`.
-  trial& operator=(trial other)
+  trial& operator=(trial const& other)
+  {
+    construct(other);
+    return *this;
+  }
+
+  trial& operator=(trial&& other) noexcept
   {
     construct(std::move(other));
     return *this;
@@ -168,7 +176,7 @@ private:
     }
   }
 
-  void construct(trial&& other)
+  void construct(trial&& other) noexcept
   {
     if (other.engaged_)
     {
@@ -208,24 +216,45 @@ public:
   trial() = default;
 
   trial(error e)
-    : engaged_{false},
-      error_{std::move(e)}
+    : error_{std::make_unique<util::error>(std::move(e))}
   {
+  }
+
+  trial(trial const& other)
+    : error_{other.error_.get()}
+  {
+  }
+
+  trial(trial&& other) noexcept
+    : error_{std::move(other.error_)}
+  {
+  }
+
+  trial& operator=(trial const& other)
+  {
+    error_.reset(other.error_.get());
+    return *this;
+  }
+
+  trial& operator=(trial&& other) noexcept
+  {
+    error_ = std::move(other.error_);
+    return *this;
   }
 
   explicit operator bool() const
   {
-    return engaged_;
+    return ! error_;
   }
 
   util::error const& error() const
   {
-    return error_;
+    assert(error_);
+    return *error_;
   }
 
 private:
-  bool engaged_ = true;
-  util::error error_;
+  std::unique_ptr<util::error> error_;
 };
 
 /// Represents success in a `trial<void` scenario.

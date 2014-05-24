@@ -26,6 +26,16 @@ TEST("trial")
 
   t = error{"whoops"};
   CHECK(! t);
+
+  t = std::move(u);
+  CHECK(t);
+
+  trial<void> x;
+  CHECK(x);
+  x = error{"bad"};
+  CHECK(! x);
+  x = nothing;
+  CHECK(x);
 }
 
 TEST("result")
