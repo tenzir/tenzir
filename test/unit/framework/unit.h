@@ -126,12 +126,12 @@ template <typename T>
 struct lhs
 {
 public:
-  lhs(test* parent, char const *filename, int line, char const *expr, T x)
+  lhs(test* parent, char const *file, int line, char const *expr, T const& x)
     : test_(parent),
-      filename_(filename),
+      filename_(file),
       line_(line),
       expr_(expr),
-      x_(std::move(x))
+      x_(x)
   {
   }
 
@@ -271,7 +271,7 @@ private:
   char const *filename_;
   int line_;
   char const *expr_;
-  T x_;
+  T const& x_;
   bool passed_ = false;
 };
 
@@ -287,9 +287,9 @@ public:
   }
 
   template <typename T>
-  lhs<T> operator->*(T x)
+  lhs<T> operator->*(T const& x)
   {
-    return {test_, filename_, line_, expr_, std::move(x)};
+    return {test_, filename_, line_, expr_, x};
   }
 
 private:
