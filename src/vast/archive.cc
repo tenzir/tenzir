@@ -136,7 +136,7 @@ cppa::behavior archive_actor::act()
   };
 }
 
-char const* archive_actor::describe() const
+std::string archive_actor::describe() const
 {
   return "archive";
 }

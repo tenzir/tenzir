@@ -12,7 +12,7 @@ struct packer : actor_base
   packer(cppa::actor manager, cppa::actor sink);
 
   cppa::behavior act() final;
-  char const* describe() const final;
+  std::string describe() const final;
 
   cppa::actor manager_;
   cppa::actor sink_;
@@ -26,7 +26,7 @@ struct unpacker : actor_base
   unpacker(cppa::any_tuple segment, cppa::actor sink, size_t batch_size = 0);
 
   cppa::behavior act() final;
-  char const* describe() const final;
+  std::string describe() const final;
 
   cppa::any_tuple segment_;
   segment::reader reader_;

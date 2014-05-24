@@ -47,7 +47,7 @@ struct segment_manager_actor : actor_base
   segment_manager_actor(size_t capacity, path dir);
 
   cppa::behavior act() final;
-  char const* describe() const final;
+  std::string describe() const final;
 
   segment_manager segment_manager_;
 };

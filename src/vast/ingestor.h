@@ -35,7 +35,7 @@ public:
                  uint64_t batch_size);
 
   cppa::behavior act() final;
-  char const* describe() const final;
+  std::string describe() const final;
 
 private:
   path dir_;

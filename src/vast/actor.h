@@ -30,7 +30,7 @@ struct actor_base : cppa::event_based_actor
   }
 
   virtual cppa::behavior act() = 0;
-  virtual char const* describe() const = 0;
+  virtual std::string describe() const = 0;
 };
 
 } // namespace vast

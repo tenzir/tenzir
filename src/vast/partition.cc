@@ -469,6 +469,9 @@ behavior partition_actor::act()
     {
       if (! unpacker_ && ! segments_.empty())
       {
+        VAST_LOG_ACTOR_DEBUG("begins unpacking segment " <<
+                             segments_.front().get_as<segment>(0).id());
+
         unpacker_ = spawn<unpacker>(segments_.front(), this, batch_size_);
         send(unpacker_, atom("run"));
       }
@@ -477,7 +480,7 @@ behavior partition_actor::act()
     {
       auto& s = segments_.front().get_as<segment>(0);
 
-      VAST_LOG_ACTOR_VERBOSE("unpacking segment " << s.id());
+      VAST_LOG_ACTOR_DEBUG("finished unpacking segment " << s.id());
       partition_.update(s);
 
       segments_.pop();
@@ -558,7 +561,7 @@ behavior partition_actor::act()
   };
 }
 
-char const* partition_actor::describe() const
+std::string partition_actor::describe() const
 {
   return "partition";
 }

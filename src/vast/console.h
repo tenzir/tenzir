@@ -123,7 +123,7 @@ struct console : actor_base
   console(cppa::actor search, path dir);
 
   cppa::behavior act() final;
-  char const* describe() const final;
+  std::string describe() const final;
 
   /// Prints status information to standard error.
   std::ostream& print(print_mode mode);

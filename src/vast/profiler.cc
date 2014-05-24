@@ -155,7 +155,7 @@ behavior profiler::act()
   };
 }
 
-char const* profiler::describe() const
+std::string profiler::describe() const
 {
   return "profiler";
 }

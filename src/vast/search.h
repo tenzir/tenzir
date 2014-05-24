@@ -20,7 +20,7 @@ struct search_actor : actor_base
   search_actor(path dir, cppa::actor archive, cppa::actor index);
 
   cppa::behavior act() final;
-  char const* describe() const final;
+  std::string describe() const final;
 
   path dir_;
   schema schema_;

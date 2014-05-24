@@ -64,7 +64,7 @@ struct keystroke_monitor : actor_base
     };
   };
 
-  char const* describe() const
+  std::string describe() const
   {
     return "keystroke-monitor";
   };
@@ -951,7 +951,7 @@ behavior console::act()
   };
 }
 
-char const* console::describe() const
+std::string console::describe() const
 {
   return "console";
 }

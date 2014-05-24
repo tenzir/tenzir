@@ -58,7 +58,7 @@ behavior signal_monitor::act()
   };
 }
 
-char const* signal_monitor::describe() const
+std::string signal_monitor::describe() const
 {
   return "signal-monitor";
 }

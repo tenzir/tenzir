@@ -118,7 +118,7 @@ struct index_actor : actor_base
   trial<void> make_partition(path const& dir);
 
   cppa::behavior act() final;
-  char const* describe() const final;
+  std::string describe() const final;
 
   path dir_;
   size_t batch_size_;

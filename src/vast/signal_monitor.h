@@ -15,7 +15,7 @@ public:
   signal_monitor(cppa::actor receiver);
 
   cppa::behavior act() final;
-  char const* describe() const final;
+  std::string describe() const final;
 
 private:
   cppa::actor receiver_;

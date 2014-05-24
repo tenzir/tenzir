@@ -95,7 +95,7 @@ behavior segment_manager_actor::act()
   };
 }
 
-char const* segment_manager_actor::describe() const
+std::string segment_manager_actor::describe() const
 {
   return "segment-manager";
 }

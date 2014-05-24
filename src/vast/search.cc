@@ -152,7 +152,7 @@ behavior search_actor::act()
   };
 }
 
-char const* search_actor::describe() const
+std::string search_actor::describe() const
 {
   return "search";
 }

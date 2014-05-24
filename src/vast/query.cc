@@ -359,7 +359,7 @@ behavior query_actor::act()
   };
 }
 
-char const* query_actor::describe() const
+std::string query_actor::describe() const
 {
   return "query";
 }

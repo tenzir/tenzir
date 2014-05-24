@@ -745,7 +745,7 @@ behavior index_actor::act()
   };
 }
 
-char const* index_actor::describe() const
+std::string index_actor::describe() const
 {
   return "index";
 }

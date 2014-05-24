@@ -42,7 +42,7 @@ behavior packer::act()
   };
 }
 
-char const* packer::describe() const
+std::string packer::describe() const
 {
   return "packer";
 }
@@ -100,7 +100,7 @@ behavior unpacker::act()
   };
 }
 
-char const* unpacker::describe() const
+std::string unpacker::describe() const
 {
   return "unpacker";
 }

@@ -254,7 +254,7 @@ behavior program::act()
   return default_behavior;
 }
 
-char const* program::describe() const
+std::string program::describe() const
 {
   return "program";
 }

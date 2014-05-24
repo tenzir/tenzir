@@ -183,7 +183,7 @@ behavior ingestor_actor::act()
   };
 }
 
-char const* ingestor_actor::describe() const
+std::string ingestor_actor::describe() const
 {
   return "ingestor";
 }

@@ -25,7 +25,7 @@ public:
                  cppa::actor search);
 
   cppa::behavior act() final;
-  char const* describe() const final;
+  std::string describe() const final;
 
 private:
   bool paused_ = false;

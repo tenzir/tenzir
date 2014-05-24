@@ -94,7 +94,7 @@ struct query_actor : actor_base
   query_actor(cppa::actor archive, cppa::actor sink, expr::ast ast);
 
   cppa::behavior act() final;
-  char const* describe() const final;
+  std::string describe() const final;
 
   void prefetch(size_t max);
   void extract(uint64_t n);

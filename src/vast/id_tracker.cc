@@ -109,7 +109,7 @@ behavior id_tracker_actor::act()
   };
 }
 
-char const* id_tracker_actor::describe() const
+std::string id_tracker_actor::describe() const
 {
   return "id-tracker";
 }

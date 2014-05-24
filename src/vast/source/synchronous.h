@@ -78,7 +78,7 @@ public:
     };
   }
 
-  char const* describe() const final
+  std::string describe() const final
   {
     return static_cast<Derived const*>(this)->description();
   }

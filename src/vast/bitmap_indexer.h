@@ -166,7 +166,7 @@ struct event_name_indexer
     return &e.name();
   }
 
-  char const* describe() const final
+  std::string describe() const final
   {
     return "name-bitmap-indexer";
   }
@@ -190,7 +190,7 @@ struct event_time_indexer
     return &timestamp_;
   }
 
-  char const* describe() const final
+  std::string describe() const final
   {
     return "time-bitmap-indexer";
   }
@@ -216,9 +216,10 @@ struct event_data_indexer
     return e.name() == type_->name() ? e.at(offset_) : nullptr;
   }
 
-  char const* describe() const final
+  std::string describe() const final
   {
-    return "data-bitmap-indexer";
+    return "data-bitmap-indexer("
+      + to_string(*type_) + ':' + to_string(offset_) + ')';
   }
 
   type_const_ptr type_;

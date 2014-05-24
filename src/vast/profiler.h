@@ -31,7 +31,7 @@ public:
   profiler(path log_dir, std::chrono::seconds secs);
 
   cppa::behavior act() final;
-  char const* describe() const final;
+  std::string describe() const final;
 
 private:
   path const log_dir_;

@@ -106,7 +106,7 @@ behavior segmentizer::act()
   };
 }
 
-char const* segmentizer::describe() const
+std::string segmentizer::describe() const
 {
   return "segmentizer";
 }

@@ -78,7 +78,7 @@ struct partition_actor : actor_base
   partition_actor(path dir, size_t batch_size, uuid id = uuid::random());
 
   cppa::behavior act() final;
-  char const* describe() const final;
+  std::string describe() const final;
 
   template <typename Bitstream = default_bitstream>
   trial<void> load_data_indexer(path const& p)

@@ -106,7 +106,7 @@ behavior receiver_actor::act()
 
 }
 
-char const* receiver_actor::describe() const
+std::string receiver_actor::describe() const
 {
   return "receiver";
 }
