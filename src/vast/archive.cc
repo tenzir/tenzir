@@ -97,8 +97,8 @@ any_tuple archive::on_miss(uuid const& id)
 }
 
 
-archive_actor::archive_actor(path directory, size_t max_segments)
-  : archive_{std::move(directory), max_segments}
+archive_actor::archive_actor(path const& directory, size_t max_segments)
+  : archive_{directory / "archive", max_segments}
 {
 }
 

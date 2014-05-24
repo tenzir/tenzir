@@ -94,7 +94,7 @@ behavior program::act()
     if (config_.check("archive-actor") || config_.check("all-server"))
     {
       archive = spawn<archive_actor, linked>(
-          vast_dir / "archive",
+          vast_dir,
           *config_.as<size_t>("archive.max-segments"));
 
       VAST_LOG_ACTOR_INFO(
@@ -118,7 +118,7 @@ behavior program::act()
     if (config_.check("index-actor") || config_.check("all-server"))
     {
       index = spawn<index_actor, linked>(
-          vast_dir / "index", *config_.as<size_t>("index.batch-size"));
+          vast_dir, *config_.as<size_t>("index.batch-size"));
 
       VAST_LOG_ACTOR_INFO(
           "publishes index at " << index_host << ':' << index_port);

@@ -3,6 +3,7 @@
 
 #include "vast/actor.h"
 #include "vast/bitstream.h"
+#include "vast/expression.h"
 #include "vast/file_system.h"
 #include "vast/optional.h"
 #include "vast/uuid.h"
@@ -110,9 +111,9 @@ struct index_actor : actor_base
   };
 
   /// Spawns the index.
-  /// @param dir The root directory of the index.
+  /// @param dir The VAST directory to create the index under.
   /// @param batch_size The number of events to index at once.
-  index_actor(path dir, size_t batch_size);
+  index_actor(path const& dir, size_t batch_size);
 
   trial<void> make_partition(path const& dir);
 

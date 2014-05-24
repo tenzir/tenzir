@@ -51,7 +51,7 @@ private:
 
 struct archive_actor : actor_base
 {
-  archive_actor(path directory, size_t max_segments);
+  archive_actor(path const& directory, size_t max_segments);
 
   cppa::behavior act() final;
   char const* describe() const final;

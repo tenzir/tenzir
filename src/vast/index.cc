@@ -3,7 +3,6 @@
 #include <cppa/cppa.hpp>
 #include "vast/bitmap_index.h"
 #include "vast/segment.h"
-#include "vast/expression.h"
 #include "vast/partition.h"
 #include "vast/print.h"
 #include "vast/io/serialization.h"
@@ -449,8 +448,8 @@ std::vector<expr::ast> index::walk(
 
 using namespace cppa;
 
-index_actor::index_actor(path dir, size_t batch_size)
-  : dir_{std::move(dir)},
+index_actor::index_actor(path const& dir, size_t batch_size)
+  : dir_{dir / "index"},
     batch_size_{batch_size}
 {
 }
