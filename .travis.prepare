@@ -12,7 +12,8 @@ if [ "$CC" = "clang" ] ; then
   sudo add-apt-repository -y ppa:h-rayflood/llvm
   sudo apt-get -qq update
   sudo apt-get -qq install --allow-unauthenticated clang-3.4
-  sudo apt-get -qq install libc++1 libc++abi1
+  # FIXME: where do we get these?
+  #sudo apt-get -qq install libc++1 libc++abi1
 
   mkdir -p $PREFIX/bin && cd $PREFIX/bin
   ln -s $(which clang-3.4) clang
@@ -22,9 +23,10 @@ if [ "$CC" = "clang" ] ; then
   git clone git://github.com/rsmmr/install-clang.git
   install-clang/install-clang -a libcxxabi -j $CONCURRENCY $PREFIX
 elif [ "$CC" = "gcc" ] ; then
+  # FIXME: seems like this doesn't work with Ubuntu 12.04 :-/.
   sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
   sudo apt-get -qq update
-  sudo apt-get -qq install --allow-unauthenticated gcc-4.9
+  sudo apt-get -qq install gcc-4.9 g++-4.9
 
   cd $PREFIX/bin
   ln -s $(which gcc-4.9) gcc
