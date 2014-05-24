@@ -135,51 +135,80 @@ public:
   {
   }
 
+  ~lhs()
+  {
+    if (evaluated_)
+      return;
+
+    if (eval(0))
+      pass();
+    else
+      fail_unary();
+  }
+
   template <typename U>
   using elevated = std::conditional_t<std::is_convertible<U, T>::value, T, U>;
 
   explicit operator bool()
   {
+    evaluated_ = true;
     return !! x_ ? pass() : fail_unary();
   }
 
   template <typename U>
   bool operator==(U const& u)
   {
+    evaluated_ = true;
     return x_ == static_cast<elevated<U>>(u) ? pass() : fail(u);
   }
 
   template <typename U>
   bool operator!=(U const& u)
   {
+    evaluated_ = true;
     return x_ != static_cast<elevated<U>>(u) ? pass() : fail(u);
   }
 
   template <typename U>
   bool operator<(U const& u)
   {
+    evaluated_ = true;
     return x_ < static_cast<elevated<U>>(u) ? pass() : fail(u);
   }
 
   template <typename U>
   bool operator<=(U const& u)
   {
+    evaluated_ = true;
     return x_ <= static_cast<elevated<U>>(u) ? pass() : fail(u);
   }
 
   template <typename U>
   bool operator>(U const& u)
   {
+    evaluated_ = true;
     return x_ > static_cast<elevated<U>>(u) ? pass() : fail(u);
   }
 
   template <typename U>
   bool operator>=(U const& u)
   {
+    evaluated_ = true;
     return x_ >= static_cast<elevated<U>>(u) ? pass() : fail(u);
   }
 
 private:
+  template<typename V = T>
+  auto eval(int) -> decltype(! std::declval<V>())
+  {
+    return !! x_;
+  }
+
+  bool eval(long)
+  {
+    return true;
+  }
+
   bool pass()
   {
     passed_ = true;
@@ -237,6 +266,7 @@ private:
       return " ";
   }
 
+  bool evaluated_ = false;
   test* test_;
   char const *filename_;
   int line_;
@@ -276,25 +306,29 @@ private:
 #define UNIT_PASTE(lhs, rhs) UNIT_CONCAT(lhs, rhs)
 #define UNIT_UNIQUE(name) UNIT_PASTE(name, __LINE__)
 
-#define CHECK(...) \
-  (void)(::unit::detail::expr{this, __FILE__, __LINE__, #__VA_ARGS__} \
-         ->* __VA_ARGS__)
+#define CHECK(...)                                                          \
+  do                                                                        \
+  {                                                                         \
+    (void)(::unit::detail::expr{this, __FILE__, __LINE__, #__VA_ARGS__}     \
+             ->* __VA_ARGS__);                                              \
+  }                                                                         \
+  while (false)
 
-#define REQUIRE(...) \
-  do \
-  { \
-    auto UNIT_UNIQUE(__result) = \
-    ::unit::detail::expr{this, __FILE__, __LINE__, #__VA_ARGS__} \
-         ->* __VA_ARGS__;\
-\
-    if (! UNIT_UNIQUE(__result)) \
-      throw ::unit::require_error{#__VA_ARGS__}; \
-\
-  } \
+#define REQUIRE(...)                                                        \
+  do                                                                        \
+  {                                                                         \
+    auto UNIT_UNIQUE(__result) =                                            \
+    ::unit::detail::expr{this, __FILE__, __LINE__, #__VA_ARGS__}            \
+         ->* __VA_ARGS__;                                                   \
+                                                                            \
+    if (! UNIT_UNIQUE(__result))                                            \
+      throw ::unit::require_error{#__VA_ARGS__};                            \
+                                                                            \
+  }                                                                         \
   while (false)
 
 
-#define SUITE(name)                                                       \
+#define SUITE(name)                                                         \
   namespace { ::unit::detail::namer UNIT_UNIQUE(namer){name}; }
 
 #define TEST(name)                                                          \

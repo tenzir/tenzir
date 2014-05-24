@@ -30,6 +30,5 @@ TEST("getline")
     CHECK(line == "");
     CHECK(io::getline(input, line));
     CHECK(line == "line6");
-    CHECK(io::getline(input, line));
   }
 }
