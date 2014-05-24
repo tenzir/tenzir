@@ -19,6 +19,8 @@ receiver_actor::receiver_actor(actor tracker,
 
 behavior receiver_actor::act()
 {
+  trap_exit(true);
+
   attach_functor(
       [=](uint32_t)
       {
@@ -32,6 +34,10 @@ behavior receiver_actor::act()
 
   return
   {
+    [=](exit_msg const& e)
+    {
+      quit(e.reason);
+    },
     [=](down_msg const&)
     {
       for (auto& a : ingestors_)

@@ -370,15 +370,15 @@ behavior partition_actor::act()
   {
     [=](exit_msg const& e)
     {
-      if (e.reason != exit::kill)
+      if (e.reason == exit::kill)
       {
         quit(e.reason);
         return;
       }
 
-      if (exiting_ == 0 && ! segments_.empty())
+      if (exit_reason_ == 0 && ! segments_.empty())
       {
-        exiting_ = e.reason;
+        exit_reason_ = e.reason;
         return;
       }
 
@@ -487,9 +487,9 @@ behavior partition_actor::act()
           unpacker_ = spawn<unpacker>(segments_.front(), this, batch_size_);
           send(unpacker_, atom("run"));
         }
-        else if (exiting_ != 0)
+        else if (exit_reason_ != 0)
         {
-          send_exit(this, exiting_);
+          send_exit(this, exit_reason_);
         }
       }
     },

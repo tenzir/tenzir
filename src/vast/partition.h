@@ -126,7 +126,7 @@ struct partition_actor : actor_base
   bool updated_ = false;
   size_t batch_size_;
   uint64_t max_backlog_ = 0;
-  uint32_t exiting_ = 0;
+  uint32_t exit_reason_ = 0;
   partition partition_;
   schema schema_;
   std::unordered_map<path, indexer_state> indexers_;
