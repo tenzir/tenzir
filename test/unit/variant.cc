@@ -2,7 +2,7 @@
 
 #include "vast/util/variant.h"
 
-SUITE("util")
+SUITE("variant")
 
 using namespace vast;
 
@@ -72,6 +72,25 @@ TEST("factory construction")
 
   CHECK(util::get<double>(pair::make(0)));
   CHECK(util::get<int>(pair::make(1)));
+}
+
+TEST("operator==")
+{
+  using pair = util::variant<double, int>;
+
+  pair p0{42};
+  pair p1{42.0};
+  pair p2{1337};
+  pair p3{4.2};
+
+  CHECK(p0 != p1);
+  CHECK(p0 != p2);
+  CHECK(p0 != p3);
+
+  CHECK(p1 != p3);
+
+  p1 = 4.2;
+  CHECK(p1 == p3);
 }
 
 TEST("positional introspection")

@@ -240,7 +240,7 @@ public:
 
   friend bool operator==(variant const& x, variant const& y)
   {
-    return x.which_ != y.which_ || y.apply_visitor_internal(equality(x));
+    return x.which_ == y.which_ && y.apply_visitor_internal(equality(x));
   }
 
 private:
