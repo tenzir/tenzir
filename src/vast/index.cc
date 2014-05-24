@@ -609,10 +609,10 @@ behavior index_actor::act()
         VAST_LOG_ACTOR_INFO("created new partition " << first->first);
       }
 
-      VAST_LOG_ACTOR_DEBUG("got segment covering [" <<
-                           s.first() << ',' << s.last() << ']');
-
       index_.update_partition(active_.first, s.first(), s.last());
+
+      VAST_LOG_ACTOR_DEBUG("forwards segment covering [" <<
+                           s.first() << ',' << s.last() << ']');
 
       forward_to(active_.second);
     },

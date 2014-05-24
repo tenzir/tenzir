@@ -371,8 +371,18 @@ behavior partition_actor::act()
     [=](exit_msg const& e)
     {
       if (e.reason != exit::kill)
-        flush();
+      {
+        quit(e.reason);
+        return;
+      }
 
+      if (exiting_ == 0 && ! segments_.empty())
+      {
+        exiting_ = e.reason;
+        return;
+      }
+
+      flush();
       quit(e.reason);
     },
     [=](down_msg const&)
@@ -467,13 +477,20 @@ behavior partition_actor::act()
     },
     on(atom("unpack")) >> [=]
     {
-      if (! unpacker_ && ! segments_.empty())
+      if (! unpacker_)
       {
-        VAST_LOG_ACTOR_DEBUG("begins unpacking segment " <<
-                             segments_.front().get_as<segment>(0).id());
+        if (! segments_.empty())
+        {
+          VAST_LOG_ACTOR_DEBUG("begins unpacking segment " <<
+                               segments_.front().get_as<segment>(0).id());
 
-        unpacker_ = spawn<unpacker>(segments_.front(), this, batch_size_);
-        send(unpacker_, atom("run"));
+          unpacker_ = spawn<unpacker>(segments_.front(), this, batch_size_);
+          send(unpacker_, atom("run"));
+        }
+        else if (exiting_ != 0)
+        {
+          send_exit(this, exiting_);
+        }
       }
     },
     on(atom("unpacked")) >> [=]

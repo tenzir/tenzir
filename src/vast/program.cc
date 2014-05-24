@@ -75,7 +75,7 @@ behavior program::act()
     auto tracker_port = *config_.as<unsigned>("tracker.port");
     if (config_.check("tracker-actor") || config_.check("all-server"))
     {
-      tracker = spawn<id_tracker_actor, linked>(vast_dir);
+      tracker = spawn<id_tracker_actor>(vast_dir);
       VAST_LOG_ACTOR_INFO(
           "publishes tracker at " << tracker_host << ':' << tracker_port);
 
@@ -93,7 +93,7 @@ behavior program::act()
     auto archive_port = *config_.as<unsigned>("archive.port");
     if (config_.check("archive-actor") || config_.check("all-server"))
     {
-      archive = spawn<archive_actor, linked>(
+      archive = spawn<archive_actor>(
           vast_dir,
           *config_.as<size_t>("archive.max-segments"));
 
@@ -117,7 +117,7 @@ behavior program::act()
     auto index_port = *config_.as<unsigned>("index.port");
     if (config_.check("index-actor") || config_.check("all-server"))
     {
-      index = spawn<index_actor, linked>(
+      index = spawn<index_actor>(
           vast_dir, *config_.as<size_t>("index.batch-size"));
 
       VAST_LOG_ACTOR_INFO(
@@ -198,6 +198,10 @@ behavior program::act()
       receiver = spawn<receiver_actor, linked>(tracker, archive, index, search);
       VAST_LOG_ACTOR_INFO(
           "publishes receiver at " << receiver_host << ':' << receiver_port);
+
+      receiver->link_to(tracker);
+      receiver->link_to(archive);
+      receiver->link_to(index);
 
       publish(receiver, receiver_port, receiver_host.c_str());
     }
