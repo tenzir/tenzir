@@ -102,8 +102,6 @@ public:
           }
 
         stats_.increment(n);
-        if (n < total)
-          VAST_LOG_ACTOR_WARN("indexed " << n << '/' << total << " events");
 
         return make_any_tuple(total, n, stats_.last(), stats_.mean());
       },
