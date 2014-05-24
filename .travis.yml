@@ -29,10 +29,7 @@ env:
 #    - compiler: gcc
 
 before_script:
-  - mkdir -p $PREFIX/src && cd $PREFIX/src
-  - sh ./.travis.$CC
-  - sh ./.travis.boost
-  - sh ./.travis.libcppa
+  - sh .travis.prepare
   - ./configure $BUILD_TYPE --prefix=$PREFIX
 
 script:
