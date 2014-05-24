@@ -588,9 +588,17 @@ public:
 private:
   bool push_back_impl(value const& val)
   {
-    auto& addr = val.get<address>();
-    auto& bytes = addr.data();
-    size_t const start = addr.is_v4() ? 12 : 0;
+    address const* addr;
+
+    if (val.which() == address_value)
+      addr = &val.get<address>();
+    else if (val.which() == prefix_value)
+      addr = &val.get<prefix>().network();
+    else
+      return false;
+
+    auto& bytes = addr->data();
+    size_t const start = addr->is_v4() ? 12 : 0;
 
     if (! v4_.push_back(start == 12))
       return false;
@@ -630,7 +638,8 @@ private:
     }
   }
 
-  trial<bitstream> lookup_impl(relational_operator op, address const& addr) const
+  trial<bitstream>
+  lookup_impl(relational_operator op, address const& addr) const
   {
     auto& bytes = addr.data();
     auto is_v4 = addr.is_v4();
@@ -710,6 +719,78 @@ private:
                          address_bitmap_index const& y)
   {
     return x.bitmaps_ == y.bitmaps_;
+  }
+};
+
+/// A bitmap index for IP prefixes.
+template <typename Bitstream>
+class prefix_bitmap_index
+  : public bitmap_index_base<prefix_bitmap_index<Bitstream>>
+{
+  friend bitmap_index_base<prefix_bitmap_index<Bitstream>>;
+
+  template <typename>
+  friend struct detail::bitmap_index_model;
+
+public:
+  prefix_bitmap_index() = default;
+
+private:
+  bool push_back_impl(value const& val)
+  {
+    return network_.push_back(val)
+      && length_.push_back(val.get<prefix>().length());
+  }
+
+  bool stretch_impl(size_t n)
+  {
+    return network_.stretch(n) && length_.append(n, false);
+  }
+
+  trial<bitstream> lookup_impl(relational_operator op, value const& val) const
+  {
+    if (! (op == equal || op == not_equal))
+      return error{"unsupported relational operator", op};
+
+    auto pfx = val.get<prefix>();
+
+    auto bs = network_.lookup(equal, pfx.network());
+    if (! bs)
+      return bs;
+
+    auto n = network_.lookup(equal, pfx.network());
+    if (! n)
+      return n;
+
+    auto r = bitstream{*bs & *n};
+    return std::move(op == equal ? r : r.flip());
+  }
+
+  uint64_t size_impl() const
+  {
+    return length_.size();
+  }
+
+  address_bitmap_index<Bitstream> network_;
+  bitmap<uint8_t, Bitstream, range_bitslice_coder> length_;
+
+private:
+  friend access;
+
+  void serialize(serializer& sink) const
+  {
+    sink << network_ << length_;
+  }
+
+  void deserialize(deserializer& source)
+  {
+    source >> network_ >> length_;
+  }
+
+  friend bool operator==(prefix_bitmap_index const& x,
+                         prefix_bitmap_index const& y)
+  {
+    return x.network_ == y.network_ && x.length_ == y.length_;
   }
 };
 
@@ -960,6 +1041,8 @@ trial<bitmap_index<Bitstream>> make_bitmap_index(type_tag t, Args&&... args)
       return {string_bitmap_index<Bitstream>(std::forward<Args>(args)...)};
     case address_value:
       return {address_bitmap_index<Bitstream>(std::forward<Args>(args)...)};
+    case prefix_value:
+      return {prefix_bitmap_index<Bitstream>(std::forward<Args>(args)...)};
     case port_value:
       return {port_bitmap_index<Bitstream>(std::forward<Args>(args)...)};
   }

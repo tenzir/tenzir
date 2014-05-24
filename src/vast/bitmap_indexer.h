@@ -249,6 +249,11 @@ struct event_data_index_factory
     return spawn<address_bitmap_index<Bitstream>>();
   }
 
+  trial<cppa::actor> operator()(prefix_type const&) const
+  {
+    return spawn<prefix_bitmap_index<Bitstream>>();
+  }
+
   trial<cppa::actor> operator()(port_type const&) const
   {
     return spawn<port_bitmap_index<Bitstream>>();
@@ -284,11 +289,6 @@ struct event_data_index_factory
     return error{"regular expressions not yet supported"};
   }
 
-  trial<cppa::actor> operator()(prefix_type const&) const
-  {
-    return error{"prefixes not yet supported"};
-  }
-
   trial<cppa::actor> operator()(table_type const&) const
   {
     return error{"tables not yet supported"};
@@ -296,7 +296,7 @@ struct event_data_index_factory
 
   trial<cppa::actor> operator()(record_type const&) const
   {
-    return error{"records should be unrolled"};
+    return error{"records shall be unrolled"};
   }
 
   template <typename BitmapIndex, typename... Args>

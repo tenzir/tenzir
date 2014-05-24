@@ -224,6 +224,7 @@ void announce_builtin_types()
     arithmetic_bitmap_index<null_bitstream, time_range_value>,
     arithmetic_bitmap_index<null_bitstream, time_point_value>,
     address_bitmap_index<null_bitstream>,
+    prefix_bitmap_index<null_bitstream>,
     port_bitmap_index<null_bitstream>,
     string_bitmap_index<null_bitstream>,
     sequence_bitmap_index<null_bitstream>,
@@ -234,6 +235,7 @@ void announce_builtin_types()
     arithmetic_bitmap_index<ewah_bitstream, time_range_value>,
     arithmetic_bitmap_index<ewah_bitstream, time_point_value>,
     address_bitmap_index<ewah_bitstream>,
+    prefix_bitmap_index<ewah_bitstream>,
     port_bitmap_index<ewah_bitstream>,
     string_bitmap_index<ewah_bitstream>,
     sequence_bitmap_index<ewah_bitstream>

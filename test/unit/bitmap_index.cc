@@ -226,6 +226,42 @@ TEST("IP address")
   CHECK(bmi == bmi2);
 }
 
+TEST("IP prefixes")
+{
+  prefix_bitmap_index<null_bitstream> bmi, bmi2;
+
+  auto p0 = to<prefix>("192.168.0.0/24");
+  auto p1 = to<prefix>("192.168.1.0/24");
+  auto p2 = to<prefix>("::/40");
+  REQUIRE(p0);
+  REQUIRE(p1);
+  REQUIRE(p2);
+
+  value v0{*p0};
+  value v1{*p1};
+  value v2{*p2};
+
+  REQUIRE(bmi.push_back(v0));
+  REQUIRE(bmi.push_back(v1));
+  REQUIRE(bmi.push_back(v0));
+  REQUIRE(bmi.push_back(v0));
+  REQUIRE(bmi.push_back(v2));
+  REQUIRE(bmi.push_back(v2));
+
+  auto bs = bmi.lookup(equal, v0);
+  REQUIRE(bs);
+  CHECK(to_string(*bs) == "101100");
+
+  bs = bmi.lookup(not_equal, v1);
+  REQUIRE(bs);
+  CHECK(to_string(*bs) == "101111");
+
+  std::vector<uint8_t> buf;
+  io::archive(buf, bmi);
+  io::unarchive(buf, bmi2);
+  CHECK(bmi == bmi2);
+}
+
 TEST("port (null)")
 {
   port_bitmap_index<null_bitstream> bmi;
