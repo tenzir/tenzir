@@ -12,6 +12,7 @@ if [ "$CC" = "clang" ] ; then
   sudo add-apt-repository -y ppa:h-rayflood/llvm
   sudo apt-get -qq update
   sudo apt-get -qq install --allow-unauthenticated clang-3.4
+  sudo apt-get -qq install libc++1 libc++abi1
 
   mkdir -p $PREFIX/bin && cd $PREFIX/bin
   ln -s $(which clang-3.4) clang
@@ -23,7 +24,7 @@ if [ "$CC" = "clang" ] ; then
 elif [ "$CC" = "gcc" ] ; then
   sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
   sudo apt-get -qq update
-  sudo apt-get -qq install --allow-unauthenticated g++-4.9
+  sudo apt-get -qq install --allow-unauthenticated gcc-4.9
 
   cd $PREFIX/bin
   ln -s $(which gcc-4.9) gcc
