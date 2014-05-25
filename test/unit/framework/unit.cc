@@ -192,7 +192,7 @@ int engine::run(configuration const& cfg)
   auto test_rx = std::regex{*cfg.as<std::string>("tests")};
   for (auto& p : instance().suites_)
   {
-    if (! std::regex_match(p.first, suite_rx))
+    if (! std::regex_search(p.first, suite_rx))
       continue;
 
     auto suite_name = p.first.empty() ? "<unnamed>" : p.first;
@@ -202,7 +202,7 @@ int engine::run(configuration const& cfg)
 
     for (auto& t : p.second)
     {
-      if (! std::regex_match(t->__name(), test_rx))
+      if (! std::regex_search(t->__name(), test_rx))
         continue;
 
       if (! displayed_header)
