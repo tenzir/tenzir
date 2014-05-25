@@ -251,11 +251,15 @@ int engine::run(configuration const& cfg)
       total_bad += bad;
 
       log.verbose()
-          << color::yellow << "  -> " << color::reset
-          << good + bad << " check" << (good + bad > 0 ? "s" : "") << " ("
-          << color::green << good << color::reset << '/'
-          << color::red << bad << color::reset
-          << ")" << '\n';
+          << color::yellow << "  -> " << color::cyan << good + bad
+          << color::reset << " check" << (good + bad > 0 ? "s" : "");
+
+      if (bad > 0)
+        log.verbose()
+          << " (" << color::green << good << color::reset << '/'
+          << color::red << bad << color::reset << ")" << '\n';
+      else
+        log.verbose() << '\n';
     }
 
     total_tests += p.second.size();
