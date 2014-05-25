@@ -215,6 +215,19 @@ public:
     return find_option(name);
   }
 
+  /// Retrieves an option.
+  /// @param shortcut The shortcut to lookup.
+  /// @returns The option for *shortcut* or `nullptr` if *shortcut* does not
+  ///     exist.
+  option* operator[](char shortcut)
+  {
+    auto i = shortcuts_.find({shortcut});
+    if (i == shortcuts_.end())
+      return nullptr;
+
+    return find_option(i->second);
+  }
+
   /// Checks whether the given option is set.
   /// @param opt Name of the option to check.
   /// @returns `true` if *opt* is set.
