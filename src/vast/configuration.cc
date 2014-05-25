@@ -36,7 +36,7 @@ void configuration::initialize()
   auto& general = create_block("general options");
   general.add('c', "config", "configuration file");
   general.add('h', "help", "display this help");
-  general.add('d', "directory", "VAST directory").set("vast");
+  general.add('d', "directory", "VAST directory").init("vast");
   general.add('z', "advanced", "show advanced options");
 
 
@@ -46,9 +46,9 @@ void configuration::initialize()
 
   auto& log = create_block("logger options", "log");
   log.add('v', "console-verbosity", "console verbosity " + range)
-     .set(std::min(3, max));
+     .init(std::min(3, max));
   log.add('V', "file-verbosity", "log file verbosity " + range)
-     .set(std::min(4, max));
+     .init(std::min(4, max));
   log.add("no-colors", "don't use colors for console output");
   log.add("function-names", "log function names");
 
@@ -82,49 +82,49 @@ void configuration::initialize()
   actor.visible(false);
 
   auto& ingest = create_block("ingest options", "ingest");
-  ingest.add("max-events-per-chunk", "maximum events per chunk").set(5000);
-  ingest.add("max-segment-size", "maximum segment size in MB").set(128);
-  ingest.add("batch-size", "number of events to ingest in one run").set(4000);
+  ingest.add("max-events-per-chunk", "maximum events per chunk").init(5000);
+  ingest.add("max-segment-size", "maximum segment size in MB").init(128);
+  ingest.add("batch-size", "number of events to ingest in one run").init(4000);
   ingest.add('r', "file-name", "path to file to ingest").single();
-  ingest.add("file-type", "file type of the file to ingest").set("bro2");
-  ingest.add("time-field", "field to extract event timestamp from").set(-1);
+  ingest.add("file-type", "file type of the file to ingest").init("bro2");
+  ingest.add("time-field", "field to extract event timestamp from").init(-1);
   ingest.add("submit", "send orphaned segments on startup");
 #ifdef VAST_HAVE_BROCCOLI
   ingest.add("broccoli-host", "hostname/address of broccoli source")
-        .set("127.0.0.1");
-  ingest.add("broccoli-port", "port of the broccoli source").set(42000);
+        .init("127.0.0.1");
+  ingest.add("broccoli-port", "port of the broccoli source").init(42000);
   ingest.add("broccoli-events", "list of events for broccoli to subscribe to")
         .multi();
 #endif
   ingest.visible(false);
 
   auto& receiver = create_block("receiver options", "receiver");
-  receiver.add("host", "hostname/address of the receiver").set("127.0.0.1");
-  receiver.add("port", "TCP port of the receiver").set(42000);
+  receiver.add("host", "hostname/address of the receiver").init("127.0.0.1");
+  receiver.add("port", "TCP port of the receiver").init(42000);
   receiver.visible(false);
 
   auto& archive = create_block("archive options", "archive");
-  archive.add("host", "hostname/address of the archive").set("127.0.0.1");
-  archive.add("port", "TCP port of the archive").set(42003);
-  archive.add("max-segments", "maximum segments cached in memory").set(10);
+  archive.add("host", "hostname/address of the archive").init("127.0.0.1");
+  archive.add("port", "TCP port of the archive").init(42003);
+  archive.add("max-segments", "maximum segments cached in memory").init(10);
   archive.visible(false);
 
   auto& index = create_block("index options", "index");
-  index.add("host", "hostname/address of the archive").set("127.0.0.1");
-  index.add("port", "TCP port of the index").set(42004);
+  index.add("host", "hostname/address of the archive").init("127.0.0.1");
+  index.add("port", "TCP port of the index").init(42004);
   index.add("partition", "name of the partition to append to").single();
-  index.add("batch-size", "number of events to index in one run").set(1000);
+  index.add("batch-size", "number of events to index in one run").init(1000);
   index.add("rebuild", "rebuild indexes from archive");
   index.visible(false);
 
   auto& tracker = create_block("ID tracker options", "tracker");
-  tracker.add("host", "hostname/address of the tracker").set("127.0.0.1");
-  tracker.add("port", "TCP port of the ID tracker").set(42002);
+  tracker.add("host", "hostname/address of the tracker").init("127.0.0.1");
+  tracker.add("port", "TCP port of the ID tracker").init(42002);
   tracker.visible(false);
 
   auto& search = create_block("search options", "search");
-  search.add("host", "hostname/address of the archive").set("127.0.0.1");
-  search.add("port", "TCP port of the search").set(42001);
+  search.add("host", "hostname/address of the archive").init("127.0.0.1");
+  search.add("port", "TCP port of the search").init(42001);
   search.visible(false);
 
 #ifdef VAST_HAVE_EDITLINE

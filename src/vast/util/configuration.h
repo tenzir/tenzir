@@ -34,6 +34,7 @@ public:
     }
   };
 
+  /// A configuration option.
   class option
   {
     friend configuration;
@@ -46,37 +47,49 @@ public:
     {
     }
 
+    /// Syntactic sugar for ::set.
     template <typename T>
     option& operator=(T const& x)
     {
       return set(x);
     }
 
-    template <typename T, typename... Args>
-    option& set(T const& head, Args const&... tail)
+    /// Sets a default-value without marking the option as engaged.
+    /// @returns `*this`
+    template <typename T, typename... Ts>
+    option& init(T const& x, Ts const&... xs)
     {
       values_.clear();
-      assign(head, tail...);
+      assign(x, xs...);
       max_vals_ = values_.size() == 1 ? 1 : -1;
       return *this;
     }
 
-    option& set(bool b)
+    /// Sets a value and marks the option as engaged.
+    /// @returns `*this`
+    template <typename T, typename... Ts>
+    option& set(T const& x, Ts const&... xs)
     {
-      values_.clear();
-
-      if (b)
-        defaulted_ = false;
-
-      return *this;
+      defaulted_ = false;
+      return init(x, xs...);
     }
 
+    option& set(bool b)
+    {
+      defaulted_ = ! b;
+      return init(b);
+    }
+
+    /// Sets the maximum number of allowed values.
+    /// @returns `*this`
     option& multi(size_t n = -1)
     {
       max_vals_ = n;
       return *this;
     }
 
+    /// Sets the maximum number of allowed values to 1.
+    /// @returns `*this`
     option& single()
     {
       return multi(1);
@@ -91,11 +104,11 @@ public:
       values_.push_back(ss.str());
     }
 
-    template <typename T, typename... Args>
-    void assign(T const& head, Args const&... tail)
+    template <typename T, typename... Ts>
+    void assign(T const& x, Ts const&... xs)
     {
-      assign(head);
-      assign(tail...);
+      assign(x);
+      assign(xs...);
     }
 
     std::string name_;
@@ -190,7 +203,7 @@ public:
 
     for (auto& p : dependencies_)
     {
-      std::string deps;
+      std::string deps = "{";
       auto any = std::any_of(
           p.second.begin(),
           p.second.end(),
@@ -201,7 +214,7 @@ public:
           });
 
       if (check(p.first) && ! any)
-        return error{p.first + " requires at least one of:" + deps};
+        return error{p.first + " requires any option of " + deps + " }"};
     }
 
     return nothing;
@@ -212,11 +225,11 @@ public:
       conflicts_{other.conflicts_},
       dependencies_{other.dependencies_}
   {
-    for (auto& b : other.blocks_)
+    for (auto& ob : other.blocks_)
     {
-      auto& copy = create_block(b.name_, b.prefix_);
-      copy.visible(b.visible());
-      copy.options_ = b.options_;
+      auto& b = create_block(ob.name_, ob.prefix_);
+      b.visible(ob.visible());
+      b.options_ = ob.options_;
     }
   }
 
