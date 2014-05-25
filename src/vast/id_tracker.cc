@@ -31,9 +31,11 @@ bool id_tracker::load()
 
 bool id_tracker::save()
 {
-  assert(exists(dir_));
   if (id_ == 1)
     return true;
+
+  if (! exists(dir_) && ! mkdir(dir_))
+    return false;
 
   std::ofstream file{to_string(dir_ / "id")};
   if (! file)
