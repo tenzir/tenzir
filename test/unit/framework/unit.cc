@@ -145,6 +145,16 @@ private:
   std::ofstream file_;
 };
 
+std::string render(std::chrono::microseconds t)
+{
+  return t.count() > 1000000
+    ? (std::to_string(t.count() / 1000000) + '.'
+      + std::to_string((t.count() % 1000000) / 10000) + " s")
+    : t.count() > 1000
+      ? (std::to_string(t.count() / 1000) + " ms")
+      : (std::to_string(t.count()) + " us");
+}
+
 } // namespace <anonymous>
 
 int engine::run(configuration const& cfg)
@@ -187,6 +197,7 @@ int engine::run(configuration const& cfg)
   size_t total_tests = 0;
   size_t total_good = 0;
   size_t total_bad = 0;
+  std::chrono::microseconds runtime;
 
   auto suite_rx = std::regex{*cfg.as<std::string>("suites")};
   auto test_rx = std::regex{*cfg.as<std::string>("tests")};
@@ -218,6 +229,7 @@ int engine::run(configuration const& cfg)
           << color::yellow << "- " << color::reset << t->__name() << '\n';
 
       auto failed_require = false;
+      auto start = std::chrono::system_clock::now();
       try
       {
         t->__run();
@@ -226,6 +238,9 @@ int engine::run(configuration const& cfg)
       {
         failed_require = true;
       }
+      auto stop = std::chrono::system_clock::now();
+      auto elapsed = stop - start;
+      runtime += elapsed;
 
       size_t good = 0;
       size_t bad = 0;
@@ -252,7 +267,8 @@ int engine::run(configuration const& cfg)
 
       log.verbose()
           << color::yellow << "  -> " << color::cyan << good + bad
-          << color::reset << " check" << (good + bad > 0 ? "s" : "");
+          << color::reset << " check" << (good + bad > 1 ? "s " : " ")
+          << "took " << color::cyan << render(elapsed) << color::reset;
 
       if (bad > 0)
         log.verbose()
@@ -291,7 +307,8 @@ int engine::run(configuration const& cfg)
     << color::red << total_bad << color::reset << ")";
 
   log.info()
-    << '\n' << indent << "success: "
+    << '\n' << indent << "time:    " << color::yellow << render(runtime)
+    << '\n' << color::reset << indent << "success: "
     << (percent_good == 100.0 ? color::green : color::yellow)
     << percent_good << "%" << color::reset << "\n\n"
     << color::cyan << bar << color::reset << '\n';
