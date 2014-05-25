@@ -1,68 +1,28 @@
 #include <cppa/cppa.hpp>
 #include "vast.h"
-#include "vast/file_system.h"
-#include "vast/logger.h"
-#include "vast/program.h"
-#include "vast/type_info.h"
-#include "vast/detail/cppa_type_info.h"
-#include "vast/detail/type_manager.h"
-
-using namespace vast;
 
 int main(int argc, char *argv[])
 {
-  initialize();
-
-  auto config = configuration::parse(argc, argv);
-  if (! config)
+  auto cfg = vast::configuration::parse(argc, argv);
+  if (! cfg)
   {
-    std::cerr << config.error() << ", try -h or --help" << std::endl;
+    std::cerr << cfg.error() << ", try -h or --help" << std::endl;
     return 1;
   }
 
-  if (argc < 2 || config->check("help") || config->check("advanced"))
+  if (argc < 2 || cfg->check("help") || cfg->check("advanced"))
   {
-    config->usage(std::cerr, config->check("advanced"));
+    cfg->usage(std::cerr, cfg->check("advanced"));
     return 0;
   }
 
-  auto vast_dir = path{*config->get("directory")};
-  if (! exists(vast_dir) && ! mkdir(vast_dir))
-  {
-    std::cerr << "could not create directory: " << vast_dir << std::endl;
-    return 1;
-  }
-
-  logger::instance()->init(
-      *logger::parse_level(*config->get("log.console-verbosity")),
-      *logger::parse_level(*config->get("log.file-verbosity")),
-      ! config->check("log.no-colors"),
-      config->check("log.function-names"),
-      vast_dir / "log");
-
-  VAST_LOG_VERBOSE(" _   _____   __________");
-  VAST_LOG_VERBOSE("| | / / _ | / __/_  __/");
-  VAST_LOG_VERBOSE("| |/ / __ |_\\ \\  / / ");
-  VAST_LOG_VERBOSE("|___/_/ |_/___/ /_/  " << VAST_VERSION);
-  VAST_LOG_VERBOSE("");
-
-  detail::type_manager::instance()->each(
-      [&](global_type_info const& gti)
-      {
-        VAST_LOG_DEBUG("registered type " << gti.id() << ": " << gti.name());
-      });
-
-  cppa::max_msg_size(512 * 1024 * 1024);
-  VAST_LOG_DEBUG("set cppa maximum message size to " <<
-                 cppa::max_msg_size() / 1024 << " KB");
-
   // FIXME: if we do not detach the program actor, it becomes impossible to
   // intercept and handle SIGINT. Why?
-  cppa::spawn<program, cppa::detached>(*config);
+  cppa::spawn<vast::program, cppa::detached>(*cfg);
   cppa::await_all_actors_done();
   cppa::shutdown();
 
-  cleanup();
+  vast::cleanup();
 
   return 0;
 }

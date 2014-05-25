@@ -100,23 +100,26 @@ struct logger::impl
     file_level_ = file;
     use_colors_ = color;
 
-    std::ostringstream filename;
-    filename << "vast_" << std::time(nullptr);
+    if (! log_file_.is_open())
+    {
+      std::ostringstream filename;
+      filename << "vast_" << std::time(nullptr);
 #ifdef VAST_POSIX
-    filename << '_' << ::getpid();
+      filename << '_' << ::getpid();
 #endif
-    filename << ".log";
+      filename << ".log";
 
-    if (! exists(dir))
-      mkdir(dir);
+      if (! exists(dir) && ! mkdir(dir))
+        return false;
 
-    log_file_.open(to_string(dir / path(filename.str())));
-    if (! log_file_)
-      return false;
+      log_file_.open(to_string(dir / path(filename.str())));
+      if (! log_file_)
+        return false;
 
-    log_thread_ = std::thread([=] { run(); });
+      log_thread_ = std::thread([=] { run(); });
+    }
 
-    return true;
+    return log_thread_.joinable();
   }
 
   bool takes(logger::level lvl) const

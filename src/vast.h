@@ -1,11 +1,10 @@
 #ifndef VAST_H
 #define VAST_H
 
-namespace vast {
+#include "vast/configuration.h"
+#include "vast/program.h"
 
-/// Must be called before using any VAST construct.
-/// @returns `true` on success.
-bool initialize();
+namespace vast {
 
 /// Cleans up global state.
 /// @returns `true` on success.

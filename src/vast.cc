@@ -1,16 +1,8 @@
 #include "vast.h"
 #include "vast/logger.h"
-#include "vast/type_info.h"
 #include "vast/detail/type_manager.h"
 
 namespace vast {
-
-bool initialize()
-{
-  announce_builtin_types();
-
-  return true;
-}
 
 bool cleanup()
 {

@@ -2,9 +2,10 @@
 #define VAST_PROGRAM_H
 
 #include "vast/actor.h"
-#include "vast/configuration.h"
 
 namespace vast {
+
+class configuration;
 
 /// The main program.
 class program : public actor_base

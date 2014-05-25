@@ -2,10 +2,11 @@
 #include "vast.h"
 #include "vast/file_system.h"
 #include "vast/logger.h"
+#include "vast/type_info.h"
 
 int main(int argc, char* argv[])
 {
-  vast::initialize();
+  vast::announce_builtin_types();
 
   auto cfg = unit::configuration::parse(argc, argv);
   if (! cfg)

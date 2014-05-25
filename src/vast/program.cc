@@ -4,6 +4,7 @@
 #include <csignal>
 #include <iostream>
 #include "vast/archive.h"
+#include "vast/configuration.h"
 #include "vast/file_system.h"
 #include "vast/id_tracker.h"
 #include "vast/index.h"
@@ -13,6 +14,8 @@
 #include "vast/receiver.h"
 #include "vast/search.h"
 #include "vast/signal_monitor.h"
+#include "vast/type_info.h"
+#include "vast/detail/cppa_type_info.h"
 #include "vast/detail/type_manager.h"
 
 #ifdef VAST_HAVE_BROCCOLI
@@ -49,12 +52,45 @@ behavior program::act()
                              to_string(last_dequeued()));
       });
 
-  auto monitor = spawn<signal_monitor, detached+linked>(this);
-  send(monitor, atom("act"));
-
   auto vast_dir = path{*config_.get("directory")}.complete();
+
+  auto initialized = logger::instance()->init(
+      *logger::parse_level(*config_.get("log.console-verbosity")),
+      *logger::parse_level(*config_.get("log.file-verbosity")),
+      ! config_.check("log.no-colors"),
+      config_.check("log.function-names"),
+      vast_dir / "log");
+
+  if (! initialized)
+  {
+    std::cerr << "failed to initialize logger" << std::endl;
+    send_exit(this, exit::error);
+    return default_behavior;
+  }
+
+  VAST_LOG_VERBOSE(" _   _____   __________");
+  VAST_LOG_VERBOSE("| | / / _ | / __/_  __/");
+  VAST_LOG_VERBOSE("| |/ / __ |_\\ \\  / / ");
+  VAST_LOG_VERBOSE("|___/_/ |_/___/ /_/  " << VAST_VERSION);
+  VAST_LOG_VERBOSE("");
+
+  announce_builtin_types();
+
+  detail::type_manager::instance()->each(
+      [&](global_type_info const& gti)
+      {
+        VAST_LOG_DEBUG("registered type " << gti.id() << ": " << gti.name());
+      });
+
+  max_msg_size(512 * 1024 * 1024);
+  VAST_LOG_ACTOR_DEBUG("set cppa maximum message size to " <<
+                       cppa::max_msg_size() / 1024 << " KB");
+
   try
   {
+    auto monitor = spawn<signal_monitor, detached+linked>(this);
+    send(monitor, atom("act"));
+
     if (config_.check("profile"))
     {
       auto ms = *config_.as<unsigned>("profile");
@@ -253,7 +289,6 @@ behavior program::act()
     VAST_LOG_ACTOR_ERROR("encountered network error: " << e.what());
     send_exit(this, exit::error);
   }
-
 
   return default_behavior;
 }
