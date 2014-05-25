@@ -1,7 +1,7 @@
 include_directories(
     ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/test/unit
-    ${CMAKE_BINARY_DIR}/src)
+    ${CMAKE_BINARY_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Generate C++ header file that defines the schema test cases.
 file(GLOB schemas schemas/*.sch)
@@ -11,10 +11,9 @@ foreach (s ${schemas})
     set (this "DEFINE_SCHEMA_TEST_CASE(${base}, \"${s}\")")
     set (schema_test_cases "${schema_test_cases}${this}\n")
 endforeach ()
-configure_file(schema_test_cases.h.in schema_test_cases.h)
+configure_file(tests/schema_test_cases.h.in schema_test_cases.h)
 
-file(GLOB_RECURSE tests *.cc)
-
+file(GLOB_RECURSE tests framework/*.cc tests/*.cc)
 add_executable(unit-test ${tests})
 target_link_libraries(unit-test libvast)
 
