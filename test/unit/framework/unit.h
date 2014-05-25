@@ -38,12 +38,12 @@ private:
 };
 
 /// Drives unit test execution.
-class program
+class engine
 {
-  program() = default;
+  engine() = default;
 
 public:
-  /// Adds a suite to the program.
+  /// Adds a suite to the engine.
   /// @param name The name of the suite.
   /// @param t The test to register.
   /// @throws `std::logic_error` if a test with *t*'s name exists already.
@@ -55,7 +55,7 @@ public:
   static int run(configuration const& cfg);
 
 private:
-  static program& instance();
+  static engine& instance();
 
   std::map<std::string, std::vector<std::unique_ptr<test>>> suites_;
 };
@@ -82,7 +82,7 @@ struct adder
 {
   adder()
   {
-    program::add(suite, std::make_unique<T>());
+    engine::add(suite, std::make_unique<T>());
   }
 };
 

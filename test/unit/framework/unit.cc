@@ -51,7 +51,7 @@ std::string const& test::__name() const
 }
 
 
-void program::add(char const* name, std::unique_ptr<test> t)
+void engine::add(char const* name, std::unique_ptr<test> t)
 {
   auto& suite = instance().suites_[std::string{name ? name : ""}];
   for (auto& x : suite)
@@ -147,7 +147,7 @@ private:
 
 } // namespace <anonymous>
 
-int program::run(configuration const& cfg)
+int engine::run(configuration const& cfg)
 {
   if (cfg.check("help"))
   {
@@ -266,7 +266,7 @@ int program::run(configuration const& cfg)
 
   auto suites = instance().suites_.size();
   auto percent_good =
-    unsigned(10000 * total_good / double(total_good + total_bad)) / 100.0;
+    unsigned(100000 * total_good / double(total_good + total_bad)) / 1000.0;
 
   auto title = std::string{"summary"};
   auto pad = std::string((bar.size() - title.size()) / 2, ' ');
@@ -295,10 +295,10 @@ int program::run(configuration const& cfg)
   return 0;
 }
 
-program& program::instance()
+engine& engine::instance()
 {
-  static program p;
-  return p;
+  static engine e;
+  return e;
 }
 
 } // namespace unit

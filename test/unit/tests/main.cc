@@ -26,7 +26,7 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  auto rc = unit::program::run(*cfg);
+  auto rc = unit::engine::run(*cfg);
 
   if (! cfg->check("vast-keep-logs"))
     vast::rm(log_dir);
