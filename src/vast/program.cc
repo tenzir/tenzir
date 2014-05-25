@@ -4,7 +4,6 @@
 #include <csignal>
 #include <iostream>
 #include "vast/archive.h"
-#include "vast/configuration.h"
 #include "vast/file_system.h"
 #include "vast/id_tracker.h"
 #include "vast/index.h"
@@ -30,8 +29,8 @@ using namespace cppa;
 
 namespace vast {
 
-program::program(configuration const& config)
-  : config_{config}
+program::program(configuration config)
+  : config_{std::move(config)}
 {
 }
 
@@ -88,6 +87,15 @@ behavior program::act()
 
   try
   {
+    if (config_.check("all-server"))
+    {
+      *config_["receiver-actor"] = true;
+      *config_["tracker-actor"] = true;
+      *config_["archive-actor"] = true;
+      *config_["index-actor"] = true;
+      *config_["search-actor"] = true;
+    }
+
     auto monitor = spawn<signal_monitor, detached+linked>(this);
     send(monitor, atom("act"));
 
@@ -109,7 +117,7 @@ behavior program::act()
     actor tracker;
     auto tracker_host = *config_.get("tracker.host");
     auto tracker_port = *config_.as<unsigned>("tracker.port");
-    if (config_.check("tracker-actor") || config_.check("all-server"))
+    if (config_.check("tracker-actor"))
     {
       tracker = spawn<id_tracker_actor>(vast_dir);
       VAST_LOG_ACTOR_INFO(
@@ -127,7 +135,7 @@ behavior program::act()
     actor archive;
     auto archive_host = *config_.get("archive.host");
     auto archive_port = *config_.as<unsigned>("archive.port");
-    if (config_.check("archive-actor") || config_.check("all-server"))
+    if (config_.check("archive-actor"))
     {
       archive = spawn<archive_actor>(
           vast_dir,
@@ -151,7 +159,7 @@ behavior program::act()
     actor index;
     auto index_host = *config_.get("index.host");
     auto index_port = *config_.as<unsigned>("index.port");
-    if (config_.check("index-actor") || config_.check("all-server"))
+    if (config_.check("index-actor"))
     {
       index = spawn<index_actor>(
           vast_dir, *config_.as<size_t>("index.batch-size"));
@@ -198,7 +206,7 @@ behavior program::act()
     actor search;
     auto search_host = *config_.get("search.host");
     auto search_port = *config_.as<unsigned>("search.port");
-    if (config_.check("search-actor") || config_.check("all-server"))
+    if (config_.check("search-actor"))
     {
       search = spawn<search_actor, linked>(vast_dir, archive, index);
       VAST_LOG_ACTOR_INFO(
@@ -229,15 +237,21 @@ behavior program::act()
     actor receiver;
     auto receiver_host = *config_.get("receiver.host");
     auto receiver_port = *config_.as<unsigned>("receiver.port");
-    if (config_.check("receiver-actor") || config_.check("all-server"))
+    if (config_.check("receiver-actor"))
     {
-      receiver = spawn<receiver_actor, linked>(tracker, archive, index, search);
+      receiver = spawn<receiver_actor>(tracker, archive, index, search);
       VAST_LOG_ACTOR_INFO(
           "publishes receiver at " << receiver_host << ':' << receiver_port);
 
       receiver->link_to(tracker);
       receiver->link_to(archive);
       receiver->link_to(index);
+
+      // If we're running in "one-shot" mode where both ingestor and core
+      // actors share the same program, then we initiate the teardown via the
+      // ingestor.
+      if (! config_.check("ingestor-actor"))
+        receiver->link_to(*this);
 
       publish(receiver, receiver_port, receiver_host.c_str());
     }
@@ -252,12 +266,20 @@ behavior program::act()
     actor ingestor;
     if (config_.check("ingestor-actor"))
     {
-      ingestor = spawn<ingestor_actor, linked>(
+      ingestor = spawn<ingestor_actor>(
           vast_dir,
           receiver,
           *config_.as<size_t>("ingest.max-events-per-chunk"),
           *config_.as<size_t>("ingest.max-segment-size") * 1000000,
           *config_.as<size_t>("ingest.batch-size"));
+
+      // If we have a receiver in the same program, we're propagating the exit
+      // to it rather than the program. This ensures proper delivery of
+      // inflight segments from ingestor to receiver.
+      if (config_.check("receiver-actor"))
+        ingestor->link_to(receiver);
+      else
+        ingestor->link_to(*this);
 
 #ifdef VAST_HAVE_BROCCOLI
       util::broccoli::init(config_.check("broccoli-messages"),
