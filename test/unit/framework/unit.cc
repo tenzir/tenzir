@@ -229,7 +229,7 @@ int engine::run(configuration const& cfg)
           << color::yellow << "- " << color::reset << t->__name() << '\n';
 
       auto failed_require = false;
-      auto start = std::chrono::system_clock::now();
+      auto start = std::chrono::steady_clock::now();
       try
       {
         t->__run();
@@ -238,8 +238,10 @@ int engine::run(configuration const& cfg)
       {
         failed_require = true;
       }
-      auto stop = std::chrono::system_clock::now();
-      auto elapsed = stop - start;
+      auto stop = std::chrono::steady_clock::now();
+      auto elapsed =
+        std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+
       runtime += elapsed;
 
       size_t good = 0;
