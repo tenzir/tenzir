@@ -201,16 +201,41 @@ public:
           });
 
       if (check(p.first) && ! any)
-        return error{p.first + " requires:" + deps};
+        return error{p.first + " requires at least one of:" + deps};
     }
 
     return nothing;
   }
 
+  configuration(configuration const& other)
+    : shortcuts_{other.shortcuts_},
+      conflicts_{other.conflicts_},
+      dependencies_{other.dependencies_}
+  {
+    for (auto& b : other.blocks_)
+    {
+      auto& copy = create_block(b.name_, b.prefix_);
+      copy.visible(b.visible());
+      copy.options_ = b.options_;
+    }
+  }
+
+  /// Syntactic sugar for ::find.
+  option* operator[](std::string const& name)
+  {
+    return find(name);
+  }
+
+  /// Syntactic sugar for ::find.
+  option* operator[](char shortcut)
+  {
+    return find(shortcut);
+  }
+
   /// Retrieves an option.
   /// @param name The name of the option to lookup.
   /// @returns The option *name* or `nullptr` if *name* does not exist.
-  option* operator[](std::string const& name)
+  option* find(std::string const& name)
   {
     return find_option(name);
   }
@@ -219,7 +244,7 @@ public:
   /// @param shortcut The shortcut to lookup.
   /// @returns The option for *shortcut* or `nullptr` if *shortcut* does not
   ///     exist.
-  option* operator[](char shortcut)
+  option* find(char shortcut)
   {
     auto i = shortcuts_.find({shortcut});
     if (i == shortcuts_.end())
@@ -364,7 +389,6 @@ protected:
       options_.emplace_back(std::move(fqn), std::move(desc), shortcut);
       return options_.back();
     }
-
 
     /// Sets the visibility of this block when displaying the usage.
     bool visible() const
