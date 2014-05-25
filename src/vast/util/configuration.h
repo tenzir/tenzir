@@ -34,6 +34,78 @@ public:
     }
   };
 
+  class option
+  {
+    friend configuration;
+
+  public:
+    option(std::string name, std::string desc, char shortcut = '\0')
+      : name_{std::move(name)},
+        description_{std::move(desc)},
+        shortcut_{shortcut}
+    {
+    }
+
+    template <typename T>
+    option& operator=(T const& x)
+    {
+      return set(x);
+    }
+
+    template <typename T, typename... Args>
+    option& set(T const& head, Args const&... tail)
+    {
+      values_.clear();
+      assign(head, tail...);
+      max_vals_ = values_.size() == 1 ? 1 : -1;
+      return *this;
+    }
+
+    option& set(bool b)
+    {
+      values_.clear();
+
+      if (b)
+        defaulted_ = false;
+
+      return *this;
+    }
+
+    option& multi(size_t n = -1)
+    {
+      max_vals_ = n;
+      return *this;
+    }
+
+    option& single()
+    {
+      return multi(1);
+    }
+
+  private:
+    template <typename T>
+    void assign(T const& x)
+    {
+      std::ostringstream ss;
+      ss << x;
+      values_.push_back(ss.str());
+    }
+
+    template <typename T, typename... Args>
+    void assign(T const& head, Args const&... tail)
+    {
+      assign(head);
+      assign(tail...);
+    }
+
+    std::string name_;
+    std::vector<std::string> values_;
+    std::string description_;
+    size_t max_vals_ = 0;
+    bool defaulted_ = true;
+    char shortcut_ = '\0';
+  };
+
   /// Initializes the configuration from a configuration file.
   /// @param filename The name of the configuration file.
   /// @returns An engaged trial on success.
@@ -99,10 +171,48 @@ public:
         o->values_ = std::move(values);
     }
 
-    if (! cfg.verify())
-      return error{"configuration verification failed"};
+    auto t = cfg.verify();
+    if (! t)
+      return t.error();
 
     return {std::move(cfg)};
+  }
+
+  /// Checks whether conflicts and dependencies are in order.
+  ///
+  /// @returns `nothing` iff there exist no conflicts and all dependencies are
+  /// met.
+  trial<void> verify() const
+  {
+    for (auto& p : conflicts_)
+      if (check(p.first) && check(p.second))
+        return error{"conflicting options:", p.first, p.second};
+
+    for (auto& p : dependencies_)
+    {
+      std::string deps;
+      auto any = std::any_of(
+          p.second.begin(),
+          p.second.end(),
+          [&](std::string const& dep)
+          {
+            deps += " " + dep;
+            return check(dep);
+          });
+
+      if (check(p.first) && ! any)
+        return error{p.first + " requires:" + deps};
+    }
+
+    return nothing;
+  }
+
+  /// Retrieves an option.
+  /// @param name The name of the option to lookup.
+  /// @returns The option *name* or `nullptr` if *name* does not exist.
+  option* operator[](std::string const& name)
+  {
+    return find_option(name);
   }
 
   /// Checks whether the given option is set.
@@ -190,55 +300,6 @@ public:
   }
 
 protected:
-  class option
-  {
-    friend configuration;
-  public:
-    option(std::string name, std::string desc, char shortcut = '\0')
-      : name_{std::move(name)},
-        description_{std::move(desc)},
-        shortcut_{shortcut}
-    {
-    }
-
-    template <typename T>
-    option& init(T const& x)
-    {
-      std::ostringstream ss;
-      ss << x;
-      values_.push_back(ss.str());
-      max_vals_ = (values_.size() == 1) ? 1 : -1;
-      return *this;
-    }
-
-    template<class T, typename... Args>
-    option& init(T const& head, Args... tail)
-    {
-      init(head);
-      init(tail...);
-      return *this;
-    }
-
-    option& multi(size_t n = -1)
-    {
-      max_vals_ = n;
-      return *this;
-    }
-
-    option& single()
-    {
-      return multi(1);
-    }
-
-  private:
-    std::string name_;
-    std::vector<std::string> values_;
-    std::string description_;
-    size_t max_vals_ = 0;
-    bool defaulted_ = true;
-    char shortcut_ = '\0';
-  };
-
   /// A proxy class to add options to the configuration.
   class block
   {
@@ -414,26 +475,6 @@ private:
   Derived const* derived() const
   {
     return static_cast<Derived const*>(this);
-  }
-
-  bool verify() const
-  {
-    for (auto& p : conflicts_)
-      if (check(p.first) && check(p.second))
-        return false;
-
-    for (auto& p : dependencies_)
-    {
-      auto any = std::any_of(
-          p.second.begin(),
-          p.second.end(),
-          [&](std::string const& dep) { return check(dep); });
-
-      if (check(p.first) && ! any)
-        return false;
-    }
-
-    return true;
   }
 
   option* find_option(std::string const& opt)

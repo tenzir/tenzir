@@ -28,12 +28,12 @@ void configuration::initialize()
   auto& b = create_block("general options");
   b.add('f', "log-file", "log unit test output to file");
   b.add('k', "vast-keep-logs", "keep VAST's log directory after tests");
-  b.add('l', "vast-log-dir", "VAST log directory").init("/tmp/vast-unit-test");
+  b.add('l', "vast-log-dir", "VAST log directory").set("/tmp/vast-unit-test");
   b.add('n', "no-colors", "don't use colors when printing to console");
-  b.add('s', "suites", "execute matching suites").init(".*");
-  b.add('t', "tests", "execute matching tests").init(".*");
-  b.add('v', "console-verbosity", "console verbosity [0-3]").init(1);
-  b.add('V', "file-verbosity", "log file verbosity [0-3]").init(3);
+  b.add('s', "suites", "execute matching suites").set(".*");
+  b.add('t', "tests", "execute matching tests").set(".*");
+  b.add('v', "console-verbosity", "console verbosity [0-3]").set(1);
+  b.add('V', "file-verbosity", "log file verbosity [0-3]").set(3);
   b.add('?', "help", "display this help");
 
   add_dependency("log-file", "no-colors");
