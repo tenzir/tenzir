@@ -299,6 +299,9 @@ public:
   template <typename T>
   trial<T> as(std::string const& opt) const
   {
+    static_assert(! std::is_same<T, std::string>::value,
+                  "use get() for std::string");
+
     auto o = find_option(opt);
     if (! o)
       return error{"unknown option", opt};
