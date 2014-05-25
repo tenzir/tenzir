@@ -1,15 +1,18 @@
 cmake_minimum_required(VERSION 2.6 FATAL_ERROR)
 project(VAST CXX)
 
+set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+include(CTest)
+include(Helpers)
+include(MacDependencyPaths)
+include(ConfigurePackaging)
+
 # Prohibit in-source builds.
 if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
   message(FATAL_ERROR "In-source builds are not allowed. Please use "
     "./configure to choose a build directory and "
     "initialize the build configuration.")
 endif ()
-
-set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
-include(Helpers)
 
 # Support for 'make uninstall'.
 if ("${PROJECT_SOURCE_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
@@ -69,8 +72,6 @@ endif ()
 if (NOT CMAKE_CXX_FLAGS)
   set(CMAKE_CXX_FLAGS ${CXX_FLAGS})
 endif ()
-
-include(MacDependencyPaths)
 
 if (BOOST_ROOT)
   set(Boost_NO_SYSTEM_PATHS true)
@@ -145,7 +146,6 @@ add_subdirectory(src)
 add_subdirectory(test)
 add_subdirectory(tools)
 
-include(ConfigurePackaging)
 ConfigurePackaging(${VERSION})
 
 macro(display test desc summary)

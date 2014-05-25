@@ -105,7 +105,7 @@ public:
       console_{std::cerr}
   {
     if (! logfile.empty())
-      file_.open(logfile);
+      file_.open(logfile, std::ofstream::out | std::ofstream::app);
   }
 
   template <typename T>
@@ -186,7 +186,7 @@ int engine::run(configuration const& cfg)
     color::bold_white   = "";
   }
 
-  auto log_file = cfg.as<std::string>("log-file");
+  auto log_file = cfg.get("log-file");
   logger log{*cfg.as<int>("console-verbosity"),
              *cfg.as<int>("file-verbosity"),
              log_file ? *log_file : ""};
@@ -196,17 +196,17 @@ int engine::run(configuration const& cfg)
   size_t total_tests = 0;
   size_t total_good = 0;
   size_t total_bad = 0;
-  auto suite_rx = std::regex{*cfg.as<std::string>("suites")};
-  auto test_rx = std::regex{*cfg.as<std::string>("tests")};
+  auto suite_rx = std::regex{*cfg.get("suites")};
+  auto test_rx = std::regex{*cfg.get("tests")};
   auto bar = '+' + std::string(70, '-') + '+';
 
   std::regex not_suite_rx;
-  auto not_suites = cfg.as<std::string>("not-suites");
+  auto not_suites = cfg.get("not-suites");
   if (not_suites)
     not_suite_rx = *not_suites;
 
   std::regex not_test_rx;
-  auto not_tests = cfg.as<std::string>("not-tests");
+  auto not_tests = cfg.get("not-tests");
   if (not_tests)
     not_test_rx = *not_tests;
 
