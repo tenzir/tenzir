@@ -30,8 +30,10 @@ void configuration::initialize()
   b.add('k', "vast-keep-logs", "keep VAST's log directory after tests");
   b.add('l', "vast-log-dir", "VAST log directory").init("/tmp/vast-unit-test");
   b.add('n', "no-colors", "don't use colors when printing to console");
-  b.add('s', "suites", "execute matching suites").init(".*");
-  b.add('t', "tests", "execute matching tests").init(".*");
+  b.add('s', "suites", "execute only matching suites").init(".*");
+  b.add('S', "not-suites", "execute everything but matching suites").single();
+  b.add('t', "tests", "execute only matching tests").init(".*");
+  b.add('T', "not-tests", "execute everything but matching tests").single();
   b.add('v', "console-verbosity", "console verbosity [0-3]").init(1);
   b.add('V', "file-verbosity", "log file verbosity [0-3]").init(3);
   b.add('?', "help", "display this help");

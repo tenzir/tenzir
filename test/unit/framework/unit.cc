@@ -191,19 +191,29 @@ int engine::run(configuration const& cfg)
              *cfg.as<int>("file-verbosity"),
              log_file ? *log_file : ""};
 
-  auto bar = '+' + std::string(70, '-') + '+';
-
+  std::chrono::microseconds runtime;
   size_t failed_requires = 0;
   size_t total_tests = 0;
   size_t total_good = 0;
   size_t total_bad = 0;
-  std::chrono::microseconds runtime;
-
   auto suite_rx = std::regex{*cfg.as<std::string>("suites")};
   auto test_rx = std::regex{*cfg.as<std::string>("tests")};
+  auto bar = '+' + std::string(70, '-') + '+';
+
+  std::regex not_suite_rx;
+  auto not_suites = cfg.as<std::string>("not-suites");
+  if (not_suites)
+    not_suite_rx = *not_suites;
+
+  std::regex not_test_rx;
+  auto not_tests = cfg.as<std::string>("not-tests");
+  if (not_tests)
+    not_test_rx = *not_tests;
+
   for (auto& p : instance().suites_)
   {
-    if (! std::regex_search(p.first, suite_rx))
+    if (! std::regex_search(p.first, suite_rx)
+        || (not_suites && std::regex_search(p.first, not_suite_rx)))
       continue;
 
     auto suite_name = p.first.empty() ? "<unnamed>" : p.first;
@@ -213,7 +223,8 @@ int engine::run(configuration const& cfg)
 
     for (auto& t : p.second)
     {
-      if (! std::regex_search(t->__name(), test_rx))
+      if (! std::regex_search(t->__name(), test_rx)
+          || (not_tests && std::regex_search(t->__name(), not_test_rx)))
         continue;
 
       if (! displayed_header)
