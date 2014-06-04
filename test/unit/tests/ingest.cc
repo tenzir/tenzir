@@ -49,7 +49,7 @@ TEST("ingestion (all-in-one)")
   CHECK(rm(path{*cfg.get("directory")}));
 }
 
-TEST("ingestion (two processes)")
+TEST("ingestion (two programs)")
 {
   bump_ports(cfg);
   *cfg['a'] = true;
@@ -60,7 +60,7 @@ TEST("ingestion (two processes)")
 
   // Wait until the TCP sockets have bound.
   scoped_actor self;
-  self->delayed_send(self, std::chrono::seconds(5), "wait");
+  self->delayed_send(self, std::chrono::seconds(1), "wait");
   self->receive(others() >>
                 [&]
                 {
