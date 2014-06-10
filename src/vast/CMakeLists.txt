@@ -97,6 +97,11 @@ if (GPERFTOOLS_FOUND AND VAST_USE_PERFTOOLS_HEAP_PROFILER)
 endif ()
 
 add_library(libvast SHARED ${libvast_sources})
-set_target_properties(libvast PROPERTIES OUTPUT_NAME vast)
+set_target_properties(libvast
+  PROPERTIES
+  SOVERSION ${VERSION_MAJOR}
+  VERSION ${VERSION_MAJOR}.${VERSION_MINOR}
+  OUTPUT_NAME vast)
+
 target_link_libraries(libvast ${libvast_libs})
 install(TARGETS libvast DESTINATION lib)
