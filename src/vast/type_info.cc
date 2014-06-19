@@ -96,7 +96,6 @@ bool is_convertible(global_type_info const* from, std::type_info const& to)
 }
 
 namespace {
-// TODO: Use polymorphic lambdas in C++14.
 
 struct type_announcer
 {
@@ -127,7 +126,7 @@ struct bmi_converter
 
     make_convertible<
       detail::bitmap_index_model<T>,
-      detail::bitmap_index_concept
+      detail::bitmap_index_concept<typename T::bitstream_type>
     >();
   }
 };

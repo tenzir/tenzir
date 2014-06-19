@@ -135,7 +135,7 @@ public:
           return;
         }
 
-        send(sink, pred, part, std::move(*r));
+        send(sink, pred, part, bitstream{std::move(*r)});
       }
     };
   }

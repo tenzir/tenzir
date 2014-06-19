@@ -53,8 +53,12 @@ public:
   /// Looks up a value given a relational operator.
   /// @param op The relation operator.
   /// @param val The value to lookup.
-  trial<bitstream> lookup(relational_operator op, value const& val) const
+  template <typename Hack = Derived>
+  auto lookup(relational_operator op, value const& val) const
+    -> decltype(std::declval<Hack>().lookup_impl(op, val))
   {
+    static_assert(std::is_same<Hack, Derived>(), ":-P");
+
     return derived()->lookup_impl(op, val);
   }
 
@@ -89,6 +93,7 @@ private:
 namespace detail {
 
 /// The concept for bitmap indexes.
+template <typename Bitstream>
 struct bitmap_index_concept
 {
   bitmap_index_concept() = default;
@@ -96,7 +101,7 @@ struct bitmap_index_concept
 
   virtual bool push_back_impl(value const& val) = 0;
   virtual bool stretch_impl(size_t n) = 0;
-  virtual trial<bitstream> lookup_impl(relational_operator op,
+  virtual trial<Bitstream> lookup_impl(relational_operator op,
                                        value const& val) const = 0;
   virtual uint64_t size_impl() const = 0;
 
@@ -109,9 +114,12 @@ struct bitmap_index_concept
 /// A concrete bitmap index model.
 template <typename BitmapIndex>
 struct bitmap_index_model
-  : bitmap_index_concept,
+  : bitmap_index_concept<typename BitmapIndex::bitstream_type>,
     util::equality_comparable<bitmap_index_model<BitmapIndex>>
 {
+  using bitstream_type = typename BitmapIndex::bitstream_type;
+  using bmi_concept = bitmap_index_concept<bitstream_type>;
+
   bitmap_index_model() = default;
 
   bitmap_index_model(BitmapIndex bmi)
@@ -129,8 +137,8 @@ struct bitmap_index_model
     return bmi_.stretch_impl(n);
   }
 
-  virtual trial<bitstream> lookup_impl(relational_operator op,
-                                       value const& val) const final
+  virtual trial<bitstream_type>
+  lookup_impl(relational_operator op, value const& val) const final
   {
     return bmi_.lookup_impl(op, val);
   }
@@ -140,7 +148,7 @@ struct bitmap_index_model
     return bmi_.size_impl();
   }
 
-  BitmapIndex const& cast(bitmap_index_concept const& c) const
+  BitmapIndex const& cast(bmi_concept const& c) const
   {
     if (typeid(c) != typeid(*this))
       throw std::bad_cast();
@@ -148,7 +156,7 @@ struct bitmap_index_model
     return static_cast<bitmap_index_model const&>(c).bmi_;
   }
 
-  BitmapIndex& cast(bitmap_index_concept& c)
+  BitmapIndex& cast(bmi_concept& c)
   {
     if (typeid(c) != typeid(*this))
       throw std::bad_cast();
@@ -161,12 +169,12 @@ struct bitmap_index_model
     return x.bmi_ == y.bmi_;
   }
 
-  virtual std::unique_ptr<bitmap_index_concept> copy() const final
+  virtual std::unique_ptr<bmi_concept> copy() const final
   {
     return std::make_unique<bitmap_index_model>(*this);
   }
 
-  virtual bool equals(bitmap_index_concept const& other) const final
+  virtual bool equals(bmi_concept const& other) const final
   {
     return bmi_ == cast(other);
   }
@@ -248,7 +256,7 @@ private:
     return concept_->stretch_impl(n);
   }
 
-  trial<bitstream> lookup_impl(relational_operator op, value const& val) const
+  trial<Bitstream> lookup_impl(relational_operator op, value const& val) const
   {
     assert(concept_);
     return concept_->lookup_impl(op, val);
@@ -261,7 +269,7 @@ private:
   }
 
 private:
-  std::unique_ptr<detail::bitmap_index_concept> concept_;
+  std::unique_ptr<detail::bitmap_index_concept<Bitstream>> concept_;
 
 private:
   friend access;
@@ -333,6 +341,8 @@ class arithmetic_bitmap_index
     >;
 
 public:
+  using bitstream_type = Bitstream;
+
   arithmetic_bitmap_index() = default;
 
   template <
@@ -370,17 +380,17 @@ private:
     return bitmap_.append(n, false);
   }
 
-  trial<bitstream> lookup_impl(relational_operator op, value const& val) const
+  trial<Bitstream> lookup_impl(relational_operator op, value const& val) const
   {
     if (op == in || op == not_in)
       return error{"unsupported relational operator:", op};
 
     if (bitmap_.empty())
-      return {bitstream{Bitstream{}}};
+      return Bitstream{};
 
     auto r = bitmap_.lookup(op, extract(val));
     if (r)
-      return bitstream{std::move(*r)};
+      return std::move(*r);
     else
       return r.error();
   };
@@ -412,9 +422,7 @@ private:
   }
 };
 
-/// A bitmap index for strings. It uses a @link dictionary
-/// vast::util::dictionary@endlink to map each string to a unique numeric value
-/// to be used by the bitmap.
+/// A bitmap index for strings.
 template <typename Bitstream>
 class string_bitmap_index
   : public bitmap_index_base<string_bitmap_index<Bitstream>>
@@ -425,6 +433,8 @@ class string_bitmap_index
   friend struct detail::bitmap_index_model;
 
 public:
+  using bitstream_type = Bitstream;
+
   string_bitmap_index() = default;
 
 private:
@@ -460,7 +470,7 @@ private:
     return size_.append(n, false);
   }
 
-  trial<bitstream> lookup_impl(relational_operator op, value const& val) const
+  trial<Bitstream> lookup_impl(relational_operator op, value const& val) const
   {
     assert(val.which() == string_value);
 
@@ -476,20 +486,20 @@ private:
           if (str.empty())
           {
             if (auto s = size_.lookup(equal, 0))
-              return {std::move(op == equal ? *s : s->flip())};
+              return std::move(op == equal ? *s : s->flip());
             else
               return s.error();
           }
 
           if (str.size() > bitmaps_.size())
-            return {Bitstream{this->size(), op == not_equal}};
+            return Bitstream{this->size(), op == not_equal};
 
           auto r = size_.lookup(less_equal, str.size());
           if (! r)
             return r.error();
 
           if (r->find_first() == Bitstream::npos)
-            return {Bitstream{this->size(), op == not_equal}};
+            return Bitstream{this->size(), op == not_equal};
 
           for (size_t i = 0; i < str.size(); ++i)
           {
@@ -500,19 +510,19 @@ private:
             if (b->find_first() != Bitstream::npos)
               *r &= *b;
             else
-              return {Bitstream{this->size(), op == not_equal}};
+              return Bitstream{this->size(), op == not_equal};
           }
 
-          return {std::move(op == equal ? *r : r->flip())};
+          return std::move(op == equal ? *r : r->flip());
         }
       case ni:
       case not_ni:
         {
           if (str.empty())
-            return {Bitstream{this->size(), op == ni}};
+            return Bitstream{this->size(), op == ni};
 
           if (str.size() > bitmaps_.size())
-            return {Bitstream{this->size(), op == not_ni}};
+            return Bitstream{this->size(), op == not_ni};
 
           // Iterate through all k-grams.
           Bitstream r{this->size(), 0};
@@ -539,7 +549,7 @@ private:
               r |= substr;
           }
 
-          return {std::move(op == ni ? r : r.flip())};
+          return std::move(op == ni ? r : r.flip());
         }
     }
   }
@@ -583,6 +593,8 @@ class address_bitmap_index
   friend struct detail::bitmap_index_model;
 
 public:
+  using bitstream_type = Bitstream;
+
   address_bitmap_index() = default;
 
 private:
@@ -619,13 +631,13 @@ private:
     return v4_.append(n, false);
   }
 
-  trial<bitstream> lookup_impl(relational_operator op, value const& val) const
+  trial<Bitstream> lookup_impl(relational_operator op, value const& val) const
   {
     if (! (op == equal || op == not_equal || op == in || op == not_in))
       return error{"unsupported relational operator", op};
 
     if (v4_.empty())
-      return {Bitstream{}};
+      return Bitstream{};
 
     switch (val.which())
     {
@@ -638,7 +650,7 @@ private:
     }
   }
 
-  trial<bitstream>
+  trial<Bitstream>
   lookup_impl(relational_operator op, address const& addr) const
   {
     auto& bytes = addr.data();
@@ -654,13 +666,13 @@ private:
       if (bs->find_first() != Bitstream::npos)
         r &= *bs;
       else
-        return {Bitstream{this->size(), op == not_equal}};
+        return Bitstream{this->size(), op == not_equal};
     }
 
-    return {std::move(op == equal ? r : r.flip())};
+    return std::move(op == equal ? r : r.flip());
   }
 
-  trial<bitstream> lookup_impl(relational_operator op, prefix const& pfx) const
+  trial<Bitstream> lookup_impl(relational_operator op, prefix const& pfx) const
   {
     if (! (op == in || op == not_in))
       return error{"unsupported relational operator", op};
@@ -687,11 +699,11 @@ private:
         {
           if (op == not_in)
             r.flip();
-          return {std::move(r)};
+          return std::move(r);
         }
       }
 
-    return {Bitstream{this->size(), false}};
+    return Bitstream{this->size(), false};
   }
 
   uint64_t size_impl() const
@@ -733,6 +745,8 @@ class prefix_bitmap_index
   friend struct detail::bitmap_index_model;
 
 public:
+  using bitstream_type = Bitstream;
+
   prefix_bitmap_index() = default;
 
 private:
@@ -747,7 +761,7 @@ private:
     return network_.stretch(n) && length_.append(n, false);
   }
 
-  trial<bitstream> lookup_impl(relational_operator op, value const& val) const
+  trial<Bitstream> lookup_impl(relational_operator op, value const& val) const
   {
     if (! (op == equal || op == not_equal))
       return error{"unsupported relational operator", op};
@@ -762,7 +776,7 @@ private:
     if (! n)
       return n;
 
-    auto r = bitstream{*bs & *n};
+    auto r = Bitstream{*bs & *n};
     return std::move(op == equal ? r : r.flip());
   }
 
@@ -805,6 +819,8 @@ class port_bitmap_index
   friend struct detail::bitmap_index_model;
 
 public:
+  using bitstream_type = Bitstream;
+
   port_bitmap_index() = default;
 
 private:
@@ -819,7 +835,7 @@ private:
     return num_.append(n, false) && proto_.append(n, false);
   }
 
-  trial<bitstream> lookup_impl(relational_operator op, value const& val) const
+  trial<Bitstream> lookup_impl(relational_operator op, value const& val) const
   {
     assert(val.which() == port_value);
 
@@ -827,7 +843,7 @@ private:
       return error{"unsupported relational operator", op};
 
     if (num_.empty())
-      return {Bitstream{}};
+      return Bitstream{};
 
     auto& p = val.get<port>();
     auto n = num_.lookup(op, p.number());
@@ -835,7 +851,7 @@ private:
       return n.error();
 
     if (n->find_first() == Bitstream::npos)
-      return {Bitstream{this->size(), false}};
+      return Bitstream{this->size(), false};
 
     if (p.type() != port::unknown)
     {
@@ -846,7 +862,7 @@ private:
       *n &= *t;
     }
 
-    return {std::move(*n)};
+    return std::move(*n);
   }
 
   uint64_t size_impl() const
@@ -889,6 +905,8 @@ class sequence_bitmap_index : public bitmap_index_base<sequence_bitmap_index<Bit
   friend struct detail::bitmap_index_model;
 
 public:
+  using bitstream_type = Bitstream;
+
   sequence_bitmap_index() = default;
 
   sequence_bitmap_index(type_tag t)
@@ -912,7 +930,7 @@ private:
     return size_.append(n, false);
   }
 
-  trial<bitstream> lookup_impl(relational_operator op, value const& val) const
+  trial<Bitstream> lookup_impl(relational_operator op, value const& val) const
   {
     if (op == ni)
       op = in;
@@ -923,9 +941,9 @@ private:
       return error{"unsupported relational operator", op};
 
     if (this->empty())
-      return {Bitstream{}};
+      return Bitstream{};
 
-    bitstream r;
+    Bitstream r;
     auto t = bmis_.front().lookup(equal, val);
     if (t)
       r |= *t;
@@ -947,7 +965,7 @@ private:
     if (op == not_in)
       r.flip();
 
-    return r;
+    return std::move(r);
   }
 
   uint64_t size_impl() const
@@ -1009,7 +1027,8 @@ private:
     source >> elem_type_ >> bmis_ >> size_;
   }
 
-  friend bool operator==(sequence_bitmap_index const& x, sequence_bitmap_index const& y)
+  friend bool
+  operator==(sequence_bitmap_index const& x, sequence_bitmap_index const& y)
   {
     return x.elem_type_ == y.elem_type_
         && x.bmis_ == y.bmis_
