@@ -36,7 +36,37 @@ program::program(configuration config)
 
 behavior program::act()
 {
+  attach_functor(
+      [=](uint32_t)
+      {
+        receiver_ = invalid_actor;
+        tracker_ = invalid_actor;
+        archive_ = invalid_actor;
+        index_ = invalid_actor;
+        search_ = invalid_actor;
+      });
+
   behavior default_behavior = (
+      on(atom("receiver")) >> [=]()
+      {
+        return receiver_;
+      },
+      on(atom("tracker")) >> [=]()
+      {
+        return tracker_;
+      },
+      on(atom("archive")) >> [=]()
+      {
+        return archive_;
+      },
+      on(atom("index")) >> [=]()
+      {
+        return index_;
+      },
+      on(atom("search")) >> [=]()
+      {
+        return search_;
+      },
       on(atom("signal"), arg_match) >> [&](int signal)
       {
         VAST_LOG_ACTOR_VERBOSE("received signal " << signal);
@@ -114,37 +144,35 @@ behavior program::act()
       send(prof, atom("start"), atom("rusage"));
     }
 
-    actor tracker;
     auto tracker_host = *config_.get("tracker.host");
     auto tracker_port = *config_.as<unsigned>("tracker.port");
     if (config_.check("tracker-actor"))
     {
-      tracker = spawn<id_tracker_actor>(vast_dir);
+      tracker_ = spawn<id_tracker_actor>(vast_dir);
       VAST_LOG_ACTOR_INFO(
           "publishes tracker at " << tracker_host << ':' << tracker_port);
 
-      publish(tracker, tracker_port, tracker_host.c_str());
+      publish(tracker_, tracker_port, tracker_host.c_str());
     }
     else if (config_.check("receiver-actor"))
     {
       VAST_LOG_ACTOR_VERBOSE(
           "connects to tracker at " << tracker_host << ':' << tracker_port);
-      tracker = remote_actor(tracker_host, tracker_port);
+      tracker_ = remote_actor(tracker_host, tracker_port);
     }
 
-    actor archive;
     auto archive_host = *config_.get("archive.host");
     auto archive_port = *config_.as<unsigned>("archive.port");
     if (config_.check("archive-actor"))
     {
-      archive = spawn<archive_actor>(
+      archive_ = spawn<archive_actor>(
           vast_dir,
           *config_.as<size_t>("archive.max-segments"));
 
       VAST_LOG_ACTOR_INFO(
           "publishes archive at " << archive_host << ':' << archive_port);
 
-      publish(archive, archive_port, archive_host.c_str());
+      publish(archive_, archive_port, archive_host.c_str());
     }
     else if (config_.check("receiver-actor")
              || config_.check("search-actor")
@@ -153,21 +181,20 @@ behavior program::act()
       VAST_LOG_ACTOR_VERBOSE(
           "connects to archive at " << archive_host << ':' << archive_port);
 
-      archive = remote_actor(archive_host, archive_port);
+      archive_ = remote_actor(archive_host, archive_port);
     }
 
-    actor index;
     auto index_host = *config_.get("index.host");
     auto index_port = *config_.as<unsigned>("index.port");
     if (config_.check("index-actor"))
     {
-      index = spawn<index_actor>(
+      index_ = spawn<index_actor>(
           vast_dir, *config_.as<size_t>("index.batch-size"));
 
       VAST_LOG_ACTOR_INFO(
           "publishes index at " << index_host << ':' << index_port);
 
-      publish(index, index_port, index_host.c_str());
+      publish(index_, index_port, index_host.c_str());
     }
     else if (config_.check("receiver-actor")
              || config_.check("search-actor")
@@ -176,12 +203,12 @@ behavior program::act()
       VAST_LOG_ACTOR_VERBOSE("connects to index at " <<
                            index_host << ":" << index_port);
 
-      index = remote_actor(index_host, index_port);
+      index_ = remote_actor(index_host, index_port);
     }
 
     if (auto partition = config_.get("index.partition"))
     {
-      send(index, atom("partition"), *partition);
+      send(index_, atom("partition"), *partition);
     }
     else if (config_.check("index.rebuild"))
     {
@@ -189,8 +216,8 @@ behavior program::act()
         [=](segment const& s)
         {
           event_id next = s.base() + s.events();
-          send(archive, atom("segment"), next);
-          forward_to(index);
+          send(archive_, atom("segment"), next);
+          forward_to(index_);
         },
         on(atom("no segment"), arg_match) >> [=](event_id eid)
         {
@@ -199,20 +226,19 @@ behavior program::act()
         });
 
       VAST_LOG_INFO("begins rebuilding index");
-      send(index, atom("delete"));
-      send(archive, atom("segment"), event_id{1});
+      send(index_, atom("delete"));
+      send(archive_, atom("segment"), event_id{1});
     }
 
-    actor search;
     auto search_host = *config_.get("search.host");
     auto search_port = *config_.as<unsigned>("search.port");
     if (config_.check("search-actor"))
     {
-      search = spawn<search_actor, linked>(vast_dir, archive, index);
+      search_ = spawn<search_actor, linked>(vast_dir, archive_, index_);
       VAST_LOG_ACTOR_INFO(
           "publishes search at " << search_host << ':' << search_port);
 
-      publish(search, search_port, search_host.c_str());
+      publish(search_, search_port, search_host.c_str());
     }
 #ifdef VAST_HAVE_EDITLINE
     else if (config_.check("receiver-actor") || config_.check("console-actor"))
@@ -223,44 +249,43 @@ behavior program::act()
       VAST_LOG_ACTOR_VERBOSE(
           "connects to search at " << search_host << ":" << search_port);
 
-      search = remote_actor(search_host, search_port);
+      search_ = remote_actor(search_host, search_port);
 
 #ifdef VAST_HAVE_EDITLINE
       if (config_.check("console-actor"))
       {
-        auto c = spawn<console, detached+linked>(search, vast_dir / "console");
+        auto c = spawn<console, detached+linked>(search_, vast_dir / "console");
         delayed_send(c, std::chrono::milliseconds(200), atom("prompt"));
       }
 #endif
     }
 
-    actor receiver;
     auto receiver_host = *config_.get("receiver.host");
     auto receiver_port = *config_.as<unsigned>("receiver.port");
     if (config_.check("receiver-actor"))
     {
-      receiver = spawn<receiver_actor>(tracker, archive, index, search);
+      receiver_ = spawn<receiver_actor>(tracker_, archive_, index_, search_);
       VAST_LOG_ACTOR_INFO(
           "publishes receiver at " << receiver_host << ':' << receiver_port);
 
-      receiver->link_to(tracker);
-      receiver->link_to(archive);
-      receiver->link_to(index);
+      receiver_->link_to(tracker_);
+      receiver_->link_to(archive_);
+      receiver_->link_to(index_);
 
       // If we're running in "one-shot" mode where both ingestor and core
       // actors share the same program, then we initiate the teardown via the
       // ingestor.
       if (! config_.check("ingestor-actor"))
-        receiver->link_to(*this);
+        receiver_->link_to(*this);
 
-      publish(receiver, receiver_port, receiver_host.c_str());
+      publish(receiver_, receiver_port, receiver_host.c_str());
     }
     else if (config_.check("ingestor-actor"))
     {
       VAST_LOG_ACTOR_VERBOSE(
           "connects to receiver at " << receiver_host << ":" << receiver_port);
 
-      receiver = remote_actor(receiver_host, receiver_port);
+      receiver_ = remote_actor(receiver_host, receiver_port);
     }
 
     actor ingestor;
@@ -268,7 +293,7 @@ behavior program::act()
     {
       ingestor = spawn<ingestor_actor>(
           vast_dir,
-          receiver,
+          receiver_,
           *config_.as<size_t>("ingest.max-events-per-chunk"),
           *config_.as<size_t>("ingest.max-segment-size") * 1000000,
           *config_.as<size_t>("ingest.batch-size"));
@@ -277,7 +302,7 @@ behavior program::act()
       // to it rather than the program. This ensures proper delivery of
       // inflight segments from ingestor to receiver.
       if (config_.check("receiver-actor"))
-        ingestor->link_to(receiver);
+        ingestor->link_to(receiver_);
       else
         ingestor->link_to(*this);
 

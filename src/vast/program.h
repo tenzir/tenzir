@@ -20,6 +20,11 @@ public:
   std::string describe() const final;
 
 private:
+  cppa::actor receiver_;
+  cppa::actor tracker_;
+  cppa::actor archive_;
+  cppa::actor index_;
+  cppa::actor search_;
   configuration config_;
 };
 
