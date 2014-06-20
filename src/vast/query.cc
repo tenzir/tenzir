@@ -214,7 +214,7 @@ void query_actor::prefetch(size_t max)
     if (std::find(inflight_.begin(), inflight_.end(), i) == inflight_.end())
     {
       inflight_.push_back(i);
-      send(archive_, i, this);
+      send(archive_, i);
       VAST_LOG_ACTOR_DEBUG("asks for segment containing id " << i);
     }
   }

@@ -82,7 +82,7 @@ trial<any_tuple> archive::load(event_id eid)
   if (auto id = ranges_.lookup(eid))
     return cache_.retrieve(*id);
   else
-    return error{"no segment for id", id};
+    return error{"no segment for id", eid};
 }
 
 any_tuple archive::on_miss(uuid const& id)
@@ -119,18 +119,18 @@ cppa::behavior archive_actor::act()
 
       return make_any_tuple(atom("ack"), s.id());
     },
-    [=](event_id eid, actor sink)
+    [=](event_id eid)
     {
       auto t = archive_.load(eid);
       if (t)
       {
         VAST_LOG_ACTOR_DEBUG("delivering segment for event " << eid);
-        send_tuple(sink, *t);
+        return *t;
       }
       else
       {
         VAST_LOG_ACTOR_WARN(t.error());
-        send(sink, atom("no segment"), eid);
+        return make_any_tuple(atom("no segment"), eid);
       }
     }
   };
