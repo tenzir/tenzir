@@ -2,6 +2,7 @@
 #define VAST_ACTOR_H
 
 #include <cppa/event_based_actor.hpp>
+#include <cppa/typed_event_based_actor.hpp>
 #include "vast/logger.h"
 
 namespace vast {
@@ -15,9 +16,10 @@ constexpr uint32_t kill   = cppa::exit_reason::user_defined + 3;
 
 } // namespace exit
 
-/// An actor enhanced in 
+/// The base class for event-based actors in VAST.
 struct actor_base : cppa::event_based_actor
 {
+protected:
   cppa::behavior make_behavior() final
   {
     VAST_LOG_ACTOR_DEBUG(describe(), "spawned");
@@ -32,6 +34,28 @@ struct actor_base : cppa::event_based_actor
   virtual cppa::behavior act() = 0;
   virtual std::string describe() const = 0;
 };
+
+/// The base class for typed actors in VAST.
+template <typename Actor>
+struct typed_actor_base : Actor::base
+{
+protected:
+  typename Actor::behavior_type make_behavior() final
+  {
+    VAST_LOG_ACTOR_DEBUG(describe(), "spawned");
+    return act();
+  }
+
+  void on_exit() final
+  {
+    VAST_LOG_ACTOR_DEBUG(describe(), "terminated");
+  }
+
+  virtual typename Actor::behavior_type act() = 0;
+  virtual std::string describe() const = 0;
+};
+
+using cppa::replies_to;
 
 } // namespace vast
 
