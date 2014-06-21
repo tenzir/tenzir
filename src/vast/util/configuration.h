@@ -119,76 +119,76 @@ public:
     char shortcut_ = '\0';
   };
 
-  /// Initializes the configuration from a configuration file.
-  /// @param filename The name of the configuration file.
-  /// @returns An engaged trial on success.
-  static trial<Derived> parse(std::string const& /* filename */)
-  {
-    return error{"function not yet implemented"};
-  }
-
   /// Initializes the configuration from command line parameters.
   /// @argc The argc parameter from main.
   /// @param argv The argv parameter from main.
   static trial<Derived> parse(int argc, char *argv[])
   {
-    Derived cfg;
-
-    // Although we don't like to use exceptions, for the "configuration DSL" we
-    // prefer a monadic style to declare our program and hence have to fall
-    // back to exceptions.
     try
     {
-      cfg.initialize();
+      Derived cfg;
+
+      for (int i = 1; i < argc; ++i)
+      {
+        std::vector<std::string> values;
+
+        std::string arg{argv[i]};
+        auto val = cfg.optionize(arg);
+        if (val)
+          values.emplace_back(*val);
+        else if (val.failed())
+          return val.error();
+
+        auto o = cfg.find_option(arg);
+        if (o)
+          o->defaulted_ = false;
+        else
+          return error{"unknown option", arg};
+
+        // Consume everything until the next option.
+        while (i + 1 < argc)
+        {
+          std::string next{argv[i + 1]};
+          if (! cfg.optionize(next).failed())
+            break;
+
+          values.emplace_back(std::move(next));
+          ++i;
+        }
+
+        if (values.size() > o->max_vals_)
+          return error{"too many values", arg};
+
+        if (o->max_vals_ == 1 && values.size() != 1)
+          return error{"option value required", arg};
+
+        if (! values.empty())
+          o->values_ = std::move(values);
+      }
+
+      auto t = cfg.verify();
+      if (! t)
+        return t.error();
+
+      return {std::move(cfg)};
     }
     catch (std::logic_error const& e)
     {
       return error{e.what()};
     }
+  }
 
-    for (int i = 1; i < argc; ++i)
+  configuration(configuration const& other)
+    : shortcuts_{other.shortcuts_},
+      conflicts_{other.conflicts_},
+      dependencies_{other.dependencies_}
+  {
+    for (auto& ob : other.blocks_)
     {
-      std::vector<std::string> values;
-
-      std::string arg{argv[i]};
-      auto val = cfg.optionize(arg);
-      if (val)
-        values.emplace_back(*val);
-      else if (val.failed())
-        return val.error();
-
-      auto o = cfg.find_option(arg);
-      if (o)
-        o->defaulted_ = false;
-      else
-        return error{"unknown option", arg};
-
-      // Consume everything until the next option.
-      while (i + 1 < argc)
-      {
-        std::string next{argv[i + 1]};
-        if (! cfg.optionize(next).failed())
-          break;
-
-        values.emplace_back(std::move(next));
-        ++i;
-      }
-
-      if (values.size() > o->max_vals_)
-        return error{"too many values", arg};
-
-      if (o->max_vals_ == 1 && values.size() != 1)
-        return error{"option value required", arg};
-
-      if (! values.empty())
-        o->values_ = std::move(values);
+      auto& b = create_block(ob.name_, ob.prefix_);
+      b.visible(ob.visible());
+      b.options_ = ob.options_;
     }
-
-    auto t = cfg.verify();
-    if (! t)
-      return t.error();
-
-    return {std::move(cfg)};
   }
 
   /// Checks whether conflicts and dependencies are in order.
@@ -218,19 +218,6 @@ public:
     }
 
     return nothing;
-  }
-
-  configuration(configuration const& other)
-    : shortcuts_{other.shortcuts_},
-      conflicts_{other.conflicts_},
-      dependencies_{other.dependencies_}
-  {
-    for (auto& ob : other.blocks_)
-    {
-      auto& b = create_block(ob.name_, ob.prefix_);
-      b.visible(ob.visible());
-      b.options_ = ob.options_;
-    }
   }
 
   /// Syntactic sugar for ::find.
@@ -439,7 +426,11 @@ protected:
   };
 
   /// Default-constructs a configuration.
-  configuration() = default;
+  /// @throws `std::logic_error` if the configuration is malformed.
+  configuration()
+  {
+    derived()->initialize();
+  }
 
   /// Creates a new option block.
   /// @param name The name of the option block.
