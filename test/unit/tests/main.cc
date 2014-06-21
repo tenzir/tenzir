@@ -4,8 +4,6 @@
 #include "vast/logger.h"
 #include "vast/type_info.h"
 
-uint16_t base_port;
-
 int main(int argc, char* argv[])
 {
   vast::announce_builtin_types();
@@ -27,8 +25,6 @@ int main(int argc, char* argv[])
     std::cerr << "failed to initialize VAST's logger" << std::endl;
     return 1;
   }
-
-  base_port = *cfg->as<uint16_t>("base-port");
 
   auto rc = unit::engine::run(*cfg);
 
