@@ -104,7 +104,7 @@ TEST("actor integrity")
   self->send(core, atom("archive"));
   self->receive([&](actor archive) { self->send(archive, event_id(100)); });
   self->receive(
-      (on_arg_match >> [&](segment const& s)
+      on_arg_match >> [&](segment const& s)
       {
         CHECK(s.base() == 1);
         CHECK(s.events() == 113);
@@ -115,8 +115,8 @@ TEST("actor integrity")
         REQUIRE(e);
         CHECK((*e)[1] == "XBy0ZlNNWuj");
         CHECK((*e)[3] == "TLSv10");
-      })
-      .or_else(fail));
+      },
+      fail);
 
   //
   // Index
@@ -128,35 +128,35 @@ TEST("actor integrity")
   self->receive([&](actor idx) { self->send(idx, atom("query"), *q, self); });
 
   self->receive(
-      (on(atom("success")) >> [&]
+      on(atom("success")) >> [&]
       {
         REQUIRE(true);
-      })
-      .or_else(fail));
+      },
+      fail);
 
   self->receive(
-      (on(atom("progress"), arg_match) >> [=](double progress, uint64_t hits)
+      on(atom("progress"), arg_match) >> [=](double progress, uint64_t hits)
       {
         CHECK(progress == 0.0);
         CHECK(hits == 0);
-      })
-      .or_else(fail));
+      },
+      fail);
 
   self->receive(
-      (on_arg_match >> [&](bitstream const& hits)
+      on_arg_match >> [&](bitstream const& hits)
       {
         CHECK(hits.count() == 46);
         CHECK(hits.find_first() == 4);
-      })
-      .or_else(fail));
+      },
+      fail);
 
   self->receive(
-      (on(atom("progress"), arg_match) >> [=](double progress, uint64_t hits)
+      on(atom("progress"), arg_match) >> [=](double progress, uint64_t hits)
       {
         CHECK(progress == 1.0);
         CHECK(hits == 46);
-      })
-      .or_else(fail));
+      },
+      fail);
 
   self->send_exit(core, exit::done);
   self->await_all_other_actors_done();
