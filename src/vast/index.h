@@ -13,12 +13,13 @@
 namespace vast {
 
 /// An inter-query predicate cache.
-class index
+class index : public actor_base
 {
 public:
-  /// A function applied to each <predicate, partition> pair that is not in the
-  /// cache. Iff it returns `true`, the pair will be added to the cache.
-  using miss_callback = std::function<bool(expr::ast const&, uuid const&)>;
+  class dissector;
+  class builder;
+  class pusher;
+  class evaluator;
 
   struct evaluation
   {
@@ -27,7 +28,7 @@ public:
     double total_progress = 0.0;
   };
 
-  struct cache_entry
+  struct predicate_cache_entry
   {
     struct partition_state
     {
@@ -45,65 +46,6 @@ public:
     time_point last = time_range{};
   };
 
-  /// Sets the miss callback for failed partition hits lookups for a given
-  /// predicate.
-  /// @param f The callback.
-  void set_on_miss(miss_callback f);
-
-  /// Evaluates a given AST with respect to the cache.
-  /// @param ast The AST to get the progress for.
-  /// @returns The result of the evaluation.
-  trial<evaluation> evaluate(expr::ast const& ast);
-
-  /// Incorporates a new query.
-  /// @param qry The query AST.
-  /// @returns `true` on success.
-  trial<evaluation> add_query(expr::ast const& qry);
-
-  /// Registers the number of expected results for a given predicate/partition.
-  /// @param pred The (existing) predicate to update.
-  /// @param part The partition *pred* came from.
-  /// @param n The number of expected hits for *pred* from *part*.
-  void expect(expr::ast const& pred, uuid const& part, uint64_t n);
-
-  /// Updates the state of a given partition.
-  /// @param id The UUID of the partition to update.
-  /// @param first The timestamp of the first event in partition *id*.
-  /// @param last The timestamp of the last event in partition *id*.
-  void update_partition(uuid const& id, time_point first, time_point last);
-
-  /// Updates the cache with new hits.
-  /// @param pred The predicate to update with *hits*.
-  /// @param part The partition where *pred* comes from.
-  /// @param hits The new result for *pred* from *part*.
-  /// @returns The queries affected by *pred*.
-  std::vector<expr::ast> update_hits(expr::ast const& pred, uuid const& part,
-                                     bitstream const& hits);
-
-private:
-  class dissector;
-  class builder;
-  class pusher;
-  class evaluator;
-
-  /// Applies a function to node chain in the GCG up the roots.
-  /// @param start The AST to begin execution.
-  /// @param f The function to execute on *start* and its partents.
-  /// @returns The path of nodes taken through the GCG.
-  std::vector<expr::ast> walk(
-      expr::ast const& start,
-      std::function<bool(expr::ast const&, util::flat_set<expr::ast> const&)> f);
-
-  std::map<expr::ast, cache_entry> cache_;
-  std::unordered_map<uuid, partition_state> partitions_;
-  std::map<expr::ast, util::flat_set<expr::ast>> gqg_;
-  util::flat_set<expr::ast> queries_;
-  miss_callback on_miss_ = [](expr::ast const&, uuid const&) { return true; };
-};
-
-/// The event index.
-struct index_actor : actor_base
-{
   struct query_state
   {
     bitstream hits;
@@ -113,20 +55,46 @@ struct index_actor : actor_base
   /// Spawns the index.
   /// @param dir The VAST directory to create the index under.
   /// @param batch_size The number of events to index at once.
-  index_actor(path const& dir, size_t batch_size);
+  index(path const& dir, size_t batch_size);
 
+  // FIXME: helper function to workaround a libcppa complication.
+  void ask_partition(uuid const& part, expr::ast const& pred);
+
+  /// Evaluates a given AST with respect to the cache.
+  /// @param ast The AST to get the progress for.
+  void evaluate(expr::ast const& ast);
+
+  /// Spawns a partition.
+  /// @param dir The directory of the partition.
+  /// @returns `nothing` on success.
   trial<void> make_partition(path const& dir);
+
+  /// Updates the state of a given partition.
+  /// @param id The UUID of the partition to update.
+  /// @param first The timestamp of the first event in partition *id*.
+  /// @param last The timestamp of the last event in partition *id*.
+  void update_partition(uuid const& id, time_point first, time_point last);
+
+  /// Applies a function to node chain in the GCG up the roots.
+  /// @param start The AST to begin execution.
+  /// @param f The function to execute on *start* and its partents.
+  /// @returns The path of nodes taken through the GCG.
+  std::vector<expr::ast> walk(
+      expr::ast const& start,
+      std::function<bool(expr::ast const&, util::flat_set<expr::ast> const&)> f);
 
   cppa::behavior act() final;
   std::string describe() const final;
 
   path dir_;
   size_t batch_size_;
+  std::map<expr::ast, predicate_cache_entry> predicate_cache_;
+  std::map<expr::ast, util::flat_set<expr::ast>> gqg_;
   std::map<expr::ast, query_state> queries_;
+  std::map<string, uuid> part_map_;
+  std::unordered_map<uuid, partition_state> part_state_;
   std::unordered_map<uuid, cppa::actor> part_actors_;
-  std::map<string, uuid> parts_;
-  std::pair<uuid, cppa::actor> active_;
-  index index_;
+  std::pair<uuid, cppa::actor> active_part_;
 };
 
 } // namespace vast

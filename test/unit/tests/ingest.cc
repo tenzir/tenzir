@@ -1,5 +1,6 @@
 #include <cppa/cppa.hpp>
 
+#include "vast/bitstream.h"
 #include "vast/configuration.h"
 #include "vast/event.h"
 #include "vast/expression.h"
@@ -38,10 +39,11 @@ TEST("ingestion (all-in-one)")
 {
   configuration cfg;
   set_ports(cfg, 0);
+  *cfg['v'] = 0;
+  *cfg['V'] = 5;
   *cfg['a'] = true;
   *cfg['I'] = true;
   *cfg['r'] = m57_day11_18::ftp;
-  *cfg['v'] = 1;
 
   REQUIRE(cfg.verify());
 
@@ -55,6 +57,8 @@ TEST("ingestion (two programs)")
 {
   configuration core_config;
   set_ports(core_config, 1);
+  *core_config['v'] = 0;
+  *core_config['V'] = 5;
   *core_config['a'] = true;
   REQUIRE(core_config.verify());
 
@@ -62,6 +66,8 @@ TEST("ingestion (two programs)")
 
   configuration ingest_config;
   set_ports(ingest_config, 1);
+  *ingest_config['v'] = 0;
+  *ingest_config['V'] = 5;
   *ingest_config['I'] = true;
   *ingest_config['r'] = m57_day11_18::ssl;
   REQUIRE(ingest_config.verify());
@@ -78,11 +84,19 @@ TEST("actor integrity")
 {
   configuration cfg;
   set_ports(cfg, 2);
+  *cfg['v'] = 0;
+  *cfg['V'] = 5;
   *cfg['a'] = true;
   REQUIRE(cfg.verify());
 
   scoped_actor self;
   auto core = spawn<program>(cfg);
+
+  auto fail = others() >> [&]
+  {
+    std::cerr << to_string(self->last_dequeued()) << std::endl;
+    REQUIRE(false);
+  };
 
   //
   // Archive
@@ -90,7 +104,7 @@ TEST("actor integrity")
   self->send(core, atom("archive"));
   self->receive([&](actor archive) { self->send(archive, event_id(100)); });
   self->receive(
-      on_arg_match >> [&](segment const& s)
+      (on_arg_match >> [&](segment const& s)
       {
         CHECK(s.base() == 1);
         CHECK(s.events() == 113);
@@ -101,24 +115,49 @@ TEST("actor integrity")
         REQUIRE(e);
         CHECK((*e)[1] == "XBy0ZlNNWuj");
         CHECK((*e)[3] == "TLSv10");
-      },
-      others() >> [&]
-      {
-        std::cerr << to_string(self->last_dequeued()) << std::endl;
-        REQUIRE(false);
-      });
+      })
+      .or_else(fail));
 
   //
   // Index
   //
-  auto ast = to<expr::ast>("id.resp_p == 995/?");
-  REQUIRE(ast);
+  auto q = to<expr::ast>("id.resp_p == 995/?");
+  REQUIRE(q);
 
   self->send(core, atom("index"));
-  self->receive(
-      [&](actor index) { self->send(index, atom("query"), *ast, self); });
+  self->receive([&](actor idx) { self->send(idx, atom("query"), *q, self); });
 
-  // TODO
+  self->receive(
+      (on(atom("success")) >> [&]
+      {
+        REQUIRE(true);
+      })
+      .or_else(fail));
+
+  self->receive(
+      (on(atom("progress"), arg_match) >> [=](double progress, uint64_t hits)
+      {
+        CHECK(progress == 0.0);
+        CHECK(hits == 0);
+      })
+      .or_else(fail));
+
+  self->receive(
+      (on_arg_match >> [&](bitstream const& hits)
+      {
+        CHECK(hits.count() == 46);
+        CHECK(hits.find_first() == 4);
+      })
+      .or_else(fail));
+
+  self->receive(
+      (on(atom("progress"), arg_match) >> [=](double progress, uint64_t hits)
+      {
+        CHECK(progress == 1.0);
+        CHECK(hits == 46);
+      })
+      .or_else(fail));
+
   self->send_exit(core, exit::done);
   self->await_all_other_actors_done();
 

@@ -188,8 +188,7 @@ behavior program::act()
     auto index_port = *config_.as<unsigned>("index.port");
     if (config_.check("index-actor"))
     {
-      index_ = spawn<index_actor>(
-          vast_dir, *config_.as<size_t>("index.batch-size"));
+      index_ = spawn<index>(vast_dir, *config_.as<size_t>("index.batch-size"));
 
       VAST_LOG_ACTOR_INFO(
           "publishes index at " << index_host << ':' << index_port);

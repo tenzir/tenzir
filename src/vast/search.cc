@@ -118,7 +118,9 @@ behavior search_actor::act()
     {
       VAST_LOG_ACTOR_INFO("got new client " << client << " asking for " << ast);
 
-      // Must succeed because we checked it in parse_ast().
+      // Must succeed because we checked it in parse_ast(). But because we want
+      // to use both the resolved and original AST in this handler, we have to
+      // do the resolving twice.
       auto resolved = ast.resolve(schema_);
       assert(resolved);
 

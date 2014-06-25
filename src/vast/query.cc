@@ -298,15 +298,14 @@ behavior query_actor::act()
         }
       }
     },
-    [=](bitstream const& hits, double progress)
+    [=](bitstream const& hits)
     {
       assert(hits);
       assert(! hits.empty());
       assert(hits.find_first() != bitstream::npos);
 
       VAST_LOG_ACTOR_DEBUG("got index hit covering [" << hits.find_first()
-                           << ',' << hits.find_last() << "] (" <<
-                           int(progress * 100) << "%)");
+                           << ',' << hits.find_last() << ']');
 
       query_.add(hits);
 

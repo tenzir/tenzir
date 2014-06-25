@@ -7,6 +7,8 @@
 #include "vast/print.h"
 #include "vast/io/serialization.h"
 
+using namespace cppa;
+
 namespace vast {
 
 namespace {
@@ -39,6 +41,7 @@ using restriction_map = std::map<expr::ast, std::vector<uuid>>;
 
 } // namespace <anonymous>
 
+// Registers each sub-tree with the GQG.
 class index::dissector : public expr::default_const_visitor
 {
 public:
@@ -88,6 +91,7 @@ private:
   expr::ast const& root_;
 };
 
+// Builds the set of restrictions.
 class index::builder : public expr::default_const_visitor
 {
 public:
@@ -126,8 +130,8 @@ public:
     {
       if (all_.empty())
       {
-        all_.reserve(index_.partitions_.size());
-        for (auto& p : index_.partitions_)
+        all_.reserve(index_.part_state_.size());
+        for (auto& p : index_.part_state_)
           all_.push_back(p.first);
 
         all_.shrink_to_fit();
@@ -145,7 +149,7 @@ public:
 
       restriction_map::mapped_type partitions;
       VAST_LOG_DEBUG("checking restrictors for " << expr::ast{pred});
-      for (auto& p : index_.partitions_)
+      for (auto& p : index_.part_state_)
       {
         if (pred.pred(p.second.first, ts))
         {
@@ -182,6 +186,7 @@ private:
   value const* v_;
 };
 
+// Propagates the accumulated restrictions.
 class index::pusher : public expr::default_const_visitor
 {
 public:
@@ -276,7 +281,7 @@ public:
     double need = 0.0;
     double misses = 0.0;
 
-    auto& parts = index_.cache_[pred].parts;
+    auto& parts = index_.predicate_cache_[pred].parts;
     VAST_LOG_DEBUG("evaluating " << expr::ast{pred});
     for (auto& r : restrictions_[pred])
     {
@@ -284,8 +289,21 @@ public:
       if (i == parts.end())
       {
         ++misses;
-        if (index_.on_miss_(pred, r))
-          parts[r];
+
+        // FIXME: for now, all partition actors reside in memory. This needs to
+        // change because it's not possible to keep them all hot.
+        assert(index_.part_actors_.count(r));
+
+        VAST_LOG_DEBUG("cache miss for partition " << r << ", asking " <<
+                       index_.part_actors_[r]);
+
+        // FIXME: Why can't we get an actor handle of the index in this
+        // fashion? The message never arrives...
+        //actor self = &index_;
+        //index_.send(index_.part_actors_[r], pred, self);
+        index_.ask_partition(r, pred);
+
+        parts[r];
       }
       else if (! i->second.expected)
       {
@@ -300,7 +318,7 @@ public:
         need += *i->second.expected;
       }
 
-      assert(parts.count(r)); // FIXME: assumes on_miss_ returns always true.
+      assert(parts.count(r));
       VAST_LOG_DEBUG("  - " << r <<
                      ": " << parts[r].got << '/' <<
                      (parts[r].expected ? to_string(*parts[r].expected) : "-"));
@@ -322,31 +340,36 @@ public:
   index::evaluation result_;
 };
 
-void index::set_on_miss(miss_callback f)
+index::index(path const& dir, size_t batch_size)
+  : dir_{dir / "index"},
+    batch_size_{batch_size}
 {
-  on_miss_ = f;
 }
 
-trial<index::evaluation> index::evaluate(expr::ast const& ast)
+void index::ask_partition(uuid const& part, expr::ast const& pred)
 {
-  if (! queries_.contains(ast))
-    return error{"not a registered query: ", ast};
+  send(part_actors_[part], pred, this);
+}
+
+void index::evaluate(expr::ast const& ast)
+{
+  assert(queries_.count(ast));
 
   restriction_map r;
   builder b{*this, r};
-  pusher p{r};
-  evaluator e{*this, r};
-
   ast.accept(b);
 
   for (auto& pair : r)
   {
-    VAST_LOG_DEBUG("built restriction of " << ast << " for " << pair.first);
+    VAST_LOG_ACTOR_DEBUG("built restriction of " << ast << " for " << pair.first);
     for (auto& u : pair.second)
-      VAST_LOG_DEBUG("  -  " << u);
+      VAST_LOG_ACTOR_DEBUG("  -  " << u);
   }
 
+  pusher p{r};
   ast.accept(p);
+
+  evaluator e{*this, r};
   ast.accept(e);
 
   auto& er = e.result_;
@@ -358,70 +381,80 @@ trial<index::evaluation> index::evaluate(expr::ast const& ast)
     er.total_progress = sum / er.predicate_progress.size();
   }
 
-  VAST_LOG_DEBUG("evaluated " << ast <<
-                 " (" << int(er.total_progress * 100) << "%)");
+  VAST_LOG_ACTOR_DEBUG("evaluated " << ast <<
+                       " (" << int(er.total_progress * 100) << "%)");
   for (auto& pair : er.predicate_progress)
     VAST_LOG_DEBUG("  -  " << int(pair.second * 100) << "% of " << pair.first);
 
-  return std::move(er);
-}
-
-trial<index::evaluation> index::add_query(expr::ast const& qry)
-{
-  if (! queries_.contains(qry))
+  auto& qs = queries_[ast];
+  if (er.hits && er.hits.find_first() != bitstream::npos
+      && (! qs.hits || er.hits != qs.hits))
   {
-    dissector d{*this, qry};
-    qry.accept(d);
-    queries_.insert(qry);
+    qs.hits = er.hits;
+    for (auto& sink : qs.subscribers)
+    {
+      VAST_LOG_ACTOR_DEBUG("notifies " << sink <<
+                           " with new result for " << ast << " (" <<
+                           int(er.total_progress * 100) << "%)");
+
+      send(sink, er.hits);
+    }
   }
 
-  return evaluate(qry);
+  uint64_t count = qs.hits ? qs.hits.count() : 0;
+  for (auto& s : qs.subscribers)
+    send(s, atom("progress"), er.total_progress, count);
 }
 
-void index::expect(expr::ast const& pred, uuid const& part, uint64_t n)
+trial<void> index::make_partition(path const& dir)
 {
-  cache_[pred].parts[part].expected = n;
+  auto name = dir.basename();
+
+  uuid id;
+  auto i = part_map_.find(name.str());
+  if (i != part_map_.end())
+  {
+    id = i->second;
+  }
+  else
+  {
+    if (exists(dir))
+    {
+      partition::meta_data meta;
+
+      if (! exists(dir / partition::part_meta_file))
+        return error{"couldn't find meta data of partition ", name};
+      else if (! io::unarchive(dir / partition::part_meta_file, meta))
+        return error{"failed to read meta data of partition ", name};
+
+      update_partition(meta.id, meta.first_event, meta.last_event);
+
+      id = meta.id;
+    }
+    else
+    {
+      id = uuid::random();
+    }
+
+    part_map_.emplace(name.str(), id);
+  }
+
+  auto& a = part_actors_[id];
+  if (! a)
+    a = spawn<partition_actor, monitored>(dir, batch_size_, id);
+
+  return nothing;
 }
 
 void index::update_partition(uuid const& id, time_point first, time_point last)
 {
-  auto& p = partitions_[id];
+  auto& p = part_state_[id];
 
   if (p.first == time_range{} || first < p.first)
     p.first = first;
 
   if (p.last == time_range{} || last > p.last)
     p.last = last;
-}
-
-std::vector<expr::ast> index::update_hits(expr::ast const& pred,
-                                          uuid const& part,
-                                          bitstream const& hits)
-{
-  assert(cache_.count(pred));
-
-  auto& entry = cache_[pred].parts[part];
-
-  if (hits)
-  {
-    ++entry.got;
-    entry.hits |= hits;
-  }
-
-  assert(! entry.expected || entry.got <= *entry.expected);
-
-  std::vector<expr::ast> roots;
-  walk(
-      pred,
-      [&](expr::ast const& ast, util::flat_set<expr::ast> const&) -> bool
-      {
-        if (queries_.contains(ast))
-          roots.push_back(ast);
-
-        return true;
-      });
-
-  return roots;
 }
 
 std::vector<expr::ast> index::walk(
@@ -446,67 +479,9 @@ std::vector<expr::ast> index::walk(
   return path;
 }
 
-using namespace cppa;
-
-index_actor::index_actor(path const& dir, size_t batch_size)
-  : dir_{dir / "index"},
-    batch_size_{batch_size}
-{
-}
-
-trial<void> index_actor::make_partition(path const& dir)
-{
-  auto name = dir.basename();
-
-  uuid id;
-  auto i = parts_.find(name.str());
-  if (i != parts_.end())
-  {
-    id = i->second;
-  }
-  else
-  {
-    if (exists(dir))
-    {
-      partition::meta_data meta;
-
-      if (! exists(dir / partition::part_meta_file))
-        return error{"couldn't find meta data of partition ", name};
-      else if (! io::unarchive(dir / partition::part_meta_file, meta))
-        return error{"failed to read meta data of partition ", name};
-
-      index_.update_partition(meta.id, meta.first_event, meta.last_event);
-
-      id = meta.id;
-    }
-    else
-    {
-      id = uuid::random();
-    }
-
-    parts_.emplace(name.str(), id);
-  }
-
-  auto& a = part_actors_[id];
-  if (! a)
-    a = spawn<partition_actor, monitored>(dir, batch_size_, id);
-
-  return nothing;
-}
-
-behavior index_actor::act()
+behavior index::act()
 {
   trap_exit(true);
-
-  index_.set_on_miss(
-      [&](expr::ast const& pred, uuid const& id) -> bool
-      {
-        // For now, all partitions reside in memory.
-        assert(part_actors_.count(id));
-
-        send(part_actors_[id], pred, this);
-        return true;
-      });
 
   traverse(
       dir_,
@@ -521,11 +496,11 @@ behavior index_actor::act()
         return true;
       });
 
-  if (! parts_.empty())
+  if (! part_map_.empty())
   {
-    active_ = *part_actors_.find(parts_.rbegin()->second);
+    active_part_ = *part_actors_.find(part_map_.rbegin()->second);
     VAST_LOG_ACTOR_INFO("appends to existing partition " <<
-                        parts_.rbegin()->first);
+                        part_map_.rbegin()->first);
   }
 
   attach_functor(
@@ -533,7 +508,7 @@ behavior index_actor::act()
       {
         queries_.clear();
         part_actors_.clear();
-        active_.second = invalid_actor;
+        active_part_.second = invalid_actor;
       });
 
   return
@@ -550,8 +525,8 @@ behavior index_actor::act()
     {
       VAST_LOG_ACTOR_DEBUG("got DOWN from " << last_sender());
 
-      if (active_.second == last_sender())
-        active_.second = invalid_actor;
+      if (active_part_.second == last_sender())
+        active_part_.second = invalid_actor;
 
       for (auto i = part_actors_.begin(); i != part_actors_.end(); ++i)
         if (i->second == last_sender())
@@ -584,17 +559,17 @@ behavior index_actor::act()
         return;
       }
 
-      assert(parts_.count(dir));
-      assert(part_actors_.count(parts_[dir]));
+      assert(part_map_.count(dir));
+      assert(part_actors_.count(part_map_[dir]));
 
-      active_ = *part_actors_.find(parts_[dir]);
+      active_part_ = *part_actors_.find(part_map_[dir]);
       VAST_LOG_ACTOR_INFO("now appends to partition " << dir);
 
-      assert(active_.second);
+      assert(active_part_.second);
     },
     [=](segment const& s)
     {
-      if (parts_.empty())
+      if (part_map_.empty())
       {
         auto r = make_partition(dir_ / to_string(uuid::random()).data());
         if (! r)
@@ -604,62 +579,55 @@ behavior index_actor::act()
           return;
         }
 
-        auto first = parts_.begin();
-        active_ = *part_actors_.find(first->second);
+        auto first = part_map_.begin();
+        active_part_ = *part_actors_.find(first->second);
         VAST_LOG_ACTOR_INFO("created new partition " << first->first);
       }
 
-      index_.update_partition(active_.first, s.first(), s.last());
+      update_partition(active_part_.first, s.first(), s.last());
 
       VAST_LOG_ACTOR_DEBUG("forwards segment covering [" <<
                            s.first() << ',' << s.last() << ']');
 
-      forward_to(active_.second);
+      forward_to(active_part_.second);
     },
     on(atom("backlog")) >> [=]
     {
-      forward_to(active_.second);
+      forward_to(active_part_.second);
     },
     on(atom("query"), arg_match) >> [=](expr::ast const& ast, actor sink)
     {
-      if (parts_.empty())
+      if (part_map_.empty())
       {
         auto err = error{"has no partitions to answer queries"};
         VAST_LOG_ACTOR_WARN(err);
         return make_any_tuple(err);
       }
 
+      if (! queries_.count(ast))
+      {
+        dissector d{*this, ast};
+        ast.accept(d);
+      }
+
       assert(! queries_[ast].subscribers.contains(sink));
       queries_[ast].subscribers.insert(sink);
 
-      auto e = index_.add_query(ast);
-      if (e)
-      {
-        uint64_t count = e->hits ? e->hits.count() : 0;
+      send(this, atom("eval"), ast);
 
-        if (e->hits && e->hits.find_first() != bitstream::npos)
-        {
-          VAST_LOG_ACTOR_DEBUG("notifies " << sink <<
-                               " with complete result for " << ast);
-
-          send(sink, std::move(e->hits), e->total_progress);
-        }
-
-        send(sink, atom("progress"), e->total_progress, count);
-
-        return make_any_tuple(atom("success"));
-      }
-      else
-      {
-        return make_any_tuple(e.error());
-      }
+      return make_any_tuple(atom("success"));
+    },
+    on(atom("eval"), arg_match) >> [=](expr::ast const& q)
+    {
+      evaluate(q);
     },
     [=](expr::ast const& pred, uuid const& part, uint64_t n)
     {
       VAST_LOG_ACTOR_DEBUG("expects partition " << part <<
-                           " to deliver " << n << " predicates " << pred);
+                           " to deliver " << n << " hits for predicate " <<
+                           pred);
 
-      index_.expect(pred, part, n);
+      predicate_cache_[pred].parts[part].expected = n;
     },
     [=](expr::ast const& pred, uuid const& part, bitstream const& hits)
     {
@@ -667,42 +635,35 @@ behavior index_actor::act()
           "received " << (hits ? hits.count() : 0) <<
           " hits from " << part << " for predicate " << pred);
 
-      for (auto& q : index_.update_hits(pred, part, hits))
+      assert(predicate_cache_.count(pred));
+
+      auto& entry = predicate_cache_[pred].parts[part];
+
+      if (hits)
       {
-        auto e = index_.evaluate(q);
-        if (e)
-        {
-          auto& qs = queries_[q];
-
-          if (e->hits && e->hits.find_first() != bitstream::npos
-              && (! qs.hits || e->hits != qs.hits))
-          {
-            qs.hits = e->hits;
-            for (auto& sink : qs.subscribers)
-            {
-              VAST_LOG_ACTOR_DEBUG("notifies " << sink <<
-                                   " with new result for " << q << " (" <<
-                                   int(e->total_progress * 100) << "%)");
-
-              send(sink, e->hits, e->total_progress);
-            }
-          }
-
-          uint64_t count = qs.hits ? qs.hits.count() : 0;
-          for (auto& s : qs.subscribers)
-            send(s, atom("progress"), e->total_progress, count);
-        }
-        else
-        {
-          VAST_LOG_ACTOR_ERROR(e.error());
-          send_exit(this, exit::error);
-          return;
-        }
+        ++entry.got;
+        entry.hits |= hits;
       }
+
+      assert(! entry.expected || entry.got <= *entry.expected);
+
+      std::vector<expr::ast> roots;
+      walk(
+          pred,
+          [&](expr::ast const& ast, util::flat_set<expr::ast> const&) -> bool
+          {
+            if (queries_.count(ast))
+              roots.push_back(ast);
+
+            return true;
+          });
+
+      for (auto& q : roots)
+        evaluate(q);
     },
     on(atom("delete")) >> [=]
     {
-      if (parts_.empty())
+      if (part_map_.empty())
       {
         VAST_LOG_ACTOR_WARN("ignores request to delete empty index");
         return;
@@ -745,7 +706,7 @@ behavior index_actor::act()
   };
 }
 
-std::string index_actor::describe() const
+std::string index::describe() const
 {
   return "index";
 }
