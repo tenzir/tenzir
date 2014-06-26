@@ -4,11 +4,9 @@
 #include "vast/actor.h"
 #include "vast/aliases.h"
 #include "vast/bitstream.h"
-#include "vast/cow.h"
 #include "vast/expression.h"
 #include "vast/segment.h"
 #include "vast/uuid.h"
-#include "vast/util/range_map.h"
 #include "vast/util/trial.h"
 
 namespace vast {
