@@ -363,7 +363,7 @@ void index::evaluate(expr::ast const& ast)
   {
     VAST_LOG_ACTOR_DEBUG("built restriction of " << ast << " for " << pair.first);
     for (auto& u : pair.second)
-      VAST_LOG_ACTOR_DEBUG("  -  " << u);
+      VAST_LOG_DEBUG("  -  " << u);
   }
 
   pusher p{r};

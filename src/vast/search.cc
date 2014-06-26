@@ -124,8 +124,8 @@ behavior search_actor::act()
       auto resolved = ast.resolve(schema_);
       assert(resolved);
 
-      auto qry = spawn<query_actor>(archive_, client, std::move(*resolved));
-      send(qry, atom("1st batch"), clients_[client.address()].batch_size);
+      auto qry = spawn<query>(archive_, client, std::move(*resolved));
+      send(qry, atom("extract"), clients_[client.address()].batch_size);
 
       return sync_send(index_, atom("query"), ast, qry).then(
           on(atom("success")) >> [=]
