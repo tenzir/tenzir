@@ -9,7 +9,6 @@
 #include "vast/file_system.h"
 #include "vast/object.h"
 #include "vast/value.h"
-#include "vast/search_result.h"
 #include "vast/segment.h"
 #include "vast/type.h"
 #include "vast/serialization.h"
@@ -193,8 +192,7 @@ void announce_builtin_types()
     bitmap_index<null_bitstream>,
     bitmap_index<ewah_bitstream>,
     expr::ast,
-    schema,
-    search_result
+    schema
   > vast_types;
 
   std::tuple<
