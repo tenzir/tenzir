@@ -684,7 +684,7 @@ TEST("block appending (EWAH)")
 
 TEST("polymorphic iteration")
 {
-  bitstream bs = null_bitstream{};
+  bitstream bs{null_bitstream{}};
   bs.push_back(true);
   bs.append(10, false);
   bs.append(2, true);
@@ -695,7 +695,7 @@ TEST("polymorphic iteration")
   CHECK(*++i == 12);
   CHECK(++i == bs.end());
 
-  bs = ewah_bitstream{};
+  bs = bitstream{ewah_bitstream{}};
   bs.push_back(false);
   bs.push_back(true);
   bs.append(421, false);

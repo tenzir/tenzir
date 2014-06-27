@@ -1,6 +1,7 @@
 #ifndef VAST_IO_STREAM_H
 #define VAST_IO_STREAM_H
 
+#include <cstddef>
 #include <cstdint>
 #include <utility>
 #include "vast/config.h"

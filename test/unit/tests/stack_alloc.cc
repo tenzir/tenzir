@@ -9,20 +9,17 @@ using namespace vast;
 
 TEST("stack allocator")
 {
-  using allocator = util::short_alloc<uint64_t, 16>;
+  using allocator = util::stack_alloc<uint64_t, 16>;
   using short_list = std::forward_list<uint64_t, allocator>;
 
-  util::arena<16> arena;
-  allocator alloc{arena};
-  short_list list{alloc};
-
-  // Use the stack.
-  list.push_front(21);
+  short_list list;
+  list.push_front(21); // On the stack.
 
   // Arena is now full.
-  CHECK(arena.used() == arena.size());
+  CHECK(list.get_allocator().arena().used() ==
+        list.get_allocator().arena().size());
 
-  // Use the heap.
+  // On the heap.
   list.push_front(42);
   list.push_front(84);
   list.push_front(168);

@@ -25,13 +25,6 @@ public:
   static constexpr auto all_one = bitvector::all_one;
   static constexpr auto msb_one = bitvector::msb_one;
 
-  bitstream_base() = default;
-
-  bitstream_base(bitstream_base const&) = default;
-  bitstream_base(bitstream_base&&) = default;
-  bitstream_base& operator=(bitstream_base const&) = default;
-  bitstream_base& operator=(bitstream_base&&) = default;
-
   Derived& operator&=(Derived const& other)
   {
     derived().bitwise_and(other);
@@ -592,7 +585,7 @@ public:
     typename Bitstream,
     typename = util::disable_if_same_or_derived<bitstream, Bitstream>
   >
-  bitstream(Bitstream&& bs)
+  explicit bitstream(Bitstream&& bs)
     : concept_{
         new detail::bitstream_model<std::decay_t<Bitstream>>{
             std::forward<Bitstream>(bs)}}

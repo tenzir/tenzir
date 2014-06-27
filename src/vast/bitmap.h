@@ -217,7 +217,7 @@ private:
 
     auto i = bitstreams_.find(x);
     if (i == bitstreams_.end() || i->second.empty())
-      return {{this->size(), op == not_equal}};
+      return Bitstream{this->size(), op == not_equal};
 
     auto result = i->second;
     result.append(this->size() - result.size(), false);

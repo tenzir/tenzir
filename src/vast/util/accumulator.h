@@ -83,7 +83,8 @@ public:
     return bacc::variance(accumulator_);
   }
 
-  auto sd() const -> decltype(std::sqrt(variance()))
+  auto sd() const
+    -> decltype(std::sqrt(std::declval<accumulator>().variance()))
   {
     return std::sqrt(variance());
   }

@@ -48,7 +48,7 @@ string::string(string const& other)
   tag(other.tag());
 }
 
-string::string(string&& other)
+string::string(string&& other) noexcept
 {
   std::memcpy(buf_, other.buf_, buf_size);
   std::memset(other.buf_, 0, buf_size);
@@ -60,7 +60,14 @@ string::~string()
     delete[] heap_str();
 }
 
-string& string::operator=(string other)
+string& string::operator=(string const& other)
+{
+  assign(other.data(), other.data() + other.size());
+  tag(other.tag());
+  return *this;
+}
+
+string& string::operator=(string&& other) noexcept
 {
   using std::swap;
   swap(*this, other);
@@ -114,8 +121,9 @@ char const* string::data() const
 
 string::size_type string::size() const
 {
+  auto p = reinterpret_cast<size_type const*>(&buf_[heap_cnt_off]);
   if (is_heap_allocated())
-    return *reinterpret_cast<size_type const*>(&buf_[heap_cnt_off]);
+    return *p;
   else
     return buf_[in_situ_cnt_off];
 }
@@ -499,7 +507,7 @@ void string::clear()
   std::memset(buf_, 0, buf_size);
 }
 
-void swap(string& x, string& y)
+void swap(string& x, string& y) noexcept
 {
   using std::swap;
   swap(x.buf_, y.buf_);

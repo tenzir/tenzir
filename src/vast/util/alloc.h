@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <cassert>
+#include "vast/util/operators.h"
 
 namespace vast {
 namespace util {
@@ -12,23 +13,30 @@ namespace util {
 /// store to retrieve further space.
 /// @tparam N The number of bytes in the arena.
 template <size_t N>
-class arena
+class arena : equality_comparable<arena<N>>
 {
   static constexpr size_t alignment = 16;
-
-  arena(arena const&) = delete;
-  arena& operator=(arena const&) = delete;
 
 public:
   arena() noexcept
     : ptr_{buf_}
-  {}
+  {
+  }
+
+  arena(arena const& other) noexcept
+    : ptr_{buf_ + other.used()}
+  {
+    std::copy(other.buf_, other.buf_ + other.used(), buf_);
+  }
 
   ~arena()
   {
     ptr_ = nullptr;
   }
 
+  /// Allocates a chunk of bytes.
+  /// @param n The number of bytes of the chunk to allocate.
+  /// @returns A pointer to the allocated chunk.
   char* allocate(size_t n)
   {
     assert(pointer_in_buffer(ptr_) && "allocator has outlived arena");
@@ -42,6 +50,9 @@ public:
     return static_cast<char*>(::operator new(n));
   }
 
+  /// Deallocates a pointer.
+  /// @param p The pointer to allocate.
+  /// @param n The size of the chunk *p* points to.
   void deallocate(char* p, size_t n) noexcept
   {
     assert(pointer_in_buffer(ptr_) && "allocator has outlived arena");
@@ -56,22 +67,32 @@ public:
     }
   }
 
+  /// Retrieves the arena capacity.
+  /// @returns The number of bytes the arena provides.
   static constexpr size_t size()
   {
     return N;
   }
 
+  /// Retrieves the number of bytes used.
+  /// @returns The number of bytes the arena uses.
   size_t used() const
   {
     return static_cast<size_t>(ptr_ - buf_);
   }
 
+  /// Resets the arena.
   void reset()
   {
     ptr_ = buf_;
   }
 
 private:
+  friend bool operator==(arena const& x, arena const& y)
+  {
+    return std::equal(x.buf_, x.buf_ + N, y.buf_);
+  }
+
   bool pointer_in_buffer(char* p) noexcept
   {
     return buf_ <= p && p <= buf_ + N;
@@ -82,35 +103,32 @@ private:
 };
 
 
-/// A stack-based allocator referencing an existing arena.
-/// Originally from Howard Hinnant, see
-/// http://home.roadrunner.com/~hinnant/stack_alloc.html.
+/// A stack-based allocator.
+/// @see http://home.roadrunner.com/~hinnant/stack_alloc.html.
 template <class T, size_t N>
-class short_alloc
+class stack_alloc : equality_comparable<stack_alloc<T, N>>
 {
-  template <class U, size_t M>
-  friend class short_alloc;
+  template <typename U, size_t M>
+  friend class stack_alloc;
 
 public:
   using value_type = T;
 
-  template <class _Up>
+  template <class U>
   struct rebind
   {
-    using other = short_alloc<_Up, N>;
+    using other = stack_alloc<U, N>;
   };
 
-  short_alloc(arena<N>& a) noexcept
-    : a_{a}
-  {}
+  stack_alloc() = default;
 
-  template <class U>
-  short_alloc(short_alloc<U, N> const& a) noexcept
-    : a_{a.a_}
-  {}
+  stack_alloc(stack_alloc const&) = default;
 
-  short_alloc(short_alloc const&) = default;
-  short_alloc& operator=(short_alloc const&) = delete;
+  template <typename U>
+  stack_alloc(stack_alloc<U, N> const& other)
+    : a_{other.a_}
+  {
+  }
 
   T* allocate(size_t n)
   {
@@ -122,47 +140,18 @@ public:
     a_.deallocate(reinterpret_cast<char*>(p), n * sizeof(T));
   }
 
-  template <class T1, size_t N1, class U, size_t M>
-  friend bool
-  operator==(short_alloc<T1, N1> const& x, short_alloc<U, M> const& y) noexcept
+  const util::arena<N>& arena() const
   {
-    return N == M && &x.a_ == &y.a_;
-  }
-
-  template <class T1, size_t N1, class U, size_t M>
-  friend bool
-  operator!=(short_alloc<T1, N1> const& x, short_alloc<U, M> const& y) noexcept
-  {
-    return ! (x == y);
+    return a_;
   }
 
 private:
-  arena<N>& a_;
-};
+  friend bool operator==(stack_alloc const& x, stack_alloc const& y) noexcept
+  {
+    return x.a_ == y.a_;
+  }
 
-
-/// A stack-based allocator which comes with its own ::arena.
-template <class T, size_t N>
-class stack_alloc : public short_alloc<T, N>
-{
-  using super = short_alloc<T, N>;
-
-public:
-  stack_alloc() noexcept
-    : super{a_}
-  {}
-
-  template <class U>
-  stack_alloc(stack_alloc<U, N> const& a) noexcept
-    : super{a_},
-      a_{a.a_}
-  {}
-
-  stack_alloc(stack_alloc const&) = default;
-  stack_alloc& operator=(stack_alloc const&) = delete;
-
-private:
-  arena<N> a_;
+  util::arena<N> a_;
 };
 
 } // namespace util

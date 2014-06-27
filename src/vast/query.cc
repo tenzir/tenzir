@@ -127,7 +127,7 @@ query::query(actor archive, actor sink, expr::ast ast)
       assert(reader_);
       assert(requested_ > 0);
 
-      bitstream mask = bitstream_type{};
+      bitstream mask = bitstream{bitstream_type{}};
       mask.append(current()->base(), false);
       mask.append(current()->events(), true);
       mask &= unprocessed_;
@@ -161,7 +161,7 @@ query::query(actor archive, actor sink, expr::ast ast)
       requested_ -= n;
       VAST_LOG_ACTOR_DEBUG("extracted " << n << " events");
 
-      bitstream partial = bitstream_type{last + 1, true};
+      bitstream partial = bitstream{bitstream_type{last + 1, true}};
       partial &= mask;
       processed_ |= partial;
       unprocessed_ -= partial;

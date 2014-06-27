@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <fstream>
+#include <iterator>
 #include "vast/serialization.h"
 
 #ifdef VAST_POSIX

@@ -420,7 +420,7 @@ public:
   /// @param args The arguments to pass to the type.
   /// @returns A pointer to the ::type for `T`.
   template <typename T, typename... Args>
-  static type_ptr make(string name = "", Args&&... args = {})
+  static type_ptr make(string name = "", Args&&... args)
   {
     auto t = new type{type_info{T{std::forward<Args>(args)...}}};
     if (! name.empty())
