@@ -45,7 +45,7 @@ class recursive_wrapper : equality_comparable<recursive_wrapper<T>>
 public:
   template <
     typename U,
-    typename Dummy = std::enable_if_t<std::is_convertible<U, T>::value, U>
+    typename Dummy = std::enable_if_t<std::is_convertible<U, T>{}, U>
   >
   recursive_wrapper(U const& u)
     : x_(new T(u))
@@ -54,7 +54,7 @@ public:
 
   template <
     typename U,
-    typename Dummy = std::enable_if_t<std::is_convertible<U, T>::value, U>
+    typename Dummy = std::enable_if_t<std::is_convertible<U, T>{}, U>
   >
   recursive_wrapper(U&& u)
     : x_(new T(std::forward<U>(u)))
@@ -191,7 +191,7 @@ public:
   >
   variant(T&& x)
   {
-    static_assert(! std::is_same<variant<Ts...>&, T>(),
+    static_assert(! std::is_same<variant<Ts...>&, T>{},
                   "should have been sfinaed out");
 
     // A compile error here means that T is not unambiguously convertible to
@@ -302,7 +302,7 @@ private:
     template <typename T>
     void operator()(T& rhs) const noexcept
     {
-      static_assert(std::is_nothrow_move_constructible<T>(),
+      static_assert(std::is_nothrow_move_constructible<T>{},
                     "T must not throw in move constructor");
 
       self_.construct(std::move(rhs));
@@ -322,10 +322,10 @@ private:
     template <typename Rhs>
     void operator()(Rhs const& rhs) const
     {
-      static_assert(std::is_nothrow_destructible<Rhs>(),
+      static_assert(std::is_nothrow_destructible<Rhs>{},
                     "T must not throw in destructor");
 
-      static_assert(std::is_nothrow_move_constructible<Rhs>(),
+      static_assert(std::is_nothrow_move_constructible<Rhs>{},
                     "T must not throw in move constructor");
 
       if (self_.which() == rhs_which_)
@@ -358,13 +358,13 @@ private:
     {
       using rhs_no_const = std::remove_const_t<Rhs>;
 
-      static_assert(std::is_nothrow_destructible<rhs_no_const>(),
+      static_assert(std::is_nothrow_destructible<rhs_no_const>{},
                     "T must not throw in destructor");
 
-      static_assert(std::is_nothrow_move_assignable<rhs_no_const>(),
+      static_assert(std::is_nothrow_move_assignable<rhs_no_const>{},
                     "T must not throw in move assignment");
 
-      static_assert(std::is_nothrow_move_constructible<rhs_no_const>(),
+      static_assert(std::is_nothrow_move_constructible<rhs_no_const>{},
                     "T must not throw in move constructor");
 
       if (self_.which() == rhs_which_)
@@ -389,7 +389,7 @@ private:
     template <typename T>
     void operator()(T& x) const noexcept
     {
-      static_assert(std::is_nothrow_destructible<T>(),
+      static_assert(std::is_nothrow_destructible<T>{},
                     "T must not throw in destructor");
       x.~T();
     }
@@ -544,14 +544,14 @@ private:
   }
 
   template <typename T>
-  void construct(T&& x) noexcept(std::is_rvalue_reference<decltype(x)>())
+  void construct(T&& x) noexcept(std::is_rvalue_reference<decltype(x)>{})
   {
     using type = typename std::remove_reference<T>::type;
 
     // FIXME: Somehow the copmiler doesn't generate nothrow move constructors
     // for some of our custom types, even though they are annotated as such.
     // Needs investigation.
-    //static_assert(std::is_nothrow_move_constructible<type>(),
+    //static_assert(std::is_nothrow_move_constructible<type>{},
     //              "move constructor of T must not throw");
 
     new (&storage_) type(std::forward<T>(x));
@@ -563,8 +563,7 @@ private:
   }
 
 #ifdef VAST_GCC
-  // FIXME: Seems like GCC doesn't have std::aligned_union implemented, so wave
-  // to roll our own :-/.
+  // FIXME: Seems like GCC doesn't have std::aligned_union implemented.
   template <typename T>
   struct Sizeof
   {
