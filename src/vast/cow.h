@@ -5,7 +5,6 @@
 #include <cppa/cow_tuple.hpp>
 #include "vast/serialization.h"
 #include "vast/util/operators.h"
-#include "vast/util/meta.h"
 
 namespace vast {
 
@@ -22,10 +21,7 @@ public:
 
   /// Constructs a `T` by forwarding the arguments to `cppa::cow_tuple`.
   /// @args The argument to forward to `cppa::cow_tuple`.
-  template <
-    typename... Args,
-    typename = util::disable_if_same_or_derived<cow<T>, Args...>
-  >
+  template <typename... Args>
   cow(Args&&... args)
     : tuple_(std::forward<Args>(args)...)
   {

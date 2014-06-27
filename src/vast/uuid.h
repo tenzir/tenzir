@@ -19,7 +19,6 @@ public:
   using iterator = uint8_t*;
   using const_iterator = uint8_t const*;
   using size_type = size_t;
-  using difference_type_type = ptrdiff_t;
 
   static uuid random();
   static uuid nil();

@@ -102,6 +102,15 @@ private:
     return static_cast<Derived*>(this)->next();
   }
 
+#ifdef VAST_GCC
+// FIXME: The range_iterator uses the range (composition), but in the
+// definition of range_iterator, the call to
+// decltype(std::declval<Range>().dereference()) fails because the range has
+// not yet been befriended.
+//
+// As a workaround, we just make this method public. Clang doesn't complain.
+public:
+#endif
   template <typename Hack = Derived>
   auto dereference() const
     -> decltype(std::declval<Hack>().state())

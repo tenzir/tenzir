@@ -119,12 +119,17 @@ public:
 
   /// Move-constructs a string.
   /// @param other The string to move.
-  string(string&& other);
+  string(string&& other) noexcept;
 
-  /// Assigns a string.
+  /// Copy-assigns a string.
   /// @param other The string to assign to this instance.
   /// @returns A reference to the LHS of the assignment.
-  string& operator=(string other);
+  string& operator=(string const& other);
+
+  /// Move-assigns a string.
+  /// @param other The string to assign to this instance.
+  /// @returns A reference to the LHS of the assignment.
+  string& operator=(string&& other) noexcept;
 
   /// Destroys a string. If the string was heap-allocated, it releases its
   /// memory.
@@ -349,7 +354,7 @@ public:
   /// Swaps two strings.
   /// @param x The first string.
   /// @param y The second string.
-  friend void swap(string& x, string& y);
+  friend void swap(string& x, string& y) noexcept;
 
   //
   // Tagging

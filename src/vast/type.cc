@@ -149,6 +149,7 @@ argument::argument(string name, type_const_ptr type)
   : name{std::move(name)},
     type{std::move(type)}
 {
+  static_assert(std::is_nothrow_move_constructible<string>(), "xxxxxxxxxxxxxxxxxxxx");
 }
 
 void argument::serialize(serializer& sink) const

@@ -54,18 +54,6 @@ public:
   }
 
 private:
-  template <typename I, typename C, typename V, typename R, typename D>
-  static I& I(iterator_facade<I, C, V, R, D>& facade)
-  {
-    return *static_cast<I*>(&facade);
-  }
-
-  template <typename I, typename C, typename V, typename R, typename D>
-  static I const& derived(iterator_facade<I, C, V, R, D> const& facade)
-  {
-    return *static_cast<I const*>(&facade);
-  }
-
   iterator_access() = default;
 };
 

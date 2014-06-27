@@ -625,6 +625,11 @@ bool operator>=(value const& x, value const& y)
 }
 
 
+record::record(std::vector<value> values)
+  : super(std::move(values))
+{
+}
+
 value const* record::at(offset const& o) const
 {
   record const* r = this;

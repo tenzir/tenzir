@@ -30,7 +30,6 @@ set(libvast_sources
   regex.cc
   schema.cc
   search.cc
-  search_result.cc
   segment.cc
   segment_pack.cc
   segmentizer.cc

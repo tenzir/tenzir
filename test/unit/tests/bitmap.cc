@@ -10,8 +10,10 @@ void print(double d)
 {
   std::cout << d << "\t = ";
   auto o = detail::order(d, 4);
-  auto x = *reinterpret_cast<uint64_t*>(&d);
-  auto y = *reinterpret_cast<uint64_t*>(&o);
+  auto xu = reinterpret_cast<uint64_t*>(&d);
+  auto x = *xu;
+  auto yu = reinterpret_cast<uint64_t*>(&o);
+  auto y = *yu;
 
   for (size_t i = 0; i < 64; ++i)
   {

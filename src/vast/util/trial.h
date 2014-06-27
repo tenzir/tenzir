@@ -215,7 +215,7 @@ class trial<void>
 public:
   trial() = default;
 
-  trial(error e)
+  trial(util::error e)
     : error_{std::make_unique<util::error>(std::move(e))}
   {
   }

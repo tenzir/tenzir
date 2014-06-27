@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cerrno>
+#include <cstring>
 #include <histedit.h>
 #include "vast/print.h"
 #include "vast/util/color.h"

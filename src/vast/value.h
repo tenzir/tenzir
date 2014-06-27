@@ -10,7 +10,6 @@
 #include "vast/string.h"
 #include "vast/time.h"
 #include "vast/type.h"
-#include "vast/util/meta.h"
 #include "vast/util/operators.h"
 
 namespace vast {
@@ -517,21 +516,13 @@ class record : public std::vector<value>,
   using super = std::vector<value>;
 
 public:
+  using super::super;
+
   record() = default;
 
-  template <
-    typename... Args,
-    typename = util::disable_if_same_or_derived<record, Args...>
-  >
-  record(Args&&... args)
-    : super(std::forward<Args>(args)...)
-  {
-  }
-
-  record(std::initializer_list<value> list)
-    : super(std::move(list))
-  {
-  }
+  /// Constructs a record from a sequence of values.
+  /// @param values The values of the record.
+  record(std::vector<value> values);
 
   /// Recursively accesses a vector via a list of offsets serving as indices.
   ///

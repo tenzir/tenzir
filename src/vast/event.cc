@@ -16,6 +16,11 @@ event::event(record values)
 {
 }
 
+event::event(std::vector<value> values)
+  : event(record(std::move(values)))
+{
+}
+
 event::event(std::initializer_list<value> list)
   : record(std::move(list)),
     type_{type_invalid}

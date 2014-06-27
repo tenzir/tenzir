@@ -32,6 +32,7 @@ do so, all subject to the following:
 
 #include <type_traits>
 
+#include "vast/config.h"
 #include "vast/util/operators.h"
 #include "vast/util/meta.h"
 
@@ -131,15 +132,28 @@ private:
 template <typename... Ts>
 class variant : equality_comparable<variant<Ts...>>
 {
-  template <typename U, typename...>
-  using front_type = U;
+#ifdef VAST_GCC
+  // Workaround for http://stackoverflow.com/q/24433658/1170277.
+  template <typename T, typename...>
+  struct front_type
+  {
+    using type = T;
+  };
+#else
+  template <typename T, typename...>
+  using front_type = T;
+#endif
 
 public:
   /// The type of the variant discriminator.
   using tag_type = size_t;
 
   /// The first type in the variant; used for default-construction.
+#ifdef VAST_GCC
+  using front = typename front_type<Ts...>::type;
+#else
   using front = front_type<Ts...>;
+#endif
 
   /// Construct a variant from a type tag.
   /// @pre `0 <= tag < sizeof...(Ts)`
@@ -177,7 +191,7 @@ public:
   >
   variant(T&& x)
   {
-    static_assert(! std::is_same<variant<Ts...>&, T>::value,
+    static_assert(! std::is_same<variant<Ts...>&, T>(),
                   "should have been sfinaed out");
 
     // A compile error here means that T is not unambiguously convertible to
@@ -187,7 +201,7 @@ public:
 
   variant(variant const& rhs)
   {
-    rhs.apply_visitor_internal(constructor(*this));
+    rhs.apply_visitor_internal(copy_constructor(*this));
     which_ = rhs.which_;
   }
 
@@ -252,7 +266,7 @@ private:
     }
 
     template <typename T>
-    void operator()(T const&) const noexcept
+    void operator()(T const&) const
     {
       self_.construct(T());
     }
@@ -261,15 +275,15 @@ private:
     variant& self_;
   };
 
-  struct constructor
+  struct copy_constructor
   {
-    constructor(variant& self)
+    copy_constructor(variant& self)
       : self_(self)
     {
     }
 
     template <typename T>
-    void operator()(T const& rhs) const noexcept
+    void operator()(T const& rhs) const
     {
       self_.construct(rhs);
     }
@@ -288,7 +302,7 @@ private:
     template <typename T>
     void operator()(T& rhs) const noexcept
     {
-      static_assert(std::is_nothrow_move_constructible<T>::value,
+      static_assert(std::is_nothrow_move_constructible<T>(),
                     "T must not throw in move constructor");
 
       self_.construct(std::move(rhs));
@@ -308,10 +322,10 @@ private:
     template <typename Rhs>
     void operator()(Rhs const& rhs) const
     {
-      static_assert(std::is_nothrow_destructible<Rhs>::value,
+      static_assert(std::is_nothrow_destructible<Rhs>(),
                     "T must not throw in destructor");
 
-      static_assert(std::is_nothrow_move_constructible<Rhs>::value,
+      static_assert(std::is_nothrow_move_constructible<Rhs>(),
                     "T must not throw in move constructor");
 
       if (self_.which() == rhs_which_)
@@ -344,13 +358,13 @@ private:
     {
       using rhs_no_const = std::remove_const_t<Rhs>;
 
-      static_assert(std::is_nothrow_destructible<rhs_no_const>::value,
+      static_assert(std::is_nothrow_destructible<rhs_no_const>(),
                     "T must not throw in destructor");
 
-      static_assert(std::is_nothrow_move_assignable<rhs_no_const>::value,
+      static_assert(std::is_nothrow_move_assignable<rhs_no_const>(),
                     "T must not throw in move assignment");
 
-      static_assert(std::is_nothrow_move_constructible<rhs_no_const>::value,
+      static_assert(std::is_nothrow_move_constructible<rhs_no_const>(),
                     "T must not throw in move constructor");
 
       if (self_.which() == rhs_which_)
@@ -375,7 +389,7 @@ private:
     template <typename T>
     void operator()(T& x) const noexcept
     {
-      static_assert(std::is_nothrow_destructible<T>::value,
+      static_assert(std::is_nothrow_destructible<T>(),
                     "T must not throw in destructor");
       x.~T();
     }
@@ -530,12 +544,16 @@ private:
   }
 
   template <typename T>
-  void construct(T&& x) noexcept
+  void construct(T&& x) noexcept(std::is_rvalue_reference<decltype(x)>())
   {
     using type = typename std::remove_reference<T>::type;
 
-    static_assert(std::is_nothrow_constructible<type>::value,
-                  "constructor of T must not throw");
+#ifdef VAST_CLANG
+    // FIXME: Somehow GCC doesn't generate nothrow move constructors for some
+    // of our custom types, even though they are annotated as such.
+    static_assert(std::is_nothrow_move_constructible<type>(),
+                  "move constructor of T must not throw");
+#endif
 
     new (&storage_) type(std::forward<T>(x));
   }
@@ -545,7 +563,29 @@ private:
     apply_visitor_internal(destructor());
   }
 
-  typename std::aligned_union<0, Ts...>::type storage_;
+#ifdef VAST_GCC
+  // FIXME: Seems like GCC doesn't have std::aligned_union implemented, so wave
+  // to roll our own :-/.
+  template <typename T>
+  struct Sizeof
+  {
+    static constexpr auto value = sizeof(T);
+  };
+
+  template <typename T>
+  struct Alignof
+  {
+    static constexpr auto value = alignof(T);
+  };
+
+  std::aligned_storage_t<
+    max<Sizeof, Ts...>(),
+    max<Alignof, Ts...>()
+  > storage_;
+#else
+  std::aligned_union_t<0, Ts...> storage_;
+#endif
+
   tag_type which_;
 };
 

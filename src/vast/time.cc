@@ -131,7 +131,11 @@ trial<void> convert(time_range tr, time_range::duration_type& dur)
   return nothing;
 }
 
+#ifdef VAST_CLANG
 time_point::time_point(std::string const& str, char const* fmt, char const* locale)
+#else
+time_point::time_point(std::string const& str, char const* fmt, char const*)
+#endif
 {
   auto epoch = detail::make_tm();
   std::istringstream ss(str);
@@ -336,7 +340,7 @@ trial<void> convert(time_point tp, std::string& str)
   str = ss.str();
 #else
   char buf[256];
-  strftime(buf, sizeof(buf), time_point::time_point::format, &tm);
+  strftime(buf, sizeof(buf), time_point::time_point::format, &*tm);
   str = buf;
 #endif
 

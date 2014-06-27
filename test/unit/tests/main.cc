@@ -20,7 +20,7 @@ int main(int argc, char* argv[])
   if (! vast::logger::instance()->init(
           vast::logger::quiet,
           vast::logger::debug,
-          false, true, log_dir))
+          false, false, log_dir))
   {
     std::cerr << "failed to initialize VAST's logger" << std::endl;
     return 1;

@@ -75,7 +75,7 @@ struct attribute
 struct argument_declaration
 {
   std::string name;
-  type type;
+  schema::type type;
   boost::optional<std::vector<attribute>> attrs;
 };
 
@@ -86,7 +86,7 @@ struct record_type
 
 struct type_declaration
 {
-  using variant_type = boost::variant<type_info, type>;
+  using variant_type = boost::variant<type_info, schema::type>;
   std::string name;
   variant_type type;
 };

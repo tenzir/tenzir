@@ -36,9 +36,9 @@ private:
   cppa::behavior waiting_;
   cppa::behavior extracting_;
 
-  bitstream hits_ = bitstream_type{};
-  bitstream processed_ = bitstream_type{};
-  bitstream unprocessed_ = bitstream_type{};
+  bitstream hits_ = bitstream{bitstream_type{}};
+  bitstream processed_ = bitstream{bitstream_type{}};
+  bitstream unprocessed_ = bitstream{bitstream_type{}};
   std::unique_ptr<segment::reader> reader_;
   cppa::any_tuple segment_;
 

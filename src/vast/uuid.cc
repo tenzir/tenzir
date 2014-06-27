@@ -58,8 +58,6 @@ public:
   template <typename Iterator>
   uuid operator()(Iterator begin, Iterator end) const
   {
-    using char_type = typename std::iterator_traits<Iterator>::value_type;
-
     auto c = advance_char(begin, end);
     auto braced = false;
     if (c == '{')

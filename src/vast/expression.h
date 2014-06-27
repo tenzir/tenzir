@@ -1,6 +1,7 @@
 #ifndef VAST_EXPRESSION_H
 #define VAST_EXPRESSION_H
 
+#include "vast/config.h"
 #include "vast/event.h"
 #include "vast/offset.h"
 #include "vast/operator.h"
@@ -144,7 +145,7 @@ struct schema_extractor
   : public util::visitable<extractor, schema_extractor, const_visitor>
 {
   schema_extractor() = default;
-  schema_extractor(key k);
+  schema_extractor(vast::key k);
 
   virtual schema_extractor* clone() const override;
   virtual bool equals(node const& other) const override;
@@ -294,6 +295,11 @@ private:
     if (! t)
       return t.error();
 
+#ifdef VAST_GCC
+    // FIXME: why do we need to pull in util::print to enable ADL? Shouldn't an
+    // unqualified call work directly?
+    using util::print;
+#endif
     return print(str, out);
   }
 };

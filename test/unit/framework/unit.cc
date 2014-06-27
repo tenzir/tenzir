@@ -100,8 +100,8 @@ public:
   };
 
   logger(int lvl_cons, int lvl_file, std::string const& logfile)
-    : level_console_{static_cast<level>(lvl_cons)},
-      level_file_{static_cast<level>(lvl_file)},
+    : level_console_(static_cast<level>(lvl_cons)),
+      level_file_(static_cast<level>(lvl_file)),
       console_{std::cerr}
   {
     if (! logfile.empty())
@@ -191,7 +191,7 @@ int engine::run(configuration const& cfg)
              *cfg.as<int>("file-verbosity"),
              log_file ? *log_file : ""};
 
-  std::chrono::microseconds runtime;
+  std::chrono::microseconds runtime{0};
   size_t failed_requires = 0;
   size_t total_tests = 0;
   size_t total_good = 0;

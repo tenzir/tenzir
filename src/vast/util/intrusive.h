@@ -16,7 +16,9 @@ template <typename Derived>
 class intrusive_base
 {
 public:
-  intrusive_base() = default;
+  intrusive_base()
+  {
+  }
 
   intrusive_base(intrusive_base const&)
   {
@@ -67,7 +69,7 @@ template <typename T>
 class intrusive_ptr
 {
 public:
-  typedef T element_type;
+  using element_type = T;
 
   intrusive_ptr() = default;
 
