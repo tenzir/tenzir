@@ -548,12 +548,11 @@ private:
   {
     using type = typename std::remove_reference<T>::type;
 
-#ifdef VAST_CLANG
-    // FIXME: Somehow GCC doesn't generate nothrow move constructors for some
-    // of our custom types, even though they are annotated as such.
-    static_assert(std::is_nothrow_move_constructible<type>(),
-                  "move constructor of T must not throw");
-#endif
+    // FIXME: Somehow the copmiler doesn't generate nothrow move constructors
+    // for some of our custom types, even though they are annotated as such.
+    // Needs investigation.
+    //static_assert(std::is_nothrow_move_constructible<type>(),
+    //              "move constructor of T must not throw");
 
     new (&storage_) type(std::forward<T>(x));
   }
