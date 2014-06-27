@@ -160,17 +160,15 @@ result<event> bro2::extract_impl()
         else if (t.size() < depth)
         {
           r = &e;
+          depth = t.size();
           for (size_t i = 0; i < t.size() - 1; ++i)
-          {
-            --depth;
             r = &r->back().get<record>();
-          }
         }
 
         auto begin = fs.start(f);
         auto end = fs.end(f);
 
-        // Check whether the field is unset or empty ('-' or "(empty"))
+        // Check whether the field is unset or empty ('-' or "(empty)")
         if (std::equal(unset_field_.begin(), unset_field_.end(), begin)
             || std::equal(empty_field_.begin(), empty_field_.end(), begin))
         {
