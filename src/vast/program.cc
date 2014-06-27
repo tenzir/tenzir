@@ -298,7 +298,6 @@ partial_function program::act()
       }
     }
 
-
     if (config_.check("receiver-actor"))
     {
       // We always initiate the shutdown via the receiver, regardless of
@@ -321,10 +320,6 @@ partial_function program::act()
       // If we're running in ingestion mode, we're independent and terminate as
       // soon as the ingestor has finished.
       link_to(ingestor);
-    }
-    else
-    {
-      assert(! "should never happen");
     }
   }
   catch (network_error const& e)
