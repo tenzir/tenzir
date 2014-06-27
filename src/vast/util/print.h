@@ -7,6 +7,7 @@
 #include <ostream>
 #include <string>
 #include <type_traits>
+#include <vector>
 #include "vast/util/trial.h"
 #include "vast/util/coding.h"
 
@@ -71,6 +72,13 @@ trial<void> print(std::string const& str, Iterator&& out)
   return nothing;
 }
 
+template <typename Iterator, typename T, typename Allocator>
+trial<void> print(std::vector<T, Allocator> const& v, Iterator&& out,
+                  std::string const& delim = ", ")
+{
+  return print_delimited(delim, v.begin(), v.end(), out);
+}
+
 template <typename T, typename Iterator>
 auto print(T n, Iterator&& out)
   -> std::enable_if_t<
@@ -122,7 +130,7 @@ auto print(T n, Iterator&& out, size_t digits = 10)
 // Helpers
 //
 
-/// Prints a numeric type .
+/// Prints a numeric type.
 template <typename T, typename Iterator>
 trial<void> print_numeric(T n, Iterator&& out)
 {
