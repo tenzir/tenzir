@@ -73,38 +73,53 @@ public:
     return d -= y;
   }
 
+  /// Flips all bits, i.e., creates the compliment bitstream.
   Derived& flip()
   {
     derived().bitwise_not();
     return static_cast<Derived&>(*this);
   }
 
+  /// Flips all bits, i.e., creates the compliment bitstream.
   Derived operator~() const
   {
     Derived d(derived());
     return d.flip();
   }
 
+  /// Inspects a bit at a given position.
+  /// @param i The bit position to check.
+  /// @returns `true` if bit *i* is set.
   bool operator[](size_type i) const
   {
     return derived().at(i);
   }
 
+  /// Retrieves the number of bits in the bitstream.
+  /// @returns The number of total bits in the bitstream.
   size_type size() const
   {
     return derived().size_impl();
   }
 
+  /// Retrieves the population count (aka. Hamming weight) of the bitstream.
+  /// @returns The number of set bits.
   size_type count() const
   {
     return derived().count_impl();
   }
 
+  /// Checks whether the bitstream has no bits.
+  /// @returns `true` iff `size() > 0`
   bool empty() const
   {
     return derived().empty_impl();
   }
 
+  /// Appends a sequence of bits.
+  /// @param n The number of bits to append.
+  /// @param bit The bit value of the *n* bits to append.
+  /// @returns `true` on success.
   bool append(size_type n, bool bit)
   {
     if (n == 0 || npos - n < size())
@@ -113,6 +128,10 @@ public:
     return true;
   }
 
+  /// Appends bits from a given block.
+  /// @param block The block whose bits to append.
+  /// @param bits The number of bits to take from *block*.
+  /// @returns `true` on success.
   bool append_block(block_type block, size_type bits = block_width)
   {
     assert(bits <= block_width);
@@ -122,6 +141,9 @@ public:
     return true;
   }
 
+  /// Appends a single bit.
+  /// @param bit The bit value.
+  /// @returns `true` on success.
   bool push_back(bool bit)
   {
     if (std::numeric_limits<size_type>::max() == size())
@@ -130,11 +152,14 @@ public:
     return true;
   }
 
+  /// Removes trailing zero bits.
   void trim()
   {
     derived().trim_impl();
   }
 
+  /// Removes all bits from bitstream.
+  /// @post `empty() == true`.
   void clear() noexcept
   {
     derived().clear_impl();
@@ -156,27 +181,43 @@ public:
     return derived().end_impl();
   }
 
+  /// Accesses the last bit of the bitstream.
+  /// @returns The bit value of the last bit.
   bool back() const
   {
     assert(! empty());
     return derived().back_impl();
   }
 
+  /// Retrieves the position of the first one-bit.
+  /// @returns The position of the first one-bit or bitstream::npos if no such
+  /// position exists (i.e., if all bits are zero).
   size_type find_first() const
   {
     return derived().find_first_impl();
   }
 
+  /// Finds the next one-bit after a given position.
+  /// @param i The position after which to begin finding.
+  /// @returns The position of the first one-bit after *i* or bitstream::npos
+  /// if no such one-bit exists.
   size_type find_next(size_type i) const
   {
     return derived().find_next_impl(i);
   }
 
+  /// Retrieves the position of the last one-bit.
+  /// @returns The position of the last one-bit or bitstream::npos if no such
+  /// position exists (i.e., if all bits are zero).
   size_type find_last() const
   {
     return derived().find_last_impl();
   }
 
+  /// Finds the previous one-bit before a given position.
+  /// @param i The position before which to begin finding.
+  /// @returns The position of the first one-bit before *i* or bitstream::npos
+  /// if no such one-bit exists.
   size_type find_prev(size_type i) const
   {
     return derived().find_prev_impl(i);
