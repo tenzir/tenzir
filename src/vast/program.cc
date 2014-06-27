@@ -260,17 +260,6 @@ partial_function program::act()
       VAST_LOG_ACTOR_INFO(
           "publishes receiver at " << receiver_host << ':' << receiver_port);
 
-      receiver_->link_to(tracker_);
-      receiver_->link_to(archive_);
-      receiver_->link_to(index_);
-      receiver_->link_to(search_);
-
-      // If we're running in "one-shot" mode where both ingestor and core
-      // actors share the same program, then we initiate the teardown via the
-      // ingestor.
-      if (! config_.check("ingestor-actor"))
-        receiver_->link_to(*this);
-
       publish(receiver_, receiver_port, receiver_host.c_str());
     }
     else if (config_.check("ingestor-actor"))
@@ -291,37 +280,51 @@ partial_function program::act()
           *config_.as<size_t>("ingest.max-segment-size") * 1000000,
           *config_.as<size_t>("ingest.batch-size"));
 
-      // If we have a receiver in the same program, we're propagating the exit
-      // to it rather than the program. This ensures proper delivery of
-      // inflight segments from ingestor to receiver.
-      if (config_.check("receiver-actor"))
-        ingestor->link_to(receiver_);
-      else
-        ingestor->link_to(*this);
-
-#ifdef VAST_HAVE_BROCCOLI
-      util::broccoli::init(config_.check("broccoli-messages"),
-                           config_.check("broccoli-calltrace"));
-
-      if (config_.check("ingest.broccoli-events"))
-      {
-        auto host = *config_.get("ingest.broccoli-host");
-        auto port = *config_.as<unsigned>("ingest.broccoli-port");
-        auto events =
-          *config_.as<std::vector<std::string>>("ingest.broccoli-events");
-
-        send(ingestor, atom("ingest"), atom("broccoli"), host, port,
-             std::move(events));
-      }
-#endif
-
       if (config_.check("ingest.submit"))
+      {
         send(ingestor, atom("submit"));
+      }
       else if (auto file = config_.get("ingest.file-name"))
-        send(ingestor, atom("ingest"), *config_.get("ingest.file-type"), *file,
+      {
+        send(ingestor, atom("ingest"),
+             *config_.get("ingest.file-type"),
+             *file,
              *config_.as<int32_t>("ingest.time-field"));
+      }
       else
+      {
+        VAST_LOG_ACTOR_DEBUG("sends exit to unused ingestor " << ingestor);
         send_exit(ingestor, exit::done);
+      }
+    }
+
+
+    if (config_.check("receiver-actor"))
+    {
+      // We always initiate the shutdown via the receiver, regardless of
+      // whether we have an ingestor in our process.
+      link_to(receiver_);
+      receiver_->link_to(tracker_);
+      receiver_->link_to(archive_);
+      receiver_->link_to(index_);
+      receiver_->link_to(search_);
+
+      // We're running in "one-shot" mode where both ingestor and receiver
+      // share the same program. In this case we initiate the teardown
+      // via the ingestor as this ensures proper delivery of inflight segments
+      // from ingestor to receiver.
+      if (config_.check("ingestor-actor"))
+        ingestor->link_to(receiver_);
+    }
+    else if (config_.check("ingestor-actor") && ! config_.check("receiver-actor"))
+    {
+      // If we're running in ingestion mode, we're independent and terminate as
+      // soon as the ingestor has finished.
+      link_to(ingestor);
+    }
+    else
+    {
+      assert(! "should never happen");
     }
   }
   catch (network_error const& e)
