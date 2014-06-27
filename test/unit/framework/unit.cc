@@ -157,12 +157,12 @@ std::string render(std::chrono::microseconds t)
 
 } // namespace <anonymous>
 
-int engine::run(configuration const& cfg)
+bool engine::run(configuration const& cfg)
 {
   if (cfg.check("help"))
   {
     cfg.usage(std::cerr);
-    return 0;
+    return false;
   }
 
   if (cfg.check("no-colors"))
@@ -326,7 +326,7 @@ int engine::run(configuration const& cfg)
     << percent_good << "%" << color::reset << "\n\n"
     << color::cyan << bar << color::reset << '\n';
 
-  return 0;
+  return total_bad == 0;
 }
 
 engine& engine::instance()

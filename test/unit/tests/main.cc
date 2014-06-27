@@ -31,5 +31,5 @@ int main(int argc, char* argv[])
   if (! cfg->check("vast-keep-logs"))
     vast::rm(log_dir);
 
-  return vast::cleanup() && rc;
+  return (vast::cleanup() && rc) ? 0 : 1;
 }

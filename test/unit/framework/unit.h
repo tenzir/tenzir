@@ -51,8 +51,8 @@ public:
 
   /// Invokes tests in all suites.
   /// @param cfg The configuration to run with.
-  /// @returns 0 on success and 1 on failure.
-  static int run(configuration const& cfg);
+  /// @returns `true` iff all tests succeeded.
+  static bool run(configuration const& cfg);
 
 private:
   static engine& instance();
