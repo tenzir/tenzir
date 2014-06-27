@@ -36,7 +36,7 @@ void configuration::initialize()
   b.add('T', "not-tests", "execute everything but matching tests").single();
   b.add('v', "console-verbosity", "console verbosity [0-3]").init(2);
   b.add('V', "file-verbosity", "log file verbosity [0-3]").init(3);
-  b.add('?', "help", "display this help");
+  b.add('h', "help", "display this help");
 
   add_dependency("log-file", "no-colors");
 }
