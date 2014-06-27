@@ -747,6 +747,7 @@ TEST("pop-count (NULL)")
   null_bitstream nbs;
   nbs.push_back(true);
   nbs.push_back(false);
+  CHECK(nbs.count() == 1);
   nbs.append(62, true);
   nbs.append(320, false);
   nbs.append(512, true);
@@ -756,8 +757,11 @@ TEST("pop-count (NULL)")
   ewah_bitstream ebs;
   ebs.push_back(true);
   ebs.push_back(false);
+  CHECK(ebs.count() == 1);
   ebs.append(62, true);
+  CHECK(ebs.count() == 63);
   ebs.append(320, false);
+  CHECK(ebs.count() == 63);
   ebs.append(512, true);
   ebs.append(47, false);
   CHECK(ebs.count() == 575);

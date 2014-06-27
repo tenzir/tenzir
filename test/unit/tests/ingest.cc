@@ -1,12 +1,14 @@
 #include <cppa/cppa.hpp>
 
 #include "vast/bitstream.h"
+#include "vast/bitmap_index.h"
 #include "vast/configuration.h"
 #include "vast/event.h"
 #include "vast/expression.h"
 #include "vast/file_system.h"
 #include "vast/program.h"
 #include "vast/segment.h"
+#include "vast/io/serialization.h"
 
 #include "framework/unit.h"
 
@@ -44,13 +46,42 @@ TEST("ingestion (all-in-one)")
   *cfg['a'] = true;
   *cfg['I'] = true;
   *cfg['r'] = m57_day11_18::ftp;
+  *cfg["index.partition"] = "m57_day11_18";
 
   REQUIRE(cfg.verify());
 
-  anon_send_exit(spawn<program>(cfg), exit::done);
+  spawn<program>(cfg);
   await_all_actors_done();
 
-  CHECK(rm(path{*cfg.get("directory")}));
+  auto dir = path{*cfg.get("directory")};
+  auto ftp = dir / "index" / "m57_day11_18" / "types" / "ftp";
+
+  REQUIRE(exists(dir));
+  REQUIRE(exists(ftp));
+
+  uint64_t size;
+  address_bitmap_index<default_bitstream> abmi;
+  port_bitmap_index<default_bitstream> pbmi;
+
+  REQUIRE(vast::io::unarchive(ftp / "id" / "orig_h" / "data.idx", size, abmi));
+  REQUIRE(vast::io::unarchive(ftp / "id" / "orig_p" / "data.idx", size, pbmi));
+
+  CHECK(size == 3); // Event ID 1 is the first valid ID.
+  CHECK(size == abmi.size());
+
+  auto eq = relational_operator::equal;
+  auto orig_h = abmi.lookup(eq, *to<address>("192.168.1.105"));
+  auto orig_p = pbmi.lookup(greater, *to<port>("49320/?"));
+
+  REQUIRE(orig_h);
+  CHECK((*orig_h)[1] == 1);
+  CHECK((*orig_h)[2] == 1);
+
+  REQUIRE(orig_p);
+  CHECK((*orig_p)[1] == 1);
+  CHECK((*orig_p)[2] == 0);
+
+  CHECK(rm(dir));
 }
 
 TEST("ingestion (two programs)")
