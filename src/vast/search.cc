@@ -17,7 +17,7 @@ search_actor::search_actor(path dir, actor archive, actor index)
 {
 }
 
-behavior search_actor::act()
+partial_function search_actor::act()
 {
   trap_exit(true);
 
@@ -144,12 +144,6 @@ behavior search_actor::act()
     {
       VAST_LOG_ACTOR_VERBOSE("ignores invalid query: " << q);
       return make_any_tuple(last_parse_error_);
-    },
-    others() >> [=]
-    {
-      VAST_LOG_ACTOR_ERROR("got unexpected message from " <<
-                           last_sender() << ": " <<
-                           to_string(last_dequeued()));
     }
   };
 }

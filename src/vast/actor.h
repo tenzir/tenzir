@@ -3,6 +3,7 @@
 
 #include <cppa/event_based_actor.hpp>
 #include <cppa/typed_event_based_actor.hpp>
+#include <cppa/to_string.hpp>
 #include "vast/logger.h"
 
 namespace vast {
@@ -22,8 +23,19 @@ struct actor_base : cppa::event_based_actor
 protected:
   cppa::behavior make_behavior() final
   {
+    using namespace cppa;
+
     VAST_LOG_ACTOR_DEBUG(describe(), "spawned");
-    return act();
+
+    auto catch_all =
+      others() >> [=]
+      {
+        VAST_LOG_ACTOR_WARN("got unexpected message from " <<
+                            last_sender() << ": " <<
+                            to_string(last_dequeued()));
+      };
+
+    return act().or_else(catch_all);
   }
 
   void on_exit() final
@@ -31,7 +43,7 @@ protected:
     VAST_LOG_ACTOR_DEBUG(describe(), "terminated");
   }
 
-  virtual cppa::behavior act() = 0;
+  virtual cppa::partial_function act() = 0;
   virtual std::string describe() const = 0;
 };
 

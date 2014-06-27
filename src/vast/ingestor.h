@@ -34,7 +34,7 @@ public:
                  size_t max_segment_size,
                  uint64_t batch_size);
 
-  cppa::behavior act() final;
+  cppa::partial_function act() final;
   std::string describe() const final;
 
 private:
@@ -42,9 +42,9 @@ private:
   cppa::actor receiver_;
   cppa::actor source_;
   cppa::actor segmentizer_;
-  cppa::behavior ready_;
-  cppa::behavior paused_;
-  cppa::behavior terminating_;
+  cppa::partial_function ready_;
+  cppa::partial_function paused_;
+  cppa::partial_function terminating_;
   size_t max_events_per_chunk_;
   size_t max_segment_size_;
   uint64_t batch_size_;

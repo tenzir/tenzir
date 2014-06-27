@@ -122,7 +122,7 @@ struct console : actor_base
   /// @param dir The directory where to save state.
   console(cppa::actor search, path dir);
 
-  cppa::behavior act() final;
+  cppa::partial_function act() final;
   std::string describe() const final;
 
   /// Prints status information to standard error.

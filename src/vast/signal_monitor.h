@@ -14,7 +14,7 @@ public:
   /// @param receiver the actor receiving the signals.
   signal_monitor(cppa::actor receiver);
 
-  cppa::behavior act() final;
+  cppa::partial_function act() final;
   std::string describe() const final;
 
 private:

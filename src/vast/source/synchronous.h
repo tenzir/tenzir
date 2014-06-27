@@ -23,7 +23,7 @@ public:
   {
   }
 
-  cppa::behavior act() final
+  cppa::partial_function act() final
   {
     using namespace cppa;
 
@@ -68,12 +68,6 @@ public:
           this->quit(exit::done);
         else
           send(this, atom("run"));
-      },
-      others() >> [=]
-      {
-        VAST_LOG_ACTOR_ERROR("received unexpected message from " <<
-                             this->last_sender() << ": " <<
-                             to_string(this->last_dequeued()));
       }
     };
   }

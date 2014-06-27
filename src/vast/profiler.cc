@@ -54,7 +54,7 @@ profiler::profiler(path log_dir, std::chrono::seconds secs)
 {
 }
 
-behavior profiler::act()
+partial_function profiler::act()
 {
   trap_exit(true);
 

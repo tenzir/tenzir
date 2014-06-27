@@ -36,7 +36,7 @@ struct keystroke_monitor : actor_base
         });
   }
 
-  behavior act()
+  partial_function act()
   {
     return
     {
@@ -617,7 +617,7 @@ void console::result::deserialize(deserializer& source)
 }
 
 
-behavior console::act()
+partial_function console::act()
 {
   print(none)
     << util::color::red
@@ -941,12 +941,6 @@ behavior console::act()
       }
 
       send(keystroke_monitor_, atom("get"));
-    },
-    others() >> [=]
-    {
-      VAST_LOG_ACTOR_ERROR("got unexpected message from " <<
-                           last_sender() << ": " <<
-                           to_string(last_dequeued()));
     }
   };
 }

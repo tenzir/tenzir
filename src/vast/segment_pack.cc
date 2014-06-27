@@ -13,7 +13,7 @@ packer::packer(actor manager, actor sink)
 {
 }
 
-behavior packer::act()
+partial_function packer::act()
 {
   attach_functor(
       [=](uint32_t)
@@ -57,7 +57,7 @@ unpacker::unpacker(any_tuple segment, actor sink, size_t batch_size)
   events_.reserve(batch_size_);
 }
 
-behavior unpacker::act()
+partial_function unpacker::act()
 {
   attach_functor([=](uint32_t) { sink_ = invalid_actor; });
 

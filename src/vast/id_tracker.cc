@@ -73,7 +73,7 @@ id_tracker_actor::id_tracker_actor(path dir)
 {
 }
 
-behavior id_tracker_actor::act()
+partial_function id_tracker_actor::act()
 {
   trap_exit(true);
 

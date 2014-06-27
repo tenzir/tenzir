@@ -77,7 +77,7 @@ struct partition_actor : actor_base
 
   partition_actor(path dir, size_t batch_size, uuid id = uuid::random());
 
-  cppa::behavior act() final;
+  cppa::partial_function act() final;
   std::string describe() const final;
 
   template <typename Bitstream = default_bitstream>

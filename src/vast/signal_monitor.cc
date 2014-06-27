@@ -33,7 +33,7 @@ signal_monitor::signal_monitor(actor receiver)
 {
 }
 
-behavior signal_monitor::act()
+partial_function signal_monitor::act()
 {
   VAST_LOG_ACTOR_DEBUG("sends signals to @" << receiver_->id());
 

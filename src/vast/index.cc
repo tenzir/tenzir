@@ -479,7 +479,7 @@ std::vector<expr::ast> index::walk(
   return path;
 }
 
-behavior index::act()
+partial_function index::act()
 {
   trap_exit(true);
 

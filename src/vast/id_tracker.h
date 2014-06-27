@@ -32,7 +32,7 @@ struct id_tracker_actor : actor_base
 {
   id_tracker_actor(path dir);
 
-  cppa::behavior act() final;
+  cppa::partial_function act() final;
   std::string describe() const final;
 
   id_tracker id_tracker_;

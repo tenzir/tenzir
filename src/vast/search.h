@@ -19,7 +19,7 @@ struct search_actor : actor_base
 
   search_actor(path dir, cppa::actor archive, cppa::actor index);
 
-  cppa::behavior act() final;
+  cppa::partial_function act() final;
   std::string describe() const final;
 
   path dir_;

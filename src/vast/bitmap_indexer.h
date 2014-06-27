@@ -33,7 +33,7 @@ public:
     bmi_.stretch(1); // Event ID 0 is not a valid event.
   }
 
-  cppa::behavior act() final
+  cppa::partial_function act() final
   {
     using namespace cppa;
 
@@ -95,6 +95,7 @@ public:
         for (auto& e : events)
           if (auto v = static_cast<Derived*>(this)->extract(e))
           {
+            // FIXME: make the std::bad_cast go away.
             if (bmi_.push_back(*v, e.id()))
               ++n;
             else

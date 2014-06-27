@@ -83,7 +83,7 @@ public:
       expr::ast const& start,
       std::function<bool(expr::ast const&, util::flat_set<expr::ast> const&)> f);
 
-  cppa::behavior act() final;
+  cppa::partial_function act() final;
   std::string describe() const final;
 
   path dir_;

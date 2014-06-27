@@ -17,7 +17,7 @@ receiver_actor::receiver_actor(actor tracker,
 {
 }
 
-behavior receiver_actor::act()
+partial_function receiver_actor::act()
 {
   trap_exit(true);
 
@@ -106,11 +106,7 @@ behavior receiver_actor::act()
         VAST_LOG_ACTOR_DEBUG("notifies ingestors to " <<
                              (paused_ ? "pause" : "resume") << " processing");
       }
-    },
-    others() >> [=]
-    {
-      VAST_LOG_ACTOR_DEBUG("got invalid message: " << to_string(last_dequeued()));
-    },
+    }
   };
 
 }

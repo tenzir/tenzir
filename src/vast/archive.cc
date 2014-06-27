@@ -102,7 +102,7 @@ archive_actor::archive_actor(path const& directory, size_t max_segments)
 {
 }
 
-cppa::behavior archive_actor::act()
+cppa::partial_function archive_actor::act()
 {
   archive_.initialize();
 

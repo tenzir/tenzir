@@ -25,7 +25,7 @@ ingestor_actor::ingestor_actor(path dir,
 {
 }
 
-behavior ingestor_actor::act()
+partial_function ingestor_actor::act()
 {
   trap_exit(true);
 

@@ -17,7 +17,7 @@ segmentizer::segmentizer(actor upstream,
 {
 }
 
-behavior segmentizer::act()
+partial_function segmentizer::act()
 {
   trap_exit(true);
 
@@ -96,12 +96,6 @@ behavior segmentizer::act()
           }
         }
       }
-    },
-    others() >> [=]
-    {
-      VAST_LOG_ACTOR_ERROR(
-          "received unexpected message from " <<
-          last_sender() << ": " << to_string(last_dequeued()));
     }
   };
 }

@@ -280,7 +280,7 @@ partition_actor::partition_actor(path dir, size_t batch_size, uuid id)
 {
 }
 
-behavior partition_actor::act()
+partial_function partition_actor::act()
 {
   trap_exit(true);
 

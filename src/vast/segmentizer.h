@@ -24,7 +24,7 @@ public:
   segmentizer(cppa::actor upstream,
               size_t max_events_per_chunk, size_t max_segment_size);
 
-  cppa::behavior act() final;
+  cppa::partial_function act() final;
   std::string describe() const final;
 
 private:

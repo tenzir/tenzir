@@ -21,7 +21,7 @@ public:
   /// @param ast The query expression ast.
   query(cppa::actor archive, cppa::actor sink, expr::ast ast);
 
-  cppa::behavior act() final;
+  cppa::partial_function act() final;
   std::string describe() const final;
 
 private:
@@ -32,9 +32,9 @@ private:
   cppa::actor archive_;
   cppa::actor sink_;
   expr::ast ast_;
-  cppa::behavior idle_;
-  cppa::behavior waiting_;
-  cppa::behavior extracting_;
+  cppa::partial_function idle_;
+  cppa::partial_function waiting_;
+  cppa::partial_function extracting_;
 
   bitstream hits_ = bitstream{bitstream_type{}};
   bitstream processed_ = bitstream{bitstream_type{}};

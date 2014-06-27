@@ -184,7 +184,7 @@ query::query(actor archive, actor sink, expr::ast ast)
     });
 }
 
-behavior query::act()
+partial_function query::act()
 {
   attach_functor(
       [=](uint32_t)

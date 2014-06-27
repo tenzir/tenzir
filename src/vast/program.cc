@@ -34,7 +34,7 @@ program::program(configuration config)
 {
 }
 
-behavior program::act()
+partial_function program::act()
 {
   attach_functor(
       [=](uint32_t)
@@ -46,7 +46,7 @@ behavior program::act()
         search_ = invalid_actor;
       });
 
-  behavior default_behavior = (
+  partial_function default_behavior = (
       on(atom("receiver")) >> [=]()
       {
         return receiver_;
@@ -72,13 +72,6 @@ behavior program::act()
         VAST_LOG_ACTOR_VERBOSE("received signal " << signal);
         if (signal == SIGINT || signal == SIGTERM)
           quit(exit::stop);
-      },
-      others() >> [=]
-      {
-        quit(exit::error);
-        VAST_LOG_ACTOR_ERROR("terminated after unexpected message from " <<
-                             last_sender() << ": " <<
-                             to_string(last_dequeued()));
       });
 
   auto vast_dir = path{*config_.get("directory")}.complete();
@@ -233,7 +226,7 @@ behavior program::act()
     auto search_port = *config_.as<unsigned>("search.port");
     if (config_.check("search-actor"))
     {
-      search_ = spawn<search_actor, linked>(vast_dir, archive_, index_);
+      search_ = spawn<search_actor>(vast_dir, archive_, index_);
       VAST_LOG_ACTOR_INFO(
           "publishes search at " << search_host << ':' << search_port);
 
@@ -270,6 +263,7 @@ behavior program::act()
       receiver_->link_to(tracker_);
       receiver_->link_to(archive_);
       receiver_->link_to(index_);
+      receiver_->link_to(search_);
 
       // If we're running in "one-shot" mode where both ingestor and core
       // actors share the same program, then we initiate the teardown via the

@@ -30,7 +30,7 @@ public:
   /// @param secs The number of seconds between subsequent measurements.
   profiler(path log_dir, std::chrono::seconds secs);
 
-  cppa::behavior act() final;
+  cppa::partial_function act() final;
   std::string describe() const final;
 
 private:
