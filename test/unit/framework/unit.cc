@@ -193,6 +193,7 @@ bool engine::run(configuration const& cfg)
 
   std::chrono::microseconds runtime{0};
   size_t failed_requires = 0;
+  size_t total_suites = 0;
   size_t total_tests = 0;
   size_t total_good = 0;
   size_t total_bad = 0;
@@ -291,13 +292,13 @@ bool engine::run(configuration const& cfg)
         log.verbose() << '\n';
     }
 
+    ++total_suites;
     total_tests += p.second.size();
 
     if (displayed_header)
       log.verbose() << '\n';
   }
 
-  auto suites = instance().suites_.size();
   auto percent_good =
     unsigned(100000 * total_good / double(total_good + total_bad)) / 1000.0;
 
@@ -308,7 +309,7 @@ bool engine::run(configuration const& cfg)
   log.info()
     << color::cyan << bar << '\n' << pad << title << '\n' << bar
     << color::reset << "\n\n"
-    << indent << "suites:  " << color::yellow << suites << color::reset << '\n'
+    << indent << "suites:  " << color::yellow << total_suites << color::reset << '\n'
     << indent << "tests:   " << color::yellow << total_tests << color::reset
     << '\n'
     << indent << "checks:  " << color::yellow << total_good + total_bad
