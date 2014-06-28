@@ -297,11 +297,8 @@ public:
         VAST_LOG_DEBUG("cache miss for partition " << r << ", asking " <<
                        index_.part_actors_[r]);
 
-        // FIXME: Why can't we get an actor handle of the index in this
-        // fashion? The message never arrives...
-        //actor self = &index_;
-        //index_.send(index_.part_actors_[r], pred, self);
-        index_.ask_partition(r, pred);
+        actor self = &index_;
+        index_.send(index_.part_actors_[r], expr::ast{pred}, self);
 
         parts[r];
       }
@@ -346,11 +343,6 @@ index::index(path const& dir, size_t batch_size)
 {
 }
 
-void index::ask_partition(uuid const& part, expr::ast const& pred)
-{
-  send(part_actors_[part], pred, this);
-}
-
 void index::evaluate(expr::ast const& ast)
 {
   assert(queries_.count(ast));
@@ -388,7 +380,7 @@ void index::evaluate(expr::ast const& ast)
 
   auto& qs = queries_[ast];
   if (er.hits && er.hits.find_first() != bitstream::npos
-      && (! qs.hits || er.hits != qs.hits))
+      && (! qs.hits || er.hits != qs.hits || er.total_progress == 1.0))
   {
     qs.hits = er.hits;
     for (auto& sink : qs.subscribers)
@@ -400,6 +392,9 @@ void index::evaluate(expr::ast const& ast)
       send(sink, er.hits);
     }
   }
+
+  if (er.total_progress == 0.0)
+    return;
 
   uint64_t count = qs.hits ? qs.hits.count() : 0;
   for (auto& s : qs.subscribers)
@@ -613,11 +608,11 @@ partial_function index::act()
       assert(! queries_[ast].subscribers.contains(sink));
       queries_[ast].subscribers.insert(sink);
 
-      send(this, atom("eval"), ast);
+      send(this, atom("first-eval"), ast);
 
       return make_any_tuple(atom("success"));
     },
-    on(atom("eval"), arg_match) >> [=](expr::ast const& q)
+    on(atom("first-eval"), arg_match) >> [=](expr::ast const& q)
     {
       evaluate(q);
     },

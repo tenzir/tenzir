@@ -57,9 +57,6 @@ public:
   /// @param batch_size The number of events to index at once.
   index(path const& dir, size_t batch_size);
 
-  // FIXME: helper function to workaround a libcppa complication.
-  void ask_partition(uuid const& part, expr::ast const& pred);
-
   /// Evaluates a given AST with respect to the cache.
   /// @param ast The AST to get the progress for.
   void evaluate(expr::ast const& ast);
