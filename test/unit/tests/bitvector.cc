@@ -45,6 +45,25 @@ TEST("basic operations")
   CHECK(x.size() == 3 + 16 + 8 + bitvector::block_width + 8);
 }
 
+TEST("block operations")
+{
+  auto ones = bitvector::all_one;
+
+  for (bitvector::block_type i = 0; i < bitvector::block_width - 1; ++i)
+    CHECK(bitvector::next_bit(ones, i) == i + 1);
+  CHECK(bitvector::next_bit(ones, bitvector::block_width - 1) == bitvector::npos);
+  CHECK(bitvector::next_bit(ones, bitvector::block_width) == bitvector::npos);
+
+  CHECK(bitvector::prev_bit(ones, bitvector::block_width) == bitvector::npos);
+  for (bitvector::block_type i = bitvector::block_width - 1; i >= 1; --i)
+    CHECK(bitvector::prev_bit(ones, i) == i - 1);
+  CHECK(bitvector::prev_bit(ones, 0) == bitvector::npos);
+
+  CHECK(bitvector::lowest_bit(ones) == 0);
+  CHECK(bitvector::lowest_bit(ones & (ones - 1)) == 1);
+  CHECK(bitvector::lowest_bit(ones & (ones - 3)) == 2);
+}
+
 TEST("bitwise operations")
 {
   bitvector a{6};

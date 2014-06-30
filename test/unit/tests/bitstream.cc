@@ -465,6 +465,28 @@ TEST("finding (EWAH)")
   CHECK(ebs.find_next(46) == 44 + 3 + 17 + 31);
   CHECK(ebs.find_next(49) == 44 + 3 + 17 + 31);
   CHECK(ebs.find_last() == ebs.size() - 1);
+
+  ebs.clear();
+  ebs.append(64, true);
+  ebs.append(32, false);
+  ebs.append(20, true);
+
+  CHECK(ebs.find_next(63) == 96);
+  for (auto i = 64; i < 95; ++i)
+    CHECK(ebs.find_next(i) == 96);
+  for (auto i = 32; i < 32 + 20 - 1; ++i)
+    CHECK(ebs.find_next(i) == i + 1);
+  CHECK(ebs.find_next(96 + 20 - 1) == ewah_bitstream::npos);
+
+  ebs.clear();
+  ebs.append(64, true);
+  ebs.append(32, true);
+  ebs.append(20, false);
+
+  CHECK(ebs.find_next(63) == 64);
+  for (auto i = 64; i < 31; ++i)
+    CHECK(ebs.find_next(i) == i + 1);
+  CHECK(ebs.find_next(64 + 31) == ewah_bitstream::npos);
 }
 
 TEST("bitwise NOT (EWAH)")
