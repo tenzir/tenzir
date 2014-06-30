@@ -21,6 +21,11 @@ constexpr uint32_t kill   = cppa::exit_reason::user_defined + 3;
 struct actor_base : cppa::event_based_actor
 {
 protected:
+  void catch_all(bool flag)
+  {
+    catch_all_ = flag;
+  }
+
   cppa::behavior make_behavior() final
   {
     using namespace cppa;
@@ -35,7 +40,9 @@ protected:
                             to_string(last_dequeued()));
       };
 
-    return act().or_else(catch_all);
+    auto partial = act();
+
+    return catch_all_ ? partial.or_else(catch_all) : partial;
   }
 
   void on_exit() final
@@ -45,6 +52,9 @@ protected:
 
   virtual cppa::partial_function act() = 0;
   virtual std::string describe() const = 0;
+
+private:
+  bool catch_all_ = true;
 };
 
 /// The base class for typed actors in VAST.
