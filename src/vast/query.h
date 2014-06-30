@@ -42,6 +42,7 @@ private:
   std::unique_ptr<segment::reader> reader_;
   cppa::any_tuple segment_;
 
+  double progress_ = 0.0;
   uint64_t requested_ = 0;
   bool inflight_ = false;
 };

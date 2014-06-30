@@ -14,16 +14,13 @@ query::query(actor archive, actor sink, expr::ast ast)
     sink_{std::move(sink)},
     ast_{std::move(ast)}
 {
-  auto incorporate_hits = [=](bitstream const& hits)
+  // Prefetches the next segment. If we don't have a segment yet, we look for
+  // the segment corresponding to the last unprocessed hit. If we have a
+  // segment, we try to get the next segment in the ID space. If no such
+  // segment exists, we try to get a segment located before the current one. If
+  // neither exist, we fail.
+  auto prefetch = [=]
   {
-    assert(hits);
-
-    VAST_LOG_ACTOR_DEBUG("got index hit covering [" << hits.find_first()
-                         << ',' << hits.find_last() << ']');
-
-    hits_ |= hits;
-    unprocessed_ = hits_ - processed_;
-
     if (inflight_)
       return;
 
@@ -39,11 +36,15 @@ query::query(actor archive, actor sink, expr::ast ast)
     }
     else
     {
+      VAST_LOG_ACTOR_DEBUG("looks for next unprocessed ID after " <<
+                           current()->base() + current()->events() - 1);
+
       auto next = unprocessed_.find_next(current()->base() +
-                                         current()->events());
+                                         current()->events() - 1);
+
       if (next != bitstream::npos)
       {
-        VAST_LOG_ACTOR_DEBUG("prefetches segment for ID " << next);
+        VAST_LOG_ACTOR_DEBUG("prefetches segment for next ID " << next);
         send(archive_, next);
         inflight_ = true;
       }
@@ -52,9 +53,9 @@ query::query(actor archive, actor sink, expr::ast ast)
         auto prev = unprocessed_.find_prev(current()->base());
         if (prev != 0 && prev != bitstream::npos)
         {
-          // The case of prev == 0 may occur when we negate queries, but it's not
-          // a valid event ID and we thus need to ignore it.
-          VAST_LOG_ACTOR_DEBUG("prefetches segment for ID " << prev);
+          // The case of prev == 0 may occur when we negate bitstreams, but
+          // it's not a valid event ID and we need to ignore it.
+          VAST_LOG_ACTOR_DEBUG("prefetches segment for previous ID " << prev);
           send(archive_, prev);
           inflight_ = true;
         }
@@ -62,15 +63,33 @@ query::query(actor archive, actor sink, expr::ast ast)
     }
   };
 
+  auto incorporate_hits = [=](bitstream const& hits)
+  {
+    assert(hits);
+
+    VAST_LOG_ACTOR_DEBUG("got index hit covering [" << hits.find_first()
+                         << ',' << hits.find_last() << ']');
+
+    hits_ |= hits;
+    unprocessed_ = hits_ - processed_;
+
+    prefetch();
+  };
+
   auto handle_progress =
     on(atom("progress"), arg_match) >> [=](double progress, uint64_t hits)
     {
-      send(sink_, atom("progress"), progress, hits);
+      if (progress != progress_)
+        send(sink_, atom("progress"), progress, hits);
+
+      progress_ = progress;
 
       if (progress == 1.0)
       {
-        VAST_LOG_ACTOR_DEBUG("completed hits (" << hits << ")");
-        send(this, atom("done"));
+        VAST_LOG_ACTOR_DEBUG("completed index interaction (" << hits << " hits)");
+
+        if (processed_.count() == hits)
+          send(this, atom("done"));
       }
     };
 
@@ -105,6 +124,11 @@ query::query(actor archive, actor sink, expr::ast ast)
       reader_ = std::make_unique<segment::reader>(current());
 
       become(extracting_);
+
+      if (requested_ > 0)
+        send(this, atom("extract"));
+
+      prefetch();
     });
 
   extracting_ = (
@@ -112,11 +136,12 @@ query::query(actor archive, actor sink, expr::ast ast)
     incorporate_hits,
     on(atom("extract"), arg_match) >> [=](uint64_t n)
     {
-      VAST_LOG_ACTOR_DEBUG("got request to extract " << n << " events (" <<
-                            requested_ << " outstanding)");
-
       assert(n > 0);
+      VAST_LOG_ACTOR_DEBUG("got request to extract " << n << " more events (" <<
+                            requested_ + n << " total)");
 
+      // If the query did not extract events this request, we start the
+      // extraction process now.
       if (requested_ == 0)
         send(this, atom("extract"));
 
@@ -127,10 +152,13 @@ query::query(actor archive, actor sink, expr::ast ast)
       assert(reader_);
       assert(requested_ > 0);
 
+      // We construct a new mask for each request, because the hits
+      // continuously update in every state.
       bitstream mask = bitstream{bitstream_type{}};
       mask.append(current()->base(), false);
       mask.append(current()->events(), true);
       mask &= unprocessed_;
+      assert(mask.count() > 0);
 
       uint64_t n = 0;
       event_id last = 0;
@@ -159,7 +187,6 @@ query::query(actor archive, actor sink, expr::ast ast)
       }
 
       requested_ -= n;
-      VAST_LOG_ACTOR_DEBUG("extracted " << n << " events");
 
       bitstream partial = bitstream{bitstream_type{last + 1, true}};
       partial &= mask;
@@ -167,8 +194,14 @@ query::query(actor archive, actor sink, expr::ast ast)
       unprocessed_ -= partial;
       mask -= partial;
 
+      VAST_LOG_ACTOR_DEBUG("extracted " << n << " events (" <<
+                           partial.count() << '/' << mask.count() <<
+                           " processed/remaining hits)");
+
       if (mask.find_first() != bitstream::npos)
       {
+        // We continue extractining until we have processed all requested
+        // events.
         if (requested_ > 0)
           send_tuple(this, last_dequeued());
 
@@ -176,16 +209,34 @@ query::query(actor archive, actor sink, expr::ast ast)
       }
 
       reader_.reset();
+      segment_ = {};
 
-      auto more = unprocessed_.find_first() == bitstream::npos;
-      become(more ? idle_ : waiting_);
+      become(inflight_ ? waiting_ : idle_);
 
-      VAST_LOG_ACTOR_DEBUG("switches state to " << (more ? "idle" : "waiting"));
+      if (inflight_)
+      {
+        VAST_LOG_ACTOR_DEBUG("becomes waiting");
+        become(waiting_);
+      }
+      else
+      {
+        // No segment in-flight implies no more unprocessed hits, because the
+        // arrival of new hits automatically triggers prefetching.
+        assert(unprocessed_.find_first() == bitstream::npos);
+
+        VAST_LOG_ACTOR_DEBUG("becomes idle");
+        become(idle_);
+
+        if (progress_ == 1.0 && unprocessed_.count() == 0)
+          send(this, atom("done"));
+      }
     });
 }
 
 partial_function query::act()
 {
+  catch_all(false);
+
   attach_functor(
       [=](uint32_t)
       {
