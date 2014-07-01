@@ -30,6 +30,7 @@ do so, all subject to the following:
 #ifndef VAST_UTIL_VARIANT_H
 #define VAST_UTIL_VARIANT_H
 
+#include <cassert>
 #include <type_traits>
 
 #include "vast/config.h"
