@@ -116,18 +116,21 @@ private:
   template <typename Iterator>
   struct printer
   {
-    printer(Iterator& out)
-      : out{out}
-    {}
+    printer(Iterator& out, bool tree, size_t indent)
+      : out_{out},
+        tree_{tree},
+        indent_{indent}
+    {
+    }
 
     trial<void> operator()(none const&)
     {
-      return print("null", out);
+      return print("null", out_);
     }
 
     trial<void> operator()(bool b)
     {
-      return print(b ? "true" : "false", out);
+      return print(b ? "true" : "false", out_);
     }
 
     trial<void> operator()(json::number n)
@@ -140,54 +143,41 @@ private:
       else
         str.erase(str.find_last_not_of('0') + 1, std::string::npos);
 
-      return print(str, out);
+      return print(str, out_);
     }
 
     trial<void> operator()(std::string const& str)
     {
-      auto t = print('"', out);
+      auto t = print('"', out_);
       if (! t)
         return t.error();
 
-      t = print(str, out); // TODO: escape properly.
+      t = print(str, out_); // TODO: escape properly.
       if (! t)
         return t.error();
 
-      return print('"', out);
+      return print('"', out_);
     }
 
     trial<void> operator()(json::array const& a)
     {
-      auto t = print('[', out);
+      auto t = print('[', out_);
       if (! t)
         return t.error();
 
-      t = print_delimited(", ", a.begin(), a.end(), out);
-      if (! t)
-        return t.error();
+      if (! a.empty() && tree_)
+      {
+        ++depth_;
+        *out_++ = '\n';
+      }
 
-      return print(']', out);
-    }
-
-    trial<void> operator()(json::object const& o)
-    {
-      auto t = print('{', out);
-      if (! t)
-        return t.error();
-
-      auto begin = o.begin();
-      auto end = o.end();
+      auto begin = a.begin();
+      auto end = a.end();
       while (begin != end)
       {
-        t = (*this)(begin->first);
-        if (! t)
-          return t.error();
+        indent();
 
-        t = print(": ", out);
-        if (! t)
-          return t.error();
-
-        t = print(begin->second, out);
+        t = apply_visitor(*this, begin->value_);
         if (! t)
           return t.error();
 
@@ -195,16 +185,85 @@ private:
 
         if (begin != end)
         {
-          t = print(", ", out);
+          t = print(tree_ ? ",\n" : ", ", out_);
           if (! t)
             return t.error();
         }
       }
 
-      return print('}', out);
+      if (! a.empty() && tree_)
+      {
+        --depth_;
+        *out_++ = '\n';
+        indent();
+      }
+
+      return print(']', out_);
     }
 
-    Iterator& out;
+    trial<void> operator()(json::object const& o)
+    {
+      auto t = print('{', out_);
+      if (! t)
+        return t.error();
+
+      if (! o.empty() && tree_)
+      {
+        ++depth_;
+        *out_++ = '\n';
+      }
+
+      auto begin = o.begin();
+      auto end = o.end();
+      while (begin != end)
+      {
+        indent();
+
+        t = (*this)(begin->first);
+        if (! t)
+          return t.error();
+
+        t = print(": ", out_);
+        if (! t)
+          return t.error();
+
+        t = apply_visitor(*this, begin->second.value_);
+        if (! t)
+          return t.error();
+
+        ++begin;
+
+        if (begin != end)
+        {
+          t = print(tree_ ? ",\n" : ", ", out_);
+          if (! t)
+            return t.error();
+        }
+      }
+
+      if (! o.empty() && tree_)
+      {
+        --depth_;
+        *out_++ = '\n';
+        indent();
+      }
+
+      return print('}', out_);
+    }
+
+    void indent()
+    {
+      if (! tree_)
+        return;
+
+      for (size_t i = 0; i < depth_ * indent_; ++i)
+        *out_++ = ' ';
+    }
+
+    Iterator& out_;
+    bool tree_;
+    size_t indent_;
+    size_t depth_ = 0;
   };
 
   template <typename Iterator>
@@ -228,13 +287,15 @@ private:
   }
 
   template <typename Iterator>
-  friend trial<void> print(value const& v, Iterator&& out)
+  friend trial<void> print(value const& v, Iterator&& out,
+                           bool tree, size_t indent)
   {
-    return apply_visitor(printer<Iterator>{out}, v);
+    return apply_visitor(printer<Iterator>{out, tree, indent}, v);
   }
 
   template <typename Iterator>
-  friend trial<void> print(json const& j, Iterator&& out)
+  friend trial<void> print(json const& j, Iterator&& out,
+                           bool tree = false, size_t indent = 2)
   {
     return print(j.value_, out, tree, indent);
   }

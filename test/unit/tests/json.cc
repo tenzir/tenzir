@@ -85,7 +85,7 @@ TEST("JSON printing")
   str.clear();
 
   json::array a{42, -1337, "foo", nil, true};
-  CHECK(print(json{std::move(a)}, out));
+  CHECK(print(json{a}, out));
   CHECK(str == "[42, -1337, \"foo\", null, true]");
   str.clear();
 
@@ -101,5 +101,37 @@ TEST("JSON printing")
   o = {{"baz", 4.2}};
   CHECK(print(json{std::move(o)}, out));
   CHECK(str == "{\"baz\": 4.2}");
+  str.clear();
+
+  o = {
+    {"baz", 4.2},
+    {"x", a},
+    {"inner", json::object{{"a", false}, {"b", 42}, {"c", a}}}
+  };
+
+  auto tree = R"json({
+  "baz": 4.2,
+  "inner": {
+    "a": false,
+    "b": 42,
+    "c": [
+      42,
+      -1337,
+      "foo",
+      null,
+      true
+    ]
+  },
+  "x": [
+    42,
+    -1337,
+    "foo",
+    null,
+    true
+  ]
+})json";
+
+  std::cout << tree << std::endl;
+  CHECK(to_string(o, true) == tree);
   str.clear();
 }
