@@ -59,7 +59,8 @@ public:
 
   /// Evaluates a given AST with respect to the cache.
   /// @param ast The AST to get the progress for.
-  void evaluate(expr::ast const& ast);
+  /// @returns The ::evaluation result.
+  evaluation evaluate(expr::ast const& ast);
 
   /// Spawns a partition.
   /// @param dir The directory of the partition.

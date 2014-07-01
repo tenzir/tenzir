@@ -124,7 +124,7 @@ cppa::partial_function archive_actor::act()
       auto t = archive_.load(eid);
       if (t)
       {
-        VAST_LOG_ACTOR_DEBUG("delivering segment for event " << eid);
+        VAST_LOG_ACTOR_DEBUG("delivers segment for event " << eid);
         return *t;
       }
       else

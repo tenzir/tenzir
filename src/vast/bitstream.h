@@ -223,6 +223,13 @@ public:
     return derived().find_prev_impl(i);
   }
 
+  /// Checks whether the bitstream consists only of zero.
+  /// @returns `true` iff all bits in the bitstream are zero.
+  bool all_zero() const
+  {
+    return find_first() == npos;
+  }
+
   bitvector const& bits() const
   {
     return derived().bits_impl();

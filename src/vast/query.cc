@@ -198,7 +198,7 @@ query::query(actor archive, actor sink, expr::ast ast)
                            partial.count() << '/' << mask.count() <<
                            " processed/remaining hits)");
 
-      if (mask.find_first() != bitstream::npos)
+      if (! mask.all_zero())
       {
         // We continue extractining until we have processed all requested
         // events.
@@ -222,7 +222,7 @@ query::query(actor archive, actor sink, expr::ast ast)
       {
         // No segment in-flight implies no more unprocessed hits, because the
         // arrival of new hits automatically triggers prefetching.
-        assert(unprocessed_.find_first() == bitstream::npos);
+        assert(unprocessed_.all_zero());
 
         VAST_LOG_ACTOR_DEBUG("becomes idle");
         become(idle_);

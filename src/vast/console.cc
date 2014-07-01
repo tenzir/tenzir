@@ -689,21 +689,8 @@ partial_function console::act()
     {
       auto i = connected_.find(last_sender());
       assert(i != connected_.end());
-      intrusive_ptr<result> r;
-      // FIXME: see other note on message reordering.
-      //if (i == connected_.end())
-      //{
-      //  VAST_LOG_ACTOR_WARN(
-      //      "got orphaned progress update: " << int(progress * 100) <<
-      //      "%, " << hits << " hits");
 
-      //  r = active_;
-      //}
-      //else
-      {
-        r = i->second.second;
-      }
-
+      auto r = i->second.second;
       assert(r);
       r->hits(hits);
 
@@ -747,28 +734,9 @@ partial_function console::act()
     [=](event const&)
     {
       auto i = connected_.find(last_sender());
-      intrusive_ptr<result> r;
       assert(i != connected_.end());
 
-      // FIXME: We're currently experiencing a message reordering issue in
-      // libcpppa that causes events (and progress reports) to arrive
-      // *after* receiving the DOWN message from the corresponding query.
-      // This should technically not happen because a query actor only
-      // terminates after having sent all events. Only these cases we see
-      // "orphaned" results.
-      //
-      // To fix this, we opportunisticly assume that the message comes from
-      // the last active result.
-      //if (i == connected_.end())
-      //{
-      //  VAST_LOG_ACTOR_WARN("got orphaned query result: " << e);
-      //  r = active_;
-      //}
-      //else
-      {
-        r = i->second.second;
-      }
-
+      auto r = i->second.second;
       assert(r);
 
       cow<event> ce = *tuple_cast<event>(last_dequeued());

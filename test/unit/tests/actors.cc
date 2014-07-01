@@ -150,26 +150,19 @@ TEST("actor integrity")
       fail);
 
   //
-  // Index
+  // Index (manual querying)
   //
-  auto q = to<expr::ast>("id.resp_p == 995/?");
-  REQUIRE(q);
+  auto pops = to<expr::ast>("id.resp_p == 995/?");
+  REQUIRE(pops);
 
   self->send(core, atom("index"));
-  self->receive([&](actor idx) { self->send(idx, atom("query"), *q, self); });
+  self->receive(
+      [&](actor index) { self->send(index, atom("query"), *pops, self); });
 
   self->receive(
       on(atom("success")) >> [&]
       {
         REQUIRE(true);
-      },
-      fail);
-
-  self->receive(
-      on(atom("progress"), arg_match) >> [=](double progress, uint64_t hits)
-      {
-        CHECK(progress == 0.0);
-        CHECK(hits == 0);
       },
       fail);
 
@@ -188,6 +181,57 @@ TEST("actor integrity")
         CHECK(hits == 46);
       },
       fail);
+
+  //
+  // Query
+  //
+  self->send(core, atom("search"));
+  self->receive(
+      [&](actor search)
+      {
+        auto q = "id.resp_p == 995/?";
+        self->sync_send(search, atom("query"), atom("create"), self, q).await((
+            [&](expr::ast const& ast, actor qry)
+            {
+              CHECK(ast == *pops);
+              self->send(qry, atom("extract"), uint64_t{46});
+            },
+            fail));
+      },
+      fail);
+
+  self->receive(
+      on(atom("progress"), arg_match) >> [=](double progress, uint64_t hits)
+      {
+        CHECK(progress == 1.0);
+        CHECK(hits == 46);
+      },
+      fail);
+
+  auto i = 0;
+  self->receive_for(i, 46) (
+    [&](event const& e)
+    {
+      // Verify contents from a few random events.
+      if (e.id() == 4)
+        CHECK(e[1] == "KKSlmtmkkxf");
+
+      if (e.id() == 42)
+      {
+        CHECK(e[1] == "7e0gZmKgGS4");
+        CHECK(e[4] == "TLS_RSA_WITH_RC4_128_MD5");
+      }
+
+      // The last event.
+      if (e.id() == 103)
+        CHECK(e[1] == "mXRBhfuUqag");
+    },
+    others() >> [&]
+    {
+      std::cerr
+        << "got unexpected message from " << self->last_sender().id() << ": "
+        << to_string(self->last_dequeued()) << std::endl;
+    });
 
   self->send_exit(core, exit::done);
   self->await_all_other_actors_done();

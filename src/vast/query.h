@@ -11,7 +11,8 @@
 
 namespace vast {
 
-/// Takes bitstreams and segments to produce results in the form of events.
+/// Receives index hits, looks up the corresponding segments in the archive,
+/// and filters out results which it then sends to a sink.
 class query : public actor_base
 {
 public:

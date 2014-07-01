@@ -343,7 +343,7 @@ index::index(path const& dir, size_t batch_size)
 {
 }
 
-void index::evaluate(expr::ast const& ast)
+index::evaluation index::evaluate(expr::ast const& ast)
 {
   assert(queries_.count(ast));
 
@@ -378,27 +378,7 @@ void index::evaluate(expr::ast const& ast)
   for (auto& pair : er.predicate_progress)
     VAST_LOG_DEBUG("  -  " << int(pair.second * 100) << "% of " << pair.first);
 
-  auto& qs = queries_[ast];
-  if (er.hits && er.hits.find_first() != bitstream::npos
-      && (! qs.hits || er.hits != qs.hits || er.total_progress == 1.0))
-  {
-    qs.hits = er.hits;
-    for (auto& sink : qs.subscribers)
-    {
-      VAST_LOG_ACTOR_DEBUG("notifies " << sink <<
-                           " with new result for " << ast << " (" <<
-                           int(er.total_progress * 100) << "%)");
-
-      send(sink, er.hits);
-    }
-  }
-
-  if (er.total_progress == 0.0)
-    return;
-
-  uint64_t count = qs.hits ? qs.hits.count() : 0;
-  for (auto& s : qs.subscribers)
-    send(s, atom("progress"), er.total_progress, count);
+  return std::move(er);
 }
 
 trial<void> index::make_partition(path const& dir)
@@ -608,13 +588,27 @@ partial_function index::act()
       assert(! queries_[ast].subscribers.contains(sink));
       queries_[ast].subscribers.insert(sink);
 
-      send(this, atom("first-eval"), ast);
+      send(this, atom("first-eval"), ast, sink);
 
       return make_any_tuple(atom("success"));
     },
-    on(atom("first-eval"), arg_match) >> [=](expr::ast const& q)
+    on(atom("first-eval"), arg_match) >> [=](expr::ast const& ast, actor sink)
     {
-      evaluate(q);
+      auto e = evaluate(ast);
+
+      if (e.total_progress == 0.0)
+        return;
+
+      auto& qs = queries_[ast];
+      if (e.hits && ! e.hits.all_zero()
+          && (! qs.hits || e.hits != qs.hits || e.total_progress == 1.0))
+      {
+        qs.hits = e.hits;
+        send(sink, e.hits);
+      }
+
+      auto count = qs.hits ? qs.hits.count() : 0;
+      send(sink, atom("progress"), e.total_progress, count);
     },
     [=](expr::ast const& pred, uuid const& part, uint64_t n)
     {
@@ -653,8 +647,25 @@ partial_function index::act()
             return true;
           });
 
-      for (auto& q : roots)
-        evaluate(q);
+      for (auto& r : roots)
+      {
+        auto e = evaluate(r);
+
+        auto& qs = queries_[r];
+        if (e.hits && ! e.hits.all_zero() && (! qs.hits || e.hits != qs.hits))
+        {
+          qs.hits = e.hits;
+          for (auto& sink : qs.subscribers)
+            send(sink, e.hits);
+        }
+
+        if (e.total_progress == 0.0)
+          return;
+
+        for (auto& sink : qs.subscribers)
+          send(sink, atom("progress"),
+               e.total_progress, qs.hits ? qs.hits.count() : 0);
+      }
     },
     on(atom("delete")) >> [=]
     {
