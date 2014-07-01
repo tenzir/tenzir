@@ -131,7 +131,6 @@ TEST("JSON printing")
   ]
 })json";
 
-  std::cout << tree << std::endl;
   CHECK(to_string(o, true) == tree);
   str.clear();
 }
