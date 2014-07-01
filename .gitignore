@@ -4,4 +4,4 @@ build
 Makefile
 doc/html
 src/config.h
-tmp
+test/unit/bro/logs/**/*.log
