@@ -104,11 +104,22 @@ auto print(T n, Iterator&& out)
 }
 
 template <typename T, typename Iterator>
-auto print(T n, Iterator&& out, size_t digits = 10)
+auto print(T n, Iterator&& out, int digits = 10)
   -> std::enable_if_t<std::is_floating_point<T>::value, trial<void>>
 {
+  if (digits < 0)
+  {
+    // FIXME: Improve performance by not going through std::string.
+    auto str = std::to_string(n);
+    return print(str, out);
+  }
+
   if (n == 0)
-    return print("0.0000000000", out);
+  {
+    print("0.", out);
+    for (auto i = 0; i < digits; ++i)
+      print('0', out);
+  }
 
   if (n < 0)
   {
@@ -120,8 +131,11 @@ auto print(T n, Iterator&& out, size_t digits = 10)
   uint64_t right = std::round(std::modf(n, &left) * std::pow(10, digits));
 
   print_numeric(static_cast<uint64_t>(left), out);
-  print('.', out);
-  print_numeric(right, out);
+  if (digits != 0)
+  {
+    print('.', out);
+    print_numeric(right, out);
+  }
 
   return nothing;
 }
