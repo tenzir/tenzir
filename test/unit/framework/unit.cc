@@ -222,11 +222,14 @@ bool engine::run(configuration const& cfg)
 
     bool displayed_header = false;
 
+    size_t tests_ran = 0;
     for (auto& t : p.second)
     {
       if (! std::regex_search(t->__name(), test_rx)
           || (not_tests && std::regex_search(t->__name(), not_test_rx)))
         continue;
+
+      ++tests_ran;
 
       if (! displayed_header)
       {
@@ -290,10 +293,13 @@ bool engine::run(configuration const& cfg)
           << color::red << bad << color::reset << ")" << '\n';
       else
         log.verbose() << '\n';
+
+      ++total_tests;
     }
 
-    ++total_suites;
-    total_tests += p.second.size();
+    // We only counts suites which have executed one or more tests.
+    if (tests_ran > 0)
+      ++total_suites;
 
     if (displayed_header)
       log.verbose() << '\n';
