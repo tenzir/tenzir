@@ -19,7 +19,7 @@ configure_file(tests/schema_test_cases.h.in schema_test_cases.h)
 file(GLOB_RECURSE zipped_logs bro/logs/*.gz)
 if (zipped_logs)
   message(STATUS "uncompressing logs...")
-  execute_process(COMMAND gunzip -k ${zipped_logs})
+  execute_process(COMMAND gunzip -fk ${zipped_logs})
 endif ()
 
 set (bro_log_header "#ifndef BRO_LOGS\n#define BRO_LOGS")
