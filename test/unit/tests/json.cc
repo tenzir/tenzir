@@ -52,6 +52,29 @@ TEST("JSON construction/assignment")
   CHECK(is<json::object>(j));
 }
 
+TEST("JSON total order")
+{
+  json j0{true};
+  json j1{false};
+
+  CHECK(j1 < j0);
+  CHECK(j0 != j1);
+
+  j0 = "bar";
+  j1 = "foo";
+
+  CHECK(j0 != j1);
+  CHECK(j0 < j1);
+
+  j1 = 42;
+
+  CHECK(j0 != j1);
+  CHECK(! (j0 < j1));
+  CHECK(! (j0 <= j1));
+  CHECK(j0 > j1);
+  CHECK(j0 >= j1);
+}
+
 TEST("JSON printing")
 {
   std::string str;

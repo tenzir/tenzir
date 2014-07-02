@@ -6,13 +6,14 @@
 #include <vector>
 #include "vast/util/none.h"
 #include "vast/util/print.h"
+#include "vast/util/operators.h"
 #include "vast/util/variant.h"
 
 namespace vast {
 namespace util {
 
 /// A JSON data type.
-class json
+class json : totally_ordered<json>
 {
 public:
   struct array;
@@ -106,6 +107,49 @@ private:
   value value_;
 
 private:
+  struct less_than
+  {
+    template <typename T>
+    bool operator()(T const& x, T const& y)
+    {
+      return x < y;
+    }
+
+    template <typename T, typename U>
+    bool operator()(T const&, U const&)
+    {
+      return false;
+    }
+  };
+
+  struct equals
+  {
+    template <typename T>
+    bool operator()(T const& x, T const& y)
+    {
+      return x == y;
+    }
+
+    template <typename T, typename U>
+    bool operator()(T const&, U const&)
+    {
+      return false;
+    }
+  };
+
+  friend bool operator<(json const& x, json const& y)
+  {
+    if (which(x) == which(y))
+      return visit(less_than{}, x, y);
+    else
+      return which(x) < which(y);
+  }
+
+  friend bool operator==(json const& x, json const& y)
+  {
+    return visit(equals{}, x, y);
+  }
+
   friend json::value& expose(json& j)
   {
     return j.value_;
