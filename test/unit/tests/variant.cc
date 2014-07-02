@@ -170,3 +170,57 @@ TEST("delayed visitation")
   std::for_each(doubles.begin(), doubles.end(), util::apply_visitor(doppler{}));
   CHECK(*util::get<int>(doubles[2]) == 84);
 }
+
+namespace {
+
+// A type containing a variant and modeling the Variant concept.
+class plain
+{
+public:
+  plain() = default;
+
+  template <typename T>
+  plain(T&& x)
+    : value_(std::forward<T>(x))
+  {
+  }
+
+  using value = util::variant<int, bool>;
+
+protected:
+  value value_;
+
+  friend value const& expose(plain const& w)
+  {
+    return w.value_;
+  }
+};
+
+struct typed : plain
+{
+  enum class type : value::tag_type
+  {
+    foo,
+    bar
+  };
+};
+
+} // namespace <anonymous>
+
+TEST("variant concept")
+{
+  plain p;
+  typed t;
+
+  CHECK(std::is_same<decltype(util::which(p)), plain::value::tag_type>::value);
+  CHECK(std::is_same<decltype(util::which(t)), typed::type>::value);
+
+  CHECK(util::which(p) == 0);
+  CHECK(util::which(t) == typed::type::foo);
+
+  REQUIRE(util::is<int>(p));
+  CHECK(*util::get<int>(p) == 0);
+
+  auto r = util::visit([](auto x) -> bool { return !! x; }, p);
+  CHECK(! r);
+}

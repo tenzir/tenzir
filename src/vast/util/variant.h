@@ -615,12 +615,6 @@ T const* get(variant<Ts...> const& var)
   return apply_visitor(getter<T const>(), var);
 }
 
-template <typename T, typename... Ts>
-bool is(variant<Ts...> const& v)
-{
-  return get<T>(v) != nullptr;
-}
-
 namespace detail {
 
 template <typename Visitor>
@@ -707,6 +701,92 @@ template <typename Visitor, typename V, typename... Vs>
 auto apply_visitor(Visitor&& visitor, V&& v, Vs&&... vs)
 {
   return apply_visitor(detail::binary_visitor<Visitor, V>(visitor, v), vs...);
+}
+
+// Variant Concept
+// ===============
+//
+// The *Variant* concept comes in handy for types which contain a variant but
+// offer an extended interface. Such types benefit from uniform access of the
+// variant aspect, namely visitation and selective type checking/extraction.
+//
+// To model the *Variant* concept, a type `V` must provide two overloads of the
+// free function:
+//
+//    variant<Ts...>&       expose(V& x)
+//    variant<Ts...> const& expose(V const& x)
+//
+// This function is found via ADL and enables the following free functions:
+//
+//    1) `auto which(V&& x)`
+//    2) `auto get(V&& x)`
+//    3) `bool is(V&& x)`
+//    4) `auto visit(Visitor, Vs&&... vs)`
+//
+// If `T` also provide an enum class called `type` which inherits from
+// `variant<...>::tag_type`, then `which(V&&)` returns a value of type `type`
+// instead of using the variant tag type.
+
+// Forward declaration
+namespace detail { struct dummy; }
+template <typename V>
+auto expose(V&&) -> std::enable_if_t<std::is_same<V, detail::dummy>::value>;
+
+namespace detail {
+
+struct has_type_member
+{
+  template <typename T>
+  static auto test(int)
+    -> decltype(typename T::type(), std::true_type());
+
+  template <typename>
+  static auto test(...) -> std::false_type;
+};
+
+template <typename T>
+struct has_type : decltype(has_type_member::test<std::decay_t<T>>(0)) {};
+
+} // namespace detail
+
+
+template <typename V>
+auto which(V&& v)
+  -> std::enable_if_t<detail::has_type<V>{}, typename std::decay_t<V>::type>
+{
+  return static_cast<typename std::decay_t<V>::type>(expose(v).which());
+}
+
+template <typename V>
+auto which(V&& v)
+  -> std::enable_if_t<! detail::has_type<V>{}, decltype(expose(v).which())>
+{
+  return expose(v).which();
+}
+
+template <typename T, typename V>
+auto get(V&& v)
+// FIXME: why does this SFINAE expression fail? It would have the clearest
+// semantics.
+//  -> std::enable_if_t<is_callable_with<V>(expose), decltype(get<T>(expose(v))>
+  -> std::enable_if_t<
+       std::is_reference<decltype(expose(v))>::value,
+       decltype(get<T>(expose(v)))
+     >
+{
+  return get<T>(expose(v));
+}
+
+template <typename T, typename V>
+auto is(V&& v)
+{
+  return get<T>(v) != nullptr;
+}
+
+template <typename Visitor, typename... Vs>
+auto visit(Visitor&& v, Vs&&... vs)
+{
+  return apply_visitor(std::forward<Visitor>(v), expose(vs)...);
 }
 
 } // namespace util
