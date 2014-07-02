@@ -101,6 +101,7 @@ TEST("ingestion (two programs)")
   *ingest_config['V'] = 5;
   *ingest_config['I'] = true;
   *ingest_config['r'] = m57_day11_18::ssl;
+  *ingest_config["index.partition"] = "m57_day11_18";
   REQUIRE(ingest_config.verify());
 
   // Wait until the TCP sockets of the core have bound.
@@ -111,6 +112,8 @@ TEST("ingestion (two programs)")
   await_all_actors_done();
 }
 
+// Requires the previous test to run successfully because this one accesses the
+// data it has written to disk.
 TEST("actor integrity")
 {
   configuration cfg;
@@ -226,12 +229,7 @@ TEST("actor integrity")
       if (e.id() == 103)
         CHECK(e[1] == "mXRBhfuUqag");
     },
-    others() >> [&]
-    {
-      std::cerr
-        << "got unexpected message from " << self->last_sender().id() << ": "
-        << to_string(self->last_dequeued()) << std::endl;
-    });
+    fail);
 
   self->send_exit(core, exit::done);
   self->await_all_other_actors_done();

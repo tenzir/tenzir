@@ -39,16 +39,16 @@ struct can_call
 
 } // namespace detail
 
-template<typename F, typename... A>
+template <typename F, typename... A>
 struct callable : decltype(detail::can_call::test<F, A...>(0)) {};
 
-template<typename F, typename... A>
+template <typename F, typename... A>
 struct callable <F(A...)> : callable<F, A...> {};
 
-template<typename... A, typename F>
+template <typename... A, typename F>
 constexpr callable<F, A...> is_callable_with(F&&)
 {
- return callable<F(A...)>{};
+  return callable<F(A...)>{};
 }
 
 /// @see http://bit.ly/uref-copy.
