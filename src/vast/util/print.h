@@ -118,7 +118,9 @@ auto print(T n, Iterator&& out, int digits = 10)
   {
     print("0.", out);
     for (auto i = 0; i < digits; ++i)
-      print('0', out);
+      *out++ = '0';
+
+    return nothing;
   }
 
   if (n < 0)
