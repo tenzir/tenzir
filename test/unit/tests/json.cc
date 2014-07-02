@@ -1,4 +1,5 @@
 #include "vast/util/json.h"
+#include "vast/util/convert.h"
 
 #include "framework/unit.h"
 
@@ -162,4 +163,27 @@ TEST("JSON printing")
 
   CHECK(to_string(o, true) == tree);
   str.clear();
+}
+
+TEST("JSON conversion")
+{
+  auto t = to<json>(true);
+  REQUIRE(t);
+  CHECK(*t == json{true});
+
+  t = to<json>(4.2);
+  REQUIRE(t);
+  CHECK(*t == json{4.2});
+
+  t = to<json>("foo");
+  REQUIRE(t);
+  CHECK(*t == json{"foo"});
+
+  t = to<json>(std::vector<int>{1, 2, 3});
+  REQUIRE(t);
+  CHECK(*t == json::array{1, 2, 3});
+
+  t = to<json>(std::map<int, bool>{{1, true}, {2, false}});
+  REQUIRE(t);
+  CHECK(*t == json::object{{"1", true}, {"2", false}});
 }

@@ -341,6 +341,75 @@ private:
   }
 };
 
+inline trial<void> convert(bool b, json& j)
+{
+  j = b;
+  return nothing;
+}
+
+template <typename T>
+auto convert(T x, json& j)
+  -> std::enable_if_t<std::is_arithmetic<T>::value, trial<void>>
+{
+  j = json::number(x);
+  return nothing;
+}
+
+inline trial<void> convert(char const* str, json& j)
+{
+  j = str;
+  return nothing;
+}
+
+inline trial<void> convert(std::string const& str, json& j)
+{
+  j = str;
+  return nothing;
+}
+
+template <typename T>
+trial<void> convert(std::vector<T> const& v, json& j)
+{
+  json::array a;
+  for (auto& x : v)
+  {
+    json i;
+    auto t = convert(x, i);
+    if (! t)
+      return t.error();
+
+    a.push_back(std::move(i));
+  };
+
+  j = std::move(a);
+
+  return nothing;
+}
+
+template <typename K, typename V>
+trial<void> convert(std::map<K, V> const& m, json& j)
+{
+  util::json::object o;
+  for (auto& p : m)
+  {
+    json k;
+    auto t = convert(p.first, k);
+    if (! t)
+      return t.error();
+
+    json v;
+    t = convert(p.second, v);
+    if (! t)
+      return t.error();
+
+    o.emplace(to_string(k), std::move(v));
+  };
+
+  j = std::move(o);
+
+  return nothing;
+}
+
 } // namespace util
 } // namespace vast
 
