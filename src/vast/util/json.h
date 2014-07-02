@@ -102,17 +102,20 @@ public:
   {
   }
 
-  /// Retrieves the type of the JSON value.
-  /// @returns The type of this value.
-  type which() const
-  {
-    return static_cast<type>(value_.which());
-  }
-
 private:
   value value_;
 
 private:
+  friend json::value& expose(json& j)
+  {
+    return j.value_;
+  }
+
+  friend json::value const& expose(json const& j)
+  {
+    return j.value_;
+  }
+
   template <typename Iterator>
   struct printer
   {
@@ -177,7 +180,7 @@ private:
       {
         indent();
 
-        t = apply_visitor(*this, begin->value_);
+        t = visit(*this, *begin);
         if (! t)
           return t.error();
 
@@ -227,7 +230,7 @@ private:
         if (! t)
           return t.error();
 
-        t = apply_visitor(*this, begin->second.value_);
+        t = visit(*this, begin->second);
         if (! t)
           return t.error();
 
@@ -287,17 +290,10 @@ private:
   }
 
   template <typename Iterator>
-  friend trial<void> print(value const& v, Iterator&& out,
-                           bool tree, size_t indent)
-  {
-    return apply_visitor(printer<Iterator>{out, tree, indent}, v);
-  }
-
-  template <typename Iterator>
   friend trial<void> print(json const& j, Iterator&& out,
                            bool tree = false, size_t indent = 2)
   {
-    return print(j.value_, out, tree, indent);
+    return visit(printer<Iterator>{out, tree, indent}, j);
   }
 };
 

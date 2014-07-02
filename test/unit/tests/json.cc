@@ -9,41 +9,47 @@ SUITE("util")
 
 TEST("JSON construction/assignment")
 {
-  CHECK(json{}.which() == json::type::null);
-  CHECK(json{nil}.which() == json::type::null);
+  CHECK(which(json{}) == json::type::null);
+  CHECK(which(json{nil}) == json::type::null);
 
-  CHECK(json{true}.which() == json::type::boolean);
-  CHECK(json{false}.which() == json::type::boolean);
+  CHECK(which(json{true}) == json::type::boolean);
+  CHECK(which(json{false}) == json::type::boolean);
 
-  CHECK(json{4.2}.which() == json::type::number);
-  CHECK(json{42}.which() == json::type::number);
-  CHECK(json{-1337}.which() == json::type::number);
+  CHECK(which(json{4.2}) == json::type::number);
+  CHECK(which(json{42}) == json::type::number);
+  CHECK(which(json{-1337}) == json::type::number);
 
-  CHECK(json(std::string{"foo"}).which() == json::type::string);
-  CHECK(json("foo").which() == json::type::string);
+  CHECK(which(json(std::string{"foo"})) == json::type::string);
+  CHECK(which(json("foo")) == json::type::string);
 
-  CHECK(json{json::array{}}.which() == json::type::array);
+  CHECK(which(json{json::array{}}) == json::type::array);
 
-  CHECK(json{json::object{}}.which() == json::type::object);
+  CHECK(which(json{json::object{}}) == json::type::object);
 
   json j;
   j = nil;
-  CHECK(j.which() == json::type::null);
+  CHECK(which(j) == json::type::null);
+  CHECK(is<none>(j));
 
   j = true;
-  CHECK(j.which() == json::type::boolean);
+  CHECK(which(j) == json::type::boolean);
+  CHECK(is<bool>(j));
 
   j = 42;
-  CHECK(j.which() == json::type::number);
+  CHECK(which(j) == json::type::number);
+  CHECK(is<json::number>(j));
 
   j = "foo";
-  CHECK(j.which() == json::type::string);
+  CHECK(which(j) == json::type::string);
+  CHECK(is<std::string>(j));
 
   j = json::array{};
-  CHECK(j.which() == json::type::array);
+  CHECK(which(j) == json::type::array);
+  CHECK(is<json::array>(j));
 
   j = json::object{};
-  CHECK(j.which() == json::type::object);
+  CHECK(which(j) == json::type::object);
+  CHECK(is<json::object>(j));
 }
 
 TEST("JSON printing")
