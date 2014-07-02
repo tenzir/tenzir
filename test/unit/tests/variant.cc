@@ -102,13 +102,13 @@ TEST("positional introspection")
 
 TEST("type-based access")
 {
-  REQUIRE(util::get<int>(t0));
+  REQUIRE(util::is<int>(t0));
   CHECK(*util::get<int>(t0) == 42);
 
-  REQUIRE(util::get<double>(t1));
+  REQUIRE(util::is<double>(t1));
   CHECK(*util::get<double>(t1) == 4.2);
 
-  REQUIRE(util::get<std::string>(t2));
+  REQUIRE(util::is<std::string>(t2));
   CHECK(*util::get<std::string>(t2) == "42");
 }
 

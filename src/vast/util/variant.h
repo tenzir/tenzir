@@ -615,6 +615,12 @@ T const* get(variant<Ts...> const& var)
   return apply_visitor(getter<T const>(), var);
 }
 
+template <typename T, typename... Ts>
+bool is(variant<Ts...> const& v)
+{
+  return get<T>(v) != nullptr;
+}
+
 namespace detail {
 
 template <typename Visitor>
