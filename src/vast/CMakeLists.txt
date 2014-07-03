@@ -56,6 +56,7 @@ set(libvast_sources
   io/stream.cc
   source/file.cc
   util/poll.cc
+  util/string.cc
   util/terminal.cc
   util/hash/crc.cc
   util/hash/murmur.cc
