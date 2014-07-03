@@ -98,6 +98,8 @@ private:
   friend bool operator<(prefix const& x, prefix const& y);
 };
 
+trial<void> convert(prefix const& p, util::json& j);
+
 } // namespace vast
 
 #endif

@@ -2,6 +2,7 @@
 
 #include "vast/logger.h"
 #include "vast/serialization.h"
+#include "vast/util/json.h"
 
 namespace vast {
 
@@ -106,6 +107,29 @@ bool operator<(event const& x, event const& y)
     return
       std::tie(x.id_, x.timestamp_, static_cast<record const&>(x)) <
       std::tie(y.id_, y.timestamp_, static_cast<record const&>(y));
+}
+
+trial<void> convert(event const& e, util::json& j)
+{
+  util::json::object o;
+  o["type"] = to_string(*e.type());
+  o["id"] = e.id();
+
+  auto t = to<util::json>(e.timestamp().since_epoch().count());
+  if (! t)
+    return t.error();
+
+  o["timestamp"] = *t;
+
+  t = to<util::json>(static_cast<record const&>(e));
+  if (! t)
+    return t.error();
+
+  o["data"] = *t;
+
+  j = std::move(o);
+
+  return nothing;
 }
 
 } // namespace vast

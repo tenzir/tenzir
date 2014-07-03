@@ -180,6 +180,8 @@ private:
   friend bool operator<(address const& x, address const& y);
 };
 
+trial<void> convert(address const& a, util::json& j);
+
 } // namespace vast
 
 #endif

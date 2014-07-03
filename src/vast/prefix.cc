@@ -3,6 +3,7 @@
 #include "vast/logger.h"
 #include "vast/value.h" // TODO: remove after exception removal
 #include "vast/serialization.h"
+#include "vast/util/json.h"
 
 namespace vast {
 
@@ -88,6 +89,12 @@ bool operator==(prefix const& x, prefix const& y)
 bool operator<(prefix const& x, prefix const& y)
 {
   return std::tie(x.network_, x.length_) < std::tie(y.network_, y.length_);
+}
+
+trial<void> convert(prefix const& p, util::json& j)
+{
+  j = to_string(p);
+  return nothing;
 }
 
 } // namespace vast

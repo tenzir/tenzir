@@ -7,6 +7,7 @@
 #include "vast/util/none.h"
 #include "vast/util/print.h"
 #include "vast/util/operators.h"
+#include "vast/util/string.h"
 #include "vast/util/variant.h"
 
 namespace vast {
@@ -195,15 +196,11 @@ private:
 
     trial<void> operator()(std::string const& str)
     {
-      auto t = print('"', out_);
+      auto t = print(json_escape(str), out_);
       if (! t)
         return t.error();
 
-      t = print(str, out_); // TODO: escape properly.
-      if (! t)
-        return t.error();
-
-      return print('"', out_);
+      return nothing;
     }
 
     trial<void> operator()(json::array const& a)

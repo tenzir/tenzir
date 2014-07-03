@@ -201,6 +201,7 @@ private:
 
   friend trial<void> convert(time_range tr, double& d);
   friend trial<void> convert(time_range tr, duration_type& dur);
+  friend trial<void> convert(time_range tr, util::json& j);
 };
 
 /// An absolute point in time having UTC time zone.
@@ -328,6 +329,7 @@ private:
   friend trial<void> convert(time_point tp, double& d);
   friend trial<void> convert(time_point tp, std::tm& tm);
   friend trial<void> convert(time_point tp, std::string& str);
+  friend trial<void> convert(time_point tp, util::json& j);
 
   time_point_type time_point_;
 };

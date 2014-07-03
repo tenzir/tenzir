@@ -109,6 +109,8 @@ private:
   friend bool operator<(regex const& x, regex const& y);
 };
 
+trial<void> convert(regex const& r, util::json& j);
+
 } // namespace vast
 
 #endif

@@ -127,6 +127,8 @@ private:
   friend bool operator<(port const& x, port const& y);
 };
 
+trial<void> convert(port const& p, util::json& j);
+
 } // namespace vast
 
 #endif

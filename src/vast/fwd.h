@@ -53,6 +53,10 @@ template <typename Container> class container_output_stream;
 enum compression : uint8_t;
 } // namespace io
 
+namespace util {
+class json;
+} // namespace util
+
 } // namespace vast
 
 #endif

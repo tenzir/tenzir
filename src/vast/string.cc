@@ -5,6 +5,7 @@
 #include "vast/logger.h"
 #include "vast/serialization.h"
 #include "vast/util/coding.h"
+#include "vast/util/json.h"
 
 namespace vast {
 
@@ -594,6 +595,12 @@ bool operator<(string const& x, string const& y)
   return std::lexicographical_compare(
       x.begin(), x.end(),
       y.begin(), y.end());
+}
+
+trial<void> convert(string str, util::json& j)
+{
+  j = to_string(str);
+  return nothing;
 }
 
 } // namespace vast

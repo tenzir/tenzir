@@ -406,6 +406,7 @@ private:
 
   friend bool operator==(string const& x, string const& y);
   friend bool operator<(string const& x, string const& y);
+  friend trial<void> convert(string str, util::json& j);
 };
 
 } // namespace vast

@@ -3,6 +3,7 @@
 #include <utility>
 #include "vast/logger.h"
 #include "vast/serialization.h"
+#include "vast/util/json.h"
 
 namespace vast {
 
@@ -75,6 +76,12 @@ bool operator==(port const& x, port const& y)
 bool operator<(port const& x, port const& y)
 {
   return std::tie(x.number_, x.type_) < std::tie(y.number_, y.type_);
+}
+
+trial<void> convert(port const& p, util::json& j)
+{
+  j = to_string(p);
+  return nothing;
 }
 
 } // namespace vast

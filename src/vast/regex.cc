@@ -1,6 +1,7 @@
 #include "vast/regex.h"
 
 #include "vast/serialization.h"
+#include "vast/util/json.h"
 
 namespace vast {
 
@@ -54,6 +55,12 @@ bool operator==(regex const& x, regex const& y)
 bool operator<(regex const& x, regex const& y)
 {
   return x.str_ < y.str_;
+}
+
+trial<void> convert(regex const& r, util::json& j)
+{
+  j = to_string(r);
+  return nothing;
 }
 
 } // namespace vast

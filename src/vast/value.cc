@@ -6,6 +6,7 @@
 #include <type_traits>
 #include "vast/logger.h"
 #include "vast/serialization.h"
+#include "vast/util/json.h"
 
 namespace vast {
 
@@ -625,6 +626,46 @@ bool operator>=(value const& x, value const& y)
 }
 
 
+namespace {
+
+struct json_converter
+{
+  using result_type = trial<void>;
+
+  json_converter(util::json& j)
+    : j_{j}
+  {
+  }
+
+  trial<void> operator()(value_invalid) const
+  {
+    return nothing;
+  }
+
+  trial<void> operator()(type_tag) const
+  {
+    // Remains null.
+    return nothing;
+  }
+
+  trial<void> operator()(string const& str) const
+  {
+    j_ = std::string{str.begin(), str.end()};
+    return nothing;
+  }
+
+  template <typename T>
+  trial<void> operator()(T const& x) const
+  {
+    return convert(x, j_);
+  }
+
+  util::json& j_;
+};
+
+} // namespace <anonymous>
+
+
 record::record(std::vector<value> values)
   : super(std::move(values))
 {
@@ -768,6 +809,33 @@ bool operator<(record const& x, record const& y)
     static_cast<record::super const&>(y);
 }
 
+trial<void> convert(vector const& v, util::json& j)
+{
+  util::json::object o;
+
+  // TODO: once we have strong typing built into the values, we can make this
+  // more robust.
+  if (v.empty())
+    o["elem_type"];
+  else
+    o["elem_type"] = to_string(v[0].which());
+
+  util::json::array values;
+  for (auto& x : v)
+  {
+    util::json j;
+    auto t = value::visit(x, json_converter{j});
+    if (! t)
+      return t.error();
+
+    values.push_back(std::move(j));
+  };
+
+  o["values"] = std::move(values);
+
+  j = std::move(o);
+  return nothing;
+}
 
 void table::each(std::function<void(value const&, value const&)> f) const
 {
@@ -814,6 +882,62 @@ bool operator<(table const& x, table const& y)
 {
   return static_cast<table::super const&>(x) <
     static_cast<table::super const&>(y);
+}
+
+trial<void> convert(table const& t, util::json& j)
+{
+  util::json::object o;
+
+  // TODO: once we have strong typing built into the values, we can make this
+  // more robust.
+  if (t.empty())
+  {
+    o["key_type"];
+    o["map_type"];
+  }
+  else
+  {
+    o["key_type"] = to_string(t.begin()->first.which());
+    o["map_type"] = to_string(t.begin()->second.which());
+  }
+
+  util::json::array values;
+  for (auto& p : t)
+  {
+    util::json::array a;
+
+    util::json j;
+    auto r = value::visit(p.first, json_converter{j});
+    if (! r)
+      return r.error();
+
+    a.push_back(std::move(j));
+
+    r = value::visit(p.second, json_converter{j});
+    if (! r)
+      return r.error();
+
+    a.push_back(std::move(j));
+    values.emplace_back(std::move(a));
+  };
+
+  o["values"] = std::move(values);
+
+  j = std::move(o);
+  return nothing;
+}
+
+trial<void> convert(value const& v, util::json& j)
+{
+  util::json::object o;
+  o["type"] = to_string(v.which());
+  auto t = value::visit(v, json_converter{o["value"]});
+  if (! t)
+    return t.error();
+
+  j = std::move(o);
+
+  return nothing;
 }
 
 } // namespace vast

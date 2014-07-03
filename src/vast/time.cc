@@ -6,6 +6,7 @@
 #include "vast/config.h"
 #include "vast/logger.h"
 #include "vast/serialization.h"
+#include "vast/util/json.h"
 
 namespace vast {
 
@@ -128,6 +129,12 @@ trial<void> convert(time_range tr, double& d)
 trial<void> convert(time_range tr, time_range::duration_type& dur)
 {
   dur = tr.duration_;
+  return nothing;
+}
+
+trial<void> convert(time_range tr, util::json& j)
+{
+  j = tr.count();
   return nothing;
 }
 
@@ -344,6 +351,12 @@ trial<void> convert(time_point tp, std::string& str)
   str = buf;
 #endif
 
+  return nothing;
+}
+
+trial<void> convert(time_point tp, util::json& j)
+{
+  j = tp.since_epoch().count();
   return nothing;
 }
 

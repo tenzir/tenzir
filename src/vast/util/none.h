@@ -10,12 +10,12 @@ struct none {};
 /// The only instance of ::none.
 static constexpr auto nil = none{};
 
-bool operator<(none const&, none const&)
+inline bool operator<(none const&, none const&)
 {
   return true;
 }
 
-bool operator==(none const&, none const&)
+inline bool operator==(none const&, none const&)
 {
   return true;
 }

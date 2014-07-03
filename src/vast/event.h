@@ -99,6 +99,7 @@ private:
 
   friend bool operator==(event const& x, event const& y);
   friend bool operator<(event const& x, event const& y);
+  friend trial<void> convert(event const& e, util::json& j);
 };
 
 } // namespace vast

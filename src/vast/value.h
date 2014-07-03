@@ -2,6 +2,7 @@
 #define VAST_VALUE_H
 
 #include <map>
+#include "vast/fwd.h"
 #include "vast/address.h"
 #include "vast/offset.h"
 #include "vast/port.h"
@@ -285,12 +286,12 @@ value operator%(value const& x, value const& y);
 value operator-(value const& x);
 
 // Bitwise operators
-value operator&(value const& x, value const& y);
-value operator|(value const& x, value const& y);
-value operator^(value const& x, value const& y);
-value operator<<(value const& x, value const& y);
-value operator>>(value const& x, value const& y);
-value operator~(value const& x);
+//value operator&(value const& x, value const& y);
+//value operator|(value const& x, value const& y);
+//value operator^(value const& x, value const& y);
+//value operator<<(value const& x, value const& y);
+//value operator>>(value const& x, value const& y);
+//value operator~(value const& x);
 
 namespace detail {
 
@@ -634,18 +635,20 @@ public:
     return parse(static_cast<record&>(v), begin, end,
                  elem_type, sep, left, right, esc);
   }
+
+  friend trial<void> convert(vector const& v, util::json& j);
 };
 
 
-class set : public record
+class set : public vector
 {
 public:
-  using record::record;
+  using vector::vector;
 
   set() = default;
 
   set(record r)
-    : record(std::move(r))
+    : vector(std::move(r))
   {
   }
 
@@ -717,6 +720,7 @@ private:
 
   friend bool operator==(table const& x, table const& y);
   friend bool operator<(table const& x, table const& y);
+  friend trial<void> convert(table const& t, util::json& j);
 };
 
 
@@ -859,6 +863,8 @@ trial<void> parse(value& v, Iterator& begin, Iterator end,
 
   return apply_visitor(p, type->info());
 }
+
+trial<void> convert(value const& v, util::json& j);
 
 } // namespace vast
 
