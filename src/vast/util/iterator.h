@@ -1,6 +1,7 @@
 #ifndef VAST_UTIL_ITERATOR_H
 #define VAST_UTIL_ITERATOR_H
 
+#include <memory>
 #include "vast/util/operators.h"
 
 namespace vast {
