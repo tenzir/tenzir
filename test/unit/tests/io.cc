@@ -2,6 +2,7 @@
 
 #include "vast/io/formatted.h"
 #include "vast/io/container_stream.h"
+#include "vast/io/iostream.h"
 #include "vast/io/range.h"
 
 using namespace vast;
@@ -96,6 +97,38 @@ TEST("range-based input stream access")
     CHECK(*buf.as<uint8_t>() == i);
     i += buf.size();
   }
+}
+
+TEST("std::istream adapter")
+{
+  std::istringstream iss{"foo"};
+  io::istream_buffer ibuf{iss};
+  io::buffered_input_stream in{ibuf};
+
+  auto block = in.next_block();
+  REQUIRE(block);
+
+  std::string str{block.as<char>(), block.size()};
+  CHECK(str == "foo");
+}
+
+TEST("std::ostream adapter")
+{
+  std::string str = "Heiliger Strohsack!";
+  std::ostringstream oss;
+  io::ostream_buffer obuf{oss};
+  io::buffered_output_stream out{obuf};
+
+  auto block = out.next_block();
+  REQUIRE(block);
+  REQUIRE(block.size() > str.size());
+
+  std::copy(str.begin(), str.end(), block.data());
+  out.rewind(block.size() - str.size());
+  REQUIRE(out.flush());
+
+  CHECK(oss.str().size() == str.size());
+  CHECK(oss.str() == str);
 }
 
 TEST("formatted output")

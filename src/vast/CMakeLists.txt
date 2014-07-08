@@ -53,6 +53,7 @@ set(libvast_sources
   io/compression.cc
   io/file_stream.cc
   io/getline.cc
+  io/iostream.cc
   io/stream.cc
   source/file.cc
   util/poll.cc
