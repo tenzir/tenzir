@@ -1,15 +1,21 @@
 #ifndef VAST_IO_BUFFER_H
 #define VAST_IO_BUFFER_H
 
+#include <cassert>
+#include <cstdint>
 #include <type_traits>
+#include "vast/util/operators.h"
 
 namespace vast {
 namespace io {
 
 /// A shallow buffer that can be used for reading or writing.
 template <typename T>
-class buffer
+class buffer : util::equality_comparable<buffer<T>>
 {
+  template <typename U>
+  friend class buffer;
+
   using byte_type =
     std::conditional_t<std::is_const<T>::value, uint8_t const, uint8_t>;
 
@@ -19,6 +25,13 @@ public:
   buffer(T* data, size_t size)
     : data_{reinterpret_cast<byte_type*>(data)},
       size_{size}
+  {
+  }
+
+  template <typename U>
+  buffer(buffer<U> const& other)
+    : data_{other.data_},
+      size_{other.size_}
   {
   }
 
@@ -56,6 +69,13 @@ public:
 private:
   byte_type* data_ = nullptr;
   size_t size_ = 0;
+
+private:
+  template <typename T0, typename T1>
+  friend bool operator==(buffer<T0> const& x, buffer<T1> const& y)
+  {
+    return x.data_ == y.data_ && x.size_ == y.size_;
+  }
 };
 
 template <typename T>

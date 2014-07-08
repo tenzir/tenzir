@@ -1,5 +1,6 @@
 #include "framework/unit.h"
 
+#include "vast/io/algorithm.h"
 #include "vast/io/formatted.h"
 #include "vast/io/container_stream.h"
 #include "vast/io/iostream.h"
@@ -129,6 +130,37 @@ TEST("std::ostream adapter")
 
   CHECK(oss.str().size() == str.size());
   CHECK(oss.str() == str);
+}
+
+TEST("input iterator")
+{
+  decltype(data) buf;
+  auto in = io::make_container_input_stream(data, 3);
+  io::input_iterator begin{in}, end;
+
+  std::copy(begin, end, std::back_inserter(buf));
+
+  CHECK(buf == data);
+  CHECK(in.bytes() == data.size());
+}
+
+TEST("output iterator")
+{
+  std::string str;
+  auto sink = io::make_container_output_stream(str);
+
+  std::string source = "foobar";
+  auto out = std::copy(source.begin(), source.end(), io::output_iterator{sink});
+
+  // It's a bit cumbersome to manually rewind the current block of the output
+  // stream, but this is how we do it. An alterantive would be to keep a shared
+  // pointer to a buffer such that rewinding only occurs when the last iterator
+  // goes out of scope, but iterators should be cheap to create and copy, so
+  // we're going for the more verbose version here at the cost of usability.
+  out.rewind();
+
+  CHECK(str == source);
+  CHECK(sink.bytes() == source.size());
 }
 
 TEST("formatted output")

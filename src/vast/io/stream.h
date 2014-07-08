@@ -96,12 +96,6 @@ protected:
   output_stream() = default;
 };
 
-/// Copies data from an input stream into an output stream.
-/// @param source The input stream.
-/// @param sink The output stream.
-/// @returns The number of bytes copied for source and sink.
-std::pair<size_t, size_t> copy(input_stream& source, output_stream& sink);
-
 } // namespace io
 } // namespace vast
 

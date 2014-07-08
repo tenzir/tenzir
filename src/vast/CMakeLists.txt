@@ -46,6 +46,7 @@ set(libvast_sources
   detail/demangle.cc
   detail/type_manager.cc
   detail/ast/query.cc
+  io/algorithm.cc
   io/array_stream.cc
   io/buffered_stream.cc
   io/coded_stream.cc
