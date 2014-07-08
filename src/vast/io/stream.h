@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <utility>
 #include "vast/config.h"
+#include "vast/io/buffer.h"
 
 namespace vast {
 namespace io {
@@ -15,8 +16,13 @@ static size_t const default_block_size = 8 << 10;
 class input_stream
 {
 public:
-  /// Destroys an input stream.
   virtual ~input_stream() = default;
+
+  /// Retrieves a contiguous block of data from the stream.
+  ///
+  /// @returns A buffer filled with the next block of bytes or an invalid
+  /// buffer.
+  buffer<void const> next_block();
 
   /// Retrieves a contiguous data buffer from the stream.
   ///
@@ -54,8 +60,13 @@ protected:
 class output_stream
 {
 public:
-  /// Destroys an output stream.
   virtual ~output_stream() = default;
+
+  /// Retrieves a contiguous block of data from the stream.
+  ///
+  /// @returns A buffer filled with the next block of bytes or an invalid
+  /// buffer.
+  buffer<void> next_block();
 
   /// Retrieves a contiguous data buffer from the stream for write operations.
   ///
