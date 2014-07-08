@@ -142,6 +142,15 @@ auto print(T n, Iterator&& out, int digits = 10)
   return nothing;
 }
 
+template <typename T, typename Iterator>
+trial<void> print(trial<T> const& t, Iterator&& out)
+{
+  if (t)
+    return print(*t, out);
+  else
+    return t.error();
+}
+
 //
 // Helpers
 //
