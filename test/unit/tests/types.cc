@@ -84,6 +84,14 @@ TEST("time_point")
   CHECK(t.delta(0, 0, 0, 0, -13) == u);
   u = time_point(2010, 12, 12, 23, 55, 4);
   CHECK(t.delta(0, 0, 0, 0, -20) == u);
+
+  auto str = to<std::string>(u, "%Y-%m");
+  REQUIRE(str);
+  CHECK(*str == "2010-12");
+
+  str = to<std::string>(u, "H:%M:%S");
+  REQUIRE(str);
+  CHECK(*str == "23:55:04");
 }
 
 TEST("strings")

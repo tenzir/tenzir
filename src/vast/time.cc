@@ -338,28 +338,27 @@ trial<void> convert(time_point tp, std::tm& tm)
     : error{"failed to convert time_point"};
 }
 
-trial<void> convert(time_point tp, std::string& str)
-{
-  auto tm = to<std::tm>(tp);
-  std::ostringstream ss;
-#ifdef VAST_CLANG
-  ss << std::put_time(&*tm, time_point::time_point::format);
-  str = ss.str();
-#else
-  char buf[256];
-  strftime(buf, sizeof(buf), time_point::time_point::format, &*tm);
-  str = buf;
-#endif
-
-  return nothing;
-}
-
 trial<void> convert(time_point tp, util::json& j)
 {
   j = tp.since_epoch().count();
   return nothing;
 }
 
+trial<void> convert(time_point tp, std::string& str, char const* fmt)
+{
+  auto tm = to<std::tm>(tp);
+  std::ostringstream ss;
+#ifdef VAST_CLANG
+  ss << std::put_time(&*tm, fmt);
+  str = ss.str();
+#else
+  char buf[256];
+  strftime(buf, sizeof(buf), fmt, &*tm);
+  str = buf;
+#endif
+
+  return nothing;
+}
 
 namespace detail {
 

@@ -297,17 +297,6 @@ private:
   void deserialize(deserializer& source);
 
   template <typename Iterator>
-  friend trial<void> print(time_point tp, Iterator&& out)
-  {
-    std::string str;
-    auto t = convert(tp, str);
-    if (t)
-      return print(str, out);
-    else
-      return t.error();
-  }
-
-  template <typename Iterator>
   friend trial<void> parse(time_point& tp, Iterator& begin, Iterator end,
                     char const* fmt = nullptr)
   {
@@ -328,11 +317,28 @@ private:
 
   friend trial<void> convert(time_point tp, double& d);
   friend trial<void> convert(time_point tp, std::tm& tm);
-  friend trial<void> convert(time_point tp, std::string& str);
   friend trial<void> convert(time_point tp, util::json& j);
 
   time_point_type time_point_;
 };
+
+// This remains outside because friend functions with default arguments must
+// come with a direct definition, no declarations allowed.
+trial<void> convert(time_point tp, std::string& str,
+                           char const* fmt = time_point::format);
+
+// We put this one outside because it uses the conversion function above.
+template <typename Iterator>
+trial<void> print(time_point tp, Iterator&& out,
+                  char const* fmt = time_point::format)
+{
+  std::string str;
+  auto t = convert(tp, str, fmt);
+  if (t)
+    return print(str, out);
+  else
+    return t.error();
+}
 
 
 namespace detail {
