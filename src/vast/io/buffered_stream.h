@@ -8,7 +8,7 @@ namespace vast {
 namespace io {
 
 /// An interface for buffered input.
-class input_streambuffer
+class input_buffer
 {
 public:
   /// Attempts to read data into a given buffer.
@@ -38,7 +38,7 @@ public:
 };
 
 /// An interface for buffered output.
-class output_streambuffer
+class output_buffer
 {
 public:
   /// Attempts to write data to a given buffer.
@@ -62,13 +62,13 @@ class buffered_input_stream : public input_stream
   buffered_input_stream& operator=(buffered_input_stream) = delete;
 
 public:
-  /// Constructs a buffered input stream from an input_streambuffer.
+  /// Constructs a buffered input stream from an input_buffer.
   ///
-  /// @param isb The input_streambuffer.
+  /// @param ib The input_buffer.
   ///
   /// @param block_size The number of bytes to read at once from the underlying
   /// streambuffer.
-  buffered_input_stream(input_streambuffer& isb, size_t block_size = 0);
+  buffered_input_stream(input_buffer& ib, size_t block_size = 0);
 
   virtual bool next(void const** data, size_t* size) override;
   virtual void rewind(size_t bytes) override;
@@ -81,7 +81,7 @@ private:
   size_t rewind_bytes_ = 0;
   size_t valid_bytes_ = 0;  // Size of last call to next();
   std::vector<uint8_t> buffer_;
-  input_streambuffer& isb_;
+  input_buffer& ib_;
 };
 
 /// An output stream that buffers its data before flushing it upon destruction.
@@ -89,14 +89,15 @@ class buffered_output_stream : public output_stream
 {
   buffered_output_stream(buffered_output_stream const&) = delete;
   buffered_output_stream& operator=(buffered_output_stream) = delete;
+
 public:
-  /// Constructs a buffered output stream from an output_streambuffer.
+  /// Constructs a buffered output stream from an output_buffer.
   ///
-  /// @param osb The output_streambuffer.
+  /// @param osb The output_buffer.
   ///
   /// @param block_size The number of bytes to write at once into the
   /// underlying streambuffer.
-  buffered_output_stream(output_streambuffer& osb, size_t block_size = 0);
+  buffered_output_stream(output_buffer& osb, size_t block_size = 0);
   virtual ~buffered_output_stream();
 
   /// Flushes data to the underying output streambuffer.
@@ -112,7 +113,7 @@ private:
   int64_t position_ = 0;
   size_t valid_bytes_ = 0;  // Size of last call to next();
   std::vector<uint8_t> buffer_;
-  output_streambuffer& osb_;
+  output_buffer& ob_;
 };
 
 } // namespace io

@@ -5,7 +5,7 @@
 namespace vast {
 namespace io {
 
-bool input_streambuffer::skip(size_t bytes, size_t* skipped)
+bool input_buffer::skip(size_t bytes, size_t* skipped)
 {
   char buf[4096];
   size_t got = 0;
@@ -22,10 +22,9 @@ bool input_streambuffer::skip(size_t bytes, size_t* skipped)
   return true;
 }
 
-buffered_input_stream::buffered_input_stream(
-    input_streambuffer& isb, size_t block_size)
-  : buffer_(block_size > 0 ? block_size : default_block_size)
-  , isb_(isb)
+buffered_input_stream::buffered_input_stream(input_buffer& ib, size_t block_size)
+  : buffer_(block_size > 0 ? block_size : default_block_size),
+    ib_(ib)
 {
 }
 
@@ -42,7 +41,7 @@ bool buffered_input_stream::next(void const** data, size_t* size)
     return true;
   }
 
-  if ((failed_ = ! isb_.read(buffer_.data(), buffer_.size(), &valid_bytes_)))
+  if ((failed_ = ! ib_.read(buffer_.data(), buffer_.size(), &valid_bytes_)))
     return false;
   else if (valid_bytes_ == 0)
     return false;
@@ -75,7 +74,7 @@ bool buffered_input_stream::skip(size_t bytes)
   rewind_bytes_ = 0;
 
   size_t skipped;
-  auto success = isb_.skip(bytes, &skipped);
+  auto success = ib_.skip(bytes, &skipped);
   if (success)
     position_ += skipped;
   return success && skipped == bytes;
@@ -88,9 +87,9 @@ uint64_t buffered_input_stream::bytes() const
 
 
 buffered_output_stream::buffered_output_stream(
-    output_streambuffer& osb, size_t block_size)
-  : buffer_(block_size > 0 ? block_size : default_block_size)
-  , osb_(osb)
+    output_buffer& ob, size_t block_size)
+  : buffer_(block_size > 0 ? block_size : default_block_size),
+    ob_(ob)
 {
 }
 
@@ -105,7 +104,7 @@ bool buffered_output_stream::flush()
     return false;
   if (valid_bytes_ == 0)
     return true;
-  if ((failed_ = ! osb_.write(buffer_.data(), valid_bytes_)))
+  if ((failed_ = ! ob_.write(buffer_.data(), valid_bytes_)))
     return false;
 
   position_ += valid_bytes_;
@@ -133,7 +132,6 @@ uint64_t buffered_output_stream::bytes() const
 {
   return position_ + valid_bytes_;
 }
-
 
 } // namespace io
 } // namespace vast
