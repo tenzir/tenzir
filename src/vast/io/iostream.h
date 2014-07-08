@@ -7,7 +7,7 @@
 namespace vast {
 namespace io {
 
-/// An 
+/// An [input buffer](io::input_buffer) wrapping a `std::istream`.
 class istream_buffer : public input_buffer
 {
 public:
@@ -18,6 +18,7 @@ private:
   std::istream& in_;
 };
 
+/// An [output buffer](io::output_buffer) wrapping a `std::ostream`.
 class ostream_buffer : public output_buffer
 {
 public:
