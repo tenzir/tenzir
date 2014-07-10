@@ -48,7 +48,9 @@ public:
   /// Rewinds the last block of the underlying ::output_stream. After working
   /// with the iterator, this function must be called to "flush" the output
   /// iterator, i.e., rewind the current block of the underlying output stream.
-  void rewind();
+  ///
+  /// @returns The number of bytes rewound.
+  size_t rewind();
 
 private:
   friend util::iterator_access;

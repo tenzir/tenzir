@@ -50,12 +50,20 @@ output_iterator::output_iterator(output_stream& out)
   buf_ = out_->next_block();
 }
 
-void output_iterator::rewind()
+size_t output_iterator::rewind()
 {
   if (! buf_)
-    return;
+    return 0;
 
-  out_->rewind(buf_.size() - i_);
+  auto available = buf_.size() - i_;
+  if (available > 0)
+  {
+    out_->rewind(available);
+    buf_ = {};
+    i_ = 0;
+  }
+
+  return available;
 }
 
 void output_iterator::increment()
