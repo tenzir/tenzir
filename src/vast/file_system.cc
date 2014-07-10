@@ -278,14 +278,6 @@ bool operator<(path const& x, path const& y)
 file::file(path p)
   : path_{std::move(p)}
 {
-#ifdef VAST_POSIX
-  // Support reading from STDIN.
-  if (path_ == "-")
-  {
-    handle_ = ::fileno(stdin);
-    is_open_ = true;
-  }
-#endif // VAST_POSIX
 }
 
 file::file(path p, native_type handle)
@@ -330,6 +322,17 @@ trial<void> file::open(open_mode mode, bool append)
     return error{"cannot open file in read mode and append simultaneously"};
 
 #ifdef VAST_POSIX
+  // Support reading from STDIN and STDOUT.
+  if (path_ == "-")
+  {
+    if (mode == read_write)
+      return error{"cannot open - in read/write mode"};
+
+    handle_ = ::fileno(mode == read_only ? stdin : stdout);
+    is_open_ = true;
+    return nothing;
+  }
+
   int flags = O_CREAT;
   switch (mode)
   {
@@ -413,8 +416,10 @@ bool file::write(void const* source, size_t bytes, size_t* put)
 {
   if (put)
     *put = 0;
+
   if (! is_open_)
     return false;
+
   size_t total = 0;
   auto buffer = reinterpret_cast<uint8_t const*>(source);
 #ifdef VAST_POSIX
@@ -426,8 +431,10 @@ bool file::write(void const* source, size_t bytes, size_t* put)
       written = ::write(handle_, buffer + total, bytes - total);
     }
     while (written < 0 && errno == EINTR);
+
     if (written <= 0)
       return false;
+
     total += written;
     if (put)
       *put += written;
@@ -442,10 +449,10 @@ bool file::seek(size_t bytes, size_t *skipped)
 {
   if (skipped)
     *skipped = 0;
-  if (! is_open_)
+
+  if (! is_open_ || seek_failed_)
     return false;
-  if (seek_failed_)
-    return false;
+
 #ifdef VAST_POSIX
   if (::lseek(handle_, bytes, SEEK_CUR) == off_t(-1))
   {
@@ -455,8 +462,10 @@ bool file::seek(size_t bytes, size_t *skipped)
 #else
   return false;
 #endif // VAST_POSIX
+
   if (skipped)
     *skipped = bytes;
+
   return true;
 }
 
@@ -481,8 +490,10 @@ bool rm(const path& p)
     traverse(p, [](path const& inner) { return rm(inner); });
     return VAST_DELETE_DIRECTORY(p.str().data());
   }
+
   if (t == path::type::regular_file || t == path::type::symlink)
     return VAST_DELETE_FILE(p.str().data());
+
   return false;
 }
 
@@ -530,6 +541,7 @@ void traverse(path const& p, std::function<bool(path const&)> f)
   DIR* d = ::opendir(p.str().data());
   if (! d)
     return;
+
   struct dirent* ent;
   while ((ent = ::readdir(d)))
   {
