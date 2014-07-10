@@ -1,7 +1,7 @@
-#include "vast/ingestor.h"
+#include "vast/importer.h"
 
 #include "vast/segment.h"
-#include "vast/source/file.h"
+#include "vast/source/bro.h"
 #include "vast/io/serialization.h"
 
 #ifdef VAST_HAVE_BROCCOLI
@@ -12,11 +12,11 @@ namespace vast {
 
 using namespace cppa;
 
-ingestor_actor::ingestor_actor(path dir,
-                               actor receiver,
-                               size_t max_events_per_chunk,
-                               size_t max_segment_size,
-                               uint64_t batch_size)
+importer::importer(path dir,
+                   actor receiver,
+                   size_t max_events_per_chunk,
+                   size_t max_segment_size,
+                   uint64_t batch_size)
   : dir_{dir / "ingest" / "segments"},
     receiver_{receiver},
     max_events_per_chunk_{max_events_per_chunk},
@@ -25,7 +25,7 @@ ingestor_actor::ingestor_actor(path dir,
 {
 }
 
-partial_function ingestor_actor::act()
+partial_function importer::act()
 {
   trap_exit(true);
 
@@ -163,29 +163,28 @@ partial_function ingestor_actor::act()
 
       become(ready_);
     },
-    on(atom("ingest"), "bro2", arg_match)
-      >> [=](std::string const& file, int32_t ts_field)
+    on(atom("add"), "bro", arg_match) >> [=](std::string const& file)
     {
       VAST_LOG_ACTOR_INFO("ingests " << file);
 
-      source_ = spawn<source::bro2, detached>(segmentizer_, file, ts_field);
+      source_ = spawn<source::bro, detached>(segmentizer_, file, -1);
       source_->link_to(segmentizer_);
       send(source_, atom("batch size"), batch_size_);
       send(source_, atom("run"));
 
       become(ready_);
     },
-    on(atom("ingest"), val<std::string>, arg_match) >> [=](std::string const&)
+    on(atom("add"), any_vals) >> [=]
     {
-      VAST_LOG_ACTOR_ERROR("got invalid ingestion file type");
+      VAST_LOG_ACTOR_ERROR("got invalid import file type");
       quit(exit::error);
     },
   };
 }
 
-std::string ingestor_actor::describe() const
+std::string importer::describe() const
 {
-  return "ingestor";
+  return "importer";
 }
 
 } // namespace vast

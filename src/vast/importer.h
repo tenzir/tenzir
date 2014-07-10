@@ -1,5 +1,5 @@
-#ifndef VAST_INGESTOR_H
-#define VAST_INGESTOR_H
+#ifndef VAST_IMPORTER_H
+#define VAST_IMPORTER_H
 
 #include <queue>
 #include <unordered_map>
@@ -11,12 +11,11 @@
 
 namespace vast {
 
-/// The ingestor. This component manages different types of event sources, each
-/// of which generate events in a different manner.
-class ingestor_actor : public actor_base
+/// Manages sources which produce events.
+class importer : public actor_base
 {
 public:
-  /// Spawns an ingestor.
+  /// Spawns an importer.
   ///
   /// @param dir The directory where to save persistent state.
   ///
@@ -28,11 +27,11 @@ public:
   ///
   /// @param batch_size The number of events a synchronous source buffers until
   /// relaying them to the segmentizer
-  ingestor_actor(path dir,
-                 cppa::actor receiver,
-                 size_t max_events_per_chunk,
-                 size_t max_segment_size,
-                 uint64_t batch_size);
+  importer(path dir,
+           cppa::actor receiver,
+           size_t max_events_per_chunk,
+           size_t max_segment_size,
+           uint64_t batch_size);
 
   cppa::partial_function act() final;
   std::string describe() const final;

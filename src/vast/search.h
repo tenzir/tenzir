@@ -14,7 +14,6 @@ struct search_actor : actor_base
   struct client_state
   {
     util::flat_set<cppa::actor> queries;
-    uint64_t batch_size = 1; // Overridden by client.
   };
 
   search_actor(path dir, cppa::actor archive, cppa::actor index);

@@ -46,11 +46,11 @@ TEST("ingestion (all-in-one)")
   *cfg['a'] = true;
   *cfg['I'] = true;
   *cfg['r'] = m57_day11_18::ftp;
-  *cfg["index.partition"] = "m57_day11_18";
+  *cfg['p'] = "m57_day11_18";
 
   REQUIRE(cfg.verify());
 
-  spawn<program>(cfg);
+  anon_send(spawn<program>(cfg), atom("run"));
   await_all_actors_done();
 
   auto dir = path{*cfg.get("directory")};
@@ -94,6 +94,7 @@ TEST("ingestion (two programs)")
   REQUIRE(core_config.verify());
 
   auto core = spawn<program>(core_config);
+  anon_send(core, atom("run"));
 
   configuration ingest_config;
   set_ports(ingest_config, 1);
@@ -101,14 +102,17 @@ TEST("ingestion (two programs)")
   *ingest_config['V'] = 5;
   *ingest_config['I'] = true;
   *ingest_config['r'] = m57_day11_18::ssl;
-  *ingest_config["index.partition"] = "m57_day11_18";
+  *ingest_config['p'] = "m57_day11_18";
   REQUIRE(ingest_config.verify());
 
   // Wait until the TCP sockets of the core have bound.
   ::sleep(1);
 
   // Terminates after ingestion completes.
-  spawn<program>(ingest_config)->link_to(core);
+  auto import = spawn<program>(ingest_config);
+  import->link_to(core);
+  anon_send(import, atom("run"));
+
   await_all_actors_done();
 }
 
@@ -125,6 +129,7 @@ TEST("actor integrity")
 
   scoped_actor self;
   auto core = spawn<program>(cfg);
+  anon_send(core, atom("run"));
 
   auto fail = others() >> [&]
   {
@@ -193,7 +198,7 @@ TEST("actor integrity")
       [&](actor search)
       {
         auto q = "id.resp_p == 995/?";
-        self->sync_send(search, atom("query"), atom("create"), self, q).await((
+        self->sync_send(search, atom("query"), self, q).await((
             [&](expr::ast const& ast, actor qry)
             {
               CHECK(ast == *pops);

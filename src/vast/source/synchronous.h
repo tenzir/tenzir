@@ -72,11 +72,6 @@ public:
     };
   }
 
-  std::string describe() const final
-  {
-    return static_cast<Derived const*>(this)->description();
-  }
-
 private:
   void send_events()
   {

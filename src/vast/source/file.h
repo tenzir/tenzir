@@ -1,10 +1,7 @@
 #ifndef VAST_SOURCE_FILE_H
 #define VAST_SOURCE_FILE_H
 
-#include <cassert>
 #include "vast/type_tag.h"
-#include "vast/schema.h"
-#include "vast/string.h"
 #include "vast/io/file_stream.h"
 #include "vast/io/getline.h"
 #include "vast/source/synchronous.h"
@@ -41,11 +38,6 @@ public:
     return current_line() == nullptr;
   }
 
-  char const* description() const
-  {
-    return static_cast<Derived const*>(this)->description_impl();
-  }
-
   /// Retrieves the next non-empty line from the file.
   ///
   /// @returns A pointer to the next line if extracting was successful and
@@ -80,31 +72,6 @@ private:
   io::file_input_stream file_stream_;
   uint64_t current_ = 0;
   std::string line_;
-};
-
-
-/// A generic Bro 2.x log file source.
-class bro2 : public file<bro2>
-{
-public:
-  bro2(cppa::actor sink, std::string const& filename,
-       int32_t timestamp_field);
-
-  result<event> extract_impl();
-
-  char const* description_impl() const;
-
-private:
-  trial<void> parse_header();
-
-  int32_t timestamp_field_ = -1;
-  string separator_ = " ";
-  string set_separator_;
-  string empty_field_;
-  string unset_field_;
-  schema schema_;
-  type_ptr type_;
-  type_ptr flat_type_;
 };
 
 } // namespace source

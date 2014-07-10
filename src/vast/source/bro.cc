@@ -1,5 +1,6 @@
-#include "vast/source/file.h"
+#include "vast/source/bro.h"
 
+#include <cassert>
 #include "vast/util/field_splitter.h"
 
 namespace vast {
@@ -78,14 +79,14 @@ trial<type_const_ptr> make_type(schema& sch, string const& bro_type)
 
 } // namespace <anonymous>
 
-bro2::bro2(cppa::actor sink, std::string const& filename,
+bro::bro(cppa::actor sink, std::string const& filename,
            int32_t timestamp_field)
-  : file<bro2>{std::move(sink), filename},
+  : file<bro>{std::move(sink), filename},
     timestamp_field_{timestamp_field}
 {
 }
 
-result<event> bro2::extract_impl()
+result<event> bro::extract_impl()
 {
   util::field_splitter<std::string::const_iterator>
     fs{separator_.data(), separator_.size()};
@@ -212,12 +213,12 @@ result<event> bro2::extract_impl()
   return std::move(e);
 }
 
-char const* bro2::description_impl() const
+std::string bro::describe() const
 {
-  return "bro2-source";
+  return "bro-source";
 }
 
-trial<void> bro2::parse_header()
+trial<void> bro::parse_header()
 {
   auto line = this->current_line();
   if (! line)
@@ -330,7 +331,7 @@ trial<void> bro2::parse_header()
   if (! status)
     return error{"failed to add type to schema: " + status.error().msg()};
 
-  VAST_LOG_ACTOR_DEBUG("parsed bro2 header:");
+  VAST_LOG_ACTOR_DEBUG("parsed bro header:");
   VAST_LOG_ACTOR_DEBUG("    #separator " << separator_);
   VAST_LOG_ACTOR_DEBUG("    #set_separator " << set_separator_);
   VAST_LOG_ACTOR_DEBUG("    #empty_field " << empty_field_);
@@ -370,3 +371,4 @@ trial<void> bro2::parse_header()
 
 } // namespace source
 } // namespace vast
+

@@ -16,7 +16,9 @@ int main(int argc, char *argv[])
     return 0;
   }
 
-  cppa::spawn<vast::program>(std::move(*cfg));
+  auto program = cppa::spawn<vast::program>(std::move(*cfg));
+  cppa::anon_send(program, cppa::atom("run"));
+
   cppa::await_all_actors_done();
   cppa::shutdown();
 

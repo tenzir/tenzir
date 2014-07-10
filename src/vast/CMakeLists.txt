@@ -12,11 +12,12 @@ set(libvast_sources
   expression.cc
   event.cc
   error.cc
+  exporter.cc
   file_system.cc
   id_tracker.cc
   index.cc
   individual.cc
-  ingestor.cc
+  importer.cc
   logger.cc
   object.cc
   operator.cc
@@ -56,7 +57,9 @@ set(libvast_sources
   io/getline.cc
   io/iostream.cc
   io/stream.cc
-  source/file.cc
+  sink/bro.cc
+  sink/json.cc
+  source/bro.cc
   util/poll.cc
   util/string.cc
   util/terminal.cc

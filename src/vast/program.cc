@@ -4,10 +4,11 @@
 #include <csignal>
 #include <iostream>
 #include "vast/archive.h"
+#include "vast/exporter.h"
 #include "vast/file_system.h"
 #include "vast/id_tracker.h"
 #include "vast/index.h"
-#include "vast/ingestor.h"
+#include "vast/importer.h"
 #include "vast/logger.h"
 #include "vast/profiler.h"
 #include "vast/receiver.h"
@@ -16,10 +17,6 @@
 #include "vast/type_info.h"
 #include "vast/detail/cppa_type_info.h"
 #include "vast/detail/type_manager.h"
-
-#ifdef VAST_HAVE_BROCCOLI
-#include "vast/util/broccoli.h"
-#endif
 
 #ifdef VAST_HAVE_EDITLINE
 #include "vast/console.h"
@@ -46,48 +43,62 @@ partial_function program::act()
         search_ = invalid_actor;
       });
 
-  partial_function default_behavior = (
-      on(atom("receiver")) >> [=]()
-      {
-        return receiver_;
-      },
-      on(atom("tracker")) >> [=]()
-      {
-        return tracker_;
-      },
-      on(atom("archive")) >> [=]()
-      {
-        return archive_;
-      },
-      on(atom("index")) >> [=]()
-      {
-        return index_;
-      },
-      on(atom("search")) >> [=]()
-      {
-        return search_;
-      },
-      on(atom("signal"), arg_match) >> [&](int signal)
-      {
-        VAST_LOG_ACTOR_VERBOSE("received signal " << signal);
-        if (signal == SIGINT || signal == SIGTERM)
-          quit(exit::stop);
-      });
+  return
+  {
+    on(atom("run")) >> [=]
+    {
+      run();
+    },
+    on(atom("receiver")) >> [=]
+    {
+      return receiver_;
+    },
+    on(atom("tracker")) >> [=]
+    {
+      return tracker_;
+    },
+    on(atom("archive")) >> [=]
+    {
+      return archive_;
+    },
+    on(atom("index")) >> [=]
+    {
+      return index_;
+    },
+    on(atom("search")) >> [=]
+    {
+      return search_;
+    },
+    on(atom("signal"), arg_match) >> [=](int signal)
+    {
+      VAST_LOG_ACTOR_VERBOSE("received signal " << signal);
+      if (signal == SIGINT || signal == SIGTERM)
+        quit(exit::stop);
+    }
+  };
+}
 
+std::string program::describe() const
+{
+  return "program";
+}
+
+void program::run()
+{
   auto vast_dir = path{*config_.get("directory")}.complete();
 
-  auto initialized = logger::instance()->init(
+  auto success = logger::instance()->init(
       *logger::parse_level(*config_.get("log.console-verbosity")),
       *logger::parse_level(*config_.get("log.file-verbosity")),
       ! config_.check("log.no-colors"),
       config_.check("log.function-names"),
       vast_dir / "log");
 
-  if (! initialized)
+  if (! success)
   {
     std::cerr << "failed to initialize logger" << std::endl;
-    send_exit(this, exit::error);
-    return default_behavior;
+    quit(exit::error);
+    return;
   }
 
   VAST_LOG_VERBOSE(" _   _____   __________");
@@ -205,6 +216,7 @@ partial_function program::act()
     else if (config_.check("index.rebuild"))
     {
       become(
+        keep_behavior,
         [=](segment const& s)
         {
           event_id next = s.base() + s.events();
@@ -214,7 +226,7 @@ partial_function program::act()
         on(atom("no segment"), arg_match) >> [=](event_id eid)
         {
           VAST_LOG_INFO("sent all segments to index (" << eid - 1 << " events)");
-          become(default_behavior);
+          unbecome();
         });
 
       VAST_LOG_INFO("begins rebuilding index");
@@ -232,11 +244,11 @@ partial_function program::act()
 
       publish(search_, search_port, search_host.c_str());
     }
+    else if (config_.check("receiver-actor")
 #ifdef VAST_HAVE_EDITLINE
-    else if (config_.check("receiver-actor") || config_.check("console-actor"))
-#else
-    else if (config_.check("receiver-actor"))
+             || config_.check("console-actor")
 #endif
+             || config_.check("exporter-actor"))
     {
       VAST_LOG_ACTOR_VERBOSE(
           "connects to search at " << search_host << ":" << search_port);
@@ -262,7 +274,7 @@ partial_function program::act()
 
       publish(receiver_, receiver_port, receiver_host.c_str());
     }
-    else if (config_.check("ingestor-actor"))
+    else if (config_.check("importer-actor"))
     {
       VAST_LOG_ACTOR_VERBOSE(
           "connects to receiver at " << receiver_host << ":" << receiver_port);
@@ -270,70 +282,85 @@ partial_function program::act()
       receiver_ = remote_actor(receiver_host, receiver_port);
     }
 
-    actor ingestor;
-    if (config_.check("ingestor-actor"))
+    actor imp0rter;
+    if (config_.check("importer-actor"))
     {
-      ingestor = spawn<ingestor_actor>(
+      imp0rter = spawn<importer>(
           vast_dir,
           receiver_,
-          *config_.as<size_t>("ingest.max-events-per-chunk"),
-          *config_.as<size_t>("ingest.max-segment-size") * 1000000,
-          *config_.as<size_t>("ingest.batch-size"));
+          *config_.as<size_t>("import.max-events-per-chunk"),
+          *config_.as<size_t>("import.max-segment-size") * 1000000,
+          *config_.as<size_t>("import.batch-size"));
 
-      if (config_.check("ingest.submit"))
-      {
-        send(ingestor, atom("submit"));
-      }
-      else if (auto file = config_.get("ingest.file-name"))
-      {
-        send(ingestor, atom("ingest"),
-             *config_.get("ingest.file-type"),
-             *file,
-             *config_.as<int32_t>("ingest.time-field"));
-      }
+      if (config_.check("import.submit"))
+        send(imp0rter, atom("submit"));
       else
-      {
-        VAST_LOG_ACTOR_DEBUG("sends exit to unused ingestor " << ingestor);
-        send_exit(ingestor, exit::done);
-      }
+        send(imp0rter, atom("add"),
+             *config_.get("import.format"), *config_.get("import.read"));
+    }
+    else if (config_.check("exporter-actor"))
+    {
+      auto format = *config_.get("export.format");
+      auto out = *config_.get("export.write");
+      auto limit = *config_.as<uint64_t>("export.limit");
+      auto exp0rter = spawn<exporter, linked>();
+
+      send(exp0rter, atom("add"), format, out);
+      if (limit > 0)
+        send(exp0rter, atom("limit"), limit);
+
+      auto query = *config_.get("export.query");
+      sync_send(search_, atom("query"), exp0rter, query).then(
+          on_arg_match >> [=](error const& e)
+          {
+            VAST_LOG_ACTOR_ERROR("got invalid query syntax: " << e);
+            std::cerr  << "syntax error: " << e << std::endl;
+            quit(exit::error);
+          },
+          [=](expr::ast const& ast, actor qry)
+          {
+            VAST_LOG_ACTOR_DEBUG("instantiated query for: " << ast);
+            exp0rter->link_to(qry);
+            send(qry, atom("extract"), limit);
+          },
+          others() >> [=]
+          {
+            VAST_LOG_ACTOR_ERROR("got unexpected reply: " <<
+                                 to_string(last_dequeued()));
+
+            quit(exit::error);
+          });
     }
 
     if (config_.check("receiver-actor"))
     {
       // We always initiate the shutdown via the receiver, regardless of
-      // whether we have an ingestor in our process.
+      // whether we have an importer in our process.
       link_to(receiver_);
       receiver_->link_to(tracker_);
       receiver_->link_to(archive_);
       receiver_->link_to(index_);
       receiver_->link_to(search_);
 
-      // We're running in "one-shot" mode where both ingestor and receiver
+      // We're running in "one-shot" mode where both importer and receiver
       // share the same program. In this case we initiate the teardown
-      // via the ingestor as this ensures proper delivery of inflight segments
-      // from ingestor to receiver.
-      if (config_.check("ingestor-actor"))
-        ingestor->link_to(receiver_);
+      // via the importer as this ensures proper delivery of inflight segments
+      // from importer to receiver.
+      if (imp0rter)
+        imp0rter->link_to(receiver_);
     }
-    else if (config_.check("ingestor-actor") && ! config_.check("receiver-actor"))
+    else if (imp0rter && ! config_.check("receiver-actor"))
     {
       // If we're running in ingestion mode, we're independent and terminate as
-      // soon as the ingestor has finished.
-      link_to(ingestor);
+      // soon as the importer has finished.
+      link_to(imp0rter);
     }
   }
   catch (network_error const& e)
   {
     VAST_LOG_ACTOR_ERROR("encountered network error: " << e.what());
-    send_exit(this, exit::error);
+    quit(exit::error);
   }
-
-  return default_behavior;
-}
-
-std::string program::describe() const
-{
-  return "program";
 }
 
 } // namespace vast

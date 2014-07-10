@@ -177,7 +177,6 @@ console::console(cppa::actor search, path dir)
         if (auto n = parse<uint64_t>(lval, args.end()))
         {
           opts_.batch_size = *n;
-          send(search_, atom("client"), atom("batch-size"), *n);
           return true;
         }
         else
@@ -312,7 +311,7 @@ console::console(cppa::actor search, path dir)
         if (args.empty())
           return false;
 
-        sync_send(search_, atom("query"), atom("create"), this, args).then(
+        sync_send(search_, atom("query"), this, args).then(
             on_arg_match >> [=](sync_exited_msg const& e)
             {
               print(fail)
@@ -349,6 +348,7 @@ console::console(cppa::actor search, path dir)
                 << "new query " << active_->id()
                 << " -> " << ast << std::endl;
 
+              send(qry, atom("extract"), opts_.batch_size);
               expected_ = opts_.batch_size;
               VAST_LOG_ACTOR_DEBUG("expects " << expected_ <<
                                    " results as initial batch");
@@ -642,9 +642,6 @@ partial_function console::act()
       connected_.erase(doomed);
     }
   };
-
-  send(search_, atom("client"), atom("connected"));
-  send(search_, atom("client"), atom("batch size"), opts_.batch_size);
 
   attach_functor(
       [=](uint32_t)

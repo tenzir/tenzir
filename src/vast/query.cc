@@ -136,16 +136,16 @@ query::query(actor archive, actor sink, expr::ast ast)
     incorporate_hits,
     on(atom("extract"), arg_match) >> [=](uint64_t n)
     {
-      assert(n > 0);
-      VAST_LOG_ACTOR_DEBUG("got request to extract " << n << " more events (" <<
-                            requested_ + n << " total)");
+      VAST_LOG_ACTOR_DEBUG(
+          "got request to extract " << (n == 0 ? "all" : to_string(n)) <<
+          " events (" << (n == 0 ? uint64_t(-1) : requested_ + n) << " total)");
 
       // If the query did not extract events this request, we start the
       // extraction process now.
       if (requested_ == 0)
         send(this, atom("extract"));
 
-      requested_ += n;
+      requested_ = n == 0 ? -1 : requested_ + n;
     },
     on(atom("extract")) >> [=]
     {

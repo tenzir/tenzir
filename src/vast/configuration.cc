@@ -39,7 +39,6 @@ void configuration::initialize()
   general.add('d', "directory", "VAST directory").init("vast");
   general.add('z', "advanced", "show advanced options");
 
-
   auto min = 0;
   auto max = VAST_LOG_LEVEL;
   auto range = '[' + std::to_string(min) + '-' + std::to_string(max) + ']';
@@ -62,46 +61,42 @@ void configuration::initialize()
 #ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
   advanced.add("profile-heap", "also enable Google perftools heap profiling");
 #endif
-#ifdef VAST_HAVE_BROCCOLI
-  advanced.add("broccoli-messages", "enable broccoli debug messages");
-  advanced.add("broccoli-calltrace", "enable broccoli function call tracing");
-#endif
   advanced.visible(false);
 
-  auto& actor = create_block("actor options");
+  auto& act = create_block("actor options");
 #ifdef VAST_HAVE_EDITLINE
-  actor.add('C', "console-actor", "spawn the console client actor");
+  act.add('C', "console-actor", "spawn the console client actor");
 #endif
-  actor.add('a', "all-server", "spawn all server actors");
-  actor.add('A', "archive-actor", "spawn the archive");
-  actor.add('I', "ingestor-actor", "spawn the ingestor");
-  actor.add('R', "receiver-actor", "spawn the receiver");
-  actor.add('S', "search-actor", "spawn the search");
-  actor.add('T', "tracker-actor", "spawn the ID tracker");
-  actor.add('X', "index-actor", "spawn the index");
-  actor.visible(false);
+  act.add('a', "all-server", "spawn all server actors");
+  act.add('A', "archive-actor", "spawn the archive");
+  act.add('I', "importer-actor", "spawn the importer");
+  act.add('E', "exporter-actor", "spawn the exporter");
+  act.add('R', "receiver-actor", "spawn the receiver");
+  act.add('S', "search-actor", "spawn the search");
+  act.add('T', "tracker-actor", "spawn the ID tracker");
+  act.add('X', "index-actor", "spawn the index");
+  act.visible(false);
 
-  auto& ingest = create_block("ingest options", "ingest");
-  ingest.add("max-events-per-chunk", "maximum events per chunk").init(5000);
-  ingest.add("max-segment-size", "maximum segment size in MB").init(128);
-  ingest.add("batch-size", "number of events to ingest in one run").init(4000);
-  ingest.add('r', "file-name", "path to file to ingest").single();
-  ingest.add("file-type", "file type of the file to ingest").init("bro2");
-  ingest.add("time-field", "field to extract event timestamp from").init(-1);
-  ingest.add("submit", "send orphaned segments on startup");
-#ifdef VAST_HAVE_BROCCOLI
-  ingest.add("broccoli-host", "hostname/address of broccoli source")
-        .init("127.0.0.1");
-  ingest.add("broccoli-port", "port of the broccoli source").init(42000);
-  ingest.add("broccoli-events", "list of events for broccoli to subscribe to")
-        .multi();
-#endif
-  ingest.visible(false);
+  auto& imp = create_block("import options", "import");
+  imp.add("max-events-per-chunk", "maximum events per chunk").init(5000);
+  imp.add("max-segment-size", "maximum segment size in MB").init(128);
+  imp.add("batch-size", "number of events to ingest in one run").init(4000);
+  imp.add('r', "read", "path to input file/directory").init("-");
+  imp.add('i', "format", "format of events to ingest").init("bro");
+  imp.add("submit", "send orphaned segments on startup");
+  imp.visible(false);
 
-  auto& receiver = create_block("receiver options", "receiver");
-  receiver.add("host", "hostname/address of the receiver").init("127.0.0.1");
-  receiver.add("port", "TCP port of the receiver").init(42000);
-  receiver.visible(false);
+  auto& exp = create_block("export options", "export");
+  exp.add('l', "limit", "maximum number of results").init(0);
+  exp.add('o', "format", "format of events to generate").init("bro");
+  exp.add('q', "query", "the query string").single();
+  exp.add('w', "write", "path to output file/directory").init("-");
+  exp.visible(false);
+
+  auto& recv = create_block("receiver options", "receiver");
+  recv.add("host", "hostname/address of the receiver").init("127.0.0.1");
+  recv.add("port", "TCP port of the receiver").init(42000);
+  recv.visible(false);
 
   auto& archive = create_block("archive options", "archive");
   archive.add("host", "hostname/address of the archive").init("127.0.0.1");
@@ -109,18 +104,18 @@ void configuration::initialize()
   archive.add("max-segments", "maximum segments cached in memory").init(10);
   archive.visible(false);
 
-  auto& index = create_block("index options", "index");
-  index.add("host", "hostname/address of the archive").init("127.0.0.1");
-  index.add("port", "TCP port of the index").init(42004);
-  index.add("partition", "name of the partition to append to").single();
-  index.add("batch-size", "number of events to index in one run").init(1000);
-  index.add("rebuild", "rebuild indexes from archive");
-  index.visible(false);
+  auto& idx = create_block("index options", "index");
+  idx.add("host", "hostname/address of the archive").init("127.0.0.1");
+  idx.add("port", "TCP port of the index").init(42004);
+  idx.add('p', "partition", "name of the partition to append to").single();
+  idx.add("batch-size", "number of events to index in one run").init(1000);
+  idx.add("rebuild", "rebuild indexes from archive");
+  idx.visible(false);
 
-  auto& tracker = create_block("ID tracker options", "tracker");
-  tracker.add("host", "hostname/address of the tracker").init("127.0.0.1");
-  tracker.add("port", "TCP port of the ID tracker").init(42002);
-  tracker.visible(false);
+  auto& track = create_block("ID tracker options", "tracker");
+  track.add("host", "hostname/address of the tracker").init("127.0.0.1");
+  track.add("port", "TCP port of the ID tracker").init(42002);
+  track.visible(false);
 
   auto& search = create_block("search options", "search");
   search.add("host", "hostname/address of the archive").init("127.0.0.1");
@@ -132,17 +127,27 @@ void configuration::initialize()
   add_conflict("console-actor", "tracker-actor");
   add_conflict("console-actor", "archive-actor");
   add_conflict("console-actor", "index-actor");
-  add_conflict("console-actor", "ingestor-actor");
+  add_conflict("console-actor", "importer-actor");
+  add_conflict("console-actor", "exporter-actor");
   add_conflict("console-actor", "search-actor");
   add_conflict("console-actor", "receiver-actor");
 #endif
 
-  add_dependency("ingest.time-field", "ingestor-actor");
-  add_dependency("ingest.submit", "ingestor-actor");
-  add_dependency("ingest.file-name", "ingestor-actor");
-  add_dependency("ingest.file-type", "ingest.file-name");
+  add_dependency("import.submit", "importer-actor");
+  add_dependency("import.read", "importer-actor");
+  add_dependency("import.format", "import.read");
+
   add_dependencies("index.partition", {"index-actor", "all-server"});
   add_conflict("index.rebuild", "index.partition");
+
+  add_conflict("importer-actor", "exporter-actor");
+  add_conflict("receiver-actor", "exporter-actor");
+  add_conflict("tracker-actor", "exporter-actor");
+
+  add_dependency("export.limit", "exporter-actor");
+  add_dependency("export.format", "exporter-actor");
+  add_dependency("export.query", "exporter-actor");
+  add_dependency("export.write", "exporter-actor");
 }
 
 } // namespace vast

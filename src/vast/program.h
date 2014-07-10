@@ -19,6 +19,8 @@ public:
   cppa::partial_function act() final;
   std::string describe() const final;
 
+  void run();
+
 private:
   cppa::actor receiver_;
   cppa::actor tracker_;

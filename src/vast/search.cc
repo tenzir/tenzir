@@ -102,21 +102,10 @@ partial_function search_actor::act()
           VAST_LOG_ACTOR_ERROR("failed to write schema to " << schema_path);
       }
     },
-    on(atom("client"), atom("connected")) >> [=]
-    {
-      VAST_LOG_ACTOR_INFO("accpeted connection from new client " <<
-                          last_sender());
-    },
-    on(atom("client"), atom("batch size"), arg_match)
-      >> [=](uint64_t batch_size)
-    {
-      clients_[last_sender()].batch_size = batch_size;
-      monitor(last_sender());
-    },
-    on(atom("query"), atom("create"), val<actor>, parse_ast)
+    on(atom("query"), val<actor>, parse_ast)
       >> [=](actor const& client, expr::ast const& ast) -> continue_helper
     {
-      VAST_LOG_ACTOR_INFO("got new client " << client << " asking for " << ast);
+      VAST_LOG_ACTOR_INFO("got client " << client << " asking for " << ast);
 
       // Must succeed because we checked it in parse_ast(). But because we want
       // to use both the resolved and original AST in this handler, we have to
@@ -125,11 +114,11 @@ partial_function search_actor::act()
       assert(resolved);
 
       auto qry = spawn<query>(archive_, client, std::move(*resolved));
-      send(qry, atom("extract"), clients_[client.address()].batch_size);
 
       return sync_send(index_, atom("query"), ast, qry).then(
           on(atom("success")) >> [=]
           {
+            monitor(client);
             clients_[client.address()].queries.insert(qry);
             return make_any_tuple(ast, qry);
           },
@@ -139,7 +128,7 @@ partial_function search_actor::act()
             return last_dequeued();
           });
     },
-    on(atom("query"), atom("create"), val<actor>, arg_match)
+    on(atom("query"), val<actor>, arg_match)
       >> [=](actor const&, std::string const& q)
     {
       VAST_LOG_ACTOR_VERBOSE("ignores invalid query: " << q);
