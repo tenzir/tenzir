@@ -89,7 +89,7 @@ TEST("time_point")
   REQUIRE(str);
   CHECK(*str == "2010-12");
 
-  str = to<std::string>(u, "H:%M:%S");
+  str = to<std::string>(u, "%H:%M:%S");
   REQUIRE(str);
   CHECK(*str == "23:55:04");
 }
