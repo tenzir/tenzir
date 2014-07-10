@@ -42,6 +42,11 @@ public:
     return data_ != nullptr;
   }
 
+  byte_type& operator[](size_t i) const
+  {
+    return *at(i);
+  }
+
   template <typename U>
   auto as(size_t offset = 0) const
     -> std::conditional_t<std::is_const<T>::value, U const*, U*>
@@ -50,7 +55,7 @@ public:
     return reinterpret_cast<type>(at(offset));
   }
 
-  byte_type* at(size_t offset = 0) const
+  byte_type* at(size_t offset) const
   {
     assert(offset < size_);
     return data_ + offset;
