@@ -49,6 +49,11 @@ TEST("floating point")
   CHECK(str == "0.0000000000");
 
   str.clear();
+  d = 0.005;
+  print(d, out);
+  CHECK(str == "0.0050000000");
+
+  str.clear();
   d = 123.456;
   print(d, out);
   CHECK(str == "123.4560000000");
@@ -62,6 +67,26 @@ TEST("floating point")
   d = 123456.1234567890123;
   print(d, out);
   CHECK(str == "123456.1234567890");
+
+  str.clear();
+  d = 123456.1234567890123;
+  print(d, out, 6);
+  CHECK(str == "123456.123457");
+
+  str.clear();
+  d = 123456.8888;
+  print(d, out, 0);
+  CHECK(str == "123457");
+
+  str.clear();
+  d = 123456.1234567890123;
+  print(d, out, 1);
+  CHECK(str == "123456.1");
+
+  str.clear();
+  d = 123456.00123;
+  print(d, out, 6);
+  CHECK(str == "123456.001230");
 }
 
 TEST("custom")

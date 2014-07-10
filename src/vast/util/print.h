@@ -132,10 +132,18 @@ auto print(T n, Iterator&& out, int digits = 10)
   double left;
   uint64_t right = std::round(std::modf(n, &left) * std::pow(10, digits));
 
-  print_numeric(static_cast<uint64_t>(left), out);
-  if (digits != 0)
+  if (digits == 0)
   {
-    print('.', out);
+    print_numeric(static_cast<uint64_t>(std::round(n)), out);
+  }
+  else
+  {
+    print_numeric(static_cast<uint64_t>(left), out);
+
+    *out++ = '.';
+    for (auto i = 1.0; i < digits - std::log10(right); ++i)
+      *out++ = '0';
+
     print_numeric(right, out);
   }
 
