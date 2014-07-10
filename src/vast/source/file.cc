@@ -169,10 +169,26 @@ result<event> bro2::extract_impl()
         auto end = fs.end(f);
 
         // Check whether the field is unset or empty ('-' or "(empty)")
-        if (std::equal(unset_field_.begin(), unset_field_.end(), begin)
-            || std::equal(empty_field_.begin(), empty_field_.end(), begin))
+        if (std::equal(unset_field_.begin(), unset_field_.end(), begin))
         {
           r->emplace_back(t.back()->type->tag());
+        }
+        else if (std::equal(empty_field_.begin(), empty_field_.end(), begin))
+        {
+          switch (t.back()->type->tag())
+          {
+            default:
+              return error{"only container types can by empty"};
+            case set_value:
+              r->emplace_back(set{});
+              break;
+            case vector_value:
+              r->emplace_back(vector{});
+              break;
+            case table_value:
+              r->emplace_back(table{});
+              break;
+          }
         }
         else
         {
