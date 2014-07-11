@@ -40,7 +40,7 @@ void set_ports(configuration& config, uint64_t instance)
 TEST("ingestion (all-in-one)")
 {
   configuration cfg;
-  set_ports(cfg, 0);
+  set_ports(cfg, 1);
   *cfg['v'] = 0;
   *cfg['V'] = 5;
   *cfg['a'] = true;
@@ -87,7 +87,7 @@ TEST("ingestion (all-in-one)")
 TEST("ingestion (two programs)")
 {
   configuration core_config;
-  set_ports(core_config, 1);
+  set_ports(core_config, 2);
   *core_config['v'] = 0;
   *core_config['V'] = 5;
   *core_config['a'] = true;
@@ -97,7 +97,7 @@ TEST("ingestion (two programs)")
   anon_send(core, atom("run"));
 
   configuration ingest_config;
-  set_ports(ingest_config, 1);
+  set_ports(ingest_config, 2);
   *ingest_config['v'] = 0;
   *ingest_config['V'] = 5;
   *ingest_config['I'] = true;
@@ -121,7 +121,7 @@ TEST("ingestion (two programs)")
 TEST("actor integrity")
 {
   configuration cfg;
-  set_ports(cfg, 2);
+  set_ports(cfg, 3);
   *cfg['v'] = 0;
   *cfg['V'] = 5;
   *cfg['a'] = true;
