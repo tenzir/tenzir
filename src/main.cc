@@ -15,6 +15,12 @@ int main(int argc, char *argv[])
     cfg->usage(std::cerr, cfg->check("advanced"));
     return 0;
   }
+  else if (cfg->check("version"))
+  {
+    std::cout << VAST_VERSION << std::endl;
+    return 0;
+  }
+
 
   auto program = cppa::spawn<vast::program>(std::move(*cfg));
   cppa::anon_send(program, cppa::atom("run"));

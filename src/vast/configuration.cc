@@ -38,6 +38,7 @@ void configuration::initialize()
   general.add('h', "help", "display this help");
   general.add('d', "directory", "VAST directory").init("vast");
   general.add('z', "advanced", "show advanced options");
+  general.add("version", "print the version of VAST");
 
   auto min = 0;
   auto max = VAST_LOG_LEVEL;
@@ -64,10 +65,10 @@ void configuration::initialize()
   advanced.visible(false);
 
   auto& act = create_block("actor options");
+  act.add('a', "all-server", "spawn all server actors");
 #ifdef VAST_HAVE_EDITLINE
   act.add('C', "console-actor", "spawn the console client actor");
 #endif
-  act.add('a', "all-server", "spawn all server actors");
   act.add('A', "archive-actor", "spawn the archive");
   act.add('I', "importer-actor", "spawn the importer");
   act.add('E', "exporter-actor", "spawn the exporter");
