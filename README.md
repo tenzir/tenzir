@@ -16,11 +16,15 @@ Start a server:
 
     vast -a
 
-Ingest data from standard input:
+Import data:
 
-    zcat *.log.gz | vast -I -r -
+    zcat *.log.gz | vast -I
 
-Start the client and submit a query:
+Run a query of at most 100 results, printed as a [Bro](http://www.bro.org) log:
+
+    vast -E -o bro -l 100 -q ':addr in 192.168.0.0/24'
+
+Start the interactive console and submit a query:
 
     vast -C
     > ask
@@ -40,7 +44,7 @@ Installation
 
 Required:
 
-- [Clang >= 3.4](http://clang.llvm.org/) or [g++ >= 4.9](http://gcc.gnu.org)
+- [Clang >= 3.4](http://clang.llvm.org/) or [GCC >= 4.9](http://gcc.gnu.org)
 - [CMake](http://www.cmake.org)
 - [libcppa](https://github.com/Neverlord/libcppa)
 - [Boost](http://www.boost.org) (headers only)
