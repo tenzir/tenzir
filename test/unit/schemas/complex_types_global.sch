@@ -1,7 +1,7 @@
 # Complex types with global scope.
 
 type enum_t: enum { x, y, z }
-type vector_t: vector of addr
+type vector_t: vector[addr]
 type set_t: set[pattern]
 type table_t: table[port] of addr
 

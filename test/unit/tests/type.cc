@@ -34,7 +34,7 @@ TEST("construction and display")
   CHECK(to_string(*s) == "set[bool]");
 
   auto v = type::make<vector_type>("", b);
-  CHECK(to_string(*v) == "vector of bool");
+  CHECK(to_string(*v) == "vector[bool]");
 
   auto t = type::make<table_type>("", b, s);
   CHECK(to_string(*t) == "table[bool] of set[bool]");

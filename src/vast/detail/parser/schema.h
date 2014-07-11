@@ -152,8 +152,9 @@ struct schema : qi::grammar<Iterator, ast::schema::schema(), skipper<Iterator>>
 
     vector_
         =   lit("vector")
-        >   "of"
+        >   '['
         >   type_
+        >   ']'
         ;
 
     set_

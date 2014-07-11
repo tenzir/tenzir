@@ -110,11 +110,15 @@ private:
   template <typename Iterator>
   friend trial<void> print(vector_type const& v, Iterator&& out)
   {
-    auto t = print("vector of ", out);
+    auto t = print("vector[", out);
     if (! t)
       return t.error();
 
-    return print(*v.elem_type, out);
+    t = print(*v.elem_type, out);
+    if (! t)
+      return t.error();
+
+    return print(']', out);
   }
 
   friend bool operator==(vector_type const& lhs, vector_type const& rhs);
