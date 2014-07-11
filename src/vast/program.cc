@@ -121,7 +121,7 @@ void program::run()
 
   try
   {
-    if (config_.check("all-server"))
+    if (config_.check("all-core"))
     {
       *config_["receiver-actor"] = true;
       *config_["tracker-actor"] = true;

@@ -65,7 +65,7 @@ void configuration::initialize()
   advanced.visible(false);
 
   auto& act = create_block("actor options");
-  act.add('a', "all-server", "spawn all server actors");
+  act.add('a', "all-core", "spawn all core actors");
 #ifdef VAST_HAVE_EDITLINE
   act.add('C', "console-actor", "spawn the console client actor");
 #endif
@@ -124,7 +124,7 @@ void configuration::initialize()
   search.visible(false);
 
 #ifdef VAST_HAVE_EDITLINE
-  add_conflict("console-actor", "all-server");
+  add_conflict("console-actor", "all-core");
   add_conflict("console-actor", "tracker-actor");
   add_conflict("console-actor", "archive-actor");
   add_conflict("console-actor", "index-actor");
@@ -138,7 +138,7 @@ void configuration::initialize()
   add_dependency("import.read", "importer-actor");
   add_dependency("import.format", "import.read");
 
-  add_dependencies("index.partition", {"index-actor", "all-server"});
+  add_dependencies("index.partition", {"index-actor", "all-core"});
   add_conflict("index.rebuild", "index.partition");
 
   add_conflict("importer-actor", "exporter-actor");
