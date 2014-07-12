@@ -1,4 +1,4 @@
-#include "vast/tasker.h"
+#include "vast/task_tree.h"
 
 #include "framework/unit.h"
 
@@ -33,11 +33,10 @@ behavior worker(event_based_actor* self, actor const& supervisor)
 //              / | \
 //            2a 2b 2c
 //
-// Each worker only adds two numbers and then terminates.
-TEST("tasker")
+TEST("task tree")
 {
   scoped_actor self;
-  auto t = self->spawn<tasker, monitored>(self);
+  auto t = self->spawn<task_tree, monitored>(self);
 
   auto leaf1a = spawn(worker, t);
   auto leaf1b = spawn(worker, t);
@@ -46,9 +45,9 @@ TEST("tasker")
   auto leaf2c = spawn(worker, t);
 
   // Just a dummy node in our example.
-  auto intermediate = spawn([] { });
+  auto intermediate = spawn(
+      [&](event_based_actor* self) { self->send(t, atom("done")); });
 
-  // Register the nodes with the tasker.
   anon_send(t, self, leaf1a);
   anon_send(t, self, leaf1b);
   anon_send(t, self, intermediate);
@@ -83,7 +82,7 @@ TEST("tasker")
   anon_send(leaf1b, "please!");
 
   auto i = 0;
-  self->receive_for(i, 5) (
+  self->receive_for(i, 6) (
       [&](uint64_t remaining, uint64_t total)
       {
         CHECK(remaining == 5 - i);

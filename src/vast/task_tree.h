@@ -1,5 +1,5 @@
-#ifndef VAST_TASKER_H
-#define VAST_TASKER_H
+#ifndef VAST_TASK_TREE_H
+#define VAST_TASK_TREE_H
 
 #include <cassert>
 #include <map>
@@ -9,16 +9,14 @@
 namespace vast {
 
 /// Manages progress in a hierarchical task tree.
-class tasker : public actor_base
+class task_tree : public actor_base
 {
-  struct node
-  {
-    cppa::actor actor;
-    uint64_t children = 0;
-  };
-
 public:
-  tasker(cppa::actor root)
+  /// Spawns a task tree.
+  /// @param root The root node of the task hierarchy.
+  /// @param exit_code The exit code to exit with when done.
+  task_tree(cppa::actor root, uint32_t exit_code = exit::done)
+    : exit_code_{exit_code}
   {
     degree_[root.address()] = 0;
   }
@@ -67,7 +65,7 @@ public:
 
   std::string describe() const final
   {
-    return "tasker";
+    return "task-tree";
   }
 
 private:
@@ -86,12 +84,11 @@ private:
     {
       degree_.erase(i);
       if (degree_.empty())
-        quit(exit::done); // We've reached the root. Thank you and good bye.
-      else
-        remove(parent);
+        quit(exit_code_);
     }
   };
 
+  uint32_t exit_code_ = exit::done;
   uint64_t remaining_ = 0;
   uint64_t total_ = 0;
   std::map<cppa::actor_addr, cppa::actor> graph_;
