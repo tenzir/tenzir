@@ -17,6 +17,35 @@ constexpr uint32_t kill   = cppa::exit_reason::user_defined + 3;
 
 } // namespace exit
 
+inline char const* render_exit_reason(uint32_t reason)
+{
+  switch (reason)
+  {
+    default:
+      return "unknown";
+    case exit::done:
+      return "done";
+    case exit::stop:
+      return "stop";
+    case exit::error:
+      return "error";
+    case exit::kill:
+      return "kill";
+    case cppa::exit_reason::normal:
+      return "normal";
+    case cppa::exit_reason::unhandled_exception:
+      return "unhandled exception";
+    case cppa::exit_reason::unhandled_sync_failure:
+      return "unhandled sync failure";
+    case cppa::exit_reason::unhandled_sync_timeout:
+      return "unhandled sync timeout";
+    case cppa::exit_reason::user_shutdown:
+      return "user shutdown";
+    case cppa::exit_reason::remote_link_unreachable:
+      return "remote link unreachable";
+  }
+}
+
 /// The base class for event-based actors in VAST.
 struct actor_base : cppa::event_based_actor
 {
@@ -47,7 +76,8 @@ protected:
 
   void on_exit() final
   {
-    VAST_LOG_ACTOR_DEBUG(describe(), "terminated");
+    VAST_LOG_ACTOR_DEBUG(describe(), "terminated (" <<
+                         render_exit_reason(planned_exit_reason()) << ')');
   }
 
   virtual cppa::partial_function act() = 0;
