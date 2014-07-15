@@ -92,7 +92,7 @@ TEST("basic actor integrity")
   *core_config['v'] = 0;
   *core_config['V'] = 5;
   *core_config['a'] = true;
-  *core_config['p'] = "m57_day11_18";
+  *core_config['p'] = "m57-ssl";
   REQUIRE(core_config.verify());
 
   auto core = spawn<program>(core_config);
@@ -126,6 +126,7 @@ TEST("basic actor integrity")
   *core_config['v'] = 0;
   *core_config['V'] = 5;
   *core_config['a'] = true;
+  *core_config['p'] = "m57-conn";
   REQUIRE(core_config.verify());
 
   core = spawn<program>(core_config);
@@ -247,7 +248,6 @@ TEST("basic actor integrity")
   *import_config['r'] = m57_day11_18::conn;
   import = self->spawn<program, monitored>(import_config);
   anon_send(import, atom("run"));
-
   self->receive(
       on_arg_match >> [&](down_msg const& d) { CHECK(d.reason == exit::done); },
       fail);
@@ -269,13 +269,54 @@ TEST("basic actor integrity")
                     CHECK(self->last_sender() == task_tree);
 
                     auto dir = path{*core_config.get("directory")};
-                    auto p = dir / "index" / "m57_day11_18" / "types" / "conn";
+                    auto p = dir / "index" / "m57-conn" / "types" / "conn";
                     REQUIRE(exists(p));
                   },
                   fail);
             },
             fail);
       });
+
+  // Issue a query against both conn and ssl.
+  self->send(core, atom("search"));
+  self->receive(
+      [&](actor search)
+      {
+        auto q = "id.resp_p == 443/? && ssl.server_name ni \"mozilla\"";
+        self->sync_send(search, atom("query"), self, q).await((
+            [&](expr::ast const&, actor qry)
+            {
+              // Extract all results.
+              self->send(qry, atom("extract"), uint64_t{0});
+              self->monitor(qry);
+            },
+            fail));
+      },
+      fail);
+
+  bool done = false;
+  size_t n = 0;
+  self->do_receive(
+      [&](event const&)
+      {
+        ++n;
+      },
+      on(atom("progress"), arg_match) >> [=](double, uint64_t)
+      {
+        REQUIRE(true);
+      },
+      on(atom("done")) >> [&]
+      {
+        CHECK(n == 15);
+      },
+      [&](down_msg const& d)
+      {
+        // Query terminates after having extracted all events.
+        CHECK(d.reason == exit::done);
+        done = true;
+      },
+      fail
+      ).until(gref(done) == true);
 
   self->send_exit(core, exit::done);
   self->await_all_other_actors_done();
