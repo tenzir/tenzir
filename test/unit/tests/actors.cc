@@ -37,7 +37,7 @@ void set_ports(configuration& config, uint64_t instance)
 
 } // namespace <anonymous>
 
-TEST("ingestion (all-in-one)")
+TEST("all-in-one import")
 {
   configuration cfg;
   set_ports(cfg, 1);
@@ -84,62 +84,64 @@ TEST("ingestion (all-in-one)")
   CHECK(rm(dir));
 }
 
-TEST("ingestion (two programs)")
+TEST("basic actor integrity")
 {
+  // First spawn the core.
   configuration core_config;
   set_ports(core_config, 2);
   *core_config['v'] = 0;
   *core_config['V'] = 5;
   *core_config['a'] = true;
+  *core_config['p'] = "m57_day11_18";
   REQUIRE(core_config.verify());
 
   auto core = spawn<program>(core_config);
   anon_send(core, atom("run"));
 
-  configuration ingest_config;
-  set_ports(ingest_config, 2);
-  *ingest_config['v'] = 0;
-  *ingest_config['V'] = 5;
-  *ingest_config['I'] = true;
-  *ingest_config['r'] = m57_day11_18::ssl;
-  *ingest_config['p'] = "m57_day11_18";
-  REQUIRE(ingest_config.verify());
-
   // Wait until the TCP sockets of the core have bound.
-  ::sleep(1);
+  std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-  // Terminates after ingestion completes.
-  auto import = spawn<program>(ingest_config);
+  // Import a single Bro log.
+  configuration import_config;
+  set_ports(import_config, 2);
+  *import_config['v'] = 0;
+  *import_config['V'] = 5;
+  *import_config['I'] = true;
+  *import_config['r'] = m57_day11_18::ssl;
+  *import_config["import.max-events-per-chunk"] = 10;
+  *import_config["import.max-segment-size"] = 1;
+  REQUIRE(import_config.verify());
+
+  // Terminates after import completes.
+  auto import = spawn<program>(import_config);
+
+  // Pull down core afterwards.
   import->link_to(core);
   anon_send(import, atom("run"));
 
   await_all_actors_done();
-}
 
-// Requires the previous test to run successfully because this one accesses the
-// data it has written to disk.
-TEST("actor integrity")
-{
-  configuration cfg;
-  set_ports(cfg, 3);
-  *cfg['v'] = 0;
-  *cfg['V'] = 5;
-  *cfg['a'] = true;
-  REQUIRE(cfg.verify());
+  // Restart a new core.
+  set_ports(core_config, 3);
+  *core_config['v'] = 0;
+  *core_config['V'] = 5;
+  *core_config['a'] = true;
+  REQUIRE(core_config.verify());
 
-  scoped_actor self;
-  auto core = spawn<program>(cfg);
+  core = spawn<program>(core_config);
   anon_send(core, atom("run"));
 
+  scoped_actor self;
   auto fail = others() >> [&]
   {
-    std::cerr << to_string(self->last_dequeued()) << std::endl;
+    std::cerr
+      << "unexpected message from " << self->last_sender().id() << ": "
+      << to_string(self->last_dequeued()) << std::endl;
+
     REQUIRE(false);
   };
 
-  //
-  // Archive
-  //
+  // Test whether the archive has the correct segment.
   self->send(core, atom("archive"));
   self->receive([&](actor archive) { self->send(archive, event_id(100)); });
   self->receive(
@@ -157,9 +159,7 @@ TEST("actor integrity")
       },
       fail);
 
-  //
-  // Index (manual querying)
-  //
+  // Test whether a manual index lookup succeeds.
   auto pops = to<expr::ast>("id.resp_p == 995/?");
   REQUIRE(pops);
 
@@ -190,9 +190,7 @@ TEST("actor integrity")
       },
       fail);
 
-  //
-  // Query
-  //
+  // Construct a simple query and verify that the results are correct.
   self->send(core, atom("search"));
   self->receive(
       [&](actor search)
@@ -236,8 +234,51 @@ TEST("actor integrity")
     },
     fail);
 
+  // A query always sends a "done" atom before terminating.
+  self->receive(
+      on(atom("done")) >> [&]
+      {
+        REQUIRE(true);
+      },
+      fail);
+
+  // Now import another log file.
+  set_ports(import_config, 3);
+  *import_config['r'] = m57_day11_18::conn;
+  import = self->spawn<program, monitored>(import_config);
+  anon_send(import, atom("run"));
+
+  self->receive(
+      on_arg_match >> [&](down_msg const& d) { CHECK(d.reason == exit::done); },
+      fail);
+
+  // Wait for the segment to arrive at the receiver.
+  std::this_thread::sleep_for(std::chrono::seconds(1));
+
+  self->send(core, atom("index"));
+  self->receive(
+      [&](actor index)
+      {
+        self->sync_send(index, atom("flush")).await(
+            on_arg_match >> [&](actor task_tree)
+            {
+              anon_send(task_tree, atom("notify"), self);
+              self->receive(
+                  on(atom("done")) >> [&]
+                  {
+                    CHECK(self->last_sender() == task_tree);
+
+                    auto dir = path{*core_config.get("directory")};
+                    auto p = dir / "index" / "m57_day11_18" / "types" / "conn";
+                    REQUIRE(exists(p));
+                  },
+                  fail);
+            },
+            fail);
+      });
+
   self->send_exit(core, exit::done);
   self->await_all_other_actors_done();
 
-  CHECK(rm(path{*cfg.get("directory")}));
+  CHECK(rm(path{*core_config.get("directory")}));
 }

@@ -87,7 +87,11 @@ public:
       {
         this->quit(e.reason);
       },
-      on(atom("flush")) >> flush,
+      on(atom("flush"), arg_match) >> [=](actor task_tree)
+      {
+        flush();
+        send(task_tree, atom("done"));
+      },
       [=](std::vector<event> const& events)
       {
         uint64_t n = 0;

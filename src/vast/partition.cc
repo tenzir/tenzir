@@ -5,6 +5,7 @@
 #include "vast/event.h"
 #include "vast/segment.h"
 #include "vast/segment_pack.h"
+#include "vast/task_tree.h"
 #include "vast/io/serialization.h"
 
 namespace vast {
@@ -322,33 +323,6 @@ partial_function partition_actor::act()
           });
   }
 
-  auto flush = [=]
-  {
-    VAST_LOG_ACTOR_DEBUG("flushes its indexes in " << dir_);
-
-    for (auto& p : indexers_)
-      if (p.second.actor)
-        send(p.second.actor, atom("flush"));
-
-    auto t = io::archive(dir_ / "schema", schema_);
-    if (! t)
-    {
-      VAST_LOG_ACTOR_ERROR("failed to save schema for " << dir_ << ": " <<
-                           t.error().msg());
-      quit(exit::error);
-      return;
-    }
-
-    t = io::archive(dir_ / partition::part_meta_file, partition_);
-    if (! t)
-    {
-      VAST_LOG_ACTOR_ERROR("failed to save partition " << dir_ <<
-                           ": " << t.error().msg());
-      quit(exit::error);
-      return;
-    }
-  };
-
   attach_functor(
       [=](uint32_t reason)
       {
@@ -376,14 +350,25 @@ partial_function partition_actor::act()
         return;
       }
 
+      // Wait for unpacker to finish.
       if (exit_reason_ == 0 && ! segments_.empty())
       {
         exit_reason_ = e.reason;
         return;
       }
 
-      flush();
-      quit(e.reason);
+      // FIXME: ensure this happens at most once.
+      auto tree = spawn<task_tree>(this);
+      send(tree, atom("notify"), this);
+      send(tree, this, this);
+      send(this, atom("flush"), tree);
+      exit_reason_ = e.reason;
+    },
+    on(atom("done")) >> [=]
+    {
+      // We only spawn one task tree upon exiting. Once we get notified we can
+      // safely terminate with the last exit reason.
+      quit(exit_reason_);
     },
     [=](down_msg const&)
     {
@@ -419,7 +404,37 @@ partial_function partition_actor::act()
           send_tuple(a, t);
       }
     },
-    on(atom("flush")) >> flush,
+    on(atom("flush"), arg_match) >> [=](actor tree)
+    {
+      VAST_LOG_ACTOR_DEBUG("got request to flush its indexes");
+
+      for (auto& p : indexers_)
+        if (p.second.actor)
+        {
+          send(tree, this, p.second.actor);
+          send(p.second.actor, atom("flush"), tree);
+        }
+
+      auto t = io::archive(dir_ / "schema", schema_);
+      if (! t)
+      {
+        VAST_LOG_ACTOR_ERROR("failed to save schema for " << dir_ << ": " <<
+                             t.error().msg());
+        quit(exit::error);
+        return;
+      }
+
+      t = io::archive(dir_ / partition::part_meta_file, partition_);
+      if (! t)
+      {
+        VAST_LOG_ACTOR_ERROR("failed to save partition " << dir_ <<
+                             ": " << t.error().msg());
+        quit(exit::error);
+        return;
+      }
+
+      send(tree, atom("done"));
+    },
     [=](segment const& s)
     {
       VAST_LOG_ACTOR_DEBUG("got segment with " << s.events() << " events");

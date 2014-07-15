@@ -5,6 +5,7 @@
 #include "vast/segment.h"
 #include "vast/partition.h"
 #include "vast/print.h"
+#include "vast/task_tree.h"
 #include "vast/io/serialization.h"
 
 using namespace cppa;
@@ -523,6 +524,17 @@ partial_function index::act()
 
         quit(exit::error);
       }
+    },
+    on(atom("flush")) >> [=]
+    {
+      auto tree = spawn<task_tree>(this);
+      for (auto& p : part_actors_)
+      {
+        send(tree, this, p.second);
+        send(p.second, atom("flush"), tree);
+      }
+
+      return tree;
     },
     on(atom("partition"), arg_match) >> [=](std::string const& dir)
     {

@@ -55,8 +55,9 @@ TEST("task tree")
   anon_send(t, intermediate, leaf2b);
   anon_send(t, intermediate, leaf2c);
 
-  // Subscribe to progress updates.
-  anon_send(t, atom("update"), self);
+  // Subscribe to progress updates and final termination.
+  anon_send(t, atom("subscribe"), self);
+  anon_send(t, atom("notify"), self);
 
   auto fail = others() >> [&]
   {
@@ -88,6 +89,12 @@ TEST("task tree")
         CHECK(remaining == 5 - i);
         CHECK(total == 6);
       },
+      fail
+      );
+
+  // We wanted to be notified.
+  self->receive(
+      on(atom("done")) >> [&]{ REQUIRE(true); },
       fail
       );
 

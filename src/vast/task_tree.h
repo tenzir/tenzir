@@ -14,9 +14,7 @@ class task_tree : public actor_base
 public:
   /// Spawns a task tree.
   /// @param root The root node of the task hierarchy.
-  /// @param exit_code The exit code to exit with when done.
-  task_tree(cppa::actor root, uint32_t exit_code = exit::done)
-    : exit_code_{exit_code}
+  task_tree(cppa::actor root)
   {
     degree_[root.address()] = 0;
   }
@@ -30,13 +28,16 @@ public:
         {
           graph_.clear();
           degree_.clear();
-          tracker_ = invalid_actor;
+          subscriber_ = invalid_actor;
+          notifyee_ = invalid_actor;
         });
 
     return
     {
       [=](actor parent, actor child)
       {
+        VAST_LOG_ACTOR_DEBUG("registers child-parent edge (" << child <<
+                             " -> " << parent << ")");
         ++total_;
         ++remaining_;
         ++degree_[parent.address()];
@@ -47,14 +48,44 @@ public:
         assert(remaining_ > 0);
         --remaining_;
 
-        if (tracker_)
-          send(tracker_, remaining_, total_);
+        auto edge = graph_.find(last_sender());
+        if (edge == graph_.end())
+        {
+          VAST_LOG_ACTOR_ERROR("got unregistered node: " << last_sender());
+          quit(exit::error);
+          return;
+        }
 
-        remove(last_sender());
+        VAST_LOG_ACTOR_DEBUG(
+            "removes completed node " << last_sender() <<
+            " (" << remaining_ << '/' << total_ << " remaining" << ')');
+
+        if (subscriber_)
+          send(subscriber_, remaining_, total_);
+
+        if (remaining_ == 0)
+          send(notifyee_, atom("done"));
+
+        auto parent = edge->second.address();
+        graph_.erase(edge);
+
+        auto i = degree_.find(parent);
+        assert(i != degree_.end());
+        assert(i->second > 0);
+        if (--i->second == 0)
+        {
+          degree_.erase(i);
+          if (degree_.empty())
+            quit(exit::done);
+        }
       },
-      on(atom("update"), arg_match) >> [=](actor tracker)
+      on(atom("notify"), arg_match) >> [=](actor whom)
       {
-        tracker_ = tracker;
+        notifyee_ = whom;
+      },
+      on(atom("subscribe"), arg_match) >> [=](actor subscriber)
+      {
+        subscriber_ = subscriber;
       },
       on(atom("progress")) >> [=]
       {
@@ -69,31 +100,12 @@ public:
   }
 
 private:
-  void remove(cppa::actor_addr node)
-  {
-    auto edge = graph_.find(node);
-    assert(edge != graph_.end());
-
-    auto parent = edge->second.address();
-    graph_.erase(edge);
-
-    auto i = degree_.find(parent);
-    assert(i != degree_.end());
-    assert(i->second > 0);
-    if (--i->second == 0)
-    {
-      degree_.erase(i);
-      if (degree_.empty())
-        quit(exit_code_);
-    }
-  };
-
-  uint32_t exit_code_ = exit::done;
   uint64_t remaining_ = 0;
   uint64_t total_ = 0;
   std::map<cppa::actor_addr, cppa::actor> graph_;
   std::map<cppa::actor_addr, size_t> degree_;
-  cppa::actor tracker_;
+  cppa::actor subscriber_;
+  cppa::actor notifyee_;
 };
 
 } // namespace vast
