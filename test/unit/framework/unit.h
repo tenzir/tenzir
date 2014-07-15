@@ -54,6 +54,22 @@ public:
   /// @returns `true` iff all tests succeeded.
   static bool run(configuration const& cfg);
 
+  /// Retrieves the file of the last check.
+  /// @returns The source file where the last successful check came from.
+  static char const* last_check_file();
+
+  /// Sets the file of the last check.
+  /// @param file The file of the last successful check.
+  static void last_check_file(char const* file);
+
+  /// Retrieves the line number of the last check.
+  /// @returns The line where the last successful check came from.
+  static size_t last_check_line();
+
+  /// Sets the file of the last check.
+  /// @param line The line of the last successful check.
+  static void last_check_line(size_t line);
+
 private:
   static engine& instance();
 
@@ -120,6 +136,19 @@ template <typename T>
 showable<T> show(T const &x)
 {
   return showable<T>{x};
+}
+
+// Constructs spacing given a line number.
+inline char const* fill(int line)
+{
+  if (line < 10)
+    return "    ";
+  else if (line < 100)
+    return "   ";
+  else if (line < 1000)
+    return "  ";
+  else
+    return " ";
 }
 
 template <typename T>
@@ -254,18 +283,6 @@ private:
     return false;
   }
 
-  static char const* fill(int line)
-  {
-    if (line < 10)
-      return "    ";
-    else if (line < 100)
-      return "   ";
-    else if (line < 1000)
-      return "  ";
-    else
-      return " ";
-  }
-
   bool evaluated_ = false;
   test* test_;
   char const *filename_;
@@ -311,6 +328,9 @@ private:
   {                                                                         \
     (void)(::unit::detail::expr{this, __FILE__, __LINE__, #__VA_ARGS__}     \
              ->* __VA_ARGS__);                                              \
+                                                                            \
+    ::unit::engine::last_check_file(__FILE__);                              \
+    ::unit::engine::last_check_line(__LINE__);                              \
   }                                                                         \
   while (false)
 
@@ -324,6 +344,8 @@ private:
     if (! UNIT_UNIQUE(__result))                                            \
       throw ::unit::require_error{#__VA_ARGS__};                            \
                                                                             \
+    ::unit::engine::last_check_file(__FILE__);                              \
+    ::unit::engine::last_check_line(__LINE__);                              \
   }                                                                         \
   while (false)
 

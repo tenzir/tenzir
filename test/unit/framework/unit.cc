@@ -155,7 +155,30 @@ std::string render(std::chrono::microseconds t)
       : (std::to_string(t.count()) + " us");
 }
 
+char const* check_file = "<none>";
+size_t check_line = 0;
+
 } // namespace <anonymous>
+
+char const* engine::last_check_file()
+{
+  return check_file;
+}
+
+void engine::last_check_file(char const* file)
+{
+  check_file = file;
+}
+
+size_t engine::last_check_line()
+{
+  return check_line;
+}
+
+void engine::last_check_line(size_t line)
+{
+  check_line = line;
+}
 
 bool engine::run(configuration const& cfg)
 {
@@ -276,7 +299,12 @@ bool engine::run(configuration const& cfg)
       if (failed_require)
       {
         ++failed_requires;
-        log.error() << color::red << "     REQUIRED" << color::reset << '\n';
+        log.error()
+          << color::red << "     REQUIRED" << color::reset << '\n'
+          << "     " << color::blue << last_check_file() << color::yellow
+          << ":" << color::cyan << last_check_line() << color::reset
+          << detail::fill(last_check_line()) << "had last successful check"
+          << '\n';
       }
 
       total_good += good;
