@@ -215,7 +215,6 @@ bool engine::run(configuration const& cfg)
              log_file ? *log_file : ""};
 
   std::chrono::microseconds runtime{0};
-  size_t failed_requires = 0;
   size_t total_suites = 0;
   size_t total_tests = 0;
   size_t total_good = 0;
@@ -297,15 +296,12 @@ bool engine::run(configuration const& cfg)
         }
 
       if (failed_require)
-      {
-        ++failed_requires;
         log.error()
           << color::red << "     REQUIRED" << color::reset << '\n'
           << "     " << color::blue << last_check_file() << color::yellow
           << ":" << color::cyan << last_check_line() << color::reset
           << detail::fill(last_check_line()) << "had last successful check"
           << '\n';
-      }
 
       total_good += good;
       total_bad += bad;
@@ -321,6 +317,9 @@ bool engine::run(configuration const& cfg)
           << color::red << bad << color::reset << ")" << '\n';
       else
         log.verbose() << '\n';
+
+      if (failed_require)
+        break;
 
       ++total_tests;
     }
