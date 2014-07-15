@@ -203,18 +203,24 @@ public:
 
     for (auto& p : dependencies_)
     {
-      std::string deps = "{";
-      auto any = std::any_of(
-          p.second.begin(),
-          p.second.end(),
-          [&](std::string const& dep)
-          {
-            deps += " " + dep;
-            return check(dep);
-          });
+      std::string str;
+      auto& deps = p.second;
+      auto any = false;
+      for (size_t i = 0; i < deps.size(); ++i)
+      {
+        if (check(deps[i]))
+        {
+          any = true;
+          break;
+        }
+
+        str += deps[i];
+        if (i != deps.size() - 1)
+          str += ", ";
+      }
 
       if (check(p.first) && ! any)
-        return error{p.first + " requires any option of " + deps + " }"};
+        return error{p.first + " depends on any option of {" + str + "}"};
     }
 
     return nothing;
