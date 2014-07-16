@@ -282,18 +282,21 @@ null_bitstream::sequence_range::sequence_range(null_bitstream const& bs)
     next();
 }
 
-bool null_bitstream::sequence_range::next_sequence(bitsequence& seq)
+bool null_bitstream::sequence_range::next_sequence(bitseq& seq)
 {
   if (next_block_ >= bits_->blocks())
     return false;
 
   seq.offset = next_block_ * block_width;
   seq.data = bits_->block(next_block_);
-  seq.type = seq.data == 0 || seq.data == all_one ? fill : literal;
   seq.length = block_width;
+  seq.type =
+    seq.data == 0 || seq.data == all_one
+    ? bitseq::fill
+    : bitseq::literal;
 
   while (++next_block_ < bits_->blocks())
-    if (seq.type == fill && seq.data == bits_->block(next_block_))
+    if (seq.is_fill() && seq.data == bits_->block(next_block_))
       seq.length += block_width;
     else
       break;
@@ -617,7 +620,7 @@ ewah_bitstream::sequence_range::sequence_range(ewah_bitstream const& bs)
     next();
 }
 
-bool ewah_bitstream::sequence_range::next_sequence(bitsequence& seq)
+bool ewah_bitstream::sequence_range::next_sequence(bitseq& seq)
 {
   if (next_block_ >= bits_->blocks())
     return false;
@@ -628,7 +631,7 @@ bool ewah_bitstream::sequence_range::next_sequence(bitsequence& seq)
     // The next block must be a dirty block (unless it's the last block, which
     // we don't count in the number of dirty blocks).
     --num_dirty_;
-    seq.type = literal;
+    seq.type = bitseq::literal;
     seq.data = block;
     seq.offset += seq.length;
     seq.length = next_block_ == bits_->blocks()
@@ -648,7 +651,7 @@ bool ewah_bitstream::sequence_range::next_sequence(bitsequence& seq)
     }
     else
     {
-      seq.type = fill;
+      seq.type = bitseq::fill;
       seq.data = marker_type(block) ? all_one : 0;
       seq.offset += seq.length;
       seq.length = clean * block_width;
@@ -1144,26 +1147,51 @@ void ewah_bitstream::bump_dirty_count()
 ewah_bitstream::size_type ewah_bitstream::find_forward(size_type i) const
 {
   auto range = sequence_range{*this};
+  auto seq = range.begin();
+  auto end = range.end();
 
-  for (auto& seq : range)
-    if (seq.offset + seq.length > i)
-      break;
-
-  for (auto& seq : range)
+  while (seq != end)
   {
-    if (seq.data)
+    // First we skip over all sequences {[a,b) | b <= i} and stop at the
+    // first sequence.
+    if (seq->offset + seq->length <= i)
     {
-      if (seq.is_fill())
-        return i >= seq.offset && i < seq.offset + seq.length ? i : seq.offset;
-
-      auto const idx = bitvector::bit_index(i);
-      if (idx == 0 || idx > seq.length)
-        return seq.offset + bitvector::lowest_bit(seq.data);
-
-      auto next = bitvector::next_bit(seq.data, idx - 1);
-      if (next != npos)
-        return seq.offset + next;
+      ++seq;
+      continue;
     }
+
+    assert(seq->offset + seq->length);
+
+    // Then we check the single sequence [a,b) | i >= a && i < b.
+    if (seq->data)
+    {
+      if (seq->is_fill())
+        return i;
+
+      auto idx = bitvector::bit_index(i);
+      auto bit =
+        // TODO: factor this type of lookup into a utility function.
+        idx == 0
+        ? bitvector::lowest_bit(seq->data)
+        : bitvector::next_bit(seq->data, idx - 1);
+
+      if (bit != npos)
+        return seq->offset + bit;
+    }
+
+    ++seq;
+    break;
+  }
+
+  // Finally we investigate the remaining sequences {[a,b) | i > b}.
+  while (seq != end)
+  {
+    if (seq->data)
+      return seq->is_fill()
+        ? seq->offset
+        : seq->offset + bitvector::lowest_bit(seq->data);
+
+    ++seq;
   }
 
   return npos;
@@ -1182,13 +1210,13 @@ ewah_bitstream::size_type ewah_bitstream::find_backward(size_type i) const
         return last;
 
       if (seq.is_fill())
-        return seq.offset + seq.length - 1;
+        return i;
 
-      auto const idx = bitvector::bit_index(i);
+      auto idx = bitvector::bit_index(i);
       if (idx == bitvector::block_width - 1)
         return seq.offset + bitvector::highest_bit(seq.data);
 
-      auto const prev = bitvector::prev_bit(seq.data, idx + 1);
+      auto prev = bitvector::prev_bit(seq.data, idx + 1);
       return prev == npos ? last : seq.offset + prev;
     }
 

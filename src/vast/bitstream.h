@@ -9,6 +9,31 @@
 
 namespace vast {
 
+// An abstraction over a contiguous sequence of bits in a bitstream. A bit
+// sequence can have two types: a *fill* sequence representing a homogenous
+// bits, typically greater than or equal to the block size, and a *literal*
+// sequence representing bits from a single block, typically less than or
+// equal to the block size.
+struct bitseq
+{
+  enum block_type { fill, literal };
+
+  bool is_fill() const
+  {
+    return type == fill;
+  }
+
+  bool is_literal() const
+  {
+    return type == literal;
+  }
+
+  block_type type = literal;
+  bitvector::size_type offset = 0;
+  bitvector::block_type data = 0;
+  bitvector::size_type length = 0;
+};
+
 class bitstream;
 
 /// The base class for all bitstream implementations.
@@ -203,7 +228,9 @@ public:
   /// if no such one-bit exists.
   size_type find_next(size_type i) const
   {
-    return derived().find_next_impl(i);
+    auto r = derived().find_next_impl(i);
+    assert(r > i || r == npos);
+    return r;
   }
 
   /// Retrieves the position of the last one-bit.
@@ -220,7 +247,9 @@ public:
   /// if no such one-bit exists.
   size_type find_prev(size_type i) const
   {
-    return derived().find_prev_impl(i);
+    auto r = derived().find_prev_impl(i);
+    assert(r < i || r == npos);
+    return r;
   }
 
   /// Checks whether the bitstream consists only of zero.
@@ -270,32 +299,6 @@ template <typename Derived>
 class sequence_range_base
   : public util::range_facade<sequence_range_base<Derived>>
 {
-public:
-  enum block_type { fill, literal };
-
-  // A block-based abstraction over a contiguous sequence of bits from of a
-  // bitstream. A sequence can have two types: a *fill* sequence represents a
-  // homogenous bits, typically greater than or equal to the block size, while
-  // a *literal* sequence represents bits from a single block, typically less
-  // than or equal to the block size.
-  struct bitsequence
-  {
-    bool is_fill() const
-    {
-      return type == fill;
-    }
-
-    bool is_literal() const
-    {
-      return type == literal;
-    }
-
-    block_type type = literal;
-    bitvector::size_type offset = 0;
-    bitvector::block_type data = 0;
-    bitvector::size_type length = 0;
-  };
-
 protected:
   bool next()
   {
@@ -305,12 +308,12 @@ protected:
 private:
   friend util::range_facade<sequence_range_base<Derived>>;
 
-  bitsequence const& state() const
+  bitseq const& state() const
   {
     return seq_;
   }
 
-  bitsequence seq_;
+  bitseq seq_;
 };
 
 /// The concept for bitstreams.
@@ -734,7 +737,7 @@ public:
   private:
     friend detail::sequence_range_base<sequence_range>;
 
-    bool next_sequence(bitsequence& seq);
+    bool next_sequence(bitseq& seq);
 
     bitvector const* bits_;
     size_type next_block_ = 0;
@@ -850,7 +853,7 @@ public:
   private:
     friend detail::sequence_range_base<sequence_range>;
 
-    bool next_sequence(bitsequence& seq);
+    bool next_sequence(bitseq& seq);
 
     bitvector const* bits_;
     size_type next_block_ = 0;

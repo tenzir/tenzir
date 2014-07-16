@@ -435,16 +435,16 @@ TEST("finding (EWAH)")
   CHECK(ewah.find_next(2473901163903) == 2473901163904);
   CHECK(ewah.find_next(2473901163904) == ewah_bitstream::npos);
   CHECK(ewah.find_last() == 2473901163905 - 1);
-  CHECK(ewah.find_prev(2473901163904) == 274877908288 + 62);
-  CHECK(ewah.find_prev(320) == 319);
   CHECK(ewah.find_prev(128) == 125);
+  CHECK(ewah.find_prev(320) == 319);
+  CHECK(ewah.find_prev(2473901163904) == 274877908288 + 62);
 
   CHECK(ewah2.find_first() == 1);
   CHECK(ewah2.find_next(1) == 423);
   CHECK(ewah2.find_last() == 424);
-  CHECK(ewah2.find_prev(424) == 423);
-  CHECK(ewah2.find_prev(423) == 1);
   CHECK(ewah2.find_prev(1) == ewah_bitstream::npos);
+  CHECK(ewah2.find_prev(423) == 1);
+  CHECK(ewah2.find_prev(424) == 423);
 
   CHECK(ewah3.find_first() == 0);
   CHECK(ewah3.find_next(3 * 64 + 29) == 3 * 64 + 29 + 2 /* = 223 */);
@@ -471,12 +471,26 @@ TEST("finding (EWAH)")
   ebs.append(32, false);
   ebs.append(20, true);
 
+  CHECK(ebs.find_prev(0) == ewah_bitstream::npos);
+  CHECK(ebs.find_prev(63) == 62);
   CHECK(ebs.find_next(63) == 96);
-  for (auto i = 64; i < 95; ++i)
+  bitstream::size_type i;
+  for (i = 64; i < 64 + 32; ++i)
+  {
+    CHECK(ebs.find_prev(i) == 63);
     CHECK(ebs.find_next(i) == 96);
-  for (auto i = 32; i < 32 + 20 - 1; ++i)
+  }
+  while (i < 64 + 32 + 20 - 1)
+  {
     CHECK(ebs.find_next(i) == i + 1);
-  CHECK(ebs.find_next(96 + 20 - 1) == ewah_bitstream::npos);
+    ++i;
+    CHECK(ebs.find_prev(i) == i - 1);
+  }
+
+  // Now we're at the last bit.
+  CHECK(i == 64 + 32 + 20 - 1);
+  CHECK(ebs.find_prev(i) == 64 + 32 + 20 - 2);
+  CHECK(ebs.find_next(i) == ewah_bitstream::npos);
 
   ebs.clear();
   ebs.append(64, true);
@@ -484,8 +498,19 @@ TEST("finding (EWAH)")
   ebs.append(20, false);
 
   CHECK(ebs.find_next(63) == 64);
-  for (auto i = 64; i < 31; ++i)
+  i = 64;
+  while (i < 64 + 32 - 1)
+  {
     CHECK(ebs.find_next(i) == i + 1);
+    ++i;
+    CHECK(ebs.find_prev(i) == i - 1);
+  }
+  while (i < 64 + 32 + 20 - 1)
+  {
+    CHECK(ebs.find_next(i) == ewah_bitstream::npos);
+    ++i;
+    CHECK(ebs.find_prev(i) == 64 + 32 - 1);
+  }
   CHECK(ebs.find_next(64 + 31) == ewah_bitstream::npos);
 }
 
