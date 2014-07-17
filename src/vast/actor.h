@@ -1,19 +1,19 @@
 #ifndef VAST_ACTOR_H
 #define VAST_ACTOR_H
 
-#include <cppa/event_based_actor.hpp>
-#include <cppa/typed_event_based_actor.hpp>
-#include <cppa/to_string.hpp>
+#include <caf/event_based_actor.hpp>
+#include <caf/typed_event_based_actor.hpp>
+#include <caf/to_string.hpp>
 #include "vast/logger.h"
 
 namespace vast {
 
 namespace exit {
 
-constexpr uint32_t done   = cppa::exit_reason::user_defined;
-constexpr uint32_t stop   = cppa::exit_reason::user_defined + 1;
-constexpr uint32_t error  = cppa::exit_reason::user_defined + 2;
-constexpr uint32_t kill   = cppa::exit_reason::user_defined + 3;
+constexpr uint32_t done   = caf::exit_reason::user_defined;
+constexpr uint32_t stop   = caf::exit_reason::user_defined + 1;
+constexpr uint32_t error  = caf::exit_reason::user_defined + 2;
+constexpr uint32_t kill   = caf::exit_reason::user_defined + 3;
 
 } // namespace exit
 
@@ -31,23 +31,23 @@ inline char const* render_exit_reason(uint32_t reason)
       return "error";
     case exit::kill:
       return "kill";
-    case cppa::exit_reason::normal:
+    case caf::exit_reason::normal:
       return "normal";
-    case cppa::exit_reason::unhandled_exception:
+    case caf::exit_reason::unhandled_exception:
       return "unhandled exception";
-    case cppa::exit_reason::unhandled_sync_failure:
+    case caf::exit_reason::unhandled_sync_failure:
       return "unhandled sync failure";
-    case cppa::exit_reason::unhandled_sync_timeout:
+    case caf::exit_reason::unhandled_sync_timeout:
       return "unhandled sync timeout";
-    case cppa::exit_reason::user_shutdown:
+    case caf::exit_reason::user_shutdown:
       return "user shutdown";
-    case cppa::exit_reason::remote_link_unreachable:
+    case caf::exit_reason::remote_link_unreachable:
       return "remote link unreachable";
   }
 }
 
 /// The base class for event-based actors in VAST.
-struct actor_base : cppa::event_based_actor
+struct actor_base : caf::event_based_actor
 {
 protected:
   void catch_all(bool flag)
@@ -55,9 +55,9 @@ protected:
     catch_all_ = flag;
   }
 
-  cppa::behavior make_behavior() final
+  caf::behavior make_behavior() final
   {
-    using namespace cppa;
+    using namespace caf;
 
     VAST_LOG_ACTOR_DEBUG(describe(), "spawned");
 
@@ -80,7 +80,7 @@ protected:
                          render_exit_reason(planned_exit_reason()) << ')');
   }
 
-  virtual cppa::partial_function act() = 0;
+  virtual caf::message_handler act() = 0;
   virtual std::string describe() const = 0;
 
 private:
@@ -107,31 +107,30 @@ protected:
   virtual std::string describe() const = 0;
 };
 
-using cppa::replies_to;
+using caf::replies_to;
 
 } // namespace vast
 
-namespace cppa {
+namespace caf {
 
-inline auto operator<<(std::ostream& out, actor_addr const& a) -> decltype(out)
+inline std::ostream& operator<<(std::ostream& out, actor_addr const& a)
 {
   out << '@' << a.id();
   return out;
 }
 
-inline auto operator<<(std::ostream& out, actor const& a) -> decltype(out)
+inline std::ostream& operator<<(std::ostream& out, actor const& a)
 {
   out << a.address();
   return out;
 }
 
-inline auto operator<<(std::ostream& out, abstract_actor const& a)
-  -> decltype(out)
+inline std::ostream& operator<<(std::ostream& out, abstract_actor const& a)
 {
   out << a.address();
   return out;
 }
 
-} // namespace cppa
+} // namespace caf
 
 #endif

@@ -46,7 +46,7 @@ Required:
 
 - [Clang >= 3.4](http://clang.llvm.org/) or [GCC >= 4.9](http://gcc.gnu.org)
 - [CMake](http://www.cmake.org)
-- [libcppa](https://github.com/Neverlord/libcppa)
+- [libcaf](https://github.com/Neverlord/libcppa)
 - [Boost](http://www.boost.org) (headers only)
 
 Optional:

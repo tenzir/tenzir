@@ -8,7 +8,7 @@
 
 namespace vast {
 
-using namespace cppa;
+using namespace caf;
 
 search_actor::search_actor(path dir, actor archive, actor index)
   : dir_{std::move(dir)},
@@ -17,7 +17,7 @@ search_actor::search_actor(path dir, actor archive, actor index)
 {
 }
 
-partial_function search_actor::act()
+message_handler search_actor::act()
 {
   trap_exit(true);
 
@@ -120,7 +120,7 @@ partial_function search_actor::act()
           {
             monitor(client);
             clients_[client.address()].queries.insert(qry);
-            return make_any_tuple(ast, qry);
+            return make_message(ast, qry);
           },
           [=](error const&)
           {
@@ -132,7 +132,7 @@ partial_function search_actor::act()
       >> [=](actor const&, std::string const& q)
     {
       VAST_LOG_ACTOR_VERBOSE("ignores invalid query: " << q);
-      return make_any_tuple(last_parse_error_);
+      return make_message(last_parse_error_);
     }
   };
 }

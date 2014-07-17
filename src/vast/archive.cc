@@ -1,6 +1,6 @@
 #include "vast/archive.h"
 
-#include <cppa/cppa.hpp>
+#include <caf/all.hpp>
 #include "vast/aliases.h"
 #include "vast/bitstream.h"
 #include "vast/file_system.h"
@@ -10,7 +10,7 @@
 
 namespace vast {
 
-using namespace cppa;
+using namespace caf;
 
 archive::archive(path directory, size_t capacity)
   : dir_{std::move(directory)},
@@ -48,7 +48,7 @@ void archive::initialize()
       });
 }
 
-bool archive::store(any_tuple msg)
+bool archive::store(message msg)
 {
   if (! exists(dir_) && ! mkdir(dir_))
   {
@@ -77,7 +77,7 @@ bool archive::store(any_tuple msg)
   return true;
 }
 
-trial<any_tuple> archive::load(event_id eid)
+trial<message> archive::load(event_id eid)
 {
   if (auto id = ranges_.lookup(eid))
     return cache_.retrieve(*id);
@@ -85,7 +85,7 @@ trial<any_tuple> archive::load(event_id eid)
     return error{"no segment for id", eid};
 }
 
-any_tuple archive::on_miss(uuid const& id)
+message archive::on_miss(uuid const& id)
 {
   VAST_LOG_DEBUG("experienced cache miss for " << id);
   assert(segment_files_.find(id) != segment_files_.end());
@@ -93,7 +93,7 @@ any_tuple archive::on_miss(uuid const& id)
   segment s;
   io::unarchive(dir_ / path{to_string(id)}, s);
 
-  return make_any_tuple(std::move(s));
+  return make_message(std::move(s));
 }
 
 
@@ -102,7 +102,7 @@ archive_actor::archive_actor(path const& directory, size_t max_segments)
 {
 }
 
-cppa::partial_function archive_actor::act()
+caf::message_handler archive_actor::act()
 {
   archive_.initialize();
 
@@ -114,10 +114,10 @@ cppa::partial_function archive_actor::act()
       {
         VAST_LOG_ACTOR_ERROR("failed to register segment " << s.id());
         quit(exit::error);
-        return make_any_tuple(atom("nack"), s.id());
+        return make_message(atom("nack"), s.id());
       }
 
-      return make_any_tuple(atom("ack"), s.id());
+      return make_message(atom("ack"), s.id());
     },
     [=](event_id eid)
     {
@@ -130,7 +130,7 @@ cppa::partial_function archive_actor::act()
       else
       {
         VAST_LOG_ACTOR_WARN(t.error());
-        return make_any_tuple(atom("no segment"), eid);
+        return make_message(atom("no segment"), eid);
       }
     }
   };

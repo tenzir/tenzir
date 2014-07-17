@@ -49,7 +49,7 @@ public:
   struct query_state
   {
     bitstream hits;
-    util::flat_set<cppa::actor> subscribers;
+    util::flat_set<caf::actor> subscribers;
   };
 
   /// Spawns the index.
@@ -81,7 +81,7 @@ public:
       expr::ast const& start,
       std::function<bool(expr::ast const&, util::flat_set<expr::ast> const&)> f);
 
-  cppa::partial_function act() final;
+  caf::message_handler act() final;
   std::string describe() const final;
 
   path dir_;
@@ -91,8 +91,8 @@ public:
   std::map<expr::ast, query_state> queries_;
   std::map<string, uuid> part_map_;
   std::unordered_map<uuid, partition_state> part_state_;
-  std::unordered_map<uuid, cppa::actor> part_actors_;
-  std::pair<uuid, cppa::actor> active_part_;
+  std::unordered_map<uuid, caf::actor> part_actors_;
+  std::pair<uuid, caf::actor> active_part_;
 };
 
 } // namespace vast

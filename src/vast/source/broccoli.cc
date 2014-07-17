@@ -6,7 +6,7 @@
 namespace vast {
 namespace source {
 
-using namespace cppa;
+using namespace caf;
 
 broccoli::broccoli(actor_ptr sink, std::string const& host, unsigned port)
 {

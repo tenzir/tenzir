@@ -1,6 +1,6 @@
 #include "vast/partition.h"
 
-#include <cppa/cppa.hpp>
+#include <caf/all.hpp>
 #include "vast/bitmap_index.h"
 #include "vast/event.h"
 #include "vast/segment.h"
@@ -162,7 +162,7 @@ void partition::deserialize(deserializer& source)
 }
 
 
-using namespace cppa;
+using namespace caf;
 
 namespace {
 
@@ -281,7 +281,7 @@ partition_actor::partition_actor(path dir, size_t batch_size, uuid id)
 {
 }
 
-partial_function partition_actor::act()
+message_handler partition_actor::act()
 {
   trap_exit(true);
 
@@ -399,7 +399,7 @@ partial_function partition_actor::act()
       }
       else
       {
-        auto t = make_any_tuple(pred, partition_.meta().id, idx);
+        auto t = make_message(pred, partition_.meta().id, idx);
         for (auto& a : d.indexes_)
           send_tuple(a, t);
       }
@@ -522,7 +522,7 @@ partial_function partition_actor::act()
     on(atom("backlog")) >> [=]
     {
       uint64_t segments = segments_.size();
-      return make_any_tuple(atom("backlog"), segments, max_backlog_);
+      return make_message(atom("backlog"), segments, max_backlog_);
     },
     [=](uint64_t processed, uint64_t indexed, uint64_t rate, uint64_t mean)
     {

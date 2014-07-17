@@ -318,7 +318,9 @@ TEST("binary encoded bitmap")
 
 TEST("precision binning (integral)")
 {
-  bitmap<int, null_bitstream, equality_coder, precision_binner> bm{2};
+  bitmap<int, null_bitstream, equality_coder, precision_binner> bm;
+  bm.set_binner(2);
+
   REQUIRE(bm.push_back(183));
   REQUIRE(bm.push_back(215));
   REQUIRE(bm.push_back(350));
@@ -332,7 +334,8 @@ TEST("precision binning (integral)")
 
 TEST("precision binning (double, negative)")
 {
-  bitmap<double, null_bitstream, equality_coder, precision_binner> bm{-3}, bm2;
+  bitmap<double, null_bitstream, equality_coder, precision_binner> bm, bm2;
+  bm.set_binner(-3);
 
   // These end up in different bins...
   REQUIRE(bm.push_back(42.001));
@@ -364,7 +367,8 @@ TEST("precision binning (double, negative)")
 
 TEST("precision binning (double, positive)")
 {
-  bitmap<double, null_bitstream, equality_coder, precision_binner> bm{1};
+  bitmap<double, null_bitstream, equality_coder, precision_binner> bm;
+  bm.set_binner(1);
 
   // These end up in different bins...
   REQUIRE(bm.push_back(42.123));

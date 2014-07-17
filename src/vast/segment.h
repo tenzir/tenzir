@@ -1,11 +1,11 @@
 #ifndef VAST_SEGMENT_H
 #define VAST_SEGMENT_H
 
-#include <vector>
+#include <list>
 #include <string>
+#include <vector>
 #include "vast/aliases.h"
 #include "vast/chunk.h"
-#include "vast/cow.h"
 #include "vast/time.h"
 #include "vast/optional.h"
 #include "vast/schema.h"
@@ -290,7 +290,7 @@ public:
 
 private:
   header header_;
-  std::vector<cow<chunk>> chunks_;
+  std::vector<chunk> chunks_;
 
 private:
   friend access;

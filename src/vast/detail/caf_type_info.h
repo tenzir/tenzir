@@ -1,30 +1,30 @@
 #ifndef VAST_DETAIL_CPPA_TYPE_INFO_H
 #define VAST_DETAIL_CPPA_TYPE_INFO_H
 
-#include <cppa/util/abstract_uniform_type_info.hpp>
+#include <caf/detail/abstract_uniform_type_info.hpp>
 #include "vast/logger.h"
-#include "vast/detail/cppa_serialization.h"
+#include "vast/detail/caf_serialization.h"
 
 namespace vast {
 namespace detail {
 
 template <typename T>
-class cppa_type_info : public cppa::util::abstract_uniform_type_info<T>
+class caf_type_info : public caf::detail::abstract_uniform_type_info<T>
 {
 protected:
-  void serialize(void const* ptr, cppa::serializer* sink) const final
+  void serialize(void const* ptr, caf::serializer* sink) const final
   {
     VAST_ENTER();
     auto x = reinterpret_cast<T const*>(ptr);
-    cppa_serializer serializer{sink};
+    caf_serializer serializer{sink};
     serializer << *x;
   }
 
-  void deserialize(void* ptr, cppa::deserializer* source) const final
+  void deserialize(void* ptr, caf::deserializer* source) const final
   {
     VAST_ENTER();
     auto x = reinterpret_cast<T*>(ptr);
-    cppa_deserializer deserializer{source};
+    caf_deserializer deserializer{source};
     deserializer >> *x;
   }
 };

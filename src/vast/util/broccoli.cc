@@ -471,7 +471,7 @@ void callback(BroConn* bc, void* user_data, BroEvMeta* meta)
 
 } // namespace
 
-using namespace cppa;
+using namespace caf;
 
 void init(bool messages, bool calltrace)
 {
@@ -493,8 +493,8 @@ void init(bool messages, bool calltrace)
   bro_init(&ctx);
 }
 
-connection::connection(cppa::io::input_stream_ptr in,
-                       cppa::io::output_stream_ptr out)
+connection::connection(caf::io::input_stream_ptr in,
+                       caf::io::output_stream_ptr out)
   : in_{std::move(in)},
     out_{std::move(out)}
 {

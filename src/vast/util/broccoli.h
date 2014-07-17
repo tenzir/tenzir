@@ -30,8 +30,8 @@ public:
   /// Spawns a new Broccoli connection.
   /// @param The input stream to read data from.
   /// @param The output stream to read data from.
-  connection(cppa::io::input_stream_ptr in,
-             cppa::io::output_stream_ptr out);
+  connection(caf::io::input_stream_ptr in,
+             caf::io::output_stream_ptr out);
 
   /// Overrides `event_based_actor::on_exit`.
   virtual void on_exit() final;
@@ -41,8 +41,8 @@ public:
 
 private:
   struct bro_conn* bc_;
-  cppa::io::input_stream_ptr in_;
-  cppa::io::output_stream_ptr out_;
+  caf::io::input_stream_ptr in_;
+  caf::io::output_stream_ptr out_;
   event_handler event_handler_;
 };
 

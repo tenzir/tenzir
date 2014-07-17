@@ -20,7 +20,7 @@ public:
   /// Constructs a file source.
   /// @param sink The actor to send the generated events to.
   /// @param filename The name of the file to ingest.
-  file(cppa::actor sink, std::string const& filename)
+  file(caf::actor sink, std::string const& filename)
     : synchronous<file<Derived>>{std::move(sink)},
       file_handle_{path{filename}},
       file_stream_{file_handle_}

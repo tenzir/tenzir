@@ -1,12 +1,12 @@
 #include "vast/segmentizer.h"
 
-#include <cppa/cppa.hpp>
+#include <caf/all.hpp>
 #include "vast/event.h"
 #include "vast/logger.h"
 
 namespace vast {
 
-using namespace cppa;
+using namespace caf;
 
 segmentizer::segmentizer(actor upstream,
                          size_t max_events_per_chunk, size_t max_segment_size)
@@ -17,7 +17,7 @@ segmentizer::segmentizer(actor upstream,
 {
 }
 
-partial_function segmentizer::act()
+message_handler segmentizer::act()
 {
   trap_exit(true);
 

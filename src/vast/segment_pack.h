@@ -9,13 +9,13 @@ namespace vast {
 /// Packs events into segments.
 struct packer : actor_base
 {
-  packer(cppa::actor manager, cppa::actor sink);
+  packer(caf::actor manager, caf::actor sink);
 
-  cppa::partial_function act() final;
+  caf::message_handler act() final;
   std::string describe() const final;
 
-  cppa::actor manager_;
-  cppa::actor sink_;
+  caf::actor manager_;
+  caf::actor sink_;
   segment segment_;
   segment::writer writer_;
 };
@@ -23,14 +23,14 @@ struct packer : actor_base
 /// Unpacks a segment into batches of events.
 struct unpacker : actor_base
 {
-  unpacker(cppa::any_tuple segment, cppa::actor sink, size_t batch_size = 0);
+  unpacker(caf::message segment, caf::actor sink, size_t batch_size = 0);
 
-  cppa::partial_function act() final;
+  caf::message_handler act() final;
   std::string describe() const final;
 
-  cppa::any_tuple segment_;
+  caf::message segment_;
   segment::reader reader_;
-  cppa::actor sink_;
+  caf::actor sink_;
   std::vector<event> events_;
   size_t batch_size_;
 };

@@ -20,9 +20,9 @@ public:
   /// @param archive The archive actor.
   /// @param sink The sink receiving the query results.
   /// @param ast The query expression ast.
-  query(cppa::actor archive, cppa::actor sink, expr::ast ast);
+  query(caf::actor archive, caf::actor sink, expr::ast ast);
 
-  cppa::partial_function act() final;
+  caf::message_handler act() final;
   std::string describe() const final;
 
 private:
@@ -30,18 +30,18 @@ private:
 
   segment const* current() const;
 
-  cppa::actor archive_;
-  cppa::actor sink_;
+  caf::actor archive_;
+  caf::actor sink_;
   expr::ast ast_;
-  cppa::partial_function idle_;
-  cppa::partial_function waiting_;
-  cppa::partial_function extracting_;
+  caf::message_handler idle_;
+  caf::message_handler waiting_;
+  caf::message_handler extracting_;
 
   bitstream hits_ = bitstream{bitstream_type{}};
   bitstream processed_ = bitstream{bitstream_type{}};
   bitstream unprocessed_ = bitstream{bitstream_type{}};
   std::unique_ptr<segment::reader> reader_;
-  cppa::any_tuple segment_;
+  caf::message segment_;
 
   double progress_ = 0.0;
   uint64_t requested_ = 0;

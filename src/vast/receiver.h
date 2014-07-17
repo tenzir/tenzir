@@ -18,21 +18,21 @@ public:
   /// @param archive The archive actor.
   /// @param index The index actor.
   /// @param search The search actor.
-  receiver_actor(cppa::actor tracker,
-                 cppa::actor archive,
-                 cppa::actor index,
-                 cppa::actor search);
+  receiver_actor(caf::actor tracker,
+                 caf::actor archive,
+                 caf::actor index,
+                 caf::actor search);
 
-  cppa::partial_function act() final;
+  caf::message_handler act() final;
   std::string describe() const final;
 
 private:
   bool paused_ = false;
-  cppa::actor tracker_;
-  cppa::actor archive_;
-  cppa::actor index_;
-  cppa::actor search_;
-  std::set<cppa::actor> ingestors_;
+  caf::actor tracker_;
+  caf::actor archive_;
+  caf::actor index_;
+  caf::actor search_;
+  std::set<caf::actor> ingestors_;
 };
 
 } // namespace vast

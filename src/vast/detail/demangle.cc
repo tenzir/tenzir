@@ -1,12 +1,12 @@
 #include "vast/detail/demangle.h"
-#include "cppa/detail/demangle.hpp"
+#include "caf/detail/demangle.hpp"
 
 namespace vast {
 namespace detail {
 
 std::string demangle(char const* name)
 {
-  return cppa::detail::demangle(name);
+  return caf::detail::demangle(name);
 }
 
 std::string demangle(const std::type_info& info)

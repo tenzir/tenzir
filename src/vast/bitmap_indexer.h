@@ -1,10 +1,9 @@
 #ifndef VAST_BITMAP_INDEXER_H
 #define VAST_BITMAP_INDEXER_H
 
-#include <cppa/cppa.hpp>
+#include <caf/all.hpp>
 #include "vast/actor.h"
 #include "vast/bitmap_index.h"
-#include "vast/cow.h"
 #include "vast/event.h"
 #include "vast/expression.h"
 #include "vast/file_system.h"
@@ -33,9 +32,9 @@ public:
     bmi_.stretch(1); // Event ID 0 is not a valid event.
   }
 
-  cppa::partial_function act() final
+  caf::message_handler act() final
   {
-    using namespace cppa;
+    using namespace caf;
 
     this->trap_exit(true);
 
@@ -108,7 +107,7 @@ public:
 
         stats_.increment(n);
 
-        return make_any_tuple(total, n, stats_.last(), stats_.mean());
+        return make_message(total, n, stats_.last(), stats_.mean());
       },
       [=](expr::ast const& pred, uuid const& part, actor sink)
       {
@@ -243,73 +242,73 @@ struct event_data_index_factory
   }
 
   template <typename T>
-  trial<cppa::actor> operator()(T const&) const
+  trial<caf::actor> operator()(T const&) const
   {
     using bmi_t = arithmetic_bitmap_index<Bitstream, to_type_tag<T>::value>;
     return spawn<bmi_t>();
   }
 
-  trial<cppa::actor> operator()(address_type const&) const
+  trial<caf::actor> operator()(address_type const&) const
   {
     return spawn<address_bitmap_index<Bitstream>>();
   }
 
-  trial<cppa::actor> operator()(prefix_type const&) const
+  trial<caf::actor> operator()(prefix_type const&) const
   {
     return spawn<prefix_bitmap_index<Bitstream>>();
   }
 
-  trial<cppa::actor> operator()(port_type const&) const
+  trial<caf::actor> operator()(port_type const&) const
   {
     return spawn<port_bitmap_index<Bitstream>>();
   }
 
-  trial<cppa::actor> operator()(string_type const&) const
+  trial<caf::actor> operator()(string_type const&) const
   {
     return spawn<string_bitmap_index<Bitstream>>();
   }
 
-  trial<cppa::actor> operator()(enum_type const&) const
+  trial<caf::actor> operator()(enum_type const&) const
   {
     return spawn<string_bitmap_index<Bitstream>>();
   }
 
-  trial<cppa::actor> operator()(set_type const& t) const
+  trial<caf::actor> operator()(set_type const& t) const
   {
     return spawn<sequence_bitmap_index<Bitstream>>(t.elem_type->tag());
   }
 
-  trial<cppa::actor> operator()(vector_type const& t) const
+  trial<caf::actor> operator()(vector_type const& t) const
   {
     return spawn<sequence_bitmap_index<Bitstream>>(t.elem_type->tag());
   }
 
-  trial<cppa::actor> operator()(invalid_type const&) const
+  trial<caf::actor> operator()(invalid_type const&) const
   {
     return error{"bitmap index for invalid type not supported"};
   }
 
-  trial<cppa::actor> operator()(regex_type const&) const
+  trial<caf::actor> operator()(regex_type const&) const
   {
     return error{"regular expressions not yet supported"};
   }
 
-  trial<cppa::actor> operator()(table_type const&) const
+  trial<caf::actor> operator()(table_type const&) const
   {
     return error{"tables not yet supported"};
   }
 
-  trial<cppa::actor> operator()(record_type const&) const
+  trial<caf::actor> operator()(record_type const&) const
   {
     return error{"records shall be unrolled"};
   }
 
   template <typename BitmapIndex, typename... Args>
-  cppa::actor spawn(Args&&... args) const
+  caf::actor spawn(Args&&... args) const
   {
     using indexer_type = event_data_indexer<BitmapIndex>;
 
-    return cppa::spawn<indexer_type>(path_, type_, off_,
+    return caf::spawn<indexer_type>(path_, type_, off_,
                                      BitmapIndex{std::forward<Args>(args)...});
   }
 
@@ -322,7 +321,7 @@ struct event_data_index_factory
 
 /// Factory to construct an indexer based on a given type.
 template <typename Bitstream>
-trial<cppa::actor>
+trial<caf::actor>
 make_event_data_indexer(path const& p, type_const_ptr const& t, offset const& o)
 {
   detail::event_data_index_factory<Bitstream> v{p, t, o};

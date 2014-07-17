@@ -27,14 +27,14 @@ void signal_handler(int signo)
 
 } // namespace <anonymous>
 
-using namespace cppa;
+using namespace caf;
 
 signal_monitor::signal_monitor(actor receiver)
   : receiver_{std::move(receiver)}
 {
 }
 
-partial_function signal_monitor::act()
+message_handler signal_monitor::act()
 {
   VAST_LOG_ACTOR_DEBUG("sends signals to @" << receiver_->id());
 

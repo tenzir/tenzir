@@ -1,4 +1,4 @@
-#include <cppa/cppa.hpp>
+#include <caf/all.hpp>
 
 #include "vast/event.h"
 #include "vast/exporter.h"
@@ -6,11 +6,11 @@
 #include "vast/sink/bro.h"
 #include "vast/sink/json.h"
 
-using namespace cppa;
+using namespace caf;
 
 namespace vast {
 
-partial_function exporter::act()
+message_handler exporter::act()
 {
   attach_functor(
       [=](uint32_t reason)

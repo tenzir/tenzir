@@ -1,4 +1,4 @@
-#include <cppa/cppa.hpp>
+#include <caf/all.hpp>
 #include "vast.h"
 
 int main(int argc, char *argv[])
@@ -22,11 +22,11 @@ int main(int argc, char *argv[])
   }
 
 
-  auto program = cppa::spawn<vast::program>(std::move(*cfg));
-  cppa::anon_send(program, cppa::atom("run"));
+  auto program = caf::spawn<vast::program>(std::move(*cfg));
+  caf::anon_send(program, caf::atom("run"));
 
-  cppa::await_all_actors_done();
-  cppa::shutdown();
+  caf::await_all_actors_done();
+  caf::shutdown();
 
   vast::cleanup();
 

@@ -167,7 +167,7 @@ segment::reader::reader(segment const* s)
 {
   if (! segment_.chunks_.empty())
   {
-    current_ = &segment_.chunks_.front().read();
+    current_ = &segment_.chunks_.front();
     chunk_reader_ = std::make_unique<chunk::reader>(*current_);
   }
 }
@@ -269,7 +269,7 @@ chunk const* segment::reader::next()
     next_ = chunk_base_;
   }
 
-  current_ = &segment_.chunks_[++chunk_idx_].read();
+  current_ = &segment_.chunks_[++chunk_idx_];
   chunk_reader_ = std::make_unique<chunk::reader>(*current_);
 
   return current_;
@@ -280,7 +280,7 @@ chunk const* segment::reader::prev()
   if (segment_.chunks_.empty() || chunk_idx_ == 0)
     return nullptr;
 
-  current_ = &segment_.chunks_[--chunk_idx_].read();
+  current_ = &segment_.chunks_[--chunk_idx_];
   chunk_reader_ = std::make_unique<chunk::reader>(*current_);
 
   if (next_ > 0)

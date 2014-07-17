@@ -2,7 +2,7 @@
 
 #include "framework/unit.h"
 
-using namespace cppa;
+using namespace caf;
 using namespace vast;
 
 SUITE("actors")

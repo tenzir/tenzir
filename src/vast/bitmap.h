@@ -807,10 +807,15 @@ public:
   using binner_type = Binner<T>;
   using coder_type = Coder<T, Bitstream>;
 
-  /// Constructs an empty bitmap.
-  bitmap(binner_type binner = {}, coder_type coder = {})
-    : coder_{coder}, binner_{binner}
+  /// Default-constructs an empty bitmap.
+  bitmap() = default;
+
+  /// Instantites a new binner.
+  /// @param xs The parameters forwarded to the constructor of the binner.
+  template <typename... Ts>
+  void set_binner(Ts&&... xs)
   {
+    binner_ = binner_type(std::forward<Ts>(xs)...);
   }
 
   /// Adds a value to the bitmap. For example, in the case of equality

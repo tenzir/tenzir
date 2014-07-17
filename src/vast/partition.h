@@ -69,7 +69,7 @@ struct partition_actor : actor_base
       uint64_t value_rate_mean = 0; // Mean indexing rate (values/sec).
     };
 
-    cppa::actor actor;
+    caf::actor actor;
     type_const_ptr type;
     offset off;
     statistics stats;
@@ -77,7 +77,7 @@ struct partition_actor : actor_base
 
   partition_actor(path dir, size_t batch_size, uuid id = uuid::random());
 
-  cppa::partial_function act() final;
+  caf::message_handler act() final;
   std::string describe() const final;
 
   template <typename Bitstream = default_bitstream>
@@ -130,8 +130,8 @@ struct partition_actor : actor_base
   partition partition_;
   schema schema_;
   std::unordered_map<path, indexer_state> indexers_;
-  std::queue<cppa::any_tuple> segments_;
-  cppa::actor unpacker_;
+  std::queue<caf::message> segments_;
+  caf::actor unpacker_;
 };
 
 } // namespace vast

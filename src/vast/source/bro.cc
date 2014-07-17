@@ -79,7 +79,7 @@ trial<type_const_ptr> make_type(schema& sch, string const& bro_type)
 
 } // namespace <anonymous>
 
-bro::bro(cppa::actor sink, std::string const& filename,
+bro::bro(caf::actor sink, std::string const& filename,
            int32_t timestamp_field)
   : file<bro>{std::move(sink), filename},
     timestamp_field_{timestamp_field}

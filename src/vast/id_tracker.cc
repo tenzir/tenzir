@@ -2,10 +2,10 @@
 
 #include <cassert>
 #include <fstream>
-#include <cppa/cppa.hpp>
+#include <caf/all.hpp>
 #include "vast/print.h"
 
-using namespace cppa;
+using namespace caf;
 
 namespace vast {
 
@@ -73,7 +73,7 @@ id_tracker_actor::id_tracker_actor(path dir)
 {
 }
 
-partial_function id_tracker_actor::act()
+message_handler id_tracker_actor::act()
 {
   trap_exit(true);
 
@@ -100,12 +100,12 @@ partial_function id_tracker_actor::act()
       {
         VAST_LOG_ACTOR_ERROR(
             "failed to hand out " << n << " ids (current ID: " << next << ")");
-        return make_any_tuple(atom("id"), atom("failure"));
+        return make_message(atom("id"), atom("failure"));
       }
       else
       {
         VAST_LOG_ACTOR_DEBUG("hands out [" << next << ',' << next + n << ')');
-        return make_any_tuple(atom("id"), next, next + n);
+        return make_message(atom("id"), next, next + n);
       }
     }
   };

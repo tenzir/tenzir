@@ -3,7 +3,7 @@
 
 #include <cassert>
 #include <map>
-#include <cppa/cppa.hpp>
+#include <caf/all.hpp>
 #include "vast/actor.h"
 
 namespace vast {
@@ -14,14 +14,14 @@ class task_tree : public actor_base
 public:
   /// Spawns a task tree.
   /// @param root The root node of the task hierarchy.
-  task_tree(cppa::actor root)
+  task_tree(caf::actor root)
   {
     degree_[root.address()] = 0;
   }
 
-  cppa::partial_function act() final
+  caf::message_handler act() final
   {
-    using namespace cppa;
+    using namespace caf;
 
     attach_functor(
         [=](uint32_t)
@@ -89,7 +89,7 @@ public:
       },
       on(atom("progress")) >> [=]
       {
-        return make_any_tuple(remaining_, total_);
+        return make_message(remaining_, total_);
       }
     };
   }
@@ -102,10 +102,10 @@ public:
 private:
   uint64_t remaining_ = 0;
   uint64_t total_ = 0;
-  std::map<cppa::actor_addr, cppa::actor> graph_;
-  std::map<cppa::actor_addr, size_t> degree_;
-  cppa::actor subscriber_;
-  cppa::actor notifyee_;
+  std::map<caf::actor_addr, caf::actor> graph_;
+  std::map<caf::actor_addr, size_t> degree_;
+  caf::actor subscriber_;
+  caf::actor notifyee_;
 };
 
 } // namespace vast

@@ -21,14 +21,14 @@ public:
   ///
   /// @param max_segment_size The maximum number of bytes to put in a single
   /// segment.
-  segmentizer(cppa::actor upstream,
+  segmentizer(caf::actor upstream,
               size_t max_events_per_chunk, size_t max_segment_size);
 
-  cppa::partial_function act() final;
+  caf::message_handler act() final;
   std::string describe() const final;
 
 private:
-  cppa::actor upstream_;
+  caf::actor upstream_;
   util::rate_accumulator<uint64_t> stats_;
   segment segment_;
   segment::writer writer_;

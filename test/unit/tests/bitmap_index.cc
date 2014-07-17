@@ -66,9 +66,11 @@ TEST("integral")
   CHECK(to_string(*greater_zero) == "0111111");
 }
 
-TEST("floating point")
+TEST("floating point with binning")
 {
-  arithmetic_bitmap_index<null_bitstream, double_value> bmi{-2};
+  arithmetic_bitmap_index<null_bitstream, double_value> bmi;
+  bmi.set_binner(-2);
+
   REQUIRE(bmi.push_back(-7.8));
   REQUIRE(bmi.push_back(42.123));
   REQUIRE(bmi.push_back(10000.0));
@@ -83,35 +85,13 @@ TEST("floating point")
   CHECK(to_string(*bmi.lookup(not_equal, 4711.14)) == "1110111");
 }
 
-TEST("time_point")
-{
-  arithmetic_bitmap_index<null_bitstream, time_point_value> bmi{9}, bmi2;
-  REQUIRE(bmi.push_back(time_point{"2014-01-16+05:30:15"}));
-  REQUIRE(bmi.push_back(time_point{"2014-01-16+05:30:12"}));
-  REQUIRE(bmi.push_back(time_point{"2014-01-16+05:30:15"}));
-  REQUIRE(bmi.push_back(time_point{"2014-01-16+05:30:18"}));
-  REQUIRE(bmi.push_back(time_point{"2014-01-16+05:30:15"}));
-  REQUIRE(bmi.push_back(time_point{"2014-01-16+05:30:19"}));
-
-  auto fifteen = bmi.lookup(equal, time_point{"2014-01-16+05:30:15"});
-  CHECK(to_string(*fifteen) == "101010");
-
-  auto twenty = bmi.lookup(less, time_point{"2014-01-16+05:30:20"});
-  CHECK(to_string(*twenty) == "111111");
-
-  auto eighteen = bmi.lookup(greater_equal, time_point{"2014-01-16+05:30:18"});
-  CHECK(to_string(*eighteen) == "000101");
-
-  std::vector<uint8_t> buf;
-  io::archive(buf, bmi);
-  io::unarchive(buf, bmi2);
-  CHECK(bmi == bmi2);
-}
-
 TEST("time_range")
 {
+  arithmetic_bitmap_index<null_bitstream, time_range_value> bmi, bmi2;
+
   // A precision of 8 translates into a resolution of 0.1 sec.
-  arithmetic_bitmap_index<null_bitstream, time_range_value> bmi{8}, bmi2;
+  bmi.set_binner(8);
+
   REQUIRE(bmi.push_back(std::chrono::milliseconds(1000)));
   REQUIRE(bmi.push_back(std::chrono::milliseconds(2000)));
   REQUIRE(bmi.push_back(std::chrono::milliseconds(3000)));
@@ -130,6 +110,33 @@ TEST("time_range")
   auto twelve = bmi.lookup(greater, std::chrono::milliseconds(1200));
   REQUIRE(twelve);
   CHECK(to_string(*twelve) == "011011");
+
+  std::vector<uint8_t> buf;
+  io::archive(buf, bmi);
+  io::unarchive(buf, bmi2);
+  CHECK(bmi == bmi2);
+}
+
+TEST("time_point")
+{
+  arithmetic_bitmap_index<null_bitstream, time_point_value> bmi, bmi2;
+  bmi.set_binner(9);
+
+  REQUIRE(bmi.push_back(time_point{"2014-01-16+05:30:15"}));
+  REQUIRE(bmi.push_back(time_point{"2014-01-16+05:30:12"}));
+  REQUIRE(bmi.push_back(time_point{"2014-01-16+05:30:15"}));
+  REQUIRE(bmi.push_back(time_point{"2014-01-16+05:30:18"}));
+  REQUIRE(bmi.push_back(time_point{"2014-01-16+05:30:15"}));
+  REQUIRE(bmi.push_back(time_point{"2014-01-16+05:30:19"}));
+
+  auto fifteen = bmi.lookup(equal, time_point{"2014-01-16+05:30:15"});
+  CHECK(to_string(*fifteen) == "101010");
+
+  auto twenty = bmi.lookup(less, time_point{"2014-01-16+05:30:20"});
+  CHECK(to_string(*twenty) == "111111");
+
+  auto eighteen = bmi.lookup(greater_equal, time_point{"2014-01-16+05:30:18"});
+  CHECK(to_string(*eighteen) == "000101");
 
   std::vector<uint8_t> buf;
   io::archive(buf, bmi);

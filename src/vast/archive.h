@@ -33,27 +33,27 @@ public:
   /// Records a given segment to disk and puts it in the cache.
   /// @param msg The segment to store.
   /// @returns `true` on success.
-  bool store(cppa::any_tuple msg);
+  bool store(caf::message msg);
 
   /// Retrieves a segment for a given event ID.
   /// @param eid The event ID to find the segment for.
   /// @return The segment containing the event with *id*.
-  trial<cppa::any_tuple> load(event_id eid);
+  trial<caf::message> load(event_id eid);
 
 private:
-  cppa::any_tuple on_miss(uuid const& id);
+  caf::message on_miss(uuid const& id);
 
   path dir_;
   std::unordered_map<uuid, path> segment_files_;
   util::range_map<event_id, uuid> ranges_;
-  util::lru_cache<uuid, cppa::any_tuple> cache_;
+  util::lru_cache<uuid, caf::message> cache_;
 };
 
 struct archive_actor : actor_base
 {
   archive_actor(path const& directory, size_t max_segments);
 
-  cppa::partial_function act() final;
+  caf::message_handler act() final;
   std::string describe() const final;
 
   archive archive_;

@@ -3,7 +3,6 @@
 
 #include <deque>
 #include "vast/actor.h"
-#include "vast/cow.h"
 #include "vast/expression.h"
 #include "vast/file_system.h"
 #include "vast/individual.h"
@@ -43,7 +42,7 @@ struct console : actor_base
 
     /// Adds an event to this result.
     /// @param e The event to add.
-    void add(cow<event> e);
+    void add(event e);
 
     /// Applies a function to a given number of existing events and advances
     /// the internal position.
@@ -100,7 +99,7 @@ struct console : actor_base
     uint64_t hits_ = 0;
     double progress_ = 0.0;
     pos_type pos_ = 0;
-    std::deque<cow<event>> events_;
+    std::deque<event> events_;
 
   private:
     friend access;
@@ -120,9 +119,9 @@ struct console : actor_base
   /// Spawns the console client.
   /// @param search The search actor the console interacts with.
   /// @param dir The directory where to save state.
-  console(cppa::actor search, path dir);
+  console(caf::actor search, path dir);
 
-  cppa::partial_function act() final;
+  caf::message_handler act() final;
   std::string describe() const final;
 
   /// Prints status information to standard error.
@@ -141,10 +140,10 @@ struct console : actor_base
   path dir_;
   intrusive_ptr<result> active_;
   std::vector<intrusive_ptr<result>> results_;
-  std::map<cppa::actor_addr, std::pair<cppa::actor, intrusive_ptr<result>>>
+  std::map<caf::actor_addr, std::pair<caf::actor, intrusive_ptr<result>>>
     connected_;
-  cppa::actor search_;
-  cppa::actor keystroke_monitor_;
+  caf::actor search_;
+  caf::actor keystroke_monitor_;
   util::command_line cmdline_;
   options opts_;
   bool following_ = false;

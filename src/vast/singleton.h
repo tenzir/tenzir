@@ -21,7 +21,7 @@ namespace vast {
 /// creation.
 ///
 /// @note This CAS-style singleton implementation originally comes from Dominik
-/// Charousset's libcppa.
+/// Charousset's libcaf.
 template <typename T>
 class singleton
 {

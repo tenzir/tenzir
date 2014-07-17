@@ -1,5 +1,6 @@
 #include "framework/unit.h"
 
+#include <unistd.h>  // getpid
 #include "vast/print.h"
 #include "vast/file_system.h"
 
@@ -71,7 +72,7 @@ TEST("file/directory manipulation")
 
   path base = "vast-unit-test-file-system-test";
   path p("/tmp");
-  p /= base / string(to_string(getpid()));
+  p /= base / string{to_string(::getpid())};
   CHECK(! p.is_regular_file());
   CHECK(! exists(p));
   CHECK(mkdir(p));

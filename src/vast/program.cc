@@ -1,5 +1,6 @@
 #include "vast/program.h"
 
+#include <caf/io/all.hpp>
 #include <cstdlib>
 #include <csignal>
 #include <iostream>
@@ -15,14 +16,14 @@
 #include "vast/search.h"
 #include "vast/signal_monitor.h"
 #include "vast/type_info.h"
-#include "vast/detail/cppa_type_info.h"
+#include "vast/detail/caf_type_info.h"
 #include "vast/detail/type_manager.h"
 
 #ifdef VAST_HAVE_EDITLINE
 #include "vast/console.h"
 #endif
 
-using namespace cppa;
+using namespace caf;
 
 namespace vast {
 
@@ -31,7 +32,7 @@ program::program(configuration config)
 {
 }
 
-partial_function program::act()
+message_handler program::act()
 {
   attach_functor(
       [=](uint32_t)
@@ -115,9 +116,9 @@ void program::run()
         VAST_LOG_DEBUG("registered type " << gti.id() << ": " << gti.name());
       });
 
-  max_msg_size(512 * 1024 * 1024);
-  VAST_LOG_ACTOR_DEBUG("set cppa maximum message size to " <<
-                       cppa::max_msg_size() / 1024 << " KB");
+  caf::io::max_msg_size(512 * 1024 * 1024);
+  VAST_LOG_ACTOR_DEBUG("set caf maximum message size to " <<
+                       caf::io::max_msg_size() / 1024 << " KB");
 
   try
   {
@@ -156,13 +157,13 @@ void program::run()
       VAST_LOG_ACTOR_INFO(
           "publishes tracker at " << tracker_host << ':' << tracker_port);
 
-      publish(tracker_, tracker_port, tracker_host.c_str());
+      caf::io::publish(tracker_, tracker_port, tracker_host.c_str());
     }
     else if (config_.check("receiver-actor"))
     {
       VAST_LOG_ACTOR_VERBOSE(
           "connects to tracker at " << tracker_host << ':' << tracker_port);
-      tracker_ = remote_actor(tracker_host, tracker_port);
+      tracker_ = caf::io::remote_actor(tracker_host, tracker_port);
     }
 
     auto archive_host = *config_.get("archive.host");
@@ -176,7 +177,7 @@ void program::run()
       VAST_LOG_ACTOR_INFO(
           "publishes archive at " << archive_host << ':' << archive_port);
 
-      publish(archive_, archive_port, archive_host.c_str());
+      caf::io::publish(archive_, archive_port, archive_host.c_str());
     }
     else if (config_.check("receiver-actor")
              || config_.check("search-actor")
@@ -185,7 +186,7 @@ void program::run()
       VAST_LOG_ACTOR_VERBOSE(
           "connects to archive at " << archive_host << ':' << archive_port);
 
-      archive_ = remote_actor(archive_host, archive_port);
+      archive_ = caf::io::remote_actor(archive_host, archive_port);
     }
 
     auto index_host = *config_.get("index.host");
@@ -197,7 +198,7 @@ void program::run()
       VAST_LOG_ACTOR_INFO(
           "publishes index at " << index_host << ':' << index_port);
 
-      publish(index_, index_port, index_host.c_str());
+      caf::io::publish(index_, index_port, index_host.c_str());
     }
     else if (config_.check("receiver-actor")
              || config_.check("search-actor")
@@ -206,7 +207,7 @@ void program::run()
       VAST_LOG_ACTOR_VERBOSE("connects to index at " <<
                            index_host << ":" << index_port);
 
-      index_ = remote_actor(index_host, index_port);
+      index_ = caf::io::remote_actor(index_host, index_port);
     }
 
     if (auto partition = config_.get("index.partition"))
@@ -242,7 +243,7 @@ void program::run()
       VAST_LOG_ACTOR_INFO(
           "publishes search at " << search_host << ':' << search_port);
 
-      publish(search_, search_port, search_host.c_str());
+      caf::io::publish(search_, search_port, search_host.c_str());
     }
     else if (config_.check("receiver-actor")
 #ifdef VAST_HAVE_EDITLINE
@@ -253,7 +254,7 @@ void program::run()
       VAST_LOG_ACTOR_VERBOSE(
           "connects to search at " << search_host << ":" << search_port);
 
-      search_ = remote_actor(search_host, search_port);
+      search_ = caf::io::remote_actor(search_host, search_port);
 
 #ifdef VAST_HAVE_EDITLINE
       if (config_.check("console-actor"))
@@ -272,14 +273,14 @@ void program::run()
       VAST_LOG_ACTOR_INFO(
           "publishes receiver at " << receiver_host << ':' << receiver_port);
 
-      publish(receiver_, receiver_port, receiver_host.c_str());
+      caf::io::publish(receiver_, receiver_port, receiver_host.c_str());
     }
     else if (config_.check("importer-actor"))
     {
       VAST_LOG_ACTOR_VERBOSE(
           "connects to receiver at " << receiver_host << ":" << receiver_port);
 
-      receiver_ = remote_actor(receiver_host, receiver_port);
+      receiver_ = caf::io::remote_actor(receiver_host, receiver_port);
     }
 
     actor imp0rter;

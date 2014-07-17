@@ -1,19 +1,19 @@
 #ifndef VAST_DETAIL_CPPA_SERIALIZATION_H
 #define VAST_DETAIL_CPPA_SERIALIZATION_H
 
-#include <cppa/deserializer.hpp>
-#include <cppa/serializer.hpp>
+#include <caf/deserializer.hpp>
+#include <caf/serializer.hpp>
 #include "vast/serialization.h"
 #include "vast/util/byte_swap.h"
 
 namespace vast {
 namespace detail {
 
-class cppa_serializer : public serializer
+class caf_serializer : public serializer
 {
 public:
-  cppa_serializer(cppa::serializer* sink);
-  virtual ~cppa_serializer();
+  caf_serializer(caf::serializer* sink);
+  virtual ~caf_serializer();
   virtual bool begin_sequence(uint64_t size) override;
   virtual bool end_sequence() override;
   virtual bool write_bool(bool x) override;
@@ -34,21 +34,20 @@ private:
   std::enable_if_t<std::is_arithmetic<T>::value, bool>
   write(T x)
   {
-    using namespace vast;
     sink_->write_value(util::byte_swap<host_endian, network_endian>(x));
     bytes_ += sizeof(T);
     return true;
   }
 
-  cppa::serializer* sink_;
+  caf::serializer* sink_;
   size_t bytes_;
 };
 
-class cppa_deserializer : public deserializer
+class caf_deserializer : public deserializer
 {
 public:
-  cppa_deserializer(cppa::deserializer* source);
-  virtual ~cppa_deserializer();
+  caf_deserializer(caf::deserializer* source);
+  virtual ~caf_deserializer();
   virtual bool begin_sequence(uint64_t& size) override;
   virtual bool end_sequence() override;
   virtual bool read_bool(bool& x) override;
@@ -69,20 +68,13 @@ private:
   std::enable_if_t<std::is_arithmetic<T>::value, bool>
   read(T& x)
   {
-    using namespace vast;
-    using namespace cppa::detail;
-    static constexpr auto ptype = type_to_ptype<T>::ptype;
-    static_assert(
-        std::is_same<T, typename ptype_to_type<ptype>::type>::value,
-        "invalid type conversion on cppa's primitive variant");
-
-    auto pv = source_->read_value(ptype);
-    x = util::byte_swap<network_endian, host_endian>(cppa::get<T>(pv));
+    x = source_->read<T>();
+    x = util::byte_swap<network_endian, host_endian>(x);
     bytes_ += sizeof(T);
     return true;
   }
 
-  cppa::deserializer* source_;
+  caf::deserializer* source_;
   size_t bytes_;
 };
 

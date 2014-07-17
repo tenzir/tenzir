@@ -1,4 +1,4 @@
-#include <cppa/cppa.hpp>
+#include <caf/all.hpp>
 
 #include "vast/bitstream.h"
 #include "vast/bitmap_index.h"
@@ -14,7 +14,7 @@
 
 #include "test/unit/bro_logs.h"
 
-using namespace cppa;
+using namespace caf;
 using namespace vast;
 
 SUITE("actors")
@@ -316,7 +316,7 @@ TEST("basic actor integrity")
         done = true;
       },
       fail
-      ).until(gref(done) == true);
+      ).until([&done] { return done; });
 
   self->send_exit(core, exit::done);
   self->await_all_other_actors_done();

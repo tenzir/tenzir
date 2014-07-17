@@ -11,7 +11,7 @@ namespace sink {
 template <typename Derived>
 struct base : public actor_base
 {
-  cppa::partial_function act() final
+  caf::message_handler act() final
   {
     return
     {

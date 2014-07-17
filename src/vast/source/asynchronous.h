@@ -19,7 +19,7 @@ public:
     : sink_(sink),
       batch_size_(batch_size)
   {
-    using namespace cppa;
+    using namespace caf;
     operating_ = (
         on(atom("batch size"), arg_match) >> [=](size_t batch_size)
         {
@@ -52,7 +52,7 @@ public:
         });
   }
 
-  /// Implements `cppa::event_based_actor::init`.
+  /// Implements `caf::event_based_actor::init`.
   behavior act() final
   {
     return operating_.or_else(static_cast<Derived*>(this)->impl_);
@@ -68,10 +68,10 @@ public:
   }
 
 private:
-  cppa::actor_ptr sink_;
+  caf::actor_ptr sink_;
   size_t batch_size_ = 0;
   std::vector<event> events_;
-  cppa::partial_function operating_;
+  caf::message_handler operating_;
 };
 
 } // namespace source

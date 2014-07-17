@@ -345,15 +345,10 @@ public:
 
   arithmetic_bitmap_index() = default;
 
-  template <
-    typename U = bitmap_type,
-    typename... Args,
-    typename = std::enable_if_t<
-      std::is_same<bitmap_binner<U>, precision_binner<U>>::value>
-  >
-  explicit arithmetic_bitmap_index(Args&&... args)
-    : bitmap_{{std::forward<Args>(args)...}}
+  template <typename... Ts>
+  void set_binner(Ts&&... xs)
   {
+    bitmap_.set_binner(std::forward<Ts>(xs)...);
   }
 
 private:

@@ -12,7 +12,7 @@ namespace source {
 class bro : public file<bro>
 {
 public:
-  bro(cppa::actor sink, std::string const& filename, int32_t timestamp_field);
+  bro(caf::actor sink, std::string const& filename, int32_t timestamp_field);
 
   result<event> extract_impl();
 

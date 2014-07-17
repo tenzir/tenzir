@@ -1,10 +1,10 @@
 #include "vast/query.h"
 
-#include <cppa/cppa.hpp>
+#include <caf/all.hpp>
 #include "vast/event.h"
 #include "vast/logger.h"
 
-using namespace cppa;
+using namespace caf;
 
 namespace vast {
 
@@ -233,7 +233,7 @@ query::query(actor archive, actor sink, expr::ast ast)
     });
 }
 
-partial_function query::act()
+message_handler query::act()
 {
   catch_all(false);
 
@@ -254,7 +254,10 @@ std::string query::describe() const
 
 segment const* query::current() const
 {
-  return segment_.empty() ? nullptr : &get<0>(*tuple_cast<segment>(segment_));
+  if (segment_.empty())
+    return nullptr;
+  
+  return reinterpret_cast<segment const*>(segment_.at(0));
 }
 
 } // namespace vast

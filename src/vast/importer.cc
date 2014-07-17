@@ -10,7 +10,7 @@
 
 namespace vast {
 
-using namespace cppa;
+using namespace caf;
 
 importer::importer(path dir,
                    actor receiver,
@@ -25,7 +25,7 @@ importer::importer(path dir,
 {
 }
 
-partial_function importer::act()
+message_handler importer::act()
 {
   trap_exit(true);
 

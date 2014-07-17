@@ -1,8 +1,8 @@
 #ifndef VAST_UTIL_SERVER_H
 #define VAST_UTIL_SERVER_H
 
-#include <cppa/cppa.hpp>
-#include <cppa/io/ipv4_acceptor.hpp>
+#include <caf/all.hpp>
+#include <caf/io/ipv4_acceptor.hpp>
 #include "vast/actor.h"
 #include "vast/util/poll.h"
 
@@ -16,15 +16,15 @@ public:
   /// Spawns a new server and redirects new connections to a given actor.
   /// @param port The port to listen on.
   /// @param handler The actor handling freshly accepted connections.
-  server(uint16_t port, cppa::actor_ptr handler)
-    : acceptor_{cppa::io::ipv4_acceptor::create(port, nullptr)},
+  server(uint16_t port, caf::actor_ptr handler)
+    : acceptor_{caf::io::ipv4_acceptor::create(port, nullptr)},
       handler_{std::move(handler)}
   {
   }
 
   void act()
   {
-    using namespace cppa;
+    using namespace caf;
     become(
         on(atom("accept")) >> [=]
         {
@@ -45,8 +45,8 @@ public:
   }
 
 private:
-  std::unique_ptr<cppa::io::acceptor> acceptor_;
-  cppa::actor_ptr handler_;
+  std::unique_ptr<caf::io::acceptor> acceptor_;
+  caf::actor_ptr handler_;
 };
 
 } // namespace util

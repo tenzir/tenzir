@@ -1,6 +1,6 @@
 #include "vast/index.h"
 
-#include <cppa/cppa.hpp>
+#include <caf/all.hpp>
 #include "vast/bitmap_index.h"
 #include "vast/segment.h"
 #include "vast/partition.h"
@@ -8,7 +8,7 @@
 #include "vast/task_tree.h"
 #include "vast/io/serialization.h"
 
-using namespace cppa;
+using namespace caf;
 
 namespace vast {
 
@@ -455,7 +455,7 @@ std::vector<expr::ast> index::walk(
   return path;
 }
 
-partial_function index::act()
+message_handler index::act()
 {
   trap_exit(true);
 
@@ -588,7 +588,7 @@ partial_function index::act()
       {
         auto err = error{"has no partitions to answer queries"};
         VAST_LOG_ACTOR_WARN(err);
-        return make_any_tuple(err);
+        return make_message(err);
       }
 
       if (! queries_.count(ast))
@@ -602,7 +602,7 @@ partial_function index::act()
 
       send(this, atom("first-eval"), ast, sink);
 
-      return make_any_tuple(atom("success"));
+      return make_message(atom("success"));
     },
     on(atom("first-eval"), arg_match) >> [=](expr::ast const& ast, actor sink)
     {

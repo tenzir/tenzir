@@ -4,7 +4,7 @@
 #include <iomanip>
 #include <sys/resource.h>   // getrusage
 #include <sys/time.h>       // gettimeofday
-#include <cppa/cppa.hpp>
+#include <caf/all.hpp>
 #include "vast/config.h"
 #include "vast/file_system.h"
 
@@ -15,7 +15,7 @@
 #include <google/heap-profiler.h>
 #endif
 
-using namespace cppa;
+using namespace caf;
 
 namespace vast {
 
@@ -54,7 +54,7 @@ profiler::profiler(path log_dir, std::chrono::seconds secs)
 {
 }
 
-partial_function profiler::act()
+message_handler profiler::act()
 {
   trap_exit(true);
 

@@ -2,14 +2,14 @@
 
 #include <cassert>
 #include <iomanip>
-#include <cppa/cppa.hpp>
+#include <caf/all.hpp>
 #include "vast/event.h"
 #include "vast/parse.h"
 #include "vast/io/serialization.h"
 #include "vast/util/color.h"
 #include "vast/util/poll.h"
 
-using namespace cppa;
+using namespace caf;
 
 namespace vast {
 
@@ -36,7 +36,7 @@ struct keystroke_monitor : actor_base
         });
   }
 
-  partial_function act()
+  message_handler act()
   {
     return
     {
@@ -96,19 +96,9 @@ struct help_printer
 
 help_printer help;
 
-struct cow_event_less_than
-{
-  bool operator()(cow<event> const& x, cow<event> const& y) const
-  {
-    return *x < *y;
-  }
-};
-
-cow_event_less_than cow_event_lt;
-
 } // namespace <anonymous>
 
-console::console(cppa::actor search, path dir)
+console::console(caf::actor search, path dir)
   : dir_{std::move(dir)},
     search_{std::move(search)}
 {
@@ -482,8 +472,7 @@ bool console::result::save(path const& p) const
   file f{p};
   f.open(file::write_only);
   io::file_output_stream fos{f};
-  std::unique_ptr<io::compressed_output_stream>
-    cos{io::make_compressed_output_stream(io::lz4, fos)};
+  auto cos = io::make_compressed_output_stream(io::lz4, fos);
   binary_serializer sink{*cos};
 
   // TODO: use segments.
@@ -499,8 +488,7 @@ bool console::result::load(path const& p)
   file f{p};
   f.open(file::read_only);
   io::file_input_stream fis{f};
-  std::unique_ptr<io::compressed_input_stream>
-    cos{io::make_compressed_input_stream(io::lz4, fis)};
+  auto cos = io::make_compressed_input_stream(io::lz4, fis);
   binary_deserializer source{*cos};
 
   // TODO: use segments.
@@ -516,11 +504,11 @@ bool console::result::load(path const& p)
   return true;
 }
 
-void console::result::add(cow<event> e)
+void console::result::add(event e)
 {
-  auto i = std::lower_bound(events_.begin(), events_.end(), e, cow_event_lt);
-  assert(i == events_.end() || cow_event_lt(e, *i));
-  events_.insert(i, e);
+  auto i = std::lower_bound(events_.begin(), events_.end(), e);
+  assert(i == events_.end() || e < *i);
+  events_.insert(i, std::move(e));
 }
 
 size_t console::result::apply(size_t n, std::function<void(event const&)> f)
@@ -528,7 +516,7 @@ size_t console::result::apply(size_t n, std::function<void(event const&)> f)
   size_t i = 0;
   while (i < n && pos_ < events_.size())
   {
-    f(*events_[pos_++]);
+    f(events_[pos_++]);
     ++i;
   }
   return i;
@@ -617,7 +605,7 @@ void console::result::deserialize(deserializer& source)
 }
 
 
-partial_function console::act()
+message_handler console::act()
 {
   print(none)
     << util::color::red
@@ -728,16 +716,13 @@ partial_function console::act()
         r->progress(progress);
       }
     },
-    [=](event const&)
+    [=](event& e)
     {
       auto i = connected_.find(last_sender());
       assert(i != connected_.end());
 
       auto r = i->second.second;
       assert(r);
-
-      cow<event> ce = *tuple_cast<event>(last_dequeued());
-      r->add(ce);
 
       if (following_ && r == active_)
       {
@@ -747,11 +732,13 @@ partial_function console::act()
           appending_ = false;
         }
 
-        std::cout << *ce << std::endl;
+        std::cout << e << std::endl;
 
         if (expected_ > 0 && --expected_ == 0)
           send(this, atom("key"), 's');
       }
+
+      r->add(std::move(e));
     },
     on(atom("key"), arg_match) >> [=](char key)
     {

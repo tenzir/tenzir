@@ -34,7 +34,7 @@ endmacro ()
 
 # A list of paths that is used to build the export string.
 set(path_list)
-foreach(i ${Boost_LIBRARIES} ${LIBCPPA_LIBRARIES} ${Broccoli_LIBRARIES})
+foreach(i ${Boost_LIBRARIES} ${LIBCAF_LIBRARIES} ${Broccoli_LIBRARIES})
     get_filename_component(dir ${i} PATH)
     if (dir)
         list_unique_insert(path_list ${dir})

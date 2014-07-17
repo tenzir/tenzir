@@ -1,10 +1,10 @@
 #include "vast/receiver.h"
 
-#include <cppa/cppa.hpp>
+#include <caf/all.hpp>
 
 namespace vast {
 
-using namespace cppa;
+using namespace caf;
 
 receiver_actor::receiver_actor(actor tracker,
                                actor archive,
@@ -17,7 +17,7 @@ receiver_actor::receiver_actor(actor tracker,
 {
 }
 
-partial_function receiver_actor::act()
+message_handler receiver_actor::act()
 {
   trap_exit(true);
 
@@ -57,7 +57,7 @@ partial_function receiver_actor::act()
 
       send(search_, s.schema());
 
-      any_tuple last = last_dequeued();
+      message last = last_dequeued();
 
       sync_send(tracker_, atom("request"), uint64_t{s.events()}).then(
         on(atom("id"), arg_match) >> [=](event_id from, event_id to)
@@ -74,17 +74,17 @@ partial_function receiver_actor::act()
                                        s.events());
 
                   quit(exit::error);
-                  return make_any_tuple(atom("nack"), s.id());
+                  return make_message(atom("nack"), s.id());
                 }
 
                 s.base(from);
 
                 auto id = s.id();
-                auto t = make_any_tuple(std::move(s));
+                auto t = make_message(std::move(s));
                 send_tuple(archive_, t);
                 send_tuple(index_, t);
 
-                return make_any_tuple(atom("ack"), id);
+                return make_message(atom("ack"), id);
               });
         });
     },

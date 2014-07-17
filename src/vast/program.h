@@ -16,17 +16,17 @@ public:
   /// @param config The program configuration.
   program(configuration config);
 
-  cppa::partial_function act() final;
+  caf::message_handler act() final;
   std::string describe() const final;
 
   void run();
 
 private:
-  cppa::actor receiver_;
-  cppa::actor tracker_;
-  cppa::actor archive_;
-  cppa::actor index_;
-  cppa::actor search_;
+  caf::actor receiver_;
+  caf::actor tracker_;
+  caf::actor archive_;
+  caf::actor index_;
+  caf::actor search_;
   configuration config_;
 };
 

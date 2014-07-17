@@ -15,12 +15,12 @@ struct broccoli : asynchronous<broccoli>
   /// @param sink The sink to send events to.
   /// @param host The host to bind to.
   /// @param port The TCP port to listen on.
-  broccoli(cppa::actor:ptr sink, std::string const& host, unsigned port)
+  broccoli(caf::actor:ptr sink, std::string const& host, unsigned port)
 
   std::set<std::string> event_names_;
-  std::set<cppa::actor_ptr> broccolis_;
-  cppa::actor_ptr server_;
-  cppa::behavior impl_;
+  std::set<caf::actor_ptr> broccolis_;
+  caf::actor_ptr server_;
+  caf::behavior impl_;
 };
 
 } // namespace source

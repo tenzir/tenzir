@@ -1,8 +1,7 @@
 #include "vast/type_info.h"
 
-#include <cppa/cppa.hpp>
+#include <caf/all.hpp>
 #include "vast/bitstream.h"
-#include "vast/cow.h"
 #include "vast/expression.h"
 #include "vast/event.h"
 #include "vast/error.h"
@@ -13,7 +12,7 @@
 #include "vast/type.h"
 #include "vast/serialization.h"
 #include "vast/bitmap_index.h"
-#include "vast/detail/cppa_type_info.h"
+#include "vast/detail/caf_type_info.h"
 #include "vast/detail/type_manager.h"
 #include "vast/util/tuple.h"
 
@@ -102,7 +101,7 @@ struct type_announcer
   void operator()(T /* x */) const
   {
     announce<T>();
-    cppa::announce(typeid(T), std::make_unique<detail::cppa_type_info<T>>());
+    caf::announce(typeid(T), std::make_unique<detail::caf_type_info<T>>());
   }
 };
 
@@ -177,7 +176,7 @@ void announce_builtin_types()
     table,
     type_tag,
     value, std::vector<value>,
-    event, std::vector<event>, std::vector<cow<event>>,
+    event, std::vector<event>,
     error,
 
     chunk,

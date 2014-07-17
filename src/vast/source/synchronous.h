@@ -1,7 +1,7 @@
 #ifndef VAST_SOURCE_SYNCHRONOUS_H
 #define VAST_SOURCE_SYNCHRONOUS_H
 
-#include <cppa/cppa.hpp>
+#include <caf/all.hpp>
 #include "vast/actor.h"
 #include "vast/event.h"
 #include "vast/util/result.h"
@@ -17,15 +17,15 @@ public:
   /// Spawns a synchronous source.
   /// @param The actor receiving the generated events.
   /// @param batch_size The number of events to extract in one batch.
-  synchronous(cppa::actor sink, uint64_t batch_size = 0)
+  synchronous(caf::actor sink, uint64_t batch_size = 0)
     : sink_{std::move(sink)},
       batch_size_{batch_size}
   {
   }
 
-  cppa::partial_function act() final
+  caf::message_handler act() final
   {
-    using namespace cppa;
+    using namespace caf;
 
     this->trap_exit(true);
 
@@ -82,7 +82,7 @@ private:
     }
   }
 
-  cppa::actor sink_;
+  caf::actor sink_;
   uint64_t batch_size_ = 0;
   std::vector<event> events_;
 };

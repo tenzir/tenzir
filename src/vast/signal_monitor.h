@@ -1,7 +1,7 @@
 #ifndef VAST_SIGNAL_MONITOR_H
 #define VAST_SIGNAL_MONITOR_H
 
-#include <cppa/cppa.hpp>
+#include <caf/all.hpp>
 #include "vast/actor.h"
 
 namespace vast {
@@ -12,13 +12,13 @@ class signal_monitor : public actor_base
 public:
   /// Spawns the system monitor with a given receiver.
   /// @param receiver the actor receiving the signals.
-  signal_monitor(cppa::actor receiver);
+  signal_monitor(caf::actor receiver);
 
-  cppa::partial_function act() final;
+  caf::message_handler act() final;
   std::string describe() const final;
 
 private:
-  cppa::actor receiver_;
+  caf::actor receiver_;
 };
 
 } // namespace vast

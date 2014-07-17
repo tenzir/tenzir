@@ -4,7 +4,7 @@
 
 namespace vast {
 
-using namespace cppa;
+using namespace caf;
 
 packer::packer(actor manager, actor sink)
   : manager_{manager},
@@ -13,7 +13,7 @@ packer::packer(actor manager, actor sink)
 {
 }
 
-partial_function packer::act()
+message_handler packer::act()
 {
   attach_functor(
       [=](uint32_t)
@@ -48,7 +48,7 @@ std::string packer::describe() const
 }
 
 
-unpacker::unpacker(any_tuple segment, actor sink, size_t batch_size)
+unpacker::unpacker(message segment, actor sink, size_t batch_size)
   : segment_{segment},
     reader_{&segment_.get_as<vast::segment>(0)},
     sink_{sink},
@@ -57,7 +57,7 @@ unpacker::unpacker(any_tuple segment, actor sink, size_t batch_size)
   events_.reserve(batch_size_);
 }
 
-partial_function unpacker::act()
+message_handler unpacker::act()
 {
   attach_functor([=](uint32_t) { sink_ = invalid_actor; });
 

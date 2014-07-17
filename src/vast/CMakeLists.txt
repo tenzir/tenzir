@@ -43,7 +43,7 @@ set(libvast_sources
   type_tag.cc
   uuid.cc
   value.cc
-  detail/cppa_serialization.cc
+  detail/caf_serialization.cc
   detail/demangle.cc
   detail/type_manager.cc
   detail/ast/query.cc
@@ -81,7 +81,7 @@ if (EDITLINE_FOUND)
     util/editline.cc)
 endif ()
 
-set(libvast_libs lz4 ${LIBCPPA_LIBRARIES})
+set(libvast_libs lz4 ${LIBCAF_LIBRARIES})
 
 if (BROCCOLI_FOUND)
   set(libvast_libs ${libvast_libs} ${BROCCOLI_LIBRARIES})

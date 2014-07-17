@@ -10,11 +10,11 @@ namespace vast {
 class exporter : public actor_base
 {
 public:
-  cppa::partial_function act() final;
+  caf::message_handler act() final;
   std::string describe() const final;
 
 private:
-  std::set<cppa::actor> sinks_;
+  std::set<caf::actor> sinks_;
   uint64_t processed_ = 0;
   uint64_t limit_ = 0;
 };
