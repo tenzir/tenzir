@@ -15,7 +15,7 @@ bool json::process(event const& e)
   if (! j)
     return false;
 
-  auto str = to_string(*j);
+  auto str = to_string(*j, true);
   str += '\n';
 
   return stream_.write(str.begin(), str.end());
