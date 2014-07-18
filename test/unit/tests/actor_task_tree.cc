@@ -38,6 +38,10 @@ TEST("task tree")
   scoped_actor self;
   auto t = self->spawn<task_tree, monitored>(self);
 
+  // Subscribe to progress updates and final termination.
+  anon_send(t, atom("subscribe"), self);
+  anon_send(t, atom("notify"), self);
+
   auto leaf1a = spawn(worker, t);
   auto leaf1b = spawn(worker, t);
   auto leaf2a = spawn(worker, t);
@@ -54,10 +58,6 @@ TEST("task tree")
   anon_send(t, intermediate, leaf2a);
   anon_send(t, intermediate, leaf2b);
   anon_send(t, intermediate, leaf2c);
-
-  // Subscribe to progress updates and final termination.
-  anon_send(t, atom("subscribe"), self);
-  anon_send(t, atom("notify"), self);
 
   auto fail = others() >> [&]
   {
