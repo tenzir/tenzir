@@ -69,7 +69,7 @@ TEST("integral")
 TEST("floating point with binning")
 {
   arithmetic_bitmap_index<null_bitstream, double_value> bmi;
-  bmi.set_binner(-2);
+  bmi.binner(-2);
 
   REQUIRE(bmi.push_back(-7.8));
   REQUIRE(bmi.push_back(42.123));
@@ -90,7 +90,7 @@ TEST("time_range")
   arithmetic_bitmap_index<null_bitstream, time_range_value> bmi, bmi2;
 
   // A precision of 8 translates into a resolution of 0.1 sec.
-  bmi.set_binner(8);
+  bmi.binner(8);
 
   REQUIRE(bmi.push_back(std::chrono::milliseconds(1000)));
   REQUIRE(bmi.push_back(std::chrono::milliseconds(2000)));
@@ -120,7 +120,7 @@ TEST("time_range")
 TEST("time_point")
 {
   arithmetic_bitmap_index<null_bitstream, time_point_value> bmi, bmi2;
-  bmi.set_binner(9);
+  bmi.binner(9);
 
   REQUIRE(bmi.push_back(time_point{"2014-01-16+05:30:15"}));
   REQUIRE(bmi.push_back(time_point{"2014-01-16+05:30:12"}));

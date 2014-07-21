@@ -346,9 +346,9 @@ public:
   arithmetic_bitmap_index() = default;
 
   template <typename... Ts>
-  void set_binner(Ts&&... xs)
+  void binner(Ts&&... xs)
   {
-    bitmap_.set_binner(std::forward<Ts>(xs)...);
+    bitmap_.binner(std::forward<Ts>(xs)...);
   }
 
 private:

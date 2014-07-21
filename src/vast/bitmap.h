@@ -813,7 +813,7 @@ public:
   /// Instantites a new binner.
   /// @param xs The parameters forwarded to the constructor of the binner.
   template <typename... Ts>
-  void set_binner(Ts&&... xs)
+  void binner(Ts&&... xs)
   {
     binner_ = binner_type(std::forward<Ts>(xs)...);
   }
