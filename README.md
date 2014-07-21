@@ -12,9 +12,9 @@ forensics and incident response.
 Synopsis
 --------
 
-Start a server:
+Start a core:
 
-    vast -a
+    vast -C
 
 Import data:
 
@@ -26,7 +26,7 @@ Run a query of at most 100 results, printed as a [Bro](http://www.bro.org) log:
 
 Start the interactive console and submit a query:
 
-    vast -C
+    vast -Q
     > ask
     ? &time > now - 2d && :string == "http"
 

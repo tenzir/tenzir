@@ -34,7 +34,8 @@ std::string configuration::banner() const
 void configuration::initialize()
 {
   auto& general = create_block("general options");
-  general.add('c', "config", "configuration file");
+// TODO: not yet supported.
+//  general.add('c', "config", "configuration file");
   general.add('h', "help", "display this help");
   general.add('d', "directory", "VAST directory").init("vast");
   general.add('z', "advanced", "show advanced options");
@@ -54,7 +55,7 @@ void configuration::initialize()
 
   auto& advanced = create_block("advanced options");
   advanced.add('P', "profile",
-               "enable getrusage profiling at a given interval (seconds)")
+               "spawn the profiler with at a given granularity (seconds)")
           .single();
 #ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
   advanced.add("profile-cpu", "also enable Google perftools CPU profiling");
@@ -65,18 +66,17 @@ void configuration::initialize()
   advanced.visible(false);
 
   auto& act = create_block("actor options");
-  act.add('a', "all-core", "spawn all core actors");
+  act.add('C', "core", "spawn all core actors");
+//  act.add('R', "receiver", "spawn the receiver");
+//  act.add('A', "archive", "spawn the archive");
+//  act.add('X', "index", "spawn the index");
+//  act.add('T', "tracker", "spawn the tracker");
+//  act.add('S', "search", "spawn the search");
+  act.add('E', "exporter", "spawn the exporter");
+  act.add('I', "importer", "spawn the importer");
 #ifdef VAST_HAVE_EDITLINE
-  act.add('C', "console-actor", "spawn the console client actor");
+  act.add('Q', "console", "spawn the query console");
 #endif
-  act.add('A', "archive-actor", "spawn the archive");
-  act.add('I', "importer-actor", "spawn the importer");
-  act.add('E', "exporter-actor", "spawn the exporter");
-  act.add('R', "receiver-actor", "spawn the receiver");
-  act.add('S', "search-actor", "spawn the search");
-  act.add('T', "tracker-actor", "spawn the ID tracker");
-  act.add('X', "index-actor", "spawn the index");
-  act.visible(false);
 
   auto& imp = create_block("import options", "import");
   imp.add("max-events-per-chunk", "maximum events per chunk").init(5000);
@@ -99,18 +99,18 @@ void configuration::initialize()
   recv.add("port", "TCP port of the receiver").init(42000);
   recv.visible(false);
 
-  auto& archive = create_block("archive options", "archive");
-  archive.add("host", "hostname/address of the archive").init("127.0.0.1");
-  archive.add("port", "TCP port of the archive").init(42003);
-  archive.add("max-segments", "maximum segments cached in memory").init(10);
-  archive.visible(false);
+  auto& arch = create_block("archive options", "archive");
+  arch.add("max-segments", "maximum segments cached in memory").init(10);
+  arch.add("host", "hostname/address of the archive").init("127.0.0.1");
+  arch.add("port", "TCP port of the archive").init(42003);
+  arch.visible(false);
 
   auto& idx = create_block("index options", "index");
-  idx.add("host", "hostname/address of the archive").init("127.0.0.1");
-  idx.add("port", "TCP port of the index").init(42004);
   idx.add('p', "partition", "name of the partition to append to").single();
   idx.add("batch-size", "number of events to index in one run").init(1000);
   idx.add("rebuild", "rebuild indexes from archive");
+  idx.add("host", "hostname/address of the archive").init("127.0.0.1");
+  idx.add("port", "TCP port of the index").init(42004);
   idx.visible(false);
 
   auto& track = create_block("ID tracker options", "tracker");
@@ -118,37 +118,37 @@ void configuration::initialize()
   track.add("port", "TCP port of the ID tracker").init(42002);
   track.visible(false);
 
-  auto& search = create_block("search options", "search");
-  search.add("host", "hostname/address of the archive").init("127.0.0.1");
-  search.add("port", "TCP port of the search").init(42001);
-  search.visible(false);
+  auto& srch = create_block("search options", "search");
+  srch.add("host", "hostname/address of the archive").init("127.0.0.1");
+  srch.add("port", "TCP port of the search").init(42001);
+  srch.visible(false);
 
 #ifdef VAST_HAVE_EDITLINE
-  add_conflict("console-actor", "all-core");
-  add_conflict("console-actor", "tracker-actor");
-  add_conflict("console-actor", "archive-actor");
-  add_conflict("console-actor", "index-actor");
-  add_conflict("console-actor", "importer-actor");
-  add_conflict("console-actor", "exporter-actor");
-  add_conflict("console-actor", "search-actor");
-  add_conflict("console-actor", "receiver-actor");
+  add_conflict("console", "core");
+  add_conflict("console", "tracker");
+  add_conflict("console", "archive");
+  add_conflict("console", "index");
+  add_conflict("console", "importer");
+  add_conflict("console", "exporter");
+  add_conflict("console", "search");
+  add_conflict("console", "receiver");
 #endif
 
-  add_dependency("import.submit", "importer-actor");
-  add_dependency("import.read", "importer-actor");
+  add_dependency("import.submit", "importer");
+  add_dependency("import.read", "importer");
   add_dependency("import.format", "import.read");
 
-  add_dependencies("index.partition", {"index-actor", "all-core"});
+  add_dependencies("index.partition", {"index", "core"});
   add_conflict("index.rebuild", "index.partition");
 
-  add_conflict("importer-actor", "exporter-actor");
-  add_conflict("receiver-actor", "exporter-actor");
-  add_conflict("tracker-actor", "exporter-actor");
+  add_conflict("importer", "exporter");
+  add_conflict("receiver", "exporter");
+  add_conflict("tracker", "exporter");
 
-  add_dependency("export.limit", "exporter-actor");
-  add_dependency("export.format", "exporter-actor");
-  add_dependency("export.query", "exporter-actor");
-  add_dependency("export.write", "exporter-actor");
+  add_dependency("export.limit", "exporter");
+  add_dependency("export.format", "exporter");
+  add_dependency("export.query", "exporter");
+  add_dependency("export.write", "exporter");
 }
 
 } // namespace vast

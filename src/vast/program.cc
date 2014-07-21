@@ -122,13 +122,13 @@ void program::run()
 
   try
   {
-    if (config_.check("all-core"))
+    if (config_.check("core"))
     {
-      *config_["receiver-actor"] = true;
-      *config_["tracker-actor"] = true;
-      *config_["archive-actor"] = true;
-      *config_["index-actor"] = true;
-      *config_["search-actor"] = true;
+      *config_["receiver"] = true;
+      *config_["tracker"] = true;
+      *config_["archive"] = true;
+      *config_["index"] = true;
+      *config_["search"] = true;
     }
 
     auto monitor = spawn<signal_monitor, detached+linked>(this);
@@ -151,7 +151,7 @@ void program::run()
 
     auto tracker_host = *config_.get("tracker.host");
     auto tracker_port = *config_.as<unsigned>("tracker.port");
-    if (config_.check("tracker-actor"))
+    if (config_.check("tracker"))
     {
       tracker_ = spawn<id_tracker_actor>(vast_dir);
       VAST_LOG_ACTOR_INFO(
@@ -159,7 +159,7 @@ void program::run()
 
       caf::io::publish(tracker_, tracker_port, tracker_host.c_str());
     }
-    else if (config_.check("receiver-actor"))
+    else if (config_.check("receiver"))
     {
       VAST_LOG_ACTOR_VERBOSE(
           "connects to tracker at " << tracker_host << ':' << tracker_port);
@@ -168,7 +168,7 @@ void program::run()
 
     auto archive_host = *config_.get("archive.host");
     auto archive_port = *config_.as<unsigned>("archive.port");
-    if (config_.check("archive-actor"))
+    if (config_.check("archive"))
     {
       archive_ = spawn<archive_actor>(
           vast_dir,
@@ -179,8 +179,8 @@ void program::run()
 
       caf::io::publish(archive_, archive_port, archive_host.c_str());
     }
-    else if (config_.check("receiver-actor")
-             || config_.check("search-actor")
+    else if (config_.check("receiver")
+             || config_.check("search")
              || config_.check("index.rebuild"))
     {
       VAST_LOG_ACTOR_VERBOSE(
@@ -191,7 +191,7 @@ void program::run()
 
     auto index_host = *config_.get("index.host");
     auto index_port = *config_.as<unsigned>("index.port");
-    if (config_.check("index-actor"))
+    if (config_.check("index"))
     {
       index_ = spawn<index>(vast_dir, *config_.as<size_t>("index.batch-size"));
 
@@ -200,8 +200,8 @@ void program::run()
 
       caf::io::publish(index_, index_port, index_host.c_str());
     }
-    else if (config_.check("receiver-actor")
-             || config_.check("search-actor")
+    else if (config_.check("receiver")
+             || config_.check("search")
              || config_.check("index.rebuild"))
     {
       VAST_LOG_ACTOR_VERBOSE("connects to index at " <<
@@ -237,7 +237,7 @@ void program::run()
 
     auto search_host = *config_.get("search.host");
     auto search_port = *config_.as<unsigned>("search.port");
-    if (config_.check("search-actor"))
+    if (config_.check("search"))
     {
       search_ = spawn<search_actor>(vast_dir, archive_, index_);
       VAST_LOG_ACTOR_INFO(
@@ -245,11 +245,11 @@ void program::run()
 
       caf::io::publish(search_, search_port, search_host.c_str());
     }
-    else if (config_.check("receiver-actor")
+    else if (config_.check("receiver")
 #ifdef VAST_HAVE_EDITLINE
-             || config_.check("console-actor")
+             || config_.check("console")
 #endif
-             || config_.check("exporter-actor"))
+             || config_.check("exporter"))
     {
       VAST_LOG_ACTOR_VERBOSE(
           "connects to search at " << search_host << ":" << search_port);
@@ -257,7 +257,7 @@ void program::run()
       search_ = caf::io::remote_actor(search_host, search_port);
 
 #ifdef VAST_HAVE_EDITLINE
-      if (config_.check("console-actor"))
+      if (config_.check("console"))
       {
         auto c = spawn<console, detached+linked>(search_, vast_dir / "console");
         delayed_send(c, std::chrono::milliseconds(200), atom("prompt"));
@@ -267,7 +267,7 @@ void program::run()
 
     auto receiver_host = *config_.get("receiver.host");
     auto receiver_port = *config_.as<unsigned>("receiver.port");
-    if (config_.check("receiver-actor"))
+    if (config_.check("receiver"))
     {
       receiver_ = spawn<receiver_actor>(tracker_, archive_, index_, search_);
       VAST_LOG_ACTOR_INFO(
@@ -275,7 +275,7 @@ void program::run()
 
       caf::io::publish(receiver_, receiver_port, receiver_host.c_str());
     }
-    else if (config_.check("importer-actor"))
+    else if (config_.check("importer"))
     {
       VAST_LOG_ACTOR_VERBOSE(
           "connects to receiver at " << receiver_host << ":" << receiver_port);
@@ -284,7 +284,7 @@ void program::run()
     }
 
     actor imp0rter;
-    if (config_.check("importer-actor"))
+    if (config_.check("importer"))
     {
       imp0rter = spawn<importer>(
           vast_dir,
@@ -299,7 +299,7 @@ void program::run()
         send(imp0rter, atom("add"),
              *config_.get("import.format"), *config_.get("import.read"));
     }
-    else if (config_.check("exporter-actor"))
+    else if (config_.check("exporter"))
     {
       auto format = *config_.get("export.format");
       auto out = *config_.get("export.write");
@@ -333,7 +333,7 @@ void program::run()
           });
     }
 
-    if (config_.check("receiver-actor"))
+    if (config_.check("receiver"))
     {
       // We always initiate the shutdown via the receiver, regardless of
       // whether we have an importer in our process.
@@ -350,7 +350,7 @@ void program::run()
       if (imp0rter)
         imp0rter->link_to(receiver_);
     }
-    else if (imp0rter && ! config_.check("receiver-actor"))
+    else if (imp0rter && ! config_.check("receiver"))
     {
       // If we're running in ingestion mode, we're independent and terminate as
       // soon as the importer has finished.
