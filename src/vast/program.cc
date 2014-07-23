@@ -110,14 +110,14 @@ void program::run()
 
   announce_builtin_types();
 
-  detail::type_manager::instance()->each(
-      [&](global_type_info const& gti)
-      {
-        VAST_LOG_DEBUG("registered type " << gti.id() << ": " << gti.name());
-      });
+  //detail::type_manager::instance()->each(
+  //    [&](global_type_info const& gti)
+  //    {
+  //      VAST_LOG_DEBUG("registered type " << gti.id() << ": " << gti.name());
+  //    });
 
   caf::io::max_msg_size(512 * 1024 * 1024);
-  VAST_LOG_ACTOR_DEBUG("set caf maximum message size to " <<
+  VAST_LOG_ACTOR_DEBUG("set CAF maximum message size to " <<
                        caf::io::max_msg_size() / 1024 << " KB");
 
   try
