@@ -117,7 +117,7 @@ struct validator : public boost::static_visitor<bool>
     auto rhs_type = rhs.which();
     auto& lhs = pred.lhs;
     return
-      (lhs == "name" && (rhs_type == string_value || rhs_type == regex_value))
+      (lhs == "type" && (rhs_type == string_value || rhs_type == regex_value))
       || (lhs == "time" && rhs_type == time_point_value)
       || (lhs == "id" && rhs_type == uint_value);
   }

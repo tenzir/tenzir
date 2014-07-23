@@ -86,7 +86,7 @@ TEST("partial order")
 TEST("parser tests")
 {
     // Event tags.
-  CHECK(to<expr::ast>("&name == \"foo\""));
+  CHECK(to<expr::ast>("&type == \"foo\""));
   CHECK(to<expr::ast>("&time < now - 5d10m3s"));
   CHECK(to<expr::ast>("&id == 42"));
 
@@ -130,15 +130,15 @@ TEST("tag queries")
   REQUIRE(ast);
   CHECK(evaluate(*ast, e) == true);
 
-  ast = to<expr::ast>("&name == \"foo\"");
+  ast = to<expr::ast>("&type == \"foo\"");
   REQUIRE(ast);
   CHECK(evaluate(*ast, e) == true);
 
-  ast = to<expr::ast>("&name != \"bar\"");
+  ast = to<expr::ast>("&type != \"bar\"");
   REQUIRE(ast);
   CHECK(evaluate(*ast, e) == true);
 
-  ast = to<expr::ast>("&name != \"foo\"");
+  ast = to<expr::ast>("&type != \"foo\"");
   REQUIRE(ast);
   CHECK(evaluate(*ast, e) == false);
 }
@@ -214,7 +214,7 @@ TEST("schema queries")
   // Error cases
   //
 
-  // Invalid event name.
+  // Invalid prefix.
   auto a = to<expr::ast>("not.there ~ /nil/");
   REQUIRE(a);
   CHECK(! a->resolve(sch));

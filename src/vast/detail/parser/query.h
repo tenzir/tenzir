@@ -114,7 +114,7 @@ struct query : qi::grammar<Iterator, ast::query::query(), skipper<Iterator>>
       =   raw[lexeme[(alpha | '_' | '*' | '?') >> *(alnum | '_' | '*' | '?')]]
       ;
 
-    event_name
+    event_type
       =   raw[lexeme[ ((alpha | '_') >> *(alnum | '_' )) % repeat(2)[':'] ]]
       ;
 
@@ -164,7 +164,7 @@ struct query : qi::grammar<Iterator, ast::query::query(), skipper<Iterator>>
         not_pred;
 
     qi::rule<Iterator, std::string(), skipper<Iterator>>
-        identifier, glob, event_name;
+        identifier, glob, event_type;
 
     qi::symbols<char, relational_operator>
         pred_op;

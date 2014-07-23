@@ -411,7 +411,7 @@ public:
     }
 
     std::unique_ptr<extractor> lhs;
-    if (pred.lhs == "name")
+    if (pred.lhs == "type")
       lhs = std::make_unique<name_extractor>();
     else if (pred.lhs == "time")
       lhs = std::make_unique<timestamp_extractor>();
