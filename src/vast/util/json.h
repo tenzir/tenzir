@@ -17,6 +17,16 @@ namespace util {
 class json : totally_ordered<json>
 {
 public:
+  enum class type : uint8_t
+  {
+    null = 0,
+    boolean = 1,
+    number = 2,
+    string = 3,
+    array = 4,
+    object = 5
+  };
+
   struct array;
   struct object;
 
@@ -24,7 +34,8 @@ public:
   using number = long double;
 
   /// A JSON value.
-  using value = variant<
+  using value = basic_variant<
+    type,
     none,
     bool,
     number,
@@ -75,16 +86,6 @@ public:
   struct object : std::map<std::string, json>
   {
     using map<std::string, json>::map;
-  };
-
-  enum class type : value::tag_type
-  {
-    null = 0,
-    boolean = 1,
-    number = 2,
-    string = 3,
-    array = 4,
-    object = 5
   };
 
   /// Default-constructs a null JSON value.

@@ -130,8 +130,11 @@ private:
 };
 
 /// A variant class.
-template <typename... Ts>
-class variant : equality_comparable<variant<Ts...>>
+/// @tparam Tag The type of the discriminator. If this type is an enum value,
+///     it must start at 0 and increment sequentially by 1.
+/// @tparam Ts The types the variant should assume.
+template <typename Tag, typename... Ts>
+class basic_variant : equality_comparable<basic_variant<Tag, Ts...>>
 {
 #ifdef VAST_GCC
   // Workaround for http://stackoverflow.com/q/24433658/1170277.
@@ -147,7 +150,7 @@ class variant : equality_comparable<variant<Ts...>>
 
 public:
   /// The type of the variant discriminator.
-  using tag_type = size_t;
+  using tag_type = Tag;
 
   /// The first type in the variant; used for default-construction.
 #ifdef VAST_GCC
@@ -158,20 +161,20 @@ public:
 
   /// Construct a variant from a type tag.
   /// @pre `0 <= tag < sizeof...(Ts)`
-  static variant make(tag_type tag)
+  static basic_variant make(tag_type tag)
   {
     return {factory{}, tag};
   }
 
   /// Default-constructs a variant with the first type.
-  variant() noexcept
+  basic_variant() noexcept
   {
     construct(front{});
     which_ = tag_type{};
   }
 
   /// Destructs the variant by invoking the destructor of the active instance.
-  ~variant() noexcept
+  ~basic_variant() noexcept
   {
     destruct();
   }
@@ -184,15 +187,15 @@ public:
     typename T,
     typename = std::enable_if<
       ! std::is_same<
-        std::remove_reference_t<variant<Ts...>>,
+        std::remove_reference_t<basic_variant>,
         std::remove_reference_t<T>
       >::value,
       T
     >
   >
-  variant(T&& x)
+  basic_variant(T&& x)
   {
-    static_assert(! std::is_same<variant<Ts...>&, T>{},
+    static_assert(! std::is_same<basic_variant&, T>{},
                   "should have been sfinaed out");
 
     // A compile error here means that T is not unambiguously convertible to
@@ -200,19 +203,19 @@ public:
     initializer<0, Ts...>::initialize(*this, std::forward<T>(x));
   }
 
-  variant(variant const& rhs)
+  basic_variant(basic_variant const& rhs)
   {
     rhs.apply_visitor_internal(copy_constructor(*this));
     which_ = rhs.which_;
   }
 
-  variant(variant&& rhs) noexcept
+  basic_variant(basic_variant&& rhs) noexcept
   {
     rhs.apply_visitor_internal(move_constructor(*this));
     which_ = rhs.which_;
   }
 
-  variant& operator=(variant const& rhs)
+  basic_variant& operator=(basic_variant const& rhs)
   {
     if (this != &rhs)
     {
@@ -222,7 +225,7 @@ public:
     return *this;
   }
 
-  variant& operator=(variant&& rhs) noexcept
+  basic_variant& operator=(basic_variant&& rhs) noexcept
   {
     if (this != &rhs)
     {
@@ -253,7 +256,7 @@ public:
                       std::forward<Args>(args)...);
   }
 
-  friend bool operator==(variant const& x, variant const& y)
+  friend bool operator==(basic_variant const& x, basic_variant const& y)
   {
     return x.which_ == y.which_ && y.apply_visitor_internal(equality(x));
   }
@@ -261,7 +264,7 @@ public:
 private:
   struct default_constructor
   {
-    default_constructor(variant& self)
+    default_constructor(basic_variant& self)
       : self_(self)
     {
     }
@@ -273,12 +276,12 @@ private:
     }
 
   private:
-    variant& self_;
+    basic_variant& self_;
   };
 
   struct copy_constructor
   {
-    copy_constructor(variant& self)
+    copy_constructor(basic_variant& self)
       : self_(self)
     {
     }
@@ -290,12 +293,12 @@ private:
     }
 
   private:
-    variant& self_;
+    basic_variant& self_;
   };
 
   struct move_constructor
   {
-    move_constructor(variant& self)
+    move_constructor(basic_variant& self)
       : self_(self)
     {
     }
@@ -310,12 +313,12 @@ private:
     }
 
   private:
-    variant& self_;
+    basic_variant& self_;
   };
 
   struct assigner
   {
-    assigner(variant& self, tag_type rhs_which)
+    assigner(basic_variant& self, tag_type rhs_which)
       : self_(self), rhs_which_(rhs_which)
     {
     }
@@ -343,13 +346,13 @@ private:
     }
 
   private:
-    variant& self_;
+    basic_variant& self_;
     tag_type rhs_which_;
   };
 
   struct move_assigner
   {
-    move_assigner(variant& self, tag_type rhs_which)
+    move_assigner(basic_variant& self, tag_type rhs_which)
       : self_(self), rhs_which_(rhs_which)
     {
     }
@@ -381,7 +384,7 @@ private:
     }
 
   private:
-    variant& self_;
+    basic_variant& self_;
     tag_type rhs_which_;
   };
 
@@ -396,37 +399,38 @@ private:
     }
   };
 
-  template <tag_type Tag, typename... Tail>
+  template <size_t TT, typename... Tail>
   struct initializer;
 
-  template <tag_type Tag, typename T, typename... Tail>
-  struct initializer<Tag, T, Tail...> : public initializer<Tag + 1, Tail...>
+  template <size_t TT, typename T, typename... Tail>
+  struct initializer<TT, T, Tail...> 
+    : public initializer<TT + 1, Tail...>
   {
-    using base = initializer<Tag + 1, Tail...>;
+    using base = initializer<TT + 1, Tail...>;
     using base::initialize;
 
-    static void initialize(variant& v, T&& x)
+    static void initialize(basic_variant& v, T&& x)
     {
       v.construct(std::move(x));
-      v.which_ = Tag;
+      v.which_ = static_cast<tag_type>(TT);
     }
 
-    static void initialize(variant& v, T const& x)
+    static void initialize(basic_variant& v, T const& x)
     {
       v.construct(x);
-      v.which_ = Tag;
+      v.which_ = static_cast<tag_type>(TT);
     }
   };
 
-  template <tag_type Tag>
-  struct initializer<Tag>
+  template <size_t TT>
+  struct initializer<TT>
   {
     void initialize(); //this should never match
   };
 
   struct equality
   {
-    equality(variant const& self)
+    equality(basic_variant const& self)
       : self_(self)
     {
     }
@@ -438,7 +442,7 @@ private:
     }
 
   private:
-    variant const& self_;
+    basic_variant const& self_;
   };
 
   template <typename T, typename Internal>
@@ -454,7 +458,7 @@ private:
   }
 
   struct factory { };
-  variant(factory, tag_type tag)
+  basic_variant(factory, tag_type tag)
   {
     which_ = tag;
     apply<std::false_type>(default_constructor{*this});
@@ -526,10 +530,11 @@ private:
     assert(static_cast<size_t>(which) >= 0
            && static_cast<size_t>(which) < sizeof...(Ts));
 
-    return (*callers[which])(internal,
-                             std::forward<Storage>(storage),
-                             std::forward<Visitor>(visitor),
-                             std::forward<Args>(args)...);
+    return (*callers[static_cast<size_t>(which)])(
+        internal,
+        std::forward<Storage>(storage),
+        std::forward<Visitor>(visitor),
+        std::forward<Args>(args)...);
   }
 
   template <typename Visitor>
@@ -603,14 +608,14 @@ struct getter
   }
 };
 
-template <typename T, typename... Ts>
-T* get(variant<Ts...>& var)
+template <typename T, typename Tag, typename... Ts>
+T* get(basic_variant<Tag, Ts...>& var)
 {
   return apply_visitor(getter<T>(), var);
 }
 
-template <typename T, typename... Ts>
-T const* get(variant<Ts...> const& var)
+template <typename T, typename Tag, typename... Ts>
+T const* get(basic_variant<Tag, Ts...> const& var)
 {
   return apply_visitor(getter<T const>(), var);
 }
@@ -703,6 +708,10 @@ auto apply_visitor(Visitor&& visitor, V&& v, Vs&&... vs)
   return apply_visitor(detail::binary_visitor<Visitor, V>(visitor, v), vs...);
 }
 
+/// A variant with a defaulted tag type.
+template <typename... Ts>
+using variant = basic_variant<size_t, Ts...>;
+
 // Variant Concept
 // ===============
 //
@@ -722,53 +731,26 @@ auto apply_visitor(Visitor&& visitor, V&& v, Vs&&... vs)
 //    2) `auto get(V&& x)`
 //    3) `bool is(V&& x)`
 //    4) `auto visit(Visitor, Vs&&... vs)`
-//
-// If `T` also provide an enum class called `type` which inherits from
-// `variant<...>::tag_type`, then `which(V&&)` returns a value of type `type`
-// instead of using the variant tag type.
 
 // Forward declaration
 namespace detail { struct dummy; }
 template <typename V>
 auto expose(V&&) -> std::enable_if_t<std::is_same<V, detail::dummy>::value>;
 
-namespace detail {
-
-struct has_type_member
-{
-  template <typename T>
-  static auto test(int)
-    -> decltype(typename T::type(), std::true_type());
-
-  template <typename>
-  static auto test(...) -> std::false_type;
-};
-
-template <typename T>
-struct has_type : decltype(has_type_member::test<std::decay_t<T>>(0)) {};
-
-} // namespace detail
-
-
 template <typename V>
 auto which(V&& v)
-  -> std::enable_if_t<detail::has_type<V>{}, typename std::decay_t<V>::type>
-{
-  return static_cast<typename std::decay_t<V>::type>(expose(v).which());
-}
-
-template <typename V>
-auto which(V&& v)
-  -> std::enable_if_t<! detail::has_type<V>{}, decltype(expose(v).which())>
+// FIXME: why does this SFINAE expression fail? It has the clearest semantics.
+//  -> std::enable_if_t<is_callable_with<V>(expose), decltype(get<T>(expose(v))>
+  -> std::enable_if_t<
+       std::is_reference<decltype(expose(v))>::value,
+       decltype(expose(v).which())
+     >
 {
   return expose(v).which();
 }
 
 template <typename T, typename V>
 auto get(V&& v)
-// FIXME: why does this SFINAE expression fail? It would have the clearest
-// semantics.
-//  -> std::enable_if_t<is_callable_with<V>(expose), decltype(get<T>(expose(v))>
   -> std::enable_if_t<
        std::is_reference<decltype(expose(v))>::value,
        decltype(get<T>(expose(v)))

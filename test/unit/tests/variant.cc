@@ -173,14 +173,33 @@ TEST("delayed visitation")
 
 namespace {
 
+// Discriminator unions must begin at 0 and increment sequentially.
+enum class hell : int
+{
+  devil = 0,
+  diablo = 1
+};
+
+} // namespace <anonymous>
+
+
+TEST("variant custom tag")
+{
+  using custom_variant = util::basic_variant<hell, int, std::string>;
+  custom_variant v(42);
+  CHECK(v.which() == hell::devil);
+}
+
+namespace {
+
 // A type containing a variant and modeling the Variant concept.
-class plain
+class concept
 {
 public:
-  plain() = default;
+  concept() = default;
 
   template <typename T>
-  plain(T&& x)
+  concept(T&& x)
     : value_(std::forward<T>(x))
   {
   }
@@ -190,37 +209,22 @@ public:
 protected:
   value value_;
 
-  friend value const& expose(plain const& w)
+  friend value const& expose(concept const& w)
   {
     return w.value_;
   }
-};
-
-struct typed : plain
-{
-  enum class type : value::tag_type
-  {
-    foo,
-    bar
-  };
 };
 
 } // namespace <anonymous>
 
 TEST("variant concept")
 {
-  plain p;
-  typed t;
+  concept c;
 
-  CHECK(std::is_same<decltype(util::which(p)), plain::value::tag_type>::value);
-  CHECK(std::is_same<decltype(util::which(t)), typed::type>::value);
+  CHECK(util::which(c) == 0);
+  REQUIRE(util::is<int>(c));
+  CHECK(*util::get<int>(c) == 0);
 
-  CHECK(util::which(p) == 0);
-  CHECK(util::which(t) == typed::type::foo);
-
-  REQUIRE(util::is<int>(p));
-  CHECK(*util::get<int>(p) == 0);
-
-  auto r = util::visit([](auto x) -> bool { return !! x; }, p);
+  auto r = util::visit([](auto x) -> bool { return !! x; }, c);
   CHECK(! r);
 }
