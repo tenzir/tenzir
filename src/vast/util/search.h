@@ -221,6 +221,104 @@ TextIterator search_boyer_moore(PatternIterator p0, PatternIterator p1,
   return make_boyer_moore(p0, p1)(t0, t1);
 }
 
+/// A stateful [Knuth-Morris-Pratt](http://bit.ly/knuth-morris-pratt) search
+/// context. It can look for a pattern *P* over a (text) sequence *T*.
+/// @tparam PatternIterator The iterator type over the pattern.
+template <typename PatternIterator>
+class knuth_morris_pratt
+{
+  using pat_difference_type =
+    typename std::iterator_traits<PatternIterator>::difference_type;
+
+public:
+  /// Construct a Knuth-Morris-Pratt search context from a pattern.
+  /// @param begin The start of the pattern.
+  /// @param end The end of the pattern.
+  knuth_morris_pratt(PatternIterator begin, PatternIterator end)
+    : pat_{begin},
+      n_{end - begin},
+      skip_(static_cast<size_t>(n_ + 1))
+  {
+    skip_[0] = -1;
+    for (auto i = 1; i <= n_; ++i)
+    {
+      auto j = skip_[i - 1];
+      while (j >= 0)
+      {
+        if (begin[j] == begin[i - 1])
+          break;
+        j = skip_ [j];
+      }
+      skip_[i] = j + 1;
+    }
+  }
+
+  /// Looks for *P* in *T*.
+  /// @tparam TextIterator A random-access iterator over *T*.
+  /// @param begin The start of *T*.
+  /// @param end The end of *T*
+  /// @returns The position in *T* where *P* occurrs or *end* if *P* does not
+  ///     exist in *T*.
+  template <typename TextIterator>
+  TextIterator operator()(TextIterator begin, TextIterator end) const
+  {
+    /// Empty *P* always matches at the beginning of *T*.
+    if (n_ == 0)
+      return begin;
+
+    // Empty *T* or |T| < |P| can never match.
+    if (begin == end || end - begin < n_)
+      return end;
+
+    pat_difference_type i = 0;  // Position in T.
+    pat_difference_type p = 0;  // Position in P.
+    while (i <= end - begin - n_)
+    {
+      while (pat_[p] == begin[i + p])
+        if (++p == n_)
+          return begin + i;
+
+      i += p - skip_[p];
+      p = skip_[p] >= 0 ? skip_[p] : 0;
+    }
+
+    return end;
+  }
+
+private:
+  PatternIterator pat_;
+  pat_difference_type n_;
+  std::vector<pat_difference_type> skip_;
+};
+
+/// Constructs a Knuth-Morris-Pratt search context from a pattern.
+/// @tparam Iterator A random-access iterator for the pattern
+/// @param begin The iterator to the start of the pattern.
+/// @param end The iterator to the end of the pattern.
+template <typename Iterator>
+auto make_knuth_morris_pratt(Iterator begin, Iterator end)
+{
+  return boyer_moore<Iterator>{begin, end};
+}
+
+/// Performs a [Knuth-Morris-Pratt](http://bit.ly/knuth-morris-pratt) search of
+/// a pattern *P* over a sequence *T*.
+///
+/// @tparam TextIterator A random-access iterator for *T*
+/// @tparam PatternIterator A random-access iterator for *P*
+/// @param p0 The iterator to the start of *P*.
+/// @param p1 The iterator to the end of *P*.
+/// @param t0 The iterator to the start of *T*.
+/// @param t0 The iterator to the end of *T*.
+/// @returns An iterator to the first occurrence of *P* in *T* or *t1* if *P*
+///     does not occur in *T*.
+template <typename TextIterator, typename PatternIterator>
+TextIterator search_knuth_morris_pratt(PatternIterator p0, PatternIterator p1,
+                                       TextIterator t0, TextIterator t1)
+{
+  return make_knuth_morris_pratt(p0, p1)(t0, t1);
+}
+
 } // namespace util
 } // namespace vast
 
