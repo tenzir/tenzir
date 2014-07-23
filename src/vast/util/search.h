@@ -298,7 +298,7 @@ private:
 template <typename Iterator>
 auto make_knuth_morris_pratt(Iterator begin, Iterator end)
 {
-  return boyer_moore<Iterator>{begin, end};
+  return knuth_morris_pratt<Iterator>{begin, end};
 }
 
 /// Performs a [Knuth-Morris-Pratt](http://bit.ly/knuth-morris-pratt) search of
