@@ -1,14 +1,12 @@
 #ifndef VAST_OPTIONAL_HPP
 #define VAST_OPTIONAL_HPP
 
-#include <caf/optional.hpp>
 #include "vast/serialization.h"
+#include "vast/util/optional.h"
 
 namespace vast {
 
-/// An optional value of `T` with similar semantics as `std::optional`.
-template <typename T>
-using optional = caf::optional<T>;
+using util::optional;
 
 template <typename T>
 void serialize(serializer& sink, optional<T> const& opt)
