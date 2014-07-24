@@ -5,7 +5,7 @@ VAST
 [![Build Status](https://secure.travis-ci.org/mavam/vast.png)](http://travis-ci.org/mavam/vast)
 -->
 
-**Visibility Across Space and Time (VAST)** is a real-time platform for network
+**Visibility Across Space and Time (VAST)** is a unified platform for network
 forensics and incident response.
 
 
@@ -46,7 +46,7 @@ Required:
 
 - [Clang >= 3.4](http://clang.llvm.org/) or [GCC >= 4.9](http://gcc.gnu.org)
 - [CMake](http://www.cmake.org)
-- [libcaf](https://github.com/Neverlord/libcppa)
+- [CAF](https://github.com/actor-framework/actor-framework)
 - [Boost](http://www.boost.org) (headers only)
 
 Optional:
