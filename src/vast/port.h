@@ -34,18 +34,6 @@ public:
   /// @param type The port type.
   port(number_type number, port_type type = unknown);
 
-  /// Constructs a port from another one.
-  /// @param other The port to copy.
-  port(port const& other);
-
-  /// Moves a port.
-  /// @param other The port to move.
-  port(port&& other);
-
-  /// Assigns another port to this instance.
-  /// @param other The right-hand side of the assignment.
-  port& operator=(port other);
-
   /// Retrieves the port number.
   /// @returns The port number.
   number_type number() const;

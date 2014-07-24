@@ -23,13 +23,6 @@ prefix::prefix(address addr, uint8_t length)
   }
 }
 
-prefix::prefix(prefix&& other)
-  : network_{std::move(other.network_)},
-    length_{other.length_}
-{
-  other.length_ = 0;
-}
-
 bool prefix::contains(address const& addr) const
 {
   address p{addr};

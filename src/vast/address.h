@@ -56,11 +56,6 @@ public:
   /// @returns An engaged option iff parsing succeeded.
   explicit address(string const& str);
 
-  address(address const&) = default;
-  address(address&& other);
-  address& operator=(address const&) = default;
-  address& operator=(address&&) = default;
-
   /// Constructs an address from a raw bytes.
   ///
   /// @param bytes A pointer to the raw byte representation. This must point

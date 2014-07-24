@@ -13,28 +13,6 @@ port::port(number_type number, port_type type)
 {
 }
 
-port::port(port const& other)
-  : number_(other.number_)
-  , type_(other.type_)
-{
-}
-
-port::port(port&& other)
-  : number_(other.number_)
-  , type_(other.type_)
-{
-  other.number_ = 0u;
-  other.type_ = unknown;
-}
-
-port& port::operator=(port other)
-{
-  using std::swap;
-  swap(number_, other.number_);
-  swap(type_, other.type_);
-  return *this;
-}
-
 port::number_type port::number() const
 {
   return number_;

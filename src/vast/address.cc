@@ -50,12 +50,6 @@ address::address()
   bytes_.fill(0);
 }
 
-address::address(address&& other)
-  : bytes_(std::move(other.bytes_))
-{
-  other.bytes_.fill(0);
-}
-
 address::address(uint32_t const* bytes, family fam, byte_order order)
 {
   if (fam == ipv4)

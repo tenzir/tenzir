@@ -20,11 +20,6 @@ public:
   /// @param length The prefix length.
   prefix(address addr, uint8_t length);
 
-  prefix(prefix const& other) = default;
-  prefix(prefix&& other);
-  prefix& operator=(prefix&&) = default;
-  prefix& operator=(prefix const&) = default;
-
   /// Checks whether this prefix includes a given address.
   /// @param addr The address to test for .
   bool contains(address const& addr) const;
