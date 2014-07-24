@@ -54,24 +54,23 @@ void configuration::initialize()
   log.add("function-names", "log function names");
 
   auto& advanced = create_block("advanced options");
-  advanced.add('P', "profile",
-               "spawn the profiler with at a given granularity (seconds)")
-          .single();
+  advanced.add('P', "profiler", "spawn the profiler ");
+  advanced.add("profile-interval", "profiling granularity in seconds").init(1);
 #ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
-  advanced.add("profile-cpu", "also enable Google perftools CPU profiling");
+  advanced.add("perftools-cpu", "enable gperftools CPU profiling");
 #endif
 #ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
-  advanced.add("profile-heap", "also enable Google perftools heap profiling");
+  advanced.add("perftools-heap", "enable gperftools heap profiling");
 #endif
   advanced.visible(false);
 
   auto& act = create_block("actor options");
   act.add('C', "core", "spawn all core actors");
-//  act.add('R', "receiver", "spawn the receiver");
-//  act.add('A', "archive", "spawn the archive");
-//  act.add('X', "index", "spawn the index");
-//  act.add('T', "tracker", "spawn the tracker");
-//  act.add('S', "search", "spawn the search");
+  act.add(/* 'R', */ "receiver", "spawn the receiver");
+  act.add(/* 'A', */ "archive", "spawn the archive");
+  act.add(/* 'X', */ "index", "spawn the index");
+  act.add(/* 'T', */ "tracker", "spawn the tracker");
+  act.add(/* 'S', */ "search", "spawn the search");
   act.add('E', "exporter", "spawn the exporter");
   act.add('I', "importer", "spawn the importer");
 #ifdef VAST_HAVE_EDITLINE
@@ -122,6 +121,14 @@ void configuration::initialize()
   srch.add("host", "hostname/address of the archive").init("127.0.0.1");
   srch.add("port", "TCP port of the search").init(42001);
   srch.visible(false);
+
+  add_dependency("profile-interval", "profiler");
+#ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
+  add_dependency("perftools-cpu", "profiler");
+#endif
+#ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
+  add_dependency("perftools-heap", "profiler");
+#endif
 
 #ifdef VAST_HAVE_EDITLINE
   add_conflict("console", "core");

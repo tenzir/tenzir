@@ -122,28 +122,26 @@ void program::run()
 
   try
   {
-    if (config_.check("core"))
-    {
-      *config_["receiver"] = true;
-      *config_["tracker"] = true;
-      *config_["archive"] = true;
-      *config_["index"] = true;
-      *config_["search"] = true;
-    }
+    bool core = config_.check("core");
+    *config_["receiver"] = core;
+    *config_["tracker"] = core;
+    *config_["archive"] = core;
+    *config_["index"] = core;
+    *config_["search"] = core;
 
     auto monitor = spawn<signal_monitor, detached+linked>(this);
     send(monitor, atom("act"));
 
-    if (config_.check("profile"))
+    if (config_.check("profiler"))
     {
-      auto ms = *config_.as<unsigned>("profile");
+      auto secs = *config_.as<unsigned>("profile-interval");
       auto prof = spawn<profiler, detached+linked>(
-          vast_dir / "log", std::chrono::seconds(ms));
+          vast_dir / "log", std::chrono::seconds(secs));
 
-      if (config_.check("profile-cpu"))
+      if (config_.check("perftools-cpu"))
         send(prof, atom("start"), atom("perftools"), atom("cpu"));
 
-      if (config_.check("profile-heap"))
+      if (config_.check("perftools-heap"))
         send(prof, atom("start"), atom("perftools"), atom("heap"));
 
       send(prof, atom("start"), atom("rusage"));

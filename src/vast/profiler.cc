@@ -56,7 +56,40 @@ profiler::profiler(path log_dir, std::chrono::seconds secs)
 
 message_handler profiler::act()
 {
-  trap_exit(true);
+  attach_functor(
+      [=](uint32_t)
+      {
+#ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
+        ProfilerState state;
+        ProfilerGetCurrentState(&state);
+        if (state.enabled)
+        {
+          VAST_LOG_ACTOR_INFO("stops Gperftools CPU profiler");
+          ProfilerStop();
+          VAST_LOG_ACTOR_INFO(
+              "recorded " << state.samples_gathered <<
+              " Gperftools CPU profiler samples in " << state.profile_name);
+        }
+#endif
+#ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
+        if (IsHeapProfilerRunning())
+        {
+          VAST_LOG_ACTOR_INFO("stops Gperftools heap profiler");
+          HeapProfilerDump("cleanup");
+          HeapProfilerStop();
+        }
+#endif
+
+        file_.close();
+      });
+
+
+  if (! exists(log_dir_))
+  {
+    auto t = mkdir(log_dir_);
+    if (! t)
+      VAST_LOG_ACTOR_ERROR("could not create directory: " << t.error());
+  }
 
   auto filename = log_dir_ / "profile.log";
   file_.open(to_string(filename));
@@ -81,33 +114,6 @@ message_handler profiler::act()
 
   return
   {
-    [=](exit_msg const& e)
-    {
-#ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
-      ProfilerState state;
-      ProfilerGetCurrentState(&state);
-      if (state.enabled)
-      {
-        VAST_LOG_ACTOR_INFO("stops Gperftools CPU profiler");
-        ProfilerStop();
-        VAST_LOG_ACTOR_INFO(
-            "recorded " << state.samples_gathered <<
-            " Gperftools CPU profiler samples in " << state.profile_name);
-      }
-#endif
-#ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
-      if (IsHeapProfilerRunning())
-      {
-        VAST_LOG_ACTOR_INFO("stops Gperftools heap profiler");
-        HeapProfilerDump("cleanup");
-        HeapProfilerStop();
-      }
-#endif
-
-      file_.close();
-      quit(e.reason);
-    },
-
 #ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
     on(atom("start"), atom("perftools"), atom("cpu")) >> [=]
     {
@@ -117,14 +123,12 @@ message_handler profiler::act()
       ProfilerStart(f.c_str());
       delayed_send(this, secs_, atom("flush"));
     },
-
     on(atom("flush")) >> [=]
     {
       ProfilerFlush();
       delayed_send(this, secs_, atom("flush"));
     },
 #endif
-
 #ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
     on(atom("start"), atom("perftools"), atom("heap")) >> [=]
     {
@@ -134,13 +138,11 @@ message_handler profiler::act()
       HeapProfilerStart(f.c_str());
     },
 #endif
-
     on(atom("start"), atom("rusage")) >> [=]
     {
       measurement now;
       delayed_send(this, secs_, atom("data"), now.clock, now.usr, now.sys);
     },
-
     on(atom("data"), arg_match) >> [=](double clock, double usr, double sys)
     {
       measurement now;
