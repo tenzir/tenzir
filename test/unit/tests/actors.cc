@@ -43,7 +43,7 @@ TEST("all-in-one import")
   set_ports(cfg, 1);
   *cfg['v'] = 0;
   *cfg['V'] = 5;
-  *cfg['a'] = true;
+  *cfg['C'] = true;
   *cfg['I'] = true;
   *cfg['r'] = m57_day11_18::ftp;
   *cfg['p'] = "m57_day11_18";
@@ -91,7 +91,7 @@ TEST("basic actor integrity")
   set_ports(core_config, 2);
   *core_config['v'] = 0;
   *core_config['V'] = 5;
-  *core_config['a'] = true;
+  *core_config['C'] = true;
   *core_config['p'] = "m57-ssl";
   REQUIRE(core_config.verify());
 
@@ -125,7 +125,7 @@ TEST("basic actor integrity")
   set_ports(core_config, 3);
   *core_config['v'] = 0;
   *core_config['V'] = 5;
-  *core_config['a'] = true;
+  *core_config['C'] = true;
   *core_config['p'] = "m57-conn";
   REQUIRE(core_config.verify());
 
