@@ -1374,7 +1374,7 @@ public:
       auto first_type = t->at(trace.front().first);
       for (auto& p : trace)
         if (! p.first.empty())
-          if (auto r = util::get<record_type>(t->info()))
+          if (auto r = get<record_type>(t->info()))
             if (! first_type->represents(r->at(p.first)))
             {
               error_ =

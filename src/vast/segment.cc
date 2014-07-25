@@ -81,7 +81,7 @@ segment::writer::~writer()
 
 bool segment::writer::write(event const& e)
 {
-  if (! util::get<invalid_type>(e.type()->info()) && ! e.type()->name().empty())
+  if (! get<invalid_type>(e.type()->info()) && ! e.type()->name().empty())
     if (! schema_.find_type(e.type()->name()) && ! schema_.add(e.type()))
       return false;
 

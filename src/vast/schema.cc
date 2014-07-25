@@ -27,7 +27,7 @@ trial<void> schema::add(type_const_ptr t)
   if (! t)
     return error{"add empty type"};
 
-  if (util::get<invalid_type>(t->info()))
+  if (get<invalid_type>(t->info()))
     return error{"instance of invalid_type"};
 
   if (t->name().empty() && find_type_info(t->info()).empty())

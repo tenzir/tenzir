@@ -772,6 +772,13 @@ auto visit(Visitor&& v, Vs&&... vs)
 }
 
 } // namespace util
+
+// We want to use these functions to work via ADL within VAST.
+using util::which;
+using util::get;
+using util::is;
+using util::visit;
+
 } // namespace vast
 
 #endif
