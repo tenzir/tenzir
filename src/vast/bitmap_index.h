@@ -217,7 +217,7 @@ public:
 
   template <
     typename BitmapIndex,
-    typename = util::disable_if_same_or_derived<bitmap_index, BitmapIndex>
+    typename = util::disable_if_same_or_derived_t<bitmap_index, BitmapIndex>
   >
   bitmap_index(BitmapIndex&& bmi)
     : concept_{

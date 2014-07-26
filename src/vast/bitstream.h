@@ -387,7 +387,7 @@ public:
 
     template <
       typename Iterator,
-      typename = util::disable_if_same_or_derived<iterator, Iterator>
+      typename = util::disable_if_same_or_derived_t<iterator, Iterator>
     >
     iterator(Iterator&& i)
       : concept_{
@@ -634,7 +634,7 @@ public:
 
   template <
     typename Bitstream,
-    typename = util::disable_if_same_or_derived<bitstream, Bitstream>
+    typename = util::disable_if_same_or_derived_t<bitstream, Bitstream>
   >
   explicit bitstream(Bitstream&& bs)
     : concept_{

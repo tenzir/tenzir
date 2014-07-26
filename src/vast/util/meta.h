@@ -53,9 +53,13 @@ constexpr callable<F, A...> is_callable_with(F&&)
 
 /// @see http://bit.ly/uref-copy.
 template <typename A, typename B>
-using disable_if_same_or_derived = std::enable_if_t<
+using disable_if_same_or_derived = std::enable_if<
   ! std::is_base_of<A, std::remove_reference_t<B>>::value
 >;
+
+template <typename A, typename B>
+using disable_if_same_or_derived_t =
+  typename disable_if_same_or_derived<A, B>::type;
 
 // Integral bool
 template <bool B, typename...>
