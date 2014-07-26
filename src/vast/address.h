@@ -40,21 +40,8 @@ public:
   /// @param str The string holding the IPv6 address.
   static trial<address> from_v6(char const* str);
 
+  /// Default-constructs an (invalid) address.
   address();
-
-  /// Constructs an address from a C string.
-  /// @param str The string holding and IPv4 or IPv6 address.
-  explicit address(char const* str);
-
-  /// Constructs an address from a C++ string.
-  /// @param str The string holding and IPv4 or IPv6 address.
-  /// @returns An engaged option iff parsing succeeded.
-  explicit address(std::string const& str);
-
-  /// Constructs an address from a VAST string.
-  /// @param str The string holding and IPv4 or IPv6 address.
-  /// @returns An engaged option iff parsing succeeded.
-  explicit address(string const& str);
 
   /// Constructs an address from a raw bytes.
   ///
