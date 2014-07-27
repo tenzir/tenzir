@@ -202,7 +202,7 @@ trial<offset> record_type::resolve(key const& k) const
       {
         // If the name matches, we have to check whether we're continuing with
         // an intermediate record or have reached the last symbol.
-        rec = util::get<record_type>(rec->args[i].type->info());
+        rec = get<record_type>(rec->args[i].type->info());
         if (! (rec || id + 1 == k.end()))
           return error{"intermediate arguments must be records"};
 
@@ -343,7 +343,7 @@ record_type record_type::flatten() const
 {
   record_type result;
   for (auto& outer : args)
-    if (auto r = util::get<record_type>(outer.type->info()))
+    if (auto r = get<record_type>(outer.type->info()))
       for (auto& inner : r->flatten().args)
         result.args.emplace_back(outer.name + "." + inner.name, inner.type);
     else
@@ -368,7 +368,7 @@ record_type record_type::unflatten() const
       if (r->args.empty() || r->args.back().name != name)
         r->args.emplace_back(std::move(name), type::make<record_type>());
 
-      auto next = util::get<record_type>(r->args.back().type->info());
+      auto next = get<record_type>(r->args.back().type->info());
 
       // Hack: because the traversal algorithm is a lot easier when traversing
       // the symbol sequence front to back, we bypass the immutability of types
@@ -402,7 +402,7 @@ type_const_ptr record_type::at(key const& k) const
     if (i + 1 == k.size())
       return arg->type;
 
-    r = util::get<record_type>(arg->type->info());
+    r = get<record_type>(arg->type->info());
     if (! r)
       return {};
   }
@@ -423,7 +423,7 @@ type_const_ptr record_type::at(offset const& o) const
     if (i + 1 == o.size())
       return t;
 
-    r = util::get<record_type>(t->info());
+    r = get<record_type>(t->info());
     if (! r)
       return {};
   }
@@ -441,7 +441,7 @@ trial<void> each_impl(record_type const& r,
   {
     t.push_back(&a);
 
-    if (auto inner = util::get<record_type>(a.type->info()))
+    if (auto inner = get<record_type>(a.type->info()))
     {
       each_impl(*inner, f, t);
     }
@@ -608,7 +608,7 @@ type_const_ptr type::at(key const& k) const
     return {};
   if (k.size() == 1)
     return shared_from_this();
-  else if (auto r = util::get<record_type>(info_))
+  else if (auto r = get<record_type>(info_))
     return r->at({k.begin() + 1, k.end()});
   else
     return {};
@@ -616,7 +616,7 @@ type_const_ptr type::at(key const& k) const
 
 type_const_ptr type::at(offset const& o) const
 {
-  if (auto r = util::get<record_type>(info_))
+  if (auto r = get<record_type>(info_))
     return r->at(o);
   else if (o.empty())
     return shared_from_this();
@@ -626,7 +626,7 @@ type_const_ptr type::at(offset const& o) const
 
 void type::each(std::function<void(key const&, offset const&)> f) const
 {
-  if (util::get<record_type>(info_))
+  if (get<record_type>(info_))
     apply_visitor(eacher{f}, info_);
   else
     f({name_}, {});

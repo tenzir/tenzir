@@ -70,8 +70,8 @@ TEST("factory construction")
 {
   using pair = util::variant<double, int>;
 
-  CHECK(util::get<double>(pair::make(0)));
-  CHECK(util::get<int>(pair::make(1)));
+  CHECK(get<double>(pair::make(0)));
+  CHECK(get<int>(pair::make(1)));
 }
 
 TEST("operator==")
@@ -102,25 +102,25 @@ TEST("positional introspection")
 
 TEST("type-based access")
 {
-  REQUIRE(util::is<int>(t0));
-  CHECK(*util::get<int>(t0) == 42);
+  REQUIRE(is<int>(t0));
+  CHECK(*get<int>(t0) == 42);
 
-  REQUIRE(util::is<double>(t1));
-  CHECK(*util::get<double>(t1) == 4.2);
+  REQUIRE(is<double>(t1));
+  CHECK(*get<double>(t1) == 4.2);
 
-  REQUIRE(util::is<std::string>(t2));
-  CHECK(*util::get<std::string>(t2) == "42");
+  REQUIRE(is<std::string>(t2));
+  CHECK(*get<std::string>(t2) == "42");
 }
 
 TEST("assignment")
 {
-  *util::get<int>(t0) = 1337;
-  *util::get<double>(t1) = 1.337;
+  *get<int>(t0) = 1337;
+  *get<double>(t1) = 1.337;
   std::string leet{"1337"};
-  *util::get<std::string>(t2) = std::move(leet);
-  CHECK(*util::get<int>(t0) == 1337);
-  CHECK(*util::get<double>(t1) == 1.337);
-  CHECK(*util::get<std::string>(t2) == "1337");
+  *get<std::string>(t2) = std::move(leet);
+  CHECK(*get<int>(t0) == 1337);
+  CHECK(*get<double>(t1) == 1.337);
+  CHECK(*get<std::string>(t2) == "1337");
 }
 
 TEST("unary visitation")
@@ -129,7 +129,7 @@ TEST("unary visitation")
   apply_visitor(v, t1);           // lvalue
   apply_visitor(stateful{}, t1);  // rvalue
   apply_visitor(doppler{}, t1);
-  CHECK(*util::get<double>(t1) == 1.337 * 2);
+  CHECK(*get<double>(t1) == 1.337 * 2);
 }
 
 TEST("binary visitation")
@@ -168,7 +168,7 @@ TEST("delayed visitation")
   CHECK(s.state == 3);
 
   std::for_each(doubles.begin(), doubles.end(), util::apply_visitor(doppler{}));
-  CHECK(*util::get<int>(doubles[2]) == 84);
+  CHECK(*get<int>(doubles[2]) == 84);
 }
 
 namespace {
@@ -221,9 +221,9 @@ TEST("variant concept")
 {
   concept c;
 
-  CHECK(util::which(c) == 0);
-  REQUIRE(util::is<int>(c));
-  CHECK(*util::get<int>(c) == 0);
+  CHECK(which(c) == 0);
+  REQUIRE(is<int>(c));
+  CHECK(*get<int>(c) == 0);
 
   auto r = util::visit([](auto x) -> bool { return !! x; }, c);
   CHECK(! r);
