@@ -486,6 +486,9 @@ private:
   >
   static auto invoke(Internal internal, Storage&& storage, Visitor&& visitor,
                      Args&&... args)
+    // FIXME: why does adding this decltype expression squelch compile errors
+    // with visitors returning references?
+    -> decltype(visitor(*reinterpret_cast<const_type<T, Storage>*>(&storage), args...))
   {
     auto x = reinterpret_cast<const_type<T, Storage>*>(&storage);
     return visitor(get_value(*x, internal), std::forward<Args>(args)...);
@@ -590,34 +593,33 @@ private:
   tag_type which_;
 };
 
+namespace detail {
+
 template <typename T>
 struct getter
 {
+  T const* operator()(T const& x) const
+  {
+    return &x;
+  }
+
   T* operator()(T& x) const
   {
     return &x;
   }
 
   template <typename U>
-  T* operator()(U const&) const
+  T const* operator()(U const&) const
+  {
+    return nullptr;
+  }
+
+  template <typename U>
+  T* operator()(U&) const
   {
     return nullptr;
   }
 };
-
-template <typename T, typename Tag, typename... Ts>
-T* get(basic_variant<Tag, Ts...>& var)
-{
-  return apply_visitor(getter<T>(), var);
-}
-
-template <typename T, typename Tag, typename... Ts>
-T const* get(basic_variant<Tag, Ts...> const& var)
-{
-  return apply_visitor(getter<T const>(), var);
-}
-
-namespace detail {
 
 template <typename Visitor>
 class delayed_visitor
@@ -725,48 +727,45 @@ using variant = basic_variant<size_t, Ts...>;
 //
 // This function is found via ADL and enables the following free functions:
 //
-//    1) `auto which(V&& x)`
-//    2) `auto get(V&& x)`
-//    3) `bool is(V&& x)`
-//    4) `auto visit(Visitor, Vs&&... vs)`
+//    1) `auto visit(Visitor, Vs&&... vs)`
+//    2) `auto which(V&& x)`
+//    3) `auto get(V&& x)`
+//    4) `bool is(V&& x)`
 
-// Forward declaration
-namespace detail { struct dummy; }
-template <typename V>
-auto expose(V&&) -> std::enable_if_t<std::is_same<V, detail::dummy>::value>;
-
-template <typename V>
-auto which(V&& v)
-// FIXME: why does this SFINAE expression fail? It has the clearest semantics.
-//  -> std::enable_if_t<is_callable_with<V>(expose), decltype(get<T>(expose(v))>
-  -> std::enable_if_t<
-       std::is_reference<decltype(expose(v))>::value,
-       decltype(expose(v).which())
-     >
+template <typename Tag, typename... Ts>
+basic_variant<Tag, Ts...>& expose(basic_variant<Tag, Ts...>& v)
 {
-  return expose(v).which();
+  return v;
 }
 
-template <typename T, typename V>
-auto get(V&& v)
-  -> std::enable_if_t<
-       std::is_reference<decltype(expose(v))>::value,
-       decltype(get<T>(expose(v)))
-     >
+template <typename Tag, typename... Ts>
+basic_variant<Tag, Ts...> const& expose(basic_variant<Tag, Ts...> const& v)
 {
-  return get<T>(expose(v));
-}
-
-template <typename T, typename V>
-auto is(V&& v)
-{
-  return get<T>(v) != nullptr;
+  return v;
 }
 
 template <typename Visitor, typename... Vs>
 auto visit(Visitor&& v, Vs&&... vs)
 {
   return apply_visitor(std::forward<Visitor>(v), expose(vs)...);
+}
+
+template <typename V>
+auto which(V&& v)
+{
+  return expose(v).which();
+}
+
+template <typename T, typename V>
+auto get(V&& v)
+{
+  return visit(detail::getter<T>{}, v);
+}
+
+template <typename T, typename V>
+auto is(V&& v)
+{
+  return get<T>(v) != nullptr;
 }
 
 } // namespace util

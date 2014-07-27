@@ -126,32 +126,32 @@ TEST("assignment")
 TEST("unary visitation")
 {
   stateful v;
-  apply_visitor(v, t1);           // lvalue
-  apply_visitor(stateful{}, t1);  // rvalue
-  apply_visitor(doppler{}, t1);
+  visit(v, t1);           // lvalue
+  visit(stateful{}, t1);  // rvalue
+  visit(doppler{}, t1);
   CHECK(*get<double>(t1) == 1.337 * 2);
 }
 
 TEST("binary visitation")
 {
-  CHECK(! apply_visitor(binary{}, t0, t1));
-  CHECK(! apply_visitor(binary{}, t1, t0));
-  CHECK(! apply_visitor(binary{}, t0, t2));
-  CHECK(apply_visitor(binary{}, t0, triple{84}));
+  CHECK(! visit(binary{}, t0, t1));
+  CHECK(! visit(binary{}, t1, t0));
+  CHECK(! visit(binary{}, t0, t2));
+  CHECK(visit(binary{}, t0, triple{84}));
 }
 
 TEST("ternary visitation")
 {
   using trio = util::variant<bool, double, int>;
-  CHECK(apply_visitor(ternary{}, trio{true}, trio{4.2}, trio{42}) == 4.2);
-  CHECK(apply_visitor(ternary{}, trio{false}, trio{4.2}, trio{1337}) == 1337.0);
+  CHECK(visit(ternary{}, trio{true}, trio{4.2}, trio{42}) == 4.2);
+  CHECK(visit(ternary{}, trio{false}, trio{4.2}, trio{1337}) == 1337.0);
 }
 
 TEST("generic lambda visitation")
 {
   using pair = util::variant<double, int>;
   auto fourty_two = pair{42};
-  auto r = apply_visitor([](auto x) -> int { return x + 42; }, fourty_two);
+  auto r = visit([](auto x) -> int { return x + 42; }, fourty_two);
   CHECK(r == 84);
 }
 
@@ -164,11 +164,38 @@ TEST("delayed visitation")
   doubles.emplace_back(42);
 
   stateful s;
-  std::for_each(doubles.begin(), doubles.end(), util::apply_visitor(s));
+  std::for_each(doubles.begin(), doubles.end(), visit(s));
   CHECK(s.state == 3);
 
-  std::for_each(doubles.begin(), doubles.end(), util::apply_visitor(doppler{}));
+  std::for_each(doubles.begin(), doubles.end(), visit(doppler{}));
   CHECK(*get<int>(doubles[2]) == 84);
+}
+
+namespace {
+
+struct reference_returner
+{
+  static constexpr double nada = 0.0;
+
+  template <typename T>
+  double const& operator()(T const&) const
+  {
+    return nada;
+  }
+
+  double const& operator()(double const& d) const
+  {
+    return d;
+  }
+};
+
+} // namespace <anonymous>
+
+TEST("visitor with reference as return value")
+{
+  util::variant<double, int> v = 4.2;
+  double const& d = visit(reference_returner{}, v);
+  CHECK(d == *get<double>(v));
 }
 
 namespace {
@@ -225,6 +252,6 @@ TEST("variant concept")
   REQUIRE(is<int>(c));
   CHECK(*get<int>(c) == 0);
 
-  auto r = util::visit([](auto x) -> bool { return !! x; }, c);
+  auto r = visit([](auto x) -> bool { return !! x; }, c);
   CHECK(! r);
 }
