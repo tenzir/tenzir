@@ -243,7 +243,7 @@ public:
   template <typename Internal, typename Visitor, typename... Args>
   auto apply(Visitor&& visitor, Args&&... args)
   {
-    return visit_impl(Internal{}, which_, &storage_,
+    return visit_impl(which_, Internal{}, storage_,
                       std::forward<Visitor>(visitor),
                       std::forward<Args>(args)...);
   }
@@ -251,7 +251,7 @@ public:
   template <typename Internal, typename Visitor, typename... Args>
   auto apply(Visitor&& visitor, Args&&... args) const
   {
-    return visit_impl(Internal{}, which_, &storage_,
+    return visit_impl(which_, Internal{}, storage_,
                       std::forward<Visitor>(visitor),
                       std::forward<Args>(args)...);
   }
@@ -451,22 +451,20 @@ private:
     return x;
   }
 
+  template <typename T, typename Internal>
+  static T const& get_value(T const& x, Internal)
+  {
+    return x;
+  }
+
   template <typename T>
   static T& get_value(recursive_wrapper<T>& x, std::false_type)
   {
     return x.get();
   }
 
-  struct factory { };
-  basic_variant(factory, tag_type tag)
-  {
-    which_ = tag;
-    apply<std::false_type>(default_constructor{*this});
-  }
-
   template <typename T>
-  static T const&
-  get_value(recursive_wrapper<T> const& x, std::false_type)
+  static T const& get_value(recursive_wrapper<T> const& x, std::false_type)
   {
     return x.get();
   }
@@ -474,16 +472,14 @@ private:
   template <typename T, typename Storage>
   using const_type =
     std::conditional_t<
-      std::is_const<
-        std::remove_pointer_t<std::remove_reference_t<Storage>>
-      >::value,
+      std::is_const<std::remove_reference_t<Storage> >::value,
       T const,
       T
     >;
 
   template <
-    typename Internal,
     typename T,
+    typename Internal,
     typename Storage,
     typename Visitor,
     typename... Args
@@ -491,7 +487,7 @@ private:
   static auto invoke(Internal internal, Storage&& storage, Visitor&& visitor,
                      Args&&... args)
   {
-    auto x = reinterpret_cast<const_type<T, Storage>*>(storage);
+    auto x = reinterpret_cast<const_type<T, Storage>*>(&storage);
     return visitor(get_value(*x, internal), std::forward<Args>(args)...);
   }
 
@@ -501,30 +497,24 @@ private:
     typename Visitor,
     typename... Args
   >
-  static auto visit_impl(Internal internal,
-                         tag_type which,
+  static auto visit_impl(tag_type which,
+                         Internal internal,
                          Storage&& storage,
                          Visitor&& visitor,
                          Args&&... args)
   {
     using visitor_type = std::decay_t<Visitor>;
+    using this_front = const_type<front, Storage>;
+    using result_type = decltype(visitor(std::declval<this_front&>(), args...));
 
     // TODO: Consider all overloads, not just the one with the first type.
-    static_assert(callable<visitor_type, front const&, Args&&...>::value
-                  || callable<visitor_type, front&, Args&&...>::value,
+    static_assert(callable<visitor_type, this_front&, Args&&...>::value,
                   "visitor has no viable overload for operator()");
 
-    using result_type =
-      std::conditional_t<
-        callable<visitor_type, front const&, Args&&...>::value,
-        std::result_of_t<visitor_type(front const&, Args&&...)>,
-        std::result_of_t<visitor_type(front&, Args&&...)>
-      >;
-
-    using fn = result_type (*)(Internal, Storage&&, Visitor&&, Args&&...);
+    using fn = result_type (*)(Internal, Storage, Visitor&&, Args&&...);
     static fn callers[sizeof...(Ts)] =
     {
-      &invoke<Internal, Ts, Storage&&, Visitor, Args&&...>...
+      &invoke<Ts, Internal, Storage, Visitor, Args...>...
     };
 
     assert(static_cast<size_t>(which) >= 0
@@ -535,6 +525,13 @@ private:
         std::forward<Storage>(storage),
         std::forward<Visitor>(visitor),
         std::forward<Args>(args)...);
+  }
+
+  struct factory { };
+  basic_variant(factory, tag_type tag)
+  {
+    which_ = tag;
+    apply<std::false_type>(default_constructor{*this});
   }
 
   template <typename Visitor>
@@ -699,7 +696,8 @@ auto apply_visitor(Visitor& visitor)
 template <typename Visitor, typename Visitable>
 auto apply_visitor(Visitor&& visitor, Visitable&& visitable)
 {
-  return visitable.template apply<std::false_type>(visitor);
+  return visitable.template apply<std::false_type>(
+      std::forward<Visitor>(visitor));
 }
 
 template <typename Visitor, typename V, typename... Vs>
