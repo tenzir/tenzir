@@ -86,11 +86,21 @@ TEST("operator==")
   CHECK(p0 != p1);
   CHECK(p0 != p2);
   CHECK(p0 != p3);
-
   CHECK(p1 != p3);
 
   p1 = 4.2;
   CHECK(p1 == p3);
+
+  CHECK(! (p1 < p3 || p1 > p3));
+  CHECK(p1 < p2);
+  CHECK(p2 > p1);
+  CHECK(p0 < p2);
+
+  // The total ordering works component-wise: for the pair variant, all double
+  // types are less-than int types.
+  CHECK(p1 < p0);
+  CHECK(p1 < p2);
+  CHECK(p3 < p2);
 }
 
 TEST("positional introspection")

@@ -41,7 +41,7 @@ namespace vast {
 namespace util {
 
 template <typename T>
-class recursive_wrapper : equality_comparable<recursive_wrapper<T>>
+class recursive_wrapper : totally_ordered<recursive_wrapper<T>>
 {
 public:
   template <
@@ -122,6 +122,16 @@ private:
   {
     *x_ = std::forward<U>(u);
   }
+
+  friend bool operator==(recursive_wrapper const& x, recursive_wrapper const& y)
+  {
+    return *x.x_ == *y.x_;
+  }
+
+  friend bool operator<(recursive_wrapper const& x, recursive_wrapper const& y)
+  {
+    return *x.x_ < *y.x_;
+  }
 };
 
 /// A variant class.
@@ -129,7 +139,7 @@ private:
 ///     it must start at 0 and increment sequentially by 1.
 /// @tparam Ts The types the variant should assume.
 template <typename Tag, typename... Ts>
-class basic_variant : equality_comparable<basic_variant<Tag, Ts...>>
+class basic_variant : totally_ordered<basic_variant<Tag, Ts...>>
 {
 #ifdef VAST_GCC
   // Workaround for http://stackoverflow.com/q/24433658/1170277.
@@ -462,10 +472,10 @@ private:
     // FIXME: why does adding this decltype expression squelch compile errors
     // occuring with visitors returning references?
     -> decltype(visitor(*reinterpret_cast<const_type<T, Storage>*>(&storage),
-                        std::forward<Args>(args)...))
+                        args...))
   {
     auto x = reinterpret_cast<const_type<T, Storage>*>(&storage);
-    return visitor(get_value(*x, internal), std::forward<Args>(args)...);
+    return visitor(get_value(*x, internal), args...);
   }
 
   template <
@@ -565,6 +575,52 @@ private:
 #endif
 
   tag_type which_;
+
+private:
+  struct equals
+  {
+    equals(basic_variant const& self)
+      : self_{self}
+    {
+    }
+
+    template <typename Rhs>
+    bool operator()(Rhs const& rhs) const
+    {
+      return *reinterpret_cast<Rhs const*>(&self_.storage_) == rhs;
+    }
+
+    basic_variant const& self_;
+  };
+
+  struct less_than
+  {
+    less_than(basic_variant const& self)
+      : self_{self}
+    {
+    }
+
+    template <typename Rhs>
+    bool operator()(Rhs const& rhs) const
+    {
+      return *reinterpret_cast<Rhs const*>(&self_.storage_) < rhs;
+    }
+
+    basic_variant const& self_;
+  };
+
+  friend bool operator==(basic_variant const& x, basic_variant const& y)
+  {
+    return x.which_ == y.which_ && y.apply_visitor_internal(equals{x});
+  }
+
+  friend bool operator<(basic_variant const& x, basic_variant const& y)
+  {
+    if (x.which_ == y.which_)
+      return y.apply_visitor_internal(less_than{x});
+    else
+      return x.which_ < y.which_;
+  }
 };
 
 namespace detail {
