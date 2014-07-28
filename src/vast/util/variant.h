@@ -460,8 +460,9 @@ private:
   static auto invoke(Internal internal, Storage&& storage, Visitor&& visitor,
                      Args&&... args)
     // FIXME: why does adding this decltype expression squelch compile errors
-    // with visitors returning references?
-    -> decltype(visitor(*reinterpret_cast<const_type<T, Storage>*>(&storage), args...))
+    // occuring with visitors returning references?
+    -> decltype(visitor(*reinterpret_cast<const_type<T, Storage>*>(&storage),
+                        std::forward<Args>(args)...))
   {
     auto x = reinterpret_cast<const_type<T, Storage>*>(&storage);
     return visitor(get_value(*x, internal), std::forward<Args>(args)...);
@@ -487,8 +488,8 @@ private:
     static_assert(callable<visitor_type, this_front&, Args&&...>::value,
                   "visitor has no viable overload for operator()");
 
-    using fn = result_type (*)(Internal, Storage, Visitor&&, Args&&...);
-    static fn callers[sizeof...(Ts)] =
+    using fn = result_type (*)(Internal, Storage&&, Visitor&&, Args&&...);
+    static constexpr fn callers[sizeof...(Ts)] =
     {
       &invoke<Ts, Internal, Storage, Visitor, Args...>...
     };

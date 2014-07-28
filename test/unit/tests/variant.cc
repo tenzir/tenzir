@@ -175,11 +175,10 @@ namespace {
 
 struct reference_returner
 {
-  static constexpr double nada = 0.0;
-
   template <typename T>
   double const& operator()(T const&) const
   {
+    static constexpr double nada = 0.0;
     return nada;
   }
 
@@ -194,8 +193,11 @@ struct reference_returner
 TEST("visitor with reference as return value")
 {
   util::variant<double, int> v = 4.2;
-  double const& d = visit(reference_returner{}, v);
-  CHECK(d == *get<double>(v));
+  reference_returner r;
+  CHECK(std::is_same<decltype(r(42)), double const&>::value);
+  CHECK(! std::is_same<decltype(r(42)), double>::value);
+  CHECK(std::is_same<decltype(visit(r, v)), double const&>::value);
+  CHECK(! std::is_same<decltype(visit(r, v)), double>::value);
 }
 
 namespace {
