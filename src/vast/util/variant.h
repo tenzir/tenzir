@@ -122,11 +122,6 @@ private:
   {
     *x_ = std::forward<U>(u);
   }
-
-  friend bool operator==(recursive_wrapper const& x, recursive_wrapper const& y)
-  {
-    return *x.x_ == *y.x_;
-  }
 };
 
 /// A variant class.
@@ -254,11 +249,6 @@ public:
     return visit_impl(which_, Internal{}, storage_,
                       std::forward<Visitor>(visitor),
                       std::forward<Args>(args)...);
-  }
-
-  friend bool operator==(basic_variant const& x, basic_variant const& y)
-  {
-    return x.which_ == y.which_ && y.apply_visitor_internal(equality(x));
   }
 
 private:
@@ -426,23 +416,6 @@ private:
   struct initializer<TT>
   {
     void initialize(); //this should never match
-  };
-
-  struct equality
-  {
-    equality(basic_variant const& self)
-      : self_(self)
-    {
-    }
-
-    template <typename Rhs>
-    bool operator()(Rhs const& rhs) const
-    {
-      return *reinterpret_cast<Rhs const*>(&self_.storage_) == rhs;
-    }
-
-  private:
-    basic_variant const& self_;
   };
 
   template <typename T, typename Internal>
