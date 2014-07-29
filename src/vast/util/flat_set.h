@@ -121,14 +121,14 @@ public:
 
   iterator find(value_type const& x)
   {
-    auto i = std::lower_bound(begin(), end(), x, cmp_);
-    return i == end() || cmp_(x, *i) ? end() : i;
+    auto i = std::lower_bound(begin(), end(), x, compare{});
+    return i == end() || compare{}(x, *i) ? end() : i;
   }
 
   const_iterator find(value_type const& x) const
   {
-    auto i = std::lower_bound(begin(), end(), x, cmp_);
-    return i == end() || cmp_(x, *i) ? end() : i;
+    auto i = std::lower_bound(begin(), end(), x, compare{});
+    return i == end() || compare{}(x, *i) ? end() : i;
   }
 
   bool contains(value_type const& x) const
@@ -216,7 +216,7 @@ public:
   std::pair<iterator, bool> insert(T x)
   {
     auto i = std::lower_bound(begin(), end(), x);
-    if (i == end() || cmp_(x, *i))
+    if (i == end() || compare{}(x, *i))
       return {v_.insert(i, std::move(x)), true};
     else
       return {i, false};
@@ -292,7 +292,6 @@ public:
 
 private:
   vector_type v_;
-  compare cmp_;
 };
 
 } // namespace util
