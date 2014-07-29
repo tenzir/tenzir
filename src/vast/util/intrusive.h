@@ -73,40 +73,47 @@ public:
 
   intrusive_ptr() = default;
 
-  intrusive_ptr(T* p, bool add_ref = true)
-    : ptr_(p)
+  intrusive_ptr(T* x, bool add_ref = true)
+    : ptr_{x}
   {
     if (ptr_ && add_ref)
       ref(ptr_);
   }
 
+  template <typename U>
+  intrusive_ptr(intrusive_ptr<U> other)
+    : ptr_{other.release()}
+  {
+    static_assert(std::is_convertible<T*, U*>::value,
+                  "U* is not assignable to T*");
+  }
+
   intrusive_ptr(intrusive_ptr const& other)
-    : ptr_(other.get())
+    : ptr_{other.get()}
   {
     if (ptr_)
       ref(ptr_);
   }
 
-  template <typename U>
-  intrusive_ptr(intrusive_ptr<U> other)
-    : ptr_(other.release())
-  {
-    static_assert(std::is_convertible<T*, U*>::value,
-                  "U* cannot be assigned to T*");
-  }
-
-  intrusive_ptr(intrusive_ptr&& other)
-    : ptr_(other.release())
+  intrusive_ptr(intrusive_ptr&& other) noexcept
+    : ptr_{other.release()}
   {
   }
 
-  ~intrusive_ptr()
+  ~intrusive_ptr() noexcept
   {
     if (ptr_)
       unref(ptr_);
   }
 
-  intrusive_ptr& operator=(intrusive_ptr other)
+  intrusive_ptr& operator=(intrusive_ptr const& other)
+  {
+    intrusive_ptr tmp{other};
+    tmp.swap(*this);
+    return *this;
+  }
+
+  intrusive_ptr& operator=(intrusive_ptr&& other) noexcept
   {
     other.swap(*this);
     return *this;
@@ -118,7 +125,7 @@ public:
     return *this;
   }
 
-  void swap(intrusive_ptr& other)
+  void swap(intrusive_ptr& other) noexcept
   {
     std::swap(ptr_, other.ptr_);
   }
