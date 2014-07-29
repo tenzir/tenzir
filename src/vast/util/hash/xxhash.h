@@ -36,13 +36,24 @@ class xxhash : public hash<xxhash>
 
 public:
   using digest_type = unsigned;
+  using state_type = detail::XXH32_stateSpace_t;
 
   /// The maximum length of an xxhash computation.
   static constexpr size_t max_len = (1u << 31) - 1;
 
-  xxhash(uint32_t seed = 0)
+  explicit xxhash(uint32_t seed = 0)
   {
     detail::XXH32_resetState(&state_, seed);
+  }
+
+  explicit xxhash(state_type state)
+    : state_(state)
+  {
+  }
+
+  state_type const& state() const
+  {
+    return state_;
   }
 
 private:
@@ -66,7 +77,7 @@ private:
     return detail::XXH32_intermediateDigest(&state_);
   }
 
-  detail::XXH32_stateSpace_t state_;
+  state_type state_;
 };
 
 } // namespace util
