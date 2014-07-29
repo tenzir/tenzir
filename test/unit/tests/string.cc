@@ -67,3 +67,69 @@ TEST("JSON string escaping")
   CHECK(json_unescape("\"invalid \\x escape sequence\"") == "");
   CHECK(json_unescape("\"unescaped\"quote\"") == "");
 }
+
+namespace {
+
+template <typename Iterator>
+auto to_strings(std::vector<std::pair<Iterator, Iterator>> const& v)
+{
+  std::vector<std::string> strs;
+  strs.resize(v.size());
+  for (size_t i = 0; i < v.size(); ++i)
+    strs[i] = {v[i].first, v[i].second};
+
+  return strs;
+}
+
+} // namespace <anonymous>
+
+TEST("string splitting")
+{
+  std::string str = "Der Geist, der stets verneint.";
+  auto s = to_strings(split(str.begin(), str.end(), " "));
+  REQUIRE(s.size() == 5);
+  CHECK(s[0] == "Der");
+  CHECK(s[1] == "Geist,");
+  CHECK(s[2] == "der");
+  CHECK(s[3] == "stets");
+  CHECK(s[4] == "verneint.");
+
+  // TODO: it would be more consistent if split considered not only before the
+  // first seperator, but also after the last one. But this is not how many
+  // split implementations operate.
+  str = ",,";
+  s = to_strings(split(str.begin(), str.end(), ","));
+  REQUIRE(s.size() == 2);
+  CHECK(s[0] == "");
+  CHECK(s[1] == "");
+
+  str = ",a,b,c,";
+  s = to_strings(split(str.begin(), str.end(), ","));
+  REQUIRE(s.size() == 4);
+  CHECK(s[0] == "");
+  CHECK(s[1] == "a");
+  CHECK(s[2] == "b");
+  CHECK(s[3] == "c");
+
+  str = "a*,b,c";
+  s = to_strings(split(str.begin(), str.end(), ",", "*"));
+  REQUIRE(s.size() == 2);
+  CHECK(s[0] == "a*,b");
+  CHECK(s[1] == "c");
+
+  str = "a,b,c,d,e,f";
+  s = to_strings(split(str.begin(), str.end(), ",", "", 2));
+  REQUIRE(s.size() == 2);
+  CHECK(s[0] == "a");
+  CHECK(s[1] == "b,c,d,e,f");
+
+  str = "a-b-c*-d";
+  s = to_strings(split(str.begin(), str.end(), "-", "*", -1, true));
+  REQUIRE(s.size() == 5);
+  CHECK(s[0] == "a");
+  CHECK(s[1] == "-");
+  CHECK(s[2] == "b");
+  CHECK(s[3] == "-");
+  CHECK(s[4] == "c*-d");
+
+}
