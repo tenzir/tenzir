@@ -68,21 +68,6 @@ TEST("JSON string escaping")
   CHECK(json_unescape("\"unescaped\"quote\"") == "");
 }
 
-namespace {
-
-template <typename Iterator>
-auto to_strings(std::vector<std::pair<Iterator, Iterator>> const& v)
-{
-  std::vector<std::string> strs;
-  strs.resize(v.size());
-  for (size_t i = 0; i < v.size(); ++i)
-    strs[i] = {v[i].first, v[i].second};
-
-  return strs;
-}
-
-} // namespace <anonymous>
-
 TEST("string splitting")
 {
   std::string str = "Der Geist, der stets verneint.";

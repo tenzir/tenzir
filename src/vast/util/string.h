@@ -49,8 +49,6 @@ std::string json_unescape(std::string const& str);
 /// @pre `! sep.empty()`
 /// @returns A vector of iterator pairs each of which delimit a single field
 ///          with a range *[start, end)*.
-/// @todo Implement regex-based splitting. At this point the parameter
-///       *include_sep* has not much significance.
 template <typename Iterator>
 std::vector<std::pair<Iterator, Iterator>>
 split(Iterator begin, Iterator end, std::string const& sep, std::string const& esc = "",
@@ -122,6 +120,20 @@ split(Iterator begin, Iterator end, std::string const& sep, std::string const& e
     pos.emplace_back(prev, end);
 
   return pos;
+}
+
+/// Constructs a `std::vector<std::string>` from a ::split result.
+/// @param v The vector of iterator pairs from ::split.
+/// @returns a vector of strings with the split elements.
+template <typename Iterator>
+auto to_strings(std::vector<std::pair<Iterator, Iterator>> const& v)
+{
+  std::vector<std::string> strs;
+  strs.resize(v.size());
+  for (size_t i = 0; i < v.size(); ++i)
+    strs[i] = {v[i].first, v[i].second};
+
+  return strs;
 }
 
 } // namespace util
