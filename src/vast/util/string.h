@@ -122,6 +122,14 @@ split(Iterator begin, Iterator end, std::string const& sep, std::string const& e
   return pos;
 }
 
+std::vector<std::pair<std::string::const_iterator, std::string::const_iterator>>
+inline split(std::string const& str, std::string const& sep,
+             std::string const& esc = "", int max_splits = -1,
+             bool include_sep = false)
+{
+  return split(str.begin(), str.end(), sep, esc, max_splits, include_sep);
+}
+
 /// Constructs a `std::vector<std::string>` from a ::split result.
 /// @param v The vector of iterator pairs from ::split.
 /// @returns a vector of strings with the split elements.
