@@ -51,16 +51,6 @@ constexpr callable<F, A...> is_callable_with(F&&)
   return callable<F(A...)>{};
 }
 
-/// @see http://bit.ly/uref-copy.
-template <typename A, typename B>
-using disable_if_same_or_derived = std::enable_if<
-  ! std::is_base_of<A, std::remove_reference_t<B>>::value
->;
-
-template <typename A, typename B>
-using disable_if_same_or_derived_t =
-  typename disable_if_same_or_derived<A, B>::type;
-
 // Integral bool
 template <bool B, typename...>
 using bool_t = typename std::integral_constant<bool, B>::type;
@@ -90,14 +80,22 @@ struct all<Head, Tail...> : if_then_else<Head, all<Tail...>, bool_t<false>> { };
 // SFINAE helpers
 namespace detail { enum class enabler { }; }
 
-template <bool B, typename U = void>
-using disable_if = std::enable_if<! B, U>;
+template <bool B, typename T = void>
+using disable_if = std::enable_if<! B, T>;
 
-template <bool B, typename U = void>
-using disable_if_t = typename disable_if<B, U>::type;
+template <bool B, typename T = void>
+using disable_if_t = typename disable_if<B, T>::type;
 
-template <typename... Ts>
-using enable_if_all = std::enable_if_t<all<Ts...>::value, detail::enabler>;
+template <typename A, typename B>
+using is_same_or_derived = std::is_base_of<A, std::remove_reference_t<B>>;
+
+/// @see http://bit.ly/uref-copy.
+template <typename A, typename B>
+using disable_if_same_or_derived = disable_if<is_same_or_derived<A, B>::value>;
+
+template <typename A, typename B>
+using disable_if_same_or_derived_t =
+  typename disable_if_same_or_derived<A, B>::type;
 
 template <typename... Ts>
 using disable_if_all = disable_if_t<all<Ts...>::value, detail::enabler>;
