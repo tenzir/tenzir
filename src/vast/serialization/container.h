@@ -56,9 +56,9 @@ void deserialize(deserializer& source, std::array<T, N>& a)
     source >> x;
 }
 
-template <typename T>
+template <typename T, typename Allocator>
 std::enable_if_t<util::is_byte<T>::value>
-serialize(serializer& sink, std::vector<T> const& v)
+serialize(serializer& sink, std::vector<T, Allocator> const& v)
 {
   sink.begin_sequence(v.size());
   if (! v.empty())
@@ -66,16 +66,16 @@ serialize(serializer& sink, std::vector<T> const& v)
   sink.end_sequence();
 }
 
-template <typename T>
+template <typename T, typename Allocator>
 std::enable_if_t<util::is_byte<T>::value>
-deserialize(deserializer& source, std::vector<T>& v)
+deserialize(deserializer& source, std::vector<T, Allocator>& v)
 {
   uint64_t size;
   source.begin_sequence(size);
   if (size > 0)
   {
     v.clear();
-    typedef typename std::vector<T>::size_type size_type;
+    using size_type = typename std::vector<T, Allocator>::size_type;
     if (size > std::numeric_limits<size_type>::max())
       throw std::length_error("size too large for architecture");
     v.resize(size);
@@ -84,9 +84,9 @@ deserialize(deserializer& source, std::vector<T>& v)
   source.end_sequence();
 }
 
-template <typename T>
+template <typename T, typename Allocator>
 std::enable_if_t<! util::is_byte<T>::value>
-serialize(serializer& sink, std::vector<T> const& v)
+serialize(serializer& sink, std::vector<T, Allocator> const& v)
 {
   sink.begin_sequence(v.size());
   for (auto const& x : v)
@@ -94,16 +94,16 @@ serialize(serializer& sink, std::vector<T> const& v)
   sink.end_sequence();
 }
 
-template <typename T>
+template <typename T, typename Allocator>
 std::enable_if_t<!util::is_byte<T>::value>
-deserialize(deserializer& source, std::vector<T>& v)
+deserialize(deserializer& source, std::vector<T, Allocator>& v)
 {
   uint64_t size;
   source.begin_sequence(size);
   if (size > 0)
   {
     v.clear();
-    using size_type = typename std::vector<T>::size_type;
+    using size_type = typename std::vector<T, Allocator>::size_type;
     if (size > std::numeric_limits<size_type>::max())
       throw std::length_error("size too large for architecture");
     v.resize(size);
