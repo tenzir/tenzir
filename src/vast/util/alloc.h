@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <cassert>
+#include <vector>
 #include "vast/util/operators.h"
 
 namespace vast {
@@ -104,6 +105,8 @@ private:
 
 
 /// A stack-based allocator.
+/// @tparam T The type of the object to allocate.
+/// @tparam N The number of bytes in the contained arena.
 /// @see http://home.roadrunner.com/~hinnant/stack_alloc.html.
 template <class T, size_t N>
 class stack_alloc : equality_comparable<stack_alloc<T, N>>
@@ -153,6 +156,12 @@ private:
 
   util::arena<N> a_;
 };
+
+/// A stack-based `std::vector`.
+/// @tparam T The vector element type.
+/// @tparam N The number of elements to keep on the stack.
+template <typename T, size_t N>
+using stack_vector = std::vector<T, stack_alloc<T, N * sizeof(T)>>;
 
 } // namespace util
 } // namespace vast
