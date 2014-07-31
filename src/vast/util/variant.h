@@ -155,7 +155,7 @@ class basic_variant : totally_ordered<basic_variant<Tag, Ts...>>
 
 public:
   /// The type of the variant discriminator.
-  using tag_type = Tag;
+  using tag = Tag;
 
   /// The first type in the variant; used for default-construction.
 #ifdef VAST_GCC
@@ -165,17 +165,18 @@ public:
 #endif
 
   /// Construct a variant from a type tag.
-  /// @pre `0 <= tag < sizeof...(Ts)`
-  static basic_variant make(tag_type tag)
+  /// @param t The tag.
+  /// @pre `0 <= t < sizeof...(Ts)`
+  static basic_variant make(tag t)
   {
-    return {factory{}, tag};
+    return {factory{}, t};
   }
 
   /// Default-constructs a variant with the first type.
   basic_variant() noexcept
   {
     construct(front{});
-    which_ = tag_type{};
+    which_ = tag{};
   }
 
   /// Destructs the variant by invoking the destructor of the active instance.
@@ -240,7 +241,7 @@ public:
     return *this;
   }
 
-  tag_type which() const
+  tag which() const
   {
     return which_;
   }
@@ -318,7 +319,7 @@ private:
 
   struct assigner
   {
-    assigner(basic_variant& self, tag_type rhs_which)
+    assigner(basic_variant& self, tag rhs_which)
       : self_(self), rhs_which_(rhs_which)
     {
     }
@@ -347,12 +348,12 @@ private:
 
   private:
     basic_variant& self_;
-    tag_type rhs_which_;
+    tag rhs_which_;
   };
 
   struct move_assigner
   {
-    move_assigner(basic_variant& self, tag_type rhs_which)
+    move_assigner(basic_variant& self, tag rhs_which)
       : self_(self), rhs_which_(rhs_which)
     {
     }
@@ -385,7 +386,7 @@ private:
 
   private:
     basic_variant& self_;
-    tag_type rhs_which_;
+    tag rhs_which_;
   };
 
   struct destructor
@@ -412,13 +413,13 @@ private:
     static void initialize(basic_variant& v, T&& x)
     {
       v.construct(std::move(x));
-      v.which_ = static_cast<tag_type>(TT);
+      v.which_ = static_cast<tag>(TT);
     }
 
     static void initialize(basic_variant& v, T const& x)
     {
       v.construct(x);
-      v.which_ = static_cast<tag_type>(TT);
+      v.which_ = static_cast<tag>(TT);
     }
   };
 
@@ -484,7 +485,7 @@ private:
     typename Visitor,
     typename... Args
   >
-  static auto visit_impl(tag_type which,
+  static auto visit_impl(tag which,
                          Internal internal,
                          Storage&& storage,
                          Visitor&& visitor,
@@ -515,9 +516,9 @@ private:
   }
 
   struct factory { };
-  basic_variant(factory, tag_type tag)
+  basic_variant(factory, tag t)
   {
-    which_ = tag;
+    which_ = t;
     apply<std::false_type>(default_constructor{*this});
   }
 
@@ -574,7 +575,7 @@ private:
   std::aligned_union_t<0, Ts...> storage_;
 #endif
 
-  tag_type which_;
+  tag which_;
 
 private:
   struct equals
