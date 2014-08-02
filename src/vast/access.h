@@ -10,6 +10,12 @@ struct access
   struct serializable;
   struct parsable;
   struct printable;
+
+  template <typename F, typename... Args>
+  static auto call(F f, Args&&... args)
+  {
+    return f(std::forward<Args>(args)...);
+  }
 };
 
 } // namespace vast
