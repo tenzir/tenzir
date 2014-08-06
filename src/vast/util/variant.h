@@ -191,19 +191,10 @@ public:
   /// unambiguously convertible to one of the types in the variant.
   template <
     typename T,
-    typename = std::enable_if<
-      ! std::is_same<
-        std::remove_reference_t<basic_variant>,
-        std::remove_reference_t<T>
-      >::value,
-      T
-    >
+    typename = util::disable_if_same_or_derived_t<basic_variant, T>
   >
   basic_variant(T&& x)
   {
-    static_assert(! std::is_same<basic_variant&, T>{},
-                  "should have been sfinaed out");
-
     // A compile error here means that T is not unambiguously convertible to
     // any of the variant types.
     initializer<0, Ts...>::initialize(*this, std::forward<T>(x));
