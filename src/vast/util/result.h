@@ -2,7 +2,11 @@
 #define VAST_UTIL_RESULT_H
 
 #include "vast/optional.h"
-#include "vast/util/error.h"
+#include "vast/util/print.h"
+
+// FIXME: we need to include util/print.h to avoid linker errors in cases when
+// somone includes util/result.h but does not include util/print.h beforehand.
+// The reason is that util/print.h defines error::render.
 
 namespace vast {
 namespace util {
