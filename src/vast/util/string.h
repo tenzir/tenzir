@@ -2,6 +2,7 @@
 #define VAST_UTIL_STRING_H
 
 #include <cassert>
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -142,6 +143,46 @@ auto to_strings(std::vector<std::pair<Iterator, Iterator>> const& v)
     strs[i] = {v[i].first, v[i].second};
 
   return strs;
+}
+
+/// Determines whether a string occurs at the beginning of another.
+/// @param begin The beginning of the string.
+/// @param end The end of the string.
+/// @param str The substring to check at the start of *[begin, end)*.
+/// @returns `true` iff *str* occurs at the beginning of *[begin, end)*.
+template <typename Iterator>
+bool starts_with(Iterator begin, Iterator end, std::string const& str)
+{
+  using diff = typename std::iterator_traits<Iterator>::difference_type;
+  if (static_cast<diff>(str.size()) > end - begin)
+    return false;
+
+  return std::equal(str.begin(), str.end(), begin);
+}
+
+inline bool starts_with(std::string const& str, std::string const& start)
+{
+  return starts_with(str.begin(), str.end(), start);
+}
+
+/// Determines whether a string occurs at the end of another.
+/// @param begin The beginning of the string.
+/// @param end The end of the string.
+/// @param str The substring to check at the end of *[begin, end)*.
+/// @returns `true` iff *str* occurs at the end of *[begin, end)*.
+template <typename Iterator>
+bool ends_with(Iterator begin, Iterator end, std::string const& str)
+{
+  using diff = typename std::iterator_traits<Iterator>::difference_type;
+  if (static_cast<diff>(str.size()) > end - begin)
+    return false;
+
+  return std::equal(str.begin(), str.end(), end - str.size());
+}
+
+inline bool ends_with(std::string const& str, std::string const& end)
+{
+  return ends_with(str.begin(), str.end(), end);
 }
 
 } // namespace util
