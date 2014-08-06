@@ -1,6 +1,8 @@
 #ifndef VAST_SERIALIZATION_ARITHMETIC_H
 #define VAST_SERIALIZATION_ARITHMETIC_H
 
+#include "vast/serialization.h"
+
 namespace vast {
 
 inline bool serialize(serializer& sink, bool x)

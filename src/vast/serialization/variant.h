@@ -2,6 +2,7 @@
 #define VAST_SERIALIZATION_VARIANT_H
 
 #include <type_traits>
+#include "vast/serialization.h"
 #include "vast/util/variant.h"
 
 namespace vast {

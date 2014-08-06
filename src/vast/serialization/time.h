@@ -2,6 +2,7 @@
 #define VAST_SERIALIZATION_TIME_H
 
 #include <chrono>
+#include "vast/serialization/arithmetic.h"
 
 namespace vast {
 

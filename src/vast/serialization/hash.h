@@ -1,6 +1,7 @@
 #ifndef VAST_SERIALIZATION_HASH_H
 #define VAST_SERIALIZATION_HASH_H
 
+#include "vast/serialization.h"
 #include "vast/util/hash/xxhash.h"
 
 namespace vast {

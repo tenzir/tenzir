@@ -2,6 +2,7 @@
 #define VAST_SERIALIZATION_STRING_H
 
 #include <string>
+#include "vast/serialization.h"
 
 namespace vast {
 

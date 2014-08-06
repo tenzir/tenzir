@@ -7,7 +7,7 @@
 #include <map>
 #include <stdexcept>
 #include <unordered_map>
-#include "vast/serialization/arithmetic.h"
+#include "vast/serialization.h"
 #include "vast/util/meta.h"
 
 namespace vast {
