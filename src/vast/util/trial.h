@@ -3,7 +3,6 @@
 
 #include <cassert>
 #include <memory>
-
 #include "vast/util/error.h"
 
 namespace vast {
@@ -59,12 +58,14 @@ public:
   /// @returns A reference to `*this`.
   trial& operator=(trial const& other)
   {
+    destroy();
     construct(other);
     return *this;
   }
 
   trial& operator=(trial&& other) noexcept
   {
+    destroy();
     construct(std::move(other));
     return *this;
   }
@@ -259,7 +260,7 @@ private:
 
 /// Represents success in a `trial<void` scenario.
 /// @relates trial
-auto const nothing = trial<void>{};
+trial<void> const nothing = {};
 
 } // namespace util
 } // namespace vast
