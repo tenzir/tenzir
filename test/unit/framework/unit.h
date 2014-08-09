@@ -27,12 +27,14 @@ public:
   virtual void __run() = 0;
 
   void __pass(std::string msg);
-  void __fail(std::string msg);
+  void __fail(std::string msg, bool expected);
 
+  size_t __expected_failures() const;
   std::vector<std::pair<bool, std::string>> const& __trace() const;
   std::string const& __name() const;
 
 private:
+  size_t expected_failures_ = 0;
   std::vector<std::pair<bool, std::string>> trace_;
   std::string name_;
 };
@@ -155,11 +157,13 @@ template <typename T>
 struct lhs
 {
 public:
-  lhs(test* parent, char const *file, int line, char const *expr, T const& x)
+  lhs(test* parent, char const *file, int line, char const *expr,
+      bool should_fail, T const& x)
     : test_(parent),
       filename_(file),
       line_(line),
       expr_(expr),
+      should_fail_(should_fail),
       x_(x)
   {
   }
@@ -261,7 +265,7 @@ private:
       << color::blue << filename_ << color::yellow << ":"
       << color::blue << line_ << fill(line_) << color::reset << expr_;
 
-    test_->__fail(ss.str());
+    test_->__fail(ss.str(), should_fail_);
 
     return false;
   }
@@ -278,27 +282,30 @@ private:
       << color::red << show(x_) << color::magenta << " !! "
       << color::red << show(u) << color::magenta << ')' << color::reset;
 
-    test_->__fail(ss.str());
+    test_->__fail(ss.str(), should_fail_);
 
     return false;
   }
 
   bool evaluated_ = false;
+  bool passed_ = false;
   test* test_;
   char const *filename_;
   int line_;
   char const *expr_;
+  bool should_fail_;
   T const& x_;
-  bool passed_ = false;
 };
 
 struct expr
 {
 public:
-  expr(test* parent, char const *filename, int lineno, char const *expr)
+  expr(test* parent, char const *filename, int lineno, bool should_fail,
+       char const *expr)
     : test_{parent},
       filename_{filename},
       line_{lineno},
+      should_fail_{should_fail},
       expr_{expr}
   {
   }
@@ -306,13 +313,14 @@ public:
   template <typename T>
   lhs<T> operator->*(T const& x)
   {
-    return {test_, filename_, line_, expr_, x};
+    return {test_, filename_, line_, expr_, should_fail_, x};
   }
 
 private:
   test* test_;
   char const* filename_;
   int line_;
+  bool should_fail_;
   char const* expr_;
 };
 
@@ -326,8 +334,19 @@ private:
 #define CHECK(...)                                                          \
   do                                                                        \
   {                                                                         \
-    (void)(::unit::detail::expr{this, __FILE__, __LINE__, #__VA_ARGS__}     \
-             ->* __VA_ARGS__);                                              \
+    (void)(::unit::detail::expr{this, __FILE__, __LINE__,                   \
+                                false, #__VA_ARGS__} ->* __VA_ARGS__);      \
+                                                                            \
+    ::unit::engine::last_check_file(__FILE__);                              \
+    ::unit::engine::last_check_line(__LINE__);                              \
+  }                                                                         \
+  while (false)
+
+#define FAIL(...)                                                           \
+  do                                                                        \
+  {                                                                         \
+    (void)(::unit::detail::expr{this, __FILE__, __LINE__, true,             \
+                                #__VA_ARGS__} ->* __VA_ARGS__);             \
                                                                             \
     ::unit::engine::last_check_file(__FILE__);                              \
     ::unit::engine::last_check_line(__LINE__);                              \
@@ -338,7 +357,7 @@ private:
   do                                                                        \
   {                                                                         \
     auto UNIT_UNIQUE(__result) =                                            \
-    ::unit::detail::expr{this, __FILE__, __LINE__, #__VA_ARGS__}            \
+    ::unit::detail::expr{this, __FILE__, __LINE__, false, #__VA_ARGS__}     \
          ->* __VA_ARGS__;                                                   \
                                                                             \
     if (! UNIT_UNIQUE(__result))                                            \

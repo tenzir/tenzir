@@ -30,14 +30,22 @@ test::test(std::string name)
 {
 }
 
+size_t test::__expected_failures() const
+{
+  return expected_failures_;
+}
+
 void test::__pass(std::string msg)
 {
   trace_.emplace_back(true, std::move(msg));
 }
 
-void test::__fail(std::string msg)
+void test::__fail(std::string msg, bool expected)
 {
   trace_.emplace_back(false, std::move(msg));
+
+  if (expected)
+    ++expected_failures_;
 }
 
 std::vector<std::pair<bool, std::string>> const& test::__trace() const
@@ -219,6 +227,7 @@ bool engine::run(configuration const& cfg)
   size_t total_tests = 0;
   size_t total_good = 0;
   size_t total_bad = 0;
+  size_t total_bad_expected = 0;
   auto suite_rx = std::regex{*cfg.get("suites")};
   auto test_rx = std::regex{*cfg.get("tests")};
   auto bar = '+' + std::string(70, '-') + '+';
@@ -305,6 +314,7 @@ bool engine::run(configuration const& cfg)
 
       total_good += good;
       total_bad += bad;
+      total_bad_expected += t->__expected_failures();
 
       log.verbose()
           << color::yellow << "  -> " << color::cyan << good + bad
@@ -337,7 +347,7 @@ bool engine::run(configuration const& cfg)
 
   auto title = std::string{"summary"};
   auto pad = std::string((bar.size() - title.size()) / 2, ' ');
-  auto indent = std::string(27, ' ');
+  auto indent = std::string(24, ' ');
 
   log.info()
     << color::cyan << bar << '\n' << pad << title << '\n' << bar
@@ -349,9 +359,16 @@ bool engine::run(configuration const& cfg)
     << color::reset;
 
   if (total_bad > 0)
+  {
     log.info()
     << " (" << color::green << total_good << color::reset << '/'
     << color::red << total_bad << color::reset << ")";
+
+    if (total_bad_expected)
+      log.info()
+        << ' ' << color::cyan << total_bad_expected << color::reset
+        << " failures expected";
+  }
 
   log.info()
     << '\n' << indent << "time:    " << color::yellow << render(runtime)
@@ -360,7 +377,7 @@ bool engine::run(configuration const& cfg)
     << percent_good << "%" << color::reset << "\n\n"
     << color::cyan << bar << color::reset << '\n';
 
-  return total_bad == 0;
+  return total_bad == total_bad_expected;
 }
 
 engine& engine::instance()

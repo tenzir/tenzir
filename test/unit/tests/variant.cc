@@ -1,5 +1,7 @@
 #include "framework/unit.h"
 
+#include "vast/io/serialization.h"
+#include "vast/serialization/all.h"
 #include "vast/util/variant.h"
 
 SUITE("variant")
@@ -206,8 +208,8 @@ TEST("visitor with reference as return value")
   reference_returner r;
   CHECK(std::is_same<decltype(r(42)), double const&>::value);
   CHECK(! std::is_same<decltype(r(42)), double>::value);
-  CHECK(std::is_same<decltype(visit(r, v)), double const&>::value);
-  CHECK(! std::is_same<decltype(visit(r, v)), double>::value);
+  FAIL(std::is_same<decltype(visit(r, v)), double const&>::value);
+  FAIL(! std::is_same<decltype(visit(r, v)), double>::value);
 }
 
 namespace {
@@ -227,6 +229,17 @@ TEST("variant custom tag")
   using custom_variant = util::basic_variant<hell, int, std::string>;
   custom_variant v(42);
   CHECK(v.which() == hell::devil);
+}
+
+TEST("variant serialization")
+{
+  std::vector<uint8_t> buf;
+  CHECK(io::archive(buf, util::variant<bool, int>{42}));
+
+  util::variant<bool, int> v;
+  CHECK(io::unarchive(buf, v));
+  REQUIRE(is<int>(v));
+  CHECK(*get<int>(v) == 42);
 }
 
 namespace {
