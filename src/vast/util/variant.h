@@ -72,7 +72,7 @@ public:
   {
   }
 
-  recursive_wrapper(recursive_wrapper&& rhs)
+  recursive_wrapper(recursive_wrapper&& rhs) noexcept
     : x_(rhs.x_)
   {
     rhs.x_ = nullptr;
@@ -84,7 +84,7 @@ public:
     return *this;
   }
 
-  recursive_wrapper& operator=(recursive_wrapper&& rhs)
+  recursive_wrapper& operator=(recursive_wrapper&& rhs) noexcept
   {
     delete x_;
     x_ = rhs.x_;
@@ -98,7 +98,7 @@ public:
     return *this;
   }
 
-  recursive_wrapper& operator=(T&& x)
+  recursive_wrapper& operator=(T&& x) noexcept
   {
     assign(std::move(x));
     return *this;
