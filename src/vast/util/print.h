@@ -10,6 +10,7 @@
 #include <vector>
 #include "vast/util/trial.h"
 #include "vast/util/coding.h"
+#include "vast/util/none.h"
 
 namespace vast {
 namespace util {
@@ -157,6 +158,12 @@ trial<void> print(trial<T> const& t, Iterator&& out)
     return print(*t, out);
   else
     return t.error();
+}
+
+template <typename Iterator>
+trial<void> print(none const&, Iterator&& out)
+{
+  return print("none", out);
 }
 
 //

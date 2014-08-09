@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <locale>   // std::isdigit
 #include <istream>
+#include "vast/util/none.h"
 #include "vast/util/trial.h"
 
 namespace vast {
@@ -183,6 +184,12 @@ trial<void> parse(char (&buf)[N], Iterator& begin, Iterator end)
     buf[i++] = *begin++;
 
   return nothing;
+}
+
+template <typename Iterator>
+trial<void> parse(none&, Iterator&&, Iterator&&)
+{
+  return error{"cannot parse none"};
 }
 
 //
