@@ -109,11 +109,8 @@ auto print(T n, Iterator&& out, int digits = 10)
   -> std::enable_if_t<std::is_floating_point<T>::value, trial<void>>
 {
   if (digits < 0)
-  {
     // FIXME: Improve performance by not going through std::string.
-    auto str = std::to_string(n);
-    return print(str, out);
-  }
+    return print(std::to_string(n), out);
 
   if (n == 0)
   {
@@ -142,7 +139,8 @@ auto print(T n, Iterator&& out, int digits = 10)
     print_numeric(static_cast<uint64_t>(left), out);
 
     *out++ = '.';
-    for (auto i = 1.0; i < digits - std::log10(right); ++i)
+    auto magnitude = right == 0 ? 0 : std::log10(right);
+    for (auto i = 1.0; i < digits - magnitude; ++i)
       *out++ = '0';
 
     print_numeric(right, out);

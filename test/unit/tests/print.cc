@@ -49,6 +49,11 @@ TEST("floating point")
   CHECK(str == "0.0000000000");
 
   str.clear();
+  d = 1.0;
+  print(d, out);
+  CHECK(str == "1.0000000000");
+
+  str.clear();
   d = 0.005;
   print(d, out);
   CHECK(str == "0.0050000000");
