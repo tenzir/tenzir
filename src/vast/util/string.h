@@ -53,13 +53,13 @@ std::string json_unescape(std::string const& str);
 template <typename Iterator>
 std::vector<std::pair<Iterator, Iterator>>
 split(Iterator begin, Iterator end, std::string const& sep, std::string const& esc = "",
-      int max_splits = -1, bool include_sep = false)
+      size_t max_splits = -1, bool include_sep = false)
 {
   assert(! sep.empty());
 
   std::vector<std::pair<Iterator, Iterator>> pos;
 
-  int splits = 0;
+  size_t splits = 0;
   auto i = begin;
   auto prev = i;
   while (i != end)
@@ -106,7 +106,7 @@ split(Iterator begin, Iterator end, std::string const& sep, std::string const& e
       }
     }
 
-    if (++splits == max_splits)
+    if (splits++ == max_splits)
       break;
 
     pos.emplace_back(prev, i);
@@ -125,7 +125,7 @@ split(Iterator begin, Iterator end, std::string const& sep, std::string const& e
 
 std::vector<std::pair<std::string::const_iterator, std::string::const_iterator>>
 inline split(std::string const& str, std::string const& sep,
-             std::string const& esc = "", int max_splits = -1,
+             std::string const& esc = "", size_t max_splits = -1,
              bool include_sep = false)
 {
   return split(str.begin(), str.end(), sep, esc, max_splits, include_sep);

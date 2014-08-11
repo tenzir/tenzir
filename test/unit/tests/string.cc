@@ -103,7 +103,7 @@ TEST("string splitting")
   CHECK(s[1] == "c");
 
   str = "a,b,c,d,e,f";
-  s = to_strings(split(str.begin(), str.end(), ",", "", 2));
+  s = to_strings(split(str.begin(), str.end(), ",", "", 1));
   REQUIRE(s.size() == 2);
   CHECK(s[0] == "a");
   CHECK(s[1] == "b,c,d,e,f");
@@ -116,5 +116,4 @@ TEST("string splitting")
   CHECK(s[2] == "b");
   CHECK(s[3] == "-");
   CHECK(s[4] == "c*-d");
-
 }
