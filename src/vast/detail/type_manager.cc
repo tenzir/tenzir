@@ -2,7 +2,7 @@
 
 #include <cassert>
 #include <exception>
-#include "vast/type_info.h"
+#include "vast/serialization.h"
 
 namespace vast {
 namespace detail {

@@ -3,9 +3,11 @@
 
 #include <functional>
 #include <string>
+#include <vector>
 #include "vast/config.h"
 #include "vast/fwd.h"
-#include "vast/string.h"
+#include "vast/print.h"
+#include "vast/trial.h"
 #include "vast/util/operators.h"
 
 namespace vast {
@@ -49,12 +51,9 @@ public:
   /// @param str The string representing of a path.
   path(char const* str);
 
-  /// Constructs a path from a VAST string.
+  /// Constructs a path from a string.
   /// @param str The string representing of a path.
-  path(string str);
-
-  /// Constructs a path from a C++ string.
-  explicit path(std::string const& str);
+  path(std::string str);
 
   path& operator/=(path const& p);
   path& operator+=(path const& p);
@@ -105,7 +104,7 @@ public:
 
   /// Retrieves the underlying string representation.
   /// @returns The string representation of the path.
-  string const& str() const;
+  std::string const& str() const;
 
   //
   // Filesystem operations
@@ -141,7 +140,7 @@ private:
     return print(p.str_, out);
   }
 
-  string str_;
+  std::string str_;
 };
 
 /// A file abstraction.
@@ -273,7 +272,7 @@ struct hash<vast::path>
 {
   size_t operator()(vast::path const& p) const
   {
-    return hash<vast::string>{}(p.str());
+    return hash<std::string>{}(p.str());
   }
 };
 

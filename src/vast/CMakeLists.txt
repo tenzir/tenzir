@@ -9,6 +9,7 @@ set(libvast_sources
   bitstream.cc
   chunk.cc
   configuration.cc
+  data.cc
   expression.cc
   event.cc
   error.cc
@@ -19,16 +20,14 @@ set(libvast_sources
   individual.cc
   importer.cc
   logger.cc
-  object.cc
   operator.cc
   partition.cc
+  pattern.cc
   port.cc
-  prefix.cc
   profiler.cc
   program.cc
   query.cc
   receiver.cc
-  regex.cc
   schema.cc
   search.cc
   segment.cc
@@ -36,11 +35,9 @@ set(libvast_sources
   segmentizer.cc
   serialization.cc
   signal_monitor.cc
-  string.cc
+  subnet.cc
   time.cc
   type.cc
-  type_info.cc
-  type_tag.cc
   uuid.cc
   value.cc
   detail/caf_serialization.cc
@@ -52,7 +49,6 @@ set(libvast_sources
   io/buffered_stream.cc
   io/coded_stream.cc
   io/compressed_stream.cc
-  io/compression.cc
   io/file_stream.cc
   io/getline.cc
   io/iostream.cc

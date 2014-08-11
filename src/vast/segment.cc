@@ -3,6 +3,8 @@
 #include "vast/event.h"
 #include "vast/logger.h"
 #include "vast/serialization.h"
+#include "vast/serialization/flat_set.h"
+#include "vast/serialization/variant.h"
 
 namespace vast {
 
@@ -81,9 +83,11 @@ segment::writer::~writer()
 
 bool segment::writer::write(event const& e)
 {
-  if (! get<invalid_type>(e.type()->info()) && ! e.type()->name().empty())
-    if (! schema_.find_type(e.type()->name()) && ! schema_.add(e.type()))
-      return false;
+  if (e.type().name().empty())
+    return false;
+
+  if (! schema_.find_type(e.type().name()) && ! schema_.add(e.type()))
+    return false;
 
   if (! (chunk_writer_ && store(e)))
     return false;
@@ -143,9 +147,9 @@ size_t segment::writer::bytes() const
 bool segment::writer::store(event const& e)
 {
   auto success =
-    chunk_writer_->write(e.name(), 0) &&
+    chunk_writer_->write(e.type().name(), 0) &&
     chunk_writer_->write(e.timestamp(), 0) &&
-    chunk_writer_->write(static_cast<std::vector<value> const&>(e));
+    chunk_writer_->write(e.data());
 
   if (first_ == time_range{} || e.timestamp() < first_)
     first_ = e.timestamp();
@@ -182,13 +186,13 @@ trial<event> segment::reader::read(event_id id)
   if (id > 0 && ! seek(id))
     return error{"event id " + to_string(id) + " out of bounds"};
 
-  auto r = load();
-  if (r)
-    return {std::move(r.value())};
-  else if (r.failed())
-    return r.error();
+  auto e = load();
+  if (e)
+    return {std::move(e.value())};
+  else if (e.failed())
+    return e.error();
 
-  assert(! r.empty());
+  assert(! e.empty());
   return error{"empty event"}; // should never happen.
 }
 
@@ -308,7 +312,7 @@ result<event> segment::reader::load(bool discard)
   if (! chunk_reader_ || chunk_reader_->available() == 0)
     return next() ? load(discard) : error{"no more events to load"};
 
-  string name;
+  std::string name;
   if (! chunk_reader_->read(name, 0))
     return error{"failed to read type name from chunk"};
 
@@ -316,21 +320,20 @@ result<event> segment::reader::load(bool discard)
   if (! chunk_reader_->read(ts, 0))
     return error{"failed to read event timestamp from chunk"};
 
-  std::vector<value> v;
-  if (! chunk_reader_->read(v))
-    return error{"failed to read event arguments from chunk"};
+  data d;
+  if (! chunk_reader_->read(d))
+    return error{"failed to read event data from chunk"};
 
   if (! discard)
   {
-    event e(std::move(v));
+    auto t = segment_.header_.schema.find_type(name);
+    if (! t)
+      return error{"schema inconsistency, missing type: ", name};
+
+    event e(std::move(d), *t);
     e.timestamp(ts);
     if (next_ > 0)
       e.id(next_++);
-
-    if (auto t = segment_.header_.schema.find_type(name))
-      e.type(t);
-    else if (! name.empty())
-      VAST_LOG_WARN("schema inconsistency, missing type: " << name);
 
     return std::move(e);
   }

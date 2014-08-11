@@ -1,5 +1,5 @@
-#ifndef VAST_PREFIX_H
-#define VAST_PREFIX_H
+#ifndef VAST_SUBNET_H
+#define VAST_SUBNET_H
 
 #include "vast/address.h"
 #include "vast/parse.h"
@@ -7,18 +7,17 @@
 
 namespace vast {
 
-/// Stores IPv4 and IPv6 prefixes, e.g., @c 192.168.1.1/16 and @c FD00::/8.
-class prefix : util::totally_ordered<prefix>
+/// Stores IPv4 and IPv6 prefixes, e.g., `192.168.1.1/16` and `FD00::/8`.
+class subnet : util::totally_ordered<subnet>
 {
 public:
-
-  /// Constructs the empty prefix, i.e., @c ::/0.
-  prefix();
+  /// Constructs the empty prefix, i.e., `::/0`.
+  subnet();
 
   /// Constructs a prefix from an address.
   /// @param addr The address.
   /// @param length The prefix length.
-  prefix(address addr, uint8_t length);
+  subnet(address addr, uint8_t length);
 
   /// Checks whether this prefix includes a given address.
   /// @param addr The address to test for .
@@ -45,19 +44,19 @@ private:
   void deserialize(deserializer& source);
 
   template <typename Iterator>
-  friend trial<void> print(prefix const& p, Iterator&& out)
+  friend trial<void> print(subnet const& s, Iterator&& out)
   {
-    auto t = print(p.network_, out);
+    auto t = print(s.network_, out);
     if (! t)
       return t.error();
 
     *out++ = '/';
 
-    return print(p.length(), out);
+    return print(s.length(), out);
   }
 
   template <typename Iterator>
-  friend trial<void> parse(prefix& pfx, Iterator& begin, Iterator end)
+  friend trial<void> parse(subnet& s, Iterator& begin, Iterator end)
   {
     char buf[64];
     auto p = buf;
@@ -66,7 +65,7 @@ private:
     *p = '\0';
 
     auto lval = buf;
-    auto t = parse(pfx.network_, lval, p);
+    auto t = parse(s.network_, lval, p);
     if (! t)
       return t.error();
 
@@ -79,21 +78,21 @@ private:
     *p = '\0';
 
     lval = buf;
-    t = parse(pfx.length_, lval, p);
+    t = parse(s.length_, lval, p);
     if (! t)
       return t.error();
 
-    if (! pfx.initialize())
+    if (! s.initialize())
       return error{"invalid parameters"};
 
     return nothing;
   }
 
-  friend bool operator==(prefix const& x, prefix const& y);
-  friend bool operator<(prefix const& x, prefix const& y);
+  friend bool operator==(subnet const& x, subnet const& y);
+  friend bool operator<(subnet const& x, subnet const& y);
 };
 
-trial<void> convert(prefix const& p, util::json& j);
+trial<void> convert(subnet const& p, util::json& j);
 
 } // namespace vast
 

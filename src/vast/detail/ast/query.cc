@@ -7,15 +7,15 @@ namespace detail {
 namespace ast {
 namespace query {
 
-struct folder : public boost::static_visitor<value>
+struct folder : public boost::static_visitor<data>
 {
-  static value apply(arithmetic_operator op, value const& /* val */)
+  static data apply(arithmetic_operator op, data const& /* val */)
   {
     switch (op)
     {
       default:
         assert(! "unary expression folder not yet implemented");
-        return invalid;
+        return {};
         // TODO: implement VAST operations.
         //case positive:
         //    return val;
@@ -26,15 +26,15 @@ struct folder : public boost::static_visitor<value>
     }
   }
 
-  static value apply(arithmetic_operator op,
-                     value const& /* lhs */,
-                     value const& /* rhs */)
+  static data apply(arithmetic_operator op,
+                     data const& /* lhs */,
+                     data const& /* rhs */)
   {
     switch (op)
     {
       default:
         assert(! "binary expression folder not yet implemented");
-        return invalid;
+        return {};
         // TODO: implement VAST operations.
         //case bitwise_or:
         //    return lhs | rhs;
@@ -55,35 +55,35 @@ struct folder : public boost::static_visitor<value>
     }
   }
 
-  value operator()(value const& val) const
+  data operator()(data const& d) const
   {
-    return val;
+    return d;
   }
 
-  value operator()(unary_expr const& unary) const
+  data operator()(unary_expr const& unary) const
   {
     auto operand = boost::apply_visitor(*this, unary.operand);
     return apply(unary.op, operand);
   }
 
-  value operator()(expr_operand const& operand) const
+  data operator()(expr_operand const& operand) const
   {
     return boost::apply_visitor(*this, operand);
   }
 
-  value operator()(value_expr const& expr) const
+  data operator()(data_expr const& expr) const
   {
-    auto value = boost::apply_visitor(*this, expr.first);
+    auto d = boost::apply_visitor(*this, expr.first);
     if (expr.rest.empty())
-      return value;
+      return d;
 
     for (auto& operation : expr.rest)
     {
       auto operand = boost::apply_visitor(*this, operation.operand);
-      value = apply(operation.op, value, operand);
+      d = apply(operation.op, d, operand);
     }
 
-    return value;
+    return d;
   }
 };
 
@@ -114,33 +114,28 @@ struct validator : public boost::static_visitor<bool>
   bool operator()(tag_predicate const& pred) const
   {
     auto rhs = fold(pred.rhs);
-    auto rhs_type = rhs.which();
     auto& lhs = pred.lhs;
     return
-      (lhs == "type" && (rhs_type == string_value || rhs_type == regex_value))
-      || (lhs == "time" && rhs_type == time_point_value)
-      || (lhs == "id" && rhs_type == uint_value);
+      (lhs == "type" && (is<std::string>(rhs) || is<pattern>(rhs)))
+      || (lhs == "time" && is<time_point>(rhs))
+      || (lhs == "id" && is<count>(rhs));
   }
 
   bool operator()(type_predicate const& pred) const
   {
     auto rhs = fold(pred.rhs);
-    auto rhs_type = rhs.which();
-    auto& lhs_type = pred.lhs;
     auto& op = pred.op;
-    return
-      lhs_type == rhs_type
-      || (lhs_type == string_value
+    return pred.lhs.check(rhs)
+      || (is<type::string>(pred.lhs)
           && (op == match || op == not_match || op == in || op == not_in)
-          && rhs_type == regex_value)
-      || (lhs_type == address_value && pred.op == in
-          && rhs_type == prefix_value);
+          && is<pattern>(rhs))
+      || (is<type::address>(pred.lhs) && op == in && is<subnet>(rhs));
   }
 
   bool operator()(schema_predicate const& pred) const
   {
     auto rhs = fold(pred.rhs);
-    return rhs != invalid && ! pred.lhs.empty();
+    return ! is<none>(rhs) && ! pred.lhs.empty();
   }
 
   bool operator()(negated_predicate const& pred) const
@@ -149,19 +144,19 @@ struct validator : public boost::static_visitor<bool>
   }
 };
 
-value fold(value_expr const& expr)
+data fold(data_expr const& expr)
 {
-  auto value = boost::apply_visitor(folder(), expr.first);
+  auto d = boost::apply_visitor(folder(), expr.first);
   if (expr.rest.empty())
-    return value;
+    return d;
 
   for (auto& operation : expr.rest)
   {
     auto operand = boost::apply_visitor(folder(), operation.operand);
-    value = folder::apply(operation.op, value, operand);
+    d = folder::apply(operation.op, d, operand);
   }
 
-  return value;
+  return d;
 }
 
 bool validate(query const& q)

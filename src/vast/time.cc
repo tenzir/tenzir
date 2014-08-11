@@ -5,7 +5,7 @@
 #include <iomanip>
 #include "vast/config.h"
 #include "vast/logger.h"
-#include "vast/serialization.h"
+#include "vast/serialization/time.h"
 #include "vast/util/json.h"
 
 namespace vast {

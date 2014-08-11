@@ -1,12 +1,12 @@
-#ifndef VAST_DETAIL_PARSER_EXPRESSION_H
-#define VAST_DETAIL_PARSER_EXPRESSION_H
+#ifndef VAST_DETAIL_PARSER_DATA_EXPRESSION_H
+#define VAST_DETAIL_PARSER_DATA_EXPRESSION_H
 
 #include "vast/detail/parser/boost.h"
 
 #include "vast/detail/ast/query.h"
 #include "vast/detail/parser/error_handler.h"
 #include "vast/detail/parser/skipper.h"
-#include "vast/detail/parser/value.h"
+#include "vast/detail/parser/data.h"
 
 namespace vast {
 namespace detail {
@@ -16,11 +16,11 @@ namespace qi = boost::spirit::qi;
 namespace ascii = boost::spirit::ascii;
 
 template <typename Iterator>
-struct value_expression
-  : qi::grammar<Iterator, ast::query::value_expr(), skipper<Iterator>>
+struct data_expression
+  : qi::grammar<Iterator, ast::query::data_expr(), skipper<Iterator>>
 {
-  value_expression(error_handler<Iterator>& on_error)
-    : value_expression::base_type(expr)
+  data_expression(error_handler<Iterator>& on_error)
+    : data_expression::base_type(expr)
   {
       qi::_1_type _1;
       qi::_2_type _2;
@@ -54,7 +54,7 @@ struct value_expression
           ;
 
       primary
-          =   val
+          =   dta
           |   ('(' > expr > ')')
           ;
 
@@ -73,7 +73,7 @@ struct value_expression
       primary.name("primary expression");
   }
 
-  qi::rule<Iterator, ast::query::value_expr(), skipper<Iterator>>
+  qi::rule<Iterator, ast::query::data_expr(), skipper<Iterator>>
       expr;
 
   qi::rule<Iterator, ast::query::expr_operand(), skipper<Iterator>>
@@ -85,7 +85,7 @@ struct value_expression
   qi::symbols<char, arithmetic_operator>
       unary_op, binary_op;
 
-  value<Iterator> val;
+  data<Iterator> dta;
 };
 
 } // namespace ast

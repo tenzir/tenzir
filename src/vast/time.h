@@ -14,6 +14,10 @@ namespace vast {
 // Forward declaration
 class time_point;
 
+// TODO: Replace time_range with time_duration.
+class time_range;
+using time_duration = time_range;
+
 /// Constructs a time point with the current time.
 time_point now();
 

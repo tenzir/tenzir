@@ -1,45 +1,23 @@
 #ifndef VAST_KEY_H
 #define VAST_KEY_H
 
-#include <vector>
+#include <string>
 #include "vast/print.h"
 #include "vast/parse.h"
-#include "vast/string.h"
+#include "vast/util/stack_vector.h"
+#include "vast/util/string.h"
 
 namespace vast {
 
 /// A sequence of type/argument names to recursively access a type or value.
-struct key : std::vector<string>
+struct key : util::stack_vector<std::string, 4>
 {
-  using super = std::vector<string>;
-
-  key() = default;
-
-  key(super::const_iterator begin, super::const_iterator end)
-    : super{begin, end}
-  {
-  }
-
-  key(super v)
-    : super{std::move(v)}
-  {
-  }
-
-  key(std::initializer_list<string> list)
-    : super{std::move(list)}
-  {
-  }
+  using util::stack_vector<std::string, 4>::stack_vector;
 
   template <typename Iterator>
   friend trial<void> parse(key& k, Iterator& begin, Iterator end)
   {
-    auto str = parse<string>(begin, end);
-    if (! str)
-      return str.error();
-
-    for (auto& p : str->split("."))
-      k.emplace_back(p.first, p.second);
-
+    k = util::to_strings(util::split(begin, end, "."));
     return nothing;
   }
 

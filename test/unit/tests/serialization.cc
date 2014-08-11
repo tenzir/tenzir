@@ -1,8 +1,8 @@
 #include "framework/unit.h"
 
-#include "vast/object.h"
 #include "vast/value.h"
-#include "vast/serialization.h"
+#include "vast/optional.h"
+#include "vast/serialization/all.h"
 #include "vast/io/serialization.h"
 
 SUITE("serialization")
@@ -71,6 +71,19 @@ TEST("containers")
   CHECK(v0 == v1);
   CHECK(l0 == l1);
   CHECK(u0 == u1);
+}
+
+TEST("optional<T>")
+{
+  optional<std::string> o1 = std::string{"foo"};
+  decltype(o1) o2;
+  std::vector<uint8_t> buf;
+  io::archive(buf, o1);
+  io::unarchive(buf, o2);
+  REQUIRE(o1);
+  REQUIRE(o2);
+  CHECK(*o2 == "foo");
+  CHECK(*o1 == *o2);
 }
 
 // A serializable class.

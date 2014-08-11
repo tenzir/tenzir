@@ -5,7 +5,7 @@
 #include <boost/variant/recursive_variant.hpp>
 #include <boost/fusion/include/adapt_struct.hpp>
 #include "vast/operator.h"
-#include "vast/value.h"
+#include "vast/data.h"
 
 namespace vast {
 namespace detail {
@@ -25,12 +25,12 @@ struct identifier
 };
 
 struct unary_expr;
-struct value_expr;
+struct data_expr;
 
 using expr_operand = boost::variant<
-  value,
+  data,
   boost::recursive_wrapper<unary_expr>,
-  boost::recursive_wrapper<value_expr>
+  boost::recursive_wrapper<data_expr>
 >;
 
 struct unary_expr
@@ -45,7 +45,7 @@ struct expr_operation
   expr_operand operand;
 };
 
-struct value_expr
+struct data_expr
 {
   expr_operand first;
   std::vector<expr_operation> rest;
@@ -55,21 +55,21 @@ struct tag_predicate
 {
   std::string lhs;
   relational_operator op;
-  value_expr rhs;
+  data_expr rhs;
 };
 
 struct type_predicate
 {
-  type_tag lhs;
+  vast::type lhs;
   relational_operator op;
-  value_expr rhs;
+  data_expr rhs;
 };
 
 struct schema_predicate
 {
   std::vector<std::string> lhs;
   relational_operator op;
-  value_expr rhs;
+  data_expr rhs;
 };
 
 struct negated_predicate;
@@ -105,10 +105,10 @@ struct query
   std::vector<query_operation> rest;
 };
 
-/// Folds a constant expression into a single value.
-/// @param expr The constant expression.
-/// @returns The folded value.
-value fold(value_expr const& expr);
+/// Folds a constant expression into a single datum.
+/// @param expr The data expression.
+/// @returns The folded datum.
+data fold(data_expr const& expr);
 
 /// Validates a query with respect to semantic correctness. This means ensuring
 /// that LHS and RHS of predicate operators have the correct types.
@@ -132,7 +132,7 @@ BOOST_FUSION_ADAPT_STRUCT(
     (vast::detail::ast::query::expr_operand, operand))
 
   BOOST_FUSION_ADAPT_STRUCT(
-    vast::detail::ast::query::value_expr,
+    vast::detail::ast::query::data_expr,
     (vast::detail::ast::query::expr_operand, first)
     (std::vector<vast::detail::ast::query::expr_operation>, rest))
 
@@ -140,19 +140,19 @@ BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::query::tag_predicate,
     (std::string, lhs)
     (vast::relational_operator, op)
-    (vast::detail::ast::query::value_expr, rhs))
+    (vast::detail::ast::query::data_expr, rhs))
 
   BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::query::type_predicate,
-    (vast::type_tag, lhs)
+    (vast::type, lhs)
     (vast::relational_operator, op)
-    (vast::detail::ast::query::value_expr, rhs))
+    (vast::detail::ast::query::data_expr, rhs))
 
   BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::query::schema_predicate,
     (std::vector<std::string>, lhs)
     (vast::relational_operator, op)
-    (vast::detail::ast::query::value_expr, rhs))
+    (vast::detail::ast::query::data_expr, rhs))
 
   BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::query::negated_predicate,

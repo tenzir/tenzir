@@ -10,7 +10,97 @@ SUITE("file system")
 
 TEST("path operations")
 {
-  path p = "/usr/local/bin/foo";
+  path p(".");
+  CHECK(p.basename() == ".");
+  CHECK(p.extension() == ".");
+  CHECK(p.parent() == "");
+
+  p = "..";
+  CHECK(p.basename() == "..");
+  CHECK(p.extension() == ".");
+  CHECK(p.parent() == "");
+
+  p = "/";
+  CHECK(p.basename() == "/");
+  CHECK(p.extension() == "");
+  CHECK(p.parent() == "");
+
+  p = "foo";
+  CHECK(p.basename() == "foo");
+  CHECK(p.extension() == "");
+  CHECK(p.parent() == "");
+
+  p = "/foo";
+  CHECK(p.basename() == "foo");
+  CHECK(p.extension() == "");
+  CHECK(p.parent() == "/");
+
+  p = "foo/";
+  CHECK(p.basename() == ".");
+  CHECK(p.extension() == "");
+  CHECK(p.parent() == "foo");
+
+  p = "/foo/";
+  CHECK(p.basename() == ".");
+  CHECK(p.extension() == "");
+  CHECK(p.parent() == "/foo");
+
+  p = "foo/bar";
+  CHECK(p.basename() == "bar");
+  CHECK(p.extension() == "");
+  CHECK(p.parent() == "foo");
+
+  p = "/foo/bar";
+  CHECK(p.basename() == "bar");
+  CHECK(p.extension() == "");
+  CHECK(p.parent() == "/foo");
+
+  p = "/.";
+  CHECK(p.basename() == ".");
+  CHECK(p.extension() == ".");
+  CHECK(p.parent() == "/");
+
+  p = "./";
+  CHECK(p.basename() == ".");
+  CHECK(p.extension() == "");
+  CHECK(p.parent() == ".");
+
+  p = "/..";
+  CHECK(p.basename() == "..");
+  CHECK(p.extension() == ".");
+  CHECK(p.parent() == "/");
+
+  p = "../";
+  CHECK(p.basename() == ".");
+  CHECK(p.extension() == "");
+  CHECK(p.parent() == "..");
+
+  p = "foo/.";
+  CHECK(p.basename() == ".");
+  CHECK(p.extension() == ".");
+  CHECK(p.parent() == "foo");
+
+  p = "foo/..";
+  CHECK(p.basename() == "..");
+  CHECK(p.extension() == ".");
+  CHECK(p.parent() == "foo");
+
+  p = "foo/./";
+  CHECK(p.basename() == ".");
+  CHECK(p.extension() == "");
+  CHECK(p.parent() == "foo/.");
+
+  p = "foo/../";
+  CHECK(p.basename() == ".");
+  CHECK(p.extension() == "");
+  CHECK(p.parent() == "foo/..");
+
+  p = "foo/./bar";
+  CHECK(p.basename() == "bar");
+  CHECK(p.extension() == "");
+  CHECK(p.parent() == "foo/.");
+
+  p = "/usr/local/bin/foo";
   CHECK(p.parent() == "/usr/local/bin");
   CHECK(p.basename() == "foo");
   CHECK(path("/usr/local/bin/foo.bin").basename(true) == "foo");
@@ -72,7 +162,7 @@ TEST("file/directory manipulation")
 
   path base = "vast-unit-test-file-system-test";
   path p("/tmp");
-  p /= base / string{to_string(::getpid())};
+  p /= base / to_string(::getpid());
   CHECK(! p.is_regular_file());
   CHECK(! exists(p));
   CHECK(mkdir(p));

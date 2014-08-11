@@ -223,7 +223,6 @@ template <typename T, typename... Ts>
 void error::render(T&& x, Ts&&... xs)
 {
   render(std::forward<T>(x));
-  render(' ');
   render(std::forward<Ts>(xs)...);
 }
 

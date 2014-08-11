@@ -21,7 +21,7 @@ TEST("polymorphic")
 
 TEST("boolean")
 {
-  arithmetic_bitmap_index<null_bitstream, bool_value> bmi, bmi2;
+  arithmetic_bitmap_index<null_bitstream, boolean> bmi, bmi2;
   REQUIRE(bmi.push_back(true));
   REQUIRE(bmi.push_back(true));
   REQUIRE(bmi.push_back(false));
@@ -46,7 +46,7 @@ TEST("boolean")
 
 TEST("integral")
 {
-  arithmetic_bitmap_index<null_bitstream, int_value> bmi;
+  arithmetic_bitmap_index<null_bitstream, integer> bmi;
   REQUIRE(bmi.push_back(-7));
   REQUIRE(bmi.push_back(42));
   REQUIRE(bmi.push_back(10000));
@@ -68,7 +68,7 @@ TEST("integral")
 
 TEST("floating point with binning")
 {
-  arithmetic_bitmap_index<null_bitstream, double_value> bmi;
+  arithmetic_bitmap_index<null_bitstream, real> bmi;
   bmi.binner(-2);
 
   REQUIRE(bmi.push_back(-7.8));
@@ -87,7 +87,7 @@ TEST("floating point with binning")
 
 TEST("time_range")
 {
-  arithmetic_bitmap_index<null_bitstream, time_range_value> bmi, bmi2;
+  arithmetic_bitmap_index<null_bitstream, time_duration> bmi, bmi2;
 
   // A precision of 8 translates into a resolution of 0.1 sec.
   bmi.binner(8);
@@ -119,7 +119,7 @@ TEST("time_range")
 
 TEST("time_point")
 {
-  arithmetic_bitmap_index<null_bitstream, time_point_value> bmi, bmi2;
+  arithmetic_bitmap_index<null_bitstream, time_point> bmi, bmi2;
   bmi.binner(9);
 
   REQUIRE(bmi.push_back(time_point{"2014-01-16+05:30:15"}));
@@ -203,29 +203,33 @@ TEST("IP address")
   auto bs = bmi.lookup(equal, addr);
   REQUIRE(bs);
   CHECK(to_string(*bs) == "100110");
-  auto nbs = bmi.lookup(not_equal, addr);
-  CHECK(to_string(*nbs) == "011001");
+
+  bs = bmi.lookup(not_equal, addr);
+  CHECK(to_string(*bs) == "011001");
 
   addr = *address::from_v4("192.168.0.5");
   CHECK(to_string(*bmi.lookup(equal, addr)) == "000000");
-  CHECK(! bmi.lookup(match, *address::from_v6("::")));
+
+  CHECK(! bmi.lookup(match, *address::from_v6("::"))); // Invalid operator
 
   bmi.push_back(*address::from_v4("192.168.0.128"));
   bmi.push_back(*address::from_v4("192.168.0.130"));
   bmi.push_back(*address::from_v4("192.168.0.240"));
   bmi.push_back(*address::from_v4("192.168.0.127"));
 
-  auto pfx = prefix{*address::from_v4("192.168.0.128"), 25};
-  auto pbs = bmi.lookup(in, pfx);
-  REQUIRE(pbs);
-  CHECK(to_string(*pbs) == "0000001110");
-  auto npbs = bmi.lookup(not_in, pfx);
-  REQUIRE(npbs);
-  CHECK(to_string(*npbs) == "1111110001");
-  pfx = {*address::from_v4("192.168.0.0"), 24};
-  auto pbs2 = bmi.lookup(in, pfx);
-  REQUIRE(pbs2);
-  CHECK(to_string(*pbs2) == "1111111111");
+  auto sub = subnet{*address::from_v4("192.168.0.128"), 25};
+  bs = bmi.lookup(in, sub);
+  REQUIRE(bs);
+  CHECK(to_string(*bs) == "0000001110");
+
+  bs = bmi.lookup(not_in, sub);
+  REQUIRE(bs);
+  CHECK(to_string(*bs) == "1111110001");
+
+  sub = {*address::from_v4("192.168.0.0"), 24};
+  bs = bmi.lookup(in, sub);
+  REQUIRE(bs);
+  CHECK(to_string(*bs) == "1111111111");
 
   std::vector<uint8_t> buf;
   io::archive(buf, bmi);
@@ -233,33 +237,29 @@ TEST("IP address")
   CHECK(bmi == bmi2);
 }
 
-TEST("IP prefixes")
+TEST("subnet")
 {
-  prefix_bitmap_index<null_bitstream> bmi, bmi2;
+  subnet_bitmap_index<null_bitstream> bmi, bmi2;
 
-  auto p0 = to<prefix>("192.168.0.0/24");
-  auto p1 = to<prefix>("192.168.1.0/24");
-  auto p2 = to<prefix>("::/40");
-  REQUIRE(p0);
-  REQUIRE(p1);
-  REQUIRE(p2);
+  auto s0 = to<subnet>("192.168.0.0/24");
+  auto s1 = to<subnet>("192.168.1.0/24");
+  auto s2 = to<subnet>("::/40");
+  REQUIRE(s0);
+  REQUIRE(s1);
+  REQUIRE(s2);
 
-  value v0{*p0};
-  value v1{*p1};
-  value v2{*p2};
+  REQUIRE(bmi.push_back(*s0));
+  REQUIRE(bmi.push_back(*s1));
+  REQUIRE(bmi.push_back(*s0));
+  REQUIRE(bmi.push_back(*s0));
+  REQUIRE(bmi.push_back(*s2));
+  REQUIRE(bmi.push_back(*s2));
 
-  REQUIRE(bmi.push_back(v0));
-  REQUIRE(bmi.push_back(v1));
-  REQUIRE(bmi.push_back(v0));
-  REQUIRE(bmi.push_back(v0));
-  REQUIRE(bmi.push_back(v2));
-  REQUIRE(bmi.push_back(v2));
-
-  auto bs = bmi.lookup(equal, v0);
+  auto bs = bmi.lookup(equal, *s0);
   REQUIRE(bs);
   CHECK(to_string(*bs) == "101100");
 
-  bs = bmi.lookup(not_equal, v1);
+  bs = bmi.lookup(not_equal, *s1);
   REQUIRE(bs);
   CHECK(to_string(*bs) == "101111");
 
@@ -345,25 +345,17 @@ TEST("port (ewah)")
 
 TEST("container")
 {
-  sequence_bitmap_index<null_bitstream> bmi{string_value};
+  sequence_bitmap_index<null_bitstream> bmi{type::string{}};
 
-  set s;
-  s.emplace_back("foo");
-  s.emplace_back("bar");
+  set s{"foo", "bar"};
   CHECK(bmi.push_back(s));
 
-  s.clear();
-  s.emplace_back("qux");
-  s.emplace_back("foo");
-  s.emplace_back("baz");
-  s.emplace_back("corge");
+  s = {"qux", "foo", "baz", "corge"};
   CHECK(bmi.push_back(s));
 
-  s.clear();
-  s.emplace_back("bar");
+  s = {"bar"};
   CHECK(bmi.push_back(s));
 
-  s.clear();
   CHECK(bmi.push_back(s));
 
   null_bitstream r;
@@ -375,7 +367,7 @@ TEST("container")
   r.append(4, false);
   CHECK(*bmi.lookup(in, "not") == r);
 
-  auto v = to<vector>("you won't believe it", type::make<string_type>(), " ");
+  auto v = to<vector>("[you won't believe it]", type::string{}, " ");
   REQUIRE(v);
   CHECK(bmi.push_back(*v));
 }

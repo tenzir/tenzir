@@ -1,6 +1,6 @@
 #include "vast/operator.h"
 #include "vast/logger.h"
-#include "vast/serialization.h"
+#include "vast/serialization/arithmetic.h"
 
 namespace vast {
 

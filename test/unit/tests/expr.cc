@@ -22,11 +22,11 @@ TEST("schema setup")
     "type foo : record"
     "{"
     "  s1: string,"
-    "  d1: double,"
+    "  d1: real,"
     "  c: count,"
     "  i: int,"
     "  s2: string,"
-    "  d2: double"
+    "  d2: real"
     "}"
     "type bar : record { s1: string, r : record { b: bool, s: string } }";
 
@@ -34,16 +34,13 @@ TEST("schema setup")
   REQUIRE(s);
   sch = *s;
 
-  REQUIRE(sch.find_type("foo"));
-  REQUIRE(sch.find_type("bar"));
+  auto foo = sch.find_type("foo");
+  auto bar = sch.find_type("bar");
+  REQUIRE(foo);
+  REQUIRE(bar);
 
-  event e0{"babba", 1.337, 42u, 100, "bar", -4.80};
-  e0.type(sch.find_type("foo"));
-  events.push_back(std::move(e0));
-
-  event e1{"yadda", record{false, "baz"}};
-  e1.type(sch.find_type("bar"));
-  events.push_back(std::move(e1));
+  events.emplace_back(record{"babba", 1.337, 42u, 100, "bar", -4.8}, *foo);
+  events.emplace_back(record{"yadda", record{false, "baz"}}, *bar);
 };
 
 TEST("partial order")
@@ -107,9 +104,9 @@ TEST("parser tests")
   CHECK(to<expr::ast>(":string !ni \"shore\""));
 
   // Groups
-  CHECK(to<expr::ast>("(:double > 4.2)"));
-  CHECK(to<expr::ast>(":double > 4.2 && (:time < now || :port == 53/?)"));
-  CHECK(to<expr::ast>("(:double > 4.2 && (:time < now || :port == 53/?))"));
+  CHECK(to<expr::ast>("(:real > 4.2)"));
+  CHECK(to<expr::ast>(":real > 4.2 && (:time < now || :port == 53/?)"));
+  CHECK(to<expr::ast>("(:real > 4.2 && (:time < now || :port == 53/?))"));
 
   // Invalid type name.
   CHECK(! to<expr::ast>(":foo == -42"));
@@ -117,30 +114,32 @@ TEST("parser tests")
 
 bool bool_eval(expr::ast const& a, event const& e)
 {
-  return evaluate(a, e).get<bool>();
+  return *get<boolean>(evaluate(a, e));
 }
 
-TEST("tag queries")
+TEST("meta data queries")
 {
   event e;
   e.timestamp({"2014-01-16+05:30:12"});
-  e.type(type::make<invalid_type>("foo"));
+  auto t = type::alias{type{}};
+  CHECK(t.name("foo"));
+  CHECK(e.type(t));
 
   auto ast = to<expr::ast>("&time == 2014-01-16+05:30:12");
   REQUIRE(ast);
-  CHECK(evaluate(*ast, e) == true);
+  CHECK(bool_eval(*ast, e));
 
   ast = to<expr::ast>("&type == \"foo\"");
   REQUIRE(ast);
-  CHECK(evaluate(*ast, e) == true);
+  CHECK(bool_eval(*ast, e));
 
   ast = to<expr::ast>("&type != \"bar\"");
   REQUIRE(ast);
-  CHECK(evaluate(*ast, e) == true);
+  CHECK(bool_eval(*ast, e));
 
   ast = to<expr::ast>("&type != \"foo\"");
   REQUIRE(ast);
-  CHECK(evaluate(*ast, e) == false);
+  CHECK(! bool_eval(*ast, e));
 }
 
 TEST("type queries")
@@ -160,13 +159,13 @@ TEST("type queries")
   CHECK(bool_eval(*ast, events[0]));
   CHECK(! bool_eval(*ast, events[1]));
 
-  ast = to<expr::ast>(":double >= -4.8");
+  ast = to<expr::ast>(":real >= -4.8");
   REQUIRE(ast);
   CHECK(bool_eval(*ast, events[0]));
   CHECK(! bool_eval(*ast, events[1]));
 
   ast = to<expr::ast>(
-      ":int <= -3 || :int >= +100 && :string !~ /bar/ || :double > 1.0");
+      ":int <= -3 || :int >= +100 && :string !~ /bar/ || :real > 1.0");
   REQUIRE(ast);
   CHECK(bool_eval(*ast, events[0]));
   CHECK(! bool_eval(*ast, events[1]));
@@ -177,6 +176,8 @@ TEST("schema queries")
   auto plain = to<expr::ast>("foo.s1 == \"babba\"");
   REQUIRE(plain);
   auto resolved = plain->resolve(sch);
+  if (! resolved)
+    std::cout << resolved.error() << std::endl;
   REQUIRE(resolved);
   CHECK(bool_eval(*resolved, events[0]));
 

@@ -1,7 +1,8 @@
 #include "framework/unit.h"
 
-#include "vast/util/trial.h"
-#include "vast/util/result.h"
+#include "vast/error.h"
+#include "vast/trial.h"
+#include "vast/result.h"
 
 SUITE("util")
 

@@ -69,12 +69,9 @@ message_handler unpacker::act()
       {
         assert(e);
 
-        // We only support fully typed events at this point, but may loosen
-        // this constraint in the future.
-        auto& t = e->type();
-        if (t->name().empty() || util::get<invalid_type>(t->info()))
+        if (e->type().name().empty() || is<none>(*e))
         {
-          VAST_LOG_ACTOR_ERROR("got invalid event " << *t << " for " << *e);
+          VAST_LOG_ACTOR_ERROR("got invalid event: " << *e);
           quit(exit::error);
           return;
         }

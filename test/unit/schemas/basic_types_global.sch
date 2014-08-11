@@ -3,8 +3,8 @@
 type t1: bool
 type t2: int
 type t3: count
-type t4: double
-type t5: interval
+type t4: real
+type t5: duration
 type t6: time
 type t7: string
 type t8: pattern

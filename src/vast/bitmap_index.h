@@ -3,9 +3,9 @@
 
 #include "vast/bitmap.h"
 #include "vast/operator.h"
+#include "vast/optional.h"
 #include "vast/logger.h"
 #include "vast/value.h"
-#include "vast/util/dictionary.h"
 #include "vast/util/operators.h"
 #include "vast/util/trial.h"
 
@@ -17,29 +17,27 @@ class bitmap_index_base : util::equality_comparable<bitmap_index_base<Derived>>
 {
 public:
   /// Appends a single value.
-  /// @param val The value to add to the index.
-  /// @param id The ID to associate with *val*.
+  /// @param x The value to append to the index.
+  /// @param offset The position of *x* in the bitmap index.
   /// @returns `true` if appending succeeded.
-  bool push_back(value const& val, event_id id = 0)
+  template <typename T>
+  bool push_back(T const& x, uint64_t offset = 0)
   {
-    if (id > 0)
-    {
-      if (id < size())
-      {
-        VAST_LOG_ERROR("got value " << val << " incompatible ID " << id <<
-                       " (required: ID > " << size() << ')');
-        return false;
-      }
+    return catch_up(offset) && derived()->push_back_impl(x);
+  }
 
-      auto delta = id - size();
-      if (delta > 1)
-        if (! stretch(delta))
-          return false;
-    }
+  bool push_back(none, uint64_t offset = 0)
+  {
+    // TODO: differentiate between nil and invalid value. The former represent
+    // optional values, but we also use stretching to append invalid ones.
+    return catch_up(offset) && stretch(1);
+  }
 
-    // TODO: add explicit indexing support for empty values by putting them
-    // into a separate bitmap, as opposed to stretching the bitmap index.
-    return val ? derived()->push_back_impl(val) : stretch(1);
+  bool push_back(data const& d, uint64_t offset = 0)
+  {
+    // TODO: see above.
+    return catch_up(offset)
+        && (is<none>(d) ? stretch(1) : derived()->push_back_impl(d));
   }
 
   /// Appends 0-bits to the index.
@@ -52,14 +50,21 @@ public:
 
   /// Looks up a value given a relational operator.
   /// @param op The relation operator.
-  /// @param val The value to lookup.
-  template <typename Hack = Derived>
-  auto lookup(relational_operator op, value const& val) const
-    -> decltype(std::declval<Hack>().lookup_impl(op, val))
+  /// @param x The value to lookup.
+  template <typename T, typename Hack = Derived>
+  auto lookup(relational_operator op, T const& x) const
+    -> decltype(std::declval<Hack>().lookup_impl(op, x))
   {
     static_assert(std::is_same<Hack, Derived>(), ":-P");
+    return derived()->lookup_impl(op, x);
+  }
 
-    return derived()->lookup_impl(op, val);
+  template <typename T, typename Hack = Derived>
+  auto lookup(relational_operator op, none) const
+    -> decltype(std::declval<Hack>().lookup_impl(op, nil))
+  {
+    static_assert(std::is_same<Hack, Derived>(), ":-P");
+    return derived()->lookup_impl(op, nil);
   }
 
   /// Retrieves the number of elements in the bitmap index.
@@ -74,6 +79,30 @@ public:
   bool empty() const
   {
     return size() == 0;
+  }
+
+  /// Appends invalid bits to bring the bitmap index up to a given size. Given
+  /// a number of *n* bits, the function stretches the bitmap index with
+  /// `size() - n` bits.
+  /// @param n The new size to stretch the bitmap index to.
+  /// @returns `true` on success.
+  bool catch_up(uint64_t n)
+  {
+    if (n == 0)
+      return true;
+
+    if (n < size())
+    {
+      VAST_LOG_ERROR("lower n than required: " << n << " < " << size());
+      return false;
+    }
+
+    auto delta = n - size();
+    if (delta > 1)
+      if (! stretch(delta))
+        return false;
+
+    return true;
   }
 
 private:
@@ -99,10 +128,10 @@ struct bitmap_index_concept
   bitmap_index_concept() = default;
   virtual ~bitmap_index_concept() = default;
 
-  virtual bool push_back_impl(value const& val) = 0;
+  virtual bool push_back_impl(data const& d) = 0;
   virtual bool stretch_impl(size_t n) = 0;
   virtual trial<Bitstream> lookup_impl(relational_operator op,
-                                       value const& val) const = 0;
+                                       data const& d) const = 0;
   virtual uint64_t size_impl() const = 0;
 
   virtual std::unique_ptr<bitmap_index_concept> copy() const = 0;
@@ -127,9 +156,9 @@ struct bitmap_index_model
   {
   }
 
-  virtual bool push_back_impl(value const& val) final
+  virtual bool push_back_impl(data const& d) final
   {
-    return bmi_.push_back_impl(val);
+    return bmi_.push_back_impl(d);
   }
 
   virtual bool stretch_impl(size_t n) final
@@ -138,9 +167,9 @@ struct bitmap_index_model
   }
 
   virtual trial<bitstream_type>
-  lookup_impl(relational_operator op, value const& val) const final
+  lookup_impl(relational_operator op, data const& d) const final
   {
-    return bmi_.lookup_impl(op, val);
+    return bmi_.lookup_impl(op, d);
   }
 
   virtual uint64_t size_impl() const final
@@ -244,10 +273,10 @@ public:
   }
 
 private:
-  bool push_back_impl(value const& val)
+  bool push_back_impl(data const& d)
   {
     assert(concept_);
-    return concept_->push_back_impl(val);
+    return concept_->push_back_impl(d);
   }
 
   bool stretch_impl(size_t n)
@@ -256,10 +285,10 @@ private:
     return concept_->stretch_impl(n);
   }
 
-  trial<Bitstream> lookup_impl(relational_operator op, value const& val) const
+  trial<Bitstream> lookup_impl(relational_operator op, data const& d) const
   {
     assert(concept_);
-    return concept_->lookup_impl(op, val);
+    return concept_->lookup_impl(op, d);
   }
 
   uint64_t size_impl() const
@@ -299,7 +328,7 @@ private:
 };
 
 /// A bitmap index for arithmetic values.
-template <typename Bitstream, type_tag T>
+template <typename Bitstream, typename T>
 class arithmetic_bitmap_index
   : public bitmap_index_base<arithmetic_bitmap_index<Bitstream, T>>,
     util::equality_comparable<arithmetic_bitmap_index<Bitstream, T>>
@@ -309,13 +338,17 @@ class arithmetic_bitmap_index
   template <typename>
   friend struct detail::bitmap_index_model;
 
-  using bitmap_type =
+  using bitmap_value_type =
     std::conditional_t<
-      T == time_range_value || T == time_point_value,
-      time_range::rep,
+      std::is_same<T, time_point>::value
+      || std::is_same<T, time_duration>::value,
+      time_duration::rep,
       std::conditional_t<
-        T == bool_value || T == int_value || T == uint_value || T == double_value,
-        type_tag_type<T>,
+        std::is_same<T, boolean>::value
+        || std::is_same<T, integer>::value
+        || std::is_same<T, count>::value
+        || std::is_same<T, real>::value,
+        T,
         std::false_type
       >
     >;
@@ -323,7 +356,9 @@ class arithmetic_bitmap_index
   template <typename U>
   using bitmap_binner =
     std::conditional_t<
-      T == double_value || T == time_range_value || T == time_point_value,
+      std::is_same<T, real>::value
+      || std::is_same<T, time_point>::value
+      || std::is_same<T, time_duration>::value,
       precision_binner<U>,
       null_binner<U>
     >;
@@ -331,14 +366,17 @@ class arithmetic_bitmap_index
   template <typename B, typename U>
   using bitmap_coder =
     std::conditional_t<
-      T == bool_value,
+      std::is_same<T, boolean>::value,
       equality_coder<B, U>,
       std::conditional_t<
-        std::is_arithmetic<bitmap_type>::value,
+        std::is_arithmetic<bitmap_value_type>::value,
         range_bitslice_coder<B, U>,
         std::false_type
       >
     >;
+
+  using bitmap_type =
+    bitmap<bitmap_value_type, Bitstream, bitmap_coder, bitmap_binner>;
 
 public:
   using bitstream_type = Bitstream;
@@ -352,22 +390,78 @@ public:
   }
 
 private:
-  static bitmap_type extract(value const& val)
+  struct pusher
   {
-    switch (val.which())
+    pusher(bitmap_type& bm)
+      : bm_{bm}
     {
-      default:
-        return val.get<bitmap_type>();
-      case time_range_value:
-        return val.get<time_range>().count();
-      case time_point_value:
-        return val.get<time_point>().since_epoch().count();
     }
+
+    template <typename U>
+    bool operator()(U) const
+    {
+      return false;
+    }
+
+    bool operator()(bitmap_value_type x) const
+    {
+      return bm_.push_back(x);
+    }
+
+    bool operator()(time_point x) const
+    {
+      return (*this)(x.since_epoch().count());
+    }
+
+    bool operator()(time_duration x) const
+    {
+      return (*this)(x.count());
+    }
+
+    bitmap_type& bm_;
+  };
+
+  struct looker
+  {
+    looker(bitmap_type const& bm, relational_operator op)
+      : bm_{bm},
+        op_{op}
+    {
+    }
+
+    template <typename U>
+    trial<Bitstream> operator()(U const& x) const
+    {
+      return error{"invalid type: ", x};
+    }
+
+    trial<Bitstream> operator()(bitmap_value_type x) const
+    {
+      return bm_.lookup(op_, x);
+    }
+
+    trial<Bitstream> operator()(time_point x) const
+    {
+      return (*this)(x.since_epoch().count());
+    }
+
+    trial<Bitstream> operator()(time_duration x) const
+    {
+      return (*this)(x.count());
+    }
+
+    bitmap_type const& bm_;
+    relational_operator op_;
+  };
+
+  bool push_back_impl(data const& d)
+  {
+    return visit(pusher{bitmap_}, d);
   }
 
-  bool push_back_impl(value const& val)
+  bool push_back_impl(T x)
   {
-    return bitmap_.push_back(extract(val));
+    return pusher{bitmap_}(x);
   }
 
   bool stretch_impl(size_t n)
@@ -375,19 +469,20 @@ private:
     return bitmap_.append(n, false);
   }
 
-  trial<Bitstream> lookup_impl(relational_operator op, value const& val) const
+  trial<Bitstream> lookup_impl(relational_operator op, data const& d) const
   {
     if (op == in || op == not_in)
-      return error{"unsupported relational operator:", op};
+      return error{"unsupported relational operator: ", op};
 
-    if (bitmap_.empty())
-      return Bitstream{};
+    return visit(looker{bitmap_, op}, d);
+  };
 
-    auto r = bitmap_.lookup(op, extract(val));
-    if (r)
-      return std::move(*r);
-    else
-      return r.error();
+  trial<Bitstream> lookup_impl(relational_operator op, T x) const
+  {
+    if (op == in || op == not_in)
+      return error{"unsupported relational operator: ", op};
+
+    return looker{bitmap_, op}(x);
   };
 
   uint64_t size_impl() const
@@ -395,7 +490,7 @@ private:
     return bitmap_.size();
   }
 
-  bitmap<bitmap_type, Bitstream, bitmap_coder, bitmap_binner> bitmap_;
+  bitmap_type bitmap_;
 
 private:
   friend access;
@@ -433,19 +528,14 @@ public:
   string_bitmap_index() = default;
 
 private:
-  static uint8_t byte_at(string const& s, size_t i)
+  template <typename Iterator>
+  bool push_back_string(Iterator begin, Iterator end)
   {
-    return static_cast<uint8_t>(s[i]);
-  }
+    auto size = static_cast<size_t>(end - begin);
+    if (size > bitmaps_.size())
+      bitmaps_.resize(size);
 
-  bool push_back_impl(value const& val)
-  {
-    auto& str = val.get<string>();
-
-    if (str.size() > bitmaps_.size())
-      bitmaps_.resize(str.size());
-
-    for (size_t i = 0; i < str.size(); ++i)
+    for (size_t i = 0; i < size; ++i)
     {
       assert(this->size() >= bitmaps_[i].size());
       auto delta = this->size() - bitmaps_[i].size();
@@ -453,11 +543,28 @@ private:
         if (! bitmaps_[i].append(delta, false))
           return false;
 
-      if (! bitmaps_[i].push_back(byte_at(str, i)))
+      if (! bitmaps_[i].push_back(static_cast<uint8_t>(begin[i])))
         return false;
     }
 
-    return size_.push_back(str.size());
+    return size_.push_back(size);
+  }
+
+  bool push_back_impl(data const& d)
+  {
+    auto str = get<std::string>(d);
+    return str ? push_back_impl(*str) : false;
+  }
+
+  bool push_back_impl(std::string const& str)
+  {
+    return push_back_string(str.begin(), str.end());
+  }
+
+  template <size_t N>
+  bool push_back_impl(char const (&str)[N])
+  {
+    return push_back_string(str, str + N - 1);
   }
 
   bool stretch_impl(size_t n)
@@ -465,20 +572,20 @@ private:
     return size_.append(n, false);
   }
 
-  trial<Bitstream> lookup_impl(relational_operator op, value const& val) const
+  template <typename Iterator>
+  trial<Bitstream> lookup_string(relational_operator op,
+                               Iterator begin, Iterator end) const
   {
-    assert(val.which() == string_value);
-
-    auto str = val.get<string>();
+    auto size = static_cast<size_t>(end - begin);
 
     switch (op)
     {
       default:
-        return error{"unsupported relational operator", op};
+        return error{"unsupported relational operator: ", op};
       case equal:
       case not_equal:
         {
-          if (str.empty())
+          if (size == 0)
           {
             if (auto s = size_.lookup(equal, 0))
               return std::move(op == equal ? *s : s->flip());
@@ -486,23 +593,23 @@ private:
               return s.error();
           }
 
-          if (str.size() > bitmaps_.size())
+          if (size > bitmaps_.size())
             return Bitstream{this->size(), op == not_equal};
 
-          auto r = size_.lookup(less_equal, str.size());
+          auto r = size_.lookup(less_equal, size);
           if (! r)
             return r.error();
 
-          if (r->find_first() == Bitstream::npos)
+          if (r->all_zero())
             return Bitstream{this->size(), op == not_equal};
 
-          for (size_t i = 0; i < str.size(); ++i)
+          for (size_t i = 0; i < size; ++i)
           {
-            auto b = bitmaps_[i].lookup(equal, byte_at(str, i));
+            auto b = bitmaps_[i].lookup(equal, static_cast<uint8_t>(begin[i]));
             if (! b)
               return b.error();
 
-            if (b->find_first() != Bitstream::npos)
+            if (! b->all_zero())
               *r &= *b;
             else
               return Bitstream{this->size(), op == not_equal};
@@ -513,25 +620,25 @@ private:
       case ni:
       case not_ni:
         {
-          if (str.empty())
+          if (size == 0)
             return Bitstream{this->size(), op == ni};
 
-          if (str.size() > bitmaps_.size())
+          if (size > bitmaps_.size())
             return Bitstream{this->size(), op == not_ni};
 
-          // Iterate through all k-grams.
+          // TODO: Be more clever than iterating over all k-grams (#45).
           Bitstream r{this->size(), 0};
-          for (size_t i = 0; i < bitmaps_.size() - str.size() + 1; ++i)
+          for (size_t i = 0; i < bitmaps_.size() - size + 1; ++i)
           {
             Bitstream substr{this->size(), 1};;
             auto skip = false;
-            for (size_t j = 0; j < str.size(); ++j)
+            for (size_t j = 0; j < size; ++j)
             {
-              auto bs = bitmaps_[i + j].lookup(equal, str[j]);
+              auto bs = bitmaps_[i + j].lookup(equal, begin[j]);
               if (! bs)
                 return bs.error();
 
-              if (bs->find_first() == Bitstream::npos)
+              if (bs->all_zero())
               {
                 skip = true;
                 break;
@@ -549,13 +656,35 @@ private:
     }
   }
 
+  trial<Bitstream> lookup_impl(relational_operator op, data const& d) const
+  {
+    auto s = get<std::string>(d);
+    if (s)
+      return lookup_impl(op, *s);
+
+    return error{"not string data: ", d};
+  }
+
+  trial<Bitstream> lookup_impl(relational_operator op,
+                               std::string const& str) const
+  {
+    return lookup_string(op, str.begin(), str.end());
+  }
+
+  template <size_t N>
+    trial<Bitstream> lookup_impl(relational_operator op,
+                                 char const (&str)[N]) const
+    {
+      return lookup_string(op, str, str + N - 1);
+    }
+
   uint64_t size_impl() const
   {
     return size_.size();
   }
 
   std::vector<bitmap<uint8_t, Bitstream, binary_bitslice_coder>> bitmaps_;
-  bitmap<string::size_type, Bitstream, range_bitslice_coder> size_;
+  bitmap<std::string::size_type, Bitstream, range_bitslice_coder> size_;
 
 private:
   friend access;
@@ -580,12 +709,12 @@ private:
 /// A bitmap index for IP addresses.
 template <typename Bitstream>
 class address_bitmap_index
-  : public bitmap_index_base<address_bitmap_index<Bitstream>>
+: public bitmap_index_base<address_bitmap_index<Bitstream>>
 {
   friend bitmap_index_base<address_bitmap_index<Bitstream>>;
 
   template <typename>
-  friend struct detail::bitmap_index_model;
+    friend struct detail::bitmap_index_model;
 
 public:
   using bitstream_type = Bitstream;
@@ -593,19 +722,10 @@ public:
   address_bitmap_index() = default;
 
 private:
-  bool push_back_impl(value const& val)
+  bool push_back_impl(address const& a)
   {
-    address const* addr;
-
-    if (val.which() == address_value)
-      addr = &val.get<address>();
-    else if (val.which() == prefix_value)
-      addr = &val.get<prefix>().network();
-    else
-      return false;
-
-    auto& bytes = addr->data();
-    size_t const start = addr->is_v4() ? 12 : 0;
+    auto& bytes = a.data();
+    size_t start = a.is_v4() ? 12 : 0;
 
     if (! v4_.push_back(start == 12))
       return false;
@@ -617,6 +737,16 @@ private:
     return true;
   }
 
+  bool push_back_impl(data const& d)
+  {
+    if (auto a = get<address>(d))
+      return push_back_impl(*a);
+    else if (auto s = get<subnet>(d))
+      return push_back_impl(s->network());
+    else
+      return false;
+  }
+
   bool stretch_impl(size_t n)
   {
     for (size_t i = 0; i < 16; ++i)
@@ -626,30 +756,32 @@ private:
     return v4_.append(n, false);
   }
 
-  trial<Bitstream> lookup_impl(relational_operator op, value const& val) const
+  trial<Bitstream> lookup_impl(relational_operator op, data const& d) const
   {
     if (! (op == equal || op == not_equal || op == in || op == not_in))
-      return error{"unsupported relational operator", op};
+      return error{"unsupported relational operator: ", op};
 
     if (v4_.empty())
       return Bitstream{};
 
-    switch (val.which())
+    switch (which(d))
     {
       default:
-        return error{"invalid type tag"};
-      case address_value:
-        return lookup_impl(op, val.get<address>());
-      case prefix_value:
-        return lookup_impl(op, val.get<prefix>());
+        return error{"invalid value"};
+      case data::tag::address:
+        return lookup_impl(op, *get<address>(d));
+      case data::tag::subnet:
+        return lookup_impl(op, *get<subnet>(d));
     }
   }
 
-  trial<Bitstream>
-  lookup_impl(relational_operator op, address const& addr) const
+  trial<Bitstream> lookup_impl(relational_operator op, address const& a) const
   {
-    auto& bytes = addr.data();
-    auto is_v4 = addr.is_v4();
+    if (! (op == equal || op == not_equal))
+      return error{"unsupported relational operator: ", op};
+
+    auto& bytes = a.data();
+    auto is_v4 = a.is_v4();
     auto r = is_v4 ? v4_ : Bitstream{this->size(), true};
 
     for (size_t i = is_v4 ? 12 : 0; i < 16; ++ i)
@@ -658,7 +790,7 @@ private:
       if (! bs)
         return bs.error();
 
-      if (bs->find_first() != Bitstream::npos)
+      if (! bs->all_zero())
         r &= *bs;
       else
         return Bitstream{this->size(), op == not_equal};
@@ -667,19 +799,19 @@ private:
     return std::move(op == equal ? r : r.flip());
   }
 
-  trial<Bitstream> lookup_impl(relational_operator op, prefix const& pfx) const
+  trial<Bitstream> lookup_impl(relational_operator op, subnet const& s) const
   {
     if (! (op == in || op == not_in))
-      return error{"unsupported relational operator", op};
+      return error{"unsupported relational operator: ", op};
 
-    auto topk = pfx.length();
+    auto topk = s.length();
     if (topk == 0)
-      return error{"invalid IP prefix length:", topk};
+      return error{"invalid IP subnet length: ", topk};
 
-    auto net = pfx.network();
+    auto net = s.network();
     auto is_v4 = net.is_v4();
     if ((is_v4 ? topk + 96 : topk) == 128)
-      return lookup_impl(op == in ? equal : not_equal, pfx.network());
+      return lookup_impl(op == in ? equal : not_equal, s.network());
 
     auto r = is_v4 ? v4_ : Bitstream{this->size(), true};
     auto bit = topk;
@@ -731,24 +863,29 @@ private:
 
 /// A bitmap index for IP prefixes.
 template <typename Bitstream>
-class prefix_bitmap_index
-  : public bitmap_index_base<prefix_bitmap_index<Bitstream>>
+class subnet_bitmap_index
+: public bitmap_index_base<subnet_bitmap_index<Bitstream>>
 {
-  friend bitmap_index_base<prefix_bitmap_index<Bitstream>>;
+  friend bitmap_index_base<subnet_bitmap_index<Bitstream>>;
 
   template <typename>
-  friend struct detail::bitmap_index_model;
+    friend struct detail::bitmap_index_model;
 
 public:
   using bitstream_type = Bitstream;
 
-  prefix_bitmap_index() = default;
+  subnet_bitmap_index() = default;
 
 private:
-  bool push_back_impl(value const& val)
+  bool push_back_impl(subnet const& s)
   {
-    return network_.push_back(val)
-      && length_.push_back(val.get<prefix>().length());
+    return network_.push_back(s.network()) && length_.push_back(s.length());
+  }
+
+  bool push_back_impl(data const& d)
+  {
+    auto s = get<subnet>(d);
+    return s ? push_back_impl(*s) : false;
   }
 
   bool stretch_impl(size_t n)
@@ -756,23 +893,30 @@ private:
     return network_.stretch(n) && length_.append(n, false);
   }
 
-  trial<Bitstream> lookup_impl(relational_operator op, value const& val) const
+  trial<Bitstream> lookup_impl(relational_operator op, subnet const& s) const
   {
     if (! (op == equal || op == not_equal))
-      return error{"unsupported relational operator", op};
+      return error{"unsupported relational operator: ", op};
 
-    auto pfx = val.get<prefix>();
-
-    auto bs = network_.lookup(equal, pfx.network());
+    auto bs = network_.lookup(equal, s.network());
     if (! bs)
       return bs;
 
-    auto n = network_.lookup(equal, pfx.network());
+    auto n = length_.lookup(equal, s.length());
     if (! n)
       return n;
 
     auto r = Bitstream{*bs & *n};
     return std::move(op == equal ? r : r.flip());
+  }
+
+  trial<Bitstream> lookup_impl(relational_operator op, data const& d) const
+  {
+    auto s = get<subnet>(d);
+    if (s)
+      return lookup_impl(op, *s);
+
+    return error{"not subnet data: ", d};
   }
 
   uint64_t size_impl() const
@@ -796,8 +940,8 @@ private:
     source >> network_ >> length_;
   }
 
-  friend bool operator==(prefix_bitmap_index const& x,
-                         prefix_bitmap_index const& y)
+  friend bool operator==(subnet_bitmap_index const& x,
+                         subnet_bitmap_index const& y)
   {
     return x.network_ == y.network_ && x.length_ == y.length_;
   }
@@ -819,10 +963,15 @@ public:
   port_bitmap_index() = default;
 
 private:
-  bool push_back_impl(value const& val)
+  bool push_back_impl(port const& p)
   {
-    auto& p = val.get<port>();
     return num_.push_back(p.number()) && proto_.push_back(p.type());
+  }
+
+  bool push_back_impl(data const& d)
+  {
+    auto p = get<port>(d);
+    return p ? push_back_impl(*p) : false;
   }
 
   bool stretch_impl(size_t n)
@@ -830,22 +979,19 @@ private:
     return num_.append(n, false) && proto_.append(n, false);
   }
 
-  trial<Bitstream> lookup_impl(relational_operator op, value const& val) const
+  trial<Bitstream> lookup_impl(relational_operator op, port const& p) const
   {
-    assert(val.which() == port_value);
-
     if (op == in || op == not_in)
-      return error{"unsupported relational operator", op};
+      return error{"unsupported relational operator: ", op};
 
     if (num_.empty())
       return Bitstream{};
 
-    auto& p = val.get<port>();
     auto n = num_.lookup(op, p.number());
     if (! n)
       return n.error();
 
-    if (n->find_first() == Bitstream::npos)
+    if (n->all_zero())
       return Bitstream{this->size(), false};
 
     if (p.type() != port::unknown)
@@ -858,6 +1004,15 @@ private:
     }
 
     return std::move(*n);
+  }
+
+  trial<Bitstream> lookup_impl(relational_operator op, data const& d) const
+  {
+    auto p = get<port>(d);
+    if (p)
+      return lookup_impl(op, *p);
+
+    return error{"not port data: ", d};
   }
 
   uint64_t size_impl() const
@@ -904,80 +1059,28 @@ public:
 
   sequence_bitmap_index() = default;
 
-  sequence_bitmap_index(type_tag t)
-    : elem_type_{t}
+  sequence_bitmap_index(type t)
+    : elem_type_{std::move(t)}
   {
   }
 
 private:
-  bool push_back_impl(value const& val)
+  bool push_back_impl(data const& d)
   {
-    if (val.which() == set_value)
-      return push_back_container<set>(val);
-    else if (val.which() == vector_value)
-      return push_back_container<vector>(val);
-    else
-      return false;
-  }
-
-  bool stretch_impl(size_t n)
-  {
-    return size_.append(n, false);
-  }
-
-  trial<Bitstream> lookup_impl(relational_operator op, value const& val) const
-  {
-    if (op == ni)
-      op = in;
-    else if (op == not_ni)
-      op = not_in;
-
-    if (! (op == in || op == not_in))
-      return error{"unsupported relational operator", op};
-
-    if (this->empty())
-      return Bitstream{};
-
-    Bitstream r;
-    auto t = bmis_.front().lookup(equal, val);
-    if (t)
-      r |= *t;
-    else
-      return t;
-
-    for (size_t i = 1; i < bmis_.size(); ++i)
+    switch (which(d))
     {
-      auto bs = bmis_[i].lookup(equal, val);
-      if (bs)
-        r |= *bs;
-      else
-        return bs;
+      default:
+        return false;
+      case data::tag::vector:
+        return push_back_impl(*get<vector>(d));
+      case data::tag::set:
+        return push_back_impl(*get<set>(d));
     }
-
-    if (r.size() < this->size())
-      r.append(this->size() - r.size(), false);
-
-    if (op == not_in)
-      r.flip();
-
-    return std::move(r);
   }
 
-  uint64_t size_impl() const
+  template <typename Container>
+  bool push_back_impl(Container const& c)
   {
-    return size_.size();
-  }
-
-  type_tag elem_type_;
-  std::vector<bitmap_index<Bitstream>> bmis_;
-  bitmap<uint32_t, Bitstream, range_bitslice_coder> size_;
-
-private:
-  template <typename C>
-  bool push_back_container(value const& val)
-  {
-    auto& c = val.get<C>();
-
     if (c.empty())
       return size_.append(1, false);
 
@@ -1009,6 +1112,58 @@ private:
     return size_.push_back(c.size());
   }
 
+  bool stretch_impl(size_t n)
+  {
+    return size_.append(n, false);
+  }
+
+  trial<Bitstream> lookup_impl(relational_operator op, data const& d) const
+  {
+    if (op == ni)
+      op = in;
+    else if (op == not_ni)
+      op = not_in;
+
+    if (! (op == in || op == not_in))
+      return error{"unsupported relational operator: ", op};
+
+    if (this->empty())
+      return Bitstream{};
+
+    Bitstream r;
+    auto t = bmis_.front().lookup(equal, d);
+    if (t)
+      r |= *t;
+    else
+      return t;
+
+    for (size_t i = 1; i < bmis_.size(); ++i)
+    {
+      auto bs = bmis_[i].lookup(equal, d);
+      if (bs)
+        r |= *bs;
+      else
+        return bs;
+    }
+
+    if (r.size() < this->size())
+      r.append(this->size() - r.size(), false);
+
+    if (op == not_in)
+      r.flip();
+
+    return std::move(r);
+  }
+
+  uint64_t size_impl() const
+  {
+    return size_.size();
+  }
+
+  type elem_type_;
+  std::vector<bitmap_index<Bitstream>> bmis_;
+  bitmap<uint32_t, Bitstream, range_bitslice_coder> size_;
+
 private:
   friend access;
 
@@ -1033,31 +1188,32 @@ private:
 
 /// Factory to construct a bitmap index based on a given type tag.
 template <typename Bitstream, typename... Args>
-trial<bitmap_index<Bitstream>> make_bitmap_index(type_tag t, Args&&... args)
+trial<bitmap_index<Bitstream>> make_bitmap_index(type const& t, Args&&... args)
 {
-  switch (t)
+  // Can't use a visitor because of argument forwarding.
+  switch (which(t))
   {
     default:
-      return error{"unspported type tag:", t};
-    case bool_value:
-      return {arithmetic_bitmap_index<Bitstream, bool_value>(std::forward<Args>(args)...)};
-    case int_value:
-      return {arithmetic_bitmap_index<Bitstream, int_value>(std::forward<Args>(args)...)};
-    case uint_value:
-      return {arithmetic_bitmap_index<Bitstream, uint_value>(std::forward<Args>(args)...)};
-    case double_value:
-      return {arithmetic_bitmap_index<Bitstream, double_value>(std::forward<Args>(args)...)};
-    case time_range_value:
-      return {arithmetic_bitmap_index<Bitstream, time_range_value>(std::forward<Args>(args)...)};
-    case time_point_value:
-      return {arithmetic_bitmap_index<Bitstream, time_point_value>(std::forward<Args>(args)...)};
-    case string_value:
+      return error{"unspported type: ", t};
+    case type::tag::boolean:
+      return {arithmetic_bitmap_index<Bitstream, boolean>(std::forward<Args>(args)...)};
+    case type::tag::integer:
+      return {arithmetic_bitmap_index<Bitstream, integer>(std::forward<Args>(args)...)};
+    case type::tag::count:
+      return {arithmetic_bitmap_index<Bitstream, count>(std::forward<Args>(args)...)};
+    case type::tag::real:
+      return {arithmetic_bitmap_index<Bitstream, real>(std::forward<Args>(args)...)};
+    case type::tag::time_point:
+      return {arithmetic_bitmap_index<Bitstream, time_point>(std::forward<Args>(args)...)};
+    case type::tag::time_duration:
+      return {arithmetic_bitmap_index<Bitstream, time_duration>(std::forward<Args>(args)...)};
+    case type::tag::string:
       return {string_bitmap_index<Bitstream>(std::forward<Args>(args)...)};
-    case address_value:
+    case type::tag::address:
       return {address_bitmap_index<Bitstream>(std::forward<Args>(args)...)};
-    case prefix_value:
-      return {prefix_bitmap_index<Bitstream>(std::forward<Args>(args)...)};
-    case port_value:
+    case type::tag::subnet:
+      return {subnet_bitmap_index<Bitstream>(std::forward<Args>(args)...)};
+    case type::tag::port:
       return {port_bitmap_index<Bitstream>(std::forward<Args>(args)...)};
   }
 }

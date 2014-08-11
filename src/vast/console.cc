@@ -6,6 +6,7 @@
 #include "vast/event.h"
 #include "vast/parse.h"
 #include "vast/io/serialization.h"
+#include "vast/serialization/arithmetic.h"
 #include "vast/util/color.h"
 #include "vast/util/poll.h"
 

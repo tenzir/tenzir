@@ -146,18 +146,19 @@ public:
       v_ = nullptr;
       pred.rhs().accept(*this);
       assert(v_);
-      auto ts = v_->get<time_point>();
+      auto ts = get<time_point>(*v_);
+      assert(ts);
 
       restriction_map::mapped_type partitions;
       VAST_LOG_DEBUG("checking restrictors for " << expr::ast{pred});
       for (auto& p : index_.part_state_)
       {
-        if (pred.pred(p.second.first, ts))
+        if (pred.pred(value{p.second.first}, *v_))
         {
           VAST_LOG_DEBUG("  - " << p.second.first << " for " << p.first);
           partitions.push_back(p.first);
         }
-        else if (pred.pred(p.second.last, ts))
+        else if (pred.pred(value{p.second.last}, *v_))
         {
           VAST_LOG_DEBUG("  - " << p.second.last << " for " << p.first);
           partitions.push_back(p.first);

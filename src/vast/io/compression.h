@@ -17,9 +17,6 @@ enum compression : uint8_t
 #endif // VAST_HAVE_SNAPPY
 };
 
-void serialize(serializer& sink, compression method);
-void deserialize(deserializer& source, compression& method);
-
 } // namespace io
 } // namespace vast
 

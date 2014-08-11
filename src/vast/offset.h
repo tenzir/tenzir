@@ -1,33 +1,16 @@
 #ifndef VAST_OFFSET_H
 #define VAST_OFFSET_H
 
-#include <vector>
 #include "vast/print.h"
 #include "vast/parse.h"
+#include "vast/util/stack_vector.h"
 
 namespace vast {
 
 /// A sequence of indexes to recursively access a type or value.
-struct offset : std::vector<size_t>
+struct offset : util::stack_vector<size_t, 4>
 {
-  using super = std::vector<size_t>;
-
-  offset() = default;
-
-  offset(super::const_iterator begin, super::const_iterator end)
-    : super{begin, end}
-  {
-  }
-
-  offset(super v)
-    : super{std::move(v)}
-  {
-  }
-
-  offset(std::initializer_list<size_t> list)
-    : super{std::move(list)}
-  {
-  }
+  using util::stack_vector<size_t, 4>::stack_vector;
 
   template <typename Iterator>
   friend trial<void> print(offset const& o, Iterator&& out)

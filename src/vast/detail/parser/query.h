@@ -1,7 +1,7 @@
 #ifndef VAST_DETAIL_PARSER_QUERY_H
 #define VAST_DETAIL_PARSER_QUERY_H
 
-#include "vast/detail/parser/expression.h"
+#include "vast/detail/parser/data_expression.h"
 
 namespace vast {
 namespace detail {
@@ -12,7 +12,7 @@ struct query : qi::grammar<Iterator, ast::query::query(), skipper<Iterator>>
 {
   query(error_handler<Iterator>& on_error)
     : query::base_type{start},
-      value_expr{on_error}
+      data_expr{on_error}
   {
     qi::_1_type _1;
     qi::_2_type _2;
@@ -50,20 +50,16 @@ struct query : qi::grammar<Iterator, ast::query::query(), skipper<Iterator>>
       ;
 
     type.add
-      ("bool",      bool_value)
-      ("int",       int_value)
-      ("count",     uint_value)
-      ("double",    double_value)
-      ("interval",  time_range_value)
-      ("time",      time_point_value)
-      ("string",    string_value)
-      ("record",    record_value)
-      ("vector",    record_value)
-      ("set",       record_value)
-      ("table",     table_value)
-      ("addr",      address_value)
-      ("subnet",    prefix_value)
-      ("port",      port_value)
+      ("bool",      vast::type::boolean{})
+      ("int",       vast::type::integer{})
+      ("count",     vast::type::count{})
+      ("real",      vast::type::real{})
+      ("time",      vast::type::time_point{})
+      ("duration",  vast::type::time_duration{})
+      ("string",    vast::type::string{})
+      ("addr",      vast::type::address{})
+      ("subnet",    vast::type::subnet{})
+      ("port",      vast::type::port{})
       ;
 
     start
@@ -86,20 +82,20 @@ struct query : qi::grammar<Iterator, ast::query::query(), skipper<Iterator>>
       =   '&'
       >   identifier
       >   pred_op
-      >   value_expr
+      >   data_expr
       ;
 
     type_pred
       =   ':'
       >   type
       >   pred_op
-      >   value_expr
+      >   data_expr
       ;
 
     schema_pred
       =   glob >> *('.' > glob)
       >   pred_op
-      >   value_expr
+      >   data_expr
       ;
 
     not_pred
@@ -166,16 +162,11 @@ struct query : qi::grammar<Iterator, ast::query::query(), skipper<Iterator>>
     qi::rule<Iterator, std::string(), skipper<Iterator>>
         identifier, glob, event_type;
 
-    qi::symbols<char, relational_operator>
-        pred_op;
+    qi::symbols<char, relational_operator> pred_op;
+    qi::symbols<char, boolean_operator> boolean_op;
+    qi::symbols<char, vast::type> type;
 
-    qi::symbols<char, boolean_operator>
-        boolean_op;
-
-    qi::symbols<char, type_tag>
-        type;
-
-    value_expression<Iterator> value_expr;
+    data_expression<Iterator> data_expr;
 };
 
 } // namespace ast

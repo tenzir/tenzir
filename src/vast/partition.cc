@@ -204,21 +204,27 @@ struct dispatcher : expr::default_const_visitor
 
   virtual void visit(expr::type_extractor const& te)
   {
-    // TODO: Switch to strong typing.
     for (auto& p : actor_.indexers_)
-      if (p.second.type && p.second.type->at(p.second.off)->tag() == te.type)
+      if (is<type::record>(p.second.type))
       {
-        if (p.second.actor)
+        assert(! "records shall be flattened");
+      }
+      else
+      {
+        if (p.second.type == te.type)
         {
-          indexes_.push_back(p.second.actor);
-        }
-        else
-        {
-          auto a = actor_.load_data_indexer(p.first);
-          if (! a)
-            VAST_LOG_ERROR(a.error());
-          else
+          if (p.second.actor)
+          {
             indexes_.push_back(p.second.actor);
+          }
+          else
+          {
+            auto a = actor_.load_data_indexer(p.first);
+            if (! a)
+              VAST_LOG_ERROR(a.error());
+            else
+              indexes_.push_back(p.second.actor);
+          }
         }
       }
   }
@@ -226,48 +232,56 @@ struct dispatcher : expr::default_const_visitor
   virtual void visit(expr::schema_extractor const& se)
   {
     for (auto& t : actor_.schema_)
-      for (auto& pair : t->find_suffix(se.key))
+      if (auto r = get<type::record>(t))
       {
-        path p = "types";
-        for (auto& i : pair.second)
-          p /= i;
+        for (auto& pair : r->find_suffix(se.key))
+        {
+          path p = "types";
+          for (auto& i : pair.second)
+            p /= i;
 
-        auto i = actor_.indexers_.find(p);
-        if (i == actor_.indexers_.end())
-        {
-          VAST_LOG_WARN("no index for " << p);
-        }
-        else if (! expr::compatible(i->second.type->at(i->second.off)->tag(),
-                                    rhs_type_, op_))
-        {
-          VAST_LOG_WARN("incompatible types: " <<
-                        "LHS = " << i->second.type->at(i->second.off)->tag() <<
-                        " <--> RHS = " << rhs_type_);
-        }
-        else if (! i->second.actor)
-        {
-          VAST_LOG_DEBUG("loading indexer for " << p);
-          auto a = actor_.load_data_indexer(i->first);
-          if (! a)
-            VAST_LOG_ERROR(a.error());
+          auto i = actor_.indexers_.find(p);
+          if (i == actor_.indexers_.end())
+          {
+            VAST_LOG_WARN("no index for " << p);
+          }
+          else if (auto r = get<type::record>(i->second.type))
+          {
+            auto lhs_type = r->at(i->second.off);
+            assert(lhs_type);
+            if (! compatible(*lhs_type, op_, rhs_type_))
+              VAST_LOG_WARN("incompatible types: LHS = " << *lhs_type <<
+                            " <--> RHS = " << rhs_type_);
+          }
+          else if (! i->second.actor)
+          {
+            VAST_LOG_DEBUG("loading indexer for " << p);
+            auto a = actor_.load_data_indexer(i->first);
+            if (! a)
+              VAST_LOG_ERROR(a.error());
+            else
+              indexes_.push_back(i->second.actor);
+          }
           else
+          {
+            VAST_LOG_DEBUG("found loaded indexer for " << p);
             indexes_.push_back(i->second.actor);
+          }
         }
-        else
-        {
-          VAST_LOG_DEBUG("found loaded indexer for " << p);
-          indexes_.push_back(i->second.actor);
-        }
+      }
+      else
+      {
+        assert(! "all events must currently be records");
       }
   }
 
   virtual void visit(expr::constant const& c)
   {
-    rhs_type_ = c.val.which();
+    rhs_type_ = c.val.type();
   }
 
   relational_operator op_;
-  type_tag rhs_type_;
+  type rhs_type_;
   partition_actor& actor_;
   std::vector<actor> indexes_;
 };
@@ -306,21 +320,32 @@ message_handler partition_actor::act()
 
     indexers_[dir_ / "name.idx"];
     indexers_[dir_ / "type.idx"];
-    for (auto& type : schema_)
-      type->each(
-          [&](key const& k, offset const& o)
-          {
-            auto p = path{"types"} / type->name();
-            for (auto& id : k)
-              p /= id;
 
-            VAST_LOG_ACTOR_DEBUG("found indexer for " << *type << '.' << k);
+    auto init_state = [this](path const& p, offset const& o, type const& t)
+    {
+      assert(indexers_.find(p) == indexers_.end());
+      auto& state = indexers_[p];
+      state.off = o;
+      state.type = t;
+    };
 
-            assert(indexers_.find(p) == indexers_.end());
-            auto& state = indexers_[p];
-            state.off = o;
-            state.type = type;
-          });
+    for (auto& tp : schema_)
+    {
+      auto p = path{"types"} / tp.name();
+      if (auto r = get<type::record>(tp))
+        r->each(
+            [&](type::record::trace const& t, offset const& o) -> trial<void>
+            {
+              auto ip = p;
+              for (auto f : t)
+                ip /= f->name;
+
+              init_state(ip, o, t.back()->type);
+              return nothing;
+            });
+      else
+        init_state(p, {}, tp);
+    }
   }
 
   attach_functor(
@@ -450,21 +475,36 @@ message_handler partition_actor::act()
 
       schema_ = std::move(*sch);
 
-      for (auto& t : s.schema())
-        t->each(
-          [&](key const& k, offset const& o)
-          {
-            auto p = path{"types"} / t->name();
-            for (auto& id : k)
-              p /= id;
+      auto create = [this](path const& p, offset const& o, type const& t)
+        -> trial<void>
+      {
+        auto i = create_data_indexer(p, o, t);
+        if (! i)
+        {
+          VAST_LOG_ACTOR_ERROR(i.error());
+          quit(exit::error);
+          return i;
+        }
 
-            auto i = create_data_indexer(p, o, t);
-            if (! i)
-            {
-              VAST_LOG_ACTOR_ERROR(i.error());
-              quit(exit::error);
-            }
-          });
+        return nothing;
+      };
+
+      for (auto& tp : schema_)
+      {
+        auto p = path{"types"} / tp.name();
+        if (auto r = get<type::record>(tp))
+          r->each(
+              [&](type::record::trace const& t, offset const& o) -> trial<void>
+              {
+                auto ip = p;
+                for (auto f : t)
+                  ip /= f->name;
+
+                return create(ip, o, t.back()->type);
+              });
+        else
+          create(p, {}, tp);
+      }
 
       auto p = dir_ / "name.idx";
       auto state = &indexers_[p];

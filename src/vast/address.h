@@ -4,7 +4,6 @@
 #include <array>
 #include <string>
 #include "vast/fwd.h"
-#include "vast/string.h"
 #include "vast/print.h"
 #include "vast/util/operators.h"
 
@@ -152,8 +151,7 @@ private:
   template <typename Iterator>
   friend trial<void> print(address const& a, Iterator&& out)
   {
-    auto str = to_string(a);
-    return print(str, out);
+    return print(to_string(a), out);
   }
 
   friend std::string to_string(address const& a);

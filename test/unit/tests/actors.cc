@@ -155,8 +155,8 @@ TEST("basic actor integrity")
         segment::reader r{&s};
         auto e = r.read(113);
         REQUIRE(e);
-        CHECK((*e)[1] == "XBy0ZlNNWuj");
-        CHECK((*e)[3] == "TLSv10");
+        CHECK(get<record>(*e)->at(1) == "XBy0ZlNNWuj");
+        CHECK(get<record>(*e)->at(3) == "TLSv10");
       },
       fail);
 
@@ -221,17 +221,17 @@ TEST("basic actor integrity")
     {
       // Verify contents from a few random events.
       if (e.id() == 4)
-        CHECK(e[1] == "KKSlmtmkkxf");
+        CHECK(get<record>(e)->at(1) == "KKSlmtmkkxf");
 
       if (e.id() == 42)
       {
-        CHECK(e[1] == "7e0gZmKgGS4");
-        CHECK(e[4] == "TLS_RSA_WITH_RC4_128_MD5");
+        CHECK(get<record>(e)->at(1) == "7e0gZmKgGS4");
+        CHECK(get<record>(e)->at(4) == "TLS_RSA_WITH_RC4_128_MD5");
       }
 
       // The last event.
       if (e.id() == 103)
-        CHECK(e[1] == "mXRBhfuUqag");
+        CHECK(get<record>(e)->at(1) == "mXRBhfuUqag");
     },
     fail);
 

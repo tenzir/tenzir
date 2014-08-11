@@ -7,9 +7,13 @@
 
 namespace vast {
 
-class ewah_bitstream;
+// Values
+using boolean = bool;
+using integer = int64_t;
+using count = uint64_t;
+using real = double;
 
-/// The default bitstream to use.
+class ewah_bitstream;
 using default_bitstream = ewah_bitstream;
 
 /// Uniquely identifies a VAST event.
@@ -27,10 +31,6 @@ static constexpr event_id max_event_id =
 
 /// Uniquely identifies a VAST type.
 using type_id = uint64_t;
-
-class type;
-using type_ptr = std::shared_ptr<type>;
-using type_const_ptr = std::shared_ptr<type const>;
 
 } // namespace vast
 

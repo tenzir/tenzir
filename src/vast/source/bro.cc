@@ -1,80 +1,69 @@
 #include "vast/source/bro.h"
 
 #include <cassert>
-#include "vast/util/field_splitter.h"
+#include "vast/util/string.h"
 
 namespace vast {
 namespace source {
 
 namespace {
 
-trial<type_const_ptr> make_type(schema& sch, string const& bro_type)
+trial<type> make_type(std::string const& bro_type)
 {
-  type_ptr t;
+  type t;
   if (bro_type == "enum" || bro_type == "string" || bro_type == "file")
-    t = type::make<string_type>();
+    t = type::string{};
   else if (bro_type == "bool")
-    t = type::make<bool_type>();
+    t = type::boolean{};
   else if (bro_type == "int")
-    t = type::make<int_type>();
+    t = type::integer{};
   else if (bro_type == "count")
-    t = type::make<uint_type>();
+    t = type::count{};
   else if (bro_type == "double")
-    t = type::make<double_type>();
-  else if (bro_type == "interval")
-    t = type::make<time_range_type>();
+    t = type::real{};
   else if (bro_type == "time")
-    t = type::make<time_point_type>();
+    t = type::time_point{};
+  else if (bro_type == "interval")
+    t = type::time_duration{};
   else if (bro_type == "pattern")
-    t = type::make<regex_type>();
+    t = type::pattern{};
   else if (bro_type == "addr")
-    t = type::make<address_type>();
+    t = type::address{};
   else if (bro_type == "subnet")
-    t = type::make<prefix_type>();
+    t = type::subnet{};
   else if (bro_type == "port")
-    t = type::make<port_type>();
+    t = type::port{};
 
-  if (! t && (bro_type.starts_with("vector")
-              || bro_type.starts_with("set")
-              || bro_type.starts_with("table")))
+  if (is<none>(t)
+      && (util::starts_with(bro_type, "vector")
+          || util::starts_with(bro_type, "set")
+          || util::starts_with(bro_type, "table")))
   {
+    // Bro's logging framwork cannot log nested vectors/sets/tables, so we can
+    // safely assume that we're dealing with a basic type inside the brackets.
+    // If this will ever change, we'll have to enhance this simple parser.
     auto open = bro_type.find("[");
-    auto close = bro_type.find("]", open);
-    if (open == string::npos || close == string::npos)
-      return error{"invalid element type"};
+    auto close = bro_type.rfind("]");
+    if (open == std::string::npos || close == std::string::npos)
+      return error{"missing delimiting container brackets: ", bro_type};
 
-    auto elem = bro_type.substr(open + 1, close - open - 1);
-    auto elem_type = make_type(sch, elem);
-    if (! elem_type)
-      return elem_type.error();
+    auto elem = make_type(bro_type.substr(open + 1, close - open - 1));
+    if (! elem)
+      return elem.error();
 
-    // Bro cannot log nested vectors/sets/tables, so we can safely assume that
-    // we're dealing with a basic type here.
-    if (bro_type.starts_with("vector"))
-      t = type::make<vector_type>("", *elem_type);
+    // Bro sometimes logs sets as tables, e.g., represents set[string] as
+    // table[string]. We iron out this inconsistency by normalizing the type to
+    // a set.
+    if (util::starts_with(bro_type, "vector"))
+      t = type::vector{*elem};
     else
-      t = type::make<set_type>("", *elem_type);
+      t = type::set{*elem};
   }
 
-  if (t)
-  {
-    auto types = sch.find_type_info(t->info());
-    if (types.empty())
-    {
-      auto status = sch.add(t);
-      if (t)
-        return {t};
-      else
-        return error{"failed to add type to schema: " + status.error().msg()};
-    }
+  if (is<none>(t))
+    return error{"failed to make type for: ", bro_type};
 
-    if (types.size() != 1)
-      return error{"schema inconsistency: at most one type possible"};
-
-    return types[0];
-  }
-
-  return error{"failed to make type for: " + to_string(bro_type)};
+  return t;
 }
 
 } // namespace <anonymous>
@@ -88,10 +77,7 @@ bro::bro(caf::actor sink, std::string const& filename,
 
 result<event> bro::extract_impl()
 {
-  util::field_splitter<std::string::const_iterator>
-    fs{separator_.data(), separator_.size()};
-
-  if (! type_)
+  if (is<none>(type_))
   {
     auto line = this->next();
     if (! line)
@@ -106,12 +92,11 @@ result<event> bro::extract_impl()
   if (! line)
     return {};
 
-  fs.split(line->begin(), line->end());
+  auto s = util::split(*line, separator_);
 
-  if (fs.fields() > 0 && *fs.start(0) == '#')
+  if (s.size() > 0 && s[0].first != s[0].second && *s[0].first == '#')
   {
-    auto first = string{fs.start(0), fs.end(0)};
-    if (first.starts_with("#separator"))
+    if (util::starts_with(s[0].first, s[0].second, "#separator"))
     {
       VAST_LOG_ACTOR_VERBOSE("restarts with new log");
 
@@ -126,8 +111,7 @@ result<event> bro::extract_impl()
       if (! line)
         return {};
 
-      fs = {separator_.data(), separator_.size()};
-      fs.split(line->begin(), line->end());
+      s = util::split(*line, separator_);
     }
     else
     {
@@ -137,16 +121,15 @@ result<event> bro::extract_impl()
     }
   }
 
-  event e;
-  e.type(type_);
-  e.timestamp(now());
   size_t f = 0;
   size_t depth = 1;
-  record* r = &e;
-  util::get<record_type>(type_->info())->each(
-      [&](trace const& t) -> trial<void>
+  record event_record;
+  record* r = &event_record;
+  auto ts = now();
+  auto attempt = get<type::record>(type_)->each_field(
+      [&](type::record::trace const& t) -> trial<void>
       {
-        if (f == fs.fields())
+        if (f == s.size())
           return error{"accessed field", f, "out of bounds"};
 
         if (t.size() > depth)
@@ -154,61 +137,69 @@ result<event> bro::extract_impl()
           for (size_t i = 0; i < t.size() - depth; ++i)
           {
             ++depth;
-            r->emplace_back(record{});
-            r = &r->back().get<record>();
+            r->push_back(record{});
+            r = get<record>(r->back());
           }
         }
         else if (t.size() < depth)
         {
-          r = &e;
+          r = &event_record;
           depth = t.size();
           for (size_t i = 0; i < t.size() - 1; ++i)
-            r = &r->back().get<record>();
+            r = get<record>(r->back());
         }
-
-        auto begin = fs.start(f);
-        auto end = fs.end(f);
 
         // Check whether the field is unset or empty ('-' or "(empty)")
-        if (std::equal(unset_field_.begin(), unset_field_.end(), begin))
+        if (std::equal(unset_field_.begin(), unset_field_.end(),
+                       s[f].first, s[f].second))
         {
-          r->emplace_back(t.back()->type->tag());
+          r->emplace_back(nil);
         }
-        else if (std::equal(empty_field_.begin(), empty_field_.end(), begin))
+        else if (std::equal(empty_field_.begin(), empty_field_.end(),
+                            s[f].first, s[f].second))
         {
-          switch (t.back()->type->tag())
+          switch (which(t.back()->type))
           {
             default:
               return error{"only container types can by empty"};
-            case set_value:
-              r->emplace_back(set{});
-              break;
-            case vector_value:
+            case type::tag::vector:
               r->emplace_back(vector{});
               break;
-            case table_value:
+            case type::tag::set:
+              r->emplace_back(set{});
+              break;
+            case type::tag::table:
               r->emplace_back(table{});
               break;
           }
         }
         else
         {
-          auto v = parse<value>(begin, end, t.back()->type,
-                                set_separator_, "", "",
-                                set_separator_, "", "");
-          if (! v)
-            return v.error() + error{std::string{begin, end}};
+          auto d = parse<data>(s[f].first, s[f].second, t.back()->type,
+                               set_separator_, "", "",
+                               set_separator_, "", "");
+          if (! d)
+            return d.error() + error{std::string{s[f].first, s[f].second}};
 
-          if (f == size_t(timestamp_field_) && v->which() == time_point_value)
-            e.timestamp(v->get<time_point>());
+          if (f == size_t(timestamp_field_))
+            if (auto tp = get<time_point>(*d))
+              ts = *tp;
 
-          r->push_back(std::move(*v));
+          r->push_back(std::move(*d));
         }
 
         ++f;
 
         return nothing;
       });
+
+  if (! attempt)
+    return attempt.error();
+
+  // TODO: For better performance, bypass the type-check during event
+  // construction.
+  event e{std::move(event_record), type_};
+  e.timestamp(ts);
 
   return std::move(e);
 }
@@ -218,131 +209,146 @@ std::string bro::describe() const
   return "bro-source";
 }
 
+trial<std::string> bro::parse_header_line(std::string const& line,
+                                          std::string const& prefix)
+{
+  auto s = util::split(line, separator_, "", 1);
+
+  if (! (s.size() == 2
+         && std::equal(prefix.begin(), prefix.end(), s[0].first, s[0].second)))
+    return error{"got invalid header line: " + line};
+
+
+  return std::string{s[1].first, s[1].second};
+}
+
 trial<void> bro::parse_header()
 {
   auto line = this->current_line();
   if (! line)
     return error{"failed to retrieve first header line"};
 
-  util::field_splitter<std::string::const_iterator>
-    fs{separator_.data(), separator_.size()};
-
-  fs.split(line->begin(), line->end());
-
-  if (fs.fields() != 2 || ! fs.equals(0, "#separator"))
-    return error{"got invalid #separator"};
+  static std::string const separator = "#separator";
+  auto header_value = parse_header_line(*line, separator);
+  if (! header_value)
+    return header_value.error();
 
   std::string sep;
-  std::string bro_sep(fs.start(1), fs.end(1));
   std::string::size_type pos = 0;
   while (pos != std::string::npos)
   {
-    pos = bro_sep.find("\\x", pos);
+    pos = header_value->find("\\x", pos);
     if (pos != std::string::npos)
     {
-      auto i = std::stoi(bro_sep.substr(pos + 2, 2), nullptr, 16);
+      auto i = std::stoi(header_value->substr(pos + 2, 2), nullptr, 16);
       assert(i >= 0 && i <= 255);
       sep.push_back(i);
       pos += 2;
     }
   }
 
-  separator_ = string{sep.begin(), sep.end()};
-  fs = {separator_.data(), separator_.size()};
+  separator_ = {sep.begin(), sep.end()};
 
   line = this->next();
   if (! line)
     return error{"failed to retrieve next header line"};
 
-  fs.split(line->begin(), line->end());
-  if (fs.fields() != 2 || ! fs.equals(0, "#set_separator"))
-    return error{"got invalid #set_separator"};
+  static std::string const set_separator = "#set_separator";
+  header_value = parse_header_line(*line, set_separator);
+  if (! header_value)
+    return header_value.error();
 
-  auto set_sep = std::string(fs.start(1), fs.end(1));
-  set_separator_ = string(set_sep.begin(), set_sep.end());
-
-  line = this->next();
-  if (! line)
-    return error{"failed to retrieve next header line"};
-
-  fs.split(line->begin(), line->end());
-  if (fs.fields() != 2 || ! fs.equals(0, "#empty_field"))
-    return error{"invalid #empty_field"};
-
-  auto empty = std::string(fs.start(1), fs.end(1));
-  empty_field_ = string(empty.begin(), empty.end());
+  set_separator_ = std::move(*header_value);
 
   line = this->next();
   if (! line)
     return error{"failed to retrieve next header line"};
 
-  fs.split(line->begin(), line->end());
-  if (fs.fields() != 2 || ! fs.equals(0, "#unset_field"))
-    return error{"invalid #unset_field"};
+  static std::string const empty_field = "#empty_field";
+  header_value = parse_header_line(*line, empty_field);
+  if (! header_value)
+    return header_value.error();
 
-  auto unset = std::string(fs.start(1), fs.end(1));
-  unset_field_ = string(unset.begin(), unset.end());
+  empty_field_ = std::move(*header_value);
 
   line = this->next();
   if (! line)
     return error{"failed to retrieve next header line"};
 
-  fs.split(line->begin(), line->end());
-  if (fs.fields() != 2 || ! fs.equals(0, "#path"))
-    return error{"invalid #path"};
+  static std::string const unset_field = "#unset_field";
+  header_value = parse_header_line(*line, unset_field);
+  if (! header_value)
+    return header_value.error();
 
-  auto event_name = string{fs.start(1), fs.end(1)};
+  unset_field_ = std::move(*header_value);
+
+  line = this->next();
+  if (! line)
+    return error{"failed to retrieve next header line"};
+
+  static std::string const bro_path = "#path";
+  header_value = parse_header_line(*line, bro_path);
+  if (! header_value)
+    return header_value.error();
+
+  auto event_name = std::move(*header_value);
 
   line = this->next(); // Skip #open tag.
   line = this->next();
   if (! line)
     return error{"failed to retrieve next header line"};
 
-  fs.split(line->begin(), line->end());
-  if (! fs.equals(0, "#fields"))
-    return error{"got invalid #fields"};
+  static std::string const bro_fields = "#fields";
+  header_value = parse_header_line(*line, bro_fields);
+  if (! header_value)
+    return header_value.error();
 
-  std::vector<string> arg_names;
-  for (size_t i = 1; i < fs.fields(); ++i)
-    arg_names.emplace_back(fs.start(i), fs.end(i));
+  auto field_names = util::to_strings(util::split(*header_value, separator_));
 
   line = this->next();
   if (! line)
     return error{"failed to retrieve next header line"};
 
-  fs.split(line->begin(), line->end());
-  if (! fs.equals(0, "#types"))
-    return error{"got invalid #types"};
+  static std::string const bro_types = "#types";
+  header_value = parse_header_line(*line, bro_types);
+  if (! header_value)
+    return header_value.error();
 
-  record_type event_record;
-  for (size_t i = 1; i < fs.fields(); ++i)
+  auto field_types = util::to_strings(util::split(*header_value, separator_));
+
+  if (field_types.size() != field_names.size())
+    return error{"differing size of field names and field types"};
+
+  std::vector<type::record::field> fields;
+  for (size_t i = 0; i < field_types.size(); ++i)
   {
-    string bro_type = {fs.start(i), fs.end(i)};
-    auto t = make_type(schema_, bro_type);
+    auto t = make_type(field_types[i]);
     if (! t)
       return t.error();
 
-    event_record.args.emplace_back(arg_names[i - 1], *t);
+    fields.emplace_back(field_names[i], *t);
   }
 
-  type_ = type::make<record_type>(event_name, event_record.unflatten());
-  flat_type_ = type::make<record_type>(event_name, std::move(event_record));
-  auto status = schema_.add(type_);
-  if (! status)
-    return error{"failed to add type to schema: " + status.error().msg()};
+  type::record event_record{std::move(fields)};
+
+  type_ = event_record.unflatten();
+  type_.name(event_name);
+
+  flat_type_ = std::move(event_record);
+  flat_type_.name(event_name);
 
   VAST_LOG_ACTOR_DEBUG("parsed bro header:");
   VAST_LOG_ACTOR_DEBUG("    #separator " << separator_);
   VAST_LOG_ACTOR_DEBUG("    #set_separator " << set_separator_);
   VAST_LOG_ACTOR_DEBUG("    #empty_field " << empty_field_);
   VAST_LOG_ACTOR_DEBUG("    #unset_field " << unset_field_);
-  VAST_LOG_ACTOR_DEBUG("    #path " << type_->name());
+  VAST_LOG_ACTOR_DEBUG("    #path " << type_.name());
 
-  auto rec = util::get<record_type>(flat_type_->info());
+  auto rec = get<type::record>(flat_type_);
 
   VAST_LOG_ACTOR_DEBUG("    fields:");
-  for (size_t i = 0; i < rec->args.size(); ++i)
-    VAST_LOG_ACTOR_DEBUG("      " << i << ") " << rec->args[i]);
+  for (size_t i = 0; i < rec->fields().size(); ++i)
+    VAST_LOG_ACTOR_DEBUG("      " << i << ") " << rec->fields()[i]);
 
   if (timestamp_field_ > -1)
   {
@@ -352,9 +358,9 @@ trial<void> bro::parse_header()
   else
   {
     size_t i = 0;
-    for (auto& arg : rec->args)
+    for (auto& f : rec->fields())
     {
-      if (util::get<time_point_type>(arg.type->info()))
+      if (is<time_point>(f.type))
       {
         VAST_LOG_ACTOR_VERBOSE("auto-detected field " << i <<
                                " as event timestamp");

@@ -13,13 +13,14 @@ struct value_invalid;
 class value;
 enum type_tag : uint8_t;
 
-class address;
-class time_range;
 class time_point;
+class time_range;
+using time_duration = time_range;
+using time_period = time_range;
+class pattern;
+class address;
+class subnet;
 class port;
-class prefix;
-class string;
-class regex;
 class record;
 class vector;
 class set;
@@ -32,11 +33,6 @@ class ewah_bitstream;
 namespace expr {
 class ast;
 }
-
-namespace detail {
-template <typename T> void save(serializer& sink, T const& x);
-template <typename T> void load(deserializer& source, T& x);
-} // namespace detail
 
 namespace io {
 class input_stream;

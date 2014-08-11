@@ -63,7 +63,7 @@ struct set_type
 struct table_type
 {
   type key_type;
-  type type_tag;
+  type value_type;
 };
 
 struct attribute
@@ -129,7 +129,7 @@ BOOST_FUSION_ADAPT_STRUCT(
 BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::schema::table_type,
     (vast::detail::ast::schema::type, key_type)
-    (vast::detail::ast::schema::type, type_tag))
+    (vast::detail::ast::schema::type, value_type))
 
 BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::schema::attribute,

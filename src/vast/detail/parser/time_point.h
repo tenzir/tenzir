@@ -1,7 +1,7 @@
 #ifndef VAST_DETAIL_PARSER_TIME_POINT_H
 #define VAST_DETAIL_PARSER_TIME_POINT_H
 
-#include "vast/detail/parser/duration.h"
+#include "vast/detail/parser/time_duration.h"
 
 #ifdef VAST_CLANG
 #pragma clang diagnostic push
@@ -23,7 +23,7 @@ struct time_point : qi::grammar<Iterator, vast::time_point(), skipper<Iterator>>
       typedef vast::time_point type;
     };
 
-    vast::time_point operator()(time_range r) const
+    vast::time_point operator()(vast::time_point r) const
     {
       return r;
     }
@@ -71,22 +71,22 @@ struct time_point : qi::grammar<Iterator, vast::time_point(), skipper<Iterator>>
           assert(! "invalid tag");
           break;
         case 0:
-          p += time_range(std::chrono::nanoseconds(negate ? -n : n));
+          p += vast::time_duration(std::chrono::nanoseconds(negate ? -n : n));
           break;
         case 1:
-          p += time_range(std::chrono::microseconds(negate ? -n : n));
+          p += vast::time_duration(std::chrono::microseconds(negate ? -n : n));
           break;
         case 2:
-          p += time_range(std::chrono::milliseconds(negate ? -n : n));
+          p += vast::time_duration(std::chrono::milliseconds(negate ? -n : n));
           break;
         case 3:
-          p += time_range(std::chrono::seconds(negate ? -n : n));
+          p += vast::time_duration(std::chrono::seconds(negate ? -n : n));
           break;
         case 4:
-          p += time_range(std::chrono::minutes(negate ? -n : n));
+          p += vast::time_duration(std::chrono::minutes(negate ? -n : n));
           break;
         case 5:
-          p += time_range(std::chrono::hours(negate ? -n : n));
+          p += vast::time_duration(std::chrono::hours(negate ? -n : n));
           break;
         case 6:
           p = p.delta(0, 0, 0, negate ? -n : n);
@@ -291,7 +291,7 @@ struct time_point : qi::grammar<Iterator, vast::time_point(), skipper<Iterator>>
   qi::rule<Iterator, vast::time_point(), skipper<Iterator>> time, delta;
   qi::rule<Iterator, vast::time_point()> fmt0, fmt1, fmt2, fmt3, fmt4;
   qi::rule<Iterator> digit2, digit4;
-  duration<Iterator> dur;
+  time_duration<Iterator> dur;
 
   boost::phoenix::function<absolute_time> at;
   boost::phoenix::function<initializer> init;

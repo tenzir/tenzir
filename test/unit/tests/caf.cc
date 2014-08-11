@@ -1,23 +1,22 @@
 #include "framework/unit.h"
-
 #include <caf/all.hpp>
-
-#include "vast/event.h"
+#include "vast/value.h"
 
 using namespace vast;
 
-TEST("libcaf serialization")
+SUITE("CAF")
+
+TEST("serialization")
 {
-  event e0{42, "foo", -8.3, record{invalid, now()}};
-  e0.id(101);
+  record r0{42, "foo", -8.3, record{nil, now()}};
 
   std::vector<uint8_t> buf;
   caf::binary_serializer bs{std::back_inserter(buf)};
-  caf::uniform_typeid<event>()->serialize(&e0, &bs);
+  caf::uniform_typeid<record>()->serialize(&r0, &bs);
 
-  event e1;
+  record r1;
   caf::binary_deserializer bd{buf.data(), buf.size()};
-  caf::uniform_typeid<event>()->deserialize(&e1, &bd);
+  caf::uniform_typeid<record>()->deserialize(&r1, &bd);
 
-  CHECK(e0 == e1);
+  CHECK(r0 == r1);
 }

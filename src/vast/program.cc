@@ -14,9 +14,8 @@
 #include "vast/profiler.h"
 #include "vast/receiver.h"
 #include "vast/search.h"
+#include "vast/serialization.h"
 #include "vast/signal_monitor.h"
-#include "vast/type_info.h"
-#include "vast/detail/caf_type_info.h"
 #include "vast/detail/type_manager.h"
 
 #ifdef VAST_HAVE_EDITLINE

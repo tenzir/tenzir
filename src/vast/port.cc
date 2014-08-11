@@ -2,7 +2,7 @@
 
 #include <utility>
 #include "vast/logger.h"
-#include "vast/serialization.h"
+#include "vast/serialization/arithmetic.h"
 #include "vast/util/json.h"
 
 namespace vast {

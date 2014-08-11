@@ -16,8 +16,8 @@ namespace vast {
 class schema : util::equality_comparable<schema>
 {
 public:
-  using const_iterator = std::vector<type_const_ptr>::const_iterator;
-  using iterator = std::vector<type_const_ptr>::iterator;
+  using const_iterator = std::vector<type>::const_iterator;
+  using iterator = std::vector<type>::iterator;
 
   /// Merges two schemata.
   /// @param s1 The first schema.
@@ -28,18 +28,18 @@ public:
   /// Adds a new type to the schema.
   /// @param t The type to add.
   /// @returns `nothing` on success.
-  trial<void> add(type_const_ptr t);
+  trial<void> add(type t);
 
   /// Retrieves the type for a given type name.
   /// @param name The name of the type to lookup.
   /// @returns The type registered as *name* or an empty pointer if *name* does
   /// not exist.
-  type_const_ptr find_type(string const& name) const;
+  type const* find_type(std::string const& name) const;
 
-  /// Retrieves the type(s) for a given type name.
-  /// @param ti The [type information](::type_info) to look for.
-  /// @returns The type(s) with type information *ti*.
-  std::vector<type_const_ptr> find_type_info(type_info const& ti) const;
+  /// Retrieves the type(s) matching a given type.
+  /// @param t The ype to look for.
+  /// @returns The type(s) having type *t*.
+  std::vector<type> find_types(type const& t) const;
 
   /// Checks whether a given event complies with the schema.
   /// @param e The event to test.
@@ -49,8 +49,6 @@ public:
   // Container API.
   const_iterator begin() const;
   const_iterator end() const;
-  iterator begin();
-  iterator end();
 
   /// Retrieves the number of types in the schema.
   /// @returns The number of types this schema has.
@@ -61,7 +59,7 @@ public:
   bool empty() const;
 
 private:
-  std::vector<type_const_ptr> types_;
+  std::vector<type> types_;
 
 private:
   friend access;
@@ -73,14 +71,14 @@ private:
   {
     for (auto& t : s.types_)
     {
-      if (t->name().empty())
+      if (t.name().empty())
         continue;
 
       // TODO: fix laziness.
       print("type ", out);
-      print(t->name(), out);
+      print(t.name(), out);
       print(": ", out);
-      print(*t, out, false);
+      print(t, out, false);
       print("\n", out);
     }
 
@@ -98,97 +96,110 @@ namespace detail {
 class type_factory
 {
 public:
-  using result_type = type_const_ptr;
+  using result_type = type;
 
-  type_factory(schema const& s, string name = "")
+  type_factory(schema const& s, std::string name = "")
     : schema_{s},
       name_{std::move(name)}
   {
   }
 
-  type_const_ptr operator()(detail::ast::schema::basic_type t) const
+  type operator()(detail::ast::schema::basic_type bt) const
   {
-    switch (t)
+    type t;
+    switch (bt)
     {
       default:
         assert(! "missing type implementation");
       case detail::ast::schema::bool_type:
-        return type::make<bool_type>(name_);
+        t = type::boolean{};
+        break;
       case detail::ast::schema::int_type:
-        return type::make<int_type>(name_);
+        t = type::integer{};
+        break;
       case detail::ast::schema::uint_type:
-        return type::make<uint_type>(name_);
+        t = type::count{};
+        break;
       case detail::ast::schema::double_type:
-        return type::make<double_type>(name_);
-      case detail::ast::schema::time_frame_type:
-        return type::make<time_range_type>(name_);
+        t = type::real{};
+        break;
       case detail::ast::schema::time_point_type:
-        return type::make<time_point_type>(name_);
+        t = type::time_point{};
+        break;
+      case detail::ast::schema::time_frame_type:
+        t = type::time_duration{};
+        break;
       case detail::ast::schema::string_type:
-        return type::make<string_type>(name_);
+        t = type::string{};
+        break;
       case detail::ast::schema::regex_type:
-        return type::make<regex_type>(name_);
+        t = type::pattern{};
+        break;
       case detail::ast::schema::address_type:
-        return type::make<address_type>(name_);
+        t = type::address{};
+        break;
       case detail::ast::schema::prefix_type:
-        return type::make<prefix_type>(name_);
+        t = type::subnet{};
+        break;
       case detail::ast::schema::port_type:
-        return type::make<port_type>(name_);
+        t = type::port{};
+        break;
     }
+
+    t.name(name_);
+    return t;
   }
 
-  type_const_ptr operator()(detail::ast::schema::enum_type const& t) const
+  type operator()(detail::ast::schema::enum_type const& t) const
   {
-    std::vector<string> v;
-    for (auto& str : t.fields)
-      v.emplace_back(str);
-
-    return type::make<enum_type>(name_, std::move(v));
+    auto e = type::enumeration{t.fields};
+    e.name(name_);
+    return e;
   }
 
-  type_const_ptr operator()(detail::ast::schema::vector_type const& t) const
+  type operator()(detail::ast::schema::vector_type const& t) const
   {
-    return type::make<vector_type>(name_, make_type(t.element_type));
+    auto v = type::vector{make_type(t.element_type)};
+    v.name(name_);
+    return v;
   }
 
-  type_const_ptr operator()(detail::ast::schema::set_type const& t) const
+  type operator()(detail::ast::schema::set_type const& t) const
   {
-    return type::make<set_type>(name_, make_type(t.element_type));
+    auto s = type::set{make_type(t.element_type)};
+    s.name(name_);
+    return s;
   }
 
-  type_const_ptr operator()(detail::ast::schema::table_type const& t) const
+  type operator()(detail::ast::schema::table_type const& t) const
   {
-    auto k = make_type(t.key_type);
-    auto y = make_type(t.type_tag);
-    return type::make<table_type>(name_, k, y);
+    auto m = type::table{make_type(t.key_type), make_type(t.value_type)};
+    m.name(name_);
+    return m;
   }
 
-  type_const_ptr operator()(detail::ast::schema::record_type const& t) const
+  type operator()(detail::ast::schema::record_type const& t) const
   {
-    record_type r;
+    std::vector<type::record::field> fields;
     for (auto& arg : t.args)
-      r.args.emplace_back(make_argument(arg));
+      fields.push_back({arg.name, make_type(arg.type)});
 
-    return type::make<record_type>(name_, std::move(r));
+    auto r = type::record{std::move(fields)};
+    r.name(name_);
+    return r;
   }
 
-  argument make_argument(
-      detail::ast::schema::argument_declaration const& a) const
-  {
-    return {a.name, make_type(a.type)};
-  }
-
-  type_const_ptr make_type(detail::ast::schema::type const& t) const
+  type make_type(detail::ast::schema::type const& t) const
   {
     if (auto x = schema_.find_type(t.name))
-      return x;
+      return *x;
 
     return boost::apply_visitor(type_factory{schema_}, t.info);
   }
 
 private:
   schema const& schema_;
-  string name_;
+  std::string name_;
 };
 
 struct schema_factory
@@ -212,12 +223,16 @@ struct schema_factory
     {
       auto t = schema_.find_type(x->name);
       if (t)
-        t = t->clone(td.name);
+      {
+        auto u = type::alias{*t};
+        u.name(td.name);
+        schema_.add(u);
+      }
       else
-        t = boost::apply_visitor(type_factory{schema_, td.name}, x->info);
-
-      assert(t);
-      schema_.add(t);
+      {
+        auto u = boost::apply_visitor(type_factory{schema_, td.name}, x->info);
+        schema_.add(u);
+      }
     }
 
     return nothing;

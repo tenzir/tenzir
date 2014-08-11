@@ -4,8 +4,7 @@
 #include <arpa/inet.h>
 #include <cstring>
 #include "vast/logger.h"
-#include "vast/string.h"
-#include "vast/serialization.h"
+#include "vast/serialization/all.h"
 #include "vast/util/byte_swap.h"
 #include "vast/util/json.h"
 

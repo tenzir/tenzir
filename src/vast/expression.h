@@ -3,11 +3,12 @@
 
 #include "vast/config.h"
 #include "vast/event.h"
+#include "vast/key.h"
 #include "vast/offset.h"
 #include "vast/operator.h"
 #include "vast/optional.h"
+#include "vast/pattern.h"
 #include "vast/print.h"
-#include "vast/regex.h"
 #include "vast/schema.h"
 #include "vast/detail/ast/query.h"
 #include "vast/detail/parser/error_handler.h"
@@ -128,7 +129,7 @@ struct offset_extractor
   : public util::visitable<extractor, offset_extractor, const_visitor>
 {
   offset_extractor();
-  offset_extractor(type_const_ptr type, offset off);
+  offset_extractor(vast::type type, offset off);
 
   virtual offset_extractor* clone() const override;
   virtual bool equals(node const& other) const override;
@@ -136,7 +137,7 @@ struct offset_extractor
   virtual void serialize(serializer& sink) const override;
   virtual void deserialize(deserializer& source) override;
 
-  type_const_ptr type;
+  vast::type type;
   offset off;
 };
 
@@ -161,7 +162,7 @@ struct type_extractor
   : public util::visitable<extractor, type_extractor, const_visitor>
 {
   type_extractor() = default;
-  type_extractor(type_tag t);
+  type_extractor(vast::type t);
 
   virtual type_extractor* clone() const override;
   virtual bool equals(node const& other) const override;
@@ -169,7 +170,7 @@ struct type_extractor
   virtual void serialize(serializer& sink) const override;
   virtual void deserialize(deserializer& source) override;
 
-  type_tag type;
+  vast::type type;
 };
 
 /// An n-ary operator.
@@ -475,14 +476,13 @@ public:
   }
 
 private:
-  std::unique_ptr<offset_extractor> make_offset_extractor(type_const_ptr t,
-                                                          offset o)
+  std::unique_ptr<offset_extractor> make_offset_extractor(type t, offset o)
   {
     return std::make_unique<offset_extractor>(t, std::move(o));
   }
 
   std::unique_ptr<constant>
-  make_constant(detail::ast::query::value_expr const& expr)
+  make_constant(detail::ast::query::data_expr const& expr)
   {
     return std::make_unique<constant>(detail::ast::query::fold(expr));
   }
@@ -492,14 +492,14 @@ private:
     // Determine whether we need a regular expression node or whether basic
     // equality comparison suffices. This check is relatively crude at the
     // moment: we just look whether the expression contains * or ?.
-    auto glob = regex("\\*|\\?").search(expr);
+    auto glob = pattern{"\\*|\\?"}.search(expr);
     auto p = std::make_unique<predicate>(glob ? match : equal);
     auto lhs = std::make_unique<name_extractor>();
     p->add(std::move(lhs));
     if (glob)
-      p->add(std::make_unique<constant>(regex::glob(expr)));
+      p->add(std::make_unique<constant>(value{pattern::glob(expr)}));
     else
-      p->add(std::make_unique<constant>(expr));
+      p->add(std::make_unique<constant>(value{expr}));
     return std::move(p);
   }
 
@@ -535,21 +535,6 @@ trial<void> parse(ast& a, Iterator& begin, Iterator end)
   a = ast{std::move(*t)};
   return nothing;
 }
-
-/// Checks whether the types of two nodes in a predicate are compatible with
-/// each other, i.e., whether operator evaluation for the given types is
-/// semantically correct. Note that this function assumes the AST has already
-/// been normalized with the type of the extractor occurring at the LHS and the
-/// value at the RHS.
-///
-/// @param lhs The type of the extractor.
-///
-/// @param rhs The type of the value.
-///
-/// @param op The operator under which to compare *lhs* and *rhs*.
-///
-/// @returns `true` if *lhs* and *rhs* are compatible to each other under *op*.
-bool compatible(type_tag lhs, type_tag rhs, relational_operator op);
 
 /// Evaluates an expression node for a given event.
 value evaluate(node const& n, event const& e);

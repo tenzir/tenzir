@@ -7,32 +7,38 @@
 namespace vast {
 namespace sink {
 
-// FIXME: why does the linker complain when not declaring this variable?
 constexpr char const* bro::format;
 
 std::string bro::make_header(type const& t)
 {
+  auto r = get<type::record>(t);
+  assert(r);
+
   std::string h;
   h += std::string{"#separator "} + util::byte_escape(std::string{sep}) + '\n';
   h += std::string{"#set_separator"} + sep + set_separator + '\n';
   h += std::string{"#empty_field"} + sep + empty_field + '\n';
   h += std::string{"#unset_field"} + sep + unset_field + '\n';
-  h += std::string{"#path"} + sep + to_string(t.name()) + '\n';
+  h += std::string{"#path"} + sep + t.name() + '\n';
   h += std::string{"#open"} + sep + to_string(now(), format) + '\n';
 
   h += "#fields";
-  t.each([&](key const& k, offset const&) { h += sep + to_string(k); });
-  h += '\n';
-
-  h += "#types";
-  t.each(
-      [&](key const&, offset const& o)
+  r->each_key(
+      [&](key const& k) -> trial<void>
       {
-        assert(t.at(o));
-        h += sep + to_string(*t.at(o), false);
+        h += sep + to_string(k);
+        return nothing;
       });
-  h += '\n';
 
+  h += "\n#types";
+  r->each_offset(
+      [&](offset const& o) -> trial<void>
+      {
+        h += sep + to_string(*r->at(o), 0);
+        return nothing;
+      });
+
+  h += '\n';
   return h;
 }
 
@@ -65,35 +71,35 @@ struct value_printer
 {
   using result_type = std::string;
 
+  std::string operator()(none) const
+  {
+    return bro::unset_field;
+  }
+
   template <typename T>
-  std::string operator()(T const& x) const
+  std::string operator()(T&& x) const
   {
     return to_string(x);
   }
 
-  std::string operator()(value_invalid) const
-  {
-    return bro::unset_field;
-  }
-
-  std::string operator()(type_tag) const
-  {
-    return bro::unset_field;
-  }
-
-  std::string operator()(int64_t i) const
+  std::string operator()(integer i) const
   {
     return std::to_string(i);
   }
 
-  std::string operator()(uint64_t u) const
+  std::string operator()(count c) const
   {
-    return std::to_string(u);
+    return std::to_string(c);
   }
 
-  std::string operator()(double d) const
+  std::string operator()(real r) const
   {
-    return to_string(d, 6);
+    return to_string(r, 6);
+  }
+
+  std::string operator()(time_point tp) const
+  {
+    return (*this)(tp.since_epoch());
   }
 
   std::string operator()(time_range tr) const
@@ -103,14 +109,9 @@ struct value_printer
     return (*this)(d);
   }
 
-  std::string operator()(time_point tp) const
+  std::string operator()(std::string const& str) const
   {
-    return (*this)(tp.since_epoch());
-  }
-
-  std::string operator()(string const& str) const
-  {
-    return std::string{str.begin(), str.end()};
+    return str;
   }
 
   std::string operator()(port const& p) const
@@ -126,7 +127,7 @@ struct value_printer
 
     while (begin != end)
     {
-      str += value::visit(*begin++, *this);
+      str += visit(*this, *begin++);
 
       if (begin != end)
         str += bro::sep;
@@ -137,18 +138,23 @@ struct value_printer
     return str;
   }
 
-  std::string operator()(vector const& v) const
+  template <typename C>
+  auto operator()(C const& c) const
+    -> std::enable_if_t<
+         std::is_same<C, vector>::value || std::is_same<C, set>::value,
+         std::string
+       >
   {
-    if (v.empty())
+    if (c.empty())
       return bro::empty_field;
 
     std::string str;
-    auto begin = v.begin();
-    auto end = v.end();
+    auto begin = c.begin();
+    auto end = c.end();
 
     while (begin != end)
     {
-      str += value::visit(*begin++, *this);
+      str += visit(*this, *begin++);
 
       if (begin != end)
         str += bro::set_separator;
@@ -157,11 +163,6 @@ struct value_printer
     }
 
     return str;
-  }
-
-  std::string operator()(set const& s) const
-  {
-    return (*this)(static_cast<vector const&>(s));
   }
 
   std::string operator()(table const&) const
@@ -175,7 +176,13 @@ struct value_printer
 
 bool bro::process(event const& e)
 {
-  auto t = e.type();
+  auto& t = e.type();
+
+  if (! is<type::record>(t))
+  {
+    VAST_LOG_ACTOR_ERROR("cannot process non-record events");
+    return false;
+  }
 
   stream* s = nullptr;
   if (dir_.empty())
@@ -184,7 +191,7 @@ bool bro::process(event const& e)
     {
       VAST_LOG_ACTOR_DEBUG("creates a new stream for STDOUT");
       auto i = streams_.emplace("",  std::make_unique<stream>("-"));
-      auto header = make_header(*t);
+      auto header = make_header(t);
       if (! i.first->second->write(header.begin(), header.end()))
         return false;
     }
@@ -193,18 +200,18 @@ bool bro::process(event const& e)
   }
   else
   {
-    auto& strm = streams_[to_string(t->name())];
+    auto& strm = streams_[t.name()];
     s = strm.get();
     if (! s)
     {
-      VAST_LOG_ACTOR_DEBUG("creates new stream for event " << t->name());
+      VAST_LOG_ACTOR_DEBUG("creates new stream for event " << t.name());
 
       if (! exists(dir_))
       {
-        auto t = mkdir(dir_);
-        if (! t)
+        auto d = mkdir(dir_);
+        if (! d)
         {
-          VAST_LOG_ACTOR_ERROR("failed to create directory: " << t.error());
+          VAST_LOG_ACTOR_ERROR("failed to create directory: " << d.error());
           quit(exit::error);
           return false;
         }
@@ -216,10 +223,10 @@ bool bro::process(event const& e)
         return false;
       }
 
-      strm = std::make_unique<stream>(dir_ / (t->name() + ".log"));
+      strm = std::make_unique<stream>(dir_ / (t.name() + ".log"));
       s = strm.get();
 
-      auto header = make_header(*t);
+      auto header = make_header(t);
       if (! s->write(header.begin(), header.end()))
         return false;
     }
@@ -227,7 +234,7 @@ bool bro::process(event const& e)
 
   assert(s != nullptr);
 
-  auto str = value_printer{}(static_cast<record const&>(e));
+  auto str = visit(value_printer{}, e);
   str += '\n';
 
   return s->write(str.begin(), str.end());

@@ -1,7 +1,7 @@
 #ifndef VAST_CHUNK_H
 #define VAST_CHUNK_H
 
-#include "vast/serialization.h"
+#include "vast/serialization/all.h"
 #include "vast/io/array_stream.h"
 #include "vast/io/container_stream.h"
 #include "vast/io/compressed_stream.h"

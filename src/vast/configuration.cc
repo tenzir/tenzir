@@ -1,8 +1,6 @@
 #include "vast/configuration.h"
 #include "vast/file_system.h"
 #include "vast/logger.h"
-#include "vast/string.h"
-#include "vast/type_info.h"
 #include "vast/detail/type_manager.h"
 #include "vast/util/color.h"
 

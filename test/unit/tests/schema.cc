@@ -21,7 +21,8 @@ using namespace vast;
     auto str = to_string(*s0);                                      \
     lval = str.begin();                                             \
     auto s1 = parse<schema>(lval, str.end());                       \
-    REQUIRE(s0);                                                    \
+    if (! s1) std::cout << s1.error() << std::endl;                 \
+    REQUIRE(s1);                                                    \
     CHECK(str == to_string(*s1));                                   \
   }
 
@@ -31,14 +32,17 @@ using namespace vast;
 TEST("schema_serialization")
 {
   schema sch;
-  std::vector<argument> args;
-  args.emplace_back("s1", type::make<string_type>());
-  args.emplace_back("d1", type::make<double_type>());
-  args.emplace_back("c", type::make<uint_type>());
-  args.emplace_back("i", type::make<int_type>());
-  args.emplace_back("s2", type::make<string_type>());
-  args.emplace_back("d2", type::make<double_type>());
-  sch.add(type::make<record_type>("foo", std::move(args)));
+
+  auto t = type::record{
+    {"s1", type::string{}},
+    {"d1", type::real{}},
+    {"c", type::count{}},
+    {"i", type::integer{}},
+    {"s2", type::string{}},
+    {"d2", type::real{}}};
+  t.name("foo");
+
+  sch.add(t);
 
   std::vector<uint8_t> buf;
   CHECK(io::archive(buf, sch));
@@ -46,64 +50,49 @@ TEST("schema_serialization")
   schema sch2;
   CHECK(io::unarchive(buf, sch2));
 
-  CHECK(sch2.find_type("foo"));
-  CHECK(to_string(sch) == to_string(sch2));
+  auto u = sch2.find_type("foo");
+  REQUIRE(u);
+  CHECK(t == *u);
 }
 
 TEST("offset_finding")
 {
   std::string str =
     "type a : int\n"
-    "type inner : record{ x: int, y: double }\n"
+    "type inner : record{ x: int, y: real }\n"
     "type middle : record{ a: int, b: inner }\n"
     "type outer : record{ a: middle, b: record { y: string }, c: int }\n"
-    "type foo : record{ a: int, b: double, c: outer, d: middle }";
+    "type foo : record{ a: int, b: real, c: outer, d: middle }";
 
   auto lval = str.begin();
   auto sch = parse<schema>(lval, str.end());
   REQUIRE(sch);
 
-  //auto offs = sch->find_offsets({"a"});
-  //decltype(offs) expected;
-  //expected.emplace(sch->find_type("outer"), offset{0, 0});
-  //expected.emplace(sch->find_type("middle"), offset{0});
-  //expected.emplace(sch->find_type("foo"), offset{0});
-  //expected.emplace(sch->find_type("foo"), offset{2, 0, 0});
-  //expected.emplace(sch->find_type("foo"), offset{3, 0});
-  //CHECK(offs == expected);
-
-  //offs = sch->find_offsets({"b", "y"});
-  //expected.clear();
-  //expected.emplace(sch->find_type("foo"), offset{2, 0, 1, 1});
-  //expected.emplace(sch->find_type("foo"), offset{2, 1, 0});
-  //expected.emplace(sch->find_type("foo"), offset{3, 1, 1});
-  //expected.emplace(sch->find_type("middle"), offset{1, 1});
-  //expected.emplace(sch->find_type("outer"), offset{0, 1, 1});
-  //expected.emplace(sch->find_type("outer"), offset{1, 0});
-  //CHECK(offs == expected);
-
-  auto foo = util::get<record_type>(sch->find_type("foo")->info());
+  auto foo = sch->find_type("foo");
   REQUIRE(foo);
+  auto r = get<type::record>(*foo);
 
-  auto t = foo->at(offset{0});
+  REQUIRE(r);
+  auto t = r->at(offset{0});
   REQUIRE(t);
-  CHECK(t->info() == type::make<int_type>()->info());
+  CHECK(is<type::integer>(*t));
 
-  t = foo->at(offset{2, 0, 1, 1});
+  t = r->at(offset{2, 0, 1, 1});
   REQUIRE(t);
-  CHECK(t->info() == type::make<double_type>()->info());
+  CHECK(is<type::real>(*t));
 
-  t = foo->at(offset{2, 0, 1});
+  t = r->at(offset{2, 0, 1});
   REQUIRE(t);
-  CHECK(t->name() == "inner");
-  CHECK(util::get<record_type>(t->info()));
+  auto inner = get<type::record>(*t);
+  REQUIRE(inner);
+  CHECK(inner->name() == "inner");
 }
 
 TEST("merging")
 {
   std::string str =
     "type a : int\n"
-    "type inner : record { x: int, y: double }\n";
+    "type inner : record { x: int, y: real }\n";
 
   auto lval = str.begin();
   auto s1 = parse<schema>(lval, str.end());

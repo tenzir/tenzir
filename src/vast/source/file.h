@@ -1,7 +1,6 @@
 #ifndef VAST_SOURCE_FILE_H
 #define VAST_SOURCE_FILE_H
 
-#include "vast/type_tag.h"
 #include "vast/io/file_stream.h"
 #include "vast/io/getline.h"
 #include "vast/source/synchronous.h"

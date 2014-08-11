@@ -117,8 +117,8 @@ TEST("time_range")
 TEST("time_point")
 {
   time_point expected(2012, 8, 12, 23, 55, 4);
-  string str("2012-08-12+23:55:04");
-  CHECK(time_point(to_string(str)) == expected);
+  std::string str("2012-08-12+23:55:04");
+  CHECK(time_point(str) == expected);
 
   auto i = str.begin();
   auto t = parse<time_point>(i, str.end(), time_point::format);
@@ -126,72 +126,19 @@ TEST("time_point")
   CHECK(*t == expected);
 }
 
-TEST("string")
+TEST("pattern")
 {
-  // Here is a difference: the value parser grammar expects strings with
-  // double quotes whereas this version does not.
-  auto str = "\"f\\oo\\\"bar\"";
-  auto start = str;
-  auto end = str + std::strlen(str);
+  std::string str = "/^\\w{3}\\w{3}\\w{3}$/";
+  auto i = str.begin();
+  auto p = parse<pattern>(i, str.end());
+  CHECK(p);
+  CHECK(i == str.end());
 
-  auto s0 = parse<string>(start, end);
-  REQUIRE(s0);
-  CHECK(start == end);
-
-  auto v = to<value>(str);
-  REQUIRE(v);
-  CHECK(*v != invalid);
-  CHECK(s0->thin("\"", "\\") == *v);
-}
-
-TEST("regex")
-{
-  {
-    string str("/^\\w{3}\\w{3}\\w{3}$/");
-    auto i = str.begin();
-    auto rx = parse<regex>(i, str.end());
-    CHECK(rx);
-    CHECK(i == str.end());
-  }
-  {
-    auto str = "/foo\\+(bar){2}|\"baz\"*/";
-    auto start = str;
-    auto end = str + std::strlen(str);
-    auto rx = parse<regex>(start, end);
-    CHECK(rx);
-    CHECK(start == end);
-  }
-}
-
-TEST("containers")
-{
-  {
-    string str{"{1, 2, 3}"};
-    auto i = str.begin();
-    auto s = parse<set>(i, str.end(), type::make<int_type>());
-    REQUIRE(s);
-    CHECK(i == str.end());
-
-    set expected{1, 2, 3};
-    CHECK(*s == expected);
-  }
-  {
-    string str("a--b--c");
-    auto i = str.begin();
-    auto v = parse<vector>(i, str.end(), type::make<string_type>(), "--");
-    REQUIRE(v);
-    CHECK(i == str.end());
-
-    vector expected{"a", "b", "c"};
-    CHECK(*v == expected);
-  }
-
-  auto roots = "a.root-servers.net,b.root-servers.net,c.root-servers.net";
-  auto v = to<vector>(roots, type::make<string_type>(), ",");
-  REQUIRE(v);
-  REQUIRE(v->size() == 3);
-  CHECK(v->front() == "a.root-servers.net");
-  CHECK(v->back() == "c.root-servers.net");
+  str = "/foo\\+(bar){2}|\"baz\"*/";
+  i = str.begin();
+  p = parse<pattern>(i, str.end());
+  CHECK(p);
+  CHECK(i == str.end());
 }
 
 TEST("address")
@@ -212,21 +159,21 @@ TEST("address")
   CHECK(*a == *address::from_v6(str));
 }
 
-TEST("prefix")
+TEST("subnet")
 {
   auto str = "192.168.0.0/24";
   auto start = str;
   auto end = str + std::strlen(str);
-  auto p = parse<prefix>(start, end);
+  auto s = parse<subnet>(start, end);
   CHECK(start == end);
-  CHECK(*p == prefix{*address::from_v4("192.168.0.0"), 24});
+  CHECK(*s == subnet{*address::from_v4("192.168.0.0"), 24});
 
   str = "::/40";
   start = str;
   end = str + std::strlen(str);
-  p = parse<prefix>(start, end);
+  s = parse<subnet>(start, end);
   CHECK(start == end);
-  CHECK(*p == prefix{*address::from_v6("::"), 40});
+  CHECK(*s == subnet{*address::from_v6("::"), 40});
 }
 
 TEST("port")
@@ -272,193 +219,227 @@ TEST("port")
   }
 }
 
+TEST("containers")
+{
+  std::string str = "{1, 2, 3}";
+  auto i = str.begin();
+  auto s = parse<set>(i, str.end(), type::integer{});
+  REQUIRE(s);
+  CHECK(i == str.end());
+  CHECK(*s == set{1, 2, 3});
+
+  str = "[a--b--c]";
+  i = str.begin();
+  auto v = parse<vector>(i, str.end(), type::string{}, "--");
+  REQUIRE(v);
+  CHECK(i == str.end());
+  CHECK(*v == vector{"a", "b", "c"});
+
+  auto roots = "a.root-servers.net,b.root-servers.net,c.root-servers.net";
+  v = to<vector>(roots, type::string{}, ",", "", "");
+  REQUIRE(v);
+  REQUIRE(v->size() == 3);
+  CHECK(v->front() == "a.root-servers.net");
+  CHECK(v->back() == "c.root-servers.net");
+}
+
 TEST("value")
 {
   // Booleans
-  {
-    auto v = to<value>("T");
-    REQUIRE(v);
-    CHECK(v->which() == bool_value);
-    CHECK(v->get<bool>());
+  auto v = to<value>("T");
+  REQUIRE(v);
+  REQUIRE(is<boolean>(*v));
+  CHECK(*get<bool>(*v));
 
-    v = to<value>("F");
-    REQUIRE(v);
-    CHECK(v->which() == bool_value);
-    CHECK(! v->get<bool>());
-  }
+  v = to<value>("F");
+  REQUIRE(v);
+  REQUIRE(is<boolean>(*v));
+  CHECK(! *get<bool>(*v));
 
   // Numbers
-  {
-    auto v = to<value>("123456789");
-    CHECK(v->which() == uint_value);
-    CHECK(v->get<uint64_t>() == 123456789ll);
+  v = to<value>("123456789");
+  REQUIRE(v);
+  REQUIRE(is<count>(*v));
+  CHECK(*get<count>(*v) == 123456789ll);
 
-    v = to<value>("+123456789");
-    CHECK(v->which() == int_value);
-    CHECK(v->get<int64_t>() == 123456789ll);
+  v = to<value>("+123456789");
+  REQUIRE(v);
+  REQUIRE(is<integer>(*v));
+  CHECK(*get<integer>(*v) == 123456789ll);
 
-    v = to<value>("-123456789");
-    CHECK(v->which() == int_value);
-    CHECK(v->get<int64_t>() == -123456789ll);
+  v = to<value>("-123456789");
+  REQUIRE(v);
+  REQUIRE(is<integer>(*v));
+  CHECK(*get<integer>(*v) == -123456789ll);
 
-    v = to<value>("-123.456789");
-    CHECK(v->which() == double_value);
-    CHECK(v->get<double>() == -123.456789);
-  }
+  v = to<value>("-123.456789");
+  REQUIRE(v);
+  REQUIRE(is<real>(*v));
+  CHECK(*get<real>(*v) == -123.456789);
 
   // Time ranges
-  {
-    auto v = to<value>("42 nsecs");
-    CHECK(v->which() == time_range_value);
-    CHECK(v->get<time_range>().count() == 42ll);
+  v = to<value>("42 nsecs");
+  REQUIRE(v);
+  REQUIRE(is<time_range>(*v));
+  CHECK(get<time_range>(*v)->count() == 42ll);
 
-    v = to<value>("42 musec");
-    CHECK(v->which() == time_range_value);
-    CHECK(v->get<time_range>().count() == 42000ll);
+  v = to<value>("42 musec");
+  REQUIRE(v);
+  REQUIRE(is<time_range>(*v));
+  CHECK(get<time_range>(*v)->count() == 42000ll);
 
-    v = to<value>("-42 msec");
-    CHECK(v->which() == time_range_value);
-    CHECK(v->get<time_range>().count() == -42000000ll);
+  v = to<value>("-42 msec");
+  REQUIRE(v);
+  REQUIRE(is<time_range>(*v));
+  CHECK(get<time_range>(*v)->count() == -42000000ll);
 
-    v = to<value>("99 secs");
-    CHECK(v->which() == time_range_value);
-    CHECK(v->get<time_range>().count() == 99000000000ll);
+  v = to<value>("99 secs");
+  REQUIRE(v);
+  REQUIRE(is<time_range>(*v));
+  CHECK(get<time_range>(*v)->count() == 99000000000ll);
 
-    v = to<value>("5 mins");
-    CHECK(v->which() == time_range_value);
-    CHECK(v->get<time_range>().count() == 300000000000ll);
+  v = to<value>("5 mins");
+  REQUIRE(v);
+  REQUIRE(is<time_range>(*v));
+  CHECK(get<time_range>(*v)->count() == 300000000000ll);
 
-    v = to<value>("3 hours");
-    CHECK(v->which() == time_range_value);
-    CHECK(v->get<time_range>().count() == 10800000000000ll);
+  v = to<value>("3 hours");
+  REQUIRE(v);
+  REQUIRE(is<time_range>(*v));
+  CHECK(get<time_range>(*v)->count() == 10800000000000ll);
 
-    v = to<value>("4 days");
-    CHECK(v->which() == time_range_value);
-    CHECK(v->get<time_range>().count() == 345600000000000ll);
+  v = to<value>("4 days");
+  REQUIRE(v);
+  REQUIRE(is<time_range>(*v));
+  CHECK(get<time_range>(*v)->count() == 345600000000000ll);
 
-    v = to<value>("7 weeks");
-    CHECK(v->which() == time_range_value);
-    CHECK(v->get<time_range>().count() == 4233600000000000ll);
+  v = to<value>("7 weeks");
+  REQUIRE(v);
+  REQUIRE(is<time_range>(*v));
+  CHECK(get<time_range>(*v)->count() == 4233600000000000ll);
 
-    v = to<value>("2 months");
-    CHECK(v->which() == time_range_value);
-    CHECK(v->get<time_range>().count() == 5184000000000000ll);
+  v = to<value>("2 months");
+  REQUIRE(v);
+  REQUIRE(is<time_range>(*v));
+  CHECK(get<time_range>(*v)->count() == 5184000000000000ll);
 
-    v= to<value>("-8 years");
-    CHECK(v->which() == time_range_value);
-    CHECK(v->get<time_range>().count() == -252288000000000000ll);
+  v= to<value>("-8 years");
+  REQUIRE(v);
+  REQUIRE(is<time_range>(*v));
+  CHECK(get<time_range>(*v)->count() == -252288000000000000ll);
 
-    // Compound durations
-    v = to<value>("5m99s");
-    CHECK(v->which() == time_range_value);
-    CHECK(v->get<time_range>().count() == 399000000000ll);
-  }
+  // Compound durations
+  v = to<value>("5m99s");
+  REQUIRE(v);
+  REQUIRE(is<time_range>(*v));
+  CHECK(get<time_range>(*v)->count() == 399000000000ll);
 
   // Time points
-  {
-    auto v = to<value>("2012-08-12+23:55:04");
-    auto t = v->get<time_point>();
-    CHECK(t, time_point(2012, 8, 12, 23, 55 == 4));
+  v = to<value>("2012-08-12+23:55:04");
+  CHECK(*get<time_point>(*v), time_point(2012, 8, 12, 23, 55 == 4));
 
-    v = to<value>("2012-08-12+00:00:00");
-    CHECK(v->which() == time_point_value);
-    CHECK(v->get<time_point>().since_epoch().count() == 1344729600000000000ll);
+  v = to<value>("2012-08-12+00:00:00");
+  REQUIRE(v);
+  REQUIRE(is<time_point>(*v));
+  CHECK(get<time_point>(*v)->since_epoch().count() == 1344729600000000000ll);
 
-    v = to<value>("2012-08-12");
-    CHECK(v->get<time_point>().since_epoch().count() == 1344729600000000000ll);
+  v = to<value>("2012-08-12");
+  REQUIRE(v);
+  REQUIRE(is<time_point>(*v));
+  CHECK(get<time_point>(*v)->since_epoch().count() == 1344729600000000000ll);
 
-    v = to<value>("2012-08-12+23");
-    CHECK(v->get<time_point>().since_epoch().count() == 1344812400000000000ll);
+  v = to<value>("2012-08-12+23");
+  REQUIRE(v);
+  REQUIRE(is<time_point>(*v));
+  CHECK(get<time_point>(*v)->since_epoch().count() == 1344812400000000000ll);
 
-    v = to<value>("2012-08-12+23:55");
-    CHECK(v->get<time_point>().since_epoch().count() == 1344815700000000000ll);
+  v = to<value>("2012-08-12+23:55");
+  REQUIRE(v);
+  REQUIRE(is<time_point>(*v));
+  CHECK(get<time_point>(*v)->since_epoch().count() == 1344815700000000000ll);
 
-    v = to<value>("2012-08-12+23:55:04");
-    CHECK(v->get<time_point>().since_epoch().count() == 1344815704000000000ll);
-  }
+  v = to<value>("2012-08-12+23:55:04");
+  REQUIRE(v);
+  REQUIRE(is<time_point>(*v));
+  CHECK(get<time_point>(*v)->since_epoch().count() == 1344815704000000000ll);
 
   // Strings
-  {
-    // Escaped
-    auto v = to<value>("\"new\\nline\\\"esc\"");
-    CHECK(v->which() == string_value);
-    CHECK(*v == "new\nline\"esc");
-  }
+  v = to<value>("\"new\\nline\\\"esc\"");
+  REQUIRE(v);
+  CHECK(is<std::string>(*v));
+  CHECK(*v == "new\nline\"esc");
 
   // Regexes
-  {
-    auto v = to<value>("/../");
-    CHECK(v->which() == regex_value);
-    CHECK(*v == regex{".."});
+  v = to<value>("/../");
+  REQUIRE(v);
+  REQUIRE(is<pattern>(*v));
+  CHECK(*v == pattern{".."});
 
-    v = to<value>("/\\/../");
-    CHECK(v->which() == regex_value);
-    CHECK(*v == regex{"/.."});
-  }
+  v = to<value>("/\\/../");
+  REQUIRE(v);
+  REQUIRE(is<pattern>(*v));
+  CHECK(*v == pattern{"/.."});
 
   // Vectors
-  {
-    auto v = to<value>("[1, 2, 3]");
-    CHECK(v->which() == vector_value);
-    CHECK(*v == value(vector{1u, 2u, 3u}));
-  }
+  v = to<value>("[1, 2, 3]");
+  REQUIRE(v);
+  CHECK(is<vector>(*v));
+  CHECK(*v == vector{1u, 2u, 3u});
 
   // Sets
-  {
-    auto v = to<value>("{+1, +2, +3}");
-    CHECK(v->which() == set_value);
-    CHECK(*v == value(set{1, 2, 3}));
+  v = to<value>("{+1, +2, +3}");
+  REQUIRE(v);
+  CHECK(is<set>(*v));
+  CHECK(*v == set{1, 2, 3});
 
-    v = to<value>("{\"foo\", \"bar\"}");
-    CHECK(v->which() == set_value);
-    CHECK(*v == value(set{"foo", "bar"}));
-  }
+  v = to<value>("{\"foo\", \"bar\"}");
+  REQUIRE(v);
+  CHECK(is<set>(*v));
+  CHECK(*v == set{"foo", "bar"});
 
   // Tables
-  {
-    auto v = to<value>("{\"x\" -> T, \"y\" -> F}");
-    CHECK(v->which() == table_value);
-    CHECK(*v == value(table{{"x", true}, {"y", false}}));
-  }
+  v = to<value>("{\"x\" -> T, \"y\" -> F}");
+  REQUIRE(v);
+  CHECK(is<table>(*v));
+  CHECK(*v == table{{"x", true}, {"y", false}});
 
   // Records
-  {
-    auto v = to<value>("(\"x\", T, 42, +42)");
-    CHECK(v->which() == record_value);
-    CHECK(*v, value(record{"x", true, 42u == 42}));
-  }
+  v = to<value>("(\"x\", T, 42, +42)");
+  REQUIRE(v);
+  CHECK(is<record>(*v));
+  CHECK(*v == record{"x", true, 42u, 42});
 
   // Addresses
-  {
-    auto v = to<value>("127.0.0.1");
-    CHECK(v->which() == address_value);
-    CHECK(*v == *address::from_v4("127.0.0.1"));
+  v = to<value>("127.0.0.1");
+  REQUIRE(v);
+  CHECK(is<address>(*v));
+  CHECK(*v == *address::from_v4("127.0.0.1"));
 
-    v = to<value>("::");
-    CHECK(v->which() == address_value);
-    CHECK(*v == *address::from_v6("::"));
+  v = to<value>("::");
+  REQUIRE(v);
+  CHECK(is<address>(*v));
+  CHECK(*v == *address::from_v6("::"));
 
-    v = to<value>("f00::");
-    CHECK(v->which() == address_value);
-    CHECK(*v == *address::from_v6("f00::"));
-  }
+  v = to<value>("f00::");
+  REQUIRE(v);
+  CHECK(is<address>(*v));
+  CHECK(*v == *address::from_v6("f00::"));
 
-  // Prefixes
-  {
-    auto v = to<value>("10.0.0.0/8");
-    CHECK(v->which() == prefix_value);
-    CHECK(*v == prefix{*address::from_v4("10.0.0.0"), 8});
+  // Subnets
+  v = to<value>("10.0.0.0/8");
+  REQUIRE(v);
+  CHECK(is<subnet>(*v));
+  CHECK(*v == subnet{*address::from_v4("10.0.0.0"), 8});
 
-    v = to<value>("2001:db8:0:0:8:800:200c:417a/64");
-    CHECK(v->which() == prefix_value);
-    auto pfx = prefix{*address::from_v6("2001:db8:0:0:8:800:200c:417a"), 64};
-    CHECK(*v == pfx);
-  }
+  v = to<value>("2001:db8:0:0:8:800:200c:417a/64");
+  REQUIRE(v);
+  CHECK(is<subnet>(*v));
+  auto pfx = subnet{*address::from_v6("2001:db8:0:0:8:800:200c:417a"), 64};
+  CHECK(*v == pfx);
 
   // Ports
-  {
-    auto v = to<value>("53/udp");
-    CHECK(v->which() == port_value);
-    CHECK(*v, (port{53 == port::udp}));
-  }
+  v = to<value>("53/udp");
+  REQUIRE(v);
+  CHECK(is<port>(*v));
+  CHECK(*v == port{53, port::udp});
 }

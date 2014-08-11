@@ -1,32 +1,10 @@
 #include "vast/event.h"
 
 #include "vast/logger.h"
-#include "vast/serialization.h"
+#include "vast/serialization/arithmetic.h"
 #include "vast/util/json.h"
 
 namespace vast {
-
-event::event()
-  : type_{type_invalid}
-{
-}
-
-event::event(record values)
-  : record(std::move(values)),
-    type_{type_invalid}
-{
-}
-
-event::event(std::vector<value> values)
-  : event(record(std::move(values)))
-{
-}
-
-event::event(std::initializer_list<value> list)
-  : record(std::move(list)),
-    type_{type_invalid}
-{
-}
 
 void event::id(event_id i)
 {
@@ -36,12 +14,6 @@ void event::id(event_id i)
 void event::timestamp(time_point time)
 {
   timestamp_ = time;
-}
-
-void event::type(type_const_ptr t)
-{
-  assert(t);
-  type_ = std::move(t);
 }
 
 event_id event::id() const
@@ -54,81 +26,52 @@ time_point event::timestamp() const
   return timestamp_;
 }
 
-type_const_ptr const& event::type() const
-{
-  return type_;
-}
-
-string const& event::name() const
-{
-  return type_->name();
-}
-
 void event::serialize(serializer& sink) const
 {
-  assert(type_);
   sink
-    << *type_
     << id_
     << timestamp_
-    << static_cast<record const&>(*this);
+    << static_cast<value const&>(*this);
 }
 
 void event::deserialize(deserializer& source)
 {
-  auto t = type::make<invalid_type>();
-
   source
-    >> *t
     >> id_
     >> timestamp_
-    >> static_cast<record&>(*this);
-
-  type_ = t;
+    >> static_cast<value&>(*this);
 }
 
 bool operator==(event const& x, event const& y)
 {
   return x.id() == y.id()
-      && ((x.type_ && y.type_ && *x.type_ == *y.type_)
-          || (! x.type_ && ! y.type_))
-      && x.timestamp_ == y.timestamp_
-      && x.size() == y.size()
-      && std::equal(x.begin(), x.end(), y.begin());
+      && x.timestamp() == y.timestamp()
+      && static_cast<value const&>(x) == static_cast<value const&>(y);
 }
 
 bool operator<(event const& x, event const& y)
 {
-  if (x.type_ && y.type_)
-    return
-      std::tie(x.id_, x.timestamp_, *x.type_, static_cast<record const&>(x)) <
-      std::tie(y.id_, y.timestamp_, *y.type_, static_cast<record const&>(y));
-  else
-    return
-      std::tie(x.id_, x.timestamp_, static_cast<record const&>(x)) <
-      std::tie(y.id_, y.timestamp_, static_cast<record const&>(y));
+  return
+    std::tie(x.id_, x.timestamp_, static_cast<value const&>(x)) <
+    std::tie(y.id_, y.timestamp_, static_cast<value const&>(y));
 }
 
 trial<void> convert(event const& e, util::json& j)
 {
   util::json::object o;
-  o["type"] = to_string(*e.type());
   o["id"] = e.id();
 
   auto t = to<util::json>(e.timestamp().since_epoch().count());
   if (! t)
     return t.error();
-
   o["timestamp"] = *t;
 
-  t = to<util::json>(static_cast<record const&>(e));
+  t = to<util::json>(static_cast<value const&>(e));
   if (! t)
     return t.error();
-
-  o["data"] = *t;
+  o["value"] = *t;
 
   j = std::move(o);
-
   return nothing;
 }
 

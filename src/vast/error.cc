@@ -1,6 +1,6 @@
 #include "vast/error.h"
 
-#include "vast/serialization.h"
+#include "vast/serialization/string.h"
 
 namespace vast {
 

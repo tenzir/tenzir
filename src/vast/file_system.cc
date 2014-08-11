@@ -3,7 +3,8 @@
 #include <cassert>
 #include <fstream>
 #include <iterator>
-#include "vast/serialization.h"
+#include "vast/serialization/string.h"
+#include "vast/util/string.h"
 
 #ifdef VAST_POSIX
 #  include <cerrno>
@@ -43,34 +44,29 @@ path path::current()
 {
 #ifdef VAST_POSIX
   char buf[max_len];
-  return string{::getcwd(buf, max_len)};
+  return ::getcwd(buf, max_len);
 #else
   return {};
 #endif
 }
 
 path::path(char const* str)
-  : path{string(str)}
+  : str_{str}
 {
 }
 
-path::path(string str)
+path::path(std::string str)
   : str_{std::move(str)}
-{
-}
-
-path::path(std::string const& str)
-  : path{str.c_str()}
 {
 }
 
 path& path::operator/=(path const& p)
 {
-  if (p.empty() || (str_.ends_with(separator) && p == separator))
+  if (p.empty() || (util::ends_with(str_, separator) && p == separator))
     return *this;
   if (str_.empty())
     str_ = p.str_;
-  else if (str_.ends_with(separator) || p == separator)
+  else if (util::ends_with(str_, separator) || p == separator)
     str_ = str_ + p.str_;
   else
     str_ = str_ + separator + p.str_;
@@ -102,23 +98,23 @@ path path::parent() const
   if (str_ == separator || str_ == "." || str_ == "..")
     return {};
   auto pos = str_.rfind(separator);
-  if (pos == string::npos)
+  if (pos == std::string::npos)
     return {};
   if (pos == 0) // The parent is root.
-    return {separator};
+    return separator;
   return str_.substr(0, pos);
 }
 
 path path::basename(bool strip_extension) const
 {
   if (str_ == separator)
-    return {separator};
+    return separator;
   auto pos = str_.rfind(separator);
-  if (pos == string::npos && ! strip_extension)  // Already a basename.
+  if (pos == std::string::npos && ! strip_extension)  // Already a basename.
     return *this;
   if (pos == str_.size() - 1)
-    return {"."};
-  if (pos == string::npos)
+    return ".";
+  if (pos == std::string::npos)
     pos = 0;
   auto base = str_.substr(pos + 1);
   if (! strip_extension)
@@ -126,7 +122,7 @@ path path::basename(bool strip_extension) const
   auto ext = base.rfind(".");
   if (ext == 0)
     return {};
-  if (ext == string::npos)
+  if (ext == std::string::npos)
     return base;
   return base.substr(0, ext);
 }
@@ -134,10 +130,10 @@ path path::basename(bool strip_extension) const
 path path::extension() const
 {
   if (str_.back() == '.')
-    return {"."};
+    return ".";
   auto base = basename();
   auto ext = base.str_.rfind(".");
-  if (base == path(string(".")) || ext == string::npos)
+  if (base == "." || ext == std::string::npos)
     return {};
   return base.str_.substr(ext);
 }
@@ -151,18 +147,23 @@ std::vector<path> path::split() const
 {
   if (empty())
     return {};
-  auto components = str_.split(separator, "\\", -1, true);
+
+  auto components =
+    util::to_strings(util::split(str_, separator, "\\", -1, true));
+
   assert(! components.empty());
   std::vector<path> result;
   size_t begin = 0;
-  if (string{components[0].first, components[0].second}.empty())
+  if (components[0].empty())
   {
     // Path starts with "/".
     result.emplace_back(separator);
     begin = 2;
   }
+
   for (size_t i = begin; i < components.size(); i += 2)
-    result.emplace_back(string{components[i].first, components[i].second});
+    result.emplace_back(std::move(components[i]));
+
   return result;
 }
 
@@ -210,7 +211,7 @@ path path::chop(int n) const
   return r;
 }
 
-string const& path::str() const
+std::string const& path::str() const
 {
   return str_;
 }
@@ -545,7 +546,7 @@ void traverse(path const& p, std::function<bool(path const&)> f)
   struct dirent* ent;
   while ((ent = ::readdir(d)))
   {
-    string str(ent->d_name);
+    auto str = std::string{ent->d_name};
     if (str != "." && str != ".." && ! f(p / std::move(str)))
       break;
   }

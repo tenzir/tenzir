@@ -64,7 +64,7 @@ message_handler receiver_actor::act()
         {
           VAST_LOG_ACTOR_DEBUG("got " << to - from <<
                                " IDs in [" << from << ", " << to << ")");
-          match(last)(
+          caf::match(last)(
               on_arg_match >> [=](segment& s, actor)
               {
                 auto n = to - from;

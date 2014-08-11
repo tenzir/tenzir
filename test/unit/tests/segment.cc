@@ -15,11 +15,14 @@ TEST("reading and writing")
   /// total segment size.
   segment::writer w(&s1, 256);
 
+  auto t = type::count{};
+  t.name("count");
+
   for (size_t i = 0; i < 1124; ++i)
   {
     // Since the segment has no size restriction, it is always possible to add
     // more events.
-    REQUIRE(w.write(event{i}));
+    REQUIRE(w.write(event{i, t}));
   }
 
   // At this point, the writer has still 100 events that have not yet been
@@ -32,7 +35,7 @@ TEST("reading and writing")
 
   // Let's add more events and then attempt the second option.
   for (size_t i = 0; i < 50; ++i)
-    CHECK(w.write(event{i}));
+    CHECK(w.write(event{i, t}));
 
   segment s2;
   w.attach_to(&s2);
@@ -43,14 +46,14 @@ TEST("reading and writing")
   segment::reader r1{&s1};
   size_t n = 0;
   while (auto e = r1.read())
-    CHECK(*e == (event{n++}));
+    CHECK(*e == (event{n++, t}));
   CHECK(n == 1124);
 
   // Same thing for the second segment.
   segment::reader r2{&s2};
   n = 0;
   while (auto e = r2.read())
-    CHECK(*e == (event{n++}));
+    CHECK(*e == (event{n++, t}));
   CHECK(n == 50);
 }
 
@@ -59,37 +62,36 @@ TEST("auto schematization")
   segment s;
   segment::writer w{&s};
 
-  record_type rec;
-  rec.args.emplace_back("", type::make<int_type>());
-  rec.args.emplace_back("", type::make<bool_type>());
-  auto t = type::make<record_type>("foo", std::move(rec));
+  auto t = type::record{
+    {"", type::integer{}},
+    {"", type::boolean{}}};
+
+  t.name("foo");
 
   for (size_t i = 0; i < 100; ++i)
-  {
-    event e{42, true};
-    e.type(t);
-    REQUIRE(w.write(e));
-  }
+    REQUIRE(w.write(event{record{42, true}, t}));
 
   REQUIRE(w.flush());
   auto u = s.schema().find_type("foo");
   REQUIRE(u);
-  CHECK(*t == *u);
-  CHECK(t == u);
+  CHECK(t == *u);
 
   segment::reader r{&s};
   auto e = r.read();
   REQUIRE(e);
-  CHECK(e->type() == u);
+  CHECK(e->type() == *u);
 }
 
 TEST("seeking")
 {
+  auto t = type::integer{};
+  REQUIRE(t.name("test"));
+
   segment s;
   s.base(1000);
   segment::writer w{&s, 256};
   for (auto i = 0; i < 1024; ++i)
-    CHECK(w.write(event{1000 + i}));
+    REQUIRE(w.write(event{1000 + i, t}));
   CHECK(w.flush());
   REQUIRE(s.events() == 1024);
 
@@ -99,12 +101,12 @@ TEST("seeking")
   CHECK(r.seek(1042));
   e = r.read();
   REQUIRE(e);
-  CHECK(e->front() == 1042);
+  CHECK(*get<integer>(*e) == 1042);
 
   CHECK(r.seek(1010));
   e = r.read();
   REQUIRE(e);
-  CHECK(e->front() == 1010);
+  CHECK(*get<integer>(*e) == 1010);
 
   CHECK(! r.seek(10));
   CHECK(! r.seek(999));
@@ -113,26 +115,29 @@ TEST("seeking")
   CHECK(r.seek(1011));
   e = r.read();
   REQUIRE(e);
-  CHECK(e->front() == 1011);
+  CHECK(*get<integer>(*e) == 1011);
 
   CHECK(r.seek(1720));
   e = r.read();
   REQUIRE(e);
-  CHECK(e->front() == 1720);
+  CHECK(*get<integer>(*e) == 1720);
 
   CHECK(r.seek(2023));
   e = r.read();
   REQUIRE(e);
-  CHECK(e->front() == 2023);
+  CHECK(*get<integer>(*e) == 2023);
 }
 
 TEST("event loading")
 {
+  auto t = type::count{};
+  t.name("count");
+
   segment s;
   {
     segment::writer w{&s, 10};
     for (size_t i = 0; i < 256; ++i)
-      CHECK(w.write(event{i}));
+      CHECK(w.write(event{i, t}));
   }
   CHECK(s.events() == 256);
 
@@ -143,34 +148,37 @@ TEST("event loading")
   REQUIRE(o);
   auto& first = *o;
   CHECK(first.id() == b);
-  CHECK(first[0] == 0u);
+  CHECK(*get<count>(first) == 0);
 
   o = s.load(b + 42);
   REQUIRE(o);
   auto& mid1 = *o;
   CHECK(mid1.id() == b + 42);
-  CHECK(mid1[0] == 42u);
+  CHECK(*get<count>(mid1) == 42);
 
   o = s.load(256);
   REQUIRE(o);
   auto& mid2 = *o;
   CHECK(mid2.id() == 256);
-  CHECK(mid2[0] == 256u - b);
+  CHECK(*get<count>(mid2) == 256 - b);
 
   o = s.load(b + 255);
   REQUIRE(o);
   auto& last = *o;
   CHECK(last.id() == b + 255);
-  CHECK(last[0] == 255u);
+  CHECK(*get<count>(last) == 255);
 }
 
 TEST("event extraction")
 {
+  auto t = type::count{};
+  t.name("count");
+
   segment s;
   {
     segment::writer w{&s, 10};
     for (size_t i = 0; i < 256; ++i)
-      CHECK(w.write(event{i}));
+      CHECK(w.write(event{i, t}));
   }
   s.base(1000);
 

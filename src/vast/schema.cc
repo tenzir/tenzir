@@ -12,38 +12,32 @@ trial<schema> schema::merge(schema const& s1, schema const& s2)
 
   for (auto& t2 : s2.types_)
   {
-    auto t1 = s1.find_type(t2->name());
+    auto t1 = s1.find_type(t2.name());
     if (! t1)
       merged.types_.push_back(t2);
-    else if (*t1 != *t2)
-      return error{"type clash:", *t1, "<-->", *t2};
+    else if (*t1 != t2)
+      return error{"type clash:", *t1, "<-->", t2};
   }
 
   return std::move(merged);
 }
 
-trial<void> schema::add(type_const_ptr t)
+trial<void> schema::add(type t)
 {
-  if (! t)
-    return error{"add empty type"};
-
-  if (get<invalid_type>(t->info()))
+  if (is<none>(t))
     return error{"instance of invalid_type"};
 
-  if (t->name().empty() && find_type_info(t->info()).empty())
-    return error{"duplicate unnamed typed:", *t};
+  if (t.name().empty() && find_types(t).empty())
+    return error{"duplicate unnamed typed:", t};
 
-  if (! t->name().empty())
-    if (auto existing = find_type(t->name()))
+  if (! t.name().empty())
+    if (auto existing = find_type(t.name()))
     {
-      if (*existing == *t)
-      {
-        existing = t;
+      if (*existing == t)
         return nothing;
-      }
-
-      return error{"clash in types with same name (existing <--> added):",
-                   to_string(*existing, false), "<-->", to_string(*t, false)};
+      else
+        return error{"clash in types with same name (existing <--> added):",
+                     to_string(*existing, false), "<-->", to_string(t, false)};
     }
 
   types_.push_back(std::move(t));
@@ -51,20 +45,20 @@ trial<void> schema::add(type_const_ptr t)
   return nothing;
 }
 
-type_const_ptr schema::find_type(string const& name) const
+type const* schema::find_type(std::string const& name) const
 {
   for (auto& t : types_)
-    if (t->name() == name)
-      return t;
+    if (t.name() == name)
+      return &t;
 
   return {};
 }
 
-std::vector<type_const_ptr> schema::find_type_info(type_info const& ti) const
+std::vector<type> schema::find_types(type const& t) const
 {
-  std::vector<type_const_ptr> types;
-  for (auto& t : types_)
-    if (t->info() == ti)
+  std::vector<type> types;
+  for (auto& ty : types_)
+    if (ty == t)
       types.push_back(t);
 
   return types;
@@ -76,16 +70,6 @@ schema::const_iterator schema::begin() const
 }
 
 schema::const_iterator schema::end() const
-{
-  return types_.end();
-}
-
-schema::iterator schema::begin()
-{
-  return types_.begin();
-}
-
-schema::iterator schema::end()
 {
   return types_.end();
 }
@@ -117,14 +101,7 @@ void schema::deserialize(deserializer& source)
 
 bool operator==(schema const& x, schema const& y)
 {
-  if (x.types_.size() != y.types_.size())
-    return false;
-
-  for (size_t i = 0; i < x.types_.size(); ++i)
-    if (*x.types_[i] != *y.types_[i])
-      return false;
-
-  return true;
+  return x.types_ == y.types_;
 }
 
 } // namespace vast

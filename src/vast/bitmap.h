@@ -6,8 +6,9 @@
 #include <unordered_map>
 #include "vast/bitstream.h"
 #include "vast/operator.h"
-#include "vast/serialization.h"
+#include "vast/serialization/all.h"
 #include "vast/util/operators.h"
+#include "vast/util/stack_vector.h"
 
 namespace vast {
 
@@ -378,7 +379,7 @@ class bitslice_coder
 
 public:
   using offset_binary_type = decltype(detail::order(T()));
-  using value_list = std::vector<offset_binary_type>;
+  using value_list = util::stack_vector<offset_binary_type, 8>;
 
   /// Constructs a slicer with a given (potentially non-uniform) base.
   /// @param base The sequence of bases.

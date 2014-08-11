@@ -5,6 +5,7 @@
 #include <vector>
 #include "vast/util/editline.h"
 #include "vast/util/intrusive.h"
+#include "vast/util/print.h"
 #include "vast/util/result.h"
 
 namespace vast {

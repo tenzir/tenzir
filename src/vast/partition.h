@@ -6,7 +6,6 @@
 #include "vast/bitmap_indexer.h"
 #include "vast/file_system.h"
 #include "vast/schema.h"
-#include "vast/string.h"
 #include "vast/time.h"
 #include "vast/uuid.h"
 #include "vast/util/result.h"
@@ -70,7 +69,7 @@ struct partition_actor : actor_base
     };
 
     caf::actor actor;
-    type_const_ptr type;
+    vast::type type;
     offset off;
     statistics stats;
   };
@@ -85,7 +84,7 @@ struct partition_actor : actor_base
   {
     auto i = indexers_.find(p);
     if (i == indexers_.end())
-      return error{"no such path:", };
+      return error{"no such path: ", };
 
     if (i->second.actor)
       return nothing;
@@ -94,24 +93,22 @@ struct partition_actor : actor_base
   }
 
   template <typename Bitstream = default_bitstream>
-  trial<void>
-  create_data_indexer(path const& p, offset const& o, type_const_ptr t)
+  trial<void> create_data_indexer(path const& p, offset const& o, type const& t)
   {
-    assert(t);
     auto& state = indexers_[p];
-    if (state.type && *state.type != *t)
-      return error{"type mismatch:", *state.type, " vs", *t};
+    if (! is<none>(state.type) && state.type != t)
+      return error{"type mismatch: ", state.type, " vs ", t};
 
     if (state.actor)
-      return nothing;
+      return error{"data indexer already exists: ", state.actor};
 
     VAST_LOG_ACTOR_DEBUG("creates indexer at " << p <<
-                         " @" << o << " with type " << *t);
+                         " @" << o << " with type " << t);
 
     auto abs = dir_ / p / "data.idx";
     auto a = make_event_data_indexer<Bitstream>(abs, t, o);
     if (! a)
-      return error{"failed to construct data indexer:", a.error()};
+      return error{"failed to construct data indexer: ", a.error()};
 
     monitor(*a);
 

@@ -2,7 +2,7 @@
 #include "vast.h"
 #include "vast/file_system.h"
 #include "vast/logger.h"
-#include "vast/type_info.h"
+#include "vast/serialization.h"
 
 int main(int argc, char* argv[])
 {
@@ -31,5 +31,5 @@ int main(int argc, char* argv[])
   if (! cfg->check("vast-keep-logs"))
     vast::rm(log_dir);
 
-  return (vast::cleanup() && rc) ? 0 : 1;
+  return vast::cleanup() && rc ? 0 : 1;
 }

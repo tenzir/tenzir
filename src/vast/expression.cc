@@ -3,7 +3,7 @@
 #include <boost/variant/apply_visitor.hpp>
 #include "vast/logger.h"
 #include "vast/optional.h"
-#include "vast/serialization.h"
+#include "vast/serialization/all.h"
 
 namespace vast {
 namespace expr {
@@ -106,15 +106,13 @@ void id_extractor::deserialize(deserializer&)
 }
 
 offset_extractor::offset_extractor()
-  : type{type_invalid}
 {
 }
 
-offset_extractor::offset_extractor(type_const_ptr type, offset off)
-  : type{type},
-    off{std::move(off)}
+offset_extractor::offset_extractor(vast::type t, offset o)
+  : type{t},
+    off{std::move(o)}
 {
-  assert(type);
 }
 
 offset_extractor* offset_extractor::clone() const
@@ -124,14 +122,12 @@ offset_extractor* offset_extractor::clone() const
 
 void offset_extractor::serialize(serializer& sink) const
 {
-  sink << *type << off;
+  sink << type << off;
 }
 
 void offset_extractor::deserialize(deserializer& source)
 {
-  auto t = type::make<invalid_type>();
-  source >> *t >> off;
-  type = t;
+  source >> type >> off;
 }
 
 bool offset_extractor::equals(node const& other) const
@@ -140,7 +136,7 @@ bool offset_extractor::equals(node const& other) const
     return false;
 
   auto& that = static_cast<offset_extractor const&>(other);
-  return *type == *that.type && off == that.off;
+  return type == that.type && off == that.off;
 }
 
 bool offset_extractor::is_less_than(node const& other) const
@@ -149,7 +145,7 @@ bool offset_extractor::is_less_than(node const& other) const
     return typeid(*this).hash_code() < typeid(other).hash_code();
 
   auto& that = static_cast<offset_extractor const&>(other);
-  return std::tie(*type, off) < std::tie(*that.type, that.off);
+  return std::tie(type, off) < std::tie(that.type, that.off);
 }
 
 
@@ -188,7 +184,7 @@ void schema_extractor::deserialize(deserializer& source)
 }
 
 
-type_extractor::type_extractor(type_tag t)
+type_extractor::type_extractor(vast::type t)
   : type{t}
 {
 }
@@ -277,7 +273,7 @@ struct match_visitor
 {
   using result_type = bool;
 
-  result_type operator()(string const& lhs, regex const& rhs) const
+  result_type operator()(std::string const& lhs, pattern const& rhs) const
   {
     return rhs.match(lhs);
   }
@@ -293,17 +289,17 @@ struct in_visitor
 {
   using result_type = bool;
 
-  result_type operator()(string const& lhs, string const& rhs) const
+  result_type operator()(std::string const& lhs, std::string const& rhs) const
   {
-    return rhs.find(lhs) != string::npos;
+    return rhs.find(lhs) != std::string::npos;
   }
 
-  result_type operator()(string const& lhs, regex const& rhs) const
+  result_type operator()(std::string const& lhs, pattern const& rhs) const
   {
     return rhs.search(lhs);
   }
 
-  result_type operator()(address const& lhs, prefix const& rhs) const
+  result_type operator()(address const& lhs, subnet const& rhs) const
   {
     return rhs.contains(lhs);
   }
@@ -350,32 +346,32 @@ predicate::binary_predicate predicate::make_predicate(relational_operator op)
     case match:
       return [](value const& lhs, value const& rhs) -> bool
       {
-        return value::visit(lhs, rhs, match_visitor{});
+        return visit(match_visitor{}, lhs, rhs);
       };
     case not_match:
       return [](value const& lhs, value const& rhs) -> bool
       {
-        return ! value::visit(lhs, rhs, match_visitor{});
+        return ! visit(match_visitor{}, lhs, rhs);
       };
     case in:
       return [](value const& lhs, value const& rhs) -> bool
       {
-        return value::visit(lhs, rhs, in_visitor{});
+        return visit(in_visitor{}, lhs, rhs);
       };
     case not_in:
       return [](value const& lhs, value const& rhs) -> bool
       {
-        return ! value::visit(lhs, rhs, in_visitor{});
+        return ! visit(in_visitor{}, lhs, rhs);
       };
     case ni:
       return [](value const& lhs, value const& rhs) -> bool
       {
-        return value::visit(lhs, rhs, ni_visitor{});
+        return visit(ni_visitor{}, lhs, rhs);
       };
     case not_ni:
       return [](value const& lhs, value const& rhs) -> bool
       {
-        return ! value::visit(lhs, rhs, ni_visitor{});
+        return ! visit(ni_visitor{}, lhs, rhs);
       };
     case equal:
       return [](value const& lhs, value const& rhs)
@@ -847,39 +843,47 @@ public:
 
   virtual void visit(timestamp_extractor const&)
   {
-    result_ = event_.timestamp();
+    result_ = value{event_.timestamp()};
   }
 
   virtual void visit(name_extractor const&)
   {
-    result_ = event_.name();
+    result_ = value{event_.type().name()};
   }
 
   virtual void visit(id_extractor const&)
   {
-    result_ = event_.id();
+    result_ = value{event_.id()};
   }
 
   virtual void visit(offset_extractor const& o)
   {
-    auto v = event_.at(o.off);
-    result_ = v ? *v : invalid;
+    //result_ = nil;
+    if (auto r = get<record>(event_))
+      if (auto d = r->at(o.off))
+        result_ = *d;
   }
 
   virtual void visit(schema_extractor const&)
   {
     assert(! "must resolve AST before evaluating with schema extractor");
-    result_ = invalid;
+    result_ = nil;
   }
 
   virtual void visit(type_extractor const& t)
   {
     if (! extractor_state_)
     {
+      auto r = get<record>(event_);
+      if (! r)
+        return;
+
       extractor_state_ = extractor_state{};
-      extractor_state_->pos.emplace_back(&event_, 0);
+      extractor_state_->pos.emplace_back(r, 0);
     }
-    result_ = invalid;
+
+    result_ = nil;
+
     while (! extractor_state_->pos.empty())
     {
       auto& rec = *extractor_state_->pos.back().first;
@@ -890,19 +894,20 @@ public:
         extractor_state_->pos.pop_back();
         continue;
       }
-      auto& arg = rec[idx++];
+
+      auto& d = rec[idx++];
       if (extractor_state_->pos.size() == 1 && idx == rec.size())
         extractor_state_->complete = true; // Finished with top-most record.
-      if (! arg)
-        continue;
-      if (arg.which() == record_value)
+
+      if (auto r = get<record>(d))
       {
-        extractor_state_->pos.emplace_back(&arg.get<record>(), 0);
+        extractor_state_->pos.emplace_back(r, 0);
         continue;
       }
-      if (arg.which() == t.type)
+
+      if (t.type.check(d))
       {
-        result_ = arg;
+        result_ = d;
         break;
       }
     }
@@ -922,38 +927,41 @@ public:
         break;
     }
     while (extractor_state_ && ! extractor_state_->complete);
+
     if (extractor_state_)
       extractor_state_ = {};
-    result_ = result;
+
+    result_ = value{result};
   }
 
   virtual void visit(conjunction const& c)
   {
-    result_ = std::all_of(
+    result_ = value{std::all_of(
         c.operands.begin(),
         c.operands.end(),
         [&](std::unique_ptr<node> const& operand) -> bool
         {
           operand->accept(*this);
-          assert(result_ && result_.which() == bool_value);
-          return result_.get<bool>();
-        });
+          assert(is<boolean>(result_));
+          return *get<boolean>(result_);
+        })};
   }
 
   virtual void visit(disjunction const& d)
   {
-    result_ = std::any_of(
+    result_ = value{std::any_of(
         d.operands.begin(),
         d.operands.end(),
         [&](std::unique_ptr<node> const& operand) -> bool
         {
           operand->accept(*this);
-          assert(result_ && result_.which() == bool_value);
-          return result_.get<bool>();
-        });
+          assert(is<boolean>(result_));
+          return *get<boolean>(result_);
+        })};
   }
 
 private:
+  // Enables stateful iteration through records.
   struct extractor_state
   {
     std::vector<std::pair<record const*, size_t>> pos;
@@ -968,46 +976,6 @@ private:
 
 } // namespace <anonymous>
 
-bool compatible(type_tag lhs, type_tag rhs, relational_operator op)
-{
-  switch (op)
-  {
-    default:
-      return false;
-    case match:
-    case not_match:
-      switch (lhs)
-      {
-        default:
-          return false;
-        case string_value:
-          return rhs == regex_value;
-      }
-    case equal:
-    case not_equal:
-    case less:
-    case less_equal:
-    case greater:
-    case greater_equal:
-      return lhs == rhs;
-    case in:
-    case not_in:
-      switch (lhs)
-      {
-        default:
-          return is_container(rhs);
-        case string_value:
-          return rhs == string_value || is_container(rhs);
-        case address_value:
-          return rhs == prefix_value || is_container(rhs);
-      }
-    case ni:
-      return compatible(rhs, lhs, in);
-    case not_ni:
-      return compatible(rhs, lhs, not_in);
-  }
-}
-
 value evaluate(node const& n, event const& e)
 {
   evaluator v{e};
@@ -1017,7 +985,7 @@ value evaluate(node const& n, event const& e)
 
 value evaluate(ast const& a, event const& e)
 {
-  return a.root() ? evaluate(*a.root(), e) : invalid;
+  return a.root() ? evaluate(*a.root(), e) : nil;
 }
 
 namespace {
@@ -1057,7 +1025,7 @@ public:
   virtual void visit(offset_extractor const& o)
   {
     indent();
-    str_ += to_string(*o.type);
+    str_ += to_string(o.type);
     str_ += '@';
     str_ += to_string(o.off);
     str_ += '\n';
@@ -1192,7 +1160,7 @@ public:
 
   virtual void visit(offset_extractor const& o)
   {
-    str_ += to_string(*o.type) + '@' + to_string(o.off);
+    str_ += to_string(o.type) + '@' + to_string(o.off);
   }
 
   virtual void visit(schema_extractor const& s)
@@ -1366,24 +1334,27 @@ public:
     auto disj = std::make_unique<disjunction>();
     for (auto& t : schema_)
     {
-      auto trace = t->find_suffix(pred.key);
+      auto r = get<type::record>(t);
+      if (! r)
+        continue;
+
+      auto trace = r->find_suffix(pred.key);
       if (trace.empty())
         continue;
 
       // Make sure that all found keys resolve to arguments with the same type.
-      auto first_type = t->at(trace.front().first);
+      auto first_type = r->at(trace.front().first);
       for (auto& p : trace)
         if (! p.first.empty())
-          if (auto r = get<record_type>(t->info()))
-            if (! first_type->represents(r->at(p.first)))
-            {
-              error_ =
-                error{"type clash: " +
-                      to_string(*t) + " : " + to_string(*t, false) +
-                      " <--> " + to_string(*r->at(p.first)) + " : " +
-                      to_string(*r->at(p.first), false)};
-              return;
-            }
+          if (! congruent(*first_type, *r->at(p.first)))
+          {
+            error_ =
+              error{"type clash: " +
+                    to_string(t) + " : " + to_string(t, false) +
+                    " <--> " + to_string(*r->at(p.first)) + " : " +
+                    to_string(*r->at(p.first), false)};
+            return;
+          }
 
       // Add all offsets from the trace to the disjunction, which will
       // eventually replace this node.

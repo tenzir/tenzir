@@ -3,7 +3,9 @@
 
 #include <algorithm>
 #include "vast/bitvector.h"
-#include "vast/serialization.h"
+#include "vast/serialization/arithmetic.h"
+#include "vast/serialization/container.h"
+#include "vast/serialization/pointer.h"
 #include "vast/util/operators.h"
 #include "vast/util/range.h"
 

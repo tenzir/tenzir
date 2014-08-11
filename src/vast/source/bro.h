@@ -1,8 +1,6 @@
 #ifndef VAST_SOURCE_BRO_H
 #define VAST_SOURCE_BRO_H
 
-#include "vast/schema.h"
-#include "vast/string.h"
 #include "vast/source/file.h"
 
 namespace vast {
@@ -19,16 +17,18 @@ public:
   std::string describe() const final;
 
 private:
+  trial<std::string> parse_header_line(std::string const& line,
+                                       std::string const& prefix);
+
   trial<void> parse_header();
 
   int32_t timestamp_field_ = -1;
-  string separator_ = " ";
-  string set_separator_;
-  string empty_field_;
-  string unset_field_;
-  schema schema_;
-  type_ptr type_;
-  type_ptr flat_type_;
+  std::string separator_ = " ";
+  std::string set_separator_;
+  std::string empty_field_;
+  std::string unset_field_;
+  type type_;
+  type flat_type_;
 };
 
 } // namespace source

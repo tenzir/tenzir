@@ -167,7 +167,7 @@ query::query(actor archive, actor sink, expr::ast ast)
         last = id;
         if (auto e = reader_->read(id))
         {
-          if (evaluate(ast_, *e).get<bool>())
+          if (is<boolean>(evaluate(ast_, *e)))
           {
             send(sink_, std::move(*e));
             if (++n == requested_)

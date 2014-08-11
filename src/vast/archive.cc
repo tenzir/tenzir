@@ -5,7 +5,7 @@
 #include "vast/bitstream.h"
 #include "vast/file_system.h"
 #include "vast/segment.h"
-#include "vast/serialization.h"
+#include "vast/serialization/all.h"
 #include "vast/io/serialization.h"
 
 namespace vast {
@@ -56,7 +56,7 @@ bool archive::store(message msg)
     return false;
   }
 
-  match(msg)(
+  caf::match(msg)(
       on_arg_match >> [&](segment const& s)
       {
         assert(segment_files_.find(s.id()) == segment_files_.end());

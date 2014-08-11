@@ -96,14 +96,14 @@ public:
         uint64_t n = 0;
         uint64_t total = events.size();
         for (auto& e : events)
-          if (auto v = static_cast<Derived*>(this)->extract(e))
-          {
-            // FIXME: make the std::bad_cast go away.
-            if (bmi_.push_back(*v, e.id()))
-              ++n;
-            else
-              VAST_LOG_ACTOR_ERROR("failed to append value: " << *v);
-          }
+        {
+          auto t = static_cast<Derived*>(this)->append(bmi_, e);
+          if (t)
+            ++n;
+          else
+            VAST_LOG_ACTOR_ERROR("failed to append event " << e.id() << ": " <<
+                                 t.error());
+        }
 
         stats_.increment(n);
 
@@ -131,7 +131,7 @@ public:
           return;
         }
 
-        auto r = bmi_.lookup(*o, *c);
+        auto r = bmi_.lookup(*o, c->data());
         if (! r)
         {
           VAST_LOG_ACTOR_ERROR(r.error());
@@ -163,9 +163,13 @@ struct event_name_indexer
     string_bitmap_index<Bitstream>
   >::bitmap_indexer;
 
-  string const* extract(event const& e) const
+  template <typename BitmapIndex>
+  trial<void> append(BitmapIndex& bmi, event const& e)
   {
-    return &e.name();
+    if (bmi.push_back(e.type().name()))
+      return nothing;
+    else
+      return error{"failed to append event name: ", e.type().name()};
   }
 
   std::string describe() const final
@@ -178,18 +182,21 @@ template <typename Bitstream>
 struct event_time_indexer
   : bitmap_indexer<
       event_time_indexer<Bitstream>,
-      arithmetic_bitmap_index<Bitstream, time_point_value>
+      arithmetic_bitmap_index<Bitstream, time_point>
     >
 {
   using bitmap_indexer<
     event_time_indexer<Bitstream>,
-    arithmetic_bitmap_index<Bitstream, time_point_value>
+    arithmetic_bitmap_index<Bitstream, time_point>
   >::bitmap_indexer;
 
-  time_point const* extract(event const& e)
+  template <typename BitmapIndex>
+  trial<void> append(BitmapIndex& bmi, event const& e)
   {
-    timestamp_ = e.timestamp();
-    return &timestamp_;
+    if (bmi.push_back(e.timestamp()))
+      return nothing;
+    else
+      return error{"failed to append event timestamp: ", e.timestamp()};
   }
 
   std::string describe() const final
@@ -206,25 +213,33 @@ struct event_data_indexer
 {
   using super = bitmap_indexer<event_data_indexer<BitmapIndex>, BitmapIndex>;
 
-  event_data_indexer(path p, type_const_ptr t, offset o, BitmapIndex bmi = {})
+  event_data_indexer(path p, offset o, BitmapIndex bmi = {})
     : super{std::move(p), std::move(bmi)},
-      type_{std::move(t)},
       offset_{std::move(o)}
   {
   }
 
-  value const* extract(event const& e) const
+  trial<void> append(BitmapIndex& bmi, event const& e)
   {
-    return e.name() == type_->name() ? e.at(offset_) : nullptr;
+    auto r = get<record>(e);
+    if (! r)
+      return error{"only records supports currently, got event ", e.type()};
+
+    auto d = r->at(offset_);
+    if (! d)
+      return error{"no data at offset ", offset_};
+
+    if (! bmi.push_back(*d, e.id()))
+      return error{"push_back failed for ", *d};
+
+    return nothing;
   }
 
   std::string describe() const final
   {
-    return "data-bitmap-indexer("
-      + to_string(*type_) + ':' + to_string(offset_) + ')';
+    return "data-bitmap-indexer(" + to_string(offset_) + ')';
   }
 
-  type_const_ptr type_;
   offset offset_;
 };
 
@@ -233,10 +248,8 @@ namespace detail {
 template <typename Bitstream>
 struct event_data_index_factory
 {
-  event_data_index_factory(path const& p, type_const_ptr const& t,
-                           offset const& o)
+  event_data_index_factory(path const& p, offset const& o)
     : path_{p},
-      type_{t},
       off_{o}
   {
   }
@@ -244,76 +257,78 @@ struct event_data_index_factory
   template <typename T>
   trial<caf::actor> operator()(T const&) const
   {
-    using bmi_t = arithmetic_bitmap_index<Bitstream, to_type_tag<T>::value>;
-    return spawn<bmi_t>();
+    return spawn<arithmetic_bitmap_index<Bitstream, type::to_data<T>>>();
   }
 
-  trial<caf::actor> operator()(address_type const&) const
+  trial<caf::actor> operator()(type::address const&) const
   {
     return spawn<address_bitmap_index<Bitstream>>();
   }
 
-  trial<caf::actor> operator()(prefix_type const&) const
+  trial<caf::actor> operator()(type::subnet const&) const
   {
-    return spawn<prefix_bitmap_index<Bitstream>>();
+    return spawn<subnet_bitmap_index<Bitstream>>();
   }
 
-  trial<caf::actor> operator()(port_type const&) const
+  trial<caf::actor> operator()(type::port const&) const
   {
     return spawn<port_bitmap_index<Bitstream>>();
   }
 
-  trial<caf::actor> operator()(string_type const&) const
+  trial<caf::actor> operator()(type::string const&) const
   {
     return spawn<string_bitmap_index<Bitstream>>();
   }
 
-  trial<caf::actor> operator()(enum_type const&) const
+  trial<caf::actor> operator()(type::enumeration const&) const
   {
     return spawn<string_bitmap_index<Bitstream>>();
   }
 
-  trial<caf::actor> operator()(set_type const& t) const
+  trial<caf::actor> operator()(type::vector const& t) const
   {
-    return spawn<sequence_bitmap_index<Bitstream>>(t.elem_type->tag());
+    return spawn<sequence_bitmap_index<Bitstream>>(t.elem());
   }
 
-  trial<caf::actor> operator()(vector_type const& t) const
+  trial<caf::actor> operator()(type::set const& t) const
   {
-    return spawn<sequence_bitmap_index<Bitstream>>(t.elem_type->tag());
+    return spawn<sequence_bitmap_index<Bitstream>>(t.elem());
   }
 
-  trial<caf::actor> operator()(invalid_type const&) const
+  trial<caf::actor> operator()(none const&) const
   {
     return error{"bitmap index for invalid type not supported"};
   }
 
-  trial<caf::actor> operator()(regex_type const&) const
+  trial<caf::actor> operator()(type::pattern const&) const
   {
     return error{"regular expressions not yet supported"};
   }
 
-  trial<caf::actor> operator()(table_type const&) const
+  trial<caf::actor> operator()(type::table const&) const
   {
     return error{"tables not yet supported"};
   }
 
-  trial<caf::actor> operator()(record_type const&) const
+  trial<caf::actor> operator()(type::record const&) const
   {
     return error{"records shall be unrolled"};
+  }
+
+  trial<caf::actor> operator()(type::alias const& a) const
+  {
+    return visit(*this, a.type());
   }
 
   template <typename BitmapIndex, typename... Args>
   caf::actor spawn(Args&&... args) const
   {
     using indexer_type = event_data_indexer<BitmapIndex>;
-
-    return caf::spawn<indexer_type>(path_, type_, off_,
-                                     BitmapIndex{std::forward<Args>(args)...});
+    return caf::spawn<indexer_type>(
+        path_, off_, BitmapIndex{std::forward<Args>(args)...});
   }
 
   path const& path_;
-  type_const_ptr const& type_;
   offset const& off_;
 };
 
@@ -322,16 +337,9 @@ struct event_data_index_factory
 /// Factory to construct an indexer based on a given type.
 template <typename Bitstream>
 trial<caf::actor>
-make_event_data_indexer(path const& p, type_const_ptr const& t, offset const& o)
+make_event_data_indexer(path const& p, type const& t, offset const& o)
 {
-  detail::event_data_index_factory<Bitstream> v{p, t, o};
-
-  auto inner = t->at(o);
-  if (! inner)
-    return error{"no type at offset " + to_string(o) + " in type " +
-                 to_string(*inner)};
-
-  return apply_visitor(v, inner->info());
+  return visit(detail::event_data_index_factory<Bitstream>{p, o}, t);
 }
 
 } // namespace vast
