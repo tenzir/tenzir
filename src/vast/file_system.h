@@ -179,14 +179,14 @@ public:
 
   /// Move-construfts a file.
   /// @param other The file to move.
-  file(file&& other);
+  file(file&& other) noexcept;
 
   /// Destroys and closes a file.
   ~file();
 
   /// Move-Assigns a file to this instance.
   /// @param other The RHS of the assignment.
-  file& operator=(file&& other);
+  file& operator=(file&& other) = default;
 
   /// Opens the file.
   /// @param mode How to open the file.

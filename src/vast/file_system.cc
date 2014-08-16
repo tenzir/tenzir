@@ -288,7 +288,7 @@ file::file(path p, native_type handle)
 {
 }
 
-file::file(file&& other)
+file::file(file&& other) noexcept
   : handle_{other.handle_},
     is_open_{other.is_open_},
     seek_failed_{other.seek_failed_},
@@ -302,16 +302,6 @@ file::file(file&& other)
 file::~file()
 {
   close();
-}
-
-file& file::operator=(file&& other)
-{
-  using std::swap;
-  swap(path_, other.path_);
-  swap(handle_, other.handle_);
-  swap(is_open_, other.is_open_);
-  swap(seek_failed_, other.seek_failed_);
-  return *this;
 }
 
 trial<void> file::open(open_mode mode, bool append)
