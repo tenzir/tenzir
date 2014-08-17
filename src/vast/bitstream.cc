@@ -491,26 +491,23 @@ void ewah_bitstream::iterator::increment()
   assert(ewah_);
   assert(pos_ != npos);
 
-  if (pos_ == npos)
-    return;
+  // Check whether we still have clean 1-blocks to process.
+  if (num_clean_ > 0)
+  {
+    if (bitvector::bit_index(++pos_) == 0)
+      if (--num_clean_ == 0)
+        scan();
 
-  // First check whether we're processing the last (dirty) block.
-  // special one.
+    return;
+  }
+
+  // Then check whether we're processing the last (dirty) block.
   if (idx_ == ewah_->bits_.blocks() - 1)
   {
     auto i = bitvector::bit_index(pos_);
     auto next = bitvector::next_bit(ewah_->bits_.block(idx_), i);
     pos_ += next == npos ? npos - pos_ : next - i;
     return;
-  }
-
-  // Check whether we're still processing clean 1-blocks.
-  if (num_clean_ > 0)
-  {
-    if (bitvector::bit_index(++pos_) == 0)
-      --num_clean_;
-    if (num_clean_ > 0)
-      return;
   }
 
   // Time for the dirty stuff.
@@ -575,19 +572,16 @@ void ewah_bitstream::iterator::scan()
   while (idx_ < ewah_->bits_.blocks() - 1 && num_dirty_ == 0)
   {
     auto marker = ewah_->bits_.block(idx_++);
-    auto zeros = ! ewah_bitstream::marker_type(marker);
     num_dirty_ = ewah_bitstream::marker_num_dirty(marker);
     auto num_clean = ewah_bitstream::marker_num_clean(marker);
 
-    if (zeros)
-    {
-      pos_ += block_width * num_clean;
-    }
-    else
+    if (ewah_bitstream::marker_type(marker))
     {
       num_clean_ += num_clean;
       break;
     }
+
+    pos_ += block_width * num_clean;
   }
 
   // If we have clean 1-blocks, we don't need to do anything because we know

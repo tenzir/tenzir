@@ -222,7 +222,7 @@ TEST("polymorphic")
   CHECK(y.size() == 3);
 }
 
-TEST("operations (null)")
+TEST("bitwise operations (null)")
 {
   null_bitstream x;
   REQUIRE(x.append(3, true));
@@ -407,6 +407,21 @@ TEST("bitwise iteration (EWAH)")
     cnt += 4;
     ++i;
   }
+}
+
+TEST("iterator increment bugfix (EWAH)")
+{
+  ewah_bitstream ebs;
+  ebs.push_back(false);
+  ebs.append(1023, true);
+
+  auto begin = ebs.begin();
+  auto end = ebs.end();
+  size_t n = 1;
+  while (begin != end)
+    REQUIRE (*begin++ == n++);
+
+  CHECK(n == 1024);
 }
 
 TEST("element access (EWAH)")
