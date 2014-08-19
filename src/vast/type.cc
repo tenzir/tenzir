@@ -486,7 +486,7 @@ trial<offset> type::record::resolve(key const& k) const
         // an intermediate record or have reached the last symbol.
         rec = get<record>(rec->fields_[i].type);
         if (! (rec || id + 1 == k.end()))
-          return error{"intermediate arguments must be records"};
+          return error{"intermediate fields must be records"};
 
         off.push_back(i);
         found = true;
@@ -499,6 +499,31 @@ trial<offset> type::record::resolve(key const& k) const
     return error{"non-existant field name"};
 
   return std::move(off);
+}
+
+trial<key> type::record::resolve(offset const& o) const
+{
+  if (o.empty())
+    return error{"empty offset sequence"};
+
+  key k;
+  auto r = this;
+  for (size_t i = 0; i < o.size(); ++i)
+  {
+    if (o[i] >= r->fields_.size())
+      return error{"offset index ", i, " out of bounds"};
+
+    k.push_back(r->fields_[o[i]].name);
+
+    if (i != o.size() - 1)
+    {
+      r = get<record>(r->fields_[o[i]].type);
+      if (! r)
+        return error{"intermediate fields must be records"};
+    }
+  }
+
+  return std::move(k);
 }
 
 namespace {

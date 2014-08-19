@@ -717,6 +717,11 @@ public:
   /// @returns The ::offset corresponding to *k*.
   trial<offset> resolve(key const& k) const;
 
+  /// Attemps to resolve an ::offset to a ::key.
+  /// @param o The offset to resolve.
+  /// @returns The ::key corresponding to *o*.
+  trial<key> resolve(offset const& o) const;
+
   /// Finds all offset-key pairs for an *exact* key in this and nested records.
   /// @param k The key to resolve.
   /// @returns The offset-key pairs corresponding to the found *k*.

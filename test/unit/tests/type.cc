@@ -138,16 +138,27 @@ TEST("record resolving")
     {"c", r}
   };
 
-  auto o = r.resolve({"c"});
+  auto o = r.resolve(key{"c"});
   REQUIRE(o);
   CHECK(o->size() == 1);
   CHECK(o->front() == 2);
 
-  o = r.resolve({"c", "x"});
+  o = r.resolve(key{"c", "x"});
   REQUIRE(o);
   CHECK(o->size() == 2);
   CHECK(o->front() == 2);
   CHECK(o->back() == 0);
+
+  auto k = r.resolve(offset{2});
+  REQUIRE(k);
+  CHECK(k->size() == 1);
+  CHECK(k->front() == "c");
+
+  k = r.resolve(offset{2, 0});
+  REQUIRE(k);
+  CHECK(k->size() == 2);
+  CHECK(k->front() == "c");
+  CHECK(k->back() == "x");
 }
 
 TEST("record flattening/unflattening")
