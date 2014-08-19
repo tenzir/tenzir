@@ -1,15 +1,13 @@
 #include "vast/receiver.h"
 
 #include <caf/all.hpp>
+#include "vast/chunk.h"
 
 namespace vast {
 
 using namespace caf;
 
-receiver_actor::receiver_actor(actor tracker,
-                               actor archive,
-                               actor index,
-                               actor search)
+receiver::receiver(actor tracker, actor archive, actor index, actor search)
   : tracker_(tracker),
     archive_(archive),
     index_(index),
@@ -17,7 +15,7 @@ receiver_actor::receiver_actor(actor tracker,
 {
 }
 
-message_handler receiver_actor::act()
+message_handler receiver::act()
 {
   trap_exit(true);
 
@@ -40,51 +38,53 @@ message_handler receiver_actor::act()
     },
     [=](down_msg const&)
     {
-      for (auto& a : ingestors_)
+      for (auto& a : importers_)
         if (a == last_sender())
         {
-          ingestors_.erase(a);
+          importers_.erase(a);
           break;
         }
     },
-    [=](segment& s, actor source)
+    [=](chunk const& chk, actor source)
     {
-      VAST_LOG_ACTOR_DEBUG("got segment " << s.id());
+      if (! importers_.count(source))
+      {
+        // We keep track of the importers to be able to send flow control
+        // messages back to them.
+        monitor(source);
+        importers_.insert(source);
+      }
 
-      // For flow control messages.
-      monitor(source);
-      ingestors_.insert(source);
-
-      send(search_, s.schema());
+      send(search_, chk.meta().schema);
 
       message last = last_dequeued();
 
-      sync_send(tracker_, atom("request"), uint64_t{s.events()}).then(
-        on(atom("id"), arg_match) >> [=](event_id from, event_id to)
+      sync_send(tracker_, atom("request"), chk.events()).then(
+        on(atom("id"), arg_match) >> [=](event_id from, event_id to) mutable
         {
           VAST_LOG_ACTOR_DEBUG("got " << to - from <<
-                               " IDs in [" << from << ", " << to << ")");
-          caf::match(last)(
-              on_arg_match >> [=](segment& s, actor)
+                               " IDs for chunk [" << from << ", " << to << ")");
+
+          auto msg = last.apply(
+              on_arg_match >> [=](chunk& c, actor)
               {
                 auto n = to - from;
-                if (n < s.events())
+                if (n < c.events())
                 {
                   VAST_LOG_ACTOR_ERROR("got " << n << " IDs, needed " <<
-                                       s.events());
-
+                                       c.events());
                   quit(exit::error);
-                  return make_message(atom("nack"), s.id());
+                  return;
                 }
 
-                s.base(from);
+                ewah_bitstream ids;
+                ids.append(from, false);
+                ids.append(n, true);
+                c.ids(std::move(ids));
 
-                auto id = s.id();
-                auto t = make_message(std::move(s));
+                auto t = make_message(std::move(c));
                 send_tuple(archive_, t);
                 send_tuple(index_, t);
-
-                return make_message(atom("ack"), id);
               });
         });
     },
@@ -93,25 +93,26 @@ message_handler receiver_actor::act()
       send_tuple(index_, last_dequeued());
       delayed_send_tuple(this, std::chrono::milliseconds(100), last_dequeued());
     },
-    on(atom("backlog"), arg_match) >> [=](uint64_t segments, uint64_t backlog)
+    on(atom("backlog"), arg_match) >> [=](uint64_t chunks, uint64_t backlog)
     {
       // TODO: Make flow-control backlog dynamic.
-      auto backlogged = segments > 0 || backlog > 10000;
+      auto backlogged = chunks > 10 || backlog > 10000;
       if ((backlogged && ! paused_) || (! backlogged && paused_))
       {
         paused_ = ! paused_;
-        for (auto& a : ingestors_)
+        for (auto& a : importers_)
           send(a, atom("backlog"), backlogged);
 
-        VAST_LOG_ACTOR_DEBUG("notifies ingestors to " <<
-                             (paused_ ? "pause" : "resume") << " processing");
+        VAST_LOG_ACTOR_DEBUG(
+            "notifies ingestors to " << (paused_ ? "pause" : "resume") <<
+            " chunk delivery");
       }
     }
   };
 
 }
 
-std::string receiver_actor::describe() const
+std::string receiver::describe() const
 {
   return "receiver";
 }

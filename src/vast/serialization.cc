@@ -473,6 +473,7 @@ void announce_builtin_types()
     event,
     error,
 
+    block,
     chunk,
     offset,
     key,

@@ -29,7 +29,8 @@ public:
 
   /// Sets the event ID.
   /// @param i The new event ID.
-  void id(event_id i);
+  /// @returns `true` iff *i* is in *[1, 2^64-2]*.
+  bool id(event_id i);
 
   /// Sets the event timestamp.
   /// @param time The event timestamp.

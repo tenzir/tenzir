@@ -13,6 +13,7 @@
 #include "vast/util/operators.h"
 
 namespace vast {
+
 class schema : util::equality_comparable<schema>
 {
 public:

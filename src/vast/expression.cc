@@ -1150,7 +1150,7 @@ public:
 
   virtual void visit(name_extractor const&)
   {
-    str_ += "&name";
+    str_ += "&type";
   }
 
   virtual void visit(id_extractor const&)

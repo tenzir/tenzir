@@ -1,6 +1,6 @@
 #include "vast/importer.h"
 
-#include "vast/segment.h"
+#include "vast/sink/chunkifier.h"
 #include "vast/source/bro.h"
 #include "vast/io/serialization.h"
 
@@ -12,15 +12,9 @@ namespace vast {
 
 using namespace caf;
 
-importer::importer(path dir,
-                   actor receiver,
-                   size_t max_events_per_chunk,
-                   size_t max_segment_size,
-                   uint64_t batch_size)
-  : dir_{dir / "ingest" / "segments"},
+importer::importer(path dir, actor receiver, uint64_t batch_size)
+  : dir_{dir / "import"},
     receiver_{receiver},
-    max_events_per_chunk_{max_events_per_chunk},
-    max_segment_size_{max_segment_size},
     batch_size_{batch_size}
 {
 }
@@ -29,15 +23,15 @@ message_handler importer::act()
 {
   trap_exit(true);
 
-  segmentizer_ = spawn<segmentizer, monitored>(
-      this, max_events_per_chunk_, max_segment_size_);
+  chunkifier_ = spawn<sink::chunkifier, monitored>(this, batch_size_);
 
   traverse(
-      dir_,
+      dir_ / "chunks",
       [&](path const& p) -> bool
       {
-        VAST_LOG_ACTOR_INFO("found orphaned segment: " << p.basename());
+        VAST_LOG_ACTOR_INFO("found orphaned chunk: " << p.basename());
         orphaned_.insert(p.basename());
+        ++stored_;
         return true;
       });
 
@@ -46,7 +40,7 @@ message_handler importer::act()
       {
         receiver_ = invalid_actor;
         source_ = invalid_actor;
-        segmentizer_ = invalid_actor;
+        chunkifier_ = invalid_actor;
       });
 
   auto on_exit = [=](exit_msg const& e)
@@ -56,89 +50,11 @@ message_handler importer::act()
       // message to the sink.
       send_exit(source_, exit::stop);
     else
-      // If we have no source, we just tell the segmentizer to exit.
-      send_exit(segmentizer_, e.reason);
+      // If we have no source, we just tell the chunkifier to exit.
+      send_exit(chunkifier_, e.reason);
   };
 
-  auto on_ack = [=](uuid const& id)
-  {
-    VAST_LOG_ACTOR_DEBUG("got ack for segment " << id);
-
-    auto i = orphaned_.find(path{to_string(id)});
-    if (i != orphaned_.end())
-    {
-      VAST_LOG_ACTOR_INFO("submitted orphaned segment " << id);
-      rm(dir_ / *i);
-      orphaned_.erase(i);
-    }
-  };
-
-  ready_ =
-  {
-    on_exit,
-    [=](down_msg const&)
-    {
-      segmentizer_ = invalid_actor;
-    },
-    on(atom("ack"), arg_match) >> on_ack,
-    on(atom("backlog"), arg_match) >> [=](bool backlogged)
-    {
-      if (backlogged)
-      {
-        VAST_LOG_ACTOR_DEBUG("pauses segment sending");
-        become(paused_);
-      }
-    },
-    [=](segment& s)
-    {
-      VAST_LOG_ACTOR_DEBUG("delivers segment " << s.id());
-      send(receiver_, std::move(s), this);
-    },
-    after(std::chrono::seconds(0)) >> [=]
-    {
-      if (! segmentizer_)
-        become(terminating_);
-    }
-  };
-
-  paused_ =
-  {
-    on_exit,
-    on(atom("ack"), arg_match) >> on_ack,
-    on(atom("backlog"), arg_match) >> [=](bool backlogged)
-    {
-      if (! backlogged)
-      {
-        VAST_LOG_ACTOR_DEBUG("resumes segment sending");
-        become(ready_);
-      }
-    },
-  };
-
-  terminating_ =
-  {
-    [=](segment const& s)
-    {
-      if (! exists(dir_) && ! mkdir(dir_))
-      {
-        VAST_LOG_ACTOR_ERROR("failed to create directory " << dir_);
-        return;
-      }
-
-      auto p = dir_ / path{to_string(s.id())};
-      VAST_LOG_ACTOR_INFO("archives segment to " << p);
-
-      auto t = io::archive(p, s);
-      if (! t)
-        VAST_LOG_ACTOR_ERROR("failed to archive " << p << ": " << t.error());
-    },
-    after(std::chrono::seconds(0)) >> [=]
-    {
-      quit(exit::done);
-    }
-  };
-
-  return
+  init_ =
   {
     on_exit,
     [=](down_msg const& d)
@@ -147,18 +63,17 @@ message_handler importer::act()
     },
     on(atom("submit")) >> [=]
     {
-      for (auto& base : orphaned_)
+      for (auto& basename : orphaned_)
       {
-        auto p = dir_ / base;
-        segment s;
-        if (! io::unarchive(p, s))
+        auto p = dir_ / "chunks" / basename;
+        chunk chk;
+        if (! io::unarchive(p, chk))
         {
-          VAST_LOG_ACTOR_ERROR("failed to load orphaned segment " << base);
+          VAST_LOG_ACTOR_ERROR("failed to load orphaned chunk " << basename);
           continue;
         }
 
-        // FIXME: enqueue segments in the order they have been received.
-        send(this, std::move(s));
+        send(this, std::move(chk));
       }
 
       become(ready_);
@@ -167,8 +82,8 @@ message_handler importer::act()
     {
       VAST_LOG_ACTOR_INFO("ingests " << file);
 
-      source_ = spawn<source::bro, detached>(segmentizer_, file, -1);
-      source_->link_to(segmentizer_);
+      source_ = spawn<source::bro, detached>(chunkifier_, file, -1);
+      source_->link_to(chunkifier_);
       send(source_, atom("batch size"), batch_size_);
       send(source_, atom("run"));
 
@@ -180,6 +95,71 @@ message_handler importer::act()
       quit(exit::error);
     },
   };
+
+  ready_ =
+  {
+    on_exit,
+    [=](down_msg const&)
+    {
+      chunkifier_ = invalid_actor;
+    },
+    on(atom("backlog"), arg_match) >> [=](bool backlogged)
+    {
+      if (backlogged)
+      {
+        VAST_LOG_ACTOR_DEBUG("pauses chunk delivery");
+        become(paused_);
+      }
+    },
+    [=](chunk const& chk)
+    {
+      //VAST_LOG_ACTOR_DEBUG("delivers chunk (" << chk.events() << " events)");
+      send(receiver_, chk, this);
+    },
+    after(std::chrono::seconds(0)) >> [=]
+    {
+      if (! chunkifier_)
+        become(terminating_);
+    }
+  };
+
+  paused_ =
+  {
+    on_exit,
+    on(atom("backlog"), arg_match) >> [=](bool backlogged)
+    {
+      if (! backlogged)
+      {
+        VAST_LOG_ACTOR_DEBUG("resumes chunk delivery");
+        become(ready_);
+      }
+    },
+  };
+
+  terminating_ =
+  {
+    [=](chunk const& chk)
+    {
+      if (! exists(dir_ / "chunks") && ! mkdir(dir_ / "chunks"))
+      {
+        VAST_LOG_ACTOR_ERROR("failed to create chunk directory");
+        return;
+      }
+
+      auto p = dir_ / "chunks" / ("chunk-" + to_string(stored_++));
+      VAST_LOG_ACTOR_INFO("archives chunk to " << p);
+
+      auto t = io::archive(p, chk);
+      if (! t)
+        VAST_LOG_ACTOR_ERROR("failed to archive chunk: " << t.error());
+    },
+    after(std::chrono::seconds(0)) >> [=]
+    {
+      quit(exit::done);
+    }
+  };
+
+  return init_;
 }
 
 std::string importer::describe() const

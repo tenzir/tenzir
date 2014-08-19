@@ -76,9 +76,7 @@ void configuration::initialize()
 #endif
 
   auto& imp = create_block("import options", "import");
-  imp.add("max-events-per-chunk", "maximum events per chunk").init(5000);
-  imp.add("max-segment-size", "maximum segment size in MB").init(128);
-  imp.add("batch-size", "number of events to ingest in one run").init(4000);
+  imp.add("batch-size", "number of events to ingest in one run").init(5000);
   imp.add('r', "read", "path to input file/directory").init("-");
   imp.add('i', "format", "format of events to ingest").init("bro");
   imp.add("submit", "send orphaned segments on startup");
@@ -97,6 +95,7 @@ void configuration::initialize()
   recv.visible(false);
 
   auto& arch = create_block("archive options", "archive");
+  arch.add("max-segment-size", "maximum segment size in MB").init(128);
   arch.add("max-segments", "maximum segments cached in memory").init(10);
   arch.add("host", "hostname/address of the archive").init("127.0.0.1");
   arch.add("port", "TCP port of the archive").init(42003);

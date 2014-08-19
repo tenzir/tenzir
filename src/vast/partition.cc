@@ -3,116 +3,28 @@
 #include <caf/all.hpp>
 #include "vast/bitmap_index.h"
 #include "vast/event.h"
-#include "vast/segment.h"
-#include "vast/segment_pack.h"
 #include "vast/task_tree.h"
 #include "vast/io/serialization.h"
+#include "vast/source/dechunkifier.h"
+
+using namespace caf;
 
 namespace vast {
 
 path const partition::part_meta_file = "partition.meta";
-
-//namespace {
-//
-//// If the given predicate is a name extractor, extracts the name.
-//struct name_checker : expr::default_const_visitor
-//{
-//  virtual void visit(expr::predicate const& pred)
-//  {
-//    pred.lhs().accept(*this);
-//    if (check_)
-//      pred.rhs().accept(*this);
-//  }
-//
-//  virtual void visit(expr::name_extractor const&)
-//  {
-//    check_ = true;
-//  }
-//
-//  virtual void visit(expr::constant const& c)
-//  {
-//    value_ = c.val;
-//  }
-//
-//  bool check_ = false;
-//  value value_;
-//};
-//
-//// Partitions the AST predicates into meta and data predicates. Moreover, it
-//// assigns each data predicate a name if a it coexists with name-extractor
-//// predicate that restricts the scope of the data predicate.
-//struct predicatizer : expr::default_const_visitor
-//{
-//  virtual void visit(expr::conjunction const& conj)
-//  {
-//    std::vector<expr::ast> flat;
-//    std::vector<expr::ast> deep;
-//
-//    // Partition terms into leaves and others.
-//    for (auto& operand : conj.operands)
-//    {
-//      auto op = expr::ast{*operand};
-//      if (op.is_predicate())
-//        flat.push_back(std::move(op));
-//      else
-//        deep.push_back(std::move(op));
-//    }
-//
-//    // Extract the name for all predicates in this conjunction.
-//    //
-//    // TODO: add a check to the semantic pass after constructing queries to
-//    // flag multiple name/offset/time extractors in the same conjunction.
-//    name_.clear();
-//    for (auto& pred : flat)
-//    {
-//      name_checker checker;
-//      pred.accept(checker);
-//      if (checker.check_)
-//        name_ = checker.value_.get<string>();
-//    }
-//
-//    for (auto& pred : flat)
-//      pred.accept(*this);
-//
-//    // Proceed with the remaining conjunctions deeper in the tree.
-//    name_.clear();
-//    for (auto& n : deep)
-//      n.accept(*this);
-//  }
-//
-//  virtual void visit(expr::disjunction const& disj)
-//  {
-//    for (auto& operand : disj.operands)
-//      operand->accept(*this);
-//  }
-//
-//  virtual void visit(expr::predicate const& pred)
-//  {
-//    if (! expr::ast{pred}.is_meta_predicate())
-//      data_predicates_.emplace(name_, pred);
-//    else
-//      meta_predicates_.push_back(pred);
-//  }
-//
-//  string name_;
-//  std::multimap<string, expr::ast> data_predicates_;
-//  std::vector<expr::ast> meta_predicates_;
-//};
-//
-//} // namespace <anonymous>
 
 partition::meta_data::meta_data(uuid id)
   : id{id}
 {
 }
 
-void partition::meta_data::update(segment const& s)
+void partition::meta_data::update(chunk const& chk)
 {
-  if (first_event == time_range{} || s.first() < first_event)
-    first_event = s.first();
+  if (first_event == time_range{} || chk.meta().first < first_event)
+    first_event = chk.meta().first;
 
-  if (last_event == time_range{} || s.last() > last_event)
-    last_event = s.last();
+  if (last_event == time_range{} || chk.meta().last > last_event)
+    last_event = chk.meta().last;
 
   last_modified = now();
 }
@@ -141,9 +53,9 @@ partition::partition(uuid id)
 {
 }
 
-void partition::update(segment const& s)
+void partition::update(chunk const& chk)
 {
-  meta_.update(s);
+  meta_.update(chk);
 }
 
 partition::meta_data const& partition::meta() const
@@ -162,11 +74,7 @@ void partition::deserialize(deserializer& source)
 }
 
 
-using namespace caf;
-
-namespace {
-
-struct dispatcher : expr::default_const_visitor
+struct partition_actor::dispatcher : expr::default_const_visitor
 {
   dispatcher(partition_actor& pa)
     : actor_{pa}
@@ -182,102 +90,71 @@ struct dispatcher : expr::default_const_visitor
 
   virtual void visit(expr::timestamp_extractor const&)
   {
-    auto p = actor_.dir_ / "time.idx";
-    auto& s = actor_.indexers_[p];
-    if (! s.actor)
-      s.actor = actor_.spawn<event_time_indexer<default_bitstream>, monitored>(
-          std::move(p));
-
-    indexes_.push_back(s.actor);
+    indexes_.push_back(actor_.load_time_indexer());
   }
 
   virtual void visit(expr::name_extractor const&)
   {
-    auto p = actor_.dir_ / "name.idx";
-    auto& s = actor_.indexers_[p];
-    if (! s.actor)
-      s.actor = actor_.spawn<event_name_indexer<default_bitstream>, monitored>(
-          std::move(p));
-
-    indexes_.push_back(s.actor);
+    indexes_.push_back(actor_.load_name_indexer());
   }
 
   virtual void visit(expr::type_extractor const& te)
   {
-    for (auto& p : actor_.indexers_)
-      if (is<type::record>(p.second.type))
+    for (auto& tp : actor_.schema_)
+      // FIXME: Adjust after having switched to the new record indexer.
+      if (auto r = get<type::record>(tp))
       {
-        assert(! "records shall be flattened");
-      }
-      else
-      {
-        if (p.second.type == te.type)
-        {
-          if (p.second.actor)
-          {
-            indexes_.push_back(p.second.actor);
-          }
-          else
-          {
-            auto a = actor_.load_data_indexer(p.first);
-            if (! a)
-              VAST_LOG_ERROR(a.error());
-            else
-              indexes_.push_back(p.second.actor);
-          }
-        }
+        auto attempt = r->each(
+            [&](type::record::trace const& t, offset const& o) -> trial<void>
+            {
+              if (t.back()->type == te.type)
+              {
+                auto a = actor_.load_data_indexer(tp, te.type, o);
+                if (! a)
+                  return a.error();
+
+                indexes_.push_back(*a);
+              }
+
+              return nothing;
+            });
+
+        if (! attempt)
+          VAST_LOG_ERROR(attempt.error());
       }
   }
 
   virtual void visit(expr::schema_extractor const& se)
   {
-    for (auto& t : actor_.schema_)
-      if (auto r = get<type::record>(t))
+    for (auto& tp : actor_.schema_)
+      // FIXME: Adjust after having switched to the new record indexer.
+      if (auto r = get<type::record>(tp))
       {
         for (auto& pair : r->find_suffix(se.key))
         {
-          path p = "types";
-          for (auto& i : pair.second)
-            p /= i;
+          auto& o = pair.first;
+          auto lhs_type = r->at(o);
+          assert(lhs_type);
 
-          auto i = actor_.indexers_.find(p);
-          if (i == actor_.indexers_.end())
+          if (! compatible(*lhs_type, op_, rhs_type_))
           {
-            VAST_LOG_WARN("no index for " << p);
+            VAST_LOG_WARN("incompatible types: LHS = " << *lhs_type <<
+                          " <--> RHS = " << rhs_type_);
+            return;
           }
-          else if (auto r = get<type::record>(i->second.type))
-          {
-            auto lhs_type = r->at(i->second.off);
-            assert(lhs_type);
-            if (! compatible(*lhs_type, op_, rhs_type_))
-              VAST_LOG_WARN("incompatible types: LHS = " << *lhs_type <<
-                            " <--> RHS = " << rhs_type_);
-          }
-          else if (! i->second.actor)
-          {
-            VAST_LOG_DEBUG("loading indexer for " << p);
-            auto a = actor_.load_data_indexer(i->first);
-            if (! a)
-              VAST_LOG_ERROR(a.error());
-            else
-              indexes_.push_back(i->second.actor);
-          }
+
+          auto a = actor_.load_data_indexer(tp, *lhs_type, o);
+          if (! a)
+            VAST_LOG_ERROR(a.error());
           else
-          {
-            VAST_LOG_DEBUG("found loaded indexer for " << p);
-            indexes_.push_back(i->second.actor);
-          }
+            indexes_.push_back(*a);
         }
-      }
-      else
-      {
-        assert(! "all events must currently be records");
       }
   }
 
   virtual void visit(expr::constant const& c)
   {
-    rhs_type_ = c.val.type();
+    rhs_type_ = type::derive(c.val.data());
   }
 
   relational_operator op_;
@@ -286,7 +163,6 @@ struct dispatcher : expr::default_const_visitor
   std::vector<actor> indexes_;
 };
 
-} // namespace <anonymous>
 
 partition_actor::partition_actor(path dir, size_t batch_size, uuid id)
   : dir_{std::move(dir)},
@@ -317,49 +193,18 @@ message_handler partition_actor::act()
       quit(exit::error);
       return {};
     }
-
-    indexers_[dir_ / "name.idx"];
-    indexers_[dir_ / "type.idx"];
-
-    auto init_state = [this](path const& p, offset const& o, type const& t)
-    {
-      assert(indexers_.find(p) == indexers_.end());
-      auto& state = indexers_[p];
-      state.off = o;
-      state.type = t;
-    };
-
-    for (auto& tp : schema_)
-    {
-      auto p = path{"types"} / tp.name();
-      if (auto r = get<type::record>(tp))
-        r->each(
-            [&](type::record::trace const& t, offset const& o) -> trial<void>
-            {
-              auto ip = p;
-              for (auto f : t)
-                ip /= f->name;
-
-              init_state(ip, o, t.back()->type);
-              return nothing;
-            });
-      else
-        init_state(p, {}, tp);
-    }
   }
 
   attach_functor(
       [=](uint32_t reason)
       {
-        if (unpacker_)
-          anon_send_exit(unpacker_, reason);
+        if (dechunkifier_)
+          anon_send_exit(dechunkifier_, reason);
+        dechunkifier_ = invalid_actor;
 
         for (auto& p : indexers_)
-          if (p.second.actor)
-            anon_send_exit(p.second.actor, reason);
-
+          anon_send_exit(p.second, reason);
         indexers_.clear();
-        unpacker_ = invalid_actor;
       });
 
 
@@ -376,7 +221,7 @@ message_handler partition_actor::act()
       }
 
       // Wait for unpacker to finish.
-      if (exit_reason_ == 0 && ! segments_.empty())
+      if (exit_reason_ == 0 && ! chunks_.empty())
       {
         exit_reason_ = e.reason;
         return;
@@ -397,15 +242,26 @@ message_handler partition_actor::act()
     },
     [=](down_msg const&)
     {
-      VAST_LOG_ACTOR_DEBUG("got DOWN from " << last_sender());
+      if (last_sender() == dechunkifier_)
+      {
+        auto chk = chunks_.front();
+        partition_.update(chk);
+        chunks_.pop();
+        dechunkifier_ = invalid_actor;
+        send(this, atom("unpack"));
+      }
+      else
+      {
+        VAST_LOG_ACTOR_DEBUG("got DOWN from " << last_sender());
 
-      for (auto& p : indexers_)
-        if (p.second.actor == last_sender())
-        {
-          p.second.actor = invalid_actor;
-          p.second.stats = {};
-          return;
-        }
+        stats_.erase(last_sender());
+        for (auto i = indexers_.begin(); i != indexers_.end(); ++i)
+          if (i->second == last_sender())
+          {
+            indexers_.erase(i);
+            break;
+          }
+      }
     },
     [=](expr::ast const& pred, actor idx)
     {
@@ -434,10 +290,10 @@ message_handler partition_actor::act()
       VAST_LOG_ACTOR_DEBUG("got request to flush its indexes");
 
       for (auto& p : indexers_)
-        if (p.second.actor)
+        if (p.second)
         {
-          send(tree, this, p.second.actor);
-          send(p.second.actor, atom("flush"), tree);
+          send(tree, this, p.second);
+          send(p.second, atom("flush"), tree);
         }
 
       auto t = io::archive(dir_ / "schema", schema_);
@@ -460,87 +316,70 @@ message_handler partition_actor::act()
 
       send(tree, atom("done"));
     },
-    [=](segment const& s)
+    [=](chunk const& c)
     {
-      VAST_LOG_ACTOR_DEBUG("got segment with " << s.events() << " events");
+      VAST_LOG_ACTOR_DEBUG("got chunk with " << c.events() << " events");
 
-      auto sch = schema::merge(schema_, s.schema());
+      auto sch = schema::merge(schema_, c.meta().schema);
       if (! sch)
       {
         VAST_LOG_ACTOR_ERROR("failed to merge schema: " << sch.error());
-        VAST_LOG_ACTOR_ERROR("ignores segment " << s.id());
         quit(exit::error);
         return;
       }
-
-      schema_ = std::move(*sch);
-
-      auto create = [this](path const& p, offset const& o, type const& t)
-        -> trial<void>
+      else if (*sch != schema_)
       {
-        auto i = create_data_indexer(p, o, t);
-        if (! i)
-        {
-          VAST_LOG_ACTOR_ERROR(i.error());
-          quit(exit::error);
-          return i;
-        }
+        schema_ = std::move(*sch);
 
-        return nothing;
-      };
+        load_time_indexer();
+        load_name_indexer();
 
-      for (auto& tp : schema_)
-      {
-        auto p = path{"types"} / tp.name();
-        if (auto r = get<type::record>(tp))
-          r->each(
-              [&](type::record::trace const& t, offset const& o) -> trial<void>
-              {
-                auto ip = p;
-                for (auto f : t)
-                  ip /= f->name;
+        for (auto& tp : c.meta().schema)
+          // FIXME: Adjust after having switched to the new record indexer.
+          if (auto r = get<type::record>(tp))
+          {
+            auto attempt = r->each(
+                [&](type::record::trace const& t, offset const& o) -> trial<void>
+                {
+                  auto a = load_data_indexer(tp, t.back()->type, o);
+                  if (! a)
+                    return a.error();
+                  return nothing;
+                });
 
-                return create(ip, o, t.back()->type);
-              });
-        else
-          create(p, {}, tp);
+            if (! attempt)
+            {
+              VAST_LOG_ACTOR_ERROR(attempt.error());
+              quit(exit::error);
+              return;
+            }
+          }
       }
 
-      auto p = dir_ / "name.idx";
-      auto state = &indexers_[p];
-      if (! state->actor)
-        state->actor =
-          spawn<event_name_indexer<default_bitstream>, monitored>(std::move(p));
-
-      p = dir_ / "time.idx";
-      state = &indexers_[p];
-      if (! state->actor)
-        state->actor =
-          spawn<event_time_indexer<default_bitstream>, monitored>(std::move(p));
-
-      segments_.push(last_dequeued());
+      chunks_.push(c);
       send(this, atom("unpack"));
     },
     [=](std::vector<event> const& events)
     {
       for (auto& p : indexers_)
-        if (p.second.actor)
-        {
-          send_tuple(p.second.actor, last_dequeued());
-          p.second.stats.backlog += events.size();
-        }
+        send_tuple(p.second, last_dequeued());
+
+      for (auto& p : stats_)
+        p.second.backlog += events.size();
     },
     on(atom("unpack")) >> [=]
     {
-      if (! unpacker_)
+      if (! dechunkifier_)
       {
-        if (! segments_.empty())
+        if (! chunks_.empty())
         {
-          VAST_LOG_ACTOR_DEBUG("begins unpacking segment " <<
-                               segments_.front().get_as<segment>(0).id());
+          VAST_LOG_ACTOR_DEBUG("begins unpacking a chunk (" <<
+                               chunks_.size() << " remaining)");
 
-          unpacker_ = spawn<unpacker>(segments_.front(), this, batch_size_);
-          send(unpacker_, atom("run"));
+          dechunkifier_ = spawn<source::dechunkifier, monitored>(
+              chunks_.front(), this, batch_size_);
+
+          send(dechunkifier_, atom("run"));
         }
         else if (exit_reason_ != 0)
         {
@@ -548,40 +387,25 @@ message_handler partition_actor::act()
         }
       }
     },
-    on(atom("unpacked")) >> [=]
-    {
-      auto& s = segments_.front().get_as<segment>(0);
-
-      VAST_LOG_ACTOR_DEBUG("finished unpacking segment " << s.id());
-      partition_.update(s);
-
-      segments_.pop();
-      unpacker_ = invalid_actor;
-      send(this, atom("unpack"));
-    },
     on(atom("backlog")) >> [=]
     {
-      uint64_t segments = segments_.size();
-      return make_message(atom("backlog"), segments, max_backlog_);
+      uint64_t n = chunks_.size();
+      return make_message(atom("backlog"), n, max_backlog_);
     },
     [=](uint64_t processed, uint64_t indexed, uint64_t rate, uint64_t mean)
     {
       max_backlog_ = 0;
-      for (auto& p : indexers_)
-        if (p.second.actor == last_sender())
-        {
-          auto& stats = p.second.stats;
+      auto i = stats_.find(last_sender());
+      assert(i != stats_.end());
+      auto& s = i->second;
 
-          if (stats.backlog > max_backlog_)
-            max_backlog_ = stats.backlog;
+      if (s.backlog > max_backlog_)
+        max_backlog_ = s.backlog;
 
-          stats.backlog -= processed;
-          stats.value_total += indexed;
-          stats.value_rate = rate;
-          stats.value_rate_mean = mean;
-
-          break;
-        }
+      s.backlog -= processed;
+      s.value_total += indexed;
+      s.value_rate = rate;
+      s.value_rate_mean = mean;
 
       updated_ = true;
     },
@@ -603,23 +427,22 @@ message_handler partition_actor::act()
 
       auto n = 0;
       for (auto& p : indexers_)
-        if (p.second.actor)
-        {
-          ++n;
+      {
+        ++n;
 
-          auto& stats = p.second.stats;
-          if (stats.backlog > max_backlog.first)
-            max_backlog = {stats.backlog, p.second.actor};
+        auto& s = stats_[p.second.address()];
+        if (s.backlog > max_backlog.first)
+          max_backlog = {s.backlog, p.second};
 
-          if (stats.value_rate < event_rate_min)
-            event_rate_min = stats.value_rate;
-          if (stats.value_rate > event_rate_max)
-            event_rate_max = stats.value_rate;
+        if (s.value_rate < event_rate_min)
+          event_rate_min = s.value_rate;
+        if (s.value_rate > event_rate_max)
+          event_rate_max = s.value_rate;
 
-          value_total += stats.value_total;
-          value_rate += stats.value_rate;
-          value_rate_mean += stats.value_rate_mean;
-        }
+        value_total += s.value_total;
+        value_rate += s.value_rate;
+        value_rate_mean += s.value_rate_mean;
+      }
 
       if (value_rate > 0 || max_backlog.first > 0)
         VAST_LOG_ACTOR_VERBOSE(
@@ -636,6 +459,66 @@ message_handler partition_actor::act()
 std::string partition_actor::describe() const
 {
   return "partition";
+}
+
+actor partition_actor::load_time_indexer()
+{
+  auto p = dir_ / "meta" / "time" / "index";
+  auto& s = indexers_[p];
+  if (! s)
+  {
+    s = spawn<event_time_indexer<default_bitstream>>(std::move(p));
+    monitor(s);
+    stats_[s.address()];
+  }
+
+  return s;
+}
+
+actor partition_actor::load_name_indexer()
+{
+  auto p = dir_ / "meta" / "name" / "index";
+  auto& s = indexers_[p];
+  if (! s)
+  {
+    s = spawn<event_name_indexer<default_bitstream>>(std::move(p));
+    monitor(s);
+    stats_[s.address()];
+  }
+
+  return s;
+}
+
+trial<actor> partition_actor::load_data_indexer(
+    type const& et, type const& t, offset const& o)
+{
+  auto abs = dir_ / path{"types"} / et.name();
+
+  // FIXME: Remove after having switched to the new record indexer.
+  auto r = get<type::record>(et);
+  if (r)
+  {
+    auto fs = r->resolve(o);
+    assert(fs);
+    for (auto& f : *fs)
+      abs /= f;
+  }
+
+  abs /= "index";
+
+  auto& s = indexers_[abs];
+  if (! s)
+  {
+    auto a = make_event_data_indexer<default_bitstream>(abs, et, t, o);
+    if (! a)
+      return a;
+
+    s = *a;
+    monitor(s);
+    stats_[s.address()];
+  }
+
+  return s;
 }
 
 } // namespace vast

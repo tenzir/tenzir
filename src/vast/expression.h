@@ -290,6 +290,9 @@ private:
   template <typename Iterator>
   friend trial<void> print(ast const& a, Iterator&& out, bool tree = false)
   {
+    if (! a)
+      return nothing;
+
     // FIXME: don't use poor man's printing via string generation.
     std::string str;
     auto t = convert(*a.node_, str, tree);

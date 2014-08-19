@@ -213,14 +213,19 @@ struct event_data_indexer
 {
   using super = bitmap_indexer<event_data_indexer<BitmapIndex>, BitmapIndex>;
 
-  event_data_indexer(path p, offset o, BitmapIndex bmi = {})
+  event_data_indexer(type t, path p, offset o, BitmapIndex bmi = {})
     : super{std::move(p), std::move(bmi)},
+      event_type_{std::move(t)},
       offset_{std::move(o)}
   {
   }
 
   trial<void> append(BitmapIndex& bmi, event const& e)
   {
+    // Bail out if we're not responsible.
+    if (e.type() != event_type_)
+      return nothing;
+
     auto r = get<record>(e);
     if (! r)
       return error{"only records supports currently, got event ", e.type()};
@@ -240,6 +245,7 @@ struct event_data_indexer
     return "data-bitmap-indexer(" + to_string(offset_) + ')';
   }
 
+  type event_type_;
   offset offset_;
 };
 
@@ -248,9 +254,10 @@ namespace detail {
 template <typename Bitstream>
 struct event_data_index_factory
 {
-  event_data_index_factory(path const& p, offset const& o)
+  event_data_index_factory(path const& p, offset const& o, type const& t)
     : path_{p},
-      off_{o}
+      off_{o},
+      event_type_{t}
   {
   }
 
@@ -325,11 +332,12 @@ struct event_data_index_factory
   {
     using indexer_type = event_data_indexer<BitmapIndex>;
     return caf::spawn<indexer_type>(
-        path_, off_, BitmapIndex{std::forward<Args>(args)...});
+        event_type_, path_, off_, BitmapIndex{std::forward<Args>(args)...});
   }
 
   path const& path_;
   offset const& off_;
+  type const& event_type_;
 };
 
 } // namespace detail
@@ -337,9 +345,10 @@ struct event_data_index_factory
 /// Factory to construct an indexer based on a given type.
 template <typename Bitstream>
 trial<caf::actor>
-make_event_data_indexer(path const& p, type const& t, offset const& o)
+make_event_data_indexer(path const& p, type const& et, type const& t,
+                        offset const& o)
 {
-  return visit(detail::event_data_index_factory<Bitstream>{p, o}, t);
+  return visit(detail::event_data_index_factory<Bitstream>{p, o, et}, t);
 }
 
 } // namespace vast

@@ -85,15 +85,11 @@ message_handler search_actor::act()
         VAST_LOG_ACTOR_ERROR(sch.error());
         send_exit(this, exit::error);
       }
-      else if (*sch == schema_)
-      {
-        VAST_LOG_ACTOR_DEBUG("did not change schema after merge");
-      }
-      else
+      else if (*sch != schema_)
       {
         schema_ = *sch;
-        VAST_LOG_ACTOR_VERBOSE("successfully merged schemata:");
-        VAST_LOG_ACTOR_VERBOSE(schema_);
+        VAST_LOG_ACTOR_DEBUG("successfully merged schemata");
+        //VAST_LOG_ACTOR_DEBUG(schema_);
 
         auto t = io::archive(schema_path, schema_);
         if (t)

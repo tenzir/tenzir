@@ -1,5 +1,6 @@
 #include "vast/segment.h"
 
+#include <caf/message_handler.hpp>
 #include "vast/event.h"
 #include "vast/logger.h"
 #include "vast/serialization.h"
@@ -8,27 +9,33 @@
 
 namespace vast {
 
-// FIXME: Why does the linker complain without these definitions? These are
-// redundant to those in the header file.
-uint32_t const segment::header::magic;
-uint32_t const segment::header::version;
+uint32_t const segment::meta_data::magic;
+uint32_t const segment::meta_data::version;
 
-void segment::header::serialize(serializer& sink) const
+bool segment::meta_data::contains(event_id eid) const
+{
+  return base != 0 && base <= eid && eid < base + events;
+}
+
+bool segment::meta_data::contains(event_id from, event_id to) const
+{
+  return base != 0 && from < to && base <= from && to < base + events;
+}
+
+void segment::meta_data::serialize(serializer& sink) const
 {
   sink
     << magic << version
     << id
-    << compression
     << first
     << last
     << base
-    << n
-    << max_bytes
-    << occupied_bytes
+    << events
+    << bytes
     << schema;
 }
 
-void segment::header::deserialize(deserializer& source)
+void segment::meta_data::deserialize(deserializer& source)
 {
   uint32_t m;
   source >> m;
@@ -42,136 +49,33 @@ void segment::header::deserialize(deserializer& source)
 
   source
     >> id
-    >> compression
     >> first
     >> last
     >> base
-    >> n
-    >> max_bytes
-    >> occupied_bytes
+    >> events
+    >> bytes
     >> schema;
 }
 
-bool operator==(segment::header const& x, segment::header const& y)
+bool operator==(segment::meta_data const& x, segment::meta_data const& y)
 {
   return x.id == y.id
-      && x.compression == y.compression
       && x.first == y.first
       && x.last == y.last
       && x.base == y.base
-      && x.n == y.n
-      && x.max_bytes == y.max_bytes
-      && x.occupied_bytes == y.occupied_bytes
+      && x.events == y.events
+      && x.bytes == y.bytes
       && x.schema == y.schema;
 }
 
-segment::writer::writer(segment* s, size_t max_events_per_chunk)
-  : segment_(s),
-    chunk_{std::make_unique<chunk>(segment_->header_.compression)},
-    chunk_writer_{std::make_unique<chunk::writer>(*chunk_)},
-    max_events_per_chunk_{max_events_per_chunk}
+segment::reader::reader(segment const& s)
+  : segment_{&s},
+    next_{segment_->meta_.base},
+    chunk_base_{segment_->meta_.base}
 {
-  assert(s != nullptr);
-}
-
-segment::writer::~writer()
-{
-  if (! flush())
-    VAST_LOG_WARN("segment writer discarded " <<
-                  chunk_->elements() << " events");
-}
-
-bool segment::writer::write(event const& e)
-{
-  if (e.type().name().empty())
-    return false;
-
-  if (! schema_.find_type(e.type().name()) && ! schema_.add(e.type()))
-    return false;
-
-  if (! (chunk_writer_ && store(e)))
-    return false;
-
-  if (max_events_per_chunk_ && chunk_->elements() % max_events_per_chunk_ == 0)
-    return !!flush();
-
-  return true;
-}
-
-void segment::writer::attach_to(segment* s)
-{
-  assert(s != nullptr);
-  segment_ = s;
-}
-
-trial<void> segment::writer::flush()
-{
-  if (chunk_->empty())
-    return nothing;
-
-  chunk_writer_.reset();
-
-  if (segment_->max_bytes() > 0
-      && segment_->bytes() + chunk_->compressed_bytes() > segment_->max_bytes())
-    return error{"flushing " + to_string(chunk_->compressed_bytes()) +
-                 "B would exceed segment capacity " +
-                 to_string(segment_->max_bytes())};
-
-  segment_->header_.first = first_;
-  segment_->header_.last = last_;
-  segment_->header_.n += chunk_->elements();
-  segment_->header_.occupied_bytes += chunk_->compressed_bytes();
-  segment_->chunks_.push_back(std::move(*chunk_));
-
-  chunk_ = std::make_unique<chunk>(segment_->header_.compression);
-  chunk_writer_ = std::make_unique<chunk::writer>(*chunk_);
-
-  auto s = schema::merge(schema_, segment_->header_.schema);
-  if (s)
-    segment_->header_.schema = std::move(*s);
-  else
-    return s.error();
-
-
-  first_ = time_range{};
-  last_ = time_range{};
-
-  return nothing;
-}
-
-size_t segment::writer::bytes() const
-{
-  return chunk_writer_ ? chunk_writer_->bytes() : chunk_->uncompressed_bytes();
-}
-
-bool segment::writer::store(event const& e)
-{
-  auto success =
-    chunk_writer_->write(e.type().name(), 0) &&
-    chunk_writer_->write(e.timestamp(), 0) &&
-    chunk_writer_->write(e.data());
-
-  if (first_ == time_range{} || e.timestamp() < first_)
-    first_ = e.timestamp();
-
-  if (last_ == time_range{} || e.timestamp() > last_)
-    last_ = e.timestamp();
-
-  if (! success)
-    VAST_LOG_ERROR("failed to write event to chunk");
-
-  return success;
-}
-
-
-segment::reader::reader(segment const* s)
-  : segment_{*s},
-    next_{segment_.header_.base},
-    chunk_base_{segment_.header_.base}
-{
-  if (! segment_.chunks_.empty())
+  if (! segment_->chunks_.empty())
   {
-    current_ = &segment_.chunks_.front();
+    current_ = &segment_->chunks_.front();
     chunk_reader_ = std::make_unique<chunk::reader>(*current_);
   }
 }
@@ -181,291 +85,160 @@ event_id segment::reader::position() const
   return next_;
 }
 
-trial<event> segment::reader::read(event_id id)
+result<event> segment::reader::read(event_id id)
 {
-  if (id > 0 && ! seek(id))
-    return error{"event id " + to_string(id) + " out of bounds"};
+  if (! chunk_reader_)
+    return error{"cannot read from empty segment"};
 
-  auto e = load();
-  if (e)
-    return {std::move(e.value())};
-  else if (e.failed())
-    return e.error();
-
-  assert(! e.empty());
-  return error{"empty event"}; // should never happen.
-}
-
-bool segment::reader::seek(event_id id)
-{
-  if (! segment_.contains(id))
+  if (id > 0)
   {
-    return false;
-  }
-  else if (id == next_)
-  {
-    return true;
-  }
-  else if (id < next_)
-  {
-    if (within_current_chunk(id))
-      backup();
-    else
-      while (next_ > id)
-        if (! prev())
-          return false;
-  }
-  else
-  {
-    while (! within_current_chunk(id))
-      if (! next())
-        return false;
-  }
-
-  assert(id >= next_);
-  auto n = id - next_;
-
-  auto r = skip(n);
-  if (r)
-    return *r == n;
-
-  VAST_LOG_ERROR(r.error().msg());
-  return false;
-}
-
-optional<size_t> segment::reader::extract(event_id begin,
-                                          event_id end,
-                                          std::function<void(event)> f)
-{
-  if (! segment_.contains(next_) ||
-      ! f ||
-      (begin > 0 && begin < segment_.base() && ! seek(begin)) ||
-      (end > 0 && end >= segment_.base() + segment_.events()))
-    return {};
-
-  optional<size_t> n = 0;
-  event_id i = next_ - 1;
-  do
-  {
-    auto e = read(++i);
-    if (! e)
+    if (! segment_->meta_.contains(id))
     {
-      VAST_LOG_ERROR("failed to read event " << i << " from chunk");
-      return {};
+      return error{"event ID ", id, " out of bounds"};
+    }
+    else if (id < next_)
+    {
+      if (id >= chunk_base_)
+      {
+        next_ = chunk_base_;
+        chunk_reader_ = std::make_unique<chunk::reader>(*current_);
+      }
+      else
+      {
+        while (id < next_)
+          if (! prev())
+            return error{"backward seek failure"};
+      }
+    }
+    else if (id > next_)
+    {
+      while (id >= chunk_base_ + current_->events())
+        if (! next())
+          return error{"forward seek failure"};
     }
 
-    f(std::move(*e));
-    ++*n;
-  }
-  while ((end == 0 && within_current_chunk(i)) || i < end);
-
-  return n;
-}
-
-chunk const* segment::reader::next()
-{
-  if (! current_ || chunk_idx_ + 1 == segment_.chunks_.size())
-    return nullptr;
-
-  if (next_ > 0)
-  {
-    chunk_base_ += current_->elements();
-    next_ = chunk_base_;
+    next_ = id;
   }
 
-  current_ = &segment_.chunks_[++chunk_idx_];
-  chunk_reader_ = std::make_unique<chunk::reader>(*current_);
+  if (next_ - chunk_base_ == current_->events() && ! next())
+    return error{"processed all chunks"};
 
-  return current_;
+  assert(next_ >= chunk_base_);
+  auto e = chunk_reader_->read(next_ - chunk_base_);
+  ++next_;
+
+  return e;
 }
 
 chunk const* segment::reader::prev()
 {
-  if (segment_.chunks_.empty() || chunk_idx_ == 0)
+  if (segment_->chunks_.empty() || chunk_idx_ == 0)
     return nullptr;
 
-  current_ = &segment_.chunks_[--chunk_idx_];
+  current_ = &segment_->chunks_[--chunk_idx_];
   chunk_reader_ = std::make_unique<chunk::reader>(*current_);
 
   if (next_ > 0)
   {
-    chunk_base_ -= current_->elements();
+    chunk_base_ -= current_->events();
     next_ = chunk_base_;
   }
 
   return current_;
 }
 
-event_id segment::reader::backup()
+chunk const* segment::reader::next()
 {
-  if (! current_ || next_ == chunk_base_ || ! within_current_chunk(next_))
-    return 0;
-
-  auto distance = next_ - chunk_base_;
-  next_ = chunk_base_;
-  chunk_reader_ = std::make_unique<chunk::reader>(*current_);
-  return distance;
-}
-
-result<event> segment::reader::load(bool discard)
-{
-  if (! chunk_reader_ || chunk_reader_->available() == 0)
-    return next() ? load(discard) : error{"no more events to load"};
-
-  std::string name;
-  if (! chunk_reader_->read(name, 0))
-    return error{"failed to read type name from chunk"};
-
-  time_point ts;
-  if (! chunk_reader_->read(ts, 0))
-    return error{"failed to read event timestamp from chunk"};
-
-  data d;
-  if (! chunk_reader_->read(d))
-    return error{"failed to read event data from chunk"};
-
-  if (! discard)
-  {
-    auto t = segment_.header_.schema.find_type(name);
-    if (! t)
-      return error{"schema inconsistency, missing type: ", name};
-
-    event e(std::move(d), *t);
-    e.timestamp(ts);
-    if (next_ > 0)
-      e.id(next_++);
-
-    return std::move(e);
-  }
+  if (! current_ || chunk_idx_ + 1 == segment_->chunks_.size())
+    return nullptr;
 
   if (next_ > 0)
-    ++next_;
-
-  return {};
-}
-
-trial<event_id> segment::reader::skip(size_t n)
-{
-  if (n == 0)
-    return 0;
-
-  event_id skipped = 0;
-  while (n --> 0)
   {
-    auto r = load(true);
-    assert(! r);
-    if (r.failed())
-      return r.error();
-
-    ++skipped;
+    chunk_base_ += current_->events();
+    next_ = chunk_base_;
   }
 
-  return skipped;
-}
+  current_ = &segment_->chunks_[++chunk_idx_];
+  chunk_reader_ = std::make_unique<chunk::reader>(*current_);
 
-bool segment::reader::within_current_chunk(event_id eid) const
-{
-  assert(current_ != nullptr);
-  return next_ > 0
-      && eid >= chunk_base_
-      && eid < chunk_base_ + current_->elements();
+  return current_;
 }
 
 
-segment::segment(uuid id, uint64_t max_bytes, io::compression method)
+segment::segment(uuid id)
 {
-  header_.id = id;
-  header_.compression = method;
-  header_.max_bytes = max_bytes;
+  meta_.id = id;
 }
 
-void segment::base(event_id id)
+trial<void> segment::push_back(chunk chk)
 {
-  header_.base = id;
+  if (chk.events() == 0)
+    return error{"empty chunk"};
+
+  // The first chunk determines the segment base.
+  if (chunks_.empty())
+  {
+    auto first = chk.meta().ids.find_first();
+    if (first != ewah_bitstream::npos)
+      meta_.base = first;
+  }
+  else if (meta_.base != 0)
+  {
+    // If they have a base, segments must comprise chunks with adjacent
+    // sequential ID ranges.
+    auto first = chk.meta().ids.find_first();
+    if (meta_.base + meta_.events != first)
+      return error{"expected chunk with first event ID ",
+                   meta_.base + meta_.events, ", got ", first};
+  }
+
+  meta_.events += chk.events();
+
+  if (chk.meta().first < meta_.first)
+    meta_.first = chk.meta().first;
+
+  if (chk.meta().last > meta_.last)
+    meta_.last = chk.meta().last;
+
+  auto s = schema::merge(chk.meta().schema, meta_.schema);
+  if (s)
+    meta_.schema = std::move(*s);
+  else
+    return s.error();
+
+  chunks_.push_back(std::move(chk));
+
+  return nothing;
 }
 
-trial<event> segment::load(event_id id) const
+segment::meta_data const& segment::meta() const
 {
-  return reader{this}.read(id);
+  return meta_;
 }
 
-uuid const& segment::id() const
+bool segment::empty() const
 {
-  return header_.id;
+  return size() == 0;
 }
 
-time_point segment::first() const
+size_t segment::size() const
 {
-  return header_.first;
-}
-
-time_point segment::last() const
-{
-  return header_.last;
-}
-
-event_id segment::base() const
-{
-  return header_.base;
-}
-
-bool segment::contains(event_id eid) const
-{
-  return header_.base != 0
-      && header_.base <= eid
-      && eid < header_.base + header_.n;
-}
-
-bool segment::contains(event_id from, event_id to) const
-{
-  return header_.base != 0
-      && from < to && header_.base <= from
-      && to < header_.base + header_.n;
-}
-
-uint64_t segment::events() const
-{
-  return header_.n;
-}
-
-uint64_t segment::bytes() const
-{
-  return header_.occupied_bytes;
-}
-
-uint64_t segment::max_bytes() const
-{
-  return header_.max_bytes;
-}
-
-schema const& segment::schema() const
-{
-  return header_.schema;
-}
-
-size_t segment::store(std::vector<event> const& v, size_t max_events_per_chunk)
-{
-  writer w(this, max_events_per_chunk);
-  size_t i;
-  for (i = 0; i < v.size(); ++i)
-    if (! w.write(v[i]))
-      break;
-  return i;
+  return chunks_.size();
 }
 
 void segment::serialize(serializer& sink) const
 {
-  sink << header_ << chunks_;
+  sink << meta_ << chunks_;
 }
 
 void segment::deserialize(deserializer& source)
 {
-  source >> header_ >> chunks_;
+  source >> meta_ >> chunks_;
 }
 
 bool operator==(segment const& x, segment const& y)
 {
-  return x.header_ == y.header_;
+  return x.meta_ == y.meta_;
 }
 
 } // namespace vast

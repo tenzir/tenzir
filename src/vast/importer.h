@@ -7,7 +7,6 @@
 #include "vast/actor.h"
 #include "vast/file_system.h"
 #include "vast/uuid.h"
-#include "vast/segmentizer.h"
 
 namespace vast {
 
@@ -16,22 +15,11 @@ class importer : public actor_base
 {
 public:
   /// Spawns an importer.
-  ///
   /// @param dir The directory where to save persistent state.
-  ///
   /// @param receiver The actor receiving the generated segments.
-  ///
-  /// @param max_events_per_chunk The maximum number of events per chunk.
-  ///
-  /// @param max_segment_size The maximum size of a segment.
-  ///
   /// @param batch_size The number of events a synchronous source buffers until
-  /// relaying them to the segmentizer
-  importer(path dir,
-           caf::actor receiver,
-           size_t max_events_per_chunk,
-           size_t max_segment_size,
-           uint64_t batch_size);
+  ///                   relaying them to the chunkifier
+  importer(path dir, caf::actor receiver, uint64_t batch_size);
 
   caf::message_handler act() final;
   std::string describe() const final;
@@ -40,13 +28,13 @@ private:
   path dir_;
   caf::actor receiver_;
   caf::actor source_;
-  caf::actor segmentizer_;
+  caf::actor chunkifier_;
+  caf::message_handler init_;
   caf::message_handler ready_;
   caf::message_handler paused_;
   caf::message_handler terminating_;
-  size_t max_events_per_chunk_;
-  size_t max_segment_size_;
   uint64_t batch_size_;
+  size_t stored_ = 0;
   std::set<path> orphaned_;
 };
 

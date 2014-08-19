@@ -95,6 +95,12 @@ message_handler id_tracker_actor::act()
     },
     on(atom("request"), arg_match) >> [=](uint64_t n)
     {
+      if (n == 0)
+      {
+        VAST_LOG_ACTOR_ERROR("cannot hand out 0 ids");
+        return make_message(atom("id"), atom("failure"));
+      }
+
       auto next = id_tracker_.next_id();
       if (! id_tracker_.hand_out(n))
       {

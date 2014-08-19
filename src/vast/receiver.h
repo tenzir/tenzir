@@ -3,14 +3,13 @@
 
 #include <set>
 #include "vast/actor.h"
-#include "vast/segment.h"
 
 namespace vast {
 
-/// Receives segments, imbues them with an ID from TRACKER, and relays them to
-/// ARCHIVE and INDEX. It also forwards the segment schema to SEARCH.
-/// The receiver forms the server-side counterpart to an ingestor.
-class receiver_actor : public actor_base
+/// Receives chunks from IMPORTER, imbues them with an ID from TRACKER, and
+/// relays them to ARCHIVE and INDEX. RECEIVER also forwards the chunk schema
+/// to SEARCH.
+class receiver : public actor_base
 {
 public:
   /// Spawns a receiver.
@@ -18,10 +17,10 @@ public:
   /// @param archive The archive actor.
   /// @param index The index actor.
   /// @param search The search actor.
-  receiver_actor(caf::actor tracker,
-                 caf::actor archive,
-                 caf::actor index,
-                 caf::actor search);
+  receiver(caf::actor tracker,
+           caf::actor archive,
+           caf::actor index,
+           caf::actor search);
 
   caf::message_handler act() final;
   std::string describe() const final;
@@ -32,7 +31,7 @@ private:
   caf::actor archive_;
   caf::actor index_;
   caf::actor search_;
-  std::set<caf::actor> ingestors_;
+  std::set<caf::actor> importers_;
 };
 
 } // namespace vast

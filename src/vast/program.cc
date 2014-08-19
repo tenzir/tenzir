@@ -167,9 +167,10 @@ void program::run()
     auto archive_port = *config_.as<unsigned>("archive.port");
     if (config_.check("archive"))
     {
-      archive_ = spawn<archive_actor>(
+      archive_ = spawn<archive>(
           vast_dir,
-          *config_.as<size_t>("archive.max-segments"));
+          *config_.as<size_t>("archive.max-segments"),
+          *config_.as<size_t>("archive.max-segment-size") * 1000000);
 
       VAST_LOG_ACTOR_INFO(
           "publishes archive at " << archive_host << ':' << archive_port);
@@ -213,23 +214,7 @@ void program::run()
     }
     else if (config_.check("index.rebuild"))
     {
-      become(
-        keep_behavior,
-        [=](segment const& s)
-        {
-          event_id next = s.base() + s.events();
-          send(archive_, atom("segment"), next);
-          forward_to(index_);
-        },
-        on(atom("no segment"), arg_match) >> [=](event_id eid)
-        {
-          VAST_LOG_INFO("sent all segments to index (" << eid - 1 << " events)");
-          unbecome();
-        });
-
-      VAST_LOG_INFO("begins rebuilding index");
-      send(index_, atom("delete"));
-      send(archive_, atom("segment"), event_id{1});
+      // TODO
     }
 
     auto search_host = *config_.get("search.host");
@@ -266,7 +251,7 @@ void program::run()
     auto receiver_port = *config_.as<unsigned>("receiver.port");
     if (config_.check("receiver"))
     {
-      receiver_ = spawn<receiver_actor>(tracker_, archive_, index_, search_);
+      receiver_ = spawn<receiver>(tracker_, archive_, index_, search_);
       VAST_LOG_ACTOR_INFO(
           "publishes receiver at " << receiver_host << ':' << receiver_port);
 
@@ -283,12 +268,8 @@ void program::run()
     actor imp0rter;
     if (config_.check("importer"))
     {
-      imp0rter = spawn<importer>(
-          vast_dir,
-          receiver_,
-          *config_.as<size_t>("import.max-events-per-chunk"),
-          *config_.as<size_t>("import.max-segment-size") * 1000000,
-          *config_.as<size_t>("import.batch-size"));
+      imp0rter = spawn<importer>(vast_dir, receiver_,
+                                 *config_.as<size_t>("import.batch-size"));
 
       if (config_.check("import.submit"))
         send(imp0rter, atom("submit"));

@@ -6,9 +6,15 @@
 
 namespace vast {
 
-void event::id(event_id i)
+bool event::id(event_id i)
 {
-  id_ = i;
+  if (i >= min_event_id || i <= max_event_id)
+  {
+    id_ = i;
+    return true;
+  }
+
+  return false;
 }
 
 void event::timestamp(time_point time)

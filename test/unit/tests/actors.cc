@@ -63,11 +63,12 @@ TEST("all-in-one import")
   address_bitmap_index<default_bitstream> abmi;
   port_bitmap_index<default_bitstream> pbmi;
 
-  REQUIRE(vast::io::unarchive(ftp / "id" / "orig_h" / "data.idx", size, abmi));
-  REQUIRE(vast::io::unarchive(ftp / "id" / "orig_p" / "data.idx", size, pbmi));
+  REQUIRE(vast::io::unarchive(ftp / "id" / "orig_h" / "index", size, abmi));
+  REQUIRE(vast::io::unarchive(ftp / "id" / "orig_p" / "index", size, pbmi));
 
-  CHECK(size == 3); // Event ID 1 is the first valid ID.
-  CHECK(size == abmi.size());
+  REQUIRE(size == 3); // Event ID 1 is the first valid ID.
+  REQUIRE(size == abmi.size());
+  REQUIRE(size == pbmi.size());
 
   auto eq = relational_operator::equal;
   auto orig_h = abmi.lookup(eq, *to<address>("192.168.1.105"));
@@ -108,8 +109,8 @@ TEST("basic actor integrity")
   *import_config['V'] = 5;
   *import_config['I'] = true;
   *import_config['r'] = m57_day11_18::ssl;
-  *import_config["import.max-events-per-chunk"] = 10;
-  *import_config["import.max-segment-size"] = 1;
+  *import_config["import.batch-size"] = 10;
+  *import_config["archive.max-segment-size"] = 1;
   REQUIRE(import_config.verify());
 
   // Terminates after import completes.
@@ -148,11 +149,11 @@ TEST("basic actor integrity")
   self->receive(
       on_arg_match >> [&](segment const& s)
       {
-        CHECK(s.base() == 1);
-        CHECK(s.events() == 113);
+        CHECK(s.meta().base == 1);
+        CHECK(s.meta().events == 113);
 
         // Check the last ssl.log entry.
-        segment::reader r{&s};
+        segment::reader r{s};
         auto e = r.read(113);
         REQUIRE(e);
         CHECK(get<record>(*e)->at(1) == "XBy0ZlNNWuj");
@@ -219,9 +220,9 @@ TEST("basic actor integrity")
   self->receive_for(i, 46) (
     [&](event const& e)
     {
-      // Verify contents from a few random events.
+      // Verify contents of a few random events.
       if (e.id() == 4)
-        CHECK(get<record>(e)->at(1) == "KKSlmtmkkxf");
+        CHECK(get<record>(e)->at(1) == "reRxJaOOlO9");
 
       if (e.id() == 42)
       {

@@ -161,7 +161,12 @@ result<event> bro::extract_impl()
           switch (which(t.back()->type))
           {
             default:
-              return error{"only container types can by empty"};
+              return error{"invalid empty field ", f, '"', t.back()->name, '"',
+                           " of type ", t.back()->type, ": ",
+                           std::string{s[f].first, s[f].second}};
+            case type::tag::string:
+              r->emplace_back(std::string{});
+              break;
             case type::tag::vector:
               r->emplace_back(vector{});
               break;
@@ -329,13 +334,11 @@ trial<void> bro::parse_header()
     fields.emplace_back(field_names[i], *t);
   }
 
-  type::record event_record{std::move(fields)};
+  type::record flat{std::move(fields)};
 
-  type_ = event_record.unflatten();
+  type_ = flat.unflatten();
   type_.name(event_name);
-
-  flat_type_ = std::move(event_record);
-  flat_type_.name(event_name);
+  flat.name(event_name);
 
   VAST_LOG_ACTOR_DEBUG("parsed bro header:");
   VAST_LOG_ACTOR_DEBUG("    #separator " << separator_);
@@ -344,11 +347,9 @@ trial<void> bro::parse_header()
   VAST_LOG_ACTOR_DEBUG("    #unset_field " << unset_field_);
   VAST_LOG_ACTOR_DEBUG("    #path " << type_.name());
 
-  auto rec = get<type::record>(flat_type_);
-
   VAST_LOG_ACTOR_DEBUG("    fields:");
-  for (size_t i = 0; i < rec->fields().size(); ++i)
-    VAST_LOG_ACTOR_DEBUG("      " << i << ") " << rec->fields()[i]);
+  for (size_t i = 0; i < flat.fields().size(); ++i)
+    VAST_LOG_ACTOR_DEBUG("      " << i << ") " << flat.fields()[i]);
 
   if (timestamp_field_ > -1)
   {
@@ -358,7 +359,7 @@ trial<void> bro::parse_header()
   else
   {
     size_t i = 0;
-    for (auto& f : rec->fields())
+    for (auto& f : flat.fields())
     {
       if (is<time_point>(f.type))
       {

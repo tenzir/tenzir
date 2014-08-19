@@ -2,7 +2,7 @@
 
 #include <caf/all.hpp>
 #include "vast/bitmap_index.h"
-#include "vast/segment.h"
+#include "vast/chunk.h"
 #include "vast/partition.h"
 #include "vast/print.h"
 #include "vast/task_tree.h"
@@ -555,7 +555,7 @@ message_handler index::act()
 
       assert(active_part_.second);
     },
-    [=](segment const& s)
+    [=](chunk const& chk)
     {
       if (part_map_.empty())
       {
@@ -572,11 +572,9 @@ message_handler index::act()
         VAST_LOG_ACTOR_INFO("created new partition " << first->first);
       }
 
-      update_partition(active_part_.first, s.first(), s.last());
+      update_partition(active_part_.first, chk.meta().first, chk.meta().last);
 
-      VAST_LOG_ACTOR_DEBUG("forwards segment covering [" <<
-                           s.first() << ',' << s.last() << ']');
-
+      VAST_LOG_ACTOR_DEBUG("forwards chunk");
       forward_to(active_part_.second);
     },
     on(atom("backlog")) >> [=]

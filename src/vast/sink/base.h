@@ -22,6 +22,16 @@ struct base : public actor_base
           VAST_LOG_ACTOR_ERROR("failed to process event: " << e);
           quit(exit::error);
         }
+      },
+      [=](std::vector<event> const& v)
+      {
+        for (auto& e : v)
+          if (! static_cast<Derived*>(this)->process(e))
+          {
+            VAST_LOG_ACTOR_ERROR("failed to process event: " << e);
+            quit(exit::error);
+            return;
+          }
       }
     };
   }

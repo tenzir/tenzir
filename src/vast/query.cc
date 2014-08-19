@@ -36,11 +36,12 @@ query::query(actor archive, actor sink, expr::ast ast)
     }
     else
     {
-      VAST_LOG_ACTOR_DEBUG("looks for next unprocessed ID after " <<
-                           current()->base() + current()->events() - 1);
+      VAST_LOG_ACTOR_DEBUG(
+          "looks for next unprocessed ID after " <<
+          current()->meta().base + current()->meta().events - 1);
 
-      auto next = unprocessed_.find_next(current()->base() +
-                                         current()->events() - 1);
+      auto next = unprocessed_.find_next(current()->meta().base +
+                                         current()->meta().events - 1);
 
       if (next != bitstream::npos)
       {
@@ -50,7 +51,7 @@ query::query(actor archive, actor sink, expr::ast ast)
       }
       else
       {
-        auto prev = unprocessed_.find_prev(current()->base());
+        auto prev = unprocessed_.find_prev(current()->meta().base);
         if (prev != 0 && prev != bitstream::npos)
         {
           // The case of prev == 0 may occur when we negate bitstreams, but
@@ -117,11 +118,11 @@ query::query(actor archive, actor sink, expr::ast ast)
       segment_ = last_dequeued();
 
       VAST_LOG_ACTOR_DEBUG(
-          "got segment " << s.id() <<
-          " [" << s.base() << ", " << s.base() + s.events() << ")");
+          "got segment " << s.meta().id << " [" << s.meta().base <<
+          ", " << s.meta().base + s.meta().events << ")");
 
       assert(! reader_);
-      reader_ = std::make_unique<segment::reader>(current());
+      reader_ = std::make_unique<segment::reader>(*current());
 
       become(extracting_);
 
@@ -155,8 +156,8 @@ query::query(actor archive, actor sink, expr::ast ast)
       // We construct a new mask for each request, because the hits
       // continuously update in every state.
       bitstream mask = bitstream{bitstream_type{}};
-      mask.append(current()->base(), false);
-      mask.append(current()->events(), true);
+      mask.append(current()->meta().base, false);
+      mask.append(current()->meta().events, true);
       mask &= unprocessed_;
       assert(mask.count() > 0);
 

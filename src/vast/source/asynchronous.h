@@ -55,6 +55,8 @@ public:
   /// Implements `caf::event_based_actor::init`.
   behavior act() final
   {
+    attach_functor([=](uint32_t) { sink_ = invalid_actor; });
+
     return operating_.or_else(static_cast<Derived*>(this)->impl_);
   }
 

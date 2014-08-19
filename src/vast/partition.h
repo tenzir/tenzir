@@ -3,6 +3,7 @@
 
 #include <queue>
 #include "vast/actor.h"
+#include "vast/chunk.h"
 #include "vast/bitmap_indexer.h"
 #include "vast/file_system.h"
 #include "vast/schema.h"
@@ -11,8 +12,6 @@
 #include "vast/util/result.h"
 
 namespace vast {
-
-class segment;
 
 /// A horizontal partition of the index.
 class partition
@@ -25,7 +24,7 @@ public:
     meta_data() = default;
     meta_data(uuid id);
 
-    void update(segment const& s);
+    void update(chunk const& chk);
 
     uuid id;
     time_point first_event = time_range{};
@@ -41,8 +40,8 @@ public:
   /// @id The UUID to use for this partition.
   partition(uuid id);
 
-  /// Updates the partition meta data with an indexed segment.
-  void update(segment const& s);
+  /// Updates the partition meta data with an indexed chunk.
+  void update(chunk const& chk);
 
   /// Retrieves the partition meta data.
   meta_data const& meta() const;
@@ -56,68 +55,29 @@ private:
   meta_data meta_;
 };
 
-struct partition_actor : actor_base
+class partition_actor : public actor_base
 {
-  struct indexer_state
-  {
-    struct statistics
-    {
-      uint64_t backlog = 0;         // Number of outstanding batches.
-      uint64_t value_total = 0;     // Total values indexed.
-      uint64_t value_rate = 0;      // Last indexing rate (values/sec).
-      uint64_t value_rate_mean = 0; // Mean indexing rate (values/sec).
-    };
-
-    caf::actor actor;
-    vast::type type;
-    offset off;
-    statistics stats;
-  };
-
+public:
   partition_actor(path dir, size_t batch_size, uuid id = uuid::random());
 
   caf::message_handler act() final;
   std::string describe() const final;
 
-  template <typename Bitstream = default_bitstream>
-  trial<void> load_data_indexer(path const& p)
+private:
+  struct statistics
   {
-    auto i = indexers_.find(p);
-    if (i == indexers_.end())
-      return error{"no such path: ", };
+    uint64_t backlog = 0;         // Number of outstanding batches.
+    uint64_t value_total = 0;     // Total values indexed.
+    uint64_t value_rate = 0;      // Last indexing rate (values/sec).
+    uint64_t value_rate_mean = 0; // Mean indexing rate (values/sec).
+  };
 
-    if (i->second.actor)
-      return nothing;
+  struct dispatcher;
 
-    return create_data_indexer<Bitstream>(p, i->second.off, i->second.type);
-  }
-
-  template <typename Bitstream = default_bitstream>
-  trial<void> create_data_indexer(path const& p, offset const& o, type const& t)
-  {
-    auto& state = indexers_[p];
-    if (! is<none>(state.type) && state.type != t)
-      return error{"type mismatch: ", state.type, " vs ", t};
-
-    if (state.actor)
-      return error{"data indexer already exists: ", state.actor};
-
-    VAST_LOG_ACTOR_DEBUG("creates indexer at " << p <<
-                         " @" << o << " with type " << t);
-
-    auto abs = dir_ / p / "data.idx";
-    auto a = make_event_data_indexer<Bitstream>(abs, t, o);
-    if (! a)
-      return error{"failed to construct data indexer: ", a.error()};
-
-    monitor(*a);
-
-    state.actor = *a;
-    state.type = t;
-    state.off = o;
-
-    return nothing;
-  }
+  caf::actor load_time_indexer();
+  caf::actor load_name_indexer();
+  trial<caf::actor> load_data_indexer(type const& et, type const& t,
+                                      offset const& o);
 
   path dir_;
   bool updated_ = false;
@@ -126,9 +86,10 @@ struct partition_actor : actor_base
   uint32_t exit_reason_ = 0;
   partition partition_;
   schema schema_;
-  std::unordered_map<path, indexer_state> indexers_;
-  std::queue<caf::message> segments_;
-  caf::actor unpacker_;
+  std::unordered_map<path, caf::actor> indexers_;
+  std::unordered_map<caf::actor_addr, statistics> stats_;
+  std::queue<chunk> chunks_;
+  caf::actor dechunkifier_;
 };
 
 } // namespace vast

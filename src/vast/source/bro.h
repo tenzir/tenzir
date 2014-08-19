@@ -28,7 +28,6 @@ private:
   std::string empty_field_;
   std::string unset_field_;
   type type_;
-  type flat_type_;
 };
 
 } // namespace source

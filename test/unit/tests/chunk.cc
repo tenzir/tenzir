@@ -4,31 +4,46 @@
 
 using namespace vast;
 
-TEST("chunks")
+SUITE("core")
+
+TEST("chunk")
 {
   chunk chk;
-
   auto t = type::integer{};
   t.name("i");
 
-  // Upon destruction, the writer's IO streams flush their state into the
-  // referenced chunk.
+  chunk::writer w{chk};
+  std::vector<event> es;
+  for (auto i = 0; i < 1e3; ++i)
   {
-    chunk::writer w(chk);
-    for (size_t i = 0; i < 1e3; ++i)
-      CHECK(w.write(event{i, t}));
-
-    CHECK(chk.elements() == 1e3);
+    es.emplace_back(i, t);
+    REQUIRE(w.write(es.back()));
   }
 
-  chunk::reader r(chk);
-  for (size_t i = 0; i < 1e3; ++i)
+  w.flush();
+  CHECK(chk.events() == 1e3);
+
+  chunk::reader r{chk};
+  for (auto i = 0; i < 1e3; ++i)
   {
-    event e;
-    CHECK(r.read(e));
-    CHECK(e == event{i, t});
+    auto e = r.read();
+    REQUIRE(e);
+    CHECK(*e == event{i, t});
   }
 
   chunk copy{chk};
   CHECK(chk == copy);
+
+  chunk from_events{es};
+  CHECK(from_events == chk);
+
+  // Assign IDs to the chunk.
+  ewah_bitstream ids;
+  ids.append(42, false);
+  ids.append(1e3 - 1, true);
+
+  CHECK(! chk.ids(ids));  // 1 event ID missing.
+
+  ids.push_back(true);
+  CHECK(chk.ids(std::move(ids)));
 }

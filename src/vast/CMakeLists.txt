@@ -7,6 +7,7 @@ set(libvast_sources
   archive.cc
   bitvector.cc
   bitstream.cc
+  block.cc
   chunk.cc
   configuration.cc
   data.cc
@@ -31,8 +32,6 @@ set(libvast_sources
   schema.cc
   search.cc
   segment.cc
-  segment_pack.cc
-  segmentizer.cc
   serialization.cc
   signal_monitor.cc
   subnet.cc
@@ -54,6 +53,7 @@ set(libvast_sources
   io/iostream.cc
   io/stream.cc
   sink/bro.cc
+  sink/chunkifier.cc
   sink/json.cc
   source/bro.cc
   util/poll.cc

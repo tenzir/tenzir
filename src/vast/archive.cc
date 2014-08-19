@@ -1,10 +1,7 @@
 #include "vast/archive.h"
 
 #include <caf/all.hpp>
-#include "vast/aliases.h"
-#include "vast/bitstream.h"
 #include "vast/file_system.h"
-#include "vast/segment.h"
 #include "vast/serialization/all.h"
 #include "vast/io/serialization.h"
 
@@ -12,18 +9,15 @@ namespace vast {
 
 using namespace caf;
 
-archive::archive(path directory, size_t capacity)
-  : dir_{std::move(directory)},
+archive::archive(path dir, size_t capacity, size_t max_segment_size)
+  : dir_{dir / "archive"},
+    max_segment_size_{max_segment_size},
     cache_{capacity, [&](uuid const& id) { return on_miss(id); }}
 {
+  assert(max_segment_size_ > 0);
 }
 
-path const& archive::dir() const
-{
-  return dir_;
-}
-
-void archive::initialize()
+caf::message_handler archive::act()
 {
   traverse(
       dir_,
@@ -31,21 +25,74 @@ void archive::initialize()
       {
         segment_files_.emplace(to_string(p.basename()), p);
 
-        segment::header header;
-        io::unarchive(p, header);
+        segment::meta_data meta;
+        io::unarchive(p, meta);
         VAST_LOG_DEBUG("found segment " << p.basename() <<
-                       " for ID range [" << header.base << ", " <<
-                       header.base + header.n << ")");
+                       " for ID range [" << meta.base << ", " <<
+                       meta.base + meta.events << ")");
 
-        if (! ranges_.insert(header.base, header.base + header.n, header.id))
+        if (! ranges_.insert(meta.base, meta.base + meta.events, meta.id))
         {
           VAST_LOG_ERROR("inconsistency in ID space for [" <<
-                         header.base << ", " << header.base + header.n << ")");
+                         meta.base << ", " << meta.base + meta.events << ")");
           return false;
         }
 
         return true;
       });
+
+  attach_functor(
+    [=](uint32_t)
+    {
+      if (current_size_ == 0)
+        return;
+
+      VAST_LOG_ACTOR_VERBOSE("writes buffered segment to disk");
+      if (! store(make_message(std::move(current_))))
+        VAST_LOG_ACTOR_ERROR("failed to save buffered segment");
+    });
+
+  return
+  {
+    [=](chunk const& chk)
+    {
+      if (! current_.empty()
+          && current_size_ + chk.bytes() >= max_segment_size_)
+      {
+        if (! store(make_message(std::move(current_))))
+        {
+          VAST_LOG_ACTOR_ERROR("failed to save buffered segment");
+          quit(exit::error);
+          return;
+        }
+
+        current_ = {};
+        current_size_ = 0;
+      }
+
+      current_size_ += chk.bytes();
+      current_.push_back(chk);
+    },
+    [=](event_id eid)
+    {
+      auto t = load(eid);
+      if (t)
+      {
+        VAST_LOG_ACTOR_DEBUG("delivers segment for event " << eid);
+        return *t;
+      }
+      else
+      {
+        VAST_LOG_ACTOR_WARN(t.error());
+        return make_message(atom("no segment"), eid);
+      }
+    }
+  };
+}
+
+std::string archive::describe() const
+{
+  return "archive";
 }
 
 bool archive::store(message msg)
@@ -56,22 +103,25 @@ bool archive::store(message msg)
     return false;
   }
 
-  caf::match(msg)(
+  msg.apply(
       on_arg_match >> [&](segment const& s)
       {
-        assert(segment_files_.find(s.id()) == segment_files_.end());
+        assert(segment_files_.find(s.meta().id) == segment_files_.end());
 
-        auto const filename = dir_ / path{to_string(s.id())};
+        auto filename = dir_ / path{to_string(s.meta().id)};
 
         auto t = io::archive(filename, s);
         if (t)
-          VAST_LOG_VERBOSE("wrote segment to " << filename);
+          VAST_LOG_VERBOSE("wrote segment " << s.meta().id << " to " <<
+                           filename);
         else
           VAST_LOG_ERROR(t.error());
 
-        segment_files_.emplace(s.id(), filename);
-        ranges_.insert(s.base(), s.base() + s.events(), s.id());
-        cache_.insert(s.id(), msg);
+        segment_files_.emplace(s.meta().id, filename);
+        cache_.insert(s.meta().id, msg);
+        ranges_.insert(s.meta().base,
+                       s.meta().base + s.meta().events,
+                       s.meta().id);
       });
 
   return true;
@@ -94,51 +144,6 @@ message archive::on_miss(uuid const& id)
   io::unarchive(dir_ / path{to_string(id)}, s);
 
   return make_message(std::move(s));
-}
-
-
-archive_actor::archive_actor(path const& directory, size_t max_segments)
-  : archive_{directory / "archive", max_segments}
-{
-}
-
-caf::message_handler archive_actor::act()
-{
-  archive_.initialize();
-
-  return
-  {
-    [=](segment const& s)
-    {
-      if (! archive_.store(last_dequeued()))
-      {
-        VAST_LOG_ACTOR_ERROR("failed to register segment " << s.id());
-        quit(exit::error);
-        return make_message(atom("nack"), s.id());
-      }
-
-      return make_message(atom("ack"), s.id());
-    },
-    [=](event_id eid)
-    {
-      auto t = archive_.load(eid);
-      if (t)
-      {
-        VAST_LOG_ACTOR_DEBUG("delivers segment for event " << eid);
-        return *t;
-      }
-      else
-      {
-        VAST_LOG_ACTOR_WARN(t.error());
-        return make_message(atom("no segment"), eid);
-      }
-    }
-  };
-}
-
-std::string archive_actor::describe() const
-{
-  return "archive";
 }
 
 } // namespace vast
