@@ -43,6 +43,11 @@ struct type_deserializer;
 class type : util::totally_ordered<type>
 {
 public:
+  /// Derives a type from data.
+  /// @param d The data to derive a type from.
+  /// @returns The type corresponding to *d*.
+  static type derive(data const& d);
+
   using hash_type = util::xxhash;
 
   // The base class for type classes.

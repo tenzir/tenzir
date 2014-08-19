@@ -1,4 +1,5 @@
 #include "framework/unit.h"
+#include "vast/data.h"
 #include "vast/type.h"
 #include "vast/io/serialization.h"
 
@@ -317,4 +318,17 @@ TEST("representational equality (congruence)")
 
   CHECK(a != r0);
   CHECK(congruent(a, r0));
+}
+
+TEST("type derivation")
+{
+  CHECK(type::derive(data{"foo"}), type::string{});
+
+  type::record r{
+    {"", type::integer{}},
+    {"", type::count{}},
+    {"", type::real{}}
+  };
+
+  CHECK(type::derive(record{42, 1337u, 3.1415}), r);
 }

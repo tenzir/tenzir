@@ -6,6 +6,66 @@
 
 namespace vast {
 
+namespace {
+
+struct deriver
+{
+  type operator()(none const&) const
+  {
+    return type{};
+  }
+
+  template <typename T>
+  type operator()(T const&) const
+  {
+    static_assert(type::is_basic<type::from_data<T>>::value,
+                  "only basic types allowed");
+
+    return type::from_data<T>{};
+  }
+
+  type operator()(enumeration const&) const
+  {
+    // We can't derive the available fields from a single data instance.
+    return type{};
+  }
+
+  type operator()(vector const& v) const
+  {
+    return type::vector{v.empty() ? type{} : type::derive(v[0])};
+  }
+
+  type operator()(set const& s) const
+  {
+    return type::set{s.empty() ? type{} : type::derive(*s.begin())};
+  }
+
+  type operator()(table const& x) const
+  {
+    if (x.empty())
+      return type::table{type{}, type{}};
+
+    auto front = x.begin();
+    return type::table{type::derive(front->first), type::derive(front->second)};
+  }
+
+  type operator()(record const& r) const
+  {
+    std::vector<type::record::field> fs;
+    for (size_t i = 0; i < r.size(); ++i)
+      fs.emplace_back("", type::derive(r[i]));
+
+    return type::record{std::move(fs)};
+  }
+};
+
+} // namespace <anonymous>
+
+type type::derive(data const& d)
+{
+  return visit(deriver{}, d);
+}
+
 type::type()
 {
   static auto const default_info = util::make_intrusive<intrusive_info>();
