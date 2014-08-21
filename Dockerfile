@@ -19,7 +19,7 @@ RUN cd $PREFIX/src/ && \
     git clone https://github.com/actor-framework/actor-framework.git
 RUN cd $PREFIX/src/actor-framework && \
     git pull && \
-    git checkout develop && \
+    git checkout 8dcc3e72 && \
     ./configure --prefix=$PREFIX --no-examples && \
     make -j $PARALLELISM && \
     make test && \
