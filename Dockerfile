@@ -1,11 +1,12 @@
-# vast
+# VAST
 #
 # VERSION               0.1
 
-FROM      ubuntu:14.04
+FROM        ubuntu:14.04
+MAINTAINER  Matthias Vallentin <matthias@bro.org>
 
-ENV PREFIX /usr/local
-ENV PARALLELISM 4
+ENV         PREFIX /usr/local
+ENV         PARALLELISM 4
 
 # Compiler setup
 RUN apt-get update && apt-get -y install cmake git build-essential
