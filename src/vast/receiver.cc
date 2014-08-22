@@ -34,6 +34,9 @@ message_handler receiver::act()
   {
     [=](exit_msg const& e)
     {
+      // This handler exists only to ensure that the sync_send call below does
+      // not get shot down from an exit message before having received an
+      // answer.
       quit(e.reason);
     },
     [=](down_msg const&)

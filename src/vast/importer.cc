@@ -47,7 +47,7 @@ message_handler importer::act()
   {
     if (source_)
       // Tell the source to exit, it will in turn propagate the exit
-      // message to the sink.
+      // message to the chunkifier.
       send_exit(source_, exit::stop);
     else
       // If we have no source, we just tell the chunkifier to exit.
@@ -113,7 +113,6 @@ message_handler importer::act()
     },
     [=](chunk const& chk)
     {
-      //VAST_LOG_ACTOR_DEBUG("delivers chunk (" << chk.events() << " events)");
       send(receiver_, chk, this);
     },
     after(std::chrono::seconds(0)) >> [=]

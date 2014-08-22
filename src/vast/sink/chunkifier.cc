@@ -21,10 +21,7 @@ chunkifier::chunkifier(actor upstream, size_t max_events_per_chunk)
       {
         writer_->flush();
         if (chunk_->events() > 0)
-        {
-          VAST_LOG_ACTOR_VERBOSE("processed " << total_events_ << " events");
           anon_send(upstream_, std::move(*chunk_));
-        }
 
         upstream_ = invalid_actor;
 
