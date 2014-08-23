@@ -19,21 +19,20 @@ namespace util {
 template <typename Derived>
 class configuration
 {
-public:
-  struct error : util::error
+  struct option_error : error
   {
-    using util::error::error;
-
-    error(std::string msg, char c)
-      : util::error{msg + " (-" + c + ')'}
+    option_error(std::string msg, char c)
+      : error{msg + " (-" + c + ')'}
     {
     }
-    error(std::string msg, std::string opt)
-      : util::error{msg + " (--" + opt + ')'}
+
+    option_error(std::string msg, std::string const& opt)
+      : error{msg + " (--" + opt + ')'}
     {
     }
   };
 
+public:
   /// A configuration option.
   class option
   {
@@ -143,7 +142,7 @@ public:
         if (o)
           o->defaulted_ = false;
         else
-          return error{"unknown option", arg};
+          return option_error{"unknown option", arg};
 
         // Consume everything until the next option.
         while (i + 1 < argc)
@@ -157,10 +156,10 @@ public:
         }
 
         if (values.size() > o->max_vals_)
-          return error{"too many values", arg};
+          return option_error{"too many values", arg};
 
         if (o->max_vals_ == 1 && values.size() != 1)
-          return error{"option value required", arg};
+          return option_error{"option value required", arg};
 
         if (! values.empty())
           o->values_ = std::move(values);
@@ -199,7 +198,7 @@ public:
   {
     for (auto& p : conflicts_)
       if (check(p.first) && check(p.second))
-        return error{"conflicting options:", p.first, p.second};
+        return error{"conflicting options: --", p.first, " and --", p.second};
 
     for (auto& p : dependencies_)
     {
@@ -214,7 +213,7 @@ public:
           break;
         }
 
-        str += deps[i];
+        str += "--" + deps[i];
         if (i != deps.size() - 1)
           str += ", ";
       }
@@ -297,7 +296,7 @@ public:
 
     auto o = find_option(opt);
     if (! o)
-      return error{"unknown option", opt};
+      return option_error{"unknown option", opt};
 
     return dispatch<T>(*o, std::is_same<T, std::vector<std::string>>());
   }
@@ -485,13 +484,13 @@ private:
     if (str.size() < 2)
     {
       // We need at least a dash followed by one character.
-      return error{"ill-formed option specificiation", str};
+      return option_error{"ill-formed option specificiation", str};
     }
     else if (str[0] == '-' && str[1] == '-')
     {
       // Argument begins with '--'.
       if (str.size() == 2)
-        return error{"ill-formed option specification", str};
+        return option_error{"ill-formed option specification", str};
 
       str = str.substr(2);
     }
@@ -499,7 +498,7 @@ private:
     {
       auto s = shortcuts_.find({str[1]});
       if (s == shortcuts_.end())
-        return error{"unknown short option", str[1]};
+        return option_error{"unknown short option", str[1]};
 
       // Check if the short option comes with a value, like -v5.
       auto val = str.size() > 2 ? str.substr(2) : "";
@@ -511,7 +510,7 @@ private:
     }
     else
     {
-      return error{"not an option", str};
+      return option_error{"not an option", str};
     }
 
     return {};
@@ -557,10 +556,10 @@ private:
   trial<T> dispatch(option const& opt, std::false_type) const
   {
     if (opt.values_.empty())
-      return error{"option has no value", opt.name_};
+      return option_error{"option has no value", opt.name_};
 
     if (opt.max_vals_ > 1)
-      return error{"cannot cast multi-value option", opt.name_};
+      return option_error{"cannot cast multi-value option", opt.name_};
 
     T x;
     std::istringstream ss(opt.values_.front());
