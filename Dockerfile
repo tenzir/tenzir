@@ -8,10 +8,10 @@ MAINTAINER  Matthias Vallentin <matthias@bro.org>
 ENV         PREFIX /usr/local
 ENV         PARALLELISM 4
 
-# Compiler setup
-RUN apt-get update && apt-get -y install cmake git build-essential
+# Compiler and dependcy setup
+RUN apt-get update && apt-get -y install cmake git build-essential tmux
 RUN apt-get update && \
-    apt-get -y install clang-3.4 libc++-dev libboost-dev g++- gcc-
+    apt-get -y install clang-3.4 libc++-dev libboost-dev libedit-dev g++- gcc-
 
 RUN mkdir -p $PREFIX/src
 
