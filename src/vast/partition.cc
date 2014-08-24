@@ -327,7 +327,7 @@ message_handler partition_actor::act()
         quit(exit::error);
         return;
       }
-      else if (*sch != schema_)
+      else if (indexers_.empty() || *sch != schema_)
       {
         schema_ = std::move(*sch);
 
