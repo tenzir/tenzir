@@ -230,14 +230,22 @@ struct event_data_indexer
     if (! r)
       return error{"only records supports currently, got event ", e.type()};
 
-    auto d = r->at(offset_);
-    if (! d)
-      return error{"no data at offset ", offset_};
-
-    if (! bmi.push_back(*d, e.id()))
-      return error{"push_back failed for ", *d};
-
-    return nothing;
+    if (auto d = r->at(offset_))
+    {
+      if (bmi.push_back(*d, e.id()))
+        return nothing;
+      else
+        return error{"push_back failed for ", *d, ", id", e.id()};
+    }
+    else
+    {
+      // If there is no data at a given offset, it means that an intermediate
+      // record is nil but we're trying to access a deeper field.
+      if (bmi.push_back(nil, e.id()))
+        return nothing;
+      else
+        return error{"push_back failed for nil, id ", e.id()};
+    }
   }
 
   std::string describe() const final
