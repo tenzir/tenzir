@@ -4,6 +4,10 @@
 #include "vast/source/bro.h"
 #include "vast/io/serialization.h"
 
+#ifdef VAST_HAVE_PCAP
+#include "vast/source/pcap.h"
+#endif
+
 #ifdef VAST_HAVE_BROCCOLI
 #include "vast/source/broccoli.h"
 #endif
@@ -80,7 +84,7 @@ message_handler importer::act()
     },
     on(atom("add"), "bro", arg_match) >> [=](std::string const& file)
     {
-      VAST_LOG_ACTOR_INFO("ingests " << file);
+      VAST_LOG_ACTOR_INFO("ingests bro log: " << file);
 
       source_ = spawn<source::bro, detached>(chunkifier_, file, -1);
       source_->link_to(chunkifier_);
@@ -89,6 +93,19 @@ message_handler importer::act()
 
       become(ready_);
     },
+#ifdef VAST_HAVE_PCAP
+    on(atom("add"), "pcap", arg_match) >> [=](std::string const& file)
+    {
+      VAST_LOG_ACTOR_INFO("ingests pcap: " << file);
+
+      source_ = spawn<source::pcap, detached>(chunkifier_, file);
+      source_->link_to(chunkifier_);
+      send(source_, atom("batch size"), batch_size_);
+      send(source_, atom("run"));
+
+      become(ready_);
+    },
+#endif
     on(atom("add"), any_vals) >> [=]
     {
       VAST_LOG_ACTOR_ERROR("got invalid import file type");

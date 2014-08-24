@@ -2,9 +2,12 @@
 
 #include "vast/event.h"
 #include "vast/exporter.h"
-
 #include "vast/sink/bro.h"
 #include "vast/sink/json.h"
+
+#ifdef VAST_HAVE_PCAP
+#include "vast/sink/pcap.h"
+#endif
 
 using namespace caf;
 
@@ -36,7 +39,7 @@ message_handler exporter::act()
     on(atom("add"), "bro", arg_match) >> [=](std::string const& out)
     {
       VAST_LOG_ACTOR_DEBUG("registers new bro sink");
-      sinks_.insert(spawn<sink::bro, monitored>(path{out}));
+      sinks_.insert(spawn<sink::bro, monitored>(out));
     },
     on(atom("add"), "json", arg_match) >> [=](std::string const& out)
     {
@@ -60,6 +63,13 @@ message_handler exporter::act()
 
       sinks_.insert(spawn<sink::json, monitored>(std::move(p)));
     },
+#ifdef VAST_HAVE_PCAP
+    on(atom("add"), "pcap", arg_match) >> [=](std::string const& out)
+    {
+      VAST_LOG_ACTOR_DEBUG("registers new pcap sink");
+      sinks_.insert(spawn<sink::pcap, monitored>(out));
+    },
+#endif
     on(atom("add"), any_vals) >> [=]
     {
       VAST_LOG_ACTOR_ERROR("got invalid sink type");

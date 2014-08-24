@@ -20,6 +20,7 @@
 
 #cmakedefine VAST_USE_PERFTOOLS_CPU_PROFILER
 #cmakedefine VAST_USE_PERFTOOLS_HEAP_PROFILER
+#cmakedefine VAST_HAVE_PCAP
 #cmakedefine VAST_HAVE_BROCCOLI
 #cmakedefine VAST_HAVE_EDITLINE
 #cmakedefine VAST_HAVE_SNAPPY

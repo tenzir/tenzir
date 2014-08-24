@@ -35,6 +35,7 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
   Optional packages in non-standard locations:
     --with-editline=PATH    path to editline install root
     --with-perftools=PATH   path to gperftools install root
+    --with-pcap=PATH        path to libpcap install root
     --with-broccoli=PATH    path to Broccoli install root
     --with-doxygen=PATH     path to Doxygen install root
 
@@ -142,6 +143,9 @@ while [ $# -ne 0 ]; do
             ;;
         --with-doxygen=*)
             append_cache_entry Doxygen_ROOT_DIR PATH $optarg
+            ;;
+        --with-pcap=*)
+            append_cache_entry PCAP_ROOT_DIR PATH $optarg
             ;;
         --with-broccoli=*)
             append_cache_entry Broccoli_ROOT_DIR PATH $optarg

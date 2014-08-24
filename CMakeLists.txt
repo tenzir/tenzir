@@ -97,6 +97,15 @@ else ()
   message(FATAL_ERROR "Could not find libcaf")
 endif ()
 
+if (NOT PCAP_ROOT_DIR AND VAST_PREFIX)
+  set(PCAP_ROOT_DIR ${VAST_PREFIX})
+endif ()
+find_package(PCAP QUIET)
+if (PCAP_FOUND)
+  set(VAST_HAVE_PCAP true)
+  include_directories(${PCAP_INCLUDE_DIR})
+endif ()
+
 if (NOT BROCCOLI_ROOT_DIR AND VAST_PREFIX)
   set(BROCCOLI_ROOT_DIR ${VAST_PREFIX})
 endif ()
@@ -159,6 +168,7 @@ endmacro()
 
 display(ENABLE_DEBUG yes debug_summary)
 display(DOXYGEN_FOUND yes doxygen_summary)
+display(PCAP_FOUND ${PCAP_INCLUDE_DIR} pcap_summary)
 display(BROCCOLI_FOUND ${BROCCOLI_INCLUDE_DIR} broccoli_summary)
 display(EDITLINE_FOUND ${EDITLINE_INCLUDE_DIR} editline_summary)
 display(GPERFTOOLS_FOUND ${GPERFTOOLS_INCLUDE_DIR} perftools_summary)
@@ -179,10 +189,11 @@ set(build_summary
     "\nBoost:                ${Boost_INCLUDE_DIR}"
     "\nLibcaf:               ${LIBCAF_INCLUDE_DIRS}"
     "\n"
-    "\nDoxygen:              ${doxygen_summary}"
+    "\nPCAP:                 ${pcap_summary}"
     "\nBroccoli:             ${broccoli_summary}"
     "\nEditline:             ${editline_summary}"
     "\nGperftools:           ${perftools_summary}"
+    "\nDoxygen:              ${doxygen_summary}"
     "\n"
     "\nUse tcmalloc:         ${tcmalloc_summary}"
     "\nUse AddressSanitizer: ${asan_summary}"

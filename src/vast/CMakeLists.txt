@@ -64,6 +64,12 @@ set(libvast_sources
   util/hash/xxhash.cc
   )
 
+if (PCAP_FOUND)
+  set(libvast_sources ${libvast_sources}
+    sink/pcap.cc
+    source/pcap.cc)
+endif ()
+
 if (BROCCOLI_FOUND)
   set(libvast_sources ${libvast_sources}
     source/broccoli.cc
@@ -78,6 +84,10 @@ if (EDITLINE_FOUND)
 endif ()
 
 set(libvast_libs lz4 ${LIBCAF_LIBRARIES})
+
+if (PCAP_FOUND)
+  set(libvast_libs ${libvast_libs} ${PCAP_LIBRARIES})
+endif ()
 
 if (BROCCOLI_FOUND)
   set(libvast_libs ${libvast_libs} ${BROCCOLI_LIBRARIES})
