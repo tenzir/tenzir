@@ -276,12 +276,12 @@ bool operator<(path const& x, path const& y)
 }
 
 
-file::file(path p)
+file::file(vast::path p)
   : path_{std::move(p)}
 {
 }
 
-file::file(path p, native_type handle)
+file::file(vast::path p, native_type handle)
   : handle_{handle},
     is_open_{true},
     path_{std::move(p)}
@@ -460,6 +460,10 @@ bool file::seek(size_t bytes, size_t *skipped)
   return true;
 }
 
+path const& file::path() const
+{
+  return path_;
+}
 
 bool exists(path const& p)
 {

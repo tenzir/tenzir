@@ -16,7 +16,7 @@ trial<schema> schema::merge(schema const& s1, schema const& s2)
     if (! t1)
       merged.types_.push_back(t2);
     else if (*t1 != t2)
-      return error{"type clash:", *t1, "<-->", t2};
+      return error{"type clash: ", *t1, " <--> ", t2};
   }
 
   return std::move(merged);
@@ -28,7 +28,7 @@ trial<void> schema::add(type t)
     return error{"instance of invalid_type"};
 
   if (t.name().empty() && find_types(t).empty())
-    return error{"duplicate unnamed typed:", t};
+    return error{"duplicate unnamed typed: ", t};
 
   if (! t.name().empty())
     if (auto existing = find_type(t.name()))
@@ -36,8 +36,8 @@ trial<void> schema::add(type t)
       if (*existing == t)
         return nothing;
       else
-        return error{"clash in types with same name (existing <--> added):",
-                     to_string(*existing, false), "<-->", to_string(t, false)};
+        return error{"clash in types with same name (existing <--> added): ",
+                     to_string(*existing, false), " <--> ", to_string(t, false)};
     }
 
   types_.push_back(std::move(t));

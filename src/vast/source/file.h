@@ -6,9 +6,6 @@
 #include "vast/source/synchronous.h"
 
 namespace vast {
-
-class event;
-
 namespace source {
 
 /// A file source that transforms file contents into events.

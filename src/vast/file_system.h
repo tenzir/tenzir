@@ -169,13 +169,13 @@ public:
 
   /// Constructs a file from a path.
   /// @param p The file path.
-  file(path p);
+  file(vast::path p);
 
   /// Constructs a file from the OS' native file handle type.
   /// @param p The file path.
   /// @param handle The file handle.
   /// @pre The file identified via handle is open.
-  file(path p, native_type handle);
+  file(vast::path p, native_type handle);
 
   /// Move-construfts a file.
   /// @param other The file to move.
@@ -226,11 +226,15 @@ public:
   /// @returns `true` on success.
   bool seek(size_t bytes, size_t* skipped = nullptr);
 
+  /// Retrieves the ::path for this file.
+  /// @returns The ::path for this file.
+  vast::path const& path() const;
+
 private:
   native_type handle_;
   bool is_open_ = false;
   bool seek_failed_ = false;
-  path path_;
+  vast::path path_;
 };
 
 /// Checks whether the path exists on the filesystem.
