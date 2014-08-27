@@ -174,6 +174,13 @@ public:
     record
   >;
 
+  /// Evaluates a data predicate.
+  /// @param lhs The LHS of the predicate.
+  /// @param op The relational operator.
+  /// @param rhs The RHS of the predicate.
+  static bool evaluate(data const& lhs, relational_operator op,
+                       data const& rhs);
+
   /// Default-constructs empty data.
   data(none = nil) {}
 

@@ -346,6 +346,31 @@ TEST("relational operators")
   CHECK(! (d1 > d2));
 }
 
+TEST("predicate evaluation")
+{
+  data lhs{"foo"};
+  data rhs{"foobar"};
+  CHECK(data::evaluate(lhs, in, rhs));
+  CHECK(data::evaluate(rhs, not_in, lhs));
+  CHECK(data::evaluate(rhs, ni, lhs));
+  CHECK(data::evaluate(rhs, not_in, lhs));
+
+  lhs = count{42};
+  rhs = count{1337};
+  CHECK(data::evaluate(lhs, less_equal, rhs));
+  CHECK(data::evaluate(lhs, less, rhs));
+  CHECK(data::evaluate(lhs, not_equal, rhs));
+  CHECK(! data::evaluate(lhs, equal, rhs));
+
+  lhs = *to<data>("10.0.0.1");
+  rhs = *to<data>("10.0.0.0/8");
+  CHECK(data::evaluate(lhs, in, rhs));
+
+  rhs = real{4.2};
+  CHECK(! data::evaluate(lhs, equal, rhs));
+  CHECK(data::evaluate(lhs, not_equal, rhs));
+}
+
 TEST("serialization")
 {
   set s;
@@ -362,4 +387,3 @@ TEST("serialization")
   CHECK(d0 == d1);
   CHECK(to_string(d1) == "{8/icmp, 53/udp, 80/tcp}");
 }
-
