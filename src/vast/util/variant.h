@@ -214,21 +214,15 @@ public:
 
   basic_variant& operator=(basic_variant const& rhs)
   {
-    if (this != &rhs)
-    {
-      rhs.apply_visitor_internal(assigner(*this, rhs.which()));
-      which_ = rhs.which_;
-    }
+    rhs.apply_visitor_internal(assigner(*this, rhs.which()));
+    which_ = rhs.which_;
     return *this;
   }
 
   basic_variant& operator=(basic_variant&& rhs) noexcept
   {
-    if (this != &rhs)
-    {
-      rhs.apply_visitor_internal(move_assigner(*this, rhs.which()));
-      which_ = rhs.which_;
-    }
+    rhs.apply_visitor_internal(move_assigner(*this, rhs.which()));
+    which_ = rhs.which_;
     return *this;
   }
 
@@ -395,7 +389,7 @@ private:
   struct initializer;
 
   template <size_t TT, typename T, typename... Tail>
-  struct initializer<TT, T, Tail...> 
+  struct initializer<TT, T, Tail...>
     : public initializer<TT + 1, Tail...>
   {
     using base = initializer<TT + 1, Tail...>;
@@ -508,8 +502,8 @@ private:
 
   struct factory { };
   basic_variant(factory, tag t)
+    : which_{t}
   {
-    which_ = t;
     apply<std::false_type>(default_constructor{*this});
   }
 
