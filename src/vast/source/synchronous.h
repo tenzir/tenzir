@@ -17,7 +17,7 @@ public:
   /// Spawns a synchronous source.
   /// @param The actor receiving the generated events.
   /// @param batch_size The number of events to extract in one batch.
-  synchronous(caf::actor sink, uint64_t batch_size = 0)
+  synchronous(caf::actor sink, uint64_t batch_size = 100000)
     : sink_{std::move(sink)},
       batch_size_{batch_size}
   {
