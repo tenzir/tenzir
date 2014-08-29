@@ -8,10 +8,16 @@
 namespace vast {
 namespace source {
 
-pcap::pcap(caf::actor sink, path trace)
+pcap::pcap(caf::actor sink, path trace, uint64_t cutoff, size_t max_flows,
+           size_t max_age, size_t expire_interval)
   : synchronous<pcap>{std::move(sink)},
     trace_{std::move(trace)},
-    packet_type_{detail::make_packet_type()}
+    packet_type_{detail::make_packet_type()},
+    cutoff_{cutoff},
+    max_flows_{max_flows},
+    generator_{std::random_device{}()},
+    max_age_{std::chrono::seconds(max_age)},
+    expire_interval_{std::chrono::seconds(expire_interval)}
 {
 }
 
@@ -23,6 +29,7 @@ pcap::~pcap()
 
 result<event> pcap::extract()
 {
+  auto now = std::chrono::steady_clock::now();
   if (! pcap_ && ! done_)
   {
     if (trace_ != "-" && ! exists(trace_))
@@ -40,9 +47,12 @@ result<event> pcap::extract()
     {
       std::string err{buf};
       done_ = true;
+      flows_.clear();
       quit(exit::error);
       return error{"failed to open pcap file ", trace_, ": ", err};
     }
+
+    last_expire_ = now;
   }
 
   uint8_t const* data;
@@ -64,15 +74,17 @@ result<event> pcap::extract()
     return error{"timeout should not occur with traces"};
   }
 
-  record network;
+  detail::connection conn;
+  auto packet_size = packet_header_->len - 14;
   auto layer3 = data + 14;
   uint8_t const* layer4 = nullptr;
   uint8_t layer4_proto = 0;
   auto layer2_type = *reinterpret_cast<uint16_t const*>(data + 12);
+  uint64_t payload_size = packet_size;
   switch (util::byte_swap<network_endian, host_endian>(layer2_type))
   {
     default:
-      return error{"unsupported network layer"};
+      return {}; // Skip all non-IP packets.
     case 0x0800:
       {
         if (packet_header_->len < 14 + 20)
@@ -82,18 +94,14 @@ result<event> pcap::extract()
         if (header_size < 20)
           return error{"IPv4 header too short: ", header_size, " bytes"};
 
-        network.emplace_back(*reinterpret_cast<uint8_t const*>(layer3 + 8));
-
         auto orig_h = reinterpret_cast<uint32_t const*>(layer3 + 12);
-        network.emplace_back(
-            vast::address{orig_h, address::ipv4, address::network});
-
         auto resp_h = reinterpret_cast<uint32_t const*>(layer3 + 16);
-        network.emplace_back(
-            vast::address{resp_h, address::ipv4, address::network});
+        conn.src = {orig_h, address::ipv4, address::network};
+        conn.dst = {resp_h, address::ipv4, address::network};
 
         layer4_proto = *(layer3 + 9);
         layer4 = layer3 + header_size;
+        payload_size -= header_size;
       }
       break;
     case 0x86dd:
@@ -101,82 +109,122 @@ result<event> pcap::extract()
         if (packet_header_->len < 14 + 40)
           return error{"IPv6 header too short"};
 
-        network.emplace_back(*reinterpret_cast<uint8_t const*>(layer3 + 7));
-
         auto orig_h = reinterpret_cast<uint32_t const*>(layer3 + 8);
-        network.emplace_back(
-            vast::address{orig_h, address::ipv6, address::network});
-
         auto resp_h = reinterpret_cast<uint32_t const*>(layer3 + 24);
-        network.emplace_back(
-            vast::address{resp_h, address::ipv6, address::network});
+        conn.src = {orig_h, address::ipv4, address::network};
+        conn.dst = {resp_h, address::ipv4, address::network};
 
         layer4_proto = *(layer3 + 6);
         layer4 = layer3 + 40;
+        payload_size -= 40;
       }
       break;
   }
 
-  record meta;
-  meta.emplace_back(std::move(network));
-
-  record transport;
   if (layer4_proto == IPPROTO_TCP)
   {
     assert(layer4);
     auto orig_p = *reinterpret_cast<uint16_t const*>(layer4);
-    orig_p = util::byte_swap<network_endian, host_endian>(orig_p);
     auto resp_p = *reinterpret_cast<uint16_t const*>(layer4 + 2);
+    orig_p = util::byte_swap<network_endian, host_endian>(orig_p);
     resp_p = util::byte_swap<network_endian, host_endian>(resp_p);
+    conn.sport = {orig_p, port::tcp};
+    conn.dport = {resp_p, port::tcp};
 
-    record ports;
-    ports.emplace_back(port{orig_p, port::tcp});
-    ports.emplace_back(port{resp_p, port::tcp});
-
-    transport.emplace_back(std::move(ports));
-    transport.emplace_back(nil);
-    transport.emplace_back(nil);
+    auto data_offset = *reinterpret_cast<uint8_t const*>(layer4 + 12) >> 4;
+    payload_size -= data_offset * 4;
   }
   else if (layer4_proto == IPPROTO_UDP)
   {
     assert(layer4);
     auto orig_p = *reinterpret_cast<uint16_t const*>(layer4);
-    orig_p = util::byte_swap<network_endian, host_endian>(orig_p);
     auto resp_p = *reinterpret_cast<uint16_t const*>(layer4 + 2);
+    orig_p = util::byte_swap<network_endian, host_endian>(orig_p);
     resp_p = util::byte_swap<network_endian, host_endian>(resp_p);
+    conn.sport = {orig_p, port::udp};
+    conn.dport = {resp_p, port::udp};
 
-    record ports;
-    ports.emplace_back(port{orig_p, port::udp});
-    ports.emplace_back(port{resp_p, port::udp});
-
-    transport.emplace_back(nil);
-    transport.emplace_back(std::move(ports));
-    transport.emplace_back(nil);
+    payload_size -= 8;
   }
   else if (layer4_proto == IPPROTO_ICMP)
   {
     assert(layer4);
-    auto t = *reinterpret_cast<uint8_t const*>(layer4);
-    auto c = *reinterpret_cast<uint8_t const*>(layer4 + 1);
+    auto message_type = *reinterpret_cast<uint8_t const*>(layer4);
+    auto message_code = *reinterpret_cast<uint8_t const*>(layer4 + 1);
+    conn.sport = {message_type, port::icmp};
+    conn.dport = {message_code, port::icmp};
 
-    transport.emplace_back(nil);
-    transport.emplace_back(nil);
-    transport.emplace_back(record{t, c});
+    // TODO: account for variable-size data.
+    payload_size -= 8;
+  }
+
+  auto i = flows_.find(conn);
+  if (i == flows_.end())
+    i = flows_.insert(std::make_pair(conn, connection_state{0, now})).first;
+  else
+    i->second.last = now;
+
+  auto& flow_size = i->second.bytes;
+  if (flow_size == cutoff_)
+    return {};
+
+  if (flow_size + payload_size <= cutoff_)
+  {
+    flow_size += payload_size;
   }
   else
   {
-    transport.emplace_back(nil);
-    transport.emplace_back(nil);
-    transport.emplace_back(nil);
+    // Trim the last packet so that it fits.
+    packet_size -= flow_size + payload_size - cutoff_;
+    flow_size = cutoff_;
   }
 
-  meta.emplace_back(std::move(transport));
+  // Evict all elements that have been inactive for a while.
+  if (now - last_expire_ > expire_interval_)
+  {
+    last_expire_ = now;
+    auto i = flows_.begin();
+    while (i != flows_.end())
+      if (now - i->second.last > max_age_)
+        i = flows_.erase(i);
+      else
+        ++i;
+  }
+
+  // If the flow table gets too large, we evict a random element.
+  if (! flows_.empty() && flows_.size() % max_flows_ == 0)
+  {
+    auto buckets = flows_.bucket_count();
+    auto unif1 = std::uniform_int_distribution<size_t>{0, buckets - 1};
+    auto bucket = unif1(generator_);
+    auto bucket_size = flows_.bucket_size(bucket);
+    while (bucket_size == 0)
+    {
+      bucket = ++bucket % buckets;
+      bucket_size = flows_.bucket_size(bucket);
+    }
+
+    auto unif2 = std::uniform_int_distribution<size_t>{0, bucket_size - 1};
+    auto offset = unif2(generator_);
+    assert(offset < bucket_size);
+    auto begin = flows_.begin(bucket);
+    for (size_t n = 0; n < offset; ++n)
+      ++begin;
+
+    flows_.erase(begin->first);
+  }
 
   record packet;
+  record meta;
+  meta.emplace_back(std::move(conn.src));
+  meta.emplace_back(std::move(conn.dst));
+  meta.emplace_back(std::move(conn.sport));
+  meta.emplace_back(std::move(conn.dport));
   packet.emplace_back(std::move(meta));
 
+  // We start with the network layer and skip the link layer.
   auto str = reinterpret_cast<char const*>(data + 14);
-  packet.emplace_back(std::string{str, packet_header_->len - 14});
+  packet.emplace_back(std::string{str, packet_size});
 
   event e{std::move(packet), packet_type_};
 

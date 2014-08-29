@@ -13,36 +13,48 @@ endforeach ()
 configure_file(tests/schema_test_cases.h.in schema_test_cases.h)
 
 #
-# Generate header file that defines the paths to log files.
+# Generate header file that defines the paths to data.
 #
 
 file(GLOB_RECURSE zipped_logs bro/logs/*.gz)
-if (zipped_logs)
-  message(STATUS "uncompressing logs...")
-  execute_process(COMMAND gunzip -fk ${zipped_logs})
-endif ()
+file(GLOB_RECURSE zipped_traces traces/*.gz)
+execute_process(COMMAND gunzip -fk ${zipped_logs})
+execute_process(COMMAND gunzip -fk ${zipped_traces})
 
-set (bro_log_header "#ifndef BRO_LOGS\n#define BRO_LOGS")
+set (test_data "#ifndef TEST_DATA\n#define TEST_DATA")
 file(GLOB log_dirs bro/logs/*)
 foreach (log_dir ${log_dirs})
   get_filename_component(log_dir_basename ${log_dir} NAME_WE)
-  set (bro_log_header "${bro_log_header}\n\nnamespace ${log_dir_basename} {\n")
+  set(test_data "${test_data}\n\nnamespace ${log_dir_basename} {\n")
   file(GLOB logs ${log_dir}/*.log)
   foreach (log ${logs})
       get_filename_component(log_basename ${log} NAME_WE)
       set (this "constexpr auto ${log_basename} = \"${log}\";")
-      set (bro_log_header "${bro_log_header}\n${this}")
+      set (test_data "${test_data}\n${this}")
   endforeach ()
-  set (bro_log_header "${bro_log_header}\n\n} // namespace ${log_dir_basename}")
+  set(test_data "${test_data}\n\n} // namespace ${log_dir_basename}")
 endforeach ()
-set (bro_log_header "${bro_log_header}\n\n#endif")
+set(test_data "${test_data}\n\nnamespace traces {\n")
+file(GLOB traces traces/*.pcap)
+foreach (trace ${traces})
+  get_filename_component(trace_basename ${trace} NAME_WE)
+  set(this "constexpr auto ${trace_basename} = \"${trace}\";")
+  set(test_data "${test_data}\n${this}")
+endforeach ()
+set(test_data "${test_data}\n\n} // namespace traces")
+set(test_data "${test_data}\n\n#endif")
 
-configure_file(tests/bro_logs.h.in bro_logs.h)
+configure_file(tests/test_data.h.in ${CMAKE_CURRENT_BINARY_DIR}/test_data.h)
+
+#
+# Configure framework
+#
 
 include_directories(
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_BINARY_DIR}/src
-    ${CMAKE_CURRENT_SOURCE_DIR})
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_BINARY_DIR})
 
 file(GLOB_RECURSE tests framework/*.cc tests/*.cc)
 add_executable(unit-test ${tests})

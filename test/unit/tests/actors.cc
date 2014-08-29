@@ -11,8 +11,7 @@
 #include "vast/io/serialization.h"
 
 #include "framework/unit.h"
-
-#include "test/unit/bro_logs.h"
+#include "test_data.h"
 
 using namespace caf;
 using namespace vast;
