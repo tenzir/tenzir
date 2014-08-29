@@ -152,6 +152,13 @@ trial<void> print(boolean_operator op, Iterator&& out)
 /// @returns The complement of *op*.
 relational_operator negate(relational_operator op);
 
+/// Flips the directionality of an operator, i.e., for a given predicate
+/// *P = LHS op RHS*, the function returns the operator such that the predicate
+/// *RHS op LHS* is equivalent to *P*.
+/// @param op The operator to flip.
+/// @returns The flipped operator.
+relational_operator flip(relational_operator op);
+
 } // namespace
 
 #endif

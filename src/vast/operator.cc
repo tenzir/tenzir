@@ -42,9 +42,6 @@ void deserialize(deserializer& source, boolean_operator& op)
   op = static_cast<boolean_operator>(u);
 }
 
-/// Negates a relational operator, i.e., creates the complementary operator.
-/// @param op The operator to negate.
-/// @returns The complement of *op*.
 relational_operator negate(relational_operator op)
 {
   switch (op)
@@ -75,6 +72,36 @@ relational_operator negate(relational_operator op)
       return not_ni;
     case not_ni:
       return ni;
+  }
+}
+
+relational_operator flip(relational_operator op)
+{
+  switch (op)
+  {
+    default:
+      throw std::logic_error("missing case for relational operator");
+    case match:
+    case not_match:
+    case equal:
+    case not_equal:
+      return op;
+    case less:
+      return greater_equal;
+    case less_equal:
+      return greater;
+    case greater:
+      return less_equal;
+    case greater_equal:
+      return less;
+    case in:
+      return ni;
+    case not_in:
+      return not_ni;
+    case ni:
+      return in;
+    case not_ni:
+      return not_in;
   }
 }
 
