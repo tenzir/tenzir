@@ -233,6 +233,11 @@ struct expr_printer
   {
   }
 
+  trial<void> operator()(none) const
+  {
+    return print("<invalid>", out_);
+  }
+
   trial<void> operator()(conjunction const& c) const
   {
     auto t = print('{', out_);

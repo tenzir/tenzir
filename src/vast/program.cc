@@ -292,8 +292,7 @@ void program::run()
       sync_send(search_, atom("query"), exp0rter, query).then(
           on_arg_match >> [=](error const& e)
           {
-            VAST_LOG_ACTOR_ERROR("got invalid query syntax: " << e);
-            std::cerr  << "syntax error: " << e << std::endl;
+            VAST_LOG_ACTOR_ERROR("got invalid query: " << e);
             quit(exit::error);
           },
           [=](expression const& ast, actor qry)

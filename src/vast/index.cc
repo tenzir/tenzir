@@ -613,9 +613,9 @@ message_handler index::act()
     {
       if (part_map_.empty())
       {
-        auto err = error{"has no partitions to answer queries"};
-        VAST_LOG_ACTOR_WARN(err);
-        return make_message(err);
+        VAST_LOG_ACTOR_WARN("has no partitions to answer queries");
+        send_exit(sink, exit::error);
+        return;
       }
 
       if (! queries_.count(ast))
@@ -625,8 +625,6 @@ message_handler index::act()
       queries_[ast].subscribers.insert(sink);
 
       send(this, atom("first-eval"), ast, sink);
-
-      return make_message(atom("success"));
     },
     on(atom("first-eval"), arg_match) >> [=](expression const& ast, actor sink)
     {

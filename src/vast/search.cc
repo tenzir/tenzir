@@ -23,30 +23,6 @@ message_handler search_actor::act()
 {
   trap_exit(true);
 
-  auto parse_ast = [=](std::string const& str) -> optional<expression>
-  {
-    auto ast = to<expression>(str);
-    if (! ast)
-    {
-      last_parse_error_ = ast.error();
-      return {};
-    }
-
-    *ast = visit(expr::normalizer{}, *ast);
-
-    // Just test whether the AST resolves according to the schema. We don't use
-    // the resolved AST here, though, as INDEX still needs the unresolved
-    // version.
-    auto t = visit(expr::schema_resolver{schema_}, *ast);
-    if (! t)
-    {
-      last_parse_error_ = t.error();
-      return {};
-    }
-
-    return std::move(*ast);
-  };
-
   auto schema_path = dir_ / "schema";
   if (exists(schema_path))
   {
@@ -105,37 +81,33 @@ message_handler search_actor::act()
           VAST_LOG_ACTOR_ERROR("failed to write schema to " << schema_path);
       }
     },
-    on(atom("query"), val<actor>, parse_ast)
-      >> [=](actor const& client, expression const& ast) -> continue_helper
+    on(atom("query"), arg_match)
+      >> [=](actor const& client, std::string const& str)
     {
-      VAST_LOG_ACTOR_INFO("got client " << client << " asking for " << ast);
+      VAST_LOG_ACTOR_INFO("got client " << client << " asking for " << str);
 
-      // Must succeed because we checked it in parse_ast(). But because we want
-      // to use both the resolved and original AST in this handler, we have to
-      // do the resolving twice.
-      auto resolved = visit(expr::schema_resolver{schema_}, ast);
-      assert(resolved);
+      auto ast = to<expression>(str);
+      if (! ast)
+      {
+         VAST_LOG_ACTOR_VERBOSE("ignores invalid query: " << str);
+         return make_message(ast.error());
+      }
 
+      *ast = visit(expr::normalizer{}, *ast);
+
+      auto resolved = visit(expr::schema_resolver{schema_}, *ast);
+      if (! resolved)
+      {
+        VAST_LOG_ACTOR_VERBOSE("could not resolve expression: " << resolved.error());
+        return make_message(resolved.error());
+      }
+
+      monitor(client);
       auto qry = spawn<query>(archive_, client, std::move(*resolved));
+      clients_[client.address()].queries.insert(qry);
+      send(index_, atom("query"), *ast, qry);
 
-      return sync_send(index_, atom("query"), ast, qry).then(
-          on(atom("success")) >> [=]
-          {
-            monitor(client);
-            clients_[client.address()].queries.insert(qry);
-            return make_message(ast, qry);
-          },
-          [=](error const&)
-          {
-            send_exit(qry, exit::error);
-            return last_dequeued();
-          });
-    },
-    on(atom("query"), val<actor>, arg_match)
-      >> [=](actor const&, std::string const& q)
-    {
-      VAST_LOG_ACTOR_VERBOSE("ignores invalid query: " << q);
-      return make_message(last_parse_error_);
+      return make_message(*ast, qry);
     }
   };
 }

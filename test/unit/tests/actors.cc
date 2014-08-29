@@ -176,13 +176,6 @@ TEST("basic actor integrity")
       [&](actor index) { self->send(index, atom("query"), *pops, self); });
 
   self->receive(
-      on(atom("success")) >> [&]
-      {
-        REQUIRE(true);
-      },
-      fail);
-
-  self->receive(
       on_arg_match >> [&](bitstream const& hits)
       {
         CHECK(hits.count() == 46);
