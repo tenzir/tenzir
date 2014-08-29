@@ -1043,7 +1043,19 @@ trial<void> type::record::each_key_offset(F f, key& k, offset& o) const
   return nothing;
 }
 
-
 } // namespace vast
+
+namespace std {
+
+template <>
+struct hash<vast::type>
+{
+  size_t operator()(vast::type const& t) const
+  {
+    return t.digest();
+  }
+};
+
+} // namespace std
 
 #endif

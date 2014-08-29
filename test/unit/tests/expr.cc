@@ -2,21 +2,76 @@
 
 #include "vast/event.h"
 #include "vast/expression.h"
-#include "vast/parse.h"
+#include "vast/schema.h"
+#include "vast/expr/evaluator.h"
+#include "vast/expr/resolver.h"
 #include "vast/io/serialization.h"
 
 using namespace vast;
 
 SUITE("expression")
 
-namespace {
+TEST("construction")
+{
+  predicate p0{time_extractor{}, less_equal, data{time_point{1983, 8, 12}}};
+  predicate p1{event_extractor{}, equal, data{"foo"}};
+  conjunction conj{p0, p1};
+  expression expr{conj};
 
-std::vector<event> events;
-schema sch;
+  auto c = get<conjunction>(expr);
+  REQUIRE(c);
+  REQUIRE(c->size() == 2);
+  CHECK(is<time_extractor>(get<predicate>(c->at(0))->lhs));
+  CHECK(*get<data>(get<predicate>(c->at(1))->rhs) == "foo");
+}
 
-} // namespace <anonymous>
+TEST("serialization")
+{
+  predicate p0{event_extractor{}, in, data{"foo"}};
+  predicate p1{type_extractor{}, equal, data{time_point{1983, 8, 12}}};
+  expression expr{disjunction{p0, p1}};
 
-TEST("schema setup")
+  auto str = to_string(expr);
+  std::vector<uint8_t> buf;
+  io::archive(buf, expr);
+  io::unarchive(buf, expr);
+
+  CHECK(to_string(expr), str);
+}
+
+TEST("parser tests")
+{
+  // Event tags.
+  CHECK(to<expression>("&type == \"foo\""));
+  CHECK(to<expression>("&time < now - 5d10m3s"));
+  CHECK(to<expression>("&id == 42"));
+
+  // Type queries.
+  CHECK(to<expression>(":port < 53/udp"));
+  CHECK(to<expression>(":addr == 192.168.0.1 && :port == 80/tcp"));
+  CHECK(to<expression>(":string ~ /evil.*/ && :subnet >= 10.0.0.0/8"));
+  CHECK(to<expression>(":addr == 1.2.3.4 || :subnet != 10.0.0.0/8"));
+  CHECK(to<expression>("! :int == +8 || ! :count < 4"));
+
+  CHECK(to<expression>("\"she\" [+ :string"));
+  CHECK(to<expression>(":string +] \"sells\""));
+  CHECK(to<expression>("\"sea\" [- :string"));
+  CHECK(to<expression>(":string -] \"shells\""));
+  CHECK(to<expression>("\"by\" in :string"));
+  CHECK(to<expression>("\"the\" !in :string"));
+  CHECK(to<expression>(":string ni \"sea\""));
+  CHECK(to<expression>(":string !ni \"shore\""));
+
+  // Groups
+  CHECK(to<expression>("(:real > 4.2)"));
+  CHECK(to<expression>(":real > 4.2 && (:time < now || :port == 53/?)"));
+  CHECK(to<expression>("(:real > 4.2 && ! (:time < now || :port == 53/?))"));
+
+  // Invalid type name.
+  CHECK(! to<expression>(":foo == -42"));
+}
+
+TEST("event evaluation")
 {
   std::string str =
     "type foo : record"
@@ -30,214 +85,119 @@ TEST("schema setup")
     "}"
     "type bar : record { s1: string, r : record { b: bool, s: string } }";
 
-  auto s = to<schema>(str);
-  REQUIRE(s);
-  sch = *s;
+  auto sch = to<schema>(str);
+  REQUIRE(sch);
 
-  auto foo = sch.find_type("foo");
-  auto bar = sch.find_type("bar");
+  auto foo = sch->find_type("foo");
+  auto bar = sch->find_type("bar");
   REQUIRE(foo);
   REQUIRE(bar);
 
-  events.emplace_back(record{"babba", 1.337, 42u, 100, "bar", -4.8}, *foo);
-  events.emplace_back(record{"yadda", record{false, "baz"}}, *bar);
-};
+  event e0{record{"babba", 1.337, 42u, 100, "bar", -4.8}, *foo};
+  event e1{record{"yadda", record{false, "baz"}}, *bar};
 
-TEST("partial order")
-{
-  auto lhs = to<expr::ast>(":string == \"tcp\"");
-  auto rhs = to<expr::ast>(":string != \"http\"");
-  REQUIRE(lhs && rhs);
-  CHECK(*lhs < *rhs);
+  //
+  // Event meta data queries
+  //
 
-  lhs = to<expr::ast>(":string == \"http\"");
-  rhs = to<expr::ast>(":string != \"http\"");
-  REQUIRE(lhs && rhs);
-  CHECK(*lhs < *rhs);
-
-  lhs = to<expr::ast>(":port == 53/tcp");
-  rhs = to<expr::ast>(":port == 54/tcp");
-  REQUIRE(lhs && rhs);
-  CHECK(*lhs < *rhs);
-
-  lhs = to<expr::ast>(":port == 54/tcp");
-  rhs = to<expr::ast>(":port > 53/tcp");
-  REQUIRE(lhs && rhs);
-  CHECK(*lhs < *rhs);
-}
-
-// TODO: Implement constant folding.
-//TEST("constant folding")
-//{
-//  auto exprs =
-//  {
-//    "T",
-//    "53/udp",
-//    "192.168.0.1 + 127.0.0.1",
-//    "(42 - 24) / 2",
-//    "-(42 - 24) / 2",
-//    "1.2.3.4 ^ 5.6.7.8
-//  };
-//}
-
-TEST("parser tests")
-{
-    // Event tags.
-  CHECK(to<expr::ast>("&type == \"foo\""));
-  CHECK(to<expr::ast>("&time < now - 5d10m3s"));
-  CHECK(to<expr::ast>("&id == 42"));
-
-  // Type queries.
-  CHECK(to<expr::ast>(":port < 53/udp"));
-  CHECK(to<expr::ast>(":addr == 192.168.0.1 && :port == 80/tcp"));
-  CHECK(to<expr::ast>(":string ~ /evil.*/ && :subnet >= 10.0.0.0/8"));
-  CHECK(to<expr::ast>(":addr == 1.2.3.4 || :subnet != 10.0.0.0/8"));
-  CHECK(to<expr::ast>("! :int == +8 || ! :count < 4"));
-
-  CHECK(to<expr::ast>(":string [+ \"she\""));
-  CHECK(to<expr::ast>(":string +] \"sells\""));
-  CHECK(to<expr::ast>(":string [- \"sea\""));
-  CHECK(to<expr::ast>(":string -] \"shells\""));
-  CHECK(to<expr::ast>(":string in \"by\""));
-  CHECK(to<expr::ast>(":string !in \"the\""));
-  CHECK(to<expr::ast>(":string ni \"sea\""));
-  CHECK(to<expr::ast>(":string !ni \"shore\""));
-
-  // Groups
-  CHECK(to<expr::ast>("(:real > 4.2)"));
-  CHECK(to<expr::ast>(":real > 4.2 && (:time < now || :port == 53/?)"));
-  CHECK(to<expr::ast>("(:real > 4.2 && (:time < now || :port == 53/?))"));
-
-  // Invalid type name.
-  CHECK(! to<expr::ast>(":foo == -42"));
-}
-
-bool bool_eval(expr::ast const& a, event const& e)
-{
-  return *get<boolean>(evaluate(a, e));
-}
-
-TEST("meta data queries")
-{
   event e;
   e.timestamp({"2014-01-16+05:30:12"});
   auto t = type::alias{type{}};
   CHECK(t.name("foo"));
   CHECK(e.type(t));
 
-  auto ast = to<expr::ast>("&time == 2014-01-16+05:30:12");
+  auto ast = to<expression>("&time == 2014-01-16+05:30:12");
   REQUIRE(ast);
-  CHECK(bool_eval(*ast, e));
+  CHECK(visit(expr::evaluator{e}, *ast));
 
-  ast = to<expr::ast>("&type == \"foo\"");
+  ast = to<expression>("&type == \"foo\"");
   REQUIRE(ast);
-  CHECK(bool_eval(*ast, e));
+  CHECK(visit(expr::evaluator{e}, *ast));
 
-  ast = to<expr::ast>("&type != \"bar\"");
+  ast = to<expression>("! &type == \"bar\"");
   REQUIRE(ast);
-  CHECK(bool_eval(*ast, e));
+  CHECK(visit(expr::evaluator{e}, *ast));
 
-  ast = to<expr::ast>("&type != \"foo\"");
+  ast = to<expression>("&type != \"foo\"");
   REQUIRE(ast);
-  CHECK(! bool_eval(*ast, e));
-}
+  CHECK(! visit(expr::evaluator{e}, *ast));
 
-TEST("type queries")
-{
-  auto ast = to<expr::ast>(":count == 42");
+  //
+  // Type queries
+  //
+
+  ast = to<expression>(":count == 42");
   REQUIRE(ast);
-  CHECK(bool_eval(*ast, events[0]));
-  CHECK(! bool_eval(*ast, events[1]));
+  CHECK(visit(expr::evaluator{e0}, visit(expr::type_resolver{*foo}, *ast)));
+  CHECK(! visit(expr::evaluator{e1}, visit(expr::type_resolver{*bar}, *ast)));
 
-  ast = to<expr::ast>(":int != +101");
+  ast = to<expression>(":int != +101");
   REQUIRE(ast);
-  CHECK(bool_eval(*ast, events[0]));
-  CHECK(bool_eval(*ast, events[1]));
+  CHECK(visit(expr::evaluator{e0}, visit(expr::type_resolver{*foo}, *ast)));
+  CHECK(! visit(expr::evaluator{e1}, visit(expr::type_resolver{*bar}, *ast)));
 
-  ast = to<expr::ast>(":string ~ /bar/ && :int == +100");
+  ast = to<expression>(":string ~ /bar/ && :int == +100");
   REQUIRE(ast);
-  CHECK(bool_eval(*ast, events[0]));
-  CHECK(! bool_eval(*ast, events[1]));
+  CHECK(visit(expr::evaluator{e0}, visit(expr::type_resolver{*foo}, *ast)));
+  CHECK(! visit(expr::evaluator{e1}, visit(expr::type_resolver{*bar}, *ast)));
 
-  ast = to<expr::ast>(":real >= -4.8");
+  ast = to<expression>(":real >= -4.8");
   REQUIRE(ast);
-  CHECK(bool_eval(*ast, events[0]));
-  CHECK(! bool_eval(*ast, events[1]));
+  CHECK(visit(expr::evaluator{e0}, visit(expr::type_resolver{*foo}, *ast)));
+  CHECK(! visit(expr::evaluator{e1}, visit(expr::type_resolver{*bar}, *ast)));
 
-  ast = to<expr::ast>(
+  ast = to<expression>(
       ":int <= -3 || :int >= +100 && :string !~ /bar/ || :real > 1.0");
   REQUIRE(ast);
-  CHECK(bool_eval(*ast, events[0]));
-  CHECK(! bool_eval(*ast, events[1]));
-}
+  CHECK(visit(expr::evaluator{e0}, visit(expr::type_resolver{*foo}, *ast)));
 
-TEST("schema queries")
-{
-  auto plain = to<expr::ast>("foo.s1 == \"babba\"");
-  REQUIRE(plain);
-  auto resolved = plain->resolve(sch);
-  if (! resolved)
-    std::cout << resolved.error() << std::endl;
-  REQUIRE(resolved);
-  CHECK(bool_eval(*resolved, events[0]));
+  // For the event of type "bar", this expression degenerates to
+  // <nil> because it has no numeric types and the first predicate of the
+  // conjunction in the middle renders the entire conjunction not viable.
+  CHECK(! visit(expr::evaluator{e1}, visit(expr::type_resolver{*bar}, *ast)));
 
-  plain = to<expr::ast>("s1 != \"cheetah\"");
-  REQUIRE(plain);
-  resolved = plain->resolve(sch);
-  REQUIRE(resolved);
-  CHECK(bool_eval(*resolved, events[0]));
+  //
+  // Schema queries
+  //
 
-  plain = to<expr::ast>("d1 > 0.5");
-  REQUIRE(plain);
-  resolved = plain->resolve(sch);
-  REQUIRE(resolved);
-  CHECK(bool_eval(*resolved, events[0]));
+  ast = to<expression>("foo.s1 == \"babba\" && d1 <= 1337.0");
+  REQUIRE(ast);
+  auto schema_resolved = visit(expr::schema_resolver{*sch}, *ast);
+  REQUIRE(schema_resolved);
+  CHECK(visit(expr::evaluator{e0}, *schema_resolved));
+  CHECK(! visit(expr::evaluator{e1}, *schema_resolved));
 
-  plain = to<expr::ast>("d2 < 0.5");
-  REQUIRE(plain);
-  resolved = plain->resolve(sch);
-  REQUIRE(resolved);
-  CHECK(bool_eval(*resolved, events[0]));
+  ast = to<expression>("s1 != \"cheetah\"");
+  REQUIRE(ast);
+  schema_resolved = visit(expr::schema_resolver{*sch}, *ast);
+  REQUIRE(schema_resolved);
+  CHECK(visit(expr::evaluator{e0}, *schema_resolved));
+  CHECK(visit(expr::evaluator{e1}, *schema_resolved));
 
-  plain = to<expr::ast>("r.b == F");
-  REQUIRE(plain);
-  resolved = plain->resolve(sch);
-  REQUIRE(resolved);
-  CHECK(bool_eval(*resolved, events[1]));
+  ast = to<expression>("d1 > 0.5");
+  REQUIRE(ast);
+  schema_resolved = visit(expr::schema_resolver{*sch}, *ast);
+  REQUIRE(schema_resolved);
+  CHECK(visit(expr::evaluator{e0}, *schema_resolved));
+  CHECK(! visit(expr::evaluator{e1}, *schema_resolved));
 
-  plain = to<expr::ast>("r.s == \"baz\"");
-  REQUIRE(plain);
-  resolved = plain->resolve(sch);
-  REQUIRE(resolved);
-  CHECK(bool_eval(*resolved, events[1]));
+  ast = to<expression>("r.b == F");
+  REQUIRE(ast);
+  schema_resolved = visit(expr::schema_resolver{*sch}, *ast);
+  REQUIRE(schema_resolved);
+  CHECK(visit(expr::evaluator{e1}, *schema_resolved));
 
   //
   // Error cases
   //
 
   // Invalid prefix.
-  auto a = to<expr::ast>("not.there ~ /nil/");
-  REQUIRE(a);
-  CHECK(! a->resolve(sch));
-
-  // 'puff' is no argument.
-  a = to<expr::ast>("puff ~ /nil/");
-  REQUIRE(a);
-  CHECK(! a->resolve(sch));
+  ast = to<expression>("not.there ~ /nil/");
+  REQUIRE(ast);
+  CHECK(! visit(expr::schema_resolver{*sch}, *ast));
 
   // 'q' doesn't exist in 'r'.
-  a = to<expr::ast>("r.q == 80/tcp");
-  REQUIRE(a);
-  CHECK(! a->resolve(sch));
-}
-
-TEST("serialization")
-{
-  std::vector<uint8_t> buf;
-  REQUIRE(io::archive(buf, sch));
-
-  schema s;
-  REQUIRE(io::unarchive(buf, s));
-  CHECK(s == sch);
-  CHECK(to_string(s) == to_string(sch));
+  ast = to<expression>("r.q == 80/tcp");
+  REQUIRE(ast);
+  CHECK(! visit(expr::schema_resolver{*sch}, *ast));
 }

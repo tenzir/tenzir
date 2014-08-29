@@ -17,7 +17,9 @@ struct key : util::stack_vector<std::string, 4>
   template <typename Iterator>
   friend trial<void> parse(key& k, Iterator& begin, Iterator end)
   {
-    k = util::to_strings(util::split(begin, end, "."));
+    for (auto& str : util::to_strings(util::split(begin, end, ".")))
+      k.push_back(std::move(str));;
+
     return nothing;
   }
 

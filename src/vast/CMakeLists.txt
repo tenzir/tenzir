@@ -43,6 +43,11 @@ set(libvast_sources
   detail/demangle.cc
   detail/type_manager.cc
   detail/ast/query.cc
+  expr/evaluator.cc
+  expr/hoister.cc
+  expr/normalizer.cc
+  expr/resolver.cc
+  expr/validator.cc
   io/algorithm.cc
   io/array_stream.cc
   io/buffered_stream.cc

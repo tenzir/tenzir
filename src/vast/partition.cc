@@ -74,93 +74,133 @@ void partition::deserialize(deserializer& source)
 }
 
 
-struct partition_actor::dispatcher : expr::default_const_visitor
+struct partition_actor::dispatcher
 {
   dispatcher(partition_actor& pa)
     : actor_{pa}
   {
   }
 
-  virtual void visit(expr::predicate const& pred)
+  template <typename T>
+  std::vector<actor> operator()(T const&)
   {
-    op_ = pred.op;
-    pred.rhs().accept(*this);
-    pred.lhs().accept(*this);
+    return {};
   }
 
-  virtual void visit(expr::timestamp_extractor const&)
+  template <typename T, typename U>
+  std::vector<actor> operator()(T const&, U const&)
   {
-    indexes_.push_back(actor_.load_time_indexer());
+    return {};
   }
 
-  virtual void visit(expr::name_extractor const&)
+  std::vector<actor> operator()(predicate const& p)
   {
-    indexes_.push_back(actor_.load_name_indexer());
+    op_ = p.op;
+    return visit(*this, p.lhs, p.rhs);
+    
   }
 
-  virtual void visit(expr::type_extractor const& te)
+  std::vector<actor> operator()(event_extractor const&, data const&)
   {
-    for (auto& tp : actor_.schema_)
-      // FIXME: Adjust after having switched to the new record indexer.
-      if (auto r = get<type::record>(tp))
+    return {actor_.load_name_indexer()};
+  }
+
+  std::vector<actor> operator()(time_extractor const&, data const&)
+  {
+    return {actor_.load_time_indexer()};
+  }
+
+  std::vector<actor> operator()(type_extractor const& e, data const&)
+  {
+    std::vector<actor> indexes;
+    for (auto& t : actor_.schema_)
+      if (auto r = get<type::record>(t))
       {
         auto attempt = r->each(
-            [&](type::record::trace const& t, offset const& o) -> trial<void>
+            [&](type::record::trace const& tr, offset const& o) -> trial<void>
             {
-              if (t.back()->type == te.type)
+              if (tr.back()->type == e.type)
               {
-                auto a = actor_.load_data_indexer(tp, te.type, o);
+                auto a = actor_.load_data_indexer(t, e.type, o);
                 if (! a)
                   return a.error();
 
-                indexes_.push_back(*a);
+                indexes.push_back(std::move(*a));
               }
 
               return nothing;
             });
 
         if (! attempt)
+        {
           VAST_LOG_ERROR(attempt.error());
+          return {};
+        }
       }
+      else if (t == e.type)
+      {
+        auto a = actor_.load_data_indexer(t, t, {});
+        if (! a)
+        {
+          VAST_LOG_ERROR(a.error());
+          return {};
+        }
+
+        indexes.push_back(std::move(*a));
+      }
+
+    return indexes;
   }
 
-  virtual void visit(expr::schema_extractor const& se)
+  std::vector<actor> operator()(schema_extractor const& e, data const& d)
   {
-    for (auto& tp : actor_.schema_)
-      // FIXME: Adjust after having switched to the new record indexer.
-      if (auto r = get<type::record>(tp))
+    std::vector<actor> indexes;
+    for (auto& t : actor_.schema_)
+      if (auto r = get<type::record>(t))
       {
-        for (auto& pair : r->find_suffix(se.key))
+        for (auto& pair : r->find_suffix(e.key))
         {
           auto& o = pair.first;
           auto lhs_type = r->at(o);
           assert(lhs_type);
 
-          if (! compatible(*lhs_type, op_, rhs_type_))
+          if (! compatible(*lhs_type, op_, type::derive(d)))
           {
             VAST_LOG_WARN("incompatible types: LHS = " << *lhs_type <<
-                          " <--> RHS = " << rhs_type_);
-            return;
+                          " <--> RHS = " << type::derive(d));
+            return {};
           }
 
-          auto a = actor_.load_data_indexer(tp, *lhs_type, o);
+          auto a = actor_.load_data_indexer(t, *lhs_type, o);
           if (! a)
             VAST_LOG_ERROR(a.error());
           else
-            indexes_.push_back(*a);
+            indexes.push_back(std::move(*a));
         }
       }
+      else if (e.key.size() == 1 && pattern::glob(e.key[0]).match(t.name()))
+      {
+        auto a = actor_.load_data_indexer(t, t, {});
+        if (! a)
+        {
+          VAST_LOG_ERROR(a.error());
+          return {};
+        }
+
+        indexes.push_back(std::move(*a));;
+      }
+
+    return indexes;
   }
 
-  virtual void visit(expr::constant const& c)
+  template <typename T>
+  std::vector<actor> operator()(data const& d, T const& e)
   {
-    rhs_type_ = type::derive(c.val.data());
+    return (*this)(e, d);
   }
 
   relational_operator op_;
-  type rhs_type_;
   partition_actor& actor_;
-  std::vector<actor> indexes_;
 };
 
 
@@ -263,14 +303,13 @@ message_handler partition_actor::act()
           }
       }
     },
-    [=](expr::ast const& pred, actor idx)
+    [=](expression const& pred, actor idx)
     {
       VAST_LOG_ACTOR_DEBUG("got predicate " << pred);
 
-      dispatcher d{*this};
-      pred.accept(d);
+      auto indexes = visit(dispatcher{*this}, pred);
 
-      uint64_t n = d.indexes_.size();
+      uint64_t n = indexes.size();
       send(idx, pred, partition_.meta().id, n);
 
       if (n == 0)
@@ -281,7 +320,7 @@ message_handler partition_actor::act()
       else
       {
         auto t = make_message(pred, partition_.meta().id, idx);
-        for (auto& a : d.indexes_)
+        for (auto& a : indexes)
           send_tuple(a, t);
       }
     },

@@ -4,6 +4,7 @@
 #include <deque>
 #include "vast/actor.h"
 #include "vast/expression.h"
+#include "vast/event.h"
 #include "vast/file_system.h"
 #include "vast/individual.h"
 #include "vast/util/command_line.h"
@@ -28,7 +29,7 @@ struct console : actor_base
     result() = default;
 
     /// Constructs a result from a valid AST.
-    result(expr::ast ast);
+    result(expression ast);
 
     /// Saves the current result state to a given directory.
     /// @param p The directory to save the results under.
@@ -65,7 +66,7 @@ struct console : actor_base
     size_t seek_backward(size_t n);
 
     /// Retrieves the AST of this query result.
-    expr::ast const& ast() const;
+    expression const& ast() const;
 
     /// Retrieves the number of events in the result.
     /// @returns The number of all events.
@@ -95,7 +96,7 @@ struct console : actor_base
   private:
     using pos_type = uint64_t;
 
-    expr::ast ast_;
+    expression ast_;
     uint64_t hits_ = 0;
     double progress_ = 0.0;
     pos_type pos_ = 0;

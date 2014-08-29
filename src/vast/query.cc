@@ -3,13 +3,14 @@
 #include <caf/all.hpp>
 #include "vast/event.h"
 #include "vast/logger.h"
+#include "vast/expr/evaluator.h"
+#include "vast/expr/resolver.h"
 
 using namespace caf;
 
 namespace vast {
 
-
-query::query(actor archive, actor sink, expr::ast ast)
+query::query(actor archive, actor sink, expression ast)
   : archive_{std::move(archive)},
     sink_{std::move(sink)},
     ast_{std::move(ast)}
@@ -168,7 +169,11 @@ query::query(actor archive, actor sink, expr::ast ast)
         last = id;
         if (auto e = reader_->read(id))
         {
-          if (is<boolean>(evaluate(ast_, *e)))
+          auto& candidate_checker = checkers_[e->type()];
+          if (is<none>(candidate_checker))
+            candidate_checker = visit(expr::type_resolver{e->type()}, ast_);
+
+          if (visit(expr::evaluator{*e}, candidate_checker))
           {
             send(sink_, std::move(*e));
             if (++n == requested_)
@@ -257,7 +262,7 @@ segment const* query::current() const
 {
   if (segment_.empty())
     return nullptr;
-  
+
   return reinterpret_cast<segment const*>(segment_.at(0));
 }
 

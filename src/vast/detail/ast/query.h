@@ -51,46 +51,22 @@ struct data_expr
   std::vector<expr_operation> rest;
 };
 
-struct tag_predicate
+struct predicate
 {
-  std::string lhs;
+  using lhs_or_rhs = boost::variant<std::string, data_expr>;
+
+  lhs_or_rhs lhs;
   relational_operator op;
-  data_expr rhs;
+  lhs_or_rhs rhs;
 };
 
-struct type_predicate
-{
-  vast::type lhs;
-  relational_operator op;
-  data_expr rhs;
-};
-
-struct schema_predicate
-{
-  std::vector<std::string> lhs;
-  relational_operator op;
-  data_expr rhs;
-};
-
-struct negated_predicate;
-
-using predicate = boost::variant<
-  tag_predicate,
-  type_predicate,
-  schema_predicate,
-  boost::recursive_wrapper<negated_predicate>
->;
-
-struct negated_predicate
-{
-  predicate operand;
-};
-
-struct query;
+struct query_expr;
+struct negated;
 
 using group = boost::variant<
   predicate,
-  boost::recursive_wrapper<query>
+  boost::recursive_wrapper<query_expr>,
+  boost::recursive_wrapper<negated>
 >;
 
 struct query_operation
@@ -99,10 +75,15 @@ struct query_operation
   group operand;
 };
 
-struct query
+struct query_expr
 {
   group first;
   std::vector<query_operation> rest;
+};
+
+struct negated
+{
+  query_expr expr;
 };
 
 /// Folds a constant expression into a single datum.
@@ -114,7 +95,7 @@ data fold(data_expr const& expr);
 /// that LHS and RHS of predicate operators have the correct types.
 /// @param q The query to validate.
 /// @returns `true` *iff* *q* is semantically correct.
-bool validate(query const& q);
+bool validate(query_expr const& q);
 
 } // namespace query
 } // namespace ast
@@ -137,26 +118,10 @@ BOOST_FUSION_ADAPT_STRUCT(
     (std::vector<vast::detail::ast::query::expr_operation>, rest))
 
   BOOST_FUSION_ADAPT_STRUCT(
-    vast::detail::ast::query::tag_predicate,
-    (std::string, lhs)
+    vast::detail::ast::query::predicate,
+    (vast::detail::ast::query::predicate::lhs_or_rhs, lhs)
     (vast::relational_operator, op)
-    (vast::detail::ast::query::data_expr, rhs))
-
-  BOOST_FUSION_ADAPT_STRUCT(
-    vast::detail::ast::query::type_predicate,
-    (vast::type, lhs)
-    (vast::relational_operator, op)
-    (vast::detail::ast::query::data_expr, rhs))
-
-  BOOST_FUSION_ADAPT_STRUCT(
-    vast::detail::ast::query::schema_predicate,
-    (std::vector<std::string>, lhs)
-    (vast::relational_operator, op)
-    (vast::detail::ast::query::data_expr, rhs))
-
-  BOOST_FUSION_ADAPT_STRUCT(
-    vast::detail::ast::query::negated_predicate,
-    (vast::detail::ast::query::predicate, operand))
+    (vast::detail::ast::query::predicate::lhs_or_rhs, rhs))
 
   BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::query::query_operation,
@@ -164,8 +129,12 @@ BOOST_FUSION_ADAPT_STRUCT(
     (vast::detail::ast::query::group, operand))
 
   BOOST_FUSION_ADAPT_STRUCT(
-    vast::detail::ast::query::query,
+    vast::detail::ast::query::query_expr,
     (vast::detail::ast::query::group, first)
     (std::vector<vast::detail::ast::query::query_operation>, rest))
+
+  BOOST_FUSION_ADAPT_STRUCT(
+    vast::detail::ast::query::negated,
+    (vast::detail::ast::query::query_expr, expr))
 
 #endif

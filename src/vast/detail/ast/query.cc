@@ -87,63 +87,6 @@ struct folder : public boost::static_visitor<data>
   }
 };
 
-struct validator : public boost::static_visitor<bool>
-{
-  static bool apply(query const& q)
-  {
-    if (! boost::apply_visitor(validator(), q.first))
-      return false;
-
-    for (auto& operation : q.rest)
-      if (! boost::apply_visitor(validator(), operation.operand))
-        return false;
-
-    return true;
-  }
-
-  bool operator()(query const& q) const
-  {
-    return apply(q);
-  }
-
-  bool operator()(predicate const& operand) const
-  {
-    return boost::apply_visitor(*this, operand);
-  }
-
-  bool operator()(tag_predicate const& pred) const
-  {
-    auto rhs = fold(pred.rhs);
-    auto& lhs = pred.lhs;
-    return
-      (lhs == "type" && (is<std::string>(rhs) || is<pattern>(rhs)))
-      || (lhs == "time" && is<time_point>(rhs))
-      || (lhs == "id" && is<count>(rhs));
-  }
-
-  bool operator()(type_predicate const& pred) const
-  {
-    auto rhs = fold(pred.rhs);
-    auto& op = pred.op;
-    return pred.lhs.check(rhs)
-      || (is<type::string>(pred.lhs)
-          && (op == match || op == not_match || op == in || op == not_in)
-          && is<pattern>(rhs))
-      || (is<type::address>(pred.lhs) && op == in && is<subnet>(rhs));
-  }
-
-  bool operator()(schema_predicate const& pred) const
-  {
-    auto rhs = fold(pred.rhs);
-    return ! is<none>(rhs) && ! pred.lhs.empty();
-  }
-
-  bool operator()(negated_predicate const& pred) const
-  {
-    return boost::apply_visitor(*this, pred.operand);
-  }
-};
-
 data fold(data_expr const& expr)
 {
   auto d = boost::apply_visitor(folder(), expr.first);
@@ -159,10 +102,10 @@ data fold(data_expr const& expr)
   return d;
 }
 
-bool validate(query const& q)
-{
-  return validator::apply(q);
-};
+//bool validate(query const& q)
+//{
+//  return validator::apply(q);
+//};
 
 } // namespace query
 } // namespace ast

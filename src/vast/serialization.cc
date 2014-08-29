@@ -433,9 +433,6 @@ struct bmi_model_wrapper
 // this verbose nonsense...
 
 template <typename T>
-using node_converter = converter<T, expr::node>;
-
-template <typename T>
 using bs_converter = converter<T, detail::bitstream_concept>;
 
 } // namespace <anonymous>
@@ -488,21 +485,8 @@ void announce_builtin_types()
     bitstream,
     bitmap_index<null_bitstream>,
     bitmap_index<ewah_bitstream>,
-    expr::ast,
+    expression,
     schema
-  >;
-
-  using expr_node_types = util::type_list<
-    expr::constant,
-    expr::timestamp_extractor,
-    expr::name_extractor,
-    expr::id_extractor,
-    expr::offset_extractor,
-    expr::schema_extractor,
-    expr::type_extractor,
-    expr::predicate,
-    expr::conjunction,
-    expr::disjunction
   >;
 
   using bitstream_models = util::type_list<
@@ -539,14 +523,12 @@ void announce_builtin_types()
       integral_types,
       stl_types,
       vast_types,
-      expr_node_types,
       bitstream_models,
       bmi_types,
       util::tl_map<bmi_types, bmi_model_wrapper>::type
     >::type;
 
   apply<announcer, all>();
-  apply<node_converter, expr_node_types>();
   apply<bs_converter, bitstream_models>();
   apply<bmi_converter, bmi_types>();
 }

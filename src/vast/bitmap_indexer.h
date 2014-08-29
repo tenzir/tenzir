@@ -109,29 +109,13 @@ public:
 
         return make_message(total, n, stats_.last(), stats_.mean());
       },
-      [=](expr::ast const& pred, uuid const& part, actor sink)
+      [=](expression const& pred, uuid const& part, actor sink)
       {
-        assert(pred.is_predicate());
+        auto p = get<predicate>(pred);
+        assert(p);
+        auto& d = *get<data>(p->rhs);
 
-        auto o = pred.find_operator();
-        if (! o)
-        {
-          VAST_LOG_ACTOR_ERROR("failed to extract operator from " << pred);
-          send(sink, pred, part, bitstream{});
-          this->quit(exit::error);
-          return;
-        }
-
-        auto c = pred.find_constant();
-        if (! c)
-        {
-          VAST_LOG_ACTOR_ERROR("failed to extract constant from " << pred);
-          send(sink, pred, part, bitstream{});
-          this->quit(exit::error);
-          return;
-        }
-
-        auto r = bmi_.lookup(*o, c->data());
+        auto r = bmi_.lookup(p->op, d);
         if (! r)
         {
           VAST_LOG_ACTOR_ERROR(r.error());
@@ -228,7 +212,13 @@ struct event_data_indexer
 
     auto r = get<record>(e);
     if (! r)
-      return error{"only records supports currently, got event ", e.type()};
+    {
+      assert(offset_.empty());
+      if (bmi.push_back(e.data(), e.id()))
+        return nothing;
+      else
+        return error{"push_back failed for ", e.data(), ", id", e.id()};
+    }
 
     if (auto d = r->at(offset_))
     {

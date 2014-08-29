@@ -38,96 +38,118 @@ std::vector<uuid> unify(std::vector<uuid> const& x,
   return r;
 }
 
-using restriction_map = std::map<expr::ast, std::vector<uuid>>;
+using restriction_map = std::map<expression, std::vector<uuid>>;
 
 } // namespace <anonymous>
 
 // Registers each sub-tree with the GQG.
-class index::dissector : public expr::default_const_visitor
+struct index::dissector
 {
-public:
-  dissector(index& idx, expr::ast const& root)
+  dissector(index& idx, expression const& root)
     : index_{idx},
       root_{root}
   {
   }
 
-  virtual void visit(expr::conjunction const& conj)
+  void operator()(none)
   {
-    expr::ast ast{conj};
-
-    if (parent_)
-      index_.gqg_[ast].insert(parent_);
-    else if (ast == root_)
-      index_.gqg_[ast];
-
-    parent_ = ast;
-    for (auto& op : conj.operands)
-      op->accept(*this);
+    assert(! "should never happen");
   }
 
-  virtual void visit(expr::disjunction const& disj)
+  void operator()(conjunction const& con)
   {
-    expr::ast ast{disj};
+    if (! is<none>(parent_))
+      index_.gqg_[con].insert(parent_);
+    else if (con == root_)
+      index_.gqg_[con];
 
-    if (parent_)
-      index_.gqg_[ast].insert(parent_);
-    else if (ast == root_)
-      index_.gqg_[ast];
-
-    parent_ = ast;
-    for (auto& op : disj.operands)
-      op->accept(*this);
+    parent_ = con;
+    for (auto& op : con)
+      visit(*this, op);
   }
 
-  virtual void visit(expr::predicate const& pred)
+  void operator()(disjunction const& dis)
   {
-    assert(parent_);
-    index_.gqg_[expr::ast{pred}].insert(parent_);
+    if (! is<none>(parent_))
+      index_.gqg_[dis].insert(parent_);
+    else if (dis == root_)
+      index_.gqg_[dis];
+
+    parent_ = dis;
+    for (auto& op : dis)
+      visit(*this, op);
   }
 
-private:
-  expr::ast parent_;
+  void operator()(negation const& n)
+  {
+    if (! is<none>(parent_))
+      index_.gqg_[n].insert(parent_);
+    else if (n == root_)
+      index_.gqg_[n];
+
+    parent_ = n;
+    visit(*this, n[0]);
+  }
+
+  void operator()(predicate const& pred)
+  {
+    assert(! is<none>(parent_) || pred == root_);
+
+    if (is<none>(parent_))
+      index_.gqg_[pred];
+    else
+      index_.gqg_[pred].insert(parent_);
+  }
+
   index& index_;
-  expr::ast const& root_;
+  expression const& root_;
+  expression parent_;
 };
 
-// Builds the set of restrictions.
-class index::builder : public expr::default_const_visitor
+// Builds the set of restrictions bottom-up.
+struct index::builder
 {
-public:
   builder(index const& idx, restriction_map& restrictions)
     : index_{idx},
       restrictions_{restrictions}
   {
   }
 
-  virtual void visit(expr::conjunction const& conj)
+  void operator()(none)
   {
-    for (auto& operand : conj.operands)
-      operand->accept(*this);
-
-    auto& r = restrictions_[conj];
-    r = restrictions_[*conj.operands[0]];
-    for (size_t i = 1; i < conj.operands.size(); ++i)
-      r = intersect(r, restrictions_[*conj.operands[i]]);
+    assert(! "should never happen");
   }
 
-  virtual void visit(expr::disjunction const& disj)
+  void operator()(conjunction const& con)
   {
-    for (auto& operand : disj.operands)
-      operand->accept(*this);
+    for (auto& op : con)
+      visit(*this, op);
 
-    auto& r = restrictions_[disj];
-    for (auto& operand : disj.operands)
-      r = unify(r, restrictions_[*operand]);
+    auto& r = restrictions_[con];
+    r = restrictions_[con[0]];
+    for (size_t i = 1; i < con.size(); ++i)
+      r = intersect(r, restrictions_[con[i]]);
   }
 
-  virtual void visit(expr::predicate const& pred)
+  void operator()(disjunction const& dis)
   {
-    timestamp_found_ = false;
-    pred.lhs().accept(*this);
-    if (! timestamp_found_)
+    for (auto& op : dis)
+      visit(*this, op);
+
+    auto& r = restrictions_[dis];
+    for (auto& op : dis)
+      r = unify(r, restrictions_[op]);
+  }
+
+  void operator()(negation const& n)
+  {
+    visit(*this, n[0]);
+  }
+
+  void operator()(predicate const& pred)
+  {
+    auto e = get<time_extractor>(pred.lhs);
+    if (! e)
     {
       if (all_.empty())
       {
@@ -143,22 +165,19 @@ public:
     }
     else
     {
-      v_ = nullptr;
-      pred.rhs().accept(*this);
-      assert(v_);
-      auto ts = get<time_point>(*v_);
-      assert(ts);
+      auto d = get<data>(pred.rhs);
+      assert(d && is<time_point>(*d));
 
       restriction_map::mapped_type partitions;
-      VAST_LOG_DEBUG("checking restrictors for " << expr::ast{pred});
+      VAST_LOG_DEBUG("checking restrictors for " << expression{pred});
       for (auto& p : index_.part_state_)
       {
-        if (pred.pred(value{p.second.first}, *v_))
+        if (data::evaluate(p.second.first, pred.op, *d))
         {
           VAST_LOG_DEBUG("  - " << p.second.first << " for " << p.first);
           partitions.push_back(p.first);
         }
-        else if (pred.pred(value{p.second.last}, *v_))
+        else if (data::evaluate(p.second.last, pred.op, *d))
         {
           VAST_LOG_DEBUG("  - " << p.second.last << " for " << p.first);
           partitions.push_back(p.first);
@@ -170,72 +189,72 @@ public:
     }
   }
 
-  virtual void visit(expr::timestamp_extractor const&)
-  {
-    timestamp_found_ = true;
-  }
-
-  virtual void visit(expr::constant const& c)
-  {
-    v_ = &c.val;
-  }
-
-private:
   index const& index_;
   restriction_map& restrictions_;
   restriction_map::mapped_type all_;
-  bool timestamp_found_;
-  value const* v_;
 };
 
-// Propagates the accumulated restrictions.
-class index::pusher : public expr::default_const_visitor
+// Propagates the accumulated restrictions top-down.
+struct index::pusher
 {
-public:
   pusher(restriction_map& restrictions)
     : restrictions_{restrictions}
   {
   }
 
-  virtual void visit(expr::conjunction const& conj)
+  void operator()(none)
   {
-    auto& r = restrictions_[conj];
-    for (auto& operand : conj.operands)
-      restrictions_[*operand] = intersect(r, restrictions_[*operand]);
+    assert(! "should never happen");
+  }
 
-    for (auto& operand : conj.operands)
+  void operator()(conjunction const& con)
+  {
+    auto& r = restrictions_[con];
+    for (auto& op : con)
+      restrictions_[op] = intersect(r, restrictions_[op]);
+
+    for (auto& op : con)
     {
-      VAST_LOG_DEBUG("pushing restriction of " << expr::ast{conj} <<
-                     " to " << expr::ast{*operand});
+      VAST_LOG_DEBUG("pushing restriction of " << expression{con} <<
+                     " to " << expression{op});
       for (auto& p : r)
         VAST_LOG_DEBUG("  -  " << p);
 
-      operand->accept(*this);
+      visit(*this, op);
     }
   }
 
-  virtual void visit(expr::disjunction const& disj)
+  void operator()(disjunction const& dis)
   {
-    auto& r = restrictions_[disj];
-    for (auto& operand : disj.operands)
-      restrictions_[*operand] = intersect(r, restrictions_[*operand]);
+    auto& r = restrictions_[dis];
+    for (auto& op : dis)
+      restrictions_[op] = intersect(r, restrictions_[op]);
 
-    for (auto& operand : disj.operands)
+    for (auto& op : dis)
     {
-      VAST_LOG_DEBUG("pushing restriction of " << expr::ast{disj} <<
-                     " to " << expr::ast{*operand});
+      VAST_LOG_DEBUG("pushing restriction of " << expression{dis} <<
+                     " to " << expression{op});
       for (auto& p : r)
         VAST_LOG_DEBUG("  -  " << p);
 
-      operand->accept(*this);
+      visit(*this, op);
     }
   }
 
-private:
+  void operator()(negation const& n)
+  {
+    visit(*this, n[0]);
+  }
+
+  void operator()(predicate const&)
+  {
+    // Done with this path.
+  }
+
   restriction_map& restrictions_;
 };
 
-class index::evaluator : public expr::default_const_visitor
+struct index::evaluator
 {
 public:
   evaluator(index& idx, restriction_map& restrictions)
@@ -244,12 +263,17 @@ public:
   {
   }
 
-  virtual void visit(expr::conjunction const& conj)
+  void operator()(none)
+  {
+    assert(! "should never happen");
+  }
+
+  void operator()(conjunction const& con)
   {
     bitstream hits;
-    for (auto& operand : conj.operands)
+    for (auto& op : con)
     {
-      operand->accept(*this);
+      visit(*this, op);
       if (! result_.hits)
       {
         // Short circuit evaluation.
@@ -263,12 +287,12 @@ public:
     result_.hits = std::move(hits);
   }
 
-  virtual void visit(expr::disjunction const& disj)
+  void operator()(disjunction const& dis)
   {
     bitstream hits;
-    for (auto& operand : disj.operands)
+    for (auto& op : dis)
     {
-      operand->accept(*this);
+      visit(*this, op);
       if (result_.hits)
         hits |= result_.hits;
     }
@@ -276,7 +300,13 @@ public:
     result_.hits = std::move(hits);
   }
 
-  virtual void visit(expr::predicate const& pred)
+  void operator()(negation const& n)
+  {
+    visit(*this, n[0]);
+    result_.hits.flip();
+  }
+
+  void operator()(predicate const& pred)
   {
     result_.hits = {};
     double got = 0.0;
@@ -284,7 +314,7 @@ public:
     double misses = 0.0;
 
     auto& parts = index_.predicate_cache_[pred].parts;
-    VAST_LOG_DEBUG("evaluating " << expr::ast{pred});
+    VAST_LOG_DEBUG("evaluating " << expression{pred});
     for (auto& r : restrictions_[pred])
     {
       auto i = parts.find(r);
@@ -300,7 +330,7 @@ public:
                        index_.part_actors_[r]);
 
         actor self = &index_;
-        index_.send(index_.part_actors_[r], expr::ast{pred}, self);
+        index_.send(index_.part_actors_[r], expression{pred}, self);
 
         parts[r];
       }
@@ -345,26 +375,24 @@ index::index(path const& dir, size_t batch_size)
 {
 }
 
-index::evaluation index::evaluate(expr::ast const& ast)
+index::evaluation index::evaluate(expression const& ast)
 {
   assert(queries_.count(ast));
 
   restriction_map r;
-  builder b{*this, r};
-  ast.accept(b);
+  visit(builder{*this, r}, ast);
 
-  for (auto& pair : r)
+  for (auto& p : r)
   {
-    VAST_LOG_ACTOR_DEBUG("built restriction of " << ast << " for " << pair.first);
-    for (auto& u : pair.second)
+    VAST_LOG_ACTOR_DEBUG("built restriction of " << ast << " for " << p.first);
+    for (auto& u : p.second)
       VAST_LOG_DEBUG("  -  " << u);
   }
 
-  pusher p{r};
-  ast.accept(p);
+  visit(pusher{r}, ast);
 
   evaluator e{*this, r};
-  ast.accept(e);
+  visit(e, ast);
 
   auto& er = e.result_;
   if (er.total_progress != 1.0 && ! er.predicate_progress.empty())
@@ -377,8 +405,8 @@ index::evaluation index::evaluate(expr::ast const& ast)
 
   VAST_LOG_ACTOR_DEBUG("evaluated " << ast <<
                        " (" << int(er.total_progress * 100) << "%)");
-  for (auto& pair : er.predicate_progress)
-    VAST_LOG_DEBUG("  -  " << int(pair.second * 100) << "% of " << pair.first);
+  for (auto& p : er.predicate_progress)
+    VAST_LOG_DEBUG("  -  " << int(p.second * 100) << "% of " << p.first);
 
   return std::move(er);
 }
@@ -434,15 +462,15 @@ void index::update_partition(uuid const& id, time_point first, time_point last)
     p.last = last;
 }
 
-std::vector<expr::ast> index::walk(
-    expr::ast const& start,
-    std::function<bool(expr::ast const&, util::flat_set<expr::ast> const&)> f)
+std::vector<expression> index::walk(
+    expression const& start,
+    std::function<bool(expression const&, util::flat_set<expression> const&)> f)
 {
   auto i = gqg_.find(start);
   if (i == gqg_.end() || ! f(i->first, i->second))
     return {};
 
-  std::vector<expr::ast> path;
+  std::vector<expression> path;
   for (auto& parent : i->second)
   {
     auto ppath = walk(parent, f);
@@ -581,7 +609,7 @@ message_handler index::act()
     {
       forward_to(active_part_.second);
     },
-    on(atom("query"), arg_match) >> [=](expr::ast const& ast, actor sink)
+    on(atom("query"), arg_match) >> [=](expression const& ast, actor sink)
     {
       if (part_map_.empty())
       {
@@ -591,10 +619,7 @@ message_handler index::act()
       }
 
       if (! queries_.count(ast))
-      {
-        dissector d{*this, ast};
-        ast.accept(d);
-      }
+        visit(dissector{*this, ast}, ast);
 
       assert(! queries_[ast].subscribers.contains(sink));
       queries_[ast].subscribers.insert(sink);
@@ -603,7 +628,7 @@ message_handler index::act()
 
       return make_message(atom("success"));
     },
-    on(atom("first-eval"), arg_match) >> [=](expr::ast const& ast, actor sink)
+    on(atom("first-eval"), arg_match) >> [=](expression const& ast, actor sink)
     {
       auto e = evaluate(ast);
 
@@ -621,7 +646,7 @@ message_handler index::act()
       auto count = qs.hits ? qs.hits.count() : 0;
       send(sink, atom("progress"), e.total_progress, count);
     },
-    [=](expr::ast const& pred, uuid const& part, uint64_t n)
+    [=](expression const& pred, uuid const& part, uint64_t n)
     {
       VAST_LOG_ACTOR_DEBUG("expects partition " << part <<
                            " to deliver " << n << " hits for predicate " <<
@@ -629,7 +654,7 @@ message_handler index::act()
 
       predicate_cache_[pred].parts[part].expected = n;
     },
-    [=](expr::ast const& pred, uuid const& part, bitstream const& hits)
+    [=](expression const& pred, uuid const& part, bitstream const& hits)
     {
       VAST_LOG_ACTOR_DEBUG(
           "received " << (hits ? hits.count() : 0) <<
@@ -647,10 +672,10 @@ message_handler index::act()
 
       assert(! entry.expected || entry.got <= *entry.expected);
 
-      std::vector<expr::ast> roots;
+      std::vector<expression> roots;
       walk(
           pred,
-          [&](expr::ast const& ast, util::flat_set<expr::ast> const&) -> bool
+          [&](expression const& ast, util::flat_set<expression> const&) -> bool
           {
             if (queries_.count(ast))
               roots.push_back(ast);

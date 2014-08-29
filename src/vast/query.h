@@ -1,6 +1,7 @@
 #ifndef VAST_QUERY_H
 #define VAST_QUERY_H
 
+#include <unordered_map>
 #include "vast/actor.h"
 #include "vast/aliases.h"
 #include "vast/bitstream.h"
@@ -20,7 +21,7 @@ public:
   /// @param archive The archive actor.
   /// @param sink The sink receiving the query results.
   /// @param ast The query expression ast.
-  query(caf::actor archive, caf::actor sink, expr::ast ast);
+  query(caf::actor archive, caf::actor sink, expression ast);
 
   caf::message_handler act() final;
   std::string describe() const final;
@@ -32,7 +33,7 @@ private:
 
   caf::actor archive_;
   caf::actor sink_;
-  expr::ast ast_;
+  expression ast_;
   caf::message_handler idle_;
   caf::message_handler waiting_;
   caf::message_handler extracting_;
@@ -42,6 +43,7 @@ private:
   bitstream unprocessed_ = bitstream{bitstream_type{}};
   std::unique_ptr<segment::reader> reader_;
   caf::message segment_;
+  std::unordered_map<type, expression> checkers_;
 
   double progress_ = 0.0;
   uint64_t requested_ = 0;

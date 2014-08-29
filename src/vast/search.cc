@@ -3,6 +3,8 @@
 #include "vast/expression.h"
 #include "vast/optional.h"
 #include "vast/query.h"
+#include "vast/expr/normalizer.h"
+#include "vast/expr/resolver.h"
 #include "vast/io/serialization.h"
 #include "vast/util/trial.h"
 
@@ -21,16 +23,21 @@ message_handler search_actor::act()
 {
   trap_exit(true);
 
-  auto parse_ast = [=](std::string const& str) -> optional<expr::ast>
+  auto parse_ast = [=](std::string const& str) -> optional<expression>
   {
-    auto ast = to<expr::ast>(str);
+    auto ast = to<expression>(str);
     if (! ast)
     {
       last_parse_error_ = ast.error();
       return {};
     }
 
-    auto t = ast->resolve(schema_);
+    *ast = visit(expr::normalizer{}, *ast);
+
+    // Just test whether the AST resolves according to the schema. We don't use
+    // the resolved AST here, though, as INDEX still needs the unresolved
+    // version.
+    auto t = visit(expr::schema_resolver{schema_}, *ast);
     if (! t)
     {
       last_parse_error_ = t.error();
@@ -99,14 +106,14 @@ message_handler search_actor::act()
       }
     },
     on(atom("query"), val<actor>, parse_ast)
-      >> [=](actor const& client, expr::ast const& ast) -> continue_helper
+      >> [=](actor const& client, expression const& ast) -> continue_helper
     {
       VAST_LOG_ACTOR_INFO("got client " << client << " asking for " << ast);
 
       // Must succeed because we checked it in parse_ast(). But because we want
       // to use both the resolved and original AST in this handler, we have to
       // do the resolving twice.
-      auto resolved = ast.resolve(schema_);
+      auto resolved = visit(expr::schema_resolver{schema_}, ast);
       assert(resolved);
 
       auto qry = spawn<query>(archive_, client, std::move(*resolved));

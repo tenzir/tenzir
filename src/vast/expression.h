@@ -1,342 +1,354 @@
 #ifndef VAST_EXPRESSION_H
 #define VAST_EXPRESSION_H
 
-#include "vast/config.h"
-#include "vast/event.h"
+#include "vast/data.h"
 #include "vast/key.h"
 #include "vast/offset.h"
 #include "vast/operator.h"
-#include "vast/optional.h"
-#include "vast/pattern.h"
-#include "vast/print.h"
-#include "vast/schema.h"
+#include "vast/type.h"
 #include "vast/detail/ast/query.h"
 #include "vast/detail/parser/error_handler.h"
 #include "vast/detail/parser/skipper.h"
 #include "vast/detail/parser/query.h"
-#include "vast/util/operators.h"
-#include "vast/util/visitor.h"
+#include "vast/expr/hoister.h"
+#include "vast/expr/validator.h"
+#include "vast/util/variant.h"
 
 namespace vast {
-namespace expr {
 
-// Forward declarations
-struct constant;
-struct timestamp_extractor;
-struct name_extractor;
-struct id_extractor;
-struct offset_extractor;
-struct schema_extractor;
-struct type_extractor;
-struct predicate;
-struct conjunction;
-struct disjunction;
+class expression;
 
-using const_visitor = util::const_visitor<
-  constant,
-  timestamp_extractor,
-  name_extractor,
-  id_extractor,
-  offset_extractor,
-  schema_extractor,
-  type_extractor,
-  predicate,
-  conjunction,
-  disjunction
->;
-
-struct default_const_visitor : expr::const_visitor
+/// Extracts the event type.
+struct event_extractor : util::totally_ordered<event_extractor>
 {
-  virtual void visit(constant const&) { }
-  virtual void visit(name_extractor const&) { }
-  virtual void visit(timestamp_extractor const&) { }
-  virtual void visit(id_extractor const&) { }
-  virtual void visit(offset_extractor const&) { }
-  virtual void visit(schema_extractor const&) { }
-  virtual void visit(type_extractor const&) { }
-  virtual void visit(predicate const&) { }
-  virtual void visit(conjunction const&) { }
-  virtual void visit(disjunction const&) { }
+  friend bool operator==(event_extractor const&, event_extractor const&)
+  {
+    return true;
+  }
+
+  friend bool operator<(event_extractor const&, event_extractor const&)
+  {
+    return true;
+  }
 };
 
-/// The base class for nodes in the expression tree.
-struct node : public util::visitable_with<const_visitor>,
-              util::totally_ordered<node>
-{
-  virtual ~node() = default;
-  virtual node* clone() const = 0;
-  virtual bool equals(node const& other) const = 0;
-  virtual bool is_less_than(node const& other) const = 0;
-  virtual void serialize(serializer& sink) const = 0;
-  virtual void deserialize(deserializer& source) = 0;
-  friend bool operator==(node const& x, node const& y);
-  friend bool operator<(node const& x, node const& y);
-};
-
-trial<void> convert(node const& n, std::string& s, bool tree = false);
-
-/// A constant value.
-struct constant : public util::visitable<node, constant, const_visitor>
-{
-  constant() = default;
-  constant(value v);
-  virtual constant* clone() const override;
-  virtual bool equals(node const& other) const override;
-  virtual bool is_less_than(node const& other) const override;
-  virtual void serialize(serializer& sink) const override;
-  virtual void deserialize(deserializer& source) override;
-
-  value val;
-};
-
-/// The base class for extractor nodes.
-struct extractor : public util::abstract_visitable<node, const_visitor>
-{
-  extractor* clone() const = 0;
-  virtual bool equals(node const& other) const override;
-  virtual bool is_less_than(node const& other) const override;
-};
 
 /// Extracts the event timestamp.
-struct timestamp_extractor
-  : public util::visitable<extractor, timestamp_extractor, const_visitor>
+struct time_extractor : util::totally_ordered<time_extractor>
 {
-  timestamp_extractor* clone() const override;
-  virtual void serialize(serializer& sink) const override;
-  virtual void deserialize(deserializer& source) override;
+  friend bool operator==(time_extractor const&, time_extractor const&)
+  {
+    return true;
+  }
+
+  friend bool operator<(time_extractor const&, time_extractor const&)
+  {
+    return true;
+  }
 };
 
-/// Extracts the event name.
-struct name_extractor
-  : public util::visitable<extractor, name_extractor, const_visitor>
-{
-  name_extractor* clone() const override;
-  virtual void serialize(serializer& sink) const override;
-  virtual void deserialize(deserializer& source) override;
-};
-
-/// Extracts the event ID.
-struct id_extractor
-  : public util::visitable<extractor, id_extractor, const_visitor>
-{
-  id_extractor* clone() const override;
-  virtual void serialize(serializer& sink) const override;
-  virtual void deserialize(deserializer& source) override;
-};
-
-/// Extract a value at a given offset.
-struct offset_extractor
-  : public util::visitable<extractor, offset_extractor, const_visitor>
-{
-  offset_extractor();
-  offset_extractor(vast::type type, offset off);
-
-  virtual offset_extractor* clone() const override;
-  virtual bool equals(node const& other) const override;
-  virtual bool is_less_than(node const& other) const override;
-  virtual void serialize(serializer& sink) const override;
-  virtual void deserialize(deserializer& source) override;
-
-  vast::type type;
-  offset off;
-};
-
-/// Extracts arguments according to a schema.
-struct schema_extractor
-  : public util::visitable<extractor, schema_extractor, const_visitor>
-{
-  schema_extractor() = default;
-  schema_extractor(vast::key k);
-
-  virtual schema_extractor* clone() const override;
-  virtual bool equals(node const& other) const override;
-  virtual bool is_less_than(node const& other) const override;
-  virtual void serialize(serializer& sink) const override;
-  virtual void deserialize(deserializer& source) override;
-
-  vast::key key;
-};
-
-/// Extracts arguments of a given type.
-struct type_extractor
-  : public util::visitable<extractor, type_extractor, const_visitor>
+/// Extracts a specific event type.
+struct type_extractor : util::totally_ordered<type_extractor>
 {
   type_extractor() = default;
-  type_extractor(vast::type t);
 
-  virtual type_extractor* clone() const override;
-  virtual bool equals(node const& other) const override;
-  virtual bool is_less_than(node const& other) const override;
-  virtual void serialize(serializer& sink) const override;
-  virtual void deserialize(deserializer& source) override;
+  explicit type_extractor(vast::type t)
+    : type{std::move(t)}
+  {
+  }
 
   vast::type type;
+
+  friend bool operator==(type_extractor const& lhs, type_extractor const& rhs)
+  {
+    return lhs.type == rhs.type;
+  }
+
+  friend bool operator<(type_extractor const& lhs, type_extractor const& rhs)
+  {
+    return lhs.type < rhs.type;
+  }
 };
 
-/// An n-ary operator.
-struct n_ary_operator : public util::abstract_visitable<node, const_visitor>
+/// Extracts one or more values.
+struct schema_extractor : util::totally_ordered<schema_extractor>
 {
-  n_ary_operator() = default;
-  n_ary_operator(n_ary_operator const& other);
-  virtual n_ary_operator* clone() const = 0;
-  virtual bool equals(node const& other) const override;
-  virtual bool is_less_than(node const& other) const override;
-  virtual void serialize(serializer& sink) const override;
-  virtual void deserialize(deserializer& source) override;
-  void add(std::unique_ptr<node> n);
+  schema_extractor() = default;
 
-  std::vector<std::unique_ptr<node>> operands;
+  explicit schema_extractor(vast::key k)
+    : key{std::move(k)}
+  {
+  }
+
+  vast::key key;
+
+  friend bool operator==(schema_extractor const& lhs,
+                         schema_extractor const& rhs)
+  {
+    return lhs.key == rhs.key;
+  }
+
+  friend bool operator<(schema_extractor const& lhs,
+                        schema_extractor const& rhs)
+  {
+    return lhs.key < rhs.key;
+  }
+};
+
+/// Extracts a singular value, the "instantiation" of a ::schema_extractor.
+struct data_extractor : util::totally_ordered<data_extractor>
+{
+  data_extractor() = default;
+
+  explicit data_extractor(vast::type t, vast::offset o)
+    : type{std::move(t)},
+      offset{std::move(o)}
+  {
+  }
+
+  vast::type type;
+  vast::offset offset;
+
+  friend bool operator==(data_extractor const& lhs, data_extractor const& rhs)
+  {
+    return lhs.type == rhs.type && lhs.offset == rhs.offset;
+  }
+
+  friend bool operator<(data_extractor const& lhs, data_extractor const& rhs)
+  {
+    return std::tie(lhs.type, lhs.offset) < std::tie(rhs.type, rhs.offset);
+  }
 };
 
 /// A predicate.
-struct predicate
-  : public util::visitable<n_ary_operator, predicate, const_visitor>
+struct predicate : util::totally_ordered<predicate>
 {
-  using binary_predicate = std::function<bool(value const&, value const&)>;
-  static binary_predicate make_predicate(relational_operator op);
-
   predicate() = default;
-  predicate(relational_operator op);
 
-  node const& lhs() const;
-  node const& rhs() const;
+  using operand = util::variant<
+      event_extractor,
+      time_extractor,
+      type_extractor,
+      schema_extractor,
+      data_extractor,
+      data
+    >;
 
-  virtual predicate* clone() const override;
-  virtual bool equals(node const& other) const override;
-  virtual bool is_less_than(node const& other) const override;
-  virtual void serialize(serializer& sink) const override;
-  virtual void deserialize(deserializer& source) override;
+  predicate(operand l, relational_operator o, operand r)
+    : lhs{std::move(l)},
+      op{o},
+      rhs{std::move(r)}
+  {
+  }
 
-  binary_predicate pred;
+  operand lhs;
   relational_operator op;
+  operand rhs;
+
+  friend bool operator==(predicate const& lhs, predicate const& rhs)
+  {
+    return lhs.lhs == rhs.lhs && lhs.op == rhs.op && lhs.rhs == rhs.rhs;
+  }
+
+  friend bool operator<(predicate const& lhs, predicate const& rhs)
+  {
+    return
+      std::tie(lhs.lhs, lhs.op, lhs.rhs) < std::tie(rhs.lhs, rhs.op, rhs.rhs);
+  }
 };
 
-/// A conjunction.
-struct conjunction
-  : public util::visitable<n_ary_operator, conjunction, const_visitor>
+/// A sequence of AND expressions.
+struct conjunction : std::vector<expression>
 {
-  virtual conjunction* clone() const override;
-  virtual bool equals(node const& other) const override;
-  virtual bool is_less_than(node const& other) const override;
-  virtual void serialize(serializer& sink) const override;
-  virtual void deserialize(deserializer& source) override;
+  using std::vector<expression>::vector;
 };
 
-/// A disjunction.
-struct disjunction
-  : public util::visitable<n_ary_operator, disjunction, const_visitor>
+/// A sequence of OR expressions.
+struct disjunction : std::vector<expression>
 {
-  virtual disjunction* clone() const override;
-  virtual bool equals(node const& other) const override;
-  virtual bool is_less_than(node const& other) const override;
-  virtual void serialize(serializer& sink) const override;
-  virtual void deserialize(deserializer& source) override;
+  using std::vector<expression>::vector;
 };
 
-/// A wrapper around an expression node with value semantics.
-class ast : util::totally_ordered<ast>
+/// A NOT expression.
+struct negation : std::vector<expression>
+{
+  using std::vector<expression>::vector;
+};
+
+/// A query expression.
+class expression : util::totally_ordered<expression>
 {
 public:
-  ast() = default;
-  ast(std::unique_ptr<node> n);
-  ast(node const& n);
-  ast(ast const& other);
-  ast(ast&&) = default;
-  ast& operator=(ast const& other);
-  ast& operator=(ast&& other);
-  explicit operator bool() const;
+  using node = util::variant<
+    none,
+    conjunction,
+    disjunction,
+    negation,
+    predicate
+  >;
 
-  void accept(const_visitor& v);
-  void accept(const_visitor& v) const;
+  /// Default-constructs empty an expression.
+  expression(none = nil) {}
 
-  node const* root() const;
-
-  //
-  // Introspection
-  //
-  bool is_conjunction() const;
-  bool is_disjunction() const;
-  bool is_predicate() const;
-  bool is_meta_predicate() const;
-  bool is_time_predicate() const;
-  bool is_name_predicate() const;
-  value const* find_constant() const;
-  offset const* find_offset() const;
-  relational_operator const* find_operator() const;
-
-  //
-  // Transformation
-  //
-
-  // Extracts all (leaf) predicates from an AST.
-  // @returns All leaf predicates of *a*.
-  std::vector<ast> predicatize() const;
-
-  /// Transforms a schema extractor into a sequence of offset extractors.
-  /// @param sch The schema used to resolve schema predicates.
-  /// @returns This AST with offset extractors instead of schema extractors.
-  trial<ast> resolve(schema const& sch) const;
+  /// Constructs an expression.
+  /// @param x The node to construct an expression from.
+  template <
+    typename T,
+    typename U = std::decay_t<T>,
+    typename = std::enable_if_t<
+         std::is_same<U, none>::value
+      || std::is_same<U, conjunction>::value
+      || std::is_same<U, disjunction>::value
+      || std::is_same<U, negation>::value
+      || std::is_same<U, predicate>::value
+    >
+  >
+  expression(T&& x)
+    : node_{std::forward<T>(x)}
+  {
+  }
 
 private:
-  std::unique_ptr<node> node_;
+  node node_;
 
 private:
   friend access;
   void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
-  friend bool operator<(ast const& x, ast const& y);
-  friend bool operator==(ast const& x, ast const& y);
 
-  template <typename Iterator>
-  friend trial<void> print(ast const& a, Iterator&& out, bool tree = false)
-  {
-    if (! a)
-      return nothing;
+  friend node& expose(expression& d);
+  friend node const& expose(expression const& d);
 
-    // FIXME: don't use poor man's printing via string generation.
-    std::string str;
-    auto t = convert(*a.node_, str, tree);
-    if (! t)
-      return t.error();
-
-#ifdef VAST_GCC
-    // FIXME: why do we need to pull in util::print to enable ADL? Shouldn't an
-    // unqualified call work directly?
-    using util::print;
-#endif
-    return print(str, out);
-  }
+  friend bool operator==(expression const& lhs, expression const& rhs);
+  friend bool operator<(expression const& lhs, expression const& rhs);
 };
 
-namespace impl {
+namespace detail {
 
-// Takes a query AST and generates a polymorphic query expression tree.
-class expressionizer
+template <typename Iterator>
+struct expr_printer
+{
+  expr_printer(Iterator& out)
+    : out_{out}
+  {
+  }
+
+  trial<void> operator()(conjunction const& c) const
+  {
+    auto t = print('{', out_);
+    if (! t)
+      return t;
+
+    t = util::print_delimited(" && ", c.begin(), c.end(), out_);
+    if (! t)
+      return t;
+
+    return print('}', out_);
+  }
+
+  trial<void> operator()(disjunction const& d) const
+  {
+    auto t = print('(', out_);
+    if (! t)
+      return t;
+
+    t = util::print_delimited(" || ", d.begin(), d.end(), out_);
+    if (! t)
+      return t;
+
+    return print(')', out_);
+  }
+
+  trial<void> operator()(negation const& n) const
+  {
+    auto t = print("! ", out_);
+    if (! t)
+      return t;
+
+    return print(n[0], out_);
+  }
+
+  trial<void> operator()(predicate const& p) const
+  {
+    auto t = visit(*this, p.lhs);
+    if (! t)
+      return t;
+
+    *out_++ = ' ';
+
+    t = print(p.op, out_);
+    if (! t)
+      return t;
+
+    *out_++ = ' ';
+
+    return visit(*this, p.rhs);
+  }
+
+  trial<void> operator()(event_extractor const&) const
+  {
+    return print("&type", out_);
+  }
+
+  trial<void> operator()(time_extractor const&) const
+  {
+    return print("&time", out_);
+  }
+
+  trial<void> operator()(type_extractor const& e) const
+  {
+    return print(e.type, out_);
+  }
+
+  trial<void> operator()(schema_extractor const& e) const
+  {
+    return print(e.key, out_);
+  }
+
+  trial<void> operator()(data_extractor const& e) const
+  {
+    auto t = print(e.type, out_);
+    if (! t)
+      return t;
+
+    if (e.offset.empty())
+      return nothing;
+
+    t = print('@', out_);
+    if (! t)
+      return t;
+
+    return print(e.offset, out_);
+  }
+
+  trial<void> operator()(data const& d) const
+  {
+    return print(d, out_);
+  }
+
+  Iterator& out_;
+};
+
+} // namespace detail
+
+template <typename Iterator>
+trial<void> print(expression const& e, Iterator&& out)
+{
+  return visit(detail::expr_printer<Iterator>{out}, e);
+}
+
+namespace detail {
+
+// Converts a Boost Spirit AST into VAST's internal representation.
+class expression_factory
 {
 public:
-  using result_type = void;
+  using result_type = trial<expression>;
 
-  static trial<std::unique_ptr<node>>
-  apply(detail::ast::query::query const& q)
+  trial<expression> operator()(detail::ast::query::query_expr const& q) const
   {
-    std::unique_ptr<n_ary_operator> root;
-
-    if (q.rest.empty())
-    {
-      // WLOG, we can always add a conjunction as parent if we just have a
-      // single predicate.
-      root = std::make_unique<conjunction>();
-
-      expressionizer visitor{root.get()};
-      boost::apply_visitor(std::ref(visitor), q.first);
-      if (visitor.error_)
-        return std::move(*visitor.error_);
-
-      return std::unique_ptr<node>(std::move(root)); // FIXME: add to parent.
-    }
-
-    // First, split the query expression at each OR node.
-    std::vector<detail::ast::query::query> ors;
+    // Split the query expression at each OR node.
+    std::vector<detail::ast::query::query_expr> ors;
     ors.push_back({q.first, {}});
     for (auto& pred : q.rest)
       if (pred.op == logical_or)
@@ -344,183 +356,138 @@ public:
       else
         ors.back().rest.push_back(pred);
 
-    // Our AST root will be a disjunction iff we have at least two terms.
-    if (ors.size() >= 2)
-      root = std::make_unique<disjunction>();
-
-    // Then create a conjunction for each set of subsequent AND nodes between
-    // two OR nodes.
-    std::unique_ptr<conjunction> conj;
+    // Create a conjunction for each set of subsequent AND nodes between two OR
+    // nodes.
+    disjunction dis;
     for (auto& ands : ors)
     {
-      n_ary_operator* local_root;
-      if (! root)
-      {
-        root = std::make_unique<conjunction>();
-        local_root = root.get();
-      }
-      else if (! ands.rest.empty())
-      {
-        auto conj = std::make_unique<conjunction>();
-        local_root = conj.get();
-        root->add(std::move(conj));
-      }
-      else
-      {
-        local_root = root.get();
-      }
+      conjunction con;
 
-      expressionizer visitor{local_root};
-      boost::apply_visitor(std::ref(visitor), ands.first);
-      if (visitor.error_)
-        return std::move(*visitor.error_);
+      auto t = boost::apply_visitor(expression_factory{}, ands.first);
+      if (! t)
+        return t;
+
+      con.push_back(std::move(*t));
 
       for (auto pred : ands.rest)
       {
-        boost::apply_visitor(std::ref(visitor), pred.operand);
-        if (visitor.error_)
-          return std::move(*visitor.error_);
+        auto t = boost::apply_visitor(expression_factory{}, pred.operand);
+        if (! t)
+          return t;
+
+        con.push_back(std::move(*t));
       }
+
+      dis.emplace_back(std::move(con));
     }
 
-    return std::unique_ptr<node>(std::move(root));
+    return expression{std::move(dis)};
   }
 
-  expressionizer(n_ary_operator* parent)
-    : parent_(parent)
+  trial<expression> operator()(detail::ast::query::predicate const& p) const
   {
-  }
-
-  void operator()(detail::ast::query::query const& q)
-  {
-    auto n = apply(q);
-    if (n)
-      parent_->add(std::move(*n));
-    else
-      error_ = n.error();
-  }
-
-  void operator()(detail::ast::query::predicate const& operand)
-  {
-    boost::apply_visitor(*this, operand);
-  }
-
-  void operator()(detail::ast::query::tag_predicate const& pred)
-  {
-    auto op = pred.op;
-    if (invert_)
+    auto make_extractor = [](std::string const& str)
+    -> trial<predicate::operand>
     {
-      op = negate(op);
-      invert_ = false;
-    }
+      if (str == "&type")
+        return {event_extractor{}};
 
-    std::unique_ptr<extractor> lhs;
-    if (pred.lhs == "type")
-      lhs = std::make_unique<name_extractor>();
-    else if (pred.lhs == "time")
-      lhs = std::make_unique<timestamp_extractor>();
-    else if (pred.lhs == "id")
-      lhs = std::make_unique<id_extractor>();
+      if (str == "&time")
+        return {time_extractor{}};
 
-    auto rhs = std::make_unique<constant>(detail::ast::query::fold(pred.rhs));
-    auto p = std::make_unique<predicate>(op);
-    p->add(std::move(lhs));
-    p->add(std::move(rhs));
+      assert(! str.empty());
+      if (str[0] == ':')
+      {
+        // TODO: make vast::type parseable.
+        auto s = str.substr(1);
+        type t;
+        if (s == "bool")
+          t = type::boolean{};
+        else if (s == "int")
+          t = type::integer{};
+        else if (s == "count")
+          t = type::count{};
+        else if (s == "real")
+          t = type::real{};
+        else if (s == "time")
+          t = type::time_point{};
+        else if (s == "duration")
+          t = type::time_duration{};
+        else if (s == "string")
+          t = type::string{};
+        else if (s == "addr")
+          t = type::address{};
+        else if (s == "subnet")
+          t = type::subnet{};
+        else if (s == "port")
+          t = type::port{};
+        else
+          return error{"invalid type: ", s};
 
-    parent_->add(std::move(p));
-  }
+        return {type_extractor{std::move(t)}};
+      }
 
-  void operator()(detail::ast::query::type_predicate const& pred)
-  {
-    auto op = pred.op;
-    if (invert_)
+      auto t = to<key>(str);
+      if (! t)
+        return t.error();
+
+      return {schema_extractor{std::move(*t)}};
+    };
+
+    auto make_operand = [&](detail::ast::query::predicate::lhs_or_rhs const& lr)
+    -> trial<predicate::operand>
     {
-      op = negate(op);
-      invert_ = false;
-    }
+      predicate::operand o;
+      if (auto d = boost::get<detail::ast::query::data_expr>(&lr))
+      {
+        o = detail::ast::query::fold(*d);
+      }
+      else
+      {
+        auto e = make_extractor(*boost::get<std::string>(&lr));
+        if (! e)
+          return e;
 
-    auto lhs = std::make_unique<type_extractor>(pred.lhs);
-    auto rhs = std::make_unique<constant>(detail::ast::query::fold(pred.rhs));
-    auto p = std::make_unique<predicate>(op);
-    p->add(std::move(lhs));
-    p->add(std::move(rhs));
+        o = *e;
+      }
 
-    parent_->add(std::move(p));
+      return o;
+    };
+
+    auto lhs = make_operand(p.lhs);
+    if (! lhs)
+      return lhs.error();
+
+    auto rhs = make_operand(p.rhs);
+    if (! rhs)
+      return rhs.error();
+
+    return expression{predicate{std::move(*lhs), p.op, std::move(*rhs)}};
   }
 
-  void operator()(detail::ast::query::schema_predicate const& pred)
+  trial<expression> operator()(detail::ast::query::negated const& neg) const
   {
-    auto op = pred.op;
-    if (invert_)
-    {
-      op = negate(op);
-      invert_ = false;
-    }
+    auto t = (*this)(neg.expr);
+    if (! t)
+      return t.error();
 
-    key k;
-    for (auto& str : pred.lhs)
-      k.emplace_back(str);
+    negation n;
+    n.push_back(std::move(*t));
 
-    auto lhs = std::make_unique<schema_extractor>(std::move(k));
-    auto rhs = std::make_unique<constant>(detail::ast::query::fold(pred.rhs));
-    auto p = std::make_unique<predicate>(op);
-    p->add(std::move(lhs));
-    p->add(std::move(rhs));
-
-    parent_->add(std::move(p));
+    return expression{std::move(n)};
   }
-
-  void operator()(detail::ast::query::negated_predicate const& pred)
-  {
-    // Since all operators have a complement, we can push down the negation to
-    // the operator-level (as opposed to leaving it at the predicate level).
-    invert_ = true;
-    boost::apply_visitor(*this, pred.operand);
-  }
-
-private:
-  std::unique_ptr<offset_extractor> make_offset_extractor(type t, offset o)
-  {
-    return std::make_unique<offset_extractor>(t, std::move(o));
-  }
-
-  std::unique_ptr<constant>
-  make_constant(detail::ast::query::data_expr const& expr)
-  {
-    return std::make_unique<constant>(detail::ast::query::fold(expr));
-  }
-
-  std::unique_ptr<node> make_glob_node(std::string const& expr)
-  {
-    // Determine whether we need a regular expression node or whether basic
-    // equality comparison suffices. This check is relatively crude at the
-    // moment: we just look whether the expression contains * or ?.
-    auto glob = pattern{"\\*|\\?"}.search(expr);
-    auto p = std::make_unique<predicate>(glob ? match : equal);
-    auto lhs = std::make_unique<name_extractor>();
-    p->add(std::move(lhs));
-    if (glob)
-      p->add(std::make_unique<constant>(value{pattern::glob(expr)}));
-    else
-      p->add(std::make_unique<constant>(value{expr}));
-    return std::move(p);
-  }
-
-  n_ary_operator* parent_;
-  bool invert_ = false;
-  optional<error> error_;
 };
 
-} // namespace impl
+} // namespace detail
 
 template <typename Iterator>
-trial<void> parse(ast& a, Iterator& begin, Iterator end)
+trial<void> parse(expression& e, Iterator& begin, Iterator end)
 {
   std::string err;
   detail::parser::error_handler<Iterator> on_error{begin, end, err};
   detail::parser::query<Iterator> grammar{on_error};
   detail::parser::skipper<Iterator> skipper;
-  detail::ast::query::query q;
+  detail::ast::query::query_expr q;
 
   bool success = phrase_parse(begin, end, grammar, skipper, q);
   if (! success)
@@ -528,22 +495,21 @@ trial<void> parse(ast& a, Iterator& begin, Iterator end)
   else if (begin != end)
     return error{"input not consumed:'", std::string{begin, end}, "'"};
 
-  if (! detail::ast::query::validate(q))
-    return error{"failed validation"};
-
-  auto t = impl::expressionizer::apply(q);
+  auto t = detail::expression_factory{}(q);
   if (! t)
     return t.error();
 
-  a = ast{std::move(*t)};
+  e = std::move(*t);
+
+  auto v = visit(expr::validator{}, e);
+  if (! v)
+    return v.error();
+
+  e = visit(expr::hoister{}, e);
+
   return nothing;
 }
 
-/// Evaluates an expression node for a given event.
-value evaluate(node const& n, event const& e);
-value evaluate(ast const& a, event const& e);
-
-} // namespace expr
 } // namespace vast
 
 #endif

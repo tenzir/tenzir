@@ -3,7 +3,6 @@
 #include <cassert>
 #include <iomanip>
 #include <caf/all.hpp>
-#include "vast/event.h"
 #include "vast/parse.h"
 #include "vast/io/serialization.h"
 #include "vast/serialization/arithmetic.h"
@@ -315,11 +314,10 @@ console::console(caf::actor search, path dir)
               print(fail) << "syntax error: " << e << std::endl;
               send(this, atom("prompt"));
             },
-            [=](expr::ast const& ast, actor const& qry)
+            [=](expression const& ast, actor const& qry)
             {
               assert(! connected_.count(qry.address()));
               assert(qry);
-              assert(ast);
 
               cmdline_.append_to_history(args);
               monitor(qry);
@@ -463,7 +461,7 @@ console::console(caf::actor search, path dir)
   cmdline_.mode_push("main");
 }
 
-console::result::result(expr::ast ast)
+console::result::result(expression ast)
   : ast_{std::move(ast)}
 {
 }
@@ -553,7 +551,7 @@ size_t console::result::seek_backward(size_t n)
   }
 }
 
-expr::ast const& console::result::ast() const
+expression const& console::result::ast() const
 {
   return ast_;
 }

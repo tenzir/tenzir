@@ -296,7 +296,7 @@ void program::run()
             std::cerr  << "syntax error: " << e << std::endl;
             quit(exit::error);
           },
-          [=](expr::ast const& ast, actor qry)
+          [=](expression const& ast, actor qry)
           {
             VAST_LOG_ACTOR_DEBUG("instantiated query for: " << ast);
             exp0rter->link_to(qry);

@@ -168,7 +168,7 @@ TEST("basic actor integrity")
       fail);
 
   // Test whether a manual index lookup succeeds.
-  auto pops = to<expr::ast>("id.resp_p == 995/?");
+  auto pops = to<expression>("id.resp_p == 995/?");
   REQUIRE(pops);
 
   self->send(core, atom("index"));
@@ -205,7 +205,7 @@ TEST("basic actor integrity")
       {
         auto q = "id.resp_p == 995/?";
         self->sync_send(search, atom("query"), self, q).await((
-            [&](expr::ast const& ast, actor qry)
+            [&](expression const& ast, actor qry)
             {
               CHECK(ast == *pops);
               self->send(qry, atom("extract"), uint64_t{46});
@@ -288,9 +288,9 @@ TEST("basic actor integrity")
   self->receive(
       [&](actor search)
       {
-        auto q = "id.resp_p == 443/? && ssl.server_name ni \"mozilla\"";
+        auto q = "id.resp_p == 443/? && \"mozilla\" in ssl.server_name";
         self->sync_send(search, atom("query"), self, q).await((
-            [&](expr::ast const&, actor qry)
+            [&](expression const&, actor qry)
             {
               // Extract all results.
               self->send(qry, atom("extract"), uint64_t{0});
