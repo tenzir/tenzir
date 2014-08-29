@@ -47,13 +47,15 @@ TEST("all-in-one import")
   *cfg['I'] = true;
   *cfg['r'] = m57_day11_18::ftp;
   *cfg['p'] = "m57_day11_18";
-
   REQUIRE(cfg.verify());
+
+  path dir = *cfg.get("directory");
+  if (exists(dir))
+    REQUIRE(rm(dir));
 
   anon_send(spawn<program>(cfg), atom("run"));
   await_all_actors_done();
 
-  auto dir = path{*cfg.get("directory")};
   auto ftp = dir / "index" / "m57_day11_18" / "types" / "ftp";
 
   REQUIRE(exists(dir));
@@ -95,6 +97,10 @@ TEST("basic actor integrity")
   *core_config['C'] = true;
   *core_config['p'] = "m57-ssl";
   REQUIRE(core_config.verify());
+
+  path dir = *core_config.get("directory");
+  if (exists(dir))
+    REQUIRE(rm(dir));
 
   auto core = spawn<program>(core_config);
   anon_send(core, atom("run"));
@@ -269,7 +275,6 @@ TEST("basic actor integrity")
                   {
                     CHECK(self->last_sender() == task_tree);
 
-                    auto dir = path{*core_config.get("directory")};
                     auto p = dir / "index" / "m57-conn" / "types" / "conn";
                     REQUIRE(exists(p));
                   },
@@ -322,5 +327,5 @@ TEST("basic actor integrity")
   self->send_exit(core, exit::done);
   self->await_all_other_actors_done();
 
-  CHECK(rm(path{*core_config.get("directory")}));
+  CHECK(rm(*core_config.get("directory")));
 }
