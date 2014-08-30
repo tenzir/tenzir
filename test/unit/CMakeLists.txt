@@ -56,7 +56,54 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_BINARY_DIR})
 
-file(GLOB_RECURSE tests framework/*.cc tests/*.cc)
+file(GLOB_RECURSE tests framework/*.cc)
+set(tests ${tests}
+  tests/actor_pcap.cc
+  tests/actors.cc
+  tests/actor_task_tree.cc
+  tests/bitmap.cc
+  tests/bitmap_index.cc
+  tests/bitstream.cc
+  tests/bitvector.cc
+  tests/block.cc
+  tests/cache.cc
+  tests/caf.cc
+  tests/chunk.cc
+  tests/data.cc
+  tests/event.cc
+  tests/expr.cc
+  tests/factory.cc
+  tests/file_system.cc
+  tests/getline.cc
+  tests/hash.cc
+  tests/intrusive.cc
+  tests/io.cc
+  tests/iterator.cc
+  tests/json.cc
+  tests/logging.cc
+  tests/main.cc
+  tests/offset.cc
+  tests/parse.cc
+  tests/print.cc
+  tests/range_map.cc
+  tests/schema.cc
+  tests/search.cc
+  tests/segment.cc
+  tests/serialization.cc
+  tests/stack_alloc.cc
+  tests/string.cc
+  tests/type.cc
+  tests/util.cc
+  tests/uuid.cc
+  tests/value.cc
+  tests/variant.cc)
+
+if (PCAP_FOUND)
+  set(tests ${tests}
+    tests/actor_pcap.cc)
+endif ()
+
+
 add_executable(unit-test ${tests})
 target_link_libraries(unit-test libvast)
 
