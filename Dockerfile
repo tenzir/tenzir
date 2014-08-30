@@ -10,8 +10,8 @@ ENV         PARALLELISM 4
 
 # Compiler and dependcy setup
 RUN apt-get update && apt-get -y install cmake git build-essential tmux
-RUN apt-get update && \
-    apt-get -y install clang-3.4 libc++-dev libboost-dev libedit-dev g++- gcc-
+RUN apt-get update && apt-get -y install clang-3.4 libc++-dev libboost-dev g++- gcc-
+RUN apt-get update && libedit-dev libpcap-dev
 
 RUN mkdir -p $PREFIX/src
 
