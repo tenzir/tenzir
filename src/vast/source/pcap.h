@@ -5,7 +5,6 @@
 #include <pcap.h>
 #include <unordered_map>
 #include <random>
-#include "vast/file_system.h"
 #include "vast/source/synchronous.h"
 #include "vast/util/hash_combine.h"
 #include "vast/util/operators.h"
@@ -69,7 +68,7 @@ class pcap : public synchronous<pcap>
 public:
   /// Constructs a file source.
   /// @param sink The actor to send the generated events to.
-  /// @param trace The name of the trace file.
+  /// @param name The name of the interface or trace file.
   /// @param cutoff The number of bytes to keep per flow.
   /// @param max_flows The maximum number of flows to keep state for.
   /// @param max_age The number of seconds to wait since the last seen packet
@@ -77,7 +76,7 @@ public:
   /// @param expire_interval The number of seconds between successive expire
   ///                        passes over the flow table.
   pcap(caf::actor sink,
-       path trace,
+       std::string name,
        uint64_t cutoff = -1,
        size_t max_flows = 100000,
        size_t max_age = 60,
@@ -96,7 +95,7 @@ private:
     std::chrono::steady_clock::time_point last;
   };
 
-  path trace_;
+  std::string name_;
   bool done_ = false;
   type packet_type_;
   pcap_t* pcap_ = nullptr;

@@ -2,16 +2,17 @@
 
 #include <netinet/in.h>
 #include "vast/event.h"
+#include "vast/file_system.h"
 #include "vast/detail/packet_type.h"
 #include "vast/util/byte_swap.h"
 
 namespace vast {
 namespace source {
 
-pcap::pcap(caf::actor sink, path trace, uint64_t cutoff, size_t max_flows,
-           size_t max_age, size_t expire_interval)
+pcap::pcap(caf::actor sink, std::string name, uint64_t cutoff,
+           size_t max_flows, size_t max_age, size_t expire_interval)
   : synchronous<pcap>{std::move(sink)},
-    trace_{std::move(trace)},
+    name_{std::move(name)},
     packet_type_{detail::make_packet_type()},
     cutoff_{cutoff},
     max_flows_{max_flows},
@@ -30,26 +31,52 @@ pcap::~pcap()
 result<event> pcap::extract()
 {
   auto now = std::chrono::steady_clock::now();
+  char buf[PCAP_ERRBUF_SIZE];
+
   if (! pcap_ && ! done_)
   {
-    if (trace_ != "-" && ! exists(trace_))
+    pcap_if_t* iface;
+    if (::pcap_findalldevs(&iface, buf) == -1)
     {
       done_ = true;
       quit(exit::error);
-      return error{"no such file: ", trace_};
+      return error{"failed to enumerate interfaces: ", buf};
     }
 
-    char buf[PCAP_ERRBUF_SIZE];
-    pcap_ = ::pcap_open_offline_with_tstamp_precision(
-        trace_.str().c_str(), PCAP_TSTAMP_PRECISION_NANO, buf);
+    for (auto i = iface; i != nullptr; i = i->next)
+      if (name_ == i->name)
+      {
+        pcap_ = ::pcap_open_live(i->name, 65535, 1, 100, buf);
+        if (! pcap_)
+        {
+          done_ = true;
+          quit(exit::error);
+          return error{"failed to open interface ", name_, ": ", buf};
+        }
+
+        break;
+      }
 
     if (! pcap_)
     {
-      std::string err{buf};
-      done_ = true;
-      flows_.clear();
-      quit(exit::error);
-      return error{"failed to open pcap file ", trace_, ": ", err};
+      if (name_ != "-" && ! exists(name_))
+      {
+        done_ = true;
+        quit(exit::error);
+        return error{"no such file: ", name_};
+      }
+
+      pcap_ = ::pcap_open_offline_with_tstamp_precision(
+          name_.c_str(), PCAP_TSTAMP_PRECISION_NANO, buf);
+
+      if (! pcap_)
+      {
+        std::string err{buf};
+        done_ = true;
+        flows_.clear();
+        quit(exit::error);
+        return error{"failed to open pcap file ", name_, ": ", err};
+      }
     }
 
     last_expire_ = now;
@@ -71,7 +98,7 @@ result<event> pcap::extract()
   }
   if (r == 0)
   {
-    return error{"timeout should not occur with traces"};
+    return {};
   }
 
   detail::connection conn;
