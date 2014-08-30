@@ -91,12 +91,6 @@ struct negated
 /// @returns The folded datum.
 data fold(data_expr const& expr);
 
-/// Validates a query with respect to semantic correctness. This means ensuring
-/// that LHS and RHS of predicate operators have the correct types.
-/// @param q The query to validate.
-/// @returns `true` *iff* *q* is semantically correct.
-bool validate(query_expr const& q);
-
 } // namespace query
 } // namespace ast
 } // namespace detail

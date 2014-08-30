@@ -102,11 +102,6 @@ data fold(data_expr const& expr)
   return d;
 }
 
-//bool validate(query const& q)
-//{
-//  return validator::apply(q);
-//};
-
 } // namespace query
 } // namespace ast
 } // namespace detail
