@@ -6,12 +6,12 @@
 namespace vast {
 namespace source {
 
+/// Unpacks events of a chunk.
 class dechunkifier : public synchronous<dechunkifier>
 {
 public:
-  dechunkifier(chunk chk, caf::actor sink, size_t batch_size)
-    : synchronous{std::move(sink), batch_size},
-      chunk_{std::move(chk)},
+  dechunkifier(chunk chk)
+    : chunk_{std::move(chk)},
       reader_{chunk_}
   {
   }

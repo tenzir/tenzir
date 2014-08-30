@@ -67,7 +67,6 @@ class pcap : public synchronous<pcap>
 {
 public:
   /// Constructs a file source.
-  /// @param sink The actor to send the generated events to.
   /// @param name The name of the interface or trace file.
   /// @param cutoff The number of bytes to keep per flow.
   /// @param max_flows The maximum number of flows to keep state for.
@@ -75,8 +74,7 @@ public:
   ///                before evicting the corresponding flow.
   /// @param expire_interval The number of seconds between successive expire
   ///                        passes over the flow table.
-  pcap(caf::actor sink,
-       std::string name,
+  pcap(std::string name,
        uint64_t cutoff = -1,
        size_t max_flows = 100000,
        size_t max_age = 60,

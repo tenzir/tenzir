@@ -14,15 +14,6 @@ template <typename Derived>
 struct synchronous : public actor_base
 {
 public:
-  /// Spawns a synchronous source.
-  /// @param The actor receiving the generated events.
-  /// @param batch_size The number of events to extract in one batch.
-  synchronous(caf::actor sink, uint64_t batch_size = 100000)
-    : sink_{std::move(sink)},
-      batch_size_{batch_size}
-  {
-  }
-
   caf::message_handler act() final
   {
     using namespace caf;
@@ -42,8 +33,18 @@ public:
       {
         batch_size_ = batch_size;
       },
+      on(atom("sink"), arg_match) >> [=](actor sink)
+      {
+        sink_ = sink;
+      },
       on(atom("run")) >> [=]
       {
+        if (! sink_)
+        {
+          quit(exit::error);
+          return;
+        }
+
         bool done = false;
         while (events_.size() < batch_size_ && ! done)
         {
@@ -83,7 +84,7 @@ private:
   }
 
   caf::actor sink_;
-  uint64_t batch_size_ = 0;
+  uint64_t batch_size_ = 100000;
   std::vector<event> events_;
 };
 

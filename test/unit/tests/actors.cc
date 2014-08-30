@@ -43,7 +43,7 @@ TEST("all-in-one import")
   *cfg['v'] = 0;
   *cfg['V'] = 5;
   *cfg['C'] = true;
-  *cfg['I'] = true;
+  *cfg['I'] = "bro";
   *cfg['r'] = m57_day11_18::ftp;
   *cfg['p'] = "m57_day11_18";
   REQUIRE(cfg.verify());
@@ -112,7 +112,7 @@ TEST("basic actor integrity")
   set_ports(import_config, 2);
   *import_config['v'] = 0;
   *import_config['V'] = 5;
-  *import_config['I'] = true;
+  *import_config['I'] = "bro";
   *import_config['r'] = m57_day11_18::ssl;
   *import_config["import.batch-size"] = 10;
   *import_config["archive.max-segment-size"] = 1;

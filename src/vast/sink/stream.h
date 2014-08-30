@@ -26,7 +26,7 @@ public:
   /// @returns `true` on success.
   bool flush()
   {
-    return stream_.flush();
+    return file_.is_open() ? stream_.flush() : false;
   }
 
   /// Writes data into the file.
@@ -36,7 +36,8 @@ public:
   template <typename Iterator>
   bool write(Iterator begin, Iterator end)
   {
-    assert(file_.is_open());
+    if (! file_.is_open())
+      return false;
 
     auto buf = stream_.next_block();
 

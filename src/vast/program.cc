@@ -17,6 +17,14 @@
 #include "vast/serialization.h"
 #include "vast/signal_monitor.h"
 #include "vast/detail/type_manager.h"
+#include "vast/sink/bro.h"
+#include "vast/sink/json.h"
+#include "vast/source/bro.h"
+
+#ifdef VAST_HAVE_PCAP
+#include "vast/sink/pcap.h"
+#include "vast/source/pcap.h"
+#endif
 
 #ifdef VAST_HAVE_EDITLINE
 #include "vast/console.h"
@@ -266,25 +274,89 @@ void program::run()
     }
 
     actor imp0rter;
-    if (config_.check("importer"))
+    if (auto format = config_.get("importer"))
     {
-      imp0rter = spawn<importer>(vast_dir, receiver_,
-                                 *config_.as<size_t>("import.batch-size"));
-
-      if (config_.check("import.submit"))
-        send(imp0rter, atom("submit"));
+      auto r = config_.get("import.read");
+      actor src;
+      if (*format == "pcap")
+      {
+#ifdef VAST_HAVE_PCAP
+        auto i = config_.get("import.interface");
+        auto c = config_.as<size_t>("import.pcap-cutoff");
+        auto m = *config_.as<size_t>("import.pcap-maxflows");
+        std::string name = i ? *i : (r ? *r : "-");
+        src = spawn<source::pcap, detached>(std::move(name), c ? *c : -1, m);
+#else
+        VAST_LOG_ACTOR_ERROR("not compiled with pcap support");
+        quit(exit::error);
+        return;
+#endif
+      }
+      else if (*format == "bro")
+      {
+        src = spawn<source::bro, detached>(r ? *r : "-", -1);
+      }
       else
-        send(imp0rter, atom("add"),
-             *config_.get("import.format"), *config_.get("import.read"));
-    }
-    else if (config_.check("exporter"))
-    {
-      auto format = *config_.get("export.format");
-      auto out = *config_.get("export.write");
-      auto limit = *config_.as<uint64_t>("export.limit");
-      auto exp0rter = spawn<exporter, linked>();
+      {
+        VAST_LOG_ACTOR_ERROR("invalid import format: " << *format);
+        quit(exit::error);
+        return;
+      }
 
-      send(exp0rter, atom("add"), format, out);
+      auto batch_size = config_.as<uint64_t>("import.batch-size");
+      imp0rter = spawn<importer>(vast_dir, receiver_, *batch_size);
+      send(imp0rter, atom("add"), src);
+    }
+    else if (auto format = config_.get("exporter"))
+    {
+      auto w = config_.get("export.write");
+      actor snk;
+      if (*format == "pcap")
+      {
+#ifdef VAST_HAVE_PCAP
+        auto flush = *config_.as<uint64_t>("export.pcap-flush");
+        snk = spawn<sink::pcap, detached>(*w, flush);
+#else
+        VAST_LOG_ACTOR_ERROR("not compiled with pcap support");
+        quit(exit::error);
+        return;
+#endif
+      }
+      else if (*format == "bro")
+      {
+        snk = spawn<sink::bro>(std::move(*w));
+      }
+      else if (*format == "json")
+      {
+        path p{std::move(*w)};
+        if (p != "-")
+        {
+          p = p.complete();
+          if (! exists(p.parent()))
+          {
+            auto t = mkdir(p.parent());
+            if (! t)
+            {
+              VAST_LOG_ACTOR_ERROR("failed to create directory: " << p.parent());
+              quit(exit::error);
+              return;
+            }
+          }
+        }
+
+        snk = spawn<sink::json>(std::move(p));
+      }
+      else
+      {
+        VAST_LOG_ACTOR_ERROR("invalid export format: " << *format);
+        quit(exit::error);
+        return;
+      }
+
+      auto exp0rter = spawn<exporter, linked>();
+      send(exp0rter, atom("add"), std::move(snk));
+
+      auto limit = *config_.as<uint64_t>("export.limit");
       if (limit > 0)
         send(exp0rter, atom("limit"), limit);
 

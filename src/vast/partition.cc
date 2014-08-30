@@ -415,9 +415,11 @@ message_handler partition_actor::act()
           VAST_LOG_ACTOR_DEBUG("begins unpacking a chunk (" <<
                                chunks_.size() << " remaining)");
 
-          dechunkifier_ = spawn<source::dechunkifier, monitored>(
-              chunks_.front(), this, batch_size_);
+          dechunkifier_ =
+            spawn<source::dechunkifier, monitored>(chunks_.front());
 
+          send(dechunkifier_, atom("sink"), this);
+          send(dechunkifier_, atom("batch size"), batch_size_);
           send(dechunkifier_, atom("run"));
         }
         else if (exit_reason_ != 0)

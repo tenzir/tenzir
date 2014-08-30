@@ -69,24 +69,25 @@ void configuration::initialize()
   act.add(/* 'X', */ "index", "spawn the index");
   act.add(/* 'T', */ "tracker", "spawn the tracker");
   act.add(/* 'S', */ "search", "spawn the search");
-  act.add('E', "exporter", "spawn the exporter");
-  act.add('I', "importer", "spawn the importer");
+  act.add('E', "exporter", "spawn the exporter").single();
+  act.add('I', "importer", "spawn the importer").single();
 #ifdef VAST_HAVE_EDITLINE
   act.add('Q', "console", "spawn the query console");
 #endif
 
   auto& imp = create_block("import options", "import");
   imp.add("batch-size", "number of events to ingest in one run").init(5000);
-  imp.add('r', "read", "path to input file/directory").init("-");
-  imp.add('i', "format", "format of events to ingest").init("bro");
-  imp.add("submit", "send orphaned segments on startup");
+  imp.add('r', "read", "path to input file/directory").single();
+  imp.add('i', "interface", "name of interface to read packets from").single();
+  imp.add("pcap-cutoff", "forego intra-flow packets after this many bytes").single();
+  imp.add("pcap-maxflows", "number of concurrent flows to track").init(100000);
   imp.visible(false);
 
   auto& exp = create_block("export options", "export");
   exp.add('l', "limit", "maximum number of results").init(0);
-  exp.add('o', "format", "format of events to generate").init("bro");
   exp.add('q', "query", "the query string").single();
   exp.add('w', "write", "path to output file/directory").init("-");
+  imp.add("pcap-flush", "flush to disk after this many packets").init(10000);
   exp.visible(false);
 
   auto& recv = create_block("receiver options", "receiver");
@@ -138,21 +139,26 @@ void configuration::initialize()
   add_conflict("console", "receiver");
 #endif
 
-  add_dependency("import.submit", "importer");
+  add_dependency("import.format", "importer");
   add_dependency("import.read", "importer");
-  add_dependency("import.format", "import.read");
-
-  add_dependencies("index.partition", {"index", "core"});
-  add_conflict("index.rebuild", "index.partition");
-
-  add_conflict("importer", "exporter");
-  add_conflict("receiver", "exporter");
-  add_conflict("tracker", "exporter");
+  add_dependency("import.interface", "importer");
+  add_dependency("import.submit", "importer");
+  add_dependency("import.pcap-cutoff", "importer");
+  add_dependency("import.pcap-maxflows", "importer");
+  add_conflict("import.read", "import.interface");
 
   add_dependency("export.limit", "exporter");
   add_dependency("export.format", "exporter");
   add_dependency("export.query", "exporter");
   add_dependency("export.write", "exporter");
+  add_dependency("export.pcap-flush", "exporter");
+  add_conflict("importer", "exporter");
+  add_conflict("receiver", "exporter");
+  add_conflict("tracker", "exporter");
+
+  add_dependencies("index.partition", {"index", "core"});
+  add_conflict("index.rebuild", "index.partition");
+
 }
 
 } // namespace vast

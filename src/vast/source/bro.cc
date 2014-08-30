@@ -68,9 +68,8 @@ trial<type> make_type(std::string const& bro_type)
 
 } // namespace <anonymous>
 
-bro::bro(caf::actor sink, std::string const& filename,
-           int32_t timestamp_field)
-  : file<bro>{std::move(sink), filename},
+bro::bro(std::string const& filename, int32_t timestamp_field)
+  : file<bro>{filename},
     timestamp_field_{timestamp_field}
 {
 }

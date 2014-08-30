@@ -18,11 +18,12 @@ Start a core:
 
 Import data:
 
-    zcat *.log.gz | vast -I
+    zcat *.log.gz | vast -I bro
 
-Run a query of at most 100 results, printed as a [Bro](http://www.bro.org) log:
+Run a query of at most 100 results, printed as [Bro](http://www.bro.org)
+conn.log:
 
-    vast -E -o bro -l 100 -q ':addr in 192.168.0.0/24'
+    vast -E bro -l 100 -q '&type == "conn" && :addr in 192.168.0.0/24'
 
 Start the interactive console and submit a query:
 

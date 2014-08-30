@@ -1,13 +1,7 @@
-#include <caf/all.hpp>
-
-#include "vast/event.h"
 #include "vast/exporter.h"
-#include "vast/sink/bro.h"
-#include "vast/sink/json.h"
 
-#ifdef VAST_HAVE_PCAP
-#include "vast/sink/pcap.h"
-#endif
+#include <caf/all.hpp>
+#include "vast/event.h"
 
 using namespace caf;
 
@@ -36,44 +30,10 @@ message_handler exporter::act()
           break;
         }
     },
-    on(atom("add"), "bro", arg_match) >> [=](std::string const& out)
+    on(atom("add"), arg_match) >> [=](actor const& snk)
     {
-      VAST_LOG_ACTOR_DEBUG("registers new bro sink");
-      sinks_.insert(spawn<sink::bro, monitored>(out));
-    },
-    on(atom("add"), "json", arg_match) >> [=](std::string const& out)
-    {
-      VAST_LOG_ACTOR_DEBUG("registers new JSON sink");
-
-      auto p = path{out};
-      if (out != "-")
-      {
-        p = p.complete();
-        if (! exists(p.parent()))
-        {
-          auto t = mkdir(p.parent());
-          if (! t)
-          {
-            VAST_LOG_ACTOR_ERROR("failed to create directory: " << p.parent());
-            quit(exit::error);
-            return;
-          }
-        }
-      }
-
-      sinks_.insert(spawn<sink::json, monitored>(std::move(p)));
-    },
-#ifdef VAST_HAVE_PCAP
-    on(atom("add"), "pcap", arg_match) >> [=](std::string const& out)
-    {
-      VAST_LOG_ACTOR_DEBUG("registers new pcap sink");
-      sinks_.insert(spawn<sink::pcap, monitored>(out));
-    },
-#endif
-    on(atom("add"), any_vals) >> [=]
-    {
-      VAST_LOG_ACTOR_ERROR("got invalid sink type");
-      quit(exit::error);
+      monitor(snk);
+      sinks_.insert(snk);
     },
     on(atom("limit"), arg_match) >> [=](uint64_t max)
     {

@@ -4,15 +4,19 @@
 #include "vast/event.h"
 #include "vast/file_system.h"
 #include "vast/detail/packet_type.h"
+#include "vast/source/bro.h"
 #include "vast/util/byte_swap.h"
+
+#ifdef VAST_HAVE_PCAP
+#include "vast/source/pcap.h"
+#endif
 
 namespace vast {
 namespace source {
 
-pcap::pcap(caf::actor sink, std::string name, uint64_t cutoff,
-           size_t max_flows, size_t max_age, size_t expire_interval)
-  : synchronous<pcap>{std::move(sink)},
-    name_{std::move(name)},
+pcap::pcap(std::string name, uint64_t cutoff, size_t max_flows, size_t max_age,
+           size_t expire_interval)
+  : name_{std::move(name)},
     packet_type_{detail::make_packet_type()},
     cutoff_{cutoff},
     max_flows_{max_flows},
@@ -46,13 +50,15 @@ result<event> pcap::extract()
     for (auto i = iface; i != nullptr; i = i->next)
       if (name_ == i->name)
       {
-        pcap_ = ::pcap_open_live(i->name, 65535, 1, 100, buf);
+        pcap_ = ::pcap_open_live(i->name, 65535, 1, 1000, buf);
         if (! pcap_)
         {
           done_ = true;
           quit(exit::error);
           return error{"failed to open interface ", name_, ": ", buf};
         }
+
+        VAST_LOG_ACTOR_INFO("listens on interface " << i->name);
 
         break;
       }
@@ -77,28 +83,32 @@ result<event> pcap::extract()
         quit(exit::error);
         return error{"failed to open pcap file ", name_, ": ", err};
       }
+
+      VAST_LOG_ACTOR_INFO("reads trace from " << name_);
     }
 
     last_expire_ = now;
   }
 
   uint8_t const* data;
+  // TODO: switch to pcap_loop.
   auto r = ::pcap_next_ex(pcap_, &packet_header_, &data);
+
+  if (r == 0)
+    // Attempt to fetch next packet timed out.
+    return {};
 
   if (r == -2)
   {
     done_ = true;
     return {};
   }
+
   if (r == -1)
   {
     std::string err{::pcap_geterr(pcap_)};
     pcap_ = nullptr;
     return error{"failed to get next packet: ", err};
-  }
-  if (r == 0)
-  {
-    return {};
   }
 
   detail::connection conn;

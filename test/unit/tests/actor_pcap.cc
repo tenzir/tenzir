@@ -13,9 +13,9 @@ TEST("pcap source")
   scoped_actor self;
 
   // Spawn a PCAP source with a no cutoff and at most 5 concurrent flows.
-  auto pcap = self->spawn<source::pcap, monitored>(
-      self, traces::nmap_vsn, -1, 5);
+  auto pcap = self->spawn<source::pcap, monitored>(traces::nmap_vsn, -1, 5);
 
+  anon_send(pcap, atom("sink"), self);
   anon_send(pcap, atom("run"));
 
   auto fail = others() >> [&]
@@ -42,8 +42,9 @@ TEST("pcap source")
   // Spawn a PCAP source with a 64-byte cutoff, at most 10 flow table entries,
   // with flows inactive for more than 5 seconds to be evicted every 2 seconds.
   pcap = self->spawn<source::pcap, monitored>(
-      self, traces::workshop_2011_browse, 64, 10, 5, 2);
+      traces::workshop_2011_browse, 64, 10, 5, 2);
 
+  anon_send(pcap, atom("sink"), self);
   anon_send(pcap, atom("run"));
 
   self->receive(

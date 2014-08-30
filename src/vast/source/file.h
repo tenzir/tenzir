@@ -14,11 +14,9 @@ class file : public synchronous<file<Derived>>
 {
 public:
   /// Constructs a file source.
-  /// @param sink The actor to send the generated events to.
   /// @param filename The name of the file to ingest.
-  file(caf::actor sink, std::string const& filename)
-    : synchronous<file<Derived>>{std::move(sink)},
-      file_handle_{path{filename}},
+  file(std::string const& filename)
+    : file_handle_{path{filename}},
       file_stream_{file_handle_}
   {
     file_handle_.open(vast::file::read_only);
