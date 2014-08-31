@@ -39,10 +39,10 @@ TEST("pcap source")
       fail
       );
 
-  // Spawn a PCAP source with a 64-byte cutoff, at most 10 flow table entries,
+  // Spawn a PCAP source with a 64-byte cutoff, at most 100 flow table entries,
   // with flows inactive for more than 5 seconds to be evicted every 2 seconds.
   pcap = self->spawn<source::pcap, monitored>(
-      traces::workshop_2011_browse, 64, 10, 5, 2);
+      traces::workshop_2011_browse, 64, 100, 5, 2);
 
   anon_send(pcap, atom("sink"), self);
   anon_send(pcap, atom("run"));
@@ -51,7 +51,7 @@ TEST("pcap source")
       [&](std::vector<event> const& v)
       {
         CHECK(v[0].type().name() == "vast::packet");
-        CHECK(v.size() == 24);
+        CHECK(v.size() == 36);
       },
       fail
       );

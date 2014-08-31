@@ -21,10 +21,8 @@ struct connection : util::equality_comparable<connection>
 
   friend bool operator==(connection const& lhs, connection const& rhs)
   {
-    return (lhs.src == rhs.src && lhs.dst == rhs.dst
-            && lhs.sport == rhs.sport && lhs.dport == rhs.dport)
-        || (lhs.src == rhs.dst && lhs.dst == rhs.src
-            && lhs.sport == rhs.dport && lhs.dport == rhs.sport);
+    return lhs.src == rhs.src && lhs.dst == rhs.dst
+        && lhs.sport == rhs.sport && lhs.dport == rhs.dport;
   }
 };
 
@@ -45,13 +43,6 @@ struct hash<vast::detail::connection>
     auto sprt = c.sport.number();
     auto dprt = c.dport.number();
     auto proto = static_cast<uint8_t>(c.sport.type());
-
-    if (std::tie(c.dst, c.dport) < std::tie(c.src, c.sport))
-    {
-      std::swap(src0, dst0);
-      std::swap(src1, dst1);
-      std::swap(sprt, dprt);
-    }
 
     return vast::util::hash_combine(src0, src1, dst0, dst1, sprt, dprt, proto);
   }
