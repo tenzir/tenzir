@@ -1,16 +1,9 @@
-VAST
-====
-
-<!--
-[![Build Status](https://secure.travis-ci.org/mavam/vast.png)](http://travis-ci.org/mavam/vast)
--->
+# VAST
 
 **Visibility Across Space and Time (VAST)** is a unified platform for network
 forensics and incident response.
 
-
-Synopsis
---------
+## Synopsis
 
 Start a core:
 
@@ -31,15 +24,18 @@ Start the interactive console and submit a query:
     > ask
     ? &time > now - 2d && :string == "http"
 
+## Documentation
 
-Documentation
--------------
+Please see the [wiki](https://github.com/mavam/vast/wiki) for documentation.
 
-- [Wiki](https://github.com/mavam/vast/wiki)
+## Installation
 
+VAST exists as a Docker container:
 
-Installation
-------------
+    docker pull mavam/vast
+    docker run --rm -t -i vast /bin/bash
+
+For instructions on how to build VAST manually, read on.
 
 ### Dependencies
 
@@ -84,7 +80,6 @@ to specificy a few environment variables to make autoconf happy:
     LDFLAGS="-L$PREFIX/lib" \
     ./configure --prefix=$PREFIX
 
-
 #### Compiler Bootstrapping
 
 - **Clang**
@@ -123,7 +118,6 @@ to specificy a few environment variables to make autoconf happy:
   in your `$PATH`, ready to be picked up by subsequent dependency
   configurations.
 
-
 #### Building VAST
 
 First define a few environment variables used by the build harnesses:
@@ -140,9 +134,7 @@ Thereafter build and install VAST:
     make test
     make install
 
-
-License
--------
+## License
 
 VAST comes with a 3-clause BSD licence, see
 [COPYING](https://raw.github.com/mavam/vast/master/COPYING) for details.
