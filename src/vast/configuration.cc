@@ -80,7 +80,7 @@ void configuration::initialize()
   imp.add('r', "read", "path to input file/directory").single();
   imp.add('i', "interface", "name of interface to read packets from").single();
   imp.add("pcap-cutoff", "forego intra-flow packets after this many bytes").single();
-  imp.add("pcap-maxflows", "number of concurrent flows to track").init(100000);
+  imp.add("pcap-maxflows", "number of concurrent flows to track").init(1000000);
   imp.visible(false);
 
   auto& exp = create_block("export options", "export");
