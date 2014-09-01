@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include <map>
 #include <memory>
 #include "vast/aliases.h"
 #include "vast/key.h"
@@ -49,6 +50,7 @@ public:
   static type derive(data const& d);
 
   using hash_type = util::xxhash;
+  using attribute_map = std::map<std::string, std::string>;
 
   // The base class for type classes.
   template <typename Derived>
@@ -69,6 +71,11 @@ public:
       return hash_.add(name_.data(), name_.size());
     }
 
+    attribute_map const& attributes() const
+    {
+      return attributes_;
+    }
+
     hash_type::digest_type digest() const
     {
       // FIXME: put the digest somewhere and remove the const_cast.
@@ -76,7 +83,15 @@ public:
     }
 
   protected:
-    base() = default;
+    base(attribute_map a = attribute_map{})
+      : attributes_(std::move(a))
+    {
+      for (auto& p : attributes_)
+      {
+        update(p.first.data(), p.first.size());
+        update(p.second.data(), p.second.size());
+      }
+    }
 
     template <typename... Ts>
     void update(Ts&&... xs)
@@ -89,12 +104,12 @@ public:
 
     void serialize(serializer& sink) const
     {
-      sink << name_ << hash_;
+      sink << name_ << attributes_ << hash_;
     }
 
     void deserialize(deserializer& source)
     {
-      source >> name_ >> hash_;
+      source >> name_ >> attributes_ >> hash_;
     }
 
     friend bool operator==(base const& lhs, base const& rhs)
@@ -108,6 +123,7 @@ public:
     }
 
     std::string name_;
+    attribute_map attributes_;
     hash_type hash_;
   };
 
@@ -122,7 +138,8 @@ public:
   class name : public base<name>                          \
   {                                                       \
   public:                                                 \
-    name()                                                \
+    name(attribute_map a = attribute_map{})               \
+      : base<name>(std::move(a))                          \
     {                                                     \
       update(#name, sizeof(#name) - 1);                   \
     }                                                     \
@@ -338,8 +355,9 @@ public:
   class enumeration : public base<enumeration>
   {
   public:
-    enumeration(std::vector<std::string> fields)
-      : fields_{std::move(fields)}
+    enumeration(std::vector<std::string> fields, attribute_map a = attribute_map{})
+      : base<enumeration>{std::move(a)},
+        fields_{std::move(fields)}
     {
       static constexpr auto desc = "enumeration";
       update(desc, sizeof(desc));
@@ -392,19 +410,22 @@ public:
   {
   }
 
-  /// Retrieves the name of the type.
-  /// @returns The name of the type.
-  std::string const& name() const;
-
   /// Assigns a name to the type. This can happen at most once because a name
   /// change modifies the type hash digest.
   /// @param name The new name of the type.
   /// @returns `true` on success.
   bool name(std::string name);
 
+  /// Retrieves the name of the type.
+  /// @returns The name of the type.
+  std::string const& name() const;
+
   /// Retrieves the hash digest of this type.
   /// @returns The hash digest of this type.
   hash_type::digest_type digest() const;
+
+  /// Retrieves the type's attributes.
+  attribute_map const& attributes() const;
 
   /// Checks whether data complies with this type.
   /// @param d The data to check.
@@ -545,8 +566,9 @@ bool compatible(type const& lhs, relational_operator op, type const& rhs);
 class type::vector : public type::base<type::vector>
 {
 public:
-  vector(type t)
-    : elem_{std::move(t)}
+  vector(type t, attribute_map a = attribute_map{})
+    : base<vector>{std::move(a)},
+      elem_{std::move(t)}
   {
     static constexpr auto desc = "vector";
     update(desc, sizeof(desc));
@@ -585,8 +607,9 @@ private:
 class type::set : public base<type::set>
 {
 public:
-  set(type t)
-    : elem_{std::move(t)}
+  set(type t, attribute_map a = attribute_map{})
+    : base<set>{std::move(a)},
+      elem_{std::move(t)}
   {
     static constexpr auto desc = "set";
     update(desc, sizeof(desc));
@@ -625,8 +648,9 @@ private:
 class type::table : public type::base<type::table>
 {
 public:
-  table(type k, type v)
-    : key_{std::move(k)},
+  table(type k, type v, attribute_map a = attribute_map{})
+    : base<table>{std::move(a)},
+      key_{std::move(k)},
       value_{std::move(v)}
   {
     static constexpr auto desc = "table";
@@ -698,8 +722,9 @@ public:
 
   using trace = util::stack_vector<field const*, 4>;
 
-  record(std::initializer_list<field> fields)
-    : fields_(fields.begin(), fields.end())
+  record(std::initializer_list<field> fields, attribute_map a = attribute_map{})
+    : base<record>{std::move(a)},
+      fields_(fields.begin(), fields.end())
   {
     initialize();
   }
@@ -871,8 +896,9 @@ private:
 class type::alias : public type::base<type::alias>
 {
 public:
-  alias(vast::type t)
-    : type_{std::move(t)}
+  alias(vast::type t, attribute_map a = attribute_map{})
+    : base<alias>{std::move(a)},
+      type_{std::move(t)}
   {
     static constexpr auto desc = "alias";
     update(desc, sizeof(desc));

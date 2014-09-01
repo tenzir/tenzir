@@ -332,3 +332,21 @@ TEST("type derivation")
 
   CHECK(type::derive(record{42, 1337u, 3.1415}), r);
 }
+
+TEST("type attributes")
+{
+  // Attributes are key-value pairs...
+  type::vector v{type::integer{}, {{"foo", "bar"}, {"baz", "qux"}}};
+  auto i = v.attributes().find("foo");
+  REQUIRE(i != v.attributes().end());
+  CHECK(i->second == "bar");
+
+  // ...with optional values.
+  auto b0 = type::boolean{{{"skip", {}}}};
+  CHECK(b0.attributes().size() == 1);
+  CHECK(b0.attributes().find("skip") != b0.attributes().end());
+
+  // Attributes are part of the type signature.
+  auto b1 = type::boolean{};
+  CHECK(b0 != b1);
+}

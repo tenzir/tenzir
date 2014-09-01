@@ -74,24 +74,6 @@ type::type()
 
 namespace {
 
-struct name_getter
-{
-  // FIXME: there exists a bug (#50) with the variant ipmlementation preventing
-  // references as return types of visitors, so we work around this using
-  // poitners.
-  std::string const* operator()(none const&) const
-  {
-    static std::string const no_name;
-    return &no_name;
-  }
-
-  template <typename T>
-  std::string const* operator()(T const& x) const
-  {
-    return &x.name();
-  }
-};
-
 struct name_setter
 {
   name_setter(std::string& name)
@@ -113,6 +95,24 @@ struct name_setter
   std::string& name_;
 };
 
+struct name_getter
+{
+  // FIXME: there exists a bug (#50) with the variant ipmlementation preventing
+  // references as return types of visitors, so we work around this using
+  // poitners.
+  std::string const* operator()(none const&) const
+  {
+    static std::string const no_name;
+    return &no_name;
+  }
+
+  template <typename T>
+  std::string const* operator()(T const& x) const
+  {
+    return &x.name();
+  }
+};
+
 struct digester
 {
   auto operator()(none const&) const
@@ -128,16 +128,36 @@ struct digester
   }
 };
 
+struct attribute_getter
+{
+  auto operator()(none const&) const
+  {
+    static auto const empty = type::attribute_map{};
+    return &empty;
+  }
+
+  template <typename T>
+  auto operator()(T const& x) const
+  {
+    return &x.attributes();
+  }
+};
+
 } // namespace <anonymous>
+
+bool type::name(std::string name)
+{
+  return visit(name_setter{name}, *info_);
+}
 
 std::string const& type::name() const
 {
   return *visit(name_getter{}, *info_);
 }
 
-bool type::name(std::string name)
+type::attribute_map const& type::attributes() const
 {
-  return visit(name_setter{name}, *info_);
+  return *visit(attribute_getter{}, *info_);
 }
 
 type::hash_type::digest_type type::digest() const
