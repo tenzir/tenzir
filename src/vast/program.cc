@@ -310,12 +310,14 @@ void program::run()
     else if (auto format = config_.get("exporter"))
     {
       auto w = config_.get("export.write");
+      assert(w);
       actor snk;
       if (*format == "pcap")
       {
 #ifdef VAST_HAVE_PCAP
-        auto flush = *config_.as<uint64_t>("export.pcap-flush");
-        snk = spawn<sink::pcap, detached>(*w, flush);
+        auto flush = config_.as<uint64_t>("export.pcap-flush");
+        assert(flush);
+        snk = spawn<sink::pcap, detached>(*w, *flush);
 #else
         VAST_LOG_ACTOR_ERROR("not compiled with pcap support");
         quit(exit::error);
@@ -360,8 +362,9 @@ void program::run()
       if (limit > 0)
         send(exp0rter, atom("limit"), limit);
 
-      auto query = *config_.get("export.query");
-      sync_send(search_, atom("query"), exp0rter, query).then(
+      auto query = config_.get("export.query");
+      assert(query);
+      sync_send(search_, atom("query"), exp0rter, *query).then(
           on_arg_match >> [=](error const& e)
           {
             VAST_LOG_ACTOR_ERROR("got invalid query: " << e);

@@ -87,7 +87,7 @@ void configuration::initialize()
   exp.add('l', "limit", "maximum number of results").init(0);
   exp.add('q', "query", "the query string").single();
   exp.add('w', "write", "path to output file/directory").init("-");
-  imp.add("pcap-flush", "flush to disk after this many packets").init(10000);
+  exp.add("pcap-flush", "flush to disk after this many packets").init(10000);
   exp.visible(false);
 
   auto& recv = create_block("receiver options", "receiver");
@@ -139,7 +139,6 @@ void configuration::initialize()
   add_conflict("console", "receiver");
 #endif
 
-  add_dependency("import.format", "importer");
   add_dependency("import.read", "importer");
   add_dependency("import.interface", "importer");
   add_dependency("import.submit", "importer");
@@ -148,8 +147,8 @@ void configuration::initialize()
   add_conflict("import.read", "import.interface");
 
   add_dependency("export.limit", "exporter");
-  add_dependency("export.format", "exporter");
   add_dependency("export.query", "exporter");
+  add_dependency("exporter", "export.query");
   add_dependency("export.write", "exporter");
   add_dependency("export.pcap-flush", "exporter");
   add_conflict("importer", "exporter");
@@ -158,7 +157,6 @@ void configuration::initialize()
 
   add_dependencies("index.partition", {"index", "core"});
   add_conflict("index.rebuild", "index.partition");
-
 }
 
 } // namespace vast
