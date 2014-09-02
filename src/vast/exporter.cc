@@ -20,7 +20,7 @@ message_handler exporter::act()
 
   return
   {
-    [=](down_msg const&)
+    [=](down_msg const& d)
     {
       VAST_LOG_ACTOR_ERROR("got DOWN from " << last_sender());
       for (auto& s : sinks_)
@@ -29,6 +29,9 @@ message_handler exporter::act()
           sinks_.erase(s);
           break;
         }
+
+      if (sinks_.empty())
+        quit(d.reason);
     },
     on(atom("add"), arg_match) >> [=](actor const& snk)
     {
