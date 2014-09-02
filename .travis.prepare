@@ -1,37 +1,44 @@
 #!/bin/sh
 
 set -e
-
 mkdir -p $PREFIX/src && cd $PREFIX/src
 
-#
-# Compiler
-#
-
 if [ "$CC" = "clang" ] ; then
-  sudo add-apt-repository -y ppa:h-rayflood/llvm
+  # Clang's build harness requires at least CMake 2.8, which Ubuntu 12.04
+  # does not provide out of the box.
+  sudo add-apt-repository -y ppa:kalakris/cmake
   sudo apt-get -qq update
-  sudo apt-get -qq install --allow-unauthenticated clang-3.4
-  # FIXME: where do we get these?
-  #sudo apt-get -qq install libc++1 libc++abi1
+  sudo apt-get -qq install --allow-unauthenticated cmake
 
-  mkdir -p $PREFIX/bin && cd $PREFIX/bin
-  ln -s $(which clang-3.4) clang
-  ln -s $(which clang++-3.4) clang++
-  cd -
+  # Fixes issue with missing header file 'bits/predefs.h' during Clang build
+  # phase 2.
+  sudo apt-get -qq install libc6-dev-i386
 
-  git clone git://github.com/rsmmr/install-clang.git
-  install-clang/install-clang -a libcxxabi -j $CONCURRENCY $PREFIX
-elif [ "$CC" = "gcc" ] ; then
-  # FIXME: seems like this doesn't work with Ubuntu 12.04 :-/.
-  sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-  sudo apt-get -qq update
-  sudo apt-get -qq install gcc-4.9 g++-4.9
+  # Travis ships with Clang 3.4, but not with libc++ and libcxxabi, which is what
+  # we need. So we have to do another full install.
+  git clone git://github.com/mavam/install-clang.git
 
-  cd $PREFIX/bin
-  ln -s $(which gcc-4.9) gcc
-  ln -s $(which g++-4.9) g++
-  cd -
+  # Travis times out when not seeing output for more than 10 mins. But
+  # compilation of Clang may exceed this time frame, so we sample output every
+  # 1000 lines to make it happy.
+  install-clang/install-clang -r 'git://github.com/llvm-mirror' -j $CONCURRENCY $PREFIX | awk 'NR % 1000 == 0'
+
+  # Travis has a Clang 3.4 installation in prefix /usr/local/clang-3.4, which
+  # we don't want to use.
+  export CC=$PREFIX/bin/clang
+  export CXX=$PREFIX/bin/clang++
+
+  # Because of the lack of libc++, which is needed to compile libcxxabi, we
+  # have to install Clang *twice*. Once to get a Clang compiler that can build
+  # libcxxabi, and then using that compiler to compile another one with
+  # libcxxabi support. Jeez.
+  rm -rf $PREFIX/src/llvm
+  install-clang/install-clang -r 'git://github.com/llvm-mirror' -j $CONCURRENCY -a libcxxabi $PREFIX | awk 'NR % 1000 == 0'
+
+  sudo cp $PREFIX/lib/libc++.so.1.0 /usr/lib
+  sudo ln -sf /usr/lib/libc++.so.1.0 /usr/lib/libc++.so
+  sudo ln -sf /usr/lib/libc++.so.1.0 /usr/lib/libc++.so.1
+  sudo ldconfig
 fi
 
 #
@@ -45,13 +52,12 @@ tar xzf boost.tar.gz
 cp -r boost_1_55_0/boost $PREFIX/include
 
 #
-# libcppa
+# CAF
 #
 
-git clone git://github.com/Neverlord/libcppa.git
-cd libcppa
-./configure $BUILD_TYPE --prefix=$PREFIX --no-examples
-make -j $CONCURRENCY
-make test
+git clone --recursive git://github.com/actor-framework/actor-framework.git
+cd actor-framework
+git checkout 8dcc3e72
+./configure --prefix=$PREFIX --no-examples --no-unit-tests
+make
 make install
-cd -

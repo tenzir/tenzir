@@ -1,6 +1,4 @@
 notifications:
-  recipients:
-    - vallentin@icir.org
   email:
     on_success: change
     on_failure: change
@@ -12,7 +10,7 @@ branches:
 language: cpp
 
 compiler:
-  - gcc
+#  - gcc
   - clang
 
 env:
@@ -33,5 +31,7 @@ before_script:
   - ./configure $BUILD_TYPE --prefix=$PREFIX
 
 script:
+# This currently fails because there is not enough memory available on the
+# Travis (only 3GB), resulting in a segfault during the compilation process.
   - make -j $CONCURRENCY
-  - make test
+  - build/bin/unit-test -v 3
