@@ -279,6 +279,13 @@ public:
     return bits / block_width + static_cast<size_type>(bits % block_width != 0);
   }
 
+  /// Flips the bits of a block beginning at a given position
+  /// @param block The block to flip.
+  /// @param start The position within the block where to start the flipping.
+  /// @returns The complement of *block*, flipped beginning at *start*.
+  /// @pre `start < block_width`
+  static size_type flip(block_type block, size_type start);
+
   /// Computes the number of 1-bits in a given block (aka. *population count*).
   /// @param block The block to inspect.
   /// @returns The number of 1-bits in *block*.
@@ -459,11 +466,13 @@ public:
   /// Toggles/flips a bit at a specific position.
   /// @param i The bit position.
   /// @returns A reference to the bit vector instance.
-  bitvector& flip(size_type i);
+  bitvector& toggle(size_type i);
 
-  /// Computes the complement
+  /// Generates the complement bitvector start at a given position.
+  /// @param start The bit position where to start flipping.
   /// @returns A reference to the bit vector instance.
-  bitvector& flip();
+  /// @pre `start < size()`
+  bitvector& flip(size_type start = 0);
 
   /// Retrieves a single bit.
   /// @param i The bit position.

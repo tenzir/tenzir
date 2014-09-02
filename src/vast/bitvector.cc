@@ -96,6 +96,12 @@ bitvector::reference& bitvector::reference::operator-=(bool x)
   return *this;
 }
 
+block_type bitvector::flip(block_type block, size_type start)
+{
+  auto invert = all_one << start;
+  return (block & ~invert) | (~block & invert);
+}
+
 size_type bitvector::count(block_type block)
 {
   size_type n = 0;
@@ -377,18 +383,24 @@ bitvector& bitvector::reset()
   return *this;
 }
 
-bitvector& bitvector::flip(size_type i)
+bitvector& bitvector::toggle(size_type i)
 {
   assert(i < num_bits_);
   bits_[block_index(i)] ^= bit_mask(i);
   return *this;
 }
 
-bitvector& bitvector::flip()
+bitvector& bitvector::flip(size_type start)
 {
-  for (size_type i = 0; i < blocks(); ++i)
-      bits_[i] = ~bits_[i];
+  assert(start < size());
+
+  auto first = block_index(start);
+  bits_[first] = flip(bits_[first], bit_index(start));
+  for (size_type i = first + 1; i < blocks(); ++i)
+    bits_[i] = ~bits_[i];
+
   zero_unused_bits();
+
   return *this;
 }
 

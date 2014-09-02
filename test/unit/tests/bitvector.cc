@@ -70,7 +70,7 @@ TEST("bitwise operations")
   CHECK(a.size() == 6);
   CHECK(a.blocks() == 1);
 
-  a.flip(3);
+  a.toggle(3);
   CHECK(to_string(a) == "001000");
   CHECK(to_string(a << 1) == "010000");
   CHECK(to_string(a << 2) == "100000");
@@ -163,4 +163,24 @@ TEST("iteration")
   *j.base() = false;
   j = bitvector::ones_iterator::rbegin(x);
   CHECK(j.base().position() == 55);
+}
+
+TEST("selective flipping")
+{
+  using block_type = bitvector::block_type;
+  auto blk = block_type{0xffffffffffffffff};
+  CHECK(bitvector::flip(blk, 0) == block_type{0x0000000000000000});
+  CHECK(bitvector::flip(blk, 1) == block_type{0x0000000000000001});
+  CHECK(bitvector::flip(blk, 4) == block_type{0x000000000000000f});
+  CHECK(bitvector::flip(blk, bitvector::block_width / 2) == block_type{0x00000000ffffffff});
+  CHECK(bitvector::flip(blk, bitvector::block_width - 1) == block_type{0x7fffffffffffffff});
+
+  bitvector v;
+  v.append(0xffffffffffffffff);
+  v.append(0xffffffffffffffff);
+  v.flip(96);
+  bitvector expected;
+  expected.append(0xffffffffffffffff);
+  expected.append(0x00000000ffffffff);
+  CHECK(v == expected);
 }
