@@ -98,8 +98,8 @@ public:
     }
 
     auto delta = n - size();
-    if (delta > 0)
-      if (! stretch(delta))
+    if (delta > 1)
+      if (! stretch(delta - 1))
         return false;
 
     return true;
