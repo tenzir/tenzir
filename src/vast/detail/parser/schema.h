@@ -17,6 +17,7 @@ struct schema : qi::grammar<Iterator, ast::schema::schema(), skipper<Iterator>>
   schema(error_handler<Iterator>& on_error)
     : schema::base_type(schema_)
   {
+    using qi::unused_type;
     using boost::phoenix::at_c;
     using boost::phoenix::begin;
     using boost::phoenix::end;
@@ -36,82 +37,42 @@ struct schema : qi::grammar<Iterator, ast::schema::schema(), skipper<Iterator>>
     ascii::alnum_type alnum;
     ascii::alpha_type alpha;
 
-    basic_type_.add
-        ("bool",      {"bool", ast::schema::bool_type})
-        ("int",       {"int", ast::schema::int_type})
-        ("count",     {"count", ast::schema::uint_type})
-        ("real",      {"real", ast::schema::double_type})
-        ("duration",  {"duration", ast::schema::time_frame_type})
-        ("time",      {"time", ast::schema::time_point_type})
-        ("string",    {"string", ast::schema::string_type})
-        ("pattern",   {"pattern", ast::schema::regex_type})
-        ("addr",      {"addr", ast::schema::address_type})
-        ("subnet",    {"subnet", ast::schema::prefix_type})
-        ("port",      {"port", ast::schema::port_type})
-        ;
-
     auto add_type =
-      [=](ast::schema::type_declaration const& decl,
-          qi::unused_type, qi::unused_type)
+      [=](std::string const& id, unused_type = {}, unused_type = {})
       {
-        auto& name = decl.name;
-        if (basic_type_.find(name) || user_type_.find(name) || event_.find(name))
-          throw std::runtime_error("duplicate type name: " + name);
-
-        if (auto ti = boost::get<ast::schema::type_info>(&decl.type))
-        {
-          user_type_.add(name, {name, *ti});
-        }
-        else if (auto t = boost::get<ast::schema::type>(&decl.type))
-        {
-          user_type_.add(name, {name, t->info});
-        }
+        if (! user_type_.find(id))
+          user_type_.add(id, id);
       };
 
-    auto add_event =
-      [&](ast::schema::event_declaration const& ed,
-          qi::unused_type, qi::unused_type)
-      {
-        if (event_.find(ed.name))
-          throw std::runtime_error("duplicate event name: " + ed.name);
-        else if (user_type_.find(ed.name))
-          throw std::runtime_error("conflicting event name: " + ed.name);
-
-        event_.add(ed.name, ed);
-      };
+    basic_type_.add
+        ("bool",     ast::schema::bool_type)
+        ("int",      ast::schema::int_type)
+        ("count",    ast::schema::uint_type)
+        ("real",     ast::schema::double_type)
+        ("duration", ast::schema::time_frame_type)
+        ("time",     ast::schema::time_point_type)
+        ("string",   ast::schema::string_type)
+        ("pattern",  ast::schema::regex_type)
+        ("addr",     ast::schema::address_type)
+        ("subnet",   ast::schema::prefix_type)
+        ("port",     ast::schema::port_type)
+        ;
 
     schema_
-        =   *statement_
-        ;
-
-    statement_
-        =   type_decl_   [_val = _1][add_type]
-        |   event_decl_  [_val = _1][add_event]
-        ;
-
-    event_decl_
-        =   lit("event")
-        >   identifier_
-        >   '('
-        >   -(argument_ % ',')
-        >   ')'
+        =   *type_decl_
         ;
 
     type_decl_
         =   lit("type")
-        >   identifier_
+        >   identifier_   [at_c<0>(_val) = _1][add_type]
         >   ':'
-        >   ( type_info_
-            | user_type_
-            | basic_type_
-            )
+        >   type_         [at_c<1>(_val) = _1]
         ;
 
     argument_
         =   identifier_
         >   ':'
         >   type_
-        >   -(+attribute_)
         ;
 
     attribute_
@@ -122,7 +83,7 @@ struct schema : qi::grammar<Iterator, ast::schema::schema(), skipper<Iterator>>
             >   -(  '='
                  >  (( '"'
                        > *(char_ - '"')
-                       > '"' ) // Extra parentheses removes a compiler warning.
+                       > '"' )
                     |  +(char_ - space)
                     )
                  )
@@ -130,17 +91,18 @@ struct schema : qi::grammar<Iterator, ast::schema::schema(), skipper<Iterator>>
         ;
 
     type_info_
-        =   enum_
+        =   user_type_
+        |   enum_
         |   vector_
         |   set_
         |   table_
         |   record_
+        |   basic_type_
         ;
 
     type_
-        =   user_type_    [_val = _1]
-        |   type_info_    [at_c<1>(_val) = _1]
-        |   basic_type_   [_val = _1]
+        =   type_info_
+        >>  *attribute_
         ;
 
     enum_
@@ -152,25 +114,25 @@ struct schema : qi::grammar<Iterator, ast::schema::schema(), skipper<Iterator>>
 
     vector_
         =   lit("vector")
-        >   '['
+        >   '<'
         >   type_
-        >   ']'
+        >   '>'
         ;
 
     set_
         =   lit("set")
-        >   '['
+        >   '<'
         >   type_
-        >   ']'
+        >   '>'
         ;
 
     table_
         =   lit("table")
-        >   '['
+        >   '<'
         >   type_
-        >   ']'
-        >   "of"
+        >   ','
         >   type_
+        >   '>'
         ;
 
     record_
@@ -191,12 +153,9 @@ struct schema : qi::grammar<Iterator, ast::schema::schema(), skipper<Iterator>>
 
     on_error.set(schema_, _4, _3);
 
-    event_.name("event symbol");
     type_.name("type symbol");
     schema_.name("schema");
-    statement_.name("statement");
     type_decl_.name("type declaration");
-    event_decl_.name("event declaration");
     argument_.name("argument");
     attribute_.name("attribute");
     type_info_.name("type info");
@@ -209,13 +168,10 @@ struct schema : qi::grammar<Iterator, ast::schema::schema(), skipper<Iterator>>
     identifier_.name("identifier");
   }
 
-  qi::symbols<char, ast::schema::event_declaration> event_;
-  qi::symbols<char, ast::schema::type> basic_type_;
-  qi::symbols<char, ast::schema::type> user_type_;
+  qi::symbols<char, ast::schema::basic_type> basic_type_;
+  qi::symbols<char, std::string> user_type_;
   qi::rule<Iterator, ast::schema::schema(), skipper<Iterator>> schema_;
-  qi::rule<Iterator, ast::schema::statement(), skipper<Iterator>> statement_;
   qi::rule<Iterator, ast::schema::type_declaration(), skipper<Iterator>> type_decl_;
-  qi::rule<Iterator, ast::schema::event_declaration(), skipper<Iterator>> event_decl_;
   qi::rule<Iterator, ast::schema::argument_declaration(), skipper<Iterator>> argument_;
   qi::rule<Iterator, ast::schema::attribute(), skipper<Iterator>> attribute_;
   qi::rule<Iterator, ast::schema::type_info(), skipper<Iterator>> type_info_;

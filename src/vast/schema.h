@@ -94,158 +94,130 @@ private:
 
 namespace detail {
 
+inline std::vector<type::attribute> make_attrs(
+    std::vector<ast::schema::attribute> const& attrs)
+{
+  std::vector<type::attribute> r;
+  for (auto& a : attrs)
+  {
+    if (a.key == "skip")
+      r.emplace_back(type::attribute::skip);
+    else
+      r.emplace_back(type::attribute::invalid);
+  }
+
+  return r;
+}
+
 class type_factory
 {
 public:
-  using result_type = type;
+  using result_type = trial<type>;
 
-  type_factory(schema const& s, std::string name = "")
+  type_factory(schema const& s, std::vector<ast::schema::attribute> const& as)
     : schema_{s},
-      name_{std::move(name)}
+      attrs_{make_attrs(as)}
   {
   }
 
-  type operator()(detail::ast::schema::basic_type bt) const
+  trial<type> operator()(std::string const& type_name) const
   {
-    type t;
+    if (auto x = schema_.find_type(type_name))
+      return *x;
+    else
+      return error{"unknown type: ", type_name};
+  }
+
+  trial<type> operator()(ast::schema::basic_type bt) const
+  {
     switch (bt)
     {
       default:
-        assert(! "missing type implementation");
-      case detail::ast::schema::bool_type:
-        t = type::boolean{};
-        break;
-      case detail::ast::schema::int_type:
-        t = type::integer{};
-        break;
-      case detail::ast::schema::uint_type:
-        t = type::count{};
-        break;
-      case detail::ast::schema::double_type:
-        t = type::real{};
-        break;
-      case detail::ast::schema::time_point_type:
-        t = type::time_point{};
-        break;
-      case detail::ast::schema::time_frame_type:
-        t = type::time_duration{};
-        break;
-      case detail::ast::schema::string_type:
-        t = type::string{};
-        break;
-      case detail::ast::schema::regex_type:
-        t = type::pattern{};
-        break;
-      case detail::ast::schema::address_type:
-        t = type::address{};
-        break;
-      case detail::ast::schema::prefix_type:
-        t = type::subnet{};
-        break;
-      case detail::ast::schema::port_type:
-        t = type::port{};
-        break;
+        return error{"missing type implementation"};
+      case ast::schema::bool_type:
+        return {type::boolean{attrs_}};
+      case ast::schema::int_type:
+        return {type::integer{attrs_}};
+      case ast::schema::uint_type:
+        return {type::count{attrs_}};
+      case ast::schema::double_type:
+        return {type::real{attrs_}};
+      case ast::schema::time_point_type:
+        return {type::time_point{attrs_}};
+      case ast::schema::time_frame_type:
+        return {type::time_duration{attrs_}};
+      case ast::schema::string_type:
+        return {type::string{attrs_}};
+      case ast::schema::regex_type:
+        return {type::pattern{attrs_}};
+      case ast::schema::address_type:
+        return {type::address{attrs_}};
+      case ast::schema::prefix_type:
+        return {type::subnet{attrs_}};
+      case ast::schema::port_type:
+        return {type::port{attrs_}};
     }
-
-    t.name(name_);
-    return t;
   }
 
-  type operator()(detail::ast::schema::enum_type const& t) const
+  trial<type> operator()(ast::schema::enum_type const& t) const
   {
-    auto e = type::enumeration{t.fields};
-    e.name(name_);
-    return e;
+    return {type::enumeration{t.fields, attrs_}};
   }
 
-  type operator()(detail::ast::schema::vector_type const& t) const
+  trial<type> operator()(ast::schema::vector_type const& t) const
   {
-    auto v = type::vector{make_type(t.element_type)};
-    v.name(name_);
-    return v;
+    auto elem = make_type(t.element_type);
+    if (! elem)
+      return elem;
+
+    return {type::vector{std::move(*elem), attrs_}};
   }
 
-  type operator()(detail::ast::schema::set_type const& t) const
+  trial<type> operator()(ast::schema::set_type const& t) const
   {
-    auto s = type::set{make_type(t.element_type)};
-    s.name(name_);
-    return s;
+    auto elem = make_type(t.element_type);
+    if (! elem)
+      return elem;
+
+    return {type::set{std::move(*elem), attrs_}};
   }
 
-  type operator()(detail::ast::schema::table_type const& t) const
+  trial<type> operator()(ast::schema::table_type const& t) const
   {
-    auto m = type::table{make_type(t.key_type), make_type(t.value_type)};
-    m.name(name_);
-    return m;
+    auto k = make_type(t.key_type);
+    if (! k)
+      return k;
+
+    auto v = make_type(t.value_type);
+    if (! v)
+      return v;
+
+    return {type::table{std::move(*k), std::move(*v), attrs_}};
   }
 
-  type operator()(detail::ast::schema::record_type const& t) const
+  trial<type> operator()(ast::schema::record_type const& t) const
   {
     std::vector<type::record::field> fields;
     for (auto& arg : t.args)
-      fields.push_back({arg.name, make_type(arg.type)});
+    {
+      auto arg_type = make_type(arg.type);
+      if (! arg_type)
+        return arg_type;
 
-    auto r = type::record{std::move(fields)};
-    r.name(name_);
-    return r;
+      fields.push_back({arg.name, std::move(*arg_type)});
+    }
+
+    return {type::record{std::move(fields), attrs_}};
   }
 
-  type make_type(detail::ast::schema::type const& t) const
+  trial<type> make_type(ast::schema::type const& t) const
   {
-    if (auto x = schema_.find_type(t.name))
-      return *x;
-
-    return boost::apply_visitor(type_factory{schema_}, t.info);
+    return boost::apply_visitor(type_factory{schema_, t.attrs}, t.info);
   }
 
 private:
   schema const& schema_;
-  std::string name_;
-};
-
-struct schema_factory
-{
-  using result_type = trial<void>;
-
-  schema_factory(schema& s)
-    : schema_{s}
-  {
-  }
-
-  trial<void> operator()(detail::ast::schema::type_declaration const& td)
-  {
-    if (auto ti = boost::get<detail::ast::schema::type_info>(&td.type))
-    {
-      auto t = boost::apply_visitor(type_factory{schema_, td.name}, *ti);
-      if (! schema_.add(t))
-        return error{"erroneous type declaration: " + td.name};
-    }
-    else if (auto x = boost::get<detail::ast::schema::type>(&td.type))
-    {
-      auto t = schema_.find_type(x->name);
-      if (t)
-      {
-        auto u = type::alias{*t};
-        u.name(td.name);
-        schema_.add(u);
-      }
-      else
-      {
-        auto u = boost::apply_visitor(type_factory{schema_, td.name}, x->info);
-        schema_.add(u);
-      }
-    }
-
-    return nothing;
-  }
-
-  trial<void> operator()(detail::ast::schema::event_declaration const&)
-  {
-    /* We will soon no longer treat events any different from types. */
-    return nothing;
-  }
-
-  schema& schema_;
+  std::vector<type::attribute> attrs_;
 };
 
 } // namespace detail
@@ -259,25 +231,39 @@ trial<void> parse(schema& sch, Iterator& begin, Iterator end)
   detail::parser::skipper<Iterator> skipper;
   detail::ast::schema::schema ast;
 
-  // TODO: get rid of the exception in the schema grammar.
-  try
-  {
-    bool success = phrase_parse(begin, end, grammar, skipper, ast);
-    if (! success || begin != end)
-      return error{std::move(err)};
-  }
-  catch (std::runtime_error const& e)
-  {
-    return error{e.what()};
-  }
+  bool success = phrase_parse(begin, end, grammar, skipper, ast);
+  if (! success || begin != end)
+    return error{std::move(err)};
 
   sch.types_.clear();
-  detail::schema_factory sf{sch};
-  for (auto& statement : ast)
+  for (auto& type_decl : ast)
   {
-    auto t = boost::apply_visitor(std::ref(sf), statement);
+    // If we have a top-level identifier, we're dealing with a type alias.
+    // Everywhere else (e.g., inside records or table types), and identifier
+    // will be resolved to the corresponding type.
+    if (auto id = boost::get<std::string>(&type_decl.type.info))
+    {
+      auto t = sch.find_type(*id);
+      if (! t)
+        return error{"unkonwn type: ", *id};
+
+      auto a = type::alias{*t, detail::make_attrs(type_decl.type.attrs)};
+      a.name(type_decl.name);
+
+      if (! sch.add(std::move(a)))
+        return error{"failed to add type alias", *id};
+    }
+
+    auto t = boost::apply_visitor(
+        detail::type_factory{sch, type_decl.type.attrs}, type_decl.type.info);
+
     if (! t)
       return t.error();
+
+    t->name(type_decl.name);
+
+    if (! sch.add(std::move(*t)))
+      return error{"failed to add type declaration", type_decl.name};
   }
 
   return nothing;

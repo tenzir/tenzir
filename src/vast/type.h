@@ -673,7 +673,7 @@ private:
   template <typename Iterator>
   friend trial<void> print(vector const& v, Iterator&& out)
   {
-    auto t = print("vector[", out);
+    auto t = print("vector<", out);
     if (! t)
       return t.error();
 
@@ -681,7 +681,7 @@ private:
     if (! t)
       return t.error();
 
-    *out++ = ']';
+    *out++ = '>';
 
     if (! v.attributes().empty())
     {
@@ -722,7 +722,7 @@ private:
   template <typename Iterator>
   friend trial<void> print(set const& s, Iterator&& out)
   {
-    auto t = print("set[", out);
+    auto t = print("set<", out);
     if (! t)
       return t.error();
 
@@ -730,7 +730,7 @@ private:
     if (! t)
       return t.error();
 
-    *out++ = ']';
+    *out++ = '>';
 
     if (! s.attributes().empty())
     {
@@ -779,7 +779,7 @@ private:
   template <typename Iterator>
   friend trial<void> print(table const& tab, Iterator&& out)
   {
-    auto t = print("table[", out);
+    auto t = print("table<", out);
     if (! t)
       return t;
 
@@ -787,13 +787,15 @@ private:
     if (! t)
       return t;
 
-    t = print("] of ", out);
+    t = print(", ", out);
     if (! t)
       return t;
 
     t = print(tab.value_, out);
     if (! t)
       return t;
+
+    *out++ = '>';
 
     if (! tab.attributes().empty())
     {
@@ -836,8 +838,9 @@ public:
     initialize();
   }
 
-  record(std::vector<field> fields)
-    : fields_(std::move(fields))
+  record(std::vector<field> fields, std::vector<attribute> a = {})
+    : base<record>{std::move(a)},
+      fields_(std::move(fields))
   {
     initialize();
   }

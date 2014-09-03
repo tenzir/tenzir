@@ -1,7 +1,7 @@
 # Basic types with local scope.
 
-event foo
-(
+type foo: record
+{
     a1: bool,
     a2: int,
     a3: count,
@@ -13,4 +13,4 @@ event foo
     a9: addr,
     a10: subnet,
     a11: port
-)
+}

@@ -18,4 +18,4 @@ type outer: record
     j: middle
 }
 
-event foo(r: outer)
+type foo: record{r: outer}

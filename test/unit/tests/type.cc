@@ -27,15 +27,13 @@ TEST("printing")
   CHECK(to_string(e) == "enum {foo, bar, baz}");
 
   type t = type::vector{type::real{}};
-  CHECK(to_string(t) == "vector[real]");
+  CHECK(to_string(t) == "vector<real>");
 
   t = type::set{type::port{}, {type::attribute::skip}};
-  CHECK(to_string(t) == "set[port] &skip");
+  CHECK(to_string(t) == "set<port> &skip");
 
-  // FIXME: it's currenty ambiguous to which type the attribute belongs to.
-  // Should it go to set[port] or the table?
   t = type::table{type::count{}, t};
-  CHECK(to_string(t) == "table[count] of set[port] &skip");
+  CHECK(to_string(t) == "table<count, set<port> &skip>");
 
   auto r = type::record{{
         {"foo", t},
@@ -44,7 +42,7 @@ TEST("printing")
       }};
 
   CHECK(to_string(r) ==
-        "record {foo: table[count] of set[port] &skip, bar: int, baz: real}");
+        "record {foo: table<count, set<port> &skip>, bar: int, baz: real}");
 
   type a = type::alias{t};
   CHECK(to_string(a) == to_string(t));
@@ -115,16 +113,19 @@ TEST("hashing")
 
 TEST("serialization")
 {
+  type s0 = type::string{{type::attribute::skip}};
   type t = type::set{type::port{}};
   t = type::table{type::count{}, t, {type::attribute::skip}};
 
   std::vector<uint8_t> buf;
-  io::archive(buf, t);
+  io::archive(buf, s0, t);
 
-  type u;
-  io::unarchive(buf, u);
+  type u, s1;
+  io::unarchive(buf, s1, u);
+  CHECK(s0 == s1);
+  CHECK(to_string(s1) == "string &skip");
   CHECK(u == t);
-  CHECK(to_string(t) == "table[count] of set[port] &skip");
+  CHECK(to_string(t) == "table<count, set<port>> &skip");
 }
 
 TEST("record resolving")

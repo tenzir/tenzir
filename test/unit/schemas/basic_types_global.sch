@@ -12,8 +12,8 @@ type t9: addr
 type t10: subnet
 type t11: port
 
-event foo
-(
+type foo: record
+{
     a1: t1,
     a2: t2,
     a3: t3,
@@ -25,4 +25,4 @@ event foo
     a9: t9,
     a10: t10,
     a11: t11
-)
+}

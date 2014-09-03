@@ -16,12 +16,15 @@ using namespace vast;
     REQUIRE(contents);                                              \
     auto lval = contents->begin();                                  \
     auto s0 = parse<schema>(lval, contents->end());                 \
+    if (! s0)                                                       \
+      std::cout << s0.error() << std::endl;                         \
     REQUIRE(s0);                                                    \
                                                                     \
     auto str = to_string(*s0);                                      \
     lval = str.begin();                                             \
     auto s1 = parse<schema>(lval, str.end());                       \
-    if (! s1) std::cout << s1.error() << std::endl;                 \
+    if (! s1)                                                       \
+      std::cout << s1.error() << std::endl;                         \
     REQUIRE(s1);                                                    \
     CHECK(str == to_string(*s1));                                   \
   }
@@ -29,33 +32,7 @@ using namespace vast;
 // Contains the test case defintions for all taxonomy test files.
 #include "test/unit/schema_test_cases.h"
 
-TEST("schema_serialization")
-{
-  schema sch;
-
-  auto t = type::record{
-    {"s1", type::string{}},
-    {"d1", type::real{}},
-    {"c", type::count{}},
-    {"i", type::integer{}},
-    {"s2", type::string{}},
-    {"d2", type::real{}}};
-  t.name("foo");
-
-  sch.add(t);
-
-  std::vector<uint8_t> buf;
-  CHECK(io::archive(buf, sch));
-
-  schema sch2;
-  CHECK(io::unarchive(buf, sch2));
-
-  auto u = sch2.find_type("foo");
-  REQUIRE(u);
-  CHECK(t == *u);
-}
-
-TEST("offset_finding")
+TEST("offset finding")
 {
   std::string str =
     "type a : int\n"
@@ -111,4 +88,30 @@ TEST("merging")
   CHECK(merged->find_type("a"));
   CHECK(merged->find_type("b"));
   CHECK(merged->find_type("inner"));
+}
+
+TEST("serialization")
+{
+  schema sch;
+
+  auto t = type::record{
+    {"s1", type::string{}},
+    {"d1", type::real{}},
+    {"c", type::count{{type::attribute::skip}}},
+    {"i", type::integer{}},
+    {"s2", type::string{}},
+    {"d2", type::real{}}};
+  t.name("foo");
+
+  sch.add(t);
+
+  std::vector<uint8_t> buf;
+  CHECK(io::archive(buf, sch));
+
+  schema sch2;
+  CHECK(io::unarchive(buf, sch2));
+
+  auto u = sch2.find_type("foo");
+  REQUIRE(u);
+  CHECK(t == *u);
 }

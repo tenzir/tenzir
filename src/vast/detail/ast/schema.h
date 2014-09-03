@@ -35,19 +35,34 @@ struct set_type;
 struct table_type;
 struct record_type;
 
-typedef boost::variant<
-    basic_type
-  , enum_type
-  , boost::recursive_wrapper<vector_type>
-  , boost::recursive_wrapper<set_type>
-  , boost::recursive_wrapper<table_type>
-  , boost::recursive_wrapper<record_type>
-> type_info;
+using type_info = boost::variant<
+  basic_type,
+  enum_type,
+  boost::recursive_wrapper<vector_type>,
+  boost::recursive_wrapper<set_type>,
+  boost::recursive_wrapper<table_type>,
+  boost::recursive_wrapper<record_type>,
+  std::string
+>;
+
+struct attribute
+{
+  std::string key;
+  boost::optional<std::string> value;
+};
 
 struct type
 {
-  std::string name;
+  type() = default;
+
+  type(type_info i, std::vector<attribute> a = {})
+    : info{std::move(i)},
+      attrs{std::move(a)}
+  {
+  }
+
   type_info info;
+  std::vector<attribute> attrs;
 };
 
 struct vector_type
@@ -66,17 +81,10 @@ struct table_type
   type value_type;
 };
 
-struct attribute
-{
-  std::string key;
-  boost::optional<std::string> value;
-};
-
 struct argument_declaration
 {
   std::string name;
   schema::type type;
-  boost::optional<std::vector<attribute>> attrs;
 };
 
 struct record_type
@@ -86,23 +94,11 @@ struct record_type
 
 struct type_declaration
 {
-  using variant_type = boost::variant<type_info, schema::type>;
   std::string name;
-  variant_type type;
+  schema::type type;
 };
 
-struct event_declaration
-{
-  std::string name;
-  boost::optional<std::vector<argument_declaration>> args;
-};
-
-typedef boost::variant<
-    type_declaration
-  , event_declaration
-> statement;
-
-typedef std::vector<statement> schema;
+using schema = std::vector<type_declaration>;
 
 } // namespace schema
 } // namespace ast
@@ -110,9 +106,14 @@ typedef std::vector<statement> schema;
 } // namespace vast
 
 BOOST_FUSION_ADAPT_STRUCT(
+    vast::detail::ast::schema::attribute,
+    (std::string, key)
+    (boost::optional<std::string>, value))
+
+BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::schema::type,
-    (std::string, name)
-    (vast::detail::ast::schema::type_info, info))
+    (vast::detail::ast::schema::type_info, info)
+    (std::vector<vast::detail::ast::schema::attribute>, attrs))
 
 BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::schema::enum_type,
@@ -132,15 +133,9 @@ BOOST_FUSION_ADAPT_STRUCT(
     (vast::detail::ast::schema::type, value_type))
 
 BOOST_FUSION_ADAPT_STRUCT(
-    vast::detail::ast::schema::attribute,
-    (std::string, key)
-    (boost::optional<std::string>, value))
-
-BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::schema::argument_declaration,
     (std::string, name)
-    (vast::detail::ast::schema::type, type)
-    (boost::optional<std::vector<vast::detail::ast::schema::attribute>>, attrs))
+    (vast::detail::ast::schema::type, type))
 
 BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::schema::record_type,
@@ -149,13 +144,6 @@ BOOST_FUSION_ADAPT_STRUCT(
 BOOST_FUSION_ADAPT_STRUCT(
     vast::detail::ast::schema::type_declaration,
     (std::string, name)
-    (vast::detail::ast::schema::type_declaration::variant_type, type))
-
-BOOST_FUSION_ADAPT_STRUCT(
-    vast::detail::ast::schema::event_declaration,
-    (std::string, name)
-    (boost::optional<std::vector<vast::detail::ast::schema::argument_declaration>>,
-     args))
-
+    (vast::detail::ast::schema::type, type))
 
 #endif
