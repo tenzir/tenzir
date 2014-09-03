@@ -10,12 +10,12 @@
 #include "vast/none.h"
 #include "vast/offset.h"
 #include "vast/operator.h"
+#include "vast/print.h"
 #include "vast/serialization/enum.h"
 #include "vast/serialization/hash.h"
 #include "vast/serialization/string.h"
 #include "vast/util/intrusive.h"
 #include "vast/util/operators.h"
-#include "vast/util/print.h"
 #include "vast/util/stack_vector.h"
 #include "vast/util/variant.h"
 #include "vast/util/hash/xxhash.h"
@@ -79,6 +79,19 @@ public:
     friend bool operator==(attribute const& lhs, attribute const& rhs)
     {
       return lhs.key == rhs.key && lhs.value == rhs.value;
+    }
+
+    template <typename Iterator>
+    friend trial<void> print(attribute const& a, Iterator&& out)
+    {
+      *out++ = '&';
+      switch (a.key)
+      {
+        default:
+          return print("invalid", out);
+        case skip:
+          return print("skip", out);
+      }
     }
   };
 
@@ -189,9 +202,19 @@ public:
                                                               \
   private:                                                    \
     template <typename Iterator>                              \
-    friend trial<void> print(name const&, Iterator&& out)     \
+    friend trial<void> print(name const& n, Iterator&& out)   \
     {                                                         \
-      return print(desc, out);                                \
+      auto t = print(desc, out);                              \
+      if (! t)                                                \
+        return t;                                             \
+                                                              \
+      if (! n.attributes().empty())                           \
+      {                                                       \
+        *out++ = ' ';                                         \
+        return print(n.attributes(), out);                    \
+      }                                                       \
+                                                              \
+      return nothing;                                         \
     }                                                         \
   };
 
@@ -434,7 +457,17 @@ public:
       if (! t)
         return t.error();
 
-      return print('}', out);
+      t = print('}', out);
+      if (! t)
+        return t.error();
+
+      if (! e.attributes().empty())
+      {
+        *out++ = ' ';
+        return print(e.attributes(), out);
+      }
+
+      return nothing;
     }
   };
 
@@ -648,7 +681,15 @@ private:
     if (! t)
       return t.error();
 
-    return print(']', out);
+    *out++ = ']';
+
+    if (! v.attributes().empty())
+    {
+      *out++ = ' ';
+      return print(v.attributes(), out);
+    }
+
+    return nothing;
   }
 };
 
@@ -689,7 +730,15 @@ private:
     if (! t)
       return t.error();
 
-    return print(']', out);
+    *out++ = ']';
+
+    if (! s.attributes().empty())
+    {
+      *out++ = ' ';
+      return print(s.attributes(), out);
+    }
+
+    return nothing;
   }
 };
 
@@ -732,17 +781,27 @@ private:
   {
     auto t = print("table[", out);
     if (! t)
-      return t.error();
+      return t;
 
     t = print(tab.key_, out);
     if (! t)
-      return t.error();
+      return t;
 
     t = print("] of ", out);
     if (! t)
-      return t.error();
+      return t;
 
-    return print(tab.value_, out);
+    t = print(tab.value_, out);
+    if (! t)
+      return t;
+
+    if (! tab.attributes().empty())
+    {
+      *out++ = ' ';
+      return print(tab.attributes(), out);
+    }
+
+    return nothing;
   }
 };
 
@@ -937,7 +996,15 @@ private:
     if (! t)
       return t.error();
 
-    return print('}', out);
+    *out++ = '}';
+
+    if (! r.attributes().empty())
+    {
+      *out++ = ' ';
+      return print(r.attributes(), out);
+    }
+
+    return nothing;
   }
 };
 
@@ -970,7 +1037,17 @@ private:
   template <typename Iterator>
   friend trial<void> print(alias const& a, Iterator&& out)
   {
-    return print(a.type(), out);
+    auto t = print(a.type(), out);
+    if (! t)
+      return t;
+
+    if (! a.attributes().empty())
+    {
+      *out++ = ' ';
+      return print(a.attributes(), out);
+    }
+
+    return nothing;
   }
 };
 
