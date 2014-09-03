@@ -11,6 +11,18 @@
 
 namespace vast {
 
+class bitstream;
+class null_bitstream;
+class ewah_bitstream;
+
+/// Determines whether a type is a valid bitstream.
+template <typename Bitstream>
+using is_bitstream = util::any<
+  std::is_same<Bitstream, bitstream>,
+  std::is_same<Bitstream, null_bitstream>,
+  std::is_same<Bitstream, ewah_bitstream>
+>;
+
 // An abstraction over a contiguous sequence of bits in a bitstream. A bit
 // sequence can have two types: a *fill* sequence representing a homogenous
 // bits, typically greater than or equal to the block size, and a *literal*
@@ -35,8 +47,6 @@ struct bitseq
   bitvector::block_type data = 0;
   bitvector::size_type length = 0;
 };
-
-class bitstream;
 
 /// The base class for all bitstream implementations.
 template <typename Derived>
@@ -1177,7 +1187,11 @@ Bitstream nor_(Bitstream const& lhs, Bitstream const& rhs)
 /// Transposes a vector of bitstreams into a character matrix of 0s and 1s.
 /// @param out The output iterator.
 /// @param v A vector of bitstreams.
-template <typename Iterator, typename Bitstream>
+template <
+  typename Iterator,
+  typename Bitstream,
+  typename = std::enable_if_t<is_bitstream<Bitstream>::value>
+>
 trial<void> print(std::vector<Bitstream> const& v, Iterator&& out)
 {
   if (v.empty())
