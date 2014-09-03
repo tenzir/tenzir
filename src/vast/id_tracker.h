@@ -8,34 +8,21 @@
 namespace vast {
 
 /// Keeps track of the event ID space.
-class id_tracker
+class id_tracker : public actor_base
 {
 public:
   /// Constructs the ID tracker.
   /// @param dir The directory where to save the ID to.
   id_tracker(path dir);
 
-  bool load();
-  bool save();
-  event_id next_id() const;
-
-  /// Hands out a given number of events.
-  bool hand_out(uint64_t n);
-
-private:
-  path dir_;
-  event_id id_ = 1;
-};
-
-/// Keeps track of the event ID space.
-struct id_tracker_actor : actor_base
-{
-  id_tracker_actor(path dir);
-
   caf::message_handler act() final;
   std::string describe() const final;
 
-  id_tracker id_tracker_;
+private:
+  bool save();
+
+  path dir_;
+  event_id id_ = 0;
 };
 
 } // namespace vast

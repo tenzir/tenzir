@@ -83,7 +83,7 @@ public:
 
   /// Appends invalid bits to bring the bitmap index up to a given size. Given
   /// a number of *n* bits, the function stretches the bitmap index with
-  /// `size() - n` bits.
+  /// `n - size()` bits.
   /// @param n The new size to stretch the bitmap index to.
   /// @returns `true` on success.
   bool catch_up(uint64_t n)
@@ -98,7 +98,7 @@ public:
     }
 
     auto delta = n - size();
-    if (delta > 1)
+    if (delta > 0)
       if (! stretch(delta))
         return false;
 

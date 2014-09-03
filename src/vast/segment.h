@@ -42,7 +42,7 @@ public:
     uuid id;
     time_point first = time_range{};
     time_point last = time_range{};
-    event_id base = 0;
+    event_id base = invalid_event_id;
     uint64_t events = 0;
     uint64_t bytes = 0;
     vast::schema schema;
@@ -65,17 +65,13 @@ public:
     /// @param s The segment to read from.
     reader(segment const& s);
 
-    /// Retrieves the current position of the reader.
-    /// @returns The ID of the next event to ::read.
-    event_id position() const;
-
     /// Extracts an event from the chunk.
-    /// @param id If non-zero, specifies the ID of the event to extract.
-    ///           If zero, the function extracts the next event from the
-    ///           underlying chunk.
+    /// @param id If non `invalid_event_id`, specifies the ID of the
+    ///           event to extract. If `invalid_event_id`, the function
+    ///           extracts the next event from the underlying chunk.
     /// @returns The extracted event, an empty result if there are no more
     ///          events available, or an error on failure.
-    result<event> read(event_id id = 0);
+    result<event> read(event_id id = invalid_event_id);
 
   private:
     chunk const* prev();
@@ -84,7 +80,7 @@ public:
     segment const* segment_;
     chunk const* current_ = nullptr;
     event_id next_ = 0;
-    event_id chunk_base_ = 0;
+    event_id chunk_base_ = invalid_event_id;
     size_t chunk_idx_ = 0;
     std::unique_ptr<chunk::reader> chunk_reader_;
   };

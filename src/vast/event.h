@@ -1,6 +1,7 @@
 #ifndef VAST_EVENT_H
 #define VAST_EVENT_H
 
+#include "vast/aliases.h"
 #include "vast/type.h"
 #include "vast/value.h"
 #include "vast/util/operators.h"
@@ -45,7 +46,7 @@ public:
   time_point timestamp() const;
 
 private:
-  event_id id_ = 0;
+  event_id id_ = invalid_event_id;
   time_point timestamp_;
 
 private:

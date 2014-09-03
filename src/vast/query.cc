@@ -53,10 +53,8 @@ query::query(actor archive, actor sink, expression ast)
       else
       {
         auto prev = unprocessed_.find_prev(current()->meta().base);
-        if (prev != 0 && prev != bitstream::npos)
+        if (prev != bitstream::npos)
         {
-          // The case of prev == 0 may occur when we negate bitstreams, but
-          // it's not a valid event ID and we need to ignore it.
           VAST_LOG_ACTOR_DEBUG("prefetches segment for previous ID " << prev);
           send(archive_, prev);
           inflight_ = true;
@@ -167,7 +165,8 @@ query::query(actor archive, actor sink, expression ast)
       for (auto id : mask)
       {
         last = id;
-        if (auto e = reader_->read(id))
+        auto e = reader_->read(id);
+        if (e)
         {
           auto& candidate_checker = checkers_[e->type()];
           if (is<none>(candidate_checker))
@@ -186,7 +185,12 @@ query::query(actor archive, actor sink, expression ast)
         }
         else
         {
-          VAST_LOG_ACTOR_ERROR("failed to extract event " << id);
+          if (e.empty())
+            VAST_LOG_ACTOR_ERROR("failed to extract event " << id);
+          else
+            VAST_LOG_ACTOR_ERROR("failed to extract event " << id << ": " <<
+                                 e.error());
+
           quit(exit::error);
           return;
         }

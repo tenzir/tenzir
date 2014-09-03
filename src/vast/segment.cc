@@ -14,12 +14,17 @@ uint32_t const segment::meta_data::version;
 
 bool segment::meta_data::contains(event_id eid) const
 {
-  return base != 0 && base <= eid && eid < base + events;
+  return base != invalid_event_id
+      && base <= eid
+      && eid < base + events;
 }
 
 bool segment::meta_data::contains(event_id from, event_id to) const
 {
-  return base != 0 && from < to && base <= from && to < base + events;
+  return base != invalid_event_id
+      && from < to
+      && base <= from
+      && to < base + events;
 }
 
 void segment::meta_data::serialize(serializer& sink) const
@@ -70,7 +75,6 @@ bool operator==(segment::meta_data const& x, segment::meta_data const& y)
 
 segment::reader::reader(segment const& s)
   : segment_{&s},
-    next_{segment_->meta_.base},
     chunk_base_{segment_->meta_.base}
 {
   if (! segment_->chunks_.empty())
@@ -80,54 +84,46 @@ segment::reader::reader(segment const& s)
   }
 }
 
-event_id segment::reader::position() const
-{
-  return next_;
-}
-
 result<event> segment::reader::read(event_id id)
 {
   if (! chunk_reader_)
     return error{"cannot read from empty segment"};
 
-  if (id > 0)
+  if (id != invalid_event_id)
   {
     if (! segment_->meta_.contains(id))
     {
       return error{"event ID ", id, " out of bounds"};
     }
-    else if (id < next_)
+    else if (id < chunk_base_ + next_)
     {
       if (id >= chunk_base_)
       {
-        next_ = chunk_base_;
+        next_ = 0;
         chunk_reader_ = std::make_unique<chunk::reader>(*current_);
       }
       else
       {
-        while (id < next_)
+        while (id < chunk_base_ + next_)
           if (! prev())
             return error{"backward seek failure"};
       }
     }
-    else if (id > next_)
+    else if (id > chunk_base_ + next_)
     {
       while (id >= chunk_base_ + current_->events())
         if (! next())
           return error{"forward seek failure"};
     }
 
-    next_ = id;
+    assert(id >= chunk_base_);
+    next_ = id - chunk_base_;
   }
 
-  if (next_ - chunk_base_ == current_->events() && ! next())
+  if (next_ == current_->events() && ! next())
     return error{"processed all chunks"};
 
-  assert(next_ >= chunk_base_);
-  auto e = chunk_reader_->read(next_ - chunk_base_);
-  ++next_;
-
-  return e;
+  return chunk_reader_->read(next_++);
 }
 
 chunk const* segment::reader::prev()
@@ -138,10 +134,10 @@ chunk const* segment::reader::prev()
   current_ = &segment_->chunks_[--chunk_idx_];
   chunk_reader_ = std::make_unique<chunk::reader>(*current_);
 
-  if (next_ > 0)
+  if (next_ != invalid_event_id)
   {
     chunk_base_ -= current_->events();
-    next_ = chunk_base_;
+    next_ = 0;
   }
 
   return current_;
@@ -152,10 +148,10 @@ chunk const* segment::reader::next()
   if (! current_ || chunk_idx_ + 1 == segment_->chunks_.size())
     return nullptr;
 
-  if (next_ > 0)
+  if (next_ != invalid_event_id)
   {
     chunk_base_ += current_->events();
-    next_ = chunk_base_;
+    next_ = 0;
   }
 
   current_ = &segment_->chunks_[++chunk_idx_];
@@ -182,7 +178,7 @@ trial<void> segment::push_back(chunk chk)
     if (first != ewah_bitstream::npos)
       meta_.base = first;
   }
-  else if (meta_.base != 0)
+  else if (meta_.base != invalid_event_id)
   {
     // If they have a base, segments must comprise chunks with adjacent
     // sequential ID ranges.

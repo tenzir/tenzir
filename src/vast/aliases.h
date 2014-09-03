@@ -19,15 +19,11 @@ using default_bitstream = ewah_bitstream;
 /// Uniquely identifies a VAST event.
 using event_id = uint64_t;
 
-/// The invalid event ID.
-static constexpr event_id invalid_event_id = 0;
-
-/// The smallest possible event ID.
-static constexpr event_id min_event_id = 1;
+/// The ID for invalid events
+constexpr event_id invalid_event_id = std::numeric_limits<event_id>::max();
 
 /// The largest possible event ID.
-static constexpr event_id max_event_id =
-  std::numeric_limits<event_id>::max() - 1;
+constexpr event_id max_event_id = invalid_event_id - 1;
 
 /// Uniquely identifies a VAST type.
 using type_id = uint64_t;

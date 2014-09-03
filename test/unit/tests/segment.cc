@@ -11,7 +11,6 @@ SUITE("core")
 TEST("segment")
 {
   segment s;
-
   auto t = type::count{};
   t.name("count");
   chunk c;
@@ -20,11 +19,7 @@ TEST("segment")
   size_t i = 0;
   while (i < 1124)
   {
-    event e{i, t};
-    e.id(i + 1);
-
-    REQUIRE(w.write(e));
-
+    REQUIRE(w.write(event{i, t}));
     if (++i % 256 == 0)
     {
       w.flush();
@@ -42,25 +37,15 @@ TEST("segment")
   segment::reader r{s};
   for (size_t i = 0; i < 1124; ++i)
   {
-    event expected{i, t};
-    expected.id(i + 1);
-
     auto e = r.read();
     REQUIRE(e);
-    REQUIRE(*e == expected);
+    REQUIRE(*e == event{i, t});
   }
 
   // Make sure the schema has the type of the event we put in.
   auto u = s.meta().schema.find_type("count");
   REQUIRE(u);
   CHECK(t == *u);
-
-  // Read an event, which must have the same type.
-  auto e = r.read(42);
-  if (! e)
-    std::cout << e.error() << std::endl;
-  REQUIRE(e);
-  CHECK(e->type() == *u);
 }
 
 TEST("segment seeking")

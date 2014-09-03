@@ -8,7 +8,7 @@ namespace vast {
 
 bool event::id(event_id i)
 {
-  if (i >= min_event_id || i <= max_event_id)
+  if (i <= max_event_id)
   {
     id_ = i;
     return true;

@@ -100,14 +100,14 @@ public:
     return d -= y;
   }
 
-  /// Flips all bits, i.e., creates the compliment bitstream.
+  /// Flips all bits, i.e., creates the complement bitstream.
   Derived& flip()
   {
     derived().bitwise_not();
     return static_cast<Derived&>(*this);
   }
 
-  /// Flips all bits, i.e., creates the compliment bitstream.
+  /// Flips all bits, i.e., creates the complement bitstream.
   Derived operator~() const
   {
     Derived d(derived());

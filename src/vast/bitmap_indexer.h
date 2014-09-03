@@ -29,7 +29,6 @@ public:
       bmi_{std::move(bmi)},
       stats_{std::chrono::seconds{1}}
   {
-    bmi_.stretch(1); // Event ID 0 is not a valid event.
   }
 
   caf::message_handler act() final

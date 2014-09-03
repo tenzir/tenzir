@@ -67,7 +67,7 @@ TEST("all-in-one import")
   REQUIRE(vast::io::unarchive(ftp / "id" / "orig_h" / "index", size, abmi));
   REQUIRE(vast::io::unarchive(ftp / "id" / "orig_p" / "index", size, pbmi));
 
-  REQUIRE(size == 3); // Event ID 1 is the first valid ID.
+  REQUIRE(size == 2);
   REQUIRE(size == abmi.size());
   REQUIRE(size == pbmi.size());
 
@@ -76,12 +76,12 @@ TEST("all-in-one import")
   auto orig_p = pbmi.lookup(greater, *to<port>("49320/?"));
 
   REQUIRE(orig_h);
+  CHECK((*orig_h)[0] == 1);
   CHECK((*orig_h)[1] == 1);
-  CHECK((*orig_h)[2] == 1);
 
   REQUIRE(orig_p);
-  CHECK((*orig_p)[1] == 1);
-  CHECK((*orig_p)[2] == 0);
+  CHECK((*orig_p)[0] == 1);
+  CHECK((*orig_p)[1] == 0);
 
   CHECK(rm(dir));
 }
@@ -154,12 +154,12 @@ TEST("basic actor integrity")
   self->receive(
       on_arg_match >> [&](segment const& s)
       {
-        CHECK(s.meta().base == 1);
+        CHECK(s.meta().base == 0);
         CHECK(s.meta().events == 113);
 
         // Check the last ssl.log entry.
         segment::reader r{s};
-        auto e = r.read(113);
+        auto e = r.read(112);
         REQUIRE(e);
         CHECK(get<record>(*e)->at(1) == "XBy0ZlNNWuj");
         CHECK(get<record>(*e)->at(3) == "TLSv10");
@@ -178,7 +178,7 @@ TEST("basic actor integrity")
       on_arg_match >> [&](bitstream const& hits)
       {
         CHECK(hits.count() == 46);
-        CHECK(hits.find_first() == 4);
+        CHECK(hits.find_first() == 3);
       },
       fail);
 
@@ -219,17 +219,17 @@ TEST("basic actor integrity")
     [&](event const& e)
     {
       // Verify contents of a few random events.
-      if (e.id() == 4)
+      if (e.id() == 3)
         CHECK(get<record>(e)->at(1) == "reRxJaOOlO9");
 
-      if (e.id() == 42)
+      if (e.id() == 41)
       {
         CHECK(get<record>(e)->at(1) == "7e0gZmKgGS4");
         CHECK(get<record>(e)->at(4) == "TLS_RSA_WITH_RC4_128_MD5");
       }
 
       // The last event.
-      if (e.id() == 103)
+      if (e.id() == 102)
         CHECK(get<record>(e)->at(1) == "mXRBhfuUqag");
     },
     fail);

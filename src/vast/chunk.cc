@@ -43,17 +43,15 @@ bool chunk::writer::write(event const& e)
     if (! meta_->schema.add(e.type()))
       return false;
 
-  if (meta_->first == time_duration{}
-      || e.timestamp() < meta_->first)
+  if (meta_->first == time_duration{} || e.timestamp() < meta_->first)
     meta_->first = e.timestamp();
 
-  if (meta_->last == time_duration{}
-      || e.timestamp() > meta_->last)
+  if (meta_->last == time_duration{} || e.timestamp() > meta_->last)
     meta_->last = e.timestamp();
 
-  if (! meta_->ids.empty() || e.id() > 0)
+  if (e.id() != invalid_event_id || ! meta_->ids.empty())
   {
-    if (e.id() < meta_->ids.size())
+    if (e.id() < meta_->ids.size() || e.id() == invalid_event_id)
       return false;
 
     auto delta = e.id() - meta_->ids.size();

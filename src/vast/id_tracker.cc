@@ -14,24 +14,73 @@ id_tracker::id_tracker(path dir)
 {
 }
 
-bool id_tracker::load()
+message_handler id_tracker::act()
 {
-  if (! exists(dir_ / "id"))
-    return true;
+  trap_exit(true);
 
-  std::ifstream file{to_string(dir_ / "id")};
-  if (! file)
-    return false;
+  if (exists(dir_ / "id"))
+  {
+    std::ifstream file{to_string(dir_ / "id")};
+    if (! file)
+    {
+      VAST_LOG_ACTOR_ERROR("failed to open file: " << (dir_ / "id"));
+      quit(exit::error);
+      return {};
 
-  file >> id_;
+      file >> id_;
+      VAST_LOG_INFO("tracker found existing next event ID " << id_);
+    }
+  }
 
-  VAST_LOG_INFO("tracker found existing next event ID " << id_);
-  return true;
+  return
+  {
+    [=](exit_msg const& e)
+    {
+      if (save())
+      {
+        quit(e.reason);
+      }
+      else
+      {
+        VAST_LOG_ACTOR_ERROR("could not save current event ID " << id_);
+        quit(exit::error);
+      }
+    },
+    on(atom("request"), arg_match) >> [=](uint64_t n)
+    {
+      if (n == 0)
+      {
+        VAST_LOG_ACTOR_ERROR("cannot hand out 0 ids");
+        return make_message(atom("id"), atom("failure"));
+      }
+      else if (std::numeric_limits<event_id>::max() - id_ < n)
+      {
+        VAST_LOG_ACTOR_ERROR("not enough ids available for " << n);
+        return make_message(atom("id"), atom("failure"));
+      }
+
+      id_ += n;
+      if (! save())
+      {
+        VAST_LOG_ACTOR_ERROR("failed to save incremented ID: " << id_);
+        quit(exit::error);
+        return make_message(atom("id"), atom("failure"));
+      }
+
+      VAST_LOG_ACTOR_DEBUG("hands out [" << (id_ - n) << ',' << id_ << ')');
+      return make_message(atom("id"), id_ - n, id_);
+    }
+  };
+}
+
+std::string id_tracker::describe() const
+{
+  return "id-tracker";
 }
 
 bool id_tracker::save()
 {
-  if (id_ == 1)
+  if (id_ == 0)
     return true;
 
   if (! exists(dir_) && ! mkdir(dir_))
@@ -44,82 +93,6 @@ bool id_tracker::save()
   file << id_ << std::endl;
 
   return true;
-}
-
-event_id id_tracker::next_id() const
-{
-  return id_;
-}
-
-bool id_tracker::hand_out(uint64_t n)
-{
-  if (std::numeric_limits<event_id>::max() - id_ < n)
-    return false;
-
-  id_ += n;
-
-  if (! save())
-  {
-    id_ -= n;
-    return false;
-  }
-
-  return true;
-}
-
-
-id_tracker_actor::id_tracker_actor(path dir)
-  : id_tracker_{std::move(dir)}
-{
-}
-
-message_handler id_tracker_actor::act()
-{
-  trap_exit(true);
-
-  if (! id_tracker_.load())
-  {
-    VAST_LOG_ACTOR_ERROR("failed to load existing tracker ID from filesystem");
-    quit(exit::error);
-  }
-
-  return
-  {
-    [=](exit_msg const& e)
-    {
-      if (! id_tracker_.save())
-        VAST_LOG_ACTOR_ERROR(
-            "could not save current event ID " << id_tracker_.next_id());
-
-      quit(e.reason);
-    },
-    on(atom("request"), arg_match) >> [=](uint64_t n)
-    {
-      if (n == 0)
-      {
-        VAST_LOG_ACTOR_ERROR("cannot hand out 0 ids");
-        return make_message(atom("id"), atom("failure"));
-      }
-
-      auto next = id_tracker_.next_id();
-      if (! id_tracker_.hand_out(n))
-      {
-        VAST_LOG_ACTOR_ERROR(
-            "failed to hand out " << n << " ids (current ID: " << next << ")");
-        return make_message(atom("id"), atom("failure"));
-      }
-      else
-      {
-        VAST_LOG_ACTOR_DEBUG("hands out [" << next << ',' << next + n << ')');
-        return make_message(atom("id"), next, next + n);
-      }
-    }
-  };
-}
-
-std::string id_tracker_actor::describe() const
-{
-  return "id-tracker";
 }
 
 } // namespace vast

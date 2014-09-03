@@ -158,7 +158,7 @@ void program::run()
     auto tracker_port = *config_.as<unsigned>("tracker.port");
     if (config_.check("tracker"))
     {
-      tracker_ = spawn<id_tracker_actor>(vast_dir);
+      tracker_ = spawn<id_tracker>(vast_dir);
       VAST_LOG_ACTOR_INFO(
           "publishes tracker at " << tracker_host << ':' << tracker_port);
 
