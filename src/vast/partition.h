@@ -76,9 +76,12 @@ private:
 
   caf::actor load_time_indexer();
   caf::actor load_name_indexer();
+
   trial<caf::actor> load_data_indexer(type const& et, type const& t,
                                       offset const& o);
 
+  trial<caf::actor> create_data_indexer(type const& et, type const& t,
+                                        offset const& o);
   path dir_;
   bool updated_ = false;
   size_t batch_size_;

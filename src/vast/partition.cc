@@ -124,8 +124,8 @@ struct partition_actor::dispatcher
                 auto a = actor_.load_data_indexer(t, e.type, o);
                 if (! a)
                   return a.error();
-
-                indexes.push_back(std::move(*a));
+                else if (*a)
+                  indexes.push_back(std::move(*a));
               }
 
               return nothing;
@@ -137,7 +137,7 @@ struct partition_actor::dispatcher
           return {};
         }
       }
-      else if (t == e.type)
+      else
       {
         auto a = actor_.load_data_indexer(t, t, {});
         if (! a)
@@ -146,7 +146,8 @@ struct partition_actor::dispatcher
           return {};
         }
 
-        indexes.push_back(std::move(*a));
+        if (*a)
+          indexes.push_back(std::move(*a));
       }
 
     return indexes;
@@ -174,7 +175,7 @@ struct partition_actor::dispatcher
           auto a = actor_.load_data_indexer(t, *lhs_type, o);
           if (! a)
             VAST_LOG_ERROR(a.error());
-          else
+          else if (*a)
             indexes.push_back(std::move(*a));
         }
       }
@@ -187,7 +188,8 @@ struct partition_actor::dispatcher
           return {};
         }
 
-        indexes.push_back(std::move(*a));;
+        if (*a)
+          indexes.push_back(std::move(*a));;
       }
 
     return indexes;
@@ -380,7 +382,10 @@ message_handler partition_actor::act()
             auto attempt = r->each(
                 [&](type::record::trace const& t, offset const& o) -> trial<void>
                 {
-                  auto a = load_data_indexer(tp, t.back()->type, o);
+                  if (t.back()->type.find_attribute(type::attribute::skip))
+                    return nothing;
+
+                  auto a = create_data_indexer(tp, t.back()->type, o);
                   if (! a)
                     return a.error();
                   return nothing;
@@ -389,6 +394,16 @@ message_handler partition_actor::act()
             if (! attempt)
             {
               VAST_LOG_ACTOR_ERROR(attempt.error());
+              quit(exit::error);
+              return;
+            }
+          }
+          else if (! tp.find_attribute(type::attribute::skip))
+          {
+            auto t = create_data_indexer(tp, tp, {});
+            if (! t)
+            {
+              VAST_LOG_ACTOR_ERROR(t.error());
               quit(exit::error);
               return;
             }
@@ -533,6 +548,16 @@ actor partition_actor::load_name_indexer()
 trial<actor> partition_actor::load_data_indexer(
     type const& et, type const& t, offset const& o)
 {
+  auto p = dir_ / path{"types"} / et.name();
+  if (exists(p))
+    return create_data_indexer(et, t, o);
+  else
+    return actor{};
+}
+
+trial<actor> partition_actor::create_data_indexer(
+    type const& et, type const& t, offset const& o)
+{
   auto abs = dir_ / path{"types"} / et.name();
 
   // FIXME: Remove after having switched to the new record indexer.
@@ -561,5 +586,4 @@ trial<actor> partition_actor::load_data_indexer(
 
   return s;
 }
-
 } // namespace vast

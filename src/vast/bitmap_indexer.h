@@ -112,9 +112,8 @@ public:
       {
         auto p = get<predicate>(pred);
         assert(p);
-        auto& d = *get<data>(p->rhs);
 
-        auto r = bmi_.lookup(p->op, d);
+        auto r = bmi_.lookup(p->op, *get<data>(p->rhs));
         if (! r)
         {
           VAST_LOG_ACTOR_ERROR(r.error());

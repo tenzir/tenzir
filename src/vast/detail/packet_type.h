@@ -15,7 +15,7 @@ inline type make_packet_type()
       {"dst", type::address{}},
       {"sport", type::port{}},
       {"dport", type::port{}}}},
-    {"data", type::string{}}};
+    {"data", type::string{{type::attribute::skip}}}};
 
   packet.name("vast::packet");
 

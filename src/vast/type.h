@@ -10,6 +10,7 @@
 #include "vast/none.h"
 #include "vast/offset.h"
 #include "vast/operator.h"
+#include "vast/serialization/enum.h"
 #include "vast/serialization/hash.h"
 #include "vast/serialization/string.h"
 #include "vast/util/intrusive.h"
@@ -44,13 +45,49 @@ struct type_deserializer;
 class type : util::totally_ordered<type>
 {
 public:
+  /// A type attrbiute.
+  struct attribute : util::equality_comparable<attribute>
+  {
+    enum key_type : uint16_t
+    {
+      invalid,
+      skip
+    };
+
+    attribute(key_type k = invalid, std::string v = {})
+      : key{k},
+        value{std::move(v)}
+    {
+    }
+
+    key_type key;
+    std::string value;
+
+  private:
+    friend access;
+
+    void serialize(serializer& sink) const
+    {
+      sink << key << value;
+    }
+
+    void deserialize(deserializer& source)
+    {
+      source >> key >> value;
+    }
+
+    friend bool operator==(attribute const& lhs, attribute const& rhs)
+    {
+      return lhs.key == rhs.key && lhs.value == rhs.value;
+    }
+  };
+
+  using hash_type = util::xxhash;
+
   /// Derives a type from data.
   /// @param d The data to derive a type from.
   /// @returns The type corresponding to *d*.
   static type derive(data const& d);
-
-  using hash_type = util::xxhash;
-  using attribute_map = std::map<std::string, std::string>;
 
   // The base class for type classes.
   template <typename Derived>
@@ -71,9 +108,15 @@ public:
       return hash_.add(name_.data(), name_.size());
     }
 
-    attribute_map const& attributes() const
+    std::vector<attribute> const& attributes() const
     {
       return attributes_;
+    }
+
+    attribute const* find_attribute(attribute::key_type k) const
+    {
+      auto i = std::find(attributes_.begin(), attributes_.end(), k);
+      return i == attributes_.end() ? nullptr : &*i;
     }
 
     hash_type::digest_type digest() const
@@ -83,13 +126,13 @@ public:
     }
 
   protected:
-    base(attribute_map a = attribute_map{})
+    base(std::vector<attribute> a = {})
       : attributes_(std::move(a))
     {
-      for (auto& p : attributes_)
+      for (auto& a : attributes_)
       {
-        update(p.first.data(), p.first.size());
-        update(p.second.data(), p.second.size());
+        update(a.key);
+        update(a.value.data(), a.value.size());
       }
     }
 
@@ -123,7 +166,7 @@ public:
     }
 
     std::string name_;
-    attribute_map attributes_;
+    std::vector<attribute> attributes_;
     hash_type hash_;
   };
 
@@ -134,22 +177,22 @@ public:
   class record;
   class alias;
 
-#define VAST_DEFINE_BASIC_TYPE(name, desc)                \
-  class name : public base<name>                          \
-  {                                                       \
-  public:                                                 \
-    name(attribute_map a = attribute_map{})               \
-      : base<name>(std::move(a))                          \
-    {                                                     \
-      update(#name, sizeof(#name) - 1);                   \
-    }                                                     \
-                                                          \
-  private:                                                \
-    template <typename Iterator>                          \
-    friend trial<void> print(name const&, Iterator&& out) \
-    {                                                     \
-      return print(desc, out);                            \
-    }                                                     \
+#define VAST_DEFINE_BASIC_TYPE(name, desc)                    \
+  class name : public base<name>                              \
+  {                                                           \
+  public:                                                     \
+    name(std::vector<attribute> a = {})                       \
+      : base<name>(std::move(a))                              \
+    {                                                         \
+      update(#name, sizeof(#name) - 1);                       \
+    }                                                         \
+                                                              \
+  private:                                                    \
+    template <typename Iterator>                              \
+    friend trial<void> print(name const&, Iterator&& out)     \
+    {                                                         \
+      return print(desc, out);                                \
+    }                                                         \
   };
 
   VAST_DEFINE_BASIC_TYPE(boolean, "bool")
@@ -355,7 +398,7 @@ public:
   class enumeration : public base<enumeration>
   {
   public:
-    enumeration(std::vector<std::string> fields, attribute_map a = attribute_map{})
+    enumeration(std::vector<std::string> fields, std::vector<attribute> a = {})
       : base<enumeration>{std::move(a)},
         fields_{std::move(fields)}
     {
@@ -425,7 +468,12 @@ public:
   hash_type::digest_type digest() const;
 
   /// Retrieves the type's attributes.
-  attribute_map const& attributes() const;
+  std::vector<attribute> const& attributes() const;
+
+  /// Looks for a specific attribute.
+  /// @param key The attribute key.
+  /// @returns A pointer to the attribute if it exists or `nullptr` otherwise.
+  attribute const* find_attribute(attribute::key_type key) const;
 
   /// Checks whether data complies with this type.
   /// @param d The data to check.
@@ -566,7 +614,7 @@ bool compatible(type const& lhs, relational_operator op, type const& rhs);
 class type::vector : public type::base<type::vector>
 {
 public:
-  vector(type t, attribute_map a = attribute_map{})
+  vector(type t, std::vector<attribute> a = {})
     : base<vector>{std::move(a)},
       elem_{std::move(t)}
   {
@@ -607,7 +655,7 @@ private:
 class type::set : public base<type::set>
 {
 public:
-  set(type t, attribute_map a = attribute_map{})
+  set(type t, std::vector<attribute> a = {})
     : base<set>{std::move(a)},
       elem_{std::move(t)}
   {
@@ -648,7 +696,7 @@ private:
 class type::table : public type::base<type::table>
 {
 public:
-  table(type k, type v, attribute_map a = attribute_map{})
+  table(type k, type v, std::vector<attribute> a = {})
     : base<table>{std::move(a)},
       key_{std::move(k)},
       value_{std::move(v)}
@@ -722,7 +770,7 @@ public:
 
   using trace = util::stack_vector<field const*, 4>;
 
-  record(std::initializer_list<field> fields, attribute_map a = attribute_map{})
+  record(std::initializer_list<field> fields, std::vector<attribute> a = {})
     : base<record>{std::move(a)},
       fields_(fields.begin(), fields.end())
   {
@@ -896,7 +944,7 @@ private:
 class type::alias : public type::base<type::alias>
 {
 public:
-  alias(vast::type t, attribute_map a = attribute_map{})
+  alias(vast::type t, std::vector<attribute> a = {})
     : base<alias>{std::move(a)},
       type_{std::move(t)}
   {

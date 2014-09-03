@@ -100,7 +100,7 @@ struct name_getter
   // FIXME: there exists a bug (#50) with the variant ipmlementation preventing
   // references as return types of visitors, so we work around this using
   // poitners.
-  std::string const* operator()(none const&) const
+  std::string const* operator()(none) const
   {
     static std::string const no_name;
     return &no_name;
@@ -115,7 +115,7 @@ struct name_getter
 
 struct digester
 {
-  auto operator()(none const&) const
+  auto operator()(none) const
   {
     static auto const nil_digest = type::hash_type::digest(nil);
     return nil_digest;
@@ -130,9 +130,9 @@ struct digester
 
 struct attribute_getter
 {
-  auto operator()(none const&) const
+  auto operator()(none) const
   {
-    static auto const empty = type::attribute_map{};
+    static auto const empty = std::vector<type::attribute>{};
     return &empty;
   }
 
@@ -141,6 +141,27 @@ struct attribute_getter
   {
     return &x.attributes();
   }
+};
+
+struct attribute_finder
+{
+  attribute_finder(type::attribute::key_type k)
+    : key_{k}
+  {
+  }
+
+  type::attribute const* operator()(none) const
+  {
+    return nullptr;
+  }
+
+  template <typename T>
+  type::attribute const* operator()(T const& x) const
+  {
+    return x.find_attribute(key_);
+  }
+
+  type::attribute::key_type key_;
 };
 
 } // namespace <anonymous>
@@ -155,9 +176,14 @@ std::string const& type::name() const
   return *visit(name_getter{}, *info_);
 }
 
-type::attribute_map const& type::attributes() const
+std::vector<type::attribute> const& type::attributes() const
 {
   return *visit(attribute_getter{}, *info_);
+}
+
+type::attribute const* type::find_attribute(attribute::key_type key) const
+{
+  return visit(attribute_finder{key}, *info_);
 }
 
 type::hash_type::digest_type type::digest() const

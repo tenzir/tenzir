@@ -336,17 +336,11 @@ TEST("type derivation")
 TEST("type attributes")
 {
   // Attributes are key-value pairs...
-  type::vector v{type::integer{}, {{"foo", "bar"}, {"baz", "qux"}}};
-  auto i = v.attributes().find("foo");
-  REQUIRE(i != v.attributes().end());
-  CHECK(i->second == "bar");
-
-  // ...with optional values.
-  auto b0 = type::boolean{{{"skip", {}}}};
-  CHECK(b0.attributes().size() == 1);
-  CHECK(b0.attributes().find("skip") != b0.attributes().end());
+  type::vector v{type::integer{}, {type::attribute::skip}};
+  auto a = v.find_attribute(type::attribute::skip);
+  REQUIRE(a);
+  CHECK(a->value == "");
 
   // Attributes are part of the type signature.
-  auto b1 = type::boolean{};
-  CHECK(b0 != b1);
+  CHECK(v != type::vector{type::integer{}});
 }
