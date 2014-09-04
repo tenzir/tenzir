@@ -342,6 +342,14 @@ trial<void> file::open(open_mode mode, bool append)
     flags |= O_APPEND;
 
   VAST_ERRNO = 0;
+
+  if (mode != read_only && ! exists(path_.parent()))
+  {
+    auto t = mkdir(path_.parent());
+    if (! t)
+      return error{"failed to create parent directory: ", t.error()};
+  }
+
   handle_ = ::open(path_.str().data(), flags, 0644);
 
   if (handle_ > 0)

@@ -189,7 +189,8 @@ public:
   file& operator=(file&& other) = default;
 
   /// Opens the file.
-  /// @param mode How to open the file.
+  /// @param mode How to open the file. If not equal to `read_only`, the
+  ///             function attempts to create non-existing parent directories.
   /// @param append If `false`, the first write truncates the file.
   /// @returns `true` on success.
   trial<void> open(open_mode mode = read_write, bool append = false);
