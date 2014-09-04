@@ -27,18 +27,17 @@ trial<void> schema::add(type t)
   if (is<none>(t))
     return error{"instance of invalid_type"};
 
-  if (t.name().empty() && find_types(t).empty())
-    return error{"duplicate unnamed typed: ", t};
+  if (t.name().empty())
+    return error{"cannot add unnamed typed: ", t};
 
-  if (! t.name().empty())
-    if (auto existing = find_type(t.name()))
-    {
-      if (*existing == t)
-        return nothing;
-      else
-        return error{"clash in types with same name (existing <--> added): ",
-                     to_string(*existing, false), " <--> ", to_string(t, false)};
-    }
+  if (auto existing = find_type(t.name()))
+  {
+    if (*existing == t)
+      return nothing;
+    else
+      return error{"clash in types with same name (existing <--> added): ",
+                   to_string(*existing, false), " <--> ", to_string(t, false)};
+  }
 
   types_.push_back(std::move(t));
 
