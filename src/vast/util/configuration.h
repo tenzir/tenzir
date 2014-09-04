@@ -219,7 +219,12 @@ public:
       }
 
       if (check(p.first) && ! any)
-        return error{p.first + " depends on any option of {" + str + "}"};
+      {
+        if (deps.size() == 1)
+          return error{"--" + p.first + " depends on " + str};
+        else
+          return error{"--" + p.first + " depends on one of " + str};
+      }
     }
 
     return nothing;
