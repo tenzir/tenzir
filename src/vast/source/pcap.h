@@ -5,6 +5,7 @@
 #include <pcap.h>
 #include <unordered_map>
 #include <random>
+#include "vast/schema.h"
 #include "vast/source/synchronous.h"
 #include "vast/util/hash_combine.h"
 #include "vast/util/operators.h"
@@ -53,11 +54,12 @@ struct hash<vast::detail::connection>
 namespace vast {
 namespace source {
 
-/// A file source that reads PCAP traces.
+/// A source that reads PCAP packets from an interface or a file.
 class pcap : public synchronous<pcap>
 {
 public:
-  /// Constructs a file source.
+  /// Constructs a PCAP source.
+  /// @param sch The schema containing the packet event.
   /// @param name The name of the interface or trace file.
   /// @param cutoff The number of bytes to keep per flow.
   /// @param max_flows The maximum number of flows to keep state for.
@@ -65,7 +67,8 @@ public:
   ///                before evicting the corresponding flow.
   /// @param expire_interval The number of seconds between successive expire
   ///                        passes over the flow table.
-  pcap(std::string name,
+  pcap(schema sch,
+       std::string name,
        uint64_t cutoff = -1,
        size_t max_flows = 100000,
        size_t max_age = 60,
@@ -84,6 +87,7 @@ private:
     std::chrono::steady_clock::time_point last;
   };
 
+  schema schema_;
   std::string name_;
   bool done_ = false;
   type packet_type_;

@@ -276,16 +276,49 @@ void program::run()
     actor imp0rter;
     if (auto format = config_.get("importer"))
     {
+      auto s = config_.get("import.schema");
+      schema sch;
+      if (s)
+      {
+        auto contents = load(*s);
+        if (! contents)
+        {
+          VAST_LOG_ACTOR_ERROR("failed to load schema: " << contents.error());
+          quit(exit::error);
+          return;
+        }
+
+        auto t = to<schema>(*contents);
+        if (! t)
+        {
+          VAST_LOG_ACTOR_ERROR("invalid schema: " << t.error());
+          quit(exit::error);
+          return;
+        }
+
+        sch = *t;
+      }
+
+      auto sniff = config_.check("import.sniff-schema");
       auto r = config_.get("import.read");
       actor src;
       if (*format == "pcap")
       {
+        if (sniff)
+        {
+          schema packet_schema;
+          packet_schema.add(detail::make_packet_type());
+          std::cout << packet_schema << std::flush;
+          quit(exit::done);
+          return;
+        }
+
 #ifdef VAST_HAVE_PCAP
         auto i = config_.get("import.interface");
         auto c = config_.as<size_t>("import.pcap-cutoff");
         auto m = *config_.as<size_t>("import.pcap-maxflows");
-        std::string name = i ? *i : *r;
-        src = spawn<source::pcap, detached>(std::move(name), c ? *c : -1, m);
+        std::string n = i ? *i : *r;
+        src = spawn<source::pcap, detached>(sch, std::move(n), c ? *c : -1, m);
 #else
         VAST_LOG_ACTOR_ERROR("not compiled with pcap support");
         quit(exit::error);
@@ -294,7 +327,7 @@ void program::run()
       }
       else if (*format == "bro")
       {
-        src = spawn<source::bro, detached>(*r, -1);
+        src = spawn<source::bro, detached>(sch, *r, sniff);
       }
       else
       {
@@ -309,80 +342,92 @@ void program::run()
     }
     else if (auto format = config_.get("exporter"))
     {
-      auto w = config_.get("export.write");
-      assert(w);
-      actor snk;
-      if (*format == "pcap")
-      {
-#ifdef VAST_HAVE_PCAP
-        auto flush = config_.as<uint64_t>("export.pcap-flush");
-        assert(flush);
-        snk = spawn<sink::pcap, detached>(*w, *flush);
-#else
-        VAST_LOG_ACTOR_ERROR("not compiled with pcap support");
-        quit(exit::error);
-        return;
-#endif
-      }
-      else if (*format == "bro")
-      {
-        snk = spawn<sink::bro>(std::move(*w));
-      }
-      else if (*format == "json")
-      {
-        path p{std::move(*w)};
-        if (p != "-")
-        {
-          p = p.complete();
-          if (! exists(p.parent()))
+      sync_send(search_, atom("schema")).then(
+          on_arg_match >> [=](schema const& sch)
           {
-            auto t = mkdir(p.parent());
-            if (! t)
+            auto w = config_.get("export.write");
+            assert(w);
+            actor snk;
+            if (*format == "pcap")
             {
-              VAST_LOG_ACTOR_ERROR("failed to create directory: " << p.parent());
+#ifdef VAST_HAVE_PCAP
+              auto flush = config_.as<uint64_t>("export.pcap-flush");
+              assert(flush);
+              snk = spawn<sink::pcap, detached>(sch, *w, *flush);
+#else
+              VAST_LOG_ACTOR_ERROR("not compiled with pcap support");
+              quit(exit::error);
+              return;
+#endif
+            }
+            else if (*format == "bro")
+            {
+              snk = spawn<sink::bro>(std::move(*w));
+            }
+            else if (*format == "json")
+            {
+              path p{std::move(*w)};
+              if (p != "-")
+              {
+                p = p.complete();
+                if (! exists(p.parent()))
+                {
+                  auto t = mkdir(p.parent());
+                  if (! t)
+                  {
+                    VAST_LOG_ACTOR_ERROR("failed to create directory: " <<
+                                         p.parent());
+                    quit(exit::error);
+                    return;
+                  }
+                }
+              }
+
+              snk = spawn<sink::json>(std::move(p));
+            }
+            else
+            {
+              VAST_LOG_ACTOR_ERROR("invalid export format: " << *format);
               quit(exit::error);
               return;
             }
-          }
-        }
 
-        snk = spawn<sink::json>(std::move(p));
-      }
-      else
-      {
-        VAST_LOG_ACTOR_ERROR("invalid export format: " << *format);
-        quit(exit::error);
-        return;
-      }
+            auto exp0rter = spawn<exporter, linked>();
+            send(exp0rter, atom("add"), std::move(snk));
 
-      auto exp0rter = spawn<exporter, linked>();
-      send(exp0rter, atom("add"), std::move(snk));
+            auto limit = *config_.as<uint64_t>("export.limit");
+            if (limit > 0)
+              send(exp0rter, atom("limit"), limit);
 
-      auto limit = *config_.as<uint64_t>("export.limit");
-      if (limit > 0)
-        send(exp0rter, atom("limit"), limit);
+            auto query = config_.get("export.query");
+            assert(query);
+            sync_send(search_, atom("query"), exp0rter, *query).then(
+                on_arg_match >> [=](error const& e)
+                {
+                  VAST_LOG_ACTOR_ERROR("got invalid query: " << e);
+                  quit(exit::error);
+                },
+                [=](expression const& ast, actor qry)
+                {
+                  VAST_LOG_ACTOR_DEBUG("instantiated query for: " << ast);
+                  exp0rter->link_to(qry);
+                  send(qry, atom("extract"), limit);
+                },
+                others() >> [=]
+                {
+                  VAST_LOG_ACTOR_ERROR("got unexpected reply: " <<
+                                       to_string(last_dequeued()));
 
-      auto query = config_.get("export.query");
-      assert(query);
-      sync_send(search_, atom("query"), exp0rter, *query).then(
-          on_arg_match >> [=](error const& e)
-          {
-            VAST_LOG_ACTOR_ERROR("got invalid query: " << e);
-            quit(exit::error);
-          },
-          [=](expression const& ast, actor qry)
-          {
-            VAST_LOG_ACTOR_DEBUG("instantiated query for: " << ast);
-            exp0rter->link_to(qry);
-            send(qry, atom("extract"), limit);
+                  quit(exit::error);
+                });
           },
           others() >> [=]
           {
-            VAST_LOG_ACTOR_ERROR("got unexpected reply: " <<
+            VAST_LOG_ACTOR_ERROR("expected schema, got: " <<
                                  to_string(last_dequeued()));
-
             quit(exit::error);
           });
+
     }
 
     if (config_.check("receiver"))

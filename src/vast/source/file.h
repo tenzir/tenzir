@@ -32,10 +32,15 @@ public:
     return current_line() == nullptr;
   }
 
+  /// Makes the source to return `true` on the next invocation of ::done.
+  void halt()
+  {
+    line_.clear();
+  }
+
   /// Retrieves the next non-empty line from the file.
-  ///
   /// @returns A pointer to the next line if extracting was successful and
-  /// `nullptr` on failure or EOF.
+  ///          `nullptr` on failure or EOF.
   std::string const* next()
   {
     if (! file_handle_.is_open())

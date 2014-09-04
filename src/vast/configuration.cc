@@ -76,9 +76,11 @@ void configuration::initialize()
 #endif
 
   auto& imp = create_block("import options", "import");
+  imp.add('s', "schema", "the schema to use for the generated events").single();
   imp.add('r', "read", "path to input file/directory").init("-");
   imp.add('i', "interface", "name of interface to read packets from").single();
   imp.add("batch-size", "number of events to ingest in one run").init(5000);
+  imp.add("sniff-schema", "print the log schema and exit");
   imp.add("pcap-cutoff", "forego intra-flow packets after this many bytes").single();
   imp.add("pcap-maxflows", "number of concurrent flows to track").init(1000000);
   imp.visible(false);
@@ -139,12 +141,14 @@ void configuration::initialize()
   add_conflict("console", "receiver");
 #endif
 
+  add_dependency("import.schema", "importer");
   add_dependency("import.read", "importer");
   add_dependency("import.interface", "importer");
-  add_dependency("import.submit", "importer");
+  add_dependency("import.sniff-schema", "importer");
   add_dependency("import.pcap-cutoff", "importer");
   add_dependency("import.pcap-maxflows", "importer");
   add_conflict("import.read", "import.interface");
+  add_conflict("import.schema", "import.sniff-schema");
 
   add_dependency("export.limit", "exporter");
   add_dependency("export.query", "exporter");

@@ -68,9 +68,10 @@ trial<type> make_type(std::string const& bro_type)
 
 } // namespace <anonymous>
 
-bro::bro(std::string const& filename, int32_t timestamp_field)
+bro::bro(schema sch, std::string const& filename, bool sniff)
   : file<bro>{filename},
-    timestamp_field_{timestamp_field}
+    schema_{std::move(sch)},
+    sniff_{sniff}
 {
 }
 
@@ -85,6 +86,15 @@ result<event> bro::extract_impl()
     auto t = parse_header();
     if (! t)
       return t.error();
+
+    if (sniff_)
+    {
+      schema sch;
+      sch.add(type_);
+      std::cout << sch << std::flush;
+      halt();
+      return {};
+    }
   }
 
   auto line = this->next();
@@ -148,7 +158,7 @@ result<event> bro::extract_impl()
             r = get<record>(r->back());
         }
 
-        // Check whether the field is unset or empty ('-' or "(empty)")
+
         if (std::equal(unset_field_.begin(), unset_field_.end(),
                        s[f].first, s[f].second))
         {
@@ -334,21 +344,35 @@ trial<void> bro::parse_header()
   }
 
   type::record flat{std::move(fields)};
-
   type_ = flat.unflatten();
   type_.name(event_name);
-  flat.name(event_name);
 
   VAST_LOG_ACTOR_DEBUG("parsed bro header:");
   VAST_LOG_ACTOR_DEBUG("    #separator " << separator_);
   VAST_LOG_ACTOR_DEBUG("    #set_separator " << set_separator_);
   VAST_LOG_ACTOR_DEBUG("    #empty_field " << empty_field_);
   VAST_LOG_ACTOR_DEBUG("    #unset_field " << unset_field_);
-  VAST_LOG_ACTOR_DEBUG("    #path " << type_.name());
-
-  VAST_LOG_ACTOR_DEBUG("    fields:");
+  VAST_LOG_ACTOR_DEBUG("    #path " << event_name);
+  VAST_LOG_ACTOR_DEBUG("    #fields:");
   for (size_t i = 0; i < flat.fields().size(); ++i)
     VAST_LOG_ACTOR_DEBUG("      " << i << ") " << flat.fields()[i]);
+
+  // If a congruent type exists in the schema, we give the schema type
+  // precedence because it may have user-annotated extra information.
+  if (auto t = schema_.find_type(event_name))
+    if (t->name() == event_name)
+    {
+      if (congruent(type_, *t))
+      {
+        VAST_LOG_ACTOR_VERBOSE("prefers type in schema over type in header");
+        type_ = *t;
+      }
+      else
+      {
+        VAST_LOG_ACTOR_WARN("ignores incongruent types in schema and log: " <<
+                            t->name());
+      }
+    }
 
   if (timestamp_field_ > -1)
   {
@@ -364,7 +388,7 @@ trial<void> bro::parse_header()
       {
         VAST_LOG_ACTOR_VERBOSE("auto-detected field " << i <<
                                " as event timestamp");
-        timestamp_field_ = static_cast<int32_t>(i);
+        timestamp_field_ = static_cast<int>(i);
         break;
       }
 

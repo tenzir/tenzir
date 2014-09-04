@@ -14,9 +14,10 @@
 namespace vast {
 namespace source {
 
-pcap::pcap(std::string name, uint64_t cutoff, size_t max_flows, size_t max_age,
-           size_t expire_interval)
-  : name_{std::move(name)},
+pcap::pcap(schema sch, std::string name, uint64_t cutoff, size_t max_flows,
+           size_t max_age, size_t expire_interval)
+  : schema_{std::move(sch)},
+    name_{std::move(name)},
     packet_type_{detail::make_packet_type()},
     cutoff_{cutoff},
     max_flows_{max_flows},
@@ -90,6 +91,19 @@ result<event> pcap::extract()
     }
 
     last_expire_ = now;
+
+    if (auto t = schema_.find_type("vast::packet"))
+    {
+      if (congruent(packet_type_, *t))
+      {
+        VAST_LOG_ACTOR_VERBOSE("prefers type in schema over default type");
+        packet_type_ = *t;
+      }
+      else
+      {
+        VAST_LOG_ACTOR_WARN("ignores incongruent schema type: " << t->name());
+      }
+    }
   }
 
   uint8_t const* data;

@@ -3,6 +3,7 @@
 
 #include <pcap.h>
 #include "vast/file_system.h"
+#include "vast/schema.h"
 #include "vast/sink/base.h"
 #include "vast/detail/packet_type.h"
 
@@ -14,9 +15,10 @@ class pcap : public base<pcap>
 {
 public:
   /// Constructs a file source.
+  /// @param sch The schema containing the packet type.
   /// @param trace The name of the trace file to construct.
   /// @param flush Number of packets after which to flush to disk.
-  pcap(path trace, size_t flush = 10000);
+  pcap(schema sch, path trace, size_t flush = 10000);
 
   ~pcap();
 
@@ -24,6 +26,7 @@ public:
   std::string describe() const final;
 
 private:
+  schema schema_;
   path trace_;
   type packet_type_;
   size_t flush_;

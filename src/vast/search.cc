@@ -60,6 +60,10 @@ message_handler search_actor::act()
 
       clients_.erase(last_sender());
     },
+    on(atom("schema")) >> [=]
+    {
+      return make_message(schema_);
+    },
     [=](schema const& s)
     {
       auto sch = schema::merge(schema_, s);
@@ -72,7 +76,6 @@ message_handler search_actor::act()
       {
         schema_ = *sch;
         VAST_LOG_ACTOR_DEBUG("successfully merged schemata");
-        //VAST_LOG_ACTOR_DEBUG(schema_);
 
         auto t = io::archive(schema_path, schema_);
         if (t)

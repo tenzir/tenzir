@@ -5,8 +5,9 @@
 namespace vast {
 namespace sink {
 
-pcap::pcap(path trace, size_t flush)
-  : trace_{std::move(trace)},
+pcap::pcap(schema sch, path trace, size_t flush)
+  : schema_{std::move(sch)},
+    trace_{std::move(trace)},
     packet_type_{detail::make_packet_type()},
     flush_{flush}
 {
@@ -23,13 +24,6 @@ pcap::~pcap()
 
 bool pcap::process(event const& e)
 {
-  if (e.type() != packet_type_)
-  {
-    VAST_LOG_ACTOR_ERROR("cannot process non-packet event: " << e.type());
-    quit(exit::error);
-    return false;
-  }
-
   if (! pcap_)
   {
     if (trace_ != "-" && ! exists(trace_))
@@ -56,6 +50,26 @@ bool pcap::process(event const& e)
       quit(exit::error);
       return false;
     }
+
+    if (auto t = schema_.find_type("vast::packet"))
+    {
+      if (congruent(packet_type_, *t))
+      {
+        VAST_LOG_ACTOR_VERBOSE("prefers type in schema over default type");
+        packet_type_ = *t;
+      }
+      else
+      {
+        VAST_LOG_ACTOR_WARN("ignores incongruent schema type: " << t->name());
+      }
+    }
+  }
+
+  if (e.type() != packet_type_)
+  {
+    VAST_LOG_ACTOR_ERROR("cannot process non-packet event: " << e.type());
+    quit(exit::error);
+    return false;
   }
 
   auto r = get<record>(e);
