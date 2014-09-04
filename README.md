@@ -25,9 +25,15 @@ Start the interactive console and submit a query:
     > ask
     ? &time > now - 2d && :string == "http"
 
-## Documentation
+## Resources
 
-Please see the [wiki](https://github.com/mavam/vast/wiki) for documentation.
+- Documentation: [wiki](https://github.com/mavam/vast/wiki)
+- Mailing lists:
+    - [vast@icir.org][vast]: general help and discussion
+    - [vast-commits@icir.org][vast-commits]: full diffs of git commits
+
+[vast]: http://mailman.icsi.berkeley.edu/mailman/listinfo/vast
+[vast-commits]: http://mailman.icsi.berkeley.edu/mailman/listinfo/vast-commits
 
 ## Installation
 
