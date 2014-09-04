@@ -30,7 +30,7 @@ RUN cd $PREFIX/src/actor-framework && \
 ADD . $PREFIX/src/vast
 RUN cd $PREFIX/src/vast && \
     ./configure --prefix=$PREFIX --log-level=debug --with-boost=/usr && \
-    make -j $PARALLELISM && \
+    make && \
     make install
 
 RUN ldconfig
