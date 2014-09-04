@@ -28,7 +28,7 @@ struct event_extractor : util::totally_ordered<event_extractor>
 
   friend bool operator<(event_extractor const&, event_extractor const&)
   {
-    return true;
+    return false;
   }
 };
 
@@ -43,7 +43,7 @@ struct time_extractor : util::totally_ordered<time_extractor>
 
   friend bool operator<(time_extractor const&, time_extractor const&)
   {
-    return true;
+    return false;
   }
 };
 
