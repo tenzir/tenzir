@@ -53,15 +53,17 @@ result<event> pcap::extract()
         pcap_ = ::pcap_open_live(i->name, 65535, 1, 1000, buf);
         if (! pcap_)
         {
+          ::pcap_freealldevs(iface);
           done_ = true;
           quit(exit::error);
           return error{"failed to open interface ", name_, ": ", buf};
         }
 
         VAST_LOG_ACTOR_INFO("listens on interface " << i->name);
-
         break;
       }
+
+    ::pcap_freealldevs(iface);
 
     if (! pcap_)
     {
