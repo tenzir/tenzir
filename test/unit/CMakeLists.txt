@@ -16,10 +16,11 @@ configure_file(tests/schema_test_cases.h.in schema_test_cases.h)
 # Generate header file that defines the paths to data.
 #
 
-file(GLOB_RECURSE zipped_logs bro/logs/*.gz)
-file(GLOB_RECURSE zipped_traces traces/*.gz)
-execute_process(COMMAND gunzip -fk ${zipped_logs})
-execute_process(COMMAND gunzip -fk ${zipped_traces})
+file(GLOB_RECURSE compressed bro/logs/*.gz traces/*.gz)
+foreach(gzip ${compressed})
+  string(REGEX REPLACE "(.*)\\..+" "\\1" extracted ${gzip})
+  execute_process(COMMAND gunzip -c ${gzip} OUTPUT_FILE ${extracted})
+endforeach()
 
 set (test_data "#ifndef TEST_DATA\n#define TEST_DATA")
 file(GLOB log_dirs bro/logs/*)
