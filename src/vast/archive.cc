@@ -132,7 +132,7 @@ trial<message> archive::load(event_id eid)
   if (auto id = ranges_.lookup(eid))
     return cache_.retrieve(*id);
   else
-    return error{"no segment for id", eid};
+    return error{"no segment for id ", eid};
 }
 
 message archive::on_miss(uuid const& id)

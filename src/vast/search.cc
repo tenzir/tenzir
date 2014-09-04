@@ -6,6 +6,8 @@
 #include "vast/expr/normalizer.h"
 #include "vast/expr/resolver.h"
 #include "vast/io/serialization.h"
+#include "vast/io/file_stream.h"
+#include "vast/io/formatted.h"
 #include "vast/util/trial.h"
 
 namespace vast {
@@ -26,11 +28,22 @@ message_handler search_actor::act()
   auto schema_path = dir_ / "schema";
   if (exists(schema_path))
   {
-    auto t = io::unarchive(schema_path, schema_);
-    if (t)
-      VAST_LOG_ACTOR_VERBOSE("read schema from " << schema_path);
-    else
-      VAST_LOG_ACTOR_ERROR("failed to read schema from " << schema_path);
+    auto contents = load(schema_path);
+    if (! contents)
+    {
+      VAST_LOG_ACTOR_ERROR("failed to read schema: " << contents.error());
+      return {};
+    }
+
+    auto sch = to<schema>(*contents);
+    if (! sch)
+    {
+      VAST_LOG_ACTOR_ERROR("failed to parse schema " << sch.error());
+      return {};
+    }
+
+    VAST_LOG_ACTOR_VERBOSE("read schema from " << schema_path);
+    schema_ = *sch;
   }
 
   return
@@ -77,11 +90,17 @@ message_handler search_actor::act()
         schema_ = *sch;
         VAST_LOG_ACTOR_DEBUG("successfully merged schemata");
 
-        auto t = io::archive(schema_path, schema_);
-        if (t)
-          VAST_LOG_ACTOR_VERBOSE("archived schema to " << schema_path);
-        else
-          VAST_LOG_ACTOR_ERROR("failed to write schema to " << schema_path);
+        file f{schema_path};
+        auto t = f.open(file::write_only);
+        if (! t)
+        {
+          VAST_LOG_ACTOR_ERROR("failed to open file: " << t.error());
+          quit(exit::error);
+          return;
+        }
+
+        io::file_output_stream out{f};
+        out << to_string(schema_);
       }
     },
     on(atom("query"), arg_match)
