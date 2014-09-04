@@ -19,9 +19,9 @@ public:
   caf::message_handler act() final;
   std::string describe() const final;
 
+private:
   void run();
 
-private:
   caf::actor receiver_;
   caf::actor tracker_;
   caf::actor archive_;
