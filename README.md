@@ -28,6 +28,7 @@ Start the interactive console and submit a query:
 ## Resources
 
 - Documentation: [wiki](https://github.com/mavam/vast/wiki)
+- Project page: <http://www.icir.org/vast>
 - Mailing lists:
     - [vast@icir.org][vast]: general help and discussion
     - [vast-commits@icir.org][vast-commits]: full diffs of git commits
