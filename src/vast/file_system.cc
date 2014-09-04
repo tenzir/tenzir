@@ -568,7 +568,7 @@ trial<std::string> load(path const& p, bool skip_whitespace)
             std::istream_iterator<char>{},
             std::back_inserter(contents));
 
-  return contents;
+  return std::move(contents);
 }
 
 } // namespace vast
