@@ -76,9 +76,9 @@ void configuration::initialize()
 #endif
 
   auto& imp = create_block("import options", "import");
-  imp.add("batch-size", "number of events to ingest in one run").init(5000);
-  imp.add('r', "read", "path to input file/directory").single();
+  imp.add('r', "read", "path to input file/directory").init("-");
   imp.add('i', "interface", "name of interface to read packets from").single();
+  imp.add("batch-size", "number of events to ingest in one run").init(5000);
   imp.add("pcap-cutoff", "forego intra-flow packets after this many bytes").single();
   imp.add("pcap-maxflows", "number of concurrent flows to track").init(1000000);
   imp.visible(false);

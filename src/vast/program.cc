@@ -284,7 +284,7 @@ void program::run()
         auto i = config_.get("import.interface");
         auto c = config_.as<size_t>("import.pcap-cutoff");
         auto m = *config_.as<size_t>("import.pcap-maxflows");
-        std::string name = i ? *i : (r ? *r : "-");
+        std::string name = i ? *i : *r;
         src = spawn<source::pcap, detached>(std::move(name), c ? *c : -1, m);
 #else
         VAST_LOG_ACTOR_ERROR("not compiled with pcap support");
@@ -294,7 +294,7 @@ void program::run()
       }
       else if (*format == "bro")
       {
-        src = spawn<source::bro, detached>(r ? *r : "-", -1);
+        src = spawn<source::bro, detached>(*r, -1);
       }
       else
       {
