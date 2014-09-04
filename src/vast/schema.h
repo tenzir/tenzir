@@ -78,7 +78,7 @@ private:
       // TODO: fix laziness.
       print("type ", out);
       print(t.name(), out);
-      print(": ", out);
+      print(" = ", out);
       print(t, out, false);
       print("\n", out);
     }

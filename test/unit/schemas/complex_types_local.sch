@@ -1,6 +1,6 @@
 # Complex types with local scope.
 
-type foo: record
+type foo = record
 {
     e: enum { x, y, z },
     v: vector<addr>,

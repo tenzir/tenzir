@@ -1,21 +1,21 @@
 # A hierarchy of three nested records, each of which have global scope.
 
-type inner: record
+type inner = record
 {
     a: addr,
     p: port
 }
 
-type middle: record
+type middle = record
 {
     b: bool,
     i: inner
 }
 
-type outer: record
+type outer = record
 {
     a: addr,
     j: middle
 }
 
-type foo: record{r: outer}
+type foo = record{r: outer}

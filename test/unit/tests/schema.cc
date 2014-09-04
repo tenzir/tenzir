@@ -35,11 +35,11 @@ using namespace vast;
 TEST("offset finding")
 {
   std::string str =
-    "type a : int\n"
-    "type inner : record{ x: int, y: real }\n"
-    "type middle : record{ a: int, b: inner }\n"
-    "type outer : record{ a: middle, b: record { y: string }, c: int }\n"
-    "type foo : record{ a: int, b: real, c: outer, d: middle }";
+    "type a = int\n"
+    "type inner = record{ x: int, y: real }\n"
+    "type middle = record{ a: int, b: inner }\n"
+    "type outer = record{ a: middle, b: record { y: string }, c: int }\n"
+    "type foo = record{ a: int, b: real, c: outer, d: middle }";
 
   auto lval = str.begin();
   auto sch = parse<schema>(lval, str.end());
@@ -68,16 +68,16 @@ TEST("offset finding")
 TEST("merging")
 {
   std::string str =
-    "type a : int\n"
-    "type inner : record { x: int, y: real }\n";
+    "type a = int\n"
+    "type inner = record { x: int, y: real }\n";
 
   auto lval = str.begin();
   auto s1 = parse<schema>(lval, str.end());
   REQUIRE(s1);
 
   str =
-    "type a : int\n"  // Same type allowed.
-    "type b : int\n";
+    "type a = int\n"  // Same type allowed.
+    "type b = int\n";
 
   lval = str.begin();
   auto s2 = parse<schema>(lval, str.end());

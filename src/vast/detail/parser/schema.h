@@ -65,7 +65,7 @@ struct schema : qi::grammar<Iterator, ast::schema::schema(), skipper<Iterator>>
     type_decl_
         =   lit("type")
         >   identifier_   [at_c<0>(_val) = _1][add_type]
-        >   ':'
+        >   '='
         >   type_         [at_c<1>(_val) = _1]
         ;
 

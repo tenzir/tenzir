@@ -74,7 +74,7 @@ TEST("parser tests")
 TEST("event evaluation")
 {
   std::string str =
-    "type foo : record"
+    "type foo = record"
     "{"
     "  s1: string,"
     "  d1: real,"
@@ -83,7 +83,7 @@ TEST("event evaluation")
     "  s2: string,"
     "  d2: real"
     "}"
-    "type bar : record { s1: string, r : record { b: bool, s: string } }";
+    "type bar = record { s1: string, r : record { b: bool, s: string } }";
 
   auto sch = to<schema>(str);
   REQUIRE(sch);

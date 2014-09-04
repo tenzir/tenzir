@@ -1,6 +1,6 @@
 # Basic types with local scope.
 
-type foo: record
+type foo = record
 {
     a1: bool,
     a2: int,
