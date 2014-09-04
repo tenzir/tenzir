@@ -64,11 +64,11 @@ bool pcap::process(event const& e)
   auto data = get<std::string>((*r)[1]);
   assert(data);
 
-  pcap_pkthdr header;
+  ::pcap_pkthdr header;
   auto ns = e.timestamp().since_epoch().count();
   header.ts.tv_sec = ns / 1000000000;
   header.ts.tv_usec = ns % 1000000000;
-  header.caplen = 65535;
+  header.caplen = data->size();
   header.len = data->size();
 
   ::pcap_dump(reinterpret_cast<uint8_t*>(pcap_dumper_), &header,
