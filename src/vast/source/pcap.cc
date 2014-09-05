@@ -75,8 +75,12 @@ result<event> pcap::extract()
         return error{"no such file: ", name_};
       }
 
+#ifdef PCAP_TSTAMP_PRECISION_NANO
       pcap_ = ::pcap_open_offline_with_tstamp_precision(
           name_.c_str(), PCAP_TSTAMP_PRECISION_NANO, buf);
+#else
+      pcap_ = ::pcap_open_offline(name_.c_str(), buf);
+#endif
 
       if (! pcap_)
       {
@@ -282,8 +286,12 @@ result<event> pcap::extract()
   event e{std::move(packet), packet_type_};
 
   auto s = time_duration::seconds(packet_header_->ts.tv_sec);
-  auto ns = time_duration::nanoseconds(packet_header_->ts.tv_usec);
-  auto t = s + ns;
+#ifdef PCAP_TSTAMP_PRECISION_NANO
+  auto sub = time_duration::nanoseconds(packet_header_->ts.tv_usec);
+#else
+  auto sub = time_duration::microseconds(packet_header_->ts.tv_usec);
+#endif
+  auto t = s + sub;
   e.timestamp(t);
 
   return std::move(e);

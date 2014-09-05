@@ -33,8 +33,12 @@ bool pcap::process(event const& e)
       return false;
     }
 
+#ifdef PCAP_TSTAMP_PRECISION_NANO
     pcap_ = ::pcap_open_dead_with_tstamp_precision(
         DLT_RAW, 65535, PCAP_TSTAMP_PRECISION_NANO);
+#else
+    pcap_ = ::pcap_open_dead(DLT_RAW, 65535);
+#endif
 
     if (! pcap_)
     {
@@ -81,7 +85,12 @@ bool pcap::process(event const& e)
   ::pcap_pkthdr header;
   auto ns = e.timestamp().since_epoch().count();
   header.ts.tv_sec = ns / 1000000000;
+#ifdef PCAP_TSTAMP_PRECISION_NANO
   header.ts.tv_usec = ns % 1000000000;
+#else
+  ns /= 1000;
+  header.ts.tv_usec = ns % 1000000;
+#endif
   header.caplen = data->size();
   header.len = data->size();
 
