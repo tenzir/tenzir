@@ -106,14 +106,19 @@ if (PCAP_FOUND)
   include_directories(${PCAP_INCLUDE_DIR})
 endif ()
 
-if (NOT BROCCOLI_ROOT_DIR AND VAST_PREFIX)
-  set(BROCCOLI_ROOT_DIR ${VAST_PREFIX})
-endif ()
-find_package(Broccoli QUIET)
-if (BROCCOLI_FOUND)
-  set(VAST_HAVE_BROCCOLI true)
-  include_directories(${BROCCOLI_INCLUDE_DIR})
-endif ()
+# FIXME: The Broccoli subsystem is currently defunct and needs a major
+# overhaul. We'll temporarily disable Broccoli support entirely until this has
+# been fixed.
+set(BROCCOLI_FOUND false)
+set(BROCCOLI_INCLUDE_DIR false)
+#if (NOT BROCCOLI_ROOT_DIR AND VAST_PREFIX)
+#  set(BROCCOLI_ROOT_DIR ${VAST_PREFIX})
+#endif ()
+#find_package(Broccoli QUIET)
+#if (BROCCOLI_FOUND)
+#  set(VAST_HAVE_BROCCOLI true)
+#  include_directories(${BROCCOLI_INCLUDE_DIR})
+#endif ()
 
 if (NOT EDITLINE_ROOT_DIR AND VAST_PREFIX)
   set(EDITLINE_ROOT_DIR ${VAST_PREFIX})
