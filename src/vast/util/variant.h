@@ -141,28 +141,23 @@ private:
 template <typename Tag, typename... Ts>
 class basic_variant : totally_ordered<basic_variant<Tag, Ts...>>
 {
-#ifdef VAST_GCC
   // Workaround for http://stackoverflow.com/q/24433658/1170277.
+  // A nicer way to express this would be this:
+  //   template <typename T, typename...>
+  //   using front_type = T;
   template <typename T, typename...>
   struct front_type
   {
     using type = T;
   };
-#else
-  template <typename T, typename...>
-  using front_type = T;
-#endif
 
 public:
   /// The type of the variant discriminator.
   using tag = Tag;
 
   /// The first type in the variant; used for default-construction.
-#ifdef VAST_GCC
+  //using front = front_type<Ts...>;
   using front = typename front_type<Ts...>::type;
-#else
-  using front = front_type<Ts...>;
-#endif
 
   /// Construct a variant from a type tag.
   /// @param t The tag.
