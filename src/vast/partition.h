@@ -14,54 +14,33 @@
 namespace vast {
 
 /// A horizontal partition of the index.
-class partition
+class partition : public actor_base
 {
 public:
-  static path const part_meta_file;
-
   struct meta_data : util::equality_comparable<meta_data>
   {
-    meta_data() = default;
-    meta_data(uuid id);
-
-    void update(chunk const& chk);
-
     uuid id;
     time_point first_event = time_range{};
     time_point last_event = time_range{};
     time_point last_modified = now();
 
+  private:
+    friend access;
     void serialize(serializer& sink) const;
     void deserialize(deserializer& source);
     friend bool operator==(meta_data const& x, meta_data const& y);
   };
 
-  /// Constructs a partition.
-  /// @id The UUID to use for this partition.
-  partition(uuid id);
-
-  /// Updates the partition meta data with an indexed chunk.
-  void update(chunk const& chk);
-
-  /// Retrieves the partition meta data.
-  meta_data const& meta() const;
-
-private:
-  friend access;
-
-  void serialize(serializer& sink) const;
-  void deserialize(deserializer& source);
-
-  meta_data meta_;
-};
-
-class partition_actor : public actor_base
-{
-public:
-  partition_actor(path dir, size_t batch_size, uuid id = uuid::random());
+  /// Spawns a partition.
+  /// @param dir The index directory in which to create this partition.
+  /// @param batch_size The number of events to dechunkify at once.
+  /// @param The unique partition ID.
+  partition(path dir, size_t batch_size, uuid id = uuid::random());
 
   caf::message_handler act() final;
   std::string describe() const final;
+
+  static path const part_meta_file;
 
 private:
   struct statistics
@@ -83,11 +62,11 @@ private:
   trial<caf::actor> create_data_indexer(type const& et, type const& t,
                                         offset const& o);
   path dir_;
+  meta_data meta_;
   bool updated_ = false;
   size_t batch_size_;
   uint64_t max_backlog_ = 0;
   uint32_t exit_reason_ = 0;
-  partition partition_;
   schema schema_;
   std::unordered_map<path, caf::actor> indexers_;
   std::unordered_map<caf::actor_addr, statistics> stats_;

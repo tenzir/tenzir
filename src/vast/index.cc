@@ -446,7 +446,7 @@ trial<void> index::make_partition(path const& dir)
 
   auto& a = part_actors_[id];
   if (! a)
-    a = spawn<partition_actor, monitored>(dir, batch_size_, id);
+    a = spawn<partition, monitored>(dir, batch_size_, id);
 
   return nothing;
 }

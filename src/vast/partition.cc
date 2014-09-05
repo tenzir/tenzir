@@ -13,22 +13,6 @@ namespace vast {
 
 path const partition::part_meta_file = "partition.meta";
 
-partition::meta_data::meta_data(uuid id)
-  : id{id}
-{
-}
-
-void partition::meta_data::update(chunk const& chk)
-{
-  if (first_event == time_range{} || chk.meta().first < first_event)
-    first_event = chk.meta().first;
-
-  if (last_event == time_range{} || chk.meta().last > last_event)
-    last_event = chk.meta().last;
-
-  last_modified = now();
-}
-
 void partition::meta_data::serialize(serializer& sink) const
 {
   sink << id << first_event << last_event << last_modified;
@@ -48,35 +32,9 @@ bool operator==(partition::meta_data const& x, partition::meta_data const& y)
 }
 
 
-partition::partition(uuid id)
-  : meta_{std::move(id)}
+struct partition::dispatcher
 {
-}
-
-void partition::update(chunk const& chk)
-{
-  meta_.update(chk);
-}
-
-partition::meta_data const& partition::meta() const
-{
-  return meta_;
-}
-
-void partition::serialize(serializer& sink) const
-{
-  sink << meta_;
-}
-
-void partition::deserialize(deserializer& source)
-{
-  source >> meta_;
-}
-
-
-struct partition_actor::dispatcher
-{
-  dispatcher(partition_actor& pa)
+  dispatcher(partition& pa)
     : actor_{pa}
   {
   }
@@ -202,24 +160,24 @@ struct partition_actor::dispatcher
   }
 
   relational_operator op_;
-  partition_actor& actor_;
+  partition& actor_;
 };
 
 
-partition_actor::partition_actor(path dir, size_t batch_size, uuid id)
+partition::partition(path dir, size_t batch_size, uuid id)
   : dir_{std::move(dir)},
-    batch_size_{batch_size},
-    partition_{std::move(id)}
+    batch_size_{batch_size}
 {
+  meta_.id = std::move(id);
 }
 
-message_handler partition_actor::act()
+message_handler partition::act()
 {
   trap_exit(true);
 
   if (exists(dir_))
   {
-    auto t = io::unarchive(dir_ / partition::part_meta_file, partition_);
+    auto t = io::unarchive(dir_ / part_meta_file, meta_);
     if (! t)
     {
       VAST_LOG_ACTOR_ERROR("failed to load partition meta data from " <<
@@ -287,7 +245,16 @@ message_handler partition_actor::act()
       if (last_sender() == dechunkifier_)
       {
         auto chk = chunks_.front();
-        partition_.update(chk);
+
+        meta_.last_modified = now();
+        if (meta_.first_event == time_range{}
+            || chk.meta().first < meta_.first_event)
+          meta_.first_event = chk.meta().first;
+
+        if (meta_.last_event == time_range{}
+            || chk.meta().last > meta_.last_event)
+          meta_.last_event = chk.meta().last;
+
         chunks_.pop();
         dechunkifier_ = invalid_actor;
         send(this, atom("unpack"));
@@ -312,16 +279,16 @@ message_handler partition_actor::act()
       auto indexes = visit(dispatcher{*this}, pred);
 
       uint64_t n = indexes.size();
-      send(idx, pred, partition_.meta().id, n);
+      send(idx, pred, meta_.id, n);
 
       if (n == 0)
       {
         VAST_LOG_ACTOR_DEBUG("did not find a matching indexer for " << pred);
-        send(idx, pred, partition_.meta().id, bitstream{});
+        send(idx, pred, meta_.id, bitstream{});
       }
       else
       {
-        auto t = make_message(pred, partition_.meta().id, idx);
+        auto t = make_message(pred, meta_.id, idx);
         for (auto& a : indexes)
           send_tuple(a, t);
       }
@@ -346,7 +313,7 @@ message_handler partition_actor::act()
         return;
       }
 
-      t = io::archive(dir_ / partition::part_meta_file, partition_);
+      t = io::archive(dir_ / part_meta_file, meta_);
       if (! t)
       {
         VAST_LOG_ACTOR_ERROR("failed to save partition " << dir_ <<
@@ -512,12 +479,12 @@ message_handler partition_actor::act()
   };
 }
 
-std::string partition_actor::describe() const
+std::string partition::describe() const
 {
   return "partition";
 }
 
-actor partition_actor::load_time_indexer()
+actor partition::load_time_indexer()
 {
   auto p = dir_ / "meta" / "time" / "index";
   auto& s = indexers_[p];
@@ -531,7 +498,7 @@ actor partition_actor::load_time_indexer()
   return s;
 }
 
-actor partition_actor::load_name_indexer()
+actor partition::load_name_indexer()
 {
   auto p = dir_ / "meta" / "name" / "index";
   auto& s = indexers_[p];
@@ -545,7 +512,7 @@ actor partition_actor::load_name_indexer()
   return s;
 }
 
-trial<actor> partition_actor::load_data_indexer(
+trial<actor> partition::load_data_indexer(
     type const& et, type const& t, offset const& o)
 {
   auto p = dir_ / path{"types"} / et.name();
@@ -555,7 +522,7 @@ trial<actor> partition_actor::load_data_indexer(
     return actor{};
 }
 
-trial<actor> partition_actor::create_data_indexer(
+trial<actor> partition::create_data_indexer(
     type const& et, type const& t, offset const& o)
 {
   auto abs = dir_ / path{"types"} / et.name();
