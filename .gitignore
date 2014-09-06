@@ -1,6 +1,6 @@
 .DS_Store
 .*sw?
-build
+build*
 Makefile
 doc/html
 src/config.h
