@@ -6,7 +6,7 @@ int main(int argc, char *argv[])
   auto cfg = vast::configuration::parse(argc, argv);
   if (! cfg)
   {
-    std::cerr << cfg.error() << ", try -h or --help" << std::endl;
+    std::cerr << cfg.error() << ", try -h or -z" << std::endl;
     return 1;
   }
 

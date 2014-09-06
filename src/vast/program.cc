@@ -146,10 +146,26 @@ void program::run()
           vast_dir / "log", std::chrono::seconds(secs));
 
       if (config_.check("perftools-cpu"))
+      {
+#ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
         send(prof, atom("start"), atom("perftools"), atom("cpu"));
+#else
+        VAST_LOG_ACTOR_ERROR("not compiled with perftools CPU support");
+        quit(exit::error);
+        return;
+#endif
+      }
 
       if (config_.check("perftools-heap"))
+      {
+#ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
         send(prof, atom("start"), atom("perftools"), atom("heap"));
+#else
+        VAST_LOG_ACTOR_ERROR("not compiled with perftools heap support");
+        quit(exit::error);
+        return;
+#endif
+      }
 
       send(prof, atom("start"), atom("rusage"));
     }
@@ -236,9 +252,7 @@ void program::run()
       caf::io::publish(search_, search_port, search_host.c_str());
     }
     else if (config_.check("receiver")
-#ifdef VAST_HAVE_EDITLINE
              || config_.check("console")
-#endif
              || config_.check("exporter"))
     {
       VAST_LOG_ACTOR_VERBOSE(
@@ -246,13 +260,17 @@ void program::run()
 
       search_ = caf::io::remote_actor(search_host, search_port);
 
-#ifdef VAST_HAVE_EDITLINE
       if (config_.check("console"))
       {
+#ifdef VAST_HAVE_EDITLINE
         auto c = spawn<console, detached+linked>(search_, vast_dir / "console");
         delayed_send(c, std::chrono::milliseconds(200), atom("prompt"));
-      }
+#else
+        VAST_LOG_ACTOR_ERROR("not compiled with editline support");
+        quit(exit::error);
+        return;
 #endif
+      }
     }
 
     auto receiver_host = *config_.get("receiver.host");

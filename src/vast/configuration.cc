@@ -54,12 +54,8 @@ void configuration::initialize()
   auto& advanced = create_block("advanced options");
   advanced.add('P', "profiler", "spawn the profiler ");
   advanced.add("profile-interval", "profiling granularity in seconds").init(1);
-#ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
   advanced.add("perftools-cpu", "enable gperftools CPU profiling");
-#endif
-#ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
   advanced.add("perftools-heap", "enable gperftools heap profiling");
-#endif
   advanced.visible(false);
 
   auto& act = create_block("actor options");
@@ -71,9 +67,7 @@ void configuration::initialize()
   act.add(/* 'S', */ "search", "spawn the search");
   act.add('E', "exporter", "spawn the exporter").single();
   act.add('I', "importer", "spawn the importer").single();
-#ifdef VAST_HAVE_EDITLINE
   act.add('Q', "console", "spawn the query console");
-#endif
 
   auto& imp = create_block("import options", "import");
   imp.add('s', "schema", "the schema to use for the generated events").single();
@@ -123,14 +117,9 @@ void configuration::initialize()
   srch.visible(false);
 
   add_dependency("profile-interval", "profiler");
-#ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
   add_dependency("perftools-cpu", "profiler");
-#endif
-#ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
   add_dependency("perftools-heap", "profiler");
-#endif
 
-#ifdef VAST_HAVE_EDITLINE
   add_conflict("console", "core");
   add_conflict("console", "tracker");
   add_conflict("console", "archive");
@@ -139,7 +128,6 @@ void configuration::initialize()
   add_conflict("console", "exporter");
   add_conflict("console", "search");
   add_conflict("console", "receiver");
-#endif
 
   add_dependency("import.schema", "importer");
   add_dependency("import.read", "importer");
