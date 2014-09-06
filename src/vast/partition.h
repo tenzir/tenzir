@@ -64,7 +64,7 @@ private:
   path dir_;
   meta_data meta_;
   bool updated_ = false;
-  size_t batch_size_;
+  uint64_t batch_size_;
   uint64_t max_backlog_ = 0;
   uint32_t exit_reason_ = 0;
   schema schema_;
