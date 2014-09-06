@@ -58,6 +58,15 @@ message_handler exporter::act()
         VAST_LOG_ACTOR_DEBUG("reached maximum event limit: " << limit_);
         quit(exit::done);
       }
+    },
+    on(atom("progress"), arg_match) >> [=](double progress, uint64_t hits)
+    {
+      VAST_LOG_ACTOR_DEBUG("got query status message: completed " <<
+                           size_t(progress * 100) << "% (" << hits << " hits)");
+    },
+    on(atom("done")) >> [=]
+    {
+      VAST_LOG_ACTOR_DEBUG("got query status message: done with index hits");
     }
   };
 }
