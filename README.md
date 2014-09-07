@@ -27,8 +27,8 @@ Start the interactive console and submit a query:
 
 ## Resources
 
-- Documentation: [wiki](https://github.com/mavam/vast/wiki)
 - Project page: <http://www.icir.org/vast>
+- Documentation: [wiki](https://github.com/mavam/vast/wiki)
 - Mailing lists:
     - [vast@icir.org][vast]: general help and discussion
     - [vast-commits@icir.org][vast-commits]: full diffs of git commits
@@ -50,7 +50,7 @@ For instructions on how to build VAST manually, read on.
 
 Required:
 
-- [Clang >= 3.4](http://clang.llvm.org/) or [GCC >= 4.9](http://gcc.gnu.org)
+- [Clang 3.4](http://clang.llvm.org/) with libcxxabi
 - [CMake](http://www.cmake.org)
 - [CAF](https://github.com/actor-framework/actor-framework)
 - [Boost](http://www.boost.org) (headers only)
