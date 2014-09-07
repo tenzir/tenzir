@@ -84,7 +84,7 @@ private:
   struct connection_state
   {
     uint64_t bytes = 0;
-    std::chrono::steady_clock::time_point last;
+    uint64_t last;
   };
 
   schema schema_;
@@ -97,9 +97,9 @@ private:
   uint64_t cutoff_;
   size_t max_flows_;
   std::mt19937 generator_;
-  std::chrono::steady_clock::duration max_age_;
-  std::chrono::steady_clock::duration expire_interval_;
-  std::chrono::steady_clock::time_point last_expire_;
+  uint64_t max_age_;
+  uint64_t expire_interval_;
+  uint64_t last_expire_ = 0;
 };
 
 } // namespace source

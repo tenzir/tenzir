@@ -22,8 +22,8 @@ pcap::pcap(schema sch, std::string name, uint64_t cutoff, size_t max_flows,
     cutoff_{cutoff},
     max_flows_{max_flows},
     generator_{std::random_device{}()},
-    max_age_{std::chrono::seconds(max_age)},
-    expire_interval_{std::chrono::seconds(expire_interval)}
+    max_age_{max_age},
+    expire_interval_{expire_interval}
 {
 }
 
@@ -35,7 +35,6 @@ pcap::~pcap()
 
 result<event> pcap::extract()
 {
-  auto now = std::chrono::steady_clock::now();
   char buf[PCAP_ERRBUF_SIZE];
 
   if (! pcap_ && ! done_)
@@ -94,8 +93,6 @@ result<event> pcap::extract()
       VAST_LOG_ACTOR_INFO("reads trace from " << name_);
     }
 
-    last_expire_ = now;
-
     if (auto t = schema_.find_type("vast::packet"))
     {
       if (congruent(packet_type_, *t))
@@ -115,13 +112,12 @@ result<event> pcap::extract()
   auto r = ::pcap_next_ex(pcap_, &packet_header_, &data);
 
   if (r == 0)
-    // Attempt to fetch next packet timed out.
-    return {};
+    return {};  // Attempt to fetch next packet timed out.
 
   if (r == -2)
   {
     done_ = true;
-    return {};
+    return {};  // Reached end of trace.
   }
 
   if (r == -1)
@@ -215,11 +211,17 @@ result<event> pcap::extract()
     payload_size -= 8;
   }
 
+  uint64_t packet_time = packet_header_->ts.tv_sec;
+
+  if (last_expire_ == 0)
+    last_expire_ = packet_time;
+
   auto i = flows_.find(conn);
   if (i == flows_.end())
-    i = flows_.insert(std::make_pair(conn, connection_state{0, now})).first;
+    i = flows_.insert(
+        std::make_pair(conn, connection_state{0, packet_time})).first;
   else
-    i->second.last = now;
+    i->second.last = packet_time;
 
   auto& flow_size = i->second.bytes;
   if (flow_size == cutoff_)
@@ -237,12 +239,12 @@ result<event> pcap::extract()
   }
 
   // Evict all elements that have been inactive for a while.
-  if (now - last_expire_ > expire_interval_)
+  if (packet_time - last_expire_ > expire_interval_)
   {
-    last_expire_ = now;
+    last_expire_ = packet_time;
     auto i = flows_.begin();
     while (i != flows_.end())
-      if (now - i->second.last > max_age_)
+      if (packet_time - i->second.last > max_age_)
         i = flows_.erase(i);
       else
         ++i;
