@@ -1,3 +1,4 @@
+[![Stories in Ready](https://badge.waffle.io/mavam/vast.png?label=ready&title=Ready)](https://waffle.io/mavam/vast)
 # VAST
 
 **Visibility Across Space and Time (VAST)** is a unified platform for network
