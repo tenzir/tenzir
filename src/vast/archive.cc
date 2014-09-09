@@ -23,7 +23,14 @@ caf::message_handler archive::act()
       dir_,
       [&](path const& p) -> bool
       {
-        segment_files_.emplace(to_string(p.basename()), p);
+        auto id = to<uuid>(p.basename().str());
+        if (! id)
+        {
+          VAST_LOG_ERROR("invalid UUID: " << id.error());
+          return false;
+        }
+
+        segment_files_.emplace(std::move(*id), p);
 
         segment::meta_data meta;
         io::unarchive(p, meta);
