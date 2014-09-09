@@ -1,5 +1,4 @@
-[![Stories in Ready](https://badge.waffle.io/mavam/vast.png?label=ready&title=Ready)](https://waffle.io/mavam/vast)
-# VAST
+# VAST [![Issues in progress](https://badge.waffle.io/mavam/vast.png?label=in%20progress&title=in%20progress)](https://waffle.io/mavam/vast)
 
 **Visibility Across Space and Time (VAST)** is a unified platform for network
 forensics and incident response.
@@ -28,8 +27,9 @@ Start the interactive console and submit a query:
 
 ## Resources
 
-- Project page: <http://www.icir.org/vast>
-- Documentation: [wiki](https://github.com/mavam/vast/wiki)
+- [Project page](http://www.icir.org/vast)
+- [Documentation](https://github.com/mavam/vast/wiki)
+- [Issue board](https://waffle.io/mavam/vast)
 - Mailing lists:
     - [vast@icir.org][vast]: general help and discussion
     - [vast-commits@icir.org][vast-commits]: full diffs of git commits
