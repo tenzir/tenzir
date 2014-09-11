@@ -42,7 +42,7 @@ Start the interactive console and submit a query:
 VAST exists as Docker container:
 
     docker pull mavam/vast
-    docker run --rm -t -i vast /bin/bash
+    docker run --rm -t -i mavam/vast /bin/bash
     > vast -h
 
 For instructions on how to build VAST manually, read on.
