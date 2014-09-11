@@ -74,7 +74,7 @@ protected:
     return catch_all_ ? partial.or_else(catch_all) : partial;
   }
 
-  void on_exit() final
+  void on_exit()
   {
     VAST_LOG_ACTOR_DEBUG(describe(), "terminated (" <<
                          render_exit_reason(planned_exit_reason()) << ')');
