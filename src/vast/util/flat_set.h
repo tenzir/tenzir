@@ -241,12 +241,12 @@ public:
 
   iterator erase(const_iterator i)
   {
-    v_.erase(i);
+    return v_.erase(i);
   }
 
   iterator erase(const_iterator first, const_iterator last)
   {
-    v_.erase(first, last);
+    return v_.erase(first, last);
   }
 
   void pop_back()
