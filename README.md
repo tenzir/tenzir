@@ -30,6 +30,8 @@ Start the interactive console and submit a query:
 - [Project page](http://www.icir.org/vast)
 - [Documentation](https://github.com/mavam/vast/wiki)
 - [Issue board](https://waffle.io/mavam/vast)
+- IRC: [#vast](http://webchat.freenode.net/?channels=vast) @
+  [Freenode](https://freenode.net)
 - Mailing lists:
     - [vast@icir.org][vast]: general help and discussion
     - [vast-commits@icir.org][vast-commits]: full diffs of git commits
