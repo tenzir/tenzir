@@ -336,6 +336,24 @@ struct expr_printer
 
 } // namespace detail
 
+template <typename T, typename Iterator>
+auto print(T const& x, Iterator&& out)
+  -> std::enable_if_t<
+       std::is_same<T, event_extractor>::value
+       || std::is_same<T, time_extractor>::value
+       || std::is_same<T, type_extractor>::value
+       || std::is_same<T, schema_extractor>::value
+       || std::is_same<T, data_extractor>::value
+       || std::is_same<T, predicate>::value
+       || std::is_same<T, conjunction>::value
+       || std::is_same<T, disjunction>::value
+       || std::is_same<T, negation>::value,
+       trial<void>
+     >
+{
+  return detail::expr_printer<Iterator>{out}(x);
+}
+
 template <typename Iterator>
 trial<void> print(expression const& e, Iterator&& out)
 {
