@@ -63,7 +63,6 @@ Optional:
 - [libpcap](http://www.tcpdump.org)
 - [libedit](http://thrysoee.dk/editline)
 - [gperftools](http://code.google.com/p/google-perftools)
-- [Broccoli](http://www.bro-ids.org)
 - [Doxygen](http://www.doxygen.org)
 
 ### Building
