@@ -90,6 +90,7 @@ message_handler importer::act()
     [=](down_msg const&)
     {
       chunkifier_ = invalid_actor;
+      become(terminating_);
     },
     on(atom("backlog"), arg_match) >> [=](bool backlogged)
     {
@@ -103,11 +104,6 @@ message_handler importer::act()
     {
       VAST_LOG_ACTOR_DEBUG("got chunk from " << last_sender());
       send(receiver_, chk, this);
-    },
-    after(std::chrono::seconds(0)) >> [=]
-    {
-      if (! chunkifier_)
-        become(terminating_);
     }
   };
 
