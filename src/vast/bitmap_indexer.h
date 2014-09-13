@@ -148,7 +148,7 @@ struct event_name_indexer
   template <typename BitmapIndex>
   trial<void> append(BitmapIndex& bmi, event const& e)
   {
-    if (bmi.push_back(e.type().name()))
+    if (bmi.push_back(e.type().name(), e.id()))
       return nothing;
     else
       return error{"failed to append event name: ", e.type().name()};
@@ -175,7 +175,7 @@ struct event_time_indexer
   template <typename BitmapIndex>
   trial<void> append(BitmapIndex& bmi, event const& e)
   {
-    if (bmi.push_back(e.timestamp()))
+    if (bmi.push_back(e.timestamp(), e.id()))
       return nothing;
     else
       return error{"failed to append event timestamp: ", e.timestamp()};
@@ -185,8 +185,6 @@ struct event_time_indexer
   {
     return "time-bitmap-indexer";
   }
-
-  time_point timestamp_;
 };
 
 template <typename BitmapIndex>
