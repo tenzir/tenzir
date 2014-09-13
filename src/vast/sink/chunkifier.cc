@@ -16,18 +16,6 @@ chunkifier::chunkifier(actor upstream, size_t max_events_per_chunk)
     stats_{std::chrono::seconds(1)},
     max_events_per_chunk_{max_events_per_chunk}
 {
-  attach_functor(
-      [=](uint32_t)
-      {
-        writer_->flush();
-        if (chunk_->events() > 0)
-          anon_send(upstream_, std::move(*chunk_));
-
-        upstream_ = invalid_actor;
-
-        if (total_events_ > 0)
-          VAST_LOG_ACTOR_VERBOSE("processed " << total_events_ << " events");
-      });
 }
 
 bool chunkifier::process(event const& e)
@@ -56,6 +44,18 @@ bool chunkifier::process(event const& e)
   }
 
   return true;
+}
+
+void chunkifier::finalize()
+{
+  writer_->flush();
+  if (chunk_->events() > 0)
+    send(upstream_, std::move(*chunk_));
+
+  upstream_ = invalid_actor;
+
+  if (total_events_ > 0)
+    VAST_LOG_ACTOR_VERBOSE("processed " << total_events_ << " events");
 }
 
 std::string chunkifier::describe() const

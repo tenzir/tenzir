@@ -12,6 +12,13 @@ importer::importer(path dir, actor receiver, uint64_t batch_size)
     receiver_{receiver},
     batch_size_{batch_size}
 {
+  attach_functor(
+      [=](uint32_t)
+      {
+        receiver_ = invalid_actor;
+        source_ = invalid_actor;
+        chunkifier_ = invalid_actor;
+      });
 }
 
 message_handler importer::act()
@@ -28,14 +35,6 @@ message_handler importer::act()
         orphaned_.insert(p.basename());
         ++stored_;
         return true;
-      });
-
-  attach_functor(
-      [=](uint32_t)
-      {
-        receiver_ = invalid_actor;
-        source_ = invalid_actor;
-        chunkifier_ = invalid_actor;
       });
 
   auto on_exit = [=](exit_msg const& e)
@@ -102,6 +101,7 @@ message_handler importer::act()
     },
     [=](chunk const& chk)
     {
+      VAST_LOG_ACTOR_DEBUG("got chunk from " << last_sender());
       send(receiver_, chk, this);
     },
     after(std::chrono::seconds(0)) >> [=]

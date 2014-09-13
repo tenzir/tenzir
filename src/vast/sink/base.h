@@ -13,8 +13,16 @@ struct base : public actor_base
 {
   caf::message_handler act() final
   {
+    using namespace caf;
+    trap_exit(true);
+
     return
     {
+      [=](exit_msg const& e)
+      {
+        static_cast<Derived*>(this)->finalize();
+        quit(e.reason);
+      },
       [=](event const& e)
       {
         if (! static_cast<Derived*>(this)->process(e))
@@ -34,6 +42,11 @@ struct base : public actor_base
           }
       }
     };
+  }
+
+  void finalize()
+  {
+    // Do nothing, allow children to hide.
   }
 };
 

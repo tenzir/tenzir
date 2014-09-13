@@ -19,6 +19,7 @@ public:
   chunkifier(caf::actor upstream, size_t max_events_per_chunk);
 
   bool process(event const& e);
+  void finalize();
   std::string describe() const final;
 
 private:
