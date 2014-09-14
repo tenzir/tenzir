@@ -215,7 +215,12 @@ void program::run()
     auto index_port = *config_.as<unsigned>("index.port");
     if (config_.check("index"))
     {
-      index_ = spawn<index>(vast_dir, *config_.as<size_t>("index.batch-size"));
+      auto batch_size = *config_.as<size_t>("index.batch-size");
+      auto max_events = *config_.as<size_t>("index.max-events");
+      auto max_parts = *config_.as<size_t>("index.max-parts");
+      auto active_parts = *config_.as<size_t>("index.active-parts");
+      index_ = spawn<index>(vast_dir, batch_size, max_events, max_parts,
+                            active_parts);
 
       VAST_LOG_ACTOR_INFO(
           "publishes index at " << index_host << ':' << index_port);
@@ -232,11 +237,7 @@ void program::run()
       index_ = caf::io::remote_actor(index_host, index_port);
     }
 
-    if (auto partition = config_.get("index.partition"))
-    {
-      send(index_, atom("partition"), *partition);
-    }
-    else if (config_.check("index.rebuild"))
+    if (config_.check("index.rebuild"))
     {
       // TODO
     }
@@ -362,8 +363,8 @@ void program::run()
         return;
       }
 
-      auto batch_size = config_.as<uint64_t>("import.batch-size");
-      imp0rter = spawn<importer>(vast_dir, receiver_, *batch_size);
+      auto batch_size = *config_.as<uint64_t>("import.batch-size");
+      imp0rter = spawn<importer>(vast_dir, receiver_, batch_size);
       send(imp0rter, atom("add"), src);
 
       if (config_.check("receiver"))
@@ -373,8 +374,8 @@ void program::run()
         // from IMPORTER to RECEIVER.
         imp0rter->link_to(receiver_);
       else
-        // If we're running in ingestion mode without RECEIVER, we're independent
-        // and terminate as soon as IMPORTER has finished.
+        // If we're running in ingestion mode without RECEIVER, we're
+        // independent and terminate as soon as IMPORTER has finished.
         link_to(imp0rter);
     }
     else if (auto format = config_.get("exporter"))

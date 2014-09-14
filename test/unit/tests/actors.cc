@@ -45,7 +45,6 @@ TEST("all-in-one import")
   *cfg['C'] = true;
   *cfg['I'] = "bro";
   *cfg['r'] = m57_day11_18::ftp;
-  *cfg['p'] = "m57_day11_18";
   REQUIRE(cfg.verify());
 
   path dir = *cfg.get("directory");
@@ -55,7 +54,19 @@ TEST("all-in-one import")
   anon_send(spawn<program>(cfg), atom("run"));
   await_all_actors_done();
 
-  auto ftp = dir / "index" / "m57_day11_18" / "types" / "ftp";
+  path part;
+  traverse(dir / "index",
+           [&](path const& p) -> bool
+           {
+             if (! p.is_directory())
+               return true;
+
+              part = p;
+              return false;
+           });
+
+  REQUIRE(! part.empty());
+  auto ftp = part / "types" / "ftp";
 
   REQUIRE(exists(dir));
   REQUIRE(exists(ftp));
@@ -94,7 +105,6 @@ TEST("basic actor integrity")
   *core_config['v'] = 0;
   *core_config['V'] = 5;
   *core_config['C'] = true;
-  *core_config['p'] = "m57-ssl";
   REQUIRE(core_config.verify());
 
   path dir = *core_config.get("directory");
@@ -132,7 +142,6 @@ TEST("basic actor integrity")
   *core_config['v'] = 0;
   *core_config['V'] = 5;
   *core_config['C'] = true;
-  *core_config['p'] = "m57-conn";
   REQUIRE(core_config.verify());
 
   core = spawn<program>(core_config);
@@ -148,7 +157,9 @@ TEST("basic actor integrity")
     REQUIRE(false);
   };
 
+  //
   // Test whether the archive has the correct segment.
+  //
   self->send(core, atom("archive"));
   self->receive([&](actor archive) { self->send(archive, event_id(100)); });
   self->receive(
@@ -166,7 +177,9 @@ TEST("basic actor integrity")
       },
       fail);
 
+  //
   // Test whether a manual index lookup succeeds.
+  //
   auto pops = to<expression>("id.resp_p == 995/?");
   REQUIRE(pops);
 
@@ -174,23 +187,26 @@ TEST("basic actor integrity")
   self->receive(
       [&](actor index) { self->send(index, atom("query"), *pops, self); });
 
-  self->receive(
+  bool done = false;
+  self->do_receive(
       on_arg_match >> [&](bitstream const& hits)
       {
-        CHECK(hits.count() == 46);
-        CHECK(hits.find_first() == 3);
+        CHECK(hits.count() > 0);
       },
-      fail);
-
-  self->receive(
-      on(atom("progress"), arg_match) >> [=](double progress, uint64_t hits)
+      on(atom("progress"), arg_match) >> [&](double progress, uint64_t hits)
       {
-        CHECK(progress == 1.0);
-        CHECK(hits == 46);
+        if (progress == 1.0)
+        {
+          done = true;
+          CHECK(hits == 46);
+        }
       },
-      fail);
+      fail
+      ).until([&done] { return done; });
 
+  //
   // Construct a simple query and verify that the results are correct.
+  //
   self->send(core, atom("search"));
   self->receive(
       [&](actor search)
@@ -207,7 +223,7 @@ TEST("basic actor integrity")
       fail);
 
   self->receive(
-      on(atom("progress"), arg_match) >> [=](double progress, uint64_t hits)
+      on(atom("progress"), arg_match) >> [&](double progress, uint64_t hits)
       {
         CHECK(progress == 1.0);
         CHECK(hits == 46);
@@ -236,13 +252,10 @@ TEST("basic actor integrity")
 
   // A query always sends a "done" atom before terminating.
   self->receive(
-      on(atom("done")) >> [&]
-      {
-        REQUIRE(true);
-      },
+      on(atom("done")) >> [&] { REQUIRE(true); },
       fail);
 
-  // Now import another log file.
+  // Now import another Bro log.
   set_ports(import_config, 3);
   *import_config['r'] = m57_day11_18::conn;
   import = self->spawn<program, monitored>(import_config);
@@ -267,8 +280,19 @@ TEST("basic actor integrity")
                   {
                     CHECK(self->last_sender() == task_tree);
 
-                    auto p = dir / "index" / "m57-conn" / "types" / "conn";
-                    REQUIRE(exists(p));
+                    path part;
+                    traverse(dir / "index",
+                             [&](path const& p) -> bool
+                             {
+                               if (! p.is_directory())
+                                 return true;
+
+                                part = p;
+                                return false;
+                             });
+
+                    REQUIRE(! part.empty());
+                    REQUIRE(exists(part / "types" / "conn"));
                   },
                   fail);
             },
@@ -292,7 +316,7 @@ TEST("basic actor integrity")
       },
       fail);
 
-  bool done = false;
+  done = false;
   size_t n = 0;
   self->do_receive(
       [&](event const&)

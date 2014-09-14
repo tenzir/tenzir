@@ -99,9 +99,11 @@ void configuration::initialize()
   arch.visible(false);
 
   auto& idx = create_block("index options", "index");
-  idx.add('p', "partition", "name of the partition to append to").single();
-  idx.add("batch-size", "number of events to index in one run").init(1000);
-  idx.add("rebuild", "rebuild indexes from archive");
+  idx.add("batch-size", "number of events to index in one run").init(5000);
+  idx.add('e', "max-events", "maximum number of events per partition").init(1 << 20);
+  idx.add('p', "max-parts", "maximum number of partitions in memory").init(10);
+  idx.add('a', "active-parts", "number of active partitions").init(5);
+  idx.add("rebuild", "delete and rebuild index from archive");
   idx.add("host", "hostname/address of the archive").init("127.0.0.1");
   idx.add("port", "TCP port of the index").init(42004);
   idx.visible(false);
@@ -146,9 +148,6 @@ void configuration::initialize()
   add_conflict("importer", "exporter");
   add_conflict("receiver", "exporter");
   add_conflict("tracker", "exporter");
-
-  add_dependencies("index.partition", {"index", "core"});
-  add_conflict("index.rebuild", "index.partition");
 }
 
 } // namespace vast

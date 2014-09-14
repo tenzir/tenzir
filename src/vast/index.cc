@@ -38,79 +38,57 @@ std::vector<uuid> unify(std::vector<uuid> const& x,
   return r;
 }
 
-using restriction_map = std::map<expression, std::vector<uuid>>;
-
 } // namespace <anonymous>
 
-// Registers each sub-tree with the GQG.
-struct index::dissector
+// Retrieves all predicates in an expression.
+struct index::predicatizer
 {
-  dissector(index& idx, expression const& root)
-    : index_{idx},
-      root_{root}
+  std::vector<predicate> operator()(none)
   {
+    return {};
   }
 
-  void operator()(none)
+  std::vector<predicate> operator()(conjunction const& con)
   {
-    assert(! "should never happen");
-  }
-
-  void operator()(conjunction const& con)
-  {
-    if (! is<none>(parent_))
-      index_.gqg_[con].insert(parent_);
-    else if (con == root_)
-      index_.gqg_[con];
-
-    parent_ = con;
+    std::vector<predicate> preds;
     for (auto& op : con)
-      visit(*this, op);
+    {
+      auto ps = visit(*this, op);
+      std::move(ps.begin(), ps.end(), std::back_inserter(preds));
+    }
+
+    return preds;
   }
 
-  void operator()(disjunction const& dis)
+  std::vector<predicate> operator()(disjunction const& dis)
   {
-    if (! is<none>(parent_))
-      index_.gqg_[dis].insert(parent_);
-    else if (dis == root_)
-      index_.gqg_[dis];
-
-    parent_ = dis;
+    std::vector<predicate> preds;
     for (auto& op : dis)
-      visit(*this, op);
+    {
+      auto ps = visit(*this, op);
+      std::move(ps.begin(), ps.end(), std::back_inserter(preds));
+    }
+
+    return preds;
   }
 
-  void operator()(negation const& n)
+  std::vector<predicate> operator()(negation const& n)
   {
-    if (! is<none>(parent_))
-      index_.gqg_[n].insert(parent_);
-    else if (n == root_)
-      index_.gqg_[n];
-
-    parent_ = n;
-    visit(*this, n[0]);
+    return visit(*this, n[0]);
   }
 
-  void operator()(predicate const& pred)
+  std::vector<predicate> operator()(predicate const& pred)
   {
-    assert(! is<none>(parent_) || pred == root_);
-
-    if (is<none>(parent_))
-      index_.gqg_[pred];
-    else
-      index_.gqg_[pred].insert(parent_);
+    return {pred};
   }
-
-  index& index_;
-  expression const& root_;
-  expression parent_;
 };
 
 // Builds the set of restrictions bottom-up.
 struct index::builder
 {
-  builder(index const& idx, restriction_map& restrictions)
-    : index_{idx},
+  builder(std::unordered_map<uuid, partition_state> const& partitions,
+          std::map<expression, std::vector<uuid>>& restrictions)
+    : partitions_{partitions},
       restrictions_{restrictions}
   {
   }
@@ -129,6 +107,10 @@ struct index::builder
     r = restrictions_[con[0]];
     for (size_t i = 1; i < con.size(); ++i)
       r = intersect(r, restrictions_[con[i]]);
+
+    VAST_LOG_DEBUG("restricted " << con << " to " <<
+                   r.size() << '/' << partitions_.size() <<
+                   " partitions");
   }
 
   void operator()(disjunction const& dis)
@@ -139,6 +121,10 @@ struct index::builder
     auto& r = restrictions_[dis];
     for (auto& op : dis)
       r = unify(r, restrictions_[op]);
+
+    VAST_LOG_DEBUG("restricted " << dis << " to " <<
+                   r.size() << '/' << partitions_.size() <<
+                   " partitions");
   }
 
   void operator()(negation const& n)
@@ -148,56 +134,41 @@ struct index::builder
 
   void operator()(predicate const& pred)
   {
+    std::vector<uuid> parts;
     auto e = get<time_extractor>(pred.lhs);
     if (! e)
     {
-      if (all_.empty())
-      {
-        all_.reserve(index_.part_state_.size());
-        for (auto& p : index_.part_state_)
-          all_.push_back(p.first);
-
-        all_.shrink_to_fit();
-        std::sort(all_.begin(), all_.end());
-      }
-
-      restrictions_[pred] = all_;
+      parts.reserve(partitions_.size());
+      for (auto& p : partitions_)
+        parts.push_back(p.first);
     }
     else
     {
       auto d = get<data>(pred.rhs);
       assert(d && is<time_point>(*d));
 
-      restriction_map::mapped_type partitions;
-      VAST_LOG_DEBUG("checking restrictors for " << expression{pred});
-      for (auto& p : index_.part_state_)
-      {
-        if (data::evaluate(p.second.first, pred.op, *d))
-        {
-          VAST_LOG_DEBUG("  - " << p.second.first << " for " << p.first);
-          partitions.push_back(p.first);
-        }
-        else if (data::evaluate(p.second.last, pred.op, *d))
-        {
-          VAST_LOG_DEBUG("  - " << p.second.last << " for " << p.first);
-          partitions.push_back(p.first);
-        }
-      }
-
-      std::sort(partitions.begin(), partitions.end());
-      restrictions_[pred] = std::move(partitions);
+      for (auto& p : partitions_)
+        if (data::evaluate(p.second.first_event, pred.op, *d)
+            || data::evaluate(p.second.last_event, pred.op, *d))
+          parts.push_back(p.first);
     }
+
+    std::sort(parts.begin(), parts.end());
+    restrictions_[pred] = std::move(parts);;
+
+    VAST_LOG_DEBUG("restricted " << pred << " to " <<
+                   parts.size() << '/' << partitions_.size() <<
+                   " partitions");
   }
 
-  index const& index_;
-  restriction_map& restrictions_;
-  restriction_map::mapped_type all_;
+  std::unordered_map<uuid, partition_state> const& partitions_;
+  std::map<expression, std::vector<uuid>>& restrictions_;
 };
 
 // Propagates the accumulated restrictions top-down.
 struct index::pusher
 {
-  pusher(restriction_map& restrictions)
+  pusher(std::map<expression, std::vector<uuid>>& restrictions)
     : restrictions_{restrictions}
   {
   }
@@ -215,11 +186,8 @@ struct index::pusher
 
     for (auto& op : con)
     {
-      VAST_LOG_DEBUG("pushing restriction of " << expression{con} <<
-                     " to " << expression{op});
-      for (auto& p : r)
-        VAST_LOG_DEBUG("  -  " << p);
-
+      VAST_LOG_DEBUG("pushing " << r.size() << " restrictions: " <<
+                     con << "  -->  " << op);
       visit(*this, op);
     }
   }
@@ -232,11 +200,8 @@ struct index::pusher
 
     for (auto& op : dis)
     {
-      VAST_LOG_DEBUG("pushing restriction of " << expression{dis} <<
-                     " to " << expression{op});
-      for (auto& p : r)
-        VAST_LOG_DEBUG("  -  " << p);
-
+      VAST_LOG_DEBUG("pushing " << r.size() << " resctrictions: " <<
+                     dis << "  -->  " << op);
       visit(*this, op);
     }
   }
@@ -251,398 +216,603 @@ struct index::pusher
     // Done with this path.
   }
 
-  restriction_map& restrictions_;
+  std::map<expression, std::vector<uuid>>& restrictions_;
 };
 
-struct index::evaluator
+// Dispatches the predicates of an expression to the corresponding partitions.
+struct index::dispatcher
 {
-public:
-  evaluator(index& idx, restriction_map& restrictions)
-    : index_{idx},
-      restrictions_{restrictions}
+  dispatcher(index& idx)
+    : index_{idx}
   {
   }
 
-  void operator()(none)
-  {
-    assert(! "should never happen");
-  }
+  void operator()(none) { }
 
   void operator()(conjunction const& con)
   {
-    bitstream hits;
+    if (is<none>(root_))
+      root_ = con;
+
     for (auto& op : con)
-    {
       visit(*this, op);
-      if (! result_.hits)
-      {
-        // Short circuit evaluation.
-        result_.hits = {};
-        return;
-      }
-
-      hits &= result_.hits;
-    }
-
-    result_.hits = std::move(hits);
   }
 
   void operator()(disjunction const& dis)
   {
-    bitstream hits;
-    for (auto& op : dis)
-    {
-      visit(*this, op);
-      if (result_.hits)
-        hits |= result_.hits;
-    }
+    if (is<none>(root_))
+      root_ = dis;
 
-    result_.hits = std::move(hits);
+    for (auto& op : dis)
+      visit(*this, op);
   }
 
   void operator()(negation const& n)
   {
+    if (is<none>(root_))
+      root_ = n;
+
     visit(*this, n[0]);
-    result_.hits.flip();
   }
 
   void operator()(predicate const& pred)
   {
-    result_.hits = {};
-    double got = 0.0;
-    double need = 0.0;
-    double misses = 0.0;
+    if (is<none>(root_))
+      root_ = pred;
 
-    auto& parts = index_.predicate_cache_[pred].parts;
-    VAST_LOG_DEBUG("evaluating " << expression{pred});
-    for (auto& r : restrictions_[pred])
+    for (auto& part : index_.queries_[root_].predicates[pred].restrictions)
     {
-      auto i = parts.find(r);
-      if (i == parts.end())
+      auto& status = index_.partitions_[part].status;
+      if (status.find(pred) == status.end())
       {
-        ++misses;
-
-        // FIXME: for now, all partition actors reside in memory. This needs to
-        // change because it's not possible to keep them all hot.
-        assert(index_.part_actors_.count(r));
-
-        VAST_LOG_DEBUG("cache miss for partition " << r << ", asking " <<
-                       index_.part_actors_[r]);
-
-        actor self = &index_;
-        index_.send(index_.part_actors_[r], expression{pred}, self);
-
-        parts[r];
+        index_.dispatch(part, pred);
+        status[pred];
       }
-      else if (! i->second.expected)
-      {
-        ++misses;
-      }
-      else
-      {
-        if (i->second.hits)
-          result_.hits |= i->second.hits;
-
-        got += i->second.got;
-        need += *i->second.expected;
-      }
-
-      assert(parts.count(r));
-      VAST_LOG_DEBUG("  - " << r <<
-                     ": " << parts[r].got << '/' <<
-                     (parts[r].expected ? to_string(*parts[r].expected) : "-"));
-    }
-
-    if (! parts.empty())
-    {
-      auto completion = double(parts.size() - misses) / double(parts.size());
-      auto progress = need == 0 ? 1.0 : got / need;
-      VAST_LOG_DEBUG("  -> completion:  " << int(completion * 100) <<
-                     "%, progress: " << int(progress * 100) << "%");
-
-      result_.predicate_progress[pred] = completion * progress;
     }
   }
 
   index& index_;
-  restriction_map& restrictions_;
-  index::evaluation result_;
+  expression root_;
 };
 
-index::index(path const& dir, size_t batch_size)
-  : dir_{dir / "index"},
-    batch_size_{batch_size}
+// Evaluates an expression by taking existing hits from the predicate cache.
+struct index::evaluator
 {
-}
-
-index::evaluation index::evaluate(expression const& ast)
-{
-  assert(queries_.count(ast));
-
-  restriction_map r;
-  visit(builder{*this, r}, ast);
-
-  for (auto& p : r)
+public:
+  evaluator(index& idx)
+    : index_{idx}
   {
-    VAST_LOG_ACTOR_DEBUG("built restriction of " << ast << " for " << p.first);
-    for (auto& u : p.second)
-      VAST_LOG_DEBUG("  -  " << u);
   }
 
-  visit(pusher{r}, ast);
-
-  evaluator e{*this, r};
-  visit(e, ast);
-
-  auto& er = e.result_;
-  if (er.total_progress != 1.0 && ! er.predicate_progress.empty())
+  bitstream operator()(none)
   {
-    double sum = 0.0;
-    for (auto& p : er.predicate_progress)
-      sum += p.second;
-    er.total_progress = sum / er.predicate_progress.size();
-  }
-
-  VAST_LOG_ACTOR_DEBUG("evaluated " << ast <<
-                       " (" << int(er.total_progress * 100) << "%)");
-  for (auto& p : er.predicate_progress)
-    VAST_LOG_DEBUG("  -  " << int(p.second * 100) << "% of " << p.first);
-
-  return std::move(er);
-}
-
-trial<void> index::make_partition(path const& dir)
-{
-  auto name = dir.basename();
-
-  uuid id;
-  auto i = part_map_.find(name.str());
-  if (i != part_map_.end())
-  {
-    id = i->second;
-  }
-  else
-  {
-    if (exists(dir))
-    {
-      partition::meta_data meta;
-
-      if (! exists(dir / partition::part_meta_file))
-        return error{"couldn't find meta data of partition ", name};
-      else if (! io::unarchive(dir / partition::part_meta_file, meta))
-        return error{"failed to read meta data of partition ", name};
-
-      update_partition(meta.id, meta.first_event, meta.last_event);
-
-      id = meta.id;
-    }
-    else
-    {
-      id = uuid::random();
-    }
-
-    part_map_.emplace(name.str(), id);
-  }
-
-  auto& a = part_actors_[id];
-  if (! a)
-    a = spawn<partition, monitored>(dir, batch_size_, id);
-
-  return nothing;
-}
-
-void index::update_partition(uuid const& id, time_point first, time_point last)
-{
-  auto& p = part_state_[id];
-
-  if (p.first == time_range{} || first < p.first)
-    p.first = first;
-
-  if (p.last == time_range{} || last > p.last)
-    p.last = last;
-}
-
-std::vector<expression> index::walk(
-    expression const& start,
-    std::function<bool(expression const&, util::flat_set<expression> const&)> f)
-{
-  auto i = gqg_.find(start);
-  if (i == gqg_.end() || ! f(i->first, i->second))
+    assert(! "should never happen");
     return {};
-
-  std::vector<expression> path;
-  for (auto& parent : i->second)
-  {
-    auto ppath = walk(parent, f);
-    std::move(ppath.begin(), ppath.end(), std::back_inserter(path));
   }
 
-  path.push_back(start);
-  std::sort(path.begin(), path.end());
-  path.erase(std::unique(path.begin(), path.end()), path.end());
+  bitstream operator()(conjunction const& con)
+  {
+    if (is<none>(root_))
+      root_ = con;
 
-  return path;
+    auto hits = visit(*this, con[0]);
+    if (! hits)
+      return {};
+
+    for (size_t i = 1; i < con.size(); ++i)
+      if (hits &= visit(*this, con[i]))
+        continue;
+      else
+        return {};  // short-circuit evaluation
+
+    auto& state = index_.queries_[root_].predicates[con];
+    state.hits = std::move(hits);
+    return state.hits;
+  }
+
+  bitstream operator()(disjunction const& dis)
+  {
+    if (is<none>(root_))
+      root_ = dis;
+
+    bitstream hits;
+    for (auto& op : dis)
+      hits |= visit(*this, op);
+
+    auto& state = index_.queries_[root_].predicates[dis];
+    state.hits = std::move(hits);
+    return state.hits;
+  }
+
+  bitstream operator()(negation const& n)
+  {
+    if (is<none>(root_))
+      root_ = n;
+
+    auto hits = visit(*this, n[0]);
+    hits.flip();
+
+    auto& state = index_.queries_[root_].predicates[n];
+    state.hits = std::move(hits);
+    return state.hits;
+  }
+
+  bitstream operator()(predicate const& pred)
+  {
+    if (is<none>(root_))
+      root_ = pred;
+
+    auto& state = index_.queries_[root_].predicates[pred];
+    bitstream hits;
+    for (auto& part : state.restrictions)
+    {
+      auto& status = index_.partitions_[part].status;
+      auto i = status.find(pred);
+      if (i != status.end())
+        hits |= i->second.hits;
+    }
+
+    state.hits |= hits;
+    return state.hits;
+  }
+
+  index& index_;
+  expression root_;
+};
+
+struct index::propagator
+{
+public:
+  propagator(index& idx, expression const& pred)
+    : index_{idx},
+      pred_{pred}
+  {
+  }
+
+  bool operator()(none)
+  {
+    assert(! "should never happen");
+  }
+
+  bool operator()(conjunction const& con)
+  {
+    if (is<none>(root_))
+      root_ = con;
+
+    for (auto& op : con)
+      if (visit(*this, op))
+      {
+        auto& preds = index_.queries_[root_].predicates;
+        auto& now = preds[con].hits;
+        auto prev = now;
+
+        now = preds[con[0]].hits;
+        for (size_t i = 0; i < con.size(); ++i)
+          if (now &= preds[con[i]].hits)
+            continue;
+          else
+            return false; // short-circuit evaluation
+
+        return now && prev && now != prev;
+      }
+
+    return false;
+  }
+
+  bool operator()(disjunction const& dis)
+  {
+    if (is<none>(root_))
+      root_ = dis;
+
+    for (auto& op : dis)
+      if (visit(*this, op))
+      {
+        auto& preds = index_.queries_[root_].predicates;
+        auto& now = preds[dis].hits;
+        auto prev = now;
+        now |= preds[op].hits;
+        return now && prev && now != prev;
+      }
+
+    return false;
+  }
+
+  bool operator()(negation const& n)
+  {
+    if (is<none>(root_))
+      root_ = n;
+
+    if (! visit(*this, n[0]))
+      return false;
+
+    auto& now = index_.queries_[root_].predicates[n].hits;
+    auto prev = now;
+    now.flip();
+
+    return now && prev && now != prev;
+  }
+
+  bool operator()(predicate const& pred)
+  {
+    if (is<none>(root_))
+      root_ = pred;
+
+    return !! index_.queries_[root_].predicates[pred].hits;
+  }
+
+  index& index_;
+  expression const& pred_;
+  expression root_;
+};
+
+void index::partition_state::serialize(serializer& sink) const
+{
+  sink << events << first_event << last_event << last_modified;
+}
+
+void index::partition_state::deserialize(deserializer& source)
+{
+  source >> events >> first_event >> last_event >> last_modified;
+}
+
+index::index(path const& dir, size_t batch_size, size_t max_events,
+             size_t max_parts, size_t active_parts)
+  : dir_{dir / "index"},
+    batch_size_{batch_size},
+    max_events_per_partition_{max_events},
+    max_partitions_{max_parts},
+    active_partitions_{active_parts}
+{
+  assert(max_events_per_partition_ > 0);
+  assert(active_partitions_ > 0);
+  assert(active_partitions_ < max_partitions_);
+
+  attach_functor(
+      [=](uint32_t)
+      {
+        auto empty = true;
+        for (auto& p : partitions_)
+          if (p.second.events > 0)
+          {
+            empty = false;
+            break;
+          }
+
+        if (! empty)
+        {
+          auto t = io::archive(dir_ / "meta.data", partitions_);
+          if (! t)
+            VAST_LOG_ACTOR_ERROR("failed to save meta data: " << t.error());
+        }
+
+        queries_.clear();
+        partitions_.clear();
+      });
+}
+
+void index::dispatch(uuid const& part, predicate const& pred)
+{
+  auto i = std::find_if(
+      schedule_.begin(),
+      schedule_.end(),
+      [&](schedule_state const& s) { return s.part == part; });
+
+  // If the partition is queued, we add the predicate to the set of
+  // to-be-queried predicates.
+  if (i != schedule_.end())
+  {
+    VAST_LOG_ACTOR_DEBUG("adds predicate to " << part << ": " << pred);
+    i->predicates.insert(pred);
+
+    // If the partition is in memory we can send it the predicate directly.
+    auto& a = partitions_[part].actor;
+    if (a)
+      send(a, expression{pred}, this);
+
+    return;
+  }
+
+  // If the partition is not in memory we enqueue it in the schedule.
+  VAST_LOG_ACTOR_DEBUG("enqueues partition " << part << " with " << pred);
+  schedule_.push_back(index::schedule_state{part, {pred}});
+
+  if (std::find(active_.begin(), active_.end(), part) != active_.end())
+  {
+    // If we have an active partition, we only need to relay the predicate.
+    auto& a = partitions_[part].actor;
+    assert(a);
+    send(a, expression{pred}, this);
+  }
+  else if (passive_.size() < max_partitions_ - active_partitions_)
+  {
+    // If we have not fully maxed out our available passive partitions, we can
+    // spawn the partition directly.
+    passive_.push_back(part);
+    VAST_LOG_ACTOR_DEBUG("spawns passive partition " << part);
+    auto& a = partitions_[part].actor;
+    assert(! a);
+    a = spawn<partition, monitored>(dir_, part, batch_size_);
+    send(a, expression{pred}, this);
+  }
+}
+
+void index::consolidate(uuid const& part, predicate const& pred)
+{
+  VAST_LOG_ACTOR_DEBUG("consolidates " << pred << " for partition " << part);
+
+  auto i = std::find_if(
+      schedule_.begin(),
+      schedule_.end(),
+      [&](schedule_state const& s) { return s.part == part; });
+
+  assert(i != schedule_.end());
+
+  // Remove the completed predicate of the partition.
+  assert(! i->predicates.empty());
+  auto x = i->predicates.find(pred);
+  assert(x != i->predicates.end());
+  i->predicates.erase(x);
+
+  // We keep the partition in the schedule as long as there exist outstanding
+  // predicates.
+  if (! i->predicates.empty())
+  {
+    VAST_LOG_ACTOR_DEBUG(
+        "got completed predicate " << pred << " for partition " <<
+        part << ", " << i->predicates.size() << " remaining");
+    return;
+  }
+
+  VAST_LOG_ACTOR_DEBUG("evicts completed partition " << part);
+  schedule_.erase(i);
+
+  if (schedule_.empty())
+    VAST_LOG_ACTOR_DEBUG("finished with entire schedule");
+
+  // We don't unload active partitions.
+  if (std::find(active_.begin(), active_.end(), part) != active_.end())
+    return;
+
+  // It could well happen that we dispatched a predicate to an active partition
+  // which then gets replaced with a new partition. In this case the partition
+  // replaced partition is neither in the active nor passive set, allowing us
+  // to ignore this consolidation request.
+  auto j = std::find(passive_.begin(), passive_.end(), part);
+  if (j == passive_.end())
+    return;
+
+  passive_.erase(j);
+  auto& p = partitions_[part];
+  assert(p.actor);
+  send_exit(p.actor, exit::stop);
+  p.actor = invalid_actor;
+
+  // Because partitions can complete in any order, we have to walk throught the
+  // schedule from the beginning again to find the next partition.
+  for (auto& entry : schedule_)
+  {
+    auto& next_actor = partitions_[entry.part].actor;
+    if (! next_actor)
+    {
+      VAST_LOG_ACTOR_DEBUG("schedules next partition " << entry.part);
+      passive_.push_back(entry.part);
+      next_actor = spawn<partition, monitored>(dir_, entry.part, batch_size_);
+      for (auto& next_pred : entry.predicates)
+        send(next_actor, expression{next_pred}, this);
+      break;
+    }
+  }
+}
+
+double index::progress(expression const& expr) const
+{
+  auto parts = 0.0;
+  auto preds = 0.0;
+  auto i = queries_.find(expr);
+  assert(i != queries_.end());
+  auto j = i->second.predicates.find(expr);
+  for (auto& part : j->second.restrictions)
+  {
+    auto part_pred = 0.0;
+    auto ps = visit(predicatizer{}, expr);
+    for (auto& pred : ps)
+    {
+      auto& status = partitions_.find(part)->second.status.find(pred)->second;
+      if (status.expected)
+        part_pred += double(status.got) / *status.expected;
+    }
+
+    part_pred /= ps.size();
+    preds += part_pred;
+    if (part_pred > 0)
+      ++parts;
+  }
+
+  preds /= parts > 0 ? parts : 1.0;
+  parts /= j->second.restrictions.size();
+
+  return parts * preds;
 }
 
 message_handler index::act()
 {
   trap_exit(true);
 
-  traverse(
-      dir_,
-      [&](path const& p) -> bool
-      {
-        VAST_LOG_ACTOR_VERBOSE("found partition " << p.basename());
+  VAST_LOG_ACTOR_VERBOSE("caps partitions at " << max_events_per_partition_ <<
+                         " events");
+  VAST_LOG_ACTOR_VERBOSE("uses " << active_partitions_ << "/" <<
+                         max_partitions_ << " active partitions");
 
-        auto r = make_partition(p);
-        if (! r)
-          VAST_LOG_ACTOR_ERROR(r.error());
-
-        return true;
-      });
-
-  if (! part_map_.empty())
+  if (exists(dir_ / "meta.data"))
   {
-    active_part_ = *part_actors_.find(part_map_.rbegin()->second);
-    VAST_LOG_ACTOR_INFO("appends to existing partition " <<
-                        part_map_.rbegin()->first);
+    auto t = io::unarchive(dir_ / "meta.data", partitions_);
+    if (! t)
+    {
+      VAST_LOG_ACTOR_ERROR("failed to load meta data: " << t.error());
+      quit(exit::error);
+      return {};
+    }
   }
 
-  attach_functor(
-      [=](uint32_t)
-      {
-        queries_.clear();
-        part_actors_.clear();
-        active_part_.second = invalid_actor;
-      });
+  // Use the N last modified partitions which still have not exceeded their
+  // capacity.
+  std::vector<std::pair<uuid, partition_state>> parts;
+  for (auto& p : partitions_)
+    if (p.second.events < max_events_per_partition_)
+      parts.push_back(p);
+
+  std::sort(parts.begin(),
+            parts.end(),
+            [](auto x, auto y)
+            {
+              return y.second.last_modified < x.second.last_modified;
+            });
+
+  active_.resize(active_partitions_);
+  for (size_t i = 0; i < active_partitions_; ++i)
+  {
+    auto id = i < parts.size() ? parts[i].first : uuid::random();
+    auto& p = partitions_[id];
+    VAST_LOG_ACTOR_DEBUG("activates partition " << id);
+    p.actor = spawn<partition, monitored>(dir_, id, batch_size_);
+    active_[i] = std::move(id);
+  }
 
   return
   {
     [=](exit_msg const& e)
     {
-      if (part_actors_.empty())
+      if (active_.empty())
         quit(e.reason);
       else
-        for (auto& p : part_actors_)
-          send_exit(p.second, e.reason);
+        for (auto& p : partitions_)
+          if (p.second.actor)
+            send_exit(p.second.actor, e.reason);
     },
     [=](down_msg const& d)
     {
       VAST_LOG_ACTOR_DEBUG("got DOWN from " << last_sender());
 
-      if (active_part_.second == last_sender())
-        active_part_.second = invalid_actor;
-
-      for (auto i = part_actors_.begin(); i != part_actors_.end(); ++i)
-        if (i->second == last_sender())
+      auto found = false;
+      for (auto i = active_.begin(); i != active_.end(); ++i)
+      {
+        auto& p = partitions_[*i];
+        if (p.actor == last_sender())
         {
-          part_actors_.erase(i);
+          p.actor = invalid_actor;
+          active_.erase(i);
+          VAST_LOG_ACTOR_DEBUG("shrinks active partitions to " <<
+                               active_.size() << '/' << active_partitions_);
+          found = true;
           break;
         }
+      }
 
+      if (! found)
+        for (auto i = passive_.begin(); i != passive_.end(); ++i)
+        {
+          auto& p = partitions_[*i];
+          if (p.actor == last_sender())
+          {
+            p.actor = invalid_actor;
+            passive_.erase(i);
+            VAST_LOG_ACTOR_DEBUG("shrinks passive partitions to " <<
+                                 passive_.size() << '/' <<
+                                 max_partitions_ - active_partitions_);
+            break;
+          }
+        }
+
+      // If a partition did not exit with error/kill, we wait until all of
+      // them terminate.
       if (d.reason == exit::stop || d.reason == exit::done)
       {
-        if (part_actors_.empty())
+        if (active_.empty())
           quit(d.reason);
       }
       else
       {
-        if (d.reason != exit::error)
-          VAST_LOG_ACTOR_WARN("terminates with unknown exit code from " <<
-                              last_sender() << ": " << d.reason);
-
-        quit(exit::error);
+        quit(d.reason);
       }
     },
     on(atom("flush")) >> [=]
     {
       auto tree = spawn<task_tree>(this);
-      for (auto& p : part_actors_)
+      for (auto& id : active_)
       {
-        send(tree, this, p.second);
-        send(p.second, atom("flush"), tree);
+        send(tree, this, partitions_[id].actor);
+        send(partitions_[id].actor, atom("flush"), tree);
       }
 
       return tree;
     },
-    on(atom("partition"), arg_match) >> [=](std::string const& dir)
-    {
-      auto r = make_partition(dir_ / path{dir});
-      if (! r)
-      {
-        VAST_LOG_ACTOR_ERROR(r.error());
-        send_exit(this, exit::error);
-        return;
-      }
-
-      assert(part_map_.count(dir));
-      assert(part_actors_.count(part_map_[dir]));
-
-      active_part_ = *part_actors_.find(part_map_[dir]);
-      VAST_LOG_ACTOR_INFO("now appends to partition " << dir);
-
-      assert(active_part_.second);
-    },
     [=](chunk const& chk)
     {
-      if (part_map_.empty())
-      {
-        auto r = make_partition(dir_ / to_string(uuid::random()).data());
-        if (! r)
-        {
-          VAST_LOG_ACTOR_ERROR(r.error());
-          send_exit(this, exit::error);
-          return;
-        }
+      auto& id = active_[next_];
+      next_ = ++next_ % active_.size();
 
-        auto first = part_map_.begin();
-        active_part_ = *part_actors_.find(first->second);
-        VAST_LOG_ACTOR_INFO("created new partition " << first->first);
+      auto i = partitions_.find(id);
+      assert(i != partitions_.end());
+      assert(i->second.actor);
+
+      // Replace partition with new one if it would overflow.
+      if (i->second.events + chk.events() > max_events_per_partition_)
+      {
+        VAST_LOG_ACTOR_DEBUG(
+            "replaces " << i->second.actor << " (" << id << ')');
+        send_exit(i->second.actor, exit::stop);
+        i->second.actor = invalid_actor;
+
+        id = uuid::random();
+        i = partitions_.emplace(id, partition_state{}).first;
+        i->second.actor = spawn<partition, monitored>(dir_, id, batch_size_);
       }
 
-      update_partition(active_part_.first, chk.meta().first, chk.meta().last);
+      auto& p = i->second;
+      p.events += chk.events();
+      p.last_modified = now();
+      if (p.first_event == time_range{} || chk.meta().first < p.first_event)
+        p.first_event = chk.meta().first;
+      if (p.last_event == time_range{} || chk.meta().last > p.last_event)
+        p.last_event = chk.meta().last;
 
-      VAST_LOG_ACTOR_DEBUG("forwards chunk");
-      forward_to(active_part_.second);
+      VAST_LOG_ACTOR_DEBUG("forwards chunk to " << p.actor << " (" << id << ')');
+      forward_to(p.actor);
     },
     on(atom("backlog")) >> [=]
     {
-      forward_to(active_part_.second);
+      for (auto& id : active_)
+        forward_to(partitions_[id].actor);
     },
     on(atom("query"), arg_match) >> [=](expression const& ast, actor sink)
     {
-      if (part_map_.empty())
+      if (! queries_.count(ast))
       {
-        VAST_LOG_ACTOR_WARN("has no partitions to answer queries");
-        send_exit(sink, exit::error);
-        return;
+        auto preds = visit(predicatizer{}, ast);
+        auto root = std::make_shared<expression>(ast);
+        for (auto& pred : preds)
+          predicates_.emplace(std::move(pred), root);
+
+        std::map<expression, std::vector<uuid>> restrictions;
+        visit(builder{partitions_, restrictions}, ast);
+        visit(pusher{restrictions}, ast);
+
+        for (auto& p : restrictions)
+          queries_[ast].predicates[p.first].restrictions = std::move(p.second);
+
+        visit(dispatcher{*this}, ast);
+
+        VAST_LOG_ACTOR_DEBUG("evaluates " << ast);
+        visit(evaluator{*this}, ast);
       }
 
-      if (! queries_.count(ast))
-        visit(dissector{*this, ast}, ast);
-
-      assert(! queries_[ast].subscribers.contains(sink));
       queries_[ast].subscribers.insert(sink);
 
-      send(this, atom("first-eval"), ast, sink);
-    },
-    on(atom("first-eval"), arg_match) >> [=](expression const& ast, actor sink)
-    {
-      auto e = evaluate(ast);
+      auto& hits = queries_[ast].predicates[ast].hits;
+      if (hits)
+        send(sink, hits);
 
-      if (e.total_progress == 0.0)
-        return;
-
-      auto& qs = queries_[ast];
-      if (e.hits && ! e.hits.all_zero()
-          && (! qs.hits || e.hits != qs.hits || e.total_progress == 1.0))
-      {
-        qs.hits = e.hits;
-        send(sink, e.hits);
-      }
-
-      auto count = qs.hits ? qs.hits.count() : 0;
-      send(sink, atom("progress"), e.total_progress, count);
+      send(sink, atom("progress"), progress(ast), hits ? hits.count() : 0);
     },
     [=](expression const& pred, uuid const& part, uint64_t n)
     {
@@ -650,7 +820,13 @@ message_handler index::act()
                            " to deliver " << n << " hits for predicate " <<
                            pred);
 
-      predicate_cache_[pred].parts[part].expected = n;
+      auto& status = partitions_[part].status[pred];
+      status.expected = n;
+
+      // It could happen that we receive all hits before we get the actual
+      // expected number.
+      if (status.got == n)
+        consolidate(part, *get<predicate>(pred));
     },
     [=](expression const& pred, uuid const& part, bitstream const& hits)
     {
@@ -658,57 +834,40 @@ message_handler index::act()
           "received " << (hits ? hits.count() : 0) <<
           " hits from " << part << " for predicate " << pred);
 
-      assert(predicate_cache_.count(pred));
+      assert(partitions_[part].status.count(pred));
+      auto& status = partitions_[part].status[pred];
+      status.hits |= hits;
+      ++status.got;
 
-      auto& entry = predicate_cache_[pred].parts[part];
+      // Once we have received all hits from a partition, we remove it from
+      // the schedule.
+      if (status.expected && status.got == *status.expected)
+        consolidate(part, *get<predicate>(pred));
 
-      if (hits)
+      // Re-evaluate all affected queries.
+      auto range = predicates_.equal_range(pred);
+      for (auto i = range.first; i != range.second; ++i)
       {
-        ++entry.got;
-        entry.hits |= hits;
-      }
-
-      assert(! entry.expected || entry.got <= *entry.expected);
-
-      std::vector<expression> roots;
-      walk(
-          pred,
-          [&](expression const& ast, util::flat_set<expression> const&) -> bool
-          {
-            if (queries_.count(ast))
-              roots.push_back(ast);
-
-            return true;
-          });
-
-      for (auto& r : roots)
-      {
-        auto e = evaluate(r);
-
-        auto& qs = queries_[r];
-        if (e.hits && ! e.hits.all_zero() && (! qs.hits || e.hits != qs.hits))
+        auto& root = *i->second;
+        VAST_LOG_ACTOR_DEBUG("evaluates " << root);
+        auto& qs = queries_[root];
+        qs.predicates[pred].hits |= hits;
+        auto changed = visit(propagator{*this, i->first}, root);
+        auto& query_hits = qs.predicates[root].hits;
+        if (changed)
         {
-          qs.hits = e.hits;
+          assert(query_hits);
           for (auto& sink : qs.subscribers)
-            send(sink, e.hits);
+            send(sink, query_hits);
         }
 
-        if (e.total_progress == 0.0)
-          return;
-
+        auto count = query_hits ? query_hits.count() : 0;
         for (auto& sink : qs.subscribers)
-          send(sink, atom("progress"),
-               e.total_progress, qs.hits ? qs.hits.count() : 0);
+          send(sink, atom("progress"), progress(root), count);
       }
     },
     on(atom("delete")) >> [=]
     {
-      if (part_map_.empty())
-      {
-        VAST_LOG_ACTOR_WARN("ignores request to delete empty index");
-        return;
-      }
-
       become(
           keep_behavior,
           [=](down_msg const& d)
@@ -717,14 +876,14 @@ message_handler index::act()
               VAST_LOG_ACTOR_WARN("got DOWN from " << last_sender() <<
                                   " with unexpected exit code " << d.reason);
 
-            for (auto i = part_actors_.begin(); i != part_actors_.end(); ++i)
-              if (i->second == last_sender())
+            for (auto i = active_.begin(); i != active_.end(); ++i)
+              if (partitions_[*i].actor == last_sender())
               {
-                part_actors_.erase(i);
+                active_.erase(i);
                 break;
               }
 
-            if (part_actors_.empty())
+            if (active_.empty())
             {
               if (! rm(dir_))
               {
@@ -740,8 +899,8 @@ message_handler index::act()
           }
       );
 
-      for (auto& p : part_actors_)
-        send_exit(p.second, exit::kill);
+      for (auto& id : active_)
+        send_exit(partitions_[id].actor, exit::kill);
     }
   };
 }

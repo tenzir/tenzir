@@ -32,15 +32,13 @@ public:
   };
 
   /// Spawns a partition.
-  /// @param dir The index directory in which to create this partition.
+  /// @param index_dir The index directory in which to create this partition.
+  /// @param id The unique ID for this partition.
   /// @param batch_size The number of events to dechunkify at once.
-  /// @param The unique partition ID.
-  partition(path dir, size_t batch_size, uuid id = uuid::random());
+  partition(path const& index_dir, uuid id, size_t batch_size);
 
   caf::message_handler act() final;
   std::string describe() const final;
-
-  static path const part_meta_file;
 
 private:
   struct statistics
@@ -62,7 +60,7 @@ private:
   trial<caf::actor> create_data_indexer(type const& et, type const& t,
                                         offset const& o);
   path dir_;
-  meta_data meta_;
+  uuid id_;
   bool updated_ = false;
   uint64_t batch_size_;
   uint64_t max_backlog_ = 0;

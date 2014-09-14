@@ -11,27 +11,6 @@ using namespace caf;
 
 namespace vast {
 
-path const partition::part_meta_file = "partition.meta";
-
-void partition::meta_data::serialize(serializer& sink) const
-{
-  sink << id << first_event << last_event << last_modified;
-}
-
-void partition::meta_data::deserialize(deserializer& source)
-{
-  source >> id >> first_event >> last_event >> last_modified;
-}
-
-bool operator==(partition::meta_data const& x, partition::meta_data const& y)
-{
-  return x.id == y.id
-      && x.first_event == y.first_event
-      && x.last_event == y.last_event
-      && x.last_modified == y.last_modified;
-}
-
-
 struct partition::dispatcher
 {
   dispatcher(partition& pa)
@@ -55,7 +34,7 @@ struct partition::dispatcher
   {
     op_ = p.op;
     return visit(*this, p.lhs, p.rhs);
-    
+
   }
 
   std::vector<actor> operator()(event_extractor const&, data const&)
@@ -164,11 +143,11 @@ struct partition::dispatcher
 };
 
 
-partition::partition(path dir, size_t batch_size, uuid id)
-  : dir_{std::move(dir)},
-    batch_size_{batch_size}
+partition::partition(path const& index_dir, uuid id, size_t batch_size)
+  : dir_{index_dir / to_string(id)},
+  id_{std::move(id)},
+  batch_size_{batch_size}
 {
-  meta_.id = std::move(id);
 }
 
 message_handler partition::act()
@@ -177,16 +156,7 @@ message_handler partition::act()
 
   if (exists(dir_))
   {
-    auto t = io::unarchive(dir_ / part_meta_file, meta_);
-    if (! t)
-    {
-      VAST_LOG_ACTOR_ERROR("failed to load partition meta data from " <<
-                           dir_ << ": " << t.error().msg());
-      quit(exit::error);
-      return {};
-    }
-
-    t = io::unarchive(dir_ / "schema", schema_);
+    auto t = io::unarchive(dir_ / "schema", schema_);
     if (! t)
     {
       VAST_LOG_ACTOR_ERROR("failed to load schema: " << t.error());
@@ -227,7 +197,6 @@ message_handler partition::act()
         return;
       }
 
-      // FIXME: ensure this happens at most once.
       auto tree = spawn<task_tree>(this);
       send(tree, atom("notify"), this);
       send(tree, this, this);
@@ -245,16 +214,6 @@ message_handler partition::act()
       if (last_sender() == dechunkifier_)
       {
         auto chk = chunks_.front();
-
-        meta_.last_modified = now();
-        if (meta_.first_event == time_range{}
-            || chk.meta().first < meta_.first_event)
-          meta_.first_event = chk.meta().first;
-
-        if (meta_.last_event == time_range{}
-            || chk.meta().last > meta_.last_event)
-          meta_.last_event = chk.meta().last;
-
         chunks_.pop();
         dechunkifier_ = invalid_actor;
         send(this, atom("unpack"));
@@ -279,23 +238,23 @@ message_handler partition::act()
       auto indexes = visit(dispatcher{*this}, pred);
 
       uint64_t n = indexes.size();
-      send(idx, pred, meta_.id, n);
+      send(idx, pred, id_, n);
 
       if (n == 0)
       {
         VAST_LOG_ACTOR_DEBUG("did not find a matching indexer for " << pred);
-        send(idx, pred, meta_.id, bitstream{});
+        send(idx, pred, id_, bitstream{});
       }
       else
       {
-        auto t = make_message(pred, meta_.id, idx);
+        auto t = make_message(pred, id_, idx);
         for (auto& a : indexes)
           send_tuple(a, t);
       }
     },
     on(atom("flush"), arg_match) >> [=](actor tree)
     {
-      VAST_LOG_ACTOR_DEBUG("got request to flush its indexes");
+      VAST_LOG_ACTOR_DEBUG("got request to flush indexes");
 
       for (auto& p : indexers_)
         if (p.second)
@@ -304,22 +263,15 @@ message_handler partition::act()
           send(p.second, atom("flush"), tree);
         }
 
-      auto t = io::archive(dir_ / "schema", schema_);
-      if (! t)
+      if (! schema_.empty())
       {
-        VAST_LOG_ACTOR_ERROR("failed to save schema for " << dir_ << ": " <<
-                             t.error().msg());
-        quit(exit::error);
-        return;
-      }
-
-      t = io::archive(dir_ / part_meta_file, meta_);
-      if (! t)
-      {
-        VAST_LOG_ACTOR_ERROR("failed to save partition " << dir_ <<
-                             ": " << t.error().msg());
-        quit(exit::error);
-        return;
+        auto t = io::archive(dir_ / "schema", schema_);
+        if (! t)
+        {
+          VAST_LOG_ACTOR_ERROR("failed to save schema: " << t.error());
+          quit(exit::error);
+          return;
+        }
       }
 
       send(tree, atom("done"));

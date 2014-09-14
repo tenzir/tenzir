@@ -16,83 +16,92 @@ namespace vast {
 class index : public actor_base
 {
 public:
-  struct dissector;
+  struct predicatizer;
   struct builder;
   struct pusher;
+  struct dispatcher;
   struct evaluator;
-
-  struct evaluation
-  {
-    bitstream hits;
-    std::map<expression, double> predicate_progress;
-    double total_progress = 0.0;
-  };
-
-  struct predicate_cache_entry
-  {
-    struct partition_state
-    {
-      uint64_t got = 0;
-      optional<uint64_t> expected;
-      bitstream hits;
-    };
-
-    std::unordered_map<uuid, partition_state> parts;
-  };
+  struct propagator;
 
   struct partition_state
   {
-    time_point first = time_range{};
-    time_point last = time_range{};
+    struct predicate_status
+    {
+      bitstream hits;
+      uint64_t got = 0;
+      optional<uint64_t> expected;
+    };
+
+    std::map<expression, predicate_status> status;
+    caf::actor actor;
+    uint64_t events = 0;
+    time_point last_modified;
+    time_point first_event = time_range{};
+    time_point last_event = time_range{};
+
+  private:
+    friend access;
+    void serialize(serializer& sink) const;
+    void deserialize(deserializer& source);
   };
 
   struct query_state
   {
-    bitstream hits;
+    struct predicate_state
+    {
+      bitstream hits;
+      std::vector<uuid> restrictions;
+    };
+
+    std::map<expression, predicate_state> predicates;
     util::flat_set<caf::actor> subscribers;
   };
 
+  struct schedule_state
+  {
+    uuid part;
+    util::flat_set<predicate> predicates;
+  };
+
   /// Spawns the index.
-  /// @param dir The VAST directory to create the index under.
-  /// @param batch_size The number of events to index at once.
-  index(path const& dir, size_t batch_size);
+  /// @param dir The directory of the index.
+  /// @param batch_size The number of events to index at once per partition.
+  /// @param max_events The maximum number of events per partition.
+  /// @param max_parts The maximum number of partitions to hold in memory.
+  /// @param active_parts The number of active partitions to hold in memory.
+  index(path const& dir, size_t batch_size, size_t max_events,
+        size_t max_parts, size_t active_parts);
 
-  /// Evaluates a given AST with respect to the cache.
-  /// @param ast The AST to get the progress for.
-  /// @returns The ::evaluation result.
-  evaluation evaluate(expression const& ast);
+  /// Dispatches a predicate for a partition either by relaying it directory
+  /// if active or enqueing it into partition queue.
+  /// @param part The partition to query with *pred*.
+  /// @param pred The predicate to look for in *part*.
+  void dispatch(uuid const& part, predicate const& pred);
 
-  /// Spawns a partition.
-  /// @param dir The directory of the partition.
-  /// @returns `nothing` on success.
-  trial<void> make_partition(path const& dir);
+  /// Consolidates a predicate which has previously been dispatched.
+  /// @param part The partition of *pred*.
+  /// @param pred The predicate which delivered all hits within *part*.
+  /// @pre The combination of *part* and *pred* must have been dispatched.
+  void consolidate(uuid const& part, predicate const& pred);
 
-  /// Updates the state of a given partition.
-  /// @param id The UUID of the partition to update.
-  /// @param first The timestamp of the first event in partition *id*.
-  /// @param last The timestamp of the last event in partition *id*.
-  void update_partition(uuid const& id, time_point first, time_point last);
-
-  /// Applies a function to node chain in the GCG up the roots.
-  /// @param start The AST to begin execution.
-  /// @param f The function to execute on *start* and its partents.
-  /// @returns The path of nodes taken through the GCG.
-  std::vector<expression> walk(
-      expression const& start,
-      std::function<bool(expression const&, util::flat_set<expression> const&)> f);
+  /// Computes the progression for a given query.
+  double progress(expression const& query) const;
 
   caf::message_handler act() final;
   std::string describe() const final;
 
   path dir_;
   size_t batch_size_;
-  std::map<expression, predicate_cache_entry> predicate_cache_;
-  std::map<expression, util::flat_set<expression>> gqg_;
+  size_t max_events_per_partition_;
+  size_t max_partitions_;
+  size_t active_partitions_;
+  std::multimap<expression, std::shared_ptr<expression>> predicates_;
   std::map<expression, query_state> queries_;
-  std::map<std::string, uuid> part_map_;
-  std::unordered_map<uuid, partition_state> part_state_;
-  std::unordered_map<uuid, caf::actor> part_actors_;
-  std::pair<uuid, caf::actor> active_part_;
+  std::unordered_map<uuid, partition_state> partitions_;
+  std::list<schedule_state> schedule_;
+  std::list<uuid> passive_;
+  std::vector<uuid> active_;
+  size_t next_ = 0;
 };
 
 } // namespace vast

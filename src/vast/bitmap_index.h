@@ -12,8 +12,9 @@
 namespace vast {
 
 /// The base class for bitmap indexes.
-template <typename Derived>
-class bitmap_index_base : util::equality_comparable<bitmap_index_base<Derived>>
+template <typename Derived, typename Bitstream>
+class bitmap_index_base
+  : util::equality_comparable<bitmap_index_base<Derived, Bitstream>>
 {
 public:
   /// Appends a single value.
@@ -23,21 +24,26 @@ public:
   template <typename T>
   bool push_back(T const& x, uint64_t offset = 0)
   {
-    return catch_up(offset) && derived()->push_back_impl(x);
+    return catch_up(offset)
+        && derived()->push_back_impl(x)
+        && nil_.push_back(false)
+        && mask_.push_back(true);
   }
 
   bool push_back(none, uint64_t offset = 0)
   {
-    // TODO: differentiate between nil and invalid value. The former represent
-    // optional values, but we also use stretching to append invalid ones.
-    return catch_up(offset) && stretch(1);
+    return catch_up(offset)
+        && stretch(1)
+        && nil_.push_back(true)
+        && mask_.push_back(true);
   }
 
   bool push_back(data const& d, uint64_t offset = 0)
   {
-    // TODO: see above.
     return catch_up(offset)
-        && (is<none>(d) ? stretch(1) : derived()->push_back_impl(d));
+        && (is<none>(d) ? stretch(1) : derived()->push_back_impl(d))
+        && nil_.push_back(is<none>(d))
+        && mask_.push_back(true);
   }
 
   /// Appends 0-bits to the index.
@@ -51,20 +57,22 @@ public:
   /// Looks up a value given a relational operator.
   /// @param op The relation operator.
   /// @param x The value to lookup.
-  template <typename T, typename Hack = Derived>
-  auto lookup(relational_operator op, T const& x) const
-    -> decltype(std::declval<Hack>().lookup_impl(op, x))
+  template <typename T>
+  trial<Bitstream> lookup(relational_operator op, T const& x) const
   {
-    static_assert(std::is_same<Hack, Derived>(), ":-P");
-    return derived()->lookup_impl(op, x);
+    auto r = derived()->lookup_impl(op, x);
+    if (r)
+      *r &= mask_;
+
+    return r;
   }
 
-  template <typename T, typename Hack = Derived>
-  auto lookup(relational_operator op, none) const
-    -> decltype(std::declval<Hack>().lookup_impl(op, nil))
+  trial<Bitstream> lookup(relational_operator op, none) const
   {
-    static_assert(std::is_same<Hack, Derived>(), ":-P");
-    return derived()->lookup_impl(op, nil);
+    if (! (op == equal || op == not_equal))
+      return error{"unsupported relational operator: ", op};
+
+    return op == equal ? nil_ & mask_ : ~nil_ & mask_;
   }
 
   /// Retrieves the number of elements in the bitmap index.
@@ -82,9 +90,10 @@ public:
   }
 
   /// Appends invalid bits to bring the bitmap index up to a given size. Given
-  /// a number of *n* bits, the function stretches the bitmap index with
-  /// `n - size()` bits.
-  /// @param n The new size to stretch the bitmap index to.
+  /// an ID of *n*, the function stretches the index up to size *n* with
+  /// invalid bits. Afterwards it appends to the mask a single true bit
+  /// for the next value to push back.
+  /// @param n The ID to catch up to.
   /// @returns `true` on success.
   bool catch_up(uint64_t n)
   {
@@ -98,15 +107,26 @@ public:
     }
 
     auto delta = n - size();
-    if (delta > 0)
-      if (! stretch(delta))
-        return false;
+    if (delta == 0)
+      return true;
 
-    return true;
+    return stretch(delta)
+        && nil_.append(delta, false)
+        && mask_.append(delta, false);
   }
 
 private:
   friend access;
+
+  void serialize(serializer& sink) const
+  {
+    sink << mask_ << nil_;
+  }
+
+  void deserialize(deserializer& source)
+  {
+    source >> mask_ >> nil_;
+  }
 
   Derived* derived()
   {
@@ -117,6 +137,9 @@ private:
   {
     return static_cast<Derived const*>(this);
   }
+
+  Bitstream mask_;
+  Bitstream nil_;
 };
 
 namespace detail {
@@ -128,11 +151,11 @@ struct bitmap_index_concept
   bitmap_index_concept() = default;
   virtual ~bitmap_index_concept() = default;
 
-  virtual bool push_back_impl(data const& d) = 0;
-  virtual bool stretch_impl(size_t n) = 0;
-  virtual trial<Bitstream> lookup_impl(relational_operator op,
-                                       data const& d) const = 0;
-  virtual uint64_t size_impl() const = 0;
+  virtual bool push_back(data const& d, uint64_t offset) = 0;
+  virtual bool stretch(size_t n) = 0;
+  virtual trial<Bitstream> lookup(relational_operator op,
+                                  data const& d) const = 0;
+  virtual uint64_t size() const = 0;
 
   virtual std::unique_ptr<bitmap_index_concept> copy() const = 0;
   virtual bool equals(bitmap_index_concept const& other) const = 0;
@@ -156,25 +179,25 @@ struct bitmap_index_model
   {
   }
 
-  virtual bool push_back_impl(data const& d) final
+  virtual bool push_back(data const& d, uint64_t offset) final
   {
-    return bmi_.push_back_impl(d);
+    return bmi_.push_back(d, offset);
   }
 
-  virtual bool stretch_impl(size_t n) final
+  virtual bool stretch(size_t n) final
   {
-    return bmi_.stretch_impl(n);
+    return bmi_.stretch(n);
   }
 
   virtual trial<bitstream_type>
-  lookup_impl(relational_operator op, data const& d) const final
+  lookup(relational_operator op, data const& d) const final
   {
-    return bmi_.lookup_impl(op, d);
+    return bmi_.lookup(op, d);
   }
 
-  virtual uint64_t size_impl() const final
+  virtual uint64_t size() const final
   {
-    return bmi_.size_impl();
+    return bmi_.size();
   }
 
   BitmapIndex const& cast(bmi_concept const& c) const
@@ -225,12 +248,8 @@ struct bitmap_index_model
 
 /// A polymorphic bitmap index with value semantics.
 template <typename Bitstream>
-class bitmap_index : public bitmap_index_base<bitmap_index<Bitstream>>,
-                     util::equality_comparable<bitmap_index<Bitstream>>
+class bitmap_index : util::equality_comparable<bitmap_index<Bitstream>>
 {
-  using super = bitmap_index_base<bitmap_index<Bitstream>>;
-  friend super;
-
 public:
   bitmap_index() = default;
 
@@ -272,29 +291,40 @@ public:
     return concept_ != nullptr;
   }
 
-private:
-  bool push_back_impl(data const& d)
+  bool push_back(data const& d, uint64_t offset = 0)
   {
     assert(concept_);
-    return concept_->push_back_impl(d);
+    return concept_->push_back(d, offset);
   }
 
-  bool stretch_impl(size_t n)
+  bool stretch(size_t n)
   {
     assert(concept_);
-    return concept_->stretch_impl(n);
+    return concept_->stretch(n);
   }
 
-  trial<Bitstream> lookup_impl(relational_operator op, data const& d) const
+  trial<Bitstream> lookup(relational_operator op, data const& d) const
   {
     assert(concept_);
-    return concept_->lookup_impl(op, d);
+    return concept_->lookup(op, d);
   }
 
-  uint64_t size_impl() const
+  uint64_t size() const
   {
     assert(concept_);
-    return concept_->size_impl();
+    return concept_->size();
+  }
+
+  uint64_t empty() const
+  {
+    assert(concept_);
+    return concept_->empty();
+  }
+
+  bool catch_up(uint64_t n)
+  {
+    assert(concept_);
+    return concept_->catchup(n);
   }
 
 private:
@@ -330,10 +360,13 @@ private:
 /// A bitmap index for arithmetic values.
 template <typename Bitstream, typename T>
 class arithmetic_bitmap_index
-  : public bitmap_index_base<arithmetic_bitmap_index<Bitstream, T>>,
+  : public bitmap_index_base<arithmetic_bitmap_index<Bitstream, T>, Bitstream>,
     util::equality_comparable<arithmetic_bitmap_index<Bitstream, T>>
 {
-  friend bitmap_index_base<arithmetic_bitmap_index<Bitstream, T>>;
+  using super =
+    bitmap_index_base<arithmetic_bitmap_index<Bitstream, T>, Bitstream>;
+
+  friend super;
 
   template <typename>
   friend struct detail::bitmap_index_model;
@@ -497,12 +530,12 @@ private:
 
   void serialize(serializer& sink) const
   {
-    sink << bitmap_;
+    sink << static_cast<super const&>(*this) << bitmap_;
   }
 
   void deserialize(deserializer& source)
   {
-    source >> bitmap_;
+    source >> static_cast<super&>(*this) >> bitmap_;
   }
 
   friend bool operator==(arithmetic_bitmap_index const& x,
@@ -515,9 +548,10 @@ private:
 /// A bitmap index for strings.
 template <typename Bitstream>
 class string_bitmap_index
-  : public bitmap_index_base<string_bitmap_index<Bitstream>>
+  : public bitmap_index_base<string_bitmap_index<Bitstream>, Bitstream>
 {
-  friend bitmap_index_base<string_bitmap_index<Bitstream>>;
+  using super = bitmap_index_base<string_bitmap_index<Bitstream>, Bitstream>;
+  friend super;
 
   template <typename>
   friend struct detail::bitmap_index_model;
@@ -553,7 +587,7 @@ private:
   bool push_back_impl(data const& d)
   {
     auto str = get<std::string>(d);
-    return str ? push_back_impl(*str) : false;
+    return str && push_back_impl(*str);
   }
 
   bool push_back_impl(std::string const& str)
@@ -574,7 +608,7 @@ private:
 
   template <typename Iterator>
   trial<Bitstream> lookup_string(relational_operator op,
-                               Iterator begin, Iterator end) const
+                                 Iterator begin, Iterator end) const
   {
     auto size = static_cast<size_t>(end - begin);
 
@@ -691,12 +725,12 @@ private:
 
   void serialize(serializer& sink) const
   {
-    sink << size_ << bitmaps_;
+    sink << static_cast<super const&>(*this) << size_ << bitmaps_;
   }
 
   void deserialize(deserializer& source)
   {
-    source >> size_ >> bitmaps_;
+    source >> static_cast<super&>(*this) >> size_ >> bitmaps_;
   }
 
   friend bool operator==(string_bitmap_index const& x,
@@ -709,9 +743,10 @@ private:
 /// A bitmap index for IP addresses.
 template <typename Bitstream>
 class address_bitmap_index
-: public bitmap_index_base<address_bitmap_index<Bitstream>>
+  : public bitmap_index_base<address_bitmap_index<Bitstream>, Bitstream>
 {
-  friend bitmap_index_base<address_bitmap_index<Bitstream>>;
+  using super = bitmap_index_base<address_bitmap_index<Bitstream>, Bitstream>;
+  friend super;
 
   template <typename>
     friend struct detail::bitmap_index_model;
@@ -846,12 +881,12 @@ private:
 
   void serialize(serializer& sink) const
   {
-    sink << v4_ << bitmaps_;
+    sink << static_cast<super const&>(*this) << v4_ << bitmaps_;
   }
 
   void deserialize(deserializer& source)
   {
-    source >> v4_ >> bitmaps_;
+    source >> static_cast<super&>(*this) >> v4_ >> bitmaps_;
   }
 
   friend bool operator==(address_bitmap_index const& x,
@@ -864,12 +899,13 @@ private:
 /// A bitmap index for IP prefixes.
 template <typename Bitstream>
 class subnet_bitmap_index
-: public bitmap_index_base<subnet_bitmap_index<Bitstream>>
+  : public bitmap_index_base<subnet_bitmap_index<Bitstream>, Bitstream>
 {
-  friend bitmap_index_base<subnet_bitmap_index<Bitstream>>;
+  using super = bitmap_index_base<subnet_bitmap_index<Bitstream>, Bitstream>;
+  friend super;
 
   template <typename>
-    friend struct detail::bitmap_index_model;
+  friend struct detail::bitmap_index_model;
 
 public:
   using bitstream_type = Bitstream;
@@ -932,12 +968,12 @@ private:
 
   void serialize(serializer& sink) const
   {
-    sink << network_ << length_;
+    sink << static_cast<super const&>(*this) << network_ << length_;
   }
 
   void deserialize(deserializer& source)
   {
-    source >> network_ >> length_;
+    source >> static_cast<super&>(*this) >> network_ >> length_;
   }
 
   friend bool operator==(subnet_bitmap_index const& x,
@@ -950,9 +986,10 @@ private:
 /// A bitmap index for transport-layer ports.
 template <typename Bitstream>
 class port_bitmap_index
-  : public bitmap_index_base<port_bitmap_index<Bitstream>>
+  : public bitmap_index_base<port_bitmap_index<Bitstream>, Bitstream>
 {
-  friend bitmap_index_base<port_bitmap_index<Bitstream>>;
+  using super = bitmap_index_base<port_bitmap_index<Bitstream>, Bitstream>;
+  friend super;
 
   template <typename>
   friend struct detail::bitmap_index_model;
@@ -1028,12 +1065,12 @@ private:
 
   void serialize(serializer& sink) const
   {
-    sink << num_ << proto_;
+    sink << static_cast<super const&>(*this) << num_ << proto_;
   }
 
   void deserialize(deserializer& source)
   {
-    source >> num_ >> proto_;
+    source >> static_cast<super&>(*this) >> num_ >> proto_;
   }
 
   friend bool operator==(port_bitmap_index const& x, port_bitmap_index const& y)
@@ -1047,9 +1084,11 @@ trial<bitmap_index<Bitstream>> make_bitmap_index(type_tag t, Args&&... args);
 
 /// A bitmap index for sets, vectors, and tuples.
 template <typename Bitstream>
-class sequence_bitmap_index : public bitmap_index_base<sequence_bitmap_index<Bitstream>>
+class sequence_bitmap_index
+  : public bitmap_index_base<sequence_bitmap_index<Bitstream>, Bitstream>
 {
-  friend bitmap_index_base<sequence_bitmap_index<Bitstream>>;
+  using super = bitmap_index_base<sequence_bitmap_index<Bitstream>, Bitstream>;
+  friend super;
 
   template <typename>
   friend struct detail::bitmap_index_model;
@@ -1099,15 +1138,8 @@ private:
     }
 
     for (size_t i = 0; i < c.size(); ++i)
-    {
-      auto delta = this->size() - bmis_[i].size();
-      if (delta > 0)
-        if (! bmis_[i].stretch(delta))
-          return false;
-
-      if (! bmis_[i].push_back(c[i]))
+      if (! bmis_[i].push_back(c[i], this->size()))
         return false;
-    }
 
     return size_.push_back(c.size());
   }
@@ -1169,12 +1201,12 @@ private:
 
   void serialize(serializer& sink) const
   {
-    sink << elem_type_ << bmis_ << size_;
+    sink << static_cast<super const&>(*this) << elem_type_ << bmis_ << size_;
   }
 
   void deserialize(deserializer& source)
   {
-    source >> elem_type_ >> bmis_ >> size_;
+    source >> static_cast<super&>(*this) >> elem_type_ >> bmis_ >> size_;
   }
 
   friend bool

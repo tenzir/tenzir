@@ -7,7 +7,6 @@ using namespace vast;
 
 SUITE("bitmap index")
 
-
 TEST("polymorphic")
 {
   bitmap_index<null_bitstream> bmi;
@@ -347,16 +346,15 @@ TEST("container")
 {
   sequence_bitmap_index<null_bitstream> bmi{type::string{}};
 
-  set s{"foo", "bar"};
-  CHECK(bmi.push_back(s));
+  vector v{"foo", "bar"};
+  CHECK(bmi.push_back(v));
 
-  s = {"qux", "foo", "baz", "corge"};
-  CHECK(bmi.push_back(s));
+  v = {"qux", "foo", "baz", "corge"};
+  CHECK(bmi.push_back(v));
 
-  s = {"bar"};
-  CHECK(bmi.push_back(s));
-
-  CHECK(bmi.push_back(s));
+  v = {"bar"};
+  CHECK(bmi.push_back(v));
+  CHECK(bmi.push_back(v));
 
   null_bitstream r;
   r.append(2, true);
@@ -364,10 +362,45 @@ TEST("container")
   CHECK(*bmi.lookup(in, "foo") == r);
 
   r.clear();
+  r.push_back(true);
+  r.push_back(false);
+  r.append(2, true);
+  CHECK(*bmi.lookup(in, "bar") == r);
+
+  r.clear();
   r.append(4, false);
   CHECK(*bmi.lookup(in, "not") == r);
 
-  auto v = to<vector>("[you won't believe it]", type::string{}, " ");
-  REQUIRE(v);
-  CHECK(bmi.push_back(*v));
+  auto strings = to<vector>("[you won't believe it]", type::string{}, " ");
+  REQUIRE(strings);
+  CHECK(bmi.push_back(*strings));
+}
+
+TEST("offset push-back")
+{
+  string_bitmap_index<null_bitstream> bmi;
+  REQUIRE(bmi.push_back("foo", 2));
+  REQUIRE(bmi.push_back(data{"bar"}, 3));
+  REQUIRE(bmi.push_back(nil, 5));
+  REQUIRE(bmi.push_back("baz", 7));
+
+  auto r = bmi.lookup(equal, "foo");
+  REQUIRE(r);
+  CHECK(to_string(*r) == "00100000");
+
+  r = bmi.lookup(not_equal, "foo");
+  REQUIRE(r);
+  CHECK(to_string(*r) == "00010101");
+
+  r = bmi.lookup(ni, "a");
+  REQUIRE(r);
+  CHECK(to_string(*r) == "00010001");
+
+  r = bmi.lookup(equal, nil);
+  REQUIRE(r);
+  CHECK(to_string(*r) == "00000100");
+
+  r = bmi.lookup(not_equal, nil);
+  REQUIRE(r);
+  CHECK(to_string(*r) == "00110001");
 }
