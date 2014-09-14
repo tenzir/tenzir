@@ -1,4 +1,4 @@
-# VAST [![Issues in progress](https://badge.waffle.io/mavam/vast.png?label=in%20progress&title=in%20progress)](https://waffle.io/mavam/vast)
+# VAST
 
 **Visibility Across Space and Time (VAST)** is a unified platform for network
 forensics and incident response.
