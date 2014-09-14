@@ -21,7 +21,7 @@ expression normalizer::operator()(conjunction const& c) const
 
 expression normalizer::operator()(disjunction const& d) const
 {
-  conjunction copy;
+  disjunction copy;
   for (auto& op : d)
     copy.push_back(visit(*this, op));
 
