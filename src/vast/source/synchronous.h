@@ -17,9 +17,7 @@ public:
   caf::message_handler act() final
   {
     using namespace caf;
-
-    this->trap_exit(true);
-
+    trap_exit(true);
     attach_functor([=](uint32_t) { sink_ = invalid_actor; });
 
     return
@@ -27,14 +25,16 @@ public:
       [=](exit_msg const& e)
       {
         send_events();
-        this->quit(e.reason);
+        quit(e.reason);
       },
       on(atom("batch size"), arg_match) >> [=](uint64_t batch_size)
       {
+        VAST_LOG_ACTOR_DEBUG("sets batch size to " << batch_size);
         batch_size_ = batch_size;
       },
       on(atom("sink"), arg_match) >> [=](actor sink)
       {
+        VAST_LOG_ACTOR_DEBUG("sets sink to " << sink);
         sink_ = sink;
       },
       on(atom("run")) >> [=]
@@ -66,7 +66,7 @@ public:
         send_events();
 
         if (done)
-          this->quit(exit::done);
+          quit(exit::done);
         else
           send(this, atom("run"));
       }
