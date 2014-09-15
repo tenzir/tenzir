@@ -23,7 +23,7 @@ private:
   void run();
 
   caf::actor receiver_;
-  caf::actor tracker_;
+  caf::actor identifier_;
   caf::actor archive_;
   caf::actor index_;
   caf::actor search_;

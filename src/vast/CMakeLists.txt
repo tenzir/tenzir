@@ -16,7 +16,7 @@ set(libvast_sources
   error.cc
   exporter.cc
   file_system.cc
-  id_tracker.cc
+  identifier.cc
   index.cc
   individual.cc
   importer.cc

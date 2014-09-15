@@ -63,7 +63,7 @@ void configuration::initialize()
   act.add(/* 'R', */ "receiver", "spawn the receiver");
   act.add(/* 'A', */ "archive", "spawn the archive");
   act.add(/* 'X', */ "index", "spawn the index");
-  act.add(/* 'T', */ "tracker", "spawn the tracker");
+  act.add(/* 'D', */ "identifier", "spawn the identifier");
   act.add(/* 'S', */ "search", "spawn the search");
   act.add('E', "exporter", "spawn the exporter").single();
   act.add('I', "importer", "spawn the importer").single();
@@ -108,9 +108,9 @@ void configuration::initialize()
   idx.add("port", "TCP port of the index").init(42004);
   idx.visible(false);
 
-  auto& track = create_block("ID tracker options", "tracker");
-  track.add("host", "hostname/address of the tracker").init("127.0.0.1");
-  track.add("port", "TCP port of the ID tracker").init(42002);
+  auto& track = create_block("indentifier options", "identifier");
+  track.add("host", "hostname/address of the identifier").init("127.0.0.1");
+  track.add("port", "TCP port of the ID identifier").init(42002);
   track.visible(false);
 
   auto& srch = create_block("search options", "search");
@@ -123,7 +123,7 @@ void configuration::initialize()
   add_dependency("perftools-heap", "profiler");
 
   add_conflict("console", "core");
-  add_conflict("console", "tracker");
+  add_conflict("console", "identifier");
   add_conflict("console", "archive");
   add_conflict("console", "index");
   add_conflict("console", "importer");
@@ -147,7 +147,7 @@ void configuration::initialize()
   add_dependency("export.pcap-flush", "exporter");
   add_conflict("importer", "exporter");
   add_conflict("receiver", "exporter");
-  add_conflict("tracker", "exporter");
+  add_conflict("identifier", "exporter");
 }
 
 } // namespace vast

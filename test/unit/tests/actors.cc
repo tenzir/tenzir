@@ -27,7 +27,7 @@ namespace {
 void set_ports(configuration& config, uint64_t instance)
 {
   uint16_t port = 42000 + instance * 5;
-  *config["tracker.port"] = port++;
+  *config["identifier.port"] = port++;
   *config["receiver.port"] = port++;
   *config["archive.port"] = port++;
   *config["index.port"] = port++;

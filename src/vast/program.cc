@@ -7,7 +7,7 @@
 #include "vast/archive.h"
 #include "vast/exporter.h"
 #include "vast/file_system.h"
-#include "vast/id_tracker.h"
+#include "vast/identifier.h"
 #include "vast/index.h"
 #include "vast/importer.h"
 #include "vast/logger.h"
@@ -45,7 +45,7 @@ message_handler program::act()
       [=](uint32_t)
       {
         receiver_ = invalid_actor;
-        tracker_ = invalid_actor;
+        identifier_ = invalid_actor;
         archive_ = invalid_actor;
         index_ = invalid_actor;
         search_ = invalid_actor;
@@ -61,9 +61,9 @@ message_handler program::act()
     {
       return receiver_;
     },
-    on(atom("tracker")) >> [=]
+    on(atom("identifier")) >> [=]
     {
-      return tracker_;
+      return identifier_;
     },
     on(atom("archive")) >> [=]
     {
@@ -131,7 +131,7 @@ void program::run()
   {
     bool core = config_.check("core");
     *config_["receiver"] = core;
-    *config_["tracker"] = core;
+    *config_["identifier"] = core;
     *config_["archive"] = core;
     *config_["index"] = core;
     *config_["search"] = core;
@@ -170,21 +170,22 @@ void program::run()
       send(prof, atom("start"), atom("rusage"));
     }
 
-    auto tracker_host = *config_.get("tracker.host");
-    auto tracker_port = *config_.as<unsigned>("tracker.port");
-    if (config_.check("tracker"))
+    auto identifier_host = *config_.get("identifier.host");
+    auto identifier_port = *config_.as<unsigned>("identifier.port");
+    if (config_.check("identifier"))
     {
-      tracker_ = spawn<id_tracker>(vast_dir);
-      VAST_LOG_ACTOR_INFO(
-          "publishes tracker at " << tracker_host << ':' << tracker_port);
+      identifier_ = spawn<identifier>(vast_dir);
+      caf::io::publish(identifier_, identifier_port, identifier_host.c_str());
 
-      caf::io::publish(tracker_, tracker_port, tracker_host.c_str());
+      VAST_LOG_ACTOR_INFO("publishes identifier at " << identifier_host << ':'
+                          << identifier_port);
     }
     else if (config_.check("receiver"))
     {
-      VAST_LOG_ACTOR_VERBOSE(
-          "connects to tracker at " << tracker_host << ':' << tracker_port);
-      tracker_ = caf::io::remote_actor(tracker_host, tracker_port);
+      VAST_LOG_ACTOR_VERBOSE("connects to identifier at " << identifier_host <<
+                             ':' << identifier_port);
+
+      identifier_ = caf::io::remote_actor(identifier_host, identifier_port);
     }
 
     auto archive_host = *config_.get("archive.host");
@@ -278,14 +279,14 @@ void program::run()
     auto receiver_port = *config_.as<unsigned>("receiver.port");
     if (config_.check("receiver"))
     {
-      receiver_ = spawn<receiver>(tracker_, archive_, index_, search_);
+      receiver_ = spawn<receiver>(identifier_, archive_, index_, search_);
       VAST_LOG_ACTOR_INFO(
           "publishes receiver at " << receiver_host << ':' << receiver_port);
 
       // We always initiate the shutdown via the receiver, regardless of
       // whether we have an importer in our process.
       link_to(receiver_);
-      receiver_->link_to(tracker_);
+      receiver_->link_to(identifier_);
       receiver_->link_to(archive_);
       receiver_->link_to(index_);
       receiver_->link_to(search_);

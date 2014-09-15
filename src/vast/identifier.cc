@@ -1,4 +1,4 @@
-#include "vast/id_tracker.h"
+#include "vast/identifier.h"
 
 #include <cassert>
 #include <fstream>
@@ -9,12 +9,12 @@ using namespace caf;
 
 namespace vast {
 
-id_tracker::id_tracker(path dir)
+identifier::identifier(path dir)
   : dir_{std::move(dir)}
 {
 }
 
-message_handler id_tracker::act()
+message_handler identifier::act()
 {
   trap_exit(true);
 
@@ -73,12 +73,12 @@ message_handler id_tracker::act()
   };
 }
 
-std::string id_tracker::describe() const
+std::string identifier::describe() const
 {
-  return "id-tracker";
+  return "identifier";
 }
 
-bool id_tracker::save()
+bool identifier::save()
 {
   if (id_ == 0)
     return true;

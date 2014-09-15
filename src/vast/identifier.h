@@ -1,5 +1,5 @@
-#ifndef VAST_ID_TRACKER_H
-#define VAST_ID_TRACKER_H
+#ifndef VAST_IDENTIFIERER_H
+#define VAST_IDENTIFIERER_H
 
 #include "vast/actor.h"
 #include "vast/aliases.h"
@@ -8,12 +8,12 @@
 namespace vast {
 
 /// Keeps track of the event ID space.
-class id_tracker : public actor_base
+class identifier : public actor_base
 {
 public:
   /// Constructs the ID tracker.
   /// @param dir The directory where to save the ID to.
-  id_tracker(path dir);
+  identifier(path dir);
 
   caf::message_handler act() final;
   std::string describe() const final;
