@@ -115,6 +115,9 @@ while [ $# -ne 0 ]; do
         --build-dir=*)
             builddir=$optarg
             ;;
+        --build-type=*)
+            append_cache_entry CMAKE_BUILD_TYPE STRING $optarg
+            ;;
         --generator=*)
             CMakeGenerator="$optarg"
             ;;
