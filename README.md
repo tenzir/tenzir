@@ -81,7 +81,7 @@ First define a few environment variables:
 
 Then setup CAF as follows:
 
-    git checkout 8dcc3e72
+    git checkout develop
     ./configure --prefix=$PREFIX --no-examples
     make
     make test
