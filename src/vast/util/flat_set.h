@@ -215,7 +215,7 @@ public:
 
   std::pair<iterator, bool> insert(T x)
   {
-    auto i = std::lower_bound(begin(), end(), x);
+    auto i = std::lower_bound(begin(), end(), x, compare{});
     if (i == end() || compare{}(x, *i))
       return {v_.insert(i, std::move(x)), true};
     else
