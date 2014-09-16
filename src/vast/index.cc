@@ -611,15 +611,19 @@ double index::progress(expression const& expr) const
   auto i = queries_.find(expr);
   assert(i != queries_.end());
   auto j = i->second.predicates.find(expr);
-  for (auto& part : j->second.restrictions)
+  auto& restrictions = j->second.restrictions;
+  assert(! restrictions.empty());
+  for (auto& part : restrictions)
   {
     auto part_pred = 0.0;
     auto ps = visit(predicatizer{}, expr);
+    assert(! ps.empty());
     for (auto& pred : ps)
     {
       auto& status = partitions_.find(part)->second.status.find(pred)->second;
-      if (status.expected)
-        part_pred += double(status.got) / *status.expected;
+      auto& expected = status.expected;
+      if (expected)
+        part_pred += *expected == 0 ? 1 : double(status.got) / *expected;
     }
 
     part_pred /= ps.size();
@@ -629,7 +633,7 @@ double index::progress(expression const& expr) const
   }
 
   preds /= parts > 0 ? parts : 1.0;
-  parts /= j->second.restrictions.size();
+  parts /= restrictions.size();
 
   return parts * preds;
 }
