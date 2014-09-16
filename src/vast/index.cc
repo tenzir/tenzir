@@ -300,10 +300,12 @@ public:
       return {};
 
     for (size_t i = 1; i < con.size(); ++i)
+    {
       if (hits &= visit(*this, con[i]))
         continue;
       else
         return {};  // short-circuit evaluation
+    }
 
     auto& state = index_.queries_[root_].predicates[con];
     state.hits = std::move(hits);
@@ -393,7 +395,7 @@ public:
           else
             return false; // short-circuit evaluation
 
-        return now && prev && now != prev;
+        return now && (! prev || now != prev);
       }
 
     return false;
@@ -411,7 +413,7 @@ public:
         auto& now = preds[dis].hits;
         auto prev = now;
         now |= preds[op].hits;
-        return now && prev && now != prev;
+        return now && (! prev || now != prev);
       }
 
     return false;
@@ -429,7 +431,7 @@ public:
     auto prev = now;
     now.flip();
 
-    return now && prev && now != prev;
+    return now && (! prev || now != prev);
   }
 
   bool operator()(predicate const& pred)
@@ -813,7 +815,7 @@ message_handler index::act()
       queries_[ast].subscribers.insert(sink);
 
       auto& hits = queries_[ast].predicates[ast].hits;
-      if (hits)
+      if (hits && ! hits.all_zero())
         send(sink, hits);
 
       send(sink, atom("progress"), progress(ast), hits ? hits.count() : 0);
@@ -861,8 +863,9 @@ message_handler index::act()
         if (changed)
         {
           assert(query_hits);
-          for (auto& sink : qs.subscribers)
-            send(sink, query_hits);
+          if (! query_hits.all_zero())
+            for (auto& sink : qs.subscribers)
+              send(sink, query_hits);
         }
 
         auto count = query_hits ? query_hits.count() : 0;
