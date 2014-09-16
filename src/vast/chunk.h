@@ -2,6 +2,7 @@
 #define VAST_CHUNK_H
 
 #include <caf/message.hpp>
+#include "vast/aliases.h"
 #include "vast/bitstream.h"
 #include "vast/block.h"
 #include "vast/time.h"
@@ -22,7 +23,7 @@ public:
   {
     time_point first = time_duration{};
     time_point last = time_duration{};
-    ewah_bitstream ids;
+    default_bitstream ids;
     vast::schema schema;
 
   private:
@@ -69,22 +70,19 @@ public:
     reader(chunk const& chk);
 
     /// Extracts an event from the chunk.
-    /// @param off If non-zero, specifies the offset of the event to extract.
-    ///            If zero, the function extracts the next event from the
-    ///            underlying block.
+    /// @param id Specifies the ID of the event to extract.
     /// @returns The extracted event, an empty result if there are no more
     ///          events available, or an error on failure.
-    result<event> read(uint64_t offset = 0);
+    result<event> read(event_id id = invalid_event_id);
 
   private:
-    trial<void> seek(uint64_t offset);
-
     result<event> materialize(bool discard);
 
     chunk const* chunk_;
     std::unique_ptr<block::reader> block_reader_;
-    ewah_bitstream::const_iterator ids_begin_;
-    ewah_bitstream::const_iterator ids_end_;
+    default_bitstream::const_iterator ids_begin_;
+    default_bitstream::const_iterator ids_end_;
+    event_id first_ = invalid_event_id;
   };
 
   /// Constructs a chunk.
@@ -94,7 +92,7 @@ public:
   /// Sets the mask of event IDs.
   /// @param ids The mask representing the IDs for the events in this chunk.
   /// @returns `true` if *ids* is a valid mask.
-  bool ids(ewah_bitstream ids);
+  bool ids(default_bitstream ids);
 
   /// Constructs a chunk and writes events into it.
   /// @param es The events to write into the chunk.

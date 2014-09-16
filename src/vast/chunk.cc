@@ -76,42 +76,44 @@ chunk::reader::reader(chunk const& chk)
     ids_begin_{chunk_->meta().ids.begin()},
     ids_end_{chunk_->meta().ids.end()}
 {
+  if (ids_begin_ != ids_end_)
+    first_ = *ids_begin_;
 }
 
-result<event> chunk::reader::read(uint64_t offset)
+result<event> chunk::reader::read(event_id id)
 {
-  if (offset > 0 && ! seek(offset))
-    return error{"offset ", offset, " out of bounds"};
+  if (id != invalid_event_id)
+  {
+    if (first_ == invalid_event_id)
+      return error{"chunk has no associated ids, cannot read event ", id};
 
-  return materialize(false);
+    if (id < first_)
+      return error{"chunk begins at id ", first_};
+
+    if (ids_begin_ == ids_end_ || id < *ids_begin_)
+    {
+      block_reader_ = std::make_unique<block::reader>(chunk_->block());
+      ids_begin_ = chunk_->meta().ids.begin();
+    }
+
+    while (ids_begin_ != ids_end_ && *ids_begin_ < id)
+    {
+      auto e = materialize(true);
+      if (e.failed())
+        return e.error();
+      ++ids_begin_;
+    }
+
+    if (ids_begin_ == ids_end_ || *ids_begin_ != id)
+      return error{"no event with id ", id};
+  }
+
+  auto e = materialize(false);
+  if (e && ids_begin_ != ids_end_)
+    e->id(*ids_begin_++);
+
+  return e;
 };
-
-trial<void> chunk::reader::seek(uint64_t offset)
-{
-  auto pos = chunk_->block().elements() - block_reader_->available();
-
-  if (offset >= chunk_->block().elements())
-    return error{"offset ", offset, " out of bounds"};
-  else if (offset == pos)
-    return nothing;
-
-  if (offset < pos)
-  {
-    block_reader_ = std::make_unique<block::reader>(chunk_->block());
-    pos = 0;
-  }
-
-  assert(pos < offset);
-  assert(offset - pos <= block_reader_->available());
-  for (auto i = pos; i < offset; ++i)
-  {
-    auto e = materialize(true);
-    if (e.failed())
-      return e.error();
-  }
-
-  return nothing;
-}
 
 result<event> chunk::reader::materialize(bool discard)
 {
@@ -130,22 +132,17 @@ result<event> chunk::reader::materialize(bool discard)
   if (! block_reader_->read(d))
     return error{"failed to read event data from block"};
 
-  if (! discard)
-  {
-    auto t = chunk_->meta().schema.find_type(name);
-    if (! t)
-      return error{"schema inconsistency, missing type: ", name};
+  if (discard)
+    return {};
 
-    event e{std::move(d), *t};
-    e.timestamp(ts);
+  auto t = chunk_->meta().schema.find_type(name);
+  if (! t)
+    return error{"schema inconsistency, missing type: ", name};
 
-    if (ids_begin_ != ids_end_)
-      e.id(*ids_begin_++);
+  event e{std::move(d), *t};
+  e.timestamp(ts);
 
-    return std::move(e);
-  }
-
-  return {};
+  return std::move(e);
 }
 
 chunk::chunk(io::compression method)
@@ -162,7 +159,7 @@ chunk::chunk(std::vector<event> const& es, io::compression method)
       return;
 }
 
-bool chunk::ids(ewah_bitstream ids)
+bool chunk::ids(default_bitstream ids)
 {
   if (ids.count() != events())
     return false;

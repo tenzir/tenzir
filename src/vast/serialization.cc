@@ -1,17 +1,18 @@
 #include "vast/serialization.h"
 
 #include <caf/all.hpp>
+#include "vast/bitmap_index.h"
 #include "vast/bitstream.h"
+#include "vast/chunk.h"
 #include "vast/expression.h"
 #include "vast/event.h"
 #include "vast/error.h"
 #include "vast/file_system.h"
 #include "vast/logger.h"
 #include "vast/value.h"
-#include "vast/segment.h"
 #include "vast/type.h"
+#include "vast/uuid.h"
 #include "vast/serialization/all.h"
-#include "vast/bitmap_index.h"
 #include "vast/detail/caf_type_info.h"
 #include "vast/detail/type_manager.h"
 #include "vast/util/coding.h"
@@ -475,7 +476,6 @@ void announce_builtin_types()
     offset,
     key,
     path,
-    segment,
     uuid,
 
     std::vector<data>, std::vector<value>, std::vector<event>,

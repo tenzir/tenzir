@@ -80,7 +80,7 @@ message_handler receiver::act()
                   return;
                 }
 
-                ewah_bitstream ids;
+                default_bitstream ids;
                 ids.append(from, false);
                 ids.append(n, true);
                 c.ids(std::move(ids));

@@ -29,7 +29,7 @@ message_handler identifier::act()
     }
 
     file >> id_;
-    VAST_LOG_INFO("tracker found existing next event ID " << id_);
+    VAST_LOG_ACTOR_INFO("found existing next event ID " << id_);
   }
 
   return

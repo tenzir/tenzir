@@ -2,12 +2,12 @@
 
 #include "vast/bitstream.h"
 #include "vast/bitmap_index.h"
+#include "vast/chunk.h"
 #include "vast/configuration.h"
 #include "vast/event.h"
 #include "vast/expression.h"
 #include "vast/file_system.h"
 #include "vast/program.h"
-#include "vast/segment.h"
 #include "vast/io/serialization.h"
 
 #include "framework/unit.h"
@@ -158,18 +158,20 @@ TEST("basic actor integrity")
   };
 
   //
-  // Test whether the archive has the correct segment.
+  // Test whether the archive has the correct chunk.
   //
   self->send(core, atom("archive"));
-  self->receive([&](actor archive) { self->send(archive, event_id(100)); });
+  self->receive([&](actor archive) { self->send(archive, event_id(112)); });
   self->receive(
-      on_arg_match >> [&](segment const& s)
+      on_arg_match >> [&](chunk const& chk)
       {
-        CHECK(s.meta().base == 0);
-        CHECK(s.meta().events == 113);
+        // The ssl.log has a total of 113 events and we use batches of 10. So
+        // the last chunk has three events in [110, 112].
+        CHECK(chk.meta().ids.find_first() == 110);
+        CHECK(chk.meta().ids.find_last() == 112);
 
         // Check the last ssl.log entry.
-        segment::reader r{s};
+        chunk::reader r{chk};
         auto e = r.read(112);
         REQUIRE(e);
         CHECK(get<record>(*e)->at(1) == "XBy0ZlNNWuj");
@@ -236,7 +238,7 @@ TEST("basic actor integrity")
     {
       // Verify contents of a few random events.
       if (e.id() == 3)
-        CHECK(get<record>(e)->at(1) == "reRxJaOOlO9");
+        CHECK(get<record>(e)->at(1) == "KKSlmtmkkxf");
 
       if (e.id() == 41)
       {
@@ -321,14 +323,17 @@ TEST("basic actor integrity")
   self->do_receive(
       [&](event const&)
       {
+      std::cout << "got event" << std::endl;
         ++n;
       },
       on(atom("progress"), arg_match) >> [=](double, uint64_t)
       {
+      std::cout << "got progress" << std::endl;
         REQUIRE(true);
       },
       on(atom("done")) >> [&]
       {
+      std::cout << "got done" << std::endl;
         CHECK(n == 15);
       },
       [&](down_msg const& d)
@@ -343,5 +348,7 @@ TEST("basic actor integrity")
   self->send_exit(core, exit::done);
   self->await_all_other_actors_done();
 
+  // Give the OS some time to flush to the filsystem.
+  std::this_thread::sleep_for(std::chrono::milliseconds(300));
   CHECK(rm(*core_config.get("directory")));
 }

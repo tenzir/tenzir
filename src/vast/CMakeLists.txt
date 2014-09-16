@@ -31,7 +31,6 @@ set(libvast_sources
   receiver.cc
   schema.cc
   search.cc
-  segment.cc
   serialization.cc
   signal_monitor.cc
   subnet.cc

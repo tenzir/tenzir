@@ -4,11 +4,12 @@
 #include <unordered_map>
 #include "vast/actor.h"
 #include "vast/aliases.h"
+#include "vast/chunk.h"
 #include "vast/file_system.h"
 #include "vast/uuid.h"
-#include "vast/segment.h"
-#include "vast/util/range_map.h"
+#include "vast/util/flat_set.h"
 #include "vast/util/lru_cache.h"
+#include "vast/util/range_map.h"
 
 namespace vast {
 
@@ -27,15 +28,24 @@ public:
   std::string describe() const final;
 
 private:
-  bool store(caf::message msg);
-  trial<caf::message> load(event_id eid);
-  caf::message on_miss(uuid const& id);
+  struct chunk_compare
+  {
+    bool operator()(chunk const& lhs, chunk const& rhs) const
+    {
+      return lhs.meta().ids.find_first() < rhs.meta().ids.find_first();
+    };
+  };
+
+  using segment = util::flat_set<chunk, chunk_compare>;
+
+  trial<void> store(segment s);
+  trial<chunk> load(event_id eid);
+  segment on_miss(uuid const& id);
 
   path dir_;
   size_t max_segment_size_;
-  util::range_map<event_id, uuid> ranges_;
-  util::lru_cache<uuid, caf::message> cache_;
-  std::unordered_map<uuid, path> segment_files_;
+  util::range_map<event_id, uuid> segments_;
+  util::lru_cache<uuid, segment> cache_;
   segment current_;
   uint64_t current_size_;
 };

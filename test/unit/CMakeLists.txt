@@ -89,7 +89,6 @@ set(tests ${tests}
   tests/range_map.cc
   tests/schema.cc
   tests/search.cc
-  tests/segment.cc
   tests/serialization.cc
   tests/stack_alloc.cc
   tests/string.cc

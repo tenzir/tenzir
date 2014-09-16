@@ -2,7 +2,8 @@
 
 #include <caf/all.hpp>
 #include "vast/file_system.h"
-#include "vast/serialization/all.h"
+#include "vast/serialization/flat_set.h"
+#include "vast/serialization/range_map.h"
 #include "vast/io/serialization.h"
 
 namespace vast {
@@ -19,44 +20,38 @@ archive::archive(path dir, size_t capacity, size_t max_segment_size)
 
 caf::message_handler archive::act()
 {
-  traverse(
-      dir_,
-      [&](path const& p) -> bool
-      {
-        auto id = to<uuid>(p.basename().str());
-        if (! id)
-        {
-          VAST_LOG_ERROR("invalid UUID: " << id.error());
-          return false;
-        }
-
-        segment_files_.emplace(std::move(*id), p);
-
-        segment::meta_data meta;
-        io::unarchive(p, meta);
-        VAST_LOG_DEBUG("found segment " << p.basename() <<
-                       " for ID range [" << meta.base << ", " <<
-                       meta.base + meta.events << ")");
-
-        if (! ranges_.insert(meta.base, meta.base + meta.events, meta.id))
-        {
-          VAST_LOG_ERROR("inconsistency in ID space for [" <<
-                         meta.base << ", " << meta.base + meta.events << ")");
-          return false;
-        }
-
-        return true;
-      });
+  if (exists(dir_ / "meta.data"))
+  {
+    auto t = io::unarchive(dir_ / "meta.data", segments_);
+    if (! t)
+    {
+      VAST_LOG_ACTOR_ERROR("failed to unarchive meta data: " << t.error());
+      quit(exit::error);
+      return {};
+    }
+  }
 
   attach_functor(
     [=](uint32_t)
     {
-      if (current_size_ == 0)
-        return;
+      if (! current_.empty())
+      {
+        VAST_LOG_ACTOR_VERBOSE("writes segment to disk");
+        auto t = store(std::move(current_));
+        if (! t)
+        {
+          VAST_LOG_ACTOR_ERROR("failed to save segment: " << t.error());
+          return;
+        }
+      }
 
-      VAST_LOG_ACTOR_VERBOSE("writes buffered segment to disk");
-      if (! store(make_message(std::move(current_))))
-        VAST_LOG_ACTOR_ERROR("failed to save buffered segment");
+      auto t = io::archive(dir_ / "meta.data", segments_);
+      if (! t)
+      {
+        VAST_LOG_ACTOR_ERROR("failed to archive meta data: " << t.error());
+        return;
+      }
+
     });
 
   return
@@ -66,9 +61,10 @@ caf::message_handler archive::act()
       if (! current_.empty()
           && current_size_ + chk.bytes() >= max_segment_size_)
       {
-        if (! store(make_message(std::move(current_))))
+        auto t = store(std::move(current_));
+        if (! t)
         {
-          VAST_LOG_ACTOR_ERROR("failed to save buffered segment");
+          VAST_LOG_ACTOR_ERROR("failed to save segment: " << t.error());
           quit(exit::error);
           return;
         }
@@ -78,21 +74,25 @@ caf::message_handler archive::act()
       }
 
       current_size_ += chk.bytes();
-      current_.push_back(chk);
+      current_.insert(chk);
     },
     [=](event_id eid)
     {
+      // First check the currently buffered segment.
+      for (size_t i = 0; i < current_.size(); ++i)
+        if (eid < current_[i].meta().ids.size() && current_[i].meta().ids[eid])
+          return make_message(current_[i]);
+
+      // Then inspect the existing segments.
       auto t = load(eid);
       if (t)
       {
-        VAST_LOG_ACTOR_DEBUG("delivers segment for event " << eid);
-        return *t;
+        VAST_LOG_ACTOR_DEBUG("delivers chunk for event " << eid);
+        return make_message(*t);
       }
-      else
-      {
-        VAST_LOG_ACTOR_WARN(t.error());
-        return make_message(atom("no segment"), eid);
-      }
+
+      VAST_LOG_ACTOR_WARN(t.error());
+      return make_message(atom("no chunk"), eid);
     }
   };
 }
@@ -102,55 +102,82 @@ std::string archive::describe() const
   return "archive";
 }
 
-bool archive::store(message msg)
+trial<void> archive::store(segment s)
 {
   if (! exists(dir_) && ! mkdir(dir_))
+    return error{"failed to create directory ", dir_};
+
+  auto id = uuid::random();
+  auto filename = dir_ / to_string(id);
+  VAST_LOG_ACTOR_VERBOSE("writes segment " << id << " to " << filename);
+  auto t = io::archive(filename, s);
+  if (! t)
+    return t;
+
+  event_id first = invalid_event_id;
+  event_id last = invalid_event_id;
+  for (auto& chk : s)
   {
-    VAST_LOG_ERROR("failed to create directory " << dir_);
-    return false;
+    auto chunk_first = chk.meta().ids.find_first();
+    auto chunk_last = chk.meta().ids.find_last();
+    assert(chunk_first != invalid_event_id && chunk_last != invalid_event_id);
+
+    if (first == invalid_event_id)
+    {
+      first = chunk_first;
+      last = chunk_last;
+    }
+    else if (last + 1 == chunk_first)
+    {
+      // Chunk ID ranges are adjacant.
+      last = chunk_last;
+    }
+    else
+    {
+      // Non-contiguous chunk ID ranges.
+      segments_.insert(first, last + 1, id);
+      first = invalid_event_id;
+      last = invalid_event_id;
+    }
   }
 
-  msg.apply(
-      on_arg_match >> [&](segment const& s)
-      {
-        assert(segment_files_.find(s.meta().id) == segment_files_.end());
+  // Last ID range sequence.
+  segments_.insert(first, last + 1, id);
 
-        auto filename = dir_ / path{to_string(s.meta().id)};
+  cache_.insert(id, std::move(s));
 
-        auto t = io::archive(filename, s);
-        if (t)
-          VAST_LOG_VERBOSE("wrote segment " << s.meta().id << " to " <<
-                           filename);
-        else
-          VAST_LOG_ERROR(t.error());
-
-        segment_files_.emplace(s.meta().id, filename);
-        cache_.insert(s.meta().id, msg);
-        ranges_.insert(s.meta().base,
-                       s.meta().base + s.meta().events,
-                       s.meta().id);
-      });
-
-  return true;
+  return nothing;
 }
 
-trial<message> archive::load(event_id eid)
+trial<chunk> archive::load(event_id eid)
 {
-  if (auto id = ranges_.lookup(eid))
-    return cache_.retrieve(*id);
-  else
-    return error{"no segment for id ", eid};
+  if (auto id = segments_.lookup(eid))
+  {
+    auto& s = cache_.retrieve(*id);
+    for (size_t i = 0; i < s.size(); ++i)
+      if (eid < s[i].meta().ids.size() && s[i].meta().ids[eid])
+        return s[i];
+
+    assert(! "segment must contain looked up id");
+  }
+
+  return error{"no segment for id ", eid};
 }
 
-message archive::on_miss(uuid const& id)
+archive::segment archive::on_miss(uuid const& id)
 {
   VAST_LOG_DEBUG("experienced cache miss for " << id);
-  assert(segment_files_.find(id) != segment_files_.end());
 
   segment s;
-  io::unarchive(dir_ / path{to_string(id)}, s);
+  auto filename = dir_ / to_string(id);
+  auto t = io::unarchive(filename, s);
+  if (! t)
+  {
+    VAST_LOG_ERROR("failed to unarchive segment: " << t.error());
+    return {};
+  }
 
-  return make_message(std::move(s));
+  return s;
 }
 
 } // namespace vast

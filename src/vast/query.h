@@ -5,15 +5,15 @@
 #include "vast/actor.h"
 #include "vast/aliases.h"
 #include "vast/bitstream.h"
+#include "vast/chunk.h"
 #include "vast/expression.h"
-#include "vast/segment.h"
 #include "vast/uuid.h"
 #include "vast/util/trial.h"
 
 namespace vast {
 
-/// Receives index hits, looks up the corresponding segments in the archive,
-/// and filters out results which it then sends to a sink.
+/// Receives index hits, looks up the corresponding chunks in the archive, and
+/// filters out results which it then sends to a sink.
 class query : public actor_base
 {
 public:
@@ -29,8 +29,6 @@ public:
 private:
   using bitstream_type = default_bitstream;
 
-  segment const* current() const;
-
   caf::actor archive_;
   caf::actor sink_;
   expression ast_;
@@ -41,9 +39,9 @@ private:
   bitstream hits_ = bitstream{bitstream_type{}};
   bitstream processed_ = bitstream{bitstream_type{}};
   bitstream unprocessed_ = bitstream{bitstream_type{}};
-  std::unique_ptr<segment::reader> reader_;
-  caf::message segment_;
   std::unordered_map<type, expression> checkers_;
+  std::unique_ptr<chunk::reader> reader_;
+  chunk chunk_;
 
   double progress_ = 0.0;
   uint64_t requested_ = 0;

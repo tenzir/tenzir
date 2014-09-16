@@ -15,47 +15,43 @@ query::query(actor archive, actor sink, expression ast)
     sink_{std::move(sink)},
     ast_{std::move(ast)}
 {
-  // Prefetches the next segment. If we don't have a segment yet, we look for
-  // the segment corresponding to the last unprocessed hit. If we have a
-  // segment, we try to get the next segment in the ID space. If no such
-  // segment exists, we try to get a segment located before the current one. If
-  // neither exist, we fail.
+  // Prefetches the next chunk. If we don't have a chunk yet, we look for the
+  // chunk corresponding to the last unprocessed hit. If we have a chunk, we
+  // try to get the next chunk in the ID space. If no such chunk exists, we try
+  // to get a chunk located before the current one. If neither exist, we fail.
   auto prefetch = [=]
   {
     if (inflight_)
       return;
 
-    if (! current())
+    if (chunk_.events() == 0)
     {
       auto last = unprocessed_.find_last();
       if (last != bitstream::npos)
       {
-        VAST_LOG_ACTOR_DEBUG("prefetches segment for ID " << last);
+        VAST_LOG_ACTOR_DEBUG("prefetches chunk for ID " << last);
         send(archive_, last);
         inflight_ = true;
       }
     }
     else
     {
-      VAST_LOG_ACTOR_DEBUG(
-          "looks for next unprocessed ID after " <<
-          current()->meta().base + current()->meta().events - 1);
+      VAST_LOG_ACTOR_DEBUG("looks for next unprocessed ID after " <<
+                           chunk_.meta().ids.find_last());
 
-      auto next = unprocessed_.find_next(current()->meta().base +
-                                         current()->meta().events - 1);
-
+      auto next = unprocessed_.find_next(chunk_.meta().ids.find_last());
       if (next != bitstream::npos)
       {
-        VAST_LOG_ACTOR_DEBUG("prefetches segment for next ID " << next);
+        VAST_LOG_ACTOR_DEBUG("prefetches chunk for next ID " << next);
         send(archive_, next);
         inflight_ = true;
       }
       else
       {
-        auto prev = unprocessed_.find_prev(current()->meta().base);
+        auto prev = unprocessed_.find_prev(chunk_.meta().ids.find_first());
         if (prev != bitstream::npos)
         {
-          VAST_LOG_ACTOR_DEBUG("prefetches segment for previous ID " << prev);
+          VAST_LOG_ACTOR_DEBUG("prefetches chunk for previous ID " << prev);
           send(archive_, prev);
           inflight_ = true;
         }
@@ -66,6 +62,7 @@ query::query(actor archive, actor sink, expression ast)
   auto incorporate_hits = [=](bitstream const& hits)
   {
     assert(hits);
+    assert(! hits.all_zero());
 
     VAST_LOG_ACTOR_DEBUG("got index hit covering [" << hits.find_first()
                          << ',' << hits.find_last() << ']');
@@ -111,17 +108,17 @@ query::query(actor archive, actor sink, expression ast)
   waiting_ = (
     handle_progress,
     incorporate_hits,
-    [=](segment const& s)
+    [=](chunk const& chk)
     {
       inflight_ = false;
-      segment_ = last_dequeued();
+      chunk_ = chk;
 
       VAST_LOG_ACTOR_DEBUG(
-          "got segment " << s.meta().id << " [" << s.meta().base <<
-          ", " << s.meta().base + s.meta().events << ")");
+          "got chunk [" << chk.meta().ids.find_first() <<
+          ", " << chk.meta().ids.find_last() << "]");
 
       assert(! reader_);
-      reader_ = std::make_unique<segment::reader>(*current());
+      reader_ = std::make_unique<chunk::reader>(chunk_);
 
       become(extracting_);
 
@@ -154,9 +151,7 @@ query::query(actor archive, actor sink, expression ast)
 
       // We construct a new mask for each request, because the hits
       // continuously update in every state.
-      bitstream mask = bitstream{bitstream_type{}};
-      mask.append(current()->meta().base, false);
-      mask.append(current()->meta().events, true);
+      bitstream mask = bitstream{chunk_.meta().ids};
       mask &= unprocessed_;
       assert(mask.count() > 0);
 
@@ -210,7 +205,7 @@ query::query(actor archive, actor sink, expression ast)
 
       if (! mask.all_zero())
       {
-        // We continue extractining until we have processed all requested
+        // We continue extracting until we have processed all requested
         // events.
         if (requested_ > 0)
           send_tuple(this, last_dequeued());
@@ -219,7 +214,7 @@ query::query(actor archive, actor sink, expression ast)
       }
 
       reader_.reset();
-      segment_ = {};
+      chunk_ = {};
 
       become(inflight_ ? waiting_ : idle_);
 
@@ -230,7 +225,7 @@ query::query(actor archive, actor sink, expression ast)
       }
       else
       {
-        // No segment in-flight implies no more unprocessed hits, because the
+        // No chunk in-flight implies no more unprocessed hits, because the
         // arrival of new hits automatically triggers prefetching.
         assert(unprocessed_.all_zero());
 
@@ -260,14 +255,6 @@ message_handler query::act()
 std::string query::describe() const
 {
   return "query";
-}
-
-segment const* query::current() const
-{
-  if (segment_.empty())
-    return nullptr;
-
-  return reinterpret_cast<segment const*>(segment_.at(0));
 }
 
 } // namespace vast
