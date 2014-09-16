@@ -13,6 +13,7 @@
 #include "vast/serialization/hash.h"
 #include "vast/serialization/none.h"
 #include "vast/serialization/optional.h"
+#include "vast/serialization/range_map.h"
 #include "vast/serialization/variant.h"
 
 #endif
