@@ -14,7 +14,7 @@ namespace vast {
 struct partition::dispatcher
 {
   dispatcher(partition& pa)
-    : actor_{pa}
+    : part_{pa}
   {
   }
 
@@ -39,18 +39,18 @@ struct partition::dispatcher
 
   std::vector<actor> operator()(event_extractor const&, data const&)
   {
-    return {actor_.load_name_indexer()};
+    return {part_.load_name_indexer()};
   }
 
   std::vector<actor> operator()(time_extractor const&, data const&)
   {
-    return {actor_.load_time_indexer()};
+    return {part_.load_time_indexer()};
   }
 
   std::vector<actor> operator()(type_extractor const& e, data const&)
   {
     std::vector<actor> indexes;
-    for (auto& t : actor_.schema_)
+    for (auto& t : part_.schema_)
       if (auto r = get<type::record>(t))
       {
         auto attempt = r->each(
@@ -58,10 +58,10 @@ struct partition::dispatcher
             {
               if (tr.back()->type == e.type)
               {
-                auto a = actor_.load_data_indexer(t, e.type, o);
+                auto a = part_.load_data_indexer(t, e.type, o);
                 if (! a)
                   return a.error();
-                else if (*a)
+                if (*a)
                   indexes.push_back(std::move(*a));
               }
 
@@ -76,13 +76,12 @@ struct partition::dispatcher
       }
       else
       {
-        auto a = actor_.load_data_indexer(t, t, {});
+        auto a = part_.load_data_indexer(t, t, {});
         if (! a)
         {
           VAST_LOG_ERROR(a.error());
           return {};
         }
-
         if (*a)
           indexes.push_back(std::move(*a));
       }
@@ -93,7 +92,7 @@ struct partition::dispatcher
   std::vector<actor> operator()(schema_extractor const& e, data const& d)
   {
     std::vector<actor> indexes;
-    for (auto& t : actor_.schema_)
+    for (auto& t : part_.schema_)
       if (auto r = get<type::record>(t))
       {
         for (auto& pair : r->find_suffix(e.key))
@@ -109,7 +108,7 @@ struct partition::dispatcher
             return {};
           }
 
-          auto a = actor_.load_data_indexer(t, *lhs_type, o);
+          auto a = part_.load_data_indexer(t, *lhs_type, o);
           if (! a)
             VAST_LOG_ERROR(a.error());
           else if (*a)
@@ -118,7 +117,7 @@ struct partition::dispatcher
       }
       else if (e.key.size() == 1 && pattern::glob(e.key[0]).match(t.name()))
       {
-        auto a = actor_.load_data_indexer(t, t, {});
+        auto a = part_.load_data_indexer(t, t, {});
         if (! a)
         {
           VAST_LOG_ERROR(a.error());
@@ -139,7 +138,7 @@ struct partition::dispatcher
   }
 
   relational_operator op_;
-  partition& actor_;
+  partition& part_;
 };
 
 
@@ -235,9 +234,8 @@ message_handler partition::act()
     {
       VAST_LOG_ACTOR_DEBUG("got predicate " << pred);
 
-      auto indexes = visit(dispatcher{*this}, pred);
-
-      uint64_t n = indexes.size();
+      auto indexers = visit(dispatcher{*this}, pred);
+      uint64_t n = indexers.size();
       send(idx, pred, id_, n);
 
       if (n == 0)
@@ -248,7 +246,7 @@ message_handler partition::act()
       else
       {
         auto t = make_message(pred, id_, idx);
-        for (auto& a : indexes)
+        for (auto& a : indexers)
           send_tuple(a, t);
       }
     },
@@ -467,11 +465,14 @@ actor partition::load_name_indexer()
 trial<actor> partition::load_data_indexer(
     type const& et, type const& t, offset const& o)
 {
-  auto p = dir_ / path{"types"} / et.name();
-  if (exists(p))
-    return create_data_indexer(et, t, o);
-  else
-    return actor{};
+  auto i = indexers_.find(dir_ / path{"types"} / et.name());
+  if (i != indexers_.end())
+  {
+    assert(i->second);
+    return i->second;
+  }
+
+  return create_data_indexer(et, t, o);
 }
 
 trial<actor> partition::create_data_indexer(
