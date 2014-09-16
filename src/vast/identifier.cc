@@ -26,10 +26,10 @@ message_handler identifier::act()
       VAST_LOG_ACTOR_ERROR("failed to open file: " << (dir_ / "id"));
       quit(exit::error);
       return {};
-
-      file >> id_;
-      VAST_LOG_INFO("tracker found existing next event ID " << id_);
     }
+
+    file >> id_;
+    VAST_LOG_INFO("tracker found existing next event ID " << id_);
   }
 
   return
