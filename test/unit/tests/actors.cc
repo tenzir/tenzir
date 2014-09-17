@@ -323,17 +323,14 @@ TEST("basic actor integrity")
   self->do_receive(
       [&](event const&)
       {
-      std::cout << "got event" << std::endl;
         ++n;
       },
       on(atom("progress"), arg_match) >> [=](double, uint64_t)
       {
-      std::cout << "got progress" << std::endl;
         REQUIRE(true);
       },
       on(atom("done")) >> [&]
       {
-      std::cout << "got done" << std::endl;
         CHECK(n == 15);
       },
       [&](down_msg const& d)
