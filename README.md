@@ -41,7 +41,7 @@ Start the interactive console and submit a query:
 
 ## Installation
 
-VAST exists as Docker container:
+VAST exists as [Docker container](https://registry.hub.docker.com/u/mavam/vast/):
 
     docker pull mavam/vast
     docker run --rm -t -i mavam/vast /bin/bash
