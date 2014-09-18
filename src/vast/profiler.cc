@@ -3,9 +3,9 @@
 #include <cassert>
 #include <iomanip>
 #include <sys/resource.h>   // getrusage
-#include <sys/time.h>       // gettimeofday
 #include <caf/all.hpp>
 #include "vast/config.h"
+#include "vast/time.h"
 #include "vast/file_system.h"
 
 #ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
@@ -21,13 +21,10 @@ namespace vast {
 
 profiler::measurement::measurement()
 {
-  struct timeval begin;
-  gettimeofday(&begin, 0);
-  clock = static_cast<double>(begin.tv_sec) +
-    static_cast<double>(begin.tv_usec) / 1000000.0;
+  clock = *to<double>(now());
 
   struct rusage ru;
-  getrusage(RUSAGE_SELF, &ru);
+  ::getrusage(RUSAGE_SELF, &ru);
   struct timeval& u = ru.ru_utime;
   struct timeval& s = ru.ru_stime;
 
@@ -36,6 +33,8 @@ profiler::measurement::measurement()
 
   sys = static_cast<double>(s.tv_sec) +
     static_cast<double>(s.tv_usec) / 1000000.0;
+
+  maxrss = ru.ru_maxrss;
 }
 
 std::ostream& operator<<(std::ostream& out, profiler::measurement const& m)
@@ -44,7 +43,9 @@ std::ostream& operator<<(std::ostream& out, profiler::measurement const& m)
     << std::fixed
     << std::setw(18) << m.clock
     << std::setw(14) << m.usr
-    << std::setw(14) << m.sys;
+    << std::setw(14) << m.sys
+    << std::setw(14) << m.maxrss;
+
   return out;
 }
 
@@ -107,9 +108,11 @@ message_handler profiler::act()
     << std::setw(18) << "clock (c)"
     << std::setw(14) << "user (c)"
     << std::setw(14) << "sys (c)"
+    << std::setw(14) << "maxrss (c)"
     << std::setw(18) << "clock (d)"
     << std::setw(14) << "user (d)"
     << std::setw(14) << "sys (d)"
+    << std::setw(14) << "maxrss (d)"
     << std::endl;
 
   return

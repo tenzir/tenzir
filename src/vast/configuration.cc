@@ -51,11 +51,11 @@ void configuration::initialize()
   log.add("no-colors", "don't use colors for console output");
   log.add("function-names", "log function names");
 
-  auto& advanced = create_block("advanced options");
-  advanced.add('P', "profiler", "spawn the profiler ");
-  advanced.add("profile-interval", "profiling granularity in seconds").init(1);
-  advanced.add("perftools-cpu", "enable gperftools CPU profiling");
-  advanced.add("perftools-heap", "enable gperftools heap profiling");
+  auto& advanced = create_block("profiler options", "profiler");
+  advanced.add("interval", "profiling granularity in seconds").init(1);
+  advanced.add("rusage", "enable rusage profiling");
+  advanced.add("cpu", "enable gperftools CPU profiling");
+  advanced.add("heap", "enable gperftools heap profiling");
   advanced.visible(false);
 
   auto& act = create_block("actor options");
@@ -117,10 +117,6 @@ void configuration::initialize()
   srch.add("host", "hostname/address of the archive").init("127.0.0.1");
   srch.add("port", "TCP port of the search").init(42001);
   srch.visible(false);
-
-  add_dependency("profile-interval", "profiler");
-  add_dependency("perftools-cpu", "profiler");
-  add_dependency("perftools-heap", "profiler");
 
   add_conflict("console", "core");
   add_conflict("console", "identifier");

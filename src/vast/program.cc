@@ -139,13 +139,15 @@ void program::run()
     auto monitor = spawn<signal_monitor, detached+linked>(this);
     send(monitor, atom("act"));
 
-    if (config_.check("profiler"))
+    if (config_.check("profiler.rusage")
+        || config_.check("profiler.cpu")
+        || config_.check("profiler.heap"))
     {
-      auto secs = *config_.as<unsigned>("profile-interval");
+      auto secs = *config_.as<unsigned>("profiler.interval");
       auto prof = spawn<profiler, detached+linked>(
           vast_dir / "log", std::chrono::seconds(secs));
 
-      if (config_.check("perftools-cpu"))
+      if (config_.check("profiler.cpu"))
       {
 #ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
         send(prof, atom("start"), atom("perftools"), atom("cpu"));
@@ -156,7 +158,7 @@ void program::run()
 #endif
       }
 
-      if (config_.check("perftools-heap"))
+      if (config_.check("profiler.heap"))
       {
 #ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
         send(prof, atom("start"), atom("perftools"), atom("heap"));
@@ -167,7 +169,8 @@ void program::run()
 #endif
       }
 
-      send(prof, atom("start"), atom("rusage"));
+      if (config_.check("profiler.rusage"))
+        send(prof, atom("start"), atom("rusage"));
     }
 
     auto identifier_host = *config_.get("identifier.host");

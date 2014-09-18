@@ -18,9 +18,10 @@ public:
     /// Measures the current system usage at construction time.
     measurement();
 
-    double clock; ///< Current wall clock time (`gettimeofday`).
+    double clock; ///< Current wall clock time.
     double usr;   ///< Time spent in the process.
     double sys;   ///< Time spent in the kernel.
+    long maxrss;  ///< Maximum resident set size.
 
     friend std::ostream& operator<<(std::ostream& out, measurement const& s);
   };
