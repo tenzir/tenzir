@@ -32,12 +32,15 @@ std::string configuration::banner() const
 void configuration::initialize()
 {
   auto& general = create_block("general options");
-// TODO: not yet supported.
-//  general.add('c', "config", "configuration file");
   general.add('h', "help", "display this help");
   general.add('d', "directory", "VAST directory").init("vast");
   general.add('z', "advanced", "show advanced options");
   general.add("version", "print the version of VAST");
+
+  auto& caf = create_block("CAF options", "caf");
+  caf.add("threads", "number of worker threads in scheduler").single();
+  caf.add("throughput", "maximum number of messages per worker invocation").single();
+  caf.visible(false);
 
   auto min = 0;
   auto max = VAST_LOG_LEVEL;
@@ -51,12 +54,12 @@ void configuration::initialize()
   log.add("no-colors", "don't use colors for console output");
   log.add("function-names", "log function names");
 
-  auto& advanced = create_block("profiler options", "profiler");
-  advanced.add("interval", "profiling granularity in seconds").init(1);
-  advanced.add("rusage", "enable rusage profiling");
-  advanced.add("cpu", "enable gperftools CPU profiling");
-  advanced.add("heap", "enable gperftools heap profiling");
-  advanced.visible(false);
+  auto& prof = create_block("profiler options", "profiler");
+  prof.add("interval", "profiling granularity in seconds").init(1);
+  prof.add("rusage", "enable rusage profiling");
+  prof.add("cpu", "enable gperftools CPU profiling");
+  prof.add("heap", "enable gperftools heap profiling");
+  prof.visible(false);
 
   auto& act = create_block("actor options");
   act.add('C', "core", "spawn all core actors");

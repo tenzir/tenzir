@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.6 FATAL_ERROR)
-project(VAST CXX)
+project(VAST C CXX)
 
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 include(CTest)
@@ -70,6 +70,11 @@ endif ()
 # Only set our flags if the environment variable CXXFLAGS is not present.
 if (NOT CMAKE_CXX_FLAGS)
   set(CMAKE_CXX_FLAGS ${CXX_FLAGS})
+endif ()
+
+find_package(Threads)
+if (NOT Threads_FOUND)
+  message(FATAL_ERROR "Could not find system threading libraries")
 endif ()
 
 if (BOOST_ROOT)

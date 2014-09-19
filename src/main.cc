@@ -21,6 +21,15 @@ int main(int argc, char *argv[])
     return 0;
   }
 
+  auto threads = std::thread::hardware_concurrency();
+  if (auto t = cfg->as<size_t>("caf.threads"))
+    threads = *t;
+
+  auto throughput = std::numeric_limits<size_t>::max();
+  if (auto t = cfg->as<size_t>("caf.throughput"))
+    throughput = *t;
+
+  caf::set_scheduler<>(threads, throughput);
 
   auto program = caf::spawn<vast::program>(std::move(*cfg));
   caf::anon_send(program, caf::atom("run"));
