@@ -4,12 +4,11 @@
 #include <queue>
 #include "vast/actor.h"
 #include "vast/chunk.h"
-#include "vast/bitmap_indexer.h"
 #include "vast/file_system.h"
 #include "vast/schema.h"
 #include "vast/time.h"
+#include "vast/trial.h"
 #include "vast/uuid.h"
-#include "vast/util/result.h"
 
 namespace vast {
 

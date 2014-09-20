@@ -1,5 +1,5 @@
-#ifndef VAST_BITMAP_INDEXER_H
-#define VAST_BITMAP_INDEXER_H
+#ifndef VAST_INDEXER_H
+#define VAST_INDEXER_H
 
 #include <caf/all.hpp>
 #include "vast/actor.h"
@@ -18,13 +18,13 @@ namespace vast {
 /// @tparam Derived The CRTP client.
 /// @tparam BitmapIndex The bitmap index type.
 template <typename Derived, typename BitmapIndex>
-class bitmap_indexer : public actor_base
+class indexer : public actor_base
 {
 public:
   /// Spawns a bitmap indexer.
   /// @param path The absolute file path on the file system.
   /// @param bmi The bitmap index.
-  bitmap_indexer(path path, BitmapIndex bmi = {})
+  indexer(path path, BitmapIndex bmi = {})
     : path_{std::move(path)},
       bmi_{std::move(bmi)},
       stats_{std::chrono::seconds{1}}
@@ -135,15 +135,15 @@ private:
 
 template <typename Bitstream>
 struct event_name_indexer
-  : bitmap_indexer<
+  : indexer<
       event_name_indexer<Bitstream>,
       string_bitmap_index<Bitstream>
     >
 {
-  using bitmap_indexer<
+  using indexer<
     event_name_indexer<Bitstream>,
     string_bitmap_index<Bitstream>
-  >::bitmap_indexer;
+  >::indexer;
 
   template <typename BitmapIndex>
   trial<void> append(BitmapIndex& bmi, event const& e)
@@ -162,15 +162,15 @@ struct event_name_indexer
 
 template <typename Bitstream>
 struct event_time_indexer
-  : bitmap_indexer<
+  : indexer<
       event_time_indexer<Bitstream>,
       arithmetic_bitmap_index<Bitstream, time_point>
     >
 {
-  using bitmap_indexer<
+  using indexer<
     event_time_indexer<Bitstream>,
     arithmetic_bitmap_index<Bitstream, time_point>
-  >::bitmap_indexer;
+  >::indexer;
 
   template <typename BitmapIndex>
   trial<void> append(BitmapIndex& bmi, event const& e)
@@ -189,9 +189,9 @@ struct event_time_indexer
 
 template <typename BitmapIndex>
 struct event_data_indexer
-  : bitmap_indexer<event_data_indexer<BitmapIndex>, BitmapIndex>
+  : indexer<event_data_indexer<BitmapIndex>, BitmapIndex>
 {
-  using super = bitmap_indexer<event_data_indexer<BitmapIndex>, BitmapIndex>;
+  using super = indexer<event_data_indexer<BitmapIndex>, BitmapIndex>;
 
   event_data_indexer(type t, path p, offset o, BitmapIndex bmi = {})
     : super{std::move(p), std::move(bmi)},

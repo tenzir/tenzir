@@ -1,8 +1,8 @@
 #include "vast/partition.h"
 
 #include <caf/all.hpp>
-#include "vast/bitmap_index.h"
 #include "vast/event.h"
+#include "vast/indexer.h"
 #include "vast/task_tree.h"
 #include "vast/io/serialization.h"
 #include "vast/source/dechunkifier.h"
