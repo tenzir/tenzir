@@ -210,9 +210,7 @@ result<event> bro::extract_impl()
   if (! attempt)
     return attempt.error();
 
-  // TODO: For better performance, bypass the type-check during event
-  // construction.
-  event e{std::move(event_record), type_};
+  event e{{std::move(event_record), type_}};
   e.timestamp(ts);
 
   return std::move(e);

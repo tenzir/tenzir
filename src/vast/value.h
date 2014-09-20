@@ -9,6 +9,16 @@ namespace vast {
 class value
 {
 public:
+  /// Constructs a type-safe value by checking whether the given data matches
+  /// the given type.
+  /// @param d The data for the value.
+  /// @param t The type *d* shall have.
+  /// @returns If `t.check(d)` then a value containing *d* and `nil` otherwise.
+  static value make(vast::data d, vast::type t)
+  {
+    return t.check(d) ? value{std::move(d), std::move(t)} : nil;
+  }
+
   /// Constructs an invalid value.
   /// Same as default-construction, but also enables statements like `v = nil`.
   value(none = nil) {}
@@ -23,23 +33,17 @@ public:
     >
   >
   value(T&& x)
-    : data_{x}
+    : data_{std::forward<T>(x)}
   {
   }
 
   /// Constructs a typed value from data.
   /// @param d The data for the value.
   /// @param t The type of *d*.
-  /// @post If `! t.check(d)` then `*this = nil`.
   value(vast::data d, vast::type t)
     : data_{std::move(d)},
       type_{std::move(t)}
   {
-    if (! type_.check(data_))
-    {
-      data_ = nil;
-      type_ = {};
-    }
   }
 
   /// Constructs a typed value from anything convertible to data.

@@ -16,7 +16,7 @@ TEST("chunk")
   std::vector<event> es;
   for (auto i = 0; i < 1e3; ++i)
   {
-    es.emplace_back(i, t);
+    es.push_back(event::make(i, t));
     REQUIRE(w.write(es.back()));
   }
 
@@ -28,7 +28,7 @@ TEST("chunk")
   {
     auto e = r.read();
     REQUIRE(e);
-    CHECK(*e == event{i, t});
+    CHECK(*e == event::make(i, t));
   }
 
   chunk copy{chk};
@@ -57,7 +57,7 @@ TEST("chunk event extraction")
   std::vector<event> es;
   for (auto i = 0; i < 1024; ++i)
   {
-    es.emplace_back(integer{1000 + i}, t);
+    es.push_back(event::make(integer{1000 + i}, t));
     es.back().id(1000 + i);
     REQUIRE(w.write(es.back()));
   }

@@ -93,8 +93,8 @@ TEST("event evaluation")
   REQUIRE(foo);
   REQUIRE(bar);
 
-  event e0{record{"babba", 1.337, 42u, 100, "bar", -4.8}, *foo};
-  event e1{record{"yadda", record{false, "baz"}}, *bar};
+  auto e0 = event::make(record{"babba", 1.337, 42u, 100, "bar", -4.8}, *foo);
+  auto e1 = event::make(record{"yadda", record{false, "baz"}}, *bar);
 
   //
   // Event meta data queries

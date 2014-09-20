@@ -139,7 +139,7 @@ result<event> chunk::reader::materialize(bool discard)
   if (! t)
     return error{"schema inconsistency, missing type: ", name};
 
-  event e{std::move(d), *t};
+  event e{{std::move(d), *t}};
   e.timestamp(ts);
 
   return std::move(e);

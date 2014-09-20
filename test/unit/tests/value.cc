@@ -56,12 +56,17 @@ TEST("typed value (data)")
 
 TEST("data and type mismatch")
 {
+  // This value has a data and type mismatch. For performance reasons, the
+  // constructor will *not* perform a type check.
   value v{42, type::real{}};
+  CHECK(v.data() == 42);
+  CHECK(v.type() == type::real{});
 
-  // If the type check during construction fails, both data and type get
-  // nullified.
-  CHECK(is<none>(v));
-  CHECK(is<none>(v.type()));
+  // If we do require type safety and cannot guarantee that data and type
+  // match, we can use the type-safe factory function.
+  auto fail = value::make(42, type::real{});
+  CHECK(is<none>(fail));
+  CHECK(is<none>(fail.type()));
 }
 
 TEST("relational operators")

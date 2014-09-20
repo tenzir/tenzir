@@ -285,7 +285,7 @@ result<event> pcap::extract()
   auto str = reinterpret_cast<char const*>(data + 14);
   packet.emplace_back(std::string{str, packet_size});
 
-  event e{std::move(packet), packet_type_};
+  event e{{std::move(packet), packet_type_}};
 
   auto s = time_duration::seconds(packet_header_->ts.tv_sec);
 #ifdef PCAP_TSTAMP_PRECISION_NANO

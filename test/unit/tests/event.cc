@@ -25,7 +25,7 @@ TEST("event")
   CHECK(e.type().name() == "");
   CHECK(e.timestamp() == time_point{});
 
-  e = {r, tr};
+  e = event::make(r, tr);
   REQUIRE(is<record>(e));
   REQUIRE(is<type::record>(e.type()));
 

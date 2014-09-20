@@ -12,21 +12,30 @@ namespace vast {
 class event : public value, util::totally_ordered<event>
 {
 public:
-  /// Constructs an invalid event.
-  event(none = nil) {}
-
-  /// Constructs an event.
+  /// Type-safe factory function to construct an event from data and type.
   /// @tparam A type convertible to a value.
   /// @param x An instance of type `T`.
   /// @param t The type of the value.
-  /// @post If `! t.check(*this)` then `*this = nil`.
+  /// @returns A valid event if *t* can successfully check *x*.
   template <typename T>
-  event(T&& x, vast::type t)
-    : value{std::forward<T>(x), std::move(t)}
+  static event make(T&& x, vast::type t)
   {
-    if (type().name().empty())
-      *this = nil;
+    return value::make(std::forward<T>(x), std::move(t));
   }
+
+  /// Type-safe factory function to construct an event from an unchecked value.
+  /// @param v The value to check and convert into an event.
+  /// @returns A valid event according *v* if `v.type().check(v.data())`.
+  static event make(value v)
+  {
+    return v.type().check(v.data()) ? event{std::move(v)} : nil;
+  }
+
+  /// Constructs an invalid event.
+  event(none = nil);
+
+  /// Constructs an event from a value.
+  event(value v);
 
   /// Sets the event ID.
   /// @param i The new event ID.

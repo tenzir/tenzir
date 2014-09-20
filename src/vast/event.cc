@@ -6,6 +6,15 @@
 
 namespace vast {
 
+event::event(none)
+{
+}
+
+event::event(value v)
+  : value{std::move(v)}
+{
+}
+
 bool event::id(event_id i)
 {
   if (i <= max_event_id)
