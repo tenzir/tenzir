@@ -92,6 +92,13 @@ TEST("time_point")
   str = to<std::string>(u, "%H:%M:%S");
   REQUIRE(str);
   CHECK(*str == "23:55:04");
+
+  auto d = to<data>("@1398933902.686337s");
+  REQUIRE(d);
+  auto tp = get<time_point>(*d);
+  REQUIRE(tp);
+  CHECK(*tp == time_range::fractional(1398933902.686337));
+  CHECK(to_string(*tp) == "2014-05-01+08:45:02");
 }
 
 TEST("patterns")

@@ -6,6 +6,11 @@
 #include "vast/detail/parser/boost.h"
 #include "vast/detail/parser/skipper.h"
 
+#ifdef VAST_CLANG
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunsequenced"
+#endif
+
 namespace vast {
 namespace detail {
 namespace parser {
@@ -57,6 +62,20 @@ struct time_duration
     }
   };
 
+  struct epoch_converter
+  {
+    template <typename>
+    struct result
+    {
+      using type = vast::time_duration;
+    };
+
+    vast::time_duration operator()(double d) const
+    {
+      return vast::time_duration::fractional(d);
+    }
+  };
+
   time_duration()
     : time_duration::base_type(dur)
   {
@@ -64,59 +83,53 @@ struct time_duration
     qi::_1_type _1;
     qi::_2_type _2;
     qi::raw_type raw;
-    qi::long_long_type num;
+    qi::long_long_type count;
+    qi::real_parser<double, qi::strict_real_policies<double>> real;
 
-    unit.add
-      ("n")
-      ("ns")
-      ("nsec")
-      ("nsecs")
-      ("u")
-      ("mu")
-      ("musec")
-      ("musecs")
-      ("i")
-      ("ms")
-      ("msec")
-      ("msecs")
-      ("s")
-      ("sec")
-      ("secs")
-      ("m")
-      ("min")
-      ("mins")
-      ("h")
-      ("hour")
-      ("hours")
-      ("d")
-      ("day")
-      ("days")
-      ("W")
-      ("w")
-      ("week")
-      ("weeks")
-      ("M")
-      ("mo")
-      ("month")
-      ("months")
-      ("Y")
-      ("y")
-      ("year")
-      ("years")
-      ;
+    ns = "n", "ns", "nsec", "nsecs";
+    us = "u", "mu", "musec", "musecs", "i";
+    ms = "ms", "msec", "msecs";
+    sec = "s", "sec", "secs";
+    min = "m", "min", "mins";
+    hour = "h", "hour", "hours";
+    day = "d", "day", "days";
+    week = "W", "w", "week", "weeks";
+    month = "M", "mo", "month", "months";
+    year = "Y", "y", "year", "years";
 
     dur
-        =   +((num >> raw[unit])     [_val += to_nano(_1, _2)])
+        =   +(  (real >> sec)           [_val += to_epoch(_1)]
+             |  (count >> raw[units])   [_val += to_nano(_1, _2)]
+             )
+        ;
+
+    units
+        =   ns
+        |   us
+        |   ms
+        |   sec
+        |   month
+        |   min
+        |   hour
+        |   day
+        |   week
+        |   year
         ;
   }
 
-  qi::symbols<char> unit;
+  qi::symbols<char> ns, us, ms, sec, min, hour, day, week, month, year;
   qi::rule<Iterator, vast::time_duration(), skipper<Iterator>> dur;
+  qi::rule<Iterator, skipper<Iterator>> units;
   boost::phoenix::function<nanoseconds_converter> to_nano;
+  boost::phoenix::function<epoch_converter> to_epoch;
 };
 
 } // namespace parser
 } // namespace detail
 } // namespace vast
+
+#ifdef VAST_CLANG
+#pragma clang diagnostic pop
+#endif
 
 #endif

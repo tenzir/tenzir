@@ -23,9 +23,9 @@ struct time_point : qi::grammar<Iterator, vast::time_point(), skipper<Iterator>>
       typedef vast::time_point type;
     };
 
-    vast::time_point operator()(vast::time_point r) const
+    vast::time_point operator()(vast::time_duration d) const
     {
-      return r;
+      return vast::time_point{} + d;
     }
   };
 
@@ -124,72 +124,6 @@ struct time_point : qi::grammar<Iterator, vast::time_point(), skipper<Iterator>>
     qi::long_long_type long_long;
     qi::repeat_type repeat;
 
-    ns.add
-      ("n")
-      ("ns")
-      ("nsec")
-      ("nsecs")
-      ;
-
-    us.add
-      ("u")
-      ("mu")
-      ("musec")
-      ("musecs")
-      ("i")
-      ;
-
-    ms.add
-      ("ms")
-      ("msec")
-      ("msecs")
-      ;
-
-    sec.add
-      ("s")
-      ("sec")
-      ("secs")
-      ;
-
-    min.add
-      ("m")
-      ("min")
-      ("mins")
-      ;
-
-    hour.add
-      ("h")
-      ("hour")
-      ("hours")
-      ;
-
-    day.add
-      ("d")
-      ("day")
-      ("days")
-      ;
-
-    week.add
-      ("W")
-      ("w")
-      ("week")
-      ("weeks")
-      ;
-
-    month.add
-      ("M")
-      ("mo")
-      ("month")
-      ("months")
-      ;
-
-    year.add
-      ("Y")
-      ("y")
-      ("year")
-      ("years")
-      ;
-
     bool negate = false;
     time
       =   (   lit("now")  [init(0)]
@@ -208,16 +142,16 @@ struct time_point : qi::grammar<Iterator, vast::time_point(), skipper<Iterator>>
       ;
 
     delta
-      =   (long_long >> ns)       [add(0, _1, ref(negate))]
-      |   (long_long >> us)       [add(1, _1, ref(negate))]
-      |   (long_long >> ms)       [add(2, _1, ref(negate))]
-      |   (long_long >> sec)      [add(3, _1, ref(negate))]
-      |   (long_long >> min)      [add(4, _1, ref(negate))]
-      |   (long_long >> hour)     [add(5, _1, ref(negate))]
-      |   (long_long >> day)      [add(6, _1, ref(negate))]
-      |   (long_long >> week)     [add(7, _1, ref(negate))]
-      |   (long_long >> month)    [add(8, _1, ref(negate))]
-      |   (long_long >> year)     [add(9, _1, ref(negate))]
+      =   (long_long >> dur.ns)       [add(0, _1, ref(negate))]
+      |   (long_long >> dur.us)       [add(1, _1, ref(negate))]
+      |   (long_long >> dur.ms)       [add(2, _1, ref(negate))]
+      |   (long_long >> dur.sec)      [add(3, _1, ref(negate))]
+      |   (long_long >> dur.min)      [add(4, _1, ref(negate))]
+      |   (long_long >> dur.hour)     [add(5, _1, ref(negate))]
+      |   (long_long >> dur.day)      [add(6, _1, ref(negate))]
+      |   (long_long >> dur.week)     [add(7, _1, ref(negate))]
+      |   (long_long >> dur.month)    [add(8, _1, ref(negate))]
+      |   (long_long >> dur.year)     [add(9, _1, ref(negate))]
       ;
 
     // TODO: Merge all fmt* rule into a single one, probably needs the
@@ -286,8 +220,6 @@ struct time_point : qi::grammar<Iterator, vast::time_point(), skipper<Iterator>>
       ;
   }
 
-  qi::symbols<char> ns, us, ms, sec, min, hour, day, week, month, year;
-
   qi::rule<Iterator, vast::time_point(), skipper<Iterator>> time, delta;
   qi::rule<Iterator, vast::time_point()> fmt0, fmt1, fmt2, fmt3, fmt4;
   qi::rule<Iterator> digit2, digit4;
@@ -300,12 +232,12 @@ struct time_point : qi::grammar<Iterator, vast::time_point(), skipper<Iterator>>
   vast::time_point point;
 };
 
-#ifdef VAST_CLANG
-#pragma clang diagnostic pop
-#endif
-
 } // namespace parser
 } // namespace detail
 } // namespace vast
+
+#ifdef VAST_CLANG
+#pragma clang diagnostic pop
+#endif
 
 #endif
