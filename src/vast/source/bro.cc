@@ -382,7 +382,7 @@ trial<void> bro::parse_header()
     size_t i = 0;
     for (auto& f : flat.fields())
     {
-      if (is<time_point>(f.type))
+      if (is<type::time_point>(f.type))
       {
         VAST_LOG_ACTOR_VERBOSE("auto-detected field " << i <<
                                " as event timestamp");
