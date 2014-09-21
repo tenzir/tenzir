@@ -185,44 +185,41 @@ expression type_resolver::operator()(negation const& n)
 
 expression type_resolver::operator()(predicate const& p)
 {
-  auto lhs = get<type_extractor>(p.lhs);
-  auto rhs = get<type_extractor>(p.rhs);
-  if (! lhs && ! rhs)
-    return {p};
-
-  assert(lhs != rhs);
-  auto& extractor_type = lhs ? lhs->type : rhs->type;
-
-  auto r = get<type::record>(type_);
-  if (! r)
+  if (auto lhs = get<type_extractor>(p.lhs))
   {
-    if (congruent(type_, extractor_type))
-      return {lhs
-              ? predicate{data_extractor{type_, {}}, p.op, p.rhs}
-              : predicate{p.lhs, p.op, data_extractor{type_, {}}}};
+    auto r = get<type::record>(type_);
+    if (! r)
+    {
+      if (congruent(type_, lhs->type))
+        return {predicate{data_extractor{type_, {}}, p.op, p.rhs}};
+      else
+        return {};
+    }
+
+    disjunction dis;
+    r->each(
+        [&](type::record::trace const& t, offset const& o) -> trial<void>
+        {
+          if (congruent(t.back()->type, lhs->type))
+            dis.emplace_back(predicate{data_extractor{type_, o}, p.op, p.rhs});
+
+          return nothing;
+        });
+
+    if (dis.empty())
+      return {};
+    if (dis.size() == 1)
+      return {std::move(dis[0])};
     else
+      return {std::move(dis)};
+  }
+  else if (auto lhs = get<data_extractor>(p.lhs))
+  {
+    if (lhs->type != type_)
       return {};
   }
 
-  disjunction dis;
-  r->each(
-      [&](type::record::trace const& t, offset const& o) -> trial<void>
-      {
-        if (congruent(t.back()->type, extractor_type))
-          dis.emplace_back(
-              lhs
-              ? predicate{data_extractor{type_, o}, p.op, p.rhs}
-              : predicate{p.lhs, p.op, data_extractor{type_, o}});
-
-        return nothing;
-      });
-
-  if (dis.empty())
-    return {};
-  if (dis.size() == 1)
-    return {std::move(dis[0])};
-  else
-    return {std::move(dis)};
+  return {p};
 }
 
 } // namespace expr

@@ -30,7 +30,11 @@ struct schema_resolver
   schema const& schema_;
 };
 
-// Replaces all type extractor nodes with one or more data extractors.
+// Resolves type and data extractor predicates. Specifically, it handles the
+// following predicates:
+// - Type extractor: replaces the predicate with one or more data extractors.
+// - Data extractor: removes the predicate if the event type does not match the
+//   type given to this visitor.
 struct type_resolver
 {
   type_resolver(type const& event_type);
