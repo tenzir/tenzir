@@ -132,11 +132,12 @@ public:
 
   void reset(T* other = nullptr)
   {
-    if (ptr_)
-      unref(ptr_);
+    auto old = ptr_;
     ptr_ = other;
     if (other)
       ref(other);
+    if (old)
+      unref(old);
   }
 
   T* release()
