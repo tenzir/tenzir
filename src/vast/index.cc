@@ -135,14 +135,7 @@ struct index::builder
   void operator()(predicate const& pred)
   {
     std::vector<uuid> parts;
-    auto e = get<time_extractor>(pred.lhs);
-    if (! e)
-    {
-      parts.reserve(partitions_.size());
-      for (auto& p : partitions_)
-        parts.push_back(p.first);
-    }
-    else
+    if (is<time_extractor>(pred.lhs))
     {
       auto d = get<data>(pred.rhs);
       assert(d && is<time_point>(*d));
@@ -152,13 +145,19 @@ struct index::builder
             || data::evaluate(p.second.last_event, pred.op, *d))
           parts.push_back(p.first);
     }
-
-    std::sort(parts.begin(), parts.end());
-    restrictions_[pred] = std::move(parts);;
+    else
+    {
+      parts.reserve(partitions_.size());
+      for (auto& p : partitions_)
+        parts.push_back(p.first);
+    }
 
     VAST_LOG_DEBUG("restricted " << pred << " to " <<
                    parts.size() << '/' << partitions_.size() <<
                    " partitions");
+
+    std::sort(parts.begin(), parts.end());
+    restrictions_[pred] = std::move(parts);
   }
 
   std::unordered_map<uuid, partition_state> const& partitions_;

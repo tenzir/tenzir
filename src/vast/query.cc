@@ -163,11 +163,15 @@ query::query(actor archive, actor sink, expression ast)
         auto e = reader_->read(id);
         if (e)
         {
-          auto& candidate_checker = checkers_[e->type()];
-          if (is<none>(candidate_checker))
-            candidate_checker = visit(expr::type_resolver{e->type()}, ast_);
+          auto& checker = checkers_[e->type()];
+          if (is<none>(checker))
+          {
+            checker = visit(expr::type_resolver{e->type()}, ast_);
+            VAST_LOG_ACTOR_DEBUG("constructed candidate checker for new event "
+                                 << e->type() << ": " << checker);
+          }
 
-          if (visit(expr::evaluator{*e}, candidate_checker))
+          if (visit(expr::evaluator{*e}, checker))
           {
             send(sink_, std::move(*e));
             if (++n == requested_)
