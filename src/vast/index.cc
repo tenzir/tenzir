@@ -614,7 +614,10 @@ double index::progress(expression const& expr) const
   assert(i != queries_.end());
   auto j = i->second.predicates.find(expr);
   auto& restrictions = j->second.restrictions;
-  assert(! restrictions.empty());
+
+  if (restrictions.empty())
+    return 1.0;
+
   for (auto& part : restrictions)
   {
     auto part_pred = 0.0;
