@@ -357,13 +357,11 @@ trial<void> parse(vector& v, Iterator& begin, Iterator end,
   if (static_cast<size_t>(end - begin) < left.size() + right.size())
     return error{"no boundaries present"};
 
-  for (size_t i = 0; i < left.size(); ++i)
-    if (begin[i] != left[i])
-      return error{"left boundary does not match"};
+  if (! util::starts_with(begin, end, left))
+    return error{"left boundary does not match"};
 
-  for (size_t i = 0; i < right.size(); ++i)
-    if (end[i - right.size()] != right[i])
-      return error{"right boundary does not match"};
+  if (! util::ends_with(begin, end, right))
+    return error{"right boundary does not match"};
 
   auto s = util::split(begin + left.size(), end - right.size(), sep, esc);
   for (auto& p : s)
@@ -393,13 +391,11 @@ trial<void> parse(set& s, Iterator& begin, Iterator end,
   if (static_cast<size_t>(end - begin) < left.size() + right.size())
     return error{"no boundaries present"};
 
-  for (size_t i = 0; i < left.size(); ++i)
-    if (begin[i] != left[i])
-      return error{"left boundary does not match"};
+  if (! util::starts_with(begin, end, left))
+    return error{"left boundary does not match"};
 
-  for (size_t i = 0; i < right.size(); ++i)
-    if (end[i - right.size()] != right[i])
-      return error{"right boundary does not match"};
+  if (! util::ends_with(begin, end, right))
+    return error{"right boundary does not match"};
 
   auto split = util::split(begin + left.size(), end - right.size(), sep, esc);
   for (auto& p : split)
@@ -429,13 +425,11 @@ trial<void> parse(record& r, Iterator& begin, Iterator end,
   if (static_cast<size_t>(end - begin) < left.size() + right.size())
     return error{"no boundaries present"};
 
-  for (size_t i = 0; i < left.size(); ++i)
-    if (begin[i] != left[i])
-      return error{"left boundary does not match"};
+  if (! util::starts_with(begin, end, left))
+    return error{"left boundary does not match"};
 
-  for (size_t i = 0; i < right.size(); ++i)
-    if (end[i - right.size()] != right[i])
-      return error{"right boundary does not match"};
+  if (! util::ends_with(begin, end, right))
+    return error{"right boundary does not match"};
 
   auto s = util::split(begin + left.size(), end - right.size(), sep, esc);
   if (s.size() != rec_type.fields().size())
