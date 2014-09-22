@@ -27,6 +27,51 @@ data const* record::at(offset const& o) const
   return nullptr;
 }
 
+trial<record> record::unflatten(type::record const& t) const
+{
+  auto i = begin();
+  size_t depth = 1;
+  record result;
+  record* r = &result;
+
+  auto attempt = t.each_field(
+      [&](type::record::trace const& t) -> trial<void>
+      {
+        if (i == end())
+          return error{"not enough data"};
+
+        if (t.size() > depth)
+        {
+          for (size_t i = 0; i < t.size() - depth; ++i)
+          {
+            ++depth;
+            r->push_back(record{});
+            r = get<record>(r->back());
+          }
+        }
+        else if (t.size() < depth)
+        {
+          r = &result;
+          depth = t.size();
+          for (size_t i = 0; i < t.size() - 1; ++i)
+            r = get<record>(r->back());
+        }
+
+        auto& ft = t.back()->type;
+        if (is<none>(*i) || ft.check(*i))
+          r->push_back(*i++);
+        else
+          return error{"data/type mismatch: ", *i, '/', ft};
+
+        return nothing;
+      });
+
+  if (! attempt)
+    return attempt.error();
+
+  return std::move(result);
+}
+
 namespace {
 
 struct match_visitor

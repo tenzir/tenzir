@@ -54,6 +54,11 @@ public:
   /// @returns A pointer to the data at *o* or `nullptr` if *o* does not
   ///          resolve.
   vast::data const* at(offset const& o) const;
+
+  /// Unflattens a data sequence according to a given record type.
+  /// @param t The type holding the structure for unflattening.
+  /// @returns The unflattened record on success.
+  trial<record> unflatten(type::record const& t) const;
 };
 
 class data

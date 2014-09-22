@@ -275,14 +275,35 @@ TEST("tables")
 
 TEST("records")
 {
-  record r{"foo", -42, 1001u, 'x', port{443, port::tcp}};
+  record r{"foo", -42, 1001u, "x", port{443, port::tcp}};
   record s{100, "bar", r};
   CHECK(r.size() == 5);
 
   CHECK(*s.at(offset{0}) == 100);
   CHECK(*s.at(offset{1}) == "bar");
   CHECK(*s.at(offset{2}) == r);
-  CHECK(*s.at(offset{2, 3}) == data{'x'});
+  CHECK(*s.at(offset{2, 3}) == data{"x"});
+
+  auto structured =
+    record{"foo", record{-42, record{1001u}}, "x", port{443, port::tcp}};
+
+  auto t = type::record{{
+        {"foo", type::string{}},
+        {"r0", type::record{{
+          {"i", type::integer{}},
+          {"r1", type::record{{
+            {"c", type::count{}}}}}}}},
+        {"bar", type::string{}},
+        {"baz", type::port{}}
+      }};
+
+  auto attempt = r.unflatten(t);
+  if (! attempt)
+    std::cout << attempt.error() << std::endl;
+
+  REQUIRE(attempt);
+  CHECK(*attempt == structured);
+  CHECK(congruent(t, type::derive(structured)));
 }
 
 TEST("data size")
