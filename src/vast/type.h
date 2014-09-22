@@ -93,7 +93,17 @@ public:
         case skip:
           return print("skip", out);
         case default_:
-          return print("default", out);
+          {
+            auto t = print("default=\"", out);
+            if (! t)
+              return t;
+
+            t = print(a.value, out);
+            if (! t)
+              return t;
+
+            return print('"', out);
+          }
       }
     }
   };
@@ -131,7 +141,10 @@ public:
 
     attribute const* find_attribute(attribute::key_type k) const
     {
-      auto i = std::find(attributes_.begin(), attributes_.end(), k);
+      auto i = std::find_if(attributes_.begin(),
+                            attributes_.end(),
+                            [&](attribute const& a) { return a.key == k; });
+
       return i == attributes_.end() ? nullptr : &*i;
     }
 

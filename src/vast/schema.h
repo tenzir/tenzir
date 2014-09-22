@@ -100,10 +100,17 @@ inline std::vector<type::attribute> make_attrs(
   std::vector<type::attribute> r;
   for (auto& a : attrs)
   {
+    auto key = type::attribute::invalid;
     if (a.key == "skip")
-      r.emplace_back(type::attribute::skip);
-    else
-      r.emplace_back(type::attribute::invalid);
+      key = type::attribute::skip;
+    else if (a.key == "default")
+      key = type::attribute::default_;
+
+    std::string value;
+    if (a.value)
+      value = *a.value;
+
+    r.emplace_back(key, std::move(value));
   }
 
   return r;
