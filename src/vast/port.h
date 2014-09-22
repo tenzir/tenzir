@@ -42,6 +42,10 @@ public:
   /// @returns The port type.
   port_type type() const;
 
+  /// Sets the port number.
+  /// @param n The new port number.
+  void number(number_type n);
+
   /// Sets the port type.
   /// @param t The new port type.
   void type(port_type t);

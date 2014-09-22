@@ -23,6 +23,11 @@ port::port_type port::type() const
   return type_;
 }
 
+void port::number(number_type n)
+{
+  number_ = n;
+}
+
 void port::type(port_type t)
 {
   type_ = t;
