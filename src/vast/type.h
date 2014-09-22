@@ -51,7 +51,8 @@ public:
     enum key_type : uint16_t
     {
       invalid,
-      skip
+      skip,
+      default_
     };
 
     attribute(key_type k = invalid, std::string v = {})
@@ -91,6 +92,8 @@ public:
           return print("invalid", out);
         case skip:
           return print("skip", out);
+        case default_:
+          return print("default", out);
       }
     }
   };
@@ -233,7 +236,7 @@ public:
   VAST_DEFINE_BASIC_TYPE(port, "port")
 #undef VAST_DEFINE_BASIC_TYPE
 
-  /// Maps a type to its corresponding value.
+  /// Maps a type to its corresponding data.
   template <typename T>
   using to_data = std::conditional_t<
       std::is_same<T, boolean>::value,
@@ -275,18 +278,22 @@ public:
                               std::is_same<T, port>::value,
                               vast::port,
                               std::conditional_t<
-                                std::is_same<T, vector>::value,
-                                vast::vector,
+                                std::is_same<T, enumeration>::value,
+                                vast::enumeration,
                                 std::conditional_t<
-                                  std::is_same<T, set>::value,
-                                  vast::set,
+                                  std::is_same<T, vector>::value,
+                                  vast::vector,
                                   std::conditional_t<
-                                    std::is_same<T, table>::value,
-                                    vast::table,
+                                    std::is_same<T, set>::value,
+                                    vast::set,
                                     std::conditional_t<
-                                      std::is_same<T, record>::value,
-                                      vast::record,
-                                      std::false_type
+                                      std::is_same<T, table>::value,
+                                      vast::table,
+                                      std::conditional_t<
+                                        std::is_same<T, record>::value,
+                                        vast::record,
+                                        std::false_type
+                                      >
                                     >
                                   >
                                 >
@@ -341,18 +348,22 @@ public:
                           std::is_same<T, vast::port>::value,
                           port,
                           std::conditional_t<
-                            std::is_same<T, vast::vector>::value,
-                            vector,
+                            std::is_same<T, vast::enumeration>::value,
+                            enumeration,
                             std::conditional_t<
-                              std::is_same<T, vast::set>::value,
-                              set,
+                              std::is_same<T, vast::vector>::value,
+                              vector,
                               std::conditional_t<
-                                std::is_same<T, vast::table>::value,
-                                table,
+                                std::is_same<T, vast::set>::value,
+                                set,
                                 std::conditional_t<
-                                  std::is_same<T, vast::record>::value,
-                                  record,
-                                  std::false_type
+                                  std::is_same<T, vast::table>::value,
+                                  table,
+                                  std::conditional_t<
+                                    std::is_same<T, vast::record>::value,
+                                    record,
+                                    std::false_type
+                                  >
                                 >
                               >
                             >
@@ -512,6 +523,10 @@ public:
   /// @param d The data to check.
   /// @returns `true` if data complies to `*this`.
   bool check(data const& d) const;
+
+  /// Default-constructs data for this given type.
+  /// @returns ::data according to this type.
+  data make() const;
 
   //
   // Introspection

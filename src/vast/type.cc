@@ -267,6 +267,25 @@ struct data_checker
   type const& type_;
 };
 
+struct data_maker
+{
+  data operator()(none) const
+  {
+    return nil;
+  }
+
+  template <typename T>
+  data operator()(T const&) const
+  {
+    return type::to_data<T>{};
+  }
+
+  data operator()(type::alias const& a) const
+  {
+    return a.type().make();
+  }
+};
+
 } // namespace <anonymous>
 
 bool type::check(data const& d) const
@@ -274,6 +293,11 @@ bool type::check(data const& d) const
   return which(d) == data::tag::none
       || which(*info_) == type::tag::none
       || visit(data_checker{*this}, d);
+}
+
+data type::make() const
+{
+  return visit(data_maker{}, *this);
 }
 
 bool type::basic() const

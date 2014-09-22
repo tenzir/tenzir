@@ -28,6 +28,9 @@ constexpr event_id max_event_id = invalid_event_id - 1;
 /// Uniquely identifies a VAST type.
 using type_id = uint64_t;
 
+/// The data type for an enumeration.
+using enumeration = uint32_t;
+
 } // namespace vast
 
 #endif

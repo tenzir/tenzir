@@ -23,8 +23,6 @@
 
 namespace vast {
 
-using enumeration = uint32_t;
-
 class data;
 
 class vector : public std::vector<data>
