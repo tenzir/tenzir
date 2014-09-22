@@ -60,6 +60,7 @@ set(libvast_sources
   sink/chunkifier.cc
   sink/json.cc
   source/bro.cc
+  source/test.cc
   util/poll.cc
   util/string.cc
   util/terminal.cc

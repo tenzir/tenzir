@@ -80,6 +80,8 @@ void configuration::initialize()
   imp.add("sniff-schema", "print the log schema and exit");
   imp.add("pcap-cutoff", "forego intra-flow packets after this many bytes").single();
   imp.add("pcap-maxflows", "number of concurrent flows to track").init(1000000);
+  imp.add("test-id", "the base event ID").init(0);
+  imp.add("test-events", "number of events to generate").init(100);
   imp.visible(false);
 
   auto& exp = create_block("export options", "export");

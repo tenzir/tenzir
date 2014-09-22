@@ -20,6 +20,7 @@
 #include "vast/sink/bro.h"
 #include "vast/sink/json.h"
 #include "vast/source/bro.h"
+#include "vast/source/test.h"
 
 #ifdef VAST_HAVE_PCAP
 #include "vast/sink/pcap.h"
@@ -359,6 +360,12 @@ void program::run()
       else if (*format == "bro")
       {
         src = spawn<source::bro, detached>(sch, *r, sniff);
+      }
+      else if (*format == "test")
+      {
+        auto id = *config_.as<event_id>("import.test-id");
+        auto events = *config_.as<uint64_t>("import.test-events");
+        src = spawn<source::test>(sch, id, events);
       }
       else
       {
