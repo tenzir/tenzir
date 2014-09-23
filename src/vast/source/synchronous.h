@@ -37,6 +37,15 @@ public:
         VAST_LOG_ACTOR_DEBUG("sets sink to " << sink);
         sink_ = sink;
       },
+      on(atom("start")) >> [=]
+      {
+        running_ = true;
+        send(this, atom("run"));
+      },
+      on(atom("stop")) >> [=]
+      {
+        running_ = false;
+      },
       on(atom("run")) >> [=]
       {
         if (! sink_)
@@ -67,8 +76,8 @@ public:
 
         if (done)
           quit(exit::done);
-        else
-          send(this, atom("run"));
+        else if (running_)
+          send_tuple(this, last_dequeued());
       }
     };
   }
@@ -83,6 +92,7 @@ private:
     }
   }
 
+  bool running_ = true;
   caf::actor sink_;
   uint64_t batch_size_ = 100000;
   std::vector<event> events_;
