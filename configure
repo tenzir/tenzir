@@ -16,6 +16,7 @@ usage="\
 Usage: $0 [OPTION]... [VAR=VALUE]...
 
   Build options:
+    --build-type=DIR        CMake build type [RelWithDebInfo]
     --build-dir=DIR         place build files in directory [build]
     --log-level=LEVEL       maximum compile-time log level [verbose]
     --generator=GENERATOR   CMake generator to use (see cmake --help)
@@ -94,6 +95,7 @@ levelize()
 # Set defaults
 builddir=build
 CMakeCacheEntries=""
+append_cache_entry CMAKE_BUILD_TYPE       STRING    RelWithDebInfo
 append_cache_entry CMAKE_INSTALL_PREFIX   PATH      /usr/local/vast
 append_cache_entry VAST_LOG_LEVEL         INTEGER   $(levelize debug)
 append_cache_entry ENABLE_DEBUG           BOOL      false
