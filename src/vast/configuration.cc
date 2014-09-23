@@ -47,10 +47,8 @@ void configuration::initialize()
   auto range = '[' + std::to_string(min) + '-' + std::to_string(max) + ']';
 
   auto& log = create_block("logger options", "log");
-  log.add('v', "console-verbosity", "console verbosity " + range)
-     .init(std::min(3, max));
-  log.add('V', "file-verbosity", "log file verbosity " + range)
-     .init(std::min(4, max));
+  log.add('v', "console", "console verbosity " + range).init(std::min(3, max));
+  log.add('V', "file", "log file verbosity " + range).init(std::min(4, max));
   log.add("no-colors", "don't use colors for console output");
   log.add("function-names", "log function names");
 

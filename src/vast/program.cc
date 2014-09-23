@@ -94,39 +94,7 @@ std::string program::describe() const
 
 void program::run()
 {
-  auto vast_dir = path{*config_.get("directory")}.complete();
-
-  auto success = logger::instance()->init(
-      *logger::parse_level(*config_.get("log.console-verbosity")),
-      *logger::parse_level(*config_.get("log.file-verbosity")),
-      ! config_.check("log.no-colors"),
-      config_.check("log.function-names"),
-      vast_dir / "log");
-
-  if (! success)
-  {
-    std::cerr << "failed to initialize logger" << std::endl;
-    quit(exit::error);
-    return;
-  }
-
-  VAST_LOG_VERBOSE(" _   _____   __________");
-  VAST_LOG_VERBOSE("| | / / _ | / __/_  __/");
-  VAST_LOG_VERBOSE("| |/ / __ |_\\ \\  / / ");
-  VAST_LOG_VERBOSE("|___/_/ |_/___/ /_/  " << VAST_VERSION);
-  VAST_LOG_VERBOSE("");
-
-  announce_builtin_types();
-
-  //detail::type_manager::instance()->each(
-  //    [&](global_type_info const& gti)
-  //    {
-  //      VAST_LOG_DEBUG("registered type " << gti.id() << ": " << gti.name());
-  //    });
-
-  caf::io::max_msg_size(512 * 1024 * 1024);
-  VAST_LOG_ACTOR_DEBUG("set CAF maximum message size to " <<
-                       caf::io::max_msg_size() / 1024 << " KB");
+  auto dir = path{*config_.get("directory")}.complete();
 
   try
   {
@@ -146,7 +114,7 @@ void program::run()
     {
       auto secs = *config_.as<unsigned>("profiler.interval");
       auto prof = spawn<profiler, detached+linked>(
-          vast_dir / "log", std::chrono::seconds(secs));
+          dir / "log", std::chrono::seconds(secs));
 
       if (config_.check("profiler.cpu"))
       {
@@ -178,7 +146,7 @@ void program::run()
     auto identifier_port = *config_.as<unsigned>("identifier.port");
     if (config_.check("identifier"))
     {
-      identifier_ = spawn<identifier>(vast_dir);
+      identifier_ = spawn<identifier>(dir);
       caf::io::publish(identifier_, identifier_port, identifier_host.c_str());
 
       VAST_LOG_ACTOR_INFO("publishes identifier at " << identifier_host << ':'
@@ -197,7 +165,7 @@ void program::run()
     if (config_.check("archive"))
     {
       archive_ = spawn<archive>(
-          vast_dir,
+          dir,
           *config_.as<size_t>("archive.max-segments"),
           *config_.as<size_t>("archive.max-segment-size") * 1000000);
 
@@ -224,7 +192,7 @@ void program::run()
       auto max_events = *config_.as<size_t>("index.max-events");
       auto max_parts = *config_.as<size_t>("index.max-parts");
       auto active_parts = *config_.as<size_t>("index.active-parts");
-      index_ = spawn<index>(vast_dir, batch_size, max_events, max_parts,
+      index_ = spawn<index>(dir, batch_size, max_events, max_parts,
                             active_parts);
 
       VAST_LOG_ACTOR_INFO(
@@ -251,7 +219,7 @@ void program::run()
     auto search_port = *config_.as<unsigned>("search.port");
     if (config_.check("search"))
     {
-      search_ = spawn<search_actor>(vast_dir, archive_, index_);
+      search_ = spawn<search_actor>(dir, archive_, index_);
       VAST_LOG_ACTOR_INFO(
           "publishes search at " << search_host << ':' << search_port);
 
@@ -269,7 +237,7 @@ void program::run()
       if (config_.check("console"))
       {
 #ifdef VAST_HAVE_EDITLINE
-        auto c = spawn<console, detached+linked>(search_, vast_dir / "console");
+        auto c = spawn<console, detached+linked>(search_, dir / "console");
         delayed_send(c, std::chrono::milliseconds(200), atom("prompt"));
 #else
         VAST_LOG_ACTOR_ERROR("not compiled with editline support");
@@ -375,7 +343,7 @@ void program::run()
       }
 
       auto batch_size = *config_.as<uint64_t>("import.batch-size");
-      imp0rter = spawn<importer>(vast_dir, receiver_, batch_size);
+      imp0rter = spawn<importer>(dir, receiver_, batch_size);
       send(imp0rter, atom("add"), src);
 
       if (config_.check("receiver"))
