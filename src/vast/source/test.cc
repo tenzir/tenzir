@@ -172,15 +172,13 @@ struct randomizer
 
   void operator()(std::string& str)
   {
-    auto x = static_cast<uint64_t>(sample());
+    lcg64 gen{static_cast<count>(sample())};
+    std::uniform_int_distribution<size_t> unif_size{0, 256};
+    std::uniform_int_distribution<char> unif_char{32, 126}; // Printable ASCII
 
-    // Generate printable characters only.
-    lcg64 gen{x};
-    std::uniform_int_distribution<char> unif{32, 126};
-
-    str.resize(x % 256);
+    str.resize(unif_size(gen));
     for (auto& c : str)
-      c = unif(gen);
+      c = unif_char(gen);
   }
 
   void operator()(address& addr)
