@@ -1225,6 +1225,12 @@ trial<void> type::record::each_key_offset(F f, key& k, offset& o) const
   return nothing;
 }
 
+template <typename Iterator>
+trial<void> print(std::vector<type::attribute> const& attrs, Iterator&& out)
+{
+  return util::print_delimited(" ", attrs.begin(), attrs.end(), out);
+}
+
 } // namespace vast
 
 namespace std {

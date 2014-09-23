@@ -92,23 +92,19 @@ TEST("merging")
 
 TEST("serialization")
 {
-  schema sch;
-
+  schema sch, sch2;
   auto t = type::record{
     {"s1", type::string{}},
     {"d1", type::real{}},
-    {"c", type::count{{type::attribute::skip}}},
+    {"c", type::count{{{type::attribute::skip}, {type::attribute::default_}}}},
     {"i", type::integer{}},
     {"s2", type::string{}},
     {"d2", type::real{}}};
   t.name("foo");
-
   sch.add(t);
 
   std::vector<uint8_t> buf;
   CHECK(io::archive(buf, sch));
-
-  schema sch2;
   CHECK(io::unarchive(buf, sch2));
 
   auto u = sch2.find_type("foo");
