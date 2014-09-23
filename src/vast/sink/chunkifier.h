@@ -16,7 +16,10 @@ public:
   /// Spawns a chunkifier.
   /// @param upstream The upstream actor receiving the generated chunks.
   /// @param max_events_per_chunk The maximum number of events per chunk.
-  chunkifier(caf::actor upstream, size_t max_events_per_chunk);
+  /// @param method The compression method to use for the chunksl
+  chunkifier(caf::actor upstream,
+             size_t max_events_per_chunk,
+             io::compression method);
 
   bool process(event const& e);
   void finalize();
@@ -24,6 +27,7 @@ public:
 
 private:
   caf::actor upstream_;
+  io::compression compression_;
   std::unique_ptr<chunk> chunk_;
   std::unique_ptr<chunk::writer> writer_;
   util::rate_accumulator<uint64_t> stats_;

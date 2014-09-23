@@ -342,8 +342,35 @@ void program::run()
         return;
       }
 
+      io::compression compression;
+      auto method = *config_.get("import.compression");
+      if (method == "null")
+      {
+        compression = io::null;
+      }
+      else if (method == "lz4")
+      {
+        compression = io::lz4;
+      }
+      else if (method == "snappy")
+      {
+#ifdef VAST_HAVE_SNAPPY
+        compression = io::snappy;
+#else
+        VAST_LOG_ACTOR_ERROR("not compiled with snappy support");
+        quit(exit::error);
+        return;
+#endif
+      }
+      else
+      {
+        VAST_LOG_ACTOR_ERROR("unknown compression method");
+        quit(exit::error);
+        return;
+      }
+
       auto batch_size = *config_.as<uint64_t>("import.batch-size");
-      imp0rter = spawn<importer>(dir, receiver_, batch_size);
+      imp0rter = spawn<importer>(dir, receiver_, batch_size, compression);
       send(imp0rter, atom("add"), src);
 
       if (config_.check("receiver"))

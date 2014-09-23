@@ -19,13 +19,16 @@ public:
   /// @param receiver The actor receiving the generated segments.
   /// @param batch_size The number of events a synchronous source buffers until
   ///                   relaying them to the chunkifier
-  importer(path dir, caf::actor receiver, uint64_t batch_size);
+  /// @param method The compression method to use for the chunkifier.
+  importer(path dir, caf::actor receiver, uint64_t batch_size,
+           io::compression method);
 
   caf::message_handler act() final;
   std::string describe() const final;
 
 private:
   path dir_;
+  io::compression compression_;
   caf::actor receiver_;
   caf::actor source_;
   caf::actor chunkifier_;

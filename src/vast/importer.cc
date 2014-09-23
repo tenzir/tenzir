@@ -7,8 +7,10 @@ namespace vast {
 
 using namespace caf;
 
-importer::importer(path dir, actor receiver, uint64_t batch_size)
+importer::importer(path dir, actor receiver, uint64_t batch_size,
+                   io::compression method)
   : dir_{dir / "import"},
+    compression_{method},
     receiver_{receiver},
     batch_size_{batch_size}
 {
@@ -25,7 +27,8 @@ message_handler importer::act()
 {
   trap_exit(true);
 
-  chunkifier_ = spawn<sink::chunkifier, monitored>(this, batch_size_);
+  chunkifier_ =
+    spawn<sink::chunkifier, monitored>(this, batch_size_, compression_);
 
   traverse(
       dir_ / "chunks",
@@ -102,7 +105,6 @@ message_handler importer::act()
     },
     [=](chunk const& chk)
     {
-      VAST_LOG_ACTOR_DEBUG("got chunk from " << last_sender());
       send(receiver_, chk, this);
     }
   };

@@ -9,9 +9,11 @@ namespace sink {
 
 using namespace caf;
 
-chunkifier::chunkifier(actor upstream, size_t max_events_per_chunk)
+chunkifier::chunkifier(actor upstream, size_t max_events_per_chunk,
+                       io::compression method)
   : upstream_{upstream},
-    chunk_{std::make_unique<chunk>()},
+    compression_{method},
+    chunk_{std::make_unique<chunk>(compression_)},
     writer_{std::make_unique<chunk::writer>(*chunk_)},
     stats_{std::chrono::seconds(1)},
     max_events_per_chunk_{max_events_per_chunk}
