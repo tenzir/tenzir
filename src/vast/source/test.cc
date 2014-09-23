@@ -167,7 +167,7 @@ struct randomizer
          || std::is_same<T, time_duration>::value
        >
   {
-    x = time_duration::fractional(sample());
+    x += time_duration::fractional(sample());
   }
 
   void operator()(std::string& str)
@@ -273,8 +273,8 @@ result<event> test::extract()
   }
 
   auto& bp = blueprints_[*next_];
+  randomizer<std::mt19937_64>{bp.dists, generator_}(bp.data);
   auto d = is<type::record>(*next_) ? data{bp.data} : bp.data[0];
-  visit(randomizer<std::mt19937_64>{bp.dists, generator_}, d);
 
   event e{{std::move(d), *next_}};
   e.timestamp(now());
