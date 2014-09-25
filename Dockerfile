@@ -20,7 +20,7 @@ RUN cd $PREFIX/src/ && \
     git clone https://github.com/actor-framework/actor-framework.git
 RUN cd $PREFIX/src/actor-framework && \
     git pull && \
-    git checkout develop && \
+    git checkout 0.11.0 && \
     ./configure --prefix=$PREFIX --no-examples && \
     make -j $PARALLELISM && \
     make test && \
@@ -35,4 +35,3 @@ RUN cd $PREFIX/src/vast && \
 
 RUN ldconfig
 CMD ["/bin/bash"]
-
