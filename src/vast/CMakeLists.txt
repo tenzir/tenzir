@@ -35,6 +35,7 @@ set(libvast_sources
   signal_monitor.cc
   subnet.cc
   time.cc
+  tracker.cc
   type.cc
   uuid.cc
   value.cc
