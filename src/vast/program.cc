@@ -20,6 +20,7 @@
 #include "vast/sink/bro.h"
 #include "vast/sink/json.h"
 #include "vast/source/bro.h"
+#include "vast/source/bgpdump.h"
 #include "vast/source/test.h"
 
 #ifdef VAST_HAVE_PCAP
@@ -328,6 +329,10 @@ void program::run()
       else if (*format == "bro")
       {
         src = spawn<source::bro, detached>(sch, *r, sniff);
+      }
+      else if (*format == "bgpdump")
+      {
+        src = spawn<source::bgpdump, detached>(sch, *r, sniff);
       }
       else if (*format == "test")
       {
