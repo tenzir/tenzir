@@ -3,242 +3,201 @@
 #include <cassert>
 #include "vast/util/string.h"
 
-#include <boost/regex.hpp>
-
 namespace vast {
 namespace source {
-
-namespace {
-
-//trial<type> make_type(std::string const& bro_type)
-//{
-//  type t;
-//  if (bro_type == "enum" || bro_type == "string" || bro_type == "file")
-//    t = type::string{};
-//  else if (bro_type == "bool")
-//    t = type::boolean{};
-//  else if (bro_type == "int")
-//    t = type::integer{};
-//  else if (bro_type == "count")
-//    t = type::count{};
-//  else if (bro_type == "double")
-//    t = type::real{};
-//  else if (bro_type == "time")
-//    t = type::time_point{};
-//  else if (bro_type == "interval")
-//    t = type::time_duration{};
-//  else if (bro_type == "pattern")
-//    t = type::pattern{};
-//  else if (bro_type == "addr")
-//    t = type::address{};
-//  else if (bro_type == "subnet")
-//    t = type::subnet{};
-//  else if (bro_type == "port")
-//    t = type::port{};
-//
-//  if (is<none>(t)
-//      && (util::starts_with(bro_type, "vector")
-//          || util::starts_with(bro_type, "set")
-//          || util::starts_with(bro_type, "table")))
-//  {
-//    // Bro's logging framwork cannot log nested vectors/sets/tables, so we can
-//    // safely assume that we're dealing with a basic type inside the brackets.
-//    // If this will ever change, we'll have to enhance this simple parser.
-//    auto open = bro_type.find("[");
-//    auto close = bro_type.rfind("]");
-//    if (open == std::string::npos || close == std::string::npos)
-//      return error{"missing delimiting container brackets: ", bro_type};
-//
-//    auto elem = make_type(bro_type.substr(open + 1, close - open - 1));
-//    if (! elem)
-//      return elem.error();
-//
-//    // Bro sometimes logs sets as tables, e.g., represents set[string] as
-//    // table[string]. We iron out this inconsistency by normalizing the type to
-//    // a set.
-//    if (util::starts_with(bro_type, "vector"))
-//      t = type::vector{*elem};
-//    else
-//      t = type::set{*elem};
-//  }
-//
-//  if (is<none>(t))
-//    return error{"failed to make type for: ", bro_type};
-//
-//  return t;
-//}
-
-} // namespace <anonymous>
-
-const std::string re_IPv4("(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)");//"\\d+\\.\\d+\\.\\d+\\.\\d+"
-const std::string re_IPv6("([0-9a-fA-F]{0,4}(:[0-9a-fA-F]{0,4})+)");//qr/(((?=.*(::))(?!.*\3.+\3))\3?|([\dA-F]{1,4}(\3|:\b|$)|\2))(?4){5}((?4){2}|(((2[0-4]|1\d|[1-9])?\d|25[0-5])\.?\b){4})\z/ai;#'(\dabcdef)+';
-const std::string re_IP("(("+re_IPv4+")|("+re_IPv6+"))");
-const std::string re_Prefix("("+re_IP+"\\/\\d+)");
-const std::string re_ASN("[1-9][0-9]*");
 
 bgpdump::bgpdump(schema sch, std::string const& filename, bool sniff)
   : file<bgpdump>{filename},
     schema_{std::move(sch)},
     sniff_{sniff}
 {
+  std::vector<type::record::field> announce_fields;
+  announce_fields.emplace_back("timestamp", type::time_point{});
+  announce_fields.emplace_back("source_ip", type::address{});
+  announce_fields.emplace_back("source_as", type::count{});
+  announce_fields.emplace_back("prefix", type::subnet{});
+  announce_fields.emplace_back("as_path", type::vector{type::count{}});
+  //announce_fields.emplace_back("as_path", type::string{});
+  announce_fields.emplace_back("origin_as", type::count{});
+  announce_fields.emplace_back("origin", type::string{});
+  announce_fields.emplace_back("nexthop", type::address{});
+  announce_fields.emplace_back("local_pref", type::count{});
+  announce_fields.emplace_back("med", type::count{});
+  announce_fields.emplace_back("community", type::string{});
+  announce_fields.emplace_back("atomic_aggregate", type::string{});
+  announce_fields.emplace_back("aggregator", type::string{});
+  type::record announce_flat{std::move(announce_fields)};
+  announce_type_ = announce_flat.unflatten();
+  announce_type_.name("announcement");
+  
+  std::vector<type::record::field> withdraw_fields;
+  withdraw_fields.emplace_back("timestamp", type::time_point{});
+  withdraw_fields.emplace_back("source_ip", type::address{});
+  withdraw_fields.emplace_back("source_as", type::count{});
+  withdraw_fields.emplace_back("prefix", type::subnet{});
+  type::record withdraw_flat{std::move(withdraw_fields)};
+  withdraw_type_ = withdraw_flat.unflatten();
+  withdraw_type_.name("withdrawn");
+  
+  std::vector<type::record::field> state_change_fields;
+  state_change_fields.emplace_back("timestamp", type::time_point{});
+  state_change_fields.emplace_back("source_ip", type::address{});
+  state_change_fields.emplace_back("source_as", type::count{});
+  state_change_fields.emplace_back("old_state", type::string{});
+  state_change_fields.emplace_back("new_state", type::string{});
+  type::record state_change_flat{std::move(state_change_fields)};
+  state_change_type_ = state_change_flat.unflatten();
+  state_change_type_.name("state_change");
 }
 
 result<event> bgpdump::extract_impl()
 {
-  //if (is<none>(type_))
-  //{
-  //  auto line = this->next();
-  //  if (! line)
-  //    return error{"could not read first line of header"};
-  //
-  //  if (sniff_)
-  //  {
-  //    schema sch;
-  //    sch.add(type_);
-  //    std::cout << sch << std::flush;
-  //    halt();
-  //    return {};
-  //  }
-  //}
-
   auto line = this->next();
   if (! line)
-    return {};
+    return {}; //error{"could not read line"};
 
-  //auto elems = util::split(*line, separator_);
-  std::vector<std::string> elems = split(*line,separator_[0]);
+  auto elems = util::split(*line, separator_);
   
-  record event_record;
-  record* r = &event_record;
-  auto ts = now();
-  
-  
-  if(elems.size() >= 6){
-      std::string time = elems[1];
-      std::string update = elems[2];// A,W,STATE,...
-      std::string sourceip = elems[3];
-      std::string sourceasn = elems[4];
-      std::string prefix = elems[5];
-      
-      if(((update.compare("A") == 0) or (update.compare("B") == 0)) and elems.size() >= 12){ //Announcement or Routing table entry
-        std::string aspath = elems[6];
-        std::string origin = elems[7];
-        std::string nexthop = elems[8];
-        
-        std::string localPref = elems[9];
-        std::string med = elems[10];
-        std::string community = "";
-        if(elems.size() >= 13){
-          community = elems[11];
-        }
-        std::string atomic_aggregate = elems[11];
-        if(community.compare("") != 0){
-          std::string atomic_aggregate = elems[12];
-        }else{
-        
-        }
-        std::string aggregator = "";
-        if(elems.size() >= 14){
-          aggregator = elems[13];
-        }
-        
-        std::vector<std::string> asns = split(aspath,' ');
-        std::string originas = asns[asns.size()-1];
-        
-        originas = boost::regex_replace(originas, boost::regex("\\{"), std::string(""));
-        originas = boost::regex_replace(originas, boost::regex("\\}"), std::string(""));
-        
-        if(boost::regex_match(prefix, boost::regex(re_Prefix)) and
-          boost::regex_match(originas, boost::regex(re_ASN)) and
-          boost::regex_match(sourceip, boost::regex(re_IP)) and
-          boost::regex_match(sourceasn, boost::regex(re_ASN)) and
-          boost::regex_match(nexthop, boost::regex(re_IP)) 
-          ){
-          
-		  
-          std::vector<type::record::field> fields;
-          fields.emplace_back("time", type::time_point{});
-	  fields.emplace_back("update", type::string{});
-	  fields.emplace_back("sourceip", type::address{});
-	  fields.emplace_back("sourceasn", type::integer{});
-	  fields.emplace_back("prefix", type::string{});
-	  fields.emplace_back("aspath", type::string{});
-	  fields.emplace_back("originas", type::integer{});
-	  fields.emplace_back("origin", type::string{});
-	  fields.emplace_back("nexthop", type::address{});
-	  fields.emplace_back("localPref", type::integer{});
-	  fields.emplace_back("med", type::integer{});
-	  fields.emplace_back("community", type::string{});
-	  fields.emplace_back("atomic_aggregate", type::string{});
-	  fields.emplace_back("aggregator", type::string{});
-          type::record flat{std::move(fields)};
-          type_ = flat.unflatten();
-          type_.name("Announcement");
-		  
-		  
-          r->push_back(time);
-          r->push_back(update);
-          r->push_back(sourceip);
-          r->push_back(sourceasn);
-          r->push_back(prefix);
-          r->push_back(aspath);
-          r->push_back(originas);
-          r->push_back(origin);
-          r->push_back(nexthop);
-          r->push_back(localPref);
-          r->push_back(med);
-          r->push_back(community);
-          r->push_back(atomic_aggregate);
-          r->push_back(aggregator);
-          
-        }else{
-          //format error
-          
-        }
-      }else if(update.compare("W") == 0){ //Withdrawn
-        if(boost::regex_match(prefix, boost::regex(re_Prefix)) and
-          boost::regex_match(sourceip, boost::regex(re_IP)) and
-          boost::regex_match(sourceasn, boost::regex(re_ASN))  ){
-          
-	  std::vector<type::record::field> fields;
-          fields.emplace_back("time", type::time_point{});
-	  fields.emplace_back("update", type::string{});
-	  fields.emplace_back("sourceip", type::address{});
-	  fields.emplace_back("sourceasn", type::integer{});
-	  fields.emplace_back("prefix", type::string{});
-          type::record flat{std::move(fields)};
-          type_ = flat.unflatten();
-          type_.name("Withdrawn");
+  if(elems.size() >= 3){
+    time_point timestamp;
+    auto t = parse(timestamp, elems[1].first, elems[1].second);
+    if (! t)
+      return t.error() + error{std::string{elems[1].first, elems[1].second}};
 
-	  r->push_back(time);
-	  r->push_back(update);
-	  r->push_back(sourceip);
-	  r->push_back(sourceasn);
-	  r->push_back(prefix);
-          
-        }else{
-          //format error
-          
-        }
-      }else if(update.compare("STATE") == 0 and elems.size() >= 7){ //state change
-        //std::string oldState = prefix;
-        //std::string newState = elems[6];
-        
-      }else{
-        //unknown type
-        
+    std::string update;// A,W,STATE,...
+    t = parse(update, elems[2].first, elems[2].second);
+    if (! t)
+      return t.error() + error{std::string{elems[2].first, elems[2].second}};
+
+    if(((update.compare("A") == 0) || (update.compare("B") == 0)) && elems.size() >= 14){ //announcement or routing table entry
+
+      vast::address source_ip;
+      t = parse(source_ip, elems[3].first, elems[3].second);
+      if (! t)
+        return t.error() + error{std::string{elems[3].first, elems[3].second}};
+
+      count source_as;
+      t = parse(source_as, elems[4].first, elems[4].second);
+      if (! t)
+        return t.error() + error{std::string{elems[4].first, elems[4].second}};
+
+      subnet prefix;
+      t = parse(prefix, elems[5].first, elems[5].second);
+      if (! t)
+        return t.error() + error{std::string{elems[5].first, elems[5].second}};
+
+	  //std::string as_path;
+      //t = parse(as_path, elems[6].first, elems[6].second);
+      vast::vector as_path;
+      count origin_as = 0;
+      t = getOriginAS(origin_as, as_path, elems[6].first, elems[6].second);
+      if (! t)
+        return t.error() + error{std::string{elems[6].first, elems[6].second}};
+
+	  std::string origin;
+      t = parse(origin, elems[7].first, elems[7].second);
+      if (! t)
+        return t.error() + error{std::string{elems[7].first, elems[7].second}};
+
+	  vast::address nexthop;
+      t = parse(nexthop, elems[8].first, elems[8].second);
+      if (! t)
+        return t.error() + error{std::string{elems[8].first, elems[8].second}};
+
+      count local_pref;
+      t = parse(local_pref, elems[9].first, elems[9].second);
+      if (! t)
+        return t.error() + error{std::string{elems[9].first, elems[9].second}};
+
+      count med;
+      t = parse(med, elems[10].first, elems[10].second);
+      if (! t)
+        return t.error() + error{std::string{elems[10].first, elems[10].second}};
+
+      std::string community;
+      if(elems[11].first == elems[11].second){
+	    community = "";
+	  }
+      else{
+        t = parse(community, elems[11].first, elems[11].second);
+	    if (! t)
+          return t.error() + error{std::string{elems[11].first, elems[11].second}};
       }
-    }else{
-      //format error
+
+      std::string atomic_aggregate;
+      if(elems[12].first == elems[12].second){
+	    atomic_aggregate = "";
+	  }
+      else{
+        t = parse(atomic_aggregate, elems[12].first, elems[12].second);
+        if (! t)
+          return t.error() + error{std::string{elems[12].first, elems[12].second}};
+      }
+
+      std::string aggregator;
+      if(elems[13].first == elems[13].second){
+	    aggregator = "";
+	  }
+      else{
+        t = parse(aggregator, elems[13].first, elems[13].second);
+        if (! t)
+          return t.error() + error{std::string{elems[13].first, elems[13].second}};
+      }
+
+      record event_record;
+      record* r = &event_record;
+	  r->emplace_back(std::move(timestamp));
+      r->emplace_back(std::move(source_ip));
+      r->emplace_back(std::move(source_as));
+      r->emplace_back(std::move(prefix));
+      r->emplace_back(std::move(as_path));
+      r->emplace_back(std::move(origin_as));
+      r->emplace_back(std::move(origin));
+      r->emplace_back(std::move(nexthop));
+      r->emplace_back(std::move(local_pref));
+      r->emplace_back(std::move(med));
+      r->emplace_back(std::move(community));
+      r->emplace_back(std::move(atomic_aggregate));
+      r->emplace_back(std::move(aggregator));
+      event e{{std::move(event_record), announce_type_}};
+      e.timestamp(timestamp);
+      return std::move(e);
+
+    }else if(update.compare("W") == 0 && elems.size() >= 6){ //withdrawn
+
+      vast::address source_ip;
+      t = parse(source_ip, elems[3].first, elems[3].second);
+      if (! t)
+        return t.error() + error{std::string{elems[3].first, elems[3].second}};
+
+      count source_as;
+      t = parse(source_as, elems[4].first, elems[4].second);
+      if (! t)
+        return t.error() + error{std::string{elems[4].first, elems[4].second}};
+
+      subnet prefix;
+      t = parse(prefix, elems[5].first, elems[5].second);
+      if (! t)
+        return t.error() + error{std::string{elems[5].first, elems[5].second}};
+
+      record event_record;
+      record* r = &event_record;
+	  r->emplace_back(std::move(timestamp));
+      r->emplace_back(std::move(source_ip));
+      r->emplace_back(std::move(source_as));
+      r->emplace_back(std::move(prefix));
+      event e{{std::move(event_record), withdraw_type_}};
+      e.timestamp(timestamp);
+      return std::move(e);
+
+    }else if(update.compare("STATE") == 0 and elems.size() >= 7){ //state change
       
+    }else{
+      return error{"unknown type"};
     }
+  }
   
-  
-
-  event e{{std::move(event_record), type_}};
-  e.timestamp(ts);
-
-  return std::move(e);
+  return {};
 }
 
 std::string bgpdump::describe() const
@@ -246,19 +205,37 @@ std::string bgpdump::describe() const
   return "bgpdump-source";
 }
 
-std::vector<std::string> bgpdump::split(const std::string &s, char delim)
-{
-    std::vector<std::string> elems;
-    std::string item;
+template <typename Iterator>
+trial<void> bgpdump::getOriginAS(count& origin_as, vast::vector &as_path, Iterator& begin, Iterator end){
+  if (begin == end)
+    return error{"empty as_path"};
+  auto s = util::split(begin, end, " ", "");
+  if(s.size() <= 0)
+    return error{"empty as_path"};
+  
+  for (size_t i = 0; i < s.size() - 1; ++i)
+  {
+    count asn;
+    auto t = parse(asn, s[i].first, s[i].second);
+    if (t)
+      as_path.push_back(std::move(asn));
+    else
+      return t.error();
+  }
+  auto last_first = s[s.size() - 1].first;
+  auto last_second = s[s.size() - 1].second;
+  
+  if (util::starts_with(last_first, last_second, "{"))
+    ++last_first;
+  if (util::ends_with(last_first, last_second, "}"))
+    --last_second;
 
-    // use stdlib to tokenize the string
-    std::stringstream ss(s);
-    while (std::getline(ss, item, delim))
-        if(!item.empty())
-            elems.push_back(item);
-
-    return elems;
+  auto t = parse(origin_as, last_first, last_second);
+  if (! t)
+    return t.error();
+  return nothing;
 }
+
 
 
 

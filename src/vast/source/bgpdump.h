@@ -22,7 +22,8 @@ public:
 
   std::string describe() const final;
 
-  std::vector<std::string> split(const std::string &s, char delim);
+  template <typename Iterator>
+  trial<void> getOriginAS(count& origin_as, vast::vector &as_path, Iterator& begin, Iterator end);
 
 private:
 
@@ -32,7 +33,12 @@ private:
   std::string set_separator_;
   std::string empty_field_;
   std::string unset_field_;
-  type type_;
+  
+  type announce_type_;
+  type route_type_;
+  type withdraw_type_;
+  type state_change_type_;
+  
 };
 
 } // namespace source
