@@ -23,7 +23,7 @@ public:
   std::string describe() const final;
 
   template <typename Iterator>
-  trial<void> getOriginAS(count& origin_as, vast::vector &as_path, Iterator& begin, Iterator end);
+  trial<void> parse_origin_as(count& origin_as, vast::vector& as_path, Iterator& begin, Iterator end);
 
 private:
 
