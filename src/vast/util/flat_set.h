@@ -258,6 +258,16 @@ public:
     return v_.erase(first, last);
   }
 
+  size_type erase(T const& x)
+  {
+    auto i = std::find(v_.begin(), v_.end(), x);
+    if (i == v_.end())
+      return 0;
+
+    v_.erase(i);
+    return 1;
+  }
+
   void pop_back()
   {
     v_.pop_back();
