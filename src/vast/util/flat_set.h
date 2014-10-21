@@ -15,8 +15,6 @@ template <
 >
 class flat_set : totally_ordered<flat_set<T, Compare, Allocator>>
 {
-  using vector_type = std::vector<T, Allocator>;
-
   friend bool operator<(flat_set const& x, flat_set const& y)
   {
     return x.v_ < y.v_;
@@ -32,6 +30,7 @@ public:
   // Types
   //
 
+  using vector_type = std::vector<T, Allocator>;
   using value_type = typename vector_type::value_type;
   using allocator_type = typename vector_type::allocator_type;
   using size_type = typename vector_type::size_type;
@@ -134,6 +133,16 @@ public:
   bool contains(value_type const& x) const
   {
     return find(x) != end();
+  }
+
+  vector_type const& as_vector() const
+  {
+    return v_;
+  }
+
+  vector_type& as_vector()
+  {
+    return v_;
   }
 
   //
