@@ -24,6 +24,7 @@ public:
 
   template <typename Iterator>
   trial<void> parse_origin_as(count& origin_as, vast::vector& as_path, Iterator& begin, Iterator end);
+  void import_schema(std::string const& name, type& type_);
 
 private:
 

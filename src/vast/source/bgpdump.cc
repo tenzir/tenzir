@@ -17,7 +17,6 @@ bgpdump::bgpdump(schema sch, std::string const& filename, bool sniff)
   announce_fields.emplace_back("source_as", type::count{});
   announce_fields.emplace_back("prefix", type::subnet{});
   announce_fields.emplace_back("as_path", type::vector{type::count{}});
-  //announce_fields.emplace_back("as_path", type::string{});
   announce_fields.emplace_back("origin_as", type::count{});
   announce_fields.emplace_back("origin", type::string{});
   announce_fields.emplace_back("nexthop", type::address{});
@@ -36,7 +35,6 @@ bgpdump::bgpdump(schema sch, std::string const& filename, bool sniff)
   route_fields.emplace_back("source_as", type::count{});
   route_fields.emplace_back("prefix", type::subnet{});
   route_fields.emplace_back("as_path", type::vector{type::count{}});
-  //route_fields.emplace_back("as_path", type::string{});
   route_fields.emplace_back("origin_as", type::count{});
   route_fields.emplace_back("origin", type::string{});
   route_fields.emplace_back("nexthop", type::address{});
@@ -68,6 +66,11 @@ bgpdump::bgpdump(schema sch, std::string const& filename, bool sniff)
   state_change_type_ = state_change_flat;
   state_change_type_.name("state_change");
   
+  import_schema("announcement",announce_type_);
+  import_schema("routing",route_type_);
+  import_schema("withdrawn",withdraw_type_);
+  import_schema("state_change",state_change_type_);
+  
   if (sniff_)
   {
     schema sch;
@@ -78,13 +81,14 @@ bgpdump::bgpdump(schema sch, std::string const& filename, bool sniff)
     std::cout << sch << std::flush;
     halt();
   }
+
 }
 
 result<event> bgpdump::extract_impl()
 {
   auto line = this->next();
   if (! line)
-    return {}; //error{"could not read line"};
+    return {};
 
   auto elems = util::split(*line, separator_);
   
@@ -93,12 +97,12 @@ result<event> bgpdump::extract_impl()
     time_point timestamp;
     auto t = parse(timestamp, elems[1].first, elems[1].second);
     if (! t)
-      return t.error() + error{std::string{elems[1].first, elems[1].second}};
+      return {};
 
     std::string update;// A,W,STATE,...
     t = parse(update, elems[2].first, elems[2].second);
     if (! t)
-      return t.error() + error{std::string{elems[2].first, elems[2].second}};
+      return {};
 
     if (((update.compare("A") == 0) || (update.compare("B") == 0)) 
 	  && elems.size() >= 14) //announcement or routing table entry
@@ -107,46 +111,43 @@ result<event> bgpdump::extract_impl()
       vast::address source_ip;
       t = parse(source_ip, elems[3].first, elems[3].second);
       if (! t)
-        return t.error() + error{std::string{elems[3].first, elems[3].second}};
+        return {};
 
       count source_as;
       t = parse(source_as, elems[4].first, elems[4].second);
       if (! t)
-        return t.error() + error{std::string{elems[4].first, elems[4].second}};
+        return {};
 
       subnet prefix;
       t = parse(prefix, elems[5].first, elems[5].second);
       if (! t)
-        return t.error() + error{std::string{elems[5].first, elems[5].second}};
+        return {};
 
-	  //std::string as_path;
-      //t = parse(as_path, elems[6].first, elems[6].second);
-      vast::vector as_path;
+	  vast::vector as_path;
       count origin_as = 0;
       t = parse_origin_as(origin_as, as_path, elems[6].first, elems[6].second);
       if (! t)
-        return t.error() + error{std::string{elems[6].first, elems[6].second}};
+        return {};
 
 	  std::string origin;
       t = parse(origin, elems[7].first, elems[7].second);
       if (! t)
-        return t.error() + error{std::string{elems[7].first, elems[7].second}};
+        return {};
 
 	  vast::address nexthop;
       t = parse(nexthop, elems[8].first, elems[8].second);
       if (! t)
-        return t.error() + error{std::string{elems[8].first, elems[8].second}};
+        return {};
 
       count local_pref;
       t = parse(local_pref, elems[9].first, elems[9].second);
       if (! t)
-        return t.error() + error{std::string{elems[9].first, elems[9].second}};
+        return {};
 
       count med;
       t = parse(med, elems[10].first, elems[10].second);
       if (! t)
-        return t.error() + error{std::string{elems[10].first, 
-          elems[10].second}};
+        return {};
 
       std::string community;
       if (elems[11].first == elems[11].second)
@@ -157,8 +158,7 @@ result<event> bgpdump::extract_impl()
 	  {
         t = parse(community, elems[11].first, elems[11].second);
 	    if (! t)
-          return t.error() + error{std::string{elems[11].first, 
-            elems[11].second}};
+          return {};
       }
 
       std::string atomic_aggregate;
@@ -170,8 +170,7 @@ result<event> bgpdump::extract_impl()
 	  {
         t = parse(atomic_aggregate, elems[12].first, elems[12].second);
         if (! t)
-          return t.error() + error{std::string{elems[12].first, 
-            elems[12].second}};
+          return {};
       }
 
       std::string aggregator;
@@ -183,8 +182,7 @@ result<event> bgpdump::extract_impl()
 	  {
         t = parse(aggregator, elems[13].first, elems[13].second);
         if (! t)
-          return t.error() + error{std::string{elems[13].first, 
-            elems[13].second}};
+          return {};
       }
 
       record event_record;
@@ -216,17 +214,17 @@ result<event> bgpdump::extract_impl()
       vast::address source_ip;
       t = parse(source_ip, elems[3].first, elems[3].second);
       if (! t)
-        return t.error() + error{std::string{elems[3].first, elems[3].second}};
+        return {};
 
       count source_as;
       t = parse(source_as, elems[4].first, elems[4].second);
       if (! t)
-        return t.error() + error{std::string{elems[4].first, elems[4].second}};
+        return {};
 
       subnet prefix;
       t = parse(prefix, elems[5].first, elems[5].second);
       if (! t)
-        return t.error() + error{std::string{elems[5].first, elems[5].second}};
+        return {};
 
       record event_record;
 	  event_record.emplace_back(std::move(timestamp));
@@ -242,22 +240,22 @@ result<event> bgpdump::extract_impl()
       vast::address source_ip;
       t = parse(source_ip, elems[3].first, elems[3].second);
       if (! t)
-        return t.error() + error{std::string{elems[3].first, elems[3].second}};
+        return {};
 
       count source_as;
       t = parse(source_as, elems[4].first, elems[4].second);
       if (! t)
-        return t.error() + error{std::string{elems[4].first, elems[4].second}};
+        return {};
 
       std::string old_state;
       t = parse(old_state, elems[5].first, elems[5].second);
       if (! t)
-        return t.error() + error{std::string{elems[5].first, elems[5].second}};
+        return {};
 
       std::string new_state;
       t = parse(new_state, elems[6].first, elems[6].second);
       if (! t)
-        return t.error() + error{std::string{elems[6].first, elems[6].second}};
+        return {};
 
       record event_record;
 	  event_record.emplace_back(std::move(timestamp));
@@ -270,7 +268,7 @@ result<event> bgpdump::extract_impl()
       return std::move(e);
     }else
 	{
-      return error{"unknown type"};
+      return {};
     }
   }
   
@@ -314,6 +312,22 @@ trial<void> bgpdump::parse_origin_as(count& origin_as, vast::vector& as_path,
     return t.error();
   as_path.push_back(std::move(origin_as));
   return nothing;
+}
+
+void bgpdump::import_schema(std::string const& name, type& type_)
+{
+  if (auto t = schema_.find_type(name))
+  {
+    if (congruent(type_, *t))
+    {
+      VAST_LOG_ACTOR_VERBOSE("prefers type in schema over default type");
+      type_ = *t;
+    }
+    else
+    {
+      VAST_LOG_ACTOR_WARN("ignores incongruent schema type: " << t->name());
+    }
+  }
 }
 
 
