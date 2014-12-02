@@ -23,7 +23,7 @@ public:
 
   bool process(event const& e);
   void finalize();
-  std::string describe() const final;
+  std::string name() const;
 
 private:
   caf::actor upstream_;

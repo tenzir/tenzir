@@ -216,7 +216,7 @@ result<event> bro::extract_impl()
   return std::move(e);
 }
 
-std::string bro::describe() const
+std::string bro::name() const
 {
   return "bro-source";
 }

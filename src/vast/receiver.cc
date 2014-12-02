@@ -7,71 +7,61 @@ namespace vast {
 
 using namespace caf;
 
-receiver::receiver(actor tracker, actor archive, actor index, actor search)
-  : tracker_(tracker),
-    archive_(archive),
-    index_(index),
-    search_(search)
+receiver::receiver()
 {
-}
-
-message_handler receiver::act()
-{
+  // We trap exit only to ensure that the sync_send call in the chunk handler
+  // doesn't get shot down from an exit message before having received an
+  // answer.
   trap_exit(true);
 
-  attach_functor(
-      [=](uint32_t)
-      {
-        tracker_ = invalid_actor;
-        archive_ = invalid_actor;
-        index_ = invalid_actor;
-        search_ = invalid_actor;
-      });
+  attach_functor([=](uint32_t)
+                 {
+                   identifier_ = invalid_actor;
+                   archive_ = invalid_actor;
+                   index_ = invalid_actor;
+                  });
+}
 
-  send(this, atom("backlog"));
+void receiver::at_exit(caf::exit_msg const& msg)
+{
+  quit(msg.reason);
+}
 
+message_handler receiver::make_handler()
+{
   return
   {
-    [=](exit_msg const& e)
+    on(atom("link"), atom("identifier"), arg_match) >> [=](actor const& a)
     {
-      // This handler exists only to ensure that the sync_send call below does
-      // not get shot down from an exit message before having received an
-      // answer.
-      quit(e.reason);
+      identifier_ = a;
     },
-    [=](down_msg const&)
+    on(atom("link"), atom("archive"), arg_match) >> [=](actor const& a)
     {
-      for (auto& a : importers_)
-        if (a == last_sender())
-        {
-          importers_.erase(a);
-          break;
-        }
+      send(a, flow_control::announce{this});
+      archive_ = a;
     },
-    [=](chunk const& chk, actor source)
+    on(atom("link"), atom("index"), arg_match) >> [=](actor const& a)
     {
-      if (! importers_.count(source))
-      {
-        // We keep track of the importers to be able to send flow control
-        // messages back to them.
-        monitor(source);
-        importers_.insert(source);
-      }
-
-      send(search_, chk.meta().schema);
+      send(a, flow_control::announce{this});
+      index_ = a;
+    },
+    [=](chunk const& chk)
+    {
+      assert(identifier_);
+      assert(archive_);
+      assert(index_);
 
       message last = last_dequeued();
-
-      sync_send(tracker_, atom("request"), chk.events()).then(
+      sync_send(identifier_, atom("request"), chk.events()).then(
         on(atom("id"), arg_match) >> [=](event_id from, event_id to) mutable
         {
-          VAST_LOG_ACTOR_DEBUG("got " << to - from <<
-                               " IDs for chunk [" << from << ", " << to << ")");
+          auto n = to - from;
+          VAST_LOG_ACTOR_DEBUG("got " << n << " IDs for chunk [" << from <<
+                               ", " << to << ")");
 
           auto msg = last.apply(
               on_arg_match >> [=](chunk& c, actor)
               {
-                auto n = to - from;
                 if (n < c.events())
                 {
                   VAST_LOG_ACTOR_ERROR("got " << n << " IDs, needed " <<
@@ -90,32 +80,12 @@ message_handler receiver::act()
                 send_tuple(index_, t);
               });
         });
-    },
-    on(atom("backlog")) >> [=]
-    {
-      send_tuple(index_, last_dequeued());
-      delayed_send_tuple(this, std::chrono::milliseconds(100), last_dequeued());
-    },
-    on(atom("backlog"), arg_match) >> [=](uint64_t chunks, uint64_t backlog)
-    {
-      // TODO: Make flow-control backlog dynamic.
-      auto backlogged = chunks > 10 || backlog > 10000;
-      if ((backlogged && ! paused_) || (! backlogged && paused_))
-      {
-        paused_ = ! paused_;
-        for (auto& a : importers_)
-          send(a, atom("backlog"), backlogged);
-
-        VAST_LOG_ACTOR_DEBUG(
-            "notifies ingestors to " << (paused_ ? "pause" : "resume") <<
-            " chunk delivery");
-      }
     }
   };
 
 }
 
-std::string receiver::describe() const
+std::string receiver::name() const
 {
   return "receiver";
 }

@@ -18,7 +18,7 @@ namespace vast {
 /// @tparam Derived The CRTP client.
 /// @tparam BitmapIndex The bitmap index type.
 template <typename Derived, typename BitmapIndex>
-class indexer : public actor_base
+class indexer : public actor_mixin<indexer<Derived, BitmapIndex>, sentinel>
 {
 public:
   /// Spawns a bitmap indexer.
@@ -31,7 +31,7 @@ public:
   {
   }
 
-  caf::message_handler act() final
+  caf::message_handler make_handler()
   {
     using namespace caf;
 
@@ -59,7 +59,7 @@ public:
           VAST_LOG_ACTOR_ERROR("failed to flush " << (size - last_flush_) <<
                                " bits to " << path_ << ": " <<
                                attempt.error());
-          quit(exit::error);
+          this->quit(exit::error);
         }
         else
         {
@@ -72,7 +72,7 @@ public:
       }
     };
 
-    attach_functor(
+    this->attach_functor(
         [=](uint32_t reason)
         {
           if (reason != exit::kill)
@@ -88,7 +88,7 @@ public:
       on(atom("flush"), arg_match) >> [=](actor task_tree)
       {
         flush();
-        send(task_tree, atom("done"));
+        this->send(task_tree, atom("done"));
       },
       [=](std::vector<event> const& events)
       {
@@ -117,11 +117,11 @@ public:
         if (! r)
         {
           VAST_LOG_ACTOR_ERROR(r.error());
-          send(sink, pred, part, bitstream{});
+          this->send(sink, pred, part, bitstream{});
           return;
         }
 
-        send(sink, pred, part, bitstream{std::move(*r)});
+        this->send(sink, pred, part, bitstream{std::move(*r)});
       }
     };
   }
@@ -154,7 +154,7 @@ struct event_name_indexer
       return error{"failed to append event name: ", e.type().name()};
   }
 
-  std::string describe() const final
+  std::string name() const
   {
     return "name-bitmap-indexer";
   }
@@ -181,7 +181,7 @@ struct event_time_indexer
       return error{"failed to append event timestamp: ", e.timestamp()};
   }
 
-  std::string describe() const final
+  std::string name() const
   {
     return "time-bitmap-indexer";
   }
@@ -234,7 +234,7 @@ struct event_data_indexer
     }
   }
 
-  std::string describe() const final
+  std::string name() const
   {
     return "data-bitmap-indexer(" + to_string(offset_) + ')';
   }

@@ -240,7 +240,7 @@ bool bro::process(event const& e)
   return s->write(str.begin(), str.end());
 }
 
-std::string bro::describe() const
+std::string bro::name() const
 {
   return "bro-sink";
 }

@@ -7,15 +7,15 @@
 #include "vast/archive.h"
 #include "vast/exporter.h"
 #include "vast/file_system.h"
-#include "vast/identifier.h"
 #include "vast/index.h"
 #include "vast/importer.h"
 #include "vast/logger.h"
 #include "vast/profiler.h"
 #include "vast/receiver.h"
-#include "vast/search.h"
 #include "vast/serialization.h"
 #include "vast/signal_monitor.h"
+#include "vast/search.h"
+#include "vast/tracker.h"
 #include "vast/detail/type_manager.h"
 #include "vast/sink/bro.h"
 #include "vast/sink/json.h"
@@ -40,16 +40,18 @@ program::program(configuration config)
 {
 }
 
-message_handler program::act()
+message_handler program::make_handler()
 {
   attach_functor(
       [=](uint32_t)
       {
         receiver_ = invalid_actor;
-        identifier_ = invalid_actor;
+        tracker_ = invalid_actor;
         archive_ = invalid_actor;
         index_ = invalid_actor;
         search_ = invalid_actor;
+        importer_ = invalid_actor;
+        exporter_ = invalid_actor;
       });
 
   return
@@ -58,36 +60,21 @@ message_handler program::act()
     {
       run();
     },
-    on(atom("receiver")) >> [=]
+    on(atom("tracker")) >> [=]
     {
-      return receiver_;
-    },
-    on(atom("identifier")) >> [=]
-    {
-      return identifier_;
-    },
-    on(atom("archive")) >> [=]
-    {
-      return archive_;
-    },
-    on(atom("index")) >> [=]
-    {
-      return index_;
-    },
-    on(atom("search")) >> [=]
-    {
-      return search_;
+      return tracker_;
     },
     on(atom("signal"), arg_match) >> [=](int signal)
     {
       VAST_LOG_ACTOR_VERBOSE("received signal " << signal);
       if (signal == SIGINT || signal == SIGTERM)
         quit(exit::stop);
-    }
+    },
+    on(atom("success")) >> [] { /* nothing to do */ }
   };
 }
 
-std::string program::describe() const
+std::string program::name() const
 {
   return "program";
 }
@@ -98,12 +85,14 @@ void program::run()
 
   try
   {
-    bool core = config_.check("core");
-    *config_["receiver"] = core;
-    *config_["identifier"] = core;
-    *config_["archive"] = core;
-    *config_["index"] = core;
-    *config_["search"] = core;
+    if (config_.check("core"))
+    {
+      *config_["receiver"] = true;
+      *config_["tracker"] = true;
+      *config_["archive"] = true;
+      *config_["index"] = true;
+      *config_["search"] = true;
+    }
 
     auto monitor = spawn<signal_monitor, detached+linked>(this);
     send(monitor, atom("act"));
@@ -142,138 +131,89 @@ void program::run()
         send(prof, atom("start"), atom("rusage"));
     }
 
-    auto identifier_host = *config_.get("identifier.host");
-    auto identifier_port = *config_.as<unsigned>("identifier.port");
-    if (config_.check("identifier"))
+    auto host = *config_.get("tracker.host");
+    auto port = *config_.as<unsigned>("tracker.port");
+    if (config_.check("tracker"))
     {
-      identifier_ = spawn<identifier>(dir);
-      caf::io::publish(identifier_, identifier_port, identifier_host.c_str());
+      VAST_LOG_ACTOR_INFO("publishes tracker at " <<
+                          host << ':' << port);
 
-      VAST_LOG_ACTOR_INFO("publishes identifier at " << identifier_host << ':'
-                          << identifier_port);
+      tracker_ = spawn<tracker, linked>(dir);
+      caf::io::publish(tracker_, port, host.c_str());
     }
-    else if (config_.check("receiver"))
+    else
     {
-      VAST_LOG_ACTOR_VERBOSE("connects to identifier at " << identifier_host <<
-                             ':' << identifier_port);
+      VAST_LOG_ACTOR_INFO("connects to tracker at " <<
+                          host << ':' << port);
 
-      identifier_ = caf::io::remote_actor(identifier_host, identifier_port);
+      tracker_ = caf::io::remote_actor(host, port);
     }
 
-    auto archive_host = *config_.get("archive.host");
-    auto archive_port = *config_.as<unsigned>("archive.port");
+    auto archive_name = *config_.get("archive.name");
     if (config_.check("archive"))
     {
-      archive_ = spawn<archive>(
+      archive_ = spawn<archive, linked>(
           dir,
           *config_.as<size_t>("archive.max-segments"),
           *config_.as<size_t>("archive.max-segment-size") * 1000000);
 
-      VAST_LOG_ACTOR_INFO(
-          "publishes archive at " << archive_host << ':' << archive_port);
-
-      caf::io::publish(archive_, archive_port, archive_host.c_str());
-    }
-    else if (config_.check("receiver")
-             || config_.check("search")
-             || config_.check("index.rebuild"))
-    {
-      VAST_LOG_ACTOR_VERBOSE(
-          "connects to archive at " << archive_host << ':' << archive_port);
-
-      archive_ = caf::io::remote_actor(archive_host, archive_port);
+      send(tracker_, atom("put"), "archive", archive_, archive_name);
     }
 
-    auto index_host = *config_.get("index.host");
-    auto index_port = *config_.as<unsigned>("index.port");
+    auto index_name = *config_.get("index.name");
     if (config_.check("index"))
     {
       auto batch_size = *config_.as<size_t>("index.batch-size");
       auto max_events = *config_.as<size_t>("index.max-events");
       auto max_parts = *config_.as<size_t>("index.max-parts");
       auto active_parts = *config_.as<size_t>("index.active-parts");
-      index_ = spawn<index>(dir, batch_size, max_events, max_parts,
-                            active_parts);
+      index_ = spawn<index, linked>(dir, batch_size, max_events, max_parts,
+                                    active_parts);
 
-      VAST_LOG_ACTOR_INFO(
-          "publishes index at " << index_host << ':' << index_port);
-
-      caf::io::publish(index_, index_port, index_host.c_str());
-    }
-    else if (config_.check("receiver")
-             || config_.check("search")
-             || config_.check("index.rebuild"))
-    {
-      VAST_LOG_ACTOR_VERBOSE("connects to index at " <<
-                           index_host << ":" << index_port);
-
-      index_ = caf::io::remote_actor(index_host, index_port);
+      send(tracker_, atom("put"), "index", index_, index_name);
     }
 
-    if (config_.check("index.rebuild"))
+    auto receiver_name = *config_.get("receiver.name");
+    if (config_.check("receiver"))
     {
-      // TODO
-    }
+      receiver_ = spawn<receiver, linked>();
+      send(tracker_, atom("put"), "receiver", receiver_, receiver_name);
 
-    auto search_host = *config_.get("search.host");
-    auto search_port = *config_.as<unsigned>("search.port");
-    if (config_.check("search"))
-    {
-      search_ = spawn<search_actor>(dir, archive_, index_);
-      VAST_LOG_ACTOR_INFO(
-          "publishes search at " << search_host << ':' << search_port);
+      scoped_actor self;
+      self->sync_send(tracker_, atom("identifier")).await(
+          [=](actor const& identifier)
+          {
+            send(receiver_, atom("link"), atom("identifier"), identifier);
+          });
 
-      caf::io::publish(search_, search_port, search_host.c_str());
-    }
-    else if (config_.check("receiver")
-             || config_.check("console")
-             || config_.check("exporter"))
-    {
-      VAST_LOG_ACTOR_VERBOSE(
-          "connects to search at " << search_host << ":" << search_port);
-
-      search_ = caf::io::remote_actor(search_host, search_port);
-
-      if (config_.check("console"))
+      if (config_.check("archive"))
       {
-#ifdef VAST_HAVE_EDITLINE
-        auto c = spawn<console, detached+linked>(search_, dir / "console");
-        delayed_send(c, std::chrono::milliseconds(200), atom("prompt"));
-#else
-        VAST_LOG_ACTOR_ERROR("not compiled with editline support");
-        quit(exit::error);
-        return;
-#endif
+        unlink_from(archive_);
+        receiver_->link_to(archive_);
+        send(tracker_, atom("link"), receiver_name, archive_name);
+      }
+
+      if (config_.check("index"))
+      {
+        unlink_from(index_);
+        receiver_->link_to(index_);
+        send(tracker_, atom("link"), receiver_name, index_name);
       }
     }
 
-    auto receiver_host = *config_.get("receiver.host");
-    auto receiver_port = *config_.as<unsigned>("receiver.port");
-    if (config_.check("receiver"))
+    auto search_name = *config_.get("search.name");
+    if (config_.check("search"))
     {
-      receiver_ = spawn<receiver>(identifier_, archive_, index_, search_);
-      VAST_LOG_ACTOR_INFO(
-          "publishes receiver at " << receiver_host << ':' << receiver_port);
+      search_ = spawn<search, linked>();
+      send(tracker_, atom("put"), "search", search_, search_name);
 
-      // We always initiate the shutdown via the receiver, regardless of
-      // whether we have an importer in our process.
-      link_to(receiver_);
-      receiver_->link_to(identifier_);
-      receiver_->link_to(archive_);
-      receiver_->link_to(index_);
-      receiver_->link_to(search_);
+      if (config_.check("archive"))
+        send(tracker_, atom("link"), search_name, archive_name);
 
-      caf::io::publish(receiver_, receiver_port, receiver_host.c_str());
-    }
-    else if (config_.check("importer"))
-    {
-      VAST_LOG_ACTOR_VERBOSE(
-          "connects to receiver at " << receiver_host << ":" << receiver_port);
-
-      receiver_ = caf::io::remote_actor(receiver_host, receiver_port);
+      if (config_.check("index"))
+        send(tracker_, atom("link"), search_name, index_name);
     }
 
-    actor imp0rter;
     if (auto format = config_.get("importer"))
     {
       auto s = config_.get("import.schema");
@@ -370,82 +310,117 @@ void program::run()
       }
 
       auto batch_size = *config_.as<uint64_t>("import.batch-size");
-      imp0rter = spawn<importer>(dir, receiver_, batch_size, compression);
-      send(imp0rter, atom("add"), src);
+      importer_ = spawn<importer, linked>(dir, batch_size, compression);
+      send(importer_, atom("source"), src);
+
+      auto importer_name = *config_.get("importer.name");
+      send(tracker_, atom("put"), "importer", importer_, importer_name);
 
       if (config_.check("receiver"))
-        // We're running in "one-shot" mode where both IMPORTER and RECEIVER
-        // share the same program. In this case we initiate the teardown
-        // via IMPORTER as this ensures proper delivery of inflight segments
-        // from IMPORTER to RECEIVER.
-        imp0rter->link_to(receiver_);
-      else
-        // If we're running in ingestion mode without RECEIVER, we're
-        // independent and terminate as soon as IMPORTER has finished.
-        link_to(imp0rter);
+      {
+        // In case we're running in "one-shot" mode where both IMPORTER and
+        // RECEIVER share the same program, we initiate the shutdown
+        // via IMPORTER to ensure proper delivery of inflight segments from
+        // IMPORTER to RECEIVER.
+        unlink_from(receiver_);
+        importer_->link_to(receiver_);
+        send(tracker_, atom("link"), importer_name, receiver_name);
+      }
     }
     else if (auto format = config_.get("exporter"))
     {
-      sync_send(search_, atom("schema")).then(
-          on_arg_match >> [=](schema const& sch)
-          {
-            auto w = config_.get("export.write");
-            assert(w);
-            actor snk;
-            if (*format == "pcap")
-            {
+      auto s = config_.get("export.schema");
+      schema sch;
+      if (s)
+      {
+        auto contents = load(*s);
+        if (! contents)
+        {
+          VAST_LOG_ACTOR_ERROR("failed to load schema: " << contents.error());
+          quit(exit::error);
+          return;
+        }
+
+        auto t = to<schema>(*contents);
+        if (! t)
+        {
+          VAST_LOG_ACTOR_ERROR("invalid schema: " << t.error());
+          quit(exit::error);
+          return;
+        }
+
+        sch = *t;
+      }
+
+      auto w = config_.get("export.write");
+      assert(w);
+      actor snk;
+      if (*format == "pcap")
+      {
 #ifdef VAST_HAVE_PCAP
-              auto flush = config_.as<uint64_t>("export.pcap-flush");
-              assert(flush);
-              snk = spawn<sink::pcap, detached>(sch, *w, *flush);
+        auto flush = config_.as<uint64_t>("export.pcap-flush");
+        assert(flush);
+        snk = spawn<sink::pcap, detached>(sch, *w, *flush);
 #else
-              VAST_LOG_ACTOR_ERROR("not compiled with pcap support");
-              quit(exit::error);
-              return;
+        VAST_LOG_ACTOR_ERROR("not compiled with pcap support");
+        quit(exit::error);
+        return;
 #endif
-            }
-            else if (*format == "bro")
+      }
+      else if (*format == "bro")
+      {
+        snk = spawn<sink::bro>(std::move(*w));
+      }
+      else if (*format == "json")
+      {
+        path p{std::move(*w)};
+        if (p != "-")
+        {
+          p = p.complete();
+          if (! exists(p.parent()))
+          {
+            auto t = mkdir(p.parent());
+            if (! t)
             {
-              snk = spawn<sink::bro>(std::move(*w));
-            }
-            else if (*format == "json")
-            {
-              path p{std::move(*w)};
-              if (p != "-")
-              {
-                p = p.complete();
-                if (! exists(p.parent()))
-                {
-                  auto t = mkdir(p.parent());
-                  if (! t)
-                  {
-                    VAST_LOG_ACTOR_ERROR("failed to create directory: " <<
-                                         p.parent());
-                    quit(exit::error);
-                    return;
-                  }
-                }
-              }
-
-              snk = spawn<sink::json>(std::move(p));
-            }
-            else
-            {
-              VAST_LOG_ACTOR_ERROR("invalid export format: " << *format);
+              VAST_LOG_ACTOR_ERROR("failed to create directory: " <<
+                                   p.parent());
               quit(exit::error);
               return;
             }
+          }
+        }
 
-            auto exp0rter = spawn<exporter, linked>();
-            send(exp0rter, atom("add"), std::move(snk));
+        snk = spawn<sink::json>(std::move(p));
+      }
+      else
+      {
+        VAST_LOG_ACTOR_ERROR("invalid export format: " << *format);
+        quit(exit::error);
+        return;
+      }
 
-            auto limit = *config_.as<uint64_t>("export.limit");
-            if (limit > 0)
-              send(exp0rter, atom("limit"), limit);
+      exporter_ = spawn<exporter, linked>();
+      send(exporter_, atom("add"), std::move(snk));
 
-            auto query = config_.get("export.query");
-            assert(query);
-            sync_send(search_, atom("query"), exp0rter, *query).then(
+      auto exporter_name = *config_.get("exporter.name");
+      send(tracker_, atom("put"), "exporter", exporter_, exporter_name);
+
+      auto limit = *config_.as<uint64_t>("export.limit");
+      if (limit > 0)
+        send(exporter_, atom("limit"), limit);
+
+      auto query = config_.get("export.query");
+      assert(query);
+
+      sync_send(tracker_, atom("get"), search_name).then(
+          on_arg_match >> [=](error const& e)
+          {
+            VAST_LOG_ACTOR_ERROR("could not get SEARCH: " << e);
+            quit(exit::error);
+          },
+          [=](actor const& srch)
+          {
+            sync_send(srch, atom("query"), exporter_, *query).then(
                 on_arg_match >> [=](error const& e)
                 {
                   VAST_LOG_ACTOR_ERROR("got invalid query: " << e);
@@ -454,7 +429,7 @@ void program::run()
                 [=](expression const& ast, actor qry)
                 {
                   VAST_LOG_ACTOR_DEBUG("instantiated query for: " << ast);
-                  exp0rter->link_to(qry);
+                  exporter_->link_to(qry);
                   send(qry, atom("extract"), limit);
                 },
                 others() >> [=]
@@ -464,14 +439,26 @@ void program::run()
 
                   quit(exit::error);
                 });
-          },
-          others() >> [=]
+          });
+    }
+    else if (config_.check("console"))
+    {
+#ifdef VAST_HAVE_EDITLINE
+      sync_send(tracker_, atom("get"), search_name).then(
+          [=](actor const& search)
           {
-            VAST_LOG_ACTOR_ERROR("expected schema, got: " <<
-                                 to_string(last_dequeued()));
+            auto c = spawn<console, linked>(search, dir / "console");
+            delayed_send(c, std::chrono::milliseconds(200), atom("prompt"));
+          },
+          [=](error const& e)
+          {
+            VAST_LOG_ACTOR_ERROR(e);
             quit(exit::error);
           });
-
+#else
+      VAST_LOG_ACTOR_ERROR("not compiled with editline support");
+      quit(exit::error);
+#endif
     }
   }
   catch (network_error const& e)

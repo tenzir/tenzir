@@ -3,8 +3,8 @@
 namespace vast {
 namespace expr {
 
-schema_resolver::schema_resolver(schema const& sch)
-  : schema_{sch}
+schema_resolver::schema_resolver(type const& t)
+  : type_{t}
 {
 }
 
@@ -72,51 +72,50 @@ trial<expression> schema_resolver::operator()(predicate const& p)
   return visit(*this, p.lhs, p.rhs);
 }
 
-trial<expression> schema_resolver::operator()(schema_extractor const& e, data const& d)
+trial<expression> schema_resolver::operator()(schema_extractor const& e,
+                                              data const& d)
 {
   disjunction dis;
-  for (auto& t : schema_)
+  auto r = get<type::record>(type_);
+  if (! r)
   {
-    auto r = get<type::record>(t);
-    if (! r)
-    {
-      // If we're not dealing with a record, the only possible match is a
-      // single-element key which represents the event name.
-      if (e.key.size() == 1 && t.name() == e.key[0])
-        dis.emplace_back(predicate{data_extractor{t, {}}, op_, d});
-
-      continue;
-    }
-
+    // If we're not dealing with a record, the only possible match is a
+    // single-element key which represents the event name.
+    if (e.key.size() == 1 && type_.name() == e.key[0])
+      dis.emplace_back(predicate{data_extractor{type_, {}}, op_, d});
+  }
+  else
+  {
     auto trace = r->find_suffix(e.key);
-    if (trace.empty())
-      continue;
-
-    // Make sure that all found keys resolve to arguments with the same type.
-    auto first_type = r->at(trace.front().first);
-    for (auto& p : trace)
-      if (! p.first.empty())
-        if (! congruent(*first_type, *r->at(p.first)))
-          return error{"type clash: ", t, " : ", to_string(t, false),
-                       " <--> ", *r->at(p.first), " : ",
-                       to_string(*r->at(p.first), false)};
+    if (trace.size() > 1)
+    {
+      // Make sure that all found keys resolve to arguments with the same type.
+      auto first_type = r->at(trace.front().first);
+      for (auto& p : trace)
+        if (! p.first.empty())
+          if (! congruent(*r->at(p.first), *first_type))
+            return error{"type clash: ", type_, " : ", to_string(type_, false),
+                         " <--> ", *r->at(p.first), " : ",
+                         to_string(*r->at(p.first), false)};
+    }
 
     // Add all offsets from the trace to the disjunction, which will
     // eventually replace this node.
     for (auto& p : trace)
       dis.emplace_back(
-          predicate{data_extractor{t, std::move(p.first)}, op_, d});
+          predicate{data_extractor{type_, std::move(p.first)}, op_, d});
   }
 
   if (dis.empty())
-    return error{"invalid key: ", e.key};
+    return expression{};
   else if (dis.size() == 1)
     return {std::move(dis[0])};
   else
     return {std::move(dis)};
 }
 
-trial<expression> schema_resolver::operator()(data const& d, schema_extractor const& e)
+trial<expression> schema_resolver::operator()(data const& d,
+                                              schema_extractor const& e)
 {
   return (*this)(e, d);
 }

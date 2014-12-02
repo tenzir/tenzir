@@ -9,26 +9,26 @@ namespace sink {
 
 /// The base class for event sinks.
 template <typename Derived>
-struct base : public actor_base
+struct base : public actor_mixin<base<Derived>, sentinel>
 {
-  caf::message_handler act() final
+  caf::message_handler make_handler()
   {
     using namespace caf;
-    trap_exit(true);
+    this->trap_exit(true);
 
     return
     {
-      [=](exit_msg const& e)
+      [=](exit_msg const& msg)
       {
         static_cast<Derived*>(this)->finalize();
-        quit(e.reason);
+        this->quit(msg.reason);
       },
       [=](event const& e)
       {
         if (! static_cast<Derived*>(this)->process(e))
         {
           VAST_LOG_ACTOR_ERROR("failed to process event: " << e);
-          quit(exit::error);
+          this->quit(exit::error);
         }
       },
       [=](std::vector<event> const& v)
@@ -37,7 +37,7 @@ struct base : public actor_base
           if (! static_cast<Derived*>(this)->process(e))
           {
             VAST_LOG_ACTOR_ERROR("failed to process event: " << e);
-            quit(exit::error);
+            this->quit(exit::error);
             return;
           }
       }
@@ -46,7 +46,7 @@ struct base : public actor_base
 
   void finalize()
   {
-    // Do nothing, allow children to hide.
+    // Do nothing, allow children to overwrite.
   }
 };
 

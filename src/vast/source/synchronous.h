@@ -11,21 +11,21 @@ namespace source {
 
 /// A synchronous source that extracts events one by one.
 template <typename Derived>
-struct synchronous : public actor_base
+struct synchronous : public actor_mixin<synchronous<Derived>, sentinel>
 {
 public:
-  caf::message_handler act() final
+  caf::message_handler make_handler()
   {
     using namespace caf;
-    trap_exit(true);
-    attach_functor([=](uint32_t) { sink_ = invalid_actor; });
+    this->trap_exit(true);
+    this->attach_functor([=](uint32_t) { sink_ = invalid_actor; });
 
     return
     {
       [=](exit_msg const& e)
       {
         send_events();
-        quit(e.reason);
+        this->quit(e.reason);
       },
       on(atom("batch size"), arg_match) >> [=](uint64_t batch_size)
       {
@@ -40,7 +40,7 @@ public:
       on(atom("start")) >> [=]
       {
         running_ = true;
-        send(this, atom("run"));
+        this->send(this, atom("run"));
       },
       on(atom("stop")) >> [=]
       {
@@ -50,7 +50,7 @@ public:
       {
         if (! sink_)
         {
-          quit(exit::error);
+          this->quit(exit::error);
           return;
         }
 
@@ -75,9 +75,9 @@ public:
         send_events();
 
         if (done)
-          quit(exit::done);
+          this->quit(exit::done);
         else if (running_)
-          send_tuple(this, last_dequeued());
+          this->send_tuple(this, this->last_dequeued());
       }
     };
   }
@@ -87,7 +87,7 @@ private:
   {
     if (! events_.empty())
     {
-      send(sink_, std::move(events_));
+      this->send(sink_, std::move(events_));
       events_.clear();
     }
   }

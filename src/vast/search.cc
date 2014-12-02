@@ -1,66 +1,32 @@
 #include "vast/search.h"
 
+#include <caf/all.hpp>
 #include "vast/expression.h"
-#include "vast/optional.h"
 #include "vast/query.h"
+#include "vast/replicator.h"
 #include "vast/expr/normalizer.h"
-#include "vast/expr/resolver.h"
-#include "vast/io/serialization.h"
-#include "vast/io/file_stream.h"
-#include "vast/io/formatted.h"
-#include "vast/util/trial.h"
 
 namespace vast {
 
 using namespace caf;
 
-search_actor::search_actor(path dir, actor archive, actor index)
-  : dir_{std::move(dir)},
-    archive_{archive},
-    index_{index}
+search::search()
 {
+  attach_functor(
+      [=](uint32_t reason)
+      {
+        archive_ = invalid_actor;
+        index_ = invalid_actor;
+        for (auto& p : clients_)
+          for (auto& q : p.second.queries)
+            anon_send_exit(q, reason);
+      });
 }
 
-message_handler search_actor::act()
+message_handler search::make_handler()
 {
-  trap_exit(true);
-
-  auto schema_path = dir_ / "schema";
-  if (exists(schema_path))
-  {
-    auto contents = load(schema_path);
-    if (! contents)
-    {
-      VAST_LOG_ACTOR_ERROR("failed to read schema: " << contents.error());
-      return {};
-    }
-
-    auto sch = to<schema>(*contents);
-    if (! sch)
-    {
-      VAST_LOG_ACTOR_ERROR("failed to parse schema " << sch.error());
-      return {};
-    }
-
-    VAST_LOG_ACTOR_VERBOSE("read schema from " << schema_path);
-    schema_ = *sch;
-  }
-
   return
   {
-    [=](exit_msg const& e)
-    {
-      for (auto& p : clients_)
-      {
-        for (auto& q : p.second.queries)
-        {
-          VAST_LOG_ACTOR_DEBUG("sends EXIT to query " << q);
-          send_exit(q, e.reason);
-        }
-      }
-
-      quit(e.reason);
-    },
     [=](down_msg const& d)
     {
       VAST_LOG_ACTOR_INFO("got disconnect from client " << last_sender());
@@ -73,40 +39,35 @@ message_handler search_actor::act()
 
       clients_.erase(last_sender());
     },
-    on(atom("schema")) >> [=]
+    on(atom("link"), atom("archive"), arg_match) >> [=](actor const& a)
     {
-      return make_message(schema_);
+      if (! archive_)
+        archive_ = spawn<replicator, linked>();
+
+      send(archive_, atom("add"), a);
     },
-    [=](schema const& s)
+    on(atom("link"), atom("index"), arg_match) >> [=](actor const& a)
     {
-      auto sch = schema::merge(schema_, s);
-      if (! sch)
-      {
-        VAST_LOG_ACTOR_ERROR(sch.error());
-        send_exit(this, exit::error);
-      }
-      else if (*sch != schema_)
-      {
-        schema_ = *sch;
-        VAST_LOG_ACTOR_DEBUG("successfully merged schemata");
+      if (! index_)
+        index_ = spawn<replicator, linked>();
 
-        file f{schema_path};
-        auto t = f.open(file::write_only);
-        if (! t)
-        {
-          VAST_LOG_ACTOR_ERROR("failed to open file: " << t.error());
-          quit(exit::error);
-          return;
-        }
-
-        io::file_output_stream out{f};
-        out << to_string(schema_);
-      }
+      send(index_, atom("add"), a);
     },
     on(atom("query"), arg_match)
       >> [=](actor const& client, std::string const& str)
     {
       VAST_LOG_ACTOR_INFO("got client " << client << " asking for " << str);
+
+      if (! archive_)
+      {
+        quit(exit::error);
+        return make_message(error{"no archive configured"});
+      }
+      else if (! index_)
+      {
+        quit(exit::error);
+        return make_message(error{"no index configured"});
+      }
 
       auto ast = to<expression>(str);
       if (! ast)
@@ -117,15 +78,8 @@ message_handler search_actor::act()
 
       *ast = visit(expr::normalizer{}, *ast);
 
-      auto resolved = visit(expr::schema_resolver{schema_}, *ast);
-      if (! resolved)
-      {
-        VAST_LOG_ACTOR_VERBOSE("could not resolve expression: " << resolved.error());
-        return make_message(resolved.error());
-      }
-
       monitor(client);
-      auto qry = spawn<query>(archive_, client, std::move(*resolved));
+      auto qry = spawn<query>(archive_, client, *ast);
       clients_[client.address()].queries.insert(qry);
       send(index_, atom("query"), *ast, qry);
 
@@ -134,7 +88,7 @@ message_handler search_actor::act()
   };
 }
 
-std::string search_actor::describe() const
+std::string search::name() const
 {
   return "search";
 }

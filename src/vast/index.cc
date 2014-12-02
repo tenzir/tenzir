@@ -588,7 +588,7 @@ void index::consolidate(uuid const& part, predicate const& pred)
   send_exit(p.actor, exit::stop);
   p.actor = invalid_actor;
 
-  // Because partitions can complete in any order, we have to walk throught the
+  // Because partitions can complete in any order, we have to walk through the
   // schedule from the beginning again to find the next partition.
   for (auto& entry : schedule_)
   {
@@ -642,7 +642,75 @@ double index::progress(expression const& expr) const
   return parts * preds;
 }
 
-message_handler index::act()
+void index::at_down(down_msg const& msg)
+{
+  VAST_LOG_ACTOR_DEBUG("got DOWN from " << last_sender());
+
+  auto i = std::find_if(
+      upstream_.begin(),
+      upstream_.end(),
+      [&](actor const& a) { return a == last_sender(); });
+
+  if (i != upstream_.end())
+  {
+    upstream_.erase(i);
+    return;
+  }
+
+  auto found = false;
+  for (auto i = active_.begin(); i != active_.end(); ++i)
+  {
+    auto& p = partitions_[*i];
+    if (p.actor == last_sender())
+    {
+      p.actor = invalid_actor;
+      active_.erase(i);
+      VAST_LOG_ACTOR_DEBUG("shrinks active partitions to " <<
+                           active_.size() << '/' << active_partitions_);
+      found = true;
+      break;
+    }
+  }
+
+  if (! found)
+    for (auto i = passive_.begin(); i != passive_.end(); ++i)
+    {
+      auto& p = partitions_[*i];
+      if (p.actor == last_sender())
+      {
+        p.actor = invalid_actor;
+        passive_.erase(i);
+        VAST_LOG_ACTOR_DEBUG("shrinks passive partitions to " <<
+                             passive_.size() << '/' <<
+                             max_partitions_ - active_partitions_);
+        break;
+      }
+    }
+
+  // If a partition did not exit with error/kill, we wait until all of
+  // them terminate.
+  if (msg.reason == exit::stop || msg.reason == exit::done)
+  {
+    if (active_.empty())
+      quit(msg.reason);
+  }
+  else
+  {
+    quit(msg.reason);
+  }
+}
+
+void index::at_exit(exit_msg const& msg)
+{
+  if (active_.empty())
+    quit(msg.reason);
+  else
+    for (auto& p : partitions_)
+      if (p.second.actor)
+        send_exit(p.second.actor, msg.reason);
+}
+
+message_handler index::make_handler()
 {
   trap_exit(true);
 
@@ -682,67 +750,13 @@ message_handler index::act()
     auto id = i < parts.size() ? parts[i].first : uuid::random();
     auto& p = partitions_[id];
     VAST_LOG_ACTOR_DEBUG("activates partition " << id);
-    p.actor = spawn<partition, monitored>(dir_, id, batch_size_);
+    p.actor = spawn<partition, priority_aware+monitored>(dir_, id, batch_size_);
+    send(p.actor, flow_control::announce{this});
     active_[i] = std::move(id);
   }
 
   return
   {
-    [=](exit_msg const& e)
-    {
-      if (active_.empty())
-        quit(e.reason);
-      else
-        for (auto& p : partitions_)
-          if (p.second.actor)
-            send_exit(p.second.actor, e.reason);
-    },
-    [=](down_msg const& d)
-    {
-      VAST_LOG_ACTOR_DEBUG("got DOWN from " << last_sender());
-
-      auto found = false;
-      for (auto i = active_.begin(); i != active_.end(); ++i)
-      {
-        auto& p = partitions_[*i];
-        if (p.actor == last_sender())
-        {
-          p.actor = invalid_actor;
-          active_.erase(i);
-          VAST_LOG_ACTOR_DEBUG("shrinks active partitions to " <<
-                               active_.size() << '/' << active_partitions_);
-          found = true;
-          break;
-        }
-      }
-
-      if (! found)
-        for (auto i = passive_.begin(); i != passive_.end(); ++i)
-        {
-          auto& p = partitions_[*i];
-          if (p.actor == last_sender())
-          {
-            p.actor = invalid_actor;
-            passive_.erase(i);
-            VAST_LOG_ACTOR_DEBUG("shrinks passive partitions to " <<
-                                 passive_.size() << '/' <<
-                                 max_partitions_ - active_partitions_);
-            break;
-          }
-        }
-
-      // If a partition did not exit with error/kill, we wait until all of
-      // them terminate.
-      if (d.reason == exit::stop || d.reason == exit::done)
-      {
-        if (active_.empty())
-          quit(d.reason);
-      }
-      else
-      {
-        quit(d.reason);
-      }
-    },
     on(atom("flush")) >> [=]
     {
       auto tree = spawn<task_tree>(this);
@@ -763,7 +777,7 @@ message_handler index::act()
       assert(i != partitions_.end());
       assert(i->second.actor);
 
-      // Replace partition with new one if it would overflow.
+      // Replace partition with new one on overflow.
       if (i->second.events + chk.events() > max_events_per_partition_)
       {
         VAST_LOG_ACTOR_DEBUG(
@@ -773,9 +787,12 @@ message_handler index::act()
 
         id = uuid::random();
         i = partitions_.emplace(id, partition_state{}).first;
-        i->second.actor = spawn<partition, monitored>(dir_, id, batch_size_);
+        i->second.actor =
+          spawn<partition, priority_aware+monitored>(dir_, id, batch_size_);
+        send(i->second.actor, flow_control::announce{this});
       }
 
+      // Update partition meta data.
       auto& p = i->second;
       p.events += chk.events();
       p.last_modified = now();
@@ -784,13 +801,9 @@ message_handler index::act()
       if (p.last_event == time_range{} || chk.meta().last > p.last_event)
         p.last_event = chk.meta().last;
 
-      VAST_LOG_ACTOR_DEBUG("forwards chunk to " << p.actor << " (" << id << ')');
       forward_to(p.actor);
-    },
-    on(atom("backlog")) >> [=]
-    {
-      for (auto& id : active_)
-        forward_to(partitions_[id].actor);
+      VAST_LOG_ACTOR_DEBUG("forwards chunk to " << p.actor <<
+                           " (" << id << ')');
     },
     on(atom("query"), arg_match) >> [=](expression const& ast, actor sink)
     {
@@ -914,7 +927,7 @@ message_handler index::act()
   };
 }
 
-std::string index::describe() const
+std::string index::name() const
 {
   return "index";
 }

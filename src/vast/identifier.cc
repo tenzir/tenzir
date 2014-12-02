@@ -14,7 +14,20 @@ identifier::identifier(path dir)
 {
 }
 
-message_handler identifier::act()
+void identifier::at_exit(exit_msg const& msg)
+{
+  if (save())
+  {
+    quit(msg.reason);
+  }
+  else
+  {
+    VAST_LOG_ACTOR_ERROR("could not save current event ID " << id_);
+    quit(exit::error);
+  }
+}
+
+message_handler identifier::make_handler()
 {
   trap_exit(true);
 
@@ -34,18 +47,6 @@ message_handler identifier::act()
 
   return
   {
-    [=](exit_msg const& e)
-    {
-      if (save())
-      {
-        quit(e.reason);
-      }
-      else
-      {
-        VAST_LOG_ACTOR_ERROR("could not save current event ID " << id_);
-        quit(exit::error);
-      }
-    },
     on(atom("request"), arg_match) >> [=](uint64_t n)
     {
       if (n == 0)
@@ -73,7 +74,7 @@ message_handler identifier::act()
   };
 }
 
-std::string identifier::describe() const
+std::string identifier::name() const
 {
   return "identifier";
 }

@@ -18,28 +18,10 @@ using namespace vast;
 
 SUITE("actors")
 
-namespace {
-
-// Because we're running multiple TCP tests sequentially, we need to give the
-// OS a bit of time to release the ports from previous test. This function sets
-// different ports for different program instances as an alternative to waiting
-// for the same ports to become free again.
-void set_ports(configuration& config, uint64_t instance)
-{
-  uint16_t port = 42000 + instance * 5;
-  *config["identifier.port"] = port++;
-  *config["receiver.port"] = port++;
-  *config["archive.port"] = port++;
-  *config["index.port"] = port++;
-  *config["search.port"] = port;
-}
-
-} // namespace <anonymous>
-
 TEST("all-in-one import")
 {
   configuration cfg;
-  set_ports(cfg, 1);
+  *cfg["tracker.port"] = 42001;
   *cfg['v'] = 0;
   *cfg['V'] = 5;
   *cfg['C'] = true;
@@ -101,7 +83,7 @@ TEST("basic actor integrity")
 {
   // First spawn the core.
   configuration core_config;
-  set_ports(core_config, 2);
+  *core_config["tracker.port"] = 42002;
   *core_config['v'] = 0;
   *core_config['V'] = 5;
   *core_config['C'] = true;
@@ -119,7 +101,7 @@ TEST("basic actor integrity")
 
   // Import a single Bro log.
   configuration import_config;
-  set_ports(import_config, 2);
+  *import_config["tracker.port"] = 42002;
   *import_config['v'] = 0;
   *import_config['V'] = 5;
   *import_config['I'] = "bro";
@@ -128,17 +110,14 @@ TEST("basic actor integrity")
   *import_config["archive.max-segment-size"] = 1;
   REQUIRE(import_config.verify());
 
-  // Terminates after import completes.
   auto import = spawn<program>(import_config);
-
-  // Pull down core afterwards.
-  import->link_to(core);
+  import->link_to(core); // Pull down core after import.
   anon_send(import, atom("run"));
 
   await_all_actors_done();
 
   // Restart a new core.
-  set_ports(core_config, 3);
+  *core_config["tracker.port"] = 42003;
   *core_config['v'] = 0;
   *core_config['V'] = 5;
   *core_config['C'] = true;
@@ -160,8 +139,12 @@ TEST("basic actor integrity")
   //
   // Test whether the archive has the correct chunk.
   //
-  self->send(core, atom("archive"));
-  self->receive([&](actor archive) { self->send(archive, event_id(112)); });
+  actor trackr;
+  self->send(core, atom("tracker"));
+  self->receive([&](actor const& t) { trackr = t; });
+
+  self->send(trackr, atom("get"), *core_config.get("archive.name"));
+  self->receive([&](actor const& a) { self->send(a, event_id(112)); });
   self->receive(
       on_arg_match >> [&](chunk const& chk)
       {
@@ -185,7 +168,7 @@ TEST("basic actor integrity")
   auto pops = to<expression>("id.resp_p == 995/?");
   REQUIRE(pops);
 
-  self->send(core, atom("index"));
+  self->send(trackr, atom("get"), *core_config.get("index.name"));
   self->receive(
       [&](actor index) { self->send(index, atom("query"), *pops, self); });
 
@@ -209,7 +192,7 @@ TEST("basic actor integrity")
   //
   // Construct a simple query and verify that the results are correct.
   //
-  self->send(core, atom("search"));
+  self->send(trackr, atom("get"), *core_config.get("search.name"));
   self->receive(
       [&](actor search)
       {
@@ -258,7 +241,7 @@ TEST("basic actor integrity")
       fail);
 
   // Now import another Bro log.
-  set_ports(import_config, 3);
+  *import_config["tracker.port"] = 42003;
   *import_config['r'] = m57_day11_18::conn;
   import = self->spawn<program, monitored>(import_config);
   anon_send(import, atom("run"));
@@ -269,7 +252,7 @@ TEST("basic actor integrity")
   // Wait for the segment to arrive at the receiver.
   std::this_thread::sleep_for(std::chrono::seconds(1));
 
-  self->send(core, atom("index"));
+  self->send(trackr, atom("get"), *core_config.get("index.name"));
   self->receive(
       [&](actor index)
       {
@@ -302,7 +285,7 @@ TEST("basic actor integrity")
       });
 
   // Issue a query against both conn and ssl.
-  self->send(core, atom("search"));
+  self->send(trackr, atom("get"), *core_config.get("search.name"));
   self->receive(
       [&](actor search)
       {

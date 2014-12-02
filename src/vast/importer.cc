@@ -7,23 +7,21 @@ namespace vast {
 
 using namespace caf;
 
-importer::importer(path dir, actor receiver, uint64_t batch_size,
-                   io::compression method)
+importer::importer(path dir, uint64_t batch_size, io::compression method)
   : dir_{dir / "import"},
     compression_{method},
-    receiver_{receiver},
     batch_size_{batch_size}
 {
   attach_functor(
       [=](uint32_t)
       {
-        receiver_ = invalid_actor;
         source_ = invalid_actor;
         chunkifier_ = invalid_actor;
+        sinks_.clear();
       });
 }
 
-message_handler importer::act()
+message_handler importer::make_handler()
 {
   trap_exit(true);
 
@@ -51,12 +49,36 @@ message_handler importer::act()
       send_exit(chunkifier_, e.reason);
   };
 
-  init_ =
+  ready_ =
   {
     on_exit,
-    [=](down_msg const& d)
+    [=](down_msg const&)
     {
-      quit(d.reason);
+      if (last_sender() == chunkifier_)
+      {
+        chunkifier_ = invalid_actor;
+        become(terminating_);
+      }
+      else
+      {
+        auto i = std::find_if(
+            sinks_.begin(),
+            sinks_.end(),
+            [=](caf::actor const& a) { return a == last_sender(); });
+
+        assert(i != sinks_.end());
+
+        size_t idx = i - sinks_.begin();
+        if (current_ > idx)
+          --current_;
+
+        VAST_LOG_ACTOR_INFO("removes sink " << last_sender());
+        sinks_.erase(i);
+
+        VAST_LOG_ACTOR_VERBOSE("has " << sinks_.size() << " sinks remaining");
+        if (sinks_.empty())
+          become(terminating_);
+      }
     },
     on(atom("submit")) >> [=]
     {
@@ -64,61 +86,61 @@ message_handler importer::act()
       {
         auto p = dir_ / "chunks" / basename;
         chunk chk;
-        if (! io::unarchive(p, chk))
+        if (io::unarchive(p, chk))
+        {
+          rm(p);
+        }
+        else
         {
           VAST_LOG_ACTOR_ERROR("failed to load orphaned chunk " << basename);
           continue;
         }
 
+        // TODO: throttle rate.
         send(this, std::move(chk));
       }
-
-      become(ready_);
     },
-    on(atom("add"), arg_match) >> [=](actor src)
+    on(atom("source"), arg_match) >> [=](actor src)
     {
       source_ = src;
       source_->link_to(chunkifier_);
       send(source_, atom("sink"), chunkifier_);
       send(source_, atom("batch size"), batch_size_);
       send(source_, atom("run"));
-
-      become(ready_);
     },
-  };
-
-  ready_ =
-  {
-    on_exit,
-    [=](down_msg const&)
+    on(atom("sink"), arg_match) >> [=](actor snk)
     {
-      chunkifier_ = invalid_actor;
-      become(terminating_);
-    },
-    on(atom("backlog"), arg_match) >> [=](bool backlogged)
-    {
-      if (backlogged)
-      {
-        VAST_LOG_ACTOR_DEBUG("pauses chunk delivery");
-        become(paused_);
-      }
+      send(snk, flow_control::announce{this});
+      sinks_.push_back(snk);
+      monitor(snk);
     },
     [=](chunk const& chk)
     {
-      send(receiver_, chk, this);
-    }
+      send(sinks_[current_++], chk);
+      current_ %= sinks_.size();
+    },
+    [=](flow_control::overload)
+    {
+      VAST_LOG_ACTOR_DEBUG("pauses chunk delivery");
+      become(paused_);
+    },
+    [=](flow_control::underload)
+    {
+      VAST_LOG_ACTOR_DEBUG("ignores underload signal");
+    },
   };
 
   paused_ =
   {
     on_exit,
-    on(atom("backlog"), arg_match) >> [=](bool backlogged)
+    [=](flow_control::overload)
     {
-      if (! backlogged)
-      {
-        VAST_LOG_ACTOR_DEBUG("resumes chunk delivery");
-        become(ready_);
-      }
+      VAST_LOG_ACTOR_DEBUG("ignores overload signal");
+    },
+    [=](flow_control::underload)
+    {
+      VAST_LOG_ACTOR_DEBUG("resumes chunk delivery");
+      become(ready_);
     },
   };
 
@@ -145,10 +167,10 @@ message_handler importer::act()
     }
   };
 
-  return init_;
+  return ready_;
 }
 
-std::string importer::describe() const
+std::string importer::name() const
 {
   return "importer";
 }

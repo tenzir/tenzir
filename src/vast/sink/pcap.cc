@@ -107,7 +107,7 @@ bool pcap::process(event const& e)
   return true;
 }
 
-std::string pcap::describe() const
+std::string pcap::name() const
 {
   return "pcap-sink";
 }

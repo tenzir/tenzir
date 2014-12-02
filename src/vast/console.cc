@@ -15,7 +15,7 @@ namespace vast {
 
 namespace {
 
-struct keystroke_monitor : actor_base
+struct keystroke_monitor : actor_mixin<keystroke_monitor, sentinel>
 {
   keystroke_monitor(actor sink)
     : sink_{sink}
@@ -36,7 +36,7 @@ struct keystroke_monitor : actor_base
         });
   }
 
-  message_handler act()
+  message_handler make_handler()
   {
     return
     {
@@ -64,7 +64,7 @@ struct keystroke_monitor : actor_base
     };
   };
 
-  std::string describe() const
+  std::string name() const
   {
     return "keystroke-monitor";
   };
@@ -604,7 +604,7 @@ void console::result::deserialize(deserializer& source)
 }
 
 
-message_handler console::act()
+message_handler console::make_handler()
 {
   print(none)
     << util::color::red
@@ -896,7 +896,7 @@ message_handler console::act()
   };
 }
 
-std::string console::describe() const
+std::string console::name() const
 {
   return "console";
 }

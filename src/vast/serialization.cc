@@ -1,6 +1,7 @@
 #include "vast/serialization.h"
 
 #include <caf/all.hpp>
+#include "vast/actor.h"
 #include "vast/bitmap_index.h"
 #include "vast/bitstream.h"
 #include "vast/chunk.h"
@@ -453,7 +454,6 @@ void announce_builtin_types()
 
   using vast_types = util::type_list<
     none,
-
     time_point,
     time_duration,
     pattern,
@@ -531,6 +531,10 @@ void announce_builtin_types()
   apply<announcer, all>();
   apply<bs_converter, bitstream_models>();
   apply<bmi_converter, bmi_types>();
+
+  caf::announce<flow_control::announce>(&flow_control::announce::source);
+  caf::announce<flow_control::overload>();
+  caf::announce<flow_control::underload>();
 }
 
 

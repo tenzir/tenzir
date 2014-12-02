@@ -291,7 +291,7 @@ bool test::done() const
   return events_ == 0;
 }
 
-std::string test::describe() const
+std::string test::name() const
 {
   return "test-source";
 }

@@ -60,7 +60,7 @@ void chunkifier::finalize()
     VAST_LOG_ACTOR_VERBOSE("processed " << total_events_ << " events");
 }
 
-std::string chunkifier::describe() const
+std::string chunkifier::name() const
 {
   return "chunkifier";
 }

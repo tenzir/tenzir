@@ -144,12 +144,62 @@ struct partition::dispatcher
 
 partition::partition(path const& index_dir, uuid id, size_t batch_size)
   : dir_{index_dir / to_string(id)},
-  id_{std::move(id)},
-  batch_size_{batch_size}
+    id_{std::move(id)},
+    batch_size_{batch_size}
 {
 }
 
-message_handler partition::act()
+void partition::at_down(down_msg const&)
+{
+  if (last_sender() == dechunkifier_)
+  {
+    dechunkifier_ = invalid_actor;
+    chunks_.pop();
+
+    if (chunks_.size() == 10 - 1)
+    {
+      VAST_LOG_ACTOR_DEBUG("signals underload");
+      for (auto& a : upstream())
+        send(a, message_priority::high, flow_control::underload{});
+    }
+
+    send(this, atom("unpack"));
+  }
+  else
+  {
+    VAST_LOG_ACTOR_DEBUG("got DOWN from " << last_sender());
+
+    stats_.erase(last_sender());
+    for (auto i = indexers_.begin(); i != indexers_.end(); ++i)
+      if (i->second == last_sender())
+      {
+        indexers_.erase(i);
+        break;
+      }
+  }
+}
+
+void partition::at_exit(exit_msg const& msg)
+{
+  if (msg.reason == exit::kill)
+  {
+    quit(msg.reason);
+  }
+  else if (exit_reason_ == 0 && ! chunks_.empty())
+  {
+    exit_reason_ = msg.reason; // Wait for unpacker to finish.
+  }
+  else
+  {
+    auto tree = spawn<task_tree>(this);
+    send(tree, atom("notify"), this);
+    send(tree, this, this);
+    send(this, atom("flush"), tree);
+    exit_reason_ = msg.reason;
+  }
+}
+
+message_handler partition::make_handler()
 {
   trap_exit(true);
 
@@ -181,54 +231,11 @@ message_handler partition::act()
 
   return
   {
-    [=](exit_msg const& e)
-    {
-      if (e.reason == exit::kill)
-      {
-        quit(e.reason);
-        return;
-      }
-
-      // Wait for unpacker to finish.
-      if (exit_reason_ == 0 && ! chunks_.empty())
-      {
-        exit_reason_ = e.reason;
-        return;
-      }
-
-      auto tree = spawn<task_tree>(this);
-      send(tree, atom("notify"), this);
-      send(tree, this, this);
-      send(this, atom("flush"), tree);
-      exit_reason_ = e.reason;
-    },
     on(atom("done")) >> [=]
     {
       // We only spawn one task tree upon exiting. Once we get notified we can
       // safely terminate with the last exit reason.
       quit(exit_reason_);
-    },
-    [=](down_msg const&)
-    {
-      if (last_sender() == dechunkifier_)
-      {
-        auto chk = chunks_.front();
-        chunks_.pop();
-        dechunkifier_ = invalid_actor;
-        send(this, atom("unpack"));
-      }
-      else
-      {
-        VAST_LOG_ACTOR_DEBUG("got DOWN from " << last_sender());
-
-        stats_.erase(last_sender());
-        for (auto i = indexers_.begin(); i != indexers_.end(); ++i)
-          if (i->second == last_sender())
-          {
-            indexers_.erase(i);
-            break;
-          }
-      }
     },
     [=](expression const& pred, actor idx)
     {
@@ -329,6 +336,14 @@ message_handler partition::act()
 
       chunks_.push(c);
       send(this, atom("unpack"));
+
+
+      if (chunks_.size() == 10)
+      {
+        VAST_LOG_ACTOR_DEBUG("signals overload");
+        for (auto& a : upstream())
+          send(a, message_priority::high, flow_control::overload{});
+      }
     },
     [=](std::vector<event> const& events)
     {
@@ -360,20 +375,11 @@ message_handler partition::act()
         }
       }
     },
-    on(atom("backlog")) >> [=]
-    {
-      uint64_t n = chunks_.size();
-      return make_message(atom("backlog"), n, max_backlog_);
-    },
     [=](uint64_t processed, uint64_t indexed, uint64_t rate, uint64_t mean)
     {
-      max_backlog_ = 0;
       auto i = stats_.find(last_sender());
       assert(i != stats_.end());
       auto& s = i->second;
-
-      if (s.backlog > max_backlog_)
-        max_backlog_ = s.backlog;
 
       s.backlog -= processed;
       s.value_total += indexed;
@@ -429,7 +435,7 @@ message_handler partition::act()
   };
 }
 
-std::string partition::describe() const
+std::string partition::name() const
 {
   return "partition";
 }

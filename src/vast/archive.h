@@ -14,7 +14,7 @@
 namespace vast {
 
 /// Accepts chunks and constructs segments.
-class archive : public actor_base
+class archive : public actor_mixin<archive, flow_controlled, sentinel>
 {
 public:
   /// Spawns the archive.
@@ -24,8 +24,8 @@ public:
   /// @pre `max_segment_size > 0`
   archive(path dir, size_t capacity, size_t max_segment_size);
 
-  caf::message_handler act() final;
-  std::string describe() const final;
+  caf::message_handler make_handler();
+  std::string name() const;
 
 private:
   struct chunk_compare

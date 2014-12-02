@@ -7,31 +7,21 @@
 namespace vast {
 
 /// Receives chunks from IMPORTER, imbues them with an ID from TRACKER, and
-/// relays them to ARCHIVE and INDEX. RECEIVER also forwards the chunk schema
-/// to SEARCH.
-class receiver : public actor_base
+/// relays them to ARCHIVE and INDEX.
+class receiver : public actor_mixin<receiver, flow_controlled, sentinel>
 {
 public:
   /// Spawns a receiver.
-  /// @param tracker The tracker actor.
-  /// @param archive The archive actor.
-  /// @param index The index actor.
-  /// @param search The search actor.
-  receiver(caf::actor tracker,
-           caf::actor archive,
-           caf::actor index,
-           caf::actor search);
+  receiver();
 
-  caf::message_handler act() final;
-  std::string describe() const final;
+  caf::message_handler make_handler();
+  void at_exit(caf::exit_msg const&);
+  std::string name() const;
 
 private:
-  bool paused_ = false;
-  caf::actor tracker_;
+  caf::actor identifier_;
   caf::actor archive_;
   caf::actor index_;
-  caf::actor search_;
-  std::set<caf::actor> importers_;
 };
 
 } // namespace vast

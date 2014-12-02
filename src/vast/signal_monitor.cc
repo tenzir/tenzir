@@ -34,9 +34,9 @@ signal_monitor::signal_monitor(actor receiver)
 {
 }
 
-message_handler signal_monitor::act()
+message_handler signal_monitor::make_handler()
 {
-  VAST_LOG_ACTOR_DEBUG("sends signals to @" << receiver_->id());
+  VAST_LOG_ACTOR_DEBUG("sends signals to " << receiver_);
 
   signals.fill(0);
   for (auto s : { SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGUSR1, SIGUSR2 })
@@ -60,7 +60,7 @@ message_handler signal_monitor::act()
   };
 }
 
-std::string signal_monitor::describe() const
+std::string signal_monitor::name() const
 {
   return "signal-monitor";
 }

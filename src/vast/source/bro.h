@@ -20,7 +20,7 @@ public:
 
   result<event> extract_impl();
 
-  std::string describe() const final;
+  std::string name() const;
 
 private:
   trial<std::string> parse_header_line(std::string const& line,

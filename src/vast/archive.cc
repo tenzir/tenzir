@@ -18,7 +18,7 @@ archive::archive(path dir, size_t capacity, size_t max_segment_size)
   assert(max_segment_size_ > 0);
 }
 
-caf::message_handler archive::act()
+caf::message_handler archive::make_handler()
 {
   if (exists(dir_ / "meta.data"))
   {
@@ -97,7 +97,7 @@ caf::message_handler archive::act()
   };
 }
 
-std::string archive::describe() const
+std::string archive::name() const
 {
   return "archive";
 }

@@ -21,7 +21,7 @@ bool json::process(event const& e)
   return stream_.write(str.begin(), str.end());
 }
 
-std::string json::describe() const
+std::string json::name() const
 {
   return "json-sink";
 }

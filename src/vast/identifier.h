@@ -8,15 +8,16 @@
 namespace vast {
 
 /// Keeps track of the event ID space.
-class identifier : public actor_base
+class identifier : public actor_mixin<identifier, sentinel>
 {
 public:
   /// Constructs the ID tracker.
   /// @param dir The directory where to save the ID to.
   identifier(path dir);
 
-  caf::message_handler act() final;
-  std::string describe() const final;
+  void at_exit(caf::exit_msg const& msg);
+  caf::message_handler make_handler();
+  std::string name() const;
 
 private:
   bool save();

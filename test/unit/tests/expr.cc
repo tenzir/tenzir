@@ -160,30 +160,33 @@ TEST("event evaluation")
   // Schema queries
   //
 
+  // FIXME:
   ast = to<expression>("foo.s1 == \"babba\" && d1 <= 1337.0");
   REQUIRE(ast);
-  auto schema_resolved = visit(expr::schema_resolver{*sch}, *ast);
+  auto schema_resolved = visit(expr::schema_resolver{*foo}, *ast);
   REQUIRE(schema_resolved);
   CHECK(visit(expr::evaluator{e0}, *schema_resolved));
   CHECK(! visit(expr::evaluator{e1}, *schema_resolved));
 
   ast = to<expression>("s1 != \"cheetah\"");
   REQUIRE(ast);
-  schema_resolved = visit(expr::schema_resolver{*sch}, *ast);
+  schema_resolved = visit(expr::schema_resolver{*foo}, *ast);
   REQUIRE(schema_resolved);
   CHECK(visit(expr::evaluator{e0}, *schema_resolved));
+  schema_resolved = visit(expr::schema_resolver{*bar}, *ast);
+  REQUIRE(schema_resolved);
   CHECK(visit(expr::evaluator{e1}, *schema_resolved));
 
   ast = to<expression>("d1 > 0.5");
   REQUIRE(ast);
-  schema_resolved = visit(expr::schema_resolver{*sch}, *ast);
+  schema_resolved = visit(expr::schema_resolver{*foo}, *ast);
   REQUIRE(schema_resolved);
   CHECK(visit(expr::evaluator{e0}, *schema_resolved));
   CHECK(! visit(expr::evaluator{e1}, *schema_resolved));
 
   ast = to<expression>("r.b == F");
   REQUIRE(ast);
-  schema_resolved = visit(expr::schema_resolver{*sch}, *ast);
+  schema_resolved = visit(expr::schema_resolver{*bar}, *ast);
   REQUIRE(schema_resolved);
   CHECK(visit(expr::evaluator{e1}, *schema_resolved));
 
@@ -194,10 +197,14 @@ TEST("event evaluation")
   // Invalid prefix.
   ast = to<expression>("not.there ~ /nil/");
   REQUIRE(ast);
-  CHECK(! visit(expr::schema_resolver{*sch}, *ast));
+  schema_resolved = visit(expr::schema_resolver{*foo}, *ast);
+  REQUIRE(schema_resolved);
+  CHECK(is<none>(*schema_resolved));
 
   // 'q' doesn't exist in 'r'.
   ast = to<expression>("r.q == 80/tcp");
   REQUIRE(ast);
-  CHECK(! visit(expr::schema_resolver{*sch}, *ast));
+  schema_resolved = visit(expr::schema_resolver{*bar}, *ast);
+  REQUIRE(schema_resolved);
+  CHECK(is<none>(*schema_resolved));
 }

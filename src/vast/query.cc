@@ -15,6 +15,13 @@ query::query(actor archive, actor sink, expression ast)
     sink_{std::move(sink)},
     ast_{std::move(ast)}
 {
+  attach_functor(
+      [=](uint32_t)
+      {
+        archive_ = invalid_actor;
+        sink_ = invalid_actor;
+      });
+
   // Prefetches the next chunk. If we don't have a chunk yet, we look for the
   // chunk corresponding to the last unprocessed hit. If we have a chunk, we
   // try to get the next chunk in the ID space. If no such chunk exists, we try
@@ -163,15 +170,24 @@ query::query(actor archive, actor sink, expression ast)
         auto e = reader_->read(id);
         if (e)
         {
-          auto& checker = checkers_[e->type()];
-          if (is<none>(checker))
+          auto& ast = expressions_[e->type()];
+          if (is<none>(ast))
           {
-            checker = visit(expr::type_resolver{e->type()}, ast_);
-            VAST_LOG_ACTOR_DEBUG("constructed candidate checker for new event "
-                                 << e->type() << ": " << checker);
+            auto t = visit(expr::schema_resolver{e->type()}, ast_);
+            if (! t)
+            {
+              VAST_LOG_ACTOR_ERROR("failed to resolve '" << ast_ << "', " <<
+                                   t.error());
+              quit(exit::error);
+              return;
+            }
+
+            ast = visit(expr::type_resolver{e->type()}, *t);
+            VAST_LOG_ACTOR_DEBUG("resolved AST for new type " << e->type() <<
+                                 ": " << ast);
           }
 
-          if (visit(expr::evaluator{*e}, checker))
+          if (visit(expr::evaluator{*e}, ast))
           {
             send(sink_, std::move(*e));
             if (++n == requested_)
@@ -242,21 +258,12 @@ query::query(actor archive, actor sink, expression ast)
     });
 }
 
-message_handler query::act()
+message_handler query::make_handler()
 {
-  catch_all(false);
-
-  attach_functor(
-      [=](uint32_t)
-      {
-        archive_ = invalid_actor;
-        sink_ = invalid_actor;
-      });
-
   return idle_;
 }
 
-std::string query::describe() const
+std::string query::name() const
 {
   return "query";
 }

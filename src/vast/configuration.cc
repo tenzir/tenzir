@@ -1,8 +1,11 @@
 #include "vast/configuration.h"
+
 #include "vast/file_system.h"
 #include "vast/logger.h"
+#include "vast/uuid.h"
 #include "vast/detail/type_manager.h"
 #include "vast/util/color.h"
+#include "vast/util/system.h"
 
 namespace vast {
 
@@ -44,7 +47,11 @@ void configuration::initialize()
 
   auto min = 0;
   auto max = VAST_LOG_LEVEL;
-  auto range = '[' + std::to_string(min) + '-' + std::to_string(max) + ']';
+  auto range = '(' + std::to_string(min) + '-' + std::to_string(max) + ')';
+
+  auto hostname = util::hostname();
+  if (! hostname || hostname->empty())
+    hostname = to_string(uuid::random()).substr(0, 6);  // FIXME: uniform?
 
   auto& log = create_block("logger options", "log");
   log.add('v', "console", "console verbosity " + range).init(std::min(3, max));
@@ -52,19 +59,13 @@ void configuration::initialize()
   log.add("no-colors", "don't use colors for console output");
   log.add("function-names", "log function names");
 
-  auto& prof = create_block("profiler options", "profiler");
-  prof.add("interval", "profiling granularity in seconds").init(1);
-  prof.add("rusage", "enable rusage profiling");
-  prof.add("cpu", "enable gperftools CPU profiling");
-  prof.add("heap", "enable gperftools heap profiling");
-  prof.visible(false);
-
   auto& act = create_block("actor options");
-  act.add('C', "core", "spawn all core actors (-R -A -X)");
+  act.add('C', "core", "spawn all core actors (-S -T -R -A -X)");
+  act.add('T', "tracker", "spawn a tracker");
   act.add('R', "receiver", "spawn a receiver");
   act.add('A', "archive", "spawn an archive");
   act.add('X', "index", "spawn an index");
-  act.add('T', "tracker", "spawn a tracker");
+  act.add('S', "search", "spawns a search");
   act.add('E', "exporter", "spawn an exporter").single();
   act.add('I', "importer", "spawn an importer").single();
   act.add('Q', "console", "spawn a query console");
@@ -75,7 +76,6 @@ void configuration::initialize()
   track.visible(false);
 
   auto& imp = create_block("import options", "import");
-  imp.add("domain", "the ingestion domain").init("default");
   imp.add('s', "schema", "the schema to use for the generated events").single();
   imp.add('r', "read", "path to input file/directory").init("-");
   imp.add('i', "interface", "name of interface to read packets from").single();
@@ -86,22 +86,26 @@ void configuration::initialize()
   imp.add("pcap-maxflows", "number of concurrent flows to track").init(1000000);
   imp.add("test-id", "the base event ID").init(0);
   imp.add("test-events", "number of events to generate").init(100);
+  imp.add("name", "default importer name").init("importer@" + *hostname);
   imp.visible(false);
 
   auto& exp = create_block("export options", "export");
-  exp.add("domain", "the retrieval domain").init("default");
+  exp.add("schema", "the schema to use for the generated events").single();
   exp.add('l', "limit", "maximum number of results").init(0);
   exp.add('q', "query", "the query string").single();
   exp.add('w', "write", "path to output file/directory").init("-");
   exp.add("pcap-flush", "flush to disk after this many packets").init(10000);
+  exp.add("name", "default exporter name").init("exporter@" + *hostname);
   exp.visible(false);
 
   auto& recv = create_block("receiver options", "receiver");
+  recv.add("name", "default receiver name").init("receiver@" + *hostname);
   recv.visible(false);
 
   auto& arch = create_block("archive options", "archive");
   arch.add("max-segment-size", "maximum segment size in MB").init(128);
   arch.add("max-segments", "maximum segments cached in memory").init(10);
+  arch.add("name", "default archive name").init("archive@" + *hostname);
   arch.visible(false);
 
   auto& idx = create_block("index options", "index");
@@ -110,7 +114,19 @@ void configuration::initialize()
   idx.add('p', "max-parts", "maximum number of partitions in memory").init(10);
   idx.add('a', "active-parts", "number of active partitions").init(5);
   idx.add("rebuild", "delete and rebuild index from archive");
+  idx.add("name", "default index name").init("index-" + *hostname);
   idx.visible(false);
+
+  auto& srch = create_block("search options", "search");
+  srch.add("name", "default search name").init("search@" + *hostname);
+  srch.visible(false);
+
+  auto& prof = create_block("profiler options", "profiler");
+  prof.add("interval", "profiling granularity in seconds").init(1);
+  prof.add("rusage", "enable rusage profiling");
+  prof.add("cpu", "enable gperftools CPU profiling");
+  prof.add("heap", "enable gperftools heap profiling");
+  prof.visible(false);
 
   add_conflict("console", "core");
   add_conflict("console", "tracker");

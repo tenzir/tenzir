@@ -16,7 +16,7 @@ public:
   json(path p);
 
   bool process(event const& e);
-  std::string describe() const final;
+  std::string name() const;
 
 private:
   path dir_;

@@ -304,7 +304,7 @@ bool pcap::done() const
   return ! pcap_ || done_;
 }
 
-std::string pcap::describe() const
+std::string pcap::name() const
 {
   return "pcap-source";
 }

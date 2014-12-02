@@ -11,28 +11,26 @@
 namespace vast {
 
 /// Manages sources which produce events.
-class importer : public actor_base
+class importer : public actor_mixin<importer, sentinel>
 {
 public:
   /// Spawns an importer.
   /// @param dir The directory where to save persistent state.
-  /// @param receiver The actor receiving the generated segments.
   /// @param batch_size The number of events a synchronous source buffers until
   ///                   relaying them to the chunkifier
   /// @param method The compression method to use for the chunkifier.
-  importer(path dir, caf::actor receiver, uint64_t batch_size,
-           io::compression method);
+  importer(path dir, uint64_t batch_size, io::compression method);
 
-  caf::message_handler act() final;
-  std::string describe() const final;
+  caf::message_handler make_handler();
+  std::string name() const;
 
 private:
   path dir_;
   io::compression compression_;
-  caf::actor receiver_;
+  size_t current_ = 0;
+  std::vector<caf::actor> sinks_;
   caf::actor source_;
   caf::actor chunkifier_;
-  caf::message_handler init_;
   caf::message_handler ready_;
   caf::message_handler paused_;
   caf::message_handler terminating_;

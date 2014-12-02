@@ -30,7 +30,7 @@ public:
     return done_;
   }
 
-  std::string describe() const final
+  std::string name() const
   {
     return "dechunkifier";
   }

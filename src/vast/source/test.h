@@ -47,7 +47,7 @@ public:
 
   result<event> extract();
   bool done() const;
-  std::string describe() const final;
+  std::string name() const;
 
 private:
   schema schema_;

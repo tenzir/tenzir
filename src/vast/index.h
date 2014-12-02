@@ -13,7 +13,7 @@
 namespace vast {
 
 /// An inter-query predicate cache.
-class index : public actor_base
+class index : public actor_mixin<index, flow_controlled, sentinel>
 {
 public:
   struct predicatizer;
@@ -87,10 +87,17 @@ public:
   /// Computes the progression for a given query.
   double progress(expression const& query) const;
 
-  caf::message_handler act() final;
-  std::string describe() const final;
+  // FIXME: only propagate overload upstream if *all* partitions are
+  // overloaded. This requires tracking the set of overloaded partitions
+  // manually.
+
+  void at_down(caf::down_msg const& msg);
+  void at_exit(caf::exit_msg const& msg);
+  caf::message_handler make_handler();
+  std::string name() const;
 
   path dir_;
+  util::flat_set<caf::actor> upstream_;
   size_t batch_size_;
   size_t max_events_per_partition_;
   size_t max_partitions_;

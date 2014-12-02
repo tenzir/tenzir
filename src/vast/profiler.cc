@@ -55,7 +55,7 @@ profiler::profiler(path log_dir, std::chrono::seconds secs)
 {
 }
 
-message_handler profiler::act()
+message_handler profiler::make_handler()
 {
   attach_functor(
       [=](uint32_t)
@@ -160,7 +160,7 @@ message_handler profiler::act()
   };
 }
 
-std::string profiler::describe() const
+std::string profiler::name() const
 {
   return "profiler";
 }

@@ -12,7 +12,7 @@
 namespace vast {
 
 /// A console-based, interactive query client.
-struct console : actor_base
+struct console : actor_mixin<console, sentinel>
 {
   struct options
   {
@@ -122,8 +122,8 @@ struct console : actor_base
   /// @param dir The directory where to save state.
   console(caf::actor search, path dir);
 
-  caf::message_handler act() final;
-  std::string describe() const final;
+  caf::message_handler make_handler();
+  std::string name() const;
 
   /// Prints status information to standard error.
   std::ostream& print(print_mode mode);

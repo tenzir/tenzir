@@ -7,7 +7,21 @@ using namespace caf;
 
 namespace vast {
 
-message_handler exporter::act()
+void exporter::at_down(down_msg const& msg)
+{
+  VAST_LOG_ACTOR_ERROR("got DOWN from " << last_sender());
+  for (auto& s : sinks_)
+    if (s == last_sender())
+    {
+      sinks_.erase(s);
+      break;
+    }
+
+  if (sinks_.empty())
+    quit(msg.reason);
+}
+
+message_handler exporter::make_handler()
 {
   attach_functor(
       [=](uint32_t reason)
@@ -20,19 +34,6 @@ message_handler exporter::act()
 
   return
   {
-    [=](down_msg const& d)
-    {
-      VAST_LOG_ACTOR_ERROR("got DOWN from " << last_sender());
-      for (auto& s : sinks_)
-        if (s == last_sender())
-        {
-          sinks_.erase(s);
-          break;
-        }
-
-      if (sinks_.empty())
-        quit(d.reason);
-    },
     on(atom("add"), arg_match) >> [=](actor const& snk)
     {
       monitor(snk);
@@ -71,7 +72,7 @@ message_handler exporter::act()
   };
 }
 
-std::string exporter::describe() const
+std::string exporter::name() const
 {
   return "exporter";
 }

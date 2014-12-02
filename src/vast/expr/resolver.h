@@ -10,7 +10,7 @@ namespace expr {
 /// Transforms schema extractors into one or more data extractors.
 struct schema_resolver
 {
-  schema_resolver(schema const& sch);
+  schema_resolver(type const& t);
 
   trial<expression> operator()(none);
   trial<expression> operator()(conjunction const& c);
@@ -27,7 +27,7 @@ struct schema_resolver
   }
 
   relational_operator op_;
-  schema const& schema_;
+  type const& type_;
 };
 
 // Resolves type and data extractor predicates. Specifically, it handles the

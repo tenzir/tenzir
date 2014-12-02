@@ -1,5 +1,6 @@
 #include "vast/tracker.h"
 #include "vast/identifier.h"
+#include "vast/replicator.h"
 
 #include <caf/all.hpp>
 
@@ -14,123 +15,112 @@ tracker::tracker(path dir)
       [=](uint32_t)
       {
         identifier_ = invalid_actor;
-        ingestion_receivers_.clear();
-        ingestion_archives_.clear();
-        ingestion_indexes_.clear();
-        retrieval_receivers_.clear();
-        retrieval_archives_.clear();
-        retrieval_indexes_.clear();
       });
 }
 
-namespace {
-
-template <typename Map>
-bool add(Map& map, std::string const& domain, actor const& a)
+message_handler tracker::make_handler()
 {
-  auto i = map.find(domain);
-  if (i == map.end())
-  {
-    map[domain].push_back(a);
-    return true;
-  }
+  identifier_ = spawn<identifier, linked>(dir_);
 
-  auto j = std::find(i->second.begin(), i->second.end(), a);
-  if (j == i->second.end())
-    return false;
-
-  i->second.push_back(a);
-  return true;
-}
-
-template <typename Map>
-std::vector<actor> lookup(Map& map, std::string const& domain)
-{
-  auto i = map.find(domain);
-  return i == map.end() ? std::vector<actor>{} : i->second;
-}
-
-} // namespace <anonymous>
-
-message_handler tracker::act()
-{
-  identifier_ = spawn<identifier,linked>(dir_);
   return
   {
+    [=](down_msg const&)
+    {
+      // When an actor goes down, TRACKER sets the actor to invalid but
+      // keeps the topology information, as the terminated actor may come up
+      // again.
+      for (auto& p : actors_)
+        if (p.second.actor == last_sender())
+          p.second.actor = invalid_actor;
+    },
     on(atom("identifier")) >> [=]
     {
       return identifier_;
     },
-    on(atom("receiver"), atom("ingestion"), arg_match)
-      >> [=](std::string const& domain, actor const& a)
+    on(atom("put"), arg_match)
+      >> [=](std::string const& type, actor const& a, std::string const& name)
     {
-      if (! add(ingestion_receivers_, domain, a))
-        VAST_LOG_ACTOR_WARN("got duplicate receiver " << a);
+      if (actors_.find(name) != actors_.end())
+        return make_message(error{"duplicate actor: ", name});
+
+      auto& as = actors_[name];
+      as.actor = a;
+      if (type == "importer")
+        as.type = component::importer;
+      else if (type == "receiver")
+        as.type = component::receiver;
+      else if (type == "archive")
+        as.type = component::archive;
+      else if (type == "index")
+        as.type = component::index;
+      else if (type == "search")
+        as.type = component::search;
+      else
+        return make_message(error{"duplicate actor: ", name});
+
+      monitor(a);
+      VAST_LOG_VERBOSE(*this, " registers " << type << ": " << name);
+      return make_message(atom("success"));
     },
-    on(atom("receiver"), atom("ingestion"), arg_match)
-      >> [=](std::string const& domain)
+    on(atom("get"), arg_match) >> [=](std::string const& name)
     {
-      return lookup(ingestion_receivers_, domain);
+      auto i = actors_.find(name);
+      if (i != actors_.end())
+        return make_message(i->second.actor);
+      else
+        return make_message(error{"unknown actor: ", name});
     },
-    on(atom("archive"), atom("ingestion"), arg_match)
-      >> [=](std::string const& domain, actor const& a)
+    on(atom("link"), arg_match)
+      >> [=](std::string const& source, std::string const& sink)
     {
-      if (! add(ingestion_archives_, domain, a))
-        VAST_LOG_ACTOR_WARN("got duplicate archive " << a);
-    },
-    on(atom("archive"), atom("ingestion"), arg_match)
-      >> [=](std::string const& domain)
-    {
-      return lookup(ingestion_archives_, domain);
-    },
-    on(atom("index"), atom("ingestion"), arg_match)
-      >> [=](std::string const& domain, actor const& a)
-    {
-      if (! add(ingestion_indexes_, domain, a))
-        VAST_LOG_ACTOR_WARN("got duplicate index " << a);
-    },
-    on(atom("index"), atom("ingestion"), arg_match)
-      >> [=](std::string const& domain)
-    {
-      return lookup(ingestion_indexes_, domain);
-    },
-    on(atom("receiver"), atom("retrieval"), arg_match)
-      >> [=](std::string const& domain, actor const& a)
-    {
-      if (! add(retrieval_receivers_, domain, a))
-        VAST_LOG_ACTOR_WARN("got duplicate receiver " << a);
-    },
-    on(atom("receiver"), atom("retrieval"), arg_match)
-      >> [=](std::string const& domain)
-    {
-      return lookup(retrieval_receivers_, domain);
-    },
-    on(atom("archive"), atom("retrieval"), arg_match)
-      >> [=](std::string const& domain, actor const& a)
-    {
-      if (! add(retrieval_archives_, domain, a))
-        VAST_LOG_ACTOR_WARN("got duplicate archive " << a);
-    },
-    on(atom("archive"), atom("retrieval"), arg_match)
-      >> [=](std::string const& domain)
-    {
-      return lookup(retrieval_archives_, domain);
-    },
-    on(atom("index"), atom("retrieval"), arg_match)
-      >> [=](std::string const& domain, actor const& a)
-    {
-      if (! add(retrieval_indexes_, domain, a))
-        VAST_LOG_ACTOR_WARN("got duplicate index " << a);
-    },
-    on(atom("index"), atom("retrieval"), arg_match)
-      >> [=](std::string const& domain)
-    {
-      return lookup(retrieval_indexes_, domain);
+      auto i = actors_.find(source);
+      actor_state* src = nullptr;
+      if (i != actors_.end())
+        src = &i->second;
+      else
+        return make_message(error{"unknown source: ", source});
+
+      i = actors_.find(sink);
+      actor_state* snk = nullptr;
+      if (i != actors_.end())
+        snk = &i->second;
+      else
+        return make_message(error{"unknown sink: ", sink});
+
+      auto er = topology_.equal_range(source);
+      for (auto i = er.first; i != er.second; ++i)
+        if (i->first == source && i->second == sink)
+          return make_message(error{"link exists: ", source, " -> ", sink});
+
+      switch (src->type)
+      {
+        default:
+          return make_message(error{"invalid source: ", source});
+        case component::importer:
+          if (snk->type != component::receiver)
+            return make_message(error{"sink not a receiver: ", sink});
+          else
+            send(src->actor, atom("sink"), snk->actor);
+          break;
+        case component::receiver:
+        case component::search:
+          if (snk->type == component::archive)
+            send(src->actor, atom("link"), atom("archive"), snk->actor);
+          else if (snk->type == component::index)
+            send(src->actor, atom("link"), atom("index"), snk->actor);
+          else
+            return make_message(error{"sink not archive or index: ", sink});
+          break;
+      }
+
+      VAST_LOG_VERBOSE(*this, " links " << source << " -> " << sink);
+      topology_.emplace(source, sink);
+      return make_message(atom("success"));
     }
   };
 }
 
-std::string tracker::describe() const
+std::string tracker::name() const
 {
   return "tracker";
 }
