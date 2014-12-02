@@ -64,6 +64,7 @@ set(libvast_sources
   source/test.cc
   util/poll.cc
   util/string.cc
+  util/system.cc
   util/terminal.cc
   util/hash/crc.cc
   util/hash/murmur.cc
