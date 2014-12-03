@@ -338,12 +338,23 @@ public:
       {
         sink << "   --" << opt.name_;
         sink << std::string(max_len - opt.name_.size(), ' ');
+
         if (has_shortcut)
           sink << (opt.shortcut_
                    ? std::string(" | -") + opt.shortcut_
                    : "     ");
 
-        sink << "   " << opt.description_ << "\n";
+        sink << "   " << opt.description_;
+
+        if (! opt.values_.empty())
+        {
+          sink << " [";
+          print_delimited(", ", opt.values_.begin(), opt.values_.end(),
+                          std::ostream_iterator<char>{sink});
+          sink << ']';
+        }
+
+        sink << '\n';
       }
     }
 
