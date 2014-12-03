@@ -258,11 +258,15 @@ private:
   std::unique_ptr<util::error> error_;
 };
 
-/// Represents success in a `trial<void` scenario.
+/// Represents success in a `trial<void>` scenario.
 /// @relates trial
 trial<void> const nothing = {};
 
 } // namespace util
 } // namespace vast
+
+// Including this file here prevents linker errors in the constructor of
+// util::error, which uses the printable concept to render its arguments.
+#include "vast/util/print.h"
 
 #endif

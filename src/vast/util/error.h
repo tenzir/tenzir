@@ -46,7 +46,8 @@ public:
 
 private:
   // These two functions are defined in vast/util/print.h so that they can make
-  // use of the the built-in overloads for print().
+  // use of the the built-in overloads for print() and break the cyclic
+  // dependency of trial, error, and print.
   template <typename T>
   void render(T&& x);
 

@@ -149,6 +149,12 @@ auto print(T n, Iterator&& out, int digits = 10)
   return nothing;
 }
 
+template <typename Iterator>
+trial<void> print(error const& e, Iterator&& out)
+{
+  return print(e.msg(), out);
+}
+
 template <typename T, typename Iterator>
 trial<void> print(trial<T> const& t, Iterator&& out)
 {
@@ -224,12 +230,6 @@ void error::render(T&& x, Ts&&... xs)
 {
   render(std::forward<T>(x));
   render(std::forward<Ts>(xs)...);
-}
-
-template <typename Iterator>
-trial<void> print(error const& e, Iterator&& out)
-{
-  return print(e.msg(), out);
 }
 
 //
