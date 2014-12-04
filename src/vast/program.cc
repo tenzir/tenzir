@@ -216,27 +216,12 @@ void program::run()
 
     if (auto format = config_.get("importer"))
     {
-      auto s = config_.get("import.schema");
-      schema sch;
-      if (s)
+      auto sch = load_and_parse<schema>(path{*config_.get("import.schema")});
+      if (! sch)
       {
-        auto contents = load(*s);
-        if (! contents)
-        {
-          VAST_LOG_ACTOR_ERROR("failed to load schema: " << contents.error());
-          quit(exit::error);
-          return;
-        }
-
-        auto t = to<schema>(*contents);
-        if (! t)
-        {
-          VAST_LOG_ACTOR_ERROR("invalid schema: " << t.error());
-          quit(exit::error);
-          return;
-        }
-
-        sch = *t;
+        VAST_LOG_ACTOR_ERROR("failed to load schema: " << sch.error());
+        quit(exit::error);
+        return;
       }
 
       auto sniff = config_.check("import.sniff-schema");
@@ -258,7 +243,7 @@ void program::run()
         auto c = config_.as<size_t>("import.pcap-cutoff");
         auto m = *config_.as<size_t>("import.pcap-maxflows");
         std::string n = i ? *i : *r;
-        src = spawn<source::pcap, detached>(sch, std::move(n), c ? *c : -1, m);
+        src = spawn<source::pcap, detached>(*sch, std::move(n), c ? *c : -1, m);
 #else
         VAST_LOG_ACTOR_ERROR("not compiled with pcap support");
         quit(exit::error);
@@ -267,13 +252,13 @@ void program::run()
       }
       else if (*format == "bro")
       {
-        src = spawn<source::bro, detached>(sch, *r, sniff);
+        src = spawn<source::bro, detached>(*sch, *r, sniff);
       }
       else if (*format == "test")
       {
         auto id = *config_.as<event_id>("import.test-id");
         auto events = *config_.as<uint64_t>("import.test-events");
-        src = spawn<source::test>(sch, id, events);
+        src = spawn<source::test>(*sch, id, events);
       }
       else
       {
@@ -329,27 +314,12 @@ void program::run()
     }
     else if (auto format = config_.get("exporter"))
     {
-      auto s = config_.get("export.schema");
-      schema sch;
-      if (s)
+      auto sch = load_and_parse<schema>(path{*config_.get("export.schema")});
+      if (! sch)
       {
-        auto contents = load(*s);
-        if (! contents)
-        {
-          VAST_LOG_ACTOR_ERROR("failed to load schema: " << contents.error());
-          quit(exit::error);
-          return;
-        }
-
-        auto t = to<schema>(*contents);
-        if (! t)
-        {
-          VAST_LOG_ACTOR_ERROR("invalid schema: " << t.error());
-          quit(exit::error);
-          return;
-        }
-
-        sch = *t;
+        VAST_LOG_ACTOR_ERROR("failed to load schema: " << sch.error());
+        quit(exit::error);
+        return;
       }
 
       auto w = config_.get("export.write");
@@ -360,7 +330,7 @@ void program::run()
 #ifdef VAST_HAVE_PCAP
         auto flush = config_.as<uint64_t>("export.pcap-flush");
         assert(flush);
-        snk = spawn<sink::pcap, detached>(sch, *w, *flush);
+        snk = spawn<sink::pcap, detached>(*sch, *w, *flush);
 #else
         VAST_LOG_ACTOR_ERROR("not compiled with pcap support");
         quit(exit::error);
