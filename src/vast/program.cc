@@ -313,7 +313,7 @@ void program::run()
       importer_ = spawn<importer, linked>(dir, batch_size, compression);
       send(importer_, atom("source"), src);
 
-      auto importer_name = *config_.get("importer.name");
+      auto importer_name = *config_.get("import.name");
       send(tracker_, atom("put"), "importer", importer_, importer_name);
 
       if (config_.check("receiver"))
@@ -402,7 +402,7 @@ void program::run()
       exporter_ = spawn<exporter, linked>();
       send(exporter_, atom("add"), std::move(snk));
 
-      auto exporter_name = *config_.get("exporter.name");
+      auto exporter_name = *config_.get("export.name");
       send(tracker_, atom("put"), "exporter", exporter_, exporter_name);
 
       auto limit = *config_.as<uint64_t>("export.limit");
