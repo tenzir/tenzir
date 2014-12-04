@@ -2,6 +2,7 @@
 
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/socket.h>
 #include <cstring>
 #include "vast/logger.h"
 #include "vast/serialization/all.h"
