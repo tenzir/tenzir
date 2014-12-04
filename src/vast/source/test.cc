@@ -223,7 +223,7 @@ struct randomizer
     return visit(sampler<RNG>{gen_}, dists_[i++]);
   }
 
-  std::vector<distribution> dists_;
+  std::vector<distribution>& dists_;
   size_t i = 0;
   RNG& gen_;
 };
