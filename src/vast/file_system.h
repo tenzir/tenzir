@@ -1,14 +1,20 @@
 #ifndef VAST_FILE_SYSTEM_H
 #define VAST_FILE_SYSTEM_H
 
+#include "vast/config.h"
+
+#ifdef VAST_POSIX
+#  include <dirent.h>
+#endif
+
 #include <functional>
 #include <string>
 #include <vector>
-#include "vast/config.h"
 #include "vast/fwd.h"
 #include "vast/parse.h"
 #include "vast/print.h"
 #include "vast/trial.h"
+#include "vast/util/iterator.h"
 #include "vast/util/operators.h"
 
 namespace vast {
@@ -237,6 +243,53 @@ private:
   bool is_open_ = false;
   bool seek_failed_ = false;
   vast::path path_;
+};
+
+/// An ordered sequence of all the directory entries in a particular directory.
+class directory
+{
+public:
+  using const_iterator =
+    class iterator
+      : public util::iterator_facade<
+          iterator,
+          std::input_iterator_tag,
+          path const&,
+          path const&
+        >
+  {
+  public:
+    iterator(directory* dir = nullptr);
+
+    void increment();
+    path const& dereference() const;
+    bool equals(iterator const& other) const;
+
+  private:
+    path current_;
+    directory const* dir_ = nullptr;
+  };
+
+  /// Constructs a directory stream.
+  /// @param p The path to the directory.
+  directory(vast::path p);
+
+  ~directory();
+
+  iterator begin();
+  iterator end() const;
+
+  void rewind();
+
+  /// Retrieves the ::path for this file.
+  /// @returns The ::path for this file.
+  vast::path const& path() const;
+
+private:
+  vast::path path_;
+#ifdef VAST_POSIX
+  DIR* dir_ = nullptr;
+#endif
 };
 
 /// Checks whether the path exists on the filesystem.

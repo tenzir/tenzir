@@ -28,15 +28,12 @@ message_handler importer::make_handler()
   chunkifier_ =
     spawn<sink::chunkifier, monitored>(this, batch_size_, compression_);
 
-  traverse(
-      dir_ / "chunks",
-      [&](path const& p) -> bool
-      {
-        VAST_LOG_ACTOR_INFO("found orphaned chunk: " << p.basename());
-        orphaned_.insert(p.basename());
-        ++stored_;
-        return true;
-      });
+  for (auto const& p : directory{dir_ / "chunks"})
+  {
+    VAST_LOG_ACTOR_INFO("found orphaned chunk: " << p.basename());
+    orphaned_.insert(p.basename());
+    ++stored_;
+  }
 
   auto on_exit = [=](exit_msg const& e)
   {

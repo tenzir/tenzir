@@ -10,7 +10,6 @@
 #  include <cerrno>
 #  include <cstring>
 #  include <cstdio>
-#  include <dirent.h>
 #  include <fcntl.h>
 #  include <unistd.h>
 #  include <sys/stat.h>
@@ -472,6 +471,89 @@ path const& file::path() const
 {
   return path_;
 }
+
+
+directory::iterator::iterator(directory* dir)
+  : dir_{dir}
+{
+  increment();
+}
+
+void directory::iterator::increment()
+{
+  if (! dir_)
+    return;
+
+#ifdef VAST_POSIX
+  if (! dir_->dir_)
+  {
+    dir_ = nullptr;
+  }
+  else if (auto ent = ::readdir(dir_->dir_))
+  {
+    auto d = ent->d_name;
+    assert(d);
+    auto dot = d[0] == '.' && d[1] == '\0';
+    auto dotdot = d[0] == '.' && d[1] == '.' && d[2] == '\0';
+    if (dot || dotdot)
+      increment();
+    else
+      current_ = dir_->path_ / d;
+  }
+  else
+  {
+    dir_ = nullptr;
+  }
+#endif
+}
+
+path const& directory::iterator::dereference() const
+{
+  return current_;
+}
+
+bool directory::iterator::equals(iterator const& other) const
+{
+  return dir_ == other.dir_;
+}
+
+directory::directory(vast::path p)
+  : path_{std::move(p)},
+    dir_{::opendir(path_.str().data())}
+{
+}
+
+directory::~directory()
+{
+#ifdef VAST_POSIX
+  if (dir_)
+    ::closedir(dir_);
+#endif
+}
+
+directory::iterator directory::begin()
+{
+  return iterator{this};
+}
+
+directory::iterator directory::end() const
+{
+  return {};
+}
+
+void directory::rewind()
+{
+#ifdef VAST_POSIX
+  if (dir_)
+    ::rewinddir(dir_);
+#endif
+}
+
+path const& directory::path() const
+{
+  return path_;
+}
+
 
 bool exists(path const& p)
 {

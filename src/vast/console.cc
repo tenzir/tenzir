@@ -117,17 +117,13 @@ console::console(caf::actor search, path dir)
   }
 
   // Look for persistent queries.
-  traverse(
-      dir_ / "results",
-      [this](path const& p)
-      {
-        auto r = make_intrusive<result>();
-        io::unarchive(p / "meta", *r);
-        r->load(p / "data");
-        results_.push_back(r);
-        return true;
-      });
-
+  for (auto const& p : directory{dir_ / "results"})
+  {
+    auto r = make_intrusive<result>();
+    io::unarchive(p / "meta", *r);
+    r->load(p / "data");
+    results_.push_back(r);
+  }
 
   auto complete = [](std::string const& prefix, std::vector<std::string> match)
     -> std::string
