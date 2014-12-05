@@ -28,7 +28,7 @@ message_handler importer::make_handler()
   chunkifier_ =
     spawn<sink::chunkifier, monitored>(this, batch_size_, compression_);
 
-  for (auto const& p : directory{dir_ / "chunks"})
+  for (auto& p : directory{dir_ / "chunks"})
   {
     VAST_LOG_ACTOR_INFO("found orphaned chunk: " << p.basename());
     orphaned_.insert(p.basename());
@@ -113,6 +113,7 @@ message_handler importer::make_handler()
     },
     [=](chunk const& chk)
     {
+      assert(! sinks_.empty());
       send(sinks_[current_++], chk);
       current_ %= sinks_.size();
     },

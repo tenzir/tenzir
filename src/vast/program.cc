@@ -217,6 +217,49 @@ void program::run()
     schema sch;
     if (auto format = config_.get("importer"))
     {
+      io::compression compression;
+      auto method = *config_.get("import.compression");
+      if (method == "null")
+      {
+        compression = io::null;
+      }
+      else if (method == "lz4")
+      {
+        compression = io::lz4;
+      }
+      else if (method == "snappy")
+      {
+#ifdef VAST_HAVE_SNAPPY
+        compression = io::snappy;
+#else
+        VAST_LOG_ACTOR_ERROR("not compiled with snappy support");
+        quit(exit::error);
+        return;
+#endif
+      }
+      else
+      {
+        VAST_LOG_ACTOR_ERROR("unknown compression method");
+        quit(exit::error);
+        return;
+      }
+
+      auto batch_size = *config_.as<uint64_t>("import.batch-size");
+      importer_ = spawn<importer, linked>(dir, batch_size, compression);
+
+      auto importer_name = *config_.get("import.name");
+      send(tracker_, atom("put"), "importer", importer_, importer_name);
+      if (config_.check("receiver"))
+      {
+        // In case we're running in "one-shot" mode where both IMPORTER and
+        // RECEIVER share the same program, we initiate the shutdown
+        // via IMPORTER to ensure proper delivery of inflight segments from
+        // IMPORTER to RECEIVER.
+        unlink_from(receiver_);
+        importer_->link_to(receiver_);
+        send(tracker_, atom("link"), importer_name, receiver_name);
+      }
+
       if (auto schema_file = config_.get("import.schema"))
       {
         auto t = load_and_parse<schema>(path{*schema_file});
@@ -273,50 +316,8 @@ void program::run()
         return;
       }
 
-      io::compression compression;
-      auto method = *config_.get("import.compression");
-      if (method == "null")
-      {
-        compression = io::null;
-      }
-      else if (method == "lz4")
-      {
-        compression = io::lz4;
-      }
-      else if (method == "snappy")
-      {
-#ifdef VAST_HAVE_SNAPPY
-        compression = io::snappy;
-#else
-        VAST_LOG_ACTOR_ERROR("not compiled with snappy support");
-        quit(exit::error);
-        return;
-#endif
-      }
-      else
-      {
-        VAST_LOG_ACTOR_ERROR("unknown compression method");
-        quit(exit::error);
-        return;
-      }
-
-      auto batch_size = *config_.as<uint64_t>("import.batch-size");
-      importer_ = spawn<importer, linked>(dir, batch_size, compression);
       send(importer_, atom("source"), src);
 
-      auto importer_name = *config_.get("import.name");
-      send(tracker_, atom("put"), "importer", importer_, importer_name);
-
-      if (config_.check("receiver"))
-      {
-        // In case we're running in "one-shot" mode where both IMPORTER and
-        // RECEIVER share the same program, we initiate the shutdown
-        // via IMPORTER to ensure proper delivery of inflight segments from
-        // IMPORTER to RECEIVER.
-        unlink_from(receiver_);
-        importer_->link_to(receiver_);
-        send(tracker_, atom("link"), importer_name, receiver_name);
-      }
     }
     else if (auto format = config_.get("exporter"))
     {
