@@ -31,25 +31,31 @@ message_handler receiver::make_handler()
 {
   return
   {
-    on(atom("link"), atom("identifier"), arg_match) >> [=](actor const& a)
+    on(atom("set"), atom("identifier"), arg_match) >> [=](actor const& a)
     {
+      VAST_LOG_ACTOR_DEBUG("registers identifier" << a);
       identifier_ = a;
+      return make_message(atom("ok"));
     },
-    on(atom("link"), atom("archive"), arg_match) >> [=](actor const& a)
+    on(atom("add"), atom("archive"), arg_match) >> [=](actor const& a)
     {
+      VAST_LOG_ACTOR_DEBUG("registers archive" << a);
       send(a, flow_control::announce{this});
       archive_ = a;
+      return make_message(atom("ok"));
     },
-    on(atom("link"), atom("index"), arg_match) >> [=](actor const& a)
+    on(atom("add"), atom("index"), arg_match) >> [=](actor const& a)
     {
+      VAST_LOG_ACTOR_DEBUG("registers index" << a);
       send(a, flow_control::announce{this});
       index_ = a;
+      return make_message(atom("ok"));
     },
     [=](chunk const& chk)
     {
-      assert(identifier_);
-      assert(archive_);
-      assert(index_);
+      assert(identifier_ != invalid_actor);
+      assert(archive_ != invalid_actor);
+      assert(index_ != invalid_actor);
 
       message last = last_dequeued();
       sync_send(identifier_, atom("request"), chk.events()).then(
@@ -60,7 +66,7 @@ message_handler receiver::make_handler()
                                ", " << to << ")");
 
           auto msg = last.apply(
-              on_arg_match >> [=](chunk& c, actor)
+              on_arg_match >> [=](chunk& c)
               {
                 if (n < c.events())
                 {
@@ -79,6 +85,16 @@ message_handler receiver::make_handler()
                 send_tuple(archive_, t);
                 send_tuple(index_, t);
               });
+        },
+        [=](error const& e)
+        {
+          VAST_LOG_ACTOR_ERROR(e);
+          quit(exit::error);
+        },
+        others() >> [=]
+        {
+          VAST_LOG_ACTOR_WARN("got unexpected message" <<
+                              to_string(last_dequeued()));
         });
     }
   };

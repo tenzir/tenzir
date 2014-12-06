@@ -40,7 +40,7 @@ public:
 
     return
     {
-      on(atom("add"), arg_match) >> [=](actor a)
+      on(atom("add"), atom("worker"), arg_match) >> [=](actor a)
       {
         VAST_LOG_DEBUG(*this << " adds worker " << a);
         monitor(a);

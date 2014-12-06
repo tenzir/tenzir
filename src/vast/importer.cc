@@ -97,19 +97,23 @@ message_handler importer::make_handler()
         send(this, std::move(chk));
       }
     },
-    on(atom("source"), arg_match) >> [=](actor src)
+    on(atom("add"), atom("source"), arg_match) >> [=](actor const& src)
     {
+      // TODO: Support multiple sources.
+      VAST_LOG_ACTOR_DEBUG("adds source " << src);
       source_ = src;
       source_->link_to(chunkifier_);
       send(source_, atom("sink"), chunkifier_);
       send(source_, atom("batch size"), batch_size_);
       send(source_, atom("run"));
     },
-    on(atom("sink"), arg_match) >> [=](actor snk)
+    on(atom("add"), atom("sink"), arg_match) >> [=](actor const& snk)
     {
+      VAST_LOG_ACTOR_DEBUG("adds sink " << snk);
       send(snk, flow_control::announce{this});
       sinks_.push_back(snk);
       monitor(snk);
+      return make_message(atom("ok"));
     },
     [=](chunk const& chk)
     {

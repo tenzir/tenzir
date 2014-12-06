@@ -646,17 +646,6 @@ void index::at_down(down_msg const& msg)
 {
   VAST_LOG_ACTOR_DEBUG("got DOWN from " << last_sender());
 
-  auto i = std::find_if(
-      upstream_.begin(),
-      upstream_.end(),
-      [&](actor const& a) { return a == last_sender(); });
-
-  if (i != upstream_.end())
-  {
-    upstream_.erase(i);
-    return;
-  }
-
   auto found = false;
   for (auto i = active_.begin(); i != active_.end(); ++i)
   {

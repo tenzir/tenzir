@@ -70,7 +70,12 @@ message_handler program::make_handler()
       if (signal == SIGINT || signal == SIGTERM)
         quit(exit::stop);
     },
-    on(atom("success")) >> [] { /* nothing to do */ }
+    [=](error const& e)
+    {
+      VAST_LOG_ACTOR_ERROR("got error: " << e);
+      quit(exit::error);
+    },
+    on(atom("ok")) >> [] { /* nothing to do */ }
   };
 }
 
@@ -135,19 +140,24 @@ void program::run()
     auto port = *config_.as<unsigned>("tracker.port");
     if (config_.check("tracker"))
     {
-      VAST_LOG_ACTOR_INFO("publishes tracker at " <<
-                          host << ':' << port);
-
+      VAST_LOG_ACTOR_INFO("publishes tracker at " << host << ':' << port);
       tracker_ = spawn<tracker, linked>(dir);
       caf::io::publish(tracker_, port, host.c_str());
     }
     else
     {
-      VAST_LOG_ACTOR_INFO("connects to tracker at " <<
-                          host << ':' << port);
-
+      VAST_LOG_ACTOR_INFO("connects to tracker at " << host << ':' << port);
       tracker_ = caf::io::remote_actor(host, port);
     }
+
+    scoped_actor self;
+    message_handler ok_or_quit = (
+        on(atom("ok")) >> [] { /* do nothing */ },
+        [=](error const& e)
+        {
+          VAST_LOG_ACTOR_ERROR("got error: " << e);
+          quit(exit::error);
+        });
 
     auto archive_name = *config_.get("archive.name");
     if (config_.check("archive"))
@@ -157,7 +167,8 @@ void program::run()
           *config_.as<size_t>("archive.max-segments"),
           *config_.as<size_t>("archive.max-segment-size") * 1000000);
 
-      send(tracker_, atom("put"), "archive", archive_, archive_name);
+      self->sync_send(tracker_, atom("put"), "archive", archive_, archive_name)
+        .await(ok_or_quit);
     }
 
     auto index_name = *config_.get("index.name");
@@ -170,48 +181,66 @@ void program::run()
       index_ = spawn<index, linked>(dir, batch_size, max_events, max_parts,
                                     active_parts);
 
-      send(tracker_, atom("put"), "index", index_, index_name);
+      self->sync_send(tracker_, atom("put"), "index", index_, index_name)
+        .await(ok_or_quit);
     }
 
     auto receiver_name = *config_.get("receiver.name");
     if (config_.check("receiver"))
     {
       receiver_ = spawn<receiver, linked>();
-      send(tracker_, atom("put"), "receiver", receiver_, receiver_name);
 
-      scoped_actor self;
+      // TRACKER needs to remain alive at least as long as RECEIVER, because
+      // RECEIVER asks IDENTIFIER (which resides inside TRACKER) for chunk IDs.
+      unlink_from(tracker_);
+      tracker_->link_to(receiver_);
+
+      self->sync_send(tracker_, atom("put"), "receiver", receiver_,
+                      receiver_name).await(ok_or_quit);
+
       self->sync_send(tracker_, atom("identifier")).await(
-          [=](actor const& identifier)
+          [&](actor const& identifier)
           {
-            send(receiver_, atom("link"), atom("identifier"), identifier);
+            send(receiver_, atom("set"), atom("identifier"), identifier);
           });
 
       if (config_.check("archive"))
       {
         unlink_from(archive_);
         receiver_->link_to(archive_);
-        send(tracker_, atom("link"), receiver_name, archive_name);
+        self->sync_send(tracker_, atom("link"), receiver_name, archive_name)
+          .await(ok_or_quit);
       }
 
       if (config_.check("index"))
       {
         unlink_from(index_);
         receiver_->link_to(index_);
-        send(tracker_, atom("link"), receiver_name, index_name);
+        self->sync_send(tracker_, atom("link"), receiver_name, index_name)
+          .await(ok_or_quit);
       }
+
     }
 
     auto search_name = *config_.get("search.name");
     if (config_.check("search"))
     {
-      search_ = spawn<search, linked>();
-      send(tracker_, atom("put"), "search", search_, search_name);
+      search_ = spawn<search>();
+      self->sync_send(tracker_, atom("put"), "search", search_, search_name)
+        .await(ok_or_quit);
 
       if (config_.check("archive"))
-        send(tracker_, atom("link"), search_name, archive_name);
+        self->sync_send(tracker_, atom("link"), search_name, archive_name)
+          .await(ok_or_quit);
 
       if (config_.check("index"))
-        send(tracker_, atom("link"), search_name, index_name);
+        self->sync_send(tracker_, atom("link"), search_name, index_name)
+          .await(ok_or_quit);
+
+      if (config_.check("receiver"))
+        search_->link_to(receiver_);
+      else
+        link_to(search_);
     }
 
     schema sch;
@@ -248,17 +277,20 @@ void program::run()
       importer_ = spawn<importer, linked>(dir, batch_size, compression);
 
       auto importer_name = *config_.get("import.name");
-      send(tracker_, atom("put"), "importer", importer_, importer_name);
+      self->sync_send(tracker_, atom("put"), "importer", importer_,
+                      importer_name).await(ok_or_quit);
+
       if (config_.check("receiver"))
       {
-        // In case we're running in "one-shot" mode where both IMPORTER and
-        // RECEIVER share the same program, we initiate the shutdown
-        // via IMPORTER to ensure proper delivery of inflight segments from
-        // IMPORTER to RECEIVER.
+        // If this program accomodates both IMPORTER and RECEIVER, we must
+        // initiate the shutdown via IMPORTER to ensure proper delivery of
+        // inflight chunks from IMPORTER to RECEIVER.
         unlink_from(receiver_);
         importer_->link_to(receiver_);
-        send(tracker_, atom("link"), importer_name, receiver_name);
       }
+
+      self->sync_send(tracker_, atom("link"), importer_name, receiver_name)
+        .await(ok_or_quit);
 
       if (auto schema_file = config_.get("import.schema"))
       {
@@ -316,8 +348,7 @@ void program::run()
         return;
       }
 
-      send(importer_, atom("source"), src);
-
+      send(importer_, atom("add"), atom("source"), src);
     }
     else if (auto format = config_.get("exporter"))
     {
@@ -381,20 +412,20 @@ void program::run()
         return;
       }
 
-      exporter_ = spawn<exporter, linked>();
-      send(exporter_, atom("add"), std::move(snk));
-
       auto exporter_name = *config_.get("export.name");
-      send(tracker_, atom("put"), "exporter", exporter_, exporter_name);
+      self->sync_send(tracker_, atom("put"), "exporter", exporter_,
+                      exporter_name).await(ok_or_quit);
 
       auto limit = *config_.as<uint64_t>("export.limit");
       if (limit > 0)
         send(exporter_, atom("limit"), limit);
 
+      exporter_ = spawn<exporter, linked>();
+      send(exporter_, atom("add"), std::move(snk));
+
       auto query = config_.get("export.query");
       assert(query);
-
-      sync_send(tracker_, atom("get"), search_name).then(
+      self->sync_send(tracker_, atom("get"), search_name).await(
           on_arg_match >> [=](error const& e)
           {
             VAST_LOG_ACTOR_ERROR("could not get SEARCH: " << e);
@@ -426,7 +457,7 @@ void program::run()
     else if (config_.check("console"))
     {
 #ifdef VAST_HAVE_EDITLINE
-      sync_send(tracker_, atom("get"), search_name).then(
+      self->sync_send(tracker_, atom("get"), search_name).await(
           [=](actor const& search)
           {
             auto c = spawn<console, linked>(search, dir / "console");

@@ -150,7 +150,7 @@ struct actor_mixin : base_actor, Components...
     auto first = static_cast<Derived*>(this)->make_handler();
     auto rest = build_handler<Components...>();
 
-    return system.or_else(first).or_else(rest);
+    return first.or_else(system).or_else(rest);
   }
 
   void at_down(caf::down_msg const&) { }
@@ -241,12 +241,16 @@ struct flow_controlled : component
 
   void on_announce(base_actor* self, caf::actor const& upstream)
   {
+    VAST_LOG_DEBUG(*self, " registers " << upstream <<
+                   " as upstream node for flow-control");
+
     self->monitor(upstream);
     upstream_.insert(upstream);
   }
 
   void on_overload(base_actor* self)
   {
+    VAST_LOG_DEBUG(*self, " got overload signal");
     for (auto& a : upstream_)
       caf::send_tuple_as(self, a, caf::message_priority::high,
                          self->last_dequeued());
@@ -254,6 +258,7 @@ struct flow_controlled : component
 
   void on_underload(base_actor* self)
   {
+    VAST_LOG_DEBUG(*self, " got underload signal");
     for (auto& a : upstream_)
       caf::send_tuple_as(self, a, caf::message_priority::high,
                          self->last_dequeued());

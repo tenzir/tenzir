@@ -97,7 +97,6 @@ public:
   std::string name() const;
 
   path dir_;
-  util::flat_set<caf::actor> upstream_;
   size_t batch_size_;
   size_t max_events_per_partition_;
   size_t max_partitions_;

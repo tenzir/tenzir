@@ -18,21 +18,38 @@ tracker::tracker(path dir)
       });
 }
 
+void tracker::at_down(caf::down_msg const&)
+{
+  // When an actor goes down, TRACKER sets the actor to invalid but keeps the
+  // topology information, as the terminated actor may come up again.
+  for (auto i = actors_.begin(); i != actors_.end(); ++i)
+    if (i->second.actor == last_sender())
+    {
+      VAST_LOG_ACTOR_VERBOSE("disconnects " << i->first);
+      auto j = topology_.begin();
+      while (j != topology_.end())
+        if (j->first == i->first || j->second == i->first)
+        {
+          VAST_LOG_ACTOR_VERBOSE("removes link " << j->first << " -> " <<
+                                 j->second);
+          j = topology_.erase(j);
+        }
+        else
+        {
+          ++j;
+        }
+
+      actors_.erase(i);
+      break;
+    }
+}
+
 message_handler tracker::make_handler()
 {
   identifier_ = spawn<identifier, linked>(dir_);
 
   return
   {
-    [=](down_msg const&)
-    {
-      // When an actor goes down, TRACKER sets the actor to invalid but
-      // keeps the topology information, as the terminated actor may come up
-      // again.
-      for (auto& p : actors_)
-        if (p.second.actor == last_sender())
-          p.second.actor = invalid_actor;
-    },
     on(atom("identifier")) >> [=]
     {
       return identifier_;
@@ -60,7 +77,7 @@ message_handler tracker::make_handler()
 
       monitor(a);
       VAST_LOG_VERBOSE(*this, " registers " << type << ": " << name);
-      return make_message(atom("success"));
+      return make_message(atom("ok"));
     },
     on(atom("get"), arg_match) >> [=](std::string const& name)
     {
@@ -92,6 +109,10 @@ message_handler tracker::make_handler()
         if (i->first == source && i->second == sink)
           return make_message(error{"link exists: ", source, " -> ", sink});
 
+      VAST_LOG_VERBOSE(*this, " links " << source << " -> " << sink);
+
+      scoped_actor self;
+      message_handler ok = on(atom("ok")) >> [] { /* do nothing */ };
       switch (src->type)
       {
         default:
@@ -100,22 +121,24 @@ message_handler tracker::make_handler()
           if (snk->type != component::receiver)
             return make_message(error{"sink not a receiver: ", sink});
           else
-            send(src->actor, atom("sink"), snk->actor);
+            self->sync_send(src->actor, atom("add"), atom("sink"),
+                            snk->actor).await(ok);
           break;
         case component::receiver:
         case component::search:
           if (snk->type == component::archive)
-            send(src->actor, atom("link"), atom("archive"), snk->actor);
+            self->sync_send(src->actor, atom("add"), atom("archive"),
+                            snk->actor).await(ok);
           else if (snk->type == component::index)
-            send(src->actor, atom("link"), atom("index"), snk->actor);
+            self->sync_send(src->actor, atom("add"), atom("index"),
+                            snk->actor).await(ok);
           else
             return make_message(error{"sink not archive or index: ", sink});
           break;
       }
 
-      VAST_LOG_VERBOSE(*this, " links " << source << " -> " << sink);
       topology_.emplace(source, sink);
-      return make_message(atom("success"));
+      return make_message(atom("ok"));
     }
   };
 }

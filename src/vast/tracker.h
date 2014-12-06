@@ -19,6 +19,7 @@ public:
   tracker(path dir);
 
   caf::message_handler make_handler();
+  void at_down(caf::down_msg const& msg);
   std::string name() const;
 
 private:

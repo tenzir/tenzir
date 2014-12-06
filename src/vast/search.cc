@@ -39,19 +39,21 @@ message_handler search::make_handler()
 
       clients_.erase(last_sender());
     },
-    on(atom("link"), atom("archive"), arg_match) >> [=](actor const& a)
+    on(atom("add"), atom("archive"), arg_match) >> [=](actor const& a)
     {
       if (! archive_)
         archive_ = spawn<replicator, linked>();
 
-      send(archive_, atom("add"), a);
+      send(archive_, atom("add"), atom("worker"), a);
+      return make_message(atom("ok"));
     },
-    on(atom("link"), atom("index"), arg_match) >> [=](actor const& a)
+    on(atom("add"), atom("index"), arg_match) >> [=](actor const& a)
     {
       if (! index_)
         index_ = spawn<replicator, linked>();
 
-      send(index_, atom("add"), a);
+      send(index_, atom("add"), atom("worker"), a);
+      return make_message(atom("ok"));
     },
     on(atom("query"), arg_match)
       >> [=](actor const& client, std::string const& str)

@@ -50,22 +50,15 @@ message_handler identifier::make_handler()
     on(atom("request"), arg_match) >> [=](uint64_t n)
     {
       if (n == 0)
-      {
-        VAST_LOG_ACTOR_ERROR("cannot hand out 0 ids");
-        return make_message(atom("id"), atom("failure"));
-      }
+        return make_message(error{"cannot hand out 0 ids"});
       else if (std::numeric_limits<event_id>::max() - id_ < n)
-      {
-        VAST_LOG_ACTOR_ERROR("not enough ids available for " << n);
-        return make_message(atom("id"), atom("failure"));
-      }
+        return make_message(error{"not enough ids for ", n, " events"});
 
       id_ += n;
       if (! save())
       {
-        VAST_LOG_ACTOR_ERROR("failed to save incremented ID: " << id_);
         quit(exit::error);
-        return make_message(atom("id"), atom("failure"));
+        return make_message(error{"failed to save incremented ID ", id_});
       }
 
       VAST_LOG_ACTOR_DEBUG("hands out [" << (id_ - n) << ',' << id_ << ')');
