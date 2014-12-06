@@ -234,17 +234,38 @@ test::test(schema sch, event_id id, uint64_t events)
   : schema_{std::move(sch)},
     id_{id},
     events_{events},
-    generator_{std::random_device{}()},
-    next_{schema_.begin()}
+    generator_{std::random_device{}()}
 {
   assert(events_ > 0);
+
+  if (schema_.empty())
+  {
+    auto builtin_schema = R"schema(
+      type test = record
+      {
+        b: bool &default="uniform(0,1)",
+        i: int &default="uniform(-42000,1337)",
+        c: count &default="pareto(0,1)",
+        r: real &default="normal(0,1)",
+        s: string &default="uniform(0,100)",
+        t: time &default="uniform(0,10)",
+        d: duration &default="uniform(100,200)",
+        a: addr &default="uniform(0,2000000)",
+        s: subnet &default="uniform(1000,2000)",
+        p: port &default="uniform(1,65384)"
+      }
+    )schema";
+
+    auto t = to<schema>(builtin_schema);
+    assert(t);
+    schema_ = *t;
+  }
+
+  next_ = schema_.begin();
 }
 
 result<event> test::extract()
 {
-  if (schema_.empty())
-    return error{"must have at least one type in schema"};
-
   assert(next_ != schema_.end());
 
   if (blueprints_.empty())
