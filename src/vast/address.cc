@@ -4,6 +4,7 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <cstring>
+#include <cstdlib>
 #include "vast/logger.h"
 #include "vast/serialization/all.h"
 #include "vast/util/byte_swap.h"
@@ -113,26 +114,33 @@ bool address::is_multicast() const
   return is_v4() ? bytes_[12] == 224 : bytes_[0] == 0xff;
 }
 
+namespace {
+inline uint32_t bitmask32(size_t bottom_bits)
+{
+  return bottom_bits >= 32 ? 0xffffffff : ((uint32_t{1} << bottom_bits) - 1);
+}
+
+} // namespace <anonymous>
+
 bool address::mask(unsigned top_bits_to_keep)
 {
   if (top_bits_to_keep > 128)
     return false;
 
-  auto i = 12u;
-  auto bits_to_chop = 128 - top_bits_to_keep;
-  while (bits_to_chop >= 32)
-  {
-    auto p = reinterpret_cast<uint32_t*>(&bytes_[i]);
-    *p = 0;
-    bits_to_chop -= 32;
-    i -= 4;
-  }
+  uint32_t m[4] = { 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff };
+  auto r = std::ldiv(top_bits_to_keep, 32);
 
-  auto last = reinterpret_cast<uint32_t*>(&bytes_[i]);
-  auto val = util::byte_swap<network_endian, host_endian>(*last);
-  val >>= bits_to_chop;
-  val <<= bits_to_chop;
-  *last = util::byte_swap<host_endian, network_endian>(val);
+  if (r.quot < 4)
+    m[r.quot] =
+      util::byte_swap<host_endian, network_endian>(
+          m[r.quot] & ~bitmask32(32 - r.rem));
+
+  for (size_t i = r.quot + 1; i < 4; ++i)
+    m[i] = 0;
+
+  auto p = reinterpret_cast<uint32_t*>(&bytes_[0]);
+  for (size_t i = 0; i < 4; ++i)
+    p[i] &= m[i];
 
   return true;
 }

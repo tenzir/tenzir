@@ -207,12 +207,19 @@ TEST("addresses (IPv6)")
   CHECK(f == (a ^ d));
   CHECK(f == e);
 
-  a.mask(112);
+  CHECK(! a.mask(129));
+  CHECK(a.mask(128)); // No modification
+  CHECK(a == *to<address>("2001:db8:0000:0000:0202:b3ff:fe1e:8329"));
+  CHECK(a.mask(112));
   CHECK(a == *to<address>("2001:db8::202:b3ff:fe1e:0"));
-  a.mask(100);
+  CHECK(a.mask(100));
   CHECK(a == *to<address>("2001:db8::202:b3ff:f000:0"));
-  a.mask(3);
+  CHECK(a.mask(64));
+  CHECK(a == *to<address>("2001:db8::202:b3ff::"));
+  CHECK(a.mask(3));
   CHECK(a == *to<address>("2000::"));
+  CHECK(a.mask(0));
+  CHECK(a == *to<address>("::"));
 }
 
 TEST("subnets")
