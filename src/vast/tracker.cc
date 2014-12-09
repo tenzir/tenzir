@@ -64,6 +64,8 @@ message_handler tracker::make_handler()
       as.actor = a;
       if (type == "importer")
         as.type = component::importer;
+      else if (type == "exporter")
+        as.type = component::exporter;
       else if (type == "receiver")
         as.type = component::receiver;
       else if (type == "archive")
@@ -73,7 +75,7 @@ message_handler tracker::make_handler()
       else if (type == "search")
         as.type = component::search;
       else
-        return make_message(error{"duplicate actor: ", name});
+        return make_message(error{"invalid type: ", type});
 
       monitor(a);
       VAST_LOG_VERBOSE(*this, " registers " << type << ": " << name);

@@ -26,6 +26,7 @@ private:
   enum class component
   {
     importer,
+    exporter,
     receiver,
     archive,
     index,
