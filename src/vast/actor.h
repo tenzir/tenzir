@@ -167,6 +167,12 @@ private:
     static_cast<Derived*>(this)->at_exit(msg);
   }
 
+  template <typename... Cs>
+  std::enable_if_t<sizeof...(Cs) == 0, caf::message_handler> build_handler()
+  {
+    return {};
+  }
+
   template <typename C>
   caf::message_handler build_handler()
   {
@@ -178,6 +184,11 @@ private:
   build_handler()
   {
     return build_handler<C>().or_else(build_handler<Cs...>());
+  }
+
+  template <typename... Cs>
+  std::enable_if_t<sizeof...(Cs) == 0> exec_down(caf::down_msg const&)
+  {
   }
 
   template <typename C>
@@ -192,6 +203,11 @@ private:
   {
     exec_down<C>(msg);
     exec_down<Cs...>(msg);
+  }
+
+  template <typename... Cs>
+  std::enable_if_t<sizeof...(Cs) == 0> exec_exit(caf::exit_msg const&)
+  {
   }
 
   template <typename C>
