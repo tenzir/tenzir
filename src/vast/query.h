@@ -14,7 +14,7 @@ namespace vast {
 
 /// Receives index hits, looks up the corresponding chunks in the archive, and
 /// filters out results which it then sends to a sink.
-class query : public actor_mixin<query, sentinel>
+class query : public actor_mixin<query>
 {
 public:
   /// Spawns a query actor.

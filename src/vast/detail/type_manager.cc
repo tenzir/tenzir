@@ -13,13 +13,10 @@ type_manager::add(std::type_info const& ti,
 {
   if (by_ti_.find(std::type_index(ti)) != by_ti_.end())
     return false;
-  if (by_name_.find(ti.name()) != by_name_.end())
-    return false;;
 
   auto gti = f(++id_);
 
   by_id_.emplace(gti->id(), gti);
-  by_name_.emplace(gti->name(), gti);
   by_ti_.emplace(std::type_index(ti), std::unique_ptr<global_type_info>(gti));
 
   return true;
@@ -37,14 +34,6 @@ global_type_info const* type_manager::lookup(type_id id) const
 {
   auto i = by_id_.find(id);
   if (i == by_id_.end())
-    return nullptr;
-  return i->second;
-}
-
-global_type_info const* type_manager::lookup(std::string const& name) const
-{
-  auto i = by_name_.find(name);
-  if (i == by_name_.end())
     return nullptr;
   return i->second;
 }

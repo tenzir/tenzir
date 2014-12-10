@@ -18,8 +18,8 @@
 #include "vast/detail/type_manager.h"
 #include "vast/util/coding.h"
 #include "vast/util/meta.h"
+#include "vast/util/pp.h"
 #include "vast/util/tuple.h"
-
 
 namespace vast {
 
@@ -127,70 +127,70 @@ bool binary_serializer::write_bool(bool x)
   bytes_ += sizeof(bool);
   VAST_RETURN(sink_.write<uint8_t>(&x));
 }
-  
+
 bool binary_serializer::write_int8(int8_t x)
 {
   VAST_ENTER(VAST_ARG(x));
   bytes_ += sizeof(int8_t);
   VAST_RETURN(sink_.write<int8_t>(&x));
 }
-  
+
 bool binary_serializer::write_uint8(uint8_t x)
 {
   VAST_ENTER(VAST_ARG(x));
   bytes_ += sizeof(uint8_t);
   VAST_RETURN(sink_.write<uint8_t>(&x));
 }
-  
+
 bool binary_serializer::write_int16(int16_t x)
 {
   VAST_ENTER(VAST_ARG(x));
   bytes_ += sizeof(int16_t);
   VAST_RETURN(sink_.write<int16_t>(&x));
 }
-  
+
 bool binary_serializer::write_uint16(uint16_t x)
 {
   VAST_ENTER(VAST_ARG(x));
   bytes_ += sizeof(uint16_t);
   VAST_RETURN(sink_.write<uint16_t>(&x));
 }
-  
+
 bool binary_serializer::write_int32(int32_t x)
 {
   VAST_ENTER(VAST_ARG(x));
   bytes_ += sizeof(int32_t);
   VAST_RETURN(sink_.write<int32_t>(&x));
 }
-  
+
 bool binary_serializer::write_uint32(uint32_t x)
 {
   VAST_ENTER(VAST_ARG(x));
   bytes_ += sizeof(uint32_t);
   VAST_RETURN(sink_.write<uint32_t>(&x));
 }
-  
+
 bool binary_serializer::write_int64(int64_t x)
 {
   VAST_ENTER(VAST_ARG(x));
   bytes_ += sizeof(int64_t);
   VAST_RETURN(sink_.write<int64_t>(&x));
 }
-  
+
 bool binary_serializer::write_uint64(uint64_t x)
 {
   VAST_ENTER(VAST_ARG(x));
   bytes_ += sizeof(uint64_t);
   VAST_RETURN(sink_.write<uint64_t>(&x));
 }
-  
+
 bool binary_serializer::write_double(double x)
 {
   VAST_ENTER(VAST_ARG(x));
   bytes_ += sizeof(double);
   VAST_RETURN(sink_.write<double>(&x));
 }
-  
+
 bool binary_serializer::write_raw(void const* data, size_t size)
 {
   VAST_ENTER(VAST_ARG(data, size));
@@ -223,70 +223,70 @@ bool binary_deserializer::read_bool(bool& x)
   bytes_ += sizeof(bool);
   VAST_RETURN(source_.read<uint8_t>(&x), x);
 }
-  
+
 bool binary_deserializer::read_int8(int8_t& x)
 {
   VAST_ENTER();
   bytes_ += sizeof(int8_t);
   VAST_RETURN(source_.read<int8_t>(&x), x);
 }
-  
+
 bool binary_deserializer::read_uint8(uint8_t& x)
 {
   VAST_ENTER();
   bytes_ += sizeof(uint8_t);
   VAST_RETURN(source_.read<uint8_t>(&x), x);
 }
-  
+
 bool binary_deserializer::read_int16(int16_t& x)
 {
   VAST_ENTER();
   bytes_ += sizeof(int16_t);
   VAST_RETURN(source_.read<int16_t>(&x), x);
 }
-  
+
 bool binary_deserializer::read_uint16(uint16_t& x)
 {
   VAST_ENTER();
   bytes_ += sizeof(uint16_t);
   VAST_RETURN(source_.read<uint16_t>(&x), x);
 }
-  
+
 bool binary_deserializer::read_int32(int32_t& x)
 {
   VAST_ENTER();
   bytes_ += sizeof(int32_t);
   VAST_RETURN(source_.read<int32_t>(&x), x);
 }
-  
+
 bool binary_deserializer::read_uint32(uint32_t& x)
 {
   VAST_ENTER();
   bytes_ += sizeof(uint32_t);
   VAST_RETURN(source_.read<uint32_t>(&x), x);
 }
-  
+
 bool binary_deserializer::read_int64(int64_t& x)
 {
   VAST_ENTER();
   bytes_ += sizeof(int64_t);
   VAST_RETURN(source_.read<int64_t>(&x), x);
 }
-  
+
 bool binary_deserializer::read_uint64(uint64_t& x)
 {
   VAST_ENTER();
   bytes_ += sizeof(uint64_t);
   VAST_RETURN(source_.read<uint64_t>(&x), x);
 }
-  
+
 bool binary_deserializer::read_double(double& x)
 {
   VAST_ENTER();
   bytes_ += sizeof(double);
   VAST_RETURN(source_.read<double>(&x), x);
 }
-  
+
 bool binary_deserializer::read_raw(void* data, size_t size)
 {
   VAST_ENTER();
@@ -304,18 +304,13 @@ type_id global_type_info::id() const
   return id_;
 }
 
-std::string const& global_type_info::name() const
-{
-  return name_;
-}
-
 object global_type_info::create() const
 {
   return {this, construct()};
 }
 
-global_type_info::global_type_info(type_id id, std::string name)
-  : id_(id), name_(std::move(name))
+global_type_info::global_type_info(type_id id)
+  : id_(id)
 {
 }
 
@@ -364,17 +359,24 @@ global_type_info const* global_typeid(type_id id)
   return detail::type_manager::instance()->lookup(id);
 }
 
-global_type_info const* global_typeid(std::string const& name)
-{
-  return detail::type_manager::instance()->lookup(name);
-}
-
 bool is_convertible(global_type_info const* from, std::type_info const& to)
 {
   return detail::type_manager::instance()->check_link(from, to);
 }
 
 namespace {
+
+template <template <typename> class F, typename L>
+auto apply()
+{
+  using tuple =
+    typename util::tl_apply<
+      typename util::tl_map<L, F>::type,
+      std::tuple
+    >::type;
+
+  util::static_for_each([](auto f) { f(); }, tuple{});
+}
 
 template <typename From, typename To>
 struct converter
@@ -386,6 +388,9 @@ struct converter
     make_convertible<From, To>();
   }
 };
+
+template <typename T>
+using bs_converter = converter<T, detail::bitstream_concept>;
 
 template <typename From>
 struct bmi_converter
@@ -402,93 +407,124 @@ struct bmi_converter
 };
 
 template <typename T>
-struct announcer
+auto caf_announce(std::string name)
 {
-  using type = announcer;
+  // VAST
+  announce<T>();
 
-  void operator()() const
-  {
-    announce<T>();
-    caf::announce(typeid(T), std::make_unique<detail::caf_type_info<T>>());
-  }
-};
-
-template <template <typename> class F, typename L>
-auto apply()
-{
-  using tuple =
-    typename util::tl_apply<
-      typename util::tl_map<L, F>::type,
-      std::tuple
-    >::type;
-
-  util::static_for_each([](auto f) { f(); }, tuple{});
+  // CAF
+  auto ti = std::make_unique<detail::caf_type_info<T>>(std::move(name));
+  return caf::announce(typeid(T), std::move(ti));
 }
 
+// Needed only because the macro below cannot handle the commata.
 template <typename T>
-struct bmi_model_wrapper
-{
-  using type = detail::bitmap_index_model<T>;
-};
-
-// Why isn't there direct support for currying in meta programming land? All
-// this verbose nonsense...
+using abi_null = arithmetic_bitmap_index<null_bitstream, T>;
 
 template <typename T>
-using bs_converter = converter<T, detail::bitstream_concept>;
+using abi_ewah = arithmetic_bitmap_index<ewah_bitstream, T>;
 
 } // namespace <anonymous>
 
+#define VAST_ANNOUNCE2(T, name) caf_announce<T>(name)
+#define VAST_ANNOUNCE1(T)       VAST_ANNOUNCE2(T, #T)
+#define VAST_ANNOUNCE(...)      VAST_PP_OVERLOAD(VAST_ANNOUNCE, \
+                                                 __VA_ARGS__)(__VA_ARGS__)
 void announce_builtin_types()
 {
-  using integral_types = util::type_list<
-    bool, double,
-    int8_t, int16_t, int32_t, int64_t,
-    uint8_t, uint16_t, uint32_t, uint64_t
-  >;
+  // Core
+  VAST_ANNOUNCE(address);
+  VAST_ANNOUNCE(arithmetic_operator);
+  VAST_ANNOUNCE(block);
+  VAST_ANNOUNCE(boolean_operator);
+  VAST_ANNOUNCE(chunk);
+  VAST_ANNOUNCE(data);
+  VAST_ANNOUNCE(error);
+  VAST_ANNOUNCE(expression);
+  VAST_ANNOUNCE(event);
+  VAST_ANNOUNCE(key);
+  VAST_ANNOUNCE(none);
+  VAST_ANNOUNCE(offset);
+  VAST_ANNOUNCE(path);
+  VAST_ANNOUNCE(pattern);
+  VAST_ANNOUNCE(port);
+  VAST_ANNOUNCE(record);
+  VAST_ANNOUNCE(relational_operator);
+  VAST_ANNOUNCE(schema);
+  VAST_ANNOUNCE(set);
+  VAST_ANNOUNCE(subnet);
+  VAST_ANNOUNCE(table);
+  VAST_ANNOUNCE(time_point);
+  VAST_ANNOUNCE(time_duration);
+  VAST_ANNOUNCE(type);
+  VAST_ANNOUNCE(uuid);
+  VAST_ANNOUNCE(value);
+  VAST_ANNOUNCE(vector);
+  // std::vector<T>
+  VAST_ANNOUNCE(std::vector<data>);
+  VAST_ANNOUNCE(std::vector<event>);
+  VAST_ANNOUNCE(std::vector<value>);
+  VAST_ANNOUNCE(std::vector<uuid>);
+  // Bitstream
+  VAST_ANNOUNCE(bitstream);
+  VAST_ANNOUNCE(detail::bitstream_model<ewah_bitstream>);
+  VAST_ANNOUNCE(detail::bitstream_model<null_bitstream>);
+  // Bitmap Index
+  VAST_ANNOUNCE(bitmap_index<ewah_bitstream>);
+  VAST_ANNOUNCE(bitmap_index<null_bitstream>);
+  VAST_ANNOUNCE(abi_null<boolean>);
+  VAST_ANNOUNCE(abi_null<integer>);
+  VAST_ANNOUNCE(abi_null<count>);
+  VAST_ANNOUNCE(abi_null<real>);
+  VAST_ANNOUNCE(abi_null<time_point>);
+  VAST_ANNOUNCE(abi_null<time_duration>);
+  VAST_ANNOUNCE(abi_ewah<boolean>);
+  VAST_ANNOUNCE(abi_ewah<integer>);
+  VAST_ANNOUNCE(abi_ewah<count>);
+  VAST_ANNOUNCE(abi_ewah<real>);
+  VAST_ANNOUNCE(abi_ewah<time_point>);
+  VAST_ANNOUNCE(abi_ewah<time_duration>);
+  VAST_ANNOUNCE(address_bitmap_index<null_bitstream>);
+  VAST_ANNOUNCE(subnet_bitmap_index<null_bitstream>);
+  VAST_ANNOUNCE(port_bitmap_index<null_bitstream>);
+  VAST_ANNOUNCE(string_bitmap_index<null_bitstream>);
+  VAST_ANNOUNCE(sequence_bitmap_index<null_bitstream>);
+  VAST_ANNOUNCE(address_bitmap_index<ewah_bitstream>);
+  VAST_ANNOUNCE(subnet_bitmap_index<ewah_bitstream>);
+  VAST_ANNOUNCE(port_bitmap_index<ewah_bitstream>);
+  VAST_ANNOUNCE(string_bitmap_index<ewah_bitstream>);
+  VAST_ANNOUNCE(sequence_bitmap_index<ewah_bitstream>);
+  VAST_ANNOUNCE(detail::bitmap_index_model<address_bitmap_index<null_bitstream>>);
+  VAST_ANNOUNCE(detail::bitmap_index_model<subnet_bitmap_index<null_bitstream>>);
+  VAST_ANNOUNCE(detail::bitmap_index_model<port_bitmap_index<null_bitstream>>);
+  VAST_ANNOUNCE(detail::bitmap_index_model<string_bitmap_index<null_bitstream>>);
+  VAST_ANNOUNCE(detail::bitmap_index_model<sequence_bitmap_index<null_bitstream>>);
+  VAST_ANNOUNCE(detail::bitmap_index_model<address_bitmap_index<ewah_bitstream>>);
+  VAST_ANNOUNCE(detail::bitmap_index_model<subnet_bitmap_index<ewah_bitstream>>);
+  VAST_ANNOUNCE(detail::bitmap_index_model<port_bitmap_index<ewah_bitstream>>);
+  VAST_ANNOUNCE(detail::bitmap_index_model<string_bitmap_index<ewah_bitstream>>);
+  VAST_ANNOUNCE(detail::bitmap_index_model<sequence_bitmap_index<ewah_bitstream>>);
+  VAST_ANNOUNCE(detail::bitmap_index_model<abi_null<boolean>>);
+  VAST_ANNOUNCE(detail::bitmap_index_model<abi_null<integer>>);
+  VAST_ANNOUNCE(detail::bitmap_index_model<abi_null<count>>);
+  VAST_ANNOUNCE(detail::bitmap_index_model<abi_null<real>>);
+  VAST_ANNOUNCE(detail::bitmap_index_model<abi_null<time_point>>);
+  VAST_ANNOUNCE(detail::bitmap_index_model<abi_null<time_duration>>);
+  VAST_ANNOUNCE(detail::bitmap_index_model<abi_ewah<boolean>>);
+  VAST_ANNOUNCE(detail::bitmap_index_model<abi_ewah<integer>>);
+  VAST_ANNOUNCE(detail::bitmap_index_model<abi_ewah<count>>);
+  VAST_ANNOUNCE(detail::bitmap_index_model<abi_ewah<real>>);
+  VAST_ANNOUNCE(detail::bitmap_index_model<abi_ewah<time_point>>);
+  VAST_ANNOUNCE(detail::bitmap_index_model<abi_ewah<time_duration>>);
 
-  using stl_types = util::type_list<
-    std::string,
-    std::vector<std::string>
-  >;
 
-  using vast_types = util::type_list<
-    none,
-    time_point,
-    time_duration,
-    pattern,
-    address,
-    subnet,
-    port,
-    vector,
-    set,
-    table,
-    record,
-    data,
+  caf::announce<std::vector<caf::actor>>("std::vector<actor>");
+  caf::announce<flow_control::announce>("flow_control::annoucne",
+                                        &flow_control::announce::source);
+  caf::announce<flow_control::overload>("flow_control::overload");
+  caf::announce<flow_control::underload>("flow_control::underload");
 
-    type,
-    value,
-    event,
-    error,
-
-    block,
-    chunk,
-    offset,
-    key,
-    path,
-    uuid,
-
-    std::vector<data>, std::vector<value>, std::vector<event>,
-    std::vector<uuid>,
-
-    arithmetic_operator, boolean_operator, relational_operator,
-    bitstream,
-    bitmap_index<null_bitstream>,
-    bitmap_index<ewah_bitstream>,
-    expression,
-    schema
-  >;
-
+  // Polymorphic types
   using bitstream_models = util::type_list<
     detail::bitstream_model<ewah_bitstream>,
     detail::bitstream_model<null_bitstream>
@@ -519,24 +555,13 @@ void announce_builtin_types()
     sequence_bitmap_index<ewah_bitstream>
   >;
 
-  using all = util::tl_concat<
-      integral_types,
-      stl_types,
-      vast_types,
-      bitstream_models,
-      bmi_types,
-      util::tl_map<bmi_types, bmi_model_wrapper>::type
-    >::type;
-
-  apply<announcer, all>();
   apply<bs_converter, bitstream_models>();
   apply<bmi_converter, bmi_types>();
-
-  caf::announce<flow_control::announce>(&flow_control::announce::source);
-  caf::announce<flow_control::overload>();
-  caf::announce<flow_control::underload>();
 }
 
+#undef VAST_ANNOUNCE
+#undef VAST_ANNOUNCE1
+#undef VAST_ANNOUNCE2
 
 object::object(global_type_info const* type, void* value)
   : type_(type), value_(value)

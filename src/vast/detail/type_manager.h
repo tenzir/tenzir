@@ -45,14 +45,6 @@ public:
   /// such information exists.
   global_type_info const* lookup(type_id id) const;
 
-  /// Retrieves type information by type name.
-  ///
-  /// @param name The type name to lookup.
-  ///
-  /// @returns A pointer to VAST's type information for *name* or `nullptr` if
-  /// no such information exists.
-  global_type_info const* lookup(std::string const& name) const;
-
   /// Registers a convertible-to relationship for an announced type.
   /// @param from The announced type information to convert to *to*.
   /// @param to The type information to convert *from* to.
@@ -79,7 +71,6 @@ private:
   type_id id_ = 0;
   std::unordered_map<std::type_index, std::unique_ptr<global_type_info>> by_ti_;
   std::unordered_map<type_id, global_type_info const*> by_id_;
-  std::unordered_map<std::string, global_type_info const*> by_name_;
   std::unordered_map<type_id, std::set<std::type_index>> conversions_;
 };
 

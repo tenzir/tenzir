@@ -8,7 +8,6 @@
 #include "vast/io/coded_stream.h"
 #include "vast/util/meta.h"
 #include "vast/util/operators.h"
-#include "vast/detail/demangle.h"
 
 namespace vast {
 
@@ -275,10 +274,6 @@ public:
   /// @returns The ID of this type.
   type_id id() const;
 
-  /// Retrieves the demangled and globally unique type name.
-  /// @param The name of this type.
-  std::string const& name() const;
-
   /// Default-constructs an object of this type.
   /// @returns an object with this type.
   object create() const;
@@ -322,11 +317,10 @@ public:
   virtual void deserialize(deserializer& source, void* instance) const = 0;
 
 protected:
-  global_type_info(type_id id, std::string name);
+  global_type_info(type_id id);
 
 private:
   type_id id_ = 0;
-  std::string name_;
 };
 
 /// A concrete type info that suits most common types.
@@ -336,7 +330,7 @@ class concrete_type_info : public global_type_info
 {
 public:
   concrete_type_info(type_id id)
-    : global_type_info(id, detail::demangle(typeid(T)))
+    : global_type_info(id)
   {
   }
 
@@ -462,11 +456,6 @@ global_type_info const* global_typeid(std::type_info const& ti);
 /// @param id A unique type identifier.
 /// @returns A global_type_info instance if `T` is known and `nullptr` otherwise.
 global_type_info const* global_typeid(type_id id);
-
-/// Retrieves runtime type information about a given type.
-/// @param name A unique type name.
-/// @returns A global_type_info instance if `T` is known and `nullptr` otherwise.
-global_type_info const* global_typeid(std::string const& name);
 
 /// Retrieves runtime type information about a given type.
 /// @tparam T The type to inquire information about.

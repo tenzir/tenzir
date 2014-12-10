@@ -11,6 +11,12 @@ namespace detail {
 template <typename T>
 class caf_type_info : public caf::detail::abstract_uniform_type_info<T>
 {
+public:
+  caf_type_info(std::string name)
+    : caf::detail::abstract_uniform_type_info<T>(std::move(name))
+  {
+  }
+
 protected:
   void serialize(void const* ptr, caf::serializer* sink) const final
   {

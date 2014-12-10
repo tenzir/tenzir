@@ -40,7 +40,6 @@ set(libvast_sources
   uuid.cc
   value.cc
   detail/caf_serialization.cc
-  detail/demangle.cc
   detail/type_manager.cc
   detail/ast/query.cc
   expr/evaluator.cc
