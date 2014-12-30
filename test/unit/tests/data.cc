@@ -215,7 +215,7 @@ TEST("addresses (IPv6)")
   CHECK(a.mask(100));
   CHECK(a == *to<address>("2001:db8::202:b3ff:f000:0"));
   CHECK(a.mask(64));
-  CHECK(a == *to<address>("2001:db8::202:b3ff::"));
+  CHECK(a == *to<address>("2001:db8::"));
   CHECK(a.mask(3));
   CHECK(a == *to<address>("2000::"));
   CHECK(a.mask(0));
