@@ -141,7 +141,7 @@ while [ $# -ne 0 ]; do
             append_cache_entry ENABLE_ADDRESS_SANITIZER BOOL true
             ;;
         --with-caf=*)
-            append_cache_entry LIBCAF_ROOT_DIR PATH $optarg
+            append_cache_entry CAF_ROOT_DIR PATH $optarg
             ;;
         --with-boost=*)
             append_cache_entry BOOST_ROOT PATH $optarg

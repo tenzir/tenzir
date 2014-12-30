@@ -89,7 +89,7 @@ if (EDITLINE_FOUND)
     util/editline.cc)
 endif ()
 
-set(libvast_libs lz4 ${LIBCAF_LIBRARIES})
+set(libvast_libs lz4 ${CAF_LIBRARIES})
 
 if (PCAP_FOUND)
   set(libvast_libs ${libvast_libs} ${PCAP_LIBRARIES})

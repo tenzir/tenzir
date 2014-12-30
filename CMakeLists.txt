@@ -88,14 +88,14 @@ else ()
   message(FATAL_ERROR "Could not find Boost")
 endif ()
 
-if (NOT LIBCAF_ROOT_DIR AND VAST_PREFIX)
-  set(LIBCAF_ROOT_DIR ${VAST_PREFIX})
+if (NOT CAF_ROOT_DIR AND VAST_PREFIX)
+  set(CAF_ROOT_DIR ${VAST_PREFIX})
 endif ()
-find_package(Libcaf COMPONENTS core io)
-if (LIBCAF_FOUND)
-  include_directories(${LIBCAF_INCLUDE_DIRS})
+find_package(CAF COMPONENTS core io)
+if (CAF_FOUND)
+  include_directories(${CAF_INCLUDE_DIRS})
 else ()
-  message(FATAL_ERROR "Could not find libcaf")
+  message(FATAL_ERROR "Could not find CAF")
 endif ()
 
 if (NOT PCAP_ROOT_DIR AND VAST_PREFIX)
@@ -195,7 +195,7 @@ set(build_summary
     "\nInstall prefix:       ${CMAKE_INSTALL_PREFIX}"
     "\n"
     "\nBoost:                ${Boost_INCLUDE_DIR}"
-    "\nCAF:                  ${LIBCAF_INCLUDE_DIRS}"
+    "\nCAF:                  ${CAF_INCLUDE_DIRS}"
     "\n"
     "\nPCAP:                 ${pcap_summary}"
     "\nBroccoli:             ${broccoli_summary}"
