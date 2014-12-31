@@ -160,7 +160,7 @@ void partition::at_down(down_msg const&)
     {
       VAST_LOG_ACTOR_DEBUG("signals underload");
       for (auto& a : upstream())
-        send(a, message_priority::high, flow_control::underload{});
+        send(message_priority::high, a, flow_control::underload{});
     }
 
     send(this, atom("unpack"));
@@ -337,12 +337,11 @@ message_handler partition::make_handler()
       chunks_.push(c);
       send(this, atom("unpack"));
 
-
       if (chunks_.size() == 10)
       {
         VAST_LOG_ACTOR_DEBUG("signals overload");
         for (auto& a : upstream())
-          send(a, message_priority::high, flow_control::overload{});
+          send(message_priority::high, a, flow_control::overload{});
       }
     },
     [=](std::vector<event> const& events)
