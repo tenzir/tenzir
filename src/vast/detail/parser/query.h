@@ -14,8 +14,6 @@ struct query : qi::grammar<Iterator, ast::query::query_expr(), skipper<Iterator>
     : query::base_type{expr},
       data_expr{on_error}
   {
-    qi::_1_type _1;
-    qi::_2_type _2;
     qi::_3_type _3;
     qi::_4_type _4;
     qi::raw_type raw;

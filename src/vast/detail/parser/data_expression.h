@@ -22,8 +22,6 @@ struct data_expression
   data_expression(error_handler<Iterator>& on_error)
     : data_expression::base_type(expr)
   {
-      qi::_1_type _1;
-      qi::_2_type _2;
       qi::_3_type _3;
       qi::_4_type _4;
 
