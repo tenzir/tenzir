@@ -65,7 +65,7 @@ void configuration::initialize()
   act.add('R', "receiver", "spawn a receiver");
   act.add('A', "archive", "spawn an archive");
   act.add('X', "index", "spawn an index");
-  act.add('S', "search", "spawns a search");
+  act.add('S', "search", "spawn a search");
   act.add('E', "exporter", "spawn an exporter").single();
   act.add('I', "importer", "spawn an importer").single();
   act.add('Q', "console", "spawn a query console");
