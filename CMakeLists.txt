@@ -149,7 +149,7 @@ if (ENABLE_PERFTOOLS_HEAP)
   set(VAST_USE_PERFTOOLS_HEAP_PROFILER true)
 endif ()
 
-find_package(Doxygen)
+find_package(Doxygen QUIET)
 if (DOXYGEN_FOUND)
   add_subdirectory(doc)
 endif ()
