@@ -186,20 +186,43 @@ display(GPERFTOOLS_FOUND ${GPERFTOOLS_INCLUDE_DIR} perftools_summary)
 display(VAST_USE_PERFTOOLS_HEAP_PROFILER yes tcmalloc_summary)
 display(ENABLE_ADDRESS_SANITIZER yes asan_summary)
 
+if (VAST_LOG_LEVEL EQUAL 0)
+  set(log_level_summary quiet)
+elseif (VAST_LOG_LEVEL EQUAL 1)
+  set(log_level_summary error)
+elseif (VAST_LOG_LEVEL EQUAL 2)
+  set(log_level_summary warn)
+elseif (VAST_LOG_LEVEL EQUAL 3)
+  set(log_level_summary info)
+elseif (VAST_LOG_LEVEL EQUAL 4)
+  set(log_level_summary verbose)
+elseif (VAST_LOG_LEVEL EQUAL 5)
+  set(log_level_summary debug)
+elseif (VAST_LOG_LEVEL EQUAL 6)
+  set(log_level_summary trace)
+else ()
+  message(FATAL "invalid log level")
+endif ()
+
 set(build_summary
     "\n====================|  Build Summary  |===================="
     "\n"
     "\nVersion:              ${VERSION_MAJ_MIN}"
     "\n"
-    "\nDebug mode:           ${debug_summary}"
     "\nBuild type:           ${CMAKE_BUILD_TYPE}"
+    "\nDebug mode:           ${debug_summary}"
+    "\nLog level:            ${log_level_summary}"
+    "\n"
+    "\nCC:                   ${CMAKE_C_COMPILER}"
+    "\nCXX:                  ${CMAKE_CXX_COMPILER}"
+    "\nCXXFLAGS:             ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${build_type}}"
+    "\n"
     "\nSource directory:     ${CMAKE_SOURCE_DIR}"
     "\nBuild directory:      ${CMAKE_BINARY_DIR}"
     "\nInstall prefix:       ${CMAKE_INSTALL_PREFIX}"
     "\n"
     "\nBoost:                ${Boost_INCLUDE_DIR}"
     "\nCAF:                  ${CAF_INCLUDE_DIRS}"
-    "\n"
     "\nPCAP:                 ${pcap_summary}"
     "\nBroccoli:             ${broccoli_summary}"
     "\nEditline:             ${editline_summary}"
@@ -208,10 +231,6 @@ set(build_summary
     "\n"
     "\nUse tcmalloc:         ${tcmalloc_summary}"
     "\nUse AddressSanitizer: ${asan_summary}"
-    "\n"
-    "\nCC:                   ${CMAKE_C_COMPILER}"
-    "\nCXX:                  ${CMAKE_CXX_COMPILER}"
-    "\nCXXFLAGS:             ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${build_type}}"
     "\n"
     "\n===========================================================\n")
 
