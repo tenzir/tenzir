@@ -107,7 +107,7 @@ result<event> bro::extract_impl()
   {
     if (util::starts_with(s[0].first, s[0].second, "#separator"))
     {
-      VAST_LOG_ACTOR_VERBOSE("restarts with new log");
+      VAST_VERBOSE(this, "restarts with new log");
 
       timestamp_field_ = -1;
       separator_ = " ";
@@ -124,8 +124,8 @@ result<event> bro::extract_impl()
     }
     else
     {
-      VAST_LOG_ACTOR_VERBOSE("ignored comment at line " << line_number() <<
-                             ": " << *line);
+      VAST_VERBOSE(this, "ignored comment at line", line_number() << ':',
+                   *line);
       return {};
     }
   }
@@ -345,15 +345,15 @@ trial<void> bro::parse_header()
   type_ = flat.unflatten();
   type_.name(event_name);
 
-  VAST_LOG_ACTOR_DEBUG("parsed bro header:");
-  VAST_LOG_ACTOR_DEBUG("    #separator " << separator_);
-  VAST_LOG_ACTOR_DEBUG("    #set_separator " << set_separator_);
-  VAST_LOG_ACTOR_DEBUG("    #empty_field " << empty_field_);
-  VAST_LOG_ACTOR_DEBUG("    #unset_field " << unset_field_);
-  VAST_LOG_ACTOR_DEBUG("    #path " << event_name);
-  VAST_LOG_ACTOR_DEBUG("    #fields:");
+  VAST_DEBUG(this, "parsed bro header:");
+  VAST_DEBUG(this, "    #separator", separator_);
+  VAST_DEBUG(this, "    #set_separator", set_separator_);
+  VAST_DEBUG(this, "    #empty_field", empty_field_);
+  VAST_DEBUG(this, "    #unset_field", unset_field_);
+  VAST_DEBUG(this, "    #path", event_name);
+  VAST_DEBUG(this, "    #fields:");
   for (size_t i = 0; i < flat.fields().size(); ++i)
-    VAST_LOG_ACTOR_DEBUG("      " << i << ") " << flat.fields()[i]);
+    VAST_DEBUG(this, "     ", i << ')', flat.fields()[i]);
 
   // If a congruent type exists in the schema, we give the schema type
   // precedence because it may have user-annotated extra information.
@@ -362,20 +362,20 @@ trial<void> bro::parse_header()
     {
       if (congruent(type_, *t))
       {
-        VAST_LOG_ACTOR_VERBOSE("prefers type in schema over type in header");
+        VAST_VERBOSE(this, "prefers type in schema over type in header");
         type_ = *t;
       }
       else
       {
-        VAST_LOG_ACTOR_WARN("ignores incongruent types in schema and log: " <<
-                            t->name());
+        VAST_WARN(this, "ignores incongruent types in schema and log:",
+                  t->name());
       }
     }
 
   if (timestamp_field_ > -1)
   {
-    VAST_LOG_ACTOR_VERBOSE("attempts to extract timestamp from field " <<
-                           timestamp_field_);
+    VAST_VERBOSE(this, "attempts to extract timestamp from field",
+                 timestamp_field_);
   }
   else
   {
@@ -384,8 +384,7 @@ trial<void> bro::parse_header()
     {
       if (is<type::time_point>(f.type))
       {
-        VAST_LOG_ACTOR_VERBOSE("auto-detected field " << i <<
-                               " as event timestamp");
+        VAST_VERBOSE(this, "auto-detected field", i, " as event timestamp");
         timestamp_field_ = static_cast<int>(i);
         break;
       }

@@ -33,20 +33,20 @@ message_handler receiver::make_handler()
   {
     on(atom("set"), atom("identifier"), arg_match) >> [=](actor const& a)
     {
-      VAST_LOG_ACTOR_DEBUG("registers identifier" << a);
+      VAST_DEBUG(this, "registers identifier", a);
       identifier_ = a;
       return make_message(atom("ok"));
     },
     on(atom("add"), atom("archive"), arg_match) >> [=](actor const& a)
     {
-      VAST_LOG_ACTOR_DEBUG("registers archive" << a);
+      VAST_DEBUG(this, "registers archive", a);
       send(a, flow_control::announce{this});
       archive_ = a;
       return make_message(atom("ok"));
     },
     on(atom("add"), atom("index"), arg_match) >> [=](actor const& a)
     {
-      VAST_LOG_ACTOR_DEBUG("registers index" << a);
+      VAST_DEBUG(this, "registers index", a);
       send(a, flow_control::announce{this});
       index_ = a;
       return make_message(atom("ok"));
@@ -62,16 +62,15 @@ message_handler receiver::make_handler()
         on(atom("id"), arg_match) >> [=](event_id from, event_id to) mutable
         {
           auto n = to - from;
-          VAST_LOG_ACTOR_DEBUG("got " << n << " IDs for chunk [" << from <<
-                               ", " << to << ")");
+          VAST_DEBUG(this, "got", n,
+                     "IDs for chunk [" << from << "," << to << ")");
 
           auto msg = last.apply(
               on_arg_match >> [=](chunk& c)
               {
                 if (n < c.events())
                 {
-                  VAST_LOG_ACTOR_ERROR("got " << n << " IDs, needed " <<
-                                       c.events());
+                  VAST_ERROR(this, "got", n, "IDs, needed", c.events());
                   quit(exit::error);
                   return;
                 }
@@ -88,17 +87,15 @@ message_handler receiver::make_handler()
         },
         [=](error const& e)
         {
-          VAST_LOG_ACTOR_ERROR(e);
+          VAST_ERROR(this, e);
           quit(exit::error);
         },
         others() >> [=]
         {
-          VAST_LOG_ACTOR_WARN("got unexpected message" <<
-                              to_string(last_dequeued()));
+          VAST_WARN(this, "got unexpected message", to_string(last_dequeued()));
         });
     }
   };
-
 }
 
 std::string receiver::name() const

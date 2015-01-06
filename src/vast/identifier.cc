@@ -22,7 +22,7 @@ void identifier::at_exit(exit_msg const& msg)
   }
   else
   {
-    VAST_LOG_ACTOR_ERROR("could not save current event ID " << id_);
+    VAST_ERROR(this, "could not save current event ID", id_);
     quit(exit::error);
   }
 }
@@ -36,13 +36,13 @@ message_handler identifier::make_handler()
     std::ifstream file{to_string(dir_ / "id")};
     if (! file)
     {
-      VAST_LOG_ACTOR_ERROR("failed to open file: " << (dir_ / "id"));
+      VAST_ERROR(this, "failed to open file:", dir_ / "id");
       quit(exit::error);
       return {};
     }
 
     file >> id_;
-    VAST_LOG_ACTOR_INFO("found existing next event ID " << id_);
+    VAST_INFO(this, "found existing next event ID", id_);
   }
 
   return
@@ -61,7 +61,7 @@ message_handler identifier::make_handler()
         return make_message(error{"failed to save incremented ID ", id_});
       }
 
-      VAST_LOG_ACTOR_DEBUG("hands out [" << (id_ - n) << ',' << id_ << ')');
+      VAST_DEBUG(this, "hands out [" << (id_ - n) << ',' << id_ << ')');
       return make_message(atom("id"), id_ - n, id_);
     }
   };

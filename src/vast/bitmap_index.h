@@ -102,7 +102,7 @@ public:
 
     if (n < size())
     {
-      VAST_LOG_ERROR("lower n than required: " << n << " < " << size());
+      VAST_ERROR("lower n than required:", n, '<', size());
       return false;
     }
 

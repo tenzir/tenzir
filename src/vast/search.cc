@@ -29,11 +29,11 @@ message_handler search::make_handler()
   {
     [=](down_msg const& d)
     {
-      VAST_LOG_ACTOR_INFO("got disconnect from client " << last_sender());
+      VAST_INFO(this, "got disconnect from client", last_sender());
 
       for (auto& q : clients_[last_sender()].queries)
       {
-        VAST_LOG_ACTOR_DEBUG("sends EXIT to query " << q);
+        VAST_DEBUG(this, "sends EXIT to query", q);
         send_exit(q, d.reason);
       }
 
@@ -58,7 +58,7 @@ message_handler search::make_handler()
     on(atom("query"), arg_match)
       >> [=](actor const& client, std::string const& str)
     {
-      VAST_LOG_ACTOR_INFO("got client " << client << " asking for " << str);
+      VAST_INFO(this, "got client", client, "asking for", str);
 
       if (! archive_)
       {
@@ -74,7 +74,7 @@ message_handler search::make_handler()
       auto ast = to<expression>(str);
       if (! ast)
       {
-         VAST_LOG_ACTOR_VERBOSE("ignores invalid query: " << str);
+         VAST_VERBOSE(this, "ignores invalid query:", str);
          return make_message(ast.error());
       }
 

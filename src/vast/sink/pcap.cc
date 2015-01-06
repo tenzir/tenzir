@@ -28,7 +28,7 @@ bool pcap::process(event const& e)
   {
     if (trace_ != "-" && ! exists(trace_))
     {
-      VAST_LOG_ACTOR_ERROR("no such file: " << trace_);
+      VAST_ERROR(this, "cannot locate file:", trace_);
       quit(exit::error);
       return false;
     }
@@ -42,7 +42,7 @@ bool pcap::process(event const& e)
 
     if (! pcap_)
     {
-      VAST_LOG_ACTOR_ERROR("failed to open pcap handle");
+      VAST_ERROR(this, "failed to open pcap handle");
       quit(exit::error);
       return false;
     }
@@ -50,7 +50,7 @@ bool pcap::process(event const& e)
     pcap_dumper_ = ::pcap_dump_open(pcap_, trace_.str().c_str());
     if (! pcap_dumper_)
     {
-      VAST_LOG_ACTOR_ERROR("failed to open pcap dumper for " << trace_);
+      VAST_ERROR(this, "failed to open pcap dumper for", trace_);
       quit(exit::error);
       return false;
     }
@@ -59,19 +59,19 @@ bool pcap::process(event const& e)
     {
       if (congruent(packet_type_, *t))
       {
-        VAST_LOG_ACTOR_VERBOSE("prefers type in schema over default type");
+        VAST_VERBOSE(this, "prefers type in schema over default type");
         packet_type_ = *t;
       }
       else
       {
-        VAST_LOG_ACTOR_WARN("ignores incongruent schema type: " << t->name());
+        VAST_WARN(this, "ignores incongruent schema type:", t->name());
       }
     }
   }
 
   if (e.type() != packet_type_)
   {
-    VAST_LOG_ACTOR_ERROR("cannot process non-packet event: " << e.type());
+    VAST_ERROR(this, "cannot process non-packet event:", e.type());
     quit(exit::error);
     return false;
   }
@@ -99,7 +99,7 @@ bool pcap::process(event const& e)
 
   if (++total_packets_ % flush_ == 0 && ::pcap_dump_flush(pcap_dumper_) == -1)
   {
-    VAST_LOG_ACTOR_ERROR("failed to flush at packet " << total_packets_);
+    VAST_ERROR(this, "failed to flush at packet", total_packets_);
     quit(exit::error);
     return false;
   }

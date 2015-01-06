@@ -451,7 +451,8 @@ logger::message logger::make_message(logger::level lvl,
   assert(facility != nullptr);
 
   message m{lvl};
-  if (impl_->show_functions_ || impl_->console_level_ == trace || impl_->file_level_ == trace)
+  if (impl_->show_functions_ || impl_->console_level_ == trace
+      || impl_->file_level_ == trace)
     m.function_ = prettify(fun);
 
   if (*facility)

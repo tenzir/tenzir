@@ -1,10 +1,58 @@
 #ifndef VAST_ACTOR_H
 #define VAST_ACTOR_H
 
+#include <cassert>
+#include <ostream>
 #include <caf/event_based_actor.hpp>
-#include <caf/typed_event_based_actor.hpp>
 #include <caf/send.hpp>
 #include <caf/to_string.hpp>
+
+namespace caf {
+
+inline std::ostream& operator<<(std::ostream& out, actor_addr const& a)
+{
+  out << '#' << a.id();
+  return out;
+}
+
+inline std::ostream& operator<<(std::ostream& out, actor const& a)
+{
+  out << a.address();
+  return out;
+}
+
+inline std::ostream& operator<<(std::ostream& out, abstract_actor const& a)
+{
+  out << a.address();
+  return out;
+}
+
+template <typename Stream>
+inline Stream& operator<<(Stream& out, actor const* a)
+{
+  assert(a != nullptr);
+  out << *a;
+  return out;
+}
+
+template <typename Stream>
+inline Stream& operator<<(Stream& out, abstract_actor const* a)
+{
+  assert(a != nullptr);
+  out << *a;
+  return out;
+}
+
+template <typename Stream>
+inline Stream& operator<<(Stream& out, event_based_actor const* a)
+{
+  assert(a != nullptr);
+  out << *a;
+  return out;
+}
+
+} // namespace caf
+
 #include "vast/logger.h"
 #include "vast/util/operators.h"
 #include "vast/util/flat_set.h"
@@ -91,7 +139,7 @@ struct base_actor : caf::event_based_actor
 
   caf::behavior make_behavior() override
   {
-    VAST_LOG_DEBUG(*this, " spawned");
+    VAST_DEBUG(this, "spawned");
     return act();
   }
 
@@ -107,14 +155,22 @@ struct base_actor : caf::event_based_actor
 
   void on_exit()
   {
-    VAST_LOG_DEBUG(*this, " terminated (" <<
-                   render_exit_reason(planned_exit_reason()) << ')');
+    VAST_DEBUG(this, "terminated (" <<
+               render_exit_reason(planned_exit_reason()) << ')');
   }
 };
 
 inline std::ostream& operator<<(std::ostream& out, base_actor const& a)
 {
   out << a.description();
+  return out;
+}
+
+template <typename Stream>
+inline Stream& operator<<(Stream& out, base_actor const* a)
+{
+  assert(a != nullptr);
+  out << *a;
   return out;
 }
 
@@ -230,8 +286,8 @@ struct sentinel : component
 {
   void on_unexpected(base_actor* self, caf::message const& msg)
   {
-    VAST_LOG_WARN(*self, " got unexpected message from " <<
-                  self->last_sender() << ": " << to_string(msg));
+    VAST_WARN(self, "got unexpected message from",
+              self->last_sender() << ':', to_string(msg));
   }
 
   caf::message_handler make_handler(base_actor* self)
@@ -257,16 +313,14 @@ struct flow_controlled : component
 
   void on_announce(base_actor* self, caf::actor const& upstream)
   {
-    VAST_LOG_DEBUG(*self, " registers " << upstream <<
-                   " as upstream node for flow-control");
-
+    VAST_DEBUG(self, "registers", upstream, "as upstream flow-control node");
     self->monitor(upstream);
     upstream_.insert(upstream);
   }
 
   void on_overload(base_actor* self)
   {
-    VAST_LOG_DEBUG(*self, " got overload signal");
+    VAST_DEBUG(self, "got overload signal");
     for (auto& a : upstream_)
       caf::send_tuple_as(self, a, caf::message_priority::high,
                          self->last_dequeued());
@@ -274,7 +328,7 @@ struct flow_controlled : component
 
   void on_underload(base_actor* self)
   {
-    VAST_LOG_DEBUG(*self, " got underload signal");
+    VAST_DEBUG(self, "got underload signal");
     for (auto& a : upstream_)
       caf::send_tuple_as(self, a, caf::message_priority::high,
                          self->last_dequeued());
@@ -308,27 +362,5 @@ struct flow_controlled : component
 };
 
 } // namespace vast
-
-namespace caf {
-
-inline std::ostream& operator<<(std::ostream& out, actor_addr const& a)
-{
-  out << '#' << a.id();
-  return out;
-}
-
-inline std::ostream& operator<<(std::ostream& out, actor const& a)
-{
-  out << a.address();
-  return out;
-}
-
-inline std::ostream& operator<<(std::ostream& out, abstract_actor const& a)
-{
-  out << a.address();
-  return out;
-}
-
-} // namespace caf
 
 #endif

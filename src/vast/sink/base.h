@@ -27,7 +27,7 @@ struct base : public actor_mixin<base<Derived>, sentinel>
       {
         if (! static_cast<Derived*>(this)->process(e))
         {
-          VAST_LOG_ACTOR_ERROR("failed to process event: " << e);
+          VAST_ERROR(this, "failed to process event:", e);
           this->quit(exit::error);
         }
       },
@@ -36,7 +36,7 @@ struct base : public actor_mixin<base<Derived>, sentinel>
         for (auto& e : v)
           if (! static_cast<Derived*>(this)->process(e))
           {
-            VAST_LOG_ACTOR_ERROR("failed to process event: " << e);
+            VAST_ERROR(this, "failed to process event:", e);
             this->quit(exit::error);
             return;
           }

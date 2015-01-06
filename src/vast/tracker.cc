@@ -25,13 +25,12 @@ void tracker::at_down(caf::down_msg const&)
   for (auto i = actors_.begin(); i != actors_.end(); ++i)
     if (i->second.actor == last_sender())
     {
-      VAST_LOG_ACTOR_VERBOSE("disconnects " << i->first);
+      VAST_VERBOSE(this, "disconnects", i->first);
       auto j = topology_.begin();
       while (j != topology_.end())
         if (j->first == i->first || j->second == i->first)
         {
-          VAST_LOG_ACTOR_VERBOSE("removes link " << j->first << " -> " <<
-                                 j->second);
+          VAST_VERBOSE(this, "removes link", j->first, "->", j->second);
           j = topology_.erase(j);
         }
         else
@@ -78,7 +77,7 @@ message_handler tracker::make_handler()
         return make_message(error{"invalid type: ", type});
 
       monitor(a);
-      VAST_LOG_VERBOSE(*this, " registers " << type << ": " << name);
+      VAST_VERBOSE(this, "registers", type << ':', name);
       return make_message(atom("ok"));
     },
     on(atom("get"), arg_match) >> [=](std::string const& name)
@@ -111,7 +110,7 @@ message_handler tracker::make_handler()
         if (i->first == source && i->second == sink)
           return make_message(error{"link exists: ", source, " -> ", sink});
 
-      VAST_LOG_VERBOSE(*this, " links " << source << " -> " << sink);
+      VAST_VERBOSE(this, "links", source, "->", sink);
 
       scoped_actor self;
       message_handler ok = on(atom("ok")) >> [] { /* do nothing */ };

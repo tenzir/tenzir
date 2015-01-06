@@ -65,17 +65,16 @@ message_handler profiler::make_handler()
         ProfilerGetCurrentState(&state);
         if (state.enabled)
         {
-          VAST_LOG_ACTOR_INFO("stops Gperftools CPU profiler");
+          VAST_INFO(this, "stops Gperftools CPU profiler");
           ProfilerStop();
-          VAST_LOG_ACTOR_INFO(
-              "recorded " << state.samples_gathered <<
-              " Gperftools CPU profiler samples in " << state.profile_name);
+          VAST_INFO(this, "recorded", state.samples_gathered,
+                    "Gperftools CPU profiler samples in", state.profile_name);
         }
 #endif
 #ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
         if (IsHeapProfilerRunning())
         {
-          VAST_LOG_ACTOR_INFO("stops Gperftools heap profiler");
+          VAST_INFO(this, "stops Gperftools heap profiler");
           HeapProfilerDump("cleanup");
           HeapProfilerStop();
         }
@@ -89,18 +88,14 @@ message_handler profiler::make_handler()
   {
     auto t = mkdir(log_dir_);
     if (! t)
-      VAST_LOG_ACTOR_ERROR("could not create directory: " << t.error());
+      VAST_ERROR(this, "could not create directory:", t.error());
   }
 
   auto filename = log_dir_ / "profile.log";
   file_.open(to_string(filename));
 
-  VAST_LOG_ACTOR_INFO(
-      "enables getrusage profiling every " <<
-      (secs_.count() == 1
-       ? std::string("second")
-       : std::to_string(secs_.count()) + " seconds") <<
-      " (" << filename << ')');
+  VAST_INFO(this, "enables getrusage profiling every", secs_.count(),
+            (secs_.count() == 1 ? "" : "s"), '(' << filename << ')');
 
   assert(file_.good());
   file_.flags(std::ios::left);
@@ -120,7 +115,7 @@ message_handler profiler::make_handler()
 #ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
     on(atom("start"), atom("perftools"), atom("cpu")) >> [=]
     {
-      VAST_LOG_ACTOR_INFO("starts Gperftools CPU profiler");
+      VAST_INFO(this, "starts Gperftools CPU profiler");
 
       auto f = to_string(log_dir_ / "perftools.cpu");
       ProfilerStart(f.c_str());
@@ -135,7 +130,7 @@ message_handler profiler::make_handler()
 #ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
     on(atom("start"), atom("perftools"), atom("heap")) >> [=]
     {
-      VAST_LOG_ACTOR_INFO("starts Gperftools heap profiler");
+      VAST_INFO(this, "starts Gperftools heap profiler");
 
       auto f = to_string(log_dir_ / "perftools.heap");
       HeapProfilerStart(f.c_str());

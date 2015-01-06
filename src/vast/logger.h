@@ -186,89 +186,81 @@ private:
   }                                                                           \
   while (false)
 
-#if VAST_LOG_LEVEL > 0
-#  define VAST_LOG_ERROR_1(m1)   VAST_LOG(::vast::logger::error, m1)
-#  define VAST_LOG_ERROR_2(m1, m2) \
-    VAST_LOG(::vast::logger::error, m1 << m2)
-#  define VAST_LOG_ERROR(...)    VAST_PP_OVERLOAD(VAST_LOG_ERROR_, \
-                                                  __VA_ARGS__)(__VA_ARGS__)
-#  define VAST_LOG_ACTOR_ERROR(m) VAST_LOG_ERROR(*this << ' ' << m)
+#define VAST_LOG_MSG_2(lvl, m1) \
+  VAST_LOG(lvl, m1)
+#define VAST_LOG_MSG_3(lvl, m1, m2) \
+  VAST_LOG_MSG_2(lvl, m1 << ' ' << m2)
+#define VAST_LOG_MSG_4(lvl, m1, m2, m3) \
+  VAST_LOG_MSG_3(lvl, m1, m2 << ' ' << m3)
+#define VAST_LOG_MSG_5(lvl, m1, m2, m3, m4) \
+  VAST_LOG_MSG_4(lvl, m1, m2, m3 << ' ' << m4)
+#define VAST_LOG_MSG_6(lvl, m1, m2, m3, m4, m5) \
+  VAST_LOG_MSG_5(lvl, m1, m2, m3, m4 << ' ' << m5)
+#define VAST_LOG_MSG_7(lvl, m1, m2, m3, m4, m5, m6) \
+  VAST_LOG_MSG_6(lvl, m1, m2, m3, m4, m5 << ' ' << m6)
+#define VAST_LOG_MSG_8(lvl, m1, m2, m3, m4, m5, m6, m7) \
+  VAST_LOG_MSG_7(lvl, m1, m2, m3, m4, m5, m6 << ' ' << m7)
+#define VAST_LOG_MSG_9(lvl, m1, m2, m3, m4, m5, m6, m7, m8) \
+  VAST_LOG_MSG_8(lvl, m1, m2, m3, m4, m5, m6, m7 << ' ' << m8)
+#define VAST_LOG_MSG_10(lvl, m1, m2, m3, m4, m5, m6, m7, m8, m9) \
+  VAST_LOG_MSG_9(lvl, m1, m2, m3, m4, m5, m6, m7, m8 << ' ' << m9)
+#define VAST_LOG_MSG(...) \
+  VAST_PP_OVERLOAD(VAST_LOG_MSG_, __VA_ARGS__)(__VA_ARGS__)
+
+#define VAST_LOG_LEVEL_QUIET    0
+#define VAST_LOG_LEVEL_ERROR    1
+#define VAST_LOG_LEVEL_WARN     2
+#define VAST_LOG_LEVEL_INFO     3
+#define VAST_LOG_LEVEL_VERBOSE  4
+#define VAST_LOG_LEVEL_DEBUG    5
+#define VAST_LOG_LEVEL_TRACE    6
+
+#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_ERROR
+#  define VAST_ERROR(...) VAST_LOG_MSG(::vast::logger::error, __VA_ARGS__)
 #else
-#  define VAST_LOG_ERROR(message)     VAST_VOID
-#  define VAST_LOG_ACTOR_ERROR(...)   VAST_VOID
+#  define VAST_ERROR(...) VAST_VOID
 #endif
 
-#if VAST_LOG_LEVEL > 1
-#  define VAST_LOG_WARN_1(m1)   VAST_LOG(::vast::logger::warn, m1)
-#  define VAST_LOG_WARN_2(m1, m2) \
-    VAST_LOG(::vast::logger::warn, m1 << m2)
-#  define VAST_LOG_WARN(...)    VAST_PP_OVERLOAD(VAST_LOG_WARN_, \
-                                                 __VA_ARGS__)(__VA_ARGS__)
-#  define VAST_LOG_ACTOR_WARN(m) VAST_LOG_WARN(*this << ' ' << m)
+#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_WARN
+#  define VAST_WARN(...) VAST_LOG_MSG(::vast::logger::warn, __VA_ARGS__)
 #else
-#  define VAST_LOG_WARN(message)      VAST_VOID
-#  define VAST_LOG_ACTOR_WARN(...)    VAST_VOID
+#  define VAST_WARN(...) VAST_VOID
 #endif
 
-#if VAST_LOG_LEVEL > 2
-#  define VAST_LOG_INFO_1(m1)   VAST_LOG(::vast::logger::info, m1)
-#  define VAST_LOG_INFO_2(m1, m2) \
-    VAST_LOG(::vast::logger::info, m1 << m2)
-#  define VAST_LOG_INFO(...)    VAST_PP_OVERLOAD(VAST_LOG_INFO_, \
-                                                 __VA_ARGS__)(__VA_ARGS__)
-#  define VAST_LOG_ACTOR_INFO(m) VAST_LOG_INFO(*this << ' ' << m)
+#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
+#  define VAST_INFO(...) VAST_LOG_MSG(::vast::logger::info, __VA_ARGS__)
 #else
-#  define VAST_LOG_INFO(message)     VAST_VOID
-#  define VAST_LOG_ACTOR_INFO(...)   VAST_VOID
+#  define VAST_INFO(...) VAST_VOID
 #endif
 
-#if VAST_LOG_LEVEL > 3
-#  define VAST_LOG_VERBOSE_1(m1)   VAST_LOG(::vast::logger::verbose, m1)
-#  define VAST_LOG_VERBOSE_2(m1, m2) \
-    VAST_LOG(::vast::logger::verbose, m1 << m2)
-#  define VAST_LOG_VERBOSE(...)    VAST_PP_OVERLOAD(VAST_LOG_VERBOSE_, \
-                                                 __VA_ARGS__)(__VA_ARGS__)
-#  define VAST_LOG_ACTOR_VERBOSE(m) VAST_LOG_VERBOSE(*this << ' ' << m)
+#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_VERBOSE
+#  define VAST_VERBOSE(...) VAST_LOG_MSG(::vast::logger::verbose, __VA_ARGS__)
 #else
-#  define VAST_LOG_VERBOSE(message)     VAST_VOID
-#  define VAST_LOG_ACTOR_VERBOSE(...)   VAST_VOID
+#  define VAST_VERBOSE(...) VAST_VOID
 #endif
 
-#if VAST_LOG_LEVEL > 4
-#  define VAST_LOG_DEBUG_1(m1)   VAST_LOG(::vast::logger::debug, m1)
-#  define VAST_LOG_DEBUG_2(m1, m2) \
-    VAST_LOG(::vast::logger::debug, m1 << m2)
-#  define VAST_LOG_DEBUG(...)    VAST_PP_OVERLOAD(VAST_LOG_DEBUG_, \
-                                                 __VA_ARGS__)(__VA_ARGS__)
-#  define VAST_LOG_ACTOR_DEBUG(m) VAST_LOG_DEBUG(*this << ' ' << m)
+#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_DEBUG
+#  define VAST_DEBUG(...) VAST_LOG_MSG(::vast::logger::debug, __VA_ARGS__)
 #else
-#  define VAST_LOG_DEBUG(message)     VAST_VOID
-#  define VAST_LOG_ACTOR_DEBUG(...)   VAST_VOID
+#  define VAST_DEBUG(...) VAST_VOID
 #endif
 
-#if VAST_LOG_LEVEL > 5
-#  define VAST_ENTER_ARGS(args)                                               \
-      auto vast_msg = ::vast::logger::instance()->make_message(               \
+#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_TRACE
+#  define VAST_ARGS_ENTER(args) "--> (" << args << ')'
+#  define VAST_ARGS_LEAVE(args) "<-- (" << args << ')'
+#  define VAST_ENTER_ARGS(args, msg)                                          \
+      auto __vast_msg = ::vast::logger::instance()->make_message(             \
           ::vast::logger::level::trace,                                       \
           VAST_LOG_FACILITY, __PRETTY_FUNCTION__);                            \
-                                                                              \
-     ::vast::logger::tracer vast_tracer(std::move(vast_msg));                 \
-     vast_tracer << "--> (" << args << ')';                                   \
-     vast_tracer.commit();                                                    \
-     VAST_VOID
-#  define VAST_ENTER_ARGS_MSG(args, msg)                                      \
-     ::vast::logger::tracer vast_tracer(__PRETTY_FUNCTION__);                 \
-     vast_tracer << "--> (" << args << ") " << msg;                           \
-     vast_tracer.commit();                                                    \
-     VAST_VOID
-#  define VAST_ENTER_MSG(msg) VAST_ENTER_ARGS_MSG('*', msg)
-
-#  define VAST_ENTER_0()     VAST_ENTER_ARGS('*')
-#  define VAST_ENTER_1(A)    VAST_ENTER_ARGS(A)
-#  define VAST_ENTER_2(A, B) VAST_ENTER_ARGS_MSG(A, B)
-#  define VAST_ENTER(...)    VAST_PP_OVERLOAD(VAST_ENTER_, \
-                                              __VA_ARGS__)(__VA_ARGS__)
-
+     ::vast::logger::tracer __vast_tracer{std::move(__vast_msg)};             \
+     __vast_tracer << VAST_ARGS_ENTER(args) << msg;                           \
+     __vast_tracer.commit()
+#  define VAST_ENTER()                 VAST_ENTER_ARGS('*', "")
+#  define VAST_ENTER_MSG(msg)          VAST_ENTER_ARGS('*', ' ' << msg)
+#  define VAST_ENTER_WITH_1(args)      VAST_ENTER_ARGS(args, "")
+#  define VAST_ENTER_WITH_2(args, msg) VAST_ENTER_ARGS(args, " " << msg)
+#  define VAST_ENTER_WITH(...) \
+     VAST_PP_OVERLOAD(VAST_ENTER_WITH_, __VA_ARGS__)(__VA_ARGS__)
 #  define VAST_ARG_1(A) #A << " = " << A
 #  define VAST_ARG_2(A, B)                                      \
     VAST_ARG_1(A) << ", " << #B << " = " << B
@@ -279,27 +271,25 @@ private:
 #  define VAST_ARG_5(A, B, C, D, E)                             \
     VAST_ARG_4(A, B, C, D) << ", " << #E << " = " << E
 #  define VAST_ARG(...) VAST_PP_OVERLOAD(VAST_ARG_, __VA_ARGS__)(__VA_ARGS__)
-
 #  define VAST_ARGF(arg, f) #arg << " = " << f(arg)
 #  define VAST_ARGM(arg, m) #arg << " = " << arg.m()
 #  define VAST_THIS "*this = " << *this
 #  define VAST_MSG(msg)                                                      \
-     vast_tracer.reset(false);                                               \
-     vast_tracer << msg;                                                     \
-     vast_tracer.commit();                                                   \
-     VAST_VOID
+     __vast_tracer.reset(false);                                             \
+     __vast_tracer << msg;                                                   \
+     __vast_tracer.commit()
 #  define VAST_LEAVE(msg)                                                    \
      {                                                                       \
-       vast_tracer.reset(true);                                              \
-       vast_tracer << "<-- (void) " << msg;                                  \
+       __vast_tracer.reset(true);                                            \
+       __vast_tracer << VAST_ARGS_LEAVE("void") << ' ' << msg;               \
        return;                                                               \
      }                                                                       \
      VAST_VOID
 #  define VAST_RETURN_VAL_MSG(value, msg)                                    \
      {                                                                       \
        auto&& vast_result = value;                                           \
-       vast_tracer.reset(true);                                              \
-       vast_tracer << "<-- (" << vast_result << ") " << msg;                 \
+       __vast_tracer.reset(true);                                            \
+       __vast_tracer << VAST_ARGS_LEAVE(vast_result) << ' ' << msg;          \
        return vast_result;                                                   \
      }                                                                       \
      VAST_VOID
@@ -307,16 +297,20 @@ private:
 #  define VAST_RETURN_2(val, msg)  VAST_RETURN_VAL_MSG(val, msg)
 #  define VAST_RETURN(...) \
      VAST_PP_OVERLOAD(VAST_RETURN_, __VA_ARGS__)(__VA_ARGS__)
-
 #else
-#  define VAST_ENTER(...) VAST_VOID
-#  define VAST_MSG(msg) VAST_VOID
-#  define VAST_LEAVE(msg) return
-#  define VAST_RETURN(value, ...) return value
+#  define VAST_ENTER() VAST_VOID
+#  define VAST_ENTER_MSG() VAST_VOID
+#  define VAST_ENTER_WITH(...) VAST_VOID
+#  define VAST_MSG(...) VAST_VOID
+#  define VAST_LEAVE(...) return
+#  define VAST_RETURN_1(val) return val
+#  define VAST_RETURN_2(val, msg) return val
+#  define VAST_RETURN(...) \
+     VAST_PP_OVERLOAD(VAST_RETURN_, __VA_ARGS__)(__VA_ARGS__)
 #  define VAST_ARG(...)
 #  define VAST_ARGF
 #  define VAST_ARGM
 #  define VAST_THIS
-#endif // VAST_LOG_LEVEL > 5
+#endif
 
-#endif // VAST_LOGGER_H
+#endif

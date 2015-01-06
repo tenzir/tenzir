@@ -36,11 +36,11 @@ int main(int argc, char *argv[])
     return 1;
   }
 
-  VAST_LOG_VERBOSE(" _   _____   __________");
-  VAST_LOG_VERBOSE("| | / / _ | / __/_  __/");
-  VAST_LOG_VERBOSE("| |/ / __ |_\\ \\  / / ");
-  VAST_LOG_VERBOSE("|___/_/ |_/___/ /_/  " << VAST_VERSION);
-  VAST_LOG_VERBOSE("");
+  VAST_VERBOSE(" _   _____   __________");
+  VAST_VERBOSE("| | / / _ | / __/_  __/");
+  VAST_VERBOSE("| |/ / __ |_\\ \\  / / ");
+  VAST_VERBOSE("|___/_/ |_/___/ /_/  " << VAST_VERSION);
+  VAST_VERBOSE("");
 
   auto threads = std::thread::hardware_concurrency();
   if (auto t = cfg->as<size_t>("caf.threads"))
@@ -51,10 +51,10 @@ int main(int argc, char *argv[])
     throughput = *t;
 
   caf::set_scheduler<>(threads, throughput);
-  VAST_LOG_VERBOSE("set scheduler threads to " << threads);
-  VAST_LOG_VERBOSE("set scheduler maximum throughput to " <<
-                   (throughput == std::numeric_limits<size_t>::max()
-                    ? "unlimited" : std::to_string(throughput)));
+  VAST_VERBOSE("set scheduler threads to", threads);
+  VAST_VERBOSE("set scheduler maximum throughput to",
+               (throughput == std::numeric_limits<size_t>::max()
+                ? "unlimited" : std::to_string(throughput)));
 
   auto program = caf::spawn<vast::program>(std::move(*cfg));
   caf::anon_send(program, caf::atom("run"));

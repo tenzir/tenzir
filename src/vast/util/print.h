@@ -274,7 +274,8 @@ template <typename CharT, typename Traits, typename T>
 auto operator<<(std::basic_ostream<CharT, Traits>& out, T const& x)
   -> std::enable_if_t<
        printable<T, std::ostreambuf_iterator<CharT>>::value
-         && ! streamable<decltype(out), T>::value,
+         && ! streamable<decltype(out), T>::value
+         && ! std::is_pointer<T>::value,
        decltype(out)
      >
 {

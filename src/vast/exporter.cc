@@ -9,7 +9,7 @@ namespace vast {
 
 void exporter::at_down(down_msg const& msg)
 {
-  VAST_LOG_ACTOR_ERROR("got DOWN from " << last_sender());
+  VAST_ERROR(this, "got DOWN from", last_sender());
   for (auto& s : sinks_)
     if (s == last_sender())
     {
@@ -41,13 +41,13 @@ message_handler exporter::make_handler()
     },
     on(atom("limit"), arg_match) >> [=](uint64_t max)
     {
-      VAST_LOG_ACTOR_DEBUG("caps event export at " << max << " events");
+      VAST_DEBUG(this, "caps event export at", max, "events");
 
       if (processed_ < max)
         limit_ = max;
       else
-        VAST_LOG_ACTOR_ERROR("ignores new limit of " << max <<
-                             ", already processed " << processed_ << " events");
+        VAST_ERROR(this, "ignores new limit of", max <<
+                   ", already processed", processed_, " events");
     },
     [=](event const&)
     {
@@ -56,18 +56,18 @@ message_handler exporter::make_handler()
 
       if (++processed_ == limit_)
       {
-        VAST_LOG_ACTOR_DEBUG("reached maximum event limit: " << limit_);
+        VAST_DEBUG(this, "reached maximum event limit:", limit_);
         quit(exit::done);
       }
     },
     on(atom("progress"), arg_match) >> [=](double progress, uint64_t hits)
     {
-      VAST_LOG_ACTOR_DEBUG("got query status message: completed " <<
-                           size_t(progress * 100) << "% (" << hits << " hits)");
+      VAST_DEBUG(this, "got query status message: completed ",
+                 size_t(progress * 100) << "% (" << hits << " hits)");
     },
     on(atom("done")) >> [=]
     {
-      VAST_LOG_ACTOR_DEBUG("got query status message: done with index hits");
+      VAST_DEBUG(this, "got query status message: done with index hits");
     }
   };
 }

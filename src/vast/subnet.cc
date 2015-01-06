@@ -60,7 +60,7 @@ bool subnet::initialize()
 
 void subnet::serialize(serializer& sink) const
 {
-  VAST_ENTER(VAST_THIS);
+  VAST_ENTER_WITH(VAST_THIS);
   sink << length_ << network_;
 }
 

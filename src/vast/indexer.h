@@ -41,11 +41,11 @@ public:
     {
       auto attempt = io::unarchive(path_, last_flush_, bmi_);
       if (! attempt)
-        VAST_LOG_ACTOR_ERROR("failed to load bitmap index from " << path_ <<
-                             ": " << attempt.error());
+        VAST_ERROR(this, "failed to load bitmap index from",
+                   path_ << ':', attempt.error());
       else
-        VAST_LOG_ACTOR_DEBUG("loaded bitmap index from " << path_ <<
-                             " (" << bmi_.size() << " bits)");
+        VAST_DEBUG(this, "loaded bitmap index from", path_,
+                   '(' << bmi_.size(), "bits)");
     }
 
     auto flush = [=]
@@ -56,17 +56,15 @@ public:
         auto attempt = io::archive(path_, size, bmi_);
         if (! attempt)
         {
-          VAST_LOG_ACTOR_ERROR("failed to flush " << (size - last_flush_) <<
-                               " bits to " << path_ << ": " <<
-                               attempt.error());
+          VAST_ERROR(this, "failed to flush", size - last_flush_,
+                     "bits to", path_ << ':', attempt.error());
           this->quit(exit::error);
         }
         else
         {
-          VAST_LOG_ACTOR_DEBUG(
-              "flushed bitmap index to " << path_ << " (" <<
-              (size - last_flush_) << '/' << size << " new/total bits)");
-
+          VAST_DEBUG(this, "flushed bitmap index to", path_,
+                     '(' << (size - last_flush_) << '/' << size,
+                     "new/total bits)");
           last_flush_ = size;
         }
       }
@@ -100,8 +98,8 @@ public:
           if (t)
             ++n;
           else
-            VAST_LOG_ACTOR_ERROR("failed to append event " << e.id() << ": " <<
-                                 t.error());
+            VAST_ERROR(this, "failed to append event", e.id() << ':',
+                       t.error());
         }
 
         stats_.increment(n);
@@ -116,7 +114,7 @@ public:
         auto r = bmi_.lookup(p->op, *get<data>(p->rhs));
         if (! r)
         {
-          VAST_LOG_ACTOR_ERROR(r.error());
+          VAST_ERROR(this, r.error());
           this->send(sink, pred, part, bitstream{});
           return;
         }

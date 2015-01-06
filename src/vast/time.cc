@@ -105,15 +105,12 @@ time_range::rep time_range::count() const
 
 void time_range::serialize(serializer& sink) const
 {
-  VAST_ENTER(VAST_THIS);
   sink << duration_;
 }
 
 void time_range::deserialize(deserializer& source)
 {
-  VAST_ENTER();
   source >> duration_;
-  VAST_LEAVE(VAST_THIS);
 }
 
 trial<void> convert(time_range tr, double& d)
@@ -310,15 +307,12 @@ time_range time_point::since_epoch() const
 
 void time_point::serialize(serializer& sink) const
 {
-  VAST_ENTER(VAST_THIS);
   sink << time_point_;
 }
 
 void time_point::deserialize(deserializer& source)
 {
-  VAST_ENTER();
   source >> time_point_;
-  VAST_LEAVE(VAST_THIS);
 }
 
 trial<void> convert(time_point tp, double &d)

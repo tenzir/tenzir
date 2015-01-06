@@ -36,8 +36,8 @@ public:
     {
       [=](actor parent, actor child)
       {
-        VAST_LOG_ACTOR_DEBUG("registers child-parent edge (" << child <<
-                             " -> " << parent << ")");
+        VAST_DEBUG(this, "registers child-parent edge (" << child,
+                   "->", parent << ")");
         ++total_;
         ++remaining_;
         ++degree_[parent.address()];
@@ -51,14 +51,13 @@ public:
         auto edge = graph_.find(last_sender());
         if (edge == graph_.end())
         {
-          VAST_LOG_ACTOR_ERROR("got unregistered node: " << last_sender());
+          VAST_ERROR(this, "got unregistered node:", last_sender());
           quit(exit::error);
           return;
         }
 
-        VAST_LOG_ACTOR_DEBUG(
-            "removes completed node " << last_sender() <<
-            " (" << remaining_ << '/' << total_ << " remaining" << ')');
+        VAST_DEBUG(this, "removes completed node", last_sender(),
+                   '(' << remaining_ << '/' << total_, "remaining)");
 
         if (subscriber_)
           send(subscriber_, remaining_, total_);

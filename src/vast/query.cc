@@ -36,20 +36,20 @@ query::query(actor archive, actor sink, expression ast)
       auto last = unprocessed_.find_last();
       if (last != bitstream::npos)
       {
-        VAST_LOG_ACTOR_DEBUG("prefetches chunk for ID " << last);
+        VAST_DEBUG(this, "prefetches chunk for ID", last);
         send(archive_, last);
         inflight_ = true;
       }
     }
     else
     {
-      VAST_LOG_ACTOR_DEBUG("looks for next unprocessed ID after " <<
-                           chunk_.meta().ids.find_last());
+      VAST_DEBUG(this, "looks for next unprocessed ID after",
+                 chunk_.meta().ids.find_last());
 
       auto next = unprocessed_.find_next(chunk_.meta().ids.find_last());
       if (next != bitstream::npos)
       {
-        VAST_LOG_ACTOR_DEBUG("prefetches chunk for next ID " << next);
+        VAST_DEBUG(this, "prefetches chunk for next ID", next);
         send(archive_, next);
         inflight_ = true;
       }
@@ -58,7 +58,7 @@ query::query(actor archive, actor sink, expression ast)
         auto prev = unprocessed_.find_prev(chunk_.meta().ids.find_first());
         if (prev != bitstream::npos)
         {
-          VAST_LOG_ACTOR_DEBUG("prefetches chunk for previous ID " << prev);
+          VAST_DEBUG(this, "prefetches chunk for previous ID", prev);
           send(archive_, prev);
           inflight_ = true;
         }
@@ -71,8 +71,8 @@ query::query(actor archive, actor sink, expression ast)
     assert(hits);
     assert(! hits.all_zero());
 
-    VAST_LOG_ACTOR_DEBUG("got index hit covering [" << hits.find_first()
-                         << ',' << hits.find_last() << ']');
+    VAST_DEBUG(this, "got index hit covering",
+               '[' << hits.find_first() << ',' << hits.find_last() << ']');
 
     hits_ |= hits;
     unprocessed_ = hits_ - processed_;
@@ -90,8 +90,7 @@ query::query(actor archive, actor sink, expression ast)
 
       if (progress == 1.0)
       {
-        VAST_LOG_ACTOR_DEBUG("completed index interaction (" << hits << " hits)");
-
+        VAST_DEBUG(this, "completed index interaction (" << hits, "hits)");
         if (processed_.count() == hits)
           send(this, atom("done"));
       }
@@ -120,9 +119,8 @@ query::query(actor archive, actor sink, expression ast)
       inflight_ = false;
       chunk_ = chk;
 
-      VAST_LOG_ACTOR_DEBUG(
-          "got chunk [" << chk.meta().ids.find_first() <<
-          ", " << chk.meta().ids.find_last() << "]");
+      VAST_DEBUG(this, "got chunk [" << chk.meta().ids.find_first() << ',',
+                 chk.meta().ids.find_last() << "]");
 
       assert(! reader_);
       reader_ = std::make_unique<chunk::reader>(chunk_);
@@ -140,9 +138,10 @@ query::query(actor archive, actor sink, expression ast)
     incorporate_hits,
     on(atom("extract"), arg_match) >> [=](uint64_t n)
     {
-      VAST_LOG_ACTOR_DEBUG(
-          "got request to extract " << (n == 0 ? "all" : to_string(n)) <<
-          " events (" << (n == 0 ? uint64_t(-1) : requested_ + n) << " total)");
+      VAST_DEBUG(this, "got request to extract",
+                 (n == 0 ? "all" : to_string(n)),
+                 "events (" << (n == 0 ? uint64_t(-1) : requested_ + n),
+                 " total)");
 
       // If the query did not extract events this request, we start the
       // extraction process now.
@@ -176,15 +175,13 @@ query::query(actor archive, actor sink, expression ast)
             auto t = visit(expr::schema_resolver{e->type()}, ast_);
             if (! t)
             {
-              VAST_LOG_ACTOR_ERROR("failed to resolve '" << ast_ << "', " <<
-                                   t.error());
+              VAST_ERROR(this, "failed to resolve", ast_ << ',', t.error());
               quit(exit::error);
               return;
             }
 
             ast = visit(expr::type_resolver{e->type()}, *t);
-            VAST_LOG_ACTOR_DEBUG("resolved AST for new type " << e->type() <<
-                                 ": " << ast);
+            VAST_DEBUG(this, "resolved AST for type", e->type() << ':', ast);
           }
 
           if (visit(expr::evaluator{*e}, ast))
@@ -195,16 +192,15 @@ query::query(actor archive, actor sink, expression ast)
           }
           else
           {
-            VAST_LOG_ACTOR_WARN("ignores false positive : " << *e);
+            VAST_WARN(this, "ignores false positive:", *e);
           }
         }
         else
         {
           if (e.empty())
-            VAST_LOG_ACTOR_ERROR("failed to extract event " << id);
+            VAST_ERROR(this, "failed to extract event", id);
           else
-            VAST_LOG_ACTOR_ERROR("failed to extract event " << id << ": " <<
-                                 e.error());
+            VAST_ERROR(this, "failed to extract event", id << ':', e.error());
 
           quit(exit::error);
           return;
@@ -219,9 +215,9 @@ query::query(actor archive, actor sink, expression ast)
       unprocessed_ -= partial;
       mask -= partial;
 
-      VAST_LOG_ACTOR_DEBUG("extracted " << n << " events (" <<
-                           partial.count() << '/' << mask.count() <<
-                           " processed/remaining hits)");
+      VAST_DEBUG(this, "extracted", n, "events",
+                 '(' << partial.count() << '/' << mask.count(),
+                 "processed/remaining hits)");
 
       if (! mask.all_zero())
       {
@@ -240,7 +236,7 @@ query::query(actor archive, actor sink, expression ast)
 
       if (inflight_)
       {
-        VAST_LOG_ACTOR_DEBUG("becomes waiting");
+        VAST_DEBUG(this, "becomes waiting");
         become(waiting_);
       }
       else
@@ -249,7 +245,7 @@ query::query(actor archive, actor sink, expression ast)
         // arrival of new hits automatically triggers prefetching.
         assert(unprocessed_.all_zero());
 
-        VAST_LOG_ACTOR_DEBUG("becomes idle");
+        VAST_DEBUG(this, "becomes idle");
         become(idle_);
 
         if (progress_ == 1.0 && unprocessed_.count() == 0)

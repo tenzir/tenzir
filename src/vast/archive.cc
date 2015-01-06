@@ -25,7 +25,7 @@ caf::message_handler archive::make_handler()
     auto t = io::unarchive(dir_ / "meta.data", segments_);
     if (! t)
     {
-      VAST_LOG_ACTOR_ERROR("failed to unarchive meta data: " << t.error());
+      VAST_ERROR(this, "failed to unarchive meta data:", t.error());
       quit(exit::error);
       return {};
     }
@@ -36,11 +36,11 @@ caf::message_handler archive::make_handler()
     {
       if (! current_.empty())
       {
-        VAST_LOG_ACTOR_VERBOSE("writes segment to disk");
+        VAST_VERBOSE(this, "writes segment to disk");
         auto t = store(std::move(current_));
         if (! t)
         {
-          VAST_LOG_ACTOR_ERROR("failed to save segment: " << t.error());
+          VAST_ERROR(this, "failed to save segment:", t.error());
           return;
         }
       }
@@ -48,7 +48,7 @@ caf::message_handler archive::make_handler()
       auto t = io::archive(dir_ / "meta.data", segments_);
       if (! t)
       {
-        VAST_LOG_ACTOR_ERROR("failed to archive meta data: " << t.error());
+        VAST_ERROR(this, "failed to archive meta data:", t.error());
         return;
       }
 
@@ -64,7 +64,7 @@ caf::message_handler archive::make_handler()
         auto t = store(std::move(current_));
         if (! t)
         {
-          VAST_LOG_ACTOR_ERROR("failed to save segment: " << t.error());
+          VAST_ERROR(this, "failed to save segment:", t.error());
           quit(exit::error);
           return;
         }
@@ -87,11 +87,11 @@ caf::message_handler archive::make_handler()
       auto t = load(eid);
       if (t)
       {
-        VAST_LOG_ACTOR_DEBUG("delivers chunk for event " << eid);
+        VAST_DEBUG(this, "delivers chunk for event", eid);
         return make_message(*t);
       }
 
-      VAST_LOG_ACTOR_WARN(t.error());
+      VAST_WARN(this, t.error());
       return make_message(atom("no chunk"), eid);
     }
   };
@@ -109,7 +109,7 @@ trial<void> archive::store(segment s)
 
   auto id = uuid::random();
   auto filename = dir_ / to_string(id);
-  VAST_LOG_ACTOR_VERBOSE("writes segment " << id << " to " << filename);
+  VAST_VERBOSE(this, "writes segment", id, "to", filename);
   auto t = io::archive(filename, s);
   if (! t)
     return t;
@@ -166,14 +166,14 @@ trial<chunk> archive::load(event_id eid)
 
 archive::segment archive::on_miss(uuid const& id)
 {
-  VAST_LOG_DEBUG("experienced cache miss for " << id);
+  VAST_DEBUG(this, "experienced cache miss for", id);
 
   segment s;
   auto filename = dir_ / to_string(id);
   auto t = io::unarchive(filename, s);
   if (! t)
   {
-    VAST_LOG_ERROR("failed to unarchive segment: " << t.error());
+    VAST_ERROR(this, "failed to unarchive segment:", t.error());
     return {};
   }
 

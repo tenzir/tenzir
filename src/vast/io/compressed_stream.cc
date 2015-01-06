@@ -13,7 +13,7 @@ namespace io {
 
 bool compressed_input_stream::next(void const** data, size_t* size)
 {
-  VAST_ENTER(VAST_ARG(data, size));
+  VAST_ENTER_WITH(VAST_ARG(data, size));
   assert(! uncompressed_.empty());
   if (rewind_bytes_ > 0)
   {
@@ -63,7 +63,7 @@ bool compressed_input_stream::next(void const** data, size_t* size)
 
 void compressed_input_stream::rewind(size_t bytes)
 {
-  VAST_ENTER(VAST_ARG(bytes));
+  VAST_ENTER_WITH(VAST_ARG(bytes));
   if (rewind_bytes_ + bytes <= valid_bytes_)
     rewind_bytes_ += bytes;
   else
@@ -72,7 +72,7 @@ void compressed_input_stream::rewind(size_t bytes)
 
 bool compressed_input_stream::skip(size_t bytes)
 {
-  VAST_ENTER(VAST_ARG(bytes));
+  VAST_ENTER_WITH(VAST_ARG(bytes));
   void const* data;
   size_t size;
   auto ok = next(&data, &size);
@@ -162,7 +162,7 @@ bool compressed_output_stream::flush()
 
 bool compressed_output_stream::next(void** data, size_t* size)
 {
-  VAST_ENTER(VAST_ARG(data, size));
+  VAST_ENTER_WITH(VAST_ARG(data, size));
   if (valid_bytes_ == uncompressed_.size() && ! flush())
     VAST_RETURN(false);
 
@@ -174,7 +174,7 @@ bool compressed_output_stream::next(void** data, size_t* size)
 
 void compressed_output_stream::rewind(size_t bytes)
 {
-  VAST_ENTER(VAST_ARG(bytes));
+  VAST_ENTER_WITH(VAST_ARG(bytes));
   valid_bytes_ -= bytes > valid_bytes_ ? valid_bytes_ : bytes;
 }
 
@@ -217,7 +217,7 @@ null_input_stream::null_input_stream(input_stream& source)
 
 size_t null_input_stream::uncompress(void const* source, size_t size)
 {
-  VAST_ENTER(VAST_ARG(source, size));
+  VAST_ENTER_WITH(VAST_ARG(source, size));
   assert(uncompressed_.size() >= size);
   std::memcpy(uncompressed_.data(), source, size);
   VAST_RETURN(size);
@@ -235,13 +235,13 @@ null_output_stream::~null_output_stream()
 
 size_t null_output_stream::compressed_size(size_t output) const
 {
-  VAST_ENTER(VAST_ARG(output));
+  VAST_ENTER_WITH(VAST_ARG(output));
   VAST_RETURN(output);
 }
 
 size_t null_output_stream::compress(void* sink, size_t sink_size)
 {
-  VAST_ENTER(VAST_ARG(sink, sink_size));
+  VAST_ENTER_WITH(VAST_ARG(sink, sink_size));
   assert(sink_size >= valid_bytes_);
   std::memcpy(sink, uncompressed_.data(), valid_bytes_);
   VAST_RETURN(valid_bytes_);
@@ -255,7 +255,7 @@ lz4_input_stream::lz4_input_stream(input_stream& source)
 
 size_t lz4_input_stream::uncompress(void const* source, size_t size)
 {
-  VAST_ENTER(VAST_ARG(source, size));
+  VAST_ENTER_WITH(VAST_ARG(source, size));
   // LZ4 does not offer functionality to estimate the output size. It operates
   // on at most 64KB blocks, so we need to ensure this maximum.
   assert(uncompressed_.size() >= 64 << 10);
@@ -280,14 +280,14 @@ lz4_output_stream::~lz4_output_stream()
 
 size_t lz4_output_stream::compressed_size(size_t output) const
 {
-  VAST_ENTER(VAST_ARG(output));
+  VAST_ENTER_WITH(VAST_ARG(output));
   auto result = LZ4_compressBound(output);
   VAST_RETURN(result);
 }
 
 size_t lz4_output_stream::compress(void* sink, size_t sink_size)
 {
-  VAST_ENTER(VAST_ARG(sink, sink_size));
+  VAST_ENTER_WITH(VAST_ARG(sink, sink_size));
   assert(sink_size >= valid_bytes_);
   auto n = LZ4_compress_limitedOutput(
       reinterpret_cast<char const*>(uncompressed_.data()),
@@ -307,7 +307,7 @@ snappy_input_stream::snappy_input_stream(input_stream& source)
 
 size_t uncompress(void const* source, size_t size)
 {
-  VAST_ENTER(VAST_ARG(source, size));
+  VAST_ENTER_WITH(VAST_ARG(source, size));
   size_t n;
   auto success = ::snappy::GetUncompressedLength(
       reinterpret_cast<char const*>(source), size, &n);
@@ -334,14 +334,14 @@ snappy_output_stream::~snappy_output_stream()
 
 size_t compressed_size(size_t output) const
 {
-  VAST_ENTER(VAST_ARG(output));
+  VAST_ENTER_WITH(VAST_ARG(output));
   auto result = ::snappy::MaxCompressedLength(output);
   VAST_RETURN(result);
 }
 
 size_t compress(void* sink, size_t sink_size)
 {
-  VAST_ENTER(VAST_ARG(sink, sink_size));
+  VAST_ENTER_WITH(VAST_ARG(sink, sink_size));
   size_t n;
   ::snappy::RawCompress(
       reinterpret_cast<char const*>(uncompressed_.data()),

@@ -35,19 +35,17 @@ list(GET version_numbers 1 VERSION_MINOR)
 set(VERSION_MAJ_MIN "${VERSION_MAJOR}.${VERSION_MINOR}")
 
 if (NOT CMAKE_CXX_FLAGS)
-  # TODO: Fix variadic logging macros and then add -pedantic again.
-  # We need -ftemplate-depth=256 to make Boost Spirit happy.
-  set(CXX_FLAGS                      "-Wall -Wextra -std=c++1y -ftemplate-depth=256")
+  # -ftemplate-depth=256 makes Boost Spirit happy.
+  set(CXX_FLAGS "-Wall -Wextra -pedantic -std=c++1y -ftemplate-depth=256")
   set(CMAKE_CXX_FLAGS_DEBUG          "-O0 -g")
   set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os")
   set(CMAKE_CXX_FLAGS_RELEASE        "-O3")
   set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g")
-
-  if (ENABLE_DEBUG)
-    set(CMAKE_BUILD_TYPE Debug)
-    set(CXX_FLAGS "${CXX_FLAGS} -DVAST_DEBUG")
-  endif ()
 endif()
+
+if (ENABLE_DEBUG)
+  set(CMAKE_BUILD_TYPE Debug)
+endif ()
 
 if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
   execute_process(

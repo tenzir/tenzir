@@ -66,13 +66,13 @@ message_handler program::make_handler()
     },
     on(atom("signal"), arg_match) >> [=](int signal)
     {
-      VAST_LOG_ACTOR_VERBOSE("received signal " << signal);
+      VAST_VERBOSE(this, "received signal", signal);
       if (signal == SIGINT || signal == SIGTERM)
         quit(exit::stop);
     },
     [=](error const& e)
     {
-      VAST_LOG_ACTOR_ERROR("got error: " << e);
+      VAST_ERROR(this, "got error:", e);
       quit(exit::error);
     },
     on(atom("ok")) >> [] { /* nothing to do */ }
@@ -115,7 +115,7 @@ void program::run()
 #ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
         send(prof, atom("start"), atom("perftools"), atom("cpu"));
 #else
-        VAST_LOG_ACTOR_ERROR("not compiled with perftools CPU support");
+        VAST_ERROR(this, "not compiled with perftools CPU support");
         quit(exit::error);
         return;
 #endif
@@ -126,7 +126,7 @@ void program::run()
 #ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
         send(prof, atom("start"), atom("perftools"), atom("heap"));
 #else
-        VAST_LOG_ACTOR_ERROR("not compiled with perftools heap support");
+        VAST_ERROR(this, "not compiled with perftools heap support");
         quit(exit::error);
         return;
 #endif
@@ -140,13 +140,13 @@ void program::run()
     auto port = *config_.as<unsigned>("tracker.port");
     if (config_.check("tracker"))
     {
-      VAST_LOG_ACTOR_INFO("publishes tracker at " << host << ':' << port);
+      VAST_INFO(this, "publishes tracker at", host << ':' << port);
       tracker_ = spawn<tracker, linked>(dir);
       caf::io::publish(tracker_, port, host.c_str());
     }
     else
     {
-      VAST_LOG_ACTOR_INFO("connects to tracker at " << host << ':' << port);
+      VAST_INFO(this, "connects to tracker at", host << ':' << port);
       tracker_ = caf::io::remote_actor(host, port);
     }
 
@@ -155,7 +155,7 @@ void program::run()
         on(atom("ok")) >> [] { /* do nothing */ },
         [=](error const& e)
         {
-          VAST_LOG_ACTOR_ERROR("got error: " << e);
+          VAST_ERROR(this, "got error:", e);
           quit(exit::error);
         });
 
@@ -261,14 +261,14 @@ void program::run()
 #ifdef VAST_HAVE_SNAPPY
         compression = io::snappy;
 #else
-        VAST_LOG_ACTOR_ERROR("not compiled with snappy support");
+        VAST_ERROR(this, "not compiled with snappy support");
         quit(exit::error);
         return;
 #endif
       }
       else
       {
-        VAST_LOG_ACTOR_ERROR("unknown compression method");
+        VAST_ERROR(this, "unknown compression method");
         quit(exit::error);
         return;
       }
@@ -297,7 +297,7 @@ void program::run()
         auto t = load_and_parse<schema>(path{*schema_file});
         if (! t)
         {
-          VAST_LOG_ACTOR_ERROR("failed to load schema: " << t.error());
+          VAST_ERROR(this, "failed to load schema:", t.error());
           quit(exit::error);
           return;
         }
@@ -326,7 +326,7 @@ void program::run()
         std::string n = i ? *i : *r;
         src = spawn<source::pcap, detached>(sch, std::move(n), c ? *c : -1, m);
 #else
-        VAST_LOG_ACTOR_ERROR("not compiled with pcap support");
+        VAST_ERROR(this, "not compiled with pcap support");
         quit(exit::error);
         return;
 #endif
@@ -343,7 +343,7 @@ void program::run()
       }
       else
       {
-        VAST_LOG_ACTOR_ERROR("invalid import format: " << *format);
+        VAST_ERROR(this, "invalid import format:", *format);
         quit(exit::error);
         return;
       }
@@ -357,7 +357,7 @@ void program::run()
         auto t = load_and_parse<schema>(path{*schema_file});
         if (! t)
         {
-          VAST_LOG_ACTOR_ERROR("failed to load schema: " << t.error());
+          VAST_ERROR(this, "failed to load schema:", t.error());
           quit(exit::error);
           return;
         }
@@ -375,7 +375,7 @@ void program::run()
         assert(flush);
         snk = spawn<sink::pcap, detached>(sch, *w, *flush);
 #else
-        VAST_LOG_ACTOR_ERROR("not compiled with pcap support");
+        VAST_ERROR(this, "not compiled with pcap support");
         quit(exit::error);
         return;
 #endif
@@ -395,8 +395,7 @@ void program::run()
             auto t = mkdir(p.parent());
             if (! t)
             {
-              VAST_LOG_ACTOR_ERROR("failed to create directory: " <<
-                                   p.parent());
+              VAST_ERROR(this, "failed to create directory:", p.parent());
               quit(exit::error);
               return;
             }
@@ -407,7 +406,7 @@ void program::run()
       }
       else
       {
-        VAST_LOG_ACTOR_ERROR("invalid export format: " << *format);
+        VAST_ERROR(this, "invalid export format:", *format);
         quit(exit::error);
         return;
       }
@@ -428,7 +427,7 @@ void program::run()
       self->sync_send(tracker_, atom("get"), search_name).await(
           on_arg_match >> [=](error const& e)
           {
-            VAST_LOG_ACTOR_ERROR("could not get SEARCH: " << e);
+            VAST_ERROR(this, "could not get SEARCH:", e);
             quit(exit::error);
           },
           [=](actor const& srch)
@@ -436,20 +435,19 @@ void program::run()
             sync_send(srch, atom("query"), exporter_, *query).then(
                 on_arg_match >> [=](error const& e)
                 {
-                  VAST_LOG_ACTOR_ERROR("got invalid query: " << e);
+                  VAST_ERROR(this, "got invalid query:", e);
                   quit(exit::error);
                 },
                 [=](expression const& ast, actor qry)
                 {
-                  VAST_LOG_ACTOR_DEBUG("instantiated query for: " << ast);
+                  VAST_DEBUG(this, "instantiated query for:", ast);
                   exporter_->link_to(qry);
                   send(qry, atom("extract"), limit);
                 },
                 others() >> [=]
                 {
-                  VAST_LOG_ACTOR_ERROR("got unexpected reply: " <<
-                                       to_string(last_dequeued()));
-
+                  VAST_ERROR(this, "got unexpected reply:",
+                             to_string(last_dequeued()));
                   quit(exit::error);
                 });
           });
@@ -465,18 +463,18 @@ void program::run()
           },
           [=](error const& e)
           {
-            VAST_LOG_ACTOR_ERROR(e);
+            VAST_ERROR(this, e);
             quit(exit::error);
           });
 #else
-      VAST_LOG_ACTOR_ERROR("not compiled with editline support");
+      VAST_ERROR(this, "not compiled with editline support");
       quit(exit::error);
 #endif
     }
   }
   catch (network_error const& e)
   {
-    VAST_LOG_ACTOR_ERROR("encountered network error: " << e.what());
+    VAST_ERROR(this, "encountered network error:", e.what());
     quit(exit::error);
   }
 }

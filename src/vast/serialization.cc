@@ -29,7 +29,7 @@ bool serializer::begin_instance(std::type_info const& /* ti */)
   VAST_ENTER();
   //if (global_typeid(ti) == nullptr)
   //{
-  //  VAST_LOG_ERROR("missing type info for " << detail::demangle(ti));
+  //  VAST_ERROR("missing type info for", ti.name());
   //  VAST_RETURN(false);
   //}
   VAST_RETURN(true);
@@ -51,7 +51,7 @@ bool serializer::end_sequence()
 
 bool serializer::write_string(char const* data, size_t size)
 {
-  VAST_ENTER(VAST_ARG(data, size));
+  VAST_ENTER_WITH(VAST_ARG(data, size));
   VAST_RETURN(write_raw(data, size));
 }
 
@@ -68,7 +68,7 @@ bool deserializer::begin_instance(std::type_info const& /* ti */)
   VAST_ENTER();
   //if (global_typeid(ti) == nullptr)
   //{
-  //  VAST_LOG_ERROR("missing type info for " << detail::demangle(ti));
+  //  VAST_ERROR("missing type info for", ti.name());
   //  VAST_RETURN(false);
   //}
   VAST_RETURN(true);
@@ -105,7 +105,7 @@ bool deserializer::read_type(global_type_info const*& gti)
   if (gti)
     VAST_RETURN(true);
 
-  VAST_LOG_ERROR("no type info for id " << id);
+  VAST_ERROR("no type info for ID", id);
   VAST_RETURN(false);
 }
 
@@ -123,77 +123,77 @@ bool binary_serializer::begin_sequence(uint64_t size)
 
 bool binary_serializer::write_bool(bool x)
 {
-  VAST_ENTER(VAST_ARG(x));
+  VAST_ENTER_WITH(VAST_ARG(x));
   bytes_ += sizeof(bool);
   VAST_RETURN(sink_.write<uint8_t>(&x));
 }
 
 bool binary_serializer::write_int8(int8_t x)
 {
-  VAST_ENTER(VAST_ARG(x));
+  VAST_ENTER_WITH(VAST_ARG(x));
   bytes_ += sizeof(int8_t);
   VAST_RETURN(sink_.write<int8_t>(&x));
 }
 
 bool binary_serializer::write_uint8(uint8_t x)
 {
-  VAST_ENTER(VAST_ARG(x));
+  VAST_ENTER_WITH(VAST_ARG(x));
   bytes_ += sizeof(uint8_t);
   VAST_RETURN(sink_.write<uint8_t>(&x));
 }
 
 bool binary_serializer::write_int16(int16_t x)
 {
-  VAST_ENTER(VAST_ARG(x));
+  VAST_ENTER_WITH(VAST_ARG(x));
   bytes_ += sizeof(int16_t);
   VAST_RETURN(sink_.write<int16_t>(&x));
 }
 
 bool binary_serializer::write_uint16(uint16_t x)
 {
-  VAST_ENTER(VAST_ARG(x));
+  VAST_ENTER_WITH(VAST_ARG(x));
   bytes_ += sizeof(uint16_t);
   VAST_RETURN(sink_.write<uint16_t>(&x));
 }
 
 bool binary_serializer::write_int32(int32_t x)
 {
-  VAST_ENTER(VAST_ARG(x));
+  VAST_ENTER_WITH(VAST_ARG(x));
   bytes_ += sizeof(int32_t);
   VAST_RETURN(sink_.write<int32_t>(&x));
 }
 
 bool binary_serializer::write_uint32(uint32_t x)
 {
-  VAST_ENTER(VAST_ARG(x));
+  VAST_ENTER_WITH(VAST_ARG(x));
   bytes_ += sizeof(uint32_t);
   VAST_RETURN(sink_.write<uint32_t>(&x));
 }
 
 bool binary_serializer::write_int64(int64_t x)
 {
-  VAST_ENTER(VAST_ARG(x));
+  VAST_ENTER_WITH(VAST_ARG(x));
   bytes_ += sizeof(int64_t);
   VAST_RETURN(sink_.write<int64_t>(&x));
 }
 
 bool binary_serializer::write_uint64(uint64_t x)
 {
-  VAST_ENTER(VAST_ARG(x));
+  VAST_ENTER_WITH(VAST_ARG(x));
   bytes_ += sizeof(uint64_t);
   VAST_RETURN(sink_.write<uint64_t>(&x));
 }
 
 bool binary_serializer::write_double(double x)
 {
-  VAST_ENTER(VAST_ARG(x));
+  VAST_ENTER_WITH(VAST_ARG(x));
   bytes_ += sizeof(double);
   VAST_RETURN(sink_.write<double>(&x));
 }
 
 bool binary_serializer::write_raw(void const* data, size_t size)
 {
-  VAST_ENTER(VAST_ARG(data, size));
+  VAST_ENTER_WITH(VAST_ARG(data, size));
   bytes_ += size;
   VAST_RETURN(sink_.write_raw(data, size));
 }
@@ -650,11 +650,11 @@ void object::deserialize(deserializer& source)
 
   if (! source.read_type(type_) )
   {
-    VAST_LOG_ERROR("failed to deserialize object type");
+    VAST_ERROR("failed to deserialize object type");
   }
   else if (type_ == nullptr)
   {
-    VAST_LOG_ERROR("deserialized an invalid object type");
+    VAST_ERROR("deserialized an invalid object type");
   }
   else
   {

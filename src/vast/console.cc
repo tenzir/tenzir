@@ -104,14 +104,14 @@ console::console(caf::actor search, path dir)
 {
   if (! exists(dir_) && ! mkdir(dir_))
   {
-    VAST_LOG_ACTOR_ERROR("failed to create console directory: " << dir_);
+    VAST_ERROR(this, "failed to create console directory:", dir_);
     quit(exit::error);
     return;
   }
 
   if (! exists(dir_ / "results") && ! mkdir(dir_ / "results"))
   {
-    VAST_LOG_ACTOR_ERROR("failed to create console result directory");
+    VAST_ERROR(this, "failed to create console result directory");
     quit(exit::error);
     return;
   }
@@ -275,7 +275,7 @@ console::console(caf::actor search, path dir)
 
         follow();
 
-        VAST_LOG_ACTOR_DEBUG("enters query " << active_->id());
+        VAST_DEBUG(this, "enters query", active_->id());
         return {};
       });
 
@@ -335,8 +335,7 @@ console::console(caf::actor search, path dir)
 
               send(qry, atom("extract"), opts_.batch_size);
               expected_ = opts_.batch_size;
-              VAST_LOG_ACTOR_DEBUG("expects " << expected_ <<
-                                   " results as initial batch");
+              VAST_DEBUG(this, "expects", expected_, "results as first batch");
 
               if (opts_.auto_follow)
                 follow();
@@ -345,9 +344,9 @@ console::console(caf::actor search, path dir)
             },
             others() >> [=]
             {
-              VAST_LOG_ACTOR_ERROR("got unexpected message: " <<
-                                   to_string(last_dequeued()));
               send(this, atom("prompt"));
+              VAST_ERROR(this, "got unexpected message:",
+                         to_string(last_dequeued()));
             });
 
       return {};
@@ -645,7 +644,7 @@ message_handler console::make_handler()
       }
       else
       {
-        VAST_LOG_ACTOR_DEBUG("got DOWN from query " << last_sender());
+        VAST_DEBUG(this, "got DOWN from query", last_sender());
         remove(last_sender());
       }
     },
@@ -656,9 +655,7 @@ message_handler console::make_handler()
     },
     on(atom("done")) >> [=]
     {
-      VAST_LOG_ACTOR_DEBUG("got done notification from query "
-                           << last_sender());
-
+      VAST_DEBUG(this, "got done notification from query", last_sender());
       remove(last_sender());
     },
     on(atom("prompt")) >> [=]
@@ -942,7 +939,7 @@ void console::prompt(size_t ms)
   auto t = cmdline_.get(line);
   if (! t)
   {
-    VAST_LOG_ACTOR_ERROR("failed to retrieve command line: " << t.error());
+    VAST_ERROR(this, "failed to retrieve command line:", t.error());
     quit(exit::error);
     return;
   }

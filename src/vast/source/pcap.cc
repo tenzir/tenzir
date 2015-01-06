@@ -7,10 +7,6 @@
 #include "vast/source/bro.h"
 #include "vast/util/byte_swap.h"
 
-#ifdef VAST_HAVE_PCAP
-#include "vast/source/pcap.h"
-#endif
-
 namespace vast {
 namespace source {
 
@@ -59,7 +55,7 @@ result<event> pcap::extract()
           return error{"failed to open interface ", name_, ": ", buf};
         }
 
-        VAST_LOG_ACTOR_INFO("listens on interface " << i->name);
+        VAST_INFO(this, "listens on interface " << i->name);
         break;
       }
 
@@ -90,19 +86,19 @@ result<event> pcap::extract()
         return error{"failed to open pcap file ", name_, ": ", err};
       }
 
-      VAST_LOG_ACTOR_INFO("reads trace from " << name_);
+      VAST_INFO(this, "reads trace from", name_);
     }
 
     if (auto t = schema_.find_type("vast::packet"))
     {
       if (congruent(packet_type_, *t))
       {
-        VAST_LOG_ACTOR_VERBOSE("prefers type in schema over default type");
+        VAST_VERBOSE(this, "prefers type in schema over default type");
         packet_type_ = *t;
       }
       else
       {
-        VAST_LOG_ACTOR_WARN("ignores incongruent schema type: " << t->name());
+        VAST_WARN(this, "ignores incongruent schema type:", t->name());
       }
     }
   }

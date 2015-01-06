@@ -42,7 +42,7 @@ public:
     {
       on(atom("add"), atom("worker"), arg_match) >> [=](actor a)
       {
-        VAST_LOG_DEBUG(*this << " adds worker " << a);
+        VAST_DEBUG(this, "adds worker", a);
         monitor(a);
         workers_.push_back(std::move(a));
       },

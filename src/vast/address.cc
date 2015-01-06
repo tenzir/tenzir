@@ -178,7 +178,7 @@ std::array<uint8_t, 16> const& address::data() const
 
 void address::serialize(serializer& sink) const
 {
-  VAST_ENTER(VAST_THIS);
+  VAST_ENTER_WITH(VAST_THIS);
   for (size_t i = 0; i < 16; i += 8)
   {
     auto p = reinterpret_cast<uint64_t const*>(&bytes_[i]);

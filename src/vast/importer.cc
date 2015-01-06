@@ -30,7 +30,7 @@ message_handler importer::make_handler()
 
   for (auto& p : directory{dir_ / "chunks"})
   {
-    VAST_LOG_ACTOR_INFO("found orphaned chunk: " << p.basename());
+    VAST_INFO(this, "found orphaned chunk:", p.basename());
     orphaned_.insert(p.basename());
     ++stored_;
   }
@@ -69,10 +69,10 @@ message_handler importer::make_handler()
         if (current_ > idx)
           --current_;
 
-        VAST_LOG_ACTOR_INFO("removes sink " << last_sender());
+        VAST_INFO(this, "removes sink", last_sender());
         sinks_.erase(i);
 
-        VAST_LOG_ACTOR_VERBOSE("has " << sinks_.size() << " sinks remaining");
+        VAST_VERBOSE(this, "has", sinks_.size(), "sinks remaining");
         if (sinks_.empty())
           become(terminating_);
       }
@@ -89,7 +89,7 @@ message_handler importer::make_handler()
         }
         else
         {
-          VAST_LOG_ACTOR_ERROR("failed to load orphaned chunk " << basename);
+          VAST_ERROR(this, "failed to load orphaned chunk", basename);
           continue;
         }
 
@@ -100,7 +100,7 @@ message_handler importer::make_handler()
     on(atom("add"), atom("source"), arg_match) >> [=](actor const& src)
     {
       // TODO: Support multiple sources.
-      VAST_LOG_ACTOR_DEBUG("adds source " << src);
+      VAST_DEBUG(this, "adds source", src);
       source_ = src;
       source_->link_to(chunkifier_);
       send(source_, atom("sink"), chunkifier_);
@@ -109,7 +109,7 @@ message_handler importer::make_handler()
     },
     on(atom("add"), atom("sink"), arg_match) >> [=](actor const& snk)
     {
-      VAST_LOG_ACTOR_DEBUG("adds sink " << snk);
+      VAST_DEBUG(this, "adds sink", snk);
       send(snk, flow_control::announce{this});
       sinks_.push_back(snk);
       monitor(snk);
@@ -123,12 +123,12 @@ message_handler importer::make_handler()
     },
     [=](flow_control::overload)
     {
-      VAST_LOG_ACTOR_DEBUG("pauses chunk delivery");
+      VAST_DEBUG(this, "pauses chunk delivery");
       become(paused_);
     },
     [=](flow_control::underload)
     {
-      VAST_LOG_ACTOR_DEBUG("ignores underload signal");
+      VAST_DEBUG(this, "ignores underload signal");
     },
   };
 
@@ -137,11 +137,11 @@ message_handler importer::make_handler()
     on_exit,
     [=](flow_control::overload)
     {
-      VAST_LOG_ACTOR_DEBUG("ignores overload signal");
+      VAST_DEBUG(this, "ignores overload signal");
     },
     [=](flow_control::underload)
     {
-      VAST_LOG_ACTOR_DEBUG("resumes chunk delivery");
+      VAST_DEBUG(this, "resumes chunk delivery");
       become(ready_);
     },
   };
@@ -152,16 +152,16 @@ message_handler importer::make_handler()
     {
       if (! exists(dir_ / "chunks") && ! mkdir(dir_ / "chunks"))
       {
-        VAST_LOG_ACTOR_ERROR("failed to create chunk directory");
+        VAST_ERROR(this, "failed to create chunk directory");
         return;
       }
 
       auto p = dir_ / "chunks" / ("chunk-" + to_string(stored_++));
-      VAST_LOG_ACTOR_INFO("archives chunk to " << p);
+      VAST_INFO(this, "archives chunk to", p);
 
       auto t = io::archive(p, chk);
       if (! t)
-        VAST_LOG_ACTOR_ERROR("failed to archive chunk: " << t.error());
+        VAST_ERROR(this, "failed to archive chunk:", t.error());
     },
     after(std::chrono::seconds(0)) >> [=]
     {

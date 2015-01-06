@@ -2,7 +2,7 @@
 
 #include "vast/logger.h"
 
-#if VAST_LOG_LEVEL > 5
+#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_TRACE
 
 SUITE("core")
 
@@ -17,13 +17,13 @@ int foo()
 
 void bar(int i, std::string s, char c)
 {
-  VAST_ENTER(VAST_ARG(i, s, c));
+  VAST_ENTER_WITH(VAST_ARG(i, s, c));
   VAST_MSG("about to call foo");
   foo();
-  VAST_LEAVE("leaving with a message");
+  VAST_LEAVE("returning with a message");
 };
 
-TEST("logging")
+TEST("tracing")
 {
   foo();
   bar(42, "***", 'A');

@@ -70,7 +70,7 @@ struct partition::dispatcher
 
         if (! attempt)
         {
-          VAST_LOG_ERROR(attempt.error());
+          VAST_ERROR(attempt.error());
           return {};
         }
       }
@@ -79,7 +79,7 @@ struct partition::dispatcher
         auto a = part_.load_data_indexer(t, t, {});
         if (! a)
         {
-          VAST_LOG_ERROR(a.error());
+          VAST_ERROR(a.error());
           return {};
         }
         if (*a)
@@ -103,14 +103,14 @@ struct partition::dispatcher
 
           if (! compatible(*lhs_type, op_, type::derive(d)))
           {
-            VAST_LOG_WARN("incompatible types: LHS = " << *lhs_type <<
-                          " <--> RHS = " << type::derive(d));
+            VAST_WARN("incompatible types: LHS =", *lhs_type,
+                      "<--> RHS =", type::derive(d));
             return {};
           }
 
           auto a = part_.load_data_indexer(t, *lhs_type, o);
           if (! a)
-            VAST_LOG_ERROR(a.error());
+            VAST_ERROR(a.error());
           else if (*a)
             indexes.push_back(std::move(*a));
         }
@@ -120,7 +120,7 @@ struct partition::dispatcher
         auto a = part_.load_data_indexer(t, t, {});
         if (! a)
         {
-          VAST_LOG_ERROR(a.error());
+          VAST_ERROR(a.error());
           return {};
         }
 
@@ -158,7 +158,7 @@ void partition::at_down(down_msg const&)
 
     if (chunks_.size() == 10 - 1)
     {
-      VAST_LOG_ACTOR_DEBUG("signals underload");
+      VAST_DEBUG(this, "signals underload");
       for (auto& a : upstream())
         send(message_priority::high, a, flow_control::underload{});
     }
@@ -167,7 +167,7 @@ void partition::at_down(down_msg const&)
   }
   else
   {
-    VAST_LOG_ACTOR_DEBUG("got DOWN from " << last_sender());
+    VAST_DEBUG(this, "got DOWN from", last_sender());
 
     stats_.erase(last_sender());
     for (auto i = indexers_.begin(); i != indexers_.end(); ++i)
@@ -208,7 +208,7 @@ message_handler partition::make_handler()
     auto t = io::unarchive(dir_ / "schema", schema_);
     if (! t)
     {
-      VAST_LOG_ACTOR_ERROR("failed to load schema: " << t.error());
+      VAST_ERROR(this, "failed to load schema:", t.error());
       quit(exit::error);
       return {};
     }
@@ -239,7 +239,7 @@ message_handler partition::make_handler()
     },
     [=](expression const& pred, actor idx)
     {
-      VAST_LOG_ACTOR_DEBUG("got predicate " << pred);
+      VAST_DEBUG(this, "got predicate", pred);
 
       auto indexers = visit(dispatcher{*this}, pred);
       uint64_t n = indexers.size();
@@ -247,7 +247,7 @@ message_handler partition::make_handler()
 
       if (n == 0)
       {
-        VAST_LOG_ACTOR_DEBUG("did not find a matching indexer for " << pred);
+        VAST_DEBUG(this, "did not find a matching indexer for", pred);
         send(idx, pred, id_, bitstream{});
       }
       else
@@ -259,7 +259,7 @@ message_handler partition::make_handler()
     },
     on(atom("flush"), arg_match) >> [=](actor tree)
     {
-      VAST_LOG_ACTOR_DEBUG("got request to flush indexes");
+      VAST_DEBUG(this, "got request to flush indexes");
 
       for (auto& p : indexers_)
         if (p.second)
@@ -273,7 +273,7 @@ message_handler partition::make_handler()
         auto t = io::archive(dir_ / "schema", schema_);
         if (! t)
         {
-          VAST_LOG_ACTOR_ERROR("failed to save schema: " << t.error());
+          VAST_ERROR(this, "failed to save schema:", t.error());
           quit(exit::error);
           return;
         }
@@ -283,12 +283,12 @@ message_handler partition::make_handler()
     },
     [=](chunk const& c)
     {
-      VAST_LOG_ACTOR_DEBUG("got chunk with " << c.events() << " events");
+      VAST_DEBUG(this, "got chunk with", c.events(), "events");
 
       auto sch = schema::merge(schema_, c.meta().schema);
       if (! sch)
       {
-        VAST_LOG_ACTOR_ERROR("failed to merge schema: " << sch.error());
+        VAST_ERROR(this, "failed to merge schema:", sch.error());
         quit(exit::error);
         return;
       }
@@ -317,7 +317,7 @@ message_handler partition::make_handler()
 
             if (! attempt)
             {
-              VAST_LOG_ACTOR_ERROR(attempt.error());
+              VAST_ERROR(this, attempt.error());
               quit(exit::error);
               return;
             }
@@ -327,7 +327,7 @@ message_handler partition::make_handler()
             auto t = create_data_indexer(tp, tp, {});
             if (! t)
             {
-              VAST_LOG_ACTOR_ERROR(t.error());
+              VAST_ERROR(this, t.error());
               quit(exit::error);
               return;
             }
@@ -339,7 +339,7 @@ message_handler partition::make_handler()
 
       if (chunks_.size() == 10)
       {
-        VAST_LOG_ACTOR_DEBUG("signals overload");
+        VAST_DEBUG(this, "signals overload");
         for (auto& a : upstream())
           send(message_priority::high, a, flow_control::overload{});
       }
@@ -358,7 +358,7 @@ message_handler partition::make_handler()
       {
         if (! chunks_.empty())
         {
-          VAST_LOG_ACTOR_DEBUG("begins unpacking a chunk (" <<
+          VAST_DEBUG(this, "begins unpacking a chunk (" <<
                                chunks_.size() << " remaining)");
 
           dechunkifier_ =
@@ -423,7 +423,7 @@ message_handler partition::make_handler()
       }
 
       if (value_rate > 0 || max_backlog.first > 0)
-        VAST_LOG_ACTOR_VERBOSE(
+        VAST_VERBOSE(this, 
             "indexes at " << value_rate << " values/sec" <<
             " (mean " << value_rate_mean << ") and " <<
             (value_rate / n) << " events/sec" <<

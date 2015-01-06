@@ -19,7 +19,7 @@ coded_input_stream::~coded_input_stream()
 
 bool coded_input_stream::skip(size_t n)
 {
-  VAST_ENTER(VAST_ARG(n));
+  VAST_ENTER_WITH(VAST_ARG(n));
   if (n <= buffer_.size())
   {
     buffer_.advance(n);
@@ -42,7 +42,7 @@ bool coded_input_stream::raw(void const** data, size_t* size)
 
 size_t coded_input_stream::read_raw(void* sink, size_t size)
 {
-  VAST_ENTER(VAST_ARG(sink, size));
+  VAST_ENTER_WITH(VAST_ARG(sink, size));
   size_t total = 0;
   size_t current;
   while ((current = buffer_.size()) < size)
@@ -93,7 +93,7 @@ coded_output_stream::~coded_output_stream()
 
 bool coded_output_stream::skip(size_t n)
 {
-  VAST_ENTER(VAST_ARG(n));
+  VAST_ENTER_WITH(VAST_ARG(n));
   while (n > buffer_.size())
   {
     n -= buffer_.size();
@@ -115,7 +115,7 @@ bool coded_output_stream::raw(void** data, size_t* size)
 
 size_t coded_output_stream::write_raw(void const* source, size_t size)
 {
-  VAST_ENTER(VAST_ARG(source, size));
+  VAST_ENTER_WITH(VAST_ARG(source, size));
   size_t total = 0;
   size_t current;
   while ((current = buffer_.size()) < size)

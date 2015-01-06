@@ -29,12 +29,12 @@ public:
       },
       on(atom("batch size"), arg_match) >> [=](uint64_t batch_size)
       {
-        VAST_LOG_ACTOR_DEBUG("sets batch size to " << batch_size);
+        VAST_DEBUG(this, "sets batch size to", batch_size);
         batch_size_ = batch_size;
       },
       on(atom("sink"), arg_match) >> [=](actor sink)
       {
-        VAST_LOG_ACTOR_DEBUG("sets sink to " << sink);
+        VAST_DEBUG(this, "sets sink to", sink);
         sink_ = sink;
       },
       on(atom("start")) >> [=]
@@ -64,7 +64,7 @@ public:
           }
           else if (r.failed())
           {
-            VAST_LOG_ACTOR_ERROR(r.error());
+            VAST_ERROR(this, r.error());
             done = true;
             break;
           }

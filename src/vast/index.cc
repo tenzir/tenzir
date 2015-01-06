@@ -108,9 +108,8 @@ struct index::builder
     for (size_t i = 1; i < con.size(); ++i)
       r = intersect(r, restrictions_[con[i]]);
 
-    VAST_LOG_DEBUG("restricted " << con << " to " <<
-                   r.size() << '/' << partitions_.size() <<
-                   " partitions");
+    VAST_DEBUG("restricted", con, "to",
+               r.size() << '/' << partitions_.size(), "partitions");
   }
 
   void operator()(disjunction const& dis)
@@ -122,9 +121,8 @@ struct index::builder
     for (auto& op : dis)
       r = unify(r, restrictions_[op]);
 
-    VAST_LOG_DEBUG("restricted " << dis << " to " <<
-                   r.size() << '/' << partitions_.size() <<
-                   " partitions");
+    VAST_DEBUG("restricted", dis, "to",
+               r.size() << '/' << partitions_.size(), "partitions");
   }
 
   void operator()(negation const& n)
@@ -152,9 +150,8 @@ struct index::builder
         parts.push_back(p.first);
     }
 
-    VAST_LOG_DEBUG("restricted " << pred << " to " <<
-                   parts.size() << '/' << partitions_.size() <<
-                   " partitions");
+    VAST_DEBUG("restricted", pred, "to",
+               parts.size() << '/' << partitions_.size(), "partitions");
 
     std::sort(parts.begin(), parts.end());
     restrictions_[pred] = std::move(parts);
@@ -185,8 +182,7 @@ struct index::pusher
 
     for (auto& op : con)
     {
-      VAST_LOG_DEBUG("pushing " << r.size() << " restrictions: " <<
-                     con << "  -->  " << op);
+      VAST_DEBUG("pushing", r.size(), "restrictions:", con, " --> ", op);
       visit(*this, op);
     }
   }
@@ -199,8 +195,7 @@ struct index::pusher
 
     for (auto& op : dis)
     {
-      VAST_LOG_DEBUG("pushing " << r.size() << " resctrictions: " <<
-                     dis << "  -->  " << op);
+      VAST_DEBUG("pushing", r.size(), "restrictions:", dis, " --> ", op);
       visit(*this, op);
     }
   }
@@ -483,7 +478,7 @@ index::index(path const& dir, size_t batch_size, size_t max_events,
         {
           auto t = io::archive(dir_ / "meta.data", partitions_);
           if (! t)
-            VAST_LOG_ACTOR_ERROR("failed to save meta data: " << t.error());
+            VAST_ERROR(this, "failed to save meta data:", t.error());
         }
 
         queries_.clear();
@@ -502,7 +497,7 @@ void index::dispatch(uuid const& part, predicate const& pred)
   // to-be-queried predicates.
   if (i != schedule_.end())
   {
-    VAST_LOG_ACTOR_DEBUG("adds predicate to " << part << ": " << pred);
+    VAST_DEBUG(this, "adds predicate to", part << ":", pred);
     i->predicates.insert(pred);
 
     // If the partition is in memory we can send it the predicate directly.
@@ -514,7 +509,7 @@ void index::dispatch(uuid const& part, predicate const& pred)
   }
 
   // If the partition is not in memory we enqueue it in the schedule.
-  VAST_LOG_ACTOR_DEBUG("enqueues partition " << part << " with " << pred);
+  VAST_DEBUG(this, "enqueues partition", part, "with", pred);
   schedule_.push_back(index::schedule_state{part, {pred}});
 
   if (std::find(active_.begin(), active_.end(), part) != active_.end())
@@ -529,7 +524,7 @@ void index::dispatch(uuid const& part, predicate const& pred)
     // If we have not fully maxed out our available passive partitions, we can
     // spawn the partition directly.
     passive_.push_back(part);
-    VAST_LOG_ACTOR_DEBUG("spawns passive partition " << part);
+    VAST_DEBUG(this, "spawns passive partition", part);
     auto& a = partitions_[part].actor;
     assert(! a);
     a = spawn<partition, monitored>(dir_, part, batch_size_);
@@ -539,7 +534,7 @@ void index::dispatch(uuid const& part, predicate const& pred)
 
 void index::consolidate(uuid const& part, predicate const& pred)
 {
-  VAST_LOG_ACTOR_DEBUG("consolidates " << pred << " for partition " << part);
+  VAST_DEBUG(this, "consolidates", pred, "for partition", part);
 
   auto i = std::find_if(
       schedule_.begin(),
@@ -558,17 +553,16 @@ void index::consolidate(uuid const& part, predicate const& pred)
   // predicates.
   if (! i->predicates.empty())
   {
-    VAST_LOG_ACTOR_DEBUG(
-        "got completed predicate " << pred << " for partition " <<
-        part << ", " << i->predicates.size() << " remaining");
+    VAST_DEBUG(this, "got completed predicate", pred, "for partition",
+               part << ',', i->predicates.size(), "remaining");
     return;
   }
 
-  VAST_LOG_ACTOR_DEBUG("evicts completed partition " << part);
+  VAST_DEBUG(this, "evicts completed partition", part);
   schedule_.erase(i);
 
   if (schedule_.empty())
-    VAST_LOG_ACTOR_DEBUG("finished with entire schedule");
+    VAST_DEBUG(this, "finished with entire schedule");
 
   // We don't unload active partitions.
   if (std::find(active_.begin(), active_.end(), part) != active_.end())
@@ -595,7 +589,7 @@ void index::consolidate(uuid const& part, predicate const& pred)
     auto& next_actor = partitions_[entry.part].actor;
     if (! next_actor)
     {
-      VAST_LOG_ACTOR_DEBUG("schedules next partition " << entry.part);
+      VAST_DEBUG(this, "schedules next partition", entry.part);
       passive_.push_back(entry.part);
       next_actor = spawn<partition, monitored>(dir_, entry.part, batch_size_);
       for (auto& next_pred : entry.predicates)
@@ -644,7 +638,7 @@ double index::progress(expression const& expr) const
 
 void index::at_down(down_msg const& msg)
 {
-  VAST_LOG_ACTOR_DEBUG("got DOWN from " << last_sender());
+  VAST_DEBUG(this, "got DOWN from", last_sender());
 
   auto found = false;
   for (auto i = active_.begin(); i != active_.end(); ++i)
@@ -654,8 +648,8 @@ void index::at_down(down_msg const& msg)
     {
       p.actor = invalid_actor;
       active_.erase(i);
-      VAST_LOG_ACTOR_DEBUG("shrinks active partitions to " <<
-                           active_.size() << '/' << active_partitions_);
+      VAST_DEBUG(this, "shrinks active partitions to",
+                 active_.size() << '/' << active_partitions_);
       found = true;
       break;
     }
@@ -669,9 +663,8 @@ void index::at_down(down_msg const& msg)
       {
         p.actor = invalid_actor;
         passive_.erase(i);
-        VAST_LOG_ACTOR_DEBUG("shrinks passive partitions to " <<
-                             passive_.size() << '/' <<
-                             max_partitions_ - active_partitions_);
+        VAST_DEBUG(this, "shrinks passive partitions to", passive_.size() << 
+                   '/' << max_partitions_ - active_partitions_);
         break;
       }
     }
@@ -703,17 +696,16 @@ message_handler index::make_handler()
 {
   trap_exit(true);
 
-  VAST_LOG_ACTOR_VERBOSE("caps partitions at " << max_events_per_partition_ <<
-                         " events");
-  VAST_LOG_ACTOR_VERBOSE("uses " << active_partitions_ << "/" <<
-                         max_partitions_ << " active partitions");
+  VAST_VERBOSE(this, "caps partitions at", max_events_per_partition_, "events");
+  VAST_VERBOSE(this, "uses", active_partitions_ << "/" << max_partitions_,
+               "active partitions");
 
   if (exists(dir_ / "meta.data"))
   {
     auto t = io::unarchive(dir_ / "meta.data", partitions_);
     if (! t)
     {
-      VAST_LOG_ACTOR_ERROR("failed to load meta data: " << t.error());
+      VAST_ERROR(this, "failed to load meta data:", t.error());
       quit(exit::error);
       return {};
     }
@@ -738,7 +730,7 @@ message_handler index::make_handler()
   {
     auto id = i < parts.size() ? parts[i].first : uuid::random();
     auto& p = partitions_[id];
-    VAST_LOG_ACTOR_DEBUG("activates partition " << id);
+    VAST_DEBUG(this, "activates partition", id);
     p.actor = spawn<partition, priority_aware+monitored>(dir_, id, batch_size_);
     send(p.actor, flow_control::announce{this});
     active_[i] = std::move(id);
@@ -769,8 +761,7 @@ message_handler index::make_handler()
       // Replace partition with new one on overflow.
       if (i->second.events + chk.events() > max_events_per_partition_)
       {
-        VAST_LOG_ACTOR_DEBUG(
-            "replaces " << i->second.actor << " (" << id << ')');
+        VAST_DEBUG(this, "replaces", i->second.actor, '(' << id << ')');
         send_exit(i->second.actor, exit::stop);
         i->second.actor = invalid_actor;
 
@@ -791,8 +782,7 @@ message_handler index::make_handler()
         p.last_event = chk.meta().last;
 
       forward_to(p.actor);
-      VAST_LOG_ACTOR_DEBUG("forwards chunk to " << p.actor <<
-                           " (" << id << ')');
+      VAST_DEBUG(this, "forwards chunk to", p.actor, '(' << id << ')');
     },
     on(atom("query"), arg_match) >> [=](expression const& ast, actor sink)
     {
@@ -812,7 +802,7 @@ message_handler index::make_handler()
 
         visit(dispatcher{*this}, ast);
 
-        VAST_LOG_ACTOR_DEBUG("evaluates " << ast);
+        VAST_DEBUG(this, "evaluates", ast);
         visit(evaluator{*this}, ast);
       }
 
@@ -826,9 +816,8 @@ message_handler index::make_handler()
     },
     [=](expression const& pred, uuid const& part, uint64_t n)
     {
-      VAST_LOG_ACTOR_DEBUG("expects partition " << part <<
-                           " to deliver " << n << " hits for predicate " <<
-                           pred);
+      VAST_DEBUG(this, "expects partition", part, "to deliver", n,
+                 "hits for predicate", pred);
 
       auto& status = partitions_[part].status[pred];
       status.expected = n;
@@ -840,9 +829,8 @@ message_handler index::make_handler()
     },
     [=](expression const& pred, uuid const& part, bitstream const& hits)
     {
-      VAST_LOG_ACTOR_DEBUG(
-          "received " << (hits ? hits.count() : 0) <<
-          " hits from " << part << " for predicate " << pred);
+      VAST_DEBUG(this, "received", (hits ? hits.count() : 0), "hits from",
+                 part, "for predicate", pred);
 
       assert(partitions_[part].status.count(pred));
       auto& status = partitions_[part].status[pred];
@@ -859,7 +847,7 @@ message_handler index::make_handler()
       for (auto i = range.first; i != range.second; ++i)
       {
         auto& root = *i->second;
-        VAST_LOG_ACTOR_DEBUG("evaluates " << root);
+        VAST_DEBUG(this, "evaluates", root);
         auto& qs = queries_[root];
         qs.predicates[pred].hits |= hits;
         auto changed = visit(propagator{*this, i->first}, root);
@@ -884,8 +872,8 @@ message_handler index::make_handler()
           [=](down_msg const& d)
           {
             if (d.reason != exit::kill)
-              VAST_LOG_ACTOR_WARN("got DOWN from " << last_sender() <<
-                                  " with unexpected exit code " << d.reason);
+              VAST_WARN(this, "got DOWN from", last_sender(),
+                        "with unexpected exit code", d.reason);
 
             for (auto i = active_.begin(); i != active_.end(); ++i)
               if (partitions_[*i].actor == last_sender())
@@ -898,13 +886,12 @@ message_handler index::make_handler()
             {
               if (! rm(dir_))
               {
-                VAST_LOG_ACTOR_ERROR("failed to delete index directory: " <<
-                                     dir_);
+                VAST_ERROR(this, "failed to delete index directory:", dir_);
                 send_exit(this, exit::error);
                 return;
               }
 
-              VAST_LOG_ACTOR_INFO("deleted index: " << dir_);
+              VAST_INFO(this, "deleted index:", dir_);
               unbecome();
             }
           }

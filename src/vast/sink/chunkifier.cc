@@ -24,17 +24,16 @@ bool chunkifier::process(event const& e)
 {
   if (! writer_->write(e))
   {
-    VAST_LOG_ACTOR_ERROR("failed to write event into chunk: " << e);
+    VAST_ERROR(this, "failed to write event into chunk:", e);
     quit(exit::error);
     return false;
   }
 
   ++total_events_;
   if (stats_.increment())
-    VAST_LOG_ACTOR_VERBOSE(
-        "writes at " << stats_.last() << " events/sec (" <<
-        stats_.mean() << '/' << stats_.median() << '/' <<
-        stats_.sd() << " mean/median/sd)");
+    VAST_VERBOSE(this, "writes at", stats_.last(), "events/sec (" <<
+                 stats_.mean() << '/' << stats_.median() << '/' << stats_.sd(),
+                 " mean/median/sd)");
 
 
   if (chunk_->events() == max_events_per_chunk_)
@@ -57,7 +56,7 @@ void chunkifier::finalize()
   upstream_ = invalid_actor;
 
   if (total_events_ > 0)
-    VAST_LOG_ACTOR_VERBOSE("processed " << total_events_ << " events");
+    VAST_VERBOSE(this, "processed", total_events_, "events");
 }
 
 std::string chunkifier::name() const

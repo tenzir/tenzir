@@ -47,7 +47,7 @@ public:
   void on_overload(base_actor* self)
   {
     using namespace caf;
-    VAST_LOG_DEBUG(*self, " inserts " << a << " into overload set");
+    VAST_DEBUG(self, "inserts", a, "into overload set");
     overloaded_.insert(a);
 
     if (overloaded_.size() < workers_.size())
@@ -59,37 +59,32 @@ public:
         keep_behavior,
         [=](flow_control::overload const&)
         {
-          VAST_LOG_DEBUG(*self, "ignores overload signal");
+          VAST_DEBUG(self, "ignores overload signal");
         },
         [=](flow_control::underload const&)
         {
+          VAST_DEBUG(self, "removes", last_sender(), "from overload set");
           overloaded_.erase(last_sender());
-          VAST_LOG_DEBUG(*self, "removes " << last_sender() <<
-                         " from overload set");
-
           flow_controlled::on_underload();
-
-          VAST_LOG_DEBUG(*self, "unbecomes overloaded");
+          VAST_DEBUG(self, "unbecomes overloaded");
           unbecome();
         });
   }
 
   void on_underload(base_actor* self)
   {
+    VAST_DEBUG(self, "removes", self->last_sender(), "from overload set");
     overloaded_.erase(self->last_sender());
-    VAST_LOG_DEBUG(*self, "removes " << self->last_sender() <<
-                   " from overload set");
   }
 
   caf::message_handler make_handler()
   {
     using namespace caf;
-
     return
     {
       on(atom("add"), atom("worker"), arg_match) >> [=](actor a)
       {
-        VAST_LOG_DEBUG(*this, "adds worker " << a);
+        VAST_DEBUG(this, "adds worker", a);
         monitor(a);
         workers_.push_back(std::move(a));
       },

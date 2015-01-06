@@ -180,7 +180,7 @@ bool bro::process(event const& e)
 
   if (! is<type::record>(t))
   {
-    VAST_LOG_ACTOR_ERROR("cannot process non-record events");
+    VAST_ERROR(this, "cannot process non-record events");
     return false;
   }
 
@@ -189,7 +189,7 @@ bool bro::process(event const& e)
   {
     if (streams_.empty())
     {
-      VAST_LOG_ACTOR_DEBUG("creates a new stream for STDOUT");
+      VAST_DEBUG(this, "creates a new stream for STDOUT");
       auto i = streams_.emplace("",  std::make_unique<stream>("-"));
       auto header = make_header(t);
       if (! i.first->second->write(header.begin(), header.end()))
@@ -204,21 +204,21 @@ bool bro::process(event const& e)
     s = strm.get();
     if (! s)
     {
-      VAST_LOG_ACTOR_DEBUG("creates new stream for event " << t.name());
+      VAST_DEBUG(this, "creates new stream for event", t.name());
 
       if (! exists(dir_))
       {
         auto d = mkdir(dir_);
         if (! d)
         {
-          VAST_LOG_ACTOR_ERROR("failed to create directory: " << d.error());
+          VAST_ERROR(this, "failed to create directory:", d.error());
           quit(exit::error);
           return false;
         }
       }
       else if (! dir_.is_directory())
       {
-        VAST_LOG_ACTOR_ERROR("got existing non-directory path: " << dir_);
+        VAST_ERROR(this, "got existing non-directory path:", dir_);
         quit(exit::error);
         return false;
       }
