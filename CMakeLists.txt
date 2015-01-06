@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 2.6 FATAL_ERROR)
 project(VAST C CXX)
 
+# Silence warning CMP0042.
+if (APPLE AND NOT DEFINED CMAKE_MACOSX_RPATH)
+  set(CMAKE_MACOSX_RPATH true)
+endif()
+
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 include(CTest)
 include(Helpers)
