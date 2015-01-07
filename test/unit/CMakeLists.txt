@@ -16,14 +16,14 @@ configure_file(tests/schema_test_cases.h.in schema_test_cases.h)
 # Generate header file that defines the paths to data.
 #
 
-file(GLOB_RECURSE compressed bro/logs/*.gz traces/*.gz)
+file(GLOB_RECURSE compressed logs/bro/*.gz logs/bgpdump/*.gz traces/*.gz)
 foreach(gzip ${compressed})
   string(REGEX REPLACE "(.*)\\..+" "\\1" extracted ${gzip})
   execute_process(COMMAND gunzip -c ${gzip} OUTPUT_FILE ${extracted})
 endforeach()
 
 set (test_data "#ifndef TEST_DATA\n#define TEST_DATA")
-file(GLOB log_dirs bro/logs/*)
+file(GLOB log_dirs logs/bro/*)
 foreach (log_dir ${log_dirs})
   get_filename_component(log_dir_basename ${log_dir} NAME_WE)
   set(test_data "${test_data}\n\nnamespace ${log_dir_basename} {\n")
@@ -35,6 +35,16 @@ foreach (log_dir ${log_dirs})
   endforeach ()
   set(test_data "${test_data}\n\n} // namespace ${log_dir_basename}")
 endforeach ()
+
+set(test_data "${test_data}\n\nnamespace bgpdump {\n")
+file(GLOB logs logs/bgpdump/*.txt)
+foreach (log ${logs})
+  get_filename_component(log_basename ${log} NAME_WE)
+  set (this "constexpr auto ${log_basename} = \"${log}\";")
+  set (test_data "${test_data}\n${this}")
+endforeach ()
+set(test_data "${test_data}\n\n} // namespace bgpdump")
+
 set(test_data "${test_data}\n\nnamespace traces {\n")
 file(GLOB traces traces/*.pcap)
 foreach (trace ${traces})
@@ -66,6 +76,7 @@ set(tests ${tests}
   tests/bitmap_index.cc
   tests/bitstream.cc
   tests/bitvector.cc
+  tests/bgpdump.cc
   tests/block.cc
   tests/cache.cc
   tests/caf.cc
