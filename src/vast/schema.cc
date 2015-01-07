@@ -83,6 +83,11 @@ bool schema::empty() const
   return types_.empty();
 }
 
+void schema::clear()
+{
+  types_.clear();
+}
+
 void schema::serialize(serializer& sink) const
 {
   sink << to_string(*this);

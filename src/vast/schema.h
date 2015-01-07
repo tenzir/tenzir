@@ -14,6 +14,7 @@
 
 namespace vast {
 
+/// An ordered sequence of of named types.
 class schema : util::equality_comparable<schema>
 {
 public:
@@ -42,22 +43,12 @@ public:
   /// @returns The type(s) having type *t*.
   std::vector<type> find_types(type const& t) const;
 
-  /// Checks whether a given event complies with the schema.
-  /// @param e The event to test.
-  /// @returns `nothing` iff *e* complies with this schema.
-  //trial<void> complies(event const& e) const;
-
   // Container API.
   const_iterator begin() const;
   const_iterator end() const;
-
-  /// Retrieves the number of types in the schema.
-  /// @returns The number of types this schema has.
   size_t size() const;
-
-  /// Checks whether the schema is empty.
-  /// @returns `size() == 0`.
   bool empty() const;
+  void clear();
 
 private:
   std::vector<type> types_;
