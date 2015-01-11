@@ -1,6 +1,6 @@
 #include "vast/configuration.h"
 
-#include "vast/file_system.h"
+#include "vast/filesystem.h"
 #include "vast/logger.h"
 #include "vast/uuid.h"
 #include "vast/detail/type_manager.h"

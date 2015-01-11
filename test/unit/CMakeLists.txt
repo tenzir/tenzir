@@ -69,14 +69,14 @@ include_directories(
 
 file(GLOB_RECURSE tests framework/*.cc)
 set(tests ${tests}
-  tests/actor_pcap.cc
-  tests/actors.cc
-  tests/actor_task_tree.cc
+  tests/actor/source_bgpdump.cc
+  tests/actor/source_pcap.cc
+  tests/actor/program.cc
+  tests/actor/task_tree.cc
   tests/bitmap.cc
   tests/bitmap_index.cc
   tests/bitstream.cc
   tests/bitvector.cc
-  tests/bgpdump.cc
   tests/block.cc
   tests/cache.cc
   tests/caf.cc
@@ -85,7 +85,7 @@ set(tests ${tests}
   tests/event.cc
   tests/expr.cc
   tests/factory.cc
-  tests/file_system.cc
+  tests/filesystem.cc
   tests/getline.cc
   tests/hash.cc
   tests/intrusive.cc
@@ -111,7 +111,7 @@ set(tests ${tests}
 
 if (PCAP_FOUND)
   set(tests ${tests}
-    tests/actor_pcap.cc)
+    tests/actor/source_pcap.cc)
 endif ()
 
 

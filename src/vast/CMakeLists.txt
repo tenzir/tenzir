@@ -4,7 +4,6 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in
 set(libvast_sources
   ../vast.cc
   address.cc
-  archive.cc
   bitvector.cc
   bitstream.cc
   block.cc
@@ -14,31 +13,38 @@ set(libvast_sources
   expression.cc
   event.cc
   error.cc
-  exporter.cc
-  file_system.cc
-  identifier.cc
-  index.cc
+  filesystem.cc
   individual.cc
-  importer.cc
   logger.cc
   operator.cc
-  partition.cc
   pattern.cc
   port.cc
-  profiler.cc
-  program.cc
-  query.cc
-  receiver.cc
   schema.cc
-  search.cc
   serialization.cc
-  signal_monitor.cc
   subnet.cc
   time.cc
-  tracker.cc
   type.cc
   uuid.cc
   value.cc
+  actor/archive.cc
+  actor/exporter.cc
+  actor/identifier.cc
+  actor/importer.cc
+  actor/index.cc
+  actor/partition.cc
+  actor/profiler.cc
+  actor/program.cc
+  actor/query.cc
+  actor/receiver.cc
+  actor/search.cc
+  actor/signal_monitor.cc
+  actor/tracker.cc
+  actor/sink/bro.cc
+  actor/sink/chunkifier.cc
+  actor/sink/json.cc
+  actor/source/bro.cc
+  actor/source/bgpdump.cc
+  actor/source/test.cc
   detail/caf_serialization.cc
   detail/type_manager.cc
   detail/ast/query.cc
@@ -56,12 +62,6 @@ set(libvast_sources
   io/getline.cc
   io/iostream.cc
   io/stream.cc
-  sink/bro.cc
-  sink/chunkifier.cc
-  sink/json.cc
-  source/bro.cc
-  source/bgpdump.cc
-  source/test.cc
   util/poll.cc
   util/string.cc
   util/system.cc
@@ -73,19 +73,19 @@ set(libvast_sources
 
 if (PCAP_FOUND)
   set(libvast_sources ${libvast_sources}
-    sink/pcap.cc
-    source/pcap.cc)
+    actor/sink/pcap.cc
+    actor/source/pcap.cc)
 endif ()
 
 if (BROCCOLI_FOUND)
   set(libvast_sources ${libvast_sources}
-    source/broccoli.cc
+    actor/source/broccoli.cc
     util/broccoli.cc)
 endif ()
 
 if (EDITLINE_FOUND)
   set(libvast_sources ${libvast_sources}
-    console.cc
+    actor/console.cc
     util/command_line.cc
     util/editline.cc)
 endif ()

@@ -5,7 +5,7 @@
 #include <iostream>
 #include <fstream>
 #include <thread>
-#include "vast/file_system.h"
+#include "vast/filesystem.h"
 #include "vast/time.h"
 #include "vast/util/color.h"
 #include "vast/util/queue.h"

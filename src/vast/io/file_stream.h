@@ -1,7 +1,7 @@
 #ifndef VAST_IO_FILE_STREAM_H
 #define VAST_IO_FILE_STREAM_H
 
-#include "vast/file_system.h"
+#include "vast/filesystem.h"
 #include "vast/io/buffered_stream.h"
 
 namespace vast {

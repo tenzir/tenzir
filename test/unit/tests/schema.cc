@@ -1,6 +1,6 @@
 #include "framework/unit.h"
 
-#include "vast/file_system.h"
+#include "vast/filesystem.h"
 #include "vast/schema.h"
 #include "vast/io/serialization.h"
 #include "vast/util/convert.h"

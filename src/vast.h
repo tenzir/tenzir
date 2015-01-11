@@ -2,10 +2,10 @@
 #define VAST_H
 
 #include "vast/configuration.h"
-#include "vast/file_system.h"
+#include "vast/filesystem.h"
 #include "vast/logger.h"
-#include "vast/program.h"
 #include "vast/serialization.h"
+#include "vast/actor/program.h"
 
 namespace vast {
 
