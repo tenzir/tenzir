@@ -155,11 +155,16 @@ public:
           ++i;
         }
 
-        if (values.size() > o->max_vals_)
-          return option_error{"too many values", arg};
-
         if (o->max_vals_ == 1 && values.size() != 1)
           return option_error{"option value required", arg};
+
+        if (o->max_vals_ > 0)
+        {
+          if (values.size() < o->max_vals_)
+            return option_error{"not enough values", arg};
+          else if (values.size() > o->max_vals_)
+            return option_error{"too many values", arg};
+        }
 
         if (! values.empty())
           o->values_ = std::move(values);
