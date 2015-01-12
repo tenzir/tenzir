@@ -57,8 +57,14 @@ int main(int argc, char *argv[])
                 ? "unlimited" : std::to_string(throughput)));
 
   auto program = caf::spawn<vast::program>(std::move(*cfg));
-  caf::anon_send(program, caf::atom("run"));
-  caf::await_all_actors_done();
+  caf::scoped_actor self;
+  self->sync_send(program, caf::atom("run")).await(
+    caf::others() >> [] {},
+    [&](vast::error const& e)
+    {
+      VAST_ERROR(program, "encountered error:", e);
+    });
+  self->await_all_other_actors_done();
   caf::shutdown();
   vast::cleanup();
 

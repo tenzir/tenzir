@@ -59,7 +59,11 @@ message_handler program::make_handler()
   {
     on(atom("run")) >> [=]
     {
-      run();
+      auto t = run();
+      if (t)
+        return make_message(atom("ok"));
+      else
+        return make_message(std::move(t.error()));
     },
     on(atom("tracker")) >> [=]
     {
@@ -85,7 +89,7 @@ std::string program::name() const
   return "program";
 }
 
-void program::run()
+trial<void> program::run()
 {
   auto dir = path{*config_.get("directory")}.complete();
 
@@ -116,9 +120,8 @@ void program::run()
 #ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
         send(prof, atom("start"), atom("perftools"), atom("cpu"));
 #else
-        VAST_ERROR(this, "not compiled with perftools CPU support");
         quit(exit::error);
-        return;
+        return error{"not compiled with perftools CPU support"};
 #endif
       }
 
@@ -127,9 +130,8 @@ void program::run()
 #ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
         send(prof, atom("start"), atom("perftools"), atom("heap"));
 #else
-        VAST_ERROR(this, "not compiled with perftools heap support");
         quit(exit::error);
-        return;
+        return error{"not compiled with perftools heap support"};
 #endif
       }
 
@@ -151,31 +153,35 @@ void program::run()
       tracker_ = caf::io::remote_actor(host, port);
     }
 
-    scoped_actor self;
+    optional<error> abort;
     message_handler ok_or_quit = (
         on(atom("ok")) >> [] { /* do nothing */ },
-        [=](error const& e)
+        [&](error& e)
         {
-          VAST_ERROR(this, "got error:", e);
+          abort = std::move(e);
           quit(exit::error);
         });
 
+    scoped_actor self;
     auto link = *config_.as<std::vector<std::string>>("tracker.link");
     if (! link.empty())
     {
       assert(link.size() == 2);
-      sync_send(tracker_, atom("link"), link[0], link[1]).then(
-        on(atom("ok")) >> [=]
+      self->sync_send(tracker_, atom("link"), link[0], link[1]).await(
+        on(atom("ok")) >> [&]
         {
           VAST_INFO(this, "successfully linked", link[0], "to", link[1]);
           quit(exit::done);
         },
-        [=](error const& e)
+        [=](error& e) mutable
         {
-          VAST_ERROR(this, "got error:", e);
+          abort = std::move(e);
           quit(exit::error);
         });
-      return;
+      if (abort)
+        return std::move(*abort);
+      else
+        return nothing;
     }
 
     auto archive_name = *config_.get("archive.name");
@@ -188,6 +194,8 @@ void program::run()
 
       self->sync_send(tracker_, atom("put"), "archive", archive_, archive_name)
         .await(ok_or_quit);
+      if (abort)
+        return std::move(*abort);
     }
 
     auto index_name = *config_.get("index.name");
@@ -202,6 +210,8 @@ void program::run()
 
       self->sync_send(tracker_, atom("put"), "index", index_, index_name)
         .await(ok_or_quit);
+      if (abort)
+        return std::move(*abort);
     }
 
     auto receiver_name = *config_.get("receiver.name");
@@ -216,6 +226,8 @@ void program::run()
 
       self->sync_send(tracker_, atom("put"), "receiver", receiver_,
                       receiver_name).await(ok_or_quit);
+      if (abort)
+        return std::move(*abort);
 
       self->sync_send(tracker_, atom("identifier")).await(
           [&](actor const& identifier)
@@ -229,6 +241,8 @@ void program::run()
         receiver_->link_to(archive_);
         self->sync_send(tracker_, atom("link"), receiver_name, archive_name)
           .await(ok_or_quit);
+        if (abort)
+          return std::move(*abort);
       }
 
       if (config_.check("index"))
@@ -237,6 +251,8 @@ void program::run()
         receiver_->link_to(index_);
         self->sync_send(tracker_, atom("link"), receiver_name, index_name)
           .await(ok_or_quit);
+        if (abort)
+          return std::move(*abort);
       }
 
     }
@@ -247,14 +263,24 @@ void program::run()
       search_ = spawn<search>();
       self->sync_send(tracker_, atom("put"), "search", search_, search_name)
         .await(ok_or_quit);
+      if (abort)
+        return std::move(*abort);
 
       if (config_.check("archive"))
+      {
         self->sync_send(tracker_, atom("link"), search_name, archive_name)
           .await(ok_or_quit);
+        if (abort)
+          return std::move(*abort);
+      }
 
       if (config_.check("index"))
+      {
         self->sync_send(tracker_, atom("link"), search_name, index_name)
           .await(ok_or_quit);
+        if (abort)
+          return std::move(*abort);
+      }
 
       if (config_.check("receiver"))
         search_->link_to(receiver_);
@@ -280,16 +306,14 @@ void program::run()
 #ifdef VAST_HAVE_SNAPPY
         compression = io::snappy;
 #else
-        VAST_ERROR(this, "not compiled with snappy support");
         quit(exit::error);
-        return;
+        return error{"not compiled with snappy support"};
 #endif
       }
       else
       {
-        VAST_ERROR(this, "unknown compression method");
         quit(exit::error);
-        return;
+        return error{"unknown compression method"};
       }
 
       auto batch_size = *config_.as<uint64_t>("import.batch-size");
@@ -298,6 +322,8 @@ void program::run()
       auto importer_name = *config_.get("import.name");
       self->sync_send(tracker_, atom("put"), "importer", importer_,
                       importer_name).await(ok_or_quit);
+      if (abort)
+        return std::move(*abort);
 
       if (config_.check("receiver"))
       {
@@ -310,15 +336,16 @@ void program::run()
 
       self->sync_send(tracker_, atom("link"), importer_name, receiver_name)
         .await(ok_or_quit);
+      if (abort)
+        return std::move(*abort);
 
       if (auto schema_file = config_.get("import.schema"))
       {
         auto t = load_and_parse<schema>(path{*schema_file});
         if (! t)
         {
-          VAST_ERROR(this, "failed to load schema:", t.error());
           quit(exit::error);
-          return;
+          return error{"failed to load schema: ", t.error()};
         }
 
         sch = *t;
@@ -335,7 +362,7 @@ void program::run()
           packet_schema.add(detail::make_packet_type());
           std::cout << packet_schema << std::flush;
           quit(exit::done);
-          return;
+          return nothing;
         }
 
 #ifdef VAST_HAVE_PCAP
@@ -345,9 +372,8 @@ void program::run()
         std::string n = i ? *i : *r;
         src = spawn<source::pcap, detached>(sch, std::move(n), c ? *c : -1, m);
 #else
-        VAST_ERROR(this, "not compiled with pcap support");
         quit(exit::error);
-        return;
+        return error{"not compiled with pcap support"};
 #endif
       }
       else if (*format == "bro")
@@ -366,9 +392,8 @@ void program::run()
       }
       else
       {
-        VAST_ERROR(this, "invalid import format:", *format);
         quit(exit::error);
-        return;
+        return error{"invalid import format: ", *format};
       }
 
       send(importer_, atom("add"), atom("source"), src);
@@ -380,9 +405,8 @@ void program::run()
         auto t = load_and_parse<schema>(path{*schema_file});
         if (! t)
         {
-          VAST_ERROR(this, "failed to load schema:", t.error());
           quit(exit::error);
-          return;
+          return error{"failed to load schema: ", t.error()};
         }
 
         sch = *t;
@@ -398,9 +422,8 @@ void program::run()
         assert(flush);
         snk = spawn<sink::pcap, detached>(sch, *w, *flush);
 #else
-        VAST_ERROR(this, "not compiled with pcap support");
         quit(exit::error);
-        return;
+        return error{"not compiled with pcap support"};
 #endif
       }
       else if (*format == "bro")
@@ -418,9 +441,8 @@ void program::run()
             auto t = mkdir(p.parent());
             if (! t)
             {
-              VAST_ERROR(this, "failed to create directory:", p.parent());
               quit(exit::error);
-              return;
+              return error{"failed to create directory: ", p.parent()};
             }
           }
         }
@@ -429,14 +451,15 @@ void program::run()
       }
       else
       {
-        VAST_ERROR(this, "invalid export format:", *format);
         quit(exit::error);
-        return;
+        return error{"invalid export format: ", *format};
       }
 
       auto exporter_name = *config_.get("export.name");
       self->sync_send(tracker_, atom("put"), "exporter", exporter_,
                       exporter_name).await(ok_or_quit);
+      if (abort)
+        return std::move(*abort);
 
       auto limit = *config_.as<uint64_t>("export.limit");
       if (limit > 0)
@@ -448,17 +471,17 @@ void program::run()
       auto query = config_.get("export.query");
       assert(query);
       self->sync_send(tracker_, atom("get"), search_name).await(
-          on_arg_match >> [=](error const& e)
+          on_arg_match >> [=](error& e) mutable
           {
-            VAST_ERROR(this, "could not get SEARCH:", e);
+            abort = std::move(e);
             quit(exit::error);
           },
-          [=](actor const& srch)
+          [&](actor const& srch)
           {
-            sync_send(srch, atom("query"), exporter_, *query).then(
-                on_arg_match >> [=](error const& e)
+            self->sync_send(srch, atom("query"), exporter_, *query).await(
+                on_arg_match >> [=](error& e) mutable
                 {
-                  VAST_ERROR(this, "got invalid query:", e);
+                  abort = std::move(e);
                   quit(exit::error);
                 },
                 [=](expression const& ast, actor qry)
@@ -467,13 +490,15 @@ void program::run()
                   exporter_->link_to(qry);
                   send(qry, atom("extract"), limit);
                 },
-                others() >> [=]
+                others() >> [=]() mutable
                 {
-                  VAST_ERROR(this, "got unexpected reply:",
-                             to_string(last_dequeued()));
+                  abort = error{"got unexpected reply:",
+                                to_string(last_dequeued())};
                   quit(exit::error);
                 });
           });
+      if (abort)
+        return std::move(*abort);
     }
     else if (config_.check("console"))
     {
@@ -484,21 +509,24 @@ void program::run()
             auto c = spawn<console, linked>(search, dir / "console");
             delayed_send(c, std::chrono::milliseconds(200), atom("prompt"));
           },
-          [=](error const& e)
+          [=](error& e) mutable
           {
-            VAST_ERROR(this, e);
+            abort = std::move(e);
             quit(exit::error);
           });
+      if (abort)
+        return std::move(*abort);
 #else
-      VAST_ERROR(this, "not compiled with editline support");
-      quit(exit::error);
+      return error{"not compiled with editline support"};
 #endif
     }
+
+    return nothing;
   }
   catch (network_error const& e)
   {
-    VAST_ERROR(this, "encountered network error:", e.what());
     quit(exit::error);
+    return error{"encountered network error:", e.what()};
   }
 }
 

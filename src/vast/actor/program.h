@@ -3,6 +3,7 @@
 
 #include "vast/configuration.h"
 #include "vast/actor/actor.h"
+#include "vast/trial.h"
 
 namespace vast {
 
@@ -18,7 +19,7 @@ public:
   std::string name() const;
 
 private:
-  void run();
+  trial<void> run();
 
   caf::actor receiver_;
   caf::actor tracker_;
