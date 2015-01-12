@@ -60,8 +60,15 @@ int main(int argc, char *argv[])
   caf::anon_send(program, caf::atom("run"));
   caf::await_all_actors_done();
   caf::shutdown();
-
   vast::cleanup();
 
-  return 0;
+  auto er = program->exit_reason();
+  if (er == vast::exit::done || er == vast::exit::stop)
+    return 0;
+  else if (er == vast::exit::error)
+    return 1;
+  else if (er == vast::exit::kill)
+    return 2;
+  else
+    return 255;
 }
