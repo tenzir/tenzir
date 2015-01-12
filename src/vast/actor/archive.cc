@@ -15,20 +15,6 @@ archive::archive(path dir, size_t capacity, size_t max_segment_size)
     cache_{capacity, [&](uuid const& id) { return on_miss(id); }}
 {
   assert(max_segment_size_ > 0);
-}
-
-caf::message_handler archive::make_handler()
-{
-  if (exists(dir_ / "meta.data"))
-  {
-    auto t = io::unarchive(dir_ / "meta.data", segments_);
-    if (! t)
-    {
-      VAST_ERROR(this, "failed to unarchive meta data:", t.error());
-      quit(exit::error);
-      return {};
-    }
-  }
 
   attach_functor(
     [=](uint32_t)
@@ -50,8 +36,21 @@ caf::message_handler archive::make_handler()
         VAST_ERROR(this, "failed to archive meta data:", t.error());
         return;
       }
-
     });
+}
+
+caf::message_handler archive::make_handler()
+{
+  if (exists(dir_ / "meta.data"))
+  {
+    auto t = io::unarchive(dir_ / "meta.data", segments_);
+    if (! t)
+    {
+      VAST_ERROR(this, "failed to unarchive meta data:", t.error());
+      quit(exit::error);
+      return {};
+    }
+  }
 
   return
   {

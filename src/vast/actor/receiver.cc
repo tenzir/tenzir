@@ -54,8 +54,18 @@ message_handler receiver::make_handler()
     [=](chunk const& chk)
     {
       assert(identifier_ != invalid_actor);
-      assert(archive_ != invalid_actor);
-      assert(index_ != invalid_actor);
+      if (archive_ == invalid_actor)
+      {
+        VAST_ERROR(this, "not linked to archive");
+        quit(exit::error);
+        return;
+      }
+      if (index_ == invalid_actor)
+      {
+        VAST_ERROR(this, "not linked to index");
+        quit(exit::error);
+        return;
+      }
 
       message last = last_dequeued();
       sync_send(identifier_, atom("request"), chk.events()).then(

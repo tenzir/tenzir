@@ -160,6 +160,24 @@ void program::run()
           quit(exit::error);
         });
 
+    auto link = *config_.as<std::vector<std::string>>("tracker.link");
+    if (! link.empty())
+    {
+      assert(link.size() == 2);
+      sync_send(tracker_, atom("link"), link[0], link[1]).then(
+        on(atom("ok")) >> [=]
+        {
+          VAST_INFO(this, "successfully linked", link[0], "to", link[1]);
+          quit(exit::done);
+        },
+        [=](error const& e)
+        {
+          VAST_ERROR(this, "got error:", e);
+          quit(exit::error);
+        });
+      return;
+    }
+
     auto archive_name = *config_.get("archive.name");
     if (config_.check("archive"))
     {

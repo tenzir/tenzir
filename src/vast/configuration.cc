@@ -73,6 +73,7 @@ void configuration::initialize()
   auto& track = create_block("tracker options", "tracker");
   track.add("host", "hostname/address of the tracker").init("127.0.0.1");
   track.add("port", "TCP port of the tracker").init(42000);
+  track.add("link", "link two components").multi(2);
   track.visible(false);
 
   auto& imp = create_block("import options", "import");
@@ -114,7 +115,7 @@ void configuration::initialize()
   idx.add('p', "max-parts", "maximum number of partitions in memory").init(10);
   idx.add('a', "active-parts", "number of active partitions").init(5);
   idx.add("rebuild", "delete and rebuild index from archive");
-  idx.add("name", "default index name").init("index-" + *hostname);
+  idx.add("name", "default index name").init("index@" + *hostname);
   idx.visible(false);
 
   auto& srch = create_block("search options", "search");

@@ -314,6 +314,7 @@ struct flow_controlled : component
   void on_announce(base_actor* self, caf::actor const& upstream)
   {
     VAST_DEBUG(self, "registers", upstream, "as upstream flow-control node");
+    assert(self != upstream);
     self->monitor(upstream);
     upstream_.insert(upstream);
   }
