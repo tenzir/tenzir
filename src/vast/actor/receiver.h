@@ -15,7 +15,8 @@ public:
   receiver();
 
   caf::message_handler make_handler();
-  void at_exit(caf::exit_msg const&);
+  void at_down(caf::down_msg const& msg);
+  void at_exit(caf::exit_msg const& msg);
   std::string name() const;
 
 private:

@@ -22,7 +22,26 @@ receiver::receiver()
                   });
 }
 
-void receiver::at_exit(caf::exit_msg const& msg)
+void receiver::at_down(down_msg const& msg)
+{
+  if (msg.source == identifier_)
+  {
+    VAST_VERBOSE(this, "got DOWN from identifier (tracker went down)");
+    quit(exit::error);
+  }
+  else if (msg.source == archive_)
+  {
+    VAST_VERBOSE(this, "got DOWN from archive");
+    archive_ = invalid_actor;
+  }
+  else if (msg.source == index_)
+  {
+    VAST_VERBOSE(this, "got DOWN from index");
+    index_ = invalid_actor;
+  }
+}
+
+void receiver::at_exit(exit_msg const& msg)
 {
   quit(msg.reason);
 }
@@ -34,6 +53,7 @@ message_handler receiver::make_handler()
     on(atom("set"), atom("identifier"), arg_match) >> [=](actor const& a)
     {
       VAST_DEBUG(this, "registers identifier", a);
+      monitor(a);
       identifier_ = a;
       return make_message(atom("ok"));
     },
@@ -41,6 +61,7 @@ message_handler receiver::make_handler()
     {
       VAST_DEBUG(this, "registers archive", a);
       send(a, flow_control::announce{this});
+      monitor(a);
       archive_ = a;
       return make_message(atom("ok"));
     },
@@ -48,6 +69,7 @@ message_handler receiver::make_handler()
     {
       VAST_DEBUG(this, "registers index", a);
       send(a, flow_control::announce{this});
+      monitor(a);
       index_ = a;
       return make_message(atom("ok"));
     },
