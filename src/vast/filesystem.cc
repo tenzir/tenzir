@@ -541,14 +541,6 @@ directory::iterator directory::end() const
   return {};
 }
 
-void directory::rewind()
-{
-#ifdef VAST_POSIX
-  if (dir_)
-    ::rewinddir(dir_);
-#endif
-}
-
 path const& directory::path() const
 {
   return path_;

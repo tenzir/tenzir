@@ -279,8 +279,6 @@ public:
   iterator begin();
   iterator end() const;
 
-  void rewind();
-
   /// Retrieves the ::path for this file.
   /// @returns The ::path for this file.
   vast::path const& path() const;
