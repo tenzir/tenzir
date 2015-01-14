@@ -300,12 +300,14 @@ struct sentinel : component
 /// Handles flow-control signals.
 struct flow_controlled : component
 {
-  void at_down(base_actor* self, caf::down_msg const&)
+  void at_down(base_actor* self, caf::down_msg const& msg)
   {
+    VAST_DEBUG(self, "unregisters", msg.source,
+               "as upstream flow-control node");
     auto i = std::find_if(
         upstream_.begin(),
         upstream_.end(),
-        [&](caf::actor const& a) { return a == self->last_sender(); });
+        [&](caf::actor const& a) { return a == msg.source; });
 
     if (i != upstream_.end())
       upstream_.erase(i);

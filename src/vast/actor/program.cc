@@ -152,6 +152,7 @@ trial<void> program::run()
       tracker_ = caf::io::remote_actor(host, port);
     }
 
+    scoped_actor self;
     optional<error> abort;
     message_handler ok_or_quit = (
         on(atom("ok")) >> [] { /* do nothing */ },
@@ -159,9 +160,14 @@ trial<void> program::run()
         {
           abort = std::move(e);
           quit(exit::error);
+        },
+        others() >> [&]
+        {
+          abort = error{"got unexpected message: ",
+                        to_string(self->last_dequeued())};
+          quit(exit::error);
         });
 
-    scoped_actor self;
     auto link = *config_.as<std::vector<std::string>>("tracker.link");
     if (! link.empty())
     {
@@ -221,7 +227,11 @@ trial<void> program::run()
       // TRACKER needs to remain alive at least as long as RECEIVER, because
       // RECEIVER asks IDENTIFIER (which resides inside TRACKER) for chunk IDs.
       unlink_from(tracker_);
-      tracker_->link_to(receiver_);
+
+      // If RECEIVER and TRACKER live in different processes, a failing
+      // RECEIVER should not take down VAST's central component.
+      if (config_.check("tracker"))
+        tracker_->link_to(receiver_);
 
       self->sync_send(tracker_, atom("put"), "receiver", receiver_,
                       receiver_name).await(ok_or_quit);

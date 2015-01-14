@@ -26,17 +26,6 @@ void tracker::at_down(caf::down_msg const& msg)
     {
       VAST_INFO(this, "got DOWN from", i->first);
       i->second.actor = invalid_actor;
-      //auto j = topology_.begin();
-      //while (j != topology_.end())
-      //  if (j->first == i->first || j->second == i->first)
-      //  {
-      //    VAST_VERBOSE(this, "removes link", j->first, "->", j->second);
-      //    j = topology_.erase(j);
-      //  }
-      //  else
-      //  {
-      //    ++j;
-      //  }
       break;
     }
 }
@@ -57,6 +46,10 @@ message_handler tracker::make_handler()
     on(atom("identifier")) >> [=]
     {
       return identifier_;
+    },
+    on(atom("ok")) >> []
+    {
+      // Sent during relinking below, nothing to do here.
     },
     on(atom("put"), arg_match)
       >> [=](std::string const& type, actor const& a, std::string const& name)
@@ -97,6 +90,18 @@ message_handler tracker::make_handler()
         }
         VAST_INFO(this, "re-instantiates", name);
         i->second.actor = a;
+        // Relink affected components.
+        auto j = topology_.begin();
+        while (j != topology_.end())
+          if (j->first == name || j->second == name)
+          {
+            send(this, atom("link"), j->first, j->second);
+            j = topology_.erase(j);
+          }
+          else
+          {
+            ++j;
+          }
       }
 
       monitor(a);
@@ -129,16 +134,16 @@ message_handler tracker::make_handler()
 
       auto er = topology_.equal_range(source);
       for (auto i = er.first; i != er.second; ++i)
-        if (i->first == source && i->second == sink)
+        if (i->second == sink)
         {
-          VAST_DEBUG(this, "ignores existing link: ", source, " -> ", sink);
+          VAST_VERBOSE(this, "ignores existing link: ", source, " -> ", sink);
           return make_message(atom("ok"));
         }
 
       VAST_VERBOSE(this, "links", source, "->", sink);
 
       scoped_actor self;
-      message_handler ok = on(atom("ok")) >> [] { /* do nothing */ };
+      message_handler ok = on(atom("ok")) >> [] {};
       switch (src->type)
       {
         default:
