@@ -77,16 +77,15 @@ Naming
 
 - Class names, constants, and function names are lowercase with underscores.
 
-- Template parameter names use CamelCase.
+- Template parameter types should be written in CamelCase.
 
 - Types and variables should be nouns, while functions performing an action
   should be "command" verbs. Getter and setter functions should be nouns. We do
   not use an explicit `get_` or `set_` prefix. Classes used to implement
   metaprogramming functions also should use verbs, e.g., `remove_const`.
 
-
-- All macros should start with `VAST_` to avoid potential clashes with external
-  libraries.
+- All library macros should start with `VAST_` to avoid potential clashes with
+  external libraries.
 
 - Names of *(i)* classes/structs, *(ii)* functions, and *(iii)* enums should be
   lower case and delimited by underscores.
@@ -94,6 +93,9 @@ Naming
 - The name of implementation namespaces is `detail`, e.g.,
 
         vast::detail::some_non_exposed_helper
+
+- Member variables should have an underscore (`_`) as suffix, unless they
+  are part of the public interface.
 
 Template Metaprogramming
 ========================
