@@ -54,8 +54,7 @@ message_handler signal_monitor::make_handler()
             send(receiver_, atom("signal"), i);
       }
 
-      std::this_thread::sleep_for(std::chrono::milliseconds(100));
-      send_tuple(this, last_dequeued());
+      delayed_send_tuple(this, std::chrono::milliseconds(100), last_dequeued());
     }
   };
 }

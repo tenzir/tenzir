@@ -104,7 +104,7 @@ trial<void> program::run()
       *config_["search"] = true;
     }
 
-    auto monitor = spawn<signal_monitor, detached+linked>(this);
+    auto monitor = spawn<signal_monitor, linked>(this);
     send(monitor, atom("act"));
 
     if (config_.check("profiler.rusage")
