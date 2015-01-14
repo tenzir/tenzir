@@ -76,6 +76,8 @@ caf::message_handler archive::make_handler()
     },
     [=](event_id eid)
     {
+      VAST_DEBUG(this, "got request for event", eid);
+
       // First check the currently buffered segment.
       for (size_t i = 0; i < current_.size(); ++i)
         if (eid < current_[i].meta().ids.size() && current_[i].meta().ids[eid])

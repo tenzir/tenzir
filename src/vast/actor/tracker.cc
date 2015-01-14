@@ -19,27 +19,24 @@ tracker::tracker(path dir)
       });
 }
 
-void tracker::at_down(caf::down_msg const&)
+void tracker::at_down(caf::down_msg const& msg)
 {
-  // When an actor goes down, TRACKER sets the actor to invalid but keeps the
-  // topology information, as the terminated actor may come up again.
   for (auto i = actors_.begin(); i != actors_.end(); ++i)
-    if (i->second.actor == last_sender())
+    if (i->second.actor == msg.source)
     {
-      VAST_VERBOSE(this, "disconnects", i->first);
-      auto j = topology_.begin();
-      while (j != topology_.end())
-        if (j->first == i->first || j->second == i->first)
-        {
-          VAST_VERBOSE(this, "removes link", j->first, "->", j->second);
-          j = topology_.erase(j);
-        }
-        else
-        {
-          ++j;
-        }
-
-      actors_.erase(i);
+      VAST_INFO(this, "got DOWN from", i->first);
+      i->second.actor = invalid_actor;
+      //auto j = topology_.begin();
+      //while (j != topology_.end())
+      //  if (j->first == i->first || j->second == i->first)
+      //  {
+      //    VAST_VERBOSE(this, "removes link", j->first, "->", j->second);
+      //    j = topology_.erase(j);
+      //  }
+      //  else
+      //  {
+      //    ++j;
+      //  }
       break;
     }
 }
@@ -64,28 +61,45 @@ message_handler tracker::make_handler()
     on(atom("put"), arg_match)
       >> [=](std::string const& type, actor const& a, std::string const& name)
     {
-      if (actors_.find(name) != actors_.end())
-        return make_message(error{"duplicate actor: ", name});
-
-      auto& as = actors_[name];
-      as.actor = a;
+      auto c = component::invalid;
       if (type == "importer")
-        as.type = component::importer;
+        c = component::importer;
       else if (type == "exporter")
-        as.type = component::exporter;
+        c = component::exporter;
       else if (type == "receiver")
-        as.type = component::receiver;
+        c = component::receiver;
       else if (type == "archive")
-        as.type = component::archive;
+        c = component::archive;
       else if (type == "index")
-        as.type = component::index;
+        c = component::index;
       else if (type == "search")
-        as.type = component::search;
+        c = component::search;
       else
         return make_message(error{"invalid type: ", type});
 
+      auto i = actors_.find(name);
+      if (i == actors_.end())
+      {
+        VAST_INFO(this, "registers", type << ':', name);
+        actors_.emplace(name, actor_state{a, c});
+      }
+      else
+      {
+        if (i->second.type != c)
+        {
+          VAST_WARN(this, "found existing actor with different type:", name);
+          return make_message(error{"type mismatch for: ", name});
+        }
+        if (i->second.actor != invalid_actor)
+        {
+          VAST_WARN(this, "got duplicate actor:", name);
+          return make_message(error{"duplicate actor: ", name});
+        }
+        VAST_INFO(this, "re-instantiates", name);
+        i->second.actor = a;
+      }
+
       monitor(a);
-      VAST_VERBOSE(this, "registers", type << ':', name);
       return make_message(atom("ok"));
     },
     on(atom("get"), arg_match) >> [=](std::string const& name)
@@ -116,7 +130,10 @@ message_handler tracker::make_handler()
       auto er = topology_.equal_range(source);
       for (auto i = er.first; i != er.second; ++i)
         if (i->first == source && i->second == sink)
-          return make_message(error{"link exists: ", source, " -> ", sink});
+        {
+          VAST_DEBUG(this, "ignores existing link: ", source, " -> ", sink);
+          return make_message(atom("ok"));
+        }
 
       VAST_VERBOSE(this, "links", source, "->", sink);
 

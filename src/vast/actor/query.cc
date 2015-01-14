@@ -154,6 +154,7 @@ query::query(actor archive, actor sink, expression ast)
     {
       assert(reader_);
       assert(requested_ > 0);
+      VAST_DEBUG(this, "starts to extract events (", requested_, "requested)");
 
       // We construct a new mask for each request, because the hits
       // continuously update in every state.

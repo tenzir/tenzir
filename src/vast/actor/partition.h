@@ -60,6 +60,7 @@ private:
 
   trial<caf::actor> create_data_indexer(type const& et, type const& t,
                                         offset const& o);
+
   path dir_;
   uuid id_;
   bool updated_ = false;
@@ -70,6 +71,7 @@ private:
   std::unordered_map<caf::actor_addr, statistics> stats_;
   std::queue<chunk> chunks_;
   caf::actor dechunkifier_;
+  caf::actor task_tree_;
 };
 
 } // namespace vast

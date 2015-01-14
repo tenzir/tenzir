@@ -147,6 +147,18 @@ partition::partition(path const& index_dir, uuid id, size_t batch_size)
     id_{std::move(id)},
     batch_size_{batch_size}
 {
+  trap_exit(true);
+  attach_functor(
+    [=](uint32_t reason)
+    {
+      if (dechunkifier_)
+        anon_send_exit(dechunkifier_, reason);
+      dechunkifier_ = invalid_actor;
+
+      for (auto& p : indexers_)
+        anon_send_exit(p.second, reason);
+      indexers_.clear();
+    });
 }
 
 void partition::at_down(down_msg const&)
@@ -159,8 +171,7 @@ void partition::at_down(down_msg const&)
     if (chunks_.size() == 10 - 1)
     {
       VAST_DEBUG(this, "signals underload");
-      for (auto& a : upstream())
-        send(message_priority::high, a, flow_control::underload{});
+      send(message_priority::high, this, flow_control::underload{});
     }
 
     send(this, atom("unpack"));
@@ -168,7 +179,6 @@ void partition::at_down(down_msg const&)
   else
   {
     VAST_DEBUG(this, "got DOWN from", last_sender());
-
     stats_.erase(last_sender());
     for (auto i = indexers_.begin(); i != indexers_.end(); ++i)
       if (i->second == last_sender())
@@ -185,24 +195,27 @@ void partition::at_exit(exit_msg const& msg)
   {
     quit(msg.reason);
   }
-  else if (exit_reason_ == 0 && ! chunks_.empty())
+  else if (chunks_.empty() && ! task_tree_)
   {
-    exit_reason_ = msg.reason; // Wait for unpacker to finish.
+    // If we have no chunks in the queue, we can initiate the shutdown process
+    // directly.
+    task_tree_ = spawn<task_tree>(this);
+    send(task_tree_, atom("notify"), this);
+    send(task_tree_, this, this);
+    send(this, atom("flush"), task_tree_);
+    exit_reason_ = msg.reason;
   }
   else
   {
-    auto tree = spawn<task_tree>(this);
-    send(tree, atom("notify"), this);
-    send(tree, this, this);
-    send(this, atom("flush"), tree);
+    // If we haven't finished unpacking chunks, we just save the exit reason
+    // and exit after having finished with the last chunk, which will trigger
+    // sending another exit message.
     exit_reason_ = msg.reason;
   }
 }
 
 message_handler partition::make_handler()
 {
-  trap_exit(true);
-
   if (exists(dir_))
   {
     auto t = io::unarchive(dir_ / "schema", schema_);
@@ -214,19 +227,6 @@ message_handler partition::make_handler()
     }
   }
 
-  attach_functor(
-      [=](uint32_t reason)
-      {
-        if (dechunkifier_)
-          anon_send_exit(dechunkifier_, reason);
-        dechunkifier_ = invalid_actor;
-
-        for (auto& p : indexers_)
-          anon_send_exit(p.second, reason);
-        indexers_.clear();
-      });
-
-
   send(this, atom("stats"), atom("show"));
 
   return
@@ -235,6 +235,7 @@ message_handler partition::make_handler()
     {
       // We only spawn one task tree upon exiting. Once we get notified we can
       // safely terminate with the last exit reason.
+      assert(exit_reason_ != 0);
       quit(exit_reason_);
     },
     [=](expression const& pred, actor idx)
@@ -257,7 +258,7 @@ message_handler partition::make_handler()
           send_tuple(a, t);
       }
     },
-    on(atom("flush"), arg_match) >> [=](actor tree)
+    on(atom("flush"), arg_match) >> [=](actor const& tree)
     {
       VAST_DEBUG(this, "got request to flush indexes");
 
@@ -304,16 +305,16 @@ message_handler partition::make_handler()
           if (auto r = get<type::record>(tp))
           {
             auto attempt = r->each(
-                [&](type::record::trace const& t, offset const& o) -> trial<void>
-                {
-                  if (t.back()->type.find_attribute(type::attribute::skip))
-                    return nothing;
-
-                  auto a = create_data_indexer(tp, t.back()->type, o);
-                  if (! a)
-                    return a.error();
+              [&](type::record::trace const& t, offset const& o) -> trial<void>
+              {
+                if (t.back()->type.find_attribute(type::attribute::skip))
                   return nothing;
-                });
+
+                auto a = create_data_indexer(tp, t.back()->type, o);
+                if (! a)
+                  return a.error();
+                return nothing;
+              });
 
             if (! attempt)
             {
@@ -340,8 +341,7 @@ message_handler partition::make_handler()
       if (chunks_.size() == 10)
       {
         VAST_DEBUG(this, "signals overload");
-        for (auto& a : upstream())
-          send(message_priority::high, a, flow_control::overload{});
+        send(message_priority::high, this, flow_control::overload{});
       }
     },
     [=](std::vector<event> const& events)
@@ -359,7 +359,7 @@ message_handler partition::make_handler()
         if (! chunks_.empty())
         {
           VAST_DEBUG(this, "begins unpacking a chunk (" <<
-                               chunks_.size() << " remaining)");
+                     chunks_.size() << " remaining)");
 
           dechunkifier_ =
             spawn<source::dechunkifier, monitored>(chunks_.front());
@@ -423,13 +423,13 @@ message_handler partition::make_handler()
       }
 
       if (value_rate > 0 || max_backlog.first > 0)
-        VAST_VERBOSE(this, 
-            "indexes at " << value_rate << " values/sec" <<
-            " (mean " << value_rate_mean << ") and " <<
-            (value_rate / n) << " events/sec" <<
-            " (" << event_rate_min << '/' << event_rate_max << '/' <<
-            (value_rate_mean / n) << " min/max/mean) with max backlog of " <<
-            max_backlog.first << " at " << max_backlog.second);
+        VAST_VERBOSE(this,
+          "indexes at " << value_rate << " values/sec" <<
+          " (mean " << value_rate_mean << ") and " <<
+          (value_rate / n) << " events/sec" <<
+          " (" << event_rate_min << '/' << event_rate_max << '/' <<
+          (value_rate_mean / n) << " min/max/mean) with max backlog of " <<
+          max_backlog.first << " at " << max_backlog.second);
     }
   };
 }

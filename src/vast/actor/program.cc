@@ -104,8 +104,7 @@ trial<void> program::run()
       *config_["search"] = true;
     }
 
-    auto monitor = spawn<signal_monitor, linked>(this);
-    send(monitor, atom("act"));
+    send(spawn<signal_monitor, linked>(this), atom("act"));
 
     if (config_.check("profiler.rusage")
         || config_.check("profiler.cpu")
@@ -173,7 +172,7 @@ trial<void> program::run()
           VAST_INFO(this, "successfully linked", link[0], "to", link[1]);
           quit(exit::done);
         },
-        [=](error& e) mutable
+        [&](error& e)
         {
           abort = std::move(e);
           quit(exit::error);
@@ -400,6 +399,17 @@ trial<void> program::run()
     }
     else if (auto format = config_.get("exporter"))
     {
+      auto exporter_name = *config_.get("export.name");
+      self->sync_send(tracker_, atom("put"), "exporter", exporter_,
+                      exporter_name).await(ok_or_quit);
+      if (abort)
+        return std::move(*abort);
+
+      auto limit = *config_.as<uint64_t>("export.limit");
+      if (limit > 0)
+        send(exporter_, atom("limit"), limit);
+
+      exporter_ = spawn<exporter, linked>();
       if (auto schema_file = config_.get("export.schema"))
       {
         auto t = load_and_parse<schema>(path{*schema_file});
@@ -455,23 +465,12 @@ trial<void> program::run()
         return error{"invalid export format: ", *format};
       }
 
-      auto exporter_name = *config_.get("export.name");
-      self->sync_send(tracker_, atom("put"), "exporter", exporter_,
-                      exporter_name).await(ok_or_quit);
-      if (abort)
-        return std::move(*abort);
-
-      auto limit = *config_.as<uint64_t>("export.limit");
-      if (limit > 0)
-        send(exporter_, atom("limit"), limit);
-
-      exporter_ = spawn<exporter, linked>();
       send(exporter_, atom("add"), std::move(snk));
 
       auto query = config_.get("export.query");
       assert(query);
       self->sync_send(tracker_, atom("get"), search_name).await(
-          on_arg_match >> [=](error& e) mutable
+          on_arg_match >> [&](error& e)
           {
             abort = std::move(e);
             quit(exit::error);
@@ -479,18 +478,18 @@ trial<void> program::run()
           [&](actor const& srch)
           {
             self->sync_send(srch, atom("query"), exporter_, *query).await(
-                on_arg_match >> [=](error& e) mutable
+                on_arg_match >> [&](error& e)
                 {
                   abort = std::move(e);
                   quit(exit::error);
                 },
-                [=](expression const& ast, actor qry)
+                [&](expression const& ast, actor qry)
                 {
                   VAST_DEBUG(this, "instantiated query for:", ast);
                   exporter_->link_to(qry);
                   send(qry, atom("extract"), limit);
                 },
-                others() >> [=]() mutable
+                others() >> [&]()
                 {
                   abort = error{"got unexpected reply:",
                                 to_string(last_dequeued())};
@@ -504,12 +503,12 @@ trial<void> program::run()
     {
 #ifdef VAST_HAVE_EDITLINE
       self->sync_send(tracker_, atom("get"), search_name).await(
-          [=](actor const& search)
+          [&](actor const& search)
           {
             auto c = spawn<console, linked>(search, dir / "console");
             delayed_send(c, std::chrono::milliseconds(200), atom("prompt"));
           },
-          [=](error& e) mutable
+          [&](error& e)
           {
             abort = std::move(e);
             quit(exit::error);

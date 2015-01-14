@@ -26,6 +26,7 @@ public:
 private:
   enum class component
   {
+    invalid,
     importer,
     exporter,
     receiver,

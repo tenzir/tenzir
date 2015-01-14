@@ -30,7 +30,6 @@ message_handler search::make_handler()
     [=](down_msg const& d)
     {
       VAST_INFO(this, "got disconnect from client", last_sender());
-
       for (auto& q : clients_[last_sender()].queries)
       {
         VAST_DEBUG(this, "sends EXIT to query", q);
@@ -41,6 +40,7 @@ message_handler search::make_handler()
     },
     on(atom("add"), atom("archive"), arg_match) >> [=](actor const& a)
     {
+      VAST_DEBUG(this, "adds archive", a);
       if (! archive_)
         archive_ = spawn<replicator, linked>();
 
@@ -49,6 +49,7 @@ message_handler search::make_handler()
     },
     on(atom("add"), atom("index"), arg_match) >> [=](actor const& a)
     {
+      VAST_DEBUG(this, "adds index", a);
       if (! index_)
         index_ = spawn<replicator, linked>();
 

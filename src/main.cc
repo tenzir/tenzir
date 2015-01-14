@@ -59,10 +59,15 @@ int main(int argc, char *argv[])
   auto program = caf::spawn<vast::program>(std::move(*cfg));
   caf::scoped_actor self;
   self->sync_send(program, caf::atom("run")).await(
-    caf::others() >> [] {},
+    on(caf::atom("ok")) >> [] {},
     [&](vast::error const& e)
     {
       VAST_ERROR(program, "encountered error:", e);
+    },
+    caf::others() >> [&]
+    {
+      VAST_WARN(program, "got unexpected message:",
+                to_string(self->last_dequeued()));
     });
   self->await_all_other_actors_done();
   caf::shutdown();

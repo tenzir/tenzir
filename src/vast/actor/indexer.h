@@ -29,13 +29,12 @@ public:
       bmi_{std::move(bmi)},
       stats_{std::chrono::seconds{1}}
   {
+    this->trap_exit(true);
   }
 
   caf::message_handler make_handler()
   {
     using namespace caf;
-
-    this->trap_exit(true);
 
     if (exists(path_))
     {
@@ -79,11 +78,11 @@ public:
 
     return
     {
-      [=](exit_msg const& e)
+      [=](exit_msg const& msg)
       {
-        this->quit(e.reason);
+        this->quit(msg.reason);
       },
-      on(atom("flush"), arg_match) >> [=](actor task_tree)
+      on(atom("flush"), arg_match) >> [=](actor const& task_tree)
       {
         flush();
         this->send(task_tree, atom("done"));
@@ -98,12 +97,10 @@ public:
           if (t)
             ++n;
           else
-            VAST_ERROR(this, "failed to append event", e.id() << ':',
-                       t.error());
+            VAST_ERROR(this, "failed to append event (", t.error(), "):", e);
         }
 
         stats_.increment(n);
-
         return make_message(total, n, stats_.last(), stats_.mean());
       },
       [=](expression const& pred, uuid const& part, actor sink)
