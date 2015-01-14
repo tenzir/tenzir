@@ -9,10 +9,10 @@
 #include "vast/filesystem.h"
 
 #ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
-#include <google/profiler.h>
+#include <gperftools/profiler.h>
 #endif
 #ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
-#include <google/heap-profiler.h>
+#include <gperftools/heap-profiler.h>
 #endif
 
 using namespace caf;
