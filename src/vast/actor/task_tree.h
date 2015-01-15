@@ -36,7 +36,7 @@ public:
     {
       [=](actor parent, actor child)
       {
-        VAST_DEBUG(this, "registers child-parent edge (" << child,
+        VAST_TRACE(this, "registers child-parent edge (" << child,
                    "->", parent << ")");
         ++total_;
         ++remaining_;
@@ -56,7 +56,7 @@ public:
           return;
         }
 
-        VAST_DEBUG(this, "removes completed node", last_sender(),
+        VAST_TRACE(this, "removes completed node", last_sender(),
                    '(' << remaining_ << '/' << total_, "remaining)");
 
         if (subscriber_)
@@ -78,12 +78,14 @@ public:
             quit(exit::done);
         }
       },
-      on(atom("notify"), arg_match) >> [=](actor whom)
+      on(atom("notify"), arg_match) >> [=](actor const& whom)
       {
+        VAST_TRACE(this, "will notify", whom, "about task completion");
         notifyee_ = whom;
       },
-      on(atom("subscribe"), arg_match) >> [=](actor subscriber)
+      on(atom("subscribe"), arg_match) >> [=](actor const& subscriber)
       {
+        VAST_TRACE(this, "will notify", subscriber, "on task status chagne");
         subscriber_ = subscriber;
       },
       on(atom("progress")) >> [=]

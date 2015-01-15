@@ -246,6 +246,12 @@ private:
 #endif
 
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_TRACE
+#  define VAST_TRACE(...) VAST_LOG_MSG(::vast::logger::trace, __VA_ARGS__)
+#else
+#  define VAST_TRACE(...) VAST_VOID
+#endif
+
+#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_TRACE
 #  define VAST_ARGS_ENTER(args) "--> (" << args << ')'
 #  define VAST_ARGS_LEAVE(args) "<-- (" << args << ')'
 #  define VAST_ENTER_ARGS(args, msg)                                          \
