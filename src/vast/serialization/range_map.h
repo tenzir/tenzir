@@ -7,15 +7,16 @@
 namespace vast {
 
 template <typename P, typename V>
-void serialize(serializer& sink, util::range_map<P, V> const& s)
+void serialize(serializer& sink, util::range_map<P, V> const& rm)
 {
-  sink.begin_sequence(s.size());
-  s.each([&](P const& l, P const& r, V const& v) { sink << l << r << v; });
+  sink.begin_sequence(rm.size());
+  for (auto t : rm)
+    sink << get<0>(t) << get<1>(t) << get<2>(t);
   sink.end_sequence();
 }
 
 template <typename P, typename V>
-void deserialize(deserializer& source, util::range_map<P, V>& s)
+void deserialize(deserializer& source, util::range_map<P, V>& rm)
 {
   uint64_t size;
   source.begin_sequence(size);
@@ -26,7 +27,7 @@ void deserialize(deserializer& source, util::range_map<P, V>& s)
       P l, r;
       V v;
       source >> l >> r >> v;
-      s.insert(std::move(l), std::move(r), std::move(v));
+      rm.insert(std::move(l), std::move(r), std::move(v));
     }
 
   source.end_sequence();
