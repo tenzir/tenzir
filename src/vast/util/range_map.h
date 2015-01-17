@@ -14,6 +14,9 @@ namespace util {
 template <typename Point, typename Value>
 class range_map
 {
+  static_assert(std::is_arithmetic<Point>::value,
+                "Point must be an arithmetic type");
+
   using map_type = std::map<Point, std::pair<Point, Value>>;
   using map_iterator = typename map_type::iterator;
   using map_const_iterator = typename map_type::const_iterator;
@@ -69,11 +72,86 @@ public:
   {
     assert(l < r);
     auto lb = map_.lower_bound(l);
-    if (find(l, lb) != map_.end())
-      return false;
-    if (lb == map_.end() || lb->first >= r)
-      return map_.emplace(
-          std::move(l), std::make_pair(std::move(r), std::move(v))).second;
+    if (locate(l, lb) == map_.end() && (lb == map_.end() || r <= left(lb)))
+      return map_.emplace(l, std::make_pair(r, std::move(v))).second;
+    return false;
+  }
+
+  /// Inserts a value for a right-open range, updating existing adjacent
+  /// intervals if it's possible to merge them. Two intervals can only be
+  /// merged if they have the same values.
+  /// @note If *[l,r]* reaches into an existing interval, injection fails.
+  /// @param l The left endpoint of the interval.
+  /// @param r The right endpoint of the interval.
+  /// @param v The value r associated with *[l,r]*.
+  /// @returns `true` on success.
+  bool inject(Point l, Point r, Value v)
+  {
+    assert(l < r);
+    if (map_.empty())
+      return emplace(l, r, std::move(v));
+    auto i = map_.lower_bound(l);
+    // Adjust position (i = this, p = prev, n = next).
+    if (i == map_.end() || (i != map_.begin() && l != left(i)))
+      --i;
+    auto n = i;
+    ++n;
+    auto p = i;
+    if (i != map_.begin())
+      --p;
+    else
+      p = map_.end();
+    // Assess the fit.
+    auto fits_left = r <= left(i) && (p == map_.end() || l >= right(p));
+    auto fits_right = l >= right(i) && (n == map_.end() || r <= left(n));
+    if (fits_left)
+    {
+      auto right_merge = r == left(i) && v == value(i);
+      auto left_merge = p != map_.end() && l == right(p) && v == value(p);
+      if (left_merge && right_merge)
+      {
+        right(p) = right(i);
+        map_.erase(i);
+      }
+      else if (left_merge)
+      {
+        right(p) = r;
+      }
+      else if (right_merge)
+      {
+        emplace(l, right(i), std::move(v));
+        map_.erase(i);
+      }
+      else
+      {
+        emplace(l, r, std::move(v));
+      }
+      return true;
+    }
+    else if (fits_right)
+    {
+      auto right_merge = n != map_.end() && r == left(n) && v == value(n);
+      auto left_merge = l == right(i) && v == value(i);
+      if (left_merge && right_merge)
+      {
+        right(i) = right(n);
+        map_.erase(n);
+      }
+      else if (left_merge)
+      {
+        right(i) = r;
+      }
+      else if (right_merge)
+      {
+        emplace(l, right(n), std::move(v));
+        map_.erase(n);
+      }
+      else
+      {
+        emplace(l, r, std::move(v));
+      }
+      return true;
+    }
     return false;
   }
 
@@ -84,7 +162,7 @@ public:
   ///          to an existing value.
   bool erase(Point p)
   {
-    auto i = find(p, map_.lower_bound(p));
+    auto i = locate(p, map_.lower_bound(p));
     if (i == map_.end())
       return false;
     map_.erase(i);
@@ -97,24 +175,24 @@ public:
   ///          *[a,b)* if *a <= p < b* and `nullptr` otherwise.
   Value const* lookup(Point const& p) const
   {
-    auto i = find(p, map_.lower_bound(p));
+    auto i = locate(p, map_.lower_bound(p));
     return i != map_.end() ? &i->second.second : nullptr;
   }
 
   /// Retrieves value and interval for a given point.
   /// @param p The point to lookup.
-  /// @returns A tuple with the first component holding a pointer to the value
+  /// @returns A tuple with the last component holding a pointer to the value
   ///          associated with the half-open interval *[a,b)* if *a <= p < b*,
-  ///          and `nullptr` otherwise. If the first component points to a
-  ///          valid value, then the remaining two represent *[a,b)* and are
-  ///          set to *[0,0)* otherwise.
-  std::tuple<Value const*, Point, Point> find(Point const& p) const
+  ///          and `nullptr` otherwise. If the last component points to a
+  ///          valid value, then the first two represent *[a,b)* and *[0,0)*
+  ///          otherwise.
+  std::tuple<Point, Point, Value const*> find(Point const& p) const
   {
-    auto i = find(p, map_.lower_bound(p));
+    auto i = locate(p, map_.lower_bound(p));
     if (i == map_.end())
-      return {nullptr, 0, 0};
+      return {0, 0, nullptr};
     else
-      return {&i->second.second, i->first, i->second.first};
+      return {left(i), right(i), &i->second.second};
   }
 
   /// Retrieves the size of the range map.
@@ -131,13 +209,47 @@ public:
     return map_.empty();
   }
 
-private:
-  map_const_iterator find(Point const& p, map_const_iterator lb) const
+  /// Clears the range map.
+  void clear()
   {
-    if ((lb != map_.end() && lb->first == p) ||
-        (lb != map_.begin() && p < (--lb)->second.first))
+    return map_.clear();
+  }
+
+private:
+  template <typename Iterator>
+  static auto& left(Iterator i)
+  {
+    return i->first;
+  }
+
+  template <typename Iterator>
+  static auto& right(Iterator i)
+  {
+    return i->second.first;
+  }
+
+  template <typename Iterator>
+  static auto& value(Iterator i)
+  {
+    return i->second.second;
+  }
+
+  // Finds the interval of a point.
+  map_const_iterator locate(Point const& p, map_const_iterator lb) const
+  {
+    if ((lb != map_.end() && p == left(lb)) ||
+        (lb != map_.begin() && p < right(--lb)))
+    //if (lb == map_.end())
+    //  return map_.empty() ? lb : map_.rbegin().base();
+    //else if (p == left(lb) || (lb != map_.begin() && p < right(--lb)))
       return lb;
     return map_.end();
+  }
+
+  bool emplace(Point l, Point r, Value v)
+  {
+    auto pair = std::make_pair(std::move(r), std::move(v));
+    return map_.emplace(std::move(l), std::move(pair)).second;
   }
 
   map_type map_;

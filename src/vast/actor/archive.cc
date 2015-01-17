@@ -21,11 +21,10 @@ archive::archive(path dir, size_t capacity, size_t max_segment_size)
     {
       if (! current_.empty())
       {
-        VAST_VERBOSE(this, "writes segment to disk");
         auto t = store(std::move(current_));
         if (! t)
         {
-          VAST_ERROR(this, "failed to save segment:", t.error());
+          VAST_ERROR(this, "failed to store segment:", t.error());
           return;
         }
       }
@@ -33,7 +32,7 @@ archive::archive(path dir, size_t capacity, size_t max_segment_size)
       auto t = io::archive(dir_ / "meta.data", segments_);
       if (! t)
       {
-        VAST_ERROR(this, "failed to archive meta data:", t.error());
+        VAST_ERROR(this, "failed to store segment meta data:", t.error());
         return;
       }
     });
@@ -62,7 +61,7 @@ caf::message_handler archive::make_handler()
         auto t = store(std::move(current_));
         if (! t)
         {
-          VAST_ERROR(this, "failed to save segment:", t.error());
+          VAST_ERROR(this, "failed to store segment:", t.error());
           quit(exit::error);
           return;
         }
@@ -114,37 +113,16 @@ trial<void> archive::store(segment s)
   if (! t)
     return t;
 
-  event_id first = invalid_event_id;
-  event_id last = invalid_event_id;
   for (auto& chk : s)
   {
-    auto chunk_first = chk.meta().ids.find_first();
-    auto chunk_last = chk.meta().ids.find_last();
-    assert(chunk_first != invalid_event_id && chunk_last != invalid_event_id);
-
-    if (first == invalid_event_id)
-    {
-      first = chunk_first;
-      last = chunk_last;
-    }
-    else if (last + 1 == chunk_first)
-    {
-      // Chunk ID ranges are adjacant.
-      last = chunk_last;
-    }
-    else
-    {
-      // Non-contiguous chunk ID ranges.
-      segments_.insert(first, last + 1, id);
-      first = invalid_event_id;
-      last = invalid_event_id;
-    }
+    auto first = chk.meta().ids.find_first();
+    auto last = chk.meta().ids.find_last();
+    assert(first != last);
+    assert(first != invalid_event_id && last != invalid_event_id);
+    segments_.inject(first, last + 1, id);
   }
 
-  // Last ID range sequence.
-  segments_.insert(first, last + 1, id);
-
-  cache_.insert(id, std::move(s));
+  cache_.insert(std::move(id), std::move(s));
 
   return nothing;
 }
