@@ -1,6 +1,11 @@
 #include "vast/data.h"
 
-#include "vast/serialization/all.h"
+#include "vast/serialization/container.h"
+#include "vast/serialization/enum.h"
+#include "vast/serialization/flat_set.h"
+#include "vast/serialization/none.h"
+#include "vast/serialization/string.h"
+#include "vast/serialization/variant.h"
 #include "vast/util/json.h"
 #include "vast/offset.h"
 

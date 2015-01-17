@@ -1,7 +1,9 @@
 #include "vast/type.h"
 
 #include "vast/value.h"
-#include "vast/serialization/all.h"
+#include "vast/serialization/container.h"
+#include "vast/serialization/none.h"
+#include "vast/serialization/variant.h"
 #include "vast/util/json.h"
 
 namespace vast {

@@ -6,7 +6,7 @@
 #include <cstring>
 #include <cstdlib>
 #include "vast/logger.h"
-#include "vast/serialization/all.h"
+#include "vast/serialization/arithmetic.h"
 #include "vast/util/byte_swap.h"
 #include "vast/util/json.h"
 

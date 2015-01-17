@@ -1,6 +1,5 @@
 #include "vast/value.h"
 
-#include "vast/serialization/all.h"
 #include "vast/util/json.h"
 #include "vast/offset.h"
 
