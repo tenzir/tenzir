@@ -7,16 +7,60 @@ using namespace vast;
 
 namespace {
 
-ewah_bitstream ewah;
-ewah_bitstream ewah2;
-ewah_bitstream ewah3;
+ewah_bitstream make_ewah1()
+{
+  ewah_bitstream ewah;
+  ewah.append(10, true);
+  ewah.append(20, false);
+  ewah.append(40, true);
+  ewah.push_back(false);
+  ewah.push_back(true);
+  ewah.push_back(false);
+  ewah.append(53, true);
+  ewah.push_back(false);
+  ewah.push_back(false);
+  ewah.append(192, true);
+  ewah.append(64 * 16, false);
+  ewah.append(64ull * ((1ull << 32) - 1), true);
+  ewah.push_back(false);
+  ewah.append(63, true);
+  for (auto i = 0; i < 64; ++i)
+    ewah.push_back(i % 2 == 0);
+  ewah.append((1ull << (32 + 3)) * 64, false);
+  ewah.push_back(true);
+  return ewah;
+}
+
+ewah_bitstream make_ewah2()
+{
+  ewah_bitstream ewah;
+  ewah.push_back(false);
+  ewah.push_back(true);
+  ewah.append(421, false);
+  ewah.append(2, true);
+  return ewah;
+}
+
+ewah_bitstream make_ewah3()
+{
+  ewah_bitstream ewah;
+  ewah.append(222, true);
+  ewah.push_back(false);
+  ewah.push_back(true);
+  ewah.push_back(false);
+  ewah.append_block(0xcccccccccc);
+  ewah.push_back(false);
+  ewah.push_back(true);
+  return ewah;
+}
 
 } // namespace <anonymous>
 
 SUITE("bitstream")
 
-TEST("EWAH algorithm")
+TEST("EWAH algorithm 1")
 {
+  ewah_bitstream ewah;
   ewah.append(10, true);
   ewah.append(20, false);
 
@@ -175,35 +219,46 @@ TEST("EWAH algorithm")
   REQUIRE(to_string(ewah) == str);
   CHECK(ewah.size() == 2473901163905);
 
-  ewah2.push_back(false);
-  ewah2.push_back(true);
-  ewah2.append(421, false);
-  ewah2.push_back(true);
-  ewah2.push_back(true);
+  REQUIRE(ewah == make_ewah1());
+}
 
-  str =
+TEST("EWAH algorithm 2")
+{
+  ewah_bitstream ewah;
+  ewah.push_back(false);
+  ewah.push_back(true);
+  ewah.append(421, false);
+  ewah.push_back(true);
+  ewah.push_back(true);
+
+  auto str =
     "0000000000000000000000000000000000000000000000000000000000000001\n"
     "0000000000000000000000000000000000000000000000000000000000000010\n"
     "0000000000000000000000000000001010000000000000000000000000000000\n"
     "                       11000000000000000000000000000000000000000";
 
-  REQUIRE(to_string(ewah2) == str);
+  REQUIRE(to_string(ewah) == str);
+  REQUIRE(ewah == make_ewah2());
+}
 
+TEST("EWAH algorithm 3")
+{
+  ewah_bitstream ewah;
+  ewah.append(222, true);
+  ewah.push_back(false);
+  ewah.push_back(true);
+  ewah.push_back(false);
+  ewah.append_block(0xcccccccccc);
+  ewah.push_back(false);
+  ewah.push_back(true);
 
-  ewah3.append(222, true);
-  ewah3.push_back(false);
-  ewah3.push_back(true);
-  ewah3.push_back(false);
-  ewah3.append_block(0xcccccccccc);
-  ewah3.push_back(false);
-  ewah3.push_back(true);
-
-  str =
+  auto str =
     "1000000000000000000000000000000110000000000000000000000000000001\n"
     "1001100110011001100110011001100010111111111111111111111111111111\n"
     "                             10000000000000000000000000110011001";
 
-  REQUIRE(to_string(ewah3) == str);
+  REQUIRE(to_string(ewah) == str);
+  REQUIRE(ewah == make_ewah3());
 }
 
 TEST("polymorphic")
@@ -283,10 +338,14 @@ TEST("bitwise operations (null)")
 
 TEST("trimming (EWAH)")
 {
+  auto ewah1 = make_ewah1();
+  auto ewah2 = make_ewah2();
+  auto ewah3 = make_ewah3();
+
   // NOPs---these all end in a 1.
-  auto ewah_trimmed = ewah;
+  auto ewah_trimmed = ewah1;
   ewah_trimmed.trim();
-  CHECK(ewah == ewah_trimmed);
+  CHECK(ewah1 == ewah_trimmed);
   auto ewah2_trimmed = ewah2;
   ewah2_trimmed.trim();
   CHECK(ewah2 == ewah2_trimmed);
@@ -352,7 +411,10 @@ TEST("trimming (EWAH)")
 
 TEST("bitwise iteration (EWAH)")
 {
-  auto i = ewah.begin();
+  auto ewah1 = make_ewah1();
+  auto ewah2 = make_ewah2();
+
+  auto i = ewah1.begin();
   for (size_t j = 0; j < 10; ++j)
     CHECK(*i++ == j);
 
@@ -426,34 +488,37 @@ TEST("iterator increment bugfix (EWAH)")
 
 TEST("element access (EWAH)")
 {
-  CHECK(ewah[0]);
-  CHECK(ewah[9]);
-  CHECK(! ewah[10]);
-  CHECK(ewah[64]);
-  CHECK(! ewah[1024]);
-  CHECK(ewah[1344]);
-  CHECK(ewah[2473901163905 - 1]);
+  auto ewah1 = make_ewah1();
+  CHECK(ewah1[0]);
+  CHECK(ewah1[9]);
+  CHECK(! ewah1[10]);
+  CHECK(ewah1[64]);
+  CHECK(! ewah1[1024]);
+  CHECK(ewah1[1344]);
+  CHECK(ewah1[2473901163905 - 1]);
 }
 
 TEST("finding (EWAH)")
 {
-  CHECK(ewah.find_first() == 0);
-  CHECK(ewah.find_next(0) == 1);
-  CHECK(ewah.find_next(8) == 9);
-  CHECK(ewah.find_next(9) == 30);
-  CHECK(ewah.find_next(10) == 30);
-  CHECK(ewah.find_next(63) == 64);
-  CHECK(ewah.find_next(64) == 65);
-  CHECK(ewah.find_next(69) == 71);
-  CHECK(ewah.find_next(319) == 1344);
-  CHECK(ewah.find_next(320) == 1344);
-  CHECK(ewah.find_next(2473901163903) == 2473901163904);
-  CHECK(ewah.find_next(2473901163904) == ewah_bitstream::npos);
-  CHECK(ewah.find_last() == 2473901163905 - 1);
-  CHECK(ewah.find_prev(128) == 125);
-  CHECK(ewah.find_prev(320) == 319);
-  CHECK(ewah.find_prev(2473901163904) == 274877908288 + 62);
+  auto ewah1 = make_ewah1();
+  CHECK(ewah1.find_first() == 0);
+  CHECK(ewah1.find_next(0) == 1);
+  CHECK(ewah1.find_next(8) == 9);
+  CHECK(ewah1.find_next(9) == 30);
+  CHECK(ewah1.find_next(10) == 30);
+  CHECK(ewah1.find_next(63) == 64);
+  CHECK(ewah1.find_next(64) == 65);
+  CHECK(ewah1.find_next(69) == 71);
+  CHECK(ewah1.find_next(319) == 1344);
+  CHECK(ewah1.find_next(320) == 1344);
+  CHECK(ewah1.find_next(2473901163903) == 2473901163904);
+  CHECK(ewah1.find_next(2473901163904) == ewah_bitstream::npos);
+  CHECK(ewah1.find_last() == 2473901163905 - 1);
+  CHECK(ewah1.find_prev(128) == 125);
+  CHECK(ewah1.find_prev(320) == 319);
+  CHECK(ewah1.find_prev(2473901163904) == 274877908288 + 62);
 
+  auto ewah2 = make_ewah2();
   CHECK(ewah2.find_first() == 1);
   CHECK(ewah2.find_next(1) == 423);
   CHECK(ewah2.find_last() == 424);
@@ -461,6 +526,7 @@ TEST("finding (EWAH)")
   CHECK(ewah2.find_prev(423) == 1);
   CHECK(ewah2.find_prev(424) == 423);
 
+  auto ewah3 = make_ewah3();
   CHECK(ewah3.find_first() == 0);
   CHECK(ewah3.find_next(3 * 64 + 29) == 3 * 64 + 29 + 2 /* = 223 */);
   CHECK(ewah3.find_next(223) == 223 + 4); // Skip 3 zeros.
@@ -572,12 +638,15 @@ TEST("bitwise NOT (EWAH)")
     "1000000000000000000000000000010000000000000000000000000000000000\n"
     "                                                               0";
 
-  CHECK(to_string(~ewah) == str);
+  auto ewah1 = make_ewah1();
+  CHECK(to_string(~ewah1) == str);
 }
 
 
 TEST("bitwise AND (EWAH)")
 {
+  auto ewah2 = make_ewah2();
+  auto ewah3 = make_ewah3();
   auto str =
       "0000000000000000000000000000000000000000000000000000000000000001\n"
       "0000000000000000000000000000000000000000000000000000000000000010\n"
@@ -608,6 +677,8 @@ TEST("bitwise AND (EWAH)")
 
 TEST("bitwise OR (EWAH)")
 {
+  auto ewah2 = make_ewah2();
+  auto ewah3 = make_ewah3();
   auto str =
     "1000000000000000000000000000000110000000000000000000000000000010\n"
     "1001100110011001100110011001100010111111111111111111111111111111\n"
@@ -631,6 +702,8 @@ TEST("bitwise OR (EWAH)")
 
 TEST("bitwise XOR (EWAH)")
 {
+  auto ewah2 = make_ewah2();
+  auto ewah3 = make_ewah3();
   auto str =
     "0000000000000000000000000000000000000000000000000000000000000001\n"
     "1111111111111111111111111111111111111111111111111111111111111101\n"
@@ -645,6 +718,8 @@ TEST("bitwise XOR (EWAH)")
 
 TEST("bitwise NAND (EWAH)")
 {
+  auto ewah2 = make_ewah2();
+  auto ewah3 = make_ewah3();
   auto str =
     "0000000000000000000000000000001100000000000000000000000000000000\n"
     "                       11000000000000000000000000000000000000000";
@@ -667,17 +742,18 @@ TEST("bitwise NAND (EWAH)")
 
 TEST("sequence iteration (EWAH)")
 {
-  auto range = ewah_bitstream::sequence_range{ewah};
+  auto ewah1 = make_ewah1();
+  auto range = ewah_bitstream::sequence_range{ewah1};
 
   // The first two blocks are literal.
   auto i = range.begin();
   CHECK(i->is_literal());
   CHECK(i->length == bitvector::block_width);
-  CHECK(i->data == ewah.bits().block(1));
+  CHECK(i->data == ewah1.bits().block(1));
   ++i;
   CHECK(i->is_literal());
   CHECK(i->length == bitvector::block_width);
-  CHECK(i->data == ewah.bits().block(2));
+  CHECK(i->data == ewah1.bits().block(2));
 
   ++i;
   CHECK(i->is_fill());
@@ -696,12 +772,12 @@ TEST("sequence iteration (EWAH)")
 
   ++i;
   CHECK(i->is_literal());
-  CHECK(i->data == ewah.bits().block(6));
+  CHECK(i->data == ewah1.bits().block(6));
   CHECK(i->length == bitvector::block_width);
 
   ++i;
   CHECK(i->is_literal());
-  CHECK(i->data == ewah.bits().block(7));
+  CHECK(i->data == ewah1.bits().block(7));
   CHECK(i->length == bitvector::block_width);
 
   ++i;
