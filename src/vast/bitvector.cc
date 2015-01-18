@@ -351,6 +351,13 @@ void bitvector::append(block_type block, size_type bits)
   num_bits_ += bits;
 }
 
+void bitvector::append(bitvector const& other)
+{
+  block_append(other.bits_.begin(), other.bits_.end());
+  auto extra = other.extra_bits();
+  resize(size() - (extra == 0 ? 0 : block_width - extra));
+}
+
 bitvector& bitvector::set(size_type i, bool bit)
 {
   assert(i < num_bits_);
@@ -416,50 +423,6 @@ bitvector::reference bitvector::operator[](size_type i)
   return {bits_[block_index(i)], bit_index(i)};
 }
 
-block_type bitvector::block(size_type b) const
-{
-  return bits_[b];
-}
-
-block_type& bitvector::block(size_type b)
-{
-  return bits_[b];
-}
-
-block_type bitvector::block_at_bit(size_type i) const
-{
-  return bits_[block_index(i)];
-}
-
-block_type& bitvector::block_at_bit(size_type i)
-{
-  return bits_[block_index(i)];
-}
-
-block_type bitvector::first_block() const
-{
-  assert(! bits_.empty());
-  return bits_.front();
-}
-
-block_type& bitvector::first_block()
-{
-  assert(! bits_.empty());
-  return bits_.front();
-}
-
-block_type bitvector::last_block() const
-{
-  assert(! bits_.empty());
-  return bits_.back();
-}
-
-block_type& bitvector::last_block()
-{
-  assert(! bits_.empty());
-  return bits_.back();
-}
-
 size_type bitvector::count() const
 {
   auto i = bits_.begin();
@@ -472,11 +435,6 @@ size_type bitvector::count() const
     --length;
   }
   return n;
-}
-
-size_type bitvector::blocks() const
-{
-  return bits_.size();
 }
 
 size_type bitvector::size() const
@@ -525,6 +483,55 @@ size_type bitvector::find_prev(size_type i) const
     return find_backward(bi - 1);
   else
     return npos;
+}
+
+size_type bitvector::blocks() const
+{
+  return bits_.size();
+}
+
+block_type bitvector::block(size_type b) const
+{
+  return bits_[b];
+}
+
+block_type& bitvector::block(size_type b)
+{
+  return bits_[b];
+}
+
+block_type bitvector::block_at_bit(size_type i) const
+{
+  return bits_[block_index(i)];
+}
+
+block_type& bitvector::block_at_bit(size_type i)
+{
+  return bits_[block_index(i)];
+}
+
+block_type bitvector::first_block() const
+{
+  assert(! bits_.empty());
+  return bits_.front();
+}
+
+block_type& bitvector::first_block()
+{
+  assert(! bits_.empty());
+  return bits_.front();
+}
+
+block_type bitvector::last_block() const
+{
+  assert(! bits_.empty());
+  return bits_.back();
+}
+
+block_type& bitvector::last_block()
+{
+  assert(! bits_.empty());
+  return bits_.back();
 }
 
 void bitvector::zero_unused_bits()

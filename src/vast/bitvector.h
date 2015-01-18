@@ -13,7 +13,7 @@
 
 namespace vast {
 
-/// A vector of bits.
+/// A vector of bits having similar semantics as a `std::vector<bool>`.
 class bitvector : util::totally_ordered<bitvector>
 {
 public:
@@ -304,23 +304,17 @@ public:
   static size_type highest_bit(block_type block);
 
   /// Finds the next bit in a block starting from a given offset.
-  ///
   /// @param block The block to inspect.
-  ///
   /// @param i The offset from the LSB where to begin searching.
-  ///
   /// @returns The index in the block where the next 1-bit after *i* occurs or
-  /// `npos` if no such bit exists.
+  ///          `npos` if no such bit exists.
   static size_type next_bit(block_type block, size_type i);
 
   /// Finds the previous bit in a block starting from a given offset.
-  ///
   /// @param block The block to inspect.
-  ///
   /// @param i The offset from the LSB where to begin searching.
-  ///
   /// @returns The index in the block where the 1-bit before *i* occurs or
-  /// `npos` if no such bit exists.
+  ///          `npos` if no such bit exists.
   static size_type prev_bit(block_type block, size_type i);
 
   /// Prints a single block.
@@ -387,50 +381,16 @@ public:
   //
   // Basic operations
   //
-  /// Appends the bits in a sequence of values.
-  /// @tparam Iterator A forward iterator.
-  /// @param first An iterator pointing to the first element of the sequence.
-  /// @param last An iterator pointing to one past the last element of the
-  /// sequence.
-  template <
-    typename Iterator,
-    typename = std::enable_if_t<
-      std::is_same<
-        typename std::iterator_traits<Iterator>::iterator_category,
-        std::forward_iterator_tag
-      >::value
-    >
-  >
-  void append(Iterator first, Iterator last)
-  {
-    if (first == last)
-      return;
-
-    auto excess = extra_bits();
-    auto delta = std::distance(first, last);
-    bits_.reserve(blocks() + delta);
-    if (excess == 0)
-    {
-      bits_.back() |= (*first << excess);
-      do
-      {
-        auto bv = *first++ >> (block_width - excess);
-        bits_.push_back(bv | (first == last ? 0 : *first << excess));
-      } while (first != last);
-    }
-    else
-    {
-      bits_.insert(bits_.end(), first, last);
-    }
-
-    num_bits_ += block_width * delta;
-  }
 
   /// Appends the bits in a given block.
   /// @param block The block containing bits to append.
-  /// @param bits The number of bits (from the LSB) to append.
+  /// @param bits The number of bits to append (starting from the LSB).
   /// @pre `bits <= block_width`
   void append(block_type block, size_type bits = block_width);
+
+  /// Appends a bit vector to this instance.
+  /// @param other The other bit vector to append.
+  void append(bitvector const& other);
 
   /// Appends a single bit to the end of the bit vector.
   /// @param bit The value of the bit.
@@ -484,6 +444,84 @@ public:
   /// @returns A const-reference to the bit at position *i*.
   const_reference operator[](size_type i) const;
 
+  /// Appends blocks from an iterator range.
+  /// @tparam Iterator A forward iterator.
+  /// @param first Points to the first block of the range.
+  /// @param last Points to the one past the last block of the range.
+  template <typename Iterator>
+  void block_append(Iterator first, Iterator last)
+  {
+    if (first == last)
+      return;
+
+    auto delta = last - first;
+    num_bits_ += block_width * delta;
+
+    bits_.reserve(blocks() + delta);
+    auto extra = extra_bits();
+    if (extra == 0)
+    {
+      bits_.insert(bits_.end(), first, last);
+      return;
+    }
+
+    bits_.back() |= (*first << extra);
+    do
+    {
+      auto blk = *first++ >> (block_width - extra);
+      bits_.push_back(blk | (first == last ? 0 : *first << extra));
+    }
+    while (first != last);
+  }
+
+  /// Counts the number of 1-bits in the bit vector.
+  /// Also known as *population count* or *Hamming weight*.
+  /// @returns The number of bits set to 1.
+  size_type count() const;
+
+  /// Retrieves the number of bits the bitvector consist of.
+  /// @returns The length of the bit vector in bits.
+  size_type size() const;
+
+  /// Checks whether the bit vector is empty.
+  /// @returns `true` iff the bitvector has zero length.
+  bool empty() const;
+
+  /// Retrieves the number of active bits in the last block.
+  /// @returns The number of active bits the last block.
+  block_type extra_bits() const;
+
+  /// Finds the bit position of of the first 1-bit.
+  ///
+  /// @returns The position of the first bit that equals to one or `npos` if no
+  /// such bit exists.
+  size_type find_first() const;
+
+  /// Finds the next 1-bit from a given starting position.
+  /// @param i The index where to start looking forward.
+  /// @returns The position of the first bit that equals to 1 after position
+  ///          *i*  or `npos` if no such bit exists.
+  size_type find_next(size_type i) const;
+
+  /// Finds the bit position of of the last 1-bit.
+  /// @returns The position of the last bit that equals to one or `npos` if no
+  ///          such bit exists.
+  size_type find_last() const;
+
+  /// Finds the previous 1-bit from a given starting position.
+  /// @param i The index where to start looking backward.
+  /// @returns The position of the first bit that equals to 1 before position
+  ///          *i* or `npos` if no such bit exists.
+  size_type find_prev(size_type i) const;
+
+  //
+  // Block-based API
+  //
+
+  /// Retrieves the number of blocks of the underlying storage.
+  /// @param The number of blocks that represent `size()` bits.
+  size_type blocks() const;
+
   /// Retrieves an entire block at a given block index.
   /// @param *b* The block index.
   /// @returns The *b*th block.
@@ -528,55 +566,6 @@ public:
   /// @pre *! empty()*
   block_type& last_block();
 
-  /// Counts the number of 1-bits in the bit vector. Also known as *population
-  /// count* or *Hamming weight*.
-  /// @returns The number of bits set to 1.
-  size_type count() const;
-
-  /// Retrieves the number of blocks of the underlying storage.
-  /// @param The number of blocks that represent `size()` bits.
-  size_type blocks() const;
-
-  /// Retrieves the number of bits the bitvector consist of.
-  /// @returns The length of the bit vector in bits.
-  size_type size() const;
-
-  /// Checks whether the bit vector is empty.
-  /// @returns `true` iff the bitvector has zero length.
-  bool empty() const;
-
-  /// Computes the number of unused bits in the last block.
-  /// @returns The number of available free bits the last block.
-  block_type extra_bits() const;
-
-  /// Finds the bit position of of the first 1-bit.
-  ///
-  /// @returns The position of the first bit that equals to one or `npos` if no
-  /// such bit exists.
-  size_type find_first() const;
-
-  /// Finds the next 1-bit from a given starting position.
-  ///
-  /// @param i The index where to start looking forward.
-  ///
-  /// @returns The position of the first bit that equals to 1 after position
-  /// *i*  or `npos` if no such bit exists.
-  size_type find_next(size_type i) const;
-
-  /// Finds the bit position of of the last 1-bit.
-  ///
-  /// @returns The position of the last bit that equals to one or `npos` if no
-  /// such bit exists.
-  size_type find_last() const;
-
-  /// Finds the previous 1-bit from a given starting position.
-  ///
-  /// @param i The index where to start looking backward.
-  ///
-  /// @returns The position of the first bit that equals to 1 before position
-  /// *i* or `npos` if no such bit exists.
-  size_type find_prev(size_type i) const;
-
 private:
   // If the number of bits in the vector are not not a multiple of
   // bitvector::block_width, then the last block exhibits unused bits which
@@ -584,19 +573,15 @@ private:
   void zero_unused_bits();
 
   /// Looks forward for the first 1-bit starting at a given position.
-  ///
   /// @param i The block index to start looking.
-  ///
   /// @returns The block index of the first 1-bit starting from *i* or
-  /// `bitvector::npos` if no 1-bit exists.
+  ///          `bitvector::npos` if no 1-bit exists.
   size_type find_forward(size_type i) const;
 
   /// Looks backward for the first 1-bit starting at a given position.
-  ///
   /// @param i The block index to start looking backward.
-  ///
   /// @returns The block index of the first 1-bit going backward from *i* or
-  /// `bitvector::npos` if no 1-bit exists.
+  ///          `bitvector::npos` if no 1-bit exists.
   size_type find_backward(size_type i) const;
 
   std::vector<block_type> bits_;
@@ -609,18 +594,14 @@ private:
   void deserialize(deserializer& source);
 
   /// Prints a bitvector.
-  ///
   /// @param out An iterator modeling the OutputIterator concept.
-  ///
-  /// @param msb: The order of display. If `true`, display bits from MSB
-  /// to LSB and in the reverse order otherwise.
-  ///
-  /// @param all: Indicates whether to include also the unused bits of the last
-  /// block if the number of `b.size()` is not a multiple of
-  /// `bitvector::block_width`.
-  ///
-  /// @param max: Specifies a maximum size on the output. If 0, no cutting
-  /// occurs.
+  /// @param msb The order of display. If `true`, display bits from MSB
+  ///            to LSB and in the reverse order otherwise.
+  /// @param all Indicates whether to include also the unused bits of the last
+  ///            block if the number of `b.size()` is not a multiple of
+  ///            `bitvector::block_width`.
+  /// @param max Specifies a maximum size on the output. If 0, no cutting
+  ///            occurs.
   template <typename Iterator>
   friend trial<void> print(bitvector const& b, Iterator&& out,
                            bool msb = true, bool all = false, size_t max = 0)

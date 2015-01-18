@@ -184,3 +184,32 @@ TEST("selective flipping")
   expected.append(0x00000000ffffffff);
   CHECK(v == expected);
 }
+
+TEST("bitvector appending")
+{
+  bitvector v1;
+  v1.append(0xffffffffffffffff);
+  v1.resize(200, false);
+  v1.flip(150);
+
+  bitvector v2;
+  v2.append(0xffffffffffffffff);
+  v2.append(0x00000000ffffffff);
+  v2.resize(200, false);
+
+  auto size_before = v1.size();
+  v1.append(v2);
+  CHECK(v1.size() == size_before + v2.size());
+  CHECK(! v1[149]);
+  CHECK(v1[150]);
+  CHECK(v1[200]);
+  CHECK(v1[263]);
+  CHECK(v1[264]);
+  CHECK(v1[295]);
+  CHECK(! v1[296]);
+
+  v1.resize(128);
+  v2.resize(128);
+  v1.append(v2);
+  CHECK(v1.size() == 256);
+}
