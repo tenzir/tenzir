@@ -976,7 +976,7 @@ void console::prompt(size_t ms)
     print(fail) << r.error() << std::endl;
     prompt();
   }
-};
+}
 
 void console::follow()
 {

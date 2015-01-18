@@ -16,7 +16,7 @@ void serialize(serializer& sink, util::basic_variant<Tag, Ts...> const& v)
 template <typename Tag, typename... Ts>
 void deserialize(deserializer& source, util::basic_variant<Tag, Ts...>& v)
 {
-  Tag t;
+  Tag t = {};
   source >> t;
   v = util::basic_variant<Tag, Ts...>::make(t);
   visit([&](auto& x) { source >> x; }, v);

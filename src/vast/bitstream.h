@@ -800,7 +800,7 @@ private:
     // We print NULL bitstreams from LSB to MSB to underline the stream
     // character.
     return print(bs.bits(), out, false, false, 0);
-  };
+  }
 
   friend bool operator==(null_bitstream const& x, null_bitstream const& y);
   friend bool operator<(null_bitstream const& x, null_bitstream const& y);
@@ -1020,7 +1020,7 @@ private:
     }
 
     return nothing;
-  };
+  }
 
   friend bool operator==(ewah_bitstream const& x, ewah_bitstream const& y);
   friend bool operator<(ewah_bitstream const& x, ewah_bitstream const& y);

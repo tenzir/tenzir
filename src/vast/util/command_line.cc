@@ -160,7 +160,7 @@ std::string const& command_line::mode::name() const
 std::string command_line::mode::help(size_t indent) const
 {
   return root_->help(indent);
-};
+}
 
 
 intrusive_ptr<command_line::mode>

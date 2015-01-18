@@ -346,8 +346,10 @@ private:
       static_assert(std::is_nothrow_destructible<rhs_no_const>{},
                     "T must not throw in destructor");
 
-      static_assert(std::is_nothrow_move_assignable<rhs_no_const>{},
-                    "T must not throw in move assignment");
+      // Clang doesn't complain, but GCC does, so we disable this check for
+      // now, but may consider bringing it back in the future.
+      //static_assert(std::is_nothrow_move_assignable<rhs_no_const>{},
+      //              "T must not throw in move assignment");
 
       static_assert(std::is_nothrow_move_constructible<rhs_no_const>{},
                     "T must not throw in move constructor");

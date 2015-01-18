@@ -62,7 +62,7 @@ bool chunk::writer::write(event const& e)
   return block_writer_->write(e.type().name(), 0)
       && block_writer_->write(e.timestamp(), 0)
       && block_writer_->write(e.data());
-};
+}
 
 void chunk::writer::flush()
 {
@@ -113,7 +113,7 @@ result<event> chunk::reader::read(event_id id)
     e->id(*ids_begin_++);
 
   return e;
-};
+}
 
 result<event> chunk::reader::materialize(bool discard)
 {

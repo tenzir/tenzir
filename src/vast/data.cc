@@ -135,6 +135,9 @@ bool data::evaluate(data const& lhs, relational_operator op, data const& rhs)
 {
   switch (op)
   {
+    default:
+      assert(! "missing case");
+      return false;
     case match:
       return visit(match_visitor{}, lhs, rhs);
     case not_match:

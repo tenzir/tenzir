@@ -83,7 +83,7 @@ public:
 private:
   struct connection_state
   {
-    uint64_t bytes = 0;
+    uint64_t bytes;
     uint64_t last;
   };
 

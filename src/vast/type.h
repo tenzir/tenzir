@@ -854,7 +854,7 @@ public:
     }
 
     std::string name;
-    type type;
+    vast::type type;
   };
 
   using trace = util::stack_vector<field const*, 4>;

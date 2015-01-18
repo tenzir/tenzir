@@ -20,7 +20,7 @@ inline type make_packet_type()
   packet.name("vast::packet");
 
   return packet;
-};
+}
 
 } // namespace detail
 } // namespace vast

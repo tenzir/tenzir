@@ -255,7 +255,8 @@ result<event> pcap::extract()
     auto bucket_size = flows_.bucket_size(bucket);
     while (bucket_size == 0)
     {
-      bucket = ++bucket % buckets;
+      ++bucket;
+      bucket %= buckets;
       bucket_size = flows_.bucket_size(bucket);
     }
 

@@ -149,7 +149,7 @@ void editline::completer::replace(std::vector<std::string> completions)
 void editline::completer::on(callback f)
 {
   callback_ = f;
-};
+}
 
 trial<std::string> editline::completer::complete(std::string const& prefix) const
 {
@@ -171,7 +171,7 @@ trial<std::string> editline::completer::complete(std::string const& prefix) cons
   }
 
   return callback_(prefix, std::move(matches));
-};
+}
 
 namespace {
 

@@ -73,7 +73,7 @@ typename Hash::digest_type digest(T&& x)
   Hash h;
   h.add(x);
   return h.get();
-};
+}
 
 } // namespace util
 } // namespace vast

@@ -37,7 +37,7 @@ struct schema : qi::grammar<Iterator, ast::schema::schema(), skipper<Iterator>>
     ascii::alpha_type alpha;
 
     auto add_type =
-      [=](std::string const& id, unused_type = {}, unused_type = {})
+      [=](std::string const& id, unused_type, unused_type)
       {
         if (! user_type_.find(id))
           user_type_.add(id, id);

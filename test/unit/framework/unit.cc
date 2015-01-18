@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cstdlib>
+#include <chrono>
 #include <regex>
 
 char const* unit::color::reset        = "\033[0m";

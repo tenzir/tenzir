@@ -751,8 +751,8 @@ message_handler index::make_handler()
     },
     [=](chunk const& chk)
     {
-      auto& id = active_[next_];
-      next_ = ++next_ % active_.size();
+      auto& id = active_[next_++];
+      next_ %= active_.size();
 
       auto i = partitions_.find(id);
       assert(i != partitions_.end());

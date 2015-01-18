@@ -2,6 +2,7 @@
 #define VAST_IO_BUFFER_H
 
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
 #include <type_traits>
 #include "vast/util/operators.h"
@@ -76,8 +77,7 @@ private:
   size_t size_ = 0;
 
 private:
-  template <typename T0, typename T1>
-  friend bool operator==(buffer<T0> const& x, buffer<T1> const& y)
+  friend bool operator==(buffer const& x, buffer const& y)
   {
     return x.data_ == y.data_ && x.size_ == y.size_;
   }

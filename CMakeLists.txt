@@ -59,6 +59,14 @@ if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
     message(FATAL_ERROR "${PROJECT_NAME} requires g++ 4.9 or greater.")
   endif ()
   set(CXX_FLAGS "${CXX_FLAGS} -fdiagnostics-color=always")
+  if (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
+    # Works around issues with libstdc++ and C++11. For details, see:
+    # - https://bugs.freebsd.org/bugzilla/show_bug.cgi?id=194929
+    # - https://bugs.freebsd.org/bugzilla/show_bug.cgi?id=182657
+    set(CXX_FLAGS "${CXX_FLAGS} -D_GLIBCXX_USE_C99")
+    set(CXX_FLAGS "${CXX_FLAGS} -D_GLIBCXX_USE_C99_MATH")
+    set(CXX_FLAGS "${CXX_FLAGS} -D_GLIBCXX_USE_C99_MATH_TR1")
+  endif ()
 elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
   set(CXX_FLAGS "${CXX_FLAGS} -stdlib=libc++")
   if (ENABLE_ADDRESS_SANITIZER)
