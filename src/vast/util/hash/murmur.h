@@ -3,6 +3,7 @@
 
 #include <cassert>
 #include <array>
+#include <limits>
 #include "vast/util/hash.h"
 
 namespace vast {
@@ -53,6 +54,7 @@ public:
 
   static digest_type value(void const* x, size_t n, uint32_t seed = 0)
   {
+    assert(n <= std::numeric_limits<int>::max());
     digest_type d;
     detail::murmur3<Bits>(x, static_cast<int>(n), seed, &d);
     return d;
