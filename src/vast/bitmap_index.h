@@ -706,11 +706,11 @@ private:
   }
 
   template <size_t N>
-    trial<Bitstream> lookup_impl(relational_operator op,
-                                 char const (&str)[N]) const
-    {
-      return lookup_string(op, str, str + N - 1);
-    }
+  trial<Bitstream> lookup_impl(relational_operator op,
+                               char const (&str)[N]) const
+  {
+    return lookup_string(op, str, str + N - 1);
+  }
 
   uint64_t size_impl() const
   {

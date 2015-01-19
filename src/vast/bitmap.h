@@ -86,7 +86,9 @@ uint64_t order(T x, size_t sig_bits = 5)
 
 } // namespace detail
 
-/// The base class for bitmap coders.
+/// The base class for bitmap coders. A coder offers encoding and decoding of
+/// values. It encodes values into its type-specific storage and returns a
+/// bitstream as a result of a point-query under a given relational operator.
 template <typename Derived>
 class coder : util::equality_comparable<coder<Derived>>
 {
@@ -791,7 +793,8 @@ private:
   }
 };
 
-/// A bitmap which maps values to [bitstreams](@ref bitstream).
+/// A bitmap acts as an associative array mapping arithmetic values to
+/// [bitstreams](@ref bitstream).
 template <
   typename T,
   typename Bitstream = ewah_bitstream,

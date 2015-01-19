@@ -806,13 +806,20 @@ private:
   friend bool operator<(null_bitstream const& x, null_bitstream const& y);
 };
 
-/// A bitstream encoded using the *Enhanced World-Aligned Hybrid (EWAH)*
-/// algorithm.
+/// A bitstream encoded with the *Enhanced World-Aligned Hybrid (EWAH)*
+/// algorithm. EWAH has two types of blocks: *marker* and *dirty*. The bits in
+/// a dirty block are literally interpreted whereas the bits of a marker block
+/// have are have following semantics, assuming N being the number of bits per
+/// block:
 ///
-/// @note This implementation internally maintains the following invariants:
+///     1. Bits *[0,N/2)*: number of dirty words following clean bits
+///     2. Bits *[N/2,N-1)*: number of clean words
+///     3. MSB *N-1*: the type of the clean words
 ///
-///   1. The first block is a marker.
-///   2. The last block is always dirty.
+/// This implementation (internally) maintains the following invariants:
+///
+///     1. The first block is a marker.
+///     2. The last block is always dirty.
 class ewah_bitstream : public bitstream_base<ewah_bitstream>,
                        util::totally_ordered<ewah_bitstream>
 {
@@ -1026,7 +1033,7 @@ private:
   friend bool operator<(ewah_bitstream const& x, ewah_bitstream const& y);
 };
 
-/// Performs a bitwise operation on two bitstreams.
+/// Applies a bitwise operation on two bitstreams.
 /// The algorithm traverses the two bitstreams side by side.
 ///
 /// @param lhs The LHS of the operation.
