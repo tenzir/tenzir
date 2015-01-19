@@ -1,11 +1,19 @@
-#include "framework/unit.h"
+#include <caf/set_scheduler.hpp>
+
 #include "vast.h"
 #include "vast/filesystem.h"
 #include "vast/logger.h"
 #include "vast/serialization.h"
 
+#include "framework/unit.h"
+
 int main(int argc, char* argv[])
 {
+  // Work around CAF bug that blocks VAST in our "distributed" actor unit test
+  // when using less than three threads.
+  if (std::thread::hardware_concurrency() == 1)
+    caf::set_scheduler<>(3);
+
   vast::announce_builtin_types();
 
   auto cfg = unit::configuration::parse(argc, argv);

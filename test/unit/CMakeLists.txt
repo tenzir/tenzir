@@ -117,7 +117,7 @@ endif ()
 
 
 add_executable(unit-test ${tests})
-target_link_libraries(unit-test libvast)
+target_link_libraries(unit-test libvast ${CMAKE_THREAD_LIBS_INIT})
 
 #
 # Generate CMake tests
