@@ -17,8 +17,9 @@ namespace vast {
 class bitvector : util::totally_ordered<bitvector>
 {
 public:
-  using block_type = size_t;
-  using size_type = size_t;
+  // TODO: make configurable
+  using block_type = uint64_t;
+  using size_type = uint64_t;
 
   /// Bits per block.
   static constexpr block_type block_width =
