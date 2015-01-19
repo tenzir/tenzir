@@ -22,6 +22,7 @@
 #include "vast/actor/source/bro.h"
 #include "vast/actor/source/bgpdump.h"
 #include "vast/actor/source/test.h"
+#include "vast/detail/packet_type.h"
 
 #ifdef VAST_HAVE_PCAP
 #include "vast/actor/sink/pcap.h"

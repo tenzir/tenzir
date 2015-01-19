@@ -73,7 +73,6 @@ set(tests ${tests}
   tests/actor/program.cc
   tests/actor/replicator.cc
   tests/actor/source_bgpdump.cc
-  tests/actor/source_pcap.cc
   tests/actor/task_tree.cc
   tests/bitmap.cc
   tests/bitmap_index.cc
