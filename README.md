@@ -53,7 +53,7 @@ For instructions on how to build VAST manually, read on.
 
 Required:
 
-- [Clang 3.4](http://clang.llvm.org/) with libcxxabi
+- [Clang >= 3.4](http://clang.llvm.org/)
 - [CMake](http://www.cmake.org)
 - [CAF](https://github.com/actor-framework/actor-framework)
 - [Boost](http://www.boost.org) (headers only)
@@ -67,34 +67,42 @@ Optional:
 
 ### Building
 
-Although modern C++ compiler offer a feature-complete implementation of the
-C++14 standard, installing a working build toolchain turns out to be
-non-trivial on some platforms. Feedback about what works and what doesn't
-is very much appreciated.
+After having installed the necessary dependencies, building VAST involves the
+following steps:
 
-First define a few environment variables:
-
-    export PREFIX=/opt/vast
-    export CC=/path/to/cc
-    export CXX=/path/to/c++
-    export LD_LIBRARY_PATH=$PREFIX/lib
-
-Then setup CAF as follows:
-
-    git checkout 0.11.0
-    ./configure --prefix=$PREFIX --no-examples
+    ./configure
     make
     make test
     make install
 
-Finally build, test, and install VAST:
+#### FreeBSD
 
-    ./configure --prefix=$PREFIX
-    make
-    make test
-    make install
+VAST development primarily takes place on FreeBSD because it ships with a C++14
+compiler and provides all dependencies natively, which one can install as
+follows:
+
+    pkg install cmake boost-libs caf libedit google-perftools
+
+#### Linux
+
+To the best of our knowledge, no distribution currently comes with an apt
+compiler out of the box. On Debian-based distributions (e.g., Ubuntu 14.04.1),
+getting a working toolchain involves installing the following packages:
+
+    apt-get install cmake clang-3.5 libc++-dev libc++abi-dev \
+      libboost-dev libpcap-dev libedit-dev libgoogle-perftools-dev
+
+CAF still requires manual installation, which requires the same steps as
+outlined above for VAST.
+
+#### Mac OS
+
+Mac OS Yosemite also ships with a working C++14 compiler. We recommend
+[Homebrew](http://brew.sh) for installing dependencies:
+
+    brew install cmake boost actor-framework google-perftools
 
 ## License
 
-VAST comes with a 3-clause BSD licence, see
-[COPYING](https://raw.github.com/mavam/vast/master/COPYING) for details.
+VAST comes with a [3-clause BSD
+licence](https://raw.github.com/mavam/vast/master/COPYING).
