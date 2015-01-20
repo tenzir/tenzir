@@ -188,6 +188,35 @@ TEST("range coding")
   }
 }
 
+// TODO: write unit tests for equality_bitslice_coder.
+
+TEST("coder merging")
+{
+  // We only test the equality coder here, the other coders have a trivial
+  // function that boils down to component-level bitwise OR.
+  equality_coder<uint8_t, null_bitstream> r, s;
+  REQUIRE(r.encode(6));
+  REQUIRE(r.encode(9));
+  REQUIRE(r.encode(10));
+  REQUIRE(r.encode(77));
+
+  REQUIRE(s.append(4, false));
+
+  REQUIRE(r.encode(6));
+  REQUIRE(r.encode(10));
+  REQUIRE(r.encode(10));
+  REQUIRE(r.encode(42));
+
+  r |= s;
+
+  REQUIRE(r.size() == 8);
+  CHECK(to_string(*r.decode(6, equal)) ==          "10001000");
+  CHECK(to_string(*r.decode(10, equal)) ==         "00100110");
+  CHECK(to_string(*r.decode(42, equal)) ==         "00000001");
+  CHECK(to_string(*r.decode(77, equal)) ==         "00010000");
+  CHECK(to_string(*r.decode(42, greater_equal)) == "00010001");
+}
+
 TEST("range encoded bitmap (null)")
 {
   bitmap<int8_t, null_bitstream, range_bitslice_coder> bm, bm2;
@@ -326,7 +355,7 @@ TEST("precision binning (integral)")
   REQUIRE(bm.push_back(350));
   REQUIRE(bm.push_back(253));
   REQUIRE(bm.push_back(101));
-  
+
   CHECK(to_string(*bm[100]) == "10001");
   CHECK(to_string(*bm[200]) == "01010");
   CHECK(to_string(*bm[300]) == "00100");
@@ -347,7 +376,7 @@ TEST("precision binning (double, negative)")
 
   REQUIRE(bm.push_back(43.0005)); // This one is rounded up to the previous bin...
   REQUIRE(bm.push_back(43.0015)); // ...and this one to the next.
-  
+
   CHECK(to_string(*bm[42.001]) == "100000");
   CHECK(to_string(*bm[42.002]) == "010000");
   CHECK(to_string(*bm[43.001]) == "001110");
@@ -380,7 +409,7 @@ TEST("precision binning (double, positive)")
 
   REQUIRE(bm.push_back(39.5)); // This one just makes it into the 40 bin.
   REQUIRE(bm.push_back(49.5)); // ...and this in the 50.
-  
+
   CHECK(to_string(*bm[40.0]) == "101110");
   CHECK(to_string(*bm[50.0]) == "010001");
 }

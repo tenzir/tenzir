@@ -11,7 +11,6 @@
 #include "vast/util/stack_vector.h"
 
 namespace vast {
-
 namespace detail {
 
 /// Takes any arithmetic type and creates and maps it to an unsigned integral
@@ -90,7 +89,9 @@ uint64_t order(T x, size_t sig_bits = 5)
 /// values. It encodes values into its type-specific storage and returns a
 /// bitstream as a result of a point-query under a given relational operator.
 template <typename Derived>
-class coder : util::equality_comparable<coder<Derived>>
+class coder
+  : util::equality_comparable<coder<Derived>>,
+    util::orable<coder<Derived>>
 {
 public:
   uint64_t size() const
@@ -98,11 +99,15 @@ public:
     return rows_;
   }
 
-  uint64_t cardinality() const
-  {
-    return derived()->cardinality_impl();
-  }
-
+  // FIXME: The operation "append" does not really make sense, because we use
+  // it only to append "fill" zeros of the encoded set of bit streams. It would
+  // make more sense to have a separate bitstream that tracks the valid rows
+  // and then use a different function (say "stretch", as in bitmap_index) to
+  // append invalid bits. This would also give rise to deletion by modifying
+  // the bit stream of valid rows. However, many bitmap indexes combine several
+  // bitmaps, and then we'd have one validity check for each one although we
+  // only need one. So maybe we should also provide some sort of raw access
+  // method (e.g., decode_unchecked) to bypass the validity check.
   bool append(size_t n, bool bit)
   {
     auto success = derived()->append_impl(n, bit);
@@ -133,6 +138,12 @@ public:
   void each(F f) const
   {
     derived()->each_impl(f);
+  }
+
+  Derived& operator|=(Derived const& other)
+  {
+    derived()->bitwise_or(other);
+    return *derived();;
   }
 
 protected:
@@ -181,11 +192,6 @@ class equality_coder
   friend super;
 
 private:
-  uint64_t cardinality_impl() const
-  {
-    return bitstreams_.size();
-  }
-
   bool append_impl(size_t n, bool bit)
   {
     if (bit)
@@ -233,6 +239,36 @@ private:
   {
     for (auto& p : bitstreams_)
       f(1, p.first, p.second);
+  }
+
+  void bitwise_or(equality_coder const& other)
+  {
+    // We need O(N + M) comparisons here because the intersection of the
+    // unordered maps may not be empty.
+    for (auto& p : bitstreams_)
+    {
+      auto i = other.bitstreams_.find(p.first);
+      if (i != other.bitstreams_.end())
+        p.second |= i->second;
+      else if (this->size() < other.size())
+        p.second.append(other.size() - this->size(), false);
+    }
+
+    for (auto& p : other.bitstreams_)
+    {
+      auto i = bitstreams_.find(p.first);
+      if (i != bitstreams_.end())
+      {
+        i->second |= p.second;
+      }
+      else
+      {
+        auto j = bitstreams_.emplace(i->first, p.second);
+        assert(j.second);
+        if (this->size() < other.size())
+          j.first->second.append(other.size() - this->size(), false);
+      }
+    }
   }
 
   std::unordered_map<T, Bitstream> bitstreams_;
@@ -293,11 +329,6 @@ public:
   }
 
 private:
-  uint64_t cardinality_impl() const
-  {
-    return bits;
-  }
-
   bool append_impl(size_t n, bool bit)
   {
     for (auto& bs : bitstreams_)
@@ -309,7 +340,7 @@ private:
 
   bool encode_impl(T x)
   {
-    for (size_t i = 0; i < bitstreams_.size(); ++i)
+    for (size_t i = 0; i < bits; ++i)
       bitstreams_[i].push_back((x >> i) & 1);
 
     return true;
@@ -325,7 +356,7 @@ private:
       case not_equal:
         {
           Bitstream r{this->size(), true};
-          for (size_t i = 0; i < bitstreams_.size(); ++i)
+          for (size_t i = 0; i < bits; ++i)
             r &= ((x >> i) & 1) ? bitstreams_[i] : ~bitstreams_[i];
 
           return {std::move(op == equal ? r : r.flip())};
@@ -336,8 +367,14 @@ private:
   template <typename F>
   void each_impl(F f) const
   {
-    for (size_t i = 0; i < bitstreams_.size(); ++i)
+    for (size_t i = 0; i < bits; ++i)
       f(1, i, bitstreams_[i]);
+  }
+
+  void bitwise_or(binary_bitslice_coder const& other)
+  {
+    for (size_t i = 0; i < bits; ++i)
+      bitstreams_[i] |= other.bitstreams_[i];
   }
 
   std::vector<Bitstream> bitstreams_;
@@ -486,6 +523,17 @@ private:
         f(i, j, bitstreams_[i][j]);
   }
 
+  void bitwise_or(bitslice_coder const& other)
+  {
+    // With some effort it is possible to OR together two bitslice coders of
+    // different bases, but it requires conversion of the
+    assert(base_ == other.base_);
+    assert(bitstreams_.size() == other.bitstreams_.size());
+    for (size_t i = 0; i < bitstreams_.size(); ++i)
+      for (size_t j = 0; j < bitstreams_[i].size(); ++j)
+        bitstreams_[i][j] |= other.bitstreams_[i][j];
+  }
+
 private:
   friend access;
 
@@ -543,7 +591,7 @@ private:
       {
         auto idx = base_[i] == 2 ? 0 : v_[i];
         auto& bs = bitstreams_[i][idx];
-        bs.append(this->size() - bs->size(), false);
+        bs.append(this->size() - bs.size(), false);
         if (! bs.push_back(true))
           return false;
       }
