@@ -70,6 +70,7 @@ include_directories(
 file(GLOB_RECURSE tests framework/*.cc)
 set(tests ${tests}
   tests/actor/distributed.cc
+  tests/actor/import.cc
   tests/actor/program.cc
   tests/actor/replicator.cc
   tests/actor/source_bgpdump.cc
