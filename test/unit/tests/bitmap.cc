@@ -89,7 +89,7 @@ TEST("basic bitmap")
   CHECK(bm.lookup(not_equal, 13));
   CHECK(to_string(*bm.lookup(not_equal, 13)) == "11111");
 
-  CHECK(bm.append(5, false));
+  CHECK(bm.stretch(5));
   CHECK(bm.size() == 10);
 
   std::vector<uint8_t> buf;
@@ -190,7 +190,7 @@ TEST("range coding")
 
 // TODO: write unit tests for equality_bitslice_coder.
 
-TEST("bitmap merging (equality coder)")
+TEST("merging (equality coder)")
 {
   bitmap<uint8_t, null_bitstream> bm1, bm2;
   REQUIRE(bm1.push_back(6));
@@ -198,7 +198,7 @@ TEST("bitmap merging (equality coder)")
   REQUIRE(bm1.push_back(10));
   REQUIRE(bm1.push_back(77));
 
-  REQUIRE(bm2.append(4, false));
+  REQUIRE(bm2.stretch(4));
   REQUIRE(bm2.push_back(6));
   REQUIRE(bm2.push_back(10));
   REQUIRE(bm2.push_back(10));
@@ -213,7 +213,7 @@ TEST("bitmap merging (equality coder)")
   CHECK(to_string(*bm1.lookup(equal, 77)) == "00010000");
 }
 
-TEST("bitmap merging (range bitslice coder)")
+TEST("merging (range bitslice coder)")
 {
   bitmap<uint8_t, null_bitstream, range_bitslice_coder> bm1, bm2;
   REQUIRE(bm1.push_back(6));
@@ -221,7 +221,7 @@ TEST("bitmap merging (range bitslice coder)")
   REQUIRE(bm1.push_back(10));
   REQUIRE(bm1.push_back(77));
 
-  REQUIRE(bm2.append(4, false));
+  REQUIRE(bm2.stretch(4));
   REQUIRE(bm2.push_back(6));
   REQUIRE(bm2.push_back(10));
   REQUIRE(bm2.push_back(10));
@@ -236,6 +236,18 @@ TEST("bitmap merging (range bitslice coder)")
   CHECK(to_string(*bm2.lookup(equal, 77)) ==         "00010000");
   CHECK(to_string(*bm2.lookup(greater_equal, 42)) == "00010001");
   CHECK(to_string(*bm2.lookup(less_equal, 10)) ==    "11101110");
+}
+
+TEST("multi push-back")
+{
+  bitmap<uint8_t, null_bitstream, range_bitslice_coder> bm;
+  REQUIRE(bm.push_back(7, 4));
+  REQUIRE(bm.push_back(3, 6));
+
+  CHECK(bm.size() == 10);
+  CHECK(to_string(*bm.lookup(less, 10)) == "1111111111");
+  CHECK(to_string(*bm.lookup(equal, 7)) == "1111000000");
+  CHECK(to_string(*bm.lookup(equal, 3)) == "0000111111");
 }
 
 TEST("range encoded bitmap (null)")
@@ -395,7 +407,7 @@ TEST("precision binning (double, negative)")
   REQUIRE(bm.push_back(43.0014));
   REQUIRE(bm.push_back(43.0013));
 
-  REQUIRE(bm.push_back(43.0005)); // This one is rounded up to the previous bin...
+  REQUIRE(bm.push_back(43.0005)); // This one rounds up to the previous bin...
   REQUIRE(bm.push_back(43.0015)); // ...and this one to the next.
 
   CHECK(to_string(*bm[42.001]) == "100000");

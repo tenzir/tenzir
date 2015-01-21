@@ -91,8 +91,7 @@ public:
 
   /// Appends invalid bits to bring the bitmap index up to a given size. Given
   /// an ID of *n*, the function stretches the index up to size *n* with
-  /// invalid bits. Afterwards it appends to the mask a single true bit
-  /// for the next value to push back.
+  /// invalid bits.
   /// @param n The ID to catch up to.
   /// @returns `true` on success.
   bool catch_up(uint64_t n)
@@ -499,7 +498,7 @@ private:
 
   bool stretch_impl(size_t n)
   {
-    return bitmap_.append(n, false);
+    return bitmap_.stretch(n);
   }
 
   trial<Bitstream> lookup_impl(relational_operator op, data const& d) const
@@ -565,23 +564,22 @@ private:
   template <typename Iterator>
   bool push_back_string(Iterator begin, Iterator end)
   {
-    auto size = static_cast<size_t>(end - begin);
-    if (size > bitmaps_.size())
-      bitmaps_.resize(size);
+    auto length = static_cast<size_t>(end - begin);
+    if (length > bitmaps_.size())
+      bitmaps_.resize(length);
 
-    for (size_t i = 0; i < size; ++i)
+    for (size_t i = 0; i < length; ++i)
     {
       assert(this->size() >= bitmaps_[i].size());
       auto delta = this->size() - bitmaps_[i].size();
-      if (delta > 0)
-        if (! bitmaps_[i].append(delta, false))
-          return false;
+      if (delta > 0 && ! bitmaps_[i].stretch(delta))
+        return false;
 
       if (! bitmaps_[i].push_back(static_cast<uint8_t>(begin[i])))
         return false;
     }
 
-    return size_.push_back(size);
+    return size_.push_back(length);
   }
 
   bool push_back_impl(data const& d)
@@ -603,7 +601,7 @@ private:
 
   bool stretch_impl(size_t n)
   {
-    return size_.append(n, false);
+    return size_.stretch(n);
   }
 
   template <typename Iterator>
@@ -785,7 +783,7 @@ private:
   bool stretch_impl(size_t n)
   {
     for (size_t i = 0; i < 16; ++i)
-      if (! bitmaps_[i].append(n, false))
+      if (! bitmaps_[i].stretch(n))
         return false;
 
     return v4_.append(n, false);
@@ -926,7 +924,7 @@ private:
 
   bool stretch_impl(size_t n)
   {
-    return network_.stretch(n) && length_.append(n, false);
+    return network_.stretch(n) && length_.stretch(n);
   }
 
   trial<Bitstream> lookup_impl(relational_operator op, subnet const& s) const
@@ -1013,7 +1011,7 @@ private:
 
   bool stretch_impl(size_t n)
   {
-    return num_.append(n, false) && proto_.append(n, false);
+    return num_.stretch(n) && proto_.stretch(n);
   }
 
   trial<Bitstream> lookup_impl(relational_operator op, port const& p) const
@@ -1121,7 +1119,7 @@ private:
   bool push_back_impl(Container const& c)
   {
     if (c.empty())
-      return size_.append(1, false);
+      return size_.stretch(1);
 
     if (bmis_.size() < c.size())
     {
@@ -1146,7 +1144,7 @@ private:
 
   bool stretch_impl(size_t n)
   {
-    return size_.append(n, false);
+    return size_.stretch(n);
   }
 
   trial<Bitstream> lookup_impl(relational_operator op, data const& d) const

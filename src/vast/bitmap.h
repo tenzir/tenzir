@@ -8,7 +8,6 @@
 #include "vast/operator.h"
 #include "vast/serialization/all.h"
 #include "vast/util/operators.h"
-#include "vast/util/stack_vector.h"
 
 namespace vast {
 namespace detail {
@@ -83,6 +82,31 @@ uint64_t order(T x, size_t sig_bits = 5)
   return result;
 }
 
+/// Decomposes a single value into a vector of values according to the given
+/// base.
+/// @param x The value to decompose.
+/// @param base The base used to decompose *x*.
+/// @param values The values in which *x* gets decomposed.
+/// @pre `base.size() == values.size()`
+template <typename T, typename U = T>
+void decompose(T x, std::vector<U> const& base, std::vector<U>& values)
+{
+  assert(base.size() == values.size());
+  auto o = order(x);
+  size_t i = base.size();
+  while (i --> 0)
+  {
+    auto b = U{1};
+    for (size_t j = 0; j < i; ++j)
+      b *= base[j];
+
+    values[i] = o / b;
+
+    if (o >= b)
+      o -= values[i] * b;
+  }
+}
+
 } // namespace detail
 
 /// The base class for bitmap coders. A coder offers encoding and decoding of
@@ -99,34 +123,36 @@ public:
     return rows_;
   }
 
-  // FIXME: The operation "append" does not really make sense, because we use
-  // it only to append "fill" zeros of the encoded set of bit streams. It would
-  // make more sense to have a separate bitstream that tracks the valid rows
-  // and then use a different function (say "stretch", as in bitmap_index) to
-  // append invalid bits. This would also give rise to deletion by modifying
-  // the bit stream of valid rows. However, many bitmap indexes combine several
-  // bitmaps, and then we'd have one validity check for each one although we
-  // only need one. So maybe we should also provide some sort of raw access
-  // method (e.g., decode_unchecked) to bypass the validity check.
-  bool append(size_t n, bool bit)
-  {
-    auto success = derived()->append_impl(n, bit);
-    if (success)
-      rows_ += n;
-
-    return success;
-  }
-
+  // Encodes a single values multiple times.
+  // @param x The value to encode.
+  // @param n The number of time to add *x*.
+  /// @returns `true` on success.
   template <typename T>
-  bool encode(T x)
+  bool encode(T x, size_t n = 1)
   {
-    auto success = derived()->encode_impl(x);
-    if (success)
-      ++rows_;
-
-    return success;
+    if (std::numeric_limits<uint64_t>::max() - rows_ < n)
+      return false;
+    if (! derived()->encode_impl(x, n))
+      return false;
+    rows_ += n;
+    return true;
   }
 
+  /// Aritifically increases the size, i.e., the number of rows.
+  /// @param n The number of rows to increase the coder by.
+  /// @returns `true` on success and `false` if there is not enough space.
+  bool stretch(size_t n)
+  {
+    if (std::numeric_limits<uint64_t>::max() - rows_ < n)
+      return false;
+    rows_ += n;
+    return true;
+  }
+
+  /// Decodes a value under a relational operator.
+  /// @param x The value to decode.
+  /// @param op The relation operator under which to decode *x*.
+  /// @returns The bitstream for *x* according to *op*.
   template <typename T, typename Hack = Derived>
   auto decode(T x, relational_operator op = equal) const
     -> decltype(std::declval<Hack>().decode_impl(x, op))
@@ -195,30 +221,19 @@ class equality_coder
   friend super;
 
 private:
-  bool append_impl(size_t n, bool bit)
-  {
-    if (bit)
-      for (auto& p : bitstreams_)
-        if (! p.second.append(n, bit))
-          return false;
-
-    return true;
-  }
-
-  bool encode_impl(T x)
+  bool encode_impl(T x, size_t n)
   {
     auto i = bitstreams_.find(x);
     if (i != bitstreams_.end())
     {
       auto& bs = i->second;
       bs.append(this->size() - bs.size(), false);
-      return bs.push_back(true);
+      return bs.append(n, true);
     }
     else
     {
       Bitstream bs{this->size(), false};
-      bs.push_back(true);
-      return bitstreams_.emplace(x, std::move(bs)).second;
+      return bs.append(n, true) && bitstreams_.emplace(x, std::move(bs)).second;
     }
   }
 
@@ -331,20 +346,14 @@ public:
   }
 
 private:
-  bool append_impl(size_t n, bool bit)
-  {
-    for (auto& bs : bitstreams_)
-      if (! bs.append(n, bit))
-        return false;
-
-    return true;
-  }
-
-  bool encode_impl(T x)
+  bool encode_impl(T x, size_t n)
   {
     for (size_t i = 0; i < bits; ++i)
-      bitstreams_[i].push_back((x >> i) & 1);
-
+    {
+      bitstreams_[i].append(this->size() - bitstreams_[i].size(), false);
+      if (! bitstreams_[i].append(n, (x >> i) & 1))
+        return false;
+    }
     return true;
   }
 
@@ -423,7 +432,7 @@ class bitslice_coder
 
 public:
   using offset_binary_type = decltype(detail::order(T()));
-  using value_list = util::stack_vector<offset_binary_type, 8>;
+  using value_list = std::vector<offset_binary_type>;
 
   /// Constructs a slicer with a given (potentially non-uniform) base.
   /// @param base The sequence of bases.
@@ -458,26 +467,6 @@ public:
 
 
 protected:
-  /// Decomposes a value into vector of values according to the given base.
-  void decompose(T x) const
-  {
-    auto o = detail::order(x);
-    auto& v = const_cast<value_list&>(v_);
-
-    size_t i = base_.size();
-    while (i --> 0)
-    {
-      offset_binary_type b = 1;
-      for (size_t j = 0; j < i; ++j)
-        b *= base_[j];
-
-      v[i] = o / b;
-
-      if (o >= b)
-        o -= v[i] * b;
-    }
-  }
-
   value_list base_;
   value_list v_;
   std::vector<std::vector<Bitstream>> bitstreams_;
@@ -499,19 +488,9 @@ private:
   }
 
 private:
-  bool append_impl(size_t n, bool bit)
+  bool encode_impl(T x, size_t n)
   {
-    for (auto& bitstreams : bitstreams_)
-      for (auto& bs : bitstreams)
-        if (! bs.append(n, bit))
-          return false;
-
-    return true;
-  }
-
-  bool encode_impl(T x)
-  {
-    return static_cast<Derived*>(this)->encode_value(x);
+    return static_cast<Derived*>(this)->encode_value(x, n);
   }
 
   trial<Bitstream> decode_impl(T x, relational_operator op) const
@@ -594,17 +573,16 @@ public:
   }
 
 private:
-  bool encode_value(T x)
+  bool encode_value(T x, size_t n)
   {
-    this->decompose(x);
-
+    detail::decompose(x, base_, v_);
     for (size_t i = 0; i < v_.size(); ++i)
       if (v_[i] > 0)
       {
         auto idx = base_[i] == 2 ? 0 : v_[i];
         auto& bs = bitstreams_[i][idx];
         bs.append(this->size() - bs.size(), false);
-        if (! bs.push_back(true))
+        if (! bs.append(n, true))
           return false;
       }
 
@@ -613,7 +591,7 @@ private:
 
   trial<Bitstream> decode_value(T x, relational_operator op) const
   {
-    this->decompose(x);
+    detail::decompose(x, base_, const_cast<decltype(v_)&>(v_));
 
     Bitstream r{this->size(), true};
     for (size_t i = 0; i < v_.size(); ++i)
@@ -621,7 +599,6 @@ private:
       auto idx = v_[i];
       if (base_[i] == 2 && idx != 0)
         --idx;
-
       r &= bitstreams_[i][idx];
     }
 
@@ -664,21 +641,22 @@ public:
   }
 
 private:
-  bool encode_value(T x)
+  bool encode_value(T x, size_t n)
   {
-    this->decompose(x);
-
+    detail::decompose(x, base_, v_);
     for (size_t i = 0; i < bitstreams_.size(); ++i)
       for (size_t j = 0; j < bitstreams_[i].size(); ++j)
-        if (! bitstreams_[i][j].push_back(j >= v_[i]))
+      {
+        auto& bs = bitstreams_[i][j];
+        bs.append(this->size() - bs.size(), false);
+        if (! bs.append(n, j >= v_[i]))
           return false;
-
+      }
     return true;
   }
 
-  // Implements the RangeEval-Opt algorithm.
-  //
-  // @todo Add some optimizations from Ming-Chuan Wu to reduce the number of
+  // Implements the *RangeEval-Opt* algorithm.
+  // TODO: add some optimizations from Ming-Chuan Wu to reduce the number of
   // bitstream scans (and bitwise operations).
   trial<Bitstream> decode_value(T x, relational_operator op) const
   {
@@ -696,7 +674,7 @@ private:
 
     Bitstream result{this->size(), true};
 
-    this->decompose(x);
+    detail::decompose(x, base_, const_cast<decltype(v_)&>(v_));
 
     switch (op)
     {
@@ -893,23 +871,21 @@ public:
   /// Adds a value to the bitmap. For example, in the case of equality
   /// encoding, this entails appending 1 to the single bitstream for the given
   /// value and 0 to all other bitstreams.
-  ///
-  /// @param x The value to add.
-  ///
+  /// @param x The value to append.
+  /// @param n The number of times to append *x*.
   /// @returns `true` on success and `false` if the bitmap is full, i.e., has
-  /// `2^std::numeric_limits<size_t>::digits() - 1` elements.
-  bool push_back(T x)
+  ///          `2^std::numeric_limits<size_t>::digits() - 1` elements.
+  bool push_back(T x, size_t n = 1)
   {
-    return coder_.encode(binner_(x));
+    return coder_.encode(binner_(x), n);
   }
 
-  /// Appends a given number of invalid rows/elements to the bitmaps.
-  /// @param n The number of elements to append.
-  /// @param bit The value of the bit to append.
-  /// @returns `true` on success and `false` if the bitmap is full.
-  bool append(size_t n = 1, bool bit = false)
+  /// Aritifically increases the bitmap size, i.e., the number of rows.
+  /// @param n The number of rows to increase the bitmap by.
+  /// @returns `true` on success and `false` if there is not enough space.
+  bool stretch(size_t n)
   {
-    return coder_.append(n, bit);
+    return coder_.stretch(n);
   }
 
   /// Shorthand for `lookup(equal, x)`.
@@ -971,7 +947,7 @@ private:
 
   template <typename Iterator>
   friend trial<void> print(bitmap const& bm, Iterator&& out,
-                    bool with_header = true, char delim = '\t')
+                           bool with_header = true, char delim = '\t')
   {
     if (bm.empty())
       return nothing;
@@ -1014,14 +990,14 @@ public:
 
   bitmap() = default;
 
-  bool push_back(bool x)
+  bool push_back(bool x, size_t n = 1)
   {
-    return bool_.push_back(x);
+    return bool_.append(n, x);
   }
 
-  bool append(size_t n = 1, bool bit = false)
+  bool stretch(size_t n)
   {
-    return bool_.append(n, bit);
+    return bool_.append(n, false);
   }
 
   trial<Bitstream> operator[](bool x) const
