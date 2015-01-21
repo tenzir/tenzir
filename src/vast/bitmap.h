@@ -134,16 +134,19 @@ public:
     return derived()->decode_impl(x, op);
   }
 
+  Derived& operator|=(Derived const& other)
+  {
+    derived()->bitwise_or(other);
+    if (other.size() > size())
+      rows_ = other.size();
+    return *derived();
+  }
+
+  /// Applies a function to each raw bitstream.
   template <typename F>
   void each(F f) const
   {
     derived()->each_impl(f);
-  }
-
-  Derived& operator|=(Derived const& other)
-  {
-    derived()->bitwise_or(other);
-    return *derived();;
   }
 
 protected:
@@ -243,8 +246,15 @@ private:
 
   void bitwise_or(equality_coder const& other)
   {
-    // We need O(N + M) comparisons here because the intersection of the
-    // unordered maps may not be empty.
+    if (other.bitstreams_.empty())
+      return;
+
+    if (bitstreams_.empty())
+    {
+      bitstreams_ = other.bitstreams_;
+      return;
+    }
+
     for (auto& p : bitstreams_)
     {
       auto i = other.bitstreams_.find(p.first);
@@ -255,20 +265,12 @@ private:
     }
 
     for (auto& p : other.bitstreams_)
-    {
-      auto i = bitstreams_.find(p.first);
-      if (i != bitstreams_.end())
+      if (bitstreams_.find(p.first) == bitstreams_.end())
       {
-        i->second |= p.second;
+        auto j = bitstreams_.insert(p).first;
+        if (this->size() > other.size())
+          j->second.append(other.size() - this->size(), false);
       }
-      else
-      {
-        auto j = bitstreams_.emplace(i->first, p.second);
-        assert(j.second);
-        if (this->size() < other.size())
-          j.first->second.append(other.size() - this->size(), false);
-      }
-    }
   }
 
   std::unordered_map<T, Bitstream> bitstreams_;
@@ -373,8 +375,11 @@ private:
 
   void bitwise_or(binary_bitslice_coder const& other)
   {
-    for (size_t i = 0; i < bits; ++i)
-      bitstreams_[i] |= other.bitstreams_[i];
+    if (bitstreams_.empty())
+      bitstreams_ = other.bitstreams_;
+    else if (! other.bitstreams_.empty())
+      for (size_t i = 0; i < bits; ++i)
+        bitstreams_[i] |= other.bitstreams_[i];
   }
 
   std::vector<Bitstream> bitstreams_;
@@ -526,12 +531,19 @@ private:
   void bitwise_or(bitslice_coder const& other)
   {
     // With some effort it is possible to OR together two bitslice coders of
-    // different bases, but it requires conversion of the
+    // different bases, but it requires conversion of the base. We tackle this
+    // maybe in the future
     assert(base_ == other.base_);
+    assert(! bitstreams_.empty());
+    assert(! other.bitstreams_.empty());
     assert(bitstreams_.size() == other.bitstreams_.size());
-    for (size_t i = 0; i < bitstreams_.size(); ++i)
-      for (size_t j = 0; j < bitstreams_[i].size(); ++j)
-        bitstreams_[i][j] |= other.bitstreams_[i][j];
+
+    if (bitstreams_[0].empty())
+      bitstreams_ = other.bitstreams_;
+    else if (! other.bitstreams_[0].empty())
+      for (size_t i = 0; i < bitstreams_.size(); ++i)
+        for (size_t j = 0; j < bitstreams_[i].size(); ++j)
+          bitstreams_[i][j] |= other.bitstreams_[i][j];
   }
 
 private:
@@ -849,7 +861,9 @@ template <
   template <typename, typename> class Coder = equality_coder,
   template <typename> class Binner = null_binner
 >
-class bitmap : util::equality_comparable<bitmap<T, Bitstream, Coder, Binner>>
+class bitmap
+  : util::equality_comparable<bitmap<T, Bitstream, Coder, Binner>>,
+    util::orable<bitmap<T, Bitstream, Coder, Binner>>
 {
   static_assert(std::is_arithmetic<T>::value, "arithmetic type required");
 
@@ -861,6 +875,12 @@ public:
 
   /// Default-constructs an empty bitmap.
   bitmap() = default;
+
+  bitmap& operator|=(bitmap const& other)
+  {
+    coder_ |= other.coder_;
+    return *this;
+  }
 
   /// Instantites a new binner.
   /// @param xs The parameters forwarded to the constructor of the binner.

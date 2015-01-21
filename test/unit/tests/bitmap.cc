@@ -190,31 +190,52 @@ TEST("range coding")
 
 // TODO: write unit tests for equality_bitslice_coder.
 
-TEST("coder merging")
+TEST("bitmap merging (equality coder)")
 {
-  // We only test the equality coder here, the other coders have a trivial
-  // function that boils down to component-level bitwise OR.
-  equality_coder<uint8_t, null_bitstream> r, s;
-  REQUIRE(r.encode(6));
-  REQUIRE(r.encode(9));
-  REQUIRE(r.encode(10));
-  REQUIRE(r.encode(77));
+  bitmap<uint8_t, null_bitstream> bm1, bm2;
+  REQUIRE(bm1.push_back(6));
+  REQUIRE(bm1.push_back(9));
+  REQUIRE(bm1.push_back(10));
+  REQUIRE(bm1.push_back(77));
 
-  REQUIRE(s.append(4, false));
+  REQUIRE(bm2.append(4, false));
+  REQUIRE(bm2.push_back(6));
+  REQUIRE(bm2.push_back(10));
+  REQUIRE(bm2.push_back(10));
+  REQUIRE(bm2.push_back(42));
 
-  REQUIRE(r.encode(6));
-  REQUIRE(r.encode(10));
-  REQUIRE(r.encode(10));
-  REQUIRE(r.encode(42));
+  bm1 |= bm2;
 
-  r |= s;
+  REQUIRE(bm1.size() == 8);
+  CHECK(to_string(*bm1.lookup(equal, 6)) ==  "10001000");
+  CHECK(to_string(*bm1.lookup(equal, 10)) == "00100110");
+  CHECK(to_string(*bm1.lookup(equal, 42)) == "00000001");
+  CHECK(to_string(*bm1.lookup(equal, 77)) == "00010000");
+}
 
-  REQUIRE(r.size() == 8);
-  CHECK(to_string(*r.decode(6, equal)) ==          "10001000");
-  CHECK(to_string(*r.decode(10, equal)) ==         "00100110");
-  CHECK(to_string(*r.decode(42, equal)) ==         "00000001");
-  CHECK(to_string(*r.decode(77, equal)) ==         "00010000");
-  CHECK(to_string(*r.decode(42, greater_equal)) == "00010001");
+TEST("bitmap merging (range bitslice coder)")
+{
+  bitmap<uint8_t, null_bitstream, range_bitslice_coder> bm1, bm2;
+  REQUIRE(bm1.push_back(6));
+  REQUIRE(bm1.push_back(9));
+  REQUIRE(bm1.push_back(10));
+  REQUIRE(bm1.push_back(77));
+
+  REQUIRE(bm2.append(4, false));
+  REQUIRE(bm2.push_back(6));
+  REQUIRE(bm2.push_back(10));
+  REQUIRE(bm2.push_back(10));
+  REQUIRE(bm2.push_back(42));
+
+  bm2 |= bm1;
+
+  REQUIRE(bm2.size() == 8);
+  CHECK(to_string(*bm2.lookup(equal, 6)) ==          "10001000");
+  CHECK(to_string(*bm2.lookup(equal, 10)) ==         "00100110");
+  CHECK(to_string(*bm2.lookup(equal, 42)) ==         "00000001");
+  CHECK(to_string(*bm2.lookup(equal, 77)) ==         "00010000");
+  CHECK(to_string(*bm2.lookup(greater_equal, 42)) == "00010001");
+  CHECK(to_string(*bm2.lookup(less_equal, 10)) ==    "11101110");
 }
 
 TEST("range encoded bitmap (null)")
