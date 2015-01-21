@@ -8,15 +8,15 @@
 namespace vast {
 
 /// The main program.
-class program : public actor_mixin<program, sentinel>
+class program : public default_actor
 {
 public:
   /// Spawns the program.
   /// @param config The program configuration.
   program(configuration config);
 
-  caf::message_handler make_handler();
-  std::string name() const;
+  caf::message_handler make_handler() override;
+  std::string name() const override;
 
 private:
   trial<void> run();

@@ -47,7 +47,7 @@ TEST("distributed")
   configuration cfg_track{cfg};
   *cfg_track['T'] = true;
   REQUIRE(cfg_track.verify());
-  auto t = spawn<program>(std::move(cfg_track));
+  auto t = self->spawn<program>(std::move(cfg_track));
   self->sync_send(t, atom("run")).await(propagate);
   if (failed)
     REQUIRE(false);
@@ -56,8 +56,8 @@ TEST("distributed")
   configuration cfg_recv{cfg};
   *cfg_recv['R'] = true;
   REQUIRE(cfg_recv.verify());
-  auto p = spawn<program>(std::move(cfg_recv));
-  self->sync_send(p, atom("run")).await(propagate);
+  auto r = self->spawn<program, monitored>(std::move(cfg_recv));
+  self->sync_send(r, atom("run")).await(propagate);
   if (failed)
     REQUIRE(false);
 
@@ -65,7 +65,7 @@ TEST("distributed")
   configuration cfg_arch{cfg};
   *cfg_arch['A'] = true;
   REQUIRE(cfg_arch.verify());
-  auto a = spawn<program>(std::move(cfg_arch));
+  auto a = self->spawn<program>(std::move(cfg_arch));
   self->sync_send(a, atom("run")).await(propagate);
   if (failed)
     REQUIRE(false);
@@ -74,7 +74,7 @@ TEST("distributed")
   configuration cfg_idx{cfg};
   *cfg_idx['X'] = true;
   REQUIRE(cfg_idx.verify());
-  auto x = spawn<program>(std::move(cfg_idx));
+  auto x = self->spawn<program>(std::move(cfg_idx));
   self->sync_send(x, atom("run")).await(propagate);
   if (failed)
     REQUIRE(false);
@@ -83,7 +83,7 @@ TEST("distributed")
   configuration cfg_srch{cfg};
   *cfg_srch['S'] = true;
   REQUIRE(cfg_srch.verify());
-  auto s = spawn<program>(std::move(cfg_srch));
+  auto s = self->spawn<program>(std::move(cfg_srch));
   self->sync_send(s, atom("run")).await(propagate);
   if (failed)
     REQUIRE(false);
@@ -135,8 +135,8 @@ TEST("distributed")
     REQUIRE(false);
   self->receive([](down_msg const&) {});
 
-  // Give messages in pipeline some time.
-  std::this_thread::sleep_for(std::chrono::seconds(1));
+  // Give the chunks in the pipeline from IMPORTER to RECEIVER some time.
+  std::this_thread::sleep_for(std::chrono::milliseconds(800));
 
   // Check that import went fine with a simple query.
   self->sync_send(t, atom("tracker")).await(
@@ -180,7 +180,7 @@ TEST("distributed")
     on(atom("done")) >> [] {},
     [&](event const& e)
     {
-      VAST_INFO("got event:", e);
+      VAST_DEBUG("got event:", e);
       CHECK(e.type().name() == "ftp");
       done = true;
     },
@@ -191,6 +191,16 @@ TEST("distributed")
     })
   .until([&] { return done; });
 
+  // We bring down RECEIVER first because it keeps a reference to IDENTIFIER
+  // inside TRACKER. If we just killed TRACKER, it would in turn terminate
+  // IDENTIFIER and than RECEIVER with an error.
+  self->send_exit(r, exit::done);
+  VAST_DEBUG("waiting for RECEIVER to terminate");
+  self->receive([&](down_msg const& msg) { REQUIRE(msg.source == r); });
+
+  // Once RECEIVER is down, TRACKER can safely bring DOWN the remaining
+  // components.
+  VAST_DEBUG("sending EXIT to TRACKER");
   self->send_exit(t, exit::done);
   self->await_all_other_actors_done();
 }

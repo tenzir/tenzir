@@ -636,15 +636,15 @@ double index::progress(expression const& expr) const
   return parts * preds;
 }
 
-void index::at_down(down_msg const& msg)
+void index::at(down_msg const& msg)
 {
-  VAST_DEBUG(this, "got DOWN from", last_sender());
+  VAST_DEBUG(this, "got DOWN from", msg.source);
 
   auto found = false;
   for (auto i = active_.begin(); i != active_.end(); ++i)
   {
     auto& p = partitions_[*i];
-    if (p.actor == last_sender())
+    if (p.actor == msg.source)
     {
       p.actor = invalid_actor;
       active_.erase(i);
@@ -659,7 +659,7 @@ void index::at_down(down_msg const& msg)
     for (auto i = passive_.begin(); i != passive_.end(); ++i)
     {
       auto& p = partitions_[*i];
-      if (p.actor == last_sender())
+      if (p.actor == msg.source)
       {
         p.actor = invalid_actor;
         passive_.erase(i);
@@ -682,7 +682,7 @@ void index::at_down(down_msg const& msg)
   }
 }
 
-void index::at_exit(exit_msg const& msg)
+void index::at(exit_msg const& msg)
 {
   if (active_.empty())
     quit(msg.reason);
@@ -694,8 +694,6 @@ void index::at_exit(exit_msg const& msg)
 
 message_handler index::make_handler()
 {
-  trap_exit(true);
-
   VAST_VERBOSE(this, "caps partitions at", max_events_per_partition_, "events");
   VAST_VERBOSE(this, "uses", active_partitions_ << "/" << max_partitions_,
                "active partitions");
@@ -869,14 +867,14 @@ message_handler index::make_handler()
     {
       become(
           keep_behavior,
-          [=](down_msg const& d)
+          [=](down_msg const& msg)
           {
-            if (d.reason != exit::kill)
-              VAST_WARN(this, "got DOWN from", last_sender(),
-                        "with unexpected exit code", d.reason);
+            if (msg.reason != exit::kill)
+              VAST_WARN(this, "got DOWN from", msg.source,
+                        "with unexpected exit code", msg.reason);
 
             for (auto i = active_.begin(); i != active_.end(); ++i)
-              if (partitions_[*i].actor == last_sender())
+              if (partitions_[*i].actor == msg.source)
               {
                 active_.erase(i);
                 break;

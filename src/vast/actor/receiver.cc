@@ -9,20 +9,16 @@ using namespace caf;
 
 receiver::receiver()
 {
-  // We trap exit only to ensure that the sync_send call in the chunk handler
-  // doesn't get shot down from an exit message before having received an
-  // answer.
-  trap_exit(true);
-
-  attach_functor([=](uint32_t)
-                 {
-                   identifier_ = invalid_actor;
-                   archive_ = invalid_actor;
-                   index_ = invalid_actor;
-                  });
+  attach_functor(
+      [=](uint32_t)
+      {
+        identifier_ = invalid_actor;
+        archive_ = invalid_actor;
+        index_ = invalid_actor;
+      });
 }
 
-void receiver::at_down(down_msg const& msg)
+void receiver::at(down_msg const& msg)
 {
   if (msg.source == identifier_)
   {
@@ -39,11 +35,6 @@ void receiver::at_down(down_msg const& msg)
     VAST_VERBOSE(this, "got DOWN from index");
     index_ = invalid_actor;
   }
-}
-
-void receiver::at_exit(exit_msg const& msg)
-{
-  quit(msg.reason);
 }
 
 message_handler receiver::make_handler()

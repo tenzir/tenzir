@@ -15,7 +15,7 @@ namespace vast {
 
 namespace {
 
-struct keystroke_monitor : actor_mixin<keystroke_monitor, sentinel>
+struct keystroke_monitor : default_actor
 {
   keystroke_monitor(actor sink)
     : sink_{sink}
@@ -36,7 +36,7 @@ struct keystroke_monitor : actor_mixin<keystroke_monitor, sentinel>
         });
   }
 
-  message_handler make_handler()
+  message_handler make_handler() override
   {
     return
     {
@@ -64,7 +64,7 @@ struct keystroke_monitor : actor_mixin<keystroke_monitor, sentinel>
     };
   };
 
-  std::string name() const
+  std::string name() const override
   {
     return "keystroke-monitor";
   };
@@ -598,6 +598,19 @@ void console::result::deserialize(deserializer& source)
   source >> ast_ >> progress_ >> pos_;
 }
 
+void console::at(down_msg const& msg)
+{
+  if (msg.source == search_.address())
+  {
+    print(fail) << "search terminated" << std::endl;
+    quit(exit::error);
+  }
+  else
+  {
+    VAST_DEBUG(this, "got DOWN from query", msg.source);
+    remove(msg.source);
+  }
+}
 
 message_handler console::make_handler()
 {
@@ -614,17 +627,6 @@ message_handler console::make_handler()
 
   keystroke_monitor_ = spawn<keystroke_monitor, detached+linked>(this);
 
-  auto remove = [=](actor_addr doomed)
-  {
-    if (connected_.count(doomed))
-    {
-      if (active_->size() == 0)
-        unfollow();
-
-      connected_.erase(doomed);
-    }
-  };
-
   attach_functor(
       [=](uint32_t)
       {
@@ -635,19 +637,6 @@ message_handler console::make_handler()
 
   return
   {
-    [=](down_msg const&)
-    {
-      if (last_sender() == search_.address())
-      {
-        print(fail) << "search terminated" << std::endl;
-        quit(exit::error);
-      }
-      else
-      {
-        VAST_DEBUG(this, "got DOWN from query", last_sender());
-        remove(last_sender());
-      }
-    },
     [=](error const& e)
     {
       print(fail) << e << std::endl;
@@ -989,6 +978,15 @@ void console::unfollow()
   following_ = false;
   send(keystroke_monitor_, atom("stop"));
   prompt();
+}
+
+void console::remove(actor_addr const& doomed)
+{
+  if (! connected_.count(doomed))
+    return;
+  if (active_->size() == 0)
+    unfollow();
+  connected_.erase(doomed);
 }
 
 } // namespace vast

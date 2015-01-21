@@ -7,74 +7,55 @@
 namespace vast {
 
 /// Relays a message to one specific worker in a round-robin fashion.
-class load_balancer : public actor_mixin<replicator, flow_controlled>
+class load_balancer : public flow_controlled_actor
 {
 public:
   load_balancer()
   {
+    trap_unexpected(false);
     attach_functor(
-        [=](uint32_t reason)
+        [=](uint32_t)
         {
-          for (auto& a : workers_)
-            anon_send_exit(a, reason);
           workers_.clear();
-          overloaded.clear();
+          overloaded_.clear();
         });
   }
 
-  void at_down(down_msg const& down)
+  void at(caf::down_msg const& msg) override
   {
     workers_.erase(
         std::remove_if(
             workers_.begin(),
             workers_.end(),
-            [=](actor const& a) { return a == last_sender() }),
+            [=](caf::actor const& a) { return a == last_sender(); }),
         workers_.end());
 
     overloaded_.erase(
         std::remove_if(
             overloaded_.begin(),
             overloaded_.end(),
-            [=](actor const& a) { return a == last_sender() }),
+            [=](caf::actor_addr const& addr) { return addr == last_sender(); }),
         overloaded_.end());
 
     if (workers_.empty())
-      quit(down.reason);
+      quit(msg.reason);
     else if (i_ == workers_.size())
       i_ = 0;
   }
 
-  void on_overload(base_actor* self)
+  void on_overload() override
   {
-    using namespace caf;
-    VAST_DEBUG(self, "inserts", a, "into overload set");
-    overloaded_.insert(a);
-
+    VAST_DEBUG(this, "inserts", last_sender(), "into overload set");
+    overloaded_.insert(last_sender());
     if (overloaded_.size() < workers_.size())
       return;
-
-    flow_controlled::on_overload();
-
-    self->become(
-        keep_behavior,
-        [=](flow_control::overload const&)
-        {
-          VAST_DEBUG(self, "ignores overload signal");
-        },
-        [=](flow_control::underload const&)
-        {
-          VAST_DEBUG(self, "removes", last_sender(), "from overload set");
-          overloaded_.erase(last_sender());
-          flow_controlled::on_underload();
-          VAST_DEBUG(self, "unbecomes overloaded");
-          unbecome();
-        });
+    become_overloaded();
   }
 
-  void on_underload(base_actor* self)
+  void on_underload() override
   {
-    VAST_DEBUG(self, "removes", self->last_sender(), "from overload set");
-    overloaded_.erase(self->last_sender());
+    VAST_DEBUG(this, "removes", last_sender(), "from overload set");
+    overloaded_.erase(last_sender());
   }
 
   caf::message_handler make_handler()
@@ -88,6 +69,10 @@ public:
         monitor(a);
         workers_.push_back(std::move(a));
       },
+      on(atom("workers")) >> [=]
+      {
+        return workers_;
+      },
       others() >> [=]
       {
         assert(! workers_.empty());
@@ -98,7 +83,6 @@ public:
           i_ %= workers_.size();
         }
         while (overloaded_.contains(next.address()));
-
         forward_to(next);
       }
     };

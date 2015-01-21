@@ -12,7 +12,7 @@
 namespace vast {
 
 /// A console-based, interactive query client.
-struct console : actor_mixin<console, sentinel>
+struct console : default_actor
 {
   struct options
   {
@@ -122,8 +122,9 @@ struct console : actor_mixin<console, sentinel>
   /// @param dir The directory where to save state.
   console(caf::actor search, path dir);
 
-  caf::message_handler make_handler();
-  std::string name() const;
+  void at(caf::down_msg const& msg) override;
+  caf::message_handler make_handler() override;
+  std::string name() const override;
 
   /// Prints status information to standard error.
   std::ostream& print(print_mode mode);
@@ -137,6 +138,8 @@ struct console : actor_mixin<console, sentinel>
 
   /// Leaves the query control mode.
   void unfollow();
+
+  void remove(caf::actor_addr const& doomed);
 
   path dir_;
   intrusive_ptr<result> active_;

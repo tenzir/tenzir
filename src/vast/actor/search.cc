@@ -13,31 +13,42 @@ using namespace caf;
 search::search()
 {
   attach_functor(
-      [=](uint32_t reason)
+      [=](uint32_t)
       {
         archive_ = invalid_actor;
         index_ = invalid_actor;
-        for (auto& p : clients_)
-          for (auto& q : p.second.queries)
-            anon_send_exit(q, reason);
+        clients_.clear();
       });
+}
+
+void search::at(exit_msg const& msg)
+{
+  for (auto& p : clients_)
+    for (auto& q : p.second.queries)
+    {
+      VAST_DEBUG(this, "sends EXIT to query", q);
+      send_exit(q, msg.reason);
+    }
+
+  quit(msg.reason);
+}
+
+void search::at(down_msg const& msg)
+{
+  VAST_INFO(this, "got disconnect from client", msg.source);
+  for (auto& q : clients_[msg.source].queries)
+  {
+    VAST_DEBUG(this, "sends EXIT to query", q);
+    send_exit(q, msg.reason);
+  }
+
+  clients_.erase(last_sender());
 }
 
 message_handler search::make_handler()
 {
   return
   {
-    [=](down_msg const& d)
-    {
-      VAST_INFO(this, "got disconnect from client", last_sender());
-      for (auto& q : clients_[last_sender()].queries)
-      {
-        VAST_DEBUG(this, "sends EXIT to query", q);
-        send_exit(q, d.reason);
-      }
-
-      clients_.erase(last_sender());
-    },
     on(atom("add"), atom("archive"), arg_match) >> [=](actor const& a)
     {
       VAST_DEBUG(this, "adds archive", a);

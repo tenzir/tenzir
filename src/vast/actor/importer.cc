@@ -21,10 +21,48 @@ importer::importer(path dir, uint64_t batch_size, io::compression method)
       });
 }
 
+void importer::at(exit_msg const& msg)
+{
+  if (source_)
+    // Tell the source to exit, it will in turn propagate the exit
+    // message to the chunkifier.
+    send_exit(source_, exit::stop);
+  else
+    // If we have no source, we just tell the chunkifier to exit.
+    send_exit(chunkifier_, msg.reason);
+}
+
+void importer::at(down_msg const& msg)
+{
+  if (last_sender() == chunkifier_)
+  {
+    chunkifier_ = invalid_actor;
+    become(terminating_);
+  }
+  else
+  {
+    auto i = std::find_if(
+        sinks_.begin(),
+        sinks_.end(),
+        [&](caf::actor const& a) { return a == msg.source; });
+
+    assert(i != sinks_.end());
+
+    size_t idx = i - sinks_.begin();
+    if (current_ > idx)
+      --current_;
+
+    VAST_INFO(this, "removes sink", msg.source);
+    sinks_.erase(i);
+
+    VAST_VERBOSE(this, "has", sinks_.size(), "sinks remaining");
+    if (sinks_.empty())
+      become(terminating_);
+  }
+}
+
 message_handler importer::make_handler()
 {
-  trap_exit(true);
-
   chunkifier_ =
     spawn<sink::chunkifier, monitored>(this, batch_size_, compression_);
 
@@ -35,48 +73,8 @@ message_handler importer::make_handler()
     ++stored_;
   }
 
-  auto on_exit = [=](exit_msg const& e)
-  {
-    if (source_)
-      // Tell the source to exit, it will in turn propagate the exit
-      // message to the chunkifier.
-      send_exit(source_, exit::stop);
-    else
-      // If we have no source, we just tell the chunkifier to exit.
-      send_exit(chunkifier_, e.reason);
-  };
-
   ready_ =
   {
-    on_exit,
-    [=](down_msg const&)
-    {
-      if (last_sender() == chunkifier_)
-      {
-        chunkifier_ = invalid_actor;
-        become(terminating_);
-      }
-      else
-      {
-        auto i = std::find_if(
-            sinks_.begin(),
-            sinks_.end(),
-            [=](caf::actor const& a) { return a == last_sender(); });
-
-        assert(i != sinks_.end());
-
-        size_t idx = i - sinks_.begin();
-        if (current_ > idx)
-          --current_;
-
-        VAST_INFO(this, "removes sink", last_sender());
-        sinks_.erase(i);
-
-        VAST_VERBOSE(this, "has", sinks_.size(), "sinks remaining");
-        if (sinks_.empty())
-          become(terminating_);
-      }
-    },
     on(atom("submit")) >> [=]
     {
       for (auto& basename : orphaned_)
@@ -134,7 +132,7 @@ message_handler importer::make_handler()
 
   paused_ =
   {
-    on_exit,
+    [=](exit_msg const& msg) { at(msg); },
     [=](flow_control::overload)
     {
       VAST_DEBUG(this, "ignores overload signal");

@@ -7,21 +7,21 @@
 namespace vast {
 
 /// Replicates a message by relaying it to a set of workers.
-class replicator : public actor_mixin<replicator, flow_controlled>
+class replicator : public flow_controlled_actor
 {
 public:
   replicator()
   {
-    attach_functor(
-        [=](uint32_t reason)
-        {
-          for (auto& a : workers_)
-            anon_send_exit(a, reason);
-          workers_.clear();
-        });
+    trap_unexpected(false);
   }
 
-  void at_down(caf::down_msg const& down)
+  void at(caf::exit_msg const& msg) override
+  {
+    workers_.clear();
+    quit(msg.reason);
+  }
+
+  void at(caf::down_msg const& msg) override
   {
     workers_.erase(
         std::remove_if(
@@ -31,10 +31,10 @@ public:
         workers_.end());
 
     if (workers_.empty())
-      quit(down.reason);
+      quit(msg.reason);
   }
 
-  caf::message_handler make_handler()
+  caf::message_handler make_handler() override
   {
     using namespace caf;
 
@@ -46,14 +46,16 @@ public:
         monitor(a);
         workers_.push_back(std::move(a));
       },
+      on(atom("workers")) >> [=]
+      {
+        return workers_;
+      },
       others() >> [=]
       {
         for (auto& a : workers_)
           // FIXME: use a method of sending appropriate for 1-n communication.
           //send_tuple_as(last_sender(), a, last_dequeued());
           forward_to(a);
-
-        return workers_;
       }
     };
   }

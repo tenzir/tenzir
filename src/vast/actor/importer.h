@@ -11,7 +11,7 @@
 namespace vast {
 
 /// Manages sources which produce events.
-class importer : public actor_mixin<importer, sentinel>
+class importer : public default_actor
 {
 public:
   /// Spawns an importer.
@@ -21,8 +21,10 @@ public:
   /// @param method The compression method to use for the chunkifier.
   importer(path dir, uint64_t batch_size, io::compression method);
 
-  caf::message_handler make_handler();
-  std::string name() const;
+  void at(caf::exit_msg const& msg) override;
+  void at(caf::down_msg const& msg) override;
+  caf::message_handler make_handler() override;
+  std::string name() const override;
 
 private:
   path dir_;

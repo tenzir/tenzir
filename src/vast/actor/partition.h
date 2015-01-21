@@ -13,7 +13,7 @@
 namespace vast {
 
 /// A horizontal partition of the index.
-class partition : public actor_mixin<partition, flow_controlled, sentinel>
+class partition : public flow_controlled_actor
 {
 public:
   struct meta_data : util::equality_comparable<meta_data>
@@ -36,10 +36,10 @@ public:
   /// @param batch_size The number of events to dechunkify at once.
   partition(path const& index_dir, uuid id, size_t batch_size);
 
-  void at_down(caf::down_msg const& msg);
-  void at_exit(caf::exit_msg const& msg);
-  caf::message_handler make_handler();
-  std::string name() const;
+  void at(caf::down_msg const& msg) override;
+  void at(caf::exit_msg const& msg) override;
+  caf::message_handler make_handler() override;
+  std::string name() const override;
 
 private:
   struct statistics

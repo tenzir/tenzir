@@ -1,6 +1,5 @@
 #include "vast/actor/tracker.h"
 #include "vast/actor/identifier.h"
-#include "vast/actor/replicator.h"
 
 #include <caf/all.hpp>
 
@@ -11,7 +10,6 @@ namespace vast {
 tracker::tracker(path dir)
   : dir_{std::move(dir)}
 {
-  trap_exit(true);
   attach_functor(
       [=](uint32_t)
       {
@@ -19,7 +17,7 @@ tracker::tracker(path dir)
       });
 }
 
-void tracker::at_down(caf::down_msg const& msg)
+void tracker::at(caf::down_msg const& msg)
 {
   for (auto i = actors_.begin(); i != actors_.end(); ++i)
     if (i->second.actor == msg.source)
@@ -30,7 +28,7 @@ void tracker::at_down(caf::down_msg const& msg)
     }
 }
 
-void tracker::at_exit(caf::exit_msg const& msg)
+void tracker::at(caf::exit_msg const& msg)
 {
   for (auto& p : actors_)
     send_exit(p.second.actor, msg.reason);

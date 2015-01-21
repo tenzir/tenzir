@@ -9,7 +9,7 @@
 namespace vast {
 
 /// A simple CPU profiler.
-class profiler : public actor_mixin<profiler, sentinel>
+class profiler : public default_actor
 {
 public:
   /// A resoure measurement.
@@ -31,8 +31,8 @@ public:
   /// @param secs The number of seconds between subsequent measurements.
   profiler(path log_dir, std::chrono::seconds secs);
 
-  caf::message_handler make_handler();
-  std::string name() const;
+  caf::message_handler make_handler() override;
+  std::string name() const override;
 
 private:
   path const log_dir_;

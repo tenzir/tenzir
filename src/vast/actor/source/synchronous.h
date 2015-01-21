@@ -11,22 +11,22 @@ namespace source {
 
 /// A synchronous source that extracts events one by one.
 template <typename Derived>
-struct synchronous : public actor_mixin<synchronous<Derived>, sentinel>
+struct synchronous : public default_actor
 {
 public:
-  caf::message_handler make_handler()
+  void at(caf::exit_msg const& msg) override
+  {
+    send_events();
+    this->quit(msg.reason);
+  }
+
+  caf::message_handler make_handler() override
   {
     using namespace caf;
-    this->trap_exit(true);
     this->attach_functor([=](uint32_t) { sink_ = invalid_actor; });
 
     return
     {
-      [=](exit_msg const& e)
-      {
-        send_events();
-        this->quit(e.reason);
-      },
       on(atom("batch size"), arg_match) >> [=](uint64_t batch_size)
       {
         VAST_DEBUG(this, "sets batch size to", batch_size);

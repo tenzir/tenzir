@@ -23,7 +23,8 @@ public:
 
   bool process(event const& e);
   void finalize();
-  std::string name() const;
+  void at(caf::exit_msg const& msg) override;
+  std::string name() const override;
 
 private:
   caf::actor upstream_;

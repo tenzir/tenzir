@@ -14,7 +14,7 @@ namespace vast {
 
 /// Receives index hits, looks up the corresponding chunks in the archive, and
 /// filters out results which it then sends to a sink.
-class query : public actor_mixin<query>
+class query : public default_actor
 {
 public:
   /// Spawns a query actor.
@@ -23,8 +23,8 @@ public:
   /// @param ast The query expression ast.
   query(caf::actor archive, caf::actor sink, expression ast);
 
-  caf::message_handler make_handler();
-  std::string name() const;
+  caf::message_handler make_handler() override;
+  std::string name() const override;
 
 private:
   using bitstream_type = default_bitstream;

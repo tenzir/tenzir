@@ -9,7 +9,7 @@
 namespace vast {
 
 /// Manages progress in a hierarchical task tree.
-class task_tree : public actor_mixin<task_tree, sentinel>
+class task_tree : public default_actor
 {
 public:
   /// Spawns a task tree.
@@ -19,7 +19,7 @@ public:
     degree_[root.address()] = 0;
   }
 
-  caf::message_handler make_handler()
+  caf::message_handler make_handler() override
   {
     using namespace caf;
 

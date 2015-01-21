@@ -9,20 +9,13 @@ namespace sink {
 
 /// The base class for event sinks.
 template <typename Derived>
-struct base : public actor_mixin<base<Derived>, sentinel>
+struct base : public default_actor
 {
-  caf::message_handler make_handler()
+  caf::message_handler make_handler() override
   {
     using namespace caf;
-    this->trap_exit(true);
-
     return
     {
-      [=](exit_msg const& msg)
-      {
-        static_cast<Derived*>(this)->finalize();
-        this->quit(msg.reason);
-      },
       [=](event const& e)
       {
         if (! static_cast<Derived*>(this)->process(e))
@@ -42,11 +35,6 @@ struct base : public actor_mixin<base<Derived>, sentinel>
           }
       }
     };
-  }
-
-  void finalize()
-  {
-    // Do nothing, allow children to overwrite.
   }
 };
 

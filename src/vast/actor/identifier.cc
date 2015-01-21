@@ -14,7 +14,7 @@ identifier::identifier(path dir)
 {
 }
 
-void identifier::at_exit(exit_msg const& msg)
+void identifier::at(exit_msg const& msg)
 {
   if (save())
   {
@@ -29,8 +29,6 @@ void identifier::at_exit(exit_msg const& msg)
 
 message_handler identifier::make_handler()
 {
-  trap_exit(true);
-
   if (exists(dir_ / "id"))
   {
     std::ifstream file{to_string(dir_ / "id")};

@@ -47,7 +47,7 @@ bool chunkifier::process(event const& e)
   return true;
 }
 
-void chunkifier::finalize()
+void chunkifier::at(caf::exit_msg const& msg)
 {
   writer_->flush();
   if (chunk_->events() > 0)
@@ -57,6 +57,8 @@ void chunkifier::finalize()
 
   if (total_events_ > 0)
     VAST_VERBOSE(this, "processed", total_events_, "events");
+
+  quit(msg.reason);
 }
 
 std::string chunkifier::name() const

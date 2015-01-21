@@ -161,9 +161,9 @@ partition::partition(path const& index_dir, uuid id, size_t batch_size)
     });
 }
 
-void partition::at_down(down_msg const&)
+void partition::at(down_msg const& msg)
 {
-  if (last_sender() == dechunkifier_)
+  if (msg.source == dechunkifier_)
   {
     dechunkifier_ = invalid_actor;
     chunks_.pop();
@@ -178,10 +178,10 @@ void partition::at_down(down_msg const&)
   }
   else
   {
-    VAST_DEBUG(this, "got DOWN from", last_sender());
-    stats_.erase(last_sender());
+    VAST_DEBUG(this, "got DOWN from", msg.source);
+    stats_.erase(msg.source);
     for (auto i = indexers_.begin(); i != indexers_.end(); ++i)
-      if (i->second == last_sender())
+      if (i->second == msg.source)
       {
         indexers_.erase(i);
         break;
@@ -189,7 +189,7 @@ void partition::at_down(down_msg const&)
   }
 }
 
-void partition::at_exit(exit_msg const& msg)
+void partition::at(exit_msg const& msg)
 {
   if (msg.reason == exit::kill)
   {

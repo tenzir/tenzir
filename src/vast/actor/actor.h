@@ -133,24 +133,25 @@ inline char const* render_exit_reason(uint32_t reason)
 }
 
 /// The base class for VAST actors.
-struct base_actor : caf::event_based_actor
+class default_actor : public caf::event_based_actor
 {
-  virtual caf::behavior act() = 0;
+public:
+  default_actor()
+  {
+    trap_exit(true);
+    trap_unexpected(true);
+  }
 
   caf::behavior make_behavior() override
   {
     VAST_DEBUG(this, "spawned");
-    return act();
-  }
-
-  virtual std::string name() const
-  {
-    return "actor";
-  }
-
-  std::string description() const
-  {
-    return name() + '#' + std::to_string(id());
+    auto system = make_exit_handler().or_else(make_down_handler());
+    auto internal = make_internal_handler();
+    auto client = make_handler();
+    auto handler = system.or_else(internal).or_else(client);
+    if (trap_unexpected())
+      handler = handler.or_else(make_unexpected_handler());
+    return handler;
   }
 
   void on_exit()
@@ -158,183 +159,114 @@ struct base_actor : caf::event_based_actor
     VAST_DEBUG(this, "terminated (" <<
                render_exit_reason(planned_exit_reason()) << ')');
   }
+
+  virtual std::string name() const
+  {
+    return "actor";
+  }
+
+  virtual std::string description() const
+  {
+    return name() + '#' + std::to_string(id());
+  }
+
+protected:
+  virtual caf::message_handler make_handler() = 0;
+
+  // For derived actors that need to inject a custom handler.
+  virtual caf::message_handler make_internal_handler()
+  {
+    return {};
+  }
+
+  bool trap_unexpected()
+  {
+    return flags_ &= 0x01;
+  }
+
+  void trap_unexpected(bool flag)
+  {
+    if (flag)
+      flags_ |= 0x01;
+    else
+      flags_ &= ~0x01;
+  }
+
+  virtual void at(caf::exit_msg const& msg)
+  {
+    quit(msg.reason);
+  }
+
+  virtual void at(caf::down_msg const&)
+  {
+    // Nothing by default.
+  }
+
+  virtual caf::message_handler make_exit_handler()
+  {
+    return [=](caf::exit_msg const& msg) { at(msg); };
+  }
+
+  virtual caf::message_handler make_down_handler()
+  {
+    return [=](caf::down_msg const& msg) { at(msg); };
+  }
+
+private:
+  caf::message_handler make_unexpected_handler()
+  {
+    return
+    {
+      caf::others() >> [=]
+      {
+        VAST_WARN(this, "got unexpected message from",
+                  last_sender() << ':', to_string(last_dequeued()));
+      }
+    };
+  }
+
+  // To keep actors as space-efficient as possible, we use this low-level
+  // mechanism to customize the behavior.
+  int flags_ = 0;
 };
 
-inline std::ostream& operator<<(std::ostream& out, base_actor const& a)
+inline std::ostream& operator<<(std::ostream& out, default_actor const& a)
 {
   out << a.description();
   return out;
 }
 
 template <typename Stream>
-inline Stream& operator<<(Stream& out, base_actor const* a)
+inline Stream& operator<<(Stream& out, default_actor const* a)
 {
   assert(a != nullptr);
   out << *a;
   return out;
 }
 
-// A composable, stateful CAF message handler.
-struct component
+/// An actor which can participate in a flow-controlled setting.
+class flow_controlled_actor : public default_actor
 {
-  void at_down(base_actor*, caf::down_msg const&) { }
-  void at_exit(base_actor*, caf::exit_msg const&) { }
-};
+protected:
+  // Hooks for clients.
+  virtual void on_announce(caf::actor const&) { }
+  virtual void on_overload() { }
+  virtual void on_underload() { }
 
-/// An actor enhanced with a sequence of components.
-template <typename Derived, typename... Components>
-struct actor_mixin : base_actor, Components...
-{
-  caf::behavior act() override
+  caf::message_handler make_down_handler() final
   {
-    using namespace caf;
-
-    message_handler system =
-    {
-      [=](down_msg const& d)
+    return
+      [=](caf::down_msg const& msg)
       {
-        exec_derived_down(d);
-        exec_down<Components...>(d);
-      },
-      [=](exit_msg const& e)
-      {
-        exec_derived_exit(e);
-        exec_exit<Components...>(e);
-      }
-    };
-
-    auto first = static_cast<Derived*>(this)->make_handler();
-    auto rest = build_handler<Components...>();
-
-    return first.or_else(system).or_else(rest);
-  }
-
-  void at_down(caf::down_msg const&) { }
-  void at_exit(caf::exit_msg const&) { }
-
-private:
-  void exec_derived_down(caf::down_msg const& down)
-  {
-    static_cast<Derived*>(this)->at_down(down);
-  }
-
-  void exec_derived_exit(caf::exit_msg const& msg)
-  {
-    static_cast<Derived*>(this)->at_exit(msg);
-  }
-
-  template <typename... Cs>
-  std::enable_if_t<sizeof...(Cs) == 0, caf::message_handler> build_handler()
-  {
-    return {};
-  }
-
-  template <typename C>
-  caf::message_handler build_handler()
-  {
-    return static_cast<C*>(this)->make_handler(static_cast<base_actor*>(this));
-  }
-
-  template <typename C, typename... Cs>
-  std::enable_if_t<sizeof...(Cs) != 0, caf::message_handler>
-  build_handler()
-  {
-    return build_handler<C>().or_else(build_handler<Cs...>());
-  }
-
-  template <typename... Cs>
-  std::enable_if_t<sizeof...(Cs) == 0> exec_down(caf::down_msg const&)
-  {
-  }
-
-  template <typename C>
-  void exec_down(caf::down_msg const& msg)
-  {
-    C::at_down(this, msg);
-  }
-
-  template <typename C, typename... Cs>
-  std::enable_if_t<sizeof...(Cs) != 0>
-  exec_down(caf::down_msg const& msg)
-  {
-    exec_down<C>(msg);
-    exec_down<Cs...>(msg);
-  }
-
-  template <typename... Cs>
-  std::enable_if_t<sizeof...(Cs) == 0> exec_exit(caf::exit_msg const&)
-  {
-  }
-
-  template <typename C>
-  void exec_exit(caf::exit_msg const& msg)
-  {
-    C::at_exit(this, msg);
-  }
-
-  template <typename C, typename... Cs>
-  std::enable_if_t<sizeof...(Cs) != 0>
-  exec_exit(caf::exit_msg const& msg)
-  {
-    exec_exit<C>(msg);
-    exec_exit<Cs...>(msg);
-  }
-};
-
-/// Handles all unexpected messages.
-struct sentinel : component
-{
-  void on_unexpected(base_actor* self, caf::message const& msg)
-  {
-    VAST_WARN(self, "got unexpected message from",
-              self->last_sender() << ':', to_string(msg));
-  }
-
-  caf::message_handler make_handler(base_actor* self)
-  {
-    using namespace caf;
-    return { others() >> [=] { on_unexpected(self, self->last_dequeued()); } };
-  }
-};
-
-/// Handles flow-control signals.
-struct flow_controlled : component
-{
-  void at_down(base_actor* self, caf::down_msg const& msg)
-  {
-    VAST_DEBUG(self, "unregisters", msg.source,
-               "as upstream flow-control node");
-    auto i = std::find_if(
-        upstream_.begin(),
-        upstream_.end(),
-        [&](caf::actor const& a) { return a == msg.source; });
-
-    if (i != upstream_.end())
-      upstream_.erase(i);
-  }
-
-  void on_announce(base_actor* self, caf::actor const& upstream)
-  {
-    VAST_DEBUG(self, "registers", upstream, "as upstream flow-control node");
-    assert(self != upstream);
-    self->monitor(upstream);
-    upstream_.insert(upstream);
-  }
-
-  void on_overload(base_actor* self)
-  {
-    VAST_DEBUG(self, "got overload signal");
-    for (auto& a : upstream_)
-      caf::send_tuple_as(self, a, caf::message_priority::high,
-                         self->last_dequeued());
-  }
-
-  void on_underload(base_actor* self)
-  {
-    VAST_DEBUG(self, "got underload signal");
-    for (auto& a : upstream_)
-      caf::send_tuple_as(self, a, caf::message_priority::high,
-                         self->last_dequeued());
+        at(msg);
+        VAST_DEBUG(this, "deregisters upstream flow-control node", msg.source);
+        auto i = std::find_if(
+            upstream_.begin(),
+            upstream_.end(),
+            [&](caf::actor const& a) { return a == msg.source; });
+        if (i != upstream_.end())
+          upstream_.erase(i);
+      };
   }
 
   auto upstream() const
@@ -342,25 +274,58 @@ struct flow_controlled : component
     return upstream_;
   }
 
-  caf::message_handler make_handler(base_actor* self)
+  void become_overloaded()
   {
+    VAST_DEBUG(this, "becomes overloaded");
+    become(
+      caf::keep_behavior,
+      [=](flow_control::overload)
+      {
+        VAST_DEBUG(this, "ignores overload signal");
+      },
+      [=](flow_control::underload)
+      {
+        VAST_DEBUG(this, "unbecomes overloaded");
+        on_underload();
+        unbecome();
+      });
+  }
+
+  caf::message_handler make_internal_handler() final
+  {
+    using namespace caf;
     return
     {
       [=](flow_control::announce const& a)
       {
-        on_announce(self, a.source);
+        assert(this != a.source);
+        on_announce(a.source);
+        VAST_DEBUG(this, "registers", a.source, "as upstream flow-control node");
+        monitor(a.source);
+        upstream_.insert(a.source);
       },
-      [=](flow_control::overload const&)
+      [=](flow_control::overload)
       {
-        on_overload(self);
+        on_overload();
+        for (auto& a : upstream_)
+        {
+          VAST_DEBUG(this, "propagates overload signal to", a);
+          send_tuple_as(this, a, message_priority::high, last_dequeued());
+        }
       },
-      [=](flow_control::underload const&)
+      [=](flow_control::underload)
       {
-        on_underload(self);
+        on_underload();
+        for (auto& a : upstream_)
+        {
+          VAST_DEBUG(this, "propagates underload signal to", a);
+          send_tuple_as(this, a, message_priority::high, last_dequeued());
+        }
       }
     };
   }
 
+private:
   util::flat_set<caf::actor> upstream_;
 };
 

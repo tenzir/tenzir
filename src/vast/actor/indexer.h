@@ -18,7 +18,7 @@ namespace vast {
 /// @tparam Derived The CRTP client.
 /// @tparam BitmapIndex The bitmap index type.
 template <typename Derived, typename BitmapIndex>
-class indexer : public actor_mixin<indexer<Derived, BitmapIndex>, sentinel>
+class indexer : public default_actor
 {
 public:
   /// Spawns a bitmap indexer.
@@ -29,10 +29,15 @@ public:
       bmi_{std::move(bmi)},
       stats_{std::chrono::seconds{1}}
   {
-    this->trap_exit(true);
+    this->attach_functor(
+        [=](uint32_t reason)
+        {
+          if (reason != exit::kill)
+            flush();
+        });
   }
 
-  caf::message_handler make_handler()
+  caf::message_handler make_handler() override
   {
     using namespace caf;
 
@@ -47,41 +52,8 @@ public:
                    '(' << bmi_.size(), "bits)");
     }
 
-    auto flush = [=]
-    {
-      auto size = static_cast<decltype(last_flush_)>(bmi_.size());
-      if (size > last_flush_)
-      {
-        auto attempt = io::archive(path_, size, bmi_);
-        if (! attempt)
-        {
-          VAST_ERROR(this, "failed to flush", size - last_flush_,
-                     "bits to", path_ << ':', attempt.error());
-          this->quit(exit::error);
-        }
-        else
-        {
-          VAST_DEBUG(this, "flushed bitmap index to", path_,
-                     '(' << (size - last_flush_) << '/' << size,
-                     "new/total bits)");
-          last_flush_ = size;
-        }
-      }
-    };
-
-    this->attach_functor(
-        [=](uint32_t reason)
-        {
-          if (reason != exit::kill)
-            flush();
-        });
-
     return
     {
-      [=](exit_msg const& msg)
-      {
-        this->quit(msg.reason);
-      },
       on(atom("flush"), arg_match) >> [=](actor const& task_tree)
       {
         flush();
@@ -122,6 +94,28 @@ public:
   }
 
 private:
+  void flush()
+  {
+    auto size = static_cast<decltype(last_flush_)>(bmi_.size());
+    if (size > last_flush_)
+    {
+      auto attempt = io::archive(path_, size, bmi_);
+      if (! attempt)
+      {
+        VAST_ERROR(this, "failed to flush", size - last_flush_,
+                   "bits to", path_ << ':', attempt.error());
+        this->quit(exit::error);
+      }
+      else
+      {
+        VAST_DEBUG(this, "flushed bitmap index to", path_,
+                   '(' << (size - last_flush_) << '/' << size,
+                   "new/total bits)");
+        last_flush_ = size;
+      }
+    }
+  };
+
   path const path_;
   BitmapIndex bmi_;
   uint64_t last_flush_ = 1;
@@ -149,7 +143,7 @@ struct event_name_indexer
       return error{"failed to append event name: ", e.type().name()};
   }
 
-  std::string name() const
+  std::string name() const override
   {
     return "name-bitmap-indexer";
   }
@@ -176,7 +170,7 @@ struct event_time_indexer
       return error{"failed to append event timestamp: ", e.timestamp()};
   }
 
-  std::string name() const
+  std::string name() const override
   {
     return "time-bitmap-indexer";
   }
@@ -229,7 +223,7 @@ struct event_data_indexer
     }
   }
 
-  std::string name() const
+  std::string name() const override
   {
     return "data-bitmap-indexer(" + to_string(offset_) + ')';
   }

@@ -15,6 +15,8 @@ query::query(actor archive, actor sink, expression ast)
     sink_{std::move(sink)},
     ast_{std::move(ast)}
 {
+  trap_exit(false);
+  trap_unexpected(false);
   attach_functor(
       [=](uint32_t)
       {

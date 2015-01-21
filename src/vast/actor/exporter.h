@@ -7,12 +7,12 @@
 namespace vast {
 
 /// An actor receiving events and dispatching them to registered sinks.
-class exporter : public actor_mixin<exporter, sentinel>
+class exporter : public default_actor
 {
 public:
-  void at_down(caf::down_msg const& msg);
-  caf::message_handler make_handler();
-  std::string name() const;
+  void at(caf::down_msg const& msg) override;
+  caf::message_handler make_handler() override;
+  std::string name() const override;
 
 private:
   std::set<caf::actor> sinks_;

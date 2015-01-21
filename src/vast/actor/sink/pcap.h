@@ -23,7 +23,7 @@ public:
   ~pcap();
 
   bool process(event const& e);
-  std::string name() const;
+  std::string name() const override;
 
 private:
   schema schema_;
