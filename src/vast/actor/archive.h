@@ -17,6 +17,16 @@ namespace vast {
 class archive : public actor_mixin<archive, flow_controlled, sentinel>
 {
 public:
+  struct chunk_compare
+  {
+    bool operator()(chunk const& lhs, chunk const& rhs) const
+    {
+      return lhs.meta().ids.find_first() < rhs.meta().ids.find_first();
+    };
+  };
+
+  using segment = util::flat_set<chunk, chunk_compare>;
+
   /// Spawns the archive.
   /// @param dir The root directory of the archive.
   /// @param capacity The number of segments to hold in memory.
@@ -28,16 +38,6 @@ public:
   std::string name() const;
 
 private:
-  struct chunk_compare
-  {
-    bool operator()(chunk const& lhs, chunk const& rhs) const
-    {
-      return lhs.meta().ids.find_first() < rhs.meta().ids.find_first();
-    };
-  };
-
-  using segment = util::flat_set<chunk, chunk_compare>;
-
   trial<void> store(segment s);
   trial<chunk> load(event_id eid);
   segment on_miss(uuid const& id);

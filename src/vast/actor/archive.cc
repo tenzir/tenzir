@@ -35,6 +35,7 @@ archive::archive(path dir, size_t capacity, size_t max_segment_size)
         VAST_ERROR(this, "failed to store segment meta data:", t.error());
         return;
       }
+      VAST_VERBOSE(this, "wrote meta data to:", dir / "meta.data");
     });
 }
 
@@ -55,6 +56,9 @@ caf::message_handler archive::make_handler()
   {
     [=](chunk const& chk)
     {
+      VAST_DEBUG(this, "got chunk [" << chk.meta().ids.find_first() << ',' <<
+                 (chk.meta().ids.find_last() + 1 ) << ')');
+
       if (! current_.empty()
           && current_size_ + chk.bytes() >= max_segment_size_)
       {
@@ -123,7 +127,6 @@ trial<void> archive::store(segment s)
   }
 
   cache_.insert(std::move(id), std::move(s));
-
   return nothing;
 }
 

@@ -2,7 +2,9 @@
 
 #include "vast/bitmap_index.h"
 #include "vast/configuration.h"
+#include "vast/event.h"
 #include "vast/filesystem.h"
+#include "vast/actor/archive.h"
 #include "vast/actor/program.h"
 #include "vast/io/serialization.h"
 
@@ -31,6 +33,10 @@ TEST("all-in-one import")
 
   anon_send(spawn<program>(cfg), atom("run"));
   await_all_actors_done();
+
+  //
+  // Check that indexes have been written successfully.
+  //
 
   path part;
   for (auto& p : directory{dir / "index"})
@@ -68,6 +74,31 @@ TEST("all-in-one import")
   REQUIRE(orig_p);
   CHECK((*orig_p)[0] == 1);
   CHECK((*orig_p)[1] == 0);
+
+  //
+  // Check that the archive has successfully stored the segment.
+  //
+
+  path segment_file;
+  for (auto& p : directory{dir / "archive"})
+    if (p.basename() != "meta.data")
+    {
+      segment_file = p;
+      break;
+    }
+  REQUIRE(! segment_file.empty());
+
+  archive::segment s;
+  REQUIRE(vast::io::unarchive(segment_file, s));
+  REQUIRE(s.size() == 1);
+  REQUIRE(s.front().events() == 2);
+
+  chunk::reader r{s.front()};
+  auto e = r.read();
+  REQUIRE(e);
+  auto rec = get<record>(*e);
+  REQUIRE(e);
+  CHECK(rec->at(1) == "VFU8tqz6is3");
 
   CHECK(rm(dir));
 }
