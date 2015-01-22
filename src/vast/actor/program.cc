@@ -225,8 +225,8 @@ trial<void> program::run()
     {
       receiver_ = spawn<receiver, linked>();
 
-      // TRACKER needs to remain alive at least as long as RECEIVER, because
-      // RECEIVER asks IDENTIFIER (which resides inside TRACKER) for chunk IDs.
+      // Whenever we have a RECEIVER, it initiates the shutdown because it
+      // depends on IDENTIFIER from inside TRACKER.
       unlink_from(tracker_);
 
       // If RECEIVER and TRACKER live in different processes, a failing
@@ -249,6 +249,12 @@ trial<void> program::run()
       {
         unlink_from(archive_);
         receiver_->link_to(archive_);
+        if (config_.check("tracker"))
+        {
+          tracker_->unlink_from(receiver_);
+          tracker_->link_to(archive_);
+        }
+
         self->sync_send(tracker_, atom("link"), receiver_name, archive_name)
           .await(ok_or_quit);
         if (abort)
@@ -259,12 +265,17 @@ trial<void> program::run()
       {
         unlink_from(index_);
         receiver_->link_to(index_);
+        if (config_.check("tracker"))
+        {
+          tracker_->unlink_from(receiver_);
+          tracker_->link_to(index_);
+        }
+
         self->sync_send(tracker_, atom("link"), receiver_name, index_name)
           .await(ok_or_quit);
         if (abort)
           return std::move(*abort);
       }
-
     }
 
     auto search_name = *config_.get("search.name");
@@ -340,7 +351,7 @@ trial<void> program::run()
         // If this program accomodates both IMPORTER and RECEIVER, we must
         // initiate the shutdown via IMPORTER to ensure proper delivery of
         // inflight chunks from IMPORTER to RECEIVER.
-        unlink_from(receiver_);
+        unlink_from(importer_);
         importer_->link_to(receiver_);
       }
 
