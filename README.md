@@ -41,17 +41,25 @@ Start the interactive console and submit a query:
 
 ## Installation
 
-VAST exists as [Docker container](https://registry.hub.docker.com/u/mavam/vast/):
+### Docker
+
+To get up and running quickly, use the [Docker
+container](https://registry.hub.docker.com/u/mavam/vast/):
 
     docker pull mavam/vast
-    docker run --rm -t -i mavam/vast /bin/bash
+    docker run --rm -ti mavam/vast
     > vast -h
 
-For instructions on how to build VAST manually, read on.
+### Source Build
 
-### Dependencies
+Building VAST takes the following steps:
 
-Required:
+    ./configure
+    make
+    make test
+    make install
+
+Required dependencies:
 
 - [Clang >= 3.4](http://clang.llvm.org/)
 - [CMake](http://www.cmake.org)
@@ -65,16 +73,6 @@ Optional:
 - [gperftools](http://code.google.com/p/google-perftools)
 - [Doxygen](http://www.doxygen.org)
 
-### Building
-
-After having installed the necessary dependencies, building VAST involves the
-following steps:
-
-    ./configure
-    make
-    make test
-    make install
-
 #### FreeBSD
 
 VAST development primarily takes place on FreeBSD because it ships with a C++14
@@ -86,8 +84,9 @@ follows:
 #### Linux
 
 To the best of our knowledge, no distribution currently comes with an apt
-compiler out of the box. On Debian-based distributions (e.g., Ubuntu 14.04.1),
-getting a working toolchain involves installing the following packages:
+compiler out of the box. On recent Debian-based distributions (e.g., Ubuntu
+14.04.1), getting a working toolchain involves installing the following
+packages:
 
     apt-get install cmake clang-3.5 libc++-dev libc++abi-dev \
       libboost-dev libpcap-dev libedit-dev libgoogle-perftools-dev
