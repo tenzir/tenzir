@@ -29,6 +29,7 @@ void configuration::initialize()
   b.add('f', "log-file", "log unit test output to file");
   b.add('k', "vast-keep-logs", "keep VAST's log directory after tests");
   b.add('l', "vast-log-dir", "VAST log directory").init("vast-unit-test-logs");
+  b.add('m', "max-runtime", "maximum runtime per unit test [20 secs]").init(20);
   b.add('n', "no-colors", "don't use colors when printing to console");
   b.add('s', "suites", "execute only matching suites").init(".*");
   b.add('S', "not-suites", "execute everything but matching suites").single();

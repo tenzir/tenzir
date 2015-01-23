@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <chrono>
 #include <regex>
+#include <thread>
 
 char const* unit::color::reset        = "\033[0m";
 char const* unit::color::black        = "\033[30m";
@@ -218,6 +219,8 @@ bool engine::run(configuration const& cfg)
     color::bold_white   = "";
   }
 
+  auto max_runtime = *cfg.as<size_t>("max-runtime");
+
   auto log_file = cfg.get("log-file");
   logger log{*cfg.as<int>("console-verbosity"),
              *cfg.as<int>("file-verbosity"),
@@ -279,6 +282,15 @@ bool engine::run(configuration const& cfg)
       auto start = std::chrono::steady_clock::now();
       try
       {
+        auto test_name = t->__name();
+        std::thread{[test_name, max_runtime] {
+          std::this_thread::sleep_for(std::chrono::seconds(max_runtime));
+          std::cerr
+            << "WATCHDOG: test " << test_name << " did not complete within "
+            << max_runtime << " seconds" << std::endl;
+          ::abort();
+        }}.detach();
+
         t->__run();
       }
       catch (require_error const& e)
