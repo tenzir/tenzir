@@ -66,48 +66,7 @@ TEST("bitwise total ordering")
   //print(1111.2);
 }
 
-TEST("basic bitmap")
-{
-  bitmap<int, null_bitstream> bm, bm2;
-  REQUIRE(bm.push_back(42));
-  REQUIRE(bm.push_back(84));
-  REQUIRE(bm.push_back(42));
-  REQUIRE(bm.push_back(21));
-  REQUIRE(bm.push_back(30));
-
-  CHECK(to_string(*bm[21]) == "00010");
-
-  CHECK(to_string(*bm[30]) == "00001");
-  CHECK(to_string(*bm[42]) == "10100");
-  CHECK(to_string(*bm[84]) == "01000");
-  CHECK(to_string(*bm[39]) == "00000");
-
-  CHECK(to_string(*bm.lookup(not_equal, 21)) == "11101");
-  CHECK(to_string(*bm.lookup(not_equal, 30)) == "11110");
-  CHECK(to_string(*bm.lookup(not_equal, 42)) == "01011");
-  CHECK(to_string(*bm.lookup(not_equal, 84)) == "10111");
-  CHECK(bm.lookup(not_equal, 13));
-  CHECK(to_string(*bm.lookup(not_equal, 13)) == "11111");
-
-  CHECK(bm.stretch(5));
-  CHECK(bm.size() == 10);
-
-  std::vector<uint8_t> buf;
-  io::archive(buf, bm);
-  io::unarchive(buf, bm2);
-  // The default bitmap storage is unordered, so the the following commented
-  // check may fail due to different underlying hash tables. However, the
-  // bitmaps should still be equal.
-  //CHECK(to_string(bm) == to_string(bm2));
-  CHECK(bm == bm2);
-  CHECK(bm.size() == bm2.size());
-  CHECK(to_string(*bm[21]) == to_string(*bm2[21]));
-  CHECK(to_string(*bm[30]) == to_string(*bm2[30]));
-  CHECK(to_string(*bm[42]) == to_string(*bm2[42]));
-  CHECK(to_string(*bm[84]) == to_string(*bm2[84]));
-}
-
-TEST("range coding")
+TEST("range bitslice coding")
 {
   range_bitslice_coder<uint8_t, null_bitstream> r;
 
@@ -188,7 +147,70 @@ TEST("range coding")
   }
 }
 
-// TODO: write unit tests for equality_bitslice_coder.
+TEST("equality bitslice coding")
+{
+  equality_bitslice_coder<int8_t, null_bitstream> c;
+  REQUIRE(c.encode(-127));
+  REQUIRE(c.encode(-42));
+  REQUIRE(c.encode(-3));
+  REQUIRE(c.encode(9));
+  REQUIRE(c.encode(10));
+  REQUIRE(c.encode(77));
+  REQUIRE(c.encode(99));
+  REQUIRE(c.encode(100));
+  REQUIRE(c.encode(128));
+
+  CHECK(to_string(*c.decode(-127, equal)) ==         "100000000");
+  CHECK(to_string(*c.decode(-42,  equal)) ==         "010000000");
+  CHECK(to_string(*c.decode(-3,   equal)) ==         "001000000");
+  CHECK(to_string(*c.decode(9,    equal)) ==         "000100000");
+  CHECK(to_string(*c.decode(10,   equal)) ==         "000010000");
+  CHECK(to_string(*c.decode(77,   equal)) ==         "000001000");
+  CHECK(to_string(*c.decode(99,   equal)) ==         "000000100");
+  CHECK(to_string(*c.decode(100,  equal)) ==         "000000010");
+  CHECK(to_string(*c.decode(128,  equal)) ==         "000000001");
+}
+
+TEST("basic bitmap")
+{
+  bitmap<int, null_bitstream> bm, bm2;
+  REQUIRE(bm.push_back(42));
+  REQUIRE(bm.push_back(84));
+  REQUIRE(bm.push_back(42));
+  REQUIRE(bm.push_back(21));
+  REQUIRE(bm.push_back(30));
+
+  CHECK(to_string(*bm[21]) == "00010");
+
+  CHECK(to_string(*bm[30]) == "00001");
+  CHECK(to_string(*bm[42]) == "10100");
+  CHECK(to_string(*bm[84]) == "01000");
+  CHECK(to_string(*bm[39]) == "00000");
+
+  CHECK(to_string(*bm.lookup(not_equal, 21)) == "11101");
+  CHECK(to_string(*bm.lookup(not_equal, 30)) == "11110");
+  CHECK(to_string(*bm.lookup(not_equal, 42)) == "01011");
+  CHECK(to_string(*bm.lookup(not_equal, 84)) == "10111");
+  CHECK(bm.lookup(not_equal, 13));
+  CHECK(to_string(*bm.lookup(not_equal, 13)) == "11111");
+
+  CHECK(bm.stretch(5));
+  CHECK(bm.size() == 10);
+
+  std::vector<uint8_t> buf;
+  io::archive(buf, bm);
+  io::unarchive(buf, bm2);
+  // The default bitmap storage is unordered, so the the following commented
+  // check may fail due to different underlying hash tables. However, the
+  // bitmaps should still be equal.
+  //CHECK(to_string(bm) == to_string(bm2));
+  CHECK(bm == bm2);
+  CHECK(bm.size() == bm2.size());
+  CHECK(to_string(*bm[21]) == to_string(*bm2[21]));
+  CHECK(to_string(*bm[30]) == to_string(*bm2[30]));
+  CHECK(to_string(*bm[42]) == to_string(*bm2[42]));
+  CHECK(to_string(*bm[84]) == to_string(*bm2[84]));
+}
 
 namespace {
 
@@ -198,7 +220,7 @@ template <
 >
 auto merge_test()
 {
-  bitmap<uint8_t, Bitstream, Coder> bm1, bm2;
+  bitmap<int8_t, Bitstream, Coder> bm1, bm2;
   REQUIRE(bm1.push_back(6));
   REQUIRE(bm1.push_back(9));
   REQUIRE(bm1.push_back(10));
@@ -227,7 +249,7 @@ template <
 >
 auto append_test()
 {
-  bitmap<int, Bitstream, Coder> bm1, bm2;
+  bitmap<int16_t, Bitstream, Coder> bm1, bm2;
   REQUIRE(bm1.push_back(43));
   REQUIRE(bm1.push_back(42));
   REQUIRE(bm1.push_back(42));
@@ -238,15 +260,20 @@ auto append_test()
   REQUIRE(bm2.push_back(1337));
   REQUIRE(bm2.push_back(456));
 
+  CHECK(to_string(*bm1.lookup(equal, 42)) ==   "0110");
+  CHECK(to_string(*bm1.lookup(equal, 1337)) == "0001");
   bm1.append(bm2);
   REQUIRE(bm1.size() == 8);
   CHECK(to_string(*bm1.lookup(equal, 42)) ==   "01100000");
+  CHECK(to_string(*bm1.lookup(equal, 123)) ==  "00000100");
   CHECK(to_string(*bm1.lookup(equal, 1337)) == "00010010");
+  CHECK(to_string(*bm1.lookup(equal, 456)) ==  "00000001");
 
   bm2.append(bm1);
   REQUIRE(bm2.size() == 12);
   CHECK(to_string(*bm2.lookup(equal, 42)) ==   "000001100000");
   CHECK(to_string(*bm2.lookup(equal, 1337)) == "001000010010");
+  CHECK(to_string(*bm2.lookup(equal, 456)) ==  "000100000001");
 
   return bm2;
 }
@@ -293,8 +320,10 @@ TEST("append (equality bitslice coder)")
 TEST("append (range bitslice coder)")
 {
   auto bm = append_test<null_bitstream, range_bitslice_coder>();
-  CHECK(to_string(*bm.lookup(greater_equal, 42)) == "00010001");
-  CHECK(to_string(*bm.lookup(less_equal, 10)) ==    "11101110");
+  CHECK(to_string(*bm.lookup(greater_equal, 42)) == "111111111111");
+  CHECK(to_string(*bm.lookup(less_equal, 10)) ==    "000000000000");
+  CHECK(to_string(*bm.lookup(less_equal, 100)) ==   "000011100000");
+  CHECK(to_string(*bm.lookup(greater, 1000)) ==   "101000011010");
 }
 
 TEST("multi push-back")

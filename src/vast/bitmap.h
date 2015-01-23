@@ -118,9 +118,19 @@ class coder
     util::orable<coder<Derived>>
 {
 public:
+  /// Retrieves the number entries in the coder, i.e., the number of rows.
+  /// @returns The size of the coder measured in number of entries.
   uint64_t size() const
   {
     return rows_;
+  }
+
+  /// Checks whether the coder is empty. A stretched coder is not empty,
+  /// although it has zero entries.
+  /// @returns `true` if the coder is empty.
+  bool empty() const
+  {
+    return size() == 0;
   }
 
   // Encodes a single values multiple times.
@@ -138,17 +148,6 @@ public:
     return true;
   }
 
-  /// Aritifically increases the size, i.e., the number of rows.
-  /// @param n The number of rows to increase the coder by.
-  /// @returns `true` on success and `false` if there is not enough space.
-  bool stretch(size_t n)
-  {
-    if (std::numeric_limits<uint64_t>::max() - rows_ < n)
-      return false;
-    rows_ += n;
-    return true;
-  }
-
   /// Decodes a value under a relational operator.
   /// @param x The value to decode.
   /// @param op The relation operator under which to decode *x*.
@@ -160,6 +159,33 @@ public:
     return derived()->decode_impl(x, op);
   }
 
+  /// Aritifically increases the size, i.e., the number of rows.
+  /// @param n The number of rows to increase the coder by.
+  /// @returns `true` on success and `false` if there is not enough space.
+  bool stretch(size_t n)
+  {
+    if (std::numeric_limits<uint64_t>::max() - rows_ < n)
+      return false;
+    rows_ += n;
+    return true;
+  }
+
+  /// Appends another coder to this instance.
+  /// @param other The coder to append.
+  /// @returns `true` on success.
+  bool append(Derived const& other)
+  {
+    if (std::numeric_limits<uint64_t>::max() - rows_ < other.size())
+      return false;
+    auto result = derived()->append_impl(other);
+    rows_ += other.size();
+    return result;
+  }
+
+  /// Performs the component-wise bitwise OR of the underlying bitstream
+  /// storage.
+  /// @param other The bitstream to OR with this instance.
+  /// @returns `*this`
   Derived& operator|=(Derived const& other)
   {
     derived()->bitwise_or(other);
@@ -252,11 +278,37 @@ private:
     return std::move(op == equal ? result : result.flip());
   }
 
-  template <typename F>
-  void each_impl(F f) const
+  bool append_impl(equality_coder const& other)
   {
+    if (other.bitstreams_.empty())
+      return true;
+
+    if (bitstreams_.empty())
+    {
+      bitstreams_ = other.bitstreams_;
+      return true;
+    }
+
     for (auto& p : bitstreams_)
-      f(1, p.first, p.second);
+    {
+      auto i = other.bitstreams_.find(p.first);
+      if (i != other.bitstreams_.end())
+      {
+        p.second.append(this->size() - p.second.size(), false);
+        p.second.append(i->second);
+      }
+    }
+
+    for (auto& p : other.bitstreams_)
+      if (bitstreams_.find(p.first) == bitstreams_.end())
+      {
+        Bitstream bs;
+        bs.append(this->size(), false);
+        bs.append(p.second);
+        bitstreams_.emplace(p.first, std::move(bs));
+      }
+
+    return true;
   }
 
   void bitwise_or(equality_coder const& other)
@@ -286,6 +338,13 @@ private:
         if (this->size() > other.size())
           j->second.append(other.size() - this->size(), false);
       }
+  }
+
+  template <typename F>
+  void each_impl(F f) const
+  {
+    for (auto& p : bitstreams_)
+      f(1, p.first, p.second);
   }
 
   std::unordered_map<T, Bitstream> bitstreams_;
@@ -375,11 +434,18 @@ private:
     }
   }
 
-  template <typename F>
-  void each_impl(F f) const
+  bool append_impl(binary_bitslice_coder const& other)
   {
-    for (size_t i = 0; i < bits; ++i)
-      f(1, i, bitstreams_[i]);
+    if (bitstreams_.empty())
+      bitstreams_ = other.bitstreams_;
+    else if (! other.bitstreams_.empty())
+      for (size_t i = 0; i < bits; ++i)
+      {
+        bitstreams_[i].append(this->size() - bitstreams_[i].size(), false);
+        bitstreams_[i].append(other.bitstreams_[i]);
+      }
+
+    return true;
   }
 
   void bitwise_or(binary_bitslice_coder const& other)
@@ -389,6 +455,13 @@ private:
     else if (! other.bitstreams_.empty())
       for (size_t i = 0; i < bits; ++i)
         bitstreams_[i] |= other.bitstreams_[i];
+  }
+
+  template <typename F>
+  void each_impl(F f) const
+  {
+    for (size_t i = 0; i < bits; ++i)
+      f(1, i, bitstreams_[i]);
   }
 
   std::vector<Bitstream> bitstreams_;
@@ -498,20 +571,11 @@ private:
     return static_cast<Derived const*>(this)->decode_value(x, op);
   }
 
-  template <typename F>
-  void each_impl(F f) const
-  {
-    assert(base_.size() == bitstreams_.size());
-    for (size_t i = 0; i < bitstreams_.size(); ++i)
-      for (size_t j = 0; j < bitstreams_[i].size(); ++j)
-        f(i, j, bitstreams_[i][j]);
-  }
-
-  void bitwise_or(bitslice_coder const& other)
+  bool append_impl(bitslice_coder const& other)
   {
     // With some effort it is possible to OR together two bitslice coders of
     // different bases, but it requires conversion of the base. We tackle this
-    // maybe in the future
+    // maybe in the future.
     assert(base_ == other.base_);
     assert(! bitstreams_.empty());
     assert(! other.bitstreams_.empty());
@@ -522,7 +586,43 @@ private:
     else if (! other.bitstreams_[0].empty())
       for (size_t i = 0; i < bitstreams_.size(); ++i)
         for (size_t j = 0; j < bitstreams_[i].size(); ++j)
-          bitstreams_[i][j] |= other.bitstreams_[i][j];
+        {
+          auto& here = bitstreams_[i][j];
+          auto& there = other.bitstreams_[i][j];
+          if (! there.empty())
+          {
+            here.append(this->size() - here.size(), false);
+            here.append(there);
+          }
+        }
+
+    return true;
+  }
+
+  void bitwise_or(bitslice_coder const& other)
+  {
+    // See comment above.
+    assert(base_ == other.base_);
+    assert(! bitstreams_.empty());
+    assert(! other.bitstreams_.empty());
+    assert(bitstreams_.size() == other.bitstreams_.size());
+
+    if (bitstreams_[0].empty())
+      bitstreams_ = other.bitstreams_;
+    else if (! other.bitstreams_[0].empty())
+      for (size_t i = 0; i < bitstreams_.size(); ++i)
+        for (size_t j = 0; j < bitstreams_[i].size(); ++j)
+          if (! other.bitstreams_[i][j].empty())
+            bitstreams_[i][j] |= other.bitstreams_[i][j];
+  }
+
+  template <typename F>
+  void each_impl(F f) const
+  {
+    assert(base_.size() == bitstreams_.size());
+    for (size_t i = 0; i < bitstreams_.size(); ++i)
+      for (size_t j = 0; j < bitstreams_[i].size(); ++j)
+        f(i, j, bitstreams_[i][j]);
   }
 
 private:
@@ -577,14 +677,13 @@ private:
   {
     detail::decompose(x, base_, v_);
     for (size_t i = 0; i < v_.size(); ++i)
-      if (v_[i] > 0)
-      {
-        auto idx = base_[i] == 2 ? 0 : v_[i];
-        auto& bs = bitstreams_[i][idx];
-        bs.append(this->size() - bs.size(), false);
-        if (! bs.append(n, true))
-          return false;
-      }
+    {
+      auto idx = base_[i] == 2 ? 0 : v_[i];
+      auto& bs = bitstreams_[i][idx];
+      bs.append(this->size() - bs.size(), false);
+      if (! bs.append(n, true))
+        return false;
+    }
 
     return true;
   }
@@ -888,6 +987,14 @@ public:
     return coder_.stretch(n);
   }
 
+  /// Appends the contents of another bitmap to this one.
+  /// @param other The other bitmap.
+  /// @returns `true` on success.
+  bool append(bitmap const& other)
+  {
+    return coder_.append(other.coder_);
+  }
+
   /// Shorthand for `lookup(equal, x)`.
   trial<Bitstream> operator[](T x) const
   {
@@ -998,6 +1105,11 @@ public:
   bool stretch(size_t n)
   {
     return bool_.append(n, false);
+  }
+
+  bool append(bitmap const& other)
+  {
+    return bool_.append(other.bool_);
   }
 
   trial<Bitstream> operator[](bool x) const
