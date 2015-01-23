@@ -96,7 +96,6 @@ set(tests ${tests}
   tests/iterator.cc
   tests/json.cc
   tests/logging.cc
-  tests/main.cc
   tests/offset.cc
   tests/parse.cc
   tests/print.cc
