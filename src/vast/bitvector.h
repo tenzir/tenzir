@@ -515,6 +515,10 @@ public:
   ///          *i* or `npos` if no such bit exists.
   size_type find_prev(size_type i) const;
 
+  /// Reserves space in the underlying block vector.
+  /// @param n The number of bits to reserve space for.
+  void reserve(size_type n);
+
   //
   // Block-based API
   //

@@ -485,6 +485,11 @@ size_type bitvector::find_prev(size_type i) const
     return npos;
 }
 
+void bitvector::reserve(size_type n)
+{
+  bits_.reserve(bits_to_blocks(n));
+}
+
 size_type bitvector::blocks() const
 {
   return bits_.size();
