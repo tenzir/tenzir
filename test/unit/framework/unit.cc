@@ -185,6 +185,11 @@ size_t engine::last_check_line()
   return check_line;
 }
 
+test* engine::current_test()
+{
+  return instance().current_;
+}
+
 void engine::last_check_line(size_t line)
 {
   check_line = line;
@@ -291,6 +296,7 @@ bool engine::run(configuration const& cfg)
           ::abort();
         }}.detach();
 
+        instance().current_ = t.get();
         t->__run();
       }
       catch (require_error const& e)

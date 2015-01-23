@@ -1,6 +1,7 @@
 #ifndef FRAMEWORK_UNIT_H
 #define FRAMEWORK_UNIT_H
 
+#include <cassert>
 #include <map>
 #include <vector>
 #include <string>
@@ -72,9 +73,14 @@ public:
   /// @param line The line of the last successful check.
   static void last_check_line(size_t line);
 
+  /// Retrieves the currently executing test.
+  /// @returns A pointer to the currently executing test.
+  static test* current_test();
+
 private:
   static engine& instance();
 
+  test* current_ = nullptr;
   std::map<std::string, std::vector<std::unique_ptr<test>>> suites_;
 };
 
@@ -166,6 +172,7 @@ public:
       should_fail_(should_fail),
       x_(x)
   {
+    assert(test_ != nullptr);
   }
 
   ~lhs()
@@ -334,8 +341,9 @@ private:
 #define CHECK(...)                                                          \
   do                                                                        \
   {                                                                         \
-    (void)(::unit::detail::expr{this, __FILE__, __LINE__,                   \
-                                false, #__VA_ARGS__} ->* __VA_ARGS__);      \
+    (void)(::unit::detail::expr{::unit::engine::current_test(),             \
+                                __FILE__, __LINE__, false,                  \
+                                #__VA_ARGS__} ->* __VA_ARGS__);             \
                                                                             \
     ::unit::engine::last_check_file(__FILE__);                              \
     ::unit::engine::last_check_line(__LINE__);                              \
@@ -345,7 +353,8 @@ private:
 #define FAIL(...)                                                           \
   do                                                                        \
   {                                                                         \
-    (void)(::unit::detail::expr{this, __FILE__, __LINE__, true,             \
+    (void)(::unit::detail::expr{::unit::engine::current_test(),             \
+                                __FILE__, __LINE__, true,                   \
                                 #__VA_ARGS__} ->* __VA_ARGS__);             \
                                                                             \
     ::unit::engine::last_check_file(__FILE__);                              \
@@ -357,8 +366,9 @@ private:
   do                                                                        \
   {                                                                         \
     auto UNIT_UNIQUE(__result) =                                            \
-    ::unit::detail::expr{this, __FILE__, __LINE__, false, #__VA_ARGS__}     \
-         ->* __VA_ARGS__;                                                   \
+      ::unit::detail::expr{::unit::engine::current_test(),                  \
+                           __FILE__, __LINE__, false, #__VA_ARGS__}         \
+      ->* __VA_ARGS__;                                                      \
                                                                             \
     if (! UNIT_UNIQUE(__result))                                            \
       throw ::unit::require_error{#__VA_ARGS__};                            \

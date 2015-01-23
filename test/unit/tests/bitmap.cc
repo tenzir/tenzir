@@ -190,9 +190,15 @@ TEST("range coding")
 
 // TODO: write unit tests for equality_bitslice_coder.
 
-TEST("merging (equality coder)")
+namespace {
+
+template <
+  typename Bitstream,
+  template <typename, typename> class Coder
+>
+auto merge_test()
 {
-  bitmap<uint8_t, null_bitstream> bm1, bm2;
+  bitmap<uint8_t, Bitstream, Coder> bm1, bm2;
   REQUIRE(bm1.push_back(6));
   REQUIRE(bm1.push_back(9));
   REQUIRE(bm1.push_back(10));
@@ -211,31 +217,84 @@ TEST("merging (equality coder)")
   CHECK(to_string(*bm1.lookup(equal, 10)) == "00100110");
   CHECK(to_string(*bm1.lookup(equal, 42)) == "00000001");
   CHECK(to_string(*bm1.lookup(equal, 77)) == "00010000");
+
+  return bm1;
 }
 
-TEST("merging (range bitslice coder)")
+template <
+  typename Bitstream,
+  template <typename, typename> class Coder
+>
+auto append_test()
 {
-  bitmap<uint8_t, null_bitstream, range_bitslice_coder> bm1, bm2;
-  REQUIRE(bm1.push_back(6));
-  REQUIRE(bm1.push_back(9));
-  REQUIRE(bm1.push_back(10));
-  REQUIRE(bm1.push_back(77));
+  bitmap<int, Bitstream, Coder> bm1, bm2;
+  REQUIRE(bm1.push_back(43));
+  REQUIRE(bm1.push_back(42));
+  REQUIRE(bm1.push_back(42));
+  REQUIRE(bm1.push_back(1337));
 
-  REQUIRE(bm2.stretch(4));
-  REQUIRE(bm2.push_back(6));
-  REQUIRE(bm2.push_back(10));
-  REQUIRE(bm2.push_back(10));
-  REQUIRE(bm2.push_back(42));
+  REQUIRE(bm2.push_back(4711));
+  REQUIRE(bm2.push_back(123));
+  REQUIRE(bm2.push_back(1337));
+  REQUIRE(bm2.push_back(456));
 
-  bm2 |= bm1;
+  bm1.append(bm2);
+  REQUIRE(bm1.size() == 8);
+  CHECK(to_string(*bm1.lookup(equal, 42)) ==   "01100000");
+  CHECK(to_string(*bm1.lookup(equal, 1337)) == "00010010");
 
-  REQUIRE(bm2.size() == 8);
-  CHECK(to_string(*bm2.lookup(equal, 6)) ==          "10001000");
-  CHECK(to_string(*bm2.lookup(equal, 10)) ==         "00100110");
-  CHECK(to_string(*bm2.lookup(equal, 42)) ==         "00000001");
-  CHECK(to_string(*bm2.lookup(equal, 77)) ==         "00010000");
-  CHECK(to_string(*bm2.lookup(greater_equal, 42)) == "00010001");
-  CHECK(to_string(*bm2.lookup(less_equal, 10)) ==    "11101110");
+  bm2.append(bm1);
+  REQUIRE(bm2.size() == 12);
+  CHECK(to_string(*bm2.lookup(equal, 42)) ==   "000001100000");
+  CHECK(to_string(*bm2.lookup(equal, 1337)) == "001000010010");
+
+  return bm2;
+}
+
+} // namespace <anonymous>
+
+TEST("merge (equality coder)")
+{
+  merge_test<null_bitstream, equality_coder>();
+}
+
+TEST("merge (binary bitslice coder)")
+{
+  merge_test<null_bitstream, binary_bitslice_coder>();
+}
+
+TEST("merge (equality bitslice coder)")
+{
+  merge_test<null_bitstream, equality_bitslice_coder>();
+}
+
+TEST("merge (range bitslice coder)")
+{
+  auto bm = merge_test<null_bitstream, range_bitslice_coder>();
+  CHECK(to_string(*bm.lookup(greater_equal, 42)) == "00010001");
+  CHECK(to_string(*bm.lookup(less_equal, 10)) ==    "11101110");
+}
+
+TEST("append (equality coder)")
+{
+  append_test<null_bitstream, equality_coder>();
+}
+
+TEST("append (binary bitslice coder)")
+{
+  append_test<null_bitstream, binary_bitslice_coder>();
+}
+
+TEST("append (equality bitslice coder)")
+{
+  append_test<null_bitstream, equality_bitslice_coder>();
+}
+
+TEST("append (range bitslice coder)")
+{
+  auto bm = append_test<null_bitstream, range_bitslice_coder>();
+  CHECK(to_string(*bm.lookup(greater_equal, 42)) == "00010001");
+  CHECK(to_string(*bm.lookup(less_equal, 10)) ==    "11101110");
 }
 
 TEST("multi push-back")
