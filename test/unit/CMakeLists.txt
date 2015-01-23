@@ -133,12 +133,18 @@ MACRO (make_test suite)
   add_test(${test_name} ${unit_test} -n -v 3 -s "${suite}" ${ARGN})
 ENDMACRO ()
 
-execute_process(
-  COMMAND
-    ${CMAKE_CURRENT_SOURCE_DIR}/find-suites ${CMAKE_CURRENT_SOURCE_DIR}/tests
-  OUTPUT_VARIABLE
-    test_suites)
+foreach(test ${tests})
+  file(STRINGS ${test} contents)
+  foreach(line ${contents})
+    if ("${line}" MATCHES "SUITE(.*)")
+      string(REGEX REPLACE ".*\\(\"(.*)\"\\).*" "\\1" suite ${line})
+      list(APPEND suites ${suite})
+    endif()
+  endforeach()
+endforeach()
+list(REMOVE_DUPLICATES suites)
 
-foreach(suite ${test_suites})
+
+foreach(suite ${suites})
   make_test("${suite}")
 endforeach ()

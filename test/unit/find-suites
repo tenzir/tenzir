@@ -1,7 +1,0 @@
-#!/bin/sh
-#
-# This scripts creates a semicolon-separated list (of all test suites for CMake.
-#
-# $1: The directory with the unit tests.
-
-grep -rI SUITE $1 | sed 's;.*SUITE("\(.*\)");\1;' | sort | uniq | tr '\n' ';'
