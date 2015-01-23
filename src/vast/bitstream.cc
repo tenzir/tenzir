@@ -122,6 +122,13 @@ void bitstream::bitwise_subtract(bitstream const& other)
     concept_->bitwise_subtract(*other.concept_);
 }
 
+void bitstream::append_impl(bitstream const& other)
+{
+  assert(concept_);
+  assert(other.concept_);
+  concept_->append_impl(*other.concept_);
+}
+
 void bitstream::append_impl(size_type n, bool bit)
 {
   assert(concept_);
@@ -343,6 +350,11 @@ void null_bitstream::bitwise_subtract(null_bitstream const& other)
   if (bits_.size() < other.bits_.size())
     bits_.resize(other.bits_.size());
   bits_ -= other.bits_;
+}
+
+void null_bitstream::append_impl(null_bitstream const& other)
+{
+  bits_.append(other.bits());
 }
 
 void null_bitstream::append_impl(size_type n, bool bit)
@@ -724,6 +736,25 @@ void ewah_bitstream::bitwise_xor(ewah_bitstream const& other)
 void ewah_bitstream::bitwise_subtract(ewah_bitstream const& other)
 {
   *this = nand_(*this, other);
+}
+
+void ewah_bitstream::append_impl(ewah_bitstream const& other)
+{
+  if (other.bits_.empty())
+    return;
+
+  if (bits_.empty())
+  {
+    *this = other;
+    return;
+  }
+
+  bits_.reserve(bits_.size() + other.bits_.size());
+  for (auto& seq : sequence_range{other})
+    if (seq.is_fill())
+      append(seq.length, seq.data);
+    else
+      append_block(seq.data, seq.length);
 }
 
 void ewah_bitstream::append_impl(size_type n, bool bit)

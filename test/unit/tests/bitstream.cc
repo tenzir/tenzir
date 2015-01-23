@@ -882,25 +882,71 @@ TEST("sequence iteration (NULL)")
 
 TEST("pop-count (NULL)")
 {
-  null_bitstream nbs;
-  nbs.push_back(true);
-  nbs.push_back(false);
-  CHECK(nbs.count() == 1);
-  nbs.append(62, true);
-  nbs.append(320, false);
-  nbs.append(512, true);
-  nbs.append(47, false);
-  CHECK(nbs.count() == 575);
+  null_bitstream bs;
+  bs.push_back(true);
+  bs.push_back(false);
+  CHECK(bs.count() == 1);
+  bs.append(62, true);
+  bs.append(320, false);
+  bs.append(512, true);
+  bs.append(47, false);
+  CHECK(bs.count() == 575);
+}
 
-  ewah_bitstream ebs;
-  ebs.push_back(true);
-  ebs.push_back(false);
-  CHECK(ebs.count() == 1);
-  ebs.append(62, true);
-  CHECK(ebs.count() == 63);
-  ebs.append(320, false);
-  CHECK(ebs.count() == 63);
-  ebs.append(512, true);
-  ebs.append(47, false);
-  CHECK(ebs.count() == 575);
+TEST("pop-count (EWAH)")
+{
+  ewah_bitstream bs;
+  bs.push_back(true);
+  bs.push_back(false);
+  CHECK(bs.count() == 1);
+  bs.append(62, true);
+  CHECK(bs.count() == 63);
+  bs.append(320, false);
+  CHECK(bs.count() == 63);
+  bs.append(512, true);
+  bs.append(47, false);
+  CHECK(bs.count() == 575);
+}
+
+namespace {
+
+template <typename Bitstream>
+void test_append()
+{
+  Bitstream bs1, bs2;
+  bs1.push_back(true);
+  bs1.push_back(false);
+  bs1.append(4444, true);
+  auto size = bs1.size();
+  CHECK(size == 4446);
+
+  bs2.append(500, false);
+  bs2.append(20, true);
+  CHECK(bs2.size() == 520);
+
+  bs1.append(bs2);
+  CHECK(bs1.size() == size + bs2.size());
+  CHECK(bs1.size() == 4966);
+  CHECK(bs1[size + 500]);
+  CHECK(bs1[size + 519]);
+
+  size = bs2.size();
+  bs2.append(bs1);
+  CHECK(bs2.size() == size + bs1.size());
+  CHECK(bs2[size]); // first of bs1
+  CHECK(! bs2[size + 1]);
+  CHECK(bs2[size + 2]);
+  CHECK(bs2[size + 2 + 4443]);
+}
+
+} // namespace <anonymous>
+
+TEST("append (NULL)")
+{
+  test_append<null_bitstream>();
+}
+
+TEST("append (EWAH)")
+{
+  test_append<ewah_bitstream>();
 }

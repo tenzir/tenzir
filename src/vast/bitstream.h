@@ -153,6 +153,24 @@ public:
     return derived().empty_impl();
   }
 
+  /// Appends another bitstream.
+  /// @param other The other bitstream.
+  /// @returns `true` on success.
+  bool append(Derived const& other)
+  {
+    if (other.empty())
+      return true;
+    if (empty())
+    {
+      *this = other;
+      return true;
+    }
+    if (std::numeric_limits<size_type>::max() - size() < other.size())
+      return false;
+    derived().append_impl(other);
+    return true;
+  }
+
   /// Appends a sequence of bits.
   /// @param n The number of bits to append.
   /// @param bit The bit value of the *n* bits to append.
@@ -432,6 +450,7 @@ public:
   virtual void bitwise_or(bitstream_concept const& other) = 0;
   virtual void bitwise_xor(bitstream_concept const& other) = 0;
   virtual void bitwise_subtract(bitstream_concept const& other) = 0;
+  virtual void append_impl(bitstream_concept const& other) = 0;
   virtual void append_impl(size_type n, bool bit) = 0;
   virtual void append_block_impl(block_type block, size_type bits) = 0;
   virtual void push_back_impl(bool bit) = 0;
@@ -526,6 +545,11 @@ public:
   virtual void bitwise_subtract(bitstream_concept const& other) final
   {
     bitstream_.bitwise_subtract(cast(other));
+  }
+
+  virtual void append_impl(bitstream_concept const& other) final
+  {
+    bitstream_.append_impl(cast(other));
   }
 
   virtual void append_impl(size_type n, bool bit) final
@@ -669,6 +693,7 @@ private:
   void bitwise_or(bitstream const& other);
   void bitwise_xor(bitstream const& other);
   void bitwise_subtract(bitstream const& other);
+  void append_impl(bitstream const& other);
   void append_impl(size_type n, bool bit);
   void append_block_impl(block_type block, size_type bits);
   void push_back_impl(bool bit);
@@ -769,6 +794,7 @@ private:
   void bitwise_or(null_bitstream const& other);
   void bitwise_xor(null_bitstream const& other);
   void bitwise_subtract(null_bitstream const& other);
+  void append_impl(null_bitstream const& other);
   void append_impl(size_type n, bool bit);
   void append_block_impl(block_type block, size_type bits);
   void push_back_impl(bool bit);
@@ -898,6 +924,7 @@ private:
   void bitwise_or(ewah_bitstream const& other);
   void bitwise_xor(ewah_bitstream const& other);
   void bitwise_subtract(ewah_bitstream const& other);
+  void append_impl(ewah_bitstream const& other);
   void append_impl(size_type n, bool bit);
   void append_block_impl(block_type block, size_type bits);
   void push_back_impl(bool bit);
