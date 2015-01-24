@@ -43,8 +43,8 @@ Start the interactive console and submit a query:
 
 ### Docker
 
-To get up and running quickly, use the [Docker
-container](https://registry.hub.docker.com/u/mavam/vast/):
+The [VAST docker container](https://registry.hub.docker.com/u/mavam/vast/)
+provides a quick way to get up and running:
 
     docker pull mavam/vast
     docker run --rm -ti mavam/vast
@@ -52,7 +52,7 @@ container](https://registry.hub.docker.com/u/mavam/vast/):
 
 ### Source Build
 
-Building VAST takes the following steps:
+Building VAST involves the following steps:
 
     ./configure
     make
@@ -85,19 +85,18 @@ follows:
 
 To the best of our knowledge, no distribution currently comes with an apt
 compiler out of the box. On recent Debian-based distributions (e.g., Ubuntu
-14.04.1), getting a working toolchain involves installing the following
+14.04.1), getting a working toolchain requires installing the following
 packages:
 
     apt-get install cmake clang-3.5 libc++-dev libc++abi-dev \
       libboost-dev libpcap-dev libedit-dev libgoogle-perftools-dev
 
-CAF still requires manual installation, which requires the same steps as
-outlined above for VAST.
+CAF still needs manual installation.
 
 #### Mac OS
 
-Mac OS Yosemite also ships with a working C++14 compiler. We recommend
-[Homebrew](http://brew.sh) for installing dependencies:
+Mac OS Yosemite also ships with a working C++14 compiler.
+[Homebrew](http://brew.sh) makes it easy to install the dependencies:
 
     brew install cmake boost actor-framework google-perftools
 
