@@ -8,7 +8,7 @@
 namespace vast {
 namespace util {
 
-/// Converts a byte value into a character.
+/// Converts a byte value into an ASCII character.
 /// @param b The byte to convert
 template <
   typename T,
@@ -36,9 +36,9 @@ namespace varbyte {
 namespace detail {
 
 template <typename T>
-size_t constexpr make_unsigned(T x)
+size_t constexpr cast_unsigned(T x)
 {
-  return static_cast<typename std::make_unsigned<T>::type>(x);
+  return static_cast<std::make_unsigned_t<T>>(x);
 }
 
 } // namespace detail
@@ -47,40 +47,40 @@ template <typename T>
 std::enable_if_t<(sizeof(T) > 4), size_t>
 constexpr size(T x)
 {
-  return detail::make_unsigned(x) >= (T(1) << 63) ? 10 :
-         detail::make_unsigned(x) >= (T(1) << 56) ? 9 :
-         detail::make_unsigned(x) >= (T(1) << 49) ? 8 :
-         detail::make_unsigned(x) >= (T(1) << 42) ? 7 :
-         detail::make_unsigned(x) >= (T(1) << 35) ? 6 :
-         detail::make_unsigned(x) >= (T(1) << 28) ? 5 :
-         detail::make_unsigned(x) >= (T(1) << 21) ? 4 :
-         detail::make_unsigned(x) >= (T(1) << 14) ? 3 :
-         detail::make_unsigned(x) >= (T(1) << 7) ? 2 : 1;
+  return detail::cast_unsigned(x) >= (T(1) << 63) ? 10 :
+         detail::cast_unsigned(x) >= (T(1) << 56) ? 9 :
+         detail::cast_unsigned(x) >= (T(1) << 49) ? 8 :
+         detail::cast_unsigned(x) >= (T(1) << 42) ? 7 :
+         detail::cast_unsigned(x) >= (T(1) << 35) ? 6 :
+         detail::cast_unsigned(x) >= (T(1) << 28) ? 5 :
+         detail::cast_unsigned(x) >= (T(1) << 21) ? 4 :
+         detail::cast_unsigned(x) >= (T(1) << 14) ? 3 :
+         detail::cast_unsigned(x) >= (T(1) << 7) ? 2 : 1;
 }
 
 template <typename T>
 std::enable_if_t<(sizeof(T) > 2 && sizeof(T) <= 4), size_t>
 constexpr size(T x)
 {
-  return detail::make_unsigned(x) >= (T(1) << 28) ? 5 :
-         detail::make_unsigned(x) >= (T(1) << 21) ? 4 :
-         detail::make_unsigned(x) >= (T(1) << 14) ? 3 :
-         detail::make_unsigned(x) >= (T(1) << 7) ? 2 : 1;
+  return detail::cast_unsigned(x) >= (T(1) << 28) ? 5 :
+         detail::cast_unsigned(x) >= (T(1) << 21) ? 4 :
+         detail::cast_unsigned(x) >= (T(1) << 14) ? 3 :
+         detail::cast_unsigned(x) >= (T(1) << 7) ? 2 : 1;
 }
 
 template <typename T>
 std::enable_if_t<(sizeof(T) == 2), size_t>
 constexpr size(T x)
 {
-  return detail::make_unsigned(x) >= (T(1) << 14) ? 3 :
-         detail::make_unsigned(x) >= (T(1) << 7) ? 2 : 1;
+  return detail::cast_unsigned(x) >= (T(1) << 14) ? 3 :
+         detail::cast_unsigned(x) >= (T(1) << 7) ? 2 : 1;
 }
 
 template <typename T>
 std::enable_if_t<sizeof(T) == 1, size_t>
 constexpr size(T x)
 {
-  return detail::make_unsigned(x) >= (1 << 7) ? 2 : 1;
+  return detail::cast_unsigned(x) >= (1 << 7) ? 2 : 1;
 }
 
 /// The maximum number of bytes required to encode an integral type *T*.
