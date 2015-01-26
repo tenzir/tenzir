@@ -51,28 +51,21 @@ struct partition::dispatcher
   {
     std::vector<actor> indexes;
     for (auto& t : part_.schema_)
+      // FIXME: Adjust after having switched to the new record indexer.
       if (auto r = get<type::record>(t))
       {
-        auto attempt = r->each(
-            [&](type::record::trace const& tr, offset const& o) -> trial<void>
+        for (auto& i : type::record::each{*r})
+          if (i.trace.back()->type == e.type)
+          {
+            auto a = part_.load_data_indexer(t, e.type, i.offset);
+            if (! a)
             {
-              if (tr.back()->type == e.type)
-              {
-                auto a = part_.load_data_indexer(t, e.type, o);
-                if (! a)
-                  return a.error();
-                if (*a)
-                  indexes.push_back(std::move(*a));
-              }
-
-              return nothing;
-            });
-
-        if (! attempt)
-        {
-          VAST_ERROR(attempt.error());
-          return {};
-        }
+              VAST_ERROR(a.error());
+              return {};
+            }
+            if (*a)
+              indexes.push_back(std::move(*a));
+          }
       }
       else
       {
@@ -304,24 +297,20 @@ message_handler partition::make_handler()
           // FIXME: Adjust after having switched to the new record indexer.
           if (auto r = get<type::record>(tp))
           {
-            auto attempt = r->each(
-              [&](type::record::trace const& t, offset const& o) -> trial<void>
-              {
-                if (t.back()->type.find_attribute(type::attribute::skip))
-                  return nothing;
-
-                auto a = create_data_indexer(tp, t.back()->type, o);
-                if (! a)
-                  return a.error();
-                return nothing;
-              });
-
-            if (! attempt)
+            for (auto& i : type::record::each{*r})
             {
-              VAST_ERROR(this, attempt.error());
-              quit(exit::error);
-              return;
+              if (i.trace.back()->type.find_attribute(type::attribute::skip))
+                continue;
+
+              auto a = create_data_indexer(tp, i.trace.back()->type, i.offset);
+              if (! a)
+              {
+                VAST_ERROR(this, a.error());
+                quit(exit::error);
+                return;
+              }
             }
+
           }
           else if (! tp.find_attribute(type::attribute::skip))
           {

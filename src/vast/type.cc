@@ -599,6 +599,61 @@ bool compatible(type const& lhs, relational_operator op, type const& rhs)
   }
 }
 
+key type::record::each::range_state::key() const
+{
+  vast::key k(trace.size());
+  for (size_t i = 0; i < trace.size(); ++i)
+    k[i] = trace[i]->name;
+  return k;
+}
+
+size_t type::record::each::range_state::depth() const
+{
+  return trace.size();
+}
+
+type::record::each::each(record const& r)
+{
+  if (r.fields_.empty())
+    return;
+  auto rec = &r;
+  do
+  {
+    records_.push_back(rec);
+    state_.trace.push_back(&rec->fields_[0]);
+    state_.offset.push_back(0);
+  }
+  while ((rec = get<type::record>(state_.trace.back()->type)));
+}
+
+bool type::record::each::next()
+{
+  if (records_.empty())
+    return false;
+
+  while (++state_.offset.back() == records_.back()->fields_.size())
+  {
+    records_.pop_back();
+    state_.trace.pop_back();
+    state_.offset.pop_back();
+    if (records_.empty())
+      return false;
+  }
+
+  auto f = &records_.back()->fields_[state_.offset.back()];
+  state_.trace.back() = f;
+
+  while (auto r = get<type::record>(f->type))
+  {
+    f = &r->fields_[0];
+    records_.emplace_back(r);
+    state_.trace.push_back(f);
+    state_.offset.push_back(0);
+  }
+
+  return true;
+}
+
 trial<offset> type::record::resolve(key const& k) const
 {
   if (k.empty())

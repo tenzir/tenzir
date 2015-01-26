@@ -39,40 +39,34 @@ trial<record> record::unflatten(type::record const& t) const
   record result;
   record* r = &result;
 
-  auto attempt = t.each_field(
-      [&](type::record::trace const& t) -> trial<void>
+  for (auto& e : type::record::each{t})
+  {
+    if (i == end())
+      return error{"not enough data"};
+
+    if (e.depth() > depth)
+    {
+      for (size_t j = 0; j < e.depth() - depth; ++j)
       {
-        if (i == end())
-          return error{"not enough data"};
+        ++depth;
+        r->push_back(record{});
+        r = get<record>(r->back());
+      }
+    }
+    else if (e.depth() < depth)
+    {
+      r = &result;
+      depth = e.depth();
+      for (size_t j = 0; j < depth - 1; ++j)
+        r = get<record>(r->back());
+    }
 
-        if (t.size() > depth)
-        {
-          for (size_t i = 0; i < t.size() - depth; ++i)
-          {
-            ++depth;
-            r->push_back(record{});
-            r = get<record>(r->back());
-          }
-        }
-        else if (t.size() < depth)
-        {
-          r = &result;
-          depth = t.size();
-          for (size_t i = 0; i < t.size() - 1; ++i)
-            r = get<record>(r->back());
-        }
-
-        auto& ft = t.back()->type;
-        if (is<none>(*i) || ft.check(*i))
-          r->push_back(*i++);
-        else
-          return error{"data/type mismatch: ", *i, '/', ft};
-
-        return nothing;
-      });
-
-  if (! attempt)
-    return attempt.error();
+    auto& field_type = e.trace.back()->type;
+    if (is<none>(*i) || field_type.check(*i))
+      r->push_back(*i++);
+    else
+      return error{"data/type mismatch: ", *i, '/', field_type};
+  }
 
   return std::move(result);
 }

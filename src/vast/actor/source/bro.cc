@@ -135,80 +135,75 @@ result<event> bro::extract_impl()
   record event_record;
   record* r = &event_record;
   auto ts = now();
-  auto attempt = get<type::record>(type_)->each_field(
-      [&](type::record::trace const& t) -> trial<void>
+
+  for (auto& e : type::record::each{*get<type::record>(type_)})
+  {
+    if (f == s.size())
+      return error{"accessed field", f, "out of bounds"};
+
+    if (e.trace.size() > depth)
+    {
+      for (size_t i = 0; i < e.depth() - depth; ++i)
       {
-        if (f == s.size())
-          return error{"accessed field", f, "out of bounds"};
-
-        if (t.size() > depth)
-        {
-          for (size_t i = 0; i < t.size() - depth; ++i)
-          {
-            ++depth;
-            r->push_back(record{});
-            r = get<record>(r->back());
-          }
-        }
-        else if (t.size() < depth)
-        {
-          r = &event_record;
-          depth = t.size();
-          for (size_t i = 0; i < t.size() - 1; ++i)
-            r = get<record>(r->back());
-        }
+        ++depth;
+        r->push_back(record{});
+        r = get<record>(r->back());
+      }
+    }
+    else if (e.depth() < depth)
+    {
+      r = &event_record;
+      depth = e.depth();
+      for (size_t i = 0; i < depth - 1; ++i)
+        r = get<record>(r->back());
+    }
 
 
-        if (std::equal(unset_field_.begin(), unset_field_.end(),
-                       s[f].first, s[f].second))
-        {
-          r->emplace_back(nil);
-        }
-        else if (std::equal(empty_field_.begin(), empty_field_.end(),
-                            s[f].first, s[f].second))
-        {
-          switch (which(t.back()->type))
-          {
-            default:
-              return error{"invalid empty field ", f, '"', t.back()->name, '"',
-                           " of type ", t.back()->type, ": ",
-                           std::string{s[f].first, s[f].second}};
-            case type::tag::string:
-              r->emplace_back(std::string{});
-              break;
-            case type::tag::vector:
-              r->emplace_back(vector{});
-              break;
-            case type::tag::set:
-              r->emplace_back(set{});
-              break;
-            case type::tag::table:
-              r->emplace_back(table{});
-              break;
-          }
-        }
-        else
-        {
-          auto d = parse<data>(s[f].first, s[f].second, t.back()->type,
-                               set_separator_, "", "",
-                               set_separator_, "", "");
-          if (! d)
-            return d.error() + error{std::string{s[f].first, s[f].second}};
+    if (std::equal(unset_field_.begin(), unset_field_.end(),
+                   s[f].first, s[f].second))
+    {
+      r->emplace_back(nil);
+    }
+    else if (std::equal(empty_field_.begin(), empty_field_.end(),
+                        s[f].first, s[f].second))
+    {
+      switch (which(e.trace.back()->type))
+      {
+        default:
+          return error{"invalid empty field ", f, '"', e.trace.back()->name,
+                       "\" of type ", e.trace.back()->type, ": ",
+                       std::string{s[f].first, s[f].second}};
+        case type::tag::string:
+          r->emplace_back(std::string{});
+          break;
+        case type::tag::vector:
+          r->emplace_back(vector{});
+          break;
+        case type::tag::set:
+          r->emplace_back(set{});
+          break;
+        case type::tag::table:
+          r->emplace_back(table{});
+          break;
+      }
+    }
+    else
+    {
+      auto d = parse<data>(s[f].first, s[f].second, e.trace.back()->type,
+                           set_separator_, "", "",
+                           set_separator_, "", "");
+      if (! d)
+        return d.error() + error{std::string{s[f].first, s[f].second}};
 
-          if (f == size_t(timestamp_field_))
-            if (auto tp = get<time_point>(*d))
-              ts = *tp;
+      if (f == size_t(timestamp_field_))
+        if (auto tp = get<time_point>(*d))
+          ts = *tp;
 
-          r->push_back(std::move(*d));
-        }
+      r->push_back(std::move(*d));
+    }
 
-        ++f;
-
-        return nothing;
-      });
-
-  if (! attempt)
-    return attempt.error();
+    ++f;
+  }
 
   event e{{std::move(event_record), type_}};
   e.timestamp(ts);

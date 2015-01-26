@@ -16,7 +16,7 @@
 #include "vast/serialization/string.h"
 #include "vast/util/intrusive.h"
 #include "vast/util/operators.h"
-#include "vast/util/stack_vector.h"
+#include "vast/util/range.h"
 #include "vast/util/variant.h"
 #include "vast/util/hash/xxhash.h"
 
@@ -857,7 +857,34 @@ public:
     vast::type type;
   };
 
-  using trace = util::stack_vector<field const*, 4>;
+  /// Enables recursive record iteration.
+  class each : public util::range_facade<each>
+  {
+  public:
+    struct range_state
+    {
+      vast::key key() const;
+      size_t depth() const;
+
+      std::vector<field const*> trace;
+      vast::offset offset;
+    };
+
+    each(record const& r);
+
+  private:
+    friend util::range_facade<each>;
+
+    range_state const& state() const
+    {
+      return state_;
+    }
+
+    bool next();
+
+    range_state state_;
+    std::vector<record const*> records_;
+  };
 
   record(std::initializer_list<field> fields, std::vector<attribute> a = {})
     : base<record>{std::move(a)},
@@ -923,70 +950,8 @@ public:
   /// @returns The type at offset *o* or `nullptr` if *o* doesn't resolve.
   type const* at(offset const& o) const;
 
-  /// Recursively applies a function on each record field and offset.
-  /// @param f The function to apply to each field.
-  template <typename F>
-  auto each(F f) const
-  {
-    trace t;
-    offset o;
-    return each_impl(f, t, o);
-  }
-
-  /// Recursively applies a function on each record field.
-  /// @param f The function to apply to each field.
-  template <typename F>
-  auto each_field(F f) const
-  {
-    trace t;
-    return each_field_impl(f, t);
-  }
-
-  /// Recursively applies a function on each record field offset.
-  /// @param f The function to apply to each field.
-  template <typename F>
-  auto each_offset(F f) const
-  {
-    offset o;
-    return each_offset_impl(f, o);
-  }
-
-  /// Recursively applies a function on each record field key.
-  /// @param f The function to apply to each field.
-  template <typename F>
-  auto each_key(F f) const
-  {
-    key k;
-    return each_key_impl(f, k);
-  }
-
-  /// Recursively applies a function on each record field key and offset.
-  /// @param f The function to apply to each field.
-  template <typename F>
-  auto each_key_offset(F f) const
-  {
-    key k;
-    offset o;
-    return each_key_offset(f, k , o);
-  }
-
 private:
   void initialize();
-
-  template <typename F>
-  trial<void> each_impl(F f, trace& t, offset& o) const;
-
-  template <typename F>
-  trial<void> each_field_impl(F f, trace& t) const;
-
-  template <typename F>
-  trial<void> each_offset_impl(F f, offset& o) const;
-
-  template <typename F>
-  trial<void> each_key_impl(F f, key& k) const;
-
-  template <typename F>
-  trial<void> each_key_offset(F f, key& k, offset& o) const;
 
   std::vector<field> fields_;
 
@@ -1105,125 +1070,6 @@ struct type::intrusive_info : util::intrusive_base<intrusive_info>, type::info
     return static_cast<type::info const&>(i);
   }
 };
-
-
-template <typename F>
-trial<void> type::record::each_impl(F f, type::record::trace& t, offset& o) const
-{
-  o.push_back(0);
-
-  for (auto& field : fields_)
-  {
-    t.push_back(&field);
-
-    auto inner = get<type::record>(field.type);
-    auto tr = inner
-      ? inner->each_impl(f, t, o)
-      : f(const_cast<type::record::trace const&>(t),
-          const_cast<offset const&>(o));
-
-    if (! tr)
-      return tr;
-
-    ++o.back();
-    t.pop_back();
-  }
-
-  o.pop_back();
-
-  return nothing;
-}
-
-template <typename F>
-trial<void> type::record::each_field_impl(F f, type::record::trace& t) const
-{
-  for (auto& field : fields_)
-  {
-    t.push_back(&field);
-
-    auto inner = get<type::record>(field.type);
-    auto tr = inner
-      ? inner->each_field_impl(f, t)
-      : f(const_cast<type::record::trace const&>(t));
-
-    if (! tr)
-      return tr;
-
-    t.pop_back();
-  }
-
-  return nothing;
-}
-
-template <typename F>
-trial<void> type::record::each_offset_impl(F f, offset& o) const
-{
-  o.push_back(0);
-
-  for (auto& field : fields_)
-  {
-    auto inner = get<type::record>(field.type);
-    auto t = inner
-      ? inner->each_offset_impl(f, o)
-      : f(const_cast<offset const&>(o));
-
-    if (! t)
-      return t;
-
-    ++o.back();
-  }
-
-  o.pop_back();
-
-  return nothing;
-}
-
-template <typename F>
-trial<void> type::record::each_key_impl(F f, key& k) const
-{
-  for (auto& field : fields_)
-  {
-    k.push_back(field.name);
-
-    auto inner = get<type::record>(field.type);
-    auto t = inner
-      ? inner->each_key_impl(f, k)
-      : f(const_cast<key const&>(k));
-
-    if (! t)
-      return t;
-
-    k.pop_back();
-  }
-
-  return nothing;
-}
-
-template <typename F>
-trial<void> type::record::each_key_offset(F f, key& k, offset& o) const
-{
-  o.push_back(0);
-
-  for (auto& field : fields_)
-  {
-    k.push_back(field.name);
-
-    auto inner = get<type::record>(field.type);
-    auto t = inner
-      ? inner->each_key_offset(f, k, o)
-      : f(const_cast<key const&>(k), const_cast<offset const&>(o));
-
-    if (! t)
-      return t;
-
-    ++o.back();
-    k.pop_back();
-  }
-
-  o.pop_back();
-
-  return nothing;
-}
 
 template <typename Iterator>
 trial<void> print(std::vector<type::attribute> const& attrs, Iterator&& out)

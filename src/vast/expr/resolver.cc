@@ -196,14 +196,10 @@ expression type_resolver::operator()(predicate const& p)
     }
 
     disjunction dis;
-    r->each(
-        [&](type::record::trace const& t, offset const& o) -> trial<void>
-        {
-          if (congruent(t.back()->type, lhs->type))
-            dis.emplace_back(predicate{data_extractor{type_, o}, p.op, p.rhs});
-
-          return nothing;
-        });
+    for (auto& e : type::record::each{*r})
+      if (congruent(e.trace.back()->type, lhs->type))
+        dis.emplace_back(
+          predicate{data_extractor{type_, e.offset}, p.op, p.rhs});
 
     if (dis.empty())
       return {};

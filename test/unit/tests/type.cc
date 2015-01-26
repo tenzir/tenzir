@@ -128,6 +128,30 @@ TEST("serialization")
   CHECK(to_string(t) == "table<count, set<port>> &skip");
 }
 
+TEST("record range")
+{
+  auto r = type::record{
+    {"x", type::record{
+            {"y", type::record{
+                    {"z", type::integer{}},
+                    {"k", type::boolean{}}
+                  }},
+            {"m", type::record{
+                    {"y", type::record{{"a", type::address{}}}},
+                    {"f", type::real{}}
+                  }},
+            {"b", type::boolean{}}
+          }},
+    {"y", type::record{{"b", type::boolean{}}}}
+    };
+
+  for (auto& i : type::record::each{r})
+    if (i.offset == offset{0, 1, 0, 0})
+      CHECK(i.key() == key{"x", "m", "y", "a"});
+    else if (i.offset == offset{1, 0})
+      CHECK(i.key() == key{"y", "b"});
+}
+
 TEST("record resolving")
 {
   auto r = type::record{

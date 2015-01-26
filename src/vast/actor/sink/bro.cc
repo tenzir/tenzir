@@ -23,20 +23,12 @@ std::string bro::make_header(type const& t)
   h += std::string{"#open"} + sep + to_string(now(), format) + '\n';
 
   h += "#fields";
-  r->each_key(
-      [&](key const& k) -> trial<void>
-      {
-        h += sep + to_string(k);
-        return nothing;
-      });
+  for (auto& e : type::record::each{*r})
+    h += sep + to_string(e.key());
 
   h += "\n#types";
-  r->each_offset(
-      [&](offset const& o) -> trial<void>
-      {
-        h += sep + to_string(*r->at(o), 0);
-        return nothing;
-      });
+  for (auto& e : type::record::each{*r})
+    h += sep + to_string(e.trace.back()->type, 0);
 
   h += '\n';
   return h;
