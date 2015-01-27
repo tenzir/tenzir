@@ -183,6 +183,12 @@ uint64_t chunk::events() const
   return block().elements();
 }
 
+event_id chunk::base() const
+{
+  auto i = meta().ids.find_first();
+  return i == default_bitstream::npos ? invalid_event_id : i;
+}
+
 chunk::meta_data& chunk::get_meta()
 {
   return msg_.get_as_mutable<meta_data>(0);

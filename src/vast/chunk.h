@@ -111,6 +111,10 @@ public:
   /// @returns The number of events in the chunk.
   uint64_t events() const;
 
+  /// Retrieves the ID of the first event.
+  /// @returns The ID of the first event.
+  event_id base() const;
+
 private:
   meta_data& get_meta();
   vast::block& block();
