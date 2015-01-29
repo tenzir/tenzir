@@ -1,8 +1,10 @@
 #ifndef VAST_ACTOR_PARTITION_H
 #define VAST_ACTOR_PARTITION_H
 
-#include <queue>
+#include <map>
+#include <set>
 #include "vast/chunk.h"
+#include "vast/expression.h"
 #include "vast/filesystem.h"
 #include "vast/schema.h"
 #include "vast/time.h"
@@ -13,28 +15,21 @@
 namespace vast {
 
 /// A horizontal partition of the index.
+///
+/// For each chunk PARTITION receives, it spawns (i) a dedicated DECHUNKIFIER
+/// which turns the chunk back into a sequence of events, (ii) a set of
+/// EVENT_INDEXERs for all event types occurring in the chunk, and (iii)
+/// registers all EVENT_INDEXERs as sink of the DECHUNKIFIER.
 class partition : public flow_controlled_actor
 {
-public:
-  struct meta_data : util::equality_comparable<meta_data>
-  {
-    uuid id;
-    time_point first_event = time_range{};
-    time_point last_event = time_range{};
-    time_point last_modified = now();
+  struct evaluator;
 
-  private:
-    friend access;
-    void serialize(serializer& sink) const;
-    void deserialize(deserializer& source);
-    friend bool operator==(meta_data const& x, meta_data const& y);
-  };
+public:
+  using bitstream_type = default_bitstream;
 
   /// Spawns a partition.
-  /// @param index_dir The index directory in which to create this partition.
-  /// @param id The unique ID for this partition.
-  /// @param batch_size The number of events to dechunkify at once.
-  partition(path const& index_dir, uuid id, size_t batch_size);
+  /// @param dir The directory where to store this partition on the file system.
+  partition(path const& dir);
 
   void at(caf::down_msg const& msg) override;
   void at(caf::exit_msg const& msg) override;
@@ -42,36 +37,32 @@ public:
   std::string name() const override;
 
 private:
-  struct statistics
+  trial<void> flush();
+
+  struct predicate_state
   {
-    uint64_t backlog = 0;         // Number of outstanding batches.
-    uint64_t value_total = 0;     // Total values indexed.
-    uint64_t value_rate = 0;      // Last indexing rate (values/sec).
-    uint64_t value_rate_mean = 0; // Mean indexing rate (values/sec).
+    caf::actor task;
+    bitstream_type hits;
+    util::flat_set<event_id> coverage;
+    util::flat_set<expression> queries;
   };
 
-  struct dispatcher;
+  struct query_state
+  {
+    caf::actor task;
+    bitstream_type hits;
+    util::flat_set<caf::actor> sinks;
+    size_t chunks = 0;
+  };
 
-  caf::actor load_time_indexer();
-  caf::actor load_name_indexer();
-
-  trial<caf::actor> load_data_indexer(type const& et, type const& t,
-                                      offset const& o);
-
-  trial<caf::actor> create_data_indexer(type const& et, type const& t,
-                                        offset const& o);
-
-  path dir_;
-  uuid id_;
-  bool updated_ = false;
-  uint64_t batch_size_;
-  uint32_t exit_reason_ = 0;
+  path const dir_;
   schema schema_;
-  std::unordered_map<path, caf::actor> indexers_;
-  std::unordered_map<caf::actor_addr, statistics> stats_;
-  std::queue<chunk> chunks_;
-  caf::actor dechunkifier_;
-  caf::actor task_tree_;
+  util::flat_set<caf::actor_addr> dechunkifiers_;
+  std::multimap<event_id, caf::actor> indexers_;
+  std::map<predicate, predicate_state> predicates_;
+  std::map<expression, query_state> queries_;
+  std::map<caf::actor_addr, predicate const*> predicate_tasks_;
+  std::map<caf::actor_addr, expression const*> query_tasks_;
 };
 
 } // namespace vast

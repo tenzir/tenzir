@@ -466,6 +466,8 @@ void announce_builtin_types()
   VAST_ANNOUNCE(std::vector<value>);
   VAST_ANNOUNCE(std::vector<uuid>);
   // Bitstream
+  VAST_ANNOUNCE(ewah_bitstream);
+  VAST_ANNOUNCE(null_bitstream);
   VAST_ANNOUNCE(bitstream);
   VAST_ANNOUNCE(detail::bitstream_model<ewah_bitstream>);
   VAST_ANNOUNCE(detail::bitstream_model<null_bitstream>);

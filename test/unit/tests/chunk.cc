@@ -8,10 +8,10 @@ SUITE("core")
 
 TEST("chunk")
 {
-  chunk chk;
   auto t = type::integer{};
   t.name("i");
 
+  chunk chk;
   chunk::writer w{chk};
   std::vector<event> es;
   for (auto i = 0; i < 1e3; ++i)

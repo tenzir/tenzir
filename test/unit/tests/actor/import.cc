@@ -18,6 +18,7 @@ SUITE("actors")
 
 TEST("all-in-one import")
 {
+  VAST_INFO("inhaling a single Bro log");
   configuration cfg;
   *cfg["tracker.port"] = 42001;
   *cfg['v'] = 0;
@@ -26,59 +27,45 @@ TEST("all-in-one import")
   *cfg['I'] = "bro";
   *cfg['r'] = m57_day11_18::ftp;
   REQUIRE(cfg.verify());
-
   path dir = *cfg.get("directory");
   if (exists(dir))
     REQUIRE(rm(dir));
-
   anon_send(spawn<program>(cfg), atom("run"));
   await_all_actors_done();
 
-  //
-  // Check that indexes have been written successfully.
-  //
-
-  path part;
-  for (auto& p : directory{dir / "index"})
-    if (p.is_directory())
-    {
-      part = p;
-      break;
-    }
-
-  REQUIRE(! part.empty());
-  auto ftp = part / "types" / "ftp";
-
+  VAST_INFO("checking that indexes have been written correctly");
+  path id_range;
+  for (auto& p0 : directory{dir / "index"})
+    if (p0.is_directory())
+      for (auto& p1 : directory{p0})
+        if (p1.is_directory())
+        {
+          id_range = p1;
+          break;
+        }
+  REQUIRE(! id_range.empty());
+  auto ftp = id_range / "ftp" / "data";
   REQUIRE(exists(dir));
   REQUIRE(exists(ftp));
-
-  uint64_t size;
   address_bitmap_index<default_bitstream> abmi;
   port_bitmap_index<default_bitstream> pbmi;
+  REQUIRE(vast::io::unarchive(ftp / "id" / "orig_h" / "index", abmi));
+  REQUIRE(vast::io::unarchive(ftp / "id" / "orig_p" / "index", pbmi));
+  REQUIRE(abmi.size() == 2);
+  REQUIRE(pbmi.size() == 2);
 
-  REQUIRE(vast::io::unarchive(ftp / "id" / "orig_h" / "index", size, abmi));
-  REQUIRE(vast::io::unarchive(ftp / "id" / "orig_p" / "index", size, pbmi));
-
-  REQUIRE(size == 2);
-  REQUIRE(size == abmi.size());
-  REQUIRE(size == pbmi.size());
-
+  VAST_INFO("performing manual bitmap index lookup");
   auto eq = relational_operator::equal;
   auto orig_h = abmi.lookup(eq, *to<address>("192.168.1.105"));
   auto orig_p = pbmi.lookup(greater, *to<port>("49320/?"));
-
   REQUIRE(orig_h);
   CHECK((*orig_h)[0] == 1);
   CHECK((*orig_h)[1] == 1);
-
   REQUIRE(orig_p);
   CHECK((*orig_p)[0] == 1);
   CHECK((*orig_p)[1] == 0);
 
-  //
-  // Check that the archive has successfully stored the segment.
-  //
-
+  VAST_INFO("checking that ARCHIVE has successfully stored the segment");
   path segment_file;
   for (auto& p : directory{dir / "archive"})
     if (p.basename() != "meta.data")
@@ -87,12 +74,10 @@ TEST("all-in-one import")
       break;
     }
   REQUIRE(! segment_file.empty());
-
   archive::segment s;
   REQUIRE(vast::io::unarchive(segment_file, s));
   REQUIRE(s.size() == 1);
   REQUIRE(s.front().events() == 2);
-
   chunk::reader r{s.front()};
   auto e = r.read();
   REQUIRE(e);
@@ -100,5 +85,6 @@ TEST("all-in-one import")
   REQUIRE(e);
   CHECK(rec->at(1) == "VFU8tqz6is3");
 
+  VAST_INFO("removing temporary directory");
   CHECK(rm(dir));
 }

@@ -54,6 +54,14 @@ public:
     return derived()->stretch_impl(n);
   }
 
+  /// Appends a bitmap index.
+  /// @param other The bitmap index to append.
+  /// @returns `true` on success.
+  bool append(Derived const& other)
+  {
+    return derived()->append_impl(other);
+  }
+
   /// Looks up a value given a relational operator.
   /// @param op The relation operator.
   /// @param x The value to lookup.
@@ -632,7 +640,7 @@ private:
           if (! r)
             return r.error();
 
-          if (r->all_zero())
+          if (r->all_zeros())
             return Bitstream{this->size(), op == not_equal};
 
           for (size_t i = 0; i < size; ++i)
@@ -641,7 +649,7 @@ private:
             if (! b)
               return b.error();
 
-            if (! b->all_zero())
+            if (! b->all_zeros())
               *r &= *b;
             else
               return Bitstream{this->size(), op == not_equal};
@@ -670,7 +678,7 @@ private:
               if (! bs)
                 return bs.error();
 
-              if (bs->all_zero())
+              if (bs->all_zeros())
               {
                 skip = true;
                 break;
@@ -823,7 +831,7 @@ private:
       if (! bs)
         return bs.error();
 
-      if (! bs->all_zero())
+      if (! bs->all_zeros())
         r &= *bs;
       else
         return Bitstream{this->size(), op == not_equal};
@@ -1026,7 +1034,7 @@ private:
     if (! n)
       return n.error();
 
-    if (n->all_zero())
+    if (n->all_zeros())
       return Bitstream{this->size(), false};
 
     if (p.type() != port::unknown)

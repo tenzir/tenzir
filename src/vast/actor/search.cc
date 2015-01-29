@@ -29,7 +29,6 @@ void search::at(exit_msg const& msg)
       VAST_DEBUG(this, "sends EXIT to query", q);
       send_exit(q, msg.reason);
     }
-
   quit(msg.reason);
 }
 
@@ -41,7 +40,6 @@ void search::at(down_msg const& msg)
     VAST_DEBUG(this, "sends EXIT to query", q);
     send_exit(q, msg.reason);
   }
-
   clients_.erase(last_sender());
 }
 
@@ -54,7 +52,6 @@ message_handler search::make_handler()
       VAST_DEBUG(this, "adds archive", a);
       if (! archive_)
         archive_ = spawn<replicator, linked>();
-
       send(archive_, atom("add"), atom("worker"), a);
       return make_message(atom("ok"));
     },
@@ -63,7 +60,6 @@ message_handler search::make_handler()
       VAST_DEBUG(this, "adds index", a);
       if (! index_)
         index_ = spawn<replicator, linked>();
-
       send(index_, atom("add"), atom("worker"), a);
       return make_message(atom("ok"));
     },
@@ -71,7 +67,6 @@ message_handler search::make_handler()
       >> [=](actor const& client, std::string const& str)
     {
       VAST_INFO(this, "got client", client, "asking for", str);
-
       if (! archive_)
       {
         quit(exit::error);
@@ -82,22 +77,19 @@ message_handler search::make_handler()
         quit(exit::error);
         return make_message(error{"no index configured"});
       }
-
-      auto ast = to<expression>(str);
-      if (! ast)
+      auto expr = to<expression>(str);
+      if (! expr)
       {
          VAST_VERBOSE(this, "ignores invalid query:", str);
-         return make_message(ast.error());
+         return make_message(expr.error());
       }
-
-      *ast = visit(expr::normalizer{}, *ast);
-
+      *expr = visit(expr::normalizer{}, *expr);
+      VAST_DEBUG(this, "normalized query to", *expr);
       monitor(client);
-      auto qry = spawn<query>(archive_, client, *ast);
+      auto qry = spawn<query>(archive_, client, *expr);
       clients_[client.address()].queries.insert(qry);
-      send(index_, atom("query"), *ast, qry);
-
-      return make_message(*ast, qry);
+      send(index_, *expr, qry);
+      return make_message(*expr, qry);
     }
   };
 }

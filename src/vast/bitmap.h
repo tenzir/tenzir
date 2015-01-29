@@ -844,6 +844,7 @@ struct null_binner : util::equality_comparable<null_binner<T>>
 };
 
 /// A binning policy that reduces value to a given precision.
+/// Integral types are truncated and fractional types are rounded.
 template <typename T>
 class precision_binner
 {
@@ -864,17 +865,13 @@ class precision_binner
 
 public:
   /// Constructs a precision binner.
-  ///
   /// @param precision The number of decimal digits. For example, a value of 3
-  /// means that the values 1000 and 1300 end up in the same bin having a value
-  /// of 1.
-  ///
-  /// For integral types, the sign of *precision* has no meaning, but for
-  /// floating point types, the sign indiciates the precision of the fractional
-  /// component. For example, a precision of -2 means that the values 42.03 and
-  /// 42.04 end up in the same bin 42.00.
-  ///
-  /// @note Integral types are truncated and fractional types are rounded.
+  ///        means that the values 1000 and 1300 end up in the same bin having
+  ///        a value of 1. For integral types, the sign of *precision* has no
+  ///        meaning, but for floating point types, the sign indiciates the
+  ///        precision of the fractional component. For example, a precision of
+  ///        -2 means that the values 42.03 and 42.04 end up in the same bin
+  ///        42.00.
   precision_binner(int precision = default_precision)
   {
     integral_ = std::pow(10, precision < 0 ? -precision : precision);
@@ -930,8 +927,12 @@ private:
   }
 };
 
-/// A bitmap acts as an associative array mapping arithmetic values to
-/// [bitstreams](@ref bitstream).
+/// An associative array which maps (arithmetic) values to [bitstreams](@ref
+/// bitstream).
+/// @tparam T The value type for append and lookup operation.
+/// @tparam Bitstream The bitstream type.
+/// @tparam Coder The encoding/decoding policy.
+/// @tparam Binner The pre-processing policy to perform on values.
 template <
   typename T,
   typename Bitstream = ewah_bitstream,
@@ -953,6 +954,10 @@ public:
   /// Default-constructs an empty bitmap.
   bitmap() = default;
 
+  /// Performs the bitwise OR of the contained bitstreams.
+  /// @param other The bitmap to OR into this instance.
+  /// @returns `*this`
+  /// @see append
   bitmap& operator|=(bitmap const& other)
   {
     coder_ |= other.coder_;
@@ -990,6 +995,7 @@ public:
   /// Appends the contents of another bitmap to this one.
   /// @param other The other bitmap.
   /// @returns `true` on success.
+  /// @see operator|=
   bool append(bitmap const& other)
   {
     return coder_.append(other.coder_);
@@ -1002,13 +1008,10 @@ public:
   }
 
   /// Retrieves a bitstream of a given value with respect to a given operator.
-  ///
   /// @param op The relational operator to use for looking up *x*.
-  ///
   /// @param x The value to find the bitstream for.
-  ///
   /// @returns An engaged bitstream for all values *v* where *op(v,x)* is
-  /// `true` or a disengaged bitstream if *x* does not exist.
+  ///          `true` or a disengaged bitstream if *x* does not exist.
   trial<Bitstream> lookup(relational_operator op, T x) const
   {
     return coder_.decode(binner_(x), op);

@@ -4,18 +4,18 @@
 namespace vast {
 namespace expr {
 
-interval_restrictor::interval_restrictor(time_point first, time_point last)
+time_restrictor::time_restrictor(time_point first, time_point last)
   : first_{first},
     last_{last}
 {
 }
 
-bool interval_restrictor::operator()(none) const
+bool time_restrictor::operator()(none) const
 {
   assert(! "should never happen");
 }
 
-bool interval_restrictor::operator()(conjunction const& con) const
+bool time_restrictor::operator()(conjunction const& con) const
 {
   for (auto& op : con)
     if (! visit(*this, op))
@@ -23,7 +23,7 @@ bool interval_restrictor::operator()(conjunction const& con) const
   return true;
 }
 
-bool interval_restrictor::operator()(disjunction const& dis) const
+bool time_restrictor::operator()(disjunction const& dis) const
 {
   for (auto& op : dis)
     if (visit(*this, op))
@@ -31,7 +31,7 @@ bool interval_restrictor::operator()(disjunction const& dis) const
   return false;
 }
 
-bool interval_restrictor::operator()(negation const& n) const
+bool time_restrictor::operator()(negation const& n) const
 {
   // We can only apply a negation if it sits directly on top of a time
   // extractor, because we can then negate the meaning of the temporal
@@ -43,7 +43,7 @@ bool interval_restrictor::operator()(negation const& n) const
   return r;
 }
 
-bool interval_restrictor::operator()(predicate const& p) const
+bool time_restrictor::operator()(predicate const& p) const
 {
   if (! is<time_extractor>(p.lhs))
     return true;

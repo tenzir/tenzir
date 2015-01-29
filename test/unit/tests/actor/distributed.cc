@@ -30,18 +30,17 @@ TEST("distributed")
   scoped_actor self;
   bool failed = false;
   message_handler propagate = (
-      on(atom("ok")) >> [] {},
-      [&](error const& e)
-      {
-        failed = true;
-        VAST_ERROR("got error: ", e);
-      },
-      others() >> [&]
-      {
-        failed = true;
-        VAST_ERROR("unexpected message: ",
-                   to_string(self->last_dequeued()));
-      });
+    on(atom("ok")) >> [] {},
+    [&](error const& e)
+    {
+      failed = true;
+      VAST_ERROR("got error: ", e);
+    },
+    others() >> [&]
+    {
+      failed = true;
+      VAST_ERROR("unexpected message: ", to_string(self->last_dequeued()));
+    });
 
   // Tracker
   configuration cfg_track{cfg};
@@ -88,7 +87,7 @@ TEST("distributed")
   if (failed)
     REQUIRE(false);
 
-  // Link components
+  VAST_INFO("linking components");
   configuration cfg_link{cfg};
   cfg_link["tracker.link"]->set("receiver", "archive");
   auto l = self->spawn<program, monitored>(cfg_link);
@@ -138,7 +137,7 @@ TEST("distributed")
   // Give the chunks in the pipeline from IMPORTER to RECEIVER some time.
   std::this_thread::sleep_for(std::chrono::milliseconds(800));
 
-  // Check that import went fine with a simple query.
+  VAST_INFO("checking with a simple query that import went fine");
   self->sync_send(t, atom("tracker")).await(
     [&](actor const& track)
     {
@@ -174,13 +173,15 @@ TEST("distributed")
       REQUIRE(false);
     });
 
+  VAST_INFO("getting one result");
   bool done = false;
   self->do_receive(
+    [&](actor const& /* task */) {},
     on(atom("progress"), arg_match) >> [&](double, uint64_t) {},
     on(atom("done")) >> [] {},
     [&](event const& e)
     {
-      VAST_DEBUG("got event:", e);
+      VAST_INFO("got event:", e);
       CHECK(e.type().name() == "ftp");
       done = true;
     },
@@ -194,13 +195,13 @@ TEST("distributed")
   // We bring down RECEIVER first because it keeps a reference to IDENTIFIER
   // inside TRACKER. If we just killed TRACKER, it would in turn terminate
   // IDENTIFIER and than RECEIVER with an error.
+  VAST_INFO("waiting for RECEIVER to terminate");
   self->send_exit(r, exit::done);
-  VAST_DEBUG("waiting for RECEIVER to terminate");
   self->receive([&](down_msg const& msg) { REQUIRE(msg.source == r); });
 
   // Once RECEIVER is down, TRACKER can safely bring DOWN the remaining
   // components.
-  VAST_DEBUG("sending EXIT to TRACKER");
+  VAST_INFO("sending EXIT to TRACKER");
   self->send_exit(t, exit::done);
   self->await_all_other_actors_done();
 }

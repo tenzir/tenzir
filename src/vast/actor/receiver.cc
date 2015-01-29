@@ -104,8 +104,8 @@ message_handler receiver::make_handler()
                 c.ids(std::move(ids));
 
                 auto t = make_message(std::move(c));
-                send_tuple(archive_, t);
-                send_tuple(index_, t);
+                send(archive_, t);
+                send(index_, t);
               });
         },
         [=](error const& e)

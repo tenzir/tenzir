@@ -18,9 +18,9 @@ namespace expr {
 /// visitor returns `false` if a time extractor restricts all predicates to lay
 /// outside the given interval, and returns `true` if at least one unrestricted
 /// predicate exists in the expression.
-struct interval_restrictor
+struct time_restrictor
 {
-  interval_restrictor(time_point first, time_point second);
+  time_restrictor(time_point first, time_point second);
 
   bool operator()(none) const;
   bool operator()(conjunction const& con) const;

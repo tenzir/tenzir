@@ -18,99 +18,51 @@ query::query(actor archive, actor sink, expression ast)
   trap_exit(false);
   trap_unexpected(false);
   attach_functor(
-      [=](uint32_t)
-      {
-        archive_ = invalid_actor;
-        sink_ = invalid_actor;
-      });
-
-  // Prefetches the next chunk. If we don't have a chunk yet, we look for the
-  // chunk corresponding to the last unprocessed hit. If we have a chunk, we
-  // try to get the next chunk in the ID space. If no such chunk exists, we try
-  // to get a chunk located before the current one. If neither exist, we fail.
-  auto prefetch = [=]
-  {
-    if (inflight_)
-      return;
-
-    if (chunk_.events() == 0)
+    [=](uint32_t)
     {
-      auto last = unprocessed_.find_last();
-      if (last != bitstream::npos)
-      {
-        VAST_DEBUG(this, "prefetches chunk for ID", last);
-        send(archive_, last);
-        inflight_ = true;
-      }
-    }
-    else
-    {
-      VAST_DEBUG(this, "looks for next unprocessed ID after",
-                 chunk_.meta().ids.find_last());
+      archive_ = invalid_actor;
+      sink_ = invalid_actor;
+    });
 
-      auto next = unprocessed_.find_next(chunk_.meta().ids.find_last());
-      if (next != bitstream::npos)
-      {
-        VAST_DEBUG(this, "prefetches chunk for next ID", next);
-        send(archive_, next);
-        inflight_ = true;
-      }
-      else
-      {
-        auto prev = unprocessed_.find_prev(chunk_.meta().ids.find_first());
-        if (prev != bitstream::npos)
-        {
-          VAST_DEBUG(this, "prefetches chunk for previous ID", prev);
-          send(archive_, prev);
-          inflight_ = true;
-        }
-      }
-    }
-  };
-
-  auto incorporate_hits = [=](bitstream const& hits)
+  auto incorporate_hits = [=](bitstream_type const& hits)
   {
-    assert(hits);
-    assert(! hits.all_zero());
-
-    VAST_DEBUG(this, "got index hit covering",
-               '[' << hits.find_first() << ',' << hits.find_last() << ']');
-
+    assert(! hits.all_zeros());
     hits_ |= hits;
     unprocessed_ = hits_ - processed_;
-
+    VAST_DEBUG(this, "got index hit covering",
+               '[' << hits.find_first() << ',' << hits.find_last() << ']');
     prefetch();
   };
 
   auto handle_progress =
-    on(atom("progress"), arg_match) >> [=](double progress, uint64_t hits)
+    on(atom("progress"), arg_match) >> [=](uint64_t remaining, uint64_t total)
     {
-      if (progress != progress_)
-        send(sink_, atom("progress"), progress, hits);
-
-      progress_ = progress;
-
-      if (progress == 1.0)
-      {
-        VAST_DEBUG(this, "completed index interaction (" << hits, "hits)");
-        if (processed_.count() == hits)
-          send(this, atom("done"));
-      }
+      progress_ = (total - double(remaining)) / total;
+      send(sink_, atom("progress"), progress_);
     };
 
   idle_ = (
     handle_progress,
-    [=](bitstream const& hits)
+    [=](actor const& task)
+    {
+      send(task, atom("subscriber"), this);
+      task_ = task;
+    },
+    [=](bitstream_type const& hits)
     {
       incorporate_hits(hits);
-
       if (inflight_)
         become(waiting_);
     },
     on(atom("done")) >> [=]
     {
-      send_tuple(sink_, last_dequeued());
+      forward_to(sink_);
       quit(exit::done);
+    },
+    on(atom("done"), arg_match) >> [=](expression const&)
+    {
+      VAST_DEBUG(this, "completed index interaction");
+      send(this, atom("done"));
     });
 
   waiting_ = (
@@ -118,20 +70,15 @@ query::query(actor archive, actor sink, expression ast)
     incorporate_hits,
     [=](chunk const& chk)
     {
-      inflight_ = false;
-      chunk_ = chk;
-
       VAST_DEBUG(this, "got chunk [" << chk.meta().ids.find_first() << ',',
                  chk.meta().ids.find_last() << "]");
-
+      inflight_ = false;
+      chunk_ = chk;
       assert(! reader_);
       reader_ = std::make_unique<chunk::reader>(chunk_);
-
       become(extracting_);
-
       if (requested_ > 0)
         send(this, atom("extract"));
-
       prefetch();
     });
 
@@ -144,26 +91,24 @@ query::query(actor archive, actor sink, expression ast)
                  (n == 0 ? "all" : to_string(n)),
                  "events (" << (n == 0 ? uint64_t(-1) : requested_ + n),
                  " total)");
-
       // If the query did not extract events this request, we start the
       // extraction process now.
       if (requested_ == 0)
         send(this, atom("extract"));
-
       requested_ = n == 0 ? -1 : requested_ + n;
     },
     on(atom("extract")) >> [=]
     {
+      VAST_DEBUG(this, "starts to extract events (", requested_, "requested)");
       assert(reader_);
       assert(requested_ > 0);
-      VAST_DEBUG(this, "starts to extract events (", requested_, "requested)");
-
-      // We construct a new mask for each request, because the hits
+      // We construct a new mask for each extraction request, because hits may
       // continuously update in every state.
-      bitstream mask = bitstream{chunk_.meta().ids};
+      bitstream_type mask{chunk_.meta().ids};
       mask &= unprocessed_;
       assert(mask.count() > 0);
-
+      // Go through the current chunk and perform a candidate check for a hit,
+      // and relay the event to the sink on success.
       uint64_t n = 0;
       event_id last = 0;
       for (auto id : mask)
@@ -182,11 +127,9 @@ query::query(actor archive, actor sink, expression ast)
               quit(exit::error);
               return;
             }
-
             ast = visit(expr::type_resolver{e->type()}, *t);
             VAST_DEBUG(this, "resolved AST for type", e->type() << ':', ast);
           }
-
           if (visit(expr::evaluator{*e}, ast))
           {
             send(sink_, std::move(*e));
@@ -204,39 +147,29 @@ query::query(actor archive, actor sink, expression ast)
             VAST_ERROR(this, "failed to extract event", id);
           else
             VAST_ERROR(this, "failed to extract event", id << ':', e.error());
-
           quit(exit::error);
           return;
         }
       }
-
       requested_ -= n;
-
-      bitstream partial = bitstream{bitstream_type{last + 1, true}};
+      bitstream_type partial{last + 1, true};
       partial &= mask;
       processed_ |= partial;
       unprocessed_ -= partial;
       mask -= partial;
-
-      VAST_DEBUG(this, "extracted", n, "events",
-                 '(' << partial.count() << '/' << mask.count(),
-                 "processed/remaining hits)");
-
-      if (! mask.all_zero())
+      VAST_DEBUG(this, "extracted", n, "events " << partial.count() << '/'
+                 << mask.count(), "processed/remaining hits)");
+      if (! mask.all_zeros())
       {
         // We continue extracting until we have processed all requested
         // events.
         if (requested_ > 0)
-          send_tuple(this, last_dequeued());
-
+          send(this, last_dequeued());
         return;
       }
-
       reader_.reset();
       chunk_ = {};
-
       become(inflight_ ? waiting_ : idle_);
-
       if (inflight_)
       {
         VAST_DEBUG(this, "becomes waiting");
@@ -244,13 +177,12 @@ query::query(actor archive, actor sink, expression ast)
       }
       else
       {
-        // No chunk in-flight implies no more unprocessed hits, because the
-        // arrival of new hits automatically triggers prefetching.
-        assert(unprocessed_.all_zero());
-
+        // No in-flight chunk implies that we have no more unprocessed hits,
+        // because arrival of new hits automatically triggers prefetching.
+        assert(! unprocessed_.empty());
+        assert(unprocessed_.all_zeros());
         VAST_DEBUG(this, "becomes idle");
         become(idle_);
-
         if (progress_ == 1.0 && unprocessed_.count() == 0)
           send(this, atom("done"));
       }
@@ -266,5 +198,44 @@ std::string query::name() const
 {
   return "query";
 }
+
+void query::prefetch()
+{
+  if (inflight_)
+    return;
+  if (chunk_.events() == 0)
+  {
+    auto last = unprocessed_.find_last();
+    if (last != bitstream_type::npos)
+    {
+      VAST_DEBUG(this, "prefetches chunk for ID", last);
+      send(archive_, last);
+      inflight_ = true;
+    }
+  }
+  else
+  {
+    VAST_DEBUG(this, "looks for next unprocessed ID after",
+               chunk_.meta().ids.find_last());
+    auto next = unprocessed_.find_next(chunk_.meta().ids.find_last());
+    if (next != bitstream_type::npos)
+    {
+      VAST_DEBUG(this, "prefetches chunk for next ID", next);
+      send(archive_, next);
+      inflight_ = true;
+    }
+    else
+    {
+      auto prev = unprocessed_.find_prev(chunk_.meta().ids.find_first());
+      if (prev != bitstream::npos)
+      {
+        VAST_DEBUG(this, "prefetches chunk for previous ID", prev);
+        send(archive_, prev);
+        inflight_ = true;
+      }
+    }
+  }
+};
+
 
 } // namespace vast

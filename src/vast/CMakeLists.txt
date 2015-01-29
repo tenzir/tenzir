@@ -51,6 +51,8 @@ set(libvast_sources
   expr/evaluator.cc
   expr/hoister.cc
   expr/normalizer.cc
+  expr/predicatizer.cc
+  expr/restrictor.cc
   expr/resolver.cc
   expr/validator.cc
   io/algorithm.cc

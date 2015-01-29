@@ -110,7 +110,6 @@ void configuration::initialize()
   arch.visible(false);
 
   auto& idx = create_block("index options", "index");
-  idx.add("batch-size", "number of events to index in one run").init(5000);
   idx.add('e', "max-events", "maximum number of events per partition").init(1 << 20);
   idx.add('p', "max-parts", "maximum number of partitions in memory").init(10);
   idx.add('a', "active-parts", "number of active partitions").init(5);

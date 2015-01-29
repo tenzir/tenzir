@@ -207,12 +207,10 @@ trial<void> program::run()
     auto index_name = *config_.get("index.name");
     if (config_.check("index"))
     {
-      auto batch_size = *config_.as<size_t>("index.batch-size");
       auto max_events = *config_.as<size_t>("index.max-events");
       auto max_parts = *config_.as<size_t>("index.max-parts");
       auto active_parts = *config_.as<size_t>("index.active-parts");
-      index_ = spawn<index, linked>(dir, batch_size, max_events, max_parts,
-                                    active_parts);
+      index_ = spawn<index, linked>(dir, max_events, max_parts, active_parts);
 
       self->sync_send(tracker_, atom("put"), "index", index_, index_name)
         .await(ok_or_quit);
@@ -281,7 +279,7 @@ trial<void> program::run()
     auto search_name = *config_.get("search.name");
     if (config_.check("search"))
     {
-      search_ = spawn<search>();
+      search_ = spawn<search, linked>();
       self->sync_send(tracker_, atom("put"), "search", search_, search_name)
         .await(ok_or_quit);
       if (abort)
@@ -302,11 +300,6 @@ trial<void> program::run()
         if (abort)
           return std::move(*abort);
       }
-
-      if (config_.check("receiver"))
-        search_->link_to(receiver_);
-      else
-        link_to(search_);
     }
 
     schema sch;

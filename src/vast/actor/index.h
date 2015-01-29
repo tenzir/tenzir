@@ -4,7 +4,6 @@
 #include "vast/bitstream.h"
 #include "vast/expression.h"
 #include "vast/filesystem.h"
-#include "vast/optional.h"
 #include "vast/uuid.h"
 #include "vast/time.h"
 #include "vast/actor/actor.h"
@@ -12,32 +11,41 @@
 
 namespace vast {
 
-/// An inter-query predicate cache.
-class index : public flow_controlled_actor
+/// Indexes chunks by scaling horizontally over multiple partitions.
+///
+/// The index consists of multiple partitions. A partition loaded into memory is
+/// either *active* or *passive*. An active partition can still receive chunks
+/// whereas a passive partition is a sealed entity used only during querying.
+/// On startup, it will scan all existing partitions on the filesystem and load
+/// the k-most recent partitions into the active set, where k is configurable
+/// parameter.
+///
+/// Arriving chunks get load-balanced across the set of active partitions. If a
+/// partition becomes full, it will get evicted and replaced with a new one.
+///
+/// A query expression always comes with a sink actor receiving the hits. The
+/// sink will receive messages in the following order:
+///
+///   (1) A task representing the progress of the evaluation
+///   (2) Optionally a series of hits
+///   (3) A DONE atom
+///
+/// After receiving the DONE atom the sink will not receive any further hits.
+struct index : public flow_controlled_actor
 {
-public:
-  struct predicatizer;
-  struct builder;
-  struct pusher;
-  struct dispatcher;
-  struct evaluator;
-  struct propagator;
+  // FIXME: only propagate overload upstream if *all* partitions are
+  // overloaded. This requires tracking the set of overloaded partitions
+  // manually.
+
+  using bitstream_type = default_bitstream;
 
   struct partition_state
   {
-    struct predicate_status
-    {
-      bitstream hits;
-      uint64_t got = 0;
-      optional<uint64_t> expected;
-    };
-
-    std::map<expression, predicate_status> status;
     caf::actor actor;
     uint64_t events = 0;
     time_point last_modified;
-    time_point first_event = time_range{};
-    time_point last_event = time_range{};
+    time_point from = time_range{};
+    time_point to = time_range{};
 
   private:
     friend access;
@@ -47,61 +55,51 @@ public:
 
   struct query_state
   {
-    struct predicate_state
-    {
-      bitstream hits;
-      std::vector<uuid> restrictions;
-    };
-
-    std::map<expression, predicate_state> predicates;
+    bitstream_type hits;
+    caf::actor task;
+    std::map<caf::actor, uuid> parts;
     util::flat_set<caf::actor> subscribers;
   };
 
   struct schedule_state
   {
     uuid part;
-    util::flat_set<predicate> predicates;
+    util::flat_set<expression> queries;
   };
 
   /// Spawns the index.
   /// @param dir The directory of the index.
-  /// @param batch_size The number of events to index at once per partition.
   /// @param max_events The maximum number of events per partition.
   /// @param max_parts The maximum number of partitions to hold in memory.
   /// @param active_parts The number of active partitions to hold in memory.
-  index(path const& dir, size_t batch_size, size_t max_events,
+  index(path const& dir, size_t max_events,
         size_t max_parts, size_t active_parts);
-
-  /// Dispatches a predicate for a partition either by relaying it directory
-  /// if active or enqueing it into partition queue.
-  /// @param part The partition to query with *pred*.
-  /// @param pred The predicate to look for in *part*.
-  void dispatch(uuid const& part, predicate const& pred);
-
-  /// Consolidates a predicate which has previously been dispatched.
-  /// @param part The partition of *pred*.
-  /// @param pred The predicate which delivered all hits within *part*.
-  /// @pre The combination of *part* and *pred* must have been dispatched.
-  void consolidate(uuid const& part, predicate const& pred);
-
-  /// Computes the progression for a given query.
-  double progress(expression const& query) const;
-
-  // FIXME: only propagate overload upstream if *all* partitions are
-  // overloaded. This requires tracking the set of overloaded partitions
-  // manually.
 
   void at(caf::down_msg const& msg) override;
   void at(caf::exit_msg const& msg) override;
   caf::message_handler make_handler() override;
   std::string name() const override;
 
+  /// Dispatches a query for a partition either by relaying it directly if
+  /// active or enqueing it into partition queue.
+  /// @param part The partition to query with *expr*.
+  /// @param expr The query to look for in *part*.
+  /// @returns The partition actor for *part* if *expr* can be scheduled.
+  optional<caf::actor> dispatch(uuid const& part, expression const& expr);
+
+  /// Consolidates a query which has previously been dispatched.
+  /// @param part The partition of *expr*.
+  /// @param expr The query which has finished with *part*.
+  /// @pre The combination of *part* and *expr* must have been dispatched.
+  void consolidate(uuid const& part, expression const& expr);
+
+  trial<void> flush();
+
   path dir_;
-  size_t batch_size_;
   size_t max_events_per_partition_;
   size_t max_partitions_;
   size_t active_partitions_;
-  std::multimap<expression, std::shared_ptr<expression>> predicates_;
+  std::map<caf::actor_addr, expression const*> tasks_;
   std::map<expression, query_state> queries_;
   std::unordered_map<uuid, partition_state> partitions_;
   std::list<schedule_state> schedule_;

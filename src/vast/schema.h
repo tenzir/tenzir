@@ -21,7 +21,8 @@ public:
   using const_iterator = std::vector<type>::const_iterator;
   using iterator = std::vector<type>::iterator;
 
-  /// Merges two schemata.
+  /// Merges two schemata by appending all types of the second schema to the
+  /// first.
   /// @param s1 The first schema.
   /// @param s2 The second schema.
   /// @returns The merged schema.
@@ -66,7 +67,7 @@ private:
       if (t.name().empty())
         continue;
 
-      // TODO: fix laziness.
+      // TODO: fix laziness and check return values.
       print("type ", out);
       print(t.name(), out);
       print(" = ", out);

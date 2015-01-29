@@ -7,6 +7,7 @@
 #include "vast/expression.h"
 #include "vast/filesystem.h"
 #include "vast/actor/program.h"
+#include "vast/actor/task.h"
 
 #include "framework/unit.h"
 #include "test_data.h"
@@ -18,64 +19,48 @@ SUITE("actors")
 
 TEST("basic actor integrity")
 {
-  // First spawn the core.
+  scoped_actor self;
+
+  VAST_INFO("spawning the first core");
   configuration core_config;
   *core_config["tracker.port"] = 42002;
   *core_config['v'] = 0;
   *core_config['V'] = 5;
   *core_config['C'] = true;
   REQUIRE(core_config.verify());
-
   path dir = *core_config.get("directory");
   if (exists(dir))
     REQUIRE(rm(dir));
-
   auto core = spawn<program>(core_config);
-  anon_send(core, atom("run"));
+  self->send(core, atom("run"));
+  self->receive(on(atom("ok")) >> [&] { CHECK(self->last_sender() == core); });
 
-  // Wait until the TCP sockets of the core have bound.
-  std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-  // Import a single Bro log.
+  VAST_INFO("importing a single Bro log");
   configuration import_config;
   *import_config["tracker.port"] = 42002;
   *import_config['v'] = 0;
-  *import_config['V'] = 5;
   *import_config['I'] = "bro";
   *import_config['r'] = m57_day11_18::ssl;
   *import_config["import.batch-size"] = 10;
   *import_config["archive.max-segment-size"] = 1;
   REQUIRE(import_config.verify());
-
   auto import = spawn<program>(import_config);
-  import->link_to(core); // Pull down core after import.
+  import->link_to(core);
   anon_send(import, atom("run"));
 
-  await_all_actors_done();
+  VAST_INFO("waiting for importer to pull down core");
+  self->await_all_other_actors_done();
 
-  // Restart a new core.
+  VAST_INFO("restarting a new core");
   *core_config["tracker.port"] = 42003;
   *core_config['v'] = 0;
   *core_config['V'] = 5;
   *core_config['C'] = true;
   REQUIRE(core_config.verify());
-
   core = spawn<program>(core_config);
   anon_send(core, atom("run"));
 
-  scoped_actor self;
-  auto fail = others() >> [&]
-  {
-    std::cerr
-      << "unexpected message from " << self->last_sender().id() << ": "
-      << to_string(self->last_dequeued()) << std::endl;
-
-    REQUIRE(false);
-  };
-
-  //
-  // Test whether the archive has the correct chunk.
-  //
+  VAST_INFO("testing whether archive has the correct chunk");
   actor trackr;
   self->send(core, atom("tracker"));
   self->receive([&](actor const& t) { trackr = t; });
@@ -83,75 +68,58 @@ TEST("basic actor integrity")
   self->send(trackr, atom("get"), *core_config.get("archive.name"));
   self->receive([&](actor const& a) { self->send(a, event_id(112)); });
   self->receive(
-      on_arg_match >> [&](chunk const& chk)
-      {
-        // The ssl.log has a total of 113 events and we use batches of 10. So
-        // the last chunk has three events in [110, 112].
-        CHECK(chk.meta().ids.find_first() == 110);
-        CHECK(chk.meta().ids.find_last() == 112);
+    on_arg_match >> [&](chunk const& chk)
+    {
+      // The ssl.log has a total of 113 events and we use batches of 10. So
+      // the last chunk has three events in [110, 112].
+      CHECK(chk.meta().ids.find_first() == 110);
+      CHECK(chk.meta().ids.find_last() == 112);
 
-        // Check the last ssl.log entry.
-        chunk::reader r{chk};
-        auto e = r.read(112);
-        REQUIRE(e);
-        CHECK(get<record>(*e)->at(1) == "XBy0ZlNNWuj");
-        CHECK(get<record>(*e)->at(3) == "TLSv10");
-      },
-      fail);
+      // Check the last ssl.log entry.
+      chunk::reader r{chk};
+      auto e = r.read(112);
+      REQUIRE(e);
+      CHECK(get<record>(*e)->at(1) == "XBy0ZlNNWuj");
+      CHECK(get<record>(*e)->at(3) == "TLSv10");
+    });
 
-  //
-  // Test whether a manual index lookup succeeds.
-  //
+  VAST_INFO("testing whether a manual index lookup succeeds");
   auto pops = to<expression>("id.resp_p == 995/?");
   REQUIRE(pops);
-
   self->send(trackr, atom("get"), *core_config.get("index.name"));
-  self->receive(
-      [&](actor index) { self->send(index, atom("query"), *pops, self); });
-
-  bool done = false;
+  self->receive([&](actor const& index) { self->send(index, *pops, self); });
+  self->receive([&](actor t) { self->send(t, atom("subscriber"), self); });
+  uint64_t left = 5;
   self->do_receive(
-      [&](bitstream const& hits)
-      {
-        CHECK(hits.count() > 0);
-      },
-      on(atom("progress"), arg_match) >> [&](double progress, uint64_t hits)
-      {
-        if (progress == 1.0)
-        {
-          done = true;
-          CHECK(hits == 46);
-        }
-      },
-      fail
-      ).until([&done] { return done; });
+    [&](default_bitstream const& hits)
+    {
+      CHECK(hits.count() > 0);
+    },
+    on(atom("done"), arg_match) >> [&](expression const& expr)
+    {
+      CHECK(expr == *pops);
+    },
+    on(atom("progress"), arg_match) >> [&](uint64_t remaining, uint64_t total)
+    {
+      CHECK(total == 5);
+      CHECK(--left == remaining);
+    }).until([&left] { return left == 0; });
 
-  //
-  // Construct a simple query and verify that the results are correct.
-  //
+  VAST_INFO("constructing a simple POPS query");
   self->send(trackr, atom("get"), *core_config.get("search.name"));
   self->receive(
-      [&](actor search)
-      {
-        auto q = "id.resp_p == 995/?";
-        self->sync_send(search, atom("query"), self, q).await((
-            [&](expression const& ast, actor qry)
-            {
-              CHECK(ast == *pops);
-              self->send(qry, atom("extract"), uint64_t{46});
-            },
-            fail));
-      },
-      fail);
+    [&](actor search)
+    {
+      auto q = "id.resp_p == 995/?";
+      self->sync_send(search, atom("query"), self, q).await((
+        [&](expression const& ast, actor qry)
+        {
+          CHECK(ast == *pops);
+          self->send(qry, atom("extract"), uint64_t{46});
+        }));
+    });
 
-  self->receive(
-      on(atom("progress"), arg_match) >> [&](double progress, uint64_t hits)
-      {
-        CHECK(progress == 1.0);
-        CHECK(hits == 46);
-      },
-      fail);
-
+  VAST_INFO("checking POPS query results");
   auto i = 0;
   self->receive_for(i, 46) (
     [&](event const& e)
@@ -169,99 +137,73 @@ TEST("basic actor integrity")
       // The last event.
       if (e.id() == 102)
         CHECK(get<record>(e)->at(1) == "mXRBhfuUqag");
-    },
-    fail);
+    });
 
-  // A query always sends a "done" atom before terminating.
-  self->receive(
-      on(atom("done")) >> [&] { REQUIRE(true); },
-      fail);
+  VAST_INFO("waiting on final done from QUERY");
+  self->receive(on(atom("done")) >> [&] { REQUIRE(true); });
 
-  // Now import another Bro log.
+  VAST_INFO("importing another Bro log");
   *import_config["tracker.port"] = 42003;
+  *import_config["import.batch-size"] = 100;
   *import_config['r'] = m57_day11_18::conn;
   import = self->spawn<program, monitored>(import_config);
   anon_send(import, atom("run"));
-  self->receive(
-      on_arg_match >> [&](down_msg const& d) { CHECK(d.reason == exit::done); },
-      fail);
+  self->receive([&](down_msg const& msg) { CHECK(msg.reason == exit::done); });
 
-  // Wait for the segment to arrive at the receiver.
-  std::this_thread::sleep_for(std::chrono::seconds(1));
+  VAST_INFO("waiting for chunks to arrive at RECEIVER");
+  std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
+  VAST_INFO("flushing INDEX");
   self->send(trackr, atom("get"), *core_config.get("index.name"));
   self->receive(
-      [&](actor index)
-      {
-        self->sync_send(index, atom("flush")).await(
-            on_arg_match >> [&](actor task_tree)
-            {
-              anon_send(task_tree, atom("notify"), self);
-              self->receive(
-                  on(atom("done")) >> [&]
-                  {
-                    CHECK(self->last_sender() == task_tree);
-                    path part;
-                    for (auto& p : directory{dir / "index"})
-                      if (p.is_directory())
-                      {
-                        part = p;
-                        break;
-                      }
+    [&](actor const& index)
+    {
+      auto t = self->spawn<task, monitored>();
+      self->send(index, atom("flush"), t);
+      self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
+    });
 
-                    REQUIRE(! part.empty());
-                    REQUIRE(exists(part / "types" / "conn"));
-                  },
-                  fail);
-            },
-            fail);
-      });
-
-  // Issue a query against both conn and ssl.
+  VAST_INFO("issuing query against conn and ssl");
   self->send(trackr, atom("get"), *core_config.get("search.name"));
   self->receive(
-      [&](actor search)
-      {
-        auto q = "id.resp_p == 443/? && \"mozilla\" in ssl.server_name";
-        self->sync_send(search, atom("query"), self, q).await((
-            [&](expression const&, actor qry)
-            {
-              // Extract all results.
-              self->send(qry, atom("extract"), uint64_t{0});
-              self->monitor(qry);
-            },
-            fail));
-      },
-      fail);
+    [&](actor const& search)
+    {
+      auto q = "id.resp_p == 443/? && \"mozilla\" in ssl.server_name";
+      self->sync_send(search, atom("query"), self, q).await((
+        [&](expression const&, actor const& qry)
+        {
+          // Extract all results.
+          self->send(qry, atom("extract"), uint64_t{0});
+          self->monitor(qry);
+        }));
+    });
 
-  done = false;
+  VAST_INFO("processing query results");
+  auto done = false;
   size_t n = 0;
   self->do_receive(
-      [&](event const&)
-      {
-        ++n;
-      },
-      on(atom("progress"), arg_match) >> [=](double, uint64_t)
-      {
-        REQUIRE(true);
-      },
-      on(atom("done")) >> [&]
-      {
-        CHECK(n == 15);
-      },
-      [&](down_msg const& d)
-      {
-        // Query terminates after having extracted all events.
-        CHECK(d.reason == exit::done);
-        done = true;
-      },
-      fail
-      ).until([&done] { return done; });
+    [&](event const&)
+    {
+      ++n;
+    },
+    on(atom("progress"), arg_match) >> [=](double, uint64_t)
+    {
+      REQUIRE(true);
+    },
+    on(atom("done")) >> [&]
+    {
+      CHECK(n == 15);
+    },
+    [&](down_msg const& d)
+    {
+      // Query terminates after having extracted all events.
+      CHECK(d.reason == exit::done);
+      done = true;
+    }).until([&done] { return done; });
 
   self->send_exit(core, exit::done);
   self->await_all_other_actors_done();
 
-  // Give the OS some time to flush to the filsystem.
-  std::this_thread::sleep_for(std::chrono::milliseconds(300));
+  VAST_INFO("removing temporary directory");
   CHECK(rm(*core_config.get("directory")));
 }

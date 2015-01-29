@@ -3,208 +3,125 @@
 #include <caf/all.hpp>
 #include "vast/event.h"
 #include "vast/actor/indexer.h"
-#include "vast/actor/task_tree.h"
+#include "vast/actor/task.h"
 #include "vast/actor/source/dechunkifier.h"
+#include "vast/expr/predicatizer.h"
 #include "vast/io/serialization.h"
 
 using namespace caf;
 
 namespace vast {
 
-struct partition::dispatcher
+struct partition::evaluator
 {
-  dispatcher(partition& pa)
-    : part_{pa}
+  using bitstream_type = partition::bitstream_type;
+
+  evaluator(partition const& p)
+    : partition_{p}
   {
   }
 
-  template <typename T>
-  std::vector<actor> operator()(T const&)
+  default_bitstream operator()(none) const
   {
+    assert(! "should never happen");
     return {};
   }
 
-  template <typename T, typename U>
-  std::vector<actor> operator()(T const&, U const&)
+  // TODO: when short-circuiting in con- and disjunction below, it may be
+  // necessary to increase the size of the hits to the maximum among all hits,
+  // because we need to be able to negate the result and still get a bitstream
+  // with the right number of bits.
+
+  bitstream_type operator()(conjunction const& con) const
   {
-    return {};
+    auto hits = visit(*this, con[0]);
+    if (hits.empty() || hits.all_zeros())
+      return {};
+    for (size_t i = 1; i < con.size(); ++i)
+    {
+      hits &= visit(*this, con[i]);
+      if (hits.empty() || hits.all_zeros()) // short-circuit
+        return {};
+    }
+    return hits;
   }
 
-  std::vector<actor> operator()(predicate const& p)
+  bitstream_type operator()(disjunction const& dis) const
   {
-    op_ = p.op;
-    return visit(*this, p.lhs, p.rhs);
-
+    bitstream_type hits;
+    for (auto& op : dis)
+    {
+      hits |= visit(*this, op);
+      if (! hits.empty() && hits.all_ones())  // short-circuit
+        break;
+    }
+    return hits;
   }
 
-  std::vector<actor> operator()(event_extractor const&, data const&)
+  bitstream_type operator()(negation const& n) const
   {
-    return {part_.load_name_indexer()};
+    auto hits = visit(*this, n[0]);
+    hits.flip();
+    return hits;
   }
 
-  std::vector<actor> operator()(time_extractor const&, data const&)
+  bitstream_type operator()(predicate const& pred) const
   {
-    return {part_.load_time_indexer()};
+    auto& preds = partition_.predicates_;
+    auto p = preds.find(pred);
+    return p == preds.end() ? bitstream_type{} : p->second.hits;
   }
 
-  std::vector<actor> operator()(type_extractor const& e, data const&)
-  {
-    std::vector<actor> indexes;
-    for (auto& t : part_.schema_)
-      // FIXME: Adjust after having switched to the new record indexer.
-      if (auto r = get<type::record>(t))
-      {
-        for (auto& i : type::record::each{*r})
-          if (i.trace.back()->type == e.type)
-          {
-            auto a = part_.load_data_indexer(t, e.type, i.offset);
-            if (! a)
-            {
-              VAST_ERROR(a.error());
-              return {};
-            }
-            if (*a)
-              indexes.push_back(std::move(*a));
-          }
-      }
-      else
-      {
-        auto a = part_.load_data_indexer(t, t, {});
-        if (! a)
-        {
-          VAST_ERROR(a.error());
-          return {};
-        }
-        if (*a)
-          indexes.push_back(std::move(*a));
-      }
-
-    return indexes;
-  }
-
-  std::vector<actor> operator()(schema_extractor const& e, data const& d)
-  {
-    std::vector<actor> indexes;
-    for (auto& t : part_.schema_)
-      if (auto r = get<type::record>(t))
-      {
-        for (auto& pair : r->find_suffix(e.key))
-        {
-          auto& o = pair.first;
-          auto lhs_type = r->at(o);
-          assert(lhs_type);
-
-          if (! compatible(*lhs_type, op_, type::derive(d)))
-          {
-            VAST_WARN("incompatible types: LHS =", *lhs_type,
-                      "<--> RHS =", type::derive(d));
-            return {};
-          }
-
-          auto a = part_.load_data_indexer(t, *lhs_type, o);
-          if (! a)
-            VAST_ERROR(a.error());
-          else if (*a)
-            indexes.push_back(std::move(*a));
-        }
-      }
-      else if (e.key.size() == 1 && pattern::glob(e.key[0]).match(t.name()))
-      {
-        auto a = part_.load_data_indexer(t, t, {});
-        if (! a)
-        {
-          VAST_ERROR(a.error());
-          return {};
-        }
-
-        if (*a)
-          indexes.push_back(std::move(*a));;
-      }
-
-    return indexes;
-  }
-
-  template <typename T>
-  std::vector<actor> operator()(data const& d, T const& e)
-  {
-    return (*this)(e, d);
-  }
-
-  relational_operator op_;
-  partition& part_;
+  partition const& partition_;
 };
 
-
-partition::partition(path const& index_dir, uuid id, size_t batch_size)
-  : dir_{index_dir / to_string(id)},
-    id_{std::move(id)},
-    batch_size_{batch_size}
+partition::partition(path const& dir)
+  : dir_{dir}
 {
-  trap_exit(true);
   attach_functor(
-    [=](uint32_t reason)
-    {
-      if (dechunkifier_)
-        anon_send_exit(dechunkifier_, reason);
-      dechunkifier_ = invalid_actor;
-
-      for (auto& p : indexers_)
-        anon_send_exit(p.second, reason);
-      indexers_.clear();
-    });
+      [=](uint32_t)
+      {
+        indexers_.clear();
+        predicates_.clear();
+        queries_.clear();
+      });
 }
 
 void partition::at(down_msg const& msg)
 {
-  if (msg.source == dechunkifier_)
-  {
-    dechunkifier_ = invalid_actor;
-    chunks_.pop();
+  VAST_DEBUG(this, "got DOWN from", msg.source);
+  if (dechunkifiers_.erase(msg.source) == 1)
+    return;
 
-    if (chunks_.size() == 10 - 1)
+  for (auto i = indexers_.begin(); i != indexers_.end(); ++i)
+    if (i->second.address() == msg.source)
     {
-      VAST_DEBUG(this, "signals underload");
-      send(message_priority::high, this, flow_control::underload{});
+      indexers_.erase(i);
+      if (indexers_.size() < 64)
+        become_underloaded();
+      return;
     }
 
-    send(this, atom("unpack"));
-  }
-  else
-  {
-    VAST_DEBUG(this, "got DOWN from", msg.source);
-    stats_.erase(msg.source);
-    for (auto i = indexers_.begin(); i != indexers_.end(); ++i)
-      if (i->second == msg.source)
-      {
-        indexers_.erase(i);
-        break;
-      }
-  }
+  // The same sink may exist with multiple predicates in the cache.
+  for (auto& i : queries_)
+    i.second.sinks.erase(actor_cast<actor>(msg.source));
 }
 
 void partition::at(exit_msg const& msg)
 {
+  VAST_DEBUG(this, "got EXIT from", msg.source);
   if (msg.reason == exit::kill)
   {
     quit(msg.reason);
+    return;
   }
-  else if (chunks_.empty() && ! task_tree_)
-  {
-    // If we have no chunks in the queue, we can initiate the shutdown process
-    // directly.
-    task_tree_ = spawn<task_tree>(this);
-    send(task_tree_, atom("notify"), this);
-    send(task_tree_, this, this);
-    send(this, atom("flush"), task_tree_);
-    exit_reason_ = msg.reason;
-  }
-  else
-  {
-    // If we haven't finished unpacking chunks, we just save the exit reason
-    // and exit after having finished with the last chunk, which will trigger
-    // sending another exit message.
-    exit_reason_ = msg.reason;
-  }
+  trap_exit(false);
+  auto t = spawn<task, linked>(msg.reason);
+  send(this, atom("flush"), t);
+  for (auto& i : indexers_)
+    link_to(i.second);
+  for (auto& q : queries_)
+    link_to(q.second.task);
 }
 
 message_handler partition::make_handler()
@@ -218,207 +135,198 @@ message_handler partition::make_handler()
       quit(exit::error);
       return {};
     }
+    for (auto& p : directory{dir_})
+    {
+      auto basename = p.basename().str();
+      if (p.is_directory())
+      {
+        // Extract the base ID from the path. Directories have the form a-b.
+        auto dash = basename.find('-');
+        if (dash < 1 || dash == std::string::npos)
+        {
+          VAST_WARN(this, "ignores directory with invalid format:", basename);
+          continue;
+        }
+        auto left = basename.substr(0, dash);
+        auto base = to<event_id>(left);
+        if (! base)
+        {
+          VAST_WARN("ignores directory with invalid event ID:", left);
+          continue;
+        }
+        // Load the indexer for each event.
+        for (auto& inner : directory{p})
+        {
+          VAST_DEBUG(this, "loads", basename / inner.basename());
+          auto a = spawn<event_indexer<bitstream_type>, monitored>(inner);
+          indexers_.emplace(*base, a);
+        }
+      }
+    }
   }
-
-  send(this, atom("stats"), atom("show"));
 
   return
   {
-    on(atom("done")) >> [=]
-    {
-      // We only spawn one task tree upon exiting. Once we get notified we can
-      // safely terminate with the last exit reason.
-      assert(exit_reason_ != 0);
-      quit(exit_reason_);
-    },
-    [=](expression const& pred, actor idx)
-    {
-      VAST_DEBUG(this, "got predicate", pred);
-
-      auto indexers = visit(dispatcher{*this}, pred);
-      uint64_t n = indexers.size();
-      send(idx, pred, id_, n);
-
-      if (n == 0)
-      {
-        VAST_DEBUG(this, "did not find a matching indexer for", pred);
-        send(idx, pred, id_, bitstream{});
-      }
-      else
-      {
-        auto t = make_message(pred, id_, idx);
-        for (auto& a : indexers)
-          send_tuple(a, t);
-      }
-    },
-    on(atom("flush"), arg_match) >> [=](actor const& tree)
-    {
-      VAST_DEBUG(this, "got request to flush indexes");
-
-      for (auto& p : indexers_)
-        if (p.second)
-        {
-          send(tree, this, p.second);
-          send(p.second, atom("flush"), tree);
-        }
-
-      if (! schema_.empty())
-      {
-        auto t = io::archive(dir_ / "schema", schema_);
-        if (! t)
-        {
-          VAST_ERROR(this, "failed to save schema:", t.error());
-          quit(exit::error);
-          return;
-        }
-      }
-
-      send(tree, atom("done"));
-    },
     [=](chunk const& c)
     {
-      VAST_DEBUG(this, "got chunk with", c.events(), "events");
-
+      VAST_DEBUG(this, "got chunk with", c.events(), "events:",
+                 '[' << c.base() << ',' << (c.base() + c.events()) << ')');
+      // We record all types so that we can spawn the indexers later.
       auto sch = schema::merge(schema_, c.meta().schema);
-      if (! sch)
+      if (sch)
+      {
+        schema_ = std::move(*sch);
+      }
+      else
       {
         VAST_ERROR(this, "failed to merge schema:", sch.error());
         quit(exit::error);
         return;
       }
-      else if (indexers_.empty() || *sch != schema_)
+      // Spawn a dechunkifier and event indexers, then wire them.
+      auto dechunkifier = spawn<source::dechunkifier, monitored>(c);
+      auto base = c.base();
+      auto i = to_string(base) + "-" + to_string(base + c.events());
+      for (auto& t : c.meta().schema)
+        if (! t.find_attribute(type::attribute::skip))
+        {
+          auto a = spawn<event_indexer<bitstream_type>, monitored>(
+              dir_ / i / t.name(), t);
+          indexers_.emplace(base, a);
+          send(dechunkifier, atom("sink"), a);
+        }
+      send(dechunkifier, atom("batch size"), 8192ull);
+      send(dechunkifier, atom("start"));
+      dechunkifiers_.insert(dechunkifier->address());
+      // TODO: test whether this is a reasonable value.
+      if (indexers_.size() > 64)
+        become_overloaded();
+      VAST_DEBUG(this, "runs", indexers_.size(), "indexers and",
+                 dechunkifiers_.size(), "dechunkifiers");
+    },
+    [=](expression const& expr, actor const& sink)
+    {
+      // TODO: normalize query so that it does not contain any negations.
+      // Otherwise we violate the strict monotonicity of hits.
+      VAST_DEBUG(this, "got query for", sink << ':', expr);
+      monitor(sink);
+      auto q = queries_.emplace(expr, query_state{}).first;
+      q->second.sinks.insert(sink);
+      if (! q->second.task)
       {
-        schema_ = std::move(*sch);
-
-        load_time_indexer();
-        load_name_indexer();
-
-        for (auto& tp : c.meta().schema)
-          // FIXME: Adjust after having switched to the new record indexer.
-          if (auto r = get<type::record>(tp))
-          {
-            for (auto& i : type::record::each{*r})
+        // Even if we still have evaluated this query in the past, we still
+        // spin up a new task. This ensures that we incorporate results from
+        // chunks that have arrived in the meantime.
+        VAST_DEBUG(this, "spawns new query task");
+        q->second.task = spawn<task>();
+        query_tasks_.emplace(q->second.task->address(), &q->first);
+        send(q->second.task, atom("supervisor"), this);
+        send(q->second.task, this);
+        for (auto& pred : visit(expr::predicatizer{}, expr))
+        {
+          auto p = predicates_.emplace(pred, predicate_state{}).first;
+          p->second.queries.insert(expr);
+          for (auto& i : indexers_)
+            if (! p->second.coverage.contains(i.first))
             {
-              if (i.trace.back()->type.find_attribute(type::attribute::skip))
-                continue;
-
-              auto a = create_data_indexer(tp, i.trace.back()->type, i.offset);
-              if (! a)
+              VAST_DEBUG(this, "forwards predicate to", i.second << ':', pred);
+              p->second.coverage.insert(i.first);
+              if (! p->second.task)
               {
-                VAST_ERROR(this, a.error());
-                quit(exit::error);
-                return;
+                p->second.task = spawn<task>();
+                send(p->second.task, atom("supervisor"), this);
+                predicate_tasks_.emplace(p->second.task.address(), &p->first);
               }
+              send(q->second.task, p->second.task);
+              send(p->second.task, i.second);
+              send(i.second, expression{pred}, this, p->second.task);
             }
-
-          }
-          else if (! tp.find_attribute(type::attribute::skip))
-          {
-            auto t = create_data_indexer(tp, tp, {});
-            if (! t)
-            {
-              VAST_ERROR(this, t.error());
-              quit(exit::error);
-              return;
-            }
-          }
-      }
-
-      chunks_.push(c);
-      send(this, atom("unpack"));
-
-      if (chunks_.size() == 10)
-      {
-        VAST_DEBUG(this, "signals overload");
-        send(message_priority::high, this, flow_control::overload{});
-      }
-    },
-    [=](std::vector<event> const& events)
-    {
-      for (auto& p : indexers_)
-        send_tuple(p.second, last_dequeued());
-
-      for (auto& p : stats_)
-        p.second.backlog += events.size();
-    },
-    on(atom("unpack")) >> [=]
-    {
-      if (! dechunkifier_)
-      {
-        if (! chunks_.empty())
-        {
-          VAST_DEBUG(this, "begins unpacking a chunk (" <<
-                     chunks_.size() << " remaining)");
-
-          dechunkifier_ =
-            spawn<source::dechunkifier, monitored>(chunks_.front());
-
-          send(dechunkifier_, atom("sink"), this);
-          send(dechunkifier_, atom("batch size"), batch_size_);
-          send(dechunkifier_, atom("run"));
         }
-        else if (exit_reason_ != 0)
-        {
-          send_exit(this, exit_reason_);
-        }
+        send(q->second.task, atom("done"));
       }
+      if (! q->second.hits.empty() && ! q->second.hits.all_zeros())
+        send(sink, expr, q->second.hits);
     },
-    [=](uint64_t processed, uint64_t indexed, uint64_t rate, uint64_t mean)
+    on(atom("done")) >> [=]
     {
-      auto i = stats_.find(last_sender());
-      assert(i != stats_.end());
-      auto& s = i->second;
-
-      s.backlog -= processed;
-      s.value_total += indexed;
-      s.value_rate = rate;
-      s.value_rate_mean = mean;
-
-      updated_ = true;
-    },
-    on(atom("stats"), atom("show")) >> [=]
-    {
-      delayed_send_tuple(this, std::chrono::seconds(3), last_dequeued());
-
-      if (updated_)
-        updated_ = false;
-      else
+      // Once we're done with an entire query, propagate this fact to all
+      // sinks. This needs to happen in the same channel as the results flow,
+      // checking the asynchronously running task would not work.
+      auto qt = query_tasks_.find(last_sender());
+      if (qt != query_tasks_.end())
+      {
+        VAST_DEBUG(this, "completed query", *qt->second);
+        auto& qs = queries_[*qt->second];
+        auto msg = make_message(atom("done"), *qt->second);
+        for (auto& s : qs.sinks)
+          send(s, msg);
+        qs.task = invalid_actor;
+        query_tasks_.erase(qt);
         return;
-
-      std::pair<uint64_t, actor> max_backlog = {0, invalid_actor};
-      uint64_t value_total = 0;
-      uint64_t value_rate = 0;
-      uint64_t value_rate_mean = 0;
-      uint64_t event_rate_min = -1;
-      uint64_t event_rate_max = 0;
-
-      auto n = 0;
-      for (auto& p : indexers_)
-      {
-        ++n;
-
-        auto& s = stats_[p.second.address()];
-        if (s.backlog > max_backlog.first)
-          max_backlog = {s.backlog, p.second};
-
-        if (s.value_rate < event_rate_min)
-          event_rate_min = s.value_rate;
-        if (s.value_rate > event_rate_max)
-          event_rate_max = s.value_rate;
-
-        value_total += s.value_total;
-        value_rate += s.value_rate;
-        value_rate_mean += s.value_rate_mean;
       }
-
-      if (value_rate > 0 || max_backlog.first > 0)
-        VAST_VERBOSE(this,
-          "indexes at " << value_rate << " values/sec" <<
-          " (mean " << value_rate_mean << ") and " <<
-          (value_rate / n) << " events/sec" <<
-          " (" << event_rate_min << '/' << event_rate_max << '/' <<
-          (value_rate_mean / n) << " min/max/mean) with max backlog of " <<
-          max_backlog.first << " at " << max_backlog.second);
+      // Once we've completed all tasks pertaining to a certain predicate, we
+      // we evaluate all queries in which this predicate occurs.
+      auto pt = predicate_tasks_.find(last_sender());
+      assert(pt != predicate_tasks_.end());
+      auto& ps = predicates_[*pt->second];
+      VAST_DEBUG(this, "completed predicate for", ps.coverage.size(),
+                 "indexers:", *pt->second);
+      for (auto& q : ps.queries)
+      {
+        VAST_DEBUG(this, "evaluates", q);
+        auto& qs = queries_[q];
+        auto result = visit(evaluator{*this}, q);
+        if (! result.empty() && ! result.all_zeros() && result != qs.hits)
+        {
+          VAST_DEBUG(this, "relays", result.count(), "hits");
+          qs.hits = std::move(result);
+          auto msg = make_message(q, qs.hits);
+          for (auto& sink : qs.sinks)
+            send(sink, msg);
+        }
+      }
+      ps.task = invalid_actor;
+      predicate_tasks_.erase(pt);
+    },
+    [=](expression const& pred, bitstream_type const& hits)
+    {
+      VAST_DEBUG(this, "got", hits.count(), "hits for predicate:", pred);
+      predicates_[*get<predicate>(pred)].hits |= hits;
+    },
+    on(atom("flush"), arg_match) >> [=](actor const& task)
+    {
+      VAST_DEBUG(this, "got flush request");
+      send(task, this);
+      if (dechunkifiers_.empty())
+        send(this, atom("flush"));
+      else
+        VAST_DEBUG(this, "waits for dechunkifiers to exit");
+      become(
+        keep_behavior,
+        [=](down_msg const& msg)
+        {
+          at(msg);
+          if (dechunkifiers_.empty())
+            send(this, atom("flush"));
+        },
+        on(atom("flush")) >> [=]
+        {
+          unbecome();
+          VAST_DEBUG(this, "flushes indexers");
+          for (auto& i : indexers_)
+            if (i.second)
+            {
+              send(task, i.second);
+              send(i.second, atom("flush"), task);
+            }
+          auto t = flush();
+          send(task, atom("done"));
+          if (! t)
+          {
+            VAST_ERROR(this, "failed to flush:", t.error());
+            quit(exit::error);
+          }
+        });
     }
   };
 }
@@ -428,76 +336,12 @@ std::string partition::name() const
   return "partition";
 }
 
-actor partition::load_time_indexer()
+trial<void> partition::flush()
 {
-  auto p = dir_ / "meta" / "time" / "index";
-  auto& s = indexers_[p];
-  if (! s)
-  {
-    s = spawn<event_time_indexer<default_bitstream>>(std::move(p));
-    monitor(s);
-    stats_[s.address()];
-  }
-
-  return s;
+  if (schema_.empty())
+    return nothing;
+  else
+    return io::archive(dir_ / "schema", schema_);
 }
 
-actor partition::load_name_indexer()
-{
-  auto p = dir_ / "meta" / "name" / "index";
-  auto& s = indexers_[p];
-  if (! s)
-  {
-    s = spawn<event_name_indexer<default_bitstream>>(std::move(p));
-    monitor(s);
-    stats_[s.address()];
-  }
-
-  return s;
-}
-
-trial<actor> partition::load_data_indexer(
-    type const& et, type const& t, offset const& o)
-{
-  auto i = indexers_.find(dir_ / path{"types"} / et.name());
-  if (i != indexers_.end())
-  {
-    assert(i->second);
-    return i->second;
-  }
-
-  return create_data_indexer(et, t, o);
-}
-
-trial<actor> partition::create_data_indexer(
-    type const& et, type const& t, offset const& o)
-{
-  auto abs = dir_ / path{"types"} / et.name();
-
-  // FIXME: Remove after having switched to the new record indexer.
-  auto r = get<type::record>(et);
-  if (r)
-  {
-    auto fs = r->resolve(o);
-    assert(fs);
-    for (auto& f : *fs)
-      abs /= f;
-  }
-
-  abs /= "index";
-
-  auto& s = indexers_[abs];
-  if (! s)
-  {
-    auto a = make_event_data_indexer<default_bitstream>(abs, et, t, o);
-    if (! a)
-      return a;
-
-    s = *a;
-    monitor(s);
-    stats_[s.address()];
-  }
-
-  return s;
-}
 } // namespace vast

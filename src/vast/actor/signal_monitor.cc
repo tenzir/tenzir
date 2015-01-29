@@ -19,7 +19,6 @@ void signal_handler(int signo)
 {
   ++signals[0];
   ++signals[signo];
-
   // Catch termination signals only once to allow forced termination by the OS.
   if (signo == SIGINT || signo == SIGTERM)
     std::signal(signo, SIG_DFL);
@@ -37,11 +36,9 @@ signal_monitor::signal_monitor(actor receiver)
 message_handler signal_monitor::make_handler()
 {
   VAST_DEBUG(this, "sends signals to", sink_);
-
   signals.fill(0);
   for (auto s : { SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGUSR1, SIGUSR2 })
     std::signal(s, &signal_handler);
-
   return
   {
     on(atom("act")) >> [=]
@@ -53,8 +50,7 @@ message_handler signal_monitor::make_handler()
           while (signals[i]-- > 0)
             send(sink_, atom("signal"), i);
       }
-
-      delayed_send_tuple(this, std::chrono::milliseconds(100), last_dequeued());
+      delayed_send(this, std::chrono::milliseconds(100), last_dequeued());
     }
   };
 }

@@ -249,9 +249,20 @@ class flow_controlled_actor : public default_actor
 {
 protected:
   // Hooks for clients.
-  virtual void on_announce(caf::actor const&) { }
-  virtual void on_overload() { }
-  virtual void on_underload() { }
+  virtual void on_announce(caf::actor const& a)
+  {
+    register_upstream(a);
+  }
+
+  virtual void on_overload(caf::actor_addr const&)
+  {
+    propagate_overload();
+  }
+
+  virtual void on_underload(caf::actor_addr const&)
+  {
+    propagate_underload();
+  }
 
   caf::message_handler make_down_handler() final
   {
@@ -259,14 +270,41 @@ protected:
       [=](caf::down_msg const& msg)
       {
         at(msg);
-        VAST_DEBUG(this, "deregisters upstream flow-control node", msg.source);
         auto i = std::find_if(
             upstream_.begin(),
             upstream_.end(),
             [&](caf::actor const& a) { return a == msg.source; });
         if (i != upstream_.end())
+        {
+          VAST_DEBUG(this, "deregisters upstream flow-control node", msg.source);
           upstream_.erase(i);
+        }
       };
+  }
+
+  void register_upstream(caf::actor const& a)
+  {
+    VAST_DEBUG(this, "registers", a, "as upstream flow-control node");
+    monitor(a);
+    upstream_.insert(a);
+  }
+
+  void propagate_overload()
+  {
+    for (auto& a : upstream_)
+    {
+      VAST_DEBUG(this, "propagates overload signal to", a);
+      send_as(this, caf::message_priority::high, a, flow_control::overload{});
+    }
+  }
+
+  void propagate_underload()
+  {
+    for (auto& a : upstream_)
+    {
+      VAST_DEBUG(this, "propagates underload signal to", a);
+      send_as(this, caf::message_priority::high, a, flow_control::underload{});
+    }
   }
 
   auto upstream() const
@@ -274,21 +312,29 @@ protected:
     return upstream_;
   }
 
-  void become_overloaded()
+  bool overloaded() const
   {
+    return overloaded_;
+  }
+
+  bool become_overloaded()
+  {
+    if (overloaded())
+      return false;
     VAST_DEBUG(this, "becomes overloaded");
-    become(
-      caf::keep_behavior,
-      [=](flow_control::overload)
-      {
-        VAST_DEBUG(this, "ignores overload signal");
-      },
-      [=](flow_control::underload)
-      {
-        VAST_DEBUG(this, "unbecomes overloaded");
-        on_underload();
-        unbecome();
-      });
+    overloaded_ = true;
+    propagate_overload();
+    return true;
+  }
+
+  bool become_underloaded()
+  {
+    if (! overloaded())
+      return false;
+    VAST_DEBUG(this, "becomes underloaded");
+    overloaded_ = false;
+    propagate_underload();
+    return true;
   }
 
   caf::message_handler make_internal_handler() final
@@ -300,32 +346,20 @@ protected:
       {
         assert(this != a.source);
         on_announce(a.source);
-        VAST_DEBUG(this, "registers", a.source, "as upstream flow-control node");
-        monitor(a.source);
-        upstream_.insert(a.source);
       },
       [=](flow_control::overload)
       {
-        on_overload();
-        for (auto& a : upstream_)
-        {
-          VAST_DEBUG(this, "propagates overload signal to", a);
-          send_tuple_as(this, a, message_priority::high, last_dequeued());
-        }
+        on_overload(last_sender());
       },
       [=](flow_control::underload)
       {
-        on_underload();
-        for (auto& a : upstream_)
-        {
-          VAST_DEBUG(this, "propagates underload signal to", a);
-          send_tuple_as(this, a, message_priority::high, last_dequeued());
-        }
+        on_underload(last_sender());
       }
     };
   }
 
 private:
+  bool overloaded_ = false;
   util::flat_set<caf::actor> upstream_;
 };
 

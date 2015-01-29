@@ -43,19 +43,19 @@ public:
       i_ = 0;
   }
 
-  void on_overload() override
+  void on_overload(caf::actor_addr const& a) override
   {
-    VAST_DEBUG(this, "inserts", last_sender(), "into overload set");
-    overloaded_.insert(last_sender());
-    if (overloaded_.size() < workers_.size())
-      return;
-    become_overloaded();
+    VAST_DEBUG(this, "inserts", a, "into overload set");
+    overloaded_.insert(a);
+    if (overloaded_.size() == workers_.size())
+      become_overloaded();
   }
 
-  void on_underload() override
+  void on_underload(caf::actor_addr const& a) override
   {
-    VAST_DEBUG(this, "removes", last_sender(), "from overload set");
-    overloaded_.erase(last_sender());
+    VAST_DEBUG(this, "removes", a, "from overload set");
+    overloaded_.erase(a);
+    become_underloaded();
   }
 
   caf::message_handler make_handler()
@@ -82,7 +82,7 @@ public:
           next = workers_[i_++];
           i_ %= workers_.size();
         }
-        while (overloaded_.contains(next.address()));
+        while (overloaded_.contains(next.address()) && ! overloaded());
         forward_to(next);
       }
     };
