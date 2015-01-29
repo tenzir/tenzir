@@ -14,7 +14,8 @@ class task_tree : public default_actor
 public:
   /// Spawns a task tree.
   /// @param root The root node of the task hierarchy.
-  task_tree(caf::actor root)
+  task_tree(caf::actor root, uint32_t exit_reason = exit::done)
+    : exit_reason_{exit_reason}
   {
     degree_[root.address()] = 0;
   }
@@ -75,7 +76,7 @@ public:
         {
           degree_.erase(i);
           if (degree_.empty())
-            quit(exit::done);
+            quit(exit_reason_);
         }
       },
       on(atom("notify"), arg_match) >> [=](actor const& whom)
@@ -101,6 +102,7 @@ public:
   }
 
 private:
+  uint32_t exit_reason_;
   uint64_t remaining_ = 0;
   uint64_t total_ = 0;
   std::map<caf::actor_addr, caf::actor> graph_;
