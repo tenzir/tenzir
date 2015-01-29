@@ -23,7 +23,7 @@ public:
   caf::message_handler make_handler() override
   {
     using namespace caf;
-    this->attach_functor([=](uint32_t) { sink_ = invalid_actor; });
+    this->attach_functor([=](uint32_t) { sinks_.clear(); });
 
     return
     {
@@ -32,10 +32,10 @@ public:
         VAST_DEBUG(this, "sets batch size to", batch_size);
         batch_size_ = batch_size;
       },
-      on(atom("sink"), arg_match) >> [=](actor sink)
+      on(atom("sink"), arg_match) >> [=](actor const& sink)
       {
-        VAST_DEBUG(this, "sets sink to", sink);
-        sink_ = sink;
+        VAST_DEBUG(this, "adds sink to", sink);
+        sinks_.push_back(sink);
       },
       on(atom("start")) >> [=]
       {
@@ -48,8 +48,9 @@ public:
       },
       on(atom("run")) >> [=]
       {
-        if (! sink_)
+        if (sinks_.empty())
         {
+          VAST_ERROR(this, "cannot run without sinks");
           this->quit(exit::error);
           return;
         }
@@ -77,7 +78,7 @@ public:
         if (done)
           this->quit(exit::done);
         else if (running_)
-          this->send_tuple(this, this->last_dequeued());
+          this->send(this, this->last_dequeued());
       }
     };
   }
@@ -87,14 +88,15 @@ private:
   {
     if (! events_.empty())
     {
-      this->send(sink_, std::move(events_));
-      events_.clear();
+      for (auto& a : sinks_)
+        this->send(a, std::move(events_));
+      events_ = {};
     }
   }
 
   bool running_ = true;
-  caf::actor sink_;
-  uint64_t batch_size_ = 100000;
+  std::vector<caf::actor> sinks_;
+  uint64_t batch_size_ = std::numeric_limits<uint16_t>::max();
   std::vector<event> events_;
 };
 
