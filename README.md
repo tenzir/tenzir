@@ -98,7 +98,7 @@ CAF still needs manual installation.
 Mac OS Yosemite also ships with a working C++14 compiler.
 [Homebrew](http://brew.sh) makes it easy to install the dependencies:
 
-    brew install cmake boost actor-framework google-perftools
+    brew install cmake boost caf google-perftools
 
 ## License
 
