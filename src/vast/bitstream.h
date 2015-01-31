@@ -282,11 +282,18 @@ public:
     return r;
   }
 
-  /// Checks whether the bitstream consists only of zero.
-  /// @returns `true` iff all bits in the bitstream are zero.
-  bool all_zero() const
+  /// Checks whether a non-empty bitstream consists only of 0s.
+  /// @returns `true` iff all bits in the bitstream are 0.
+  bool all_zeros() const
   {
-    return find_first() == npos;
+    return ! empty() && find_first() == npos;
+  }
+
+  /// Checks whether a non-empty bitstream consists only of 1s.
+  /// @returns `true` iff all bits in the bitstream are 1.
+  bool all_ones() const
+  {
+    return ! empty() && find_first() == size() - 1;
   }
 
   bitvector const& bits() const
