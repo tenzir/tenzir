@@ -41,7 +41,7 @@ TEST("basic actor integrity")
   *import_config['v'] = 0;
   *import_config['I'] = "bro";
   *import_config['r'] = m57_day11_18::ssl;
-  *import_config["import.batch-size"] = 10;
+  *import_config["import.chunk-size"] = 10;
   *import_config["archive.max-segment-size"] = 1;
   REQUIRE(import_config.verify());
   auto import = spawn<program>(import_config);
@@ -144,7 +144,7 @@ TEST("basic actor integrity")
 
   VAST_INFO("importing another Bro log");
   *import_config["tracker.port"] = 42003;
-  *import_config["import.batch-size"] = 100;
+  *import_config["import.chunk-size"] = 100;
   *import_config['r'] = m57_day11_18::conn;
   import = self->spawn<program, monitored>(import_config);
   anon_send(import, atom("run"));

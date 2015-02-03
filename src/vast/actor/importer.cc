@@ -7,10 +7,10 @@ namespace vast {
 
 using namespace caf;
 
-importer::importer(path dir, uint64_t batch_size, io::compression method)
+importer::importer(path dir, uint64_t chunk_size, io::compression method)
   : dir_{dir / "import"},
     compression_{method},
-    batch_size_{batch_size}
+    chunk_size_{chunk_size}
 {
   attach_functor(
       [=](uint32_t)
@@ -64,7 +64,7 @@ void importer::at(down_msg const& msg)
 message_handler importer::make_handler()
 {
   chunkifier_ =
-    spawn<sink::chunkifier, monitored>(this, batch_size_, compression_);
+    spawn<sink::chunkifier, monitored>(this, chunk_size_, compression_);
 
   for (auto& p : directory{dir_ / "chunks"})
   {
@@ -102,7 +102,7 @@ message_handler importer::make_handler()
       source_ = src;
       source_->link_to(chunkifier_);
       send(source_, atom("sink"), chunkifier_);
-      send(source_, atom("batch size"), batch_size_);
+      send(source_, atom("batch size"), chunk_size_);
       send(source_, atom("run"));
     },
     on(atom("add"), atom("sink"), arg_match) >> [=](actor const& snk)

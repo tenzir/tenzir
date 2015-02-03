@@ -81,7 +81,7 @@ void configuration::initialize()
   imp.add('r', "read", "path to input file/directory").init("-");
   imp.add('i', "interface", "name of interface to read packets from").single();
   imp.add("compression", "the compression method for chunks").init("lz4");
-  imp.add("batch-size", "number of events to ingest in one run").init(5000);
+  imp.add('c', "chunk-size", "number of events to ingest in one run").init(5000);
   imp.add("sniff-schema", "print the log schema and exit");
   imp.add("pcap-cutoff", "forego intra-flow packets after this many bytes").single();
   imp.add("pcap-maxflows", "number of concurrent flows to track").init(1000000);

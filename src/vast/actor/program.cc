@@ -330,8 +330,8 @@ trial<void> program::run()
         return error{"unknown compression method"};
       }
 
-      auto batch_size = *config_.as<uint64_t>("import.batch-size");
-      importer_ = spawn<importer, linked>(dir, batch_size, compression);
+      auto chunk_size = *config_.as<uint64_t>("import.chunk-size");
+      importer_ = spawn<importer, linked>(dir, chunk_size, compression);
 
       auto importer_name = *config_.get("import.name");
       self->sync_send(tracker_, atom("put"), "importer", importer_,

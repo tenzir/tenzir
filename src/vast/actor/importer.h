@@ -16,10 +16,10 @@ class importer : public default_actor
 public:
   /// Spawns an importer.
   /// @param dir The directory where to save persistent state.
-  /// @param batch_size The number of events a synchronous source buffers until
+  /// @param chunk_size The number of events a source buffers until
   ///                   relaying them to the chunkifier
   /// @param method The compression method to use for the chunkifier.
-  importer(path dir, uint64_t batch_size, io::compression method);
+  importer(path dir, uint64_t chunk_size, io::compression method);
 
   void at(caf::exit_msg const& msg) override;
   void at(caf::down_msg const& msg) override;
@@ -36,7 +36,7 @@ private:
   caf::message_handler ready_;
   caf::message_handler paused_;
   caf::message_handler terminating_;
-  uint64_t batch_size_;
+  uint64_t chunk_size_;
   size_t stored_ = 0;
   std::set<path> orphaned_;
 };
