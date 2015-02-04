@@ -67,12 +67,18 @@ public:
   ///                before evicting the corresponding flow.
   /// @param expire_interval The number of seconds between successive expire
   ///                        passes over the flow table.
+  /// @param pseudo_realtime The inverse factor by which to delay packets. For
+  ///                        example, if 5, then for two packets spaced *t*
+  ///                        seconds apart, the source will sleep for *t/5*
+  ///                        seconds.
+  ///
   pcap(schema sch,
        std::string name,
        uint64_t cutoff = -1,
        size_t max_flows = 100000,
        size_t max_age = 60,
-       size_t expire_interval = 10);
+       size_t expire_interval = 10,
+       int64_t pseudo_realtime = 0);
 
   ~pcap();
 
@@ -100,6 +106,8 @@ private:
   uint64_t max_age_;
   uint64_t expire_interval_;
   uint64_t last_expire_ = 0;
+  std::chrono::nanoseconds last_timestamp_;
+  int64_t pseudo_realtime_;
 };
 
 } // namespace source

@@ -378,13 +378,16 @@ trial<void> program::run()
           quit(exit::done);
           return nothing;
         }
-
 #ifdef VAST_HAVE_PCAP
         auto i = config_.get("import.interface");
         auto c = config_.as<size_t>("import.pcap-cutoff");
-        auto m = *config_.as<size_t>("import.pcap-maxflows");
+        auto m = *config_.as<size_t>("import.pcap-flow-max");
+        auto a = *config_.as<size_t>("import.pcap-flow-age");
+        auto e = *config_.as<size_t>("import.pcap-flow-expiry");
+        auto p = *config_.as<int64_t>("import.pcap-pseudo-realtime");
         std::string n = i ? *i : *r;
-        src = spawn<source::pcap, detached>(sch, std::move(n), c ? *c : -1, m);
+        src = spawn<source::pcap, detached>(
+            sch, std::move(n), c ? *c : -1, m, a, e, p);
 #else
         quit(exit::error);
         return error{"not compiled with pcap support"};

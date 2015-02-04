@@ -84,7 +84,10 @@ void configuration::initialize()
   imp.add('c', "chunk-size", "number of events to ingest in one run").init(5000);
   imp.add("sniff-schema", "print the log schema and exit");
   imp.add("pcap-cutoff", "forego intra-flow packets after this many bytes").single();
-  imp.add("pcap-maxflows", "number of concurrent flows to track").init(1000000);
+  imp.add("pcap-flow-max", "number of concurrent flows to track").init(1000000);
+  imp.add("pcap-flow-age", "maximum flow lifetime before eviction").init(60);
+  imp.add("pcap-flow-expiry", "flow table expiration interval").init(10);
+  imp.add("pcap-pseudo-realtime", "factor c delaying packets in trace by 1/c").init(0);
   imp.add("test-id", "the base event ID").init(0);
   imp.add("test-events", "number of events to generate").init(100);
   imp.add("name", "default importer name").init("importer@" + *hostname);

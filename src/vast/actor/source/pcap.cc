@@ -1,6 +1,7 @@
 #include "vast/actor/source/pcap.h"
 
 #include <netinet/in.h>
+#include <thread>
 #include "vast/event.h"
 #include "vast/filesystem.h"
 #include "vast/actor/source/bro.h"
@@ -11,7 +12,7 @@ namespace vast {
 namespace source {
 
 pcap::pcap(schema sch, std::string name, uint64_t cutoff, size_t max_flows,
-           size_t max_age, size_t expire_interval)
+           size_t max_age, size_t expire_interval, int64_t pseudo_realtime)
   : schema_{std::move(sch)},
     name_{std::move(name)},
     packet_type_{detail::make_packet_type()},
@@ -19,7 +20,8 @@ pcap::pcap(schema sch, std::string name, uint64_t cutoff, size_t max_flows,
     max_flows_{max_flows},
     generator_{std::random_device{}()},
     max_age_{max_age},
-    expire_interval_{expire_interval}
+    expire_interval_{expire_interval},
+    pseudo_realtime_{pseudo_realtime}
 {
 }
 
@@ -87,7 +89,14 @@ result<event> pcap::extract()
       }
 
       VAST_INFO(this, "reads trace from", name_);
+      if (pseudo_realtime_ > 0)
+        VAST_INFO(this, "uses pseudo-realtime factor 1/" << pseudo_realtime_);
     }
+
+    VAST_INFO(this, "cuts off flows after", cutoff_, "bytes in each direction");
+    VAST_INFO(this, "keeps at most", max_flows_, "concurrent flows");
+    VAST_INFO(this, "evicts flows after", max_age_, "seconds of inactivity");
+    VAST_INFO(this, "expires flow table every", expire_interval_, "seconds");
 
     if (auto t = schema_.find_type("vast::packet"))
     {
@@ -282,17 +291,30 @@ result<event> pcap::extract()
   auto str = reinterpret_cast<char const*>(data + 14);
   packet.emplace_back(std::string{str, packet_size});
 
-  event e{{std::move(packet), packet_type_}};
-
-  auto s = time_duration::seconds(packet_header_->ts.tv_sec);
+  auto s = std::chrono::seconds(packet_header_->ts.tv_sec);
 #ifdef PCAP_TSTAMP_PRECISION_NANO
-  auto sub = time_duration::nanoseconds(packet_header_->ts.tv_usec);
+  auto sub = std::chrono::nanoseconds(packet_header_->ts.tv_usec);
 #else
-  auto sub = time_duration::microseconds(packet_header_->ts.tv_usec);
+  auto sub = std::chrono::microseconds(packet_header_->ts.tv_usec);
 #endif
-  auto t = s + sub;
-  e.timestamp(t);
+  auto timestamp = s + sub;
+  if (pseudo_realtime_ > 0)
+  {
+    if (timestamp < last_timestamp_)
+    {
+      VAST_WARN(this, "encountered non-monotonic packet timestamps: ",
+                timestamp.count(), '<', last_timestamp_.count());
+    }
+    if (last_timestamp_ != std::chrono::nanoseconds{})
+    {
+      auto delta = timestamp - last_timestamp_;
+      std::this_thread::sleep_for(delta / pseudo_realtime_);
+    }
+    last_timestamp_ = timestamp;
+  }
 
+  event e{{std::move(packet), packet_type_}};
+  e.timestamp(time_point{timestamp});
   return std::move(e);
 }
 
