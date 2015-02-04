@@ -163,7 +163,10 @@ message_handler index::make_handler()
       }
       auto t = flush();
       if (! t)
+      {
         VAST_ERROR(this, "failed to save meta data:", t.error());
+        quit(exit::error);
+      }
       send(task, atom("done"));
     },
     [=](chunk const& chk)
@@ -445,17 +448,10 @@ void index::consolidate(uuid const& part, expression const& expr)
 
 trial<void> index::flush()
 {
-  auto empty = true;
   for (auto& p : partitions_)
     if (p.second.events > 0)
-    {
-      empty = false;
-      break;
-    }
-  if (empty)
-    return nothing;
-  else
-    return io::archive(dir_ / "meta", partitions_);
+      return io::archive(dir_ / "meta", partitions_);
+  return nothing;
 }
 
 } // namespace vast

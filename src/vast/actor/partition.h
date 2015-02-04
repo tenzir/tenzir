@@ -37,7 +37,7 @@ public:
   std::string name() const override;
 
 private:
-  trial<void> flush();
+  void flush(caf::actor const& task);
 
   struct predicate_state
   {

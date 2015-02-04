@@ -296,37 +296,25 @@ message_handler partition::make_handler()
     on(atom("flush"), arg_match) >> [=](actor const& task)
     {
       VAST_DEBUG(this, "got flush request");
-      send(task, this);
       if (dechunkifiers_.empty())
-        send(this, atom("flush"));
+      {
+        flush(task);
+      }
       else
+      {
         VAST_DEBUG(this, "waits for dechunkifiers to exit");
-      become(
-        keep_behavior,
-        [=](down_msg const& msg)
-        {
-          at(msg);
-          if (dechunkifiers_.empty())
-            send(this, atom("flush"));
-        },
-        on(atom("flush")) >> [=]
-        {
-          unbecome();
-          VAST_DEBUG(this, "flushes indexers");
-          for (auto& i : indexers_)
-            if (i.second)
-            {
-              send(task, i.second);
-              send(i.second, atom("flush"), task);
-            }
-          auto t = flush();
-          send(task, atom("done"));
-          if (! t)
+        become(
+          keep_behavior,
+          [=](down_msg const& msg)
           {
-            VAST_ERROR(this, "failed to flush:", t.error());
-            quit(exit::error);
-          }
-        });
+            at(msg);
+            if (dechunkifiers_.empty())
+            {
+              flush(task);
+              unbecome();
+            }
+          });
+      }
     }
   };
 }
@@ -336,12 +324,26 @@ std::string partition::name() const
   return "partition";
 }
 
-trial<void> partition::flush()
+void partition::flush(actor const& task)
 {
-  if (schema_.empty())
-    return nothing;
-  else
-    return io::archive(dir_ / "schema", schema_);
+  VAST_DEBUG(this, "peforms flush");
+  send(task, this);
+  for (auto& i : indexers_)
+    if (i.second)
+    {
+      send(task, i.second);
+      send(i.second, atom("flush"), task);
+    }
+  if (! schema_.empty())
+  {
+    auto t = io::archive(dir_ / "schema", schema_);
+    if (! t)
+    {
+      VAST_ERROR(this, "failed to flush:", t.error());
+      quit(exit::error);
+    }
+  }
+  send(task, atom("done"));
 }
 
 } // namespace vast
