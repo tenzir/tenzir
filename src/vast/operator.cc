@@ -87,13 +87,13 @@ relational_operator flip(relational_operator op)
     case not_equal:
       return op;
     case less:
-      return greater_equal;
-    case less_equal:
       return greater;
+    case less_equal:
+      return greater_equal;
     case greater:
-      return less_equal;
-    case greater_equal:
       return less;
+    case greater_equal:
+      return less_equal;
     case in:
       return ni;
     case not_in:
