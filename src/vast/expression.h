@@ -10,7 +10,7 @@
 #include "vast/detail/parser/error_handler.h"
 #include "vast/detail/parser/skipper.h"
 #include "vast/detail/parser/query.h"
-#include "vast/expr/hoister.h"
+#include "vast/expr/normalize.h"
 #include "vast/expr/validator.h"
 #include "vast/util/variant.h"
 

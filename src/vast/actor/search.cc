@@ -4,7 +4,7 @@
 #include "vast/expression.h"
 #include "vast/actor/query.h"
 #include "vast/actor/replicator.h"
-#include "vast/expr/normalizer.h"
+#include "vast/expr/normalize.h"
 
 namespace vast {
 
@@ -83,7 +83,7 @@ message_handler search::make_handler()
          VAST_VERBOSE(this, "ignores invalid query:", str);
          return make_message(expr.error());
       }
-      *expr = visit(expr::normalizer{}, *expr);
+      *expr = expr::normalize(*expr);
       VAST_DEBUG(this, "normalized query to", *expr);
       monitor(client);
       auto qry = spawn<query>(archive_, client, *expr);

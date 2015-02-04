@@ -49,8 +49,7 @@ set(libvast_sources
   detail/type_manager.cc
   detail/ast/query.cc
   expr/evaluator.cc
-  expr/hoister.cc
-  expr/normalizer.cc
+  expr/normalize.cc
   expr/predicatizer.cc
   expr/restrictor.cc
   expr/resolver.cc

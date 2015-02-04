@@ -5,6 +5,7 @@
 #include "vast/schema.h"
 #include "vast/expr/evaluator.h"
 #include "vast/expr/resolver.h"
+#include "vast/expr/normalize.h"
 #include "vast/io/serialization.h"
 
 using namespace vast;
@@ -207,4 +208,56 @@ TEST("event evaluation")
   schema_resolved = visit(expr::schema_resolver{*bar}, *ast);
   REQUIRE(schema_resolved);
   CHECK(is<none>(*schema_resolved));
+}
+
+TEST("AST normalization")
+{
+  VAST_INFO("ensuring extractor position on LHS");
+  auto expr = to<expression>("\"foo\" in bar");
+  auto normalized = to<expression>("bar ni \"foo\"");
+  REQUIRE(expr);
+  REQUIRE(normalized);
+  CHECK(expr::normalize(*expr) == *normalized);
+
+  VAST_INFO("pushing down negations to predicate level");
+  expr = to<expression>("! (x > 42 && x < 84)");
+  normalized = to<expression>("x <= 42 || x >= 84");
+  REQUIRE(expr);
+  REQUIRE(normalized);
+  CHECK(expr::normalize(*expr) == *normalized);
+
+  VAST_INFO("verifying removal of negations");
+  expr = to<expression>("! x < 42");
+  normalized = to<expression>("x >= 42");
+  REQUIRE(expr);
+  REQUIRE(normalized);
+  CHECK(expr::normalize(*expr) == *normalized);
+  expr = to<expression>("!! x == 42");
+  normalized = to<expression>("x == 42");
+  REQUIRE(expr);
+  REQUIRE(normalized);
+  CHECK(expr::normalize(*expr) == *normalized);
+  expr = to<expression>("!!! x == 42");
+  normalized = to<expression>("x != 42");
+  REQUIRE(expr);
+  REQUIRE(normalized);
+  CHECK(expr::normalize(*expr) == *normalized);
+  expr = to<expression>("!! (x == 42 || a == 80/tcp)");
+  normalized = to<expression>("(x == 42 || a == 80/tcp)");
+  REQUIRE(expr);
+  REQUIRE(normalized);
+  CHECK(expr::normalize(*expr) == *normalized);
+  CHECK(expr::normalize(*expr) == *normalized);
+  expr = to<expression>("! (x > -1 && x < +1)");
+  normalized = to<expression>("x <= -1 || x >= +1");
+  REQUIRE(expr);
+  REQUIRE(normalized);
+  CHECK(expr::normalize(*expr) == *normalized);
+
+  VAST_INFO("performing all normalizations in one shot");
+  expr = to<expression>("42 < a && ! (\"foo\" in bar || !! x == 1337)");
+  normalized = to<expression>("a > 42 && bar !ni \"foo\" && x != 1337");
+  REQUIRE(expr);
+  REQUIRE(normalized);
+  CHECK(expr::normalize(*expr) == *normalized);
 }
