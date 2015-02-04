@@ -11,19 +11,25 @@ Start a core:
 
 Import data:
 
-    zcat *.log.gz | vast -I bro
-    vast -I pcap < trace.pcap
+```sh
+zcat *.log.gz | vast -I bro
+vast -I pcap < trace.pcap
+```
 
 Run a query of at most 100 results, printed as [Bro](http://www.bro.org)
 conn.log:
 
-    vast -E bro -l 100 -q '&type == "conn" && :addr in 192.168.0.0/24'
+```sh
+vast -E bro -l 100 -q '&type == "conn" && :addr in 192.168.0.0/24'
+```
 
 Start the interactive console and submit a query:
 
-    vast -Q
-    > ask
-    ? &time > now - 2d && :string == "http"
+```sh
+vast -Q
+> ask
+? &time > now - 2d && :string == "http"
+```
 
 ## Resources
 
