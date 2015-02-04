@@ -36,7 +36,7 @@ expression hoister::operator()(disjunction const& d) const
 
 expression hoister::operator()(negation const& n) const
 {
-  return {negation{visit(*this, n[0])}};
+  return {negation{visit(*this, n.expression())}};
 }
 
 expression hoister::operator()(predicate const& p) const
@@ -68,7 +68,7 @@ expression aligner::operator()(disjunction const& d) const
 
 expression aligner::operator()(negation const& n) const
 {
-  return {negation{visit(*this, n[0])}};
+  return {negation{visit(*this, n.expression())}};
 }
 
 expression aligner::operator()(predicate const& p) const
@@ -121,12 +121,12 @@ expression denegator::operator()(disjunction const& d) const
 expression denegator::operator()(negation const& n) const
 {
   // Step through double negations.
-  if (auto inner = get<negation>(n[0]))
-    return visit(*this, (*inner)[0]);
+  if (auto inner = get<negation>(n.expression()))
+    return visit(*this, inner->expression());
   // Apply De Morgan from here downward.
   denegator visitor{true};
   visitor.negate_ = true;
-  return visit(visitor, n[0]);
+  return visit(visitor, n.expression());
 }
 
 expression denegator::operator()(predicate const& p) const

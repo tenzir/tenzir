@@ -170,9 +170,12 @@ struct disjunction : std::vector<expression>
 };
 
 /// A NOT expression.
-struct negation : std::vector<expression>
+struct negation : std::vector<vast::expression>
 {
-  using std::vector<expression>::vector;
+  using std::vector<vast::expression>::vector;
+
+  vast::expression const& expression() const;
+  vast::expression& expression();
 };
 
 /// A query expression.
@@ -270,7 +273,7 @@ struct expr_printer
     if (! t)
       return t;
 
-    return print(n[0], out_);
+    return print(n.expression(), out_);
   }
 
   trial<void> operator()(predicate const& p) const

@@ -57,7 +57,7 @@ trial<expression> schema_resolver::operator()(disjunction const& d)
 
 trial<expression> schema_resolver::operator()(negation const& n)
 {
-  auto r = visit(*this, n[0]);
+  auto r = visit(*this, n.expression());
   if (! r)
     return r;
   else if (! is<none>(*r))
@@ -175,7 +175,7 @@ expression type_resolver::operator()(disjunction const& d)
 
 expression type_resolver::operator()(negation const& n)
 {
-  auto e = visit(*this, n[0]);
+  auto e = visit(*this, n.expression());
   if (is<none>(e))
     return e;
   else

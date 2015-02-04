@@ -36,8 +36,8 @@ bool time_restrictor::operator()(negation const& n) const
   // We can only apply a negation if it sits directly on top of a time
   // extractor, because we can then negate the meaning of the temporal
   // constraint.
-  auto r = visit(*this, n[0]);
-  if (auto p = get<predicate>(n[0]))
+  auto r = visit(*this, n.expression());
+  if (auto p = get<predicate>(n.expression()))
     if (is<time_extractor>(p->lhs))
       return ! r;
   return r;

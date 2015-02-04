@@ -60,7 +60,7 @@ struct partition::evaluator
 
   bitstream_type operator()(negation const& n) const
   {
-    auto hits = visit(*this, n[0]);
+    auto hits = visit(*this, n.expression());
     hits.flip();
     return hits;
   }

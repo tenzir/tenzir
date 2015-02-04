@@ -33,7 +33,7 @@ std::vector<predicate> predicatizer::operator()(disjunction const& dis) const
 
 std::vector<predicate> predicatizer::operator()(negation const& n) const
 {
-  return visit(*this, n[0]);
+  return visit(*this, n.expression());
 }
 
 std::vector<predicate> predicatizer::operator()(predicate const& pred) const

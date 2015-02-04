@@ -4,6 +4,19 @@
 #include "vast/serialization/variant.h"
 
 namespace vast {
+
+expression const& negation::expression() const
+{
+  assert(! empty());
+  return *begin();
+}
+
+expression& negation::expression()
+{
+  assert(! empty());
+  return *begin();
+}
+
 namespace detail {
 
 struct expr_serializer

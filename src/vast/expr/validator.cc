@@ -36,7 +36,7 @@ trial<void> validator::operator()(disjunction const& d) const
 
 trial<void> validator::operator()(negation const& n) const
 {
-  return visit(*this, n[0]);
+  return visit(*this, n.expression());
 }
 
 trial<void> validator::operator()(predicate const& p) const
