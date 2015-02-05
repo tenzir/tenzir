@@ -49,6 +49,33 @@ public:
   using std::vector<vast::data>::vector;
   using std::vector<vast::data>::at;
 
+  /// Enables recursive record iteration.
+  class each : public util::range_facade<each>
+  {
+  public:
+    struct range_state
+    {
+      vast::data const& operator*() const;
+      util::stack::vector<8, vast::data const*> trace;
+      vast::offset offset;
+    };
+
+    each(record const& r);
+
+  private:
+    friend util::range_facade<each>;
+
+    range_state const& state() const
+    {
+      return state_;
+    }
+
+    bool next();
+
+    range_state state_;
+    util::stack::vector<8, record const*> records_;
+  };
+
   /// Retrieves a data at a givene offset.
   /// @param o The offset to look at.
   /// @returns A pointer to the data at *o* or `nullptr` if *o* does not

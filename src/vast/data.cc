@@ -11,6 +11,50 @@
 
 namespace vast {
 
+data const& record::each::range_state::operator*() const
+{
+  assert(! trace.empty());
+  return *trace.back();
+}
+
+record::each::each(record const& r)
+{
+  if (r.empty())
+    return;
+  auto rec = &r;
+  do
+  {
+    records_.push_back(rec);
+    state_.trace.push_back(&(*rec)[0]);
+    state_.offset.push_back(0);
+  }
+  while ((rec = get<record>(*state_.trace.back())));
+}
+
+bool record::each::next()
+{
+  if (records_.empty())
+    return false;
+  while (++state_.offset.back() == records_.back()->size())
+  {
+    records_.pop_back();
+    state_.trace.pop_back();
+    state_.offset.pop_back();
+    if (records_.empty())
+      return false;
+  }
+  auto f = &(*records_.back())[state_.offset.back()];
+  state_.trace.back() = f;
+  while (auto r = get<record>(*f))
+  {
+    f = &(*r)[0];
+    records_.push_back(r);
+    state_.trace.push_back(f);
+    state_.offset.push_back(0);
+  }
+  return true;
+}
+
 data const* record::at(offset const& o) const
 {
   record const* r = this;

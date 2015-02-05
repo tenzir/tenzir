@@ -305,12 +305,15 @@ TEST("records")
       }};
 
   auto attempt = r.unflatten(t);
-  if (! attempt)
-    std::cout << attempt.error() << std::endl;
-
   REQUIRE(attempt);
   CHECK(*attempt == structured);
   CHECK(congruent(t, type::derive(structured)));
+
+  std::vector<data> each;
+  auto flat = record{"foo", -42, 1001u, "x", port{443, port::tcp}};
+  for (auto& i : record::each{structured})
+    each.push_back(*i);
+  CHECK(each == flat);
 }
 
 TEST("data size")
