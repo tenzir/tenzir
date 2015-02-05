@@ -27,11 +27,6 @@ struct partition::evaluator
     return {};
   }
 
-  // TODO: when short-circuiting in con- and disjunction below, it may be
-  // necessary to increase the size of the hits to the maximum among all hits,
-  // because we need to be able to negate the result and still get a bitstream
-  // with the right number of bits.
-
   bitstream_type operator()(conjunction const& con) const
   {
     auto hits = visit(*this, con[0]);
@@ -206,8 +201,6 @@ message_handler partition::make_handler()
     },
     [=](expression const& expr, actor const& sink)
     {
-      // TODO: normalize query so that it does not contain any negations.
-      // Otherwise we violate the strict monotonicity of hits.
       VAST_DEBUG(this, "got query for", sink << ':', expr);
       monitor(sink);
       auto q = queries_.emplace(expr, query_state{}).first;
