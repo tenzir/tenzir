@@ -207,9 +207,9 @@ trial<void> program::run()
     auto index_name = *config_.get("index.name");
     if (config_.check("index"))
     {
-      auto max_events = *config_.as<size_t>("index.max-events");
-      auto max_parts = *config_.as<size_t>("index.max-parts");
-      auto active_parts = *config_.as<size_t>("index.active-parts");
+      auto max_events = *config_.as<size_t>("index.part-size");
+      auto max_parts = *config_.as<size_t>("index.part-max");
+      auto active_parts = *config_.as<size_t>("index.part-active");
       index_ = spawn<index, linked>(dir, max_events, max_parts, active_parts);
 
       self->sync_send(tracker_, atom("put"), "index", index_, index_name)
