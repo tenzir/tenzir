@@ -300,7 +300,8 @@ file::file(file&& other) noexcept
 
 file::~file()
 {
-  close();
+  if (path_ != "-")
+    close();
 }
 
 trial<void> file::open(open_mode mode, bool append)
@@ -367,6 +368,8 @@ bool file::close()
 #ifdef VAST_POSIX
   if (! is_open_)
     return false;
+  else if (path_ == "-")
+    return true;
   int result;
   do
   {
