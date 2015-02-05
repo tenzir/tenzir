@@ -14,7 +14,6 @@
 #  include <unistd.h>
 #  include <sys/stat.h>
 #  include <sys/types.h>
-#  define VAST_ERRNO errno
 #  define VAST_CHDIR(P)(::chdir(P) == 0)
 #  define VAST_CREATE_DIRECTORY(P)(::mkdir(P, S_IRWXU|S_IRWXG|S_IRWXO) == 0)
 #  define VAST_CREATE_HARD_LINK(F, T)(::link(T, F) == 0)
@@ -23,7 +22,6 @@
 #  define VAST_DELETE_DIRECTORY(P)(::rmdir(P) == 0)
 #  define VAST_MOVE_FILE(F,T)(::rename(F, T) == 0)
 #else
-#  define VAST_ERRNO ::GetLastError()
 #  define VAST_CHDIR(P)(::SetCurrentDirectoryW(P) != 0)
 #  define VAST_CREATE_DIRECTORY(P)(::CreateDirectoryW(P, 0) != 0)
 #  define VAST_CREATE_HARD_LINK(F,T)(create_hard_link_api(F, T, 0) != 0)
@@ -146,10 +144,8 @@ std::vector<path> path::split() const
 {
   if (empty())
     return {};
-
   auto components =
     util::to_strings(util::split(str_, separator, "\\", -1, true));
-
   assert(! components.empty());
   std::vector<path> result;
   size_t begin = 0;
@@ -159,10 +155,8 @@ std::vector<path> path::split() const
     result.emplace_back(separator);
     begin = 2;
   }
-
   for (size_t i = begin; i < components.size(); i += 2)
     result.emplace_back(std::move(components[i]));
-
   return result;
 }
 
@@ -172,16 +166,13 @@ path path::trim(int n) const
     return *this;
   else if (n == 0)
     return {};
-
   auto pieces = split();
   size_t first = 0;
   size_t last = pieces.size();
-
   if (n < 0)
     first = last - std::min(size_t(-n), pieces.size());
   else
     last = std::min(size_t(n), pieces.size());
-
   path r;
   for (size_t i = first; i < last; ++i)
     r /= pieces[i];
@@ -193,20 +184,16 @@ path path::chop(int n) const
 {
   if (empty() || n == 0)
     return *this;
-
   auto pieces = split();
   size_t first = 0;
   size_t last = pieces.size();
-
   if (n < 0)
     last -= std::min(size_t(-n), pieces.size());
   else
     first += std::min(size_t(n), pieces.size());
-
   path r;
   for (size_t i = first; i < last; ++i)
     r /= pieces[i];
-
   return r;
 }
 
@@ -308,22 +295,18 @@ trial<void> file::open(open_mode mode, bool append)
 {
   if (is_open_)
     return error{"file already open"};
-
   if (mode == read_only && append)
     return error{"cannot open file in read mode and append simultaneously"};
-
 #ifdef VAST_POSIX
-  // Support reading from STDIN and STDOUT.
+  // Support reading from STDIN and writing to STDOUT.
   if (path_ == "-")
   {
     if (mode == read_write)
       return error{"cannot open - in read/write mode"};
-
     handle_ = ::fileno(mode == read_only ? stdin : stdout);
     is_open_ = true;
     return nothing;
   }
-
   int flags = O_CREAT;
   switch (mode)
   {
@@ -337,27 +320,22 @@ trial<void> file::open(open_mode mode, bool append)
       flags |= O_WRONLY;
       break;
   }
-
   if (append)
     flags |= O_APPEND;
-
-  VAST_ERRNO = 0;
-
+  errno = 0;
   if (mode != read_only && ! exists(path_.parent()))
   {
     auto t = mkdir(path_.parent());
     if (! t)
       return error{"failed to create parent directory: ", t.error()};
   }
-
   handle_ = ::open(path_.str().data(), flags, 0644);
   if (handle_ != -1)
   {
     is_open_ = true;
     return nothing;
   }
-
-  return error{std::strerror(VAST_ERRNO)};
+  return error{std::strerror(errno)};
 #else
   return error{"not yet implemented"};
 #endif // VAST_POSIX
@@ -368,8 +346,6 @@ bool file::close()
 #ifdef VAST_POSIX
   if (! is_open_)
     return false;
-  else if (path_ == "-")
-    return true;
   int result;
   do
   {
@@ -416,10 +392,8 @@ bool file::write(void const* source, size_t bytes, size_t* put)
 {
   if (put)
     *put = 0;
-
   if (! is_open_)
     return false;
-
   size_t total = 0;
   auto buffer = reinterpret_cast<uint8_t const*>(source);
 #ifdef VAST_POSIX
@@ -431,10 +405,8 @@ bool file::write(void const* source, size_t bytes, size_t* put)
       written = ::write(handle_, buffer + total, bytes - total);
     }
     while (written < 0 && errno == EINTR);
-
     if (written <= 0)
       return false;
-
     total += written;
     if (put)
       *put += written;
@@ -449,10 +421,8 @@ bool file::seek(size_t bytes, size_t *skipped)
 {
   if (skipped)
     *skipped = 0;
-
   if (! is_open_ || seek_failed_)
     return false;
-
 #ifdef VAST_POSIX
   if (::lseek(handle_, bytes, SEEK_CUR) == off_t(-1))
   {
@@ -462,10 +432,8 @@ bool file::seek(size_t bytes, size_t *skipped)
 #else
   return false;
 #endif // VAST_POSIX
-
   if (skipped)
     *skipped = bytes;
-
   return true;
 }
 
@@ -569,10 +537,8 @@ bool rm(const path& p)
     traverse(p, [](path const& inner) { return rm(inner); });
     return VAST_DELETE_DIRECTORY(p.str().data());
   }
-
   if (t == path::type::regular_file || t == path::type::symlink)
     return VAST_DELETE_FILE(p.str().data());
-
   return false;
 }
 
@@ -581,7 +547,6 @@ trial<void> mkdir(path const& p)
   auto components = p.split();
   if (components.empty())
     return error{"cannot mkdir empty path"};
-
   path c;
   for (auto& comp : components)
   {
@@ -597,7 +562,7 @@ trial<void> mkdir(path const& p)
       if (! VAST_CREATE_DIRECTORY(c.str().data()))
       {
         // Because there exists a TOCTTOU issue here, we have to check again.
-        if (VAST_ERRNO == EEXIST)
+        if (errno == EEXIST)
         {
           auto kind = c.kind();
           if (! (kind == path::directory || kind == path::symlink))
@@ -605,12 +570,11 @@ trial<void> mkdir(path const& p)
         }
         else
         {
-          return error{std::strerror(VAST_ERRNO), c};
+          return error{std::strerror(errno), c};
         }
       }
     }
   }
-
   return nothing;
 }
 
@@ -620,7 +584,6 @@ void traverse(path const& p, std::function<bool(path const&)> f)
   DIR* d = ::opendir(p.str().data());
   if (! d)
     return;
-
   struct dirent* ent;
   while ((ent = ::readdir(d)))
   {
@@ -639,19 +602,15 @@ trial<std::string> load(path const& p, bool skip_whitespace)
 {
   if (p.is_directory())
     return error{"cannot load directory:", p};
-
   std::ifstream in{p.str().data()};
   if (! in)
     return error{"failed to open file:", p};
-
   if (! skip_whitespace)
     in.unsetf(std::ios::skipws);
-
   std::string contents;
   std::copy(std::istream_iterator<char>{in},
             std::istream_iterator<char>{},
             std::back_inserter(contents));
-
   return std::move(contents);
 }
 

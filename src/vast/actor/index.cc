@@ -186,7 +186,7 @@ message_handler index::make_handler()
       if (i->second.events > 0
           && i->second.events + chk.events() > max_events_per_partition_)
       {
-        VAST_DEBUG(this, "replaces", i->second.actor, '(' << part << ')');
+        VAST_VERBOSE(this, "replaces partition (" << part << ')');
         send_exit(i->second.actor, exit::stop);
         i->second.actor = invalid_actor;
 

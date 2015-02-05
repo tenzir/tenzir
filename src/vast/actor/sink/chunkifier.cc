@@ -33,7 +33,7 @@ bool chunkifier::process(event const& e)
   if (stats_.increment())
     VAST_VERBOSE(this, "writes at", stats_.last(), "events/sec (" <<
                  stats_.mean() << '/' << stats_.median() << '/' << stats_.sd(),
-                 " mean/median/sd)");
+                 "mean/median/sd)");
 
 
   if (chunk_->events() == max_events_per_chunk_)

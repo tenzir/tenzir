@@ -99,7 +99,7 @@ query::query(actor archive, actor sink, expression ast)
     },
     on(atom("extract")) >> [=]
     {
-      VAST_DEBUG(this, "starts to extract events (", requested_, "requested)");
+      VAST_DEBUG(this, "starts to extract events (" << requested_, "requested)");
       assert(reader_);
       assert(requested_ > 0);
       // We construct a new mask for each extraction request, because hits may

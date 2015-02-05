@@ -379,7 +379,7 @@ trial<void> bro::parse_header()
     {
       if (is<type::time_point>(f.type))
       {
-        VAST_VERBOSE(this, "auto-detected field", i, " as event timestamp");
+        VAST_VERBOSE(this, "auto-detected field", i, "as event timestamp");
         timestamp_field_ = static_cast<int>(i);
         break;
       }
