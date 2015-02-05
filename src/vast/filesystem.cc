@@ -350,8 +350,7 @@ trial<void> file::open(open_mode mode, bool append)
   }
 
   handle_ = ::open(path_.str().data(), flags, 0644);
-
-  if (handle_ > 0)
+  if (handle_ != -1)
   {
     is_open_ = true;
     return nothing;
