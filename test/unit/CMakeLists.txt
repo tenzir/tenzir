@@ -106,7 +106,7 @@ set(tests ${tests}
   tests/schema.cc
   tests/search.cc
   tests/serialization.cc
-  tests/stack_alloc.cc
+  tests/stack.cc
   tests/string.cc
   tests/type.cc
   tests/util.cc

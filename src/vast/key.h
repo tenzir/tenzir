@@ -4,22 +4,21 @@
 #include <string>
 #include "vast/print.h"
 #include "vast/parse.h"
-#include "vast/util/stack_vector.h"
 #include "vast/util/string.h"
+#include "vast/util/stack/vector.h"
 
 namespace vast {
 
 /// A sequence of type/argument names to recursively access a type or value.
-struct key : util::stack_vector<std::string, 4>
+struct key : util::stack::vector<4, std::string>
 {
-  using util::stack_vector<std::string, 4>::stack_vector;
+  using util::stack::vector<4, std::string>::vector;
 
   template <typename Iterator>
   friend trial<void> parse(key& k, Iterator& begin, Iterator end)
   {
     for (auto& str : util::to_strings(util::split(begin, end, ".")))
-      k.push_back(std::move(str));;
-
+      k.push_back(std::move(str));
     return nothing;
   }
 

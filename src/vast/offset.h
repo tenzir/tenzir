@@ -3,14 +3,14 @@
 
 #include "vast/print.h"
 #include "vast/parse.h"
-#include "vast/util/stack_vector.h"
+#include "vast/util/stack/vector.h"
 
 namespace vast {
 
 /// A sequence of indexes to recursively access a type or value.
-struct offset : util::stack_vector<size_t, 4>
+struct offset : util::stack::vector<4, size_t>
 {
-  using util::stack_vector<size_t, 4>::stack_vector;
+  using util::stack::vector<4, size_t>::vector;
 
   template <typename Iterator>
   friend trial<void> print(offset const& o, Iterator&& out)
@@ -27,13 +27,10 @@ struct offset : util::stack_vector<size_t, 4>
       auto t = parse_positive_decimal(i, begin, end);
       if (! t)
         return error{"expected digit"} + t.error();
-
       o.push_back(i);
-
       if (begin != end && *begin++ != ',')
         return error{"expected comma"};
     }
-
     return nothing;
   }
 };

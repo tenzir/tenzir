@@ -19,6 +19,7 @@
 #include "vast/util/range.h"
 #include "vast/util/variant.h"
 #include "vast/util/hash/xxhash.h"
+#include "vast/util/stack/vector.h"
 
 namespace vast {
 
@@ -129,7 +130,6 @@ public:
     {
       if (! name_.empty())
         return false;
-
       name_ = std::move(name);
       return hash_.add(name_.data(), name_.size());
     }
@@ -223,13 +223,11 @@ public:
       auto t = print(desc, out);                              \
       if (! t)                                                \
         return t;                                             \
-                                                              \
       if (! n.attributes().empty())                           \
       {                                                       \
         *out++ = ' ';                                         \
         return print(n.attributes(), out);                    \
       }                                                       \
-                                                              \
       return nothing;                                         \
     }                                                         \
   };
@@ -866,7 +864,7 @@ public:
       vast::key key() const;
       size_t depth() const;
 
-      std::vector<field const*> trace;
+      util::stack::vector<8, field const*> trace;
       vast::offset offset;
     };
 
@@ -883,7 +881,7 @@ public:
     bool next();
 
     range_state state_;
-    std::vector<record const*> records_;
+    util::stack::vector<8, record const*> records_;
   };
 
   record(std::initializer_list<field> fields, std::vector<attribute> a = {})
