@@ -56,7 +56,11 @@ result<event> pcap::extract()
           quit(exit::error);
           return error{"failed to open interface ", name_, ": ", buf};
         }
-
+        if (pseudo_realtime_ > 0)
+        {
+          pseudo_realtime_ = 0;
+          VAST_WARN(this, "ignores pseudo-realtime in live mode");
+        }
         VAST_INFO(this, "listens on interface " << i->name);
         break;
       }
