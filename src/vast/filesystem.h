@@ -89,10 +89,6 @@ public:
   /// @returns An absolute path.
   path complete() const;
 
-  /// Splits the string at the path separator.
-  /// @returns A vector of the path components.
-  std::vector<path> split() const;
-
   /// Retrieves a sub-path from beginning or end.
   ///
   /// @param n If positive, the function returns the first *n*
@@ -289,6 +285,11 @@ private:
   DIR* dir_ = nullptr;
 #endif
 };
+
+/// Splits the string at the path separator.
+/// @param p The path to split.
+/// @returns A vector of the path components.
+std::vector<path> split(path const& p);
 
 /// Checks whether the path exists on the filesystem.
 /// @param p The path to check for existance.

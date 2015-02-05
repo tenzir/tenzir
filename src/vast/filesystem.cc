@@ -140,33 +140,13 @@ path path::complete() const
   return root().empty() ? current() / *this : *this;
 }
 
-std::vector<path> path::split() const
-{
-  if (empty())
-    return {};
-  auto components =
-    util::to_strings(util::split(str_, separator, "\\", -1, true));
-  assert(! components.empty());
-  std::vector<path> result;
-  size_t begin = 0;
-  if (components[0].empty())
-  {
-    // Path starts with "/".
-    result.emplace_back(separator);
-    begin = 2;
-  }
-  for (size_t i = begin; i < components.size(); i += 2)
-    result.emplace_back(std::move(components[i]));
-  return result;
-}
-
 path path::trim(int n) const
 {
   if (empty())
     return *this;
   else if (n == 0)
     return {};
-  auto pieces = split();
+  auto pieces = split(*this);
   size_t first = 0;
   size_t last = pieces.size();
   if (n < 0)
@@ -184,7 +164,7 @@ path path::chop(int n) const
 {
   if (empty() || n == 0)
     return *this;
-  auto pieces = split();
+  auto pieces = split(*this);
   size_t first = 0;
   size_t last = pieces.size();
   if (n < 0)
@@ -517,6 +497,26 @@ path const& directory::path() const
 }
 
 
+std::vector<path> split(path const& p)
+{
+  if (p.empty())
+    return {};
+  auto components =
+    util::to_strings(util::split(p.str(), path::separator, "\\", -1, true));
+  assert(! components.empty());
+  std::vector<path> result;
+  size_t begin = 0;
+  if (components[0].empty())
+  {
+    // Path starts with "/".
+    result.emplace_back(path::separator);
+    begin = 2;
+  }
+  for (size_t i = begin; i < components.size(); i += 2)
+    result.emplace_back(std::move(components[i]));
+  return result;
+}
+
 bool exists(path const& p)
 {
 #ifdef VAST_POSIX
@@ -544,7 +544,7 @@ bool rm(const path& p)
 
 trial<void> mkdir(path const& p)
 {
-  auto components = p.split();
+  auto components = split(p);
   if (components.empty())
     return error{"cannot mkdir empty path"};
   path c;

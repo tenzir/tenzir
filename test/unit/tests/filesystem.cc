@@ -111,7 +111,7 @@ TEST("path operations")
   CHECK(p.complete() == p);
   CHECK(path("foo/").complete() == path::current() / "foo/");
 
-  auto pieces = p.split();
+  auto pieces = split(p);
   REQUIRE(pieces.size() == 5);
   CHECK(pieces[0] == "/");
   CHECK(pieces[1] == "usr");
