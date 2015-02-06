@@ -73,30 +73,47 @@ struct partition::evaluator
 partition::partition(path const& dir)
   : dir_{dir}
 {
-  attach_functor(
-      [=](uint32_t)
-      {
-        indexers_.clear();
-        predicates_.clear();
-        queries_.clear();
-      });
+  attach_functor([=](uint32_t)
+    {
+      dechunkifiers_.clear();
+      indexers_.clear();
+      predicates_.clear();
+      queries_.clear();
+    });
+
+  // TODO: calibrate
+  overload_when([this]
+    {
+      return dechunkifiers_.size() > 10 || inflight_pings_.size() > 10;
+    });
 }
 
 void partition::at(down_msg const& msg)
 {
   VAST_DEBUG(this, "got DOWN from", msg.source);
-  if (dechunkifiers_.erase(msg.source) == 1)
+  // We send all affected indexers a ping to get an idea of how busy they are.
+  // Then, we use number of all inflight pings as proxy for the load of the
+  // partition.
+  auto er = dechunkifiers_.equal_range(msg.source);
+  if (er.first != er.second)
+  {
+    while (er.first != er.second)
+    {
+      send(er.first->second, ping_atom::value);
+      inflight_pings_.insert(er.first->second->address());
+      er.first = dechunkifiers_.erase(er.first);
+    }
+    check_overload();
     return;
-
+  }
+  // Indexers exit less regularly, so we check them after the dechunkifiers.
   for (auto i = indexers_.begin(); i != indexers_.end(); ++i)
     if (i->second.address() == msg.source)
     {
       indexers_.erase(i);
-      if (indexers_.size() < 64)
-        become_underloaded();
+      check_underload();
       return;
     }
-
   // The same sink may exist with multiple predicates in the cache.
   for (auto& i : queries_)
     i.second.sinks.erase(actor_cast<actor>(msg.source));
@@ -188,14 +205,12 @@ message_handler partition::make_handler()
           auto a = spawn<event_indexer<bitstream_type>, monitored>(
               dir_ / i / t.name(), t);
           indexers_.emplace(base, a);
+          dechunkifiers_.emplace(dechunkifier->address(), a);
           send(dechunkifier, atom("sink"), a);
         }
+      check_overload();
       send(dechunkifier, atom("batch size"), 8192ull);
       send(dechunkifier, atom("start"));
-      dechunkifiers_.insert(dechunkifier->address());
-      // TODO: test whether this is a reasonable value.
-      if (indexers_.size() > 64)
-        become_overloaded();
       VAST_DEBUG(this, "runs", indexers_.size(), "indexers and",
                  dechunkifiers_.size(), "dechunkifiers");
     },
@@ -239,6 +254,13 @@ message_handler partition::make_handler()
       }
       if (! q->second.hits.empty() && ! q->second.hits.all_zeros())
         send(sink, expr, q->second.hits);
+    },
+    [=](pong_atom)
+    {
+      inflight_pings_.erase(last_sender());
+      check_underload();
+      if (! inflight_pings_.empty())
+        VAST_DEBUG(this, "awaits", inflight_pings_.size(), "indexer pongs");
     },
     on(atom("done")) >> [=]
     {

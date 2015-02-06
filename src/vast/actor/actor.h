@@ -132,6 +132,9 @@ inline char const* render_exit_reason(uint32_t reason)
   }
 }
 
+using ping_atom = caf::atom_constant<caf::atom("PING")>;
+using pong_atom = caf::atom_constant<caf::atom("PONG")>;
+
 /// The base class for VAST actors.
 class default_actor : public caf::event_based_actor
 {
@@ -145,7 +148,8 @@ public:
   caf::behavior make_behavior() override
   {
     VAST_DEBUG(this, "spawned");
-    auto system = make_exit_handler().or_else(make_down_handler());
+    caf::message_handler system = [=](ping_atom) { return pong_atom::value; };
+    system = system.or_else(make_exit_handler()).or_else(make_down_handler());
     auto internal = make_internal_handler();
     auto client = make_handler();
     auto handler = system.or_else(internal).or_else(client);
@@ -319,7 +323,7 @@ protected:
 
   bool become_overloaded()
   {
-    if (overloaded())
+    if (overloaded_)
       return false;
     VAST_DEBUG(this, "becomes overloaded");
     overloaded_ = true;
@@ -329,12 +333,29 @@ protected:
 
   bool become_underloaded()
   {
-    if (! overloaded())
+    if (! overloaded_)
       return false;
     VAST_DEBUG(this, "becomes underloaded");
     overloaded_ = false;
     propagate_underload();
     return true;
+  }
+
+  void overload_when(std::function<bool()> f)
+  {
+    overload_check_ = f;
+  }
+
+  void check_overload()
+  {
+    if (overload_check_ && overload_check_())
+      become_overloaded();
+  }
+
+  void check_underload()
+  {
+    if (overload_check_ && ! overload_check_())
+      become_underloaded();
   }
 
   caf::message_handler make_internal_handler() final
@@ -361,6 +382,7 @@ protected:
 private:
   bool overloaded_ = false;
   util::flat_set<caf::actor> upstream_;
+  std::function<bool()> overload_check_;
 };
 
 } // namespace vast
