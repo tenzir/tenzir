@@ -26,14 +26,12 @@ public:
   {
     using namespace caf;
     become(
-        on(atom("accept")) >> [=]
+        [=](accept_atom)
         {
           if (poll(acceptor_->file_handle()))
           {
             if (auto opt = acceptor_->try_accept_connection())
-              send(handler_,
-                   atom("connection"),
-                   spawn<Connection>(opt->first, opt->second));
+              send(handler_, spawn<Connection>(opt->first, opt->second));
           }
           self << self->last_dequeued();
         });

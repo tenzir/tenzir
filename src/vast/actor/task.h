@@ -46,7 +46,7 @@ public:
         actors_.insert(a.address());
         ++total_;
       },
-      on(atom("done"), arg_match) >> [=](actor const& a)
+      [=](done_atom, actor const& a)
       {
         VAST_TRACE(this, "manually completed actor", a);
         if (actors_.erase(a.address()) == 1)
@@ -55,7 +55,7 @@ public:
           notify();
         }
       },
-      on(atom("done")) >> [=]
+      [=](done_atom)
       {
         if (actors_.erase(last_sender()) == 1)
         {
@@ -66,17 +66,17 @@ public:
         VAST_ERROR(this, "got DONE from unregistered actor:", last_sender());
         quit(exit::error);
       },
-      on(atom("supervisor"), arg_match) >> [=](actor const& a)
+      [=](supervisor_atom, actor const& a)
       {
         VAST_TRACE(this, "notifies", a, "about task completion");
         supervisors_.insert(a);
       },
-      on(atom("subscriber"), arg_match) >> [=](actor const& a)
+      [=](subscriber_atom, actor const& a)
       {
         VAST_TRACE(this, "notifies", a, "on task status chagne");
         subscribers_.insert(a);
       },
-      on(atom("progress")) >> [=]
+      [=](progress_atom)
       {
         return make_message(uint64_t{actors_.size()}, total_);
       }
@@ -93,10 +93,10 @@ private:
   {
     using namespace caf;
     for (auto& s : subscribers_)
-      send(s, atom("progress"), uint64_t{actors_.size()}, total_);
+      send(s, progress_atom::value, uint64_t{actors_.size()}, total_);
     if (actors_.empty())
     {
-      auto done = make_message(atom("done"));
+      auto done = make_message(done_atom::value);
       for (auto& s : supervisors_)
         send(s, done);
       quit(exit_reason_);

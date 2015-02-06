@@ -129,7 +129,7 @@ void partition::at(exit_msg const& msg)
   }
   trap_exit(false);
   auto t = spawn<task, linked>(msg.reason);
-  send(this, atom("flush"), t);
+  send(this, flush_atom::value, t);
   for (auto& i : indexers_)
     link_to(i.second);
   for (auto& q : queries_)
@@ -206,11 +206,11 @@ message_handler partition::make_handler()
               dir_ / i / t.name(), t);
           indexers_.emplace(base, a);
           dechunkifiers_.emplace(dechunkifier->address(), a);
-          send(dechunkifier, atom("sink"), a);
+          send(dechunkifier, sink_atom::value, a);
         }
       check_overload();
-      send(dechunkifier, atom("batch size"), 8192ull);
-      send(dechunkifier, atom("start"));
+      send(dechunkifier, batch_atom::value, 8192ull);
+      send(dechunkifier, start_atom::value);
       VAST_DEBUG(this, "runs", indexers_.size(), "indexers and",
                  dechunkifiers_.size(), "dechunkifiers");
     },
@@ -228,7 +228,7 @@ message_handler partition::make_handler()
         VAST_DEBUG(this, "spawns new query task");
         q->second.task = spawn<task>();
         query_tasks_.emplace(q->second.task->address(), &q->first);
-        send(q->second.task, atom("supervisor"), this);
+        send(q->second.task, supervisor_atom::value, this);
         send(q->second.task, this);
         for (auto& pred : visit(expr::predicatizer{}, expr))
         {
@@ -242,7 +242,7 @@ message_handler partition::make_handler()
               if (! p->second.task)
               {
                 p->second.task = spawn<task>();
-                send(p->second.task, atom("supervisor"), this);
+                send(p->second.task, supervisor_atom::value, this);
                 predicate_tasks_.emplace(p->second.task.address(), &p->first);
               }
               send(q->second.task, p->second.task);
@@ -250,7 +250,7 @@ message_handler partition::make_handler()
               send(i.second, expression{pred}, this, p->second.task);
             }
         }
-        send(q->second.task, atom("done"));
+        send(q->second.task, done_atom::value);
       }
       if (! q->second.hits.empty() && ! q->second.hits.all_zeros())
         send(sink, expr, q->second.hits);
@@ -262,7 +262,7 @@ message_handler partition::make_handler()
       if (! inflight_pings_.empty())
         VAST_DEBUG(this, "awaits", inflight_pings_.size(), "indexer pongs");
     },
-    on(atom("done")) >> [=]
+    [=](done_atom)
     {
       // Once we're done with an entire query, propagate this fact to all
       // sinks. This needs to happen in the same channel as the results flow,
@@ -272,7 +272,7 @@ message_handler partition::make_handler()
       {
         VAST_DEBUG(this, "completed query", *qt->second);
         auto& qs = queries_[*qt->second];
-        auto msg = make_message(atom("done"), *qt->second);
+        auto msg = make_message(done_atom::value, *qt->second);
         for (auto& s : qs.sinks)
           send(s, msg);
         qs.task = invalid_actor;
@@ -308,7 +308,7 @@ message_handler partition::make_handler()
       VAST_DEBUG(this, "got", hits.count(), "hits for predicate:", pred);
       predicates_[*get<predicate>(pred)].hits |= hits;
     },
-    on(atom("flush"), arg_match) >> [=](actor const& task)
+    [=](flush_atom, actor const& task)
     {
       VAST_DEBUG(this, "got flush request");
       if (dechunkifiers_.empty())
@@ -347,7 +347,7 @@ void partition::flush(actor const& task)
     if (i.second)
     {
       send(task, i.second);
-      send(i.second, atom("flush"), task);
+      send(i.second, flush_atom::value, task);
     }
   if (! schema_.empty())
   {
@@ -358,7 +358,7 @@ void partition::flush(actor const& task)
       quit(exit::error);
     }
   }
-  send(task, atom("done"));
+  send(task, done_atom::value);
 }
 
 } // namespace vast

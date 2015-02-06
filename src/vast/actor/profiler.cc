@@ -113,22 +113,22 @@ message_handler profiler::make_handler()
   return
   {
 #ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
-    on(atom("start"), atom("perftools"), atom("cpu")) >> [=]
+    [=](start_atom, perftools_atom, cpu_atom)
     {
       VAST_INFO(this, "starts Gperftools CPU profiler");
 
       auto f = to_string(log_dir_ / "perftools.cpu");
       ProfilerStart(f.c_str());
-      delayed_send(this, secs_, atom("flush"));
+      delayed_send(this, secs_, flush_atom::value);
     },
-    on(atom("flush")) >> [=]
+    [=](flush_atom)
     {
       ProfilerFlush();
-      delayed_send(this, secs_, atom("flush"));
+      delayed_send(this, secs_, flush_atom::value);
     },
 #endif
 #ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
-    on(atom("start"), atom("perftools"), atom("heap")) >> [=]
+    [=](start_atom, perftools_atom, heap_atom)
     {
       VAST_INFO(this, "starts Gperftools heap profiler");
 
@@ -136,16 +136,16 @@ message_handler profiler::make_handler()
       HeapProfilerStart(f.c_str());
     },
 #endif
-    on(atom("start"), atom("rusage")) >> [=]
+    [=](start_atom, rusage_atom)
     {
       measurement now;
-      delayed_send(this, secs_, atom("data"), now.clock, now.usr, now.sys);
+      delayed_send(this, secs_, now.clock, now.usr, now.sys);
     },
-    on(atom("data"), arg_match) >> [=](double clock, double usr, double sys)
+    [=](double clock, double usr, double sys)
     {
       measurement now;
       file_ << now;
-      delayed_send(this, secs_, atom("data"), now.clock, now.usr, now.sys);
+      delayed_send(this, secs_, now.clock, now.usr, now.sys);
 
       now.clock -= clock;
       now.usr -= usr;

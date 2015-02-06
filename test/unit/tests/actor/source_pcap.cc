@@ -15,8 +15,8 @@ TEST("pcap source")
   // Spawn a PCAP source with a no cutoff and at most 5 concurrent flows.
   auto pcap = self->spawn<source::pcap, monitored>(schema{}, traces::nmap_vsn, -1, 5);
 
-  anon_send(pcap, atom("sink"), self);
-  anon_send(pcap, atom("run"));
+  anon_send(pcap, sink_atom::value, self);
+  anon_send(pcap, run_atom::value);
 
   auto fail = others() >> [&]
   {
@@ -44,8 +44,8 @@ TEST("pcap source")
   pcap = self->spawn<source::pcap, monitored>(
       schema{}, traces::workshop_2011_browse, 64, 100, 5, 2);
 
-  anon_send(pcap, atom("sink"), self);
-  anon_send(pcap, atom("run"));
+  anon_send(pcap, sink_atom::value, self);
+  anon_send(pcap, run_atom::value);
 
   self->receive(
       [&](std::vector<event> const& v)

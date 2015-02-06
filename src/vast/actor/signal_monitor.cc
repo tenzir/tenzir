@@ -41,14 +41,14 @@ message_handler signal_monitor::make_handler()
     std::signal(s, &signal_handler);
   return
   {
-    on(atom("act")) >> [=]
+    [=](run_atom)
     {
       if (signals[0] > 0)
       {
         signals[0] = 0;
         for (int i = 0; size_t(i) < signals.size(); ++i)
           while (signals[i]-- > 0)
-            send(sink_, atom("signal"), i);
+            send(sink_, signal_atom::value, i);
       }
       delayed_send(this, std::chrono::milliseconds(100), last_dequeued());
     }

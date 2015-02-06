@@ -99,7 +99,7 @@ void index::at(exit_msg const& msg)
   {
     trap_exit(false);
     auto t = spawn<task, linked>(msg.reason);
-    send(this, atom("flush"), t);
+    send(this, flush_atom::value, t);
     for (auto& p : partitions_)
       if (p.second.actor)
         link_to(p.second.actor);
@@ -151,7 +151,7 @@ message_handler index::make_handler()
 
   return
   {
-    on(atom("flush"), arg_match) >> [=](actor const& task)
+    [=](flush_atom, actor const& task)
     {
       VAST_DEBUG(this, "flushes active partitions");
       send(task, this);
@@ -159,7 +159,7 @@ message_handler index::make_handler()
       {
         auto& p = partitions_[id].actor;
         send(task, p);
-        send(p, atom("flush"), task);
+        send(p, flush_atom::value, task);
       }
       auto t = flush();
       if (! t)
@@ -167,7 +167,7 @@ message_handler index::make_handler()
         VAST_ERROR(this, "failed to save meta data:", t.error());
         quit(exit::error);
       }
-      send(task, atom("done"));
+      send(task, done_atom::value);
     },
     [=](chunk const& chk)
     {
@@ -249,7 +249,7 @@ message_handler index::make_handler()
         queries_.emplace(expr, qs);
       }
     },
-    on(atom("done"), arg_match) >> [=](expression const& expr)
+    [=](done_atom, expression const& expr)
     {
       VAST_DEBUG(this, "got signal that", last_sender(), "finished for", expr);
       auto q = queries_.find(expr);
@@ -257,7 +257,7 @@ message_handler index::make_handler()
       auto p = q->second.parts.find(actor_cast<actor>(last_sender()));
       assert(p != q->second.parts.end());
       consolidate(p->second, expr);
-      send(q->second.task, atom("done"), p->first);
+      send(q->second.task, done_atom::value, p->first);
       q->second.parts.erase(p);
       if (q->second.parts.empty())
       {
@@ -280,7 +280,7 @@ message_handler index::make_handler()
         for (auto& s : qs.subscribers)
           send(s, qs.hits);
     },
-    on(atom("delete")) >> [=]
+    [=](delete_atom)
     {
       for (auto& id : active_)
         send_exit(partitions_[id].actor, exit::kill);

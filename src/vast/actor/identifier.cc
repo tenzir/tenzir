@@ -45,7 +45,7 @@ message_handler identifier::make_handler()
 
   return
   {
-    on(atom("request"), arg_match) >> [=](uint64_t n)
+    [=](request_atom, uint64_t n)
     {
       if (n == 0)
         return make_message(error{"cannot hand out 0 ids"});
@@ -60,7 +60,7 @@ message_handler identifier::make_handler()
       }
 
       VAST_DEBUG(this, "hands out [" << (id_ - n) << ',' << id_ << ')');
-      return make_message(atom("id"), id_ - n, id_);
+      return make_message(id_atom::value, id_ - n, id_);
     }
   };
 }

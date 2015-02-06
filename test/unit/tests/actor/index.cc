@@ -72,7 +72,7 @@ TEST("index")
     {
       hits |= h;
     },
-    on(atom("done"), arg_match) >> [&](expression const& e)
+    [&](done_atom, expression const& e)
     {
       CHECK(*expr == e);
       done = true;

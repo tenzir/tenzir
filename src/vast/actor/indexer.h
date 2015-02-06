@@ -74,10 +74,10 @@ public:
 
     return
     {
-      on(atom("flush"), arg_match) >> [=](actor const& task)
+      [=](flush_atom, actor const& task)
       {
         auto t = flush();
-        send(task, atom("done"));
+        send(task, done_atom::value);
         if (! t)
         {
           VAST_ERROR(this, "failed to flush:", t.error());
@@ -114,7 +114,7 @@ public:
           VAST_ERROR(this, "failed to lookup:", pred, '(' << r.error() << ')');
           quit(exit::error);
         }
-        send(task, atom("done"));
+        send(task, done_atom::value);
       }
     };
   }
@@ -600,7 +600,7 @@ public:
 
     return
     {
-      on(atom("load")) >> [=]
+      [=](load_atom)
       {
         load_bitmap_indexers();
         VAST_DEBUG(this, "has loaded", indexers_.size(), "indexers");
@@ -610,7 +610,7 @@ public:
         for (auto& i : indexers_)
           send_as(this, i.second, last_dequeued());
       },
-      on(atom("flush"), arg_match) >> [=](actor const& task)
+      [=](flush_atom, actor const& task)
       {
         VAST_DEBUG(this, "flushes", indexers_.size(), "indexers");
         for (auto& i : indexers_)
@@ -619,7 +619,7 @@ public:
           send_as(this, i.second, last_dequeued());
         }
         auto t = flush();
-        send(task, atom("done"));
+        send(task, done_atom::value);
         if (! t)
         {
           VAST_ERROR(this, "failed to flush:", t.error());
@@ -642,7 +642,7 @@ public:
             send_as(this, i, last_dequeued());
           }
         }
-        send(task, atom("done"));
+        send(task, done_atom::value);
       }
     };
   }

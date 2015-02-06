@@ -29,8 +29,8 @@ TEST("distributed")
 
   scoped_actor self;
   bool failed = false;
-  message_handler propagate = (
-    on(atom("ok")) >> [] {},
+  message_handler propagate = {
+    [](ok_atom) {},
     [&](error const& e)
     {
       failed = true;
@@ -40,14 +40,14 @@ TEST("distributed")
     {
       failed = true;
       VAST_ERROR("unexpected message: ", to_string(self->last_dequeued()));
-    });
+    }};
 
   // Tracker
   configuration cfg_track{cfg};
   *cfg_track['T'] = true;
   REQUIRE(cfg_track.verify());
   auto t = self->spawn<program>(std::move(cfg_track));
-  self->sync_send(t, atom("run")).await(propagate);
+  self->sync_send(t, run_atom::value).await(propagate);
   if (failed)
     REQUIRE(false);
 
@@ -56,7 +56,7 @@ TEST("distributed")
   *cfg_recv['R'] = true;
   REQUIRE(cfg_recv.verify());
   auto r = self->spawn<program, monitored>(std::move(cfg_recv));
-  self->sync_send(r, atom("run")).await(propagate);
+  self->sync_send(r, run_atom::value).await(propagate);
   if (failed)
     REQUIRE(false);
 
@@ -65,7 +65,7 @@ TEST("distributed")
   *cfg_arch['A'] = true;
   REQUIRE(cfg_arch.verify());
   auto a = self->spawn<program>(std::move(cfg_arch));
-  self->sync_send(a, atom("run")).await(propagate);
+  self->sync_send(a, run_atom::value).await(propagate);
   if (failed)
     REQUIRE(false);
 
@@ -74,7 +74,7 @@ TEST("distributed")
   *cfg_idx['X'] = true;
   REQUIRE(cfg_idx.verify());
   auto x = self->spawn<program>(std::move(cfg_idx));
-  self->sync_send(x, atom("run")).await(propagate);
+  self->sync_send(x, run_atom::value).await(propagate);
   if (failed)
     REQUIRE(false);
 
@@ -83,7 +83,7 @@ TEST("distributed")
   *cfg_srch['S'] = true;
   REQUIRE(cfg_srch.verify());
   auto s = self->spawn<program>(std::move(cfg_srch));
-  self->sync_send(s, atom("run")).await(propagate);
+  self->sync_send(s, run_atom::value).await(propagate);
   if (failed)
     REQUIRE(false);
 
@@ -91,7 +91,7 @@ TEST("distributed")
   configuration cfg_link{cfg};
   cfg_link["tracker.link"]->set("receiver", "archive");
   auto l = self->spawn<program, monitored>(cfg_link);
-  self->sync_send(l, atom("run")).await(propagate);
+  self->sync_send(l, run_atom::value).await(propagate);
   if (failed)
     REQUIRE(false);
   self->receive([](down_msg const&) {});
@@ -99,7 +99,7 @@ TEST("distributed")
     REQUIRE(false);
   cfg_link["tracker.link"]->set("receiver", "index");
   l = self->spawn<program, monitored>(cfg_link);
-  self->sync_send(l, atom("run")).await(propagate);
+  self->sync_send(l, run_atom::value).await(propagate);
   if (failed)
     REQUIRE(false);
   self->receive([](down_msg const&) {});
@@ -107,7 +107,7 @@ TEST("distributed")
     REQUIRE(false);
   cfg_link["tracker.link"]->set("search", "archive");
   l = self->spawn<program, monitored>(cfg_link);
-  self->sync_send(l, atom("run")).await(propagate);
+  self->sync_send(l, run_atom::value).await(propagate);
   if (failed)
     REQUIRE(false);
   self->receive([](down_msg const&) {});
@@ -115,7 +115,7 @@ TEST("distributed")
     REQUIRE(false);
   cfg_link["tracker.link"]->set("search", "index");
   l = self->spawn<program, monitored>(cfg_link);
-  self->sync_send(l, atom("run")).await(propagate);
+  self->sync_send(l, run_atom::value).await(propagate);
   if (failed)
     REQUIRE(false);
   self->receive([](down_msg const&) {});
@@ -129,7 +129,7 @@ TEST("distributed")
   REQUIRE(cfg.verify());
   REQUIRE(cfg_imp.verify());
   auto i = self->spawn<program, monitored>(std::move(cfg_imp));
-  self->sync_send(i, atom("run")).await(propagate);
+  self->sync_send(i, run_atom::value).await(propagate);
   if (failed)
     REQUIRE(false);
   self->receive([](down_msg const&) {});
@@ -138,14 +138,14 @@ TEST("distributed")
   std::this_thread::sleep_for(std::chrono::milliseconds(800));
 
   VAST_INFO("checking with a simple query that import went fine");
-  self->sync_send(t, atom("tracker")).await(
+  self->sync_send(t, tracker_atom::value).await(
     [&](actor const& track)
     {
-      self->sync_send(track, atom("get"), "search").await(
+      self->sync_send(track, get_atom::value, "search").await(
         [&](actor const& srch)
         {
           auto query = ":addr == 192.168.1.105";
-          self->sync_send(srch, atom("query"), self, query).await(
+          self->sync_send(srch, query_atom::value, self, query).await(
             on_arg_match >> [=](error const& e)
             {
               VAST_ERROR(e);
@@ -153,7 +153,7 @@ TEST("distributed")
             },
             [&](expression const&, actor const& qry)
             {
-              self->send(qry, atom("extract"), uint64_t{1});
+              self->send(qry, extract_atom::value, uint64_t{1});
             },
             others() >> [&]
             {
@@ -177,8 +177,8 @@ TEST("distributed")
   bool done = false;
   self->do_receive(
     [&](actor const& /* task */) {},
-    on(atom("progress"), arg_match) >> [&](double, uint64_t) {},
-    on(atom("done")) >> [] {},
+    [&](progress_atom, double) {},
+    [](done_atom) {},
     [&](event const& e)
     {
       VAST_INFO("got event:", e);

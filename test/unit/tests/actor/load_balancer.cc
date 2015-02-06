@@ -21,8 +21,8 @@ TEST("load balancer")
     scoped_actor w0;
     scoped_actor w1;
     self->send(message_priority::high, lb, flow_control::announce{self});
-    self->send(lb, atom("add"), atom("worker"), w0);
-    self->send(lb, atom("add"), atom("worker"), w1);
+    self->send(lb, add_atom::value, worker_atom::value, w0);
+    self->send(lb, add_atom::value, worker_atom::value, w1);
     self->send(lb, atom("test"));
     w0->receive(on(atom("test")) >> [&] { CHECK(w0->last_sender() == self); });
     self->send(lb, atom("test"));

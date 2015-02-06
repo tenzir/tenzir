@@ -35,17 +35,17 @@ query::query(actor archive, actor sink, expression ast)
   };
 
   auto handle_progress =
-    on(atom("progress"), arg_match) >> [=](uint64_t remaining, uint64_t total)
+    [=](progress_atom, uint64_t remaining, uint64_t total)
     {
       progress_ = (total - double(remaining)) / total;
-      send(sink_, atom("progress"), progress_);
+      send(sink_, progress_atom::value, progress_);
     };
 
-  idle_ = (
+  idle_ = {
     handle_progress,
     [=](actor const& task)
     {
-      send(task, atom("subscriber"), this);
+      send(task, subscriber_atom::value, this);
       task_ = task;
     },
     [=](bitstream_type const& hits)
@@ -54,18 +54,18 @@ query::query(actor archive, actor sink, expression ast)
       if (inflight_)
         become(waiting_);
     },
-    on(atom("done")) >> [=]
+    [=](done_atom)
     {
       forward_to(sink_);
       quit(exit::done);
     },
-    on(atom("done"), arg_match) >> [=](expression const&)
+    [=](done_atom, expression const&)
     {
       VAST_DEBUG(this, "completed index interaction");
-      send(this, atom("done"));
-    });
+      send(this, done_atom::value);
+    }};
 
-  waiting_ = (
+  waiting_ = {
     handle_progress,
     incorporate_hits,
     [=](chunk const& chk)
@@ -78,14 +78,14 @@ query::query(actor archive, actor sink, expression ast)
       reader_ = std::make_unique<chunk::reader>(chunk_);
       become(extracting_);
       if (requested_ > 0)
-        send(this, atom("extract"));
+        send(this, extract_atom::value);
       prefetch();
-    });
+    }};
 
-  extracting_ = (
+  extracting_ = {
     handle_progress,
     incorporate_hits,
-    on(atom("extract"), arg_match) >> [=](uint64_t n)
+    [=](extract_atom, uint64_t n)
     {
       VAST_DEBUG(this, "got request to extract",
                  (n == 0 ? "all" : to_string(n)),
@@ -94,10 +94,10 @@ query::query(actor archive, actor sink, expression ast)
       // If the query did not extract events this request, we start the
       // extraction process now.
       if (requested_ == 0)
-        send(this, atom("extract"));
+        send(this, extract_atom::value);
       requested_ = n == 0 ? -1 : requested_ + n;
     },
-    on(atom("extract")) >> [=]
+    [=](extract_atom)
     {
       VAST_DEBUG(this, "starts to extract events (" << requested_, "requested)");
       assert(reader_);
@@ -184,9 +184,9 @@ query::query(actor archive, actor sink, expression ast)
         VAST_DEBUG(this, "becomes idle");
         become(idle_);
         if (progress_ == 1.0 && unprocessed_.count() == 0)
-          send(this, atom("done"));
+          send(this, done_atom::value);
       }
-    });
+    }};
 }
 
 message_handler query::make_handler()

@@ -58,19 +58,19 @@ message_handler program::make_handler()
 
   return
   {
-    on(atom("run")) >> [=]
+    [=](run_atom)
     {
       auto t = run();
       if (t)
-        return make_message(atom("ok"));
+        return make_message(ok_atom::value);
       else
         return make_message(std::move(t.error()));
     },
-    on(atom("tracker")) >> [=]
+    [=](tracker_atom)
     {
       return tracker_;
     },
-    on(atom("signal"), arg_match) >> [=](int signal)
+    [=](signal_atom, int signal)
     {
       VAST_VERBOSE(this, "received signal", signal);
       if (signal == SIGINT || signal == SIGTERM)
@@ -81,7 +81,7 @@ message_handler program::make_handler()
       VAST_ERROR(this, "got error:", e);
       quit(exit::error);
     },
-    on(atom("ok")) >> [] { /* nothing to do */ }
+    [](ok_atom) { /* nothing to do */ }
   };
 }
 
@@ -105,7 +105,7 @@ trial<void> program::run()
       *config_["search"] = true;
     }
 
-    send(spawn<signal_monitor, linked>(this), atom("act"));
+    send(spawn<signal_monitor, linked>(this), run_atom::value);
 
     if (config_.check("profiler.rusage")
         || config_.check("profiler.cpu")
@@ -118,7 +118,7 @@ trial<void> program::run()
       if (config_.check("profiler.cpu"))
       {
 #ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
-        send(prof, atom("start"), atom("perftools"), atom("cpu"));
+        send(prof, start_atom::value, perftools_atom::value, cpu_atom::value);
 #else
         quit(exit::error);
         return error{"not compiled with perftools CPU support"};
@@ -128,7 +128,7 @@ trial<void> program::run()
       if (config_.check("profiler.heap"))
       {
 #ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
-        send(prof, atom("start"), atom("perftools"), atom("heap"));
+        send(prof, start_atom::value, perftools_atom::value, heap_atom::value);
 #else
         quit(exit::error);
         return error{"not compiled with perftools heap support"};
@@ -136,7 +136,7 @@ trial<void> program::run()
       }
 
       if (config_.check("profiler.rusage"))
-        send(prof, atom("start"), atom("rusage"));
+        send(prof, start_atom::value, rusage_atom::value);
     }
 
     auto host = *config_.get("tracker.host");
@@ -155,8 +155,8 @@ trial<void> program::run()
 
     scoped_actor self;
     optional<error> abort;
-    message_handler ok_or_quit = (
-        on(atom("ok")) >> [] { /* do nothing */ },
+    message_handler ok_or_quit{
+        [](ok_atom) { /* do nothing */ },
         [&](error& e)
         {
           abort = std::move(e);
@@ -164,17 +164,18 @@ trial<void> program::run()
         },
         others() >> [&]
         {
-          abort = error{"got unexpected message: ",
+          abort = error{"got unexpected message from ",
+                        to_string(self->last_sender()), ": ",
                         to_string(self->last_dequeued())};
           quit(exit::error);
-        });
+        }};
 
     auto link = *config_.as<std::vector<std::string>>("tracker.link");
     if (! link.empty())
     {
       assert(link.size() == 2);
-      self->sync_send(tracker_, atom("link"), link[0], link[1]).await(
-        on(atom("ok")) >> [&]
+      self->sync_send(tracker_, link_atom::value, link[0], link[1]).await(
+        [&](ok_atom)
         {
           VAST_INFO(this, "successfully linked", link[0], "to", link[1]);
           quit(exit::done);
@@ -198,8 +199,8 @@ trial<void> program::run()
           *config_.as<size_t>("archive.max-segments"),
           *config_.as<size_t>("archive.max-segment-size") * 1000000);
 
-      self->sync_send(tracker_, atom("put"), "archive", archive_, archive_name)
-        .await(ok_or_quit);
+      self->sync_send(tracker_, put_atom::value, "archive", archive_,
+                      archive_name).await(ok_or_quit);
       if (abort)
         return std::move(*abort);
     }
@@ -212,7 +213,7 @@ trial<void> program::run()
       auto active_parts = *config_.as<size_t>("index.part-active");
       index_ = spawn<index, linked>(dir, max_events, max_parts, active_parts);
 
-      self->sync_send(tracker_, atom("put"), "index", index_, index_name)
+      self->sync_send(tracker_, put_atom::value, "index", index_, index_name)
         .await(ok_or_quit);
       if (abort)
         return std::move(*abort);
@@ -232,15 +233,16 @@ trial<void> program::run()
       if (config_.check("tracker"))
         tracker_->link_to(receiver_);
 
-      self->sync_send(tracker_, atom("put"), "receiver", receiver_,
+      self->sync_send(tracker_, put_atom::value, "receiver", receiver_,
                       receiver_name).await(ok_or_quit);
       if (abort)
         return std::move(*abort);
 
-      self->sync_send(tracker_, atom("identifier")).await(
+      self->sync_send(tracker_, get_atom::value, "identifier").await(
           [&](actor const& identifier)
           {
-            send(receiver_, atom("set"), atom("identifier"), identifier);
+            send(receiver_, set_atom::value, identifier_atom::value,
+                 identifier);
           });
 
       if (config_.check("archive"))
@@ -253,7 +255,7 @@ trial<void> program::run()
           tracker_->link_to(archive_);
         }
 
-        self->sync_send(tracker_, atom("link"), receiver_name, archive_name)
+        self->sync_send(tracker_, link_atom::value, receiver_name, archive_name)
           .await(ok_or_quit);
         if (abort)
           return std::move(*abort);
@@ -269,7 +271,7 @@ trial<void> program::run()
           tracker_->link_to(index_);
         }
 
-        self->sync_send(tracker_, atom("link"), receiver_name, index_name)
+        self->sync_send(tracker_, link_atom::value, receiver_name, index_name)
           .await(ok_or_quit);
         if (abort)
           return std::move(*abort);
@@ -280,14 +282,14 @@ trial<void> program::run()
     if (config_.check("search"))
     {
       search_ = spawn<search, linked>();
-      self->sync_send(tracker_, atom("put"), "search", search_, search_name)
+      self->sync_send(tracker_, put_atom::value, "search", search_, search_name)
         .await(ok_or_quit);
       if (abort)
         return std::move(*abort);
 
       if (config_.check("archive"))
       {
-        self->sync_send(tracker_, atom("link"), search_name, archive_name)
+        self->sync_send(tracker_, link_atom::value, search_name, archive_name)
           .await(ok_or_quit);
         if (abort)
           return std::move(*abort);
@@ -295,7 +297,7 @@ trial<void> program::run()
 
       if (config_.check("index"))
       {
-        self->sync_send(tracker_, atom("link"), search_name, index_name)
+        self->sync_send(tracker_, link_atom::value, search_name, index_name)
           .await(ok_or_quit);
         if (abort)
           return std::move(*abort);
@@ -334,7 +336,7 @@ trial<void> program::run()
       importer_ = spawn<importer, linked>(dir, chunk_size, compression);
 
       auto importer_name = *config_.get("import.name");
-      self->sync_send(tracker_, atom("put"), "importer", importer_,
+      self->sync_send(tracker_, put_atom::value, "importer", importer_,
                       importer_name).await(ok_or_quit);
       if (abort)
         return std::move(*abort);
@@ -348,7 +350,7 @@ trial<void> program::run()
         importer_->link_to(receiver_);
       }
 
-      self->sync_send(tracker_, atom("link"), importer_name, receiver_name)
+      self->sync_send(tracker_, link_atom::value, importer_name, receiver_name)
         .await(ok_or_quit);
       if (abort)
         return std::move(*abort);
@@ -413,19 +415,19 @@ trial<void> program::run()
         return error{"invalid import format: ", *format};
       }
 
-      send(importer_, atom("add"), atom("source"), src);
+      send(importer_, add_atom::value, source_atom::value, src);
     }
     else if (auto format = config_.get("exporter"))
     {
       auto exporter_name = *config_.get("export.name");
-      self->sync_send(tracker_, atom("put"), "exporter", exporter_,
+      self->sync_send(tracker_, put_atom::value, "exporter", exporter_,
                       exporter_name).await(ok_or_quit);
       if (abort)
         return std::move(*abort);
 
       auto limit = *config_.as<uint64_t>("export.limit");
       if (limit > 0)
-        send(exporter_, atom("limit"), limit);
+        send(exporter_, limit_atom::value, limit);
 
       exporter_ = spawn<exporter, linked>();
       if (auto schema_file = config_.get("export.schema"))
@@ -483,11 +485,11 @@ trial<void> program::run()
         return error{"invalid export format: ", *format};
       }
 
-      send(exporter_, atom("add"), std::move(snk));
+      send(exporter_, add_atom::value, std::move(snk));
 
       auto query = config_.get("export.query");
       assert(query);
-      self->sync_send(tracker_, atom("get"), search_name).await(
+      self->sync_send(tracker_, get_atom::value, search_name).await(
           on_arg_match >> [&](error& e)
           {
             abort = std::move(e);
@@ -495,7 +497,7 @@ trial<void> program::run()
           },
           [&](actor const& srch)
           {
-            self->sync_send(srch, atom("query"), exporter_, *query).await(
+            self->sync_send(srch, query_atom::value, exporter_, *query).await(
                 on_arg_match >> [&](error& e)
                 {
                   abort = std::move(e);
@@ -505,7 +507,7 @@ trial<void> program::run()
                 {
                   VAST_DEBUG(this, "instantiated query for:", ast);
                   exporter_->link_to(qry);
-                  send(qry, atom("extract"), limit);
+                  send(qry, extract_atom::value, limit);
                 },
                 others() >> [&]()
                 {
@@ -520,11 +522,11 @@ trial<void> program::run()
     else if (config_.check("console"))
     {
 #ifdef VAST_HAVE_EDITLINE
-      self->sync_send(tracker_, atom("get"), search_name).await(
+      self->sync_send(tracker_, get_atom::value, search_name).await(
           [&](actor const& search)
           {
             auto c = spawn<console, linked>(search, dir / "console");
-            delayed_send(c, std::chrono::milliseconds(200), atom("prompt"));
+            delayed_send(c, std::chrono::milliseconds(200), prompt_atom::value);
           },
           [&](error& e)
           {

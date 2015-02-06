@@ -1,7 +1,7 @@
 #include "vast/actor/tracker.h"
-#include "vast/actor/identifier.h"
 
 #include <caf/all.hpp>
+#include "vast/actor/identifier.h"
 
 using namespace caf;
 
@@ -41,17 +41,15 @@ message_handler tracker::make_handler()
 
   return
   {
-    on(atom("identifier")) >> [=]
-    {
-      return identifier_;
-    },
-    on(atom("ok")) >> []
+    [](ok_atom)
     {
       // Sent during relinking below, nothing to do here.
     },
-    on(atom("put"), arg_match)
-      >> [=](std::string const& type, actor const& a, std::string const& name)
+    [=](put_atom, std::string const& type, actor const& a,
+        std::string const& name)
     {
+      if (name == "identifier")
+        return make_message(error{"'identifier' is a reserved name"});
       auto c = component::invalid;
       if (type == "importer")
         c = component::importer;
@@ -67,7 +65,6 @@ message_handler tracker::make_handler()
         c = component::search;
       else
         return make_message(error{"invalid type: ", type});
-
       auto i = actors_.find(name);
       if (i == actors_.end())
       {
@@ -93,7 +90,7 @@ message_handler tracker::make_handler()
         while (j != topology_.end())
           if (j->first == name || j->second == name)
           {
-            send(this, atom("link"), j->first, j->second);
+            send(this, link_atom::value, j->first, j->second);
             j = topology_.erase(j);
           }
           else
@@ -101,20 +98,20 @@ message_handler tracker::make_handler()
             ++j;
           }
       }
-
       monitor(a);
-      return make_message(atom("ok"));
+      return make_message(ok_atom::value);
     },
-    on(atom("get"), arg_match) >> [=](std::string const& name)
+    [=](get_atom, std::string const& name)
     {
+      if (name == "identifier")
+        return make_message(identifier_);
       auto i = actors_.find(name);
       if (i != actors_.end())
         return make_message(i->second.actor);
       else
         return make_message(error{"unknown actor: ", name});
     },
-    on(atom("link"), arg_match)
-      >> [=](std::string const& source, std::string const& sink)
+    [=](link_atom, std::string const& source, std::string const& sink)
     {
       auto i = actors_.find(source);
       actor_state* src = nullptr;
@@ -122,26 +119,21 @@ message_handler tracker::make_handler()
         src = &i->second;
       else
         return make_message(error{"unknown source: ", source});
-
       i = actors_.find(sink);
       actor_state* snk = nullptr;
       if (i != actors_.end())
         snk = &i->second;
       else
         return make_message(error{"unknown sink: ", sink});
-
       auto er = topology_.equal_range(source);
       for (auto i = er.first; i != er.second; ++i)
         if (i->second == sink)
         {
           VAST_VERBOSE(this, "ignores existing link: ", source, " -> ", sink);
-          return make_message(atom("ok"));
+          return make_message(ok_atom::value);
         }
-
       VAST_VERBOSE(this, "links", source, "->", sink);
-
       scoped_actor self;
-      message_handler ok = on(atom("ok")) >> [] {};
       switch (src->type)
       {
         default:
@@ -150,24 +142,23 @@ message_handler tracker::make_handler()
           if (snk->type != component::receiver)
             return make_message(error{"sink not a receiver: ", sink});
           else
-            self->sync_send(src->actor, atom("add"), atom("sink"),
-                            snk->actor).await(ok);
+            self->sync_send(src->actor, add_atom::value, sink_atom::value,
+                            snk->actor).await([](ok_atom) {});
           break;
         case component::receiver:
         case component::search:
           if (snk->type == component::archive)
-            self->sync_send(src->actor, atom("add"), atom("archive"),
-                            snk->actor).await(ok);
+            self->sync_send(src->actor, add_atom::value, archive_atom::value,
+                            snk->actor).await([](ok_atom) {});
           else if (snk->type == component::index)
-            self->sync_send(src->actor, atom("add"), atom("index"),
-                            snk->actor).await(ok);
+            self->sync_send(src->actor, add_atom::value, index_atom::value,
+                            snk->actor).await([](ok_atom) {});
           else
             return make_message(error{"sink not archive or index: ", sink});
           break;
       }
-
       topology_.emplace(source, sink);
-      return make_message(atom("ok"));
+      return make_message(ok_atom::value);
     }
   };
 }

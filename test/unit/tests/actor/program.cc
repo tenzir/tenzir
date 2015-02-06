@@ -32,8 +32,8 @@ TEST("basic actor integrity")
   if (exists(dir))
     REQUIRE(rm(dir));
   auto core = spawn<program>(core_config);
-  self->send(core, atom("run"));
-  self->receive(on(atom("ok")) >> [&] { CHECK(self->last_sender() == core); });
+  self->send(core, run_atom::value);
+  self->receive([&](ok_atom) { CHECK(self->last_sender() == core); });
 
   VAST_INFO("importing a single Bro log");
   configuration import_config;
@@ -46,7 +46,7 @@ TEST("basic actor integrity")
   REQUIRE(import_config.verify());
   auto import = spawn<program>(import_config);
   import->link_to(core);
-  anon_send(import, atom("run"));
+  anon_send(import, run_atom::value);
 
   VAST_INFO("waiting for importer to pull down core");
   self->await_all_other_actors_done();
@@ -58,14 +58,14 @@ TEST("basic actor integrity")
   *core_config['C'] = true;
   REQUIRE(core_config.verify());
   core = spawn<program>(core_config);
-  anon_send(core, atom("run"));
+  anon_send(core, run_atom::value);
 
   VAST_INFO("testing whether archive has the correct chunk");
   actor trackr;
-  self->send(core, atom("tracker"));
+  self->send(core, tracker_atom::value);
   self->receive([&](actor const& t) { trackr = t; });
 
-  self->send(trackr, atom("get"), *core_config.get("archive.name"));
+  self->send(trackr, get_atom::value, *core_config.get("archive.name"));
   self->receive([&](actor const& a) { self->send(a, event_id(112)); });
   self->receive(
     on_arg_match >> [&](chunk const& chk)
@@ -86,36 +86,36 @@ TEST("basic actor integrity")
   VAST_INFO("testing whether a manual index lookup succeeds");
   auto pops = to<expression>("id.resp_p == 995/?");
   REQUIRE(pops);
-  self->send(trackr, atom("get"), *core_config.get("index.name"));
+  self->send(trackr, get_atom::value, *core_config.get("index.name"));
   self->receive([&](actor const& index) { self->send(index, *pops, self); });
-  self->receive([&](actor t) { self->send(t, atom("subscriber"), self); });
+  self->receive([&](actor t) { self->send(t, subscriber_atom::value, self); });
   uint64_t left = 5;
   self->do_receive(
     [&](default_bitstream const& hits)
     {
       CHECK(hits.count() > 0);
     },
-    on(atom("done"), arg_match) >> [&](expression const& expr)
+    [&](done_atom, expression const& expr)
     {
       CHECK(expr == *pops);
     },
-    on(atom("progress"), arg_match) >> [&](uint64_t remaining, uint64_t total)
+    [&](progress_atom, uint64_t remaining, uint64_t total)
     {
       CHECK(total == 5);
       CHECK(--left == remaining);
     }).until([&left] { return left == 0; });
 
   VAST_INFO("constructing a simple POPS query");
-  self->send(trackr, atom("get"), *core_config.get("search.name"));
+  self->send(trackr, get_atom::value, *core_config.get("search.name"));
   self->receive(
     [&](actor search)
     {
       auto q = "id.resp_p == 995/?";
-      self->sync_send(search, atom("query"), self, q).await((
+      self->sync_send(search, query_atom::value, self, q).await((
         [&](expression const& ast, actor qry)
         {
           CHECK(ast == *pops);
-          self->send(qry, atom("extract"), uint64_t{46});
+          self->send(qry, extract_atom::value, uint64_t{46});
         }));
     });
 
@@ -140,40 +140,40 @@ TEST("basic actor integrity")
     });
 
   VAST_INFO("waiting on final done from QUERY");
-  self->receive(on(atom("done")) >> [&] { REQUIRE(true); });
+  self->receive([&](done_atom) { REQUIRE(true); });
 
   VAST_INFO("importing another Bro log");
   *import_config["tracker.port"] = 42003;
   *import_config["import.chunk-size"] = 100;
   *import_config['r'] = m57_day11_18::conn;
   import = self->spawn<program, monitored>(import_config);
-  anon_send(import, atom("run"));
+  anon_send(import, run_atom::value);
   self->receive([&](down_msg const& msg) { CHECK(msg.reason == exit::done); });
 
   VAST_INFO("waiting for chunks to arrive at RECEIVER");
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
   VAST_INFO("flushing INDEX");
-  self->send(trackr, atom("get"), *core_config.get("index.name"));
+  self->send(trackr, get_atom::value, *core_config.get("index.name"));
   self->receive(
     [&](actor const& index)
     {
       auto t = self->spawn<task, monitored>();
-      self->send(index, atom("flush"), t);
+      self->send(index, flush_atom::value, t);
       self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
     });
 
   VAST_INFO("issuing query against conn and ssl");
-  self->send(trackr, atom("get"), *core_config.get("search.name"));
+  self->send(trackr, get_atom::value, *core_config.get("search.name"));
   self->receive(
     [&](actor const& search)
     {
       auto q = "id.resp_p == 443/? && \"mozilla\" in ssl.server_name";
-      self->sync_send(search, atom("query"), self, q).await((
+      self->sync_send(search, query_atom::value, self, q).await((
         [&](expression const&, actor const& qry)
         {
           // Extract all results.
-          self->send(qry, atom("extract"), uint64_t{0});
+          self->send(qry, extract_atom::value, uint64_t{0});
           self->monitor(qry);
         }));
     });
@@ -186,11 +186,11 @@ TEST("basic actor integrity")
     {
       ++n;
     },
-    on(atom("progress"), arg_match) >> [=](double, uint64_t)
+    [=](progress_atom, double, uint64_t)
     {
       REQUIRE(true);
     },
-    on(atom("done")) >> [&]
+    [&](done_atom)
     {
       CHECK(n == 15);
     },

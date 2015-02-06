@@ -30,7 +30,7 @@ TEST("all-in-one import")
   path dir = *cfg.get("directory");
   if (exists(dir))
     REQUIRE(rm(dir));
-  anon_send(spawn<program>(cfg), atom("run"));
+  anon_send(spawn<program>(cfg), run_atom::value);
   await_all_actors_done();
 
   VAST_INFO("checking that indexes have been written correctly");

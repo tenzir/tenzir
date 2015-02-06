@@ -70,7 +70,7 @@ TEST("indexer")
   VAST_DEBUG("writing first index to file system");
   t = self->spawn<task, monitored>();
   self->send(t, i0);
-  self->send(i0, atom("flush"), t);
+  self->send(i0, flush_atom::value, t);
   self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
   REQUIRE(exists(dir0 / "type"));
   REQUIRE(exists(dir0 / "meta"));
@@ -80,7 +80,7 @@ TEST("indexer")
   VAST_DEBUG("writing second index to file system");
   t = self->spawn<task, monitored>();
   self->send(t, i1);
-  self->send(i1, atom("flush"), t);
+  self->send(i1, flush_atom::value, t);
   self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
   REQUIRE(exists(dir1 / "type"));
   REQUIRE(exists(dir1 / "meta"));

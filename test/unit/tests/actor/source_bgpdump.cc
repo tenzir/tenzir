@@ -16,8 +16,8 @@ TEST("bgpdump source")
   auto bgpdump =
     self->spawn<source::bgpdump, monitored>(schema{}, bgpdump::updates20140821);
 
-  anon_send(bgpdump, atom("sink"), self);
-  anon_send(bgpdump, atom("run"));
+  anon_send(bgpdump, sink_atom::value, self);
+  anon_send(bgpdump, run_atom::value);
 
   auto fail = others() >> [&]
   {

@@ -15,7 +15,7 @@ behavior worker(event_based_actor* self, actor const& task)
   {
     others() >> [=]
     {
-      self->send(task, atom("done"));
+      self->send(task, done_atom::value);
       self->quit();
     }
   };
@@ -39,8 +39,8 @@ TEST("task")
 {
   scoped_actor self;
   auto t = self->spawn<task>();
-  self->send(t, atom("subscriber"), self);
-  self->send(t, atom("supervisor"), self);
+  self->send(t, subscriber_atom::value, self);
+  self->send(t, supervisor_atom::value, self);
 
   VAST_INFO("spawning main workers");
   auto leaf1a = self->spawn(worker, t);
@@ -59,14 +59,14 @@ TEST("task")
   self->send(i, leaf2c);
 
   VAST_INFO("asking main task for the current progress");
-  self->sync_send(t, atom("progress")).await(
+  self->sync_send(t, progress_atom::value).await(
     [&](uint64_t remaining, uint64_t total)
     {
       CHECK(remaining == 3);
       CHECK(total == 3);
     });
   VAST_INFO("asking intermediate task for the current progress");
-  self->sync_send(i, atom("progress")).await(
+  self->sync_send(i, progress_atom::value).await(
     [&](uint64_t remaining, uint64_t total)
     {
       CHECK(remaining == 3);
@@ -79,7 +79,7 @@ TEST("task")
   self->send(leaf2c, "money!");
   self->receive([&](down_msg const& msg) { CHECK(msg.source == i); });
   self->receive(
-    on(atom("progress"), arg_match) >> [&](uint64_t remaining, uint64_t total)
+    [&](progress_atom, uint64_t remaining, uint64_t total)
     {
       CHECK(remaining == 2);
       CHECK(total == 3);
@@ -90,13 +90,13 @@ TEST("task")
   self->send(leaf1b, "please!");
   auto n = 1;
   self->receive_for(n, 2) (
-    on(atom("progress"), arg_match) >> [&](uint64_t remaining, uint64_t total)
+    [&](progress_atom, uint64_t remaining, uint64_t total)
     {
       CHECK(remaining == n);
       CHECK(total == 3);
     });
 
   VAST_INFO("checking final notification");
-  self->receive(on(atom("done")) >> [&] { CHECK(self->last_sender() == t); } );
+  self->receive([&](done_atom) { CHECK(self->last_sender() == t); } );
   self->await_all_other_actors_done();
 }

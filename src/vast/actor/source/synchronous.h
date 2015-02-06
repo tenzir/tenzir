@@ -27,26 +27,26 @@ public:
 
     return
     {
-      on(atom("batch size"), arg_match) >> [=](uint64_t batch_size)
+      [=](batch_atom, uint64_t batch_size)
       {
         VAST_DEBUG(this, "sets batch size to", batch_size);
         batch_size_ = batch_size;
       },
-      on(atom("sink"), arg_match) >> [=](actor const& sink)
+      [=](sink_atom, actor const& sink)
       {
         VAST_DEBUG(this, "adds sink to", sink);
         sinks_.push_back(sink);
       },
-      on(atom("start")) >> [=]
+      [=](start_atom)
       {
         running_ = true;
-        this->send(this, atom("run"));
+        this->send(this, run_atom::value);
       },
-      on(atom("stop")) >> [=]
+      [=](stop_atom)
       {
         running_ = false;
       },
-      on(atom("run")) >> [=]
+      [=](run_atom)
       {
         if (sinks_.empty())
         {

@@ -21,7 +21,7 @@ public:
   {
     using namespace caf;
     operating_ = (
-        on(atom("batch size"), arg_match) >> [=](size_t batch_size)
+        [=](batch_atom, size_t batch_size)
         {
           batch_size_ = batch_size;
         },

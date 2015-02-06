@@ -75,7 +75,7 @@ message_handler importer::make_handler()
 
   ready_ =
   {
-    on(atom("submit")) >> [=]
+    [=](submit_atom)
     {
       for (auto& basename : orphaned_)
       {
@@ -95,23 +95,23 @@ message_handler importer::make_handler()
         send(this, std::move(chk));
       }
     },
-    on(atom("add"), atom("source"), arg_match) >> [=](actor const& src)
+    [=](add_atom, source_atom, actor const& src)
     {
       // TODO: Support multiple sources.
       VAST_DEBUG(this, "adds source", src);
       source_ = src;
       source_->link_to(chunkifier_);
-      send(source_, atom("sink"), chunkifier_);
-      send(source_, atom("batch size"), chunk_size_);
-      send(source_, atom("run"));
+      send(source_, sink_atom::value, chunkifier_);
+      send(source_, batch_atom::value, chunk_size_);
+      send(source_, run_atom::value);
     },
-    on(atom("add"), atom("sink"), arg_match) >> [=](actor const& snk)
+    [=](add_atom, sink_atom, actor const& snk)
     {
       VAST_DEBUG(this, "adds sink", snk);
       send(snk, flow_control::announce{this});
       sinks_.push_back(snk);
       monitor(snk);
-      return make_message(atom("ok"));
+      return ok_atom::value;
     },
     [=](chunk const& chk)
     {

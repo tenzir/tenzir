@@ -47,24 +47,23 @@ message_handler search::make_handler()
 {
   return
   {
-    on(atom("add"), atom("archive"), arg_match) >> [=](actor const& a)
+    [=](add_atom, archive_atom, actor const& a)
     {
       VAST_DEBUG(this, "adds archive", a);
       if (! archive_)
         archive_ = spawn<replicator, linked>();
-      send(archive_, atom("add"), atom("worker"), a);
-      return make_message(atom("ok"));
+      send(archive_, add_atom::value, worker_atom::value, a);
+      return ok_atom::value;
     },
-    on(atom("add"), atom("index"), arg_match) >> [=](actor const& a)
+    [=](add_atom, index_atom, actor const& a)
     {
       VAST_DEBUG(this, "adds index", a);
       if (! index_)
         index_ = spawn<replicator, linked>();
-      send(index_, atom("add"), atom("worker"), a);
-      return make_message(atom("ok"));
+      send(index_, add_atom::value, worker_atom::value, a);
+      return ok_atom::value;
     },
-    on(atom("query"), arg_match)
-      >> [=](actor const& client, std::string const& str)
+    [=](query_atom, actor const& client, std::string const& str)
     {
       VAST_INFO(this, "got client", client, "asking for", str);
       if (! archive_)

@@ -17,8 +17,8 @@ TEST("replicator")
   {
     scoped_actor w0;
     scoped_actor w1;
-    self->send(r, atom("add"), atom("worker"), w0);
-    self->send(r, atom("add"), atom("worker"), w1);
+    self->send(r, add_atom::value, worker_atom::value, w0);
+    self->send(r, add_atom::value, worker_atom::value, w1);
     self->send(r, atom("test"));
     w0->receive(on(atom("test")) >> [&] { CHECK(w0->last_sender() == self); });
     w1->receive(on(atom("test")) >> [&] { CHECK(w1->last_sender() == self); });

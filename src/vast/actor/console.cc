@@ -12,7 +12,6 @@
 using namespace caf;
 
 namespace vast {
-
 namespace {
 
 struct keystroke_monitor : default_actor
@@ -40,26 +39,26 @@ struct keystroke_monitor : default_actor
   {
     return
     {
-      on(atom("start")) >> [=]
+      [=](start_atom)
       {
         el_.reset();
         running_ = true;
-        send(this, atom("get"));
+        send(this, get_atom::value);
       },
-      on(atom("stop")) >> [=]
+      [=](stop_atom)
       {
         running_ = false;
       },
-      on(atom("get")) >> [=]
+      [=](get_atom)
       {
         if (! running_)
           return;
 
         char c;
         if (el_.get(c))
-          send(sink_, atom("key"), c);
+          send(sink_, key_atom::value, c);
         else
-          send(this, atom("get"));
+          send(this, get_atom::value);
       }
     };
   };
@@ -297,7 +296,7 @@ console::console(caf::actor search, path dir)
         if (args.empty())
           return false;
 
-        sync_send(search_, atom("query"), this, args).then(
+        sync_send(search_, query_atom::value, this, args).then(
             on_arg_match >> [=](sync_exited_msg const& e)
             {
               print(fail)
@@ -308,7 +307,7 @@ console::console(caf::actor search, path dir)
             [=](error const& e)
             {
               print(fail) << "syntax error: " << e << std::endl;
-              send(this, atom("prompt"));
+              send(this, prompt_atom::value);
             },
             [=](expression const& ast, actor const& qry)
             {
@@ -333,18 +332,18 @@ console::console(caf::actor search, path dir)
                 << "new query " << active_->id()
                 << " -> " << ast << std::endl;
 
-              send(qry, atom("extract"), opts_.batch_size);
+              send(qry, extract_atom::value, opts_.batch_size);
               expected_ = opts_.batch_size;
               VAST_DEBUG(this, "expects", expected_, "results as first batch");
 
               if (opts_.auto_follow)
                 follow();
               else
-                send(this, atom("prompt"));
+                send(this, prompt_atom::value);
             },
             others() >> [=]
             {
-              send(this, atom("prompt"));
+              send(this, prompt_atom::value);
               VAST_ERROR(this, "got unexpected message:",
                          to_string(last_dequeued()));
             });
@@ -642,16 +641,16 @@ message_handler console::make_handler()
       print(fail) << e << std::endl;
       prompt();
     },
-    on(atom("done")) >> [=]
+    [=](done_atom)
     {
       VAST_DEBUG(this, "got done notification from query", last_sender());
       remove(last_sender());
     },
-    on(atom("prompt")) >> [=]
+    [=](prompt_atom)
     {
       prompt();
     },
-    on(atom("progress"), arg_match) >> [=](double progress, uint64_t hits)
+    [=](progress_atom, double progress, uint64_t hits)
     {
       auto i = connected_.find(last_sender());
       assert(i != connected_.end());
@@ -716,12 +715,12 @@ message_handler console::make_handler()
         std::cout << e << std::endl;
 
         if (expected_ > 0 && --expected_ == 0)
-          send(this, atom("key"), 's');
+          send(this, key_atom::value, 's');
       }
 
       r->add(std::move(e));
     },
-    on(atom("key"), arg_match) >> [=](char key)
+    [=](key_atom, char key)
     {
       switch (key)
       {
@@ -816,7 +815,7 @@ message_handler console::make_handler()
               if (p.second.second == active_)
               {
                 found = true;
-                send(p.second.first, atom("extract"), opts_.batch_size);
+                send(p.second.first, extract_atom::value, opts_.batch_size);
                 print(query)
                   << "asks for " << opts_.batch_size
                   << " more results" << std::endl;
@@ -873,7 +872,7 @@ message_handler console::make_handler()
           break;
       }
 
-      send(keystroke_monitor_, atom("get"));
+      send(keystroke_monitor_, get_atom::value);
     }
   };
 }
@@ -970,13 +969,13 @@ void console::prompt(size_t ms)
 void console::follow()
 {
   following_ = true;
-  send(keystroke_monitor_, atom("start"));
+  send(keystroke_monitor_, start_atom::value);
 }
 
 void console::unfollow()
 {
   following_ = false;
-  send(keystroke_monitor_, atom("stop"));
+  send(keystroke_monitor_, stop_atom::value);
   prompt();
 }
 

@@ -41,28 +41,28 @@ message_handler receiver::make_handler()
 {
   return
   {
-    on(atom("set"), atom("identifier"), arg_match) >> [=](actor const& a)
+    [=](set_atom, identifier_atom, actor const& a)
     {
       VAST_DEBUG(this, "registers identifier", a);
       monitor(a);
       identifier_ = a;
-      return make_message(atom("ok"));
+      return ok_atom::value;
     },
-    on(atom("add"), atom("archive"), arg_match) >> [=](actor const& a)
+    [=](add_atom, archive_atom, actor const& a)
     {
       VAST_DEBUG(this, "registers archive", a);
       send(a, flow_control::announce{this});
       monitor(a);
       archive_ = a;
-      return make_message(atom("ok"));
+      return ok_atom::value;
     },
-    on(atom("add"), atom("index"), arg_match) >> [=](actor const& a)
+    [=](add_atom, index_atom, actor const& a)
     {
       VAST_DEBUG(this, "registers index", a);
       send(a, flow_control::announce{this});
       monitor(a);
       index_ = a;
-      return make_message(atom("ok"));
+      return ok_atom::value;
     },
     [=](chunk const& chk)
     {
@@ -81,8 +81,8 @@ message_handler receiver::make_handler()
       }
 
       message last = last_dequeued();
-      sync_send(identifier_, atom("request"), chk.events()).then(
-        on(atom("id"), arg_match) >> [=](event_id from, event_id to) mutable
+      sync_send(identifier_, request_atom::value, chk.events()).then(
+        [=](id_atom, event_id from, event_id to) mutable
         {
           auto n = to - from;
           VAST_DEBUG(this, "got", n,
@@ -115,7 +115,8 @@ message_handler receiver::make_handler()
         },
         others() >> [=]
         {
-          VAST_WARN(this, "got unexpected message", to_string(last_dequeued()));
+          VAST_WARN(this, "got unexpected message from",
+                    last_sender() << ':', to_string(last_dequeued()));
         });
     }
   };

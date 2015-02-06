@@ -58,8 +58,8 @@ int main(int argc, char *argv[])
 
   auto program = caf::spawn<vast::program>(std::move(*cfg));
   caf::scoped_actor self;
-  self->sync_send(program, caf::atom("run")).await(
-    on(caf::atom("ok")) >> [] {},
+  self->sync_send(program, vast::run_atom::value).await(
+    [](caf::ok_atom) {},
     [&](vast::error const& e)
     {
       VAST_ERROR(program, "encountered error:", e);

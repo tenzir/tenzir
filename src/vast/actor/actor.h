@@ -6,6 +6,7 @@
 #include <caf/event_based_actor.hpp>
 #include <caf/send.hpp>
 #include <caf/to_string.hpp>
+#include "vast/actor/atoms.h"
 
 namespace caf {
 
@@ -131,9 +132,6 @@ inline char const* render_exit_reason(uint32_t reason)
       return "remote link unreachable";
   }
 }
-
-using ping_atom = caf::atom_constant<caf::atom("PING")>;
-using pong_atom = caf::atom_constant<caf::atom("PONG")>;
 
 /// The base class for VAST actors.
 class default_actor : public caf::event_based_actor

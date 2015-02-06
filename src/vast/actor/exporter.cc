@@ -34,12 +34,12 @@ message_handler exporter::make_handler()
 
   return
   {
-    on(atom("add"), arg_match) >> [=](actor const& snk)
+    [=](add_atom, actor const& snk)
     {
       monitor(snk);
       sinks_.insert(snk);
     },
-    on(atom("limit"), arg_match) >> [=](uint64_t max)
+    [=](limit_atom, uint64_t max)
     {
       VAST_DEBUG(this, "caps event export at", max, "events");
 
@@ -60,14 +60,13 @@ message_handler exporter::make_handler()
         quit(exit::done);
       }
     },
-    on(atom("progress"), arg_match) >> [=](double progress, uint64_t hits)
+    [=](progress_atom, double progress)
     {
-      VAST_DEBUG(this, "got query status message: completed ",
-                 size_t(progress * 100) << "% (" << hits << " hits)");
+      VAST_DEBUG(this, "got query progress:", size_t(progress * 100) << "%");
     },
-    on(atom("done")) >> [=]
+    [=](done_atom)
     {
-      VAST_DEBUG(this, "got query status message: done with index hits");
+      VAST_DEBUG(this, "got query progress: done");
     }
   };
 }

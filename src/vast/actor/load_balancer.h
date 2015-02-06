@@ -63,13 +63,13 @@ public:
     using namespace caf;
     return
     {
-      on(atom("add"), atom("worker"), arg_match) >> [=](actor a)
+      [=](add_atom, worker_atom, actor a)
       {
         VAST_DEBUG(this, "adds worker", a);
         monitor(a);
         workers_.push_back(std::move(a));
       },
-      on(atom("workers")) >> [=]
+      [=](workers_atom)
       {
         return workers_;
       },

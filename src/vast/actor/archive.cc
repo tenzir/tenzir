@@ -95,7 +95,7 @@ caf::message_handler archive::make_handler()
       }
 
       VAST_WARN(this, t.error());
-      return make_message(atom("no chunk"), eid);
+      return make_message(empty_atom::value, eid);
     }
   };
 }
