@@ -123,6 +123,7 @@ message_handler importer::make_handler()
     {
       VAST_DEBUG(this, "pauses chunk delivery");
       become(paused_);
+      send(message_priority::high, source_, stop_atom::value);
     },
     [=](flow_control::underload)
     {
@@ -141,6 +142,7 @@ message_handler importer::make_handler()
     {
       VAST_DEBUG(this, "resumes chunk delivery");
       become(ready_);
+      send(message_priority::high, source_, start_atom::value);
     },
   };
 
