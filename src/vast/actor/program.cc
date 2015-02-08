@@ -74,7 +74,17 @@ message_handler program::make_handler()
     {
       VAST_VERBOSE(this, "received signal", signal);
       if (signal == SIGINT || signal == SIGTERM)
-        quit(exit::stop);
+      {
+        // We cut the flow of events at the source and let them trickle through
+        // the pipeline so that we end up in a consistent state for a given
+        // number of events.
+        if (config_.check("importer"))
+          send_exit(importer_, exit::done);
+        else if (config_.check("receiver"))
+          send_exit(receiver_, exit::done);
+        else
+          quit(exit::stop);
+      }
     },
     [=](error const& e)
     {
@@ -219,6 +229,7 @@ trial<void> program::run()
     auto receiver_name = *config_.get("receiver.name");
     if (config_.check("receiver"))
     {
+      // FIXME: figure out why we can't spawn this actor priority-aware.
       receiver_ = spawn<receiver, linked>();
       // Whenever we have a RECEIVER, it initiates the shutdown because it
       // depends on IDENTIFIER from inside TRACKER.
