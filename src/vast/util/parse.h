@@ -224,9 +224,8 @@ auto operator>>(std::basic_istream<CharT, Traits>& in, T& x)
      >
 {
   std::istreambuf_iterator<CharT> begin{in}, end;
-  if (parse(x, begin, end))
+  if (! parse(x, begin, end))
     in.setstate(std::ios_base::failbit);
-
   return in;
 }
 
