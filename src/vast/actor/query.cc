@@ -56,12 +56,15 @@ query::query(actor archive, actor sink, expression ast)
     },
     [=](done_atom)
     {
-      forward_to(sink_);
+      send(sink_, done_atom::value, time::stopwatch() - start_time_);
       quit(exit::done);
     },
-    [=](done_atom, expression const&)
+    [=](done_atom, time::duration runtime, expression const&)
     {
-      VAST_DEBUG(this, "completed index interaction");
+      VAST_DEBUG(this, "completed index interaction in", runtime, "ms");
+      // FIXME: having completed index interaction does not mean that the user
+      // is done with the query. We should wait for a signal from the user to
+      // temrinate the query.
       send(this, done_atom::value);
     }};
 
@@ -99,7 +102,7 @@ query::query(actor archive, actor sink, expression ast)
     },
     [=](extract_atom)
     {
-      VAST_DEBUG(this, "starts to extract events (" << requested_, "requested)");
+      VAST_DEBUG(this, "extracts events (" << requested_, "requested)");
       assert(reader_);
       assert(requested_ > 0);
       // We construct a new mask for each extraction request, because hits may
@@ -191,6 +194,7 @@ query::query(actor archive, actor sink, expression ast)
 
 message_handler query::make_handler()
 {
+  start_time_ = time::stopwatch();
   return idle_;
 }
 

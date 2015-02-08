@@ -260,7 +260,7 @@ message_handler partition::make_handler()
       if (! inflight_pings_.empty())
         VAST_DEBUG(this, "awaits", inflight_pings_.size(), "indexer pongs");
     },
-    [=](done_atom)
+    [=](done_atom, time::duration runtime)
     {
       // Once we're done with an entire query, propagate this fact to all
       // sinks. This needs to happen in the same channel as the results flow,
@@ -268,9 +268,10 @@ message_handler partition::make_handler()
       auto qt = query_tasks_.find(last_sender());
       if (qt != query_tasks_.end())
       {
-        VAST_DEBUG(this, "completed query", *qt->second);
+        VAST_DEBUG(this, "completed query", *qt->second, "in",
+                   runtime.milliseconds(), "ms");
         auto& qs = queries_[*qt->second];
-        auto msg = make_message(done_atom::value, *qt->second);
+        auto msg = make_message(done_atom::value, runtime, *qt->second);
         for (auto& s : qs.sinks)
           send(s, msg);
         qs.task = invalid_actor;
@@ -282,8 +283,8 @@ message_handler partition::make_handler()
       auto pt = predicate_tasks_.find(last_sender());
       assert(pt != predicate_tasks_.end());
       auto& ps = predicates_[*pt->second];
-      VAST_DEBUG(this, "completed predicate for", ps.coverage.size(),
-                 "indexers:", *pt->second);
+      VAST_DEBUG(this, "took", runtime.milliseconds(), "to complete predicate "
+                 "for", ps.coverage.size(), "indexers:", *pt->second);
       for (auto& q : ps.queries)
       {
         VAST_DEBUG(this, "evaluates", q);

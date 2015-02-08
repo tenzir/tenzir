@@ -247,7 +247,7 @@ message_handler index::make_handler()
         queries_.emplace(expr, qs);
       }
     },
-    [=](done_atom, expression const& expr)
+    [=](done_atom, time::duration, expression const& expr)
     {
       VAST_DEBUG(this, "got signal that", last_sender(), "finished for", expr);
       auto q = queries_.find(expr);

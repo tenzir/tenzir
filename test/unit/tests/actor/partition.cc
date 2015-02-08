@@ -62,7 +62,7 @@ TEST("partition")
       CHECK(*expr == e);
       hits |= h;
     },
-    [&](done_atom, expression const& e)
+    [&](done_atom, time::duration, expression const& e)
     {
       CHECK(*expr == e);
       done = true;

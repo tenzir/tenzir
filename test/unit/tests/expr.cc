@@ -103,7 +103,7 @@ TEST("event evaluation")
   //
 
   event e;
-  auto tp = to<time::point>("2014-01-16+05:30:12");
+  auto tp = to<time::point>("2014-01-16+05:30:12", time::point::format);
   REQUIRE(tp);
   e.timestamp(*tp);
   auto t = type::alias{type{}};

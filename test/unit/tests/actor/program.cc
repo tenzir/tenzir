@@ -95,7 +95,7 @@ TEST("basic actor integrity")
     {
       CHECK(hits.count() > 0);
     },
-    [&](done_atom, expression const& expr)
+    [&](done_atom, time::duration, expression const& expr)
     {
       CHECK(expr == *pops);
     },
@@ -140,7 +140,7 @@ TEST("basic actor integrity")
     });
 
   VAST_INFO("waiting on final done from QUERY");
-  self->receive([&](done_atom) { REQUIRE(true); });
+  self->receive([&](done_atom, time::duration) { REQUIRE(true); });
 
   VAST_INFO("importing another Bro log");
   *import_config["tracker.port"] = 42003;
@@ -190,7 +190,7 @@ TEST("basic actor integrity")
     {
       REQUIRE(true);
     },
-    [&](done_atom)
+    [&](done_atom, time::duration)
     {
       CHECK(n == 15);
     },

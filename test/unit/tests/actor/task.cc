@@ -97,6 +97,7 @@ TEST("task")
     });
 
   VAST_INFO("checking final notification");
-  self->receive([&](done_atom) { CHECK(self->last_sender() == t); } );
+  self->receive(
+      [&](done_atom, time::duration) { CHECK(self->last_sender() == t); } );
   self->await_all_other_actors_done();
 }
