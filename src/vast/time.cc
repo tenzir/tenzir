@@ -133,26 +133,7 @@ trial<void> convert(duration dur, util::json& j)
   return nothing;
 }
 
-#ifdef VAST_CLANG
-point::point(std::string const& str, char const* fmt, char const* locale)
-#else
-point::point(std::string const& str, char const* fmt, char const*)
-#endif
-{
-  auto epoch = make_tm();
-  std::istringstream ss(str);
-#ifdef VAST_CLANG
-  if (locale)
-    ss.imbue(std::locale(locale));
-  ss >> std::get_time(&epoch, fmt);
-#else
-  // GCC does not implement std::locale correctly :-/.
-  strptime(str.data(), fmt, &epoch);
-#endif
-  time_point_ = clock::from_time_t(to_time_t(epoch));
-}
-
-point::point(int year, int month, int day, int hour, int min, int sec)
+point point::utc(int year, int month, int day, int hour, int min, int sec)
 {
   auto t = make_tm();
   if (sec)
@@ -192,7 +173,7 @@ point::point(int year, int month, int day, int hour, int min, int sec)
     t.tm_year = year - 1900;
   }
   propagate(t);
-  time_point_ = clock::from_time_t(to_time_t(t));
+  return point::clock::from_time_t(to_time_t(t));
 }
 
 point::point(duration d)
@@ -477,6 +458,25 @@ void propagate(std::tm &t)
       days += prev_month_days;
     }
   }
+}
+
+#ifdef VAST_CLANG
+std::tm to_tm(std::string const& str, char const* fmt, char const* locale)
+#else
+std::tm to_tm(std::string const& str, char const* fmt, char const*)
+#endif
+{
+  auto epoch = make_tm();
+  std::istringstream ss(str);
+#ifdef VAST_CLANG
+  if (locale)
+    ss.imbue(std::locale(locale));
+  ss >> std::get_time(&epoch, fmt);
+#else
+  // GCC does not implement std::locale correctly :-/.
+  strptime(str.data(), fmt, &epoch);
+#endif
+  return epoch;
 }
 
 } // namespace time

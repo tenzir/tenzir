@@ -116,10 +116,8 @@ TEST("time::duration")
 
 TEST("time::point")
 {
-  time::point expected(2012, 8, 12, 23, 55, 4);
+  auto expected = time::point::utc(2012, 8, 12, 23, 55, 4);
   std::string str("2012-08-12+23:55:04");
-  CHECK(time::point(str) == expected);
-
   auto i = str.begin();
   auto t = parse<time::point>(i, str.end(), time::point::format);
   CHECK(i == str.end());
@@ -336,7 +334,7 @@ TEST("value")
 
   // Time points
   v = to<value>("2012-08-12+23:55:04");
-  CHECK(*get<time::point>(*v), time::point(2012, 8, 12, 23, 55 == 4));
+  CHECK(*get<time::point>(*v) == time::point::utc(2012, 8, 12, 23, 55, 4));
 
   v = to<value>("2012-08-12+00:00:00");
   REQUIRE(v);

@@ -106,6 +106,22 @@ struct time_point : qi::grammar<Iterator, time::point(), skipper<Iterator>>
     time::point& p;
   };
 
+  struct time_point_factory
+  {
+    template <typename, typename, typename>
+    struct result
+    {
+      using type = time::point;
+    };
+
+    template <typename I>
+    time::point operator()(I begin, I end, char const* fmt) const
+    {
+      auto t = parse<time::point>(begin, end, fmt);
+      return t ? *t : time::point{};
+    }
+  };
+
   time_point()
     : time_point::base_type(time),
       init(point),
@@ -167,8 +183,7 @@ struct time_point : qi::grammar<Iterator, time::point(), skipper<Iterator>>
               >>  ':'
               >>  digit2 >> ':'
               >>  digit2
-          ]   [_val = construct<time::point>(
-               construct<std::string>(begin(_1), end(_1)), "%Y-%m-%d+%H:%M:%S")]
+          ]   [_val = make_time_point(begin(_1), end(_1), "%Y-%m-%d+%H:%M:%S")]
       ;
 
     // YYYY-MM-DD HH:MM
@@ -180,8 +195,7 @@ struct time_point : qi::grammar<Iterator, time::point(), skipper<Iterator>>
               >>  digit2
               >>  ':'
               >>  digit2
-          ]   [_val = construct<time::point>(
-                construct<std::string>(begin(_1), end(_1)), "%Y-%m-%d+%H:%M")]
+          ]   [_val = make_time_point(begin(_1), end(_1), "%Y-%m-%d+%H:%M")]
       ;
 
     // YYYY-MM-DD HH
@@ -191,24 +205,21 @@ struct time_point : qi::grammar<Iterator, time::point(), skipper<Iterator>>
               >>  digit2 >> '-'
               >>  digit2 >> '+'
               >>  digit2
-          ]   [_val = construct<time::point>(
-                construct<std::string>(begin(_1), end(_1)), "%Y-%m-%d+%H")]
+          ]   [_val = make_time_point(begin(_1), end(_1), "%Y-%m-%d+%H")]
       ;
 
     // YYYY-MM-DD
     fmt3
       =   raw
           [   digit4 >> '-' >>  digit2 >> '-' >>  digit2
-          ]   [_val = construct<time::point>(
-                construct<std::string>(begin(_1), end(_1)), "%Y-%m-%d")]
+          ]   [_val = make_time_point(begin(_1), end(_1), "%Y-%m-%d")]
       ;
 
     // YYYY-MM
     fmt4
       =   raw
           [   digit4 >> '-' >>  digit2
-          ]   [_val = construct<time::point>(
-                construct<std::string>(begin(_1), end(_1)), "%Y-%m")]
+          ]   [_val = make_time_point(begin(_1), end(_1), "%Y-%m")]
       ;
 
     digit2
@@ -228,6 +239,7 @@ struct time_point : qi::grammar<Iterator, time::point(), skipper<Iterator>>
   boost::phoenix::function<absolute_time> at;
   boost::phoenix::function<initializer> init;
   boost::phoenix::function<adder> add;
+  boost::phoenix::function<time_point_factory> make_time_point;
 
   time::point point;
 };

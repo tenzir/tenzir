@@ -121,20 +121,38 @@ TEST("time_point")
   arithmetic_bitmap_index<null_bitstream, time::point> bmi, bmi2;
   bmi.binner(9);
 
-  REQUIRE(bmi.push_back(time::point{"2014-01-16+05:30:15"}));
-  REQUIRE(bmi.push_back(time::point{"2014-01-16+05:30:12"}));
-  REQUIRE(bmi.push_back(time::point{"2014-01-16+05:30:15"}));
-  REQUIRE(bmi.push_back(time::point{"2014-01-16+05:30:18"}));
-  REQUIRE(bmi.push_back(time::point{"2014-01-16+05:30:15"}));
-  REQUIRE(bmi.push_back(time::point{"2014-01-16+05:30:19"}));
+  auto t = to<time::point>("2014-01-16+05:30:15", time::point::format);
+  REQUIRE(t);
+  REQUIRE(bmi.push_back(*t));
+  t = to<time::point>("2014-01-16+05:30:12", time::point::format);
+  REQUIRE(t);
+  REQUIRE(bmi.push_back(*t));
+  t = to<time::point>("2014-01-16+05:30:15", time::point::format);
+  REQUIRE(t);
+  REQUIRE(bmi.push_back(*t));
+  t = to<time::point>("2014-01-16+05:30:18", time::point::format);
+  REQUIRE(t);
+  REQUIRE(bmi.push_back(*t));
+  t = to<time::point>("2014-01-16+05:30:15", time::point::format);
+  REQUIRE(t);
+  REQUIRE(bmi.push_back(*t));
+  t = to<time::point>("2014-01-16+05:30:19", time::point::format);
+  REQUIRE(t);
+  REQUIRE(bmi.push_back(*t));
 
-  auto fifteen = bmi.lookup(equal, time::point{"2014-01-16+05:30:15"});
+  t = to<time::point>("2014-01-16+05:30:15", time::point::format);
+  REQUIRE(t);
+  auto fifteen = bmi.lookup(equal, *t);
   CHECK(to_string(*fifteen) == "101010");
 
-  auto twenty = bmi.lookup(less, time::point{"2014-01-16+05:30:20"});
+  t = to<time::point>("2014-01-16+05:30:20", time::point::format);
+  REQUIRE(t);
+  auto twenty = bmi.lookup(less, *t);
   CHECK(to_string(*twenty) == "111111");
 
-  auto eighteen = bmi.lookup(greater_equal, time::point{"2014-01-16+05:30:18"});
+  t = to<time::point>("2014-01-16+05:30:18", time::point::format);
+  REQUIRE(t);
+  auto eighteen = bmi.lookup(greater_equal, *t);
   CHECK(to_string(*eighteen) == "000101");
 
   std::vector<uint8_t> buf;

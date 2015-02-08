@@ -14,7 +14,8 @@ SUITE("expression")
 
 TEST("construction")
 {
-  predicate p0{time_extractor{}, less_equal, data{time::point{1983, 8, 12}}};
+  predicate p0{time_extractor{}, less_equal,
+               data{time::point::utc(1983, 8, 12)}};
   predicate p1{event_extractor{}, equal, data{"foo"}};
   conjunction conj{p0, p1};
   expression expr{conj};
@@ -29,7 +30,7 @@ TEST("construction")
 TEST("serialization")
 {
   predicate p0{event_extractor{}, in, data{"foo"}};
-  predicate p1{type_extractor{}, equal, data{time::point{1983, 8, 12}}};
+  predicate p1{type_extractor{}, equal, data{time::point::utc(1983, 8, 12)}};
   expression expr{disjunction{p0, p1}};
 
   auto str = to_string(expr);
@@ -102,7 +103,9 @@ TEST("event evaluation")
   //
 
   event e;
-  e.timestamp(time::point{"2014-01-16+05:30:12"});
+  auto tp = to<time::point>("2014-01-16+05:30:12");
+  REQUIRE(tp);
+  e.timestamp(*tp);
   auto t = type::alias{type{}};
   CHECK(t.name("foo"));
   CHECK(e.type(t));

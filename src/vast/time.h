@@ -138,64 +138,6 @@ private:
   void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
 
-  template <typename Iterator>
-  friend trial<void> print(duration tr, Iterator&& out)
-  {
-    double d;
-    convert(tr, d);
-    auto t = print(d, out);
-    if (! t)
-      return t.error();
-    *out++ = 's';
-    return nothing;
-  }
-
-  template <typename Iterator>
-  friend trial<void> parse(duration& tr, Iterator& begin, Iterator end)
-  {
-    bool is_double;
-    auto d = parse<double>(begin, end, &is_double);
-    if (! d)
-      return d.error();
-    if (is_double)
-    {
-      tr = duration::fractional(*d);
-      return nothing;
-    }
-    duration::rep i = *d;
-    if (begin == end)
-    {
-      tr = duration::seconds(i);
-      return nothing;
-    }
-    switch (*begin++)
-    {
-      default:
-        return error{"invalid unit:", *begin};
-      case 'n':
-        if (begin != end && *begin++ == 's')
-          tr = duration::nanoseconds(i);
-        break;
-      case 'u':
-        if (begin != end && *begin++ == 's')
-          tr = duration::microseconds(i);
-        break;
-      case 'm':
-        if (begin != end && *begin++ == 's')
-          tr = duration::milliseconds(i);
-        else
-          tr = duration::minutes(i);
-        break;
-      case 's':
-        tr = duration::seconds(i);
-        break;
-      case 'h':
-        tr = duration::hours(i);
-        break;
-    }
-    return nothing;
-  }
-
   friend trial<void> convert(duration tr, double& d);
   friend trial<void> convert(duration tr, duration_type& dur);
   friend trial<void> convert(duration tr, util::json& j);
@@ -210,8 +152,15 @@ public:
   using time_point_type = std::chrono::time_point<clock, duration_type>;
 
   // The default format string used to convert time points into calendar types.
-  // It has the form `YYYY-MM-DD HH:MM:SS`.
   static constexpr char const* format = "%Y-%m-%d+%H:%M:%S";
+
+  /// Constructs a UTC time point.
+  static point utc(int year,
+                   int month = 0,
+                   int day = 0,
+                   int hour = 0,
+                   int min = 0,
+                   int sec = 0);
 
   /// Constructs a time point with the UNIX epoch.
   point() = default;
@@ -229,24 +178,6 @@ public:
 
   /// Constructs a time point from a `std::tm` structure.
   explicit point(std::tm const& tm);
-
-  // TODO: make static factory
-  /// Constructs a time point from a given format string.
-  /// @param str The string to parse according to *fmt*.
-  /// @param fmt The format string.
-  /// @param locale The locale for *fmt*.
-  explicit point(std::string const& str,
-                 char const* fmt = format,
-                 char const* locale = nullptr);
-
-  // TODO: make static factory
-  /// Constructs a UTC time point.
-  explicit point(int year,
-                 int month = 0,
-                 int day = 0,
-                 int hour = 0,
-                 int min = 0,
-                 int sec = 0);
 
   // Arithmetic operators.
   point& operator+=(duration const& r);
@@ -288,23 +219,6 @@ private:
   void serialize(serializer& sink) const;
   void deserialize(deserializer& source);
 
-  template <typename Iterator>
-  friend trial<void> parse(point& p, Iterator& begin, Iterator end,
-                           char const* fmt = nullptr)
-  {
-    if (fmt)
-    {
-      p = point{std::string{begin, end}, fmt};
-      begin = end;
-      return nothing;
-    }
-    auto t = parse<duration>(begin, end);
-    if (! t)
-      return t.error();
-    p = *t;
-    return nothing;
-  }
-
   friend trial<void> convert(point p, double& d);
   friend trial<void> convert(point p, std::tm& tm);
   friend trial<void> convert(point p, util::json& j);
@@ -316,19 +230,6 @@ private:
 // come with a direct definition, no declarations allowed.
 trial<void> convert(point p, std::string& str,
                     char const* fmt = point::format);
-
-// We put this one outside because it uses the conversion function above.
-template <typename Iterator>
-trial<void> print(point p, Iterator&& out, char const* fmt = point::format)
-{
-  using util::print;
-  std::string str;
-  auto t = convert(p, str, fmt);
-  if (t)
-    return print(str, out);
-  else
-    return t.error();
-}
 
 /// Determines whether a given year is a leap year.
 /// @param year The year to check.
@@ -350,6 +251,9 @@ int days_in_month(int year, int month);
 /// @pre `month >= 0 && month < 12`
 int days_from(int year, int month, int n);
 
+/// Converts a `std::tm` structure to `time_t`.
+/// @param tm The `std::tm` structure to convert.
+/// @returns *tm* as `time_t`
 time_t to_time_t(std::tm const& t);
 
 /// Creates a new `std::tm` initialized to the 1970 epoch.
@@ -358,6 +262,110 @@ std::tm make_tm();
 
 /// Propagates underflowed and overflowed values up to the next higher unit.
 void propagate(std::tm &t);
+
+/// Parses a string into a `std::tm` structure.
+/// @param str The string to parse.
+/// @param fmt The format string to use.
+/// @param local The locale to use.
+/// @returns The `std::tm` structure corresponding to *str*.
+std::tm to_tm(std::string const& str, char const* fmt, char const* locale);
+
+//
+// Concepts
+//
+
+template <typename Iterator>
+trial<void> print(duration tr, Iterator&& out)
+{
+  using util::print;
+  double d;
+  convert(tr, d);
+  auto t = print(d, out);
+  if (! t)
+    return t.error();
+  *out++ = 's';
+  return nothing;
+}
+
+template <typename Iterator>
+trial<void> print(point p, Iterator&& out, char const* fmt = point::format)
+{
+  using util::print;
+  std::string str;
+  auto t = convert(p, str, fmt);
+  if (t)
+    return print(str, out);
+  else
+    return t.error();
+}
+
+template <typename Iterator>
+trial<void> parse(duration& dur, Iterator& begin, Iterator end)
+{
+  bool is_double;
+  auto d = util::parse<double>(begin, end, &is_double);
+  if (! d)
+    return d.error();
+  if (is_double)
+  {
+    dur = duration::fractional(*d);
+    return nothing;
+  }
+  duration::rep i = *d;
+  if (begin == end)
+  {
+    dur = duration::seconds(i);
+    return nothing;
+  }
+  switch (*begin++)
+  {
+    default:
+      return error{"invalid unit: ", *begin};
+    case 'n':
+      if (begin != end && *begin++ == 's')
+        dur = duration::nanoseconds(i);
+      break;
+    case 'u':
+      if (begin != end && *begin++ == 's')
+        dur = duration::microseconds(i);
+      break;
+    case 'm':
+      if (begin != end && *begin++ == 's')
+        dur = duration::milliseconds(i);
+      else
+        dur = duration::minutes(i);
+      break;
+    case 's':
+      dur = duration::seconds(i);
+      break;
+    case 'h':
+      dur = duration::hours(i);
+      break;
+  }
+  return nothing;
+}
+
+template <typename Iterator>
+trial<void> parse(point& p, Iterator& begin, Iterator end,
+                  char const* fmt = nullptr,
+                  char const* locale = nullptr)
+{
+  if (fmt)
+  {
+    std::string str{begin, end};
+    begin = end;
+    p = point::clock::from_time_t(to_time_t(to_tm(str, fmt, locale)));
+  }
+  else
+  {
+    duration d;
+    auto t = parse(d, begin, end);
+    if (! t)
+      return t.error();
+    p = d;
+  }
+  return nothing;
+}
 
 } // namespace time
 } // namespace vast
