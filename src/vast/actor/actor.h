@@ -44,14 +44,6 @@ inline Stream& operator<<(Stream& out, abstract_actor const* a)
   return out;
 }
 
-template <typename Stream>
-inline Stream& operator<<(Stream& out, event_based_actor const* a)
-{
-  assert(a != nullptr);
-  out << *a;
-  return out;
-}
-
 } // namespace caf
 
 #include "vast/logger.h"
