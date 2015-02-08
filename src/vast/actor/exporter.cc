@@ -9,7 +9,6 @@ namespace vast {
 
 void exporter::at(down_msg const& msg)
 {
-  VAST_ERROR(this, "got DOWN from", msg.source);
   for (auto& s : sinks_)
     if (s == msg.source)
     {

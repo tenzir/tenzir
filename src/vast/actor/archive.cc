@@ -15,7 +15,7 @@ archive::archive(path dir, size_t capacity, size_t max_segment_size)
     cache_{capacity, [&](uuid const& id) { return on_miss(id); }}
 {
   assert(max_segment_size_ > 0);
-
+  high_priority_exit(false);
   attach_functor(
     [=](uint32_t)
     {

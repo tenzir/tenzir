@@ -114,7 +114,6 @@ trial<void> program::run()
       auto secs = *config_.as<unsigned>("profiler.interval");
       auto prof = spawn<profiler, detached+linked>(
           dir / "log", std::chrono::seconds(secs));
-
       if (config_.check("profiler.cpu"))
       {
 #ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
@@ -124,7 +123,6 @@ trial<void> program::run()
         return error{"not compiled with perftools CPU support"};
 #endif
       }
-
       if (config_.check("profiler.heap"))
       {
 #ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
@@ -194,11 +192,10 @@ trial<void> program::run()
     auto archive_name = *config_.get("archive.name");
     if (config_.check("archive"))
     {
-      archive_ = spawn<archive, linked>(
+      archive_ = spawn<archive, priority_aware+linked>(
           dir,
           *config_.as<size_t>("archive.max-segments"),
           *config_.as<size_t>("archive.max-segment-size") * 1000000);
-
       self->sync_send(tracker_, put_atom::value, "archive", archive_,
                       archive_name).await(ok_or_quit);
       if (abort)
@@ -211,8 +208,8 @@ trial<void> program::run()
       auto max_events = *config_.as<size_t>("index.part-size");
       auto max_parts = *config_.as<size_t>("index.part-max");
       auto active_parts = *config_.as<size_t>("index.part-active");
-      index_ = spawn<index, linked>(dir, max_events, max_parts, active_parts);
-
+      index_ = spawn<index, priority_aware+linked>(dir, max_events, max_parts,
+                                                   active_parts);
       self->sync_send(tracker_, put_atom::value, "index", index_, index_name)
         .await(ok_or_quit);
       if (abort)
@@ -223,21 +220,17 @@ trial<void> program::run()
     if (config_.check("receiver"))
     {
       receiver_ = spawn<receiver, linked>();
-
       // Whenever we have a RECEIVER, it initiates the shutdown because it
       // depends on IDENTIFIER from inside TRACKER.
       unlink_from(tracker_);
-
       // If RECEIVER and TRACKER live in different processes, a failing
       // RECEIVER should not take down VAST's central component.
       if (config_.check("tracker"))
         tracker_->link_to(receiver_);
-
       self->sync_send(tracker_, put_atom::value, "receiver", receiver_,
                       receiver_name).await(ok_or_quit);
       if (abort)
         return std::move(*abort);
-
       self->sync_send(tracker_, get_atom::value, "identifier").await(
           [&](actor const& identifier)
           {
@@ -254,7 +247,6 @@ trial<void> program::run()
           tracker_->unlink_from(receiver_);
           tracker_->link_to(archive_);
         }
-
         self->sync_send(tracker_, link_atom::value, receiver_name, archive_name)
           .await(ok_or_quit);
         if (abort)
@@ -270,7 +262,6 @@ trial<void> program::run()
           tracker_->unlink_from(receiver_);
           tracker_->link_to(index_);
         }
-
         self->sync_send(tracker_, link_atom::value, receiver_name, index_name)
           .await(ok_or_quit);
         if (abort)
@@ -286,7 +277,6 @@ trial<void> program::run()
         .await(ok_or_quit);
       if (abort)
         return std::move(*abort);
-
       if (config_.check("archive"))
       {
         self->sync_send(tracker_, link_atom::value, search_name, archive_name)
@@ -294,7 +284,6 @@ trial<void> program::run()
         if (abort)
           return std::move(*abort);
       }
-
       if (config_.check("index"))
       {
         self->sync_send(tracker_, link_atom::value, search_name, index_name)
@@ -333,14 +322,13 @@ trial<void> program::run()
       }
 
       auto chunk_size = *config_.as<uint64_t>("import.chunk-size");
-      importer_ = spawn<importer, linked>(dir, chunk_size, compression);
-
+      importer_ = spawn<importer, priority_aware+linked>(dir, chunk_size,
+                                                         compression);
       auto importer_name = *config_.get("import.name");
       self->sync_send(tracker_, put_atom::value, "importer", importer_,
                       importer_name).await(ok_or_quit);
       if (abort)
         return std::move(*abort);
-
       if (config_.check("receiver"))
       {
         // If this program accomodates both IMPORTER and RECEIVER, we must
@@ -349,12 +337,10 @@ trial<void> program::run()
         unlink_from(importer_);
         importer_->link_to(receiver_);
       }
-
       self->sync_send(tracker_, link_atom::value, importer_name, receiver_name)
         .await(ok_or_quit);
       if (abort)
         return std::move(*abort);
-
       if (auto schema_file = config_.get("import.schema"))
       {
         auto t = load_and_parse<schema>(path{*schema_file});
@@ -363,7 +349,6 @@ trial<void> program::run()
           quit(exit::error);
           return error{"failed to load schema: ", t.error()};
         }
-
         sch = *t;
       }
 
@@ -388,7 +373,7 @@ trial<void> program::run()
         auto e = *config_.as<size_t>("import.pcap-flow-expiry");
         auto p = *config_.as<int64_t>("import.pcap-pseudo-realtime");
         std::string n = i ? *i : *r;
-        src = spawn<source::pcap, detached>(
+        src = spawn<source::pcap, priority_aware+detached>(
             sch, std::move(n), c ? *c : -1, m, a, e, p);
 #else
         quit(exit::error);
@@ -397,24 +382,23 @@ trial<void> program::run()
       }
       else if (*format == "bro")
       {
-        src = spawn<source::bro, detached>(sch, *r, sniff);
+        src = spawn<source::bro, priority_aware+detached>(sch, *r, sniff);
       }
       else if (*format == "bgpdump")
       {
-        src = spawn<source::bgpdump, detached>(sch, *r, sniff);
+        src = spawn<source::bgpdump, priority_aware+detached>(sch, *r, sniff);
       }
       else if (*format == "test")
       {
         auto id = *config_.as<event_id>("import.test-id");
         auto events = *config_.as<uint64_t>("import.test-events");
-        src = spawn<source::test>(sch, id, events);
+        src = spawn<source::test, priority_aware>(sch, id, events);
       }
       else
       {
         quit(exit::error);
         return error{"invalid import format: ", *format};
       }
-
       send(importer_, add_atom::value, source_atom::value, src);
     }
     else if (auto format = config_.get("exporter"))
@@ -424,11 +408,9 @@ trial<void> program::run()
                       exporter_name).await(ok_or_quit);
       if (abort)
         return std::move(*abort);
-
       auto limit = *config_.as<uint64_t>("export.limit");
       if (limit > 0)
         send(exporter_, limit_atom::value, limit);
-
       exporter_ = spawn<exporter, linked>();
       if (auto schema_file = config_.get("export.schema"))
       {
@@ -438,7 +420,6 @@ trial<void> program::run()
           quit(exit::error);
           return error{"failed to load schema: ", t.error()};
         }
-
         sch = *t;
       }
 
@@ -476,7 +457,6 @@ trial<void> program::run()
             }
           }
         }
-
         snk = spawn<sink::json>(std::move(p));
       }
       else
@@ -484,7 +464,6 @@ trial<void> program::run()
         quit(exit::error);
         return error{"invalid export format: ", *format};
       }
-
       send(exporter_, add_atom::value, std::move(snk));
 
       auto query = config_.get("export.query");

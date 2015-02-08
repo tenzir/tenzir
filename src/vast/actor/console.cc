@@ -175,26 +175,28 @@ console::console(caf::actor search, path dir)
       "auto-follow",
       "enter interactive control mode after query creation");
 
-  auto_follow->on(
-      [=](std::string args) -> util::result<bool>
-      {
-        match_split(args, ' ')(
-            on("T") >> [=](std::string const&)
-            {
-              opts_.auto_follow = true;
-            },
-            on("F") >> [=](std::string const&)
-            {
-              opts_.auto_follow = false;
-            },
-            others() >> [=]
-            {
-              print(fail) << "need 'T' or 'F' as argument" << std::endl;
-              return false;
-            });
-
-        return true;
-      });
+  // FIXME: replace match_split with new function split in CAF > 0.12.2. Since
+  // we also work with develop, we just ignore this feature for now since the
+  // console needs rewriting in SASH anyway.
+  //auto_follow->on(
+  //    [=](std::string args) -> util::result<bool>
+  //    {
+  //      match_split(args, ' ')(
+  //          on("T") >> [=](std::string const&)
+  //          {
+  //            opts_.auto_follow = true;
+  //          },
+  //          on("F") >> [=](std::string const&)
+  //          {
+  //            opts_.auto_follow = false;
+  //          },
+  //          others() >> [=]
+  //          {
+  //            print(fail) << "need 'T' or 'F' as argument" << std::endl;
+  //            return false;
+  //          });
+  //      return true;
+  //    });
 
   set->add("show", "display the current settings")->on(
       [=](std::string) -> util::result<bool>

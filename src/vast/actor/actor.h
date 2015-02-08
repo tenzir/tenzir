@@ -141,6 +141,7 @@ public:
   {
     trap_exit(true);
     trap_unexpected(true);
+    high_priority_exit(true);
   }
 
   caf::behavior make_behavior() override
@@ -183,15 +184,32 @@ protected:
 
   bool trap_unexpected()
   {
-    return flags_ &= 0x01;
+    return flags_ & 0x01;
   }
 
   void trap_unexpected(bool flag)
   {
-    if (flag)
-      flags_ |= 0x01;
-    else
-      flags_ &= ~0x01;
+    flag ? flags_ |= 0x01 : flags_ &= ~0x01;
+  }
+
+  bool overloaded()
+  {
+    return flags_ & 0x02;
+  }
+
+  void overloaded(bool flag)
+  {
+    flag ? flags_ |= 0x02 : flags_ &= ~0x02;
+  }
+
+  bool high_priority_exit()
+  {
+    return flags_ & 0x04;
+  }
+
+  void high_priority_exit(bool flag)
+  {
+    flag ? flags_ |= 0x04 : flags_ &= ~0x04;
   }
 
   virtual void at(caf::exit_msg const& msg)
@@ -206,12 +224,31 @@ protected:
 
   virtual caf::message_handler make_exit_handler()
   {
-    return [=](caf::exit_msg const& msg) { at(msg); };
+    return [=](caf::exit_msg const& msg)
+    {
+      VAST_DEBUG(this, "got EXIT from", msg.source,
+                 '(' << render_exit_reason(msg.reason) << ')');
+      if (high_priority_exit())
+      {
+        at(msg);
+      }
+      else
+      {
+        VAST_DEBUG(this, "delays exit");
+        high_priority_exit(true);
+        send(caf::message_priority::normal, this,
+             caf::exit_msg{address(), msg.reason});
+      }
+    };
   }
 
   virtual caf::message_handler make_down_handler()
   {
-    return [=](caf::down_msg const& msg) { at(msg); };
+    return [=](caf::down_msg const& msg)
+    {
+      VAST_DEBUG(this, "got DOWN from", msg.source);
+      at(msg);
+    };
   }
 
 private:
@@ -249,6 +286,12 @@ inline Stream& operator<<(Stream& out, default_actor const* a)
 /// An actor which can participate in a flow-controlled setting.
 class flow_controlled_actor : public default_actor
 {
+public:
+  flow_controlled_actor()
+  {
+    attach_functor([=](uint32_t) { upstream_.clear(); });
+  }
+
 protected:
   // Hooks for clients.
   virtual void on_announce(caf::actor const& a)
@@ -314,27 +357,22 @@ protected:
     return upstream_;
   }
 
-  bool overloaded() const
-  {
-    return overloaded_;
-  }
-
   bool become_overloaded()
   {
-    if (overloaded_)
+    if (overloaded())
       return false;
     VAST_DEBUG(this, "becomes overloaded");
-    overloaded_ = true;
+    overloaded(true);
     propagate_overload();
     return true;
   }
 
   bool become_underloaded()
   {
-    if (! overloaded_)
+    if (! overloaded())
       return false;
     VAST_DEBUG(this, "becomes underloaded");
-    overloaded_ = false;
+    overloaded(false);
     propagate_underload();
     return true;
   }
@@ -378,7 +416,6 @@ protected:
   }
 
 private:
-  bool overloaded_ = false;
   util::flat_set<caf::actor> upstream_;
   std::function<bool()> overload_check_;
 };

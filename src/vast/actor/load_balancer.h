@@ -13,6 +13,7 @@ public:
   load_balancer()
   {
     trap_unexpected(false);
+    high_priority_exit(false);
     attach_functor(
         [=](uint32_t)
         {

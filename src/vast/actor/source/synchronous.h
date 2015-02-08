@@ -14,6 +14,11 @@ template <typename Derived>
 struct synchronous : public default_actor
 {
 public:
+  synchronous()
+  {
+    high_priority_exit(false);
+  }
+
   void at(caf::exit_msg const& msg) override
   {
     send_events();

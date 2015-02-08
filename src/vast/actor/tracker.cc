@@ -22,7 +22,6 @@ void tracker::at(caf::down_msg const& msg)
   for (auto i = actors_.begin(); i != actors_.end(); ++i)
     if (i->second.actor == msg.source)
     {
-      VAST_INFO(this, "got DOWN from", i->first);
       i->second.actor = invalid_actor;
       break;
     }

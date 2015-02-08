@@ -550,7 +550,6 @@ public:
 
   void at(caf::down_msg const& msg) override
   {
-    VAST_DEBUG(this, "got DOWN from", msg.source);
     for (auto i = indexers_.begin(); i != indexers_.end(); ++i)
       if (i->second.address() == msg.source)
       {
@@ -561,7 +560,6 @@ public:
 
   void at(caf::exit_msg const& msg) override
   {
-    VAST_DEBUG(this, "got EXIT from", msg.source);
     for (auto& i : indexers_)
       send_exit(i.second, msg.reason);  // Indexers automatically flush on exit.
     quit(msg.reason);

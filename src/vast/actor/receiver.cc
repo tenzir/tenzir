@@ -9,32 +9,23 @@ using namespace caf;
 
 receiver::receiver()
 {
-  attach_functor(
-      [=](uint32_t)
-      {
-        identifier_ = invalid_actor;
-        archive_ = invalid_actor;
-        index_ = invalid_actor;
-      });
+  high_priority_exit(false);
+  attach_functor([=](uint32_t)
+  {
+    identifier_ = invalid_actor;
+    archive_ = invalid_actor;
+    index_ = invalid_actor;
+  });
 }
 
 void receiver::at(down_msg const& msg)
 {
   if (msg.source == identifier_)
-  {
-    VAST_VERBOSE(this, "got DOWN from identifier (tracker went down)");
     quit(exit::error);
-  }
   else if (msg.source == archive_)
-  {
-    VAST_VERBOSE(this, "got DOWN from archive");
     archive_ = invalid_actor;
-  }
   else if (msg.source == index_)
-  {
-    VAST_VERBOSE(this, "got DOWN from index");
     index_ = invalid_actor;
-  }
 }
 
 message_handler receiver::make_handler()

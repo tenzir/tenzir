@@ -73,6 +73,7 @@ struct partition::evaluator
 partition::partition(path const& dir)
   : dir_{dir}
 {
+  high_priority_exit(false);
   attach_functor([=](uint32_t)
     {
       dechunkifiers_.clear();
@@ -80,7 +81,6 @@ partition::partition(path const& dir)
       predicates_.clear();
       queries_.clear();
     });
-
   // TODO: calibrate
   overload_when([this]
     {
@@ -90,7 +90,6 @@ partition::partition(path const& dir)
 
 void partition::at(down_msg const& msg)
 {
-  VAST_DEBUG(this, "got DOWN from", msg.source);
   // We send all affected indexers a ping to get an idea of how busy they are.
   // Then, we use number of all inflight pings as proxy for the load of the
   // partition.
@@ -121,7 +120,6 @@ void partition::at(down_msg const& msg)
 
 void partition::at(exit_msg const& msg)
 {
-  VAST_DEBUG(this, "got EXIT from", msg.source);
   if (msg.reason == exit::kill)
   {
     quit(msg.reason);

@@ -12,6 +12,7 @@ importer::importer(path dir, uint64_t chunk_size, io::compression method)
     compression_{method},
     chunk_size_{chunk_size}
 {
+  high_priority_exit(false);
   attach_functor(
       [=](uint32_t)
       {
@@ -36,8 +37,8 @@ void importer::at(down_msg const& msg)
 {
   if (last_sender() == chunkifier_)
   {
-    chunkifier_ = invalid_actor;
     become(terminating_);
+    send(this, exit_msg{address(), msg.reason});
   }
   else
   {
@@ -131,9 +132,7 @@ message_handler importer::make_handler()
     },
   };
 
-  paused_ =
-  {
-    [=](exit_msg const& msg) { at(msg); },
+  paused_ = make_exit_handler().or_else(
     [=](flow_control::overload)
     {
       VAST_DEBUG(this, "ignores overload signal");
@@ -143,29 +142,34 @@ message_handler importer::make_handler()
       VAST_DEBUG(this, "resumes chunk delivery");
       become(ready_);
       send(message_priority::high, source_, start_atom::value);
-    },
-  };
+    }
+  );
 
   terminating_ =
   {
+    [=](exit_msg const& msg)
+    {
+      quit(msg.reason);
+    },
     [=](chunk const& chk)
     {
-      if (! exists(dir_ / "chunks") && ! mkdir(dir_ / "chunks"))
+      if (! sinks_.empty())
       {
-        VAST_ERROR(this, "failed to create chunk directory");
+        VAST_DEBUG(this, "relays lingering chunk with", chk.events(), "events");
+        send(sinks_[current_++], chk);
+        current_ %= sinks_.size();
         return;
       }
-
+      if (! exists(dir_ / "chunks") && ! mkdir(dir_ / "chunks"))
+      {
+        VAST_ERROR(this, "failed to create chunk backup directory");
+        return;
+      }
       auto p = dir_ / "chunks" / ("chunk-" + to_string(stored_++));
       VAST_INFO(this, "archives chunk to", p);
-
       auto t = io::archive(p, chk);
       if (! t)
         VAST_ERROR(this, "failed to archive chunk:", t.error());
-    },
-    after(std::chrono::seconds(0)) >> [=]
-    {
-      quit(exit::done);
     }
   };
 

@@ -33,7 +33,7 @@ index::index(path const& dir, size_t max_events,
   assert(max_events_per_partition_ > 0);
   assert(active_partitions_ > 0);
   assert(active_partitions_ < max_partitions_);
-
+  high_priority_exit(false);
   attach_functor(
       [=](uint32_t)
       {
@@ -47,7 +47,6 @@ index::index(path const& dir, size_t max_events,
 
 void index::at(down_msg const& msg)
 {
-  VAST_DEBUG(this, "got DOWN from", msg.source);
   for (auto& q : queries_)
     if (q.second.subscribers.erase(actor_cast<actor>(msg.source)) == 1)
       return;
@@ -81,7 +80,6 @@ void index::at(down_msg const& msg)
 
 void index::at(exit_msg const& msg)
 {
-  VAST_DEBUG(this, "got EXIT from", msg.source);
   if (msg.reason == exit::kill)
   {
     for (auto& p : partitions_)

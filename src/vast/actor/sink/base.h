@@ -11,6 +11,11 @@ namespace sink {
 template <typename Derived>
 struct base : public default_actor
 {
+  base()
+  {
+    high_priority_exit(false);
+  }
+
   caf::message_handler make_handler() override
   {
     using namespace caf;

@@ -13,12 +13,8 @@ public:
   replicator()
   {
     trap_unexpected(false);
-  }
-
-  void at(caf::exit_msg const& msg) override
-  {
-    workers_.clear();
-    quit(msg.reason);
+    high_priority_exit(false);
+    attach_functor([=](uint32_t) { workers_.clear(); });
   }
 
   void at(caf::down_msg const& msg) override

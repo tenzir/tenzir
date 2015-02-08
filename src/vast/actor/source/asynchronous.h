@@ -20,7 +20,8 @@ public:
       batch_size_(batch_size)
   {
     using namespace caf;
-    operating_ = (
+    high_priority_exit(false);
+    operating_ = {
         [=](batch_atom, size_t batch_size)
         {
           batch_size_ = batch_size;
@@ -49,7 +50,7 @@ public:
                              events_.begin() + events_.size(),
                              events_.end());
           send_events();
-        });
+        }};
   }
 
   /// Implements `caf::event_based_actor::init`.
