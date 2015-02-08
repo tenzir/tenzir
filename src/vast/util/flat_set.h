@@ -135,6 +135,11 @@ public:
     return find(x) != end();
   }
 
+  size_type count(value_type const& x) const
+  {
+    return contains(x) ? 1 : 0;
+  }
+
   vector_type const& as_vector() const
   {
     return v_;
