@@ -23,6 +23,11 @@ point now()
   return point::clock::now();
 }
 
+point stopwatch()
+{
+  return std::chrono::steady_clock::now();
+}
+
 duration duration::operator+() const
 {
   return *this;
@@ -102,6 +107,34 @@ bool operator<(duration const& x, duration const& y)
 duration::rep duration::count() const
 {
   return duration_.count();
+}
+
+duration::rep duration::minutes() const
+{
+  return std::chrono::duration_cast<std::chrono::minutes>(duration_).count();
+}
+
+duration::rep duration::seconds() const
+{
+  return std::chrono::duration_cast<std::chrono::seconds>(duration_).count();
+}
+
+duration::rep duration::milliseconds() const
+{
+  return
+    std::chrono::duration_cast<std::chrono::milliseconds>(duration_).count();
+}
+
+duration::rep duration::microseconds() const
+{
+  return
+    std::chrono::duration_cast<std::chrono::microseconds>(duration_).count();
+}
+
+duration::rep duration::nanoseconds() const
+{
+  return
+    std::chrono::duration_cast<std::chrono::nanoseconds>(duration_).count();
 }
 
 void duration::serialize(serializer& sink) const
@@ -206,6 +239,11 @@ point operator-(point const& x, duration const& y)
 point operator+(duration const& x, point const& y)
 {
   return x.duration_ + y.time_point_;
+}
+
+duration operator-(point const& x, point const& y)
+{
+  return x.since_epoch() - y.since_epoch();
 }
 
 bool operator==(point const& x, point const& y)

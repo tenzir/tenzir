@@ -19,8 +19,11 @@ class duration;
 class interval;
 class perdiod;
 
-/// Constructs a time point with the current time.
+/// Constructs a time point with the current system time.
 point now();
+
+/// Constructs a time point with the current time from a monotic clock.
+point stopwatch();
 
 /// A time duration with nanosecond granularity.
 class duration : util::totally_ordered<duration>
@@ -129,6 +132,26 @@ public:
   /// Lifts `std::chrono::duration::count`.
   rep count() const;
 
+  // Convert this duration to minute resolution.
+  // @returns This duration in minutes or 0 if too fine-grained.
+  rep minutes() const;
+
+  // Convert this duration to seconds resolution.
+  // @returns This duration in seconds or 0 if too fine-grained.
+  rep seconds() const;
+
+  // Convert this duration to milliseconds resolution.
+  // @returns This duration in milliseconds or 0 if too fine-grained.
+  rep milliseconds() const;
+
+  // Convert this duration to microseconds resolution.
+  // @returns This duration in microseconds or 0 if too fine-grained.
+  rep microseconds() const;
+
+  // Convert this duration to nanoseconds resolution.
+  // @returns This duration in nanoseconds.
+  rep nanoseconds() const;
+
 private:
   duration_type duration_{0};
 
@@ -185,6 +208,7 @@ public:
   friend point operator+(point const& x, duration const& y);
   friend point operator-(point const& x, duration const& y);
   friend point operator+(duration const& x, point const& y);
+  friend duration operator-(point const& x, point const& y);
 
   // Relational operators.
   friend bool operator==(point const& x, point const& y);
