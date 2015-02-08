@@ -380,9 +380,9 @@ class arithmetic_bitmap_index
 
   using bitmap_value_type =
     std::conditional_t<
-      std::is_same<T, time_point>::value
-      || std::is_same<T, time_duration>::value,
-      time_duration::rep,
+      std::is_same<T, time::point>::value
+      || std::is_same<T, time::duration>::value,
+      time::duration::rep,
       std::conditional_t<
         std::is_same<T, boolean>::value
         || std::is_same<T, integer>::value
@@ -397,8 +397,8 @@ class arithmetic_bitmap_index
   using bitmap_binner =
     std::conditional_t<
       std::is_same<T, real>::value
-      || std::is_same<T, time_point>::value
-      || std::is_same<T, time_duration>::value,
+      || std::is_same<T, time::point>::value
+      || std::is_same<T, time::duration>::value,
       precision_binner<U>,
       null_binner<U>
     >;
@@ -448,12 +448,12 @@ private:
       return bm_.push_back(x);
     }
 
-    bool operator()(time_point x) const
+    bool operator()(time::point x) const
     {
       return (*this)(x.since_epoch().count());
     }
 
-    bool operator()(time_duration x) const
+    bool operator()(time::duration x) const
     {
       return (*this)(x.count());
     }
@@ -480,12 +480,12 @@ private:
       return bm_.lookup(op_, x);
     }
 
-    trial<Bitstream> operator()(time_point x) const
+    trial<Bitstream> operator()(time::point x) const
     {
       return (*this)(x.since_epoch().count());
     }
 
-    trial<Bitstream> operator()(time_duration x) const
+    trial<Bitstream> operator()(time::duration x) const
     {
       return (*this)(x.count());
     }
@@ -1242,9 +1242,9 @@ trial<bitmap_index<Bitstream>> make_bitmap_index(type const& t, Args&&... args)
     case type::tag::real:
       return {arithmetic_bitmap_index<Bitstream, real>(std::forward<Args>(args)...)};
     case type::tag::time_point:
-      return {arithmetic_bitmap_index<Bitstream, time_point>(std::forward<Args>(args)...)};
+      return {arithmetic_bitmap_index<Bitstream, time::point>(std::forward<Args>(args)...)};
     case type::tag::time_duration:
-      return {arithmetic_bitmap_index<Bitstream, time_duration>(std::forward<Args>(args)...)};
+      return {arithmetic_bitmap_index<Bitstream, time::duration>(std::forward<Args>(args)...)};
     case type::tag::string:
       return {string_bitmap_index<Bitstream>(std::forward<Args>(args)...)};
     case type::tag::address:

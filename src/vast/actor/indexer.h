@@ -177,12 +177,12 @@ template <typename Bitstream>
 struct event_time_indexer
   : bitmap_indexer<
       Bitstream,
-      arithmetic_bitmap_index<Bitstream, time_point>
+      arithmetic_bitmap_index<Bitstream, time::point>
     >
 {
   using super = bitmap_indexer<
     Bitstream,
-    arithmetic_bitmap_index<Bitstream, time_point>
+    arithmetic_bitmap_index<Bitstream, time::point>
   >;
 
   using typename super::bitmap_index_type;
@@ -198,7 +198,7 @@ struct event_time_indexer
     return "time-indexer";
   }
 
-  time_point ts_;
+  time::point ts_;
 };
 
 /// Indexes the timestamp of an event.

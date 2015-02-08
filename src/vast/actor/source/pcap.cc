@@ -318,7 +318,7 @@ result<event> pcap::extract()
   }
 
   event e{{std::move(packet), packet_type_}};
-  e.timestamp(time_point{timestamp});
+  e.timestamp(time::point{timestamp});
   return std::move(e);
 }
 

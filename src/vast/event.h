@@ -44,7 +44,7 @@ public:
 
   /// Sets the event timestamp.
   /// @param time The event timestamp.
-  void timestamp(time_point time);
+  void timestamp(time::point time);
 
   /// Retrieves the event ID.
   /// @returns The name of the event.
@@ -52,11 +52,11 @@ public:
 
   /// Retrieves the event timestamp.
   /// @returns The event timestamp.
-  time_point timestamp() const;
+  time::point timestamp() const;
 
 private:
   event_id id_ = invalid_event_id;
-  time_point timestamp_;
+  time::point timestamp_;
 
 private:
   friend access;

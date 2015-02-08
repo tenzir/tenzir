@@ -199,10 +199,10 @@ message_handler index::make_handler()
       // Update partition meta data.
       auto& p = i->second;
       p.events += chk.events();
-      p.last_modified = now();
-      if (p.from == time_range{} || chk.meta().first < p.from)
+      p.last_modified = time::now();
+      if (p.from == time::duration{} || chk.meta().first < p.from)
         p.from = chk.meta().first;
-      if (p.to == time_range{} || chk.meta().last > p.to)
+      if (p.to == time::duration{} || chk.meta().last > p.to)
         p.to = chk.meta().last;
 
       VAST_DEBUG(this, "forwards chunk to", p.actor, '(' << part << ')');

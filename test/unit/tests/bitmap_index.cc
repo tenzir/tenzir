@@ -86,7 +86,7 @@ TEST("floating point with binning")
 
 TEST("time_range")
 {
-  arithmetic_bitmap_index<null_bitstream, time_duration> bmi, bmi2;
+  arithmetic_bitmap_index<null_bitstream, time::duration> bmi, bmi2;
 
   // A precision of 8 translates into a resolution of 0.1 sec.
   bmi.binner(8);
@@ -118,23 +118,23 @@ TEST("time_range")
 
 TEST("time_point")
 {
-  arithmetic_bitmap_index<null_bitstream, time_point> bmi, bmi2;
+  arithmetic_bitmap_index<null_bitstream, time::point> bmi, bmi2;
   bmi.binner(9);
 
-  REQUIRE(bmi.push_back(time_point{"2014-01-16+05:30:15"}));
-  REQUIRE(bmi.push_back(time_point{"2014-01-16+05:30:12"}));
-  REQUIRE(bmi.push_back(time_point{"2014-01-16+05:30:15"}));
-  REQUIRE(bmi.push_back(time_point{"2014-01-16+05:30:18"}));
-  REQUIRE(bmi.push_back(time_point{"2014-01-16+05:30:15"}));
-  REQUIRE(bmi.push_back(time_point{"2014-01-16+05:30:19"}));
+  REQUIRE(bmi.push_back(time::point{"2014-01-16+05:30:15"}));
+  REQUIRE(bmi.push_back(time::point{"2014-01-16+05:30:12"}));
+  REQUIRE(bmi.push_back(time::point{"2014-01-16+05:30:15"}));
+  REQUIRE(bmi.push_back(time::point{"2014-01-16+05:30:18"}));
+  REQUIRE(bmi.push_back(time::point{"2014-01-16+05:30:15"}));
+  REQUIRE(bmi.push_back(time::point{"2014-01-16+05:30:19"}));
 
-  auto fifteen = bmi.lookup(equal, time_point{"2014-01-16+05:30:15"});
+  auto fifteen = bmi.lookup(equal, time::point{"2014-01-16+05:30:15"});
   CHECK(to_string(*fifteen) == "101010");
 
-  auto twenty = bmi.lookup(less, time_point{"2014-01-16+05:30:20"});
+  auto twenty = bmi.lookup(less, time::point{"2014-01-16+05:30:20"});
   CHECK(to_string(*twenty) == "111111");
 
-  auto eighteen = bmi.lookup(greater_equal, time_point{"2014-01-16+05:30:18"});
+  auto eighteen = bmi.lookup(greater_equal, time::point{"2014-01-16+05:30:18"});
   CHECK(to_string(*eighteen) == "000101");
 
   std::vector<uint8_t> buf;

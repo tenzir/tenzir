@@ -13,25 +13,25 @@ namespace detail {
 namespace parser {
 
 template <typename Iterator>
-struct time_point : qi::grammar<Iterator, vast::time_point(), skipper<Iterator>>
+struct time_point : qi::grammar<Iterator, time::point(), skipper<Iterator>>
 {
   struct absolute_time
   {
     template <typename>
     struct result
     {
-      typedef vast::time_point type;
+      typedef time::point type;
     };
 
-    vast::time_point operator()(vast::time_duration d) const
+    time::point operator()(time::duration d) const
     {
-      return vast::time_point{} + d;
+      return time::point{} + d;
     }
   };
 
   struct initializer
   {
-    initializer(vast::time_point& p)
+    initializer(time::point& p)
       : p(p)
     {
     }
@@ -44,15 +44,15 @@ struct time_point : qi::grammar<Iterator, vast::time_point(), skipper<Iterator>>
 
     void operator()(int) const
     {
-      p = now();
+      p = time::now();
     }
 
-    vast::time_point& p;
+    time::point& p;
   };
 
   struct adder
   {
-    adder(vast::time_point& p)
+    adder(time::point& p)
       : p(p)
     {
     }
@@ -71,22 +71,22 @@ struct time_point : qi::grammar<Iterator, vast::time_point(), skipper<Iterator>>
           assert(! "invalid tag");
           break;
         case 0:
-          p += vast::time_duration(std::chrono::nanoseconds(negate ? -n : n));
+          p += time::duration(std::chrono::nanoseconds(negate ? -n : n));
           break;
         case 1:
-          p += vast::time_duration(std::chrono::microseconds(negate ? -n : n));
+          p += time::duration(std::chrono::microseconds(negate ? -n : n));
           break;
         case 2:
-          p += vast::time_duration(std::chrono::milliseconds(negate ? -n : n));
+          p += time::duration(std::chrono::milliseconds(negate ? -n : n));
           break;
         case 3:
-          p += vast::time_duration(std::chrono::seconds(negate ? -n : n));
+          p += time::duration(std::chrono::seconds(negate ? -n : n));
           break;
         case 4:
-          p += vast::time_duration(std::chrono::minutes(negate ? -n : n));
+          p += time::duration(std::chrono::minutes(negate ? -n : n));
           break;
         case 5:
-          p += vast::time_duration(std::chrono::hours(negate ? -n : n));
+          p += time::duration(std::chrono::hours(negate ? -n : n));
           break;
         case 6:
           p = p.delta(0, 0, 0, negate ? -n : n);
@@ -103,7 +103,7 @@ struct time_point : qi::grammar<Iterator, vast::time_point(), skipper<Iterator>>
       }
     }
 
-    vast::time_point& p;
+    time::point& p;
   };
 
   time_point()
@@ -167,7 +167,7 @@ struct time_point : qi::grammar<Iterator, vast::time_point(), skipper<Iterator>>
               >>  ':'
               >>  digit2 >> ':'
               >>  digit2
-          ]   [_val = construct<vast::time_point>(
+          ]   [_val = construct<time::point>(
                construct<std::string>(begin(_1), end(_1)), "%Y-%m-%d+%H:%M:%S")]
       ;
 
@@ -180,7 +180,7 @@ struct time_point : qi::grammar<Iterator, vast::time_point(), skipper<Iterator>>
               >>  digit2
               >>  ':'
               >>  digit2
-          ]   [_val = construct<vast::time_point>(
+          ]   [_val = construct<time::point>(
                 construct<std::string>(begin(_1), end(_1)), "%Y-%m-%d+%H:%M")]
       ;
 
@@ -191,7 +191,7 @@ struct time_point : qi::grammar<Iterator, vast::time_point(), skipper<Iterator>>
               >>  digit2 >> '-'
               >>  digit2 >> '+'
               >>  digit2
-          ]   [_val = construct<vast::time_point>(
+          ]   [_val = construct<time::point>(
                 construct<std::string>(begin(_1), end(_1)), "%Y-%m-%d+%H")]
       ;
 
@@ -199,7 +199,7 @@ struct time_point : qi::grammar<Iterator, vast::time_point(), skipper<Iterator>>
     fmt3
       =   raw
           [   digit4 >> '-' >>  digit2 >> '-' >>  digit2
-          ]   [_val = construct<vast::time_point>(
+          ]   [_val = construct<time::point>(
                 construct<std::string>(begin(_1), end(_1)), "%Y-%m-%d")]
       ;
 
@@ -207,7 +207,7 @@ struct time_point : qi::grammar<Iterator, vast::time_point(), skipper<Iterator>>
     fmt4
       =   raw
           [   digit4 >> '-' >>  digit2
-          ]   [_val = construct<vast::time_point>(
+          ]   [_val = construct<time::point>(
                 construct<std::string>(begin(_1), end(_1)), "%Y-%m")]
       ;
 
@@ -220,8 +220,8 @@ struct time_point : qi::grammar<Iterator, vast::time_point(), skipper<Iterator>>
       ;
   }
 
-  qi::rule<Iterator, vast::time_point(), skipper<Iterator>> time, delta;
-  qi::rule<Iterator, vast::time_point()> fmt0, fmt1, fmt2, fmt3, fmt4;
+  qi::rule<Iterator, time::point(), skipper<Iterator>> time, delta;
+  qi::rule<Iterator, time::point()> fmt0, fmt1, fmt2, fmt3, fmt4;
   qi::rule<Iterator> digit2, digit4;
   time_duration<Iterator> dur;
 
@@ -229,7 +229,7 @@ struct time_point : qi::grammar<Iterator, vast::time_point(), skipper<Iterator>>
   boost::phoenix::function<initializer> init;
   boost::phoenix::function<adder> add;
 
-  vast::time_point point;
+  time::point point;
 };
 
 } // namespace parser

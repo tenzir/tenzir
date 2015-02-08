@@ -134,7 +134,7 @@ result<event> bro::extract_impl()
   size_t depth = 1;
   record event_record;
   record* r = &event_record;
-  auto ts = now();
+  auto ts = time::now();
 
   for (auto& e : type::record::each{*get<type::record>(type_)})
   {
@@ -196,7 +196,7 @@ result<event> bro::extract_impl()
         return d.error() + error{std::string{s[f].first, s[f].second}};
 
       if (f == size_t(timestamp_field_))
-        if (auto tp = get<time_point>(*d))
+        if (auto tp = get<time::point>(*d))
           ts = *tp;
 
       r->push_back(std::move(*d));

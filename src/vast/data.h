@@ -109,8 +109,8 @@ public:
               std::string,
               std::conditional_t<
                    std::is_same<T, none>::value
-                || std::is_same<T, time_point>::value
-                || std::is_same<T, time_duration>::value
+                || std::is_same<T, time::point>::value
+                || std::is_same<T, time::duration>::value
                 || std::is_same<T, pattern>::value
                 || std::is_same<T, address>::value
                 || std::is_same<T, subnet>::value
@@ -139,9 +139,9 @@ public:
         || std::is_same<T, integer>::value
         || std::is_same<T, count>::value
         || std::is_same<T, real>::value
-        || std::is_same<T, time_point>::value
+        || std::is_same<T, time::point>::value
         //|| std::is_same<T, time_interval>::value
-        || std::is_same<T, time_duration>::value
+        || std::is_same<T, time::duration>::value
         //|| std::is_same<T, time_period>::value
         || std::is_same<T, std::string>::value
         || std::is_same<T, pattern>::value
@@ -188,9 +188,9 @@ public:
     integer,
     count,
     real,
-    time_point,
+    time::point,
     //time_interval,
-    time_duration,
+    time::duration,
     //time_period,
     std::string,
     pattern,

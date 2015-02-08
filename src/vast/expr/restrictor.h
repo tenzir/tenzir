@@ -20,7 +20,7 @@ namespace expr {
 /// predicate exists in the expression.
 struct time_restrictor
 {
-  time_restrictor(time_point first, time_point second);
+  time_restrictor(time::point first, time::point second);
 
   bool operator()(none) const;
   bool operator()(conjunction const& con) const;
@@ -28,8 +28,8 @@ struct time_restrictor
   bool operator()(negation const& n) const;
   bool operator()(predicate const& p) const;
 
-  time_point first_;
-  time_point last_;
+  time::point first_;
+  time::point last_;
 };
 
 } // namespace expr

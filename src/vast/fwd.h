@@ -13,10 +13,6 @@ struct value_invalid;
 class value;
 enum type_tag : uint8_t;
 
-class time_point;
-class time_range;
-using time_duration = time_range;
-using time_period = time_range;
 class pattern;
 class address;
 class subnet;
@@ -48,6 +44,11 @@ class file_output_stream;
 template <typename Container> class container_output_stream;
 enum compression : uint8_t;
 } // namespace io
+
+namespace time {
+class duration;
+class point;
+}
 
 namespace util {
 class json;

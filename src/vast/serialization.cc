@@ -454,8 +454,8 @@ void announce_builtin_types()
   VAST_ANNOUNCE(set);
   VAST_ANNOUNCE(subnet);
   VAST_ANNOUNCE(table);
-  VAST_ANNOUNCE(time_point);
-  VAST_ANNOUNCE(time_duration);
+  VAST_ANNOUNCE(time::point);
+  VAST_ANNOUNCE(time::duration);
   VAST_ANNOUNCE(type);
   VAST_ANNOUNCE(uuid);
   VAST_ANNOUNCE(value);
@@ -478,14 +478,14 @@ void announce_builtin_types()
   VAST_ANNOUNCE(abi_null<integer>);
   VAST_ANNOUNCE(abi_null<count>);
   VAST_ANNOUNCE(abi_null<real>);
-  VAST_ANNOUNCE(abi_null<time_point>);
-  VAST_ANNOUNCE(abi_null<time_duration>);
+  VAST_ANNOUNCE(abi_null<time::point>);
+  VAST_ANNOUNCE(abi_null<time::duration>);
   VAST_ANNOUNCE(abi_ewah<boolean>);
   VAST_ANNOUNCE(abi_ewah<integer>);
   VAST_ANNOUNCE(abi_ewah<count>);
   VAST_ANNOUNCE(abi_ewah<real>);
-  VAST_ANNOUNCE(abi_ewah<time_point>);
-  VAST_ANNOUNCE(abi_ewah<time_duration>);
+  VAST_ANNOUNCE(abi_ewah<time::point>);
+  VAST_ANNOUNCE(abi_ewah<time::duration>);
   VAST_ANNOUNCE(address_bitmap_index<null_bitstream>);
   VAST_ANNOUNCE(subnet_bitmap_index<null_bitstream>);
   VAST_ANNOUNCE(port_bitmap_index<null_bitstream>);
@@ -510,14 +510,14 @@ void announce_builtin_types()
   VAST_ANNOUNCE(detail::bitmap_index_model<abi_null<integer>>);
   VAST_ANNOUNCE(detail::bitmap_index_model<abi_null<count>>);
   VAST_ANNOUNCE(detail::bitmap_index_model<abi_null<real>>);
-  VAST_ANNOUNCE(detail::bitmap_index_model<abi_null<time_point>>);
-  VAST_ANNOUNCE(detail::bitmap_index_model<abi_null<time_duration>>);
+  VAST_ANNOUNCE(detail::bitmap_index_model<abi_null<time::point>>);
+  VAST_ANNOUNCE(detail::bitmap_index_model<abi_null<time::duration>>);
   VAST_ANNOUNCE(detail::bitmap_index_model<abi_ewah<boolean>>);
   VAST_ANNOUNCE(detail::bitmap_index_model<abi_ewah<integer>>);
   VAST_ANNOUNCE(detail::bitmap_index_model<abi_ewah<count>>);
   VAST_ANNOUNCE(detail::bitmap_index_model<abi_ewah<real>>);
-  VAST_ANNOUNCE(detail::bitmap_index_model<abi_ewah<time_point>>);
-  VAST_ANNOUNCE(detail::bitmap_index_model<abi_ewah<time_duration>>);
+  VAST_ANNOUNCE(detail::bitmap_index_model<abi_ewah<time::point>>);
+  VAST_ANNOUNCE(detail::bitmap_index_model<abi_ewah<time::duration>>);
 
 
   caf::announce<std::vector<caf::actor>>("std::vector<actor>");
@@ -537,8 +537,8 @@ void announce_builtin_types()
     arithmetic_bitmap_index<null_bitstream, integer>,
     arithmetic_bitmap_index<null_bitstream, count>,
     arithmetic_bitmap_index<null_bitstream, real>,
-    arithmetic_bitmap_index<null_bitstream, time_point>,
-    arithmetic_bitmap_index<null_bitstream, time_duration>,
+    arithmetic_bitmap_index<null_bitstream, time::point>,
+    arithmetic_bitmap_index<null_bitstream, time::duration>,
     address_bitmap_index<null_bitstream>,
     subnet_bitmap_index<null_bitstream>,
     port_bitmap_index<null_bitstream>,
@@ -548,8 +548,8 @@ void announce_builtin_types()
     arithmetic_bitmap_index<ewah_bitstream, integer>,
     arithmetic_bitmap_index<ewah_bitstream, count>,
     arithmetic_bitmap_index<ewah_bitstream, real>,
-    arithmetic_bitmap_index<ewah_bitstream, time_point>,
-    arithmetic_bitmap_index<ewah_bitstream, time_duration>,
+    arithmetic_bitmap_index<ewah_bitstream, time::point>,
+    arithmetic_bitmap_index<ewah_bitstream, time::duration>,
     address_bitmap_index<ewah_bitstream>,
     subnet_bitmap_index<ewah_bitstream>,
     port_bitmap_index<ewah_bitstream>,

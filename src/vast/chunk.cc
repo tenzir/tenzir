@@ -43,10 +43,10 @@ bool chunk::writer::write(event const& e)
     if (! meta_->schema.add(e.type()))
       return false;
 
-  if (meta_->first == time_duration{} || e.timestamp() < meta_->first)
+  if (meta_->first == time::duration{} || e.timestamp() < meta_->first)
     meta_->first = e.timestamp();
 
-  if (meta_->last == time_duration{} || e.timestamp() > meta_->last)
+  if (meta_->last == time::duration{} || e.timestamp() > meta_->last)
     meta_->last = e.timestamp();
 
   if (e.id() != invalid_event_id || ! meta_->ids.empty())
@@ -124,7 +124,7 @@ result<event> chunk::reader::materialize(bool discard)
   if (! block_reader_->read(name, 0))
     return error{"failed to read type name from block"};
 
-  time_point ts;
+  time::point ts;
   if (! block_reader_->read(ts, 0))
     return error{"failed to read event timestamp from block"};
 

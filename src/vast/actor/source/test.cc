@@ -129,8 +129,8 @@ struct randomizer
          std::is_same<T, integer>::value
          || std::is_same<T, count>::value
          || std::is_same<T, real>::value
-         || std::is_same<T, time_point>::value
-         || std::is_same<T, time_duration>::value
+         || std::is_same<T, time::point>::value
+         || std::is_same<T, time::duration>::value
        >
   {
     // For types we don't know how to randomize, we just crank the wheel.
@@ -163,11 +163,11 @@ struct randomizer
   template <typename T>
   auto operator()(T& x)
     -> std::enable_if_t<
-         std::is_same<T, time_point>::value
-         || std::is_same<T, time_duration>::value
+         std::is_same<T, time::point>::value
+         || std::is_same<T, time::duration>::value
        >
   {
-    x += time_duration::fractional(sample());
+    x += time::duration::fractional(sample());
   }
 
   void operator()(std::string& str)
@@ -296,7 +296,7 @@ result<event> test::extract()
   auto d = is<type::record>(*next_) ? data{bp.data} : bp.data[0];
 
   event e{{std::move(d), *next_}};
-  e.timestamp(now());
+  e.timestamp(time::now());
   e.id(id_++);
 
   if (++next_ == schema_.end())

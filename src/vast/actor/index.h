@@ -43,9 +43,9 @@ struct index : public flow_controlled_actor
   {
     caf::actor actor;
     uint64_t events = 0;
-    time_point last_modified;
-    time_point from = time_range{};
-    time_point to = time_range{};
+    time::point last_modified;
+    time::point from = time::duration{};
+    time::point to = time::duration{};
 
   private:
     friend access;

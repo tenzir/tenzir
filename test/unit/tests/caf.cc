@@ -8,7 +8,7 @@ SUITE("CAF")
 
 TEST("serialization")
 {
-  record r0{42, "foo", -8.3, record{nil, now()}};
+  record r0{42, "foo", -8.3, record{nil, time::now()}};
 
   std::vector<uint8_t> buf;
   caf::binary_serializer bs{std::back_inserter(buf)};

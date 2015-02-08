@@ -125,7 +125,7 @@ result<event> bgpdump::extract_impl()
   if (elems.size() < 5)
     return {};
 
-  time_point timestamp;
+  time::point timestamp;
   auto t = parse(timestamp, elems[1].first, elems[1].second);
   if (! t)
     return {};

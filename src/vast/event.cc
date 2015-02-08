@@ -26,7 +26,7 @@ bool event::id(event_id i)
   return false;
 }
 
-void event::timestamp(time_point time)
+void event::timestamp(time::point time)
 {
   timestamp_ = time;
 }
@@ -36,7 +36,7 @@ event_id event::id() const
   return id_;
 }
 
-time_point event::timestamp() const
+time::point event::timestamp() const
 {
   return timestamp_;
 }

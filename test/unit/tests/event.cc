@@ -23,7 +23,7 @@ TEST("event")
 
   event e;
   CHECK(e.type().name() == "");
-  CHECK(e.timestamp() == time_point{});
+  CHECK(e.timestamp() == time::point{});
 
   e = event::make(r, tr);
   REQUIRE(is<record>(e));
@@ -32,11 +32,11 @@ TEST("event")
   e.id(123456789);
   CHECK(e.id() == 123456789);
 
-  auto jetzt = now();
-  e.timestamp(jetzt);
-  CHECK(e.timestamp() == jetzt);
+  auto now = time::now();
+  e.timestamp(now);
+  CHECK(e.timestamp() == now);
 
-  e.timestamp(time_point{});
+  e.timestamp(time::point{});
   CHECK(to_string(e) == "foo [123456789|1970-01-01+00:00:00] (T, 42, -234987)");
 
   auto t = to<util::json>(e);

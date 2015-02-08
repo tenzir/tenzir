@@ -24,7 +24,7 @@ TEST("index")
   {
     auto e = event::make(record{i, to_string(i)}, t0);
     e.id(i);
-    e.timestamp(now());
+    e.timestamp(time::now());
     REQUIRE(w0.write(e));
   }
   w0.flush();
@@ -34,7 +34,7 @@ TEST("index")
   {
     auto e = event::make(4.2 + i, t1);
     e.id(i);
-    e.timestamp(now());
+    e.timestamp(time::now());
     REQUIRE(w1.write(e));
   }
   w1.flush();

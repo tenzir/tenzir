@@ -4,7 +4,7 @@
 namespace vast {
 namespace expr {
 
-time_restrictor::time_restrictor(time_point first, time_point last)
+time_restrictor::time_restrictor(time::point first, time::point last)
   : first_{first},
     last_{last}
 {
@@ -48,7 +48,7 @@ bool time_restrictor::operator()(predicate const& p) const
   if (! is<time_extractor>(p.lhs))
     return true;
   auto d = get<data>(p.rhs);
-  assert(d && is<time_point>(*d));
+  assert(d && is<time::point>(*d));
   return data::evaluate(first_, p.op, *d) || data::evaluate(last_, p.op, *d);
 }
 

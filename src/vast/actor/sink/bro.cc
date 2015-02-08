@@ -20,7 +20,7 @@ std::string bro::make_header(type const& t)
   h += std::string{"#empty_field"} + sep + empty_field + '\n';
   h += std::string{"#unset_field"} + sep + unset_field + '\n';
   h += std::string{"#path"} + sep + t.name() + '\n';
-  h += std::string{"#open"} + sep + to_string(now(), format) + '\n';
+  h += std::string{"#open"} + sep + to_string(time::now(), format) + '\n';
 
   h += "#fields";
   for (auto& e : type::record::each{*r})
@@ -36,7 +36,8 @@ std::string bro::make_header(type const& t)
 
 std::string bro::make_footer()
 {
-  std::string f = std::string{"#close"} + sep + to_string(now(), format) + '\n';
+  std::string f =
+    std::string{"#close"} + sep + to_string(time::now(), format) + '\n';
   return f;
 }
 
@@ -89,15 +90,15 @@ struct value_printer
     return to_string(r, 6);
   }
 
-  std::string operator()(time_point tp) const
+  std::string operator()(time::point point) const
   {
-    return (*this)(tp.since_epoch());
+    return (*this)(point.since_epoch());
   }
 
-  std::string operator()(time_range tr) const
+  std::string operator()(time::duration dur) const
   {
     double d;
-    convert(tr, d);
+    convert(dur, d);
     return (*this)(d);
   }
 

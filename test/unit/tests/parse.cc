@@ -90,38 +90,38 @@ TEST("double")
   CHECK(*d == -123.0);
 }
 
-TEST("time_range")
+TEST("time::duration")
 {
   auto str = "1000ms";
   auto start = str;
   auto end = str + 6;
-  auto r = parse<time_range>(start, end);
+  auto r = parse<time::duration>(start, end);
   CHECK(start == end);
-  CHECK(*r == time_range::milliseconds(1000));
+  CHECK(*r == time::duration::milliseconds(1000));
 
   str = "1000";
   start = str;
   end = str + 4;
-  r = parse<time_range>(start, end);
+  r = parse<time::duration>(start, end);
   CHECK(start == end);
-  CHECK(*r == time_range::seconds(1000));
+  CHECK(*r == time::duration::seconds(1000));
 
   str = "123.456789";
   start = str;
   end = str + 10;
-  r = parse<time_range>(start, end);
+  r = parse<time::duration>(start, end);
   CHECK(start == end);
-  CHECK(*r == time_range::fractional(123.456789));
+  CHECK(*r == time::duration::fractional(123.456789));
 }
 
-TEST("time_point")
+TEST("time::point")
 {
-  time_point expected(2012, 8, 12, 23, 55, 4);
+  time::point expected(2012, 8, 12, 23, 55, 4);
   std::string str("2012-08-12+23:55:04");
-  CHECK(time_point(str) == expected);
+  CHECK(time::point(str) == expected);
 
   auto i = str.begin();
-  auto t = parse<time_point>(i, str.end(), time_point::format);
+  auto t = parse<time::point>(i, str.end(), time::point::format);
   CHECK(i == str.end());
   CHECK(*t == expected);
 }
@@ -280,88 +280,88 @@ TEST("value")
   // Time ranges
   v = to<value>("42 nsecs");
   REQUIRE(v);
-  REQUIRE(is<time_range>(*v));
-  CHECK(get<time_range>(*v)->count() == 42ll);
+  REQUIRE(is<time::duration>(*v));
+  CHECK(get<time::duration>(*v)->count() == 42ll);
 
   v = to<value>("42 musec");
   REQUIRE(v);
-  REQUIRE(is<time_range>(*v));
-  CHECK(get<time_range>(*v)->count() == 42000ll);
+  REQUIRE(is<time::duration>(*v));
+  CHECK(get<time::duration>(*v)->count() == 42000ll);
 
   v = to<value>("-42 msec");
   REQUIRE(v);
-  REQUIRE(is<time_range>(*v));
-  CHECK(get<time_range>(*v)->count() == -42000000ll);
+  REQUIRE(is<time::duration>(*v));
+  CHECK(get<time::duration>(*v)->count() == -42000000ll);
 
   v = to<value>("99 secs");
   REQUIRE(v);
-  REQUIRE(is<time_range>(*v));
-  CHECK(get<time_range>(*v)->count() == 99000000000ll);
+  REQUIRE(is<time::duration>(*v));
+  CHECK(get<time::duration>(*v)->count() == 99000000000ll);
 
   v = to<value>("5 mins");
   REQUIRE(v);
-  REQUIRE(is<time_range>(*v));
-  CHECK(get<time_range>(*v)->count() == 300000000000ll);
+  REQUIRE(is<time::duration>(*v));
+  CHECK(get<time::duration>(*v)->count() == 300000000000ll);
 
   v = to<value>("3 hours");
   REQUIRE(v);
-  REQUIRE(is<time_range>(*v));
-  CHECK(get<time_range>(*v)->count() == 10800000000000ll);
+  REQUIRE(is<time::duration>(*v));
+  CHECK(get<time::duration>(*v)->count() == 10800000000000ll);
 
   v = to<value>("4 days");
   REQUIRE(v);
-  REQUIRE(is<time_range>(*v));
-  CHECK(get<time_range>(*v)->count() == 345600000000000ll);
+  REQUIRE(is<time::duration>(*v));
+  CHECK(get<time::duration>(*v)->count() == 345600000000000ll);
 
   v = to<value>("7 weeks");
   REQUIRE(v);
-  REQUIRE(is<time_range>(*v));
-  CHECK(get<time_range>(*v)->count() == 4233600000000000ll);
+  REQUIRE(is<time::duration>(*v));
+  CHECK(get<time::duration>(*v)->count() == 4233600000000000ll);
 
   v = to<value>("2 months");
   REQUIRE(v);
-  REQUIRE(is<time_range>(*v));
-  CHECK(get<time_range>(*v)->count() == 5184000000000000ll);
+  REQUIRE(is<time::duration>(*v));
+  CHECK(get<time::duration>(*v)->count() == 5184000000000000ll);
 
   v= to<value>("-8 years");
   REQUIRE(v);
-  REQUIRE(is<time_range>(*v));
-  CHECK(get<time_range>(*v)->count() == -252288000000000000ll);
+  REQUIRE(is<time::duration>(*v));
+  CHECK(get<time::duration>(*v)->count() == -252288000000000000ll);
 
   // Compound durations
   v = to<value>("5m99s");
   REQUIRE(v);
-  REQUIRE(is<time_range>(*v));
-  CHECK(get<time_range>(*v)->count() == 399000000000ll);
+  REQUIRE(is<time::duration>(*v));
+  CHECK(get<time::duration>(*v)->count() == 399000000000ll);
 
   // Time points
   v = to<value>("2012-08-12+23:55:04");
-  CHECK(*get<time_point>(*v), time_point(2012, 8, 12, 23, 55 == 4));
+  CHECK(*get<time::point>(*v), time::point(2012, 8, 12, 23, 55 == 4));
 
   v = to<value>("2012-08-12+00:00:00");
   REQUIRE(v);
-  REQUIRE(is<time_point>(*v));
-  CHECK(get<time_point>(*v)->since_epoch().count() == 1344729600000000000ll);
+  REQUIRE(is<time::point>(*v));
+  CHECK(get<time::point>(*v)->since_epoch().count() == 1344729600000000000ll);
 
   v = to<value>("2012-08-12");
   REQUIRE(v);
-  REQUIRE(is<time_point>(*v));
-  CHECK(get<time_point>(*v)->since_epoch().count() == 1344729600000000000ll);
+  REQUIRE(is<time::point>(*v));
+  CHECK(get<time::point>(*v)->since_epoch().count() == 1344729600000000000ll);
 
   v = to<value>("2012-08-12+23");
   REQUIRE(v);
-  REQUIRE(is<time_point>(*v));
-  CHECK(get<time_point>(*v)->since_epoch().count() == 1344812400000000000ll);
+  REQUIRE(is<time::point>(*v));
+  CHECK(get<time::point>(*v)->since_epoch().count() == 1344812400000000000ll);
 
   v = to<value>("2012-08-12+23:55");
   REQUIRE(v);
-  REQUIRE(is<time_point>(*v));
-  CHECK(get<time_point>(*v)->since_epoch().count() == 1344815700000000000ll);
+  REQUIRE(is<time::point>(*v));
+  CHECK(get<time::point>(*v)->since_epoch().count() == 1344815700000000000ll);
 
   v = to<value>("2012-08-12+23:55:04");
   REQUIRE(v);
-  REQUIRE(is<time_point>(*v));
-  CHECK(get<time_point>(*v)->since_epoch().count() == 1344815704000000000ll);
+  REQUIRE(is<time::point>(*v));
+  CHECK(get<time::point>(*v)->since_epoch().count() == 1344815704000000000ll);
 
   // Strings
   v = to<value>("\"new\\nline\\\"esc\"");

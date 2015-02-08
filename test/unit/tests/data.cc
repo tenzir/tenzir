@@ -7,82 +7,82 @@ using namespace vast;
 
 SUITE("data")
 
-TEST("time_point")
+TEST("time::point")
 {
-  time_point t(2012, 8, 12, 23, 55, 4);
+  time::point t(2012, 8, 12, 23, 55, 4);
 
   CHECK(t.delta() == t);
-  CHECK(t.delta(30) == time_range::seconds(1344815734));
-  CHECK(t.delta(56) == time_range::seconds(1344815760));
-  CHECK(t.delta(60) == time_range::seconds(1344815764));
-  CHECK(t.delta(68) == time_range::seconds(1344815772));
-  CHECK(t.delta(123587) == time_range::seconds(1344939291));
-  CHECK(t.delta(0, 0, 28) == time_range::seconds(1344916504));
+  CHECK(t.delta(30) == time::duration::seconds(1344815734));
+  CHECK(t.delta(56) == time::duration::seconds(1344815760));
+  CHECK(t.delta(60) == time::duration::seconds(1344815764));
+  CHECK(t.delta(68) == time::duration::seconds(1344815772));
+  CHECK(t.delta(123587) == time::duration::seconds(1344939291));
+  CHECK(t.delta(0, 0, 28) == time::duration::seconds(1344916504));
 
-  time_point u;
+  time::point u;
 
   // Positive offsets
-  u = time_point(2012, 9, 11, 23, 55, 4);
+  u = time::point(2012, 9, 11, 23, 55, 4);
   CHECK(t.delta(0, 0, 0, 30) == u);
-  u = time_point(2012, 10, 11, 23, 55, 4);
+  u = time::point(2012, 10, 11, 23, 55, 4);
   CHECK(t.delta(0, 0, 0, 60) == u);
-  u = time_point(2012, 11, 2, 23, 55, 4);
+  u = time::point(2012, 11, 2, 23, 55, 4);
   CHECK(t.delta(0, 0, 0, 82) == u);
-  u = time_point(2012, 10, 12, 23, 55, 4);
+  u = time::point(2012, 10, 12, 23, 55, 4);
   CHECK(t.delta(0, 0, 0, 0, 2) == u);
-  u = time_point(2012, 11, 4, 23, 55, 4);
+  u = time::point(2012, 11, 4, 23, 55, 4);
   CHECK(t.delta(0, 0, 0, 84) == u);
-  u = time_point(2013, 1, 11, 23, 55, 4);
+  u = time::point(2013, 1, 11, 23, 55, 4);
   CHECK(t.delta(0, 0, 0, 152) == u);
-  u = time_point(2012, 11, 12, 23, 55, 4);
+  u = time::point(2012, 11, 12, 23, 55, 4);
   CHECK(t.delta(0, 0, 0, 0, 3) == u);
-  u = time_point(2013, 3, 12, 23, 55, 4);
+  u = time::point(2013, 3, 12, 23, 55, 4);
   CHECK(t.delta(0, 0, 0, 0, 7) == u);
-  u = time_point(2018, 3, 12, 23, 55, 4);
+  u = time::point(2018, 3, 12, 23, 55, 4);
   CHECK(t.delta(0, 0, 0, 0, 67) == u);
-  u = time_point(2024, 8, 12, 23, 55, 4);
+  u = time::point(2024, 8, 12, 23, 55, 4);
   CHECK(t.delta(0, 0, 0, 0, 0, 12) == u);
 
   // Negative offsets
-  u = time_point(2012, 8, 12, 23, 55);
+  u = time::point(2012, 8, 12, 23, 55);
   CHECK(t.delta(-4) == u);
-  u = time_point(2012, 8, 12, 23, 54, 58);
+  u = time::point(2012, 8, 12, 23, 54, 58);
   CHECK(t.delta(-6) == u);
-  u = time_point(2012, 8, 12, 23, 53, 59);
+  u = time::point(2012, 8, 12, 23, 53, 59);
   CHECK(t.delta(-65) == u);
-  u = time_point(2012, 8, 12, 23, 0, 4);
+  u = time::point(2012, 8, 12, 23, 0, 4);
   CHECK(t.delta(0, -55) == u);
-  u = time_point(2012, 8, 12, 21, 45, 4);
+  u = time::point(2012, 8, 12, 21, 45, 4);
   CHECK(t.delta(0, -130) == u);
-  u = time_point(2012, 8, 12, 0, 55, 4);
+  u = time::point(2012, 8, 12, 0, 55, 4);
   CHECK(t.delta(0, 0, -23) == u);
-  u = time_point(2012, 8, 11, 23, 55, 4);
+  u = time::point(2012, 8, 11, 23, 55, 4);
   CHECK(t.delta(0, 0, -24) == u);
-  u = time_point(2012, 8, 9, 21, 55, 4);
+  u = time::point(2012, 8, 9, 21, 55, 4);
   CHECK(t.delta(0, 0, -74) == u);
-  u = time_point(2012, 8, 4, 23, 55, 4);
+  u = time::point(2012, 8, 4, 23, 55, 4);
   CHECK(t.delta(0, 0, 0, -8) == u);
-  u = time_point(2012, 8, 1, 23, 55, 4);
+  u = time::point(2012, 8, 1, 23, 55, 4);
   CHECK(t.delta(0, 0, 0, -11) == u);
-  u = time_point(2012, 7, 31, 23, 55, 4);
+  u = time::point(2012, 7, 31, 23, 55, 4);
   CHECK(t.delta(0, 0, 0, -12) == u);
-  u = time_point(2012, 7, 29, 23, 55, 4);
+  u = time::point(2012, 7, 29, 23, 55, 4);
   CHECK(t.delta(0, 0, 0, -14) == u);
-  u = time_point(2012, 7, 1, 23, 55, 4);
+  u = time::point(2012, 7, 1, 23, 55, 4);
   CHECK(t.delta(0, 0, 0, -42) == u);
-  u = time_point(2012, 6, 30, 23, 55, 4);
+  u = time::point(2012, 6, 30, 23, 55, 4);
   CHECK(t.delta(0, 0, 0, -43) == u);
-  u = time_point(2011, 8, 12, 23, 55, 4);
+  u = time::point(2011, 8, 12, 23, 55, 4);
   CHECK(t.delta(0, 0, 0, -366) == u);
-  u = time_point(2012, 5, 12, 23, 55, 4);
+  u = time::point(2012, 5, 12, 23, 55, 4);
   CHECK(t.delta(0, 0, 0, 0, -3) == u);
-  u = time_point(2012, 1, 12, 23, 55, 4);
+  u = time::point(2012, 1, 12, 23, 55, 4);
   CHECK(t.delta(0, 0, 0, 0, -7) == u);
-  u = time_point(2011, 8, 12, 23, 55, 4);
+  u = time::point(2011, 8, 12, 23, 55, 4);
   CHECK(t.delta(0, 0, 0, 0, -12) == u);
-  u = time_point(2011, 7, 12, 23, 55, 4);
+  u = time::point(2011, 7, 12, 23, 55, 4);
   CHECK(t.delta(0, 0, 0, 0, -13) == u);
-  u = time_point(2010, 12, 12, 23, 55, 4);
+  u = time::point(2010, 12, 12, 23, 55, 4);
   CHECK(t.delta(0, 0, 0, 0, -20) == u);
 
   auto str = to<std::string>(u, "%Y-%m");
@@ -95,9 +95,9 @@ TEST("time_point")
 
   auto d = to<data>("@1398933902.686337s");
   REQUIRE(d);
-  auto tp = get<time_point>(*d);
+  auto tp = get<time::point>(*d);
   REQUIRE(tp);
-  CHECK(*tp == time_range::fractional(1398933902.686337));
+  CHECK(*tp == time::duration::fractional(1398933902.686337));
   CHECK(to_string(*tp) == "2014-05-01+08:45:02");
 }
 

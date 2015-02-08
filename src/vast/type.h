@@ -263,13 +263,13 @@ public:
             vast::real,
             std::conditional_t<
               std::is_same<T, time_point>::value,
-              vast::time_point,
+              vast::time::point,
               std::conditional_t<
                 std::is_same<T, time_interval>::value,
                 std::false_type,
                 std::conditional_t<
                   std::is_same<T, time_duration>::value,
-                  vast::time_duration,
+                  vast::time::duration,
                   std::conditional_t<
                     std::is_same<T, time_period>::value,
                     std::false_type,
@@ -338,10 +338,10 @@ public:
             std::is_same<T, vast::real>::value,
             real,
             std::conditional_t<
-              std::is_same<T, vast::time_point>::value,
+              std::is_same<T, vast::time::point>::value,
               time_point,
               std::conditional_t<
-                std::is_same<T, vast::time_duration>::value,
+                std::is_same<T, vast::time::duration>::value,
                 time_duration,
                 std::conditional_t<
                   std::is_same<T, std::string>::value,

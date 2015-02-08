@@ -21,7 +21,7 @@ namespace vast {
 
 profiler::measurement::measurement()
 {
-  clock = *to<double>(now());
+  clock = *to<double>(time::now());
 
   struct rusage ru;
   ::getrusage(RUSAGE_SELF, &ru);

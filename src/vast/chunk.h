@@ -21,8 +21,8 @@ public:
   /// Chunk meta data.
   struct meta_data : util::equality_comparable<meta_data>
   {
-    time_point first = time_duration{};
-    time_point last = time_duration{};
+    time::point first = time::duration{};
+    time::point last = time::duration{};
     default_bitstream ids;
     vast::schema schema;
 
