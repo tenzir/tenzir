@@ -1,6 +1,6 @@
 #include "vast/util/system.h"
 
-#include <unistd.h>  // gethostname
+#include <unistd.h>  // gethostname, getpid
 #include <cerrno>
 
 namespace vast {
@@ -19,6 +19,11 @@ trial<std::string> hostname()
     return error{"hostname longer than 256 characters"};
 
   return error{"unknown error"};
+}
+
+int32_t process_id()
+{
+  return ::getpid();
 }
 
 } // namespace util

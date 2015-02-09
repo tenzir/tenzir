@@ -9,10 +9,7 @@
 #include "vast/time.h"
 #include "vast/util/color.h"
 #include "vast/util/queue.h"
-
-#ifdef VAST_POSIX
-#  include <unistd.h> // getpid
-#endif
+#include "vast/util/system.h"
 
 namespace vast {
 namespace {
@@ -103,11 +100,9 @@ struct logger::impl
     if (! log_file_.is_open())
     {
       std::ostringstream filename;
-      filename << "vast_" << std::time(nullptr);
-#ifdef VAST_POSIX
-      filename << '_' << ::getpid();
-#endif
-      filename << ".log";
+      filename
+        << "vast_" << std::time(nullptr)
+        << '_' << util::process_id() << ".log";
 
       if (! exists(dir) && ! mkdir(dir))
         return false;
