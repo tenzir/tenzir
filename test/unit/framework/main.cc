@@ -9,10 +9,10 @@
 
 int main(int argc, char* argv[])
 {
-  // Work around CAF bug that blocks VAST in our "distributed" actor unit test
-  // when using less than three threads.
-  if (std::thread::hardware_concurrency() == 1)
-    caf::set_scheduler<>(3);
+  // Because we use several blocking actors in the unit tests, we need at least
+  // some real parallelism to avoid a deadlock.
+  if (std::thread::hardware_concurrency() < 4)
+    caf::set_scheduler<>(4);
 
   vast::announce_builtin_types();
 
