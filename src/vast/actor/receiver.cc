@@ -55,7 +55,7 @@ message_handler receiver::make_handler()
       index_ = a;
       return ok_atom::value;
     },
-    [=](chunk const& chk)
+    [=](chunk& chk)
     {
       assert(identifier_ != invalid_actor);
       if (archive_ == invalid_actor)
@@ -71,7 +71,6 @@ message_handler receiver::make_handler()
         return;
       }
 
-      message last = last_dequeued();
       sync_send(identifier_, request_atom::value, chk.events()).then(
         [=](id_atom, event_id from, event_id to) mutable
         {
@@ -79,25 +78,21 @@ message_handler receiver::make_handler()
           VAST_DEBUG(this, "got", n,
                      "IDs for chunk [" << from << "," << to << ")");
 
-          auto msg = last.apply(
-              on_arg_match >> [=](chunk& c)
-              {
-                if (n < c.events())
-                {
-                  VAST_ERROR(this, "got", n, "IDs, needed", c.events());
-                  quit(exit::error);
-                  return;
-                }
+          if (n < chk.events())
+          {
+            VAST_ERROR(this, "got", n, "IDs, needed", chk.events());
+            quit(exit::error);
+            return;
+          }
 
-                default_bitstream ids;
-                ids.append(from, false);
-                ids.append(n, true);
-                c.ids(std::move(ids));
+          default_bitstream ids;
+          ids.append(from, false);
+          ids.append(n, true);
+          chk.ids(std::move(ids));
 
-                auto t = make_message(std::move(c));
-                send(archive_, t);
-                send(index_, t);
-              });
+          auto t = make_message(std::move(chk));
+          send(archive_, t);
+          send(index_, t);
         },
         [=](error const& e)
         {
