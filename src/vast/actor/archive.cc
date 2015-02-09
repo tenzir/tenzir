@@ -121,7 +121,6 @@ trial<void> archive::store(segment s)
   {
     auto first = chk.meta().ids.find_first();
     auto last = chk.meta().ids.find_last();
-    assert(first != last);
     assert(first != invalid_event_id && last != invalid_event_id);
     segments_.inject(first, last + 1, id);
   }
