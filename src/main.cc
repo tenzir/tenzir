@@ -23,12 +23,13 @@ int main(int argc, char *argv[])
 
   vast::announce_builtin_types();
 
+  auto dir = vast::path{*cfg->get("directory")}.complete();
   auto initialized = vast::logger::instance()->init(
       *vast::logger::parse_level(*cfg->get("log.console")),
       *vast::logger::parse_level(*cfg->get("log.file")),
       ! cfg->check("log.no-colors"),
       cfg->check("log.function-names"),
-      vast::path{*cfg->get("directory")}.complete() / "log");
+      dir / *cfg->get("log.directory"));
 
   if (! initialized)
   {

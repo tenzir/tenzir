@@ -3,6 +3,7 @@
 #include "vast/filesystem.h"
 #include "vast/logger.h"
 #include "vast/uuid.h"
+#include "vast/time.h"
 #include "vast/detail/type_manager.h"
 #include "vast/util/color.h"
 #include "vast/util/system.h"
@@ -53,7 +54,12 @@ void configuration::initialize()
   if (! hostname || hostname->empty())
     hostname = to_string(uuid::random()).substr(0, 6);  // FIXME: uniform?
 
-  auto& log = create_block("logger options", "log");
+  auto time_pid =
+    std::to_string(time::now().since_epoch().seconds()) +
+    '_' + std::to_string(util::process_id());
+
+  auto& log = create_block("logging options", "log");
+  log.add("directory", "log directory relative to base").init("log/" + time_pid);
   log.add('v', "console", "console verbosity " + range).init(std::min(3, max));
   log.add('V', "file", "log file verbosity " + range).init(std::min(4, max));
   log.add("no-colors", "don't use colors for console output");

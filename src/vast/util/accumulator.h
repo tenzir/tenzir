@@ -3,7 +3,6 @@
 
 #include "vast/config.h"
 
-// Boost Accumulators spits out quite a few warnings, which we'll disable here.
 #ifdef VAST_CLANG
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-variable"
@@ -11,7 +10,6 @@
 #pragma clang diagnostic ignored "-Wunneeded-internal-declaration"
 #endif
 
-#include <chrono>
 #include <boost/accumulators/framework/accumulator_set.hpp>
 #include <boost/accumulators/framework/extractor.hpp>
 #include <boost/accumulators/framework/features.hpp>
@@ -100,72 +98,7 @@ private:
     bacc::tag::variance
   >;
 
-  using accumulator_type = bacc::accumulator_set<T, features>;
-
-  accumulator_type accumulator_;
-};
-
-/// Accumulates values at a given resolution to allow for computation of rates.
-/// The interface offers the functionality of an incrementable counter whose
-/// value gets committed after a configured time resolution.
-template <typename T>
-class rate_accumulator : public accumulator<T>
-{
-public:
-  using clock = std::chrono::system_clock;
-
-  /// Constructs a temporal accumulator with a specific resolution.
-  /// @param resolution The desired resolution.
-  rate_accumulator(clock::duration resolution)
-    : resolution_{resolution}
-  {
-  }
-
-  /// Increments the internal counter by a given value.
-  ///
-  /// @param x The value to increment the internal counter.
-  ///
-  /// @returns `false` if *x* has been added to the current counter value
-  /// within the configured resolution, and `true` if the addition of *x*
-  /// committed the current counter value to the underlying accumuator.
-  ///
-  /// @post `current() == 0` upon returning `true`.
-  bool increment(T x = 1)
-  {
-    current_value_ += x;
-    auto now = clock::now();
-    auto elapsed =
-      std::chrono::duration_cast<std::chrono::microseconds>(now - last_time_);
-
-    if (elapsed < resolution_)
-      return false;
-
-    last_value_ = current_value_ * static_cast<T>(1000000) / elapsed.count();
-    last_time_ = now;
-    current_value_ = 0;
-
-    this->add(last_value_);
-
-    return this->count() > 1;
-  }
-
-  /// Retrieves the current counter value.
-  T current() const
-  {
-    return current_value_;
-  }
-
-  /// Retrieves the last value committed to the underlying accumulator.
-  T last() const
-  {
-    return last_value_;
-  }
-
-private:
-  clock::time_point last_time_;
-  clock::duration resolution_;
-  T last_value_ = 0;
-  T current_value_ = 0;
+  bacc::accumulator_set<T, features> accumulator_;
 };
 
 } // namespace util

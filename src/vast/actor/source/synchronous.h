@@ -28,7 +28,11 @@ public:
   caf::message_handler make_handler() override
   {
     using namespace caf;
-    this->attach_functor([=](uint32_t) { sinks_.clear(); });
+    this->attach_functor([=](uint32_t)
+    {
+      accountant_ = invalid_actor;
+      sinks_.clear();
+    });
 
     return
     {
@@ -41,6 +45,11 @@ public:
       {
         VAST_DEBUG(this, "adds sink to", sink);
         sinks_.push_back(sink);
+      },
+      [=](accountant_atom, actor const& accountant)
+      {
+        VAST_DEBUG(this, "registers accountant", accountant);
+        accountant_ = accountant;
       },
       [=](start_atom)
       {
@@ -59,7 +68,6 @@ public:
           this->quit(exit::error);
           return;
         }
-
         bool done = false;
         while (events_.size() < batch_size_ && ! done)
         {
@@ -74,12 +82,12 @@ public:
             done = true;
             break;
           }
-
           done = static_cast<Derived const*>(this)->done();
         }
-
+        if (accountant_ != invalid_actor && ! events_.empty())
+          send(accountant_, time::now(),
+               description() + "-event-rate", uint64_t{events_.size()});
         send_events();
-
         if (done)
           this->quit(exit::done);
         else if (running_)
@@ -100,6 +108,7 @@ private:
   }
 
   bool running_ = true;
+  caf::actor accountant_;
   std::vector<caf::actor> sinks_;
   uint64_t batch_size_ = std::numeric_limits<uint16_t>::max();
   std::vector<event> events_;

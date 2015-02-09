@@ -19,7 +19,8 @@ public:
   /// @param chunk_size The number of events a source buffers until
   ///                   relaying them to the chunkifier
   /// @param method The compression method to use for the chunkifier.
-  importer(path dir, uint64_t chunk_size, io::compression method);
+  importer(path dir, uint64_t chunk_size, io::compression method,
+           caf::actor accountant = caf::invalid_actor);
 
   void at(caf::exit_msg const& msg) override;
   void at(caf::down_msg const& msg) override;
@@ -28,15 +29,16 @@ public:
 
 private:
   path dir_;
+  uint64_t chunk_size_;
   io::compression compression_;
   size_t current_ = 0;
   std::vector<caf::actor> sinks_;
   caf::actor source_;
   caf::actor chunkifier_;
+  caf::actor accountant_;
   caf::message_handler ready_;
   caf::message_handler paused_;
   caf::message_handler terminating_;
-  uint64_t chunk_size_;
   size_t stored_ = 0;
   std::set<path> orphaned_;
 };

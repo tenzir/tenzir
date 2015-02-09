@@ -96,24 +96,15 @@ struct logger::impl
     console_level_ = console;
     file_level_ = file;
     use_colors_ = color;
-
     if (! log_file_.is_open())
     {
-      std::ostringstream filename;
-      filename
-        << "vast_" << std::time(nullptr)
-        << '_' << util::process_id() << ".log";
-
       if (! exists(dir) && ! mkdir(dir))
         return false;
-
-      log_file_.open(to_string(dir / path(filename.str())));
+      log_file_.open((dir / "vast.log").str());
       if (! log_file_)
         return false;
-
       log_thread_ = std::thread([=] { run(); });
     }
-
     return log_thread_.joinable();
   }
 

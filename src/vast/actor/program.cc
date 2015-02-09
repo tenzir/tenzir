@@ -8,6 +8,7 @@
 #include "vast/logger.h"
 #include "vast/serialization.h"
 #include "vast/detail/type_manager.h"
+#include "vast/actor/accountant.h"
 #include "vast/actor/archive.h"
 #include "vast/actor/exporter.h"
 #include "vast/actor/index.h"
@@ -23,6 +24,7 @@
 #include "vast/actor/source/bgpdump.h"
 #include "vast/actor/source/test.h"
 #include "vast/detail/packet_type.h"
+#include "vast/util/system.h"
 
 #ifdef VAST_HAVE_PCAP
 #include "vast/actor/sink/pcap.h"
@@ -103,7 +105,7 @@ std::string program::name() const
 trial<void> program::run()
 {
   auto dir = path{*config_.get("directory")}.complete();
-
+  auto log_dir = dir / path{*config_.get("log.directory")};
   try
   {
     if (config_.check("core"))
@@ -123,7 +125,7 @@ trial<void> program::run()
     {
       auto secs = *config_.as<unsigned>("profiler.interval");
       auto prof = spawn<profiler, detached+linked>(
-          dir / "log", std::chrono::seconds(secs));
+          log_dir, std::chrono::seconds(secs));
       if (config_.check("profiler.cpu"))
       {
 #ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
@@ -142,7 +144,6 @@ trial<void> program::run()
         return error{"not compiled with perftools heap support"};
 #endif
       }
-
       if (config_.check("profiler.rusage"))
         send(prof, start_atom::value, rusage_atom::value);
     }
@@ -198,6 +199,13 @@ trial<void> program::run()
       else
         return nothing;
     }
+
+    actor acct;
+    if (config_.check("archive")
+        || config_.check("index")
+        || config_.check("importer")
+        || config_.check("receiver"))
+      acct = spawn<accountant<uint64_t>, detached+linked>(log_dir);
 
     auto archive_name = *config_.get("archive.name");
     if (config_.check("archive"))
@@ -334,7 +342,7 @@ trial<void> program::run()
 
       auto chunk_size = *config_.as<uint64_t>("import.chunk-size");
       importer_ = spawn<importer, priority_aware+linked>(dir, chunk_size,
-                                                         compression);
+                                                         compression, acct);
       auto importer_name = *config_.get("import.name");
       self->sync_send(tracker_, put_atom::value, "importer", importer_,
                       importer_name).await(ok_or_quit);
