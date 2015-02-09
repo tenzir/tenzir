@@ -34,17 +34,17 @@ struct time_duration
     {
       std::string s(boost::begin(r), boost::end(r));
       if (s == "nsec" || s == "nsecs" || s == "ns" || s == "n")
-        return time::duration(std::chrono::nanoseconds(d));
+        return time::nanoseconds(d);
       else if (s == "musec" || s == "musecs" || s == "mu" || s == "u")
-        return time::duration(std::chrono::microseconds(d));
+        return time::microseconds(d);
       else if (s == "msec" || s == "msecs" || s == "ms")
-        return time::duration(std::chrono::milliseconds(d));
+        return time::milliseconds(d);
       else if (s == "sec" || s == "secs" || s == "s")
-        return time::duration(std::chrono::seconds(d));
+        return time::seconds(d);
       else if (s == "min" || s == "mins" || s == "m")
-        return time::duration(std::chrono::minutes(d));
+        return time::minutes(d);
       else if (s == "hour" || s == "hours" || s == "h")
-        return time::duration(std::chrono::hours(d));
+        return time::hours(d);
       else if (s == "day" || s == "days" || s == "d")
         return time::duration(
             std::chrono::duration<int64_t, std::ratio<86400>>(d));
@@ -72,7 +72,7 @@ struct time_duration
 
     time::duration operator()(double d) const
     {
-      return time::duration::fractional(d);
+      return time::fractional(d);
     }
   };
 

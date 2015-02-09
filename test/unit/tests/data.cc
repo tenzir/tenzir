@@ -12,12 +12,12 @@ TEST("time::point")
   auto t = time::point::utc(2012, 8, 12, 23, 55, 4);
 
   CHECK(t.delta() == t);
-  CHECK(t.delta(30) == time::duration::seconds(1344815734));
-  CHECK(t.delta(56) == time::duration::seconds(1344815760));
-  CHECK(t.delta(60) == time::duration::seconds(1344815764));
-  CHECK(t.delta(68) == time::duration::seconds(1344815772));
-  CHECK(t.delta(123587) == time::duration::seconds(1344939291));
-  CHECK(t.delta(0, 0, 28) == time::duration::seconds(1344916504));
+  CHECK(t.delta(30) == time::seconds(1344815734));
+  CHECK(t.delta(56) == time::seconds(1344815760));
+  CHECK(t.delta(60) == time::seconds(1344815764));
+  CHECK(t.delta(68) == time::seconds(1344815772));
+  CHECK(t.delta(123587) == time::seconds(1344939291));
+  CHECK(t.delta(0, 0, 28) == time::seconds(1344916504));
 
   time::point u;
 
@@ -97,7 +97,7 @@ TEST("time::point")
   REQUIRE(d);
   auto tp = get<time::point>(*d);
   REQUIRE(tp);
-  CHECK(*tp == time::duration::fractional(1398933902.686337));
+  CHECK(*tp == time::fractional(1398933902.686337));
   CHECK(to_string(*tp) == "2014-05-01+08:45:02");
 }
 

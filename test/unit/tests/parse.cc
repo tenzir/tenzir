@@ -97,21 +97,21 @@ TEST("time::duration")
   auto end = str + 6;
   auto r = parse<time::duration>(start, end);
   CHECK(start == end);
-  CHECK(*r == time::duration::milliseconds(1000));
+  CHECK(*r == time::milliseconds(1000));
 
   str = "1000";
   start = str;
   end = str + 4;
   r = parse<time::duration>(start, end);
   CHECK(start == end);
-  CHECK(*r == time::duration::seconds(1000));
+  CHECK(*r == time::seconds(1000));
 
   str = "123.456789";
   start = str;
   end = str + 10;
   r = parse<time::duration>(start, end);
   CHECK(start == end);
-  CHECK(*r == time::duration::fractional(123.456789));
+  CHECK(*r == time::fractional(123.456789));
 }
 
 TEST("time::point")

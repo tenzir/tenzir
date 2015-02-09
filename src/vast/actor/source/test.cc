@@ -167,7 +167,7 @@ struct randomizer
          || std::is_same<T, time::duration>::value
        >
   {
-    x += time::duration::fractional(sample());
+    x += time::fractional(sample());
   }
 
   void operator()(std::string& str)

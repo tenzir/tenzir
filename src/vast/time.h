@@ -14,6 +14,7 @@ namespace time {
 
 class point;
 class duration;
+using double_seconds = std::chrono::duration<double, std::ratio<1>>;
 
 // Currently unused.
 class interval;
@@ -32,70 +33,7 @@ class duration : util::totally_ordered<duration>
 
 public:
   using rep = int64_t;
-  using double_seconds = std::chrono::duration<double, std::ratio<1>>;
   using duration_type = std::chrono::duration<rep, std::nano>;
-
-  /// Constructs a nanosecond duration.
-  /// @param ns The number of nanoseconds.
-  /// @returns A duration of *ns* nanoseconds.
-  template <typename T>
-  static duration nanoseconds(T ns)
-  {
-    return std::chrono::nanoseconds{ns};
-  }
-
-  /// Constructs a microsecond duration.
-  /// @param us The number of microseconds.
-  /// @returns A duration of *us* microseconds.
-  template <typename T>
-  static duration microseconds(T us)
-  {
-    return std::chrono::microseconds{us};
-  }
-
-  /// Constructs a millisecond duration.
-  /// @param ms The number of milliseconds.
-  /// @returns A duration of *ms* milliseconds.
-  template <typename T>
-  static duration milliseconds(T ms)
-  {
-    return std::chrono::milliseconds{ms};
-  }
-
-  /// Constructs a second duration.
-  /// @param s The number of seconds.
-  /// @returns A duration of *s* seconds.
-  template <typename T>
-  static duration seconds(T s)
-  {
-    return std::chrono::seconds{s};
-  }
-
-  /// Constructs a second duration.
-  /// @param f The number of fractional seconds.
-  /// @returns A duration of *f* fractional seconds.
-  static duration fractional(double f)
-  {
-    return double_seconds{f};
-  }
-
-  /// Constructs a minute duration.
-  /// @param m The number of minutes.
-  /// @returns A duration of *m* minutes.
-  template <typename T>
-  static duration minutes(T m)
-  {
-    return std::chrono::minutes{m};
-  }
-
-  /// Constructs a hour duration.
-  /// @param h The number of hours.
-  /// @returns A duration of *h* hours.
-  template <typename T>
-  static duration hours(T h)
-  {
-    return std::chrono::hours{h};
-  }
 
   /// Constructs a zero duration.
   duration() = default;
@@ -165,6 +103,68 @@ private:
   friend trial<void> convert(duration tr, duration_type& dur);
   friend trial<void> convert(duration tr, util::json& j);
 };
+
+/// Constructs a nanosecond duration.
+/// @param ns The number of nanoseconds.
+/// @returns A duration of *ns* nanoseconds.
+template <typename T>
+duration nanoseconds(T ns)
+{
+  return std::chrono::nanoseconds{ns};
+}
+
+/// Constructs a microsecond duration.
+/// @param us The number of microseconds.
+/// @returns A duration of *us* microseconds.
+template <typename T>
+duration microseconds(T us)
+{
+  return std::chrono::microseconds{us};
+}
+
+/// Constructs a millisecond duration.
+/// @param ms The number of milliseconds.
+/// @returns A duration of *ms* milliseconds.
+template <typename T>
+duration milliseconds(T ms)
+{
+  return std::chrono::milliseconds{ms};
+}
+
+/// Constructs a second duration.
+/// @param s The number of seconds.
+/// @returns A duration of *s* seconds.
+template <typename T>
+duration seconds(T s)
+{
+  return std::chrono::seconds{s};
+}
+
+/// Constructs a second duration.
+/// @param f The number of fractional seconds.
+/// @returns A duration of *f* fractional seconds.
+inline duration fractional(double f)
+{
+  return double_seconds{f};
+}
+
+/// Constructs a minute duration.
+/// @param m The number of minutes.
+/// @returns A duration of *m* minutes.
+template <typename T>
+duration minutes(T m)
+{
+  return std::chrono::minutes{m};
+}
+
+/// Constructs a hour duration.
+/// @param h The number of hours.
+/// @returns A duration of *h* hours.
+template <typename T>
+duration hours(T h)
+{
+  return std::chrono::hours{h};
+}
 
 /// An absolute point in time having UTC time zone.
 class point : util::totally_ordered<point>
@@ -332,13 +332,13 @@ trial<void> parse(duration& dur, Iterator& begin, Iterator end)
     return d.error();
   if (is_double)
   {
-    dur = duration::fractional(*d);
+    dur = fractional(*d);
     return nothing;
   }
   duration::rep i = *d;
   if (begin == end)
   {
-    dur = duration::seconds(i);
+    dur = seconds(i);
     return nothing;
   }
   switch (*begin++)
@@ -347,23 +347,23 @@ trial<void> parse(duration& dur, Iterator& begin, Iterator end)
       return error{"invalid unit: ", *begin};
     case 'n':
       if (begin != end && *begin++ == 's')
-        dur = duration::nanoseconds(i);
+        dur = nanoseconds(i);
       break;
     case 'u':
       if (begin != end && *begin++ == 's')
-        dur = duration::microseconds(i);
+        dur = microseconds(i);
       break;
     case 'm':
       if (begin != end && *begin++ == 's')
-        dur = duration::milliseconds(i);
+        dur = milliseconds(i);
       else
-        dur = duration::minutes(i);
+        dur = minutes(i);
       break;
     case 's':
-      dur = duration::seconds(i);
+      dur = seconds(i);
       break;
     case 'h':
-      dur = duration::hours(i);
+      dur = hours(i);
       break;
   }
   return nothing;

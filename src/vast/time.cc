@@ -149,7 +149,7 @@ void duration::deserialize(deserializer& source)
 
 trial<void> convert(duration dur, double& d)
 {
-  auto dd = std::chrono::duration_cast<duration::double_seconds>(dur.duration_);
+  auto dd = std::chrono::duration_cast<double_seconds>(dur.duration_);
   d = dd.count();
   return nothing;
 }
