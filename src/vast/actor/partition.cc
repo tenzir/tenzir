@@ -4,7 +4,6 @@
 #include "vast/event.h"
 #include "vast/actor/indexer.h"
 #include "vast/actor/task.h"
-#include "vast/actor/source/dechunkifier.h"
 #include "vast/expr/predicatizer.h"
 #include "vast/io/serialization.h"
 
@@ -81,27 +80,18 @@ partition::partition(path const& dir)
       predicates_.clear();
       queries_.clear();
     });
-  // TODO: calibrate
-  overload_when([this]
+  overload_when([this] // TODO: calibrate values.
     {
-      return dechunkifiers_.size() > 10 || inflight_pings_.size() > 10;
+      return dechunkifiers_.size() > 10 || chunk_tasks_.size() > 10;
     });
 }
 
 void partition::at(down_msg const& msg)
 {
-  // We send all affected indexers a ping to get an idea of how busy they are.
-  // Then, we use number of all inflight pings as proxy for the load of the
-  // partition.
-  auto er = dechunkifiers_.equal_range(msg.source);
-  if (er.first != er.second)
+  auto d = dechunkifiers_.find(last_sender());
+  if (d != dechunkifiers_.end())
   {
-    while (er.first != er.second)
-    {
-      send(er.first->second, ping_atom::value);
-      inflight_pings_.insert(er.first->second->address());
-      er.first = dechunkifiers_.erase(er.first);
-    }
+    dechunkifiers_.erase(d);
     check_overload();
     return;
   }
@@ -177,40 +167,61 @@ message_handler partition::make_handler()
 
   return
   {
-    [=](chunk const& c)
+    [=](chunk const& c, actor const& task)
     {
       VAST_DEBUG(this, "got chunk with", c.events(), "events:",
                  '[' << c.base() << ',' << (c.base() + c.events()) << ')');
-      // We record all types so that we can spawn the indexers later.
-      auto sch = schema::merge(schema_, c.meta().schema);
-      if (sch)
-      {
-        schema_ = std::move(*sch);
-      }
-      else
-      {
-        VAST_ERROR(this, "failed to merge schema:", sch.error());
-        quit(exit::error);
-        return;
-      }
-      // Spawn a dechunkifier and event indexers, then wire them.
-      auto dechunkifier = spawn<source::dechunkifier, monitored>(c);
+      send(task, this);
+      send(task, supervisor_atom::value, this);
+      chunk_tasks_.emplace(task->address(), c.events());
       auto base = c.base();
       auto i = to_string(base) + "-" + to_string(base + c.events());
+      std::vector<actor> indexers;
       for (auto& t : c.meta().schema)
         if (! t.find_attribute(type::attribute::skip))
         {
-          auto a = spawn<event_indexer<bitstream_type>, monitored>(
+          if (! schema_.add(t))
+          {
+            VAST_ERROR(this, "failed to incorporate types from new chunk schema");
+            quit(exit::error);
+            return;
+          }
+          auto indexer = spawn<event_indexer<bitstream_type>, monitored>(
               dir_ / i / t.name(), t);
-          indexers_.emplace(base, a);
-          dechunkifiers_.emplace(dechunkifier->address(), a);
-          send(dechunkifier, sink_atom::value, a);
+          indexers.push_back(indexer);
+          indexers_.emplace(base, std::move(indexer));
         }
-      check_overload();
-      send(dechunkifier, batch_atom::value, 8192ull);
-      send(dechunkifier, start_atom::value);
+      if (!indexers.empty())
+      {
+        auto dechunkifier = spawn<monitored>(
+          [c, task](event_based_actor* self, std::vector<actor> indexers)
+          {
+            chunk::reader reader{c};
+            std::vector<event> events(c.events());
+            for (size_t i = 0; i < c.events(); ++i)
+            {
+              auto e = reader.read();
+              if (! e)
+              {
+                self->quit(exit::error);
+                return;
+              }
+              events[i] = std::move(*e);
+            }
+            auto msg = make_message(std::move(events), task);
+            for (auto& i : indexers)
+            {
+              self->send(task, i);
+              self->send(i, msg);
+            }
+          }, std::move(indexers));
+        dechunkifiers_.insert(dechunkifier->address());
+        check_overload();
+      }
+      send(task, done_atom::value);
       VAST_DEBUG(this, "runs", indexers_.size(), "indexers and",
-                 dechunkifiers_.size(), "dechunkifiers");
+                 dechunkifiers_.size(), "dechunkifiers for",
+                 chunk_tasks_.size(), "chunks");
     },
     [=](expression const& expr, actor const& sink)
     {
@@ -253,23 +264,22 @@ message_handler partition::make_handler()
       if (! q->second.hits.empty() && ! q->second.hits.all_zeros())
         send(sink, expr, q->second.hits);
     },
-    [=](pong_atom)
-    {
-      inflight_pings_.erase(last_sender());
-      check_underload();
-      if (! inflight_pings_.empty())
-        VAST_DEBUG(this, "awaits", inflight_pings_.size(), "indexer pongs");
-    },
     [=](done_atom, time::duration runtime)
     {
+      auto ct = chunk_tasks_.find(last_sender());
+      if (ct != chunk_tasks_.end())
+      {
+        VAST_DEBUG(this, "indexed", ct->second, "events in", runtime);
+        chunk_tasks_.erase(ct);
+        return;
+      }
       // Once we're done with an entire query, propagate this fact to all
       // sinks. This needs to happen in the same channel as the results flow,
       // checking the asynchronously running task would not work.
       auto qt = query_tasks_.find(last_sender());
       if (qt != query_tasks_.end())
       {
-        VAST_DEBUG(this, "completed query", *qt->second, "in",
-                   runtime.milliseconds(), "ms");
+        VAST_DEBUG(this, "completed query", *qt->second, "in", runtime);
         auto& qs = queries_[*qt->second];
         auto msg = make_message(done_atom::value, runtime, *qt->second);
         for (auto& s : qs.sinks)
@@ -283,8 +293,8 @@ message_handler partition::make_handler()
       auto pt = predicate_tasks_.find(last_sender());
       assert(pt != predicate_tasks_.end());
       auto& ps = predicates_[*pt->second];
-      VAST_DEBUG(this, "took", runtime.milliseconds(), "to complete predicate "
-                 "for", ps.coverage.size(), "indexers:", *pt->second);
+      VAST_DEBUG(this, "took", runtime, "to complete predicate for",
+                 ps.coverage.size(), "indexers:", *pt->second);
       for (auto& q : ps.queries)
       {
         VAST_DEBUG(this, "evaluates", q);

@@ -84,7 +84,7 @@ public:
           quit(exit::error);
         }
       },
-      [=](std::vector<event> const& events)
+      [=](std::vector<event> const& events, actor const& task)
       {
         VAST_DEBUG(this, "got", events.size(), "events");
         for (auto& e : events)
@@ -98,6 +98,7 @@ public:
             quit(exit::error);
             return;
           }
+        send(task, done_atom::value);
       },
       [=](expression const& pred, actor const& sink, actor const& task)
       {
@@ -603,10 +604,14 @@ public:
         load_bitmap_indexers();
         VAST_DEBUG(this, "has loaded", indexers_.size(), "indexers");
       },
-      [=](std::vector<event> const&)
+      [=](std::vector<event> const&, actor const& task)
       {
         for (auto& i : indexers_)
+        {
+          send(task, i.second);
           send_as(this, i.second, last_dequeued());
+        }
+        send(task, done_atom::value);
       },
       [=](flush_atom, actor const& task)
       {

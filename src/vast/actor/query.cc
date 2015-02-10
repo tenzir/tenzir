@@ -61,7 +61,7 @@ query::query(actor archive, actor sink, expression ast)
     },
     [=](done_atom, time::duration runtime, expression const&)
     {
-      VAST_DEBUG(this, "completed index interaction in", runtime, "ms");
+      VAST_DEBUG(this, "completed index interaction in", runtime);
       // FIXME: having completed index interaction does not mean that the user
       // is done with the query. We should wait for a signal from the user to
       // temrinate the query.
