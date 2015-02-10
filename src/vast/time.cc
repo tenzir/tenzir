@@ -119,6 +119,11 @@ duration::rep duration::seconds() const
   return std::chrono::duration_cast<std::chrono::seconds>(duration_).count();
 }
 
+double duration::double_seconds() const
+{
+  return std::chrono::duration_cast<std::chrono::duration<double>>(duration_).count();
+}
+
 duration::rep duration::milliseconds() const
 {
   return
@@ -149,8 +154,7 @@ void duration::deserialize(deserializer& source)
 
 trial<void> convert(duration dur, double& d)
 {
-  auto dd = std::chrono::duration_cast<double_seconds>(dur.duration_);
-  d = dd.count();
+  d = dur.double_seconds();
   return nothing;
 }
 
@@ -317,7 +321,7 @@ void point::deserialize(deserializer& source)
 
 trial<void> convert(point p, double &d)
 {
-  d = *to<double>(duration{p.time_point_.time_since_epoch()});
+  d = p.since_epoch().double_seconds();
   return nothing;
 }
 

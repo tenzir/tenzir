@@ -66,7 +66,7 @@ struct accountant : default_actor
         auto& ctx = contexts_[context];
         if (auto a = accumulate(ctx, x, timestamp))
         {
-          auto record = to_string(timestamp.since_epoch().microseconds())
+          auto record = to_string(timestamp.since_epoch().double_seconds())
             + '\t' + context
             + '\t' + to_string(*a)
             + '\t' + to_string(ctx.accumulator.count())
