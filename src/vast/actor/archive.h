@@ -48,6 +48,7 @@ private:
   util::lru_cache<uuid, segment> cache_;
   segment current_;
   uint64_t current_size_;
+  caf::actor accountant_;
 };
 
 } // namespace vast

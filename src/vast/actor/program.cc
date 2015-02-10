@@ -203,8 +203,7 @@ trial<void> program::run()
     actor acct;
     if (config_.check("archive")
         || config_.check("index")
-        || config_.check("importer")
-        || config_.check("receiver"))
+        || config_.check("importer"))
       acct = spawn<accountant<uint64_t>, detached+linked>(log_dir);
 
     auto archive_name = *config_.get("archive.name");
@@ -214,6 +213,7 @@ trial<void> program::run()
           dir,
           *config_.as<size_t>("archive.max-segments"),
           *config_.as<size_t>("archive.max-segment-size") * 1000000);
+      send(archive_, accountant_atom::value, acct);
       self->sync_send(tracker_, put_atom::value, "archive", archive_,
                       archive_name).await(ok_or_quit);
       if (abort)
@@ -228,6 +228,7 @@ trial<void> program::run()
       auto active_parts = *config_.as<size_t>("index.part-active");
       index_ = spawn<index, priority_aware+linked>(dir, max_events, max_parts,
                                                    active_parts);
+      send(index_, accountant_atom::value, acct);
       self->sync_send(tracker_, put_atom::value, "index", index_, index_name)
         .await(ok_or_quit);
       if (abort)
@@ -342,7 +343,8 @@ trial<void> program::run()
 
       auto chunk_size = *config_.as<uint64_t>("import.chunk-size");
       importer_ = spawn<importer, priority_aware+linked>(dir, chunk_size,
-                                                         compression, acct);
+                                                         compression);
+      send(importer_, accountant_atom::value, acct);
       auto importer_name = *config_.get("import.name");
       self->sync_send(tracker_, put_atom::value, "importer", importer_,
                       importer_name).await(ok_or_quit);

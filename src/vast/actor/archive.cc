@@ -19,6 +19,7 @@ archive::archive(path dir, size_t capacity, size_t max_segment_size)
   attach_functor(
     [=](uint32_t)
     {
+      accountant_ = invalid_actor;
       if (! current_.empty())
       {
         auto t = store(std::move(current_));
@@ -28,7 +29,6 @@ archive::archive(path dir, size_t capacity, size_t max_segment_size)
           return;
         }
       }
-
       auto t = io::archive(dir_ / "meta.data", segments_);
       if (! t)
       {
@@ -54,11 +54,15 @@ caf::message_handler archive::make_handler()
 
   return
   {
+    [=](accountant_atom, actor const& accountant)
+    {
+      VAST_DEBUG(this, "registers accountant", accountant);
+      accountant_ = accountant;
+    },
     [=](chunk const& chk)
     {
       VAST_DEBUG(this, "got chunk [" << chk.meta().ids.find_first() << ',' <<
                  (chk.meta().ids.find_last() + 1 ) << ')');
-
       if (! current_.empty()
           && current_size_ + chk.bytes() >= max_segment_size_)
       {
@@ -69,13 +73,13 @@ caf::message_handler archive::make_handler()
           quit(exit::error);
           return;
         }
-
         current_ = {};
         current_size_ = 0;
       }
-
       current_size_ += chk.bytes();
       current_.insert(chk);
+      if (accountant_)
+        send(accountant_, time::now(), description() + "-events", chk.events());
     },
     [=](event_id eid)
     {

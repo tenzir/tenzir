@@ -51,7 +51,7 @@ struct base : public default_actor
           }
         if (accountant_)
           send(accountant_, time::now(),
-               description() + "-event-rate", uint64_t{v.size()});
+               description() + "-events", uint64_t{v.size()});
       }
     };
   }

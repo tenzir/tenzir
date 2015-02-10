@@ -40,6 +40,7 @@ index::index(path const& dir, size_t max_events,
         auto t = flush();
         if (! t)
           VAST_ERROR(this, "failed to save meta data:", t.error());
+        accountant_ = invalid_actor;
         queries_.clear();
         partitions_.clear();
       });
@@ -148,6 +149,11 @@ message_handler index::make_handler()
 
   return
   {
+    [=](accountant_atom, actor const& accountant)
+    {
+      VAST_DEBUG(this, "registers accountant", accountant);
+      accountant_ = accountant;
+    },
     [=](flush_atom, actor const& task)
     {
       VAST_VERBOSE(this, "flushes", active_.size(), "active partitions");
@@ -250,6 +256,8 @@ message_handler index::make_handler()
       auto t = tasks_.find(last_sender());
       assert(t != tasks_.end());
       VAST_VERBOSE(this, "indexed", t->second, "events in", runtime);
+      if (accountant_)
+        send(accountant_, time::now(), description() + "-events", t->second);
       tasks_.erase(t);
     },
     [=](done_atom, time::duration runtime, expression const& expr)

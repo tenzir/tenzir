@@ -86,7 +86,7 @@ public:
         }
         if (accountant_ != invalid_actor && ! events_.empty())
           send(accountant_, time::now(),
-               description() + "-event-rate", uint64_t{events_.size()});
+               description() + "-events", uint64_t{events_.size()});
         send_events();
         if (done)
           this->quit(exit::done);
@@ -101,6 +101,7 @@ private:
   {
     if (! events_.empty())
     {
+      VAST_VERBOSE(this, "produced", events_.size(), "events");
       for (auto& a : sinks_)
         this->send(a, std::move(events_));
       events_ = {};

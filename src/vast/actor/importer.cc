@@ -7,12 +7,10 @@ namespace vast {
 
 using namespace caf;
 
-importer::importer(path dir, uint64_t chunk_size, io::compression method,
-                   caf::actor accountant)
+importer::importer(path dir, uint64_t chunk_size, io::compression method)
   : dir_{dir / "import"},
     chunk_size_{chunk_size},
-    compression_{method},
-    accountant_{accountant}
+    compression_{method}
 {
   high_priority_exit(false);
   attach_functor([=](uint32_t)
@@ -119,6 +117,11 @@ message_handler importer::make_handler()
       sinks_.push_back(snk);
       monitor(snk);
       return ok_atom::value;
+    },
+    [=](accountant_atom, actor const& accountant)
+    {
+      VAST_DEBUG(this, "registers accountant", accountant);
+      accountant_ = accountant;
     },
     [=](chunk const& chk)
     {
