@@ -238,8 +238,7 @@ trial<void> program::run()
     auto receiver_name = *config_.get("receiver.name");
     if (config_.check("receiver"))
     {
-      // FIXME: figure out why we can't spawn this actor priority-aware.
-      receiver_ = spawn<receiver, linked>();
+      receiver_ = spawn<receiver, priority_aware+linked>();
       // Whenever we have a RECEIVER, it initiates the shutdown because it
       // depends on IDENTIFIER from inside TRACKER.
       unlink_from(tracker_);
