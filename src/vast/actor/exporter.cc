@@ -52,7 +52,6 @@ message_handler exporter::make_handler()
     {
       for (auto& s : sinks_)
         forward_to(s);
-
       if (++processed_ == limit_)
       {
         VAST_DEBUG(this, "reached maximum event limit:", limit_);
@@ -63,9 +62,9 @@ message_handler exporter::make_handler()
     {
       VAST_DEBUG(this, "got query progress:", size_t(progress * 100) << "%");
     },
-    [=](done_atom)
+    [=](done_atom, time::duration runtime)
     {
-      VAST_DEBUG(this, "got query progress: done");
+      VAST_DEBUG(this, "completed query in", runtime);
     }
   };
 }
