@@ -1,5 +1,8 @@
 # VAST
 
+[![Gitter][gitter-badge]](https://gitter.im/mavam/vast)
+[gitter-badge]: https://badges.gitter.im/Join%20Chat.svg
+
 **Visibility Across Space and Time (VAST)** is a unified platform for network
 forensics and incident response.
 
@@ -36,12 +39,11 @@ vast -Q
 - [Project page](http://www.icir.org/vast)
 - [Documentation](https://github.com/mavam/vast/wiki)
 - [Issue board](https://waffle.io/mavam/vast)
-- Chat: [![Gitter][gitter-badge]](https://gitter.im/mavam/vast)
+- [Chat](https://gitter.im/mavam/vast)
 - Mailing lists:
     - [vast@icir.org][vast]: general help and discussion
     - [vast-commits@icir.org][vast-commits]: full diffs of git commits
 
-[gitter-badge]: https://badges.gitter.im/Join%20Chat.svg
 [vast]: http://mailman.icsi.berkeley.edu/mailman/listinfo/vast
 [vast-commits]: http://mailman.icsi.berkeley.edu/mailman/listinfo/vast-commits
 
