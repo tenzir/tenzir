@@ -15,7 +15,6 @@ chunkifier::chunkifier(actor upstream, size_t max_events_per_chunk,
     compression_{method},
     chunk_{std::make_unique<chunk>(compression_)},
     writer_{std::make_unique<chunk::writer>(*chunk_)},
-    stats_{std::chrono::seconds(1)},
     max_events_per_chunk_{max_events_per_chunk}
 {
 }
@@ -28,13 +27,6 @@ bool chunkifier::process(event const& e)
     quit(exit::error);
     return false;
   }
-
-  ++total_events_;
-  if (stats_.increment())
-    VAST_VERBOSE(this, "writes at", stats_.last(), "events/sec (" <<
-                 stats_.mean() << '/' << stats_.median() << '/' << stats_.sd(),
-                 "mean/median/sd)");
-
 
   if (chunk_->events() == max_events_per_chunk_)
   {

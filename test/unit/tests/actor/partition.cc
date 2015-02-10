@@ -1,6 +1,7 @@
 #include <caf/all.hpp>
 #include "vast/event.h"
 #include "vast/actor/partition.h"
+#include "vast/actor/task.h"
 
 #include "framework/unit.h"
 
@@ -42,8 +43,14 @@ TEST("partition")
   path dir = "vast-test-partition";
   scoped_actor self;
   auto p = self->spawn<partition, monitored+priority_aware>(dir);
-  self->send(p, chk0);
-  self->send(p, chk1);
+  auto t = self->spawn<task, monitored>();
+  self->send(t, p);
+  self->send(p, chk0, t);
+  self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
+  t = self->spawn<task, monitored>();
+  self->send(t, p);
+  self->send(p, chk1, t);
+  self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
 
   VAST_INFO("flushing partition through termination");
   self->send_exit(p, exit::done);

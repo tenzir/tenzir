@@ -40,6 +40,7 @@ index::index(path const& dir, size_t max_events,
         auto t = flush();
         if (! t)
           VAST_ERROR(this, "failed to save meta data:", t.error());
+        accountant_ = invalid_actor;
         queries_.clear();
         partitions_.clear();
       });
@@ -85,7 +86,6 @@ void index::at(exit_msg const& msg)
     for (auto& p : partitions_)
       if (p.second.actor)
         send_exit(p.second.actor, exit::kill);
-    quit(msg.reason);
     for (auto& p : partitions_)
       if (p.second.actor)
         send_exit(p.second.actor, exit::kill);
@@ -149,9 +149,14 @@ message_handler index::make_handler()
 
   return
   {
+    [=](accountant_atom, actor const& accountant)
+    {
+      VAST_DEBUG(this, "registers accountant", accountant);
+      accountant_ = accountant;
+    },
     [=](flush_atom, actor const& task)
     {
-      VAST_DEBUG(this, "flushes active partitions");
+      VAST_VERBOSE(this, "flushes", active_.size(), "active partitions");
       send(task, this);
       for (auto& id : active_)
       {
@@ -171,11 +176,9 @@ message_handler index::make_handler()
     {
       auto& part = active_[next_++];
       next_ %= active_.size();
-
       auto i = partitions_.find(part);
       assert(i != partitions_.end());
       assert(i->second.actor);
-
       // Replace partition with a new one on overflow. If the max is too small
       // that even the first chunk doesn't fit, then we just accept this and
       // have a one-chunk partition.
@@ -195,7 +198,6 @@ message_handler index::make_handler()
         // TODO: once we have live queries in place, we must inform the new
         // partition about them at this point.
       }
-
       // Update partition meta data.
       auto& p = i->second;
       p.events += chk.events();
@@ -204,13 +206,15 @@ message_handler index::make_handler()
         p.from = chk.meta().first;
       if (p.to == time::duration{} || chk.meta().last > p.to)
         p.to = chk.meta().last;
-
       VAST_DEBUG(this, "forwards chunk to", p.actor, '(' << part << ')');
-      forward_to(p.actor);
+      auto t = spawn<task>();
+      send(t, supervisor_atom::value, this);
+      tasks_.emplace(t->address(), chk.events());
+      send(p.actor, chk, t);
     },
     [=](expression const& expr, actor const& sink)
     {
-      VAST_DEBUG(this, "got query for", sink << ':', expr);
+      VAST_VERBOSE(this, "got query for", sink << ':', expr);
       monitor(sink);
       auto q = queries_.find(expr);
       if (q != queries_.end())
@@ -247,7 +251,16 @@ message_handler index::make_handler()
         queries_.emplace(expr, qs);
       }
     },
-    [=](done_atom, time::duration, expression const& expr)
+    [=](done_atom, time::duration runtime)
+    {
+      auto t = tasks_.find(last_sender());
+      assert(t != tasks_.end());
+      VAST_VERBOSE(this, "indexed", t->second, "events in", runtime);
+      if (accountant_)
+        send(accountant_, time::now(), description() + "-events", t->second);
+      tasks_.erase(t);
+    },
+    [=](done_atom, time::duration runtime, expression const& expr)
     {
       VAST_DEBUG(this, "got signal that", last_sender(), "finished for", expr);
       auto q = queries_.find(expr);
@@ -259,7 +272,7 @@ message_handler index::make_handler()
       q->second.parts.erase(p);
       if (q->second.parts.empty())
       {
-        VAST_DEBUG(this, "completed query", expr);
+        VAST_VERBOSE(this, "completed query", expr, "in", runtime);
         for (auto& s : q->second.subscribers)
           send(s, last_dequeued());
         queries_.erase(q);

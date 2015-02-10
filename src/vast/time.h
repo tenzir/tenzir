@@ -78,6 +78,10 @@ public:
   // @returns This duration in seconds or 0 if too fine-grained.
   rep seconds() const;
 
+  // Convert this duration to seconds resolution with double precision.
+  // @returns This duration in seconds plus a fractional part.
+  double double_seconds() const;
+
   // Convert this duration to milliseconds resolution.
   // @returns This duration in milliseconds or 0 if too fine-grained.
   rep milliseconds() const;

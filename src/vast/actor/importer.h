@@ -28,15 +28,16 @@ public:
 
 private:
   path dir_;
+  uint64_t chunk_size_;
   io::compression compression_;
   size_t current_ = 0;
   std::vector<caf::actor> sinks_;
   caf::actor source_;
   caf::actor chunkifier_;
+  caf::actor accountant_;
   caf::message_handler ready_;
   caf::message_handler paused_;
   caf::message_handler terminating_;
-  uint64_t chunk_size_;
   size_t stored_ = 0;
   std::set<path> orphaned_;
 };

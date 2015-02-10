@@ -31,7 +31,6 @@ private:
   io::compression compression_;
   std::unique_ptr<chunk> chunk_;
   std::unique_ptr<chunk::writer> writer_;
-  util::rate_accumulator<uint64_t> stats_;
   size_t max_events_per_chunk_;
   size_t total_events_ = 0;
 };

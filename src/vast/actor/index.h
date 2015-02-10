@@ -99,7 +99,8 @@ struct index : public flow_controlled_actor
   size_t max_events_per_partition_;
   size_t max_partitions_;
   size_t active_partitions_;
-  std::map<caf::actor_addr, expression const*> tasks_;
+  caf::actor accountant_;
+  std::map<caf::actor_addr, uint64_t> tasks_;
   std::map<expression, query_state> queries_;
   std::unordered_map<uuid, partition_state> partitions_;
   std::list<schedule_state> schedule_;

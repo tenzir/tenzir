@@ -57,13 +57,13 @@ private:
 
   path const dir_;
   schema schema_;
-  std::multimap<caf::actor_addr, caf::actor> dechunkifiers_;
+  std::set<caf::actor_addr> dechunkifiers_;
   std::multimap<event_id, caf::actor> indexers_;
   std::map<predicate, predicate_state> predicates_;
   std::map<expression, query_state> queries_;
   std::map<caf::actor_addr, predicate const*> predicate_tasks_;
   std::map<caf::actor_addr, expression const*> query_tasks_;
-  std::set<caf::actor_addr> inflight_pings_;
+  std::map<caf::actor_addr, uint64_t> chunk_tasks_;
 };
 
 } // namespace vast

@@ -36,12 +36,16 @@ TEST("indexer")
   path dir1 = "vast-test-indexer-t1";
   auto i0 = self->spawn<event_indexer<bitstream_type>, monitored>(dir0, t0);
   auto i1 = self->spawn<event_indexer<bitstream_type>, monitored>(dir1, t1);
-  self->send(i0, events);
-  self->send(i1, events);
+  auto t = self->spawn<task, monitored>();
+  self->send(t, i0);
+  self->send(t, i1);
+  self->send(i0, events, t);
+  self->send(i1, events, t);
+  self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
 
   VAST_DEBUG("running a query against the first indexer");
   predicate pred{type_extractor{type::count{}}, less, data{100u}};
-  auto t = self->spawn<task, monitored>();
+  t = self->spawn<task, monitored>();
   self->send(t, i0);
   self->send(i0, expression{pred}, self, t);
   self->receive(

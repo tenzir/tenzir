@@ -9,17 +9,17 @@ using namespace caf;
 
 importer::importer(path dir, uint64_t chunk_size, io::compression method)
   : dir_{dir / "import"},
-    compression_{method},
-    chunk_size_{chunk_size}
+    chunk_size_{chunk_size},
+    compression_{method}
 {
   high_priority_exit(false);
-  attach_functor(
-      [=](uint32_t)
-      {
-        source_ = invalid_actor;
-        chunkifier_ = invalid_actor;
-        sinks_.clear();
-      });
+  attach_functor([=](uint32_t)
+  {
+    source_ = invalid_actor;
+    chunkifier_ = invalid_actor;
+    accountant_ = invalid_actor;
+    sinks_.clear();
+  });
 }
 
 void importer::at(exit_msg const& msg)
@@ -66,6 +66,8 @@ message_handler importer::make_handler()
 {
   chunkifier_ =
     spawn<sink::chunkifier, monitored>(this, chunk_size_, compression_);
+  if (accountant_)
+    send(chunkifier_, accountant_atom::value, accountant_);
 
   for (auto& p : directory{dir_ / "chunks"})
   {
@@ -104,6 +106,8 @@ message_handler importer::make_handler()
       source_->link_to(chunkifier_);
       send(source_, sink_atom::value, chunkifier_);
       send(source_, batch_atom::value, chunk_size_);
+      if (accountant_)
+        send(source_, accountant_atom::value, accountant_);
       send(source_, run_atom::value);
     },
     [=](add_atom, sink_atom, actor const& snk)
@@ -113,6 +117,11 @@ message_handler importer::make_handler()
       sinks_.push_back(snk);
       monitor(snk);
       return ok_atom::value;
+    },
+    [=](accountant_atom, actor const& accountant)
+    {
+      VAST_DEBUG(this, "registers accountant", accountant);
+      accountant_ = accountant;
     },
     [=](chunk const& chk)
     {

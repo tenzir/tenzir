@@ -11,6 +11,10 @@ namespace util {
 /// @returns The system hostname.
 trial<std::string> hostname();
 
+/// Retrieves the process ID.
+/// @returns The ID of this process.
+int32_t process_id();
+
 } // namespace util
 } // namespace vast
 
