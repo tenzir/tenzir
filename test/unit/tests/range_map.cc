@@ -109,3 +109,51 @@ TEST("range_map injection")
   CHECK(std::get<0>(i) == 75);
   CHECK(std::get<1>(i) == 99);
 }
+
+TEST("range_map erasure")
+{
+  range_map<size_t, char> rm;
+  rm.insert(50, 60, 'a');
+  rm.insert(80, 90, 'b');
+  rm.insert(20, 30, 'c');
+  auto i = rm.lookup(50);
+  REQUIRE(i);
+  CHECK(*i == 'a');
+  // Erase nothing.
+  rm.erase(40, 50);
+  i = rm.lookup(50);
+  REQUIRE(i);
+  CHECK(*i == 'a');
+  // Adjust left.
+  rm.erase(40, 52);
+  i = rm.lookup(51);
+  CHECK(! i);
+  i = rm.lookup(52);
+  REQUIRE(i);
+  CHECK(*i == 'a');
+  // Adjust right.
+  rm.erase(58, 70);
+  i = rm.lookup(58);
+  CHECK(! i);
+  i = rm.lookup(57);
+  REQUIRE(i);
+  CHECK(*i == 'a');
+  // Erase middle.
+  rm.erase(54, 56);
+  i = rm.lookup(53);
+  REQUIRE(i);
+  CHECK(*i == 'a');
+  i = rm.lookup(54);
+  CHECK(! i);
+  i = rm.lookup(55);
+  CHECK(! i);
+  i = rm.lookup(56);
+  REQUIRE(i);
+  CHECK(*i == 'a');
+  // Erase multiple entirely.
+  rm.erase(45, 65);
+  i = rm.lookup(53);
+  CHECK(! i);
+  i = rm.lookup(56);
+  CHECK(! i);
+}

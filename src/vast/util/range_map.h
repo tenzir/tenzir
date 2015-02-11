@@ -169,6 +169,48 @@ public:
     return true;
   }
 
+  /// Adjusts or erases ranges so that no values in the map overlap with
+  /// *[l,r)*.
+  /// @param l The left endpoint of the interval.
+  /// @param r The right endpoint of the interval.
+  void erase(Point l, Point r)
+  {
+    if (l > r)
+      return;
+    auto next_left = l;
+    for (;;)
+    {
+      auto lb = map_.lower_bound(next_left);
+      auto i = locate(next_left, lb);
+      if (i == map_.end())
+        i = lb;
+      if (i == map_.end() || left(i) >= r)
+        break;
+      next_left = right(i);
+      if (l <= left(i) && r >= right(i))
+      { // [l,r) overlaps [i) in its entirety
+        map_.erase(i);
+      }
+      else if (left(i) <= l && right(i) >= r)
+      { // [i) overlaps [l,r) in its entirety
+        Point orig_r = right(i);
+        right(i) = l;
+        inject(r, orig_r, value(i));
+        break;
+      }
+      else if (l <= left(i) && r > left(i))
+      { // [l,r) overlaps [i) partially and starts before
+        map_.emplace(r, std::make_pair(right(i), std::move(value(i))));
+        map_.erase(i);
+        break;
+      }
+      else if (l < right(i) && r >= right(i))
+      { // [l,r) overlaps [i) partially and starts after
+        right(i) = l;
+      }
+    }
+  }
+
   /// Retrieves the value for a given point.
   /// @param p The point to lookup.
   /// @returns A pointer to the value associated with the half-open interval
@@ -239,9 +281,14 @@ private:
   {
     if ((lb != map_.end() && p == left(lb)) ||
         (lb != map_.begin() && p < right(--lb)))
-    //if (lb == map_.end())
-    //  return map_.empty() ? lb : map_.rbegin().base();
-    //else if (p == left(lb) || (lb != map_.begin() && p < right(--lb)))
+      return lb;
+    return map_.end();
+  }
+
+  map_iterator locate(Point const& p, map_iterator lb)
+  {
+    if ((lb != map_.end() && p == left(lb)) ||
+        (lb != map_.begin() && p < right(--lb)))
       return lb;
     return map_.end();
   }
