@@ -133,7 +133,7 @@ query::query(actor archive, actor sink, expression ast)
             ast = visit(expr::type_resolver{e->type()}, *t);
             VAST_DEBUG(this, "resolved AST for type", e->type() << ':', ast);
           }
-          if (visit(expr::evaluator{*e}, ast))
+          if (visit(expr::event_evaluator{*e}, ast))
           {
             send(sink_, std::move(*e));
             if (++n == requested_)
