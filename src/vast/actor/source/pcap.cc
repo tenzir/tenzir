@@ -97,10 +97,10 @@ result<event> pcap::extract()
         VAST_INFO(this, "uses pseudo-realtime factor 1/" << pseudo_realtime_);
     }
 
-    VAST_INFO(this, "cuts off flows after", cutoff_, "bytes in each direction");
-    VAST_INFO(this, "keeps at most", max_flows_, "concurrent flows");
-    VAST_INFO(this, "evicts flows after", max_age_, "seconds of inactivity");
-    VAST_INFO(this, "expires flow table every", expire_interval_, "seconds");
+    VAST_VERBOSE(this, "cuts off flows after", cutoff_, "bytes in each direction");
+    VAST_VERBOSE(this, "keeps at most", max_flows_, "concurrent flows");
+    VAST_VERBOSE(this, "evicts flows after", max_age_, "seconds of inactivity");
+    VAST_VERBOSE(this, "expires flow table every", expire_interval_, "seconds");
 
     if (auto t = schema_.find_type("vast::packet"))
     {

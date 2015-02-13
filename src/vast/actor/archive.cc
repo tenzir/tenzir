@@ -35,7 +35,7 @@ archive::archive(path dir, size_t capacity, size_t max_segment_size)
         VAST_ERROR(this, "failed to store segment meta data:", t.error());
         return;
       }
-      VAST_VERBOSE(this, "wrote meta data to:", dir / "meta.data");
+      VAST_VERBOSE(this, "wrote meta data to:", (dir / "meta.data").trim(-3));
     });
 }
 
@@ -116,7 +116,7 @@ trial<void> archive::store(segment s)
 
   auto id = uuid::random();
   auto filename = dir_ / to_string(id);
-  VAST_VERBOSE(this, "writes segment", id, "to", filename);
+  VAST_VERBOSE(this, "writes segment", id, "to", filename.trim(-3));
   auto t = io::archive(filename, s);
   if (! t)
     return t;
