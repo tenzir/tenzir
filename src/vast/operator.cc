@@ -1,46 +1,7 @@
 #include "vast/operator.h"
 #include "vast/logger.h"
-#include "vast/serialization/arithmetic.h"
 
 namespace vast {
-
-void serialize(serializer& sink, arithmetic_operator op)
-{
-  sink << static_cast<std::underlying_type<arithmetic_operator>::type>(op);
-}
-
-void deserialize(deserializer& source, arithmetic_operator& op)
-{
-  std::underlying_type<arithmetic_operator>::type u;
-  source >> u;
-  op = static_cast<arithmetic_operator>(u);
-}
-
-
-void serialize(serializer& sink, relational_operator op)
-{
-  sink << static_cast<std::underlying_type<relational_operator>::type>(op);
-}
-
-void deserialize(deserializer& source, relational_operator& op)
-{
-  std::underlying_type<relational_operator>::type u;
-  source >> u;
-  op = static_cast<relational_operator>(u);
-}
-
-
-void serialize(serializer& sink, boolean_operator op)
-{
-  sink << static_cast<std::underlying_type<boolean_operator>::type>(op);
-}
-
-void deserialize(deserializer& source, boolean_operator& op)
-{
-  std::underlying_type<boolean_operator>::type u;
-  source >> u;
-  op = static_cast<boolean_operator>(u);
-}
 
 relational_operator negate(relational_operator op)
 {
