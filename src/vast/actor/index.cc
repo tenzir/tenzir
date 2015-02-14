@@ -104,7 +104,8 @@ void index::at(exit_msg const& msg)
   }
   flush();
   trap_exit(false); // Once the task completes we go down with it.
-  auto t = spawn<task, linked>(msg.reason);
+  auto t = spawn<task, linked>();
+  send(t, msg.reason);
   for (auto& q : queries_)
     if (q.second.cont)
       link_to(q.second.cont->task);
@@ -215,9 +216,8 @@ message_handler index::make_handler()
         p.to = chk.meta().last;
       // Relay chunk.
       VAST_DEBUG(this, "forwards chunk to", p.actor, '(' << part << ')');
-      auto t = spawn<task>();
+      auto t = spawn<task>(chk.events());
       send(t, supervisor_atom::value, this);
-      tasks_.emplace(t->address(), chk.events());
       send(p.actor, chk, t);
     },
     [=](expression const& expr, query_options opts, actor const& subscriber)
@@ -306,14 +306,11 @@ message_handler index::make_handler()
         q->second.cont->task = invalid_actor;
       }
     },
-    [=](done_atom, time::duration runtime)
+    [=](done_atom, time::duration runtime, uint64_t events)
     {
-      auto t = tasks_.find(last_sender());
-      assert(t != tasks_.end());
-      VAST_VERBOSE(this, "indexed", t->second, "events in", runtime);
+      VAST_VERBOSE(this, "indexed", events, "events in", runtime);
       if (accountant_)
-        send(accountant_, time::now(), description() + "-events", t->second);
-      tasks_.erase(t);
+        send(accountant_, time::now(), description() + "-events", events);
     },
     [=](done_atom, time::duration runtime, expression const& expr)
     {

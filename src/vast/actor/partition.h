@@ -65,13 +65,11 @@ private:
   caf::actor sink_;
   caf::actor proxy_;
   schema schema_;
+  size_t chunks_indexed_concurrently_ = 0;
   std::multimap<event_id, caf::actor> indexers_;
   std::map<expression, query_state> queries_;
   std::map<predicate, predicate_state> predicates_;
   std::set<caf::actor_addr> dechunkifiers_;
-  std::map<caf::actor_addr, expression const*> query_tasks_;
-  std::map<caf::actor_addr, predicate const*> predicate_tasks_;
-  std::map<caf::actor_addr, uint64_t> chunk_tasks_;
 };
 
 } // namespace vast

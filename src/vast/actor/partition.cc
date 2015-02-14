@@ -174,7 +174,8 @@ partition::partition(path dir, actor sink)
       predicates_.clear();
       queries_.clear();
     });
-  overload_when([=] { return chunk_tasks_.size() > 10; }); // TODO: calibrate.
+  // TODO: calibrate.
+  overload_when([=] { return chunks_indexed_concurrently_ > 10; });
 }
 
 void partition::at(down_msg const& msg)
@@ -196,7 +197,8 @@ void partition::at(exit_msg const& msg)
     quit(msg.reason);
     return;
   }
-  auto t = spawn<task, linked>(msg.reason);
+  auto t = spawn<task, linked>();
+  send(t, msg.reason);
   trap_exit(false); // Once the task completes we go down with it.
   send(this, flush_atom::value, t);
   for (auto& i : indexers_)
@@ -276,9 +278,6 @@ message_handler partition::make_handler()
         send_exit(task, exit::done);
         return;
       }
-      // Register the chunk with the task that tracks the indexing progress.
-      send(task, supervisor_atom::value, this);
-      chunk_tasks_.emplace(task->address(), chk.events());
       // Spin up a dechunkifier for this chunk and tell it to send all events
       // to the freshly created indexers.
       auto dechunkifier = spawn<monitored>(
@@ -298,9 +297,16 @@ message_handler partition::make_handler()
             self->send(proxy, std::move(indexers));
         });
       dechunkifiers_.insert(dechunkifier->address());
-      VAST_DEBUG(this, "runs", indexers_.size(), "indexers,",
-                 dechunkifiers_.size(), "dechunkifiers, and",
-                 chunk_tasks_.size(), "chunks");
+      ++chunks_indexed_concurrently_;
+      check_overload();
+      send(task, supervisor_atom::value, this);
+      VAST_DEBUG(this, "indexes", chunks_indexed_concurrently_, "in parallel");
+    },
+    [=](done_atom, time::duration runtime, uint64_t events)
+    {
+      VAST_DEBUG(this, "indexed", events, "events in", runtime);
+      --chunks_indexed_concurrently_;
+      check_underload();
     },
     [=](expression const& expr, continuous_atom)
     {
@@ -328,8 +334,7 @@ message_handler partition::make_handler()
         // spin up a new task to ensure that we incorporate results from chunks
         // that have arrived in the meantime.
         VAST_DEBUG(this, "spawns new query task");
-        q->second.task = spawn<task>();
-        query_tasks_.emplace(q->second.task->address(), &q->first);
+        q->second.task = spawn<task>(q->first);
         send(q->second.task, supervisor_atom::value, this);
         send(q->second.task, this);
         for (auto& pred : visit(expr::predicatizer{}, expr))
@@ -346,9 +351,8 @@ message_handler partition::make_handler()
               p->second.coverage.insert(i.first);
               if (! p->second.task)
               {
-                p->second.task = spawn<task>();
+                p->second.task = spawn<task>(&p->first);
                 send(p->second.task, supervisor_atom::value, this);
-                predicate_tasks_.emplace(p->second.task.address(), &p->first);
               }
               send(q->second.task, p->second.task);
               send(p->second.task, i.second);
@@ -360,35 +364,18 @@ message_handler partition::make_handler()
       if (! q->second.hits.empty() && ! q->second.hits.all_zeros())
         send(sink_, expr, q->second.hits, historical_atom::value);
     },
-    [=](done_atom, time::duration runtime)
+    [=](expression const& pred, bitstream_type const& hits)
     {
-      auto ct = chunk_tasks_.find(last_sender());
-      if (ct != chunk_tasks_.end())
-      {
-        VAST_DEBUG(this, "indexed", ct->second, "events in", runtime);
-        chunk_tasks_.erase(ct);
-        return;
-      }
-      // Once we're done with an entire query, propagate this fact to the sink.
-      // This needs to happen in the same channel as the results flow to get a
-      // synchronous signal.
-      auto qt = query_tasks_.find(last_sender());
-      if (qt != query_tasks_.end())
-      {
-        VAST_DEBUG(this, "completed query", *qt->second, "in", runtime);
-        auto& qs = queries_[*qt->second];
-        send(sink_, done_atom::value, runtime, *qt->second);
-        qs.task = invalid_actor;
-        query_tasks_.erase(qt);
-        return;
-      }
+      VAST_DEBUG(this, "got", hits.count(), "hits for predicate:", pred);
+      predicates_[*get<predicate>(pred)].hits |= hits;
+    },
+    [=](done_atom, time::duration runtime, predicate const* pred)
+    {
       // Once we've completed all tasks of a certain predicate for all chunks,
       // we evaluate all queries in which the predicate participates.
-      auto pt = predicate_tasks_.find(last_sender());
-      assert(pt != predicate_tasks_.end());
-      auto& ps = predicates_[*pt->second];
+      auto& ps = predicates_[*pred];
       VAST_DEBUG(this, "took", runtime, "to complete predicate for",
-                 ps.coverage.size(), "indexers:", *pt->second);
+                 ps.coverage.size(), "indexers:", *pred);
       for (auto& q : ps.queries)
       {
         assert(q != nullptr);
@@ -403,12 +390,12 @@ message_handler partition::make_handler()
         }
       }
       ps.task = invalid_actor;
-      predicate_tasks_.erase(pt);
     },
-    [=](expression const& pred, bitstream_type const& hits)
+    [=](done_atom, time::duration runtime, expression const& expr)
     {
-      VAST_DEBUG(this, "got", hits.count(), "hits for predicate:", pred);
-      predicates_[*get<predicate>(pred)].hits |= hits;
+      VAST_DEBUG(this, "completed query", expr, "in", runtime);
+      queries_[expr].task = invalid_actor;
+      send(sink_, last_dequeued());
     },
     [=](flush_atom, actor const& task)
     {

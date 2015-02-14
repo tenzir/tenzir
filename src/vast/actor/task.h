@@ -16,14 +16,15 @@ namespace vast {
 struct task : public default_actor
 {
   /// Spawns a task.
-  /// @param exit_reason The exit reason upon to use upon completion.
-  task(uint32_t exit_reason = exit::done)
-    : exit_reason_{exit_reason}
+  /// @param xs Opaque tokens return appended to the completion message.
+  template <typename... Ts>
+  task(Ts&&... xs)
+    : done_msg_{caf::make_message(done_atom::value, time::duration{},
+                                  std::forward<Ts>(xs)...)}
   {
     attach_functor(
       [=](uint32_t)
       {
-        workers_.clear();
         subscribers_.clear();
         supervisors_.clear();
       });
@@ -37,8 +38,7 @@ struct task : public default_actor
 
   void at(caf::exit_msg const& msg) override
   {
-    // Only notify our supervisors when exiting.
-    subscribers_.clear();
+    subscribers_.clear(); // Only notify our supervisors when exiting.
     notify();
     quit(msg.reason);
   }
@@ -46,9 +46,14 @@ struct task : public default_actor
   caf::message_handler make_handler() override
   {
     using namespace caf;
-    begin_ = time::stopwatch();
+    done_msg_.get_as_mutable<time::duration>(1) =
+      time::stopwatch().since_epoch();
     return
     {
+      [=](uint32_t exit_reason)
+      {
+        exit_reason_ = exit_reason;
+      },
       [=](actor const& a)
       {
         VAST_TRACE(this, "registers actor", a);
@@ -120,21 +125,21 @@ private:
   void notify()
   {
     using namespace caf;
-    auto runtime = time::stopwatch() - begin_;
+    auto& t = done_msg_.get_as_mutable<time::duration>(1);
+    t = time::stopwatch().since_epoch() - t;
     for (auto& s : subscribers_)
       send(s, progress_atom::value, uint64_t{workers_.size()}, total_);
     if (workers_.empty())
     {
-      auto done = make_message(done_atom::value, runtime);
       for (auto& s : supervisors_)
-        send(s, done);
+        send(s, done_msg_);
       quit(exit_reason_);
     }
   }
 
-  uint32_t exit_reason_;
+  uint32_t exit_reason_ = exit::done;
   uint64_t total_ = 0;
-  time::point begin_;
+  caf::message done_msg_;
   std::map<caf::actor_addr, uint64_t> workers_;
   util::flat_set<caf::actor> subscribers_;
   util::flat_set<caf::actor> supervisors_;
