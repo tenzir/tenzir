@@ -26,9 +26,6 @@ enum arithmetic_operator : uint8_t
   mod
 };
 
-void serialize(serializer& sink, arithmetic_operator op);
-void deserialize(deserializer& source, arithmetic_operator& op);
-
 template <typename Iterator>
 trial<void> print(arithmetic_operator op, Iterator&& out)
 {
@@ -78,9 +75,6 @@ enum relational_operator : uint8_t
   greater_equal
 };
 
-void serialize(serializer& sink, relational_operator op);
-void deserialize(deserializer& source, relational_operator& op);
-
 template <typename Iterator>
 trial<void> print(relational_operator op, Iterator&& out)
 {
@@ -125,9 +119,6 @@ enum boolean_operator : uint8_t
   logical_and,
   logical_or
 };
-
-void serialize(serializer& sink, boolean_operator op);
-void deserialize(deserializer& source, boolean_operator& op);
 
 template <typename Iterator>
 trial<void> print(boolean_operator op, Iterator&& out)

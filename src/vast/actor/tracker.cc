@@ -128,10 +128,10 @@ message_handler tracker::make_handler()
       for (auto i = er.first; i != er.second; ++i)
         if (i->second == sink)
         {
-          VAST_VERBOSE(this, "ignores existing link: ", source, " -> ", sink);
+          VAST_INFO(this, "ignores existing link: ", source, " -> ", sink);
           return make_message(ok_atom::value);
         }
-      VAST_VERBOSE(this, "links", source, "->", sink);
+      VAST_INFO(this, "links", source, "->", sink);
       scoped_actor self;
       switch (src->type)
       {

@@ -31,6 +31,7 @@ namespace vast {
 ///   (3) A DONE atom
 ///
 /// After receiving the DONE atom the sink will not receive any further hits.
+/// This sequence applies both to continuous and historical queries.
 struct index : public flow_controlled_actor
 {
   // FIXME: only propagate overload upstream if *all* partitions are
@@ -38,6 +39,12 @@ struct index : public flow_controlled_actor
   // manually.
 
   using bitstream_type = default_bitstream;
+
+  struct schedule_state
+  {
+    uuid part;
+    util::flat_set<expression> queries;
+  };
 
   struct partition_state
   {
@@ -53,18 +60,24 @@ struct index : public flow_controlled_actor
     void deserialize(deserializer& source);
   };
 
-  struct query_state
+  struct continuous_query_state
   {
     bitstream_type hits;
     caf::actor task;
-    std::map<caf::actor, uuid> parts;
-    util::flat_set<caf::actor> subscribers;
   };
 
-  struct schedule_state
+  struct historical_query_state
   {
-    uuid part;
-    util::flat_set<expression> queries;
+    bitstream_type hits;
+    caf::actor task;
+    std::map<caf::actor_addr, uuid> parts;
+  };
+
+  struct query_state
+  {
+    optional<continuous_query_state> cont;
+    optional<historical_query_state> hist;
+    util::flat_set<caf::actor> subscribers;
   };
 
   /// Spawns the index.
@@ -93,7 +106,7 @@ struct index : public flow_controlled_actor
   /// @pre The combination of *part* and *expr* must have been dispatched.
   void consolidate(uuid const& part, expression const& expr);
 
-  trial<void> flush();
+  void flush();
 
   path dir_;
   size_t max_events_per_partition_;

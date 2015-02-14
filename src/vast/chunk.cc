@@ -151,21 +151,39 @@ chunk::chunk(io::compression method)
 }
 
 chunk::chunk(std::vector<event> const& es, io::compression method)
-  : chunk{method}
 {
-  writer w{*this};
-  for (auto& e : es)
-    if (! w.write(e))
-      return;
+  compress(es, method);
 }
 
 bool chunk::ids(default_bitstream ids)
 {
   if (ids.count() != events())
     return false;
-
   get_meta().ids = std::move(ids);
   return true;
+}
+
+bool chunk::compress(std::vector<event> const& events, io::compression method)
+{
+  msg_ = caf::make_message(meta_data{}, vast::block{method});
+  writer w{*this};
+  for (auto& e : events)
+    if (! w.write(e))
+      return false;
+  return true;
+}
+
+std::vector<event> chunk::uncompress() const
+{
+  std::vector<event> result(events());
+  reader r{*this};
+  for (uint64_t i = 0; i < events(); ++i)
+  {
+    auto e = r.read();
+    assert(e);
+    result[i] = std::move(*e);
+  }
+  return result;
 }
 
 chunk::meta_data const& chunk::meta() const

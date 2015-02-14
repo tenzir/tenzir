@@ -4,6 +4,7 @@
 #include "vast/bitmap_index.h"
 #include "vast/chunk.h"
 #include "vast/print.h"
+#include "vast/query_options.h"
 #include "vast/actor/partition.h"
 #include "vast/actor/task.h"
 #include "vast/expr/restrictor.h"
@@ -34,23 +35,38 @@ index::index(path const& dir, size_t max_events,
   assert(active_partitions_ > 0);
   assert(active_partitions_ < max_partitions_);
   high_priority_exit(false);
-  attach_functor(
-      [=](uint32_t)
-      {
-        auto t = flush();
-        if (! t)
-          VAST_ERROR(this, "failed to save meta data:", t.error());
-        accountant_ = invalid_actor;
-        queries_.clear();
-        partitions_.clear();
-      });
+  attach_functor([=](uint32_t)
+    {
+      accountant_ = invalid_actor;
+      queries_.clear();
+      partitions_.clear();
+    });
 }
 
 void index::at(down_msg const& msg)
 {
-  for (auto& q : queries_)
-    if (q.second.subscribers.erase(actor_cast<actor>(msg.source)) == 1)
+  for (auto q = queries_.begin(); q != queries_.end(); ++q)
+    if (q->second.subscribers.erase(actor_cast<actor>(msg.source)) == 1)
+    {
+      if (q->second.subscribers.empty())
+      {
+        VAST_VERBOSE(this, "removes query subscriber", msg.source);
+        if (q->second.cont)
+        {
+          VAST_VERBOSE(this, "disables continuous query:", q->first);
+          q->second.cont = {};
+          for (auto& a : active_)
+            send(partitions_[a].actor, q->first,
+                 continuous_atom::value, disable_atom::value);
+        }
+        if (! q->second.cont && ! q->second.hist)
+        {
+          VAST_VERBOSE(this, "removes query:", q->first);
+          queries_.erase(q);
+        }
+      }
       return;
+    }
   // Because the set of existing partitions may by far exceed the set of
   // in-memory partitions, we only look at the latter ones.
   for (auto i = active_.begin(); i != active_.end(); ++i)
@@ -83,27 +99,23 @@ void index::at(exit_msg const& msg)
 {
   if (msg.reason == exit::kill)
   {
-    for (auto& p : partitions_)
-      if (p.second.actor)
-        send_exit(p.second.actor, exit::kill);
-    for (auto& p : partitions_)
-      if (p.second.actor)
-        send_exit(p.second.actor, exit::kill);
-    for (auto& q : queries_)
-      send_exit(q.second.task, exit::kill);
     quit(exit::kill);
+    return;
   }
-  else
-  {
-    trap_exit(false);
-    auto t = spawn<task, linked>(msg.reason);
-    send(this, flush_atom::value, t);
-    for (auto& p : partitions_)
-      if (p.second.actor)
-        link_to(p.second.actor);
-    for (auto& q : queries_)
-      link_to(q.second.task);
-  }
+  flush();
+  trap_exit(false); // Once the task completes we go down with it.
+  auto t = spawn<task, linked>(msg.reason);
+  for (auto& q : queries_)
+    if (q.second.cont)
+      link_to(q.second.cont->task);
+    else if (q.second.hist)
+      link_to(q.second.hist->task);
+  for (auto& p : partitions_)
+    if (p.second.actor)
+      send(t, p.second.actor);
+  for (auto& p : partitions_)
+    if (p.second.actor)
+      send_exit(p.second.actor, msg.reason);
 }
 
 message_handler index::make_handler()
@@ -141,8 +153,8 @@ message_handler index::make_handler()
   {
     auto id = i < parts.size() ? parts[i].first : uuid::random();
     auto& p = partitions_[id];
-    VAST_DEBUG(this, "activates partition", id);
-    p.actor = spawn<partition, monitored>(dir_ / to_string(id));
+    VAST_VERBOSE(this, "activates partition", id);
+    p.actor = spawn<partition, monitored>(dir_ / to_string(id), this);
     send(p.actor, flow_control::announce{this});
     active_[i] = std::move(id);
   }
@@ -161,15 +173,9 @@ message_handler index::make_handler()
       for (auto& id : active_)
       {
         auto& p = partitions_[id].actor;
-        send(task, p);
         send(p, flush_atom::value, task);
       }
-      auto t = flush();
-      if (! t)
-      {
-        VAST_ERROR(this, "failed to save meta data:", t.error());
-        quit(exit::error);
-      }
+      flush();
       send(task, done_atom::value);
     },
     [=](chunk const& chk)
@@ -182,21 +188,22 @@ message_handler index::make_handler()
       // Replace partition with a new one on overflow. If the max is too small
       // that even the first chunk doesn't fit, then we just accept this and
       // have a one-chunk partition.
-      // TODO: We could manually split up chunks that are too large to fit the
-      // partition limit.
       if (i->second.events > 0
           && i->second.events + chk.events() > max_events_per_partition_)
       {
         VAST_VERBOSE(this, "replaces partition (" << part << ')');
         send_exit(i->second.actor, exit::stop);
         i->second.actor = invalid_actor;
-
+        // Create a new partition.
         part = uuid::random();
         i = partitions_.emplace(part, partition_state{}).first;
-        i->second.actor = spawn<partition, monitored>(dir_ / to_string(part));
+        i->second.actor =
+          spawn<partition, monitored>(dir_ / to_string(part), this);
         send(i->second.actor, flow_control::announce{this});
-        // TODO: once we have live queries in place, we must inform the new
-        // partition about them at this point.
+        // Register continuous queries.
+        for (auto& q : queries_)
+          if (q.second.cont)
+            send(i->second.actor, q.first, continuous_atom::value);
       }
       // Update partition meta data.
       auto& p = i->second;
@@ -206,49 +213,97 @@ message_handler index::make_handler()
         p.from = chk.meta().first;
       if (p.to == time::duration{} || chk.meta().last > p.to)
         p.to = chk.meta().last;
+      // Relay chunk.
       VAST_DEBUG(this, "forwards chunk to", p.actor, '(' << part << ')');
       auto t = spawn<task>();
       send(t, supervisor_atom::value, this);
       tasks_.emplace(t->address(), chk.events());
       send(p.actor, chk, t);
     },
-    [=](expression const& expr, actor const& sink)
+    [=](expression const& expr, query_options opts, actor const& subscriber)
     {
-      VAST_VERBOSE(this, "got query for", sink << ':', expr);
-      monitor(sink);
-      auto q = queries_.find(expr);
-      if (q != queries_.end())
+      VAST_VERBOSE(this, "got query:", expr);
+      if (opts == no_query_options)
       {
-        VAST_DEBUG(this, "found query with", q->second.hits.count(), "hits");
-        assert(q->second.task != invalid_actor);
-        q->second.subscribers.insert(sink);
-        send(sink, q->second.task);
-        if (! q->second.hits.empty() && ! q->second.hits.all_zeros())
-          send(sink, q->second.hits);
+        VAST_WARN(this, "ignores query with no options:", expr);
         return;
       }
-      query_state qs;
-      VAST_DEBUG(this, "spawns new query task");
-      qs.subscribers.insert(sink);
-      qs.task = spawn<task>();
-      send(sink, qs.task);
-      for (auto& p : partitions_)
-        if (visit(expr::time_restrictor{p.second.from, p.second.to}, expr))
-          if (auto a = dispatch(p.first, expr))
-          {
-            qs.parts.emplace(*a, p.first);
-            send(qs.task, *a);
-            send(*a, expr, this);
-          }
-      if (qs.parts.empty())
+      monitor(subscriber);
+      auto& qs = queries_[expr];
+      qs.subscribers.insert(subscriber);
+      if (has_historical_option(opts))
       {
-        VAST_DEBUG(this, "did not find a qualifying partition for query");
-        send_exit(qs.task, exit::done);
+        if (! qs.hist)
+        {
+          VAST_DEBUG(this, "instantiates historical query");
+          qs.hist = historical_query_state{};
+        }
+        if (! qs.hist->task)
+        {
+          VAST_VERBOSE(this, "enables historical query");
+          qs.hist->task = spawn<task>();
+          // Test whether this query matches any partition and relay it where
+          // possible.
+          for (auto& p : partitions_)
+            if (visit(expr::time_restrictor{p.second.from, p.second.to}, expr))
+              if (auto a = dispatch(p.first, expr))
+              {
+                qs.hist->parts.emplace(a->address(), p.first);
+                send(qs.hist->task, *a);
+                send(*a, expr, historical_atom::value);
+              }
+          if (qs.hist->parts.empty())
+          {
+            VAST_DEBUG(this, "did not find a qualifying partition for query");
+            send_exit(qs.hist->task, exit::done);
+            qs.hist->task = invalid_actor;
+          }
+        }
+        send(subscriber, qs.hist->task);
+        if (! qs.hist->hits.empty() && ! qs.hist->hits.all_zeros())
+          send(subscriber, qs.hist->hits);
+        if (! qs.hist->task && ! has_continuous_option(opts))
+          queries_.erase(expr);
+      }
+      if (has_continuous_option(opts))
+      {
+        if (! qs.cont)
+        {
+          VAST_DEBUG(this, "instantiates continuous query");
+          qs.cont = continuous_query_state{};
+        }
+        if (! qs.cont->task)
+        {
+          VAST_VERBOSE(this, "enables continuous query");
+          qs.cont->task = spawn<task>();
+          send(qs.cont->task, this);
+          // Relay the continuous query to all active partitions, as these may
+          // still receive chunks.
+          for (auto& a : active_)
+            send(partitions_[a].actor, expr, continuous_atom::value);
+        }
+        send(subscriber, qs.cont->task);
+        if (! qs.cont->hits.empty() && ! qs.cont->hits.all_zeros())
+          send(subscriber, qs.cont->hits);
+      }
+    },
+    [=](expression const& expr, continuous_atom, disable_atom)
+    {
+      VAST_VERBOSE(this, "got request to disable continuous query:", expr);
+      auto q = queries_.find(expr);
+      if (q == queries_.end())
+      {
+        VAST_WARN(this, "has not such query:", expr);
+      }
+      else if (! q->second.cont)
+      {
+        VAST_WARN(this, "has already disabled query:", expr);
       }
       else
       {
-        VAST_DEBUG(this, "queried with", qs.parts.size(), "partitions");
-        queries_.emplace(expr, qs);
+        VAST_VERBOSE(this, "disables continuous query:", expr);
+        send(q->second.cont->task, done_atom::value);
+        q->second.cont->task = invalid_actor;
       }
     },
     [=](done_atom, time::duration runtime)
@@ -262,69 +317,50 @@ message_handler index::make_handler()
     },
     [=](done_atom, time::duration runtime, expression const& expr)
     {
-      VAST_DEBUG(this, "got signal that", last_sender(), "finished for", expr);
+      VAST_DEBUG(this, "got signal that", last_sender(),
+                 "finished for historical query: ", expr);
       auto q = queries_.find(expr);
       assert(q != queries_.end());
-      auto p = q->second.parts.find(actor_cast<actor>(last_sender()));
-      assert(p != q->second.parts.end());
+      assert(q->second.hist);
+      auto p = q->second.hist->parts.find(last_sender());
+      assert(p != q->second.hist->parts.end());
       consolidate(p->second, expr);
-      send(q->second.task, done_atom::value, p->first);
-      q->second.parts.erase(p);
-      if (q->second.parts.empty())
+      send(q->second.hist->task, done_atom::value, p->first);
+      q->second.hist->parts.erase(p);
+      if (q->second.hist->parts.empty())
       {
         VAST_VERBOSE(this, "completed query", expr, "in", runtime);
         for (auto& s : q->second.subscribers)
           send(s, last_dequeued());
+        // TODO: consider caching it for a while and also record its coverage
+        // so that future queries don't need to start over again.
         queries_.erase(q);
       }
     },
-    [=](expression const& expr, bitstream_type const& hits)
+    [=](expression const& expr, bitstream_type const& hits, historical_atom)
     {
-      VAST_DEBUG(this, "received", hits.count(), "hits from",
-                 last_sender(), "for query", expr);
-
+      VAST_DEBUG(this, "received", hits.count(), "historical hits from",
+                 last_sender(), "for query:", expr);
       auto& qs = queries_[expr];
-      auto before = qs.hits.count();
-      qs.hits |= hits;
-      auto after = qs.hits.count();
+      assert(qs.hist);
+      auto before = qs.hist->hits.count();
+      qs.hist->hits |= hits;
+      auto after = qs.hist->hits.count();
       if (after > 0 && after > before)
         for (auto& s : qs.subscribers)
-          send(s, qs.hits);
+          // TODO: just send 'hits' to avoid sending redundant information
+          // already sent in the past.
+          send(s, qs.hist->hits);
     },
-    [=](delete_atom)
+    [=](expression const& expr, bitstream_type const& hits, continuous_atom)
     {
-      for (auto& id : active_)
-        send_exit(partitions_[id].actor, exit::kill);
-
-      become(
-          keep_behavior,
-          [=](down_msg const& msg)
-          {
-            if (msg.reason != exit::kill)
-              VAST_WARN(this, "got DOWN from", msg.source,
-                        "with unexpected exit code", msg.reason);
-
-            for (auto i = active_.begin(); i != active_.end(); ++i)
-              if (partitions_[*i].actor == msg.source)
-              {
-                active_.erase(i);
-                break;
-              }
-
-            if (active_.empty())
-            {
-              if (! rm(dir_))
-              {
-                VAST_ERROR(this, "failed to delete index directory:", dir_);
-                send_exit(this, exit::error);
-                return;
-              }
-
-              VAST_INFO(this, "deleted index:", dir_);
-              unbecome();
-            }
-          }
-      );
+      VAST_DEBUG(this, "received", hits.count(), "continuous hits from",
+                 last_sender(), "for query:", expr);
+      auto& qs = queries_[expr];
+      assert(qs.cont);
+      qs.cont->hits |= hits;
+      for (auto& s : qs.subscribers)
+        send(s, qs.cont->hits); // TODO: see note above.
     }
   };
 }
@@ -374,7 +410,7 @@ optional<actor> index::dispatch(uuid const& part, expression const& expr)
     VAST_DEBUG(this, "spawns passive partition", part);
     auto& a = partitions_[part].actor;
     assert(! a);
-    a = spawn<partition, monitored>(dir_ / to_string(part));
+    a = spawn<partition, monitored>(dir_ / to_string(part), this);
     send(a, flow_control::announce{this});
     return a;
   }
@@ -426,7 +462,7 @@ void index::consolidate(uuid const& part, expression const& expr)
   else
     passive_.erase(j);
 
-  VAST_DEBUG(this, "unloads partition from memory:", part);
+  VAST_DEBUG(this, "evicts partition from memory:", part);
   auto& p = partitions_[part];
   assert(p.actor);
   send_exit(p.actor, exit::stop);
@@ -442,27 +478,35 @@ void index::consolidate(uuid const& part, expression const& expr)
     {
       VAST_DEBUG(this, "schedules next partition", entry.part);
       passive_.push_back(entry.part);
-      next_part = spawn<partition, monitored>(dir_ / to_string(entry.part));
+      next_part =
+        spawn<partition, monitored>(dir_ / to_string(entry.part), this);
       send(next_part, flow_control::announce{this});
       for (auto& next_expr : entry.queries)
       {
         auto q = queries_.find(next_expr);
         assert(q != queries_.end());
-        q->second.parts.emplace(next_part, entry.part);
-        send(q->second.task, next_part);
-        send(next_part, next_expr, this);
+        assert(q->second.hist);
+        q->second.hist->parts.emplace(next_part->address(), entry.part);
+        send(q->second.hist->task, next_part);
+        send(next_part, next_expr, historical_atom::value);
       }
       break;
     }
   }
 }
 
-trial<void> index::flush()
+void index::flush()
 {
   for (auto& p : partitions_)
     if (p.second.events > 0)
-      return io::archive(dir_ / "meta", partitions_);
-  return nothing;
+    {
+      auto t = io::archive(dir_ / "meta", partitions_);
+      if (! t)
+      {
+        VAST_ERROR(this, "failed to save meta data:", t.error());
+        quit(exit::error);
+      }
+    }
 }
 
 } // namespace vast

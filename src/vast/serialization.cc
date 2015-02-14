@@ -9,9 +9,10 @@
 #include "vast/error.h"
 #include "vast/filesystem.h"
 #include "vast/logger.h"
-#include "vast/value.h"
+#include "vast/query_options.h"
 #include "vast/type.h"
 #include "vast/uuid.h"
+#include "vast/value.h"
 #include "vast/actor/actor.h"
 #include "vast/serialization/all.h"
 #include "vast/detail/caf_type_info.h"
@@ -519,7 +520,8 @@ void announce_builtin_types()
   VAST_ANNOUNCE(detail::bitmap_index_model<abi_ewah<time::point>>);
   VAST_ANNOUNCE(detail::bitmap_index_model<abi_ewah<time::duration>>);
 
-
+  // CAF-only
+  caf::announce<query_options>("query_options");
   caf::announce<std::vector<caf::actor>>("std::vector<actor>");
   caf::announce<flow_control::announce>("flow_control::announce",
                                         &flow_control::announce::source);

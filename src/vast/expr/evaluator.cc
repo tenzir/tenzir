@@ -1,19 +1,21 @@
 #include "vast/expr/evaluator.h"
 
+#include "vast/event.h"
+
 namespace vast {
 namespace expr {
 
-evaluator::evaluator(event const& e)
+event_evaluator::event_evaluator(event const& e)
   : event_{e}
 {
 }
 
-bool evaluator::operator()(none)
+bool event_evaluator::operator()(none)
 {
   return false;
 }
 
-bool evaluator::operator()(conjunction const& c)
+bool event_evaluator::operator()(conjunction const& c)
 {
   for (auto& op : c)
     if (! visit(*this, op))
@@ -22,7 +24,7 @@ bool evaluator::operator()(conjunction const& c)
   return true;
 }
 
-bool evaluator::operator()(disjunction const& d)
+bool event_evaluator::operator()(disjunction const& d)
 {
   for (auto& op : d)
     if (visit(*this, op))
@@ -31,40 +33,40 @@ bool evaluator::operator()(disjunction const& d)
   return false;
 }
 
-bool evaluator::operator()(negation const& n)
+bool event_evaluator::operator()(negation const& n)
 {
   return ! visit(*this, n[0]);
 }
 
-bool evaluator::operator()(predicate const& p)
+bool event_evaluator::operator()(predicate const& p)
 {
   op_ = p.op;
   return visit(*this, p.lhs, p.rhs);
 }
 
-bool evaluator::operator()(event_extractor const&, data const& d)
+bool event_evaluator::operator()(event_extractor const&, data const& d)
 {
   return data::evaluate(event_.type().name(), op_, d);
 }
 
-bool evaluator::operator()(time_extractor const&, data const& d)
+bool event_evaluator::operator()(time_extractor const&, data const& d)
 {
   return data::evaluate(event_.timestamp(), op_, d);
 }
 
-bool evaluator::operator()(type_extractor const&, data const&)
+bool event_evaluator::operator()(type_extractor const&, data const&)
 {
   assert(! "type extractor should have been optimized away");
   return false;
 }
 
-bool evaluator::operator()(schema_extractor const&, data const&)
+bool event_evaluator::operator()(schema_extractor const&, data const&)
 {
   assert(! "schema extract should have been resolved");
   return false;
 }
 
-bool evaluator::operator()(data_extractor const& e, data const& d)
+bool event_evaluator::operator()(data_extractor const& e, data const& d)
 {
   if (e.type != event_.type())
     return false;

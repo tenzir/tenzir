@@ -340,15 +340,15 @@ trial<void> bro::parse_header()
   type_ = flat.unflatten();
   type_.name(event_name);
 
-  VAST_DEBUG(this, "parsed bro header:");
-  VAST_DEBUG(this, "    #separator", separator_);
-  VAST_DEBUG(this, "    #set_separator", set_separator_);
-  VAST_DEBUG(this, "    #empty_field", empty_field_);
-  VAST_DEBUG(this, "    #unset_field", unset_field_);
-  VAST_DEBUG(this, "    #path", event_name);
-  VAST_DEBUG(this, "    #fields:");
+  VAST_VERBOSE(this, "parsed bro header:");
+  VAST_VERBOSE(this, "    #separator", separator_);
+  VAST_VERBOSE(this, "    #set_separator", set_separator_);
+  VAST_VERBOSE(this, "    #empty_field", empty_field_);
+  VAST_VERBOSE(this, "    #unset_field", unset_field_);
+  VAST_VERBOSE(this, "    #path", event_name);
+  VAST_VERBOSE(this, "    #fields:");
   for (size_t i = 0; i < flat.fields().size(); ++i)
-    VAST_DEBUG(this, "     ", i << ')', flat.fields()[i]);
+    VAST_VERBOSE(this, "     ", i << ')', flat.fields()[i]);
 
   // If a congruent type exists in the schema, we give the schema type
   // precedence because it may have user-annotated extra information.

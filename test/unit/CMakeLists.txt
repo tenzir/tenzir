@@ -69,13 +69,13 @@ include_directories(
 
 file(GLOB_RECURSE tests framework/*.cc)
 set(tests ${tests}
+  tests/actor/all-in-one.cc
   tests/actor/distributed.cc
   tests/actor/import.cc
   tests/actor/index.cc
   tests/actor/indexer.cc
   tests/actor/load_balancer.cc
   tests/actor/partition.cc
-  tests/actor/program.cc
   tests/actor/replicator.cc
   tests/actor/source_bgpdump.cc
   tests/actor/task.cc

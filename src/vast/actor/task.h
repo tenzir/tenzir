@@ -2,7 +2,7 @@
 #define VAST_ACTOR_TASK_H
 
 #include <chrono>
-#include <set>
+#include <map>
 #include <caf/all.hpp>
 #include "vast/time.h"
 #include "vast/actor/actor.h"
@@ -35,6 +35,14 @@ struct task : public default_actor
       notify();
   }
 
+  void at(caf::exit_msg const& msg) override
+  {
+    // Only notify our supervisors when exiting.
+    subscribers_.clear();
+    notify();
+    quit(msg.reason);
+  }
+
   caf::message_handler make_handler() override
   {
     using namespace caf;
@@ -45,28 +53,30 @@ struct task : public default_actor
       {
         VAST_TRACE(this, "registers actor", a);
         monitor(a);
-        workers_.insert(a.address());
+        ++workers_[a.address()];
+        ++total_;
+      },
+      [=](actor const& a, uint64_t n)
+      {
+        VAST_TRACE(this, "registers actor", a, "for", n, "sub-tasks");
+        monitor(a);
+        workers_[a.address()] += n;
         ++total_;
       },
       [=](done_atom, actor const& a)
       {
         VAST_TRACE(this, "manually completed actor", a);
-        if (workers_.erase(a.address()) == 1)
-        {
-          demonitor(a);
-          notify();
-        }
+        complete(a->address());
+      },
+      [=](done_atom, actor_addr const& addr)
+      {
+        VAST_TRACE(this, "manually completed actor with address", addr);
+        complete(addr);
       },
       [=](done_atom)
       {
-        if (workers_.erase(last_sender()) == 1)
-        {
-          demonitor(last_sender());
-          notify();
-          return;
-        }
-        VAST_ERROR(this, "got DONE from unregistered actor:", last_sender());
-        quit(exit::error);
+        VAST_TRACE(this, "completed actor with address", last_sender());
+        complete(last_sender());
       },
       [=](supervisor_atom, actor const& a)
       {
@@ -91,10 +101,26 @@ struct task : public default_actor
   }
 
 private:
+  void complete(caf::actor_addr const& addr)
+  {
+    auto w = workers_.find(addr);
+    if (w == workers_.end())
+    {
+      VAST_ERROR(this, "got completion signal from unregistered actor:", addr);
+      quit(exit::error);
+    }
+    else if (--w->second == 0)
+    {
+      demonitor(addr);
+      workers_.erase(w);
+      notify();
+    }
+  }
+
   void notify()
   {
-    auto runtime = time::stopwatch() - begin_;
     using namespace caf;
+    auto runtime = time::stopwatch() - begin_;
     for (auto& s : subscribers_)
       send(s, progress_atom::value, uint64_t{workers_.size()}, total_);
     if (workers_.empty())
@@ -109,7 +135,7 @@ private:
   uint32_t exit_reason_;
   uint64_t total_ = 0;
   time::point begin_;
-  std::set<caf::actor_addr> workers_;
+  std::map<caf::actor_addr, uint64_t> workers_;
   util::flat_set<caf::actor> subscribers_;
   util::flat_set<caf::actor> supervisors_;
 };

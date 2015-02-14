@@ -105,7 +105,9 @@ public:
         VAST_DEBUG(this, "looks up predicate:", pred);
         auto p = get<predicate>(pred);
         assert(p);
-        auto r = bmi_.lookup(p->op, *get<data>(p->rhs));
+        auto d = get<data>(p->rhs);
+        assert(d);
+        auto r = bmi_.lookup(p->op, *d);
         if (r)
         {
           send(sink, pred, std::move(*r));

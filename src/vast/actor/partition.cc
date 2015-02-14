@@ -11,101 +11,182 @@ using namespace caf;
 
 namespace vast {
 
-struct partition::evaluator
+namespace {
+
+// Accumulates all hits from a chunk, evalutes a query, and sends the result of
+// the evaluation to PARTITION.
+template <typename Bitstream>
+struct continuous_query_proxy : default_actor
 {
-  using bitstream_type = partition::bitstream_type;
+  using predicate_map = std::map<predicate, Bitstream>;
 
-  evaluator(partition const& p)
-    : partition_{p}
+  // Evalutes an expression according to a given set of predicates.
+  struct evaluator : expr::bitstream_evaluator<evaluator, Bitstream>
   {
-  }
-
-  default_bitstream operator()(none) const
-  {
-    assert(! "should never happen");
-    return {};
-  }
-
-  bitstream_type operator()(conjunction const& con) const
-  {
-    auto hits = visit(*this, con[0]);
-    if (hits.empty() || hits.all_zeros())
-      return {};
-    for (size_t i = 1; i < con.size(); ++i)
+    evaluator(predicate_map const& pm)
+      : map_{pm}
     {
-      hits &= visit(*this, con[i]);
-      if (hits.empty() || hits.all_zeros()) // short-circuit
-        return {};
     }
-    return hits;
-  }
 
-  bitstream_type operator()(disjunction const& dis) const
-  {
-    bitstream_type hits;
-    for (auto& op : dis)
+    Bitstream const* lookup(predicate const& pred) const
     {
-      hits |= visit(*this, op);
-      if (! hits.empty() && hits.all_ones())  // short-circuit
-        break;
+      auto i = map_.find(pred);
+      return i == map_.end() ? nullptr : &i->second;
     }
-    return hits;
-  }
 
-  bitstream_type operator()(negation const& n) const
+    predicate_map const& map_;
+  };
+
+  // Accumulates hits from indexers for a single chunk.
+  struct accumulator : default_actor
   {
-    auto hits = visit(*this, n.expression());
-    hits.flip();
-    return hits;
-  }
+    accumulator(std::vector<expression> exprs, actor sink)
+      : exprs_{std::move(exprs)},
+        sink_{std::move(sink)}
+    {
+      attach_functor([=](uint32_t)
+        {
+          sink_ = invalid_actor;
+        });
+    }
 
-  bitstream_type operator()(predicate const& pred) const
+    message_handler make_handler() override
+    {
+      return
+      {
+        [=](expression& pred, Bitstream& hits)
+        {
+          auto p = get<predicate>(pred);
+          assert(p);
+          map_.emplace(std::move(*p), std::move(hits));
+        },
+        [=](done_atom, time::duration)
+        {
+          for (auto& expr : exprs_)
+          {
+            VAST_DEBUG(this, "evalutes continuous query:", expr);
+            send(sink_, expr, visit(evaluator{map_}, expr));
+          }
+          quit(exit::done);
+          // TODO: relay predicate_map back to PARTITION if the query is also
+          // historical. Caveat: we should not re-evaluate the historical query
+          // with these hits to avoid that the sink receives duplicate hits.
+        }
+      };
+    }
+
+    std::string name() const override
+    {
+      return "accumulator";
+    }
+
+    predicate_map map_;
+    std::vector<expression> exprs_;
+    actor sink_;
+  };
+
+  continuous_query_proxy(actor sink)
+    : sink_{std::move(sink)}
   {
-    auto& preds = partition_.predicates_;
-    auto p = preds.find(pred);
-    return p == preds.end() ? bitstream_type{} : p->second.hits;
+    attach_functor([=](uint32_t)
+      {
+        sink_ = invalid_actor;
+      });
   }
 
-  partition const& partition_;
+  message_handler make_handler() override
+  {
+    return
+    {
+      [=](expression const& expr)
+      {
+        exprs_.insert(expr);
+        for (auto& p : visit(expr::predicatizer{}, expr))
+          preds_.insert(std::move(p));
+      },
+      [=](expression const& expr, disable_atom)
+      {
+        exprs_.erase(expr);
+        preds_.clear();
+        for (auto& ex : exprs_)
+          for (auto& p : visit(expr::predicatizer{}, ex))
+            preds_.insert(std::move(p));
+      },
+      [=](expression& expr, Bitstream& hits)
+      {
+        VAST_DEBUG(this, "relays", hits.count(), "hits");
+        send(sink_, std::move(expr), std::move(hits), continuous_atom::value);
+      },
+      [=](std::vector<actor> const& indexers)
+      {
+        // FIXME: do not stupidly send every predicate to every indexer,
+        // rather, pick the minimal subset intelligently.
+        assert(! exprs_.empty());
+        auto acc = spawn<accumulator>(exprs_.as_vector(), this);
+        auto t = spawn<task>();
+        send(t, supervisor_atom::value, acc);
+        for (auto& i : indexers)
+        {
+          send(t, i, uint64_t{preds_.size()});
+          for (auto& p : preds_)
+            send(i, expression{p}, acc, t);
+        }
+      }
+    };
+  }
+
+  std::string name() const override
+  {
+    return "proxy";
+  }
+
+  actor sink_;
+  util::flat_set<expression> exprs_;
+  util::flat_set<predicate> preds_;
 };
 
-partition::partition(path const& dir)
-  : dir_{dir}
+} // namespace <anonymous>
+
+partition::evaluator::evaluator(partition const& p)
+  : partition_{p}
 {
+}
+
+partition::bitstream_type const*
+partition::evaluator::lookup(predicate const& pred) const
+{
+  auto p = partition_.predicates_.find(pred);
+  return p == partition_.predicates_.end() ? nullptr : &p->second.hits;
+}
+
+
+partition::partition(path dir, actor sink)
+  : dir_{std::move(dir)},
+    sink_{std::move(sink)}
+{
+  assert(sink_ != invalid_actor);
   high_priority_exit(false);
   attach_functor([=](uint32_t)
     {
-      dechunkifiers_.clear();
+      sink_ = invalid_actor;
+      proxy_ = invalid_actor;
       indexers_.clear();
       predicates_.clear();
       queries_.clear();
     });
-  overload_when([this] // TODO: calibrate values.
-    {
-      return dechunkifiers_.size() > 10 || chunk_tasks_.size() > 10;
-    });
+  overload_when([=] { return chunk_tasks_.size() > 10; }); // TODO: calibrate.
 }
 
 void partition::at(down_msg const& msg)
 {
-  auto d = dechunkifiers_.find(last_sender());
-  if (d != dechunkifiers_.end())
-  {
-    dechunkifiers_.erase(d);
-    check_overload();
+  if (dechunkifiers_.erase(msg.source) == 1)
     return;
-  }
-  // Indexers exit less regularly, so we check them after the dechunkifiers.
-  for (auto i = indexers_.begin(); i != indexers_.end(); ++i)
-    if (i->second.address() == msg.source)
-    {
-      indexers_.erase(i);
-      check_underload();
-      return;
-    }
-  // The same sink may exist with multiple predicates in the cache.
-  for (auto& i : queries_)
-    i.second.sinks.erase(actor_cast<actor>(msg.source));
+  auto i = std::find_if(
+      indexers_.begin(),
+      indexers_.end(),
+      [&](auto& p) { return p.second.address() == msg.source; });
+  if (i != indexers_.end())
+    indexers_.erase(i);
 }
 
 void partition::at(exit_msg const& msg)
@@ -115,8 +196,8 @@ void partition::at(exit_msg const& msg)
     quit(msg.reason);
     return;
   }
-  trap_exit(false);
   auto t = spawn<task, linked>(msg.reason);
+  trap_exit(false); // Once the task completes we go down with it.
   send(this, flush_atom::value, t);
   for (auto& i : indexers_)
     link_to(i.second);
@@ -167,73 +248,85 @@ message_handler partition::make_handler()
 
   return
   {
-    [=](chunk const& c, actor const& task)
+    [=](chunk const& chk, actor const& task)
     {
-      VAST_DEBUG(this, "got chunk with", c.events(), "events:",
-                 '[' << c.base() << ',' << (c.base() + c.events()) << ')');
-      send(task, this);
-      send(task, supervisor_atom::value, this);
-      chunk_tasks_.emplace(task->address(), c.events());
-      auto base = c.base();
-      auto i = to_string(base) + "-" + to_string(base + c.events());
+      VAST_DEBUG(this, "got chunk with", chk.events(), "events:",
+                 '[' << chk.base() << ',' << (chk.base() + chk.events())
+                 << ')');
+      // Create event indexers according to chunk schema.
+      auto base = chk.base();
+      auto interval = to_string(base) + "-" + to_string(base + chk.events());
       std::vector<actor> indexers;
-      for (auto& t : c.meta().schema)
+      for (auto& t : chk.meta().schema)
         if (! t.find_attribute(type::attribute::skip))
         {
           if (! schema_.add(t))
           {
-            VAST_ERROR(this, "failed to incorporate types from new chunk schema");
+            VAST_ERROR(this, "failed to incorporate types from new schema");
             quit(exit::error);
             return;
           }
           auto indexer = spawn<event_indexer<bitstream_type>, monitored>(
-              dir_ / i / t.name(), t);
+              dir_ / interval / t.name(), t);
           indexers.push_back(indexer);
           indexers_.emplace(base, std::move(indexer));
         }
-      if (!indexers.empty())
+      if (indexers.empty())
       {
-        auto dechunkifier = spawn<monitored>(
-          [c, task](event_based_actor* self, std::vector<actor> indexers)
-          {
-            chunk::reader reader{c};
-            std::vector<event> events(c.events());
-            for (size_t i = 0; i < c.events(); ++i)
-            {
-              auto e = reader.read();
-              if (! e)
-              {
-                self->quit(exit::error);
-                return;
-              }
-              events[i] = std::move(*e);
-            }
-            auto msg = make_message(std::move(events), task);
-            for (auto& i : indexers)
-            {
-              self->send(task, i);
-              self->send(i, msg);
-            }
-          }, std::move(indexers));
-        dechunkifiers_.insert(dechunkifier->address());
-        check_overload();
+        send_exit(task, exit::done);
+        return;
       }
-      send(task, done_atom::value);
-      VAST_DEBUG(this, "runs", indexers_.size(), "indexers and",
-                 dechunkifiers_.size(), "dechunkifiers for",
+      // Register the chunk with the task that tracks the indexing progress.
+      send(task, supervisor_atom::value, this);
+      chunk_tasks_.emplace(task->address(), chk.events());
+      // Spin up a dechunkifier for this chunk and tell it to send all events
+      // to the freshly created indexers.
+      auto dechunkifier = spawn<monitored>(
+        [chk, indexers=std::move(indexers), task, proxy=proxy_]
+        (event_based_actor* self)
+        {
+          assert(! indexers.empty());
+          auto events = chk.uncompress();
+          assert(! events.empty());
+          auto msg = make_message(std::move(events), task);
+          for (auto& i : indexers)
+          {
+            self->send(task, i);
+            self->send(i, msg);
+          }
+          if (proxy != invalid_actor)
+            self->send(proxy, std::move(indexers));
+        });
+      dechunkifiers_.insert(dechunkifier->address());
+      VAST_DEBUG(this, "runs", indexers_.size(), "indexers,",
+                 dechunkifiers_.size(), "dechunkifiers, and",
                  chunk_tasks_.size(), "chunks");
     },
-    [=](expression const& expr, actor const& sink)
+    [=](expression const& expr, continuous_atom)
     {
-      VAST_DEBUG(this, "got query for", sink << ':', expr);
-      monitor(sink);
+      VAST_DEBUG(this, "got continuous query:", expr);
+      if (! proxy_)
+        proxy_ =
+          spawn<continuous_query_proxy<default_bitstream>, linked>(sink_);
+      send(proxy_, expr);
+    },
+    [=](expression const& expr, continuous_atom, disable_atom)
+    {
+      VAST_DEBUG(this, "got continuous query:", expr);
+      if (! proxy_)
+        VAST_WARN(this, "ignores disable request, no continuous queries");
+      else
+        send(proxy_, expr, disable_atom::value);
+    },
+    [=](expression const& expr, historical_atom)
+    {
+      VAST_DEBUG(this, "got historical query:", expr);
       auto q = queries_.emplace(expr, query_state{}).first;
-      q->second.sinks.insert(sink);
       if (! q->second.task)
       {
         // Even if we still have evaluated this query in the past, we still
-        // spin up a new task. This ensures that we incorporate results from
-        // chunks that have arrived in the meantime.
+        // spin up a new task to ensure that we incorporate results from chunks
+        // that have arrived in the meantime.
         VAST_DEBUG(this, "spawns new query task");
         q->second.task = spawn<task>();
         query_tasks_.emplace(q->second.task->address(), &q->first);
@@ -242,8 +335,11 @@ message_handler partition::make_handler()
         for (auto& pred : visit(expr::predicatizer{}, expr))
         {
           auto p = predicates_.emplace(pred, predicate_state{}).first;
-          p->second.queries.insert(expr);
+          p->second.queries.insert(&q->first);
           for (auto& i : indexers_)
+            // We forward this predicate only to the subset of indexers which we
+            // haven't asked yet, i.e., the indexers who's coverage is higher
+            // than this predicate.
             if (! p->second.coverage.contains(i.first))
             {
               VAST_DEBUG(this, "forwards predicate to", i.second << ':', pred);
@@ -262,7 +358,7 @@ message_handler partition::make_handler()
         send(q->second.task, done_atom::value);
       }
       if (! q->second.hits.empty() && ! q->second.hits.all_zeros())
-        send(sink, expr, q->second.hits);
+        send(sink_, expr, q->second.hits, historical_atom::value);
     },
     [=](done_atom, time::duration runtime)
     {
@@ -273,23 +369,21 @@ message_handler partition::make_handler()
         chunk_tasks_.erase(ct);
         return;
       }
-      // Once we're done with an entire query, propagate this fact to all
-      // sinks. This needs to happen in the same channel as the results flow,
-      // checking the asynchronously running task would not work.
+      // Once we're done with an entire query, propagate this fact to the sink.
+      // This needs to happen in the same channel as the results flow to get a
+      // synchronous signal.
       auto qt = query_tasks_.find(last_sender());
       if (qt != query_tasks_.end())
       {
         VAST_DEBUG(this, "completed query", *qt->second, "in", runtime);
         auto& qs = queries_[*qt->second];
-        auto msg = make_message(done_atom::value, runtime, *qt->second);
-        for (auto& s : qs.sinks)
-          send(s, msg);
+        send(sink_, done_atom::value, runtime, *qt->second);
         qs.task = invalid_actor;
         query_tasks_.erase(qt);
         return;
       }
-      // Once we've completed all tasks pertaining to a certain predicate, we
-      // we evaluate all queries in which this predicate occurs.
+      // Once we've completed all tasks of a certain predicate for all chunks,
+      // we evaluate all queries in which the predicate participates.
       auto pt = predicate_tasks_.find(last_sender());
       assert(pt != predicate_tasks_.end());
       auto& ps = predicates_[*pt->second];
@@ -297,16 +391,15 @@ message_handler partition::make_handler()
                  ps.coverage.size(), "indexers:", *pt->second);
       for (auto& q : ps.queries)
       {
-        VAST_DEBUG(this, "evaluates", q);
-        auto& qs = queries_[q];
-        auto result = visit(evaluator{*this}, q);
-        if (! result.empty() && ! result.all_zeros() && result != qs.hits)
+        assert(q != nullptr);
+        VAST_DEBUG(this, "evaluates", *q);
+        auto& qs = queries_[*q];
+        auto hits = visit(evaluator{*this}, *q);
+        if (! hits.empty() && ! hits.all_zeros() && hits != qs.hits)
         {
-          VAST_DEBUG(this, "relays", result.count(), "hits");
-          qs.hits = std::move(result);
-          auto msg = make_message(q, qs.hits);
-          for (auto& sink : qs.sinks)
-            send(sink, msg);
+          VAST_DEBUG(this, "relays", hits.count(), "hits");
+          qs.hits = hits;
+          send(sink_, *q, std::move(hits), historical_atom::value);
         }
       }
       ps.task = invalid_actor;

@@ -89,15 +89,26 @@ public:
   /// @param method The compression method to use.
   chunk(io::compression method = io::lz4);
 
+  /// Constructs a chunk and directly calls ::compress afterwards.
+  /// @param es The events to write into the chunk.
+  /// @param method The compression method of the underlying block.
+  chunk(std::vector<event> const& es, io::compression method = io::lz4);
+
   /// Sets the mask of event IDs.
   /// @param ids The mask representing the IDs for the events in this chunk.
   /// @returns `true` if *ids* is a valid mask.
   bool ids(default_bitstream ids);
 
-  /// Constructs a chunk and writes events into it.
-  /// @param es The events to write into the chunk.
-  /// @param method The compression method of the underlying block.
-  chunk(std::vector<event> const& es, io::compression method = io::lz4);
+  /// Compresses a vector of events into this chunk.
+  /// Destroys all previous contents.
+  /// @param events The vector of events to write into this chunk.
+  /// @returns `true` on success.
+  bool compress(std::vector<event> const& events,
+                io::compression method = io::lz4);
+
+  /// Uncompresses the chunk back into a vector of events.
+  /// @returns The vector of events for this chunk.
+  std::vector<event> uncompress() const;
 
   /// Retrieves the chunk meta data.
   /// @returns The meta data of the chunk.

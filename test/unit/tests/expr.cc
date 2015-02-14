@@ -112,19 +112,19 @@ TEST("event evaluation")
 
   auto ast = to<expression>("&time == 2014-01-16+05:30:12");
   REQUIRE(ast);
-  CHECK(visit(expr::evaluator{e}, *ast));
+  CHECK(visit(expr::event_evaluator{e}, *ast));
 
   ast = to<expression>("&type == \"foo\"");
   REQUIRE(ast);
-  CHECK(visit(expr::evaluator{e}, *ast));
+  CHECK(visit(expr::event_evaluator{e}, *ast));
 
   ast = to<expression>("! &type == \"bar\"");
   REQUIRE(ast);
-  CHECK(visit(expr::evaluator{e}, *ast));
+  CHECK(visit(expr::event_evaluator{e}, *ast));
 
   ast = to<expression>("&type != \"foo\"");
   REQUIRE(ast);
-  CHECK(! visit(expr::evaluator{e}, *ast));
+  CHECK(! visit(expr::event_evaluator{e}, *ast));
 
   //
   // Type queries
@@ -132,33 +132,33 @@ TEST("event evaluation")
 
   ast = to<expression>(":count == 42");
   REQUIRE(ast);
-  CHECK(visit(expr::evaluator{e0}, visit(expr::type_resolver{*foo}, *ast)));
-  CHECK(! visit(expr::evaluator{e1}, visit(expr::type_resolver{*bar}, *ast)));
+  CHECK(visit(expr::event_evaluator{e0}, visit(expr::type_resolver{*foo}, *ast)));
+  CHECK(! visit(expr::event_evaluator{e1}, visit(expr::type_resolver{*bar}, *ast)));
 
   ast = to<expression>(":int != +101");
   REQUIRE(ast);
-  CHECK(visit(expr::evaluator{e0}, visit(expr::type_resolver{*foo}, *ast)));
-  CHECK(! visit(expr::evaluator{e1}, visit(expr::type_resolver{*bar}, *ast)));
+  CHECK(visit(expr::event_evaluator{e0}, visit(expr::type_resolver{*foo}, *ast)));
+  CHECK(! visit(expr::event_evaluator{e1}, visit(expr::type_resolver{*bar}, *ast)));
 
   ast = to<expression>(":string ~ /bar/ && :int == +100");
   REQUIRE(ast);
-  CHECK(visit(expr::evaluator{e0}, visit(expr::type_resolver{*foo}, *ast)));
-  CHECK(! visit(expr::evaluator{e1}, visit(expr::type_resolver{*bar}, *ast)));
+  CHECK(visit(expr::event_evaluator{e0}, visit(expr::type_resolver{*foo}, *ast)));
+  CHECK(! visit(expr::event_evaluator{e1}, visit(expr::type_resolver{*bar}, *ast)));
 
   ast = to<expression>(":real >= -4.8");
   REQUIRE(ast);
-  CHECK(visit(expr::evaluator{e0}, visit(expr::type_resolver{*foo}, *ast)));
-  CHECK(! visit(expr::evaluator{e1}, visit(expr::type_resolver{*bar}, *ast)));
+  CHECK(visit(expr::event_evaluator{e0}, visit(expr::type_resolver{*foo}, *ast)));
+  CHECK(! visit(expr::event_evaluator{e1}, visit(expr::type_resolver{*bar}, *ast)));
 
   ast = to<expression>(
       ":int <= -3 || :int >= +100 && :string !~ /bar/ || :real > 1.0");
   REQUIRE(ast);
-  CHECK(visit(expr::evaluator{e0}, visit(expr::type_resolver{*foo}, *ast)));
+  CHECK(visit(expr::event_evaluator{e0}, visit(expr::type_resolver{*foo}, *ast)));
 
   // For the event of type "bar", this expression degenerates to
   // <nil> because it has no numeric types and the first predicate of the
   // conjunction in the middle renders the entire conjunction not viable.
-  CHECK(! visit(expr::evaluator{e1}, visit(expr::type_resolver{*bar}, *ast)));
+  CHECK(! visit(expr::event_evaluator{e1}, visit(expr::type_resolver{*bar}, *ast)));
 
   //
   // Schema queries
@@ -169,30 +169,30 @@ TEST("event evaluation")
   REQUIRE(ast);
   auto schema_resolved = visit(expr::schema_resolver{*foo}, *ast);
   REQUIRE(schema_resolved);
-  CHECK(visit(expr::evaluator{e0}, *schema_resolved));
-  CHECK(! visit(expr::evaluator{e1}, *schema_resolved));
+  CHECK(visit(expr::event_evaluator{e0}, *schema_resolved));
+  CHECK(! visit(expr::event_evaluator{e1}, *schema_resolved));
 
   ast = to<expression>("s1 != \"cheetah\"");
   REQUIRE(ast);
   schema_resolved = visit(expr::schema_resolver{*foo}, *ast);
   REQUIRE(schema_resolved);
-  CHECK(visit(expr::evaluator{e0}, *schema_resolved));
+  CHECK(visit(expr::event_evaluator{e0}, *schema_resolved));
   schema_resolved = visit(expr::schema_resolver{*bar}, *ast);
   REQUIRE(schema_resolved);
-  CHECK(visit(expr::evaluator{e1}, *schema_resolved));
+  CHECK(visit(expr::event_evaluator{e1}, *schema_resolved));
 
   ast = to<expression>("d1 > 0.5");
   REQUIRE(ast);
   schema_resolved = visit(expr::schema_resolver{*foo}, *ast);
   REQUIRE(schema_resolved);
-  CHECK(visit(expr::evaluator{e0}, *schema_resolved));
-  CHECK(! visit(expr::evaluator{e1}, *schema_resolved));
+  CHECK(visit(expr::event_evaluator{e0}, *schema_resolved));
+  CHECK(! visit(expr::event_evaluator{e1}, *schema_resolved));
 
   ast = to<expression>("r.b == F");
   REQUIRE(ast);
   schema_resolved = visit(expr::schema_resolver{*bar}, *ast);
   REQUIRE(schema_resolved);
-  CHECK(visit(expr::evaluator{e1}, *schema_resolved));
+  CHECK(visit(expr::event_evaluator{e1}, *schema_resolved));
 
   //
   // Error cases
