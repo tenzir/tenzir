@@ -2,6 +2,7 @@
 
 #include "vast/event.h"
 #include "vast/expression.h"
+#include "vast/query_options.h"
 #include "vast/actor/program.h"
 
 #include "framework/unit.h"
@@ -145,7 +146,7 @@ TEST("distributed")
         [&](actor const& srch)
         {
           auto query = ":addr == 192.168.1.105";
-          self->sync_send(srch, query_atom::value, self, query).await(
+          self->sync_send(srch, query, historical, self).await(
             on_arg_match >> [=](error const& e)
             {
               VAST_ERROR(e);

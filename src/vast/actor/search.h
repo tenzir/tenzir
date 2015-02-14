@@ -6,13 +6,10 @@
 
 namespace vast {
 
+class expression;
+
 struct search : public default_actor
 {
-  struct client_state
-  {
-    util::flat_set<caf::actor> queries;
-  };
-
   search();
 
   void at(caf::exit_msg const& msg) override;
@@ -22,7 +19,7 @@ struct search : public default_actor
 
   caf::actor archive_;
   caf::actor index_;
-  std::map<caf::actor_addr, client_state> clients_;
+  std::multimap<caf::actor_addr, caf::actor> queries_;
 };
 
 } // namespace vast

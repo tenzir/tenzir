@@ -6,6 +6,7 @@
 #include <iostream>
 #include "vast/filesystem.h"
 #include "vast/logger.h"
+#include "vast/query_options.h"
 #include "vast/serialization.h"
 #include "vast/detail/type_manager.h"
 #include "vast/actor/accountant.h"
@@ -486,35 +487,36 @@ trial<void> program::run()
       }
       send(exporter_, add_atom::value, std::move(snk));
 
-      auto query = config_.get("export.query");
-      assert(query);
+      auto expr = config_.get("export.expression");
+      assert(expr);
+      auto opts = no_query_options;
+      if (config_.check("export.continuous"))
+        opts = continuous;
+      else if (config_.check("export.historical"))
+        opts = historical;
+      else if (config_.check("export.unified"))
+        opts = unified;
       self->sync_send(tracker_, get_atom::value, search_name).await(
-          on_arg_match >> [&](error& e)
-          {
-            abort = std::move(e);
-            quit(exit::error);
-          },
-          [&](actor const& srch)
-          {
-            self->sync_send(srch, query_atom::value, exporter_, *query).await(
-                on_arg_match >> [&](error& e)
-                {
-                  abort = std::move(e);
-                  quit(exit::error);
-                },
-                [&](expression const& ast, actor qry)
-                {
-                  VAST_DEBUG(this, "instantiated query for:", ast);
-                  exporter_->link_to(qry);
-                  send(qry, extract_atom::value, limit);
-                },
-                others() >> [&]()
-                {
-                  abort = error{"got unexpected reply:",
-                                to_string(last_dequeued())};
-                  quit(exit::error);
-                });
-          });
+        on_arg_match >> [&](error& e)
+        {
+          abort = std::move(e);
+          quit(exit::error);
+        },
+        [&](actor const& srch)
+        {
+          self->sync_send(srch, *expr, opts, exporter_).await(
+            on_arg_match >> [&](error& e)
+            {
+              abort = std::move(e);
+              quit(exit::error);
+            },
+            [&](expression const& ast, actor const& qry)
+            {
+              VAST_DEBUG(this, "instantiated query", qry, "for:", ast);
+              exporter_->link_to(qry);
+              send(qry, extract_atom::value, limit);
+            });
+        });
       if (abort)
         return std::move(*abort);
     }

@@ -2,6 +2,7 @@
 
 #include <caf/all.hpp>
 #include "vast/expression.h"
+#include "vast/query_options.h"
 #include "vast/actor/query.h"
 #include "vast/actor/replicator.h"
 #include "vast/expr/normalize.h"
@@ -17,30 +18,31 @@ search::search()
       {
         archive_ = invalid_actor;
         index_ = invalid_actor;
-        clients_.clear();
+        queries_.clear();
       });
 }
 
 void search::at(exit_msg const& msg)
 {
-  for (auto& p : clients_)
-    for (auto& q : p.second.queries)
-    {
-      VAST_DEBUG(this, "sends EXIT to query", q);
-      send_exit(q, msg.reason);
-    }
+  for (auto& q : queries_)
+  {
+    link_to(q.first);
+    link_to(q.second);
+  }
   quit(msg.reason);
 }
 
 void search::at(down_msg const& msg)
 {
   VAST_INFO(this, "got disconnect from client", msg.source);
-  for (auto& q : clients_[msg.source].queries)
+  auto er = queries_.equal_range(msg.source);
+  auto i = er.first;
+  while (i != er.second)
   {
-    VAST_DEBUG(this, "sends EXIT to query", q);
-    send_exit(q, msg.reason);
+    VAST_DEBUG(this, "sends EXIT to query", i->second);
+    send_exit(i->second, msg.reason);
+    i = queries_.erase(i);
   }
-  clients_.erase(last_sender());
 }
 
 message_handler search::make_handler()
@@ -63,7 +65,7 @@ message_handler search::make_handler()
       send(index_, add_atom::value, worker_atom::value, a);
       return ok_atom::value;
     },
-    [=](query_atom, actor const& client, std::string const& str)
+    [=](std::string const& str, query_options opts, actor const& client)
     {
       VAST_INFO(this, "got client", client, "asking for", str);
       if (! archive_)
@@ -76,18 +78,22 @@ message_handler search::make_handler()
         quit(exit::error);
         return make_message(error{"no index configured"});
       }
+      if (! (has_historical_option(opts) || has_continuous_option(opts)))
+      {
+        return make_message(error{"no query mode specified"});
+      }
       auto expr = to<expression>(str);
       if (! expr)
       {
-         VAST_VERBOSE(this, "ignores invalid query:", str);
-         return make_message(expr.error());
+        VAST_VERBOSE(this, "ignores invalid query:", str);
+        return make_message(expr.error());
       }
       *expr = expr::normalize(*expr);
       VAST_DEBUG(this, "normalized query to", *expr);
       monitor(client);
       auto qry = spawn<query>(archive_, client, *expr);
-      clients_[client.address()].queries.insert(qry);
-      send(index_, *expr, qry);
+      queries_.emplace(client->address(), qry);
+      send(index_, *expr, opts, qry);
       return make_message(*expr, qry);
     }
   };

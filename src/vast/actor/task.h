@@ -35,6 +35,14 @@ struct task : public default_actor
       notify();
   }
 
+  void at(caf::exit_msg const& msg) override
+  {
+    // Only notify our supervisors when exiting.
+    subscribers_.clear();
+    notify();
+    quit(msg.reason);
+  }
+
   caf::message_handler make_handler() override
   {
     using namespace caf;

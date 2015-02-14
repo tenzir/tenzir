@@ -8,31 +8,37 @@ forensics and incident response.
 
 ## Synopsis
 
-Start a core:
+Import a PCAP trace in one shot:
+
+    zcat *.log.gz | vast -I bro
+    vast -C -I pcap < trace.pcap
+
+Query VAST and get the result back as PCAP trace:
+
+    vast -E bro -q -e 'sport > 60000/tcp && src !in 10.0.0.0/8'
+
+In a distributed setup start a VAST *core*:
 
     vast -C
 
-Import data:
+Import [Bro](http://www.bro.org) logs and send them to the core:
 
-```sh
-zcat *.log.gz | vast -I bro
-vast -I pcap < trace.pcap
-```
+    zcat *.log.gz | vast -I bro
 
-Run a query of at most 100 results, printed as [Bro](http://www.bro.org)
-conn.log:
+Run a historical query, asking for activity in the past, at most 100 results,
+printed as Bro conn.log:
 
-```sh
-vast -E bro -l 100 -q '&type == "conn" && :addr in 192.168.0.0/24'
-```
+    vast -E bro -l 100 -q -e '&type == "conn" && :addr in 192.168.0.0/24'
+
+Run a continuous query, subscribing to all future matches:
+
+    vast -E bro -c -e 'conn.id.orig_h == 6.6.6.6'
 
 Start the interactive console and submit a query:
 
-```sh
-vast -Q
-> ask
-? &time > now - 2d && :string == "http"
-```
+    vast -Q
+    > ask
+    ? &time > now - 2d && :string == "http"
 
 ## Resources
 

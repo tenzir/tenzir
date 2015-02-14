@@ -7,12 +7,16 @@ namespace vast {
 using accept_atom = caf::atom_constant<caf::atom("accept")>;
 using add_atom = caf::atom_constant<caf::atom("add")>;
 using batch_atom = caf::atom_constant<caf::atom("batch")>;
+using continuous_atom = caf::atom_constant<caf::atom("continuous")>;
 using data_atom = caf::atom_constant<caf::atom("data")>;
 using delete_atom = caf::atom_constant<caf::atom("delete")>;
+using disable_atom = caf::atom_constant<caf::atom("disable")>;
 using done_atom = caf::atom_constant<caf::atom("done")>;
 using empty_atom = caf::atom_constant<caf::atom("empty")>;
+using enable_atom = caf::atom_constant<caf::atom("enable")>;
 using extract_atom = caf::atom_constant<caf::atom("extract")>;
 using flush_atom = caf::atom_constant<caf::atom("flush")>;
+using historical_atom = caf::atom_constant<caf::atom("historical")>;
 using id_atom = caf::atom_constant<caf::atom("id")>;
 using key_atom = caf::atom_constant<caf::atom("key")>;
 using limit_atom = caf::atom_constant<caf::atom("limit")>;
@@ -22,6 +26,7 @@ using ping_atom = caf::atom_constant<caf::atom("ping")>;
 using pong_atom = caf::atom_constant<caf::atom("pong")>;
 using progress_atom = caf::atom_constant<caf::atom("progress")>;
 using prompt_atom = caf::atom_constant<caf::atom("prompt")>;
+using publish_atom = caf::atom_constant<caf::atom("publish")>;
 using query_atom = caf::atom_constant<caf::atom("query")>;
 using read_atom = caf::atom_constant<caf::atom("read")>;
 using request_atom = caf::atom_constant<caf::atom("request")>;
@@ -33,10 +38,11 @@ using start_atom = caf::atom_constant<caf::atom("start")>;
 using stop_atom = caf::atom_constant<caf::atom("stop")>;
 using store_atom = caf::atom_constant<caf::atom("store")>;
 using submit_atom = caf::atom_constant<caf::atom("submit")>;
+using subscribe_atom = caf::atom_constant<caf::atom("subscribe")>;
 using value_atom = caf::atom_constant<caf::atom("value")>;
 using write_atom = caf::atom_constant<caf::atom("write")>;
 
-// Roles
+// Actor roles
 using accountant_atom = caf::atom_constant<caf::atom("accountant")>;
 using archive_atom = caf::atom_constant<caf::atom("archive")>;
 using identifier_atom = caf::atom_constant<caf::atom("identifier")>;

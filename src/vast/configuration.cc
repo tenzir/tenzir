@@ -87,7 +87,7 @@ void configuration::initialize()
   imp.add('r', "read", "path to input file/directory").init("-");
   imp.add('i', "interface", "name of interface to read packets from").single();
   imp.add("compression", "the compression method for chunks").init("lz4");
-  imp.add('c', "chunk-size", "number of events to ingest in one run").init(8192);
+  imp.add('n', "chunk-size", "number of events to ingest in one run").init(8192);
   imp.add("sniff-schema", "print the log schema and exit");
   imp.add("pcap-cutoff", "forego intra-flow packets after this many bytes").single();
   imp.add("pcap-flow-max", "number of concurrent flows to track").init(1000000);
@@ -101,8 +101,11 @@ void configuration::initialize()
 
   auto& exp = create_block("export options", "export");
   exp.add("schema", "the schema to use for the generated events").single();
+  exp.add('c', "continuous", "marks a query as continuous");
   exp.add('l', "limit", "maximum number of results").init(0);
-  exp.add('q', "query", "the query string").single();
+  exp.add('e', "expression", "the query expression").single();
+  exp.add('q', "historical", "marks a query as historical");
+  exp.add('u', "unified", "marks a query as both historical and continuous");
   exp.add('w', "write", "path to output file/directory").init("-");
   exp.add("pcap-flush", "flush to disk after this many packets").init(10000);
   exp.add("name", "default exporter name").init("exporter@" + *hostname);
@@ -156,8 +159,10 @@ void configuration::initialize()
   add_conflict("import.schema", "import.sniff-schema");
 
   add_dependency("export.limit", "exporter");
-  add_dependency("export.query", "exporter");
-  add_dependency("exporter", "export.query");
+  add_dependency("export.expression", "exporter");
+  add_dependencies("export.expression",
+                   {"export.historical", "export.continuous", "export.unified"});
+  add_dependency("exporter", "export.expression");
   add_dependency("export.write", "exporter");
   add_dependency("export.pcap-flush", "exporter");
   add_conflict("importer", "exporter");

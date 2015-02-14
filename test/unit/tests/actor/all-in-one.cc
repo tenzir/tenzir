@@ -6,6 +6,7 @@
 #include "vast/event.h"
 #include "vast/expression.h"
 #include "vast/filesystem.h"
+#include "vast/query_options.h"
 #include "vast/actor/program.h"
 #include "vast/actor/task.h"
 
@@ -17,7 +18,7 @@ using namespace vast;
 
 SUITE("actors")
 
-TEST("basic actor integrity")
+TEST("all-in-one")
 {
   scoped_actor self;
 
@@ -87,7 +88,10 @@ TEST("basic actor integrity")
   auto pops = to<expression>("id.resp_p == 995/?");
   REQUIRE(pops);
   self->send(trackr, get_atom::value, *core_config.get("index.name"));
-  self->receive([&](actor const& index) { self->send(index, *pops, self); });
+  self->receive([&](actor const& index)
+  {
+    self->send(index, *pops, historical, self);
+  });
   self->receive([&](actor t) { self->send(t, subscriber_atom::value, self); });
   uint64_t left = 5;
   self->do_receive(
@@ -111,12 +115,12 @@ TEST("basic actor integrity")
     [&](actor search)
     {
       auto q = "id.resp_p == 995/?";
-      self->sync_send(search, query_atom::value, self, q).await((
+      self->sync_send(search, q, historical, self).await(
         [&](expression const& ast, actor qry)
         {
           CHECK(ast == *pops);
           self->send(qry, extract_atom::value, uint64_t{46});
-        }));
+        });
     });
 
   VAST_INFO("checking POPS query results");
@@ -169,13 +173,13 @@ TEST("basic actor integrity")
     [&](actor const& search)
     {
       auto q = "id.resp_p == 443/? && \"mozilla\" in ssl.server_name";
-      self->sync_send(search, query_atom::value, self, q).await((
+      self->sync_send(search, q, historical, self).await(
         [&](expression const&, actor const& qry)
         {
           // Extract all results.
           self->send(qry, extract_atom::value, uint64_t{0});
           self->monitor(qry);
-        }));
+        });
     });
 
   VAST_INFO("processing query results");
