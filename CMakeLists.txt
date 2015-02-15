@@ -188,10 +188,19 @@ display(ENABLE_DEBUG yes debug_summary)
 display(DOXYGEN_FOUND yes doxygen_summary)
 display(PCAP_FOUND ${PCAP_INCLUDE_DIR} pcap_summary)
 display(BROCCOLI_FOUND ${BROCCOLI_INCLUDE_DIR} broccoli_summary)
-display(EDITLINE_FOUND "${EDITLINE_INCLUDE_DIR} (${EDITLINE_VERSION})" editline_summary)
+display(EDITLINE_FOUND
+        "${EDITLINE_INCLUDE_DIR} (${EDITLINE_VERSION})" editline_summary)
 display(GPERFTOOLS_FOUND ${GPERFTOOLS_INCLUDE_DIR} perftools_summary)
 display(VAST_USE_PERFTOOLS_HEAP_PROFILER yes tcmalloc_summary)
 display(ENABLE_ADDRESS_SANITIZER yes asan_summary)
+# Display the right include directory based on wheter we pointed to a CAF build
+# directory or to an install prefix.
+get_filename_component(caf_dir ${CAF_LIBRARY_CORE} PATH)
+get_filename_component(caf_dir ${caf_dir} PATH)
+if (NOT EXISTS "${caf_dir}/install_manifest.txt")
+  set(caf_dir ${CAF_INCLUDE_DIR_CORE})
+endif ()
+display(CAF_FOUND ${caf_dir} caf_summary)
 
 if (VAST_LOG_LEVEL EQUAL 0)
   set(log_level_summary quiet)
@@ -229,7 +238,7 @@ set(build_summary
     "\nInstall prefix:       ${CMAKE_INSTALL_PREFIX}"
     "\n"
     "\nBoost:                ${Boost_INCLUDE_DIR}"
-    "\nCAF:                  ${CAF_INCLUDE_DIRS}"
+    "\nCAF:                  ${caf_summary}"
     "\nPCAP:                 ${pcap_summary}"
     "\nBroccoli:             ${broccoli_summary}"
     "\nEditline:             ${editline_summary}"
