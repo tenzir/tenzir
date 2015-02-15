@@ -303,13 +303,9 @@ result<event> test::extract()
     next_ = schema_.begin();
 
   assert(events_ > 0);
-  --events_;
+  if (--events_ == 0)
+    done(true);
   return std::move(e);
-}
-
-bool test::done() const
-{
-  return events_ == 0;
 }
 
 std::string test::name() const

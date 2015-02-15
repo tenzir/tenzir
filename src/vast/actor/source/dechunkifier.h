@@ -20,14 +20,8 @@ public:
   {
     auto e = reader_.read();
     if (e.empty())
-      done_ = true;
-
+      done(true);
     return e;
-  }
-
-  bool done() const
-  {
-    return done_;
   }
 
   std::string name() const
@@ -38,7 +32,6 @@ public:
 private:
   chunk chunk_;
   chunk::reader reader_;
-  bool done_ = false;
 };
 
 } // namespace source

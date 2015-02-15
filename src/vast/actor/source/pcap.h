@@ -83,8 +83,7 @@ public:
   ~pcap();
 
   result<event> extract();
-  bool done() const;
-  std::string name() const;
+  std::string name() const override;
 
 private:
   struct connection_state
@@ -95,7 +94,6 @@ private:
 
   schema schema_;
   std::string name_;
-  bool done_ = false;
   type packet_type_;
   pcap_t* pcap_ = nullptr;
   pcap_pkthdr* packet_header_ = nullptr;

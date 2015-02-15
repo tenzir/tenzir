@@ -68,8 +68,7 @@ public:
           this->quit(exit::error);
           return;
         }
-        bool done = false;
-        while (events_.size() < batch_size_ && ! done)
+        while (events_.size() < batch_size_ && ! done())
         {
           result<event> r = static_cast<Derived*>(this)->extract();
           if (r)
@@ -79,21 +78,31 @@ public:
           else if (r.failed())
           {
             VAST_ERROR(this, r.error());
-            done = true;
+            done(true);
             break;
           }
-          done = static_cast<Derived const*>(this)->done();
         }
         if (accountant_ != invalid_actor && ! events_.empty())
           send(accountant_, time::now(),
                description() + "-events", uint64_t{events_.size()});
         send_events();
-        if (done)
+        if (done())
           this->quit(exit::done);
         else if (running_)
           this->send(this, this->last_dequeued());
       }
     };
+  }
+
+protected:
+  bool done() const
+  {
+    return done_;
+  }
+
+  void done(bool flag)
+  {
+    done_ = flag;
   }
 
 private:
@@ -108,6 +117,7 @@ private:
     }
   }
 
+  bool done_ = false;
   bool running_ = true;
   caf::actor accountant_;
   std::vector<caf::actor> sinks_;

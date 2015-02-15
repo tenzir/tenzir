@@ -27,43 +27,42 @@ public:
     return static_cast<Derived*>(this)->extract_impl();
   }
 
-  bool done() const
+  /// Advances to the next non-empty line in the file.
+  /// @returns `true` on success and false on failure or EOF.
+  bool next_line()
   {
-    return current_line() == nullptr;
-  }
-
-  /// Makes the source to return `true` on the next invocation of ::done.
-  void halt()
-  {
-    line_.clear();
-  }
-
-  /// Retrieves the next non-empty line from the file.
-  /// @returns A pointer to the next line if extracting was successful and
-  ///          `nullptr` on failure or EOF.
-  std::string const* next()
-  {
+    if (this->done())
+      return false;
     if (! file_handle_.is_open())
-      return nullptr;
-
+    {
+      this->done(true);
+      return false;
+    }
+    // Get the next non_empty line.
     line_.clear();
     while (line_.empty())
       if (io::getline(file_stream_, line_))
+      {
         ++current_;
+      }
       else
-        return nullptr;
-
-    return &line_;
+      {
+        this->done(true);
+        return false;
+      }
+    return true;
   }
 
+  /// Retrieves the current line number.
   uint64_t line_number() const
   {
     return current_;
   }
 
-  std::string const* current_line() const
+  /// Retrieves the current line.
+  std::string const& line() const
   {
-    return line_.empty() ? nullptr : &line_;
+    return line_;
   }
 
 private:

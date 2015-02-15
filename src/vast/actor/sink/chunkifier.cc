@@ -17,6 +17,7 @@ chunkifier::chunkifier(actor upstream, size_t max_events_per_chunk,
     writer_{std::make_unique<chunk::writer>(*chunk_)},
     max_events_per_chunk_{max_events_per_chunk}
 {
+  attach_functor([=](uint32_t) { upstream_ = invalid_actor; });
 }
 
 bool chunkifier::process(event const& e)
@@ -27,7 +28,7 @@ bool chunkifier::process(event const& e)
     quit(exit::error);
     return false;
   }
-
+  ++total_events_;
   if (chunk_->events() == max_events_per_chunk_)
   {
     writer_.reset();
@@ -35,7 +36,6 @@ bool chunkifier::process(event const& e)
     chunk_ = std::make_unique<chunk>();
     writer_ = std::make_unique<chunk::writer>(*chunk_);
   }
-
   return true;
 }
 
@@ -44,12 +44,8 @@ void chunkifier::at(caf::exit_msg const& msg)
   writer_->flush();
   if (chunk_->events() > 0)
     send(upstream_, std::move(*chunk_));
-
-  upstream_ = invalid_actor;
-
   if (total_events_ > 0)
     VAST_VERBOSE(this, "processed", total_events_, "events");
-
   quit(msg.reason);
 }
 

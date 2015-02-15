@@ -343,8 +343,8 @@ message_handler partition::make_handler()
           p->second.queries.insert(&q->first);
           for (auto& i : indexers_)
             // We forward this predicate only to the subset of indexers which we
-            // haven't asked yet, i.e., the indexers who's coverage is higher
-            // than this predicate.
+            // haven't asked yet, i.e., those who's coverage is higher than
+            // this predicate.
             if (! p->second.coverage.contains(i.first))
             {
               VAST_DEBUG(this, "forwards predicate to", i.second << ':', pred);

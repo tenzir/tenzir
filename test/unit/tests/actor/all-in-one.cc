@@ -131,13 +131,11 @@ TEST("all-in-one")
       // Verify contents of a few random events.
       if (e.id() == 3)
         CHECK(get<record>(e)->at(1) == "KKSlmtmkkxf");
-
       if (e.id() == 41)
       {
         CHECK(get<record>(e)->at(1) == "7e0gZmKgGS4");
         CHECK(get<record>(e)->at(4) == "TLS_RSA_WITH_RC4_128_MD5");
       }
-
       // The last event.
       if (e.id() == 102)
         CHECK(get<record>(e)->at(1) == "mXRBhfuUqag");

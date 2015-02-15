@@ -46,11 +46,9 @@ trial<type> make_type(std::string const& bro_type)
     auto close = bro_type.rfind("]");
     if (open == std::string::npos || close == std::string::npos)
       return error{"missing delimiting container brackets: ", bro_type};
-
     auto elem = make_type(bro_type.substr(open + 1, close - open - 1));
     if (! elem)
       return elem.error();
-
     // Bro sometimes logs sets as tables, e.g., represents set[string] as
     // table[string]. We iron out this inconsistency by normalizing the type to
     // a set.
@@ -79,53 +77,43 @@ result<event> bro::extract_impl()
 {
   if (is<none>(type_))
   {
-    auto line = this->next();
-    if (! line)
+    if (! this->next_line())
       return error{"could not read first line of header"};
-
     auto t = parse_header();
     if (! t)
       return t.error();
-
     if (sniff_)
     {
       schema sch;
       sch.add(type_);
       std::cout << sch << std::flush;
-      halt();
+      this->done(true);
       return {};
     }
   }
 
-  auto line = this->next();
-  if (! line)
-    return {};
+  if (! this->next_line())
+    return {}; // Reached EOF.
 
-  auto s = util::split(*line, separator_);
-
+  auto s = util::split(this->line(), separator_);
   if (s.size() > 0 && s[0].first != s[0].second && *s[0].first == '#')
   {
     if (util::starts_with(s[0].first, s[0].second, "#separator"))
     {
       VAST_VERBOSE(this, "restarts with new log");
-
       timestamp_field_ = -1;
       separator_ = " ";
-
       auto t = parse_header();
       if (! t)
         return t.error();
-
-      auto line = this->next();
-      if (! line)
+      if (! this->next_line())
         return {};
-
-      s = util::split(*line, separator_);
+      s = util::split(this->line(), separator_);
     }
     else
     {
       VAST_VERBOSE(this, "ignored comment at line", line_number() << ':',
-                   *line);
+                   this->line());
       return {};
     }
   }
@@ -135,12 +123,13 @@ result<event> bro::extract_impl()
   record event_record;
   record* r = &event_record;
   auto ts = time::now();
-
   for (auto& e : type::record::each{*get<type::record>(type_)})
   {
     if (f == s.size())
-      return error{"accessed field", f, "out of bounds"};
-
+    {
+      VAST_WARN(this, "accessed field", f, "out of bounds");
+      return {};
+    }
     if (e.trace.size() > depth)
     {
       for (size_t i = 0; i < e.depth() - depth; ++i)
@@ -157,8 +146,6 @@ result<event> bro::extract_impl()
       for (size_t i = 0; i < depth - 1; ++i)
         r = get<record>(r->back());
     }
-
-
     if (std::equal(unset_field_.begin(), unset_field_.end(),
                    s[f].first, s[f].second))
     {
@@ -170,9 +157,10 @@ result<event> bro::extract_impl()
       switch (which(e.trace.back()->type))
       {
         default:
-          return error{"invalid empty field ", f, '"', e.trace.back()->name,
-                       "\" of type ", e.trace.back()->type, ": ",
-                       std::string{s[f].first, s[f].second}};
+          VAST_WARN(this, "got invalid empty field", f, '"' <<
+                    e.trace.back()->name << "\" of type", e.trace.back()->type
+                    << ':', std::string(s[f].first, s[f].second));
+          return {};
         case type::tag::string:
           r->emplace_back(std::string{});
           break;
@@ -193,21 +181,22 @@ result<event> bro::extract_impl()
                            set_separator_, "", "",
                            set_separator_, "", "");
       if (! d)
-        return d.error() + error{std::string{s[f].first, s[f].second}};
-
-      if (f == size_t(timestamp_field_))
+      {
+        VAST_WARN(this, "failed to parse field", f << ':',
+                  std::string(s[f].first, s[f].second), "(reason",
+                  d.error());
+        return {};
+      }
+      if (f == static_cast<size_t>(timestamp_field_))
         if (auto tp = get<time::point>(*d))
           ts = *tp;
-
       r->push_back(std::move(*d));
     }
-
     ++f;
   }
 
   event e{{std::move(event_record), type_}};
   e.timestamp(ts);
-
   return std::move(e);
 }
 
@@ -220,23 +209,16 @@ trial<std::string> bro::parse_header_line(std::string const& line,
                                           std::string const& prefix)
 {
   auto s = util::split(line, separator_, "", 1);
-
   if (! (s.size() == 2
          && std::equal(prefix.begin(), prefix.end(), s[0].first, s[0].second)))
     return error{"got invalid header line: " + line};
-
-
   return std::string{s[1].first, s[1].second};
 }
 
 trial<void> bro::parse_header()
 {
-  auto line = this->current_line();
-  if (! line)
-    return error{"failed to retrieve first header line"};
-
   static std::string const separator = "#separator";
-  auto header_value = parse_header_line(*line, separator);
+  auto header_value = parse_header_line(this->line(), separator);
   if (! header_value)
     return header_value.error();
 
@@ -256,68 +238,61 @@ trial<void> bro::parse_header()
 
   separator_ = {sep.begin(), sep.end()};
 
-  line = this->next();
-  if (! line)
+  if (! this->next_line())
     return error{"failed to retrieve next header line"};
 
   static std::string const set_separator = "#set_separator";
-  header_value = parse_header_line(*line, set_separator);
+  header_value = parse_header_line(this->line(), set_separator);
   if (! header_value)
     return header_value.error();
 
   set_separator_ = std::move(*header_value);
 
-  line = this->next();
-  if (! line)
+  if (! this->next_line())
     return error{"failed to retrieve next header line"};
 
   static std::string const empty_field = "#empty_field";
-  header_value = parse_header_line(*line, empty_field);
+  header_value = parse_header_line(this->line(), empty_field);
   if (! header_value)
     return header_value.error();
 
   empty_field_ = std::move(*header_value);
 
-  line = this->next();
-  if (! line)
+  if (! this->next_line())
     return error{"failed to retrieve next header line"};
 
   static std::string const unset_field = "#unset_field";
-  header_value = parse_header_line(*line, unset_field);
+  header_value = parse_header_line(this->line(), unset_field);
   if (! header_value)
     return header_value.error();
 
   unset_field_ = std::move(*header_value);
 
-  line = this->next();
-  if (! line)
+  if (! this->next_line())
     return error{"failed to retrieve next header line"};
 
   static std::string const bro_path = "#path";
-  header_value = parse_header_line(*line, bro_path);
+  header_value = parse_header_line(this->line(), bro_path);
   if (! header_value)
     return header_value.error();
 
   auto event_name = std::move(*header_value);
 
-  line = this->next(); // Skip #open tag.
-  line = this->next();
-  if (! line)
+  if (! (this->next_line() && this->next_line())) // Skip #open tag.
     return error{"failed to retrieve next header line"};
 
   static std::string const bro_fields = "#fields";
-  header_value = parse_header_line(*line, bro_fields);
+  header_value = parse_header_line(this->line(), bro_fields);
   if (! header_value)
     return header_value.error();
 
   auto field_names = util::to_strings(util::split(*header_value, separator_));
 
-  line = this->next();
-  if (! line)
+  if (! this->next_line())
     return error{"failed to retrieve next header line"};
 
   static std::string const bro_types = "#types";
-  header_value = parse_header_line(*line, bro_types);
+  header_value = parse_header_line(this->line(), bro_types);
   if (! header_value)
     return header_value.error();
 

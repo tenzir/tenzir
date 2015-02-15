@@ -56,7 +56,7 @@ bgpdump::bgpdump(schema sch, std::string const& filename, bool sniff)
     sch.add(withdraw_type_);
     sch.add(state_change_type_);
     std::cout << sch << std::flush;
-    halt();
+    done(true);
   }
 }
 
@@ -117,11 +117,10 @@ result<event> bgpdump::extract_impl()
     schema_.clear();
   }
 
-  auto line = this->next();
-  if (! line)
+  if (! next_line())
     return {};
 
-  auto elems = util::split(*line, separator_);
+  auto elems = util::split(this->line(), separator_);
   if (elems.size() < 5)
     return {};
 

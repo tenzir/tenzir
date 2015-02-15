@@ -46,8 +46,7 @@ public:
   test(schema sch, event_id id, uint64_t events);
 
   result<event> extract();
-  bool done() const;
-  std::string name() const;
+  std::string name() const override;
 
 private:
   schema schema_;

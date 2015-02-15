@@ -111,7 +111,7 @@ TEST("index")
   VAST_INFO("disabling continuous query and sending another chunk");
   self->send(i, *expr, continuous_atom::value, disable_atom::value);
   self->receive([&](down_msg const& msg) { CHECK(msg.source == task); });
-  auto e = event::make(record{1337, to_string(1337)}, t0);
+  auto e = event::make(record{1337u, to_string(1337)}, t0);
   e.id(4711);
   self->send(i, chunk{{std::move(e)}});
   // Make sure that we didn't get any new hits.

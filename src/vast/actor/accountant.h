@@ -76,7 +76,6 @@ struct accountant : default_actor
             + '\t' + to_string(ctx.accumulator.mean())
             + '\t' + to_string(ctx.accumulator.median())
             + '\t' + to_string(ctx.accumulator.variance());
-          VAST_DEBUG(record);
           if (file_)
             file_ << record << std::endl;
         }

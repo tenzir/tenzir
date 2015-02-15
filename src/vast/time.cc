@@ -15,7 +15,7 @@ constexpr char const* point::format;
 
 namespace {
 std::mutex time_zone_mutex;
-bool time_zone_set = false;
+std::atomic<bool> time_zone_set{false};
 } // namespace <anonymous>
 
 point now()
@@ -23,9 +23,19 @@ point now()
   return point::clock::now();
 }
 
-point stopwatch()
+duration duration::zero()
 {
-  return std::chrono::steady_clock::now();
+  return duration_type::zero();
+}
+
+duration duration::min()
+{
+  return duration_type::min();
+}
+
+duration duration::max()
+{
+  return duration_type::max();
 }
 
 duration duration::operator+() const
@@ -170,6 +180,23 @@ trial<void> convert(duration dur, util::json& j)
   return nothing;
 }
 
+point point::from_tm(std::tm const& tm)
+{
+  // Because std::mktime by default uses localtime, we have to make sure to set
+  // the timezone before the first call to it.
+  if (! time_zone_set)
+  {
+    std::lock_guard<std::mutex> lock{time_zone_mutex};
+    if (::setenv("TZ", "GMT", 1))
+      throw std::runtime_error("could not set timzone variable");
+    time_zone_set = true;
+  }
+  auto t = std::mktime(const_cast<std::tm*>(&tm));
+  if (t == -1)
+    return {};
+  return std::chrono::system_clock::from_time_t(t);
+}
+
 point point::utc(int year, int month, int day, int hour, int min, int sec)
 {
   auto t = make_tm();
@@ -210,7 +237,7 @@ point point::utc(int year, int month, int day, int hour, int min, int sec)
     t.tm_year = year - 1900;
   }
   propagate(t);
-  return point::clock::from_time_t(to_time_t(t));
+  return std::chrono::system_clock::from_time_t(to_time_t(t));
 }
 
 point::point(duration d)
@@ -260,22 +287,6 @@ bool operator<(point const& x, point const& y)
   return x.time_point_ < y.time_point_;
 }
 
-point::point(std::tm const& tm)
-{
-  // Because std::mktime by default uses localtime, we have to make sure to set
-  // the timezone before the first call to it.
-  if (! time_zone_set)
-  {
-    std::lock_guard<std::mutex> lock(time_zone_mutex);
-    if (::setenv("TZ", "GMT", 1))
-      throw std::runtime_error("could not set timzone variable");
-  }
-  auto t = std::mktime(const_cast<std::tm*>(&tm));
-  if (t == -1)
-    throw std::runtime_error("point(): invalid std::tm");
-  time_point_ = clock::from_time_t(t);
-}
-
 point point::delta(int secs,
                    int mins,
                    int hours,
@@ -301,12 +312,12 @@ point point::delta(int secs,
   if (years)
     tm->tm_mday += days_from(tm->tm_year, tm->tm_mon, years * 12);
   propagate(*tm);
-  return point(*tm);
+  return from_tm(*tm);
 }
 
 duration point::since_epoch() const
 {
-  return duration(time_point_.time_since_epoch());
+  return duration{time_point_.time_since_epoch()};
 }
 
 void point::serialize(serializer& sink) const
@@ -329,7 +340,7 @@ trial<void> convert(point p, std::tm& tm)
 {
   auto d = std::chrono::duration_cast<point::clock::duration>(
       p.time_point_.time_since_epoch());
-  auto tt = point::clock::to_time_t(point::clock::time_point(d));
+  auto tt = std::chrono::system_clock::to_time_t(point::clock::time_point(d));
   return ::gmtime_r(&tt, &tm) != nullptr
     ? nothing 
     : error{"failed to convert point"};
@@ -420,6 +431,7 @@ time_t to_time_t(std::tm const& tm)
     std::lock_guard<std::mutex> lock(time_zone_mutex);
     if (::setenv("TZ", "GMT", 1))
       throw std::runtime_error("could not set timzone variable");
+    time_zone_set.store(true);
   }
   auto t = std::mktime(const_cast<std::tm*>(&tm));
   if (t == -1)

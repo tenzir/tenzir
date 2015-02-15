@@ -35,15 +35,11 @@ result<event> pcap::extract()
 {
   char buf[PCAP_ERRBUF_SIZE];
 
-  if (! pcap_ && ! done_)
+  if (! pcap_ && ! done())
   {
     pcap_if_t* iface;
     if (::pcap_findalldevs(&iface, buf) == -1)
-    {
-      done_ = true;
-      quit(exit::error);
       return error{"failed to enumerate interfaces: ", buf};
-    }
 
     for (auto i = iface; i != nullptr; i = i->next)
       if (name_ == i->name)
@@ -52,8 +48,6 @@ result<event> pcap::extract()
         if (! pcap_)
         {
           ::pcap_freealldevs(iface);
-          done_ = true;
-          quit(exit::error);
           return error{"failed to open interface ", name_, ": ", buf};
         }
         if (pseudo_realtime_ > 0)
@@ -70,11 +64,7 @@ result<event> pcap::extract()
     if (! pcap_)
     {
       if (name_ != "-" && ! exists(name_))
-      {
-        done_ = true;
-        quit(exit::error);
         return error{"no such file: ", name_};
-      }
 
 #ifdef PCAP_TSTAMP_PRECISION_NANO
       pcap_ = ::pcap_open_offline_with_tstamp_precision(
@@ -86,9 +76,7 @@ result<event> pcap::extract()
       if (! pcap_)
       {
         std::string err{buf};
-        done_ = true;
         flows_.clear();
-        quit(exit::error);
         return error{"failed to open pcap file ", name_, ": ", err};
       }
 
@@ -125,7 +113,7 @@ result<event> pcap::extract()
 
   if (r == -2)
   {
-    done_ = true;
+    done(true);
     return {};  // Reached end of trace.
   }
 
@@ -133,6 +121,7 @@ result<event> pcap::extract()
   {
     std::string err{::pcap_geterr(pcap_)};
     pcap_ = nullptr;
+    done(true);
     return error{"failed to get next packet: ", err};
   }
 
@@ -320,11 +309,6 @@ result<event> pcap::extract()
   event e{{std::move(packet), packet_type_}};
   e.timestamp(time::point{timestamp});
   return std::move(e);
-}
-
-bool pcap::done() const
-{
-  return ! pcap_ || done_;
 }
 
 std::string pcap::name() const

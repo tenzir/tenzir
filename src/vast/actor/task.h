@@ -22,12 +22,11 @@ struct task : public default_actor
     : done_msg_{caf::make_message(done_atom::value, time::duration{},
                                   std::forward<Ts>(xs)...)}
   {
-    attach_functor(
-      [=](uint32_t)
-      {
-        subscribers_.clear();
-        supervisors_.clear();
-      });
+    attach_functor([=](uint32_t)
+    {
+      subscribers_.clear();
+      supervisors_.clear();
+    });
   }
 
   void at(caf::down_msg const& msg) override
@@ -46,8 +45,7 @@ struct task : public default_actor
   caf::message_handler make_handler() override
   {
     using namespace caf;
-    done_msg_.get_as_mutable<time::duration>(1) =
-      time::stopwatch().since_epoch();
+    start_ = time::steady_clock::now();
     return
     {
       [=](uint32_t exit_reason)
@@ -125,8 +123,8 @@ private:
   void notify()
   {
     using namespace caf;
-    auto& t = done_msg_.get_as_mutable<time::duration>(1);
-    t = time::stopwatch().since_epoch() - t;
+    auto& runtime = done_msg_.get_as_mutable<time::duration>(1);
+    runtime = time::steady_clock::now() - start_;
     for (auto& s : subscribers_)
       send(s, progress_atom::value, uint64_t{workers_.size()}, total_);
     if (workers_.empty())
@@ -139,6 +137,7 @@ private:
 
   uint32_t exit_reason_ = exit::done;
   uint64_t total_ = 0;
+  time::steady_clock::time_point start_;
   caf::message done_msg_;
   std::map<caf::actor_addr, uint64_t> workers_;
   util::flat_set<caf::actor> subscribers_;

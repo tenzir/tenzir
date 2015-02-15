@@ -26,17 +26,18 @@ query::query(actor archive, actor sink, expression ast)
 
   auto incorporate_hits = [=](bitstream_type const& hits)
   {
+    VAST_DEBUG(this, "got index hit covering", '[' << hits.find_first() << ','
+               << (hits.find_last() + 1) << ')');
     assert(! hits.all_zeros());
     hits_ |= hits;
     unprocessed_ = hits_ - processed_;
-    VAST_DEBUG(this, "got index hit covering",
-               '[' << hits.find_first() << ',' << hits.find_last() << ']');
     prefetch();
   };
 
   auto handle_progress =
     [=](progress_atom, uint64_t remaining, uint64_t total)
     {
+      assert(last_sender() == task_->address());
       progress_ = (total - double(remaining)) / total;
       send(sink_, progress_atom::value, progress_);
     };
@@ -45,6 +46,7 @@ query::query(actor archive, actor sink, expression ast)
     handle_progress,
     [=](actor const& task)
     {
+      VAST_TRACE(this, "received task from index");
       send(task, subscriber_atom::value, this);
       task_ = task;
     },
@@ -56,15 +58,15 @@ query::query(actor archive, actor sink, expression ast)
     },
     [=](done_atom)
     {
-      send(sink_, done_atom::value, time::stopwatch() - start_time_);
+      assert(last_sender() == this);
+      time::duration runtime = time::steady_clock::now() - start_time_;
+      send(sink_, done_atom::value, runtime);
+      VAST_INFO(this, "took", runtime, "to answer query:", ast_);
       quit(exit::done);
     },
-    [=](done_atom, time::duration runtime, expression const&)
+    [=](done_atom, time::duration runtime, expression const&) // from INDEX
     {
-      VAST_DEBUG(this, "completed index interaction in", runtime);
-      // FIXME: having completed index interaction does not mean that the user
-      // is done with the query. We should wait for a signal from the user to
-      // temrinate the query.
+      VAST_VERBOSE(this, "completed index interaction in", runtime);
       send(this, done_atom::value);
     }};
 
@@ -73,8 +75,8 @@ query::query(actor archive, actor sink, expression ast)
     incorporate_hits,
     [=](chunk const& chk)
     {
-      VAST_DEBUG(this, "got chunk [" << chk.meta().ids.find_first() << ',',
-                 chk.meta().ids.find_last() << "]");
+      VAST_DEBUG(this, "got chunk [" << chk.base() << ',' <<
+                 (chk.base() + chk.events()) << ")");
       inflight_ = false;
       chunk_ = chk;
       assert(! reader_);
@@ -162,6 +164,7 @@ query::query(actor archive, actor sink, expression ast)
       mask -= partial;
       VAST_DEBUG(this, "extracted", n, "events " << partial.count() << '/'
                  << mask.count(), "processed/remaining hits)");
+      assert(! mask.empty());
       if (! mask.all_zeros())
       {
         // We continue extracting until we have processed all requested
@@ -194,7 +197,7 @@ query::query(actor archive, actor sink, expression ast)
 
 message_handler query::make_handler()
 {
-  start_time_ = time::stopwatch();
+  start_time_ = time::steady_clock::now();
   return idle_;
 }
 

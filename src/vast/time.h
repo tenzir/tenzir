@@ -12,9 +12,14 @@
 namespace vast {
 namespace time {
 
+// The main reason why we try to shoehorn std::chrono into the two types
+// *duration* and *point* is so that we can offer two simple types to the query
+// language.
+
 class point;
 class duration;
 using double_seconds = std::chrono::duration<double, std::ratio<1>>;
+using std::chrono::steady_clock;
 
 // Currently unused.
 class interval;
@@ -22,9 +27,6 @@ class perdiod;
 
 /// Constructs a time point with the current system time.
 point now();
-
-/// Constructs a time point with the current time from a monotic clock.
-point stopwatch();
 
 /// A time duration with nanosecond granularity.
 class duration : util::totally_ordered<duration>
@@ -35,14 +37,20 @@ public:
   using rep = int64_t;
   using duration_type = std::chrono::duration<rep, std::nano>;
 
+  static duration zero();
+  static duration min();
+  static duration max();
+
   /// Constructs a zero duration.
   duration() = default;
 
   /// Constructs a duration from a `std::chrono::duration`.
-  /// @param dur The `std::chrono::duration`.
+  /// @tparam Rep The representation type of the duration.
+  /// @tparam Period The period of the duration.
+  /// @param dur A `std::chrono::duration<Rep, Period>`.
   template <typename Rep, typename Period>
   duration(std::chrono::duration<Rep, Period> dur)
-    : duration_(std::chrono::duration_cast<duration_type>(dur))
+    : duration_{std::chrono::duration_cast<duration_type>(dur).count()}
   {
   }
 
@@ -181,6 +189,9 @@ public:
   // The default format string used to convert time points into calendar types.
   static constexpr char const* format = "%Y-%m-%d+%H:%M:%S";
 
+  /// Constructs a time point from a `std::tm` structure.
+  static point from_tm(std::tm const& tm);
+
   /// Constructs a UTC time point.
   static point utc(int year,
                    int month = 0,
@@ -195,16 +206,13 @@ public:
   /// Constructs a time point from a `std::chrono::time_point`.
   template <typename Clock, typename Duration>
   point(std::chrono::time_point<Clock, Duration> tp)
-    : time_point_(tp.time_since_epoch())
+    : time_point_{std::chrono::time_point_cast<duration_type>(tp)}
   {
   }
 
   /// Creates a time point from a duration.
   /// @param d The duration.
   point(duration d);
-
-  /// Constructs a time point from a `std::tm` structure.
-  explicit point(std::tm const& tm);
 
   // Arithmetic operators.
   point& operator+=(duration const& r);
@@ -303,12 +311,10 @@ std::tm to_tm(std::string const& str, char const* fmt, char const* locale);
 //
 
 template <typename Iterator>
-trial<void> print(duration tr, Iterator&& out)
+trial<void> print(duration d, Iterator&& out)
 {
   using util::print;
-  double d;
-  convert(tr, d);
-  auto t = print(d, out);
+  auto t = print(d.double_seconds(), out);
   if (! t)
     return t.error();
   *out++ = 's';
@@ -382,7 +388,8 @@ trial<void> parse(point& p, Iterator& begin, Iterator end,
   {
     std::string str{begin, end};
     begin = end;
-    p = point::clock::from_time_t(to_time_t(to_tm(str, fmt, locale)));
+    p = std::chrono::system_clock::from_time_t(
+        to_time_t(to_tm(str, fmt, locale)));
   }
   else
   {

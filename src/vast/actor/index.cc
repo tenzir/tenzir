@@ -215,7 +215,8 @@ message_handler index::make_handler()
       if (p.to == time::duration{} || chk.meta().last > p.to)
         p.to = chk.meta().last;
       // Relay chunk.
-      VAST_DEBUG(this, "forwards chunk to", p.actor, '(' << part << ')');
+      VAST_DEBUG(this, "forwards chunk [" << chk.base() << ',' << chk.base() +
+                 chk.events() << ')', "to", p.actor, '(' << part << ')');
       auto t = spawn<task>(chk.events());
       send(t, supervisor_atom::value, this);
       send(p.actor, chk, t);

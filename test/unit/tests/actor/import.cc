@@ -16,7 +16,7 @@ using namespace vast;
 
 SUITE("actors")
 
-TEST("all-in-one import")
+TEST("import")
 {
   VAST_INFO("inhaling a single Bro log");
   configuration cfg;
