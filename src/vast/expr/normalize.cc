@@ -77,6 +77,11 @@ expression aligner::operator()(predicate const& p) const
 }
 
 
+denegator::denegator(bool negate)
+  : negate_{negate}
+{
+}
+
 expression denegator::operator()(none) const
 {
   return nil;
@@ -125,7 +130,6 @@ expression denegator::operator()(negation const& n) const
     return visit(*this, inner->expression());
   // Apply De Morgan from here downward.
   denegator visitor{true};
-  visitor.negate_ = true;
   return visit(visitor, n.expression());
 }
 
@@ -142,7 +146,7 @@ expression normalize(expression const& expr)
   r = visit(denegator{}, r);
   r = visit(hoister{}, r);
   return r;
-};
+}
 
 } // namespace expr
 } // namespace vast

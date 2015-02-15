@@ -242,7 +242,7 @@ void query::prefetch()
       }
     }
   }
-};
+}
 
 
 } // namespace vast

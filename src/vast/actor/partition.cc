@@ -327,7 +327,7 @@ message_handler partition::make_handler()
     [=](expression const& expr, historical_atom)
     {
       VAST_DEBUG(this, "got historical query:", expr);
-      auto q = queries_.emplace(expr, query_state{}).first;
+      auto q = queries_.emplace(expr, query_state()).first;
       if (! q->second.task)
       {
         // Even if we still have evaluated this query in the past, we still
@@ -339,7 +339,7 @@ message_handler partition::make_handler()
         send(q->second.task, this);
         for (auto& pred : visit(expr::predicatizer{}, expr))
         {
-          auto p = predicates_.emplace(pred, predicate_state{}).first;
+          auto p = predicates_.emplace(pred, predicate_state()).first;
           p->second.queries.insert(&q->first);
           for (auto& i : indexers_)
             // We forward this predicate only to the subset of indexers which we

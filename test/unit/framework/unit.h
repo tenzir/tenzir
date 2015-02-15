@@ -120,6 +120,21 @@ std::ostream& operator<<(std::ostream& out, showable_base<T> const&)
   return out;
 }
 
+// See GCC note below.
+#ifdef __GNUC__
+struct stream
+{
+  template <typename S, typename U>
+  static auto test(S* o, U const* x) -> decltype(*o << *x, std::true_type());
+
+  template <typename, typename>
+  static auto test(...) -> std::false_type;
+};
+
+template <typename S, typename U>
+struct streamable : decltype(stream::test<S, U>(0, 0)) {};
+#endif
+
 template <typename T>
 class showable : public showable_base<T>
 {
@@ -129,12 +144,25 @@ public:
   {
   }
 
+  // GCC 4.9 appears to choke on expression SFINAE here and attempts to
+  // instantiate the function even when the decltype expression fails. 
+#ifndef __GNUC__
   template <typename U = T>
   friend auto operator<<(std::ostream& out, showable const& p)
     -> decltype(out << std::declval<U const&>())
   {
     return out << p.x_;
   }
+#else
+  template <
+    typename U = T,
+    typename = std::enable_if_t<streamable<std::ostream, U>::value>
+  >
+  friend std::ostream& operator<<(std::ostream& out, showable const& p)
+  {
+    return out << p.x_;
+  }
+#endif
 
 private:
   T const& x_;

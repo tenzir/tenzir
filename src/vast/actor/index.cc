@@ -197,7 +197,7 @@ message_handler index::make_handler()
         i->second.actor = invalid_actor;
         // Create a new partition.
         part = uuid::random();
-        i = partitions_.emplace(part, partition_state{}).first;
+        i = partitions_.emplace(part, partition_state()).first;
         i->second.actor =
           spawn<partition, monitored>(dir_ / to_string(part), this);
         send(i->second.actor, flow_control::announce{this});
@@ -237,7 +237,7 @@ message_handler index::make_handler()
         if (! qs.hist)
         {
           VAST_DEBUG(this, "instantiates historical query");
-          qs.hist = historical_query_state{};
+          qs.hist = historical_query_state();
         }
         if (! qs.hist->task)
         {
@@ -271,7 +271,7 @@ message_handler index::make_handler()
         if (! qs.cont)
         {
           VAST_DEBUG(this, "instantiates continuous query");
-          qs.cont = continuous_query_state{};
+          qs.cont = continuous_query_state();
         }
         if (! qs.cont->task)
         {

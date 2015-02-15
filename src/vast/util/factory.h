@@ -86,7 +86,7 @@ public:
                   "invalid base class of announced type");
 
     factories_.emplace(std::move(key), factory_type<Derived>());
-  };
+  }
 
   result_type construct(K const& key) const
   {

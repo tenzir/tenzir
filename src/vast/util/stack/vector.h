@@ -2,6 +2,7 @@
 #define VAST_UTIL_STACK_VECTOR
 
 #include <vector>
+#include <scoped_allocator>
 #include "vast/util/stack/allocator.h"
 
 namespace vast {
@@ -53,7 +54,8 @@ struct vector
   }
 
   vector(vector const& other)
-    : vector_type(other, this->allocator)
+    : detail::container_base<N, T>::container_base(other),
+      vector_type(other, this->allocator)
   {
   }
 

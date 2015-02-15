@@ -230,11 +230,13 @@ public:
   ///          otherwise.
   std::tuple<Point, Point, Value const*> find(Point const& p) const
   {
+    // GCC 4.9 still has an explicit tuple ctor.
+    using tuple_type = std::tuple<Point, Point, Value const*>;
     auto i = locate(p, map_.lower_bound(p));
     if (i == map_.end())
-      return {0, 0, nullptr};
+      return tuple_type{0, 0, nullptr};
     else
-      return {left(i), right(i), &i->second.second};
+      return tuple_type{left(i), right(i), &i->second.second};
   }
 
   /// Retrieves the size of the range map.

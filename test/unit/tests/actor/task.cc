@@ -23,17 +23,18 @@ behavior worker(event_based_actor* self, actor const& task)
 
 } // namespace <anonymous>
 
-// We construct the following task tree hierarchy in this example:
-//
-//                    t
-//                  / | \
-//                 /  |  \
-//                i  1a  1b
-//               /|\
-//              / | \
-//            2a 2b 2c
-//
-// Here, 't' and 'i' represent tasks and the remaining nodes workers.
+/* We construct the following task tree hierarchy in this example:
+ *
+ *                    t
+ *                  / | \
+ *                 /  |  \
+ *                i  1a  1b
+ *               /|\
+ *              / | \
+ *            2a 2b 2c
+ *
+ * Here, 't' and 'i' represent tasks and the remaining nodes workers.
+ */
 
 TEST("task")
 {

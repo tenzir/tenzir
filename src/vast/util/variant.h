@@ -181,12 +181,14 @@ public:
   }
 
   /// Constructs a variant from one of the discrimanted types.
-  ///
-  /// @param x The value to construct the variant with. Note that *x* must be
-  /// unambiguously convertible to one of the types in the variant.
+  /// @param x The value to construct the variant with, which must be
+  ///          unambiguously convertible to one of the types in the variant.
   template <
     typename T,
-    typename = util::disable_if_same_or_derived_t<basic_variant, T>
+    typename = std::enable_if_t<
+      ! util::is_same_or_derived<basic_variant, T>::value
+      && util::any<std::is_convertible<T, Ts>...>::value
+    >
   >
   basic_variant(T&& x)
   {

@@ -37,6 +37,8 @@ struct aligner
 /// Pushes negations down to the predicate level and removes double negations.
 struct denegator
 {
+  denegator(bool negate = false);
+
   expression operator()(none) const;
   expression operator()(conjunction const& c) const;
   expression operator()(disjunction const& d) const;

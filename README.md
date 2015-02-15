@@ -75,7 +75,9 @@ Building VAST involves the following steps:
 
 Required dependencies:
 
-- [Clang >= 3.4](http://clang.llvm.org/)
+- A C++14 compiler:
+  - Clang >= 3.4
+  - GCC >= 4.9
 - [CMake](http://www.cmake.org)
 - [CAF](https://github.com/actor-framework/actor-framework)
 - [Boost](http://www.boost.org) (headers only)

@@ -3,8 +3,8 @@
 
 #include <cstddef>
 #include <cassert>
-#include <scoped_allocator>
 #include <type_traits>
+#include "vast/config.h"
 #include "vast/util/operators.h"
 
 namespace vast {
@@ -130,7 +130,17 @@ public:
   using propagate_on_container_move_assignment = std::true_type;
   using propagate_on_container_swap = std::true_type;
 
-  explicit allocator(arena_type* a)
+  // This should be provided by std::allocator_traits, but buggy GCC 4.9
+  // complains.
+#ifdef VAST_GCC
+  template <typename U>
+  struct rebind
+  {
+    using other = allocator<U, N>;
+  };
+#endif
+
+  explicit allocator(arena_type* a) noexcept
     : arena_{a}
   {
   }
@@ -151,21 +161,29 @@ public:
     arena_->deallocate(reinterpret_cast<char*>(p), n * sizeof(T));
   }
 
+  // Some bug in GCC prevents the inline friend defintion of the operator, so
+  // we just declare it here.
   template <typename U, size_t N0, typename V, size_t N1>
-  friend bool operator==(allocator<U, N0> const& x, allocator<V, N1> const& y)
-  {
-    return x.arena_ == y.arena_;
-  }
+  friend bool operator==(allocator<U, N0> const& x, allocator<V, N1> const& y);
 
   template <typename U, size_t N0, typename V, size_t N1>
-  friend bool operator!=(allocator<U, N0> const& x, allocator<V, N1> const& y)
-  {
-    return ! (x.arena_ == y.arena_);
-  }
+  friend bool operator!=(allocator<U, N0> const& x, allocator<V, N1> const& y);
 
 private:
   arena_type* arena_;
 };
+
+template <typename U, size_t N0, typename V, size_t N1>
+bool operator==(allocator<U, N0> const& x, allocator<V, N1> const& y)
+{
+  return x.arena_ == y.arena_;
+}
+
+template <typename U, size_t N0, typename V, size_t N1>
+bool operator!=(allocator<U, N0> const& x, allocator<V, N1> const& y)
+{
+  return x.arena_ != y.arena_;
+}
 
 namespace detail {
 
@@ -189,7 +207,7 @@ struct container_base
   container_base& operator=(container_base const& other) = delete;
   container_base& operator=(container_base&& other) = delete;
 
-  using allocator_type = allocator<T, N>;
+  using allocator_type = stack::allocator<T, N>;
   using arena_type = typename allocator_type::arena_type;
   arena_type arena;
   allocator_type allocator;

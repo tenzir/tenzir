@@ -7,12 +7,6 @@ using namespace vast;
 
 SUITE("value")
 
-TEST("size")
-{
-  //std::cout << "sizeof(value) == " << sizeof(value) << std::endl;
-  CHECK(sizeof(value) <= 40);
-}
-
 // An *invalid* value has neither a type nor data.
 // This is the default-constructed state.
 TEST("invalid/nil")

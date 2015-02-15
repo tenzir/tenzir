@@ -82,9 +82,8 @@ private:
 template <typename PatternIterator>
 class boyer_moore
 {
-  template <typename Container>
-  static void make_prefix(PatternIterator begin, PatternIterator end,
-                          Container &pfx)
+  template <typename Iterator, typename Container>
+  static void make_prefix(Iterator begin, Iterator end, Container& pfx)
   {
     assert(end - begin > 0);
     assert(pfx.size() == static_cast<size_t>(end - begin));
@@ -95,10 +94,8 @@ class boyer_moore
     {
       while (k > 0 && begin[k] != begin[i])
         k = pfx[k - 1];
-
       if (begin[k] == begin[i])
         k++;
-
       pfx[i] = k;
     }
   }

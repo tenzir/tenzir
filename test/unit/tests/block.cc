@@ -32,4 +32,3 @@ TEST("block")
   block copy{blk};
   CHECK(blk == copy);
 }
-

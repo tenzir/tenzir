@@ -316,11 +316,6 @@ TEST("records")
   CHECK(each == flat);
 }
 
-TEST("data size")
-{
-  CHECK(sizeof(data) <= 32);
-}
-
 // An *invalid* value has neither a type nor data.
 // This is the default-constructed state.
 TEST("invalid data")

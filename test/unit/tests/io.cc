@@ -136,10 +136,8 @@ TEST("input iterator")
 {
   decltype(data) buf;
   auto in = io::make_container_input_stream(data, 3);
-  io::input_iterator begin{in}, end;
-
-  std::copy(begin, end, std::back_inserter(buf));
-
+  io::input_iterator begin{in};
+  std::copy(begin, io::input_iterator{}, std::back_inserter(buf));
   CHECK(buf == data);
   CHECK(in.bytes() == data.size());
 }

@@ -316,6 +316,8 @@ private:
   {
     switch (t)
     {
+      default:
+        return error{"missing switch case"};
       case type::null:
         return print("null", out);
       case type::boolean:

@@ -6,6 +6,7 @@
 #include <map>
 #include <memory>
 #include "vast/aliases.h"
+#include "vast/config.h"
 #include "vast/key.h"
 #include "vast/none.h"
 #include "vast/offset.h"
@@ -501,7 +502,29 @@ public:
   /// @param x An instance of `T`.
   template <
     typename T,
-    typename = util::disable_if_same_or_derived_t<type, T>
+    typename = std::enable_if_t<
+      ! util::is_same_or_derived<type, T>::value
+#ifdef VAST_GCC
+      && (std::is_convertible<T, none>::value
+          || std::is_convertible<T, boolean>::value
+          || std::is_convertible<T, integer>::value
+          || std::is_convertible<T, count>::value
+          || std::is_convertible<T, real>::value
+          || std::is_convertible<T, time_point>::value
+          || std::is_convertible<T, time_duration>::value
+          || std::is_convertible<T, string>::value
+          || std::is_convertible<T, pattern>::value
+          || std::is_convertible<T, address>::value
+          || std::is_convertible<T, subnet>::value
+          || std::is_convertible<T, port>::value
+          || std::is_convertible<T, enumeration>::value
+          || std::is_convertible<T, vector>::value
+          || std::is_convertible<T, set>::value
+          || std::is_convertible<T, table>::value
+          || std::is_convertible<T, record>::value
+          || std::is_convertible<T, alias>::value)
+#endif
+    >
   >
   type(T&& x)
     : info_{util::make_intrusive<intrusive_info>(std::forward<T>(x))}

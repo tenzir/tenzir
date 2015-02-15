@@ -5,14 +5,13 @@
 #include "vast/serialization/all.h"
 #include "vast/io/serialization.h"
 
-SUITE("serialization")
-
 using namespace vast;
+using namespace vast::util;
+
+SUITE("serialization")
 
 TEST("byte swapping")
 {
-  using util::byte_swap;
-
   uint8_t  x08 = 0x11;
   uint16_t x16 = 0x1122;
   uint32_t x32 = 0x11223344;
