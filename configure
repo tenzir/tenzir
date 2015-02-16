@@ -206,7 +206,10 @@ fi
 cmake="$cmake $CMakeCacheEntries \"$sourcedir\""
 eval $cmake
 
-echo "# This is the command used to configure this build" > config.status
+printf "#!/bin/sh\n\n" > config.status
+printf "# Switch to the source of this build directory.\n" >> config.status
+printf "cd \"$sourcedir\"\n\n" >> config.status
+printf "# Invoke the command to configure this build.\n" >> config.status
 if [ -n "$CC" ]; then
   printf "CC=%s" $CC >> config.status
   printf ' ' >> config.status
