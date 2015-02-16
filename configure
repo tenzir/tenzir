@@ -3,7 +3,7 @@
 # the project's CMake scripts will recognize
 
 command="$0 $*"
-sourcedir="$( cd "$( dirname "$0" )" && pwd )"
+sourcedir="$(cd "$(dirname "$0")" && pwd)"
 type cmake > /dev/null 2>&1 || {
     echo "\
 This package requires CMake, please install it first, then you may
@@ -57,7 +57,7 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
 #   $3 is the cache entry variable value
 append_cache_entry ()
 {
-  CMakeCacheEntries="$CMakeCacheEntries -D $1:$2=$3"
+  CMakeCacheEntries="$CMakeCacheEntries -D \"$1:$2=$3\""
 }
 
 levelize()
@@ -104,30 +104,33 @@ append_cache_entry CPACK_SOURCE_IGNORE_FILES STRING
 # parse arguments
 while [ $# -ne 0 ]; do
     case "$1" in
-        -*=*) optarg=`echo "$1" | sed 's/[-_a-zA-Z0-9]*=//'` ;;
-        *) optarg= ;;
+        -*=*)
+          optarg="$(echo "$1" | sed 's/[-_a-zA-Z0-9]*=//')"
+          ;;
+        *)
+          optarg=
+          ;;
     esac
-
     case "$1" in
         --help|-h)
             echo "${usage}" 1>&2
             exit 1
             ;;
         --build-dir=*)
-            builddir=$optarg
+            builddir="$optarg"
             ;;
         --build-type=*)
-            append_cache_entry CMAKE_BUILD_TYPE STRING $optarg
+            append_cache_entry CMAKE_BUILD_TYPE STRING "$optarg"
             ;;
         --generator=*)
             CMakeGenerator="$optarg"
             ;;
         --log-level=*)
-            append_cache_entry VAST_LOG_LEVEL INTEGER $(levelize $optarg)
+            append_cache_entry VAST_LOG_LEVEL INTEGER $(levelize "$optarg")
             ;;
         --prefix=*)
-            append_cache_entry VAST_PREFIX PATH $optarg
-            append_cache_entry CMAKE_INSTALL_PREFIX PATH $optarg
+            append_cache_entry VAST_PREFIX PATH "$optarg"
+            append_cache_entry CMAKE_INSTALL_PREFIX PATH "$optarg"
             ;;
         --enable-debug)
             append_cache_entry VAST_LOG_LEVEL INTEGER $(levelize trace)
@@ -140,37 +143,37 @@ while [ $# -ne 0 ]; do
             append_cache_entry ENABLE_ADDRESS_SANITIZER BOOL true
             ;;
         --with-caf=*)
-            append_cache_entry CAF_ROOT_DIR PATH $optarg
+            append_cache_entry CAF_ROOT_DIR PATH "$optarg"
             ;;
         --with-boost=*)
-            append_cache_entry BOOST_ROOT PATH $optarg
+            append_cache_entry BOOST_ROOT PATH "$optarg"
             ;;
         --with-doxygen=*)
-            append_cache_entry Doxygen_ROOT_DIR PATH $optarg
+            append_cache_entry Doxygen_ROOT_DIR PATH "$optarg"
             ;;
         --with-pcap=*)
-            append_cache_entry PCAP_ROOT_DIR PATH $optarg
+            append_cache_entry PCAP_ROOT_DIR PATH "$optarg"
             ;;
         --with-editline=*)
-            append_cache_entry EDITLINE_ROOT_DIR PATH $optarg
+            append_cache_entry EDITLINE_ROOT_DIR PATH "$optarg"
             ;;
         --with-perftools=*)
-            append_cache_entry Gperftools_ROOT_DIR PATH $optarg
+            append_cache_entry Gperftools_ROOT_DIR PATH "$optarg"
             ;;
         --binary-package)
             append_cache_entry BINARY_PACKAGING_MODE BOOL true
             ;;
         --ignore-dirs=*)
-            append_cache_entry CPACK_SOURCE_IGNORE_FILES STRING $optarg
+            append_cache_entry CPACK_SOURCE_IGNORE_FILES STRING "$optarg"
             ;;
         --pkg-name-prefix=*)
-            append_cache_entry PACKAGE_NAME_PREFIX STRING $optarg
+            append_cache_entry PACKAGE_NAME_PREFIX STRING "$optarg"
             ;;
         --osx-sysroot=*)
-            append_cache_entry CMAKE_OSX_SYSROOT PATH $optarg
+            append_cache_entry CMAKE_OSX_SYSROOT PATH "$optarg"
             ;;
         --osx-min-version=*)
-            append_cache_entry CMAKE_OSX_DEPLOYMENT_TARGET STRING $optarg
+            append_cache_entry CMAKE_OSX_DEPLOYMENT_TARGET STRING "$optarg"
             ;;
         *)
             echo "Invalid option '$1'.  Try $0 --help to see available options."
@@ -194,11 +197,14 @@ fi
 
 cd "$builddir"
 
+# In order to support spaces in paths, we use eval to re-evaluate the command
+# line before passing it to CMake.
+cmake=cmake
 if [ -n "$CMakeGenerator" ]; then
-    cmake -G "$CMakeGenerator" $CMakeCacheEntries "$sourcedir"
-else
-    cmake $CMakeCacheEntries "$sourcedir"
+  cmake="$cmake -G \"$CMakeGenerator\" "
 fi
+cmake="$cmake $CMakeCacheEntries \"$sourcedir\""
+eval $cmake
 
 echo "# This is the command used to configure this build" > config.status
 if [ -n "$CC" ]; then
@@ -217,16 +223,16 @@ echo $command >> config.status
 chmod u+x config.status
 
 makefile="$sourcedir/Makefile"
-if [ -f $makefile ]; then
-  if ! head -n 1 $makefile | cut -d ' ' -f 2- | grep -q " $builddir "; then
-    sed -i.orig "s/\(DIRS :=.*\)/\1 $builddir /" $makefile
-    rm $makefile.orig
+if [ -f "$makefile" ]; then
+  if ! head -n 1 "$makefile" | cut -d ' ' -f 2- | grep -q " $builddir "; then
+    sed -i.orig "s/\(DIRS :=.*\)/\1 $builddir /" "$makefile"
+    rm "$makefile.orig"
      >&2 echo "-- added $builddir to list of build directories"
   fi
   exit 0
 fi
 
-printf "DIRS := %s \n\n" "$builddir" > $makefile
+printf "DIRS := %s \n\n" "$builddir" > "$makefile"
 contents=$(cat <<'EOT'
 all:
 	@for i in $(DIRS); do $(MAKE) -C $$i $@; done
@@ -250,4 +256,4 @@ distclean:
 EOT
 )
 
-echo "$contents" >> $makefile
+echo "$contents" >> "$makefile"
