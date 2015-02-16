@@ -52,11 +52,18 @@ if (ENABLE_DEBUG)
   set(CMAKE_BUILD_TYPE Debug)
 endif ()
 
-if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
-  execute_process(
-    COMMAND ${CMAKE_CXX_COMPILER} -dumpversion OUTPUT_VARIABLE GCC_VERSION)
-  if (NOT (GCC_VERSION VERSION_GREATER 4.9 OR GCC_VERSION VERSION_EQUAL 4.9))
-    message(FATAL_ERROR "${PROJECT_NAME} requires g++ 4.9 or greater.")
+try_run(program_result
+        compilation_succeeded
+        "${CMAKE_BINARY_DIR}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/get_compiler_version.cpp"
+        RUN_OUTPUT_VARIABLE compiler_version)
+if (NOT compilation_succeeded OR NOT program_result EQUAL 0)
+  message(FATAL_ERROR "Cannot determine compiler version")
+elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
+  if (compiler_version VERSION_GREATER 4.8)
+    message(STATUS "Found GCC ${compiler_version}")
+  else ()
+    message(FATAL_ERROR "GCC >= 4.9 required, found ${compiler_version}")
   endif ()
   set(CXX_FLAGS "${CXX_FLAGS} -fdiagnostics-color=always")
   if (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
@@ -68,12 +75,17 @@ if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
     set(CXX_FLAGS "${CXX_FLAGS} -D_GLIBCXX_USE_C99_MATH_TR1")
   endif ()
 elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+  if (compiler_version VERSION_GREATER 3.3)
+    message(STATUS "Found Clang ${compiler_version}")
+  else ()
+    message(FATAL_ERROR "Clang >= 3.4 required, found ${compiler_version}")
+  endif ()
   set(CXX_FLAGS "${CXX_FLAGS} -stdlib=libc++")
   if (ENABLE_ADDRESS_SANITIZER)
     set(CXX_FLAGS "${CXX_FLAGS} -fsanitize=address -g")
   endif ()
 else ()
-  message(FATAL_ERROR "Your C++ compiler does not support C++11.")
+  message(FATAL_ERROR "unsupported compiler: ${CMAKE_CXX_COMPILER_ID}")
 endif ()
 
 # Only set our flags if the environment variable CXXFLAGS is not present.
