@@ -220,8 +220,18 @@ fi
 echo $command >> config.status
 chmod u+x config.status
 
-printf "DIRS := %s\n\n" $builddir > $sourcedir/Makefile
-makefile=$(cat <<'EOT'
+makefile="$sourcedir/Makefile"
+if [ -f $makefile ]; then
+  if ! head -n 1 $makefile | cut -d ' ' -f 2- | grep -q " $builddir "; then
+    sed -i.orig "s/\(DIRS :=.*\)/\1$builddir /" $makefile
+    rm $makefile.orig
+     >&2 echo "-- added $builddir to list of build directories"
+  fi
+  exit 0
+fi
+
+printf "DIRS := %s \n\n" $builddir > $makefile
+contents=$(cat <<'EOT'
 all:
 	@for i in $(DIRS); do $(MAKE) -C $$i $@; done
 
@@ -244,4 +254,4 @@ distclean:
 EOT
 )
 
-echo "$makefile" >> $sourcedir/Makefile
+echo "$contents" >> $makefile
