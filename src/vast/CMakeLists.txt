@@ -78,12 +78,6 @@ if (PCAP_FOUND)
     actor/source/pcap.cc)
 endif ()
 
-if (BROCCOLI_FOUND)
-  set(libvast_sources ${libvast_sources}
-    actor/source/broccoli.cc
-    util/broccoli.cc)
-endif ()
-
 if (EDITLINE_FOUND)
   set(libvast_sources ${libvast_sources}
     actor/console.cc
