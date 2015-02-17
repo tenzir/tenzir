@@ -262,7 +262,10 @@ message_handler index::make_handler()
         }
         send(subscriber, qs.hist->task);
         if (! qs.hist->hits.empty() && ! qs.hist->hits.all_zeros())
+        {
+          VAST_VERBOSE(this, "relays", qs.hist->hits.count(), "cached hits");
           send(subscriber, qs.hist->hits);
+        }
         if (! qs.hist->task && ! has_continuous_option(opts))
           queries_.erase(expr);
       }
@@ -335,7 +338,7 @@ message_handler index::make_handler()
         queries_.erase(q);
       }
     },
-    [=](expression const& expr, bitstream_type const& hits, historical_atom)
+    [=](expression const& expr, bitstream_type& hits, historical_atom)
     {
       VAST_DEBUG(this, "received", hits.count(), "historical hits from",
                  last_sender(), "for query:", expr);
@@ -345,20 +348,24 @@ message_handler index::make_handler()
       qs.hist->hits |= hits;
       auto after = qs.hist->hits.count();
       if (after > 0 && after > before)
+      {
+        auto msg = make_message(std::move(hits));
         for (auto& s : qs.subscribers)
-          // TODO: just send 'hits' to avoid sending redundant information
-          // already sent in the past.
-          send(s, qs.hist->hits);
+          send(s, msg);
+      }
     },
-    [=](expression const& expr, bitstream_type const& hits, continuous_atom)
+    [=](expression const& expr, bitstream_type& hits, continuous_atom)
     {
       VAST_DEBUG(this, "received", hits.count(), "continuous hits from",
                  last_sender(), "for query:", expr);
       auto& qs = queries_[expr];
       assert(qs.cont);
       qs.cont->hits |= hits;
-      for (auto& s : qs.subscribers)
-        send(s, qs.cont->hits); // TODO: see note above.
+      {
+        auto msg = make_message(std::move(hits));
+        for (auto& s : qs.subscribers)
+          send(s, msg);
+      }
     }
   };
 }
