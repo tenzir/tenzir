@@ -25,8 +25,6 @@ TEST("all-in-one")
   VAST_INFO("spawning the first core");
   configuration core_config;
   *core_config["tracker.port"] = 42002;
-  *core_config['v'] = 0;
-  *core_config['V'] = 5;
   *core_config['C'] = true;
   REQUIRE(core_config.verify());
   path dir = *core_config.get("directory");
@@ -39,7 +37,6 @@ TEST("all-in-one")
   VAST_INFO("importing a single Bro log");
   configuration import_config;
   *import_config["tracker.port"] = 42002;
-  *import_config['v'] = 0;
   *import_config['I'] = "bro";
   *import_config['r'] = m57_day11_18::ssl;
   *import_config["import.chunk-size"] = 10;
@@ -54,8 +51,6 @@ TEST("all-in-one")
 
   VAST_INFO("restarting a new core");
   *core_config["tracker.port"] = 42003;
-  *core_config['v'] = 0;
-  *core_config['V'] = 5;
   *core_config['C'] = true;
   REQUIRE(core_config.verify());
   core = spawn<program>(core_config);

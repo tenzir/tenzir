@@ -25,8 +25,6 @@ TEST("distributed")
   *cfg["archive.name"] = "archive";
   *cfg["index.name"] = "index";
   *cfg["search.name"] = "search";
-  *cfg['v'] = 0;
-  *cfg['V'] = 5;
 
   scoped_actor self;
   bool failed = false;

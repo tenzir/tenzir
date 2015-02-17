@@ -21,8 +21,6 @@ TEST("import")
   VAST_INFO("inhaling a single Bro log");
   configuration cfg;
   *cfg["tracker.port"] = 42001;
-  *cfg['v'] = 0;
-  *cfg['V'] = 5;
   *cfg['C'] = true;
   *cfg['I'] = "bro";
   *cfg['r'] = m57_day11_18::ftp;
