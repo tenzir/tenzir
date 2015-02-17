@@ -4,20 +4,7 @@
 #include "vast/serialization/variant.h"
 
 namespace vast {
-
-expression const& negation::expression() const
-{
-  assert(! empty());
-  return *begin();
-}
-
-expression& negation::expression()
-{
-  assert(! empty());
-  return *begin();
-}
-
-namespace detail {
+namespace {
 
 struct expr_serializer
 {
@@ -48,13 +35,7 @@ struct expr_serializer
 
   void operator()(predicate const& p)
   {
-    sink_ << which(p.lhs);
-    visit(*this, p.lhs);
-
-    sink_ << p.op;
-
-    sink_ << which(p.rhs);
-    visit(*this, p.rhs);
+    sink_ << p;
   }
 
   void operator()(type_extractor const& t)
@@ -109,17 +90,7 @@ struct expr_deserializer
 
   void operator()(predicate& p)
   {
-    predicate::operand::tag l;
-    source_ >> l;
-    p.lhs = predicate::operand::make(l);
-    visit(*this, p.lhs);
-
-    source_ >> p.op;
-
-    predicate::operand::tag r;
-    source_ >> r;
-    p.rhs = predicate::operand::make(r);
-    visit(*this, p.rhs);
+    source_ >> p;
   }
 
   void operator()(type_extractor& t)
@@ -145,13 +116,47 @@ struct expr_deserializer
   deserializer& source_;
 };
 
-} // namespace detail
+} // namespace <anonymous>
+
+void serialize(serializer& sink, predicate const& p)
+{
+  sink << which(p.lhs);
+  visit(expr_serializer{sink}, p.lhs);
+  sink << p.op;
+  sink << which(p.rhs);
+  visit(expr_serializer{sink}, p.rhs);
+}
+
+void deserialize(deserializer& source, predicate& p)
+{
+  predicate::operand::tag l;
+  source >> l;
+  p.lhs = predicate::operand::make(l);
+  visit(expr_deserializer{source}, p.lhs);
+  source >> p.op;
+  predicate::operand::tag r;
+  source >> r;
+  p.rhs = predicate::operand::make(r);
+  visit(expr_deserializer{source}, p.rhs);
+}
+
+expression const& negation::expression() const
+{
+  assert(! empty());
+  return *begin();
+}
+
+expression& negation::expression()
+{
+  assert(! empty());
+  return *begin();
+}
 
 
 void expression::serialize(serializer& sink) const
 {
   sink << which(node_);
-  visit(detail::expr_serializer{sink}, node_);
+  visit(expr_serializer{sink}, node_);
 }
 
 
@@ -159,9 +164,8 @@ void expression::deserialize(deserializer& source)
 {
   node::tag t;
   source >> t;
-
   node_ = node::make(t);
-  visit(detail::expr_deserializer{source}, node_);
+  visit(expr_deserializer{source}, node_);
 }
 
 expression::node& expose(expression& e)

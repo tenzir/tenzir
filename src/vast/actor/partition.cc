@@ -351,7 +351,7 @@ message_handler partition::make_handler()
               p->second.coverage.insert(i.first);
               if (! p->second.task)
               {
-                p->second.task = spawn<task>(&p->first);
+                p->second.task = spawn<task>(p->first);
                 send(p->second.task, supervisor_atom::value, this);
               }
               send(q->second.task, p->second.task);
@@ -369,13 +369,13 @@ message_handler partition::make_handler()
       VAST_DEBUG(this, "got", hits.count(), "hits for predicate:", pred);
       predicates_[*get<predicate>(pred)].hits |= hits;
     },
-    [=](done_atom, time::duration runtime, predicate const* pred)
+    [=](done_atom, time::duration runtime, predicate const& pred)
     {
       // Once we've completed all tasks of a certain predicate for all chunks,
       // we evaluate all queries in which the predicate participates.
-      auto& ps = predicates_[*pred];
+      auto& ps = predicates_[pred];
       VAST_DEBUG(this, "took", runtime, "to complete predicate for",
-                 ps.coverage.size(), "indexers:", *pred);
+                 ps.coverage.size(), "indexers:", pred);
       for (auto& q : ps.queries)
       {
         assert(q != nullptr);

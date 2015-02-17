@@ -442,6 +442,7 @@ void announce_builtin_types()
   VAST_ANNOUNCE(data);
   VAST_ANNOUNCE(error);
   VAST_ANNOUNCE(expression);
+  VAST_ANNOUNCE(predicate);
   VAST_ANNOUNCE(event);
   VAST_ANNOUNCE(key);
   VAST_ANNOUNCE(none);

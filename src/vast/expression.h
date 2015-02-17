@@ -157,6 +157,9 @@ struct predicate : util::totally_ordered<predicate>
   }
 };
 
+void serialize(serializer& sink, predicate const& p);
+void deserialize(deserializer& source, predicate& p);
+
 /// A sequence of AND expressions.
 struct conjunction : std::vector<expression>
 {
