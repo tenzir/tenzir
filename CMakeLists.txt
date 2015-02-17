@@ -65,7 +65,6 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
   else ()
     message(FATAL_ERROR "GCC >= 4.9 required, found ${compiler_version}")
   endif ()
-  set(CXX_FLAGS "${CXX_FLAGS} -fdiagnostics-color=always")
   if (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
     # Works around issues with libstdc++ and C++11. For details, see:
     # - https://bugs.freebsd.org/bugzilla/show_bug.cgi?id=194929
