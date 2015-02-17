@@ -50,8 +50,9 @@ message_handler exporter::make_handler()
     },
     [=](event const&)
     {
+      auto sender = actor_cast<actor>(last_sender());
       for (auto& s : sinks_)
-        forward_to(s);
+        send_as(sender, s, last_dequeued());
       if (++processed_ == limit_)
       {
         VAST_DEBUG(this, "reached maximum event limit:", limit_);

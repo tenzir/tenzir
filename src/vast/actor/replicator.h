@@ -48,10 +48,9 @@ public:
       },
       others() >> [=]
       {
-        for (auto& a : workers_)
-          // FIXME: use a method of sending appropriate for 1-n communication.
-          //send_tuple_as(last_sender(), a, last_dequeued());
-          forward_to(a);
+        auto sender = actor_cast<actor>(last_sender());
+        for (auto& w : workers_)
+          send_as(sender, w, last_dequeued());
       }
     };
   }
