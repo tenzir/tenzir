@@ -43,6 +43,7 @@ private:
   segment on_miss(uuid const& id);
 
   path dir_;
+  path meta_data_filename_;
   size_t max_segment_size_;
   util::range_map<event_id, uuid> segments_;
   util::lru_cache<uuid, segment> cache_;

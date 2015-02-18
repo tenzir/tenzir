@@ -11,6 +11,7 @@ using namespace caf;
 
 archive::archive(path dir, size_t capacity, size_t max_segment_size)
   : dir_{dir / "archive"},
+    meta_data_filename_{dir_ / "meta.data"},
     max_segment_size_{max_segment_size},
     cache_{capacity, [&](uuid const& id) { return on_miss(id); }}
 {
@@ -29,21 +30,21 @@ archive::archive(path dir, size_t capacity, size_t max_segment_size)
           return;
         }
       }
-      auto t = io::archive(dir_ / "meta.data", segments_);
+      VAST_VERBOSE(this, "writes meta data to:", meta_data_filename_.trim(-3));
+      auto t = io::archive(meta_data_filename_, segments_);
       if (! t)
       {
         VAST_ERROR(this, "failed to store segment meta data:", t.error());
         return;
       }
-      VAST_VERBOSE(this, "wrote meta data to:", (dir / "meta.data").trim(-3));
     });
 }
 
 caf::message_handler archive::make_handler()
 {
-  if (exists(dir_ / "meta.data"))
+  if (exists(meta_data_filename_))
   {
-    auto t = io::unarchive(dir_ / "meta.data", segments_);
+    auto t = io::unarchive(meta_data_filename_, segments_);
     if (! t)
     {
       VAST_ERROR(this, "failed to unarchive meta data:", t.error());
