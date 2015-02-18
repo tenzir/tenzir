@@ -107,7 +107,7 @@ TEST("all-in-one")
     {
       CHECK(hits.count() > 0);
     },
-    [&](done_atom, time::duration, expression const& expr)
+    [&](done_atom, time::extent, expression const& expr)
     {
       CHECK(expr == *pops);
     },
@@ -150,7 +150,7 @@ TEST("all-in-one")
     });
 
   VAST_INFO("waiting on final done from QUERY");
-  self->receive([&](done_atom, time::duration) { REQUIRE(true); });
+  self->receive([&](done_atom, time::extent) { REQUIRE(true); });
 
   VAST_INFO("importing another Bro log");
   *import_config["tracker.port"] = 42003;
@@ -202,7 +202,7 @@ TEST("all-in-one")
     {
       REQUIRE(true);
     },
-    [&](done_atom, time::duration)
+    [&](done_atom, time::extent)
     {
       CHECK(n == 15);
     },

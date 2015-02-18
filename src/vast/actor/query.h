@@ -49,7 +49,7 @@ struct query : public default_actor
   std::unique_ptr<chunk::reader> reader_;
   chunk chunk_;
 
-  time::steady_clock::time_point start_time_;
+  time::moment start_time_;
   double progress_ = 0.0;
   uint64_t requested_ = 0;
   bool inflight_ = false;

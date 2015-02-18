@@ -458,6 +458,8 @@ void announce_builtin_types()
   VAST_ANNOUNCE(table);
   VAST_ANNOUNCE(time::point);
   VAST_ANNOUNCE(time::duration);
+  VAST_ANNOUNCE(time::moment);
+  VAST_ANNOUNCE(time::extent);
   VAST_ANNOUNCE(type);
   VAST_ANNOUNCE(uuid);
   VAST_ANNOUNCE(value);

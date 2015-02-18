@@ -75,7 +75,7 @@ TEST("index")
     {
       hits |= h;
     },
-    [&](done_atom, time::duration, expression const& e)
+    [&](done_atom, time::extent, expression const& e)
     {
       CHECK(*expr == e);
       done = true;

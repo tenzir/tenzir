@@ -177,7 +177,7 @@ TEST("distributed")
   self->do_receive(
     [&](actor const& /* task */) {},
     [&](progress_atom, double) {},
-    [](done_atom, time::duration) {},
+    [](done_atom, time::moment) {},
     [&](event const& e)
     {
       VAST_INFO("got event:", e);

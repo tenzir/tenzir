@@ -58,6 +58,7 @@ caf::message_handler archive::make_handler()
     {
       VAST_DEBUG(this, "registers accountant", accountant);
       accountant_ = accountant;
+      send(accountant_, description() + "-events", time::now());
     },
     [=](chunk const& chk)
     {
@@ -79,7 +80,7 @@ caf::message_handler archive::make_handler()
       current_size_ += chk.bytes();
       current_.insert(chk);
       if (accountant_)
-        send(accountant_, time::now(), description() + "-events", chk.events());
+        send(accountant_, chk.events(), time::snapshot());
     },
     [=](event_id eid)
     {

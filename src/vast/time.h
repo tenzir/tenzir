@@ -19,7 +19,16 @@ namespace time {
 class point;
 class duration;
 using double_seconds = std::chrono::duration<double, std::ratio<1>>;
-using std::chrono::steady_clock;
+
+// Short idiomatic names for working with timers.
+using stopwatch = std::chrono::steady_clock;
+using moment = stopwatch::time_point;
+using extent = stopwatch::duration;
+
+inline moment snapshot()
+{
+  return stopwatch::now();
+}
 
 // Currently unused.
 class interval;
@@ -311,13 +320,42 @@ std::tm to_tm(std::string const& str, char const* fmt, char const* locale);
 //
 
 template <typename Iterator>
-trial<void> print(duration d, Iterator&& out)
+trial<void> print(duration d, Iterator&& out, bool adaptive = true)
 {
   using util::print;
-  auto t = print(d.double_seconds(), out);
-  if (! t)
-    return t.error();
-  *out++ = 's';
+  if (adaptive)
+  {
+    auto cnt = d.count();
+    if (cnt > 1000000000)
+    {
+      print_numeric(cnt / 1000000000, out);
+      print('.', out);
+      print_numeric((cnt % 1000000000) / 10000000, out);
+      print("s", out);
+    }
+    else if (cnt > 1000000)
+    {
+      print_numeric(cnt / 1000000, out);
+      print('.', out);
+      print_numeric((cnt % 1000000) / 10000, out);
+      print("ms", out);
+    }
+    else if (cnt > 1000)
+    {
+      print_numeric(cnt / 1000, out);
+      print("us", out);
+    }
+    else
+    {
+      print_numeric(cnt, out);
+      print("ns", out);
+    }
+  }
+  else
+  {
+    print(d.double_seconds(), out);
+    print('s', out);
+  }
   return nothing;
 }
 
@@ -404,5 +442,16 @@ trial<void> parse(point& p, Iterator& begin, Iterator end,
 
 } // namespace time
 } // namespace vast
+
+// We put this overload in namespace std so that ADL can find it.
+namespace std {
+
+template <typename Rep, typename Period, typename Iterator>
+vast::trial<void> print(std::chrono::duration<Rep, Period> d, Iterator&& out)
+{
+  return print(vast::time::duration{d}, out);
+}
+
+} // namespace std
 
 #endif

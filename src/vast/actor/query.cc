@@ -59,12 +59,12 @@ query::query(actor archive, actor sink, expression ast)
     [=](done_atom)
     {
       assert(last_sender() == this);
-      time::duration runtime = time::steady_clock::now() - start_time_;
+      auto runtime = time::snapshot() - start_time_;
       send(sink_, done_atom::value, runtime);
       VAST_INFO(this, "took", runtime, "to answer query:", ast_);
       quit(exit::done);
     },
-    [=](done_atom, time::duration runtime, expression const&) // from INDEX
+    [=](done_atom, time::extent runtime, expression const&) // from INDEX
     {
       VAST_VERBOSE(this, "completed index interaction in", runtime);
       send(this, done_atom::value);
@@ -197,7 +197,7 @@ query::query(actor archive, actor sink, expression ast)
 
 message_handler query::make_handler()
 {
-  start_time_ = time::steady_clock::now();
+  start_time_ = time::snapshot();
   return idle_;
 }
 

@@ -64,6 +64,7 @@ public:
       {
         VAST_DEBUG(this, "registers accountant", accountant);
         accountant_ = accountant;
+        send(accountant_, description() + "-events", time::now());
       },
       [=](run_atom)
       {
@@ -88,8 +89,7 @@ public:
           }
         }
         if (accountant_ != invalid_actor && ! events_.empty())
-          send(accountant_, time::now(),
-               description() + "-events", uint64_t{events_.size()});
+          send(accountant_, uint64_t{events_.size()}, time::snapshot());
         send_events();
         if (done())
           this->quit(exit::done);

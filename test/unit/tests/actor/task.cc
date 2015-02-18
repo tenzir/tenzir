@@ -98,14 +98,13 @@ TEST("task")
     });
 
   VAST_INFO("checking final notification");
-  self->receive(
-      [&](done_atom, time::duration) { CHECK(self->last_sender() == t); } );
+  self->receive([&](done_atom) { CHECK(self->last_sender() == t); } );
 
   VAST_INFO("customizing an exit message");
   t = spawn<task>(42);
   self->send(t, supervisor_atom::value, self);
   self->send_exit(t, exit::kill);
-  self->receive([&](done_atom, time::duration, int i) { CHECK(i == 42); } );
+  self->receive([&](done_atom, int i) { CHECK(i == 42); } );
 
   self->await_all_other_actors_done();
 }

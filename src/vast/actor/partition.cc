@@ -60,7 +60,7 @@ struct continuous_query_proxy : default_actor
           assert(p);
           map_.emplace(std::move(*p), std::move(hits));
         },
-        [=](done_atom, time::duration)
+        [=](done_atom)
         {
           for (auto& expr : exprs_)
           {
@@ -302,9 +302,9 @@ message_handler partition::make_handler()
       send(task, supervisor_atom::value, this);
       VAST_DEBUG(this, "indexes", chunks_indexed_concurrently_, "in parallel");
     },
-    [=](done_atom, time::duration runtime, uint64_t events)
+    [=](done_atom, time::moment start, uint64_t events)
     {
-      VAST_DEBUG(this, "indexed", events, "events in", runtime);
+      VAST_DEBUG(this, "indexed", events, "events in", time::snapshot() - start);
       --chunks_indexed_concurrently_;
       check_underload();
     },
@@ -334,7 +334,7 @@ message_handler partition::make_handler()
         // spin up a new task to ensure that we incorporate results from chunks
         // that have arrived in the meantime.
         VAST_DEBUG(this, "spawns new query task");
-        q->second.task = spawn<task>(q->first);
+        q->second.task = spawn<task>(time::snapshot(), q->first);
         send(q->second.task, supervisor_atom::value, this);
         send(q->second.task, this);
         for (auto& pred : visit(expr::predicatizer{}, expr))
@@ -351,7 +351,7 @@ message_handler partition::make_handler()
               p->second.coverage.insert(i.first);
               if (! p->second.task)
               {
-                p->second.task = spawn<task>(p->first);
+                p->second.task = spawn<task>(time::snapshot(), p->first);
                 send(p->second.task, supervisor_atom::value, this);
               }
               send(q->second.task, p->second.task);
@@ -369,13 +369,14 @@ message_handler partition::make_handler()
       VAST_DEBUG(this, "got", hits.count(), "hits for predicate:", pred);
       predicates_[*get<predicate>(pred)].hits |= hits;
     },
-    [=](done_atom, time::duration runtime, predicate const& pred)
+    [=](done_atom, time::moment start, predicate const& pred)
     {
       // Once we've completed all tasks of a certain predicate for all chunks,
       // we evaluate all queries in which the predicate participates.
       auto& ps = predicates_[pred];
-      VAST_DEBUG(this, "took", runtime, "to complete predicate for",
-                 ps.coverage.size(), "indexers:", pred);
+      VAST_DEBUG(this, "took", time::snapshot() - start,
+                 "to complete predicate for", ps.coverage.size(),
+                 "indexers:", pred);
       for (auto& q : ps.queries)
       {
         assert(q != nullptr);
@@ -391,9 +392,10 @@ message_handler partition::make_handler()
       }
       ps.task = invalid_actor;
     },
-    [=](done_atom, time::duration runtime, expression const& expr)
+    [=](done_atom, time::moment start, expression const& expr)
     {
-      VAST_DEBUG(this, "completed query", expr, "in", runtime);
+      VAST_DEBUG(this, "completed query", expr, "in",
+                 time::snapshot() - start);
       queries_[expr].task = invalid_actor;
       send(sink_, last_dequeued());
     },

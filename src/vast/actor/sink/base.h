@@ -30,6 +30,7 @@ struct base : public default_actor
       {
         VAST_DEBUG(this, "registers accountant", accountant);
         accountant_ = accountant;
+        send(accountant_, description() + "-events", time::now());
       },
       [=](event const& e)
       {
@@ -50,8 +51,7 @@ struct base : public default_actor
             return;
           }
         if (accountant_)
-          send(accountant_, time::now(),
-               description() + "-events", uint64_t{v.size()});
+          send(accountant_, uint64_t{v.size()}, time::snapshot());
       }
     };
   }

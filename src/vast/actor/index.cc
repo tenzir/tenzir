@@ -166,6 +166,7 @@ message_handler index::make_handler()
     {
       VAST_DEBUG(this, "registers accountant", accountant);
       accountant_ = accountant;
+      send(accountant_, description() + "-events", time::now());
     },
     [=](flush_atom, actor const& task)
     {
@@ -217,7 +218,7 @@ message_handler index::make_handler()
       // Relay chunk.
       VAST_DEBUG(this, "forwards chunk [" << chk.base() << ',' << chk.base() +
                  chk.events() << ')', "to", p.actor, '(' << part << ')');
-      auto t = spawn<task>(chk.events());
+      auto t = spawn<task>(time::snapshot(), chk.events());
       send(t, supervisor_atom::value, this);
       send(p.actor, chk, t);
     },
@@ -242,7 +243,7 @@ message_handler index::make_handler()
         if (! qs.hist->task)
         {
           VAST_VERBOSE(this, "enables historical query");
-          qs.hist->task = spawn<task>();
+          qs.hist->task = spawn<task>(time::snapshot());
           // Test whether this query matches any partition and relay it where
           // possible.
           for (auto& p : partitions_)
@@ -279,7 +280,7 @@ message_handler index::make_handler()
         if (! qs.cont->task)
         {
           VAST_VERBOSE(this, "enables continuous query");
-          qs.cont->task = spawn<task>();
+          qs.cont->task = spawn<task>(time::snapshot());
           send(qs.cont->task, this);
           // Relay the continuous query to all active partitions, as these may
           // still receive chunks.
@@ -310,16 +311,18 @@ message_handler index::make_handler()
         q->second.cont->task = invalid_actor;
       }
     },
-    [=](done_atom, time::duration runtime, uint64_t events)
+    [=](done_atom, time::moment start, uint64_t events)
     {
-      VAST_VERBOSE(this, "indexed", events, "events in", runtime);
+      VAST_VERBOSE(this, "indexed", events, "events in",
+                   time::snapshot() - start);
       if (accountant_)
-        send(accountant_, time::now(), description() + "-events", events);
+        send(accountant_, events, time::snapshot());
     },
-    [=](done_atom, time::duration runtime, expression const& expr)
+    [=](done_atom, time::moment start, expression const& expr)
     {
+      auto runtime = time::snapshot() - start;
       VAST_DEBUG(this, "got signal that", last_sender(),
-                 "finished for historical query: ", expr);
+                 "took", runtime, "to complete for answer query: ", expr);
       auto q = queries_.find(expr);
       assert(q != queries_.end());
       assert(q->second.hist);
@@ -332,7 +335,7 @@ message_handler index::make_handler()
       {
         VAST_VERBOSE(this, "completed query", expr, "in", runtime);
         for (auto& s : q->second.subscribers)
-          send(s, last_dequeued());
+          send(s, done_atom::value, runtime, expr);
         // TODO: consider caching it for a while and also record its coverage
         // so that future queries don't need to start over again.
         queries_.erase(q);
