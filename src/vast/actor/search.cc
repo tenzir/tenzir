@@ -25,10 +25,7 @@ search::search()
 void search::at(exit_msg const& msg)
 {
   for (auto& q : queries_)
-  {
-    link_to(q.first);
     link_to(q.second);
-  }
   quit(msg.reason);
 }
 
