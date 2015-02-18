@@ -11,7 +11,7 @@ namespace source {
 
 /// A synchronous source that extracts events one by one.
 template <typename Derived>
-struct synchronous : public default_actor
+struct synchronous : public flow_controlled_actor
 {
 public:
   synchronous()
@@ -23,6 +23,20 @@ public:
   {
     send_events();
     this->quit(msg.reason);
+  }
+
+  void on_overload(caf::actor_addr const&) override
+  {
+    become_overloaded();
+    running_ = false; // Stop at the next occasion.
+  }
+
+  void on_underload(caf::actor_addr const&) override
+  {
+    become_underloaded();
+    running_ = true;
+    if (! done())
+      send(this, run_atom::value);
   }
 
   caf::message_handler make_handler() override
@@ -50,15 +64,6 @@ public:
       {
         VAST_DEBUG(this, "registers accountant", accountant);
         accountant_ = accountant;
-      },
-      [=](start_atom)
-      {
-        running_ = true;
-        this->send(this, run_atom::value);
-      },
-      [=](stop_atom)
-      {
-        running_ = false;
       },
       [=](run_atom)
       {

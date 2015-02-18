@@ -139,14 +139,7 @@ public:
   caf::behavior make_behavior() override
   {
     VAST_DEBUG(this, "spawned");
-    caf::message_handler system = [=](ping_atom) { return pong_atom::value; };
-    system = system.or_else(make_exit_handler()).or_else(make_down_handler());
-    auto internal = make_internal_handler();
-    auto client = make_handler();
-    auto handler = system.or_else(internal).or_else(client);
-    if (trap_unexpected())
-      handler = handler.or_else(make_unexpected_handler());
-    return handler;
+    return augment(make_handler());
   }
 
   void on_exit()
@@ -168,13 +161,25 @@ public:
 protected:
   virtual caf::message_handler make_handler() = 0;
 
+  caf::message_handler augment(caf::message_handler handler)
+  {
+    auto augmented = make_exit_handler()
+      .or_else(make_down_handler())
+      .or_else(make_internal_handler())
+      .or_else([=](ping_atom) { return pong_atom::value; })
+      .or_else(std::move(handler));
+    if (trap_unexpected())
+      augmented = augmented.or_else(make_unexpected_handler());
+    return augmented;
+  }
+
   // For derived actors that need to inject a custom handler.
   virtual caf::message_handler make_internal_handler()
   {
     return {};
   }
 
-  bool trap_unexpected()
+  bool trap_unexpected() const
   {
     return flags_ & 0x01;
   }
@@ -184,7 +189,7 @@ protected:
     flag ? flags_ |= 0x01 : flags_ &= ~0x01;
   }
 
-  bool overloaded()
+  bool overloaded() const
   {
     return flags_ & 0x02;
   }
@@ -194,7 +199,7 @@ protected:
     flag ? flags_ |= 0x02 : flags_ &= ~0x02;
   }
 
-  bool high_priority_exit()
+  bool high_priority_exit() const
   {
     return flags_ & 0x04;
   }

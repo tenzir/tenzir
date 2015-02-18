@@ -11,7 +11,7 @@
 namespace vast {
 
 /// Manages sources which produce events.
-class importer : public default_actor
+class importer : public flow_controlled_actor
 {
 public:
   /// Spawns an importer.
@@ -35,8 +35,6 @@ private:
   caf::actor source_;
   caf::actor chunkifier_;
   caf::actor accountant_;
-  caf::message_handler ready_;
-  caf::message_handler paused_;
   caf::message_handler terminating_;
   size_t stored_ = 0;
   std::set<path> orphaned_;

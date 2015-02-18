@@ -42,11 +42,24 @@ TEST("all-in-one")
   *import_config["import.chunk-size"] = 10;
   *import_config["archive.max-segment-size"] = 1;
   REQUIRE(import_config.verify());
-  auto import = spawn<program>(import_config);
-  import->link_to(core);
+  auto import = self->spawn<program, monitored>(import_config);
   anon_send(import, run_atom::value);
+  self->receive([&](down_msg const& msg) { CHECK(msg.reason == exit::done); });
 
-  VAST_INFO("waiting for importer to pull down core");
+  VAST_INFO("waiting for all chunks to pass RECEIVER");
+  auto receiver_name = *core_config.get("receiver.name");
+  self->sync_send(core, tracker_atom::value).await([&](actor const& tracker)
+  {
+    self->sync_send(tracker, get_atom::value, receiver_name).await(
+      [&](actor const& receiver)
+      {
+        self->send(receiver, ping_atom::value);
+        self->receive([&](pong_atom) { CHECK(true); });
+      });
+  });
+
+  VAST_INFO("waiting for first core to terminate");
+  self->send_exit(core, exit::done);
   self->await_all_other_actors_done();
 
   VAST_INFO("restarting a new core");
@@ -147,8 +160,10 @@ TEST("all-in-one")
   anon_send(import, run_atom::value);
   self->receive([&](down_msg const& msg) { CHECK(msg.reason == exit::done); });
 
-  VAST_INFO("waiting for chunks to arrive at RECEIVER");
-  std::this_thread::sleep_for(std::chrono::milliseconds(500));
+  VAST_INFO("delaying flush until all chunks have passed RECEIVER");
+  self->send(trackr, get_atom::value, receiver_name);
+  self->receive([&](actor const& r) { self->send(r, ping_atom::value); });
+  self->receive([&](pong_atom) { CHECK(true); });
 
   VAST_INFO("flushing INDEX");
   self->send(trackr, get_atom::value, *core_config.get("index.name"));
