@@ -20,87 +20,64 @@ SUITE("actors")
 
 TEST("all-in-one")
 {
-  scoped_actor self;
-
-  VAST_INFO("spawning the first core");
-  configuration core_config;
-  *core_config["tracker.port"] = 42002;
-  *core_config['C'] = true;
-  REQUIRE(core_config.verify());
-  path dir = *core_config.get("directory");
+  VAST_INFO("importing a single Bro log");
+  configuration import;
+  *import["tracker.port"] = 42002;
+  *import['I'] = "bro";
+  *import['C'] = true;
+  *import['r'] = m57_day11_18::ssl;
+  *import["import.chunk-size"] = 10;
+  *import["archive.max-segment-size"] = 1;
+  REQUIRE(import.verify());
+  path dir = *import.get("directory");
   if (exists(dir))
     REQUIRE(rm(dir));
-  auto core = spawn<program>(core_config);
-  self->send(core, run_atom::value);
-  self->receive([&](ok_atom) { CHECK(self->last_sender() == core); });
-
-  VAST_INFO("importing a single Bro log");
-  configuration import_config;
-  *import_config["tracker.port"] = 42002;
-  *import_config['I'] = "bro";
-  *import_config['r'] = m57_day11_18::ssl;
-  *import_config["import.chunk-size"] = 10;
-  *import_config["archive.max-segment-size"] = 1;
-  REQUIRE(import_config.verify());
-  auto import = self->spawn<program, monitored>(import_config);
-  anon_send(import, run_atom::value);
-  self->receive([&](down_msg const& msg) { CHECK(msg.reason == exit::done); });
-
-  VAST_INFO("waiting for all chunks to pass RECEIVER");
-  auto receiver_name = *core_config.get("receiver.name");
-  self->sync_send(core, tracker_atom::value).await([&](actor const& tracker)
-  {
-    self->sync_send(tracker, get_atom::value, receiver_name).await(
-      [&](actor const& receiver)
-      {
-        self->send(receiver, ping_atom::value);
-        self->receive([&](pong_atom) { CHECK(true); });
-      });
-  });
-
-  VAST_INFO("waiting for first core to terminate");
-  self->send_exit(core, exit::done);
+  scoped_actor self;
+  self->send(self->spawn<program>(import), run_atom::value);
   self->await_all_other_actors_done();
 
   VAST_INFO("restarting a new core");
-  *core_config["tracker.port"] = 42003;
+  configuration core_config;
   *core_config['C'] = true;
+  *core_config["tracker.port"] = 42003;
   REQUIRE(core_config.verify());
-  core = spawn<program>(core_config);
-  anon_send(core, run_atom::value);
+  auto core = spawn<program>(core_config);
+  self->send(core, run_atom::value);
 
   VAST_INFO("testing whether archive has the correct chunk");
-  actor trackr;
-  self->send(core, tracker_atom::value);
-  self->receive([&](actor const& t) { trackr = t; });
-
-  self->send(trackr, get_atom::value, *core_config.get("archive.name"));
-  self->receive([&](actor const& a) { self->send(a, event_id(112)); });
-  self->receive(
-    on_arg_match >> [&](chunk const& chk)
-    {
-      // The ssl.log has a total of 113 events and we use batches of 10. So
-      // the last chunk has three events in [110, 112].
-      CHECK(chk.meta().ids.find_first() == 110);
-      CHECK(chk.meta().ids.find_last() == 112);
-
-      // Check the last ssl.log entry.
-      chunk::reader r{chk};
-      auto e = r.read(112);
-      REQUIRE(e);
-      CHECK(get<record>(*e)->at(1) == "XBy0ZlNNWuj");
-      CHECK(get<record>(*e)->at(3) == "TLSv10");
-    });
+  actor tracker;
+  self->sync_send(core, tracker_atom::value).await([&](actor const& t)
+  {
+    tracker = t;
+  });
+  self->send(tracker, get_atom::value, *core_config.get("archive.name"));
+  self->receive([&](actor const& a) { self->send(a, event_id{112}); });
+  self->receive([&](chunk const& chk)
+  {
+    // The ssl.log has a total of 113 events and we use batches of 10. So
+    // the last chunk has three events in [110, 112].
+    CHECK(chk.meta().ids.find_first() == 110);
+    CHECK(chk.meta().ids.find_last() == 112);
+    // Check the last ssl.log entry.
+    chunk::reader r{chk};
+    auto e = r.read(112);
+    REQUIRE(e);
+    CHECK(get<record>(*e)->at(1) == "XBy0ZlNNWuj");
+    CHECK(get<record>(*e)->at(3) == "TLSv10");
+  });
 
   VAST_INFO("testing whether a manual index lookup succeeds");
   auto pops = to<expression>("id.resp_p == 995/?");
   REQUIRE(pops);
-  self->send(trackr, get_atom::value, *core_config.get("index.name"));
+  self->send(tracker, get_atom::value, *core_config.get("index.name"));
   self->receive([&](actor const& index)
   {
     self->send(index, *pops, historical, self);
   });
-  self->receive([&](actor t) { self->send(t, subscriber_atom::value, self); });
+  self->receive([&](actor const& task)
+  {
+    self->send(task, subscriber_atom::value, self);
+  });
   uint64_t left = 5;
   self->do_receive(
     [&](default_bitstream const& hits)
@@ -118,18 +95,17 @@ TEST("all-in-one")
     }).until([&left] { return left == 0; });
 
   VAST_INFO("constructing a simple POPS query");
-  self->send(trackr, get_atom::value, *core_config.get("search.name"));
-  self->receive(
-    [&](actor search)
-    {
-      auto q = "id.resp_p == 995/?";
-      self->sync_send(search, q, historical, self).await(
-        [&](expression const& ast, actor qry)
-        {
-          CHECK(ast == *pops);
-          self->send(qry, extract_atom::value, uint64_t{46});
-        });
-    });
+  self->send(tracker, get_atom::value, *core_config.get("search.name"));
+  self->receive([&](actor search)
+  {
+    auto q = "id.resp_p == 995/?";
+    self->sync_send(search, q, historical, self).await(
+      [&](expression const& ast, actor const& qry)
+      {
+        CHECK(ast == *pops);
+        self->send(qry, extract_atom::value, uint64_t{46});
+      });
+  });
 
   VAST_INFO("checking POPS query results");
   auto i = 0;
@@ -151,32 +127,25 @@ TEST("all-in-one")
 
   VAST_INFO("waiting on final done from QUERY");
   self->receive([&](done_atom, time::extent) { REQUIRE(true); });
+  self->send_exit(core, exit::done);
+  self->await_all_other_actors_done();
 
   VAST_INFO("importing another Bro log");
-  *import_config["tracker.port"] = 42003;
-  *import_config["import.chunk-size"] = 100;
-  *import_config['r'] = m57_day11_18::conn;
-  import = self->spawn<program, monitored>(import_config);
-  anon_send(import, run_atom::value);
-  self->receive([&](down_msg const& msg) { CHECK(msg.reason == exit::done); });
+  *import["import.chunk-size"] = 100;
+  *import['r'] = m57_day11_18::conn;
+  self->send(self->spawn<program>(import), run_atom::value);
+  self->await_all_other_actors_done();
 
-  VAST_INFO("delaying flush until all chunks have passed RECEIVER");
-  self->send(trackr, get_atom::value, receiver_name);
-  self->receive([&](actor const& r) { self->send(r, ping_atom::value); });
-  self->receive([&](pong_atom) { CHECK(true); });
-
-  VAST_INFO("flushing INDEX");
-  self->send(trackr, get_atom::value, *core_config.get("index.name"));
-  self->receive(
-    [&](actor const& index)
-    {
-      auto t = self->spawn<task, monitored>();
-      self->send(index, flush_atom::value, t);
-      self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
-    });
+  VAST_INFO("restarting another core");
+  core = spawn<program>(core_config);
+  self->send(core, run_atom::value);
 
   VAST_INFO("issuing query against conn and ssl");
-  self->send(trackr, get_atom::value, *core_config.get("search.name"));
+  self->sync_send(core, tracker_atom::value).await([&](actor const& t)
+  {
+    tracker = t;
+  });
+  self->send(tracker, get_atom::value, *core_config.get("search.name"));
   self->receive(
     [&](actor const& search)
     {
