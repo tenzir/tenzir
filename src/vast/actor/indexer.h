@@ -26,15 +26,19 @@ public:
     : path_{std::move(p)},
       bmi_{std::forward<Args>(args)...}
   {
-    attach_functor(
-      [=](uint32_t reason)
-      {
-        if (reason == exit::kill)
-          return;
-        auto t = flush();
-        if (! t)
-          VAST_ERROR(this, "failed to flush:", t.error());
-      });
+  }
+
+  void at(caf::exit_msg const& msg)
+  {
+    if (msg.reason == exit::kill)
+    {
+      quit(exit::kill);
+      return;
+    }
+    auto t = flush();
+    if (! t)
+      VAST_ERROR(this, "failed to flush:", t.error());
+    quit(msg.reason);
   }
 
   virtual bool push_back(BitmapIndex& bmi, event const& e) = 0;
@@ -480,14 +484,7 @@ public:
     : dir_{std::move(p)},
       type_{std::move(t)}
   {
-    attach_functor(
-      [=](uint32_t)
-      {
-        indexers_.clear();
-        auto t = flush();
-        if (! t)
-          VAST_ERROR(this, "failed to flush:", t.error());
-      });
+    attach_functor([=](uint32_t) { indexers_.clear(); });
   }
 
   caf::actor load_name_indexer()
@@ -545,7 +542,9 @@ public:
       auto i = detail::make_data_indexer<Bitstream>(*t, p, o, type_);
       if (! i)
         return i;
+      else
       a = std::move(*i);
+      monitor(a);
     }
 
     return a;
@@ -563,9 +562,23 @@ public:
 
   void at(caf::exit_msg const& msg) override
   {
+    auto t = flush();
+    if (! t)
+      VAST_ERROR(this, "failed to flush:", t.error());
+    if (indexers_.empty())
+    {
+      quit(msg.reason);
+      return;
+    }
+    become(
+      [=](caf::down_msg const& msg)
+      {
+        at(msg);
+        if (indexers_.empty())
+          quit(msg.reason);
+      });
     for (auto& i : indexers_)
-      send_exit(i.second, msg.reason);  // Indexers automatically flush on exit.
-    quit(msg.reason);
+      send_exit(i.second, msg.reason);
   }
 
   caf::message_handler make_handler() override

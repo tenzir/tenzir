@@ -193,17 +193,57 @@ void partition::at(exit_msg const& msg)
 {
   if (msg.reason == exit::kill)
   {
+    for (auto& i : indexers_)
+      link_to(i.second);
+    for (auto& q : queries_)
+      link_to(q.second.task);
     quit(msg.reason);
     return;
   }
-  auto t = spawn<task, linked>();
-  send(t, msg.reason);
-  trap_exit(false); // Once the task completes we go down with it.
-  send(this, flush_atom::value, t);
-  for (auto& i : indexers_)
-    link_to(i.second);
+  // We terminate queries unconditionally.
   for (auto& q : queries_)
-    link_to(q.second.task);
+    send_exit(q.second.task, msg.reason);
+  // Two-staged shutdown of dechunkifiers and indexers: first, wait for all
+  // dechunkifiers to exit since they relay events to the indexers. Thereafter
+  // we can guaranatee that they have received all events and can shut them
+  // down safely.
+  // FIXME: since we provide a "naked" DOWN handler, we override the
+  // flow-control DOWN handler. In this case it is safe because we have no
+  // downstream nodes, but we should really figure out a better way to make
+  // become() work with composite behaviors.
+  auto phase2 = [=](down_msg const& down)
+  {
+    at(down);
+    if (indexers_.empty())
+      quit(msg.reason);
+  };
+  auto phase1 = [=](down_msg const& down)
+  {
+    at(down);
+    if (! dechunkifiers_.empty())
+      return;
+    if (indexers_.empty())
+    {
+      quit(msg.reason);
+      return;
+    }
+    become(phase2);
+    for (auto& i : indexers_)
+      send_exit(i.second, msg.reason);
+  };
+  if (! dechunkifiers_.empty())
+  {
+    become(phase1);
+    return;
+  }
+  if (! indexers_.empty())
+  {
+    become(phase2);
+    for (auto& i : indexers_)
+      send_exit(i.second, msg.reason);
+    return;
+  }
+  quit(msg.reason);
 }
 
 message_handler partition::make_handler()
