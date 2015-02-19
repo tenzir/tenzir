@@ -34,7 +34,6 @@ index::index(path const& dir, size_t max_events,
   assert(max_events_per_partition_ > 0);
   assert(active_partitions_ > 0);
   assert(active_partitions_ < max_partitions_);
-  high_priority_exit(false);
   attach_functor([=](uint32_t)
     {
       accountant_ = invalid_actor;

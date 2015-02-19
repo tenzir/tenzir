@@ -14,7 +14,6 @@ struct base : public default_actor
 {
   base()
   {
-    high_priority_exit(false);
     attach_functor([=](uint32_t)
     {
       accountant_ = caf::invalid_actor;

@@ -12,7 +12,6 @@ importer::importer(path dir, uint64_t chunk_size, io::compression method)
     chunk_size_{chunk_size},
     compression_{method}
 {
-  high_priority_exit(false);
   attach_functor([=](uint32_t)
   {
     source_ = invalid_actor;

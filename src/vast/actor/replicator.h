@@ -13,7 +13,6 @@ public:
   replicator()
   {
     trap_unexpected(false);
-    high_priority_exit(false);
     attach_functor([=](uint32_t) { workers_.clear(); });
   }
 

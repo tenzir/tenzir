@@ -165,7 +165,6 @@ partition::partition(path dir, actor sink)
     sink_{std::move(sink)}
 {
   assert(sink_ != invalid_actor);
-  high_priority_exit(false);
   attach_functor([=](uint32_t)
     {
       sink_ = invalid_actor;

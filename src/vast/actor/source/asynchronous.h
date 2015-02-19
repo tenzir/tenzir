@@ -20,7 +20,6 @@ public:
       batch_size_(batch_size)
   {
     using namespace caf;
-    high_priority_exit(false);
     operating_ = {
         [=](batch_atom, size_t batch_size)
         {

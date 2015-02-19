@@ -9,7 +9,6 @@ using namespace caf;
 
 receiver::receiver()
 {
-  high_priority_exit(false);
   attach_functor([=](uint32_t)
   {
     identifier_ = invalid_actor;

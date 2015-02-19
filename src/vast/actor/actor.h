@@ -133,7 +133,6 @@ public:
   {
     trap_exit(true);
     trap_unexpected(true);
-    high_priority_exit(true);
   }
 
   caf::behavior make_behavior() override
@@ -199,16 +198,6 @@ protected:
     flag ? flags_ |= 0x02 : flags_ &= ~0x02;
   }
 
-  bool high_priority_exit() const
-  {
-    return flags_ & 0x04;
-  }
-
-  void high_priority_exit(bool flag)
-  {
-    flag ? flags_ |= 0x04 : flags_ &= ~0x04;
-  }
-
   virtual void at(caf::exit_msg const& msg)
   {
     quit(msg.reason);
@@ -225,16 +214,16 @@ protected:
     {
       VAST_DEBUG(this, "got EXIT from", msg.source,
                  '(' << render_exit_reason(msg.reason) << ')');
-      if (high_priority_exit())
+      if (current_mailbox_element()->mid.is_high_priority())
       {
-        at(msg);
+        VAST_DEBUG(this, "delays exit");
+        send(caf::message_priority::normal, this,
+             caf::exit_msg{address(), msg.reason});
       }
       else
       {
-        VAST_DEBUG(this, "delays exit");
-        high_priority_exit(true);
-        send(caf::message_priority::normal, this,
-             caf::exit_msg{address(), msg.reason});
+        VAST_DEBUG(this, "runs EXIT handler");
+        at(msg);
       }
     };
   }
