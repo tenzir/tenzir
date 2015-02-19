@@ -29,6 +29,13 @@ using lcg64 =
     std::numeric_limits<uint64_t>::max()
   >;
 
+// Some GCC 4.9 versions have trouble with our linear congruential engine.
+#ifdef VAST_GCC
+using lcg = std::minstd_rand;
+#else
+using lcg = lcg64;
+#endif
+
 /// A source that generates random events according to a given schema.
 class test : public synchronous<test>
 {

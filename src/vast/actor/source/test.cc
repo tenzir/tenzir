@@ -144,7 +144,7 @@ struct randomizer
 
   void operator()(boolean& b)
   {
-    lcg64 gen{static_cast<count>(sample())};
+    lcg gen{static_cast<lcg::result_type>(sample())};
     std::uniform_int_distribution<count> unif{0, 1};
     b = unif(gen);
   }
@@ -172,7 +172,7 @@ struct randomizer
 
   void operator()(std::string& str)
   {
-    lcg64 gen{static_cast<count>(sample())};
+    lcg gen{static_cast<lcg::result_type>(sample())};
     std::uniform_int_distribution<size_t> unif_size{0, 256};
     std::uniform_int_distribution<char> unif_char{32, 126}; // Printable ASCII
 
