@@ -61,7 +61,7 @@ query::query(actor archive, actor sink, expression ast)
       assert(current_sender() == this);
       auto runtime = time::snapshot() - start_time_;
       send(sink_, done_atom::value, runtime);
-      VAST_INFO(this, "took", runtime, "to answer query:", ast_);
+      VAST_INFO(this, "took", runtime, "for:", ast_);
       quit(exit::done);
     },
     [=](done_atom, time::extent runtime, expression const&) // from INDEX

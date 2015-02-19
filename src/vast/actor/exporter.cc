@@ -40,7 +40,7 @@ message_handler exporter::make_handler()
     },
     [=](limit_atom, uint64_t max)
     {
-      VAST_DEBUG(this, "caps event export at", max, "events");
+      VAST_VERBOSE(this, "caps event export at", max, "events");
 
       if (processed_ < max)
         limit_ = max;
@@ -55,7 +55,7 @@ message_handler exporter::make_handler()
         send_as(sender, s, current_message());
       if (++processed_ == limit_)
       {
-        VAST_DEBUG(this, "reached maximum event limit:", limit_);
+        VAST_VERBOSE(this, "reached maximum event limit:", limit_);
         quit(exit::done);
       }
     },
@@ -63,9 +63,10 @@ message_handler exporter::make_handler()
     {
       VAST_DEBUG(this, "got query progress:", size_t(progress * 100) << "%");
     },
-    [=](done_atom, time::duration runtime)
+    [=](done_atom, time::extent runtime)
     {
-      VAST_DEBUG(this, "completed query in", runtime);
+      VAST_VERBOSE(this, "completed query running for", runtime);
+      quit(exit::done);
     }
   };
 }

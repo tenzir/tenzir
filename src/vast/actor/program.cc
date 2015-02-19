@@ -159,7 +159,7 @@ trial<void> program::run()
     }
     else
     {
-      VAST_INFO(this, "connects to tracker at", host << ':' << port);
+      VAST_VERBOSE(this, "connects to tracker at", host << ':' << port);
       tracker_ = caf::io::remote_actor(host, port);
     }
 
