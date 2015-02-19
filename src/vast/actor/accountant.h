@@ -63,12 +63,12 @@ struct accountant : default_actor
     {
       [=](std::string const& context, time::point first)
       {
-        actors_[last_sender()] = context;
+        actors_[current_sender()] = context;
         contexts_[context].begin = first;
       },
       [=](T x, time::moment timestamp)
       {
-        record(actors_[last_sender()], x, timestamp);
+        record(actors_[current_sender()], x, timestamp);
       },
       [=](std::string const& context, T x, time::moment timestamp)
       {

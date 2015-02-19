@@ -33,7 +33,7 @@ public:
             if (auto opt = acceptor_->try_accept_connection())
               send(handler_, spawn<Connection>(opt->first, opt->second));
           }
-          self << self->last_dequeued();
+          self << self->current_message();
         });
   }
 

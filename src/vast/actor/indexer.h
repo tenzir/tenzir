@@ -611,7 +611,7 @@ public:
         for (auto& i : indexers_)
         {
           send(task, i.second);
-          send_as(this, i.second, last_dequeued());
+          send_as(this, i.second, current_message());
         }
         send(task, done_atom::value);
       },
@@ -621,7 +621,7 @@ public:
         for (auto& i : indexers_)
         {
           send(task, i.second);
-          send_as(this, i.second, last_dequeued());
+          send_as(this, i.second, current_message());
         }
         auto t = flush();
         send(task, done_atom::value);
@@ -644,7 +644,7 @@ public:
           for (auto& i : indexers)
           {
             send(task, i);
-            send_as(this, i, last_dequeued());
+            send_as(this, i, current_message());
           }
         }
         send(task, done_atom::value);

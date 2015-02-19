@@ -38,7 +38,7 @@ TEST("distributed")
     others() >> [&]
     {
       failed = true;
-      VAST_ERROR("unexpected message: ", to_string(self->last_dequeued()));
+      VAST_ERROR("unexpected message: ", to_string(self->current_message()));
     }};
 
   // Tracker
@@ -156,7 +156,7 @@ TEST("distributed")
             },
             others() >> [&]
             {
-              VAST_ERROR(to_string(self->last_dequeued()));
+              VAST_ERROR(to_string(self->current_message()));
               REQUIRE(false);
             });
         },
@@ -168,7 +168,7 @@ TEST("distributed")
     },
     others() >> [&]
     {
-      VAST_ERROR(to_string(self->last_dequeued()));
+      VAST_ERROR(to_string(self->current_message()));
       REQUIRE(false);
     });
 
@@ -186,7 +186,7 @@ TEST("distributed")
     },
     others() >> [&]
     {
-      VAST_ERROR(to_string(self->last_dequeued()));
+      VAST_ERROR(to_string(self->current_message()));
       REQUIRE(false);
     })
   .until([&] { return done; });

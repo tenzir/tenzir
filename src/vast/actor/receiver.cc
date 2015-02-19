@@ -101,7 +101,7 @@ message_handler receiver::make_handler()
         others() >> [=]
         {
           VAST_WARN(this, "got unexpected message from",
-                    last_sender() << ':', to_string(last_dequeued()));
+                    current_sender() << ':', to_string(current_message()));
         });
     }
   };

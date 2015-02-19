@@ -347,7 +347,7 @@ console::console(caf::actor search, path dir)
             {
               send(this, prompt_atom::value);
               VAST_ERROR(this, "got unexpected message:",
-                         to_string(last_dequeued()));
+                         to_string(current_message()));
             });
 
       return {};
@@ -645,8 +645,8 @@ message_handler console::make_handler()
     },
     [=](done_atom)
     {
-      VAST_DEBUG(this, "got done notification from query", last_sender());
-      remove(last_sender());
+      VAST_DEBUG(this, "got done notification from query", current_sender());
+      remove(current_sender());
     },
     [=](prompt_atom)
     {
@@ -654,7 +654,7 @@ message_handler console::make_handler()
     },
     [=](progress_atom, double progress, uint64_t hits)
     {
-      auto i = connected_.find(last_sender());
+      auto i = connected_.find(current_sender());
       assert(i != connected_.end());
 
       auto r = i->second.second;
@@ -700,7 +700,7 @@ message_handler console::make_handler()
     },
     [=](event& e)
     {
-      auto i = connected_.find(last_sender());
+      auto i = connected_.find(current_sender());
       assert(i != connected_.end());
 
       auto r = i->second.second;

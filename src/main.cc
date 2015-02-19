@@ -68,7 +68,7 @@ int main(int argc, char *argv[])
     caf::others() >> [&]
     {
       VAST_WARN(program, "got unexpected message:",
-                to_string(self->last_dequeued()));
+                to_string(self->current_message()));
     });
   self->await_all_other_actors_done();
   caf::shutdown();

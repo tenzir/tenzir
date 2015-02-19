@@ -245,7 +245,7 @@ private:
       caf::others() >> [=]
       {
         VAST_WARN(this, "got unexpected message from",
-                  last_sender() << ':', to_string(last_dequeued()));
+                  current_sender() << ':', to_string(current_message()));
       }
     };
   }
@@ -392,11 +392,11 @@ protected:
       },
       [=](flow_control::overload)
       {
-        on_overload(last_sender());
+        on_overload(current_sender());
       },
       [=](flow_control::underload)
       {
-        on_underload(last_sender());
+        on_underload(current_sender());
       }
     };
   }

@@ -22,7 +22,7 @@ public:
         std::remove_if(
             workers_.begin(),
             workers_.end(),
-            [=](caf::actor const& a) { return a == last_sender(); }),
+            [=](caf::actor const& a) { return a == current_sender(); }),
         workers_.end());
 
     if (workers_.empty())
@@ -47,9 +47,9 @@ public:
       },
       others() >> [=]
       {
-        auto sender = actor_cast<actor>(last_sender());
+        auto sender = actor_cast<actor>(current_sender());
         for (auto& w : workers_)
-          send_as(sender, w, last_dequeued());
+          send_as(sender, w, current_message());
       }
     };
   }

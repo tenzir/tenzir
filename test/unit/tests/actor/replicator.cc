@@ -20,8 +20,8 @@ TEST("replicator")
     self->send(r, add_atom::value, worker_atom::value, w0);
     self->send(r, add_atom::value, worker_atom::value, w1);
     self->send(r, atom("test"));
-    w0->receive(on(atom("test")) >> [&] { CHECK(w0->last_sender() == self); });
-    w1->receive(on(atom("test")) >> [&] { CHECK(w1->last_sender() == self); });
+    w0->receive(on(atom("test")) >> [&] { CHECK(w0->current_sender() == self); });
+    w1->receive(on(atom("test")) >> [&] { CHECK(w1->current_sender() == self); });
   }
 
   self->send_exit(r, exit::stop);

@@ -27,14 +27,14 @@ public:
         std::remove_if(
             workers_.begin(),
             workers_.end(),
-            [=](caf::actor const& a) { return a == last_sender(); }),
+            [=](caf::actor const& a) { return a == current_sender(); }),
         workers_.end());
 
     overloaded_.erase(
         std::remove_if(
             overloaded_.begin(),
             overloaded_.end(),
-            [=](caf::actor_addr const& addr) { return addr == last_sender(); }),
+            [=](caf::actor_addr const& addr) { return addr == current_sender(); }),
         overloaded_.end());
 
     if (workers_.empty())

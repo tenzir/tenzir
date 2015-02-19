@@ -37,7 +37,7 @@ query::query(actor archive, actor sink, expression ast)
   auto handle_progress =
     [=](progress_atom, uint64_t remaining, uint64_t total)
     {
-      assert(last_sender() == task_->address());
+      assert(current_sender() == task_->address());
       progress_ = (total - double(remaining)) / total;
       send(sink_, progress_atom::value, progress_);
     };
@@ -58,7 +58,7 @@ query::query(actor archive, actor sink, expression ast)
     },
     [=](done_atom)
     {
-      assert(last_sender() == this);
+      assert(current_sender() == this);
       auto runtime = time::snapshot() - start_time_;
       send(sink_, done_atom::value, runtime);
       VAST_INFO(this, "took", runtime, "to answer query:", ast_);
@@ -170,7 +170,7 @@ query::query(actor archive, actor sink, expression ast)
         // We continue extracting until we have processed all requested
         // events.
         if (requested_ > 0)
-          send(this, last_dequeued());
+          send(this, current_message());
         return;
       }
       reader_.reset();

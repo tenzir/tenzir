@@ -75,8 +75,8 @@ struct task : public default_actor
       },
       [=](done_atom)
       {
-        VAST_TRACE(this, "completed actor with address", last_sender());
-        complete(last_sender());
+        VAST_TRACE(this, "completed actor with address", current_sender());
+        complete(current_sender());
       },
       [=](supervisor_atom, actor const& a)
       {

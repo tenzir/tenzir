@@ -89,7 +89,7 @@ public:
         if (done())
           this->quit(exit::done);
         else if (running_)
-          this->send(this, this->last_dequeued());
+          this->send(this, this->current_message());
       }
     };
   }

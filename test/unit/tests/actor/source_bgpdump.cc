@@ -21,7 +21,7 @@ TEST("bgpdump source")
 
   auto fail = others() >> [&]
   {
-    std::cerr << to_string(self->last_dequeued()) << std::endl;
+    std::cerr << to_string(self->current_message()) << std::endl;
     REQUIRE(false);
   };
 

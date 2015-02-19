@@ -98,7 +98,7 @@ TEST("task")
     });
 
   VAST_INFO("checking final notification");
-  self->receive([&](done_atom) { CHECK(self->last_sender() == t); } );
+  self->receive([&](done_atom) { CHECK(self->current_sender() == t); } );
 
   VAST_INFO("customizing an exit message");
   t = spawn<task>(42);

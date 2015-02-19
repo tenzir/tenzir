@@ -320,12 +320,12 @@ message_handler index::make_handler()
     [=](done_atom, time::moment start, expression const& expr)
     {
       auto runtime = time::snapshot() - start;
-      VAST_DEBUG(this, "got signal that", last_sender(),
+      VAST_DEBUG(this, "got signal that", current_sender(),
                  "took", runtime, "to complete for answer query: ", expr);
       auto q = queries_.find(expr);
       assert(q != queries_.end());
       assert(q->second.hist);
-      auto p = q->second.hist->parts.find(last_sender());
+      auto p = q->second.hist->parts.find(current_sender());
       assert(p != q->second.hist->parts.end());
       consolidate(p->second, expr);
       send(q->second.hist->task, done_atom::value, p->first);
@@ -343,7 +343,7 @@ message_handler index::make_handler()
     [=](expression const& expr, bitstream_type& hits, historical_atom)
     {
       VAST_DEBUG(this, "received", hits.count(), "historical hits from",
-                 last_sender(), "for query:", expr);
+                 current_sender(), "for query:", expr);
       auto& qs = queries_[expr];
       assert(qs.hist);
       auto before = qs.hist->hits.count();
@@ -359,7 +359,7 @@ message_handler index::make_handler()
     [=](expression const& expr, bitstream_type& hits, continuous_atom)
     {
       VAST_DEBUG(this, "received", hits.count(), "continuous hits from",
-                 last_sender(), "for query:", expr);
+                 current_sender(), "for query:", expr);
       auto& qs = queries_[expr];
       assert(qs.cont);
       qs.cont->hits |= hits;

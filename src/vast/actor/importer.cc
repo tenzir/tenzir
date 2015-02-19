@@ -64,7 +64,7 @@ void importer::at(exit_msg const& msg)
 
 void importer::at(down_msg const& msg)
 {
-  if (last_sender() == chunkifier_)
+  if (current_sender() == chunkifier_)
   {
     chunkifier_ = invalid_actor;
     become(terminating_);
@@ -72,7 +72,7 @@ void importer::at(down_msg const& msg)
     return;
   }
   for (auto s = sinks_.begin(); s != sinks_.end(); ++s)
-    if (s->address() == last_sender())
+    if (s->address() == current_sender())
     {
       VAST_VERBOSE(this, "removes sink", msg.source);
       size_t idx = s - sinks_.begin();

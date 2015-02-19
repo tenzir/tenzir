@@ -50,7 +50,7 @@ message_handler signal_monitor::make_handler()
           while (signals[i]-- > 0)
             send(sink_, signal_atom::value, i);
       }
-      delayed_send(this, std::chrono::milliseconds(100), last_dequeued());
+      delayed_send(this, std::chrono::milliseconds(100), current_message());
     }
   };
 }

@@ -175,8 +175,8 @@ trial<void> program::run()
         others() >> [&]
         {
           abort = error{"got unexpected message from ",
-                        to_string(self->last_sender()), ": ",
-                        to_string(self->last_dequeued())};
+                        to_string(self->current_sender()), ": ",
+                        to_string(self->current_message())};
           quit(exit::error);
         }};
 

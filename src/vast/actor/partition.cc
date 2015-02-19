@@ -396,7 +396,7 @@ message_handler partition::make_handler()
       VAST_DEBUG(this, "completed query", expr, "in",
                  time::snapshot() - start);
       queries_[expr].task = invalid_actor;
-      send(sink_, last_dequeued());
+      send(sink_, current_message());
     },
     [=](flush_atom, actor const& task)
     {
