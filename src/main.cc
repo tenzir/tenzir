@@ -24,12 +24,12 @@ int main(int argc, char *argv[])
   vast::announce_builtin_types();
 
   auto dir = vast::path{*cfg->get("directory")}.complete();
+  auto log_dir = dir / *cfg->get("log.directory");
+  auto log_level_console = *vast::logger::parse_level(*cfg->get("log.console"));
+  auto log_level_file = *vast::logger::parse_level(*cfg->get("log.file"));
   auto initialized = vast::logger::instance()->init(
-      *vast::logger::parse_level(*cfg->get("log.console")),
-      *vast::logger::parse_level(*cfg->get("log.file")),
-      ! cfg->check("log.no-colors"),
-      cfg->check("log.function-names"),
-      dir / *cfg->get("log.directory"));
+      log_level_console, log_level_file, ! cfg->check("log.no-colors"),
+      cfg->check("log.function-names"), log_dir);
 
   if (! initialized)
   {
@@ -42,6 +42,8 @@ int main(int argc, char *argv[])
   VAST_VERBOSE("| |/ / __ |_\\ \\  / / ");
   VAST_VERBOSE("|___/_/ |_/___/ /_/  " << VAST_VERSION);
   VAST_VERBOSE("");
+  if (log_level_file > vast::logger::level::quiet)
+    VAST_VERBOSE("logging to directory", log_dir);
 
   auto threads = std::thread::hardware_concurrency();
   if (auto t = cfg->as<size_t>("caf.threads"))
