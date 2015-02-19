@@ -39,19 +39,20 @@ list(GET version_numbers 0 VERSION_MAJOR)
 list(GET version_numbers 1 VERSION_MINOR)
 set(VERSION_MAJ_MIN "${VERSION_MAJOR}.${VERSION_MINOR}")
 
+if (ENABLE_DEBUG)
+  set(CMAKE_BUILD_TYPE Debug)
+endif ()
+
 if (NOT CMAKE_CXX_FLAGS)
   # -ftemplate-depth=256 makes Boost Spirit happy.
-  set(CXX_FLAGS "-Wall -Wextra -pedantic -std=c++1y -ftemplate-depth=256")
+  set(EXTRA_FLAGS "-Wall -Wextra -pedantic -std=c++1y -ftemplate-depth=256")
   set(CMAKE_CXX_FLAGS_DEBUG          "-O0 -g")
   set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os")
   set(CMAKE_CXX_FLAGS_RELEASE        "-O3")
   set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g")
 endif()
 
-if (ENABLE_DEBUG)
-  set(CMAKE_BUILD_TYPE Debug)
-endif ()
-
+# Perform compiler requirement checks.
 try_run(program_result
         compilation_succeeded
         "${CMAKE_BINARY_DIR}"
@@ -69,9 +70,9 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
     # Works around issues with libstdc++ and C++11. For details, see:
     # - https://bugs.freebsd.org/bugzilla/show_bug.cgi?id=194929
     # - https://bugs.freebsd.org/bugzilla/show_bug.cgi?id=182657
-    set(CXX_FLAGS "${CXX_FLAGS} -D_GLIBCXX_USE_C99")
-    set(CXX_FLAGS "${CXX_FLAGS} -D_GLIBCXX_USE_C99_MATH")
-    set(CXX_FLAGS "${CXX_FLAGS} -D_GLIBCXX_USE_C99_MATH_TR1")
+    set(EXTRA_FLAGS "${EXTRA_FLAGS} -D_GLIBCXX_USE_C99")
+    set(EXTRA_FLAGS "${EXTRA_FLAGS} -D_GLIBCXX_USE_C99_MATH")
+    set(EXTRA_FLAGS "${EXTRA_FLAGS} -D_GLIBCXX_USE_C99_MATH_TR1")
   endif ()
 elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
   if (compiler_version VERSION_GREATER 3.3)
@@ -79,17 +80,31 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
   else ()
     message(FATAL_ERROR "Clang >= 3.4 required, found ${compiler_version}")
   endif ()
-  set(CXX_FLAGS "${CXX_FLAGS} -stdlib=libc++")
-  if (ENABLE_ADDRESS_SANITIZER)
-    set(CXX_FLAGS "${CXX_FLAGS} -fsanitize=address -g")
-  endif ()
+  set(EXTRA_FLAGS "${EXTRA_FLAGS} -stdlib=libc++")
 else ()
   message(FATAL_ERROR "unsupported compiler: ${CMAKE_CXX_COMPILER_ID}")
 endif ()
 
+if (ENABLE_ADDRESS_SANITIZER)
+  set(CXXFLAGS_BACKUP "${CMAKE_CXX_FLAGS}")
+  set(CMAKE_CXX_FLAGS "-fsanitize=address -fno-omit-frame-pointer")
+  try_run(program_result
+          compilation_succeeded
+          "${CMAKE_BINARY_DIR}"
+          "${CMAKE_CURRENT_SOURCE_DIR}/cmake/get_compiler_version.cpp")
+  if(NOT compilation_succeeded)
+    message(STATUS "Address Sanitizer not available on selected compiler")
+  else()
+    message(STATUS "Enabling Address Sanitizer")
+    set(EXTRA_FLAGS "${EXTRA_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
+    set(ASAN_FOUND true)
+  endif()
+  set(CMAKE_CXX_FLAGS "${CXXFLAGS_BACKUP}")
+endif(ENABLE_ADDRESS_SANITIZER)
+
 # Only set our flags if the environment variable CXXFLAGS is not present.
 if (NOT CMAKE_CXX_FLAGS)
-  set(CMAKE_CXX_FLAGS ${CXX_FLAGS})
+  set(CMAKE_CXX_FLAGS ${EXTRA_FLAGS})
 endif ()
 
 find_package(Threads)
@@ -181,22 +196,8 @@ macro(display test desc summary)
   endif()
 endmacro()
 
+# Prettify build summary.
 display(ENABLE_DEBUG yes debug_summary)
-display(DOXYGEN_FOUND yes doxygen_summary)
-display(PCAP_FOUND ${PCAP_INCLUDE_DIR} pcap_summary)
-display(EDITLINE_FOUND
-        "${EDITLINE_INCLUDE_DIR} (${EDITLINE_VERSION})" editline_summary)
-display(GPERFTOOLS_FOUND ${GPERFTOOLS_INCLUDE_DIR} perftools_summary)
-display(VAST_USE_PERFTOOLS_HEAP_PROFILER yes tcmalloc_summary)
-display(ENABLE_ADDRESS_SANITIZER yes asan_summary)
-# Display the right include directory based on wheter we pointed to a CAF build
-# directory or to an install prefix.
-set(caf_dir ${CAF_INCLUDE_DIR_CORE})
-if (EXISTS "${CAF_INCLUDE_DIR_CORE}/../build/libcaf_core")
-  get_filename_component(caf_dir ${caf_dir} PATH)
-endif ()
-display(CAF_FOUND ${caf_dir} caf_summary)
-
 if (VAST_LOG_LEVEL EQUAL 0)
   set(log_level_summary quiet)
 elseif (VAST_LOG_LEVEL EQUAL 1)
@@ -214,6 +215,20 @@ elseif (VAST_LOG_LEVEL EQUAL 6)
 else ()
   message(FATAL "invalid log level")
 endif ()
+set(caf_dir ${CAF_INCLUDE_DIR_CORE})
+if (EXISTS "${CAF_INCLUDE_DIR_CORE}/../build/libcaf_core")
+  get_filename_component(caf_dir ${caf_dir} PATH)
+endif ()
+display(CAF_FOUND ${caf_dir} caf_summary)
+display(PCAP_FOUND ${PCAP_INCLUDE_DIR} pcap_summary)
+set(editline_display "${EDITLINE_INCLUDE_DIR} (${EDITLINE_VERSION})")
+display(EDITLINE_FOUND ${editline_display} editline_summary)
+display(GPERFTOOLS_FOUND ${GPERFTOOLS_INCLUDE_DIR} perftools_summary)
+display(DOXYGEN_FOUND yes doxygen_summary)
+display(VAST_USE_PERFTOOLS_HEAP_PROFILER yes tcmalloc_summary)
+display(ASAN_FOUND yes asan_summary)
+# Display the right include directory based on wheter we pointed to a CAF build
+# directory or to an install prefix.
 
 set(build_summary
     "\n====================|  Build Summary  |===================="
