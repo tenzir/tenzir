@@ -15,7 +15,6 @@ void exporter::at(down_msg const& msg)
       sinks_.erase(s);
       break;
     }
-
   if (sinks_.empty())
     quit(msg.reason);
 }
@@ -27,7 +26,6 @@ message_handler exporter::make_handler()
       {
         for (auto& s : sinks_)
           send_exit(s, reason);
-
         sinks_.clear();
       });
 
@@ -40,13 +38,13 @@ message_handler exporter::make_handler()
     },
     [=](limit_atom, uint64_t max)
     {
-      VAST_VERBOSE(this, "caps event export at", max, "events");
+      VAST_DEBUG(this, "caps event export at", max, "events");
 
       if (processed_ < max)
         limit_ = max;
       else
-        VAST_ERROR(this, "ignores new limit of", max <<
-                   ", already processed", processed_, " events");
+        VAST_WARN(this, "ignores new limit of", max <<
+                  ", already processed", processed_, " events");
     },
     [=](event const&)
     {
@@ -55,18 +53,22 @@ message_handler exporter::make_handler()
         send_as(sender, s, current_message());
       if (++processed_ == limit_)
       {
-        VAST_VERBOSE(this, "reached maximum event limit:", limit_);
+        VAST_DEBUG(this, "reached maximum event limit:", limit_);
         quit(exit::done);
+        for (auto& s : sinks_)
+          send_exit(s, exit::done);
       }
     },
     [=](progress_atom, double progress)
     {
-      VAST_DEBUG(this, "got query progress:", size_t(progress * 100) << "%");
+      VAST_VERBOSE(this, "got query progress:", size_t(progress * 100) << "%");
     },
-    [=](done_atom, time::extent runtime)
+    [=](done_atom, time::duration runtime)
     {
-      VAST_VERBOSE(this, "completed query running for", runtime);
+      VAST_VERBOSE(this, "got DONE from query which took" << runtime);
       quit(exit::done);
+      for (auto& s : sinks_)
+        send_exit(s, exit::done);
     }
   };
 }

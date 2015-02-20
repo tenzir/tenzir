@@ -321,7 +321,7 @@ message_handler index::make_handler()
     {
       auto runtime = time::snapshot() - start;
       VAST_DEBUG(this, "got signal that", current_sender(),
-                 "took", runtime, "to complete for answer query: ", expr);
+                 "took", runtime, "to complete query: ", expr);
       auto q = queries_.find(expr);
       assert(q != queries_.end());
       assert(q->second.hist);
