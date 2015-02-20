@@ -941,7 +941,7 @@ void console::prompt(size_t ms)
     if (cmdline_.mode_pop() > 0)
       prompt();
     else
-      send_exit(this, exit::stop);
+      send_exit(address(), exit::stop);
     return;
   }
 
