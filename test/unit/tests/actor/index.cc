@@ -45,20 +45,20 @@ TEST("index")
   VAST_INFO("sending chunks to index");
   path dir = "vast-test-index";
   scoped_actor self;
-  auto i = self->spawn<vast::index, monitored+priority_aware>(dir, 500, 5, 3);
-  self->send(i, chk0);
-  self->send(i, chk1);
+  auto idx = self->spawn<vast::index, priority_aware>(dir, 500, 5, 3);
+  self->send(idx, chk0);
+  self->send(idx, chk1);
 
   VAST_INFO("flushing index through termination");
-  self->send_exit(i, exit::done);
-  self->receive([&](down_msg const& msg) { CHECK(msg.source == i); });
+  self->send_exit(idx, exit::done);
+  self->await_all_other_actors_done();
 
   VAST_INFO("reloading index and running a query against it");
-  i = self->spawn<vast::index, monitored+priority_aware>(dir, 500, 5, 3);
+  idx = self->spawn<vast::index, priority_aware>(dir, 500, 5, 3);
   auto expr = to<expression>("c >= 42 && c < 84");
   REQUIRE(expr);
   actor task;
-  self->send(i, *expr, historical, self);
+  self->send(idx, *expr, historical, self);
   self->receive(
     [&](actor const& t)
     {
@@ -88,7 +88,7 @@ TEST("index")
   VAST_INFO("creating a continuous query");
   expr = to<expression>("s ni \"7\"");  // Must be normalized at this point.
   REQUIRE(expr);
-  self->send(i, *expr, continuous, self);
+  self->send(idx, *expr, continuous, self);
   self->receive(
     [&](actor const& t)
     {
@@ -105,20 +105,20 @@ TEST("index")
     events[i] = event::make(record{j, to_string(j)}, t0);
     events[i].id(j);
   }
-  self->send(i, chunk{std::move(events)});
+  self->send(idx, chunk{std::move(events)});
   self->receive([&](bitstream_type const& bs) { CHECK(bs.count() == 549); });
 
   VAST_INFO("disabling continuous query and sending another chunk");
-  self->send(i, *expr, continuous_atom::value, disable_atom::value);
+  self->send(idx, *expr, continuous_atom::value, disable_atom::value);
   self->receive([&](down_msg const& msg) { CHECK(msg.source == task); });
   auto e = event::make(record{1337u, to_string(1337)}, t0);
   e.id(4711);
-  self->send(i, chunk{{std::move(e)}});
+  self->send(idx, chunk{{std::move(e)}});
   // Make sure that we didn't get any new hits.
   CHECK(self->mailbox().count() == 0);
 
   VAST_INFO("cleaning up");
-  self->send_exit(i, exit::done);
+  self->send_exit(idx, exit::done);
   self->await_all_other_actors_done();
   rm(dir);
 }

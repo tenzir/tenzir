@@ -14,9 +14,8 @@
 namespace vast {
 
 /// Accepts chunks and constructs segments.
-class archive : public flow_controlled_actor
+struct archive : flow_controlled_actor
 {
-public:
   struct chunk_compare
   {
     bool operator()(chunk const& lhs, chunk const& rhs) const
@@ -34,10 +33,9 @@ public:
   /// @pre `max_segment_size > 0`
   archive(path dir, size_t capacity, size_t max_segment_size);
 
-  caf::message_handler make_handler() override;
-  std::string name() const override;
+  void on_exit();
+  caf::behavior make_behavior() override;
 
-private:
   trial<void> store(segment s);
   trial<chunk> load(event_id eid);
   segment on_miss(uuid const& id);

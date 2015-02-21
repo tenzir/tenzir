@@ -11,19 +11,8 @@
 namespace vast {
 
 /// Manages topology within a VAST ecosystem.
-class tracker : public default_actor
+struct tracker : default_actor
 {
-public:
-  /// Spawns a tracker.
-  /// @param dir The directory to use for meta data.
-  tracker(path dir);
-
-  void at(caf::down_msg const& msg) override;
-  void at(caf::exit_msg const& msg) override;
-  caf::message_handler make_handler() override;
-  std::string name() const override;
-
-private:
   enum class component
   {
     invalid,
@@ -40,6 +29,13 @@ private:
     caf::actor actor;
     component type;
   };
+
+  /// Spawns a tracker.
+  /// @param dir The directory to use for meta data.
+  tracker(path dir);
+
+  void on_exit();
+  caf::behavior make_behavior() override;
 
   path dir_;
   caf::actor identifier_;

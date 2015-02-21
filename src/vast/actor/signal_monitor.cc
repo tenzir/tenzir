@@ -29,11 +29,17 @@ void signal_handler(int signo)
 using namespace caf;
 
 signal_monitor::signal_monitor(actor receiver)
-  : sink_{std::move(receiver)}
+  : default_actor{"signal-monitor"},
+    sink_{std::move(receiver)}
 {
 }
 
-message_handler signal_monitor::make_handler()
+void signal_monitor::on_exit()
+{
+  sink_ = invalid_actor;
+}
+
+behavior signal_monitor::make_behavior()
 {
   VAST_DEBUG(this, "sends signals to", sink_);
   signals.fill(0);
@@ -51,13 +57,9 @@ message_handler signal_monitor::make_handler()
             send(sink_, signal_atom::value, i);
       }
       delayed_send(this, std::chrono::milliseconds(100), current_message());
-    }
+    },
+    catch_unexpected()
   };
-}
-
-std::string signal_monitor::name() const
-{
-  return "signal-monitor";
 }
 
 } // namespace vast

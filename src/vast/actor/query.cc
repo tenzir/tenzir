@@ -11,19 +11,11 @@ using namespace caf;
 namespace vast {
 
 query::query(actor archive, actor sink, expression ast)
-  : archive_{std::move(archive)},
+  : default_actor{"query"},
+    archive_{std::move(archive)},
     sink_{std::move(sink)},
     ast_{std::move(ast)}
 {
-  trap_exit(false);
-  trap_unexpected(false);
-  attach_functor(
-    [=](uint32_t)
-    {
-      archive_ = invalid_actor;
-      sink_ = invalid_actor;
-    });
-
   auto incorporate_hits = [=](bitstream_type const& hits)
   {
     VAST_DEBUG(this, "got index hit covering", '[' << hits.find_first() << ','
@@ -195,15 +187,16 @@ query::query(actor archive, actor sink, expression ast)
     }};
 }
 
-message_handler query::make_handler()
+void query::on_exit()
+{
+  archive_ = invalid_actor;
+  sink_ = invalid_actor;
+}
+
+behavior query::make_behavior()
 {
   start_time_ = time::snapshot();
   return idle_;
-}
-
-std::string query::name() const
-{
-  return "query";
 }
 
 void query::prefetch()

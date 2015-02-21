@@ -22,31 +22,19 @@ public:
   using bitmap_index_type = BitmapIndex;
 
   template <typename... Args>
-  bitmap_indexer(path p, Args&&... args)
-    : path_{std::move(p)},
+  bitmap_indexer(char const* name, path p, Args&&... args)
+    : default_actor{name},
+      path_{std::move(p)},
       bmi_{std::forward<Args>(args)...}
   {
-  }
-
-  void at(caf::exit_msg const& msg)
-  {
-    if (msg.reason == exit::kill)
-    {
-      quit(exit::kill);
-      return;
-    }
-    auto t = flush();
-    if (! t)
-      VAST_ERROR(this, "failed to flush:", t.error());
-    quit(msg.reason);
+    trap_exit(true);
   }
 
   virtual bool push_back(BitmapIndex& bmi, event const& e) = 0;
 
-  caf::message_handler make_handler() override
+  caf::behavior make_behavior() override
   {
     using namespace caf;
-
     // Materialize an existing index.
     if (exists(path_))
     {
@@ -56,7 +44,6 @@ public:
         quit(exit::error);
         return {};
       }
-
       auto t = io::unarchive(path_ / "meta", last_flush_);
       if (! t)
       {
@@ -64,7 +51,6 @@ public:
         quit(exit::error);
         return {};
       }
-
       t = io::unarchive(path_ / "index", bmi_);
       if (! t)
       {
@@ -72,12 +58,22 @@ public:
         quit(exit::error);
         return {};
       }
-
       VAST_DEBUG(this, "materialized bitmap index of size", bmi_.size());
     }
-
     return
     {
+      [=](exit_msg const& msg)
+      {
+        if (msg.reason == exit::kill)
+        {
+          quit(exit::kill);
+          return;
+        }
+        auto t = flush();
+        if (! t)
+          VAST_ERROR(this, "failed to flush:", t.error());
+        quit(msg.reason);
+      },
       [=](flush_atom, actor const& task)
       {
         auto t = flush();
@@ -166,16 +162,16 @@ struct event_name_indexer
   >;
 
   using typename super::bitmap_index_type;
-  using super::super;
+
+  template <typename... Args>
+  event_name_indexer(path p, Args&&... args)
+    : super{"event-name-indexer", std::move(p), std::forward<Args>(args)...}
+  {
+  }
 
   bool push_back(bitmap_index_type& bmi, event const& e) override
   {
     return bmi.push_back(e.type().name(), e.id());
-  }
-
-  std::string name() const override
-  {
-    return "name-indexer";
   }
 };
 
@@ -193,16 +189,16 @@ struct event_time_indexer
   >;
 
   using typename super::bitmap_index_type;
-  using super::super;
+
+  template <typename... Args>
+  event_time_indexer(path p, Args&&... args)
+    : super{"event-time-indexer", std::move(p), std::forward<Args>(args)...}
+  {
+  }
 
   bool push_back(bitmap_index_type& bmi, event const& e) override
   {
     return bmi.push_back(e.timestamp(), e.id());
-  }
-
-  std::string name() const override
-  {
-    return "time-indexer";
   }
 
   time::point ts_;
@@ -217,7 +213,7 @@ struct event_data_indexer : public bitmap_indexer<Bitstream, BitmapIndex>
 
   template <typename... Args>
   event_data_indexer(path p, offset o, type t, Args&&... args)
-    : super{std::move(p), std::forward<Args>(args)...},
+    : super{"event-data-indexer", std::move(p), std::forward<Args>(args)...},
       event_type_{std::move(t)},
       offset_(std::move(o))
   {
@@ -242,11 +238,6 @@ struct event_data_indexer : public bitmap_indexer<Bitstream, BitmapIndex>
     // If there is no data at a given offset, it means that an intermediate
     // record is nil but we're trying to access a deeper field.
     return bmi.push_back(nil, e.id());
-  }
-
-  std::string name() const override
-  {
-    return "data-indexer(" + to_string(offset_) + ')';
   }
 
   type const event_type_;
@@ -358,7 +349,7 @@ make_data_indexer(type const& t, path const& p, offset const& o, type const& e)
 
 /// Indexes an event.
 template <typename Bitstream>
-class event_indexer : public default_actor
+struct event_indexer : default_actor
 {
   struct loader
   {
@@ -423,7 +414,6 @@ class event_indexer : public default_actor
         else
           VAST_ERROR(a.error());
       }
-
       return indexes;
     }
 
@@ -442,7 +432,6 @@ class event_indexer : public default_actor
             VAST_WARN("type clash: LHS =", *lhs, "<=> RHS =", type::derive(d));
             return {};
           }
-
           auto a = indexer_.load_data_indexer(o);
           if (! a)
             VAST_ERROR(a.error());
@@ -473,7 +462,6 @@ class event_indexer : public default_actor
     event_indexer& indexer_;
   };
 
-public:
   /// Spawns an event indexer.
   /// @param p The directory in which to create new state.
   /// @param t The type of the event. If invalid or given, the indexer attempts
@@ -481,10 +469,11 @@ public:
   ///          certain bitmap indexes. If valid, the indexer runs in
   ///          (write-only) "construction mode" and spawns all bitmap indexes.
   event_indexer(path p, type t = {})
-    : dir_{std::move(p)},
+    : default_actor{"event-indexer"},
+      dir_{std::move(p)},
       type_{std::move(t)}
   {
-    attach_functor([=](uint32_t) { indexers_.clear(); });
+    trap_exit(true);
   }
 
   caf::actor load_name_indexer()
@@ -527,7 +516,6 @@ public:
       for (auto& k : *key)
         p /= k;
     }
-
     auto& a = indexers_[p];
     if (! a)
     {
@@ -546,45 +534,17 @@ public:
       a = std::move(*i);
       monitor(a);
     }
-
     return a;
   }
 
-  void at(caf::down_msg const& msg) override
+  void on_exit()
   {
-    for (auto i = indexers_.begin(); i != indexers_.end(); ++i)
-      if (i->second.address() == msg.source)
-      {
-        indexers_.erase(i);
-        break;
-      }
+    indexers_.clear();
   }
 
-  void at(caf::exit_msg const& msg) override
-  {
-    auto t = flush();
-    if (! t)
-      VAST_ERROR(this, "failed to flush:", t.error());
-    if (indexers_.empty())
-    {
-      quit(msg.reason);
-      return;
-    }
-    become(
-      [=](caf::down_msg const& msg)
-      {
-        at(msg);
-        if (indexers_.empty())
-          quit(msg.reason);
-      });
-    for (auto& i : indexers_)
-      send_exit(i.second, msg.reason);
-  }
-
-  caf::message_handler make_handler() override
+  caf::behavior make_behavior() override
   {
     using namespace caf;
-
     if (! exists(dir_))
     {
       load_bitmap_indexers();
@@ -611,9 +571,38 @@ public:
         type_ = existing;
       }
     }
-
+    auto on_down = [=](down_msg const& msg)
+    {
+      for (auto i = indexers_.begin(); i != indexers_.end(); ++i)
+        if (i->second.address() == msg.source)
+        {
+          indexers_.erase(i);
+          break;
+        }
+    };
     return
     {
+      [=](exit_msg const& msg)
+      {
+        auto t = flush();
+        if (! t)
+          VAST_ERROR(this, "failed to flush:", t.error());
+        if (indexers_.empty())
+        {
+          quit(msg.reason);
+          return;
+        }
+        become(
+          [reason=msg.reason, on_down, this](caf::down_msg const& msg)
+          {
+            on_down(msg);
+            if (indexers_.empty())
+              quit(reason);
+          });
+        for (auto& i : indexers_)
+          send_exit(i.second, msg.reason);
+      },
+      on_down,
       [=](load_atom)
       {
         load_bitmap_indexers();
@@ -663,11 +652,6 @@ public:
         send(task, done_atom::value);
       }
     };
-  }
-
-  std::string name() const override
-  {
-    return "event-indexer";
   }
 
 private:

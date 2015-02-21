@@ -42,6 +42,7 @@ std::string bro::make_footer()
 }
 
 bro::bro(path p)
+  : base<bro>{"bro-sink"}
 {
   if (p != "-")
     dir_ = std::move(p);
@@ -231,11 +232,6 @@ bool bro::process(event const& e)
   str += '\n';
 
   return s->write(str.begin(), str.end());
-}
-
-std::string bro::name() const
-{
-  return "bro-sink";
 }
 
 } // namespace sink

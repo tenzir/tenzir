@@ -83,7 +83,6 @@ public:
   ~pcap();
 
   result<event> extract();
-  std::string name() const override;
 
 private:
   struct connection_state

@@ -8,38 +8,38 @@ using namespace caf;
 namespace vast {
 
 tracker::tracker(path dir)
-  : dir_{std::move(dir)}
+  : default_actor{"tracker"},
+    dir_{std::move(dir)}
 {
-  attach_functor(
-      [=](uint32_t)
-      {
-        identifier_ = invalid_actor;
-      });
+  trap_exit(true);
 }
 
-void tracker::at(caf::down_msg const& msg)
+void tracker::on_exit()
 {
-  for (auto i = actors_.begin(); i != actors_.end(); ++i)
-    if (i->second.actor == msg.source)
-    {
-      i->second.actor = invalid_actor;
-      break;
-    }
+  identifier_ = invalid_actor;
+  actors_.clear();
 }
 
-void tracker::at(caf::exit_msg const& msg)
-{
-  for (auto& p : actors_)
-    send_exit(p.second.actor, msg.reason);
-  quit(msg.reason);
-}
-
-message_handler tracker::make_handler()
+behavior tracker::make_behavior()
 {
   identifier_ = spawn<identifier, linked>(dir_);
-
   return
   {
+    [=](exit_msg const& msg)
+    {
+      for (auto& p : actors_)
+        send_exit(p.second.actor, msg.reason);
+      quit(msg.reason);
+    },
+    [=](down_msg const& msg)
+    {
+      for (auto i = actors_.begin(); i != actors_.end(); ++i)
+        if (i->second.actor == msg.source)
+        {
+          i->second.actor = invalid_actor;
+          break;
+        }
+    },
     [](ok_atom)
     {
       // Sent during relinking below, nothing to do here.
@@ -158,13 +158,9 @@ message_handler tracker::make_handler()
       }
       topology_.emplace(source, sink);
       return make_message(ok_atom::value);
-    }
+    },
+    catch_unexpected()
   };
-}
-
-std::string tracker::name() const
-{
-  return "tracker";
 }
 
 } // namespace vast

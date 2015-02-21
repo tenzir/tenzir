@@ -231,7 +231,8 @@ struct randomizer
 } // namespace <anonymous>
 
 test::test(schema sch, event_id id, uint64_t events)
-  : schema_{std::move(sch)},
+  : synchronous<test>{"test-source"},
+    schema_{std::move(sch)},
     id_{id},
     events_{events},
     generator_{std::random_device{}()}
@@ -306,11 +307,6 @@ result<event> test::extract()
   if (--events_ == 0)
     done(true);
   return std::move(e);
-}
-
-std::string test::name() const
-{
-  return "test-source";
 }
 
 } // namespace source

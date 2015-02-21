@@ -29,7 +29,6 @@ public:
   bro(path p);
 
   bool process(event const& e);
-  std::string name() const override;
 
 private:
   path dir_;

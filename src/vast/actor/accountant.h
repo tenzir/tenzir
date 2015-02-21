@@ -26,12 +26,13 @@ struct accountant : default_actor
   /// @param resolution The granularity at which to track values which get
   ///                   submitted incrementally.
   accountant(path dir, time::duration resolution = time::seconds(1))
-    : dir_{std::move(dir)},
+    : default_actor{"accountant"},
+      dir_{std::move(dir)},
       resolution_{resolution}
   {
   }
 
-  caf::message_handler make_handler() override
+  caf::behavior make_behavior() override
   {
     if (dir_.empty())
     {
@@ -73,13 +74,9 @@ struct accountant : default_actor
       [=](std::string const& context, T x, time::moment timestamp)
       {
         record(context, x, timestamp);
-      }
+      },
+      catch_unexpected()
     };
-  }
-
-  std::string name() const override
-  {
-    return "accumulator";
   }
 
   void record(std::string const& context, T x, time::moment t)

@@ -67,7 +67,7 @@ trial<type> make_type(std::string const& bro_type)
 } // namespace <anonymous>
 
 bro::bro(schema sch, std::string const& filename, bool sniff)
-  : file<bro>{filename},
+  : file<bro>{"bro-source", filename},
     schema_{std::move(sch)},
     sniff_{sniff}
 {
@@ -198,11 +198,6 @@ result<event> bro::extract_impl()
   event e{{std::move(event_record), type_}};
   e.timestamp(ts);
   return std::move(e);
-}
-
-std::string bro::name() const
-{
-  return "bro-source";
 }
 
 trial<std::string> bro::parse_header_line(std::string const& line,

@@ -7,17 +7,15 @@
 namespace vast {
 
 /// Monitors the application for UNIX signals and forwards them to an actor.
-class signal_monitor : public default_actor
+struct signal_monitor : default_actor
 {
-public:
   /// Spawns the system monitor with a given receiver.
   /// @param receiver the actor receiving the signals.
   signal_monitor(caf::actor receiver);
 
-  caf::message_handler make_handler() override;
-  std::string name() const override;
+  void on_exit();
+  caf::behavior make_behavior() override;
 
-private:
   caf::actor sink_;
 };
 

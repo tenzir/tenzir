@@ -51,42 +51,6 @@ inline Stream& operator<<(Stream& out, abstract_actor const* a)
 #include "vast/util/flat_set.h"
 
 namespace vast {
-
-namespace flow_control {
-
-struct announce : util::equality_comparable<announce>
-{
-  announce(caf::actor a = {})
-    : source{std::move(a)}
-  {
-  }
-
-  caf::actor source;
-
-  friend bool operator==(announce const& lhs, announce const& rhs)
-  {
-    return lhs.source == rhs.source;
-  }
-};
-
-struct overload : util::equality_comparable<overload>
-{
-  friend bool operator==(overload const&, overload const&)
-  {
-    return true;
-  }
-};
-
-struct underload : util::equality_comparable<underload>
-{
-  friend bool operator==(underload const&, underload const&)
-  {
-    return true;
-  }
-};
-
-} // namespace flow_control
-
 namespace exit {
 
 constexpr uint32_t done   = caf::exit_reason::user_defined;
@@ -129,135 +93,72 @@ inline char const* render_exit_reason(uint32_t reason)
 class default_actor : public caf::event_based_actor
 {
 public:
-  default_actor()
+  default_actor(char const* name = "actor")
+    : name_{name}
   {
-    trap_exit(true);
-    trap_unexpected(true);
+    VAST_DEBUG(this, "spawned");
+    attach_functor([=](uint32_t reason)
+    {
+      VAST_DEBUG(this, "terminated (" << render_exit_reason(reason) << ')');
+    });
+  }
+
+  template <typename F, typename... Vs>
+  default_actor(F fun, Vs&&... vs)
+    : default_actor{}
+  {
+    make_behavior_ = std::bind(fun, this, std::forward<Vs>(vs)...);
   }
 
   caf::behavior make_behavior() override
   {
-    VAST_DEBUG(this, "spawned");
-    return augment(make_handler());
+    auto result = make_behavior_(this);
+    make_behavior_ = nullptr;
+    return result;
   }
 
-  void on_exit()
+  char const* name() const
   {
-    VAST_DEBUG(this, "terminated (" <<
-               render_exit_reason(planned_exit_reason()) << ')');
+    return name_;
   }
 
-  virtual std::string name() const
+  void name(char const* name)
   {
-    return "actor";
+    name_ = name;
   }
 
-  virtual std::string description() const
+  std::string label() const
   {
-    return name() + '#' + std::to_string(id());
+    return std::string{name()} + '#' + std::to_string(id());
   }
 
 protected:
-  virtual caf::message_handler make_handler() = 0;
-
-  caf::message_handler augment(caf::message_handler handler)
+  bool downgrade_exit()
   {
-    auto augmented = make_exit_handler()
-      .or_else(make_down_handler())
-      .or_else(make_internal_handler())
-      .or_else([=](ping_atom) { return pong_atom::value; })
-      .or_else(std::move(handler));
-    if (trap_unexpected())
-      augmented = augmented.or_else(make_unexpected_handler());
-    return augmented;
-  }
+    if (! current_mailbox_element()->mid.is_high_priority())
+      return false;
+    VAST_DEBUG(this, "delays exit");
+    send(caf::message_priority::normal, this, current_message());
+    return true;
+  };
 
-  // For derived actors that need to inject a custom handler.
-  virtual caf::message_handler make_internal_handler()
+  auto catch_unexpected()
   {
-    return {};
-  }
-
-  bool trap_unexpected() const
-  {
-    return flags_ & 0x01;
-  }
-
-  void trap_unexpected(bool flag)
-  {
-    flag ? flags_ |= 0x01 : flags_ &= ~0x01;
-  }
-
-  bool overloaded() const
-  {
-    return flags_ & 0x02;
-  }
-
-  void overloaded(bool flag)
-  {
-    flag ? flags_ |= 0x02 : flags_ &= ~0x02;
-  }
-
-  virtual void at(caf::exit_msg const& msg)
-  {
-    quit(msg.reason);
-  }
-
-  virtual void at(caf::down_msg const&)
-  {
-    // Nothing by default.
-  }
-
-  virtual caf::message_handler make_exit_handler()
-  {
-    return [=](caf::exit_msg const& msg)
+    return caf::others() >> [=]
     {
-      VAST_DEBUG(this, "got EXIT from", msg.source,
-                 '(' << render_exit_reason(msg.reason) << ')');
-      if (current_mailbox_element()->mid.is_high_priority())
-      {
-        VAST_DEBUG(this, "delays exit");
-        send(caf::message_priority::normal, this,
-             caf::exit_msg{address(), msg.reason});
-      }
-      else
-      {
-        VAST_DEBUG(this, "runs EXIT handler");
-        at(msg);
-      }
-    };
-  }
-
-  virtual caf::message_handler make_down_handler()
-  {
-    return [=](caf::down_msg const& msg)
-    {
-      VAST_DEBUG(this, "got DOWN from", msg.source);
-      at(msg);
+      VAST_WARN(this, "got unexpected message from",
+                current_sender() << ':', caf::to_string(current_message()));
     };
   }
 
 private:
-  caf::message_handler make_unexpected_handler()
-  {
-    return
-    {
-      caf::others() >> [=]
-      {
-        VAST_WARN(this, "got unexpected message from",
-                  current_sender() << ':', to_string(current_message()));
-      }
-    };
-  }
-
-  // To keep actors as space-efficient as possible, we use this low-level
-  // mechanism to customize the behavior.
-  int flags_ = 0;
+  char const* name_ = "actor";
+  std::function<caf::behavior(default_actor*)> make_behavior_;
 };
 
 inline std::ostream& operator<<(std::ostream& out, default_actor const& a)
 {
-  out << a.description();
+  out << a.label();
   return out;
 }
 
@@ -270,72 +171,146 @@ inline Stream& operator<<(Stream& out, default_actor const* a)
 }
 
 /// An actor which can participate in a flow-controlled setting.
+/// A flow-controlled actor sits in a chain of actors which propagate overload
+/// signals back to the original sender.
+///
+/// Consider the following scenario, where a sender *S* sends data to *A*,
+/// which then forwards it to *B* and *C*.
+///
+///     S --- A --- B
+///            \
+///             C
+///
+/// If any of the actors downstream of *S* get overloaded, the need to
+/// propagate the signal back to *S*. The decision what to do with an overload
+/// signal is *local* to the actor on the path. if *A* is a load-balancer and
+/// receives a signal from *C*, it mayb simply stop sending messages to *C*
+/// until it receives an underload signal from *C*. But if *A* is a message
+/// replicator, it would propagate the signal up to *S*.
+///
+/// To implement such flow control scenarios, users must provide the following
+/// flow-control handlers:
+///
+///   1. <overload_atom>
+///   2. <underload_atom>
+///   3. <upstream_atom, caf::actor>
+///
+/// An actor who just sits in a flow-control aware chain of actors typically
+/// just needs to forward overload signals from downstream nodes back upstream.
+/// The default handlers do this, and they can be integrated into the actor's
+/// handler with the following functions:
+///
+///     behavior make_behavior() override
+///     {
+///       return
+///       {
+///         register_upstream_node(),
+///         forward_overload(),
+///         forward_underload(),
+///         [=](down_msg const& msg)
+///         {
+///           if (remove_upstream_node(msg.source))
+///             return;
+///           // Handle DOWN from other nodes.
+///         },
+///         // Other handlers here
+///       };
+///     }
+///
+/// An actor the becomes overloaded calls `overloaded(true)` and underloaded
+/// with `overloaded(false)`. Calls to these functions propagate the signal
+/// upstream to the sender. At the source producing data, the handlers for
+/// overload/underload should regulate the sender rate.
 class flow_controlled_actor : public default_actor
 {
 public:
-  flow_controlled_actor()
+  flow_controlled_actor(char const* name = "flow-controlled-actor")
+    : default_actor{name}
   {
     attach_functor([=](uint32_t) { upstream_.clear(); });
   }
 
 protected:
-  // Hooks for clients.
-  virtual void on_announce(caf::actor const& a)
+  void add_upstream_node(caf::actor const& upstream)
   {
-    register_upstream(a);
+    VAST_DEBUG(this, "registers", upstream, "as upstream flow-control node");
+    monitor(upstream);
+    upstream_.insert(upstream);
   }
 
-  virtual void on_overload(caf::actor_addr const&)
+  bool remove_upstream_node(caf::actor_addr const& upstream)
   {
-    propagate_overload();
+    auto i = std::find_if(
+        upstream_.begin(),
+        upstream_.end(),
+        [&](auto& u) { return u == upstream; });
+    if (i == upstream_.end())
+      return false;
+    VAST_DEBUG(this, "deregisters upstream flow-control node", upstream);
+    upstream_.erase(i);
+    return true;
   }
 
-  virtual void on_underload(caf::actor_addr const&)
+  bool overloaded() const
   {
-    propagate_underload();
+    return overloaded_;
   }
 
-  caf::message_handler make_down_handler() final
+  bool overloaded(bool flag)
   {
-    return
-      [=](caf::down_msg const& msg)
-      {
-        at(msg);
-        auto i = std::find_if(
-            upstream_.begin(),
-            upstream_.end(),
-            [&](caf::actor const& a) { return a == msg.source; });
-        if (i != upstream_.end())
-        {
-          VAST_DEBUG(this, "deregisters upstream flow-control node", msg.source);
-          upstream_.erase(i);
-        }
-      };
-  }
-
-  void register_upstream(caf::actor const& a)
-  {
-    VAST_DEBUG(this, "registers", a, "as upstream flow-control node");
-    monitor(a);
-    upstream_.insert(a);
+    if (flag)
+    {
+      if (overloaded())
+        return false;
+      VAST_DEBUG(this, "becomes overloaded");
+      overloaded_ = true;
+      propagate_overload();
+    }
+    else
+    {
+      if (! overloaded())
+        return false;
+      VAST_DEBUG(this, "becomes underloaded");
+      overloaded_ = false;
+      propagate_underload();
+    }
+    return true;
   }
 
   void propagate_overload()
   {
-    for (auto& a : upstream_)
+    for (auto& u : upstream_)
     {
-      VAST_DEBUG(this, "propagates overload signal to", a);
-      send_as(this, caf::message_priority::high, a, flow_control::overload{});
+      VAST_DEBUG(this, "propagates overload signal to", u);
+      send(caf::message_priority::high, u, overload_atom::value);
     }
   }
 
   void propagate_underload()
   {
-    for (auto& a : upstream_)
+    for (auto& u : upstream_)
     {
-      VAST_DEBUG(this, "propagates underload signal to", a);
-      send_as(this, caf::message_priority::high, a, flow_control::underload{});
+      VAST_DEBUG(this, "propagates underload signal to", u);
+      send(caf::message_priority::high, u, underload_atom::value);
     }
+  }
+
+  auto forward_overload()
+  {
+    return [=](overload_atom) { propagate_overload(); };
+  }
+
+  auto forward_underload()
+  {
+    return [=](underload_atom) { propagate_underload(); };
+  }
+
+  auto register_upstream_node()
+  {
+    return [=](upstream_atom, caf::actor const& upstream)
+    {
+      add_upstream_node(upstream);
+    };
   }
 
   auto upstream() const
@@ -343,67 +318,9 @@ protected:
     return upstream_;
   }
 
-  bool become_overloaded()
-  {
-    if (overloaded())
-      return false;
-    VAST_DEBUG(this, "becomes overloaded");
-    overloaded(true);
-    propagate_overload();
-    return true;
-  }
-
-  bool become_underloaded()
-  {
-    if (! overloaded())
-      return false;
-    VAST_DEBUG(this, "becomes underloaded");
-    overloaded(false);
-    propagate_underload();
-    return true;
-  }
-
-  void overload_when(std::function<bool()> f)
-  {
-    overload_check_ = f;
-  }
-
-  void check_overload()
-  {
-    if (overload_check_ && overload_check_())
-      become_overloaded();
-  }
-
-  void check_underload()
-  {
-    if (overload_check_ && ! overload_check_())
-      become_underloaded();
-  }
-
-  caf::message_handler make_internal_handler() final
-  {
-    using namespace caf;
-    return
-    {
-      [=](flow_control::announce const& a)
-      {
-        assert(this != a.source);
-        on_announce(a.source);
-      },
-      [=](flow_control::overload)
-      {
-        on_overload(current_sender());
-      },
-      [=](flow_control::underload)
-      {
-        on_underload(current_sender());
-      }
-    };
-  }
-
 private:
+  bool overloaded_ = false;
   util::flat_set<caf::actor> upstream_;
-  std::function<bool()> overload_check_;
 };
 
 } // namespace vast

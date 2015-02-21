@@ -41,24 +41,24 @@ using namespace caf;
 namespace vast {
 
 program::program(configuration config)
-  : config_{std::move(config)}
+  : default_actor{"program"},
+    config_{std::move(config)}
 {
 }
 
-message_handler program::make_handler()
+void program::on_exit()
 {
-  attach_functor(
-      [=](uint32_t)
-      {
-        receiver_ = invalid_actor;
-        tracker_ = invalid_actor;
-        archive_ = invalid_actor;
-        index_ = invalid_actor;
-        search_ = invalid_actor;
-        importer_ = invalid_actor;
-        exporter_ = invalid_actor;
-      });
+  receiver_ = invalid_actor;
+  tracker_ = invalid_actor;
+  archive_ = invalid_actor;
+  index_ = invalid_actor;
+  search_ = invalid_actor;
+  importer_ = invalid_actor;
+  exporter_ = invalid_actor;
+}
 
+behavior program::make_behavior()
+{
   return
   {
     [=](run_atom)
@@ -89,18 +89,14 @@ message_handler program::make_handler()
           quit(exit::stop);
       }
     },
+    [](ok_atom) { /* nothing to do */ },
     [=](error const& e)
     {
       VAST_ERROR(this, "got error:", e);
       quit(exit::error);
     },
-    [](ok_atom) { /* nothing to do */ }
+    catch_unexpected()
   };
-}
-
-std::string program::name() const
-{
-  return "program";
 }
 
 trial<void> program::run()

@@ -8,18 +8,34 @@ namespace vast {
 using namespace caf;
 
 importer::importer(path dir, uint64_t chunk_size, io::compression method)
-  : dir_{dir / "import"},
+  : flow_controlled_actor{"importer"},
+    dir_{dir / "import"},
     chunk_size_{chunk_size},
     compression_{method}
 {
-  attach_functor([=](uint32_t)
-  {
-    source_ = invalid_actor;
-    chunkifier_ = invalid_actor;
-    accountant_ = invalid_actor;
-    sinks_.clear();
-  });
+  trap_exit(true);
+}
 
+void importer::on_exit()
+{
+  source_ = invalid_actor;
+  chunkifier_ = invalid_actor;
+  accountant_ = invalid_actor;
+  sinks_.clear();
+}
+
+caf::behavior importer::make_behavior()
+{
+  chunkifier_ =
+    spawn<sink::chunkifier, monitored>(this, chunk_size_, compression_);
+  if (accountant_)
+    send(chunkifier_, accountant_atom::value, accountant_);
+  for (auto& p : directory{dir_ / "chunks"})
+  {
+    VAST_INFO(this, "found orphaned chunk:", p.basename());
+    orphaned_.insert(p.basename());
+    ++stored_;
+  }
   terminating_ =
   {
     [=](exit_msg const& msg)
@@ -47,65 +63,56 @@ importer::importer(path dir, uint64_t chunk_size, io::compression method)
         VAST_ERROR(this, "failed to archive chunk:", t.error());
     }
   };
-}
-
-void importer::at(exit_msg const& msg)
-{
-  if (source_)
-    // Tell the source to exit, it will in turn propagate the exit
-    // message to the chunkifier because they are linked.
-    send_exit(source_, exit::stop);
-  else if (chunkifier_)
-    // If we have no source, we just tell the chunkifier to exit.
-    send_exit(chunkifier_, msg.reason);
-  else
-    assert(! "should never happen");
-}
-
-void importer::at(down_msg const& msg)
-{
-  if (current_sender() == chunkifier_)
-  {
-    chunkifier_ = invalid_actor;
-    become(terminating_);
-    send(this, exit_msg{address(), msg.reason});
-    return;
-  }
-  for (auto s = sinks_.begin(); s != sinks_.end(); ++s)
-    if (s->address() == current_sender())
-    {
-      VAST_VERBOSE(this, "removes sink", msg.source);
-      size_t idx = s - sinks_.begin();
-      if (current_ > idx)
-        --current_;
-      sinks_.erase(s);
-      if (sinks_.empty())
-      {
-        become(terminating_);
-        send(this, exit_msg{address(), msg.reason});
-      }
-      else
-      {
-        VAST_VERBOSE(this, "has", sinks_.size(), "sinks remaining");
-      }
-      break;
-    }
-}
-
-message_handler importer::make_handler()
-{
-  chunkifier_ =
-    spawn<sink::chunkifier, monitored>(this, chunk_size_, compression_);
-  if (accountant_)
-    send(chunkifier_, accountant_atom::value, accountant_);
-  for (auto& p : directory{dir_ / "chunks"})
-  {
-    VAST_INFO(this, "found orphaned chunk:", p.basename());
-    orphaned_.insert(p.basename());
-    ++stored_;
-  }
   return
   {
+    register_upstream_node(),
+    forward_overload(),
+    forward_underload(),
+    [=](exit_msg const& msg)
+    {
+      if (downgrade_exit())
+        return;
+      if (source_)
+        // Tell the source to exit, it will in turn propagate the exit
+        // message to the chunkifier because they are linked.
+        send_exit(source_, exit::stop);
+      else if (chunkifier_)
+        // If we have no source, we just tell the chunkifier to exit.
+        send_exit(chunkifier_, msg.reason);
+      else
+        assert(! "should never happen");
+    },
+    [=](down_msg const& msg)
+    {
+      if (remove_upstream_node(msg.source))
+        return;
+      if (current_sender() == chunkifier_)
+      {
+        chunkifier_ = invalid_actor;
+        become(terminating_);
+        send(this, exit_msg{address(), msg.reason});
+        return;
+      }
+      for (auto s = sinks_.begin(); s != sinks_.end(); ++s)
+        if (s->address() == current_sender())
+        {
+          VAST_VERBOSE(this, "removes sink", msg.source);
+          size_t idx = s - sinks_.begin();
+          if (current_ > idx)
+            --current_;
+          sinks_.erase(s);
+          if (sinks_.empty())
+          {
+            become(terminating_);
+            send(this, exit_msg{address(), msg.reason});
+          }
+          else
+          {
+            VAST_VERBOSE(this, "has", sinks_.size(), "sinks remaining");
+          }
+          break;
+        }
+    },
     [=](submit_atom)
     {
       for (auto& basename : orphaned_)
@@ -128,7 +135,7 @@ message_handler importer::make_handler()
     {
       // TODO: Support multiple sources.
       VAST_DEBUG(this, "adds source", src);
-      register_upstream(src);
+      add_upstream_node(src);
       source_ = src;
       source_->link_to(chunkifier_);
       send(source_, sink_atom::value, chunkifier_);
@@ -140,7 +147,7 @@ message_handler importer::make_handler()
     [=](add_atom, sink_atom, actor const& snk)
     {
       VAST_DEBUG(this, "adds sink", snk);
-      send(snk, flow_control::announce{this});
+      send(snk, upstream_atom::value, this);
       sinks_.push_back(snk);
       monitor(snk);
       return ok_atom::value;
@@ -155,13 +162,9 @@ message_handler importer::make_handler()
       assert(! sinks_.empty());
       send(sinks_[current_++], chk);
       current_ %= sinks_.size();
-    }
+    },
+    catch_unexpected()
   };
-}
-
-std::string importer::name() const
-{
-  return "importer";
 }
 
 } // namespace vast

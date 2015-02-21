@@ -8,17 +8,12 @@ namespace vast {
 
 /// Receives chunks from IMPORTER, imbues them with an ID from TRACKER, and
 /// relays them to ARCHIVE and INDEX.
-class receiver : public flow_controlled_actor
+struct receiver : flow_controlled_actor
 {
-public:
-  /// Spawns a receiver.
   receiver();
+  void on_exit();
+  caf::behavior make_behavior() override;
 
-  void at(caf::down_msg const& msg) override;
-  caf::message_handler make_handler() override;
-  std::string name() const override;
-
-private:
   caf::actor identifier_;
   caf::actor archive_;
   caf::actor index_;

@@ -8,17 +8,15 @@
 namespace vast {
 
 /// The main program.
-class program : public default_actor
+struct program : default_actor
 {
-public:
   /// Spawns the program.
   /// @param config The program configuration.
   program(configuration config);
 
-  caf::message_handler make_handler() override;
-  std::string name() const override;
+  void on_exit();
+  caf::behavior make_behavior() override;
 
-private:
   trial<void> run();
 
   caf::actor receiver_;

@@ -10,23 +10,19 @@ namespace sink {
 
 /// Receives events from sources, writes them into chunks, and then relays the
 /// chunks them upstream.
-class chunkifier : public base<chunkifier>
+struct chunkifier : base<chunkifier>
 {
-public:
   /// Spawns a chunkifier.
   /// @param upstream The upstream actor receiving the generated chunks.
   /// @param max_events_per_chunk The maximum number of events per chunk.
   /// @param method The compression method to use for the chunksl
-  chunkifier(caf::actor upstream,
+  chunkifier(caf::actor const& upstream,
              size_t max_events_per_chunk,
              io::compression method);
 
+  void finalize() override;
   bool process(event const& e);
-  void finalize();
-  void at(caf::exit_msg const& msg) override;
-  std::string name() const override;
 
-private:
   caf::actor upstream_;
   io::compression compression_;
   std::unique_ptr<chunk> chunk_;

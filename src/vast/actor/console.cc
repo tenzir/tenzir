@@ -16,8 +16,9 @@ namespace {
 
 struct keystroke_monitor : default_actor
 {
-  keystroke_monitor(actor sink)
-    : sink_{sink}
+  keystroke_monitor(actor const& sink)
+    : default_actor{"keystroke-monitor"},
+      sink_{sink}
   {
     el_.on_char_read(
         [](char *c) -> int
@@ -35,7 +36,12 @@ struct keystroke_monitor : default_actor
         });
   }
 
-  message_handler make_handler() override
+  void on_exit()
+  {
+    sink_ = invalid_actor;
+  }
+
+  behavior make_behavior() override
   {
     return
     {
@@ -61,11 +67,6 @@ struct keystroke_monitor : default_actor
           send(this, get_atom::value);
       }
     };
-  };
-
-  std::string name() const override
-  {
-    return "keystroke-monitor";
   };
 
   bool running_ = true;
@@ -98,7 +99,8 @@ help_printer help;
 } // namespace <anonymous>
 
 console::console(caf::actor search, path dir)
-  : dir_{std::move(dir)},
+  : default_actor{"console"},
+    dir_{std::move(dir)},
     search_{std::move(search)}
 {
   if (! exists(dir_) && ! mkdir(dir_))
@@ -599,21 +601,14 @@ void console::result::deserialize(deserializer& source)
   source >> ast_ >> progress_ >> pos_;
 }
 
-void console::at(down_msg const& msg)
+void console::on_exit()
 {
-  if (msg.source == search_.address())
-  {
-    print(fail) << "search terminated" << std::endl;
-    quit(exit::error);
-  }
-  else
-  {
-    VAST_DEBUG(this, "got DOWN from query", msg.source);
-    remove(msg.source);
-  }
+  connected_.clear();
+  search_ = invalid_actor;
+  keystroke_monitor_ = invalid_actor;
 }
 
-message_handler console::make_handler()
+behavior console::make_behavior()
 {
   print(none)
     << util::color::red
@@ -628,16 +623,21 @@ message_handler console::make_handler()
 
   keystroke_monitor_ = spawn<keystroke_monitor, detached+linked>(this);
 
-  attach_functor(
-      [=](uint32_t)
-      {
-        connected_.clear();
-        search_ = invalid_actor;
-        keystroke_monitor_ = invalid_actor;
-      });
-
   return
   {
+    [=](down_msg const& msg)
+    {
+      if (msg.source == search_.address())
+      {
+        print(fail) << "search terminated" << std::endl;
+        quit(exit::error);
+      }
+      else
+      {
+        VAST_DEBUG(this, "got DOWN from query", msg.source);
+        remove(msg.source);
+      }
+    },
     [=](error const& e)
     {
       print(fail) << e << std::endl;
@@ -877,11 +877,6 @@ message_handler console::make_handler()
       send(keystroke_monitor_, get_atom::value);
     }
   };
-}
-
-std::string console::name() const
-{
-  return "console";
 }
 
 std::ostream& console::print(print_mode mode)

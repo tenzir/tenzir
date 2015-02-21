@@ -88,10 +88,8 @@ struct index : public flow_controlled_actor
   index(path const& dir, size_t max_events,
         size_t max_parts, size_t active_parts);
 
-  void at(caf::down_msg const& msg) override;
-  void at(caf::exit_msg const& msg) override;
-  caf::message_handler make_handler() override;
-  std::string name() const override;
+  void on_exit();
+  caf::behavior make_behavior() override;
 
   /// Dispatches a query for a partition either by relaying it directly if
   /// active or enqueing it into partition queue.

@@ -8,14 +8,11 @@ namespace vast {
 
 class expression;
 
-struct search : public default_actor
+struct search : default_actor
 {
   search();
-
-  void at(caf::exit_msg const& msg) override;
-  void at(caf::down_msg const& msg) override;
-  caf::message_handler make_handler() override;
-  std::string name() const override;
+  void on_exit();
+  caf::behavior make_behavior() override;
 
   caf::actor archive_;
   caf::actor index_;

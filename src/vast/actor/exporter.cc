@@ -7,30 +7,38 @@ using namespace caf;
 
 namespace vast {
 
-void exporter::at(down_msg const& msg)
+exporter::exporter()
+  : default_actor{"exporter"}
 {
-  for (auto& s : sinks_)
-    if (s == msg.source)
-    {
-      sinks_.erase(s);
-      break;
-    }
-  if (sinks_.empty())
-    quit(msg.reason);
 }
 
-message_handler exporter::make_handler()
+void exporter::on_exit()
 {
-  attach_functor(
-      [=](uint32_t reason)
-      {
-        for (auto& s : sinks_)
-          send_exit(s, reason);
-        sinks_.clear();
-      });
+  sinks_.clear();
+}
 
+behavior exporter::make_behavior()
+{
+  trap_exit(true);
   return
   {
+    [=](exit_msg const& msg)
+    {
+      quit(msg.reason);
+      for (auto& s : sinks_)
+        send_exit(s, msg.reason);
+    },
+    [=](down_msg const& msg)
+    {
+      for (auto& s : sinks_)
+        if (s == msg.source)
+        {
+          sinks_.erase(s);
+          break;
+        }
+      if (sinks_.empty())
+        quit(msg.reason);
+    },
     [=](add_atom, actor const& snk)
     {
       monitor(snk);
@@ -69,13 +77,9 @@ message_handler exporter::make_handler()
       quit(exit::done);
       for (auto& s : sinks_)
         send_exit(s, exit::done);
-    }
+    },
+    catch_unexpected()
   };
-}
-
-std::string exporter::name() const
-{
-  return "exporter";
 }
 
 } // namespace vast

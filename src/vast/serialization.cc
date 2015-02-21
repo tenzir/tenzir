@@ -526,10 +526,6 @@ void announce_builtin_types()
   // CAF-only
   caf::announce<query_options>("query_options");
   caf::announce<std::vector<caf::actor>>("std::vector<actor>");
-  caf::announce<flow_control::announce>("flow_control::announce",
-                                        &flow_control::announce::source);
-  caf::announce<flow_control::overload>("flow_control::overload");
-  caf::announce<flow_control::underload>("flow_control::underload");
 
   // Polymorphic types
   using bitstream_models = util::type_list<

@@ -41,16 +41,18 @@ struct continuous_query_proxy : default_actor
   struct accumulator : default_actor
   {
     accumulator(std::vector<expression> exprs, actor sink)
-      : exprs_{std::move(exprs)},
+      : default_actor{"accumulator"},
+        exprs_{std::move(exprs)},
         sink_{std::move(sink)}
     {
-      attach_functor([=](uint32_t)
-        {
-          sink_ = invalid_actor;
-        });
     }
 
-    message_handler make_handler() override
+    void on_exit()
+    {
+      sink_ = invalid_actor;
+    }
+
+    behavior make_behavior() override
     {
       return
       {
@@ -75,26 +77,23 @@ struct continuous_query_proxy : default_actor
       };
     }
 
-    std::string name() const override
-    {
-      return "accumulator";
-    }
-
     predicate_map map_;
     std::vector<expression> exprs_;
     actor sink_;
   };
 
   continuous_query_proxy(actor sink)
-    : sink_{std::move(sink)}
+    : default_actor{"continuous-query-proxy"},
+      sink_{std::move(sink)}
   {
-    attach_functor([=](uint32_t)
-      {
-        sink_ = invalid_actor;
-      });
   }
 
-  message_handler make_handler() override
+  void on_exit()
+  {
+    sink_ = invalid_actor;
+  }
+
+  behavior make_behavior() override
   {
     return
     {
@@ -135,11 +134,6 @@ struct continuous_query_proxy : default_actor
     };
   }
 
-  std::string name() const override
-  {
-    return "proxy";
-  }
-
   actor sink_;
   util::flat_set<expression> exprs_;
   util::flat_set<predicate> preds_;
@@ -161,92 +155,24 @@ partition::evaluator::lookup(predicate const& pred) const
 
 
 partition::partition(path dir, actor sink)
-  : dir_{std::move(dir)},
+  : flow_controlled_actor{"partition"},
+    dir_{std::move(dir)},
     sink_{std::move(sink)}
 {
   assert(sink_ != invalid_actor);
-  attach_functor([=](uint32_t)
-    {
-      sink_ = invalid_actor;
-      proxy_ = invalid_actor;
-      indexers_.clear();
-      predicates_.clear();
-      queries_.clear();
-    });
-  // TODO: calibrate.
-  overload_when([=] { return chunks_indexed_concurrently_ > 10; });
+  trap_exit(true);
 }
 
-void partition::at(down_msg const& msg)
+void partition::on_exit()
 {
-  if (dechunkifiers_.erase(msg.source) == 1)
-    return;
-  auto i = std::find_if(
-      indexers_.begin(),
-      indexers_.end(),
-      [&](auto& p) { return p.second.address() == msg.source; });
-  if (i != indexers_.end())
-    indexers_.erase(i);
+  sink_ = invalid_actor;
+  proxy_ = invalid_actor;
+  indexers_.clear();
+  predicates_.clear();
+  queries_.clear();
 }
 
-void partition::at(exit_msg const& msg)
-{
-  if (msg.reason == exit::kill)
-  {
-    for (auto& i : indexers_)
-      link_to(i.second);
-    for (auto& q : queries_)
-      link_to(q.second.task);
-    quit(msg.reason);
-    return;
-  }
-  // We terminate queries unconditionally.
-  for (auto& q : queries_)
-    send_exit(q.second.task, msg.reason);
-  // Two-staged shutdown of dechunkifiers and indexers: first, wait for all
-  // dechunkifiers to exit since they relay events to the indexers. Thereafter
-  // we can guaranatee that they have received all events and can shut them
-  // down safely.
-  // FIXME: since we provide a "naked" DOWN handler, we override the
-  // flow-control DOWN handler. In this case it is safe because we have no
-  // downstream nodes, but we should really figure out a better way to make
-  // become() work with composite behaviors.
-  auto phase2 = [=](down_msg const& down)
-  {
-    at(down);
-    if (indexers_.empty())
-      quit(msg.reason);
-  };
-  auto phase1 = [=](down_msg const& down)
-  {
-    at(down);
-    if (! dechunkifiers_.empty())
-      return;
-    if (indexers_.empty())
-    {
-      quit(msg.reason);
-      return;
-    }
-    become(phase2);
-    for (auto& i : indexers_)
-      send_exit(i.second, msg.reason);
-  };
-  if (! dechunkifiers_.empty())
-  {
-    become(phase1);
-    return;
-  }
-  if (! indexers_.empty())
-  {
-    become(phase2);
-    for (auto& i : indexers_)
-      send_exit(i.second, msg.reason);
-    return;
-  }
-  quit(msg.reason);
-}
-
-message_handler partition::make_handler()
+behavior partition::make_behavior()
 {
   if (exists(dir_))
   {
@@ -286,9 +212,87 @@ message_handler partition::make_handler()
       }
     }
   }
-
+  // Basic DOWN handler.
+  auto on_down = [=](down_msg const& msg)
+  {
+    if (remove_upstream_node(msg.source))
+      return;
+    if (dechunkifiers_.erase(msg.source) == 1)
+      return;
+    auto i = std::find_if(
+        indexers_.begin(),
+        indexers_.end(),
+        [&](auto& p) { return p.second.address() == msg.source; });
+    if (i != indexers_.end())
+      indexers_.erase(i);
+  };
   return
   {
+    forward_overload(),
+    forward_underload(),
+    register_upstream_node(),
+    [=](exit_msg const& msg)
+    {
+      if (msg.reason == exit::kill)
+      {
+        for (auto& i : indexers_)
+          link_to(i.second);
+        for (auto& q : queries_)
+          link_to(q.second.task);
+        quit(msg.reason);
+        return;
+      }
+      if (downgrade_exit())
+        return;
+      // We don't have persistent query state, so we can terminate the queries
+      // directly.
+      for (auto& q : queries_)
+        send_exit(q.second.task, msg.reason);
+      // Exit phase 2: after all dechunkifiers have exited we wait for all indexers
+      // and terminate afterwards.
+      auto exit_phase2 =
+        [reason=msg.reason, on_down, this](down_msg const& down)
+        {
+          on_down(down);
+          if (indexers_.empty())
+            quit(reason);
+        };
+      // Exit phase 1: wait for all dechunkifiers to exit. If we have indexers
+      // left, tell them to exit.
+      auto exit_phase1 =
+        [reason=msg.reason, on_down, exit_phase2, this](down_msg const& down)
+      {
+        on_down(down);
+        if (! dechunkifiers_.empty())
+          return;
+        if (indexers_.empty())
+        {
+          quit(reason);
+          return;
+        }
+        VAST_DEBUG(this, "enters exit phase 2 after phase 1");
+        become(exit_phase2);
+        for (auto& i : indexers_)
+          send_exit(i.second, reason);
+      };
+      // Begin the two-phase shutdown.
+      if (! dechunkifiers_.empty())
+      {
+        VAST_DEBUG(this, "enters exit phase 1");
+        become(exit_phase1);
+        return;
+      }
+      if (! indexers_.empty())
+      {
+        VAST_DEBUG(this, "enters exit phase 2");
+        become(exit_phase2);
+        for (auto& i : indexers_)
+          send_exit(i.second, msg.reason);
+        return;
+      }
+      quit(msg.reason);
+    },
+    on_down,
     [=](chunk const& chk, actor const& task)
     {
       VAST_DEBUG(this, "got chunk with", chk.events(), "events:",
@@ -336,16 +340,16 @@ message_handler partition::make_handler()
             self->send(proxy, std::move(indexers));
         });
       dechunkifiers_.insert(dechunkifier->address());
-      ++chunks_indexed_concurrently_;
-      check_overload();
+      if (++chunks_indexed_concurrently_ > 10) // TODO: calibrate
+        overloaded(true);
       send(task, supervisor_atom::value, this);
       VAST_DEBUG(this, "indexes", chunks_indexed_concurrently_, "in parallel");
     },
     [=](done_atom, time::moment start, uint64_t events)
     {
       VAST_DEBUG(this, "indexed", events, "events in", time::snapshot() - start);
-      --chunks_indexed_concurrently_;
-      check_underload();
+      if (--chunks_indexed_concurrently_ < 10)
+        overloaded(false);
     },
     [=](expression const& expr, continuous_atom)
     {
@@ -452,7 +456,7 @@ message_handler partition::make_handler()
           keep_behavior,
           [=](down_msg const& msg)
           {
-            at(msg);
+            on_down(msg);
             if (dechunkifiers_.empty())
             {
               flush(task);
@@ -460,13 +464,9 @@ message_handler partition::make_handler()
             }
           });
       }
-    }
+    },
+    catch_unexpected()
   };
-}
-
-std::string partition::name() const
-{
-  return "partition";
 }
 
 void partition::flush(actor const& task)

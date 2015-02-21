@@ -7,14 +7,12 @@
 namespace vast {
 
 /// An actor receiving events and dispatching them to registered sinks.
-class exporter : public default_actor
+struct exporter : default_actor
 {
-public:
-  void at(caf::down_msg const& msg) override;
-  caf::message_handler make_handler() override;
-  std::string name() const override;
+  exporter();
+  void on_exit();
+  caf::behavior make_behavior() override;
 
-private:
   std::set<caf::actor> sinks_;
   uint64_t processed_ = 0;
   uint64_t limit_ = 0;

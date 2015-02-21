@@ -20,8 +20,6 @@ public:
 
   result<event> extract_impl();
 
-  std::string name() const;
-
 private:
   // Updates a type with a congruent one from the provided schema.
   trial<void> update(type& t);

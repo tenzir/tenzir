@@ -12,40 +12,40 @@ namespace vast {
 using namespace caf;
 
 search::search()
+  : default_actor{"search"}
 {
-  attach_functor(
-      [=](uint32_t)
-      {
-        archive_ = invalid_actor;
-        index_ = invalid_actor;
-        queries_.clear();
-      });
 }
 
-void search::at(exit_msg const& msg)
+void search::on_exit()
 {
-  for (auto& q : queries_)
-    link_to(q.second);
-  quit(msg.reason);
+  archive_ = invalid_actor;
+  index_ = invalid_actor;
+  queries_.clear();
 }
 
-void search::at(down_msg const& msg)
+behavior search::make_behavior()
 {
-  VAST_INFO(this, "got disconnect from client", msg.source);
-  auto er = queries_.equal_range(msg.source);
-  auto i = er.first;
-  while (i != er.second)
-  {
-    VAST_DEBUG(this, "sends EXIT to query", i->second);
-    send_exit(i->second, msg.reason);
-    i = queries_.erase(i);
-  }
-}
-
-message_handler search::make_handler()
-{
+  trap_exit(true);
   return
   {
+    [=](exit_msg const& msg)
+    {
+      for (auto& q : queries_)
+        link_to(q.second);
+      quit(msg.reason);
+    },
+    [=](down_msg const& msg)
+    {
+      VAST_INFO(this, "got disconnect from client", msg.source);
+      auto er = queries_.equal_range(msg.source);
+      auto i = er.first;
+      while (i != er.second)
+      {
+        VAST_DEBUG(this, "sends EXIT to query", i->second);
+        send_exit(i->second, msg.reason);
+        i = queries_.erase(i);
+      }
+    },
     [=](add_atom, archive_atom, actor const& a)
     {
       VAST_DEBUG(this, "adds archive", a);
@@ -92,13 +92,9 @@ message_handler search::make_handler()
       queries_.emplace(client->address(), qry);
       send(index_, *expr, opts, qry);
       return make_message(*expr, qry);
-    }
+    },
+    catch_unexpected()
   };
-}
-
-std::string search::name() const
-{
-  return "search";
 }
 
 } // namespace vast

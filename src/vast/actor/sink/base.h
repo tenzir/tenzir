@@ -12,24 +12,35 @@ namespace sink {
 template <typename Derived>
 struct base : public default_actor
 {
-  base()
+  base(char const* name = "sink")
+    : default_actor{name}
   {
-    attach_functor([=](uint32_t)
-    {
-      accountant_ = caf::invalid_actor;
-    });
   }
 
-  caf::message_handler make_handler() override
+  void on_exit()
+  {
+    accountant_ = caf::invalid_actor;
+  }
+
+  // Allows children too hook exit.
+  virtual void finalize() { }
+
+  caf::behavior make_behavior() override
   {
     using namespace caf;
+    trap_exit(true);
     return
     {
+      [=](exit_msg const& msg)
+      {
+        finalize();
+        quit(msg.reason);
+      },
       [=](accountant_atom, actor const& accountant)
       {
         VAST_DEBUG(this, "registers accountant", accountant);
         accountant_ = accountant;
-        send(accountant_, description() + "-events", time::now());
+        send(accountant_, label() + "-events", time::now());
       },
       [=](event const& e)
       {
@@ -51,7 +62,8 @@ struct base : public default_actor
           }
         if (accountant_)
           send(accountant_, uint64_t{v.size()}, time::snapshot());
-      }
+      },
+      catch_unexpected()
     };
   }
 

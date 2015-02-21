@@ -13,7 +13,8 @@ namespace source {
 
 pcap::pcap(schema sch, std::string name, uint64_t cutoff, size_t max_flows,
            size_t max_age, size_t expire_interval, int64_t pseudo_realtime)
-  : schema_{std::move(sch)},
+  : synchronous<pcap>{"pcap-source"},
+    schema_{std::move(sch)},
     name_{std::move(name)},
     packet_type_{detail::make_packet_type()},
     cutoff_{cutoff},
@@ -309,11 +310,6 @@ result<event> pcap::extract()
   event e{{std::move(packet), packet_type_}};
   e.timestamp(time::point{timestamp});
   return std::move(e);
-}
-
-std::string pcap::name() const
-{
-  return "pcap-source";
 }
 
 } // namespace source

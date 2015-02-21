@@ -14,7 +14,7 @@ namespace vast {
 
 /// Receives index hits, looks up the corresponding chunks in the archive, and
 /// filters out results which it then sends to a sink.
-struct query : public default_actor
+struct query : default_actor
 {
   using bitstream_type = default_bitstream;
 
@@ -24,8 +24,8 @@ struct query : public default_actor
   /// @param ast The query expression ast.
   query(caf::actor archive, caf::actor sink, expression ast);
 
-  caf::message_handler make_handler() override;
-  std::string name() const override;
+  void on_exit();
+  caf::behavior make_behavior() override;
 
   // Prefetches the next chunk and sets the "inflight" chunk status. If we
   // don't have a chunk yet, we look for the chunk corresponding to the last

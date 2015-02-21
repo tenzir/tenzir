@@ -22,6 +22,7 @@ using key_atom = caf::atom_constant<caf::atom("key")>;
 using limit_atom = caf::atom_constant<caf::atom("limit")>;
 using link_atom = caf::atom_constant<caf::atom("link")>;
 using load_atom = caf::atom_constant<caf::atom("load")>;
+using overload_atom = caf::atom_constant<caf::atom("overload")>;
 using ping_atom = caf::atom_constant<caf::atom("ping")>;
 using pong_atom = caf::atom_constant<caf::atom("pong")>;
 using progress_atom = caf::atom_constant<caf::atom("progress")>;
@@ -39,6 +40,7 @@ using stop_atom = caf::atom_constant<caf::atom("stop")>;
 using store_atom = caf::atom_constant<caf::atom("store")>;
 using submit_atom = caf::atom_constant<caf::atom("submit")>;
 using subscribe_atom = caf::atom_constant<caf::atom("subscribe")>;
+using underload_atom = caf::atom_constant<caf::atom("underload")>;
 using value_atom = caf::atom_constant<caf::atom("value")>;
 using write_atom = caf::atom_constant<caf::atom("write")>;
 
@@ -54,6 +56,7 @@ using subscriber_atom = caf::atom_constant<caf::atom("subscriber")>;
 using supervisor_atom = caf::atom_constant<caf::atom("supervisor")>;
 using search_atom = caf::atom_constant<caf::atom("search")>;
 using tracker_atom = caf::atom_constant<caf::atom("tracker")>;
+using upstream_atom = caf::atom_constant<caf::atom("upstream")>;
 using worker_atom = caf::atom_constant<caf::atom("worker")>;
 using workers_atom = caf::atom_constant<caf::atom("workers")>;
 

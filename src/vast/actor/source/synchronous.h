@@ -11,40 +11,43 @@ namespace source {
 
 /// A synchronous source that extracts events one by one.
 template <typename Derived>
-struct synchronous : public flow_controlled_actor
+class synchronous : public flow_controlled_actor
 {
 public:
-  void at(caf::exit_msg const& msg) override
+  synchronous(char const* name)
+    : flow_controlled_actor{name}
   {
-    send_events();
-    this->quit(msg.reason);
   }
 
-  void on_overload(caf::actor_addr const&) override
+  void on_exit()
   {
-    become_overloaded();
-    running_ = false; // Stop at the next occasion.
+    accountant_ = caf::invalid_actor;
+    sinks_.clear();
   }
 
-  void on_underload(caf::actor_addr const&) override
-  {
-    become_underloaded();
-    running_ = true;
-    if (! done())
-      send(this, run_atom::value);
-  }
-
-  caf::message_handler make_handler() override
+  caf::behavior make_behavior() override
   {
     using namespace caf;
-    this->attach_functor([=](uint32_t)
-    {
-      accountant_ = invalid_actor;
-      sinks_.clear();
-    });
-
+    trap_exit(true);
     return
     {
+      [=](exit_msg const& msg)
+      {
+        if (downgrade_exit())
+          return;
+        send_events();
+        this->quit(msg.reason);
+      },
+      [=](overload_atom)
+      {
+        overloaded(true); // Stop after the next batch.
+      },
+      [=](underload_atom)
+      {
+        overloaded(false);
+        if (! done())
+          send(this, run_atom::value);
+      },
       [=](batch_atom, uint64_t batch_size)
       {
         VAST_DEBUG(this, "sets batch size to", batch_size);
@@ -59,7 +62,7 @@ public:
       {
         VAST_DEBUG(this, "registers accountant", accountant);
         accountant_ = accountant;
-        send(accountant_, description() + "-events", time::now());
+        send(accountant_, label() + "-events", time::now());
       },
       [=](run_atom)
       {
@@ -88,9 +91,10 @@ public:
         send_events();
         if (done())
           this->quit(exit::done);
-        else if (running_)
+        else if (! overloaded())
           this->send(this, this->current_message());
-      }
+      },
+      catch_unexpected(),
     };
   }
 
@@ -118,7 +122,6 @@ private:
   }
 
   bool done_ = false;
-  bool running_ = true;
   caf::actor accountant_;
   std::vector<caf::actor> sinks_;
   uint64_t batch_size_ = std::numeric_limits<uint16_t>::max();

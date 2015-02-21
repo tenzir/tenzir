@@ -7,34 +7,45 @@
 namespace vast {
 
 /// Replicates a message by relaying it to a set of workers.
-class replicator : public flow_controlled_actor
+struct replicator : flow_controlled_actor
 {
-public:
   replicator()
+    : flow_controlled_actor{"replicator"}
   {
-    trap_unexpected(false);
-    attach_functor([=](uint32_t) { workers_.clear(); });
   }
 
-  void at(caf::down_msg const& msg) override
+  void on_exit()
   {
-    workers_.erase(
-        std::remove_if(
-            workers_.begin(),
-            workers_.end(),
-            [=](caf::actor const& a) { return a == current_sender(); }),
-        workers_.end());
+    workers_.clear();
+  };
 
-    if (workers_.empty())
-      quit(msg.reason);
-  }
-
-  caf::message_handler make_handler() override
+  caf::behavior make_behavior() override
   {
     using namespace caf;
-
+    trap_exit(true);
     return
     {
+      forward_overload(),
+      forward_underload(),
+      register_upstream_node(),
+      [=](exit_msg const&)
+      {
+        if (downgrade_exit())
+          return;
+      },
+      [=](down_msg const& msg)
+      {
+        if (remove_upstream_node(msg.source))
+          return;
+        workers_.erase(
+            std::remove_if(
+                workers_.begin(),
+                workers_.end(),
+                [=](caf::actor const& a) { return a == current_sender(); }),
+            workers_.end());
+        if (workers_.empty())
+          quit(msg.reason);
+      },
       [=](add_atom, worker_atom, actor a)
       {
         VAST_DEBUG(this, "adds worker", a);
@@ -54,12 +65,6 @@ public:
     };
   }
 
-  std::string name() const
-  {
-    return "replicator";
-  }
-
-private:
   std::vector<caf::actor> workers_;
 };
 

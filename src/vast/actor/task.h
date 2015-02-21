@@ -12,39 +12,40 @@ namespace vast {
 /// An abstraction of a task where each work item consists of an actor. The
 /// task completes as soon as all registered items send either a DONE atom or
 /// terminate.
-struct task : public default_actor
+struct task : default_actor
 {
   /// Spawns a task.
   /// @param xs Opaque tokens return appended to the completion message.
   template <typename... Ts>
   task(Ts&&... xs)
-    : done_msg_{caf::make_message(done_atom::value, std::forward<Ts>(xs)...)}
+    : default_actor{"task"},
+      done_msg_{caf::make_message(done_atom::value, std::forward<Ts>(xs)...)}
   {
-    attach_functor([=](uint32_t)
-    {
-      subscribers_.clear();
-      supervisors_.clear();
-    });
+    trap_exit(true);
   }
 
-  void at(caf::down_msg const& msg) override
+  void on_exit()
   {
-    if (workers_.erase(msg.source) == 1)
-      notify();
+    subscribers_.clear();
+    supervisors_.clear();
   }
 
-  void at(caf::exit_msg const& msg) override
-  {
-    subscribers_.clear(); // Only notify our supervisors when exiting.
-    notify();
-    quit(msg.reason);
-  }
-
-  caf::message_handler make_handler() override
+  caf::behavior make_behavior() override
   {
     using namespace caf;
     return
     {
+      [=](exit_msg const& msg)
+      {
+        subscribers_.clear(); // Only notify our supervisors when exiting.
+        notify();
+        quit(msg.reason);
+      },
+      [=](down_msg const& msg)
+      {
+        if (workers_.erase(msg.source) == 1)
+          notify();
+      },
       [=](uint32_t exit_reason)
       {
         exit_reason_ = exit_reason;
@@ -95,12 +96,6 @@ struct task : public default_actor
     };
   }
 
-  std::string name() const
-  {
-    return "task";
-  }
-
-private:
   void complete(caf::actor_addr const& addr)
   {
     auto w = workers_.find(addr);

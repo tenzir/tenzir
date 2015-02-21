@@ -7,7 +7,7 @@ namespace vast {
 namespace source {
 
 bgpdump::bgpdump(schema sch, std::string const& filename, bool sniff)
-  : file<bgpdump>{filename},
+  : file<bgpdump>{"bgpdump-source", filename},
     schema_{std::move(sch)},
     sniff_{sniff}
 {
@@ -253,11 +253,6 @@ result<event> bgpdump::extract_impl()
   }
 
   return {};
-}
-
-std::string bgpdump::name() const
-{
-  return "bgpdump-source";
 }
 
 trial<void> bgpdump::update(type& t)

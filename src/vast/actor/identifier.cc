@@ -10,24 +10,13 @@ using namespace caf;
 namespace vast {
 
 identifier::identifier(path dir)
-  : dir_{std::move(dir)}
+  : default_actor{"identifier"},
+    dir_{std::move(dir)}
 {
+  trap_exit(true);
 }
 
-void identifier::at(exit_msg const& msg)
-{
-  if (save())
-  {
-    quit(msg.reason);
-  }
-  else
-  {
-    VAST_ERROR(this, "could not save current event ID", id_);
-    quit(exit::error);
-  }
-}
-
-message_handler identifier::make_handler()
+behavior identifier::make_behavior()
 {
   if (exists(dir_ / "id"))
   {
@@ -45,6 +34,18 @@ message_handler identifier::make_handler()
 
   return
   {
+    [=](exit_msg const& msg)
+    {
+      if (save())
+      {
+        quit(msg.reason);
+      }
+      else
+      {
+        VAST_ERROR(this, "could not save current event ID", id_);
+        quit(exit::error);
+      }
+    },
     [=](request_atom, uint64_t n)
     {
       if (n == 0)
@@ -61,13 +62,9 @@ message_handler identifier::make_handler()
 
       VAST_DEBUG(this, "hands out [" << (id_ - n) << ',' << id_ << ')');
       return make_message(id_atom::value, id_ - n, id_);
-    }
+    },
+    catch_unexpected()
   };
-}
-
-std::string identifier::name() const
-{
-  return "identifier";
 }
 
 bool identifier::save()

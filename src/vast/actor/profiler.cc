@@ -50,53 +50,49 @@ std::ostream& operator<<(std::ostream& out, profiler::measurement const& m)
 }
 
 profiler::profiler(path log_dir, std::chrono::seconds secs)
-  : log_dir_{std::move(log_dir)},
+  : default_actor{"profiler"},
+    log_dir_{std::move(log_dir)},
     secs_{secs}
 {
 }
 
-message_handler profiler::make_handler()
+void profiler::on_exit()
 {
-  attach_functor(
-      [=](uint32_t)
-      {
 #ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
-        ProfilerState state;
-        ProfilerGetCurrentState(&state);
-        if (state.enabled)
-        {
-          VAST_INFO(this, "stops Gperftools CPU profiler");
-          ProfilerStop();
-          VAST_INFO(this, "recorded", state.samples_gathered,
-                    "Gperftools CPU profiler samples in", state.profile_name);
-        }
+  ProfilerState state;
+  ProfilerGetCurrentState(&state);
+  if (state.enabled)
+  {
+    VAST_INFO(this, "stops Gperftools CPU profiler");
+    ProfilerStop();
+    VAST_INFO(this, "recorded", state.samples_gathered,
+              "Gperftools CPU profiler samples in", state.profile_name);
+  }
 #endif
 #ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
-        if (IsHeapProfilerRunning())
-        {
-          VAST_INFO(this, "stops Gperftools heap profiler");
-          HeapProfilerDump("cleanup");
-          HeapProfilerStop();
-        }
+  if (IsHeapProfilerRunning())
+  {
+    VAST_INFO(this, "stops Gperftools heap profiler");
+    HeapProfilerDump("cleanup");
+    HeapProfilerStop();
+  }
 #endif
 
-        file_.close();
-      });
+  file_.close();
+}
 
-
+behavior profiler::make_behavior()
+{
   if (! exists(log_dir_))
   {
     auto t = mkdir(log_dir_);
     if (! t)
       VAST_ERROR(this, "could not create directory:", t.error());
   }
-
   auto filename = log_dir_ / "profile.log";
   file_.open(to_string(filename));
-
   VAST_INFO(this, "enables getrusage profiling every", secs_.count(),
             (secs_.count() == 1 ? "" : "s"), '(' << filename << ')');
-
   assert(file_.good());
   file_.flags(std::ios::left);
   file_
@@ -109,7 +105,6 @@ message_handler profiler::make_handler()
     << std::setw(14) << "sys (d)"
     << std::setw(14) << "maxrss (d)"
     << std::endl;
-
   return
   {
 #ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
@@ -151,13 +146,9 @@ message_handler profiler::make_handler()
       now.usr -= usr;
       now.sys -= sys;
       file_ << now << std::endl;
-    }
+    },
+    catch_unexpected()
   };
-}
-
-std::string profiler::name() const
-{
-  return "profiler";
 }
 
 } // namespace vast

@@ -5,7 +5,8 @@ namespace vast {
 namespace sink {
 
 json::json(path p)
-  : stream_{std::move(p)}
+  : base<json>{"json-sink"},
+    stream_{std::move(p)}
 {
 }
 
@@ -19,11 +20,6 @@ bool json::process(event const& e)
   str += '\n';
 
   return stream_.write(str.begin(), str.end());
-}
-
-std::string json::name() const
-{
-  return "json-sink";
 }
 
 } // namespace sink

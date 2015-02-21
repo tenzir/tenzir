@@ -11,9 +11,8 @@
 namespace vast {
 
 /// Manages sources which produce events.
-class importer : public flow_controlled_actor
+struct importer : flow_controlled_actor
 {
-public:
   /// Spawns an importer.
   /// @param dir The directory where to save persistent state.
   /// @param chunk_size The number of events a source buffers until
@@ -21,12 +20,9 @@ public:
   /// @param method The compression method to use for the chunkifier.
   importer(path dir, uint64_t chunk_size, io::compression method);
 
-  void at(caf::exit_msg const& msg) override;
-  void at(caf::down_msg const& msg) override;
-  caf::message_handler make_handler() override;
-  std::string name() const override;
+  void on_exit();
+  caf::behavior make_behavior() override;
 
-private:
   path dir_;
   uint64_t chunk_size_;
   io::compression compression_;

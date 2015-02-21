@@ -10,16 +10,40 @@ namespace vast {
 using namespace caf;
 
 archive::archive(path dir, size_t capacity, size_t max_segment_size)
-  : dir_{dir / "archive"},
+  : flow_controlled_actor{"archive"},
+    dir_{dir / "archive"},
     meta_data_filename_{dir_ / "meta.data"},
     max_segment_size_{max_segment_size},
     cache_{capacity, [&](uuid const& id) { return on_miss(id); }}
 {
   assert(max_segment_size_ > 0);
-  attach_functor(
-    [=](uint32_t)
+  trap_exit(true);
+}
+
+void archive::on_exit()
+{
+  accountant_ = invalid_actor;
+}
+
+caf::behavior archive::make_behavior()
+{
+  if (exists(meta_data_filename_))
+  {
+    auto t = io::unarchive(meta_data_filename_, segments_);
+    if (! t)
     {
-      accountant_ = invalid_actor;
+      VAST_ERROR(this, "failed to unarchive meta data:", t.error());
+      quit(exit::error);
+      return {};
+    }
+  }
+  return
+  {
+    register_upstream_node(),
+    [=](exit_msg const& msg)
+    {
+      if (downgrade_exit())
+        return;
       if (! current_.empty())
       {
         auto t = store(std::move(current_));
@@ -36,29 +60,17 @@ archive::archive(path dir, size_t capacity, size_t max_segment_size)
         VAST_ERROR(this, "failed to store segment meta data:", t.error());
         return;
       }
-    });
-}
-
-caf::message_handler archive::make_handler()
-{
-  if (exists(meta_data_filename_))
-  {
-    auto t = io::unarchive(meta_data_filename_, segments_);
-    if (! t)
+      quit(msg.reason);
+    },
+    [=](down_msg const& msg)
     {
-      VAST_ERROR(this, "failed to unarchive meta data:", t.error());
-      quit(exit::error);
-      return {};
-    }
-  }
-
-  return
-  {
+      remove_upstream_node(msg.source);
+    },
     [=](accountant_atom, actor const& accountant)
     {
       VAST_DEBUG(this, "registers accountant", accountant);
       accountant_ = accountant;
-      send(accountant_, description() + "-events", time::now());
+      send(accountant_, label() + "-events", time::now());
     },
     [=](chunk const& chk)
     {
@@ -85,12 +97,10 @@ caf::message_handler archive::make_handler()
     [=](event_id eid)
     {
       VAST_DEBUG(this, "got request for event", eid);
-
       // First check the currently buffered segment.
       for (size_t i = 0; i < current_.size(); ++i)
         if (eid < current_[i].meta().ids.size() && current_[i].meta().ids[eid])
           return make_message(current_[i]);
-
       // Then inspect the existing segments.
       auto t = load(eid);
       if (t)
@@ -98,30 +108,23 @@ caf::message_handler archive::make_handler()
         VAST_DEBUG(this, "delivers chunk for event", eid);
         return make_message(*t);
       }
-
       VAST_WARN(this, t.error());
       return make_message(empty_atom::value, eid);
-    }
+    },
+    catch_unexpected()
   };
-}
-
-std::string archive::name() const
-{
-  return "archive";
 }
 
 trial<void> archive::store(segment s)
 {
   if (! exists(dir_) && ! mkdir(dir_))
     return error{"failed to create directory ", dir_};
-
   auto id = uuid::random();
   auto filename = dir_ / to_string(id);
   VAST_VERBOSE(this, "writes segment", id, "to", filename.trim(-3));
   auto t = io::archive(filename, s);
   if (! t)
     return t;
-
   for (auto& chk : s)
   {
     auto first = chk.meta().ids.find_first();
@@ -129,7 +132,6 @@ trial<void> archive::store(segment s)
     assert(first != invalid_event_id && last != invalid_event_id);
     segments_.inject(first, last + 1, id);
   }
-
   cache_.insert(std::move(id), std::move(s));
   return nothing;
 }
@@ -142,17 +144,14 @@ trial<chunk> archive::load(event_id eid)
     for (size_t i = 0; i < s.size(); ++i)
       if (eid < s[i].meta().ids.size() && s[i].meta().ids[eid])
         return s[i];
-
     assert(! "segment must contain looked up id");
   }
-
   return error{"no segment for id ", eid};
 }
 
 archive::segment archive::on_miss(uuid const& id)
 {
   VAST_DEBUG(this, "experienced cache miss for", id);
-
   segment s;
   auto filename = dir_ / to_string(id);
   auto t = io::unarchive(filename, s);
@@ -161,7 +160,6 @@ archive::segment archive::on_miss(uuid const& id)
     VAST_ERROR(this, "failed to unarchive segment:", t.error());
     return {};
   }
-
   return s;
 }
 

@@ -21,7 +21,7 @@ namespace vast {
 /// which turns the chunk back into a sequence of events, (ii) a set of
 /// EVENT_INDEXERs for all event types occurring in the chunk, and (iii)
 /// registers all EVENT_INDEXERs as sink of the DECHUNKIFIER.
-struct partition : public flow_controlled_actor
+struct partition : flow_controlled_actor
 {
   using bitstream_type = default_bitstream;
 
@@ -32,20 +32,6 @@ struct partition : public flow_controlled_actor
 
     partition const& partition_;
   };
-
-  /// Spawns a partition.
-  /// @param dir The directory where to store this partition on the file system.
-  /// @param sink The actor receiving results of this partition.
-  /// @pre `sink != invalid_actor`
-  partition(path dir, caf::actor sink);
-
-  void at(caf::down_msg const& msg) override;
-  void at(caf::exit_msg const& msg) override;
-  caf::message_handler make_handler() override;
-  std::string name() const override;
-
-private:
-  void flush(caf::actor const& task);
 
   struct predicate_state
   {
@@ -60,6 +46,17 @@ private:
     caf::actor task;
     bitstream_type hits;
   };
+
+  /// Spawns a partition.
+  /// @param dir The directory where to store this partition on the file system.
+  /// @param sink The actor receiving results of this partition.
+  /// @pre `sink != invalid_actor`
+  partition(path dir, caf::actor sink);
+
+  void on_exit();
+  caf::behavior make_behavior() override;
+
+  void flush(caf::actor const& task);
 
   path const dir_;
   caf::actor sink_;

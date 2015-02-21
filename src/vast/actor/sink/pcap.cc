@@ -6,7 +6,8 @@ namespace vast {
 namespace sink {
 
 pcap::pcap(schema sch, path trace, size_t flush)
-  : schema_{std::move(sch)},
+  : base<pcap>{"pcap-sink"},
+    schema_{std::move(sch)},
     trace_{std::move(trace)},
     packet_type_{detail::make_packet_type()},
     flush_{flush}
@@ -105,11 +106,6 @@ bool pcap::process(event const& e)
   }
 
   return true;
-}
-
-std::string pcap::name() const
-{
-  return "pcap-sink";
 }
 
 } // namespace sink

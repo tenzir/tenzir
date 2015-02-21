@@ -11,7 +11,8 @@ class dechunkifier : public synchronous<dechunkifier>
 {
 public:
   dechunkifier(chunk chk)
-    : chunk_{std::move(chk)},
+    : synchronous<dechunkifier>{"dechunkifier"},
+      chunk_{std::move(chk)},
       reader_{chunk_}
   {
   }
@@ -22,11 +23,6 @@ public:
     if (e.empty())
       done(true);
     return e;
-  }
-
-  std::string name() const
-  {
-    return "dechunkifier";
   }
 
 private:

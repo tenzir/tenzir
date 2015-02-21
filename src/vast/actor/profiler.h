@@ -9,9 +9,8 @@
 namespace vast {
 
 /// A simple CPU profiler.
-class profiler : public default_actor
+struct profiler : default_actor
 {
-public:
   /// A resoure measurement.
   struct measurement
   {
@@ -31,10 +30,9 @@ public:
   /// @param secs The number of seconds between subsequent measurements.
   profiler(path log_dir, std::chrono::seconds secs);
 
-  caf::message_handler make_handler() override;
-  std::string name() const override;
+  void on_exit();
+  caf::behavior make_behavior() override;
 
-private:
   path const log_dir_;
   std::ofstream file_;
   std::chrono::seconds secs_;

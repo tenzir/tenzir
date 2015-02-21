@@ -122,9 +122,8 @@ struct console : default_actor
   /// @param dir The directory where to save state.
   console(caf::actor search, path dir);
 
-  void at(caf::down_msg const& msg) override;
-  caf::message_handler make_handler() override;
-  std::string name() const override;
+  void on_exit();
+  caf::behavior make_behavior() override;
 
   /// Prints status information to standard error.
   std::ostream& print(print_mode mode);

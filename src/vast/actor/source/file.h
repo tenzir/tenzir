@@ -14,9 +14,11 @@ class file : public synchronous<file<Derived>>
 {
 public:
   /// Constructs a file source.
+  /// @param name The name of the actor.
   /// @param filename The name of the file to ingest.
-  file(std::string const& filename)
-    : file_handle_{path{filename}},
+  file(char const* name, std::string const& filename)
+    : synchronous<file<Derived>>{name},
+      file_handle_{path{filename}},
       file_stream_{file_handle_}
   {
     file_handle_.open(vast::file::read_only);
