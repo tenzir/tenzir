@@ -177,9 +177,9 @@ inline Stream& operator<<(Stream& out, default_actor const* a)
 /// Consider the following scenario, where a sender *S* sends data to *A*,
 /// which then forwards it to *B* and *C*.
 ///
-///     S --- A --- B
-///            \
 ///             C
+///            /
+///     S --- A --- B
 ///
 /// If any of the actors downstream of *S* get overloaded, the need to
 /// propagate the signal back to *S*. The decision what to do with an overload
