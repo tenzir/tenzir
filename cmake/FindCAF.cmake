@@ -7,9 +7,8 @@
 # Variables used by this module (they can change the default behaviour and need
 # to be set before calling find_package):
 #
-#  CAF_ROOT_DIR  Set this variable to the root installation of
-#                CAF if the module has problems finding 
-#                the proper installation path.
+#  CAF_ROOT_DIR  Set this variable either to an installation prefix or to wa
+#                CAF build directory where to look for the CAF libraries.
 #
 # Variables defined by this module:
 #
@@ -28,28 +27,21 @@ foreach (comp ${CAF_FIND_COMPONENTS})
   else ()
     set(HDRNAME "caf/${comp}/all.hpp")
   endif ()
-  # look for headers: give CMake hints where to find non-installed CAF versions
-  # note that we look for the headers of each component individually: this is
-  # necessary to support non-installed versions of CAF, i.e., accessing the
-  # checked out "actor-framework" or "caf" directory structure directly;
-  # also check whether CAF_ROOT_DIR is a source directory
-  set(HDRHINT "${CAF_ROOT_DIR}/libcaf_${comp}")
-  foreach(dir ".." "../.." "../../..")
-    foreach(subdir "actor-framework" "caf")
-      set(HDRHINT ${HDRHINT} "${dir}/${subdir}/libcaf_${comp}")
-    endforeach()
-  endforeach()
+  if (CAF_ROOT_DIR)
+    set(header_hints
+        "${CAF_ROOT_DIR}/include"
+        "${CAF_ROOT_DIR}/../libcaf_${comp}")
+  endif ()
   find_path(CAF_INCLUDE_DIR_${UPPERCOMP}
             NAMES
               ${HDRNAME}
             HINTS
-              ${CAF_ROOT_DIR}/include
+              ${header_hints}
               /usr/include
               /usr/local/include
               /opt/local/include
               /sw/include
-              ${CMAKE_INSTALL_PREFIX}/include
-              ${HDRHINT})
+              ${CMAKE_INSTALL_PREFIX}/include)
   mark_as_advanced(CAF_INCLUDE_DIR_${UPPERCOMP})
   if (NOT "${CAF_INCLUDE_DIR_${UPPERCOMP}}"
       STREQUAL "CAF_INCLUDE_DIR_${UPPERCOMP}-NOTFOUND")
@@ -68,24 +60,19 @@ foreach (comp ${CAF_FIND_COMPONENTS})
     # look for (.dll|.so|.dylib) file, again giving hints for non-installed CAFs
     # skip probe_event as it is header only
     if (NOT ${comp} STREQUAL "probe_event")
-      unset(LIBHINT)
-      foreach(dir ".." "../.." "../../..")
-        foreach(subdir "actor-framework" "caf")
-          set(LIBHINT ${LIBHINT} "${dir}/${subdir}/build/lib")
-        endforeach()
-      endforeach()
+      if (CAF_ROOT_DIR)
+        set(library_hints "${CAF_ROOT_DIR}/lib")
+      endif ()
       find_library(CAF_LIBRARY_${UPPERCOMP}
                    NAMES
                      "caf_${comp}"
                    HINTS
-                     ${CAF_ROOT_DIR}/lib
-                     ${CAF_ROOT_DIR}/build/lib
+                     ${library_hints}
                      /usr/lib
                      /usr/local/lib
                      /opt/local/lib
                      /sw/lib
-                     ${CMAKE_INSTALL_PREFIX}/lib
-                     ${LIBHINT})
+                     ${CMAKE_INSTALL_PREFIX}/lib)
       mark_as_advanced(CAF_LIBRARY_${UPPERCOMP})
       if ("${CAF_LIBRARY_${UPPERCOMP}}" STREQUAL "CAF_LIBRARY-NOTFOUND")
         set(CAF_${comp}_FOUND false)
