@@ -101,6 +101,7 @@ set(tests ${tests}
   tests/logging.cc
   tests/offset.cc
   tests/parse.cc
+  tests/parse_value.cc
   tests/print.cc
   tests/range_map.cc
   tests/schema.cc
