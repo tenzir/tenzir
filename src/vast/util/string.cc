@@ -17,9 +17,7 @@ std::string byte_escape(std::string const& str, bool all)
 {
   if (str.empty())
     return {};
-
   std::string esc;
-
   if (all)
   {
     esc.resize(str.size() * 4);
@@ -48,23 +46,18 @@ std::string byte_escape(std::string const& str, bool all)
         esc += hex[c & 0x0f];
       }
   }
-
   return esc;
 }
 
 std::string byte_unescape(std::string const& str)
 {
   std::string unesc;
-
   auto i = str.begin();
   while (str.end() - i > 3)
   {
-    if (*i == '\\'
-      && *(i + 1) == 'x'
-      && std::isxdigit(*(i + 2))
-      && std::isxdigit(*(i + 3)))
+    if (*i == '\\' && i[1] == 'x' && std::isxdigit(i[2]) && std::isxdigit(i[3]))
     {
-      unesc += hex_to_byte(*(i + 2), *(i + 3));
+      unesc += hex_to_byte(i[2], i[3]);
       i += 4;
     }
     else
@@ -72,9 +65,7 @@ std::string byte_unescape(std::string const& str)
       unesc += *i++;
     }
   }
-
   std::copy(i, str.end(), std::back_inserter(unesc));
-
   return unesc;
 }
 
@@ -82,12 +73,9 @@ std::string json_escape(std::string const& str)
 {
   if (str.empty())
     return "\"\"";
-
   std::string esc;
   esc.reserve(str.size());
-
   esc += '"';
-
   for (auto c : str)
   {
     switch (c)
@@ -121,41 +109,35 @@ std::string json_escape(std::string const& str)
         break;
     }
   }
-
   esc += '"';
-
   return esc;
 }
 
 std::string json_unescape(std::string const& str)
 {
   std::string unesc;
-  unesc.reserve(str.size());
-
-  if (str.empty())
+  if (str.empty() || str.size() < 2)
     return {};
-
-  std::string::size_type i = 0;
-  if (str[i] == '"')
-    ++i;
-
-  while (i < str.size() - 1)
+  // Only consider doulbe-quote strings.
+  if (! (str.front() == '"' && str.back() == '"'))
+    return {};
+  unesc.reserve(str.size());
+  std::string::size_type i = 1;
+  std::string::size_type last = str.size() - 1;
+  // Skip the opening double quote.
+  // Unescape everything until the closing double quote.
+  while (i < last)
   {
     auto c = str[i++];
-    if (c == '"')
-    {
-      // Unescaped double-quotes not allowed inside a string.
+    if (c == '"')   // Unescaped double-quotes not allowed.
       return {};
-    }
-    else if (c != '\\')
+    if (c != '\\')  // Skip everything non-escpaed character.
     {
       unesc += c;
       continue;
     }
-
-    if (i == str.size() - 1)
+    if (i == last)  // No '\' before final double quote allowed.
       return {};
-
     switch (str[i++])
     {
       default:
@@ -184,21 +166,18 @@ std::string json_unescape(std::string const& str)
       case 't':
         unesc += '\t';
         break;
-      case 'u':
+      case 'u':    // We can't handle unicode and leave \uXXXX as is.
         {
-          // We ignore unicode escape sequences.
+          unesc += '\\';
           unesc += 'u';
-          auto max = std::min(std::string::size_type{4}, str.size() - i - 1);
-          for (std::string::size_type j = 0; j < max; ++j)
+          auto end = std::min(std::string::size_type{4}, last - i);
+          for (std::string::size_type j = 0; j < end; ++j)
             unesc += str[i++];
         }
         break;
     }
   }
-
-  if (i != str.size() - 1 || str[i] != '"')
-    return {};
-
+  assert(i == last);
   return unesc;
 }
 

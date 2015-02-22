@@ -52,8 +52,9 @@ std::string json_unescape(std::string const& str);
 ///          with a range *[start, end)*.
 template <typename Iterator>
 std::vector<std::pair<Iterator, Iterator>>
-split(Iterator begin, Iterator end, std::string const& sep, std::string const& esc = "",
-      size_t max_splits = -1, bool include_sep = false)
+split(Iterator begin, Iterator end, std::string const& sep,
+      std::string const& esc = "", size_t max_splits = -1,
+      bool include_sep = false)
 {
   assert(! sep.empty());
 
