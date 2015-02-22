@@ -93,7 +93,7 @@ struct value_printer
 
   std::string operator()(time::point point) const
   {
-    return (*this)(point.since_epoch());
+    return (*this)(point.time_since_epoch());
   }
 
   std::string operator()(time::duration dur) const

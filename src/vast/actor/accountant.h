@@ -87,7 +87,7 @@ struct accountant : default_actor
       ctx.begin = time::now();
     if (auto a = accumulate(ctx, x, t))
     {
-      auto ts = (ctx.begin + (t - ctx.last)).since_epoch().double_seconds();
+      auto ts = (ctx.begin + (t - ctx.last)).time_since_epoch().double_seconds();
       auto record = to_string(ts)
         + '\t' + (context.empty() ? "none" : context)
         + '\t' + to_string(*a)

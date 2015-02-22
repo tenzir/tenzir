@@ -450,7 +450,7 @@ private:
 
     bool operator()(time::point x) const
     {
-      return (*this)(x.since_epoch().count());
+      return (*this)(x.time_since_epoch().count());
     }
 
     bool operator()(time::duration x) const
@@ -482,7 +482,7 @@ private:
 
     trial<Bitstream> operator()(time::point x) const
     {
-      return (*this)(x.since_epoch().count());
+      return (*this)(x.time_since_epoch().count());
     }
 
     trial<Bitstream> operator()(time::duration x) const

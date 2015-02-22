@@ -339,27 +339,32 @@ TEST("value")
   v = to<value>("2012-08-12+00:00:00");
   REQUIRE(v);
   REQUIRE(is<time::point>(*v));
-  CHECK(get<time::point>(*v)->since_epoch().count() == 1344729600000000000ll);
+  CHECK(get<time::point>(*v)->time_since_epoch().count()
+        == 1344729600000000000ll);
 
   v = to<value>("2012-08-12");
   REQUIRE(v);
   REQUIRE(is<time::point>(*v));
-  CHECK(get<time::point>(*v)->since_epoch().count() == 1344729600000000000ll);
+  CHECK(get<time::point>(*v)->time_since_epoch().count()
+        == 1344729600000000000ll);
 
   v = to<value>("2012-08-12+23");
   REQUIRE(v);
   REQUIRE(is<time::point>(*v));
-  CHECK(get<time::point>(*v)->since_epoch().count() == 1344812400000000000ll);
+  CHECK(get<time::point>(*v)->time_since_epoch().count()
+        == 1344812400000000000ll);
 
   v = to<value>("2012-08-12+23:55");
   REQUIRE(v);
   REQUIRE(is<time::point>(*v));
-  CHECK(get<time::point>(*v)->since_epoch().count() == 1344815700000000000ll);
+  CHECK(get<time::point>(*v)->time_since_epoch().count()
+        == 1344815700000000000ll);
 
   v = to<value>("2012-08-12+23:55:04");
   REQUIRE(v);
   REQUIRE(is<time::point>(*v));
-  CHECK(get<time::point>(*v)->since_epoch().count() == 1344815704000000000ll);
+  CHECK(get<time::point>(*v)->time_since_epoch().count()
+        == 1344815704000000000ll);
 
   // Strings
   v = to<value>("\"new\\nline\\\"esc\"");

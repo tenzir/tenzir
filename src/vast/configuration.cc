@@ -55,7 +55,7 @@ void configuration::initialize()
     hostname = to_string(uuid::random()).substr(0, 6);  // FIXME: uniform?
 
   auto time_pid =
-    std::to_string(time::now().since_epoch().seconds()) +
+    std::to_string(time::now().time_since_epoch().seconds()) +
     '_' + std::to_string(util::process_id());
 
   auto& log = create_block("logging options", "log");

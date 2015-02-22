@@ -274,7 +274,7 @@ point operator+(duration const& x, point const& y)
 
 duration operator-(point const& x, point const& y)
 {
-  return x.since_epoch() - y.since_epoch();
+  return x.time_since_epoch() - y.time_since_epoch();
 }
 
 bool operator==(point const& x, point const& y)
@@ -315,7 +315,7 @@ point point::delta(int secs,
   return from_tm(*tm);
 }
 
-duration point::since_epoch() const
+duration point::time_since_epoch() const
 {
   return duration{time_point_.time_since_epoch()};
 }
@@ -332,7 +332,7 @@ void point::deserialize(deserializer& source)
 
 trial<void> convert(point p, double &d)
 {
-  d = p.since_epoch().double_seconds();
+  d = p.time_since_epoch().double_seconds();
   return nothing;
 }
 
@@ -348,7 +348,7 @@ trial<void> convert(point p, std::tm& tm)
 
 trial<void> convert(point p, util::json& j)
 {
-  j = p.since_epoch().count();
+  j = p.time_since_epoch().count();
   return nothing;
 }
 

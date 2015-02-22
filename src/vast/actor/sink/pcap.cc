@@ -84,7 +84,7 @@ bool pcap::process(event const& e)
   assert(data);
 
   ::pcap_pkthdr header;
-  auto ns = e.timestamp().since_epoch().count();
+  auto ns = e.timestamp().time_since_epoch().count();
   header.ts.tv_sec = ns / 1000000000;
 #ifdef PCAP_TSTAMP_PRECISION_NANO
   header.ts.tv_usec = ns % 1000000000;

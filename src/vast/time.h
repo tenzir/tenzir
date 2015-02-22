@@ -18,6 +18,13 @@ namespace time {
 
 class point;
 class duration;
+
+using std::chrono::nanoseconds;
+using std::chrono::microseconds;
+using std::chrono::milliseconds;
+using std::chrono::seconds;
+using std::chrono::minutes;
+using std::chrono::hours;
 using double_seconds = std::chrono::duration<double, std::ratio<1>>;
 
 // Short idiomatic names for working with timers.
@@ -125,66 +132,12 @@ private:
   friend trial<void> convert(duration tr, util::json& j);
 };
 
-/// Constructs a nanosecond duration.
-/// @param ns The number of nanoseconds.
-/// @returns A duration of *ns* nanoseconds.
-template <typename T>
-duration nanoseconds(T ns)
-{
-  return std::chrono::nanoseconds{ns};
-}
-
-/// Constructs a microsecond duration.
-/// @param us The number of microseconds.
-/// @returns A duration of *us* microseconds.
-template <typename T>
-duration microseconds(T us)
-{
-  return std::chrono::microseconds{us};
-}
-
-/// Constructs a millisecond duration.
-/// @param ms The number of milliseconds.
-/// @returns A duration of *ms* milliseconds.
-template <typename T>
-duration milliseconds(T ms)
-{
-  return std::chrono::milliseconds{ms};
-}
-
-/// Constructs a second duration.
-/// @param s The number of seconds.
-/// @returns A duration of *s* seconds.
-template <typename T>
-duration seconds(T s)
-{
-  return std::chrono::seconds{s};
-}
-
 /// Constructs a second duration.
 /// @param f The number of fractional seconds.
 /// @returns A duration of *f* fractional seconds.
 inline duration fractional(double f)
 {
   return double_seconds{f};
-}
-
-/// Constructs a minute duration.
-/// @param m The number of minutes.
-/// @returns A duration of *m* minutes.
-template <typename T>
-duration minutes(T m)
-{
-  return std::chrono::minutes{m};
-}
-
-/// Constructs a hour duration.
-/// @param h The number of hours.
-/// @returns A duration of *h* hours.
-template <typename T>
-duration hours(T h)
-{
-  return std::chrono::hours{h};
 }
 
 /// An absolute point in time having UTC time zone.
@@ -256,7 +209,7 @@ public:
               int years = 0);
 
   /// Returns a duration representing the duration since the UNIX epoch.
-  duration since_epoch() const;
+  duration time_since_epoch() const;
 
 private:
   friend access;

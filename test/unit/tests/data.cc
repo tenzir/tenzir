@@ -12,12 +12,12 @@ TEST("time::point")
   auto t = time::point::utc(2012, 8, 12, 23, 55, 4);
 
   CHECK(t.delta() == t);
-  CHECK(t.delta(30) == time::seconds(1344815734));
-  CHECK(t.delta(56) == time::seconds(1344815760));
-  CHECK(t.delta(60) == time::seconds(1344815764));
-  CHECK(t.delta(68) == time::seconds(1344815772));
-  CHECK(t.delta(123587) == time::seconds(1344939291));
-  CHECK(t.delta(0, 0, 28) == time::seconds(1344916504));
+  CHECK(t.delta(30).time_since_epoch() == time::seconds(1344815734));
+  CHECK(t.delta(56).time_since_epoch() == time::seconds(1344815760));
+  CHECK(t.delta(60).time_since_epoch() == time::seconds(1344815764));
+  CHECK(t.delta(68).time_since_epoch() == time::seconds(1344815772));
+  CHECK(t.delta(123587).time_since_epoch() == time::seconds(1344939291));
+  CHECK(t.delta(0, 0, 28).time_since_epoch() == time::seconds(1344916504));
 
   time::point u;
 

@@ -76,7 +76,7 @@ trial<void> convert(event const& e, util::json& j)
   util::json::object o;
   o["id"] = e.id();
 
-  auto t = to<util::json>(e.timestamp().since_epoch().count());
+  auto t = to<util::json>(e.timestamp().time_since_epoch().count());
   if (! t)
     return t.error();
   o["timestamp"] = *t;
