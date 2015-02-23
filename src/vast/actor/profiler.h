@@ -8,23 +8,9 @@
 
 namespace vast {
 
-/// A simple CPU profiler.
+/// Profiles CPU and heap via gperftools.
 struct profiler : default_actor
 {
-  /// A resoure measurement.
-  struct measurement
-  {
-    /// Measures the current system usage at construction time.
-    measurement();
-
-    double clock; ///< Current wall clock time.
-    double usr;   ///< Time spent in the process.
-    double sys;   ///< Time spent in the kernel.
-    long maxrss;  ///< Maximum resident set size.
-
-    friend std::ostream& operator<<(std::ostream& out, measurement const& s);
-  };
-
   /// Spawns the profiler.
   /// @param log_dir The directory where to write profiler output to.
   /// @param secs The number of seconds between subsequent measurements.
@@ -34,7 +20,6 @@ struct profiler : default_actor
   caf::behavior make_behavior() override;
 
   path const log_dir_;
-  std::ofstream file_;
   std::chrono::seconds secs_;
 };
 

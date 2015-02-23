@@ -2,7 +2,6 @@
 
 #include <cassert>
 #include <iomanip>
-#include <sys/resource.h>   // getrusage
 #include <caf/all.hpp>
 #include "vast/config.h"
 #include "vast/time.h"
@@ -18,36 +17,6 @@
 using namespace caf;
 
 namespace vast {
-
-profiler::measurement::measurement()
-{
-  clock = *to<double>(time::now());
-
-  struct rusage ru;
-  ::getrusage(RUSAGE_SELF, &ru);
-  struct timeval& u = ru.ru_utime;
-  struct timeval& s = ru.ru_stime;
-
-  usr = static_cast<double>(u.tv_sec) +
-    static_cast<double>(u.tv_usec) / 1000000.0;
-
-  sys = static_cast<double>(s.tv_sec) +
-    static_cast<double>(s.tv_usec) / 1000000.0;
-
-  maxrss = ru.ru_maxrss;
-}
-
-std::ostream& operator<<(std::ostream& out, profiler::measurement const& m)
-{
-  out
-    << std::fixed
-    << std::setw(18) << m.clock
-    << std::setw(14) << m.usr
-    << std::setw(14) << m.sys
-    << std::setw(14) << m.maxrss;
-
-  return out;
-}
 
 profiler::profiler(path log_dir, std::chrono::seconds secs)
   : default_actor{"profiler"},
@@ -77,8 +46,6 @@ void profiler::on_exit()
     HeapProfilerStop();
   }
 #endif
-
-  file_.close();
 }
 
 behavior profiler::make_behavior()
@@ -89,22 +56,6 @@ behavior profiler::make_behavior()
     if (! t)
       VAST_ERROR(this, "could not create directory:", t.error());
   }
-  auto filename = log_dir_ / "profile.log";
-  file_.open(to_string(filename));
-  VAST_INFO(this, "enables getrusage profiling every", secs_.count(),
-            (secs_.count() == 1 ? "" : "s"), '(' << filename << ')');
-  assert(file_.good());
-  file_.flags(std::ios::left);
-  file_
-    << std::setw(18) << "clock (c)"
-    << std::setw(14) << "user (c)"
-    << std::setw(14) << "sys (c)"
-    << std::setw(14) << "maxrss (c)"
-    << std::setw(18) << "clock (d)"
-    << std::setw(14) << "user (d)"
-    << std::setw(14) << "sys (d)"
-    << std::setw(14) << "maxrss (d)"
-    << std::endl;
   return
   {
 #ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
@@ -131,22 +82,6 @@ behavior profiler::make_behavior()
       HeapProfilerStart(f.c_str());
     },
 #endif
-    [=](start_atom, rusage_atom)
-    {
-      measurement now;
-      delayed_send(this, secs_, now.clock, now.usr, now.sys);
-    },
-    [=](double clock, double usr, double sys)
-    {
-      measurement now;
-      file_ << now;
-      delayed_send(this, secs_, now.clock, now.usr, now.sys);
-
-      now.clock -= clock;
-      now.usr -= usr;
-      now.sys -= sys;
-      file_ << now << std::endl;
-    },
     catch_unexpected()
   };
 }

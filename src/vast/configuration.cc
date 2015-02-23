@@ -135,7 +135,7 @@ void configuration::initialize()
 
   auto& prof = create_block("profiler options", "profiler");
   prof.add("interval", "profiling granularity in seconds").init(1);
-  prof.add("rusage", "enable rusage profiling");
+  prof.add("caf", "enable CAF worker thread and actor profiling");
   prof.add("cpu", "enable gperftools CPU profiling");
   prof.add("heap", "enable gperftools heap profiling");
   prof.visible(false);

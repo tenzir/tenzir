@@ -116,9 +116,7 @@ trial<void> program::run()
 
     send(spawn<signal_monitor, linked>(this), run_atom::value);
 
-    if (config_.check("profiler.rusage")
-        || config_.check("profiler.cpu")
-        || config_.check("profiler.heap"))
+    if (config_.check("profiler.cpu") || config_.check("profiler.heap"))
     {
       auto secs = *config_.as<unsigned>("profiler.interval");
       auto prof = spawn<profiler, detached+linked>(
@@ -141,8 +139,6 @@ trial<void> program::run()
         return error{"not compiled with perftools heap support"};
 #endif
       }
-      if (config_.check("profiler.rusage"))
-        send(prof, start_atom::value, rusage_atom::value);
     }
 
     auto host = *config_.get("tracker.host");

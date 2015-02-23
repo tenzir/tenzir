@@ -1,4 +1,5 @@
 #include <caf/all.hpp>
+#include <caf/scheduler/profiled_coordinator.hpp>
 #include "vast.h"
 
 int main(int argc, char *argv[])
@@ -49,15 +50,22 @@ int main(int argc, char *argv[])
   if (auto t = cfg->as<size_t>("caf.threads"))
     threads = *t;
 
-  auto throughput = std::numeric_limits<size_t>::max();
+  auto thruput = std::numeric_limits<size_t>::max();
   if (auto t = cfg->as<size_t>("caf.throughput"))
-    throughput = *t;
+    thruput = *t;
 
-  caf::set_scheduler<>(threads, throughput);
+  if (cfg->check("profiler.caf"))
+    caf::set_scheduler(
+      new caf::scheduler::profiled_coordinator<>{
+        (log_dir / "caf.log").str(), std::chrono::milliseconds{1000},
+        threads, thruput});
+  else
+    caf::set_scheduler<>(threads, thruput);
+
   VAST_VERBOSE("set scheduler threads to", threads);
   VAST_VERBOSE("set scheduler maximum throughput to",
-               (throughput == std::numeric_limits<size_t>::max()
-                ? "unlimited" : std::to_string(throughput)));
+               (thruput == std::numeric_limits<size_t>::max()
+                ? "unlimited" : std::to_string(thruput)));
 
   auto program = caf::spawn<vast::program>(std::move(*cfg));
   caf::scoped_actor self;
