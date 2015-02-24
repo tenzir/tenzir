@@ -5,6 +5,9 @@
 #include <iterator>
 #include "vast/serialization/string.h"
 #include "vast/util/string.h"
+#include "vast/io/algorithm.h"
+#include "vast/io/file_stream.h"
+#include "vast/io/container_stream.h"
 
 #ifdef VAST_POSIX
 #  include <cerrno>
@@ -598,19 +601,16 @@ void traverse(path const& p, std::function<bool(path const&)> f)
 }
 
 // Loads file contents into a string.
-trial<std::string> load(path const& p, bool skip_whitespace)
+trial<std::string> load(path const& p)
 {
-  if (p.is_directory())
-    return error{"cannot load directory:", p};
-  std::ifstream in{p.str().data()};
-  if (! in)
-    return error{"failed to open file:", p};
-  if (! skip_whitespace)
-    in.unsetf(std::ios::skipws);
+  file f{p};
+  auto t = f.open(file::read_only);
+  if (! t)
+    return t.error();
   std::string contents;
-  std::copy(std::istream_iterator<char>{in},
-            std::istream_iterator<char>{},
-            std::back_inserter(contents));
+  auto out = io::make_container_output_stream(contents);
+  io::file_input_stream in{f};
+  io::copy(in, out);
   return std::move(contents);
 }
 
