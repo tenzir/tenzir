@@ -1,7 +1,7 @@
 # VAST
 
+[![Build Status][jenkins-badge]][jenkins-url]
 [![Gitter][gitter-badge]](https://gitter.im/mavam/vast)
-[gitter-badge]: https://badges.gitter.im/Join%20Chat.svg
 
 **Visibility Across Space and Time (VAST)** is a unified platform for network
 forensics and incident response.
@@ -47,11 +47,8 @@ Start the interactive console and submit a query:
 - [Issue board](https://waffle.io/mavam/vast)
 - [Chat](https://gitter.im/mavam/vast)
 - Mailing lists:
-    - [vast@icir.org][vast]: general help and discussion
-    - [vast-commits@icir.org][vast-commits]: full diffs of git commits
-
-[vast]: http://mailman.icsi.berkeley.edu/mailman/listinfo/vast
-[vast-commits]: http://mailman.icsi.berkeley.edu/mailman/listinfo/vast-commits
+    - [vast@icir.org][mailing-list]: general help and discussion
+    - [vast-commits@icir.org][mailing-list-commits]: full diffs of git commits
 
 ## Installation
 
@@ -120,3 +117,9 @@ Mac OS Yosemite also ships with a working C++14 compiler.
 
 VAST comes with a [3-clause BSD
 licence](https://raw.github.com/mavam/vast/master/COPYING).
+
+[mailing-list]: http://mailman.icsi.berkeley.edu/mailman/listinfo/vast
+[mailing-list-commits]: http://mailman.icsi.berkeley.edu/mailman/listinfo/vast-commits
+[jenkins-url]: http://mobi39.cpt.haw-hamburg.de/job/VAST/job/master%20branch/
+[jenkins-badge]: http://mobi39.cpt.haw-hamburg.de/buildStatus/icon?job=VAST/master%20branch
+[gitter-badge]: https://badges.gitter.im/Join%20Chat.svg
