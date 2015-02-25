@@ -39,10 +39,6 @@ list(GET version_numbers 0 VERSION_MAJOR)
 list(GET version_numbers 1 VERSION_MINOR)
 set(VERSION_MAJ_MIN "${VERSION_MAJOR}.${VERSION_MINOR}")
 
-if (ENABLE_DEBUG)
-  set(CMAKE_BUILD_TYPE Debug)
-endif ()
-
 if (NOT CMAKE_CXX_FLAGS)
   # -ftemplate-depth=256 makes Boost Spirit happy.
   set(EXTRA_FLAGS "-Wall -Wextra -pedantic -std=c++1y -ftemplate-depth=256")
@@ -101,6 +97,10 @@ if (ENABLE_ADDRESS_SANITIZER)
   endif()
   set(CMAKE_CXX_FLAGS "${CXXFLAGS_BACKUP}")
 endif(ENABLE_ADDRESS_SANITIZER)
+
+if (SHOW_TIME_REPORT)
+  set(EXTRA_FLAGS "${EXTRA_FLAGS} -ftime-report")
+endif ()
 
 # Only set our flags if the environment variable CXXFLAGS is not present.
 if (NOT CMAKE_CXX_FLAGS)
@@ -161,11 +161,8 @@ endif ()
 find_package(Gperftools QUIET)
 if (GPERFTOOLS_FOUND)
   set(VAST_USE_PERFTOOLS_CPU_PROFILER true)
+  set(VAST_USE_PERFTOOLS_HEAP_PROFILER ${ENABLE_PERFTOOLS_HEAP})
   include_directories(BEFORE ${GPERFTOOLS_INCLUDE_DIR})
-endif ()
-set(VAST_USE_PERFTOOLS_HEAP_PROFILER false)
-if (ENABLE_PERFTOOLS_HEAP)
-  set(VAST_USE_PERFTOOLS_HEAP_PROFILER true)
 endif ()
 
 find_package(Doxygen QUIET)
@@ -197,7 +194,7 @@ macro(display test desc summary)
 endmacro()
 
 # Prettify build summary.
-display(ENABLE_DEBUG yes debug_summary)
+display(SHOW_TIME_REPORT yes time_report_summary)
 if (VAST_LOG_LEVEL EQUAL 0)
   set(log_level_summary quiet)
 elseif (VAST_LOG_LEVEL EQUAL 1)
@@ -238,17 +235,17 @@ set(build_summary
     "\n"
     "\nVersion:              ${VERSION_MAJ_MIN}"
     "\n"
+    "\nSource directory:     ${CMAKE_SOURCE_DIR}"
+    "\nBuild directory:      ${CMAKE_BINARY_DIR}"
+    "\nInstall prefix:       ${CMAKE_INSTALL_PREFIX}"
+    "\n"
     "\nBuild type:           ${CMAKE_BUILD_TYPE}"
-    "\nDebug mode:           ${debug_summary}"
+    "\nShow time report:     ${time_report_summary}"
     "\nLog level:            ${log_level_summary}"
     "\n"
     "\nCC:                   ${CMAKE_C_COMPILER}"
     "\nCXX:                  ${CMAKE_CXX_COMPILER}"
     "\nCXXFLAGS:             ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${build_type}}"
-    "\n"
-    "\nSource directory:     ${CMAKE_SOURCE_DIR}"
-    "\nBuild directory:      ${CMAKE_BINARY_DIR}"
-    "\nInstall prefix:       ${CMAKE_INSTALL_PREFIX}"
     "\n"
     "\nBoost:                ${Boost_INCLUDE_DIR}"
     "\nCAF:                  ${caf_summary}"
