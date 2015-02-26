@@ -120,6 +120,6 @@ licence](https://raw.github.com/mavam/vast/master/COPYING).
 
 [mailing-list]: http://mailman.icsi.berkeley.edu/mailman/listinfo/vast
 [mailing-list-commits]: http://mailman.icsi.berkeley.edu/mailman/listinfo/vast-commits
-[jenkins-url]: http://mobi39.cpt.haw-hamburg.de/job/VAST/job/master%20branch/
+[jenkins-url]: http://mobi39.cpt.haw-hamburg.de/view/VAST%20Build%20Status/
 [jenkins-badge]: http://mobi39.cpt.haw-hamburg.de/buildStatus/icon?job=VAST/master%20branch
 [gitter-badge]: https://badges.gitter.im/Join%20Chat.svg
