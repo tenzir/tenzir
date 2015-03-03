@@ -6,6 +6,7 @@
 #include "vast/logger.h"
 #include "vast/serialization.h"
 #include "vast/actor/program.h"
+#include "vast/actor/signal_monitor.h"
 
 namespace vast {
 

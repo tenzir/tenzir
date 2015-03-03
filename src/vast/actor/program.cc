@@ -1,8 +1,8 @@
 #include "vast/actor/program.h"
 
 #include <caf/io/all.hpp>
-#include <cstdlib>
 #include <csignal>
+#include <cstdlib>
 #include <iostream>
 #include "vast/filesystem.h"
 #include "vast/logger.h"
@@ -16,7 +16,6 @@
 #include "vast/actor/importer.h"
 #include "vast/actor/receiver.h"
 #include "vast/actor/search.h"
-#include "vast/actor/signal_monitor.h"
 #include "vast/actor/tracker.h"
 #include "vast/actor/profiler.h"
 #include "vast/actor/sink/bro.h"
@@ -113,8 +112,6 @@ trial<void> program::run()
       *config_["index"] = true;
       *config_["search"] = true;
     }
-
-    send(spawn<signal_monitor, linked>(this), run_atom::value);
 
     if (config_.check("profiler.cpu") || config_.check("profiler.heap"))
     {

@@ -45,6 +45,7 @@ behavior signal_monitor::make_behavior()
   signals.fill(0);
   for (auto s : { SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGUSR1, SIGUSR2 })
     std::signal(s, &signal_handler);
+  send(this, run_atom::value);
   return
   {
     [=](run_atom)

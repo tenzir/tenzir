@@ -68,6 +68,8 @@ int main(int argc, char *argv[])
                 ? "unlimited" : std::to_string(thruput)));
 
   auto program = caf::spawn<vast::program>(std::move(*cfg));
+  auto signal_monitor = caf::spawn<vast::signal_monitor>(program);
+  program->link_to(signal_monitor);
   caf::scoped_actor self;
   self->sync_send(program, vast::run_atom::value).await(
     [](caf::ok_atom) {},
