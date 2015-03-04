@@ -14,7 +14,7 @@ archive::archive(path dir, size_t capacity, size_t max_segment_size)
     dir_{dir / "archive"},
     meta_data_filename_{dir_ / "meta.data"},
     max_segment_size_{max_segment_size},
-    cache_{capacity, [&](uuid const& id) { return on_miss(id); }}
+    cache_{capacity}
 {
   assert(max_segment_size_ > 0);
   trap_exit(true);
@@ -140,27 +140,26 @@ trial<chunk> archive::load(event_id eid)
 {
   if (auto id = segments_.lookup(eid))
   {
-    auto& s = cache_.retrieve(*id);
-    for (size_t i = 0; i < s.size(); ++i)
-      if (eid < s[i].meta().ids.size() && s[i].meta().ids[eid])
-        return s[i];
+    auto s = cache_.lookup(*id);
+    if (s == nullptr)
+    {
+      VAST_DEBUG(this, "experienced cache miss for", *id);
+      segment seg;
+      auto filename = dir_ / to_string(*id);
+      auto t = io::unarchive(filename, seg);
+      if (! t)
+      {
+        VAST_ERROR(this, "failed to unarchive segment:", t.error());
+        return t.error();
+      }
+      s = cache_.insert(*id, std::move(seg)).first;
+    }
+    for (size_t i = 0; i < s->size(); ++i)
+      if (eid < (*s)[i].meta().ids.size() && (*s)[i].meta().ids[eid])
+        return (*s)[i];
     assert(! "segment must contain looked up id");
   }
   return error{"no segment for id ", eid};
-}
-
-archive::segment archive::on_miss(uuid const& id)
-{
-  VAST_DEBUG(this, "experienced cache miss for", id);
-  segment s;
-  auto filename = dir_ / to_string(id);
-  auto t = io::unarchive(filename, s);
-  if (! t)
-  {
-    VAST_ERROR(this, "failed to unarchive segment:", t.error());
-    return {};
-  }
-  return s;
 }
 
 } // namespace vast

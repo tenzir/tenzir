@@ -1,31 +1,24 @@
 #include "framework/unit.h"
 #include "vast/util/lru_cache.h"
 
+using namespace vast;
+
 SUITE("util")
 
 TEST("lru_cache")
 {
-  using lru_cache = vast::util::lru_cache<std::string, size_t>;
-  lru_cache c{2, [](std::string const& str) { return str.length(); }};
-
-  // Perform some accesses.
-  c.retrieve("x");
-  c.retrieve("fu");
-  c.retrieve("foo");
-  c.retrieve("quux");
-  c.retrieve("corge");
-  c.retrieve("foo");
-
-  CHECK(c.retrieve_latest() == 3);
-
-  std::vector<std::string> v;
-  std::transform(
-      c.begin(),
-      c.end(),
-      std::back_inserter(v),
-      [](lru_cache::cache::value_type const& pair) { return pair.first; });
-
-  std::sort(v.begin(), v.end());
-  decltype(v) expected{"corge", "foo"};
-  CHECK(v == expected);
+  using lru_cache = util::lru_cache<std::string, int>;
+  lru_cache c{2};
+  CHECK(c.insert("x", 1).second);
+  CHECK(c.insert("fu", 2).second);
+  CHECK(c.insert("foo", 3).second);
+  CHECK(c.insert("quux", 4).second);
+  CHECK(c.insert("corge", 5).second);
+  CHECK(c.insert("foo", 6).second);
+  CHECK(! c.insert("foo", 7).second);
+  CHECK(! c.lookup("x"));
+  CHECK(c.lookup("corge"));
+  auto i = c.lookup("foo");
+  REQUIRE(i);
+  CHECK(*i == 6);
 }

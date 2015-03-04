@@ -38,7 +38,6 @@ struct archive : flow_controlled_actor
 
   trial<void> store(segment s);
   trial<chunk> load(event_id eid);
-  segment on_miss(uuid const& id);
 
   path dir_;
   path meta_data_filename_;
