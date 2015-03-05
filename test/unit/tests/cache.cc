@@ -14,6 +14,7 @@ TEST("lru_cache")
   CHECK(c.insert("foo", 3).second);
   CHECK(c.insert("quux", 4).second);
   CHECK(c.insert("corge", 5).second);
+  c.on_evict([&](std::string const&, int v) { CHECK(v == 4); });
   CHECK(c.insert("foo", 6).second);
   CHECK(! c.insert("foo", 7).second);
   CHECK(! c.lookup("x"));

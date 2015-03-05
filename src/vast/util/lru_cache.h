@@ -2,9 +2,11 @@
 #define VAST_UTIL_LRU_CACHE
 
 #include <cassert>
+#include <functional>
 #include <unordered_map>
 #include <list>
 #include "vast/serialization.h"
+#include "vast/util/iterator.h"
 
 namespace vast {
 namespace util {
@@ -34,8 +36,35 @@ public:
     std::pair<mapped_type, typename tracker::iterator>
   >;
 
-  using iterator = typename cache::iterator;
-  using const_iterator = typename cache::const_iterator;
+  /// The callback to invoke for evicted elements.
+  using evict_callback = std::function<void(key_type const&, mapped_type&)>;
+
+  class const_iterator
+    : public iterator_adaptor<
+        const_iterator,
+        typename cache::const_iterator,
+        std::forward_iterator_tag,
+        std::tuple<key_type const&, mapped_type const&>
+      >
+  {
+    using super = iterator_adaptor<
+      const_iterator,
+      typename cache::const_iterator,
+        std::forward_iterator_tag,
+        std::tuple<key_type const&, mapped_type const&>
+    >;
+
+  public:
+    using super::super;
+
+  private:
+    friend util::iterator_access;
+
+    std::tuple<key_type const&, mapped_type const&> dereference() const
+    {
+      return std::tie(this->base()->first, this->base()->second.first);
+    }
+  };
 
   /// Constructs an LRU cache with a fixed number of elements.
   /// @param capacity The maximum number of elements in the cache.
@@ -43,6 +72,13 @@ public:
     : capacity_{capacity}
   {
     assert(capacity_ > 0);
+  }
+
+  /// Sets a callback for elements to be evicted.
+  /// @param fun The function to invoke with the element being evicted.
+  void on_evict(evict_callback fun)
+  {
+    on_evict_ = fun;
   }
 
   /// Retrieves a value for a given key. If the key exists in the cache, the
@@ -74,24 +110,14 @@ public:
     return {&j.first->second.first, true};
   }
 
-  iterator begin()
-  {
-    return cache_.begin();
-  }
-
   const_iterator begin() const
   {
-    return cache_.begin();
-  }
-
-  iterator end()
-  {
-    return cache_.end();
+    return const_iterator{cache_.begin()};
   }
 
   const_iterator end() const
   {
-    return cache_.end();
+    return const_iterator{cache_.end()};
   }
 
   /// Retrieves the current number of elements in the cache.
@@ -116,7 +142,7 @@ public:
   }
 
 private:
-  iterator find(key_type const& key)
+  typename cache::iterator find(key_type const& key)
   {
     auto i = cache_.find(key);
     if (i != cache_.end())
@@ -131,6 +157,8 @@ private:
     assert(! tracker_.empty());
     auto i = cache_.find(tracker_.front());
     assert(i != cache_.end());
+    if (on_evict_)
+      on_evict_(i->first, i->second.first);
     cache_.erase(i);
     tracker_.pop_front();
   }
@@ -138,6 +166,7 @@ private:
   size_t const capacity_;
   tracker tracker_;
   cache cache_;
+  evict_callback on_evict_;
 
 private:
   friend access;
