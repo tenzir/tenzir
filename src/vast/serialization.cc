@@ -525,7 +525,6 @@ void announce_builtin_types()
 
   // CAF-only
   caf::announce<query_options>("query_options");
-  caf::announce<std::vector<caf::actor>>("std::vector<actor>");
 
   // Polymorphic types
   using bitstream_models = util::type_list<
