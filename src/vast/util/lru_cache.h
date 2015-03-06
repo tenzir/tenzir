@@ -81,6 +81,16 @@ public:
     on_evict_ = fun;
   }
 
+  /// Accesses the value for a given key. If key does not exists,
+  /// the function default-constructs a value of `mapped_type`.
+  /// @param fun The function to invoke with the element being evicted.
+  /// @returns The value corresponding to *key*.
+  mapped_type& operator[](key_type const& key)
+  {
+    auto i = find(key);
+    return i == cache_.end() ? *insert(key, {}).first : i->second.first;
+  }
+
   /// Retrieves a value for a given key. If the key exists in the cache, the
   /// function returns the corresponding iterator and registers the key as
   /// accessed.
