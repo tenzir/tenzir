@@ -4,7 +4,6 @@
 #include "vast/expression.h"
 #include "vast/query_options.h"
 #include "vast/actor/query.h"
-#include "vast/actor/replicator.h"
 #include "vast/expr/normalize.h"
 
 namespace vast {
@@ -49,17 +48,23 @@ behavior search::make_behavior()
     [=](add_atom, archive_atom, actor const& a)
     {
       VAST_DEBUG(this, "adds archive", a);
-      if (! archive_)
-        archive_ = spawn<replicator, linked>();
-      send(archive_, add_atom::value, worker_atom::value, a);
+      if (archive_ == invalid_actor)
+      {
+        archive_ = actor_pool::make(actor_pool::broadcast{});
+        link_to(archive_);
+      }
+      send(archive_, sys_atom::value, put_atom::value, a);
       return ok_atom::value;
     },
     [=](add_atom, index_atom, actor const& a)
     {
       VAST_DEBUG(this, "adds index", a);
-      if (! index_)
-        index_ = spawn<replicator, linked>();
-      send(index_, add_atom::value, worker_atom::value, a);
+      if (index_ == invalid_actor)
+      {
+        index_ = actor_pool::make(actor_pool::broadcast{});
+        link_to(index_);
+      }
+      send(index_, sys_atom::value, put_atom::value, a);
       return ok_atom::value;
     },
     [=](std::string const& str, query_options opts, actor const& client)

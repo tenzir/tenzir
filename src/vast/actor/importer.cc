@@ -11,21 +11,23 @@ importer::importer(path dir, uint64_t chunk_size, io::compression method)
   : flow_controlled_actor{"importer"},
     dir_{dir / "import"},
     chunk_size_{chunk_size},
-    compression_{method}
+    compression_{method},
+    sink_pool_{actor_pool::make(actor_pool::round_robin{})}
 {
   trap_exit(true);
 }
 
 void importer::on_exit()
 {
+  sink_pool_ = invalid_actor;
   source_ = invalid_actor;
   chunkifier_ = invalid_actor;
   accountant_ = invalid_actor;
-  sinks_.clear();
 }
 
 caf::behavior importer::make_behavior()
 {
+  monitor(sink_pool_);
   chunkifier_ =
     spawn<sink::chunkifier, monitored>(this, chunk_size_, compression_);
   if (accountant_)
@@ -44,11 +46,11 @@ caf::behavior importer::make_behavior()
     },
     [=](chunk const& chk)
     {
-      if (! sinks_.empty())
+      if (sink_pool_ != invalid_actor)
       {
-        VAST_DEBUG(this, "relays lingering chunk with", chk.events(), "events");
-        send(sinks_[current_++], chk);
-        current_ %= sinks_.size();
+        VAST_DEBUG(this, "relays lingering chunk with", chk.events(),
+                   "events");
+        send(sink_pool_, chk);
         return;
       }
       if (! exists(dir_ / "chunks") && ! mkdir(dir_ / "chunks"))
@@ -93,25 +95,13 @@ caf::behavior importer::make_behavior()
         send(this, exit_msg{address(), msg.reason});
         return;
       }
-      for (auto s = sinks_.begin(); s != sinks_.end(); ++s)
-        if (s->address() == current_sender())
-        {
-          VAST_VERBOSE(this, "removes sink", msg.source);
-          size_t idx = s - sinks_.begin();
-          if (current_ > idx)
-            --current_;
-          sinks_.erase(s);
-          if (sinks_.empty())
-          {
-            become(terminating_);
-            send(this, exit_msg{address(), msg.reason});
-          }
-          else
-          {
-            VAST_VERBOSE(this, "has", sinks_.size(), "sinks remaining");
-          }
-          break;
-        }
+      if (current_sender() == sink_pool_)
+      {
+        VAST_DEBUG(this, "begins termination");
+        sink_pool_ = invalid_actor;
+        become(terminating_);
+        send(this, exit_msg{address(), msg.reason});
+      }
     },
     [=](submit_atom)
     {
@@ -148,8 +138,7 @@ caf::behavior importer::make_behavior()
     {
       VAST_DEBUG(this, "adds sink", snk);
       send(snk, upstream_atom::value, this);
-      sinks_.push_back(snk);
-      monitor(snk);
+      send(sink_pool_, sys_atom::value, put_atom::value, snk);
       return ok_atom::value;
     },
     [=](accountant_atom, actor const& accountant)
@@ -159,9 +148,7 @@ caf::behavior importer::make_behavior()
     },
     [=](chunk const& chk)
     {
-      assert(! sinks_.empty());
-      send(sinks_[current_++], chk);
-      current_ %= sinks_.size();
+      send(sink_pool_, chk);
     },
     catch_unexpected()
   };

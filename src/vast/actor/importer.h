@@ -26,8 +26,7 @@ struct importer : flow_controlled_actor
   path dir_;
   uint64_t chunk_size_;
   io::compression compression_;
-  size_t current_ = 0;
-  std::vector<caf::actor> sinks_;
+  caf::actor sink_pool_;
   caf::actor source_;
   caf::actor chunkifier_;
   caf::actor accountant_;
