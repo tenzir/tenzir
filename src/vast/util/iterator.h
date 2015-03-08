@@ -10,7 +10,7 @@ namespace util {
 template <typename, typename, typename, typename, typename>
 class iterator_facade;
 
-// Provides clean access to iterator internals. Similar to vast::access.
+// Provides clean access to iterator internals.
 class iterator_access
 {
   template <typename, typename, typename, typename, typename>
@@ -61,14 +61,14 @@ private:
 /// A simple version of `boost::iterator_facade`.
 template <
   typename Derived,
-  typename Category,
   typename Value,
+  typename Category,
   typename Reference  = Value&,
   typename Difference = std::ptrdiff_t
 >
 class iterator_facade : totally_ordered<
                           iterator_facade<
-                            Derived, Category, Value, Reference, Difference
+                            Derived, Value, Category, Reference, Difference
                           >
                         >
 {
@@ -126,16 +126,17 @@ public:
   using value_type = std::remove_cv_t<Value>;
   using reference = Reference;
   using difference_type = Difference;
-  using arrow_dispatcher = operator_arrow_dispatch<
-    reference,
-    std::add_pointer_t<
-      std::conditional_t<
-        std::is_const<Value>::value,
-        value_type const,
-        value_type
+  using arrow_dispatcher =
+    operator_arrow_dispatch<
+      reference,
+      std::add_pointer_t<
+        std::conditional_t<
+          std::is_const<Value>::value,
+          value_type const,
+          value_type
+        >
       >
-    >
-  >;
+    >;
 
   using pointer = typename arrow_dispatcher::result_type;
 
@@ -229,29 +230,28 @@ public:
 
 protected:
   using iterator_facade_type =
-    iterator_facade<Derived, Category, Value, Reference, Difference>;
+    iterator_facade<Derived, Value, Category, Reference, Difference>;
 };
 
 /// A simple version of `boost::iterator_adaptor`.
 template <
   typename Derived,
   typename Base,
-  typename Category,
   typename Value,
+  typename Category,
   typename Reference = Value&,
   typename Difference = std::ptrdiff_t
 >
 class iterator_adaptor
   : public iterator_facade<
-             Derived, Category, Value, Reference, Difference
+             Derived, Value, Category, Reference, Difference
            >
 {
  public:
     using base_iterator = Base;
-    using super =
-      iterator_adaptor<
-        Derived, Base, Category, Value, Reference, Difference
-      >;
+    using super = iterator_adaptor<
+      Derived, Base, Value, Category, Reference, Difference
+    >;
 
     iterator_adaptor() = default;
 

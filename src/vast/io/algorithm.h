@@ -37,8 +37,8 @@ private:
 /// An output iterator which wraps an output stream.
 class output_iterator : public util::iterator_facade<
                            output_iterator,
-                           std::output_iterator_tag,
-                           char
+                           char,
+                           std::output_iterator_tag
                          >
 {
 public:

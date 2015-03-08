@@ -73,8 +73,8 @@ public:
   template <typename Bitvector>
   class bit_iterator_base : public util::iterator_facade<
     bit_iterator_base<Bitvector>,
-    std::random_access_iterator_tag,
     bool,
+    std::random_access_iterator_tag,
     std::conditional_t<
       std::is_const<Bitvector>::value,
       const_reference,
@@ -165,8 +165,8 @@ public:
   class ones_iterator_base :
     public util::iterator_facade<
              ones_iterator_base<Bitvector>,
-             std::bidirectional_iterator_tag,
              bool,
+             std::bidirectional_iterator_tag,
              std::conditional_t<
                std::is_const<Bitvector>::value,
                const_reference,

@@ -8,10 +8,8 @@ using namespace vast;
 
 // A simple iterator over an array.
 template <typename T, size_t N>
-struct iterator : util::iterator_facade<
-                  iterator<T, N>,
-                  std::random_access_iterator_tag,
-                  T>
+struct iterator
+  : util::iterator_facade<iterator<T, N>, T, std::random_access_iterator_tag>
 {
 public:
   iterator() = default;

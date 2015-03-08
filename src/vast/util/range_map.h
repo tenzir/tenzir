@@ -4,6 +4,7 @@
 #include <cassert>
 #include <map>
 #include <tuple>
+
 #include "vast/util/iterator.h"
 
 namespace vast {
@@ -26,16 +27,16 @@ public:
     : public iterator_adaptor<
         const_iterator,
         map_const_iterator,
-        std::bidirectional_iterator_tag,
         std::tuple<Point, Point, Value>,
+        std::bidirectional_iterator_tag,
         std::tuple<Point const&, Point const&, Value const&>
       >
   {
     using super = iterator_adaptor<
       const_iterator,
       map_const_iterator,
-      std::bidirectional_iterator_tag,
       std::tuple<Point, Point, Value>,
+      std::bidirectional_iterator_tag,
       std::tuple<Point const&, Point const&, Value const&>
     >;
 

@@ -40,8 +40,8 @@ template <typename Range>
 class range_iterator
   : public iterator_facade<
       range_iterator<Range>,
-      std::forward_iterator_tag,
-      decltype(std::declval<Range>().dereference())
+      decltype(std::declval<Range>().dereference()),
+      std::forward_iterator_tag
     >
 {
   friend Range;

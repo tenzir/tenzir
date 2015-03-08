@@ -420,7 +420,7 @@ private:
 public:
   using const_iterator = class iterator
     : public util::iterator_facade<
-               iterator, std::forward_iterator_tag, size_type, size_type
+               iterator, size_type, std::forward_iterator_tag, size_type
             >
   {
   public:
@@ -750,8 +750,8 @@ public:
     : public util::iterator_adaptor<
         iterator,
         bitvector::const_ones_iterator,
-        std::forward_iterator_tag,
         size_type,
+        std::forward_iterator_tag,
         size_type
       >
   {
@@ -863,7 +863,7 @@ class ewah_bitstream : public bitstream_base<ewah_bitstream>,
 public:
   using const_iterator = class iterator
     : public util::iterator_facade<
-               iterator, std::forward_iterator_tag, size_type, size_type
+               iterator, size_type, std::forward_iterator_tag, size_type
              >
   {
   public:
