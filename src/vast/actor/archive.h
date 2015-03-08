@@ -7,8 +7,8 @@
 #include "vast/filesystem.h"
 #include "vast/uuid.h"
 #include "vast/actor/actor.h"
+#include "vast/util/cache.h"
 #include "vast/util/flat_set.h"
-#include "vast/util/lru_cache.h"
 #include "vast/util/range_map.h"
 
 namespace vast {
@@ -43,7 +43,7 @@ struct archive : flow_controlled_actor
   path meta_data_filename_;
   size_t max_segment_size_;
   util::range_map<event_id, uuid> segments_;
-  util::lru_cache<uuid, segment> cache_;
+  util::cache<uuid, segment> cache_;
   segment current_;
   uint64_t current_size_;
   caf::actor accountant_;
