@@ -1,6 +1,7 @@
-#include "vast/io/coded_stream.h"
-
 #include <algorithm>
+
+#include "vast/logger.h"
+#include "vast/io/coded_stream.h"
 
 namespace vast {
 namespace io {
