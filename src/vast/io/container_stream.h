@@ -1,6 +1,9 @@
 #ifndef VAST_IO_CONTAINER_STREAM_H
 #define VAST_IO_CONTAINER_STREAM_H
 
+#include <string>
+#include <vector>
+
 #include "vast/io/array_stream.h"
 
 namespace vast {

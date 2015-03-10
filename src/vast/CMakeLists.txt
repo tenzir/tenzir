@@ -6,6 +6,7 @@ set(libvast_sources
   announce.cc
   bitvector.cc
   bitstream.cc
+  bitstream_polymorphic.cc
   block.cc
   chunk.cc
   cleanup.cc
@@ -14,7 +15,6 @@ set(libvast_sources
   die.cc
   expression.cc
   event.cc
-  error.cc
   filesystem.cc
   individual.cc
   logger.cc
@@ -46,6 +46,7 @@ set(libvast_sources
   actor/source/bro.cc
   actor/source/bgpdump.cc
   actor/source/test.cc
+  concept/serializable/hierarchy.cc
   detail/ast/query.cc
   expr/evaluator.cc
   expr/normalize.cc

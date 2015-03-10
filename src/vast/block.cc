@@ -1,8 +1,5 @@
 #include "vast/block.h"
 
-#include "vast/serialization/container.h"
-#include "vast/serialization/enum.h"
-
 namespace vast {
 
 block::writer::writer(block& blk)
@@ -69,22 +66,6 @@ size_t block::compressed_bytes() const
 size_t block::uncompressed_bytes() const
 {
   return uncompressed_bytes_;
-}
-
-void block::serialize(serializer& sink) const
-{
-  sink << compression_;
-  sink << elements_;
-  sink << uncompressed_bytes_;
-  sink << buffer_;
-}
-
-void block::deserialize(deserializer& source)
-{
-  source >> compression_;
-  source >> elements_;
-  source >> uncompressed_bytes_;
-  source >> buffer_;
 }
 
 bool operator==(block const& x, block const& y)

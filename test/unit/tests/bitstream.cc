@@ -1,7 +1,10 @@
-#include "framework/unit.h"
 #include "vast/convert.h"
 #include "vast/bitstream.h"
+#include "vast/bitstream_polymorphic.h"
+#include "vast/concept/serializable/bitstream_polymorphic.h"
 #include "vast/io/serialization.h"
+
+#include "framework/unit.h"
 
 using namespace vast;
 

@@ -6,10 +6,12 @@
 #include <unordered_map>
 #include "vast/bitstream.h"
 #include "vast/operator.h"
-#include "vast/serialization/all.h"
 #include "vast/util/operators.h"
 
 namespace vast {
+
+struct access;
+
 namespace detail {
 
 /// Takes any arithmetic type and creates and maps it to an unsigned integral
@@ -117,7 +119,14 @@ class coder
   : util::equality_comparable<coder<Derived>>,
     util::orable<coder<Derived>>
 {
+  friend access;
+
 public:
+  friend bool operator==(coder const& x, coder const& y)
+  {
+    return x.rows_ == y.rows_;
+  }
+
   /// Retrieves the number entries in the coder, i.e., the number of rows.
   /// @returns The size of the coder measured in number of entries.
   uint64_t size() const
@@ -201,24 +210,6 @@ public:
     derived()->each_impl(f);
   }
 
-protected:
-  friend access;
-
-  void serialize(serializer& sink) const
-  {
-    sink << static_cast<uint64_t>(rows_);
-  }
-
-  void deserialize(deserializer& source)
-  {
-    source >> rows_;
-  }
-
-  friend bool operator==(coder const& x, coder const& y)
-  {
-    return x.rows_ == y.rows_;
-  }
-
 private:
   Derived* derived()
   {
@@ -245,6 +236,14 @@ class equality_coder
 {
   using super = coder<equality_coder<T, Bitstream>>;
   friend super;
+  friend access;
+
+public:
+  friend bool operator==(equality_coder const& x, equality_coder const& y)
+  {
+    return static_cast<super const&>(x) == static_cast<super const&>(y)
+        && x.bitstreams_ == y.bitstreams_;
+  }
 
 private:
   bool encode_impl(T x, size_t n)
@@ -348,27 +347,6 @@ private:
   }
 
   std::unordered_map<T, Bitstream> bitstreams_;
-
-private:
-  friend access;
-
-  void serialize(serializer& sink) const
-  {
-    super::serialize(sink);
-    sink << bitstreams_;
-  }
-
-  void deserialize(deserializer& source)
-  {
-    super::deserialize(source);
-    source >> bitstreams_;
-  }
-
-  friend bool operator==(equality_coder const& x, equality_coder const& y)
-  {
-    return static_cast<super const&>(x) == static_cast<super const&>(y)
-        && x.bitstreams_ == y.bitstreams_;
-  }
 };
 
 /// An binary bit-slice coder (aka. *binary bit-sliced index*). It uses
@@ -387,6 +365,7 @@ class binary_bitslice_coder
 
   using super = coder<binary_bitslice_coder<T, Bitstream>>;
   friend super;
+  friend access;
 
   static uint8_t constexpr bits = std::numeric_limits<T>::digits;
 
@@ -394,6 +373,13 @@ public:
   binary_bitslice_coder()
     : bitstreams_(bits)
   {
+  }
+
+  friend bool operator==(binary_bitslice_coder const& x,
+                         binary_bitslice_coder const& y)
+  {
+    return static_cast<super const&>(x) == static_cast<super const&>(y)
+        && x.bitstreams_ == y.bitstreams_;
   }
 
   /// Retrieves a bitstream for a given power of 2.
@@ -465,28 +451,6 @@ private:
   }
 
   std::vector<Bitstream> bitstreams_;
-
-private:
-  friend access;
-
-  void serialize(serializer& sink) const
-  {
-    super::serialize(sink);
-    sink << bitstreams_;
-  }
-
-  void deserialize(deserializer& source)
-  {
-    super::deserialize(source);
-    source >> bitstreams_;
-  }
-
-  friend bool operator==(binary_bitslice_coder const& x,
-                         binary_bitslice_coder const& y)
-  {
-    return static_cast<super const&>(x) == static_cast<super const&>(y)
-        && x.bitstreams_ == y.bitstreams_;
-  }
 };
 
 /// The base class for multi-component bit-slice coders. Given a *base* it
@@ -502,6 +466,7 @@ class bitslice_coder
 
   using super = coder<bitslice_coder<Derived, T, Bitstream>>;
   friend super;
+  friend access;
 
 public:
   using offset_binary_type = decltype(detail::order(T()));
@@ -538,6 +503,12 @@ public:
     initialize();
   }
 
+  friend bool operator==(bitslice_coder const& x, bitslice_coder const& y)
+  {
+    return static_cast<super const&>(x) == static_cast<super const&>(y)
+        && x.base_ == y.base_
+        && x.bitstreams_ == y.bitstreams_;
+  }
 
 protected:
   value_list base_;
@@ -624,28 +595,6 @@ private:
       for (size_t j = 0; j < bitstreams_[i].size(); ++j)
         f(i, j, bitstreams_[i][j]);
   }
-
-private:
-  friend access;
-
-  void serialize(serializer& sink) const
-  {
-    super::serialize(sink);
-    sink << base_ << v_ << bitstreams_;
-  }
-
-  void deserialize(deserializer& source)
-  {
-    super::deserialize(source);
-    source >> base_ >> v_ >> bitstreams_;
-  }
-
-  friend bool operator==(bitslice_coder const& x, bitslice_coder const& y)
-  {
-    return static_cast<super const&>(x) == static_cast<super const&>(y)
-        && x.base_ == y.base_
-        && x.bitstreams_ == y.bitstreams_;
-  }
 };
 
 /// An equality bit-slice coder.
@@ -658,8 +607,9 @@ class equality_bitslice_coder
   using super = bitslice_coder<
       equality_bitslice_coder<T, Bitstream>, T, Bitstream
     >;
-
   friend super;
+  friend access;
+
   using super::v_;
   using super::base_;
   using super::bitstreams_;
@@ -725,8 +675,9 @@ class range_bitslice_coder
   using super = bitslice_coder<
       range_bitslice_coder<T, Bitstream>, T, Bitstream
     >;
-
   friend super;
+  friend access;
+
   using super::v_;
   using super::base_;
   using super::bitstreams_;
@@ -824,22 +775,14 @@ private:
 template <typename T>
 struct null_binner : util::equality_comparable<null_binner<T>>
 {
-  T operator()(T x) const
-  {
-    return x;
-  }
-
-  void serialize(serializer&) const
-  {
-  }
-
-  void deserialize(deserializer&)
-  {
-  }
-
   friend bool operator==(null_binner const&, null_binner const&)
   {
     return true;
+  }
+
+  T operator()(T x) const
+  {
+    return x;
   }
 };
 
@@ -848,6 +791,8 @@ struct null_binner : util::equality_comparable<null_binner<T>>
 template <typename T>
 class precision_binner
 {
+  friend access;
+
   template <typename B>
   using is_bool = std::is_same<B, bool>;
 
@@ -862,6 +807,11 @@ class precision_binner
       std::integral_constant<int, -2>,
       std::integral_constant<int, 1>
     >::value;
+
+  friend bool operator==(precision_binner const& x, precision_binner const& y)
+  {
+    return x.integral_ == y.integral_ && x.fractional_ == y.fractional_;
+  }
 
 public:
   /// Constructs a precision binner.
@@ -907,24 +857,6 @@ private:
 
   T integral_;
   double fractional_ = 0.0;
-
-private:
-  friend access;
-
-  void serialize(serializer& sink) const
-  {
-    sink << integral_ << fractional_;
-  }
-
-  void deserialize(deserializer& source)
-  {
-    source >> integral_ >> fractional_;
-  }
-
-  friend bool operator==(precision_binner const& x, precision_binner const& y)
-  {
-    return x.integral_ == y.integral_ && x.fractional_ == y.fractional_;
-  }
 };
 
 /// An associative array which maps (arithmetic) values to [bitstreams](@ref
@@ -945,6 +877,8 @@ class bitmap
 {
   static_assert(std::is_arithmetic<T>::value, "arithmetic type required");
 
+  friend access;
+
 public:
   using data_type = T;
   using bitstream_type = Bitstream;
@@ -953,6 +887,11 @@ public:
 
   /// Default-constructs an empty bitmap.
   bitmap() = default;
+
+  friend bool operator==(bitmap const& x, bitmap const& y)
+  {
+    return x.coder_ == y.coder_ && x.binner_ == y.binner_;
+  }
 
   /// Performs the bitwise OR of the contained bitstreams.
   /// @param other The bitmap to OR into this instance.
@@ -1038,23 +977,6 @@ public:
     return coder_;
   }
 
-private:
-  coder_type coder_;
-  binner_type binner_;
-
-private:
-  friend access;
-
-  void serialize(serializer& sink) const
-  {
-    sink << binner_ << coder_;
-  }
-
-  void deserialize(deserializer& source)
-  {
-    source >> binner_ >> coder_;
-  }
-
   template <typename Iterator>
   friend trial<void> print(bitmap const& bm, Iterator&& out,
                            bool with_header = true, char delim = '\t')
@@ -1080,10 +1002,9 @@ private:
     return print(cols, out);
   }
 
-  friend bool operator==(bitmap const& x, bitmap const& y)
-  {
-    return x.coder_ == y.coder_ && x.binner_ == y.binner_;
-  }
+private:
+  coder_type coder_;
+  binner_type binner_;
 };
 
 /// A bitmap specialization for `bool`.
@@ -1094,11 +1015,18 @@ template <
 >
 class bitmap<bool, Bitstream, Coder, Binner>
 {
+  friend access;
+
 public:
   using binner_type = Binner<bool>;
   using coder_type = Coder<bool, Bitstream>;
 
   bitmap() = default;
+
+  friend bool operator==(bitmap const& x, bitmap const& y)
+  {
+    return x.bool_ == y.bool_;
+  }
 
   bool push_back(bool x, size_t n = 1)
   {
@@ -1143,22 +1071,6 @@ public:
     return bool_.empty();
   }
 
-private:
-  Bitstream bool_;
-
-private:
-  friend access;
-
-  void serialize(serializer& sink) const
-  {
-    sink << bool_;
-  }
-
-  void deserialize(deserializer& source)
-  {
-    source >> bool_;
-  }
-
   template <typename Iterator>
   friend trial<void> print(bitmap const& bm, Iterator&& out)
   {
@@ -1194,10 +1106,8 @@ private:
     return nothing;
   }
 
-  friend bool operator==(bitmap const& x, bitmap const& y)
-  {
-    return x.bool_ == y.bool_;
-  }
+private:
+  Bitstream bool_;
 };
 
 } // namespace vast

@@ -1,6 +1,9 @@
 #include "framework/unit.h"
 
 #include "vast/event.h"
+#include "vast/concept/serializable/value.h"
+#include "vast/concept/state/event.h"
+#include "vast/io/serialization.h"
 #include "vast/util/json.h"
 
 using namespace vast;
@@ -38,6 +41,12 @@ TEST("event")
 
   e.timestamp(time::point{});
   CHECK(to_string(e) == "foo [123456789|1970-01-01+00:00:00] (T, 42, -234987)");
+
+  std::vector<uint8_t> buf;
+  io::archive(buf, e);
+  decltype(e) e2;
+  io::unarchive(buf, e2);
+  CHECK(e == e2);
 
   auto t = to<util::json>(e);
   REQUIRE(t);

@@ -17,9 +17,13 @@ namespace vast {
 /// An ordered sequence of of named types.
 class schema : util::equality_comparable<schema>
 {
+  friend access;
+
 public:
   using const_iterator = std::vector<type>::const_iterator;
   using iterator = std::vector<type>::iterator;
+
+  friend bool operator==(schema const& x, schema const& y);
 
   /// Merges two schemata by appending all types of the second schema to the
   /// first.
@@ -51,14 +55,6 @@ public:
   bool empty() const;
   void clear();
 
-private:
-  std::vector<type> types_;
-
-private:
-  friend access;
-  void serialize(serializer& sink) const;
-  void deserialize(deserializer& source);
-
   template <typename Iterator>
   friend trial<void> print(schema const& s, Iterator&& out)
   {
@@ -81,7 +77,8 @@ private:
   template <typename Iterator>
   friend trial<void> parse(schema& sch, Iterator& begin, Iterator end);
 
-  friend bool operator==(schema const& x, schema const& y);
+private:
+  std::vector<type> types_;
 };
 
 namespace detail {

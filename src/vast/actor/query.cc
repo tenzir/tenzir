@@ -1,8 +1,8 @@
-#include "vast/actor/query.h"
-
 #include <caf/all.hpp>
+
 #include "vast/event.h"
 #include "vast/logger.h"
+#include "vast/actor/query.h"
 #include "vast/expr/evaluator.h"
 #include "vast/expr/resolver.h"
 
@@ -227,7 +227,7 @@ void query::prefetch()
     else
     {
       auto prev = unprocessed_.find_prev(chunk_.meta().ids.find_first());
-      if (prev != bitstream::npos)
+      if (prev != bitstream_type::npos)
       {
         VAST_DEBUG(this, "prefetches chunk for previous ID", prev);
         send(archive_, prev);

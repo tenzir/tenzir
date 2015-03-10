@@ -157,9 +157,6 @@ struct predicate : util::totally_ordered<predicate>
   }
 };
 
-void serialize(serializer& sink, predicate const& p);
-void deserialize(deserializer& source, predicate& p);
-
 /// A sequence of AND expressions.
 struct conjunction : std::vector<expression>
 {
@@ -184,6 +181,8 @@ struct negation : std::vector<vast::expression>
 /// A query expression.
 class expression : util::totally_ordered<expression>
 {
+  friend access;
+
 public:
   using node = util::variant<
     none,
@@ -214,19 +213,14 @@ public:
   {
   }
 
-private:
-  node node_;
-
-private:
-  friend access;
-  void serialize(serializer& sink) const;
-  void deserialize(deserializer& source);
+  friend bool operator==(expression const& lhs, expression const& rhs);
+  friend bool operator<(expression const& lhs, expression const& rhs);
 
   friend node& expose(expression& d);
   friend node const& expose(expression const& d);
 
-  friend bool operator==(expression const& lhs, expression const& rhs);
-  friend bool operator<(expression const& lhs, expression const& rhs);
+private:
+  node node_;
 };
 
 namespace detail {

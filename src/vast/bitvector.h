@@ -2,20 +2,22 @@
 #define VAST_BITVECTOR_H
 
 #include <cassert>
-#include <iterator>
 #include <limits>
 #include <string>
 #include <vector>
-#include "vast/fwd.h"
 #include "vast/trial.h"
 #include "vast/util/operators.h"
 #include "vast/util/iterator.h"
 
 namespace vast {
 
+struct access;
+
 /// A vector of bits having similar semantics as a `std::vector<bool>`.
 class bitvector : util::totally_ordered<bitvector>
 {
+  friend access;
+
 public:
   // TODO: make configurable
   using block_type = uint64_t;
@@ -362,6 +364,9 @@ public:
   bitvector& operator=(bitvector const&) = default;
   bitvector& operator=(bitvector&&) = default;
 
+  friend bool operator==(bitvector const& x, bitvector const& y);
+  friend bool operator<(bitvector const& x, bitvector const& y);
+
   //
   // Bitwise operations
   //
@@ -593,11 +598,6 @@ private:
   size_type num_bits_;
 
 private:
-  friend access;
-
-  void serialize(serializer& sink) const;
-  void deserialize(deserializer& source);
-
   /// Prints a bitvector.
   /// @param out An iterator modeling the OutputIterator concept.
   /// @param msb The order of display. If `true`, display bits from MSB
@@ -632,9 +632,6 @@ private:
     out = std::copy(str.begin(), str.end(), out);
     return nothing;
   }
-
-  friend bool operator==(bitvector const& x, bitvector const& y);
-  friend bool operator<(bitvector const& x, bitvector const& y);
 };
 
 } // namespace vast

@@ -3,19 +3,21 @@
 
 namespace vast {
 
-/// Provides clean access of private class internals. Used by various concepts.
+/// Wrapper to encapsulate the implementation of concepts requiring access to
+/// private state.
 struct access
 {
-  struct convertible;
-  struct serializable;
+  template <typename, typename = void>
+  struct state;
+
+  template <typename, typename = void>
   struct parsable;
+
+  template <typename, typename = void>
   struct printable;
 
-  template <typename F, typename... Args>
-  static auto call(F f, Args&&... args)
-  {
-    return f(std::forward<Args>(args)...);
-  }
+  template <typename, typename = void>
+  struct convertible;
 };
 
 } // namespace vast

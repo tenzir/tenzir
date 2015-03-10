@@ -8,9 +8,14 @@
 
 namespace vast {
 
+struct access;
+namespace util { class json; }
+
 /// A regular expression.
 class pattern : util::totally_ordered<pattern>
 {
+  friend access;
+
 public:
   /// Constructs a pattern from a glob expression. A glob expression consists
   /// of the following elements:
@@ -26,6 +31,9 @@ public:
   /// Default-constructs an empty pattern.
   pattern() = default;
 
+  friend bool operator==(pattern const& lhs, pattern const& rhs);
+  friend bool operator<(pattern const& lhs, pattern const& rhs);
+
   /// Constructs a pattern from a string.
   /// @param str The string containing the pattern.
   explicit pattern(std::string str);
@@ -39,15 +47,6 @@ public:
   /// @param str The string to search.
   /// @returns `true` if the pattern matches inside *str*.
   bool search(std::string const& str) const;
-
-private:
-  std::string str_;
-
-private:
-  friend access;
-
-  void serialize(serializer& sink) const;
-  void deserialize(deserializer& source);
 
   template <typename Iterator>
   friend trial<void> print(pattern const& p, Iterator&& out)
@@ -82,8 +81,8 @@ private:
     return nothing;
   }
 
-  friend bool operator==(pattern const& lhs, pattern const& rhs);
-  friend bool operator<(pattern const& lhs, pattern const& rhs);
+private:
+  std::string str_;
 };
 
 trial<void> convert(pattern const& p, util::json& j);

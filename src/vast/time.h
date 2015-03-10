@@ -10,11 +10,15 @@
 #include "vast/util/operators.h"
 
 namespace vast {
+
+struct access;
+
 namespace time {
 
 // The main reason why we try to shoehorn std::chrono into the two types
 // *duration* and *point* is so that we can offer two simple types to the query
-// language.
+// language. We may switch to more types in the future, i.e., nanoseconds,
+// microseconds, etc.
 
 class point;
 class duration;
@@ -47,6 +51,7 @@ point now();
 /// A time duration with nanosecond granularity.
 class duration : util::totally_ordered<duration>
 {
+  friend access;
   friend class point;
 
 public:
@@ -118,18 +123,12 @@ public:
   // @returns This duration in nanoseconds.
   rep nanoseconds() const;
 
-private:
-  duration_type duration_{0};
-
-private:
-  friend access;
-
-  void serialize(serializer& sink) const;
-  void deserialize(deserializer& source);
-
   friend trial<void> convert(duration tr, double& d);
   friend trial<void> convert(duration tr, duration_type& dur);
   friend trial<void> convert(duration tr, util::json& j);
+
+private:
+  duration_type duration_{0};
 };
 
 /// Constructs a second duration.
@@ -143,6 +142,8 @@ inline duration fractional(double f)
 /// An absolute point in time having UTC time zone.
 class point : util::totally_ordered<point>
 {
+  friend access;
+
 public:
   using duration_type = duration::duration_type;
   using clock = std::chrono::system_clock;
@@ -211,16 +212,11 @@ public:
   /// Returns a duration representing the duration since the UNIX epoch.
   duration time_since_epoch() const;
 
-private:
-  friend access;
-
-  void serialize(serializer& sink) const;
-  void deserialize(deserializer& source);
-
   friend trial<void> convert(point p, double& d);
   friend trial<void> convert(point p, std::tm& tm);
   friend trial<void> convert(point p, util::json& j);
 
+private:
   time_point_type time_point_;
 };
 

@@ -8,20 +8,28 @@
 #include "vast/actor/partition.h"
 #include "vast/actor/task.h"
 #include "vast/expr/restrictor.h"
+#include "vast/concept/serializable/std/array.h"
+#include "vast/concept/serializable/std/chrono.h"
+#include "vast/concept/serializable/std/unordered_map.h"
+#include "vast/concept/serializable/state.h"
+#include "vast/concept/state/uuid.h"
+#include "vast/concept/state/time.h"
 #include "vast/io/serialization.h"
 
 using namespace caf;
 
 namespace vast {
 
-void index::partition_state::serialize(serializer& sink) const
+template <typename Serializer>
+void serialize(Serializer& sink, index::partition_state const& ps)
 {
-  sink << events << from << to << last_modified;
+  sink << ps.events << ps.from << ps.to << ps.last_modified;
 }
 
-void index::partition_state::deserialize(deserializer& source)
+template <typename Deserializer>
+void deserialize(Deserializer& source, index::partition_state& ps)
 {
-  source >> events >> from >> to >> last_modified;
+  source >> ps.events >> ps.from >> ps.to >> ps.last_modified;
 }
 
 index::index(path const& dir, size_t max_events,

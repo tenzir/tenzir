@@ -3,7 +3,6 @@
 #include <cassert>
 #include <fstream>
 #include <iterator>
-#include "vast/serialization/string.h"
 #include "vast/util/string.h"
 #include "vast/io/algorithm.h"
 #include "vast/io/file_stream.h"
@@ -222,16 +221,6 @@ bool path::is_directory() const
 bool path::is_symlink() const
 {
   return kind() == symlink;
-}
-
-void path::serialize(serializer& sink) const
-{
-  sink << str_;
-}
-
-void path::deserialize(deserializer& source)
-{
-  source >> str_;
 }
 
 bool operator==(path const& x, path const& y)

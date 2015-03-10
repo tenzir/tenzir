@@ -1,5 +1,6 @@
 #include "framework/unit.h"
 #include "vast/value.h"
+#include "vast/concept/serializable/value.h"
 #include "vast/io/serialization.h"
 #include "vast/util/json.h"
 

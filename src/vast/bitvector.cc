@@ -1,8 +1,5 @@
 #include "vast/bitvector.h"
 
-#include "vast/serialization/arithmetic.h"
-#include "vast/serialization/container.h"
-
 namespace vast {
 
 using size_type = bitvector::size_type;
@@ -562,18 +559,6 @@ size_type bitvector::find_backward(size_type i) const
     --i;
   auto result = i * block_width + highest_bit(bits_[i]);
   return result == 0 ? npos : result;
-}
-
-void bitvector::serialize(serializer& sink) const
-{
-  sink << num_bits_;
-  sink << bits_;
-}
-
-void bitvector::deserialize(deserializer& source)
-{
-  source >> num_bits_;
-  source >> bits_;
 }
 
 bool operator==(bitvector const& x, bitvector const& y)

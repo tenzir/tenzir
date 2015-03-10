@@ -2,10 +2,12 @@
 
 #include "vast/event.h"
 #include "vast/expression.h"
+#include "vast/logger.h"
 #include "vast/schema.h"
 #include "vast/expr/evaluator.h"
 #include "vast/expr/resolver.h"
 #include "vast/expr/normalize.h"
+#include "vast/concept/serializable/expression.h"
 #include "vast/io/serialization.h"
 
 using namespace vast;

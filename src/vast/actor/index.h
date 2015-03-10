@@ -1,6 +1,10 @@
 #ifndef VAST_INDEX_H
 #define VAST_INDEX_H
 
+#include <list>
+#include <map>
+#include <unordered_map>
+
 #include "vast/bitstream.h"
 #include "vast/expression.h"
 #include "vast/filesystem.h"
@@ -53,11 +57,6 @@ struct index : public flow_controlled_actor
     time::point last_modified;
     time::point from = time::duration{};
     time::point to = time::duration{};
-
-  private:
-    friend access;
-    void serialize(serializer& sink) const;
-    void deserialize(deserializer& source);
   };
 
   struct continuous_query_state

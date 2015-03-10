@@ -90,6 +90,8 @@ public:
 
 class data
 {
+  friend access;
+
 public:
   template <typename T>
   using from = std::conditional_t<
@@ -140,9 +142,7 @@ public:
         || std::is_same<T, count>::value
         || std::is_same<T, real>::value
         || std::is_same<T, time::point>::value
-        //|| std::is_same<T, time_interval>::value
         || std::is_same<T, time::duration>::value
-        //|| std::is_same<T, time_period>::value
         || std::is_same<T, std::string>::value
         || std::is_same<T, pattern>::value
         || std::is_same<T, address>::value
@@ -166,9 +166,7 @@ public:
     count,
     real,
     time_point,
-    //time_interval,
     time_duration,
-    //time_period,
     string,
     pattern,
     address,
@@ -189,9 +187,7 @@ public:
     count,
     real,
     time::point,
-    //time_interval,
     time::duration,
-    //time_period,
     std::string,
     pattern,
     address,
@@ -228,23 +224,18 @@ public:
   {
   }
 
-private:
-  variant_type data_;
-
-private:
-  friend access;
-  void serialize(serializer& sink) const;
-  void deserialize(deserializer& source);
-
-  friend variant_type& expose(data& d);
-  friend variant_type const& expose(data const& d);
-
   friend bool operator==(data const& lhs, data const& rhs);
   friend bool operator!=(data const& lhs, data const& rhs);
   friend bool operator<(data const& lhs, data const& rhs);
   friend bool operator<=(data const& lhs, data const& rhs);
   friend bool operator>=(data const& lhs, data const& rhs);
   friend bool operator>(data const& lhs, data const& rhs);
+
+  friend variant_type& expose(data& d);
+  friend variant_type const& expose(data const& d);
+
+private:
+  variant_type data_;
 };
 
 //

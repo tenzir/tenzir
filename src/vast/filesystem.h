@@ -19,11 +19,15 @@
 
 namespace vast {
 
+struct access;
+
 /// A filesystem path abstraction.
 class path : util::totally_ordered<path>,
              util::addable<path>,
              util::dividable<path>
 {
+  friend access;
+
 public:
 #ifdef VAST_WINDOWS
   static constexpr char const* separator = "\\";
@@ -131,18 +135,13 @@ public:
   friend bool operator==(path const& x, path const& y);
   friend bool operator<(path const& x, path const& y);
 
-private:
-  friend access;
-
-  void serialize(serializer& sink) const;
-  void deserialize(deserializer& source);
-
   template <typename Iterator>
   friend trial<void> print(path const& p, Iterator&& out)
   {
     return print(p.str_, out);
   }
 
+private:
   std::string str_;
 };
 

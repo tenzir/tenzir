@@ -1,6 +1,7 @@
 #include "framework/unit.h"
 #include "vast/data.h"
 #include "vast/type.h"
+#include "vast/concept/serializable/type.h"
 #include "vast/io/serialization.h"
 
 using namespace vast;

@@ -6,6 +6,8 @@
 #include "vast/filesystem.h"
 #include "vast/actor/archive.h"
 #include "vast/actor/program.h"
+#include "vast/concept/serializable/bitmap_index.h"
+#include "vast/concept/serializable/chunk.h"
 #include "vast/io/serialization.h"
 
 #include "framework/unit.h"

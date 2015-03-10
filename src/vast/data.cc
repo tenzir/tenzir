@@ -1,11 +1,5 @@
 #include "vast/data.h"
 
-#include "vast/serialization/container.h"
-#include "vast/serialization/enum.h"
-#include "vast/serialization/flat_set.h"
-#include "vast/serialization/none.h"
-#include "vast/serialization/string.h"
-#include "vast/serialization/variant.h"
 #include "vast/util/json.h"
 #include "vast/offset.h"
 
@@ -228,7 +222,6 @@ bool operator<(data const& lhs, data const& rhs)
   if (which(lhs.data_) == data::tag::none
       || which(rhs.data_) == data::tag::none)
     return false;
-
   return lhs.data_ < rhs.data_;
 }
 
@@ -237,7 +230,6 @@ bool operator<=(data const& lhs, data const& rhs)
   if (which(lhs.data_) == data::tag::none
       || which(rhs.data_) == data::tag::none)
     return false;
-
   return lhs.data_ <= rhs.data_;
 }
 
@@ -246,7 +238,6 @@ bool operator>=(data const& lhs, data const& rhs)
   if (which(lhs.data_) == data::tag::none
       || which(rhs.data_) == data::tag::none)
     return false;
-
   return lhs.data_ >= rhs.data_;
 }
 
@@ -255,18 +246,7 @@ bool operator>(data const& lhs, data const& rhs)
   if (which(lhs.data_) == data::tag::none
       || which(rhs.data_) == data::tag::none)
     return false;
-
   return lhs.data_ > rhs.data_;
-}
-
-void data::serialize(serializer& sink) const
-{
-  sink << data_;
-}
-
-void data::deserialize(deserializer& source)
-{
-  source >> data_;
 }
 
 namespace {

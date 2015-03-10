@@ -1,7 +1,7 @@
 #include "framework/unit.h"
 
+#include "vast/concept/serializable/util/variant.h"
 #include "vast/io/serialization.h"
-#include "vast/serialization/all.h"
 #include "vast/util/variant.h"
 
 SUITE("variant")

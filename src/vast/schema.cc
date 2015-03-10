@@ -1,9 +1,5 @@
 #include "vast/schema.h"
 
-#include <fstream>
-#include "vast/serialization.h"
-#include "vast/io/container_stream.h"
-
 namespace vast {
 
 trial<schema> schema::merge(schema const& s1, schema const& s2)
@@ -86,21 +82,6 @@ bool schema::empty() const
 void schema::clear()
 {
   types_.clear();
-}
-
-void schema::serialize(serializer& sink) const
-{
-  sink << to_string(*this);
-}
-
-void schema::deserialize(deserializer& source)
-{
-  std::string str;
-  source >> str;
-  auto lval = str.begin();
-  auto s = parse<schema>(lval, str.end());
-  if (s)
-    *this = *s;
 }
 
 bool operator==(schema const& x, schema const& y)

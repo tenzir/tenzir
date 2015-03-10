@@ -1,7 +1,8 @@
 #ifndef VAST_BLOCK_H
 #define VAST_BLOCK_H
 
-#include "vast/serialization.h"
+#include "vast/concept/serializable/binary_serializer.h"
+#include "vast/concept/serializable/binary_deserializer.h"
 #include "vast/io/array_stream.h"
 #include "vast/io/container_stream.h"
 #include "vast/io/compressed_stream.h"
@@ -9,9 +10,13 @@
 
 namespace vast {
 
+struct access;
+
 /// A compressed buffer of serialized objects.
 class block : util::equality_comparable<block>
 {
+  friend access;
+
 public:
   /// A helper class to to write into the block.
   class writer
@@ -117,10 +122,6 @@ public:
   friend bool operator==(block const& x, block const& y);
 
 private:
-  friend access;
-  void serialize(serializer& sink) const;
-  void deserialize(deserializer& source);
-
   io::compression compression_;
   uint64_t elements_ = 0;
   uint64_t uncompressed_bytes_ = 0;

@@ -2,12 +2,15 @@
 #define VAST_ACTOR_INDEXER_H
 
 #include <caf/all.hpp>
-#include "vast/bitmap_index.h"
+
+#include "vast/bitmap_index_polymorphic.h"
 #include "vast/event.h"
 #include "vast/expression.h"
 #include "vast/filesystem.h"
 #include "vast/offset.h"
 #include "vast/actor/actor.h"
+#include "vast/concept/serializable/bitmap_index_polymorphic.h"
+#include "vast/concept/serializable/type.h"
 #include "vast/io/serialization.h"
 
 namespace vast {

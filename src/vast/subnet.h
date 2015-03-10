@@ -10,9 +10,14 @@ namespace vast {
 /// Stores IPv4 and IPv6 prefixes, e.g., `192.168.1.1/16` and `FD00::/8`.
 class subnet : util::totally_ordered<subnet>
 {
+  friend access;
+
 public:
   /// Constructs the empty prefix, i.e., `::/0`.
   subnet();
+
+  friend bool operator==(subnet const& x, subnet const& y);
+  friend bool operator<(subnet const& x, subnet const& y);
 
   /// Constructs a prefix from an address.
   /// @param addr The address.
@@ -30,18 +35,6 @@ public:
   /// Retrieves the prefix length.
   /// @returns The prefix length.
   uint8_t length() const;
-
-private:
-  bool initialize();
-
-  address network_;
-  uint8_t length_;
-
-private:
-  friend access;
-
-  void serialize(serializer& sink) const;
-  void deserialize(deserializer& source);
 
   template <typename Iterator>
   friend trial<void> print(subnet const& s, Iterator&& out)
@@ -88,8 +81,11 @@ private:
     return nothing;
   }
 
-  friend bool operator==(subnet const& x, subnet const& y);
-  friend bool operator<(subnet const& x, subnet const& y);
+private:
+  bool initialize();
+
+  address network_;
+  uint8_t length_;
 };
 
 trial<void> convert(subnet const& p, util::json& j);

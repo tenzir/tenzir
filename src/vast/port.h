@@ -14,6 +14,8 @@ namespace vast {
 /// A transport-layer port.
 class port : util::totally_ordered<port>
 {
+  friend access;
+
 public:
   using number_type = uint16_t;
 
@@ -34,6 +36,9 @@ public:
   /// @param type The port type.
   port(number_type number, port_type type = unknown);
 
+  friend bool operator==(port const& x, port const& y);
+  friend bool operator<(port const& x, port const& y);
+
   /// Retrieves the port number.
   /// @returns The port number.
   number_type number() const;
@@ -49,16 +54,6 @@ public:
   /// Sets the port type.
   /// @param t The new port type.
   void type(port_type t);
-
-private:
-  number_type number_ = 0;
-  port_type type_ = unknown;
-
-private:
-  friend access;
-
-  void serialize(serializer& sink) const;
-  void deserialize(deserializer& source);
 
   template <typename Iterator>
   friend trial<void> parse(port& prt, Iterator& begin, Iterator end)
@@ -115,8 +110,9 @@ private:
     }
   }
 
-  friend bool operator==(port const& x, port const& y);
-  friend bool operator<(port const& x, port const& y);
+private:
+  number_type number_ = 0;
+  port_type type_ = unknown;
 };
 
 trial<void> convert(port const& p, util::json& j);

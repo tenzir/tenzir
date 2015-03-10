@@ -1,8 +1,7 @@
-#include "vast/actor/archive.h"
-
 #include <caf/all.hpp>
-#include "vast/serialization/flat_set.h"
-#include "vast/serialization/range_map.h"
+
+#include "vast/actor/archive.h"
+#include "vast/concept/serializable/chunk.h"
 #include "vast/io/serialization.h"
 
 namespace vast {

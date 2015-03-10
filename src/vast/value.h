@@ -8,6 +8,8 @@ namespace vast {
 /// Typed representation of data.
 class value
 {
+  friend access;
+
 public:
   /// Constructs a type-safe value by checking whether the given data matches
   /// the given type.
@@ -61,6 +63,13 @@ public:
   /// @param x The data to construct the value from.
   value(vast::data x) : data_{std::move(x)} {}
 
+  friend bool operator==(value const& lhs, value const& rhs);
+  friend bool operator!=(value const& lhs, value const& rhs);
+  friend bool operator<(value const& lhs, value const& rhs);
+  friend bool operator<=(value const& lhs, value const& rhs);
+  friend bool operator>=(value const& lhs, value const& rhs);
+  friend bool operator>(value const& lhs, value const& rhs);
+
   /// Sets the type of the value.
   /// @param t The new type of the value.
   /// @returns `true` if the value had no data or if the type check succeeded.
@@ -77,21 +86,10 @@ public:
     return data_;
   }
 
-private:
-  friend access;
-  void serialize(serializer& sink) const;
-  void deserialize(deserializer& source);
-
   friend vast::data::variant_type& expose(value& v);
   friend vast::data::variant_type const& expose(value const& v);
 
-  friend bool operator==(value const& lhs, value const& rhs);
-  friend bool operator!=(value const& lhs, value const& rhs);
-  friend bool operator<(value const& lhs, value const& rhs);
-  friend bool operator<=(value const& lhs, value const& rhs);
-  friend bool operator>=(value const& lhs, value const& rhs);
-  friend bool operator>(value const& lhs, value const& rhs);
-
+private:
   vast::data data_;
   vast::type type_;
 };

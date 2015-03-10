@@ -1,6 +1,12 @@
 #include <caf/all.hpp>
 #include <caf/scheduler/profiled_coordinator.hpp>
-#include "vast.h"
+
+#include "vast/announce.h"
+#include "vast/cleanup.h"
+#include "vast/filesystem.h"
+#include "vast/logger.h"
+#include "vast/actor/program.h"
+#include "vast/actor/signal_monitor.h"
 
 int main(int argc, char *argv[])
 {
@@ -22,7 +28,7 @@ int main(int argc, char *argv[])
     return 0;
   }
 
-  vast::announce_builtin_types();
+  vast::announce_types();
 
   auto dir = vast::path{*cfg->get("directory")}.complete();
   auto log_dir = dir / *cfg->get("log.directory");

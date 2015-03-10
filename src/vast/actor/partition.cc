@@ -5,6 +5,7 @@
 #include "vast/actor/indexer.h"
 #include "vast/actor/task.h"
 #include "vast/expr/predicatizer.h"
+#include "vast/concept/serializable/schema.h"
 #include "vast/io/serialization.h"
 
 using namespace caf;

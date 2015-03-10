@@ -1,6 +1,7 @@
 #include "vast/actor/importer.h"
 
 #include "vast/actor/sink/chunkifier.h"
+#include "vast/concept/serializable/chunk.h"
 #include "vast/io/serialization.h"
 
 namespace vast {

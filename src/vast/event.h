@@ -8,9 +8,13 @@
 
 namespace vast {
 
+struct access;
+
 /// A value with a named type plus additional meta data.
 class event : public value, util::totally_ordered<event>
 {
+  friend access;
+
 public:
   /// Type-safe factory function to construct an event from data and type.
   /// @tparam A type convertible to a value.
@@ -37,6 +41,9 @@ public:
   /// Constructs an event from a value.
   event(value v);
 
+  friend bool operator==(event const& x, event const& y);
+  friend bool operator<(event const& x, event const& y);
+
   /// Sets the event ID.
   /// @param i The new event ID.
   /// @returns `true` iff *i* is in *[1, 2^64-2]*.
@@ -53,16 +60,6 @@ public:
   /// Retrieves the event timestamp.
   /// @returns The event timestamp.
   time::point timestamp() const;
-
-private:
-  event_id id_ = invalid_event_id;
-  time::point timestamp_;
-
-private:
-  friend access;
-
-  void serialize(serializer& sink) const;
-  void deserialize(deserializer& source);
 
   template <typename Iterator>
   friend trial<void> print(event const& e, Iterator&& out)
@@ -90,9 +87,11 @@ private:
     return print(static_cast<value const&>(e), out);
   }
 
-  friend bool operator==(event const& x, event const& y);
-  friend bool operator<(event const& x, event const& y);
   friend trial<void> convert(event const& e, util::json& j);
+
+private:
+  event_id id_ = invalid_event_id;
+  time::point timestamp_;
 };
 
 } // namespace vast

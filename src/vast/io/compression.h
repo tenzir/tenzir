@@ -1,8 +1,9 @@
 #ifndef VAST_IO_COMPRESSION_H
 #define VAST_IO_COMPRESSION_H
 
+#include <cstdint>
+
 #include "vast/config.h"
-#include "vast/fwd.h"
 
 namespace vast {
 namespace io {

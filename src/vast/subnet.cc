@@ -1,7 +1,6 @@
 #include "vast/subnet.h"
 
 #include "vast/logger.h"
-#include "vast/serialization/arithmetic.h"
 #include "vast/util/json.h"
 
 namespace vast {
@@ -20,6 +19,16 @@ subnet::subnet(address addr, uint8_t length)
     network_ = address{};
     length_ = 0;
   }
+}
+
+bool operator==(subnet const& x, subnet const& y)
+{
+  return x.network_ == y.network_ && x.length_ == y.length_;
+}
+
+bool operator<(subnet const& x, subnet const& y)
+{
+  return std::tie(x.network_, x.length_) < std::tie(y.network_, y.length_);
 }
 
 bool subnet::contains(address const& addr) const
@@ -56,29 +65,6 @@ bool subnet::initialize()
   network_.mask(length_);
 
   return true;
-}
-
-void subnet::serialize(serializer& sink) const
-{
-  VAST_ENTER_WITH(VAST_THIS);
-  sink << length_ << network_;
-}
-
-void subnet::deserialize(deserializer& source)
-{
-  VAST_ENTER();
-  source >> length_ >> network_;
-  VAST_LEAVE(VAST_THIS);
-}
-
-bool operator==(subnet const& x, subnet const& y)
-{
-  return x.network_ == y.network_ && x.length_ == y.length_;
-}
-
-bool operator<(subnet const& x, subnet const& y)
-{
-  return std::tie(x.network_, x.length_) < std::tie(y.network_, y.length_);
 }
 
 trial<void> convert(subnet const& p, util::json& j)
