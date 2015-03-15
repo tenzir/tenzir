@@ -20,7 +20,8 @@ query::query(actor archive, actor sink, expression ast)
   {
     VAST_DEBUG(this, "got index hit covering", '[' << hits.find_first() << ','
                << (hits.find_last() + 1) << ')');
-    assert(! hits.all_zeros());
+    assert(! hits.all_zeros() && (hits & hits_).count() == 0);
+    total_hits_ += hits.count();
     hits_ |= hits;
     unprocessed_ = hits_ - processed_;
     prefetch();
@@ -31,7 +32,7 @@ query::query(actor archive, actor sink, expression ast)
     {
       assert(current_sender() == task_->address());
       progress_ = (total - double(remaining)) / total;
-      send(sink_, progress_atom::value, progress_);
+      send(sink_, progress_atom::value, progress_, total_hits_);
     };
 
   idle_ = {

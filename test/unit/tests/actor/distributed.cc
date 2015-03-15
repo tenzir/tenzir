@@ -176,7 +176,7 @@ TEST("distributed")
   bool done = false;
   self->do_receive(
     [&](actor const& /* task */) {},
-    [&](progress_atom, double) {},
+    [&](progress_atom, double, uint64_t) {},
     [](done_atom, time::moment) {},
     [&](event const& e)
     {

@@ -42,6 +42,7 @@ struct query : default_actor
   caf::message_handler waiting_;
   caf::message_handler extracting_;
 
+  uint64_t total_hits_ = 0;
   bitstream_type hits_;
   bitstream_type processed_;
   bitstream_type unprocessed_;

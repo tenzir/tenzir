@@ -5,6 +5,7 @@
 
 #include "vast/parse.h"
 #include "vast/actor/console.h"
+#include "vast/query_options.h"
 #include "vast/util/color.h"
 #include "vast/util/meta.h"
 #include "vast/util/poll.h"
@@ -288,7 +289,7 @@ console::console(caf::actor search, path dir)
         if (args.empty())
           return false;
 
-        sync_send(search_, query_atom::value, this, args).then(
+        sync_send(search_, args, historical, this).then(
             on_arg_match >> [=](sync_exited_msg const& e)
             {
               print(fail)

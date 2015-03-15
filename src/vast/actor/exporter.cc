@@ -67,9 +67,11 @@ behavior exporter::make_behavior()
           send_exit(s, exit::done);
       }
     },
-    [=](progress_atom, double progress)
+    [=](progress_atom, double progress, uint64_t total_hits)
     {
-      VAST_VERBOSE(this, "got query progress:", size_t(progress * 100) << "%");
+      VAST_VERBOSE(this, "got query progress:",
+                   total_hits, "hits (" <<
+                   size_t(progress * 100) << "%)");
     },
     [=](done_atom, time::duration runtime)
     {
