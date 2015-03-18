@@ -1,13 +1,20 @@
-This document specifies the coding style used throughout VAST. In general, the
-style draws inspiration from the STL, the [Google
-style](http://google-styleguide.googlecode.com/svn/trunk/cppguide.xml), and
-[CAF
-style](https://github.com/actor-framework/actor-framework/blob/master/HACKING.md).
+This document specifies the coding style for VAST. The style is based on
+STL, [Google style][google-style], and [CAF style][caf-style] guidelines.
+
+[google-style]: http://google-styleguide.googlecode.com/svn/trunk/cppguide.xml
+[caf-style]: https://github.com/actor-framework/actor-framework/blob/master/HACKING.md
 
 General
 =======
 
-- Use 2 spaces per indentation level, no tabs, 80 characters max per line.
+- 2 spaces per indentation level.
+
+- No tabs, ever.
+
+- 80 characters max per line.
+
+- Minimize veritcal whitespace within functions. Use comments to separate
+  logical code blocks.
 
 - Namespaces and access modifiers (e.g., `public`) do not increase the
   indentation level.
@@ -20,11 +27,15 @@ General
 
 - Never use unwrapped, manual resource management such as `new` and `delete`.
 
-- Prefer `using T = X` in favor of `typedef X T`.
+- Use `using T = X` in favor of `typedef X T`.
 
 - Keywords are always followed by a whitespace: `if (...)`, `template <...>`,
   `while (...)`, etc.
 
+- Never use C-style casts.
+
+- Do not use the `inline` keyword unless to avoid duplicate symbols. The
+  compiler does a better job at figuring out what functions should be inlined.
 
 Header
 ======
@@ -40,9 +51,11 @@ Header
 
 - Include order is from low-level to high-level headers, e.g.,
 
+        #include <cassert>
+
         #include <memory>
 
-        #include <boost/operators.hpp>
+        #include <3rd/party.hpp>
 
         #include "vast/logger.h"
         #include "vast/util/profiler.h"
@@ -51,18 +64,22 @@ Header
   always be in doublequotes and relative to the source directory, whereas
   system-wide includes in angle brackets.
 
-  In the implementation (`*.cc`) file, the top-level include always consist of
-  the corresponding header file. Aftewards, the above order applies again. For
-  example,
-
-        #include "meta/event.h"
-
-        #include <functional>
-
-- When declaring a function, the order of parameters is: inputs, then outputs.
+- As in the STL, the order of parameters when declaring a function is: inputs,
+  then outputs. API coherence and symmetry trumps this rule, e.g., when the
+  first argument of related functions model the same concept.
 
 Classes
 =======
+
+- Use the order `public`, `proctected`, `private` for functions and members in
+  classes.
+
+- The order of member functions within a class is: constructors, operators,
+  mutating members, accessors.
+
+- Friends first: put friend declaration immediate after opening the class.
+
+- Use structs for state-less classes or when the API is the struct's state.
 
 - Prefer types with value semantics over reference semantics.
 
@@ -90,23 +107,22 @@ Naming
 - Names of *(i)* classes/structs, *(ii)* functions, and *(iii)* enums should be
   lower case and delimited by underscores.
 
-- The name of implementation namespaces is `detail`, e.g.,
+- Put non-API implementation into namespace `detail`.
 
-        vast::detail::some_non_exposed_helper
+- Member variables have an underscore (`_`) as suffix, unless they constitute
+  the public interface.
 
-- Member variables should have an underscore (`_`) as suffix, unless they
-  are part of the public interface.
+- Put static non-const variables in an anonymous namespace.
 
 Template Metaprogramming
 ========================
 
-- Break `using name = ...` statements always directly after `=` if it
-  does not fit in one line.
+- Break `using name = ...` statements always directly after `=` if they do not
+  fit in one line.
 
 - Use one level of indentation per "open" template and place the closing `>`,
   `>::type` or `>::value` on its own line. For example:
   ```cpp
-  
   using optional_result_type = 
     typename std::conditional<
       std::is_same<result_type, void>::value,
@@ -116,21 +132,20 @@ Template Metaprogramming
   ```
 
 - When dealing with "ordinary" templates, use indentation based on the position
-  of the opening `<`:
+  of the last opening `<`:
   ```cpp
-
   using type = quite_a_long_template_which_needs_a_break<std::string,
                                                          double>;
   ```
 
-
 Comments
 ========
 
-- Doxygen comments (which are stripped during the generation of the
-  documentation) start with `///`.
+- Doxygen comments start with `///`.
 
-- Use `@cmd` rather than `\cmd` for Doxygen commands.
+- Use Markdown instead of Doxygen formatters.
+
+- Use `@cmd` rather than `\cmd`.
 
 - Use `//` or `/*` and `*/` to define basic comments that should not be
   swallowed by Doxygen.
