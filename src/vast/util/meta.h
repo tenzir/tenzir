@@ -110,6 +110,23 @@ using disable_if_same = disable_if_t<std::is_same<T, U>::value, R>;
 template <typename T>
 using unqualified = std::remove_cv_t<std::remove_reference_t<T>>;
 
+template <typename T, typename U = std::decay_t<T>>
+using deduce = std::conditional_t<
+  std::is_rvalue_reference<T>::value,
+  std::add_rvalue_reference_t<std::decay_t<U>>,
+  std::conditional_t<
+    std::is_lvalue_reference<T>::value
+      && std::is_const<std::remove_reference_t<T>>::value,
+    std::add_lvalue_reference_t<std::add_const_t<std::decay_t<U>>>,
+    std::conditional_t<
+      std::is_lvalue_reference<T>::value
+        && ! std::is_const<std::remove_reference_t<T>>::value,
+      std::add_lvalue_reference_t<std::decay_t<U>>,
+      std::false_type
+    >
+  >
+>;
+
 //
 // Various meta functions mostly used to sfinae out certain types.
 //
