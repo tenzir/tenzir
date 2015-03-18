@@ -1,19 +1,14 @@
 #include "vast/chunk.h"
-
 #include "vast/event.h"
-#include "vast/serialization/arithmetic.h"
+#include "vast/concept/serializable/data.h"
+#include "vast/concept/serializable/state.h"
+#include "vast/concept/serializable/type.h"
+#include "vast/concept/serializable/std/chrono.h"
+#include "vast/concept/serializable/std/array.h"
+#include "vast/concept/serializable/std/string.h"
+#include "vast/concept/state/event.h"
 
 namespace vast {
-
-void chunk::meta_data::serialize(serializer& sink) const
-{
-  sink << first << last << ids << schema;
-}
-
-void chunk::meta_data::deserialize(deserializer& source)
-{
-  source >> first >> last >> ids >> schema;
-}
 
 bool operator==(chunk::meta_data const& x, chunk::meta_data const& y)
 {
@@ -220,16 +215,6 @@ block& chunk::block()
 block const& chunk::block() const
 {
   return msg_.get_as<vast::block>(1);
-}
-
-void chunk::serialize(serializer& sink) const
-{
-  sink << meta() << block();
-}
-
-void chunk::deserialize(deserializer& source)
-{
-  source >> get_meta() >> block();
 }
 
 bool operator==(chunk const& x, chunk const& y)

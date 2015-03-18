@@ -2,6 +2,8 @@
 #define VAST_ACTOR_ACCOUNTANT_H
 
 #include <fstream>
+#include <unordered_map>
+
 #include "vast/filesystem.h"
 #include "vast/time.h"
 #include "vast/actor/actor.h"

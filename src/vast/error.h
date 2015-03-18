@@ -1,15 +1,25 @@
 #ifndef VAST_ERROR_H
 #define VAST_ERROR_H
 
-#include "vast/fwd.h"
 #include "vast/util/error.h"
 
 namespace vast {
 
 using util::error;
 
-void serialize(serializer& sink, error const& e);
-void deserialize(deserializer& source, error& e);
+template <typename Serializer>
+void serialize(Serializer& sink, error const& e)
+{
+  sink << e.msg();
+}
+
+template <typename Deserializer>
+void deserialize(Deserializer& source, error& e)
+{
+  std::string str;
+  source >> str;
+  e = error{std::move(str)};
+}
 
 } // namespace vast
 

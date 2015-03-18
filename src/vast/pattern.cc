@@ -1,7 +1,6 @@
 #include "vast/pattern.h"
 
 #include <regex>
-#include "vast/serialization/string.h"
 #include "vast/util/json.h"
 
 namespace vast {
@@ -18,26 +17,6 @@ pattern::pattern(std::string str)
 {
 }
 
-bool pattern::match(std::string const& str) const
-{
-  return std::regex_match(str.begin(), str.end(), std::regex{str_});
-}
-
-bool pattern::search(std::string const& str) const
-{
-  return std::regex_search(str.begin(), str.end(), std::regex{str_});
-}
-
-void pattern::serialize(serializer& sink) const
-{
-  sink << str_;
-}
-
-void pattern::deserialize(deserializer& source)
-{
-  source >> str_;
-}
-
 bool operator==(pattern const& lhs, pattern const& rhs)
 {
   return lhs.str_ == rhs.str_;
@@ -46,6 +25,16 @@ bool operator==(pattern const& lhs, pattern const& rhs)
 bool operator<(pattern const& lhs, pattern const& rhs)
 {
   return lhs.str_ < rhs.str_;
+}
+
+bool pattern::match(std::string const& str) const
+{
+  return std::regex_match(str.begin(), str.end(), std::regex{str_});
+}
+
+bool pattern::search(std::string const& str) const
+{
+  return std::regex_search(str.begin(), str.end(), std::regex{str_});
 }
 
 trial<void> convert(pattern const& p, util::json& j)

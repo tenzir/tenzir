@@ -6,7 +6,9 @@
 #include "vast/filesystem.h"
 #include "vast/actor/archive.h"
 #include "vast/actor/program.h"
-#include "vast/io/serialization.h"
+#include "vast/concept/serializable/bitmap_index.h"
+#include "vast/concept/serializable/chunk.h"
+#include "vast/concept/serializable/io.h"
 
 #include "framework/unit.h"
 #include "test_data.h"
@@ -47,8 +49,8 @@ TEST("import")
   REQUIRE(exists(ftp));
   address_bitmap_index<default_bitstream> abmi;
   port_bitmap_index<default_bitstream> pbmi;
-  REQUIRE(vast::io::unarchive(ftp / "id" / "orig_h" / "index", abmi));
-  REQUIRE(vast::io::unarchive(ftp / "id" / "orig_p" / "index", pbmi));
+  REQUIRE(vast::load(ftp / "id" / "orig_h" / "index", abmi));
+  REQUIRE(vast::load(ftp / "id" / "orig_p" / "index", pbmi));
   REQUIRE(abmi.size() == 2);
   REQUIRE(pbmi.size() == 2);
 
@@ -73,7 +75,7 @@ TEST("import")
     }
   REQUIRE(! segment_file.empty());
   archive::segment s;
-  REQUIRE(vast::io::unarchive(segment_file, s));
+  REQUIRE(vast::load(segment_file, s));
   REQUIRE(s.size() == 1);
   REQUIRE(s.front().events() == 2);
   chunk::reader r{s.front()};

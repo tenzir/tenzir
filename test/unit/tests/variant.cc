@@ -1,7 +1,7 @@
 #include "framework/unit.h"
 
-#include "vast/io/serialization.h"
-#include "vast/serialization/all.h"
+#include "vast/concept/serializable/util/variant.h"
+#include "vast/concept/serializable/io.h"
 #include "vast/util/variant.h"
 
 SUITE("variant")
@@ -234,10 +234,10 @@ TEST("variant custom tag")
 TEST("variant serialization")
 {
   std::vector<uint8_t> buf;
-  CHECK(io::archive(buf, util::variant<bool, int>{42}));
+  CHECK(save(buf, util::variant<bool, int>{42}));
 
   util::variant<bool, int> v;
-  CHECK(io::unarchive(buf, v));
+  CHECK(load(buf, v));
   REQUIRE(is<int>(v));
   CHECK(*get<int>(v) == 42);
 }

@@ -1,9 +1,15 @@
-#include "framework/unit.h"
+#include "vast/announce.h"
+#include "vast/util/optional.h"
+#include "vast/concept/serializable/hierarchy.h"
+#include "vast/concept/serializable/state.h"
+#include "vast/concept/serializable/std/list.h"
+#include "vast/concept/serializable/std/unordered_map.h"
+#include "vast/concept/serializable/std/vector.h"
+#include "vast/concept/serializable/util/optional.h"
+#include "vast/concept/serializable/io.h"
+#include "vast/util/byte_swap.h"
 
-#include "vast/value.h"
-#include "vast/optional.h"
-#include "vast/serialization/all.h"
-#include "vast/io/serialization.h"
+#include "framework/unit.h"
 
 using namespace vast;
 using namespace vast::util;
@@ -64,8 +70,8 @@ TEST("containers")
   std::unordered_map<int, int> u0{{4, 2}, {8, 4}}, u1;
 
   std::vector<uint8_t> buf;
-  io::archive(buf, v0, l0, u0);
-  io::unarchive(buf, v1, l1, u1);
+  save(buf, v0, l0, u0);
+  load(buf, v1, l1, u1);
 
   CHECK(v0 == v1);
   CHECK(l0 == l1);
@@ -74,11 +80,11 @@ TEST("containers")
 
 TEST("optional<T>")
 {
-  optional<std::string> o1 = std::string{"foo"};
+  util::optional<std::string> o1 = std::string{"foo"};
   decltype(o1) o2;
   std::vector<uint8_t> buf;
-  io::archive(buf, o1);
-  io::unarchive(buf, o2);
+  save(buf, o1);
+  load(buf, o2);
   REQUIRE(o1);
   REQUIRE(o2);
   CHECK(*o2 == "foo");
@@ -88,30 +94,40 @@ TEST("optional<T>")
 // A serializable class.
 class serializable
 {
+  friend vast::access;
+
 public:
   int i() const
   {
     return i_;
   }
 
+  void i(int x)
+  {
+    i_ = x;
+  }
+
 private:
-  friend vast::access;
-
-  void serialize(serializer& sink) const
-  {
-    sink << i_ - 10;
-  }
-
-  void deserialize(deserializer& source)
-  {
-    source >> i_;
-    i_ += 10;
-  }
-
-  int i_ = 42;
+  int i_ = 0;
 };
 
-TEST("vast::io API")
+namespace vast {
+
+// By specializing the state concept, the class becomes automatically
+// serializable.
+template <>
+struct access::state<serializable>
+{
+  template <typename T, typename F>
+  static void call(T&& x, F f)
+  {
+    f(x.i_);
+  }
+};
+
+} // namespace vast
+
+TEST("compress/decompress")
 {
   std::vector<io::compression> methods{io::null, io::lz4};
 #ifdef VAST_HAVE_SNAPPY
@@ -119,138 +135,120 @@ TEST("vast::io API")
 #endif // VAST_HAVE_SNAPPY
   for (auto method : methods)
   {
-    std::vector<int> input(1u << 10), output;
+    // Generate some data.
+    std::vector<int> input(1u << 10);
     REQUIRE((input.size() % 2) == 0);
     for (size_t i = 0; i < input.size() / 2; ++i)
       input[i] = i % 128;
     for (size_t i = input.size() / 2; i < input.size(); ++i)
       input[i] = i % 2;
-
-    std::vector<uint8_t> buf;
+    // Serialize & compress.
     serializable x;
-    io::compress(method, buf, input, serializable());
-    io::decompress(method, buf, output, x);
-
-    REQUIRE(input.size() == output.size());
-    for (size_t i = 0; i < input.size(); ++i)
-      CHECK(output[i] == input[i]);
-    CHECK(x.i() == 42);
+    x.i(42);
+    std::string buf;
+    auto t = compress(buf, method, input, x);
+    CHECK(t);
+    serializable y;
+    decltype(input) output;
+    t = decompress(buf, method, output, y);
+    CHECK(t);
+    CHECK(input.size() == output.size());
+    CHECK(input == output);
+    CHECK(y.i() == 42);
   }
 }
 
-TEST("objects")
-{
-  object o, p;
-  o = object::adopt(new record{42, 84, 1337});
-
-  std::vector<uint8_t> buf;
-  io::archive(buf, o);
-  io::unarchive(buf, p);
-
-  CHECK(o == p);
-}
+//
+// Polymorphic serialization
+//
 
 struct base
 {
   virtual ~base() = default;
-  virtual uint32_t f() const = 0;
-  virtual void serialize(serializer& sink) const = 0;
-  virtual void deserialize(deserializer& source) = 0;
+  friend bool operator==(base, base) { return true; }
+  int i = 0;
 };
 
-struct derived : base
+template <typename Serializer>
+void serialize(Serializer& sink, base const& b)
 {
-  friend bool operator==(derived const& x, derived const& y)
-  {
-    return x.i == y.i;
-  }
+  sink << b.i;
+}
 
-  virtual uint32_t f() const final
-  {
-    return i;
-  }
+template <typename Deserializer>
+void deserialize(Deserializer& source, base& b)
+{
+  source >> b.i;
+}
 
-  virtual void serialize(serializer& sink) const final
-  {
-    sink << i;
-  }
-
-  virtual void deserialize(deserializer& source) final
-  {
-    source >> i;
-  }
-
-  uint32_t i = 0;
+struct derived1 : base
+{
+  friend bool operator==(derived1, derived1) { return true; }
+  int j = 1;
 };
 
-TEST("polymorphic objects")
+namespace vast {
+
+template <>
+struct access::state<derived1>
 {
-  derived d;
-  d.i = 42;
+  template <class F>
+  static void read(derived1 const& x, F f)
+  {
+    f(static_cast<base const&>(x), x.j);
+  }
 
-  // Polymorphic types must be announced as their concrete type is not known at
-  // compile time.
-  REQUIRE((announce<derived>()));
+  template <class F>
+  static void write(derived1& x, F f)
+  {
+    f(static_cast<base&>(x), x.j);
+  }
+};
 
-  // Due to the lacking introspection capabilities in C++, the serialization
-  // framework requires explicit registration of each derived
-  // class to provide type-safe access.
-  REQUIRE((make_convertible<derived, base>()));
+} // namespace vast
 
+struct derived2 : base
+{
+  friend bool operator==(derived2, derived2) { return true; }
+  int k = 1;
+};
+
+template <typename Serializer>
+void serialize(Serializer& sink, derived2 const& d)
+{
+  sink << static_cast<base const&>(d) << d.k;
+}
+
+template <typename Deserializer>
+void deserialize(Deserializer& source, derived2& d)
+{
+  source >> static_cast<base&>(d) >> d.k;
+}
+
+TEST("polymorphic serialization")
+{
+  announce_hierarchy<base, derived1, derived2>("derived1", "derived2");
+  auto uti = caf::uniform_typeid<derived1>();
+  REQUIRE(uti != nullptr);
+  CHECK(uti->name() == std::string{"derived1"});
   std::vector<uint8_t> buf;
   {
-    // We serialize the object through a polymorphic reference to the base
-    // class, which simply invokes the correct virtual serialize() method of
-    // the derived class.
+    derived1 d1;
+    d1.i = 42;
+    d1.j = 1337;
     auto out = io::make_container_output_stream(buf);
-    binary_serializer sink(out);
-    base& b = d;
-    REQUIRE(write_object(sink, b));
+    binary_serializer bs{out};
+    polymorphic_serialize(bs, &d1);
   }
   {
-    // Actually, this is the same as serializing through a pointer directory,
-    // because serializing a pointer assumes reference semantics and hence
-    // writes an instance out as object.
-    decltype(buf) buf2;
-    base* bp = &d;
-    io::archive(buf2, bp);
-    CHECK(buf == buf2);
-  }
-  {
-    // It should always be possible to deserialize an instance of the exact
-    // derived type. This technically does not require any virtual functions.
-    auto in = io::make_array_input_stream(buf);
-    binary_deserializer source(in);
-    derived e;
-    REQUIRE(read_object(source, e));
-    CHECK(e.i == 42);
-  }
-  {
-    // Similarly, it should always be possible to retrieve an opaque object and
-    // get the derived type via a type-checked invocation of get<T>.
-    object o;
-    io::unarchive(buf, o);
-    CHECK(o.convertible_to<derived>());
-    CHECK(get<derived>(o).f() == 42);
-    // Since we've announced the type as being convertible to its base class,
-    // we can also safely obtain a reference to the base.
-    CHECK(o.convertible_to<base>());
-    CHECK(get<base>(o).f() == 42);
-    // Moreover, since we've assurred convertability we can extract the raw
-    // instance from the object. Thereafter, we own it and have to delete it.
-    base* b = o.release_as<base>();
-    CHECK(b->f() == 42);
-    REQUIRE(b != nullptr);
-    delete b;
-  }
-  {
-    // Finally, since all serializations of pointers are assumed to pertain to
-    // objects with reference semantics, we can just serialize the pointer
-    // directly.
-    base* b = nullptr;
-    io::unarchive(buf, b);
-    REQUIRE(b != nullptr);
-    CHECK(b->f() == 42);
-    delete b;
+    base* b;
+    auto in = io::make_container_input_stream(buf);
+    binary_deserializer bd{in};
+    polymorphic_deserialize(bd, b);
+    REQUIRE(b);
+    CHECK(b->i == 42);
+    auto d1 = dynamic_cast<derived1*>(b);
+    REQUIRE(d1 != nullptr);
+    CHECK(d1->j == 1337);
   }
 }

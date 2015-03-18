@@ -6,8 +6,6 @@
 namespace vast {
 
 struct access;
-class serializer;
-class deserializer;
 
 struct value_invalid;
 class value;

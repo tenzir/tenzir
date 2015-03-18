@@ -5,7 +5,6 @@
 #include <iomanip>
 #include "vast/config.h"
 #include "vast/logger.h"
-#include "vast/serialization/time.h"
 #include "vast/util/json.h"
 
 namespace vast {
@@ -150,16 +149,6 @@ duration::rep duration::nanoseconds() const
 {
   return
     std::chrono::duration_cast<std::chrono::nanoseconds>(duration_).count();
-}
-
-void duration::serialize(serializer& sink) const
-{
-  sink << duration_;
-}
-
-void duration::deserialize(deserializer& source)
-{
-  source >> duration_;
 }
 
 trial<void> convert(duration dur, double& d)
@@ -318,16 +307,6 @@ point point::delta(int secs,
 duration point::time_since_epoch() const
 {
   return duration{time_point_.time_since_epoch()};
-}
-
-void point::serialize(serializer& sink) const
-{
-  sink << time_point_;
-}
-
-void point::deserialize(deserializer& source)
-{
-  source >> time_point_;
 }
 
 trial<void> convert(point p, double &d)

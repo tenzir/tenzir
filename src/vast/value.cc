@@ -19,16 +19,6 @@ type const& value::type() const
   return type_;
 }
 
-void value::serialize(serializer& sink) const
-{
-  sink << type_ << data_;
-}
-
-void value::deserialize(deserializer& source)
-{
-  source >> type_ >> data_;
-}
-
 data::variant_type& expose(value& v)
 {
   return expose(v.data_);

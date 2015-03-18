@@ -2,7 +2,7 @@
 #define VAST_IO_CODED_STREAM_H
 
 #include <type_traits>
-#include "vast/logger.h"
+
 #include "vast/io/stream.h"
 #include "vast/util/byte_swap.h"
 #include "vast/util/buffer.h"
@@ -51,18 +51,17 @@ public:
   std::enable_if_t<std::is_arithmetic<T>::value, bool>
   read(void* x)
   {
-    VAST_ENTER();
     auto val = reinterpret_cast<T*>(x);
     if (buffer_.size() >= sizeof(T))
     {
       auto buf = buffer_.cast<T const>();
       *val = util::byte_swap<network_endian, host_endian>(*buf);
       buffer_.advance(sizeof(T));
-      VAST_RETURN(true, "got " << *val);
+      return true;
     }
     auto n = read_raw(val, sizeof(T));
     *val = util::byte_swap<network_endian, host_endian>(*val);
-    VAST_RETURN((n == sizeof(T)), "got " << *val);
+    return n == sizeof(T);
   }
 
   /// Reads a variable-byte encoded integral type from the input.
@@ -73,13 +72,12 @@ public:
   std::enable_if_t<std::is_integral<T>::value, bool>
   read_varbyte(T* x)
   {
-    VAST_ENTER();
     size_t n = 0;
     if (buffer_.size() >= util::varbyte::max_size<T>())
     {
       n = util::varbyte::decode(buffer_.get(), x);
       buffer_.advance(n);
-      VAST_RETURN(true, "got " << *x);
+      return true;
     }
 
     *x = n = 0;
@@ -87,17 +85,17 @@ public:
     do
     {
       if (n == util::varbyte::max_size<T>())
-        VAST_RETURN(false, "reached varbyte max size");
+        return false;
       while (buffer_.size() == 0)
         if (! refresh())
-          VAST_RETURN(false, "refresh failed");
+          return false;
       low7 = *buffer_.get();
       *x |= (low7 & 0x7F) << (7 * n);
       buffer_.advance(1);
       ++n;
     }
     while (low7 & 0x80);
-    VAST_RETURN(true, "got " << *x);
+    return true;
   }
 
   /// Reads raw bytes.
@@ -155,18 +153,17 @@ public:
   std::enable_if_t<std::is_arithmetic<T>::value, size_t>
   write(void const* x)
   {
-    VAST_ENTER();
     auto ptr = reinterpret_cast<T const*>(x);
     T val = util::byte_swap<host_endian, network_endian>(*ptr);
     if (buffer_.size() < sizeof(T))
     {
       auto n = write_raw(&val, sizeof(T));
-      VAST_RETURN(n);
+      return n;
     }
 
     *buffer_.cast<T>() = val;
     buffer_.advance(sizeof(T));
-    VAST_RETURN(sizeof(T));
+    return sizeof(T);
   }
 
   /// Writes a variable-byte encoded integral type to the output.
@@ -177,7 +174,6 @@ public:
   std::enable_if_t<std::is_integral<T>::value, size_t>
   write_varbyte(T const* x)
   {
-    VAST_ENTER();
     size_t n;
     if (buffer_.size() >= util::varbyte::max_size<T>() ||
         buffer_.size() >= util::varbyte::size(*x))
@@ -185,14 +181,14 @@ public:
       n = util::varbyte::encode(*x, buffer_.get());
       assert(n == util::varbyte::size(*x));
       buffer_.advance(n);
-      VAST_RETURN(n);
+      return n;
     }
 
     // If we might write across buffers, we first write the result into a
     // temporary space and then write it out in raw form.
     uint8_t buf[util::varbyte::max_size<T>()];
     n = util::varbyte::encode(*x, buf);
-    VAST_RETURN(write_raw(buf, n));
+    return write_raw(buf, n);
   }
 
   /// Writes raw bytes.

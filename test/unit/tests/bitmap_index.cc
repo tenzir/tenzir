@@ -1,6 +1,7 @@
 #include "framework/unit.h"
-#include "vast/bitmap_index.h"
-#include "vast/io/serialization.h"
+#include "vast/bitmap_index_polymorphic.h"
+#include "vast/concept/serializable/bitmap_index_polymorphic.h"
+#include "vast/concept/serializable/io.h"
 #include "vast/util/convert.h"
 
 using namespace vast;
@@ -11,16 +12,20 @@ TEST("polymorphic")
 {
   bitmap_index<null_bitstream> bmi;
   REQUIRE(! bmi);
-
   bmi = string_bitmap_index<null_bitstream>{};
   REQUIRE(bmi);
-
   CHECK(bmi.push_back("foo"));
+
+  std::vector<uint8_t> buf;
+  save(buf, bmi);
+  decltype(bmi) bmi2;
+  load(buf, bmi2);
+  CHECK(bmi == bmi2);
 }
 
 TEST("boolean")
 {
-  arithmetic_bitmap_index<null_bitstream, boolean> bmi, bmi2;
+  arithmetic_bitmap_index<null_bitstream, boolean> bmi;
   REQUIRE(bmi.push_back(true));
   REQUIRE(bmi.push_back(true));
   REQUIRE(bmi.push_back(false));
@@ -38,8 +43,9 @@ TEST("boolean")
   CHECK(to_string(*t) == "11010001");
 
   std::vector<uint8_t> buf;
-  io::archive(buf, bmi);
-  io::unarchive(buf, bmi2);
+  save(buf, bmi);
+  decltype(bmi) bmi2;
+  load(buf, bmi2);
   CHECK(bmi == bmi2);
 }
 
@@ -63,6 +69,12 @@ TEST("integral")
   auto greater_zero = bmi.lookup(greater, 0);
   REQUIRE(greater_zero);
   CHECK(to_string(*greater_zero) == "0111111");
+
+  std::vector<uint8_t> buf;
+  save(buf, bmi);
+  decltype(bmi) bmi2;
+  load(buf, bmi2);
+  CHECK(bmi == bmi2);
 }
 
 TEST("floating point with binning")
@@ -82,11 +94,17 @@ TEST("floating point with binning")
   CHECK(to_string(*bmi.lookup(less, 43.0)) == "1100011");
   CHECK(to_string(*bmi.lookup(greater_equal, 42.0)) == "0111111");
   CHECK(to_string(*bmi.lookup(not_equal, 4711.14)) == "1110111");
+
+  std::vector<uint8_t> buf;
+  save(buf, bmi);
+  decltype(bmi) bmi2;
+  load(buf, bmi2);
+  CHECK(bmi == bmi2);
 }
 
 TEST("time_range")
 {
-  arithmetic_bitmap_index<null_bitstream, time::duration> bmi, bmi2;
+  arithmetic_bitmap_index<null_bitstream, time::duration> bmi;
 
   // A precision of 8 translates into a resolution of 0.1 sec.
   bmi.binner(8);
@@ -111,14 +129,15 @@ TEST("time_range")
   CHECK(to_string(*twelve) == "011011");
 
   std::vector<uint8_t> buf;
-  io::archive(buf, bmi);
-  io::unarchive(buf, bmi2);
+  save(buf, bmi);
+  decltype(bmi) bmi2;
+  load(buf, bmi2);
   CHECK(bmi == bmi2);
 }
 
 TEST("time_point")
 {
-  arithmetic_bitmap_index<null_bitstream, time::point> bmi, bmi2;
+  arithmetic_bitmap_index<null_bitstream, time::point> bmi;
   bmi.binner(9);
 
   auto t = to<time::point>("2014-01-16+05:30:15", time::point::format);
@@ -156,14 +175,15 @@ TEST("time_point")
   CHECK(to_string(*eighteen) == "000101");
 
   std::vector<uint8_t> buf;
-  io::archive(buf, bmi);
-  io::unarchive(buf, bmi2);
+  save(buf, bmi);
+  decltype(bmi) bmi2;
+  load(buf, bmi2);
   CHECK(bmi == bmi2);
 }
 
 TEST("string")
 {
-  string_bitmap_index<null_bitstream> bmi, bmi2;
+  string_bitmap_index<null_bitstream> bmi;
   REQUIRE(bmi.push_back("foo"));
   REQUIRE(bmi.push_back("bar"));
   REQUIRE(bmi.push_back("baz"));
@@ -199,8 +219,9 @@ TEST("string")
   CHECK(! e);
 
   std::vector<uint8_t> buf;
-  io::archive(buf, bmi);
-  io::unarchive(buf, bmi2);
+  save(buf, bmi);
+  decltype(bmi) bmi2;
+  load(buf, bmi2);
   CHECK(bmi == bmi2);
   CHECK(to_string(*bmi2.lookup(equal, "foo")) == "1001100000");
   CHECK(to_string(*bmi2.lookup(equal, "bar")) == "0100010000");
@@ -208,7 +229,7 @@ TEST("string")
 
 TEST("IP address")
 {
-  address_bitmap_index<null_bitstream> bmi, bmi2;
+  address_bitmap_index<null_bitstream> bmi;
   REQUIRE(bmi.push_back(*address::from_v4("192.168.0.1")));
   REQUIRE(bmi.push_back(*address::from_v4("192.168.0.2")));
   REQUIRE(bmi.push_back(*address::from_v4("192.168.0.3")));
@@ -249,14 +270,15 @@ TEST("IP address")
   CHECK(to_string(*bs) == "1111111111");
 
   std::vector<uint8_t> buf;
-  io::archive(buf, bmi);
-  io::unarchive(buf, bmi2);
+  save(buf, bmi);
+  decltype(bmi) bmi2;
+  load(buf, bmi2);
   CHECK(bmi == bmi2);
 }
 
 TEST("subnet")
 {
-  subnet_bitmap_index<null_bitstream> bmi, bmi2;
+  subnet_bitmap_index<null_bitstream> bmi;
 
   auto s0 = to<subnet>("192.168.0.0/24");
   auto s1 = to<subnet>("192.168.1.0/24");
@@ -281,8 +303,9 @@ TEST("subnet")
   CHECK(to_string(*bs) == "101111");
 
   std::vector<uint8_t> buf;
-  io::archive(buf, bmi);
-  io::unarchive(buf, bmi2);
+  save(buf, bmi);
+  decltype(bmi) bmi2;
+  load(buf, bmi2);
   CHECK(bmi == bmi2);
 }
 
@@ -310,6 +333,12 @@ TEST("port (null)")
   pbs = bmi.lookup(greater, port{2, port::unknown});
   REQUIRE(pbs);
   CHECK(to_string(*pbs) == "1111111");
+
+  std::vector<uint8_t> buf;
+  save(buf, bmi);
+  decltype(bmi) bmi2;
+  load(buf, bmi2);
+  CHECK(bmi == bmi2);
 }
 
 TEST("port (ewah)")
@@ -392,6 +421,12 @@ TEST("container")
   auto strings = to<vector>("[you won't believe it]", type::string{}, " ");
   REQUIRE(strings);
   CHECK(bmi.push_back(*strings));
+
+  std::vector<uint8_t> buf;
+  save(buf, bmi);
+  decltype(bmi) bmi2;
+  load(buf, bmi2);
+  CHECK(bmi == bmi2);
 }
 
 TEST("offset push-back")

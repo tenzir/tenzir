@@ -2,17 +2,19 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in
                ${CMAKE_CURRENT_BINARY_DIR}/config.h)
 
 set(libvast_sources
-  ../vast.cc
   address.cc
+  announce.cc
   bitvector.cc
   bitstream.cc
+  bitstream_polymorphic.cc
   block.cc
   chunk.cc
+  cleanup.cc
   configuration.cc
   data.cc
+  die.cc
   expression.cc
   event.cc
-  error.cc
   filesystem.cc
   individual.cc
   logger.cc
@@ -20,7 +22,6 @@ set(libvast_sources
   pattern.cc
   port.cc
   schema.cc
-  serialization.cc
   subnet.cc
   time.cc
   type.cc
@@ -45,8 +46,7 @@ set(libvast_sources
   actor/source/bro.cc
   actor/source/bgpdump.cc
   actor/source/test.cc
-  detail/caf_serialization.cc
-  detail/type_manager.cc
+  concept/serializable/hierarchy.cc
   detail/ast/query.cc
   expr/evaluator.cc
   expr/normalize.cc

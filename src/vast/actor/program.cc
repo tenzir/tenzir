@@ -7,8 +7,6 @@
 #include "vast/filesystem.h"
 #include "vast/logger.h"
 #include "vast/query_options.h"
-#include "vast/serialization.h"
-#include "vast/detail/type_manager.h"
 #include "vast/actor/accountant.h"
 #include "vast/actor/archive.h"
 #include "vast/actor/exporter.h"

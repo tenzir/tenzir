@@ -6,7 +6,6 @@
 #include <cstring>
 #include <cstdlib>
 #include "vast/logger.h"
-#include "vast/serialization/arithmetic.h"
 #include "vast/util/byte_swap.h"
 #include "vast/util/json.h"
 
@@ -174,27 +173,6 @@ address& address::operator^=(address const& other)
 std::array<uint8_t, 16> const& address::data() const
 {
   return bytes_;
-}
-
-void address::serialize(serializer& sink) const
-{
-  VAST_ENTER_WITH(VAST_THIS);
-  for (size_t i = 0; i < 16; i += 8)
-  {
-    auto p = reinterpret_cast<uint64_t const*>(&bytes_[i]);
-    sink << *p;
-  }
-}
-
-void address::deserialize(deserializer& source)
-{
-  VAST_ENTER();
-  for (size_t i = 0; i < 16; i += 8)
-  {
-    auto p = reinterpret_cast<uint64_t*>(&bytes_[i]);
-    source >> *p;
-  }
-  VAST_LEAVE(VAST_THIS);
 }
 
 std::string to_string(address const& a)

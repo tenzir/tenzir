@@ -4,7 +4,6 @@
 #include "vast/logger.h"
 #include "vast/uuid.h"
 #include "vast/time.h"
-#include "vast/detail/type_manager.h"
 #include "vast/util/color.h"
 #include "vast/util/system.h"
 

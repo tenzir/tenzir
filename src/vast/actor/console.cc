@@ -1,12 +1,12 @@
-#include "vast/actor/console.h"
-
 #include <cassert>
 #include <iomanip>
+
 #include <caf/all.hpp>
+
 #include "vast/parse.h"
-#include "vast/io/serialization.h"
-#include "vast/serialization/arithmetic.h"
+#include "vast/actor/console.h"
 #include "vast/util/color.h"
+#include "vast/util/meta.h"
 #include "vast/util/poll.h"
 
 using namespace caf;
@@ -21,19 +21,16 @@ struct keystroke_monitor : default_actor
       sink_{sink}
   {
     el_.on_char_read(
-        [](char *c) -> int
-        {
-          if (! util::poll(::fileno(stdin), 500000))
-            return 0;
-
-          auto ch = ::fgetc(stdin);
-          if (ch == '\x04')
-            ch = EOF;
-
-          *c = static_cast<char>(ch);
-
-          return 1;
-        });
+      [](char *c) -> int
+      {
+        if (! util::poll(::fileno(stdin), 500000))
+          return 0;
+        auto ch = ::fgetc(stdin);
+        if (ch == '\x04')
+          ch = EOF;
+        *c = static_cast<char>(ch);
+        return 1;
+      });
   }
 
   void on_exit()
@@ -115,15 +112,6 @@ console::console(caf::actor search, path dir)
     VAST_ERROR(this, "failed to create console result directory");
     quit(exit::error);
     return;
-  }
-
-  // Look for persistent queries.
-  for (auto const& p : directory{dir_ / "results"})
-  {
-    auto r = make_intrusive<result>();
-    io::unarchive(p / "meta", *r);
-    r->load(p / "data");
-    results_.push_back(r);
   }
 
   auto complete = [](std::string const& prefix, std::vector<std::string> match)
@@ -464,43 +452,6 @@ console::result::result(expression ast)
 {
 }
 
-bool console::result::save(path const& p) const
-{
-  file f{p};
-  f.open(file::write_only);
-  io::file_output_stream fos{f};
-  auto cos = io::make_compressed_output_stream(io::lz4, fos);
-  binary_serializer sink{*cos};
-
-  // TODO: use segments.
-  sink << static_cast<uint64_t>(events_.size());
-  for (auto& e : events_)
-    sink << e;
-
-  return true;
-}
-
-bool console::result::load(path const& p)
-{
-  file f{p};
-  f.open(file::read_only);
-  io::file_input_stream fis{f};
-  auto cos = io::make_compressed_input_stream(io::lz4, fis);
-  binary_deserializer source{*cos};
-
-  // TODO: use segments.
-  uint64_t size;
-  source >> size;
-  if (size > 0)
-  {
-    events_.resize(size);
-    for (size_t i = 0; i < size; ++i)
-      source >> events_[i];
-  }
-
-  return true;
-}
-
 void console::result::add(event e)
 {
   auto i = std::lower_bound(events_.begin(), events_.end(), e);
@@ -587,18 +538,6 @@ double console::result::percent(size_t precision) const
   return i + std::trunc(f) / m;
 
   return progress_;
-}
-
-void console::result::serialize(serializer& sink) const
-{
-  individual::serialize(sink);
-  sink << ast_ << progress_ << pos_;
-}
-
-void console::result::deserialize(deserializer& source)
-{
-  individual::deserialize(source);
-  source >> ast_ >> progress_ >> pos_;
 }
 
 void console::on_exit()
@@ -753,7 +692,6 @@ behavior console::make_behavior()
               << "interactive query control mode:\n"
               << "\n"
               << "     <space>  display the next batch of available results\n"
-              << "        a     archive the result on the file system\n"
               << "  " << util::color::green << '*' << util::color::reset <<
                     "     e     ask query for more results\n"
               << "        j     seek one batch forward\n"
@@ -779,37 +717,6 @@ behavior console::make_behavior()
               print(query) << "reached end of results" << std::endl;
           }
           break;
-        case 'a':
-          {
-            assert(active_);
-
-            // TODO: look if same AST already exists under a different file.
-            auto const dir =
-              dir_ / "results" / path{to_string(active_->id())};
-
-            if (exists(dir))
-            {
-              // TODO: support option to overwrite/append.
-              print(fail) << "results already exists" << std::endl;
-            }
-            else
-            {
-              if (! mkdir(dir))
-              {
-                print(fail) << "failed to create dir: " << dir << std::endl;
-                quit(exit::error);
-                return;
-              }
-              auto n = active_->size();
-              print(query) << "saving result to " << dir  << std::endl;
-              io::archive(dir / "meta", *active_);
-              active_->save(dir / "data");
-              print(query) << "saved " << n << " events" << std::endl;
-            }
-
-            prompt();
-          }
-          return;
         case 'e':
           {
             bool found = false;

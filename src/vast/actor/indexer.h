@@ -2,13 +2,16 @@
 #define VAST_ACTOR_INDEXER_H
 
 #include <caf/all.hpp>
-#include "vast/bitmap_index.h"
+
+#include "vast/bitmap_index_polymorphic.h"
 #include "vast/event.h"
 #include "vast/expression.h"
 #include "vast/filesystem.h"
 #include "vast/offset.h"
 #include "vast/actor/actor.h"
-#include "vast/io/serialization.h"
+#include "vast/concept/serializable/bitmap_index_polymorphic.h"
+#include "vast/concept/serializable/type.h"
+#include "vast/concept/serializable/io.h"
 
 namespace vast {
 namespace detail {
@@ -44,14 +47,14 @@ public:
         quit(exit::error);
         return {};
       }
-      auto t = io::unarchive(path_ / "meta", last_flush_);
+      auto t = load(path_ / "meta", last_flush_);
       if (! t)
       {
         VAST_ERROR(this, "failed to load meta data");
         quit(exit::error);
         return {};
       }
-      t = io::unarchive(path_ / "index", bmi_);
+      t = load(path_ / "index", bmi_);
       if (! t)
       {
         VAST_ERROR(this, "failed to load bitmap index");
@@ -132,11 +135,11 @@ private:
                << '/' << bmi_.size(), "new/total bits)");
 
     last_flush_ = bmi_.size();
-    auto t = io::archive(path_ / "meta", last_flush_);
+    auto t = save(path_ / "meta", last_flush_);
     if (! t)
       return t;
 
-    t = io::archive(path_ / "index", bmi_);
+    t = save(path_ / "index", bmi_);
     if (! t)
       return t;
 
@@ -552,7 +555,7 @@ struct event_indexer : default_actor
     else
     {
       type existing;
-      auto t = io::unarchive(dir_ / "type", existing);
+      auto t = load(dir_ / "type", existing);
       if (! t)
       {
         VAST_ERROR(this, "could not read type from", dir_ << ':', t.error());
@@ -657,7 +660,7 @@ struct event_indexer : default_actor
 private:
   trial<void> flush()
   {
-    return io::archive(dir_ / "type", type_);
+    return save(dir_ / "type", type_);
   }
 
   void load_bitmap_indexers()

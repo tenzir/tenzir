@@ -1,14 +1,16 @@
 #ifndef VAST_UTIL_NONE
 #define VAST_UTIL_NONE
 
+#include <caf/none.hpp>
+
 namespace vast {
 namespace util {
 
 /// A class that models a null value.
-struct none {};
+using none = caf::none_t;
 
 /// The only instance of ::none.
-static constexpr auto nil = none{};
+static constexpr auto nil = caf::none;
 
 inline bool operator<(none const&, none const&)
 {
@@ -18,6 +20,11 @@ inline bool operator<(none const&, none const&)
 inline bool operator==(none const&, none const&)
 {
   return true;
+}
+
+inline bool operator!=(none const&, none const&)
+{
+  return false;
 }
 
 } // namespace util

@@ -2,6 +2,7 @@
 #define VAST_ACTOR_CONSOLE_H
 
 #include <deque>
+
 #include "vast/expression.h"
 #include "vast/event.h"
 #include "vast/filesystem.h"
@@ -101,11 +102,6 @@ struct console : default_actor
     double progress_ = 0.0;
     pos_type pos_ = 0;
     std::deque<event> events_;
-
-  private:
-    friend access;
-    void serialize(serializer& sink) const;
-    void deserialize(deserializer& source);
   };
 
   enum print_mode

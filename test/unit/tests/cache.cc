@@ -1,9 +1,9 @@
 #include <numeric>
 
-#include <vast/io/serialization.h>
 #include <vast/util/cache.h>
-#include <vast/serialization/string.h>
-#include <vast/serialization/util/cache.h>
+#include <vast/concept/serializable/std/string.h>
+#include <vast/concept/serializable/util/cache.h>
+#include <vast/concept/serializable/io.h>
 
 #include "framework/unit.h"
 
@@ -11,7 +11,7 @@ using namespace vast;
 
 SUITE("util")
 
-TEST("lru_cache")
+TEST("cache")
 {
   util::cache<std::string, int> c{2};
   c["x"] = 1;
@@ -43,9 +43,9 @@ TEST("lru_cache")
   CHECK(i == c.end());
   // Serialization
   std::vector<uint8_t> buf;
-  io::archive(buf, c);
+  save(buf, c);
   decltype(c) d{42};
-  io::unarchive(buf, d);
+  load(buf, d);
   CHECK(c.size() == d.size());
   CHECK(*c.begin() == *d.begin());
 }

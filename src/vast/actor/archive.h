@@ -37,7 +37,6 @@ struct archive : flow_controlled_actor
   caf::behavior make_behavior() override;
 
   trial<void> store(segment s);
-  trial<chunk> load(event_id eid);
 
   path dir_;
   path meta_data_filename_;

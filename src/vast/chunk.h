@@ -17,6 +17,8 @@ class event;
 /// have invalid IDs, i.e., equal to 0, or monotonically increasing IDs.
 class chunk : util::equality_comparable<chunk>
 {
+    friend access;
+
 public:
   /// Chunk meta data.
   struct meta_data : util::equality_comparable<meta_data>
@@ -25,11 +27,6 @@ public:
     time::point last = time::duration{};
     default_bitstream ids;
     vast::schema schema;
-
-  private:
-    friend access;
-    void serialize(serializer& sink) const;
-    void deserialize(deserializer& source);
 
     friend bool operator==(meta_data const& x, meta_data const& y);
   };
@@ -94,6 +91,8 @@ public:
   /// @param method The compression method of the underlying block.
   chunk(std::vector<event> const& es, io::compression method = io::lz4);
 
+  friend bool operator==(chunk const& x, chunk const& y);
+
   /// Sets the mask of event IDs.
   /// @param ids The mask representing the IDs for the events in this chunk.
   /// @returns `true` if *ids* is a valid mask.
@@ -132,13 +131,6 @@ private:
   vast::block const& block() const;
 
   caf::message msg_;  // <meta_data, block>
-
-private:
-  friend access;
-  void serialize(serializer& sink) const;
-  void deserialize(deserializer& source);
-
-  friend bool operator==(chunk const& x, chunk const& y);
 };
 
 } // namespace vast

@@ -8,20 +8,28 @@
 #include "vast/actor/partition.h"
 #include "vast/actor/task.h"
 #include "vast/expr/restrictor.h"
-#include "vast/io/serialization.h"
+#include "vast/concept/serializable/std/array.h"
+#include "vast/concept/serializable/std/chrono.h"
+#include "vast/concept/serializable/std/unordered_map.h"
+#include "vast/concept/serializable/state.h"
+#include "vast/concept/state/uuid.h"
+#include "vast/concept/state/time.h"
+#include "vast/concept/serializable/io.h"
 
 using namespace caf;
 
 namespace vast {
 
-void index::partition_state::serialize(serializer& sink) const
+template <typename Serializer>
+void serialize(Serializer& sink, index::partition_state const& ps)
 {
-  sink << events << from << to << last_modified;
+  sink << ps.events << ps.from << ps.to << ps.last_modified;
 }
 
-void index::partition_state::deserialize(deserializer& source)
+template <typename Deserializer>
+void deserialize(Deserializer& source, index::partition_state& ps)
 {
-  source >> events >> from >> to >> last_modified;
+  source >> ps.events >> ps.from >> ps.to >> ps.last_modified;
 }
 
 index::index(path const& dir, size_t max_events,
@@ -52,7 +60,7 @@ behavior index::make_behavior()
                "active partitions");
   if (exists(dir_ / "meta"))
   {
-    auto t = io::unarchive(dir_ / "meta", partitions_);
+    auto t = load(dir_ / "meta", partitions_);
     if (! t)
     {
       VAST_ERROR(this, "failed to load meta data:", t.error());
@@ -506,7 +514,7 @@ void index::flush()
   for (auto& p : partitions_)
     if (p.second.events > 0)
     {
-      auto t = io::archive(dir_ / "meta", partitions_);
+      auto t = save(dir_ / "meta", partitions_);
       if (! t)
       {
         VAST_ERROR(this, "failed to save meta data:", t.error());

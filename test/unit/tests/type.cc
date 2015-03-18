@@ -1,7 +1,8 @@
 #include "framework/unit.h"
 #include "vast/data.h"
 #include "vast/type.h"
-#include "vast/io/serialization.h"
+#include "vast/concept/serializable/type.h"
+#include "vast/concept/serializable/io.h"
 
 using namespace vast;
 
@@ -118,10 +119,10 @@ TEST("serialization")
   t = type::table{type::count{}, t, {type::attribute::skip}};
 
   std::vector<uint8_t> buf;
-  io::archive(buf, s0, t);
+  save(buf, s0, t);
 
   type u, s1;
-  io::unarchive(buf, s1, u);
+  load(buf, s1, u);
   CHECK(s0 == s1);
   CHECK(to_string(s1) == "string &skip");
   CHECK(u == t);

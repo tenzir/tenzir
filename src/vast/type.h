@@ -12,9 +12,6 @@
 #include "vast/offset.h"
 #include "vast/operator.h"
 #include "vast/print.h"
-#include "vast/serialization/enum.h"
-#include "vast/serialization/hash.h"
-#include "vast/serialization/string.h"
 #include "vast/util/intrusive.h"
 #include "vast/util/operators.h"
 #include "vast/util/range.h"
@@ -37,7 +34,8 @@ class record;
 class data;
 
 namespace detail {
-struct type_deserializer;
+struct type_reader;
+struct type_writer;
 } // namespace detail
 
 /// A type for a data. The type *signature* consists of (i) type name and (ii)
@@ -46,7 +44,11 @@ struct type_deserializer;
 /// not consistent with lexicographical string representation.
 class type : util::totally_ordered<type>
 {
+  friend access;
+
 public:
+  struct intrusive_info;
+
   /// A type attrbiute.
   struct attribute : util::equality_comparable<attribute>
   {
@@ -65,19 +67,6 @@ public:
 
     key_type key;
     std::string value;
-
-  private:
-    friend access;
-
-    void serialize(serializer& sink) const
-    {
-      sink << key << value;
-    }
-
-    void deserialize(deserializer& source)
-    {
-      source >> key >> value;
-    }
 
     friend bool operator==(attribute const& lhs, attribute const& rhs)
     {
@@ -121,7 +110,19 @@ public:
   template <typename Derived>
   class base : util::totally_ordered<base<Derived>>
   {
+    friend access;
+
   public:
+    friend bool operator==(base const& lhs, base const& rhs)
+    {
+      return lhs.digest() == rhs.digest();
+    }
+
+    friend bool operator<(base const& lhs, base const& rhs)
+    {
+      return lhs.digest() < rhs.digest();
+    }
+
     std::string const& name() const
     {
       return name_;
@@ -173,28 +174,6 @@ public:
     }
 
   private:
-    friend access;
-
-    void serialize(serializer& sink) const
-    {
-      sink << name_ << attributes_ << hash_;
-    }
-
-    void deserialize(deserializer& source)
-    {
-      source >> name_ >> attributes_ >> hash_;
-    }
-
-    friend bool operator==(base const& lhs, base const& rhs)
-    {
-      return lhs.digest() == rhs.digest();
-    }
-
-    friend bool operator<(base const& lhs, base const& rhs)
-    {
-      return lhs.digest() < rhs.digest();
-    }
-
     std::string name_;
     std::vector<attribute> attributes_;
     hash_type hash_;
@@ -443,6 +422,11 @@ public:
   /// An enum type.
   class enumeration : public base<enumeration>
   {
+    friend access;
+    friend info;
+    friend detail::type_reader;
+    friend detail::type_writer;
+
   public:
     enumeration(std::vector<std::string> fields, std::vector<attribute> a = {})
       : base<enumeration>{std::move(a)},
@@ -461,13 +445,9 @@ public:
     }
 
   private:
-    std::vector<std::string> fields_;
-
-  private:
-    friend info;
-    friend detail::type_deserializer;
-
     enumeration() = default;
+
+    std::vector<std::string> fields_;
 
     template <typename Iterator>
     friend trial<void> print(enumeration const& e, Iterator&& out)
@@ -530,6 +510,14 @@ public:
     : info_{util::make_intrusive<intrusive_info>(std::forward<T>(x))}
   {
   }
+
+  explicit type(util::intrusive_ptr<intrusive_info> ii)
+    : info_{std::move(ii)}
+  {
+  }
+
+  friend bool operator==(type const& lhs, type const& rhs);
+  friend bool operator<(type const& lhs, type const& rhs);
 
   /// Assigns a name to the type. This can happen at most once because a name
   /// change modifies the type hash digest.
@@ -605,17 +593,8 @@ public:
   bool recursive() const;
 
 private:
-  struct intrusive_info;
-
-  friend access;
-  void serialize(serializer&) const;
-  void deserialize(deserializer&);
-
   friend info& expose(type& t);
   friend info const& expose(type const& t);
-
-  friend bool operator==(type const& lhs, type const& rhs);
-  friend bool operator<(type const& lhs, type const& rhs);
 
   template <typename Iterator>
   friend trial<void> print(tag t, Iterator&& out)
@@ -695,6 +674,11 @@ bool compatible(type const& lhs, relational_operator op, type const& rhs);
 
 class type::vector : public type::base<type::vector>
 {
+  friend access;
+  friend type::info;
+  friend detail::type_reader;
+  friend detail::type_writer;
+
 public:
   vector(type t, std::vector<attribute> a = {})
     : base<vector>{std::move(a)},
@@ -711,13 +695,9 @@ public:
   }
 
 private:
-  type elem_;
-
-private:
-  friend type::info;
-  friend detail::type_deserializer;
-
   vector() = default;
+
+  type elem_;
 
   template <typename Iterator>
   friend trial<void> print(vector const& v, Iterator&& out)
@@ -744,6 +724,11 @@ private:
 
 class type::set : public base<type::set>
 {
+  friend access;
+  friend type::info;
+  friend detail::type_reader;
+  friend detail::type_writer;
+
 public:
   set(type t, std::vector<attribute> a = {})
     : base<set>{std::move(a)},
@@ -760,13 +745,9 @@ public:
   }
 
 private:
-  type elem_;
-
-private:
-  friend type::info;
-  friend detail::type_deserializer;
-
   set() = default;
+
+  type elem_;
 
   template <typename Iterator>
   friend trial<void> print(set const& s, Iterator&& out)
@@ -793,6 +774,11 @@ private:
 
 class type::table : public type::base<type::table>
 {
+  friend access;
+  friend type::info;
+  friend detail::type_reader;
+  friend detail::type_writer;
+
 public:
   table(type k, type v, std::vector<attribute> a = {})
     : base<table>{std::move(a)},
@@ -816,14 +802,10 @@ public:
   }
 
 private:
+  table() = default;
+
   type key_;
   type value_;
-
-private:
-  friend type::info;
-  friend detail::type_deserializer;
-
-  table() = default;
 
   template <typename Iterator>
   friend trial<void> print(table const& tab, Iterator&& out)
@@ -858,6 +840,11 @@ private:
 
 class type::record : public type::base<type::record>
 {
+  friend access;
+  friend type::info;
+  friend detail::type_reader;
+  friend detail::type_writer;
+
 public:
   struct field : util::equality_comparable<field>
   {
@@ -972,25 +959,11 @@ public:
   type const* at(offset const& o) const;
 
 private:
+  record() = default;
+
   void initialize();
 
   std::vector<field> fields_;
-
-private:
-  friend type::info;
-  friend detail::type_deserializer;
-
-  record() = default;
-
-  friend void serialize(serializer& sink, field const& f)
-  {
-    sink << f.name << f.type;
-  }
-
-  friend void deserialize(deserializer& source, field& f)
-  {
-    source >> f.name >> f.type;
-  }
 
   template <typename Iterator>
   friend trial<void> print(field const& f, Iterator&& out)
@@ -1027,6 +1000,11 @@ private:
 
 class type::alias : public type::base<type::alias>
 {
+  friend access;
+  friend type::info;
+  friend detail::type_reader;
+  friend detail::type_writer;
+
 public:
   alias(vast::type t, std::vector<attribute> a = {})
     : base<alias>{std::move(a)},
@@ -1043,13 +1021,9 @@ public:
   }
 
 private:
-  vast::type type_;
-
-private:
-  friend type::info;
-  friend detail::type_deserializer;
-
   alias() = default;
+
+  vast::type type_;
 
   template <typename Iterator>
   friend trial<void> print(alias const& a, Iterator&& out)

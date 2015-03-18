@@ -9,10 +9,14 @@
 
 namespace vast {
 
+struct access;
+
 /// An IP address.
 class address : util::totally_ordered<address>,
                 util::bitwise<address>
 {
+  friend access;
+
   /// Top 96 bits of v4-mapped-addr.
   static std::array<uint8_t, 12> const v4_mapped_prefix;
 
@@ -52,6 +56,9 @@ public:
   /// @param order The byte order in which the address pointed to by *bytes*
   /// is stored in.
   address(uint32_t const* bytes, family fam, byte_order order);
+
+  friend bool operator==(address const& x, address const& y);
+  friend bool operator<(address const& x, address const& y);
 
   /// Determines whether the address is IPv4.
   ///
@@ -111,15 +118,6 @@ public:
   /// @returns A reference to an array of 16 bytes.
   std::array<uint8_t, 16> const& data() const;
 
-private:
-  std::array<uint8_t, 16> bytes_;
-
-private:
-  friend access;
-
-  void serialize(serializer& sink) const;
-  void deserialize(deserializer& source);
-
   template <typename Iterator>
   friend trial<void> parse(address& a, Iterator& begin, Iterator end)
   {
@@ -156,8 +154,8 @@ private:
 
   friend std::string to_string(address const& a);
 
-  friend bool operator==(address const& x, address const& y);
-  friend bool operator<(address const& x, address const& y);
+private:
+  std::array<uint8_t, 16> bytes_;
 };
 
 trial<void> convert(address const& a, util::json& j);

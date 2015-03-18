@@ -12,6 +12,8 @@ namespace vast {
 
 class uuid : util::totally_ordered<uuid>
 {
+  friend access;
+
 public:
   using value_type = uint8_t;
   using reference = uint8_t&;
@@ -32,15 +34,6 @@ public:
   size_type size() const;
 
   void swap(uuid& other);
-
-private:
-  std::array<uint8_t, 16> id_;
-
-private:
-  friend access;
-
-  void serialize(serializer& sink) const;
-  void deserialize(deserializer& source);
 
   template <typename Iterator>
   friend trial<void> print(uuid const& u, Iterator&& out)
@@ -112,6 +105,7 @@ private:
   friend bool operator==(uuid const& x, uuid const& y);
   friend bool operator<(uuid const& x, uuid const& y);
 
+private:
   static uint8_t lookup(char c)
   {
     static constexpr auto digits = "0123456789abcdefABCDEF";
@@ -121,6 +115,8 @@ private:
     // TODO: use a static table as opposed to searching in the vector.
     return values[std::find(digits, digits + 22, c) - digits];
   }
+
+  std::array<uint8_t, 16> id_;
 };
 
 } // namespace vast

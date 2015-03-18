@@ -2,11 +2,13 @@
 
 #include "vast/event.h"
 #include "vast/expression.h"
+#include "vast/logger.h"
 #include "vast/schema.h"
 #include "vast/expr/evaluator.h"
 #include "vast/expr/resolver.h"
 #include "vast/expr/normalize.h"
-#include "vast/io/serialization.h"
+#include "vast/concept/serializable/expression.h"
+#include "vast/concept/serializable/io.h"
 
 using namespace vast;
 
@@ -35,8 +37,8 @@ TEST("serialization")
 
   auto str = to_string(expr);
   std::vector<uint8_t> buf;
-  io::archive(buf, expr);
-  io::unarchive(buf, expr);
+  save(buf, expr);
+  load(buf, expr);
 
   CHECK(to_string(expr), str);
 }

@@ -1,7 +1,6 @@
 #include "vast/uuid.h"
 
 #include <random>
-#include "vast/serialization.h"
 
 namespace vast {
 namespace {
@@ -92,16 +91,6 @@ uuid::size_type uuid::size() const
 void uuid::swap(uuid& other)
 {
   std::swap_ranges(begin(), end(), other.begin());
-}
-
-void uuid::serialize(serializer& sink) const
-{
-  sink.write_raw(&id_, sizeof(id_));
-}
-
-void uuid::deserialize(deserializer& source)
-{
-  source.read_raw(&id_, sizeof(id_));
 }
 
 bool operator==(uuid const& x, uuid const& y)

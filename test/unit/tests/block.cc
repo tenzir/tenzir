@@ -1,7 +1,7 @@
 #include "framework/unit.h"
 #include "vast/block.h"
 #include "vast/event.h"
-#include "vast/serialization/arithmetic.h"
+#include "vast/concept/serializable/builtin.h"
 
 using namespace vast;
 

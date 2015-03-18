@@ -1,7 +1,8 @@
 #include "framework/unit.h"
 #include "vast/bitmap.h"
 #include "vast/convert.h"
-#include "vast/io/serialization.h"
+#include "vast/concept/serializable/bitmap.h"
+#include "vast/concept/serializable/io.h"
 
 using namespace vast;
 
@@ -198,8 +199,8 @@ TEST("basic bitmap")
   CHECK(bm.size() == 10);
 
   std::vector<uint8_t> buf;
-  io::archive(buf, bm);
-  io::unarchive(buf, bm2);
+  save(buf, bm);
+  load(buf, bm2);
   // The default bitmap storage is unordered, so the the following commented
   // check may fail due to different underlying hash tables. However, the
   // bitmaps should still be equal.
@@ -370,8 +371,8 @@ TEST("range encoded bitmap (null)")
   CHECK(to_string(*bm.lookup(greater_equal, 22)) == "11101");
 
   std::vector<uint8_t> buf;
-  io::archive(buf, bm);
-  io::unarchive(buf, bm2);
+  save(buf, bm);
+  load(buf, bm2);
   CHECK(bm == bm2);
   CHECK(to_string(bm) == to_string(bm2));
   CHECK(to_string(*bm2.lookup(greater, 84)) == "00000");
@@ -457,8 +458,8 @@ TEST("binary encoded bitmap")
   CHECK(to_string(*bm.lookup(not_equal, 3)) ==   "1111011");
 
   std::vector<uint8_t> buf;
-  io::archive(buf, bm);
-  io::unarchive(buf, bm2);
+  save(buf, bm);
+  load(buf, bm2);
   CHECK(bm == bm2);
   CHECK(to_string(bm) == to_string(bm2));
   CHECK(to_string(*bm2[0]) == "1000000");
@@ -504,8 +505,8 @@ TEST("precision binning (double, negative)")
   CHECK(to_string(*bm[43.002]) == "000001");
 
   std::vector<uint8_t> buf;
-  io::archive(buf, bm);
-  io::unarchive(buf, bm2);
+  save(buf, bm);
+  load(buf, bm2);
   CHECK(to_string(*bm2[43.001]) == "001110");
   CHECK(to_string(*bm2[43.002]) == "000001");
 

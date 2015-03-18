@@ -1,10 +1,12 @@
 #ifndef VAST_IO_CONTAINER_STREAM_H
 #define VAST_IO_CONTAINER_STREAM_H
 
+#include <string>
+#include <vector>
+
 #include "vast/io/array_stream.h"
 
 namespace vast {
-namespace io {
 
 namespace detail {
 
@@ -24,6 +26,8 @@ using is_byte_container =
   >;
 
 } // namespace detail
+
+namespace io {
 
 /// An output stream that appends to an STL container.
 template <typename Container>

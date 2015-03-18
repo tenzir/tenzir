@@ -1,6 +1,7 @@
 #include "framework/unit.h"
 #include "vast/value.h"
-#include "vast/io/serialization.h"
+#include "vast/concept/serializable/value.h"
+#include "vast/concept/serializable/io.h"
 #include "vast/util/json.h"
 
 using namespace vast;
@@ -116,8 +117,8 @@ TEST("serialization")
   value v{s, t};
   value w;
   std::vector<uint8_t> buf;
-  io::archive(buf, v);
-  io::unarchive(buf, w);
+  save(buf, v);
+  load(buf, w);
 
   CHECK(v == w);
   CHECK(to_string(w) == "{8/icmp, 53/udp, 80/tcp}");

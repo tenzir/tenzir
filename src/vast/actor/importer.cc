@@ -1,7 +1,8 @@
 #include "vast/actor/importer.h"
 
 #include "vast/actor/sink/chunkifier.h"
-#include "vast/io/serialization.h"
+#include "vast/concept/serializable/chunk.h"
+#include "vast/concept/serializable/io.h"
 
 namespace vast {
 
@@ -60,7 +61,7 @@ caf::behavior importer::make_behavior()
       }
       auto p = dir_ / "chunks" / ("chunk-" + to_string(stored_++));
       VAST_INFO(this, "archives chunk to", p);
-      auto t = io::archive(p, chk);
+      auto t = save(p, chk);
       if (! t)
         VAST_ERROR(this, "failed to archive chunk:", t.error());
     }
@@ -109,7 +110,7 @@ caf::behavior importer::make_behavior()
       {
         auto p = dir_ / "chunks" / basename;
         chunk chk;
-        if (io::unarchive(p, chk))
+        if (load(p, chk))
         {
           rm(p);
         }
