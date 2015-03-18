@@ -1,12 +1,12 @@
-#include "vast/filesystem.h"
-
 #include <cassert>
 #include <fstream>
 #include <iterator>
-#include "vast/util/string.h"
+
+#include "vast/filesystem.h"
 #include "vast/io/algorithm.h"
 #include "vast/io/file_stream.h"
 #include "vast/io/container_stream.h"
+#include "vast/util/string.h"
 
 #ifdef VAST_POSIX
 #  include <cerrno>
@@ -590,7 +590,7 @@ void traverse(path const& p, std::function<bool(path const&)> f)
 }
 
 // Loads file contents into a string.
-trial<std::string> load(path const& p)
+trial<std::string> load_contents(path const& p)
 {
   file f{p};
   auto t = f.open(file::read_only);

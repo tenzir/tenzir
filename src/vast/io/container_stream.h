@@ -7,7 +7,6 @@
 #include "vast/io/array_stream.h"
 
 namespace vast {
-namespace io {
 
 namespace detail {
 
@@ -27,6 +26,8 @@ using is_byte_container =
   >;
 
 } // namespace detail
+
+namespace io {
 
 /// An output stream that appends to an STL container.
 template <typename Container>

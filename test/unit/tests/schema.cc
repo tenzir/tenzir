@@ -3,7 +3,7 @@
 #include "vast/filesystem.h"
 #include "vast/schema.h"
 #include "vast/concept/serializable/schema.h"
-#include "vast/io/serialization.h"
+#include "vast/concept/serializable/io.h"
 #include "vast/util/convert.h"
 
 SUITE("schema")
@@ -13,7 +13,7 @@ using namespace vast;
 #define DEFINE_SCHEMA_TEST_CASE(name, input)                        \
   TEST(#name)                                                       \
   {                                                                 \
-    auto contents = load(input);                                    \
+    auto contents = load_contents(input);                           \
     REQUIRE(contents);                                              \
     auto lval = contents->begin();                                  \
     auto s0 = parse<schema>(lval, contents->end());                 \
@@ -105,8 +105,8 @@ TEST("serialization")
   sch.add(t);
 
   std::vector<uint8_t> buf;
-  CHECK(io::archive(buf, sch));
-  CHECK(io::unarchive(buf, sch2));
+  CHECK(save(buf, sch));
+  CHECK(load(buf, sch2));
 
   auto u = sch2.find_type("foo");
   REQUIRE(u);

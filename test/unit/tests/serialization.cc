@@ -6,7 +6,7 @@
 #include "vast/concept/serializable/std/unordered_map.h"
 #include "vast/concept/serializable/std/vector.h"
 #include "vast/concept/serializable/util/optional.h"
-#include "vast/io/serialization.h"
+#include "vast/concept/serializable/io.h"
 #include "vast/util/byte_swap.h"
 
 #include "framework/unit.h"
@@ -70,8 +70,8 @@ TEST("containers")
   std::unordered_map<int, int> u0{{4, 2}, {8, 4}}, u1;
 
   std::vector<uint8_t> buf;
-  io::archive(buf, v0, l0, u0);
-  io::unarchive(buf, v1, l1, u1);
+  save(buf, v0, l0, u0);
+  load(buf, v1, l1, u1);
 
   CHECK(v0 == v1);
   CHECK(l0 == l1);
@@ -83,8 +83,8 @@ TEST("optional<T>")
   util::optional<std::string> o1 = std::string{"foo"};
   decltype(o1) o2;
   std::vector<uint8_t> buf;
-  io::archive(buf, o1);
-  io::unarchive(buf, o2);
+  save(buf, o1);
+  load(buf, o2);
   REQUIRE(o1);
   REQUIRE(o2);
   CHECK(*o2 == "foo");
@@ -127,7 +127,7 @@ struct access::state<serializable>
 
 } // namespace vast
 
-TEST("vast::io API")
+TEST("compress/decompress")
 {
   std::vector<io::compression> methods{io::null, io::lz4};
 #ifdef VAST_HAVE_SNAPPY
@@ -135,22 +135,25 @@ TEST("vast::io API")
 #endif // VAST_HAVE_SNAPPY
   for (auto method : methods)
   {
-    std::vector<int> input(1u << 10), output;
+    // Generate some data.
+    std::vector<int> input(1u << 10);
     REQUIRE((input.size() % 2) == 0);
     for (size_t i = 0; i < input.size() / 2; ++i)
       input[i] = i % 128;
     for (size_t i = input.size() / 2; i < input.size(); ++i)
       input[i] = i % 2;
-
-    std::vector<uint8_t> buf;
-    serializable x, y;
+    // Serialize & compress.
+    serializable x;
     x.i(42);
-    io::compress(method, buf, input, x);
-    io::decompress(method, buf, output, y);
-
-    REQUIRE(input.size() == output.size());
-    for (size_t i = 0; i < input.size(); ++i)
-      CHECK(output[i] == input[i]);
+    std::string buf;
+    auto t = compress(buf, method, input, x);
+    CHECK(t);
+    serializable y;
+    decltype(input) output;
+    t = decompress(buf, method, output, y);
+    CHECK(t);
+    CHECK(input.size() == output.size());
+    CHECK(input == output);
     CHECK(y.i() == 42);
   }
 }

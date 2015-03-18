@@ -2,7 +2,7 @@
 #include "vast/bitstream.h"
 #include "vast/bitstream_polymorphic.h"
 #include "vast/concept/serializable/bitstream_polymorphic.h"
-#include "vast/io/serialization.h"
+#include "vast/concept/serializable/io.h"
 
 #include "framework/unit.h"
 
@@ -275,8 +275,8 @@ TEST("polymorphic")
   CHECK(x.size() == 3);
 
   std::vector<uint8_t> buf;
-  io::archive(buf, x);
-  io::unarchive(buf, y);
+  save(buf, x);
+  load(buf, y);
   CHECK(y.size() == 3);
 }
 

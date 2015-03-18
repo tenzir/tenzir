@@ -2,7 +2,7 @@
 
 #include "vast/data.h"
 #include "vast/concept/serializable/data.h"
-#include "vast/io/serialization.h"
+#include "vast/concept/serializable/io.h"
 
 using namespace vast;
 
@@ -317,9 +317,9 @@ TEST("records")
   CHECK(each == flat);
 
   std::string buf;
-  io::archive(buf, structured);
+  save(buf, structured);
   decltype(structured) structured2;
-  io::unarchive(buf, structured2);
+  load(buf, structured2);
   CHECK(structured2 == structured);
 }
 
@@ -421,8 +421,8 @@ TEST("serialization")
   data d0{s};
   data d1;
   std::vector<uint8_t> buf;
-  io::archive(buf, d0);
-  io::unarchive(buf, d1);
+  save(buf, d0);
+  load(buf, d1);
   CHECK(d0 == d1);
   CHECK(to_string(d1) == "{8/icmp, 53/udp, 80/tcp}");
 }

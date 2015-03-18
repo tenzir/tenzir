@@ -3,7 +3,7 @@
 #include <vast/util/cache.h>
 #include <vast/concept/serializable/std/string.h>
 #include <vast/concept/serializable/util/cache.h>
-#include <vast/io/serialization.h>
+#include <vast/concept/serializable/io.h>
 
 #include "framework/unit.h"
 
@@ -43,9 +43,9 @@ TEST("cache")
   CHECK(i == c.end());
   // Serialization
   std::vector<uint8_t> buf;
-  io::archive(buf, c);
+  save(buf, c);
   decltype(c) d{42};
-  io::unarchive(buf, d);
+  load(buf, d);
   CHECK(c.size() == d.size());
   CHECK(*c.begin() == *d.begin());
 }

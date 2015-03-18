@@ -6,7 +6,7 @@
 #include "vast/actor/task.h"
 #include "vast/expr/predicatizer.h"
 #include "vast/concept/serializable/schema.h"
-#include "vast/io/serialization.h"
+#include "vast/concept/serializable/io.h"
 
 using namespace caf;
 
@@ -177,7 +177,7 @@ behavior partition::make_behavior()
 {
   if (exists(dir_))
   {
-    auto t = io::unarchive(dir_ / "schema", schema_);
+    auto t = load(dir_ / "schema", schema_);
     if (! t)
     {
       VAST_ERROR(this, "failed to load schema:", t.error());
@@ -482,7 +482,7 @@ void partition::flush(actor const& task)
     }
   if (! schema_.empty())
   {
-    auto t = io::archive(dir_ / "schema", schema_);
+    auto t = save(dir_ / "schema", schema_);
     if (! t)
     {
       VAST_ERROR(this, "failed to flush:", t.error());

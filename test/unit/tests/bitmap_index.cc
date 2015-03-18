@@ -1,7 +1,7 @@
 #include "framework/unit.h"
 #include "vast/bitmap_index_polymorphic.h"
 #include "vast/concept/serializable/bitmap_index_polymorphic.h"
-#include "vast/io/serialization.h"
+#include "vast/concept/serializable/io.h"
 #include "vast/util/convert.h"
 
 using namespace vast;
@@ -17,9 +17,9 @@ TEST("polymorphic")
   CHECK(bmi.push_back("foo"));
 
   std::vector<uint8_t> buf;
-  io::archive(buf, bmi);
+  save(buf, bmi);
   decltype(bmi) bmi2;
-  io::unarchive(buf, bmi2);
+  load(buf, bmi2);
   CHECK(bmi == bmi2);
 }
 
@@ -43,9 +43,9 @@ TEST("boolean")
   CHECK(to_string(*t) == "11010001");
 
   std::vector<uint8_t> buf;
-  io::archive(buf, bmi);
+  save(buf, bmi);
   decltype(bmi) bmi2;
-  io::unarchive(buf, bmi2);
+  load(buf, bmi2);
   CHECK(bmi == bmi2);
 }
 
@@ -71,9 +71,9 @@ TEST("integral")
   CHECK(to_string(*greater_zero) == "0111111");
 
   std::vector<uint8_t> buf;
-  io::archive(buf, bmi);
+  save(buf, bmi);
   decltype(bmi) bmi2;
-  io::unarchive(buf, bmi2);
+  load(buf, bmi2);
   CHECK(bmi == bmi2);
 }
 
@@ -96,9 +96,9 @@ TEST("floating point with binning")
   CHECK(to_string(*bmi.lookup(not_equal, 4711.14)) == "1110111");
 
   std::vector<uint8_t> buf;
-  io::archive(buf, bmi);
+  save(buf, bmi);
   decltype(bmi) bmi2;
-  io::unarchive(buf, bmi2);
+  load(buf, bmi2);
   CHECK(bmi == bmi2);
 }
 
@@ -129,9 +129,9 @@ TEST("time_range")
   CHECK(to_string(*twelve) == "011011");
 
   std::vector<uint8_t> buf;
-  io::archive(buf, bmi);
+  save(buf, bmi);
   decltype(bmi) bmi2;
-  io::unarchive(buf, bmi2);
+  load(buf, bmi2);
   CHECK(bmi == bmi2);
 }
 
@@ -175,9 +175,9 @@ TEST("time_point")
   CHECK(to_string(*eighteen) == "000101");
 
   std::vector<uint8_t> buf;
-  io::archive(buf, bmi);
+  save(buf, bmi);
   decltype(bmi) bmi2;
-  io::unarchive(buf, bmi2);
+  load(buf, bmi2);
   CHECK(bmi == bmi2);
 }
 
@@ -219,9 +219,9 @@ TEST("string")
   CHECK(! e);
 
   std::vector<uint8_t> buf;
-  io::archive(buf, bmi);
+  save(buf, bmi);
   decltype(bmi) bmi2;
-  io::unarchive(buf, bmi2);
+  load(buf, bmi2);
   CHECK(bmi == bmi2);
   CHECK(to_string(*bmi2.lookup(equal, "foo")) == "1001100000");
   CHECK(to_string(*bmi2.lookup(equal, "bar")) == "0100010000");
@@ -270,9 +270,9 @@ TEST("IP address")
   CHECK(to_string(*bs) == "1111111111");
 
   std::vector<uint8_t> buf;
-  io::archive(buf, bmi);
+  save(buf, bmi);
   decltype(bmi) bmi2;
-  io::unarchive(buf, bmi2);
+  load(buf, bmi2);
   CHECK(bmi == bmi2);
 }
 
@@ -303,9 +303,9 @@ TEST("subnet")
   CHECK(to_string(*bs) == "101111");
 
   std::vector<uint8_t> buf;
-  io::archive(buf, bmi);
+  save(buf, bmi);
   decltype(bmi) bmi2;
-  io::unarchive(buf, bmi2);
+  load(buf, bmi2);
   CHECK(bmi == bmi2);
 }
 
@@ -335,9 +335,9 @@ TEST("port (null)")
   CHECK(to_string(*pbs) == "1111111");
 
   std::vector<uint8_t> buf;
-  io::archive(buf, bmi);
+  save(buf, bmi);
   decltype(bmi) bmi2;
-  io::unarchive(buf, bmi2);
+  load(buf, bmi2);
   CHECK(bmi == bmi2);
 }
 
@@ -423,9 +423,9 @@ TEST("container")
   CHECK(bmi.push_back(*strings));
 
   std::vector<uint8_t> buf;
-  io::archive(buf, bmi);
+  save(buf, bmi);
   decltype(bmi) bmi2;
-  io::unarchive(buf, bmi2);
+  load(buf, bmi2);
   CHECK(bmi == bmi2);
 }
 

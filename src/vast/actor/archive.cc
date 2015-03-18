@@ -2,7 +2,7 @@
 
 #include "vast/actor/archive.h"
 #include "vast/concept/serializable/chunk.h"
-#include "vast/io/serialization.h"
+#include "vast/concept/serializable/io.h"
 
 namespace vast {
 
@@ -28,7 +28,7 @@ caf::behavior archive::make_behavior()
 {
   if (exists(meta_data_filename_))
   {
-    auto t = io::unarchive(meta_data_filename_, segments_);
+    auto t = load(meta_data_filename_, segments_);
     if (! t)
     {
       VAST_ERROR(this, "failed to unarchive meta data:", t.error());
@@ -53,7 +53,7 @@ caf::behavior archive::make_behavior()
         }
       }
       VAST_VERBOSE(this, "writes meta data to:", meta_data_filename_.trim(-3));
-      auto t = io::archive(meta_data_filename_, segments_);
+      auto t = save(meta_data_filename_, segments_);
       if (! t)
       {
         VAST_ERROR(this, "failed to store segment meta data:", t.error());
@@ -101,13 +101,32 @@ caf::behavior archive::make_behavior()
         if (eid < current_[i].meta().ids.size() && current_[i].meta().ids[eid])
           return make_message(current_[i]);
       // Then inspect the existing segments.
-      auto t = load(eid);
-      if (t)
+      if (auto id = segments_.lookup(eid))
       {
-        VAST_DEBUG(this, "delivers chunk for event", eid);
-        return make_message(*t);
+        auto s = cache_.lookup(*id);
+        if (s == nullptr)
+        {
+          VAST_DEBUG(this, "experienced cache miss for", *id);
+          segment seg;
+          auto filename = dir_ / to_string(*id);
+          auto t = load(filename, seg);
+          if (! t)
+          {
+            VAST_ERROR(this, "failed to unarchive segment:", t.error());
+            quit(exit::error);
+            return make_message(empty_atom::value, eid);
+          }
+          s = cache_.insert(*id, std::move(seg)).first;
+        }
+        for (size_t i = 0; i < s->size(); ++i)
+          if (eid < (*s)[i].meta().ids.size() && (*s)[i].meta().ids[eid])
+          {
+            VAST_DEBUG(this, "delivers chunk for event", eid);
+            return make_message((*s)[i]);
+          }
+        assert(! "segment must contain looked up id");
       }
-      VAST_WARN(this, t.error());
+      VAST_WARN(this, "no segment for id", eid);
       return make_message(empty_atom::value, eid);
     },
     catch_unexpected()
@@ -121,7 +140,7 @@ trial<void> archive::store(segment s)
   auto id = uuid::random();
   auto filename = dir_ / to_string(id);
   VAST_VERBOSE(this, "writes segment", id, "to", filename.trim(-3));
-  auto t = io::archive(filename, s);
+  auto t = save(filename, s);
   if (! t)
     return t;
   for (auto& chk : s)
@@ -133,32 +152,6 @@ trial<void> archive::store(segment s)
   }
   cache_.insert(std::move(id), std::move(s));
   return nothing;
-}
-
-trial<chunk> archive::load(event_id eid)
-{
-  if (auto id = segments_.lookup(eid))
-  {
-    auto s = cache_.lookup(*id);
-    if (s == nullptr)
-    {
-      VAST_DEBUG(this, "experienced cache miss for", *id);
-      segment seg;
-      auto filename = dir_ / to_string(*id);
-      auto t = io::unarchive(filename, seg);
-      if (! t)
-      {
-        VAST_ERROR(this, "failed to unarchive segment:", t.error());
-        return t.error();
-      }
-      s = cache_.insert(*id, std::move(seg)).first;
-    }
-    for (size_t i = 0; i < s->size(); ++i)
-      if (eid < (*s)[i].meta().ids.size() && (*s)[i].meta().ids[eid])
-        return (*s)[i];
-    assert(! "segment must contain looked up id");
-  }
-  return error{"no segment for id ", eid};
 }
 
 } // namespace vast

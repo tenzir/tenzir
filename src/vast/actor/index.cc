@@ -14,7 +14,7 @@
 #include "vast/concept/serializable/state.h"
 #include "vast/concept/state/uuid.h"
 #include "vast/concept/state/time.h"
-#include "vast/io/serialization.h"
+#include "vast/concept/serializable/io.h"
 
 using namespace caf;
 
@@ -60,7 +60,7 @@ behavior index::make_behavior()
                "active partitions");
   if (exists(dir_ / "meta"))
   {
-    auto t = io::unarchive(dir_ / "meta", partitions_);
+    auto t = load(dir_ / "meta", partitions_);
     if (! t)
     {
       VAST_ERROR(this, "failed to load meta data:", t.error());
@@ -514,7 +514,7 @@ void index::flush()
   for (auto& p : partitions_)
     if (p.second.events > 0)
     {
-      auto t = io::archive(dir_ / "meta", partitions_);
+      auto t = save(dir_ / "meta", partitions_);
       if (! t)
       {
         VAST_ERROR(this, "failed to save meta data:", t.error());
