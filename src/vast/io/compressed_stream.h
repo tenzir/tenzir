@@ -51,7 +51,7 @@ private:
 /// compression method.
 /// @param method The compression method to use.
 /// @param source The underlying stream to read from.
-compressed_input_stream* make_compressed_input_stream(
+std::unique_ptr<compressed_input_stream> make_compressed_input_stream(
     compression method, input_stream& source);
 
 /// An output stream that compresses data written to it.
@@ -97,7 +97,7 @@ private:
 /// compression method.
 /// @param method The compression method to use.
 /// @param sink The underlying stream to write into.
-compressed_output_stream* make_compressed_output_stream(
+std::unique_ptr<compressed_output_stream> make_compressed_output_stream(
     compression method, output_stream& sink);
 
 

@@ -97,7 +97,7 @@ compressed_input_stream::compressed_input_stream(input_stream& source)
 {
 }
 
-compressed_input_stream* make_compressed_input_stream(
+std::unique_ptr<compressed_input_stream> make_compressed_input_stream(
     compression method, input_stream& source)
 {
   switch (method)
@@ -105,12 +105,12 @@ compressed_input_stream* make_compressed_input_stream(
     default:
       throw std::runtime_error("invalid compression method");
     case null:
-      return new null_input_stream(source);
+      return std::make_unique<null_input_stream>(source);
     case lz4:
-      return new lz4_input_stream(source);
+      return std::make_unique<lz4_input_stream>(source);
 #ifdef VAST_HAVE_SNAPPY
     case snappy:
-      return new snappy_input_stream(source);
+      return std::make_unique<snappy_input_stream>(source);
 #endif // VAST_HAVE_SNAPPY
   }
 }
@@ -191,7 +191,7 @@ compressed_output_stream::compressed_output_stream(
 {
 }
 
-compressed_output_stream* make_compressed_output_stream(
+std::unique_ptr<compressed_output_stream> make_compressed_output_stream(
     compression method, output_stream& sink)
 {
   switch (method)
@@ -199,12 +199,12 @@ compressed_output_stream* make_compressed_output_stream(
     default:
       throw std::runtime_error("invalid compression method");
     case null:
-      return new null_output_stream(sink);
+      return std::make_unique<null_output_stream>(sink);
     case lz4:
-      return new lz4_output_stream(sink);
+      return std::make_unique<lz4_output_stream>(sink);
 #ifdef VAST_HAVE_SNAPPY
     case snappy:
-      return new snappy_output_stream(sink);
+      return std::make_unique<snappy_output_stream>(sink);
 #endif // VAST_HAVE_SNAPPY
   }
 }
