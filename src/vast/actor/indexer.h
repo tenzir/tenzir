@@ -41,20 +41,7 @@ public:
     // Materialize an existing index.
     if (exists(path_))
     {
-      if (! exists(path_ / "meta"))
-      {
-        VAST_ERROR(this, "lacks meta data");
-        quit(exit::error);
-        return {};
-      }
-      auto t = load(path_ / "meta", last_flush_);
-      if (! t)
-      {
-        VAST_ERROR(this, "failed to load meta data");
-        quit(exit::error);
-        return {};
-      }
-      t = load(path_ / "index", bmi_);
+      auto t = load(path_, last_flush_, bmi_);
       if (! t)
       {
         VAST_ERROR(this, "failed to load bitmap index");
@@ -130,19 +117,10 @@ private:
   {
     if (bmi_.size() == last_flush_)
       return nothing;
-
     VAST_DEBUG(this, "flushes bitmap index (" << (bmi_.size() - last_flush_)
                << '/' << bmi_.size(), "new/total bits)");
-
     last_flush_ = bmi_.size();
-    auto t = save(path_ / "meta", last_flush_);
-    if (! t)
-      return t;
-
-    t = save(path_ / "index", bmi_);
-    if (! t)
-      return t;
-
+    auto t = save(path_, last_flush_, bmi_);
     return nothing;
   }
 
@@ -534,7 +512,7 @@ struct event_indexer : default_actor
       if (! i)
         return i;
       else
-      a = std::move(*i);
+        a = std::move(*i);
       monitor(a);
     }
     return a;

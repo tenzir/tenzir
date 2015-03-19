@@ -47,10 +47,11 @@ TEST("import")
   auto ftp = id_range / "ftp" / "data";
   REQUIRE(exists(dir));
   REQUIRE(exists(ftp));
+  uint64_t last_flush;
   address_bitmap_index<default_bitstream> abmi;
   port_bitmap_index<default_bitstream> pbmi;
-  REQUIRE(vast::load(ftp / "id" / "orig_h" / "index", abmi));
-  REQUIRE(vast::load(ftp / "id" / "orig_p" / "index", pbmi));
+  REQUIRE(load(ftp / "id" / "orig_h", last_flush, abmi));
+  REQUIRE(load(ftp / "id" / "orig_p", last_flush, pbmi));
   REQUIRE(abmi.size() == 2);
   REQUIRE(pbmi.size() == 2);
 
@@ -75,7 +76,7 @@ TEST("import")
     }
   REQUIRE(! segment_file.empty());
   archive::segment s;
-  REQUIRE(vast::load(segment_file, s));
+  REQUIRE(load(segment_file, s));
   REQUIRE(s.size() == 1);
   REQUIRE(s.front().events() == 2);
   chunk::reader r{s.front()};
