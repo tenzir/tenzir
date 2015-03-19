@@ -122,7 +122,7 @@ void configuration::initialize()
 
   auto& idx = create_block("index options", "index");
   idx.add('p', "part-size", "maximum events per partition").init(1 << 20);
-  idx.add('m', "part-max", "maximum number of partitions in memory").init(10);
+  idx.add('m', "part-passive", "maximum number of passive partitions").init(10);
   idx.add('a', "part-active", "number of active partitions").init(5);
   idx.add("rebuild", "delete and rebuild index from archive");
   idx.add("name", "default index name").init("index@" + *hostname);

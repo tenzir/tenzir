@@ -45,7 +45,7 @@ TEST("index")
   VAST_INFO("sending chunks to index");
   path dir = "vast-test-index";
   scoped_actor self;
-  auto idx = self->spawn<vast::index, priority_aware>(dir, 500, 5, 3);
+  auto idx = self->spawn<vast::index, priority_aware>(dir, 500, 2, 3);
   self->send(idx, chk0);
   self->send(idx, chk1);
 
@@ -54,7 +54,7 @@ TEST("index")
   self->await_all_other_actors_done();
 
   VAST_INFO("reloading index and running a query against it");
-  idx = self->spawn<vast::index, priority_aware>(dir, 500, 5, 3);
+  idx = self->spawn<vast::index, priority_aware>(dir, 500, 2, 3);
   auto expr = to<expression>("c >= 42 && c < 84");
   REQUIRE(expr);
   actor task;

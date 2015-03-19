@@ -82,10 +82,11 @@ struct index : public flow_controlled_actor
   /// Spawns the index.
   /// @param dir The directory of the index.
   /// @param max_events The maximum number of events per partition.
-  /// @param max_parts The maximum number of partitions to hold in memory.
+  /// @param passive_parts The maximum number of passive partitions to hold in
+  ///                      memory.
   /// @param active_parts The number of active partitions to hold in memory.
   index(path const& dir, size_t max_events,
-        size_t max_parts, size_t active_parts);
+        size_t passive_parts, size_t active_parts);
 
   void on_exit();
   caf::behavior make_behavior() override;
@@ -107,7 +108,7 @@ struct index : public flow_controlled_actor
 
   path dir_;
   size_t max_events_per_partition_;
-  size_t max_partitions_;
+  size_t passive_partitions_;
   size_t active_partitions_;
   caf::actor accountant_;
   std::map<expression, query_state> queries_;

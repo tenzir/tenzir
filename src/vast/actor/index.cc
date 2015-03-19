@@ -33,16 +33,15 @@ void deserialize(Deserializer& source, index::partition_state& ps)
 }
 
 index::index(path const& dir, size_t max_events,
-             size_t max_parts, size_t active_parts)
+             size_t passive_parts, size_t active_parts)
   : flow_controlled_actor{"index"},
     dir_{dir / "index"},
     max_events_per_partition_{max_events},
-    max_partitions_{max_parts},
+    passive_partitions_{passive_parts},
     active_partitions_{active_parts}
 {
   assert(max_events_per_partition_ > 0);
   assert(active_partitions_ > 0);
-  assert(active_partitions_ < max_partitions_);
   trap_exit(true);
 }
 
@@ -50,14 +49,13 @@ void index::on_exit()
 {
   accountant_ = invalid_actor;
   queries_.clear();
-  partitions_.clear();
 }
 
 behavior index::make_behavior()
 {
-  VAST_VERBOSE(this, "caps partition at", max_events_per_partition_, "events");
-  VAST_VERBOSE(this, "uses", active_partitions_ << "/" << max_partitions_,
-               "active partitions");
+  VAST_VERBOSE(this, "caps partitions at", max_events_per_partition_, "events");
+  VAST_VERBOSE(this, "uses at most", passive_partitions_, "passive partitions");
+  VAST_VERBOSE(this, "uses", active_partitions_, "active partitions");
   if (exists(dir_ / "meta"))
   {
     auto t = load(dir_ / "meta", partitions_);
@@ -167,7 +165,7 @@ behavior index::make_behavior()
           p.actor = invalid_actor;
           passive_.erase(i);
           VAST_DEBUG(this, "shrinks passive partitions to", passive_.size() <<
-                     '/' << max_partitions_ - active_partitions_);
+                     '/' << passive_partitions_);
           return;
         }
       }
@@ -418,7 +416,7 @@ optional<actor> index::dispatch(uuid const& part, expression const& expr)
 
   // If we have not fully maxed out our available passive partitions, we can
   // spawn the partition directly.
-  if (passive_.size() < max_partitions_ - active_partitions_)
+  if (passive_.size() < passive_partitions_)
   {
     passive_.push_back(part);
     VAST_DEBUG(this, "spawns passive partition", part);

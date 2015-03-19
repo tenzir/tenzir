@@ -212,10 +212,10 @@ trial<void> program::run()
     if (config_.check("index"))
     {
       auto max_events = *config_.as<size_t>("index.part-size");
-      auto max_parts = *config_.as<size_t>("index.part-max");
+      auto passive_parts = *config_.as<size_t>("index.part-passive");
       auto active_parts = *config_.as<size_t>("index.part-active");
-      index_ = spawn<index, priority_aware+linked>(dir, max_events, max_parts,
-                                                   active_parts);
+      index_ = spawn<index, priority_aware+linked>(
+          dir, max_events, passive_parts, active_parts);
       send(index_, accountant_atom::value, acct);
       self->sync_send(tracker_, put_atom::value, "index", index_, index_name)
         .await(ok_or_quit);
