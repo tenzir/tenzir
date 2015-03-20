@@ -527,31 +527,7 @@ struct event_indexer : default_actor
   {
     using namespace caf;
     if (! exists(dir_))
-    {
       load_bitmap_indexers();
-    }
-    else
-    {
-      type existing;
-      auto t = load(dir_ / "type", existing);
-      if (! t)
-      {
-        VAST_ERROR(this, "could not read type from", dir_ << ':', t.error());
-        quit(exit::error);
-        return {};
-      }
-      if (! is<none>(type_) && existing != type_)
-      {
-        VAST_ERROR(this, "type '" << type_
-                   << "' clashes with existing type '" << existing << "'");
-        quit(exit::error);
-        return {};
-      }
-      else
-      {
-        type_ = existing;
-      }
-    }
     auto on_down = [=](down_msg const& msg)
     {
       for (auto i = indexers_.begin(); i != indexers_.end(); ++i)
@@ -565,9 +541,6 @@ struct event_indexer : default_actor
     {
       [=](exit_msg const& msg)
       {
-        auto t = flush();
-        if (! t)
-          VAST_ERROR(this, "failed to flush:", t.error());
         if (indexers_.empty())
         {
           quit(msg.reason);
@@ -606,13 +579,7 @@ struct event_indexer : default_actor
           send(task, i.second);
           send_as(this, i.second, current_message());
         }
-        auto t = flush();
         send(task, done_atom::value);
-        if (! t)
-        {
-          VAST_ERROR(this, "failed to flush:", t.error());
-          quit(exit::error);
-        }
       },
       [=](expression const& pred, actor const&, actor const& task)
       {
@@ -636,11 +603,6 @@ struct event_indexer : default_actor
   }
 
 private:
-  trial<void> flush()
-  {
-    return save(dir_ / "type", type_);
-  }
-
   void load_bitmap_indexers()
   {
     load_time_indexer();

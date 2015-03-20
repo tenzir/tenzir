@@ -18,9 +18,9 @@ TEST("index")
   // TODO create a test fixture for this and share with partition test.
   VAST_INFO("creating test chunks");
   auto t0 = type::record{{"c", type::count{}}, {"s", type::string{}}};
-  t0.name("test-record-event");
+  t0.name("test_record_event");
   auto t1 = type::real{};
-  t1.name("test-double-event");
+  t1.name("test_double_event");
   chunk chk0;
   chunk::writer w0{chk0};
   for (size_t i = 0; i < 1024; ++i)

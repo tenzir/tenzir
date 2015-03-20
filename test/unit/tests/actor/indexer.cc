@@ -76,7 +76,6 @@ TEST("indexer")
   self->send(t, i0);
   self->send(i0, flush_atom::value, t);
   self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
-  REQUIRE(exists(dir0 / "type"));
   REQUIRE(exists(dir0 / "meta"));
   REQUIRE(exists(dir0 / "data"));
   self->send_exit(i0, exit::done);
@@ -86,14 +85,13 @@ TEST("indexer")
   self->send(t, i1);
   self->send(i1, flush_atom::value, t);
   self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
-  REQUIRE(exists(dir1 / "type"));
   REQUIRE(exists(dir1 / "meta"));
   REQUIRE(exists(dir1 / "data"));
   self->send_exit(i1, exit::done);
   self->receive([&](down_msg const& msg) { CHECK(msg.source == i1); });
 
   VAST_DEBUG("loading index from file system and querying again");
-  i0 = self->spawn<event_indexer<bitstream_type>, monitored>(dir0);
+  i0 = self->spawn<event_indexer<bitstream_type>, monitored>(dir0, t0);
   pred = predicate{type_extractor{type::count{}}, equal, data{998u}};
   t = self->spawn<task, monitored>();
   self->send(t, i0);

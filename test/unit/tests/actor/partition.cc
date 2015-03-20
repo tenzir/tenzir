@@ -17,9 +17,9 @@ TEST("partition")
   // TODO create a test fixture for this and share with index.
   VAST_INFO("creating test chunks");
   auto t0 = type::record{{"c", type::count{}}, {"s", type::string{}}};
-  t0.name("test-record-event");
+  t0.name("test_record_event");
   auto t1 = type::real{};
-  t1.name("test-double-event");
+  t1.name("test_double_event");
   chunk chk0;
   chunk::writer w0{chk0};
   for (size_t i = 0; i < 1024; ++i)
@@ -105,7 +105,7 @@ TEST("partition")
 
   VAST_INFO("disabling continuous query and sending another chunk");
   self->send(p, *expr, continuous_atom::value, disable_atom::value);
-  auto e = event::make(record{1337, to_string(1337)}, t0);
+  auto e = event::make(record{1337u, to_string(1337)}, t0);
   e.id(4711);
   t = self->spawn<task, monitored>(time::snapshot(), 1ull);
   self->send(p, chunk{{std::move(e)}}, t);

@@ -8,7 +8,6 @@
 #include "vast/filesystem.h"
 #include "vast/schema.h"
 #include "vast/time.h"
-#include "vast/trial.h"
 #include "vast/uuid.h"
 #include "vast/actor/actor.h"
 #include "vast/expr/evaluator.h"
@@ -56,7 +55,7 @@ struct partition : flow_controlled_actor
   void on_exit();
   caf::behavior make_behavior() override;
 
-  void flush(caf::actor const& task);
+  void flush();
 
   path const dir_;
   caf::actor sink_;

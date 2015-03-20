@@ -108,9 +108,12 @@ struct continuous_query_proxy : default_actor
       {
         exprs_.erase(expr);
         preds_.clear();
-        for (auto& ex : exprs_)
-          for (auto& p : visit(expr::predicatizer{}, ex))
-            preds_.insert(std::move(p));
+        if (exprs_.empty())
+          quit(exit::done);
+        else
+          for (auto& ex : exprs_)
+            for (auto& p : visit(expr::predicatizer{}, ex))
+              preds_.insert(std::move(p));
       },
       [=](expression& expr, Bitstream& hits)
       {
@@ -119,9 +122,14 @@ struct continuous_query_proxy : default_actor
       },
       [=](std::vector<actor> const& indexers)
       {
+        VAST_DEBUG(this, "got", indexers.size(), "indexers");
+        if (exprs_.empty())
+        {
+          VAST_WARN(this, "got indexers without having queries");
+          return;
+        }
         // FIXME: do not stupidly send every predicate to every indexer,
         // rather, pick the minimal subset intelligently.
-        assert(! exprs_.empty());
         auto acc = spawn<accumulator>(exprs_.as_vector(), this);
         auto t = spawn<task>();
         send(t, supervisor_atom::value, acc);
@@ -184,19 +192,20 @@ behavior partition::make_behavior()
       quit(exit::error);
       return {};
     }
+    assert(! schema_.empty());
     for (auto& p : directory{dir_})
     {
-      auto basename = p.basename().str();
+      auto interval = p.basename().str();
       if (p.is_directory())
       {
         // Extract the base ID from the path. Directories have the form a-b.
-        auto dash = basename.find('-');
+        auto dash = interval.find('-');
         if (dash < 1 || dash == std::string::npos)
         {
-          VAST_WARN(this, "ignores directory with invalid format:", basename);
+          VAST_WARN(this, "ignores directory with invalid format:", interval);
           continue;
         }
-        auto left = basename.substr(0, dash);
+        auto left = interval.substr(0, dash);
         auto base = to<event_id>(left);
         if (! base)
         {
@@ -204,10 +213,12 @@ behavior partition::make_behavior()
           continue;
         }
         // Load the indexer for each event.
-        for (auto& inner : directory{p})
+        for (auto& name : directory{p})
         {
-          VAST_DEBUG(this, "loads", basename / inner.basename());
-          auto a = spawn<event_indexer<bitstream_type>, monitored>(inner);
+          VAST_DEBUG(this, "loads", interval / name.basename());
+          auto t = schema_.find_type(name.basename().str());
+          assert(t != nullptr);
+          auto a = spawn<event_indexer<bitstream_type>, monitored>(name, *t);
           indexers_.emplace(*base, a);
         }
       }
@@ -216,6 +227,11 @@ behavior partition::make_behavior()
   // Basic DOWN handler.
   auto on_down = [=](down_msg const& msg)
   {
+    if (msg.source == proxy_->address())
+    {
+      proxy_ = invalid_actor;
+      return;
+    }
     if (remove_upstream_node(msg.source))
       return;
     if (dechunkifiers_.erase(msg.source) == 1)
@@ -234,21 +250,6 @@ behavior partition::make_behavior()
     register_upstream_node(),
     [=](exit_msg const& msg)
     {
-      if (msg.reason == exit::kill)
-      {
-        for (auto& i : indexers_)
-          link_to(i.second);
-        for (auto& q : queries_)
-          link_to(q.second.task);
-        quit(msg.reason);
-        return;
-      }
-      if (downgrade_exit())
-        return;
-      // We don't have persistent query state, so we can terminate the queries
-      // directly.
-      for (auto& q : queries_)
-        send_exit(q.second.task, msg.reason);
       // Exit phase 2: after all dechunkifiers have exited we wait for all indexers
       // and terminate afterwards.
       auto exit_phase2 =
@@ -276,11 +277,31 @@ behavior partition::make_behavior()
         for (auto& i : indexers_)
           send_exit(i.second, reason);
       };
+      if (msg.reason == exit::kill)
+      {
+        if (proxy_)
+          send_exit(proxy_, exit::kill);
+        for (auto& i : indexers_)
+          link_to(i.second);
+        for (auto& q : queries_)
+          link_to(q.second.task);
+        quit(msg.reason);
+        return;
+      }
+      if (downgrade_exit())
+        return;
+      // A partition doesn't have persistent query state, nor does the
+      // continuous query proxy, so we can always terminate the them directly.
+      for (auto& q : queries_)
+        send_exit(q.second.task, msg.reason);
+      if (proxy_)
+        send_exit(proxy_, msg.reason);
       // Begin the two-phase shutdown.
       if (! dechunkifiers_.empty())
       {
         VAST_DEBUG(this, "enters exit phase 1");
         become(exit_phase1);
+        flush();
         return;
       }
       if (! indexers_.empty())
@@ -289,17 +310,20 @@ behavior partition::make_behavior()
         become(exit_phase2);
         for (auto& i : indexers_)
           send_exit(i.second, msg.reason);
+        flush();
         return;
       }
+      flush();
       quit(msg.reason);
     },
     on_down,
     [=](chunk const& chk, actor const& task)
     {
-      VAST_DEBUG(this, "got chunk with", chk.events(), "events:",
-                 '[' << chk.base() << ',' << (chk.base() + chk.events())
-                 << ')');
+      VAST_DEBUG(this, "got chunk with", chk.meta().schema.size(), "types and",
+                 chk.events(), "events:",
+                 '[' << chk.base() << ',' << (chk.base() + chk.events()) << ')');
       // Create event indexers according to chunk schema.
+      assert(! chk.meta().schema.empty());
       auto base = chk.base();
       auto interval = to_string(base) + "-" + to_string(base + chk.events());
       std::vector<actor> indexers;
@@ -357,7 +381,7 @@ behavior partition::make_behavior()
       VAST_DEBUG(this, "got continuous query:", expr);
       if (! proxy_)
         proxy_ =
-          spawn<continuous_query_proxy<default_bitstream>, linked>(sink_);
+          spawn<continuous_query_proxy<default_bitstream>, monitored>(sink_);
       send(proxy_, expr);
     },
     [=](expression const& expr, continuous_atom, disable_atom)
@@ -445,10 +469,23 @@ behavior partition::make_behavior()
     },
     [=](flush_atom, actor const& task)
     {
+      auto do_flush = [=]
+      {
+        VAST_DEBUG(this, "peforms flush");
+        send(task, this);
+        for (auto& i : indexers_)
+          if (i.second)
+          {
+            send(task, i.second);
+            send(i.second, flush_atom::value, task);
+          }
+        flush();
+        send(task, done_atom::value);
+      };
       VAST_DEBUG(this, "got flush request");
       if (dechunkifiers_.empty())
       {
-        flush(task);
+        do_flush();
       }
       else
       {
@@ -460,7 +497,7 @@ behavior partition::make_behavior()
             on_down(msg);
             if (dechunkifiers_.empty())
             {
-              flush(task);
+              do_flush();
               unbecome();
             }
           });
@@ -470,26 +507,17 @@ behavior partition::make_behavior()
   };
 }
 
-void partition::flush(actor const& task)
+void partition::flush()
 {
-  VAST_DEBUG(this, "peforms flush");
-  send(task, this);
-  for (auto& i : indexers_)
-    if (i.second)
-    {
-      send(task, i.second);
-      send(i.second, flush_atom::value, task);
-    }
-  if (! schema_.empty())
+  if (schema_.empty())
+    return;
+  VAST_DEBUG(this, "flushes schema");
+  auto t = save(dir_ / "schema", schema_);
+  if (! t)
   {
-    auto t = save(dir_ / "schema", schema_);
-    if (! t)
-    {
-      VAST_ERROR(this, "failed to flush:", t.error());
-      quit(exit::error);
-    }
+    VAST_ERROR(this, "failed to flush:", t.error());
+    quit(exit::error);
   }
-  send(task, done_atom::value);
 }
 
 } // namespace vast
