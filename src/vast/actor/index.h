@@ -11,6 +11,7 @@
 #include "vast/uuid.h"
 #include "vast/time.h"
 #include "vast/actor/actor.h"
+#include "vast/util/cache.h"
 #include "vast/util/flat_set.h"
 
 namespace vast {
@@ -52,7 +53,6 @@ struct index : public flow_controlled_actor
 
   struct partition_state
   {
-    caf::actor actor;
     uint64_t events = 0;
     time::point last_modified;
     time::point from = time::duration{};
@@ -85,6 +85,7 @@ struct index : public flow_controlled_actor
   /// @param passive_parts The maximum number of passive partitions to hold in
   ///                      memory.
   /// @param active_parts The number of active partitions to hold in memory.
+  /// @pre `passive_parts > 0 && active_parts > 0`
   index(path const& dir, size_t max_events,
         size_t passive_parts, size_t active_parts);
 
@@ -108,15 +109,13 @@ struct index : public flow_controlled_actor
 
   path dir_;
   size_t max_events_per_partition_;
-  size_t passive_partitions_;
-  size_t active_partitions_;
   caf::actor accountant_;
   std::map<expression, query_state> queries_;
   std::unordered_map<uuid, partition_state> partitions_;
   std::list<schedule_state> schedule_;
-  std::list<uuid> passive_;
-  std::vector<uuid> active_;
-  size_t next_ = 0;
+  util::cache<uuid, caf::actor, util::mru> passive_;
+  std::vector<std::pair<uuid, caf::actor>> active_;
+  size_t next_active_ = 0;
 };
 
 } // namespace vast

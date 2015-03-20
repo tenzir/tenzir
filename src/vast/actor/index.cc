@@ -36,13 +36,15 @@ index::index(path const& dir, size_t max_events,
              size_t passive_parts, size_t active_parts)
   : flow_controlled_actor{"index"},
     dir_{dir / "index"},
-    max_events_per_partition_{max_events},
-    passive_partitions_{passive_parts},
-    active_partitions_{active_parts}
+    max_events_per_partition_{max_events}
 {
-  assert(max_events_per_partition_ > 0);
-  assert(active_partitions_ > 0);
   trap_exit(true);
+  assert(max_events_per_partition_ > 0);
+  assert(active_parts > 0);
+  assert(passive_parts > 0);
+  active_.resize(active_parts);
+  passive_.capacity(passive_parts);
+  passive_.on_evict([=](uuid, actor& p) { send_exit(p, exit::done); });
 }
 
 void index::on_exit()
@@ -54,8 +56,8 @@ void index::on_exit()
 behavior index::make_behavior()
 {
   VAST_VERBOSE(this, "caps partitions at", max_events_per_partition_, "events");
-  VAST_VERBOSE(this, "uses at most", passive_partitions_, "passive partitions");
-  VAST_VERBOSE(this, "uses", active_partitions_, "active partitions");
+  VAST_VERBOSE(this, "uses at most", passive_.capacity(), "passive partitions");
+  VAST_VERBOSE(this, "uses", active_.size(), "active partitions");
   if (exists(dir_ / "meta"))
   {
     auto t = load(dir_ / "meta", partitions_);
@@ -71,21 +73,20 @@ behavior index::make_behavior()
   for (auto& p : partitions_)
     if (p.second.events < max_events_per_partition_)
       parts.push_back(p);
-  std::sort(parts.begin(),
-            parts.end(),
+  std::sort(parts.begin(), parts.end(),
             [](auto& x, auto& y)
             {
               return y.second.last_modified < x.second.last_modified;
             });
-  active_.resize(active_partitions_);
-  for (size_t i = 0; i < active_partitions_; ++i)
+  for (size_t i = 0; i < active_.size(); ++i)
   {
     auto id = i < parts.size() ? parts[i].first : uuid::random();
-    auto& p = partitions_[id];
-    VAST_VERBOSE(this, "activates partition", id);
-    p.actor = spawn<partition, monitored>(dir_ / to_string(id), this);
-    send(p.actor, upstream_atom::value, this);
-    active_[i] = std::move(id);
+    VAST_VERBOSE(this, "loads", (i < parts.size() ? "existing" : "new"),
+                 "active partition", id);
+    auto p = spawn<partition, monitored>(dir_ / to_string(id), this);
+    send(p, upstream_atom::value, this);
+    active_[i] = {id, p};
+    partitions_[id].last_modified = time::now();
   }
   return
   {
@@ -110,12 +111,14 @@ behavior index::make_behavior()
           link_to(q.second.cont->task);
         else if (q.second.hist)
           link_to(q.second.hist->task);
-      for (auto& p : partitions_)
-        if (p.second.actor)
-          send(t, p.second.actor);
-      for (auto& p : partitions_)
-        if (p.second.actor)
-          send_exit(p.second.actor, msg.reason);
+      for (auto& a : active_)
+        send(t, a.second);
+      for (auto p : passive_)
+        send(t, p.second);
+      for (auto& a : active_)
+        send_exit(a.second, msg.reason);
+      for (auto p : passive_)
+        send_exit(p.second, msg.reason);
     },
     [=](down_msg const& msg)
     {
@@ -132,8 +135,8 @@ behavior index::make_behavior()
               VAST_VERBOSE(this, "disables continuous query:", q->first);
               q->second.cont = {};
               for (auto& a : active_)
-                send(partitions_[a].actor, q->first,
-                     continuous_atom::value, disable_atom::value);
+                send(a.second, q->first, continuous_atom::value,
+                     disable_atom::value);
             }
             if (! q->second.cont && ! q->second.hist)
             {
@@ -143,29 +146,22 @@ behavior index::make_behavior()
           }
           return;
         }
-      // Because the set of existing partitions may by far exceed the set of
-      // in-memory partitions, we only look at the latter ones.
       for (auto i = active_.begin(); i != active_.end(); ++i)
       {
-        auto& p = partitions_[*i];
-        if (p.actor.address() == msg.source)
+        if (i->second.address() == msg.source)
         {
-          p.actor = invalid_actor;
+          VAST_DEBUG(this, "removes active partitions", i->first);
           active_.erase(i);
-          VAST_DEBUG(this, "shrinks active partitions to",
-                     active_.size() << '/' << active_partitions_);
           return;
         }
       }
       for (auto i = passive_.begin(); i != passive_.end(); ++i)
       {
-        auto& p = partitions_[*i];
-        if (p.actor.address() == msg.source)
+        if (i->second.address() == msg.source)
         {
-          p.actor = invalid_actor;
-          passive_.erase(i);
-          VAST_DEBUG(this, "shrinks passive partitions to", passive_.size() <<
-                     '/' << passive_partitions_);
+          passive_.erase(i->first);
+          VAST_DEBUG(this, "shrinks passive partitions to",
+                     passive_.size() << '/' << passive_.capacity());
           return;
         }
       }
@@ -180,40 +176,34 @@ behavior index::make_behavior()
     {
       VAST_VERBOSE(this, "flushes", active_.size(), "active partitions");
       send(task, this);
-      for (auto& id : active_)
-      {
-        auto& p = partitions_[id].actor;
-        send(p, flush_atom::value, task);
-      }
+      for (auto& a : active_)
+        send(a.second, flush_atom::value, task);
       flush();
       send(task, done_atom::value);
     },
     [=](chunk const& chk)
     {
-      auto& part = active_[next_++];
-      next_ %= active_.size();
-      auto i = partitions_.find(part);
+      auto& a = active_[next_active_++ % active_.size()];
+      auto i = partitions_.find(a.first);
       assert(i != partitions_.end());
-      assert(i->second.actor);
+      assert(a.second != invalid_actor);
       // Replace partition with a new one on overflow. If the max is too small
       // that even the first chunk doesn't fit, then we just accept this and
       // have a one-chunk partition.
       if (i->second.events > 0
           && i->second.events + chk.events() > max_events_per_partition_)
       {
-        VAST_VERBOSE(this, "replaces partition (" << part << ')');
-        send_exit(i->second.actor, exit::stop);
-        i->second.actor = invalid_actor;
+        VAST_VERBOSE(this, "replaces partition (" << a.first << ')');
+        send_exit(a.second, exit::stop);
         // Create a new partition.
-        part = uuid::random();
-        i = partitions_.emplace(part, partition_state()).first;
-        i->second.actor =
-          spawn<partition, monitored>(dir_ / to_string(part), this);
-        send(i->second.actor, upstream_atom::value, this);
+        a.first = uuid::random();
+        a.second = spawn<partition, monitored>(dir_ / to_string(a.first), this);
+        send(a.second, upstream_atom::value, this);
+        i = partitions_.emplace(a.first, partition_state()).first;
         // Register continuous queries.
         for (auto& q : queries_)
           if (q.second.cont)
-            send(i->second.actor, q.first, continuous_atom::value);
+            send(a.second, q.first, continuous_atom::value);
       }
       // Update partition meta data.
       auto& p = i->second;
@@ -225,10 +215,10 @@ behavior index::make_behavior()
         p.to = chk.meta().last;
       // Relay chunk.
       VAST_DEBUG(this, "forwards chunk [" << chk.base() << ',' << chk.base() +
-                 chk.events() << ')', "to", p.actor, '(' << part << ')');
+                 chk.events() << ')', "to", a.second, '(' << a.first << ')');
       auto t = spawn<task>(time::snapshot(), chk.events());
       send(t, supervisor_atom::value, this);
-      send(p.actor, chk, t);
+      send(a.second, chk, t);
     },
     [=](expression const& expr, query_options opts, actor const& subscriber)
     {
@@ -293,7 +283,7 @@ behavior index::make_behavior()
           // Relay the continuous query to all active partitions, as these may
           // still receive chunks.
           for (auto& a : active_)
-            send(partitions_[a].actor, expr, continuous_atom::value);
+            send(a.second, expr, continuous_atom::value);
         }
         send(subscriber, qs.cont->task);
         if (! qs.cont->hits.empty() && ! qs.cont->hits.all_zeros())
@@ -400,10 +390,12 @@ optional<actor> index::dispatch(uuid const& part, expression const& expr)
     VAST_DEBUG(this, "adds expression to", part << ":", expr);
     i->queries.insert(expr);
     // If the partition is in memory we can send it the query directly.
-    if (ps.actor != invalid_actor)
-      return ps.actor;
-    else
-      return {};
+    for (auto& a : active_)
+      if (a.first == part)
+        return a.second;
+    if (auto p = passive_.lookup(part))
+      return *p;
+    return {};
   }
 
   // If the partition is not in memory we enqueue it in the schedule.
@@ -411,20 +403,19 @@ optional<actor> index::dispatch(uuid const& part, expression const& expr)
   schedule_.push_back(index::schedule_state{part, {expr}});
 
   // If the partition is active (and has events), we can just relay the expression.
-  if (std::find(active_.begin(), active_.end(), part) != active_.end())
-    return ps.actor;
+  for (auto& a : active_)
+    if (a.first == part)
+      return a.second;
 
   // If we have not fully maxed out our available passive partitions, we can
   // spawn the partition directly.
-  if (passive_.size() < passive_partitions_)
+  if (passive_.size() < passive_.capacity())
   {
-    passive_.push_back(part);
     VAST_DEBUG(this, "spawns passive partition", part);
-    auto& a = partitions_[part].actor;
-    assert(! a);
-    a = spawn<partition, monitored>(dir_ / to_string(part), this);
-    send(a, upstream_atom::value, this);
-    return a;
+    auto p = spawn<partition, monitored>(dir_ / to_string(part), this);
+    send(p, upstream_atom::value, this);
+    passive_.insert(part, p);
+    return p;
   }
 
   return {};
@@ -439,7 +430,7 @@ void index::consolidate(uuid const& part, expression const& expr)
       schedule_.end(),
       [&](schedule_state const& s) { return s.part == part; });
 
-  // Remove the completed expression of the partition.
+  // Remove the completed query expression from the scheduling state.
   assert(i != schedule_.end());
   assert(! i->queries.empty());
   auto x = i->queries.find(expr);
@@ -460,47 +451,37 @@ void index::consolidate(uuid const& part, expression const& expr)
     VAST_DEBUG(this, "finished with entire schedule");
 
   // We never unload active partitions.
-  if (std::find(active_.begin(), active_.end(), part) != active_.end())
-    return;
+  for (auto& a : active_)
+    if (a.first == part)
+      return;
 
   // If we're not dealing with an active partition, it must exist in the
   // passive list, unless we dispatched an expression to an active partition
-  // and that got replaced with a new one. Then the replaced partition is
-  // neither in the active nor passive set and already being taken care of, so
-  // we can safely ignore this consolidation request.
-  auto j = std::find(passive_.begin(), passive_.end(), part);
-  if (j == passive_.end())
+  // and that got replaced with a new one. In the latter case the replaced
+  // partition is neither in the active nor passive set and has already being
+  // taken care of, so we can safely ignore this consolidation request.
+  if (passive_.lookup(part) == nullptr)
     return;
-  else
-    passive_.erase(j);
 
-  VAST_DEBUG(this, "evicts partition from memory:", part);
-  auto& p = partitions_[part];
-  assert(p.actor);
-  send_exit(p.actor, exit::stop);
-  p.actor = invalid_actor;
-
-  // Now that we've unloaded one, load the next. Because partitions can
-  // complete in any order, we have to walk through the schedule from the
-  // beginning again to find the next partition to load.
+  // For each consolidated partition, we load another new one. Because
+  // partitions can complete in any order, we have to walk through the schedule
+  // from the beginning again to find the next partition to load.
   for (auto& entry : schedule_)
   {
-    auto& next_part = partitions_[entry.part].actor;
-    if (! next_part)
+    if (! passive_.contains(entry.part))
     {
       VAST_DEBUG(this, "schedules next partition", entry.part);
-      passive_.push_back(entry.part);
-      next_part =
-        spawn<partition, monitored>(dir_ / to_string(entry.part), this);
-      send(next_part, upstream_atom::value, this);
+      auto p = spawn<partition, monitored>(dir_ / to_string(entry.part), this);
+      send(p, upstream_atom::value, this);
+      passive_.insert(entry.part, p); // automatically evicts 'part'.
       for (auto& next_expr : entry.queries)
       {
         auto q = queries_.find(next_expr);
         assert(q != queries_.end());
         assert(q->second.hist);
-        q->second.hist->parts.emplace(next_part->address(), entry.part);
-        send(q->second.hist->task, next_part);
-        send(next_part, next_expr, historical_atom::value);
+        q->second.hist->parts.emplace(p->address(), entry.part);
+        send(q->second.hist->task, p);
+        send(p, next_expr, historical_atom::value);
       }
       break;
     }
