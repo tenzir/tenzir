@@ -6,7 +6,7 @@
 #include "vast/io/container_stream.h"
 #include "vast/io/compressed_stream.h"
 #include "vast/io/file_stream.h"
-#include "vast/util/trial.h"
+#include "vast/trial.h"
 
 namespace vast {
 

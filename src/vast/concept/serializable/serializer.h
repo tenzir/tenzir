@@ -51,7 +51,10 @@ public:
   void begin_sequence(uint64_t size);
 
   /// Finishes writing a sequence.
-  void end_sequence();
+  void end_sequence()
+  {
+    // nop
+  }
 
   /// Serializes an instance.
   /// @param x The instance to write.

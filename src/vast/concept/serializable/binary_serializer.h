@@ -23,10 +23,6 @@ public:
     bytes_ += util::varbyte::size(size);
   }
 
-  void end_sequence()
-  {
-  }
-
   template <typename T>
   auto write(T x)
     -> std::enable_if_t<std::is_arithmetic<T>::value>

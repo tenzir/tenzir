@@ -26,10 +26,6 @@ public:
     return size;
   }
 
-  void end_sequence()
-  {
-  }
-
   template <typename T>
   auto read(T& x)
     -> std::enable_if_t<std::is_arithmetic<T>::value>

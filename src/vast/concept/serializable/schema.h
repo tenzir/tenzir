@@ -1,6 +1,7 @@
 #ifndef VAST_CONCEPT_SERIALIZABLE_SCHEMA_H
 #define VAST_CONCEPT_SERIALIZABLE_SCHEMA_H
 
+#include <iostream>
 #include "vast/schema.h"
 #include "vast/concept/serializable/std/string.h"
 
@@ -13,17 +14,19 @@ namespace vast {
 template <typename Serializer>
 void serialize(Serializer& sink, schema const& sch)
 {
-  serialize(sink, to_string(sch));
+  sink << to_string(sch);
 }
 
 template <typename Deserializer>
 void deserialize(Deserializer& source, schema& sch)
 {
   std::string str;
-  deserialize(source, str);
+  source >> str;
+  if (str.empty())
+    return;
+  sch.clear();
   auto i = str.begin();
-  if (auto s = parse<schema>(i, str.end()))
-    sch = *s;
+  parse(sch, i, str.end());
 }
 
 } // namespace vast

@@ -51,7 +51,10 @@ public:
   uint64_t begin_sequence();
 
   /// Completes writing a sequence.
-  void end_sequence();
+  void end_sequence()
+  {
+    // nop
+  }
 
   /// Deserializes an instance.
   /// @param x The instance to read into.
