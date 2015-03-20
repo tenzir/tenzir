@@ -279,17 +279,17 @@ trial<void> file::open(open_mode mode, bool append)
     is_open_ = true;
     return nothing;
   }
-  int flags = O_CREAT;
+  int flags = 0;
   switch (mode)
   {
     case read_write:
-      flags |= O_RDWR;
+      flags = O_CREAT | O_RDWR;
       break;
     case read_only:
-      flags |= O_RDONLY;
+      flags = O_RDONLY;
       break;
     case write_only:
-      flags |= O_WRONLY;
+      flags = O_CREAT | O_WRONLY;
       break;
   }
   if (append)
