@@ -5,10 +5,12 @@
 
 #include "vast/expression.h"
 #include "vast/concept/serializable/data.h"
+#include "vast/concept/serializable/state.h"
 #include "vast/concept/serializable/type.h"
 #include "vast/concept/serializable/std/string.h"
 #include "vast/concept/serializable/std/vector.h"
 #include "vast/concept/serializable/util/variant.h"
+#include "vast/concept/state/expression.h"
 
 namespace vast {
 namespace detail {
@@ -161,10 +163,14 @@ void serialize(Serializer& sink, expression const& expr)
 template <typename Deserializer>
 void deserialize(Deserializer& source, expression& expr)
 {
-  expression::node::tag t;
-  source >> t;
-  auto n = expression::node::make(t);
-  visit(detail::expr_deserializer<Deserializer>{source}, expr);
+  auto f = [&](auto& x)
+  {
+    expression::node::tag t;
+    source >> t;
+    x = expression::node::make(t);
+    visit(detail::expr_deserializer<Deserializer>{source}, expr);
+  };
+  access::state<expression>::call(expr, f);
 }
 
 } // namespace vast
