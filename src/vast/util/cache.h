@@ -20,11 +20,14 @@ struct cache_policy
   using iterator = __unspecified__;
   using const_iterator = __unspecified__;
 
+  /// Accesses the key pointed to by an iterator.
+  void access(iterator i);
+
   /// Inserts a key.
   iterator insert(T key);
 
-  /// Accesses the key pointed to by an iterator.
-  void access(iterator i);
+  /// Erases a key.
+  size_t erase(T key);
 
   /// Evicts the next element and returns it.
   T evict() const;
@@ -35,9 +38,10 @@ struct cache_policy
 };
 #endif
 
-/// A *least-recently used* (LRU) policy.
+namespace detail {
+
 template <typename T>
-class lru
+class list_eviction_policy
 {
   using tracker = std::list<T>;
 
@@ -45,14 +49,13 @@ public:
   using iterator = typename tracker::iterator;
   using const_iterator = typename tracker::const_iterator;
 
-  iterator insert(T key)
+  size_t erase(T const& key)
   {
-    return tracker_.insert(tracker_.end(), std::move(key));
-  }
-
-  void access(iterator i)
-  {
-    tracker_.splice(tracker_.end(), tracker_, i); // Move to back.
+    auto i = std::find(tracker_.begin(), tracker_.end(), key);
+    if (i == tracker_.end())
+      return 0;
+    tracker_.erase(i);
+    return 1;
   }
 
   T evict()
@@ -73,8 +76,48 @@ public:
     return tracker_.end();
   }
 
-private:
+protected:
   tracker tracker_;
+};
+
+} // namespace detail
+
+/// A *least recently used* (LRU) cache eviction policy.
+template <typename T>
+class lru : public detail::list_eviction_policy<T>
+{
+public:
+  using typename detail::list_eviction_policy<T>::iterator;
+  using typename detail::list_eviction_policy<T>::const_iterator;
+
+  void access(iterator i)
+  {
+    this->tracker_.splice(this->tracker_.end(), this->tracker_, i);
+  }
+
+  iterator insert(T key)
+  {
+    return this->tracker_.insert(this->tracker_.end(), std::move(key));
+  }
+};
+
+/// A *most recently used* (MRU) cache eviction policy.
+template <typename T>
+class mru : public detail::list_eviction_policy<T>
+{
+public:
+  using typename detail::list_eviction_policy<T>::iterator;
+  using typename detail::list_eviction_policy<T>::const_iterator;
+
+  void access(iterator i)
+  {
+    this->tracker_.splice(this->tracker_.begin(), this->tracker_, i);
+  }
+
+  iterator insert(T key)
+  {
+    return this->tracker_.insert(this->tracker_.begin(), std::move(key));
+  }
 };
 
 /// A direct-mapped cache with fixed capacity.
@@ -154,7 +197,7 @@ public:
 
   /// Accesses the value for a given key. If key does not exists,
   /// the function default-constructs a value of `mapped_type`.
-  /// @param fun The function to invoke with the element being evicted.
+  /// @param key The key to lookup.
   /// @returns The value corresponding to *key*.
   mapped_type& operator[](key_type const& key)
   {
@@ -165,12 +208,21 @@ public:
   /// Retrieves a value for a given key. If the key exists in the cache, the
   /// function returns the corresponding iterator and registers the key as
   /// accessed.
-  /// @param key The key to lookup
+  /// @param key The key to lookup.
   /// @returns An iterator for *key* or the end iterator if *key* is not hot.
   mapped_type* lookup(key_type const& key)
   {
     auto i = find(key);
     return i == cache_.end() ? nullptr : &i->second.first;
+  }
+
+  /// Checks whether a given key has a cache entry *without* involving the
+  /// eviction policy.
+  /// @param key The key to lookup.
+  /// @returns `true` iff *key* exists in the cache.
+  bool contains(key_type const& key) const
+  {
+    return cache_.find(key) != cache_.end();
   }
 
   /// Inserts a fresh entry in the cache.
@@ -189,6 +241,19 @@ public:
     auto k = policy_.insert(key);
     auto j = cache_.emplace(std::move(key), make_pair(std::move(value), k));
     return {&j.first->second.first, true};
+  }
+
+  /// Removes an entry for a given key without invoking the eviction callback.
+  /// @param key The key to remove.
+  /// @returns The number of entries removed.
+  size_t erase(key_type const& key)
+  {
+    auto i = cache_.find(key);
+    if (i == cache_.end())
+      return 0;
+    policy_.erase(key);
+    cache_.erase(i);
+    return 1;
   }
 
   /// Retrieves the maximum number elements the cache can hold.

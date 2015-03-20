@@ -11,7 +11,7 @@ using namespace vast;
 
 SUITE("util")
 
-TEST("cache")
+TEST("LRU cache")
 {
   util::cache<std::string, int> c{2};
   c["x"] = 1;
@@ -48,4 +48,20 @@ TEST("cache")
   load(buf, d);
   CHECK(c.size() == d.size());
   CHECK(*c.begin() == *d.begin());
+  // Erasure (does not call evict function)
+  CHECK(! c.contains("x"));
+  CHECK(c.contains("foo"));
+  CHECK(c.erase("foo") == 1);
+}
+
+TEST("MRU cache")
+{
+  util::cache<std::string, int, util::mru> c{2};
+  c.on_evict([&](std::string const&, int v) { CHECK(v == 3); });
+  CHECK(c.insert("fu", 2).second);
+  CHECK(c.insert("foo", 3).second);
+  CHECK(c.insert("quux", 4).second);
+  CHECK(c.contains("quux"));
+  CHECK(! c.contains("foo"));
+  CHECK(c.contains("fu"));
 }
