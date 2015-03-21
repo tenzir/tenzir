@@ -1,7 +1,10 @@
 #ifndef VAST_CHUNK_H
 #define VAST_CHUNK_H
 
+#include <unordered_map>
+
 #include <caf/message.hpp>
+
 #include "vast/aliases.h"
 #include "vast/bitstream.h"
 #include "vast/block.h"
@@ -55,6 +58,7 @@ public:
 
   private:
     meta_data* meta_;
+    std::unordered_map<type, uint32_t> type_cache_;
     std::unique_ptr<block::writer> block_writer_;
   };
 
@@ -77,6 +81,7 @@ public:
 
     chunk const* chunk_;
     std::unique_ptr<block::reader> block_reader_;
+    std::unordered_map<uint32_t, type> type_cache_;
     default_bitstream::const_iterator ids_begin_;
     default_bitstream::const_iterator ids_end_;
     event_id first_ = invalid_event_id;

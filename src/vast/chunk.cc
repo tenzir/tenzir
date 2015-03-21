@@ -33,29 +33,39 @@ bool chunk::writer::write(event const& e)
 {
   if (! block_writer_)
     return false;
-
-  if (! meta_->schema.find_type(e.type().name()))
-    if (! meta_->schema.add(e.type()))
-      return false;
-
+  // Write meta data.
   if (meta_->first == time::duration{} || e.timestamp() < meta_->first)
     meta_->first = e.timestamp();
-
   if (meta_->last == time::duration{} || e.timestamp() > meta_->last)
     meta_->last = e.timestamp();
-
   if (e.id() != invalid_event_id || ! meta_->ids.empty())
   {
     if (e.id() < meta_->ids.size() || e.id() == invalid_event_id)
       return false;
-
     auto delta = e.id() - meta_->ids.size();
     meta_->ids.append(delta, false);
     meta_->ids.push_back(true);
   }
-
-  return block_writer_->write(e.type().name(), 0)
-      && block_writer_->write(e.timestamp(), 0)
+  // Write type.
+  auto t = type_cache_.find(e.type());
+  if (t == type_cache_.end())
+  {
+    assert(! meta_->schema.find_type(e.type().name()));
+    if (! meta_->schema.add(e.type()))
+      return false;
+    auto type_id = static_cast<uint32_t>(type_cache_.size());
+    if (! block_writer_->write(type_id, 0))
+      return false;
+    t = type_cache_.emplace(e.type(), type_id).first;
+    if (! block_writer_->write(e.type().name(), 0))
+      return false;
+  }
+  else if (! block_writer_->write(t->second, 0))
+  {
+    return false;
+  }
+  // Write timestamp and data.
+  return block_writer_->write(e.timestamp(), 0)
       && block_writer_->write(e.data());
 }
 
@@ -81,16 +91,14 @@ result<event> chunk::reader::read(event_id id)
   {
     if (first_ == invalid_event_id)
       return error{"chunk has no associated ids, cannot read event ", id};
-
     if (id < first_)
       return error{"chunk begins at id ", first_};
-
     if (ids_begin_ == ids_end_ || id < *ids_begin_)
     {
       block_reader_ = std::make_unique<block::reader>(chunk_->block());
       ids_begin_ = chunk_->meta().ids.begin();
+      type_cache_.clear();
     }
-
     while (ids_begin_ != ids_end_ && *ids_begin_ < id)
     {
       auto e = materialize(true);
@@ -98,15 +106,12 @@ result<event> chunk::reader::read(event_id id)
         return e.error();
       ++ids_begin_;
     }
-
     if (ids_begin_ == ids_end_ || *ids_begin_ != id)
       return error{"no event with id ", id};
   }
-
   auto e = materialize(false);
   if (e && ids_begin_ != ids_end_)
     e->id(*ids_begin_++);
-
   return e;
 }
 
@@ -114,29 +119,33 @@ result<event> chunk::reader::materialize(bool discard)
 {
   if (block_reader_->available() == 0)
     return {};
-
-  std::string name;
-  if (! block_reader_->read(name, 0))
-    return error{"failed to read type name from block"};
-
+  // Read type.
+  uint32_t type_id;
+  if (! block_reader_->read(type_id, 0))
+    return error{"failed to read type id from block"};
+  auto t = type_cache_.find(type_id);
+  if (t == type_cache_.end())
+  {
+    std::string type_name;
+    if (! block_reader_->read(type_name, 0))
+      return error{"failed to read type name from block"};
+    auto st = chunk_->meta().schema.find_type(type_name);
+    if (! st)
+      return error{"schema inconsistency, missing type: ", type_name};
+    t = type_cache_.emplace(type_id, *st).first;
+  }
+  // Read timstamp and data
   time::point ts;
   if (! block_reader_->read(ts, 0))
     return error{"failed to read event timestamp from block"};
-
   data d;
   if (! block_reader_->read(d))
     return error{"failed to read event data from block"};
-
+  // Bail out early if requested.
   if (discard)
     return {};
-
-  auto t = chunk_->meta().schema.find_type(name);
-  if (! t)
-    return error{"schema inconsistency, missing type: ", name};
-
-  event e{{std::move(d), *t}};
+  event e{{std::move(d), t->second}};
   e.timestamp(ts);
-
   return std::move(e);
 }
 
