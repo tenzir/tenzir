@@ -44,7 +44,12 @@ index::index(path const& dir, size_t max_events,
   assert(passive_parts > 0);
   active_.resize(active_parts);
   passive_.capacity(passive_parts);
-  passive_.on_evict([=](uuid, actor& p) { send_exit(p, exit::done); });
+  passive_.on_evict(
+    [=](uuid id, actor& p)
+    {
+      VAST_DEBUG(this, "evicts partition", id);
+      send_exit(p, exit::stop);
+    });
 }
 
 void index::on_exit()
@@ -58,6 +63,7 @@ behavior index::make_behavior()
   VAST_VERBOSE(this, "caps partitions at", max_events_per_partition_, "events");
   VAST_VERBOSE(this, "uses at most", passive_.capacity(), "passive partitions");
   VAST_VERBOSE(this, "uses", active_.size(), "active partitions");
+  // Load meta data about each partition.
   if (exists(dir_ / "meta"))
   {
     auto t = load(dir_ / "meta", partitions_);
@@ -374,15 +380,10 @@ behavior index::make_behavior()
 
 optional<actor> index::dispatch(uuid const& part, expression const& expr)
 {
-  auto& ps = partitions_[part];
-  if (ps.events == 0)
+  if (partitions_[part].events == 0)
     return {};
-
-  auto i = std::find_if(
-      schedule_.begin(),
-      schedule_.end(),
-      [&](schedule_state const& s) { return s.part == part; });
-
+  auto schedule_pred = [&](auto& s) { return s.part == part; };
+  auto i = std::find_if(schedule_.begin(), schedule_.end(), schedule_pred);
   // If the partition is already scheduled, we add the expression to the set of
   // to-be-queried expressions.
   if (i != schedule_.end())
@@ -397,16 +398,13 @@ optional<actor> index::dispatch(uuid const& part, expression const& expr)
       return *p;
     return {};
   }
-
   // If the partition is not in memory we enqueue it in the schedule.
   VAST_DEBUG(this, "enqueues partition", part, "with", expr);
   schedule_.push_back(index::schedule_state{part, {expr}});
-
   // If the partition is active (and has events), we can just relay the expression.
   for (auto& a : active_)
     if (a.first == part)
       return a.second;
-
   // If we have not fully maxed out our available passive partitions, we can
   // spawn the partition directly.
   if (passive_.size() < passive_.capacity())
@@ -417,26 +415,20 @@ optional<actor> index::dispatch(uuid const& part, expression const& expr)
     passive_.insert(part, p);
     return p;
   }
-
   return {};
 }
 
 void index::consolidate(uuid const& part, expression const& expr)
 {
-  VAST_DEBUG(this, "consolidates", expr, "for partition", part);
-
-  auto i = std::find_if(
-      schedule_.begin(),
-      schedule_.end(),
-      [&](schedule_state const& s) { return s.part == part; });
-
-  // Remove the completed query expression from the scheduling state.
+  VAST_DEBUG(this, "consolidates", part, "for", expr);
+  auto schedule_pred = [&](auto& s) { return s.part == part; };
+  auto i = std::find_if(schedule_.begin(), schedule_.end(), schedule_pred);
+  // Remove the completed query expression from the schedule.
   assert(i != schedule_.end());
   assert(! i->queries.empty());
   auto x = i->queries.find(expr);
   assert(x != i->queries.end());
   i->queries.erase(x);
-
   // We keep the partition in the schedule as long it has outstanding queries.
   if (! i->queries.empty())
   {
@@ -444,17 +436,14 @@ void index::consolidate(uuid const& part, expression const& expr)
                part << ',', i->queries.size(), "remaining");
     return;
   }
-
   VAST_DEBUG(this, "removes partition from schedule:", part);
   schedule_.erase(i);
   if (schedule_.empty())
     VAST_DEBUG(this, "finished with entire schedule");
-
   // We never unload active partitions.
-  for (auto& a : active_)
-    if (a.first == part)
-      return;
-
+  auto part_pred = [&](auto& a) { return a.first == part; };
+  if (std::find_if(active_.begin(), active_.end(), part_pred) != active_.end())
+    return;
   // If we're not dealing with an active partition, it must exist in the
   // passive list, unless we dispatched an expression to an active partition
   // and that got replaced with a new one. In the latter case the replaced
@@ -462,15 +451,16 @@ void index::consolidate(uuid const& part, expression const& expr)
   // taken care of, so we can safely ignore this consolidation request.
   if (passive_.lookup(part) == nullptr)
     return;
-
-  // For each consolidated partition, we load another new one. Because
+  // For each consolidated passive partition, we load another new one. Because
   // partitions can complete in any order, we have to walk through the schedule
-  // from the beginning again to find the next partition to load.
+  // from the beginning again to find the next passive partition to load.
   for (auto& entry : schedule_)
   {
-    if (! passive_.contains(entry.part))
+    auto entry_pred = [&](auto& a) { return a.first == entry.part; };
+    auto a = std::find_if(active_.begin(), active_.end(), entry_pred);
+    if (a == active_.end() && ! passive_.contains(entry.part))
     {
-      VAST_DEBUG(this, "schedules next partition", entry.part);
+      VAST_DEBUG(this, "schedules next passive partition", entry.part);
       auto p = spawn<partition, monitored>(dir_ / to_string(entry.part), this);
       send(p, upstream_atom::value, this);
       passive_.insert(entry.part, p); // automatically evicts 'part'.
