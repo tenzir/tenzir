@@ -115,8 +115,7 @@ private:
     if (! events_.empty())
     {
       VAST_VERBOSE(this, "produced", events_.size(), "events");
-      for (auto& a : sinks_)
-        this->send(a, std::move(events_));
+      this->send(sinks_[next_sink_++ % sinks_.size()], std::move(events_));
       events_ = {};
     }
   }
@@ -126,6 +125,7 @@ private:
   std::vector<caf::actor> sinks_;
   uint64_t batch_size_ = std::numeric_limits<uint16_t>::max();
   std::vector<event> events_;
+  size_t next_sink_ = 0;
 };
 
 } // namespace source
