@@ -18,7 +18,7 @@ public:
   ///              `false`, parse events.
   bgpdump(schema sch, std::string const& filename, bool sniff = false);
 
-  result<event> extract_impl();
+  result<event> extract();
 
 private:
   // Updates a type with a congruent one from the provided schema.

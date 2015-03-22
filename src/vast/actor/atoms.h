@@ -34,6 +34,7 @@ using request_atom = caf::atom_constant<caf::atom("request")>;
 using response_atom = caf::atom_constant<caf::atom("response")>;
 using run_atom = caf::atom_constant<caf::atom("run")>;
 using set_atom = caf::atom_constant<caf::atom("set")>;
+using sniff_atom = caf::atom_constant<caf::atom("sniff")>;
 using signal_atom = caf::atom_constant<caf::atom("signal")>;
 using start_atom = caf::atom_constant<caf::atom("start")>;
 using stop_atom = caf::atom_constant<caf::atom("stop")>;

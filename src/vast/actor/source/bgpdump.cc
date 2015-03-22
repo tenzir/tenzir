@@ -98,7 +98,7 @@ trial<void> parse_origin_as(count& origin_as, vast::vector& as_path,
 
 } // namespace
 
-result<event> bgpdump::extract_impl()
+result<event> bgpdump::extract()
 {
   if (! schema_.empty())
   {

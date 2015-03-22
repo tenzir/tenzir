@@ -73,7 +73,7 @@ bro::bro(schema sch, std::string const& filename, bool sniff)
 {
 }
 
-result<event> bro::extract_impl()
+result<event> bro::extract()
 {
   if (is<none>(type_))
   {

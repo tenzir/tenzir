@@ -18,7 +18,7 @@ public:
   ///              `false`, parse events..
   bro(schema sch, std::string const& filename, bool sniff = false);
 
-  result<event> extract_impl();
+  result<event> extract();
 
 private:
   trial<std::string> parse_header_line(std::string const& line,

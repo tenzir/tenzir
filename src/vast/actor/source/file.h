@@ -10,23 +10,18 @@ namespace source {
 
 /// A file source that transforms file contents into events.
 template <typename Derived>
-class file : public synchronous<file<Derived>>
+class file : public synchronous<Derived>
 {
 public:
   /// Constructs a file source.
   /// @param name The name of the actor.
   /// @param filename The name of the file to ingest.
   file(char const* name, std::string const& filename)
-    : synchronous<file<Derived>>{name},
+    : synchronous<Derived>{name},
       file_handle_{path{filename}},
       file_stream_{file_handle_}
   {
     file_handle_.open(vast::file::read_only);
-  }
-
-  result<event> extract()
-  {
-    return static_cast<Derived*>(this)->extract_impl();
   }
 
   /// Advances to the next non-empty line in the file.
@@ -40,7 +35,7 @@ public:
       this->done(true);
       return false;
     }
-    // Get the next non_empty line.
+    // Get the next non empty line.
     line_.clear();
     while (line_.empty())
       if (io::getline(file_stream_, line_))
