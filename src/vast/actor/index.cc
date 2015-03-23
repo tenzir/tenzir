@@ -247,7 +247,9 @@ behavior index::make_behavior()
         if (! qs.hist->task)
         {
           VAST_VERBOSE(this, "enables historical query");
-          qs.hist->task = spawn<task>(time::snapshot());
+          qs.hist->task = spawn<task>(time::snapshot(), expr,
+                                      historical_atom::value);
+          send(qs.hist->task, supervisor_atom::value, this);
           // Test whether this query matches any partition and relay it where
           // possible.
           for (auto& p : partitions_)
@@ -271,8 +273,6 @@ behavior index::make_behavior()
           VAST_VERBOSE(this, "relays", qs.hist->hits.count(), "cached hits");
           send(subscriber, qs.hist->hits);
         }
-        if (! qs.hist->task && ! has_continuous_option(opts))
-          queries_.erase(expr);
       }
       if (has_continuous_option(opts))
       {
@@ -335,15 +335,23 @@ behavior index::make_behavior()
       consolidate(p->second, expr);
       send(q->second.hist->task, done_atom::value, p->first);
       q->second.hist->parts.erase(p);
-      if (q->second.hist->parts.empty())
-      {
-        VAST_VERBOSE(this, "completed query", expr, "in", runtime);
-        for (auto& s : q->second.subscribers)
-          send(s, done_atom::value, runtime, expr);
-        // TODO: consider caching it for a while and also record its coverage
-        // so that future queries don't need to start over again.
-        queries_.erase(q);
-      }
+    },
+    [=](done_atom, time::moment start, expression const& expr, historical_atom)
+    {
+      auto runtime = time::snapshot() - start;
+      VAST_VERBOSE(this, "completed lookup", expr, "in", runtime);
+      auto q = queries_.find(expr);
+      assert(q != queries_.end());
+      assert(q->second.hist);
+      assert(q->second.hist->parts.empty());
+      // Notify subscribers about completion.
+      for (auto& s : q->second.subscribers)
+        send(s, done_atom::value, runtime, expr);
+      // Remove query state.
+      // TODO: consider caching it for a while and also record its coverage
+      // so that future queries don't need to start over again.
+      q->second.hist->task = invalid_actor;
+      queries_.erase(q);
     },
     [=](expression const& expr, bitstream_type& hits, historical_atom)
     {
@@ -382,29 +390,26 @@ optional<actor> index::dispatch(uuid const& part, expression const& expr)
 {
   if (partitions_[part].events == 0)
     return {};
-  auto schedule_pred = [&](auto& s) { return s.part == part; };
-  auto i = std::find_if(schedule_.begin(), schedule_.end(), schedule_pred);
   // If the partition is already scheduled, we add the expression to the set of
   // to-be-queried expressions.
-  if (i != schedule_.end())
+  auto schedule_pred = [&](auto& s) { return s.part == part; };
+  auto i = std::find_if(schedule_.begin(), schedule_.end(), schedule_pred);
+  if (i == schedule_.end())
+  {
+    VAST_DEBUG(this, "enqueues partition", part, "with", expr);
+    schedule_.push_back(index::schedule_state{part, {expr}});
+  }
+  else
   {
     VAST_DEBUG(this, "adds expression to", part << ":", expr);
     i->queries.insert(expr);
-    // If the partition is in memory we can send it the query directly.
-    for (auto& a : active_)
-      if (a.first == part)
-        return a.second;
-    if (auto p = passive_.lookup(part))
-      return *p;
-    return {};
   }
-  // If the partition is not in memory we enqueue it in the schedule.
-  VAST_DEBUG(this, "enqueues partition", part, "with", expr);
-  schedule_.push_back(index::schedule_state{part, {expr}});
-  // If the partition is active (and has events), we can just relay the expression.
+  // If the partition is in memory, we send it the expression directly.
   for (auto& a : active_)
     if (a.first == part)
       return a.second;
+  if (auto p = passive_.lookup(part))
+    return *p;
   // If we have not fully maxed out our available passive partitions, we can
   // spawn the partition directly.
   if (passive_.size() < passive_.capacity())
