@@ -15,6 +15,7 @@
 #include "vast/actor/search.h"
 #include "vast/actor/tracker.h"
 #include "vast/actor/profiler.h"
+#include "vast/actor/sink/ascii.h"
 #include "vast/actor/sink/bro.h"
 #include "vast/actor/sink/json.h"
 #include "vast/actor/source/bro.h"
@@ -454,7 +455,7 @@ trial<void> program::run()
       {
         snk = spawn<sink::bro>(std::move(*w));
       }
-      else if (*format == "json")
+      else if (*format == "ascii" || *format == "json")
       {
         path p{std::move(*w)};
         if (p != "-")
@@ -470,7 +471,10 @@ trial<void> program::run()
             }
           }
         }
-        snk = spawn<sink::json>(std::move(p));
+        if (*format == "ascii")
+          snk = spawn<sink::ascii>(std::move(p));
+        else
+          snk = spawn<sink::json>(std::move(p));
       }
       else
       {

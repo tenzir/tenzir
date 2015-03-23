@@ -39,6 +39,7 @@ set(libvast_sources
   actor/search.cc
   actor/signal_monitor.cc
   actor/tracker.cc
+  actor/sink/ascii.cc
   actor/sink/bro.cc
   actor/sink/json.cc
   actor/source/bro.cc
