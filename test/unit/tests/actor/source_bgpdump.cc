@@ -14,8 +14,7 @@ TEST("bgpdump source")
 
   // Spawn a
   auto bgpdump =
-    self->spawn<source::bgpdump, monitored>(schema{}, bgpdump::updates20140821);
-
+    self->spawn<source::bgpdump, monitored>(bgpdump::updates20140821);
   anon_send(bgpdump, sink_atom::value, self);
   anon_send(bgpdump, run_atom::value);
 

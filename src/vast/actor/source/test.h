@@ -48,9 +48,12 @@ public:
 
   /// Constructs a test source.
   /// @param id The base event ID.
-  /// @param sch The schema containing the events to generate.
   /// @param events The numer of events to generate.
-  test(schema sch, event_id id, uint64_t events);
+  test(event_id id, uint64_t events);
+
+  schema sniff();
+
+  void set(schema const& sch);
 
   result<event> extract();
 

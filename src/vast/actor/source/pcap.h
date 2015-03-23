@@ -59,7 +59,6 @@ class pcap : public synchronous<pcap>
 {
 public:
   /// Constructs a PCAP source.
-  /// @param sch The schema containing the packet event.
   /// @param name The name of the interface or trace file.
   /// @param cutoff The number of bytes to keep per flow.
   /// @param max_flows The maximum number of flows to keep state for.
@@ -72,8 +71,7 @@ public:
   ///                        seconds apart, the source will sleep for *t/5*
   ///                        seconds.
   ///
-  pcap(schema sch,
-       std::string name,
+  pcap(std::string name,
        uint64_t cutoff = -1,
        size_t max_flows = 100000,
        size_t max_age = 60,
@@ -81,6 +79,10 @@ public:
        int64_t pseudo_realtime = 0);
 
   ~pcap();
+
+  schema sniff();
+
+  void set(schema const& sch);
 
   result<event> extract();
 
@@ -91,7 +93,6 @@ private:
     uint64_t last;
   };
 
-  schema schema_;
   std::string name_;
   type packet_type_;
   pcap_t* pcap_ = nullptr;

@@ -12,13 +12,14 @@ class bro : public file<bro>
 {
 public:
   /// Spawns a Bro source.
-  /// @param sch The schema to prefer over the auto-deduced type.
   /// @param filename The name of the Bro log file.
-  /// @param sniff If `true`, sniff and print the schema, then exit. If
-  ///              `false`, parse events..
-  bro(schema sch, std::string const& filename, bool sniff = false);
+  bro(std::string const& filename);
 
   result<event> extract();
+
+  schema sniff();
+
+  void set(schema const& sch);
 
 private:
   trial<std::string> parse_header_line(std::string const& line,
@@ -26,8 +27,7 @@ private:
 
   trial<void> parse_header();
 
-  schema schema_;
-  bool sniff_;
+  vast::schema schema_;
   int timestamp_field_ = -1;
   std::string separator_ = " ";
   std::string set_separator_;

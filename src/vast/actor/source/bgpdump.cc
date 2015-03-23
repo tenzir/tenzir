@@ -6,10 +6,8 @@
 namespace vast {
 namespace source {
 
-bgpdump::bgpdump(schema sch, std::string const& filename, bool sniff)
-  : file<bgpdump>{"bgpdump-source", filename},
-    schema_{std::move(sch)},
-    sniff_{sniff}
+bgpdump::bgpdump(std::string const& filename)
+  : file<bgpdump>{"bgpdump-source", filename}
 {
   std::vector<type::record::field> fields;
   fields.emplace_back("timestamp", type::time_point{});
@@ -47,16 +45,67 @@ bgpdump::bgpdump(schema sch, std::string const& filename, bool sniff)
   state_change_fields.emplace_back("new_state", type::string{});
   state_change_type_ = type::record{std::move(state_change_fields)};
   state_change_type_.name("bgpdump::state_change");
+}
 
-  if (sniff_)
+schema bgpdump::sniff()
+{
+  schema sch;
+  sch.add(announce_type_);
+  sch.add(route_type_);
+  sch.add(withdraw_type_);
+  sch.add(state_change_type_);
+  return sch;
+}
+
+void bgpdump::set(schema const& sch)
+{
+  if (auto t = sch.find_type(announce_type_.name()))
   {
-    schema sch;
-    sch.add(announce_type_);
-    sch.add(route_type_);
-    sch.add(withdraw_type_);
-    sch.add(state_change_type_);
-    std::cout << sch << std::flush;
-    done(true);
+    if (congruent(*t, announce_type_))
+    {
+      VAST_VERBOSE("prefers type in schema over default type:", *t);
+      announce_type_ = *t;
+    }
+    else
+    {
+      VAST_WARN("ignores incongruent schema type:", t->name());
+    }
+  }
+  if (auto t = sch.find_type(route_type_.name()))
+  {
+    if (congruent(*t, route_type_))
+    {
+      VAST_VERBOSE("prefers type in schema over default type:", *t);
+      route_type_ = *t;
+    }
+    else
+    {
+      VAST_WARN("ignores incongruent schema type:", t->name());
+    }
+  }
+  if (auto t = sch.find_type(withdraw_type_.name()))
+  {
+    if (congruent(*t, withdraw_type_))
+    {
+      VAST_VERBOSE("prefers type in schema over default type:", *t);
+      withdraw_type_ = *t;
+    }
+    else
+    {
+      VAST_WARN("ignores incongruent schema type:", t->name());
+    }
+  }
+  if (auto t = sch.find_type(state_change_type_.name()))
+  {
+    if (congruent(*t, state_change_type_))
+    {
+      VAST_VERBOSE("prefers type in schema over default type:", *t);
+      state_change_type_ = *t;
+    }
+    else
+    {
+      VAST_WARN("ignores incongruent schema type:", t->name());
+    }
   }
 }
 
@@ -100,23 +149,6 @@ trial<void> parse_origin_as(count& origin_as, vast::vector& as_path,
 
 result<event> bgpdump::extract()
 {
-  if (! schema_.empty())
-  {
-    auto t = update(announce_type_);
-    if (! t)
-      return t.error();
-    t = update(route_type_);
-    if (! t)
-      return t.error();
-    t = update(withdraw_type_);
-    if (! t)
-      return t.error();
-    t = update(state_change_type_);
-    if (! t)
-      return t.error();
-    schema_.clear();
-  }
-
   if (! next_line())
     return {};
 
@@ -253,24 +285,6 @@ result<event> bgpdump::extract()
   }
 
   return {};
-}
-
-trial<void> bgpdump::update(type& t)
-{
-  auto s = schema_.find_type(t.name());
-  if (! s)
-    return nothing;
-
-  if (! congruent(*s, t))
-  {
-    VAST_WARN("ignores incongruent schema type:", s->name());
-    return nothing;
-  }
-
-  VAST_VERBOSE("prefers type in schema over default type:", *s);
-  t = *s;
-
-  return nothing;
 }
 
 } // namespace source

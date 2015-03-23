@@ -21,7 +21,6 @@
 #include "vast/actor/source/bro.h"
 #include "vast/actor/source/bgpdump.h"
 #include "vast/actor/source/test.h"
-#include "vast/detail/packet_type.h"
 #include "vast/util/system.h"
 
 #ifdef VAST_HAVE_PCAP
@@ -300,7 +299,6 @@ trial<void> program::run()
       }
     }
 
-    schema sch;
     if (auto format = config_.get("importer"))
     {
       io::compression compression;
@@ -349,6 +347,47 @@ trial<void> program::run()
         .await(ok_or_quit);
       if (abort)
         return std::move(*abort);
+      actor src;
+      if (*format == "pcap")
+      {
+#ifdef VAST_HAVE_PCAP
+        auto r = config_.get("import.read");
+        auto i = config_.get("import.interface");
+        auto n = std::string{i ? *i : *r};
+        auto c = config_.as<size_t>("import.pcap-cutoff");
+        auto cutoff = c ? *c : -1;
+        auto m = *config_.as<size_t>("import.pcap-flow-max");
+        auto a = *config_.as<size_t>("import.pcap-flow-age");
+        auto e = *config_.as<size_t>("import.pcap-flow-expiry");
+        auto p = *config_.as<int64_t>("import.pcap-pseudo-realtime");
+        src = spawn<source::pcap, priority_aware+detached>(
+            std::move(n), cutoff, m, a, e, p);
+#else
+        quit(exit::error);
+        return error{"not compiled with pcap support"};
+#endif
+      }
+      else if (*format == "bro")
+      {
+        auto r = config_.get("import.read");
+        src = spawn<source::bro, priority_aware+detached>(*r);
+      }
+      else if (*format == "bgpdump")
+      {
+        auto r = config_.get("import.read");
+        src = spawn<source::bgpdump, priority_aware+detached>(*r);
+      }
+      else if (*format == "test")
+      {
+        auto id = *config_.as<event_id>("import.test-id");
+        auto events = *config_.as<uint64_t>("import.test-events");
+        src = spawn<source::test, priority_aware>(id, events);
+      }
+      else
+      {
+        quit(exit::error);
+        return error{"invalid import format: ", *format};
+      }
       if (auto schema_file = config_.get("import.schema"))
       {
         auto t = load_and_parse<schema>(path{*schema_file});
@@ -357,56 +396,19 @@ trial<void> program::run()
           quit(exit::error);
           return error{"failed to load schema: ", t.error()};
         }
-        sch = *t;
+        self->send(src, *t);
       }
-
-      auto sniff = config_.check("import.sniff-schema");
-      auto r = config_.get("import.read");
-      actor src;
-      if (*format == "pcap")
+      if (config_.check("import.sniff-schema"))
       {
-        if (sniff)
-        {
-          schema packet_schema;
-          packet_schema.add(detail::make_packet_type());
-          std::cout << packet_schema << std::flush;
-          quit(exit::done);
-          return nothing;
-        }
-#ifdef VAST_HAVE_PCAP
-        auto i = config_.get("import.interface");
-        auto c = config_.as<size_t>("import.pcap-cutoff");
-        auto m = *config_.as<size_t>("import.pcap-flow-max");
-        auto a = *config_.as<size_t>("import.pcap-flow-age");
-        auto e = *config_.as<size_t>("import.pcap-flow-expiry");
-        auto p = *config_.as<int64_t>("import.pcap-pseudo-realtime");
-        std::string n = i ? *i : *r;
-        src = spawn<source::pcap, priority_aware+detached>(
-            sch, std::move(n), c ? *c : -1, m, a, e, p);
-#else
-        quit(exit::error);
-        return error{"not compiled with pcap support"};
-#endif
-      }
-      else if (*format == "bro")
-      {
-        src = spawn<source::bro, priority_aware+detached>(sch, *r, sniff);
-      }
-      else if (*format == "bgpdump")
-      {
-        src = spawn<source::bgpdump, priority_aware+detached>(sch, *r, sniff);
-      }
-      else if (*format == "test")
-      {
-        auto id = *config_.as<event_id>("import.test-id");
-        auto events = *config_.as<uint64_t>("import.test-events");
-        src = spawn<source::test, priority_aware>(sch, id, events);
-      }
-      else
-      {
-        quit(exit::error);
-        return error{"invalid import format: ", *format};
-      }
+        self->sync_send(src, schema_atom::value).await(
+          [=](schema const& sch)
+          {
+            std::cout << sch << std::flush;
+            send_exit(src, exit::done);
+            quit(exit::done);
+          });
+        return nothing;
+      };
       send(importer_, add_atom::value, source_atom::value, src);
     }
     else if (auto format = config_.get("exporter"))
@@ -420,6 +422,7 @@ trial<void> program::run()
       if (limit > 0)
         send(exporter_, limit_atom::value, limit);
       exporter_ = spawn<exporter, linked>();
+      schema sch;
       if (auto schema_file = config_.get("export.schema"))
       {
         auto t = load_and_parse<schema>(path{*schema_file});

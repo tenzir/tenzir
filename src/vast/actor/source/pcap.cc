@@ -11,10 +11,9 @@
 namespace vast {
 namespace source {
 
-pcap::pcap(schema sch, std::string name, uint64_t cutoff, size_t max_flows,
+pcap::pcap(std::string name, uint64_t cutoff, size_t max_flows,
            size_t max_age, size_t expire_interval, int64_t pseudo_realtime)
   : synchronous<pcap>{"pcap-source"},
-    schema_{std::move(sch)},
     name_{std::move(name)},
     packet_type_{detail::make_packet_type()},
     cutoff_{cutoff},
@@ -30,6 +29,30 @@ pcap::~pcap()
 {
   if (pcap_)
     ::pcap_close(pcap_);
+}
+
+schema pcap::sniff()
+{
+  schema sch;
+  sch.add(packet_type_);
+  return sch;
+}
+
+void pcap::set(schema const& sch)
+{
+  auto t = sch.find_type("vast::packet");
+  if (! t)
+  {
+    VAST_ERROR(this, "did not find type vast::packet in given schema");
+    return;
+  }
+  if (! congruent(packet_type_, *t))
+  {
+    VAST_WARN(this, "ignores incongruent schema type:", t->name());
+    return;
+  }
+  VAST_VERBOSE(this, "prefers type in schema over default type");
+  packet_type_ = *t;
 }
 
 result<event> pcap::extract()
@@ -90,19 +113,6 @@ result<event> pcap::extract()
     VAST_VERBOSE(this, "keeps at most", max_flows_, "concurrent flows");
     VAST_VERBOSE(this, "evicts flows after", max_age_, "seconds of inactivity");
     VAST_VERBOSE(this, "expires flow table every", expire_interval_, "seconds");
-
-    if (auto t = schema_.find_type("vast::packet"))
-    {
-      if (congruent(packet_type_, *t))
-      {
-        VAST_VERBOSE(this, "prefers type in schema over default type");
-        packet_type_ = *t;
-      }
-      else
-      {
-        VAST_WARN(this, "ignores incongruent schema type:", t->name());
-      }
-    }
   }
 
   uint8_t const* data;

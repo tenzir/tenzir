@@ -66,11 +66,37 @@ trial<type> make_type(std::string const& bro_type)
 
 } // namespace <anonymous>
 
-bro::bro(schema sch, std::string const& filename, bool sniff)
-  : file<bro>{"bro-source", filename},
-    schema_{std::move(sch)},
-    sniff_{sniff}
+bro::bro(std::string const& filename)
+  : file<bro>{"bro-source", filename}
 {
+}
+
+schema bro::sniff()
+{
+  if (is<none>(type_))
+  {
+    // If the type is not set, we assume the input has not yet been accessed
+    // and attempt to parse the Bro log header.
+    if (! this->next_line())
+    {
+      VAST_ERROR(this, "could not read first line of header");
+      return {};
+    }
+    auto t = parse_header();
+    if (! t)
+    {
+      VAST_ERROR(this, "failed to parse header:", t.error());
+      return {};
+    }
+  }
+  schema sch;
+  sch.add(type_);
+  return sch;
+}
+
+void bro::set(schema const& sch)
+{
+  schema_ = sch;
 }
 
 result<event> bro::extract()
@@ -82,19 +108,11 @@ result<event> bro::extract()
     auto t = parse_header();
     if (! t)
       return t.error();
-    if (sniff_)
-    {
-      schema sch;
-      sch.add(type_);
-      std::cout << sch << std::flush;
-      this->done(true);
-      return {};
-    }
   }
-
+  // Check if we've reached EOF.
   if (! this->next_line())
-    return {}; // Reached EOF.
-
+    return {};
+  // Check if we encountered a new log file.
   auto s = util::split(this->line(), separator_);
   if (s.size() > 0 && s[0].first != s[0].second && *s[0].first == '#')
   {
@@ -117,7 +135,6 @@ result<event> bro::extract()
       return {};
     }
   }
-
   size_t f = 0;
   size_t depth = 1;
   record event_record;
@@ -168,7 +185,7 @@ result<event> bro::extract()
           r->emplace_back(vector{});
           break;
         case type::tag::set:
-          r->emplace_back(set{});
+          r->emplace_back(vast::set{});
           break;
         case type::tag::table:
           r->emplace_back(table{});
@@ -194,7 +211,6 @@ result<event> bro::extract()
     }
     ++f;
   }
-
   event e{{std::move(event_record), type_}};
   e.timestamp(ts);
   return std::move(e);

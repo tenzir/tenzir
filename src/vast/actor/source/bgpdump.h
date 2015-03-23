@@ -12,20 +12,16 @@ class bgpdump : public file<bgpdump>
 {
 public:
   /// Spawns a BGPDump source.
-  /// @param sch The schema to prefer over the auto-deduced type.
   /// @param filename The name of the BGPDump file.
-  /// @param sniff If `true`, sniff and print the schema, then exit. If
-  ///              `false`, parse events.
-  bgpdump(schema sch, std::string const& filename, bool sniff = false);
+  bgpdump(std::string const& filename);
+
+  schema sniff();
+
+  void set(schema const& sch);
 
   result<event> extract();
 
 private:
-  // Updates a type with a congruent one from the provided schema.
-  trial<void> update(type& t);
-
-  schema schema_;
-  bool sniff_;
   std::string separator_ = "|";
   std::string set_separator_;
   std::string empty_field_;

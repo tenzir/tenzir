@@ -230,79 +230,83 @@ struct randomizer
 
 } // namespace <anonymous>
 
-test::test(schema sch, event_id id, uint64_t events)
+test::test(event_id id, uint64_t events)
   : synchronous<test>{"test-source"},
-    schema_{std::move(sch)},
     id_{id},
     events_{events},
     generator_{std::random_device{}()}
 {
   assert(events_ > 0);
+  static auto builtin_schema = R"schema(
+    type test = record
+    {
+      b: bool &default="uniform(0,1)",
+      i: int &default="uniform(-42000,1337)",
+      c: count &default="pareto(0,1)",
+      r: real &default="normal(0,1)",
+      s: string &default="uniform(0,100)",
+      t: time &default="uniform(0,10)",
+      d: duration &default="uniform(100,200)",
+      a: addr &default="uniform(0,2000000)",
+      s: subnet &default="uniform(1000,2000)",
+      p: port &default="uniform(1,65384)"
+    }
+  )schema";
+  auto t = to<schema>(builtin_schema);
+  assert(t);
+  set(*t);
+}
 
-  if (schema_.empty())
-  {
-    auto builtin_schema = R"schema(
-      type test = record
-      {
-        b: bool &default="uniform(0,1)",
-        i: int &default="uniform(-42000,1337)",
-        c: count &default="pareto(0,1)",
-        r: real &default="normal(0,1)",
-        s: string &default="uniform(0,100)",
-        t: time &default="uniform(0,10)",
-        d: duration &default="uniform(100,200)",
-        a: addr &default="uniform(0,2000000)",
-        s: subnet &default="uniform(1000,2000)",
-        p: port &default="uniform(1,65384)"
-      }
-    )schema";
+schema test::sniff()
+{
+  return schema_;
+}
 
-    auto t = to<schema>(builtin_schema);
-    assert(t);
-    schema_ = *t;
-  }
-
+void test::set(schema const& sch)
+{
+  assert(! sch.empty());
+  schema_ = sch;
   next_ = schema_.begin();
+  for (auto& t : schema_)
+  {
+    blueprint bp;
+    auto attempt = visit(blueprint_factory{bp}, t);
+    if (! attempt)
+    {
+      VAST_ERROR(this, "failed to generate blueprint:", attempt.error());
+      quit(exit::error);
+      return;
+    }
+    if (auto r = get<type::record>(t))
+    {
+      auto u = bp.data.unflatten(*r);
+      if (! u)
+      {
+        VAST_ERROR(this, "failed to unflatten record:", u.error());
+        quit(exit::error);
+        return;
+      }
+      bp.data = std::move(*u);
+    }
+    assert(! bp.data.empty());
+    blueprints_[t] = std::move(bp);
+  }
 }
 
 result<event> test::extract()
 {
   assert(next_ != schema_.end());
-
-  if (blueprints_.empty())
-  {
-    for (auto& t : schema_)
-    {
-      blueprint bp;
-      auto attempt = visit(blueprint_factory{bp}, t);
-      if (! attempt)
-        return attempt.error();
-
-      if (auto r = get<type::record>(t))
-      {
-        auto u = bp.data.unflatten(*r);
-        if (! u)
-          return u.error();
-
-        bp.data = std::move(*u);
-      }
-
-      assert(! bp.data.empty());
-      blueprints_[t] = std::move(bp);
-    }
-  }
-
+  // Generate random data.
   auto& bp = blueprints_[*next_];
   randomizer<std::mt19937_64>{bp.dists, generator_}(bp.data);
   auto d = is<type::record>(*next_) ? data{bp.data} : bp.data[0];
-
+  // Fill a new event.
   event e{{std::move(d), *next_}};
   e.timestamp(time::now());
   e.id(id_++);
-
+  // Advance to next type in schema.
   if (++next_ == schema_.end())
     next_ = schema_.begin();
-
   assert(events_ > 0);
   if (--events_ == 0)
     done(true);

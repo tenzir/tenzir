@@ -48,6 +48,14 @@ public:
         if (! done())
           send(this, run_atom::value);
       },
+      [=](schema_atom)
+      {
+        return static_cast<Derived*>(this)->sniff();
+      },
+      [=](schema const& sch)
+      {
+        static_cast<Derived*>(this)->set(sch);
+      },
       [=](batch_atom, uint64_t batch_size)
       {
         VAST_DEBUG(this, "sets batch size to", batch_size);
