@@ -24,7 +24,7 @@ struct program : default_actor
   caf::actor archive_;
   caf::actor index_;
   caf::actor search_;
-  caf::actor importer_;
+  caf::actor source_;
   caf::actor exporter_;
   configuration config_;
 };

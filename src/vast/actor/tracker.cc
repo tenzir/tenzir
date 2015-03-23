@@ -50,8 +50,8 @@ behavior tracker::make_behavior()
       if (name == "identifier")
         return make_message(error{"'identifier' is a reserved name"});
       auto c = component::invalid;
-      if (type == "importer")
-        c = component::importer;
+      if (type == "source")
+        c = component::source;
       else if (type == "exporter")
         c = component::exporter;
       else if (type == "receiver")
@@ -137,7 +137,7 @@ behavior tracker::make_behavior()
       {
         default:
           return make_message(error{"invalid source: ", source});
-        case component::importer:
+        case component::source:
           if (snk->type != component::receiver)
             return make_message(error{"sink not a receiver: ", sink});
           else

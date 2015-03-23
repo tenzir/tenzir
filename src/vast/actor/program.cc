@@ -11,7 +11,6 @@
 #include "vast/actor/archive.h"
 #include "vast/actor/exporter.h"
 #include "vast/actor/index.h"
-#include "vast/actor/importer.h"
 #include "vast/actor/receiver.h"
 #include "vast/actor/search.h"
 #include "vast/actor/tracker.h"
@@ -49,7 +48,7 @@ void program::on_exit()
   archive_ = invalid_actor;
   index_ = invalid_actor;
   search_ = invalid_actor;
-  importer_ = invalid_actor;
+  source_ = invalid_actor;
   exporter_ = invalid_actor;
 }
 
@@ -77,8 +76,8 @@ behavior program::make_behavior()
         // We cut the flow of events at the source and let them trickle through
         // the pipeline so that we end up in a consistent state for a given
         // number of events.
-        if (config_.check("importer"))
-          send_exit(importer_, exit::done);
+        if (config_.check("import"))
+          send_exit(source_, exit::done);
         else if (config_.check("receiver"))
           send_exit(receiver_, exit::done);
         else
@@ -190,7 +189,7 @@ trial<void> program::run()
     actor acct;
     if (config_.check("archive")
         || config_.check("index")
-        || config_.check("importer"))
+        || config_.check("import"))
       acct = spawn<accountant<uint64_t>, detached+linked>(log_dir);
 
     auto archive_name = *config_.get("archive.name");
@@ -299,10 +298,75 @@ trial<void> program::run()
       }
     }
 
-    if (auto format = config_.get("importer"))
+    if (auto format = config_.get("import"))
     {
+      if (*format == "pcap")
+      {
+#ifdef VAST_HAVE_PCAP
+        auto r = config_.get("import.read");
+        auto i = config_.get("import.interface");
+        auto n = std::string{i ? *i : *r};
+        auto c = config_.as<size_t>("import.pcap-cutoff");
+        auto cutoff = c ? *c : -1;
+        auto m = *config_.as<size_t>("import.pcap-flow-max");
+        auto a = *config_.as<size_t>("import.pcap-flow-age");
+        auto e = *config_.as<size_t>("import.pcap-flow-expiry");
+        auto p = *config_.as<int64_t>("import.pcap-pseudo-realtime");
+        source_ = spawn<source::pcap, priority_aware + detached + linked>(
+            std::move(n), cutoff, m, a, e, p);
+#else
+        quit(exit::error);
+        return error{"not compiled with pcap support"};
+#endif
+      }
+      else if (*format == "bro")
+      {
+        auto r = config_.get("import.read");
+        source_ = spawn<source::bro, priority_aware + detached + linked>(*r);
+      }
+      else if (*format == "bgpdump")
+      {
+        auto r = config_.get("import.read");
+        source_ = spawn<source::bgpdump, priority_aware + detached + linked>(*r);
+      }
+      else if (*format == "test")
+      {
+        auto id = *config_.as<event_id>("import.test-id");
+        auto events = *config_.as<uint64_t>("import.test-events");
+        source_ = spawn<source::test, priority_aware + linked>(id, events);
+      }
+      else
+      {
+        quit(exit::error);
+        return error{"invalid import format: ", *format};
+      }
+      // Set a new schema if provided.
+      if (auto schema_file = config_.get("import.schema"))
+      {
+        auto t = load_and_parse<schema>(path{*schema_file});
+        if (! t)
+        {
+          quit(exit::error);
+          return error{"failed to load schema: ", t.error()};
+        }
+        send(source_, *t);
+      }
+      // Sniff the source schema.
+      if (config_.check("import.sniff-schema"))
+      {
+        self->sync_send(source_, schema_atom::value).await(
+          [=](schema const& sch)
+          {
+            std::cout << sch << std::flush;
+            send_exit(source_, exit::done);
+            quit(exit::done);
+          });
+        return nothing;
+      };
+      // Set source parameters.
       io::compression compression;
       auto method = *config_.get("import.compression");
+      // TODO: Make io::compression model the Parseable and Printable concepts.
       if (method == "null")
       {
         compression = io::null;
@@ -325,91 +389,29 @@ trial<void> program::run()
         quit(exit::error);
         return error{"unknown compression method"};
       }
-
-      auto chunk_size = *config_.as<uint64_t>("import.chunk-size");
-      importer_ = spawn<importer, priority_aware+linked>(dir, chunk_size,
-                                                         compression);
-      send(importer_, accountant_atom::value, acct);
-      auto importer_name = *config_.get("import.name");
-      self->sync_send(tracker_, put_atom::value, "importer", importer_,
-                      importer_name).await(ok_or_quit);
+      send(source_, compression);
+      auto batch_size = *config_.as<uint64_t>("import.batch-size");
+      send(source_, batch_atom::value, batch_size);
+      send(source_, accountant_atom::value, acct);
+      // Register source with TRACKER and link it with RECEIVER.
+      auto source_name = *config_.get("import.name");
+      self->sync_send(tracker_, put_atom::value, "source", source_,
+                      source_name).await(ok_or_quit);
       if (abort)
         return std::move(*abort);
-      if (config_.check("receiver"))
-      {
-        // If this program accomodates both IMPORTER and RECEIVER, we must
-        // initiate the shutdown via IMPORTER to ensure proper delivery of
-        // inflight chunks from IMPORTER to RECEIVER.
-        unlink_from(importer_);
-        importer_->link_to(receiver_);
-      }
-      self->sync_send(tracker_, link_atom::value, importer_name, receiver_name)
+      self->sync_send(tracker_, link_atom::value, source_name, receiver_name)
         .await(ok_or_quit);
       if (abort)
         return std::move(*abort);
-      actor src;
-      if (*format == "pcap")
+      // If this program accomodates both a source and RECEIVER, we must
+      // initiate the shutdown via the source to ensure that RECEIVER will not
+      // shut down before having received all events from the source.
+      if (config_.check("receiver"))
       {
-#ifdef VAST_HAVE_PCAP
-        auto r = config_.get("import.read");
-        auto i = config_.get("import.interface");
-        auto n = std::string{i ? *i : *r};
-        auto c = config_.as<size_t>("import.pcap-cutoff");
-        auto cutoff = c ? *c : -1;
-        auto m = *config_.as<size_t>("import.pcap-flow-max");
-        auto a = *config_.as<size_t>("import.pcap-flow-age");
-        auto e = *config_.as<size_t>("import.pcap-flow-expiry");
-        auto p = *config_.as<int64_t>("import.pcap-pseudo-realtime");
-        src = spawn<source::pcap, priority_aware+detached>(
-            std::move(n), cutoff, m, a, e, p);
-#else
-        quit(exit::error);
-        return error{"not compiled with pcap support"};
-#endif
+        unlink_from(source_);
+        source_->link_to(receiver_);
       }
-      else if (*format == "bro")
-      {
-        auto r = config_.get("import.read");
-        src = spawn<source::bro, priority_aware+detached>(*r);
-      }
-      else if (*format == "bgpdump")
-      {
-        auto r = config_.get("import.read");
-        src = spawn<source::bgpdump, priority_aware+detached>(*r);
-      }
-      else if (*format == "test")
-      {
-        auto id = *config_.as<event_id>("import.test-id");
-        auto events = *config_.as<uint64_t>("import.test-events");
-        src = spawn<source::test, priority_aware>(id, events);
-      }
-      else
-      {
-        quit(exit::error);
-        return error{"invalid import format: ", *format};
-      }
-      if (auto schema_file = config_.get("import.schema"))
-      {
-        auto t = load_and_parse<schema>(path{*schema_file});
-        if (! t)
-        {
-          quit(exit::error);
-          return error{"failed to load schema: ", t.error()};
-        }
-        self->send(src, *t);
-      }
-      if (config_.check("import.sniff-schema"))
-      {
-        self->sync_send(src, schema_atom::value).await(
-          [=](schema const& sch)
-          {
-            std::cout << sch << std::flush;
-            send_exit(src, exit::done);
-            quit(exit::done);
-          });
-        return nothing;
-      };
-      send(importer_, add_atom::value, source_atom::value, src);
+      send(source_, run_atom::value);
     }
     else if (auto format = config_.get("exporter"))
     {

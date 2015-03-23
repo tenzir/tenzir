@@ -30,7 +30,6 @@ set(libvast_sources
   actor/archive.cc
   actor/exporter.cc
   actor/identifier.cc
-  actor/importer.cc
   actor/index.cc
   actor/partition.cc
   actor/profiler.cc
@@ -41,7 +40,6 @@ set(libvast_sources
   actor/signal_monitor.cc
   actor/tracker.cc
   actor/sink/bro.cc
-  actor/sink/chunkifier.cc
   actor/sink/json.cc
   actor/source/bro.cc
   actor/source/bgpdump.cc

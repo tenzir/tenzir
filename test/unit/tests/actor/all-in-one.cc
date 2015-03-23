@@ -26,7 +26,7 @@ TEST("all-in-one")
   *import['I'] = "bro";
   *import['C'] = true;
   *import['r'] = m57_day11_18::ssl;
-  *import["import.chunk-size"] = 10;
+  *import["import.batch-size"] = 10;
   *import["archive.max-segment-size"] = 1;
   REQUIRE(import.verify());
   path dir = *import.get("directory");
@@ -131,7 +131,7 @@ TEST("all-in-one")
   self->await_all_other_actors_done();
 
   VAST_INFO("importing another Bro log");
-  *import["import.chunk-size"] = 100;
+  *import["import.batch-size"] = 100;
   *import['r'] = m57_day11_18::conn;
   self->send(self->spawn<program>(import), run_atom::value);
   self->await_all_other_actors_done();

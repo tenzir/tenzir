@@ -72,7 +72,7 @@ void configuration::initialize()
   act.add('X', "index", "spawn an index");
   act.add('S', "search", "spawn a search");
   act.add('E', "exporter", "spawn an exporter").single();
-  act.add('I', "importer", "spawn an importer").single();
+  act.add('I', "import", "spawn a source to import events").single();
   act.add('Q', "console", "spawn a query console");
 
   auto& track = create_block("tracker options", "tracker");
@@ -85,8 +85,8 @@ void configuration::initialize()
   imp.add('s', "schema", "the schema to use for the generated events").single();
   imp.add('r', "read", "path to input file/directory").init("-");
   imp.add('i', "interface", "name of interface to read packets from").single();
-  imp.add("compression", "the compression method for chunks").init("lz4");
-  imp.add('n', "chunk-size", "number of events to ingest in one run").init(8192);
+  imp.add("compression", "the compression method for event batches").init("lz4");
+  imp.add('b', "batch-size", "number of events to ingest in one run").init(16384);
   imp.add("sniff-schema", "print the log schema and exit");
   imp.add("pcap-cutoff", "forego intra-flow packets after this many bytes").single();
   imp.add("pcap-flow-max", "number of concurrent flows to track").init(1000000);
@@ -95,7 +95,7 @@ void configuration::initialize()
   imp.add("pcap-pseudo-realtime", "factor c delaying packets in trace by 1/c").init(0);
   imp.add("test-id", "the base event ID").init(0);
   imp.add("test-events", "number of events to generate").init(100);
-  imp.add("name", "default importer name").init("importer@" + *hostname);
+  imp.add("name", "default source name").init("source@" + *hostname);
   imp.visible(false);
 
   auto& exp = create_block("export options", "export");

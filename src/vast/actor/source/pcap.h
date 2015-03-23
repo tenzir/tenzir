@@ -11,6 +11,7 @@
 #include "vast/util/operators.h"
 
 namespace vast {
+namespace source {
 namespace detail {
 
 struct connection : util::equality_comparable<connection>
@@ -28,14 +29,15 @@ struct connection : util::equality_comparable<connection>
 };
 
 } // namespace detail
+} // namespace source
 } // namespace vast
 
 namespace std {
 
 template <>
-struct hash<vast::detail::connection>
+struct hash<vast::source::detail::connection>
 {
-  size_t operator()(vast::detail::connection const& c) const
+  size_t operator()(vast::source::detail::connection const& c) const
   {
     auto src0 = *reinterpret_cast<uint64_t const*>(&c.src.data()[0]);
     auto src1 = *reinterpret_cast<uint64_t const*>(&c.src.data()[8]);

@@ -15,7 +15,7 @@ pcap::pcap(std::string name, uint64_t cutoff, size_t max_flows,
            size_t max_age, size_t expire_interval, int64_t pseudo_realtime)
   : synchronous<pcap>{"pcap-source"},
     name_{std::move(name)},
-    packet_type_{detail::make_packet_type()},
+    packet_type_{vast::detail::make_packet_type()},
     cutoff_{cutoff},
     max_flows_{max_flows},
     generator_{std::random_device{}()},

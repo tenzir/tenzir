@@ -121,7 +121,7 @@ TEST("distributed")
   if (failed)
     REQUIRE(false);
 
-  // Importer
+  // Source
   configuration cfg_imp{cfg};
   *cfg_imp['I'] = "bro";
   *cfg_imp['r'] = m57_day11_18::ftp;
@@ -133,7 +133,7 @@ TEST("distributed")
     REQUIRE(false);
   self->receive([](down_msg const&) {});
 
-  // Give the chunks in the pipeline from IMPORTER to RECEIVER some time.
+  // Give the chunks in the pipeline from SOURCE to RECEIVER some time.
   std::this_thread::sleep_for(std::chrono::milliseconds(800));
 
   VAST_INFO("checking with a simple query that import went fine");

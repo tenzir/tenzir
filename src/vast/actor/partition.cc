@@ -368,7 +368,8 @@ behavior partition::make_behavior()
       if (++chunks_indexed_concurrently_ > 10) // TODO: calibrate
         overloaded(true);
       send(task, supervisor_atom::value, this);
-      VAST_DEBUG(this, "indexes", chunks_indexed_concurrently_, "in parallel");
+      VAST_DEBUG(this, "indexes", chunks_indexed_concurrently_,
+                 "chunks in parallel");
     },
     [=](done_atom, time::moment start, uint64_t events)
     {

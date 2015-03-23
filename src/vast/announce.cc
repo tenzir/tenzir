@@ -41,6 +41,7 @@
 #include "vast/concept/state/value.h"
 #include "vast/concept/state/util/error.h"
 #include "vast/concept/state/util/none.h"
+#include "vast/io/compression.h"
 
 namespace vast {
 namespace {
@@ -110,6 +111,38 @@ void announce_bmi_hierarchy(std::string const& bs_name)
   );
 }
 
+//class vector_event_type_info 
+//  : public caf::detail::abstract_uniform_type_info<std::vector<event>>
+//{
+//public:
+//  vector_event_type_info(io::compression method)
+//    : caf::detail::abstract_uniform_type_info<std::vector<event>>(
+//        "std::vector<vast::event>"),
+//      compression_{method}
+//  {
+//  }
+//
+//private:
+//  void serialize(void const* ptr, caf::serializer* sink) const final
+//  {
+//    caf_to_vast_serializer s{*sink};
+//    auto events = reinterpret_cast<std::vector<event> const*>(ptr);
+//    chunk chk{*events, compression_};
+//    s << chk;
+//  }
+//
+//  void deserialize(void* ptr, caf::deserializer* source) const final
+//  {
+//    caf_to_vast_deserializer d{*source};
+//    auto x = reinterpret_cast<std::vector<event>*>(ptr);
+//    chunk chk;
+//    d >> chk;
+//    *x = chk.uncompress();
+//  }
+//
+//  io::compression compression_;
+//};
+
 } // namespace <anonymous>
 
 void announce_types()
@@ -143,6 +176,7 @@ void announce_types()
   announce<event>("vast::event");
   announce<expression>("vast::expression");
   announce<predicate>("vast::predicate");
+  announce<io::compression>("vast::io::compression");
   announce<none>("vast::util::none");
   announce<error>("vast::util::error");
   // std::vector<T>
