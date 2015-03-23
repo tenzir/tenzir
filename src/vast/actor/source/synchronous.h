@@ -25,6 +25,7 @@ public:
   void on_exit()
   {
     source_ = caf::invalid_actor;
+    accountant_ = caf::invalid_actor;
   }
 
   caf::behavior make_behavior() override
@@ -44,10 +45,18 @@ public:
         if (remove_upstream_node(msg.source))
           return;
       },
+      [=](accountant_atom, actor const& accountant)
+      {
+        VAST_DEBUG(this, "registers accountant", accountant);
+        accountant_ = accountant;
+        send(accountant_, label() + "-events", time::now());
+      },
       [=](std::vector<event> const& events, caf::actor const& sink)
       {
         VAST_DEBUG(this, "forwards", events.size(), "events");
         send(sink, chunk{events, compression_});
+        if (accountant_ != invalid_actor)
+          send(accountant_, uint64_t{events.size()}, time::snapshot());
         if (mailbox().count() > 50)
           overloaded(true);
         else if (overloaded())
@@ -58,6 +67,7 @@ public:
 
 private:
   caf::actor source_;
+  caf::actor accountant_;
   io::compression compression_ = io::lz4;
 };
 
@@ -172,6 +182,8 @@ public:
         {
           chunkifier_ = spawn<detail::chunkifier, priority_aware + monitored>(
               this, compression_);
+          if (accountant_)
+            send(chunkifier_, accountant_atom::value, accountant_);
           send(chunkifier_, upstream_atom::value, this);
         }
         if (sinks_.empty())
