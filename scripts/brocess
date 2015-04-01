@@ -103,6 +103,10 @@ if [ "$import" == 1 ]; then
   mkdir -m 700 -p $spool
   log "fetching remote trace(s) $traces to $spool"
   scp -r -q -c arcfour $traces $spool
+  if [ $? != 0 ]; then
+    log "experienced error fetching traces"
+    exit 1
+  fi
   chmod 600 $spool/*
   traces=$(ls $spool/*)
 fi
