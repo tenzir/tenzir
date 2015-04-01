@@ -7,6 +7,8 @@ MAINTAINER  Matthias Vallentin <matthias@bro.org>
 
 ENV         PREFIX /usr/local
 ENV         PARALLELISM 4
+ENV         CC clang-3.5
+ENV         CXX clang++-3.5
 
 # Compiler and dependcy setup
 RUN apt-get update && apt-get -y install cmake git build-essential tmux wget
