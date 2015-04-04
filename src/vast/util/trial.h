@@ -16,10 +16,16 @@ template <typename T>
 class trial
 {
 public:
-  /// Constructs a trial by forwarding arguments to the underlying type.
-  /// @param args The arguments to pass to `T`'s constructor.
+  /// Constructs a trial from an instance of `T`.
+  /// @param x An instatnce of type .`T`
   /// @post The trial is *engaged*, i.e., `*this == true`.
-  trial(T x)
+  trial(T const& x)
+    : engaged_{true}
+  {
+    new (&value_) T(x);
+  }
+
+  trial(T&& x) noexcept(std::is_nothrow_move_constructible<T>::value)
     : engaged_{true}
   {
     new (&value_) T(std::move(x));
@@ -63,7 +69,8 @@ public:
     return *this;
   }
 
-  trial& operator=(trial&& other) noexcept
+  trial& operator=(trial&& other)
+    noexcept(std::is_nothrow_move_constructible<T>::value)
   {
     destroy();
     construct(std::move(other));
@@ -75,7 +82,15 @@ public:
   ///
   /// @param args The arguments to forward to `T`'s constructor.
   /// @returns A reference to `*this`.
-  trial& operator=(T x)
+  trial& operator=(T const& x)
+  {
+    destroy();
+    engaged_ = true;
+    new (&value_) T(x);
+    return *this;
+  }
+
+  trial& operator=(T&& x) noexcept(std::is_nothrow_move_constructible<T>::value)
   {
     destroy();
     engaged_ = true;
@@ -177,7 +192,8 @@ private:
     }
   }
 
-  void construct(trial&& other) noexcept
+  void construct(trial&& other)
+    noexcept(std::is_nothrow_move_constructible<T>::value)
   {
     if (other.engaged_)
     {
