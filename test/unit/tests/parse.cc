@@ -1,4 +1,9 @@
 #include "vast/data.h"
+#include "vast/concept/parseable/core.h"
+#include "vast/concept/parseable/numeric.h"
+
+#include "framework/unit.h"
+#include "framework/unit.h"
 
 #define SUITE parse
 #include "test.h"
@@ -7,86 +12,152 @@ using namespace vast;
 
 TEST(bool)
 {
-  char const* str = "T";
-  auto start = str;
-  auto end = str + 1;
-  auto b = parse<bool>(start, end);
-  CHECK(start == end);
-  REQUIRE(b);
-  CHECK(*b);
-
-  str = "F";
-  start = str;
-  b = parse<bool>(start, str + 1);
-  CHECK(start == str + 1);
-  REQUIRE(b);
-  CHECK(! *b);
-
-  str = "x";
-  start = str;
-  CHECK(! parse<bool>(start, str + 1));
+  auto p0 = single_char_bool_parser{};
+  auto p1 = zero_one_bool_parser{};
+  auto p2 = literal_bool_parser{};
+  auto str = std::string{"T0trueFfalse1"};
+  auto i = str.begin();
+  auto l = str.end();
+  auto f = i;
+  bool b;
+  // Successful 'T'
+  CHECK(p0.parse(i, l, b));
+  CHECK(b);
+  CHECK(i == f + 1);
+  // Wrong parser
+  CHECK(! p0.parse(i, l, b));
+  CHECK(i == f + 1);
+  // Correct parser
+  CHECK(p1.parse(i, l, b));
+  CHECK(! b);
+  CHECK(i == f + 2);
+  CHECK(p2.parse(i, l, b));
+  CHECK(b);
+  CHECK(i == f + 6);
+  // Wrong parser
+  CHECK(! p2.parse(i, l, b));
+  CHECK(i == f + 6);
+  // Correct parser
+  CHECK(p0.parse(i, l, b));
+  CHECK(! b);
+  CHECK(i == f + 7);
+  b = true;
+  CHECK(p2.parse(i, l, b));
+  CHECK(! b);
+  CHECK(i == f + 12);
+  CHECK(p1.parse(i, l, b));
+  CHECK(b);
+  CHECK(i == f + 13);
+  CHECK(i == l);
+  // Unusued type
+  i = f;
+  CHECK(p0.parse(i, l, unused));
+  CHECK(p0(str));
 }
 
-TEST(int)
+TEST(integral)
 {
-  auto str = "-1024";
-  auto start = str;
-  auto end = str + 5;
-  auto i = parse<int64_t>(start, end);
-  CHECK(start == end);
-  CHECK(*i == -1024ll);
-
-  str = "+1024";
-  start = str;
-  end = str + 5;
-  i = parse<int64_t>(start, end);
-  CHECK(start == end);
-  CHECK(*i == 1024ll);
-
-  str = "1337";
-  start = str;
-  end = str + 4;
-  i = parse<int64_t>(start, end);
-  CHECK(start == end);
-  CHECK(*i == 1337ll);
+  // Default parser for signed integers.
+  auto str = std::string{"-1024"};
+  auto p0 = integral_parser<int>{};
+  int n;
+  auto f = str.begin();
+  auto l = str.end();
+  CHECK(p0.parse(f, l, n));
+  CHECK(n == -1024);
+  CHECK(f == l);
+  f = str.begin() + 1;
+  n = 0;
+  CHECK(p0.parse(f, l, n));
+  CHECK(n == 1024);
+  CHECK(f == l);
+  str[0] = '+';
+  f = str.begin();
+  n = 0;
+  CHECK(p0.parse(f, l, n));
+  CHECK(n == 1024);
+  CHECK(f == l);
+  // Default parser for unsigned integers.
+  auto p1 = integral_parser<unsigned>{};
+  unsigned u;
+  f = str.begin();
+  CHECK(p1.parse(f, l, u));
+  CHECK(u == 1024);
+  CHECK(f == l);
+  f = str.begin() + 1;
+  u = 0;
+  CHECK(p1.parse(f, l, u));
+  CHECK(n == 1024);
+  CHECK(f == l);
+  // Parser with digit constraints.
+  auto p2 = integral_parser<int, 4, 2>{};
+  n = 0;
+  str[0] = '-';
+  f = str.begin();
+  CHECK(p2.parse(f, l, n));
+  CHECK(n == -1024);
+  CHECK(f == l);
+  // Not enough digits.
+  str = "-1";
+  f = str.begin();
+  l = str.end();
+  CHECK(! p2.parse(f, l, n));
+  CHECK(f == str.begin());
+  // Too many digits.
+  str = "-123456";
+  f = str.begin();
+  l = str.end();
+  CHECK(! p2.parse(f, l, unused));
+  CHECK(f == str.begin());
 }
 
-TEST(uint)
+TEST(real)
 {
-  auto str = "1024";
-  auto start = str;
-  auto end = str + 4;
-  auto u = parse<int64_t>(start, end);
-  CHECK(start == end);
-  CHECK(*u == 1024ull);
-
-  str = "+1024";
-  start = str;
-  ++end;
-  CHECK(! parse<uint64_t>(start, end));
+  auto p = make_parser<double>{};
+  // Integral plus fractional part, negative.
+  auto str = std::string{"-123.456789"};
+  auto f = str.begin();
+  auto l = str.end();
+  double d;
+  CHECK(p.parse(f, l, d));
+  CHECK(d == -123.456789);
+  CHECK(f == l);
+  // Integral plus fractional part, positive.
+  d = 0;
+  f = str.begin() + 1;
+  CHECK(p.parse(f, l, d));
+  CHECK(d == 123.456789);
+  CHECK(f == l);
+  // No fractional part, negative.
+  d = 0;
+  f = str.begin();
+  CHECK(p.parse(f, f + 4, d));
+  CHECK(d == -123);
+  CHECK(f == str.begin() + 4);
+  // No fractional part, positive.
+  d = 0;
+  f = str.begin() + 1;
+  CHECK(p.parse(f, f + 3, d));
+  CHECK(d == 123);
+  CHECK(f == str.begin() + 4);
+  // No integral part, positive.
+  d = 0;
+  f = str.begin() + 4;
+  CHECK(p.parse(f, l, d));
+  CHECK(d == 0.456789);
+  CHECK(f == l);
+  // No integral part, negative.
+  str = "-.456789";
+  f = str.begin();
+  l = str.end();
+  CHECK(p.parse(f, l, d));
+  CHECK(d == -0.456789);
+  CHECK(f == l);
 }
 
-TEST(double)
-{
-  auto str = "-123.456789";
-  auto start = str;
-  auto end = str + std::strlen(str);
-  auto d = parse<double>(start, end);
-  CHECK(start == end);
-  CHECK(*d == -123.456789);
-
-  bool is_double = true;
-  d = to<double>("-123", &is_double);
-  REQUIRE(d);
-  CHECK(! is_double);
-  CHECK(*d == -123.0);
-
-  is_double = false;
-  d = to<double>("-123.0", &is_double);
-  REQUIRE(d);
-  CHECK(is_double);
-  CHECK(*d == -123.0);
-}
+//
+// TODO: convert to parseable concept from here
+//
 
 TEST(time::duration)
 {
