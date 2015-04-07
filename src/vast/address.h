@@ -119,34 +119,6 @@ public:
   std::array<uint8_t, 16> const& data() const;
 
   template <typename Iterator>
-  friend trial<void> parse(address& a, Iterator& begin, Iterator end)
-  {
-    if (begin == end)
-      return error{"empty iterator range"};
-
-    char buf[64];
-    auto p = buf;
-
-    auto v6 = false;
-    while (*begin != '\0' && begin != end && p - buf < 63)
-    {
-      if (*begin == ':')
-        v6 = true;
-
-      *p++ = *begin++;
-    }
-
-    *p = '\0';
-
-    auto t = v6 ? address::from_v6(buf) : address::from_v4(buf);
-    if (! t)
-      return t.error();;
-
-    a = std::move(*t);
-    return nothing;
-  }
-
-  template <typename Iterator>
   friend trial<void> print(address const& a, Iterator&& out)
   {
     return print(to_string(a), out);
@@ -159,6 +131,24 @@ private:
 };
 
 trial<void> convert(address const& a, util::json& j);
+
+} // namespace vast
+
+#include "vast/concept/parseable/core/parse.h"
+#include "vast/concept/parseable/vast/address.h"
+
+namespace vast {
+
+// TODO: remove after conversion to new parseable concept.
+template <typename Iterator>
+trial<void> parse(address& a, Iterator& begin, Iterator end)
+{
+  using vast::parse;
+  if (parse(begin, end, a))
+    return nothing;
+  else
+    return error{"failed to parse address", std::string{begin, end}};
+}
 
 } // namespace vast
 
