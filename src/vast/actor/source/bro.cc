@@ -199,9 +199,10 @@ result<event> bro::extract()
                            set_separator_, "", "");
       if (! d)
       {
-        VAST_WARN(this, "failed to parse field", f << ':',
-                  std::string(s[f].first, s[f].second), "(reason",
-                  d.error());
+        VAST_WARN(this, "failed to parse field", f << ": \"" <<
+                  std::string(s[f].first, s[f].second) << '"',
+                  "(reason", d.error() << ')');
+        VAST_WARN(this, "skips line:", this->line());
         return {};
       }
       if (f == static_cast<size_t>(timestamp_field_))
