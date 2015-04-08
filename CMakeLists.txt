@@ -24,10 +24,12 @@ if ("${PROJECT_SOURCE_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
   configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/cmake_uninstall.cmake.in"
     "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake"
     @ONLY)
-
   add_custom_target(uninstall COMMAND
     ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake)
 endif ()
+
+# Reconfigure the project with 'make configure'.
+add_custom_target(configure COMMAND ${CMAKE_CURRENT_BINARY_DIR}/config.status)
 
 set(CMAKE_VERBOSE_MAKEFILE false
   CACHE STRING "Show all outputs including compiler lines." FORCE)
@@ -40,7 +42,7 @@ list(GET version_numbers 1 VERSION_MINOR)
 set(VERSION_MAJ_MIN "${VERSION_MAJOR}.${VERSION_MINOR}")
 
 if (NOT CMAKE_CXX_FLAGS)
-  # -ftemplate-depth=256 makes Boost Spirit happy.
+  # -ftemplate-depth=256 ot make Boost Spirit happy.
   set(EXTRA_FLAGS "-Wall -Wextra -pedantic -std=c++1y -ftemplate-depth=256")
   set(CMAKE_CXX_FLAGS_DEBUG          "-O0 -g")
   set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os")
