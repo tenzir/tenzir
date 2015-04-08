@@ -212,25 +212,21 @@ fi
 
 printf "DIRS := \"%s\" \n\n" "$builddir" > "$makefile"
 contents=$(cat <<'EOT'
-all:
-	@for i in $(DIRS); do $(MAKE) -C $$i $@; done
+THIS := distclean
+OTHERS := $(filter-out $(THIS), $(MAKECMDGOALS))
 
-test:
-	@for i in $(DIRS); do $(MAKE) -C $$i $@; done
+$(or $(lastword $(OTHERS)), all):
+	@for dir in $(DIRS); do $(MAKE) -C $$dir $(OTHERS); done
 
-install:
-	@for i in $(DIRS); do $(MAKE) -C $$i $@; done
+.PHONY: $(OTHERS) all
 
-uninstall:
-	@for i in $(DIRS); do $(MAKE) -C $$i $@; done
-
-clean:
-	@for i in $(DIRS); do $(MAKE) -C $$i $@; done
+$(filter-out $(lastword $(OTHERS)), $(OTHERS)):
+	@cd .
 
 distclean:
 	rm -rf $(DIRS) Makefile
 
-.PHONY: all test install uninstall clean distclean
+.PHONY: distclean
 EOT
 )
 
