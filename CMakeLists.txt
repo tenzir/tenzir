@@ -168,9 +168,7 @@ if (GPERFTOOLS_FOUND)
 endif ()
 
 find_package(Doxygen QUIET)
-if (DOXYGEN_FOUND)
-  add_subdirectory(doc)
-endif ()
+find_package(Md2man QUIET)
 
 include_directories(BEFORE ${CMAKE_CURRENT_BINARY_DIR})
 include_directories(BEFORE ${CMAKE_SOURCE_DIR}/aux)
@@ -182,6 +180,7 @@ set (LIBRARY_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/lib CACHE
   PATH "Single directory for all libraries")
 
 add_subdirectory(aux)
+add_subdirectory(doc)
 add_subdirectory(src)
 add_subdirectory(test)
 
@@ -227,6 +226,7 @@ set(editline_display "${EDITLINE_INCLUDE_DIR} (${EDITLINE_VERSION})")
 display(EDITLINE_FOUND ${editline_display} editline_summary)
 display(GPERFTOOLS_FOUND ${GPERFTOOLS_INCLUDE_DIR} perftools_summary)
 display(DOXYGEN_FOUND yes doxygen_summary)
+display(MD2MAN_FOUND yes md2man_summary)
 display(VAST_USE_PERFTOOLS_HEAP_PROFILER yes tcmalloc_summary)
 display(ASAN_FOUND yes asan_summary)
 # Display the right include directory based on wheter we pointed to a CAF build
@@ -255,6 +255,7 @@ set(build_summary
     "\nEditline:             ${editline_summary}"
     "\nGperftools:           ${perftools_summary}"
     "\nDoxygen:              ${doxygen_summary}"
+    "\nmd2man:               ${md2man_summary}"
     "\n"
     "\nUse tcmalloc:         ${tcmalloc_summary}"
     "\nUse AddressSanitizer: ${asan_summary}"

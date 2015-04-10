@@ -1,0 +1,342 @@
+.TH VAST 1 "April 10, 2015" 0.1 "Visibility Across Space and Time"
+.SH NAME
+.PP
+VAST \-\- a unified platform for network forensics
+.SH SYNOPSIS
+.PP
+\fB\fCvast\fR [\fIoptions\fP\&...] [\fIcommand\fP] [\fIarguments\fP\&...]
+.SH DESCRIPTION
+.PP
+VAST is a distributed platform for large\-scale network forensics. The
+system is exclusively implemented in terms of the actor model. In this
+model, concurrent entities (\fBactors\fP) execute in parallel and communicate
+asynchronously solely via message passing. VAST users connect actors together
+to create a specific system topology. Each physical node in a VAST deployment
+typically runs a single \fB\fCvast\fR daemon process which accommodates numerous
+actors. For single\-node deployments all actors can run inside this process,
+but for multi\-node deployments users can spawn actors on any node to configure
+flexible topologies that suits best their data processing pipelines.
+.PP
+With the \fB\fCvast\fR executable users can manage the system topology, configure
+event sources and sinks to import and export data, and issue queries to
+retrieve results.
+.PP
+The following key actors exist:
+.TP
+\fBTRACKER\fP
+Keeps track of the global system topology, registers new actors and wires
+them together.
+.TP
+\fBSOURCE\fP
+Generates events from a data source, such as packets from a network interface
+or log files.
+.TP
+\fBSINK\fP
+Receives events as the result of a query and displays them in specific output
+format, such JSON, PCAP (for packets), or Bro logs.
+.TP
+\fBARCHIVE\fP
+Compressed bulk storage of the all events.
+.TP
+\fBINDEX\fP
+Accelerates queries by constructing bitmap indexes over a subset of the event
+data.
+.TP
+\fBIMPORTER\fP
+Accepts events from \fBSOURCEs\fP, assigns them unique 64\-bit IDs, and relays
+them to \fBARCHIVE\fP and \fBINDEX\fP\&.
+.TP
+\fBEXPORTER\fP
+Accepts query expressions from users, spawns \fBQUERY\fP actors, and relays
+them to \fBARCHIVE\fP and \fBINDEX\fP\&.
+.TP
+\fBQUERY\fP
+A handle to a running query for retrieving index hits and extracting results.
+.SH OPTIONS
+.PP
+This section describes the global \fB\fCvast\fR \fIoptions\fP, irrespective of the
+\fIcommand\fP issued. When not specifying any \fIoptions\fP, \fB\fCvast\fR attempts to connect
+to the process running at the local machine. 
+.TP
+\fB\fC\-a\fR \fIaddress\fP [\fI127.0.0.1\fP, \fI::1\fP]
+The IP \fIaddress\fP or hostname of the \fB\fCvast\fR instance to connect to.
+.TP
+\fB\fC\-p\fR \fIport\fP [\fI42000\fP]
+The port of a \fB\fCvast\fR instance to connect to.
+.PP
+\fB\fC\-l\fR \fIlog\-level\fP [\fI3\fP]
+  The verbosity of console log messages shown on standard error. The
+  \fIlog\-level\fP can take on the following values:
+    \- \fI0\fP \fI(quiet)\fP: do not produce any output
+    \- \fI1\fP \fI(error)\fP: report failures which constitute a program error
+    \- \fI2\fP \fI(warn)\fP: notable issues that do not affect correctness
+    \- \fI3\fP \fI(info)\fP: status messages representing system activity
+    \- \fI4\fP \fI(verbose)\fP: more fine\-grained activity reports
+    \- \fI5\fP \fI(debug)\fP: copious amounts of low\-level implementation details
+    \- \fI6\fP \fI(trace)\fP: log function entry and exit
+.TP
+\fB\fC\-v\fR
+Print the VAST version and exit.
+.SH COMMANDS
+.PP
+This section describes each \fIcommand\fP and its \fIarguments\fP\&. 
+When not specifying a \fIcommand\fP, \fB\fCvast\fR enters an interactive shell. The
+following commands exist:
+.RS
+.IP \(bu 2
+\fIstart\fP         starts a \fB\fCvast\fR instance
+.IP \(bu 2
+\fIstop\fP          stops a \fB\fCvast\fR instance
+.IP \(bu 2
+\fItopology\fP      shows the node and actor topology
+.IP \(bu 2
+\fIconnect\fP       connects two actors
+.IP \(bu 2
+\fIdisconnect\fP    disconnects two connected actors
+.IP \(bu 2
+\fIspawn\fP         creates a new actor
+.IP \(bu 2
+\fIimport\fP        imports data from standard input
+.IP \(bu 2
+\fIexport\fP        performs a query and exports results to standard output
+.RE
+.SS start
+.PP
+Synopsis:
+.IP
+\fIstart\fP [\fIarguments\fP]
+.PP
+Starts a \fB\fCvast\fR instance on this node.
+.PP
+Available \fIarguments\fP:
+.TP
+\fB\fC\-n\fR \fIname\fP [\fIhostname\fP]
+A unique name for this instance. The default name is the system hostname.
+.TP
+\fB\fC\-a\fR \fIaddress\fP\&... [\fI0.0.0.0\fP]
+The list of IP \fIaddress\fP where this instance listens on.
+.TP
+\fB\fC\-p\fR \fIport\fP [\fI42000\fP]
+The port where this instance binds to.
+.TP
+\fB\fC\-d\fR \fIdirectory\fP [\fIvast\fP]
+The path on the file system where to store persistent state.
+.TP
+\fB\fC\-l\fR \fIlog\-level\fP [\fI4\fP]
+The verbosity of the log file. See section \fBOPTIONS\fP for a description of
+possible values.
+.TP
+\fB\fC\-c\fR
+Spawn a \fIcore\fP immediately after starting.
+.TP
+\fB\fC\-w\fR \fIthreads\fP [\fIstd::thread::hardware_concurrency()\fP]
+The number of worker threads to use for CAF's scheduler.
+.TP
+\fB\fC\-t\fR \fImessages\fP [\fIstd::thread::hardware_concurrency()\fP]
+The CAF worker throughput expressed in the maximum number of messages to
+process when a worker gets scheduled.
+.TP
+\fB\fC\-p\fR \fIseconds\fP [\fI1\fP]
+Enable CAF profiling of worker threads and actors at the resolution
+\fIseconds\fP\&.
+.SS stop
+.PP
+Synopsis:
+.IP
+\fIstop\fP [\fIarguments\fP]
+.PP
+Stops a \fB\fCvast\fR instance on this node. 
+.PP
+Available \fIarguments\fP:
+.TP
+\fB\fC\-n\fR \fIname\fP
+The name of the instance to stop.
+.SS topology
+.PP
+Shows the system topology.
+.SS connect
+.PP
+Synopsis:
+.IP
+\fIconnect\fP \fIA\fP \fIB\fP
+.PP
+Connect two actors named \fIA\fP and \fIB\fP by registering \fIA\fP as source for \fIB\fP and
+\fIB\fP as sink for \fIA\fP\&.
+.SS disconnect
+.PP
+Synopsis:
+.IP
+\fIdisconnect\fP \fIA\fP \fIB\fP
+.PP
+Removes a previously estalbished connection between \fIA\fP and \fIB\fP\&.
+.SS spawn
+.PP
+Synopsis:
+.IP
+\fIspawn\fP [\fIarguments\fP] \fIactor\fP [\fIparameters\fP]
+.PP
+Creates a new instance of type \fIactor\fP\&. Some actor types can have at most one
+instance while others can have multiple instances.
+.PP
+Available \fIarguments\fP:
+.TP
+\fB\fC\-n\fR \fIname\fP
+Controls the spawn location. If \fB\fC\-n\fR \fIname\fP is given, \fIactor\fP will be spawned
+on the \fB\fCvast\fR instance \fIname\fP\&. Otherwise \fIactor\fP will be spawned on the
+connected instance.
+.PP
+\fB\fC\-l\fR \fIlabel\fP
+   A unique textual identifier within one \fB\fCvast\fR instance. The default label
+   has the form \fIactorN\fP where \fIN\fP is a running counter increased for each
+   spawned instance of \fIactor\fP\&. 
+.PP
+Available \fIactor\fP values with corresponding \fIparameters\fP:
+.PP
+\fIarchive\fP [\fIparameters\fP]
+  \fB\fC\-s\fR \fIsize\fP [\fI128\fP]
+    Maximum segment size in MB
+  \fB\fC\-c\fR \fIsegments\fP [\fI10\fP]
+    Number of cached segments
+.PP
+\fIindex\fP [\fIparameters\fP]
+  \fB\fC\-a\fR \fIpartitions\fP [\fI5\fP]
+    Number of active partitions to load\-balance events over.
+  \fB\fC\-p\fR \fIpartitions\fP [\fI10\fP]
+    Number of passive partitions.
+  \fB\fC\-e\fR \fIevents\fP [\fI1,000,000\fP]
+    Maximum events per partition. When an active partition reaches its
+    maximum, \fBINDEX\fP evicts it from memory and replaces it with an empty
+    partition.
+.PP
+\fIimporter\fP
+.PP
+\fIexporter\fP
+.PP
+\fIsource\fP \fBX\fP [\fIparameters\fP]
+  \fBX\fP specifies the format of \fIsource\fP\&. Each source format has its own set of
+  parameters, the following apply to all:
+  \fB\fC\-b\fR \fIbatch\-size\fP [\fI100,000\fP]
+    Number of events to read in one batch.
+  \fB\fC\-s\fR \fIschema\fP
+    Path to an alterative \fIschema\fP file which overrides the default attributes.
+  \fB\fC\-r\fR \fIpath\fP
+    Name of the filesystem \fIpath\fP (file or directory) to read events from.
+  \fB\fC\-I\fR \fIimporter\fP
+    If no \fBIMPORTER\fP runs on the connected instance, one must specify \fB\fC\-I\fR
+    \fIimporter\fP to indicate the endpoint receiving the generated events.
+.PP
+\fIsource\fP \fIbro\fP
+.PP
+\fIsource\fP \fIbgpdump\fP
+.PP
+\fIsource\fP \fItest\fP [\fIparameters\fP]
+  \fB\fC\-n\fR \fIevents\fP
+    The maximum number of \fIevents\fP to generate.
+.PP
+\fIsource\fP \fIpcap\fP [\fIparameters\fP]
+  \fB\fC\-i\fR \fIinterface\fP
+    Name of the network \fIinterface\fP to read packets from.
+  \fB\fC\-c\fR \fIcutoff\fP
+    The \fIcutoff\fP values specifies the maximum number of bytes to record per
+    flow in each direction. That is, the maximum number of recorded bytes flow
+    bytes can at most be twice as much as \fIcutoff\fP\&. the flow will be ignored
+  \fB\fC\-f\fR \fImax\-flows\fP [\fI1,000,000\fP]
+    The maximum number of flows to track concurrently. When there exist more
+    flows than \fImax\-flows\fP, a new flow will cause eviction of a element from
+    the flow table chosen uniformly at random.
+  \fB\fC\-a\fR \fImax\-age\fP [\fI60\fP]
+    The maximum lifetime of a flow before it gets evicted from the flow table.
+  \fB\fC\-p\fR \fIc\fP
+    Enable pseudo\-realtime mode by a factor of \fI1/c\fP to artificially delay
+    packet processing when reading from trace files. This means that the PCAP
+    source in that it sleeps for the amount of time observed in the packet
+    timestamp differences. If the PCAP source encounters a packet \fIp1\fP after a
+    previous packet \fIp0\fP with timestamps \fIt1\fP and \fIt0\fP, then it will sleep for
+    time \fI(t1\-t0)/c\fP before processing \fIp1\fP\&.
+.PP
+\fIsink\fP \fBX\fP [\fIparameters\fP]
+  \fBX\fP specifies the format of \fIsink\fP\&. Each sink format has its own set of
+  parameters, the following apply to all:
+  \fB\fC\-w\fR \fIpath\fP
+    Name of the filesystem \fIpath\fP (file or directory) to write events to.
+.PP
+\fIsink\fP \fIascii\fP
+.PP
+\fIsink\fP \fIbro\fP
+.PP
+\fIsink\fP \fIjson\fP
+.PP
+\fIsink\fP \fIpcap\fP [\fIparameters\fP]
+  \fB\fC\-f\fR \fIflush\fP [\fI1000\fP]
+    Flush the output PCAP trace after having processed \fIflush\fP packets.
+.PP
+\fIquery\fP [\fIparameters\fP] \fIexpression\fP
+  \fB\fC\-c\fR
+    Marks this query as \fBcontinuous\fP\&.
+  \fB\fC\-h\fR
+    Marks this query as \fBhistorical\fP\&.
+  \fB\fC\-u\fR
+    Marks this query as \fBunified\fP, which is equivalent to specifying both
+    \fB\fC\-c\fR and \fB\fC\-h\fR\&.
+  \fB\fC\-l\fR \fIn\fP [\fI0\fP]
+    Limit the number of results to \fIn\fP entries. The value \fIn = 0\fP means
+    unlimited.
+.PP
+\fIprofiler\fP [\fIparameters\fP]
+  If compiled with gperftools, eanbles the gperftools CPU or heap profiler to
+  collect samples at a given resolution.
+  \fB\fC\-c\fR
+    Launch the CPU profiler.
+  \fB\fC\-h\fR
+    Launch the heap profiler.
+  \fB\fC\-r\fR \fIseconds\fP [\fI1\fP]
+    The profiling resolution in seconds.
+.SS import
+.PP
+Synopsis:
+.IP
+\fIimport\fP [\fIarguments\fP]
+.PP
+Imports data on standard input. This command is a shorthand for spawning a
+\fBSOURCE\fP, connecting it with an \fBIMPORTER\fP, and associating standard input
+of the process invoking \fIimport\fP with input stream of the spawned \fBSOURCE\fP\&.
+.SS export
+.PP
+Synopsis:
+.IP
+\fIexport\fP [\fIarguments\fP] \fIexpression\fP
+.PP
+Issues a query and exports results to standard output. This command is a
+shorthand for spawning a \fBQUERY\fP and \fBSINK\fP, connecting the two, and
+relaying the result stream to standard output of the process invoking \fIexport\fP\&.
+.SH EXAMPLES
+.PP
+Start a core:
+.IP
+\fB\fCvast\fR \fIstart\fP \fB\fC\-c\fR
+.PP
+Connect to a \fB\fCvast\fR instance running host \fIfoo\fP at a port \fI31337\fP:
+.IP
+\fB\fCvast\fR \fB\fC\-a\fR \fIfoo\fP \fB\fC\-p\fR \fI31337\fP
+.PP
+Import a Bro log files:
+.IP
+zcat log.gz | \fB\fCvast\fR \fIimport\fP \fIbro\fP
+.PP
+Run a historical query with at most 100 results, printed in ASCII.
+.IP
+\fB\fCvast\fR \fIexport\fP \fIascii\fP \-h \-l 100 &type == "conn" && :addr in 10.0.0.0/8
+.PP
+Read packets from network interface \fIbge0\fP and send them to a remote
+\fBIMPORTER\fP at node \fIfoo\fP:
+.IP
+\fB\fCvast\fR \fIspawn\fP \fIsource\fP \fIpcap\fP \fB\fC\-i\fR \fIbge0\fP \fB\fC\-I\fR \fIimporter0\fP\fB\fC@\fR\fIfoo\fP
+.SH BUGS
+.PP
+If you encounter a bug or have suggestions for improvement, please file an
+issue at 
+\[la]https://github.com/mavam/vast/issues\[ra]\&.
+.SH SEE ALSO
+.PP
+Visit 
+\[la]https://github.com/mavam/vast\[ra] for more information about VAST.

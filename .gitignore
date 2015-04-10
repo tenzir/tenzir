@@ -2,7 +2,5 @@
 .*sw?
 build*
 Makefile
-doc/html
-src/config.h
 test/unit/bro/logs/**/*.log
 test/unit/traces/*.pcap
