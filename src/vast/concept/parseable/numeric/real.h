@@ -12,6 +12,8 @@ namespace vast {
 template <typename T>
 struct real_parser : parser<real_parser<T>>
 {
+  static constexpr auto require_dot = true; // TODO: Make this a policy.
+
   using attribute = T;
 
   template <typename Iterator>
@@ -58,13 +60,14 @@ struct real_parser : parser<real_parser<T>>
     Attribute integral = 0;
     Attribute fractional = 0;
     auto got_num = integral_parser<uint64_t>::parse_pos(f, l, integral);
-    // If we did not get a number, we may have gotton Inf or NaN, which we
-    // ignore at this point.
+    // TODO: if we did not get a number, we may have gotton Inf or NaN, which we
+    // ignore at this point. Future work...
     // Parse dot.
     auto got_dot = parse_dot(f, l);
-    if (! got_num && ! got_dot)
+    if (! got_dot && (! got_num || require_dot))
     {
-      // Without dot and integral part, we cannot proceed.
+      // If we require a dot but don't have it, we're out. We can neither
+      // proceed if both dot and integral part are absent.
       f = save;
       return false;
     }
