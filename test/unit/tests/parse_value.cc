@@ -180,28 +180,28 @@ TEST(value)
   v = to<value>("127.0.0.1");
   REQUIRE(v);
   CHECK(is<address>(*v));
-  CHECK(*v == *address::from_v4("127.0.0.1"));
+  CHECK(*v == *to<address>("127.0.0.1"));
 
   v = to<value>("::");
   REQUIRE(v);
   CHECK(is<address>(*v));
-  CHECK(*v == *address::from_v6("::"));
+  CHECK(*v == *to<address>("::"));
 
   v = to<value>("f00::");
   REQUIRE(v);
   CHECK(is<address>(*v));
-  CHECK(*v == *address::from_v6("f00::"));
+  CHECK(*v == *to<address>("f00::"));
 
   // Subnets
   v = to<value>("10.0.0.0/8");
   REQUIRE(v);
   CHECK(is<subnet>(*v));
-  CHECK(*v == subnet{*address::from_v4("10.0.0.0"), 8});
+  CHECK(*v == subnet{*to<address>("10.0.0.0"), 8});
 
   v = to<value>("2001:db8:0:0:8:800:200c:417a/64");
   REQUIRE(v);
   CHECK(is<subnet>(*v));
-  auto pfx = subnet{*address::from_v6("2001:db8:0:0:8:800:200c:417a"), 64};
+  auto pfx = subnet{*to<address>("2001:db8:0:0:8:800:200c:417a"), 64};
   CHECK(*v == pfx);
 
   // Ports

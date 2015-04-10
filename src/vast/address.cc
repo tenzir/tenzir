@@ -14,37 +14,6 @@ std::array<uint8_t, 12> const vast::address::v4_mapped_prefix =
 
 namespace vast {
 
-trial<address> address::from_v4(char const* str)
-{
-  address r;
-  std::copy(v4_mapped_prefix.begin(),
-            v4_mapped_prefix.end(),
-            r.bytes_.begin());
-
-  int a[4];
-  int n = sscanf(str, "%d.%d.%d.%d", a + 0, a + 1, a + 2, a + 3);
-
-  if (n != 4
-      || a[0] < 0 || a[1] < 0 || a[2] < 0 || a[3] < 0
-      || a[0] > 255 || a[1] > 255 || a[2] > 255 || a[3] > 255)
-    return error{"failed to parse address: ", str};
-
-  uint32_t addr = (a[0] << 24) | (a[1] << 16) | (a[2] << 8) | a[3];
-  auto p = reinterpret_cast<uint32_t*>(&r.bytes_[12]);
-  *p = util::byte_swap<host_endian, network_endian>(addr);
-
-  return std::move(r);
-}
-
-trial<address> address::from_v6(char const* str)
-{
-  address a;
-  if (inet_pton(AF_INET6, str, a.bytes_.data()) <= 0)
-    return error{"inet_pton() failed for:", str};
-
-  return std::move(a);
-}
-
 address::address()
 {
   bytes_.fill(0);
@@ -55,7 +24,6 @@ address::address(uint32_t const* bytes, family fam, byte_order order)
   if (fam == ipv4)
   {
     std::copy(v4_mapped_prefix.begin(), v4_mapped_prefix.end(), bytes_.begin());
-
     auto p = reinterpret_cast<uint32_t*>(&bytes_[12]);
     if (order == host)
       *p = util::byte_swap<host_endian, network_endian>(*bytes);
@@ -125,22 +93,17 @@ bool address::mask(unsigned top_bits_to_keep)
 {
   if (top_bits_to_keep > 128)
     return false;
-
   uint32_t m[4] = { 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff };
   auto r = std::ldiv(top_bits_to_keep, 32);
-
   if (r.quot < 4)
     m[r.quot] =
       util::byte_swap<host_endian, network_endian>(
           m[r.quot] & ~bitmask32(32 - r.rem));
-
   for (size_t i = r.quot + 1; i < 4; ++i)
     m[i] = 0;
-
   auto p = reinterpret_cast<uint32_t*>(&bytes_[0]);
   for (size_t i = 0; i < 4; ++i)
     p[i] &= m[i];
-
   return true;
 }
 
