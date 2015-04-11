@@ -6,6 +6,7 @@
 #include "vast/concept/parseable/core/ignore.h"
 #include "vast/concept/parseable/core/kleene.h"
 #include "vast/concept/parseable/core/not.h"
+#include "vast/concept/parseable/core/optional.h"
 #include "vast/concept/parseable/core/or.h"
 #include "vast/concept/parseable/core/parse.h"
 #include "vast/concept/parseable/core/plus.h"
