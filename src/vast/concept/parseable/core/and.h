@@ -35,7 +35,24 @@ class and_parser : public parser<and_parser<Lhs, Rhs>>
 
   template <typename T>
   static constexpr auto depth_helper()
-    -> std::enable_if_t<is_and_parser<T>::value, size_t>
+    -> std::enable_if_t<
+         is_and_parser<T>::value
+          && (std::is_same<typename T::lhs_attribute, unused_type>::value
+              || std::is_same<typename T::rhs_attribute, unused_type>::value),
+         size_t
+       >
+  {
+    return depth_helper<typename T::lhs_type>();
+  }
+
+  template <typename T>
+  static constexpr auto depth_helper()
+    -> std::enable_if_t<
+         is_and_parser<T>::value
+          && ! std::is_same<typename T::lhs_attribute, unused_type>::value
+          && ! std::is_same<typename T::rhs_attribute, unused_type>::value,
+         size_t
+       >
   {
     return 1 + depth_helper<typename T::lhs_type>();
   }
@@ -45,30 +62,36 @@ class and_parser : public parser<and_parser<Lhs, Rhs>>
     return depth_helper<and_parser>();
   }
 
-  template <typename T, typename Iterator, typename Attribute>
-  auto parse_left_helper(Iterator& f, Iterator const& l, Attribute& a) const
-    -> std::enable_if_t<is_and_parser<T>::value, bool>
-  {
-    return lhs_.parse(f, l, a);
-  }
-
-  template <typename T, typename Iterator, typename Attribute>
-  auto parse_left_helper(Iterator& f, Iterator const& l, Attribute& a) const
-    -> std::enable_if_t<! is_and_parser<T>::value, bool>
-  {
-    return lhs_.parse(f, l, std::get<0>(a));
-  }
-
   template <typename Iterator>
   bool parse_left(Iterator& f, Iterator const& l, unused_type) const
   {
     return lhs_.parse(f, l, unused);
   }
 
+  template <typename L, typename T>
+  static auto get_helper(T& x)
+    -> std::enable_if_t<is_and_parser<L>{}, T&>
+  {
+    return x;
+  }
+
+  template <typename L, typename T>
+  static auto get_helper(T& x)
+    -> std::enable_if_t<! is_and_parser<L>{}, decltype(std::get<0>(x))>
+  {
+    return std::get<0>(x);
+  }
+
+  template <typename Iterator, typename... Ts>
+  bool parse_left(Iterator& f, Iterator const& l, std::tuple<Ts...>& t) const
+  {
+    return lhs_.parse(f, l, get_helper<lhs_type>(t));
+  }
+
   template <typename Iterator, typename Attribute>
   bool parse_left(Iterator& f, Iterator const& l, Attribute& a) const
   {
-    return parse_left_helper<Lhs>(f, l, a);
+    return lhs_.parse(f, l, a);
   }
 
   template <typename Iterator>
@@ -77,10 +100,16 @@ class and_parser : public parser<and_parser<Lhs, Rhs>>
     return rhs_.parse(f, l, unused);
   }
 
+  template <typename Iterator, typename... Ts>
+  bool parse_right(Iterator& f, Iterator const& l, std::tuple<Ts...>& t) const
+  {
+    return rhs_.parse(f, l, std::get<depth()>(t));
+  }
+
   template <typename Iterator, typename Attribute>
   bool parse_right(Iterator& f, Iterator const& l, Attribute& a) const
   {
-    return rhs_.parse(f, l, std::get<depth()>(a));
+    return rhs_.parse(f, l, a);
   }
 
 public:
