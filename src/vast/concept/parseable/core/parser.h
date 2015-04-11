@@ -74,7 +74,7 @@ struct parser
   }
 
   template <typename Rhs>
-  friend auto operator&(Derived const& lhs, Rhs const& rhs)
+  friend auto operator>>(Derived const& lhs, Rhs const& rhs)
   {
     return and_parser<Derived, Rhs>{lhs, rhs};
   }
