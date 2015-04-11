@@ -3,6 +3,7 @@
 
 #include "vast/concept/parseable/core/action.h"
 #include "vast/concept/parseable/core/and.h"
+#include "vast/concept/parseable/core/ignore.h"
 #include "vast/concept/parseable/core/kleene.h"
 #include "vast/concept/parseable/core/not.h"
 #include "vast/concept/parseable/core/or.h"
