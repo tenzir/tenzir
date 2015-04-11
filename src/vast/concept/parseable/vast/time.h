@@ -3,11 +3,13 @@
 
 #include "vast/access.h"
 #include "vast/time.h"
+#include "vast/concept/parseable/core/and.h"
+#include "vast/concept/parseable/core/optional.h"
 #include "vast/concept/parseable/numeric/real.h"
 
 namespace vast {
 
-struct time_duration_parser : vast::parser<time_duration_parser>
+struct time_duration_parser : parser<time_duration_parser>
 {
   using attribute = time::duration;
 
@@ -76,6 +78,81 @@ template <>
 struct parser_registry<time::duration>
 {
   using type = time_duration_parser;
+};
+
+namespace detail {
+
+struct ymd_parser : vast::parser<ymd_parser>
+{
+  using attribute = std::tm;
+
+  // YYYY(-MM(-DD))
+  static auto make()
+  {
+    auto delim = ignore(char_parser{'-'});
+    auto year = integral_parser<unsigned, 4, 4>{};
+    auto mon = integral_parser<unsigned, 2, 2>{};
+    auto day = integral_parser<unsigned, 2, 2>{};
+    return year >> ~(delim >> mon >> ~(delim >> day));
+  }
+
+  template <typename Iterator>
+  bool parse(Iterator& f, Iterator const& l, unused_type) const
+  {
+    static auto p = make();
+    return p.parse(f, l, unused);
+  }
+
+  template <typename Iterator, typename Attribute>
+  bool parse(Iterator& f, Iterator const& l, Attribute& a) const
+  {
+    using std::get;
+    static auto p = make();
+    auto ymd = decltype(p)::attribute{};
+    if (p.parse(f, l, ymd))
+    {
+      a.tm_year = get<0>(ymd) - 1900;
+      if (get<1>(ymd))
+      {
+        a.tm_mon = get<0>(*get<1>(ymd)) - 1;
+        if (get<1>(*get<1>(ymd)))
+          a.tm_mday = *get<1>(*get<1>(ymd));
+      }
+      return true;
+    }
+    return false;
+  }
+};
+
+} // detail
+
+struct time_point_parser : parser<time_point_parser>
+{
+  using attribute = time::point;
+
+  template <typename Iterator>
+  bool parse(Iterator& f, Iterator const& l, unused_type) const
+  {
+    return parser_.parse(f, l, unused);
+  }
+
+  template <typename Iterator, typename Attribute>
+  bool parse(Iterator& f, Iterator const& l, Attribute& a) const
+  {
+    std::tm tm;
+    if (! parser_.parse(f, l, tm))
+      return false;
+    a = time::point::from_tm(tm);
+    return true;
+  }
+
+  detail::ymd_parser parser_;
+};
+
+template <>
+struct parser_registry<time::point>
+{
+  using type = time_point_parser;
 };
 
 } // namespace vast
