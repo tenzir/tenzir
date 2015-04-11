@@ -8,24 +8,24 @@
 
 namespace vast {
 
+template <typename>
+struct is_tuple : std::false_type {};
+
+template <typename... Ts>
+struct is_tuple<std::tuple<Ts...>> : std::true_type {};
+
+template <typename T>
+using tuple_wrap = std::conditional_t<is_tuple<T>::value, T, std::tuple<T>>;
+
+template <typename>
+struct is_and_parser : std::false_type {};
+
+template <typename... Ts>
+struct is_and_parser<and_parser<Ts...>> : std::true_type {};
+
 template <typename Lhs, typename Rhs>
 class and_parser : public parser<and_parser<Lhs, Rhs>>
 {
-  template <typename>
-  struct is_tuple : std::false_type {};
-
-  template <typename... Ts>
-  struct is_tuple<std::tuple<Ts...>> : std::true_type {};
-
-  template <typename T>
-  using tuple_wrap = std::conditional_t<is_tuple<T>::value, T, std::tuple<T>>;
-
-  template <typename>
-  struct is_and_parser : std::false_type {};
-
-  template <typename... Ts>
-  struct is_and_parser<and_parser<Ts...>> : std::true_type {};
-
   template <typename T>
   static constexpr auto depth_helper()
     -> std::enable_if_t<! is_and_parser<T>::value, size_t>
