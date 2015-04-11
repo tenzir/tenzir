@@ -41,6 +41,9 @@ template <typename>
 class not_parser;
 
 template <typename>
+class optional_parser;
+
+template <typename>
 class kleene_parser;
 
 template <typename>
@@ -61,6 +64,11 @@ struct parser
   friend auto operator!(Derived const& p)
   {
     return not_parser<Derived>{p};
+  }
+
+  friend auto operator~(Derived const& p)
+  {
+    return optional_parser<Derived>{p};
   }
 
   friend auto operator*(Derived const& p)
