@@ -1,6 +1,7 @@
 # VAST
 
 [![Build Status][jenkins-badge]][jenkins-url]
+[![Docker Container][docker-badge]][docker-url]
 [![Gitter][gitter-badge]](https://gitter.im/mavam/vast)
 
 **Visibility Across Space and Time (VAST)** is a unified platform for network
@@ -123,3 +124,5 @@ licence](https://raw.github.com/mavam/vast/master/COPYING).
 [jenkins-url]: http://mobi39.cpt.haw-hamburg.de/view/VAST%20Build%20Status/
 [jenkins-badge]: http://mobi39.cpt.haw-hamburg.de/buildStatus/icon?job=VAST/master%20branch
 [gitter-badge]: https://badges.gitter.im/Join%20Chat.svg
+[docker-url]: https://quay.io/repository/mavam/vast
+[docker-badge]: https://quay.io/repository/mavam/vast/status 
