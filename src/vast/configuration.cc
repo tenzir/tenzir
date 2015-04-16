@@ -50,7 +50,7 @@ void configuration::initialize()
   auto range = '(' + std::to_string(min) + '-' + std::to_string(max) + ')';
 
   auto hostname = util::hostname();
-  if (! hostname || hostname->empty())
+  if (hostname.empty())
     hostname = to_string(uuid::random()).substr(0, 6);  // FIXME: uniform?
 
   auto time_pid =
@@ -95,7 +95,7 @@ void configuration::initialize()
   imp.add("pcap-pseudo-realtime", "factor c delaying packets in trace by 1/c").init(0);
   imp.add("test-id", "the base event ID").init(0);
   imp.add("test-events", "number of events to generate").init(100);
-  imp.add("name", "default source name").init("source@" + *hostname);
+  imp.add("name", "default source name").init("source@" + hostname);
   imp.visible(false);
 
   auto& exp = create_block("export options", "export");
@@ -107,17 +107,17 @@ void configuration::initialize()
   exp.add('u', "unified", "marks a query as both historical and continuous");
   exp.add('w', "write", "path to output file/directory").init("-");
   exp.add("pcap-flush", "flush to disk after this many packets").init(10000);
-  exp.add("name", "default exporter name").init("exporter@" + *hostname);
+  exp.add("name", "default exporter name").init("exporter@" + hostname);
   exp.visible(false);
 
   auto& recv = create_block("receiver options", "receiver");
-  recv.add("name", "default receiver name").init("receiver@" + *hostname);
+  recv.add("name", "default receiver name").init("receiver@" + hostname);
   recv.visible(false);
 
   auto& arch = create_block("archive options", "archive");
   arch.add("max-segment-size", "maximum segment size in MB").init(128);
   arch.add("max-segments", "maximum segments cached in memory").init(10);
-  arch.add("name", "default archive name").init("archive@" + *hostname);
+  arch.add("name", "default archive name").init("archive@" + hostname);
   arch.visible(false);
 
   auto& idx = create_block("index options", "index");
@@ -125,11 +125,11 @@ void configuration::initialize()
   idx.add('m', "part-passive", "maximum number of passive partitions").init(10);
   idx.add('a', "part-active", "number of active partitions").init(5);
   idx.add("rebuild", "delete and rebuild index from archive");
-  idx.add("name", "default index name").init("index@" + *hostname);
+  idx.add("name", "default index name").init("index@" + hostname);
   idx.visible(false);
 
   auto& srch = create_block("search options", "search");
-  srch.add("name", "default search name").init("search@" + *hostname);
+  srch.add("name", "default search name").init("search@" + hostname);
   srch.visible(false);
 
   auto& prof = create_block("profiler options", "profiler");

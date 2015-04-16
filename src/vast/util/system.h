@@ -1,15 +1,16 @@
 #ifndef VAST_UTIL_SYSTEM_H
 #define VAST_UTIL_SYSTEM_H
 
+#include <cstdint>
+
 #include <string>
-#include "vast/util/trial.h"
 
 namespace vast {
 namespace util {
 
 /// Retrieves the hostname of the system.
 /// @returns The system hostname.
-trial<std::string> hostname();
+std::string hostname();
 
 /// Retrieves the process ID.
 /// @returns The ID of this process.
