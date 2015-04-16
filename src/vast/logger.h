@@ -170,10 +170,10 @@ std::ostream& operator<<(std::ostream& stream, logger::level lvl);
   {                                                                           \
     if (::vast::logger::takes(lvl))                                           \
     {                                                                         \
-      auto m = ::vast::logger::make_message(                                  \
+      auto __vast_msg = ::vast::logger::make_message(                         \
           lvl, VAST_LOG_FACILITY, __PRETTY_FUNCTION__);                       \
-      m << msg;                                                               \
-      ::vast::logger::log(std::move(m));                                      \
+      __vast_msg << msg;                                                      \
+      ::vast::logger::log(std::move(__vast_msg));                             \
     }                                                                         \
   }                                                                           \
   while (false)
