@@ -9,15 +9,13 @@
 
 namespace vast {
 
-class path;
-
 /// A simple singleton logger and tracer.
 class logger : public singleton<logger>
 {
   friend class singleton<logger>;
 
 public:
-  enum level : uint32_t
+  enum level : int
   {
     quiet     = 0,
     error     = 1,
@@ -27,11 +25,6 @@ public:
     debug     = 5,
     trace     = 6
   };
-
-  /// Attempts to parse a textual representation of a log-level.
-  /// @param str The string holding the level description
-  /// @returns An engaged trial on success.
-  static trial<level> parse_level(std::string const& str);
 
   /// A formatted message containing timestamp and thread ID.
   class message
@@ -116,32 +109,32 @@ public:
     message msg_;
   };
 
-  ~logger();
-
-  /// Initializes the logger.
-  /// This function must be called once prior to using any logging macro.
-  /// @param console The log level of the console.
-  /// @param colors Whether to use colors in the console output.
-  /// @param file The log level of the logfile.
-  /// @param show_fns Whether to print function names in the output.
-  /// @param dir The directory to create the log file in.
+  /// Initializes the file backend.
+  /// @param verbosity The log level to filter messages.
+  /// @param filename The path of the log file.
   /// @returns `true` on success.
-  bool init(level console, level file, bool colors, bool show_fns, path dir);
+  static bool file(level verbosity, std::string const& filename);
+
+  /// Initializes the console backend.
+  /// @param verbosity The log level to filter messages.
+  /// @param colorized Whether to colorize console messages.
+  /// @returns `true` on success.
+  static bool console(level verbosity, bool colorized = true);
 
   /// Logs a record.
   /// @param msg The log message.
-  void log(message msg);
+  static void log(message msg);
 
   /// Checks whether the logger takes a given level.
   /// @param lvl The level to check.
   /// @param `true` if the logger takes at least *lvl*.
-  bool takes(level lvl) const;
+  static bool takes(level lvl);
 
   /// Constructs a message which accepts arbitrary values via `operator<<`.
   /// @param lvl The log level.
   /// @param facility The facility or component.
   /// @param fun The caller function, typically `__PRETTY_FUNCTION__`.
-  message make_message(level lvl, char const* facility, char const* fun) const;
+  static message make_message(level lvl, char const* facility, char const* fun);
 
 private:
   /// Implementation of the logger. We use PIMPL here to reduce the footprint
@@ -159,11 +152,10 @@ private:
 
   void run();
 
-  impl* impl_;
-  bool show_fns_;
-
-  friend std::ostream& operator<<(std::ostream& stream, logger::level lvl);
+  std::unique_ptr<impl> impl_;
 };
+
+std::ostream& operator<<(std::ostream& stream, logger::level lvl);
 
 } // namespace vast
 
@@ -176,12 +168,12 @@ private:
 #define VAST_LOG(lvl, msg)                                                    \
   do                                                                          \
   {                                                                           \
-    if (::vast::logger::instance()->takes(lvl))                               \
+    if (::vast::logger::takes(lvl))                                           \
     {                                                                         \
-      auto m = ::vast::logger::instance()->make_message(                      \
+      auto m = ::vast::logger::make_message(                                  \
           lvl, VAST_LOG_FACILITY, __PRETTY_FUNCTION__);                       \
       m << msg;                                                               \
-      ::vast::logger::instance()->log(std::move(m));                          \
+      ::vast::logger::log(std::move(m));                                      \
     }                                                                         \
   }                                                                           \
   while (false)
@@ -255,7 +247,7 @@ private:
 #  define VAST_ARGS_ENTER(args) "--> (" << args << ')'
 #  define VAST_ARGS_LEAVE(args) "<-- (" << args << ')'
 #  define VAST_ENTER_ARGS(args, msg)                                          \
-      auto __vast_msg = ::vast::logger::instance()->make_message(             \
+      auto __vast_msg = ::vast::logger::make_message(                         \
           ::vast::logger::level::trace,                                       \
           VAST_LOG_FACILITY, __PRETTY_FUNCTION__);                            \
      ::vast::logger::tracer __vast_tracer{std::move(__vast_msg)};             \

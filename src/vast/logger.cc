@@ -67,19 +67,15 @@ std::string prettify(char const* pretty_func)
     }
     ++c;
   }
-
   // No whitespace found, could be (con|des)tructor.
   if (! c)
     return {pretty_func, c};
-
   if (*paren != '(')
     while (*paren != '(')
       ++paren;
-
   // The space occurs before the '(', so we have a return type.
   if (++c < paren)
     return {c, paren};
-
   // If we went beyond the left parenthesis, we're in a (con|des)tructor.
   while (*paren && *paren != '(')
     ++paren;
@@ -90,21 +86,30 @@ std::string prettify(char const* pretty_func)
 
 struct logger::impl
 {
-  bool init(level console, level file, bool color, bool show_fns, path dir)
+  bool file(level verbosity, std::string const& filename)
   {
-    show_functions_ = show_fns;
-    console_level_ = console;
-    file_level_ = file;
-    use_colors_ = color;
-    if (! log_file_.is_open())
+    file_level_ = verbosity;
+    auto p = path{filename};
+    if (file_level_ != quiet && ! log_file_.is_open())
     {
-      if (! exists(dir) && ! mkdir(dir))
+      if (! exists(p) && ! exists(p.parent()) && ! mkdir(p.parent()))
         return false;
-      log_file_.open((dir / "vast.log").str());
+      log_file_.open(p.str());
       if (! log_file_)
         return false;
-      log_thread_ = std::thread([=] { run(); });
     }
+    if (! log_thread_.joinable())
+      log_thread_ = std::thread([=] { run(); });
+    return log_thread_.joinable();
+  }
+
+  bool console(level verbosity, bool colorized)
+  {
+    console_level_ = verbosity;
+    colorized_ = colorized;
+    console_ = true;
+    if (! log_thread_.joinable())
+      log_thread_ = std::thread([=] { run(); });
     return log_thread_.joinable();
   }
 
@@ -120,8 +125,6 @@ struct logger::impl
 
   void run()
   {
-    assert(log_file_);
-
     while (true)
     {
       auto m = messages_.pop();
@@ -131,8 +134,7 @@ struct logger::impl
           log_file_.close();
         return;
       }
-
-      if (m.lvl() <= file_level_)
+      if (log_file_ && m.lvl() <= file_level_)
       {
         log_file_
           << std::setprecision(15) << std::setw(16) << std::left << std::setfill('0')
@@ -145,26 +147,21 @@ struct logger::impl
           << m.msg()
           << std::endl;
       }
-
-      if (m.lvl() <= console_level_)
+      if (console_ && m.lvl() <= console_level_)
       {
-        if (use_colors_)
+        if (colorized_)
           std::cerr << util::color::cyan;
-
         std::cerr
           << std::setprecision(15) << std::setw(16) << std::left << std::setfill('0')
           << m.timestamp()
           << ' ';
-
-        if (use_colors_)
+        if (colorized_)
           std::cerr << util::color::blue;
-
         std::cerr
           << "0x" << std::setw(14) << std::setfill(' ')
           << m.thread_id()
           << ' ';
-
-        if (use_colors_)
+        if (colorized_)
         {
           switch (m.lvl())
           {
@@ -188,12 +185,9 @@ struct logger::impl
               break;
           }
         }
-
         std::cerr << m.lvl() << ' ';
-
-        if (use_colors_)
+        if (colorized_)
           std::cerr << util::color::reset;
-
         std::cerr << m.msg() << std::endl;
       }
     }
@@ -207,35 +201,15 @@ struct logger::impl
     log_thread_.join();
   }
 
-  bool show_functions_;
-  bool use_colors_;
   level console_level_;
   level file_level_;
   std::ofstream log_file_;
+  bool console_ = false;
+  bool colorized_ = false;
   std::thread log_thread_;
   util::queue<message> messages_;
 };
 
-
-trial<logger::level> logger::parse_level(std::string const& str)
-{
-  if (str == "quiet" || str == "0")
-    return quiet;
-  if (str == "error" || str == "1")
-    return error;
-  if (str == "warn" || str == "2")
-    return warn;
-  if (str == "info" || str == "3")
-    return info;
-  if (str == "verbose" || str == "4")
-    return verbose;
-  if (str == "debug" || str == "5")
-    return debug;
-  if (str == "trace" || str == "6")
-    return trace;
-
-  return util::error{"could not parse log level"};
-}
 
 logger::message::message(level lvl)
   : lvl_{lvl}
@@ -354,10 +328,8 @@ logger::tracer::tracer(message&& msg)
 void logger::tracer::fill(fill_type t)
 {
   assert(call_depth >= 1);
-
   std::string f(3 + call_depth, '-');
   f[f.size() - 1] = ' ';
-
   f[0] = '|';
   if (t == right_arrow)
     f[f.size() - 2] = '\\';
@@ -365,7 +337,6 @@ void logger::tracer::fill(fill_type t)
     f[f.size() - 2] = '/';
   else if (t == bar)
     f[f.size() - 2] = '|';
-
   msg_ << f << ' ';
 }
 
@@ -398,7 +369,6 @@ logger::tracer::~tracer()
     fill(left_arrow);
     msg_ << "::" << msg_.function();
   }
-
   commit();
   --call_depth;
 }
@@ -406,44 +376,42 @@ logger::tracer::~tracer()
 
 logger::logger()
 {
-  impl_ = new impl;
+  impl_ = std::make_unique<impl>();
 }
 
-logger::~logger()
+bool logger::file(level verbosity, std::string const& filename)
 {
-  delete impl_;
+  return instance()->impl_->file(verbosity, filename);
 }
 
-bool logger::init(level console, level file, bool colors, bool show_fns,
-                  path dir)
+bool logger::console(level verbosity, bool colorized)
 {
-  return impl_->init(console, file, colors, show_fns, dir);
+  return instance()->impl_->console(verbosity, colorized);
 }
 
 void logger::log(message msg)
 {
-  impl_->log(std::move(msg));
+  assert(instance()->impl_);
+  instance()->impl_->log(std::move(msg));
 }
 
-bool logger::takes(logger::level lvl) const
+bool logger::takes(logger::level lvl)
 {
-  return impl_->takes(lvl);
+  assert(instance()->impl_);
+  return instance()->impl_->takes(lvl);
 }
 
-logger::message logger::make_message(logger::level lvl,
-                                     char const* facility,
-                                     char const* fun) const
+logger::message logger::make_message(logger::level lvl, char const* facility,
+                                     char const* fun)
 {
   assert(facility != nullptr);
-
+  assert(instance()->impl_);
+  auto& impl = instance()->impl_;
   message m{lvl};
-  if (impl_->show_functions_ || impl_->console_level_ == trace
-      || impl_->file_level_ == trace)
+  if (impl->console_level_ == trace || impl->file_level_ == trace)
     m.function_ = prettify(fun);
-
   if (*facility)
     m.facility_ = facility;
-
   m.coin();
   return m;
 }

@@ -1,7 +1,6 @@
 #include <caf/set_scheduler.hpp>
 
 #include "vast/announce.h"
-#include "vast/cleanup.h"
 #include "vast/filesystem.h"
 #include "vast/logger.h"
 
@@ -20,18 +19,15 @@ int main(int argc, char* argv[])
     std::cerr << cfg.error() << '\n';
     return 1;
   }
-  auto log_dir = vast::path{*cfg->get("vast-log-dir")};
-  if (! vast::logger::instance()->init(
-          vast::logger::quiet,
-          vast::logger::debug,
-          false, false, log_dir))
+  auto log_file = vast::path{*cfg->get("vast-log-dir")} / "vast.log";
+  if (! vast::logger::file(vast::logger::debug, log_file.str()))
   {
     std::cerr << "failed to initialize VAST's logger" << std::endl;
     return 1;
   }
   auto rc = unit::engine::run(*cfg);
   if (! cfg->check("vast-keep-logs"))
-    vast::rm(log_dir);
-  vast::cleanup();
+    vast::rm(log_file);
+  vast::logger::destruct();
   return rc ? 0 : 1;
 }
