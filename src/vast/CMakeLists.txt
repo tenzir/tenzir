@@ -4,6 +4,7 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in
 set(libvast_sources
   address.cc
   announce.cc
+  banner.cc
   bitvector.cc
   bitstream.cc
   bitstream_polymorphic.cc
