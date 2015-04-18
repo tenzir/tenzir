@@ -1,15 +1,15 @@
-#include "vast/logger.h"
-
 #include <cassert>
 #include <iomanip>
 #include <iostream>
 #include <fstream>
 #include <thread>
+
 #include "vast/filesystem.h"
+#include "vast/logger.h"
 #include "vast/time.h"
 #include "vast/util/color.h"
 #include "vast/util/queue.h"
-#include "vast/util/system.h"
+#include "vast/util/string.h"
 
 namespace vast {
 namespace {
@@ -128,67 +128,69 @@ struct logger::impl
     while (true)
     {
       auto m = messages_.pop();
+      // A quit message is the termination signal, as it would have already
+      // been filtered out beforehand.
       if (m.lvl() == quiet)
       {
         if (log_file_)
           log_file_.close();
         return;
       }
-      if (log_file_ && m.lvl() <= file_level_)
+      // If the message contains newlines, split it up into multiple ones to
+      // preserve the correct indentation.
+      auto msg = m.msg();
+      for (auto& split : util::split(msg.begin(), msg.end(), "\n"))
       {
-        log_file_
-          << std::setprecision(15) << std::setw(16) << std::left << std::setfill('0')
-          << m.timestamp()
-          << ' '
-          << "0x" << std::setw(14) << std::setfill(' ') << m.thread_id()
-          << ' '
-          << m.lvl()
-          << ' '
-          << m.msg()
-          << std::endl;
-      }
-      if (console_ && m.lvl() <= console_level_)
-      {
-        if (colorized_)
-          std::cerr << util::color::cyan;
-        std::cerr
-          << std::setprecision(15) << std::setw(16) << std::left << std::setfill('0')
-          << m.timestamp()
-          << ' ';
-        if (colorized_)
-          std::cerr << util::color::blue;
-        std::cerr
-          << "0x" << std::setw(14) << std::setfill(' ')
-          << m.thread_id()
-          << ' ';
-        if (colorized_)
+        auto line = std::string{split.first, split.second};
+        if (log_file_ && m.lvl() <= file_level_)
         {
-          switch (m.lvl())
-          {
-            default:
-              break;
-            case error:
-              std::cerr << util::color::red;
-              break;
-            case warn:
-              std::cerr << util::color::yellow;
-              break;
-            case info:
-              std::cerr << util::color::green;
-              break;
-            case verbose:
-              std::cerr << util::color::cyan;
-              break;
-            case debug:
-            case trace:
-              std::cerr << util::color::blue;
-              break;
-          }
+          log_file_
+            << std::setprecision(15) << std::setw(16) << std::left
+            << std::setfill('0') << m.timestamp() << ' '
+            << "0x" << std::setw(14) << std::setfill(' ') << m.thread_id()
+            << ' ' << m.lvl() << ' ' << line << std::endl;
         }
-        std::cerr << m.lvl() << ' ';
-        if (colorized_)
-          std::cerr << util::color::reset;
-        std::cerr << m.msg() << std::endl;
+        if (console_ && m.lvl() <= console_level_)
+        {
+          if (colorized_)
+            std::cerr << util::color::cyan;
+          std::cerr
+            << std::setprecision(15) << std::setw(16) << std::left
+            << std::setfill('0') << m.timestamp() << ' ';
+          if (colorized_)
+            std::cerr << util::color::blue;
+          std::cerr
+            << "0x" << std::setw(14) << std::setfill(' ') << m.thread_id()
+            << ' ';
+          if (colorized_)
+          {
+            switch (m.lvl())
+            {
+              default:
+                break;
+              case error:
+                std::cerr << util::color::red;
+                break;
+              case warn:
+                std::cerr << util::color::yellow;
+                break;
+              case info:
+                std::cerr << util::color::green;
+                break;
+              case verbose:
+                std::cerr << util::color::cyan;
+                break;
+              case debug:
+              case trace:
+                std::cerr << util::color::blue;
+                break;
+            }
+          }
+          std::cerr << m.lvl() << ' ';
+          if (colorized_)
+            std::cerr << util::color::reset;
+          std::cerr << line << std::endl;
+        }
       }
     }
   }
