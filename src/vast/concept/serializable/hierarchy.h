@@ -11,7 +11,7 @@
 #include <caf/deserializer.hpp>
 
 #include "vast/die.h"
-#include "vast/concept/serializable/caf_adapters.h"
+#include "vast/concept/serializable/caf/adapters.h"
 
 namespace vast {
 

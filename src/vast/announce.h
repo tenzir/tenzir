@@ -3,7 +3,7 @@
 
 #include <caf/announce.hpp>
 
-#include "vast/concept/serializable/caf_type_info.h"
+#include "vast/concept/serializable/caf/type_info.h"
 #include "vast/concept/serializable/hierarchy.h"
 
 namespace vast {
