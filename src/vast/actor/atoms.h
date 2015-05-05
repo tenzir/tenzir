@@ -3,17 +3,25 @@
 
 namespace vast {
 
+// Inherited from CAF
+using caf::delete_atom;
+using caf::get_atom;
+using caf::ok_atom;
+using caf::put_atom;
+
 // Generic
 using accept_atom = caf::atom_constant<caf::atom("accept")>;
 using add_atom = caf::atom_constant<caf::atom("add")>;
 using batch_atom = caf::atom_constant<caf::atom("batch")>;
+using connect_atom = caf::atom_constant<caf::atom("connect")>;
 using continuous_atom = caf::atom_constant<caf::atom("continuous")>;
 using data_atom = caf::atom_constant<caf::atom("data")>;
-using delete_atom = caf::atom_constant<caf::atom("delete")>;
 using disable_atom = caf::atom_constant<caf::atom("disable")>;
+using disconnect_atom = caf::atom_constant<caf::atom("disconnect")>;
 using done_atom = caf::atom_constant<caf::atom("done")>;
 using empty_atom = caf::atom_constant<caf::atom("empty")>;
 using enable_atom = caf::atom_constant<caf::atom("enable")>;
+using exists_atom = caf::atom_constant<caf::atom("exists")>;
 using extract_atom = caf::atom_constant<caf::atom("extract")>;
 using flush_atom = caf::atom_constant<caf::atom("flush")>;
 using historical_atom = caf::atom_constant<caf::atom("historical")>;
@@ -21,8 +29,10 @@ using id_atom = caf::atom_constant<caf::atom("id")>;
 using key_atom = caf::atom_constant<caf::atom("key")>;
 using limit_atom = caf::atom_constant<caf::atom("limit")>;
 using link_atom = caf::atom_constant<caf::atom("link")>;
+using list_atom = caf::atom_constant<caf::atom("list")>;
 using load_atom = caf::atom_constant<caf::atom("load")>;
 using overload_atom = caf::atom_constant<caf::atom("overload")>;
+using peer_atom = caf::atom_constant<caf::atom("peer")>;
 using ping_atom = caf::atom_constant<caf::atom("ping")>;
 using pong_atom = caf::atom_constant<caf::atom("pong")>;
 using progress_atom = caf::atom_constant<caf::atom("progress")>;
@@ -36,6 +46,7 @@ using run_atom = caf::atom_constant<caf::atom("run")>;
 using schema_atom = caf::atom_constant<caf::atom("schema")>;
 using set_atom = caf::atom_constant<caf::atom("set")>;
 using signal_atom = caf::atom_constant<caf::atom("signal")>;
+using spawn_atom = caf::atom_constant<caf::atom("spawn")>;
 using start_atom = caf::atom_constant<caf::atom("start")>;
 using stop_atom = caf::atom_constant<caf::atom("stop")>;
 using store_atom = caf::atom_constant<caf::atom("store")>;
