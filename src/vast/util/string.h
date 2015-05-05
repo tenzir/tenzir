@@ -134,6 +134,38 @@ auto to_strings(std::vector<std::pair<Iterator, Iterator>> const& v)
   return strs;
 }
 
+/// Joins a sequence of strings according to a seperator.
+/// @param begin The beginning of the sequence.
+/// @param end The end of the sequence.
+/// @param sep The string to insert between each element of the sequence.
+/// @returns The joined string.
+template <typename Iterator, typename Predicate>
+std::string join(Iterator begin, Iterator end, std::string const& sep,
+                 Predicate p)
+{
+  std::string result;
+  while (begin != end)
+  {
+    result += p(*begin);
+    if (++begin != end)
+      result += sep;
+  }
+  return result;
+}
+
+template <typename Iterator>
+std::string join(Iterator begin, Iterator end, std::string const& sep)
+{
+  auto pred = [](auto&& x) { return std::forward<decltype(x)>(x); };
+  return join(begin, end, sep, pred);
+}
+
+template <typename T>
+std::string join(std::vector<T> const& v, std::string const& sep)
+{
+  return join(v.begin(), v.end(), sep);
+}
+
 /// Determines whether a string occurs at the beginning of another.
 /// @param begin The beginning of the string.
 /// @param end The end of the string.
