@@ -134,6 +134,23 @@ auto to_strings(std::vector<std::pair<Iterator, Iterator>> const& v)
   return strs;
 }
 
+/// Combines ::split and ::to_strings.
+template <typename Iterator>
+auto split_to_str(Iterator begin, Iterator end, std::string const& sep,
+                  std::string const& esc = "", size_t max_splits = -1,
+                  bool include_sep = false)
+{
+  return to_strings(split(begin, end, sep, esc, max_splits, include_sep));
+}
+
+inline auto split_to_str(std::string const& str, std::string const& sep,
+                         std::string const& esc = "", size_t max_splits = -1,
+                         bool include_sep = false)
+{
+  return split_to_str(str.begin(), str.end(), sep, esc, max_splits,
+                      include_sep);
+}
+
 /// Joins a sequence of strings according to a seperator.
 /// @param begin The beginning of the sequence.
 /// @param end The end of the sequence.
