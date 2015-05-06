@@ -146,22 +146,12 @@ struct logger::impl
         {
           log_file_
             << std::setprecision(15) << std::setw(16) << std::left
-            << std::setfill('0') << m.timestamp() << ' '
-            << "0x" << std::setw(14) << std::setfill(' ') << m.thread_id()
-            << ' ' << m.lvl() << ' ' << line << std::endl;
+            << std::setfill('0') << m.timestamp() << " 0x" << std::setw(14)
+            << std::setfill(' ') << m.thread_id() << ' ' << m.lvl() << ' '
+            << line << std::endl;
         }
         if (console_ && m.lvl() <= console_level_)
         {
-          if (colorized_)
-            std::cerr << util::color::cyan;
-          std::cerr
-            << std::setprecision(15) << std::setw(16) << std::left
-            << std::setfill('0') << m.timestamp() << ' ';
-          if (colorized_)
-            std::cerr << util::color::blue;
-          std::cerr
-            << "0x" << std::setw(14) << std::setfill(' ') << m.thread_id()
-            << ' ';
           if (colorized_)
           {
             switch (m.lvl())
@@ -186,10 +176,10 @@ struct logger::impl
                 break;
             }
           }
-          std::cerr << m.lvl() << ' ';
+          std::cerr << "::";
           if (colorized_)
             std::cerr << util::color::reset;
-          std::cerr << line << std::endl;
+          std::cerr << ' ' << line << std::endl;
         }
       }
     }
