@@ -161,20 +161,17 @@ std::string join(Iterator begin, Iterator end, std::string const& sep,
                  Predicate p)
 {
   std::string result;
+  if (begin != end)
+    result += p(*begin++);
   while (begin != end)
-  {
-    result += p(*begin);
-    if (++begin != end)
-      result += sep;
-  }
+    result += sep + p(*begin++);
   return result;
 }
 
 template <typename Iterator>
 std::string join(Iterator begin, Iterator end, std::string const& sep)
 {
-  auto pred = [](auto&& x) { return std::forward<decltype(x)>(x); };
-  return join(begin, end, sep, pred);
+  return join(begin, end, sep, [](auto&& x) -> decltype(x) { return x; });
 }
 
 template <typename T>
