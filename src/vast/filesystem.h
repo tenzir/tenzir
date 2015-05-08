@@ -145,10 +145,11 @@ private:
   std::string str_;
 };
 
-/// A file abstraction.
+/// A simple file abstraction.
 class file
 {
   file(file const&) = delete;
+  file& operator=(file const&) = delete;
 
 public:
   /// The native type of a file.
@@ -174,10 +175,10 @@ public:
   file(vast::path p);
 
   /// Constructs a file from the OS' native file handle type.
-  /// @param p The file path.
   /// @param handle The file handle.
-  /// @pre The file identified via handle is open.
-  file(vast::path p, native_type handle);
+  /// @param p The file path.
+  /// @pre The file identified via *handle* is open.
+  file(native_type handle, vast::path p = {});
 
   /// Move-construfts a file.
   /// @param other The file to move.
@@ -197,7 +198,7 @@ public:
   /// @returns `true` on success.
   trial<void> open(open_mode mode = read_write, bool append = false);
 
-  /// Closes the file.
+  /// Attempts to close the file.
   /// @returns `true` on success.
   bool close();
 

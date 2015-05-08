@@ -6,8 +6,8 @@
 namespace vast {
 namespace source {
 
-bgpdump::bgpdump(std::string const& filename)
-  : file<bgpdump>{"bgpdump-source", filename}
+bgpdump::bgpdump(vast::file&& f)
+  : file<bgpdump>{"bgpdump-source", std::move(f)}
 {
   std::vector<type::record::field> fields;
   fields.emplace_back("timestamp", type::time_point{});

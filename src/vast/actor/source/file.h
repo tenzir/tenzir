@@ -15,13 +15,14 @@ class file : public synchronous<Derived>
 public:
   /// Constructs a file source.
   /// @param name The name of the actor.
-  /// @param filename The name of the file to ingest.
-  file(char const* name, std::string const& filename)
+  /// @param f The file to ingest.
+  file(char const* name, vast::file&& f)
     : synchronous<Derived>{name},
-      file_handle_{path{filename}},
-      file_stream_{file_handle_}
+      file_{std::move(f)},
+      stream_{file_}
   {
-    file_handle_.open(vast::file::read_only);
+    if (! file_.is_open())
+      file_.open(vast::file::read_only);
   }
 
   /// Advances to the next non-empty line in the file.
@@ -30,15 +31,15 @@ public:
   {
     if (this->done())
       return false;
-    if (! file_handle_.is_open())
+    if (! file_.is_open())
     {
       this->done(true);
       return false;
     }
-    // Get the next non empty line.
+    // Get the next non-empty line.
     line_.clear();
     while (line_.empty())
-      if (io::getline(file_stream_, line_))
+      if (io::getline(stream_, line_))
       {
         ++current_;
       }
@@ -63,8 +64,8 @@ public:
   }
 
 private:
-  vast::file file_handle_;
-  io::file_input_stream file_stream_;
+  vast::file file_;
+  io::file_input_stream stream_;
   uint64_t current_ = 0;
   std::string line_;
 };

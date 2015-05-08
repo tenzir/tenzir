@@ -12,8 +12,8 @@ class bgpdump : public file<bgpdump>
 {
 public:
   /// Spawns a BGPDump source.
-  /// @param filename The name of the BGPDump file.
-  bgpdump(std::string const& filename);
+  /// @param f The file representing the BGPDump file.
+  bgpdump(vast::file&& f);
 
   schema sniff();
 

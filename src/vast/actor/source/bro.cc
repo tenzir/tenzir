@@ -66,8 +66,8 @@ trial<type> make_type(std::string const& bro_type)
 
 } // namespace <anonymous>
 
-bro::bro(std::string const& filename)
-  : file<bro>{"bro-source", filename}
+bro::bro(vast::file&& f)
+  : file<bro>{"bro-source", std::move(f)}
 {
 }
 

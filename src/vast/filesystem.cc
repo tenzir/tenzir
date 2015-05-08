@@ -239,7 +239,7 @@ file::file(vast::path p)
 {
 }
 
-file::file(vast::path p, native_type handle)
+file::file(native_type handle, vast::path p)
   : handle_{handle},
     is_open_{true},
     path_{std::move(p)}

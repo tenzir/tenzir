@@ -17,7 +17,7 @@ TEST("bgpdump source")
     REQUIRE(false);
   };
   // Spawn a BGPDump source.
-  auto bgpdump = self->spawn<source::bgpdump>(bgpdump::updates20140821);
+  auto bgpdump = self->spawn<source::bgpdump>(file{bgpdump::updates20140821});
   self->monitor(bgpdump);
   anon_send(bgpdump, add_atom::value, sink_atom::value, self);
   self->receive([&](upstream_atom, actor const& a) { CHECK(a == bgpdump); });

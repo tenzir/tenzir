@@ -12,8 +12,8 @@ class bro : public file<bro>
 {
 public:
   /// Spawns a Bro source.
-  /// @param filename The name of the Bro log file.
-  bro(std::string const& filename);
+  /// @param f The file representing the Bro log file.
+  bro(vast::file&& f);
 
   result<event> extract();
 

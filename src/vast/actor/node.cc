@@ -404,7 +404,7 @@ behavior node::make_behavior()
           }
           else if (format == "bro")
           {
-            src = spawn<source::bro, priority_aware + detached>(input);
+            src = spawn<source::bro, priority_aware + detached>(file{input});
           }
           else if (format == "bgpdump")
           {
@@ -413,14 +413,14 @@ behavior node::make_behavior()
               VAST_ERROR(this, "didn't specify input (-r)");
               return make_message(error{"no input specified (-r)"});
             }
-            src = spawn<source::bgpdump, priority_aware + detached>(input);
+            src = spawn<source::bgpdump, priority_aware + detached>(file{input});
           }
           else if (format == "test")
           {
             auto id = event_id{0};
             auto events = uint64_t{100};
             r = r.remainder.extract_opts({
-              {"id,i", "the base event ID", input},
+              {"id,i", "the base event ID", id},
               {"events,n", "number of events to generate", events}
             });
             if (! r.error.empty())
@@ -606,6 +606,10 @@ behavior node::make_behavior()
         return make_message(error{"no such actor: ", arg});
       send(a, run_atom::value);
       if (type == "exporter")
+        // FIXME: Because we've previously configured a limit, the extraction
+        // will finish when hitting it. But this is not a good design, as it
+        // prevents pull-based from results. Once the API becomes clearer, we
+        // need a better way for incremental extraction.
         send(a, extract_atom::value, uint64_t{0});
       return make_message(ok_atom::value);
     },
