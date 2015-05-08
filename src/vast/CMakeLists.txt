@@ -11,7 +11,6 @@ set(libvast_sources
   block.cc
   chunk.cc
   cleanup.cc
-  configuration.cc
   data.cc
   die.cc
   expression.cc
@@ -30,14 +29,13 @@ set(libvast_sources
   value.cc
   actor/archive.cc
   actor/exporter.cc
+  actor/importer.cc
   actor/identifier.cc
   actor/index.cc
+  actor/key_value_store.cc
+  actor/node.cc
   actor/partition.cc
   actor/profiler.cc
-  actor/program.cc
-  actor/query.cc
-  actor/receiver.cc
-  actor/search.cc
   actor/signal_monitor.cc
   actor/tracker.cc
   actor/sink/ascii.cc
@@ -63,10 +61,12 @@ set(libvast_sources
   io/getline.cc
   io/iostream.cc
   io/stream.cc
+  util/endpoint.cc
   util/poll.cc
   util/string.cc
   util/system.cc
   util/terminal.cc
+  util/unix_domain_socket.cc
   util/hash/crc.cc
   util/hash/murmur.cc
   util/hash/xxhash.cc

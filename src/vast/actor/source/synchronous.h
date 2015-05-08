@@ -149,32 +149,35 @@ public:
       {
         compression_ = method;
       },
-      [=](schema_atom)
-      {
-        return static_cast<Derived*>(this)->sniff();
-      },
-      [=](schema const& sch)
-      {
-        static_cast<Derived*>(this)->set(sch);
-      },
       [=](batch_atom, uint64_t batch_size)
       {
         VAST_DEBUG(this, "sets batch size to", batch_size);
         batch_size_ = batch_size;
       },
-      [=](add_atom, sink_atom, actor const& sink)
+      [=](get_atom, schema_atom)
+      {
+        return static_cast<Derived*>(this)->sniff();
+      },
+      [=](put_atom, schema const& sch)
+      {
+        static_cast<Derived*>(this)->set(sch);
+      },
+      [=](put_atom, sink_atom, actor const& sink)
       {
         VAST_DEBUG(this, "adds sink to", sink);
         monitor(sink);
         send(sink, upstream_atom::value, this);
         sinks_.push_back(sink);
-        return ok_atom::value;
       },
-      [=](accountant_atom, actor const& accountant)
+      [=](put_atom, accountant_atom, actor const& accountant)
       {
         VAST_DEBUG(this, "registers accountant", accountant);
         accountant_ = accountant;
         send(accountant_, label() + "-events", time::now());
+      },
+      [=](get_atom, sink_atom)
+      {
+        return sinks_;
       },
       [=](run_atom)
       {

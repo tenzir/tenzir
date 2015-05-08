@@ -59,6 +59,13 @@ TEST("key-value store")
   self->sync_send(s, exists_atom::value, "/foo/baz").await(
     [&](bool b) { CHECK(! b); }
   );
+  VAST_INFO("put/get an empty value");
+  self->sync_send(s, put_atom::value, "meow").await(
+    [&](ok_atom) { /* nop */ }
+  );
+  self->sync_send(s, get_atom::value, "meow").await(
+    others() >> [&] { REQUIRE(true); }
+  );
 }
 
 TEST("key-value store (distributed)")

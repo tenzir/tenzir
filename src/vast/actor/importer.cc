@@ -1,25 +1,25 @@
-#include "vast/actor/receiver.h"
-
 #include <caf/all.hpp>
+
 #include "vast/chunk.h"
+#include "vast/actor/importer.h"
 
 namespace vast {
 
 using namespace caf;
 
-receiver::receiver()
-  : flow_controlled_actor{"receiver"}
+importer::importer()
+  : flow_controlled_actor{"importer"}
 {
 }
 
-void receiver::on_exit()
+void importer::on_exit()
 {
   identifier_ = invalid_actor;
   archive_ = invalid_actor;
   index_ = invalid_actor;
 }
 
-behavior receiver::make_behavior()
+behavior importer::make_behavior()
 {
   trap_exit(true);
   return
@@ -44,41 +44,43 @@ behavior receiver::make_behavior()
       else if (msg.source == index_)
         index_ = invalid_actor;
     },
-    [=](set_atom, identifier_atom, actor const& a)
+    [=](put_atom, identifier_atom, actor const& a)
     {
       VAST_DEBUG(this, "registers identifier", a);
       monitor(a);
       identifier_ = a;
-      return ok_atom::value;
     },
-    [=](add_atom, archive_atom, actor const& a)
+    [=](put_atom, archive_atom, actor const& a)
     {
       VAST_DEBUG(this, "registers archive", a);
       send(a, upstream_atom::value, this);
       monitor(a);
       archive_ = a;
-      return ok_atom::value;
     },
-    [=](add_atom, index_atom, actor const& a)
+    [=](put_atom, index_atom, actor const& a)
     {
       VAST_DEBUG(this, "registers index", a);
       send(a, upstream_atom::value, this);
       monitor(a);
       index_ = a;
-      return ok_atom::value;
     },
     [=](chunk& chk)
     {
-      assert(identifier_ != invalid_actor);
+      if (identifier_ == invalid_actor)
+      {
+        VAST_ERROR(this, "has no identifier configured");
+        quit(exit::error);
+        return;
+      }
       if (archive_ == invalid_actor)
       {
-        VAST_ERROR(this, "not linked to archive");
+        VAST_ERROR(this, "has no archive configured");
         quit(exit::error);
         return;
       }
       if (index_ == invalid_actor)
       {
-        VAST_ERROR(this, "not linked to index");
+        VAST_ERROR(this, "has no index configured");
         quit(exit::error);
         return;
       }

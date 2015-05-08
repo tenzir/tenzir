@@ -77,7 +77,7 @@ behavior key_value_store::make_behavior()
       auto v = data_.find(key);
       if (v == data_.end())
         return make_message(nil);
-      return make_message(v->second);
+      return v->second.empty() ? make_message(unit) : v->second;
     },
     [=](list_atom, std::string const& key)
     {

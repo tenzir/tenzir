@@ -1,4 +1,4 @@
-#include <unistd.h>  // gethostname, getpid
+#include <unistd.h>       // gethostname, getpid
 
 #include <cerrno>
 

@@ -2,7 +2,6 @@
 #define VAST_UTIL_SYSTEM_H
 
 #include <cstdint>
-
 #include <string>
 
 namespace vast {

@@ -5,6 +5,7 @@
 #include <unordered_map>
 
 #include "vast/filesystem.h"
+#include "vast/optional.h"
 #include "vast/time.h"
 #include "vast/actor/actor.h"
 #include "vast/util/accumulator.h"

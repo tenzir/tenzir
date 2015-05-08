@@ -1,16 +1,16 @@
-#ifndef VAST_RECEIVER_H
-#define VAST_RECEIVER_H
+#ifndef VAST_ACTOR_IMPORTER_H
+#define VAST_ACTOR_IMPORTER_H
 
 #include <set>
 #include "vast/actor/actor.h"
 
 namespace vast {
 
-/// Receives chunks from IMPORTER, imbues them with an ID from TRACKER, and
-/// relays them to ARCHIVE and INDEX.
-struct receiver : flow_controlled_actor
+/// Receives chunks from SOURCEs, imbues them with an ID, and relays them to
+/// ARCHIVE and INDEX.
+struct importer : flow_controlled_actor
 {
-  receiver();
+  importer();
   void on_exit();
   caf::behavior make_behavior() override;
 

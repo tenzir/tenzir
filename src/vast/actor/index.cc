@@ -35,7 +35,7 @@ void deserialize(Deserializer& source, index::partition_state& ps)
 index::index(path const& dir, size_t max_events,
              size_t passive_parts, size_t active_parts)
   : flow_controlled_actor{"index"},
-    dir_{dir / "index"},
+    dir_{dir},
     max_events_per_partition_{max_events}
 {
   trap_exit(true);
@@ -172,7 +172,7 @@ behavior index::make_behavior()
         }
       }
     },
-    [=](accountant_atom, actor const& accountant)
+    [=](put_atom, accountant_atom, actor const& accountant)
     {
       VAST_DEBUG(this, "registers accountant", accountant);
       accountant_ = accountant;

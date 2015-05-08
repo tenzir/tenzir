@@ -1,10 +1,10 @@
-.TH VAST 1 "April 10, 2015" 0.1 "Visibility Across Space and Time"
+.TH VAST 1 "April 16, 2015" 0.1 "Visibility Across Space and Time"
 .SH NAME
 .PP
 VAST \-\- a unified platform for network forensics
 .SH SYNOPSIS
 .PP
-\fB\fCvast\fR [\fIoptions\fP\&...] [\fIcommand\fP] [\fIarguments\fP\&...]
+\fB\fCvast\fR [\fIoptions\fP] [\fIcommand\fP] [\fIarguments\fP]
 .SH DESCRIPTION
 .PP
 VAST is a distributed platform for large\-scale network forensics. The
@@ -12,20 +12,19 @@ system is exclusively implemented in terms of the actor model. In this
 model, concurrent entities (\fBactors\fP) execute in parallel and communicate
 asynchronously solely via message passing. VAST users connect actors together
 to create a specific system topology. Each physical node in a VAST deployment
-typically runs a single \fB\fCvast\fR daemon process which accommodates numerous
-actors. For single\-node deployments all actors can run inside this process,
-but for multi\-node deployments users can spawn actors on any node to configure
-flexible topologies that suits best their data processing pipelines.
+typically runs a single \fB\fCvast\fR process which accommodates numerous actors. For
+single\-node deployments all actors run inside this process, but for multi\-node
+deployments users can spawn actors on any node to create flexible topologies
+geared towards their data processing pipelines.
 .PP
 With the \fB\fCvast\fR executable users can manage the system topology, configure
-event sources and sinks to import and export data, and issue queries to
-retrieve results.
+event sources and sinks for data import and export, and issue queries.
 .PP
 The following key actors exist:
 .TP
-\fBTRACKER\fP
-Keeps track of the global system topology, registers new actors and wires
-them together.
+\fBPROGRAM\fP
+The main VAST actor which accomodates all other actors. Typically there
+exists one \fBPROGRAM\fP per node. 
 .TP
 \fBSOURCE\fP
 Generates events from a data source, such as packets from a network interface
@@ -54,39 +53,80 @@ them to \fBARCHIVE\fP and \fBINDEX\fP\&.
 A handle to a running query for retrieving index hits and extracting results.
 .SH OPTIONS
 .PP
-This section describes the global \fB\fCvast\fR \fIoptions\fP, irrespective of the
-\fIcommand\fP issued. When not specifying any \fIoptions\fP, \fB\fCvast\fR attempts to connect
-to the process running at the local machine. 
+The \fIoptions\fP in front a \fIcommand\fP control how to launch or how to connect to a
+\fBPROGRAM\fP\&. VAST runs as daemon when not specifying any \fIcommand\fP, i.e.,
+\fB\fCvast\fR detaches itself from the controlling terminal and continues running in
+the background. Otherwise, when specifying a \fIcommand\fP, \fB\fCvast\fR runs in client
+mode and attempts to connect to a running daemon.
+.SS CLIENT MODE
+.PP
+The following \fIoptions\fP are available in client mode:
 .TP
-\fB\fC\-a\fR \fIaddress\fP [\fI127.0.0.1\fP, \fI::1\fP]
-The IP \fIaddress\fP or hostname of the \fB\fCvast\fR instance to connect to.
+\fB\fC\-a\fR \fIaddress\fP [\fI127.0.0.1\fP]
+The IP \fIaddress\fP of the program to connect to.
 .TP
 \fB\fC\-p\fR \fIport\fP [\fI42000\fP]
-The port of a \fB\fCvast\fR instance to connect to.
+The \fIport\fP of the program to connect to.
 .PP
 \fB\fC\-l\fR \fIlog\-level\fP [\fI3\fP]
-  The verbosity of console log messages shown on standard error. The
-  \fIlog\-level\fP can take on the following values:
+  The verbosity of log messages on standard error. The \fIlog\-level\fP argument can
+  take on the following values:
     \- \fI0\fP \fI(quiet)\fP: do not produce any output
     \- \fI1\fP \fI(error)\fP: report failures which constitute a program error
     \- \fI2\fP \fI(warn)\fP: notable issues that do not affect correctness
     \- \fI3\fP \fI(info)\fP: status messages representing system activity
     \- \fI4\fP \fI(verbose)\fP: more fine\-grained activity reports
-    \- \fI5\fP \fI(debug)\fP: copious amounts of low\-level implementation details
+    \- \fI5\fP \fI(debug)\fP: copious low\-level implementation details
     \- \fI6\fP \fI(trace)\fP: log function entry and exit
+.SS DAEMON MODE
+.PP
+The following \fIoptions\fP are available in daemon mode:
+.TP
+\fB\fC\-a\fR \fIaddress\fP [\fI127.0.0.1\fP]
+The IP \fIaddress\fP to listen on.
+.TP
+\fB\fC\-p\fR \fIport\fP [\fI42000\fP]
+The \fIport\fP to connect to.
+.TP
+\fB\fC\-n\fR \fIname\fP [\fIhostname\fP]
+Overrides the program \fIname\fP\&.
+The \fIname\fP is a globally unique name for this program instance.
+.TP
+\fB\fC\-f\fR \fIhost:port\fP
+Instead of spawning a \fBTRACKER\fP, follow a remote \fBPROGRAM\fP which already
+runs a \fBTRACKER\fP\&. The value \fIhost\fP represents the remote \fBPROGRAM\fP IPv4
+or IPv6 address (in brackets, e.g., \fI[::1]\fP) and \fIport\fP its TCP port. Either
+can be omitted: just \fIhost\fP or just \fI:port\fP are valid values.
+.TP
+\fB\fC\-F\fR
+Start daemon in foreground, i.e., do not detach from controlling terminal and
+run in background.
+.TP
+\fB\fC\-d\fR \fIdirectory\fP [\fIvast\fP]
+The path on the file system where to store persistent state.
+.TP
+\fB\fC\-l\fR \fIlog\-level\fP [\fI4\fP]
+The verbosity of the log file. See above for possible values of \fIlog\-level\fP\&.
+.TP
+\fB\fC\-t\fR \fIthreads\fP [\fIstd::thread::hardware_concurrency()\fP]
+The number of worker threads to use for CAF's scheduler.
+.TP
+\fB\fC\-m\fR \fImessages\fP [\fI\-1\fP]
+The CAF worker throughput expressed in the maximum number of messages to
+process when a worker gets scheduled. The default value of \fI\-1\fP means an
+unlimited number of messages.
+.TP
+\fB\fC\-p\fR \fIseconds\fP [\fI1\fP]
+Enable CAF profiling of worker threads and actors at a resolution of
+\fIseconds\fP\&.
 .TP
 \fB\fC\-v\fR
-Print the VAST version and exit.
+Print VAST version and exit.
 .SH COMMANDS
 .PP
-This section describes each \fIcommand\fP and its \fIarguments\fP\&. 
-When not specifying a \fIcommand\fP, \fB\fCvast\fR enters an interactive shell. The
-following commands exist:
+This section describes each \fIcommand\fP and its \fIarguments\fP\&.
+The following commands exist:
 .RS
-.IP \(bu 2
-\fIstart\fP         starts a \fB\fCvast\fR instance
-.IP \(bu 2
-\fIstop\fP          stops a \fB\fCvast\fR instance
 .IP \(bu 2
 \fItopology\fP      shows the node and actor topology
 .IP \(bu 2
@@ -96,61 +136,12 @@ following commands exist:
 .IP \(bu 2
 \fIspawn\fP         creates a new actor
 .IP \(bu 2
+\fIkill\fP          terminates an actor or program
+.IP \(bu 2
 \fIimport\fP        imports data from standard input
 .IP \(bu 2
 \fIexport\fP        performs a query and exports results to standard output
 .RE
-.SS start
-.PP
-Synopsis:
-.IP
-\fIstart\fP [\fIarguments\fP]
-.PP
-Starts a \fB\fCvast\fR instance on this node.
-.PP
-Available \fIarguments\fP:
-.TP
-\fB\fC\-n\fR \fIname\fP [\fIhostname\fP]
-A unique name for this instance. The default name is the system hostname.
-.TP
-\fB\fC\-a\fR \fIaddress\fP\&... [\fI0.0.0.0\fP]
-The list of IP \fIaddress\fP where this instance listens on.
-.TP
-\fB\fC\-p\fR \fIport\fP [\fI42000\fP]
-The port where this instance binds to.
-.TP
-\fB\fC\-d\fR \fIdirectory\fP [\fIvast\fP]
-The path on the file system where to store persistent state.
-.TP
-\fB\fC\-l\fR \fIlog\-level\fP [\fI4\fP]
-The verbosity of the log file. See section \fBOPTIONS\fP for a description of
-possible values.
-.TP
-\fB\fC\-c\fR
-Spawn a \fIcore\fP immediately after starting.
-.TP
-\fB\fC\-w\fR \fIthreads\fP [\fIstd::thread::hardware_concurrency()\fP]
-The number of worker threads to use for CAF's scheduler.
-.TP
-\fB\fC\-t\fR \fImessages\fP [\fIstd::thread::hardware_concurrency()\fP]
-The CAF worker throughput expressed in the maximum number of messages to
-process when a worker gets scheduled.
-.TP
-\fB\fC\-p\fR \fIseconds\fP [\fI1\fP]
-Enable CAF profiling of worker threads and actors at the resolution
-\fIseconds\fP\&.
-.SS stop
-.PP
-Synopsis:
-.IP
-\fIstop\fP [\fIarguments\fP]
-.PP
-Stops a \fB\fCvast\fR instance on this node. 
-.PP
-Available \fIarguments\fP:
-.TP
-\fB\fC\-n\fR \fIname\fP
-The name of the instance to stop.
 .SS topology
 .PP
 Shows the system topology.
@@ -175,20 +166,20 @@ Synopsis:
 .IP
 \fIspawn\fP [\fIarguments\fP] \fIactor\fP [\fIparameters\fP]
 .PP
-Creates a new instance of type \fIactor\fP\&. Some actor types can have at most one
+Creates a new program of type \fIactor\fP\&. Some actor types can have at most one
 instance while others can have multiple instances.
 .PP
 Available \fIarguments\fP:
 .TP
 \fB\fC\-n\fR \fIname\fP
 Controls the spawn location. If \fB\fC\-n\fR \fIname\fP is given, \fIactor\fP will be spawned
-on the \fB\fCvast\fR instance \fIname\fP\&. Otherwise \fIactor\fP will be spawned on the
-connected instance.
+on the \fB\fCvast\fR program \fIname\fP\&. Otherwise \fIactor\fP will be spawned on the
+connected program.
 .PP
 \fB\fC\-l\fR \fIlabel\fP
-   A unique textual identifier within one \fB\fCvast\fR instance. The default label
+   A unique identifier for \fIactor\fP within one \fB\fCvast\fR program. The default label
    has the form \fIactorN\fP where \fIN\fP is a running counter increased for each
-   spawned instance of \fIactor\fP\&. 
+   spawned instance of \fIactor\fP\&.
 .PP
 Available \fIactor\fP values with corresponding \fIparameters\fP:
 .PP
@@ -222,7 +213,7 @@ Available \fIactor\fP values with corresponding \fIparameters\fP:
   \fB\fC\-r\fR \fIpath\fP
     Name of the filesystem \fIpath\fP (file or directory) to read events from.
   \fB\fC\-I\fR \fIimporter\fP
-    If no \fBIMPORTER\fP runs on the connected instance, one must specify \fB\fC\-I\fR
+    If no \fBIMPORTER\fP runs on the connected program, one must specify \fB\fC\-I\fR
     \fIimporter\fP to indicate the endpoint receiving the generated events.
 .PP
 \fIsource\fP \fIbro\fP
@@ -291,6 +282,14 @@ Available \fIactor\fP values with corresponding \fIparameters\fP:
     Launch the heap profiler.
   \fB\fC\-r\fR \fIseconds\fP [\fI1\fP]
     The profiling resolution in seconds.
+.SS kill
+.PP
+Synopsis:
+.IP
+\fIkill\fP \fIname\fP
+.PP
+Terminates an actor or a \fB\fCvast\fR program. The argument \fIname\fP can refer to
+either an actor label or a program name.
 .SS import
 .PP
 Synopsis:
@@ -313,17 +312,17 @@ relaying the result stream to standard output of the process invoking \fIexport\
 .PP
 Start a core:
 .IP
-\fB\fCvast\fR \fIstart\fP \fB\fC\-c\fR
+\fB\fCvast \-c\fR
 .PP
-Connect to a \fB\fCvast\fR instance running host \fIfoo\fP at a port \fI31337\fP:
+Connect to a \fB\fCvast\fR program running at \fI1.2.3.4\fP at a port \fI31337\fP:
 .IP
-\fB\fCvast\fR \fB\fC\-a\fR \fIfoo\fP \fB\fC\-p\fR \fI31337\fP
+\fB\fCvast\fR \fB\fC\-a\fR \fI1.2.3.4\fP \fB\fC\-p\fR \fI31337\fP
 .PP
-Import a Bro log files:
+Import Bro log files:
 .IP
 zcat log.gz | \fB\fCvast\fR \fIimport\fP \fIbro\fP
 .PP
-Run a historical query with at most 100 results, printed in ASCII.
+Run a historical query, printed in ASCII, limited to at most 100 results:
 .IP
 \fB\fCvast\fR \fIexport\fP \fIascii\fP \-h \-l 100 &type == "conn" && :addr in 10.0.0.0/8
 .PP
