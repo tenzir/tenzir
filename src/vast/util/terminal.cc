@@ -5,7 +5,7 @@
 #include <termios.h>
 #include <unistd.h>
 #include <cstdlib>
-#include "vast/util/poll.h"
+#include "vast/util/posix.h"
 
 namespace vast {
 namespace util {

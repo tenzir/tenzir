@@ -8,7 +8,7 @@
 #include "vast/query_options.h"
 #include "vast/util/color.h"
 #include "vast/util/meta.h"
-#include "vast/util/poll.h"
+#include "vast/util/posix.h"
 
 using namespace caf;
 

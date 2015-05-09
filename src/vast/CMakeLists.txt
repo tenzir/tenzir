@@ -62,11 +62,11 @@ set(libvast_sources
   io/iostream.cc
   io/stream.cc
   util/endpoint.cc
-  util/poll.cc
+  util/posix.cc
   util/string.cc
   util/system.cc
   util/terminal.cc
-  util/unix_domain_socket.cc
+  util/detail/posix.cc
   util/hash/crc.cc
   util/hash/murmur.cc
   util/hash/xxhash.cc

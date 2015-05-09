@@ -6,6 +6,7 @@
 #include "vast/io/algorithm.h"
 #include "vast/io/file_stream.h"
 #include "vast/io/container_stream.h"
+#include "vast/util/posix.h"
 #include "vast/util/string.h"
 
 #ifdef VAST_POSIX
@@ -337,56 +338,12 @@ bool file::is_open() const
 
 bool file::read(void* sink, size_t bytes, size_t* got)
 {
-  if (got)
-    *got = 0;
-  if (! is_open_)
-    return false;
-#ifdef VAST_POSIX
-  int result;
-  do
-  {
-    result = ::read(handle_, sink, bytes);
-  }
-  while (result < 0 && errno == EINTR);
-  if (result < 0)
-    return false;       // Error, inspect errno for details.
-  else if (result == 0) // EOF
-    return false;
-  else if (got)
-    *got = result;
-  return true;
-#else
-  return false;
-#endif // VAST_POSIX
+  return util::read(handle_, sink, bytes, got);
 }
 
 bool file::write(void const* source, size_t bytes, size_t* put)
 {
-  if (put)
-    *put = 0;
-  if (! is_open_)
-    return false;
-  size_t total = 0;
-  auto buffer = reinterpret_cast<uint8_t const*>(source);
-#ifdef VAST_POSIX
-  while (total < bytes)
-  {
-    int written;
-    do
-    {
-      written = ::write(handle_, buffer + total, bytes - total);
-    }
-    while (written < 0 && errno == EINTR);
-    if (written <= 0)
-      return false;
-    total += written;
-    if (put)
-      *put += written;
-  }
-  return true;
-#else
-  return false;
-#endif // VAST_POSIX
+  return util::write(handle_, source, bytes, put);
 }
 
 bool file::seek(size_t bytes, size_t *skipped)
