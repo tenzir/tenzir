@@ -12,8 +12,8 @@ class bro : public file<bro>
 {
 public:
   /// Spawns a Bro source.
-  /// @param f The file representing the Bro log file.
-  bro(vast::file&& f);
+  /// @param stream The input stream to read the Bro log from.
+  bro(io::file_input_stream&& stream);
 
   result<event> extract();
 

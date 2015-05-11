@@ -240,8 +240,9 @@ file::file(vast::path p)
 {
 }
 
-file::file(native_type handle, vast::path p)
+file::file(native_type handle, bool close_behavior, vast::path p)
   : handle_{handle},
+    close_on_destruction_{close_behavior},
     is_open_{true},
     path_{std::move(p)}
 {
@@ -249,6 +250,7 @@ file::file(native_type handle, vast::path p)
 
 file::file(file&& other) noexcept
   : handle_{other.handle_},
+    close_on_destruction_{other.close_on_destruction_},
     is_open_{other.is_open_},
     seek_failed_{other.seek_failed_},
     path_{std::move(other.path_)}
@@ -260,7 +262,8 @@ file::file(file&& other) noexcept
 
 file::~file()
 {
-  if (path_ != "-")
+  // Never close stdin/stdout
+  if (path_ != "-" && ! close_on_destruction_)
     close();
 }
 
@@ -549,13 +552,9 @@ void traverse(path const& p, std::function<bool(path const&)> f)
 // Loads file contents into a string.
 trial<std::string> load_contents(path const& p)
 {
-  file f{p};
-  auto t = f.open(file::read_only);
-  if (! t)
-    return t.error();
   std::string contents;
   auto out = io::make_container_output_stream(contents);
-  io::file_input_stream in{f};
+  io::file_input_stream in{p};
   io::copy(in, out);
   return std::move(contents);
 }

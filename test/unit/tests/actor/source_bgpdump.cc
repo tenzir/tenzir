@@ -11,13 +11,9 @@ SUITE("actors")
 TEST("bgpdump source")
 {
   scoped_actor self;
-  auto fail = others() >> [&]
-  {
-    std::cerr << to_string(self->current_message()) << std::endl;
-    REQUIRE(false);
-  };
   // Spawn a BGPDump source.
-  auto bgpdump = self->spawn<source::bgpdump>(file{bgpdump::updates20140821});
+  auto bgpdump = self->spawn<source::bgpdump>(
+      vast::io::file_input_stream{bgpdump::updates20140821});
   self->monitor(bgpdump);
   anon_send(bgpdump, add_atom::value, sink_atom::value, self);
   self->receive([&](upstream_atom, actor const& a) { CHECK(a == bgpdump); });
@@ -49,13 +45,11 @@ TEST("bgpdump source")
       CHECK((*r)[1] == *to<address>("68.67.63.245"));
       CHECK((*r)[2] == 22652u);
       CHECK((*r)[3] == *to<subnet>("188.123.160.0/19"));
-    },
-    fail
-    );
+    }
+  );
   // The source terminates after having read the entire log file.
   self->receive(
-    [&](down_msg const& d) { CHECK(d.reason == exit::done); },
-    fail
-    );
+    [&](down_msg const& d) { CHECK(d.reason == exit::done); }
+  );
   self->await_all_other_actors_done();
 }

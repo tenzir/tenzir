@@ -8,7 +8,7 @@
 namespace vast {
 namespace source {
 
-/// A file source that transforms file contents into events.
+/// A line-based source that transforms an input stream into lines.
 template <typename Derived>
 class file : public synchronous<Derived>
 {
@@ -16,13 +16,10 @@ public:
   /// Constructs a file source.
   /// @param name The name of the actor.
   /// @param f The file to ingest.
-  file(char const* name, vast::file&& f)
+  file(char const* name, io::file_input_stream&& stream)
     : synchronous<Derived>{name},
-      file_{std::move(f)},
-      stream_{file_}
+      stream_{std::move(stream)}
   {
-    if (! file_.is_open())
-      file_.open(vast::file::read_only);
   }
 
   /// Advances to the next non-empty line in the file.
@@ -31,13 +28,7 @@ public:
   {
     if (this->done())
       return false;
-    if (! file_.is_open())
-    {
-      this->done(true);
-      return false;
-    }
     // Get the next non-empty line.
-    line_.clear();
     while (line_.empty())
       if (io::getline(stream_, line_))
       {
@@ -64,7 +55,6 @@ public:
   }
 
 private:
-  vast::file file_;
   io::file_input_stream stream_;
   uint64_t current_ = 0;
   std::string line_;

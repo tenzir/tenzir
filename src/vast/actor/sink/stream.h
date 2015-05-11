@@ -15,18 +15,16 @@ public:
   /// Constructs a stream from a path.
   /// @param p The output path. If `-` then write the events to STDOUT.
   /// Otherwise *p* must not exist or point to an existing directory.
-  stream(path p)
-    : file_{std::move(p)},
-      stream_{file_}
+  stream(path const& p)
+    : stream_{p}
   {
-    file_.open(file::write_only);
   }
 
   /// Flushes the underlying file stream.
   /// @returns `true` on success.
   bool flush()
   {
-    return file_.is_open() ? stream_.flush() : false;
+    return stream_.flush();
   }
 
   /// Writes data into the file.
@@ -36,14 +34,9 @@ public:
   template <typename Iterator>
   bool write(Iterator begin, Iterator end)
   {
-    if (! file_.is_open())
-      return false;
-
     auto buf = stream_.next_block();
-
     if (! buf)
       return false;
-
     while (begin != end)
     {
       size_t input_size = end - begin;
@@ -66,12 +59,10 @@ public:
           break;
       }
     }
-
     return flush();
   }
 
 private:
-  file file_;
   io::file_output_stream stream_;
 };
 

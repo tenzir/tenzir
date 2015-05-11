@@ -12,8 +12,8 @@ class bgpdump : public file<bgpdump>
 {
 public:
   /// Spawns a BGPDump source.
-  /// @param f The file representing the BGPDump file.
-  bgpdump(vast::file&& f);
+  /// @param stream The input stream to read the BGPDump file from.
+  bgpdump(io::file_input_stream&& stream);
 
   schema sniff();
 

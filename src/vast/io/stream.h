@@ -19,26 +19,21 @@ public:
   virtual ~input_stream() = default;
 
   /// Retrieves a contiguous block of data from the stream.
-  ///
   /// @returns A buffer filled with the next block of bytes or an invalid
-  /// buffer.
+  ///          buffer.
   buffer<void const> next_block();
 
   /// Retrieves a contiguous data buffer from the stream.
-  ///
   /// @param data A result parameter that contains the beginning of the next
-  /// available data buffer *iff* next() returned `true`.
-  ///
+  ///             available data buffer *iff* next() returned `true`.
   /// @param size A result parameter that contains the size of *data* *iff*
-  /// next() returned `true`.
-  ///
+  ///             next() returned `true`.
   /// @returns `true` if the input has still data available, and `false` if an
   /// error occurred or the input has no more data.
   virtual bool next(void const** data, size_t* size) = 0;
 
   /// Rewinds the stream position by a given number of bytes. Subsequent calls
   /// to next() then return previous data again.
-  ///
   /// @param bytes The number of bytes to rewind the input stream.
   virtual void rewind(size_t bytes) = 0;
 
@@ -52,7 +47,6 @@ public:
   virtual uint64_t bytes() const = 0;
 
 protected:
-  /// Default-onstructs an input stream.
   input_stream() = default;
 };
 
@@ -63,19 +57,15 @@ public:
   virtual ~output_stream() = default;
 
   /// Retrieves a contiguous block of data from the stream.
-  ///
   /// @returns A buffer filled with the next block of bytes or an invalid
-  /// buffer.
+  ///          buffer.
   buffer<void> next_block();
 
   /// Retrieves a contiguous data buffer from the stream for write operations.
-  ///
   /// @param data A result parameter that contains the beginning of the next
-  /// available data buffer *iff* next() returned `true`.
-  ///
+  ///             available data buffer *iff* next() returned `true`.
   /// @param size A result parameter that contains the size of *data* *iff*
-  /// next() returned `true`.
-  ///
+  ///             next() returned `true`.
   /// @returns `true` if the output has a buffer available, and `false` if an
   /// error occurred.
   virtual bool next(void** data, size_t* size) = 0;
@@ -92,7 +82,6 @@ public:
   virtual uint64_t bytes() const = 0;
 
 protected:
-  /// Default-constructs an output stream.
   output_stream() = default;
 };
 

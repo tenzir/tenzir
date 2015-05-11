@@ -404,7 +404,8 @@ behavior node::make_behavior()
           }
           else if (format == "bro")
           {
-            src = spawn<source::bro, priority_aware + detached>(file{input});
+            src = spawn<source::bro, priority_aware + detached>(
+              io::file_input_stream{input});
           }
           else if (format == "bgpdump")
           {
@@ -413,7 +414,8 @@ behavior node::make_behavior()
               VAST_ERROR(this, "didn't specify input (-r)");
               return make_message(error{"no input specified (-r)"});
             }
-            src = spawn<source::bgpdump, priority_aware + detached>(file{input});
+            src = spawn<source::bgpdump, priority_aware + detached>(
+              io::file_input_stream{input});
           }
           else if (format == "test")
           {
