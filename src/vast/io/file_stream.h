@@ -7,6 +7,21 @@
 namespace vast {
 namespace io {
 
+class file_input_device : public input_device
+{
+public:
+  file_input_device(path const& filename);
+  file_input_device(file::native_type handle, bool close_behavior);
+  file_input_device(file_input_device&&) = default;
+  file_input_device& operator=(file_input_device&&) = default;
+
+  virtual bool read(void* data, size_t bytes, size_t* got) override;
+  virtual bool skip(size_t bytes, size_t *skipped) override;
+
+private:
+  file file_;
+};
+
 /// An input stream that reads from a file.
 class file_input_stream : public input_stream
 {
@@ -34,23 +49,22 @@ public:
   virtual uint64_t bytes() const override;
 
 private:
-  class file_input_buffer : public input_buffer
-  {
-  public:
-    file_input_buffer(path const& filename);
-    file_input_buffer(file::native_type handle, bool close_behavior);
-    file_input_buffer(file_input_buffer&&) = default;
-    file_input_buffer& operator=(file_input_buffer&&) = default;
-
-    virtual bool read(void* data, size_t bytes, size_t* got) override;
-    virtual bool skip(size_t bytes, size_t *skipped) override;
-
-  private:
-    file file_;
-  };
-
-  file_input_buffer buffer_;
+  file_input_device buffer_;
   buffered_input_stream buffered_stream_;
+};
+
+class file_output_device : public output_device
+{
+public:
+  file_output_device(path const& filename);
+  file_output_device(file::native_type handle, bool close_behavior);
+  file_output_device(file_output_device&&) = default;
+  file_output_device& operator=(file_output_device&&) = default;
+
+  virtual bool write(void const* data, size_t bytes, size_t* put) override;
+
+private:
+  file file_;
 };
 
 /// An output stream that writes to a file.
@@ -82,21 +96,7 @@ public:
   virtual uint64_t bytes() const override;
 
 private:
-  class file_output_buffer : public output_buffer
-  {
-  public:
-    file_output_buffer(path const& filename);
-    file_output_buffer(file::native_type handle, bool close_behavior);
-    file_output_buffer(file_output_buffer&&) = default;
-    file_output_buffer& operator=(file_output_buffer&&) = default;
-
-    virtual bool write(void const* data, size_t bytes, size_t* put) override;
-
-  private:
-    file file_;
-  };
-
-  file_output_buffer buffer_;
+  file_output_device buffer_;
   buffered_output_stream buffered_stream_;
 };
 

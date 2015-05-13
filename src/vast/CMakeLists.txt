@@ -57,9 +57,10 @@ set(libvast_sources
   io/buffered_stream.cc
   io/coded_stream.cc
   io/compressed_stream.cc
+  io/device.cc
   io/file_stream.cc
   io/getline.cc
-  io/iostream.cc
+  io/stream_device.cc
   io/stream.cc
   util/endpoint.cc
   util/posix.cc

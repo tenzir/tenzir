@@ -3,6 +3,29 @@
 namespace vast {
 namespace io {
 
+file_input_device::file_input_device(path const& filename)
+  : file_(filename)
+{
+  file_.open(file::read_only);
+}
+
+file_input_device::file_input_device(file::native_type handle,
+                                     bool close_behavior)
+  : file_(handle, close_behavior)
+{
+}
+
+bool file_input_device::read(void* data, size_t bytes, size_t* got)
+{
+  return file_.read(data, bytes, got);
+}
+
+bool file_input_device::skip(size_t bytes, size_t *skipped)
+{
+  return file_.seek(bytes, skipped) || input_device::skip(bytes, skipped);
+}
+
+
 file_input_stream::file_input_stream(path const& filename, size_t block_size)
   : buffer_(filename),
     buffered_stream_(buffer_, block_size)
@@ -36,29 +59,23 @@ uint64_t file_input_stream::bytes() const
   return buffered_stream_.bytes();
 }
 
-file_input_stream::file_input_buffer::file_input_buffer(path const& filename)
+
+file_output_device::file_output_device(path const& filename)
   : file_(filename)
 {
-  file_.open(file::read_only);
+  file_.open(file::write_only);
 }
 
-file_input_stream::file_input_buffer::file_input_buffer(file::native_type handle,
-                                                        bool close_behavior)
+bool file_output_device::write(void const* data, size_t bytes, size_t* put)
+{
+  return file_.write(data, bytes, put);
+}
+
+file_output_device::file_output_device(file::native_type handle,
+                                       bool close_behavior)
   : file_(handle, close_behavior)
 {
 }
-
-bool
-file_input_stream::file_input_buffer::read(void* data, size_t bytes, size_t* got)
-{
-  return file_.read(data, bytes, got);
-}
-
-bool file_input_stream::file_input_buffer::skip(size_t bytes, size_t *skipped)
-{
-  return file_.seek(bytes, skipped) || input_buffer::skip(bytes, skipped);
-}
-
 
 file_output_stream::file_output_stream(path const& filename, size_t block_size)
   : buffer_(filename),
@@ -96,24 +113,6 @@ void file_output_stream::rewind(size_t bytes)
 uint64_t file_output_stream::bytes() const
 {
   return buffered_stream_.bytes();
-}
-
-file_output_stream::file_output_buffer::file_output_buffer(path const& filename)
-  : file_(filename)
-{
-  file_.open(file::write_only);
-}
-
-file_output_stream::file_output_buffer::file_output_buffer(file::native_type handle,
-                                                        bool close_behavior)
-  : file_(handle, close_behavior)
-{
-}
-
-bool file_output_stream::file_output_buffer::write(
-    void const* data, size_t bytes, size_t* put)
-{
-  return file_.write(data, bytes, put);
 }
 
 } // namespace io
