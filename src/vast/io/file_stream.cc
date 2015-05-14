@@ -22,7 +22,13 @@ bool file_input_device::read(void* data, size_t bytes, size_t* got)
 
 bool file_input_device::skip(size_t bytes, size_t *skipped)
 {
-  return file_.seek(bytes, skipped) || input_device::skip(bytes, skipped);
+  if (file_.seek(bytes))
+  {
+    if (skipped != nullptr)
+      *skipped = bytes;
+    return true;
+  }
+  return input_device::skip(bytes, skipped);
 }
 
 

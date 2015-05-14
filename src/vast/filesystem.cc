@@ -248,22 +248,10 @@ file::file(native_type handle, bool close_behavior, vast::path p)
 {
 }
 
-file::file(file&& other) noexcept
-  : handle_{other.handle_},
-    close_on_destruction_{other.close_on_destruction_},
-    is_open_{other.is_open_},
-    seek_failed_{other.seek_failed_},
-    path_{std::move(other.path_)}
-{
-  other.handle_ = 0;
-  other.is_open_ = false;
-  other.seek_failed_ = false;
-}
-
 file::~file()
 {
-  // Never close stdin/stdout
-  if (path_ != "-" && ! close_on_destruction_)
+  // Don't close stdin/stdout implicitly.
+  if (path_ != "-" && close_on_destruction_)
     close();
 }
 
@@ -272,7 +260,7 @@ trial<void> file::open(open_mode mode, bool append)
   if (is_open_)
     return error{"file already open"};
   if (mode == read_only && append)
-    return error{"cannot open file in read mode and append simultaneously"};
+    return error{"cannot open file in read and append mode simultaneously"};
 #ifdef VAST_POSIX
   // Support reading from STDIN and writing to STDOUT.
   if (path_ == "-")
@@ -319,19 +307,10 @@ trial<void> file::open(open_mode mode, bool append)
 
 bool file::close()
 {
-#ifdef VAST_POSIX
-  if (! is_open_)
+  if (! (is_open_ && util::close(handle_)))
     return false;
-  int result;
-  do
-  {
-    result = ::close(handle_);
-  }
-  while (result < 0 && errno == EINTR);
-  return ! result;
-#else
-  return false;
-#endif // VAST_POSIX
+  is_open_ = false;
+  return true;
 }
 
 bool file::is_open() const
@@ -341,31 +320,23 @@ bool file::is_open() const
 
 bool file::read(void* sink, size_t bytes, size_t* got)
 {
-  return util::read(handle_, sink, bytes, got);
+  return is_open_ && util::read(handle_, sink, bytes, got);
 }
 
 bool file::write(void const* source, size_t bytes, size_t* put)
 {
-  return util::write(handle_, source, bytes, put);
+  return is_open_ && util::write(handle_, source, bytes, put);
 }
 
-bool file::seek(size_t bytes, size_t *skipped)
+bool file::seek(size_t bytes)
 {
-  if (skipped)
-    *skipped = 0;
   if (! is_open_ || seek_failed_)
     return false;
-#ifdef VAST_POSIX
-  if (::lseek(handle_, bytes, SEEK_CUR) == off_t(-1))
+  if (! util::seek(handle_, bytes))
   {
     seek_failed_ = true;
     return false;
   }
-#else
-  return false;
-#endif // VAST_POSIX
-  if (skipped)
-    *skipped = bytes;
   return true;
 }
 
@@ -385,7 +356,6 @@ void directory::iterator::increment()
 {
   if (! dir_)
     return;
-
 #ifdef VAST_POSIX
   if (! dir_->dir_)
   {

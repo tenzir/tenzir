@@ -101,9 +101,20 @@ bool poll(int fd, int usec)
   return FD_ISSET(fd, &rdset);
 }
 
+bool close(int fd)
+{
+  int result;
+  do
+  {
+    result = ::close(fd);
+  }
+  while (result < 0 && errno == EINTR);
+  return result == 0;
+}
+
 bool read(int fd, void* buffer, size_t bytes, size_t* got)
 {
-  int64_t taken;
+  ssize_t taken;
   do
   {
     taken = ::read(fd, buffer, bytes);
@@ -112,17 +123,17 @@ bool read(int fd, void* buffer, size_t bytes, size_t* got)
   if (taken <= 0) // EOF == 0, error == -1
     return false;
   if (got)
-    *got = taken;
+    *got = static_cast<size_t>(taken);
   return true;
 }
 
 bool write(int fd, void const* buffer, size_t bytes, size_t* put)
 {
-  size_t total = 0;
+  auto total = size_t{0};
   auto buf = reinterpret_cast<uint8_t const*>(buffer);
   while (total < bytes)
   {
-    int written;
+    ssize_t written;
     do
     {
       written = ::write(fd, buf + total, bytes - total);
@@ -130,11 +141,16 @@ bool write(int fd, void const* buffer, size_t bytes, size_t* put)
     while (written < 0 && errno == EINTR);
     if (written <= 0)
       return false;
-    total += written;
-    if (put)
-      *put += written;
+    total += static_cast<size_t>(written);
   }
+  if (put)
+    *put = total;
   return true;
+}
+
+bool seek(int fd, size_t bytes)
+{
+  return ::lseek(fd, bytes, SEEK_CUR) != -1;
 }
 
 } // namespace util

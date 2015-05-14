@@ -184,19 +184,14 @@ public:
   /// @pre The file identified via *handle* is open.
   file(native_type handle,
        bool close_behavior = close_on_destruction,
-       vast::path p = {}
-       );
+       vast::path p = {});
 
-  /// Move-construfts a file.
-  /// @param other The file to move.
-  file(file&& other) noexcept;
+  file(file&&) = default;
 
   /// Destroys and closes a file.
   ~file();
 
-  /// Move-Assigns a file to this instance.
-  /// @param other The RHS of the assignment.
-  file& operator=(file&& other) = default;
+  file& operator=(file&&) = default;
 
   /// Opens the file.
   /// @param mode How to open the file. If not equal to `read_only`, the
@@ -230,9 +225,8 @@ public:
   /// Seeks the file forward.
   /// @param bytes The number of bytes to seek forward relative to the current
   ///              position.
-  /// @param skipped Set to the number of bytes skipped.
   /// @returns `true` on success.
-  bool seek(size_t bytes, size_t* skipped = nullptr);
+  bool seek(size_t bytes);
 
   /// Retrieves the ::path for this file.
   /// @returns The ::path for this file.
@@ -240,7 +234,7 @@ public:
 
 private:
   native_type handle_;
-  bool close_on_destruction_ = true;
+  bool close_on_destruction_ = ! close_on_destruction;
   bool is_open_ = false;
   bool seek_failed_ = false;
   vast::path path_;

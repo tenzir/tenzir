@@ -71,6 +71,11 @@ bool make_blocking(int fd);
 /// @returns `true` if *fd* has ready events for reading.
 bool poll(int fd, int usec = 100000);
 
+/// Wraps `close(2)`.
+/// @param fd The file descriptor to close.
+/// @returns `true` on successful close.
+bool close(int fd);
+
 /// Wraps `read(2)`.
 /// @param fd The file descriptor to read from.
 /// @param buffer The buffer to write into.
@@ -86,6 +91,12 @@ bool read(int fd, void* buffer, size_t bytes, size_t* got = nullptr);
 /// @param put If not-nullptr, receives the number of bytes actually read.
 /// @returns `true` on successful reading.
 bool write(int fd, void const* buffer, size_t bytes, size_t* put = nullptr);
+
+/// Wraps `seek(2)`.
+/// @param fd A seekable file descriptor.
+/// @param bytes The number of bytes that should be skipped.
+/// @returns `true` on successful seek.
+bool seek(int fd, size_t bytes);
 
 } // namespace util
 } // namespace vast
