@@ -43,10 +43,10 @@ public:
   file_input_stream(file_input_stream&& other) = default;
   file_input_stream& operator=(file_input_stream&& other) = default;
 
-  virtual bool next(void const** data, size_t* size) override;
-  virtual void rewind(size_t bytes) override;
-  virtual bool skip(size_t bytes) override;
-  virtual uint64_t bytes() const override;
+  bool next(void const** data, size_t* size) override;
+  void rewind(size_t bytes) override;
+  bool skip(size_t bytes) override;
+  uint64_t bytes() const override;
 
 private:
   file_input_device buffer_;
@@ -61,7 +61,7 @@ public:
   file_output_device(file_output_device&&) = default;
   file_output_device& operator=(file_output_device&&) = default;
 
-  virtual bool write(void const* data, size_t bytes, size_t* put) override;
+  bool write(void const* data, size_t bytes, size_t* put) override;
 
 private:
   file file_;
@@ -91,9 +91,9 @@ public:
   /// @returns `true` *iff* flushing succeeded.
   bool flush();
 
-  virtual bool next(void** data, size_t* size) override;
-  virtual void rewind(size_t bytes) override;
-  virtual uint64_t bytes() const override;
+  bool next(void** data, size_t* size) override;
+  void rewind(size_t bytes) override;
+  uint64_t bytes() const override;
 
 private:
   file_output_device buffer_;

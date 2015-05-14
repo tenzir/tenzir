@@ -52,6 +52,7 @@ set(libvast_sources
   expr/restrictor.cc
   expr/resolver.cc
   expr/validator.cc
+  io/actor_stream.cc
   io/algorithm.cc
   io/array_stream.cc
   io/buffered_stream.cc

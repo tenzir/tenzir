@@ -21,9 +21,8 @@ bool buffered_input_stream::next(void const** data, size_t* size)
     rewind_bytes_ = 0;
     return true;
   }
-  if ((failed_ = ! idev_->read(buffer_.data(), buffer_.size(), &valid_bytes_)))
-    return false;
-  else if (valid_bytes_ == 0)
+  failed_ = ! idev_->read(buffer_.data(), buffer_.size(), &valid_bytes_);
+  if (failed_ || valid_bytes_ == 0)
     return false;
   position_ += valid_bytes_;
   *size = valid_bytes_;

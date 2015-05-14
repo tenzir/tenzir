@@ -73,6 +73,7 @@ set(tests ${tests}
   tests/actor/import.cc
   tests/actor/index.cc
   tests/actor/indexer.cc
+  tests/actor/io.cc
   tests/actor/key_value_store.cc
   tests/actor/partition.cc
   tests/actor/source_bgpdump.cc

@@ -24,10 +24,10 @@ public:
 
   buffered_input_stream& operator=(buffered_input_stream&&) = default;
 
-  virtual bool next(void const** data, size_t* size) override;
-  virtual void rewind(size_t bytes) override;
-  virtual bool skip(size_t bytes) override;
-  virtual uint64_t bytes() const override;
+  bool next(void const** data, size_t* size) override;
+  void rewind(size_t bytes) override;
+  bool skip(size_t bytes) override;
+  uint64_t bytes() const override;
 
 private:
   bool failed_ = false;
@@ -58,9 +58,9 @@ public:
   /// @returns `true` *iff* flushing succeeded.
   bool flush();
 
-  virtual bool next(void** data, size_t* size) override;
-  virtual void rewind(size_t bytes) override;
-  virtual uint64_t bytes() const override;
+  bool next(void** data, size_t* size) override;
+  void rewind(size_t bytes) override;
+  uint64_t bytes() const override;
 
 private:
   bool failed_ = false;
