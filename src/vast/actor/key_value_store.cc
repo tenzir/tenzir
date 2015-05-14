@@ -56,8 +56,7 @@ behavior key_value_store::make_behavior()
     on(put_atom::value, val<std::string>, any_vals)
       >> [=](std::string const& key)
     {
-      VAST_DEBUG(this, "got PUT:", key, '=',
-                 to_string(current_message().drop(2)));
+      VAST_DEBUG(this, "got PUT:", key);
       if (key.empty())
         return make_message(error{"empty key"});
       else if (key == seperator_)
