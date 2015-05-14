@@ -1,4 +1,5 @@
 #include "vast/actor/source/bgpdump.h"
+#include "vast/io/file_stream.h"
 
 #include "framework/unit.h"
 #include "test_data.h"
@@ -12,8 +13,9 @@ TEST("bgpdump source")
 {
   scoped_actor self;
   // Spawn a BGPDump source.
-  auto bgpdump = self->spawn<source::bgpdump>(
-      vast::io::file_input_stream{bgpdump::updates20140821});
+  auto f = bgpdump::updates20140821;
+  auto is = std::make_unique<vast::io::file_input_stream>(f);
+  auto bgpdump = self->spawn<source::bgpdump>(std::move(is));
   self->monitor(bgpdump);
   anon_send(bgpdump, put_atom::value, sink_atom::value, self);
   self->receive([&](upstream_atom, actor const& a) { CHECK(a == bgpdump); });

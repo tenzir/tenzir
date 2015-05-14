@@ -28,7 +28,9 @@
 #include "vast/actor/source/bgpdump.h"
 #include "vast/actor/source/test.h"
 #include "vast/expr/normalize.h"
+#include "vast/io/file_stream.h"
 #include "vast/util/endpoint.h"
+#include "vast/util/posix.h"
 #include "vast/util/string.h"
 
 #ifdef VAST_HAVE_PCAP
@@ -355,10 +357,41 @@ behavior node::make_behavior()
             {"compression,c", "compression method for event batches", comp},
             {"schema,s", "alternate schema file", schema_file},
             {"dump-schema,d", "print schema and exit"},
-            {"read,r", "path to read events from", input}
+            {"read,r", "path to read events from", input},
+            {"uds,u", "treat -r as UNIX domain socket to connect to"}
           });
           if (! r.error.empty())
             return make_message(error{std::move(r.error)});
+          auto& format = params.get_as<std::string>(0);
+          // The "pcap" and "test" sources manually verify the presence of
+          // input. All other sources are file-based and we setup their input
+          // stream here.
+          std::unique_ptr<io::input_stream> is;
+          if (! (format == "pcap" || format == "test"))
+          {
+            if (r.opts.count("read") == 0 || input.empty())
+            {
+              VAST_ERROR(this, "didn't specify valid input (-r)");
+              return make_message(error{"no valid input specified (-r)"});
+            }
+            if (r.opts.count("uds") > 0)
+            {
+              auto uds = util::unix_domain_socket::connect(input);
+              if (! uds)
+              {
+                auto err = "failed to connect to UNIX domain socket at ";
+                VAST_ERROR(this, err << input);
+                return make_message(error{err, input});
+              }
+              auto remote_fd = uds.recv_fd();
+              is = std::make_unique<io::file_input_stream>(
+                remote_fd, ! close_on_destruction);
+            }
+            else
+            {
+              is = std::make_unique<io::file_input_stream>(input);
+            }
+          }
           auto dump_schema = r.opts.count("dump-schema") > 0;
           // Facilitate actor shutdown when returning with error.
           bool terminate = true;
@@ -371,7 +404,6 @@ behavior node::make_behavior()
           };
           terminator guard{[&] { if (terminate) send_exit(src, exit::error); }};
           // Spawn a source according to format.
-          auto& format = params.get_as<std::string>(0);
           if (format == "pcap")
           {
 #ifndef VAST_HAVE_PCAP
@@ -402,21 +434,6 @@ behavior node::make_behavior()
               input, cutoff, flow_max, flow_age, flow_expiry, pseudo_realtime);
 #endif
           }
-          else if (format == "bro")
-          {
-            src = spawn<source::bro, priority_aware + detached>(
-              io::file_input_stream{input});
-          }
-          else if (format == "bgpdump")
-          {
-            if (r.opts.count("read") == 0)
-            {
-              VAST_ERROR(this, "didn't specify input (-r)");
-              return make_message(error{"no input specified (-r)"});
-            }
-            src = spawn<source::bgpdump, priority_aware + detached>(
-              io::file_input_stream{input});
-          }
           else if (format == "test")
           {
             auto id = event_id{0};
@@ -428,6 +445,16 @@ behavior node::make_behavior()
             if (! r.error.empty())
               return make_message(error{std::move(r.error)});
             src = spawn<source::test, priority_aware>(id, events);
+          }
+          else if (format == "bro")
+          {
+            src = spawn<source::bro, priority_aware + detached>(
+              std::move(is));
+          }
+          else if (format == "bgpdump")
+          {
+            src = spawn<source::bgpdump, priority_aware + detached>(
+              std::move(is));
           }
           else
           {

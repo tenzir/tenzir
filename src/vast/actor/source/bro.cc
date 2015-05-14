@@ -66,8 +66,8 @@ trial<type> make_type(std::string const& bro_type)
 
 } // namespace <anonymous>
 
-bro::bro(io::file_input_stream&& stream)
-  : file<bro>{"bro-source", std::move(stream)}
+bro::bro(std::unique_ptr<io::input_stream> is)
+  : line_based<bro>{"bro-source", std::move(is)}
 {
 }
 

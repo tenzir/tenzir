@@ -2,18 +2,18 @@
 #define VAST_ACTOR_SOURCE_BGPDUMP_H
 
 #include "vast/schema.h"
-#include "vast/actor/source/file.h"
+#include "vast/actor/source/line_based.h"
 
 namespace vast {
 namespace source {
 
-/// A source reading ASCII output from the bgpdump utility.
-class bgpdump : public file<bgpdump>
+/// A source reading ASCII output from the BGPDump utility.
+class bgpdump : public line_based<bgpdump>
 {
 public:
   /// Spawns a BGPDump source.
-  /// @param stream The input stream to read the BGPDump file from.
-  bgpdump(io::file_input_stream&& stream);
+  /// @param is The input stream to read BGPDump data logs from.
+  bgpdump(std::unique_ptr<io::input_stream> is);
 
   schema sniff();
 

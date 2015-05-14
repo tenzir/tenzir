@@ -6,8 +6,8 @@
 namespace vast {
 namespace source {
 
-bgpdump::bgpdump(io::file_input_stream&& stream)
-  : file<bgpdump>{"bgpdump-source", std::move(stream)}
+bgpdump::bgpdump(std::unique_ptr<io::input_stream> is)
+  : line_based<bgpdump>{"bgpdump-source", std::move(is)}
 {
   std::vector<type::record::field> fields;
   fields.emplace_back("timestamp", type::time_point{});
