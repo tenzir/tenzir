@@ -345,6 +345,11 @@ path const& file::path() const
   return path_;
 }
 
+file::native_type file::handle() const
+{
+  return handle_;
+}
+
 
 directory::iterator::iterator(directory* dir)
   : dir_{dir}

@@ -232,6 +232,10 @@ public:
   /// @returns The ::path for this file.
   vast::path const& path() const;
 
+  /// Retrieves the native handle for this file.
+  /// @returns The native handle.
+  native_type handle() const;
+
 private:
   native_type handle_;
   bool close_on_destruction_ = ! close_on_destruction;
