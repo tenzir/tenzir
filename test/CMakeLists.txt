@@ -1,2 +1,2 @@
-add_subdirectory(uds)
+add_subdirectory(dscat)
 add_subdirectory(unit)
