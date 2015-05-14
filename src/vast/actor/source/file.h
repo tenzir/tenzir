@@ -28,6 +28,7 @@ public:
   {
     if (this->done())
       return false;
+    line_.clear();
     // Get the next non-empty line.
     while (line_.empty())
       if (io::getline(stream_, line_))

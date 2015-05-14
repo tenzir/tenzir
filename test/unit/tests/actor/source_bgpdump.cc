@@ -15,7 +15,7 @@ TEST("bgpdump source")
   auto bgpdump = self->spawn<source::bgpdump>(
       vast::io::file_input_stream{bgpdump::updates20140821});
   self->monitor(bgpdump);
-  anon_send(bgpdump, add_atom::value, sink_atom::value, self);
+  anon_send(bgpdump, put_atom::value, sink_atom::value, self);
   self->receive([&](upstream_atom, actor const& a) { CHECK(a == bgpdump); });
   // Run the source.
   anon_send(bgpdump, run_atom::value);
