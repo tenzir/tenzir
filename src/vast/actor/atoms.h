@@ -1,6 +1,8 @@
 #ifndef VAST_ACTOR_ATOMS_H
 #define VAST_ACTOR_ATOMS_H
 
+#include <caf/atom.hpp>
+
 namespace vast {
 
 // Inherited from CAF
@@ -8,6 +10,9 @@ using caf::delete_atom;
 using caf::get_atom;
 using caf::ok_atom;
 using caf::put_atom;
+using caf::join_atom;
+using caf::leave_atom;
+using caf::sys_atom;
 
 // Generic
 using accept_atom = caf::atom_constant<caf::atom("accept")>;
