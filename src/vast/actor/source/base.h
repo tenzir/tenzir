@@ -1,5 +1,5 @@
-#ifndef VAST_ACTOR_SOURCE_SYNCHRONOUS_H
-#define VAST_ACTOR_SOURCE_SYNCHRONOUS_H
+#ifndef VAST_ACTOR_SOURCE_BASE_H
+#define VAST_ACTOR_SOURCE_BASE_H
 
 #include <caf/all.hpp>
 #include "vast/event.h"
@@ -73,12 +73,13 @@ private:
 
 } // namespace detail
 
-/// A synchronous source that extracts events one by one.
+/// The base class for data sources which synchronously extract events
+/// one-by-one.
 template <typename Derived>
-class synchronous : public flow_controlled_actor
+class base : public flow_controlled_actor
 {
 public:
-  synchronous(char const* name)
+  base(char const* name)
     : flow_controlled_actor{name}
   {
     trap_exit(true);

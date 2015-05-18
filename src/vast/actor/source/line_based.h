@@ -3,7 +3,7 @@
 
 #include <cassert>
 
-#include "vast/actor/source/synchronous.h"
+#include "vast/actor/source/base.h"
 #include "vast/io/getline.h"
 #include "vast/io/stream.h"
 
@@ -12,7 +12,7 @@ namespace source {
 
 /// A line-based source that transforms an input stream into lines.
 template <typename Derived>
-class line_based : public synchronous<Derived>
+class line_based : public base<Derived>
 {
 public:
   /// Retrieves the current line number.
@@ -32,7 +32,7 @@ protected:
   /// @param name The name of the actor.
   /// @param is The input stream to read from.
   line_based(char const* name, std::unique_ptr<io::input_stream> is)
-    : synchronous<Derived>{name},
+    : base<Derived>{name},
       input_stream_{std::move(is)}
   {
     assert(input_stream_ != nullptr);

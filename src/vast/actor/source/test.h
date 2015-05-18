@@ -5,7 +5,7 @@
 #include <unordered_map>
 #include "vast/data.h"
 #include "vast/schema.h"
-#include "vast/actor/source/synchronous.h"
+#include "vast/actor/source/base.h"
 #include "vast/util/random.h"
 #include "vast/util/variant.h"
 
@@ -37,7 +37,7 @@ using lcg = lcg64;
 #endif
 
 /// A source that generates random events according to a given schema.
-class test : public synchronous<test>
+class test : public base<test>
 {
 public:
   struct blueprint
