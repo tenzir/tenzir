@@ -383,9 +383,8 @@ behavior node::make_behavior()
                 VAST_ERROR(this, err << input);
                 return make_message(error{err, input});
               }
-              auto remote_fd = uds.recv_fd();
-              is = std::make_unique<io::file_input_stream>(
-                remote_fd, ! close_on_destruction);
+              auto remote_fd = uds.recv_fd(); // Blocks!
+              is = std::make_unique<io::file_input_stream>(remote_fd);
             }
             else
             {
