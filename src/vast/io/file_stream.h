@@ -37,8 +37,9 @@ public:
   /// @param close_behavior Whether to close the file upon destruction.
   /// @param block_size The number of bytes to read at once from the underlying
   ///                   buffer.
-  file_input_stream(file::native_type handle, bool close_behavior,
-                    size_t block_size = 0);
+  explicit file_input_stream(file::native_type handle,
+                             bool close_behavior = close_on_destruction,
+                             size_t block_size = 0);
 
   file_input_stream(file_input_stream&& other) = default;
   file_input_stream& operator=(file_input_stream&& other) = default;
@@ -75,15 +76,16 @@ public:
   /// @param filename The path to the file to write to.
   /// @param block_size The number of bytes to write at once to the underlying
   ///                   buffer.
-  file_output_stream(path const& filename, size_t block_size = 0);
+  explicit file_output_stream(path const& filename, size_t block_size = 0);
 
   /// Constructs a file output stream from a native file handle.
   /// @param handle The open file handle.
   /// @param close_behavior Whether to close the file upon destruction.
   /// @param block_size The number of bytes to write at once to the underlying
   ///                   buffer.
-  file_output_stream(file::native_type handle, bool close_behavior,
-                    size_t block_size = 0);
+  explicit file_output_stream(file::native_type handle,
+                              bool close_behavior = close_on_destruction,
+                              size_t block_size = 0);
 
   virtual ~file_output_stream();
 
