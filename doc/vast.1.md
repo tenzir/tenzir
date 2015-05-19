@@ -3,15 +3,15 @@
 NAME
 ----
 
-VAST -- a unified platform for network forensics
+`vast` -- interface to a VAST node
 
 SYNOPSIS
 --------
 
 `vast` [*options*] *command* [*arguments*]
 
-DESCRIPTION
------------
+OVERVIEW
+--------
 
 VAST is a distributed platform for large-scale network forensics. It's modular
 system architecture is exclusively implemented in terms of the actor model. In
@@ -20,21 +20,18 @@ communicate asynchronously solely via message passing. Users spawn system
 components as actors and connect them together to create a custom system
 topology.
 
-A `vast` process (aka "node") acts as a container for other actors. Nodes can
-enter a peering relationship which makes them share all global state. The set
-of peering nodes describes a VAST ecosystem: an overlay network in which actors
-can be connected irrespective of process boundaries.
+DESCRIPTION
+-----------
 
-Typically, each physical machine in a VAST deployment runs a single `vast`
-process. For single-node deployments all actors run inside this process,
-whereas cluster deployments consist of multiple peering nodes, with actors
-spread across them.
+The `vast` executable enables users to manage an ecosystem, such as creating
+event sources and sinks for data import/export, issuing queries, or retrieving
+statistics about system components.
 
 The following key actors exist:
 
 **NODE**
-  The main VAST actor which accomodates all other actors and manages global
-  state.
+  The main VAST actor which accommodates all other actors and manages global
+  state. The executable kjj
 
 **SOURCE**
   Generates events from a data source, such as packets from a network interface
@@ -60,10 +57,6 @@ The following key actors exist:
   ARCHIVE to extract candidates, and relays matching events to SINKs.
   them to ARCHIVE and INDEX.
 
-The `vast` executable enables users to manage an ecosystem, such as creating
-event sources and sinks for data import/export, issuing queries, or retrieving
-statistics about system components.
-
 OPTIONS
 -------
 
@@ -71,14 +64,14 @@ The *options* in front *command* control how to to connect to a node.
 
 The following *options* are available:
 
-`-n` *endpoint* [*127.0.0.1:42000*]
+`-e` *endpoint* [*127.0.0.1:42000*]
   The endpoint of the node to connect to or launch. (See below)
 
 `-l` *verbosity* [*3*]
   The logging verbosity. (See below)
 
 `-h`
-  Display a help message an exit.
+  Display a help message and exit.
 
 `-v`
   Print VAST version and exit.
@@ -109,7 +102,6 @@ This section describes each *command* and its *arguments*.
 
 The following commands are available:
 
-  - *start*         starts a node
   - *stop*          stops a node
   - *peer*          peers with another node
   - *show*          shows various properties of an ecosystem
@@ -121,50 +113,13 @@ The following commands are available:
   - *import*        imports data from standard input
   - *export*        exports query results to standard output
 
-### start
-
-Synopsis:
-
-  *start* [*arguments*]
-
-Spawns a node and daemonizes the process, i.e., detaches it from the
-controlling terminal and continues running in the background.
-
-Available *arguments*:
-
-`-c`
-  Start core actor and connect them.
-
-`-d` *directory* [*vast*]
-  The path on the file system where to store persistent state.
-
-`-f`
-  Start daemon in foreground, i.e., do not detach from controlling terminal and
-  run in background.
-
-`-n` *name* [*hostname*]
-  Overrides the node *name*, which defaults to the system hostname. Each node
-  in an ecosystem must have a unique name, otherwise peering fails.
-
-`-m` *messages* [*-1*]
-  The CAF worker throughput expressed in the maximum number of messages to
-  process when a worker gets scheduled. The default value of *-1* means an
-  unlimited number of messages.
-
-`-p` *logfile*
-  Enable CAF profiling of worker threads and actors and write the per-second
-  sampled data to *logfile*.
-
-`-w` *threads* [*std::thread::hardware_concurrency()*]
-  The number of worker threads to use for CAF's scheduler.
-
 ### stop
 
 Synopsis:
 
   *stop*
 
-Stops the node. This also termiantes all contained actors.
+Stops the node and terminates all contained actors.
 
 ### peer
 
@@ -263,8 +218,12 @@ Available *actor* values with corresponding *parameters*:
     *importer* to indicate the endpoint receiving the generated events.
 
 *source* *bro*
+  `-u` *uds*
+    Treats `-r` as a listening UNIX domain socket instead of a regular file.
 
 *source* *bgpdump*
+  `-u` *uds*
+    Treats `-r` as a listening UNIX domain socket instead of a regular file.
 
 *source* *test* [*parameters*]
   `-n` *events*
@@ -298,10 +257,14 @@ Available *actor* values with corresponding *parameters*:
     Name of the filesystem *path* (file or directory) to write events to.
 
 *sink* *ascii*
+  `-u` *uds*
+    Treats `-w` as a listening UNIX domain socket instead of a regular file.
 
 *sink* *bro*
 
 *sink* *json*
+  `-u` *uds*
+    Treats `-w` as a listening UNIX domain socket instead of a regular file.
 
 *sink* *pcap* [*parameters*]
   `-f` *flush* [*1000*]
@@ -387,30 +350,14 @@ invoking *export*.
 EXAMPLES
 --------
 
-Spin up a node running all core actors:
+Make the node at 10.0.0.1 peer with 10.0.0.2:
 
-    vast start -c
-
-This is equivalent to executing the following commands:
-
-    vast start
-    vast spawn identifier
-    vast spawn importer
-    vast spawn archive
-    vast spawn index
-    vast connect importer identifier
-    vast connect importer archive
-    vast connect importer index
-
-Start another node and peer with 10.0.0.1:
-
-    vast start
-    vast peer 10.0.0.1
+    vast -e 10.0.0.1 peer 10.0.0.2
 
 Connect to a node running at 1.2.3.4 on port 31337 and show the
 topology:
 
-    vast -p 1.2.3.4:31337 show topology
+    vast -e 1.2.3.4:31337 show topology
 
 Import Bro log files:
 
@@ -428,5 +375,7 @@ issue at https://github.com/mavam/vast/issues.
 
 SEE ALSO
 --------
+
+vastd(1)
 
 Visit https://github.com/mavam/vast for more information about VAST.
