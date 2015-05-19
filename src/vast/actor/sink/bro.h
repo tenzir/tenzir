@@ -5,8 +5,8 @@
 #include <unordered_map>
 
 #include "vast/filesystem.h"
+#include "vast/io/file_stream.h"
 #include "vast/actor/sink/base.h"
-#include "vast/actor/sink/stream.h"
 
 namespace vast {
 namespace sink {
@@ -31,8 +31,13 @@ public:
   bool process(event const& e);
 
 private:
+  using map_type = std::unordered_map<
+    std::string,
+    std::unique_ptr<io::file_output_stream>
+  >;
+
   path dir_;
-  std::unordered_map<std::string, std::unique_ptr<stream>> streams_;
+  map_type streams_;
 };
 
 } // namespace sink

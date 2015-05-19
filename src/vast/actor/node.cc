@@ -366,7 +366,7 @@ behavior node::make_behavior()
           // The "pcap" and "test" sources manually verify the presence of
           // input. All other sources are file-based and we setup their input
           // stream here.
-          std::unique_ptr<io::input_stream> is;
+          std::unique_ptr<io::input_stream> in;
           if (! (format == "pcap" || format == "test"))
           {
             if (r.opts.count("read") == 0 || input.empty())
@@ -384,11 +384,11 @@ behavior node::make_behavior()
                 return make_message(error{err, input});
               }
               auto remote_fd = uds.recv_fd(); // Blocks!
-              is = std::make_unique<io::file_input_stream>(remote_fd);
+              in = std::make_unique<io::file_input_stream>(remote_fd);
             }
             else
             {
-              is = std::make_unique<io::file_input_stream>(input);
+              in = std::make_unique<io::file_input_stream>(input);
             }
           }
           auto dump_schema = r.opts.count("dump-schema") > 0;
@@ -448,12 +448,12 @@ behavior node::make_behavior()
           else if (format == "bro")
           {
             src = spawn<source::bro, priority_aware + detached>(
-              std::move(is));
+              std::move(in));
           }
           else if (format == "bgpdump")
           {
             src = spawn<source::bgpdump, priority_aware + detached>(
-              std::move(is));
+              std::move(in));
           }
           else
           {
@@ -503,7 +503,8 @@ behavior node::make_behavior()
           auto output = ""s;
           r = params.extract_opts({
             {"schema,s", "alternate schema file", schema_file},
-            {"write,w", "path to write events to", output}
+            {"write,w", "path to write events to", output},
+            {"uds,u", "treat -w as UNIX domain socket to connect to"}
           });
           if (! r.error.empty())
             return make_message(error{std::move(r.error)});
@@ -512,6 +513,7 @@ behavior node::make_behavior()
             VAST_ERROR(this, "didn't specify output (-w)");
             return make_message(error{"no output specified (-w)"});
           }
+          // Setup a custom schema.
           schema sch;
           if (! schema_file.empty())
           {
@@ -523,8 +525,8 @@ behavior node::make_behavior()
             }
             sch = std::move(*t);
           }
-          actor snk;
           // Facilitate actor shutdown when returning with error.
+          actor snk;
           bool terminate = true;
           struct terminator
           {
@@ -534,6 +536,28 @@ behavior node::make_behavior()
           };
           terminator guard{[&] { if (terminate) send_exit(snk, exit::error); }};
           auto& format = params.get_as<std::string>(0);
+          // The "pcap" and "bro" sink manually handle file output. All other
+          // sources are file-based and we setup their input stream here.
+          std::unique_ptr<io::output_stream> out;
+          if (! (format == "pcap" || format == "bro"))
+          {
+            if (r.opts.count("uds") > 0)
+            {
+              auto uds = util::unix_domain_socket::connect(output);
+              if (! uds)
+              {
+                auto err = "failed to connect to UNIX domain socket at ";
+                VAST_ERROR(this, err << output);
+                return make_message(error{err, output});
+              }
+              auto remote_fd = uds.recv_fd(); // Blocks!
+              out = std::make_unique<io::file_output_stream>(remote_fd);
+            }
+          }
+          else
+          {
+            out = std::make_unique<io::file_output_stream>(output);
+          }
           if (format == "pcap")
           {
 #ifndef VAST_HAVE_PCAP
@@ -552,27 +576,13 @@ behavior node::make_behavior()
           {
             snk = spawn<sink::bro>(output);
           }
-          else if (format == "ascii" || format == "json")
+          else if (format == "ascii")
           {
-            path p{output};
-            if (p != "-")
-            {
-              p = p.complete();
-              if (! exists(p.parent()))
-              {
-                auto t = mkdir(p.parent());
-                if (! t)
-                {
-                  quit(exit::error);
-                  return make_message(error{"failed to create directory: ",
-                                            p.parent()});
-                }
-              }
-            }
-            if (format == "ascii")
-              snk = spawn<sink::ascii>(std::move(p));
-            else
-              snk = spawn<sink::json>(std::move(p));
+            snk = spawn<sink::ascii>(std::move(out));
+          }
+          else if (format == "json")
+          {
+            snk = spawn<sink::json>(std::move(out));
           }
           else
           {
@@ -636,8 +646,8 @@ behavior node::make_behavior()
       if (type == "exporter")
         // FIXME: Because we've previously configured a limit, the extraction
         // will finish when hitting it. But this is not a good design, as it
-        // prevents pull-based from results. Once the API becomes clearer, we
-        // need a better way for incremental extraction.
+        // prevents pull-based extraction of results. Once the API becomes
+        // clearer, we need a better way for incremental extraction.
         send(a, extract_atom::value, uint64_t{0});
       return make_message(ok_atom::value);
     },

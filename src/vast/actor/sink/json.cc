@@ -1,13 +1,17 @@
+#include <cassert>
+
 #include "vast/actor/sink/json.h"
+#include "vast/io/algorithm.h"
 #include "vast/util/json.h"
 
 namespace vast {
 namespace sink {
 
-json::json(path p)
+json::json(std::unique_ptr<io::output_stream> out)
   : base<json>{"json-sink"},
-    stream_{std::move(p)}
+    out_{std::move(out)}
 {
+  assert(out_ != nullptr);
 }
 
 bool json::process(event const& e)
@@ -15,11 +19,14 @@ bool json::process(event const& e)
   auto j = to<util::json>(e);
   if (! j)
     return false;
-
   auto str = to_string(*j, true);
   str += '\n';
+  return io::copy(str.begin(), str.end(), *out_);
+}
 
-  return stream_.write(str.begin(), str.end());
+void json::flush()
+{
+  out_->flush();
 }
 
 } // namespace sink

@@ -17,25 +17,23 @@ public:
   base(char const* name = "sink")
     : default_actor{name}
   {
+    trap_exit(true);
   }
 
   void on_exit()
   {
+    static_cast<Derived*>(this)->flush();
     accountant_ = caf::invalid_actor;
   }
-
-  // Allows derived classes to hook exit.
-  virtual void finalize() { }
 
   caf::behavior make_behavior() override
   {
     using namespace caf;
-    trap_exit(true);
+    last_flush_ = time::snapshot();
     return
     {
       [=](exit_msg const& msg)
       {
-        finalize();
         quit(msg.reason);
       },
       [=](limit_atom, uint64_t max)
@@ -44,8 +42,8 @@ public:
         if (processed_ < max)
           limit_ = max;
         else
-          VAST_WARN(this, "ignores new limit of", max <<
-                    ", already processed", processed_, " events");
+          VAST_WARN(this, "ignores new limit of", max,
+                    "(already processed", processed_, " events)");
       },
       [=](accountant_atom, actor const& accountant)
       {
@@ -71,14 +69,19 @@ public:
         VAST_VERBOSE(this, "got progress from query ", id << ':',
                      total_hits, "hits (" << size_t(progress * 100) << "%)");
       },
-      [=](uuid const& id, done_atom, time::duration runtime)
+      [=](uuid const& id, done_atom, time::extent runtime)
       {
-        VAST_VERBOSE(this, "got DONE from query", id << ", took" << runtime);
-        finalize();
+        VAST_VERBOSE(this, "got DONE from query", id << ", took", runtime);
         quit(exit::done);
       },
       catch_unexpected()
     };
+  }
+
+protected:
+  void flush()
+  {
+    // Nothing by default.
   }
 
 private:
@@ -87,19 +90,25 @@ private:
     if (! static_cast<Derived*>(this)->process(e))
     {
       VAST_ERROR(this, "failed to process event:", e);
-      finalize();
       this->quit(exit::error);
       return false;
     }
     if (++processed_ == limit_)
     {
       VAST_VERBOSE(this, "reached limit: ", limit_, "events");
-      finalize();
       this->quit(exit::done);
+    }
+    auto now = time::snapshot();
+    if (now - last_flush_ > flush_interval_)
+    {
+      static_cast<Derived*>(this)->flush();
+      last_flush_ = now;
     }
     return true;
   }
 
+  time::extent flush_interval_ = time::seconds(1); // TODO: make configurable
+  time::moment last_flush_;
   caf::actor accountant_;
   uint64_t processed_ = 0;
   uint64_t limit_ = 0;
