@@ -15,9 +15,11 @@ using namespace vast::io;
 
 int main(int argc, char** argv)
 {
-  auto usage = "usage: dscat [-l] <uds> [file]";
+  auto usage = "usage: dscat [-lrw] <uds> [file]";
   auto r = message_builder{argv + 1, argv + argc}.extract_opts({
-    {"listen,l", "listen on <uds> and serve <file>"}
+    {"listen,l", "listen on <uds> and serve <file>"},
+    {"write,w", "open <file> for writing"},
+    {"read,r", "open <file> for reading"}
   });
   if (r.remainder.size() > 2)
   {
@@ -30,21 +32,45 @@ int main(int argc, char** argv)
     return 1;
   }
   auto& uds_name = r.remainder.get_as<std::string>(0);
+  auto filename =
+    r.remainder.size() == 2 ? r.remainder.get_as<std::string>(1) : "-";
+  auto reading = r.opts.count("read") > 0;
+  auto writing = r.opts.count("write") > 0;
+  if (! reading && ! writing)
+  {
+    cerr << "need to specify either read (-r) or write (-w) mode" << endl;
+    return 1;
+  }
+  if (reading && writing && filename == "-")
+  {
+    cerr << "cannot open standard input or output in read/write mode" << endl;
+    return 1;
+  }
   if (r.opts.count("listen") > 0)
   {
-    auto input =
-      r.remainder.size() == 2 ? r.remainder.get_as<std::string>(1) : "-";
-    cerr << "listening on " << uds_name << " to serve " << input << endl;
+    cerr << "listening on " << uds_name << " (";
+    if (reading)
+      cerr << 'R';
+    if (writing)
+      cerr << 'W';
+    cerr << ") to serve " << filename << endl;
     auto uds = util::unix_domain_socket::accept(uds_name);
     if (! uds)
     {
       cerr << "failed to accept connection" << endl;
       return -1;
     }
-    file f{input};
-    if (! f.open(file::read_only))
+    file f{filename};
+    auto mode = file::invalid;
+    if (reading && writing)
+      mode = file::read_write;
+    else if (reading)
+      mode = file::read_only;
+    else if (writing)
+      mode = file::write_only;
+    if (! f.open(mode))
     {
-      cerr << "failed to open file " << input << endl;
+      cerr << "failed to open file " << filename << endl;
       return 1;
     }
     cerr << "sending file descriptor " << f.handle() << endl;
