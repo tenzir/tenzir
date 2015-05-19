@@ -164,6 +164,7 @@ public:
   /// The mode in which to open a file.
   enum open_mode
   {
+    invalid,
     read_only,
     write_only,
     read_write,

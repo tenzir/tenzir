@@ -274,6 +274,8 @@ trial<void> file::open(open_mode mode, bool append)
   int flags = 0;
   switch (mode)
   {
+    case invalid:
+      return error{"invalid open mode"};
     case read_write:
       flags = O_CREAT | O_RDWR;
       break;
