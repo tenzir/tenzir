@@ -63,10 +63,9 @@ public:
   /// @param sink The sink actor receiving byte vectors.
   actor_output_stream(caf::actor sink, size_t block_size = 0);
 
-  bool flush();
-
   bool next(void** data, size_t* size) override;
   void rewind(size_t bytes) override;
+  bool flush() override;
   uint64_t bytes() const override;
 
 private:

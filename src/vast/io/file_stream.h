@@ -89,12 +89,9 @@ public:
 
   virtual ~file_output_stream();
 
-  /// Flushes data to the underying output buffer.
-  /// @returns `true` *iff* flushing succeeded.
-  bool flush();
-
   bool next(void** data, size_t* size) override;
   void rewind(size_t bytes) override;
+  bool flush() override;
   uint64_t bytes() const override;
 
 private:

@@ -73,9 +73,13 @@ public:
   /// Rewinds the stream position by a given number of bytes. Rewound bytes are
   /// not written into the stream. This is useful if the last buffer returned
   /// by next() is bigger than necessary.
-  ///
   /// @param bytes The number of bytes to rewind the output stream.
   virtual void rewind(size_t bytes) = 0;
+
+  /// If buffered, flushes the current state to the underlying device.
+  /// @returns `true` If not flushable or if flushing succeeded, and `false`
+  ///          if flushable but flushing failed.
+  virtual bool flush();
 
   /// Retrieves the number of bytes this output stream processed.
   /// @returns The number of bytes this output stream processed.

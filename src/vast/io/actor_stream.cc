@@ -125,11 +125,6 @@ actor_output_stream::actor_output_stream(actor sink, size_t block_size)
 {
 }
 
-bool actor_output_stream::flush()
-{
-  return buffered_stream_.flush();
-}
-
 bool actor_output_stream::next(void** data, size_t* size)
 {
   return buffered_stream_.next(data, size);
@@ -138,6 +133,11 @@ bool actor_output_stream::next(void** data, size_t* size)
 void actor_output_stream::rewind(size_t bytes)
 {
   buffered_stream_.rewind(bytes);
+}
+
+bool actor_output_stream::flush()
+{
+  return buffered_stream_.flush();
 }
 
 uint64_t actor_output_stream::bytes() const

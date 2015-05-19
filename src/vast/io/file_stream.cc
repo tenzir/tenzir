@@ -101,11 +101,6 @@ file_output_stream::~file_output_stream()
   flush();
 }
 
-bool file_output_stream::flush()
-{
-  return buffered_stream_.flush();
-}
-
 bool file_output_stream::next(void** data, size_t* size)
 {
   return buffered_stream_.next(data, size);
@@ -114,6 +109,11 @@ bool file_output_stream::next(void** data, size_t* size)
 void file_output_stream::rewind(size_t bytes)
 {
   buffered_stream_.rewind(bytes);
+}
+
+bool file_output_stream::flush()
+{
+  return buffered_stream_.flush();
 }
 
 uint64_t file_output_stream::bytes() const

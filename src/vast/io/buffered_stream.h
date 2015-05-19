@@ -54,12 +54,9 @@ public:
 
   buffered_output_stream& operator=(buffered_output_stream&&) = default;
 
-  /// Flushes data to the underying output streambuffer.
-  /// @returns `true` *iff* flushing succeeded.
-  bool flush();
-
   bool next(void** data, size_t* size) override;
   void rewind(size_t bytes) override;
+  bool flush() override;
   uint64_t bytes() const override;
 
 private:

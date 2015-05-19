@@ -74,19 +74,6 @@ buffered_output_stream::~buffered_output_stream()
   flush();
 }
 
-bool buffered_output_stream::flush()
-{
-  if (failed_)
-    return false;
-  if (valid_bytes_ == 0)
-    return true;
-  if ((failed_ = ! odev_->write(buffer_.data(), valid_bytes_)))
-    return false;
-  position_ += valid_bytes_;
-  valid_bytes_ = 0;
-  return true;
-}
-
 bool buffered_output_stream::next(void** data, size_t* size)
 {
   if (valid_bytes_ == buffer_.size() && ! flush())
@@ -100,6 +87,19 @@ bool buffered_output_stream::next(void** data, size_t* size)
 void buffered_output_stream::rewind(size_t bytes)
 {
   valid_bytes_ -= bytes > valid_bytes_ ? valid_bytes_ : bytes;
+}
+
+bool buffered_output_stream::flush()
+{
+  if (failed_)
+    return false;
+  if (valid_bytes_ == 0)
+    return true;
+  if ((failed_ = ! odev_->write(buffer_.data(), valid_bytes_)))
+    return false;
+  position_ += valid_bytes_;
+  valid_bytes_ = 0;
+  return true;
 }
 
 uint64_t buffered_output_stream::bytes() const
