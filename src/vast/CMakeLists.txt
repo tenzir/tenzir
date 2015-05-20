@@ -35,7 +35,6 @@ set(libvast_sources
   actor/key_value_store.cc
   actor/node.cc
   actor/partition.cc
-  actor/profiler.cc
   actor/signal_monitor.cc
   actor/tracker.cc
   actor/sink/ascii.cc
@@ -73,6 +72,10 @@ set(libvast_sources
   util/hash/murmur.cc
   util/hash/xxhash.cc
   )
+
+if (GPERFTOOLS_FOUND)
+  set(libvast_sources ${libvast_sources} actor/profiler.cc)
+endif ()
 
 if (PCAP_FOUND)
   set(libvast_sources ${libvast_sources}

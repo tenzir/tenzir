@@ -20,7 +20,6 @@
 #include "vast/actor/importer.h"
 #include "vast/actor/index.h"
 #include "vast/actor/node.h"
-#include "vast/actor/profiler.h"
 #include "vast/actor/sink/ascii.h"
 #include "vast/actor/sink/bro.h"
 #include "vast/actor/sink/json.h"
@@ -32,6 +31,10 @@
 #include "vast/util/endpoint.h"
 #include "vast/util/posix.h"
 #include "vast/util/string.h"
+
+#ifdef VAST_HAVE_GPERFTOOLS
+#include "vast/actor/profiler.h"
+#endif
 
 #ifdef VAST_HAVE_PCAP
 #include "vast/actor/sink/pcap.h"
@@ -564,6 +567,7 @@ behavior node::make_behavior()
         },
         on("profiler", any_vals) >> [&]
         {
+#ifdef VAST_HAVE_GPERFTOOLS
           auto resolution = 0u;
           r = params.extract_opts({
             {"cpu,c", "start the CPU profiler"},
@@ -576,24 +580,13 @@ behavior node::make_behavior()
           auto prof = spawn<profiler, detached>(dir_ / log_path(), secs);
           attach_functor([=](uint32_t ec) { anon_send_exit(prof, ec); });
           if (r.opts.count("cpu") > 0)
-          {
-#ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
-            send(prof, start_atom::value, cpu_atom::value);
-#else
-            send_exit(prof, exit::error);
-            return make_message(error{"not compiled with perftools CPU"});
-#endif
-          }
+            send(prof, start_atom::value, "cpu");
           if (r.opts.count("heap") > 0)
-          {
-#ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
-            send(prof, start_atom::value, heap_atom::value);
-#else
-            send_exit(prof, exit::error);
-            return make_message(error{"not compiled with perftools heap"});
-#endif
-          }
+            send(prof, start_atom::value, "heap");
           return put_actor(prof, "profiler", "profiler");
+#else
+          return error{"not compiled with gperftools"};
+#endif
         },
         others() >> []
         {

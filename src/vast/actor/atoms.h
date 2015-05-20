@@ -77,10 +77,6 @@ using upstream_atom = caf::atom_constant<caf::atom("upstream")>;
 using worker_atom = caf::atom_constant<caf::atom("worker")>;
 using workers_atom = caf::atom_constant<caf::atom("workers")>;
 
-// Profiler
-using cpu_atom = caf::atom_constant<caf::atom("cpu")>;
-using heap_atom = caf::atom_constant<caf::atom("heap")>;
-
 } // namespace vast
 
 #endif
