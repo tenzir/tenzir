@@ -1,8 +1,10 @@
 #include "vast/time.h"
 #include "vast/type.h"
-
 #include "vast/actor/sink/bro.h"
+#include "vast/io/algorithm.h"
 #include "vast/util/string.h"
+
+using namespace std::string_literals;
 
 namespace vast {
 namespace sink {
@@ -13,50 +15,43 @@ std::string bro::make_header(type const& t)
 {
   auto r = get<type::record>(t);
   assert(r);
-
   std::string h;
-  h += std::string{"#separator "} + util::byte_escape(std::string{sep}) + '\n';
-  h += std::string{"#set_separator"} + sep + set_separator + '\n';
-  h += std::string{"#empty_field"} + sep + empty_field + '\n';
-  h += std::string{"#unset_field"} + sep + unset_field + '\n';
-  h += std::string{"#path"} + sep + t.name() + '\n';
-  h += std::string{"#open"} + sep + to_string(time::now(), format) + '\n';
-
+  h += "#separator"s + ' ' + util::byte_escape(std::string{sep}) + '\n';
+  h += "#set_separator"s + sep + set_separator + '\n';
+  h += "#empty_field"s + sep + empty_field + '\n';
+  h += "#unset_field"s + sep + unset_field + '\n';
+  h += "#path"s + sep + t.name() + '\n';
+  h += "#open"s + sep + to_string(time::now(), format) + '\n';
   h += "#fields";
   for (auto& e : type::record::each{*r})
     h += sep + to_string(e.key());
-
   h += "\n#types";
   for (auto& e : type::record::each{*r})
     h += sep + to_string(e.trace.back()->type, 0);
-
   h += '\n';
   return h;
 }
 
 std::string bro::make_footer()
 {
-  std::string f =
-    std::string{"#close"} + sep + to_string(time::now(), format) + '\n';
+  std::string f = "#close"s + sep + to_string(time::now(), format) + '\n';
   return f;
 }
 
 bro::bro(path p)
   : base<bro>{"bro-sink"}
 {
+  // An empty directory means we write to standard output.
   if (p != "-")
     dir_ = std::move(p);
-
-  attach_functor(
-      [=](uint32_t)
-      {
-        auto footer = make_footer();
-        for (auto& p : streams_)
-          if (p.second)
-            p.second->write(footer.begin(), footer.end());
-
-        streams_.clear();
-      });
+  attach_functor( [=](uint32_t)
+    {
+      auto footer = make_footer();
+      for (auto& p : streams_)
+        if (p.second)
+          io::copy(footer.begin(), footer.end(), *p.second);
+      streams_.clear();
+    });
 }
 
 namespace {
@@ -115,21 +110,9 @@ struct value_printer
 
   std::string operator()(record const& r) const
   {
-    std::string str;
-    auto begin = r.begin();
-    auto end = r.end();
-
-    while (begin != end)
-    {
-      str += visit(*this, *begin++);
-
-      if (begin != end)
-        str += bro::sep;
-      else
-        break;
-    }
-
-    return str;
+    auto visitor = this;
+    return util::join(r.begin(), r.end(), std::string{bro::sep},
+                      [&](auto& d) { return visit(*visitor, d); });
   }
 
   template <typename C>
@@ -141,22 +124,9 @@ struct value_printer
   {
     if (c.empty())
       return bro::empty_field;
-
-    std::string str;
-    auto begin = c.begin();
-    auto end = c.end();
-
-    while (begin != end)
-    {
-      str += visit(*this, *begin++);
-
-      if (begin != end)
-        str += bro::set_separator;
-      else
-        break;
-    }
-
-    return str;
+    auto visitor = this;
+    return util::join(c.begin(), c.end(), bro::set_separator,
+                      [&](auto& x) { return visit(*visitor, x); });
   }
 
   std::string operator()(table const&) const
@@ -171,35 +141,36 @@ struct value_printer
 bool bro::process(event const& e)
 {
   auto& t = e.type();
-
   if (! is<type::record>(t))
   {
     VAST_ERROR(this, "cannot process non-record events");
     return false;
   }
-
-  stream* s = nullptr;
+  io::file_output_stream* os = nullptr;
   if (dir_.empty())
   {
     if (streams_.empty())
     {
       VAST_DEBUG(this, "creates a new stream for STDOUT");
-      auto i = streams_.emplace("",  std::make_unique<stream>("-"));
+      auto fos = std::make_unique<io::file_output_stream>("-");
+      auto i = streams_.emplace("",  std::move(fos));
       auto header = make_header(t);
-      if (! i.first->second->write(header.begin(), header.end()))
+      if (! io::copy(header.begin(), header.end(), *i.first->second))
         return false;
     }
-
-    s = streams_.begin()->second.get();
+    os = streams_.begin()->second.get();
   }
   else
   {
-    auto& strm = streams_[t.name()];
-    s = strm.get();
-    if (! s)
+    auto i = streams_.find(t.name());
+    if (i != streams_.end())
+    {
+      os = i->second.get();
+      assert(os != nullptr);
+    }
+    else
     {
       VAST_DEBUG(this, "creates new stream for event", t.name());
-
       if (! exists(dir_))
       {
         auto d = mkdir(dir_);
@@ -216,22 +187,19 @@ bool bro::process(event const& e)
         quit(exit::error);
         return false;
       }
-
-      strm = std::make_unique<stream>(dir_ / (t.name() + ".log"));
-      s = strm.get();
-
+      auto filename = dir_ / (t.name() + ".log");
+      auto fos = std::make_unique<io::file_output_stream>(filename);
       auto header = make_header(t);
-      if (! s->write(header.begin(), header.end()))
+      if (! (io::copy(header.begin(), header.end(), *fos) && fos->flush()))
         return false;
+      auto i = streams_.emplace("",  std::move(fos));
+      os = i.first->second.get();
     }
   }
-
-  assert(s != nullptr);
-
+  assert(os != nullptr);
   auto str = visit(value_printer{}, e);
   str += '\n';
-
-  return s->write(str.begin(), str.end());
+  return io::copy(str.begin(), str.end(), *os) && os->flush();
 }
 
 } // namespace sink

@@ -1,10 +1,11 @@
 #include "framework/unit.h"
 
 #include "vast/io/algorithm.h"
+#include "vast/io/buffered_stream.h"
 #include "vast/io/formatted.h"
 #include "vast/io/container_stream.h"
-#include "vast/io/iostream.h"
 #include "vast/io/range.h"
+#include "vast/io/stream_device.h"
 
 using namespace vast;
 
@@ -103,8 +104,8 @@ TEST("range-based input stream access")
 TEST("std::istream adapter")
 {
   std::istringstream iss{"foo"};
-  io::istream_buffer ibuf{iss};
-  io::buffered_input_stream in{ibuf};
+  io::istream_device idev{iss};
+  io::buffered_input_stream in{idev};
 
   auto block = in.next_block();
   REQUIRE(block);
@@ -117,8 +118,8 @@ TEST("std::ostream adapter")
 {
   std::string str = "Heiliger Strohsack!";
   std::ostringstream oss;
-  io::ostream_buffer obuf{oss};
-  io::buffered_output_stream out{obuf};
+  io::ostream_device odev{oss};
+  io::buffered_output_stream out{odev};
 
   auto block = out.next_block();
   REQUIRE(block);

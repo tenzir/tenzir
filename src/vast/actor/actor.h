@@ -80,8 +80,6 @@ inline char const* render_exit_reason(uint32_t reason)
       return "unhandled exception";
     case caf::exit_reason::unhandled_sync_failure:
       return "unhandled sync failure";
-    case caf::exit_reason::unhandled_sync_timeout:
-      return "unhandled sync timeout";
     case caf::exit_reason::user_shutdown:
       return "user shutdown";
     case caf::exit_reason::remote_link_unreachable:

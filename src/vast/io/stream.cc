@@ -23,5 +23,10 @@ buffer<void> output_stream::next_block()
   return {};
 }
 
+bool output_stream::flush()
+{
+  return true;
+}
+
 } // namespace io
 } // namespace vast

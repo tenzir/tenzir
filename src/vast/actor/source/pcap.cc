@@ -4,7 +4,6 @@
 #include <thread>
 #include "vast/event.h"
 #include "vast/filesystem.h"
-#include "vast/actor/source/bro.h"
 #include "vast/detail/packet_type.h"
 #include "vast/util/byte_swap.h"
 
@@ -13,7 +12,7 @@ namespace source {
 
 pcap::pcap(std::string name, uint64_t cutoff, size_t max_flows,
            size_t max_age, size_t expire_interval, int64_t pseudo_realtime)
-  : synchronous<pcap>{"pcap-source"},
+  : base<pcap>{"pcap-source"},
     name_{std::move(name)},
     packet_type_{vast::detail::make_packet_type()},
     cutoff_{cutoff},

@@ -231,7 +231,7 @@ struct randomizer
 } // namespace <anonymous>
 
 test::test(event_id id, uint64_t events)
-  : synchronous<test>{"test-source"},
+  : base<test>{"test-source"},
     id_{id},
     events_{events},
     generator_{std::random_device{}()}

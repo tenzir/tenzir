@@ -1,9 +1,8 @@
-#include "vast/io/algorithm.h"
-
-#include <iostream>
 #include <cassert>
 #include <cstring>
-#include <algorithm>
+#include <iostream>
+
+#include "vast/io/algorithm.h"
 
 namespace vast {
 namespace io {
@@ -27,7 +26,6 @@ void input_iterator::increment()
       buf_ = in_->next_block();
     }
     while (buf_ && buf_.size() == 0);
-
     i_ = 0;
   }
 }
@@ -54,7 +52,6 @@ size_t output_iterator::rewind()
 {
   if (! buf_)
     return 0;
-
   auto available = buf_.size() - i_;
   if (available > 0)
   {
@@ -62,7 +59,6 @@ size_t output_iterator::rewind()
     buf_ = {};
     i_ = 0;
   }
-
   return available;
 }
 
@@ -79,7 +75,6 @@ void output_iterator::increment()
       buf_ = out_->next_block();
     }
     while (buf_ && buf_.size() == 0);
-
     i_ = 0;
   }
 }
@@ -114,7 +109,6 @@ std::pair<size_t, size_t> copy(input_stream& source, output_stream& sink)
         in_buf = reinterpret_cast<uint8_t const*>(in_buf) + out_size;
         in_size -= out_size;
       }
-
   return {source.bytes() - in_bytes, sink.bytes() - out_bytes};
 }
 

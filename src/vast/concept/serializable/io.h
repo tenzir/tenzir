@@ -44,11 +44,7 @@ template <
 >
 trial<void> save(path const& filename, Ts const&... xs)
 {
-  file f{filename};
-  auto t = f.open(file::write_only);
-  if (! t)
-    return t;
-  io::file_output_stream sink{f};
+  io::file_output_stream sink{filename};
   Serializer s{sink};
   s.put(xs...);
   return nothing;
@@ -60,11 +56,9 @@ template <
 >
 trial<void> load(path const& filename, Ts&... xs)
 {
-  file f{filename};
-  auto t = f.open(file::read_only);
-  if (! t)
-    return t;
-  io::file_input_stream source{f};
+  if (! exists(filename))
+    return error{"no such file: ", filename};
+  io::file_input_stream source{filename};
   Deserializer d{source};
   d.get(xs...);
   return nothing;
@@ -96,11 +90,7 @@ template <typename... Ts>
 trial<void> compress(path const& filename, io::compression method,
                      Ts const&... xs)
 {
-  file f{filename};
-  auto t = f.open(file::write_only);
-  if (! t)
-    return t;
-  io::file_output_stream sink{f};
+  io::file_output_stream sink{filename};
   auto out = io::make_compressed_output_stream(method, sink);
   binary_serializer s{*out};
   s.put(xs...);
@@ -110,11 +100,9 @@ trial<void> compress(path const& filename, io::compression method,
 template <typename... Ts>
 trial<void> decompress(path const& filename, io::compression method, Ts&... xs)
 {
-  file f{filename};
-  auto t = f.open(file::read_only);
-  if (! t)
-    return t;
-  io::file_input_stream source{f};
+  if (! exists(filename))
+    return error{"no such file: ", filename};
+  io::file_input_stream source{filename};
   auto in = io::make_compressed_input_stream(method, source);
   binary_deserializer d{*in};
   d.get(xs...);

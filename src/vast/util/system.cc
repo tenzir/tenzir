@@ -1,24 +1,22 @@
-#include "vast/util/system.h"
+#include <unistd.h>       // gethostname, getpid
 
-#include <unistd.h>  // gethostname, getpid
 #include <cerrno>
+
+#include "vast/util/system.h"
 
 namespace vast {
 namespace util {
 
-trial<std::string> hostname()
+std::string hostname()
 {
   char buf[256];
-  auto r = ::gethostname(buf, sizeof(buf));
-  if (r == 0)
-    return std::string{buf};
-
-  if (errno == EFAULT)
-    return error{"invalid addres"};
-  else if (errno == ENAMETOOLONG)
-    return error{"hostname longer than 256 characters"};
-
-  return error{"unknown error"};
+  if (::gethostname(buf, sizeof(buf)) == 0)
+    return buf;
+  //if (errno == EFAULT)
+  //  VAST_ERROR("failed to get hostname: invalid address");
+  //else if (errno == ENAMETOOLONG)
+  //  VAST_ERROR("failed to get hostname: longer than 256 characters");
+  return {};
 }
 
 int32_t process_id()

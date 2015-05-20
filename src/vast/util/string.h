@@ -57,9 +57,7 @@ split(Iterator begin, Iterator end, std::string const& sep,
       bool include_sep = false)
 {
   assert(! sep.empty());
-
   std::vector<std::pair<Iterator, Iterator>> pos;
-
   size_t splits = 0;
   auto i = begin;
   auto prev = i;
@@ -71,7 +69,6 @@ split(Iterator begin, Iterator end, std::string const& sep,
       ++i;
       continue;
     }
-
     // Check remaining separator characters.
     size_t j = 1;
     auto s = i;
@@ -80,14 +77,12 @@ split(Iterator begin, Iterator end, std::string const& sep,
         break;
       else
         ++j;
-
     // No separator match.
     if (j != sep.size())
     {
       ++i;
       continue;
     }
-
     // Make sure it's not an escaped match.
     if (! esc.empty() && esc.size() < static_cast<size_t>(i - begin))
     {
@@ -99,28 +94,22 @@ split(Iterator begin, Iterator end, std::string const& sep,
           escaped = false;
           break;
         }
-
       if (escaped)
       {
         ++i;
         continue;
       }
     }
-
     if (splits++ == max_splits)
       break;
-
     pos.emplace_back(prev, i);
     if (include_sep)
       pos.emplace_back(i, i + sep.size());
-
     i += sep.size();
     prev = i;
   }
-
   if (prev != end)
     pos.emplace_back(prev, end);
-
   return pos;
 }
 
@@ -142,8 +131,53 @@ auto to_strings(std::vector<std::pair<Iterator, Iterator>> const& v)
   strs.resize(v.size());
   for (size_t i = 0; i < v.size(); ++i)
     strs[i] = {v[i].first, v[i].second};
-
   return strs;
+}
+
+/// Combines ::split and ::to_strings.
+template <typename Iterator>
+auto split_to_str(Iterator begin, Iterator end, std::string const& sep,
+                  std::string const& esc = "", size_t max_splits = -1,
+                  bool include_sep = false)
+{
+  return to_strings(split(begin, end, sep, esc, max_splits, include_sep));
+}
+
+inline auto split_to_str(std::string const& str, std::string const& sep,
+                         std::string const& esc = "", size_t max_splits = -1,
+                         bool include_sep = false)
+{
+  return split_to_str(str.begin(), str.end(), sep, esc, max_splits,
+                      include_sep);
+}
+
+/// Joins a sequence of strings according to a seperator.
+/// @param begin The beginning of the sequence.
+/// @param end The end of the sequence.
+/// @param sep The string to insert between each element of the sequence.
+/// @returns The joined string.
+template <typename Iterator, typename Predicate>
+std::string join(Iterator begin, Iterator end, std::string const& sep,
+                 Predicate p)
+{
+  std::string result;
+  if (begin != end)
+    result += p(*begin++);
+  while (begin != end)
+    result += sep + p(*begin++);
+  return result;
+}
+
+template <typename Iterator>
+std::string join(Iterator begin, Iterator end, std::string const& sep)
+{
+  return join(begin, end, sep, [](auto&& x) -> decltype(x) { return x; });
+}
+
+template <typename T>
+std::string join(std::vector<T> const& v, std::string const& sep)
+{
+  return join(v.begin(), v.end(), sep);
 }
 
 /// Determines whether a string occurs at the beginning of another.
@@ -157,7 +191,6 @@ bool starts_with(Iterator begin, Iterator end, std::string const& str)
   using diff = typename std::iterator_traits<Iterator>::difference_type;
   if (static_cast<diff>(str.size()) > end - begin)
     return false;
-
   return std::equal(str.begin(), str.end(), begin);
 }
 
@@ -175,10 +208,8 @@ template <typename Iterator>
 bool ends_with(Iterator begin, Iterator end, std::string const& str)
 {
   using diff = typename std::iterator_traits<Iterator>::difference_type;
-  if (static_cast<diff>(str.size()) > end - begin)
-    return false;
-
-  return std::equal(str.begin(), str.end(), end - str.size());
+  return static_cast<diff>(str.size()) <= end - begin
+    && std::equal(str.begin(), str.end(), end - str.size());
 }
 
 inline bool ends_with(std::string const& str, std::string const& end)

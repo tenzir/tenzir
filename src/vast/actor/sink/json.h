@@ -2,9 +2,11 @@
 #define VAST_ACTOR_SINK_JSON_H
 
 #include "vast/actor/sink/base.h"
-#include "vast/actor/sink/stream.h"
 
 namespace vast {
+
+namespace io { class output_stream; }
+
 namespace sink {
 
 /// A sink generating JSON output.
@@ -12,14 +14,15 @@ class json : public base<json>
 {
 public:
   /// Spawns a JSON sink.
-  /// @param p The output path.
-  json(path p);
+  /// @param out The output stream.
+  json(std::unique_ptr<io::output_stream> out);
 
   bool process(event const& e);
 
+  void flush();
+
 private:
-  path dir_;
-  stream stream_;
+  std::unique_ptr<io::output_stream> out_;
 };
 
 } // namespace sink

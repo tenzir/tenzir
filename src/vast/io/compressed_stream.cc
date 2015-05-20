@@ -116,6 +116,24 @@ std::unique_ptr<compressed_input_stream> make_compressed_input_stream(
 }
 
 
+bool compressed_output_stream::next(void** data, size_t* size)
+{
+  VAST_ENTER_WITH(VAST_ARG(data, size));
+  if (valid_bytes_ == uncompressed_.size() && ! flush())
+    VAST_RETURN(false);
+
+  *data = uncompressed_.data() + valid_bytes_;
+  *size = uncompressed_.size() - valid_bytes_;
+  valid_bytes_ = uncompressed_.size();
+  VAST_RETURN(true);
+}
+
+void compressed_output_stream::rewind(size_t bytes)
+{
+  VAST_ENTER_WITH(VAST_ARG(bytes));
+  valid_bytes_ -= bytes > valid_bytes_ ? valid_bytes_ : bytes;
+}
+
 bool compressed_output_stream::flush()
 {
   VAST_ENTER();
@@ -158,24 +176,6 @@ bool compressed_output_stream::flush()
   }
   valid_bytes_ = 0;
   VAST_RETURN(true);
-}
-
-bool compressed_output_stream::next(void** data, size_t* size)
-{
-  VAST_ENTER_WITH(VAST_ARG(data, size));
-  if (valid_bytes_ == uncompressed_.size() && ! flush())
-    VAST_RETURN(false);
-
-  *data = uncompressed_.data() + valid_bytes_;
-  *size = uncompressed_.size() - valid_bytes_;
-  valid_bytes_ = uncompressed_.size();
-  VAST_RETURN(true);
-}
-
-void compressed_output_stream::rewind(size_t bytes)
-{
-  VAST_ENTER_WITH(VAST_ARG(bytes));
-  valid_bytes_ -= bytes > valid_bytes_ ? valid_bytes_ : bytes;
 }
 
 uint64_t compressed_output_stream::bytes() const

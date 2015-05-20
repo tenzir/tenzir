@@ -3,7 +3,7 @@
 
 #include <caf/detail/abstract_uniform_type_info.hpp>
 
-#include "vast/concept/serializable/caf_adapters.h"
+#include "vast/concept/serializable/caf/adapters.h"
 
 namespace vast {
 

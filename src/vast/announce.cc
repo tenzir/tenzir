@@ -23,11 +23,13 @@
 #include "vast/concept/serializable/schema.h"
 #include "vast/concept/serializable/state.h"
 #include "vast/concept/serializable/type.h"
+#include "vast/concept/serializable/caf/message.h"
 #include "vast/concept/serializable/std/array.h"
 #include "vast/concept/serializable/std/chrono.h"
 #include "vast/concept/serializable/std/string.h"
 #include "vast/concept/serializable/std/unordered_map.h"
 #include "vast/concept/serializable/std/vector.h"
+#include "vast/concept/serializable/std/map.h"
 #include "vast/concept/state/address.h"
 #include "vast/concept/state/bitmap_index.h"
 #include "vast/concept/state/block.h"
@@ -184,6 +186,9 @@ void announce_types()
   announce<std::vector<event>>("std::vector<vast::event>");
   announce<std::vector<value>>("std::vector<vast::value>");
   announce<std::vector<uuid>>("std::vector<vast::uuid>");
+  // std::map<T,U>
+  announce<std::map<std::string, caf::message>>(
+    "std::map<std::string,caf::message>>");
   // Polymorphic bitstreams
   announce<ewah_bitstream>("vast::ewah_bitstream");
   announce<null_bitstream>("vast::null_bitstream");

@@ -4,13 +4,13 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in
 set(libvast_sources
   address.cc
   announce.cc
+  banner.cc
   bitvector.cc
   bitstream.cc
   bitstream_polymorphic.cc
   block.cc
   chunk.cc
   cleanup.cc
-  configuration.cc
   data.cc
   die.cc
   expression.cc
@@ -29,14 +29,13 @@ set(libvast_sources
   value.cc
   actor/archive.cc
   actor/exporter.cc
+  actor/importer.cc
   actor/identifier.cc
   actor/index.cc
+  actor/key_value_store.cc
+  actor/node.cc
   actor/partition.cc
   actor/profiler.cc
-  actor/program.cc
-  actor/query.cc
-  actor/receiver.cc
-  actor/search.cc
   actor/signal_monitor.cc
   actor/tracker.cc
   actor/sink/ascii.cc
@@ -53,19 +52,23 @@ set(libvast_sources
   expr/restrictor.cc
   expr/resolver.cc
   expr/validator.cc
+  io/actor_stream.cc
   io/algorithm.cc
   io/array_stream.cc
   io/buffered_stream.cc
   io/coded_stream.cc
   io/compressed_stream.cc
+  io/device.cc
   io/file_stream.cc
   io/getline.cc
-  io/iostream.cc
+  io/stream_device.cc
   io/stream.cc
-  util/poll.cc
+  util/endpoint.cc
+  util/posix.cc
   util/string.cc
   util/system.cc
   util/terminal.cc
+  util/detail/posix.cc
   util/hash/crc.cc
   util/hash/murmur.cc
   util/hash/xxhash.cc

@@ -1,11 +1,10 @@
 #include <caf/all.hpp>
 
 #include "vast/bitmap_index.h"
-#include "vast/configuration.h"
 #include "vast/event.h"
 #include "vast/filesystem.h"
 #include "vast/actor/archive.h"
-#include "vast/actor/program.h"
+#include "vast/actor/node.h"
 #include "vast/concept/serializable/bitmap_index.h"
 #include "vast/concept/serializable/chunk.h"
 #include "vast/concept/serializable/io.h"
@@ -21,17 +20,30 @@ SUITE("actors")
 TEST("import")
 {
   VAST_INFO("inhaling a single Bro log");
-  configuration cfg;
-  *cfg["tracker.port"] = 42001;
-  *cfg['C'] = true;
-  *cfg['I'] = "bro";
-  *cfg['r'] = m57_day11_18::ftp;
-  REQUIRE(cfg.verify());
-  path dir = *cfg.get("directory");
+  scoped_actor self;
+  auto dir = path{"vast-test-import"};
   if (exists(dir))
     REQUIRE(rm(dir));
-  anon_send(spawn<program>(cfg), run_atom::value);
-  await_all_actors_done();
+  auto n = self->spawn<node>("test-node", dir);
+  auto instruct = [&](auto&&... xs)
+  {
+    auto r = self->sync_send(n, std::forward<decltype(xs)>(xs)...);
+    r.await([](ok_atom) {});
+  };
+  instruct("spawn", "archive");
+  instruct("spawn", "index");
+  instruct("spawn", "importer");
+  instruct("spawn", "identifier");
+  instruct("spawn", "source", "bro", "-r", m57_day11_18::ftp);
+  instruct("connect", "importer", "identifier");
+  instruct("connect", "importer", "archive");
+  instruct("connect", "importer", "index");
+  instruct("connect", "source", "importer");
+  instruct("send", "source", "run");
+  // FIXME: need a more reliable way to flush. Ideally after the source exits,
+  // the importer notices and sends a flush to archive and index.
+  self->delayed_send(n, std::chrono::milliseconds(250), "stop");
+  self->await_all_other_actors_done();
 
   VAST_INFO("checking that indexes have been written correctly");
   path id_range;

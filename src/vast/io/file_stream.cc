@@ -3,54 +3,46 @@
 namespace vast {
 namespace io {
 
-file_input_stream::file_input_buffer::file_input_buffer(file& f)
-  : file_(f)
+file_input_device::file_input_device(path const& filename)
+  : file_(filename)
+{
+  file_.open(file::read_only);
+}
+
+file_input_device::file_input_device(file::native_type handle,
+                                     bool close_behavior)
+  : file_(handle, close_behavior)
 {
 }
 
-file_input_stream::file_input_buffer::~file_input_buffer()
-{
-  if (! close_on_delete_)
-    return;
-  if (file_.is_open())
-    file_.close();
-}
-
-bool
-file_input_stream::file_input_buffer::read(void* data, size_t bytes, size_t* got)
+bool file_input_device::read(void* data, size_t bytes, size_t* got)
 {
   return file_.read(data, bytes, got);
 }
 
-bool file_input_stream::file_input_buffer::skip(size_t bytes, size_t *skipped)
+bool file_input_device::skip(size_t bytes, size_t *skipped)
 {
-  return file_.seek(bytes, skipped) || input_buffer::skip(bytes, skipped);
+  if (file_.seek(bytes))
+  {
+    if (skipped != nullptr)
+      *skipped = bytes;
+    return true;
+  }
+  return input_device::skip(bytes, skipped);
 }
 
-void file_input_stream::file_input_buffer::close_on_delete(bool flag)
-{
-  close_on_delete_ = flag;
-}
 
-bool file_input_stream::file_input_buffer::close()
-{
-  return file_.close();
-}
-
-file_input_stream::file_input_stream(file& f, size_t block_size)
-  : buffer_(f)
-  , buffered_stream_(buffer_, block_size)
+file_input_stream::file_input_stream(path const& filename, size_t block_size)
+  : buffer_(filename),
+    buffered_stream_(buffer_, block_size)
 {
 }
 
-void file_input_stream::close_on_delete(bool flag)
+file_input_stream::file_input_stream(file::native_type handle, bool close_behavior,
+                                     size_t block_size)
+  : buffer_(handle, close_behavior),
+    buffered_stream_(buffer_, block_size)
 {
-  buffer_.close_on_delete(flag);
-}
-
-bool file_input_stream::close()
-{
-  return buffer_.close();
 }
 
 bool file_input_stream::next(void const** data, size_t* size)
@@ -74,49 +66,39 @@ uint64_t file_input_stream::bytes() const
 }
 
 
-file_output_stream::file_output_buffer::file_output_buffer(file& f)
-  : file_(f)
+file_output_device::file_output_device(path const& filename)
+  : file_(filename)
 {
+  file_.open(file::write_only);
 }
 
-file_output_stream::file_output_buffer::~file_output_buffer()
-{
-  if (! close_on_delete_)
-    return;
-  if (file_.is_open())
-    file_.close();
-}
-
-bool file_output_stream::file_output_buffer::write(
-    void const* data, size_t bytes, size_t* put)
+bool file_output_device::write(void const* data, size_t bytes, size_t* put)
 {
   return file_.write(data, bytes, put);
 }
 
-void file_output_stream::file_output_buffer::close_on_delete(bool flag)
+file_output_device::file_output_device(file::native_type handle,
+                                       bool close_behavior)
+  : file_(handle, close_behavior)
 {
-  close_on_delete_ = flag;
 }
 
-file_output_stream::file_output_stream(file& f, size_t block_size)
-  : buffer_(f)
-  , buffered_stream_(buffer_, block_size)
+file_output_stream::file_output_stream(path const& filename, size_t block_size)
+  : buffer_(filename),
+    buffered_stream_(buffer_, block_size)
+{
+}
+
+file_output_stream::file_output_stream(file::native_type handle, bool close_behavior,
+                                     size_t block_size)
+  : buffer_(handle, close_behavior),
+    buffered_stream_(buffer_, block_size)
 {
 }
 
 file_output_stream::~file_output_stream()
 {
   flush();
-}
-
-void file_output_stream::close_on_delete(bool flag)
-{
-  buffer_.close_on_delete(flag);
-}
-
-bool file_output_stream::flush()
-{
-  return buffered_stream_.flush();
 }
 
 bool file_output_stream::next(void** data, size_t* size)
@@ -127,6 +109,11 @@ bool file_output_stream::next(void** data, size_t* size)
 void file_output_stream::rewind(size_t bytes)
 {
   buffered_stream_.rewind(bytes);
+}
+
+bool file_output_stream::flush()
+{
+  return buffered_stream_.flush();
 }
 
 uint64_t file_output_stream::bytes() const

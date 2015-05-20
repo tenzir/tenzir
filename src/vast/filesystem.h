@@ -145,10 +145,13 @@ private:
   std::string str_;
 };
 
-/// A file abstraction.
+constexpr bool close_on_destruction = true;
+
+/// A simple file abstraction.
 class file
 {
   file(file const&) = delete;
+  file& operator=(file const&) = delete;
 
 public:
   /// The native type of a file.
@@ -161,6 +164,7 @@ public:
   /// The mode in which to open a file.
   enum open_mode
   {
+    invalid,
     read_only,
     write_only,
     read_write,
@@ -174,21 +178,21 @@ public:
   file(vast::path p);
 
   /// Constructs a file from the OS' native file handle type.
-  /// @param p The file path.
   /// @param handle The file handle.
-  /// @pre The file identified via handle is open.
-  file(vast::path p, native_type handle);
+  /// @param p The file path.
+  /// @param close_behavior Whether to close or leave open the file handle upon
+  ///                       destruction.
+  /// @pre The file identified via *handle* is open.
+  file(native_type handle,
+       bool close_behavior = close_on_destruction,
+       vast::path p = {});
 
-  /// Move-construfts a file.
-  /// @param other The file to move.
-  file(file&& other) noexcept;
+  file(file&&) = default;
 
   /// Destroys and closes a file.
   ~file();
 
-  /// Move-Assigns a file to this instance.
-  /// @param other The RHS of the assignment.
-  file& operator=(file&& other) = default;
+  file& operator=(file&&) = default;
 
   /// Opens the file.
   /// @param mode How to open the file. If not equal to `read_only`, the
@@ -197,7 +201,7 @@ public:
   /// @returns `true` on success.
   trial<void> open(open_mode mode = read_write, bool append = false);
 
-  /// Closes the file.
+  /// Attempts to close the file.
   /// @returns `true` on success.
   bool close();
 
@@ -220,21 +224,22 @@ public:
   bool write(void const* source, size_t size, size_t* put = nullptr);
 
   /// Seeks the file forward.
-  ///
   /// @param bytes The number of bytes to seek forward relative to the current
-  /// position.
-  ///
-  /// @param skipped Set to the number of bytes skipped.
-  ///
+  ///              position.
   /// @returns `true` on success.
-  bool seek(size_t bytes, size_t* skipped = nullptr);
+  bool seek(size_t bytes);
 
   /// Retrieves the ::path for this file.
   /// @returns The ::path for this file.
   vast::path const& path() const;
 
+  /// Retrieves the native handle for this file.
+  /// @returns The native handle.
+  native_type handle() const;
+
 private:
   native_type handle_;
+  bool close_on_destruction_ = ! close_on_destruction;
   bool is_open_ = false;
   bool seek_failed_ = false;
   vast::path path_;
@@ -306,12 +311,10 @@ bool rm(path const& p);
 trial<void> mkdir(path const& p);
 
 /// Traverses each entry of a directory.
-///
 /// @param p The path to a directory.
-///
-/// @param f The function to call for each directory entry. The return value
-/// of *f* indicates whether to continue (`true`) or to stop (`false`)
-/// iterating.
+/// @param f The function to call for each directory entry. The return value of
+///          *f* indicates whether to continue (`true`) or to stop (`false`)
+///          iterating.
 void traverse(path const& p, std::function<bool(path const&)> f);
 
 // Loads file contents into a string.

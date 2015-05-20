@@ -2,18 +2,18 @@
 #define VAST_ACTOR_SOURCE_BRO_H
 
 #include "vast/schema.h"
-#include "vast/actor/source/file.h"
+#include "vast/actor/source/line_based.h"
 
 namespace vast {
 namespace source {
 
 /// A Bro log file source.
-class bro : public file<bro>
+class bro : public line_based<bro>
 {
 public:
   /// Spawns a Bro source.
-  /// @param filename The name of the Bro log file.
-  bro(std::string const& filename);
+  /// @param is The input stream to read Bro logs from.
+  bro(std::unique_ptr<io::input_stream> is);
 
   result<event> extract();
 

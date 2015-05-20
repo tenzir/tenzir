@@ -18,7 +18,7 @@ TEST("pcap source")
   };
   // Spawn a PCAP source with a no cutoff and at most 5 concurrent flows.
   auto pcap = self->spawn<source::pcap, monitored>(traces::nmap_vsn, -1, 5);
-  anon_send(pcap, add_atom::value, sink_atom::value, self);
+  anon_send(pcap, put_atom::value, sink_atom::value, self);
   self->receive([&](upstream_atom, actor const& a) { CHECK(a == pcap); });
   // Run the source.
   anon_send(pcap, run_atom::value);
@@ -39,7 +39,7 @@ TEST("pcap source")
   // with flows inactive for more than 5 seconds to be evicted every 2 seconds.
   pcap = self->spawn<source::pcap, monitored>(
       traces::workshop_2011_browse, 64, 100, 5, 2);
-  anon_send(pcap, add_atom::value, sink_atom::value, self);
+  anon_send(pcap, put_atom::value, sink_atom::value, self);
   self->receive([&](upstream_atom, actor const& a) { CHECK(a == pcap); });
   anon_send(pcap, run_atom::value);
   self->receive(

@@ -59,7 +59,7 @@ behavior profiler::make_behavior()
   return
   {
 #ifdef VAST_USE_PERFTOOLS_CPU_PROFILER
-    [=](start_atom, perftools_atom, cpu_atom)
+    [=](start_atom, cpu_atom)
     {
       VAST_INFO(this, "starts Gperftools CPU profiler");
 
@@ -74,7 +74,7 @@ behavior profiler::make_behavior()
     },
 #endif
 #ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
-    [=](start_atom, perftools_atom, heap_atom)
+    [=](start_atom, heap_atom)
     {
       VAST_INFO(this, "starts Gperftools heap profiler");
 

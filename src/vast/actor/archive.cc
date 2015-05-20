@@ -10,7 +10,7 @@ using namespace caf;
 
 archive::archive(path dir, size_t capacity, size_t max_segment_size)
   : flow_controlled_actor{"archive"},
-    dir_{dir / "archive"},
+    dir_{dir},
     meta_data_filename_{dir_ / "meta.data"},
     max_segment_size_{max_segment_size},
     cache_{capacity}
@@ -65,7 +65,7 @@ caf::behavior archive::make_behavior()
     {
       remove_upstream_node(msg.source);
     },
-    [=](accountant_atom, actor const& accountant)
+    [=](put_atom, accountant_atom, actor const& accountant)
     {
       VAST_DEBUG(this, "registers accountant", accountant);
       accountant_ = accountant;

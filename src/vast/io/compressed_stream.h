@@ -21,10 +21,10 @@ static size_t const uncompressed_block_size = 64 << 10;
 class compressed_input_stream : public input_stream
 {
 public:
-  virtual bool next(void const** data, size_t* size) override;
-  virtual void rewind(size_t bytes) override;
-  virtual bool skip(size_t bytes) override;
-  virtual uint64_t bytes() const override;
+  bool next(void const** data, size_t* size) override;
+  void rewind(size_t bytes) override;
+  bool skip(size_t bytes) override;
+  uint64_t bytes() const override;
 
 protected:
   /// Constructs a compressed input stream from an input stream.
@@ -58,10 +58,10 @@ std::unique_ptr<compressed_input_stream> make_compressed_input_stream(
 class compressed_output_stream : public output_stream
 {
 public:
-  bool flush();
-  virtual bool next(void** data, size_t* size) override;
-  virtual void rewind(size_t bytes) override;
-  virtual uint64_t bytes() const override;
+  bool next(void** data, size_t* size) override;
+  void rewind(size_t bytes) override;
+  bool flush() override;
+  uint64_t bytes() const override;
 
 protected:
   /// Constructs a compressed output stream from an output stream.
@@ -106,7 +106,7 @@ class null_input_stream : public compressed_input_stream
 {
 public:
   null_input_stream(input_stream& source);
-  virtual size_t uncompress(void const* source, size_t size) override;
+  size_t uncompress(void const* source, size_t size) override;
 };
 
 /// A compressed output stream that uses null compression.
@@ -115,9 +115,9 @@ class null_output_stream : public compressed_output_stream
 public:
   null_output_stream(output_stream& sink, size_t block_size = 0);
 
-  virtual ~null_output_stream();
-  virtual size_t compressed_size(size_t output) const override;
-  virtual size_t compress(void* sink, size_t sink_size) override;
+  ~null_output_stream();
+  size_t compressed_size(size_t output) const override;
+  size_t compress(void* sink, size_t sink_size) override;
 };
 
 
@@ -126,7 +126,7 @@ class lz4_input_stream : public compressed_input_stream
 {
 public:
   lz4_input_stream(input_stream& source);
-  virtual size_t uncompress(void const* source, size_t size) override;
+  size_t uncompress(void const* source, size_t size) override;
 };
 
 /// A compressed output stream using LZ4.
@@ -134,9 +134,9 @@ class lz4_output_stream : public compressed_output_stream
 {
 public:
   lz4_output_stream(output_stream& sink);
-  virtual ~lz4_output_stream();
-  virtual size_t compressed_size(size_t output) const override;
-  virtual size_t compress(void* sink, size_t sink_size) override;
+  ~lz4_output_stream();
+  size_t compressed_size(size_t output) const override;
+  size_t compress(void* sink, size_t sink_size) override;
 };
 
 #ifdef VAST_HAVE_SNAPPY
@@ -145,7 +145,7 @@ class snappy_input_stream : public compressed_input_stream
 {
 public:
   snappy_input_stream(input_stream& source);
-  virtual size_t uncompress(void const* source, size_t size) override;
+  size_t uncompress(void const* source, size_t size) override;
 };
 
 /// A compressed output stream using Snappy.
@@ -153,9 +153,9 @@ class snappy_output_stream : public compressed_output_stream
 {
 public:
   snappy_output_stream(output_stream& sink);
-  virtual ~snappy_output_stream();
-  virtual size_t compressed_size(size_t output) const override;
-  virtual size_t compress(void* sink, size_t sink_size) override;
+  ~snappy_output_stream();
+  size_t compressed_size(size_t output) const override;
+  size_t compress(void* sink, size_t sink_size) override;
 };
 #endif // VAST_HAVE_SNAPPY
 

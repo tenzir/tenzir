@@ -1,17 +1,17 @@
 #ifndef VAST_ACTOR_SOURCE_DECHUNKIFIER_H
 #define VAST_ACTOR_SOURCE_DECHUNKIFIER_H
 
-#include "vast/actor/source/synchronous.h"
+#include "vast/actor/source/base.h"
 
 namespace vast {
 namespace source {
 
 /// Unpacks events of a chunk.
-class dechunkifier : public synchronous<dechunkifier>
+class dechunkifier : public base<dechunkifier>
 {
 public:
   dechunkifier(chunk chk)
-    : synchronous<dechunkifier>{"dechunkifier"},
+    : base<dechunkifier>{"dechunkifier"},
       chunk_{std::move(chk)},
       reader_{chunk_}
   {

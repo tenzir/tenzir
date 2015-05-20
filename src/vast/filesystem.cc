@@ -6,6 +6,7 @@
 #include "vast/io/algorithm.h"
 #include "vast/io/file_stream.h"
 #include "vast/io/container_stream.h"
+#include "vast/util/posix.h"
 #include "vast/util/string.h"
 
 #ifdef VAST_POSIX
@@ -239,27 +240,18 @@ file::file(vast::path p)
 {
 }
 
-file::file(vast::path p, native_type handle)
+file::file(native_type handle, bool close_behavior, vast::path p)
   : handle_{handle},
+    close_on_destruction_{close_behavior},
     is_open_{true},
     path_{std::move(p)}
 {
 }
 
-file::file(file&& other) noexcept
-  : handle_{other.handle_},
-    is_open_{other.is_open_},
-    seek_failed_{other.seek_failed_},
-    path_{std::move(other.path_)}
-{
-  other.handle_ = 0;
-  other.is_open_ = false;
-  other.seek_failed_ = false;
-}
-
 file::~file()
 {
-  if (path_ != "-")
+  // Don't close stdin/stdout implicitly.
+  if (path_ != "-" && close_on_destruction_)
     close();
 }
 
@@ -268,7 +260,7 @@ trial<void> file::open(open_mode mode, bool append)
   if (is_open_)
     return error{"file already open"};
   if (mode == read_only && append)
-    return error{"cannot open file in read mode and append simultaneously"};
+    return error{"cannot open file in read and append mode simultaneously"};
 #ifdef VAST_POSIX
   // Support reading from STDIN and writing to STDOUT.
   if (path_ == "-")
@@ -282,6 +274,8 @@ trial<void> file::open(open_mode mode, bool append)
   int flags = 0;
   switch (mode)
   {
+    case invalid:
+      return error{"invalid open mode"};
     case read_write:
       flags = O_CREAT | O_RDWR;
       break;
@@ -315,19 +309,10 @@ trial<void> file::open(open_mode mode, bool append)
 
 bool file::close()
 {
-#ifdef VAST_POSIX
-  if (! is_open_)
+  if (! (is_open_ && util::close(handle_)))
     return false;
-  int result;
-  do
-  {
-    result = ::close(handle_);
-  }
-  while (result < 0 && errno == EINTR);
-  return ! result;
-#else
-  return false;
-#endif // VAST_POSIX
+  is_open_ = false;
+  return true;
 }
 
 bool file::is_open() const
@@ -337,81 +322,34 @@ bool file::is_open() const
 
 bool file::read(void* sink, size_t bytes, size_t* got)
 {
-  if (got)
-    *got = 0;
-  if (! is_open_)
-    return false;
-#ifdef VAST_POSIX
-  int result;
-  do
-  {
-    result = ::read(handle_, sink, bytes);
-  }
-  while (result < 0 && errno == EINTR);
-  if (result < 0)
-    return false;       // Error, inspect errno for details.
-  else if (result == 0) // EOF
-    return false;
-  else if (got)
-    *got = result;
-  return true;
-#else
-  return false;
-#endif // VAST_POSIX
+  return is_open_ && util::read(handle_, sink, bytes, got);
 }
 
 bool file::write(void const* source, size_t bytes, size_t* put)
 {
-  if (put)
-    *put = 0;
-  if (! is_open_)
-    return false;
-  size_t total = 0;
-  auto buffer = reinterpret_cast<uint8_t const*>(source);
-#ifdef VAST_POSIX
-  while (total < bytes)
-  {
-    int written;
-    do
-    {
-      written = ::write(handle_, buffer + total, bytes - total);
-    }
-    while (written < 0 && errno == EINTR);
-    if (written <= 0)
-      return false;
-    total += written;
-    if (put)
-      *put += written;
-  }
-  return true;
-#else
-  return false;
-#endif // VAST_POSIX
+  return is_open_ && util::write(handle_, source, bytes, put);
 }
 
-bool file::seek(size_t bytes, size_t *skipped)
+bool file::seek(size_t bytes)
 {
-  if (skipped)
-    *skipped = 0;
   if (! is_open_ || seek_failed_)
     return false;
-#ifdef VAST_POSIX
-  if (::lseek(handle_, bytes, SEEK_CUR) == off_t(-1))
+  if (! util::seek(handle_, bytes))
   {
     seek_failed_ = true;
     return false;
   }
-#else
-  return false;
-#endif // VAST_POSIX
-  if (skipped)
-    *skipped = bytes;
   return true;
 }
 
 path const& file::path() const
 {
   return path_;
+}
+
+file::native_type file::handle() const
+{
+  return handle_;
 }
 
 
@@ -425,7 +363,6 @@ void directory::iterator::increment()
 {
   if (! dir_)
     return;
-
 #ifdef VAST_POSIX
   if (! dir_->dir_)
   {
@@ -592,13 +529,9 @@ void traverse(path const& p, std::function<bool(path const&)> f)
 // Loads file contents into a string.
 trial<std::string> load_contents(path const& p)
 {
-  file f{p};
-  auto t = f.open(file::read_only);
-  if (! t)
-    return t.error();
   std::string contents;
   auto out = io::make_container_output_stream(contents);
-  io::file_input_stream in{f};
+  io::file_input_stream in{p};
   io::copy(in, out);
   return std::move(contents);
 }

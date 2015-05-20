@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <random>
 #include "vast/schema.h"
-#include "vast/actor/source/synchronous.h"
+#include "vast/actor/source/base.h"
 #include "vast/util/hash_combine.h"
 #include "vast/util/operators.h"
 
@@ -57,7 +57,7 @@ namespace vast {
 namespace source {
 
 /// A source that reads PCAP packets from an interface or a file.
-class pcap : public synchronous<pcap>
+class pcap : public base<pcap>
 {
 public:
   /// Constructs a PCAP source.
