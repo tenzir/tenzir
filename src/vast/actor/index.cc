@@ -178,14 +178,16 @@ behavior index::make_behavior()
       accountant_ = accountant;
       send(accountant_, label() + "-events", time::now());
     },
-    [=](flush_atom, actor const& task)
+    [=](flush_atom)
     {
       VAST_VERBOSE(this, "flushes", active_.size(), "active partitions");
-      send(task, this);
+      auto t = spawn<task>();
+      send(t, this);
       for (auto& a : active_)
-        send(a.second, flush_atom::value, task);
+        send(a.second, flush_atom::value, t);
       flush();
-      send(task, done_atom::value);
+      send(t, done_atom::value);
+      return t;
     },
     [=](chunk const& chk)
     {
