@@ -1,8 +1,8 @@
 #include <csignal>
 #include <cstdlib>
 
+#include <algorithm>
 #include <iostream>
-#include <regex>
 #include <type_traits>
 
 #include <caf/all.hpp>
@@ -42,44 +42,6 @@ using namespace caf;
 using namespace std::string_literals;
 
 namespace vast {
-namespace {
-
-template <typename Predicate>
-size_t partition_point(caf::message const& msg, Predicate p)
-{
-  using first_arg_type =
-    std::decay_t<
-      typename caf::detail::tl_head<
-        typename caf::detail::get_callable_trait<Predicate>::arg_types
-      >::type
-    >;
-  auto i = 0u;
-  while (i < msg.size())
-    if (p(msg.get_as<first_arg_type>(i)))
-      break;
-    else
-      ++i;
-  return i;
-}
-
-template <typename Predicate>
-std::pair<caf::message, caf::message>
-partition(caf::message const& msg, Predicate p)
-{
-  auto i = partition_point(msg, p);
-  if (i == msg.size())
-    return {};
-  return {msg.take(i), msg.drop(i)};
-}
-
-std::pair<caf::message, caf::message>
-partition(caf::message const& msg, std::regex rx)
-{
-  auto p = [&](std::string const& str) { return std::regex_match(str, rx); };
-  return partition(msg, p);
-}
-
-} // namespace <anonymous>
 
 path const& node::log_path()
 {
@@ -224,27 +186,39 @@ behavior node::make_behavior()
     },
     on("spawn", any_vals) >> [=]
     {
-      auto syntax = "spawn [arguments] <component> [params]";
+      auto syntax = "spawn [arguments] <actor> [params]";
       auto msg = current_message().drop(1);
       if (msg.empty())
-        return make_message(error{"missing component: ", syntax});
-      auto rx = "identifier|archive|index|source|sink|(im|ex)porter|profiler";
-      auto p = partition(msg, std::regex{rx});
-      auto& args = p.first;
-      auto& component = p.second;
-      if (component.empty())
-        return make_message(error{"invalid component: ", syntax});
-      // Extract arguments.
-      auto label = component.get_as<std::string>(0);
-      auto r = args.extract_opts({
+        return make_message(error{"missing actor: ", syntax});
+      std::vector<std::string> actors = {
+        "archive",
+        "exporter",
+        "identifier",
+        "importer",
+        "index",
+        "profiler",
+        "sink",
+        "source"
+      };
+      // Convert arguments to string vector.
+      std::vector<std::string> args(msg.size());
+      for (auto i = 0u; i < msg.size(); ++i)
+        args[i] = msg.get_as<std::string>(i);
+      auto a = std::find_first_of(args.begin(), args.end(),
+                                  actors.begin(), actors.end());
+      if (a == args.end())
+        return make_message(error{"invalid actor: ", syntax});
+      // Extract spawn arguments.
+      auto label = *a;
+      auto r = message_builder{args.begin(), a}.extract_opts({
         {"label,l", "a unique label of the actor within this node", label},
       });
       if (! r.error.empty())
         return make_message(error{std::move(r.error)});
-      VAST_VERBOSE(this, "attempts to spawn actor",
-                   component.get_as<std::string>(0), '(' << label << ')');
+      VAST_VERBOSE(this, "attempts to spawn actor", *a, '(' << label << ')');
       if (exists_actor(label))
         return make_message(error{"actor already exists: ", label});
+      auto component = msg.drop(a - args.begin());
       auto params = component.drop(1);
       auto result = component.apply({
         on("identifier") >> [&]
