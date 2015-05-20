@@ -848,10 +848,10 @@ behavior node::make_behavior()
     },
     others() >> [=]
     {
-      VAST_ERROR("invalid syntax", to_string(current_message()));
       std::string cmd;
       current_message().extract([&](std::string const& s) { cmd += ' ' + s; });
-      return error{"invalid syntax: ", cmd};
+      VAST_ERROR("invalid command syntax:" << cmd);
+      return error{"invalid command syntax:", cmd};
     }
   };
 }
