@@ -222,7 +222,7 @@ ewah_bitstream::iterator::iterator(ewah_bitstream const& ewah)
   : ewah_{&ewah},
     pos_{0}
 {
-  assert(ewah_);
+  VAST_ASSERT(ewah_);
   if (ewah_->bits_.blocks() >= 2)
     scan();
   else
@@ -236,8 +236,8 @@ bool ewah_bitstream::iterator::equals(iterator const& other) const
 
 void ewah_bitstream::iterator::increment()
 {
-  assert(ewah_);
-  assert(pos_ != npos);
+  VAST_ASSERT(ewah_);
+  VAST_ASSERT(pos_ != npos);
 
   // Check whether we still have clean 1-blocks to process.
   if (num_clean_ > 0)
@@ -281,7 +281,7 @@ void ewah_bitstream::iterator::increment()
       // We will never see a dirty block made up entirely of 0s (except for
       // potentially the very last one and here we're only looking at
       // *full* dirty blocks).
-      assert(! "should never happen");
+      VAST_ASSERT(! "should never happen");
     }
     else
     {
@@ -308,13 +308,13 @@ void ewah_bitstream::iterator::increment()
 
 ewah_bitstream::size_type ewah_bitstream::iterator::dereference() const
 {
-  assert(ewah_);
+  VAST_ASSERT(ewah_);
   return pos_;
 }
 
 void ewah_bitstream::iterator::scan()
 {
-  assert(pos_ % block_width == 0);
+  VAST_ASSERT(pos_ % block_width == 0);
 
   // We skip over all clean 0-blocks which don't have dirty blocks after them.
   while (idx_ < ewah_->bits_.blocks() - 1 && num_dirty_ == 0)
@@ -347,7 +347,7 @@ void ewah_bitstream::iterator::scan()
   }
   else
   {
-    assert(block);
+    VAST_ASSERT(block);
     pos_ += bitvector::lowest_bit(block);
   }
 }
@@ -434,7 +434,7 @@ void ewah_bitstream::bitwise_not()
   if (bits_.empty())
     return;
 
-  assert(bits_.blocks() >= 2);
+  VAST_ASSERT(bits_.blocks() >= 2);
   size_type next_marker = 0;
   size_type i;
   for (i = 0; i < bits_.blocks() - 1; ++i)
@@ -534,12 +534,12 @@ void ewah_bitstream::append_impl(size_type n, bool bit)
   // Invariant: the last block shall always be dirty.
   if (remaining_bits == 0)
   {
-    assert(clean_blocks > 0);
+    VAST_ASSERT(clean_blocks > 0);
     --clean_blocks;
     remaining_bits = block_width;
   }
 
-  assert(clean_blocks > 0);
+  VAST_ASSERT(clean_blocks > 0);
   num_bits_ += n;
 
   auto& marker = bits_.block(last_marker_);
@@ -642,7 +642,7 @@ void ewah_bitstream::trim_impl()
   {
     auto last_pos = (num_bits_ - 1) % block_width;
     auto high_pos = bitvector::highest_bit(bits_.last_block());
-    assert(last_pos >= high_pos);
+    VAST_ASSERT(last_pos >= high_pos);
     num_bits_ -= last_pos - high_pos;
     return;
   }
@@ -664,7 +664,7 @@ void ewah_bitstream::trim_impl()
     auto last_pos = (num_bits_ - 1) % block_width;
     auto high_pos = bitvector::highest_bit(bits_.last_block());
 
-    assert(last_pos >= high_pos);
+    VAST_ASSERT(last_pos >= high_pos);
     num_bits_ -= last_pos - high_pos;
 
     bits_.block(last_marker_) = marker_num_dirty(marker, --num_dirty);
@@ -716,7 +716,7 @@ void ewah_bitstream::trim_impl()
 
     // If they were the same, it would mean that the last marker was the very
     // first one, which we handle already above.
-    assert(i != last_marker_);
+    VAST_ASSERT(i != last_marker_);
 
     last_marker_ = prev;
     marker = bits_.block(last_marker_);
@@ -734,7 +734,7 @@ void ewah_bitstream::trim_impl()
       bits_.block(last_marker_) = marker_num_dirty(marker, --num_dirty);
       auto last_pos = (num_bits_ - 1) % block_width;
       auto high_pos = bitvector::highest_bit(bits_.last_block());
-      assert(last_pos >= high_pos);
+      VAST_ASSERT(last_pos >= high_pos);
       num_bits_ -= last_pos - high_pos;
     }
     else
@@ -832,8 +832,8 @@ bitvector const& ewah_bitstream::bits_impl() const
 
 void ewah_bitstream::integrate_last_block()
 {
-  assert(num_bits_ % block_width == 0);
-  assert(last_marker_ != bits_.blocks() - 1);
+  VAST_ASSERT(num_bits_ % block_width == 0);
+  VAST_ASSERT(last_marker_ != bits_.blocks() - 1);
   auto& last_block = bits_.last_block();
   auto blocks_after_marker = bits_.blocks() - last_marker_ - 1;
 
@@ -885,7 +885,7 @@ void ewah_bitstream::integrate_last_block()
 
 void ewah_bitstream::bump_dirty_count()
 {
-  assert(num_bits_ % block_width == 0);
+  VAST_ASSERT(num_bits_ % block_width == 0);
   auto& marker = bits_.block(last_marker_);
   auto num_dirty = marker_num_dirty(marker);
   if (num_dirty == marker_dirty_max)
@@ -921,7 +921,7 @@ ewah_bitstream::size_type ewah_bitstream::find_forward(size_type i) const
       continue;
     }
 
-    assert(seq->offset + seq->length);
+    VAST_ASSERT(seq->offset + seq->length);
 
     // Then we check the single sequence [a,b) | i >= a && i < b.
     if (seq->data)

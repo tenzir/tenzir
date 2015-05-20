@@ -242,7 +242,7 @@ trial<void> bro::parse_header()
     if (pos != std::string::npos)
     {
       auto i = std::stoi(header_value->substr(pos + 2, 2), nullptr, 16);
-      assert(i >= 0 && i <= 255);
+      VAST_ASSERT(i >= 0 && i <= 255);
       sep.push_back(i);
       pos += 2;
     }

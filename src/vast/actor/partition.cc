@@ -1,12 +1,13 @@
-#include "vast/actor/partition.h"
-
 #include <caf/all.hpp>
+
 #include "vast/event.h"
 #include "vast/actor/indexer.h"
+#include "vast/actor/partition.h"
 #include "vast/actor/task.h"
 #include "vast/expr/predicatizer.h"
 #include "vast/concept/serializable/schema.h"
 #include "vast/concept/serializable/io.h"
+#include "vast/util/assert.h"
 
 using namespace caf;
 
@@ -60,7 +61,7 @@ struct continuous_query_proxy : default_actor
         [=](expression& pred, Bitstream& hits)
         {
           auto p = get<predicate>(pred);
-          assert(p);
+          VAST_ASSERT(p);
           map_.emplace(std::move(*p), std::move(hits));
         },
         [=](done_atom)
@@ -168,7 +169,7 @@ partition::partition(path dir, actor sink)
     dir_{std::move(dir)},
     sink_{std::move(sink)}
 {
-  assert(sink_ != invalid_actor);
+  VAST_ASSERT(sink_ != invalid_actor);
   trap_exit(true);
 }
 
@@ -192,7 +193,7 @@ behavior partition::make_behavior()
       quit(exit::error);
       return {};
     }
-    assert(! schema_.empty());
+    VAST_ASSERT(! schema_.empty());
     for (auto& p : directory{dir_})
     {
       auto interval = p.basename().str();
@@ -217,7 +218,7 @@ behavior partition::make_behavior()
         {
           VAST_DEBUG(this, "loads", interval / name.basename());
           auto t = schema_.find_type(name.basename().str());
-          assert(t != nullptr);
+          VAST_ASSERT(t != nullptr);
           auto a = spawn<event_indexer<bitstream_type>, monitored>(name, *t);
           indexers_.emplace(*base, a);
         }
@@ -323,7 +324,7 @@ behavior partition::make_behavior()
                  chk.events(), "events:",
                  '[' << chk.base() << ',' << (chk.base() + chk.events()) << ')');
       // Create event indexers according to chunk schema.
-      assert(! chk.meta().schema.empty());
+      VAST_ASSERT(! chk.meta().schema.empty());
       auto base = chk.base();
       auto interval = to_string(base) + "-" + to_string(base + chk.events());
       std::vector<actor> indexers;
@@ -352,9 +353,9 @@ behavior partition::make_behavior()
         [chk, indexers=std::move(indexers), task, proxy=proxy_]
         (event_based_actor* self)
         {
-          assert(! indexers.empty());
+          VAST_ASSERT(! indexers.empty());
           auto events = chk.uncompress();
-          assert(! events.empty());
+          VAST_ASSERT(! events.empty());
           auto msg = make_message(std::move(events), task);
           for (auto& i : indexers)
           {
@@ -448,7 +449,7 @@ behavior partition::make_behavior()
                  "indexers:", pred);
       for (auto& q : ps.queries)
       {
-        assert(q != nullptr);
+        VAST_ASSERT(q != nullptr);
         VAST_DEBUG(this, "evaluates", *q);
         auto& qs = queries_[*q];
         auto hits = visit(evaluator{*this}, *q);

@@ -1,7 +1,7 @@
 #ifndef VAST_UTIL_HASH_XXHASH_H
 #define VAST_UTIL_HASH_XXHASH_H
 
-#include <cassert>
+#include "vast/util/assert.h"
 #include "vast/util/hash.h"
 
 namespace vast {
@@ -60,14 +60,14 @@ private:
   /// @pre `n <= max`
   static digest_type value(void const* x, size_t n, uint32_t seed = 0)
   {
-    assert(n <= max_len);
+    VAST_ASSERT(n <= max_len);
     return detail::XXH32(x, static_cast<int>(n), seed);
   }
 
   /// @pre `n <= max`
   bool update(void const* x, size_t n)
   {
-    assert(n <= max_len);
+    VAST_ASSERT(n <= max_len);
     return detail::XXH32_update(&state_, x, static_cast<size_t>(n))
         == detail::XXH_OK;
   }

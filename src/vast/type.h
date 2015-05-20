@@ -5,6 +5,7 @@
 #include <vector>
 #include <map>
 #include <memory>
+
 #include "vast/aliases.h"
 #include "vast/config.h"
 #include "vast/key.h"

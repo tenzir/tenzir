@@ -1,6 +1,6 @@
-#include "vast/expr/evaluator.h"
-
 #include "vast/event.h"
+#include "vast/expr/evaluator.h"
+#include "vast/util/assert.h"
 
 namespace vast {
 namespace expr {
@@ -56,13 +56,13 @@ bool event_evaluator::operator()(time_extractor const&, data const& d)
 
 bool event_evaluator::operator()(type_extractor const&, data const&)
 {
-  assert(! "type extractor should have been optimized away");
+  VAST_ASSERT(! "type extractor should have been optimized away");
   return false;
 }
 
 bool event_evaluator::operator()(schema_extractor const&, data const&)
 {
-  assert(! "schema extract should have been resolved");
+  VAST_ASSERT(! "schema extract should have been resolved");
   return false;
 }
 

@@ -1,4 +1,3 @@
-#include <cassert>
 #include <iomanip>
 #include <iostream>
 #include <fstream>
@@ -7,6 +6,7 @@
 #include "vast/filesystem.h"
 #include "vast/logger.h"
 #include "vast/time.h"
+#include "vast/util/assert.h"
 #include "vast/util/color.h"
 #include "vast/util/queue.h"
 #include "vast/util/string.h"
@@ -60,7 +60,7 @@ std::string prettify(char const* pretty_func)
         break;
       case '(':
         {
-          assert(paren == pretty_func);
+          VAST_ASSERT(paren == pretty_func);
           paren = c;
         }
         break;
@@ -319,7 +319,7 @@ logger::tracer::tracer(message&& msg)
 
 void logger::tracer::fill(fill_type t)
 {
-  assert(call_depth >= 1);
+  VAST_ASSERT(call_depth >= 1);
   std::string f(3 + call_depth, '-');
   f[f.size() - 1] = ' ';
   f[0] = '|';
@@ -383,21 +383,21 @@ bool logger::console(level verbosity, bool colorized)
 
 void logger::log(message msg)
 {
-  assert(instance()->impl_);
+  VAST_ASSERT(instance()->impl_);
   instance()->impl_->log(std::move(msg));
 }
 
 bool logger::takes(logger::level lvl)
 {
-  assert(instance()->impl_);
+  VAST_ASSERT(instance()->impl_);
   return instance()->impl_->takes(lvl);
 }
 
 logger::message logger::make_message(logger::level lvl, char const* facility,
                                      char const* fun)
 {
-  assert(facility != nullptr);
-  assert(instance()->impl_);
+  VAST_ASSERT(facility != nullptr);
+  VAST_ASSERT(instance()->impl_);
   auto& impl = instance()->impl_;
   message m{lvl};
   if (impl->console_level_ == trace || impl->file_level_ == trace)

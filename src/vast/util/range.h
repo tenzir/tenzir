@@ -1,6 +1,7 @@
 #ifndef VAST_UTIL_RANGE_H
 #define VAST_UTIL_RANGE_H
 
+#include "vast/util/assert.h"
 #include "vast/util/iterator.h"
 
 namespace vast {
@@ -63,7 +64,7 @@ private:
 
   void increment()
   {
-    assert(rng_);
+    VAST_ASSERT(rng_);
     if (! rng_->increment())
       rng_ = nullptr;
   }

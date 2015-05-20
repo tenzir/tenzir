@@ -2,6 +2,7 @@
 #define VAST_BITMAP_INDEX_POLYMORPHIC_H
 
 #include "vast/bitmap_index.h"
+#include "vast/util/assert.h"
 
 namespace vast {
 namespace detail {
@@ -145,44 +146,44 @@ public:
 
   bool push_back(data const& d, uint64_t offset = 0)
   {
-    assert(concept_);
+    VAST_ASSERT(concept_);
     return concept_->push_back(d, offset);
   }
 
   bool stretch(size_t n)
   {
-    assert(concept_);
+    VAST_ASSERT(concept_);
     return concept_->stretch(n);
   }
 
   trial<Bitstream> lookup(relational_operator op, data const& d) const
   {
-    assert(concept_);
+    VAST_ASSERT(concept_);
     return concept_->lookup(op, d);
   }
 
   uint64_t size() const
   {
-    assert(concept_);
+    VAST_ASSERT(concept_);
     return concept_->size();
   }
 
   uint64_t empty() const
   {
-    assert(concept_);
+    VAST_ASSERT(concept_);
     return concept_->empty();
   }
 
   bool catch_up(uint64_t n)
   {
-    assert(concept_);
+    VAST_ASSERT(concept_);
     return concept_->catchup(n);
   }
 
   friend bool operator==(bitmap_index const& x, bitmap_index const& y)
   {
-    assert(x.concept_);
-    assert(y.concept_);
+    VAST_ASSERT(x.concept_);
+    VAST_ASSERT(y.concept_);
     return x.concept_->equals(*y.concept_);
   }
 

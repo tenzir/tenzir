@@ -1,4 +1,3 @@
-#include <cassert>
 #include <fstream>
 #include <iterator>
 
@@ -6,6 +5,7 @@
 #include "vast/io/algorithm.h"
 #include "vast/io/file_stream.h"
 #include "vast/io/container_stream.h"
+#include "vast/util/assert.h"
 #include "vast/util/posix.h"
 #include "vast/util/string.h"
 
@@ -371,7 +371,7 @@ void directory::iterator::increment()
   else if (auto ent = ::readdir(dir_->dir_))
   {
     auto d = ent->d_name;
-    assert(d);
+    VAST_ASSERT(d);
     auto dot = d[0] == '.' && d[1] == '\0';
     auto dotdot = d[0] == '.' && d[1] == '.' && d[2] == '\0';
     if (dot || dotdot)
@@ -432,7 +432,7 @@ std::vector<path> split(path const& p)
     return {};
   auto components =
     util::to_strings(util::split(p.str(), path::separator, "\\", -1, true));
-  assert(! components.empty());
+  VAST_ASSERT(! components.empty());
   std::vector<path> result;
   size_t begin = 0;
   if (components[0].empty())
@@ -522,7 +522,7 @@ void traverse(path const& p, std::function<bool(path const&)> f)
   }
   ::closedir(d);
 #else
-  assert(false);
+  VAST_ASSERT(false);
 #endif // VAST_POSIX
 }
 

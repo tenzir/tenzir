@@ -1,9 +1,10 @@
-#include "vast/io/compressed_stream.h"
+#include "lz4/lz4.h"
 
 #include "vast/config.h"
 #include "vast/logger.h"
+#include "vast/io/compressed_stream.h"
+#include "vast/util/assert.h"
 
-#include "lz4/lz4.h"
 #ifdef VAST_HAVE_SNAPPY
 #include <snappy.h>
 #endif // VAST_HAVE_SNAPPY
@@ -14,10 +15,10 @@ namespace io {
 bool compressed_input_stream::next(void const** data, size_t* size)
 {
   VAST_ENTER_WITH(VAST_ARG(data, size));
-  assert(! uncompressed_.empty());
+  VAST_ASSERT(! uncompressed_.empty());
   if (rewind_bytes_ > 0)
   {
-    assert(rewind_bytes_ <= valid_bytes_);
+    VAST_ASSERT(rewind_bytes_ <= valid_bytes_);
     *data = uncompressed_.data() - valid_bytes_ + rewind_bytes_;
     *size = rewind_bytes_;
     rewind_bytes_ = 0;
@@ -154,9 +155,9 @@ bool compressed_output_stream::flush()
     // compress it first into a temporary buffer and then write it out in raw
     // form.
     n = compress(compressed_.data(), compressed_.size());
-    assert(n > 0);
-    assert(n <= std::numeric_limits<uint32_t>::max());
-    assert(n <= compressed_bound);
+    VAST_ASSERT(n > 0);
+    VAST_ASSERT(n <= std::numeric_limits<uint32_t>::max());
+    VAST_ASSERT(n <= compressed_bound);
     total_bytes_ += sink_.write<uint32_t>(&n);
     total_bytes_ += sink_.write_raw(compressed_.data(), n);
   }
@@ -165,9 +166,9 @@ bool compressed_output_stream::flush()
     // We have enough space to directly write the full block into the
     // underlying output buffer, no need to use the scratch space.
     n = compress(4 + reinterpret_cast<uint8_t*>(dst_data), compressed_.size());
-    assert(n > 0);
-    assert(n <= std::numeric_limits<uint32_t>::max());
-    assert(n <= compressed_bound);
+    VAST_ASSERT(n > 0);
+    VAST_ASSERT(n <= std::numeric_limits<uint32_t>::max());
+    VAST_ASSERT(n <= compressed_bound);
     auto four = sink_.write<uint32_t>(&n);
     if (four != sizeof(uint32_t))
       VAST_RETURN(false);
@@ -218,7 +219,7 @@ null_input_stream::null_input_stream(input_stream& source)
 size_t null_input_stream::uncompress(void const* source, size_t size)
 {
   VAST_ENTER_WITH(VAST_ARG(source, size));
-  assert(uncompressed_.size() >= size);
+  VAST_ASSERT(uncompressed_.size() >= size);
   std::memcpy(uncompressed_.data(), source, size);
   VAST_RETURN(size);
 }
@@ -242,7 +243,7 @@ size_t null_output_stream::compressed_size(size_t output) const
 size_t null_output_stream::compress(void* sink, size_t sink_size)
 {
   VAST_ENTER_WITH(VAST_ARG(sink, sink_size));
-  assert(sink_size >= valid_bytes_);
+  VAST_ASSERT(sink_size >= valid_bytes_);
   std::memcpy(sink, uncompressed_.data(), valid_bytes_);
   VAST_RETURN(valid_bytes_);
 }
@@ -258,13 +259,13 @@ size_t lz4_input_stream::uncompress(void const* source, size_t size)
   VAST_ENTER_WITH(VAST_ARG(source, size));
   // LZ4 does not offer functionality to estimate the output size. It operates
   // on at most 64KB blocks, so we need to ensure this maximum.
-  assert(uncompressed_.size() >= 64 << 10);
+  VAST_ASSERT(uncompressed_.size() >= 64 << 10);
   auto n = LZ4_uncompress_unknownOutputSize(
       reinterpret_cast<char const*>(source),
       reinterpret_cast<char*>(uncompressed_.data()),
       static_cast<int>(size),
       static_cast<int>(uncompressed_.size()));
-  assert(n > 0);
+  VAST_ASSERT(n > 0);
   VAST_RETURN(n);
 }
 
@@ -288,13 +289,13 @@ size_t lz4_output_stream::compressed_size(size_t output) const
 size_t lz4_output_stream::compress(void* sink, size_t sink_size)
 {
   VAST_ENTER_WITH(VAST_ARG(sink, sink_size));
-  assert(sink_size >= valid_bytes_);
+  VAST_ASSERT(sink_size >= valid_bytes_);
   auto n = LZ4_compress_limitedOutput(
       reinterpret_cast<char const*>(uncompressed_.data()),
       reinterpret_cast<char*>(sink),
       static_cast<int>(valid_bytes_),
       static_cast<int>(sink_size));
-  assert(n > 0);
+  VAST_ASSERT(n > 0);
   VAST_RETURN(n);
 }
 
@@ -311,14 +312,14 @@ size_t uncompress(void const* source, size_t size)
   size_t n;
   auto success = ::snappy::GetUncompressedLength(
       reinterpret_cast<char const*>(source), size, &n);
-  assert(success);
+  VAST_ASSERT(success);
   if (uncompressed_.size() < size)
     uncompressed_.resize(64 << 10);
   success = ::snappy::RawUncompress(
       reinterpret_cast<char const*>(source),
       size,
       reinterpret_cast<char*>(uncompressed_.data()));
-  assert(success);
+  VAST_ASSERT(success);
   VAST_RETURN(n);
 }
 
@@ -348,8 +349,8 @@ size_t compress(void* sink, size_t sink_size)
       valid_bytes_,
       reinterpret_cast<char*>(sink),
       &n);
-  assert(n <= sink_size);
-  assert(n > 0);
+  VAST_ASSERT(n <= sink_size);
+  VAST_ASSERT(n > 0);
   VAST_RETURN(n);
 }
 #endif // VAST_HAVE_SNAPPY

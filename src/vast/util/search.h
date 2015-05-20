@@ -1,7 +1,6 @@
 #ifndef VAST_UTIL_SEARCH_H
 #define VAST_UTIL_SEARCH_H
 
-#include <cassert>
 #include <algorithm>
 #include <array>
 #include <iterator>
@@ -9,6 +8,8 @@
 #include <unordered_map>
 #include <type_traits>
 #include <vector>
+
+#include "vast/util/assert.h"
 
 namespace vast {
 namespace util {
@@ -85,9 +86,8 @@ class boyer_moore
   template <typename Iterator, typename Container>
   static void make_prefix(Iterator begin, Iterator end, Container& pfx)
   {
-    assert(end - begin > 0);
-    assert(pfx.size() == static_cast<size_t>(end - begin));
-
+    VAST_ASSERT(end - begin > 0);
+    VAST_ASSERT(pfx.size() == static_cast<size_t>(end - begin));
     pfx[0] = 0;
     size_t k = 0;
     for (decltype(end - begin) i = 1; i < end - begin; ++i)
@@ -112,11 +112,9 @@ public:
   {
     if (n_ == 0)
       return;
-
     // Build the skip table (delta_1).
     for (decltype(n_) i = 0; i < n_; ++i)
       skip_.insert(pat_[i], i);
-
     // Build the suffix table (delta2).
     std::vector<pat_char_type> reversed(n_);
     std::reverse_copy(begin, end, reversed.begin());
@@ -149,11 +147,9 @@ public:
     /// Empty *P* always matches at the beginning of *T*.
     if (n_ == 0)
       return begin;
-
     // Empty *T* or |T| < |P| can never match.
     if (begin == end || end - begin < n_)
       return end;
-
     auto i = begin;
     while (i <= end - n_)
     {
@@ -161,12 +157,10 @@ public:
       while (pat_[j - 1] == i[j - 1])
         if (--j == 0)
           return i;
-
       auto k = skip_[i[j - 1]];
       auto m = j - k - 1;
       i += k < j && m > suffix_[j] ? m : suffix_[j];
     }
-
     return end;
   }
 
@@ -262,11 +256,9 @@ public:
     /// Empty *P* always matches at the beginning of *T*.
     if (n_ == 0)
       return begin;
-
     // Empty *T* or |T| < |P| can never match.
     if (begin == end || end - begin < n_)
       return end;
-
     pat_difference_type i = 0;  // Position in T.
     pat_difference_type p = 0;  // Position in P.
     while (i <= end - begin - n_)
@@ -274,11 +266,9 @@ public:
       while (pat_[p] == begin[i + p])
         if (++p == n_)
           return begin + i;
-
       i += p - skip_[p];
       p = skip_[p] >= 0 ? skip_[p] : 0;
     }
-
     return end;
   }
 

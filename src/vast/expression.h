@@ -12,6 +12,7 @@
 #include "vast/detail/parser/query.h"
 #include "vast/expr/normalize.h"
 #include "vast/expr/validator.h"
+#include "vast/util/assert.h"
 #include "vast/util/variant.h"
 
 namespace vast {
@@ -418,7 +419,7 @@ public:
       if (str == "&time")
         return {time_extractor{}};
 
-      assert(! str.empty());
+      VAST_ASSERT(! str.empty());
       if (str[0] == ':')
       {
         // TODO: make vast::type parseable.

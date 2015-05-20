@@ -12,6 +12,7 @@
 #include "vast/concept/serializable/bitmap_index_polymorphic.h"
 #include "vast/concept/serializable/type.h"
 #include "vast/concept/serializable/io.h"
+#include "vast/util/assert.h"
 
 namespace vast {
 namespace detail {
@@ -94,9 +95,9 @@ public:
       {
         VAST_DEBUG(this, "looks up predicate:", pred);
         auto p = get<predicate>(pred);
-        assert(p);
+        VAST_ASSERT(p);
         auto d = get<data>(p->rhs);
-        assert(d);
+        VAST_ASSERT(d);
         auto r = bmi_.lookup(p->op, *d);
         if (r)
         {
@@ -407,7 +408,7 @@ struct event_indexer : default_actor
         {
           auto& o = pair.first;
           auto lhs = r->at(o);
-          assert(lhs);
+          VAST_ASSERT(lhs);
           if (! compatible(*lhs, op_, type::derive(d)))
           {
             VAST_WARN("type clash: LHS =", *lhs, "<=> RHS =", type::derive(d));
@@ -583,7 +584,7 @@ struct event_indexer : default_actor
       },
       [=](expression const& pred, actor const&, actor const& task)
       {
-        assert(is<predicate>(pred));
+        VAST_ASSERT(is<predicate>(pred));
         auto indexers = visit(loader{*this}, pred);
         if (indexers.empty())
         {

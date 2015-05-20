@@ -1,35 +1,39 @@
 #ifndef VAST_CONFIG_H
 #define VAST_CONFIG_H
 
-#define VAST_VERSION @VERSION_MAJ_MIN@
-#define VAST_LOG_LEVEL @VAST_LOG_LEVEL@
-
-#ifdef __clang__
-#  define VAST_CLANG
-#elif __GNUC__
-#  define VAST_GCC
-#endif
-
-#if defined(__APPLE__)
-#  define VAST_MACOS
-#elif defined(__linux__)
-#  define VAST_LINUX
-#elif defined(__FreeBSD__)
-#  define VAST_BSD
-#elif defined(WIN32)
-#  define VAST_WINDOWS
-#else
-#  error platform not supported
-#endif
-
-#ifndef VAST_WINDOWS
-#  define VAST_POSIX
-#endif
-
+#cmakedefine VAST_ENABLE_ASSERTIONS
 #cmakedefine VAST_HAVE_GPERFTOOLS
 #cmakedefine VAST_HAVE_PCAP
 #cmakedefine VAST_HAVE_BROCCOLI
 #cmakedefine VAST_HAVE_SNAPPY
 #cmakedefine VAST_USE_TCMALLOC
+
+#include <caf/config.hpp>
+
+#define VAST_VERSION @VERSION_MAJ_MIN@
+#define VAST_LOG_LEVEL @VAST_LOG_LEVEL@
+
+#ifdef CAF_CLANG
+#  define VAST_CLANG
+#elif CAF_GCC
+#  define VAST_GCC
+#elif CAF_MSVC
+#  define VAST_MSVC
+#endif
+
+#if defined(CAF_MACOS)
+#  define VAST_MACOS
+#elif defined(CAF_LINUX)
+#  define VAST_LINUX
+#elif defined(CAF_BSD)
+#  define VAST_BSD
+#elif defined(CAF_WINDOWS)
+#  define VAST_WINDOWS
+#else
+#  error platform not supported
+#endif
+#ifdef CAF_POSIX
+#  define VAST_POSIX
+#endif
 
 #endif

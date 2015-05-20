@@ -15,6 +15,7 @@
 #include "vast/concept/state/uuid.h"
 #include "vast/concept/state/time.h"
 #include "vast/concept/serializable/io.h"
+#include "vast/util/assert.h"
 
 using namespace caf;
 
@@ -39,9 +40,9 @@ index::index(path const& dir, size_t max_events,
     max_events_per_partition_{max_events}
 {
   trap_exit(true);
-  assert(max_events_per_partition_ > 0);
-  assert(active_parts > 0);
-  assert(passive_parts > 0);
+  VAST_ASSERT(max_events_per_partition_ > 0);
+  VAST_ASSERT(active_parts > 0);
+  VAST_ASSERT(passive_parts > 0);
   active_.resize(active_parts);
   passive_.capacity(passive_parts);
   passive_.on_evict(
@@ -193,8 +194,8 @@ behavior index::make_behavior()
     {
       auto& a = active_[next_active_++ % active_.size()];
       auto i = partitions_.find(a.first);
-      assert(i != partitions_.end());
-      assert(a.second != invalid_actor);
+      VAST_ASSERT(i != partitions_.end());
+      VAST_ASSERT(a.second != invalid_actor);
       // Replace partition with a new one on overflow. If the max is too small
       // that even the first chunk doesn't fit, then we just accept this and
       // have a one-chunk partition.
@@ -330,10 +331,10 @@ behavior index::make_behavior()
       VAST_DEBUG(this, "got signal that", current_sender(),
                  "took", runtime, "to complete query: ", expr);
       auto q = queries_.find(expr);
-      assert(q != queries_.end());
-      assert(q->second.hist);
+      VAST_ASSERT(q != queries_.end());
+      VAST_ASSERT(q->second.hist);
       auto p = q->second.hist->parts.find(current_sender());
-      assert(p != q->second.hist->parts.end());
+      VAST_ASSERT(p != q->second.hist->parts.end());
       consolidate(p->second, expr);
       send(q->second.hist->task, done_atom::value, p->first);
       q->second.hist->parts.erase(p);
@@ -343,9 +344,9 @@ behavior index::make_behavior()
       auto runtime = time::snapshot() - start;
       VAST_VERBOSE(this, "completed lookup", expr, "in", runtime);
       auto q = queries_.find(expr);
-      assert(q != queries_.end());
-      assert(q->second.hist);
-      assert(q->second.hist->parts.empty());
+      VAST_ASSERT(q != queries_.end());
+      VAST_ASSERT(q->second.hist);
+      VAST_ASSERT(q->second.hist->parts.empty());
       // Notify subscribers about completion.
       for (auto& s : q->second.subscribers)
         send(s, done_atom::value, runtime, expr);
@@ -360,7 +361,7 @@ behavior index::make_behavior()
       VAST_DEBUG(this, "received", hits.count(), "historical hits from",
                  current_sender(), "for query:", expr);
       auto& qs = queries_[expr];
-      assert(qs.hist);
+      VAST_ASSERT(qs.hist);
       auto before = qs.hist->hits.count();
       qs.hist->hits |= hits;
       auto after = qs.hist->hits.count();
@@ -376,7 +377,7 @@ behavior index::make_behavior()
       VAST_DEBUG(this, "received", hits.count(), "continuous hits from",
                  current_sender(), "for query:", expr);
       auto& qs = queries_[expr];
-      assert(qs.cont);
+      VAST_ASSERT(qs.cont);
       qs.cont->hits |= hits;
       {
         auto msg = make_message(std::move(hits));
@@ -431,10 +432,10 @@ void index::consolidate(uuid const& part, expression const& expr)
   auto schedule_pred = [&](auto& s) { return s.part == part; };
   auto i = std::find_if(schedule_.begin(), schedule_.end(), schedule_pred);
   // Remove the completed query expression from the schedule.
-  assert(i != schedule_.end());
-  assert(! i->queries.empty());
+  VAST_ASSERT(i != schedule_.end());
+  VAST_ASSERT(! i->queries.empty());
   auto x = i->queries.find(expr);
-  assert(x != i->queries.end());
+  VAST_ASSERT(x != i->queries.end());
   i->queries.erase(x);
   // We keep the partition in the schedule as long it has outstanding queries.
   if (! i->queries.empty())
@@ -474,8 +475,8 @@ void index::consolidate(uuid const& part, expression const& expr)
       for (auto& next_expr : entry.queries)
       {
         auto q = queries_.find(next_expr);
-        assert(q != queries_.end());
-        assert(q->second.hist);
+        VAST_ASSERT(q != queries_.end());
+        VAST_ASSERT(q->second.hist);
         q->second.hist->parts.emplace(p->address(), entry.part);
         send(q->second.hist->task, p);
         send(p, next_expr, historical_atom::value);

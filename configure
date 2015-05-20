@@ -30,6 +30,7 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --generator=GENERATOR   CMake generator to use (see cmake --help)
 
   Debugging:
+    --enable-assertions     turn on assertions
     --log-level=LEVEL       maximum compile-time log level [debug]
 
   Optional features:
@@ -93,7 +94,7 @@ CMakeCacheEntries=""
 append_cache_entry CMAKE_INSTALL_PREFIX   PATH      /usr/local
 append_cache_entry CMAKE_BUILD_TYPE       STRING    RelWithDebInfo
 append_cache_entry VAST_LOG_LEVEL         INTEGER   $(levelize debug)
-append_cache_entry ENABLE_PERFTOOLS_HEAP  BOOL      false
+append_cache_entry VAST_USE_TCMALLOC      BOOL      false
 
 # Parse command line arguments.
 while [ $# -ne 0 ]; do
@@ -126,11 +127,14 @@ while [ $# -ne 0 ]; do
     --generator=*)
       CMakeGenerator="$optarg"
       ;;
+    --enable-assertions)
+      append_cache_entry VAST_ENABLE_ASSERTIONS BOOL true
+      ;;
     --log-level=*)
       append_cache_entry VAST_LOG_LEVEL INTEGER $(levelize $optarg)
       ;;
     --enable-tcmalloc)
-      append_cache_entry ENABLE_PERFTOOLS_HEAP BOOL true
+      append_cache_entry VAST_USE_TCMALLOC BOOL true
       ;;
     --enable-asan)
       append_cache_entry ENABLE_ADDRESS_SANITIZER BOOL true

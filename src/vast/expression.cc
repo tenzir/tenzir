@@ -4,13 +4,13 @@ namespace vast {
 
 expression const& negation::expression() const
 {
-  assert(! empty());
+  VAST_ASSERT(! empty());
   return *begin();
 }
 
 expression& negation::expression()
 {
-  assert(! empty());
+  VAST_ASSERT(! empty());
   return *begin();
 }
 

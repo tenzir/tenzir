@@ -4,6 +4,7 @@
 
 #include "vast/actor/atoms.h"
 #include "vast/io/actor_stream.h"
+#include "vast/util/assert.h"
 
 using namespace caf;
 
@@ -15,7 +16,7 @@ actor_input_stream::actor_input_stream(actor source,
   : source_{std::move(source)},
     timeout_{timeout}
 {
-  assert(max_inflight_ > 0);
+  VAST_ASSERT(max_inflight_ > 0);
 }
 
 bool actor_input_stream::next(void const** data, size_t* size)
@@ -35,7 +36,7 @@ bool actor_input_stream::next(void const** data, size_t* size)
   // Whenever we pop a chunk, we try to grab a new one.
   if (! done_)
   {
-    assert(max_inflight_ > data_.size());
+    VAST_ASSERT(max_inflight_ > data_.size());
     for (auto i = data_.size(); i < max_inflight_; ++i)
       self_->send(source_, get_atom::value);
     auto got_timeout = false;
@@ -61,7 +62,7 @@ bool actor_input_stream::next(void const** data, size_t* size)
 
 void actor_input_stream::rewind(size_t bytes)
 {
-  assert(! data_.empty());
+  VAST_ASSERT(! data_.empty());
   if (rewind_bytes_ + bytes <= data_.front().size())
     rewind_bytes_ += bytes;
   else
@@ -72,7 +73,7 @@ bool actor_input_stream::skip(size_t bytes)
 {
   if (rewind_bytes_ > 0)
   {
-    assert(! data_.empty());
+    VAST_ASSERT(! data_.empty());
     if (bytes <= rewind_bytes_)
     {
       rewind_bytes_ -= bytes;

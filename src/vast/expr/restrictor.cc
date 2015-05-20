@@ -1,5 +1,6 @@
 #include "vast/expr/restrictor.h"
 #include "vast/expression.h"
+#include "vast/util/assert.h"
 
 namespace vast {
 namespace expr {
@@ -12,7 +13,7 @@ time_restrictor::time_restrictor(time::point first, time::point last)
 
 bool time_restrictor::operator()(none) const
 {
-  assert(! "should never happen");
+  VAST_ASSERT(! "should never happen");
 }
 
 bool time_restrictor::operator()(conjunction const& con) const
@@ -48,7 +49,7 @@ bool time_restrictor::operator()(predicate const& p) const
   if (! is<time_extractor>(p.lhs))
     return true;
   auto d = get<data>(p.rhs);
-  assert(d && is<time::point>(*d));
+  VAST_ASSERT(d && is<time::point>(*d));
   return data::evaluate(first_, p.op, *d) || data::evaluate(last_, p.op, *d);
 }
 

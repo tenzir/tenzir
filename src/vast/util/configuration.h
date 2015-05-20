@@ -2,7 +2,6 @@
 #define VAST_UTIL_CONFIGURATION_H
 
 #include <algorithm>
-#include <cassert>
 #include <cstring>
 #include <iostream>
 #include <iterator>
@@ -11,6 +10,8 @@
 #include <sstream>
 #include <string>
 #include <vector>
+
+#include "vast/util/assert.h"
 #include "vast/util/result.h"
 
 namespace vast {
@@ -291,7 +292,7 @@ public:
     if (o->max_vals_ > 1)
       return error{"cannot get multi-value option"};
 
-    assert(o->values_.size() == 1);
+    VAST_ASSERT(o->values_.size() == 1);
     return o->values_.front();
   }
 

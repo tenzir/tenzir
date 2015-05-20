@@ -2,10 +2,10 @@
 #include <unistd.h>
 #include <sys/select.h>
 
-#include <cassert>
 #include <cerrno>
 #include <stdexcept>
 
+#include "vast/util/assert.h"
 #include "vast/util/posix.h"
 #include "vast/util/detail/posix.h"
 
@@ -42,13 +42,13 @@ unix_domain_socket::operator bool() const
 
 bool unix_domain_socket::send_fd(int fd)
 {
-  assert(*this);
+  VAST_ASSERT(*this);
   return detail::uds_send_fd(fd_, fd);
 }
 
 int unix_domain_socket::recv_fd()
 {
-  assert(*this);
+  VAST_ASSERT(*this);
   return detail::uds_recv_fd(fd_);
 }
 

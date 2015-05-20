@@ -1,8 +1,9 @@
 #ifndef VAST_UTIL_TRIAL_H
 #define VAST_UTIL_TRIAL_H
 
-#include <cassert>
 #include <memory>
+
+#include "vast/util/assert.h"
 #include "vast/util/error.h"
 
 namespace vast {
@@ -146,7 +147,7 @@ public:
   /// @pre `*this == true`.
   T& value()
   {
-    assert(engaged_);
+    VAST_ASSERT(engaged_);
     return value_;
   }
 
@@ -155,7 +156,7 @@ public:
   /// @pre `*this == true`.
   T const& value() const
   {
-    assert(engaged_);
+    VAST_ASSERT(engaged_);
     return value_;
   }
 
@@ -164,7 +165,7 @@ public:
   /// @pre `*this == false`.
   util::error const& error() const
   {
-    assert(! engaged_);
+    VAST_ASSERT(! engaged_);
     return error_;
   }
 
@@ -173,7 +174,7 @@ public:
   /// @pre `*this == false`.
   util::error& error()
   {
-    assert(! engaged_);
+    VAST_ASSERT(! engaged_);
     return error_;
   }
 
@@ -266,7 +267,7 @@ public:
 
   util::error const& error() const
   {
-    assert(error_);
+    VAST_ASSERT(error_);
     return *error_;
   }
 

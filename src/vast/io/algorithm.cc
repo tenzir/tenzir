@@ -1,8 +1,8 @@
-#include <cassert>
 #include <cstring>
 #include <iostream>
 
 #include "vast/io/algorithm.h"
+#include "vast/util/assert.h"
 
 namespace vast {
 namespace io {
@@ -32,7 +32,7 @@ void input_iterator::increment()
 
 char input_iterator::dereference() const
 {
-  assert(i_ < buf_.size());
+  VAST_ASSERT(i_ < buf_.size());
   return *buf_.as<char>(i_);
 }
 
@@ -81,7 +81,7 @@ void output_iterator::increment()
 
 char& output_iterator::dereference() const
 {
-  assert(i_ < buf_.size());
+  VAST_ASSERT(i_ < buf_.size());
   return *buf_.as<char>(i_);
 }
 

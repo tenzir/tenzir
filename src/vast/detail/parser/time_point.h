@@ -2,6 +2,7 @@
 #define VAST_DETAIL_PARSER_TIME_POINT_H
 
 #include "vast/detail/parser/time_duration.h"
+#include "vast/util/assert.h"
 
 #ifdef VAST_CLANG
 #pragma clang diagnostic push
@@ -68,7 +69,7 @@ struct time_point : qi::grammar<Iterator, time::point(), skipper<Iterator>>
       switch (tag)
       {
         default:
-          assert(! "invalid tag");
+          VAST_ASSERT(! "invalid tag");
           break;
         case 0:
           p += time::duration(std::chrono::nanoseconds(negate ? -n : n));

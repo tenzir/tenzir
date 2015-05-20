@@ -5,6 +5,7 @@
 #include "vast/time.h"
 #include "vast/detail/parser/boost.h"
 #include "vast/detail/parser/skipper.h"
+#include "vast/util/assert.h"
 
 #ifdef VAST_CLANG
 #pragma clang diagnostic push
@@ -57,8 +58,7 @@ struct time_duration
       else if (s == "year" || s == "years" || s == "y" || s == "Y")
         return time::duration(
             std::chrono::duration<int64_t, std::ratio<31536000>>(d));
-
-      assert(! "missing cast implementation");
+      VAST_ASSERT(! "missing cast implementation");
     }
   };
 

@@ -4,8 +4,10 @@
 #include <list>
 #include <stdexcept>
 #include <unordered_map>
+
 #include "vast/bitstream.h"
 #include "vast/operator.h"
+#include "vast/util/assert.h"
 #include "vast/util/operators.h"
 
 namespace vast {
@@ -53,7 +55,7 @@ uint64_t order(T x, size_t sig_bits = 5)
   static_assert(std::numeric_limits<T>::is_iec559,
                 "can only order IEEE 754 double types");
 
-  assert(sig_bits >= 0 && sig_bits <= 52);
+  VAST_ASSERT(sig_bits >= 0 && sig_bits <= 52);
 
   static constexpr auto exp_mask = (~0ull << 53) >> 1;
   static constexpr auto sig_mask = ~0ull >> 12;
@@ -93,7 +95,7 @@ uint64_t order(T x, size_t sig_bits = 5)
 template <typename T, typename U = T>
 void decompose(T x, std::vector<U> const& base, std::vector<U>& values)
 {
-  assert(base.size() == values.size());
+  VAST_ASSERT(base.size() == values.size());
   auto o = order(x);
   size_t i = base.size();
   while (i --> 0)
@@ -480,8 +482,8 @@ public:
       v_(base_.size()),
       bitstreams_(base_.size())
   {
-    assert(! base_.empty());
-    assert(std::all_of(base_.begin(),
+    VAST_ASSERT(! base_.empty());
+    VAST_ASSERT(std::all_of(base_.begin(),
                        base_.end(),
                        [](size_t b) { return b >= 2; }));
 
@@ -497,8 +499,8 @@ public:
       v_(base_.size()),
       bitstreams_(base_.size())
   {
-    assert(base >= 2);
-    assert(n > 0);
+    VAST_ASSERT(base >= 2);
+    VAST_ASSERT(n > 0);
 
     initialize();
   }
@@ -547,10 +549,10 @@ private:
     // With some effort it is possible to OR together two bitslice coders of
     // different bases, but it requires conversion of the base. We tackle this
     // maybe in the future.
-    assert(base_ == other.base_);
-    assert(! bitstreams_.empty());
-    assert(! other.bitstreams_.empty());
-    assert(bitstreams_.size() == other.bitstreams_.size());
+    VAST_ASSERT(base_ == other.base_);
+    VAST_ASSERT(! bitstreams_.empty());
+    VAST_ASSERT(! other.bitstreams_.empty());
+    VAST_ASSERT(bitstreams_.size() == other.bitstreams_.size());
 
     if (bitstreams_[0].empty())
       bitstreams_ = other.bitstreams_;
@@ -573,10 +575,10 @@ private:
   void bitwise_or(bitslice_coder const& other)
   {
     // See comment above.
-    assert(base_ == other.base_);
-    assert(! bitstreams_.empty());
-    assert(! other.bitstreams_.empty());
-    assert(bitstreams_.size() == other.bitstreams_.size());
+    VAST_ASSERT(base_ == other.base_);
+    VAST_ASSERT(! bitstreams_.empty());
+    VAST_ASSERT(! other.bitstreams_.empty());
+    VAST_ASSERT(bitstreams_.size() == other.bitstreams_.size());
 
     if (bitstreams_[0].empty())
       bitstreams_ = other.bitstreams_;
@@ -590,7 +592,7 @@ private:
   template <typename F>
   void each_impl(F f) const
   {
-    assert(base_.size() == bitstreams_.size());
+    VAST_ASSERT(base_.size() == bitstreams_.size());
     for (size_t i = 0; i < bitstreams_.size(); ++i)
       for (size_t j = 0; j < bitstreams_[i].size(); ++j)
         f(i, j, bitstreams_[i][j]);

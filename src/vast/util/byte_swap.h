@@ -1,8 +1,9 @@
 #ifndef VAST_UTIL_BYTE_SWAP_H
 #define VAST_UTIL_BYTE_SWAP_H
 
-#include <cassert>
 #include <type_traits>
+
+#include "vast/util/assert.h"
 
 #if defined (__GLIBC__)
 #  include <endian.h>
@@ -63,7 +64,7 @@ struct swap_bytes
 {
   inline T operator()(T)
   {
-    assert(! "sizeof(T) is not 1, 2, 4, or 8");
+    VAST_ASSERT(! "sizeof(T) is not 1, 2, 4, or 8");
   }
 };
 

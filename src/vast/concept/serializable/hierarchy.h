@@ -1,7 +1,6 @@
 #ifndef VAST_CONCEPT_SERIALIZABLE_HIERARCHY_H
 #define VAST_CONCEPT_SERIALIZABLE_HIERARCHY_H
 
-#include <cassert>
 #include <functional>
 #include <map>
 #include <type_traits>
@@ -12,6 +11,7 @@
 
 #include "vast/die.h"
 #include "vast/concept/serializable/caf/adapters.h"
+#include "vast/util/assert.h"
 
 namespace vast {
 
@@ -117,7 +117,7 @@ namespace detail {
 template <typename T>
 void polymorphic_serialize(caf::serializer& sink, T const* x)
 {
-  assert(x != nullptr);
+  VAST_ASSERT(x != nullptr);
   auto uti = caf::uniform_typeid(typeid(*x), true);
   if (uti == nullptr)
     die("unannounced type");

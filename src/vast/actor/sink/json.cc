@@ -1,8 +1,8 @@
-#include <cassert>
-
 #include "vast/actor/sink/json.h"
 #include "vast/io/algorithm.h"
+#include "vast/util/assert.h"
 #include "vast/util/json.h"
+
 
 namespace vast {
 namespace sink {
@@ -11,7 +11,7 @@ json::json(std::unique_ptr<io::output_stream> out)
   : base<json>{"json-sink"},
     out_{std::move(out)}
 {
-  assert(out_ != nullptr);
+  VAST_ASSERT(out_ != nullptr);
 }
 
 bool json::process(event const& e)

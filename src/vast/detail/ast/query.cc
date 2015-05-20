@@ -1,6 +1,7 @@
-#include "vast/detail/ast/query.h"
-
 #include <boost/variant/apply_visitor.hpp>
+
+#include "vast/detail/ast/query.h"
+#include "vast/util/assert.h"
 
 namespace vast {
 namespace detail {
@@ -14,7 +15,7 @@ struct folder : public boost::static_visitor<data>
     switch (op)
     {
       default:
-        assert(! "unary expression folder not yet implemented");
+        VAST_ASSERT(! "unary expression folder not yet implemented");
         return {};
         // TODO: implement VAST operations.
         //case positive:
@@ -33,7 +34,7 @@ struct folder : public boost::static_visitor<data>
     switch (op)
     {
       default:
-        assert(! "binary expression folder not yet implemented");
+        VAST_ASSERT(! "binary expression folder not yet implemented");
         return {};
         // TODO: implement VAST operations.
         //case bitwise_or:

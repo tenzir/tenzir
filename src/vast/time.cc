@@ -3,8 +3,10 @@
 #include <mutex>
 #include <sstream>
 #include <iomanip>
+
 #include "vast/config.h"
 #include "vast/logger.h"
+#include "vast/util/assert.h"
 #include "vast/util/json.h"
 
 namespace vast {
@@ -360,8 +362,8 @@ bool is_leap_year(int year)
 
 int days_in_month(int year, int month)
 {
-  assert(month >= 0);
-  assert(month < 12);
+  VAST_ASSERT(month >= 0);
+  VAST_ASSERT(month < 12);
   int days = days_per_month[month];
   // A February of a leap year has an extra day.
   if (month == 1 && is_leap_year(year))
@@ -371,8 +373,8 @@ int days_in_month(int year, int month)
 
 int days_from(int year, int month, int n)
 {
-  assert(month >= 0);
-  assert(month < 12);
+  VAST_ASSERT(month >= 0);
+  VAST_ASSERT(month < 12);
   auto days = 0;
   if (n > 0)
   {
@@ -435,8 +437,8 @@ std::tm make_tm()
 
 void propagate(std::tm &t)
 {
-  assert(t.tm_mon >= 0);
-  assert(t.tm_year >= 0);
+  VAST_ASSERT(t.tm_mon >= 0);
+  VAST_ASSERT(t.tm_year >= 0);
   if (t.tm_sec >= 60)
   {
     t.tm_min += t.tm_sec / 60;

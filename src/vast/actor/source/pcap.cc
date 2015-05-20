@@ -1,10 +1,12 @@
-#include "vast/actor/source/pcap.h"
-
 #include <netinet/in.h>
+
 #include <thread>
+
 #include "vast/event.h"
 #include "vast/filesystem.h"
+#include "vast/actor/source/pcap.h"
 #include "vast/detail/packet_type.h"
+#include "vast/util/assert.h"
 #include "vast/util/byte_swap.h"
 
 namespace vast {
@@ -184,7 +186,7 @@ result<event> pcap::extract()
 
   if (layer4_proto == IPPROTO_TCP)
   {
-    assert(layer4);
+    VAST_ASSERT(layer4);
     auto orig_p = *reinterpret_cast<uint16_t const*>(layer4);
     auto resp_p = *reinterpret_cast<uint16_t const*>(layer4 + 2);
     orig_p = util::byte_swap<network_endian, host_endian>(orig_p);
@@ -197,7 +199,7 @@ result<event> pcap::extract()
   }
   else if (layer4_proto == IPPROTO_UDP)
   {
-    assert(layer4);
+    VAST_ASSERT(layer4);
     auto orig_p = *reinterpret_cast<uint16_t const*>(layer4);
     auto resp_p = *reinterpret_cast<uint16_t const*>(layer4 + 2);
     orig_p = util::byte_swap<network_endian, host_endian>(orig_p);
@@ -209,7 +211,7 @@ result<event> pcap::extract()
   }
   else if (layer4_proto == IPPROTO_ICMP)
   {
-    assert(layer4);
+    VAST_ASSERT(layer4);
     auto message_type = *reinterpret_cast<uint8_t const*>(layer4);
     auto message_code = *reinterpret_cast<uint8_t const*>(layer4 + 1);
     conn.sport = {message_type, port::icmp};
@@ -274,7 +276,7 @@ result<event> pcap::extract()
 
     auto unif2 = std::uniform_int_distribution<size_t>{0, bucket_size - 1};
     auto offset = unif2(generator_);
-    assert(offset < bucket_size);
+    VAST_ASSERT(offset < bucket_size);
     auto begin = flows_.begin(bucket);
     for (size_t n = 0; n < offset; ++n)
       ++begin;

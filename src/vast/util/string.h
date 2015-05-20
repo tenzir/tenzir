@@ -1,10 +1,11 @@
 #ifndef VAST_UTIL_STRING_H
 #define VAST_UTIL_STRING_H
 
-#include <cassert>
 #include <algorithm>
 #include <string>
 #include <vector>
+
+#include "vast/util/assert.h"
 
 namespace vast {
 namespace util {
@@ -56,7 +57,7 @@ split(Iterator begin, Iterator end, std::string const& sep,
       std::string const& esc = "", size_t max_splits = -1,
       bool include_sep = false)
 {
-  assert(! sep.empty());
+  VAST_ASSERT(! sep.empty());
   std::vector<std::pair<Iterator, Iterator>> pos;
   size_t splits = 0;
   auto i = begin;

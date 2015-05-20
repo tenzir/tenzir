@@ -1,11 +1,11 @@
 #ifndef VAST_UTIL_CACHE
 #define VAST_UTIL_CACHE
 
-#include <cassert>
 #include <functional>
 #include <list>
 #include <unordered_map>
 
+#include "vast/util/assert.h"
 #include "vast/util/iterator.h"
 
 namespace vast {
@@ -60,7 +60,7 @@ public:
 
   T evict()
   {
-    assert(! tracker_.empty());
+    VAST_ASSERT(! tracker_.empty());
     T victim{std::move(tracker_.front())};
     tracker_.pop_front();
     return victim;
@@ -185,7 +185,7 @@ public:
   cache(size_t capacity = 100)
     : capacity_{capacity}
   {
-    assert(capacity_ > 0);
+    VAST_ASSERT(capacity_ > 0);
   }
 
   /// Sets a callback for elements to be evicted.
@@ -269,7 +269,7 @@ public:
   /// @pre `c > 0`
   void capacity(size_t c)
   {
-    assert(c > 0);
+    VAST_ASSERT(c > 0);
     auto victims = std::min(cache_.size(), capacity_ - c);
     for (size_t i = 0; i < victims; ++i)
       evict();
@@ -319,7 +319,7 @@ private:
   void evict()
   {
     auto i = cache_.find(policy_.evict());
-    assert(i != cache_.end());
+    VAST_ASSERT(i != cache_.end());
     if (on_evict_)
       on_evict_(i->first, i->second.first);
     cache_.erase(i);

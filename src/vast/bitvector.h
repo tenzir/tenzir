@@ -1,11 +1,12 @@
 #ifndef VAST_BITVECTOR_H
 #define VAST_BITVECTOR_H
 
-#include <cassert>
 #include <limits>
 #include <string>
 #include <vector>
+
 #include "vast/trial.h"
+#include "vast/util/assert.h"
 #include "vast/util/operators.h"
 #include "vast/util/iterator.h"
 
@@ -117,8 +118,8 @@ public:
       : bits_{&bits},
         i_{off}
     {
-      assert(bits_);
-      assert(! bits_->empty());
+      VAST_ASSERT(bits_);
+      VAST_ASSERT(! bits_->empty());
     }
 
     bool equals(bit_iterator_base const& other) const
@@ -128,13 +129,13 @@ public:
 
     void increment()
     {
-      assert(i_ != npos);
+      VAST_ASSERT(i_ != npos);
       ++i_;
     }
 
     void decrement()
     {
-      assert(i_ != npos);
+      VAST_ASSERT(i_ != npos);
       --i_;
     }
 
@@ -150,8 +151,8 @@ public:
            reference
          >
     {
-      assert(bits_);
-      assert(i_ != npos);
+      VAST_ASSERT(bits_);
+      VAST_ASSERT(i_ != npos);
       return const_cast<Bitvector&>(*bits_)[i_];
     }
 
@@ -213,8 +214,8 @@ public:
     ones_iterator_base(Bitvector& bits, bool forward)
       : bits_{&bits}
     {
-      assert(bits_);
-      assert(! bits_->empty());
+      VAST_ASSERT(bits_);
+      VAST_ASSERT(! bits_->empty());
       i_ = forward ? bits_->find_first() : bits_->find_last();
     }
 
@@ -225,14 +226,14 @@ public:
 
     void increment()
     {
-      assert(bits_);
+      VAST_ASSERT(bits_);
       i_ = bits_->find_next(i_);
     }
 
     void decrement()
     {
-      assert(bits_);
-      assert(i_ != npos);
+      VAST_ASSERT(bits_);
+      VAST_ASSERT(i_ != npos);
       i_ = bits_->find_prev(i_);
     }
 
@@ -243,8 +244,8 @@ public:
            reference
          >
     {
-      assert(bits_);
-      assert(i_ != npos);
+      VAST_ASSERT(bits_);
+      VAST_ASSERT(i_ != npos);
       return const_cast<Bitvector&>(*bits_)[i_];
     }
 

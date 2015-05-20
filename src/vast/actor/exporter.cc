@@ -5,6 +5,7 @@
 #include "vast/actor/exporter.h"
 #include "vast/expr/evaluator.h"
 #include "vast/expr/resolver.h"
+#include "vast/util/assert.h"
 
 using namespace caf;
 
@@ -20,7 +21,7 @@ exporter::exporter(expression ast, query_options opts)
   {
     VAST_DEBUG(this, "got index hit covering", '[' << hits.find_first() << ','
                << (hits.find_last() + 1) << ')');
-    assert(! hits.all_zeros() && (hits & hits_).count() == 0);
+    VAST_ASSERT(! hits.all_zeros() && (hits & hits_).count() == 0);
     total_hits_ += hits.count();
     hits_ |= hits;
     unprocessed_ = hits_ - processed_;
@@ -48,7 +49,7 @@ exporter::exporter(expression ast, query_options opts)
 
   auto complete = [=]
   {
-    assert(current_sender() == this);
+    VAST_ASSERT(current_sender() == this);
     auto runtime = time::snapshot() - start_time_;
     for (auto& s : sinks_)
       send(s, id_, done_atom::value, runtime);
@@ -143,7 +144,7 @@ exporter::exporter(expression ast, query_options opts)
                  (chk.base() + chk.events()) << ")");
       inflight_ = false;
       chunk_ = chk;
-      assert(! reader_);
+      VAST_ASSERT(! reader_);
       reader_ = std::make_unique<chunk::reader>(chunk_);
       VAST_DEBUG(this, "becomes extracting");
       become(extracting_);
@@ -169,13 +170,13 @@ exporter::exporter(expression ast, query_options opts)
     [=](extract_atom)
     {
       VAST_DEBUG(this, "extracts events (" << requested_, "requested)");
-      assert(reader_);
-      assert(requested_ > 0);
+      VAST_ASSERT(reader_);
+      VAST_ASSERT(requested_ > 0);
       // We construct a new mask for each extraction request, because hits may
       // continuously update in every state.
       bitstream_type mask{chunk_.meta().ids};
       mask &= unprocessed_;
-      assert(mask.count() > 0);
+      VAST_ASSERT(mask.count() > 0);
       // Go through the current chunk and perform a candidate check for a hit,
       // and relay the event to the sink on success.
       uint64_t n = 0;
@@ -235,7 +236,7 @@ exporter::exporter(expression ast, query_options opts)
       mask -= partial;
       VAST_DEBUG(this, "extracted", n, "events " << partial.count() << '/'
                  << mask.count(), "processed/remaining hits)");
-      assert(! mask.empty());
+      VAST_ASSERT(! mask.empty());
       if (! mask.all_zeros())
       {
         // We continue extracting until we have processed all requested
@@ -255,8 +256,8 @@ exporter::exporter(expression ast, query_options opts)
       {
         // No in-flight chunk implies that we have no more unprocessed hits,
         // because arrival of new hits automatically triggers prefetching.
-        assert(! unprocessed_.empty());
-        assert(unprocessed_.all_zeros());
+        VAST_ASSERT(! unprocessed_.empty());
+        VAST_ASSERT(unprocessed_.all_zeros());
         VAST_DEBUG(this, "becomes idle (no in-flight chunks)");
         become(idle_);
         if (progress_ == 1.0 && unprocessed_.count() == 0)

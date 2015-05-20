@@ -1,10 +1,10 @@
 #ifndef VAST_UTIL_INTERVAL_MAP_H
 #define VAST_UTIL_INTERVAL_MAP_H
 
-#include <cassert>
 #include <map>
 #include <tuple>
 
+#include "vast/util/assert.h"
 #include "vast/util/iterator.h"
 
 namespace vast {
@@ -71,7 +71,7 @@ public:
   /// @returns `true` on success.
   bool insert(Point l, Point r, Value v)
   {
-    assert(l < r);
+    VAST_ASSERT(l < r);
     auto lb = map_.lower_bound(l);
     if (locate(l, lb) == map_.end() && (lb == map_.end() || r <= left(lb)))
       return map_.emplace(l, std::make_pair(r, std::move(v))).second;
@@ -88,7 +88,7 @@ public:
   /// @returns `true` on success.
   bool inject(Point l, Point r, Value v)
   {
-    assert(l < r);
+    VAST_ASSERT(l < r);
     if (map_.empty())
       return emplace(l, r, std::move(v));
     auto i = map_.lower_bound(l);

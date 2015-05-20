@@ -6,6 +6,8 @@
 #include <caf/event_based_actor.hpp>
 #include <caf/send.hpp>
 #include <caf/to_string.hpp>
+
+#include "vast/util/assert.h"
 #include "vast/actor/atoms.h"
 
 namespace caf {
@@ -31,7 +33,7 @@ inline std::ostream& operator<<(std::ostream& out, abstract_actor const& a)
 template <typename Stream>
 inline Stream& operator<<(Stream& out, actor const* a)
 {
-  assert(a != nullptr);
+  VAST_ASSERT(a != nullptr);
   out << *a;
   return out;
 }
@@ -39,7 +41,7 @@ inline Stream& operator<<(Stream& out, actor const* a)
 template <typename Stream>
 inline Stream& operator<<(Stream& out, abstract_actor const* a)
 {
-  assert(a != nullptr);
+  VAST_ASSERT(a != nullptr);
   out << *a;
   return out;
 }
@@ -163,7 +165,7 @@ inline std::ostream& operator<<(std::ostream& out, default_actor const& a)
 template <typename Stream>
 inline Stream& operator<<(Stream& out, default_actor const* a)
 {
-  assert(a != nullptr);
+  VAST_ASSERT(a != nullptr);
   out << *a;
   return out;
 }

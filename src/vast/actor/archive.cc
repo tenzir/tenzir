@@ -3,6 +3,7 @@
 #include "vast/actor/archive.h"
 #include "vast/concept/serializable/chunk.h"
 #include "vast/concept/serializable/io.h"
+#include "vast/util/assert.h"
 
 namespace vast {
 
@@ -15,7 +16,7 @@ archive::archive(path dir, size_t capacity, size_t max_segment_size)
     max_segment_size_{max_segment_size},
     cache_{capacity}
 {
-  assert(max_segment_size_ > 0);
+  VAST_ASSERT(max_segment_size_ > 0);
   trap_exit(true);
 }
 
@@ -124,7 +125,7 @@ caf::behavior archive::make_behavior()
             VAST_DEBUG(this, "delivers chunk for event", eid);
             return make_message((*s)[i]);
           }
-        assert(! "segment must contain looked up id");
+        VAST_ASSERT(! "segment must contain looked up id");
       }
       VAST_WARN(this, "no segment for id", eid);
       return make_message(empty_atom::value, eid);
@@ -147,7 +148,7 @@ trial<void> archive::store(segment s)
   {
     auto first = chk.meta().ids.find_first();
     auto last = chk.meta().ids.find_last();
-    assert(first != invalid_event_id && last != invalid_event_id);
+    VAST_ASSERT(first != invalid_event_id && last != invalid_event_id);
     segments_.inject(first, last + 1, id);
   }
   cache_.insert(std::move(id), std::move(s));

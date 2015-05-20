@@ -4,6 +4,7 @@
 #include <type_traits>
 
 #include "vast/io/stream.h"
+#include "vast/util/assert.h"
 #include "vast/util/byte_swap.h"
 #include "vast/util/buffer.h"
 #include "vast/util/coding.h"
@@ -179,7 +180,7 @@ public:
         buffer_.size() >= util::varbyte::size(*x))
     {
       n = util::varbyte::encode(*x, buffer_.get());
-      assert(n == util::varbyte::size(*x));
+      VAST_ASSERT(n == util::varbyte::size(*x));
       buffer_.advance(n);
       return n;
     }

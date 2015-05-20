@@ -1,6 +1,6 @@
-#include "vast/actor/source/test.h"
-
 #include "vast/event.h"
+#include "vast/actor/source/test.h"
+#include "vast/util/assert.h"
 #include "vast/util/meta.h"
 #include "vast/util/hash/murmur.h"
 
@@ -236,7 +236,7 @@ test::test(event_id id, uint64_t events)
     events_{events},
     generator_{std::random_device{}()}
 {
-  assert(events_ > 0);
+  VAST_ASSERT(events_ > 0);
   static auto builtin_schema = R"schema(
     type test = record
     {
@@ -253,7 +253,7 @@ test::test(event_id id, uint64_t events)
     }
   )schema";
   auto t = to<schema>(builtin_schema);
-  assert(t);
+  VAST_ASSERT(t);
   set(*t);
 }
 
@@ -264,7 +264,7 @@ schema test::sniff()
 
 void test::set(schema const& sch)
 {
-  assert(! sch.empty());
+  VAST_ASSERT(! sch.empty());
   schema_ = sch;
   next_ = schema_.begin();
   for (auto& t : schema_)
@@ -288,14 +288,14 @@ void test::set(schema const& sch)
       }
       bp.data = std::move(*u);
     }
-    assert(! bp.data.empty());
+    VAST_ASSERT(! bp.data.empty());
     blueprints_[t] = std::move(bp);
   }
 }
 
 result<event> test::extract()
 {
-  assert(next_ != schema_.end());
+  VAST_ASSERT(next_ != schema_.end());
   // Generate random data.
   auto& bp = blueprints_[*next_];
   randomizer<std::mt19937_64>{bp.dists, generator_}(bp.data);
@@ -307,7 +307,7 @@ result<event> test::extract()
   // Advance to next type in schema.
   if (++next_ == schema_.end())
     next_ = schema_.begin();
-  assert(events_ > 0);
+  VAST_ASSERT(events_ > 0);
   if (--events_ == 0)
     done(true);
   return std::move(e);

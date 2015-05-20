@@ -34,7 +34,7 @@ bitvector::reference::reference(block_type& block, block_type i)
   : block_(block)
   , mask_(block_type{1} << i)
 {
-  assert(i < block_width);
+  VAST_ASSERT(i < block_width);
 }
 
 bitvector::reference& bitvector::reference::flip()
@@ -187,8 +187,8 @@ bitvector& bitvector::operator<<=(size_type n)
     auto div = n / block_width;
     auto r = bit_index(n);
     auto b = &bits_[0];
-    assert(blocks() >= 1);
-    assert(div <= last);
+    VAST_ASSERT(blocks() >= 1);
+    VAST_ASSERT(div <= last);
 
     if (r != 0)
     {
@@ -221,8 +221,8 @@ bitvector& bitvector::operator>>=(size_type n)
     auto div = n / block_width;
     auto r = bit_index(n);
     auto b = &bits_[0];
-    assert(blocks() >= 1);
-    assert(div <= last);
+    VAST_ASSERT(blocks() >= 1);
+    VAST_ASSERT(div <= last);
 
     if (r != 0)
     {
@@ -244,7 +244,7 @@ bitvector& bitvector::operator>>=(size_type n)
 
 bitvector& bitvector::operator&=(bitvector const& other)
 {
-  assert(size() >= other.size());
+  VAST_ASSERT(size() >= other.size());
   for (size_type i = 0; i < other.blocks(); ++i)
     bits_[i] &= other.bits_[i];
   return *this;
@@ -252,7 +252,7 @@ bitvector& bitvector::operator&=(bitvector const& other)
 
 bitvector& bitvector::operator|=(bitvector const& other)
 {
-  assert(size() >= other.size());
+  VAST_ASSERT(size() >= other.size());
   for (size_type i = 0; i < other.blocks(); ++i)
     bits_[i] |= other.bits_[i];
   return *this;
@@ -260,7 +260,7 @@ bitvector& bitvector::operator|=(bitvector const& other)
 
 bitvector& bitvector::operator^=(bitvector const& other)
 {
-  assert(size() >= other.size());
+  VAST_ASSERT(size() >= other.size());
   for (size_type i = 0; i < other.blocks(); ++i)
     bits_[i] ^= other.bits_[i];
   return *this;
@@ -268,7 +268,7 @@ bitvector& bitvector::operator^=(bitvector const& other)
 
 bitvector& bitvector::operator-=(bitvector const& other)
 {
-  assert(size() >= other.size());
+  VAST_ASSERT(size() >= other.size());
   for (size_type i = 0; i < other.blocks(); ++i)
     bits_[i] &= ~other.bits_[i];
   return *this;
@@ -331,7 +331,7 @@ void bitvector::push_back(bool bit)
 
 void bitvector::append(block_type block, size_type bits)
 {
-  assert(bits <= block_width);
+  VAST_ASSERT(bits <= block_width);
   auto used = extra_bits();
   auto unused = block_width - used;
   auto masked_block = bits == block_width ? block : block & ~(all_one << bits);
@@ -357,7 +357,7 @@ void bitvector::append(bitvector const& other)
 
 bitvector& bitvector::set(size_type i, bool bit)
 {
-  assert(i < num_bits_);
+  VAST_ASSERT(i < num_bits_);
 
   if (bit)
     bits_[block_index(i)] |= bit_mask(i);
@@ -376,7 +376,7 @@ bitvector& bitvector::set()
 
 bitvector& bitvector::reset(size_type i)
 {
-  assert(i < num_bits_);
+  VAST_ASSERT(i < num_bits_);
   bits_[block_index(i)] &= ~bit_mask(i);
   return *this;
 }
@@ -389,14 +389,14 @@ bitvector& bitvector::reset()
 
 bitvector& bitvector::toggle(size_type i)
 {
-  assert(i < num_bits_);
+  VAST_ASSERT(i < num_bits_);
   bits_[block_index(i)] ^= bit_mask(i);
   return *this;
 }
 
 bitvector& bitvector::flip(size_type start)
 {
-  assert(start < size());
+  VAST_ASSERT(start < size());
 
   auto first = block_index(start);
   bits_[first] = flip(bits_[first], bit_index(start));
@@ -410,13 +410,13 @@ bitvector& bitvector::flip(size_type start)
 
 bitvector::const_reference bitvector::operator[](size_type i) const
 {
-  assert(i < num_bits_);
+  VAST_ASSERT(i < num_bits_);
   return (bits_[block_index(i)] & bit_mask(i)) != 0;
 }
 
 bitvector::reference bitvector::operator[](size_type i)
 {
-  assert(i < num_bits_);
+  VAST_ASSERT(i < num_bits_);
   return {bits_[block_index(i)], bit_index(i)};
 }
 
@@ -514,25 +514,25 @@ block_type& bitvector::block_at_bit(size_type i)
 
 block_type bitvector::first_block() const
 {
-  assert(! bits_.empty());
+  VAST_ASSERT(! bits_.empty());
   return bits_.front();
 }
 
 block_type& bitvector::first_block()
 {
-  assert(! bits_.empty());
+  VAST_ASSERT(! bits_.empty());
   return bits_.front();
 }
 
 block_type bitvector::last_block() const
 {
-  assert(! bits_.empty());
+  VAST_ASSERT(! bits_.empty());
   return bits_.back();
 }
 
 block_type& bitvector::last_block()
 {
-  assert(! bits_.empty());
+  VAST_ASSERT(! bits_.empty());
   return bits_.back();
 }
 
@@ -568,7 +568,7 @@ bool operator==(bitvector const& x, bitvector const& y)
 
 bool operator<(bitvector const& x, bitvector const& y)
 {
-  assert(x.size() == y.size());
+  VAST_ASSERT(x.size() == y.size());
   for (size_type r = x.blocks(); r > 0; --r)
   {
     auto i = r - 1;

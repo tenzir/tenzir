@@ -1,10 +1,11 @@
 #ifndef VAST_IO_BUFFER_H
 #define VAST_IO_BUFFER_H
 
-#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <type_traits>
+
+#include "vast/util/assert.h"
 #include "vast/util/operators.h"
 
 namespace vast {
@@ -58,7 +59,7 @@ public:
 
   byte_type* at(size_t offset) const
   {
-    assert(offset < size_);
+    VAST_ASSERT(offset < size_);
     return data_ + offset;
   }
 

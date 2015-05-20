@@ -28,6 +28,7 @@
 #include "vast/actor/source/test.h"
 #include "vast/expr/normalize.h"
 #include "vast/io/file_stream.h"
+#include "vast/util/assert.h"
 #include "vast/util/endpoint.h"
 #include "vast/util/posix.h"
 #include "vast/util/string.h"
@@ -593,7 +594,7 @@ behavior node::make_behavior()
           return error{"not yet implemented"};
         }
       });
-      assert(result);
+      VAST_ASSERT(result);
       return std::move(*result);
     },
     on("send", val<std::string>, "run")
@@ -715,7 +716,7 @@ behavior node::make_behavior()
       scoped_actor self;
       auto key = "topology/" + src_label + '/' + snk_label;
       self->sync_send(store_, delete_atom::value, key).await(
-        [](uint64_t n) { assert(n == 1); }
+        [](uint64_t n) { VAST_ASSERT(n == 1); }
       );
       return make_message(ok_atom::value);
     },

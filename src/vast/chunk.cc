@@ -7,6 +7,7 @@
 #include "vast/concept/serializable/std/array.h"
 #include "vast/concept/serializable/std/string.h"
 #include "vast/concept/state/event.h"
+#include "vast/util/assert.h"
 
 namespace vast {
 
@@ -50,7 +51,7 @@ bool chunk::writer::write(event const& e)
   auto t = type_cache_.find(e.type());
   if (t == type_cache_.end())
   {
-    assert(! meta_->schema.find_type(e.type().name()));
+    VAST_ASSERT(! meta_->schema.find_type(e.type().name()));
     if (! meta_->schema.add(e.type()))
       return false;
     auto type_id = static_cast<uint32_t>(type_cache_.size());
@@ -184,7 +185,7 @@ std::vector<event> chunk::uncompress() const
   for (uint64_t i = 0; i < events(); ++i)
   {
     auto e = r.read();
-    assert(e);
+    VAST_ASSERT(e);
     result[i] = std::move(*e);
   }
   return result;

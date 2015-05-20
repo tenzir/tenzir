@@ -4,7 +4,9 @@
 #include <cstddef>
 #include <cassert>
 #include <type_traits>
+
 #include "vast/config.h"
+#include "vast/util/assert.h"
 #include "vast/util/operators.h"
 
 namespace vast {
@@ -47,7 +49,7 @@ public:
   /// @returns A pointer to the allocated chunk.
   char* allocate(size_t n)
   {
-    assert(pointer_in_buffer(ptr_) && "allocator has outlived arena");
+    VAST_ASSERT(pointer_in_buffer(ptr_) && "allocator has outlived arena");
     if (static_cast<size_t>(buf_ + N - ptr_) >= n)
     {
       auto r = ptr_;
@@ -63,7 +65,7 @@ public:
   /// @param n The size of the chunk *p* points to.
   void deallocate(char* p, size_t n) noexcept
   {
-    assert(pointer_in_buffer(ptr_) && "allocator has outlived arena");
+    VAST_ASSERT(pointer_in_buffer(ptr_) && "allocator has outlived arena");
     if (! pointer_in_buffer(p))
       ::operator delete(p);
     else if (p + n == ptr_)

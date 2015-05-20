@@ -2,9 +2,11 @@
 #define VAST_ACTOR_SOURCE_BASE_H
 
 #include <caf/all.hpp>
+
 #include "vast/event.h"
 #include "vast/chunk.h"
 #include "vast/actor/actor.h"
+#include "vast/util/assert.h"
 #include "vast/util/result.h"
 
 namespace vast {
@@ -240,7 +242,7 @@ private:
   void send_events()
   {
     using namespace caf;
-    assert(! events_.empty());
+    VAST_ASSERT(! events_.empty());
     VAST_VERBOSE(this, "produced", events_.size(), "events");
     auto& sink = sinks_[next_sink_++ % sinks_.size()];
     send(chunkifier_, std::move(events_), sink);

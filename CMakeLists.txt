@@ -151,7 +151,6 @@ endif ()
 find_package(Gperftools QUIET)
 if (GPERFTOOLS_FOUND)
   set(VAST_HAVE_GPERFTOOLS true)
-  set(VAST_HAVE_TCMALLOC ${ENABLE_PERFTOOLS_HEAP})
   include_directories(BEFORE ${GPERFTOOLS_INCLUDE_DIR})
 endif ()
 
@@ -213,7 +212,8 @@ display(PCAP_FOUND ${PCAP_INCLUDE_DIR} pcap_summary)
 display(GPERFTOOLS_FOUND ${GPERFTOOLS_INCLUDE_DIR} perftools_summary)
 display(DOXYGEN_FOUND yes doxygen_summary)
 display(MD2MAN_FOUND yes md2man_summary)
-display(VAST_USE_PERFTOOLS_HEAP_PROFILER yes tcmalloc_summary)
+display(VAST_USE_TCMALLOC yes tcmalloc_summary)
+display(VAST_ENABLE_ASSERTIONS yes assertions_summary)
 display(ASAN_FOUND yes asan_summary)
 # Display the right include directory based on wheter we pointed to a CAF build
 # directory or to an install prefix.
@@ -229,6 +229,7 @@ set(build_summary
     "\n"
     "\nBuild type:           ${CMAKE_BUILD_TYPE}"
     "\nShow time report:     ${time_report_summary}"
+    "\nAssertions:           ${assertions_summary}"
     "\nLog level:            ${log_level_summary}"
     "\n"
     "\nCC:                   ${CMAKE_C_COMPILER}"

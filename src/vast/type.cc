@@ -1,6 +1,6 @@
 #include "vast/type.h"
-
 #include "vast/value.h"
+#include "vast/util/assert.h"
 #include "vast/util/json.h"
 
 namespace vast {
@@ -19,7 +19,6 @@ struct deriver
   {
     static_assert(type::is_basic<type::from_data<T>>::value,
                   "only basic types allowed");
-
     return type::from_data<T>{};
   }
 
@@ -591,8 +590,7 @@ struct finder
     : mode_{m},
       key_{k}
   {
-    assert(! key_.empty());
-
+    VAST_ASSERT(! key_.empty());
     if (! init.empty())
       trace_.push_back(init);
   }
@@ -712,23 +710,18 @@ type::record type::record::unflatten() const
   for (auto& f : fields_)
   {
     auto names = util::to_strings(util::split(f.name, "."));
-    assert(! names.empty());
-
+    VAST_ASSERT(! names.empty());
     record* r = &result;
     for (size_t i = 0; i < names.size() - 1; ++i)
     {
       if (r->fields_.empty() || r->fields_.back().name != names[i])
         r->fields_.emplace_back(std::move(names[i]), type{record{}});
-
       r = get<record>(r->fields_.back().type);
     }
-
     r->fields_.emplace_back(std::move(names.back()) , f.type);
   }
-
   std::vector<std::vector<record*>> rs(1);
   rs.back().push_back(&result);
-
   auto more = true;
   while (more)
   {
@@ -737,17 +730,14 @@ type::record type::record::unflatten() const
       for (auto& f : current->fields_)
         if (auto r = get<record>(f.type))
           next.push_back(r);
-
     if (next.empty())
       more = false;
     else
       rs.push_back(std::move(next));
   }
-
   for (auto r = rs.rbegin(); r != rs.rend(); ++r)
     for (auto i : *r)
       i->initialize();
-
   return result;
 }
 

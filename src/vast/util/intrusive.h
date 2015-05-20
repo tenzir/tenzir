@@ -2,9 +2,10 @@
 #define VAST_UTIL_INTRUSIVE_H
 
 #include <atomic>
-#include <cassert>
 #include <iosfwd>
 #include <functional>
+
+#include "vast/util/assert.h"
 
 namespace vast {
 namespace util {
@@ -160,13 +161,13 @@ public:
 
   T& operator*() const
   {
-    assert(ptr_ != nullptr);
+    VAST_ASSERT(ptr_ != nullptr);
     return *ptr_;
   }
 
   T* operator->() const
   {
-    assert(ptr_ != nullptr);
+    VAST_ASSERT(ptr_ != nullptr);
     return ptr_;
   }
 

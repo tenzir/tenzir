@@ -2,6 +2,7 @@
 #include "vast/type.h"
 #include "vast/actor/sink/bro.h"
 #include "vast/io/algorithm.h"
+#include "vast/util/assert.h"
 #include "vast/util/string.h"
 
 using namespace std::string_literals;
@@ -14,7 +15,7 @@ constexpr char const* bro::format;
 std::string bro::make_header(type const& t)
 {
   auto r = get<type::record>(t);
-  assert(r);
+  VAST_ASSERT(r);
   std::string h;
   h += "#separator"s + ' ' + util::byte_escape(std::string{sep}) + '\n';
   h += "#set_separator"s + sep + set_separator + '\n';
@@ -166,7 +167,7 @@ bool bro::process(event const& e)
     if (i != streams_.end())
     {
       os = i->second.get();
-      assert(os != nullptr);
+      VAST_ASSERT(os != nullptr);
     }
     else
     {
@@ -196,7 +197,7 @@ bool bro::process(event const& e)
       os = i.first->second.get();
     }
   }
-  assert(os != nullptr);
+  VAST_ASSERT(os != nullptr);
   auto str = visit(value_printer{}, e);
   str += '\n';
   return io::copy(str.begin(), str.end(), *os) && os->flush();

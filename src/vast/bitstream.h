@@ -2,7 +2,9 @@
 #define VAST_BITSTREAM_H
 
 #include <algorithm>
+
 #include "vast/bitvector.h"
+#include "vast/util/assert.h"
 #include "vast/util/operators.h"
 #include "vast/util/meta.h"
 #include "vast/util/range.h"
@@ -189,7 +191,7 @@ public:
   /// @returns `true` on success.
   bool append_block(block_type block, size_type bits = block_width)
   {
-    assert(bits <= block_width);
+    VAST_ASSERT(bits <= block_width);
     if (npos - bits < size())
       return false;
     derived().append_block_impl(block, bits);
@@ -240,7 +242,7 @@ public:
   /// @returns The bit value of the last bit.
   bool back() const
   {
-    assert(! empty());
+    VAST_ASSERT(! empty());
     return derived().back_impl();
   }
 
@@ -259,7 +261,7 @@ public:
   size_type find_next(size_type i) const
   {
     auto r = derived().find_next_impl(i);
-    assert(r > i || r == npos);
+    VAST_ASSERT(r > i || r == npos);
     return r;
   }
 
@@ -278,7 +280,7 @@ public:
   size_type find_prev(size_type i) const
   {
     auto r = derived().find_prev_impl(i);
-    assert(r < i || r == npos);
+    VAST_ASSERT(r < i || r == npos);
     return r;
   }
 
@@ -287,7 +289,7 @@ public:
   /// @pre `! empty()`
   bool all_zeros() const
   {
-    assert(! empty());
+    VAST_ASSERT(! empty());
     return find_first() == npos;
   }
 
@@ -296,7 +298,7 @@ public:
   /// @pre `! empty()`
   bool all_ones() const
   {
-    assert(! empty());
+    VAST_ASSERT(! empty());
     return find_first() == size() - 1;
   }
 

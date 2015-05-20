@@ -85,6 +85,10 @@ endif ()
 
 set(libvast_libs lz4 ${CAF_LIBRARIES})
 
+if (VAST_ENABLE_ASSERTIONS)
+  set(libvast_libs ${libvast_libs} execinfo)
+endif ()
+
 if (PCAP_FOUND)
   set(libvast_libs ${libvast_libs} ${PCAP_LIBRARIES})
 endif ()

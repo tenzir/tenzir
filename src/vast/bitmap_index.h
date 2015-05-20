@@ -5,6 +5,7 @@
 #include "vast/operator.h"
 #include "vast/optional.h"
 #include "vast/value.h"
+#include "vast/util/assert.h"
 #include "vast/util/operators.h"
 #include "vast/util/trial.h"
 
@@ -339,7 +340,7 @@ private:
 
     for (size_t i = 0; i < length; ++i)
     {
-      assert(this->size() >= bitmaps_[i].size());
+      VAST_ASSERT(this->size() >= bitmaps_[i].size());
       auto delta = this->size() - bitmaps_[i].size();
       if (delta > 0 && ! bitmaps_[i].stretch(delta))
         return false;

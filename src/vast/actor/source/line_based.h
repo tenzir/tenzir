@@ -6,6 +6,7 @@
 #include "vast/actor/source/base.h"
 #include "vast/io/getline.h"
 #include "vast/io/stream.h"
+#include "vast/util/assert.h"
 
 namespace vast {
 namespace source {
@@ -35,7 +36,7 @@ protected:
     : base<Derived>{name},
       input_stream_{std::move(is)}
   {
-    assert(input_stream_ != nullptr);
+    VAST_ASSERT(input_stream_ != nullptr);
   }
 
   /// Advances to the next non-empty line in the file.

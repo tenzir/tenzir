@@ -1,13 +1,13 @@
 #include "vast/data.h"
-
-#include "vast/util/json.h"
 #include "vast/offset.h"
+#include "vast/util/assert.h"
+#include "vast/util/json.h"
 
 namespace vast {
 
 data const& record::each::range_state::operator*() const
 {
-  assert(! trace.empty());
+  VAST_ASSERT(! trace.empty());
   return *trace.back();
 }
 
@@ -168,7 +168,7 @@ bool data::evaluate(data const& lhs, relational_operator op, data const& rhs)
   switch (op)
   {
     default:
-      assert(! "missing case");
+      VAST_ASSERT(! "missing case");
       return false;
     case match:
       return visit(match_visitor{}, lhs, rhs);

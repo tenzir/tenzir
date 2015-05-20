@@ -4,6 +4,8 @@
 #include <cstring> // memcpy
 #include <type_traits>
 
+#include "vast/util/assert.h"
+
 namespace vast {
 namespace util {
 
@@ -47,7 +49,7 @@ public:
   std::enable_if_t<std::is_const<U>::value>
   read(void* data, size_t n)
   {
-    assert(n <= size());
+    VAST_ASSERT(n <= size());
     std::memcpy(reinterpret_cast<byte_type*>(data), start_, n);
     advance(n);
   }
@@ -56,7 +58,7 @@ public:
   std::enable_if_t<!std::is_const<U>::value>
   write(void const* data, size_t n)
   {
-    assert(n <= size());
+    VAST_ASSERT(n <= size());
     std::memcpy(start_, reinterpret_cast<const_byte_type*>(data), n);
     advance(n);
   }

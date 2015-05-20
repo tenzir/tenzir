@@ -1,7 +1,7 @@
-#include "vast/io/array_stream.h"
-
 #include <algorithm>
-#include <cassert>
+
+#include "vast/io/array_stream.h"
+#include "vast/util/assert.h"
 
 namespace vast {
 namespace io {
@@ -21,7 +21,7 @@ bool array_input_stream::next(void const** data, size_t* size)
     last_size_ = 0;
     return false;
   }
-  assert(position_ < size_);
+  VAST_ASSERT(position_ < size_);
   last_size_ = std::min(block_size_, size_ - position_);
   *data = data_ + position_;
   *size = last_size_;
@@ -72,7 +72,7 @@ bool array_output_stream::next(void** data, size_t* size)
     last_size_ = 0;
     return false;
   }
-  assert(position_ < size_);
+  VAST_ASSERT(position_ < size_);
   last_size_ = std::min(block_size_, size_ - position_);
   *data = data_ + position_;
   *size = last_size_;

@@ -177,7 +177,7 @@ std::string json_unescape(std::string const& str)
         break;
     }
   }
-  assert(i == last);
+  VAST_ASSERT(i == last);
   return unesc;
 }
 
