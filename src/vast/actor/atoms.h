@@ -7,6 +7,7 @@ namespace vast {
 
 // Inherited from CAF
 using caf::delete_atom;
+using caf::flush_atom;
 using caf::get_atom;
 using caf::ok_atom;
 using caf::put_atom;
@@ -28,7 +29,6 @@ using empty_atom = caf::atom_constant<caf::atom("empty")>;
 using enable_atom = caf::atom_constant<caf::atom("enable")>;
 using exists_atom = caf::atom_constant<caf::atom("exists")>;
 using extract_atom = caf::atom_constant<caf::atom("extract")>;
-using flush_atom = caf::atom_constant<caf::atom("flush")>;
 using historical_atom = caf::atom_constant<caf::atom("historical")>;
 using id_atom = caf::atom_constant<caf::atom("id")>;
 using key_atom = caf::atom_constant<caf::atom("key")>;
