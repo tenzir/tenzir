@@ -41,7 +41,6 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --with-boost=PATH       path to Boost install root
 
   Optional packages in non-standard locations:
-    --with-editline=PATH    path to editline install root
     --with-perftools=PATH   path to gperftools install root
     --with-pcap=PATH        path to libpcap install root
     --with-doxygen=PATH     path to Doxygen install root
@@ -144,9 +143,6 @@ while [ $# -ne 0 ]; do
       ;;
     --with-pcap=*)
       append_cache_entry PCAP_ROOT_DIR PATH "$optarg"
-      ;;
-    --with-editline=*)
-      append_cache_entry EDITLINE_ROOT_DIR PATH "$optarg"
       ;;
     --with-perftools=*)
       append_cache_entry Gperftools_ROOT_DIR PATH "$optarg"

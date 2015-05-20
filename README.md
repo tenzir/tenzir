@@ -83,7 +83,6 @@ Required dependencies:
 Optional:
 
 - [libpcap](http://www.tcpdump.org)
-- [libedit](http://thrysoee.dk/editline)
 - [gperftools](http://code.google.com/p/google-perftools)
 - [Doxygen](http://www.doxygen.org)
 

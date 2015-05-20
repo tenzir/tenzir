@@ -80,13 +80,6 @@ if (PCAP_FOUND)
     actor/source/pcap.cc)
 endif ()
 
-if (EDITLINE_FOUND)
-  set(libvast_sources ${libvast_sources}
-    actor/console.cc
-    util/command_line.cc
-    util/editline.cc)
-endif ()
-
 set(libvast_libs lz4 ${CAF_LIBRARIES})
 
 if (PCAP_FOUND)
@@ -95,10 +88,6 @@ endif ()
 
 if (BROCCOLI_FOUND)
   set(libvast_libs ${libvast_libs} ${BROCCOLI_LIBRARIES})
-endif ()
-
-if (EDITLINE_FOUND)
-  set(libvast_libs ${libvast_libs} ${EDITLINE_LIBRARIES})
 endif ()
 
 # Always link with -lprofile if we have Gperftools.

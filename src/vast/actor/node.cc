@@ -38,10 +38,6 @@
 #include "vast/actor/source/pcap.h"
 #endif
 
-#ifdef VAST_HAVE_EDITLINE
-#include "vast/actor/console.h"
-#endif
-
 using namespace caf;
 using namespace std::string_literals;
 

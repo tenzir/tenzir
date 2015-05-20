@@ -145,18 +145,6 @@ if (PCAP_FOUND)
   include_directories(${PCAP_INCLUDE_DIR})
 endif ()
 
-if (NOT EDITLINE_ROOT_DIR AND VAST_PREFIX)
-  set(EDITLINE_ROOT_DIR ${VAST_PREFIX})
-endif ()
-find_package(Editline QUIET)
-if (EDITLINE_FOUND)
-  if (EDITLINE_VERSION_MAJOR LESS 2 OR EDITLINE_VERSION_MINOR LESS 11)
-    message(FATAL_ERROR "libedit too old: ${EDITLINE_VERSION}, need >= 2.11")
-  endif ()
-  set(VAST_HAVE_EDITLINE true)
-  include_directories(${EDITLINE_INCLUDE_DIR})
-endif ()
-
 if (NOT Gperftools_ROOT_DIR AND VAST_PREFIX)
   set(Gperftools_ROOT_DIR ${VAST_PREFIX})
 endif ()
@@ -222,8 +210,6 @@ else ()
 endif ()
 display(CAF_FOUND ${caf_dir} caf_summary)
 display(PCAP_FOUND ${PCAP_INCLUDE_DIR} pcap_summary)
-set(editline_display "${EDITLINE_INCLUDE_DIR} (${EDITLINE_VERSION})")
-display(EDITLINE_FOUND ${editline_display} editline_summary)
 display(GPERFTOOLS_FOUND ${GPERFTOOLS_INCLUDE_DIR} perftools_summary)
 display(DOXYGEN_FOUND yes doxygen_summary)
 display(MD2MAN_FOUND yes md2man_summary)
@@ -252,7 +238,6 @@ set(build_summary
     "\nBoost:                ${Boost_INCLUDE_DIR}"
     "\nCAF:                  ${caf_summary}"
     "\nPCAP:                 ${pcap_summary}"
-    "\nEditline:             ${editline_summary}"
     "\nGperftools:           ${perftools_summary}"
     "\nDoxygen:              ${doxygen_summary}"
     "\nmd2man:               ${md2man_summary}"
