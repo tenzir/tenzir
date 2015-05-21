@@ -9,37 +9,19 @@ forensics and incident response.
 
 ## Synopsis
 
-Import a PCAP trace in one shot:
+Start a VAST node with debug log verbosity in the foreground and spawn all core
+actors:
 
-    zcat *.log.gz | vast -I bro
-    vast -C -I pcap < trace.pcap
+    vastd -l 5 -f -c
+
+Import [Bro](http://www.bro.org) logs or a PCAP trace in one shot:
+
+    zcat *.log.gz | vast import bro
+    vast import pcap -r trace.pcap
 
 Query VAST and get the result back as PCAP trace:
 
-    vast -E bro -q -e 'sport > 60000/tcp && src !in 10.0.0.0/8'
-
-In a distributed setup start a VAST *core*:
-
-    vast -C
-
-Import [Bro](http://www.bro.org) logs and send them to the core:
-
-    zcat *.log.gz | vast -I bro
-
-Run a historical query, asking for activity in the past, at most 100 results,
-printed as Bro conn.log:
-
-    vast -E bro -l 100 -q -e '&type == "conn" && :addr in 192.168.0.0/24'
-
-Run a continuous query, subscribing to all future matches:
-
-    vast -E bro -c -e 'conn.id.orig_h == 6.6.6.6'
-
-Start the interactive console and submit a query:
-
-    vast -Q
-    > ask
-    ? &time > now - 2d && :string == "http"
+    vast export pcap -h sport > 60000/tcp && src !in 10.0.0.0/8
 
 ## Resources
 
@@ -85,6 +67,7 @@ Optional:
 - [libpcap](http://www.tcpdump.org)
 - [gperftools](http://code.google.com/p/google-perftools)
 - [Doxygen](http://www.doxygen.org)
+- [md2man](https://github.com/sunaku/md2man)
 
 #### FreeBSD
 
@@ -92,7 +75,7 @@ VAST development primarily takes place on FreeBSD because it ships with a C++14
 compiler and provides all dependencies natively, which one can install as
 follows:
 
-    pkg install cmake boost-libs caf libedit google-perftools
+    pkg install cmake boost-libs caf google-perftools
 
 #### Linux
 
@@ -102,7 +85,7 @@ compiler out of the box. On recent Debian-based distributions (e.g., Ubuntu
 packages:
 
     apt-get install cmake clang-3.5 libc++-dev libc++abi-dev \
-      libboost-dev libpcap-dev libedit-dev libgoogle-perftools-dev
+      libboost-dev libpcap-dev libgoogle-perftools-dev
 
 CAF still needs manual installation.
 
