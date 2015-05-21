@@ -25,24 +25,44 @@ TEST("import")
   if (exists(dir))
     REQUIRE(rm(dir));
   auto n = self->spawn<node>("test-node", dir);
-  auto instruct = [&](auto&&... xs)
-  {
-    auto r = self->sync_send(n, std::forward<decltype(xs)>(xs)...);
-    r.await([](ok_atom) {});
+  // TODO: use a fixture which creates all core actors.
+  std::vector<message> msgs = {
+    make_message("spawn", "archive"),
+    make_message("spawn", "index"),
+    make_message("spawn", "importer"),
+    make_message("spawn", "identifier"),
+    make_message("spawn", "source", "bro", "-r", m57_day11_18::ftp),
+    make_message("connect", "importer", "identifier"),
+    make_message("connect", "importer", "archive"),
+    make_message("connect", "importer", "index"),
+    make_message("connect", "source", "importer"),
+    make_message("send", "source", "run")
   };
-  instruct("spawn", "archive");
-  instruct("spawn", "index");
-  instruct("spawn", "importer");
-  instruct("spawn", "identifier");
-  instruct("spawn", "source", "bro", "-r", m57_day11_18::ftp);
-  instruct("connect", "importer", "identifier");
-  instruct("connect", "importer", "archive");
-  instruct("connect", "importer", "index");
-  instruct("connect", "source", "importer");
-  instruct("send", "source", "run");
-  // FIXME: need a more reliable way to flush. Ideally after the source exits,
-  // the importer notices and sends a flush to archive and index.
-  self->delayed_send(n, std::chrono::milliseconds(250), "stop");
+  for (auto& msg : msgs)
+    self->sync_send(n, msg).await([](ok_atom) {});
+  // We first get the SOURCE, wait until it's done, then terminate IMPORTER.
+  // Thereafter, we can guarantee that ARCHIVE and INDEX have received all
+  // events.
+  self->sync_send(n, get_atom::value, "source").await(
+    [&](actor const& a, std::string const& fqn, std::string const& type)
+    {
+      CHECK(fqn == "source@test-node");
+      CHECK(type == "source");
+      REQUIRE(a != invalid_actor);
+      self->monitor(a);
+    }
+  );
+  self->receive([&](down_msg const& msg) { CHECK(msg.reason == exit::done); });
+  self->sync_send(n, get_atom::value, "importer").await(
+    [&](actor const& a, std::string const& fqn, std::string const& type)
+    {
+      CHECK(fqn == "importer@test-node");
+      CHECK(type == "importer");
+      REQUIRE(a != invalid_actor);
+      self->monitor(a);
+    }
+  );
+  self->send(n, "stop");
   self->await_all_other_actors_done();
 
   VAST_INFO("checking that indexes have been written correctly");

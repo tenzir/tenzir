@@ -128,6 +128,11 @@ behavior node::make_behavior()
     {
       return show(arg);
     },
+    [=](get_atom, std::string const& label)
+    {
+      auto s = get(label);
+      return make_message(std::move(s.actor), std::move(s.fqn), std::move(s.type));
+    },
     //
     // PRIVATE
     //
@@ -713,11 +718,11 @@ message node::connect(std::string const& source, std::string const& sink)
   // Retrieve source and sink information.
   auto src = get(source);
   auto snk = get(sink);
-  if (src.label.empty())
+  if (src.actor == invalid_actor)
     return make_message(error{"no such source: ", source});
-  if (snk.label.empty())
+  if (snk.actor == invalid_actor)
     return make_message(error{"no such sink: ", sink});
-  if (has_topology_entry(src.label, snk.label))
+  if (has_topology_entry(src.fqn, snk.fqn))
     return make_message(
         error{"connection already exists: ", source, " -> ", sink});
   // Wire actors based on their type.
@@ -757,7 +762,7 @@ message node::connect(std::string const& source, std::string const& sink)
   }
   send(src.actor, msg);
   // Create new topology entry in the store.
-  auto key = "topology/" + src.label + '/' + snk.label;
+  auto key = "topology/" + src.fqn + '/' + snk.fqn;
   scoped_actor self;
   self->sync_send(store_, put_atom::value, key).await([](ok_atom) {});
   auto del = [=](uint32_t) { anon_send(store_, delete_atom::value, key); };
@@ -771,12 +776,12 @@ message node::disconnect(std::string const& source, std::string const& sink)
   VAST_VERBOSE(this, "disconnects actors:", source, "->", sink);
   auto src = get(source);
   auto snk = get(sink);
-  if (has_topology_entry(src.label, snk.label))
+  if (has_topology_entry(src.fqn, snk.fqn))
     return make_message(
         error{"connection already exists: ", source, " -> ", sink});
   // TODO: send message that performs actual diconnection.
   scoped_actor self;
-  auto key = "topology/" + src.label + '/' + snk.label;
+  auto key = "topology/" + src.fqn + '/' + snk.fqn;
   self->sync_send(store_, delete_atom::value, key).await(
     [](uint64_t n) { VAST_ASSERT(n == 1); }
   );
@@ -809,13 +814,13 @@ message node::show(std::string const& arg)
   return make_message(std::move(result));
 }
 
-node::actor_state node::get(std::string const& str)
+node::actor_state node::get(std::string const& label)
 {
-  auto s = util::split_to_str(str, "@");
+  auto s = util::split_to_str(label, "@");
   auto& name = s.size() == 1 ? name_ : s[1];
   actor_state result;
   auto key = "actors/" + name + '/' + s[0];
-  auto fqn = s.size() == 1 ? (s[0] + '@' + name_) : str;
+  auto fqn = s.size() == 1 ? (s[0] + '@' + name_) : label;
   scoped_actor{}->sync_send(store_, get_atom::value, key).await(
     [&](actor const& a, std::string const& s) { result = {a, fqn, s}; },
     [](none) { /* nop */ }
@@ -825,7 +830,7 @@ node::actor_state node::get(std::string const& str)
 
 message node::put(actor_state const& state)
 {
-  auto key = "actors/" + name_ + "/" + state.label;
+  auto key = "actors/" + name_ + "/" + state.fqn;
   auto result = make_message(ok_atom::value);
   scoped_actor{}->sync_send(store_, put_atom::value, key, state.actor,
                             state.type).await(

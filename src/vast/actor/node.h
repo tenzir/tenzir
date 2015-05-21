@@ -36,6 +36,7 @@ struct node : default_actor
   //
   // Public message interface
   //
+
   caf::message stop();
   caf::message request_peering(std::string const& endpoint);
   caf::message spawn_actor(caf::message const& msg);
@@ -47,16 +48,17 @@ struct node : default_actor
   caf::message show(std::string const& arg);
 
   //
-  // Helper functions to synchronously interact with key-value store.
+  // Helper functions to synchronously interact with the key-value store.
   //
+
   struct actor_state
   {
     caf::actor actor;
-    std::string label;
+    std::string fqn;
     std::string type;
   };
 
-  actor_state get(std::string const& str);
+  actor_state get(std::string const& label);
   caf::message put(actor_state const& state);
   bool has_topology_entry(std::string const& src, std::string const& snk);
 
