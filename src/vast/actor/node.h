@@ -33,6 +33,33 @@ struct node : default_actor
   void on_exit();
   caf::behavior make_behavior() override;
 
+  //
+  // Public message interface
+  //
+  caf::message stop();
+  caf::message request_peering(std::string const& endpoint);
+  caf::message spawn_actor(caf::message const& msg);
+  caf::message send_run(std::string const& arg);
+  caf::message send_flush(std::string const& arg);
+  caf::message quit_actor(std::string const& arg);
+  caf::message connect(std::string const& source, std::string const& sink);
+  caf::message disconnect(std::string const& source, std::string const& sink);
+  caf::message show(std::string const& arg);
+
+  //
+  // Helper functions to synchronously interact with key-value store.
+  //
+  struct actor_state
+  {
+    caf::actor actor;
+    std::string label;
+    std::string type;
+  };
+
+  actor_state get(std::string const& str);
+  caf::message put(actor_state const& state);
+  bool has_topology_entry(std::string const& src, std::string const& snk);
+
   caf::actor accountant_;
   caf::actor store_;
   std::string name_;
