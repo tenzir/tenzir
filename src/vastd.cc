@@ -120,20 +120,18 @@ int main(int argc, char *argv[])
   // Create core ecosystem.
   if (r.opts.count("core") > 0)
   {
-    auto instruct = [&](auto&&... xs)
-    {
-      self->sync_send(n, std::forward<decltype(xs)>(xs)...).await(
-        [](ok_atom) {}
-      );
+    std::vector<caf::message> msgs = {
+      caf::make_message("spawn", "identifier"),
+      caf::make_message("spawn", "archive"),
+      caf::make_message("spawn", "index"),
+      caf::make_message("spawn", "importer"),
+      caf::make_message("connect", "importer", "identifier"),
+      caf::make_message("connect", "importer", "archive"),
+      caf::make_message("connect", "importer", "index")
     };
     // FIXME: Perform these operations asynchronously.
-    instruct("spawn", "identifier");
-    instruct("spawn", "archive");
-    instruct("spawn", "index");
-    instruct("spawn", "importer");
-    instruct("connect", "importer", "identifier");
-    instruct("connect", "importer", "archive");
-    instruct("connect", "importer", "index");
+    for (auto& msg : msgs)
+      self->sync_send(n, msg).await([](ok_atom) {});
   }
   auto exit_code = 0;
   try
