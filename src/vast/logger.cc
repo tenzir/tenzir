@@ -1,3 +1,4 @@
+#include <ctime>
 #include <iomanip>
 #include <iostream>
 #include <fstream>
@@ -10,6 +11,7 @@
 #include "vast/util/color.h"
 #include "vast/util/queue.h"
 #include "vast/util/string.h"
+#include "vast/util/system.h"
 
 namespace vast {
 namespace {
@@ -86,15 +88,34 @@ std::string prettify(char const* pretty_func)
 
 struct logger::impl
 {
+  impl()
+  {
+    auto start = std::to_string(std::time(nullptr));
+    auto pid = std::to_string(util::process_id());
+    auto lvl = static_cast<logger::level>(VAST_LOG_LEVEL);
+    if (! file(lvl, "vast-log-" + start + '-' + pid + ".log"))
+      throw std::runtime_error{"failed to default-initialize logger"};
+  }
+
   bool file(level verbosity, std::string const& filename)
   {
-    file_level_ = verbosity;
-    auto p = path{filename};
-    if (file_level_ != quiet && ! log_file_.is_open())
+    // Close and delete existing file first.
+    if (log_file_.is_open())
     {
-      if (! exists(p) && ! exists(p.parent()) && ! mkdir(p.parent()))
+      auto empty = log_file_.tellp() == 0;
+      log_file_.close();
+      if (empty)
+        rm(filename_);
+    }
+    // Set new log file.
+    file_level_ = verbosity;
+    filename_ = filename;
+    if (file_level_ != quiet)
+    {
+      if (! filename_.parent().empty() && ! exists(filename_.parent())
+          && ! mkdir(filename_.parent()))
         return false;
-      log_file_.open(p.str());
+      log_file_.open(filename_.str());
       if (! log_file_)
         return false;
     }
@@ -132,8 +153,11 @@ struct logger::impl
       // been filtered out beforehand.
       if (m.lvl() == quiet)
       {
-        if (log_file_)
+        auto empty = log_file_.tellp() == 0;
+        if (log_file_.is_open())
           log_file_.close();
+        if (empty)
+          rm(filename_);
         return;
       }
       // If the message contains newlines, split it up into multiple ones to
@@ -193,8 +217,9 @@ struct logger::impl
     log_thread_.join();
   }
 
-  level console_level_;
-  level file_level_;
+  level console_level_ = logger::quiet;
+  level file_level_ = logger::quiet;
+  path filename_;
   std::ofstream log_file_;
   bool console_ = false;
   bool colorized_ = false;
@@ -366,11 +391,6 @@ logger::tracer::~tracer()
 }
 
 
-logger::logger()
-{
-  impl_ = std::make_unique<impl>();
-}
-
 bool logger::file(level verbosity, std::string const& filename)
 {
   return instance()->impl_->file(verbosity, filename);
@@ -383,13 +403,11 @@ bool logger::console(level verbosity, bool colorized)
 
 void logger::log(message msg)
 {
-  VAST_ASSERT(instance()->impl_);
   instance()->impl_->log(std::move(msg));
 }
 
 bool logger::takes(logger::level lvl)
 {
-  VAST_ASSERT(instance()->impl_);
   return instance()->impl_->takes(lvl);
 }
 
@@ -415,7 +433,7 @@ logger* logger::create()
 
 void logger::initialize()
 {
-  /* Nothing to do. */
+  impl_ = std::make_unique<impl>();
 }
 
 void logger::destroy()

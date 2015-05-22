@@ -142,7 +142,7 @@ private:
   struct impl;
 
   /// Default-constructs a logger.
-  logger();
+  logger() = default;;
 
   // Singleton implementation.
   static logger* create();
