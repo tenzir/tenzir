@@ -1,12 +1,11 @@
-#include "framework/unit.h"
-
 #include "vast/util/range_map.h"
 
-SUITE("util")
+#define SUITE util
+#include "test.h"
 
 using namespace vast::util;
 
-TEST("range_map insertion")
+TEST(range_map insertion)
 {
   range_map<int, std::string> rm;
   CHECK(rm.insert(42, 84, "foo"));
@@ -44,13 +43,14 @@ TEST("range_map insertion")
   CHECK(*std::get<2>(t) == "foo");
 }
 
-TEST("range_map injection")
+TEST(range_map injection)
 {
   range_map<size_t, char> rm;
   CHECK(rm.inject(50, 60, 'a'));
   CHECK(rm.inject(80, 90, 'b'));
   CHECK(rm.inject(20, 30, 'c'));
-  // Contained within intervals
+
+  MESSAGE("checking contained intervals");
   CHECK(! rm.inject(51, 59, 'a'));
   CHECK(! rm.inject(50, 59, 'a'));
   CHECK(! rm.inject(50, 60, 'a'));
@@ -60,7 +60,8 @@ TEST("range_map injection")
   CHECK(! rm.inject(21, 29, 'c'));
   CHECK(! rm.inject(20, 29, 'c'));
   CHECK(! rm.inject(20, 30, 'c'));
-  // Overlapping intervals
+
+  MESSAGE("checking overlapping intervals");
   CHECK(! rm.inject(15, 25, 'c'));
   CHECK(! rm.inject(15, 31, 'c'));
   CHECK(! rm.inject(25, 35, 'c'));
@@ -70,13 +71,15 @@ TEST("range_map injection")
   CHECK(! rm.inject(75, 85, 'b'));
   CHECK(! rm.inject(75, 95, 'b'));
   CHECK(! rm.inject(85, 95, 'b'));
-  // Wrong values
+
+  MESSAGE("checking wrong values");
   CHECK(! rm.inject(0, 21, 'b'));
   CHECK(! rm.inject(25, 33, 'b'));
   CHECK(! rm.inject(25, 55, 'a'));
   CHECK(! rm.inject(45, 55, 'b'));
   CHECK(! rm.inject(85, 95, 'c'));
-  // Insertion on the very left.
+
+  MESSAGE("inserting on very left");
   CHECK(rm.inject(18, 20, 'c'));
   CHECK(rm.inject(10, 15, 'c'));
   CHECK(rm.inject(15, 18, 'c'));
@@ -85,7 +88,8 @@ TEST("range_map injection")
   CHECK(std::get<1>(i) == 30);
   REQUIRE(std::get<2>(i));
   CHECK(*std::get<2>(i) == 'c');
-  // Insertion between left and middle.
+
+  MESSAGE("inserting between left and middle");
   CHECK(rm.inject(48, 50, 'a'));
   CHECK(rm.inject(40, 45, 'a'));
   CHECK(rm.inject(45, 48, 'a'));
@@ -94,14 +98,16 @@ TEST("range_map injection")
   CHECK(std::get<1>(i) == 60);
   REQUIRE(std::get<2>(i));
   CHECK(*std::get<2>(i) == 'a');
-  // Insertion between middle and right.
+
+  MESSAGE("inserting between middle and right");
   CHECK(rm.inject(75, 80, 'b'));
   i = rm.find(80);
   CHECK(std::get<0>(i) == 75);
   CHECK(std::get<1>(i) == 90);
   REQUIRE(std::get<2>(i));
   CHECK(*std::get<2>(i) == 'b');
-  // Insertion between on the very right.
+
+  MESSAGE("inserting on very right");
   CHECK(rm.inject(90, 92, 'b'));
   CHECK(rm.inject(95, 99, 'b'));
   CHECK(rm.inject(92, 95, 'b'));
@@ -110,7 +116,7 @@ TEST("range_map injection")
   CHECK(std::get<1>(i) == 99);
 }
 
-TEST("range_map erasure")
+TEST(range_map erasure)
 {
   range_map<size_t, char> rm;
   rm.insert(50, 60, 'a');
@@ -119,26 +125,30 @@ TEST("range_map erasure")
   auto i = rm.lookup(50);
   REQUIRE(i);
   CHECK(*i == 'a');
-  // Erase nothing.
+
+  MESSAGE("erasing nothing");
   rm.erase(40, 50);
   i = rm.lookup(50);
   REQUIRE(i);
   CHECK(*i == 'a');
-  // Adjust left.
+
+  MESSAGE("adjusting left");
   rm.erase(40, 52);
   i = rm.lookup(51);
   CHECK(! i);
   i = rm.lookup(52);
   REQUIRE(i);
   CHECK(*i == 'a');
-  // Adjust right.
+
+  MESSAGE("adjusting right");
   rm.erase(58, 70);
   i = rm.lookup(58);
   CHECK(! i);
   i = rm.lookup(57);
   REQUIRE(i);
   CHECK(*i == 'a');
-  // Erase middle.
+
+  MESSAGE("erasing middle");
   rm.erase(54, 56);
   i = rm.lookup(53);
   REQUIRE(i);
@@ -150,7 +160,8 @@ TEST("range_map erasure")
   i = rm.lookup(56);
   REQUIRE(i);
   CHECK(*i == 'a');
-  // Erase multiple entirely.
+
+  MESSAGE("erasing multiple entirely");
   rm.erase(45, 65);
   i = rm.lookup(53);
   CHECK(! i);

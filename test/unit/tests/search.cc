@@ -1,11 +1,11 @@
-#include "framework/unit.h"
 #include "vast/util/search.h"
 
 using namespace vast;
 
-SUITE("util")
+#define SUITE util
+#include "test.h"
 
-TEST("boyer-moore")
+TEST(boyer-moore)
 {
   std::string needle = "foo";
   std::string haystack = "hello foo world";
@@ -33,7 +33,7 @@ TEST("boyer-moore")
     CHECK(bm(haystack.begin() + i, haystack.end()) == haystack.end());
 }
 
-TEST("knuth-morris-pratt")
+TEST(knuth-morris-pratt)
 {
   std::string needle = "foo";
   std::string haystack = "hello foo world";

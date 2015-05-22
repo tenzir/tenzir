@@ -1,10 +1,8 @@
-#include "framework/unit.h"
-
 #include "vast/util/factory.h"
 
-using namespace vast;
+#include "test.h"
 
-SUITE("util")
+using namespace vast;
 
 struct base
 {
@@ -20,13 +18,13 @@ struct derived : public base
   }
 };
 
-TEST("value factories")
+TEST(value_factories)
 {
   util::factory<int, util::value_construction> int_factory;
   CHECK(int_factory(42) == 42);
 }
 
-TEST("pointer factories")
+TEST(pointer_factories)
 {
   util::factory<std::string, util::bare_pointer_construction> string_factory;
   std::string foo{"foo"};
@@ -36,7 +34,7 @@ TEST("pointer factories")
   CHECK(*double_factory(4.2) == 4.2);
 }
 
-TEST("polymorphic factories")
+TEST(polymorphic_factories)
 {
   util::polymorphic_factory<base, std::string> poly_factory;
   poly_factory.announce<derived<42>>("foo");

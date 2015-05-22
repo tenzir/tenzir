@@ -1,59 +1,35 @@
 #include <caf/all.hpp>
+
 #include "vast/chunk.h"
 #include "vast/event.h"
 #include "vast/query_options.h"
 #include "vast/actor/index.h"
 
-#include "framework/unit.h"
+#define SUITE actors
+#include "test.h"
+#include "fixtures/chunks.h"
 
 using namespace caf;
 using namespace vast;
 
-SUITE("actors")
+FIXTURE_SCOPE(chunk_scope, fixtures::chunks)
 
-TEST("index")
+TEST(index)
 {
   using bitstream_type = index::bitstream_type;
 
-  // TODO create a test fixture for this and share with partition test.
-  VAST_INFO("creating test chunks");
-  auto t0 = type::record{{"c", type::count{}}, {"s", type::string{}}};
-  t0.name("test_record_event");
-  auto t1 = type::real{};
-  t1.name("test_double_event");
-  chunk chk0;
-  chunk::writer w0{chk0};
-  for (size_t i = 0; i < 1024; ++i)
-  {
-    auto e = event::make(record{i, to_string(i)}, t0);
-    e.id(i);
-    e.timestamp(time::now());
-    REQUIRE(w0.write(e));
-  }
-  w0.flush();
-  chunk chk1;
-  chunk::writer w1{chk1};
-  for (size_t i = chk0.events(); i < chk0.events() + 500; ++i)
-  {
-    auto e = event::make(4.2 + i, t1);
-    e.id(i);
-    e.timestamp(time::now());
-    REQUIRE(w1.write(e));
-  }
-  w1.flush();
-
-  VAST_INFO("sending chunks to index");
+  MESSAGE("sending chunks to index");
   path dir = "vast-test-index";
   scoped_actor self;
   auto idx = self->spawn<vast::index, priority_aware>(dir, 500, 2, 3);
-  self->send(idx, chk0);
-  self->send(idx, chk1);
+  self->send(idx, chunk0);
+  self->send(idx, chunk1);
 
-  VAST_INFO("flushing index through termination");
+  MESSAGE("flushing index through termination");
   self->send_exit(idx, exit::done);
   self->await_all_other_actors_done();
 
-  VAST_INFO("reloading index and running a query against it");
+  MESSAGE("reloading index and running a query against it");
   idx = self->spawn<vast::index, priority_aware>(dir, 500, 2, 3);
   auto expr = to<expression>("c >= 42 && c < 84");
   REQUIRE(expr);
@@ -67,7 +43,7 @@ TEST("index")
       task = t;
     });
 
-  VAST_INFO("getting results");
+  MESSAGE("getting results");
   bool done = false;
   bitstream_type hits;
   self->do_receive(
@@ -81,11 +57,11 @@ TEST("index")
       done = true;
     }
   ).until([&] { return done; });
-  VAST_INFO("completed hit extraction");
+  MESSAGE("completed hit extraction");
   self->receive([&](down_msg const& msg) { CHECK(msg.source == task); });
   CHECK(hits.count() == 42);
 
-  VAST_INFO("creating a continuous query");
+  MESSAGE("creating a continuous query");
   expr = to<expression>("s ni \"7\"");  // Must be normalized at this point.
   REQUIRE(expr);
   self->send(idx, *expr, continuous, self);
@@ -97,28 +73,30 @@ TEST("index")
       task = t;
     });
 
-  VAST_INFO("sending another chunk and getting continuous hits");
+  MESSAGE("sending another chunk and getting continuous hits");
   std::vector<event> events(2048);
   for (size_t i = 0; i < events.size(); ++i)
   {
     auto j = 1524 + i;
-    events[i] = event::make(record{j, to_string(j)}, t0);
+    events[i] = event::make(record{j, to_string(j)}, type0);
     events[i].id(j);
   }
   self->send(idx, chunk{std::move(events)});
   self->receive([&](bitstream_type const& bs) { CHECK(bs.count() == 549); });
 
-  VAST_INFO("disabling continuous query and sending another chunk");
+  MESSAGE("disabling continuous query and sending another chunk");
   self->send(idx, *expr, continuous_atom::value, disable_atom::value);
   self->receive([&](down_msg const& msg) { CHECK(msg.source == task); });
-  auto e = event::make(record{1337u, to_string(1337)}, t0);
+  auto e = event::make(record{1337u, to_string(1337)}, type0);
   e.id(4711);
   self->send(idx, chunk{{std::move(e)}});
   // Make sure that we didn't get any new hits.
   CHECK(self->mailbox().count() == 0);
 
-  VAST_INFO("cleaning up");
+  MESSAGE("cleaning up");
   self->send_exit(idx, exit::done);
   self->await_all_other_actors_done();
   rm(dir);
 }
+
+FIXTURE_SCOPE_END()

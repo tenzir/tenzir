@@ -3,35 +3,34 @@
 #include "vast/none.h"
 #include "vast/actor/key_value_store.h"
 
-#include "framework/unit.h"
+#define SUITE actors
+#include "test.h"
 
 using namespace caf;
 using namespace vast;
 
-SUITE("core")
-
-TEST("key-value store")
+TEST(key_value_store)
 {
   scoped_actor self;
   auto s = self->spawn<key_value_store>();
-  VAST_INFO("put two values");
+  MESSAGE("put two values");
   self->sync_send(s, put_atom::value, "/foo/bar", 42).await(
     [&](ok_atom) { /* nop */ }
   );
   self->sync_send(s, put_atom::value, "/foo/baz", 84).await(
     [&](ok_atom) { /* nop */ }
   );
-  VAST_INFO("get a key with a single value");
+  MESSAGE("get a key with a single value");
   self->sync_send(s, get_atom::value, "/foo/bar").await(
     [&](int value) { CHECK(value == 42); },
     others() >> [&] { REQUIRE(false); }
   );
-  VAST_INFO("get an invalid key value");
+  MESSAGE("get an invalid key value");
   self->sync_send(s, get_atom::value, "/foo/corge").await(
     [&](vast::none) { REQUIRE(true); },
     others() >> [&] { REQUIRE(false); }
   );
-  VAST_INFO("get multiple values");
+  MESSAGE("get multiple values");
   self->sync_send(s, list_atom::value, "/foo").await(
     [&](std::map<std::string, message> const& map)
     {
@@ -42,14 +41,14 @@ TEST("key-value store")
     },
     others() >> [&] { REQUIRE(false); }
   );
-  VAST_INFO("delete a key");
+  MESSAGE("delete a key");
   self->sync_send(s, delete_atom::value, "/foo/bar").await(
     [&](uint64_t n) { CHECK(n == 1); }
   );
   self->sync_send(s, exists_atom::value, "/foo/bar").await(
     [&](bool b) { CHECK(! b); }
   );
-  VAST_INFO("delete a value");
+  MESSAGE("delete a value");
   self->sync_send(s, put_atom::value, "/foo/qux", "quuuux").await(
     [&](ok_atom) { /* nop */ }
   );
@@ -59,21 +58,23 @@ TEST("key-value store")
   self->sync_send(s, exists_atom::value, "/foo/baz").await(
     [&](bool b) { CHECK(! b); }
   );
-  VAST_INFO("put/get an empty value");
+  MESSAGE("put/get an empty value");
   self->sync_send(s, put_atom::value, "meow").await(
     [&](ok_atom) { /* nop */ }
   );
   self->sync_send(s, get_atom::value, "meow").await(
     others() >> [&] { REQUIRE(true); }
   );
+  self->send_exit(s, exit::done);
+  self->await_all_other_actors_done();
 }
 
-TEST("key-value store (distributed)")
+TEST(key_value_store_distributed)
 {
   scoped_actor self;
   auto s1 = self->spawn<key_value_store>();
   auto s2 = self->spawn<key_value_store>();
-  VAST_INFO("setup peeering");
+  MESSAGE("setup peeering");
   self->sync_send(s1, peer_atom::value, s2).await(
     [](ok_atom) { /* nop */ }
   );
@@ -82,12 +83,12 @@ TEST("key-value store (distributed)")
   // commit globally, which is why we have to wait in the form of sleeping
   // until the data is available at all peers.
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
-  VAST_INFO("get value from peer");
+  MESSAGE("get value from peer");
   self->sync_send(s2, get_atom::value, "foo").await(
     [&](int value) { CHECK(value == 42); },
     others() >> [&] { REQUIRE(false); }
   );
-  VAST_INFO("insert value in peer and get it from other");
+  MESSAGE("insert value in peer and get it from other");
   self->sync_send(s2, put_atom::value, "bar", 84).await([](ok_atom) {});
   // Give some time to propagate the value to the peer.
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -95,4 +96,7 @@ TEST("key-value store (distributed)")
     [&](int value) { CHECK(value == 84); },
     others() >> [&] { REQUIRE(false); }
   );
+  self->send_exit(s1, exit::done);
+  self->send_exit(s2, exit::done);
+  self->await_all_other_actors_done();
 }

@@ -1,14 +1,13 @@
-#include "vast/util/json.h"
 #include "vast/util/convert.h"
+#include "vast/util/json.h"
 
-#include "framework/unit.h"
+#define SUITE util
+#include "test.h"
 
 using namespace vast;
 using namespace util;
 
-SUITE("util")
-
-TEST("JSON construction/assignment")
+TEST(JSON_construction_assignment)
 {
   CHECK(which(json{}) == json::type::null);
   CHECK(which(json{nil}) == json::type::null);
@@ -53,7 +52,7 @@ TEST("JSON construction/assignment")
   CHECK(is<json::object>(j));
 }
 
-TEST("JSON total order")
+TEST(JSON_total_order)
 {
   json j0{true};
   json j1{false};
@@ -76,7 +75,7 @@ TEST("JSON total order")
   CHECK(j0 >= j1);
 }
 
-TEST("JSON printing")
+TEST(JSON_printing)
 {
   std::string str;
   auto out = std::back_inserter(str);
@@ -165,7 +164,7 @@ TEST("JSON printing")
   str.clear();
 }
 
-TEST("JSON conversion")
+TEST(JSON_conversion)
 {
   auto t = to<json>(true);
   REQUIRE(t);

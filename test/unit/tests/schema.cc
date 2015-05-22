@@ -1,17 +1,16 @@
-#include "framework/unit.h"
-
 #include "vast/filesystem.h"
 #include "vast/schema.h"
 #include "vast/concept/serializable/schema.h"
 #include "vast/concept/serializable/io.h"
 #include "vast/util/convert.h"
 
-SUITE("schema")
+#define SUITE schema
+#include "test.h"
 
 using namespace vast;
 
 #define DEFINE_SCHEMA_TEST_CASE(name, input)                        \
-  TEST(#name)                                                       \
+  TEST(name)                                                        \
   {                                                                 \
     auto contents = load_contents(input);                           \
     REQUIRE(contents);                                              \
@@ -31,9 +30,9 @@ using namespace vast;
   }
 
 // Contains the test case defintions for all taxonomy test files.
-#include "test/unit/schema_test_cases.h"
+#include "tests/schema_test_cases.h"
 
-TEST("offset finding")
+TEST(offset finding)
 {
   std::string str =
     "type a = int\n"
@@ -66,7 +65,7 @@ TEST("offset finding")
   CHECK(inner->name() == "inner");
 }
 
-TEST("merging")
+TEST(merging)
 {
   std::string str =
     "type a = int\n"
@@ -91,7 +90,7 @@ TEST("merging")
   CHECK(merged->find_type("inner"));
 }
 
-TEST("serialization")
+TEST(serialization)
 {
   schema sch, sch2;
   auto t = type::record{

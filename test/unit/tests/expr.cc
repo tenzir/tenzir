@@ -1,5 +1,3 @@
-#include "framework/unit.h"
-
 #include "vast/event.h"
 #include "vast/expression.h"
 #include "vast/logger.h"
@@ -10,11 +8,12 @@
 #include "vast/concept/serializable/expression.h"
 #include "vast/concept/serializable/io.h"
 
+#define SUITE expression
+#include "test.h"
+
 using namespace vast;
 
-SUITE("expression")
-
-TEST("construction")
+TEST(construction)
 {
   predicate p0{time_extractor{}, less_equal,
                data{time::point::utc(1983, 8, 12)}};
@@ -29,7 +28,7 @@ TEST("construction")
   CHECK(*get<data>(get<predicate>(c->at(1))->rhs) == "foo");
 }
 
-TEST("serialization")
+TEST(serialization)
 {
   predicate p0{event_extractor{}, in, data{"foo"}};
   predicate p1{type_extractor{}, equal, data{time::point::utc(1983, 8, 12)}};
@@ -43,7 +42,7 @@ TEST("serialization")
   CHECK(to_string(expr), str);
 }
 
-TEST("parser tests")
+TEST(parser_tests)
 {
   // Event tags.
   CHECK(to<expression>("&type == \"foo\""));
@@ -75,7 +74,7 @@ TEST("parser tests")
   CHECK(! to<expression>(":foo == -42"));
 }
 
-TEST("event evaluation")
+TEST(event_evaluation)
 {
   std::string str =
     "type foo = record"
@@ -215,7 +214,7 @@ TEST("event evaluation")
   CHECK(is<none>(*schema_resolved));
 }
 
-TEST("AST normalization")
+TEST(AST_normalization)
 {
   VAST_INFO("ensuring extractor position on LHS");
   auto expr = to<expression>("\"foo\" in bar");

@@ -1,14 +1,13 @@
-#include "framework/unit.h"
-
 #include "vast/data.h"
 #include "vast/concept/serializable/data.h"
 #include "vast/concept/serializable/io.h"
 
+#define SUITE data
+#include "test.h"
+
 using namespace vast;
 
-SUITE("data")
-
-TEST("time::point")
+TEST(time_point)
 {
   auto t = time::point::utc(2012, 8, 12, 23, 55, 4);
 
@@ -102,7 +101,7 @@ TEST("time::point")
   CHECK(to_string(*tp) == "2014-05-01+08:45:02");
 }
 
-TEST("patterns")
+TEST(patterns)
 {
   std::string str = "1";
   CHECK(pattern("[0-9]").match(str));
@@ -128,7 +127,7 @@ TEST("patterns")
   CHECK(to_string(p) == "/(\\w+ )/");
 }
 
-TEST("addresses (IPv4)")
+TEST(addresses_IPv4)
 {
   address x;
   address y;
@@ -173,7 +172,7 @@ TEST("addresses (IPv4)")
   CHECK(to_string(b) == "192.168.0.171");
 }
 
-TEST("addresses (IPv6)")
+TEST(addresses_IPv6)
 {
   CHECK(address() == *to<address>("::"));
 
@@ -223,7 +222,7 @@ TEST("addresses (IPv6)")
   CHECK(a == *to<address>("::"));
 }
 
-TEST("subnets")
+TEST(subnets)
 {
   subnet p;
   CHECK(p.network() == *to<address>("::"));
@@ -247,7 +246,7 @@ TEST("subnets")
   CHECK(! r.contains(*to<address>("ff00::")));
 }
 
-TEST("ports")
+TEST(ports)
 {
   port p;
   CHECK(p.number() == 0u);
@@ -265,7 +264,7 @@ TEST("ports")
   CHECK(p < q);
 }
 
-TEST("tables")
+TEST(tables)
 {
   table ports{{"ssh", 22u}, {"http", 80u}, {"https", 443u}, {"imaps", 993u}};
   CHECK(ports.size() == 4);
@@ -281,7 +280,7 @@ TEST("tables")
   CHECK(! ports.emplace("http", 8080u).second);
 }
 
-TEST("records")
+TEST(records)
 {
   record r{"foo", -42, 1001u, "x", port{443, port::tcp}};
   record s{100, "bar", r};
@@ -325,13 +324,13 @@ TEST("records")
 
 // An *invalid* value has neither a type nor data.
 // This is the default-constructed state.
-TEST("invalid data")
+TEST(invalid_data)
 {
   data d;
   CHECK(is<none>(d));
 }
 
-TEST("data construction")
+TEST(construction)
 {
   CHECK(is<none>(data{}));
   CHECK(is<boolean>(data{true}));
@@ -353,7 +352,7 @@ TEST("data construction")
   CHECK(is<record>(data{record{}}));
 }
 
-TEST("relational operators")
+TEST(relational_operators)
 {
   data d1;
   data d2;
@@ -386,7 +385,7 @@ TEST("relational operators")
   CHECK(! (d1 > d2));
 }
 
-TEST("predicate evaluation")
+TEST(predicate_evaluation)
 {
   data lhs{"foo"};
   data rhs{"foobar"};
@@ -411,7 +410,7 @@ TEST("predicate evaluation")
   CHECK(data::evaluate(lhs, not_equal, rhs));
 }
 
-TEST("serialization")
+TEST(serialization)
 {
   set s;
   s.emplace(port{80, port::tcp});

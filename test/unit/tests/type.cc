@@ -1,14 +1,14 @@
-#include "framework/unit.h"
 #include "vast/data.h"
 #include "vast/type.h"
-#include "vast/concept/serializable/type.h"
 #include "vast/concept/serializable/io.h"
+#include "vast/concept/serializable/type.h"
+
+#define SUITE type
+#include "test.h"
 
 using namespace vast;
 
-SUITE("type")
-
-TEST("printing")
+TEST(printing)
 {
   CHECK(to_string(none{}) == "none");
   CHECK(to_string(type::boolean{}) == "bool");
@@ -51,7 +51,7 @@ TEST("printing")
   CHECK(to_string(a) == "qux");
 }
 
-TEST("equality comparison")
+TEST(equality comparison)
 {
   type t = type::boolean{};
   type u = type::boolean{};
@@ -78,7 +78,7 @@ TEST("equality comparison")
   CHECK(t != u);
 }
 
-TEST("congruence")
+TEST(congruence)
 {
   type s0 = type::set{type::port{}};
   type s1 = type::set{type::port{}};
@@ -96,7 +96,7 @@ TEST("congruence")
   CHECK(! congruent(b, i));
 }
 
-TEST("hashing")
+TEST(hashing)
 {
   CHECK(type{}.digest() == 3479547966);
   CHECK(type::boolean{}.digest() == 2972654956);
@@ -112,7 +112,7 @@ TEST("hashing")
   CHECK(type::port{}.digest() == 489833540);
 }
 
-TEST("serialization")
+TEST(serialization)
 {
   type s0 = type::string{{type::attribute::skip}};
   type t = type::set{type::port{}};
@@ -129,7 +129,7 @@ TEST("serialization")
   CHECK(to_string(t) == "table<count, set<port>> &skip");
 }
 
-TEST("record range")
+TEST(record range)
 {
   auto r = type::record{
     {"x", type::record{
@@ -153,7 +153,7 @@ TEST("record range")
       CHECK(i.key() == key{"y", "b"});
 }
 
-TEST("record resolving")
+TEST(record resolving)
 {
   auto r = type::record{
     {"x", type::integer{}},
@@ -190,7 +190,7 @@ TEST("record resolving")
   CHECK(k->back() == "x");
 }
 
-TEST("record flattening/unflattening")
+TEST(record flattening/unflattening)
 {
   auto x = type::record{
     {"x", type::record{
@@ -223,7 +223,7 @@ TEST("record flattening/unflattening")
   CHECK(u == x);
 }
 
-TEST("record symbol finding")
+TEST(record symbol finding)
 {
   auto r = type::record{
     {"x", type::integer{}},
@@ -299,7 +299,7 @@ TEST("record symbol finding")
   CHECK(o[2].first == c2);
 }
 
-TEST("representational equality (congruence)")
+TEST(representational equality (congruence))
 {
   auto i = type::integer{};
   i.name("i");
@@ -348,7 +348,7 @@ TEST("representational equality (congruence)")
   CHECK(congruent(a, r0));
 }
 
-TEST("type derivation")
+TEST(type derivation)
 {
   CHECK(type::derive(data{"foo"}), type::string{});
 
@@ -361,7 +361,7 @@ TEST("type derivation")
   CHECK(type::derive(record{42, 1337u, 3.1415}), r);
 }
 
-TEST("type attributes")
+TEST(type attributes)
 {
   // Attributes are key-value pairs...
   type::vector v{type::integer{}, {type::attribute::skip}};

@@ -1,12 +1,10 @@
-#include "framework/unit.h"
-
 #include "vast/offset.h"
+
+#include "test.h"
 
 using namespace vast;
 
-SUITE("core")
-
-TEST("offset printing")
+TEST(offset printing)
 {
   std::string str;
   offset o{0, 10, 8};
@@ -14,7 +12,7 @@ TEST("offset printing")
   CHECK(str == "0,10,8");
 }
 
-TEST("offset parsing")
+TEST(offset parsing)
 {
   auto str = std::string{"0,4,8,12"};
   auto lval = str.begin();

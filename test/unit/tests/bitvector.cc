@@ -1,12 +1,12 @@
-#include "framework/unit.h"
 #include "vast/bitvector.h"
 #include "vast/util/print.h"
 
+#define SUITE bitvector
+#include "test.h"
+
 using namespace vast;
 
-SUITE("bitvector")
-
-TEST("to_string")
+TEST(to_string)
 {
   bitvector a;
   bitvector b{10};
@@ -17,7 +17,7 @@ TEST("to_string")
   CHECK(to_string(c), std::string(78, '1'));
 }
 
-TEST("basic operations")
+TEST(basic_operations)
 {
   bitvector x;
   x.push_back(true);
@@ -45,7 +45,7 @@ TEST("basic operations")
   CHECK(x.size() == 3 + 16 + 8 + bitvector::block_width + 8);
 }
 
-TEST("block operations")
+TEST(block_operations)
 {
   auto ones = bitvector::all_one;
 
@@ -64,7 +64,7 @@ TEST("block operations")
   CHECK(bitvector::lowest_bit(ones & (ones - 3)) == 2);
 }
 
-TEST("bitwise operations")
+TEST(bitwise_operations)
 {
   bitvector a{6};
   CHECK(a.size() == 6);
@@ -93,7 +93,7 @@ TEST("bitwise operations")
   CHECK(to_string(b, false) == "010101");
 }
 
-TEST("backward search")
+TEST(backward_search)
 {
   bitvector x;
   x.append(0xffff);
@@ -113,7 +113,7 @@ TEST("backward search")
   CHECK(y.find_prev(59) == 55);
 }
 
-TEST("iteration")
+TEST(iteration)
 {
   bitvector x;
   x.append(0x30abffff7000ffff);
@@ -165,7 +165,7 @@ TEST("iteration")
   CHECK(j.base().position() == 55);
 }
 
-TEST("selective flipping")
+TEST(selective_flipping)
 {
   using block_type = bitvector::block_type;
   auto blk = block_type{0xffffffffffffffff};
@@ -185,7 +185,7 @@ TEST("selective flipping")
   CHECK(v == expected);
 }
 
-TEST("bitvector appending")
+TEST(bitvector_appending)
 {
   bitvector v1;
   v1.append(0xffffffffffffffff);

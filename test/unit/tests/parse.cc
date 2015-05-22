@@ -1,12 +1,11 @@
-#include "framework/unit.h"
-
 #include "vast/data.h"
+
+#define SUITE parse
+#include "test.h"
 
 using namespace vast;
 
-SUITE("parse")
-
-TEST("bool")
+TEST(bool)
 {
   char const* str = "T";
   auto start = str;
@@ -28,7 +27,7 @@ TEST("bool")
   CHECK(! parse<bool>(start, str + 1));
 }
 
-TEST("int")
+TEST(int)
 {
   auto str = "-1024";
   auto start = str;
@@ -52,7 +51,7 @@ TEST("int")
   CHECK(*i == 1337ll);
 }
 
-TEST("uint")
+TEST(uint)
 {
   auto str = "1024";
   auto start = str;
@@ -67,7 +66,7 @@ TEST("uint")
   CHECK(! parse<uint64_t>(start, end));
 }
 
-TEST("double")
+TEST(double)
 {
   auto str = "-123.456789";
   auto start = str;
@@ -89,7 +88,7 @@ TEST("double")
   CHECK(*d == -123.0);
 }
 
-TEST("time::duration")
+TEST(time::duration)
 {
   auto str = "1000ms";
   auto start = str;
@@ -113,7 +112,7 @@ TEST("time::duration")
   CHECK(*r == time::fractional(123.456789));
 }
 
-TEST("time::point")
+TEST(time::point)
 {
   auto expected = time::point::utc(2012, 8, 12, 23, 55, 4);
   std::string str("2012-08-12+23:55:04");
@@ -123,7 +122,7 @@ TEST("time::point")
   CHECK(*t == expected);
 }
 
-TEST("pattern")
+TEST(pattern)
 {
   std::string str = "/^\\w{3}\\w{3}\\w{3}$/";
   auto i = str.begin();
@@ -138,7 +137,7 @@ TEST("pattern")
   CHECK(i == str.end());
 }
 
-TEST("address")
+TEST(address)
 {
   auto str = "192.168.0.1";
   auto start = str;
@@ -156,7 +155,7 @@ TEST("address")
   CHECK(*a == *address::from_v6(str));
 }
 
-TEST("subnet")
+TEST(subnet)
 {
   auto str = "192.168.0.0/24";
   auto start = str;
@@ -173,7 +172,7 @@ TEST("subnet")
   CHECK(*s == subnet{*address::from_v6("::"), 40});
 }
 
-TEST("port")
+TEST(port)
 {
   {
     auto s = "22/tcp";
@@ -216,7 +215,7 @@ TEST("port")
   }
 }
 
-TEST("containers")
+TEST(containers)
 {
   std::string str = "{1, 2, 3}";
   auto i = str.begin();

@@ -1,10 +1,9 @@
-#include "framework/unit.h"
-
 #include "vast/util/intrusive.h"
 
-using namespace vast;
+#define SUITE util
+#include "test.h"
 
-SUITE("util")
+using namespace vast;
 
 struct T : public intrusive_base<T>
 {
@@ -13,7 +12,7 @@ struct T : public intrusive_base<T>
   std::vector<int> v{1, 2, 3, 4, 5};
 };
 
-TEST("intrusive_ptr<T> automatic reffing")
+TEST(intrusive_ptr_automatic_reffing)
 {
   intrusive_ptr<T> x;
   CHECK(! x);
@@ -30,7 +29,7 @@ TEST("intrusive_ptr<T> automatic reffing")
   CHECK(x->ref_count() == 1);
 }
 
-TEST("intrusive_ptr<T> manual reffing")
+TEST(intrusive_ptr_manual_reffing)
 {
   T* raw;
   intrusive_ptr<T> x;

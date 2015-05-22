@@ -10,7 +10,8 @@ foreach (s ${schemas})
     set (schema_test_cases "${schema_test_cases}${this}\n")
 endforeach ()
 
-configure_file(tests/schema_test_cases.h.in schema_test_cases.h)
+configure_file(tests/schema_test_cases.h.in 
+               ${CMAKE_CURRENT_BINARY_DIR}/tests/schema_test_cases.h)
 
 #
 # Generate header file that defines the paths to data.
@@ -55,7 +56,7 @@ endforeach ()
 set(test_data "${test_data}\n\n} // namespace traces")
 set(test_data "${test_data}\n\n#endif")
 
-configure_file(tests/test_data.h.in ${CMAKE_CURRENT_BINARY_DIR}/test_data.h)
+configure_file(data.h.in ${CMAKE_CURRENT_BINARY_DIR}/data.h)
 
 #
 # Configure framework
@@ -67,9 +68,8 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_BINARY_DIR})
 
-file(GLOB_RECURSE tests framework/*.cc)
-set(tests ${tests}
-  tests/actor/all-in-one.cc
+set(tests
+  tests/actor/export.cc
   tests/actor/import.cc
   tests/actor/index.cc
   tests/actor/indexer.cc
@@ -119,8 +119,8 @@ if (PCAP_FOUND)
     tests/actor/source_pcap.cc)
 endif ()
 
-add_executable(unit-test ${tests})
-target_link_libraries(unit-test libvast ${CMAKE_THREAD_LIBS_INIT})
+add_executable(vast-test main.cc ${tests})
+target_link_libraries(vast-test libvast ${CMAKE_THREAD_LIBS_INIT})
 
 #
 # Generate CMake tests
@@ -130,7 +130,7 @@ enable_testing()
 
 MACRO (make_test suite)
   string(REPLACE " " "_" test_name ${suite})
-  set(unit_test ${EXECUTABLE_OUTPUT_PATH}/unit-test)
+  set(unit_test ${EXECUTABLE_OUTPUT_PATH}/vast-test)
   add_test(${test_name} ${unit_test} -n -v 3 -s "${suite}" ${ARGN})
 ENDMACRO ()
 

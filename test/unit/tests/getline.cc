@@ -1,13 +1,12 @@
-#include "framework/unit.h"
-
 #include "vast/io/array_stream.h"
 #include "vast/io/getline.h"
 
+#define SUITE IO
+#include "test.h"
+
 using namespace vast;
 
-SUITE("I/O")
-
-TEST("getline")
+TEST(getline)
 {
   auto str = "\n1st\nline\rn3\r\nline4\nline5\n\nline6\n";
   for (size_t i = 3; i < 10; ++i)

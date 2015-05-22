@@ -1,8 +1,7 @@
-#include "framework/unit.h"
-
 #include "vast/util/iterator.h"
 
-SUITE("util")
+#define SUITE util
+#include "test.h"
 
 using namespace vast;
 
@@ -57,7 +56,7 @@ private:
   size_t i_ = N;
 };
 
-TEST("basic custom iterator")
+TEST(basic_custom_iterator)
 {
   int a[5] = { 1, 2, 3, 4, 5 };
   iterator<int, 5> begin{a}, end;
@@ -82,7 +81,7 @@ TEST("basic custom iterator")
   CHECK(begin <= end);
 }
 
-TEST("basic custom const-iterator")
+TEST(basic_custom_const_iterator)
 {
   int a[5] = { 1, 2, 3, 4, 5 };
   iterator<const int, 5> begin{a}, end;

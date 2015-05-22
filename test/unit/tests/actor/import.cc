@@ -9,63 +9,25 @@
 #include "vast/concept/serializable/chunk.h"
 #include "vast/concept/serializable/io.h"
 
-#include "framework/unit.h"
-#include "test_data.h"
+#define SUITE actors
+#include "test.h"
+#include "data.h"
+#include "fixtures/core.h"
 
 using namespace caf;
 using namespace vast;
 
-SUITE("actors")
+FIXTURE_SCOPE(core_scope, fixtures::core)
 
-TEST("import")
+TEST(import)
 {
-  VAST_INFO("inhaling a single Bro log");
-  scoped_actor self;
-  auto dir = path{"vast-test-import"};
-  if (exists(dir))
-    REQUIRE(rm(dir));
-  auto n = self->spawn<node>("test-node", dir);
-  // TODO: use a fixture which creates all core actors.
-  std::vector<message> msgs = {
-    make_message("spawn", "archive"),
-    make_message("spawn", "index"),
-    make_message("spawn", "importer"),
-    make_message("spawn", "identifier"),
-    make_message("spawn", "source", "bro", "-r", m57_day11_18::ftp),
-    make_message("connect", "importer", "identifier"),
-    make_message("connect", "importer", "archive"),
-    make_message("connect", "importer", "index"),
-    make_message("connect", "source", "importer"),
-    make_message("send", "source", "run")
-  };
-  for (auto& msg : msgs)
-    self->sync_send(n, msg).await([](ok_atom) {});
-  // We first get the SOURCE, wait until it's done, then terminate IMPORTER.
-  // Thereafter, we can guarantee that ARCHIVE and INDEX have received all
-  // events.
-  self->sync_send(n, get_atom::value, "source").await(
-    [&](actor const& a, std::string const& fqn, std::string const& type)
-    {
-      CHECK(fqn == "source@test-node");
-      CHECK(type == "source");
-      REQUIRE(a != invalid_actor);
-      self->monitor(a);
-    }
-  );
-  self->receive([&](down_msg const& msg) { CHECK(msg.reason == exit::done); });
-  self->sync_send(n, get_atom::value, "importer").await(
-    [&](actor const& a, std::string const& fqn, std::string const& type)
-    {
-      CHECK(fqn == "importer@test-node");
-      CHECK(type == "importer");
-      REQUIRE(a != invalid_actor);
-      self->monitor(a);
-    }
-  );
-  self->send(n, "stop");
+  MESSAGE("inhaling a Bro FTP log");
+  auto n = make_core();
+  run_source(n, "bro", "-r", m57_day11_18::ftp);
+  stop_core(n);
   self->await_all_other_actors_done();
 
-  VAST_INFO("checking that indexes have been written correctly");
+  MESSAGE("checking that indexes have been written correctly");
   path id_range;
   for (auto& p0 : directory{dir / "index"})
     if (p0.is_directory())
@@ -87,7 +49,7 @@ TEST("import")
   REQUIRE(abmi.size() == 2);
   REQUIRE(pbmi.size() == 2);
 
-  VAST_INFO("performing manual bitmap index lookup");
+  MESSAGE("performing manual bitmap index lookup");
   auto eq = relational_operator::equal;
   auto orig_h = abmi.lookup(eq, *to<address>("192.168.1.105"));
   auto orig_p = pbmi.lookup(greater, *to<port>("49320/?"));
@@ -98,7 +60,7 @@ TEST("import")
   CHECK((*orig_p)[0] == 1);
   CHECK((*orig_p)[1] == 0);
 
-  VAST_INFO("checking that ARCHIVE has successfully stored the segment");
+  MESSAGE("checking that ARCHIVE has successfully stored the segment");
   path segment_file;
   for (auto& p : directory{dir / "archive"})
     if (p.basename() != "meta.data")
@@ -117,7 +79,6 @@ TEST("import")
   auto rec = get<record>(*e);
   REQUIRE(e);
   CHECK(rec->at(1) == "VFU8tqz6is3");
-
-  VAST_INFO("removing temporary directory");
-  CHECK(rm(dir));
 }
+
+FIXTURE_SCOPE_END()

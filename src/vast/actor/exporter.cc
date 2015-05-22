@@ -102,7 +102,7 @@ exporter::exporter(expression ast, query_options opts)
       }
       for (auto& i : indexes_)
       {
-        VAST_DEBUG(this, "sends exporter to index" << i);
+        VAST_DEBUG(this, "sends query to index" << i);
         send(i, ast_, opts_, this);
       }
       become(idle_);
@@ -159,17 +159,22 @@ exporter::exporter(expression ast, query_options opts)
     incorporate_hits,
     [=](extract_atom, uint64_t n)
     {
+      auto all = std::numeric_limits<uint64_t>::max();
+      if (requested_ == all)
+      {
+        VAST_WARN(this, "ignores extract request, already getting all events");
+        return;
+      }
       VAST_DEBUG(this, "got request to extract",
-                 (n == 0 ? "all" : to_string(n)),
-                 "events (" << (n == 0 ? uint64_t(-1) : requested_ + n),
-                 " total)");
+                 (n == 0 ? "all" : to_string(n)), "events" <<
+                 (n == 0 ? "" : " (" + to_string(requested_ + n) + " total)"));
       if (requested_ == 0)
         send(this, extract_atom::value);
-      requested_ = n == 0 ? -1 : requested_ + n;
+      requested_ = n == 0 ? all : requested_ + n;
     },
     [=](extract_atom)
     {
-      VAST_DEBUG(this, "extracts events (" << requested_, "requested)");
+      VAST_DEBUG(this, "extracts events (" << requested_, "left)");
       VAST_ASSERT(reader_);
       VAST_ASSERT(requested_ > 0);
       // We construct a new mask for each extraction request, because hits may

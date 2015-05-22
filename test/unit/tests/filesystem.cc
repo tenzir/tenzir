@@ -1,14 +1,13 @@
-#include "framework/unit.h"
-
-#include <unistd.h>  // getpid
-#include "vast/print.h"
 #include "vast/filesystem.h"
+#include "vast/print.h"
+#include "vast/util/system.h"
+
+#define SUITE filesystem
+#include "test.h"
 
 using namespace vast;
 
-SUITE("filesystem")
-
-TEST("path operations")
+TEST(path_operations)
 {
   path p(".");
   CHECK(p.basename() == ".");
@@ -120,7 +119,7 @@ TEST("path operations")
   CHECK(pieces[4] == "foo");
 }
 
-TEST("path trimming")
+TEST(path_trimming)
 {
   path p = "/usr/local/bin/foo";
 
@@ -139,7 +138,7 @@ TEST("path trimming")
   CHECK(p.trim(-6) == p);
 }
 
-TEST("path chopping")
+TEST(path_chopping)
 {
   path p = "/usr/local/bin/foo";
 
@@ -156,13 +155,13 @@ TEST("path chopping")
   CHECK(p.chop(5) == "");
 }
 
-TEST("file/directory manipulation")
+TEST(file_and_directory_manipulation)
 {
   using std::to_string;
 
   path base = "vast-unit-test-file-system-test";
   path p("/tmp");
-  p /= base / to_string(::getpid());
+  p /= base / to_string(util::process_id());
   CHECK(! p.is_regular_file());
   CHECK(! exists(p));
   CHECK(mkdir(p));

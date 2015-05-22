@@ -1,14 +1,14 @@
-#include "framework/unit.h"
 #include "vast/bitmap_index_polymorphic.h"
 #include "vast/concept/serializable/bitmap_index_polymorphic.h"
 #include "vast/concept/serializable/io.h"
 #include "vast/util/convert.h"
 
+#define SUITE bitmap_index
+#include "test.h"
+
 using namespace vast;
 
-SUITE("bitmap index")
-
-TEST("polymorphic")
+TEST(polymorphic)
 {
   bitmap_index<null_bitstream> bmi;
   REQUIRE(! bmi);
@@ -23,7 +23,7 @@ TEST("polymorphic")
   CHECK(bmi == bmi2);
 }
 
-TEST("boolean")
+TEST(boolean)
 {
   arithmetic_bitmap_index<null_bitstream, boolean> bmi;
   REQUIRE(bmi.push_back(true));
@@ -49,7 +49,7 @@ TEST("boolean")
   CHECK(bmi == bmi2);
 }
 
-TEST("integral")
+TEST(integral)
 {
   arithmetic_bitmap_index<null_bitstream, integer> bmi;
   REQUIRE(bmi.push_back(-7));
@@ -77,7 +77,7 @@ TEST("integral")
   CHECK(bmi == bmi2);
 }
 
-TEST("floating point with binning")
+TEST(floating_point_with_binning)
 {
   arithmetic_bitmap_index<null_bitstream, real> bmi;
   bmi.binner(-2);
@@ -102,7 +102,7 @@ TEST("floating point with binning")
   CHECK(bmi == bmi2);
 }
 
-TEST("time_range")
+TEST(time_range)
 {
   arithmetic_bitmap_index<null_bitstream, time::duration> bmi;
 
@@ -135,7 +135,7 @@ TEST("time_range")
   CHECK(bmi == bmi2);
 }
 
-TEST("time_point")
+TEST(time_point)
 {
   arithmetic_bitmap_index<null_bitstream, time::point> bmi;
   bmi.binner(9);
@@ -181,7 +181,7 @@ TEST("time_point")
   CHECK(bmi == bmi2);
 }
 
-TEST("string")
+TEST(string)
 {
   string_bitmap_index<null_bitstream> bmi;
   REQUIRE(bmi.push_back("foo"));
@@ -227,7 +227,7 @@ TEST("string")
   CHECK(to_string(*bmi2.lookup(equal, "bar")) == "0100010000");
 }
 
-TEST("IP address")
+TEST(ip_address)
 {
   address_bitmap_index<null_bitstream> bmi;
   REQUIRE(bmi.push_back(*address::from_v4("192.168.0.1")));
@@ -276,7 +276,7 @@ TEST("IP address")
   CHECK(bmi == bmi2);
 }
 
-TEST("subnet")
+TEST(subnet)
 {
   subnet_bitmap_index<null_bitstream> bmi;
 
@@ -309,7 +309,7 @@ TEST("subnet")
   CHECK(bmi == bmi2);
 }
 
-TEST("port (null)")
+TEST(port_null)
 {
   port_bitmap_index<null_bitstream> bmi;
   bmi.push_back(port(80, port::tcp));
@@ -341,7 +341,7 @@ TEST("port (null)")
   CHECK(bmi == bmi2);
 }
 
-TEST("port (ewah)")
+TEST(port_ewah)
 {
   bitmap<uint16_t, ewah_bitstream, range_bitslice_coder> bm;
   bm.push_back(80);
@@ -389,7 +389,7 @@ TEST("port (ewah)")
   CHECK(*bm.lookup(greater, 80) == greater_eighty);
 }
 
-TEST("container")
+TEST(container)
 {
   sequence_bitmap_index<null_bitstream> bmi{type::string{}};
 
@@ -429,7 +429,7 @@ TEST("container")
   CHECK(bmi == bmi2);
 }
 
-TEST("offset push-back")
+TEST(offset_push_back)
 {
   string_bitmap_index<null_bitstream> bmi;
   REQUIRE(bmi.push_back("foo", 2));

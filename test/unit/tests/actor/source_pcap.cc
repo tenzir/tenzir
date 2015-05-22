@@ -1,14 +1,13 @@
 #include "vast/actor/source/pcap.h"
 
-#include "framework/unit.h"
-#include "test_data.h"
+#define SUITE actors
+#include "test.h"
+#include "data.h"
 
 using namespace caf;
 using namespace vast;
 
-SUITE("actors")
-
-TEST("pcap source")
+TEST(pcap_source)
 {
   scoped_actor self;
   auto fail = others() >> [&]
@@ -16,11 +15,11 @@ TEST("pcap source")
     std::cerr << to_string(self->current_message()) << std::endl;
     REQUIRE(false);
   };
-  // Spawn a PCAP source with a no cutoff and at most 5 concurrent flows.
+  MESSAGE("spawning pcap source with no cutoff and <= 5 concurrent flows");
   auto pcap = self->spawn<source::pcap, monitored>(traces::nmap_vsn, -1, 5);
   anon_send(pcap, put_atom::value, sink_atom::value, self);
   self->receive([&](upstream_atom, actor const& a) { CHECK(a == pcap); });
-  // Run the source.
+  MESSAGE("running the source");
   anon_send(pcap, run_atom::value);
   self->receive(
     [&](chunk const& chk)
@@ -37,6 +36,7 @@ TEST("pcap source")
       );
   // Spawn a PCAP source with a 64-byte cutoff, at most 100 flow table entries,
   // with flows inactive for more than 5 seconds to be evicted every 2 seconds.
+  MESSAGE("spawning pcap source with 64B cutoff and <= 100 concurrent flows");
   pcap = self->spawn<source::pcap, monitored>(
       traces::workshop_2011_browse, 64, 100, 5, 2);
   anon_send(pcap, put_atom::value, sink_atom::value, self);

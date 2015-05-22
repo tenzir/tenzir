@@ -1,21 +1,20 @@
-#include "framework/unit.h"
-
 #include "vast/error.h"
 #include "vast/trial.h"
 #include "vast/result.h"
 
-SUITE("util")
+#define SUITE util
+#include "test.h"
 
 using namespace vast;
 
-TEST("error")
+TEST(error)
 {
   error e;
   error shoot{"holy cow"};
   CHECK(shoot.msg() == "holy cow");
 }
 
-TEST("trial")
+TEST(trial)
 {
   trial<int> t = 42;
   REQUIRE(t);
@@ -39,7 +38,7 @@ TEST("trial")
   CHECK(x);
 }
 
-TEST("result")
+TEST(result)
 {
   result<int> t;
   REQUIRE(t.empty());

@@ -1,10 +1,9 @@
-#include "framework/unit.h"
-
 #include "vast/concept/serializable/util/variant.h"
 #include "vast/concept/serializable/io.h"
 #include "vast/util/variant.h"
 
-SUITE("variant")
+#define SUITE variant
+#include "test.h"
 
 using namespace vast;
 
@@ -68,7 +67,7 @@ triple t2{"42"};
 
 } // namespace <anonymous>
 
-TEST("factory construction")
+TEST(factory construction)
 {
   using pair = util::variant<double, int>;
 
@@ -76,7 +75,7 @@ TEST("factory construction")
   CHECK(get<int>(pair::make(1)));
 }
 
-TEST("operator==")
+TEST(operator==)
 {
   using pair = util::variant<double, int>;
 
@@ -105,14 +104,14 @@ TEST("operator==")
   CHECK(p3 < p2);
 }
 
-TEST("positional introspection")
+TEST(positional introspection)
 {
   CHECK(t0.which() == 0);
   CHECK(t1.which() == 1);
   CHECK(t2.which() == 2);
 }
 
-TEST("type-based access")
+TEST(type-based access)
 {
   REQUIRE(is<int>(t0));
   CHECK(*get<int>(t0) == 42);
@@ -124,7 +123,7 @@ TEST("type-based access")
   CHECK(*get<std::string>(t2) == "42");
 }
 
-TEST("assignment")
+TEST(assignment)
 {
   *get<int>(t0) = 1337;
   *get<double>(t1) = 1.337;
@@ -135,7 +134,7 @@ TEST("assignment")
   CHECK(*get<std::string>(t2) == "1337");
 }
 
-TEST("unary visitation")
+TEST(unary visitation)
 {
   stateful v;
   visit(v, t1);           // lvalue
@@ -144,7 +143,7 @@ TEST("unary visitation")
   CHECK(*get<double>(t1) == 1.337 * 2);
 }
 
-TEST("binary visitation")
+TEST(binary visitation)
 {
   CHECK(! visit(binary{}, t0, t1));
   CHECK(! visit(binary{}, t1, t0));
@@ -152,14 +151,14 @@ TEST("binary visitation")
   CHECK(visit(binary{}, t0, triple{84}));
 }
 
-TEST("ternary visitation")
+TEST(ternary visitation)
 {
   using trio = util::variant<bool, double, int>;
   CHECK(visit(ternary{}, trio{true}, trio{4.2}, trio{42}) == 4.2);
   CHECK(visit(ternary{}, trio{false}, trio{4.2}, trio{1337}) == 1337.0);
 }
 
-TEST("generic lambda visitation")
+TEST(generic lambda visitation)
 {
   using pair = util::variant<double, int>;
   auto fourty_two = pair{42};
@@ -167,7 +166,7 @@ TEST("generic lambda visitation")
   CHECK(r == 84);
 }
 
-TEST("delayed visitation")
+TEST(delayed visitation)
 {
   std::vector<util::variant<double, int>> doubles;
 
@@ -202,7 +201,7 @@ struct reference_returner
 
 } // namespace <anonymous>
 
-TEST("visitor with reference as return value")
+TEST(visitor with reference as return value)
 {
   util::variant<double, int> v = 4.2;
   reference_returner r;
@@ -224,14 +223,14 @@ enum class hell : int
 } // namespace <anonymous>
 
 
-TEST("variant custom tag")
+TEST(variant custom tag)
 {
   using custom_variant = util::basic_variant<hell, int, std::string>;
   custom_variant v(42);
   CHECK(v.which() == hell::devil);
 }
 
-TEST("variant serialization")
+TEST(variant serialization)
 {
   std::vector<uint8_t> buf;
   CHECK(save(buf, util::variant<bool, int>{42}));
@@ -269,7 +268,7 @@ protected:
 
 } // namespace <anonymous>
 
-TEST("variant concept")
+TEST(variant concept)
 {
   concept c;
 

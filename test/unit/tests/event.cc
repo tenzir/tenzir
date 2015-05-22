@@ -1,16 +1,14 @@
-#include "framework/unit.h"
-
 #include "vast/event.h"
 #include "vast/concept/serializable/value.h"
 #include "vast/concept/state/event.h"
 #include "vast/concept/serializable/io.h"
 #include "vast/util/json.h"
 
+#include "test.h"
+
 using namespace vast;
 
-SUITE("core")
-
-TEST("event")
+TEST(event)
 {
   auto tr = type::record{
     {"x", type::boolean{}},

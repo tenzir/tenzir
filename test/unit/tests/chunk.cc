@@ -1,12 +1,11 @@
-#include "framework/unit.h"
 #include "vast/chunk.h"
 #include "vast/event.h"
 
+#include "test.h"
+
 using namespace vast;
 
-SUITE("core")
-
-TEST("chunk")
+TEST(chunk)
 {
   auto t = type::integer{};
   t.name("i");
@@ -47,7 +46,7 @@ TEST("chunk")
   CHECK(chk.ids(std::move(ids)));
 }
 
-TEST("chunk event extraction")
+TEST(chunk_event_extraction)
 {
   auto t = type::integer{};
   REQUIRE(t.name("test"));

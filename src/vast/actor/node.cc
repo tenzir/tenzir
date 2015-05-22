@@ -314,7 +314,7 @@ message node::spawn_actor(message const& msg)
       uint64_t segments = 10;
       uint64_t size = 128;
       r = params.extract_opts({
-        {"segments,n", "maximum number of cached segments", segments},
+        {"segments,c", "maximum number of cached segments", segments},
         {"size,s", "maximum size of segment before flushing (MB)", size}
       });
       if (! r.error.empty())

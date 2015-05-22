@@ -1,12 +1,11 @@
-#include "framework/unit.h"
-
 #include "vast/value.h"
+
+#define SUITE parse
+#include "test.h"
 
 using namespace vast;
 
-SUITE("parse")
-
-TEST("value")
+TEST(value)
 {
   // Booleans
   auto v = to<value>("T");

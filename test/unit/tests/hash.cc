@@ -1,20 +1,19 @@
-#include "framework/unit.h"
-
 #include "vast/util/hash/crc.h"
 #include "vast/util/hash/murmur.h"
 #include "vast/util/hash/xxhash.h"
 
+#define SUITE util
+#include "test.h"
+
 using namespace vast;
 using namespace vast::util;
 
-SUITE("util")
-
-TEST("murmur hash")
+TEST(murmur_hash)
 {
   CHECK(murmur3<32>::digest(42) == 3160117731);
 }
 
-TEST("xxhash hash")
+TEST(xxhash_hash)
 {
   CHECK(xxhash::digest(42) == 1161967057);
 
@@ -25,7 +24,7 @@ TEST("xxhash hash")
   CHECK(xxh.get() == 964478135);
 }
 
-TEST("crc32")
+TEST(crc32)
 {
   CHECK(crc32::digest('f') == 1993550816);
   CHECK(crc32::digest('o') == 252678980);

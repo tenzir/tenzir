@@ -1,10 +1,8 @@
-#include "framework/unit.h"
+#include "test.h"
 
 #include "vast/logger.h"
 
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_TRACE
-
-SUITE("core")
 
 using namespace vast;
 
@@ -23,7 +21,7 @@ void bar(int i, std::string s, char c)
   VAST_LEAVE("returning with a message");
 };
 
-TEST("tracing")
+TEST(tracing)
 {
   foo();
   bar(42, "***", 'A');

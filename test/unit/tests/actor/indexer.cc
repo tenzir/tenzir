@@ -1,18 +1,17 @@
 #include "vast/actor/indexer.h"
 #include "vast/actor/task.h"
 
-#include "framework/unit.h"
+#define SUITE actors
+#include "test.h"
 
 using namespace caf;
 using namespace vast;
 
-using bitstream_type = ewah_bitstream;
-
-SUITE("actors")
-
-TEST("indexer")
+TEST(indexer)
 {
-  VAST_DEBUG("creating test events");
+  using bitstream_type = ewah_bitstream;
+
+  MESSAGE("creating test events");
   auto t0 = type::record{{"c", type::count{}}, {"s", type::string{}}};
   t0.name("test-record-event");
   auto t1 = type::real{};
@@ -30,7 +29,7 @@ TEST("indexer")
   REQUIRE(events[0].type() == t0);
   REQUIRE(events[1].type() == t1);
 
-  VAST_DEBUG("indexing the events");
+  MESSAGE("indexing the events");
   scoped_actor self;
   path dir0 = "vast-test-indexer-t0";
   path dir1 = "vast-test-indexer-t1";
@@ -43,7 +42,7 @@ TEST("indexer")
   self->send(i1, events, t);
   self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
 
-  VAST_DEBUG("running a query against the first indexer");
+  MESSAGE("running a query against the first indexer");
   predicate pred{type_extractor{type::count{}}, less, data{100u}};
   t = self->spawn<task, monitored>();
   self->send(t, i0);
@@ -57,7 +56,7 @@ TEST("indexer")
     });
   self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
 
-  VAST_DEBUG("running a query against the second indexer");
+  MESSAGE("running a query against the second indexer");
   pred = {type_extractor{t1}, less_equal, data{42.0}};
   t = self->spawn<task, monitored>();
   self->send(t, i1);
@@ -71,7 +70,7 @@ TEST("indexer")
     });
   self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
 
-  VAST_DEBUG("writing first index to file system");
+  MESSAGE("writing first index to file system");
   t = self->spawn<task, monitored>();
   self->send(t, i0);
   self->send(i0, flush_atom::value, t);
@@ -80,7 +79,7 @@ TEST("indexer")
   REQUIRE(exists(dir0 / "data"));
   self->send_exit(i0, exit::done);
   self->receive([&](down_msg const& msg) { CHECK(msg.source == i0); });
-  VAST_DEBUG("writing second index to file system");
+  MESSAGE("writing second index to file system");
   t = self->spawn<task, monitored>();
   self->send(t, i1);
   self->send(i1, flush_atom::value, t);
@@ -90,7 +89,7 @@ TEST("indexer")
   self->send_exit(i1, exit::done);
   self->receive([&](down_msg const& msg) { CHECK(msg.source == i1); });
 
-  VAST_DEBUG("loading index from file system and querying again");
+  MESSAGE("loading index from file system and querying again");
   i0 = self->spawn<event_indexer<bitstream_type>, monitored>(dir0, t0);
   pred = predicate{type_extractor{type::count{}}, equal, data{998u}};
   t = self->spawn<task, monitored>();
@@ -107,7 +106,7 @@ TEST("indexer")
   self->send_exit(i0, exit::done);
   self->receive([&](down_msg const& msg) { CHECK(msg.source == i0); });
 
-  VAST_DEBUG("cleaning up");
+  MESSAGE("cleaning up");
   self->await_all_other_actors_done();
   rm(dir0);
   rm(dir1);

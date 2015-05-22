@@ -1,5 +1,3 @@
-#include "framework/unit.h"
-
 #include "vast/io/algorithm.h"
 #include "vast/io/buffered_stream.h"
 #include "vast/io/formatted.h"
@@ -7,9 +5,10 @@
 #include "vast/io/range.h"
 #include "vast/io/stream_device.h"
 
-using namespace vast;
+#define SUITE IO
+#include "test.h"
 
-SUITE("I/O")
+using namespace vast;
 
 namespace {
 
@@ -29,7 +28,7 @@ std::vector<uint8_t> data =
 
 } // namespace <anonymous>
 
-TEST("container input stream")
+TEST(container_input_stream)
 {
   // Test reading from container with a block size that is a multiple of the
   // input.
@@ -75,7 +74,7 @@ TEST("container input stream")
   }
 }
 
-TEST("container output stream")
+TEST(container_output_stream)
 {
   std::string str;
   auto os = io::make_container_output_stream(str);
@@ -88,7 +87,7 @@ TEST("container output stream")
     CHECK(str[i] == i);
 }
 
-TEST("range-based input stream access")
+TEST(range_based_input_stream_access)
 {
   auto is = io::make_container_input_stream(data, 4);
   size_t i = 0;
@@ -101,7 +100,7 @@ TEST("range-based input stream access")
   }
 }
 
-TEST("std::istream adapter")
+TEST(std_istream adapter)
 {
   std::istringstream iss{"foo"};
   io::istream_device idev{iss};
@@ -114,7 +113,7 @@ TEST("std::istream adapter")
   CHECK(str == "foo");
 }
 
-TEST("std::ostream adapter")
+TEST(std_ostream_adapter)
 {
   std::string str = "Heiliger Strohsack!";
   std::ostringstream oss;
@@ -133,7 +132,7 @@ TEST("std::ostream adapter")
   CHECK(oss.str() == str);
 }
 
-TEST("input iterator")
+TEST(input_iterator)
 {
   decltype(data) buf;
   auto in = io::make_container_input_stream(data, 3);
@@ -143,7 +142,7 @@ TEST("input iterator")
   CHECK(in.bytes() == data.size());
 }
 
-TEST("output iterator")
+TEST(output_iterator)
 {
   std::string str;
   auto sink = io::make_container_output_stream(str);
@@ -162,7 +161,7 @@ TEST("output iterator")
   CHECK(sink.bytes() == source.size());
 }
 
-TEST("formatted output")
+TEST(formatted_output)
 {
   std::string sink;
   auto out = io::make_container_output_stream(sink);
@@ -172,7 +171,7 @@ TEST("formatted output")
   CHECK(sink == "42 43");
 }
 
-TEST("formatted input")
+TEST(formatted_input)
 {
   std::string source("42 43 foo bar");
   auto in = io::make_container_input_stream(source);

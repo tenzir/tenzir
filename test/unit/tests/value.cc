@@ -1,16 +1,16 @@
-#include "framework/unit.h"
 #include "vast/value.h"
 #include "vast/concept/serializable/value.h"
 #include "vast/concept/serializable/io.h"
 #include "vast/util/json.h"
 
-using namespace vast;
+#define SUITE value
+#include "test.h"
 
-SUITE("value")
+using namespace vast;
 
 // An *invalid* value has neither a type nor data.
 // This is the default-constructed state.
-TEST("invalid/nil")
+TEST(invalid/nil)
 {
   value v;
   CHECK(is<none>(v));
@@ -18,7 +18,7 @@ TEST("invalid/nil")
 }
 
 // A *data* value contains only data but lacks a type.
-TEST("data value")
+TEST(data value)
 {
   value v{42};
 
@@ -27,7 +27,7 @@ TEST("data value")
   CHECK(is<none>(v.type()));
 }
 
-TEST("typed value (empty)")
+TEST(typed value (empty))
 {
   type t = type::count{};
   value v{nil, t};
@@ -38,7 +38,7 @@ TEST("typed value (empty)")
   CHECK(is<type::count>(v.type()));
 }
 
-TEST("typed value (data)")
+TEST(typed value (data))
 {
   type t = type::real{};
   value v{4.2, t};
@@ -49,7 +49,7 @@ TEST("typed value (data)")
   CHECK(is<type::real>(v.type()));
 }
 
-TEST("data and type mismatch")
+TEST(data and type mismatch)
 {
   // This value has a data and type mismatch. For performance reasons, the
   // constructor will *not* perform a type check.
@@ -64,7 +64,7 @@ TEST("data and type mismatch")
   CHECK(is<none>(fail.type()));
 }
 
-TEST("relational operators")
+TEST(relational operators)
 {
   value v1;
   value v2;
@@ -103,7 +103,7 @@ TEST("relational operators")
   CHECK(v1 < v2);
 }
 
-TEST("serialization")
+TEST(serialization)
 {
   type t = type::set{type::port{}};
 
@@ -124,7 +124,7 @@ TEST("serialization")
   CHECK(to_string(w) == "{8/icmp, 53/udp, 80/tcp}");
 }
 
-TEST("printing")
+TEST(printing)
 {
   record r;
   r.emplace_back(4.2);
@@ -136,7 +136,7 @@ TEST("printing")
   CHECK(to_string(v) == "(4.2000000000, <nil>, +1337, \"fo\\x10\", {42, 43})");
 }
 
-TEST("parsing (typed)")
+TEST(parsing (typed))
 {
   // Port
   auto v = to<value>("80/tcp", type::port{});
@@ -167,7 +167,7 @@ TEST("parsing (typed)")
   CHECK(*r == record{port{53, port::udp}, -42, 4.2});
 }
 
-TEST("JSON")
+TEST(JSON)
 {
   auto tr = type::record{
         {"foo", type::port{}},

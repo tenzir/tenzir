@@ -1,17 +1,16 @@
 #include <numeric>
 
-#include <vast/util/cache.h>
 #include <vast/concept/serializable/std/string.h>
 #include <vast/concept/serializable/util/cache.h>
 #include <vast/concept/serializable/io.h>
+#include <vast/util/cache.h>
 
-#include "framework/unit.h"
+#define SUITE util
+#include "test.h"
 
 using namespace vast;
 
-SUITE("util")
-
-TEST("LRU cache")
+TEST(LRU_cache)
 {
   util::cache<std::string, int> c{2};
   c["x"] = 1;
@@ -54,7 +53,7 @@ TEST("LRU cache")
   CHECK(c.erase("foo") == 1);
 }
 
-TEST("MRU cache")
+TEST(MRU_cache)
 {
   util::cache<std::string, int, util::mru> c{2};
   c.on_evict([&](std::string const&, int v) { CHECK(v == 3); });

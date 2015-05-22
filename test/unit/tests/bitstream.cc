@@ -4,7 +4,8 @@
 #include "vast/concept/serializable/bitstream_polymorphic.h"
 #include "vast/concept/serializable/io.h"
 
-#include "framework/unit.h"
+#define SUITE bitstream
+#include "test.h"
 
 using namespace vast;
 
@@ -59,9 +60,7 @@ ewah_bitstream make_ewah3()
 
 } // namespace <anonymous>
 
-SUITE("bitstream")
-
-TEST("EWAH algorithm 1")
+TEST(EWAH_algorithm_1)
 {
   ewah_bitstream ewah;
   ewah.append(10, true);
@@ -225,7 +224,7 @@ TEST("EWAH algorithm 1")
   REQUIRE(ewah == make_ewah1());
 }
 
-TEST("EWAH algorithm 2")
+TEST(EWAH_algorithm_2)
 {
   ewah_bitstream ewah;
   ewah.push_back(false);
@@ -244,7 +243,7 @@ TEST("EWAH algorithm 2")
   REQUIRE(ewah == make_ewah2());
 }
 
-TEST("EWAH algorithm 3")
+TEST(EWAH_algorithm_3)
 {
   ewah_bitstream ewah;
   ewah.append(222, true);
@@ -264,7 +263,7 @@ TEST("EWAH algorithm 3")
   REQUIRE(ewah == make_ewah3());
 }
 
-TEST("polymorphic")
+TEST(polymorphic)
 {
   bitstream empty;
   CHECK(! empty);
@@ -280,7 +279,7 @@ TEST("polymorphic")
   CHECK(y.size() == 3);
 }
 
-TEST("bitwise operations (null)")
+TEST(bitwise_operations_NULL)
 {
   null_bitstream x;
   REQUIRE(x.append(3, true));
@@ -339,7 +338,7 @@ TEST("bitwise operations (null)")
   CHECK(to_string(z) == "01");
 }
 
-TEST("trimming (EWAH)")
+TEST(trimming_EWAH)
 {
   auto ewah1 = make_ewah1();
   auto ewah2 = make_ewah2();
@@ -412,7 +411,7 @@ TEST("trimming (EWAH)")
   ebs.clear();
 }
 
-TEST("bitwise iteration (EWAH)")
+TEST(bitwise_iteration_EWAH)
 {
   auto ewah1 = make_ewah1();
   auto ewah2 = make_ewah2();
@@ -474,7 +473,7 @@ TEST("bitwise iteration (EWAH)")
   }
 }
 
-TEST("iterator increment bugfix (EWAH)")
+TEST(iterator_increment_bugfix_EWAH)
 {
   ewah_bitstream ebs;
   ebs.push_back(false);
@@ -489,7 +488,7 @@ TEST("iterator increment bugfix (EWAH)")
   CHECK(n == 1024);
 }
 
-TEST("element access (EWAH)")
+TEST(element_access_EWAH)
 {
   auto ewah1 = make_ewah1();
   CHECK(ewah1[0]);
@@ -501,7 +500,7 @@ TEST("element access (EWAH)")
   CHECK(ewah1[2473901163905 - 1]);
 }
 
-TEST("finding (EWAH)")
+TEST(finding_EWAH)
 {
   auto ewah1 = make_ewah1();
   CHECK(ewah1.find_first() == 0);
@@ -598,7 +597,7 @@ TEST("finding (EWAH)")
   CHECK(ebs.find_next(64 + 31) == ewah_bitstream::npos);
 }
 
-TEST("bitwise NOT (EWAH)")
+TEST(bitwise_NOT_EWAH)
 {
   ewah_bitstream ebs;
   ebs.push_back(true);
@@ -646,7 +645,7 @@ TEST("bitwise NOT (EWAH)")
 }
 
 
-TEST("bitwise AND (EWAH)")
+TEST(bitwise_AND_EWAH)
 {
   auto ewah2 = make_ewah2();
   auto ewah3 = make_ewah3();
@@ -678,7 +677,7 @@ TEST("bitwise AND (EWAH)")
   CHECK((ebs2 & ebs1).size() == max_size);
 }
 
-TEST("bitwise OR (EWAH)")
+TEST(bitwise_OR_EWAH)
 {
   auto ewah2 = make_ewah2();
   auto ewah3 = make_ewah3();
@@ -703,7 +702,7 @@ TEST("bitwise OR (EWAH)")
   CHECK(to_string(ebs1 | ebs2) == str);
 }
 
-TEST("bitwise XOR (EWAH)")
+TEST(bitwise_XOR_EWAH)
 {
   auto ewah2 = make_ewah2();
   auto ewah3 = make_ewah3();
@@ -719,7 +718,7 @@ TEST("bitwise XOR (EWAH)")
   CHECK(to_string(ewah2 ^ ewah3) == str);
 }
 
-TEST("bitwise NAND (EWAH)")
+TEST(bitwise_NAND_EWAH)
 {
   auto ewah2 = make_ewah2();
   auto ewah3 = make_ewah3();
@@ -743,7 +742,7 @@ TEST("bitwise NAND (EWAH)")
   CHECK(to_string(ebs1 - ebs2) == str);
 }
 
-TEST("sequence iteration (EWAH)")
+TEST(sequence_iteration_EWAH)
 {
   auto ewah1 = make_ewah1();
   auto range = ewah_bitstream::sequence_range{ewah1};
@@ -796,7 +795,7 @@ TEST("sequence iteration (EWAH)")
   CHECK(++i == range.end());
 }
 
-TEST("block appending (EWAH)")
+TEST(block appending (EWAH))
 {
   ewah_bitstream ebs;
   ebs.append(10, true);
@@ -823,7 +822,7 @@ TEST("block appending (EWAH)")
   CHECK(to_string(ebs) == str);
 }
 
-TEST("polymorphic iteration")
+TEST(polymorphic_iteration)
 {
   bitstream bs{null_bitstream{}};
   bs.push_back(true);
@@ -850,7 +849,7 @@ TEST("polymorphic iteration")
   CHECK(++i == bs.end());
 }
 
-TEST("sequence iteration (NULL)")
+TEST(sequence_iteration_NULL)
 {
   null_bitstream nbs;
   nbs.push_back(true);
@@ -883,7 +882,7 @@ TEST("sequence iteration (NULL)")
   CHECK(++i == range.end());
 }
 
-TEST("pop-count (NULL)")
+TEST(pop_count_NULL)
 {
   null_bitstream bs;
   bs.push_back(true);
@@ -896,7 +895,7 @@ TEST("pop-count (NULL)")
   CHECK(bs.count() == 575);
 }
 
-TEST("pop-count (EWAH)")
+TEST(pop_count_EWAH)
 {
   ewah_bitstream bs;
   bs.push_back(true);
@@ -944,12 +943,12 @@ void test_append()
 
 } // namespace <anonymous>
 
-TEST("append (NULL)")
+TEST(append_NULL)
 {
   test_append<null_bitstream>();
 }
 
-TEST("append (EWAH)")
+TEST(append_EWAH)
 {
   test_append<ewah_bitstream>();
 }

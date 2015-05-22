@@ -1,11 +1,10 @@
 #include "vast/actor/task.h"
 
-#include "framework/unit.h"
+#define SUITE actors
+#include "test.h"
 
 using namespace caf;
 using namespace vast;
-
-SUITE("actors")
 
 namespace {
 
@@ -36,20 +35,20 @@ behavior worker(event_based_actor* self, actor const& task)
  * Here, 't' and 'i' represent tasks and the remaining nodes workers.
  */
 
-TEST("task")
+TEST(task)
 {
   scoped_actor self;
   auto t = self->spawn<task>();
   self->send(t, subscriber_atom::value, self);
   self->send(t, supervisor_atom::value, self);
 
-  VAST_INFO("spawning main workers");
+  MESSAGE("spawning main workers");
   auto leaf1a = self->spawn(worker, t);
   auto leaf1b = self->spawn(worker, t);
   self->send(t, leaf1a);
   self->send(t, leaf1b);
 
-  VAST_INFO("spawning intermediate workers");
+  MESSAGE("spawning intermediate workers");
   auto i = self->spawn<task, monitored>();
   self->send(t, i);
   auto leaf2a = self->spawn(worker, i);
@@ -59,14 +58,14 @@ TEST("task")
   self->send(i, leaf2b);
   self->send(i, leaf2c);
 
-  VAST_INFO("asking main task for the current progress");
+  MESSAGE("asking main task for the current progress");
   self->sync_send(t, progress_atom::value).await(
     [&](uint64_t remaining, uint64_t total)
     {
       CHECK(remaining == 3);
       CHECK(total == 3);
     });
-  VAST_INFO("asking intermediate task for the current progress");
+  MESSAGE("asking intermediate task for the current progress");
   self->sync_send(i, progress_atom::value).await(
     [&](uint64_t remaining, uint64_t total)
     {
@@ -74,7 +73,7 @@ TEST("task")
       CHECK(total == 3);
     });
 
-  VAST_INFO("completing intermediate work items");
+  MESSAGE("completing intermediate work items");
   self->send(leaf2a, "Go");
   self->send(leaf2b, "make");
   self->send(leaf2c, "money!");
@@ -86,7 +85,7 @@ TEST("task")
       CHECK(total == 3);
     });
 
-  VAST_INFO("completing remaining work items");
+  MESSAGE("completing remaining work items");
   self->send(leaf1a, "Lots");
   self->send(leaf1b, "please!");
   auto n = 1;
@@ -97,10 +96,10 @@ TEST("task")
       CHECK(total == 3);
     });
 
-  VAST_INFO("checking final notification");
+  MESSAGE("checking final notification");
   self->receive([&](done_atom) { CHECK(self->current_sender() == t); } );
 
-  VAST_INFO("customizing an exit message");
+  MESSAGE("customizing an exit message");
   t = spawn<task>(42);
   self->send(t, supervisor_atom::value, self);
   self->send_exit(t, exit::kill);

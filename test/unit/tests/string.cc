@@ -1,12 +1,12 @@
-#include "framework/unit.h"
 #include "vast/util/string.h"
+
+#define SUITE util
+#include "test.h"
 
 using namespace vast;
 using namespace util;
 
-SUITE("util")
-
-TEST("string byte escaping")
+TEST(string byte escaping)
 {
   // Identities.
   CHECK(byte_escape("") == "");
@@ -27,7 +27,7 @@ TEST("string byte escaping")
   CHECK(byte_unescape("\\x66\\x6f\\x6f") == "foo");
 }
 
-TEST("JSON string escaping")
+TEST(JSON string escaping)
 {
   CHECK(json_escape("") == "\"\"");
   CHECK(json_escape("\r") == "\"\\r\"");
@@ -68,7 +68,7 @@ TEST("JSON string escaping")
   CHECK(json_unescape("\"unescaped\"quote\"") == "");
 }
 
-TEST("string splitting and joining")
+TEST(string splitting and joining)
 {
   using namespace std::string_literals;
 

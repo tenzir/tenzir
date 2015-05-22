@@ -1,5 +1,4 @@
 #include "vast/announce.h"
-#include "vast/util/optional.h"
 #include "vast/concept/serializable/hierarchy.h"
 #include "vast/concept/serializable/state.h"
 #include "vast/concept/serializable/std/list.h"
@@ -8,15 +7,15 @@
 #include "vast/concept/serializable/util/optional.h"
 #include "vast/concept/serializable/io.h"
 #include "vast/util/byte_swap.h"
+#include "vast/util/optional.h"
 
-#include "framework/unit.h"
+#define SUITE serialization
+#include "test.h"
 
 using namespace vast;
 using namespace vast::util;
 
-SUITE("serialization")
-
-TEST("byte swapping")
+TEST(byte swapping)
 {
   uint8_t  x08 = 0x11;
   uint16_t x16 = 0x1122;
@@ -63,7 +62,7 @@ TEST("byte swapping")
   CHECK(y64 == x64);
 }
 
-TEST("containers")
+TEST(containers)
 {
   std::vector<double> v0{4.2, 8.4, 16.8}, v1;
   std::list<int> l0{4, 2}, l1;
@@ -78,7 +77,7 @@ TEST("containers")
   CHECK(u0 == u1);
 }
 
-TEST("optional<T>")
+TEST(optional<T>)
 {
   util::optional<std::string> o1 = std::string{"foo"};
   decltype(o1) o2;
@@ -127,7 +126,7 @@ struct access::state<serializable>
 
 } // namespace vast
 
-TEST("compress/decompress")
+TEST(compress/decompress)
 {
   std::vector<io::compression> methods{io::null, io::lz4};
 #ifdef VAST_HAVE_SNAPPY
@@ -225,7 +224,7 @@ void deserialize(Deserializer& source, derived2& d)
   source >> static_cast<base&>(d) >> d.k;
 }
 
-TEST("polymorphic serialization")
+TEST(polymorphic serialization)
 {
   announce_hierarchy<base, derived1, derived2>("derived1", "derived2");
   auto uti = caf::uniform_typeid<derived1>();

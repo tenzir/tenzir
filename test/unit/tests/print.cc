@@ -1,7 +1,7 @@
-#include "framework/unit.h"
 #include "vast/print.h"
 
-SUITE("print")
+#define SUITE print
+#include "test.h"
 
 using namespace vast;
 
@@ -21,7 +21,7 @@ trial<void> print(foo const& x, Iterator&& out)
 
 } // namespace n
 
-TEST("integral")
+TEST(integral)
 {
   std::string str;
   auto out = std::back_inserter(str);
@@ -35,11 +35,10 @@ TEST("integral")
   print(u64, out);
   size_t s = 5;
   print(s, out);
-
   CHECK(str == "12345");
 }
 
-TEST("floating point")
+TEST(floating point)
 {
   std::string str;
   auto out = std::back_inserter(str);
@@ -94,7 +93,7 @@ TEST("floating point")
   CHECK(str == "123456.001230");
 }
 
-TEST("custom")
+TEST(custom)
 {
   std::string str;
   auto out = std::back_inserter(str);
@@ -105,7 +104,7 @@ TEST("custom")
   CHECK(str == "+42");
 }
 
-TEST("container")
+TEST(container)
 {
   std::string str;
   auto out = std::back_inserter(str);

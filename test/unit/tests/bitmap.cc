@@ -1,43 +1,43 @@
-#include "framework/unit.h"
 #include "vast/bitmap.h"
 #include "vast/convert.h"
 #include "vast/concept/serializable/bitmap.h"
 #include "vast/concept/serializable/io.h"
 
+#define SUITE bitmap
+#include "test.h"
+
 using namespace vast;
 
+namespace {
+
 // Prints doubles as IEEE 754 and with our custom offset binary encoding.
-void print(double d)
-{
-  std::cout << d << "\t = ";
-  auto o = detail::order(d, 4);
-  auto xu = reinterpret_cast<uint64_t*>(&d);
-  auto x = *xu;
-  auto yu = reinterpret_cast<uint64_t*>(&o);
-  auto y = *yu;
+//void print(double d)
+//{
+//  std::cout << d << "\t = ";
+//  auto o = detail::order(d, 4);
+//  auto xu = reinterpret_cast<uint64_t*>(&d);
+//  auto x = *xu;
+//  auto yu = reinterpret_cast<uint64_t*>(&o);
+//  auto y = *yu;
+//  for (size_t i = 0; i < 64; ++i)
+//  {
+//    if (i == 1 || i == 12)
+//      std::cout << ' ';
+//    std::cout << ((x >> (64 - i - 1)) & 1);
+//  }
+//  std::cout << '\t';
+//  for (size_t i = 0; i < 64; ++i)
+//  {
+//    if (i == 1 || i == 12)
+//      std::cout << ' ';
+//    std::cout << ((y >> (64 - i - 1)) & 1);
+//  }
+//  std::cout << std::endl;
+//}
 
-  for (size_t i = 0; i < 64; ++i)
-  {
-    if (i == 1 || i == 12)
-      std::cout << ' ';
-    std::cout << ((x >> (64 - i - 1)) & 1);
-  }
+} // namespace <anonymous>
 
-  std::cout << '\t';
-
-  for (size_t i = 0; i < 64; ++i)
-  {
-    if (i == 1 || i == 12)
-      std::cout << ' ';
-    std::cout << ((y >> (64 - i - 1)) & 1);
-  }
-
-  std::cout << std::endl;
-}
-
-SUITE("bitmap")
-
-TEST("bitwise total ordering")
+TEST(bitwise_total_ordering)
 {
   CHECK(detail::order(0u) == 0);
   CHECK(detail::order(4u) == 4);
@@ -67,7 +67,7 @@ TEST("bitwise total ordering")
   //print(1111.2);
 }
 
-TEST("range bitslice coding")
+TEST(range_bitslice_coding)
 {
   range_bitslice_coder<uint8_t, null_bitstream> r;
 
@@ -148,7 +148,7 @@ TEST("range bitslice coding")
   }
 }
 
-TEST("equality bitslice coding")
+TEST(equality_bitslice_coding)
 {
   equality_bitslice_coder<int8_t, null_bitstream> c;
   REQUIRE(c.encode(-127));
@@ -172,7 +172,7 @@ TEST("equality bitslice coding")
   CHECK(to_string(*c.decode(128,  equal)) ==         "000000001");
 }
 
-TEST("basic bitmap")
+TEST(basic bitmap)
 {
   bitmap<int, null_bitstream> bm, bm2;
   REQUIRE(bm.push_back(42));
@@ -281,44 +281,44 @@ auto append_test()
 
 } // namespace <anonymous>
 
-TEST("merge (equality coder)")
+TEST(merge_equality_coder)
 {
   merge_test<null_bitstream, equality_coder>();
 }
 
-TEST("merge (binary bitslice coder)")
+TEST(merge_binary_bitslice_coder)
 {
   merge_test<null_bitstream, binary_bitslice_coder>();
 }
 
-TEST("merge (equality bitslice coder)")
+TEST(merge_equality_bitslicecoder)
 {
   merge_test<null_bitstream, equality_bitslice_coder>();
 }
 
-TEST("merge (range bitslice coder)")
+TEST(merge_range_bitslice_coder)
 {
   auto bm = merge_test<null_bitstream, range_bitslice_coder>();
   CHECK(to_string(*bm.lookup(greater_equal, 42)) == "00010001");
   CHECK(to_string(*bm.lookup(less_equal, 10)) ==    "11101110");
 }
 
-TEST("append (equality coder)")
+TEST(append_equality_coder)
 {
   append_test<null_bitstream, equality_coder>();
 }
 
-TEST("append (binary bitslice coder)")
+TEST(append_binary_bitslice_coder)
 {
   append_test<null_bitstream, binary_bitslice_coder>();
 }
 
-TEST("append (equality bitslice coder)")
+TEST(append_equality_bitslice_coder)
 {
   append_test<null_bitstream, equality_bitslice_coder>();
 }
 
-TEST("append (range bitslice coder)")
+TEST(append_range_bitslice_coder)
 {
   auto bm = append_test<null_bitstream, range_bitslice_coder>();
   CHECK(to_string(*bm.lookup(greater_equal, 42)) == "111111111111");
@@ -327,7 +327,7 @@ TEST("append (range bitslice coder)")
   CHECK(to_string(*bm.lookup(greater, 1000)) ==   "101000011010");
 }
 
-TEST("multi push-back")
+TEST(multi_push_back)
 {
   bitmap<uint8_t, null_bitstream, range_bitslice_coder> bm;
   REQUIRE(bm.push_back(7, 4));
@@ -339,7 +339,7 @@ TEST("multi push-back")
   CHECK(to_string(*bm.lookup(equal, 3)) == "0000111111");
 }
 
-TEST("range encoded bitmap (null)")
+TEST(range_encoded_bitmap_null)
 {
   bitmap<int8_t, null_bitstream, range_bitslice_coder> bm, bm2;
   REQUIRE(bm.push_back(42));
@@ -380,7 +380,7 @@ TEST("range encoded bitmap (null)")
   CHECK(to_string(*bm2.lookup(greater_equal, -42)) == "11111");
 }
 
-TEST("range encoded bitmap (EWAH)")
+TEST(range_encoded_bitmap)
 {
   bitmap<uint16_t, ewah_bitstream, range_bitslice_coder> bm;
   bm.push_back(80);
@@ -433,7 +433,7 @@ TEST("range encoded bitmap (EWAH)")
   CHECK(*bm.lookup(greater, 31338) == all_zeros);
 }
 
-TEST("binary encoded bitmap")
+TEST(binary_encoded_bitmap)
 {
   bitmap<int8_t, null_bitstream, binary_bitslice_coder> bm, bm2;
   REQUIRE(bm.push_back(0));
@@ -467,7 +467,7 @@ TEST("binary encoded bitmap")
   CHECK(to_string(*bm2[2]) == "0001011");
 }
 
-TEST("precision binning (integral)")
+TEST(precision_binning_integral)
 {
   bitmap<int, null_bitstream, equality_coder, precision_binner> bm;
   bm.binner(2);
@@ -483,7 +483,7 @@ TEST("precision binning (integral)")
   CHECK(to_string(*bm[300]) == "00100");
 }
 
-TEST("precision binning (double, negative)")
+TEST(precision_binning_double_negative)
 {
   bitmap<double, null_bitstream, equality_coder, precision_binner> bm, bm2;
   bm.binner(-3);
@@ -516,7 +516,7 @@ TEST("precision binning (double, negative)")
   CHECK(to_string(*bm2[43.002]) == "0000011");
 }
 
-TEST("precision binning (double, positive)")
+TEST(precision_binning_double_positive)
 {
   bitmap<double, null_bitstream, equality_coder, precision_binner> bm;
   bm.binner(1);
