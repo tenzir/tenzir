@@ -59,6 +59,7 @@ struct time_duration
         return time::duration(
             std::chrono::duration<int64_t, std::ratio<31536000>>(d));
       VAST_ASSERT(! "missing cast implementation");
+      return {};
     }
   };
 

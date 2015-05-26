@@ -1,6 +1,7 @@
 #ifndef VAST_CONCEPT_SERIALIZABLE_BUILTIN_H
 #define VAST_CONCEPT_SERIALIZABLE_BUILTIN_H
 
+#include <cstdint>
 #include <type_traits>
 
 namespace vast {

@@ -14,6 +14,7 @@ time_restrictor::time_restrictor(time::point first, time::point last)
 bool time_restrictor::operator()(none) const
 {
   VAST_ASSERT(! "should never happen");
+  return false;
 }
 
 bool time_restrictor::operator()(conjunction const& con) const
