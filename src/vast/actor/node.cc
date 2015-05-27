@@ -353,7 +353,7 @@ message node::spawn_actor(message const& msg)
     },
     on("exporter", any_vals) >> [&]
     {
-      auto limit = uint64_t{0};
+      auto limit = uint64_t{100};
       r = params.extract_opts({
         {"continuous,c", "marks a query as continuous"},
         {"historical,h", "marks a query as historical"},

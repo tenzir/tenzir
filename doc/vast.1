@@ -193,7 +193,7 @@ Available \fIactor\fP values with corresponding \fIparameters\fP:
   \fB\fC\-u\fR
     Marks this exporter as \fBunified\fP, which is equivalent to both
     \fB\fC\-c\fR and \fB\fC\-h\fR\&.
-  \fB\fC\-l\fR \fIn\fP [\fI0\fP]
+  \fB\fC\-l\fR \fIn\fP [\fI100\fP]
     Limit the number of results to \fIn\fP entries. The value \fIn = 0\fP means
     unlimited.
 .PP
@@ -367,11 +367,11 @@ zcat log.gz | vast import bro
 .fi
 .RE
 .PP
-Run a historical query, printed in ASCII, limited to at most 100 results:
+Run a historical query, printed in ASCII, limited to at most 10 results:
 .PP
 .RS
 .nf
-vast export ascii \-h :addr in 10.0.0.0/8 | tail \-n 50
+vast export ascii \-h \-l 10 :addr in 10.0.0.0/8
 .fi
 .RE
 .SH BUGS

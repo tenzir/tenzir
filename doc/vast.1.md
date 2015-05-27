@@ -200,7 +200,7 @@ Available *actor* values with corresponding *parameters*:
   `-u`
     Marks this exporter as **unified**, which is equivalent to both
     `-c` and `-h`.
-  `-l` *n* [*0*]
+  `-l` *n* [*100*]
     Limit the number of results to *n* entries. The value *n = 0* means
     unlimited.
 
@@ -370,9 +370,9 @@ Import Bro log files:
 
     zcat log.gz | vast import bro
 
-Run a historical query, printed in ASCII, limited to at most 100 results:
+Run a historical query, printed in ASCII, limited to at most 10 results:
 
-    vast export ascii -h :addr in 10.0.0.0/8 | tail -n 50
+    vast export ascii -h -l 10 :addr in 10.0.0.0/8
 
 BUGS
 ----
