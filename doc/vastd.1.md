@@ -3,7 +3,7 @@
 NAME
 ----
 
-`vastd` -- VAST daemon
+`vastd` -- VAST daemon running a node actor
 
 SYNOPSIS
 --------
@@ -54,7 +54,7 @@ The following *options* are available:
   The path on the file system where to store persistent state.
 
 `-e` *endpoint* [*127.0.0.1:42000*]
-  The endpoint of the node to connect to or launch. (See below)
+  The endpoint of the node to connect to or launch. (See vast(1) for syntax)
 
 `-f`
   Start daemon in foreground, i.e., do not detach from controlling terminal and
@@ -64,7 +64,7 @@ The following *options* are available:
   Display a help message and exit.
 
 `-l` *verbosity* [*3*]
-  The logging verbosity. (See below)
+  The logging verbosity. (See vast(1) for an explanation of values)
 
 `-m` *messages* [*-1*]
   The CAF worker throughput expressed in the maximum number of messages to
@@ -84,26 +84,6 @@ The following *options* are available:
 
 `-v`
   Print VAST version and exit.
-
-### endpoint
-
-An endpoint has the format *host:port* where *host* is a hostname or IP address
-and *port* the transport-layer port of the listening daemon. Either can be
-omitted: *host* or *:port* are also valid endpoints. IPv6 addresses must be
-enclosed in brackets when also specifying a *port*, e.g., *[::1]:42001*.
-
-### verbosity
-
-The verbosity controls the amount of status messages displayed on console and
-in log files. It can take on the following values:
-  - *0* *(quiet)*: do not produce any output
-  - *1* *(error)*: report failures which constitute a program error
-  - *2* *(warn)*: notable issues that do not affect correctness
-  - *3* *(info)*: status messages representing system activity
-  - *4* *(verbose)*: more fine-grained activity reports
-  - *5* *(debug)*: copious low-level implementation details
-  - *6* *(trace)*: log function entry and exit
-
 
 EXAMPLES
 --------

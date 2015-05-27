@@ -31,7 +31,7 @@ The following key actors exist:
 
 **NODE**
   The main VAST actor which accommodates all other actors and manages global
-  state. The executable kjj
+  state. Use vastd(1) to start a NODE.
 
 **SOURCE**
   Generates events from a data source, such as packets from a network interface
@@ -60,7 +60,7 @@ The following key actors exist:
 OPTIONS
 -------
 
-The *options* in front *command* control how to to connect to a node.
+The *options* in front of *command* control how to to connect to a node.
 
 The following *options* are available:
 
@@ -81,37 +81,35 @@ The following *options* are available:
 An endpoint has the format *host:port* where *host* is a hostname or IP address
 and *port* the transport-layer port of the listening daemon. Either can be
 omitted: *host* or *:port* are also valid endpoints. IPv6 addresses must be
-enclosed in brackets when also specifying a *port*, e.g., *[::1]:42001*.
+enclosed in brackets in conjunction with a *port*, e.g., *[::1]:42001*.
 
 ### verbosity
 
 The verbosity controls the amount of status messages displayed on console and
 in log files. It can take on the following values:
-  - *0* *(quiet)*: do not produce any output
-  - *1* *(error)*: report failures which constitute a program error
-  - *2* *(warn)*: notable issues that do not affect correctness
-  - *3* *(info)*: status messages representing system activity
-  - *4* *(verbose)*: more fine-grained activity reports
-  - *5* *(debug)*: copious low-level implementation details
-  - *6* *(trace)*: log function entry and exit
+    *0* *(quiet)*: do not produce any output
+    *1* *(error)*: report failures which constitute a program error
+    *2* *(warn)*: notable issues that do not affect correctness
+    *3* *(info)*: status messages representing system activity
+    *4* *(verbose)*: more fine-grained activity reports
+    *5* *(debug)*: copious low-level implementation details
+    *6* *(trace)*: log function entry and exit
 
 COMMANDS
 --------
 
-This section describes each *command* and its *arguments*.
-
-The following commands are available:
-
-  - *stop*          stops a node
-  - *peer*          peers with another node
-  - *show*          shows various properties of an ecosystem
-  - *spawn*         creates a new actor
-  - *quit*          terminates an actor
-  - *send*          send a message to an actor
-  - *connect*       connects two spawned actors
-  - *disconnect*    disconnects two connected actors
-  - *import*        imports data from standard input
-  - *export*        exports query results to standard output
+This section describes each *command* and its *arguments*. The following
+commands exist:
+    *stop*          stops a node
+    *peer*          peers with another node
+    *show*          shows various properties of an ecosystem
+    *spawn*         creates a new actor
+    *quit*          terminates an actor
+    *send*          send a message to an actor
+    *connect*       connects two spawned actors
+    *disconnect*    disconnects two connected actors
+    *import*        imports data from standard input
+    *export*        exports query results to standard output
 
 ### stop
 
@@ -164,7 +162,7 @@ Available *arguments*:
 
 `-n` *name*
   Controls the spawn location. If `-n` *name* is given, the actor will be
-  spawned on the `vast` node identified by *name*. Otherwise actor the will be
+  spawned on the node identified by *name*. Otherwise actor the will be
   spawned on the connected node.
 
 `-l` *label*
@@ -194,11 +192,11 @@ Available *actor* values with corresponding *parameters*:
 
 *exporter* [*parameters*] *expression*
   `-c`
-    Marks this exporter as **continuous**.
+    Marks this exporter as *continuous*.
   `-h`
-    Marks this exporter as **historical**.
+    Marks this exporter as *historical*.
   `-u`
-    Marks this exporter as **unified**, which is equivalent to both
+    Marks this exporter as *unified*, which is equivalent to both
     `-c` and `-h`.
   `-l` *n* [*100*]
     Limit the number of results to *n* entries. The value *n = 0* means
@@ -319,7 +317,7 @@ Connects two actors named *A* and *B* by registering *A* as source for *B* and
 
 Both *A* and *B* can consist of a comma-separated lists of actor labels. That
 is, if *A* consists of *n* list entries and *B* of *m*, then the number
-created connections equals to thecross product *n x m*.
+created connections equals to the cross product *n * m*.
 
 ### disconnect
 

@@ -48,7 +48,9 @@ executes the following commands after starting the node:
 The path on the file system where to store persistent state.
 .TP
 \fB\fC\-e\fR \fIendpoint\fP [\fI127.0.0.1:42000\fP]
-The endpoint of the node to connect to or launch. (See below)
+The endpoint of the node to connect to or launch. (See 
+.BR vast (1) 
+for syntax)
 .TP
 \fB\fC\-f\fR
 Start daemon in foreground, i.e., do not detach from controlling terminal and
@@ -58,7 +60,9 @@ run in background.
 Display a help message and exit.
 .TP
 \fB\fC\-l\fR \fIverbosity\fP [\fI3\fP]
-The logging verbosity. (See below)
+The logging verbosity. (See 
+.BR vast (1) 
+for an explanation of values)
 .TP
 \fB\fC\-m\fR \fImessages\fP [\fI\-1\fP]
 The CAF worker throughput expressed in the maximum number of messages to
@@ -78,23 +82,6 @@ The number of worker threads to use for CAF's scheduler.
 .TP
 \fB\fC\-v\fR
 Print VAST version and exit.
-.SS endpoint
-.PP
-An endpoint has the format \fIhost:port\fP where \fIhost\fP is a hostname or IP address
-and \fIport\fP the transport\-layer port of the listening daemon. Either can be
-omitted: \fIhost\fP or \fI:port\fP are also valid endpoints. IPv6 addresses must be
-enclosed in brackets when also specifying a \fIport\fP, e.g., \fI[::1]:42001\fP\&.
-.SS verbosity
-.PP
-The verbosity controls the amount of status messages displayed on console and
-in log files. It can take on the following values:
-  \- \fI0\fP \fI(quiet)\fP: do not produce any output
-  \- \fI1\fP \fI(error)\fP: report failures which constitute a program error
-  \- \fI2\fP \fI(warn)\fP: notable issues that do not affect correctness
-  \- \fI3\fP \fI(info)\fP: status messages representing system activity
-  \- \fI4\fP \fI(verbose)\fP: more fine\-grained activity reports
-  \- \fI5\fP \fI(debug)\fP: copious low\-level implementation details
-  \- \fI6\fP \fI(trace)\fP: log function entry and exit
 .SH EXAMPLES
 .PP
 Start a node in the foreground with debugging logging verbosity and launch all

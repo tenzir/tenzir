@@ -23,7 +23,9 @@ The following key actors exist:
 .TP
 \fBNODE\fP
 The main VAST actor which accommodates all other actors and manages global
-state. The executable kjj
+state. Use 
+.BR vastd (1) 
+to start a NODE.
 .TP
 \fBSOURCE\fP
 Generates events from a data source, such as packets from a network interface
@@ -50,7 +52,7 @@ ARCHIVE to extract candidates, and relays matching events to SINKs.
 them to ARCHIVE and INDEX.
 .SH OPTIONS
 .PP
-The \fIoptions\fP in front \fIcommand\fP control how to to connect to a node.
+The \fIoptions\fP in front of \fIcommand\fP control how to to connect to a node.
 .PP
 The following \fIoptions\fP are available:
 .TP
@@ -70,45 +72,32 @@ Print VAST version and exit.
 An endpoint has the format \fIhost:port\fP where \fIhost\fP is a hostname or IP address
 and \fIport\fP the transport\-layer port of the listening daemon. Either can be
 omitted: \fIhost\fP or \fI:port\fP are also valid endpoints. IPv6 addresses must be
-enclosed in brackets when also specifying a \fIport\fP, e.g., \fI[::1]:42001\fP\&.
+enclosed in brackets in conjunction with a \fIport\fP, e.g., \fI[::1]:42001\fP\&.
 .SS verbosity
 .PP
 The verbosity controls the amount of status messages displayed on console and
 in log files. It can take on the following values:
-  \- \fI0\fP \fI(quiet)\fP: do not produce any output
-  \- \fI1\fP \fI(error)\fP: report failures which constitute a program error
-  \- \fI2\fP \fI(warn)\fP: notable issues that do not affect correctness
-  \- \fI3\fP \fI(info)\fP: status messages representing system activity
-  \- \fI4\fP \fI(verbose)\fP: more fine\-grained activity reports
-  \- \fI5\fP \fI(debug)\fP: copious low\-level implementation details
-  \- \fI6\fP \fI(trace)\fP: log function entry and exit
+    \fI0\fP \fI(quiet)\fP: do not produce any output
+    \fI1\fP \fI(error)\fP: report failures which constitute a program error
+    \fI2\fP \fI(warn)\fP: notable issues that do not affect correctness
+    \fI3\fP \fI(info)\fP: status messages representing system activity
+    \fI4\fP \fI(verbose)\fP: more fine\-grained activity reports
+    \fI5\fP \fI(debug)\fP: copious low\-level implementation details
+    \fI6\fP \fI(trace)\fP: log function entry and exit
 .SH COMMANDS
 .PP
-This section describes each \fIcommand\fP and its \fIarguments\fP\&.
-.PP
-The following commands are available:
-.RS
-.IP \(bu 2
-\fIstop\fP          stops a node
-.IP \(bu 2
-\fIpeer\fP          peers with another node
-.IP \(bu 2
-\fIshow\fP          shows various properties of an ecosystem
-.IP \(bu 2
-\fIspawn\fP         creates a new actor
-.IP \(bu 2
-\fIquit\fP          terminates an actor
-.IP \(bu 2
-\fIsend\fP          send a message to an actor
-.IP \(bu 2
-\fIconnect\fP       connects two spawned actors
-.IP \(bu 2
-\fIdisconnect\fP    disconnects two connected actors
-.IP \(bu 2
-\fIimport\fP        imports data from standard input
-.IP \(bu 2
-\fIexport\fP        exports query results to standard output
-.RE
+This section describes each \fIcommand\fP and its \fIarguments\fP\&. The following
+commands exist:
+    \fIstop\fP          stops a node
+    \fIpeer\fP          peers with another node
+    \fIshow\fP          shows various properties of an ecosystem
+    \fIspawn\fP         creates a new actor
+    \fIquit\fP          terminates an actor
+    \fIsend\fP          send a message to an actor
+    \fIconnect\fP       connects two spawned actors
+    \fIdisconnect\fP    disconnects two connected actors
+    \fIimport\fP        imports data from standard input
+    \fIexport\fP        exports query results to standard output
 .SS stop
 .PP
 Synopsis:
@@ -157,7 +146,7 @@ Available \fIarguments\fP:
 .TP
 \fB\fC\-n\fR \fIname\fP
 Controls the spawn location. If \fB\fC\-n\fR \fIname\fP is given, the actor will be
-spawned on the \fB\fCvast\fR node identified by \fIname\fP\&. Otherwise actor the will be
+spawned on the node identified by \fIname\fP\&. Otherwise actor the will be
 spawned on the connected node.
 .PP
 \fB\fC\-l\fR \fIlabel\fP
@@ -187,11 +176,11 @@ Available \fIactor\fP values with corresponding \fIparameters\fP:
 .PP
 \fIexporter\fP [\fIparameters\fP] \fIexpression\fP
   \fB\fC\-c\fR
-    Marks this exporter as \fBcontinuous\fP\&.
+    Marks this exporter as \fIcontinuous\fP\&.
   \fB\fC\-h\fR
-    Marks this exporter as \fBhistorical\fP\&.
+    Marks this exporter as \fIhistorical\fP\&.
   \fB\fC\-u\fR
-    Marks this exporter as \fBunified\fP, which is equivalent to both
+    Marks this exporter as \fIunified\fP, which is equivalent to both
     \fB\fC\-c\fR and \fB\fC\-h\fR\&.
   \fB\fC\-l\fR \fIn\fP [\fI100\fP]
     Limit the number of results to \fIn\fP entries. The value \fIn = 0\fP means
@@ -309,7 +298,7 @@ Connects two actors named \fIA\fP and \fIB\fP by registering \fIA\fP as source f
 .PP
 Both \fIA\fP and \fIB\fP can consist of a comma\-separated lists of actor labels. That
 is, if \fIA\fP consists of \fIn\fP list entries and \fIB\fP of \fIm\fP, then the number
-created connections equals to thecross product \fIn x m\fP\&.
+created connections equals to the cross product \fIn * m\fP\&.
 .SS disconnect
 .PP
 Synopsis:
