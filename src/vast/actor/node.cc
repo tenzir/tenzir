@@ -712,79 +712,88 @@ message node::quit_actor(std::string const& arg)
   return make_message(ok_atom::value);
 }
 
-message node::connect(std::string const& source, std::string const& sink)
+message node::connect(std::string const& sources, std::string const& sinks)
 {
-  VAST_VERBOSE(this, "connects actors:", source, "->", sink);
-  // Retrieve source and sink information.
-  auto src = get(source);
-  auto snk = get(sink);
-  if (src.actor == invalid_actor)
-    return make_message(error{"no such source: ", source});
-  if (snk.actor == invalid_actor)
-    return make_message(error{"no such sink: ", sink});
-  if (has_topology_entry(src.fqn, snk.fqn))
-    return make_message(
-        error{"connection already exists: ", source, " -> ", sink});
-  // Wire actors based on their type.
-  message msg;
-  if (src.type == "source")
-  {
-    if (snk.type == "importer")
-      msg = make_message(put_atom::value, sink_atom::value, snk.actor);
-    else
-      return make_message(error{"sink not an importer: ", sink});
-  }
-  else if (src.type == "importer")
-  {
-    if (snk.type == "identifier")
-      msg = make_message(put_atom::value, identifier_atom::value, snk.actor);
-    else if (snk.type == "archive")
-      msg = make_message(put_atom::value, archive_atom::value, snk.actor);
-    else if (snk.type == "index")
-      msg = make_message(put_atom::value, index_atom::value, snk.actor);
-    else
-      return make_message(error{"invalid importer sink: ", sink});
-  }
-  else if (src.type == "exporter")
-  {
-    if (snk.type == "archive")
-      msg = make_message(put_atom::value, archive_atom::value, snk.actor);
-    else if (snk.type == "index")
-      msg = make_message(put_atom::value, index_atom::value, snk.actor);
-    else if (snk.type == "sink")
-      msg = make_message(put_atom::value, sink_atom::value, snk.actor);
-    else
-      return make_message(error{"invalid exporter sink: ", sink});
-  }
-  else
-  {
-    return make_message(error{"invalid source: ", source});
-  }
-  send(src.actor, msg);
-  // Create new topology entry in the store.
-  auto key = "topology/" + src.fqn + '/' + snk.fqn;
-  scoped_actor self;
-  self->sync_send(store_, put_atom::value, key).await([](ok_atom) {});
-  auto del = [=](uint32_t) { anon_send(store_, delete_atom::value, key); };
-  src.actor->attach_functor(del);
-  snk.actor->attach_functor(del);
+  for (auto& source : util::split_to_str(sources, ","))
+    for (auto& sink : util::split_to_str(sinks, ","))
+    {
+      VAST_VERBOSE(this, "connects actors:", source, "->", sink);
+      // Retrieve source and sink information.
+      auto src = get(source);
+      auto snk = get(sink);
+      if (src.actor == invalid_actor)
+        return make_message(error{"no such source: ", source});
+      if (snk.actor == invalid_actor)
+        return make_message(error{"no such sink: ", sink});
+      if (has_topology_entry(src.fqn, snk.fqn))
+        return make_message(
+            error{"connection already exists: ", source, " -> ", sink});
+      // Wire actors based on their type.
+      message msg;
+      if (src.type == "source")
+      {
+        if (snk.type == "importer")
+          msg = make_message(put_atom::value, sink_atom::value, snk.actor);
+        else
+          return make_message(error{"sink not an importer: ", sink});
+      }
+      else if (src.type == "importer")
+      {
+        if (snk.type == "identifier")
+          msg = make_message(put_atom::value, identifier_atom::value,
+                             snk.actor);
+        else if (snk.type == "archive")
+          msg = make_message(put_atom::value, archive_atom::value, snk.actor);
+        else if (snk.type == "index")
+          msg = make_message(put_atom::value, index_atom::value, snk.actor);
+        else
+          return make_message(error{"invalid importer sink: ", sink});
+      }
+      else if (src.type == "exporter")
+      {
+        if (snk.type == "archive")
+          msg = make_message(put_atom::value, archive_atom::value, snk.actor);
+        else if (snk.type == "index")
+          msg = make_message(put_atom::value, index_atom::value, snk.actor);
+        else if (snk.type == "sink")
+          msg = make_message(put_atom::value, sink_atom::value, snk.actor);
+        else
+          return make_message(error{"invalid exporter sink: ", sink});
+      }
+      else
+      {
+        return make_message(error{"invalid source: ", source});
+      }
+      send(src.actor, msg);
+      // Create new topology entry in the store.
+      auto key = "topology/" + src.fqn + '/' + snk.fqn;
+      scoped_actor self;
+      self->sync_send(store_, put_atom::value, key).await([](ok_atom) {});
+      auto del = [=](uint32_t) { anon_send(store_, delete_atom::value, key); };
+      src.actor->attach_functor(del);
+      snk.actor->attach_functor(del);
+    }
   return make_message(ok_atom::value);
 }
 
-message node::disconnect(std::string const& source, std::string const& sink)
+message node::disconnect(std::string const& sources, std::string const& sinks)
 {
-  VAST_VERBOSE(this, "disconnects actors:", source, "->", sink);
-  auto src = get(source);
-  auto snk = get(sink);
-  if (has_topology_entry(src.fqn, snk.fqn))
-    return make_message(
-        error{"connection already exists: ", source, " -> ", sink});
-  // TODO: send message that performs actual diconnection.
-  scoped_actor self;
-  auto key = "topology/" + src.fqn + '/' + snk.fqn;
-  self->sync_send(store_, delete_atom::value, key).await(
-    [](uint64_t n) { VAST_ASSERT(n == 1); }
-  );
+  for (auto& source : util::split_to_str(sources, ","))
+    for (auto& sink : util::split_to_str(sinks, ","))
+    {
+      VAST_VERBOSE(this, "disconnects actors:", source, "->", sink);
+      auto src = get(source);
+      auto snk = get(sink);
+      if (has_topology_entry(src.fqn, snk.fqn))
+        return make_message(
+            error{"connection already exists: ", source, " -> ", sink});
+      // TODO: send message that performs actual diconnection.
+      scoped_actor self;
+      auto key = "topology/" + src.fqn + '/' + snk.fqn;
+      self->sync_send(store_, delete_atom::value, key).await(
+        [](uint64_t n) { VAST_ASSERT(n == 1); }
+      );
+    }
   return make_message(ok_atom::value);
 }
 

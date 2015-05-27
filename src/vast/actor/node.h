@@ -43,8 +43,8 @@ struct node : default_actor
   caf::message send_run(std::string const& arg);
   caf::message send_flush(std::string const& arg);
   caf::message quit_actor(std::string const& arg);
-  caf::message connect(std::string const& source, std::string const& sink);
-  caf::message disconnect(std::string const& source, std::string const& sink);
+  caf::message connect(std::string const& sources, std::string const& sinks);
+  caf::message disconnect(std::string const& sources, std::string const& sinks);
   caf::message show(std::string const& arg);
 
   //

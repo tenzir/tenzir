@@ -1,4 +1,4 @@
-.TH VAST 1 "May 19, 2015" 0.1 "Visibility Across Space and Time"
+.TH VAST 1 "May 27, 2015" 0.1 "Visibility Across Space and Time"
 .SH NAME
 .PP
 \fB\fCvast\fR \-\- interface to a VAST node
@@ -7,7 +7,7 @@
 \fB\fCvast\fR [\fIoptions\fP] \fIcommand\fP [\fIarguments\fP]
 .SH OVERVIEW
 .PP
-VAST is a distributed platform for large\-scale network forensics. It's modular
+VAST is a distributed platform for large\-scale network forensics. Its modular
 system architecture is exclusively implemented in terms of the actor model. In
 this model, concurrent entities (actors) execute in parallel and
 communicate asynchronously solely via message passing. Users spawn system
@@ -306,6 +306,10 @@ Synopsis:
 .PP
 Connects two actors named \fIA\fP and \fIB\fP by registering \fIA\fP as source for \fIB\fP and
 \fIB\fP as sink for \fIA\fP\&.
+.PP
+Both \fIA\fP and \fIB\fP can consist of a comma\-separated lists of actor labels. That
+is, if \fIA\fP consists of \fIn\fP list entries and \fIB\fP of \fIm\fP, then the number
+created connections equals to thecross product \fIn x m\fP\&.
 .SS disconnect
 .PP
 Synopsis:
@@ -313,6 +317,9 @@ Synopsis:
 \fIdisconnect\fP \fIA\fP \fIB\fP
 .PP
 Removes a previously established connection between \fIA\fP and \fIB\fP\&.
+.PP
+As in \fB\fCconnect\fR, Both \fIA\fP and \fIB\fP can consist of a comma\-separated lists of
+actor labels.
 .SS import
 .PP
 Synopsis:

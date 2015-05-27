@@ -13,7 +13,7 @@ SYNOPSIS
 OVERVIEW
 --------
 
-VAST is a distributed platform for large-scale network forensics. It's modular
+VAST is a distributed platform for large-scale network forensics. Its modular
 system architecture is exclusively implemented in terms of the actor model. In
 this model, concurrent entities (actors) execute in parallel and
 communicate asynchronously solely via message passing. Users spawn system
@@ -317,6 +317,10 @@ Synopsis:
 Connects two actors named *A* and *B* by registering *A* as source for *B* and
 *B* as sink for *A*.
 
+Both *A* and *B* can consist of a comma-separated lists of actor labels. That
+is, if *A* consists of *n* list entries and *B* of *m*, then the number
+created connections equals to thecross product *n x m*.
+
 ### disconnect
 
 Synopsis:
@@ -324,6 +328,9 @@ Synopsis:
   *disconnect* *A* *B*
 
 Removes a previously established connection between *A* and *B*.
+
+As in `connect`, Both *A* and *B* can consist of a comma-separated lists of
+actor labels.
 
 ### import
 
