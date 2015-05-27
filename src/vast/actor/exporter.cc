@@ -49,7 +49,6 @@ exporter::exporter(expression ast, query_options opts)
 
   auto complete = [=]
   {
-    VAST_ASSERT(current_sender() == this);
     auto runtime = time::snapshot() - start_time_;
     for (auto& s : sinks_)
       send(s, id_, done_atom::value, runtime);

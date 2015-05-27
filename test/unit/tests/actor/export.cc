@@ -79,13 +79,16 @@ TEST(export)
     },
     [&](done_atom, time::extent, expression const& expr)
     {
+      done = true;
       CHECK(expr == *pops);
     },
     [&](progress_atom, uint64_t remaining, uint64_t total)
     {
-      done = true;
+      // The task we receive from INDEX consists of 12 stages, because we
+      // imported the ssl.log with 113 entries in batches of 10, which yields
+      // 11 full partitions and 1 partial one of 3, i.e., 11 + 1 = 12.
       if (remaining == 0)
-        CHECK(total == 12); // FIXME: understand why we get 12
+        CHECK(total == 12);
     },
     others() >> [&]
     {
@@ -149,9 +152,9 @@ TEST(export)
   stop_core(n);
   self->await_all_other_actors_done();
 
-  MESSAGE("importing another Bro log (SSL)");
+  MESSAGE("importing another Bro log (conn)");
   n = make_core();
-  run_source(n, "bro", "-b", "100", "-r", m57_day11_18::ssl);
+  run_source(n, "bro", "-b", "100", "-r", m57_day11_18::conn);
   stop_core(n);
   self->await_all_other_actors_done();
 
