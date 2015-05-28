@@ -10,7 +10,7 @@
 #include "vast/banner.h"
 #include "vast/filesystem.h"
 #include "vast/logger.h"
-#include "vast/actor/node.h"
+#include "vast/actor/atoms.h"
 #include "vast/util/endpoint.h"
 #include "vast/util/string.h"
 
@@ -82,6 +82,11 @@ int main(int argc, char *argv[])
   if (! logger::console(verbosity, colorized))
   {
     std::cerr << "failed to initialize logger console backend" << std::endl;
+    return 1;
+  }
+  if (! logger::file(logger::quiet))
+  {
+    std::cerr << "failed to reset logger file backend" << std::endl;
     return 1;
   }
   // Go!

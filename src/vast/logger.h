@@ -113,7 +113,7 @@ public:
   /// @param verbosity The log level to filter messages.
   /// @param filename The path of the log file.
   /// @returns `true` on success.
-  static bool file(level verbosity, std::string const& filename);
+  static bool file(level verbosity, std::string const& filename = "");
 
   /// Initializes the console backend.
   /// @param verbosity The log level to filter messages.
