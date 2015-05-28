@@ -41,7 +41,7 @@ struct node : default_actor
   caf::message request_peering(std::string const& endpoint);
   caf::message spawn_actor(caf::message const& msg);
   caf::message send_run(std::string const& arg);
-  caf::message send_flush(std::string const& arg);
+  void send_flush(std::string const& arg);
   caf::message quit_actor(std::string const& arg);
   caf::message connect(std::string const& sources, std::string const& sinks);
   caf::message disconnect(std::string const& sources, std::string const& sinks);

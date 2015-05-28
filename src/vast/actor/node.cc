@@ -108,7 +108,7 @@ behavior node::make_behavior()
     on("send", val<std::string>, "flush")
       >> [=](std::string const& arg, std::string const& /* flush */)
     {
-      return send_flush(arg);
+      send_flush(arg);
     },
     on("quit", arg_match) >> [=](std::string const& arg)
     {
@@ -140,7 +140,7 @@ behavior node::make_behavior()
         std::string const& peer_name)
     {
       // Respond to peering request.
-      auto task = spawn(
+      auto job = spawn(
         [=](event_based_actor* self, actor parent) -> behavior
         {
           return
@@ -197,12 +197,14 @@ behavior node::make_behavior()
         },
         this
       );
-      forward_to(task);
+      forward_to(job);
     },
     others() >> [=]
     {
       std::string cmd;
       current_message().extract([&](std::string const& s) { cmd += ' ' + s; });
+      if (cmd.empty())
+        cmd = to_string(current_message());
       VAST_ERROR("invalid command syntax:" << cmd);
       return error{"invalid command syntax:", cmd};
     }
@@ -692,14 +694,69 @@ message node::send_run(std::string const& arg)
   return make_message(ok_atom::value);
 }
 
-message node::send_flush(std::string const& arg)
+void node::send_flush(std::string const& arg)
 {
   VAST_VERBOSE(this, "sends FLUSH to", arg);
+  auto rp = make_response_promise();
   auto state = get(arg);
   if (! state.actor)
-    return make_message(error{"no such actor: ", arg});
-  send(state.actor, flush_atom::value);
-  return make_message(ok_atom::value);
+  {
+    rp.deliver(make_message(error{"no such actor: ", arg}));
+    return;
+  }
+  if (! (state.type == "index" || state.type == "archive"))
+  {
+    rp.deliver(make_message(error{state.type, " does not support flushing"}));
+    return;
+  };
+  auto job = spawn(
+    [=](event_based_actor* self, actor target) -> behavior
+    {
+      return
+      {
+        others() >> [=]
+        {
+          self->send(target, flush_atom::value);
+          self->become(
+            [=](actor const& task)
+            {
+              self->monitor(task);
+              self->become(
+                [=](down_msg const& msg)
+                {
+                  VAST_ASSERT(msg.source == task);
+                  rp.deliver(make_message(ok_atom::value));
+                  self->quit(exit::done);
+                }
+              );
+            },
+            [=](ok_atom)
+            {
+              rp.deliver(self->current_message());
+              self->quit(exit::done);
+            },
+            [=](error const&)
+            {
+              rp.deliver(self->current_message());
+              self->quit(exit::error);
+            },
+            others() >> [=]
+            {
+              rp.deliver(make_message(error{"unexpected response to FLUSH"}));
+              self->quit(exit::error);
+            },
+            after(time::seconds(10)) >> [=]
+            {
+              rp.deliver(make_message(error{"timed out"}));
+              self->quit(exit::error);
+            }
+          );
+        }
+      };
+    },
+    state.actor
+  );
+  forward_to(job);
 }
 
 message node::quit_actor(std::string const& arg)

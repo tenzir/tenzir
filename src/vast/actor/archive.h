@@ -37,6 +37,7 @@ struct archive : flow_controlled_actor
   caf::behavior make_behavior() override;
 
   trial<void> store(segment s);
+  bool flush();
 
   path dir_;
   path meta_data_filename_;

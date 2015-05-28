@@ -44,22 +44,8 @@ caf::behavior archive::make_behavior()
     {
       if (downgrade_exit())
         return;
-      if (! current_.empty())
-      {
-        auto t = store(std::move(current_));
-        if (! t)
-        {
-          VAST_ERROR(this, "failed to store segment:", t.error());
-          return;
-        }
-      }
-      VAST_VERBOSE(this, "writes meta data to:", meta_data_filename_.trim(-3));
-      auto t = save(meta_data_filename_, segments_);
-      if (! t)
-      {
-        VAST_ERROR(this, "failed to store segment meta data:", t.error());
+      if (! flush())
         return;
-      }
       quit(msg.reason);
     },
     [=](down_msg const& msg)
@@ -76,23 +62,20 @@ caf::behavior archive::make_behavior()
     {
       VAST_DEBUG(this, "got chunk [" << chk.meta().ids.find_first() << ',' <<
                  (chk.meta().ids.find_last() + 1 ) << ')');
-      if (! current_.empty()
-          && current_size_ + chk.bytes() >= max_segment_size_)
-      {
-        auto t = store(std::move(current_));
-        if (! t)
-        {
-          VAST_ERROR(this, "failed to store segment:", t.error());
-          quit(exit::error);
-          return;
-        }
-        current_ = {};
-        current_size_ = 0;
-      }
+      auto too_large = current_size_ + chk.bytes() >= max_segment_size_;
+      if (! current_.empty() && too_large && ! flush())
+        return;
       current_size_ += chk.bytes();
       current_.insert(chk);
       if (accountant_)
         send(accountant_, chk.events(), time::snapshot());
+    },
+    [=](flush_atom)
+    {
+      if (flush())
+        return make_message(ok_atom::value);
+      else
+        return make_message(error{"flush failed"});
     },
     [=](event_id eid)
     {
@@ -153,6 +136,31 @@ trial<void> archive::store(segment s)
   }
   cache_.insert(std::move(id), std::move(s));
   return nothing;
+}
+
+bool archive::flush()
+{
+  VAST_VERBOSE(this, "flushes segment with", current_.size(), "chunks");
+  if (current_.empty())
+    return true;
+  auto t = store(std::move(current_));
+  if (! t)
+  {
+    VAST_ERROR(this, "failed to store segment:", t.error());
+    quit(exit::error);
+    return false;
+  }
+  current_ = {};
+  current_size_ = 0;
+  VAST_VERBOSE(this, "writes meta data to:", meta_data_filename_.trim(-3));
+  t = save(meta_data_filename_, segments_);
+  if (! t)
+  {
+    VAST_ERROR(this, "failed to store segment meta data:", t.error());
+    quit(exit::error);
+    return false;
+  }
+  return true;
 }
 
 } // namespace vast

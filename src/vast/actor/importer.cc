@@ -38,7 +38,7 @@ behavior importer::make_behavior()
       if (remove_upstream_node(msg.source))
         return;
       if (msg.source == identifier_)
-        quit(exit::error);
+        identifier_ = invalid_actor;
       else if (msg.source == archive_)
         archive_ = invalid_actor;
       else if (msg.source == index_)
