@@ -45,33 +45,33 @@ TEST(serialization)
 TEST(parser_tests)
 {
   // Event tags.
-  CHECK(to<expression>("&type == \"foo\""));
-  CHECK(to<expression>("&time < now - 5d10m3s"));
-  CHECK(to<expression>("&id == 42"));
+  CHECK(detail::to_expression("&type == \"foo\""));
+  CHECK(detail::to_expression("&time < now - 5d10m3s"));
+  CHECK(detail::to_expression("&id == 42"));
 
   // Type queries.
-  CHECK(to<expression>(":port < 53/udp"));
-  CHECK(to<expression>(":addr == 192.168.0.1 && :port == 80/tcp"));
-  CHECK(to<expression>(":string ~ /evil.*/ && :subnet >= 10.0.0.0/8"));
-  CHECK(to<expression>(":addr == 1.2.3.4 || :subnet != 10.0.0.0/8"));
-  CHECK(to<expression>("! :int == +8 || ! :count < 4"));
+  CHECK(detail::to_expression(":port < 53/udp"));
+  CHECK(detail::to_expression(":addr == 192.168.0.1 && :port == 80/tcp"));
+  CHECK(detail::to_expression(":string ~ /evil.*/ && :subnet >= 10.0.0.0/8"));
+  CHECK(detail::to_expression(":addr == 1.2.3.4 || :subnet != 10.0.0.0/8"));
+  CHECK(detail::to_expression("! :int == +8 || ! :count < 4"));
 
-  CHECK(to<expression>("\"she\" [+ :string"));
-  CHECK(to<expression>(":string +] \"sells\""));
-  CHECK(to<expression>("\"sea\" [- :string"));
-  CHECK(to<expression>(":string -] \"shells\""));
-  CHECK(to<expression>("\"by\" in :string"));
-  CHECK(to<expression>("\"the\" !in :string"));
-  CHECK(to<expression>(":string ni \"sea\""));
-  CHECK(to<expression>(":string !ni \"shore\""));
+  CHECK(detail::to_expression("\"she\" [+ :string"));
+  CHECK(detail::to_expression(":string +] \"sells\""));
+  CHECK(detail::to_expression("\"sea\" [- :string"));
+  CHECK(detail::to_expression(":string -] \"shells\""));
+  CHECK(detail::to_expression("\"by\" in :string"));
+  CHECK(detail::to_expression("\"the\" !in :string"));
+  CHECK(detail::to_expression(":string ni \"sea\""));
+  CHECK(detail::to_expression(":string !ni \"shore\""));
 
   // Groups
-  CHECK(to<expression>("(:real > 4.2)"));
-  CHECK(to<expression>(":real > 4.2 && (:time < now || :port == 53/?)"));
-  CHECK(to<expression>("(:real > 4.2 && ! (:time < now || :port == 53/?))"));
+  CHECK(detail::to_expression("(:real > 4.2)"));
+  CHECK(detail::to_expression(":real > 4.2 && (:time < now || :port == 53/?)"));
+  CHECK(detail::to_expression("(:real > 4.2 && ! (:time < now || :port == 53/?))"));
 
   // Invalid type name.
-  CHECK(! to<expression>(":foo == -42"));
+  CHECK(! detail::to_expression(":foo == -42"));
 }
 
 TEST(event_evaluation)
@@ -111,19 +111,19 @@ TEST(event_evaluation)
   CHECK(t.name("foo"));
   CHECK(e.type(t));
 
-  auto ast = to<expression>("&time == 2014-01-16+05:30:12");
+  auto ast = detail::to_expression("&time == 2014-01-16+05:30:12");
   REQUIRE(ast);
   CHECK(visit(expr::event_evaluator{e}, *ast));
 
-  ast = to<expression>("&type == \"foo\"");
+  ast = detail::to_expression("&type == \"foo\"");
   REQUIRE(ast);
   CHECK(visit(expr::event_evaluator{e}, *ast));
 
-  ast = to<expression>("! &type == \"bar\"");
+  ast = detail::to_expression("! &type == \"bar\"");
   REQUIRE(ast);
   CHECK(visit(expr::event_evaluator{e}, *ast));
 
-  ast = to<expression>("&type != \"foo\"");
+  ast = detail::to_expression("&type != \"foo\"");
   REQUIRE(ast);
   CHECK(! visit(expr::event_evaluator{e}, *ast));
 
@@ -131,27 +131,27 @@ TEST(event_evaluation)
   // Type queries
   //
 
-  ast = to<expression>(":count == 42");
+  ast = detail::to_expression(":count == 42");
   REQUIRE(ast);
   CHECK(visit(expr::event_evaluator{e0}, visit(expr::type_resolver{*foo}, *ast)));
   CHECK(! visit(expr::event_evaluator{e1}, visit(expr::type_resolver{*bar}, *ast)));
 
-  ast = to<expression>(":int != +101");
+  ast = detail::to_expression(":int != +101");
   REQUIRE(ast);
   CHECK(visit(expr::event_evaluator{e0}, visit(expr::type_resolver{*foo}, *ast)));
   CHECK(! visit(expr::event_evaluator{e1}, visit(expr::type_resolver{*bar}, *ast)));
 
-  ast = to<expression>(":string ~ /bar/ && :int == +100");
+  ast = detail::to_expression(":string ~ /bar/ && :int == +100");
   REQUIRE(ast);
   CHECK(visit(expr::event_evaluator{e0}, visit(expr::type_resolver{*foo}, *ast)));
   CHECK(! visit(expr::event_evaluator{e1}, visit(expr::type_resolver{*bar}, *ast)));
 
-  ast = to<expression>(":real >= -4.8");
+  ast = detail::to_expression(":real >= -4.8");
   REQUIRE(ast);
   CHECK(visit(expr::event_evaluator{e0}, visit(expr::type_resolver{*foo}, *ast)));
   CHECK(! visit(expr::event_evaluator{e1}, visit(expr::type_resolver{*bar}, *ast)));
 
-  ast = to<expression>(
+  ast = detail::to_expression(
       ":int <= -3 || :int >= +100 && :string !~ /bar/ || :real > 1.0");
   REQUIRE(ast);
   CHECK(visit(expr::event_evaluator{e0}, visit(expr::type_resolver{*foo}, *ast)));
@@ -166,14 +166,14 @@ TEST(event_evaluation)
   //
 
   // FIXME:
-  ast = to<expression>("foo.s1 == \"babba\" && d1 <= 1337.0");
+  ast = detail::to_expression("foo.s1 == \"babba\" && d1 <= 1337.0");
   REQUIRE(ast);
   auto schema_resolved = visit(expr::schema_resolver{*foo}, *ast);
   REQUIRE(schema_resolved);
   CHECK(visit(expr::event_evaluator{e0}, *schema_resolved));
   CHECK(! visit(expr::event_evaluator{e1}, *schema_resolved));
 
-  ast = to<expression>("s1 != \"cheetah\"");
+  ast = detail::to_expression("s1 != \"cheetah\"");
   REQUIRE(ast);
   schema_resolved = visit(expr::schema_resolver{*foo}, *ast);
   REQUIRE(schema_resolved);
@@ -182,14 +182,14 @@ TEST(event_evaluation)
   REQUIRE(schema_resolved);
   CHECK(visit(expr::event_evaluator{e1}, *schema_resolved));
 
-  ast = to<expression>("d1 > 0.5");
+  ast = detail::to_expression("d1 > 0.5");
   REQUIRE(ast);
   schema_resolved = visit(expr::schema_resolver{*foo}, *ast);
   REQUIRE(schema_resolved);
   CHECK(visit(expr::event_evaluator{e0}, *schema_resolved));
   CHECK(! visit(expr::event_evaluator{e1}, *schema_resolved));
 
-  ast = to<expression>("r.b == F");
+  ast = detail::to_expression("r.b == F");
   REQUIRE(ast);
   schema_resolved = visit(expr::schema_resolver{*bar}, *ast);
   REQUIRE(schema_resolved);
@@ -200,14 +200,14 @@ TEST(event_evaluation)
   //
 
   // Invalid prefix.
-  ast = to<expression>("not.there ~ /nil/");
+  ast = detail::to_expression("not.there ~ /nil/");
   REQUIRE(ast);
   schema_resolved = visit(expr::schema_resolver{*foo}, *ast);
   REQUIRE(schema_resolved);
   CHECK(is<none>(*schema_resolved));
 
   // 'q' doesn't exist in 'r'.
-  ast = to<expression>("r.q == 80/tcp");
+  ast = detail::to_expression("r.q == 80/tcp");
   REQUIRE(ast);
   schema_resolved = visit(expr::schema_resolver{*bar}, *ast);
   REQUIRE(schema_resolved);
@@ -217,50 +217,50 @@ TEST(event_evaluation)
 TEST(AST_normalization)
 {
   VAST_INFO("ensuring extractor position on LHS");
-  auto expr = to<expression>("\"foo\" in bar");
-  auto normalized = to<expression>("bar ni \"foo\"");
+  auto expr = detail::to_expression("\"foo\" in bar");
+  auto normalized = detail::to_expression("bar ni \"foo\"");
   REQUIRE(expr);
   REQUIRE(normalized);
   CHECK(expr::normalize(*expr) == *normalized);
 
   VAST_INFO("pushing down negations to predicate level");
-  expr = to<expression>("! (x > 42 && x < 84)");
-  normalized = to<expression>("x <= 42 || x >= 84");
+  expr = detail::to_expression("! (x > 42 && x < 84)");
+  normalized = detail::to_expression("x <= 42 || x >= 84");
   REQUIRE(expr);
   REQUIRE(normalized);
   CHECK(expr::normalize(*expr) == *normalized);
 
   VAST_INFO("verifying removal of negations");
-  expr = to<expression>("! x < 42");
-  normalized = to<expression>("x >= 42");
+  expr = detail::to_expression("! x < 42");
+  normalized = detail::to_expression("x >= 42");
   REQUIRE(expr);
   REQUIRE(normalized);
   CHECK(expr::normalize(*expr) == *normalized);
-  expr = to<expression>("!! x == 42");
-  normalized = to<expression>("x == 42");
+  expr = detail::to_expression("!! x == 42");
+  normalized = detail::to_expression("x == 42");
   REQUIRE(expr);
   REQUIRE(normalized);
   CHECK(expr::normalize(*expr) == *normalized);
-  expr = to<expression>("!!! x == 42");
-  normalized = to<expression>("x != 42");
+  expr = detail::to_expression("!!! x == 42");
+  normalized = detail::to_expression("x != 42");
   REQUIRE(expr);
   REQUIRE(normalized);
   CHECK(expr::normalize(*expr) == *normalized);
-  expr = to<expression>("!! (x == 42 || a == 80/tcp)");
-  normalized = to<expression>("(x == 42 || a == 80/tcp)");
+  expr = detail::to_expression("!! (x == 42 || a == 80/tcp)");
+  normalized = detail::to_expression("(x == 42 || a == 80/tcp)");
   REQUIRE(expr);
   REQUIRE(normalized);
   CHECK(expr::normalize(*expr) == *normalized);
   CHECK(expr::normalize(*expr) == *normalized);
-  expr = to<expression>("! (x > -1 && x < +1)");
-  normalized = to<expression>("x <= -1 || x >= +1");
+  expr = detail::to_expression("! (x > -1 && x < +1)");
+  normalized = detail::to_expression("x <= -1 || x >= +1");
   REQUIRE(expr);
   REQUIRE(normalized);
   CHECK(expr::normalize(*expr) == *normalized);
 
   VAST_INFO("performing all normalizations in one shot");
-  expr = to<expression>("42 < a && ! (\"foo\" in bar || !! x == 1337)");
-  normalized = to<expression>("a > 42 && bar !ni \"foo\" && x != 1337");
+  expr = detail::to_expression("42 < a && ! (\"foo\" in bar || !! x == 1337)");
+  normalized = detail::to_expression("a > 42 && bar !ni \"foo\" && x != 1337");
   REQUIRE(expr);
   REQUIRE(normalized);
   CHECK(expr::normalize(*expr) == *normalized);

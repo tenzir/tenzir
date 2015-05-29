@@ -35,4 +35,12 @@ bool operator<(expression const& lhs, expression const& rhs)
   return lhs.node_ < rhs.node_;
 }
 
+namespace detail {
+
+trial<expression> to_expression(std::string const& str)
+{
+  return to<expression>(str);
+}
+
+} // namespace detail
 } // namespace vast

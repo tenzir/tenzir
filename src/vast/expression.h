@@ -534,6 +534,14 @@ trial<void> parse(expression& e, Iterator& begin, Iterator end)
   return nothing;
 }
 
+namespace detail {
+
+// Helper function constructing an expression from a string in order to save
+// compile times.
+trial<expression> to_expression(std::string const& str);
+
+} // namespace detail
+
 } // namespace vast
 
 #endif

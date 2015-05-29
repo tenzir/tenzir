@@ -47,6 +47,11 @@ struct node : default_actor
   caf::message disconnect(std::string const& sources, std::string const& sinks);
   caf::message show(std::string const& arg);
 
+  // Factored to reduce compiler memory footprint. See actor/node_spawn.cc.
+  caf::message spawn_source(std::string const& label,
+                            caf::message const& params);
+  caf::message spawn_sink(std::string const& label, caf::message const& params);
+
   //
   // Helper functions to synchronously interact with the key-value store.
   //

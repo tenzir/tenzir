@@ -34,6 +34,7 @@ set(libvast_sources
   actor/index.cc
   actor/key_value_store.cc
   actor/node.cc
+  actor/node_spawn.cc
   actor/partition.cc
   actor/signal_monitor.cc
   actor/sink/ascii.cc
