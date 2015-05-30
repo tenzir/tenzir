@@ -1,9 +1,9 @@
-#include "vast/util/detail/posix.h"
-
+#include <unistd.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/un.h>
-#include <unistd.h>
+
+#include "vast/util/detail/posix.h"
 
 namespace vast {
 namespace util {
@@ -16,13 +16,11 @@ int uds_listen(std::string const& path)
     return fd;
   ::sockaddr_un un;
   std::memset(&un, 0, sizeof(un));
-  un.sun_family = AF_LOCAL;
+  un.sun_family = AF_UNIX;
   std::strncpy(un.sun_path, path.data(), sizeof(un.sun_path));
-  // Remove previous socket file.
-  ::unlink(path.c_str());
-  auto size = offsetof(sockaddr_un, sun_path) + std::strlen(un.sun_path);
-  if (::bind(fd, reinterpret_cast<sockaddr*>(&un), size) < 0
-      || ::listen(fd, 10) < 0)
+  ::unlink(path.c_str()); // Always remove previous socket file.
+  auto sa = reinterpret_cast<sockaddr*>(&un);
+  if (::bind(fd, sa, sizeof(un)) < 0 || ::listen(fd, 10) < 0)
   {
     ::close(fd);
     return -1;
@@ -49,10 +47,9 @@ int uds_connect(std::string const& path)
     return fd;
   ::sockaddr_un un;
   std::memset(&un, 0, sizeof(un));
-  un.sun_family = AF_LOCAL;
+  un.sun_family = AF_UNIX;
   std::strncpy(un.sun_path, path.data(), sizeof(un.sun_path));
-  auto size = offsetof(sockaddr_un, sun_path) + std::strlen(un.sun_path);
-  if (::connect(fd, reinterpret_cast<sockaddr*>(&un), size) < 0)
+  if (::connect(fd, reinterpret_cast<sockaddr*>(&un), sizeof(un)) < 0)
     return -1;
   return fd;
 }
