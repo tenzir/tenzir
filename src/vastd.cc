@@ -1,3 +1,9 @@
+#include "vast/config.h"
+
+#ifdef VAST_LINUX
+#include <unistd.h> // daemon(3)
+#endif
+
 #include <csignal>
 #include <cstdlib>
 
