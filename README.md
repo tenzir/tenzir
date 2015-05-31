@@ -25,10 +25,11 @@ Query VAST and get the result back as PCAP trace:
 
 ## Resources
 
-- [Project page](http://www.icir.org/vast)
 - [Documentation](https://github.com/mavam/vast/wiki)
 - [Issue board](https://waffle.io/mavam/vast)
 - [Chat](https://gitter.im/mavam/vast)
+- [Contribution guidelines](CONTRIBUTING.md)
+- [Project page](http://www.icir.org/vast)
 - Mailing lists:
     - [vast@icir.org][mailing-list]: general help and discussion
     - [vast-commits@icir.org][mailing-list-commits]: full diffs of git commits
