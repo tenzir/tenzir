@@ -1,6 +1,7 @@
 #include "vast/announce.h"
 #include "vast/concept/serializable/hierarchy.h"
 #include "vast/concept/serializable/state.h"
+#include "vast/concept/serializable/vector_event.h"
 #include "vast/concept/serializable/std/list.h"
 #include "vast/concept/serializable/std/unordered_map.h"
 #include "vast/concept/serializable/std/vector.h"
@@ -11,6 +12,7 @@
 
 #define SUITE serialization
 #include "test.h"
+#include "fixtures/events.h"
 
 using namespace vast;
 using namespace vast::util;
@@ -251,3 +253,26 @@ TEST(polymorphic serialization)
     CHECK(d1->j == 1337);
   }
 }
+
+FIXTURE_SCOPE(events_scope, fixtures::simple_events)
+
+// The serialization of events goes through custom (de)serialization routines
+// to avoid redudant type serialization.
+TEST(vector<event> serialization)
+{
+  std::string str;
+  {
+    auto out = io::make_container_output_stream(str);
+    binary_serializer bs{out};
+    bs << events;
+  }
+
+  std::vector<event> deserialized;
+  auto in = io::make_container_input_stream(str);
+  binary_deserializer ds{in};
+  ds >> deserialized;
+
+  CHECK(events == deserialized);
+}
+
+FIXTURE_SCOPE_END()

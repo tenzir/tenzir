@@ -21,6 +21,7 @@
 #include "vast/actor/exporter.h"
 #include "vast/actor/node.h"
 #include "vast/expr/normalize.h"
+#include "vast/io/compression.h"
 #include "vast/io/file_stream.h"
 #include "vast/util/assert.h"
 #include "vast/util/endpoint.h"
@@ -301,17 +302,32 @@ message node::spawn_actor(message const& msg)
     },
     on("archive", any_vals) >> [&]
     {
+      io::compression method;
+      auto comp = "lz4"s;
       uint64_t segments = 10;
       uint64_t size = 128;
       r = params.extract_opts({
-        {"segments,c", "maximum number of cached segments", segments},
-        {"size,s", "maximum size of segment before flushing (MB)", size}
+        {"compression,c", "compression method for event batches", comp},
+        {"segments,s", "maximum number of cached segments", segments},
+        {"size,m", "maximum size of segment before flushing (MB)", size}
       });
       if (! r.error.empty())
         return make_message(error{std::move(r.error)});
+      if (comp == "null")
+        method = io::null;
+      else if (comp == "lz4")
+        method = io::lz4;
+      else if (comp == "snappy")
+#ifdef VAST_HAVE_SNAPPY
+        method = io::snappy;
+#else
+        return make_message(error{"not compiled with snappy support"});
+#endif
+      else
+        return make_message(error{"unknown compression method: ", comp});
       size <<= 20; // MB'ify
       auto dir = dir_ / "archive";
-      auto a = spawn<archive, priority_aware>(dir, segments, size);
+      auto a = spawn<archive, priority_aware>(dir, segments, size, method);
       attach_functor([=](uint32_t ec) { anon_send_exit(a, ec); });
       send(a, put_atom::value, accountant_atom::value, accountant_);
       return put({a, "archive", label});

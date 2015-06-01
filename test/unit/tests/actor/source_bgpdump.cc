@@ -21,27 +21,26 @@ TEST(bgpdump_source)
   MESSAGE("running the source");
   anon_send(bgpdump, run_atom::value);
   self->receive(
-    [&](chunk const& chk)
+    [&](std::vector<event> const& events)
     {
-      auto v = chk.uncompress();
-      CHECK(v.size() == 11782);
-      CHECK(v[0].type().name() == "bgpdump::state_change");
-      auto r = get<record>(v[0]);
+      REQUIRE(events.size() == 11782);
+      CHECK(events[0].type().name() == "bgpdump::state_change");
+      auto r = get<record>(events[0]);
       REQUIRE(r);
       CHECK((*r)[1] == *to<address>("2a02:20c8:1f:1::4"));
       CHECK((*r)[2] == 50304u);
       CHECK((*r)[3] == "3");
       CHECK((*r)[4] == "2");
-      CHECK(v[2].type().name() == "bgpdump::announcement");
-      r = get<record>(v[2]);
+      CHECK(events[2].type().name() == "bgpdump::announcement");
+      r = get<record>(events[2]);
       REQUIRE(r);
       CHECK((*r)[1] == *to<address>("2001:8e0:0:ffff::9"));
       auto as_path = get<vector>((*r)[4]);
       REQUIRE(as_path);
       CHECK(as_path->size() == 4);
       CHECK((*as_path)[3] == 15194u);
-      CHECK(v[13].type().name() == "bgpdump::withdrawn");
-      r = get<record>(v[13]);
+      CHECK(events[13].type().name() == "bgpdump::withdrawn");
+      r = get<record>(events[13]);
       REQUIRE(r);
       CHECK((*r)[1] == *to<address>("68.67.63.245"));
       CHECK((*r)[2] == 22652u);

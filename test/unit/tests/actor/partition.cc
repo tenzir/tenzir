@@ -1,30 +1,33 @@
 #include <caf/all.hpp>
+
+#include "vast/bitstream.h"
 #include "vast/event.h"
 #include "vast/actor/partition.h"
 #include "vast/actor/task.h"
 
 #define SUITE actors
 #include "test.h"
-#include "fixtures/chunks.h"
+#include "fixtures/events.h"
 
 using namespace caf;
 using namespace vast;
 
-FIXTURE_SCOPE(chunk_scope, fixtures::chunks)
+FIXTURE_SCOPE(fixture_scope, fixtures::simple_events)
 
 TEST(partition)
 {
   using bitstream_type = partition::bitstream_type;
 
-  MESSAGE("sending chunks to partition");
+  MESSAGE("sending events to partition");
   path dir = "vast-test-partition";
   scoped_actor self;
   auto p = self->spawn<partition, monitored+priority_aware>(dir, self);
-  auto t = self->spawn<task, monitored>(time::snapshot(), chunk0.events());
-  self->send(p, chunk0, t);
+  auto t = self->spawn<task, monitored>(time::snapshot(),
+                                        uint64_t{events0.size()});
+  self->send(p, events0, t);
   self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
-  t = self->spawn<task, monitored>(time::snapshot(), chunk1.events());
-  self->send(p, chunk1, t);
+  t = self->spawn<task, monitored>(time::snapshot(), uint64_t{events1.size()});
+  self->send(p, events1, t);
   self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
 
   MESSAGE("flushing partition through termination");
@@ -57,16 +60,9 @@ TEST(partition)
   REQUIRE(expr);
   self->send(p, *expr, continuous_atom::value);
 
-  MESSAGE("sending another chunk");
-  std::vector<event> events(2048);
-  for (size_t i = 0; i < events.size(); ++i)
-  {
-    auto j = chunk0.events() + chunk1.events() + i;
-    events[i] = event::make(record{j, to_string(j)}, type0);
-    events[i].id(j);
-  }
-  t = self->spawn<task, monitored>(time::snapshot(), 2048ull);
-  self->send(p, chunk{std::move(events)}, t);
+  MESSAGE("sending another event");
+  t = self->spawn<task, monitored>(time::snapshot(), uint64_t{events.size()});
+  self->send(p, events, t);
   self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
 
   MESSAGE("getting continuous hits");
@@ -74,16 +70,20 @@ TEST(partition)
     [&](expression const& e, bitstream_type const& hits, continuous_atom)
     {
       CHECK(*expr == e);
-      // (1524..3571).map { |x| x.to_s }.select { |x| x =~ /7/ }.length == 549
-      CHECK(hits.count() == 549);
+      // (0..1024)
+      //   .select{|x| x % 2 == 0}
+      //   .map{|x| x.to_s}
+      //   .select{|x| x =~ /7/}
+      //   .length == 95
+      CHECK(hits.count() == 95);
     });
 
-  MESSAGE("disabling continuous query and sending another chunk");
+  MESSAGE("disabling continuous query and sending another event");
   self->send(p, *expr, continuous_atom::value, disable_atom::value);
   auto e = event::make(record{1337u, to_string(1337)}, type0);
   e.id(4711);
   t = self->spawn<task, monitored>(time::snapshot(), 1ull);
-  self->send(p, chunk{{std::move(e)}}, t);
+  self->send(p, std::vector<event>{std::move(e)}, t);
   self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
   // Make sure that we didn't get any new hits.
   CHECK(self->mailbox().count() == 0);

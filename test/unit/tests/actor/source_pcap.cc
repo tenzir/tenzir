@@ -22,10 +22,10 @@ TEST(pcap_source)
   MESSAGE("running the source");
   anon_send(pcap, run_atom::value);
   self->receive(
-    [&](chunk const& chk)
+    [&](std::vector<event> const& events)
     {
-      CHECK(chk.meta().schema.find_type("vast::packet") != nullptr);
-      CHECK(chk.events() == 44);
+      REQUIRE(events.size() == 44);
+      CHECK(events[0].type().name() == "vast::packet");
     },
     fail
     );
@@ -43,7 +43,7 @@ TEST(pcap_source)
   self->receive([&](upstream_atom, actor const& a) { CHECK(a == pcap); });
   anon_send(pcap, run_atom::value);
   self->receive(
-      [&](chunk const& chk) { CHECK(chk.events() == 36); },
+      [&](std::vector<event> const& events) { CHECK(events.size() == 36); },
       fail
       );
   self->receive(

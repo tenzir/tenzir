@@ -4,76 +4,12 @@
 #include <caf/all.hpp>
 
 #include "vast/event.h"
-#include "vast/chunk.h"
 #include "vast/actor/actor.h"
 #include "vast/util/assert.h"
 #include "vast/util/result.h"
 
 namespace vast {
 namespace source {
-namespace detail {
-
-class chunkifier : public flow_controlled_actor
-{
-public:
-  chunkifier(caf::actor source, io::compression method)
-    : flow_controlled_actor{"chunkifier"},
-      source_{source},
-      compression_{method}
-  {
-    trap_exit(true);
-  }
-
-  void on_exit()
-  {
-    source_ = caf::invalid_actor;
-    accountant_ = caf::invalid_actor;
-  }
-
-  caf::behavior make_behavior() override
-  {
-    using namespace caf;
-    return
-    {
-      register_upstream_node(),
-      [=](exit_msg const& msg)
-      {
-        if (downgrade_exit())
-          return;
-        quit(msg.reason);
-      },
-      [=](down_msg const& msg)
-      {
-        if (remove_upstream_node(msg.source))
-          return;
-      },
-      [=](accountant_atom, actor const& accountant)
-      {
-        VAST_DEBUG(this, "registers accountant", accountant);
-        accountant_ = accountant;
-        send(accountant_, label() + "-events", time::now());
-      },
-      [=](std::vector<event> const& events, caf::actor const& sink)
-      {
-        VAST_DEBUG(this, "forwards", events.size(), "events");
-        send(sink, chunk{events, compression_});
-        if (accountant_ != invalid_actor)
-          send(accountant_, uint64_t{events.size()}, time::snapshot());
-        if (mailbox().count() > 50)
-          overloaded(true);
-        else if (overloaded())
-          overloaded(false);
-      }
-    };
-  }
-
-private:
-  caf::actor source_;
-  caf::actor accountant_;
-  io::compression compression_ = io::lz4;
-};
-
-} // namespace detail
 
 /// The base class for data sources which synchronously extract events
 /// one-by-one.
@@ -90,7 +26,6 @@ public:
   void on_exit()
   {
     accountant_ = caf::invalid_actor;
-    chunkifier_ = caf::invalid_actor;
     sinks_.clear();
   }
 
@@ -103,33 +38,16 @@ public:
       {
         if (downgrade_exit())
           return;
-        if (! chunkifier_)
-        {
-          this->quit(msg.reason);
-          return;
-        }
         if (! events_.empty())
-          send_events();
-        send_exit(chunkifier_, msg.reason);
-        become(
-          [=](down_msg const& down)
-          {
-            if (down.source == chunkifier_)
-              quit(msg.reason);
-          });
+          send(sinks_[next_sink_++ % sinks_.size()], std::move(events_));
+        quit(msg.reason);
       },
       [=](down_msg const& msg)
       {
-        // Handle chunkifier termination.
-        if (msg.source == chunkifier_)
-        {
-          quit(msg.reason);
-          return;
-        }
         // Handle sink termination.
         auto sink = std::find_if(
             sinks_.begin(), sinks_.end(),
-            [this](auto& x) { return x->address() == current_sender(); });
+            [&](auto& x) { return x->address() == msg.source; });
         if (sink != sinks_.end())
           sinks_.erase(sink);
         if (sinks_.empty())
@@ -147,10 +65,6 @@ public:
         overloaded(false);
         if (! done())
           send(this, run_atom::value);
-      },
-      [=](io::compression method)
-      {
-        compression_ = method;
       },
       [=](batch_atom, uint64_t batch_size)
       {
@@ -184,14 +98,6 @@ public:
       },
       [=](run_atom)
       {
-        if (! chunkifier_)
-        {
-          chunkifier_ = spawn<detail::chunkifier, priority_aware + monitored>(
-              this, compression_);
-          if (accountant_)
-            send(chunkifier_, accountant_atom::value, accountant_);
-          send(chunkifier_, upstream_atom::value, this);
-        }
         if (sinks_.empty())
         {
           VAST_ERROR(this, "cannot run without sinks");
@@ -214,9 +120,11 @@ public:
         }
         if (! events_.empty())
         {
+          VAST_VERBOSE(this, "produced", events_.size(), "events");
           if (accountant_ != invalid_actor)
             send(accountant_, uint64_t{events_.size()}, time::snapshot());
-          send_events();
+          send(sinks_[next_sink_++ % sinks_.size()], std::move(events_));
+          events_ = {};
         }
         if (done())
           send_exit(*this, exit::done);
@@ -239,20 +147,8 @@ protected:
   }
 
 private:
-  void send_events()
-  {
-    using namespace caf;
-    VAST_ASSERT(! events_.empty());
-    VAST_VERBOSE(this, "produced", events_.size(), "events");
-    auto& sink = sinks_[next_sink_++ % sinks_.size()];
-    send(chunkifier_, std::move(events_), sink);
-    events_ = {};
-  }
-
   bool done_ = false;
-  io::compression compression_ = io::lz4;
   caf::actor accountant_;
-  caf::actor chunkifier_;
   std::vector<caf::actor> sinks_;
   size_t next_sink_ = 0;
   uint64_t batch_size_ = std::numeric_limits<uint16_t>::max();

@@ -23,6 +23,7 @@
 #include "vast/concept/serializable/schema.h"
 #include "vast/concept/serializable/state.h"
 #include "vast/concept/serializable/type.h"
+#include "vast/concept/serializable/vector_event.h"
 #include "vast/concept/serializable/caf/message.h"
 #include "vast/concept/serializable/std/array.h"
 #include "vast/concept/serializable/std/chrono.h"
@@ -112,38 +113,6 @@ void announce_bmi_hierarchy(std::string const& bs_name)
     model_wrap("sequence_bitmap_index<T>", bs_name)
   );
 }
-
-//class vector_event_type_info 
-//  : public caf::detail::abstract_uniform_type_info<std::vector<event>>
-//{
-//public:
-//  vector_event_type_info(io::compression method)
-//    : caf::detail::abstract_uniform_type_info<std::vector<event>>(
-//        "std::vector<vast::event>"),
-//      compression_{method}
-//  {
-//  }
-//
-//private:
-//  void serialize(void const* ptr, caf::serializer* sink) const final
-//  {
-//    caf_to_vast_serializer s{*sink};
-//    auto events = reinterpret_cast<std::vector<event> const*>(ptr);
-//    chunk chk{*events, compression_};
-//    s << chk;
-//  }
-//
-//  void deserialize(void* ptr, caf::deserializer* source) const final
-//  {
-//    caf_to_vast_deserializer d{*source};
-//    auto x = reinterpret_cast<std::vector<event>*>(ptr);
-//    chunk chk;
-//    d >> chk;
-//    *x = chk.uncompress();
-//  }
-//
-//  io::compression compression_;
-//};
 
 } // namespace <anonymous>
 

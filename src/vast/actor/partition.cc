@@ -15,8 +15,8 @@ namespace vast {
 
 namespace {
 
-// Accumulates all hits from a chunk, evalutes a query, and sends the result of
-// the evaluation to PARTITION.
+// Accumulates all hits from an event batch, evalutes a query, and sends the
+// result of the evaluation to PARTITION.
 template <typename Bitstream>
 struct continuous_query_proxy : default_actor
 {
@@ -39,7 +39,7 @@ struct continuous_query_proxy : default_actor
     predicate_map const& map_;
   };
 
-  // Accumulates hits from indexers for a single chunk.
+  // Accumulates hits from indexers for a single event batch.
   struct accumulator : default_actor
   {
     accumulator(std::vector<expression> exprs, actor sink)
@@ -235,8 +235,6 @@ behavior partition::make_behavior()
     }
     if (remove_upstream_node(msg.source))
       return;
-    if (dechunkifiers_.erase(msg.source) == 1)
-      return;
     auto i = std::find_if(
         indexers_.begin(),
         indexers_.end(),
@@ -251,33 +249,6 @@ behavior partition::make_behavior()
     register_upstream_node(),
     [=](exit_msg const& msg)
     {
-      // Exit phase 2: after all dechunkifiers have exited we wait for all indexers
-      // and terminate afterwards.
-      auto exit_phase2 =
-        [reason=msg.reason, on_down, this](down_msg const& down)
-        {
-          on_down(down);
-          if (indexers_.empty())
-            quit(reason);
-        };
-      // Exit phase 1: wait for all dechunkifiers to exit. If we have indexers
-      // left, tell them to exit.
-      auto exit_phase1 =
-        [reason=msg.reason, on_down, exit_phase2, this](down_msg const& down)
-      {
-        on_down(down);
-        if (! dechunkifiers_.empty())
-          return;
-        if (indexers_.empty())
-        {
-          quit(reason);
-          return;
-        }
-        VAST_DEBUG(this, "enters exit phase 2 after phase 1");
-        become(exit_phase2);
-        for (auto& i : indexers_)
-          send_exit(i.second, reason);
-      };
       if (msg.reason == exit::kill)
       {
         if (proxy_)
@@ -297,38 +268,41 @@ behavior partition::make_behavior()
         send_exit(q.second.task, msg.reason);
       if (proxy_)
         send_exit(proxy_, msg.reason);
-      // Begin the two-phase shutdown.
-      if (! dechunkifiers_.empty())
+      if (indexers_.empty())
       {
-        VAST_DEBUG(this, "enters exit phase 1");
-        become(exit_phase1);
-        flush();
-        return;
+        quit(msg.reason);
       }
-      if (! indexers_.empty())
+      else
       {
-        VAST_DEBUG(this, "enters exit phase 2");
-        become(exit_phase2);
+        VAST_DEBUG(this, "brings down all indexers");
         for (auto& i : indexers_)
           send_exit(i.second, msg.reason);
-        flush();
-        return;
+        become(
+          [reason=msg.reason, on_down, this](down_msg const& down)
+          {
+            // Terminate as soon as all indexers have exited.
+            on_down(down);
+            if (indexers_.empty())
+              quit(reason);
+          }
+        );
       }
       flush();
-      quit(msg.reason);
     },
     on_down,
-    [=](chunk const& chk, actor const& task)
+    [=](std::vector<event> const& events, actor const& task)
     {
-      VAST_DEBUG(this, "got chunk with", chk.meta().schema.size(), "types and",
-                 chk.events(), "events:",
-                 '[' << chk.base() << ',' << (chk.base() + chk.events()) << ')');
-      // Create event indexers according to chunk schema.
-      VAST_ASSERT(! chk.meta().schema.empty());
-      auto base = chk.base();
-      auto interval = to_string(base) + "-" + to_string(base + chk.events());
+      VAST_DEBUG(this, "got", events.size(), "events [",
+                 events.front().id() << ',' << (events.back().id() + 1) << ')');
+      // Extract all unique types.
+      util::flat_set<type> types;
+      for (auto& e : events)
+        types.insert(e.type());
+      // Create one event indexer per type.
+      auto base = events.front().id();
+      auto interval = to_string(base) + "-" + to_string(base + events.size());
       std::vector<actor> indexers;
-      for (auto& t : chk.meta().schema)
+      for (auto& t : types)
         if (! t.find_attribute(type::attribute::skip))
         {
           if (! schema_.add(t))
@@ -344,38 +318,30 @@ behavior partition::make_behavior()
         }
       if (indexers.empty())
       {
+        VAST_WARN(this, "didn't find any types to index");
         send_exit(task, exit::done);
         return;
       }
-      // Spin up a dechunkifier for this chunk and tell it to send all events
-      // to the freshly created indexers.
-      auto dechunkifier = spawn<monitored>(
-        [chk, indexers=std::move(indexers), task, proxy=proxy_]
-        (event_based_actor* self)
-        {
-          VAST_ASSERT(! indexers.empty());
-          auto events = chk.uncompress();
-          VAST_ASSERT(! events.empty());
-          auto msg = make_message(std::move(events), task);
-          for (auto& i : indexers)
-          {
-            self->send(task, i);
-            self->send(i, msg);
-          }
-          if (proxy != invalid_actor)
-            self->send(proxy, std::move(indexers));
-        });
-      dechunkifiers_.insert(dechunkifier->address());
-      if (++chunks_indexed_concurrently_ > 10) // TODO: calibrate
+      for (auto& i : indexers)
+      {
+        send(task, i);
+        send(i, current_message());
+      }
+      if (proxy_ != invalid_actor)
+        send(proxy_, std::move(indexers));
+      events_indexed_concurrently_ += events.size();
+      if (++events_indexed_concurrently_ > 1 << 20) // TODO: calibrate
         overloaded(true);
       send(task, supervisor_atom::value, this);
-      VAST_DEBUG(this, "indexes", chunks_indexed_concurrently_,
-                 "chunks in parallel");
+      VAST_DEBUG(this, "indexes", events_indexed_concurrently_,
+                 "events in parallel");
     },
     [=](done_atom, time::moment start, uint64_t events)
     {
       VAST_DEBUG(this, "indexed", events, "events in", time::snapshot() - start);
-      if (--chunks_indexed_concurrently_ < 10)
+      VAST_ASSERT(events_indexed_concurrently_ > events);
+      events_indexed_concurrently_ -= events;
+      if (events_indexed_concurrently_ < 1 << 20)
         overloaded(false);
     },
     [=](expression const& expr, continuous_atom)
@@ -401,7 +367,7 @@ behavior partition::make_behavior()
       if (! q->second.task)
       {
         // Even if we still have evaluated this query in the past, we still
-        // spin up a new task to ensure that we incorporate results from chunks
+        // spin up a new task to ensure that we incorporate results from events
         // that have arrived in the meantime.
         VAST_DEBUG(this, "spawns new query task");
         q->second.task = spawn<task>(time::snapshot(), q->first);
@@ -441,7 +407,7 @@ behavior partition::make_behavior()
     },
     [=](done_atom, time::moment start, predicate const& pred)
     {
-      // Once we've completed all tasks of a certain predicate for all chunks,
+      // Once we've completed all tasks of a certain predicate for all events,
       // we evaluate all queries in which the predicate participates.
       auto& ps = predicates_[pred];
       VAST_DEBUG(this, "took", time::snapshot() - start,
@@ -471,39 +437,16 @@ behavior partition::make_behavior()
     },
     [=](flush_atom, actor const& task)
     {
-      auto do_flush = [=]
-      {
-        VAST_DEBUG(this, "peforms flush");
-        send(task, this);
-        for (auto& i : indexers_)
-          if (i.second)
-          {
-            send(task, i.second);
-            send(i.second, flush_atom::value, task);
-          }
-        flush();
-        send(task, done_atom::value);
-      };
-      VAST_DEBUG(this, "got flush request");
-      if (dechunkifiers_.empty())
-      {
-        do_flush();
-      }
-      else
-      {
-        VAST_DEBUG(this, "waits for dechunkifiers to exit");
-        become(
-          keep_behavior,
-          [=](down_msg const& msg)
-          {
-            on_down(msg);
-            if (dechunkifiers_.empty())
-            {
-              do_flush();
-              unbecome();
-            }
-          });
-      }
+      VAST_DEBUG(this, "peforms flush");
+      send(task, this);
+      for (auto& i : indexers_)
+        if (i.second)
+        {
+          send(task, i.second);
+          send(i.second, flush_atom::value, task);
+        }
+      flush();
+      send(task, done_atom::value);
     },
     catch_unexpected()
   };

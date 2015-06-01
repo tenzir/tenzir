@@ -3,7 +3,6 @@
 
 #include <map>
 #include <set>
-#include "vast/chunk.h"
 #include "vast/expression.h"
 #include "vast/filesystem.h"
 #include "vast/schema.h"
@@ -16,10 +15,8 @@ namespace vast {
 
 /// A horizontal partition of the index.
 ///
-/// For each chunk PARTITION receives, it spawns (i) a dedicated DECHUNKIFIER
-/// which turns the chunk back into a sequence of events, (ii) a set of
-/// EVENT_INDEXERs for all event types occurring in the chunk, and (iii)
-/// registers all EVENT_INDEXERs as sink of the DECHUNKIFIER.
+/// For each event batch PARTITION receives, it spawns one EVENT_INDEXERs per
+/// type occurring in the batch and forwards them the events. 
 struct partition : flow_controlled_actor
 {
   using bitstream_type = default_bitstream;
@@ -61,11 +58,10 @@ struct partition : flow_controlled_actor
   caf::actor sink_;
   caf::actor proxy_;
   schema schema_;
-  size_t chunks_indexed_concurrently_ = 0;
+  size_t events_indexed_concurrently_ = 0;
   std::multimap<event_id, caf::actor> indexers_;
   std::map<expression, query_state> queries_;
   std::map<predicate, predicate_state> predicates_;
-  std::set<caf::actor_addr> dechunkifiers_;
 };
 
 } // namespace vast

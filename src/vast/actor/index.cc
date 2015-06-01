@@ -2,7 +2,7 @@
 
 #include <caf/all.hpp>
 #include "vast/bitmap_index.h"
-#include "vast/chunk.h"
+#include "vast/event.h"
 #include "vast/print.h"
 #include "vast/query_options.h"
 #include "vast/actor/partition.h"
@@ -190,17 +190,17 @@ behavior index::make_behavior()
       send(t, done_atom::value);
       return t;
     },
-    [=](chunk const& chk)
+    [=](std::vector<event> const& events)
     {
       auto& a = active_[next_active_++ % active_.size()];
       auto i = partitions_.find(a.first);
       VAST_ASSERT(i != partitions_.end());
       VAST_ASSERT(a.second != invalid_actor);
       // Replace partition with a new one on overflow. If the max is too small
-      // that even the first chunk doesn't fit, then we just accept this and
-      // have a one-chunk partition.
+      // that even the first batch doesn't fit, then we just accept this and
+      // have a partition with a single batch.
       if (i->second.events > 0
-          && i->second.events + chk.events() > max_events_per_partition_)
+          && i->second.events + events.size() > max_events_per_partition_)
       {
         VAST_VERBOSE(this, "replaces partition (" << a.first << ')');
         send_exit(a.second, exit::stop);
@@ -216,18 +216,20 @@ behavior index::make_behavior()
       }
       // Update partition meta data.
       auto& p = i->second;
-      p.events += chk.events();
+      p.events += events.size();
       p.last_modified = time::now();
-      if (p.from == time::duration{} || chk.meta().first < p.from)
-        p.from = chk.meta().first;
-      if (p.to == time::duration{} || chk.meta().last > p.to)
-        p.to = chk.meta().last;
-      // Relay chunk.
-      VAST_DEBUG(this, "forwards chunk [" << chk.base() << ',' << chk.base() +
-                 chk.events() << ')', "to", a.second, '(' << a.first << ')');
-      auto t = spawn<task>(time::snapshot(), chk.events());
+      if (p.from == time::duration{} || events.front().timestamp() < p.from)
+        p.from = events.front().timestamp();
+      if (p.to == time::duration{} || events.back().timestamp() > p.to)
+        p.to = events.back().timestamp();
+      // Relay events.
+      VAST_DEBUG(this, "forwards", events.size(), "events [" <<
+                 events.front().id() << ',' << (events.back().id() + 1) << ')',
+                 "to", a.second, '(' << a.first << ')');
+      auto t = spawn<task>(time::snapshot(), uint64_t{events.size()});
       send(t, supervisor_atom::value, this);
-      send(a.second, chk, t);
+      send(a.second, message::concat(current_message(),
+                                     make_message(std::move(t))));
     },
     [=](expression const& expr, query_options opts, actor const& subscriber)
     {
@@ -290,7 +292,7 @@ behavior index::make_behavior()
           qs.cont->task = spawn<task>(time::snapshot());
           send(qs.cont->task, this);
           // Relay the continuous query to all active partitions, as these may
-          // still receive chunks.
+          // still receive events.
           for (auto& a : active_)
             send(a.second, expr, continuous_atom::value);
         }

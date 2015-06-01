@@ -173,10 +173,12 @@ Available *arguments*:
 Available *actor* values with corresponding *parameters*:
 
 *archive* [*parameters*]
-  `-s` *size* [*128*]
-    Maximum segment size in MB
-  `-c` *segments* [*10*]
+  `-c` *compression* [*lz4*]
+    Compression algorithm for chunks
+  `-s` *segments* [*10*]
     Number of cached segments
+  `-m` *size* [*128*]
+    Maximum segment size in MB
 
 *index* [*parameters*]
   `-a` *partitions* [*5*]

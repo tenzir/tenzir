@@ -29,12 +29,10 @@ namespace vast {
 message node::spawn_source(std::string const& label, message const& params)
 {
   auto batch_size = uint64_t{100000};
-  auto comp = "lz4"s;
   auto schema_file = ""s;
   auto input = ""s;
   auto r = params.extract_opts({
     {"batch,b", "number of events to ingest at once", batch_size},
-    {"compression,c", "compression method for event batches", comp},
     {"schema,s", "alternate schema file", schema_file},
     {"dump-schema,d", "print schema and exit"},
     {"read,r", "path to read events from", input},
@@ -161,18 +159,6 @@ message node::spawn_source(std::string const& label, message const& params)
   // Set parameters.
   send(src, batch_atom::value, batch_size);
   send(src, put_atom::value, accountant_atom::value, accountant_);
-  if (comp == "null")
-    send(src, io::null);
-  else if (comp == "lz4")
-    send(src, io::lz4);
-  else if (comp == "snappy")
-#ifdef VAST_HAVE_SNAPPY
-    send(src, io::snappy);
-#else
-    return make_message(error{"not compiled with snappy support"});
-#endif
-  else
-    return make_message(error{"unknown compression method: ", comp});
   // Save it.
   terminate = false;
   return put({src, "source", label});

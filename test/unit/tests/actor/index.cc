@@ -1,29 +1,28 @@
 #include <caf/all.hpp>
 
-#include "vast/chunk.h"
 #include "vast/event.h"
 #include "vast/query_options.h"
 #include "vast/actor/index.h"
 
 #define SUITE actors
 #include "test.h"
-#include "fixtures/chunks.h"
+#include "fixtures/events.h"
 
 using namespace caf;
 using namespace vast;
 
-FIXTURE_SCOPE(chunk_scope, fixtures::chunks)
+FIXTURE_SCOPE(fixture_scope, fixtures::simple_events)
 
 TEST(index)
 {
   using bitstream_type = index::bitstream_type;
 
-  MESSAGE("sending chunks to index");
+  MESSAGE("sending events to index");
   path dir = "vast-test-index";
   scoped_actor self;
   auto idx = self->spawn<vast::index, priority_aware>(dir, 500, 2, 3);
-  self->send(idx, chunk0);
-  self->send(idx, chunk1);
+  self->send(idx, events0);
+  self->send(idx, events1);
 
   MESSAGE("flushing index through termination");
   self->send_exit(idx, exit::done);
@@ -73,23 +72,16 @@ TEST(index)
       task = t;
     });
 
-  MESSAGE("sending another chunk and getting continuous hits");
-  std::vector<event> events(2048);
-  for (size_t i = 0; i < events.size(); ++i)
-  {
-    auto j = 1524 + i;
-    events[i] = event::make(record{j, to_string(j)}, type0);
-    events[i].id(j);
-  }
-  self->send(idx, chunk{std::move(events)});
-  self->receive([&](bitstream_type const& bs) { CHECK(bs.count() == 549); });
+  MESSAGE("sending another event batch and getting continuous hits");
+  self->send(idx, events);
+  self->receive([&](bitstream_type const& bs) { CHECK(bs.count() == 95); });
 
-  MESSAGE("disabling continuous query and sending another chunk");
+  MESSAGE("disabling continuous query and sending another event");
   self->send(idx, *expr, continuous_atom::value, disable_atom::value);
   self->receive([&](down_msg const& msg) { CHECK(msg.source == task); });
   auto e = event::make(record{1337u, to_string(1337)}, type0);
   e.id(4711);
-  self->send(idx, chunk{{std::move(e)}});
+  self->send(idx, std::vector<event>{std::move(e)});
   // Make sure that we didn't get any new hits.
   CHECK(self->mailbox().count() == 0);
 

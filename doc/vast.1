@@ -1,4 +1,4 @@
-.TH VAST 1 "May 27, 2015" 0.1 "Visibility Across Space and Time"
+.TH VAST 1 "May 30, 2015" 0.1 "Visibility Across Space and Time"
 .SH NAME
 .PP
 \fB\fCvast\fR \-\- interface to a VAST node
@@ -157,10 +157,12 @@ spawned on the connected node.
 Available \fIactor\fP values with corresponding \fIparameters\fP:
 .PP
 \fIarchive\fP [\fIparameters\fP]
-  \fB\fC\-s\fR \fIsize\fP [\fI128\fP]
-    Maximum segment size in MB
-  \fB\fC\-c\fR \fIsegments\fP [\fI10\fP]
+  \fB\fC\-c\fR \fIcompression\fP [\fIlz4\fP]
+    Compression algorithm for chunks
+  \fB\fC\-s\fR \fIsegments\fP [\fI10\fP]
     Number of cached segments
+  \fB\fC\-m\fR \fIsize\fP [\fI128\fP]
+    Maximum segment size in MB
 .PP
 \fIindex\fP [\fIparameters\fP]
   \fB\fC\-a\fR \fIpartitions\fP [\fI5\fP]

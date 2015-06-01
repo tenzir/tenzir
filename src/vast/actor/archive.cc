@@ -1,5 +1,7 @@
 #include <caf/all.hpp>
 
+#include "vast/chunk.h"
+#include "vast/event.h"
 #include "vast/actor/archive.h"
 #include "vast/concept/serializable/chunk.h"
 #include "vast/concept/serializable/io.h"
@@ -9,11 +11,13 @@ namespace vast {
 
 using namespace caf;
 
-archive::archive(path dir, size_t capacity, size_t max_segment_size)
+archive::archive(path dir, size_t capacity, size_t max_segment_size,
+                 io::compression compression)
   : flow_controlled_actor{"archive"},
     dir_{dir},
     meta_data_filename_{dir_ / "meta.data"},
     max_segment_size_{max_segment_size},
+    compression_{compression},
     cache_{capacity}
 {
   VAST_ASSERT(max_segment_size_ > 0);
@@ -58,17 +62,18 @@ caf::behavior archive::make_behavior()
       accountant_ = accountant;
       send(accountant_, label() + "-events", time::now());
     },
-    [=](chunk const& chk)
+    [=](std::vector<event> const& events)
     {
-      VAST_DEBUG(this, "got chunk [" << chk.meta().ids.find_first() << ',' <<
-                 (chk.meta().ids.find_last() + 1 ) << ')');
+      VAST_DEBUG(this, "got", events.size(), "events [" <<
+                 events.front().id() << ',' << (events.back().id() + 1) << ')');
+      chunk chk{events, compression_};
       auto too_large = current_size_ + chk.bytes() >= max_segment_size_;
       if (! current_.empty() && too_large && ! flush())
         return;
-      current_size_ += chk.bytes();
-      current_.insert(chk);
       if (accountant_)
-        send(accountant_, chk.events(), time::snapshot());
+        send(accountant_, uint64_t{events.size()}, time::snapshot());
+      current_size_ += chk.bytes();
+      current_.insert(std::move(chk));
     },
     [=](flush_atom)
     {

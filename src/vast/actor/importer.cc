@@ -1,6 +1,6 @@
 #include <caf/all.hpp>
 
-#include "vast/chunk.h"
+#include "vast/event.h"
 #include "vast/actor/importer.h"
 
 namespace vast {
@@ -64,7 +64,7 @@ behavior importer::make_behavior()
       monitor(a);
       index_ = a;
     },
-    [=](chunk& chk)
+    [=](std::vector<event>& events)
     {
       if (identifier_ == invalid_actor)
       {
@@ -84,23 +84,21 @@ behavior importer::make_behavior()
         quit(exit::error);
         return;
       }
-      sync_send(identifier_, request_atom::value, chk.events()).then(
+      sync_send(identifier_, request_atom::value, uint64_t{events.size()}).then(
         [=](id_atom, event_id from, event_id to) mutable
         {
           auto n = to - from;
           VAST_DEBUG(this, "got", n,
                      "IDs for chunk [" << from << "," << to << ")");
-          if (n < chk.events())
+          if (n < events.size())
           {
-            VAST_ERROR(this, "got", n, "IDs, needed", chk.events());
+            VAST_ERROR(this, "got", n, "IDs, needed", events.size());
             quit(exit::error);
             return;
           }
-          default_bitstream ids;
-          ids.append(from, false);
-          ids.append(n, true);
-          chk.ids(std::move(ids));
-          auto t = make_message(std::move(chk));
+          for (auto& e : events)
+            e.id(from++);
+          auto t = make_message(std::move(events));
           send(archive_, t);
           send(index_, t);
         },
@@ -110,7 +108,7 @@ behavior importer::make_behavior()
           quit(exit::error);
         },
         catch_unexpected()
-        );
+      );
     },
     catch_unexpected()
   };

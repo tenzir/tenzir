@@ -7,6 +7,7 @@
 #include "vast/filesystem.h"
 #include "vast/uuid.h"
 #include "vast/actor/actor.h"
+#include "vast/io/compression.h"
 #include "vast/util/cache.h"
 #include "vast/util/flat_set.h"
 #include "vast/util/range_map.h"
@@ -30,8 +31,10 @@ struct archive : flow_controlled_actor
   /// @param dir The root directory of the archive.
   /// @param capacity The number of segments to hold in memory.
   /// @param max_segment_size The maximum size in MB of a segment.
+  /// @param compression The compression method to use for chunks.
   /// @pre `max_segment_size > 0`
-  archive(path dir, size_t capacity, size_t max_segment_size);
+  archive(path dir, size_t capacity, size_t max_segment_size,
+          io::compression = io::lz4);
 
   void on_exit();
   caf::behavior make_behavior() override;
@@ -42,6 +45,7 @@ struct archive : flow_controlled_actor
   path dir_;
   path meta_data_filename_;
   size_t max_segment_size_;
+  io::compression compression_;
   util::range_map<event_id, uuid> segments_;
   util::cache<uuid, segment> cache_;
   segment current_;
