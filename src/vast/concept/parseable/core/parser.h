@@ -50,6 +50,9 @@ template <typename>
 class plus_parser;
 
 template <typename, typename>
+class difference_parser;
+
+template <typename, typename>
 class and_parser;
 
 template <typename, typename>
@@ -79,6 +82,12 @@ struct parser
   friend auto operator+(Derived const& p)
   {
     return plus_parser<Derived>{p};
+  }
+
+  template <typename Rhs>
+  friend auto operator-(Derived const& lhs, Rhs const& rhs)
+  {
+    return difference_parser<Derived, Rhs>{lhs, rhs};
   }
 
   template <typename Rhs>
