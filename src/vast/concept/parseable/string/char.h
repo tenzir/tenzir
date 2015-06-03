@@ -4,6 +4,7 @@
 #include <string>
 
 #include "vast/concept/parseable/core/parser.h"
+#include "vast/concept/parseable/detail/char_helpers.h"
 
 namespace vast {
 
@@ -22,28 +23,12 @@ public:
   {
     if (f == l || *f != c_)
       return false;
-    incorporate(a, c_);
+    detail::absorb(a, c_);
     ++f;
     return true;
   }
 
 private:
-  template <typename Attribute>
-  static void incorporate(Attribute& a, char c)
-  {
-    a = c;
-  }
-
-  static void incorporate(std::string& str, char c)
-  {
-    str += c;
-  }
-
-  static void incorporate(std::vector<char> v, char c)
-  {
-    v.push_back(c);
-  }
-
   char c_;
 };
 
