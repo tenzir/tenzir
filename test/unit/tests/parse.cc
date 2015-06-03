@@ -2,6 +2,7 @@
 #include "vast/concept/parseable/core.h"
 #include "vast/concept/parseable/numeric.h"
 #include "vast/concept/parseable/string.h"
+#include "vast/concept/parseable/string/quoted_string.h"
 #include "vast/concept/parseable/vast/address.h"
 #include "vast/concept/parseable/vast/time.h"
 
@@ -53,6 +54,63 @@ TEST(char class)
   CHECK(c.parse(f, l, got));
   CHECK(f == l);
   CHECK(got == "deadbeef");
+}
+
+TEST(quoted string)
+{
+  auto p = quoted_string_parser<'\''>{};
+  auto got = ""s;
+
+  MESSAGE("no escaped chars");
+  auto str = "'foobar'"s;
+  auto f = str.begin();
+  auto l = str.end();
+  CHECK(p.parse(f, l, got));
+  CHECK(got == "foobar");
+  CHECK(f == l);
+
+  MESSAGE("escaped char in middle");
+  str = "'foo\\'bar'"s;
+  f = str.begin();
+  l = str.end();
+  got.clear();
+  CHECK(p.parse(f, l, got));
+  CHECK(got == "foo'bar");
+  CHECK(f == l);
+
+  MESSAGE("escaped char at beginning");
+  str = "'\\'foobar'"s;
+  f = str.begin();
+  l = str.end();
+  got.clear();
+  CHECK(p.parse(f, l, got));
+  CHECK(got == "'foobar");
+  CHECK(f == l);
+
+  MESSAGE("escaped char at end");
+  str = "'foobar\\''"s;
+  f = str.begin();
+  l = str.end();
+  got.clear();
+  CHECK(p.parse(f, l, got));
+  CHECK(got == "foobar'");
+  CHECK(f == l);
+
+  MESSAGE("missing trailing quote");
+  str = "'foobar"s;
+  f = str.begin();
+  l = str.end();
+  got.clear();
+  CHECK(! p.parse(f, l, got));
+  CHECK(got == "foobar");
+
+  MESSAGE("missing trailing quote after escaped quote");
+  str = "'foobar\\'"s;
+  f = str.begin();
+  l = str.end();
+  got.clear();
+  CHECK(! p.parse(f, l, got));
+  CHECK(got == "foobar'");
 }
 
 TEST(attribute compatibility: string)
