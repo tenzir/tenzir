@@ -52,24 +52,48 @@ public:
   bool parse(Iterator& f, Iterator const& l, Attribute& a) const
   {
     auto save = f;
-    lhs_attribute al;
-    if (lhs_.parse(f, l, al))
-    {
-      a = std::move(al);
+    if (parse_left(f, l, a))
       return true;
-    }
     f = save;
-    rhs_attribute ar;
-    if (rhs_.parse(f, l, ar))
-    {
-      a = std::move(ar);
+    if (parse_right(f, l, a))
       return true;
-    }
     f = save;
     return false;
   }
 
 private:
+  template <typename Iterator>
+  bool parse_left(Iterator& f, Iterator const& l, unused_type) const
+  {
+    return lhs_.parse(f, l, unused);
+  }
+
+  template <typename Iterator>
+  bool parse_right(Iterator& f, Iterator const& l, unused_type) const
+  {
+    return rhs_.parse(f, l, unused);
+  }
+
+  template <typename Iterator, typename Attribute>
+  bool parse_left(Iterator& f, Iterator const& l, Attribute& a) const
+  {
+    lhs_attribute al;
+    if (! lhs_.parse(f, l, a))
+      return false;;
+    a = std::move(al);
+    return true;
+  }
+
+  template <typename Iterator, typename Attribute>
+  auto parse_right(Iterator& f, Iterator const& l, Attribute& a) const
+  {
+    rhs_attribute ar;
+    if (! rhs_.parse(f, l, a))
+      return false;
+    a = std::move(ar);
+    return true;
+  }
+
   Lhs lhs_;
   Rhs rhs_;
 };
