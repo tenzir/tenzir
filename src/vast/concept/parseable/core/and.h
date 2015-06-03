@@ -26,6 +26,34 @@ struct is_and_parser<and_parser<Ts...>> : std::true_type {};
 template <typename Lhs, typename Rhs>
 class and_parser : public parser<and_parser<Lhs, Rhs>>
 {
+public:
+  using lhs_type = Lhs;
+  using rhs_type = Rhs;
+  using lhs_attribute = typename Lhs::attribute;
+  using rhs_attribute = typename Rhs::attribute;
+
+  // LHS = unused && RHS = unused  =>  unused
+  // LHS = T && RHS = unused       =>  LHS
+  // LHS = unused && RHS = T       =>  RHS
+  // LHS = T && RHS = U            =>  std:tuple<T, U>
+  using attribute =
+    std::conditional_t<
+      std::is_same<lhs_attribute, unused_type>{}
+        && std::is_same<rhs_attribute, unused_type>{},
+      unused_type,
+      std::conditional_t<
+        std::is_same<lhs_attribute, unused_type>{},
+        rhs_attribute,
+        std::conditional_t<
+          std::is_same<rhs_attribute, unused_type>{},
+          lhs_attribute,
+          decltype(std::tuple_cat(tuple_wrap<lhs_attribute>{},
+                                  tuple_wrap<rhs_attribute>{}))
+        >
+      >
+    >;
+
+private:
   template <typename T>
   static constexpr auto depth_helper()
     -> std::enable_if_t<! is_and_parser<T>::value, size_t>
@@ -82,6 +110,18 @@ class and_parser : public parser<and_parser<Lhs, Rhs>>
     return std::get<0>(x);
   }
 
+  template <typename Iterator>
+  bool parse_left(Iterator& f, Iterator const& l, std::string& str) const
+  {
+    return lhs_.parse(f, l, str);
+  }
+
+  template <typename Iterator, typename T, typename U>
+  bool parse_left(Iterator& f, Iterator const& l, std::pair<T, U>& p) const
+  {
+    return lhs_.parse(f, l, p.first);
+  }
+
   template <typename Iterator, typename... Ts>
   bool parse_left(Iterator& f, Iterator const& l, std::tuple<Ts...>& t) const
   {
@@ -100,6 +140,18 @@ class and_parser : public parser<and_parser<Lhs, Rhs>>
     return rhs_.parse(f, l, unused);
   }
 
+  template <typename Iterator>
+  bool parse_right(Iterator& f, Iterator const& l, std::string& str) const
+  {
+    return rhs_.parse(f, l, str);
+  }
+
+  template <typename Iterator, typename T, typename U>
+  bool parse_right(Iterator& f, Iterator const& l, std::pair<T, U>& p) const
+  {
+    return rhs_.parse(f, l, p.second);
+  }
+
   template <typename Iterator, typename... Ts>
   bool parse_right(Iterator& f, Iterator const& l, std::tuple<Ts...>& t) const
   {
@@ -113,32 +165,6 @@ class and_parser : public parser<and_parser<Lhs, Rhs>>
   }
 
 public:
-  using lhs_type = Lhs;
-  using rhs_type = Rhs;
-  using lhs_attribute = typename Lhs::attribute;
-  using rhs_attribute = typename Rhs::attribute;
-
-  // LHS = unused && RHS = unused  =>  unused
-  // LHS = T && RHS = unused       =>  LHS
-  // LHS = unused && RHS = T       =>  RHS
-  // LHS = T && RHS = U            =>  std:tuple<T, U>
-  using attribute =
-    std::conditional_t<
-      std::is_same<lhs_attribute, unused_type>{}
-        && std::is_same<rhs_attribute, unused_type>{},
-      unused_type,
-      std::conditional_t<
-        std::is_same<lhs_attribute, unused_type>{},
-        rhs_attribute,
-        std::conditional_t<
-          std::is_same<rhs_attribute, unused_type>{},
-          lhs_attribute,
-          decltype(std::tuple_cat(tuple_wrap<lhs_attribute>{},
-                                  tuple_wrap<rhs_attribute>{}))
-        >
-      >
-    >;
-
   and_parser(Lhs const& lhs, Rhs const& rhs)
     : lhs_{lhs},
       rhs_{rhs}
