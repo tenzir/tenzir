@@ -4,17 +4,83 @@
 #include "vast/concept/parseable/vast/address.h"
 #include "vast/concept/parseable/vast/time.h"
 
-#define SUITE parse
+#define SUITE parseable
 #include "test.h"
 
 using namespace vast;
+using namespace std::string_literals;
+
+TEST(string attribute conversion)
+{
+  auto str = "..."s;
+  auto got = ""s;
+  auto f = str.begin();
+  auto l = str.end();
+  auto c = char_parser{'.'};
+
+  MESSAGE("testing char into string");
+  c.parse(f, l, got);
+  CHECK(got == ".");
+  c.parse(f, l, got);
+  CHECK(got == "..");
+  c.parse(f, l, got);
+  CHECK(got == str);
+  c.parse(f, l, got);
+  CHECK(f == l);
+
+  MESSAGE("testing plus(+)");
+  got.clear();
+  f = str.begin();
+  auto plus = +c;
+  CHECK(plus.parse(f, l, got));
+  CHECK(str == got);
+  CHECK(f == l);
+
+  MESSAGE("testing kleene (*)");
+  got.clear();
+  f = str.begin();
+  auto kleene = *c;
+  CHECK(kleene.parse(f, l, got));
+  CHECK(str == got);
+  CHECK(f == l);
+
+  MESSAGE("testing and (>>)");
+  got.clear();
+  f = str.begin();
+  auto seq = c >> c >> c;
+  CHECK(seq.parse(f, l, got));
+  CHECK(str == got);
+  CHECK(f == l);
+}
+
+TEST(pair compatibility)
+{
+  auto str = "xy"s;
+  auto got = ""s;
+  auto f = str.begin();
+  auto l = str.end();
+  auto c = char_parser{'x'} >> char_parser{'y'};
+
+  MESSAGE("parsing pair<char, char>");
+  std::pair<char, char> p0;
+  c.parse(f, l, p0);
+  CHECK(p0.first == 'x');
+  CHECK(p0.second == 'y');
+
+  MESSAGE("parsing pair<string, string>");
+  f = str.begin();
+  std::pair<std::string, std::string> p1;
+  c.parse(f, l, p1);
+  CHECK(p1.first == "x");
+  CHECK(p1.second == "y");
+}
 
 TEST(bool)
 {
   auto p0 = single_char_bool_parser{};
   auto p1 = zero_one_bool_parser{};
   auto p2 = literal_bool_parser{};
-  auto str = std::string{"T0trueFfalse1"};
+  auto str = "T0trueFfalse1"s;
   auto i = str.begin();
   auto l = str.end();
   auto f = i;
@@ -57,7 +123,7 @@ TEST(bool)
 TEST(integral)
 {
   // Default parser for signed integers.
-  auto str = std::string{"-1024"};
+  auto str = "-1024"s;
   auto p0 = integral_parser<int>{};
   int n;
   auto f = str.begin();
@@ -114,7 +180,7 @@ TEST(real)
 {
   auto p = make_parser<double>{};
   // Integral plus fractional part, negative.
-  auto str = std::string{"-123.456789"};
+  auto str = "-123.456789"s;
   auto f = str.begin();
   auto l = str.end();
   double d;
@@ -157,7 +223,7 @@ TEST(real)
 TEST(time::duration)
 {
   auto pt = make_parser<time::duration>{};
-  auto str = std::string{"1000ms"};
+  auto str = "1000ms"s;
   auto f = str.begin();
   auto l = str.end();
   time::duration d;
@@ -185,7 +251,7 @@ TEST(time::duration)
 TEST(time::point)
 {
   auto expected = time::point::utc(2012, 8, 12, 23, 55, 4);
-  std::string str("2012-08-12+23:55:04");
+  auto str = "2012-08-12+23:55:04"s;
   auto i = str.begin();
   auto t = parse<time::point>(i, str.end(), time::point::format);
   CHECK(i == str.end());
@@ -194,7 +260,7 @@ TEST(time::point)
 
 TEST(pattern)
 {
-  std::string str = "/^\\w{3}\\w{3}\\w{3}$/";
+  auto str = "/^\\w{3}\\w{3}\\w{3}$/"s;
   auto i = str.begin();
   auto p = parse<pattern>(i, str.end());
   CHECK(p);
@@ -211,7 +277,7 @@ TEST(address)
 {
   auto p = make_parser<address>{};
   // IPv4
-  auto str = std::string("192.168.0.1");
+  auto str = "192.168.0.1"s;
   auto f = str.begin();
   auto l = str.end();
   address a;
@@ -291,7 +357,7 @@ TEST(port)
 
 TEST(containers)
 {
-  std::string str = "{1, 2, 3}";
+  auto str = "{1, 2, 3}"s;
   auto i = str.begin();
   auto s = parse<set>(i, str.end(), type::integer{});
   REQUIRE(s);
