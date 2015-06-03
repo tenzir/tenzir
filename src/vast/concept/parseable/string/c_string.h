@@ -1,8 +1,8 @@
 #ifndef VAST_CONCEPT_PARSEABLE_STRING_C_STRING_H
 #define VAST_CONCEPT_PARSEABLE_STRING_C_STRING_H
 
-#include <cassert>
 #include "vast/concept/parseable/core/parser.h"
+#include "vast/util/assert.h"
 
 namespace vast {
 
@@ -14,7 +14,7 @@ public:
   c_string_parser(char const* str)
     : str_{str}
   {
-    assert(str != nullptr);
+    VAST_ASSERT(str != nullptr);
   }
 
   template <typename Iterator, typename Attribute>

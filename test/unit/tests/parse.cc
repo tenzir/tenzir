@@ -1,6 +1,7 @@
 #include "vast/data.h"
 #include "vast/concept/parseable/core.h"
 #include "vast/concept/parseable/numeric.h"
+#include "vast/concept/parseable/string.h"
 #include "vast/concept/parseable/vast/address.h"
 #include "vast/concept/parseable/vast/time.h"
 
@@ -10,7 +11,51 @@
 using namespace vast;
 using namespace std::string_literals;
 
-TEST(string attribute conversion)
+TEST(char)
+{
+  auto chr = '.';
+  auto got = '_';
+  auto f = &chr;
+  auto l = f + 1;
+  auto c = char_parser{'.'};
+  CHECK(c.parse(f, l, got));
+  CHECK(got == chr);
+  CHECK(f == l);
+
+  chr = 'x';
+  f = &chr;
+  CHECK(! c.parse(f, l, got));
+  CHECK(f != l);
+}
+
+TEST(char class)
+{
+  MESSAGE("xdigit");
+  auto str = "deadbeef"s;
+  auto got = ""s;
+  auto f = str.begin();
+  auto l = str.end();
+  auto c = +xdigit_parser{};
+  CHECK(c.parse(f, l, got));
+  CHECK(got == str);
+  CHECK(f == l);
+
+  MESSAGE("xdigit fail");
+  str = "deadXbeef"s;
+  got.clear();
+  f = str.begin();
+  l = str.end();
+  CHECK(c.parse(f, l, got));
+  CHECK(got == "dead");
+  CHECK(f == str.begin() + 4);
+  CHECK(! c.parse(f, l, got));
+  ++f;
+  CHECK(c.parse(f, l, got));
+  CHECK(f == l);
+  CHECK(got == "deadbeef");
+}
+
+TEST(attribute compatibility: string)
 {
   auto str = "..."s;
   auto got = ""s;
@@ -18,17 +63,16 @@ TEST(string attribute conversion)
   auto l = str.end();
   auto c = char_parser{'.'};
 
-  MESSAGE("testing char into string");
-  c.parse(f, l, got);
+  MESSAGE("char into string");
+  CHECK(c.parse(f, l, got));
   CHECK(got == ".");
-  c.parse(f, l, got);
+  CHECK(c.parse(f, l, got));
   CHECK(got == "..");
-  c.parse(f, l, got);
+  CHECK(c.parse(f, l, got));
   CHECK(got == str);
-  c.parse(f, l, got);
   CHECK(f == l);
 
-  MESSAGE("testing plus(+)");
+  MESSAGE("plus(+)");
   got.clear();
   f = str.begin();
   auto plus = +c;
@@ -36,7 +80,7 @@ TEST(string attribute conversion)
   CHECK(str == got);
   CHECK(f == l);
 
-  MESSAGE("testing kleene (*)");
+  MESSAGE("kleene (*)");
   got.clear();
   f = str.begin();
   auto kleene = *c;
@@ -44,7 +88,7 @@ TEST(string attribute conversion)
   CHECK(str == got);
   CHECK(f == l);
 
-  MESSAGE("testing and (>>)");
+  MESSAGE("and (>>)");
   got.clear();
   f = str.begin();
   auto seq = c >> c >> c;
@@ -53,7 +97,7 @@ TEST(string attribute conversion)
   CHECK(f == l);
 }
 
-TEST(pair compatibility)
+TEST(attribute compatibility: pair)
 {
   auto str = "xy"s;
   auto got = ""s;
@@ -61,16 +105,16 @@ TEST(pair compatibility)
   auto l = str.end();
   auto c = char_parser{'x'} >> char_parser{'y'};
 
-  MESSAGE("parsing pair<char, char>");
+  MESSAGE("pair<char, char>");
   std::pair<char, char> p0;
-  c.parse(f, l, p0);
+  CHECK(c.parse(f, l, p0));
   CHECK(p0.first == 'x');
   CHECK(p0.second == 'y');
 
-  MESSAGE("parsing pair<string, string>");
+  MESSAGE("pair<string, string>");
   f = str.begin();
   std::pair<std::string, std::string> p1;
-  c.parse(f, l, p1);
+  CHECK(c.parse(f, l, p1));
   CHECK(p1.first == "x");
   CHECK(p1.second == "y");
 }
