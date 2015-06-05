@@ -9,7 +9,7 @@ template <typename Parser>
 class not_parser : public parser<not_parser<Parser>>
 {
 public:
-  using attribute = typename Parser::attribute;
+  using attribute = unused_type;
 
   not_parser(Parser const& p)
     : parser_{p}
@@ -17,11 +17,10 @@ public:
   }
 
   template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const
+  bool parse(Iterator& f, Iterator const& l, Attribute&) const
   {
-    // Do not consume input.
-    auto i = f;
-    return ! parser_.parse(i, l, a);
+    auto i = f; // Do not consume input.
+    return ! parser_.parse(i, l, unused);
   }
 
 private:
