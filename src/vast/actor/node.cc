@@ -440,13 +440,19 @@ message node::spawn_actor(message const& msg)
       return error{"not compiled with gperftools"};
 #endif
     },
-    on("http_broker",any_vals) >> [&]
+    on("http_broker", any_vals) >> [&]
     {
-      uint16_t port = 80;
+      auto port = uint16_t{8888};
+      r = params.extract_opts({
+        {"port,p", "the port to listen on", port}
+      });
+      if (! r.error.empty())
+        return make_message(error{std::move(r.error)});
+      // FIXME: fails :-(
       auto broker = spawn_io_server(http_broker_function, port);
-      VAST_DEBUG(this,"spawned broker");
+      VAST_DEBUG(this, "spawned HTTP broker");
       attach_functor([=](uint32_t ec) { anon_send_exit(broker, ec); });
-      return put({broker, "sink", "http_broker"});
+      return put({broker, "http_broker", "http_broker"});
     },
     others() >> []
     {
