@@ -53,10 +53,10 @@ template <typename, typename>
 class difference_parser;
 
 template <typename, typename>
-class and_parser;
+class sequence_parser;
 
 template <typename, typename>
-class or_parser;
+class choice_parser;
 
 template <typename, typename>
 class action_parser;
@@ -93,13 +93,13 @@ struct parser
   template <typename Rhs>
   friend auto operator>>(Derived const& lhs, Rhs const& rhs)
   {
-    return and_parser<Derived, Rhs>{lhs, rhs};
+    return sequence_parser<Derived, Rhs>{lhs, rhs};
   }
 
   template <typename Rhs>
   friend auto operator|(Derived const& lhs, Rhs const& rhs)
   {
-    return or_parser<Derived, Rhs>{lhs, rhs};
+    return choice_parser<Derived, Rhs>{lhs, rhs};
   }
 
   template <typename Action>

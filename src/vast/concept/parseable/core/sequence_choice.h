@@ -1,5 +1,5 @@
-#ifndef VAST_CONCEPT_PARSEABLE_CORE_AND_OR_H
-#define VAST_CONCEPT_PARSEABLE_CORE_AND_OR_H
+#ifndef VAST_CONCEPT_PARSEABLE_CORE_SEQUENCE_CHOICE_H
+#define VAST_CONCEPT_PARSEABLE_CORE_SEQUENCE_CHOICE_H
 
 #include <tuple>
 #include <type_traits>
@@ -11,7 +11,7 @@ namespace vast {
 
 // (LHS >> ~RHS) | RHS
 template <typename Lhs, typename Rhs>
-class and_or_parser : public parser<and_or_parser<Lhs, Rhs>>
+class sequence_choice_parser : public parser<sequence_choice_parser<Lhs, Rhs>>
 {
 public:
   using lhs_type = Lhs;
@@ -39,7 +39,7 @@ public:
       >
     >;
 
-  and_or_parser(Lhs const& lhs, Rhs const& rhs)
+  sequence_choice_parser(Lhs const& lhs, Rhs const& rhs)
     : lhs_{lhs},
       rhs_{rhs},
       rhs_opt_{rhs}

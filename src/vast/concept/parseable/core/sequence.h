@@ -1,5 +1,5 @@
-#ifndef VAST_CONCEPT_PARSEABLE_CORE_AND_H
-#define VAST_CONCEPT_PARSEABLE_CORE_AND_H
+#ifndef VAST_CONCEPT_PARSEABLE_CORE_SEQUENCE_H
+#define VAST_CONCEPT_PARSEABLE_CORE_SEQUENCE_H
 
 #include <tuple>
 #include <type_traits>
@@ -21,10 +21,10 @@ template <typename>
 struct is_and_parser : std::false_type {};
 
 template <typename... Ts>
-struct is_and_parser<and_parser<Ts...>> : std::true_type {};
+struct is_and_parser<sequence_parser<Ts...>> : std::true_type {};
 
 template <typename Lhs, typename Rhs>
-class and_parser : public parser<and_parser<Lhs, Rhs>>
+class sequence_parser : public parser<sequence_parser<Lhs, Rhs>>
 {
 public:
   using lhs_type = Lhs;
@@ -87,7 +87,7 @@ private:
 
   static constexpr size_t depth()
   {
-    return depth_helper<and_parser>();
+    return depth_helper<sequence_parser>();
   }
 
   template <typename Iterator>
@@ -165,7 +165,7 @@ private:
   }
 
 public:
-  and_parser(Lhs const& lhs, Rhs const& rhs)
+  sequence_parser(Lhs const& lhs, Rhs const& rhs)
     : lhs_{lhs},
       rhs_{rhs}
   {
