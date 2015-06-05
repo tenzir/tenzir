@@ -3,8 +3,8 @@
 
 #include "vast/access.h"
 #include "vast/time.h"
-#include "vast/concept/parseable/core/and.h"
 #include "vast/concept/parseable/core/optional.h"
+#include "vast/concept/parseable/core/sequence.h"
 #include "vast/concept/parseable/numeric/real.h"
 
 namespace vast {

@@ -1,5 +1,5 @@
-#ifndef VAST_CONCEPT_PARSEABLE_CORE_OR_H
-#define VAST_CONCEPT_PARSEABLE_CORE_OR_H
+#ifndef VAST_CONCEPT_PARSEABLE_CORE_CHOICE_H
+#define VAST_CONCEPT_PARSEABLE_CORE_CHOICE_H
 
 #include <type_traits>
 
@@ -11,7 +11,7 @@ namespace vast {
 // TODO: implement this parser properly for more than two types, right now it's
 // not yet fully composable.
 template <typename Lhs, typename Rhs>
-class or_parser : public parser<or_parser<Lhs, Rhs>>
+class choice_parser : public parser<choice_parser<Lhs, Rhs>>
 {
 public:
   using lhs_attribute = typename Lhs::attribute;
@@ -42,7 +42,7 @@ public:
       >
     >;
 
-  or_parser(Lhs const& lhs, Rhs const& rhs)
+  choice_parser(Lhs const& lhs, Rhs const& rhs)
     : lhs_{lhs},
       rhs_{rhs}
   {
