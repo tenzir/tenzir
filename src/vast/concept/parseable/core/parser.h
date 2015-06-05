@@ -38,6 +38,9 @@ struct unused_type
 static auto unused = unused_type{};
 
 template <typename>
+class and_parser;
+
+template <typename>
 class not_parser;
 
 template <typename>
@@ -64,6 +67,11 @@ class action_parser;
 template <typename Derived>
 struct parser
 {
+  friend auto operator&(Derived const& p)
+  {
+    return and_parser<Derived>{p};
+  }
+
   friend auto operator!(Derived const& p)
   {
     return not_parser<Derived>{p};

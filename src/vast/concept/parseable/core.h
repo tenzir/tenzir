@@ -2,6 +2,7 @@
 #define VAST_CONCEPT_PARSEABLE_CORE_H
 
 #include "vast/concept/parseable/core/action.h"
+#include "vast/concept/parseable/core/and.h"
 #include "vast/concept/parseable/core/choice.h"
 #include "vast/concept/parseable/core/difference.h"
 #include "vast/concept/parseable/core/ignore.h"
