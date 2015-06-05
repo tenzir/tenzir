@@ -19,6 +19,7 @@
 #include "vast/actor/importer.h"
 #include "vast/actor/index.h"
 #include "vast/actor/exporter.h"
+#include "vast/actor/http_broker.h"
 #include "vast/actor/node.h"
 #include "vast/expr/normalize.h"
 #include "vast/io/compression.h"
@@ -32,6 +33,7 @@
 #endif
 
 using namespace caf;
+using namespace caf::io;
 using namespace std::string_literals;
 
 namespace vast {
@@ -260,7 +262,8 @@ message node::spawn_actor(message const& msg)
     "index",
     "profiler",
     "sink",
-    "source"
+    "source",
+    "http_broker",
   };
   // Convert arguments to string vector.
   std::vector<std::string> args(msg.size());
@@ -436,6 +439,14 @@ message node::spawn_actor(message const& msg)
 #else
       return error{"not compiled with gperftools"};
 #endif
+    },
+    on("http_broker",any_vals) >> [&]
+    {
+      uint16_t port = 80;
+      auto broker = spawn_io_server(http_broker_function, port);
+      VAST_DEBUG(this,"spawned broker");
+      attach_functor([=](uint32_t ec) { anon_send_exit(broker, ec); });
+      return put({broker, "http_broker", "http_broker"});
     },
     others() >> []
     {
