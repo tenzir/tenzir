@@ -106,6 +106,6 @@ licence](https://raw.github.com/mavam/vast/master/COPYING).
 [mailing-list-commits]: http://mailman.icsi.berkeley.edu/mailman/listinfo/vast-commits
 [jenkins-url]: http://mobi39.cpt.haw-hamburg.de/view/VAST%20Build%20Status/
 [jenkins-badge]: http://mobi39.cpt.haw-hamburg.de/buildStatus/icon?job=VAST/master%20branch
-[gitter-badge]: https://badges.gitter.im/Join%20Chat.svg
+[gitter-badge]: https://img.shields.io/badge/gitter-join%20chat%20%E2%86%92-green.svg
 [docker-url]: https://quay.io/repository/mavam/vast
 [docker-badge]: https://quay.io/repository/mavam/vast/status 
