@@ -446,7 +446,7 @@ message node::spawn_actor(message const& msg)
       auto broker = spawn_io_server(http_broker_function, port);
       VAST_DEBUG(this,"spawned broker");
       attach_functor([=](uint32_t ec) { anon_send_exit(broker, ec); });
-      return put({broker, "http_broker", "http_broker"});
+      return put({broker, "sink", "http_broker"});
     },
     others() >> []
     {
