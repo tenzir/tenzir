@@ -3,7 +3,6 @@
 
 #include "caf/all.hpp"
 #include "caf/io/all.hpp"
-
 #include "vast/logger.h"
 #include "vast/actor/http_broker.h"
 
