@@ -1,7 +1,11 @@
+#------------------------------------------------------------------------------
+#                                Project Setup
+#------------------------------------------------------------------------------
+
 cmake_minimum_required(VERSION 2.6 FATAL_ERROR)
 project(VAST C CXX)
 
-# Silence warning CMP0042.
+# Silence warning CMP0042
 if (APPLE AND NOT DEFINED CMAKE_MACOSX_RPATH)
   set(CMAKE_MACOSX_RPATH true)
 endif()
@@ -10,39 +14,32 @@ set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 include(CTest)
 include(Helpers)
 include(MacDependencyPaths)
-include(ConfigurePackaging)
 
-# Prohibit in-source builds.
+# Prohibit in-source builds
 if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
   message(FATAL_ERROR "In-source builds are not allowed. Please use "
     "./configure to choose a build directory and "
     "initialize the build configuration.")
 endif ()
 
-# Support for 'make uninstall'.
-if ("${PROJECT_SOURCE_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
-  configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/cmake_uninstall.cmake.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake"
-    @ONLY)
-  add_custom_target(uninstall COMMAND
-    ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake)
-endif ()
-
-# Reconfigure the project with 'make configure'.
-add_custom_target(configure COMMAND ${CMAKE_CURRENT_BINARY_DIR}/config.status)
-
+# Keep make output sane
 set(CMAKE_VERBOSE_MAKEFILE false
   CACHE STRING "Show all outputs including compiler lines." FORCE)
 
-file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" VERSION LIMIT_COUNT 1)
-string(REPLACE "." " " version_numbers ${VERSION})
+# Extract VERSION
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" VAST_VERSION LIMIT_COUNT 1)
+string(REPLACE "." " " version_numbers ${VAST_VERSION})
 separate_arguments(version_numbers)
 list(GET version_numbers 0 VERSION_MAJOR)
 list(GET version_numbers 1 VERSION_MINOR)
 set(VERSION_MAJ_MIN "${VERSION_MAJOR}.${VERSION_MINOR}")
 
+#------------------------------------------------------------------------------
+#                               Compiler Setup
+#------------------------------------------------------------------------------
+
 if (NOT CMAKE_CXX_FLAGS)
-  # -ftemplate-depth=256 ot make Boost Spirit happy.
+  # -ftemplate-depth=256 to make Boost Spirit happy
   set(EXTRA_FLAGS "-Wall -Wextra -pedantic -std=c++1y -ftemplate-depth=256")
   set(CMAKE_CXX_FLAGS_DEBUG          "-O0 -g")
   set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os")
@@ -50,7 +47,7 @@ if (NOT CMAKE_CXX_FLAGS)
   set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g")
 endif()
 
-# Perform compiler requirement checks.
+# Requirement checks
 try_run(program_result
         compilation_succeeded
         "${CMAKE_BINARY_DIR}"
@@ -109,6 +106,10 @@ if (NOT CMAKE_CXX_FLAGS)
   set(CMAKE_CXX_FLAGS ${EXTRA_FLAGS})
 endif ()
 
+#------------------------------------------------------------------------------
+#                          Dependency Configuration
+#------------------------------------------------------------------------------
+
 find_package(Threads)
 if (NOT Threads_FOUND)
   message(FATAL_ERROR "Could not find system threading libraries")
@@ -165,6 +166,50 @@ endif ()
 find_package(Doxygen QUIET)
 find_package(Md2man QUIET)
 
+#------------------------------------------------------------------------------
+#                                   Docker
+#------------------------------------------------------------------------------
+
+set(docker_image "mavam/vast")
+
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/docker-build.cmake
+  "execute_process(
+     COMMAND docker build -t ${docker_image} ${CMAKE_SOURCE_DIR}
+     RESULT_VARIABLE docker_build_success)
+   set(docker_build_success true)
+   if (docker_build_success)
+     execute_process(
+       COMMAND docker inspect --format='{{.Id}}' ${docker_image}
+       OUTPUT_VARIABLE docker_image_id)
+     execute_process(
+       COMMAND docker tag \${docker_image_id} ${docker_image}:latest
+       COMMAND docker tag \${docker_image_id} ${docker_image}:${VAST_VERSION})
+   endif ()")
+
+add_custom_target(docker-build
+  ${CMAKE_COMMAND} -P ${CMAKE_BINARY_DIR}/docker-build.cmake
+  COMMENT "Building docker image")
+
+add_custom_target(docker-run
+  COMMAND docker run -ti ${docker_image}
+  COMMENT "Running current Docker image" VERBATIM)
+
+#------------------------------------------------------------------------------
+#                                 Build Setup
+#------------------------------------------------------------------------------
+
+# make uninstall
+if ("${PROJECT_SOURCE_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
+  configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/cmake_uninstall.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake"
+    @ONLY)
+  add_custom_target(uninstall COMMAND
+    ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake)
+endif ()
+
+# make configure
+add_custom_target(configure COMMAND ${CMAKE_CURRENT_BINARY_DIR}/config.status)
+
 include_directories(BEFORE ${CMAKE_CURRENT_BINARY_DIR})
 include_directories(BEFORE ${CMAKE_SOURCE_DIR}/aux)
 
@@ -179,7 +224,9 @@ add_subdirectory(doc)
 add_subdirectory(src)
 add_subdirectory(test)
 
-ConfigurePackaging(${VERSION})
+#------------------------------------------------------------------------------
+#                                Build Summary
+#------------------------------------------------------------------------------
 
 macro(display test desc summary)
   if (${test})
@@ -189,8 +236,8 @@ macro(display test desc summary)
   endif()
 endmacro()
 
-# Prettify build summary.
 display(SHOW_TIME_REPORT yes time_report_summary)
+
 if (VAST_LOG_LEVEL EQUAL 0)
   set(log_level_summary quiet)
 elseif (VAST_LOG_LEVEL EQUAL 1)
@@ -208,6 +255,7 @@ elseif (VAST_LOG_LEVEL EQUAL 6)
 else ()
   message(FATAL "invalid log level")
 endif ()
+
 set(caf_dir ${CAF_LIBRARY_CORE})
 get_filename_component(caf_dir ${caf_dir} PATH)
 if (EXISTS "${caf_dir}/../libcaf_core")
@@ -215,6 +263,7 @@ if (EXISTS "${caf_dir}/../libcaf_core")
 else ()
   set(caf_dir ${CAF_INCLUDE_DIR_CORE})
 endif ()
+
 display(CAF_FOUND ${caf_dir} caf_summary)
 display(PCAP_FOUND ${PCAP_INCLUDE_DIR} pcap_summary)
 display(GPERFTOOLS_FOUND ${GPERFTOOLS_INCLUDE_DIR} perftools_summary)
@@ -223,8 +272,6 @@ display(MD2MAN_FOUND yes md2man_summary)
 display(VAST_USE_TCMALLOC yes tcmalloc_summary)
 display(VAST_ENABLE_ASSERTIONS yes assertions_summary)
 display(ASAN_FOUND yes asan_summary)
-# Display the right include directory based on wheter we pointed to a CAF build
-# directory or to an install prefix.
 
 set(build_summary
     "\n====================|  Build Summary  |===================="
