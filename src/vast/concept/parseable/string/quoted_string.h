@@ -20,9 +20,8 @@ public:
 
   static auto make()
   {
-    auto quote = ignore(char_parser{Quote});
-    auto escaped_quote = ignore(char_parser{Esc}) >> char_parser{Quote};
-    return quote >> +(escaped_quote | (print_parser{} - quote)) >> quote;
+    auto escaped_quote = Esc >> char_parser{Quote};
+    return Quote >> +(escaped_quote | (print_parser{} - Quote)) >> Quote;
   }
 
   template <typename Iterator, typename Attribute>
