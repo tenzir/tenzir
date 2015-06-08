@@ -89,11 +89,10 @@ struct ymd_parser : vast::parser<ymd_parser>
   // YYYY(-MM(-DD))
   static auto make()
   {
-    auto delim = ignore(char_parser{'-'});
     auto year = integral_parser<unsigned, 4, 4>{};
     auto mon = integral_parser<unsigned, 2, 2>{};
     auto day = integral_parser<unsigned, 2, 2>{};
-    return year >> ~(delim >> mon >> ~(delim >> day));
+    return year >> ~('-' >> mon >> ~('-' >> day));
   }
 
   template <typename Iterator>

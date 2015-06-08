@@ -12,8 +12,8 @@ class string_parser : public parser<string_parser>
 public:
   using attribute = std::string;
 
-  string_parser(std::string const& str)
-    : str_{str}
+  string_parser(std::string str)
+    : str_{std::move(str)}
   {
   }
 

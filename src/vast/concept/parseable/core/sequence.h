@@ -8,6 +8,9 @@
 
 namespace vast {
 
+template <typename Lhs, typename Rhs>
+class sequence_parser;
+
 template <typename>
 struct is_tuple : std::false_type {};
 
@@ -18,10 +21,10 @@ template <typename T>
 using tuple_wrap = std::conditional_t<is_tuple<T>::value, T, std::tuple<T>>;
 
 template <typename>
-struct is_and_parser : std::false_type {};
+struct is_sequence_parser : std::false_type {};
 
 template <typename... Ts>
-struct is_and_parser<sequence_parser<Ts...>> : std::true_type {};
+struct is_sequence_parser<sequence_parser<Ts...>> : std::true_type {};
 
 template <typename Lhs, typename Rhs>
 class sequence_parser : public parser<sequence_parser<Lhs, Rhs>>
@@ -56,7 +59,7 @@ public:
 private:
   template <typename T>
   static constexpr auto depth_helper()
-    -> std::enable_if_t<! is_and_parser<T>::value, size_t>
+    -> std::enable_if_t<! is_sequence_parser<T>::value, size_t>
   {
     return 0;
   }
@@ -64,7 +67,7 @@ private:
   template <typename T>
   static constexpr auto depth_helper()
     -> std::enable_if_t<
-         is_and_parser<T>::value
+         is_sequence_parser<T>::value
           && (std::is_same<typename T::lhs_attribute, unused_type>::value
               || std::is_same<typename T::rhs_attribute, unused_type>::value),
          size_t
@@ -76,7 +79,7 @@ private:
   template <typename T>
   static constexpr auto depth_helper()
     -> std::enable_if_t<
-         is_and_parser<T>::value
+         is_sequence_parser<T>::value
           && ! std::is_same<typename T::lhs_attribute, unused_type>::value
           && ! std::is_same<typename T::rhs_attribute, unused_type>::value,
          size_t
@@ -98,14 +101,14 @@ private:
 
   template <typename L, typename T>
   static auto get_helper(T& x)
-    -> std::enable_if_t<is_and_parser<L>{}, T&>
+    -> std::enable_if_t<is_sequence_parser<L>{}, T&>
   {
     return x;
   }
 
   template <typename L, typename T>
   static auto get_helper(T& x)
-    -> std::enable_if_t<! is_and_parser<L>{}, decltype(std::get<0>(x))>
+    -> std::enable_if_t<! is_sequence_parser<L>{}, decltype(std::get<0>(x))>
   {
     return std::get<0>(x);
   }
