@@ -86,6 +86,13 @@ struct parser_registry<bool>
   using type = single_char_bool_parser;
 };
 
+namespace parsers {
+
+auto const tf = bool_parser<detail::single_char_bool_policy>{};
+auto const zero_one = bool_parser<detail::zero_one_bool_policy>{};
+auto const boolean = bool_parser<detail::literal_bool_policy>{};
+
+} // namespace parsers
 } // namespace vast
 
 #endif

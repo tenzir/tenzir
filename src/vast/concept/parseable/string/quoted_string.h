@@ -32,6 +32,12 @@ public:
   }
 };
 
+namespace parsers {
+
+using q_str = quoted_string_parser<'\'', '\\'>;
+using qq_str = quoted_string_parser<'"', '\\'>;
+
+} // namespace parasers
 } // namespace vast
 
 #endif

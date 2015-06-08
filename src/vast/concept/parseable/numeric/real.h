@@ -104,6 +104,12 @@ struct parser_registry<T, std::enable_if_t<std::is_floating_point<T>::value>>
   using type = real_parser<T>;
 };
 
+namespace parsers {
+
+auto const fp = real_parser<float>{};
+auto const real = real_parser<double>{};
+
+} // namespace parsers
 } // namespace vast
 
 #endif
