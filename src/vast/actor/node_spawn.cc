@@ -220,10 +220,10 @@ message node::spawn_sink(std::string const& label, message const& params)
       auto remote_fd = uds.recv_fd(); // Blocks!
       out = std::make_unique<io::file_output_stream>(remote_fd);
     }
-  }
-  else
-  {
-    out = std::make_unique<io::file_output_stream>(output);
+    else
+    {
+      out = std::make_unique<io::file_output_stream>(output);
+    }
   }
   if (format == "pcap")
   {
