@@ -206,7 +206,7 @@ message node::spawn_sink(std::string const& label, message const& params)
   // The "pcap" and "bro" sink manually handle file output. All other
   // sources are file-based and we setup their input stream here.
   std::unique_ptr<io::output_stream> out;
-  if (! (format == "pcap" || format == "bro"))
+  if (! (format == "pcap" || format == "bro" || format == "json"))
   {
     if (r.opts.count("uds") > 0)
     {
