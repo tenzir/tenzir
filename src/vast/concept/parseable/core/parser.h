@@ -37,79 +37,12 @@ struct unused_type
 
 static auto unused = unused_type{};
 
-template <typename>
-class and_parser;
-
-template <typename>
-class not_parser;
-
-template <typename>
-class optional_parser;
-
-template <typename>
-class kleene_parser;
-
-template <typename>
-class plus_parser;
-
-template <typename, typename>
-class difference_parser;
-
-template <typename, typename>
-class sequence_parser;
-
-template <typename, typename>
-class choice_parser;
-
 template <typename, typename>
 class action_parser;
 
 template <typename Derived>
 struct parser
 {
-  friend auto operator&(Derived const& p)
-  {
-    return and_parser<Derived>{p};
-  }
-
-  friend auto operator!(Derived const& p)
-  {
-    return not_parser<Derived>{p};
-  }
-
-  friend auto operator~(Derived const& p)
-  {
-    return optional_parser<Derived>{p};
-  }
-
-  friend auto operator*(Derived const& p)
-  {
-    return kleene_parser<Derived>{p};
-  }
-
-  friend auto operator+(Derived const& p)
-  {
-    return plus_parser<Derived>{p};
-  }
-
-  template <typename Rhs>
-  friend auto operator-(Derived const& lhs, Rhs const& rhs)
-  {
-    return difference_parser<Derived, Rhs>{lhs, rhs};
-  }
-
-  template <typename Rhs>
-  friend auto operator>>(Derived const& lhs, Rhs const& rhs)
-  {
-    return sequence_parser<Derived, Rhs>{lhs, rhs};
-  }
-
-  template <typename Rhs>
-  friend auto operator|(Derived const& lhs, Rhs const& rhs)
-  {
-    return choice_parser<Derived, Rhs>{lhs, rhs};
-  }
-
   template <typename Action>
   auto then(Action fun) const
   {
@@ -120,6 +53,7 @@ struct parser
   bool operator()(Range&& r, Attribute& a = unused) const
   {
     using std::begin;
+    using std::end;
     auto f = begin(r);
     auto l = end(r);
     return derived().parse(f, l, a);
@@ -155,11 +89,27 @@ struct has_parser
   static auto test(...) -> std::false_type;
 };
 
+struct is_parser_impl
+{
+  template <typename T>
+  static auto test(T* x, char* i = nullptr)
+  -> decltype(std::is_base_of<vast::parser<T>, T>{},
+              x->parse(*i, *i, unused),
+              std::true_type());
+
+  template <typename>
+  static auto test(...) -> std::false_type;
+};
+
 } // namespace detail
 
 /// Checks whether the parser registry has a given type registered.
 template <typename T>
 struct has_parser : decltype(detail::has_parser::test<T>(0)) {};
+
+/// Checks whether a given type is-a parser, i.e., derived from ::vast::parser.
+template <typename T>
+struct is_parser : decltype(detail::is_parser_impl::test<T>(0)) {};
 
 } // namespace vast
 
