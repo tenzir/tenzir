@@ -53,7 +53,7 @@ auto operator!(T x)
 }
 
 template <typename T>
-auto operator~(T x)
+auto operator-(T x)
   -> std::enable_if_t<is_parser<T>{}, optional_parser<T>>
 {
   return optional_parser<T>{x};

@@ -92,7 +92,7 @@ struct ymd_parser : vast::parser<ymd_parser>
     auto year = integral_parser<unsigned, 4, 4>{};
     auto mon = integral_parser<unsigned, 2, 2>{};
     auto day = integral_parser<unsigned, 2, 2>{};
-    return year >> ~('-' >> mon >> ~('-' >> day));
+    return year >> -('-' >> mon >> -('-' >> day));
   }
 
   template <typename Iterator>
