@@ -26,6 +26,9 @@ template <typename, typename>
 class difference_parser;
 
 template <typename, typename>
+class list_parser;
+
+template <typename, typename>
 class sequence_parser;
 
 template <typename, typename>
@@ -77,6 +80,14 @@ auto operator+(T x)
 template <typename LHS, typename RHS>
 auto operator-(LHS&& lhs, RHS&& rhs)
   -> decltype(detail::as_parser<difference_parser>(lhs, rhs))
+{
+  return {detail::as_parser(std::forward<LHS>(lhs)),
+          detail::as_parser(std::forward<RHS>(rhs))};
+}
+
+template <typename LHS, typename RHS>
+auto operator%(LHS&& lhs, RHS&& rhs)
+  -> decltype(detail::as_parser<list_parser>(lhs, rhs))
 {
   return {detail::as_parser(std::forward<LHS>(lhs)),
           detail::as_parser(std::forward<RHS>(rhs))};

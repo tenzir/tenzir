@@ -7,6 +7,7 @@
 #include "vast/concept/parseable/core/difference.h"
 #include "vast/concept/parseable/core/ignore.h"
 #include "vast/concept/parseable/core/kleene.h"
+#include "vast/concept/parseable/core/list.h"
 #include "vast/concept/parseable/core/not.h"
 #include "vast/concept/parseable/core/operators.h"
 #include "vast/concept/parseable/core/optional.h"
