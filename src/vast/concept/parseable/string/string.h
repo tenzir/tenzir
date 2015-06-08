@@ -57,6 +57,11 @@ struct parser_registry<std::string>
   using type = string_parser;
 };
 
+namespace parsers {
+
+using str = string_parser;
+
+} // namespace parsers
 } // namespace vast
 
 #endif

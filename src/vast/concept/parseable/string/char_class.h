@@ -80,6 +80,22 @@ VAST_DEFINE_CHAR_CLASS_PARSER(xdigit);
 
 #undef VAST_DEFINE_CHAR_CLASS_PARSER
 
+namespace parsers {
+
+auto const alnum = char_class_parser<alnum_class>{};
+auto const alpha = char_class_parser<alpha_class>{};
+auto const blank = char_class_parser<blank_class>{};
+auto const cntrl = char_class_parser<cntrl_class>{};
+auto const digit = char_class_parser<digit_class>{};
+auto const graph = char_class_parser<graph_class>{};
+auto const lower = char_class_parser<lower_class>{};
+auto const print = char_class_parser<print_class>{};
+auto const punct = char_class_parser<punct_class>{};
+auto const space = char_class_parser<space_class>{};
+auto const upper = char_class_parser<upper_class>{};
+auto const xdigit = char_class_parser<xdigit_class>{};
+
+} // namespace parsers
 } // namespace vast
 
 #endif

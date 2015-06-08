@@ -38,6 +38,11 @@ struct parser_registry<char>
   using type = char_parser;
 };
 
+namespace parsers {
+
+using chr = char_parser;
+
+} // namespace parsers
 } // namespace vast
 
 #endif
