@@ -40,6 +40,9 @@ static auto unused = unused_type{};
 template <typename, typename>
 class action_parser;
 
+template <typename, typename>
+class guard_parser;
+
 template <typename Derived>
 struct parser
 {
@@ -47,6 +50,12 @@ struct parser
   auto then(Action fun) const
   {
     return action_parser<Derived, Action>{derived(), fun};
+  }
+
+  template <typename Guard>
+  auto with(Guard fun) const
+  {
+    return guard_parser<Derived, Guard>{derived(), fun};
   }
 
   template <typename Range, typename Attribute = unused_type>

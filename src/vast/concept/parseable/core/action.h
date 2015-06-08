@@ -5,6 +5,10 @@
 
 namespace vast {
 
+/// Invokes an action after a successful parse.
+/// @tparam Parser The parser to augment with an action.
+/// @tparam Action A function taking the synthesized attribute and returning
+///                `void`.
 template <typename Parser, typename Action>
 class action_parser : public parser<action_parser<Parser, Action>>
 {
@@ -19,17 +23,19 @@ public:
   {
   }
 
+  template <typename Iterator>
+  bool parse(Iterator& f, Iterator const& l, unused_type) const
+  {
+    return parser_.parse(f, l, unused);
+  }
+
   template <typename Iterator, typename Attribute>
   bool parse(Iterator& f, Iterator const& l, Attribute& a) const
   {
-    auto save = f;
-    if (parser_.parse(f, l, a))
-    {
-      action_(a);
-      return true;
-    }
-    f = save;
-    return false;
+    if (! parser_.parse(f, l, a))
+      return false;
+    action_(a);
+    return true;
   }
 
 private:
