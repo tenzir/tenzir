@@ -129,14 +129,14 @@ struct parser_registry<T, std::enable_if_t<std::is_integral<T>::value>>
 
 namespace parsers {
 
-auto const int8 = integral_parser<int8_t>{};
-auto const int16 = integral_parser<int16_t>{};
-auto const int32 = integral_parser<int32_t>{};
-auto const int64 = integral_parser<int64_t>{};
-auto const uint8 = integral_parser<uint8_t>{};
-auto const uint16 = integral_parser<uint16_t>{};
-auto const uint32 = integral_parser<uint32_t>{};
-auto const uint64 = integral_parser<uint64_t>{};
+auto const i8 = integral_parser<int8_t>{};
+auto const i16 = integral_parser<int16_t>{};
+auto const i32 = integral_parser<int32_t>{};
+auto const i64 = integral_parser<int64_t>{};
+auto const u8 = integral_parser<uint8_t>{};
+auto const u16 = integral_parser<uint16_t>{};
+auto const u32 = integral_parser<uint32_t>{};
+auto const u64 = integral_parser<uint64_t>{};
 
 } // namespace parsers
 } // namespace vast
