@@ -91,19 +91,6 @@ behavior connection_worker(broker* self, connection_handle hdl, actor const& nod
       auto ans = create_response(content);
       VAST_DEBUG(self, "responding with", ans);
       self->write(msg.handle, ans.size(), ans.c_str());
-
-      auto host = "127.0.0.1"s;
-      auto port = uint16_t{42000};
-      VAST_VERBOSE("connecting to", host << ':' << port);
-      try
-      {
-        auto node = caf::io::remote_actor(host.c_str(), port);
-        VAST_VERBOSE("connected to", host << ':' << port);
-      }
-      catch (caf::caf_exception const& e)
-      {
-        VAST_ERROR("failed to connect to", host << ':' << port);
-      }
       self->quit();
     },
     [=](connection_closed_msg const&)
