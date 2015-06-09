@@ -3,6 +3,6 @@
 
 namespace vast {
 
-caf::behavior http_broker_function(caf::io::broker* self);
+caf::behavior http_broker_function(caf::io::broker* self, caf::actor const& node);
 
 } // namespace vast

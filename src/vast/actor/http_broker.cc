@@ -67,7 +67,7 @@ std::string create_response(std::string const& content)
   return response;
 }
 
-behavior connection_worker(broker* self, connection_handle hdl)
+behavior connection_worker(broker* self, connection_handle hdl, actor const& node)
 {
   self->configure_read(hdl, receive_policy::at_most(1024));
 
@@ -109,7 +109,7 @@ behavior connection_worker(broker* self, connection_handle hdl)
   };
 }
 
-behavior http_broker_function(broker* self)
+behavior http_broker_function(broker* self, actor const& node)
 {
   VAST_VERBOSE("http_broker_function called");
   return
@@ -117,7 +117,7 @@ behavior http_broker_function(broker* self)
     [=](new_connection_msg const& ncm)
     {
       VAST_DEBUG(self, "got new connection");
-      auto worker = self->fork(connection_worker, ncm.handle);
+      auto worker = self->fork(connection_worker, ncm.handle, node);
       self->monitor(worker);
       self->link_to(worker);
     },

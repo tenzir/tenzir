@@ -449,7 +449,7 @@ message node::spawn_actor(message const& msg)
       if (! r.error.empty())
         return make_message(error{std::move(r.error)});
       // FIXME: fails :-(
-      auto broker = spawn_io_server(http_broker_function, port);
+      auto broker = spawn_io_server(http_broker_function, port, this);
       VAST_DEBUG(this, "spawned HTTP broker");
       attach_functor([=](uint32_t ec) { anon_send_exit(broker, ec); });
       return put({broker, "http_broker", "http_broker"});
