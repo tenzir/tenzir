@@ -70,6 +70,10 @@ std::string create_response(std::string const& content)
 behavior connection_worker(broker* self, connection_handle hdl, actor const& node)
 {
   self->configure_read(hdl, receive_policy::at_most(1024));
+  caf::message_builder mb;
+  mb.append("spawn");
+  mb.append("exporter");
+  self->send(node, mb.to_message());
 
   return
   {
