@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 #include <iostream>
 #include <chrono>
 
