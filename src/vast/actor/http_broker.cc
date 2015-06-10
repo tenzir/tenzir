@@ -6,6 +6,12 @@
 #include "vast/logger.h"
 #include "vast/actor/http_broker.h"
 
+#include "vast/actor/actor.h"
+#include "vast/event.h"
+#include "vast/time.h"
+#include "vast/uuid.h"
+#include "vast/util/json.h"
+
 
 // FIXME: remove after debugging
 using std::cout;
@@ -104,6 +110,8 @@ Connection: keep-alive
 
 )__";
 
+bool first_event_ = true;
+
 template <size_t Size>
 constexpr size_t cstr_size(const char (&)[Size])
 {
@@ -132,13 +140,57 @@ std::string create_response(std::string const& content)
   return response;
 }
 
-behavior connection_worker(broker* self, connection_handle hdl, actor const& node)
-{
-  self->configure_read(hdl, receive_policy::at_most(1024));
+void send_query(broker* self, std::string query, actor const& node){
   caf::message_builder mb;
   mb.append("spawn");
   mb.append("exporter");
+  mb.append("-h");
+  mb.append(query);
   self->send(node, mb.to_message());
+
+  caf::message_builder mb1;
+  mb1.append("connect");
+  mb1.append("exporter");
+  mb1.append("archive");
+  self->send(node, mb1.to_message());
+
+  caf::message_builder mb2;
+  mb2.append("connect");
+  mb2.append("exporter");
+  mb2.append("index");
+  self->send(node, mb2.to_message());
+
+  //TODO: connect exporter to sink
+
+  caf::message_builder mb3;
+  mb3.append("send");
+  mb3.append("exporter");
+  mb3.append("run");
+  self->send(node, mb3.to_message());
+
+}
+
+bool handle(event const& e, broker* self, connection_handle hdl)
+{
+  auto j = to<util::json>(e);
+  if (! j)
+    return false;
+  auto content = to_string(*j, true);
+  content += "\r\n";
+
+  if (first_event_){
+    first_event_ = false;
+    auto ans = create_response("");
+    self->write(hdl, ans.size(), ans.c_str());
+  }
+
+  self->write(hdl, content.size(), content.c_str());
+  return true;
+}
+
+behavior connection_worker(broker* self, connection_handle hdl, actor const& node)
+{
+  self->configure_read(hdl, receive_policy::at_most(1024));
 
   return
   {
@@ -149,6 +201,8 @@ behavior connection_worker(broker* self, connection_handle hdl, actor const& nod
       auto query = url.substr(url.find("query=") + 6, url.size());
       query = UriDecode(query);
       VAST_DEBUG(self, "got", query, "as query");
+
+      send_query(self, query, node);
 
       auto content ="{query : \""s;
       content.append(query);
@@ -162,6 +216,27 @@ behavior connection_worker(broker* self, connection_handle hdl, actor const& nod
     [=](connection_closed_msg const&)
     {
       self->quit();
+    },
+    // handle sink messages
+    [=](exit_msg const& msg)
+    {
+      self->quit(msg.reason);
+    },
+    [=](uuid const&, event const& e)
+    {
+      handle(e, self, hdl);
+    },
+    [=](uuid const&, std::vector<event> const& v)
+    {
+      assert(! v.empty());
+      for (auto& e : v)
+        if (! handle(e, self, hdl))
+          return;
+    },
+    [=](uuid const& id, done_atom, time::extent runtime)
+    {
+      VAST_VERBOSE(self, "got DONE from query", id << ", took", runtime);
+      self->quit(exit::done);
     }
   };
 }
