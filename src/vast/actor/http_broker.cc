@@ -89,27 +89,6 @@ std::string UriDecode(const std::string & sSrc)
 }
 
 
-//using tick_atom = atom_constant<atom("tick")>;
-
-constexpr const char http_ok[] = R"__(HTTP/1.1 200 OK
-Content-Type: text/plain
-Connection: keep-alive
-Transfer-Encoding: chunked
-
-d
-Hi there! :)
-
-0
-
-
-)__";
-
-constexpr const char http_header[] = R"__(HTTP/1.1 200 OK
-Content-Type: application/json
-Connection: keep-alive
-
-)__";
-
 bool first_event_ = true;
 
 template <size_t Size>
@@ -140,34 +119,35 @@ std::string create_response(std::string const& content)
   return response;
 }
 
-void send_query(broker* self, std::string query, actor const& node){
+void setup_exporter(broker* self, std::string query, actor const& node, std::string exporter_label){
+  //TODO: Use label instead of just "exporter"
   caf::message_builder mb;
   mb.append("spawn");
+
   mb.append("exporter");
+  //TODO: un-hardcode the query opts
   mb.append("-h");
   mb.append(query);
   self->send(node, mb.to_message());
 
-  caf::message_builder mb1;
-  mb1.append("connect");
-  mb1.append("exporter");
-  mb1.append("archive");
-  self->send(node, mb1.to_message());
+  mb.clear();
+  mb.append("connect");
+  mb.append("exporter");
+  //TODO: Actually get the archive(s) actor and use proper labels
+  mb.append("archive");
+  self->send(node, mb.to_message());
 
-  caf::message_builder mb2;
-  mb2.append("connect");
-  mb2.append("exporter");
-  mb2.append("index");
-  self->send(node, mb2.to_message());
+  mb.clear();
+  mb.append("connect");
+  mb.append("exporter");
+  //TODO: Actually get the index(es) actor and use proper labels
+  mb.append("index");
+  self->send(node, mb.to_message());
 
-  //TODO: connect exporter to sink
-
-  caf::message_builder mb3;
-  mb3.append("send");
-  mb3.append("exporter");
-  mb3.append("run");
-  self->send(node, mb3.to_message());
-
+  mb.clear();
+  mb.append(get_atom::value);
+  mb.append("exporter");
+  self->send(node, mb.to_message());
 }
 
 bool handle(event const& e, broker* self, connection_handle hdl)
@@ -180,11 +160,12 @@ bool handle(event const& e, broker* self, connection_handle hdl)
 
   if (first_event_){
     first_event_ = false;
-    auto ans = create_response("");
+    auto ans = create_response(content);
+    VAST_DEBUG("Sending first event", ans);
     self->write(hdl, ans.size(), ans.c_str());
+    self->quit();
   }
-
-  self->write(hdl, content.size(), content.c_str());
+  //self->write(hdl, content.size(), content.c_str());
   return true;
 }
 
@@ -192,35 +173,48 @@ behavior connection_worker(broker* self, connection_handle hdl, actor const& nod
 {
   self->configure_read(hdl, receive_policy::at_most(1024));
 
+  //TODO: make this unique for each connection worker.. maybe use self->id()
+  std::string exporter_label = "exporter";
+
   return
   {
     [=](new_data_msg const& msg)
     {
-      VAST_DEBUG(self, "got", msg.buf.size(), "bytes");
       auto url = parse_url(msg);
       auto query = url.substr(url.find("query=") + 6, url.size());
       query = UriDecode(query);
       VAST_DEBUG(self, "got", query, "as query");
-
-      send_query(self, query, node);
-
-      auto content ="{query : \""s;
-      content.append(query);
-      content.append("\"}");
-
-      auto ans = create_response(content);
-      VAST_DEBUG(self, "responding with", ans);
-      self->write(msg.handle, ans.size(), ans.c_str());
-      self->quit();
+      setup_exporter(self, query, node, exporter_label);
     },
     [=](connection_closed_msg const&)
     {
-      self->quit();
+      //self->quit();
+    },
+    [=](actor const& act, std::string const& fqn, std::string const& type)
+    {
+      VAST_DEBUG("got actor", act, "with fqn", fqn, " and type", type);
+      if(type == exporter_label)
+      {
+        //Register at exporter
+        caf::message_builder mb;
+        mb.append(put_atom::value);
+        mb.append(sink_atom::value);
+        mb.append(self);
+        self->send(act, mb.to_message());
+        
+        //Run exporter, maybe delay here... if exporter gets run signal before we register we might
+        //not get some events
+        mb.clear();
+        mb.append("send");
+        mb.append(exporter_label);
+        mb.append("run");
+        self->send(node, mb.to_message());
+      }
     },
     // handle sink messages
     [=](exit_msg const& msg)
     {
-      self->quit(msg.reason);
+      //self->quit(msg.reason);
     },
     [=](uuid const&, event const& e)
     {
@@ -236,7 +230,7 @@ behavior connection_worker(broker* self, connection_handle hdl, actor const& nod
     [=](uuid const& id, done_atom, time::extent runtime)
     {
       VAST_VERBOSE(self, "got DONE from query", id << ", took", runtime);
-      self->quit(exit::done);
+      //self->quit(exit::done);
     }
   };
 }
@@ -257,7 +251,6 @@ behavior http_broker_function(broker* self, actor const& node)
     {
       auto msg = to_string(self->current_message());
       VAST_WARN(self, "got unexpected msg:", msg);
-      aout(self) << "unexpected: " << msg << endl;
     }
   };
 }
