@@ -5,17 +5,16 @@
 
 namespace vast {
 
-/// Invokes an action after a successful parse.
+/// Transform a parser's inner attribute after a successful parse.
 /// @tparam Parser The parser to augment with an action.
 /// @tparam Action A function taking the synthesized attribute and returning
-///                `void`.
+///                a new type.
 template <typename Parser, typename Action>
 class action_parser : public parser<action_parser<Parser, Action>>
 {
 public:
-  // We keep the semantic action transparent and just haul through the parser's
-  // attribute.
-  using attribute = typename Parser::attribute;
+  using inner_attribute = typename Parser::attribute;
+  using attribute = std::result_of_t<Action(inner_attribute)>;
 
   action_parser(Parser const& p, Action fun)
     : parser_{p},
@@ -32,9 +31,10 @@ public:
   template <typename Iterator, typename Attribute>
   bool parse(Iterator& f, Iterator const& l, Attribute& a) const
   {
-    if (! parser_.parse(f, l, a))
+    inner_attribute x;
+    if (! parser_.parse(f, l, x))
       return false;
-    action_(a);
+    a = action_(std::move(x));
     return true;
   }
 

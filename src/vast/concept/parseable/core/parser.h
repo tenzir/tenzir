@@ -52,6 +52,12 @@ struct parser
     return action_parser<Derived, Action>{derived(), fun};
   }
 
+  template <typename Action>
+  auto operator->*(Action fun) const
+  {
+    return then(fun);
+  }
+
   template <typename Guard>
   auto with(Guard fun) const
   {
