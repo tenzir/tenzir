@@ -34,7 +34,7 @@ public:
   bool parse(Iterator& f, Iterator const& l, Attribute& a) const
   {
     attribute attr;
-    if (! parser_.parse(f, l, attr) && guard_(attr))
+    if (! (parser_.parse(f, l, attr) && guard_(attr)))
       return false;
     a = std::move(attr);
     return true;
