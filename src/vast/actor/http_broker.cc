@@ -163,9 +163,9 @@ bool handle(event const& e, broker* self, connection_handle hdl)
     auto ans = create_response(content);
     VAST_DEBUG("Sending first event", ans);
     self->write(hdl, ans.size(), ans.c_str());
-    self->quit();
   }
-  //self->write(hdl, content.size(), content.c_str());
+  self->write(hdl, content.size(), content.c_str());
+  self->flush(hdl);
   return true;
 }
 
@@ -188,10 +188,11 @@ behavior connection_worker(broker* self, connection_handle hdl, actor const& nod
     },
     [=](connection_closed_msg const&)
     {
-      //self->quit();
+      self->quit();
     },
     [=](actor const& act, std::string const& fqn, std::string const& type)
     {
+
       VAST_DEBUG("got actor", act, "with fqn", fqn, " and type", type);
       if(type == exporter_label)
       {
@@ -214,7 +215,7 @@ behavior connection_worker(broker* self, connection_handle hdl, actor const& nod
     // handle sink messages
     [=](exit_msg const& msg)
     {
-      //self->quit(msg.reason);
+      self->quit(msg.reason);
     },
     [=](uuid const&, event const& e)
     {
