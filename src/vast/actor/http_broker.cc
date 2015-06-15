@@ -127,6 +127,7 @@ void setup_exporter(broker* self, std::string query, actor const& node, std::str
   mb.append("exporter");
   //TODO: un-hardcode the query opts
   mb.append("-h");
+  mb.append("-l 10");
   mb.append(query);
   self->send(node, mb.to_message());
 
@@ -162,10 +163,16 @@ bool handle(event const& e, broker* self, connection_handle hdl)
     first_event_ = false;
     auto ans = create_response(content);
     VAST_DEBUG("Sending first event", ans);
+    ans = "[" + ans;
     self->write(hdl, ans.size(), ans.c_str());
+    self->flush(hdl);
+  } 
+  else
+  {
+    content = "," + content;
+    self->write(hdl, content.size(), content.c_str());
+    self->flush(hdl);
   }
-  self->write(hdl, content.size(), content.c_str());
-  self->flush(hdl);
   return true;
 }
 
@@ -231,7 +238,9 @@ behavior connection_worker(broker* self, connection_handle hdl, actor const& nod
     [=](uuid const& id, done_atom, time::extent runtime)
     {
       VAST_VERBOSE(self, "got DONE from query", id << ", took", runtime);
-      //self->quit(exit::done);
+      self->write(hdl, 1, "]");
+      self->flush(hdl);
+      self->quit(exit::done);
     }
   };
 }
@@ -246,7 +255,6 @@ behavior http_broker_function(broker* self, actor const& node)
       VAST_DEBUG(self, "got new connection");
       auto worker = self->fork(connection_worker, ncm.handle, node);
       self->monitor(worker);
-      self->link_to(worker);
     },
     others >> [=]
     {
