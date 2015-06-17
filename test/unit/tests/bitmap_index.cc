@@ -230,14 +230,14 @@ TEST(string)
 TEST(ip_address)
 {
   address_bitmap_index<null_bitstream> bmi;
-  REQUIRE(bmi.push_back(*address::from_v4("192.168.0.1")));
-  REQUIRE(bmi.push_back(*address::from_v4("192.168.0.2")));
-  REQUIRE(bmi.push_back(*address::from_v4("192.168.0.3")));
-  REQUIRE(bmi.push_back(*address::from_v4("192.168.0.1")));
-  REQUIRE(bmi.push_back(*address::from_v4("192.168.0.1")));
-  REQUIRE(bmi.push_back(*address::from_v4("192.168.0.2")));
+  REQUIRE(bmi.push_back(*to<address>("192.168.0.1")));
+  REQUIRE(bmi.push_back(*to<address>("192.168.0.2")));
+  REQUIRE(bmi.push_back(*to<address>("192.168.0.3")));
+  REQUIRE(bmi.push_back(*to<address>("192.168.0.1")));
+  REQUIRE(bmi.push_back(*to<address>("192.168.0.1")));
+  REQUIRE(bmi.push_back(*to<address>("192.168.0.2")));
 
-  auto addr = *address::from_v4("192.168.0.1");
+  auto addr = *to<address>("192.168.0.1");
   auto bs = bmi.lookup(equal, addr);
   REQUIRE(bs);
   CHECK(to_string(*bs) == "100110");
@@ -245,17 +245,17 @@ TEST(ip_address)
   bs = bmi.lookup(not_equal, addr);
   CHECK(to_string(*bs) == "011001");
 
-  addr = *address::from_v4("192.168.0.5");
+  addr = *to<address>("192.168.0.5");
   CHECK(to_string(*bmi.lookup(equal, addr)) == "000000");
 
-  CHECK(! bmi.lookup(match, *address::from_v6("::"))); // Invalid operator
+  CHECK(! bmi.lookup(match, *to<address>("::"))); // Invalid operator
 
-  bmi.push_back(*address::from_v4("192.168.0.128"));
-  bmi.push_back(*address::from_v4("192.168.0.130"));
-  bmi.push_back(*address::from_v4("192.168.0.240"));
-  bmi.push_back(*address::from_v4("192.168.0.127"));
+  bmi.push_back(*to<address>("192.168.0.128"));
+  bmi.push_back(*to<address>("192.168.0.130"));
+  bmi.push_back(*to<address>("192.168.0.240"));
+  bmi.push_back(*to<address>("192.168.0.127"));
 
-  auto sub = subnet{*address::from_v4("192.168.0.128"), 25};
+  auto sub = subnet{*to<address>("192.168.0.128"), 25};
   bs = bmi.lookup(in, sub);
   REQUIRE(bs);
   CHECK(to_string(*bs) == "0000001110");
@@ -264,7 +264,7 @@ TEST(ip_address)
   REQUIRE(bs);
   CHECK(to_string(*bs) == "1111110001");
 
-  sub = {*address::from_v4("192.168.0.0"), 24};
+  sub = {*to<address>("192.168.0.0"), 24};
   bs = bmi.lookup(in, sub);
   REQUIRE(bs);
   CHECK(to_string(*bs) == "1111111111");
