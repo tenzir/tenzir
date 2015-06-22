@@ -67,6 +67,47 @@ private:
 
 };
 
+/// A http_url data type.
+class http_url
+{
+public:
+
+
+  /// Default-constructs a null JSON value.
+  http_url() = default;
+
+  std::vector<std::string> Path()
+  {
+    return path_;
+  }
+
+  void add_path_segment(std::string path_segment)
+  {
+	  path_.push_back(path_segment);
+  }
+
+  std::map<std::string, std::string> Options()
+  {
+    return options_;
+  }
+
+  std::string Options(std::string key)
+  {
+    return options_[key];
+  }
+
+  void add_option(std::string key, std::string value)
+  {
+	  options_[key] = value;
+  }
+
+private:
+  std::vector<std::string> path_;
+  std::map<std::string, std::string> options_;
+
+};
+
+
 } // namespace util
 } // namespace vast
 

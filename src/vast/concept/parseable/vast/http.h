@@ -63,7 +63,7 @@ public:
 class url_parser : public parser<url_parser>
 {
 public:
-  using attribute = unused_type;
+  using attribute = util::http_url;
 
   url_parser()
   {
@@ -96,16 +96,16 @@ public:
     std::tuple<std::vector<std::vector<char>>,std::vector<std::tuple<std::vector<char>,std::vector<char>>>> h;
     if (p.parse(f, l, h))
     {
-      for (auto& path_segments : get<0>(h)){
-        (get<0>(a)).push_back(std::string(path_segments.begin(),path_segments.end()));
+      util::http_url url;
+	  for (auto& path_segments : get<0>(h)){
+        url.add_path_segment(std::string(path_segments.begin(),path_segments.end()));
       }
       for (auto& option : get<1>(h)){
-        std::tuple<std::string,std::string> opt;
-        get<0>(opt) = std::string(get<0>(option).begin(),get<0>(option).end());
-        get<1>(opt) = std::string(get<1>(option).begin(),get<1>(option).end());
-	    (get<1>(a)).push_back(std::move(opt));
+        std::string key = std::string(get<0>(option).begin(),get<0>(option).end());
+        std::string value = std::string(get<1>(option).begin(),get<1>(option).end());
+	    url.add_option(key, value);
       }
-
+      a = url;
       return true;
     }
     return false;
