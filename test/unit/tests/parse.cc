@@ -4,6 +4,7 @@
 #include "vast/concept/parseable/string.h"
 #include "vast/concept/parseable/string/quoted_string.h"
 #include "vast/concept/parseable/vast/address.h"
+#include "vast/concept/parseable/vast/http.h"
 #include "vast/concept/parseable/vast/time.h"
 
 #define SUITE parseable
@@ -321,7 +322,7 @@ TEST(real)
 //  CHECK(d == 123);
 //  CHECK(f == str.begin() + 4);
 }
-
+/*
 TEST(time::duration)
 {
   auto pt = make_parser<time::duration>{};
@@ -344,6 +345,22 @@ TEST(time::duration)
   CHECK(pt.parse(f, l, d));
   CHECK(f == l);
   CHECK(d == time::fractional(123.456789));
+}
+*/
+TEST(http_parser)
+{
+  auto p = vast::http_parser{};
+  std::tuple<std::string,std::string,std::string,std::map<std::string,std::string>> got;
+  auto str = "GET /test/path/ HTTP/1.1\r\nContent-Type: text/html\r\nContent-Length: 1234\r\n"s;
+  auto f = str.begin();
+  auto l = str.end();
+  CHECK(p.parse(f, l, got));
+  CHECK(std::get<0>(got) == "GET");
+  CHECK(std::get<1>(got) == "/test/path/");
+  CHECK(std::get<2>(got) == "HTTP/1.1");
+  CHECK(std::get<3>(got)["Content-Type"] == "text/html");
+  CHECK(std::get<3>(got)["Content-Length"] =="1234");
+  CHECK(f == l);
 }
 
 //
@@ -480,3 +497,4 @@ TEST(containers)
   CHECK(v->front() == "a.root-servers.net");
   CHECK(v->back() == "c.root-servers.net");
 }
+
