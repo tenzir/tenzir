@@ -5,6 +5,7 @@
 #include "vast/concept/parseable/string/quoted_string.h"
 #include "vast/concept/parseable/vast/address.h"
 #include "vast/concept/parseable/vast/http.h"
+#include "vast/util/http.h"
 #include "vast/concept/parseable/vast/time.h"
 
 #define SUITE parseable
@@ -350,16 +351,16 @@ TEST(time::duration)
 TEST(http_parser)
 {
   auto p = vast::http_parser{};
-  std::tuple<std::string,std::string,std::string,std::map<std::string,std::string>> got;
+  util::http_request got;
   auto str = "GET /test/path/ HTTP/1.1\r\nContent-Type: text/html\r\nContent-Length: 1234\r\n"s;
   auto f = str.begin();
   auto l = str.end();
   CHECK(p.parse(f, l, got));
-  CHECK(std::get<0>(got) == "GET");
-  CHECK(std::get<1>(got) == "/test/path/");
-  CHECK(std::get<2>(got) == "HTTP/1.1");
-  CHECK(std::get<3>(got)["Content-Type"] == "text/html");
-  CHECK(std::get<3>(got)["Content-Length"] =="1234");
+  CHECK(got.Method() == "GET");
+  CHECK(got.URL() == "/test/path/");
+  CHECK(got.HTTP_version() == "HTTP/1.1");
+  CHECK(got.Header("Content-Type") == "text/html");
+  CHECK(got.Header("Content-Length") =="1234");
   CHECK(f == l);
 }
 

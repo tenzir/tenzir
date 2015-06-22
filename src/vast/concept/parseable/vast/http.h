@@ -6,6 +6,7 @@
 #include "vast/concept/parseable/core.h"
 #include "vast/concept/parseable/string.h"
 #include "vast/concept/parseable/string/char.h"
+#include "vast/util/http.h"
 
 
 namespace vast {
@@ -13,7 +14,7 @@ namespace vast {
 class http_parser : public parser<http_parser>
 {
 public:
-  using attribute = std::tuple<std::string,std::string,std::string,std::map<std::string,std::string>>;
+  using attribute = util::http_request;
 
   http_parser()
   {
@@ -42,19 +43,16 @@ public:
     std::tuple<std::string,std::string,std::string,std::vector<std::tuple<std::vector<char>,std::vector<char>>>> h;
     if (p.parse(f, l, h))
     {
-      std::map<std::string,std::string> m;
+      util::http_request request(get<0>(h),get<1>(h),get<2>(h));
       for (auto& header_field : get<3>(h))
       {
         auto key_v = get<0>(header_field);
         auto value_v = get<1>(header_field);
         auto key = std::string(key_v.begin(),key_v.end());
         auto value = std::string(value_v.begin(),value_v.end());
-        m[key] = value;
+        request.add_header_field(key,value);
       }
-      get<0>(a) = get<0>(h);
-      get<1>(a) = get<1>(h);
-      get<2>(a) = get<2>(h);
-      get<3>(a) = m;
+      a = request;
       return true;
     }
     return false;
