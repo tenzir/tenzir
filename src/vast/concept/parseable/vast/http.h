@@ -62,6 +62,60 @@ public:
 
 };
 
+class url_parser : public parser<url_parser>
+{
+public:
+  using attribute = unused_type;
+
+  url_parser()
+  {
+  }
+
+  static auto make()
+  {
+    auto path_ignor_char = ignore(char_parser{'/'}) | ignore(char_parser{'?'});
+	auto path_char = print_parser{} - path_ignor_char;
+	auto path_segments =  '/' >> (*(path_char)) % '/';
+	auto option_key = +(print_parser{} - '=');
+	auto option_value = +(print_parser{} - '&');
+    auto option = option_key >> '=' >> option_value;
+    auto options = option % '&';
+    return path_segments >> '?' >> options;
+  }
+
+  template <typename Iterator>
+  bool parse(Iterator& f, Iterator const& l, unused_type) const
+  {
+    static auto p = make();
+    return p.parse(f, l, unused);
+  }
+
+  template <typename Iterator, typename Attribute>
+  bool parse(Iterator& f, Iterator const& l, Attribute& a) const
+  {
+    static auto p = make();
+    using std::get;
+    std::tuple<std::vector<std::vector<char>>,std::vector<std::tuple<std::vector<char>,std::vector<char>>>> h;
+    if (p.parse(f, l, h))
+    {
+      for (auto& path_segments : get<0>(h)){
+        (get<0>(a)).push_back(std::string(path_segments.begin(),path_segments.end()));
+      }
+      for (auto& option : get<1>(h)){
+        std::tuple<std::string,std::string> opt;
+        get<0>(opt) = std::string(get<0>(option).begin(),get<0>(option).end());
+        get<1>(opt) = std::string(get<1>(option).begin(),get<1>(option).end());
+	    (get<1>(a)).push_back(std::move(opt));
+      }
+
+      return true;
+    }
+    return false;
+  }
+
+};
+
+
 } // namespace vast
 
 #endif

@@ -363,6 +363,27 @@ TEST(http_parser)
   CHECK(f == l);
 }
 
+TEST(url_parser)
+{
+  auto p = vast::url_parser{};
+  std::tuple<std::vector<std::string>,std::vector<std::tuple<std::string,std::string>>> got;
+  auto str = "/test/path/foo?opt1=foobar&opt2=test"s;
+  //auto str = "/test/path?option=test"s;
+  auto f = str.begin();
+  auto l = str.end();
+  CHECK(p.parse(f, l, got));
+  CHECK(get<0>(got)[0] == "test");
+  CHECK(get<0>(got)[1] == "path");
+  CHECK(get<0>(got)[2] == "foo");
+  CHECK(get<0>((get<1>(got))[0]) == "opt1");
+  CHECK(get<1>((get<1>(got))[0]) == "foobar");
+  CHECK(get<0>((get<1>(got))[1]) == "opt2");
+  CHECK(get<1>((get<1>(got))[1]) == "test");
+  CHECK(f == l);
+
+}
+
+
 //
 // TODO: convert to parseable concept from here
 //
