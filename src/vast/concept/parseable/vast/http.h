@@ -1,11 +1,9 @@
-#ifndef VAST_CONCEPT_PARSEABLE_VAST_TIME_H
-#define VAST_CONCEPT_PARSEABLE_VAST_TIME_H
+#ifndef VAST_CONCEPT_PARSEABLE_VAST_HTTP_H
+#define VAST_CONCEPT_PARSEABLE_VAST_HTTP_H
 
 #include <string>
-#include "vast/access.h"
 #include "vast/concept/parseable/core.h"
 #include "vast/concept/parseable/string.h"
-#include "vast/concept/parseable/string/char.h"
 #include "vast/util/http.h"
 
 
@@ -128,6 +126,13 @@ public:
 
 };
 
+template <>
+struct parser_registry<util::http_request>
+{
+  using type = http_parser;
+};
+
+
 class url_parser : public parser<url_parser>
 {
 public:
@@ -183,6 +188,11 @@ public:
 
 };
 
+template <>
+struct parser_registry<util::http_url>
+{
+  using type = url_parser;
+};
 
 } // namespace vast
 

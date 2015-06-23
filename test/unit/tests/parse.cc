@@ -4,9 +4,9 @@
 #include "vast/concept/parseable/string.h"
 #include "vast/concept/parseable/string/quoted_string.h"
 #include "vast/concept/parseable/vast/address.h"
+#include "vast/concept/parseable/vast/time.h"
 #include "vast/concept/parseable/vast/http.h"
 #include "vast/util/http.h"
-#include "vast/concept/parseable/vast/time.h"
 
 #define SUITE parseable
 #include "test.h"
@@ -323,7 +323,7 @@ TEST(real)
 //  CHECK(d == 123);
 //  CHECK(f == str.begin() + 4);
 }
-/*
+
 TEST(time::duration)
 {
   auto pt = make_parser<time::duration>{};
@@ -347,10 +347,11 @@ TEST(time::duration)
   CHECK(f == l);
   CHECK(d == time::fractional(123.456789));
 }
-*/
+
 TEST(http_parser)
 {
-  auto p = vast::http_parser{};
+  //auto p = vast::http_parser{};
+  auto p = make_parser<util::http_request>{};
   util::http_request got;
   auto str = "GET /test/path/ HTTP/1.1\r\nContent-Type: text/html\r\nContent-Length: 1234\r\n"s;
   auto f = str.begin();
@@ -366,7 +367,8 @@ TEST(http_parser)
 
 TEST(url_parser)
 {
-  auto p = vast::url_parser{};
+  //auto p = vast::url_parser{};
+  auto p = make_parser<util::http_url>{};
   util::http_url got;
   auto str = "/test/path/foo?opt1=foobar&opt2=tes%3Ct"s;
   //auto str = "/test/path?option=test"s;
