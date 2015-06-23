@@ -368,7 +368,7 @@ TEST(url_parser)
 {
   auto p = vast::url_parser{};
   util::http_url got;
-  auto str = "/test/path/foo?opt1=foobar&opt2=test"s;
+  auto str = "/test/path/foo?opt1=foobar&opt2=tes%3Ct"s;
   //auto str = "/test/path?option=test"s;
   auto f = str.begin();
   auto l = str.end();
@@ -377,7 +377,7 @@ TEST(url_parser)
   CHECK(got.Path()[1] == "path");
   CHECK(got.Path()[2] == "foo");
   CHECK(got.Options("opt1") == "foobar");
-  CHECK(got.Options("opt2") == "test");
+  CHECK(got.Options("opt2") == "tes<t");
   CHECK(f == l);
 
 }
