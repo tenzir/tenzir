@@ -1,5 +1,5 @@
-#ifndef VAST_UTIL_JSON
-#define VAST_UTIL_JSON
+#ifndef VAST_UTIL_HTTP
+#define VAST_UTIL_HTTP
 
 #include <map>
 #include <string>
