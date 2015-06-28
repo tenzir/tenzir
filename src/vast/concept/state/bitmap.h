@@ -7,54 +7,28 @@
 
 namespace vast {
 
-template <typename Derived>
-struct access::state<coder<Derived>>
+template <typename Bitstream>
+struct access::state<singleton_coder<Bitstream>>
 {
   template <typename T, typename F>
   static void call(T&& x, F f)
   {
-    f(x.rows_);
+    f(x.bitstream_);
   }
 };
 
-template <typename Z, typename Bitstream>
-struct access::state<equality_coder<Z, Bitstream>>
+template <typename Derived, typename Bitstream>
+struct access::state<vector_coder<Derived, Bitstream>>
 {
   template <typename T, typename F>
   static void call(T&& x, F f)
   {
-    using super = typename std::decay_t<decltype(x)>::super;
-    using base = util::deduce<decltype(x), super>;
-    f(static_cast<base>(x), x.bitstreams_);
+    f(x.rows_, x.bitstreams_);
   }
 };
 
-template <typename Z, typename Bitstream>
-struct access::state<binary_bitslice_coder<Z, Bitstream>>
-{
-  template <typename T, typename F>
-  static void call(T&& x, F f)
-  {
-    using super = typename std::decay_t<decltype(x)>::super;
-    using base = util::deduce<decltype(x), super>;
-    f(static_cast<base>(x), x.bitstreams_);
-  }
-};
-
-template <typename Derived, typename Z, typename Bitstream>
-struct access::state<bitslice_coder<Derived, Z, Bitstream>>
-{
-  template <typename T, typename F>
-  static void call(T&& x, F f)
-  {
-    using super = typename std::decay_t<decltype(x)>::super;
-    using base = util::deduce<decltype(x), super>;
-    f(static_cast<base>(x), x.base_, x.v_, x.bitstreams_);
-  }
-};
-
-template <typename Z, typename Bitstream>
-struct access::state<equality_bitslice_coder<Z, Bitstream>>
+template <typename Bitstream>
+struct access::state<equality_coder<Bitstream>>
 {
   template <typename T, typename F>
   static void call(T&& x, F f)
@@ -65,8 +39,8 @@ struct access::state<equality_bitslice_coder<Z, Bitstream>>
   }
 };
 
-template <typename Z, typename Bitstream>
-struct access::state<range_bitslice_coder<Z, Bitstream>>
+template <typename Bitstream>
+struct access::state<range_coder<Bitstream>>
 {
   template <typename T, typename F>
   static void call(T&& x, F f)
@@ -77,52 +51,35 @@ struct access::state<range_bitslice_coder<Z, Bitstream>>
   }
 };
 
-template <typename Z>
-struct access::state<null_binner<Z>>
-{
-  template <typename T, typename F>
-  static void call(T&&, F)
-  {
-    // nop
-  }
-};
-
-template <typename Z>
-struct access::state<precision_binner<Z>>
+template <typename Bitstream>
+struct access::state<bitslice_coder<Bitstream>>
 {
   template <typename T, typename F>
   static void call(T&& x, F f)
   {
-    f(x.integral_, x.fractional_);
+    using super = typename std::decay_t<decltype(x)>::super;
+    using base = util::deduce<decltype(x), super>;
+    f(static_cast<base>(x));
   }
 };
 
-template <
-  typename Z,
-  typename BS,
-  template <typename, typename> class C,
-  template <typename> class B
->
-struct access::state<bitmap<Z, BS, C, B>>
+template <typename Base, typename Coder>
+struct access::state<multi_level_coder<Base, Coder>>
 {
   template <typename T, typename F>
   static void call(T&& x, F f)
   {
-    f(x.binner_, x.coder_);
+    f(x.coders_);
   }
 };
 
-template <
-  typename BS,
-  template <typename, typename> class C,
-  template <typename> class B
->
-struct access::state<bitmap<bool, BS, C, B>>
+template <typename Z, typename Coder, typename Binner>
+struct access::state<bitmap<Z, Coder, Binner>>
 {
   template <typename T, typename F>
   static void call(T&& x, F f)
   {
-    f(x.bool_);
+    f(x.coder_);
   }
 };
 
