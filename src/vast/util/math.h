@@ -1,6 +1,3 @@
-#ifndef VAST_UTIL_MATH_H
-#define VAST_UTIL_MATH_H
-
 // A few function in this file are licensed under the following license:
 //
 //     Copyright (c) Orson Peters, 2015.
@@ -23,6 +20,10 @@
 //
 //     3. This notice may not be removed or altered from any source
 //        distribution.
+#ifndef VAST_UTIL_MATH_H
+#define VAST_UTIL_MATH_H
+
+#include <cstdint>
 
 namespace vast {
 namespace util {

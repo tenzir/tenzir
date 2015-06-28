@@ -64,7 +64,6 @@ struct bitmap_index_model
   {
     if (typeid(c) != typeid(*this))
       throw std::bad_cast();
-
     return static_cast<bitmap_index_model const&>(c).bmi_;
   }
 
@@ -72,7 +71,6 @@ struct bitmap_index_model
   {
     if (typeid(c) != typeid(*this))
       throw std::bad_cast();
-
     return static_cast<bitmap_index_model&>(c).bmi_;
   }
 
@@ -191,8 +189,8 @@ private:
   std::unique_ptr<detail::bitmap_index_concept<Bitstream>> concept_;
 };
 
-template <typename Bitstream, typename... Args>
-trial<bitmap_index<Bitstream>> make_bitmap_index(type_tag t, Args&&... args);
+template <typename Bitstream>
+bitmap_index<Bitstream> make_bitmap_index(type_tag t);
 
 /// A bitmap index for sets, vectors, and tuples.
 template <typename Bitstream>
@@ -203,6 +201,8 @@ class sequence_bitmap_index
   friend super;
   friend access;
   template <typename> friend struct detail::bitmap_index_model;
+
+  static constexpr size_t max_container_length = 4096;
 
 public:
   using bitstream_type = Bitstream;
@@ -239,27 +239,22 @@ private:
   template <typename Container>
   bool push_back_impl(Container const& c)
   {
+    VAST_ASSERT(c.size() < max_container_length);
     if (c.empty())
       return size_.stretch(1);
-
     if (bmis_.size() < c.size())
     {
       auto old = bmis_.size();
       bmis_.resize(c.size());
       for (auto i = old; i < bmis_.size(); ++i)
       {
-        auto bmi = make_bitmap_index<Bitstream>(elem_type_);
-        if (! bmi)
-          return false;
-
-        bmis_[i] = std::move(*bmi);
+        bmis_[i] = make_bitmap_index<Bitstream>(elem_type_);
+        VAST_ASSERT(bmis_[i]);
       }
     }
-
     for (size_t i = 0; i < c.size(); ++i)
       if (! bmis_[i].push_back(c[i], this->size()))
         return false;
-
     return size_.push_back(c.size());
   }
 
@@ -274,20 +269,16 @@ private:
       op = in;
     else if (op == not_ni)
       op = not_in;
-
     if (! (op == in || op == not_in))
       return error{"unsupported relational operator: ", op};
-
     if (this->empty())
       return Bitstream{};
-
     Bitstream r;
     auto t = bmis_.front().lookup(equal, d);
     if (t)
       r |= *t;
     else
       return t;
-
     for (size_t i = 1; i < bmis_.size(); ++i)
     {
       auto bs = bmis_[i].lookup(equal, d);
@@ -296,13 +287,10 @@ private:
       else
         return bs;
     }
-
     if (r.size() < this->size())
       r.append(this->size() - r.size(), false);
-
     if (op == not_in)
       r.flip();
-
     return std::move(r);
   }
 
@@ -313,39 +301,61 @@ private:
 
   type elem_type_;
   std::vector<bitmap_index<Bitstream>> bmis_;
-  bitmap<uint32_t, Bitstream, range_bitslice_coder> size_;
+  bitmap<
+    uint32_t,
+    multi_level_coder<uniform_base<10, 4>, range_coder<Bitstream>>
+  > size_;
 };
 
-/// Factory to construct a bitmap index based on a given type tag.
-template <typename Bitstream, typename... Args>
-trial<bitmap_index<Bitstream>> make_bitmap_index(type const& t, Args&&... args)
+namespace detail {
+
+template <typename Bitstream>
+struct bitmap_index_factory
 {
-  // Can't use a visitor because of argument forwarding.
-  switch (which(t))
+  using result_type = bitmap_index<Bitstream>;
+
+  template <typename T>
+  auto operator()(T const&) const
+    -> std::enable_if_t<! type::is_arithmetic<T>{}, result_type>
   {
-    default:
-      return error{"unspported type: ", t};
-    case type::tag::boolean:
-      return {arithmetic_bitmap_index<Bitstream, boolean>(std::forward<Args>(args)...)};
-    case type::tag::integer:
-      return {arithmetic_bitmap_index<Bitstream, integer>(std::forward<Args>(args)...)};
-    case type::tag::count:
-      return {arithmetic_bitmap_index<Bitstream, count>(std::forward<Args>(args)...)};
-    case type::tag::real:
-      return {arithmetic_bitmap_index<Bitstream, real>(std::forward<Args>(args)...)};
-    case type::tag::time_point:
-      return {arithmetic_bitmap_index<Bitstream, time::point>(std::forward<Args>(args)...)};
-    case type::tag::time_duration:
-      return {arithmetic_bitmap_index<Bitstream, time::duration>(std::forward<Args>(args)...)};
-    case type::tag::string:
-      return {string_bitmap_index<Bitstream>(std::forward<Args>(args)...)};
-    case type::tag::address:
-      return {address_bitmap_index<Bitstream>(std::forward<Args>(args)...)};
-    case type::tag::subnet:
-      return {subnet_bitmap_index<Bitstream>(std::forward<Args>(args)...)};
-    case type::tag::port:
-      return {port_bitmap_index<Bitstream>(std::forward<Args>(args)...)};
+    return {};  // unsupported at the moment
   }
+
+  template <typename T>
+  auto operator()(T const&) const
+    -> std::enable_if_t<type::is_arithmetic<T>{}, result_type>
+  {
+    return arithmetic_bitmap_index<Bitstream, type::to_data<T>>{};
+  }
+
+  result_type operator()(type::string const&) const
+  {
+    return string_bitmap_index<Bitstream>{};
+  }
+
+  result_type operator()(type::address const&) const
+  {
+    return address_bitmap_index<Bitstream>{};
+  }
+
+  result_type operator()(type::subnet const&) const
+  {
+    return subnet_bitmap_index<Bitstream>{};
+  }
+
+  result_type operator()(type::port const&) const
+  {
+    return port_bitmap_index<Bitstream>{};
+  }
+};
+
+} // namespace detail
+
+/// Factory to construct a bitmap index based on a given type tag.
+template <typename Bitstream>
+bitmap_index<Bitstream> make_bitmap_index(type const& t)
+{
+  return visit(detail::bitmap_index_factory<Bitstream>{}, t);
 }
 
 } // namespace vast

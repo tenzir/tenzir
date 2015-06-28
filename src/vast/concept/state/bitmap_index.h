@@ -18,8 +18,8 @@ struct access::state<bitmap_index_base<Derived, Bitstream>>
   }
 };
 
-template <typename Bitstream, typename Z>
-struct access::state<arithmetic_bitmap_index<Bitstream, Z>>
+template <typename Bitstream, typename Z, typename Binner>
+struct access::state<arithmetic_bitmap_index<Bitstream, Z, Binner>>
 {
   template <typename T, typename F>
   static void call(T&& x, F f)
@@ -38,7 +38,7 @@ struct access::state<string_bitmap_index<Bitstream>>
   {
     using super = typename std::decay_t<decltype(x)>::super;
     using base = util::deduce<decltype(x), super>;
-    f(static_cast<base>(x), x.bitmaps_, x.size_);
+    f(static_cast<base>(x), x.bitmaps_, x.length_);
   }
 };
 
