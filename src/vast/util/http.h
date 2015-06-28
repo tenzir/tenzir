@@ -101,6 +101,16 @@ public:
 	  options_[key] = value;
   }
 
+  bool contains_option(std::string key)
+  {
+    return options_.count(key) > 0;
+    //if (options_.find(key) != options_.end())
+    //{
+    //  return true;
+    //}
+    //return false;
+  }
+
 private:
   std::vector<std::string> path_;
   std::map<std::string, std::string> options_;

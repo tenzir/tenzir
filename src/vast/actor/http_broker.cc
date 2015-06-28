@@ -45,16 +45,33 @@ std::string create_response(std::string const& content)
   return response;
 }
 
-void setup_exporter(broker* self, std::string query, actor const& node, std::string exporter_label){
+void setup_exporter(broker* self, util::http_url url, actor const& node, std::string exporter_label){
   //TODO: Use label instead of just "exporter"
   caf::message_builder mb;
   mb.append("spawn");
 
   mb.append("exporter");
-  //TODO: un-hardcode the query opts
-  mb.append("-h");
-  mb.append("-l 50");
-  mb.append(query);
+  if (url.contains_option("continuous"))
+  {
+    mb.append("-c");
+    VAST_DEBUG("add continuous option");
+  }
+  if (url.contains_option("historical"))
+  {
+    mb.append("-h");
+    VAST_DEBUG("add historical option");
+  }
+  if (url.contains_option("unified"))
+  {
+    mb.append("-u");
+    VAST_DEBUG("add unified option");
+  }
+  if (url.contains_option("limit"))
+  {
+    mb.append("-l " + url.Options("limit"));
+    VAST_DEBUG("add limit ", url.Options("limit"));
+  }
+  mb.append(url.Options("query"));
   self->send(node, mb.to_message());
 
   mb.clear();
@@ -129,7 +146,7 @@ behavior connection_worker(broker* self, connection_handle hdl, actor const& nod
       url_parser.parse(f, l, url);
       auto query = url.Options("query");
       VAST_DEBUG(self, "got", query, "as query");
-      setup_exporter(self, query, node, exporter_label);
+      setup_exporter(self, url, node, exporter_label);
     },
     [=](connection_closed_msg const&)
     {
