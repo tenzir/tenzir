@@ -410,6 +410,15 @@ trial<void> convert(std::map<K, V> const& m, json& j)
   return nothing;
 }
 
+template <typename T>
+json to_json(T const& x)
+{
+  json j;
+  if (! convert(x, j))
+    j = {}; // No partial conversion.
+  return j;
+}
+
 } // namespace util
 } // namespace vast
 
