@@ -5,7 +5,7 @@
 
 namespace vast {
 
-data const& record::each::range_state::operator*() const
+data const& record::each::range_state::data() const
 {
   VAST_ASSERT(! trace.empty());
   return *trace.back();

@@ -55,7 +55,7 @@ public:
   public:
     struct range_state
     {
-      vast::data const& operator*() const;
+      vast::data const& data() const;
       util::stack::vector<8, vast::data const*> trace;
       vast::offset offset;
     };
