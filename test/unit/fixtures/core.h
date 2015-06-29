@@ -46,7 +46,19 @@ struct core
       make_message("connect", "importer", "index"),
     };
     for (auto& msg : msgs)
-      self->sync_send(n, msg).await([](ok_atom) {});
+      self->sync_send(n, msg).await(
+        [](ok_atom) {},
+        [&](error const& e)
+        {
+          ERROR(e);
+          REQUIRE(false);
+        },
+        others >> [&]
+        {
+          ERROR("unexpected message: " << to_string(self->current_message()));
+          REQUIRE(false);
+        }
+      );
     return n;
   }
 
@@ -63,6 +75,11 @@ struct core
         REQUIRE(a != invalid_actor);
         self->monitor(a);
         self->send_exit(a, exit::done);
+      },
+      others >> [&]
+      {
+        ERROR("unexpected message: " << to_string(self->current_message()));
+        REQUIRE(false);
       }
     );
     self->receive([&](down_msg const& dm) { CHECK(dm.reason == exit::done); });
@@ -78,7 +95,19 @@ struct core
       make_message("send", "source", "run")
     };
     for (auto& msg : msgs)
-      self->sync_send(n, msg).await([](ok_atom) {});
+      self->sync_send(n, msg).await(
+        [](ok_atom) {},
+        [&](error const& e)
+        {
+          ERROR(e);
+          REQUIRE(false);
+        },
+        others >> [&]
+        {
+          ERROR("unexpected message: " << to_string(self->current_message()));
+          REQUIRE(false);
+        }
+      );
     MESSAGE("monitoring source");
     self->sync_send(n, get_atom::value, "source").await(
       [&](actor const& a, std::string const& fqn, std::string const& type)
