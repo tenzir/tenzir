@@ -52,17 +52,17 @@ constexpr uint64_t decimal_binner<E>::digits2;
 
 /// A binning policy that reduces values to a given precision.
 /// Integral types are truncated and fractional types are rounded.
-/// @tparam PositiveDigits The number of positive decimal digits. For example,
+/// @tparam IntegralDigits The number of positive decimal digits. For example,
 ///                        3 digits means that the largest value is 10^3.
-/// @tparam NegativeDigits The number of negative decimal digits.
-template <size_t PositiveDigits, size_t NegativeDigits = 0>
+/// @tparam FractionalDigits The number of negative decimal digits.
+template <size_t IntegralDigits, size_t FractionalDigits = 0>
 struct precision_binner
 {
-  static constexpr uint64_t positive10 = PositiveDigits;
-  static constexpr uint64_t negative10 = NegativeDigits;
-  static constexpr uint64_t positive_max = util::pow<positive10>(10ull);
-  static constexpr uint64_t negative_max = util::pow<negative10>(10ull);
-  static constexpr uint64_t digits10 = positive10 + negative10;
+  static constexpr uint64_t integral10 = IntegralDigits;
+  static constexpr uint64_t fractional10 = FractionalDigits;
+  static constexpr uint64_t integral_max = util::pow<integral10>(10ull);
+  static constexpr uint64_t fractional_max = util::pow<fractional10>(10ull);
+  static constexpr uint64_t digits10 = integral10 + fractional10;
   static constexpr double log10_2 = 0.3010299956639811980175;
   static constexpr uint64_t digits2 = digits10 / log10_2 + 1;
 
@@ -70,7 +70,7 @@ struct precision_binner
   static auto bin(T x)
     -> std::enable_if_t<std::is_integral<T>{}, T>
   {
-    return std::min(x, positive_max);
+    return std::min(x, integral_max);
   }
 
   template <typename T>
@@ -79,18 +79,21 @@ struct precision_binner
   {
     T i;
     auto f = std::modf(x, &i);
-    if (i >= static_cast<double>(positive_max))
-      return positive_max; // +Inf
-    auto frac = std::round(f * negative_max) / negative_max;
-    return i + frac;
+    auto negative = std::signbit(x);
+    if (negative && -i >= static_cast<double>(integral_max))
+      return -static_cast<double>(integral_max); // -Inf
+    if (! negative && i >= static_cast<double>(integral_max))
+      return integral_max; // +Inf
+    f = std::round(f * fractional_max) / fractional_max;
+    return i + f;
   }
 };
 
 template <size_t P, size_t N>
-constexpr uint64_t precision_binner<P, N>::positive_max;
+constexpr uint64_t precision_binner<P, N>::integral_max;
 
 template <size_t P, size_t N>
-constexpr uint64_t precision_binner<P, N>::negative_max;
+constexpr uint64_t precision_binner<P, N>::fractional_max;
 
 template <size_t P, size_t N>
 constexpr uint64_t precision_binner<P, N>::digits10;

@@ -181,7 +181,7 @@ class arithmetic_bitmap_index
         decimal_binner<9>, // nanoseconds -> seconds
         std::conditional_t<
           std::is_same<T, real>{},
-          precision_binner<0>, // no fractional part
+          precision_binner<10>, // no fractional part
           identity_binner
         >
       >,
