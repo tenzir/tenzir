@@ -39,6 +39,7 @@ std::string create_response(std::string const& content)
   auto response = ""s;
   response += "HTTP/1.1 200 OK\r\n";
   response += "Content-Type: application/json\r\n";
+  response += "Access-Control-Allow-Origin: *\r\n";
   response += "\r\n";
   response += content;
   response += "\r\n";
@@ -103,7 +104,6 @@ bool handle(event const& e, broker* self, connection_handle hdl)
 
   if (first_event_){
     first_event_ = false;
-    content = "[" + content;
     auto ans = create_response(content);
     ans = ans;
     VAST_DEBUG("Sending first event", ans);
@@ -112,7 +112,6 @@ bool handle(event const& e, broker* self, connection_handle hdl)
   } 
   else
   {
-    content = "," + content;
     self->write(hdl, content.size(), content.c_str());
     self->flush(hdl);
   }
@@ -190,7 +189,6 @@ behavior connection_worker(broker* self, connection_handle hdl, actor const& nod
     {
       VAST_VERBOSE(self, "got DONE from query", id << ", took", runtime);
       first_event_ = true;
-      self->write(hdl, 1, "]");
       self->flush(hdl);
       self->quit(exit::done);
     }
