@@ -46,10 +46,9 @@ std::string create_response(std::string const& content)
 }
 
 void setup_exporter(broker* self, util::http_url url, actor const& node, std::string exporter_label){
-  //TODO: Use label instead of just "exporter"
   caf::message_builder mb;
   mb.append("spawn");
-
+  mb.append("-l" + exporter_label);
   mb.append("exporter");
   if (url.contains_option("continuous"))
   {
@@ -76,21 +75,21 @@ void setup_exporter(broker* self, util::http_url url, actor const& node, std::st
 
   mb.clear();
   mb.append("connect");
-  mb.append("exporter");
+  mb.append(exporter_label);
   //TODO: Actually get the archive(s) actor and use proper labels
   mb.append("archive");
   self->send(node, mb.to_message());
 
   mb.clear();
   mb.append("connect");
-  mb.append("exporter");
+  mb.append(exporter_label);
   //TODO: Actually get the index(es) actor and use proper labels
   mb.append("index");
   self->send(node, mb.to_message());
 
   mb.clear();
   mb.append(get_atom::value);
-  mb.append("exporter");
+  mb.append(exporter_label);
   self->send(node, mb.to_message());
 }
 
@@ -124,8 +123,8 @@ behavior connection_worker(broker* self, connection_handle hdl, actor const& nod
 {
   self->configure_read(hdl, receive_policy::at_most(1024));
 
-  //TODO: make this unique for each connection worker.. maybe use self->id()
-  std::string exporter_label = "exporter";
+  std::string exporter_label = "exporter" + std::to_string(self->id());
+  VAST_DEBUG(self, "exporter_label=", exporter_label);
 
   return
   {
@@ -156,23 +155,20 @@ behavior connection_worker(broker* self, connection_handle hdl, actor const& nod
     {
 
       VAST_DEBUG("got actor", act, "with fqn", fqn, " and type", type);
-      if(type == exporter_label)
-      {
-        //Register at exporter
-        caf::message_builder mb;
-        mb.append(put_atom::value);
-        mb.append(sink_atom::value);
-        mb.append(self);
-        self->send(act, mb.to_message());
-        
-        //Run exporter, maybe delay here... if exporter gets run signal before we register we might
-        //not get some events
-        mb.clear();
-        mb.append("send");
-        mb.append(exporter_label);
-        mb.append("run");
-        self->send(node, mb.to_message());
-      }
+      //Register at exporter
+      caf::message_builder mb;
+      mb.append(put_atom::value);
+      mb.append(sink_atom::value);
+      mb.append(self);
+      self->send(act, mb.to_message());
+
+      //Run exporter, maybe delay here... if exporter gets run signal before we register we might
+      //not get some events
+      mb.clear();
+      mb.append("send");
+      mb.append(exporter_label);
+      mb.append("run");
+      self->send(node, mb.to_message());
     },
     // handle sink messages
     [=](exit_msg const& msg)
