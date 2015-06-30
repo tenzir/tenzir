@@ -86,13 +86,79 @@ struct ymd_parser : vast::parser<ymd_parser>
 {
   using attribute = std::tm;
 
-  // YYYY(-MM(-DD))
   static auto make()
   {
     auto year = integral_parser<unsigned, 4, 4>{};
     auto mon = integral_parser<unsigned, 2, 2>{};
     auto day = integral_parser<unsigned, 2, 2>{};
-    return year >> -('-' >> mon >> -('-' >> day));
+    return year >> '-' >> mon >> '-' >> day;
+  }
+
+  template <typename Iterator>
+  bool parse(Iterator& f, Iterator const& l, unused_type) const
+  {
+    static auto p = make();
+    return p.parse(f, l, unused);
+  }
+
+  template <typename Iterator>
+  bool parse(Iterator& f, Iterator const& l, std::tm& a) const
+  {
+    static auto p = make();
+    unsigned y, m, d;
+    auto t = std::tie(y, m, d);
+    if (! p.parse(f, l, t))
+      return false;
+    a.tm_year = y - 1900;
+    a.tm_mon = m - 1;
+    a.tm_mday = d;
+    return true;
+  }
+};
+
+struct hms_parser : vast::parser<hms_parser>
+{
+  using attribute = std::tm;
+
+  static auto make()
+  {
+    auto hour = integral_parser<unsigned, 2, 2>{};
+    auto min = integral_parser<unsigned, 2, 2>{};
+    auto sec = integral_parser<unsigned, 2, 2>{};
+    return hour >> ':' >> min >> ':' >> sec;
+  }
+
+  template <typename Iterator>
+  bool parse(Iterator& f, Iterator const& l, unused_type) const
+  {
+    static auto p = make();
+    return p.parse(f, l, unused);
+  }
+
+  template <typename Iterator>
+  bool parse(Iterator& f, Iterator const& l, std::tm& a) const
+  {
+    static auto p = make();
+    unsigned h, m, s;
+    auto t = std::tie(h, m, s);
+    if (! p.parse(f, l, t))
+      return false;
+    a.tm_hour = h;
+    a.tm_min = m;
+    a.tm_sec = s;
+    return true;
+  }
+};
+
+} // detail
+
+struct time_point_parser : parser<time_point_parser>
+{
+  using attribute = time::point;
+
+  static auto make()
+  {
+    return detail::ymd_parser{} >> '+' >> detail::hms_parser{};
   }
 
   template <typename Iterator>
@@ -105,47 +171,14 @@ struct ymd_parser : vast::parser<ymd_parser>
   template <typename Iterator, typename Attribute>
   bool parse(Iterator& f, Iterator const& l, Attribute& a) const
   {
-    using std::get;
     static auto p = make();
-    auto ymd = decltype(p)::attribute{};
-    if (p.parse(f, l, ymd))
-    {
-      a.tm_year = get<0>(ymd) - 1900;
-      if (get<1>(ymd))
-      {
-        a.tm_mon = get<0>(*get<1>(ymd)) - 1;
-        if (get<1>(*get<1>(ymd)))
-          a.tm_mday = *get<1>(*get<1>(ymd));
-      }
-      return true;
-    }
-    return false;
-  }
-};
-
-} // detail
-
-struct time_point_parser : parser<time_point_parser>
-{
-  using attribute = time::point;
-
-  template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, unused_type) const
-  {
-    return parser_.parse(f, l, unused);
-  }
-
-  template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const
-  {
     std::tm tm;
-    if (! parser_.parse(f, l, tm))
+    std::memset(&tm, 0, sizeof(tm));
+    if (! p.parse(f, l, tm))
       return false;
     a = time::point::from_tm(tm);
     return true;
   }
-
-  detail::ymd_parser parser_;
 };
 
 template <>

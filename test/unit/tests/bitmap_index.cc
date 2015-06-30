@@ -265,11 +265,11 @@ TEST(address)
   bs = bmi.lookup(in, sub);
   REQUIRE(bs);
   CHECK(to_string(*bs) == "11111111111");
-  sub = {*address::from_v4("192.168.0.0"), 20};
+  sub = {*to<address>("192.168.0.0"), 20};
   bs = bmi.lookup(in, sub);
   REQUIRE(bs);
   CHECK(to_string(*bs) == "11111111111");
-  sub = {*address::from_v4("192.168.0.64"), 26};
+  sub = {*to<address>("192.168.0.64"), 26};
   bs = bmi.lookup(not_in, sub);
   REQUIRE(bs);
   CHECK(to_string(*bs) == "11111111101");

@@ -324,41 +324,43 @@ TEST(real)
 
 TEST(time::duration)
 {
-  auto pt = make_parser<time::duration>{};
+  auto p = make_parser<time::duration>{};
   auto str = "1000ms"s;
   auto f = str.begin();
   auto l = str.end();
   time::duration d;
-  CHECK(pt.parse(f, l, d));
+  CHECK(p.parse(f, l, d));
   CHECK(f == l);
   CHECK(d == time::milliseconds(1000));
   // No unit (=> seconds)
   f = str.begin();
-  CHECK(pt.parse(f, l - 2, d));
+  CHECK(p.parse(f, l - 2, d));
   CHECK(f == l - 2);
   CHECK(d == time::seconds(1000));
   // Fractional timestamp (e.g., UNIX epoch).
   str = "123.456789";
   f = str.begin();
   l = str.end();
-  CHECK(pt.parse(f, l, d));
+  CHECK(p.parse(f, l, d));
   CHECK(f == l);
   CHECK(d == time::fractional(123.456789));
+}
+
+TEST(time::point)
+{
+  auto p = make_parser<time::point>{};
+  auto str = "2012-08-12+23:55:04"s;
+  auto f = str.begin();
+  auto l = str.end();
+  time::point tp;
+  CHECK(p.parse(f, l, tp));
+  CHECK(f == l);
+  CHECK(tp == time::point::utc(2012, 8, 12, 23, 55, 4));
 }
 
 //
 // TODO: convert to parseable concept from here
 //
-
-TEST(time::point)
-{
-  auto expected = time::point::utc(2012, 8, 12, 23, 55, 4);
-  auto str = "2012-08-12+23:55:04"s;
-  auto i = str.begin();
-  auto t = parse<time::point>(i, str.end(), time::point::format);
-  CHECK(i == str.end());
-  CHECK(*t == expected);
-}
 
 TEST(pattern)
 {
