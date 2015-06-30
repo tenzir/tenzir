@@ -59,8 +59,8 @@ struct node : default_actor
   struct actor_state
   {
     caf::actor actor;
-    std::string fqn;
     std::string type;
+    std::string fqn;
   };
 
   actor_state get(std::string const& label);

@@ -673,7 +673,7 @@ node::actor_state node::get(std::string const& label)
   auto key = "actors/" + name + '/' + s[0];
   auto fqn = s.size() == 1 ? (s[0] + '@' + name_) : label;
   scoped_actor{}->sync_send(store_, get_atom::value, key).await(
-    [&](actor const& a, std::string const& s) { result = {a, fqn, s}; },
+    [&](actor const& a, std::string const& s) { result = {a, s, fqn}; },
     [](none) { /* nop */ }
   );
   return result;
