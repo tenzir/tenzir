@@ -26,22 +26,18 @@ using namespace std::string_literals;
 
 namespace vast {
 
-bool first_event_ = true;
-
 template <size_t Size>
 constexpr size_t cstr_size(const char (&)[Size])
 {
   return Size;
 }
 
-std::string create_response(std::string const& content)
+std::string create_response_header()
 {
   auto response = ""s;
   response += "HTTP/1.1 200 OK\r\n";
   response += "Content-Type: application/json\r\n";
   response += "Access-Control-Allow-Origin: *\r\n";
-  response += "\r\n";
-  response += content;
   response += "\r\n";
   return response;
 }
@@ -101,20 +97,8 @@ bool handle(event const& e, broker* self, connection_handle hdl)
     return false;
   auto content = to_string(*j, true);
   content += "\r\n";
-
-  if (first_event_){
-    first_event_ = false;
-    auto ans = create_response(content);
-    ans = ans;
-    VAST_DEBUG("Sending first event", ans);
-    self->write(hdl, ans.size(), ans.c_str());
-    self->flush(hdl);
-  } 
-  else
-  {
-    self->write(hdl, content.size(), content.c_str());
-    self->flush(hdl);
-  }
+  self->write(hdl, content.size(), content.c_str());
+  self->flush(hdl);
   return true;
 }
 
@@ -168,6 +152,12 @@ behavior connection_worker(broker* self, connection_handle hdl, actor const& nod
       mb.append(exporter_label);
       mb.append("run");
       self->send(node, mb.to_message());
+
+      //send response header
+      auto header = create_response_header();
+      self->write(hdl, header.size(), header.c_str());
+      self->flush(hdl);
+      VAST_DEBUG("send response header", header);
     },
     // handle sink messages
     [=](exit_msg const& msg)
@@ -188,7 +178,6 @@ behavior connection_worker(broker* self, connection_handle hdl, actor const& nod
     [=](uuid const& id, done_atom, time::extent runtime)
     {
       VAST_VERBOSE(self, "got DONE from query", id << ", took", runtime);
-      first_event_ = true;
       self->flush(hdl);
       self->quit(exit::done);
     }
