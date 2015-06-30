@@ -4,6 +4,7 @@
 #include "vast/concept/parseable/string.h"
 #include "vast/concept/parseable/string/quoted_string.h"
 #include "vast/concept/parseable/vast/address.h"
+#include "vast/concept/parseable/vast/pattern.h"
 #include "vast/concept/parseable/vast/time.h"
 
 #define SUITE parseable
@@ -360,23 +361,24 @@ TEST(time::point)
   CHECK(tp == time::point::utc(2012, 8, 12, 23, 55, 4));
 }
 
-//
-// TODO: convert to parseable concept from here
-//
-
 TEST(pattern)
 {
+  auto p = make_parser<pattern>{};
   auto str = "/^\\w{3}\\w{3}\\w{3}$/"s;
-  auto i = str.begin();
-  auto p = parse<pattern>(i, str.end());
-  CHECK(p);
-  CHECK(i == str.end());
+  auto f = str.begin();
+  auto l = str.end();
+  pattern pat;
+  CHECK(p.parse(f, l, pat));
+  CHECK(f == l);
+  CHECK(to_string(pat) == str);
 
   str = "/foo\\+(bar){2}|\"baz\"*/";
-  i = str.begin();
-  p = parse<pattern>(i, str.end());
-  CHECK(p);
-  CHECK(i == str.end());
+  pat = {};
+  f = str.begin();
+  l = str.end();
+  CHECK(p.parse(f, l, pat));
+  CHECK(f == l);
+  CHECK(to_string(pat) == str);
 }
 
 TEST(address)
@@ -400,6 +402,10 @@ TEST(address)
   CHECK(a.is_v6());
   CHECK(to_string(a) == str);
 }
+
+//
+// TODO: convert to parseable concept from here
+//
 
 TEST(subnet)
 {
