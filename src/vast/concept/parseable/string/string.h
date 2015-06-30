@@ -1,8 +1,8 @@
 #ifndef VAST_CONCEPT_PARSEABLE_STRING_STRING_H
 #define VAST_CONCEPT_PARSEABLE_STRING_STRING_H
 
-#include <cassert>
 #include <string>
+
 #include "vast/concept/parseable/core/parser.h"
 
 namespace vast {
@@ -49,12 +49,6 @@ public:
 
 private:
   std::string str_;
-};
-
-template <>
-struct parser_registry<std::string>
-{
-  using type = string_parser;
 };
 
 namespace parsers {

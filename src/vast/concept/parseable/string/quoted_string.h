@@ -21,7 +21,7 @@ public:
   static auto make()
   {
     auto escaped_quote = Esc >> char_parser{Quote};
-    return Quote >> +(escaped_quote | (print_parser{} - Quote)) >> Quote;
+    return Quote >> +(escaped_quote | (parsers::print - Quote)) >> Quote;
   }
 
   template <typename Iterator, typename Attribute>
@@ -37,7 +37,14 @@ namespace parsers {
 using q_str = quoted_string_parser<'\'', '\\'>;
 using qq_str = quoted_string_parser<'"', '\\'>;
 
-} // namespace parasers
+} // namespace parsers
+
+template <>
+struct parser_registry<std::string>
+{
+  using type = parsers::qq_str;
+};
+
 } // namespace vast
 
 #endif

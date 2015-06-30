@@ -58,6 +58,8 @@ TEST(char class)
 
 TEST(quoted string)
 {
+  static_assert(std::is_same<make_parser<std::string>, parsers::qq_str>{},
+                "invalid parser for std::string");
   auto p = quoted_string_parser<'\''>{};
   auto got = ""s;
 
