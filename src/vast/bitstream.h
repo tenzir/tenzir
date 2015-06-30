@@ -179,9 +179,7 @@ public:
   /// @returns `true` on success.
   bool append(size_type n, bool bit)
   {
-    if (n == 0)
-      return true;
-    if (npos - n < size())
+    if (n == 0 || npos - n < size())
       return false;
     derived().append_impl(n, bit);
     return true;

@@ -312,7 +312,7 @@ TEST(records)
   std::vector<data> each;
   auto flat = record{"foo", -42, 1001u, "x", port{443, port::tcp}};
   for (auto& i : record::each{structured})
-    each.push_back(i.data());
+    each.push_back(*i);
   CHECK(each == flat);
 
   std::string buf;

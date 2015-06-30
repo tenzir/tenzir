@@ -70,8 +70,6 @@ bool null_bitstream::equals(null_bitstream const& other) const
 
 void null_bitstream::bitwise_not()
 {
-  if (bits_.empty())
-    return;
   bits_.flip();
 }
 

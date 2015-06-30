@@ -78,7 +78,6 @@ set(tests
   tests/actor/partition.cc
   tests/actor/source_bgpdump.cc
   tests/actor/task.cc
-  tests/binner.cc
   tests/bitmap.cc
   tests/bitmap_index.cc
   tests/bitstream.cc

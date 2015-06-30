@@ -1,6 +1,6 @@
 #include "vast/actor/identifier.h"
 
-#include <cstring>
+#include <cassert>
 #include <fstream>
 #include <caf/all.hpp>
 #include "vast/print.h"
@@ -23,8 +23,7 @@ behavior identifier::make_behavior()
     std::ifstream file{to_string(dir_ / "id")};
     if (! file)
     {
-      VAST_ERROR(this, "failed to open file:", dir_ / "id",
-                 '(' << std::strerror(errno) << ')');
+      VAST_ERROR(this, "failed to open file:", dir_ / "id");
       quit(exit::error);
       return {};
     }

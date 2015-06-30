@@ -556,7 +556,7 @@ public:
   //
 
   template <typename T>
-  using is_arithmetic = std::integral_constant<
+  using is_basic = std::integral_constant<
       bool,
       std::is_same<T, boolean>::value
         || std::is_same<T, integer>::value
@@ -566,12 +566,6 @@ public:
         || std::is_same<T, time_interval>::value
         || std::is_same<T, time_duration>::value
         || std::is_same<T, time_period>::value
-    >;
-
-  template <typename T>
-  using is_basic = std::integral_constant<
-      bool,
-      is_arithmetic<T>{}
         || std::is_same<T, string>::value
         || std::is_same<T, pattern>::value
         || std::is_same<T, address>::value
