@@ -134,7 +134,7 @@ public:
     return rows_;
   }
 
-  std::vector<Bitstream> const& storage() const
+  std::vector<bitstream_type> const& storage() const
   {
     return bitstreams_;
   }
@@ -150,7 +150,7 @@ public:
   }
 
   template <typename T>
-  auto decode(relational_operator op, T x) const
+  bitstream_type decode(relational_operator op, T x) const
   {
     return derived()->decode_impl(op, static_cast<std::make_unsigned_t<T>>(x));
   }
@@ -176,7 +176,7 @@ public:
   // Container API
   //
 
-  Bitstream const& operator[](size_t i) const
+  bitstream_type const& operator[](size_t i) const
   {
     VAST_ASSERT(i < bitstreams_.size());
     return bitstreams_[i];
@@ -203,7 +203,7 @@ protected:
     }
   }
 
-  std::vector<Bitstream> bitstreams_;
+  std::vector<bitstream_type> bitstreams_;
 
 private:
   Derived* derived()

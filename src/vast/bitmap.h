@@ -86,9 +86,8 @@ public:
   /// Retrieves a bitstream of a given value with respect to a given operator.
   /// @param op The relational operator to use for looking up *x*.
   /// @param x The value to find the bitstream for.
-  /// @returns An engaged bitstream for all values *v* where *op(v,x)* is
-  ///          `true` or a disengaged bitstream if *x* does not exist.
-  auto lookup(relational_operator op, value_type x) const
+  /// @returns The bitstream for all values *v* where *op(v,x)* is `true`.
+  bitstream_type lookup(relational_operator op, value_type x) const
   {
     return coder_.decode(op, order(binner_type::bin(x)));
   }
