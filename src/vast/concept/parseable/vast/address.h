@@ -5,6 +5,7 @@
 #include <sys/socket.h> // AF_INET*
 
 #include "vast/address.h"
+#include "vast/util/assert.h"
 
 #include "vast/concept/parseable/core.h"
 #include "vast/concept/parseable/numeric/integral.h"
@@ -14,6 +15,8 @@ namespace vast {
 
 struct address_parser : vast::parser<address_parser>
 {
+  using attribute = address;
+
   static auto make_v4()
   {
     using namespace parsers;
@@ -78,6 +81,8 @@ struct address_parser : vast::parser<address_parser>
 template <>
 struct access::parser<address> : vast::parser<access::parser<address>>
 {
+  using attribute = address;
+
   template <typename Iterator>
   bool parse(Iterator& f, Iterator const& l, unused_type) const
   {
@@ -100,13 +105,18 @@ struct access::parser<address> : vast::parser<access::parser<address>>
     }
     static auto const v6 = address_parser::make_v6();
     if (v6.parse(f, l, unused))
+    {
       // We still need to enhance the parseable concept with a few more tools
       // so that we can transparently parse into 16-byte sequence. Until
-      // then, we rely on ::inet_pton.
-      // FIXME: Using &*Iterator only works for contiguous iterators, which
-      // most likely encounter in practice. We really should use something like
-      // N4284 as soon as it's available.
-      return ::inet_pton(AF_INET6, &*begin, &a.bytes_) == 1;
+      // then, we rely on inet_pton. Unfortunately this incurs an extra copy
+      // because inet_pton needs a NUL-terminated string of the address *only*,
+      // i.e., it does not work when other characters follow the address.
+      char buf[INET6_ADDRSTRLEN];
+      std::memset(buf, 0, sizeof(buf));
+      VAST_ASSERT(f - begin < INET6_ADDRSTRLEN);
+      std::copy(begin, f, buf);
+      return ::inet_pton(AF_INET6, buf, &a.bytes_) == 1;
+    }
     return false;
   }
 };
