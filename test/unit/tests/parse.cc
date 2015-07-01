@@ -5,6 +5,7 @@
 #include "vast/concept/parseable/string/quoted_string.h"
 #include "vast/concept/parseable/vast/address.h"
 #include "vast/concept/parseable/vast/pattern.h"
+#include "vast/concept/parseable/vast/subnet.h"
 #include "vast/concept/parseable/vast/time.h"
 
 #define SUITE parseable
@@ -384,7 +385,8 @@ TEST(pattern)
 TEST(address)
 {
   auto p = make_parser<address>{};
-  // IPv4
+
+  MESSAGE("IPv4");
   auto str = "192.168.0.1"s;
   auto f = str.begin();
   auto l = str.end();
@@ -393,7 +395,22 @@ TEST(address)
   CHECK(f == l);
   CHECK(a.is_v4());
   CHECK(to_string(a) == str);
-  // IPv6
+
+  MESSAGE("IPv6");
+  str = "::";
+  f = str.begin();
+  l = str.end();
+  CHECK(p.parse(f, l, a));
+  CHECK(f == l);
+  CHECK(a.is_v6());
+  CHECK(to_string(a) == str);
+  str = "beef::cafe";
+  f = str.begin();
+  l = str.end();
+  CHECK(p.parse(f, l, a));
+  CHECK(f == l);
+  CHECK(a.is_v6());
+  CHECK(to_string(a) == str);
   str = "f00::cafe";
   f = str.begin();
   l = str.end();
@@ -403,26 +420,33 @@ TEST(address)
   CHECK(to_string(a) == str);
 }
 
+TEST(subnet)
+{
+  auto p = make_parser<subnet>{};
+
+  MESSAGE("IPv4");
+  auto str = "192.168.0.0/24"s;
+  auto f = str.begin();
+  auto l = str.end();
+  subnet s;
+  CHECK(p.parse(f, l, s));
+  CHECK(f == l);
+  CHECK(s == subnet{*to<address>("192.168.0.0"), 24});
+  CHECK(s.network().is_v4());
+
+  MESSAGE("IPv6");
+  str = "beef::cafe/40";
+  f = str.begin();
+  l = str.end();
+  CHECK(p.parse(f, l, s));
+  CHECK(f == l);
+  CHECK(s == subnet{*to<address>("beef::cafe"), 40});
+  CHECK(s.network().is_v6());
+}
+
 //
 // TODO: convert to parseable concept from here
 //
-
-TEST(subnet)
-{
-  auto str = "192.168.0.0/24";
-  auto start = str;
-  auto end = str + std::strlen(str);
-  auto s = parse<subnet>(start, end);
-  CHECK(start == end);
-  CHECK(*s == subnet{*to<address>("192.168.0.0"), 24});
-
-  str = "::/40";
-  start = str;
-  end = str + std::strlen(str);
-  s = parse<subnet>(start, end);
-  CHECK(start == end);
-  CHECK(*s == subnet{*to<address>("::"), 40});
-}
 
 TEST(port)
 {
