@@ -175,6 +175,17 @@ behavior connection_worker(broker* self, connection_handle hdl, actor const& nod
         if (! handle(e, self, hdl))
           return;
     },
+    [=](uuid const& id, progress_atom, double progress, uint64_t total_hits)
+    {
+      VAST_VERBOSE(self, "got progress from query ", id << ':',
+                   total_hits, "hits (" << size_t(progress * 100) << "%)");
+      auto progress_json = "{\n  \"progress\": "s;
+      progress_json += std::to_string(progress);
+      progress_json += "\n}\n";
+      self->write(hdl, progress_json.size(), progress_json.c_str());
+      self->flush(hdl);
+
+    },
     [=](uuid const& id, done_atom, time::extent runtime)
     {
       VAST_VERBOSE(self, "got DONE from query", id << ", took", runtime);
