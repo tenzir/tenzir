@@ -5,6 +5,7 @@
 #include "vast/concept/parseable/string/quoted_string.h"
 #include "vast/concept/parseable/vast/address.h"
 #include "vast/concept/parseable/vast/pattern.h"
+#include "vast/concept/parseable/vast/port.h"
 #include "vast/concept/parseable/vast/subnet.h"
 #include "vast/concept/parseable/vast/time.h"
 
@@ -444,52 +445,47 @@ TEST(subnet)
   CHECK(s.network().is_v6());
 }
 
+TEST(port)
+{
+  auto p = make_parser<port>();
+
+  MESSAGE("tcp");
+  auto str = "22/tcp"s;
+  auto f = str.begin();
+  auto l = str.end();
+  port prt;
+  CHECK(p.parse(f, l, prt));
+  CHECK(f == l);
+  CHECK(prt == port{22, port::tcp});
+
+  MESSAGE("udp");
+  str = "53/udp"s;
+  f = str.begin();
+  l = str.end();
+  CHECK(p.parse(f, l, prt));
+  CHECK(f == l);
+  CHECK(prt == port{53, port::udp});
+
+  MESSAGE("icmp");
+  str = "7/icmp"s;
+  f = str.begin();
+  l = str.end();
+  CHECK(p.parse(f, l, prt));
+  CHECK(f == l);
+  CHECK(prt == port{7, port::icmp});
+
+  MESSAGE("unknown");
+  str = "42/?"s;
+  f = str.begin();
+  l = str.end();
+  CHECK(p.parse(f, l, prt));
+  CHECK(f == l);
+  CHECK(prt == port{42, port::unknown});
+}
+
 //
 // TODO: convert to parseable concept from here
 //
-
-TEST(port)
-{
-  {
-    auto s = "22/tcp";
-    auto i = s;
-    auto end = s + std::strlen(s);
-    auto p = parse<port>(i, end);
-    REQUIRE(p);
-    CHECK(i == end);
-    CHECK(*p == port{22, port::tcp});
-  }
-
-  {
-    auto s = "42/unknown";
-    auto i = s;
-    auto end = s + std::strlen(s);
-    auto p = parse<port>(i, end);
-    REQUIRE(p);
-    CHECK(i == end);
-    CHECK(*p, port{42, port::unknown});
-  }
-
-  {
-    auto s = "53/udp";
-    auto i = s;
-    auto end = s + std::strlen(s);
-    auto p = parse<port>(i, end);
-    REQUIRE(p);
-    CHECK(i == end);
-    CHECK(*p == port{53, port::udp});
-  }
-
-  {
-    auto s = "7/icmp";
-    auto i = s;
-    auto end = s + std::strlen(s);
-    auto p = parse<port>(i, end);
-    REQUIRE(p);
-    CHECK(i == end);
-    CHECK(*p == port{7, port::icmp});
-  }
-}
 
 TEST(containers)
 {
