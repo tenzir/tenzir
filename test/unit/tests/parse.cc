@@ -17,156 +17,161 @@ using namespace std::string_literals;
 
 TEST(char)
 {
-  auto chr = '.';
-  auto got = '_';
-  auto f = &chr;
+  using namespace parsers;
+  MESSAGE("equality");
+  auto character = '.';
+  auto f = &character;
   auto l = f + 1;
-  auto c = char_parser{'.'};
-  CHECK(c.parse(f, l, got));
-  CHECK(got == chr);
+  char c;
+  CHECK(chr{'.'}.parse(f, l, c));
+  CHECK(c == character);
   CHECK(f == l);
 
-  chr = 'x';
-  f = &chr;
-  CHECK(! c.parse(f, l, got));
+  MESSAGE("inequality");
+  character = 'x';
+  f = &character;
+  CHECK(! chr{'y'}.parse(f, l, c));
   CHECK(f != l);
 }
 
 TEST(char class)
 {
+  using namespace parsers;
   MESSAGE("xdigit");
   auto str = "deadbeef"s;
-  auto got = ""s;
+  auto attr = ""s;
   auto f = str.begin();
   auto l = str.end();
-  auto c = +xdigit_parser{};
-  CHECK(c.parse(f, l, got));
-  CHECK(got == str);
+  auto p = +xdigit;
+  CHECK(p.parse(f, l, attr));
+  CHECK(attr == str);
   CHECK(f == l);
 
   MESSAGE("xdigit fail");
   str = "deadXbeef"s;
-  got.clear();
+  attr.clear();
   f = str.begin();
   l = str.end();
-  CHECK(c.parse(f, l, got));
-  CHECK(got == "dead");
+  CHECK(p.parse(f, l, attr));
+  CHECK(attr == "dead");
   CHECK(f == str.begin() + 4);
-  CHECK(! c.parse(f, l, got));
+  CHECK(! p.parse(f, l, attr));
   ++f;
-  CHECK(c.parse(f, l, got));
+  CHECK(p.parse(f, l, attr));
   CHECK(f == l);
-  CHECK(got == "deadbeef");
+  CHECK(attr == "deadbeef");
 }
 
 TEST(quoted string)
 {
   static_assert(std::is_same<make_parser<std::string>, parsers::qq_str>{},
                 "invalid parser for std::string");
-  auto p = quoted_string_parser<'\''>{};
-  auto got = ""s;
+
+  auto p = quoted_string_parser<'\'', '#'>{};
+  auto attr = ""s;
 
   MESSAGE("no escaped chars");
   auto str = "'foobar'"s;
   auto f = str.begin();
   auto l = str.end();
-  CHECK(p.parse(f, l, got));
-  CHECK(got == "foobar");
+  CHECK(p.parse(f, l, attr));
+  CHECK(attr == "foobar");
   CHECK(f == l);
 
   MESSAGE("escaped char in middle");
-  str = "'foo\\'bar'"s;
+  str = "'foo#'bar'"s;
   f = str.begin();
   l = str.end();
-  got.clear();
-  CHECK(p.parse(f, l, got));
-  CHECK(got == "foo'bar");
+  attr.clear();
+  CHECK(p.parse(f, l, attr));
+  CHECK(attr == "foo'bar");
   CHECK(f == l);
 
   MESSAGE("escaped char at beginning");
-  str = "'\\'foobar'"s;
+  str = "'#'foobar'"s;
   f = str.begin();
   l = str.end();
-  got.clear();
-  CHECK(p.parse(f, l, got));
-  CHECK(got == "'foobar");
+  attr.clear();
+  CHECK(p.parse(f, l, attr));
+  CHECK(attr == "'foobar");
   CHECK(f == l);
 
   MESSAGE("escaped char at end");
-  str = "'foobar\\''"s;
+  str = "'foobar#''"s;
   f = str.begin();
   l = str.end();
-  got.clear();
-  CHECK(p.parse(f, l, got));
-  CHECK(got == "foobar'");
+  attr.clear();
+  CHECK(p.parse(f, l, attr));
+  CHECK(attr == "foobar'");
   CHECK(f == l);
 
   MESSAGE("missing trailing quote");
   str = "'foobar"s;
   f = str.begin();
   l = str.end();
-  got.clear();
-  CHECK(! p.parse(f, l, got));
-  CHECK(got == "foobar");
+  attr.clear();
+  CHECK(! p.parse(f, l, attr));
+  CHECK(attr == "foobar");
 
   MESSAGE("missing trailing quote after escaped quote");
-  str = "'foobar\\'"s;
+  str = "'foobar#'"s;
   f = str.begin();
   l = str.end();
-  got.clear();
-  CHECK(! p.parse(f, l, got));
-  CHECK(got == "foobar'");
+  attr.clear();
+  CHECK(! p.parse(f, l, attr));
+  CHECK(attr == "foobar'");
 }
 
 TEST(attribute compatibility: string)
 {
   auto str = "..."s;
-  auto got = ""s;
+  auto attr = ""s;
   auto f = str.begin();
   auto l = str.end();
-  auto c = char_parser{'.'};
+  auto p = char_parser{'.'};
 
   MESSAGE("char into string");
-  CHECK(c.parse(f, l, got));
-  CHECK(got == ".");
-  CHECK(c.parse(f, l, got));
-  CHECK(got == "..");
-  CHECK(c.parse(f, l, got));
-  CHECK(got == str);
+  CHECK(p.parse(f, l, attr));
+  CHECK(attr == ".");
+  CHECK(p.parse(f, l, attr));
+  CHECK(attr == "..");
+  CHECK(p.parse(f, l, attr));
+  CHECK(attr == str);
   CHECK(f == l);
 
   MESSAGE("plus(+)");
-  got.clear();
+  attr.clear();
   f = str.begin();
-  auto plus = +c;
-  CHECK(plus.parse(f, l, got));
-  CHECK(str == got);
+  auto plus = +p;
+  CHECK(plus.parse(f, l, attr));
+  CHECK(str == attr);
   CHECK(f == l);
 
   MESSAGE("kleene (*)");
-  got.clear();
+  attr.clear();
   f = str.begin();
-  auto kleene = *c;
-  CHECK(kleene.parse(f, l, got));
-  CHECK(str == got);
+  auto kleene = *p;
+  CHECK(kleene.parse(f, l, attr));
+  CHECK(str == attr);
   CHECK(f == l);
 
-  MESSAGE("and (>>)");
-  got.clear();
+  MESSAGE("sequence (>>)");
+  attr.clear();
   f = str.begin();
-  auto seq = c >> c >> c;
-  CHECK(seq.parse(f, l, got));
-  CHECK(str == got);
+  auto seq = p >> p >> p;
+  CHECK(seq.parse(f, l, attr));
+  CHECK(str == attr);
   CHECK(f == l);
 }
 
 TEST(attribute compatibility: pair)
 {
+  using namespace parsers;
   auto str = "xy"s;
-  auto got = ""s;
+  auto attr = ""s;
   auto f = str.begin();
   auto l = str.end();
-  auto c = char_parser{'x'} >> char_parser{'y'};
+  auto c = chr{'x'} >> chr{'y'};
 
   MESSAGE("pair<char, char>");
   std::pair<char, char> p0;
@@ -192,7 +197,8 @@ TEST(bool)
   auto l = str.end();
   auto f = i;
   bool b;
-  // Successful 'T'
+
+  MESSAGE("successful 'T'");
   CHECK(p0.parse(i, l, b));
   CHECK(b);
   CHECK(i == f + 1);
@@ -221,7 +227,8 @@ TEST(bool)
   CHECK(b);
   CHECK(i == f + 13);
   CHECK(i == l);
-  // Unusued type
+
+  MESSAGE("unused type");
   i = f;
   CHECK(p0.parse(i, l, unused));
   CHECK(p0(str));
@@ -229,7 +236,7 @@ TEST(bool)
 
 TEST(integral)
 {
-  // Default parser for signed integers.
+  MESSAGE("signed integers");
   auto str = "-1024"s;
   auto p0 = integral_parser<int>{};
   int n;
@@ -249,7 +256,8 @@ TEST(integral)
   CHECK(p0.parse(f, l, n));
   CHECK(n == 1024);
   CHECK(f == l);
-  // Default parser for unsigned integers.
+
+  MESSAGE("unsigned integers");
   auto p1 = integral_parser<unsigned>{};
   unsigned u;
   f = str.begin();
@@ -261,7 +269,8 @@ TEST(integral)
   CHECK(p1.parse(f, l, u));
   CHECK(n == 1024);
   CHECK(f == l);
-  // Parser with digit constraints.
+
+  MESSAGE("digit constraints");
   auto p2 = integral_parser<int, 4, 2>{};
   n = 0;
   str[0] = '-';
@@ -286,7 +295,7 @@ TEST(integral)
 TEST(real)
 {
   auto p = make_parser<double>{};
-  // Integral plus fractional part, negative.
+  MESSAGE("integral plus fractional part, negative");
   auto str = "-123.456789"s;
   auto f = str.begin();
   auto l = str.end();
@@ -294,32 +303,32 @@ TEST(real)
   CHECK(p.parse(f, l, d));
   CHECK(d == -123.456789);
   CHECK(f == l);
-  // Integral plus fractional part, positive.
+  MESSAGE("integral plus fractional part, positive");
   d = 0;
   f = str.begin() + 1;
   CHECK(p.parse(f, l, d));
   CHECK(d == 123.456789);
   CHECK(f == l);
-  // No integral part, positive.
+  MESSAGE("no integral part, positive");
   d = 0;
   f = str.begin() + 4;
   CHECK(p.parse(f, l, d));
   CHECK(d == 0.456789);
   CHECK(f == l);
-  // No integral part, negative.
+  MESSAGE("no integral part, negative");
   str = "-.456789";
   f = str.begin();
   l = str.end();
   CHECK(p.parse(f, l, d));
   CHECK(d == -0.456789);
   CHECK(f == l);
-//  // No fractional part, negative.
+//  MESSAGE("no fractional part, negative");
 //  d = 0;
 //  f = str.begin();
 //  CHECK(p.parse(f, f + 4, d));
 //  CHECK(d == -123);
 //  CHECK(f == str.begin() + 4);
-//  // No fractional part, positive.
+//  MESSAGE("no fractional part, positive");
 //  d = 0;
 //  f = str.begin() + 1;
 //  CHECK(p.parse(f, f + 3, d));
@@ -337,12 +346,14 @@ TEST(time::duration)
   CHECK(p.parse(f, l, d));
   CHECK(f == l);
   CHECK(d == time::milliseconds(1000));
-  // No unit (=> seconds)
+
+  MESSAGE("no unit => seconds");
   f = str.begin();
   CHECK(p.parse(f, l - 2, d));
   CHECK(f == l - 2);
   CHECK(d == time::seconds(1000));
-  // Fractional timestamp (e.g., UNIX epoch).
+
+  MESSAGE("fractional timestamp (e.g., UNIX epoch)");
   str = "123.456789";
   f = str.begin();
   l = str.end();
