@@ -14,28 +14,15 @@
 #include "vast/concept/parseable/vast/http.h"
 #include "vast/util/http.h"
 
-
-// FIXME: remove after debugging
-using std::cout;
-using std::cerr;
-using std::endl;
-
 using namespace caf;
 using namespace caf::io;
 using namespace std::string_literals;
 
 namespace vast {
 
-template <size_t Size>
-constexpr size_t cstr_size(const char (&)[Size])
-{
-  return Size;
-}
-
 std::string create_response_header()
 {
-  auto response = ""s;
-  response += "HTTP/1.1 200 OK\r\n";
+  auto response = "HTTP/1.1 200 OK\r\n"s;
   response += "Content-Type: application/json\r\n";
   response += "Access-Control-Allow-Origin: *\r\n";
   response += "\r\n";
@@ -106,7 +93,7 @@ behavior connection_worker(broker* self, connection_handle hdl, actor const& nod
 {
   self->configure_read(hdl, receive_policy::at_most(1024));
 
-  std::string exporter_label = "exporter" + std::to_string(self->id());
+  auto exporter_label = "exporter" + std::to_string(self->id());
   VAST_DEBUG(self, "exporter_label=", exporter_label);
 
   return
@@ -189,6 +176,8 @@ behavior connection_worker(broker* self, connection_handle hdl, actor const& nod
     [=](uuid const& id, done_atom, time::extent runtime)
     {
       VAST_VERBOSE(self, "got DONE from query", id << ", took", runtime);
+      auto progress_json = "{\n  \"progress\": \"DONE\"\n}\n"s;
+      self->write(hdl, progress_json.size(), progress_json.c_str());
       self->flush(hdl);
       self->quit(exit::done);
     }
@@ -197,7 +186,7 @@ behavior connection_worker(broker* self, connection_handle hdl, actor const& nod
 
 behavior http_broker_function(broker* self, actor const& node)
 {
-  VAST_VERBOSE("http_broker_function called");
+  VAST_DEBUG(self, "http_broker_function called");
   return
   {
     [=](new_connection_msg const& ncm)
@@ -212,11 +201,6 @@ behavior http_broker_function(broker* self, actor const& node)
       VAST_WARN(self, "got unexpected msg:", msg);
     }
   };
-}
-
-optional<uint16_t> as_u16(std::string const& str)
-{
-  return static_cast<uint16_t>(stoul(str));
 }
 
 } // namespace vast
