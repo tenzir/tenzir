@@ -30,12 +30,14 @@ do so, all subject to the following:
 #ifndef VAST_UTIL_VARIANT_H
 #define VAST_UTIL_VARIANT_H
 
-#include <cassert>
 #include <type_traits>
 
 #include "vast/config.h"
+
+#include "vast/util/assert.h"
 #include "vast/util/operators.h"
 #include "vast/util/meta.h"
+#include "vast/util/type_list.h"
 
 namespace vast {
 namespace util {
@@ -141,23 +143,16 @@ private:
 template <typename Tag, typename... Ts>
 class basic_variant : totally_ordered<basic_variant<Tag, Ts...>>
 {
-  // Workaround for http://stackoverflow.com/q/24433658/1170277.
-  // A nicer way to express this would be this:
-  //   template <typename T, typename...>
-  //   using front_type = T;
-  template <typename T, typename...>
-  struct front_type
-  {
-    using type = T;
-  };
-
 public:
   /// The type of the variant discriminator.
   using tag = Tag;
 
+  /// The types of the variant.
+  using types = util::type_list<Ts...>;
+
   /// The first type in the variant; used for default-construction.
   //using front = front_type<Ts...>;
-  using front = typename front_type<Ts...>::type;
+  using front_type = typename tl_head<types>::type;
 
   /// Construct a variant from a type tag.
   /// @param t The tag.
@@ -170,7 +165,7 @@ public:
   /// Default-constructs a variant with the first type.
   basic_variant() noexcept
   {
-    construct(front{});
+    construct(front_type{});
     which_ = tag{};
   }
 
@@ -476,7 +471,7 @@ private:
                          Args&&... args)
   {
     using visitor_type = std::decay_t<Visitor>;
-    using this_front = const_type<front, Storage>;
+    using this_front = const_type<front_type, Storage>;
     using result_type = decltype(visitor(std::declval<this_front&>(), args...));
 
     // TODO: Consider all overloads, not just the one with the first type.
@@ -489,7 +484,7 @@ private:
       &invoke<Ts, Internal, Storage, Visitor, Args...>...
     };
 
-    assert(static_cast<size_t>(which) >= 0
+    VAST_ASSERT(static_cast<size_t>(which) >= 0
            && static_cast<size_t>(which) < sizeof...(Ts));
 
     return (*callers[static_cast<size_t>(which)])(
@@ -607,6 +602,35 @@ private:
       return x.which_ < y.which_;
   }
 };
+
+namespace detail {
+
+template <typename, typename>
+struct make_basic_variant;
+
+template <typename Tag, typename... Ts>
+struct make_basic_variant<Tag, type_list<Ts...>>
+{
+  using type = basic_variant<Tag, Ts...>;
+};
+
+} // namespace detail
+
+/// Constructs a variant type from a type list.
+template <typename Tag, typename TypeList>
+using make_basic_variant_over =
+  typename detail::make_basic_variant<Tag, TypeList>::type;
+
+template <typename TypeList>
+using make_variant_over =
+  typename detail::make_basic_variant<size_t, TypeList>::type;
+
+// Trait to assess whether a type is a variant.
+template <typename T>
+struct is_variant : std::false_type {};
+
+template <typename Tag, typename... Ts>
+struct is_variant<basic_variant<Tag, Ts...>> : std::true_type {};
 
 namespace detail {
 
