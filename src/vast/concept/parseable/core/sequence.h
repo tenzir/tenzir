@@ -56,6 +56,22 @@ public:
       >
     >;
 
+  sequence_parser(Lhs const& lhs, Rhs const& rhs)
+    : lhs_{lhs},
+      rhs_{rhs}
+  {
+  }
+
+  template <typename Iterator, typename Attribute>
+  bool parse(Iterator& f, Iterator const& l, Attribute& a) const
+  {
+    auto save = f;
+    if (parse_left(f, l, a) && parse_right(f, l, a))
+      return true;
+    f = save;
+    return false;
+  }
+
 private:
   template <typename T>
   static constexpr auto depth_helper()
@@ -113,12 +129,6 @@ private:
     return std::get<0>(x);
   }
 
-  template <typename Iterator>
-  bool parse_left(Iterator& f, Iterator const& l, std::string& str) const
-  {
-    return lhs_.parse(f, l, str);
-  }
-
   template <typename Iterator, typename T, typename U>
   bool parse_left(Iterator& f, Iterator const& l, std::pair<T, U>& p) const
   {
@@ -143,12 +153,6 @@ private:
     return rhs_.parse(f, l, unused);
   }
 
-  template <typename Iterator>
-  bool parse_right(Iterator& f, Iterator const& l, std::string& str) const
-  {
-    return rhs_.parse(f, l, str);
-  }
-
   template <typename Iterator, typename T, typename U>
   bool parse_right(Iterator& f, Iterator const& l, std::pair<T, U>& p) const
   {
@@ -167,24 +171,6 @@ private:
     return rhs_.parse(f, l, a);
   }
 
-public:
-  sequence_parser(Lhs const& lhs, Rhs const& rhs)
-    : lhs_{lhs},
-      rhs_{rhs}
-  {
-  }
-
-  template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const
-  {
-    auto save = f;
-    if (parse_left(f, l, a) && parse_right(f, l, a))
-      return true;
-    f = save;
-    return false;
-  }
-
-private:
   Lhs lhs_;
   Rhs rhs_;
 };
