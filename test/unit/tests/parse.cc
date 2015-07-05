@@ -346,20 +346,12 @@ TEST(time::duration)
   CHECK(p.parse(f, l, d));
   CHECK(f == l);
   CHECK(d == time::milliseconds(1000));
-
-  MESSAGE("no unit => seconds");
-  f = str.begin();
-  CHECK(p.parse(f, l - 2, d));
-  CHECK(f == l - 2);
-  CHECK(d == time::seconds(1000));
-
-  MESSAGE("fractional timestamp (e.g., UNIX epoch)");
-  str = "123.456789";
+  str = "42s";
   f = str.begin();
   l = str.end();
   CHECK(p.parse(f, l, d));
   CHECK(f == l);
-  CHECK(d == time::fractional(123.456789));
+  CHECK(d == time::seconds(42));
 }
 
 TEST(time::point)
