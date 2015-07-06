@@ -20,6 +20,8 @@ using namespace std::string_literals;
 
 namespace vast {
 
+uint64_t event_counter = 0;
+
 std::string create_response_header()
 {
   auto response = "HTTP/1.1 200 OK\r\n"s;
@@ -82,6 +84,7 @@ bool handle(event const& e, broker* self, connection_handle hdl)
   auto j = to<util::json>(e);
   if (! j)
     return false;
+  event_counter++;
   auto content = to_string(*j, true);
   content += "\r\n";
   self->write(hdl, content.size(), content.c_str());
@@ -168,6 +171,9 @@ behavior connection_worker(broker* self, connection_handle hdl, actor const& nod
                    total_hits, "hits (" << size_t(progress * 100) << "%)");
       auto progress_json = "{\n  \"progress\": "s;
       progress_json += std::to_string(progress);
+      progress_json += "\n  \"event_counter\": ";
+      progress_json += std::to_string(event_counter);
+      progress_json += "\n  \"state\": \"PROGRESS\"";
       progress_json += "\n}\n";
       self->write(hdl, progress_json.size(), progress_json.c_str());
       self->flush(hdl);
@@ -176,9 +182,14 @@ behavior connection_worker(broker* self, connection_handle hdl, actor const& nod
     [=](uuid const& id, done_atom, time::extent runtime)
     {
       VAST_VERBOSE(self, "got DONE from query", id << ", took", runtime);
-      auto progress_json = "{\n  \"state\": \"DONE\"\n}\n"s;
+      auto progress_json = "{\n  \"state\": \"DONE\""s;
+      progress_json += "\n  \"progress\": 1.0";
+      progress_json += "\n  \"event_counter\": ";
+      progress_json += std::to_string(event_counter);
+      progress_json += "\n}\n";
       self->write(hdl, progress_json.size(), progress_json.c_str());
       self->flush(hdl);
+      event_counter = 0;
       self->quit(exit::done);
     }
   };
