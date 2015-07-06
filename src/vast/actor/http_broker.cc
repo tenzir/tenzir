@@ -176,7 +176,7 @@ behavior connection_worker(broker* self, connection_handle hdl, actor const& nod
     [=](uuid const& id, done_atom, time::extent runtime)
     {
       VAST_VERBOSE(self, "got DONE from query", id << ", took", runtime);
-      auto progress_json = "{\n  \"progress\": \"DONE\"\n}\n"s;
+      auto progress_json = "{\n  \"state\": \"DONE\"\n}\n"s;
       self->write(hdl, progress_json.size(), progress_json.c_str());
       self->flush(hdl);
       self->quit(exit::done);
