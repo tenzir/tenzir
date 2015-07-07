@@ -171,9 +171,9 @@ behavior connection_worker(broker* self, connection_handle hdl, actor const& nod
                    total_hits, "hits (" << size_t(progress * 100) << "%)");
       auto progress_json = "{\n  \"progress\": "s;
       progress_json += std::to_string(progress);
-      progress_json += "\n  \"event_counter\": ";
+      progress_json += ",\n  \"event_counter\": ";
       progress_json += std::to_string(event_counter);
-      progress_json += "\n  \"state\": \"PROGRESS\"";
+      progress_json += ",\n  \"state\": \"PROGRESS\"";
       progress_json += "\n}\n";
       self->write(hdl, progress_json.size(), progress_json.c_str());
       self->flush(hdl);
@@ -183,8 +183,8 @@ behavior connection_worker(broker* self, connection_handle hdl, actor const& nod
     {
       VAST_VERBOSE(self, "got DONE from query", id << ", took", runtime);
       auto progress_json = "{\n  \"state\": \"DONE\""s;
-      progress_json += "\n  \"progress\": 1.0";
-      progress_json += "\n  \"event_counter\": ";
+      progress_json += ",\n  \"progress\": 1.0";
+      progress_json += ",\n  \"event_counter\": ";
       progress_json += std::to_string(event_counter);
       progress_json += "\n}\n";
       self->write(hdl, progress_json.size(), progress_json.c_str());
