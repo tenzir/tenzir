@@ -1,6 +1,7 @@
 #ifndef VAST_DATA_H
 #define VAST_DATA_H
 
+#include <iterator>
 #include <regex>
 #include <string>
 #include <vector>
@@ -27,28 +28,58 @@ class data;
 
 class vector : public std::vector<data>
 {
+  using super = std::vector<vast::data>;
+
 public:
-  using std::vector<vast::data>::vector;
+  using super::vector;
+
+  vector() = default;
+
+  explicit vector(super v)
+    : super{std::move(v)}
+  {
+  }
 };
 
 class set : public util::flat_set<data>
 {
+  using super = util::flat_set<vast::data>;
+
 public:
-  using util::flat_set<vast::data>::flat_set;
+  using super::flat_set;
+
+  set() = default;
+
+  explicit set(super s)
+    : super(std::move(s))
+  {
+  }
+
+  explicit set(std::vector<vast::data>& v)
+    : super(std::make_move_iterator(v.begin()),
+            std::make_move_iterator(v.end()))
+  {
+  }
+
+  explicit set(std::vector<vast::data> const& v)
+    : super(v.begin(), v.end())
+  {
+  }
 };
 
 class table : public std::map<data, data>
 {
+  using super = std::map<vast::data, vast::data>;
+
 public:
-  using std::map<vast::data, vast::data>::map;
+  using super::map;
 };
 
 class record : public std::vector<data>
 {
-public:
-  using std::vector<vast::data>::vector;
-  using std::vector<vast::data>::at;
+  using super = std::vector<vast::data>;
 
+public:
   /// Enables recursive record iteration.
   class each : public util::range_facade<each>
   {
@@ -75,6 +106,17 @@ public:
     range_state state_;
     util::stack::vector<8, record const*> records_;
   };
+
+  using super::vector;
+
+  record() = default;
+
+  explicit record(super v)
+    : super{std::move(v)}
+  {
+  }
+
+  using super::at;
 
   /// Retrieves a data at a givene offset.
   /// @param o The offset to look at.

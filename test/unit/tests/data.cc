@@ -264,6 +264,24 @@ TEST(ports)
   CHECK(p < q);
 }
 
+TEST(vector)
+{
+  auto v = std::vector<data>{-42, 42, 84};
+  CHECK(v[0] == -42);
+  auto u = vector{std::move(v)};
+  CHECK(u[0] == -42);
+}
+
+TEST(set)
+{
+  auto v = std::vector<data>{1, 2, 3};
+  auto fs = util::flat_set<data>{"a", "b", "c"};
+  auto s = set{v};
+  CHECK(s[0] == 1);
+  s = set{fs};
+  CHECK(s[1] == "b");
+}
+
 TEST(tables)
 {
   table ports{{"ssh", 22u}, {"http", 80u}, {"https", 443u}, {"imaps", 993u}};
