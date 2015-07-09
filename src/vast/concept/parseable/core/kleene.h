@@ -13,8 +13,8 @@ class kleene_parser : public parser<kleene_parser<Parser>>
 public:
   using attribute = std::vector<typename Parser::attribute>;
 
-  kleene_parser(Parser const& p)
-    : parser_{p}
+  explicit kleene_parser(Parser p)
+    : parser_{std::move(p)}
   {
   }
 

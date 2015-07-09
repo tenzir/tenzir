@@ -15,8 +15,8 @@ class repeat_parser : parser<repeat_parser<Parser, Min, Max>>
 public:
   using attribute = std::vector<typename Parser::attribute>;
 
-  repeat_parser(Parser const& p)
-    : parser_{p}
+  explicit repeat_parser(Parser p)
+    : parser_{std::move(p)}
   {
   }
 
@@ -48,9 +48,9 @@ private:
 };
 
 template <int Min, int Max = Min, typename Parser>
-repeat_parser<Parser, Min, Max> repeat(Parser const& p)
+auto repeat(Parser const& p)
 {
-  return p;
+  return repeat_parser<Parser, Min, Max>{p};
 }
 
 namespace parsers {

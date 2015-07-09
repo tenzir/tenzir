@@ -64,9 +64,6 @@ TEST(char class)
 
 TEST(quoted string)
 {
-  static_assert(std::is_same<make_parser<std::string>, parsers::qq_str>{},
-                "invalid parser for std::string");
-
   auto p = quoted_string_parser<'\'', '#'>{};
   auto attr = ""s;
 
@@ -260,7 +257,7 @@ TEST(integral)
   MESSAGE("unsigned integers");
   auto p1 = integral_parser<unsigned>{};
   unsigned u;
-  f = str.begin();
+  f = str.begin() + 1;  // no sign
   CHECK(p1.parse(f, l, u));
   CHECK(u == 1024);
   CHECK(f == l);

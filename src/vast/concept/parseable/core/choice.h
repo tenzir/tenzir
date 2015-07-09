@@ -89,9 +89,9 @@ public:
       >
     >;
 
-  choice_parser(Lhs const& lhs, Rhs const& rhs)
-    : lhs_{lhs},
-      rhs_{rhs}
+  choice_parser(Lhs lhs, Rhs rhs)
+    : lhs_{std::move(lhs)},
+      rhs_{std::move(rhs)}
   {
   }
 
@@ -118,14 +118,14 @@ private:
 
   template <typename Left, typename Iterator>
   auto parse_left(Iterator& f, Iterator const& l, unused_type) const
-    -> std::enable_if_t<! is_choice_parser<Left>{}, bool>
+    -> std::enable_if_t<! is_choice_parser<Left>::value, bool>
   {
     return lhs_.parse(f, l, unused);
   }
 
   template <typename Left, typename Iterator, typename Attribute>
   auto parse_left(Iterator& f, Iterator const& l, Attribute& a) const
-    -> std::enable_if_t<! is_choice_parser<Left>{}, bool>
+    -> std::enable_if_t<! is_choice_parser<Left>::value, bool>
   {
     lhs_attribute al;
     if (! lhs_.parse(f, l, al))

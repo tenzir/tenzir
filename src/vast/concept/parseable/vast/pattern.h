@@ -13,6 +13,8 @@ using pattern_parser = quoted_string_parser<'/', '\\'>;
 template <>
 struct access::parser<pattern> : vast::parser<access::parser<pattern>>
 {
+  using attribute = pattern;
+
   template <typename Iterator>
   bool parse(Iterator& f, Iterator const& l, unused_type) const
   {

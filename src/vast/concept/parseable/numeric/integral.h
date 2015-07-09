@@ -91,7 +91,7 @@ struct integral_parser : parser<integral_parser<T, MaxDigits, MinDigits, Radix>>
   template <typename Iterator, typename Attribute>
   static bool parse_unsigned(Iterator& f, Iterator const& l, Attribute& a)
   {
-    return ! detail::parse_sign(f) && parse_pos(f, l, a);
+    return parse_pos(f, l, a);
   }
 
   template <typename Iterator, typename Attribute, typename This = T>

@@ -19,8 +19,8 @@ public:
       optional<inner_attribute>
     >;
 
-  optional_parser(Parser const& p)
-    : parser_{p}
+  explicit optional_parser(Parser p)
+    : parser_{std::move(p)}
   {
   }
 

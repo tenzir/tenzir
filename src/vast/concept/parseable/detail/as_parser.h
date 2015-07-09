@@ -34,7 +34,7 @@ inline auto as_parser(std::string str)
 template <typename T>
 auto as_parser(T x)
   -> std::enable_if_t<
-       std::is_arithmetic<T>{} && ! std::is_same<T, bool>{},
+       std::is_arithmetic<T>{} && ! std::is_same<T, bool>::value,
        decltype(ignore(string_parser{""}))
      >
 {
@@ -57,7 +57,7 @@ using is_convertible_to_unary_parser =
   std::integral_constant<
     bool,
     std::is_convertible<T, std::string>{}
-    || (std::is_arithmetic<T>{} && ! std::is_same<T, bool>{})
+    || (std::is_arithmetic<T>{} && ! std::is_same<T, bool>::value)
   >;
 
 template <typename T, typename U>
@@ -97,7 +97,11 @@ template <
 auto as_parser(T&& x, U&& y)
   -> std::enable_if_t<
        is_convertible_to_binary_parser<std::decay_t<T>, std::decay_t<U>>{},
-       make_binary_parser<BinaryParser, std::decay_t<T>, std::decay_t<U>>
+       make_binary_parser<
+         BinaryParser,
+         decltype(detail::as_parser(std::forward<T>(x))),
+         decltype(detail::as_parser(std::forward<U>(y)))
+       >
      >
 {
   return {as_parser(std::forward<T>(x)), as_parser(std::forward<U>(y))};

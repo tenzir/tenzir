@@ -31,6 +31,8 @@ struct real_parser : parser<real_parser<T>>
     return std::pow(Base{10}, exp);
   }
 
+  static void scale(int, unused_type) { }
+
   static void scale(int exp, T& x)
   {
     if (exp >= 0)

@@ -18,8 +18,8 @@ public:
   // attribute.
   using attribute = typename Parser::attribute;
 
-  guard_parser(Parser const& p, Guard fun)
-    : parser_{p},
+  guard_parser(Parser p, Guard fun)
+    : parser_{std::move(p)},
       guard_(fun)
   {
   }

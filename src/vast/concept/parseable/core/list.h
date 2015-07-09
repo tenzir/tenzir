@@ -1,6 +1,8 @@
 #ifndef VAST_CONCEPT_PARSEABLE_CORE_LIST_H
 #define VAST_CONCEPT_PARSEABLE_CORE_LIST_H
 
+#include <vector>
+
 #include "vast/concept/parseable/core/parser.h"
 
 namespace vast {
@@ -11,11 +13,11 @@ class list_parser : public parser<list_parser<Lhs, Rhs>>
 public:
   using lhs_attribute = typename Lhs::attribute;
   using rhs_attribute = typename Rhs::attribute;
-  using attribute = lhs_attribute;
+  using attribute = std::vector<lhs_attribute>;
 
-  list_parser(Lhs const& lhs, Rhs const& rhs)
-    : lhs_{lhs},
-      rhs_{rhs}
+  list_parser(Lhs lhs, Rhs rhs)
+    : lhs_{std::move(lhs)},
+      rhs_{std::move(rhs)}
   {
   }
 

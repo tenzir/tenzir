@@ -56,9 +56,9 @@ public:
       >
     >;
 
-  sequence_parser(Lhs const& lhs, Rhs const& rhs)
-    : lhs_{lhs},
-      rhs_{rhs}
+  sequence_parser(Lhs lhs, Rhs rhs)
+    : lhs_{std::move(lhs)},
+      rhs_{std::move(rhs)}
   {
   }
 
@@ -124,7 +124,10 @@ private:
 
   template <typename L, typename T>
   static auto get_helper(T& x)
-    -> std::enable_if_t<! is_sequence_parser<L>{}, decltype(std::get<0>(x))>
+    -> std::enable_if_t<
+         ! is_sequence_parser<L>::value,
+         decltype(std::get<0>(x))
+       >
   {
     return std::get<0>(x);
   }

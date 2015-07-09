@@ -13,8 +13,8 @@ class plus_parser : public parser<plus_parser<Parser>>
 public:
   using attribute = std::vector<typename Parser::attribute>;
 
-  plus_parser(Parser const& p)
-    : parser_{p}
+  explicit plus_parser(Parser p)
+    : parser_{std::move(p)}
   {
   }
 

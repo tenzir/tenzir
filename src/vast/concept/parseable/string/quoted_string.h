@@ -34,15 +34,15 @@ public:
 
 namespace parsers {
 
-using q_str = quoted_string_parser<'\'', '\\'>;
-using qq_str = quoted_string_parser<'"', '\\'>;
+auto const q_str = quoted_string_parser<'\'', '\\'>{};
+auto const qq_str = quoted_string_parser<'"', '\\'>{};
 
 } // namespace parsers
 
 template <>
 struct parser_registry<std::string>
 {
-  using type = parsers::qq_str;
+  using type = quoted_string_parser<'"', '\\'>;
 };
 
 } // namespace vast

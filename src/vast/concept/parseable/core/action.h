@@ -21,25 +21,24 @@ public:
   static constexpr size_t action_arity = action_traits::num_args;
   using attribute =
     std::conditional_t<
-      std::is_same<action_result_type, void>{},
+      std::is_void<action_result_type>{},
       unused_type,
       action_result_type
     >;
 
-  action_parser(Parser const& p, Action fun)
-    : parser_{p},
+  action_parser(Parser p, Action fun)
+    : parser_{std::move(p)},
       action_(fun)
   {
   }
 
-  // No argument, no return type.
+  // No argument, void return type.
   template <typename Iterator, typename Attribute, typename A = Action>
   auto parse(Iterator& f, Iterator const& l, Attribute&) const
     -> std::enable_if_t<
          caf::detail::get_callable_trait<A>::num_args == 0
-           && std::is_same<
-                typename caf::detail::get_callable_trait<A>::result_type,
-                void
+           && std::is_void<
+                typename caf::detail::get_callable_trait<A>::result_type
               >{},
          bool
        >
@@ -51,14 +50,13 @@ public:
     return true;
   }
 
-  // One argument, no return type.
+  // One argument, void return type.
   template <typename Iterator, typename Attribute, typename A = Action>
   auto parse(Iterator& f, Iterator const& l, Attribute&) const
     -> std::enable_if_t<
          caf::detail::get_callable_trait<A>::num_args == 1
-           && std::is_same<
-                typename caf::detail::get_callable_trait<A>::result_type,
-                void
+           && std::is_void<
+                typename caf::detail::get_callable_trait<A>::result_type
               >{},
          bool
        >
@@ -70,15 +68,14 @@ public:
     return true;
   }
 
-  // No argument, with return type.
+  // No argument, non-void return type.
   template <typename Iterator, typename Attribute, typename A = Action>
   auto parse(Iterator& f, Iterator const& l, Attribute& a) const
     -> std::enable_if_t<
          caf::detail::get_callable_trait<A>::num_args == 0
-           && ! std::is_same<
-                typename caf::detail::get_callable_trait<A>::result_type,
-                void
-              >{},
+           && ! std::is_void<
+                typename caf::detail::get_callable_trait<A>::result_type
+              >::value,
          bool
        >
   {
@@ -89,15 +86,14 @@ public:
     return true;
   }
 
-  // One argument, with return type.
+  // One argument, non-void return type.
   template <typename Iterator, typename Attribute, typename A = Action>
   auto parse(Iterator& f, Iterator const& l, Attribute& a) const
     -> std::enable_if_t<
          caf::detail::get_callable_trait<A>::num_args == 1
-           && ! std::is_same<
-                typename caf::detail::get_callable_trait<A>::result_type,
-                void
-              >{},
+           && ! std::is_void<
+                typename caf::detail::get_callable_trait<A>::result_type
+              >::value,
          bool
        >
   {

@@ -39,38 +39,53 @@ class choice_parser;
 //
 
 template <typename T>
-auto operator&(T x)
-  -> std::enable_if_t<is_parser<T>{}, and_parser<T>>
+auto operator&(T&& x)
+  -> std::enable_if_t<
+       is_parser<std::decay_t<T>>{},
+       and_parser<std::decay_t<T>>
+     >
 {
-  return and_parser<T>{x};
+  return and_parser<std::decay_t<T>>{std::forward<T>(x)};
 }
 
 template <typename T>
-auto operator!(T x)
-  -> std::enable_if_t<is_parser<T>{}, not_parser<T>>
+auto operator!(T&& x)
+  -> std::enable_if_t<
+       is_parser<std::decay_t<T>>{},
+       not_parser<std::decay_t<T>>
+     >
 {
-  return not_parser<T>{x};
+  return not_parser<std::decay_t<T>>{std::forward<T>(x)};
 }
 
 template <typename T>
-auto operator-(T x)
-  -> std::enable_if_t<is_parser<T>{}, optional_parser<T>>
+auto operator-(T&& x)
+  -> std::enable_if_t<
+       is_parser<std::decay_t<T>>{},
+       optional_parser<std::decay_t<T>>
+     >
 {
-  return optional_parser<T>{x};
+  return optional_parser<std::decay_t<T>>{std::forward<T>(x)};
 }
 
 template <typename T>
-auto operator*(T x)
-  -> std::enable_if_t<is_parser<T>{}, kleene_parser<T>>
+auto operator*(T&& x)
+  -> std::enable_if_t<
+       is_parser<std::decay_t<T>>{},
+       kleene_parser<std::decay_t<T>>
+     >
 {
-  return kleene_parser<T>{x};
+  return kleene_parser<std::decay_t<T>>{std::forward<T>(x)};
 }
 
 template <typename T>
-auto operator+(T x)
-  -> std::enable_if_t<is_parser<T>{}, plus_parser<T>>
+auto operator+(T&& x)
+  -> std::enable_if_t<
+       is_parser<std::decay_t<T>>{},
+       plus_parser<std::decay_t<T>>
+     >
 {
-  return plus_parser<T>{x};
+  return plus_parser<std::decay_t<T>>{std::forward<T>(x)};
 }
 
 //

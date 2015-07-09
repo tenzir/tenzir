@@ -11,8 +11,8 @@ class not_parser : public parser<not_parser<Parser>>
 public:
   using attribute = unused_type;
 
-  not_parser(Parser const& p)
-    : parser_{p}
+  explicit not_parser(Parser p)
+    : parser_{std::move(p)}
   {
   }
 

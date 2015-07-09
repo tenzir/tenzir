@@ -37,6 +37,12 @@ struct unused_type
 
 static auto unused = unused_type{};
 
+inline bool operator==(unused_type, unused_type) { return true; }
+inline bool operator!=(unused_type, unused_type) { return false; }
+inline unused_type operator+(unused_type, unused_type) { return unused; }
+inline unused_type operator-(unused_type, unused_type) { return unused; }
+inline unused_type operator-(unused_type) { return unused; }
+
 template <typename, typename>
 class action_parser;
 
@@ -104,18 +110,6 @@ struct has_parser
   static auto test(...) -> std::false_type;
 };
 
-struct is_parser_impl
-{
-  template <typename T>
-  static auto test(T* x, char* i = nullptr)
-  -> decltype(std::is_base_of<vast::parser<T>, T>{},
-              x->parse(*i, *i, unused),
-              std::true_type());
-
-  template <typename>
-  static auto test(...) -> std::false_type;
-};
-
 } // namespace detail
 
 /// Checks whether the parser registry has a given type registered.
@@ -124,7 +118,7 @@ struct has_parser : decltype(detail::has_parser::test<T>(0)) {};
 
 /// Checks whether a given type is-a parser, i.e., derived from ::vast::parser.
 template <typename T>
-struct is_parser : decltype(detail::is_parser_impl::test<T>(0)) {};
+using is_parser = std::is_base_of<parser<T>, T>;
 
 } // namespace vast
 

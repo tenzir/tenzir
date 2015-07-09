@@ -39,10 +39,10 @@ public:
       >
     >;
 
-  sequence_choice_parser(Lhs const& lhs, Rhs const& rhs)
-    : lhs_{lhs},
+  sequence_choice_parser(Lhs lhs, Rhs rhs)
+    : lhs_{std::move(lhs)},
       rhs_{rhs},
-      rhs_opt_{rhs}
+      rhs_opt_{std::move(rhs)}
   {
   }
 

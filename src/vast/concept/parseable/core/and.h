@@ -12,8 +12,8 @@ class and_parser : public parser<and_parser<Parser>>
 public:
   using attribute = unused_type;
 
-  and_parser(Parser const& p)
-    : parser_{p}
+  explicit and_parser(Parser p)
+    : parser_{std::move(p)}
   {
   }
 
