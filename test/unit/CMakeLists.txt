@@ -102,6 +102,7 @@ set(tests
   tests/offset.cc
   tests/parse.cc
   tests/parse_value.cc
+  tests/parse_vast.cc
   tests/print.cc
   tests/range_map.cc
   tests/schema.cc
