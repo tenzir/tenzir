@@ -24,7 +24,7 @@ bool parse_sign(Iterator& i)
 
 template <
   typename T,
-  int MaxDigits = std::numeric_limits<T>::digits10,
+  int MaxDigits = std::numeric_limits<T>::digits10 + 1,
   int MinDigits = 1,
   int Radix = 10
 >
