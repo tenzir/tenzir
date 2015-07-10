@@ -22,7 +22,7 @@ struct extract<1>
   {
     if (f == l)
       return false;
-    a |= *f++;
+    a = *f++;
     return true;
   }
 };
@@ -33,10 +33,14 @@ struct extract<2>
   template <typename Iterator, typename Attribute>
   static bool parse(Iterator& f, Iterator const& l, Attribute& a)
   {
-    if (! extract<1>::parse(f, l, a))
+    if (f == l)
+      return false;
+    a = *f++;
+    if (f == l)
       return false;
     a <<= 8;
-    return extract<1>::parse(f, l, a);
+    a |= *f++;
+    return true;
   }
 };
 
