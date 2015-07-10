@@ -368,7 +368,6 @@ trial<void> bro::parse_header()
         timestamp_field_ = static_cast<int>(i);
         break;
       }
-
       ++i;
     }
   }
