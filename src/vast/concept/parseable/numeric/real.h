@@ -6,15 +6,28 @@
 #include <type_traits>
 
 #include "vast/concept/parseable/numeric/integral.h"
+#include "vast/util/type_list.h"
 
 namespace vast {
+namespace policy {
 
-template <typename T>
-struct real_parser : parser<real_parser<T>>
+struct require_dot {};
+struct optional_dot {};
+
+} // namespace policy
+
+template <typename T, typename... Policies>
+struct real_parser : parser<real_parser<T, Policies...>>
 {
-  static constexpr auto require_dot = true; // TODO: Make this a policy.
-
   using attribute = T;
+  using policies =
+    std::conditional_t<(sizeof...(Policies) > 0),
+    util::type_list<Policies...>,
+    util::type_list<policy::require_dot>
+  >;
+  static constexpr bool require_dot =
+    util::tl_find<policies, policy::require_dot>::value != -1
+      || util::tl_find<policies, policy::optional_dot>::value == -1;
 
   template <typename Iterator>
   static bool parse_dot(Iterator& f, Iterator const& l)
@@ -103,13 +116,15 @@ struct real_parser : parser<real_parser<T>>
 template <typename T>
 struct parser_registry<T, std::enable_if_t<std::is_floating_point<T>::value>>
 {
-  using type = real_parser<T>;
+  using type = real_parser<T, policy::require_dot>;
 };
 
 namespace parsers {
 
-auto const fp = real_parser<float>{};
-auto const real = real_parser<double>{};
+auto const fp = real_parser<float, policy::require_dot>{};
+auto const real = real_parser<double, policy::require_dot>{};
+auto const fp_opt_dot = real_parser<float, policy::optional_dot>{};
+auto const real_opt_dot = real_parser<double, policy::optional_dot>{};
 
 } // namespace parsers
 } // namespace vast
