@@ -54,6 +54,9 @@ class rule : public parser<rule<Iterator, Attribute>>
   template <typename RHS>
   void make_parser(RHS&& rhs)
   {
+    // TODO:
+    //static_assert(is_compatible_attribute<RHS, typename RHS::attribute>{},
+    //              "incompatible parser attributes");
     using rule_type = detail::rule_definition<RHS, Iterator, Attribute>;
     *parser_ = std::make_unique<rule_type>(std::forward<RHS>(rhs));
   }

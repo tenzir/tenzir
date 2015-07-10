@@ -8,6 +8,7 @@
 
 namespace vast {
 
+/// Parses a specific character.
 class char_parser : public parser<char_parser>
 {
 public:
@@ -32,6 +33,22 @@ private:
   char c_;
 };
 
+/// Parses an arbitrary character.
+struct any_parser : public parser<any_parser>
+{
+  using attribute = char;
+
+  template <typename Iterator, typename Attribute>
+  bool parse(Iterator& f, Iterator const& l, Attribute& a) const
+  {
+    if (f == l)
+      return false;
+    detail::absorb(a, *f);
+    ++f;
+    return true;
+  }
+};
+
 template <>
 struct parser_registry<char>
 {
@@ -41,6 +58,7 @@ struct parser_registry<char>
 namespace parsers {
 
 using chr = char_parser;
+static auto const any = any_parser{};
 
 } // namespace parsers
 } // namespace vast
