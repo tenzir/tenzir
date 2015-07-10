@@ -101,6 +101,7 @@ set(tests
   tests/logging.cc
   tests/offset.cc
   tests/parse.cc
+  tests/parse_bro.cc
   tests/parse_data.cc
   tests/parse_value.cc
   tests/parse_vast.cc

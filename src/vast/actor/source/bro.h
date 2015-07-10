@@ -1,6 +1,10 @@
 #ifndef VAST_ACTOR_SOURCE_BRO_H
 #define VAST_ACTOR_SOURCE_BRO_H
 
+#include <memory>
+#include <string>
+#include <unordered_map>
+
 #include "vast/schema.h"
 #include "vast/actor/source/line_based.h"
 
@@ -34,6 +38,7 @@ private:
   std::string empty_field_;
   std::string unset_field_;
   type type_;
+  std::vector<rule<std::string::const_iterator, data>> parsers_;
 };
 
 } // namespace source

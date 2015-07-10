@@ -1,6 +1,6 @@
 #include "vast/actor/source/bro.h"
-
-#include <cassert>
+#include "vast/detail/bro_parser_factory.h"
+#include "vast/util/assert.h"
 #include "vast/util/string.h"
 
 namespace vast {
@@ -194,27 +194,25 @@ result<event> bro::extract()
     }
     else
     {
-      auto d = parse<data>(s[f].first, s[f].second, e.trace.back()->type,
-                           set_separator_, "", "",
-                           set_separator_, "", "");
-      if (! d)
+      data d;
+      if (! parsers_[f].parse(s[f].first, s[f].second, d))
       {
-        VAST_WARN(this, "failed to parse field", f << ": \"" <<
-                  std::string(s[f].first, s[f].second) << '"',
-                  "(reason", d.error() << ')');
+        VAST_WARN(this, "failed to parse field", f << ':',
+                  std::string(s[f].first, s[f].second));
         VAST_WARN(this, "skips line:", this->line());
         return {};
       }
+      // Get the event timestamp if we're at the timestamp field.
       if (f == static_cast<size_t>(timestamp_field_))
-        if (auto tp = get<time::point>(*d))
+        if (auto tp = get<time::point>(d))
           ts = *tp;
-      r->push_back(std::move(*d));
+      r->push_back(std::move(d));
     }
     ++f;
   }
   event e{{std::move(event_record), type_}};
   e.timestamp(ts);
-  return std::move(e);
+  return e;
 }
 
 trial<std::string> bro::parse_header_line(std::string const& line,
@@ -353,7 +351,7 @@ trial<void> bro::parse_header()
                   t->name());
       }
     }
-
+  // Determine the timestamp field.
   if (timestamp_field_ > -1)
   {
     VAST_VERBOSE(this, "attempts to extract timestamp from field",
@@ -374,7 +372,14 @@ trial<void> bro::parse_header()
       ++i;
     }
   }
-
+  // Create Bro parsers.
+  auto make_parser = [this](type const& t) {
+    using iterator_type = std::string::const_iterator;
+    return detail::make_bro_parser<iterator_type>(t, set_separator_);
+  };
+  parsers_.resize(flat.fields().size());
+  for (size_t i = 0; i < flat.fields().size(); i++)
+    parsers_[i] = make_parser(flat.fields()[i].type);
   return nothing;
 }
 
