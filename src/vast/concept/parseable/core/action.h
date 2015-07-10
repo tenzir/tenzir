@@ -4,6 +4,7 @@
 #include <caf/detail/type_traits.hpp>
 
 #include "vast/concept/parseable/core/parser.h"
+#include "vast/util/type_list.h"
 
 namespace vast {
 
@@ -17,8 +18,12 @@ class action_parser : public parser<action_parser<Parser, Action>>
 public:
   using inner_attribute = typename Parser::attribute;
   using action_traits = caf::detail::get_callable_trait<Action>;
-  using action_result_type = typename action_traits::result_type;
   static constexpr size_t action_arity = action_traits::num_args;
+  using action_result_type = typename action_traits::result_type;
+  using action_arg_type =
+    std::remove_reference_t<
+      util::tl_head_t<typename action_traits::arg_types>
+    >;
   using attribute =
     std::conditional_t<
       std::is_void<action_result_type>{},
@@ -61,7 +66,7 @@ public:
          bool
        >
   {
-    inner_attribute x;
+    action_arg_type x;
     if (! parser_.parse(f, l, x))
       return false;
     action_(std::move(x));
@@ -97,7 +102,7 @@ public:
          bool
        >
   {
-    inner_attribute x;
+    action_arg_type x;
     if (! parser_.parse(f, l, x))
       return false;
     a = action_(std::move(x));
