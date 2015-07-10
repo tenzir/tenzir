@@ -6,6 +6,7 @@
 
 #include "vast/concept/parseable/core/parser.h"
 #include "vast/util/assert.h"
+#include "vast/util/meta.h"
 
 namespace vast {
 namespace detail {
@@ -23,7 +24,7 @@ class rule_definition : public abstract_rule<Iterator, Attribute>
 {
 public:
   explicit rule_definition(Parser p)
-    : parser_{std::move(p)}
+    : parser_(std::move(p))
   {
   }
 
@@ -50,6 +51,13 @@ class rule : public parser<rule<Iterator, Attribute>>
   using abstract_rule_type = detail::abstract_rule<Iterator, Attribute>;
   using rule_pointer = std::unique_ptr<abstract_rule_type>;
 
+  template <typename RHS>
+  void make_parser(RHS&& rhs)
+  {
+    using rule_type = detail::rule_definition<RHS, Iterator, Attribute>;
+    *parser_ = std::make_unique<rule_type>(std::forward<RHS>(rhs));
+  }
+
 public:
   using attribute = Attribute;
 
@@ -58,11 +66,26 @@ public:
   {
   }
 
-  template <typename RHS>
-  auto operator=(RHS&& rhs) -> std::enable_if_t<is_parser<RHS>{}>
+  template <
+    typename RHS,
+    typename = std::enable_if_t<
+      is_parser<std::decay_t<RHS>>{} && ! util::is_same_or_derived<rule, RHS>::value
+    >
+  >
+  rule(RHS&& rhs)
+    : rule{}
   {
-    using rule_type = detail::rule_definition<RHS, Iterator, Attribute>;
-    *parser_ = std::make_unique<rule_type>(std::forward<RHS>(rhs));
+    make_parser<RHS>(std::forward<RHS>(rhs));
+  }
+
+  template <typename RHS>
+  auto operator=(RHS&& rhs)
+    -> std::enable_if_t<
+         is_parser<std::decay_t<RHS>>{}
+           && ! util::is_same_or_derived<rule, RHS>::value
+       >
+  {
+    make_parser<RHS>(std::forward<RHS>(rhs));
   }
 
   bool parse(Iterator& f, Iterator const& l, unused_type) const
