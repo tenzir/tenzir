@@ -38,8 +38,6 @@ message node::spawn_source(std::string const& label, message const& params)
     {"read,r", "path to read events from", input},
     {"uds,u", "treat -r as UNIX domain socket to connect to"}
   });
-  if (! r.error.empty())
-    return make_message(error{std::move(r.error)});
   auto& format = params.get_as<std::string>(0);
   // The "pcap" and "test" sources manually verify the presence of
   // input. All other sources are file-based and we setup their input
