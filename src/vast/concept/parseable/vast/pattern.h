@@ -36,6 +36,12 @@ struct parser_registry<pattern>
   using type = access::parser<pattern>;
 };
 
+namespace parsers {
+
+static auto const pattern = make_parser<vast::pattern>();
+
+} // namespace parsers
+
 } // namespace vast
 
 #endif

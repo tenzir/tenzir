@@ -44,6 +44,12 @@ struct parser_registry<port>
   using type = access::parser<port>;
 };
 
+namespace parsers {
+
+static auto const port = make_parser<vast::port>();
+
+} // namespace parsers
+
 } // namespace vast
 
 #endif

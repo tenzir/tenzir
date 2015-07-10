@@ -127,6 +127,12 @@ struct parser_registry<address>
   using type = access::parser<address>;
 };
 
+namespace parsers {
+
+static auto const addr = make_parser<vast::address>();
+
+} // namespace parsers
+
 } // namespace vast
 
 #endif

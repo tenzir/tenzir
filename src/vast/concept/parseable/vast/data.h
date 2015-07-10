@@ -35,17 +35,17 @@ struct access::parser<data> : vast::parser<access::parser<data>>
         return t;
       };
     rule<Iterator, data> p;
-    p = make_parser<time::point>()
-      | make_parser<time::duration>()
-      | make_parser<subnet>()
-      | make_parser<port>()
-      | make_parser<address>()
+    p = parsers::time_point
+      | parsers::time_duration
+      | parsers::subnet
+      | parsers::port
+      | parsers::addr
       | parsers::real
       | parsers::u64
       | parsers::i64
       | parsers::tf
       | parsers::qq_str
-      | make_parser<pattern>()
+      | parsers::pattern
       | '(' >> (p % ',') ->* to_record >> ')'
       | '[' >> (p % ',') ->* to_vector >> ']'
       | '{' >> (p % ',') ->* to_set >> '}'
@@ -77,6 +77,11 @@ struct parser_registry<data>
   using type = access::parser<data>;
 };
 
+namespace parsers {
+
+static auto const data = make_parser<vast::data>();
+
+} // namespace parsers
 } // namespace vast
 
 #endif

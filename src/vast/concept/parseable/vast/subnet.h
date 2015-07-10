@@ -47,6 +47,12 @@ struct parser_registry<subnet>
   using type = access::parser<subnet>;
 };
 
+namespace parsers {
+
+static auto const subnet = make_parser<vast::subnet>();
+
+} // namespace parsers
+
 } // namespace vast
 
 #endif

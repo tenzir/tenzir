@@ -167,6 +167,13 @@ struct parser_registry<time::point>
   using type = time_point_parser;
 };
 
+namespace parsers {
+
+static auto const time_point = make_parser<time::point>();
+static auto const time_duration = make_parser<time::duration>();
+
+} // namespace parsers
+
 } // namespace vast
 
 #endif
