@@ -3,6 +3,7 @@
 
 #include "vast/optional.h"
 #include "vast/concept/parseable/core/parser.h"
+#include "vast/concept/parseable/detail/attr_fold.h"
 
 namespace vast {
 
@@ -10,8 +11,8 @@ template <typename Parser>
 class optional_parser : public parser<optional_parser<Parser>>
 {
 public:
-  using inner_attribute = typename Parser::attribute;
-
+  using inner_attribute =
+    typename detail::attr_fold<typename Parser::attribute>::type;
   using attribute =
     std::conditional_t<
       std::is_same<inner_attribute, unused_type>{},

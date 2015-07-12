@@ -1,0 +1,59 @@
+#ifndef VAST_CONCEPT_PARSEABLE_DETAIL_CONTAINER_H
+#define VAST_CONCEPT_PARSEABLE_DETAIL_CONTAINER_H
+
+#include <vector>
+#include <type_traits>
+
+#include "vast/concept/parseable/detail/attr_fold.h"
+
+namespace vast {
+namespace detail {
+
+template <typename Elem>
+struct container
+{
+  using vector_type = std::vector<Elem>;
+  using attribute = typename attr_fold<vector_type>::type;
+  using value_type = typename attribute::value_type;
+  static constexpr bool modified = std::is_same<vector_type, attribute>{};
+
+  template <typename T>
+  static void push_back(attribute& c, T&& x)
+  {
+    c.insert(c.end(), std::move(x));
+  }
+
+  static void push_back(attribute&, unused_type)
+  {
+    // nop
+  }
+
+  template <typename T>
+  static void push_back(unused_type, T&&)
+  {
+    // nop
+  }
+
+  template <typename Parser, typename Iterator>
+  static bool parse(Parser const& p, Iterator& f, Iterator const& l,
+                    unused_type)
+  {
+    return p.parse(f, l, unused);
+  }
+
+  template <typename Parser, typename Iterator, typename Attribute>
+  static bool parse(Parser const& p, Iterator& f, Iterator const& l,
+                    Attribute& a)
+  {
+    value_type x;
+    if (! p.parse(f, l, x))
+      return false;
+    push_back(a, std::move(x));
+    return true;
+  }
+};
+
+} // namespace detail
+} // namespace vast
+
+#endif

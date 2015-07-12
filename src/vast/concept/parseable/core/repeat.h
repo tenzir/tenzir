@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "vast/concept/parseable/core/parser.h"
+#include "vast/concept/parseable/detail/container.h"
 
 namespace vast {
 
@@ -13,7 +14,8 @@ class repeat_parser : parser<repeat_parser<Parser, Min, Max>>
   static_assert(Min <= Max, "minimum must be smaller than maximum");
 
 public:
-  using attribute = std::vector<typename Parser::attribute>;
+  using container = detail::container<typename Parser::attribute>;
+  using attribute = typename container::attribute;
 
   explicit repeat_parser(Parser p)
     : parser_{std::move(p)}
@@ -25,21 +27,17 @@ public:
   {
     if (Max == 0)
       return true; // If we have nothing todo, we're succeeding.
-    auto init = f;
+    auto save = f;
     auto i = 0;
     while (i < Max)
     {
-      auto save = f;
-      if (! parser_.parse(f, l, a))
-      {
-        f = save;
+      if (! container::parse(parser_, f, l, a))
         break;
-      }
       ++i;
     }
     if (i >= Min)
       return true;
-    f = init;
+    f = save;
     return false;
   }
 
