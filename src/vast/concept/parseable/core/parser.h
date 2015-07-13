@@ -4,44 +4,9 @@
 #include <type_traits>
 #include <iterator>
 
+#include "vast/concept/parseable/core/unused_type.h"
+
 namespace vast {
-
-struct unused_type
-{
-  unused_type() = default;
-
-  template <typename T>
-  unused_type(T const&)
-  {
-  }
-
-  template <typename T>
-  unused_type& operator=(T const&)
-  {
-    return *this;
-  }
-
-  template <typename T>
-  unused_type const& operator=(T const&) const
-  {
-    return *this;
-  }
-
-  unused_type& operator=(unused_type const&) = default;
-
-  unused_type const& operator=(unused_type const&) const
-  {
-    return *this;
-  }
-};
-
-static auto unused = unused_type{};
-
-inline bool operator==(unused_type, unused_type) { return true; }
-inline bool operator!=(unused_type, unused_type) { return false; }
-inline unused_type operator+(unused_type, unused_type) { return unused; }
-inline unused_type operator-(unused_type, unused_type) { return unused; }
-inline unused_type operator-(unused_type) { return unused; }
 
 template <typename, typename>
 class action_parser;
