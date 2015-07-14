@@ -19,8 +19,9 @@ RUN mkdir -p $PREFIX/src
 
 # CAF
 RUN cd $PREFIX/src/ && \
-    git clone https://github.com/actor-framework/actor-framework.git
-RUN cd $PREFIX/src/actor-framework && \
+    git clone https://github.com/actor-framework/actor-framework.git caf
+ADD . $PREFIX/src/caf
+RUN cd $PREFIX/src/caf && \
     git checkout develop && \
     ./configure --prefix=$PREFIX --no-examples && \
     make -j $PARALLELISM && \
