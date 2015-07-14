@@ -1,6 +1,6 @@
 #include <boost/variant/apply_visitor.hpp>
 
-#include "vast/detail/ast/query.h"
+#include "vast/concept/parseable/vast/detail/query_ast.h"
 #include "vast/util/assert.h"
 
 namespace vast {
@@ -77,13 +77,11 @@ struct folder : public boost::static_visitor<data>
     auto d = boost::apply_visitor(*this, expr.first);
     if (expr.rest.empty())
       return d;
-
     for (auto& operation : expr.rest)
     {
       auto operand = boost::apply_visitor(*this, operation.operand);
       d = apply(operation.op, d, operand);
     }
-
     return d;
   }
 };
@@ -93,13 +91,11 @@ data fold(data_expr const& expr)
   auto d = boost::apply_visitor(folder(), expr.first);
   if (expr.rest.empty())
     return d;
-
   for (auto& operation : expr.rest)
   {
     auto operand = boost::apply_visitor(folder(), operation.operand);
     d = folder::apply(operation.op, d, operand);
   }
-
   return d;
 }
 

@@ -3,6 +3,8 @@
 
 #include "vast/offset.h"
 
+#include "vast/concept/parseable/core/list.h"
+#include "vast/concept/parseable/core/operators.h"
 #include "vast/concept/parseable/core/parser.h"
 #include "vast/concept/parseable/numeric/integral.h"
 

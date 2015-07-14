@@ -11,15 +11,16 @@ namespace vast {
 /// A sequence of type/argument names to recursively access a type or value.
 struct key : util::stack::vector<4, std::string>
 {
-  using util::stack::vector<4, std::string>::vector;
-
-  // TODO: Migrate to concepts location.
-  template <typename Iterator>
-  friend trial<void> print(key const& k, Iterator&& out)
-  {
-    return print_delimited('.', k.begin(), k.end(), out);
-  }
+  using super = util::stack::vector<4, std::string>;
+  using super::vector;
 };
+
+// TODO: Migrate to concepts location.
+template <typename Iterator>
+trial<void> print(key const& k, Iterator&& out)
+{
+  return print_delimited('.', k.begin(), k.end(), out);
+}
 
 } // namespace vast
 

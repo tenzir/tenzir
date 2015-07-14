@@ -1,10 +1,11 @@
-#ifndef VAST_DETAIL_BRO_PARSER_FACTORY_H
-#define VAST_DETAIL_BRO_PARSER_FACTORY_H
+#ifndef VAST_CONCEPT_PARSEABLE_VAST_DETAIL_BRO_PARSER_FACTORY_H
+#define VAST_CONCEPT_PARSEABLE_VAST_DETAIL_BRO_PARSER_FACTORY_H
 
 #include "vast/data.h"
 #include "vast/type.h"
 #include "vast/concept/parseable/core.h"
 #include "vast/concept/parseable/numeric.h"
+#include "vast/concept/parseable/string/any.h"
 #include "vast/concept/parseable/vast/address.h"
 #include "vast/concept/parseable/vast/subnet.h"
 #include "vast/util/assert.h"
@@ -90,7 +91,7 @@ struct bro_parser
 
   bool operator()(type::subnet const&) const
   {
-    static auto p = parsers::subnet ->* [](subnet x) { return x; };
+    static auto p = parsers::net ->* [](subnet x) { return x; };
     return parse(p);
   }
 
@@ -178,7 +179,7 @@ struct bro_parser_factory
 
   result_type operator()(type::subnet const&) const
   {
-    return parsers::subnet ->* [](subnet x) { return x; };
+    return parsers::net ->* [](subnet x) { return x; };
   }
 
   result_type operator()(type::port const&) const

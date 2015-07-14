@@ -12,6 +12,7 @@
 #include "vast/actor/source/bro.h"
 #include "vast/actor/source/bgpdump.h"
 #include "vast/actor/source/test.h"
+#include "vast/concept/parseable/vast/detail/to_schema.h"
 #include "vast/expr/normalize.h"
 #include "vast/io/file_stream.h"
 #include "vast/util/posix.h"
@@ -25,6 +26,17 @@ using namespace caf;
 using namespace std::string_literals;
 
 namespace vast {
+namespace {
+
+trial<schema> load_and_parse_schema(path const& p)
+{
+  auto t = load_contents(p);
+  if (! t)
+    return t.error();
+  return detail::to_schema(*t);
+}
+
+} // namespace <anonymous>
 
 message node::spawn_source(std::string const& label, message const& params)
 {
@@ -139,7 +151,7 @@ message node::spawn_source(std::string const& label, message const& params)
   // Set a new schema if provided.
   if (! schema_file.empty())
   {
-    auto t = load_and_parse<schema>(path{schema_file});
+    auto t = load_and_parse_schema(schema_file);
     if (! t)
       return make_message(error{"failed to load schema: ", t.error()});
     send(src, put_atom::value, *t);
@@ -182,7 +194,7 @@ message node::spawn_sink(std::string const& label, message const& params)
   schema sch;
   if (! schema_file.empty())
   {
-    auto t = load_and_parse<schema>(path{schema_file});
+    auto t = load_and_parse_schema(schema_file);
     if (! t)
     {
       VAST_ERROR(this, "failed to load schema", schema_file);

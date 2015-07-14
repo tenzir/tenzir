@@ -17,13 +17,14 @@ struct container
   using value_type = typename attribute::value_type;
   static constexpr bool modified = std::is_same<vector_type, attribute>{};
 
-  template <typename T>
-  static void push_back(attribute& c, T&& x)
+  template <typename Container, typename T>
+  static void push_back(Container& c, T&& x)
   {
     c.insert(c.end(), std::move(x));
   }
 
-  static void push_back(attribute&, unused_type)
+  template <typename Container>
+  static void push_back(Container&, unused_type)
   {
     // nop
   }

@@ -7,6 +7,7 @@
 
 #include "vast/schema.h"
 #include "vast/actor/source/line_based.h"
+#include "vast/concept/parseable/core/rule.h"
 
 namespace vast {
 namespace source {

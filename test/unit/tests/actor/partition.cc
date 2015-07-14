@@ -36,7 +36,7 @@ TEST(partition)
 
   MESSAGE("reloading partition and running a query against it");
   p = self->spawn<partition, monitored+priority_aware>(dir, self);
-  auto expr = to<expression>("&time < now && c >= 42 && c < 84");
+  auto expr = vast::detail::to_expression("&time < now && c >= 42 && c < 84");
   REQUIRE(expr);
   self->send(p, *expr, historical_atom::value);
   bool done = false;
@@ -56,7 +56,7 @@ TEST(partition)
   CHECK(hits.count() == 42);
 
   MESSAGE("creating a continuous query");
-  expr = to<expression>("s ni \"7\"");  // Must be normalized at this point.
+  expr = vast::detail::to_expression("s ni \"7\"");
   REQUIRE(expr);
   self->send(p, *expr, continuous_atom::value);
 

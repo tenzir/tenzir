@@ -49,7 +49,7 @@ struct parser_registry<subnet>
 
 namespace parsers {
 
-static auto const subnet = make_parser<vast::subnet>();
+static auto const net = make_parser<vast::subnet>();
 
 } // namespace parsers
 

@@ -1,7 +1,7 @@
-#ifndef VAST_DETAIL_PARSER_QUERY_H
-#define VAST_DETAIL_PARSER_QUERY_H
+#ifndef VAST_CONCEPT_PARSEABLE_VAST_DETAIL_QUERY_H
+#define VAST_CONCEPT_PARSEABLE_VAST_DETAIL_QUERY_H
 
-#include "vast/detail/parser/data_expression.h"
+#include "vast/concept/parseable/vast/detail/data_expression.h"
 
 namespace vast {
 namespace detail {

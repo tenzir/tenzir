@@ -1,4 +1,5 @@
 #include "vast/expression.h"
+#include "vast/util/assert.h"
 
 namespace vast {
 
@@ -13,7 +14,6 @@ expression& negation::expression()
   VAST_ASSERT(! empty());
   return *begin();
 }
-
 
 expression::node& expose(expression& e)
 {
@@ -35,12 +35,4 @@ bool operator<(expression const& lhs, expression const& rhs)
   return lhs.node_ < rhs.node_;
 }
 
-namespace detail {
-
-trial<expression> to_expression(std::string const& str)
-{
-  return to<expression>(str);
-}
-
-} // namespace detail
 } // namespace vast

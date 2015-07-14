@@ -1,13 +1,14 @@
-#ifndef VAST_DETAIL_PARSER_DATA_H
-#define VAST_DETAIL_PARSER_DATA_H
+#ifndef VAST_CONCEPT_PARSEABLE_VAST_DETAIL_DATA_H
+#define VAST_CONCEPT_PARSEABLE_VAST_DETAIL_DATA_H
 
-#include "vast/detail/parser/escaped_string.h"
-#include "vast/detail/parser/address.h"
-#include "vast/detail/parser/port.h"
-#include "vast/detail/parser/skipper.h"
-#include "vast/detail/parser/time_duration.h"
-#include "vast/detail/parser/time_point.h"
-#include "vast/value.h"
+#include "vast/data.h"
+
+#include "vast/concept/parseable/vast/detail/escaped_string.h"
+#include "vast/concept/parseable/vast/detail/address.h"
+#include "vast/concept/parseable/vast/detail/port.h"
+#include "vast/concept/parseable/vast/detail/skipper.h"
+#include "vast/concept/parseable/vast/detail/time_duration.h"
+#include "vast/concept/parseable/vast/detail/time_point.h"
 
 #ifdef VAST_CLANG
 #pragma clang diagnostic push

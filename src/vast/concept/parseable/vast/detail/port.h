@@ -1,9 +1,8 @@
-#ifndef VAST_DETAIL_PARSER_PORT_H
-#define VAST_DETAIL_PARSER_PORT_H
+#ifndef VAST_CONCEPT_PARSEABLE_VAST_DETAIL_PORT_H
+#define VAST_CONCEPT_PARSEABLE_VAST_DETAIL_PORT_H
 
-#include <boost/spirit/include/qi.hpp>
-#include <boost/spirit/include/phoenix.hpp>
 #include "vast/port.h"
+#include "vast/concept/parseable/vast/detail/boost.h"
 
 namespace vast {
 namespace detail {

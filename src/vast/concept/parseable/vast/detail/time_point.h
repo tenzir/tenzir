@@ -1,7 +1,9 @@
-#ifndef VAST_DETAIL_PARSER_TIME_POINT_H
-#define VAST_DETAIL_PARSER_TIME_POINT_H
+#ifndef VAST_CONCEPT_PARSEABLE_VAST_DETAIL_TIME_POINT_H
+#define VAST_CONCEPT_PARSEABLE_VAST_DETAIL_TIME_POINT_H
 
-#include "vast/detail/parser/time_duration.h"
+#include "vast/concept/parseable/to.h"
+#include "vast/concept/parseable/vast/time.h"
+#include "vast/concept/parseable/vast/detail/time_duration.h"
 #include "vast/util/assert.h"
 
 #ifdef VAST_CLANG
@@ -109,16 +111,16 @@ struct time_point : qi::grammar<Iterator, time::point(), skipper<Iterator>>
 
   struct time_point_factory
   {
-    template <typename, typename, typename>
+    template <typename, typename>
     struct result
     {
       using type = time::point;
     };
 
     template <typename I>
-    time::point operator()(I begin, I end, char const* fmt) const
+    time::point operator()(I begin, I end) const
     {
-      auto t = parse<time::point>(begin, end, fmt);
+      auto t = to<time::point>(begin, end);
       return t ? *t : time::point{};
     }
   };
@@ -151,11 +153,7 @@ struct time_point : qi::grammar<Iterator, time::point(), skipper<Iterator>>
                )
           )               [_val = ref(point)]
       |   ('@' >> dur)    [_val = at(_1)]
-      |   fmt0            [_val = _1]
-      |   fmt1            [_val = _1]
-      |   fmt2            [_val = _1]
-      |   fmt3            [_val = _1]
-      |   fmt4            [_val = _1]
+      |   fmt            [_val = _1]
       ;
 
     delta
@@ -171,56 +169,13 @@ struct time_point : qi::grammar<Iterator, time::point(), skipper<Iterator>>
       |   (long_long >> dur.year)     [add(9, _1, ref(negate))]
       ;
 
-    // TODO: Merge all fmt* rule into a single one, probably needs the
-    // syntactic "not" parser ("!").
-
-    // YYYY-MM-DD HH:MM:SS
-    fmt0
-      =   raw
-          [       digit4 >> '-'
-              >>  digit2 >> '-'
-              >>  digit2 >> '+'
-              >>  digit2
-              >>  ':'
-              >>  digit2 >> ':'
-              >>  digit2
-          ]   [_val = make_time_point(begin(_1), end(_1), "%Y-%m-%d+%H:%M:%S")]
-      ;
-
-    // YYYY-MM-DD HH:MM
-    fmt1
-      =   raw
-          [       digit4 >> '-'
-              >>  digit2 >> '-'
-              >>  digit2 >> '+'
-              >>  digit2
-              >>  ':'
-              >>  digit2
-          ]   [_val = make_time_point(begin(_1), end(_1), "%Y-%m-%d+%H:%M")]
-      ;
-
-    // YYYY-MM-DD HH
-    fmt2
-      =   raw
-          [       digit4 >> '-'
-              >>  digit2 >> '-'
-              >>  digit2 >> '+'
-              >>  digit2
-          ]   [_val = make_time_point(begin(_1), end(_1), "%Y-%m-%d+%H")]
-      ;
-
-    // YYYY-MM-DD
-    fmt3
-      =   raw
-          [   digit4 >> '-' >>  digit2 >> '-' >>  digit2
-          ]   [_val = make_time_point(begin(_1), end(_1), "%Y-%m-%d")]
-      ;
-
-    // YYYY-MM
-    fmt4
-      =   raw
-          [   digit4 >> '-' >>  digit2
-          ]   [_val = make_time_point(begin(_1), end(_1), "%Y-%m")]
+    // YYYY-MM-DD+HH:MM:SS
+    fmt
+      =   raw [       
+                 digit4 >> '-' >>  digit2 >> '-' >> digit2 
+              >> '+'
+              >>  digit2 >>  ':' >>  digit2 >> ':' >>  digit2
+          ] [_val = make_time_point(begin(_1), end(_1))]
       ;
 
     digit2
@@ -233,7 +188,7 @@ struct time_point : qi::grammar<Iterator, time::point(), skipper<Iterator>>
   }
 
   qi::rule<Iterator, time::point(), skipper<Iterator>> time, delta;
-  qi::rule<Iterator, time::point()> fmt0, fmt1, fmt2, fmt3, fmt4;
+  qi::rule<Iterator, time::point()> fmt;
   qi::rule<Iterator> digit2, digit4;
   time_duration<Iterator> dur;
 

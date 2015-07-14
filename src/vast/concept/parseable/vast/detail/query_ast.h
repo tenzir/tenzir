@@ -1,9 +1,10 @@
-#ifndef VAST_DETAIL_AST_QUERY_H
-#define VAST_DETAIL_AST_QUERY_H
+#ifndef VAST_CONCEPT_PARSEABLE_VAST_DETAIL_QUERY_AST_H
+#define VAST_CONCEPT_PARSEABLE_VAST_DETAIL_QUERY_AST_H
 
 #include <boost/optional.hpp>
 #include <boost/variant/recursive_variant.hpp>
 #include <boost/fusion/include/adapt_struct.hpp>
+
 #include "vast/operator.h"
 #include "vast/data.h"
 

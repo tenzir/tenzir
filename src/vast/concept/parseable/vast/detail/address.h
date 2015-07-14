@@ -1,7 +1,9 @@
-#ifndef VAST_DETAIL_PARSER_ADDRESS_H
-#define VAST_DETAIL_PARSER_ADDRESS_H
+#ifndef VAST_CONCEPT_PARSEABLE_VAST_DETAIL_ADDRESS_H
+#define VAST_CONCEPT_PARSEABLE_VAST_DETAIL_ADDRESS_H
 
-#include "vast/detail/parser/boost.h"
+#include "vast/die.h"
+#include "vast/concept/parseable/vast/detail/boost.h"
+#include "vast/concept/parseable/vast/address.h"
 
 #ifdef VAST_CLANG
 #pragma clang diagnostic push
@@ -26,36 +28,13 @@ struct address_maker
 
   void operator()(vast::address& a, std::string const& str) const
   {
-    auto lval = str.begin();
-    // Must succeed because we've parsed it via the holy grammar.
-    a = *parse<vast::address>(lval, str.end());
+    if (! parsers::addr(str, a))
+      die("parser implementation mismatch");
   }
 };
 
 } // namespace detail
 
-/// An IP address parser which accepts addresses according to [SIP IPv6
-/// ABNF](http://tools.ietf.org/html/draft-ietf-sip-ipv6-abnf-fix-05).
-/// This IETF draft defines the grammar as follows:
-///
-///     IPv6address   =                             6( h16 ":" ) ls32
-///                    /                       "::" 5( h16 ":" ) ls32
-///                    / [               h16 ] "::" 4( h16 ":" ) ls32
-///                    / [ *1( h16 ":" ) h16 ] "::" 3( h16 ":" ) ls32
-///                    / [ *2( h16 ":" ) h16 ] "::" 2( h16 ":" ) ls32
-///                    / [ *3( h16 ":" ) h16 ] "::"    h16 ":"   ls32
-///                    / [ *4( h16 ":" ) h16 ] "::"              ls32
-///                    / [ *5( h16 ":" ) h16 ] "::"              h16
-///                    / [ *6( h16 ":" ) h16 ] "::"
-///
-///      h16           = 1*4HEXDIG
-///      ls32          = ( h16 ":" h16 ) / IPv4address
-///      IPv4address   = dec-octet "." dec-octet "." dec-octet "." dec-octet
-///      dec-octet     = DIGIT                 ; 0-9
-///                    / %x31-39 DIGIT         ; 10-99
-///                    / "1" 2DIGIT            ; 100-199
-///                    / "2" %x30-34 DIGIT     ; 200-249
-///                    / "25" %x30-35          ; 250-255
 template <typename Iterator>
 struct address : qi::grammar<Iterator, vast::address()>
 {

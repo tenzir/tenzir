@@ -12,13 +12,13 @@ struct unused_type;
 namespace detail {
 
 template <typename Attribute>
-struct attr_fold : std::common_type<Attribute> {};
+struct attr_fold : std::decay<Attribute> {};
 
 template <>
-struct attr_fold<std::vector<char>> : std::common_type<std::string> {};
+struct attr_fold<std::vector<char>> : std::decay<std::string> {};
 
 template <>
-struct attr_fold<unused_type> : std::common_type<unused_type> {};
+struct attr_fold<unused_type> : std::decay<unused_type> {};
 
 } // namespace detail
 } // namespace vast

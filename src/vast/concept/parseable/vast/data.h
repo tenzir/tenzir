@@ -37,7 +37,7 @@ struct access::parser<data> : vast::parser<access::parser<data>>
     rule<Iterator, data> p;
     p = parsers::time_point
       | parsers::time_duration
-      | parsers::subnet
+      | parsers::net
       | parsers::port
       | parsers::addr
       | parsers::real

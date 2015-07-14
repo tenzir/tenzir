@@ -1,4 +1,7 @@
-#include "vast/detail/bro_parser_factory.h"
+#include "vast/concept/parseable/to.h"
+#include "vast/concept/parseable/vast/address.h"
+#include "vast/concept/parseable/vast/subnet.h"
+#include "vast/concept/parseable/vast/detail/bro_parser_factory.h"
 
 #define SUITE parseable
 #include "test.h"

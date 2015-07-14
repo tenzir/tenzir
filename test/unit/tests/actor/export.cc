@@ -54,7 +54,7 @@ TEST(export)
   });
 
   MESSAGE("performing manual index lookup");
-  auto pops = to<expression>("id.resp_p == 995/?");
+  auto pops = vast::detail::to_expression("id.resp_p == 995/?");
   REQUIRE(pops);
   self->sync_send(n, get_atom::value, "index").await(
     [&](actor const& a, std::string const& fqn, std::string const& type)

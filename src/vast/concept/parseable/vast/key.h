@@ -3,7 +3,10 @@
 
 #include "vast/key.h"
 
-#include "vast/concept/parseable/core.h"
+#include "vast/concept/parseable/core/list.h"
+#include "vast/concept/parseable/core/operators.h"
+#include "vast/concept/parseable/core/parser.h"
+#include "vast/concept/parseable/core/plus.h"
 #include "vast/concept/parseable/string/char_class.h"
 
 namespace vast {
@@ -15,7 +18,8 @@ struct key_parser : parser<key_parser>
   template <typename Iterator, typename Attribute>
   bool parse(Iterator& f, Iterator const& l, Attribute& a) const
   {
-    static auto p = +parsers::alnum % '.';
+    using namespace parsers;
+    static auto p = +(alnum | chr{'_'}) % '.';
     return p.parse(f, l, a);
   }
 };

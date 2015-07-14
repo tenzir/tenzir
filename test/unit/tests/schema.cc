@@ -2,6 +2,7 @@
 #include "vast/schema.h"
 #include "vast/concept/serializable/schema.h"
 #include "vast/concept/serializable/io.h"
+#include "vast/concept/parseable/vast/detail/to_schema.h"
 #include "vast/util/convert.h"
 
 #define SUITE schema
@@ -14,15 +15,13 @@ using namespace vast;
   {                                                                 \
     auto contents = load_contents(input);                           \
     REQUIRE(contents);                                              \
-    auto lval = contents->begin();                                  \
-    auto s0 = parse<schema>(lval, contents->end());                 \
+    auto s0 = detail::to_schema(*contents);                         \
     if (! s0)                                                       \
       std::cout << s0.error() << std::endl;                         \
     REQUIRE(s0);                                                    \
                                                                     \
     auto str = to_string(*s0);                                      \
-    lval = str.begin();                                             \
-    auto s1 = parse<schema>(lval, str.end());                       \
+    auto s1 = detail::to_schema(str);                               \
     if (! s1)                                                       \
       std::cout << s1.error() << std::endl;                         \
     REQUIRE(s1);                                                    \
@@ -41,8 +40,7 @@ TEST(offset finding)
     "type outer = record{ a: middle, b: record { y: string }, c: int }\n"
     "type foo = record{ a: int, b: real, c: outer, d: middle }";
 
-  auto lval = str.begin();
-  auto sch = parse<schema>(lval, str.end());
+  auto sch = detail::to_schema(str);
   REQUIRE(sch);
 
   auto foo = sch->find_type("foo");
@@ -71,16 +69,14 @@ TEST(merging)
     "type a = int\n"
     "type inner = record { x: int, y: real }\n";
 
-  auto lval = str.begin();
-  auto s1 = parse<schema>(lval, str.end());
+  auto s1 = detail::to_schema(str);
   REQUIRE(s1);
 
   str =
     "type a = int\n"  // Same type allowed.
     "type b = int\n";
 
-  lval = str.begin();
-  auto s2 = parse<schema>(lval, str.end());
+  auto s2 = detail::to_schema(str);
   REQUIRE(s2);
 
   auto merged = schema::merge(*s1, *s2);

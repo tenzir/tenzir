@@ -1,7 +1,7 @@
-#ifndef VAST_DETAIL_PARSER_STREAMER_H
-#define VAST_DETAIL_PARSER_STREAMER_H
+#ifndef VAST_CONCEPT_PARSEABLE_VAST_DETAIL_STREAMER_H
+#define VAST_CONCEPT_PARSEABLE_VAST_DETAIL_STREAMER_H
 
-#include "vast/detail/parser/boost.h"
+#include "vast/concept/parseable/vast/detail/boost.h"
 
 namespace vast {
 namespace detail {

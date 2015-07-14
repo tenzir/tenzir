@@ -103,6 +103,7 @@ public:
   /// @returns A reference to an array of 16 bytes.
   std::array<uint8_t, 16> const& data() const;
 
+  // TODO: Migrate to concepts location.
   template <typename Iterator>
   friend trial<void> print(address const& a, Iterator&& out)
   {
@@ -115,25 +116,8 @@ private:
   std::array<uint8_t, 16> bytes_;
 };
 
+// TODO: Migrate to concepts location.
 trial<void> convert(address const& a, util::json& j);
-
-} // namespace vast
-
-#include "vast/concept/parseable/core/parse.h"
-#include "vast/concept/parseable/vast/address.h"
-
-namespace vast {
-
-// TODO: remove after conversion to new parseable concept.
-template <typename Iterator>
-trial<void> parse(address& a, Iterator& begin, Iterator end)
-{
-  using vast::parse;
-  if (parse(begin, end, a))
-    return nothing;
-  else
-    return error{"failed to parse address", std::string{begin, end}};
-}
 
 } // namespace vast
 

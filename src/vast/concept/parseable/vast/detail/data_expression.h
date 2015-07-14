@@ -1,12 +1,11 @@
-#ifndef VAST_DETAIL_PARSER_DATA_EXPRESSION_H
-#define VAST_DETAIL_PARSER_DATA_EXPRESSION_H
+#ifndef VAST_CONCEPT_PARSEABLE_VAST_DETAIL_DATA_EXPRESSION_H
+#define VAST_CONCEPT_PARSEABLE_VAST_DETAIL_DATA_EXPRESSION_H
 
-#include "vast/detail/parser/boost.h"
-
-#include "vast/detail/ast/query.h"
-#include "vast/detail/parser/error_handler.h"
-#include "vast/detail/parser/skipper.h"
-#include "vast/detail/parser/data.h"
+#include "vast/concept/parseable/vast/detail/boost.h"
+#include "vast/concept/parseable/vast/detail/data.h"
+#include "vast/concept/parseable/vast/detail/error_handler.h"
+#include "vast/concept/parseable/vast/detail/query_ast.h"
+#include "vast/concept/parseable/vast/detail/skipper.h"
 
 namespace vast {
 namespace detail {

@@ -1,10 +1,11 @@
-#ifndef VAST_DETAIL_PARSER_TIME_DURATION_H
-#define VAST_DETAIL_PARSER_TIME_DURATION_H
+#ifndef VAST_CONCEPT_PARSEABLE_VAST_DETAIL_TIME_DURATION_H
+#define VAST_CONCEPT_PARSEABLE_VAST_DETAIL_TIME_DURATION_H
 
 #include <string>
+
 #include "vast/time.h"
-#include "vast/detail/parser/boost.h"
-#include "vast/detail/parser/skipper.h"
+#include "vast/concept/parseable/vast/detail/boost.h"
+#include "vast/concept/parseable/vast/detail/skipper.h"
 #include "vast/util/assert.h"
 
 #ifdef VAST_CLANG

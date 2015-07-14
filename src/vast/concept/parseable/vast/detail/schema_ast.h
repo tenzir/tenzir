@@ -1,6 +1,9 @@
 #ifndef VAST_DETAIL_AST_SCHEMA_H
 #define VAST_DETAIL_AST_SCHEMA_H
 
+#include <vector>
+#include <string>
+
 #include <boost/optional.hpp>
 #include <boost/variant/recursive_variant.hpp>
 #include <boost/fusion/include/adapt_struct.hpp>

@@ -7,10 +7,10 @@
 namespace vast {
 namespace detail {
 
-template <typename Attribute>
-void absorb(Attribute& a, char c)
+template <typename Attribute, typename T>
+void absorb(Attribute& a, T&& x)
 {
-  a = c;
+  a = std::move(x);
 }
 
 inline void absorb(std::string& str, char c)

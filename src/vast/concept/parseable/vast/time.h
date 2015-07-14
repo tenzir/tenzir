@@ -3,9 +3,9 @@
 
 #include "vast/access.h"
 #include "vast/time.h"
-#include "vast/concept/parseable/core/optional.h"
-#include "vast/concept/parseable/core/sequence.h"
+#include "vast/concept/parseable/core.h"
 #include "vast/concept/parseable/numeric/real.h"
+#include "vast/concept/parseable/string/char_class.h"
 
 namespace vast {
 
@@ -19,38 +19,47 @@ struct time_duration_parser : parser<time_duration_parser>
     using namespace parsers;
     auto save = f;
     int64_t i;
-    if (i64.parse(f, l, i) && f != l)
-      switch (*f++) // Parse unit
-      {
-        case 'n':
-          if (f != l && *f++ == 's')
-          {
-            a = time::nanoseconds(i);
-            return true;
-          }
-          break;
-        case 'u':
-          if (f != l && *f++ == 's')
-          {
-            a = time::microseconds(i);
-            return true;
-          }
-          break;
-        case 'm':
-          if (f != l && *f++ == 's')
-            a = time::milliseconds(i);
-          else
-            a = time::minutes(i);
-          return true;
-        case 's':
-          a = time::seconds(i);
-          return true;
-        case 'h':
-          a = time::hours(i);
-          return true;
-      }
-    f = save;
-    return false;
+    if (! i64.parse(f, l, i))
+      return false;
+    static auto whitespace = *blank;
+    if (! whitespace.parse(f, l, unused))
+    {
+      f = save;
+      return false;
+    }
+    static auto unit
+      = lit("nsecs") ->* [] { return time::nanoseconds(1); }
+      | lit("nsec")  ->* [] { return time::nanoseconds(1); }
+      | lit("ns")    ->* [] { return time::nanoseconds(1); }
+      | lit("usecs") ->* [] { return time::microseconds(1); }
+      | lit("usec")  ->* [] { return time::microseconds(1); }
+      | lit("us")    ->* [] { return time::microseconds(1); }
+      | lit("msecs") ->* [] { return time::milliseconds(1); }
+      | lit("msec")  ->* [] { return time::milliseconds(1); }
+      | lit("ms")    ->* [] { return time::milliseconds(1); }
+      | lit("secs")  ->* [] { return time::seconds(1); }
+      | lit("sec")   ->* [] { return time::seconds(1); }
+      | lit("s")     ->* [] { return time::seconds(1); }
+      | lit("mins")  ->* [] { return time::minutes(1); }
+      | lit("min")   ->* [] { return time::minutes(1); }
+      | lit("m")     ->* [] { return time::minutes(1); }
+      | lit("hours") ->* [] { return time::hours(1); }
+      | lit("hrs")   ->* [] { return time::hours(1); }
+      | lit("h")     ->* [] { return time::hours(1); }
+      | lit("days")  ->* [] { return time::hours(24); }
+      | lit("d")     ->* [] { return time::hours(24); }
+      | lit("weeks") ->* [] { return time::hours(24 * 7); }
+      | lit("w")     ->* [] { return time::hours(24 * 7); }
+      | lit("years") ->* [] { return time::hours(24 * 365); }
+      | lit("y")     ->* [] { return time::hours(24 * 365); }
+      ;
+    if (! unit.parse(f, l, a))
+    {
+      f = save;
+      return false;
+    }
+    a *= i;
+    return true;
   }
 };
 
@@ -138,6 +147,8 @@ struct time_point_parser : parser<time_point_parser>
 
   static auto make()
   {
+    using namespace parsers;
+    //auto delta = lit("now") >> ('+' | '-') >> time_duration_parser{};
     return detail::ymd_parser{} >> '+' >> detail::hms_parser{};
   }
 

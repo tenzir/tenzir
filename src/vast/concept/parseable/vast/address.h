@@ -13,6 +13,28 @@
 
 namespace vast {
 
+/// An IP address parser which accepts addresses according to [SIP IPv6
+/// ABNF](http://tools.ietf.org/html/draft-ietf-sip-ipv6-abnf-fix-05).
+/// This IETF draft defines the grammar as follows:
+///
+///     IPv6address   =                             6( h16 ":" ) ls32
+///                    /                       "::" 5( h16 ":" ) ls32
+///                    / [               h16 ] "::" 4( h16 ":" ) ls32
+///                    / [ *1( h16 ":" ) h16 ] "::" 3( h16 ":" ) ls32
+///                    / [ *2( h16 ":" ) h16 ] "::" 2( h16 ":" ) ls32
+///                    / [ *3( h16 ":" ) h16 ] "::"    h16 ":"   ls32
+///                    / [ *4( h16 ":" ) h16 ] "::"              ls32
+///                    / [ *5( h16 ":" ) h16 ] "::"              h16
+///                    / [ *6( h16 ":" ) h16 ] "::"
+///
+///      h16           = 1*4HEXDIG
+///      ls32          = ( h16 ":" h16 ) / IPv4address
+///      IPv4address   = dec-octet "." dec-octet "." dec-octet "." dec-octet
+///      dec-octet     = DIGIT                 ; 0-9
+///                    / %x31-39 DIGIT         ; 10-99
+///                    / "1" 2DIGIT            ; 100-199
+///                    / "2" %x30-34 DIGIT     ; 200-249
+///                    / "25" %x30-35          ; 250-255
 struct address_parser : vast::parser<address_parser>
 {
   using attribute = address;

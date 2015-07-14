@@ -3,6 +3,7 @@
 #include "vast/concept/parseable/core.h"
 #include "vast/concept/parseable/numeric/real.h"
 #include "vast/concept/parseable/string/char_class.h"
+#include "vast/concept/parseable/vast/detail/to_schema.h"
 #include "vast/util/assert.h"
 #include "vast/util/meta.h"
 #include "vast/util/hash/murmur.h"
@@ -241,7 +242,7 @@ test::test(event_id id, uint64_t events)
       p: port &default="uniform(1,65384)"
     }
   )schema";
-  auto t = to<schema>(builtin_schema);
+  auto t = detail::to_schema(builtin_schema);
   VAST_ASSERT(t);
   set(*t);
 }

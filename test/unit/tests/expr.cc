@@ -5,6 +5,10 @@
 #include "vast/expr/evaluator.h"
 #include "vast/expr/resolver.h"
 #include "vast/expr/normalize.h"
+#include "vast/concept/parseable/to.h"
+#include "vast/concept/parseable/vast/time.h"
+#include "vast/concept/parseable/vast/detail/to_expression.h"
+#include "vast/concept/parseable/vast/detail/to_schema.h"
 #include "vast/concept/serializable/expression.h"
 #include "vast/concept/serializable/io.h"
 
@@ -88,7 +92,7 @@ TEST(event_evaluation)
     "}"
     "type bar = record { s1: string, r : record { b: bool, s: string } }";
 
-  auto sch = to<schema>(str);
+  auto sch = detail::to_schema(str);
   REQUIRE(sch);
 
   auto foo = sch->find_type("foo");
@@ -104,7 +108,7 @@ TEST(event_evaluation)
   //
 
   event e;
-  auto tp = to<time::point>("2014-01-16+05:30:12", time::point::format);
+  auto tp = to<time::point>("2014-01-16+05:30:12");
   REQUIRE(tp);
   e.timestamp(*tp);
   auto t = type::alias{type{}};

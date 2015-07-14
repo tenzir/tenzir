@@ -1,3 +1,4 @@
+#include "vast/concept/parseable/to.h"
 #include "vast/concept/parseable/vast/data.h"
 
 #define SUITE parseable
@@ -9,23 +10,15 @@ using namespace std::string_literals;
 TEST(data)
 {
   auto p = make_parser<data>();
+  data d;
 
-  MESSAGE("port");
-  auto str = "22/tcp"s;
+  MESSAGE("bool");
+  auto str = "T"s;
   auto f = str.begin();
   auto l = str.end();
-  data d;
   CHECK(p.parse(f, l, d));
   CHECK(f == l);
-  CHECK(d == port{22, port::tcp});
-
-  MESSAGE("address");
-  str = "10.0.0.1"s;
-  f = str.begin();
-  l = str.end();
-  CHECK(p.parse(f, l, d));
-  CHECK(f == l);
-  CHECK(d == *to<address>("10.0.0.1"));
+  CHECK(d == true);
 
   MESSAGE("numbers");
   str = "+1001"s;
@@ -47,14 +40,6 @@ TEST(data)
   CHECK(f == l);
   CHECK(d == 10.01);
 
-  MESSAGE("bool");
-  str = "T"s;
-  f = str.begin();
-  l = str.end();
-  CHECK(p.parse(f, l, d));
-  CHECK(f == l);
-  CHECK(d == true);
-
   MESSAGE("string");
   str = "\"bar\""s;
   f = str.begin();
@@ -70,6 +55,22 @@ TEST(data)
   CHECK(p.parse(f, l, d));
   CHECK(f == l);
   CHECK(d == pattern{"foo"});
+
+  MESSAGE("address");
+  str = "10.0.0.1"s;
+  f = str.begin();
+  l = str.end();
+  CHECK(p.parse(f, l, d));
+  CHECK(f == l);
+  CHECK(d == *to<address>("10.0.0.1"));
+
+  MESSAGE("port");
+  str = "22/tcp"s;
+  f = str.begin();
+  l = str.end();
+  CHECK(p.parse(f, l, d));
+  CHECK(f == l);
+  CHECK(d == port{22, port::tcp});
 
   MESSAGE("vector");
   str = "[-42]"s;

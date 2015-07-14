@@ -6,10 +6,6 @@
 #include "vast/offset.h"
 #include "vast/operator.h"
 #include "vast/type.h"
-#include "vast/detail/ast/query.h"
-#include "vast/detail/parser/error_handler.h"
-#include "vast/detail/parser/skipper.h"
-#include "vast/detail/parser/query.h"
 #include "vast/expr/normalize.h"
 #include "vast/expr/validator.h"
 #include "vast/util/assert.h"
@@ -244,11 +240,9 @@ struct expr_printer
     auto t = print('{', out_);
     if (! t)
       return t;
-
     t = util::print_delimited(" && ", c.begin(), c.end(), out_);
     if (! t)
       return t;
-
     return print('}', out_);
   }
 
@@ -257,11 +251,9 @@ struct expr_printer
     auto t = print('(', out_);
     if (! t)
       return t;
-
     t = util::print_delimited(" || ", d.begin(), d.end(), out_);
     if (! t)
       return t;
-
     return print(')', out_);
   }
 
@@ -270,7 +262,6 @@ struct expr_printer
     auto t = print("! ", out_);
     if (! t)
       return t;
-
     return print(n.expression(), out_);
   }
 
@@ -279,15 +270,11 @@ struct expr_printer
     auto t = visit(*this, p.lhs);
     if (! t)
       return t;
-
     *out_++ = ' ';
-
     t = print(p.op, out_);
     if (! t)
       return t;
-
     *out_++ = ' ';
-
     return visit(*this, p.rhs);
   }
 
@@ -316,14 +303,11 @@ struct expr_printer
     auto t = print(e.type, out_);
     if (! t)
       return t;
-
     if (e.offset.empty())
       return nothing;
-
     t = print('@', out_);
     if (! t)
       return t;
-
     return print(e.offset, out_);
   }
 
@@ -359,179 +343,6 @@ template <typename Iterator>
 trial<void> print(expression const& e, Iterator&& out)
 {
   return visit(detail::expr_printer<Iterator>{out}, e);
-}
-
-namespace detail {
-
-// Converts a Boost Spirit AST into VAST's internal representation.
-class expression_factory
-{
-public:
-  using result_type = trial<expression>;
-
-  trial<expression> operator()(detail::ast::query::query_expr const& q) const
-  {
-    // Split the query expression at each OR node.
-    std::vector<detail::ast::query::query_expr> ors;
-    ors.push_back({q.first, {}});
-    for (auto& pred : q.rest)
-      if (pred.op == logical_or)
-        ors.push_back({pred.operand, {}});
-      else
-        ors.back().rest.push_back(pred);
-
-    // Create a conjunction for each set of subsequent AND nodes between two OR
-    // nodes.
-    disjunction dis;
-    for (auto& ands : ors)
-    {
-      conjunction con;
-
-      auto t = boost::apply_visitor(expression_factory{}, ands.first);
-      if (! t)
-        return t;
-
-      con.push_back(std::move(*t));
-
-      for (auto pred : ands.rest)
-      {
-        auto t = boost::apply_visitor(expression_factory{}, pred.operand);
-        if (! t)
-          return t;
-
-        con.push_back(std::move(*t));
-      }
-
-      dis.emplace_back(std::move(con));
-    }
-
-    return expression{std::move(dis)};
-  }
-
-  trial<expression> operator()(detail::ast::query::predicate const& p) const
-  {
-    auto make_extractor = [](std::string const& str)
-    -> trial<predicate::operand>
-    {
-      if (str == "&type")
-        return {event_extractor{}};
-
-      if (str == "&time")
-        return {time_extractor{}};
-
-      VAST_ASSERT(! str.empty());
-      if (str[0] == ':')
-      {
-        // TODO: make vast::type parseable.
-        auto s = str.substr(1);
-        type t;
-        if (s == "bool")
-          t = type::boolean{};
-        else if (s == "int")
-          t = type::integer{};
-        else if (s == "count")
-          t = type::count{};
-        else if (s == "real")
-          t = type::real{};
-        else if (s == "time")
-          t = type::time_point{};
-        else if (s == "duration")
-          t = type::time_duration{};
-        else if (s == "string")
-          t = type::string{};
-        else if (s == "addr")
-          t = type::address{};
-        else if (s == "subnet")
-          t = type::subnet{};
-        else if (s == "port")
-          t = type::port{};
-        else
-          return error{"invalid type: ", s};
-
-        return {type_extractor{std::move(t)}};
-      }
-
-      auto t = to<key>(str);
-      if (! t)
-        return t.error();
-
-      return {schema_extractor{std::move(*t)}};
-    };
-
-    auto make_operand = [&](detail::ast::query::predicate::lhs_or_rhs const& lr)
-    -> trial<predicate::operand>
-    {
-      predicate::operand o;
-      if (auto d = boost::get<detail::ast::query::data_expr>(&lr))
-      {
-        o = detail::ast::query::fold(*d);
-      }
-      else
-      {
-        auto e = make_extractor(*boost::get<std::string>(&lr));
-        if (! e)
-          return e;
-
-        o = *e;
-      }
-
-      return o;
-    };
-
-    auto lhs = make_operand(p.lhs);
-    if (! lhs)
-      return lhs.error();
-
-    auto rhs = make_operand(p.rhs);
-    if (! rhs)
-      return rhs.error();
-
-    return expression{predicate{std::move(*lhs), p.op, std::move(*rhs)}};
-  }
-
-  trial<expression> operator()(detail::ast::query::negated const& neg) const
-  {
-    auto t = (*this)(neg.expr);
-    if (! t)
-      return t.error();
-
-    negation n;
-    n.push_back(std::move(*t));
-
-    return expression{std::move(n)};
-  }
-};
-
-} // namespace detail
-
-template <typename Iterator>
-trial<void> parse(expression& e, Iterator& begin, Iterator end)
-{
-  std::string err;
-  detail::parser::error_handler<Iterator> on_error{begin, end, err};
-  detail::parser::query<Iterator> grammar{on_error};
-  detail::parser::skipper<Iterator> skipper;
-  detail::ast::query::query_expr q;
-
-  bool success = phrase_parse(begin, end, grammar, skipper, q);
-  if (! success)
-    return error{std::move(err)};
-  else if (begin != end)
-    return error{"input not consumed:'", std::string{begin, end}, "'"};
-
-  auto t = detail::expression_factory{}(q);
-  if (! t)
-    return t.error();
-
-  e = std::move(*t);
-
-  auto v = visit(expr::validator{}, e);
-  if (! v)
-    return v.error();
-
-  e = visit(expr::hoister{}, e);
-
-  return nothing;
 }
 
 namespace detail {

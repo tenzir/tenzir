@@ -1,4 +1,8 @@
 #include "vast/bitmap_index_polymorphic.h"
+#include "vast/concept/parseable/to.h"
+#include "vast/concept/parseable/vast/address.h"
+#include "vast/concept/parseable/vast/subnet.h"
+#include "vast/concept/parseable/vast/time.h"
 #include "vast/concept/serializable/bitmap_index_polymorphic.h"
 #include "vast/concept/serializable/io.h"
 #include "vast/util/convert.h"
@@ -137,36 +141,36 @@ TEST(time point)
 {
   arithmetic_bitmap_index<null_bitstream, time::point> bmi;
 
-  auto t = to<time::point>("2014-01-16+05:30:15", time::point::format);
+  auto t = to<time::point>("2014-01-16+05:30:15");
   REQUIRE(t);
   CHECK(bmi.push_back(*t));
-  t = to<time::point>("2014-01-16+05:30:12", time::point::format);
+  t = to<time::point>("2014-01-16+05:30:12");
   REQUIRE(t);
   CHECK(bmi.push_back(*t));
-  t = to<time::point>("2014-01-16+05:30:15", time::point::format);
+  t = to<time::point>("2014-01-16+05:30:15");
   REQUIRE(t);
   CHECK(bmi.push_back(*t));
-  t = to<time::point>("2014-01-16+05:30:18", time::point::format);
+  t = to<time::point>("2014-01-16+05:30:18");
   REQUIRE(t);
   CHECK(bmi.push_back(*t));
-  t = to<time::point>("2014-01-16+05:30:15", time::point::format);
+  t = to<time::point>("2014-01-16+05:30:15");
   REQUIRE(t);
   CHECK(bmi.push_back(*t));
-  t = to<time::point>("2014-01-16+05:30:19", time::point::format);
+  t = to<time::point>("2014-01-16+05:30:19");
   REQUIRE(t);
   CHECK(bmi.push_back(*t));
 
-  t = to<time::point>("2014-01-16+05:30:15", time::point::format);
+  t = to<time::point>("2014-01-16+05:30:15");
   REQUIRE(t);
   auto fifteen = bmi.lookup(equal, *t);
   CHECK(to_string(*fifteen) == "101010");
 
-  t = to<time::point>("2014-01-16+05:30:20", time::point::format);
+  t = to<time::point>("2014-01-16+05:30:20");
   REQUIRE(t);
   auto twenty = bmi.lookup(less, *t);
   CHECK(to_string(*twenty) == "111111");
 
-  t = to<time::point>("2014-01-16+05:30:18", time::point::format);
+  t = to<time::point>("2014-01-16+05:30:18");
   REQUIRE(t);
   auto eighteen = bmi.lookup(greater_equal, *t);
   CHECK(to_string(*eighteen) == "000101");
@@ -378,9 +382,8 @@ TEST(container)
   r.append(4, false);
   CHECK(*bmi.lookup(in, "not") == r);
 
-  auto strings = to<vector>("[you won't believe it]", type::string{}, " ");
-  REQUIRE(strings);
-  CHECK(bmi.push_back(*strings));
+  auto strings = vector{"you", "won't", "believe", "it"};
+  CHECK(bmi.push_back(strings));
 
   MESSAGE("serialization");
   std::vector<uint8_t> buf;

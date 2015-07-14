@@ -1,8 +1,9 @@
-#ifndef VAST_DETAIL_PARSER_ESCAPED_STRING_H
-#define VAST_DETAIL_PARSER_ESCAPED_STRING_H
+#ifndef VAST_CONCEPT_PARSEABLE_VAST_DETAIL_ESCAPED_STRING_H
+#define VAST_CONCEPT_PARSEABLE_VAST_DETAIL_ESCAPED_STRING_H
 
 #include <string>
-#include "vast/detail/parser/boost.h"
+
+#include "vast/concept/parseable/vast/detail/boost.h"
 
 namespace vast {
 namespace detail {

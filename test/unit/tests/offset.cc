@@ -1,4 +1,6 @@
 #include "vast/offset.h"
+#include "vast/concept/parseable/to.h"
+#include "vast/concept/parseable/vast/offset.h"
 
 #include "test.h"
 
@@ -14,9 +16,7 @@ TEST(offset printing)
 
 TEST(offset parsing)
 {
-  auto str = std::string{"0,4,8,12"};
-  auto lval = str.begin();
-  auto o = parse<offset>(lval, str.end());
+  auto o = to<offset>("0,4,8,12");
   CHECK(o);
   CHECK(*o == offset({0,4,8,12}));
 }

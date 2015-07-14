@@ -100,10 +100,9 @@ set(tests
   tests/json.cc
   tests/logging.cc
   tests/offset.cc
-  tests/parse.cc
+  tests/parseable.cc
   tests/parse_bro.cc
   tests/parse_data.cc
-  tests/parse_value.cc
   tests/parse_vast.cc
   tests/print.cc
   tests/range_map.cc

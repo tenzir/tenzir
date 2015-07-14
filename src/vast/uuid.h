@@ -3,6 +3,7 @@
 
 #include <array>
 #include <functional>
+
 #include "vast/fwd.h"
 #include "vast/trial.h"
 #include "vast/util/coding.h"
@@ -16,10 +17,10 @@ class uuid : util::totally_ordered<uuid>
 
 public:
   using value_type = uint8_t;
-  using reference = uint8_t&;
-  using const_reference = uint8_t const&;
-  using iterator = uint8_t*;
-  using const_iterator = uint8_t const*;
+  using reference = value_type&;
+  using const_reference = value_type const&;
+  using iterator = value_type*;
+  using const_iterator = value_type const*;
   using size_type = size_t;
 
   static uuid random();
@@ -46,59 +47,6 @@ public:
       if (i == 3 || i == 5 || i == 7 || i == 9)
         *out++ = '-';
     }
-
-    return nothing;
-  }
-
-  template <typename Iterator>
-  friend trial<void> parse(uuid& u, Iterator& begin, Iterator)
-  {
-    auto c = *begin++;
-    auto braced = false;
-    if (c == '{')
-    {
-      braced = true;
-      c = *begin++;
-    }
-
-    auto with_dashes = false;
-    auto i = 0;
-    for (auto& byte : u)
-    {
-      if (i != 0)
-        c = *begin++;
-
-      if (i == 4 && c == '-')
-      {
-        with_dashes = true;
-        c = *begin++;
-      }
-
-      if (with_dashes)
-      {
-        if (i == 6 || i == 8 || i == 10)
-        {
-          if (c == '-')
-            c = *begin++;
-          else
-            return error{"invalid dashes in UUID string"};
-        }
-      }
-
-      byte = lookup(c);
-      c = *begin++;
-      byte <<= 4;
-      byte |= lookup(c);
-      ++i;
-    }
-
-    if (braced)
-    {
-      c = *begin++;
-      if (c == '}')
-        return error{"missing closing brace in UUID string"};
-    }
-
     return nothing;
   }
 
@@ -106,17 +54,7 @@ public:
   friend bool operator<(uuid const& x, uuid const& y);
 
 private:
-  static uint8_t lookup(char c)
-  {
-    static constexpr auto digits = "0123456789abcdefABCDEF";
-    static constexpr uint8_t values[] = {
-      0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,10,11,12,13,14,15, 0xff
-    };
-    // TODO: use a static table as opposed to searching in the vector.
-    return values[std::find(digits, digits + 22, c) - digits];
-  }
-
-  std::array<uint8_t, 16> id_;
+  std::array<value_type, 16> id_;
 };
 
 } // namespace vast
