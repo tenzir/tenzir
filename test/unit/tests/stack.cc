@@ -53,4 +53,10 @@ TEST(stack vector)
   REQUIRE(v.size() == 6);
   CHECK(v[0] == 4);
   CHECK(v[5] == 9);
+
+  MESSAGE("insertion at end");
+  v.clear();
+  v.insert(v.end(), 42);
+  REQUIRE(v.size() == 1);
+  CHECK(v.front() == 42);
 }

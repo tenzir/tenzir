@@ -5,7 +5,6 @@
 #include <cstring>
 #include <string>
 #include "vast/fwd.h"
-#include "vast/parse.h"
 #include "vast/print.h"
 #include "vast/util/operators.h"
 
@@ -55,39 +54,7 @@ public:
   /// @param t The new port type.
   void type(port_type t);
 
-  template <typename Iterator>
-  friend trial<void> parse(port& prt, Iterator& begin, Iterator end)
-  {
-    // Longest port: 42000/unknown = 5 + 1 + 7 = 13 bytes plus NUL.
-    char buf[16];
-    auto p = buf;
-    while (*begin != '/' && std::isdigit(*begin) && begin != end
-           && p - buf < 16)
-      *p++ = *begin++;
-
-    auto lval = buf;
-    auto t = parse_positive_decimal(prt.number_, lval, p);
-    if (! t)
-      return t.error();
-
-    if (begin == end || *begin++ != '/')
-      return nothing;
-
-    p = buf;
-    while (begin != end && p < &buf[7])
-      *p++ = *begin++;
-    *p = '\0';
-
-    if (! std::strncmp(buf, "tcp", 3))
-      prt.type_ = port::tcp;
-    else if (! std::strncmp(buf, "udp", 3))
-      prt.type_ = port::udp;
-    else if (! std::strncmp(buf, "icmp", 4))
-      prt.type_ = port::icmp;
-
-    return nothing;
-  }
-
+  // TODO: Migrate to concepts location.
   template <typename Iterator>
   friend trial<void> print(port const& p, Iterator&& out)
   {
@@ -115,6 +82,7 @@ private:
   port_type type_ = unknown;
 };
 
+// TODO: Migrate to concepts location.
 trial<void> convert(port const& p, util::json& j);
 
 } // namespace vast

@@ -1,8 +1,9 @@
 #include <unordered_set>
 
 #include "vast/uuid.h"
+#include "vast/concept/parseable/to.h"
+#include "vast/concept/parseable/vast/uuid.h"
 #include "vast/print.h"
-#include "vast/parse.h"
 
 #include "test.h"
 

@@ -6,7 +6,6 @@
 
 #include "vast/fwd.h"
 #include "vast/convert.h"
-#include "vast/parse.h"
 #include "vast/print.h"
 #include "vast/util/operators.h"
 
@@ -265,6 +264,8 @@ void propagate(std::tm &t);
 /// @returns The `std::tm` structure corresponding to *str*.
 std::tm to_tm(std::string const& str, char const* fmt, char const* locale);
 
+// TODO: migrate functions below to concepts location.
+
 //
 // Concepts
 //
@@ -319,75 +320,6 @@ trial<void> print(point p, Iterator&& out, char const* fmt = point::format)
     return print(str, out);
   else
     return t.error();
-}
-
-template <typename Iterator>
-trial<void> parse(duration& dur, Iterator& begin, Iterator end)
-{
-  bool is_double;
-  auto d = util::parse<double>(begin, end, &is_double);
-  if (! d)
-    return d.error();
-  if (is_double)
-  {
-    dur = fractional(*d);
-    return nothing;
-  }
-  duration::rep i = *d;
-  if (begin == end)
-  {
-    dur = seconds(i);
-    return nothing;
-  }
-  switch (*begin++)
-  {
-    default:
-      return error{"invalid unit: ", *begin};
-    case 'n':
-      if (begin != end && *begin++ == 's')
-        dur = nanoseconds(i);
-      break;
-    case 'u':
-      if (begin != end && *begin++ == 's')
-        dur = microseconds(i);
-      break;
-    case 'm':
-      if (begin != end && *begin++ == 's')
-        dur = milliseconds(i);
-      else
-        dur = minutes(i);
-      break;
-    case 's':
-      dur = seconds(i);
-      break;
-    case 'h':
-      dur = hours(i);
-      break;
-  }
-  return nothing;
-}
-
-template <typename Iterator>
-trial<void> parse(point& p, Iterator& begin, Iterator end,
-                  char const* fmt = nullptr,
-                  char const* locale = nullptr)
-{
-  if (fmt)
-  {
-    std::string str{begin, end};
-    begin = end;
-    p = std::chrono::system_clock::from_time_t(
-        to_time_t(to_tm(str, fmt, locale)));
-  }
-  else
-  {
-    duration d;
-    auto t = parse(d, begin, end);
-    if (! t)
-      return t.error();
-    p = d;
-  }
-  return nothing;
 }
 
 } // namespace time

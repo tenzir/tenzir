@@ -63,11 +63,9 @@ trial<void> convert(value const& v, util::json& j)
 {
   util::json::object o;
   o["type"] = to_string(v.type());
-
   auto t = convert(v.data(), o["data"]);
   if (! t)
     return t.error();
-
   j = std::move(o);
   return nothing;
 }

@@ -44,7 +44,9 @@ set(libvast_sources
   actor/source/bgpdump.cc
   actor/source/test.cc
   concept/serializable/hierarchy.cc
-  detail/ast/query.cc
+  concept/parseable/vast/detail/to_expression.cc
+  concept/parseable/vast/detail/to_schema.cc
+  concept/parseable/vast/detail/query_ast.cc
   expr/evaluator.cc
   expr/normalize.cc
   expr/predicatizer.cc

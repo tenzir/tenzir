@@ -22,11 +22,6 @@ public:
   result<event> extract();
 
 private:
-  std::string separator_ = "|";
-  std::string set_separator_;
-  std::string empty_field_;
-  std::string unset_field_;
-
   type announce_type_;
   type route_type_;
   type withdraw_type_;

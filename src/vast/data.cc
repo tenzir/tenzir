@@ -57,16 +57,13 @@ data const* record::at(offset const& o) const
     auto& idx = o[i];
     if (idx >= r->size())
       return nullptr;
-
     auto v = &(*r)[idx];
     if (i + 1 == o.size())
       return v;
-
     r = get<record>(*v);
     if (! r)
       return nullptr;
   }
-
   return nullptr;
 }
 
@@ -76,12 +73,10 @@ trial<record> record::unflatten(type::record const& t) const
   size_t depth = 1;
   record result;
   record* r = &result;
-
   for (auto& e : type::record::each{t})
   {
     if (i == end())
       return error{"not enough data"};
-
     if (e.depth() > depth)
     {
       for (size_t j = 0; j < e.depth() - depth; ++j)
@@ -98,14 +93,12 @@ trial<record> record::unflatten(type::record const& t) const
       for (size_t j = 0; j < depth - 1; ++j)
         r = get<record>(r->back());
     }
-
     auto& field_type = e.trace.back()->type;
     if (is<none>(*i) || field_type.check(*i))
       r->push_back(*i++);
     else
       return error{"data/type mismatch: ", *i, '/', field_type};
   }
-
   return std::move(result);
 }
 
@@ -289,10 +282,8 @@ trial<void> convert(vector const& v, util::json& j)
     auto t = visit(json_converter{j}, x);
     if (! t)
       return t.error();
-
     values.push_back(std::move(j));
   };
-
   j = std::move(values);
   return nothing;
 }
@@ -306,10 +297,8 @@ trial<void> convert(set const& s, util::json& j)
     auto t = visit(json_converter{j}, x);
     if (! t)
       return t.error();
-
     values.push_back(std::move(j));
   };
-
   j = std::move(values);
   return nothing;
 }
@@ -320,22 +309,17 @@ trial<void> convert(table const& t, util::json& j)
   for (auto& p : t)
   {
     util::json::array a;
-
     util::json j;
     auto r = visit(json_converter{j}, p.first);
     if (! r)
       return r.error();
-
     a.push_back(std::move(j));
-
     r = visit(json_converter{j}, p.second);
     if (! r)
       return r.error();
-
     a.push_back(std::move(j));
     values.emplace_back(std::move(a));
   };
-
   j = std::move(values);
   return nothing;
 }
@@ -349,10 +333,8 @@ trial<void> convert(record const& r, util::json& j)
     auto t = visit(json_converter{j}, x);
     if (! t)
       return t.error();
-
     values.push_back(std::move(j));
   };
-
   j = std::move(values);
   return nothing;
 }

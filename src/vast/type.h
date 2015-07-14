@@ -22,9 +22,6 @@
 
 namespace vast {
 
-struct key;
-struct offset;
-
 class address;
 class subnet;
 class pattern;

@@ -222,8 +222,7 @@ enum class hell : int
 
 } // namespace <anonymous>
 
-
-TEST(variant custom tag)
+TEST(custom tag)
 {
   using custom_variant = util::basic_variant<hell, int, std::string>;
   custom_variant v(42);
@@ -268,7 +267,7 @@ protected:
 
 } // namespace <anonymous>
 
-TEST(variant concept)
+TEST(concept)
 {
   concept c;
 
@@ -279,3 +278,19 @@ TEST(variant concept)
   auto r = visit([](auto x) -> bool { return !! x; }, c);
   CHECK(! r);
 }
+
+static_assert(
+  std::is_same<
+    util::make_variant_over<util::type_list<char, int, float>>,
+    util::variant<char, int, float>
+  >{},
+  "make_variant_over()"
+);
+
+static_assert(
+  std::is_same<
+    util::make_basic_variant_over<int, util::type_list<char, float>>,
+    util::basic_variant<int, char, float>
+  >{},
+  "make_basic_variant_over()"
+);

@@ -94,38 +94,11 @@ private:
   vast::type type_;
 };
 
+// TODO: Migrate to concepts location.
 template <typename Iterator>
 trial<void> print(value const& v, Iterator&& out)
 {
   return print(v.data(), out);
-}
-
-template <typename Iterator>
-trial<void> parse(value& v, Iterator& begin, Iterator end,
-                  type t = {},
-                  std::string const& set_sep = ", ",
-                  std::string const& set_left = "{",
-                  std::string const& set_right = "}",
-                  std::string const& vec_sep = ", ",
-                  std::string const& vec_left = "[",
-                  std::string const& vec_right = "]",
-                  std::string const& rec_sep = ", ",
-                  std::string const& rec_left = "(",
-                  std::string const& rec_right = ")",
-                  std::string const& esc = "\\")
-{
-  data d;
-  auto p = parse(d, begin, end, t,
-                 set_sep, set_left, set_right,
-                 vec_sep, vec_left, vec_right,
-                 rec_sep, rec_left, rec_right,
-                 esc);
-  if (! p)
-    return p;
-
-  v = {std::move(d), std::move(t)};
-
-  return nothing;
 }
 
 trial<void> convert(value const& v, util::json& j);

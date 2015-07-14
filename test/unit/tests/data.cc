@@ -1,4 +1,7 @@
 #include "vast/data.h"
+#include "vast/concept/parseable/to.h"
+#include "vast/concept/parseable/vast/address.h"
+#include "vast/concept/parseable/vast/subnet.h"
 #include "vast/concept/serializable/data.h"
 #include "vast/concept/serializable/io.h"
 
@@ -7,7 +10,7 @@
 
 using namespace vast;
 
-TEST(time_point)
+TEST(time::point)
 {
   auto t = time::point::utc(2012, 8, 12, 23, 55, 4);
 
@@ -92,13 +95,6 @@ TEST(time_point)
   str = to<std::string>(u, "%H:%M:%S");
   REQUIRE(str);
   CHECK(*str == "23:55:04");
-
-  auto d = to<data>("@1398933902.686337s");
-  REQUIRE(d);
-  auto tp = get<time::point>(*d);
-  REQUIRE(tp);
-  CHECK(*tp == time::fractional(1398933902.686337));
-  CHECK(to_string(*tp) == "2014-05-01+08:45:02");
 }
 
 TEST(patterns)
@@ -127,7 +123,7 @@ TEST(patterns)
   CHECK(to_string(p) == "/(\\w+ )/");
 }
 
-TEST(addresses_IPv4)
+TEST(addresses IPv4)
 {
   address x;
   address y;
@@ -172,7 +168,7 @@ TEST(addresses_IPv4)
   CHECK(to_string(b) == "192.168.0.171");
 }
 
-TEST(addresses_IPv6)
+TEST(addresses IPv6)
 {
   CHECK(address() == *to<address>("::"));
 
@@ -262,6 +258,24 @@ TEST(ports)
 
   CHECK(p != q);
   CHECK(p < q);
+}
+
+TEST(vector)
+{
+  auto v = std::vector<data>{-42, 42, 84};
+  CHECK(v[0] == -42);
+  auto u = vector{std::move(v)};
+  CHECK(u[0] == -42);
+}
+
+TEST(set)
+{
+  auto v = std::vector<data>{1, 2, 3};
+  auto fs = util::flat_set<data>{"a", "b", "c"};
+  auto s = set{v};
+  CHECK(s[0] == 1);
+  s = set{fs};
+  CHECK(s[1] == "b");
 }
 
 TEST(tables)
@@ -401,8 +415,8 @@ TEST(predicate_evaluation)
   CHECK(data::evaluate(lhs, not_equal, rhs));
   CHECK(! data::evaluate(lhs, equal, rhs));
 
-  lhs = *to<data>("10.0.0.1");
-  rhs = *to<data>("10.0.0.0/8");
+  lhs = *to<address>("10.0.0.1");
+  rhs = *to<subnet>("10.0.0.0/8");
   CHECK(data::evaluate(lhs, in, rhs));
 
   rhs = real{4.2};

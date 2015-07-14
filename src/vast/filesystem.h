@@ -11,7 +11,6 @@
 #include <string>
 #include <vector>
 #include "vast/fwd.h"
-#include "vast/parse.h"
 #include "vast/print.h"
 #include "vast/trial.h"
 #include "vast/util/iterator.h"
@@ -135,6 +134,7 @@ public:
   friend bool operator==(path const& x, path const& y);
   friend bool operator<(path const& x, path const& y);
 
+  // TODO: migrate to concepts location
   template <typename Iterator>
   friend trial<void> print(path const& p, Iterator&& out)
   {
@@ -321,19 +321,6 @@ void traverse(path const& p, std::function<bool(path const&)> f);
 // @param p The path of the file to load.
 // @returns The contents of the file *p*.
 trial<std::string> load_contents(path const& p);
-
-// Loads file contents and attempts to parse them as a specific type.
-// @param p The path of the file to load.
-// @param opts Options to the parsing function of *T*.
-template <typename T, typename... Opts>
-trial<T> load_and_parse(path const& p, Opts&&... opts)
-{
-  auto t = load_contents(p);
-  if (! t)
-    return t.error();
-  auto first = t->begin();
-  return parse<T>(first, t->end(), std::forward<Opts>(opts)...);
-}
 
 } // namespace vast
 

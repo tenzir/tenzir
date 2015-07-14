@@ -30,7 +30,7 @@ TEST(index)
 
   MESSAGE("reloading index and running a query against it");
   idx = self->spawn<vast::index, priority_aware>(dir, 500, 2, 3);
-  auto expr = to<expression>("c >= 42 && c < 84");
+  auto expr = vast::detail::to_expression("c >= 42 && c < 84");
   REQUIRE(expr);
   actor task;
   self->send(idx, *expr, historical, self);
@@ -61,7 +61,8 @@ TEST(index)
   CHECK(hits.count() == 42);
 
   MESSAGE("creating a continuous query");
-  expr = to<expression>("s ni \"7\"");  // Must be normalized at this point.
+  // The expression must have already been normalized as it hits the index.
+  expr = vast::detail::to_expression("s ni \"7\"");
   REQUIRE(expr);
   self->send(idx, *expr, continuous, self);
   self->receive(

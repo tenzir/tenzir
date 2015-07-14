@@ -5,6 +5,8 @@
 #include "vast/actor/partition.h"
 #include "vast/actor/task.h"
 #include "vast/expr/predicatizer.h"
+#include "vast/concept/parseable/numeric/integral.h"
+#include "vast/concept/parseable/to.h"
 #include "vast/concept/serializable/schema.h"
 #include "vast/concept/serializable/io.h"
 #include "vast/util/assert.h"

@@ -1,5 +1,9 @@
 #include "vast/event.h"
 #include "vast/actor/source/test.h"
+#include "vast/concept/parseable/core.h"
+#include "vast/concept/parseable/numeric/real.h"
+#include "vast/concept/parseable/string/char_class.h"
+#include "vast/concept/parseable/vast/detail/to_schema.h"
 #include "vast/util/assert.h"
 #include "vast/util/meta.h"
 #include "vast/util/hash/murmur.h"
@@ -14,24 +18,13 @@ result<distribution> make_distribution(type const& t)
   auto a = t.find_attribute(type::attribute::default_);
   if (! a)
     return {};
-
-  auto lparen = a->value.find('(');
-  auto rparen = a->value.find(')', lparen);
-  if (lparen == std::string::npos || rparen == std::string::npos)
-    return error{"invalid parenthesis"};
-
-  auto name = a->value.substr(0, lparen);
-  auto parms = a->value.substr(lparen, rparen - lparen + 1);
-  auto v = to<vector>(parms, type::real{}, ",", "(", ")");
-  if (! v)
-    return v.error();
-
-  if (v->size() != 2)
-    return error{"all distributions require two parameters"};
-
-  auto p0 = *get<real>((*v)[0]);
-  auto p1 = *get<real>((*v)[1]);
-
+  static auto num = parsers::real_opt_dot;
+  static auto param_parser = +parsers::alpha >> '(' >> num >> ',' >> num >> ')';
+  std::string name;
+  double p0, p1;
+  auto tie = std::tie(name, p0, p1);
+  if (! param_parser(a->value, tie))
+    return error{"invalid distribution specification"};
   if (name == "uniform")
   {
     if (is<type::integer>(t))
@@ -43,13 +36,10 @@ result<distribution> make_distribution(type const& t)
     else
       return {std::uniform_real_distribution<long double>{p0, p1}};
   }
-
   if (name == "normal")
     return {std::normal_distribution<long double>{p0, p1}};
-
   if (name == "pareto")
     return {util::pareto_distribution<long double>{p0, p1}};
-
   return error{"unknown distribution: ", name};
 }
 
@@ -252,7 +242,7 @@ test::test(event_id id, uint64_t events)
       p: port &default="uniform(1,65384)"
     }
   )schema";
-  auto t = to<schema>(builtin_schema);
+  auto t = detail::to_schema(builtin_schema);
   VAST_ASSERT(t);
   set(*t);
 }

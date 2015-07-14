@@ -1,4 +1,8 @@
 #include "vast/bitmap_index_polymorphic.h"
+#include "vast/concept/parseable/to.h"
+#include "vast/concept/parseable/vast/address.h"
+#include "vast/concept/parseable/vast/subnet.h"
+#include "vast/concept/parseable/vast/time.h"
 #include "vast/concept/serializable/bitmap_index_polymorphic.h"
 #include "vast/concept/serializable/io.h"
 #include "vast/util/convert.h"
@@ -137,36 +141,36 @@ TEST(time point)
 {
   arithmetic_bitmap_index<null_bitstream, time::point> bmi;
 
-  auto t = to<time::point>("2014-01-16+05:30:15", time::point::format);
+  auto t = to<time::point>("2014-01-16+05:30:15");
   REQUIRE(t);
   CHECK(bmi.push_back(*t));
-  t = to<time::point>("2014-01-16+05:30:12", time::point::format);
+  t = to<time::point>("2014-01-16+05:30:12");
   REQUIRE(t);
   CHECK(bmi.push_back(*t));
-  t = to<time::point>("2014-01-16+05:30:15", time::point::format);
+  t = to<time::point>("2014-01-16+05:30:15");
   REQUIRE(t);
   CHECK(bmi.push_back(*t));
-  t = to<time::point>("2014-01-16+05:30:18", time::point::format);
+  t = to<time::point>("2014-01-16+05:30:18");
   REQUIRE(t);
   CHECK(bmi.push_back(*t));
-  t = to<time::point>("2014-01-16+05:30:15", time::point::format);
+  t = to<time::point>("2014-01-16+05:30:15");
   REQUIRE(t);
   CHECK(bmi.push_back(*t));
-  t = to<time::point>("2014-01-16+05:30:19", time::point::format);
+  t = to<time::point>("2014-01-16+05:30:19");
   REQUIRE(t);
   CHECK(bmi.push_back(*t));
 
-  t = to<time::point>("2014-01-16+05:30:15", time::point::format);
+  t = to<time::point>("2014-01-16+05:30:15");
   REQUIRE(t);
   auto fifteen = bmi.lookup(equal, *t);
   CHECK(to_string(*fifteen) == "101010");
 
-  t = to<time::point>("2014-01-16+05:30:20", time::point::format);
+  t = to<time::point>("2014-01-16+05:30:20");
   REQUIRE(t);
   auto twenty = bmi.lookup(less, *t);
   CHECK(to_string(*twenty) == "111111");
 
-  t = to<time::point>("2014-01-16+05:30:18", time::point::format);
+  t = to<time::point>("2014-01-16+05:30:18");
   REQUIRE(t);
   auto eighteen = bmi.lookup(greater_equal, *t);
   CHECK(to_string(*eighteen) == "000101");
@@ -229,48 +233,47 @@ TEST(string)
 TEST(address)
 {
   address_bitmap_index<null_bitstream> bmi;
-
-  CHECK(bmi.push_back(*address::from_v4("192.168.0.1")));
-  CHECK(bmi.push_back(*address::from_v4("192.168.0.2")));
-  CHECK(bmi.push_back(*address::from_v4("192.168.0.3")));
-  CHECK(bmi.push_back(*address::from_v4("192.168.0.1")));
-  CHECK(bmi.push_back(*address::from_v4("192.168.0.1")));
-  CHECK(bmi.push_back(*address::from_v4("192.168.0.2")));
-  CHECK(! bmi.lookup(match, *address::from_v6("::"))); // Invalid operator
+  CHECK(bmi.push_back(*to<address>("192.168.0.1")));
+  CHECK(bmi.push_back(*to<address>("192.168.0.2")));
+  CHECK(bmi.push_back(*to<address>("192.168.0.3")));
+  CHECK(bmi.push_back(*to<address>("192.168.0.1")));
+  CHECK(bmi.push_back(*to<address>("192.168.0.1")));
+  CHECK(bmi.push_back(*to<address>("192.168.0.2")));
 
   MESSAGE("address equality");
-  auto addr = *address::from_v4("192.168.0.1");
+  auto addr = *to<address>("192.168.0.1");
   auto bs = bmi.lookup(equal, addr);
   REQUIRE(bs);
   CHECK(to_string(*bs) == "100110");
   bs = bmi.lookup(not_equal, addr);
   CHECK(to_string(*bs) == "011001");
-  addr = *address::from_v4("192.168.0.5");
+  addr = *to<address>("192.168.0.5");
   CHECK(to_string(*bmi.lookup(equal, addr)) == "000000");
+  CHECK(! bmi.lookup(match, *to<address>("::"))); // Invalid operator
 
-  bmi.push_back(*address::from_v4("192.168.0.128"));
-  bmi.push_back(*address::from_v4("192.168.0.130"));
-  bmi.push_back(*address::from_v4("192.168.0.240"));
-  bmi.push_back(*address::from_v4("192.168.0.127"));
-  bmi.push_back(*address::from_v4("192.168.0.33"));
+  bmi.push_back(*to<address>("192.168.0.128"));
+  bmi.push_back(*to<address>("192.168.0.130"));
+  bmi.push_back(*to<address>("192.168.0.240"));
+  bmi.push_back(*to<address>("192.168.0.127"));
+  bmi.push_back(*to<address>("192.168.0.33"));
 
   MESSAGE("prefix membership");
-  auto sub = subnet{*address::from_v4("192.168.0.128"), 25};
+  auto sub = subnet{*to<address>("192.168.0.128"), 25};
   bs = bmi.lookup(in, sub);
   REQUIRE(bs);
   CHECK(to_string(*bs) == "00000011100");
   bs = bmi.lookup(not_in, sub);
   REQUIRE(bs);
   CHECK(to_string(*bs) == "11111100011");
-  sub = {*address::from_v4("192.168.0.0"), 24};
+  sub = {*to<address>("192.168.0.0"), 24};
   bs = bmi.lookup(in, sub);
   REQUIRE(bs);
   CHECK(to_string(*bs) == "11111111111");
-  sub = {*address::from_v4("192.168.0.0"), 20};
+  sub = {*to<address>("192.168.0.0"), 20};
   bs = bmi.lookup(in, sub);
   REQUIRE(bs);
   CHECK(to_string(*bs) == "11111111111");
-  sub = {*address::from_v4("192.168.0.64"), 26};
+  sub = {*to<address>("192.168.0.64"), 26};
   bs = bmi.lookup(not_in, sub);
   REQUIRE(bs);
   CHECK(to_string(*bs) == "11111111101");
@@ -379,9 +382,8 @@ TEST(container)
   r.append(4, false);
   CHECK(*bmi.lookup(in, "not") == r);
 
-  auto strings = to<vector>("[you won't believe it]", type::string{}, " ");
-  REQUIRE(strings);
-  CHECK(bmi.push_back(*strings));
+  auto strings = vector{"you", "won't", "believe", "it"};
+  CHECK(bmi.push_back(strings));
 
   MESSAGE("serialization");
   std::vector<uint8_t> buf;

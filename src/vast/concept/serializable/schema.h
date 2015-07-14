@@ -4,6 +4,8 @@
 #include <iostream>
 #include "vast/schema.h"
 #include "vast/concept/serializable/std/string.h"
+#include "vast/concept/parseable/core/parse.h"
+#include "vast/concept/parseable/vast/schema.h"
 
 namespace vast {
 
@@ -26,7 +28,7 @@ void deserialize(Deserializer& source, schema& sch)
     return;
   sch.clear();
   auto i = str.begin();
-  parse(sch, i, str.end());
+  parse(i, str.end(), sch);
 }
 
 } // namespace vast

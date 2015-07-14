@@ -8,6 +8,9 @@
 #include "vast/concept/serializable/bitmap_index.h"
 #include "vast/concept/serializable/chunk.h"
 #include "vast/concept/serializable/io.h"
+#include "vast/concept/parseable/to.h"
+#include "vast/concept/parseable/vast/address.h"
+#include "vast/concept/parseable/vast/port.h"
 
 #define SUITE actors
 #include "test.h"

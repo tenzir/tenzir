@@ -1,4 +1,7 @@
 #include "vast/actor/source/bgpdump.h"
+#include "vast/concept/parseable/to.h"
+#include "vast/concept/parseable/vast/address.h"
+#include "vast/concept/parseable/vast/subnet.h"
 #include "vast/io/file_stream.h"
 
 #define SUITE actors
