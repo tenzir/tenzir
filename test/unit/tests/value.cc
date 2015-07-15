@@ -129,11 +129,11 @@ TEST(JSON)
   util::json j;
   CHECK(convert(v, j));
   auto str = R"json({
-  "data": [
-    "53\/udp",
-    -42,
-    4.2
-  ],
+  "data": {
+    "bar": -42,
+    "baz": 4.2,
+    "foo": "53\/udp"
+  },
   "type": "record {foo: port, bar: int, baz: real}"
 })json";
   CHECK(to_string(j, true) == str);
