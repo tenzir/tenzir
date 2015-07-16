@@ -4,7 +4,7 @@
 #include <type_traits>
 
 #include "vast/trial.h"
-#include "vast/concept/parseable/core/parse.h"
+#include "vast/concept/parseable/parse.h"
 
 namespace vast {
 

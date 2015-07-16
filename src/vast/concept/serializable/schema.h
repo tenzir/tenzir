@@ -4,7 +4,7 @@
 #include <iostream>
 #include "vast/schema.h"
 #include "vast/concept/serializable/std/string.h"
-#include "vast/concept/parseable/core/parse.h"
+#include "vast/concept/parseable/parse.h"
 #include "vast/concept/parseable/vast/schema.h"
 
 namespace vast {
