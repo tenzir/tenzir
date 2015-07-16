@@ -91,7 +91,7 @@ struct expression_factory
       }
       auto t = to<key>(str);
       if (! t)
-        return t.error();
+        return error{"failed to parse key"};
       return {schema_extractor{std::move(*t)}};
     };
 

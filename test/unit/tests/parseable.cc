@@ -4,6 +4,7 @@
 #include "vast/concept/parseable/numeric.h"
 #include "vast/concept/parseable/string.h"
 #include "vast/concept/parseable/stream.h"
+#include "vast/concept/parseable/to.h"
 #include "vast/concept/parseable/vast/key.h"
 
 #define SUITE parseable
@@ -358,4 +359,11 @@ TEST(stream)
   ss >> k;
   CHECK(ss.good());
   CHECK(k == key{"a", "b", "c"});
+}
+
+TEST(to)
+{
+  auto k = to<key>("a.b.c"); // John!
+  REQUIRE(k);
+  CHECK(*k == key{"a", "b", "c"});
 }
