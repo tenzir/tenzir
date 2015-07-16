@@ -4,7 +4,7 @@
 #include <type_traits>
 #include <iterator>
 
-#include "vast/concept/parseable/core/unused_type.h"
+#include "vast/concept/support/unused_type.h"
 
 namespace vast {
 
