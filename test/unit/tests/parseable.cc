@@ -1,6 +1,10 @@
+#include <sstream>
+
 #include "vast/concept/parseable/core.h"
 #include "vast/concept/parseable/numeric.h"
 #include "vast/concept/parseable/string.h"
+#include "vast/concept/parseable/stream.h"
+#include "vast/concept/parseable/vast/key.h"
 
 #define SUITE parseable
 #include "test.h"
@@ -345,4 +349,13 @@ TEST(recursive rule)
   CHECK(r.parse(f, l, c));
   CHECK(f == l);
   CHECK(c == 'x');
+}
+
+TEST(stream)
+{
+  std::istringstream ss{"a.b.c"};
+  key k;
+  ss >> k;
+  CHECK(ss.good());
+  CHECK(k == key{"a", "b", "c"});
 }
