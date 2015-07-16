@@ -10,7 +10,7 @@ namespace util {
 using none = caf::none_t;
 
 /// The only instance of ::none.
-static constexpr auto nil = caf::none;
+constexpr auto nil = none{};
 
 inline bool operator<(none const&, none const&)
 {

@@ -2,6 +2,7 @@
 #define VAST_TRIAL_H
 
 #include "vast/error.h"
+#include "vast/none.h"
 #include "vast/util/trial.h"
 
 namespace vast {

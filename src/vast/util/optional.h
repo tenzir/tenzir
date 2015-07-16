@@ -3,6 +3,8 @@
 
 #include <caf/optional.hpp>
 
+#include "vast/util/none.h"
+
 namespace vast {
 namespace util {
 
