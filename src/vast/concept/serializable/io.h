@@ -3,6 +3,7 @@
 
 #include "vast/concept/serializable/binary_serializer.h"
 #include "vast/concept/serializable/binary_deserializer.h"
+#include "vast/concept/printable/vast/filesystem.h"
 #include "vast/io/container_stream.h"
 #include "vast/io/compressed_stream.h"
 #include "vast/io/file_stream.h"

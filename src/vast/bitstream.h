@@ -443,13 +443,6 @@ private:
   bitvector bits_;
 
 private:
-  template <typename Iterator>
-  friend trial<void> print(null_bitstream const& bs, Iterator&& out)
-  {
-    // We print NULL bitstreams from LSB to MSB to underline the stream
-    // character.
-    return print(bs.bits(), out, false, false, 0);
-  }
 };
 
 /// A bitstream encoded with the *Enhanced World-Aligned Hybrid (EWAH)*
@@ -539,35 +532,6 @@ public:
   ewah_bitstream(ewah_bitstream&&) = default;
   ewah_bitstream& operator=(ewah_bitstream const&) = default;
   ewah_bitstream& operator=(ewah_bitstream&&) = default;
-
-  template <typename Iterator>
-  friend trial<void> print(ewah_bitstream const& bs, Iterator&& out)
-  {
-    for (size_t i = 0; i < bs.bits_.blocks(); ++i)
-    {
-      if (i != bs.bits_.blocks() - 1)
-      {
-        if (! bitvector::print(out, bs.bits_.block(i)))
-          return error{"failed to print block ", i};
-
-        *out++ = '\n';
-      }
-      else
-      {
-        auto remaining = bs.num_bits_ % block_width;
-        if (remaining == 0)
-          remaining = block_width;
-
-        for (size_t i = 0; i < block_width - remaining; ++i)
-          *out++ = ' ';
-
-        if (! bitvector::print(out, bs.bits_.block(i), true, 0, remaining))
-          return error{"failed to print block ", i};
-      }
-    }
-
-    return nothing;
-  }
 
 private:
   bool equals(ewah_bitstream const& other) const;
@@ -831,67 +795,6 @@ Bitstream nor_(Bitstream const& lhs, Bitstream const& rhs)
   using block_type = typename Bitstream::block_type;
   return apply(lhs, rhs, true, true,
                [](block_type x, block_type y) { return x | ~y; });
-}
-
-/// Transposes a vector of bitstreams into a character matrix of 0s and 1s.
-/// @param out The output iterator.
-/// @param v A vector of bitstreams.
-template <
-  typename Iterator,
-  typename Bitstream,
-  typename = std::enable_if_t<is_bitstream<Bitstream>::value>
->
-trial<void> print(std::vector<Bitstream> const& v, Iterator&& out)
-{
-  if (v.empty())
-    return nothing;
-
-  using const_iterator = typename Bitstream::const_iterator;
-  using ipair = std::pair<const_iterator, const_iterator>;
-  std::vector<ipair> is(v.size());
-  for (size_t i = 0; i < v.size(); ++i)
-    is[i] = {v[i].begin(), v[i].end()};
-
-  auto const zero_row = std::string(v.size(), '0') + '\n';
-  typename Bitstream::size_type last = 0;
-  bool done = false;
-  while (! done)
-  {
-    // Compute the minimum.
-    typename Bitstream::size_type min = Bitstream::npos;
-    for (auto& p : is)
-      if (p.first != p.second && *p.first < min)
-        min = *p.first;
-
-    if (min == Bitstream::npos)
-      break;
-
-    // Fill up the distance to the last row with 0 rows.
-    auto distance = min - last;
-    for (decltype(min) i = 0; i < distance; ++i)
-      std::copy(zero_row.begin(), zero_row.end(), out);
-    last = min + 1;
-
-    // Print the current transposed row.
-    done = true;
-    for (auto& p : is)
-    {
-      if (p.first != p.second && *p.first == min)
-      {
-        *out++ = '1';
-        done = false;
-        ++p.first;
-      }
-      else
-      {
-        *out++ = '0';
-      }
-    }
-
-    *out++ = '\n';
-  }
-
-  return nothing;
 }
 
 } // namespace vast

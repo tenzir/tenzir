@@ -80,7 +80,7 @@ TEST(partition)
 
   MESSAGE("disabling continuous query and sending another event");
   self->send(p, *expr, continuous_atom::value, disable_atom::value);
-  auto e = event::make(record{1337u, to_string(1337)}, type0);
+  auto e = event::make(record{1337u, std::to_string(1337)}, type0);
   e.id(4711);
   t = self->spawn<task, monitored>(time::snapshot(), 1ull);
   self->send(p, std::vector<event>{std::move(e)}, t);

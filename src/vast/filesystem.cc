@@ -8,6 +8,8 @@
 #include "vast/util/assert.h"
 #include "vast/util/posix.h"
 #include "vast/util/string.h"
+#include "vast/concept/printable/vast/error.h"
+#include "vast/concept/printable/vast/filesystem.h"
 
 #ifdef VAST_POSIX
 #  include <cerrno>

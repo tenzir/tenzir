@@ -1,5 +1,5 @@
-#include "vast/concept/serializable/util/variant.h"
 #include "vast/concept/serializable/io.h"
+#include "vast/concept/serializable/vast/util/variant.h"
 #include "vast/util/variant.h"
 
 #define SUITE variant

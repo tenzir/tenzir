@@ -1,3 +1,5 @@
+#include "vast/concept/printable/to_string.h"
+#include "vast/concept/printable/vast/type.h"
 #include "vast/expr/resolver.h"
 
 namespace vast {
@@ -94,9 +96,9 @@ trial<expression> schema_resolver::operator()(schema_extractor const& e,
       for (auto& p : trace)
         if (! p.first.empty())
           if (! congruent(*r->at(p.first), *first_type))
-            return error{"type clash: ", type_, " : ", to_string(type_, false),
+            return error{"type clash: ", type_, " : ", to_string(type_),
                          " <--> ", *r->at(p.first), " : ",
-                         to_string(*r->at(p.first), false)};
+                         to_string(*r->at(p.first))};
     }
 
     // Add all offsets from the trace to the disjunction, which will

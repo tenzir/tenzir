@@ -1,13 +1,12 @@
-#include "vast/time.h"
-
 #include <mutex>
 #include <sstream>
 #include <iomanip>
 
 #include "vast/config.h"
-#include "vast/logger.h"
+#include "vast/time.h"
+#include "vast/concept/convertible/vast/time.h"
+#include "vast/concept/convertible/to.h"
 #include "vast/util/assert.h"
-#include "vast/util/json.h"
 
 namespace vast {
 namespace time {
@@ -153,24 +152,6 @@ duration::rep duration::nanoseconds() const
     std::chrono::duration_cast<std::chrono::nanoseconds>(duration_).count();
 }
 
-trial<void> convert(duration dur, double& d)
-{
-  d = dur.double_seconds();
-  return nothing;
-}
-
-trial<void> convert(duration dur, duration::duration_type& dt)
-{
-  dt = dur.duration_;
-  return nothing;
-}
-
-trial<void> convert(duration dur, util::json& j)
-{
-  j = dur.count();
-  return nothing;
-}
-
 point point::from_tm(std::tm const& tm)
 {
   // Because std::mktime by default uses localtime, we have to make sure to set
@@ -309,43 +290,6 @@ point point::delta(int secs,
 duration point::time_since_epoch() const
 {
   return duration{time_point_.time_since_epoch()};
-}
-
-trial<void> convert(point p, double &d)
-{
-  d = p.time_since_epoch().double_seconds();
-  return nothing;
-}
-
-trial<void> convert(point p, std::tm& tm)
-{
-  auto d = std::chrono::duration_cast<point::clock::duration>(
-      p.time_point_.time_since_epoch());
-  auto tt = std::chrono::system_clock::to_time_t(point::clock::time_point(d));
-  return ::gmtime_r(&tt, &tm) != nullptr
-    ? nothing 
-    : error{"failed to convert point"};
-}
-
-trial<void> convert(point p, util::json& j)
-{
-  j = p.time_since_epoch().count();
-  return nothing;
-}
-
-trial<void> convert(point p, std::string& str, char const* fmt)
-{
-  auto tm = to<std::tm>(p);
-  std::ostringstream ss;
-#ifdef VAST_CLANG
-  ss << std::put_time(&*tm, fmt);
-  str = ss.str();
-#else
-  char buf[256];
-  strftime(buf, sizeof(buf), fmt, &*tm);
-  str = buf;
-#endif
-  return nothing;
 }
 
 namespace {

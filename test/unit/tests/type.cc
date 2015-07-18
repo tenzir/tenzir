@@ -1,7 +1,9 @@
 #include "vast/data.h"
 #include "vast/type.h"
+#include "vast/concept/printable/to_string.h"
+#include "vast/concept/printable/vast/type.h"
 #include "vast/concept/serializable/io.h"
-#include "vast/concept/serializable/type.h"
+#include "vast/concept/serializable/vast/type.h"
 
 #define SUITE type
 #include "test.h"
@@ -10,7 +12,7 @@ using namespace vast;
 
 TEST(printing)
 {
-  CHECK(to_string(none{}) == "none");
+  CHECK(to_string(type{}) == "none");
   CHECK(to_string(type::boolean{}) == "bool");
   CHECK(to_string(type::integer{}) == "int");
   CHECK(to_string(type::count{}) == "count");
@@ -48,7 +50,10 @@ TEST(printing)
   type a = type::alias{t};
   CHECK(to_string(a) == to_string(t));
   a.name("qux");
-  CHECK(to_string(a) == "qux");
+
+  std::string sig;
+  CHECK(printers::type<policy::signature>(sig, a));
+  CHECK(sig == "qux = table<count, set<port> &skip>");
 }
 
 TEST(equality comparison)

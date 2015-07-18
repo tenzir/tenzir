@@ -1,7 +1,9 @@
 #include "vast/bitmap.h"
 #include "vast/bitstream.h"
-#include "vast/concept/serializable/bitmap.h"
 #include "vast/concept/serializable/io.h"
+#include "vast/concept/serializable/vast/bitmap.h"
+#include "vast/concept/printable/to_string.h"
+#include "vast/concept/printable/vast/bitstream.h"
 
 #define SUITE bitmap
 #include "test.h"

@@ -4,9 +4,10 @@
 #include <caf/all.hpp>
 
 #include "vast/event.h"
+#include "vast/result.h"
 #include "vast/actor/actor.h"
+#include "vast/concept/printable/vast/error.h"
 #include "vast/util/assert.h"
-#include "vast/util/result.h"
 
 namespace vast {
 namespace source {

@@ -43,6 +43,14 @@ set(libvast_sources
   actor/source/bro.cc
   actor/source/bgpdump.cc
   actor/source/test.cc
+  concept/convertible/vast/address.cc
+  concept/convertible/vast/data.cc
+  concept/convertible/vast/event.cc
+  concept/convertible/vast/pattern.cc
+  concept/convertible/vast/port.cc
+  concept/convertible/vast/subnet.cc
+  concept/convertible/vast/time.cc
+  concept/convertible/vast/value.cc
   concept/serializable/hierarchy.cc
   concept/parseable/vast/detail/to_expression.cc
   concept/parseable/vast/detail/to_schema.cc
@@ -62,6 +70,7 @@ set(libvast_sources
   io/device.cc
   io/file_stream.cc
   io/getline.cc
+  io/iterator.cc
   io/stream_device.cc
   io/stream.cc
   util/endpoint.cc
@@ -73,7 +82,7 @@ set(libvast_sources
   util/hash/crc.cc
   util/hash/murmur.cc
   util/hash/xxhash.cc
-  )
+)
 
 if (GPERFTOOLS_FOUND)
   set(libvast_sources ${libvast_sources} actor/profiler.cc)

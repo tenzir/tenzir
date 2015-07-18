@@ -2,13 +2,12 @@
 #define VAST_PATTERN_H
 
 #include <string>
-#include "vast/print.h"
+
 #include "vast/util/operators.h"
 
 namespace vast {
 
 struct access;
-namespace util { class json; }
 
 /// A regular expression.
 class pattern : util::totally_ordered<pattern>
@@ -47,27 +46,9 @@ public:
   /// @returns `true` if the pattern matches inside *str*.
   bool search(std::string const& str) const;
 
-  // TODO: Migrate to concepts location.
-  template <typename Iterator>
-  friend trial<void> print(pattern const& p, Iterator&& out)
-  {
-    *out++ = '/';
-
-    auto t = print(p.str_, out);
-    if (! t)
-      return t.error();
-
-    *out++ = '/';
-
-    return nothing;
-  }
-
 private:
   std::string str_;
 };
-
-// TODO: Migrate to concepts location.
-trial<void> convert(pattern const& p, util::json& j);
 
 } // namespace vast
 

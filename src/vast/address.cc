@@ -1,13 +1,12 @@
-#include "vast/address.h"
-
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+
 #include <cstring>
 #include <cstdlib>
-#include "vast/logger.h"
+
+#include "vast/address.h"
 #include "vast/util/byte_swap.h"
-#include "vast/util/json.h"
 
 std::array<uint8_t, 12> const vast::address::v4_mapped_prefix =
     {{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff }};
@@ -129,31 +128,12 @@ address& address::operator^=(address const& other)
   else
     for (auto i = 0u; i < 16u; ++i)
       bytes_[i] ^= other.bytes_[i];
-
   return *this;
 }
 
 std::array<uint8_t, 16> const& address::data() const
 {
   return bytes_;
-}
-
-std::string to_string(address const& a)
-{
-  char buf[INET6_ADDRSTRLEN];
-  std::memset(buf, 0, INET6_ADDRSTRLEN);
-  if (a.is_v4())
-  {
-    if (inet_ntop(AF_INET, &a.bytes_[12], buf, INET_ADDRSTRLEN) == nullptr)
-      return {};
-  }
-  else
-  {
-    if (inet_ntop(AF_INET6, &a.bytes_, buf, INET6_ADDRSTRLEN) == nullptr)
-      return {};
-  }
-
-  return buf;
 }
 
 bool operator==(address const& x, address const& y)
@@ -164,12 +144,6 @@ bool operator==(address const& x, address const& y)
 bool operator<(address const& x, address const& y)
 {
   return x.bytes_ < y.bytes_;
-}
-
-trial<void> convert(address const& a, util::json& j)
-{
-  j = to_string(a);
-  return nothing;
 }
 
 } // namespace vast

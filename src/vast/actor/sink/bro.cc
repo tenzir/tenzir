@@ -1,6 +1,11 @@
 #include "vast/time.h"
 #include "vast/type.h"
 #include "vast/actor/sink/bro.h"
+#include "vast/concept/printable/to_string.h"
+#include "vast/concept/printable/numeric/real.h"
+#include "vast/concept/printable/vast/error.h"
+#include "vast/concept/printable/vast/filesystem.h"
+#include "vast/concept/printable/vast/key.h"
 #include "vast/io/algorithm.h"
 #include "vast/util/assert.h"
 #include "vast/util/string.h"
@@ -28,7 +33,7 @@ std::string bro::make_header(type const& t)
     h += sep + to_string(e.key());
   h += "\n#types";
   for (auto& e : type::record::each{*r})
-    h += sep + to_string(e.trace.back()->type, 0);
+    h += sep + to_string(e.trace.back()->type);
   h += '\n';
   return h;
 }
@@ -84,7 +89,10 @@ struct value_printer
 
   std::string operator()(real r) const
   {
-    return to_string(r, 6);
+    std::string str;
+    auto out = std::back_inserter(str);
+    real_printer<real, 6>{}.print(out, r);
+    return str;
   }
 
   std::string operator()(time::point point) const
@@ -200,6 +208,7 @@ bool bro::process(event const& e)
   VAST_ASSERT(os != nullptr);
   auto str = visit(value_printer{}, e);
   str += '\n';
+  // FIXME: don't flush that often!
   return io::copy(str.begin(), str.end(), *os) && os->flush();
 }
 

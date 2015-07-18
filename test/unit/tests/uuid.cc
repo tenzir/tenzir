@@ -3,7 +3,8 @@
 #include "vast/uuid.h"
 #include "vast/concept/parseable/to.h"
 #include "vast/concept/parseable/vast/uuid.h"
-#include "vast/print.h"
+#include "vast/concept/printable/to_string.h"
+#include "vast/concept/printable/vast/uuid.h"
 
 #include "test.h"
 

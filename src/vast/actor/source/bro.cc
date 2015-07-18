@@ -1,5 +1,6 @@
 #include "vast/actor/source/bro.h"
 #include "vast/concept/parseable/vast/detail/bro_parser_factory.h"
+#include "vast/concept/printable/vast/type.h"
 #include "vast/util/assert.h"
 #include "vast/util/string.h"
 

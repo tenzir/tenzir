@@ -11,6 +11,7 @@
 namespace vast {
 
 struct access;
+class ewah_bitstream;
 
 /// An associative array which maps (arithmetic) values to [bitstreams](@ref
 /// bitstream).

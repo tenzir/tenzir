@@ -1,9 +1,14 @@
+#include "vast/json.h"
 #include "vast/value.h"
+#include "vast/concept/convertible/vast/value.h"
+#include "vast/concept/convertible/to.h"
 #include "vast/concept/parseable/to.h"
 #include "vast/concept/parseable/vast/data.h"
-#include "vast/concept/serializable/value.h"
+#include "vast/concept/printable/to_string.h"
+#include "vast/concept/printable/vast/json.h"
+#include "vast/concept/printable/vast/value.h"
 #include "vast/concept/serializable/io.h"
-#include "vast/util/json.h"
+#include "vast/concept/serializable/vast/value.h"
 
 #define SUITE value
 #include "test.h"
@@ -126,8 +131,8 @@ TEST(JSON)
       {"baz", type::real{}}
     };
   auto v = value{*to<data>("(53/udp,-42,4.2)"), tr};
-  util::json j;
-  CHECK(convert(v, j));
+  auto j = to<json>(v);
+  REQUIRE(j);
   auto str = R"json({
   "data": {
     "bar": -42,
@@ -136,5 +141,5 @@ TEST(JSON)
   },
   "type": "record {foo: port, bar: int, baz: real}"
 })json";
-  CHECK(to_string(j, true) == str);
+  CHECK(to_string(*j) == str);
 }

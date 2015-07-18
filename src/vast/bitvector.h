@@ -321,29 +321,6 @@ public:
   ///          `npos` if no such bit exists.
   static size_type prev_bit(block_type block, size_type i);
 
-  /// Prints a single block.
-  /// @param out The iterator to print to.
-  /// @param block The block to print to *out*.
-  /// @param msb Whether to start from the MSB or not.
-  /// @param begin The offset in *block* from the LSB where to start printing.
-  /// @param end One past the last offset to print.
-  template <typename Iterator>
-  static bool print(Iterator& out,
-                    block_type block,
-                    bool msb = true,
-                    block_type begin = 0,
-                    block_type end = block_width)
-  {
-    if (msb)
-      while (begin < end)
-        *out++ = (block & (block_type(1) << (end - begin++ - 1))) ? '1' : '0';
-    else
-      while (begin < end)
-        *out++ = (block & (block_type(1) << begin++)) ? '1' : '0';
-
-    return true;
-  }
-
   /// Constructs an empty bit vector.
   bitvector();
 
@@ -597,42 +574,6 @@ private:
 
   std::vector<block_type> bits_;
   size_type num_bits_;
-
-private:
-  /// Prints a bitvector.
-  /// @param out An iterator modeling the OutputIterator concept.
-  /// @param msb The order of display. If `true`, display bits from MSB
-  ///            to LSB and in the reverse order otherwise.
-  /// @param all Indicates whether to include also the unused bits of the last
-  ///            block if the number of `b.size()` is not a multiple of
-  ///            `bitvector::block_width`.
-  /// @param max Specifies a maximum size on the output. If 0, no cutting
-  ///            occurs.
-  template <typename Iterator>
-  friend trial<void> print(bitvector const& b, Iterator&& out,
-                           bool msb = true, bool all = false, size_t max = 0)
-  {
-    std::string str;
-    auto str_size = all ? bitvector::block_width * b.blocks() : b.size();
-    if (max == 0 || str_size <= max)
-    {
-      str.assign(str_size, '0');
-    }
-    else
-    {
-      str.assign(max + 2, '0');
-      str[max + 0] = '.';
-      str[max + 1] = '.';
-      str_size = max;
-    }
-
-    for (size_type i = 0; i < std::min(str_size, b.size()); ++i)
-      if (b[i])
-        str[msb ? str_size - i - 1 : i] = '1';
-
-    out = std::copy(str.begin(), str.end(), out);
-    return nothing;
-  }
 };
 
 } // namespace vast

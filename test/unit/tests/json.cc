@@ -1,13 +1,15 @@
-#include "vast/util/convert.h"
-#include "vast/util/json.h"
+#include "vast/json.h"
+#include "vast/concept/printable/numeric.h"
+#include "vast/concept/convertible/to.h"
+#include "vast/concept/printable/to_string.h"
+#include "vast/concept/printable/vast/json.h"
 
-#define SUITE util
+#define SUITE json
 #include "test.h"
 
 using namespace vast;
-using namespace util;
 
-TEST(JSON_construction_assignment)
+TEST(construction and assignment)
 {
   CHECK(which(json{}) == json::type::null);
   CHECK(which(json{nil}) == json::type::null);
@@ -52,7 +54,7 @@ TEST(JSON_construction_assignment)
   CHECK(is<json::object>(j));
 }
 
-TEST(JSON_total_order)
+TEST(total order)
 {
   json j0{true};
   json j1{false};
@@ -75,62 +77,32 @@ TEST(JSON_total_order)
   CHECK(j0 >= j1);
 }
 
-TEST(JSON_printing)
+TEST(printing)
 {
-  std::string str;
-  auto out = std::back_inserter(str);
+  CHECK(to_string(json{}) == "null");
+  CHECK(to_string(json{true}) == "true");
+  CHECK(to_string(json{false}) == "false");
+  CHECK(to_string(json{42}) == "42");
+  CHECK(to_string(json{42.0}) == "42");
+  CHECK(to_string(json{4.2}) == "4.2");
+  CHECK(to_string(json{"foo"}) == "\"foo\"");
 
-  CHECK(print(json{}, out));
-  CHECK(str == "null");
-  str.clear();
-
-  CHECK(print(json{true}, out));
-  CHECK(str == "true");
-  str.clear();
-
-  CHECK(print(json{false}, out));
-  CHECK(str == "false");
-  str.clear();
-
-  CHECK(print(json{42}, out));
-  CHECK(str == "42");
-  str.clear();
-
-  CHECK(print(json{42.0}, out));
-  CHECK(str == "42");
-  str.clear();
-
-  CHECK(print(json{4.2}, out));
-  CHECK(str == "4.2");
-  str.clear();
-
-  CHECK(print(json{"foo"}, out));
-  CHECK(str == "\"foo\"");
-  str.clear();
-
-  std::string foo{"foo"};
-  CHECK(print(json{foo}, out));
-  CHECK(str == "\"foo\"");
-  str.clear();
-
+  std::string line;
   json::array a{42, -1337, "foo", nil, true};
-  CHECK(print(json{a}, out));
-  CHECK(str == "[42, -1337, \"foo\", null, true]");
-  str.clear();
+  CHECK(printers::json<policy::oneline>(line, json{a}));
+  CHECK(line == "[42, -1337, \"foo\", null, true]");
 
   json::object o;
   o["foo"] = 42;
   o["bar"] = nil;
-
-  // We use a std::map, which orders the keys alphabetically.
-  CHECK(print(json{std::move(o)}, out));
-  CHECK(str == "{\"bar\": null, \"foo\": 42}");
-  str.clear();
+  line.clear();
+  CHECK(printers::json<policy::oneline>(line, json{o}));
+  CHECK(line == "{\"bar\": null, \"foo\": 42}");
 
   o = {{"baz", 4.2}};
-  CHECK(print(json{std::move(o)}, out));
-  CHECK(str == "{\"baz\": 4.2}");
-  str.clear();
+  line.clear();
+  CHECK(printers::json<policy::oneline>(line, json{o}));
+  CHECK(line == "{\"baz\": 4.2}");
 
   o = {
     {"baz", 4.2},
@@ -138,7 +110,7 @@ TEST(JSON_printing)
     {"inner", json::object{{"a", false}, {"b", 42}, {"c", a}}}
   };
 
-  auto tree = R"json({
+  auto json_tree = R"json({
   "baz": 4.2,
   "inner": {
     "a": false,
@@ -160,11 +132,12 @@ TEST(JSON_printing)
   ]
 })json";
 
-  CHECK(to_string(o, true) == tree);
-  str.clear();
+  std::string str;
+  CHECK(printers::json<policy::tree>(str, json{o}));
+  CHECK(str == json_tree);
 }
 
-TEST(JSON_conversion)
+TEST(conversion)
 {
   auto t = to<json>(true);
   REQUIRE(t);
@@ -182,7 +155,7 @@ TEST(JSON_conversion)
   REQUIRE(t);
   CHECK(*t == json::array{1, 2, 3});
 
-  t = to<json>(std::map<int, bool>{{1, true}, {2, false}});
+  t = to<json>(std::map<unsigned, bool>{{1, true}, {2, false}});
   REQUIRE(t);
   CHECK(*t == json::object{{"1", true}, {"2", false}});
 }

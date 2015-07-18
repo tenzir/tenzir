@@ -1,9 +1,13 @@
 #include "vast/data.h"
+#include "vast/concept/convertible/vast/time.h"
+#include "vast/concept/convertible/to.h"
 #include "vast/concept/parseable/to.h"
 #include "vast/concept/parseable/vast/address.h"
 #include "vast/concept/parseable/vast/subnet.h"
-#include "vast/concept/serializable/data.h"
+#include "vast/concept/printable/to_string.h"
+#include "vast/concept/printable/vast/data.h"
 #include "vast/concept/serializable/io.h"
+#include "vast/concept/serializable/vast/data.h"
 
 #define SUITE data
 #include "test.h"

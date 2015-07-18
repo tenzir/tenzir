@@ -3,6 +3,7 @@
 #include "vast/event.h"
 #include "vast/query_options.h"
 #include "vast/actor/index.h"
+#include "vast/concept/printable/vast/expression.h"
 
 #define SUITE actors
 #include "test.h"
@@ -80,7 +81,7 @@ TEST(index)
   MESSAGE("disabling continuous query and sending another event");
   self->send(idx, *expr, continuous_atom::value, disable_atom::value);
   self->receive([&](down_msg const& msg) { CHECK(msg.source == task); });
-  auto e = event::make(record{1337u, to_string(1337)}, type0);
+  auto e = event::make(record{1337u, std::to_string(1337)}, type0);
   e.id(4711);
   self->send(idx, std::vector<event>{std::move(e)});
   // Make sure that we didn't get any new hits.

@@ -3,8 +3,7 @@
 
 #include <array>
 #include <string>
-#include "vast/fwd.h"
-#include "vast/print.h"
+
 #include "vast/util/operators.h"
 
 namespace vast {
@@ -103,21 +102,9 @@ public:
   /// @returns A reference to an array of 16 bytes.
   std::array<uint8_t, 16> const& data() const;
 
-  // TODO: Migrate to concepts location.
-  template <typename Iterator>
-  friend trial<void> print(address const& a, Iterator&& out)
-  {
-    return print(to_string(a), out);
-  }
-
-  friend std::string to_string(address const& a);
-
 private:
   std::array<uint8_t, 16> bytes_;
 };
-
-// TODO: Migrate to concepts location.
-trial<void> convert(address const& a, util::json& j);
 
 } // namespace vast
 

@@ -189,6 +189,8 @@ private:
   std::unique_ptr<detail::bitmap_index_concept<Bitstream>> concept_;
 };
 
+enum type_tag : uint8_t;
+
 template <typename Bitstream>
 bitmap_index<Bitstream> make_bitmap_index(type_tag t);
 

@@ -5,12 +5,13 @@
 #include "vast/filesystem.h"
 #include "vast/actor/archive.h"
 #include "vast/actor/node.h"
-#include "vast/concept/serializable/bitmap_index.h"
-#include "vast/concept/serializable/chunk.h"
 #include "vast/concept/serializable/io.h"
+#include "vast/concept/serializable/vast/bitmap_index.h"
+#include "vast/concept/serializable/vast/chunk.h"
 #include "vast/concept/parseable/to.h"
 #include "vast/concept/parseable/vast/address.h"
 #include "vast/concept/parseable/vast/port.h"
+#include "vast/concept/printable/vast/error.h"
 
 #define SUITE actors
 #include "test.h"

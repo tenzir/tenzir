@@ -1,14 +1,13 @@
 #ifndef VAST_PORT_H
 #define VAST_PORT_H
 
-#include <iosfwd>
-#include <cstring>
-#include <string>
-#include "vast/fwd.h"
-#include "vast/print.h"
+#include <cstdint>
+
 #include "vast/util/operators.h"
 
 namespace vast {
+
+struct access;
 
 /// A transport-layer port.
 class port : util::totally_ordered<port>
@@ -54,36 +53,10 @@ public:
   /// @param t The new port type.
   void type(port_type t);
 
-  // TODO: Migrate to concepts location.
-  template <typename Iterator>
-  friend trial<void> print(port const& p, Iterator&& out)
-  {
-    auto t = print(p.number_, out);
-    if (! t)
-      return t.error();
-
-    *out++ = '/';
-
-    switch (p.type())
-    {
-      default:
-        return print('?', out);
-      case port::tcp:
-        return print("tcp", out);
-      case port::udp:
-        return print("udp", out);
-      case port::icmp:
-        return print("icmp", out);
-    }
-  }
-
 private:
   number_type number_ = 0;
   port_type type_ = unknown;
 };
-
-// TODO: Migrate to concepts location.
-trial<void> convert(port const& p, util::json& j);
 
 } // namespace vast
 

@@ -3,6 +3,7 @@
 
 #include <cassert>
 #include <ostream>
+
 #include <caf/event_based_actor.hpp>
 #include <caf/send.hpp>
 #include <caf/to_string.hpp>
@@ -12,19 +13,25 @@
 
 namespace caf {
 
-inline std::ostream& operator<<(std::ostream& out, actor_addr const& a)
+template <typename Char, typename Traits>
+std::basic_ostream<Char, Traits>&
+operator<<(std::basic_ostream<Char, Traits>& out, actor_addr const& a)
 {
   out << '#' << a.id();
   return out;
 }
 
-inline std::ostream& operator<<(std::ostream& out, actor const& a)
+template <typename Char, typename Traits>
+std::basic_ostream<Char, Traits>&
+operator<<(std::basic_ostream<Char, Traits>& out, actor const& a)
 {
   out << a.address();
   return out;
 }
 
-inline std::ostream& operator<<(std::ostream& out, abstract_actor const& a)
+template <typename Char, typename Traits>
+std::basic_ostream<Char, Traits>&
+operator<<(std::basic_ostream<Char, Traits>& out, abstract_actor const& a)
 {
   out << a.address();
   return out;
@@ -103,20 +110,6 @@ public:
     });
   }
 
-  template <typename F, typename... Vs>
-  default_actor(F fun, Vs&&... vs)
-    : default_actor{}
-  {
-    make_behavior_ = std::bind(fun, this, std::forward<Vs>(vs)...);
-  }
-
-  caf::behavior make_behavior() override
-  {
-    auto result = make_behavior_(this);
-    make_behavior_ = nullptr;
-    return result;
-  }
-
   char const* name() const
   {
     return name_;
@@ -153,7 +146,6 @@ protected:
 
 private:
   char const* name_ = "actor";
-  std::function<caf::behavior(default_actor*)> make_behavior_;
 };
 
 inline std::ostream& operator<<(std::ostream& out, default_actor const& a)

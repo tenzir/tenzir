@@ -1,8 +1,8 @@
 #include <numeric>
 
-#include <vast/concept/serializable/std/string.h>
-#include <vast/concept/serializable/util/cache.h>
 #include <vast/concept/serializable/io.h>
+#include <vast/concept/serializable/std/string.h>
+#include <vast/concept/serializable/vast/util/cache.h>
 #include <vast/util/cache.h>
 
 #define SUITE util
