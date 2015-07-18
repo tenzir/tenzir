@@ -1,6 +1,8 @@
-#include "vast/expr/validator.h"
-
 #include "vast/expression.h"
+#include "vast/concept/printable/vast/data.h"
+#include "vast/concept/printable/vast/operator.h"
+#include "vast/concept/printable/vast/type.h"
+#include "vast/expr/validator.h"
 
 namespace vast {
 namespace expr {
@@ -18,7 +20,6 @@ trial<void> validator::operator()(conjunction const& c) const
     if (! t)
      return t;
   }
-
   return nothing;
 }
 
@@ -30,7 +31,6 @@ trial<void> validator::operator()(disjunction const& d) const
     if (! t)
      return t;
   }
-
   return nothing;
 }
 
@@ -73,10 +73,8 @@ trial<void> validator::operator()(predicate const& p) const
         return error{"invalid extractor"};
       }
     }
-
     return nothing;
   };
-
   auto tl = valid(p.lhs, p.rhs);
   auto tr = valid(p.rhs, p.lhs);
   if (tl || tr)

@@ -1,5 +1,6 @@
 #include "vast/io/algorithm.h"
 #include "vast/io/buffered_stream.h"
+#include "vast/io/iterator.h"
 #include "vast/io/formatted.h"
 #include "vast/io/container_stream.h"
 #include "vast/io/range.h"

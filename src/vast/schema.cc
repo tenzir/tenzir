@@ -1,5 +1,8 @@
 #include "vast/schema.h"
 
+#include "vast/concept/printable/to_string.h"
+#include "vast/concept/printable/vast/type.h"
+
 namespace vast {
 
 trial<schema> schema::merge(schema const& s1, schema const& s2)
@@ -32,7 +35,7 @@ trial<void> schema::add(type t)
       return nothing;
     else
       return error{"clash in types with same name (existing <--> added): ",
-                   to_string(*existing, false), " <--> ", to_string(t, false)};
+                   *existing, " <--> ", t};
   }
 
   types_.push_back(std::move(t));

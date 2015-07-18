@@ -7,6 +7,7 @@
 #include "vast/concept/parseable/vast/address.h"
 #include "vast/concept/parseable/vast/subnet.h"
 #include "vast/concept/parseable/vast/time.h"
+#include "vast/concept/printable/vast/type.h"
 #include "vast/util/string.h"
 
 namespace vast {

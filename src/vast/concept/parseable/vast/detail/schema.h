@@ -7,6 +7,7 @@
 #include "vast/concept/parseable/vast/detail/schema_ast.h"
 #include "vast/concept/parseable/vast/detail/error_handler.h"
 #include "vast/concept/parseable/vast/detail/skipper.h"
+#include "vast/concept/printable/string/string.h"
 
 namespace vast {
 namespace detail {

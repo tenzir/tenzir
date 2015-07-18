@@ -1,8 +1,6 @@
-#include "vast/port.h"
+#include <tuple>
 
-#include <utility>
-#include "vast/logger.h"
-#include "vast/util/json.h"
+#include "vast/port.h"
 
 namespace vast {
 
@@ -40,12 +38,6 @@ void port::number(number_type n)
 void port::type(port_type t)
 {
   type_ = t;
-}
-
-trial<void> convert(port const& p, util::json& j)
-{
-  j = to_string(p);
-  return nothing;
 }
 
 } // namespace vast

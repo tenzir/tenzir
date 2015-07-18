@@ -1,7 +1,12 @@
 #ifndef VAST_VALUE_H
 #define VAST_VALUE_H
 
+#include <type_traits>
+
 #include "vast/data.h"
+#include "vast/none.h"
+#include "vast/type.h"
+#include "vast/util/meta.h"
 
 namespace vast {
 
@@ -81,10 +86,7 @@ public:
 
   /// Retrieves the data of the value.
   /// @returns The value data.
-  vast::data const& data() const
-  {
-    return data_;
-  }
+  vast::data const& data() const;
 
   friend vast::data::variant_type& expose(value& v);
   friend vast::data::variant_type const& expose(value const& v);
@@ -93,15 +95,6 @@ private:
   vast::data data_;
   vast::type type_;
 };
-
-// TODO: Migrate to concepts location.
-template <typename Iterator>
-trial<void> print(value const& v, Iterator&& out)
-{
-  return print(v.data(), out);
-}
-
-trial<void> convert(value const& v, util::json& j);
 
 } // namespace vast
 

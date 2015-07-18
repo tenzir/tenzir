@@ -7,8 +7,12 @@
 #include "vast/expr/predicatizer.h"
 #include "vast/concept/parseable/numeric/integral.h"
 #include "vast/concept/parseable/to.h"
-#include "vast/concept/serializable/schema.h"
+#include "vast/concept/printable/vast/error.h"
+#include "vast/concept/printable/vast/expression.h"
+#include "vast/concept/printable/vast/event.h"
+#include "vast/concept/printable/vast/time.h"
 #include "vast/concept/serializable/io.h"
+#include "vast/concept/serializable/vast/schema.h"
 #include "vast/util/assert.h"
 
 using namespace caf;

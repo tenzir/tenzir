@@ -2,14 +2,12 @@
 #define VAST_UUID_H
 
 #include <array>
-#include <functional>
 
-#include "vast/fwd.h"
-#include "vast/trial.h"
-#include "vast/util/coding.h"
 #include "vast/util/operators.h"
 
 namespace vast {
+
+struct access;
 
 class uuid : util::totally_ordered<uuid>
 {
@@ -35,20 +33,6 @@ public:
   size_type size() const;
 
   void swap(uuid& other);
-
-  template <typename Iterator>
-  friend trial<void> print(uuid const& u, Iterator&& out)
-  {
-    for (size_t i = 0; i < 16; ++i)
-    {
-      auto& byte = u.id_[i];
-      *out++ = util::byte_to_char((byte >> 4) & 0x0f);
-      *out++ = util::byte_to_char(byte & 0x0f);
-      if (i == 3 || i == 5 || i == 7 || i == 9)
-        *out++ = '-';
-    }
-    return nothing;
-  }
 
   friend bool operator==(uuid const& x, uuid const& y);
   friend bool operator<(uuid const& x, uuid const& y);

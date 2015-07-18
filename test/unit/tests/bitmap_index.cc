@@ -3,9 +3,10 @@
 #include "vast/concept/parseable/vast/address.h"
 #include "vast/concept/parseable/vast/subnet.h"
 #include "vast/concept/parseable/vast/time.h"
-#include "vast/concept/serializable/bitmap_index_polymorphic.h"
+#include "vast/concept/printable/to_string.h"
+#include "vast/concept/printable/vast/bitstream.h"
 #include "vast/concept/serializable/io.h"
-#include "vast/util/convert.h"
+#include "vast/concept/serializable/vast/bitmap_index_polymorphic.h"
 
 #define SUITE bitmap_index
 #include "test.h"

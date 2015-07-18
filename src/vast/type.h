@@ -12,7 +12,8 @@
 #include "vast/none.h"
 #include "vast/offset.h"
 #include "vast/operator.h"
-#include "vast/print.h"
+#include "vast/time.h"
+#include "vast/trial.h"
 #include "vast/util/intrusive.h"
 #include "vast/util/operators.h"
 #include "vast/util/range.h"
@@ -24,6 +25,7 @@ namespace vast {
 
 class address;
 class subnet;
+class port;
 class pattern;
 class vector;
 class set;
@@ -63,38 +65,13 @@ public:
     {
     }
 
-    key_type key;
-    std::string value;
-
     friend bool operator==(attribute const& lhs, attribute const& rhs)
     {
       return lhs.key == rhs.key && lhs.value == rhs.value;
     }
 
-    template <typename Iterator>
-    friend trial<void> print(attribute const& a, Iterator&& out)
-    {
-      *out++ = '&';
-      switch (a.key)
-      {
-        default:
-          return print("invalid", out);
-        case skip:
-          return print("skip", out);
-        case default_:
-          {
-            auto t = print("default=\"", out);
-            if (! t)
-              return t;
-
-            t = print(a.value, out);
-            if (! t)
-              return t;
-
-            return print('"', out);
-          }
-      }
-    }
+    key_type key;
+    std::string value;
   };
 
   using hash_type = util::xxhash;
@@ -192,21 +169,6 @@ public:
       : base<name>(std::move(a))                              \
     {                                                         \
       update(#name, sizeof(#name) - 1);                       \
-    }                                                         \
-                                                              \
-  private:                                                    \
-    template <typename Iterator>                              \
-    friend trial<void> print(name const& n, Iterator&& out)   \
-    {                                                         \
-      auto t = print(desc, out);                              \
-      if (! t)                                                \
-        return t;                                             \
-      if (! n.attributes().empty())                           \
-      {                                                       \
-        *out++ = ' ';                                         \
-        return print(n.attributes(), out);                    \
-      }                                                       \
-      return nothing;                                         \
     }                                                         \
   };
 
@@ -432,7 +394,6 @@ public:
     {
       static constexpr auto desc = "enumeration";
       update(desc, sizeof(desc));
-
       for (auto& f : fields_)
         update(f.data(), f.size());
     }
@@ -446,30 +407,6 @@ public:
     enumeration() = default;
 
     std::vector<std::string> fields_;
-
-    template <typename Iterator>
-    friend trial<void> print(enumeration const& e, Iterator&& out)
-    {
-      auto t = print("enum {", out);
-      if (! t)
-        return t.error();
-
-      t = util::print_delimited(", ", e.fields_.begin(), e.fields_.end(), out);
-      if (! t)
-        return t.error();
-
-      t = print('}', out);
-      if (! t)
-        return t.error();
-
-      if (! e.attributes().empty())
-      {
-        *out++ = ' ';
-        return print(e.attributes(), out);
-      }
-
-      return nothing;
-    }
   };
 
   /// Default-constructs an invalid type.
@@ -600,61 +537,6 @@ private:
   friend info& expose(type& t);
   friend info const& expose(type const& t);
 
-  template <typename Iterator>
-  friend trial<void> print(tag t, Iterator&& out)
-  {
-    switch (t)
-    {
-      default:
-        return print("{invalid}", out);
-      case tag::none:
-        return print("{none}", out);
-      case tag::boolean:
-        return print("{bool}", out);
-      case tag::integer:
-        return print("{int}", out);
-      case tag::count:
-        return print("{uint}", out);
-      case tag::real:
-        return print("{real}", out);
-      case tag::time_point:
-        return print("{time}", out);
-      case tag::time_duration:
-        return print("{duration}", out);
-      case tag::string:
-        return print("{string}", out);
-      case tag::pattern:
-        return print("{pattern}", out);
-      case tag::address:
-        return print("{address}", out);
-      case tag::subnet:
-        return print("{subnet}", out);
-      case tag::port:
-        return print("{port}", out);
-      case tag::enumeration:
-        return print("{enum}", out);
-      case tag::vector:
-        return print("{vector}", out);
-      case tag::set:
-        return print("{set}", out);
-      case tag::table:
-        return print("{table}", out);
-      case tag::record:
-        return print("{record}", out);
-      case tag::alias:
-        return print("{alias}", out);
-    }
-  }
-
-  template <typename Iterator>
-  friend trial<void> print(type const& t, Iterator&& out, bool resolve = true)
-  {
-    if (t.name().empty() || ! resolve)
-      return visit([&out](auto&& x) { return print(x, out); },  t);
-    else
-      return print(t.name(), out);
-  }
-
   util::intrusive_ptr<intrusive_info> info_;
 };
 
@@ -702,28 +584,6 @@ private:
   vector() = default;
 
   type elem_;
-
-  template <typename Iterator>
-  friend trial<void> print(vector const& v, Iterator&& out)
-  {
-    auto t = print("vector<", out);
-    if (! t)
-      return t.error();
-
-    t = print(v.elem_, out);
-    if (! t)
-      return t.error();
-
-    *out++ = '>';
-
-    if (! v.attributes().empty())
-    {
-      *out++ = ' ';
-      return print(v.attributes(), out);
-    }
-
-    return nothing;
-  }
 };
 
 class type::set : public base<type::set>
@@ -752,28 +612,6 @@ private:
   set() = default;
 
   type elem_;
-
-  template <typename Iterator>
-  friend trial<void> print(set const& s, Iterator&& out)
-  {
-    auto t = print("set<", out);
-    if (! t)
-      return t.error();
-
-    t = print(s.elem(), out);
-    if (! t)
-      return t.error();
-
-    *out++ = '>';
-
-    if (! s.attributes().empty())
-    {
-      *out++ = ' ';
-      return print(s.attributes(), out);
-    }
-
-    return nothing;
-  }
 };
 
 class type::table : public type::base<type::table>
@@ -810,36 +648,6 @@ private:
 
   type key_;
   type value_;
-
-  template <typename Iterator>
-  friend trial<void> print(table const& tab, Iterator&& out)
-  {
-    auto t = print("table<", out);
-    if (! t)
-      return t;
-
-    t = print(tab.key_, out);
-    if (! t)
-      return t;
-
-    t = print(", ", out);
-    if (! t)
-      return t;
-
-    t = print(tab.value_, out);
-    if (! t)
-      return t;
-
-    *out++ = '>';
-
-    if (! tab.attributes().empty())
-    {
-      *out++ = ' ';
-      return print(tab.attributes(), out);
-    }
-
-    return nothing;
-  }
 };
 
 class type::record : public type::base<type::record>
@@ -968,38 +776,6 @@ private:
   void initialize();
 
   std::vector<field> fields_;
-
-  template <typename Iterator>
-  friend trial<void> print(field const& f, Iterator&& out)
-  {
-    auto t = print(f.name + ": ", out);
-    if (! t)
-      return t.error();
-
-    return print(f.type, out);
-  }
-
-  template <typename Iterator>
-  friend trial<void> print(record const& r, Iterator&& out)
-  {
-    auto t = print("record {", out);
-    if (! t)
-      return t.error();
-
-    t = util::print_delimited(", ", r.fields_.begin(), r.fields_.end(), out);
-    if (! t)
-      return t.error();
-
-    *out++ = '}';
-
-    if (! r.attributes().empty())
-    {
-      *out++ = ' ';
-      return print(r.attributes(), out);
-    }
-
-    return nothing;
-  }
 };
 
 class type::alias : public type::base<type::alias>
@@ -1028,22 +804,6 @@ private:
   alias() = default;
 
   vast::type type_;
-
-  template <typename Iterator>
-  friend trial<void> print(alias const& a, Iterator&& out)
-  {
-    auto t = print(a.type(), out);
-    if (! t)
-      return t;
-
-    if (! a.attributes().empty())
-    {
-      *out++ = ' ';
-      return print(a.attributes(), out);
-    }
-
-    return nothing;
-  }
 };
 
 struct type::intrusive_info : util::intrusive_base<intrusive_info>, type::info
@@ -1069,12 +829,6 @@ struct type::intrusive_info : util::intrusive_base<intrusive_info>, type::info
     return static_cast<type::info const&>(i);
   }
 };
-
-template <typename Iterator>
-trial<void> print(std::vector<type::attribute> const& attrs, Iterator&& out)
-{
-  return util::print_delimited(" ", attrs.begin(), attrs.end(), out);
-}
 
 } // namespace vast
 

@@ -1,4 +1,7 @@
 #include "vast/actor/indexer.h"
+#include "vast/concept/printable/vast/error.h"
+#include "vast/concept/printable/vast/event.h"
+#include "vast/concept/printable/vast/expression.h"
 #include "vast/actor/task.h"
 
 #define SUITE actors
@@ -21,7 +24,7 @@ TEST(indexer)
   for (size_t i = 0; i < n; ++i)
   {
     if (i % 2 == 0)
-      events[i] = event::make(record{i, to_string(i)}, t0);
+      events[i] = event::make(record{i, std::to_string(i)}, t0);
     else
       events[i] = event::make(4.2 + i, t1);
     events[i].id(i);

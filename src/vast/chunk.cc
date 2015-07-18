@@ -1,11 +1,11 @@
 #include "vast/chunk.h"
 #include "vast/event.h"
-#include "vast/concept/serializable/data.h"
 #include "vast/concept/serializable/state.h"
-#include "vast/concept/serializable/type.h"
 #include "vast/concept/serializable/std/chrono.h"
 #include "vast/concept/serializable/std/array.h"
 #include "vast/concept/serializable/std/string.h"
+#include "vast/concept/serializable/vast/data.h"
+#include "vast/concept/serializable/vast/type.h"
 #include "vast/concept/state/event.h"
 #include "vast/util/assert.h"
 

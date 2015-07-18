@@ -1,9 +1,11 @@
 #include "vast/filesystem.h"
 #include "vast/schema.h"
-#include "vast/concept/serializable/schema.h"
 #include "vast/concept/serializable/io.h"
+#include "vast/concept/serializable/vast/schema.h"
 #include "vast/concept/parseable/vast/detail/to_schema.h"
-#include "vast/util/convert.h"
+#include "vast/concept/printable/stream.h"
+#include "vast/concept/printable/vast/error.h"
+#include "vast/concept/printable/vast/schema.h"
 
 #define SUITE schema
 #include "test.h"
@@ -17,13 +19,16 @@ using namespace vast;
     REQUIRE(contents);                                              \
     auto s0 = detail::to_schema(*contents);                         \
     if (! s0)                                                       \
-      std::cout << s0.error() << std::endl;                         \
+      ERROR(s0.error());                                            \
     REQUIRE(s0);                                                    \
                                                                     \
     auto str = to_string(*s0);                                      \
     auto s1 = detail::to_schema(str);                               \
     if (! s1)                                                       \
-      std::cout << s1.error() << std::endl;                         \
+    {                                                               \
+      ERROR(s1.error());                                            \
+      ERROR("schema: " << str);                                     \
+    }                                                               \
     REQUIRE(s1);                                                    \
     CHECK(str == to_string(*s1));                                   \
   }

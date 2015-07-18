@@ -1,14 +1,14 @@
 #include "vast/announce.h"
+#include "vast/optional.h"
 #include "vast/concept/serializable/hierarchy.h"
+#include "vast/concept/serializable/io.h"
 #include "vast/concept/serializable/state.h"
-#include "vast/concept/serializable/vector_event.h"
-#include "vast/concept/serializable/std/list.h"
 #include "vast/concept/serializable/std/unordered_map.h"
 #include "vast/concept/serializable/std/vector.h"
-#include "vast/concept/serializable/util/optional.h"
-#include "vast/concept/serializable/io.h"
+#include "vast/concept/serializable/vast/optional.h"
+#include "vast/concept/serializable/vast/vector_event.h"
+#include "vast/concept/serializable/std/list.h"
 #include "vast/util/byte_swap.h"
-#include "vast/util/optional.h"
 
 #define SUITE serialization
 #include "test.h"
@@ -81,7 +81,7 @@ TEST(containers)
 
 TEST(optional<T>)
 {
-  util::optional<std::string> o1 = std::string{"foo"};
+  optional<std::string> o1 = std::string{"foo"};
   decltype(o1) o2;
   std::vector<uint8_t> buf;
   save(buf, o1);

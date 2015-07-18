@@ -104,7 +104,7 @@ set(tests
   tests/parse_bro.cc
   tests/parse_data.cc
   tests/parse_vast.cc
-  tests/print.cc
+  tests/printable.cc
   tests/range_map.cc
   tests/schema.cc
   tests/search.cc

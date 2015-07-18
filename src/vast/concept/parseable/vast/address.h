@@ -4,6 +4,7 @@
 #include <arpa/inet.h>  // inet_pton
 #include <sys/socket.h> // AF_INET*
 
+#include "vast/access.h"
 #include "vast/address.h"
 #include "vast/util/assert.h"
 

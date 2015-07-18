@@ -2,6 +2,7 @@
 
 #include "vast/event.h"
 #include "vast/actor/importer.h"
+#include "vast/concept/printable/vast/error.h"
 
 namespace vast {
 

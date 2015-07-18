@@ -1,7 +1,6 @@
 #ifndef VAST_UTIL_CODING_H
 #define VAST_UTIL_CODING_H
 
-#include <cassert>
 #include <limits>
 #include <type_traits>
 

@@ -9,7 +9,9 @@
 #include "vast/concept/parseable/vast/time.h"
 #include "vast/concept/parseable/vast/detail/to_expression.h"
 #include "vast/concept/parseable/vast/detail/to_schema.h"
-#include "vast/concept/serializable/expression.h"
+#include "vast/concept/printable/to_string.h"
+#include "vast/concept/printable/vast/expression.h"
+#include "vast/concept/serializable/vast/expression.h"
 #include "vast/concept/serializable/io.h"
 
 #define SUITE expression

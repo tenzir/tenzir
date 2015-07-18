@@ -16,14 +16,7 @@
 #include "vast/uuid.h"
 #include "vast/value.h"
 #include "vast/concept/serializable/builtin.h"
-#include "vast/concept/serializable/bitstream_polymorphic.h"
-#include "vast/concept/serializable/bitmap_index_polymorphic.h"
-#include "vast/concept/serializable/data.h"
-#include "vast/concept/serializable/expression.h"
-#include "vast/concept/serializable/schema.h"
 #include "vast/concept/serializable/state.h"
-#include "vast/concept/serializable/type.h"
-#include "vast/concept/serializable/vector_event.h"
 #include "vast/concept/serializable/caf/message.h"
 #include "vast/concept/serializable/std/array.h"
 #include "vast/concept/serializable/std/chrono.h"
@@ -31,19 +24,26 @@
 #include "vast/concept/serializable/std/unordered_map.h"
 #include "vast/concept/serializable/std/vector.h"
 #include "vast/concept/serializable/std/map.h"
+#include "vast/concept/serializable/vast/bitstream_polymorphic.h"
+#include "vast/concept/serializable/vast/bitmap_index_polymorphic.h"
+#include "vast/concept/serializable/vast/data.h"
+#include "vast/concept/serializable/vast/expression.h"
+#include "vast/concept/serializable/vast/schema.h"
+#include "vast/concept/serializable/vast/type.h"
+#include "vast/concept/serializable/vast/vector_event.h"
 #include "vast/concept/state/address.h"
 #include "vast/concept/state/bitmap_index.h"
 #include "vast/concept/state/block.h"
 #include "vast/concept/state/chunk.h"
+#include "vast/concept/state/error.h"
 #include "vast/concept/state/event.h"
 #include "vast/concept/state/filesystem.h"
+#include "vast/concept/state/none.h"
 #include "vast/concept/state/pattern.h"
 #include "vast/concept/state/time.h"
 #include "vast/concept/state/type.h"
 #include "vast/concept/state/uuid.h"
 #include "vast/concept/state/value.h"
-#include "vast/concept/state/util/error.h"
-#include "vast/concept/state/util/none.h"
 #include "vast/io/compression.h"
 
 namespace vast {
@@ -168,7 +168,7 @@ void announce_types()
   >("vast::detail::bitstream_model<vast::null_bitstream>",
     "vast::detail::bitstream_model<vast::ewah_bitstream>"
   );
-  // Polymorphic bitmap indexes.
+  //// Polymorphic bitmap indexes.
   announce_bmi_hierarchy<ewah_bitstream>("ewah_bitstream");
   announce_bmi_hierarchy<null_bitstream>("null_bitstream");
 }

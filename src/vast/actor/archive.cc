@@ -3,8 +3,12 @@
 #include "vast/chunk.h"
 #include "vast/event.h"
 #include "vast/actor/archive.h"
-#include "vast/concept/serializable/chunk.h"
 #include "vast/concept/serializable/io.h"
+#include "vast/concept/serializable/vast/chunk.h"
+#include "vast/concept/printable/stream.h"
+#include "vast/concept/printable/to_string.h"
+#include "vast/concept/printable/vast/error.h"
+#include "vast/concept/printable/vast/uuid.h"
 #include "vast/util/assert.h"
 
 namespace vast {

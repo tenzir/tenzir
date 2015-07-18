@@ -61,34 +61,6 @@ public:
   /// @returns The event timestamp.
   time::point timestamp() const;
 
-  template <typename Iterator>
-  friend trial<void> print(event const& e, Iterator&& out)
-  {
-    if (e.type().name().empty())
-    {
-      auto t = print("<anonymous>", out);
-      if (! t)
-        return t.error();
-    }
-    else
-    {
-      auto t = print(e.type().name(), out);
-      if (! t)
-        return t.error();
-    }
-
-    // TODO: Fix this laziness.
-    print(" [", out);
-    print(e.id_, out);
-    *out++ = '|';
-    print(e.timestamp_, out);
-    print("] ", out);
-
-    return print(static_cast<value const&>(e), out);
-  }
-
-  friend trial<void> convert(event const& e, util::json& j);
-
 private:
   event_id id_ = invalid_event_id;
   time::point timestamp_;

@@ -1,8 +1,9 @@
-#include "vast/convert.h"
 #include "vast/bitstream.h"
 #include "vast/bitstream_polymorphic.h"
-#include "vast/concept/serializable/bitstream_polymorphic.h"
+#include "vast/concept/printable/to_string.h"
+#include "vast/concept/printable/vast/bitstream.h"
 #include "vast/concept/serializable/io.h"
+#include "vast/concept/serializable/vast/bitstream_polymorphic.h"
 
 #define SUITE bitstream
 #include "test.h"
@@ -313,7 +314,8 @@ TEST(bitwise_operations_NULL)
   // 11000011101
   // 00100000000
   std::string str;
-  REQUIRE(print(v, std::back_inserter(str)));
+  auto i = std::back_inserter(str);
+  REQUIRE(print(i, v));
   CHECK(
       str ==
       "110\n"

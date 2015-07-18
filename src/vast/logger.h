@@ -2,10 +2,13 @@
 #define VAST_LOGGER_H
 
 #include <sstream>
+
 #include "vast/config.h"
 #include "vast/singleton.h"
-#include "vast/print.h"
 #include "vast/util/pp.h"
+
+// Defines vast::operator<<, which must be declared prior to the call site.
+#include "vast/concept/printable/stream.h"
 
 namespace vast {
 
@@ -75,7 +78,7 @@ public:
     std::string thread_id_;
     std::string facility_;
     std::string function_;
-    std::ostringstream ss_;
+    std::stringstream ss_;
 
     friend message& operator<<(message& msg, std::nullptr_t);
   };

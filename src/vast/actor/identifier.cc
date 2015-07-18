@@ -1,9 +1,11 @@
-#include "vast/actor/identifier.h"
+#include <caf/all.hpp>
 
 #include <cstring>
 #include <fstream>
-#include <caf/all.hpp>
-#include "vast/print.h"
+
+#include "vast/actor/identifier.h"
+#include "vast/concept/printable/to_string.h"
+#include "vast/concept/printable/vast/filesystem.h"
 
 using namespace caf;
 

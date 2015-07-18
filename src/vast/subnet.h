@@ -2,7 +2,6 @@
 #define VAST_SUBNET_H
 
 #include "vast/address.h"
-#include "vast/print.h"
 #include "vast/util/operators.h"
 
 namespace vast {
@@ -36,28 +35,12 @@ public:
   /// @returns The prefix length.
   uint8_t length() const;
 
-  // TODO: Migrate to concepts location.
-  template <typename Iterator>
-  friend trial<void> print(subnet const& s, Iterator&& out)
-  {
-    auto t = print(s.network_, out);
-    if (! t)
-      return t.error();
-
-    *out++ = '/';
-
-    return print(s.length(), out);
-  }
-
 private:
   bool initialize();
 
   address network_;
   uint8_t length_;
 };
-
-// TODO: Migrate to concepts location.
-trial<void> convert(subnet const& p, util::json& j);
 
 } // namespace vast
 

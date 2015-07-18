@@ -2,6 +2,9 @@
 #define VAST_ACTOR_SINK_BASE_H
 
 #include "vast/actor/actor.h"
+#include "vast/concept/printable/vast/event.h"
+#include "vast/concept/printable/vast/time.h"
+#include "vast/concept/printable/vast/uuid.h"
 #include "vast/event.h"
 #include "vast/time.h"
 #include "vast/uuid.h"

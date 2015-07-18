@@ -1,8 +1,11 @@
 #include "vast/actor/sink/json.h"
-#include "vast/io/algorithm.h"
+#include "vast/concept/convertible/vast/event.h"
+#include "vast/concept/convertible/to.h"
+#include "vast/concept/printable/print.h"
+#include "vast/concept/printable/vast/event.h"
+#include "vast/concept/printable/vast/json.h"
+#include "vast/io/iterator.h"
 #include "vast/util/assert.h"
-#include "vast/util/json.h"
-
 
 namespace vast {
 namespace sink {
@@ -16,12 +19,11 @@ json::json(std::unique_ptr<io::output_stream> out)
 
 bool json::process(event const& e)
 {
-  auto j = to<util::json>(e);
+  auto j = to<vast::json>(e);
   if (! j)
     return false;
-  auto str = to_string(*j, true);
-  str += '\n';
-  return io::copy(str.begin(), str.end(), *out_);
+  auto i = io::output_iterator{*out_};
+  return print(i, *j) && print(i, '\n');
 }
 
 void json::flush()

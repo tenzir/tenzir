@@ -11,6 +11,7 @@
 #include "vast/filesystem.h"
 #include "vast/logger.h"
 #include "vast/actor/atoms.h"
+#include "vast/concept/printable/vast/error.h"
 #include "vast/util/endpoint.h"
 #include "vast/util/string.h"
 

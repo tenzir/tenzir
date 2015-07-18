@@ -9,6 +9,9 @@
 #include "vast/time.h"
 #include "vast/filesystem.h"
 #include "vast/actor/profiler.h"
+#include "vast/concept/printable/to_string.h"
+#include "vast/concept/printable/vast/error.h"
+#include "vast/concept/printable/vast/filesystem.h"
 
 using namespace caf;
 

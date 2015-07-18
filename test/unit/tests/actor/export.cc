@@ -8,6 +8,8 @@
 #include "vast/query_options.h"
 #include "vast/uuid.h"
 #include "vast/actor/task.h"
+#include "vast/concept/printable/vast/error.h"
+#include "vast/concept/printable/vast/expression.h"
 
 #define SUITE actors
 #include "test.h"

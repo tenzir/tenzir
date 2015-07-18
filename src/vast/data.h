@@ -7,18 +7,20 @@
 #include <vector>
 #include <map>
 #include <type_traits>
+
 #include "vast/aliases.h"
 #include "vast/address.h"
 #include "vast/pattern.h"
 #include "vast/subnet.h"
 #include "vast/port.h"
 #include "vast/none.h"
+#include "vast/offset.h"
 #include "vast/optional.h"
 #include "vast/time.h"
 #include "vast/type.h"
+#include "vast/trial.h"
 #include "vast/util/flat_set.h"
 #include "vast/util/meta.h"
-#include "vast/util/print.h"
 #include "vast/util/string.h"
 
 namespace vast {
@@ -285,143 +287,6 @@ public:
 private:
   variant_type data_;
 };
-
-//
-// Printable Concept
-//
-// TODO: Migrate to concepts location.
-
-namespace detail {
-
-template <typename Iterator>
-struct data_printer
-{
-  data_printer(Iterator& out)
-    : out_{out}
-  {
-  }
-
-  trial<void> operator()(none const&) const
-  {
-    return print("<nil>", out_);
-  }
-
-  template <typename T>
-  trial<void> operator()(T const& x) const
-  {
-    return print(x, out_);
-  }
-
-  trial<void> operator()(std::string const& str) const
-  {
-    *out_++ = '"';
-
-    auto t = print(util::byte_escape(str), out_);
-    if (! t)
-      return t.error();
-
-    *out_++ = '"';
-
-    return nothing;
-  }
-
-  Iterator& out_;
-};
-
-} // namespace detail
-
-// TODO: Migrate to concepts location.
-template <typename Iterator>
-trial<void> print(data const& d, Iterator&& out)
-{
-  return visit(detail::data_printer<Iterator>(out), d);
-}
-
-// TODO: Migrate to concepts location.
-template <typename Iterator>
-trial<void> print(vector const& v, Iterator&& out, char const* delim = ", ")
-{
-  *out++ = '[';
-
-  auto t = util::print_delimited(delim, v.begin(), v.end(), out);
-  if (! t)
-    return t.error();
-
-  *out++ = ']';
-
-  return nothing;
-}
-
-// TODO: Migrate to concepts location.
-template <typename Iterator>
-trial<void> print(set const& s, Iterator&& out, char const* delim = ", ")
-{
-  *out++ = '{';
-
-  auto t = util::print_delimited(delim, s.begin(), s.end(), out);
-  if (! t)
-    return t.error();
-
-  *out++ = '}';
-
-  return nothing;
-}
-
-// TODO: Migrate to concepts location.
-template <typename Iterator>
-trial<void> print(table const& tab, Iterator&& out)
-{
-  *out++ = '{';
-  auto first = tab.begin();
-  auto last = tab.end();
-  while (first != last)
-  {
-    auto t = print(first->first, out);
-    if (! t)
-      return t.error();
-
-    t = print(" -> ", out);
-    if (! t)
-      return t.error();
-
-    t = print(first->second, out);
-    if (! t)
-      return t.error();
-
-    if (++first != last)
-    {
-      t = print(", ", out);
-      if (! t)
-        return t.error();
-    }
-  }
-
-  *out++ = '}';
-
-  return nothing;
-}
-
-// TODO: Migrate to concepts location.
-template <typename Iterator>
-trial<void> print(record const& r, Iterator&& out, char const* delim = ", ")
-{
-  *out++ = '(';
-  auto t = util::print_delimited(delim, r.begin(), r.end(), out);
-  if (! t)
-    return t.error();
-  *out++ = ')';
-  return nothing;
-}
-
-//
-// Conversion
-//
-
-trial<void> convert(vector const& v, util::json& j);
-trial<void> convert(set const& v, util::json& j);
-trial<void> convert(table const& v, util::json& j);
-trial<void> convert(record const& v, util::json& j);
-trial<void> convert(data const& v, util::json& j);
 
 } // namespace vast
 

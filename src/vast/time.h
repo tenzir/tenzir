@@ -4,9 +4,6 @@
 #include <chrono>
 #include <string>
 
-#include "vast/fwd.h"
-#include "vast/convert.h"
-#include "vast/print.h"
 #include "vast/util/operators.h"
 
 namespace vast {
@@ -40,6 +37,8 @@ inline moment snapshot()
 {
   return stopwatch::now();
 }
+
+using std::chrono::duration_cast;
 
 // Currently unused.
 class interval;
@@ -122,10 +121,6 @@ public:
   // Convert this duration to nanoseconds resolution.
   // @returns This duration in nanoseconds.
   rep nanoseconds() const;
-
-  friend trial<void> convert(duration tr, double& d);
-  friend trial<void> convert(duration tr, duration_type& dur);
-  friend trial<void> convert(duration tr, util::json& j);
 
 private:
   duration_type duration_{0};
@@ -212,18 +207,9 @@ public:
   /// Returns a duration representing the duration since the UNIX epoch.
   duration time_since_epoch() const;
 
-  friend trial<void> convert(point p, double& d);
-  friend trial<void> convert(point p, std::tm& tm);
-  friend trial<void> convert(point p, util::json& j);
-
 private:
   time_point_type time_point_;
 };
-
-// This remains outside because friend functions with default arguments must
-// come with a direct definition, no declarations allowed.
-trial<void> convert(point p, std::string& str,
-                    char const* fmt = point::format);
 
 /// Determines whether a given year is a leap year.
 /// @param year The year to check.
@@ -264,76 +250,7 @@ void propagate(std::tm &t);
 /// @returns The `std::tm` structure corresponding to *str*.
 std::tm to_tm(std::string const& str, char const* fmt, char const* locale);
 
-// TODO: migrate functions below to concepts location.
-
-//
-// Concepts
-//
-
-template <typename Iterator>
-trial<void> print(duration d, Iterator&& out, bool adaptive = true)
-{
-  using util::print;
-  if (adaptive)
-  {
-    auto cnt = d.count();
-    if (cnt > 1000000000)
-    {
-      print_numeric(cnt / 1000000000, out);
-      print('.', out);
-      print_numeric((cnt % 1000000000) / 10000000, out);
-      print("s", out);
-    }
-    else if (cnt > 1000000)
-    {
-      print_numeric(cnt / 1000000, out);
-      print('.', out);
-      print_numeric((cnt % 1000000) / 10000, out);
-      print("ms", out);
-    }
-    else if (cnt > 1000)
-    {
-      print_numeric(cnt / 1000, out);
-      print("us", out);
-    }
-    else
-    {
-      print_numeric(cnt, out);
-      print("ns", out);
-    }
-  }
-  else
-  {
-    print(d.double_seconds(), out);
-    print('s', out);
-  }
-  return nothing;
-}
-
-template <typename Iterator>
-trial<void> print(point p, Iterator&& out, char const* fmt = point::format)
-{
-  using util::print;
-  std::string str;
-  auto t = convert(p, str, fmt);
-  if (t)
-    return print(str, out);
-  else
-    return t.error();
-}
-
 } // namespace time
 } // namespace vast
-
-// We put this overload in namespace std so that ADL can find it.
-namespace std {
-
-template <typename Rep, typename Period, typename Iterator>
-vast::trial<void> print(std::chrono::duration<Rep, Period> d, Iterator&& out)
-{
-  return print(vast::time::duration{d}, out);
-}
-
-} // namespace std
 
 #endif

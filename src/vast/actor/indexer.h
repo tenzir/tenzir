@@ -9,9 +9,9 @@
 #include "vast/filesystem.h"
 #include "vast/offset.h"
 #include "vast/actor/actor.h"
-#include "vast/concept/serializable/bitmap_index_polymorphic.h"
-#include "vast/concept/serializable/type.h"
 #include "vast/concept/serializable/io.h"
+#include "vast/concept/serializable/vast/bitmap_index_polymorphic.h"
+#include "vast/concept/serializable/vast/type.h"
 #include "vast/util/assert.h"
 
 namespace vast {

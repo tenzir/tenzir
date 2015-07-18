@@ -1,6 +1,6 @@
 #include "vast/actor/sink/pcap.h"
-
 #include "vast/detail/packet_type.h"
+#include "vast/concept/printable/vast/filesystem.h"
 
 namespace vast {
 namespace sink {

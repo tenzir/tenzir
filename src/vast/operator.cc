@@ -1,5 +1,4 @@
 #include "vast/operator.h"
-#include "vast/logger.h"
 
 namespace vast {
 

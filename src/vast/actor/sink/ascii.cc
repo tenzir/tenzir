@@ -1,5 +1,7 @@
+#include <iterator>
+
 #include "vast/actor/sink/ascii.h"
-#include "vast/io/algorithm.h"
+#include "vast/io/iterator.h"
 #include "vast/util/assert.h"
 
 namespace vast {
@@ -14,8 +16,8 @@ ascii::ascii(std::unique_ptr<io::output_stream> out)
 
 bool ascii::process(event const& e)
 {
-  auto str = to_string(e) + '\n';
-  return io::copy(str.begin(), str.end(), *out_);
+  auto i = io::output_iterator{*out_};
+  return print(i, e) && print(i, '\n');
 }
 
 void ascii::flush()

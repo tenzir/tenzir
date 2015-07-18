@@ -1,5 +1,4 @@
 #include "vast/filesystem.h"
-#include "vast/print.h"
 #include "vast/util/system.h"
 
 #define SUITE filesystem
@@ -157,11 +156,9 @@ TEST(path_chopping)
 
 TEST(file_and_directory_manipulation)
 {
-  using std::to_string;
-
   path base = "vast-unit-test-file-system-test";
   path p("/tmp");
-  p /= base / to_string(util::process_id());
+  p /= base / std::to_string(util::process_id());
   CHECK(! p.is_regular_file());
   CHECK(! exists(p));
   CHECK(mkdir(p));

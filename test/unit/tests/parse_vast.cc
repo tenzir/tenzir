@@ -6,6 +6,9 @@
 #include "vast/concept/parseable/vast/port.h"
 #include "vast/concept/parseable/vast/subnet.h"
 #include "vast/concept/parseable/vast/time.h"
+#include "vast/concept/printable/to_string.h"
+#include "vast/concept/printable/vast/pattern.h"
+#include "vast/concept/printable/vast/address.h"
 
 #define SUITE parseable
 #include "test.h"

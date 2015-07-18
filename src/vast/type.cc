@@ -1,7 +1,6 @@
 #include "vast/type.h"
 #include "vast/value.h"
 #include "vast/util/assert.h"
-#include "vast/util/json.h"
 
 namespace vast {
 
@@ -42,7 +41,6 @@ struct deriver
   {
     if (x.empty())
       return type::table{type{}, type{}};
-
     auto front = x.begin();
     return type::table{type::derive(front->first), type::derive(front->second)};
   }
@@ -52,7 +50,6 @@ struct deriver
     std::vector<type::record::field> fs;
     for (size_t i = 0; i < r.size(); ++i)
       fs.emplace_back("", type::derive(r[i]));
-
     return type::record{std::move(fs)};
   }
 };
@@ -208,7 +205,6 @@ struct data_checker
   {
     static_assert(type::is_basic<type::from_data<T>>::value,
                   "only basic types allowed");
-
     return is<type::from_data<T>>(type_);
   }
 
@@ -222,7 +218,6 @@ struct data_checker
   {
     if (v.empty())
       return true;
-
     auto t = get<type::vector>(type_);
     return t && t->elem().check(*v.begin());
   }
@@ -231,7 +226,6 @@ struct data_checker
   {
     if (s.empty())
       return true;
-
     auto t = get<type::set>(type_);
     return t && t->elem().check(*s.begin());
   }
@@ -240,11 +234,9 @@ struct data_checker
   {
     if (x.empty())
       return true;
-
     auto t = get<type::table>(type_);
     if (! t)
       return false;
-
     auto front = x.begin();
     return t->key().check(front->first) && t->value().check(front->second);
   }
@@ -254,11 +246,9 @@ struct data_checker
     auto t = get<type::record>(type_);
     if (! t || t->fields().size() != r.size())
       return false;
-
     for (size_t i = 0; i < r.size(); ++i)
       if (! t->fields()[i].type.check(r[i]))
         return false;
-
     return true;
   }
 
@@ -410,11 +400,9 @@ struct congruentor
   {
     if (x.fields().size() != y.fields().size())
       return false;
-
     for (size_t i = 0; i < x.fields().size(); ++i)
       if (! visit(*this, x.fields()[i].type, y.fields()[i].type))
         return false;
-
     return true;
   }
 };
@@ -491,7 +479,6 @@ bool type::record::each::next()
 {
   if (records_.empty())
     return false;
-
   while (++state_.offset.back() == records_.back()->fields_.size())
   {
     records_.pop_back();
@@ -500,10 +487,8 @@ bool type::record::each::next()
     if (records_.empty())
       return false;
   }
-
   auto f = &records_.back()->fields_[state_.offset.back()];
   state_.trace.back() = f;
-
   while (auto r = get<type::record>(f->type))
   {
     f = &r->fields_[0];
@@ -511,7 +496,6 @@ bool type::record::each::next()
     state_.trace.push_back(f);
     state_.offset.push_back(0);
   }
-
   return true;
 }
 
@@ -519,7 +503,6 @@ trial<offset> type::record::resolve(key const& k) const
 {
   if (k.empty())
     return error{"empty symbol sequence"};
-
   offset off;
   auto found = true;
   auto rec = this;
@@ -535,17 +518,14 @@ trial<offset> type::record::resolve(key const& k) const
         rec = get<record>(rec->fields_[i].type);
         if (! (rec || id + 1 == k.end()))
           return error{"intermediate fields must be records"};
-
         off.push_back(i);
         found = true;
         break;
       }
     }
   }
-
   if (! found)
     return error{"non-existant field name"};
-
   return std::move(off);
 }
 
@@ -553,16 +533,13 @@ trial<key> type::record::resolve(offset const& o) const
 {
   if (o.empty())
     return error{"empty offset sequence"};
-
   key k;
   auto r = this;
   for (size_t i = 0; i < o.size(); ++i)
   {
     if (o[i] >= r->fields_.size())
       return error{"offset index ", i, " out of bounds"};
-
     k.push_back(r->fields_[o[i]].name);
-
     if (i != o.size() - 1)
     {
       r = get<record>(r->fields_[o[i]].type);
@@ -570,7 +547,6 @@ trial<key> type::record::resolve(offset const& o) const
         return error{"intermediate fields must be records"};
     }
   }
-
   return std::move(k);
 }
 
@@ -601,12 +577,10 @@ struct finder
     std::vector<std::pair<offset, key>> r;
     if (off_.empty() || key_.size() > trace_.size())
       return r;
-
     if (mode_ == prefix || mode_ == exact)
     {
       if (mode_ == exact && key_.size() != trace_.size())
         return r;
-
       for (size_t i = 0; i < key_.size(); ++i)
         if (! match(key_[i], trace_[i]))
           return r;
@@ -628,14 +602,11 @@ struct finder
             found = false;
             break;
           }
-
         if (found)
           break;
       }
-
       return r;
     }
-
     r.emplace_back(off_, trace_);
     return r;
   }
@@ -643,21 +614,16 @@ struct finder
   std::vector<std::pair<offset, key>> operator()(type::record const& r)
   {
     std::vector<std::pair<offset, key>> result;
-
     off_.push_back(0);
     for (auto& f : r.fields())
     {
       trace_.push_back(f.name);
-
       for (auto& p : visit(*this, f.type))
         result.push_back(std::move(p));
-
       trace_.pop_back();
       ++off_.back();
     }
-
     off_.pop_back();
-
     return result;
   }
 
@@ -698,9 +664,7 @@ type::record type::record::flatten() const
         result.fields_.emplace_back(outer.name + "." + inner.name, inner.type);
     else
       result.fields_.push_back(outer);
-
   result.initialize();
-
   return result;
 }
 
@@ -754,18 +718,14 @@ type const* type::record::at(key const& k) const
         f = &a;
         break;
       }
-
     if (! f)
       return nullptr;
-
     if (i + 1 == k.size())
       return &f->type;
-
     r = get<type::record>(f->type);
     if (! r)
       return nullptr;
   }
-
   return nullptr;
 }
 
@@ -777,16 +737,13 @@ type const* type::record::at(offset const& o) const
     auto& idx = o[i];
     if (idx >= r->fields_.size())
       return nullptr;
-
     auto t = &r->fields_[idx].type;
     if (i + 1 == o.size())
       return t;
-
     r = get<type::record>(*t);
     if (! r)
       return nullptr;
   }
-
   return nullptr;
 }
 
@@ -794,7 +751,6 @@ void type::record::initialize()
 {
   static constexpr auto desc = "record";
   update(desc, sizeof(desc));
-
   for (auto f : fields_)
   {
     update(f.name.data(), f.name.size());

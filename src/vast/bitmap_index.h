@@ -4,10 +4,12 @@
 #include "vast/bitmap.h"
 #include "vast/operator.h"
 #include "vast/optional.h"
+#include "vast/trial.h"
 #include "vast/value.h"
+#include "vast/concept/printable/vast/data.h"
+#include "vast/concept/printable/vast/operator.h"
 #include "vast/util/assert.h"
 #include "vast/util/operators.h"
-#include "vast/util/trial.h"
 
 namespace vast {
 

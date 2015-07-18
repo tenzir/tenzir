@@ -4,7 +4,7 @@
 #include <type_traits>
 #include <iterator>
 
-#include "vast/concept/parseable/core/unused_type.h"
+#include "vast/concept/support/unused_type.h"
 
 namespace vast {
 
@@ -68,8 +68,7 @@ namespace detail {
 struct has_parser
 {
   template <typename T>
-  static auto test(T* x)
-  -> decltype(typename parser_registry<T>::type(), std::true_type());
+  static auto test(T*) -> std::is_class<typename parser_registry<T>::type>;
 
   template <typename>
   static auto test(...) -> std::false_type;

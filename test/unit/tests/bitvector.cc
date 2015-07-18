@@ -1,5 +1,6 @@
 #include "vast/bitvector.h"
-#include "vast/util/print.h"
+#include "vast/concept/printable/to_string.h"
+#include "vast/concept/printable/vast/bitvector.h"
 
 #define SUITE bitvector
 #include "test.h"
@@ -89,8 +90,6 @@ TEST(bitwise_operations)
   CHECK(to_string((~a << 2) & b) == to_string(a));
 
   CHECK(b.count() == 3);
-
-  CHECK(to_string(b, false) == "010101");
 }
 
 TEST(backward_search)
@@ -123,16 +122,18 @@ TEST(iteration)
       bitvector::const_bit_iterator::begin(x),
       bitvector::const_bit_iterator::end(x),
       std::back_inserter(str),
-      [](bitvector::const_reference bit) { return bit ? '1' : '0'; });
+      [](auto bit) { return bit ? '1' : '0'; });
 
-  CHECK(to_string(x, false) == str);
+  std::string lsb_to_msb;
+  CHECK(bitvector_printer<policy::lsb_to_msb>{}(lsb_to_msb, x));
+  CHECK(lsb_to_msb == str);
 
   std::string rts;
   std::transform(
       bitvector::const_bit_iterator::rbegin(x),
       bitvector::const_bit_iterator::rend(x),
       std::back_inserter(rts),
-      [](bitvector::const_reference bit) { return bit ? '1' : '0'; });
+      [](auto bit) { return bit ? '1' : '0'; });
 
   std::reverse(str.begin(), str.end());
   CHECK(str == rts);

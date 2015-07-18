@@ -1,8 +1,5 @@
 #include "vast/subnet.h"
 
-#include "vast/logger.h"
-#include "vast/util/json.h"
-
 namespace vast {
 
 subnet::subnet()
@@ -54,23 +51,14 @@ bool subnet::initialize()
   {
     if (length_ > 32)
       return false;
-
     length_ += 96;
   }
   else if (length_ > 128)
   {
     return false;
   }
-
   network_.mask(length_);
-
   return true;
-}
-
-trial<void> convert(subnet const& p, util::json& j)
-{
-  j = to_string(p);
-  return nothing;
 }
 
 } // namespace vast

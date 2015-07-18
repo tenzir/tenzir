@@ -7,7 +7,7 @@
 #include "vast/concept/state/port.h"
 #include "vast/concept/state/subnet.h"
 #include "vast/concept/state/time.h"
-#include "vast/concept/state/util/none.h"
+#include "vast/concept/state/none.h"
 #include "vast/util/meta.h"
 
 namespace vast {

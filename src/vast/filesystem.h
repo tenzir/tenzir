@@ -10,8 +10,7 @@
 #include <functional>
 #include <string>
 #include <vector>
-#include "vast/fwd.h"
-#include "vast/print.h"
+
 #include "vast/trial.h"
 #include "vast/util/iterator.h"
 #include "vast/util/operators.h"
@@ -133,13 +132,6 @@ public:
 
   friend bool operator==(path const& x, path const& y);
   friend bool operator<(path const& x, path const& y);
-
-  // TODO: migrate to concepts location
-  template <typename Iterator>
-  friend trial<void> print(path const& p, Iterator&& out)
-  {
-    return print(p.str_, out);
-  }
 
 private:
   std::string str_;

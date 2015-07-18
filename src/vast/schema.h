@@ -1,14 +1,11 @@
 #ifndef VAST_SCHEMA_H
 #define VAST_SCHEMA_H
 
-#include <functional>
 #include <vector>
 #include <string>
-#include "vast/fwd.h"
-#include "vast/print.h"
-#include "vast/offset.h"
+
 #include "vast/type.h"
-#include "vast/util/intrusive.h"
+#include "vast/trial.h"
 #include "vast/util/operators.h"
 
 namespace vast {
@@ -53,23 +50,6 @@ public:
   size_t size() const;
   bool empty() const;
   void clear();
-
-  // TODO: Migrate to concepts location.
-  template <typename Iterator>
-  friend trial<void> print(schema const& s, Iterator&& out)
-  {
-    for (auto& t : s.types_)
-    {
-      if (t.name().empty())
-        continue;
-      print("type ", out);
-      print(t.name(), out);
-      print(" = ", out);
-      print(t, out, false);
-      print("\n", out);
-    }
-    return nothing;
-  }
 
 private:
   std::vector<type> types_;

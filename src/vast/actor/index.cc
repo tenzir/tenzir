@@ -1,20 +1,23 @@
-#include "vast/actor/index.h"
-
 #include <caf/all.hpp>
+
 #include "vast/bitmap_index.h"
 #include "vast/event.h"
-#include "vast/print.h"
 #include "vast/query_options.h"
+#include "vast/actor/index.h"
 #include "vast/actor/partition.h"
 #include "vast/actor/task.h"
 #include "vast/expr/restrictor.h"
+#include "vast/concept/printable/to_string.h"
+#include "vast/concept/printable/vast/expression.h"
+#include "vast/concept/printable/vast/error.h"
+#include "vast/concept/printable/vast/uuid.h"
+#include "vast/concept/serializable/io.h"
+#include "vast/concept/serializable/state.h"
 #include "vast/concept/serializable/std/array.h"
 #include "vast/concept/serializable/std/chrono.h"
 #include "vast/concept/serializable/std/unordered_map.h"
-#include "vast/concept/serializable/state.h"
 #include "vast/concept/state/uuid.h"
 #include "vast/concept/state/time.h"
-#include "vast/concept/serializable/io.h"
 #include "vast/util/assert.h"
 
 using namespace caf;

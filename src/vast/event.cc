@@ -1,8 +1,5 @@
 #include "vast/event.h"
 
-#include "vast/logger.h"
-#include "vast/util/json.h"
-
 namespace vast {
 
 event::event(none)
@@ -35,7 +32,6 @@ bool event::id(event_id i)
     id_ = i;
     return true;
   }
-
   return false;
 }
 
@@ -52,25 +48,6 @@ event_id event::id() const
 time::point event::timestamp() const
 {
   return timestamp_;
-}
-
-trial<void> convert(event const& e, util::json& j)
-{
-  util::json::object o;
-  o["id"] = e.id();
-
-  auto t = to<util::json>(e.timestamp().time_since_epoch().count());
-  if (! t)
-    return t.error();
-  o["timestamp"] = *t;
-
-  t = to<util::json>(static_cast<value const&>(e));
-  if (! t)
-    return t.error();
-  o["value"] = *t;
-
-  j = std::move(o);
-  return nothing;
 }
 
 } // namespace vast
