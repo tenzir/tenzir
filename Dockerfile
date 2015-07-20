@@ -2,39 +2,42 @@
 #
 # VERSION               0.1
 
-FROM        ubuntu:14.04.1
+FROM        ubuntu:15.04
 MAINTAINER  Matthias Vallentin <matthias@bro.org>
 
-ENV         PREFIX /usr/local
-ENV         PARALLELISM 4
-ENV         CC clang-3.5
-ENV         CXX clang++-3.5
+ENV PREFIX /usr/local
+ENV CC clang
+ENV CXX clang++
 
 # Compiler and dependcy setup
-RUN apt-get update && apt-get -y install cmake git build-essential tmux wget
-RUN apt-get update && apt-get -y install clang-3.5 libc++-dev libc++abi-dev \
-      libboost-dev libpcap-dev libedit-dev libgoogle-perftools-dev gcc-
+RUN apt-get -qq update && apt-get -qqy install clang libc++-dev cmake git-core
+RUN apt-get -qq update && apt-get -qqy install \
+    libboost-dev libpcap-dev libedit-dev libgoogle-perftools-dev
+RUN apt-get -qq update && apt-get -qqy install vim-tiny tmux wget
 
-RUN mkdir -p $PREFIX/src
+# By placing the ADD directive at this point, we build both CAF and VAST
+# every time. This ensures that the CI integration will always fetch a fresh
+# CAF tree, regardless of the Docker cache. The correct way to handle this
+# would be to provide a CAF docker image and use it in the FROM directive.
+ADD . $PREFIX/src/vast
 
 # CAF
-RUN cd $PREFIX/src/ && \
-    git clone https://github.com/actor-framework/actor-framework.git caf
-ADD . $PREFIX/src/caf
-RUN cd $PREFIX/src/caf && \
-    git checkout develop && \
-    ./configure --prefix=$PREFIX --no-examples && \
-    make -j $PARALLELISM && \
-    make test && \
-    make install
+WORKDIR $PREFIX/src
+RUN git clone https://github.com/actor-framework/actor-framework.git caf
+WORKDIR caf
+RUN git checkout develop
+RUN ./configure --prefix=$PREFIX --build-type=Release --no-examples --no-opencl
+RUN make
+RUN make test
+RUN make install
+RUN ldconfig
 
 # VAST
-# (No parallel build because it consumes too much memory.)
-ADD . $PREFIX/src/vast
-RUN cd $PREFIX/src/vast && \
-    ./configure --prefix=$PREFIX && \
-    make && \
-    make install
+WORKDIR $PREFIX/src/vast
+RUN ./configure --prefix=$PREFIX
+RUN make
+RUN make test
+RUN make install
 
 RUN ldconfig
 CMD ["/bin/bash"]
