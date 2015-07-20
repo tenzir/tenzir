@@ -519,7 +519,7 @@ struct event_indexer : default_actor
     return a;
   }
 
-  void on_exit()
+  void on_exit() override
   {
     indexers_.clear();
   }

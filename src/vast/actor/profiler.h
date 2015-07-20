@@ -16,7 +16,7 @@ struct profiler : default_actor
   /// @param secs The number of seconds between subsequent measurements.
   profiler(path log_dir, std::chrono::seconds secs);
 
-  void on_exit();
+  void on_exit() override;
   caf::behavior make_behavior() override;
 
   path const log_dir_;

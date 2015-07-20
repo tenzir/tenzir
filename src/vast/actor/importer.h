@@ -11,7 +11,7 @@ namespace vast {
 struct importer : flow_controlled_actor
 {
   importer();
-  void on_exit();
+  void on_exit() override;
   caf::behavior make_behavior() override;
 
   caf::actor identifier_;

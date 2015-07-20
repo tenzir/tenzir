@@ -24,7 +24,7 @@ struct task : default_actor
     trap_exit(true);
   }
 
-  void on_exit()
+  void on_exit() override
   {
     subscribers_.clear();
     supervisors_.clear();

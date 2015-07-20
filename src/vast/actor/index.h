@@ -89,7 +89,7 @@ struct index : public flow_controlled_actor
   index(path const& dir, size_t max_events,
         size_t passive_parts, size_t active_parts);
 
-  void on_exit();
+  void on_exit() override;
   caf::behavior make_behavior() override;
 
   /// Dispatches a query for a partition either by relaying it directly if

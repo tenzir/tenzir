@@ -23,7 +23,7 @@ public:
     trap_exit(true);
   }
 
-  void on_exit()
+  void on_exit() override
   {
     static_cast<Derived*>(this)->flush();
     accountant_ = caf::invalid_actor;

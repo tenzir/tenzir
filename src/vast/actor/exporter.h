@@ -25,7 +25,7 @@ struct exporter : default_actor
   /// @param opts The query options.
   exporter(expression ast, query_options opts);
 
-  void on_exit();
+  void on_exit() override;
   caf::behavior make_behavior() override;
 
   // Prefetches the next chunk and sets the "inflight" chunk status. If we

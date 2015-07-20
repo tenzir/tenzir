@@ -13,7 +13,7 @@ struct signal_monitor : default_actor
   /// @param receiver the actor receiving the signals.
   signal_monitor(caf::actor receiver);
 
-  void on_exit();
+  void on_exit() override;
   caf::behavior make_behavior() override;
 
   caf::actor sink_;

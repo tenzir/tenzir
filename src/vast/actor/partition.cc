@@ -55,7 +55,7 @@ struct continuous_query_proxy : default_actor
     {
     }
 
-    void on_exit()
+    void on_exit() override
     {
       sink_ = invalid_actor;
     }
@@ -96,7 +96,7 @@ struct continuous_query_proxy : default_actor
   {
   }
 
-  void on_exit()
+  void on_exit() override
   {
     sink_ = invalid_actor;
   }

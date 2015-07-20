@@ -24,7 +24,7 @@ public:
     trap_exit(true);
   }
 
-  void on_exit()
+  void on_exit() override
   {
     accountant_ = caf::invalid_actor;
     sinks_.clear();

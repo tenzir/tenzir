@@ -36,7 +36,7 @@ struct archive : flow_controlled_actor
   archive(path dir, size_t capacity, size_t max_segment_size,
           io::compression = io::lz4);
 
-  void on_exit();
+  void on_exit() override;
   caf::behavior make_behavior() override;
 
   trial<void> store(segment s);

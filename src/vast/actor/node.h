@@ -30,7 +30,7 @@ struct node : default_actor
   /// @param dir The directory where to store persistent state.
   node(std::string const& name = util::hostname(), path const& dir = "vast");
 
-  void on_exit();
+  void on_exit() override;
   caf::behavior make_behavior() override;
 
   //

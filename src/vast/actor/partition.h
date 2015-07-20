@@ -49,7 +49,7 @@ struct partition : flow_controlled_actor
   /// @pre `sink != invalid_actor`
   partition(path dir, caf::actor sink);
 
-  void on_exit();
+  void on_exit() override;
   caf::behavior make_behavior() override;
 
   void flush();

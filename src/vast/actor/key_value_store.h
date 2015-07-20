@@ -15,7 +15,7 @@ struct key_value_store : default_actor
   /// Spawns a backend.
   key_value_store(std::string const& seperator = "/");
 
-  void on_exit();
+  void on_exit() override;
   caf::behavior make_behavior() override;
 
   std::string const seperator_;
