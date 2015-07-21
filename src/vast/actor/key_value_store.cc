@@ -9,6 +9,60 @@ using namespace caf;
 
 namespace vast {
 
+key_value_store::wrapper::wrapper(actor& store)
+  : store_{store}
+{
+}
+
+size_t key_value_store::wrapper::erase(std::string const& key) const
+{
+  auto result = uint64_t{0};
+  scoped_actor self;
+  self->sync_send(store_, delete_atom::value, key).await(
+    [&](uint64_t deleted) { result = deleted; }
+  );
+  return result;
+}
+
+bool key_value_store::wrapper::exists(std::string const& key) const
+{
+  auto result = false;
+  scoped_actor self;
+  self->sync_send(store_, exists_atom::value, key).await(
+    [&](bool b) { result = b; }
+  );
+  return result;
+}
+
+message key_value_store::wrapper::get(std::string const& key) const
+{
+  message result;
+  scoped_actor self;
+  self->sync_send(store_, get_atom::value, key).await(
+    others >> [&] { result = std::move(self->current_message()); }
+  );
+  return result;
+}
+
+std::map<std::string, message>
+key_value_store::wrapper::list(std::string const& key) const
+{
+  auto result = std::map<std::string, message>{};
+  scoped_actor self;
+  self->sync_send(store_, list_atom::value, key).await(
+    [&](std::map<std::string, message>& m) { result = std::move(m); }
+  );
+  return result;
+}
+
+void key_value_store::wrapper::add_peer(actor const& peer) const
+{
+  scoped_actor self;
+  self->sync_send(store_, peer_atom::value, peer).await(
+    [](ok_atom) { /* nop */ }
+  );
+}
+
 key_value_store::key_value_store(std::string const& seperator)
   : default_actor{"key-value-store"},
     seperator_{seperator}
@@ -81,12 +135,13 @@ behavior key_value_store::make_behavior()
     [=](list_atom, std::string const& key)
     {
       VAST_DEBUG(this, "got LIST:", key);
-      if (key.empty())
-        return make_message(error{"empty key"});
-      auto values = data_.prefixed_by(key);
       std::map<std::string, message> result;
-      for (auto& v : values)
-        result.emplace(v->first, v->second);
+      if (! key.empty())
+      {
+        auto values = data_.prefixed_by(key);
+        for (auto& v : values)
+          result.emplace(v->first, v->second);
+      }
       return make_message(std::move(result));
     },
     [=](delete_atom, std::string const& key)

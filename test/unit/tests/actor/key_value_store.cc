@@ -9,37 +9,38 @@
 using namespace caf;
 using namespace vast;
 
-TEST(key_value_store)
+TEST(key-value store)
 {
   scoped_actor self;
   auto s = self->spawn<key_value_store>();
   MESSAGE("put two values");
-  self->sync_send(s, put_atom::value, "/foo/bar", 42).await(
+  self->sync_send(s, put_atom::value, "/foo/bar", uint8_t{42}).await(
     [&](ok_atom) { /* nop */ }
   );
-  self->sync_send(s, put_atom::value, "/foo/baz", 84).await(
+  self->sync_send(s, put_atom::value, "/foo/baz", uint8_t{84}).await(
     [&](ok_atom) { /* nop */ }
   );
   MESSAGE("get a key with a single value");
   self->sync_send(s, get_atom::value, "/foo/bar").await(
-    [&](int value) { CHECK(value == 42); },
-    others() >> [&] { REQUIRE(false); }
+    [&](uint8_t value) { CHECK(value == 42); },
+    others >> [&] { REQUIRE(false); }
   );
   MESSAGE("get an invalid key value");
   self->sync_send(s, get_atom::value, "/foo/corge").await(
     [&](vast::none) { REQUIRE(true); },
-    others() >> [&] { REQUIRE(false); }
+    others >> [&] { REQUIRE(false); }
   );
   MESSAGE("get multiple values");
   self->sync_send(s, list_atom::value, "/foo").await(
     [&](std::map<std::string, message> const& map)
     {
+      REQUIRE(map.size() == 2);
       CHECK(map.begin()->first == "/foo/bar");
-      CHECK(map.begin()->second.get_as<int>(0) == 42);
+      CHECK(map.begin()->second.get_as<uint8_t>(0) == 42);
       CHECK(map.rbegin()->first == "/foo/baz");
-      CHECK(map.rbegin()->second.get_as<int>(0) == 84);
+      CHECK(map.rbegin()->second.get_as<uint8_t>(0) == 84);
     },
-    others() >> [&] { REQUIRE(false); }
+    others >> [&] { REQUIRE(false); }
   );
   MESSAGE("delete a key");
   self->sync_send(s, delete_atom::value, "/foo/bar").await(
@@ -52,7 +53,7 @@ TEST(key_value_store)
   self->sync_send(s, put_atom::value, "/foo/qux", "quuuux").await(
     [&](ok_atom) { /* nop */ }
   );
-  self->sync_send(s, delete_atom::value, "/foo", 84).await(
+  self->sync_send(s, delete_atom::value, "/foo", uint8_t{84}).await(
     [&](uint64_t n) { CHECK(n == 1); }
   );
   self->sync_send(s, exists_atom::value, "/foo/baz").await(
@@ -63,13 +64,41 @@ TEST(key_value_store)
     [&](ok_atom) { /* nop */ }
   );
   self->sync_send(s, get_atom::value, "meow").await(
-    others() >> [&] { REQUIRE(true); }
+    others >> [&] { REQUIRE(true); }
   );
   self->send_exit(s, exit::done);
   self->await_all_other_actors_done();
 }
 
-TEST(key_value_store_distributed)
+TEST(key-value store wrapper)
+{
+  scoped_actor self;
+  auto s = self->spawn<key_value_store>();
+  auto w = key_value_store::wrapper{s};
+  MESSAGE("put two values");
+  CHECK(w.put("/foo/bar", uint8_t{42}));
+  CHECK(w.put("/foo/baz", uint8_t{84}));
+  MESSAGE("get values value");
+  w.get("/foo/bar").apply([](uint8_t value) { CHECK(value == 42); });
+  w.get("/foo/corge").apply([](vast::none) { REQUIRE(true); });
+  MESSAGE("get multiple values");
+  auto map = w.list("/foo");
+  REQUIRE(map.size() == 2);
+  CHECK(map.begin()->first == "/foo/bar");
+  CHECK(map.begin()->second.get_as<uint8_t>(0) == 42);
+  CHECK(map.rbegin()->first == "/foo/baz");
+  CHECK(map.rbegin()->second.get_as<uint8_t>(0) == 84);
+  MESSAGE("delete a key");
+  CHECK(w.erase("/foo/bar") == 1);
+  CHECK(! w.exists("/foo/bar"));
+  MESSAGE("put/get an empty value");
+  CHECK(w.put("meow"));
+  w.get("meow").apply(others >> [] { REQUIRE(true); });
+  self->send_exit(s, exit::done);
+  self->await_all_other_actors_done();
+}
+
+TEST(distributed key-value store)
 {
   scoped_actor self;
   auto s1 = self->spawn<key_value_store>();
@@ -86,7 +115,7 @@ TEST(key_value_store_distributed)
   MESSAGE("get value from peer");
   self->sync_send(s2, get_atom::value, "foo").await(
     [&](int value) { CHECK(value == 42); },
-    others() >> [&] { REQUIRE(false); }
+    others >> [&] { REQUIRE(false); }
   );
   MESSAGE("insert value in peer and get it from other");
   self->sync_send(s2, put_atom::value, "bar", 84).await([](ok_atom) {});
@@ -94,7 +123,7 @@ TEST(key_value_store_distributed)
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
   self->sync_send(s1, get_atom::value, "bar").await(
     [&](int value) { CHECK(value == 84); },
-    others() >> [&] { REQUIRE(false); }
+    others >> [&] { REQUIRE(false); }
   );
   self->send_exit(s1, exit::done);
   self->send_exit(s2, exit::done);
