@@ -112,9 +112,10 @@ struct core
     self->sync_send(n, get_atom::value, "source").await(
       [&](actor const& a, std::string const& fqn, std::string const& type)
       {
+        if (a == invalid_actor)
+          return; // source has already terminated
         CHECK(fqn == "source@" + node_name);
         CHECK(type == "source");
-        REQUIRE(a != invalid_actor);
         self->monitor(a);
       }
     );
