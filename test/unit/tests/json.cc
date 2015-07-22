@@ -1,13 +1,15 @@
 #include "vast/json.h"
+#include "vast/concept/parseable/vast/json.h"
 #include "vast/concept/printable/numeric.h"
-#include "vast/concept/convertible/to.h"
 #include "vast/concept/printable/to_string.h"
 #include "vast/concept/printable/vast/json.h"
+#include "vast/concept/convertible/to.h"
 
 #define SUITE json
 #include "test.h"
 
 using namespace vast;
+using namespace std::string_literals;
 
 TEST(construction and assignment)
 {
@@ -75,6 +77,80 @@ TEST(total order)
   CHECK(! (j0 <= j1));
   CHECK(j0 > j1);
   CHECK(j0 >= j1);
+}
+
+TEST(parsing)
+{
+  json j;
+  std::string str;
+
+  MESSAGE("bool");
+  str = "true";
+  CHECK(parsers::json(str, j));
+  CHECK(j == true);
+  str = "false";
+  CHECK(parsers::json(str, j));
+  CHECK(j == false);
+
+  MESSAGE("null");
+  str = "null";
+  CHECK(parsers::json(str, j));
+  CHECK(j == nil);
+
+  MESSAGE("number");
+  str = "42";
+  CHECK(parsers::json(str, j));
+  CHECK(j == json::number{42});
+  str = "-1337";
+  CHECK(parsers::json(str, j));
+  CHECK(j == json::number{-1337});
+  str = "4.2";
+  CHECK(parsers::json(str, j));
+  CHECK(j == json::number{4.2});
+
+  MESSAGE("string");
+  str = "\"foo\"";
+  CHECK(parsers::json(str, j));
+  CHECK(j == "foo");
+
+  MESSAGE("array");
+  str = "[]";
+  CHECK(parsers::json(str, j));
+  CHECK(j == json::array{});
+  str = "[    ]";
+  CHECK(parsers::json(str, j));
+  CHECK(j == json::array{});
+  str = "[ 42,-1337 , \"foo\", null ,true ]"s;
+  CHECK(parsers::json(str, j));
+  CHECK(j == json::array{42, -1337, "foo", nil, true});
+
+  MESSAGE("object");
+  str = "{}";
+  CHECK(parsers::json(str, j));
+  CHECK(j == json::object{});
+  str = "{    }";
+  CHECK(parsers::json(str, j));
+  CHECK(j == json::object{});
+  str = R"json({ "baz": 4.2, "inner": null })json";
+  CHECK(parsers::json(str, j));
+  CHECK(j == json::object{{"baz", 4.2}, {"inner", nil}});
+  str = R"json({
+  "baz": 4.2,
+  "inner": null,
+  "x": [
+    42,
+    -1337,
+    "foo",
+    true
+  ]
+})json";
+  CHECK(parsers::json(str, j));
+  auto o = json::object{
+    {"baz", 4.2},
+    {"inner", nil},
+    {"x", json::array{42, -1337, "foo", true}}
+  };
+  CHECK(j == o);
 }
 
 TEST(printing)

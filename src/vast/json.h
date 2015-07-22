@@ -78,13 +78,23 @@ public:
   /// A sequence of JSON values.
   struct array : std::vector<json>
   {
-    using vector<json>::vector;
+    using super = std::vector<json>;
+    using super::vector;
+
+    array() = default;
+    array(super const& s) : super(s) {}
+    array(super&& s) : super(std::move(s)) {}
   };
 
   /// An associative data structure exposing key-value pairs with unique keys.
   struct object : std::map<std::string, json>
   {
-    using map<std::string, json>::map;
+    using super = std::map<std::string, json>;
+    using super::map;
+
+    object() = default;
+    object(super const& s) : super(s) {}
+    object(super&& s) : super(std::move(s)) {}
   };
 
   /// Default-constructs a null JSON value.
