@@ -11,6 +11,8 @@
 #include "vast/filesystem.h"
 #include "vast/logger.h"
 #include "vast/actor/atoms.h"
+#include "vast/actor/exit.h"
+#include "vast/actor/source/spawn.h"
 #include "vast/concept/printable/vast/error.h"
 #include "vast/util/endpoint.h"
 #include "vast/util/string.h"
@@ -90,53 +92,107 @@ int main(int argc, char *argv[])
     std::cerr << "failed to reset logger file backend" << std::endl;
     return 1;
   }
-  // Go!
+  // Establish connection to remote node.
+  auto guard = caf::detail::make_scope_guard(
+    [] { caf::shutdown(); logger::destruct(); }
+  );
   announce_types();
-  auto exit_code = 0;
-  auto args = std::vector<std::string>(cmd + 1, command_line.end());
+  caf::actor node;
   try
   {
     VAST_VERBOSE("connecting to", host << ':' << port);
-    auto node = caf::io::remote_actor(host.c_str(), port);
-    // Assemble message from command line.
-    caf::message_builder mb;
-    mb.append(*cmd);
-    for (auto& a : args)
-      mb.append(a);
-    caf::scoped_actor self;
-    self->sync_send(node, mb.to_message()).await(
-      [&](ok_atom)
-      {
-        VAST_VERBOSE("successfully executed command:",
-                     *cmd, util::join(args, " "));
-      },
-      [&](std::string const& str)
-      {
-        VAST_VERBOSE("successfully executed command:",
-                     *cmd, util::join(args, " "));
-        std::cout << str << std::endl;
-      },
-      [&](error const& e)
-      {
-        VAST_ERROR("failed to executed command:",
-                   *cmd, util::join(args, " "));
-        VAST_ERROR(e);
-        exit_code = 1;
-      },
-      caf::others() >> [&]
-      {
-        auto msg = to_string(self->current_message());
-        VAST_ERROR("got unexpected message:", msg);
-      }
-    );
-    self->await_all_other_actors_done();
+    node = caf::io::remote_actor(host.c_str(), port);
   }
   catch (caf::network_error const& e)
   {
     VAST_ERROR("failed to connect to", host << ':' << port);
-    exit_code = 1;
+    return 1;
   }
-  caf::shutdown();
-  logger::destruct();
-  return exit_code;
+  // Assemble message from command line.
+  auto args = std::vector<std::string>(cmd + 1, command_line.end());
+  caf::message_builder mb;
+  mb.append(*cmd);
+  for (auto& a : args)
+    mb.append(a);
+  caf::scoped_actor self;
+  if (*cmd == "import")
+  {
+    // 1. Spawn a source.
+    auto src = source::spawn(mb.to_message().drop(1));
+    if (! src)
+    {
+      VAST_ERROR("failed to spawn source:", src.error());
+      return 1;
+    }
+    auto source_guard = caf::detail::make_scope_guard(
+      [=] { anon_send_exit(*src, exit::kill); }
+    );
+    // 2. Find the next-best importer.
+    caf::actor importer;
+    self->sync_send(node, store_atom::value).await(
+      [&](caf::actor const& store) {
+        self->sync_send(store, list_atom::value, "actors").await(
+          [&](std::map<std::string, caf::message>& m) {
+            for (auto& p : m)
+              // TODO: as opposed to taking the first importer available, it
+              // could make sense to take the one which faces the least load.
+              if (p.second.get_as<std::string>(1) == "importer")
+              {
+                importer = p.second.get_as<caf::actor>(0);
+                return;
+              }
+          },
+          caf::others >> [&] {
+            VAST_ERROR("got unexpected message:",
+                       caf::to_string(self->current_message()));
+          }
+        );
+      }
+    );
+    if (! importer)
+    {
+      VAST_ERROR("could not obtain importer from node");
+      return 1;
+    }
+    // 3. Connect source and importer.
+    VAST_DEBUG("connecting source with remote importer");
+    auto msg = make_message(put_atom::value, sink_atom::value, importer);
+    self->send(*src, std::move(msg));
+    // 4. Run the source.
+    VAST_DEBUG("running source");
+    self->send(*src, run_atom::value);
+    source_guard.disable();
+  }
+  else
+  {
+    auto cmd_line = *cmd + util::join(args, " ");
+    auto exit_code = 0;
+    self->sync_send(node, mb.to_message()).await(
+      [&](ok_atom)
+      {
+        VAST_VERBOSE("successfully executed command:", cmd_line);
+      },
+      [&](std::string const& str)
+      {
+        VAST_VERBOSE("successfully executed command:", cmd_line);
+        std::cout << str << std::endl;
+      },
+      [&](error const& e)
+      {
+        VAST_ERROR("failed to execute command:", cmd_line);
+        VAST_ERROR(e);
+        exit_code = 1;
+      },
+      caf::others >> [&]
+      {
+        auto msg = to_string(self->current_message());
+        VAST_ERROR("got unexpected message:", msg);
+        exit_code = 1;
+      }
+    );
+    if (exit_code != 0)
+      return exit_code;
+  }
+  self->await_all_other_actors_done();
+  return 0;
 }
