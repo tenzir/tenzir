@@ -155,9 +155,6 @@ void announce_types()
   announce<std::vector<event>>("std::vector<vast::event>");
   announce<std::vector<value>>("std::vector<vast::value>");
   announce<std::vector<uuid>>("std::vector<vast::uuid>");
-  // std::map<T,U>
-  announce<std::map<std::string, caf::message>>(
-    "std::map<std::string,caf::message>>");
   // Polymorphic bitstreams
   announce<ewah_bitstream>("vast::ewah_bitstream");
   announce<null_bitstream>("vast::null_bitstream");
@@ -171,6 +168,9 @@ void announce_types()
   //// Polymorphic bitmap indexes.
   announce_bmi_hierarchy<ewah_bitstream>("ewah_bitstream");
   announce_bmi_hierarchy<null_bitstream>("null_bitstream");
+  // CAF only
+  caf::announce<std::map<std::string, caf::message>>(
+    "std::map<std::string,caf::message>>");
 }
 
 } // namespace vast
