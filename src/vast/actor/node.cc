@@ -20,6 +20,8 @@
 #include "vast/actor/index.h"
 #include "vast/actor/exporter.h"
 #include "vast/actor/node.h"
+#include "vast/actor/sink/spawn.h"
+#include "vast/actor/source/spawn.h"
 #include "vast/concept/printable/vast/expression.h"
 #include "vast/concept/printable/vast/error.h"
 #include "vast/concept/printable/vast/filesystem.h"
@@ -120,14 +122,20 @@ behavior node::make_behavior()
     {
       return show(arg);
     },
-    [=](get_atom, std::string const& label)
+    [=](store_atom)
     {
-      auto s = get(label);
-      return make_message(std::move(s.actor), std::move(s.fqn), std::move(s.type));
+      return store_;
     },
     //
     // PRIVATE
     //
+    [=](get_atom, std::string const& label)
+    {
+      // FIXME: forward to store instead
+      auto s = get(label);
+      return make_message(std::move(s.actor), std::move(s.fqn),
+                          std::move(s.type));
+    },
     [=](sys_atom, actor const& peer, actor const& peer_store,
         std::string const& peer_name)
     {
@@ -409,13 +417,21 @@ message node::spawn_actor(message const& msg)
     },
     on("source", any_vals) >> [&]
     {
-      // Outsourced to reduce compiler memory footprint.
-      return spawn_source(label, params);
+      auto src = source::spawn(params);
+      if (! src)
+        return make_message(std::move(src.error()));
+      send(*src, put_atom::value, accountant_atom::value, accountant_);
+      attach_functor([s=*src](uint32_t ec) { anon_send_exit(s, ec); });
+      return put({*src, "source", label});
     },
     on("sink", any_vals) >> [&]
     {
-      // Outsourced to reduce compiler memory footprint.
-      return spawn_sink(label, params);
+      auto snk = sink::spawn(params);
+      if (! snk)
+        return make_message(std::move(snk.error()));
+      send(*snk, put_atom::value, accountant_atom::value, accountant_);
+      attach_functor([s=*snk](uint32_t ec) { anon_send_exit(s, ec); });
+      return put({*snk, "sink", label});
     },
     on("profiler", any_vals) >> [&]
     {
@@ -454,7 +470,10 @@ message node::send_run(std::string const& arg)
   VAST_VERBOSE(this, "sends RUN to", arg);
   auto state = get(arg);
   if (! state.actor)
+  {
+    VAST_ERROR(this, "has no such actor:", arg);
     return make_message(error{"no such actor: ", arg});
+  }
   send(state.actor, run_atom::value);
   if (state.type == "exporter")
     // FIXME: Because we've previously configured a limit, the extraction

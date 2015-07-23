@@ -34,14 +34,15 @@ set(libvast_sources
   actor/index.cc
   actor/key_value_store.cc
   actor/node.cc
-  actor/node_spawn.cc
   actor/partition.cc
   actor/signal_monitor.cc
   actor/sink/ascii.cc
   actor/sink/bro.cc
   actor/sink/json.cc
+  actor/sink/spawn.cc
   actor/source/bro.cc
   actor/source/bgpdump.cc
+  actor/source/spawn.cc
   actor/source/test.cc
   concept/convertible/vast/address.cc
   concept/convertible/vast/data.cc
