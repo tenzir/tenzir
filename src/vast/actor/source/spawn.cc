@@ -25,7 +25,7 @@ trial<caf::actor> spawn(message const& params)
 {
   auto batch_size = uint64_t{100000};
   auto schema_file = ""s;
-  auto input = ""s;
+  auto input = "-"s;
   auto r = params.extract_opts({
     {"batch,b", "number of events to ingest at once", batch_size},
     {"schema,s", "alternate schema file", schema_file},
@@ -39,12 +39,10 @@ trial<caf::actor> spawn(message const& params)
   std::unique_ptr<io::input_stream> in;
   if (! (format == "pcap" || format == "test"))
   {
-    if (r.opts.count("read") == 0 || input.empty())
-    {
-      return error{"no valid input specified (-r)"};
-    }
     if (r.opts.count("uds") > 0)
     {
+      if (input == "-")
+        return error{"invalid UNIX domain socket path"};
       auto uds = util::unix_domain_socket::connect(input);
       if (! uds)
         return error{"failed to connect to UNIX domain socket at ", input};
