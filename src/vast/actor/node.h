@@ -2,6 +2,7 @@
 #define VAST_ACTOR_NODE_H
 
 #include "vast/filesystem.h"
+#include "vast/trial.h"
 #include "vast/actor/actor.h"
 #include "vast/actor/key_value_store.h"
 #include "vast/util/system.h"
@@ -58,7 +59,7 @@ struct node : default_actor
   };
 
   actor_state get(std::string const& label);
-  caf::message put(actor_state const& state);
+  trial<caf::actor> put(actor_state const& state);
   bool has_topology_entry(std::string const& src, std::string const& snk);
 
   caf::actor accountant_;

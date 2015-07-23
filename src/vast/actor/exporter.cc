@@ -64,15 +64,6 @@ exporter::exporter(expression ast, query_options opts)
 
   init_ = {
     handle_down,
-    [=](limit_atom, uint64_t limit)
-    {
-      VAST_DEBUG(this, "sets new maximum result limit to", limit);
-      if (limit < total_results_)
-        VAST_WARN(this, "ignores new limit", limit,
-                  "smaller than the total number of results", total_results_);
-      else
-        max_results_ = limit;
-    },
     [=](put_atom, archive_atom, actor const& a)
     {
       VAST_DEBUG(this, "registers archive", a);
@@ -137,7 +128,8 @@ exporter::exporter(expression ast, query_options opts)
     {
       VAST_VERBOSE(this, "completed index interaction in", runtime);
       complete();
-    }};
+    }
+  };
 
   waiting_ = {
     handle_down,
@@ -153,44 +145,62 @@ exporter::exporter(expression ast, query_options opts)
       reader_ = std::make_unique<chunk::reader>(chunk_);
       VAST_DEBUG(this, "becomes extracting");
       become(extracting_);
-      if (requested_ > 0)
+      if (pending_ > 0)
         send(this, extract_atom::value);
       prefetch();
-    }};
+    }
+  };
 
   extracting_ = {
     handle_down,
     handle_progress,
     incorporate_hits,
-    [=](extract_atom, uint64_t n)
+    [=](stop_atom)
     {
-      auto all = std::numeric_limits<uint64_t>::max();
-      if (requested_ == all)
+      VAST_DEBUG(this, "got request to drain and terminate");
+      draining_ = true;
+    },
+    [=](extract_atom, uint64_t requested)
+    {
+      auto show_events = [](uint64_t n) -> std::string {
+        return n == max_events ? "all" : to_string(n);
+      };
+      if (requested == 0)
+        requested = max_events;
+      VAST_DEBUG(this, "got request to extract", show_events(requested),
+                 "events (" << to_string(pending_), "pending)");
+      if (pending_ == max_events)
       {
         VAST_WARN(this, "ignores extract request, already getting all events");
         return;
       }
-      VAST_DEBUG(this, "got request to extract",
-                 (n == 0 ? "all" : to_string(n)), "events" <<
-                 (n == 0 ? "" : " (" + to_string(requested_ + n) + " total)"));
-      if (requested_ == 0)
-        send(this, extract_atom::value);
-      requested_ = n == 0 ? all : requested_ + n;
+      if (pending_ > 0)
+      {
+        if (pending_ > max_events - requested)
+          pending_ = max_events;
+        else
+          pending_ += requested;
+        VAST_VERBOSE(this, "raises pending events to", show_events(pending_),
+                     "events");
+        return;
+      }
+      pending_ = std::min(max_events, requested);
+      VAST_DEBUG(this, "extracts", show_events(pending_), "events");
+      send(this, extract_atom::value);
     },
     [=](extract_atom)
     {
-      VAST_DEBUG(this, "extracts events (" << requested_, "left)");
+      VAST_ASSERT(pending_ > 0);
       VAST_ASSERT(reader_);
-      VAST_ASSERT(requested_ > 0);
       // We construct a new mask for each extraction request, because hits may
       // continuously update in every state.
       bitstream_type mask{chunk_.meta().ids};
       mask &= unprocessed_;
       VAST_ASSERT(mask.count() > 0);
-      // Go through the current chunk and perform a candidate check for a hit,
-      // and relay the event to the sink on success.
-      uint64_t n = 0;
-      event_id last = 0;
+      // Go through the current chunk and perform a candidate check for each
+      // hit, relaying event to the sink on success.
+      auto extracted = uint64_t{0};
+      auto last = event_id{0};
       for (auto id : mask)
       {
         last = id;
@@ -215,12 +225,8 @@ exporter::exporter(expression ast, query_options opts)
             auto msg = make_message(id_, std::move(*e));
             for (auto& s : sinks_)
               send(s, msg);
-            if (++total_results_ == max_results_)
-            {
-              complete();
-              return;
-            }
-            if (++n == requested_)
+            ++total_results_;
+            if (++extracted == pending_)
               break;
           }
           else
@@ -238,20 +244,26 @@ exporter::exporter(expression ast, query_options opts)
           return;
         }
       }
-      requested_ -= n;
+      pending_ -= extracted;
       bitstream_type partial{last + 1, true};
       partial &= mask;
       processed_ |= partial;
       unprocessed_ -= partial;
       mask -= partial;
-      VAST_DEBUG(this, "extracted", n, "events " << partial.count() << '/'
-                 << mask.count(), "processed/remaining hits)");
+      VAST_DEBUG(this, "extracted", extracted,
+                 "events (" << partial.count() << '/' << mask.count(),
+                 "processed/remaining hits in current chunk)");
       VAST_ASSERT(! mask.empty());
+      if (pending_ == 0 && draining_)
+      {
+        VAST_DEBUG(this, "stops after having drained all pending events");
+        complete();
+      }
       if (! mask.all_zeros())
       {
         // We continue extracting until we have processed all requested
         // events.
-        if (requested_ > 0)
+        if (pending_ > 0)
           send(this, current_message());
         return;
       }

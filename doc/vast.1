@@ -1,4 +1,4 @@
-.TH VAST 1 "May 30, 2015" 0.1 "Visibility Across Space and Time"
+.TH VAST 1 "July 23, 2015" 0.1 "Visibility Across Space and Time"
 .SH NAME
 .PP
 \fB\fCvast\fR \-\- interface to a VAST node
@@ -123,13 +123,13 @@ Shows various properties of an ecosystem. \fIargument\fP can have the
 following values:
 .TP
 \fInodes\fP
-Displayes all existing nodes in the ecosystem.
+Displays all existing nodes in the ecosystem.
 .TP
 \fIpeers\fP
-Displayes the nodes connected to this node.
+Displays the nodes connected to this node.
 .TP
 \fIcomponents\fP
-Displayes the existing components per node.
+Displays the existing components per node.
 .TP
 \fItopology\fP
 Displays the connections between nodes.
@@ -137,16 +137,16 @@ Displays the connections between nodes.
 .PP
 Synopsis:
 .IP
-\fIspawn\fP [\fIarguments\fP] \fItype\fP [\fIparameters\fP]
+\fIspawn\fP [\fIarguments\fP] \fIactor\fP [\fIparameters\fP]
 .PP
-Creates a new actor of kind \fItype\fP\&. Some actor types can have at most one
+Creates a new actor of kind \fIactor\fP\&. Some actor types can have at most one
 instance while others can have multiple instances.
 .PP
 Available \fIarguments\fP:
 .TP
 \fB\fC\-n\fR \fIname\fP
 Controls the spawn location. If \fB\fC\-n\fR \fIname\fP is given, the actor will be
-spawned on the node identified by \fIname\fP\&. Otherwise actor the will be
+spawned on the node identified by \fIname\fP\&. Otherwise the actor will be
 spawned on the connected node.
 .PP
 \fB\fC\-l\fR \fIlabel\fP
@@ -184,9 +184,8 @@ Available \fIactor\fP values with corresponding \fIparameters\fP:
   \fB\fC\-u\fR
     Marks this exporter as \fIunified\fP, which is equivalent to both
     \fB\fC\-c\fR and \fB\fC\-h\fR\&.
-  \fB\fC\-l\fR \fIn\fP [\fI100\fP]
-    Limit the number of results to \fIn\fP entries. The value \fIn = 0\fP means
-    unlimited.
+  \fB\fC\-e\fR \fIn\fP [\fI0\fP]
+    The maximum number of events to extract; \fIn = 0\fP means unlimited.
 .PP
 \fIsource\fP \fBX\fP [\fIparameters\fP]
   \fBX\fP specifies the format of \fIsource\fP\&. Each source format has its own set of
@@ -255,7 +254,7 @@ Available \fIactor\fP values with corresponding \fIparameters\fP:
     Flush the output PCAP trace after having processed \fIflush\fP packets.
 .PP
 \fIprofiler\fP [\fIparameters\fP]
-  If compiled with gperftools, eanbles the gperftools CPU or heap profiler to
+  If compiled with gperftools, enables the gperftools CPU or heap profiler to
   collect samples at a given resolution.
   \fB\fC\-c\fR
     Launch the CPU profiler.
@@ -315,12 +314,14 @@ actor labels.
 .PP
 Synopsis:
 .IP
-\fIimport\fP [\fIarguments\fP]
+\fIimport\fP \fIformat\fP [\fIspawn\-arguments\fP]
 .PP
 Imports data on standard input and send it to locally running node. This
 command is a shorthand for spawning a source, connecting it with an importer,
 and associating standard input of the process invoking \fIimport\fP with the input
 stream of the spawned source.
+.PP
+Because \fIimport\fP always reads from standard input, \fI\-r file\fP has no effect.
 .SS export
 .PP
 Synopsis:
@@ -331,6 +332,8 @@ Issues a query and exports results to standard output. This command is a
 shorthand for spawning a exporter and sink, linking the two, and relaying the
 resulting event stream arriving at the sink to standard output of the process
 invoking \fIexport\fP\&.
+.PP
+Because \fIexport\fP always writes to standard output, \fI\-w file\fP has no effect.
 .SH EXAMPLES
 .PP
 Make the node at 10.0.0.1 peer with 10.0.0.2:
@@ -362,7 +365,7 @@ Run a historical query, printed in ASCII, limited to at most 10 results:
 .PP
 .RS
 .nf
-vast export ascii \-h \-l 10 :addr in 10.0.0.0/8
+vast export ascii \-h \-e 10 :addr in 10.0.0.0/8
 .fi
 .RE
 .SH BUGS

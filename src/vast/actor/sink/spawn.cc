@@ -23,7 +23,7 @@ namespace sink {
 trial<caf::actor> spawn(message const& params)
 {
   auto schema_file = ""s;
-  auto output = ""s;
+  auto output = "-"s;
   auto r = params.extract_opts({
     {"schema,s", "alternate schema file", schema_file},
     {"write,w", "path to write events to", output},
@@ -31,8 +31,6 @@ trial<caf::actor> spawn(message const& params)
   });
   if (! r.error.empty())
     return error{std::move(r.error)};
-  if (r.opts.count("write") == 0)
-    return error{"no output specified (-w)"};
   // Setup a custom schema.
   schema sch;
   if (! schema_file.empty())
@@ -58,6 +56,8 @@ trial<caf::actor> spawn(message const& params)
   {
     if (r.opts.count("uds") > 0)
     {
+      if (output == "-")
+        return error{"cannot use stdout as UNIX domain socket"};
       auto uds = util::unix_domain_socket::connect(output);
       if (! uds)
         return error{"failed to connect to UNIX domain socket at ", output};

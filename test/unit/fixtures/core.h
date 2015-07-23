@@ -47,16 +47,14 @@ struct core
     };
     for (auto& msg : msgs)
       self->sync_send(n, msg).await(
-        [](ok_atom) {},
         [&](error const& e)
         {
           ERROR(e);
           REQUIRE(false);
         },
-        others >> [&]
+        others >> []
         {
-          ERROR("unexpected message: " << to_string(self->current_message()));
-          REQUIRE(false);
+          // Everyting except an error is a valid return value.
         }
       );
     return n;
@@ -96,16 +94,14 @@ struct core
     };
     for (auto& msg : msgs)
       self->sync_send(n, msg).await(
-        [](ok_atom) {},
         [&](error const& e)
         {
           ERROR(e);
           REQUIRE(false);
         },
-        others >> [&]
+        others >> []
         {
-          ERROR("unexpected message: " << to_string(self->current_message()));
-          REQUIRE(false);
+          // Everyting except an error is a valid return value.
         }
       );
     MESSAGE("monitoring source");

@@ -42,7 +42,7 @@ trial<caf::actor> spawn(message const& params)
     if (r.opts.count("uds") > 0)
     {
       if (input == "-")
-        return error{"invalid UNIX domain socket path"};
+        return error{"cannot use stdin as UNIX domain socket"};
       auto uds = util::unix_domain_socket::connect(input);
       if (! uds)
         return error{"failed to connect to UNIX domain socket at ", input};

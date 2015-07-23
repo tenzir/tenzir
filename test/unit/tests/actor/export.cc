@@ -100,23 +100,25 @@ TEST(export)
 
   MESSAGE("performing index lookup via exporter");
   std::vector<message> msgs = {
-    make_message("spawn", "exporter", "-h", "id.resp_p == 995/?"),
     make_message("connect", "exporter", "archive"),
     make_message("connect", "exporter", "index")
   };
-  for (auto& msg : msgs)
-    self->sync_send(n, msg).await([](ok_atom) {});
-  self->sync_send(n, get_atom::value, "exporter").await(
-    [&](actor const& a, std::string const& fqn, std::string const& type)
-    {
-      CHECK(fqn == "exporter@" + node_name);
-      CHECK(type == "exporter");
-      REQUIRE(a != invalid_actor);
-      self->send(a, put_atom::value, sink_atom::value, self);
-      self->send(a, run_atom::value);
-      self->send(a, extract_atom::value, uint64_t{46});
+  actor exp;
+  self->sync_send(n, "spawn", "exporter", "-h", "id.resp_p == 995/?").await(
+    [&](actor const& a) {
+      exp = a;
+    },
+    [&](error const& e) {
+      ERROR(e);
+      REQUIRE(false);
     }
   );
+  REQUIRE(exp != invalid_actor);
+  for (auto& msg : msgs)
+    self->sync_send(n, msg).await([](ok_atom) {});
+  self->send(exp, put_atom::value, sink_atom::value, self);
+  self->send(exp, run_atom::value);
+  self->send(exp, extract_atom::value, max_events);
   MESSAGE("verifying query results");
   auto i = 0;
   done = false;
@@ -162,27 +164,28 @@ TEST(export)
 
   MESSAGE("issuing query against conn.log and ssl.log");
   n = make_core();
-  auto q = "id.resp_p == 443/? && \"mozilla\" in ssl.server_name";
   msgs = {
-    make_message("spawn", "exporter", "-h", q),
     make_message("connect", "exporter", "archive"),
     make_message("connect", "exporter", "index")
   };
-  for (auto& msg : msgs)
-    self->sync_send(n, msg).await([](ok_atom) {});
-  self->sync_send(n, get_atom::value, "exporter").await(
-    [&](actor const& a, std::string const& fqn, std::string const& type)
-    {
-      CHECK(fqn == "exporter@" + node_name);
-      CHECK(type == "exporter");
-      REQUIRE(a != invalid_actor);
-      self->send(a, put_atom::value, sink_atom::value, self);
-      self->send(a, run_atom::value);
-      self->send(a, extract_atom::value, uint64_t{0});
-      self->monitor(a);
+  auto q = "id.resp_p == 443/? && \"mozilla\" in ssl.server_name";
+  exp = invalid_actor;
+  self->sync_send(n, "spawn", "exporter", "-h", q).await(
+    [&](actor const& a) {
+      exp = a;
+    },
+    [&](error const& e) {
+      ERROR(e);
+      REQUIRE(false);
     }
   );
-
+  REQUIRE(exp != invalid_actor);
+  for (auto& msg : msgs)
+    self->sync_send(n, msg).await([](ok_atom) {});
+  self->send(exp, put_atom::value, sink_atom::value, self);
+  self->send(exp, run_atom::value);
+  self->send(exp, extract_atom::value, max_events);
+  self->monitor(exp);
   MESSAGE("processing query results");
   i = 0;
   done = false;
