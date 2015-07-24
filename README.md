@@ -60,7 +60,7 @@ Required dependencies:
   - Clang >= 3.4
   - GCC >= 4.9
 - [CMake](http://www.cmake.org)
-- [CAF](https://github.com/actor-framework/actor-framework)
+- [CAF](https://github.com/actor-framework/actor-framework) (develop branch)
 - [Boost](http://www.boost.org) (headers only)
 
 Optional:
@@ -73,22 +73,22 @@ Optional:
 #### FreeBSD
 
 VAST development primarily takes place on FreeBSD because it ships with a C++14
-compiler and provides all dependencies natively, which one can install as
-follows:
+compiler. One can install as the dependencies as follows:
 
-    pkg install cmake boost-libs caf google-perftools
+    pkg install cmake boost-libs google-perftools
+
+FreeBSD provides a CAF port, but VAST currently requires the develop branch,
+requiring manual installation.
 
 #### Linux
 
-To the best of our knowledge, no distribution currently comes with an apt
-compiler out of the box. On recent Debian-based distributions (e.g., Ubuntu
-14.04.1), getting a working toolchain requires installing the following
-packages:
+On recent Debian-based distributions (e.g., Ubuntu 15.04), getting a working
+toolchain requires installing the following packages:
 
-    apt-get install cmake clang-3.5 libc++-dev libc++abi-dev \
-      libboost-dev libpcap-dev libgoogle-perftools-dev
+    apt-get install clang libc++-dev cmake # build harness
+    apt-get install libboost-dev libpcap-dev libgoogle-perftools-dev
 
-CAF still needs manual installation.
+CAF also requires manual installation.
 
 #### Mac OS
 
@@ -109,4 +109,4 @@ licence](https://raw.github.com/mavam/vast/master/COPYING).
 [jenkins-badge]: http://mobi39.cpt.haw-hamburg.de/buildStatus/icon?job=VAST/master%20branch
 [gitter-badge]: https://img.shields.io/badge/gitter-join%20chat%20%E2%86%92-green.svg
 [docker-url]: https://quay.io/repository/mavam/vast
-[docker-badge]: https://quay.io/repository/mavam/vast/status 
+[docker-badge]: https://quay.io/repository/mavam/vast/status
