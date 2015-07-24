@@ -25,6 +25,9 @@ constexpr event_id invalid_event_id = std::numeric_limits<event_id>::max();
 /// The largest possible event ID.
 constexpr event_id max_event_id = invalid_event_id - 1;
 
+/// The largest possible event ID.
+constexpr event_id max_events = max_event_id + 1;
+
 /// Uniquely identifies a VAST type.
 using type_id = uint64_t;
 

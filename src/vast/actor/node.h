@@ -2,6 +2,7 @@
 #define VAST_ACTOR_NODE_H
 
 #include "vast/filesystem.h"
+#include "vast/trial.h"
 #include "vast/actor/actor.h"
 #include "vast/actor/key_value_store.h"
 #include "vast/util/system.h"
@@ -10,14 +11,13 @@ namespace vast {
 
 /// A container for all other actors of a VAST process.
 ///
-/// Each node stores its meta data in a central store using the following key
-/// space:
+/// Each node stores its meta data in a key-value store.
 ///
-///   - /actors/<node>/handle/<label>
-///   - /actors/<node>/type/<label>
-///   - /peers/<node>/<label>
-///   - /nodes/<node>/...
-///   - /topology
+/// The key space has the following structure:
+///
+///   - /actors/<node>/<fqn>/{actor, type}
+///   - /peers/<node>/<fqn>
+///   - /topology/<source>/<sink>
 ///
 struct node : default_actor
 {
@@ -47,11 +47,6 @@ struct node : default_actor
   caf::message disconnect(std::string const& sources, std::string const& sinks);
   caf::message show(std::string const& arg);
 
-  // Factored to reduce compiler memory footprint. See actor/node_spawn.cc.
-  caf::message spawn_source(std::string const& label,
-                            caf::message const& params);
-  caf::message spawn_sink(std::string const& label, caf::message const& params);
-
   //
   // Helper functions to synchronously interact with the key-value store.
   //
@@ -64,7 +59,7 @@ struct node : default_actor
   };
 
   actor_state get(std::string const& label);
-  caf::message put(actor_state const& state);
+  trial<caf::actor> put(actor_state const& state);
   bool has_topology_entry(std::string const& src, std::string const& snk);
 
   caf::actor accountant_;

@@ -20,6 +20,8 @@
 #include "vast/actor/index.h"
 #include "vast/actor/exporter.h"
 #include "vast/actor/node.h"
+#include "vast/actor/sink/spawn.h"
+#include "vast/actor/source/spawn.h"
 #include "vast/concept/printable/vast/expression.h"
 #include "vast/concept/printable/vast/error.h"
 #include "vast/concept/printable/vast/filesystem.h"
@@ -120,14 +122,20 @@ behavior node::make_behavior()
     {
       return show(arg);
     },
-    [=](get_atom, std::string const& label)
+    [=](store_atom)
     {
-      auto s = get(label);
-      return make_message(std::move(s.actor), std::move(s.fqn), std::move(s.type));
+      return store_;
     },
     //
     // PRIVATE
     //
+    [=](get_atom, std::string const& label)
+    {
+      // FIXME: forward to store instead
+      auto s = get(label);
+      return make_message(std::move(s.actor), std::move(s.fqn),
+                          std::move(s.type));
+    },
     [=](sys_atom, actor const& peer, actor const& peer_store,
         std::string const& peer_name)
     {
@@ -280,6 +288,8 @@ message node::spawn_actor(message const& msg)
   });
   if (! r.error.empty())
     return make_message(error{std::move(r.error)});
+  if (label.empty())
+    return make_message(error{"empty actor label"});
   // Check if actor exists already.
   auto s = util::split_to_str(label, "@");
   auto& name = s.size() == 1 ? name_ : s[1];
@@ -301,7 +311,7 @@ message node::spawn_actor(message const& msg)
     {
       auto i = spawn<identifier>(dir_);
       attach_functor([=](uint32_t ec) { anon_send_exit(i, ec); });
-      return put({i, "identifier", "identifier"});
+      return make_message(std::move(i), "identifier");
     },
     on("archive", any_vals) >> [&]
     {
@@ -333,7 +343,7 @@ message node::spawn_actor(message const& msg)
       auto a = spawn<archive, priority_aware>(dir, segments, size, method);
       attach_functor([=](uint32_t ec) { anon_send_exit(a, ec); });
       send(a, put_atom::value, accountant_atom::value, accountant_);
-      return put({a, "archive", label});
+      return make_message(std::move(a), "archive");
     },
     on("index", any_vals) >> [&]
     {
@@ -348,26 +358,26 @@ message node::spawn_actor(message const& msg)
       if (! r.error.empty())
         return make_message(error{std::move(r.error)});
       auto dir = dir_ / "index";
-      auto i = spawn<index, priority_aware>(dir, events, passive, active);
-      attach_functor([=](uint32_t ec) { anon_send_exit(i, ec); });
-      send(i, put_atom::value, accountant_atom::value, accountant_);
-      return put({i, "index", label.empty() ? "index" : label});
+      auto idx = spawn<index, priority_aware>(dir, events, passive, active);
+      attach_functor([=](uint32_t ec) { anon_send_exit(idx, ec); });
+      send(idx, put_atom::value, accountant_atom::value, accountant_);
+      return make_message(std::move(idx), "index");
     },
     on("importer") >> [&]
     {
-      auto i = spawn<importer, priority_aware>();
-      attach_functor([=](uint32_t ec) { anon_send_exit(i, ec); });
-      //send(i, put_atom::value, accountant_atom::value, accountant_);
-      return put({i, "importer", label.empty() ? "importer" : label});
+      auto imp = spawn<importer, priority_aware>();
+      attach_functor([=](uint32_t ec) { anon_send_exit(imp, ec); });
+      //send(imp, put_atom::value, accountant_atom::value, accountant_);
+      return make_message(std::move(imp), "importer");
     },
     on("exporter", any_vals) >> [&]
     {
-      auto limit = uint64_t{100};
+      auto events = uint64_t{0};
       r = params.extract_opts({
+        {"events,e", "the number of events to extract", events},
         {"continuous,c", "marks a query as continuous"},
         {"historical,h", "marks a query as historical"},
-        {"unified,u", "marks a query as unified"},
-        {"limit,l", "seconds between measurements", limit}
+        {"unified,u", "marks a query as unified"}
       });
       if (! r.error.empty())
         return make_message(error{std::move(r.error)});
@@ -397,25 +407,32 @@ message node::spawn_actor(message const& msg)
       if (! expr)
       {
         VAST_VERBOSE(this, "ignores invalid query:", str);
-        return make_message(expr.error());
+        return make_message(std::move(expr.error()));
       }
       *expr = expr::normalize(*expr);
       VAST_VERBOSE(this, "normalized query to", *expr);
       auto exp = spawn<exporter>(*expr, query_opts);
       attach_functor([=](uint32_t ec) { anon_send_exit(exp, ec); });
-      if (r.opts.count("limit") > 0)
-        send(exp, limit_atom::value, limit);
-      return put({exp, "exporter", label});
+      send(exp, extract_atom::value, events);
+      return make_message(std::move(exp), "exporter");
     },
     on("source", any_vals) >> [&]
     {
-      // Outsourced to reduce compiler memory footprint.
-      return spawn_source(label, params);
+      auto src = source::spawn(params);
+      if (! src)
+        return make_message(std::move(src.error()));
+      send(*src, put_atom::value, accountant_atom::value, accountant_);
+      attach_functor([s=*src](uint32_t ec) { anon_send_exit(s, ec); });
+      return make_message(std::move(*src), "source");
     },
     on("sink", any_vals) >> [&]
     {
-      // Outsourced to reduce compiler memory footprint.
-      return spawn_sink(label, params);
+      auto snk = sink::spawn(params);
+      if (! snk)
+        return make_message(std::move(snk.error()));
+      send(*snk, put_atom::value, accountant_atom::value, accountant_);
+      attach_functor([s=*snk](uint32_t ec) { anon_send_exit(s, ec); });
+      return make_message(std::move(*snk), "sink");
     },
     on("profiler", any_vals) >> [&]
     {
@@ -435,14 +452,27 @@ message node::spawn_actor(message const& msg)
         send(prof, start_atom::value, "cpu");
       if (r.opts.count("heap") > 0)
         send(prof, start_atom::value, "heap");
-      return put({prof, "profiler", "profiler"});
+      return make_message(std::move(prof), "profiler");
 #else
       return error{"not compiled with gperftools"};
 #endif
     },
     others() >> []
     {
-      return error{"not yet implemented"};
+      return error{"invalid actor type"};
+    }
+  });
+  result = result->apply({
+    [&](error& e) {
+      return std::move(e);
+    },
+    [&](actor const& a, std::string const& type) {
+      VAST_ASSERT(a != invalid_actor);
+      auto t = put({a, type, label});
+      if (! t)
+        return make_message(std::move(t.error()));
+      VAST_ASSERT(*t != invalid_actor);
+      return make_message(std::move(*t));
     }
   });
   VAST_ASSERT(result);
@@ -454,14 +484,11 @@ message node::send_run(std::string const& arg)
   VAST_VERBOSE(this, "sends RUN to", arg);
   auto state = get(arg);
   if (! state.actor)
+  {
+    VAST_ERROR(this, "has no such actor:", arg);
     return make_message(error{"no such actor: ", arg});
+  }
   send(state.actor, run_atom::value);
-  if (state.type == "exporter")
-    // FIXME: Because we've previously configured a limit, the extraction
-    // will finish when hitting it. But this is not a good design, as it
-    // prevents pull-based extraction of results. Once the API becomes
-    // clearer, we need a better way for incremental extraction.
-    send(state.actor, extract_atom::value, uint64_t{0});
   return make_message(ok_atom::value);
 }
 
@@ -665,10 +692,10 @@ node::actor_state node::get(std::string const& label)
   return result;
 };
 
-message node::put(actor_state const& state)
+trial<actor> node::put(actor_state const& state)
 {
   auto key = "actors/" + name_ + "/" + state.fqn;
-  auto result = make_message(ok_atom::value);
+  auto result = trial<actor>{state.actor};
   scoped_actor{}->sync_send(store_, put_atom::value, key, state.actor,
                             state.type).await(
     [&](ok_atom)
@@ -680,7 +707,7 @@ message node::put(actor_state const& state)
     [&](error& e)
     {
       send_exit(state.actor, exit::error);
-      result = make_message(std::move(e));
+      result = std::move(e);
     }
   );
   return result;

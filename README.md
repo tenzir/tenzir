@@ -17,11 +17,11 @@ actors:
 Import [Bro](http://www.bro.org) logs or a PCAP trace in one shot:
 
     zcat *.log.gz | vast import bro
-    vast import pcap -r trace.pcap
+    vast import pcap < trace.pcap
 
 Query VAST and get the result back as PCAP trace:
 
-    vast export pcap -h sport > 60000/tcp && src !in 10.0.0.0/8
+    vast export pcap -h "sport > 60000/tcp && src !in 10.0.0.0/8"
 
 ## Resources
 
@@ -95,7 +95,8 @@ CAF still needs manual installation.
 Mac OS Yosemite also ships with a working C++14 compiler.
 [Homebrew](http://brew.sh) makes it easy to install the dependencies:
 
-    brew install cmake boost caf google-perftools
+    brew install cmake boost google-perftools
+    brew install caf --HEAD
 
 ## License
 

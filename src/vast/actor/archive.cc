@@ -92,7 +92,12 @@ caf::behavior archive::make_behavior()
       // First check the currently buffered segment.
       for (size_t i = 0; i < current_.size(); ++i)
         if (eid < current_[i].meta().ids.size() && current_[i].meta().ids[eid])
+        {
+          VAST_DEBUG(this, "delivers chunk from cache",
+                     '[' << current_[i].meta().ids.find_first() << ',' <<
+                     current_[i].meta().ids.find_last() + 1 << ')');
           return make_message(current_[i]);
+        }
       // Then inspect the existing segments.
       if (auto id = segments_.lookup(eid))
       {
@@ -114,7 +119,9 @@ caf::behavior archive::make_behavior()
         for (size_t i = 0; i < s->size(); ++i)
           if (eid < (*s)[i].meta().ids.size() && (*s)[i].meta().ids[eid])
           {
-            VAST_DEBUG(this, "delivers chunk for event", eid);
+            VAST_DEBUG(this, "delivers chunk",
+                       '[' << (*s)[i].meta().ids.find_first() << ',' <<
+                       (*s)[i].meta().ids.find_last() + 1 << ')');
             return make_message((*s)[i]);
           }
         VAST_ASSERT(! "segment must contain looked up id");

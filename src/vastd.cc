@@ -21,8 +21,10 @@
 #include "vast/banner.h"
 #include "vast/filesystem.h"
 #include "vast/logger.h"
+#include "vast/optional.h"
 #include "vast/actor/node.h"
 #include "vast/actor/signal_monitor.h"
+#include "vast/concept/printable/vast/error.h"
 #include "vast/util/endpoint.h"
 #include "vast/util/system.h"
 
@@ -69,7 +71,7 @@ int main(int argc, char *argv[])
     std::cout << banner() << "\n\n" << r.helptext;
     return 0;
   }
-  if (r.opts.count("endpoint") > 0 
+  if (r.opts.count("endpoint") > 0
       && ! util::parse_endpoint(endpoint, host, port))
   {
     std::cout << "invalid endpoint: " << endpoint << std::endl;
@@ -126,16 +128,33 @@ int main(int argc, char *argv[])
   // Create core ecosystem.
   if (r.opts.count("core") > 0)
   {
+    // TODO: Perform these operations asynchronously.
     std::vector<caf::message> msgs = {
       caf::make_message("spawn", "identifier"),
       caf::make_message("spawn", "archive"),
       caf::make_message("spawn", "index"),
       caf::make_message("spawn", "importer"),
+    };
+    for (auto& msg : msgs)
+    {
+      optional<error> err;
+      self->sync_send(n, msg).await(
+        [&](error& e) {
+          err = std::move(e);
+        },
+        caf::others >> [] { /* nop */ }
+      );
+      if (err)
+      {
+        VAST_ERROR(*err);
+        return 1;
+      }
+    }
+    msgs = {
       caf::make_message("connect", "importer", "identifier"),
       caf::make_message("connect", "importer", "archive"),
       caf::make_message("connect", "importer", "index")
     };
-    // FIXME: Perform these operations asynchronously.
     for (auto& msg : msgs)
       self->sync_send(n, msg).await([](ok_atom) {});
   }

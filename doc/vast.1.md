@@ -138,13 +138,13 @@ Shows various properties of an ecosystem. *argument* can have the
 following values:
 
 *nodes*
-  Displayes all existing nodes in the ecosystem.
+  Displays all existing nodes in the ecosystem.
 
 *peers*
-  Displayes the nodes connected to this node.
+  Displays the nodes connected to this node.
 
 *components*
-  Displayes the existing components per node.
+  Displays the existing components per node.
 
 *topology*
   Displays the connections between nodes.
@@ -153,16 +153,16 @@ following values:
 
 Synopsis:
 
-  *spawn* [*arguments*] *type* [*parameters*]
+  *spawn* [*arguments*] *actor* [*parameters*]
 
-Creates a new actor of kind *type*. Some actor types can have at most one
+Creates a new actor of kind *actor*. Some actor types can have at most one
 instance while others can have multiple instances.
 
 Available *arguments*:
 
 `-n` *name*
   Controls the spawn location. If `-n` *name* is given, the actor will be
-  spawned on the node identified by *name*. Otherwise actor the will be
+  spawned on the node identified by *name*. Otherwise the actor will be
   spawned on the connected node.
 
 `-l` *label*
@@ -200,9 +200,8 @@ Available *actor* values with corresponding *parameters*:
   `-u`
     Marks this exporter as *unified*, which is equivalent to both
     `-c` and `-h`.
-  `-l` *n* [*100*]
-    Limit the number of results to *n* entries. The value *n = 0* means
-    unlimited.
+  `-e` *n* [*0*]
+    The maximum number of events to extract; *n = 0* means unlimited.
 
 *source* **X** [*parameters*]
   **X** specifies the format of *source*. Each source format has its own set of
@@ -271,7 +270,7 @@ Available *actor* values with corresponding *parameters*:
     Flush the output PCAP trace after having processed *flush* packets.
 
 *profiler* [*parameters*]
-  If compiled with gperftools, eanbles the gperftools CPU or heap profiler to
+  If compiled with gperftools, enables the gperftools CPU or heap profiler to
   collect samples at a given resolution.
   `-c`
     Launch the CPU profiler.
@@ -336,12 +335,14 @@ actor labels.
 
 Synopsis:
 
-  *import* [*arguments*]
+  *import* *format* [*spawn-arguments*]
 
 Imports data on standard input and send it to locally running node. This
 command is a shorthand for spawning a source, connecting it with an importer,
 and associating standard input of the process invoking *import* with the input
 stream of the spawned source.
+
+Because *import* always reads from standard input, *-r file* has no effect.
 
 ### export
 
@@ -353,6 +354,8 @@ Issues a query and exports results to standard output. This command is a
 shorthand for spawning a exporter and sink, linking the two, and relaying the
 resulting event stream arriving at the sink to standard output of the process
 invoking *export*.
+
+Because *export* always writes to standard output, *-w file* has no effect.
 
 EXAMPLES
 --------
@@ -372,7 +375,7 @@ Import Bro log files:
 
 Run a historical query, printed in ASCII, limited to at most 10 results:
 
-    vast export ascii -h -l 10 :addr in 10.0.0.0/8
+    vast export ascii -h -e 10 :addr in 10.0.0.0/8
 
 BUGS
 ----

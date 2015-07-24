@@ -298,7 +298,7 @@ behavior partition::make_behavior()
     on_down,
     [=](std::vector<event> const& events, actor const& task)
     {
-      VAST_DEBUG(this, "got", events.size(), "events [",
+      VAST_DEBUG(this, "got", events.size(), "events [" <<
                  events.front().id() << ',' << (events.back().id() + 1) << ')');
       // Extract all unique types.
       util::flat_set<type> types;
