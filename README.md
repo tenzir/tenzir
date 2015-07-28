@@ -58,7 +58,7 @@ Required dependencies:
 
 - A C++14 compiler:
   - Clang >= 3.4
-  - GCC >= 4.9
+  - GCC >= 5
 - [CMake](http://www.cmake.org)
 - [CAF](https://github.com/actor-framework/actor-framework) (develop branch)
 - [Boost](http://www.boost.org) (headers only)
