@@ -44,7 +44,6 @@ TEST(JSON string escaping)
 
   CHECK(json_escape("foo\"bar") == "\"foo\\\"bar\"");
   CHECK(json_escape("foo\\bar") == "\"foo\\\\bar\"");
-  CHECK(json_escape("foo/bar")  == "\"foo\\/bar\"");
   CHECK(json_escape("foo\bbar") == "\"foo\\bbar\"");
   CHECK(json_escape("foo\fbar") == "\"foo\\fbar\"");
   CHECK(json_escape("foo\rbar") == "\"foo\\rbar\"");

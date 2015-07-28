@@ -74,8 +74,17 @@ std::string json_escape(std::string const& str)
   if (str.empty())
     return "\"\"";
   std::string esc;
-  esc.reserve(str.size());
+  esc.reserve(str.size() + 2);
   esc += '"';
+  // The JSON RFC (http://www.ietf.org/rfc/rfc4627.txt) specifies the escaping
+  // rules in section 2.5:
+  //
+  //    All Unicode characters may be placed within the quotation marks except
+  //    for the characters that must be escaped: quotation mark, reverse
+  //    solidus, and the control characters (U+0000 through U+001F).
+  //
+  //  That is, '"', '\\', and control characters are the only mandatory escaped
+  //  values. The rest is optional.
   for (auto c : str)
   {
     switch (c)
@@ -88,9 +97,6 @@ std::string json_escape(std::string const& str)
         break;
       case '\\':
         esc += "\\\\";
-        break;
-      case '/':
-        esc += "\\/";
         break;
       case '\b':
         esc += "\\b";
@@ -118,7 +124,7 @@ std::string json_unescape(std::string const& str)
   std::string unesc;
   if (str.empty() || str.size() < 2)
     return {};
-  // Only consider doulbe-quote strings.
+  // Only consider double-quote strings.
   if (! (str.front() == '"' && str.back() == '"'))
     return {};
   unesc.reserve(str.size());

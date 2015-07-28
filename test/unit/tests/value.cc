@@ -137,7 +137,7 @@ TEST(JSON)
   "data": {
     "bar": -42,
     "baz": 4.2,
-    "foo": "53\/udp"
+    "foo": "53/udp"
   },
   "type": "record {foo: port, bar: int, baz: real}"
 })json";
