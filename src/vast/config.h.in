@@ -13,11 +13,11 @@
 #define VAST_VERSION @VERSION_MAJ_MIN@
 #define VAST_LOG_LEVEL @VAST_LOG_LEVEL@
 
-#ifdef CAF_CLANG
+#if defined(CAF_CLANG)
 #  define VAST_CLANG
-#elif CAF_GCC
+#elif defined(CAF_GCC)
 #  define VAST_GCC
-#elif CAF_MSVC
+#elif defined(CAF_MSVC)
 #  define VAST_MSVC
 #endif
 
