@@ -19,7 +19,9 @@ bool print_delimited(InputIterator begin, InputIterator end,
 {
   static auto const printer = make_printer<T>{};
   static auto const delim = Delimiter{};
-  if (begin == end || ! printer.print(out, *begin))
+  if (begin == end)
+    return true;
+  if (! printer.print(out, *begin))
     return false;
   while (++begin != end)
     if (! (delim.print(out, unused) && printer.print(out, *begin)))
@@ -32,7 +34,9 @@ template <typename InputIterator, typename OutputIterator, typename Delimiter>
 bool print_delimited(InputIterator begin, InputIterator end,
                      OutputIterator&& out, Delimiter const& delim)
 {
-  if (begin == end || ! print(out, *begin))
+  if (begin == end)
+    return true;
+  if (! print(out, *begin))
     return false;
   while (++begin != end)
     if (! (print(out, delim) && print(out, *begin)))
