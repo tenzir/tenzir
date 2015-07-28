@@ -6,6 +6,7 @@
 
 #include <csignal>
 #include <cstdlib>
+#include <cstring> // strsignal(3)
 
 #include <algorithm>
 #include <iostream>
@@ -122,13 +123,15 @@ int main(int argc, char *argv[])
                (messages == std::numeric_limits<size_t>::max()
                 ? "unlimited" : std::to_string(messages)));
   // Initialize node actor.
+  auto guard = caf::detail::make_scope_guard(
+    [] { caf::shutdown(); logger::destruct(); }
+  );
   announce_types();
   auto n = caf::spawn<node>(name, dir);
   caf::scoped_actor self;
   // Create core ecosystem.
   if (r.opts.count("core") > 0)
   {
-    // TODO: Perform these operations asynchronously.
     std::vector<caf::message> msgs = {
       caf::make_message("spawn", "identifier"),
       caf::make_message("spawn", "archive"),
@@ -158,7 +161,6 @@ int main(int argc, char *argv[])
     for (auto& msg : msgs)
       self->sync_send(n, msg).await([](ok_atom) {});
   }
-  auto exit_code = 0;
   try
   {
     // Publish the node.
@@ -178,6 +180,7 @@ int main(int argc, char *argv[])
       },
       [&](signal_atom, int signal)
       {
+        VAST_DEBUG("got " << ::strsignal(signal));
         if (signal == SIGINT || signal == SIGTERM)
           stop = true;
         else
@@ -194,19 +197,22 @@ int main(int argc, char *argv[])
     self->await_all_other_actors_done();
     auto er = n->exit_reason();
     if (er == exit::error)
-      exit_code = 1;
+      return 1;
     else if (er == exit::kill)
-      exit_code = 2;
+      return -1;
     else if (! (er == exit::done || er == exit::stop))
-      exit_code = 255;
+      return 2;
   }
   catch (caf::network_error const& e)
   {
     VAST_ERROR(e.what());
     self->send_exit(n, exit::stop);
-    exit_code = 1;
+    return 1;
   }
-  caf::shutdown();
-  logger::destruct();
-  return exit_code;
+  catch (...)
+  {
+    VAST_ERROR("terminating due to uncaught exception");
+    return 1;
+  }
+  return 0;
 }

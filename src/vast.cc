@@ -213,7 +213,7 @@ int main(int argc, char *argv[])
     if (! exporter)
       return 1;
     // 3. Connect EXPORTER with ARCHIVEs and INDEXes.
-    VAST_DEBUG("connecting source with remote exporter");
+    VAST_DEBUG("retrieving topology to connect exporter with archive/index");
     self->sync_send(node, store_atom::value).await(
       [&](caf::actor const& store) {
         self->sync_send(store, list_atom::value, "actors").await(
