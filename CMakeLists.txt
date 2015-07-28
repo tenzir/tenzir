@@ -2,7 +2,7 @@
 #                                Project Setup
 #------------------------------------------------------------------------------
 
-cmake_minimum_required(VERSION 2.6 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.0 FATAL_ERROR)
 project(VAST C CXX)
 
 # Silence warning CMP0042
