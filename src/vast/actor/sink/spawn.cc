@@ -1,3 +1,6 @@
+#include <fstream>
+#include <ostream>
+
 #include <caf/all.hpp>
 #include <caf/detail/scope_guard.hpp>
 
@@ -7,7 +10,7 @@
 #include "vast/actor/sink/json.h"
 #include "vast/concept/parseable/vast/detail/to_schema.h"
 #include "vast/concept/printable/vast/schema.h"
-#include "vast/io/file_stream.h"
+#include "vast/util/fdostream.h"
 #include "vast/util/posix.h"
 
 #ifdef VAST_HAVE_PCAP
@@ -51,7 +54,7 @@ trial<caf::actor> spawn(message const& params)
   // The "pcap" and "bro" sink manually handle file output. All other
   // sources are file-based and we setup their input stream here.
   auto& format = params.get_as<std::string>(0);
-  std::unique_ptr<io::output_stream> out;
+  std::unique_ptr<std::ostream> out;
   if (! (format == "pcap" || format == "bro"))
   {
     if (r.opts.count("uds") > 0)
@@ -62,11 +65,15 @@ trial<caf::actor> spawn(message const& params)
       if (! uds)
         return error{"failed to connect to UNIX domain socket at ", output};
       auto remote_fd = uds.recv_fd(); // Blocks!
-      out = std::make_unique<io::file_output_stream>(remote_fd);
+      out = std::make_unique<util::fdostream>(remote_fd);
+    }
+    else if (output == "-")
+    {
+      out = std::make_unique<util::fdostream>(1); // stdout
     }
     else
     {
-      out = std::make_unique<io::file_output_stream>(output);
+      out = std::make_unique<std::ofstream>(output);
     }
   }
   if (format == "pcap")

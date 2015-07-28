@@ -1,13 +1,13 @@
 #include <iterator>
+#include <ostream>
 
 #include "vast/actor/sink/ascii.h"
-#include "vast/io/iterator.h"
 #include "vast/util/assert.h"
 
 namespace vast {
 namespace sink {
 
-ascii::ascii(std::unique_ptr<io::output_stream> out)
+ascii::ascii(std::unique_ptr<std::ostream> out)
   : base<ascii>{"ascii-sink"},
     out_{std::move(out)}
 {
@@ -16,7 +16,7 @@ ascii::ascii(std::unique_ptr<io::output_stream> out)
 
 bool ascii::process(event const& e)
 {
-  auto i = io::output_iterator{*out_};
+  auto i = std::ostreambuf_iterator<std::ostream::char_type>{*out_};
   return print(i, e) && print(i, '\n');
 }
 
