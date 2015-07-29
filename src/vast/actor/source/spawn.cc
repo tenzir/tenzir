@@ -15,6 +15,10 @@
 #include "vast/actor/source/pcap.h"
 #endif
 
+#ifdef VAST_HAVE_KAFKA
+#include "vast/actor/source/kafka.h"
+#endif
+
 using namespace caf;
 using namespace std::string_literals;
 
@@ -33,11 +37,11 @@ trial<caf::actor> spawn(message const& params)
     {"uds,u", "treat -r as UNIX domain socket to connect to"}
   });
   auto& format = params.get_as<std::string>(0);
-  // The "pcap" and "test" sources manually verify the presence of
+  // The "pcap", "test", and "kafka" sources manually verify the presence of
   // input. All other sources are file-based and we setup their input
   // stream here.
   std::unique_ptr<io::input_stream> in;
-  if (! (format == "pcap" || format == "test"))
+  if (! (format == "pcap" || format == "test" || format == "kafka"))
   {
     if (r.opts.count("uds") > 0)
     {
@@ -85,6 +89,31 @@ trial<caf::actor> spawn(message const& params)
       return error{"no input specified (-r or -i)"};
     src = caf::spawn<pcap, priority_aware + detached>(
       input, cutoff, flow_max, flow_age, flow_expiry, pseudo_realtime);
+#endif
+  }
+  if (format == "kafka")
+  {
+#ifndef VAST_HAVE_KAFKA
+    return error{"not compiled with kafka support"};
+#else
+    auto brokers = "localhost:9092"s;
+    auto topic = ""s;
+    auto partition = "0"s;
+    auto offset = "beginning"s;
+    auto compression = "none"s;
+    r = params.extract_opts({
+      {"brokers,b", "broker endpoints [" + brokers + ']', brokers},
+      {"topic,t", "topic to subscribe to", topic},
+      {"partition,p", "partition to use [" + partition + ']', partition},
+      {"offset,o", "offset to start consuming [" + offset + ']', offset},
+      {"compression,c", "compression method [" + compression + ']', compression}
+    });
+    if (! r.error.empty())
+      return error{std::move(r.error)};
+    if (topic.empty())
+      return error{"no topic specified (-t)"};
+    src = caf::spawn<kafka, priority_aware + detached>(
+      brokers, topic, partition, offset, compression);
 #endif
   }
   else if (format == "test")

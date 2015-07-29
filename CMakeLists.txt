@@ -154,6 +154,15 @@ if (PCAP_FOUND)
   include_directories(${PCAP_INCLUDE_DIR})
 endif ()
 
+if (NOT RDKAFKA_ROOT_DIR AND VAST_PREFIX)
+  set(RDKAFKA_ROOT_DIR ${VAST_PREFIX})
+endif ()
+find_package(Rdkafka QUIET)
+if (RDKAFKA_FOUND)
+  set(VAST_HAVE_KAFKA true)
+  include_directories(${RDKAFKA_INCLUDE_DIR})
+endif ()
+
 if (NOT Gperftools_ROOT_DIR AND VAST_PREFIX)
   set(Gperftools_ROOT_DIR ${VAST_PREFIX})
 endif ()
@@ -266,6 +275,7 @@ endif ()
 
 display(CAF_FOUND ${caf_dir} caf_summary)
 display(PCAP_FOUND ${PCAP_INCLUDE_DIR} pcap_summary)
+display(RDKAFKA_FOUND ${RDKAFKA_INCLUDE_DIR} rdkafka_summary)
 display(GPERFTOOLS_FOUND ${GPERFTOOLS_INCLUDE_DIR} perftools_summary)
 display(DOXYGEN_FOUND yes doxygen_summary)
 display(MD2MAN_FOUND yes md2man_summary)
@@ -294,6 +304,7 @@ set(build_summary
     "\nBoost:                ${Boost_INCLUDE_DIR}"
     "\nCAF:                  ${caf_summary}"
     "\nPCAP:                 ${pcap_summary}"
+    "\nrdkafka:              ${rdkafka_summary}"
     "\nGperftools:           ${perftools_summary}"
     "\nDoxygen:              ${doxygen_summary}"
     "\nmd2man:               ${md2man_summary}"

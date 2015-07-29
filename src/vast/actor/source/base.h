@@ -5,6 +5,7 @@
 
 #include "vast/event.h"
 #include "vast/result.h"
+#include "vast/schema.h"
 #include "vast/actor/actor.h"
 #include "vast/concept/printable/vast/error.h"
 #include "vast/util/assert.h"

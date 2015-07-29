@@ -98,6 +98,10 @@ if (PCAP_FOUND)
     actor/source/pcap.cc)
 endif ()
 
+if (RDKAFKA_FOUND)
+  set(libvast_sources ${libvast_sources} actor/source/kafka.cc)
+endif ()
+
 set(libvast_libs lz4 ${CAF_LIBRARIES})
 
 if (VAST_ENABLE_ASSERTIONS)
@@ -106,6 +110,10 @@ endif ()
 
 if (PCAP_FOUND)
   set(libvast_libs ${libvast_libs} ${PCAP_LIBRARIES})
+endif ()
+
+if (RDKAFKA_FOUND)
+  set(libvast_libs ${libvast_libs} ${RDKAFKA_CPP_LIBRARY})
 endif ()
 
 if (BROCCOLI_FOUND)

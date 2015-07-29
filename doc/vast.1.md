@@ -252,6 +252,21 @@ Available *actor* values with corresponding *parameters*:
     previous packet *p0* with timestamps *t1* and *t0*, then it will sleep for
     time *(t1-t0)/c* before processing *p1*.
 
+*source* *kafka* [*parameters*]
+  `-t` *topic*
+    The *topic* to consume.
+  `-b` *brokers* [*localhost:9092*]
+    A comma-separated list of brokers.
+  `-p` *partition* [*0*]
+    The partition to use.
+    Allowed options: *random* and a numeric value.
+  `-o` *offset* [*beginning*]
+    The offset to start consuming.
+    Allowed options: *beginning*, *end*, *stored*, or a numeric value.
+  `-c` *compression* [*none*]
+    The compression codec to use.
+    Allowed options: *none*, *gzip*, and *snappy*.
+
 *sink* **X** [*parameters*]
   **X** specifies the format of *sink*. Each source format has its own set of
   parameters, but the following parameters apply to all formats:

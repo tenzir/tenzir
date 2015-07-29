@@ -4,6 +4,7 @@
 #cmakedefine VAST_ENABLE_ASSERTIONS
 #cmakedefine VAST_HAVE_GPERFTOOLS
 #cmakedefine VAST_HAVE_PCAP
+#cmakedefine VAST_HAVE_KAFKA
 #cmakedefine VAST_HAVE_BROCCOLI
 #cmakedefine VAST_HAVE_SNAPPY
 #cmakedefine VAST_USE_TCMALLOC
