@@ -49,6 +49,7 @@ TEST(JSON string escaping)
   CHECK(json_escape("foo\rbar") == "\"foo\\rbar\"");
   CHECK(json_escape("foo\nbar") == "\"foo\\nbar\"");
   CHECK(json_escape("foo\tbar") == "\"foo\\tbar\"");
+  CHECK(json_escape("foo\xFF\xFF") == "\"foo\\xff\\xff\"");
 
   CHECK(json_unescape("\"foo\\\"bar\"") == "foo\"bar");
   CHECK(json_unescape("\"foo\\\\bar\"") == "foo\\bar");
@@ -59,6 +60,7 @@ TEST(JSON string escaping)
   CHECK(json_unescape("\"foo\\nbar\"")  == "foo\nbar");
   CHECK(json_unescape("\"foo\\tbar\"")  == "foo\tbar");
   CHECK(json_unescape("\"foo\\uaaaabar\"")  == "foo\\uaaaabar");
+  CHECK(json_unescape("\"foo\\xFF\\xFF\"") == "foo\xFF\xFF");
 
   // Invalid.
   CHECK(json_unescape("unquoted") == "");

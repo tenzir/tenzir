@@ -90,7 +90,17 @@ std::string json_escape(std::string const& str)
     switch (c)
     {
       default:
-        esc += c;
+        if (std::isprint(c))
+        {
+          esc += c;
+        }
+        else
+        {
+          esc += '\\';
+          esc += 'x';
+          esc += hex[(c & 0xf0) >> 4];
+          esc += hex[c & 0x0f];
+        }
         break;
       case '"':
         esc += "\\\"";
@@ -181,6 +191,18 @@ std::string json_unescape(std::string const& str)
             unesc += str[i++];
         }
         break;
+      case 'x':
+        if (i + 1 < last)
+        {
+          auto hi = str[i++];
+          auto lo = str[i++];
+          if (std::isxdigit(hi) && std::isxdigit(lo))
+          {
+            unesc += hex_to_byte(hi, lo);
+            break;
+          }
+        }
+        return {}; // \x must be followed by two hex bytes.
     }
   }
   VAST_ASSERT(i == last);
