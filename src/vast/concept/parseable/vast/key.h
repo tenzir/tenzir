@@ -19,7 +19,7 @@ struct key_parser : parser<key_parser>
   bool parse(Iterator& f, Iterator const& l, Attribute& a) const
   {
     using namespace parsers;
-    static auto p = +(alnum | chr{'_'}) % '.';
+    static auto p = +(alnum | chr{'_'} | chr{':'}) % '.';
     return p.parse(f, l, a);
   }
 };
