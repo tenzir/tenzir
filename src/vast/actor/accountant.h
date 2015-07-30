@@ -8,6 +8,8 @@
 #include "vast/optional.h"
 #include "vast/time.h"
 #include "vast/actor/actor.h"
+#include "vast/concept/printable/vast/error.h"
+#include "vast/concept/printable/vast/filesystem.h"
 #include "vast/util/accumulator.h"
 
 namespace vast {
@@ -28,24 +30,25 @@ struct accountant : default_actor
   /// @param filename The directory in which to write the logfile.
   /// @param resolution The granularity at which to track values which get
   ///                   submitted incrementally.
-  accountant(path dir, time::duration resolution = time::seconds(1))
+  accountant(path filename = "accounting.log",
+             time::duration resolution = time::seconds(1))
     : default_actor{"accountant"},
-      dir_{std::move(dir)},
+      filename_{std::move(filename)},
       resolution_{resolution}
   {
   }
 
   caf::behavior make_behavior() override
   {
-    if (dir_.empty())
+    if (filename_.empty())
     {
       VAST_ERROR(this, "require non-empty directory to write log file");
       quit(exit::error);
       return {};
     }
-    if (! exists(dir_))
+    if (! exists(filename_.parent()))
     {
-      auto t = mkdir(dir_);
+      auto t = mkdir(filename_.parent());
       if (! t)
       {
         VAST_ERROR(this, t.error());
@@ -53,10 +56,10 @@ struct accountant : default_actor
         return {};
       }
     }
-    file_.open((dir_ / "accounting.log").str());
+    file_.open((filename_).str());
     if (! file_)
     {
-      VAST_ERROR("failed to open file in:", dir_);
+      VAST_ERROR("failed to open file in:", filename_);
       quit(exit::error);
       return {};
     }
@@ -128,7 +131,7 @@ struct accountant : default_actor
     return normalized;
   }
 
-  path const dir_;
+  path const filename_;
   time::duration const resolution_;
   std::ofstream file_;
   std::unordered_map<caf::actor_addr, std::string> actors_;

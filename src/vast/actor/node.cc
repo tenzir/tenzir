@@ -64,7 +64,8 @@ void node::on_exit()
 
 behavior node::make_behavior()
 {
-  accountant_ = spawn<accountant<uint64_t>, linked>(dir_ / log_path());
+  accountant_ =
+    spawn<accountant<uint64_t>, linked>(dir_ / log_path() / "accounting.log");
   store_ = spawn<key_value_store, linked>();
   // We always begin with registering ourselves in the key value store. We
   // don't have to check for conflicting names until we peer with another node.

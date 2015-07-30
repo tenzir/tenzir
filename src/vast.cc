@@ -12,6 +12,7 @@
 #include "vast/filesystem.h"
 #include "vast/logger.h"
 #include "vast/uuid.h"
+#include "vast/actor/accountant.h"
 #include "vast/actor/atoms.h"
 #include "vast/actor/exit.h"
 #include "vast/actor/sink/spawn.h"
@@ -45,11 +46,13 @@ int main(int argc, char *argv[])
                                 commands.begin(), commands.end());
   // Parse and validate command line.
   auto log_level = 3;
-  auto endpoint = std::string{};
+  auto dir = "."s;
+  auto endpoint = ""s;
   auto host = "127.0.0.1"s;
   auto port = uint16_t{42000};
   auto r = caf::message_builder(command_line.begin(), cmd).extract_opts({
-    {"endpoint,e", "the node endpoint", endpoint},
+    {"dir,d", "directory for logs and client state", dir},
+    {"endpoint,e", "node endpoint", endpoint},
     {"log-level,l", "verbosity of console and/or log file", log_level},
     {"version,v", "print version and exit"}
   });
@@ -116,6 +119,7 @@ int main(int argc, char *argv[])
   }
   // Process commands.
   caf::scoped_actor self;
+  auto accounting_log = path(dir) / "accounting.log";
   if (*cmd == "import")
   {
     // 1. Spawn a SOURCE.
@@ -132,6 +136,9 @@ int main(int argc, char *argv[])
     auto source_guard = caf::detail::make_scope_guard(
       [=] { anon_send_exit(*src, exit::kill); }
     );
+    auto acc = self->spawn<accountant<uint64_t>>(accounting_log);
+    acc->link_to(*src);
+    self->send(*src, put_atom::value, accountant_atom::value, acc);
     // 2. Find the next-best IMPORTER.
     caf::actor importer;
     self->sync_send(node, store_atom::value).await(
@@ -183,8 +190,11 @@ int main(int argc, char *argv[])
       VAST_ERROR("failed to spawn sink:", snk.error());
       return 1;
     }
+    auto acc = self->spawn<accountant<uint64_t>>(accounting_log);
+    acc->link_to(*snk);
+    self->send(*snk, put_atom::value, accountant_atom::value, acc);
     auto sink_guard = caf::detail::make_scope_guard(
-      [=] { anon_send_exit(*snk, exit::kill); }
+      [snk=*snk] { anon_send_exit(snk, exit::kill); }
     );
     // 2. Spawn an EXPORTER.
     caf::message_builder mb;

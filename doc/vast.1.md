@@ -64,6 +64,9 @@ The *options* in front of *command* control how to to connect to a node.
 
 The following *options* are available:
 
+`-d` *dir* [*.*]
+  The directory for logs and state.
+
 `-e` *endpoint* [*127.0.0.1:42000*]
   The endpoint of the node to connect to or launch. (See below)
 
