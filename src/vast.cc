@@ -20,6 +20,7 @@
 #include "vast/concept/printable/to_string.h"
 #include "vast/concept/printable/vast/error.h"
 #include "vast/concept/printable/vast/uuid.h"
+#include "vast/detail/adjust_resource_consumption.h"
 #include "vast/util/endpoint.h"
 #include "vast/util/string.h"
 
@@ -28,6 +29,8 @@ using namespace std::string_literals;
 
 int main(int argc, char *argv[])
 {
+  if (! detail::adjust_resource_consumption())
+    return 1;
   caf::set_scheduler<>(2, -1);
   std::vector<std::string> commands = {
     "connect",

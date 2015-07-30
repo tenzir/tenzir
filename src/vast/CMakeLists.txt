@@ -56,6 +56,7 @@ set(libvast_sources
   concept/parseable/vast/detail/to_expression.cc
   concept/parseable/vast/detail/to_schema.cc
   concept/parseable/vast/detail/query_ast.cc
+  detail/adjust_resource_consumption.cc
   expr/evaluator.cc
   expr/normalize.cc
   expr/predicatizer.cc

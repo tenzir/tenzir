@@ -26,6 +26,7 @@
 #include "vast/actor/node.h"
 #include "vast/actor/signal_monitor.h"
 #include "vast/concept/printable/vast/error.h"
+#include "vast/detail/adjust_resource_consumption.h"
 #include "vast/util/endpoint.h"
 #include "vast/util/system.h"
 
@@ -34,6 +35,8 @@ using namespace std::string_literals;
 
 int main(int argc, char *argv[])
 {
+  if (! detail::adjust_resource_consumption())
+    return 1;
   // Defaults.
   auto dir = "vast"s;
   auto endpoint = std::string{};
