@@ -168,7 +168,7 @@ TEST(export)
     make_message("connect", "exporter", "archive"),
     make_message("connect", "exporter", "index")
   };
-  auto q = "id.resp_p == 443/? && \"mozilla\" in ssl.server_name";
+  auto q = "id.resp_p == 443/? && \"mozilla\" in bro::ssl.server_name";
   exp = invalid_actor;
   self->sync_send(n, "spawn", "exporter", "-h", q).await(
     [&](actor const& a) {

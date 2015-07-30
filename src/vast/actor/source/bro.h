@@ -38,6 +38,7 @@ private:
   std::string set_separator_;
   std::string empty_field_;
   std::string unset_field_;
+  std::string event_name_prefix_ = "bro";
   type type_;
   std::vector<rule<std::string::const_iterator, data>> parsers_;
 };

@@ -324,7 +324,8 @@ trial<void> bro::parse_header()
 
   type::record flat{std::move(fields)};
   type_ = flat.unflatten();
-  type_.name(event_name);
+  type_.name(event_name_prefix_.empty()
+             ? event_name : event_name_prefix_ + "::" + event_name);
 
   VAST_VERBOSE(this, "parsed bro header:");
   VAST_VERBOSE(this, "    #separator", separator_);

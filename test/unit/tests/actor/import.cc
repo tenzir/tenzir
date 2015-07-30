@@ -42,7 +42,7 @@ TEST(import)
           break;
         }
   REQUIRE(! id_range.empty());
-  auto ftp = id_range / "ftp" / "data";
+  auto ftp = id_range / "bro::ftp" / "data";
   REQUIRE(exists(dir));
   REQUIRE(exists(ftp));
   uint64_t last_flush;
