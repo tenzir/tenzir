@@ -12,7 +12,9 @@ port::port(number_type number, port_type type)
 
 bool operator==(port const& x, port const& y)
 {
-  return x.number_ == y.number_ && x.type_ == y.type_;
+  return x.number_ == y.number_ && (x.type_ == y.type_
+                                    || x.type_ == port::unknown
+                                    || y.type_ == port::unknown);
 }
 
 bool operator<(port const& x, port const& y)
