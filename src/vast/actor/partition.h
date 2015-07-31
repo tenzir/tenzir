@@ -33,7 +33,7 @@ struct partition : flow_controlled_actor
   {
     caf::actor task;
     bitstream_type hits;
-    util::flat_set<event_id> coverage;
+    util::flat_set<event_id> cache;
     util::flat_set<expression const*> queries;
   };
 

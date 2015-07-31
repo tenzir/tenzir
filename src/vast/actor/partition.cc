@@ -381,25 +381,42 @@ behavior partition::make_behavior()
         send(q->second.task, this);
         for (auto& pred : visit(expr::predicatizer{}, expr))
         {
+          VAST_DEBUG(this, "dispatches predicate", pred);
           auto p = predicates_.emplace(pred, predicate_state()).first;
           p->second.queries.insert(&q->first);
-          for (auto& i : indexers_)
-            // We forward this predicate only to the subset of indexers which we
-            // haven't asked yet, i.e., those who's coverage is higher than
-            // this predicate.
-            if (! p->second.coverage.contains(i.first))
+          auto i = indexers_.begin();
+          while (i != indexers_.end())
+          {
+            // We forward the predicate to the subset of indexers which we
+            // haven't asked yet. If an indexer has already lookup up predicate
+            // in the past, it must have sent the hits back to this partition,
+            // or is in the process of doing so.
+            auto base = i->first;
+            if (p->second.cache.contains(i->first))
             {
-              VAST_DEBUG(this, "forwards predicate to", i.second << ':', pred);
-              p->second.coverage.insert(i.first);
-              if (! p->second.task)
-              {
-                p->second.task = spawn<task>(time::snapshot(), p->first);
-                send(p->second.task, supervisor_atom::value, this);
-              }
-              send(q->second.task, p->second.task);
-              send(p->second.task, i.second);
-              send(i.second, expression{pred}, this, p->second.task);
+              VAST_DEBUG(this, "skips indexers for base", base);
+              while (base == i->first && i != indexers_.end())
+                ++i;
             }
+            else
+            {
+              VAST_DEBUG(this, "relays predicate to indexers for base", base);
+              while (base == i->first && i != indexers_.end())
+              {
+                VAST_DEBUG(this, " - forwards predicate to", i->second);
+                p->second.cache.insert(i->first);
+                if (! p->second.task)
+                {
+                  p->second.task = spawn<task>(time::snapshot(), pred);
+                  send(p->second.task, supervisor_atom::value, this);
+                }
+                send(q->second.task, p->second.task);
+                send(p->second.task, i->second);
+                send(i->second, expression{pred}, this, p->second.task);
+                ++i;
+              }
+            }
+          }
         }
         send(q->second.task, done_atom::value);
       }
@@ -417,7 +434,7 @@ behavior partition::make_behavior()
       // we evaluate all queries in which the predicate participates.
       auto& ps = predicates_[pred];
       VAST_DEBUG(this, "took", time::snapshot() - start,
-                 "to complete predicate for", ps.coverage.size(),
+                 "to complete predicate for", ps.cache.size(),
                  "indexers:", pred);
       for (auto& q : ps.queries)
       {
