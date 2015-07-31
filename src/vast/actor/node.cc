@@ -400,8 +400,8 @@ message node::spawn_actor(message const& msg)
         query_opts = unified;
       if (query_opts == no_query_options)
       {
-        VAST_ERROR(this, "got query without options");
-        return make_message(error{"no query options specified"});
+        VAST_ERROR(this, "got query without options (-h, -c, -u)");
+        return make_message(error{"no query options specified (-h, -c, -u)"});
       }
       VAST_DEBUG(this, "parses expression");
       auto expr = detail::to_expression(str);
