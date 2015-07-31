@@ -1,8 +1,7 @@
-#include "vast/util/string.h"
-
 #include <vector>
 
 #include "vast/util/coding.h"
+#include "vast/util/string.h"
 
 namespace vast {
 namespace util {
@@ -13,38 +12,57 @@ static constexpr char hex[] = "0123456789abcdef";
 
 } // namespace <anonymous>
 
-std::string byte_escape(std::string const& str, bool all)
+std::string byte_escape(std::string const& str)
 {
-  if (str.empty())
-    return {};
   std::string esc;
-  if (all)
-  {
-    esc.resize(str.size() * 4);
-    std::string::size_type i = 0;
-    for (auto c : str)
+  esc.reserve(str.size());
+  for (auto c : str)
+    if (std::isprint(c))
     {
-      esc[i++] = '\\';
-      esc[i++] = 'x';
-      esc[i++] = hex[(c & 0xf0) >> 4];
-      esc[i++] = hex[c & 0x0f];
+      esc += c;
     }
-  }
-  else
-  {
-    esc.reserve(str.size());
-    for (auto c : str)
-      if (std::isprint(c))
-      {
-        esc += c;
-      }
-      else
-      {
+    else
+    {
+      esc += '\\';
+      esc += 'x';
+      esc += hex[(c & 0xf0) >> 4];
+      esc += hex[c & 0x0f];
+    }
+  return esc;
+}
+
+std::string byte_escape(std::string const& str, std::string const& extra)
+{
+  std::string esc;
+  esc.reserve(str.size());
+  for (auto c : str)
+    if (std::isprint(c))
+    {
+      if (extra.find(c) != std::string::npos)
         esc += '\\';
-        esc += 'x';
-        esc += hex[(c & 0xf0) >> 4];
-        esc += hex[c & 0x0f];
-      }
+      esc += c;
+    }
+    else
+    {
+      esc += '\\';
+      esc += 'x';
+      esc += hex[(c & 0xf0) >> 4];
+      esc += hex[c & 0x0f];
+    }
+  return esc;
+}
+
+std::string byte_escape_all(std::string const& str)
+{
+  std::string esc;
+  esc.resize(str.size() * 4);
+  auto i = std::string::size_type{0};
+  for (auto c : str)
+  {
+    esc[i++] = '\\';
+    esc[i++] = 'x';
+    esc[i++] = hex[(c & 0xf0) >> 4];
+    esc[i++] = hex[c & 0x0f];
   }
   return esc;
 }
@@ -53,19 +71,41 @@ std::string byte_unescape(std::string const& str)
 {
   std::string unesc;
   auto i = str.begin();
-  while (str.end() - i > 3)
+  auto last = str.end();
+  while (i != last)
   {
-    if (*i == '\\' && i[1] == 'x' && std::isxdigit(i[2]) && std::isxdigit(i[3]))
+    auto c = *i++;
+    if (c != '\\')
     {
-      unesc += hex_to_byte(i[2], i[3]);
-      i += 4;
+      unesc += c;
+    }
+    else if (i == last)
+    {
+      return {}; // malformed string with dangling '\' at the end.
     }
     else
     {
-      unesc += *i++;
+      switch ((c = *i++))
+      {
+        default:
+          unesc += c;
+          break;
+        case 'x':
+          if (i != last && i + 1 != last
+              && std::isxdigit(i[0]) && std::isxdigit(i[1]))
+          {
+            auto hi = *i++;
+            auto lo = *i++;
+            unesc += hex_to_byte(hi, lo);
+          }
+          else
+          {
+            unesc += 'x';
+          }
+          break;
+      }
     }
   }
-  std::copy(i, str.end(), std::back_inserter(unesc));
   return unesc;
 }
 

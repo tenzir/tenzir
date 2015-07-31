@@ -13,16 +13,31 @@ namespace util {
 /// Escapes all non-printable characters in a string with `\xAA` where `AA` is
 /// the byte in hexadecimal representation.
 /// @param str The string to escape.
-/// @param all If `true` escapes every single character in *str*.
+/// @returns The escaped string of *str*.
+/// @relates bytes_escape_all byte_unescape
+std::string byte_escape(std::string const& str);
+
+/// Escapes all non-printable characters in a string with `\xAA` where `AA` is
+/// the byte in hexadecimal representation, plus a given list of extra
+/// characters to escape.
+/// @param str The string to escape.
+/// @param extra The extra characters to escape.
+/// @returns The escaped string of *str*.
+/// @relates bytes_escape_all byte_unescape
+std::string byte_escape(std::string const& str, std::string const& extra);
+
+/// Escapes all characters in a string with `\xAA` where `AA` is
+/// the byte in hexadecimal representation of the character.
+/// @param str The string to escape.
 /// @returns The escaped string of *str*.
 /// @relates byte_unescape
-std::string byte_escape(std::string const& str, bool all = false);
+std::string byte_escape_all(std::string const& str);
 
 /// Unescapes a byte-escaped string, i.e., replaces all occurrences of `\xAA`
 /// with the value of the byte `AA`.
 /// @param str The string to unescape.
 /// @returns The unescaped string of *str*.
-/// @relates byte_escape
+/// @relates byte_escape bytes_escape_all
 std::string byte_unescape(std::string const& str);
 
 /// Escapes a string according to JSON escaping.

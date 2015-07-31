@@ -13,18 +13,24 @@ TEST(string byte escaping)
   CHECK(byte_escape("foo") == "foo");
   CHECK(byte_escape("foo bar") == "foo bar");
 
+  CHECK(byte_escape("foobar", "o") == "f\\o\\obar");
+
   CHECK(byte_escape("foob\ar") == "foob\\x07r");
   CHECK(byte_escape("foo\tbar") == "foo\\x09bar");
   CHECK(byte_escape("foo\nbar") == "foo\\x0abar");
   CHECK(byte_escape("foo\r\nbar") == "foo\\x0d\\x0abar");
+
+  CHECK(byte_unescape("f\\o\\obar") == "foobar");
 
   CHECK(byte_unescape("foob\\x07r") == "foob\ar");
   CHECK(byte_unescape("foo\\x09bar") == "foo\tbar");
   CHECK(byte_unescape("foo\\x0abar") == "foo\nbar");
   CHECK(byte_unescape("foo\\x0d\\x0abar") == "foo\r\nbar");
 
-  CHECK(byte_escape("foo", true) == "\\x66\\x6f\\x6f");
+  CHECK(byte_escape_all("foo") == "\\x66\\x6f\\x6f");
   CHECK(byte_unescape("\\x66\\x6f\\x6f") == "foo");
+
+  CHECK(byte_unescape("foo\\") == ""); // Invalid '/' at end of string.
 }
 
 TEST(JSON string escaping)
