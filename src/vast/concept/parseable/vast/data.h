@@ -50,7 +50,7 @@ struct access::parser<data> : vast::parser<access::parser<data>>
       | '[' >> (p % ',') ->* to_vector >> ']'
       | '{' >> (p % ',') ->* to_set >> '}'
       | '{' >> ((p >> "->" >> p) % ',') ->* to_table >> '}'
-      | literal("none") ->* [] { return nil; }
+      | literal("nil") ->* [] { return nil; }
       ;
     return p;
   }

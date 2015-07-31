@@ -425,6 +425,7 @@ bool compatible(type const& lhs, relational_operator op, type const& rhs)
       return is<type::string>(lhs) && is<type::pattern>(rhs);
     case equal:
     case not_equal:
+      return is<none>(lhs) || is<none>(rhs) || congruent(lhs, rhs);
     case less:
     case less_equal:
     case greater:

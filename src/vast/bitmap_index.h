@@ -84,8 +84,18 @@ public:
   trial<Bitstream> lookup(relational_operator op, none) const
   {
     if (! (op == equal || op == not_equal))
-      return error{"unsupported relational operator: ", op};
+      return error{"invalid relational operator for nil data: ", op};
     return op == equal ? nil_ & mask_ : ~nil_ & mask_;
+  }
+
+  trial<Bitstream> lookup(relational_operator op, data const& d) const
+  {
+    if (is<none>(d))
+      return lookup(op, nil);
+    auto r = derived()->lookup_impl(op, d);
+    if (r)
+      *r &= mask_;
+    return r;
   }
 
   /// Retrieves the number of elements in the bitmap index.

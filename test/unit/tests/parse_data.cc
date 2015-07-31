@@ -97,7 +97,7 @@ TEST(data)
   CHECK(d == table{{true, 1u}, {false, 0u}});
 
   MESSAGE("record");
-  str = "(42,4.2,none)"s;
+  str = "(42,4.2,nil)"s;
   f = str.begin();
   l = str.end();
   CHECK(p.parse(f, l, d));

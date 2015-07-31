@@ -106,10 +106,11 @@ struct data : qi::grammar<Iterator, vast::data(), skipper<Iterator>>
       |   tbl                   [_val = _1]
       |   st                    [_val = _1]
       |   rec                   [_val = _1]
+      |   str                   [_val = _1]
+      |   pat                   [_val = construct<pattern>(_1)]
       |   lit("T")              [_val = construct<vast::data>(true)]
       |   lit("F")              [_val = construct<vast::data>(false)]
-      |   pat                   [_val = construct<pattern>(_1)]
-      |   str                   [_val = _1]
+      |   lit("nil")
       ;
 
     rec
