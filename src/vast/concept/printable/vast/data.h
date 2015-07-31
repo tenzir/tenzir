@@ -38,7 +38,7 @@ struct data_printer : printer<data_printer>
     bool operator()(std::string const& str) const
     {
       return printers::any.print(out_, '"')
-          && printers::str.print(out_, util::byte_escape(str))
+          && printers::str.print(out_, util::byte_escape(str, "\""))
           && printers::any.print(out_, '"');
     }
 
