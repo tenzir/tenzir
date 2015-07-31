@@ -49,7 +49,7 @@ public:
           VAST_WARN(this, "ignores new limit of", max,
                     "(already processed", processed_, " events)");
       },
-      [=](accountant_atom, actor const& accountant)
+      [=](put_atom, accountant_atom, actor const& accountant)
       {
         VAST_DEBUG(this, "registers accountant", accountant);
         accountant_ = accountant;
