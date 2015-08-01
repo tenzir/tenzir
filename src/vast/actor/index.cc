@@ -367,12 +367,11 @@ behavior index::make_behavior()
                  current_sender(), "for query:", expr);
       auto& qs = queries_[expr];
       VAST_ASSERT(qs.hist);
-      auto before = qs.hist->hits.count();
-      qs.hist->hits |= hits;
-      auto after = qs.hist->hits.count();
-      if (after > 0 && after > before)
+      auto delta = hits - qs.hist->hits;
+      if (delta.count() > 0)
       {
-        auto msg = make_message(std::move(hits));
+        qs.hist->hits |= delta;
+        auto msg = make_message(std::move(delta));
         for (auto& s : qs.subscribers)
           send(s, msg);
       }

@@ -27,7 +27,8 @@ exporter::exporter(expression ast, query_options opts)
   {
     VAST_DEBUG(this, "got index hit covering", '[' << hits.find_first() << ','
                << (hits.find_last() + 1) << ')');
-    VAST_ASSERT(! hits.all_zeros() && (hits & hits_).count() == 0);
+    VAST_ASSERT(! hits.all_zeros());           // Empty hits are useless.
+    VAST_ASSERT((hits & hits_).count() == 0);  // So are duplicate hits.
     total_hits_ += hits.count();
     hits_ |= hits;
     unprocessed_ = hits_ - processed_;
