@@ -4,8 +4,8 @@
 #include <pcap.h>
 #include "vast/filesystem.h"
 #include "vast/schema.h"
+#include "vast/type.h"
 #include "vast/actor/sink/base.h"
-#include "vast/detail/packet_type.h"
 
 namespace vast {
 namespace sink {

@@ -5,7 +5,7 @@
 #include "vast/event.h"
 #include "vast/filesystem.h"
 #include "vast/actor/source/pcap.h"
-#include "vast/detail/packet_type.h"
+#include "vast/detail/pcap_packet_type.h"
 #include "vast/util/assert.h"
 #include "vast/util/byte_swap.h"
 
@@ -16,7 +16,7 @@ pcap::pcap(std::string name, uint64_t cutoff, size_t max_flows,
            size_t max_age, size_t expire_interval, int64_t pseudo_realtime)
   : base<pcap>{"pcap-source"},
     name_{std::move(name)},
-    packet_type_{vast::detail::make_packet_type()},
+    packet_type_{vast::detail::pcap_packet_type},
     cutoff_{cutoff},
     max_flows_{max_flows},
     generator_{std::random_device{}()},

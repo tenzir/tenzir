@@ -1,5 +1,5 @@
-#ifndef VAST_DETAIL_PACKET_TYPE_H
-#define VAST_DETAIL_PACKET_TYPE_H
+#ifndef VAST_DETAIL_PCAP_PACKET_TYPE_H
+#define VAST_DETAIL_PCAP_PACKET_TYPE_H
 
 #include "vast/type.h"
 
@@ -15,12 +15,13 @@ inline type make_packet_type()
       {"dst", type::address{}},
       {"sport", type::port{}},
       {"dport", type::port{}}}},
-    {"data", type::string{{type::attribute::skip}}}};
-
-  packet.name("vast::packet");
-
+    {"data", type::string{{type::attribute::skip}}}
+  };
+  packet.name("pcap::packet");
   return packet;
 }
+
+static auto const pcap_packet_type = make_packet_type();
 
 } // namespace detail
 } // namespace vast

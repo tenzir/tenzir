@@ -1,5 +1,5 @@
 #include "vast/actor/sink/pcap.h"
-#include "vast/detail/packet_type.h"
+#include "vast/detail/pcap_packet_type.h"
 #include "vast/concept/printable/vast/filesystem.h"
 
 namespace vast {
@@ -9,7 +9,7 @@ pcap::pcap(schema sch, path trace, size_t flush)
   : base<pcap>{"pcap-sink"},
     schema_{std::move(sch)},
     trace_{std::move(trace)},
-    packet_type_{detail::make_packet_type()},
+    packet_type_{detail::pcap_packet_type},
     flush_{flush}
 {
 }

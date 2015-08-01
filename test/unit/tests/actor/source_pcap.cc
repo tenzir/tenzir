@@ -25,7 +25,7 @@ TEST(pcap_source)
     [&](std::vector<event> const& events)
     {
       REQUIRE(events.size() == 44);
-      CHECK(events[0].type().name() == "vast::packet");
+      CHECK(events[0].type().name() == "pcap::packet");
     },
     fail
     );
