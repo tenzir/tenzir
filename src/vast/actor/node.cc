@@ -146,7 +146,7 @@ behavior node::make_behavior()
         {
           return
           {
-            others() >> [=]
+            others >> [=]
             {
               auto rp = self->make_response_promise();
               auto abort_on_error = [=](error e)
@@ -200,7 +200,7 @@ behavior node::make_behavior()
       );
       forward_to(job);
     },
-    others() >> [=]
+    others >> [=]
     {
       std::string cmd;
       current_message().extract([&](std::string const& s) { cmd += ' ' + s; });
@@ -458,7 +458,7 @@ message node::spawn_actor(message const& msg)
       return error{"not compiled with gperftools"};
 #endif
     },
-    others() >> []
+    others >> []
     {
       return error{"invalid actor type"};
     }
@@ -513,7 +513,7 @@ void node::send_flush(std::string const& arg)
     {
       return
       {
-        others() >> [=]
+        others >> [=]
         {
           self->send(target, flush_atom::value);
           self->become(
@@ -539,7 +539,7 @@ void node::send_flush(std::string const& arg)
               rp.deliver(self->current_message());
               self->quit(exit::error);
             },
-            others() >> [=]
+            others >> [=]
             {
               rp.deliver(make_message(error{"unexpected response to FLUSH"}));
               self->quit(exit::error);
@@ -662,9 +662,9 @@ message node::show(std::string const& arg)
   if (arg == "nodes")
     key = "nodes/";
   else if (arg == "peers")
-    key = "peers/" + name_;
+    key = "peers/";
   else if (arg == "actors")
-    key = "actors/" + name_;
+    key = "actors/";
   else if (arg == "topology")
     key = "topology/";
   else
@@ -686,7 +686,8 @@ node::actor_state node::get(std::string const& label)
   actor_state result;
   auto key = "actors/" + name + '/' + s[0];
   auto fqn = s.size() == 1 ? (s[0] + '@' + name_) : label;
-  scoped_actor{}->sync_send(store_, get_atom::value, key).await(
+  scoped_actor self;
+  self->sync_send(store_, get_atom::value, key).await(
     [&](actor const& a, std::string const& s) { result = {a, s, fqn}; },
     [](none) { /* nop */ }
   );
