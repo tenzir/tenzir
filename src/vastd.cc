@@ -107,11 +107,15 @@ int main(int argc, char *argv[])
   else
   {
     VAST_DEBUG("deamonizing process (PID", util::process_id() << ")");
+    // On Mac OS, daemon(3) is deprecated since 10.5.
+    VAST_DIAGNOSTIC_PUSH
+    VAST_DIAGNOSTIC_IGNORE_DEPRECATED
     if (::daemon(0, 0) != 0)
     {
       VAST_ERROR("failed to daemonize process");
       return 1;
     }
+    VAST_DIAGNOSTIC_POP
   }
   // Replace/adjust scheduler.
   if (r.opts.count("profile"))

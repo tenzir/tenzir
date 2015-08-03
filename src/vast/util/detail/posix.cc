@@ -3,6 +3,7 @@
 #include <sys/types.h>
 #include <sys/un.h>
 
+#include "vast/config.h"
 #include "vast/util/detail/posix.h"
 
 namespace vast {
@@ -53,6 +54,10 @@ int uds_connect(std::string const& path)
     return -1;
   return fd;
 }
+
+// On Mac OS, CMSG_SPACE is for some reason not a constant expression.
+VAST_DIAGNOSTIC_PUSH
+VAST_DIAGNOSTIC_IGNORE_VLA_EXTENSION
 
 bool uds_send_fd(int socket, int fd)
 {
@@ -111,6 +116,8 @@ int uds_recv_fd(int socket)
      return *reinterpret_cast<int*>(CMSG_DATA(c));
   return -1;
 }
+
+VAST_DIAGNOSTIC_POP
 
 } // namespace detail
 } // namespace util

@@ -15,10 +15,20 @@
 
 #if defined(CAF_CLANG)
 #  define VAST_CLANG
+#  define VAST_DIAGNOSTIC_PUSH  _Pragma("clang diagnostic push")
+#  define VAST_DIAGNOSTIC_POP   _Pragma("clang diagnostic pop")
+#  define VAST_DIAGNOSTIC_IGNORE_DEPRECATED                                 \
+     _Pragma("clang diagnostic ignored \"-Wdeprecated\"")
+#  define VAST_DIAGNOSTIC_IGNORE_VLA_EXTENSION                              \
+     _Pragma("clang diagnostic ignored \"-Wvla-extension\"")
 #elif defined(CAF_GCC)
 #  define VAST_GCC
-#elif defined(CAF_MSVC)
-#  define VAST_MSVC
+#  define VAST_DIAGNOSTIC_PUSH  _Pragma("GCC diagnostic push")
+#  define VAST_DIAGNOSTIC_POP   _Pragma("GCC diagnostic pop")
+#  define VAST_DIAGNOSTIC_IGNORE_DEPRECATED                                 \
+     _Pragma("GCC diagnostic ignored \"-Wdeprecated\"")
+#  define VAST_DIAGNOSTIC_IGNORE_VLA_EXTENSION                              \
+     _Pragma("GCC diagnostic ignored \"-Wvla-extension\"")
 #endif
 
 #if defined(CAF_MACOS)
