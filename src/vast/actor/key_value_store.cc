@@ -102,15 +102,18 @@ behavior key_value_store::make_behavior()
       // underlying radix tree.
       for (auto& d : data_)
       {
-        VAST_DEBUG(this, "relays data to peer:", d.first);
-        send(peer, put_atom::value, d.first, d.second);
+        VAST_DEBUG(this, "relays data to peer:",
+                   d.first, "->", to_string(d.second));
+        auto header = make_message(put_atom::value, d.first);
+        send(peer, message::concat(header, d.second));
       }
       return ok_atom::value;
     },
     on(put_atom::value, val<std::string>, any_vals)
       >> [=](std::string const& key)
     {
-      VAST_DEBUG(this, "got PUT:", key);
+      auto value = current_message().drop(2);
+      VAST_DEBUG(this, "got PUT:", key, "->", to_string(value));
       if (key.empty())
         return make_message(error{"empty key"});
       else if (key == seperator_)
