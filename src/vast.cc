@@ -264,6 +264,10 @@ int main(int argc, char *argv[])
       {
         VAST_VERBOSE("successfully executed command:", cmd_line);
       },
+      [&](caf::actor const&)
+      {
+        VAST_VERBOSE("successfully executed command:", cmd_line);
+      },
       [&](std::string const& str)
       {
         VAST_VERBOSE("successfully executed command:", cmd_line);
@@ -278,7 +282,7 @@ int main(int argc, char *argv[])
       caf::others >> [&]
       {
         auto msg = to_string(self->current_message());
-        VAST_ERROR("got unexpected message:", msg);
+        VAST_ERROR("got unexpected reply:", msg);
         exit_code = 1;
       }
     );
