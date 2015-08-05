@@ -142,33 +142,34 @@ int main(int argc, char *argv[])
     auto acc = self->spawn<accountant<uint64_t>>(accounting_log);
     acc->link_to(*src);
     self->send(*src, put_atom::value, accountant_atom::value, acc);
-    // 2. Find the next-best IMPORTER.
-    caf::actor importer;
+    // 2. Find all next-best IMPORTERs.
+    std::vector<caf::actor> importers;
     self->sync_send(node, store_atom::value).await(
       [&](caf::actor const& store) {
-        self->sync_send(store, list_atom::value, "actors").await(
+        self->sync_send(store, list_atom::value, "actors/").await(
           [&](std::map<std::string, caf::message>& m) {
             for (auto& p : m)
-              // TODO: as opposed to taking the first importer available, it
-              // could make sense to take the one which faces the least load.
-              if (p.second.get_as<std::string>(1) == "importer")
-              {
-                importer = p.second.get_as<caf::actor>(0);
-                return;
+              if (p.second.get_as<std::string>(1) == "importer") {
+                auto imp = p.second.get_as<caf::actor>(0);
+                if (imp != caf::invalid_actor)
+                  importers.push_back(imp);
               }
           }
         );
       }
     );
-    if (! importer)
+    if (importers.empty())
     {
-      VAST_ERROR("could not obtain importer from node");
+      VAST_ERROR("no importers found");
       return 1;
     }
-    // 3. Connect SOURCE and IMPORTER.
-    VAST_DEBUG("connecting source with remote importer");
-    auto msg = make_message(put_atom::value, sink_atom::value, importer);
-    self->send(*src, std::move(msg));
+    // 3. Connect SOURCE and IMPORTERs.
+    for (auto& imp : importers)
+    {
+      //VAST_ASSERT(imp != caf::invalid_actor);
+      VAST_DEBUG("connecting source with importer", imp);
+      self->send(*src, put_atom::value, sink_atom::value, imp);
+    }
     // 4. Run the SOURCE.
     VAST_DEBUG("running source");
     self->send(*src, run_atom::value);
@@ -226,6 +227,8 @@ int main(int argc, char *argv[])
     if (! exporter)
       return 1;
     // 3. Connect EXPORTER with ARCHIVEs and INDEXes.
+    std::vector<caf::actor> archives;
+    std::vector<caf::actor> indexes;
     VAST_DEBUG("retrieving topology to connect exporter with archive/index");
     self->sync_send(node, store_atom::value).await(
       [&](caf::actor const& store) {
@@ -233,15 +236,27 @@ int main(int argc, char *argv[])
           [&](std::map<std::string, caf::message>& m) {
             for (auto& p : m)
               if (p.second.get_as<std::string>(1) == "archive")
-                self->send(exporter, put_atom::value, archive_atom::value,
-                           p.second.get_as<caf::actor>(0));
+                archives.push_back(p.second.get_as<caf::actor>(0));
               else if (p.second.get_as<std::string>(1) == "index")
-                self->send(exporter, put_atom::value, index_atom::value,
-                           p.second.get_as<caf::actor>(0));
+                indexes.push_back(p.second.get_as<caf::actor>(0));
           }
         );
       }
     );
+    if (archives.empty())
+    {
+      VAST_ERROR("no archives found");
+      return 1;
+    }
+    if (indexes.empty())
+    {
+      VAST_ERROR("no indexes found");
+      return 1;
+    }
+    for (auto& archive : archives)
+      self->send(exporter, put_atom::value, archive_atom::value, archive);
+    for (auto& index : indexes)
+      self->send(exporter, put_atom::value, index_atom::value, index);
     // 4. Connect EXPORTER with SINK.
     self->send(exporter, put_atom::value, sink_atom::value, *snk);
     // 5. Run the EXPORTER.
