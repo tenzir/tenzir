@@ -45,7 +45,7 @@ struct node : default_actor
   caf::message quit_actor(std::string const& arg);
   caf::message connect(std::string const& sources, std::string const& sinks);
   caf::message disconnect(std::string const& sources, std::string const& sinks);
-  caf::message show(std::string const& arg);
+  caf::message show(std::string const& arg, bool verbose);
 
   //
   // Helper functions to synchronously interact with the key-value store.

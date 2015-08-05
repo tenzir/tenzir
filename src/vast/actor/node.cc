@@ -121,7 +121,11 @@ behavior node::make_behavior()
     },
     on("show", arg_match) >> [=](std::string const& arg)
     {
-      return show(arg);
+      return show(arg, false);
+    },
+    on("show", "-v", arg_match) >> [=](std::string const& arg)
+    {
+      return show(arg, true);
     },
     [=](store_atom)
     {
@@ -653,7 +657,7 @@ message node::disconnect(std::string const& sources, std::string const& sinks)
   return make_message(ok_atom::value);
 }
 
-message node::show(std::string const& arg)
+message node::show(std::string const& arg, bool verbose)
 {
   VAST_VERBOSE(this, "got request to show", arg);
   std::string result;
@@ -669,10 +673,15 @@ message node::show(std::string const& arg)
     key = "topology/";
   else
     return make_message(error{"show: invalid argument"});
+  auto pred = [=](auto& p) -> std::string {
+    auto result = p.first;
+    if (verbose)
+      result += " -> " + to_string(p.second);
+    return result;
+  };
   self->sync_send(store_, list_atom::value, key).await(
     [&](std::map<std::string, message> const& values)
     {
-      auto pred = [](auto& p) -> std::string const& { return p.first; };
       result = util::join(values.begin(), values.end(), "\n", pred);
     }
   );
