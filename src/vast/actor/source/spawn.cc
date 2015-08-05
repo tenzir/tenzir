@@ -98,6 +98,9 @@ trial<caf::actor> spawn(message const& params)
     if (! r.error.empty())
       return error{std::move(r.error)};
     src = caf::spawn<test, priority_aware>(id, events);
+    // The test source doesn't consume any data, it only generates events.
+    // Therefore we can use the input channel for the schema.
+    schema_file = input;
   }
   else if (format == "bro")
   {
