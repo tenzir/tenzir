@@ -118,8 +118,8 @@ behavior key_value_store::make_behavior()
         return make_message(error{"empty key"});
       else if (key == seperator_)
         return make_message(error{"invalid key: ", seperator_});
+      data_[key] = value;
       relay();
-      data_[key] = current_message().drop(2);
       return make_message(ok_atom::value);
     },
     [=](exists_atom, std::string const& key)
