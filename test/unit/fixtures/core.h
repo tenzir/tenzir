@@ -49,8 +49,7 @@ struct core
       self->sync_send(n, msg).await(
         [&](error const& e)
         {
-          ERROR(e);
-          REQUIRE(false);
+          FAIL(e);
         },
         others >> []
         {
@@ -77,8 +76,7 @@ struct core
       },
       others >> [&]
       {
-        ERROR("unexpected message: " << to_string(self->current_message()));
-        REQUIRE(false);
+        FAIL("unexpected message: " << to_string(self->current_message()));
       }
     );
     self->receive([&](down_msg const& dm) { CHECK(dm.reason == exit::done); });
@@ -97,8 +95,7 @@ struct core
       self->sync_send(n, msg).await(
         [&](error const& e)
         {
-          ERROR(e);
-          REQUIRE(false);
+          FAIL(e);
         },
         others >> []
         {

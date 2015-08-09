@@ -107,8 +107,7 @@ TEST(export)
       exp = a;
     },
     [&](error const& e) {
-      ERROR(e);
-      REQUIRE(false);
+      FAIL(e);
     }
   );
   REQUIRE(exp != invalid_actor);
@@ -183,8 +182,7 @@ TEST(export)
       exp = a;
     },
     [&](error const& e) {
-      ERROR(e);
-      REQUIRE(false);
+      FAIL(e);
     }
   );
   REQUIRE(exp != invalid_actor);

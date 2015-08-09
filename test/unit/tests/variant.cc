@@ -207,8 +207,8 @@ TEST(visitor with reference as return value)
   reference_returner r;
   CHECK(std::is_same<decltype(r(42)), double const&>::value);
   CHECK(! std::is_same<decltype(r(42)), double>::value);
-  FAIL(std::is_same<decltype(visit(r, v)), double const&>::value);
-  FAIL(! std::is_same<decltype(visit(r, v)), double>::value);
+  CHECK_FAIL(std::is_same<decltype(visit(r, v)), double const&>::value);
+  CHECK_FAIL(! std::is_same<decltype(visit(r, v)), double>::value);
 }
 
 namespace {
