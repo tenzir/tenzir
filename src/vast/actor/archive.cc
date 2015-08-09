@@ -37,6 +37,7 @@ caf::behavior archive::make_behavior()
 {
   if (exists(meta_data_filename_))
   {
+    using vast::load;
     auto t = load(meta_data_filename_, segments_);
     if (! t)
     {
@@ -107,6 +108,7 @@ caf::behavior archive::make_behavior()
           VAST_DEBUG(this, "experienced cache miss for", *id);
           segment seg;
           auto filename = dir_ / to_string(*id);
+          using vast::load;
           auto t = load(filename, seg);
           if (! t)
           {
@@ -140,6 +142,7 @@ trial<void> archive::store(segment s)
   auto id = uuid::random();
   auto filename = dir_ / to_string(id);
   VAST_VERBOSE(this, "writes segment", id, "to", filename.trim(-3));
+  using vast::save;
   auto t = save(filename, s);
   if (! t)
     return t;
@@ -169,6 +172,7 @@ bool archive::flush()
   current_ = {};
   current_size_ = 0;
   VAST_VERBOSE(this, "writes meta data to:", meta_data_filename_.trim(-3));
+  using vast::save;
   t = save(meta_data_filename_, segments_);
   if (! t)
   {

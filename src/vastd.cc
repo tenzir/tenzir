@@ -15,6 +15,7 @@
 #include <thread>
 
 #include <caf/all.hpp>
+#include <caf/experimental/whereis.hpp>
 #include <caf/io/all.hpp>
 #include <caf/scheduler/profiled_coordinator.hpp>
 
@@ -129,6 +130,11 @@ int main(int argc, char *argv[])
   VAST_VERBOSE("set scheduler maximum throughput to",
                (messages == std::numeric_limits<size_t>::max()
                 ? "unlimited" : std::to_string(messages)));
+  // Enable direct connections.
+  VAST_VERBOSE("enabling direct connection optimization");
+  auto cfg = caf::experimental::whereis(caf::atom("ConfigServ"));
+  caf::anon_send(cfg, put_atom::value, "global.enable-automatic-connections",
+            caf::make_message(true));
   // Initialize node actor.
   auto guard = caf::detail::make_scope_guard(
     [] { caf::shutdown(); logger::destruct(); }

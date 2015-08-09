@@ -70,6 +70,7 @@ behavior index::make_behavior()
   // Load meta data about each partition.
   if (exists(dir_ / "meta"))
   {
+    using vast::load;
     auto t = load(dir_ / "meta", partitions_);
     if (! t)
     {
@@ -495,6 +496,7 @@ void index::flush()
   for (auto& p : partitions_)
     if (p.second.events > 0)
     {
+      using vast::save;
       auto t = save(dir_ / "meta", partitions_);
       if (! t)
       {

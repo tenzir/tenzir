@@ -30,16 +30,14 @@ behavior identifier::make_behavior()
       quit(exit::error);
       return {};
     }
-
     file >> id_;
     VAST_INFO(this, "found existing next event ID", id_);
   }
-
   return
   {
     [=](exit_msg const& msg)
     {
-      if (save())
+      if (save_id())
       {
         quit(msg.reason);
       }
@@ -55,14 +53,12 @@ behavior identifier::make_behavior()
         return make_message(error{"cannot hand out 0 ids"});
       else if (std::numeric_limits<event_id>::max() - id_ < n)
         return make_message(error{"not enough ids for ", n, " events"});
-
       id_ += n;
-      if (! save())
+      if (! save_id())
       {
         quit(exit::error);
         return make_message(error{"failed to save incremented ID ", id_});
       }
-
       VAST_DEBUG(this, "hands out [" << (id_ - n) << ',' << id_ << ')');
       return make_message(id_atom::value, id_ - n, id_);
     },
@@ -70,20 +66,16 @@ behavior identifier::make_behavior()
   };
 }
 
-bool identifier::save()
+bool identifier::save_id()
 {
   if (id_ == 0)
     return true;
-
   if (! exists(dir_) && ! mkdir(dir_))
     return false;
-
   std::ofstream file{to_string(dir_ / "id")};
   if (! file)
     return false;
-
   file << id_ << std::endl;
-
   return true;
 }
 

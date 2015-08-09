@@ -42,6 +42,7 @@ public:
     // Materialize an existing index.
     if (exists(path_))
     {
+      using vast::load;
       auto t = load(path_, last_flush_, bmi_);
       if (! t)
       {
@@ -121,6 +122,7 @@ private:
     VAST_DEBUG(this, "flushes bitmap index (" << (bmi_.size() - last_flush_)
                << '/' << bmi_.size(), "new/total bits)");
     last_flush_ = bmi_.size();
+    using vast::save;
     auto t = save(path_, last_flush_, bmi_);
     return nothing;
   }

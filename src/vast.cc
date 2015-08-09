@@ -1,9 +1,12 @@
 #include <algorithm>
 #include <iostream>
+#include <limits>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <caf/all.hpp>
+#include <caf/experimental/whereis.hpp>
 #include <caf/io/all.hpp>
 
 #include "vast/aliases.h"
@@ -32,7 +35,7 @@ int main(int argc, char *argv[])
 {
   if (! detail::adjust_resource_consumption())
     return 1;
-  caf::set_scheduler<>(2, -1);
+  // Locate command in command line.
   std::vector<std::string> commands = {
     "connect",
     "disconnect",
@@ -54,10 +57,14 @@ int main(int argc, char *argv[])
   auto endpoint = ""s;
   auto host = "127.0.0.1"s;
   auto port = uint16_t{42000};
+  auto messages = std::numeric_limits<size_t>::max();
+  auto threads = std::thread::hardware_concurrency();
   auto r = caf::message_builder(command_line.begin(), cmd).extract_opts({
     {"dir,d", "directory for logs and client state", dir},
     {"endpoint,e", "node endpoint", endpoint},
     {"log-level,l", "verbosity of console and/or log file", log_level},
+    {"messages,m", "maximum messages per CAF scheduler invocation", messages},
+    {"threads,t", "number of worker threads in CAF scheduler", threads},
     {"version,v", "print version and exit"}
   });
   if (! r.error.empty())
@@ -105,6 +112,14 @@ int main(int argc, char *argv[])
     std::cerr << "failed to reset logger file backend" << std::endl;
     return 1;
   }
+  // Adjust scheduler parameters.
+  if (r.opts.count("threads") || r.opts.count("messages"))
+    caf::set_scheduler<>(threads, messages);
+  // Enable direct connections.
+  VAST_VERBOSE("enabling direct connection optimization");
+  auto cfg = caf::experimental::whereis(caf::atom("ConfigServ"));
+  caf::anon_send(cfg, put_atom::value, "global.enable-automatic-connections",
+            caf::make_message(true));
   // Establish connection to remote node.
   auto guard = caf::detail::make_scope_guard(
     [] { caf::shutdown(); logger::destruct(); }

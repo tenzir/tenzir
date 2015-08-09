@@ -16,7 +16,7 @@ struct identifier : default_actor
 
   caf::behavior make_behavior() override;
 
-  bool save();
+  bool save_id();
 
   path dir_;
   event_id id_ = 0;

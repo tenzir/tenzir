@@ -192,6 +192,7 @@ behavior partition::make_behavior()
 {
   if (exists(dir_))
   {
+    using vast::load;
     auto t = load(dir_ / "schema", schema_);
     if (! t)
     {
@@ -480,6 +481,7 @@ void partition::flush()
   if (schema_.empty())
     return;
   VAST_DEBUG(this, "flushes schema");
+  using vast::save;
   auto t = save(dir_ / "schema", schema_);
   if (! t)
   {
