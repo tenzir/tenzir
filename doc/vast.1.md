@@ -196,6 +196,8 @@ Available *actor* values with corresponding *parameters*:
 *importer*
 
 *exporter* [*parameters*] *expression*
+  `-a`
+    Autoconnect to available archives and indexes on the node.
   `-c`
     Marks this exporter as *continuous*.
   `-h`
@@ -209,31 +211,34 @@ Available *actor* values with corresponding *parameters*:
 *source* **X** [*parameters*]
   **X** specifies the format of *source*. Each source format has its own set of
   parameters, but the following parameters apply to all formats:
+  `-a`
+    Autoconnect to available importers on the node.
   `-b` *batch-size* [*100,000*]
     Number of events to read in one batch.
-  `-s` *schema*
-    Path to an alterative *schema* file which overrides the default attributes.
-  `-r` *path*
-    Name of the filesystem *path* (file or directory) to read events from.
-  `-I` *importer*
-    If no importer runs on the connected node, one must specify `-I`
-    *importer* to indicate the endpoint receiving the generated events.
 
 *source* *bro*
+  `-r` *path*
+    Name of the filesystem *path* (file or directory) to read events from.
+  `-s` *schema*
+    Path to an alterative *schema* file which overrides the default attributes.
   `-u` *uds*
     Treats `-r` as a listening UNIX domain socket instead of a regular file.
 
 *source* *bgpdump*
+  `-r` *path*
+    Name of the file to read events from.
+  `-s` *schema*
+    Path to an alterative *schema* file which overrides the default attributes.
   `-u` *uds*
     Treats `-r` as a listening UNIX domain socket instead of a regular file.
 
 *source* *test* [*parameters*]
-  `-n` *events*
+  `-e` *events*
     The maximum number of *events* to generate.
 
 *source* *pcap* [*parameters*]
   `-i` *interface*
-    Name of the network *interface* to read packets from.
+    Name of the network *interface* to read packets from. (Overrides -r)
   `-c` *cutoff*
     The *cutoff* values specifies the maximum number of bytes to record per
     flow in each direction. That is, the maximum number of recorded bytes flow
@@ -251,6 +256,10 @@ Available *actor* values with corresponding *parameters*:
     timestamp differences. If the PCAP source encounters a packet *p1* after a
     previous packet *p0* with timestamps *t1* and *t0*, then it will sleep for
     time *(t1-t0)/c* before processing *p1*.
+  `-r` *path*
+    Filename of trace file to read packets from.
+  `-s` *schema*
+    Path to an alterative *schema* file which overrides the default attributes.
 
 *sink* **X** [*parameters*]
   **X** specifies the format of *sink*. Each source format has its own set of

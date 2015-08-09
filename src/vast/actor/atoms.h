@@ -62,6 +62,7 @@ using value_atom = caf::atom_constant<caf::atom("value")>;
 using write_atom = caf::atom_constant<caf::atom("write")>;
 
 // Actor roles
+using actor_atom = caf::atom_constant<caf::atom("actor")>;
 using accountant_atom = caf::atom_constant<caf::atom("accountant")>;
 using archive_atom = caf::atom_constant<caf::atom("archive")>;
 using identifier_atom = caf::atom_constant<caf::atom("identifier")>;

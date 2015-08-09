@@ -93,7 +93,7 @@ trial<caf::actor> spawn(message const& params)
     auto events = uint64_t{100};
     r = r.remainder.extract_opts({
       {"id,i", "the base event ID", id},
-      {"events,n", "number of events to generate", events}
+      {"events,e", "number of events to generate", events}
     });
     if (! r.error.empty())
       return error{std::move(r.error)};

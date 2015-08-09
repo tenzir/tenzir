@@ -131,20 +131,44 @@ behavior node::make_behavior()
     {
       return store_;
     },
-    //
-    // PRIVATE
-    //
-    [=](get_atom, std::string const& label)
+    [=](store_atom, get_atom, actor_atom, std::string const& label)
     {
-      // FIXME: forward to store instead
-      auto s = get(label);
-      return make_message(std::move(s.actor), std::move(s.fqn),
-                          std::move(s.type));
+      auto job = spawn(
+        [=](event_based_actor* self) -> behavior {
+          return {
+            others >> [=] {
+              auto rp = self->make_response_promise();
+              auto s = util::split_to_str(label, "@");
+              auto& name = s.size() == 1 ? name_ : s[1];
+              auto key = "actors/" + name + '/' + s[0];
+              self->send(store_, get_atom::value, key);
+              self->become(
+                [=](actor const&, std::string const&) {
+                  auto fqn = s.size() == 1 ? (s[0] + '@' + name_) : label;
+                  auto response = message::concat(
+                    self->current_message().take(1),
+                    make_message(std::move(fqn)),
+                    self->current_message().take_right(1)
+                  );
+                  rp.deliver(std::move(response));
+                  self->quit();
+                },
+                others >> [=] {
+                  rp.deliver(self->current_message());
+                  self->quit(exit::error);
+                }
+              );
+            }
+          };
+        }
+      );
+      forward_to(job);
     },
-    [=](sys_atom, actor const& peer, actor const& peer_store,
+    [=](store_atom, peer_atom, actor const& peer, actor const& peer_store,
         std::string const& peer_name)
     {
-      // Respond to peering request.
+      // Respond to peering request from another node with the forward-to-spawn
+      // idiom.
       auto job = spawn(
         [=](event_based_actor* self, actor parent) -> behavior
         {
@@ -204,6 +228,13 @@ behavior node::make_behavior()
       );
       forward_to(job);
     },
+    on(store_atom::value, any_vals) >> [=]
+    {
+      // We relay any non-peering request prefixed with the STORE atom to the
+      // key-value store, but strip the atom first.
+      current_message() = current_message().drop(1);
+      forward_to(store_);
+    },
     others >> [=]
     {
       std::string cmd;
@@ -236,7 +267,9 @@ message node::request_peering(std::string const& endpoint)
     auto peer = caf::io::remote_actor(host.c_str(), port);
     auto result = make_message(ok_atom::value);
     scoped_actor self;
-    self->sync_send(peer, sys_atom::value, this, store_, name_).await(
+    auto msg =
+      make_message(store_atom::value, peer_atom::value, this, store_, name_);
+    self->sync_send(peer, std::move(msg)).await(
       [&](ok_atom, std::string const& peer_name)
       {
         VAST_INFO(this, "now peers with:", peer_name);
@@ -377,12 +410,15 @@ message node::spawn_actor(message const& msg)
     },
     on("exporter", any_vals) >> [&]
     {
+      VAST_VERBOSE(this, "got exporter parameters:",
+                   to_string(current_message().drop(1)));
       auto events = uint64_t{0};
       r = params.extract_opts({
         {"events,e", "the number of events to extract", events},
         {"continuous,c", "marks a query as continuous"},
         {"historical,h", "marks a query as historical"},
-        {"unified,u", "marks a query as unified"}
+        {"unified,u", "marks a query as unified"},
+        {"auto-connect,a", "connect to available archives & indexes"}
       });
       if (! r.error.empty())
         return make_message(error{std::move(r.error)});
@@ -419,15 +455,56 @@ message node::spawn_actor(message const& msg)
       auto exp = spawn<exporter>(*expr, query_opts);
       attach_functor([=](uint32_t ec) { anon_send_exit(exp, ec); });
       send(exp, extract_atom::value, events);
+      if (r.opts.count("auto-connect") > 0)
+      {
+        std::vector<caf::actor> archives;
+        std::vector<caf::actor> indexes;
+        scoped_actor self;
+        self->sync_send(store_, list_atom::value, "actors/" + name_).await(
+          [&](std::map<std::string, caf::message>& m) {
+            for (auto& p : m)
+              p.second.apply({
+                [&](caf::actor const& a, std::string const& type)
+                {
+                  VAST_ASSERT(a != invalid_actor);
+                  if (type == "archive")
+                    send(exp, put_atom::value, archive_atom::value, a);
+                  else if (type == "index")
+                    send(exp, put_atom::value, index_atom::value, a);
+                }
+              });
+          }
+        );
+      }
       return make_message(std::move(exp), "exporter");
     },
     on("source", any_vals) >> [&]
     {
+      r = params.extract_opts({
+        {"auto-connect,a", "connect to available archives & indexes"}
+      });
       auto src = source::spawn(params);
       if (! src)
         return make_message(std::move(src.error()));
       send(*src, put_atom::value, accountant_atom::value, accountant_);
       attach_functor([s=*src](uint32_t ec) { anon_send_exit(s, ec); });
+      if (r.opts.count("auto-connect") > 0)
+      {
+        scoped_actor self;
+        self->sync_send(store_, list_atom::value, "actors/" + name_).await(
+          [&](std::map<std::string, caf::message>& m) {
+            for (auto& p : m)
+              p.second.apply({
+                [&](caf::actor const& a, std::string const& type)
+                {
+                  VAST_ASSERT(a != invalid_actor);
+                  if (type == "importer")
+                    send(*src, put_atom::value, sink_atom::value, a);
+                }
+              });
+          }
+        );
+      }
       return make_message(std::move(*src), "source");
     },
     on("sink", any_vals) >> [&]
@@ -595,7 +672,7 @@ message node::connect(std::string const& sources, std::string const& sinks)
         if (snk.type == "importer")
           msg = make_message(put_atom::value, sink_atom::value, snk.actor);
         else
-          return make_message(error{"sink not an importer: ", sink});
+          return make_message(error{"sink not an importer: ", snk.type});
       }
       else if (src.type == "importer")
       {
@@ -607,7 +684,7 @@ message node::connect(std::string const& sources, std::string const& sinks)
         else if (snk.type == "index")
           msg = make_message(put_atom::value, index_atom::value, snk.actor);
         else
-          return make_message(error{"invalid importer sink: ", sink});
+          return make_message(error{"invalid importer sink: ", snk.type});
       }
       else if (src.type == "exporter")
       {
@@ -618,7 +695,7 @@ message node::connect(std::string const& sources, std::string const& sinks)
         else if (snk.type == "sink")
           msg = make_message(put_atom::value, sink_atom::value, snk.actor);
         else
-          return make_message(error{"invalid exporter sink: ", sink});
+          return make_message(error{"invalid exporter sink: ", snk.type});
       }
       else
       {
@@ -692,12 +769,12 @@ node::actor_state node::get(std::string const& label)
 {
   auto s = util::split_to_str(label, "@");
   auto& name = s.size() == 1 ? name_ : s[1];
-  actor_state result;
   auto key = "actors/" + name + '/' + s[0];
   auto fqn = s.size() == 1 ? (s[0] + '@' + name_) : label;
+  actor_state result;
   scoped_actor self;
   self->sync_send(store_, get_atom::value, key).await(
-    [&](actor const& a, std::string const& s) { result = {a, s, fqn}; },
+    [&](actor const& a, std::string const& type) { result = {a, type, fqn}; },
     [](none) { /* nop */ }
   );
   return result;

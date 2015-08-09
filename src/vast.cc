@@ -22,6 +22,7 @@
 #include "vast/concept/printable/vast/uuid.h"
 #include "vast/detail/adjust_resource_consumption.h"
 #include "vast/util/endpoint.h"
+#include "vast/util/flat_set.h"
 #include "vast/util/string.h"
 
 using namespace vast;
@@ -142,20 +143,20 @@ int main(int argc, char *argv[])
     auto acc = self->spawn<accountant<uint64_t>>(accounting_log);
     acc->link_to(*src);
     self->send(*src, put_atom::value, accountant_atom::value, acc);
-    // 2. Find all next-best IMPORTERs.
+    // 2. Find all IMPORTERs to load-balance across them.
     std::vector<caf::actor> importers;
-    self->sync_send(node, store_atom::value).await(
-      [&](caf::actor const& store) {
-        self->sync_send(store, list_atom::value, "actors/").await(
-          [&](std::map<std::string, caf::message>& m) {
-            for (auto& p : m)
-              if (p.second.get_as<std::string>(1) == "importer") {
-                auto imp = p.second.get_as<caf::actor>(0);
-                if (imp != caf::invalid_actor)
-                  importers.push_back(imp);
-              }
-          }
-        );
+    auto list = make_message(store_atom::value, list_atom::value, "actors/");
+    self->sync_send(node, std::move(list)).await(
+      [&](std::map<std::string, caf::message>& m) {
+        for (auto& p : m)
+          p.second.apply({
+            [&](caf::actor const& a, std::string const& type)
+            {
+              VAST_ASSERT(a != caf::invalid_actor);
+              if (type == "importer")
+                importers.push_back(a);
+            }
+          });
       }
     );
     if (importers.empty())
@@ -194,79 +195,104 @@ int main(int argc, char *argv[])
       VAST_ERROR("failed to spawn sink:", snk.error());
       return 1;
     }
-    auto acc = self->spawn<accountant<uint64_t>>(accounting_log);
-    acc->link_to(*snk);
-    self->send(*snk, put_atom::value, accountant_atom::value, acc);
     auto sink_guard = caf::detail::make_scope_guard(
       [snk=*snk] { anon_send_exit(snk, exit::kill); }
     );
-    // 2. Spawn an EXPORTER.
-    caf::message_builder mb;
-    auto label = "exporter-" + to_string(uuid::random()).substr(0, 7);
-    mb.append("spawn");
-    mb.append("-l");
-    mb.append(label);
-    mb.append("exporter");
-    auto i = cmd + 2;
-    mb.append(*i++);
-    while (i != command_line.end())
+    auto acc = self->spawn<accountant<uint64_t>>(accounting_log);
+    acc->link_to(*snk);
+    self->send(*snk, put_atom::value, accountant_atom::value, acc);
+    // 2. For each node, spawn an (auto-connected) EXPORTER and connect it to
+    // the sink.
+    std::vector<caf::actor> nodes;
+    self->sync_send(node, store_atom::value, list_atom::value, "nodes/").await(
+      [&](std::map<std::string, caf::message> const& m) {
+        for (auto& p : m)
+          nodes.push_back(p.second.get_as<caf::actor>(0));
+      }
+    );
+    VAST_ASSERT(! nodes.empty());
+    for (auto n : nodes)
+    {
+      // Spawn remote exporter.
+      caf::message_builder mb;
+      auto label = "exporter-" + to_string(uuid::random()).substr(0, 7);
+      mb.append("spawn");
+      mb.append("-l");
+      mb.append(label);
+      mb.append("exporter");
+      mb.append("-a");
+      auto i = cmd + 2;
       mb.append(*i++);
-    caf::actor exporter;
-    self->sync_send(node, mb.to_message()).await(
-      [&](caf::actor const& actor) {
-        exporter = actor;
+      while (i != command_line.end())
+        mb.append(*i++);
+      self->send(n, mb.to_message());
+      VAST_DEBUG("created", label, "at node" << node);
+    }
+    // 3. Wait until the remote NODE returns the EXPORTERs so that we can
+    // monitor them and connect them with our local SINK.
+    auto failed = false;
+    auto early_finishers = 0u;
+    util::flat_set<caf::actor> exporters;
+    self->do_receive(
+      [&](caf::actor const& exporter) {
+        exporters.insert(exporter);
+        self->monitor(exporter);
+        self->send(exporter, put_atom::value, sink_atom::value, *snk);
+        VAST_DEBUG("running exporter");
+        self->send(exporter, stop_atom::value);
+        self->send(exporter, run_atom::value);
+      },
+      [&](caf::down_msg const& msg) {
+        ++early_finishers;
+        exporters.erase(caf::actor_cast<caf::actor>(msg.source));
       },
       [&](error const& e) {
-        VAST_ERROR("failed to spawn exporter:", e);
+        VAST_ERROR("failed to spawn exporter on node"
+                   << self->current_sender() << ':', e);
+        failed = true;
       },
       caf::others >> [&] {
-        VAST_ERROR("got unexpected message:",
+        VAST_ERROR("got unexpected message from node"
+                   << self->current_sender() << ':',
                    caf::to_string(self->current_message()));
+        failed = true;
       }
-    );
-    if (! exporter)
-      return 1;
-    // 3. Connect EXPORTER with ARCHIVEs and INDEXes.
-    std::vector<caf::actor> archives;
-    std::vector<caf::actor> indexes;
-    VAST_DEBUG("retrieving topology to connect exporter with archive/index");
-    self->sync_send(node, store_atom::value).await(
-      [&](caf::actor const& store) {
-        self->sync_send(store, list_atom::value, "actors").await(
-          [&](std::map<std::string, caf::message>& m) {
-            for (auto& p : m)
-              if (p.second.get_as<std::string>(1) == "archive")
-                archives.push_back(p.second.get_as<caf::actor>(0));
-              else if (p.second.get_as<std::string>(1) == "index")
-                indexes.push_back(p.second.get_as<caf::actor>(0));
-          }
-        );
-      }
-    );
-    if (archives.empty())
+    ).until([&] {
+      return early_finishers + exporters.size() == nodes.size() || failed;
+    });
+    if (failed)
     {
-      VAST_ERROR("no archives found");
+      for (auto exporter : exporters)
+        self->send_exit(exporter, exit::error);
       return 1;
     }
-    if (indexes.empty())
+    // 4. Wait for all EXPORTERs to terminate. Thereafter we can shutdown the
+    // SINK and finish.
+    if (! exporters.empty())
     {
-      VAST_ERROR("no indexes found");
-      return 1;
+      self->do_receive(
+        [&](caf::down_msg const& msg) {
+          exporters.erase(caf::actor_cast<caf::actor>(msg.source));
+          VAST_DEBUG("got DOWN from exporter" << msg.source << ',',
+                     "remaining:", exporters.size());
+        },
+        caf::others >> [&] {
+          VAST_ERROR("got unexpected message from node"
+                     << self->current_sender() << ':',
+                     caf::to_string(self->current_message()));
+          failed = true;
+        }
+      ).until([&] { return exporters.size() == 0 || failed; });
     }
-    for (auto& archive : archives)
-      self->send(exporter, put_atom::value, archive_atom::value, archive);
-    for (auto& index : indexes)
-      self->send(exporter, put_atom::value, index_atom::value, index);
-    // 4. Connect EXPORTER with SINK.
-    self->send(exporter, put_atom::value, sink_atom::value, *snk);
-    // 5. Run the EXPORTER.
-    VAST_DEBUG("running exporter");
-    self->send(exporter, stop_atom::value);
-    self->send(exporter, run_atom::value);
+    if (failed)
+      return 1;
     sink_guard.disable();
+    self->send_exit(*snk, exit::done);
   }
   else
   {
+    // Only "import" and "export" are local commands, the remote node executes
+    // all other ones.
     auto args = std::vector<std::string>(cmd + 1, command_line.end());
     caf::message_builder mb;
     mb.append(*cmd);

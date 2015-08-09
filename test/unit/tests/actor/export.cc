@@ -31,7 +31,8 @@ TEST(export)
 
   MESSAGE("testing whether archive has the correct chunk");
   n = make_core();
-  self->sync_send(n, get_atom::value, "archive").await(
+  self->sync_send(n, store_atom::value, get_atom::value, actor_atom::value,
+                  "archive").await(
     [&](actor const& a, std::string const& fqn, std::string const& type)
     {
       CHECK(fqn == "archive@" + node_name);
@@ -58,7 +59,8 @@ TEST(export)
   MESSAGE("performing manual index lookup");
   auto pops = vast::detail::to_expression("id.resp_p == 995/?");
   REQUIRE(pops);
-  self->sync_send(n, get_atom::value, "index").await(
+  self->sync_send(n, store_atom::value, get_atom::value, actor_atom::value,
+                  "index").await(
     [&](actor const& a, std::string const& fqn, std::string const& type)
     {
       CHECK(fqn == "index@" + node_name);
@@ -99,10 +101,6 @@ TEST(export)
     }).until([&] { return done; });
 
   MESSAGE("performing index lookup via exporter");
-  std::vector<message> msgs = {
-    make_message("connect", "exporter", "archive"),
-    make_message("connect", "exporter", "index")
-  };
   actor exp;
   self->sync_send(n, "spawn", "exporter", "-h", "id.resp_p == 995/?").await(
     [&](actor const& a) {
@@ -114,8 +112,17 @@ TEST(export)
     }
   );
   REQUIRE(exp != invalid_actor);
+  std::vector<message> msgs = {
+    make_message("connect", "exporter", "archive"),
+    make_message("connect", "exporter", "index")
+  };
   for (auto& msg : msgs)
-    self->sync_send(n, msg).await([](ok_atom) {});
+    self->sync_send(n, msg).await(
+      [](ok_atom) {},
+      [&](error const& e) {
+        ERROR(e);
+      }
+    );
   self->send(exp, put_atom::value, sink_atom::value, self);
   self->send(exp, run_atom::value);
   self->send(exp, extract_atom::value, max_events);
@@ -153,6 +160,7 @@ TEST(export)
             ": " << to_string(self->current_message()));
     }).until([&] { return done; });
 
+  self->send_exit(exp, exit::done);
   stop_core(n);
   self->await_all_other_actors_done();
 
@@ -185,7 +193,6 @@ TEST(export)
   self->send(exp, put_atom::value, sink_atom::value, self);
   self->send(exp, run_atom::value);
   self->send(exp, extract_atom::value, max_events);
-  self->monitor(exp);
   MESSAGE("processing query results");
   i = 0;
   done = false;
@@ -201,11 +208,6 @@ TEST(export)
     [&](uuid const&, done_atom, time::extent)
     {
       CHECK(i == 15);
-    },
-    [&](down_msg const& msg)
-    {
-      // Query terminates after having extracted all events.
-      CHECK(msg.reason == exit::done);
       done = true;
     },
     others() >> [&]
@@ -214,6 +216,7 @@ TEST(export)
             ": " << to_string(self->current_message()));
     }).until([&done] { return done; });
 
+  self->send_exit(exp, exit::done);
   stop_core(n);
 }
 

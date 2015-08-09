@@ -76,7 +76,6 @@ public:
       [=](uuid const& id, done_atom, time::extent runtime)
       {
         VAST_VERBOSE(this, "got DONE from query", id << ", took", runtime);
-        quit(exit::done);
       },
       catch_unexpected()
     };

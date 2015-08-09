@@ -65,7 +65,8 @@ struct core
     // Assume all sources have terminated. Then we stop the IMPORTER. After
     // getting notified that it terminated, we can guarantee that ARCHIVE and
     // INDEX have received all their events.
-    self->sync_send(n, get_atom::value, "importer").await(
+    self->sync_send(n, store_atom::value, get_atom::value, actor_atom::value,
+                    "importer").await(
       [&](actor const& a, std::string const& fqn, std::string const& type)
       {
         CHECK(fqn == "importer@" + node_name);
@@ -101,22 +102,28 @@ struct core
         },
         others >> []
         {
-          // Everyting except an error is a valid return value.
+          // Everyting except error is a valid return value.
         }
       );
     MESSAGE("monitoring source");
-    self->sync_send(n, get_atom::value, "source").await(
+    self->sync_send(n, store_atom::value, get_atom::value, actor_atom::value,
+                    "source").await(
       [&](actor const& a, std::string const& fqn, std::string const& type)
       {
-        if (a == invalid_actor)
-          return; // source has already terminated
+        CHECK(a != invalid_actor);
         CHECK(fqn == "source@" + node_name);
         CHECK(type == "source");
         self->monitor(a);
+        MESSAGE("waiting for source to terminate");
+        self->receive(
+          [&](down_msg const& dm) { CHECK(dm.reason == exit::done); }
+        );
+      },
+      [](vast::none)
+      {
+        // source has already terminated.
       }
     );
-    MESSAGE("waiting for source to terminate");
-    self->receive([&](down_msg const& dm) { CHECK(dm.reason == exit::done); });
   }
 
   std::string const node_name = "test-node";

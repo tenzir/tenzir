@@ -89,7 +89,7 @@ behavior key_value_store::make_behavior()
   {
     [=](down_msg const& msg)
     {
-      VAST_DEBUG(this, "got DOWN from", msg.source);
+      VAST_DEBUG(this, "got DOWN from peer", msg.source);
       peers_.erase(actor_cast<actor>(msg.source));
     },
     [=](peer_atom, caf::actor const& peer)
