@@ -10,20 +10,18 @@
 
 namespace vast {
 
-struct json_parser : parser<json_parser>
-{
+struct json_parser : parser<json_parser> {
   using attribute = json;
 
   template <typename Iterator>
-  static auto make()
-  {
+  static auto make() {
     auto to_array = [](optional<std::vector<json>> v) {
       return v ? json::array(std::move(*v)) : json::array{};
     };
     using key_value_pair = std::tuple<std::string, json>;
     auto to_object = [](optional<std::vector<key_value_pair>> m) {
       json::object o;
-      if (! m)
+      if (!m)
         return o;
       for (auto& p : *m)
         o.emplace(std::move(std::get<0>(p)), std::move(std::get<1>(p)));
@@ -54,8 +52,7 @@ struct json_parser : parser<json_parser>
   }
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, json& j) const
-  {
+  bool parse(Iterator& f, Iterator const& l, json& j) const {
     using namespace parsers;
     static auto p = make<Iterator>();
     return p.parse(f, l, j);
@@ -63,8 +60,7 @@ struct json_parser : parser<json_parser>
 };
 
 template <>
-struct parser_registry<json>
-{
+struct parser_registry<json> {
   using type = json_parser;
 };
 

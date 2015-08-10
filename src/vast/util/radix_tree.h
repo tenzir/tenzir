@@ -61,8 +61,7 @@ namespace util {
 /// "network" order).
 /// @tparam T The element type of the radix tree.
 template <typename T, std::size_t N = 10>
-class radix_tree
-{
+class radix_tree {
   struct node;
 
 public:
@@ -71,9 +70,8 @@ public:
   using value_type = std::pair<const key_type, mapped_type>;
   using size_type = size_t;
 
-  class iterator : public std::iterator<std::forward_iterator_tag, value_type>
-  {
-  friend class radix_tree;
+  class iterator : public std::iterator<std::forward_iterator_tag, value_type> {
+    friend class radix_tree;
 
   public:
     using reference = value_type&;
@@ -90,8 +88,7 @@ public:
     const iterator& operator++();
     iterator operator++(int);
 
-    friend void swap(iterator& a, iterator& b)
-    {
+    friend void swap(iterator& a, iterator& b) {
       using std::swap;
       swap(a.root, b.root);
       swap(a.node_ptr, b.node_ptr);
@@ -105,12 +102,13 @@ public:
     void increment();
     void prepare();
 
-    struct node_visit
-    {
+    struct node_visit {
       node* n;
       uint16_t idx;
-      node_visit(node* arg_n) : n(arg_n), idx(0) {}
-      node_visit(node* arg_n, uint16_t arg_i) : n(arg_n), idx(arg_i) {}
+      node_visit(node* arg_n) : n(arg_n), idx(0) {
+      }
+      node_visit(node* arg_n, uint16_t arg_i) : n(arg_n), idx(arg_i) {
+      }
     };
 
     node* root;
@@ -122,26 +120,20 @@ public:
   /**
    * Default construct an empty container.
    */
-  explicit radix_tree()
-    : num_entries(0),
-      root(nullptr)
-  {
+  explicit radix_tree() : num_entries(0), root(nullptr) {
   }
 
   /**
    * Destructor.
    */
-  ~radix_tree()
-  {
+  ~radix_tree() {
     recursive_clear(root);
   }
 
   /**
    * Copy construct.
    */
-  radix_tree(const radix_tree& other)
-    : num_entries(0), root(nullptr)
-  {
+  radix_tree(const radix_tree& other) : num_entries(0), root(nullptr) {
     // Maybe this could probably be better optimized?
     for (const auto& p : other)
       insert(p);
@@ -150,9 +142,7 @@ public:
   /**
    * Move construct.
    */
-  radix_tree(radix_tree&& other)
-    : num_entries(0), root(nullptr)
-  {
+  radix_tree(radix_tree&& other) : num_entries(0), root(nullptr) {
     swap(*this, other);
   }
 
@@ -160,8 +150,7 @@ public:
    * List construct.
    */
   radix_tree(std::initializer_list<value_type> l)
-    : num_entries(0), root(nullptr)
-  {
+    : num_entries(0), root(nullptr) {
     for (const auto& e : l)
       insert(e);
   }
@@ -169,8 +158,7 @@ public:
   /**
    * Assignment operator.
    */
-  radix_tree& operator=(radix_tree other)
-  {
+  radix_tree& operator=(radix_tree other) {
     swap(*this, other);
     return *this;
   }
@@ -178,24 +166,21 @@ public:
   /**
    * @returns the number of entries in the container.
    */
-  size_type size() const
-  {
+  size_type size() const {
     return num_entries;
   }
 
   /**
    * @return true if the container has no entries.
    */
-  bool empty() const
-  {
+  bool empty() const {
     return num_entries == 0;
   }
 
   /**
    * Remove all entries from the container.
    */
-  void clear()
-  {
+  void clear() {
     recursive_clear(root);
     root = nullptr;
     num_entries = 0;
@@ -207,20 +192,16 @@ public:
    * @returns an iterator to the key-value pair entry if found, else an
    * iterator equal to end().
    */
-  iterator find(const key_type& key) const
-  {
+  iterator find(const key_type& key) const {
     node* n = root;
     int depth = 0;
-    while (n)
-    {
-      if (n->type == node::tag::leaf)
-      {
+    while (n) {
+      if (n->type == node::tag::leaf) {
         if (reinterpret_cast<leaf*>(n)->key() == key)
           return {root, n};
         return end();
       }
-      if (n->partial_len)
-      {
+      if (n->partial_len) {
         auto prefix_len = prefix_shared(n, key, depth);
         if (prefix_len != std::min(N, static_cast<size_t>(n->partial_len)))
           // Prefix mismatch.
@@ -241,8 +222,7 @@ public:
    * @returns an iterator to the first entry in the container, or an iterator
    * equal to end() if the container is empty.
    */
-  iterator begin() const
-  {
+  iterator begin() const {
     return {root, reinterpret_cast<node*>(minimum(root))};
   }
 
@@ -250,8 +230,7 @@ public:
    * @returns an iterator that does not point to any entry in the container,
    * or can be thought of as "past-the-end".
    */
-  iterator end() const
-  {
+  iterator end() const {
     return {root, nullptr};
   }
 
@@ -264,8 +243,7 @@ public:
    *          same key.  The second element of the returned pair is true
    *          if no conflicting key existed.
    */
-  std::pair<iterator, bool> insert(value_type kv)
-  {
+  std::pair<iterator, bool> insert(value_type kv) {
     auto rval = recursive_insert(root, &root, std::move(kv), 0);
     if (rval.second)
       ++num_entries;
@@ -277,10 +255,9 @@ public:
    * @param key the key corresponding to the entry to remove.
    * @returns the number of entries removed (either 1 or 0).
    */
-  size_type erase(const key_type& key)
-  {
+  size_type erase(const key_type& key) {
     auto l = recursive_erase(root, &root, key, 0);
-    if (! l)
+    if (!l)
       return 0;
     --num_entries;
     delete l;
@@ -293,10 +270,9 @@ public:
    * @return the key-value pair corresponding to the key which may be
    * newly-created if it did not yet exist in the container.
    */
-  mapped_type& operator[](key_type lhs)
-  {
+  mapped_type& operator[](key_type lhs) {
     iterator it = find(lhs);
-    if ( it != end() )
+    if (it != end())
       return it->second;
     return insert(value_type(std::move(lhs), mapped_type{})).first->second;
   }
@@ -304,36 +280,29 @@ public:
   /**
    * @returns all entries that have a key prefixed by the argument.
    */
-  std::deque<iterator> prefixed_by(const key_type& prefix) const
-  {
+  std::deque<iterator> prefixed_by(const key_type& prefix) const {
     node* n = root;
     int depth = 0;
     std::deque<iterator> rval;
-    while (n)
-    {
-      if (n->type == node::tag::leaf)
-      {
+    while (n) {
+      if (n->type == node::tag::leaf) {
         if (prefix_matches(reinterpret_cast<leaf*>(n)->key(), prefix))
           rval.push_back({root, n});
         return rval;
       }
-      if (static_cast<size_t>(depth) == prefix.size())
-      {
+      if (static_cast<size_t>(depth) == prefix.size()) {
         auto l = minimum(n);
-        if (prefix_matches(l->key(), prefix))
-        {
+        if (prefix_matches(l->key(), prefix)) {
           recursive_add_leaves(n, rval);
           return rval;
         }
         return rval;
       }
-      if (n->partial_len)
-      {
+      if (n->partial_len) {
         auto prefix_len = prefix_mismatch(n, prefix, depth);
-        if (! prefix_len)
+        if (!prefix_len)
           return rval;
-        if (depth + prefix_len == prefix.size())
-        {
+        if (depth + prefix_len == prefix.size()) {
           recursive_add_leaves(n, rval);
           return rval;
         }
@@ -352,21 +321,17 @@ public:
   /**
    * @returns all entries that have a key that are a prefix of the argument.
    */
-  std::deque<iterator> prefix_of(const key_type& data) const
-  {
+  std::deque<iterator> prefix_of(const key_type& data) const {
     node* n = root;
     std::deque<iterator> rval;
     int depth = 0;
-    while (n)
-    {
-      if (n->type == node::tag::leaf)
-      {
+    while (n) {
+      if (n->type == node::tag::leaf) {
         if (prefix_matches(data, reinterpret_cast<leaf*>(n)->key()))
           rval.push_back({root, n});
         return rval;
       }
-      if (n->partial_len)
-      {
+      if (n->partial_len) {
         auto prefix_len = prefix_shared(n, data, depth);
         if (prefix_len != std::min(N, static_cast<size_t>(n->partial_len)))
           // Prefix mismatch.
@@ -386,8 +351,7 @@ public:
     return rval;
   }
 
-  bool operator==(const radix_tree& rhs) const
-  {
+  bool operator==(const radix_tree& rhs) const {
     if (num_entries != rhs.num_entries)
       return false;
     // Maybe this could probably be better optimized?
@@ -397,13 +361,11 @@ public:
     return true;
   }
 
-  bool operator!=(const radix_tree& rhs) const
-  {
+  bool operator!=(const radix_tree& rhs) const {
     return !operator==(rhs);
   }
 
-  friend void swap(radix_tree& a, radix_tree& b)
-  {
+  friend void swap(radix_tree& a, radix_tree& b) {
     using std::swap;
     swap(a.root, b.root);
     swap(a.num_entries, b.num_entries);
@@ -413,10 +375,8 @@ private:
   /**
    * Included as part of all internal nodes.
    */
-  struct node
-  {
-    enum class tag : uint8_t
-    {
+  struct node {
+    enum class tag : uint8_t {
       leaf,
       node4,
       node16,
@@ -424,12 +384,15 @@ private:
       node256,
     };
 
-    node(tag t) : type(t) {}
+    node(tag t) : type(t) {
+    }
 
     node(tag t, const node& other)
-        : type(t), num_children(other.num_children),
-          partial_len(other.partial_len), partial(other.partial)
-    {}
+      : type(t),
+        num_children(other.num_children),
+        partial_len(other.partial_len),
+        partial(other.partial) {
+    }
 
     tag type;
     uint8_t num_children = 0;
@@ -440,14 +403,14 @@ private:
   /**
     * A small internal node in the radix tree with only 4 children.
     */
-  struct node4
-  {
+  struct node4 {
     node n = {node::tag::node4};
     std::array<unsigned char, 4> keys = {};
     std::array<node*, 4> children = {};
 
     node4() = default;
-    node4(const node& other) : n(node::tag::node4, other) {}
+    node4(const node& other) : n(node::tag::node4, other) {
+    }
 
     void add_child(node** ref, unsigned char c, node* child);
     void rem_child(node** ref, node** child);
@@ -456,14 +419,14 @@ private:
   /**
     * An internal node in the radix tree with 16 children.
     */
-  struct node16
-  {
+  struct node16 {
     node n = {node::tag::node16};
     std::array<unsigned char, 16> keys = {};
     std::array<node*, 16> children = {};
 
     node16() = default;
-    node16(const node& other) : n(node::tag::node16, other) {}
+    node16(const node& other) : n(node::tag::node16, other) {
+    }
 
     void add_child(node** ref, unsigned char c, node* child);
     void rem_child(node** ref, node** child);
@@ -473,14 +436,14 @@ private:
     * An internal node in the radix tree with 48 children, but
     * a full 256 byte field.
     */
-  struct node48
-  {
+  struct node48 {
     node n = {node::tag::node48};
     std::array<unsigned char, 256> keys = {};
     std::array<node*, 48> children = {};
 
     node48() = default;
-    node48(const node& other) : n(node::tag::node48, other) {}
+    node48(const node& other) : n(node::tag::node48, other) {
+    }
 
     void add_child(node** ref, unsigned char c, node* child);
     void rem_child(node** ref, unsigned char c);
@@ -489,13 +452,13 @@ private:
   /**
    * A full, internal node in the radix tree with 256 children.
    */
-  struct node256
-  {
+  struct node256 {
     node n = {node::tag::node256};
     std::array<node*, 256> children = {};
 
     node256() = default;
-    node256(const node& other) : n(node::tag::node256, other) {}
+    node256(const node& other) : n(node::tag::node256, other) {
+    }
 
     void add_child(node** ref, unsigned char c, node* child);
     void rem_child(node** ref, unsigned char c);
@@ -504,30 +467,24 @@ private:
   /**
    * A leaf in the radix tree.  Contains the key and associated value.
    */
-  struct leaf
-  {
+  struct leaf {
     typename node::tag type;
     value_type kv;
 
-    leaf(value_type arg_kv)
-      : type(node::tag::leaf), kv(std::move(arg_kv))
-    {}
+    leaf(value_type arg_kv) : type(node::tag::leaf), kv(std::move(arg_kv)) {
+    }
 
-    const key_type& key() const
-    {
+    const key_type& key() const {
       return kv.first;
     }
   };
 
-  static inline const unsigned char* as_key_data(const std::string& key)
-  {
+  static inline const unsigned char* as_key_data(const std::string& key) {
     return reinterpret_cast<const unsigned char*>(key.data());
   }
 
   static uint32_t longest_common_prefix(const std::string& k1,
-                                        const std::string& k2,
-                                        uint32_t depth)
-  {
+                                        const std::string& k2, uint32_t depth) {
     // Null-terminator is part of key.
     auto n = std::min(k1.size() + 1, k2.size() + 1) - depth;
     uint32_t i;
@@ -539,89 +496,76 @@ private:
     return i;
   }
 
-  static bool prefix_matches(const std::string& key, const std::string& prefix)
-  {
+  static bool prefix_matches(const std::string& key,
+                             const std::string& prefix) {
     if (key.size() < prefix.size())
       return false;
-    return ! key.compare(0, prefix.size(), prefix);
+    return !key.compare(0, prefix.size(), prefix);
   }
 
-  static leaf* minimum(node* n)
-  {
-    if (! n)
+  static leaf* minimum(node* n) {
+    if (!n)
       return nullptr;
-    switch ( n->type )
-    {
+    switch (n->type) {
       case node::tag::leaf:
         return reinterpret_cast<leaf*>(n);
       case node::tag::node4:
         return minimum(reinterpret_cast<node4*>(n)->children[0]);
       case node::tag::node16:
         return minimum(reinterpret_cast<node16*>(n)->children[0]);
-      case node::tag::node48:
-        {
-          auto p = reinterpret_cast<node48*>(n);
-          int i = 0;
-          while ( ! p->keys[i] ) ++i;
-          i = p->keys[i] - 1;
-          return minimum(p->children[i]);
-        }
-      case node::tag::node256:
-        {
-          auto p = reinterpret_cast<node256*>(n);
-          int i = 0;
-          while ( ! p->children[i] ) ++i;
-          return minimum(p->children[i]);
-        }
+      case node::tag::node48: {
+        auto p = reinterpret_cast<node48*>(n);
+        int i = 0;
+        while (!p->keys[i])
+          ++i;
+        i = p->keys[i] - 1;
+        return minimum(p->children[i]);
+      }
+      case node::tag::node256: {
+        auto p = reinterpret_cast<node256*>(n);
+        int i = 0;
+        while (!p->children[i])
+          ++i;
+        return minimum(p->children[i]);
+      }
       default:
         abort();
     }
     return nullptr;
   }
 
-  static std::pair<node**, uint16_t> find_child(node* n, unsigned char c)
-  {
-    switch (n->type)
-    {
-      case node::tag::node4:
-        {
-          auto p = reinterpret_cast<node4*>(n);
-          for (int i = 0; i < n->num_children; ++i)
-            if (p->keys[i] == c)
-              return {&p->children[i], i};
-        }
-        break;
-      case node::tag::node16:
-        {
-          auto p = reinterpret_cast<node16*>(n);
-          // Compare the key to all 16 stored keys
-          __m128i cmp = _mm_cmpeq_epi8(
-              _mm_set1_epi8(c), _mm_loadu_si128((__m128i*)p->keys.data()));
-          // Use a mask to ignore children that don't exist
-          int mask = (1 << n->num_children) - 1;
-          int bitfield = _mm_movemask_epi8(cmp) & mask;
-          if (bitfield)
-          {
-            auto i = __builtin_ctz(bitfield);
+  static std::pair<node**, uint16_t> find_child(node* n, unsigned char c) {
+    switch (n->type) {
+      case node::tag::node4: {
+        auto p = reinterpret_cast<node4*>(n);
+        for (int i = 0; i < n->num_children; ++i)
+          if (p->keys[i] == c)
             return {&p->children[i], i};
-          }
+      } break;
+      case node::tag::node16: {
+        auto p = reinterpret_cast<node16*>(n);
+        // Compare the key to all 16 stored keys
+        __m128i cmp = _mm_cmpeq_epi8(_mm_set1_epi8(c),
+                                     _mm_loadu_si128((__m128i*)p->keys.data()));
+        // Use a mask to ignore children that don't exist
+        int mask = (1 << n->num_children) - 1;
+        int bitfield = _mm_movemask_epi8(cmp) & mask;
+        if (bitfield) {
+          auto i = __builtin_ctz(bitfield);
+          return {&p->children[i], i};
         }
-        break;
-      case node::tag::node48:
-        {
-          auto p = reinterpret_cast<node48*>(n);
-          int i = p->keys[c];
-          if (i)
-            return {&p->children[i - 1], i};
-        }
-        break;
-      case node::tag::node256:
-        {
-          auto p = reinterpret_cast<node256*>(n);
-          if ( p->children[c] )
-            return {&p->children[c], c};
-        }
-        break;
+      } break;
+      case node::tag::node48: {
+        auto p = reinterpret_cast<node48*>(n);
+        int i = p->keys[c];
+        if (i)
+          return {&p->children[i - 1], i};
+      } break;
+      case node::tag::node256: {
+        auto p = reinterpret_cast<node256*>(n);
+        if (p->children[c])
+          return {&p->children[c], c};
+      } break;
       default:
         abort();
         break;
@@ -630,8 +574,7 @@ private:
   }
 
   // Returns number of prefix character shared between key and node.
-  static size_t prefix_shared(node* n, const key_type& key, int depth)
-  {
+  static size_t prefix_shared(node* n, const key_type& key, int depth) {
     auto key_data = as_key_data(key);
     // Null-terminator is part of the key.
     auto max_cmp = std::min(std::min(N, static_cast<size_t>(n->partial_len)),
@@ -644,8 +587,7 @@ private:
   }
 
   // Returns calculated index at which a prefix mismatches.
-  static size_t prefix_mismatch(node* n, const key_type& key, int depth)
-  {
+  static size_t prefix_mismatch(node* n, const key_type& key, int depth) {
     auto key_data = as_key_data(key);
     // Null-terminator is part of the key.
     auto max_cmp = std::min(std::min(N, static_cast<size_t>(n->partial_len)),
@@ -654,8 +596,7 @@ private:
     for (idx = 0; idx < max_cmp; ++idx)
       if (n->partial[idx] != key_data[depth + idx])
         return idx;
-    if (n->partial_len > N)
-    {
+    if (n->partial_len > N) {
       // Need to find a leaf to determine.
       const auto l = minimum(n);
       max_cmp = std::min(l->key().size() + 1, key.size() + 1) - depth;
@@ -667,10 +608,8 @@ private:
     return idx;
   }
 
-  static void add_child(node* n, node** ref, unsigned char c, node* child)
-  {
-    switch ( n->type )
-    {
+  static void add_child(node* n, node** ref, unsigned char c, node* child) {
+    switch (n->type) {
       case node::tag::node4:
         return reinterpret_cast<node4*>(n)->add_child(ref, c, child);
       case node::tag::node16:
@@ -684,10 +623,8 @@ private:
     }
   }
 
-  static void rem_child(node* n, node** ref, unsigned char c, node** child)
-  {
-    switch (n->type)
-    {
+  static void rem_child(node* n, node** ref, unsigned char c, node** child) {
+    switch (n->type) {
       case node::tag::node4:
         return reinterpret_cast<node4*>(n)->rem_child(ref, child);
       case node::tag::node16:
@@ -702,18 +639,14 @@ private:
   }
 
   std::pair<iterator, bool> recursive_insert(node* n, node** self,
-                                             value_type kv, size_t depth)
-  {
-    if (! n)
-    {
+                                             value_type kv, size_t depth) {
+    if (!n) {
       *self = reinterpret_cast<node*>(new leaf(std::move(kv)));
       return {{root, *self}, true};
     }
-    if (n->type == node::tag::leaf)
-    {
+    if (n->type == node::tag::leaf) {
       auto l = reinterpret_cast<leaf*>(n);
-      if (l->key() == kv.first)
-      {
+      if (l->key() == kv.first) {
         // Value exists, don't change it.
         return {{root, reinterpret_cast<node*>(n)}, false};
       }
@@ -732,13 +665,11 @@ private:
                     reinterpret_cast<node*>(l2));
       return {{root, reinterpret_cast<node*>(l2)}, true};
     }
-    if (n->partial_len)
-    {
+    if (n->partial_len) {
       auto prefix_diff = prefix_mismatch(n, kv.first, depth);
-      if ( prefix_diff >= n->partial_len )
+      if (prefix_diff >= n->partial_len)
         depth += n->partial_len;
-      else
-      {
+      else {
         // Need to split the node.
         auto nn = new node4;
         *self = reinterpret_cast<node*>(nn);
@@ -747,17 +678,14 @@ private:
                   n->partial.begin() + std::min(N, prefix_diff),
                   nn->n.partial.begin());
         // Adjust prefix of the old node.
-        if (n->partial_len <= N)
-        {
+        if (n->partial_len <= N) {
           nn->add_child(self, n->partial[prefix_diff], n);
           n->partial_len -= prefix_diff + 1;
           auto m = std::min(N, static_cast<size_t>(n->partial_len));
           std::copy(n->partial.begin() + prefix_diff + 1,
                     n->partial.begin() + prefix_diff + 1 + m,
                     n->partial.begin());
-        }
-        else
-        {
+        } else {
           n->partial_len -= prefix_diff + 1;
           leaf* l = minimum(n);
           nn->add_child(self, l->key()[depth + prefix_diff], n);
@@ -782,20 +710,17 @@ private:
   }
 
   static leaf* recursive_erase(node* n, node** self, const key_type& key,
-                               size_t depth)
-  {
-    if (! n)
+                               size_t depth) {
+    if (!n)
       return nullptr;
-    if (n->type == node::tag::leaf)
-    {
+    if (n->type == node::tag::leaf) {
       auto l = reinterpret_cast<leaf*>(n);
       if (key != l->key())
         return nullptr;
       *self = nullptr;
       return l;
     }
-    if (n->partial_len)
-    {
+    if (n->partial_len) {
       auto prefix_len = prefix_shared(n, key, depth);
       if (prefix_len != std::min(N, static_cast<size_t>(n->partial_len)))
         // Prefix mismatch.
@@ -803,7 +728,7 @@ private:
       depth += n->partial_len;
     }
     auto child = find_child(n, key[depth]).first;
-    if (! child)
+    if (!child)
       return nullptr;
     if ((*child)->type != node::tag::leaf)
       return recursive_erase(*child, child, key, depth + 1);
@@ -814,147 +739,117 @@ private:
     return l;
   }
 
-  static void recursive_clear(node* n)
-  {
-    if (! n)
+  static void recursive_clear(node* n) {
+    if (!n)
       return;
-    switch ( n->type ) {
-    case node::tag::leaf:
-      delete reinterpret_cast<leaf*>(n);
-      return;
-    case node::tag::node4:
-      {
+    switch (n->type) {
+      case node::tag::leaf:
+        delete reinterpret_cast<leaf*>(n);
+        return;
+      case node::tag::node4: {
         auto p = reinterpret_cast<node4*>(n);
         for (int i = 0; i < n->num_children; ++i)
           recursive_clear(p->children[i]);
         delete p;
       }
-      return;
-    case node::tag::node16:
-      {
+        return;
+      case node::tag::node16: {
         auto p = reinterpret_cast<node16*>(n);
         for (int i = 0; i < n->num_children; ++i)
           recursive_clear(p->children[i]);
         delete p;
       }
-      return;
-    case node::tag::node48:
-      {
+        return;
+      case node::tag::node48: {
         auto p = reinterpret_cast<node48*>(n);
         for (int i = 0; i < n->num_children; ++i)
           recursive_clear(p->children[i]);
         delete p;
       }
-      return;
-    case node::tag::node256:
-      {
+        return;
+      case node::tag::node256: {
         auto p = reinterpret_cast<node256*>(n);
-        for ( int i = 0; i < 256; ++i )
+        for (int i = 0; i < 256; ++i)
           if (p->children[i])
             recursive_clear(p->children[i]);
         delete p;
       }
-      return;
-    default:
-      abort();
-    }
-  }
-
-  void recursive_add_leaves(node* n, std::deque<iterator>& leaves) const
-  {
-    switch ( n->type )
-    {
-      case node::tag::leaf:
-        leaves.push_back({root, n});
-        break;
-      case node::tag::node4:
-        {
-          auto p = reinterpret_cast<node4*>(n);
-          for (int i = 0; i < n->num_children; ++i)
-            recursive_add_leaves(p->children[i], leaves);
-        }
-        break;
-      case node::tag::node16:
-        {
-          auto p = reinterpret_cast<node16*>(n);
-          for (int i = 0; i < n->num_children; ++i)
-            recursive_add_leaves(p->children[i], leaves);
-        }
-        break;
-      case node::tag::node48:
-        {
-          auto p = reinterpret_cast<node48*>(n);
-          for (int i = 0; i < 256; ++i)
-          {
-            auto idx = p->keys[i];
-            if (! idx)
-              continue;
-            recursive_add_leaves(p->children[idx - 1], leaves);
-          }
-        }
-        break;
-      case node::tag::node256:
-        {
-          auto p = reinterpret_cast<node256*>(n);
-          for (int i = 0; i < 256; ++i)
-            if (p->children[i])
-              recursive_add_leaves(p->children[i], leaves);
-        }
-        break;
+        return;
       default:
         abort();
     }
   }
 
-  node* add_prefix_leaf(node* n, std::deque<iterator>& leaves) const
-  {
-    switch ( n->type )
-    {
+  void recursive_add_leaves(node* n, std::deque<iterator>& leaves) const {
+    switch (n->type) {
+      case node::tag::leaf:
+        leaves.push_back({root, n});
+        break;
+      case node::tag::node4: {
+        auto p = reinterpret_cast<node4*>(n);
+        for (int i = 0; i < n->num_children; ++i)
+          recursive_add_leaves(p->children[i], leaves);
+      } break;
+      case node::tag::node16: {
+        auto p = reinterpret_cast<node16*>(n);
+        for (int i = 0; i < n->num_children; ++i)
+          recursive_add_leaves(p->children[i], leaves);
+      } break;
+      case node::tag::node48: {
+        auto p = reinterpret_cast<node48*>(n);
+        for (int i = 0; i < 256; ++i) {
+          auto idx = p->keys[i];
+          if (!idx)
+            continue;
+          recursive_add_leaves(p->children[idx - 1], leaves);
+        }
+      } break;
+      case node::tag::node256: {
+        auto p = reinterpret_cast<node256*>(n);
+        for (int i = 0; i < 256; ++i)
+          if (p->children[i])
+            recursive_add_leaves(p->children[i], leaves);
+      } break;
+      default:
+        abort();
+    }
+  }
+
+  node* add_prefix_leaf(node* n, std::deque<iterator>& leaves) const {
+    switch (n->type) {
       case node::tag::leaf:
         return nullptr;
-      case node::tag::node4:
-        {
-          auto p = reinterpret_cast<node4*>(n);
-          if (n->num_children && p->keys[0] == 0
-              && p->children[0]->type == node::tag::leaf)
-          {
-            leaves.push_back({root, p->children[0]});
-            return p->children[0];
-          }
+      case node::tag::node4: {
+        auto p = reinterpret_cast<node4*>(n);
+        if (n->num_children && p->keys[0] == 0
+            && p->children[0]->type == node::tag::leaf) {
+          leaves.push_back({root, p->children[0]});
+          return p->children[0];
         }
-        break;
-      case node::tag::node16:
-        {
-          auto p = reinterpret_cast<node16*>(n);
-          if (n->num_children && p->keys[0] == 0
-               && p->children[0]->type == node::tag::leaf)
-          {
-            leaves.push_back({root, p->children[0]});
-            return p->children[0];
-          }
+      } break;
+      case node::tag::node16: {
+        auto p = reinterpret_cast<node16*>(n);
+        if (n->num_children && p->keys[0] == 0
+            && p->children[0]->type == node::tag::leaf) {
+          leaves.push_back({root, p->children[0]});
+          return p->children[0];
         }
-        break;
-      case node::tag::node48:
-        {
-          auto p = reinterpret_cast<node48*>(n);
-          if (p->keys[0]
-              && p->children[p->keys[0] - 1]->type == node::tag::leaf)
-          {
-            leaves.push_back({root, p->children[p->keys[0] - 1]});
-            return p->children[p->keys[0] - 1];
-          }
+      } break;
+      case node::tag::node48: {
+        auto p = reinterpret_cast<node48*>(n);
+        if (p->keys[0]
+            && p->children[p->keys[0] - 1]->type == node::tag::leaf) {
+          leaves.push_back({root, p->children[p->keys[0] - 1]});
+          return p->children[p->keys[0] - 1];
         }
-        break;
-      case node::tag::node256:
-        {
-          auto p = reinterpret_cast<node256*>(n);
-          if (p->children[0] && p->children[0]->type == node::tag::leaf)
-          {
-            leaves.push_back({root, p->children[0]});
-            return p->children[0];
-          }
+      } break;
+      case node::tag::node256: {
+        auto p = reinterpret_cast<node256*>(n);
+        if (p->children[0] && p->children[0]->type == node::tag::leaf) {
+          leaves.push_back({root, p->children[0]});
+          return p->children[0];
         }
-        break;
+      } break;
       default:
         abort();
     }
@@ -967,13 +862,12 @@ private:
 
 template <typename T, std::size_t N>
 void radix_tree<T, N>::node4::add_child(node** ref, unsigned char c,
-                                        node* child)
-{
-  if (n.num_children < 4)
-  {
+                                        node* child) {
+  if (n.num_children < 4) {
     int idx;
-    for ( idx = 0; idx < n.num_children; ++idx )
-      if ( c < keys[idx] ) break;
+    for (idx = 0; idx < n.num_children; ++idx)
+      if (c < keys[idx])
+        break;
     // Shift right.
     std::copy_backward(keys.begin() + idx, keys.begin() + n.num_children,
                        keys.begin() + n.num_children + 1);
@@ -996,10 +890,8 @@ void radix_tree<T, N>::node4::add_child(node** ref, unsigned char c,
 
 template <typename T, std::size_t N>
 void radix_tree<T, N>::node16::add_child(node** ref, unsigned char c,
-                                         node* child)
-{
-  if( n.num_children < 16 )
-  {
+                                         node* child) {
+  if (n.num_children < 16) {
     // Compare the key to all 16 stored keys
     __m128i cmp = _mm_cmplt_epi8(_mm_set1_epi8(c),
                                  _mm_loadu_si128((__m128i*)keys.data()));
@@ -1008,12 +900,10 @@ void radix_tree<T, N>::node16::add_child(node** ref, unsigned char c,
     unsigned bitfield = _mm_movemask_epi8(cmp) & mask;
     // Check if less than any
     unsigned idx = n.num_children;
-    if (bitfield)
-    {
+    if (bitfield) {
       idx = __builtin_ctz(bitfield);
       // Shift right.
-      std::copy_backward(keys.begin() + idx,
-                         keys.begin() + n.num_children,
+      std::copy_backward(keys.begin() + idx, keys.begin() + n.num_children,
                          keys.begin() + n.num_children + 1);
       std::copy_backward(children.begin() + idx,
                          children.begin() + n.num_children,
@@ -1037,12 +927,11 @@ void radix_tree<T, N>::node16::add_child(node** ref, unsigned char c,
 
 template <typename T, std::size_t N>
 void radix_tree<T, N>::node48::add_child(node** ref, unsigned char c,
-                                         node* child)
-{
-  if (n.num_children < 48)
-  {
+                                         node* child) {
+  if (n.num_children < 48) {
     int pos = 0;
-    while ( children[pos] ) pos++;
+    while (children[pos])
+      pos++;
     children[pos] = child;
     keys[c] = pos + 1;
     ++n.num_children;
@@ -1059,15 +948,13 @@ void radix_tree<T, N>::node48::add_child(node** ref, unsigned char c,
 
 template <typename T, std::size_t N>
 void radix_tree<T, N>::node256::add_child(node**, unsigned char c,
-                                          node* child)
-{
+                                          node* child) {
   ++n.num_children;
   children[c] = child;
 }
 
 template <typename T, std::size_t N>
-void radix_tree<T, N>::node4::rem_child(node** ref, node** child)
-{
+void radix_tree<T, N>::node4::rem_child(node** ref, node** child) {
   int pos = child - children.data();
   std::copy(keys.begin() + pos + 1, keys.begin() + n.num_children,
             keys.begin() + pos);
@@ -1077,19 +964,16 @@ void radix_tree<T, N>::node4::rem_child(node** ref, node** child)
   if (n.num_children != 1)
     return;
   node* last = children[0];
-  if ( last->type != node::tag::leaf )
-  {
+  if (last->type != node::tag::leaf) {
     // Concatenate prefixes.
     size_t prefix = n.partial_len;
-    if (prefix < N)
-    {
+    if (prefix < N) {
       n.partial[prefix] = keys[0];
       ++prefix;
     }
-    if (prefix < N)
-    {
-      int sub_prefix = std::min(static_cast<size_t>(last->partial_len),
-                                N - prefix);
+    if (prefix < N) {
+      int sub_prefix
+        = std::min(static_cast<size_t>(last->partial_len), N - prefix);
       std::copy(last->partial.begin(), last->partial.begin() + sub_prefix,
                 n.partial.begin() + prefix);
       prefix += sub_prefix;
@@ -1104,8 +988,7 @@ void radix_tree<T, N>::node4::rem_child(node** ref, node** child)
 }
 
 template <typename T, std::size_t N>
-void radix_tree<T, N>::node16::rem_child(node** ref, node** child)
-{
+void radix_tree<T, N>::node16::rem_child(node** ref, node** child) {
   int pos = child - children.data();
   std::copy(keys.begin() + pos + 1, keys.begin() + n.num_children,
             keys.begin() + pos);
@@ -1122,8 +1005,7 @@ void radix_tree<T, N>::node16::rem_child(node** ref, node** child)
 }
 
 template <typename T, std::size_t N>
-void radix_tree<T, N>::node48::rem_child(node** ref, unsigned char c)
-{
+void radix_tree<T, N>::node48::rem_child(node** ref, unsigned char c) {
   int pos = keys[c];
   keys[c] = 0;
   children[pos - 1] = nullptr;
@@ -1133,11 +1015,9 @@ void radix_tree<T, N>::node48::rem_child(node** ref, unsigned char c)
   auto nn = new node16(n);
   *ref = reinterpret_cast<node*>(nn);
   int child = 0;
-  for (int i = 0; i < 256; ++i)
-  {
+  for (int i = 0; i < 256; ++i) {
     pos = keys[i];
-    if ( pos )
-    {
+    if (pos) {
       nn->keys[child] = i;
       nn->children[child] = children[pos - 1];
       ++child;
@@ -1147,19 +1027,17 @@ void radix_tree<T, N>::node48::rem_child(node** ref, unsigned char c)
 }
 
 template <typename T, std::size_t N>
-void radix_tree<T, N>::node256::rem_child(node** ref, unsigned char c)
-{
+void radix_tree<T, N>::node256::rem_child(node** ref, unsigned char c) {
   children[c] = nullptr;
   --n.num_children;
   // Don't immediately resize to prevent thrashing.
-  if ( n.num_children != 37 )
+  if (n.num_children != 37)
     return;
   auto nn = new node48(n);
   *ref = reinterpret_cast<node*>(nn);
   int pos = 0;
   for (int i = 0; i < 256; ++i)
-    if (children[i])
-    {
+    if (children[i]) {
       nn->children[pos] = children[i];
       nn->keys[i] = pos + 1;
       ++pos;
@@ -1169,49 +1047,42 @@ void radix_tree<T, N>::node256::rem_child(node** ref, unsigned char c)
 
 template <typename T, std::size_t N>
 radix_tree<T, N>::iterator::iterator(node* arg_root, node* starting_point)
-    : root(arg_root), node_ptr(starting_point), ready_to_iterate(false)
-{
+  : root(arg_root), node_ptr(starting_point), ready_to_iterate(false) {
 }
 
 template <typename T, std::size_t N>
-typename radix_tree<T, N>::iterator::reference
-radix_tree<T, N>::iterator::operator*() const
-{
+typename radix_tree<T, N>::iterator::reference radix_tree<T, N>::iterator::
+operator*() const {
   return reinterpret_cast<leaf*>(node_ptr)->kv;
 }
 
 template <typename T, std::size_t N>
-typename radix_tree<T, N>::iterator::pointer
-radix_tree<T, N>::iterator::operator->() const
-{
+typename radix_tree<T, N>::iterator::pointer radix_tree<T, N>::iterator::
+operator->() const {
   return &reinterpret_cast<leaf*>(node_ptr)->kv;
 }
 
 template <typename T, std::size_t N>
-bool radix_tree<T, N>::iterator::operator==(const iterator& other) const
-{
+bool radix_tree<T, N>::iterator::operator==(const iterator& other) const {
   return node_ptr == other.node_ptr;
 }
 
 template <typename T, std::size_t N>
-bool radix_tree<T, N>::iterator::operator!=(const iterator& other) const
-{
+bool radix_tree<T, N>::iterator::operator!=(const iterator& other) const {
   return node_ptr != other.node_ptr;
 }
 
 template <typename T, std::size_t N>
-const typename radix_tree<T, N>::iterator&
-radix_tree<T, N>::iterator::operator++()
-{
+const typename radix_tree<T, N>::iterator& radix_tree<T, N>::iterator::
+operator++() {
   prepare();
   increment();
   return *this;
 }
 
 template <typename T, std::size_t N>
-typename radix_tree<T, N>::iterator
-radix_tree<T, N>::iterator::operator++(int)
-{
+typename radix_tree<T, N>::iterator radix_tree<T, N>::iterator::
+operator++(int) {
   prepare();
   auto rval = *this;
   increment();
@@ -1219,50 +1090,39 @@ radix_tree<T, N>::iterator::operator++(int)
 }
 
 template <typename T, std::size_t N>
-void radix_tree<T, N>::iterator::increment()
-{
-  while ( ! visited->empty() )
-  {
+void radix_tree<T, N>::iterator::increment() {
+  while (!visited->empty()) {
     uint16_t& next_idx = visited->front().idx;
     node* n = visited->front().n;
-    switch ( n->type )
-    {
-    case node::tag::leaf:
-      node_ptr = n;
-      visited->pop_front();
-      return;
-    case node::tag::node4:
-      {
+    switch (n->type) {
+      case node::tag::leaf:
+        node_ptr = n;
+        visited->pop_front();
+        return;
+      case node::tag::node4: {
         auto p = reinterpret_cast<node4*>(n);
         if (next_idx >= n->num_children)
           visited->pop_front();
-        else
-        {
+        else {
           visited->emplace_front(p->children[next_idx]);
           ++next_idx;
         }
-      }
-      break;
-    case node::tag::node16:
-      {
+      } break;
+      case node::tag::node16: {
         auto p = reinterpret_cast<node16*>(n);
         if (next_idx >= n->num_children)
           visited->pop_front();
-        else
-        {
+        else {
           visited->emplace_front(p->children[next_idx]);
           ++next_idx;
         }
-      }
-      break;
-    case node::tag::node48:
-      {
+      } break;
+      case node::tag::node48: {
         auto p = reinterpret_cast<node48*>(n);
         auto exhausted = true;
-        for (; next_idx < 256; ++next_idx)
-        {
+        for (; next_idx < 256; ++next_idx) {
           auto idx = p->keys[next_idx];
-          if (! idx)
+          if (!idx)
             continue;
           visited->emplace_front(p->children[idx - 1]);
           ++next_idx;
@@ -1271,15 +1131,12 @@ void radix_tree<T, N>::iterator::increment()
         }
         if (exhausted)
           visited->pop_front();
-      }
-      break;
-    case node::tag::node256:
-      {
+      } break;
+      case node::tag::node256: {
         auto p = reinterpret_cast<node256*>(n);
         auto exhausted = true;
-        for (; next_idx < 256; ++next_idx)
-        {
-          if (! p->children[next_idx])
+        for (; next_idx < 256; ++next_idx) {
+          if (!p->children[next_idx])
             continue;
           visited->emplace_front(p->children[next_idx]);
           ++next_idx;
@@ -1288,19 +1145,17 @@ void radix_tree<T, N>::iterator::increment()
         }
         if (exhausted)
           visited->pop_front();
-      }
-      break;
-    default:
-      abort();
+      } break;
+      default:
+        abort();
     }
   }
   node_ptr = nullptr;
 }
 
 template <typename T, std::size_t N>
-void radix_tree<T, N>::iterator::prepare()
-{
-  if ( ready_to_iterate )
+void radix_tree<T, N>::iterator::prepare() {
+  if (ready_to_iterate)
     return;
   ready_to_iterate = true;
   visited.reset(new std::deque<node_visit>);
@@ -1309,18 +1164,15 @@ void radix_tree<T, N>::iterator::prepare()
   node* n = root;
   int depth = 0;
   const key_type& key = reinterpret_cast<leaf*>(node_ptr)->key();
-  while (n)
-  {
+  while (n) {
     if (n->type == node::tag::leaf)
       return;
     depth += n->partial_len;
     auto child = find_child(n, key[depth]);
-    if (child.first)
-    {
+    if (child.first) {
       visited->emplace_front(n, child.second + 1);
       n = *child.first;
-    }
-    else
+    } else
       n = nullptr;
     ++depth;
   }
@@ -1328,17 +1180,16 @@ void radix_tree<T, N>::iterator::prepare()
 
 template <typename T, std::size_t N>
 radix_tree<T, N>::iterator::iterator(const iterator& other)
-  : root(other.root), node_ptr(other.node_ptr),
-      ready_to_iterate(other.ready_to_iterate)
-{
+  : root(other.root),
+    node_ptr(other.node_ptr),
+    ready_to_iterate(other.ready_to_iterate) {
   if (other.visited)
     visited.reset(new std::deque<node_visit>{*other.visited});
 }
 
 template <typename T, std::size_t N>
 void swap(typename radix_tree<T, N>::iterator& a,
-          typename radix_tree<T, N>::iterator& b)
-{
+          typename radix_tree<T, N>::iterator& b) {
   using std::swap;
   swap(a.root, b.root);
   swap(a.node_ptr, b.node_ptr);
@@ -1347,9 +1198,8 @@ void swap(typename radix_tree<T, N>::iterator& a,
 }
 
 template <typename T, std::size_t N>
-typename radix_tree<T, N>::iterator&
-radix_tree<T, N>::iterator::operator=(iterator rhs)
-{
+typename radix_tree<T, N>::iterator& radix_tree<T, N>::iterator::
+operator=(iterator rhs) {
   swap(*this, rhs);
   return *this;
 }

@@ -10,12 +10,10 @@ pcap::pcap(schema sch, path trace, size_t flush)
     schema_{std::move(sch)},
     trace_{std::move(trace)},
     packet_type_{detail::pcap_packet_type},
-    flush_{flush}
-{
+    flush_{flush} {
 }
 
-pcap::~pcap()
-{
+pcap::~pcap() {
   if (pcap_dumper_)
     ::pcap_dump_close(pcap_dumper_);
 
@@ -23,66 +21,50 @@ pcap::~pcap()
     ::pcap_close(pcap_);
 }
 
-bool pcap::process(event const& e)
-{
-  if (! pcap_)
-  {
-    if (trace_ != "-" && ! exists(trace_))
-    {
+bool pcap::process(event const& e) {
+  if (!pcap_) {
+    if (trace_ != "-" && !exists(trace_)) {
       VAST_ERROR(this, "cannot locate file:", trace_);
       quit(exit::error);
       return false;
     }
-
 #ifdef PCAP_TSTAMP_PRECISION_NANO
-    pcap_ = ::pcap_open_dead_with_tstamp_precision(
-        DLT_RAW, 65535, PCAP_TSTAMP_PRECISION_NANO);
+    pcap_ = ::pcap_open_dead_with_tstamp_precision(DLT_RAW, 65535,
+                                                   PCAP_TSTAMP_PRECISION_NANO);
 #else
     pcap_ = ::pcap_open_dead(DLT_RAW, 65535);
 #endif
-
-    if (! pcap_)
-    {
+    if (!pcap_) {
       VAST_ERROR(this, "failed to open pcap handle");
       quit(exit::error);
       return false;
     }
-
     pcap_dumper_ = ::pcap_dump_open(pcap_, trace_.str().c_str());
-    if (! pcap_dumper_)
-    {
+    if (!pcap_dumper_) {
       VAST_ERROR(this, "failed to open pcap dumper for", trace_);
       quit(exit::error);
       return false;
     }
-
-    if (auto t = schema_.find_type("vast::packet"))
-    {
-      if (congruent(packet_type_, *t))
-      {
+    if (auto t = schema_.find_type("vast::packet")) {
+      if (congruent(packet_type_, *t)) {
         VAST_VERBOSE(this, "prefers type in schema over default type");
         packet_type_ = *t;
-      }
-      else
-      {
+      } else {
         VAST_WARN(this, "ignores incongruent schema type:", t->name());
       }
     }
   }
-
-  if (e.type() != packet_type_)
-  {
+  if (e.type() != packet_type_) {
     VAST_ERROR(this, "cannot process non-packet event:", e.type());
     quit(exit::error);
     return false;
   }
-
   auto r = get<record>(e);
   assert(r);
   assert(r->size() == 2);
   auto data = get<std::string>((*r)[1]);
   assert(data);
-
+  // Make PCAP header.
   ::pcap_pkthdr header;
   auto ns = e.timestamp().time_since_epoch().count();
   header.ts.tv_sec = ns / 1000000000;
@@ -94,17 +76,14 @@ bool pcap::process(event const& e)
 #endif
   header.caplen = data->size();
   header.len = data->size();
-
+  // Dump packet.
   ::pcap_dump(reinterpret_cast<uint8_t*>(pcap_dumper_), &header,
               reinterpret_cast<uint8_t const*>(data->c_str()));
-
-  if (++total_packets_ % flush_ == 0 && ::pcap_dump_flush(pcap_dumper_) == -1)
-  {
+  if (++total_packets_ % flush_ == 0 && ::pcap_dump_flush(pcap_dumper_) == -1) {
     VAST_ERROR(this, "failed to flush at packet", total_packets_);
     quit(exit::error);
     return false;
   }
-
   return true;
 }
 

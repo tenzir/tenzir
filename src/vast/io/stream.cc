@@ -3,8 +3,7 @@
 namespace vast {
 namespace io {
 
-buffer<void const> input_stream::next_block()
-{
+buffer<void const> input_stream::next_block() {
   void const* in;
   size_t size;
   if (next(&in, &size))
@@ -13,8 +12,7 @@ buffer<void const> input_stream::next_block()
   return {};
 }
 
-buffer<void> output_stream::next_block()
-{
+buffer<void> output_stream::next_block() {
   void* out;
   size_t size;
   if (next(&out, &size))
@@ -23,8 +21,7 @@ buffer<void> output_stream::next_block()
   return {};
 }
 
-bool output_stream::flush()
-{
+bool output_stream::flush() {
   return true;
 }
 

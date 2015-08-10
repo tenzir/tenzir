@@ -8,77 +8,66 @@ namespace detail {
 namespace ast {
 namespace query {
 
-struct folder : public boost::static_visitor<data>
-{
-  static data apply(arithmetic_operator op, data const& /* val */)
-  {
-    switch (op)
-    {
+struct folder : public boost::static_visitor<data> {
+  static data apply(arithmetic_operator op, data const& /* val */) {
+    switch (op) {
       default:
-        VAST_ASSERT(! "unary expression folder not yet implemented");
+        VAST_ASSERT(!"unary expression folder not yet implemented");
         return {};
         // TODO: implement VAST operations.
-        //case positive:
+        // case positive:
         //    return val;
-        //case negative:
+        // case negative:
         //    return -val;
-        //case bitwise_not:
+        // case bitwise_not:
         //    return ~val;
     }
   }
 
-  static data apply(arithmetic_operator op,
-                     data const& /* lhs */,
-                     data const& /* rhs */)
-  {
-    switch (op)
-    {
+  static data apply(arithmetic_operator op, data const& /* lhs */,
+                    data const& /* rhs */) {
+    switch (op) {
       default:
-        VAST_ASSERT(! "binary expression folder not yet implemented");
+        VAST_ASSERT(!"binary expression folder not yet implemented");
         return {};
         // TODO: implement VAST operations.
-        //case bitwise_or:
+        // case bitwise_or:
         //    return lhs | rhs;
-        //case bitwise_xor:
+        // case bitwise_xor:
         //    return lhs ^ rhs;
-        //case bitwise_and:
+        // case bitwise_and:
         //    return lhs & rhs;
-        //case plus:
+        // case plus:
         //    return lhs + rhs;
-        //case minus:
+        // case minus:
         //    return lhs - rhs;
-        //case times:
+        // case times:
         //    return lhs * rhs;
-        //case divide:
+        // case divide:
         //    return lhs / rhs;
-        //case mod:
+        // case mod:
         //    return lhs % rhs;
     }
   }
 
-  data operator()(data const& d) const
-  {
+  data operator()(data const& d) const {
     return d;
   }
 
-  data operator()(unary_expr const& unary) const
-  {
+  data operator()(unary_expr const& unary) const {
     auto operand = boost::apply_visitor(*this, unary.operand);
     return apply(unary.op, operand);
   }
 
-  data operator()(expr_operand const& operand) const
-  {
+  data operator()(expr_operand const& operand) const {
     return boost::apply_visitor(*this, operand);
   }
 
-  data operator()(data_expr const& expr) const
-  {
+  data operator()(data_expr const& expr) const {
     auto d = boost::apply_visitor(*this, expr.first);
     if (expr.rest.empty())
       return d;
-    for (auto& operation : expr.rest)
-    {
+    for (auto& operation : expr.rest) {
       auto operand = boost::apply_visitor(*this, operation.operand);
       d = apply(operation.op, d, operand);
     }
@@ -86,13 +75,11 @@ struct folder : public boost::static_visitor<data>
   }
 };
 
-data fold(data_expr const& expr)
-{
+data fold(data_expr const& expr) {
   auto d = boost::apply_visitor(folder(), expr.first);
   if (expr.rest.empty())
     return d;
-  for (auto& operation : expr.rest)
-  {
+  for (auto& operation : expr.rest) {
     auto operand = boost::apply_visitor(folder(), operation.operand);
     d = folder::apply(operation.op, d, operand);
   }

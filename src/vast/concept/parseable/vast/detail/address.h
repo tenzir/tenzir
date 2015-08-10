@@ -18,17 +18,14 @@ namespace qi = boost::spirit::qi;
 
 namespace detail {
 
-struct address_maker
-{
+struct address_maker {
   template <typename, typename>
-  struct result
-  {
+  struct result {
     typedef void type;
   };
 
-  void operator()(vast::address& a, std::string const& str) const
-  {
-    if (! parsers::addr(str, a))
+  void operator()(vast::address& a, std::string const& str) const {
+    if (!parsers::addr(str, a))
       die("parser implementation mismatch");
   }
 };
@@ -36,11 +33,8 @@ struct address_maker
 } // namespace detail
 
 template <typename Iterator>
-struct address : qi::grammar<Iterator, vast::address()>
-{
-  address()
-    : address::base_type(addr)
-  {
+struct address : qi::grammar<Iterator, vast::address()> {
+  address() : address::base_type(addr) {
     using boost::phoenix::construct;
     using boost::phoenix::begin;
     using boost::phoenix::end;

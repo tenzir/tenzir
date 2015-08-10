@@ -7,8 +7,7 @@ namespace vast {
 namespace detail {
 
 /// Creates the type for packets in VAST.
-inline type make_packet_type()
-{
+inline type make_packet_type() {
   auto packet = type::record{
     {"meta", type::record{
       {"src", type::address{}},

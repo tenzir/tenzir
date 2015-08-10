@@ -29,71 +29,57 @@ std::vector<uint8_t> data =
 
 } // namespace <anonymous>
 
-TEST(container_input_stream)
-{
+TEST(container_input_stream) {
   // Test reading from container with a block size that is a multiple of the
   // input.
   {
     auto is = io::make_container_input_stream(data, 10);
     void const* in_buf;
     size_t in_size;
-    for (size_t i = 0; i < 10; ++i)
-    {
+    for (size_t i = 0; i < 10; ++i) {
       REQUIRE(is.next(&in_buf, &in_size));
       CHECK(in_size == 10);
-
       auto front = reinterpret_cast<uint8_t const*>(in_buf);
       CHECK(*front == i * 10);
     }
-
-    CHECK(! is.next(&in_buf, &in_size));
+    CHECK(!is.next(&in_buf, &in_size));
     CHECK(is.bytes() == 100);
   }
-
   // Test reading from container with a block size that is *not* a multiple of
   // the input.
   {
     auto is = io::make_container_input_stream(data, 3);
-    for (size_t i = 0; i < 33; ++i)
-    {
+    for (size_t i = 0; i < 33; ++i) {
       auto buf = is.next_block();
       REQUIRE(buf);
       CHECK(buf.size() == 3);
       CHECK(*buf.as<uint8_t>() == i * 3);
     }
-
     CHECK(is.bytes() == 99);
-
     auto buf = is.next_block();
     CHECK(buf.size() == 1);
     CHECK(*buf.as<uint8_t>() == 99);
     CHECK(is.bytes() == 100);
-
     buf = is.next_block();
-    CHECK(! buf);
+    CHECK(!buf);
     CHECK(is.bytes() == 100);
   }
 }
 
-TEST(container_output_stream)
-{
+TEST(container_output_stream) {
   std::string str;
   auto os = io::make_container_output_stream(str);
-
   if (auto buf = os.next_block())
     for (size_t i = 0; i < buf.size(); ++i)
       *buf.at(i) = i;
-
   for (size_t i = 0; i < str.size(); ++i)
     CHECK(str[i] == i);
 }
 
-TEST(range_based_input_stream_access)
-{
+TEST(range-based input_stream access) {
   auto is = io::make_container_input_stream(data, 4);
   size_t i = 0;
-  for (auto& buf : io::input_stream_range{is})
-  {
+  for (auto& buf : io::input_stream_range{is}) {
     REQUIRE(buf);
     REQUIRE(buf.size() == 4);
     CHECK(*buf.as<uint8_t>() == i);
@@ -101,8 +87,7 @@ TEST(range_based_input_stream_access)
   }
 }
 
-TEST(std_istream adapter)
-{
+TEST(istream adapter) {
   std::istringstream iss{"foo"};
   io::istream_device idev{iss};
   io::buffered_input_stream in{idev};
@@ -114,8 +99,7 @@ TEST(std_istream adapter)
   CHECK(str == "foo");
 }
 
-TEST(std_ostream_adapter)
-{
+TEST(ostream adapter) {
   std::string str = "Heiliger Strohsack!";
   std::ostringstream oss;
   io::ostream_device odev{oss};
@@ -133,8 +117,7 @@ TEST(std_ostream_adapter)
   CHECK(oss.str() == str);
 }
 
-TEST(input_iterator)
-{
+TEST(input_iterator) {
   decltype(data) buf;
   auto in = io::make_container_input_stream(data, 3);
   io::input_iterator begin{in};
@@ -143,8 +126,7 @@ TEST(input_iterator)
   CHECK(in.bytes() == data.size());
 }
 
-TEST(output_iterator)
-{
+TEST(output_iterator) {
   std::string str;
   auto sink = io::make_container_output_stream(str);
 
@@ -162,8 +144,7 @@ TEST(output_iterator)
   CHECK(sink.bytes() == source.size());
 }
 
-TEST(formatted_output)
-{
+TEST(formatted output) {
   std::string sink;
   auto out = io::make_container_output_stream(sink);
   out << 42;
@@ -172,8 +153,7 @@ TEST(formatted_output)
   CHECK(sink == "42 43");
 }
 
-TEST(formatted_input)
-{
+TEST(formatted input) {
   std::string source("42 43 foo bar");
   auto in = io::make_container_input_stream(source);
   int i;

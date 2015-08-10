@@ -13,8 +13,7 @@ namespace io {
 static size_t const default_block_size = 8 << 10;
 
 /// An abstract input stream interface.
-class input_stream
-{
+class input_stream {
 public:
   virtual ~input_stream() = default;
 
@@ -51,8 +50,7 @@ protected:
 };
 
 /// An abstract output stream interface.
-class output_stream
-{
+class output_stream {
 public:
   virtual ~output_stream() = default;
 

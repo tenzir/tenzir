@@ -13,12 +13,10 @@
 namespace vast {
 
 /// A replicated hierarchical key-value store.
-class key_value_store : public default_actor
-{
+class key_value_store : public default_actor {
 public:
   /// Synchronous interface.
-  class wrapper
-  {
+  class wrapper {
   public:
     // Constructs a key-value store.
     wrapper(caf::actor& store);
@@ -28,13 +26,14 @@ public:
     /// @param xs The values to associate with *key*.
     /// @returns `true` on success.
     template <typename... Ts>
-    bool put(std::string const& key, Ts&&... xs) const
-    {
+    bool put(std::string const& key, Ts&&... xs) const {
       auto result = true;
       caf::scoped_actor self;
       auto msg = make_message(put_atom::value, key, std::forward<Ts>(xs)...);
       self->sync_send(store_, std::move(msg)).await(
-        [&](error const&) { result = false; },
+        [&](error const&) {
+          result = false;
+        },
         [](ok_atom) { /* nop */ }
       );
       return result;
@@ -48,7 +47,7 @@ public:
     /// Deletes all key-value pairs having a specific value.
     /// @param value The value of the key-value pairs to delete.
     /// @returns The number of elements deleted.
-    //size_t erase(caf::message const& value) const;
+    // size_t erase(caf::message const& value) const;
 
     /// Checks whether a key exists.
     /// @param key The key to check.
@@ -85,7 +84,6 @@ private:
   util::radix_tree<caf::message> data_;
   std::set<caf::actor> peers_;
 };
-
 
 } // namespace vast
 

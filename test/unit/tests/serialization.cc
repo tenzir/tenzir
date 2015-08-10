@@ -17,9 +17,8 @@
 using namespace vast;
 using namespace vast::util;
 
-TEST(byte swapping)
-{
-  uint8_t  x08 = 0x11;
+TEST(byte swapping) {
+  uint8_t x08 = 0x11;
   uint16_t x16 = 0x1122;
   uint32_t x32 = 0x11223344;
   uint64_t x64 = 0x1122334455667788;
@@ -64,8 +63,7 @@ TEST(byte swapping)
   CHECK(y64 == x64);
 }
 
-TEST(containers)
-{
+TEST(containers) {
   std::vector<double> v0{4.2, 8.4, 16.8}, v1;
   std::list<int> l0{4, 2}, l1;
   std::unordered_map<int, int> u0{{4, 2}, {8, 4}}, u1;
@@ -79,8 +77,7 @@ TEST(containers)
   CHECK(u0 == u1);
 }
 
-TEST(optional<T>)
-{
+TEST(optional<T>) {
   optional<std::string> o1 = std::string{"foo"};
   decltype(o1) o2;
   std::vector<uint8_t> buf;
@@ -93,18 +90,15 @@ TEST(optional<T>)
 }
 
 // A serializable class.
-class serializable
-{
+class serializable {
   friend vast::access;
 
 public:
-  int i() const
-  {
+  int i() const {
     return i_;
   }
 
-  void i(int x)
-  {
+  void i(int x) {
     i_ = x;
   }
 
@@ -117,25 +111,21 @@ namespace vast {
 // By specializing the state concept, the class becomes automatically
 // serializable.
 template <>
-struct access::state<serializable>
-{
+struct access::state<serializable> {
   template <typename T, typename F>
-  static void call(T&& x, F f)
-  {
+  static void call(T&& x, F f) {
     f(x.i_);
   }
 };
 
 } // namespace vast
 
-TEST(compress/decompress)
-{
+TEST(compress / decompress) {
   std::vector<io::compression> methods{io::null, io::lz4};
 #ifdef VAST_HAVE_SNAPPY
   methods.push_back(io::snappy);
 #endif // VAST_HAVE_SNAPPY
-  for (auto method : methods)
-  {
+  for (auto method : methods) {
     // Generate some data.
     std::vector<int> input(1u << 10);
     REQUIRE((input.size() % 2) == 0);
@@ -163,71 +153,66 @@ TEST(compress/decompress)
 // Polymorphic serialization
 //
 
-struct base
-{
+struct base {
   virtual ~base() = default;
-  friend bool operator==(base, base) { return true; }
+  friend bool operator==(base, base) {
+    return true;
+  }
   int i = 0;
 };
 
 template <typename Serializer>
-void serialize(Serializer& sink, base const& b)
-{
+void serialize(Serializer& sink, base const& b) {
   sink << b.i;
 }
 
 template <typename Deserializer>
-void deserialize(Deserializer& source, base& b)
-{
+void deserialize(Deserializer& source, base& b) {
   source >> b.i;
 }
 
-struct derived1 : base
-{
-  friend bool operator==(derived1, derived1) { return true; }
+struct derived1 : base {
+  friend bool operator==(derived1, derived1) {
+    return true;
+  }
   int j = 1;
 };
 
 namespace vast {
 
 template <>
-struct access::state<derived1>
-{
+struct access::state<derived1> {
   template <class F>
-  static void read(derived1 const& x, F f)
-  {
+  static void read(derived1 const& x, F f) {
     f(static_cast<base const&>(x), x.j);
   }
 
   template <class F>
-  static void write(derived1& x, F f)
-  {
+  static void write(derived1& x, F f) {
     f(static_cast<base&>(x), x.j);
   }
 };
 
 } // namespace vast
 
-struct derived2 : base
-{
-  friend bool operator==(derived2, derived2) { return true; }
+struct derived2 : base {
+  friend bool operator==(derived2, derived2) {
+    return true;
+  }
   int k = 1;
 };
 
 template <typename Serializer>
-void serialize(Serializer& sink, derived2 const& d)
-{
+void serialize(Serializer& sink, derived2 const& d) {
   sink << static_cast<base const&>(d) << d.k;
 }
 
 template <typename Deserializer>
-void deserialize(Deserializer& source, derived2& d)
-{
+void deserialize(Deserializer& source, derived2& d) {
   source >> static_cast<base&>(d) >> d.k;
 }
 
-TEST(polymorphic serialization)
-{
+TEST(polymorphic serialization) {
   announce_hierarchy<base, derived1, derived2>("derived1", "derived2");
   auto uti = caf::uniform_typeid<derived1>();
   REQUIRE(uti != nullptr);
@@ -258,8 +243,7 @@ FIXTURE_SCOPE(events_scope, fixtures::simple_events)
 
 // The serialization of events goes through custom (de)serialization routines
 // to avoid redudant type serialization.
-TEST(vector<event> serialization)
-{
+TEST(vector<event> serialization) {
   std::string str;
   {
     auto out = io::make_container_output_stream(str);

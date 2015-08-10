@@ -14,8 +14,7 @@ class input_iterator : public util::iterator_facade<
                            char,
                            std::input_iterator_tag,
                            char
-                         >
-{
+                         > {
 public:
   input_iterator() = default;
 
@@ -39,8 +38,7 @@ class output_iterator : public util::iterator_facade<
                            output_iterator,
                            char,
                            std::output_iterator_tag
-                         >
-{
+                         > {
 public:
   /// Constructs an output_iterator from an ::output_stream.
   output_iterator(output_stream& out);

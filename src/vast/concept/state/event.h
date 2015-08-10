@@ -9,11 +9,9 @@
 namespace vast {
 
 template <>
-struct access::state<event>
-{
+struct access::state<event> {
   template <typename T, typename F>
-  static void call(T&& x, F f)
-  {
+  static void call(T&& x, F f) {
     using base = util::deduce<decltype(x), value>;
     f(x.id_, x.timestamp_, static_cast<base>(x));
   }

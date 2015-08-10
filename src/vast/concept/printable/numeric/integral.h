@@ -10,25 +10,21 @@
 namespace vast {
 
 template <typename T>
-struct integral_printer : printer<integral_printer<T>>
-{
+struct integral_printer : printer<integral_printer<T>> {
   static_assert(std::is_integral<T>{}, "T must be an integral type");
 
   using attribute = T;
 
   template <typename Iterator, typename U = T>
   static auto dispatch(Iterator& out, T x)
-    -> std::enable_if_t<std::is_unsigned<U>{}, bool>
-  {
+    -> std::enable_if_t<std::is_unsigned<U>{}, bool> {
     return detail::print_numeric(out, x);
   }
 
   template <typename Iterator, typename U = T>
   static auto dispatch(Iterator& out, T x)
-    -> std::enable_if_t<std::is_signed<U>{}, bool>
-  {
-    if (x < 0)
-    {
+    -> std::enable_if_t<std::is_signed<U>{}, bool> {
+    if (x < 0) {
       *out++ = '-';
       return detail::print_numeric(out, -x);
     }
@@ -37,15 +33,13 @@ struct integral_printer : printer<integral_printer<T>>
   }
 
   template <typename Iterator>
-  bool print(Iterator& out, T x) const
-  {
+  bool print(Iterator& out, T x) const {
     return dispatch(out, x);
   }
 };
 
 template <typename T>
-struct printer_registry<T, std::enable_if_t<std::is_integral<T>::value>>
-{
+struct printer_registry<T, std::enable_if_t<std::is_integral<T>::value>> {
   using type = integral_printer<T>;
 };
 

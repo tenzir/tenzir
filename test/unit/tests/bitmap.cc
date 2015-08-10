@@ -13,11 +13,9 @@ using namespace vast;
 namespace {
 
 // Prints doubles as IEEE 754 and with our custom offset binary encoding.
-std::string dump(uint64_t x)
-{
+std::string dump(uint64_t x) {
   std::string result;
-  for (size_t i = 0; i < 64; ++i)
-  {
+  for (size_t i = 0; i < 64; ++i) {
     if (i == 1 || i == 12)
       result += ' ';
     result += ((x >> (64 - i - 1)) & 1) ? '1' : '0';
@@ -25,15 +23,13 @@ std::string dump(uint64_t x)
   return result;
 }
 
-std::string dump(double x)
-{
+std::string dump(double x) {
   return dump(detail::order(x));
 }
 
 } // namespace <anonymous>
 
-TEST(bitwise total ordering (integral))
-{
+TEST(bitwise total ordering (integral)) {
   using detail::order;
 
   MESSAGE("unsigned identities");
@@ -47,8 +43,7 @@ TEST(bitwise total ordering (integral))
   CHECK(order(i) == 2147483652);
 }
 
-TEST(bitwise total ordering (floating point))
-{
+TEST(bitwise total ordering (floating point)) {
   using detail::order;
   std::string d;
   MESSAGE("permutation");
@@ -62,7 +57,7 @@ TEST(bitwise total ordering (floating point))
   CHECK(order(-2.4) < order(-2.2));
   CHECK(order(-1.0) < order(-0.1));
   CHECK(order(-0.001) < order(-0.0));
-  CHECK(order(-0.0) == order(0.0));   // no signed zero
+  CHECK(order(-0.0) == order(0.0)); // no signed zero
   CHECK(order(0.0) < order(0.001));
   CHECK(order(0.001) < order(0.1));
   CHECK(order(0.1) < order(1.0));
@@ -73,8 +68,7 @@ TEST(bitwise total ordering (floating point))
   CHECK(order(10.0) < order(1111.2));
 }
 
-TEST(singleton-coder)
-{
+TEST(singleton-coder) {
   singleton_coder<null_bitstream> c;
   REQUIRE(c.encode(true));
   REQUIRE(c.encode(false));
@@ -86,8 +80,7 @@ TEST(singleton-coder)
   CHECK(to_string(c.decode(not_equal, true)) == "01101");
 }
 
-TEST(equality-coder)
-{
+TEST(equality-coder) {
   equality_coder<null_bitstream> c{10};
   CHECK(c.encode(8));
   CHECK(c.encode(9));
@@ -114,8 +107,7 @@ TEST(equality-coder)
   CHECK(to_string(c.decode(greater,       9)) == "00000");
 }
 
-TEST(range-coder)
-{
+TEST(range-coder) {
   range_coder<null_bitstream> c{8};
   CHECK(c.encode(4));
   CHECK(c.encode(7));
@@ -124,13 +116,12 @@ TEST(range-coder)
   CHECK(c.encode(3));
   CHECK(c.encode(0));
   CHECK(c.encode(1));
-  CHECK(to_string(c.decode(less,          4)) == "00011111111");
-  CHECK(to_string(c.decode(equal,         3)) == "00011111100");
+  CHECK(to_string(c.decode(less, 4)) == "00011111111");
+  CHECK(to_string(c.decode(equal, 3)) == "00011111100");
   CHECK(to_string(c.decode(greater_equal, 3)) == "11111111100");
 }
 
-TEST(bitslice-coder)
-{
+TEST(bitslice-coder) {
   bitslice_coder<null_bitstream> c{6};
   CHECK(c.encode(4));
   CHECK(c.encode(5));
@@ -152,8 +143,7 @@ TEST(bitslice-coder)
   CHECK(to_string(c.decode(in,    5)) == "010000");
 }
 
-TEST(bitslice-coder 2)
-{
+TEST(bitslice-coder 2) {
   bitslice_coder<null_bitstream> c{8};
   CHECK(c.encode(0));
   CHECK(c.encode(1));
@@ -181,10 +171,9 @@ TEST(bitslice-coder 2)
   CHECK(to_string(c.decode(less, 128))  == "111111110");
 }
 
-TEST(base)
-{
+TEST(base) {
   using b4 = base<3, 4, 10, 42>;
-  CHECK(! b4::uniform);
+  CHECK(!b4::uniform);
   REQUIRE(b4::components == b4::values.size());
   REQUIRE(b4::components == 4);
   CHECK(b4::values[0] == 3);
@@ -193,8 +182,7 @@ TEST(base)
   CHECK(b4::values[3] == 42);
 }
 
-TEST(base uniform)
-{
+TEST(base uniform) {
   using u = uniform_base<42, 10>;
   auto is42 = [](auto x) { return x == 42; };
   CHECK(std::all_of(u::values.begin(), u::values.end(), is42));
@@ -210,15 +198,13 @@ TEST(base uniform)
   CHECK(make_uniform_base<10, int64_t>::components == 20);
 }
 
-TEST(base singleton)
-{
+TEST(base singleton) {
   using s = make_singleton_base<int8_t>;
   CHECK(s::components == 1);
   CHECK(s::values[0] == 256);
 }
 
-TEST(value decomposition)
-{
+TEST(value decomposition) {
   using detail::compose;
   using detail::decompose;
 
@@ -239,22 +225,21 @@ TEST(value decomposition)
   auto c2 = compose(d2, base<13, 13>::values);
   CHECK(c2 == 54);
 
-  // Heterogeneous base.
+  MESSAGE("heterogeneous base");
   auto d3 = decompose(312, base<10, 10, 10>::values);
   auto c3 = compose(d3, base<3, 2, 5>::values);
   CHECK(c3 == 23);
 
-  // Out of range.
+  MESSAGE("out of range");
   auto x = decompose(42, base<42>::values);
   CHECK(x[0] == 0);
 
-  // Wraps around.
+  MESSAGE("wrap around");
   x = decompose(43, base<42>::values);
   CHECK(x[0] == 1);
 }
 
-TEST(boolean bitmap)
-{
+TEST(boolean bitmap) {
   bitmap<bool, singleton_coder<null_bitstream>> m;
   m.push_back(true);
   m.push_back(false);
@@ -268,8 +253,7 @@ TEST(boolean bitmap)
   CHECK(to_string(m.lookup(not_equal, true))  == "01101");
 }
 
-TEST(equality-coded bitmap)
-{
+TEST(equality-coded bitmap) {
   using coder_type = 
     multi_level_coder<base<10, 10>, equality_coder<null_bitstream>>;
   bitmap<unsigned, coder_type> m;
@@ -295,8 +279,7 @@ TEST(equality-coded bitmap)
   CHECK(m.size() == 10);
 }
 
-TEST(bitmap serialization)
-{
+TEST(bitmap serialization) {
   using coder = 
     multi_level_coder<uniform_base<2, 8>, equality_coder<null_bitstream>>;
   using bitmap_type = bitmap<int8_t, coder>;
@@ -313,8 +296,7 @@ TEST(bitmap serialization)
   CHECK(bm == bm2);
 }
 
-TEST(range-coded bitmap)
-{
+TEST(range-coded bitmap) {
   using coder_type =
     multi_level_coder<uniform_base<10, 3>, range_coder<null_bitstream>>;
   bitmap<uint8_t, coder_type> m;
@@ -380,15 +362,13 @@ TEST(range-coded bitmap)
     m.push_back(i);
   CHECK(m.size() == 256);
   auto str = std::string(256, '0');
-  for (size_t i = 0; i < 256; ++i)
-  {
+  for (size_t i = 0; i < 256; ++i) {
     str[i] = '1';
     CHECK(to_string(m.lookup(less_equal, i)) == str);
   }
 }
 
-TEST(range-coded bitmap 2)
-{
+TEST(range-coded bitmap 2) {
   using coder_type =
     multi_level_coder<uniform_base<2, 8>, range_coder<null_bitstream>>;
   bitmap<int8_t, coder_type> bm;
@@ -421,8 +401,7 @@ TEST(range-coded bitmap 2)
   CHECK(to_string(bm.lookup(greater_equal, 22)) == "11101");
 }
 
-TEST(range-coded bitmap 3)
-{
+TEST(range-coded bitmap 3) {
   using coder_type =
     multi_level_coder<uniform_base<9, 7>, range_coder<null_bitstream>>;
   bitmap<uint16_t, coder_type> bm;
@@ -476,8 +455,7 @@ TEST(range-coded bitmap 3)
   CHECK(bm.lookup(greater, 31338) == all_zeros);
 }
 
-TEST(bitslice-coded bitmap)
-{
+TEST(bitslice-coded bitmap) {
   bitmap<int16_t, bitslice_coder<null_bitstream>> bm{8};
   bm.push_back(0);
   bm.push_back(1);
@@ -504,8 +482,7 @@ TEST(bitslice-coded bitmap)
 namespace {
 
 template <typename Coder>
-auto append_test()
-{
+auto append_test() {
   using coder_type = multi_level_coder<uniform_base<10, 6>, Coder>;
   bitmap<uint16_t, coder_type> bm1, bm2;
   bm1.push_back(43);
@@ -538,13 +515,11 @@ auto append_test()
 
 } // namespace <anonymous>
 
-TEST(equality-coder append)
-{
+TEST(equality-coder append) {
   append_test<equality_coder<null_bitstream>>();
 }
 
-TEST(range-coder append)
-{
+TEST(range-coder append) {
   auto bm = append_test<range_coder<null_bitstream>>();
   CHECK(to_string(bm.lookup(greater_equal, 42)) == "111111111111");
   CHECK(to_string(bm.lookup(less_equal, 10))    == "000000000000");
@@ -552,13 +527,11 @@ TEST(range-coder append)
   CHECK(to_string(bm.lookup(greater, 1000))     == "101000011010");
 }
 
-TEST(bitslice-coder append)
-{
+TEST(bitslice-coder append) {
   append_test<bitslice_coder<null_bitstream>>();
 }
 
-TEST(multi_push_back)
-{
+TEST(multi_push_back) {
   bitmap<uint8_t, range_coder<null_bitstream>> bm{20};
   bm.push_back(7, 4);
   bm.push_back(3, 6);
@@ -570,8 +543,7 @@ TEST(multi_push_back)
 }
 
 
-TEST(precision-binner fractional)
-{
+TEST(precision-binner fractional) {
   using binner = precision_binner<2, 3>;
   using coder_type =
     multi_level_coder<uniform_base<2, 64>, range_coder<null_bitstream>>;
@@ -588,8 +560,7 @@ TEST(precision-binner fractional)
   CHECK(to_string(bm.lookup(equal, 43.002)) == "000001");
 }
 
-TEST(decimal binner with integers)
-{
+TEST(decimal binner with integers) {
   using base_type = uniform_base<10, 4>;
   using binner = decimal_binner<2>;
   bitmap<uint16_t, equality_coder<null_bitstream>, binner> bm{400};
@@ -603,8 +574,7 @@ TEST(decimal binner with integers)
   CHECK(to_string(bm.lookup(equal, 300)) == "00100");
 }
 
-TEST(decimal binner with floating-point)
-{
+TEST(decimal binner with floating-point) {
   using binner = decimal_binner<1>;
   using coder_type =
     multi_level_coder<uniform_base<2, 64>, range_coder<null_bitstream>>;

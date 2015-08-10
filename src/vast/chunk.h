@@ -18,14 +18,12 @@ class event;
 
 /// A compressed seqeuence of events. The events in the chunk must either all
 /// have invalid IDs, i.e., equal to 0, or monotonically increasing IDs.
-class chunk : util::equality_comparable<chunk>
-{
-    friend access;
+class chunk : util::equality_comparable<chunk> {
+  friend access;
 
 public:
   /// Chunk meta data.
-  struct meta_data : util::equality_comparable<meta_data>
-  {
+  struct meta_data : util::equality_comparable<meta_data> {
     time::point first = time::duration{};
     time::point last = time::duration{};
     default_bitstream ids;
@@ -35,8 +33,7 @@ public:
   };
 
   /// A proxy class to write events into the chunk.
-  class writer
-  {
+  class writer {
   public:
     /// Constructs a writer from a chunk.
     /// @param chk The chunk to serialize into.
@@ -63,8 +60,7 @@ public:
   };
 
   /// A proxy class to read events from the chunk.
-  class reader
-  {
+  class reader {
   public:
     /// Constructs a reader from a chunk.
     /// @param chk The chunk to extract objects from.
@@ -135,7 +131,7 @@ private:
   vast::block& block();
   vast::block const& block() const;
 
-  caf::message msg_;  // <meta_data, block>
+  caf::message msg_; // <meta_data, block>
 };
 
 } // namespace vast

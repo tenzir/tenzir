@@ -14,48 +14,39 @@ namespace util {
 /// @see http://drdobbs.com/article/print?articleId=229218807&dept_url=/cpp/.
 /// @relates intrusive_ptr
 template <typename Derived>
-class intrusive_base
-{
+class intrusive_base {
 public:
-  intrusive_base()
-  {
+  intrusive_base() {
   }
 
-  intrusive_base(intrusive_base const&)
-  {
+  intrusive_base(intrusive_base const&) {
     // Do not copy the counter.
   }
 
-  intrusive_base& operator=(intrusive_base const&)
-  {
+  intrusive_base& operator=(intrusive_base const&) {
     // Do not copy the counter.
     return *this;
   }
 
   ~intrusive_base() = default;
 
-  void swap(intrusive_base const&)
-  {
+  void swap(intrusive_base const&) {
     // Do not copy the counter.
   }
 
-  size_t ref_count() const
-  {
+  size_t ref_count() const {
     return count_;
   }
 
-  bool unique() const
-  {
+  bool unique() const {
     return ref_count() == 1;
   }
 
-  friend inline void ref(Derived* ptr)
-  {
+  friend inline void ref(Derived* ptr) {
     ++((intrusive_base*)ptr)->count_;
   }
 
-  friend inline void unref(Derived* ptr)
-  {
+  friend inline void unref(Derived* ptr) {
     if (--((intrusive_base*)ptr)->count_ == 0)
       delete ptr;
   }
@@ -67,72 +58,58 @@ private:
 /// An intrusive smart pointer.
 /// @relates intrusive_base
 template <typename T>
-class intrusive_ptr
-{
+class intrusive_ptr {
 public:
   using element_type = T;
 
   intrusive_ptr() = default;
 
-  intrusive_ptr(T* x, bool add_ref = true)
-    : ptr_{x}
-  {
+  intrusive_ptr(T* x, bool add_ref = true) : ptr_{x} {
     if (ptr_ && add_ref)
       ref(ptr_);
   }
 
   template <typename U>
   intrusive_ptr(intrusive_ptr<U> other)
-    : ptr_{other.release()}
-  {
+    : ptr_{other.release()} {
     static_assert(std::is_convertible<T*, U*>::value,
                   "U* is not assignable to T*");
   }
 
-  intrusive_ptr(intrusive_ptr const& other)
-    : ptr_{other.get()}
-  {
+  intrusive_ptr(intrusive_ptr const& other) : ptr_{other.get()} {
     if (ptr_)
       ref(ptr_);
   }
 
-  intrusive_ptr(intrusive_ptr&& other) noexcept
-    : ptr_{other.release()}
-  {
+  intrusive_ptr(intrusive_ptr&& other) noexcept : ptr_{other.release()} {
   }
 
-  ~intrusive_ptr() noexcept
-  {
+  ~intrusive_ptr() noexcept {
     if (ptr_)
       unref(ptr_);
   }
 
-  intrusive_ptr& operator=(intrusive_ptr const& other)
-  {
+  intrusive_ptr& operator=(intrusive_ptr const& other) {
     intrusive_ptr tmp{other};
     tmp.swap(*this);
     return *this;
   }
 
-  intrusive_ptr& operator=(intrusive_ptr&& other) noexcept
-  {
+  intrusive_ptr& operator=(intrusive_ptr&& other) noexcept {
     other.swap(*this);
     return *this;
   }
 
-  intrusive_ptr& operator=(T* other)
-  {
+  intrusive_ptr& operator=(T* other) {
     reset(other);
     return *this;
   }
 
-  void swap(intrusive_ptr& other) noexcept
-  {
+  void swap(intrusive_ptr& other) noexcept {
     std::swap(ptr_, other.ptr_);
   }
 
-  void reset(T* other = nullptr)
-  {
+  void reset(T* other = nullptr) {
     auto old = ptr_;
     ptr_ = other;
     if (other)
@@ -141,38 +118,32 @@ public:
       unref(old);
   }
 
-  T* release()
-  {
+  T* release() {
     auto p = ptr_;
     ptr_ = nullptr;
     return p;
   }
 
-  void adopt(T* p)
-  {
+  void adopt(T* p) {
     reset();
     ptr_ = p;
   }
 
-  T* get() const
-  {
+  T* get() const {
     return ptr_;
   }
 
-  T& operator*() const
-  {
+  T& operator*() const {
     VAST_ASSERT(ptr_ != nullptr);
     return *ptr_;
   }
 
-  T* operator->() const
-  {
+  T* operator->() const {
     VAST_ASSERT(ptr_ != nullptr);
     return ptr_;
   }
 
-  explicit operator bool() const
-  {
+  explicit operator bool() const {
     return ptr_ != nullptr;
   }
 
@@ -181,65 +152,55 @@ private:
 };
 
 template <typename T, typename U>
-inline bool operator==(intrusive_ptr<T> const& x, intrusive_ptr<U> const& y)
-{
+inline bool operator==(intrusive_ptr<T> const& x, intrusive_ptr<U> const& y) {
   return x.get() == y.get();
 }
 
 template <typename T, typename U>
-inline bool operator!=(intrusive_ptr<T> const& x, intrusive_ptr<U> const& y)
-{
+inline bool operator!=(intrusive_ptr<T> const& x, intrusive_ptr<U> const& y) {
   return x.get() != y.get();
 }
 
 template <typename T, typename U>
-inline bool operator==(intrusive_ptr<T> const& x, U* y)
-{
+inline bool operator==(intrusive_ptr<T> const& x, U* y) {
   return x.get() == y;
 }
 
 template <typename T, typename U>
-inline bool operator!=(intrusive_ptr<T> const& x, U* y)
-{
+inline bool operator!=(intrusive_ptr<T> const& x, U* y) {
   return x.get() != y;
 }
 
 template <typename T, typename U>
-inline bool operator==(T* x, intrusive_ptr<U> const& y)
-{
+inline bool operator==(T* x, intrusive_ptr<U> const& y) {
   return x == y.get();
 }
 
 template <typename T, typename U>
-inline bool operator!=(T* x, intrusive_ptr<U> const& y)
-{
+inline bool operator!=(T* x, intrusive_ptr<U> const& y) {
   return x != y.get();
 }
 
 template <typename T>
-inline bool operator<(intrusive_ptr<T> const& x, intrusive_ptr<T> const& y)
-{
+inline bool operator<(intrusive_ptr<T> const& x, intrusive_ptr<T> const& y) {
   return std::less<T*>()(x.get(), y.get());
 }
 
 template <typename T>
-void swap(intrusive_ptr<T>& first, intrusive_ptr<T>& second)
-{
+void swap(intrusive_ptr<T>& first, intrusive_ptr<T>& second) {
   first.swap(second);
 }
 
 template <typename T>
-std::ostream& operator<<(std::ostream& out, intrusive_ptr<T> const& x)
-{
+std::ostream& operator<<(std::ostream& out, intrusive_ptr<T> const& x) {
   out << x.get();
   return out;
 }
 
 /// Helper function to create a an intrusive_ptr in an exception-safe way.
 /// @relates intrusive_ptr
-template<typename T, typename ...Args>
-intrusive_ptr<T> make_intrusive(Args&& ...args)
-{
+template <typename T, typename... Args>
+intrusive_ptr<T> make_intrusive(Args&&... args) {
   return intrusive_ptr<T>(new T(std::forward<Args>(args)...));
 }
 

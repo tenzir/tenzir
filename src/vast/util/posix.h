@@ -10,8 +10,7 @@ namespace util {
 
 /// An abstraction of a UNIX domain socket. This class facilitates sending and
 /// receiving file descriptors.
-class unix_domain_socket
-{
+class unix_domain_socket {
 public:
   /// Creates a UNIX domain socket listening server at a given path.
   /// @param path The filesystem path where to construct the socket.

@@ -13,8 +13,7 @@ namespace vast {
 /// @tparam Action A function taking the synthesized attribute and returning
 ///                a new type.
 template <typename Parser, typename Action>
-class action_parser : public parser<action_parser<Parser, Action>>
-{
+class action_parser : public parser<action_parser<Parser, Action>> {
 public:
   using inner_attribute = typename Parser::attribute;
   using action_traits = caf::detail::get_callable_trait<Action>;
@@ -31,10 +30,7 @@ public:
       action_result_type
     >;
 
-  action_parser(Parser p, Action fun)
-    : parser_{std::move(p)},
-      action_(fun)
-  {
+  action_parser(Parser p, Action fun) : parser_{std::move(p)}, action_(fun) {
   }
 
   // No argument, void return type.
@@ -46,10 +42,9 @@ public:
                 typename caf::detail::get_callable_trait<A>::result_type
               >{},
          bool
-       >
-  {
+       > {
     inner_attribute x;
-    if (! parser_.parse(f, l, x))
+    if (!parser_.parse(f, l, x))
       return false;
     action_();
     return true;
@@ -64,10 +59,9 @@ public:
                 typename caf::detail::get_callable_trait<A>::result_type
               >{},
          bool
-       >
-  {
+       > {
     action_arg_type x;
-    if (! parser_.parse(f, l, x))
+    if (!parser_.parse(f, l, x))
       return false;
     action_(std::move(x));
     return true;
@@ -82,10 +76,9 @@ public:
                 typename caf::detail::get_callable_trait<A>::result_type
               >::value,
          bool
-       >
-  {
+       > {
     inner_attribute x;
-    if (! parser_.parse(f, l, x))
+    if (!parser_.parse(f, l, x))
       return false;
     a = action_();
     return true;
@@ -100,10 +93,9 @@ public:
                 typename caf::detail::get_callable_trait<A>::result_type
               >::value,
          bool
-       >
-  {
+       > {
     action_arg_type x;
-    if (! parser_.parse(f, l, x))
+    if (!parser_.parse(f, l, x))
       return false;
     a = action_(std::move(x));
     return true;

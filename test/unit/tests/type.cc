@@ -10,8 +10,7 @@
 
 using namespace vast;
 
-TEST(printing)
-{
+TEST(printing) {
   CHECK(to_string(type{}) == "none");
   CHECK(to_string(type::boolean{}) == "bool");
   CHECK(to_string(type::integer{}) == "int");
@@ -44,8 +43,8 @@ TEST(printing)
         {"baz", type::real{}}
       }};
 
-  CHECK(to_string(r) ==
-        "record {foo: table<count, set<port> &skip>, bar: int, baz: real}");
+  CHECK(to_string(r)
+        == "record {foo: table<count, set<port> &skip>, bar: int, baz: real}");
 
   type a = type::alias{t};
   CHECK(to_string(a) == to_string(t));
@@ -56,8 +55,7 @@ TEST(printing)
   CHECK(sig == "qux = table<count, set<port> &skip>");
 }
 
-TEST(equality comparison)
-{
+TEST(equality comparison) {
   type t = type::boolean{};
   type u = type::boolean{};
   CHECK(t == u);
@@ -69,7 +67,7 @@ TEST(equality comparison)
   CHECK(t == u);
 
   // Names can only be assigned once.
-  CHECK(! t.name("bar"));
+  CHECK(!t.name("bar"));
   CHECK(t == u);
 
   // But we can always create a new type instance...
@@ -83,8 +81,7 @@ TEST(equality comparison)
   CHECK(t != u);
 }
 
-TEST(congruence)
-{
+TEST(congruence) {
   type s0 = type::set{type::port{}};
   type s1 = type::set{type::port{}};
   s0.name("foo");
@@ -98,11 +95,10 @@ TEST(congruence)
 
   type b = type::boolean{};
   type i = type::integer{};
-  CHECK(! congruent(b, i));
+  CHECK(!congruent(b, i));
 }
 
-TEST(hashing)
-{
+TEST(hashing) {
   CHECK(type{}.digest() == 3479547966);
   CHECK(type::boolean{}.digest() == 2972654956);
   CHECK(type::integer{}.digest() == 2281945551);
@@ -117,8 +113,7 @@ TEST(hashing)
   CHECK(type::port{}.digest() == 489833540);
 }
 
-TEST(serialization)
-{
+TEST(serialization) {
   type s0 = type::string{{type::attribute::skip}};
   type t = type::set{type::port{}};
   t = type::table{type::count{}, t, {type::attribute::skip}};
@@ -134,8 +129,7 @@ TEST(serialization)
   CHECK(to_string(t) == "table<count, set<port>> &skip");
 }
 
-TEST(record range)
-{
+TEST(record range) {
   auto r = type::record{
     {"x", type::record{
             {"y", type::record{
@@ -149,7 +143,7 @@ TEST(record range)
             {"b", type::boolean{}}
           }},
     {"y", type::record{{"b", type::boolean{}}}}
-    };
+  };
 
   for (auto& i : type::record::each{r})
     if (i.offset == offset{0, 1, 0, 0})
@@ -158,8 +152,7 @@ TEST(record range)
       CHECK(i.key() == key{"y", "b"});
 }
 
-TEST(record resolving)
-{
+TEST(record resolving) {
   auto r = type::record{
     {"x", type::integer{}},
     {"y", type::address{}},
@@ -195,8 +188,7 @@ TEST(record resolving)
   CHECK(k->back() == "x");
 }
 
-TEST(record flattening/unflattening)
-{
+TEST(record flattening/unflattening) {
   auto x = type::record{
     {"x", type::record{
             {"y", type::record{
@@ -210,7 +202,7 @@ TEST(record flattening/unflattening)
             {"b", type::boolean{}}
           }},
     {"y", type::record{{"b", type::boolean{}}}}
-    };
+  };
 
   auto y = type::record{{
     {"x.y.z", type::integer{}},
@@ -228,33 +220,27 @@ TEST(record flattening/unflattening)
   CHECK(u == x);
 }
 
-TEST(record symbol finding)
-{
+TEST(record symbol finding) {
   auto r = type::record{
     {"x", type::integer{}},
     {"y", type::address{}},
     {"z", type::real{}}
   };
-
   r = {
     {"a", type::integer{}},
     {"b", type::count{}},
     {"c", type::record{r}}
   };
-
   r = {
     {"a", type::integer{}},
     {"b", type::record{r}},
     {"c", type::count{}}
   };
-
   r.name("foo");
-
   // Record access by key.
   auto first = r.at(key{"a"});
   REQUIRE(first);
   CHECK(is<type::integer>(*first));
-
   auto deep = r.at(key{"b", "c", "y"});
   REQUIRE(deep);
   CHECK(is<type::address>(*deep));
@@ -304,8 +290,7 @@ TEST(record symbol finding)
   CHECK(o[2].first == c2);
 }
 
-TEST(representational equality (congruence))
-{
+TEST(representational equality(congruence)) {
   auto i = type::integer{};
   i.name("i");
 
@@ -317,7 +302,7 @@ TEST(representational equality (congruence))
 
   CHECK(congruent(i, i));
   CHECK(congruent(i, j));
-  CHECK(! congruent(i, c));
+  CHECK(!congruent(i, c));
 
   auto s0 = type::set{i};
   auto s1 = type::set{j};
@@ -353,8 +338,7 @@ TEST(representational equality (congruence))
   CHECK(congruent(a, r0));
 }
 
-TEST(type derivation)
-{
+TEST(type derivation) {
   CHECK(type::derive(data{"foo"}), type::string{});
 
   type::record r{
@@ -366,8 +350,7 @@ TEST(type derivation)
   CHECK(type::derive(record{42, 1337u, 3.1415}), r);
 }
 
-TEST(type attributes)
-{
+TEST(type attributes) {
   // Attributes are key-value pairs...
   type::vector v{type::integer{}, {type::attribute::skip}};
   auto a = v.find_attribute(type::attribute::skip);

@@ -18,8 +18,7 @@ namespace io {
 static size_t const uncompressed_block_size = 64 << 10;
 
 /// An input stream that read from a compressed input source.
-class compressed_input_stream : public input_stream
-{
+class compressed_input_stream : public input_stream {
 public:
   bool next(void const** data, size_t* size) override;
   void rewind(size_t bytes) override;
@@ -51,12 +50,11 @@ private:
 /// compression method.
 /// @param method The compression method to use.
 /// @param source The underlying stream to read from.
-std::unique_ptr<compressed_input_stream> make_compressed_input_stream(
-    compression method, input_stream& source);
+std::unique_ptr<compressed_input_stream>
+make_compressed_input_stream(compression method, input_stream& source);
 
 /// An output stream that compresses data written to it.
-class compressed_output_stream : public output_stream
-{
+class compressed_output_stream : public output_stream {
 public:
   bool next(void** data, size_t* size) override;
   void rewind(size_t bytes) override;
@@ -97,21 +95,18 @@ private:
 /// compression method.
 /// @param method The compression method to use.
 /// @param sink The underlying stream to write into.
-std::unique_ptr<compressed_output_stream> make_compressed_output_stream(
-    compression method, output_stream& sink);
-
+std::unique_ptr<compressed_output_stream>
+make_compressed_output_stream(compression method, output_stream& sink);
 
 /// A compressed input stream that uses null compression.
-class null_input_stream : public compressed_input_stream
-{
+class null_input_stream : public compressed_input_stream {
 public:
   null_input_stream(input_stream& source);
   size_t uncompress(void const* source, size_t size) override;
 };
 
 /// A compressed output stream that uses null compression.
-class null_output_stream : public compressed_output_stream
-{
+class null_output_stream : public compressed_output_stream {
 public:
   null_output_stream(output_stream& sink, size_t block_size = 0);
 
@@ -120,18 +115,15 @@ public:
   size_t compress(void* sink, size_t sink_size) override;
 };
 
-
 /// A compressed input stream using LZ4.
-class lz4_input_stream : public compressed_input_stream
-{
+class lz4_input_stream : public compressed_input_stream {
 public:
   lz4_input_stream(input_stream& source);
   size_t uncompress(void const* source, size_t size) override;
 };
 
 /// A compressed output stream using LZ4.
-class lz4_output_stream : public compressed_output_stream
-{
+class lz4_output_stream : public compressed_output_stream {
 public:
   lz4_output_stream(output_stream& sink);
   ~lz4_output_stream();
@@ -141,16 +133,14 @@ public:
 
 #ifdef VAST_HAVE_SNAPPY
 /// A compressed input stream using Snappy.
-class snappy_input_stream : public compressed_input_stream
-{
+class snappy_input_stream : public compressed_input_stream {
 public:
   snappy_input_stream(input_stream& source);
   size_t uncompress(void const* source, size_t size) override;
 };
 
 /// A compressed output stream using Snappy.
-class snappy_output_stream : public compressed_output_stream
-{
+class snappy_output_stream : public compressed_output_stream {
 public:
   snappy_output_stream(output_stream& sink);
   ~snappy_output_stream();

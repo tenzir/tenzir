@@ -14,8 +14,7 @@
 
 using namespace vast;
 
-TEST(time::point)
-{
+TEST(time::point) {
   auto t = time::point::utc(2012, 8, 12, 23, 55, 4);
 
   CHECK(t.delta() == t);
@@ -101,15 +100,14 @@ TEST(time::point)
   CHECK(*str == "23:55:04");
 }
 
-TEST(patterns)
-{
+TEST(patterns) {
   std::string str = "1";
   CHECK(pattern("[0-9]").match(str));
-  CHECK(! pattern("[^1]").match(str));
+  CHECK(!pattern("[^1]").match(str));
 
   str = "foobarbaz";
   CHECK(pattern("bar").search(str));
-  CHECK(! pattern("^bar$").search(str));
+  CHECK(!pattern("^bar$").search(str));
   CHECK(pattern("^\\w{3}\\w{3}\\w{3}$").match(str));
 
   CHECK(pattern::glob("foo*baz").match(str));
@@ -121,34 +119,33 @@ TEST(patterns)
   CHECK(p.search(str));
 
   p = pattern("(\\w+ )");
-  CHECK(! p.match(str));
+  CHECK(!p.match(str));
   CHECK(p.search(str));
 
   CHECK(to_string(p) == "/(\\w+ )/");
 }
 
-TEST(addresses IPv4)
-{
+TEST(addresses IPv4) {
   address x;
   address y;
   CHECK(x == y);
-  CHECK(! x.is_v4());
+  CHECK(!x.is_v4());
   CHECK(x.is_v6());
 
   auto a = *to<address>("172.16.7.1");
   CHECK(to_string(a) == "172.16.7.1");
   CHECK(a.is_v4());
-  CHECK(! a.is_v6());
-  CHECK(! a.is_loopback());
-  CHECK(! a.is_multicast());
-  CHECK(! a.is_broadcast());
+  CHECK(!a.is_v6());
+  CHECK(!a.is_loopback());
+  CHECK(!a.is_multicast());
+  CHECK(!a.is_broadcast());
 
   auto localhost = *to<address>("127.0.0.1");
   CHECK(to_string(localhost) == "127.0.0.1");
   CHECK(localhost.is_v4());
   CHECK(localhost.is_loopback());
-  CHECK(! localhost.is_multicast());
-  CHECK(! localhost.is_broadcast());
+  CHECK(!localhost.is_multicast());
+  CHECK(!localhost.is_broadcast());
 
   // Lexicalgraphical comparison.
   CHECK(localhost < a);
@@ -172,15 +169,14 @@ TEST(addresses IPv4)
   CHECK(to_string(b) == "192.168.0.171");
 }
 
-TEST(addresses IPv6)
-{
+TEST(addresses IPv6) {
   CHECK(address() == *to<address>("::"));
 
   auto a = *to<address>("2001:db8:0000:0000:0202:b3ff:fe1e:8329");
   auto b = *to<address>("2001:db8:0:0:202:b3ff:fe1e:8329");
   auto c = *to<address>("2001:db8::202:b3ff:fe1e:8329");
   CHECK(a.is_v6() && b.is_v6() && c.is_v6());
-  CHECK(! (a.is_v4() || b.is_v4() || c.is_v4()));
+  CHECK(!(a.is_v4() || b.is_v4() || c.is_v4()));
   CHECK(a == b && b == c);
 
   auto d = *to<address>("ff01::1");
@@ -193,21 +189,19 @@ TEST(addresses IPv6)
   CHECK((a | d) == *to<address>("ff01:db8::202:b3ff:fe1e:8329"));
   CHECK((a ^ d) == *to<address>("df00:db8::202:b3ff:fe1e:8328"));
 
-  uint8_t raw8[16] = { 0xdf, 0x00, 0x0d, 0xb8,
-  0x00, 0x00, 0x00, 0x00,
-  0x02, 0x02, 0xb3, 0xff,
-  0xfe, 0x1e, 0x83, 0x28 };
+  uint8_t raw8[16] = {0xdf, 0x00, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00,
+                      0x02, 0x02, 0xb3, 0xff, 0xfe, 0x1e, 0x83, 0x28};
   auto p = reinterpret_cast<uint32_t const*>(raw8);
   address e(p, address::ipv6, address::network);
   CHECK(e == (a ^ d));
 
-  uint32_t raw32[4] = { 0xdf000db8, 0x00000000, 0x0202b3ff, 0xfe1e8328 };
+  uint32_t raw32[4] = {0xdf000db8, 0x00000000, 0x0202b3ff, 0xfe1e8328};
   p = reinterpret_cast<uint32_t const*>(raw32);
   address f(p, address::ipv6, address::host);
   CHECK(f == (a ^ d));
   CHECK(f == e);
 
-  CHECK(! a.mask(129));
+  CHECK(!a.mask(129));
   CHECK(a.mask(128)); // No modification
   CHECK(a == *to<address>("2001:db8:0000:0000:0202:b3ff:fe1e:8329"));
   CHECK(a.mask(112));
@@ -222,8 +216,7 @@ TEST(addresses IPv6)
   CHECK(a == *to<address>("::"));
 }
 
-TEST(subnets)
-{
+TEST(subnets) {
   subnet p;
   CHECK(p.network() == *to<address>("::"));
   CHECK(p.length() == 0);
@@ -235,7 +228,7 @@ TEST(subnets)
   CHECK(q.length() == 24);
   CHECK(to_string(q) == "192.168.0.0/24");
   CHECK(q.contains(*to<address>("192.168.0.73")));
-  CHECK(! q.contains(*to<address>("192.168.244.73")));
+  CHECK(!q.contains(*to<address>("192.168.244.73")));
 
   auto b = *to<address>("2001:db8:0000:0000:0202:b3ff:fe1e:8329");
   subnet r{b, 64};
@@ -243,11 +236,10 @@ TEST(subnets)
   CHECK(r.network() == *to<address>("2001:db8::"));
   CHECK(to_string(r) == "2001:db8::/64");
   CHECK(r.contains(*to<address>("2001:db8::cafe:babe")));
-  CHECK(! r.contains(*to<address>("ff00::")));
+  CHECK(!r.contains(*to<address>("ff00::")));
 }
 
-TEST(ports)
-{
+TEST(ports) {
   port p;
   CHECK(p.number() == 0u);
   CHECK(p.type() == port::unknown);
@@ -264,16 +256,14 @@ TEST(ports)
   CHECK(p < q);
 }
 
-TEST(vector)
-{
+TEST(vector) {
   auto v = std::vector<data>{-42, 42, 84};
   CHECK(v[0] == -42);
   auto u = vector{std::move(v)};
   CHECK(u[0] == -42);
 }
 
-TEST(set)
-{
+TEST(set) {
   auto v = std::vector<data>{1, 2, 3};
   auto fs = util::flat_set<data>{"a", "b", "c"};
   auto s = set{v};
@@ -282,8 +272,7 @@ TEST(set)
   CHECK(s[1] == "b");
 }
 
-TEST(tables)
-{
+TEST(tables) {
   table ports{{"ssh", 22u}, {"http", 80u}, {"https", 443u}, {"imaps", 993u}};
   CHECK(ports.size() == 4);
 
@@ -295,11 +284,10 @@ TEST(tables)
   CHECK(i->second == 993u);
 
   CHECK(ports.emplace("telnet", 23u).second);
-  CHECK(! ports.emplace("http", 8080u).second);
+  CHECK(!ports.emplace("http", 8080u).second);
 }
 
-TEST(records)
-{
+TEST(records) {
   record r{"foo", -42, 1001u, "x", port{443, port::tcp}};
   record s{100, "bar", r};
   CHECK(r.size() == 5);
@@ -342,14 +330,12 @@ TEST(records)
 
 // An *invalid* value has neither a type nor data.
 // This is the default-constructed state.
-TEST(invalid_data)
-{
+TEST(invalid_data) {
   data d;
   CHECK(is<none>(d));
 }
 
-TEST(construction)
-{
+TEST(construction) {
   CHECK(is<none>(data{}));
   CHECK(is<boolean>(data{true}));
   CHECK(is<boolean>(data{false}));
@@ -370,41 +356,39 @@ TEST(construction)
   CHECK(is<record>(data{record{}}));
 }
 
-TEST(relational_operators)
-{
+TEST(relational_operators) {
   data d1;
   data d2;
   CHECK(d1 == d2);
-  CHECK(! (d1 < d2));
-  CHECK(! (d1 <= d2));
-  CHECK(! (d1 >= d2));
-  CHECK(! (d1 > d2));
+  CHECK(!(d1 < d2));
+  CHECK(!(d1 <= d2));
+  CHECK(!(d1 >= d2));
+  CHECK(!(d1 > d2));
 
   d2 = 42;
   CHECK(d1 != d2);
-  CHECK(! (d1 < d2));
-  CHECK(! (d1 <= d2));
-  CHECK(! (d1 >= d2));
-  CHECK(! (d1 > d2));
+  CHECK(!(d1 < d2));
+  CHECK(!(d1 <= d2));
+  CHECK(!(d1 >= d2));
+  CHECK(!(d1 > d2));
 
   d1 = 42;
   d2 = nil;
   CHECK(d1 != d2);
-  CHECK(! (d1 < d2));
-  CHECK(! (d1 <= d2));
-  CHECK(! (d1 >= d2));
-  CHECK(! (d1 > d2));
+  CHECK(!(d1 < d2));
+  CHECK(!(d1 <= d2));
+  CHECK(!(d1 >= d2));
+  CHECK(!(d1 > d2));
 
   d2 = 1377;
   CHECK(d1 != d2);
   CHECK(d1 < d2);
   CHECK(d1 <= d2);
-  CHECK(! (d1 >= d2));
-  CHECK(! (d1 > d2));
+  CHECK(!(d1 >= d2));
+  CHECK(!(d1 > d2));
 }
 
-TEST(predicate_evaluation)
-{
+TEST(predicate_evaluation) {
   data lhs{"foo"};
   data rhs{"foobar"};
   CHECK(data::evaluate(lhs, in, rhs));
@@ -417,19 +401,18 @@ TEST(predicate_evaluation)
   CHECK(data::evaluate(lhs, less_equal, rhs));
   CHECK(data::evaluate(lhs, less, rhs));
   CHECK(data::evaluate(lhs, not_equal, rhs));
-  CHECK(! data::evaluate(lhs, equal, rhs));
+  CHECK(!data::evaluate(lhs, equal, rhs));
 
   lhs = *to<address>("10.0.0.1");
   rhs = *to<subnet>("10.0.0.0/8");
   CHECK(data::evaluate(lhs, in, rhs));
 
   rhs = real{4.2};
-  CHECK(! data::evaluate(lhs, equal, rhs));
+  CHECK(!data::evaluate(lhs, equal, rhs));
   CHECK(data::evaluate(lhs, not_equal, rhs));
 }
 
-TEST(serialization)
-{
+TEST(serialization) {
   set s;
   s.emplace(port{80, port::tcp});
   s.emplace(port{53, port::udp});

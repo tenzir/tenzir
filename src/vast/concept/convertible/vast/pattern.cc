@@ -6,8 +6,7 @@
 
 namespace vast {
 
-bool convert(pattern const& p, json& j)
-{
+bool convert(pattern const& p, json& j) {
   j = to_string(p);
   return true;
 }

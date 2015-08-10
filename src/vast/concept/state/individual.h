@@ -8,11 +8,9 @@ namespace vast {
 class individual;
 
 template <>
-struct access::state<individual>
-{
+struct access::state<individual> {
   template <typename T, typename F>
-  static void call(T&& x, F f)
-  {
+  static void call(T&& x, F f) {
     f(x.id_);
   }
 };

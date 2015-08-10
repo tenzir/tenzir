@@ -6,17 +6,15 @@
 namespace vast {
 namespace exit {
 
-constexpr uint32_t done   = caf::exit_reason::user_defined;
-constexpr uint32_t stop   = caf::exit_reason::user_defined + 1;
-constexpr uint32_t error  = caf::exit_reason::user_defined + 2;
-constexpr uint32_t kill   = caf::exit_reason::user_defined + 3;
+constexpr uint32_t done = caf::exit_reason::user_defined;
+constexpr uint32_t stop = caf::exit_reason::user_defined + 1;
+constexpr uint32_t error = caf::exit_reason::user_defined + 2;
+constexpr uint32_t kill = caf::exit_reason::user_defined + 3;
 
 } // namespace exit
 
-inline char const* render_exit_reason(uint32_t reason)
-{
-  switch (reason)
-  {
+inline char const* render_exit_reason(uint32_t reason) {
+  switch (reason) {
     default:
       return "unknown";
     case exit::done:

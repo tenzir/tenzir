@@ -10,18 +10,15 @@
 namespace vast {
 
 template <>
-struct access::printer<port> : vast::printer<access::printer<port>>
-{
+struct access::printer<port> : vast::printer<access::printer<port>> {
   using attribute = port;
 
   template <typename Iterator>
-  bool print(Iterator& out, port const& p) const
-  {
+  bool print(Iterator& out, port const& p) const {
     using namespace printers;
-    if (! (u16.print(out, p.number_) && any.print(out, '/')))
+    if (!(u16.print(out, p.number_) && any.print(out, '/')))
       return false;
-    switch (p.type())
-    {
+    switch (p.type()) {
       default:
         return any.print(out, '?');
       case port::tcp:
@@ -35,8 +32,7 @@ struct access::printer<port> : vast::printer<access::printer<port>>
 };
 
 template <>
-struct printer_registry<port>
-{
+struct printer_registry<port> {
   using type = access::printer<port>;
 };
 

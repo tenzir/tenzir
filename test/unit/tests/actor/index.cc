@@ -14,8 +14,7 @@ using namespace vast;
 
 FIXTURE_SCOPE(fixture_scope, fixtures::simple_events)
 
-TEST(index)
-{
+TEST(index) {
   using bitstream_type = index::bitstream_type;
 
   MESSAGE("sending events to index");
@@ -36,8 +35,7 @@ TEST(index)
   actor task;
   self->send(idx, *expr, historical, self);
   self->receive(
-    [&](actor const& t)
-    {
+    [&](actor const& t) {
       REQUIRE(t != invalid_actor);
       self->monitor(t);
       task = t;
@@ -47,12 +45,10 @@ TEST(index)
   bool done = false;
   bitstream_type hits;
   self->do_receive(
-    [&](bitstream_type const& h)
-    {
+    [&](bitstream_type const& h) {
       hits |= h;
     },
-    [&](done_atom, time::extent, expression const& e)
-    {
+    [&](done_atom, time::extent, expression const& e) {
       CHECK(*expr == e);
       done = true;
     }
@@ -67,8 +63,7 @@ TEST(index)
   REQUIRE(expr);
   self->send(idx, *expr, continuous, self);
   self->receive(
-    [&](actor const& t)
-    {
+    [&](actor const& t) {
       REQUIRE(t != invalid_actor);
       self->monitor(t);
       task = t;

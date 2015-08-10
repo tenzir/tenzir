@@ -33,8 +33,7 @@ using stopwatch = std::chrono::steady_clock;
 using moment = stopwatch::time_point;
 using extent = stopwatch::duration;
 
-inline moment snapshot()
-{
+inline moment snapshot() {
   return stopwatch::now();
 }
 
@@ -48,8 +47,7 @@ class perdiod;
 point now();
 
 /// A time duration with nanosecond granularity.
-class duration : util::totally_ordered<duration>
-{
+class duration : util::totally_ordered<duration> {
   friend access;
   friend class point;
 
@@ -70,8 +68,7 @@ public:
   /// @param dur A `std::chrono::duration<Rep, Period>`.
   template <typename Rep, typename Period>
   duration(std::chrono::duration<Rep, Period> dur)
-    : duration_{std::chrono::duration_cast<duration_type>(dur).count()}
-  {
+    : duration_{std::chrono::duration_cast<duration_type>(dur).count()} {
   }
 
   // Arithmetic operators.
@@ -129,14 +126,12 @@ private:
 /// Constructs a second duration.
 /// @param f The number of fractional seconds.
 /// @returns A duration of *f* fractional seconds.
-inline duration fractional(double f)
-{
+inline duration fractional(double f) {
   return double_seconds{f};
 }
 
 /// An absolute point in time having UTC time zone.
-class point : util::totally_ordered<point>
-{
+class point : util::totally_ordered<point> {
   friend access;
 
 public:
@@ -151,12 +146,8 @@ public:
   static point from_tm(std::tm const& tm);
 
   /// Constructs a UTC time point.
-  static point utc(int year,
-                   int month = 0,
-                   int day = 0,
-                   int hour = 0,
-                   int min = 0,
-                   int sec = 0);
+  static point utc(int year, int month = 0, int day = 0, int hour = 0,
+                   int min = 0, int sec = 0);
 
   /// Constructs a time point with the UNIX epoch.
   point() = default;
@@ -164,8 +155,7 @@ public:
   /// Constructs a time point from a `std::chrono::time_point`.
   template <typename Clock, typename Duration>
   point(std::chrono::time_point<Clock, Duration> tp)
-    : time_point_{std::chrono::time_point_cast<duration_type>(tp)}
-  {
+    : time_point_{std::chrono::time_point_cast<duration_type>(tp)} {
   }
 
   /// Creates a time point from a duration.
@@ -197,12 +187,8 @@ public:
   /// @param months The months to to add/subtract.
   /// @param years The years to to add/subtract.
   /// @returns The relative time from now according to the unit specifications.
-  point delta(int secs = 0,
-              int mins = 0,
-              int hours = 0,
-              int days = 0,
-              int months = 0,
-              int years = 0);
+  point delta(int secs = 0, int mins = 0, int hours = 0, int days = 0,
+              int months = 0, int years = 0);
 
   /// Returns a duration representing the duration since the UNIX epoch.
   duration time_since_epoch() const;
@@ -241,7 +227,7 @@ time_t to_time_t(std::tm const& t);
 std::tm make_tm();
 
 /// Propagates underflowed and overflowed values up to the next higher unit.
-void propagate(std::tm &t);
+void propagate(std::tm& t);
 
 /// Parses a string into a `std::tm` structure.
 /// @param str The string to parse.

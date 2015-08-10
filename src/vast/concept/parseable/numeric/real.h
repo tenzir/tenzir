@@ -17,8 +17,7 @@ struct optional_dot {};
 } // namespace policy
 
 template <typename T, typename... Policies>
-struct real_parser : parser<real_parser<T, Policies...>>
-{
+struct real_parser : parser<real_parser<T, Policies...>> {
   using attribute = T;
   using policies =
     std::conditional_t<(sizeof...(Policies) > 0),
@@ -30,8 +29,7 @@ struct real_parser : parser<real_parser<T, Policies...>>
       || util::tl_find<policies, policy::optional_dot>::value == -1;
 
   template <typename Iterator>
-  static bool parse_dot(Iterator& f, Iterator const& l)
-  {
+  static bool parse_dot(Iterator& f, Iterator const& l) {
     if (f == l || *f != '.')
       return false;
     ++f;
@@ -39,33 +37,26 @@ struct real_parser : parser<real_parser<T, Policies...>>
   }
 
   template <typename Base, typename Exp>
-  static Base pow10(Exp exp)
-  {
+  static Base pow10(Exp exp) {
     return std::pow(Base{10}, exp);
   }
 
-  static void scale(int, unused_type) { }
+  static void scale(int, unused_type) {
+  }
 
-  static void scale(int exp, T& x)
-  {
-    if (exp >= 0)
-    {
+  static void scale(int exp, T& x) {
+    if (exp >= 0) {
       x *= pow10<T>(exp);
-    }
-    else if (exp < std::numeric_limits<T>::min_exponent10)
-    {
+    } else if (exp < std::numeric_limits<T>::min_exponent10) {
       x /= pow10<T>(-std::numeric_limits<T>::min_exponent10);
       x /= pow10<T>(-exp + std::numeric_limits<T>::min_exponent10);
-    }
-    else
-    {
+    } else {
       x /= pow10<T>(-exp);
     }
   }
 
   template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const
-  {
+  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
     if (f == l)
       return false;
     auto save = f;
@@ -79,8 +70,7 @@ struct real_parser : parser<real_parser<T, Policies...>>
     // ignore at this point. Future work...
     // Parse dot.
     auto got_dot = parse_dot(f, l);
-    if (! got_dot && (! got_num || require_dot))
-    {
+    if (!got_dot && (!got_num || require_dot)) {
       // If we require a dot but don't have it, we're out. We can neither
       // proceed if both dot and integral part are absent.
       f = save;
@@ -88,18 +78,14 @@ struct real_parser : parser<real_parser<T, Policies...>>
     }
     // Now go for the fractional part.
     auto frac_start = f;
-    if (integral_parser<uint64_t>::parse_pos(f, l, fractional))
-    {
+    if (integral_parser<uint64_t>::parse_pos(f, l, fractional)) {
       // Downscale the fractional part.
       int frac_digits = 0;
-      if (! std::is_same<Attribute, unused_type>{})
-      {
+      if (!std::is_same<Attribute, unused_type>{}) {
         frac_digits = static_cast<int>(std::distance(frac_start, f));
         scale(-frac_digits, fractional);
       }
-    }
-    else if (! got_num)
-    {
+    } else if (!got_num) {
       // We need an integral or fractional part (or both).
       f = save;
       return false;
@@ -114,8 +100,7 @@ struct real_parser : parser<real_parser<T, Policies...>>
 };
 
 template <typename T>
-struct parser_registry<T, std::enable_if_t<std::is_floating_point<T>::value>>
-{
+struct parser_registry<T, std::enable_if_t<std::is_floating_point<T>::value>> {
   using type = real_parser<T, policy::require_dot>;
 };
 

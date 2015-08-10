@@ -7,8 +7,7 @@
 namespace vast {
 
 /// An arithmetic operator.
-enum arithmetic_operator : uint8_t
-{
+enum arithmetic_operator : uint8_t {
   // Unary
   positive,
   negative,
@@ -25,8 +24,7 @@ enum arithmetic_operator : uint8_t
 };
 
 /// A (binary) relational operator.
-enum relational_operator : uint8_t
-{
+enum relational_operator : uint8_t {
   match,
   not_match,
   in,
@@ -42,12 +40,7 @@ enum relational_operator : uint8_t
 };
 
 /// A boolean operator taking on the values AND, OR, and NOT.
-enum boolean_operator : uint8_t
-{
-  logical_not,
-  logical_and,
-  logical_or
-};
+enum boolean_operator : uint8_t { logical_not, logical_and, logical_or };
 
 /// Negates a relational operator, i.e., creates the complementary operator.
 /// @param op The operator to negate.

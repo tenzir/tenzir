@@ -7,8 +7,7 @@
 namespace vast {
 namespace io {
 
-class file_input_device : public input_device
-{
+class file_input_device : public input_device {
 public:
   file_input_device(path const& filename);
   file_input_device(file::native_type handle, bool close_behavior);
@@ -16,15 +15,14 @@ public:
   file_input_device& operator=(file_input_device&&) = default;
 
   virtual bool read(void* data, size_t bytes, size_t* got) override;
-  virtual bool skip(size_t bytes, size_t *skipped) override;
+  virtual bool skip(size_t bytes, size_t* skipped) override;
 
 private:
   file file_;
 };
 
 /// An input stream that reads from a file.
-class file_input_stream : public input_stream
-{
+class file_input_stream : public input_stream {
 public:
   /// Constructs a file input stream from a filename.
   /// @param filename The path to the file to read.
@@ -54,8 +52,7 @@ private:
   buffered_input_stream buffered_stream_;
 };
 
-class file_output_device : public output_device
-{
+class file_output_device : public output_device {
 public:
   file_output_device(path const& filename);
   file_output_device(file::native_type handle, bool close_behavior);
@@ -69,8 +66,7 @@ private:
 };
 
 /// An output stream that writes to a file.
-class file_output_stream : public output_stream
-{
+class file_output_stream : public output_stream {
 public:
   /// Constructs a file output stream from a filename.
   /// @param filename The path to the file to write to.

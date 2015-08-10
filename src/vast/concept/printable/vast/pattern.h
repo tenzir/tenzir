@@ -10,24 +10,19 @@
 namespace vast {
 
 template <>
-struct access::printer<vast::pattern> 
-  : vast::printer<access::printer<vast::pattern>>
-{
+struct access::printer<vast::pattern>
+  : vast::printer<access::printer<vast::pattern>> {
   using attribute = pattern;
 
   template <typename Iterator>
-  bool print(Iterator& out, pattern const& p) const
-  {
+  bool print(Iterator& out, pattern const& p) const {
     using namespace printers;
-    return any.print(out, '/') 
-        && str.print(out, p.str_) 
-        && any.print(out, '/');
+    return any.print(out, '/') && str.print(out, p.str_) && any.print(out, '/');
   }
 };
 
 template <>
-struct printer_registry<pattern>
-{
+struct printer_registry<pattern> {
   using type = access::printer<pattern>;
 };
 

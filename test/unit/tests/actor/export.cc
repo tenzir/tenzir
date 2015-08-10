@@ -21,8 +21,7 @@ using namespace vast;
 
 FIXTURE_SCOPE(core_scope, fixtures::core)
 
-TEST(export)
-{
+TEST(export) {
   MESSAGE("inhaling a Bro SSL log");
   auto n = make_core();
   run_source(n, "bro", "-b", "10", "-r", m57_day11_18::ssl);
@@ -33,16 +32,14 @@ TEST(export)
   n = make_core();
   self->sync_send(n, store_atom::value, get_atom::value, actor_atom::value,
                   "archive").await(
-    [&](actor const& a, std::string const& fqn, std::string const& type)
-    {
+    [&](actor const& a, std::string const& fqn, std::string const& type) {
       CHECK(fqn == "archive@" + node_name);
       CHECK(type == "archive");
       REQUIRE(a != invalid_actor);
       self->send(a, event_id{112});
     }
   );
-  self->receive([&](chunk const& chk)
-  {
+  self->receive([&](chunk const& chk) {
     MESSAGE("checking chunk integrity");
     // The ssl.log has a total of 113 events and we use batches of 10. So
     // the last chunk has three events in [110, 112].
@@ -61,8 +58,7 @@ TEST(export)
   REQUIRE(pops);
   self->sync_send(n, store_atom::value, get_atom::value, actor_atom::value,
                   "index").await(
-    [&](actor const& a, std::string const& fqn, std::string const& type)
-    {
+    [&](actor const& a, std::string const& fqn, std::string const& type) {
       CHECK(fqn == "index@" + node_name);
       CHECK(type == "index");
       REQUIRE(a != invalid_actor);
@@ -70,35 +66,31 @@ TEST(export)
     }
   );
   MESSAGE("retrieving lookup task");
-  self->receive([&](actor const& task)
-  {
+  self->receive([&](actor const& task) {
     self->send(task, subscriber_atom::value, self);
   });
   MESSAGE("getting hits");
   auto done = false;
   self->do_receive(
-    [&](default_bitstream const& hits)
-    {
+    [&](default_bitstream const& hits) {
       CHECK(hits.count() > 0);
     },
-    [&](done_atom, time::extent, expression const& expr)
-    {
+    [&](done_atom, time::extent, expression const& expr) {
       done = true;
       CHECK(expr == *pops);
     },
-    [&](progress_atom, uint64_t remaining, uint64_t total)
-    {
+    [&](progress_atom, uint64_t remaining, uint64_t total) {
       // The task we receive from INDEX consists of 12 stages, because we
       // imported the ssl.log with 113 entries in batches of 10, which yields
       // 11 full partitions and 1 partial one of 3, i.e., 11 + 1 = 12.
       if (remaining == 0)
         CHECK(total == 12);
     },
-    others() >> [&]
-    {
+    others >> [&] {
       ERROR("got unexpected message from " << self->current_sender() <<
             ": " << to_string(self->current_message()));
-    }).until([&] { return done; });
+    }
+  ).until([&] { return done; });
 
   MESSAGE("performing index lookup via exporter");
   actor exp;
@@ -129,8 +121,7 @@ TEST(export)
   auto i = 0;
   done = false;
   self->do_receive(
-    [&](uuid const&, event const& e)
-    {
+    [&](uuid const&, event const& e) {
       ++i;
       // Verify contents of a few random events.
       if (e.id() == 3)
@@ -144,20 +135,16 @@ TEST(export)
       if (e.id() == 102)
         CHECK(get<record>(e)->at(1) == "mXRBhfuUqag");
     },
-    [&](uuid const&, progress_atom, double, uint64_t)
-    {
-      // nop
-    },
-    [&](uuid const&, done_atom, time::extent)
-    {
+    [&](uuid const&, progress_atom, double, uint64_t) { /* nop */ },
+    [&](uuid const&, done_atom, time::extent) {
       CHECK(i == 46);
       done = true;
     },
-    others() >> [&]
-    {
+    others >> [&] {
       ERROR("got unexpected message from " << self->current_sender() <<
             ": " << to_string(self->current_message()));
-    }).until([&] { return done; });
+    }
+  ).until([&] { return done; });
 
   self->send_exit(exp, exit::done);
   stop_core(n);
@@ -195,24 +182,19 @@ TEST(export)
   i = 0;
   done = false;
   self->do_receive(
-    [&](uuid const&, event const&)
-    {
+    [&](uuid const&, event const&) {
       ++i;
     },
-    [&](uuid const&, progress_atom, double, uint64_t)
-    {
-      // nop
-    },
-    [&](uuid const&, done_atom, time::extent)
-    {
+    [&](uuid const&, progress_atom, double, uint64_t) { /* nop */ },
+    [&](uuid const&, done_atom, time::extent) {
       CHECK(i == 15);
       done = true;
     },
-    others() >> [&]
-    {
+    others() >> [&] {
       ERROR("got unexpected message from " << self->current_sender() <<
             ": " << to_string(self->current_message()));
-    }).until([&done] { return done; });
+    }
+  ).until([&done] { return done; });
 
   self->send_exit(exp, exit::done);
   stop_core(n);

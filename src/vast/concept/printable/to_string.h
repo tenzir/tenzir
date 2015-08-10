@@ -15,8 +15,7 @@ auto to_string(From&& from, Opts&&... opts)
           std::back_insert_iterator<std::string>, std::decay_t<From>
         >{},
        std::string
-     >
-{
+     > {
   std::string str;
   print(std::back_inserter(str), from, std::forward<Opts>(opts)...);
   return str;

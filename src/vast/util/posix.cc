@@ -12,55 +12,45 @@
 namespace vast {
 namespace util {
 
-int unix_domain_socket::listen(std::string const& path)
-{
+int unix_domain_socket::listen(std::string const& path) {
   return detail::uds_listen(path);
 }
 
-unix_domain_socket unix_domain_socket::accept(std::string const& path)
-{
+unix_domain_socket unix_domain_socket::accept(std::string const& path) {
   auto server = detail::uds_listen(path);
   if (server != -1)
     return unix_domain_socket{detail::uds_accept(server)};
   return unix_domain_socket{};
 }
 
-unix_domain_socket unix_domain_socket::connect(std::string const& path)
-{
+unix_domain_socket unix_domain_socket::connect(std::string const& path) {
   return unix_domain_socket{detail::uds_connect(path)};
 }
 
-unix_domain_socket::unix_domain_socket(int fd)
-  : fd_{fd}
-{
+unix_domain_socket::unix_domain_socket(int fd) : fd_{fd} {
 }
 
-unix_domain_socket::operator bool() const
-{
+unix_domain_socket::operator bool() const {
   return fd_ != -1;
 }
 
-bool unix_domain_socket::send_fd(int fd)
-{
+bool unix_domain_socket::send_fd(int fd) {
   VAST_ASSERT(*this);
   return detail::uds_send_fd(fd_, fd);
 }
 
-int unix_domain_socket::recv_fd()
-{
+int unix_domain_socket::recv_fd() {
   VAST_ASSERT(*this);
   return detail::uds_recv_fd(fd_);
 }
 
-int unix_domain_socket::fd() const
-{
+int unix_domain_socket::fd() const {
   return fd_;
 }
 
 namespace {
 
-bool make_nonblocking(int fd, bool flag)
-{
+bool make_nonblocking(int fd, bool flag) {
   auto flags = ::fcntl(fd, F_GETFL, 0);
   if (flags == -1)
     return false;
@@ -70,27 +60,22 @@ bool make_nonblocking(int fd, bool flag)
 
 } // namespace <anonymous>
 
-bool make_nonblocking(int fd)
-{
+bool make_nonblocking(int fd) {
   return make_nonblocking(fd, true);
 }
 
-bool make_blocking(int fd)
-{
+bool make_blocking(int fd) {
   return make_nonblocking(fd, false);
 }
 
-bool poll(int fd, int usec)
-{
+bool poll(int fd, int usec) {
   fd_set rdset;
   FD_ZERO(&rdset);
   FD_SET(fd, &rdset);
   timeval timeout{0, usec};
   auto rc = ::select(fd + 1, &rdset, nullptr, nullptr, &timeout);
-  if (rc < 0)
-  {
-    switch (rc)
-    {
+  if (rc < 0) {
+    switch (rc) {
       default:
         throw std::logic_error("unhandled select() error");
       case EINTR:
@@ -101,25 +86,19 @@ bool poll(int fd, int usec)
   return FD_ISSET(fd, &rdset);
 }
 
-bool close(int fd)
-{
+bool close(int fd) {
   int result;
-  do
-  {
+  do {
     result = ::close(fd);
-  }
-  while (result < 0 && errno == EINTR);
+  } while (result < 0 && errno == EINTR);
   return result == 0;
 }
 
-bool read(int fd, void* buffer, size_t bytes, size_t* got)
-{
+bool read(int fd, void* buffer, size_t bytes, size_t* got) {
   ssize_t taken;
-  do
-  {
+  do {
     taken = ::read(fd, buffer, bytes);
-  }
-  while (taken < 0 && errno == EINTR);
+  } while (taken < 0 && errno == EINTR);
   if (taken <= 0) // EOF == 0, error == -1
     return false;
   if (got)
@@ -127,18 +106,14 @@ bool read(int fd, void* buffer, size_t bytes, size_t* got)
   return true;
 }
 
-bool write(int fd, void const* buffer, size_t bytes, size_t* put)
-{
+bool write(int fd, void const* buffer, size_t bytes, size_t* put) {
   auto total = size_t{0};
   auto buf = reinterpret_cast<uint8_t const*>(buffer);
-  while (total < bytes)
-  {
+  while (total < bytes) {
     ssize_t written;
-    do
-    {
+    do {
       written = ::write(fd, buf + total, bytes - total);
-    }
-    while (written < 0 && errno == EINTR);
+    } while (written < 0 && errno == EINTR);
     if (written <= 0)
       return false;
     total += static_cast<size_t>(written);
@@ -148,8 +123,7 @@ bool write(int fd, void const* buffer, size_t bytes, size_t* put)
   return true;
 }
 
-bool seek(int fd, size_t bytes)
-{
+bool seek(int fd, size_t bytes) {
   return ::lseek(fd, bytes, SEEK_CUR) != -1;
 }
 

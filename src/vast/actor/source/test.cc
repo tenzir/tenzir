@@ -13,26 +13,24 @@ namespace source {
 
 namespace {
 
-result<distribution> make_distribution(type const& t)
-{
+result<distribution> make_distribution(type const& t) {
   auto a = t.find_attribute(type::attribute::default_);
-  if (! a)
+  if (!a)
     return {};
   static auto num = parsers::real_opt_dot;
   static auto param_parser = +parsers::alpha >> '(' >> num >> ',' >> num >> ')';
   std::string name;
   double p0, p1;
   auto tie = std::tie(name, p0, p1);
-  if (! param_parser(a->value, tie))
+  if (!param_parser(a->value, tie))
     return error{"invalid distribution specification"};
-  if (name == "uniform")
-  {
+  if (name == "uniform") {
     if (is<type::integer>(t))
-      return {std::uniform_int_distribution<integer>{
-                static_cast<integer>(p0), static_cast<integer>(p1)}};
+      return {std::uniform_int_distribution<integer>{static_cast<integer>(p0),
+                                                     static_cast<integer>(p1)}};
     else if (is<type::boolean>(t) || is<type::count>(t) || is<type::string>(t))
-      return {std::uniform_int_distribution<count>{
-                static_cast<count>(p0), static_cast<count>(p1)}};
+      return {std::uniform_int_distribution<count>{static_cast<count>(p0),
+                                                   static_cast<count>(p1)}};
     else
       return {std::uniform_real_distribution<long double>{p0, p1}};
   }
@@ -43,42 +41,31 @@ result<distribution> make_distribution(type const& t)
   return error{"unknown distribution: ", name};
 }
 
-struct blueprint_factory
-{
-  blueprint_factory(test::blueprint& bp)
-    : blueprint_{bp}
-  {
+struct blueprint_factory {
+  blueprint_factory(test::blueprint& bp) : blueprint_{bp} {
   }
 
   template <typename T>
-  trial<void> operator()(T const& t)
-  {
+  trial<void> operator()(T const& t) {
     auto dist = make_distribution(t);
-    if (dist)
-    {
+    if (dist) {
       blueprint_.data.push_back(type{t}.make());
       blueprint_.dists.push_back(std::move(*dist));
       return nothing;
     }
-
-    if (dist.empty())
-    {
+    if (dist.empty()) {
       blueprint_.data.push_back(nil);
       return nothing;
     }
-
     return dist.error();
   }
 
-  trial<void> operator()(type::record const& r)
-  {
-    for (auto& f : r.fields())
-    {
+  trial<void> operator()(type::record const& r) {
+    for (auto& f : r.fields()) {
       auto okay = visit(*this, f.type);
-      if (! okay)
+      if (!okay)
         return okay;
     }
-
     return nothing;
   }
 
@@ -86,16 +73,12 @@ struct blueprint_factory
 };
 
 template <typename RNG>
-struct sampler
-{
-  sampler(RNG& gen)
-    : gen_{gen}
-  {
+struct sampler {
+  sampler(RNG& gen) : gen_{gen} {
   }
 
   template <typename D>
-  long double operator()(D& dist)
-  {
+  long double operator()(D& dist) {
     return static_cast<long double>(dist(gen_));
   }
 
@@ -105,35 +88,29 @@ struct sampler
 // Randomizes data according to a list of distributions and a source of
 // randomness.
 template <typename RNG>
-struct randomizer
-{
+struct randomizer {
   randomizer(std::vector<distribution>& dists, RNG& gen)
-    : dists_{dists},
-      gen_{gen}
-  {
+    : dists_{dists}, gen_{gen} {
   }
 
   template <typename T>
   auto operator()(T&)
     -> util::disable_if_t<
          std::is_same<T, integer>::value
-         || std::is_same<T, count>::value
-         || std::is_same<T, real>::value
-         || std::is_same<T, time::point>::value
-         || std::is_same<T, time::duration>::value
-       >
-  {
+           || std::is_same<T, count>::value
+           || std::is_same<T, real>::value
+           || std::is_same<T, time::point>::value
+           || std::is_same<T, time::duration>::value
+        > {
     // For types we don't know how to randomize, we just crank the wheel.
     sample();
   }
 
-  void operator()(none)
-  {
+  void operator()(none) {
     // Do nothing.
   }
 
-  void operator()(boolean& b)
-  {
+  void operator()(boolean& b) {
     lcg gen{static_cast<lcg::result_type>(sample())};
     std::uniform_int_distribution<count> unif{0, 1};
     b = unif(gen);
@@ -143,10 +120,9 @@ struct randomizer
   auto operator()(T& x)
     -> std::enable_if_t<
          std::is_same<T, integer>::value
-         || std::is_same<T, count>::value
-         || std::is_same<T, real>::value
-       >
-  {
+           || std::is_same<T, count>::value
+           || std::is_same<T, real>::value
+        > {
     x = static_cast<T>(sample());
   }
 
@@ -154,62 +130,52 @@ struct randomizer
   auto operator()(T& x)
     -> std::enable_if_t<
          std::is_same<T, time::point>::value
-         || std::is_same<T, time::duration>::value
-       >
-  {
+           || std::is_same<T, time::duration>::value
+       > {
     x += time::fractional(sample());
   }
 
-  void operator()(std::string& str)
-  {
+  void operator()(std::string& str) {
     lcg gen{static_cast<lcg::result_type>(sample())};
     std::uniform_int_distribution<size_t> unif_size{0, 256};
     std::uniform_int_distribution<char> unif_char{32, 126}; // Printable ASCII
-
     str.resize(unif_size(gen));
     for (auto& c : str)
       c = unif_char(gen);
   }
 
-  void operator()(address& addr)
-  {
+  void operator()(address& addr) {
     // We hash the generated sample into a 128-bit digest to spread out the
     // bits over the entire domain of an IPv6 address.
     auto x = sample();
     uint32_t bytes[4];
     util::detail::murmur3<128>(&x, sizeof(x), 0, bytes);
-
     // P[ip == v6] = 0.5
     std::uniform_int_distribution<uint8_t> unif{0, 1};
     auto version = unif(gen_) ? address::ipv4 : address::ipv6;
     addr = {bytes, version, address::network};
   }
 
-  void operator()(subnet& sn)
-  {
+  void operator()(subnet& sn) {
     address addr;
     (*this)(addr);
-
     std::uniform_int_distribution<uint8_t> unif{0, 128};
     sn = {std::move(addr), unif(gen_)};
   }
 
-  void operator()(port& p)
-  {
+  void operator()(port& p) {
     using port_type = std::underlying_type_t<port::port_type>;
     std::uniform_int_distribution<port_type> unif{0, 3};
     p.number(static_cast<port::number_type>(sample()));
     p.type(static_cast<port::port_type>(unif(gen_)));
   }
 
-  void operator()(record& r)
-  {
+  void operator()(record& r) {
     for (auto& d : r)
       visit(*this, d);
   }
 
-  auto sample()
-  {
+  auto sample() {
     return visit(sampler<RNG>{gen_}, dists_[i++]);
   }
 
@@ -224,8 +190,7 @@ test::test(event_id id, uint64_t events)
   : base<test>{"test-source"},
     id_{id},
     events_{events},
-    generator_{std::random_device{}()}
-{
+    generator_{std::random_device{}()} {
   VAST_ASSERT(events_ > 0);
   static auto builtin_schema = R"schema(
     type test = record
@@ -247,44 +212,37 @@ test::test(event_id id, uint64_t events)
   set(*t);
 }
 
-schema test::sniff()
-{
+schema test::sniff() {
   return schema_;
 }
 
-void test::set(schema const& sch)
-{
-  VAST_ASSERT(! sch.empty());
+void test::set(schema const& sch) {
+  VAST_ASSERT(!sch.empty());
   schema_ = sch;
   next_ = schema_.begin();
-  for (auto& t : schema_)
-  {
+  for (auto& t : schema_) {
     blueprint bp;
     auto attempt = visit(blueprint_factory{bp}, t);
-    if (! attempt)
-    {
+    if (!attempt) {
       VAST_ERROR(this, "failed to generate blueprint:", attempt.error());
       quit(exit::error);
       return;
     }
-    if (auto r = get<type::record>(t))
-    {
+    if (auto r = get<type::record>(t)) {
       auto u = bp.data.unflatten(*r);
-      if (! u)
-      {
+      if (!u) {
         VAST_ERROR(this, "failed to unflatten record:", u.error());
         quit(exit::error);
         return;
       }
       bp.data = std::move(*u);
     }
-    VAST_ASSERT(! bp.data.empty());
+    VAST_ASSERT(!bp.data.empty());
     blueprints_[t] = std::move(bp);
   }
 }
 
-result<event> test::extract()
-{
+result<event> test::extract() {
   VAST_ASSERT(next_ != schema_.end());
   // Generate random data.
   auto& bp = blueprints_[*next_];

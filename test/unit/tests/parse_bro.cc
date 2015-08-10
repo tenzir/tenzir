@@ -12,15 +12,13 @@ using namespace std::string_literals;
 namespace {
 
 template <typename Attribute>
-bool bro_parse(type const& t, std::string const& s, Attribute& attr)
-{
+bool bro_parse(type const& t, std::string const& s, Attribute& attr) {
   return detail::make_bro_parser<std::string::const_iterator>(t)(s, attr);
 }
 
 } // namspace <anonymous>
 
-TEST(bro data)
-{
+TEST(bro data) {
   data d;
   CHECK(bro_parse(type::boolean{}, "T", d));
   CHECK(d == true);

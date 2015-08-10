@@ -12,20 +12,17 @@ namespace vast {
 //
 
 template <typename Serializer>
-void serialize(Serializer& sink, std::string const& str)
-{
+void serialize(Serializer& sink, std::string const& str) {
   sink.begin_sequence(str.size());
-  if (! str.empty())
+  if (!str.empty())
     sink.write(str.data(), str.size());
   sink.end_sequence();
 }
 
 template <typename Deserializer>
-void deserialize(Deserializer& source, std::string& str)
-{
+void deserialize(Deserializer& source, std::string& str) {
   auto size = source.begin_sequence();
-  if (size > 0)
-  {
+  if (size > 0) {
     str.resize(size);
     source.read(const_cast<std::string::value_type*>(str.data()), size);
   }
@@ -37,8 +34,7 @@ void deserialize(Deserializer& source, std::string& str)
 //
 
 template <typename Serializer>
-void serialize(Serializer& sink, char const* str)
-{
+void serialize(Serializer& sink, char const* str) {
   size_t n = 0;
   for (;;)
     if (str[n] != '\0')

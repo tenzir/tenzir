@@ -6,8 +6,7 @@
 
 using namespace vast;
 
-TEST(block)
-{
+TEST(block) {
   block blk;
   // Upon destruction, the writer's IO streams flush their state into the
   // referenced block.
@@ -20,8 +19,7 @@ TEST(block)
   }
   MESSAGE("reading block");
   block::reader r{blk};
-  for (size_t i = 0; i < 1e3; ++i)
-  {
+  for (size_t i = 0; i < 1e3; ++i) {
     size_t j;
     CHECK(r.read(j));
     CHECK(j == i);

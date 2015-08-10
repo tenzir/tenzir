@@ -14,8 +14,7 @@ namespace io {
 
 /// Wraps an input stream and offers a variety of decoding schemes to read from
 /// the underlying data.
-class coded_input_stream
-{
+class coded_input_stream {
   coded_input_stream(coded_input_stream const&) = delete;
   coded_input_stream& operator=(coded_input_stream) = delete;
 
@@ -49,12 +48,9 @@ public:
   /// @returns `true` if reading *x* succeeded.
   /// @pre *x* must point to valid instance of type *T*.
   template <typename T>
-  std::enable_if_t<std::is_arithmetic<T>::value, bool>
-  read(void* x)
-  {
+  std::enable_if_t<std::is_arithmetic<T>::value, bool> read(void* x) {
     auto val = reinterpret_cast<T*>(x);
-    if (buffer_.size() >= sizeof(T))
-    {
+    if (buffer_.size() >= sizeof(T)) {
       auto buf = buffer_.cast<T const>();
       *val = util::byte_swap<network_endian, host_endian>(*buf);
       buffer_.advance(sizeof(T));
@@ -70,12 +66,9 @@ public:
   /// @param x The value to read.
   /// @returns `true` if reading *x* succeeded.
   template <typename T>
-  std::enable_if_t<std::is_integral<T>::value, bool>
-  read_varbyte(T* x)
-  {
+  std::enable_if_t<std::is_integral<T>::value, bool> read_varbyte(T* x) {
     size_t n = 0;
-    if (buffer_.size() >= util::varbyte::max_size<T>())
-    {
+    if (buffer_.size() >= util::varbyte::max_size<T>()) {
       n = util::varbyte::decode(buffer_.get(), x);
       buffer_.advance(n);
       return true;
@@ -83,19 +76,17 @@ public:
 
     *x = n = 0;
     uint8_t low7;
-    do
-    {
+    do {
       if (n == util::varbyte::max_size<T>())
         return false;
       while (buffer_.size() == 0)
-        if (! refresh())
+        if (!refresh())
           return false;
       low7 = *buffer_.get();
       *x |= (low7 & 0x7F) << (7 * n);
       buffer_.advance(1);
       ++n;
-    }
-    while (low7 & 0x80);
+    } while (low7 & 0x80);
     return true;
   }
 
@@ -115,8 +106,7 @@ private:
 
 /// Wraps an output stream and offers a variety of encoding schemes to write to
 /// the underlying data.
-class coded_output_stream
-{
+class coded_output_stream {
   coded_output_stream(coded_output_stream const&) = delete;
   coded_output_stream& operator=(coded_output_stream) = delete;
 
@@ -151,13 +141,10 @@ public:
   /// @returns The number of bytes written.
   /// @pre *x* must point to an instance of type *T*.
   template <typename T>
-  std::enable_if_t<std::is_arithmetic<T>::value, size_t>
-  write(void const* x)
-  {
+  std::enable_if_t<std::is_arithmetic<T>::value, size_t> write(void const* x) {
     auto ptr = reinterpret_cast<T const*>(x);
     T val = util::byte_swap<host_endian, network_endian>(*ptr);
-    if (buffer_.size() < sizeof(T))
-    {
+    if (buffer_.size() < sizeof(T)) {
       auto n = write_raw(&val, sizeof(T));
       return n;
     }
@@ -173,12 +160,10 @@ public:
   /// @returns The number of bytes written.
   template <typename T>
   std::enable_if_t<std::is_integral<T>::value, size_t>
-  write_varbyte(T const* x)
-  {
+  write_varbyte(T const* x) {
     size_t n;
-    if (buffer_.size() >= util::varbyte::max_size<T>() ||
-        buffer_.size() >= util::varbyte::size(*x))
-    {
+    if (buffer_.size() >= util::varbyte::max_size<T>()
+        || buffer_.size() >= util::varbyte::size(*x)) {
       n = util::varbyte::encode(*x, buffer_.get());
       VAST_ASSERT(n == util::varbyte::size(*x));
       buffer_.advance(n);

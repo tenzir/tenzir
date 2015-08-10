@@ -16,11 +16,9 @@ namespace parser {
 namespace qi = boost::spirit::qi;
 
 template <typename Iterator>
-struct schema : qi::grammar<Iterator, ast::schema::schema(), skipper<Iterator>>
-{
-  schema(error_handler<Iterator>& on_error)
-    : schema::base_type(schema_)
-  {
+struct schema
+  : qi::grammar<Iterator, ast::schema::schema(), skipper<Iterator>> {
+  schema(error_handler<Iterator>& on_error) : schema::base_type(schema_) {
     using qi::unused_type;
     using boost::phoenix::at_c;
     using boost::phoenix::begin;
@@ -189,12 +187,10 @@ struct schema : qi::grammar<Iterator, ast::schema::schema(), skipper<Iterator>>
 
 } // namespace parser
 
-inline std::vector<type::attribute> make_attrs(
-    std::vector<ast::schema::attribute> const& attrs)
-{
+inline std::vector<type::attribute>
+make_attrs(std::vector<ast::schema::attribute> const& attrs) {
   std::vector<type::attribute> r;
-  for (auto& a : attrs)
-  {
+  for (auto& a : attrs) {
     auto key = type::attribute::invalid;
     if (a.key == "skip")
       key = type::attribute::skip;
@@ -208,29 +204,24 @@ inline std::vector<type::attribute> make_attrs(
   return r;
 }
 
-class type_factory
-{
+class type_factory {
 public:
   using result_type = trial<type>;
 
-  type_factory(vast::schema const& s, std::vector<ast::schema::attribute> const& as)
-    : schema_{s},
-      attrs_{make_attrs(as)}
-  {
+  type_factory(vast::schema const& s,
+               std::vector<ast::schema::attribute> const& as)
+    : schema_{s}, attrs_{make_attrs(as)} {
   }
 
-  trial<type> operator()(std::string const& type_name) const
-  {
+  trial<type> operator()(std::string const& type_name) const {
     if (auto x = schema_.find_type(type_name))
       return *x;
     else
       return error{"unknown type: ", type_name};
   }
 
-  trial<type> operator()(ast::schema::basic_type bt) const
-  {
-    switch (bt)
-    {
+  trial<type> operator()(ast::schema::basic_type bt) const {
+    switch (bt) {
       default:
         return error{"missing type implementation"};
       case ast::schema::bool_type:
@@ -258,45 +249,39 @@ public:
     }
   }
 
-  trial<type> operator()(ast::schema::enum_type const& t) const
-  {
+  trial<type> operator()(ast::schema::enum_type const& t) const {
     return {type::enumeration{t.fields, attrs_}};
   }
 
-  trial<type> operator()(ast::schema::vector_type const& t) const
-  {
+  trial<type> operator()(ast::schema::vector_type const& t) const {
     auto elem = make_type(t.element_type);
-    if (! elem)
+    if (!elem)
       return elem;
     return {type::vector{std::move(*elem), attrs_}};
   }
 
-  trial<type> operator()(ast::schema::set_type const& t) const
-  {
+  trial<type> operator()(ast::schema::set_type const& t) const {
     auto elem = make_type(t.element_type);
-    if (! elem)
+    if (!elem)
       return elem;
     return {type::set{std::move(*elem), attrs_}};
   }
 
-  trial<type> operator()(ast::schema::table_type const& t) const
-  {
+  trial<type> operator()(ast::schema::table_type const& t) const {
     auto k = make_type(t.key_type);
-    if (! k)
+    if (!k)
       return k;
     auto v = make_type(t.value_type);
-    if (! v)
+    if (!v)
       return v;
     return {type::table{std::move(*k), std::move(*v), attrs_}};
   }
 
-  trial<type> operator()(ast::schema::record_type const& t) const
-  {
+  trial<type> operator()(ast::schema::record_type const& t) const {
     std::vector<type::record::field> fields;
-    for (auto& arg : t.args)
-    {
+    for (auto& arg : t.args) {
       auto arg_type = make_type(arg.type);
-      if (! arg_type)
+      if (!arg_type)
         return arg_type;
       fields.push_back({arg.name, std::move(*arg_type)});
     }
@@ -304,8 +289,7 @@ public:
     return {type::record{std::move(fields), attrs_}};
   }
 
-  trial<type> make_type(ast::schema::type const& t) const
-  {
+  trial<type> make_type(ast::schema::type const& t) const {
     return boost::apply_visitor(type_factory{schema_, t.attrs}, t.info);
   }
 
@@ -314,42 +298,38 @@ private:
   std::vector<type::attribute> attrs_;
 };
 
-struct schema_parser : vast::parser<schema_parser>
-{
+struct schema_parser : vast::parser<schema_parser> {
   using attribute = vast::schema;
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, vast::schema& sch) const
-  {
+  bool parse(Iterator& f, Iterator const& l, vast::schema& sch) const {
     std::string err;
     detail::parser::error_handler<Iterator> on_error{f, l, err};
     detail::parser::schema<Iterator> grammar{on_error};
     detail::parser::skipper<Iterator> skipper;
     ast::schema::schema ast;
-    if (! phrase_parse(f, l, grammar, skipper, ast))
+    if (!phrase_parse(f, l, grammar, skipper, ast))
       return false;
     sch.clear();
-    for (auto& type_decl : ast)
-    {
+    for (auto& type_decl : ast) {
       // If we have a top-level identifier, we're dealing with a type alias.
       // Everywhere else (e.g., inside records or table types), and identifier
       // will be resolved to the corresponding type.
-      if (auto id = boost::get<std::string>(&type_decl.type.info))
-      {
+      if (auto id = boost::get<std::string>(&type_decl.type.info)) {
         auto t = sch.find_type(*id);
-        if (! t)
+        if (!t)
           return false;
         auto a = type::alias{*t, make_attrs(type_decl.type.attrs)};
         a.name(type_decl.name);
-        if (! sch.add(std::move(a)))
+        if (!sch.add(std::move(a)))
           return false;
       }
-      auto t = boost::apply_visitor(
-          type_factory{sch, type_decl.type.attrs}, type_decl.type.info);
-      if (! t)
+      auto t = boost::apply_visitor(type_factory{sch, type_decl.type.attrs},
+                                    type_decl.type.info);
+      if (!t)
         return false;
       t->name(type_decl.name);
-      if (! sch.add(std::move(*t)))
+      if (!sch.add(std::move(*t)))
         return false;
     }
     return true;

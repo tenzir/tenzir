@@ -1,7 +1,6 @@
 #ifndef VAST_UTIL_TERMINAL_H
 #define VAST_UTIL_TERMINAL_H
 
-
 namespace vast {
 namespace util {
 
@@ -10,8 +9,7 @@ namespace util {
 namespace terminal {
 
 /// RAII helper for scope-wise terminal unbuffering.
-struct unbufferer
-{
+struct unbufferer {
   unbufferer();
   ~unbufferer();
 };

@@ -16,8 +16,7 @@ namespace vast {
 
 /// Receives index hits, looks up the corresponding chunks in the archive, and
 /// filters out results which it then sends to a sink.
-struct exporter : default_actor
-{
+struct exporter : default_actor {
   using bitstream_type = decltype(chunk::meta_data::ids);
 
   /// Spawns an EXPORTER.

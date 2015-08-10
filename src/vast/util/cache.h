@@ -41,16 +41,14 @@ struct cache_policy
 namespace detail {
 
 template <typename T>
-class list_eviction_policy
-{
+class list_eviction_policy {
   using tracker = std::list<T>;
 
 public:
   using iterator = typename tracker::iterator;
   using const_iterator = typename tracker::const_iterator;
 
-  size_t erase(T const& key)
-  {
+  size_t erase(T const& key) {
     auto i = std::find(tracker_.begin(), tracker_.end(), key);
     if (i == tracker_.end())
       return 0;
@@ -58,21 +56,18 @@ public:
     return 1;
   }
 
-  T evict()
-  {
-    VAST_ASSERT(! tracker_.empty());
+  T evict() {
+    VAST_ASSERT(!tracker_.empty());
     T victim{std::move(tracker_.front())};
     tracker_.pop_front();
     return victim;
   }
 
-  const_iterator begin() const
-  {
+  const_iterator begin() const {
     return tracker_.begin();
   }
 
-  const_iterator end() const
-  {
+  const_iterator end() const {
     return tracker_.end();
   }
 
@@ -84,38 +79,32 @@ protected:
 
 /// A *least recently used* (LRU) cache eviction policy.
 template <typename T>
-class lru : public detail::list_eviction_policy<T>
-{
+class lru : public detail::list_eviction_policy<T> {
 public:
   using typename detail::list_eviction_policy<T>::iterator;
   using typename detail::list_eviction_policy<T>::const_iterator;
 
-  void access(iterator i)
-  {
+  void access(iterator i) {
     this->tracker_.splice(this->tracker_.end(), this->tracker_, i);
   }
 
-  iterator insert(T key)
-  {
+  iterator insert(T key) {
     return this->tracker_.insert(this->tracker_.end(), std::move(key));
   }
 };
 
 /// A *most recently used* (MRU) cache eviction policy.
 template <typename T>
-class mru : public detail::list_eviction_policy<T>
-{
+class mru : public detail::list_eviction_policy<T> {
 public:
   using typename detail::list_eviction_policy<T>::iterator;
   using typename detail::list_eviction_policy<T>::const_iterator;
 
-  void access(iterator i)
-  {
+  void access(iterator i) {
     this->tracker_.splice(this->tracker_.begin(), this->tracker_, i);
   }
 
-  iterator insert(T key)
-  {
+  iterator insert(T key) {
     return this->tracker_.insert(this->tracker_.begin(), std::move(key));
   }
 };
@@ -126,8 +115,7 @@ template <
   typename Value,
   template <typename> class Policy = lru
 >
-class cache
-{
+class cache {
 public:
   using key_type = Key;
   using mapped_type = Value;
@@ -148,29 +136,23 @@ public:
        std::forward_iterator_tag,
        std::pair<key_type const&, mapped_type const&>,
        std::pair<key_type const&, mapped_type const&>
-     >
-  {
+     > {
     friend cache;
     friend iterator_access;
 
-    const_iterator(cache const* c, bool end)
-      : cache_{c}
-    {
+    const_iterator(cache const* c, bool end) : cache_{c} {
       i_ = end ? cache_->policy_.end() : cache_->policy_.begin();
     }
 
-    bool equals(const_iterator const& other) const
-    {
+    bool equals(const_iterator const& other) const {
       return i_ == other.i_;
     }
 
-    void increment()
-    {
+    void increment() {
       ++i_;
     }
 
-    std::pair<key_type const&, mapped_type const&> dereference() const
-    {
+    std::pair<key_type const&, mapped_type const&> dereference() const {
       auto i = cache_->cache_.find(*i_);
       return std::make_pair(i->first, i->second.first);
     }
@@ -182,16 +164,13 @@ public:
   /// Constructs an LRU cache with a maximum number of elements.
   /// @param capacity The maximum number of elements in the cache.
   /// @pre `capacity > 0`
-  cache(size_t capacity = 100)
-    : capacity_{capacity}
-  {
+  cache(size_t capacity = 100) : capacity_{capacity} {
     VAST_ASSERT(capacity_ > 0);
   }
 
   /// Sets a callback for elements to be evicted.
   /// @param fun The function to invoke with the element being evicted.
-  void on_evict(evict_callback fun)
-  {
+  void on_evict(evict_callback fun) {
     on_evict_ = fun;
   }
 
@@ -199,8 +178,7 @@ public:
   /// the function default-constructs a value of `mapped_type`.
   /// @param key The key to lookup.
   /// @returns The value corresponding to *key*.
-  mapped_type& operator[](key_type const& key)
-  {
+  mapped_type& operator[](key_type const& key) {
     auto i = find(key);
     return i == cache_.end() ? *insert(key, {}).first : i->second.first;
   }
@@ -210,8 +188,7 @@ public:
   /// accessed.
   /// @param key The key to lookup.
   /// @returns An iterator for *key* or the end iterator if *key* is not hot.
-  mapped_type* lookup(key_type const& key)
-  {
+  mapped_type* lookup(key_type const& key) {
     auto i = find(key);
     return i == cache_.end() ? nullptr : &i->second.first;
   }
@@ -220,8 +197,7 @@ public:
   /// eviction policy.
   /// @param key The key to lookup.
   /// @returns `true` iff *key* exists in the cache.
-  bool contains(key_type const& key) const
-  {
+  bool contains(key_type const& key) const {
     return cache_.find(key) != cache_.end();
   }
 
@@ -231,8 +207,7 @@ public:
   /// @returns An pair of an iterator and boolean flag. If the flag is `true`,
   ///          the iterator points to *value*. If the flag is `false`, the
   ///          iterator points to the existing value for *key*.
-  std::pair<mapped_type*, bool> insert(key_type key, mapped_type value)
-  {
+  std::pair<mapped_type*, bool> insert(key_type key, mapped_type value) {
     auto i = find(key);
     if (i != cache_.end())
       return {&i->second.first, false};
@@ -246,8 +221,7 @@ public:
   /// Removes an entry for a given key without invoking the eviction callback.
   /// @param key The key to remove.
   /// @returns The number of entries removed.
-  size_t erase(key_type const& key)
-  {
+  size_t erase(key_type const& key) {
     auto i = cache_.find(key);
     if (i == cache_.end())
       return 0;
@@ -258,8 +232,7 @@ public:
 
   /// Retrieves the maximum number elements the cache can hold.
   /// @returns The cache's capacity.
-  size_t capacity() const
-  {
+  size_t capacity() const {
     return capacity_;
   }
 
@@ -267,8 +240,7 @@ public:
   /// smaller than the previous one.
   /// @param c the new capacity.
   /// @pre `c > 0`
-  void capacity(size_t c)
-  {
+  void capacity(size_t c) {
     VAST_ASSERT(c > 0);
     auto victims = std::min(cache_.size(), capacity_ - c);
     for (size_t i = 0; i < victims; ++i)
@@ -278,46 +250,39 @@ public:
 
   /// Retrieves the current number of elements in the cache.
   /// @returns The number of elements in the cache.
-  size_t size() const
-  {
+  size_t size() const {
     return cache_.size();
   }
 
   /// Checks whether the cache is empty.
   /// @returns `true` iff the cache holds no elements.
-  bool empty() const
-  {
+  bool empty() const {
     return cache_.empty();
   }
 
   /// Removes all elements from the cache.
-  void clear()
-  {
+  void clear() {
     policy_ = {};
     cache_.clear();
   }
 
-  const_iterator begin() const
-  {
+  const_iterator begin() const {
     return const_iterator{this, false};
   }
 
-  const_iterator end() const
-  {
+  const_iterator end() const {
     return const_iterator{this, true};
   }
 
 private:
-  typename cache_map::iterator find(key_type const& key)
-  {
+  typename cache_map::iterator find(key_type const& key) {
     auto i = cache_.find(key);
     if (i != cache_.end())
       policy_.access(i->second.second);
     return i;
   }
 
-  void evict()
-  {
+  void evict() {
     auto i = cache_.find(policy_.evict());
     VAST_ASSERT(i != cache_.end());
     if (on_evict_)

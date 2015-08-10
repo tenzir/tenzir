@@ -14,8 +14,7 @@ using namespace vast;
 
 FIXTURE_SCOPE(fixture_scope, fixtures::simple_events)
 
-TEST(partition)
-{
+TEST(partition) {
   using bitstream_type = partition::bitstream_type;
 
   MESSAGE("sending events to partition");
@@ -42,13 +41,11 @@ TEST(partition)
   bool done = false;
   bitstream_type hits;
   self->do_receive(
-    [&](expression const& e, bitstream_type const& h, historical_atom)
-    {
+    [&](expression const& e, bitstream_type const& h, historical_atom) {
       CHECK(*expr == e);
       hits |= h;
     },
-    [&](done_atom, time::moment, expression const& e)
-    {
+    [&](done_atom, time::moment, expression const& e) {
       CHECK(*expr == e);
       done = true;
     }
@@ -67,8 +64,7 @@ TEST(partition)
 
   MESSAGE("getting continuous hits");
   self->receive(
-    [&](expression const& e, bitstream_type const& hits, continuous_atom)
-    {
+    [&](expression const& e, bitstream_type const& hits, continuous_atom) {
       CHECK(*expr == e);
       // (0..1024)
       //   .select{|x| x % 2 == 0}

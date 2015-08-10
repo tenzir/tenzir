@@ -8,8 +8,7 @@
 namespace vast {
 
 template <>
-struct parser_registry<schema>
-{
+struct parser_registry<schema> {
   using type = detail::schema_parser;
 };
 

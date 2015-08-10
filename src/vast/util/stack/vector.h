@@ -17,8 +17,7 @@ namespace stack {
 template <size_t N, typename T>
 struct vector 
   : detail::container_base<N, T>,
-    std::vector<T, std::scoped_allocator_adaptor<allocator<T, N>>>
-{
+    std::vector<T, std::scoped_allocator_adaptor<allocator<T, N>>> {
   using vector_type =
     std::vector<T, std::scoped_allocator_adaptor<allocator<T, N>>>;
 
@@ -27,45 +26,34 @@ struct vector
 
   using arena_type = typename allocator_type::arena_type;
 
-  vector()
-    : vector_type(this->allocator)
-  {
+  vector() : vector_type(this->allocator) {
   }
 
-  vector(size_t n, T const& x)
-    : vector_type(n, x, this->allocator)
-  {
+  vector(size_t n, T const& x) : vector_type(n, x, this->allocator) {
   }
 
-  explicit vector(size_t n)
-    : vector_type(n, this->allocator)
-  {
+  explicit vector(size_t n) : vector_type(n, this->allocator) {
   }
 
   vector(std::initializer_list<T> init)
-    : vector_type(std::move(init), this->allocator)
-  {
+    : vector_type(std::move(init), this->allocator) {
   }
 
   template <class Iterator>
   vector(Iterator first, Iterator last)
-    : vector_type(first, last, this->allocator)
-  {
+    : vector_type(first, last, this->allocator) {
   }
 
   vector(vector const& other)
     : detail::container_base<N, T>::container_base(other),
-      vector_type(other, this->allocator)
-  {
+      vector_type(other, this->allocator) {
   }
 
   vector(vector&& other) noexcept
-    : vector_type(std::move(other), this->allocator)
-  {
+    : vector_type(std::move(other), this->allocator) {
   }
 
-  vector& operator=(vector const& other)
-  {
+  vector& operator=(vector const& other) {
     // FIXME: this is probably not optimal
     this->assign(other.begin(), other.end());
     return *this;

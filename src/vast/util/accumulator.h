@@ -34,56 +34,47 @@ namespace bacc = boost::accumulators;
 /// estimators with constant space, including *sum*, *min*, *max*, *mean*,
 /// *median*, and *variance*.
 template <typename T = double>
-class accumulator
-{
+class accumulator {
   static_assert(std::is_arithmetic<T>::value,
                 "accumulator needs arithmetic type");
+
 public:
   accumulator() = default;
 
-  void add(T x)
-  {
+  void add(T x) {
     accumulator_(x);
   }
 
-  T count() const
-  {
+  T count() const {
     return bacc::count(accumulator_);
   }
 
-  T sum() const
-  {
+  T sum() const {
     return bacc::sum(accumulator_);
   }
 
-  T min() const
-  {
+  T min() const {
     return bacc::min(accumulator_);
   }
 
-  T max() const
-  {
+  T max() const {
     return bacc::max(accumulator_);
   }
 
-  T mean() const
-  {
+  T mean() const {
     return bacc::mean(accumulator_);
   }
 
-  T median() const
-  {
+  T median() const {
     return bacc::median(accumulator_);
   }
 
-  T variance() const
-  {
+  T variance() const {
     return bacc::variance(accumulator_);
   }
 
   auto sd() const
-    -> decltype(std::sqrt(std::declval<accumulator>().variance()))
-  {
+    -> decltype(std::sqrt(std::declval<accumulator>().variance())) {
     return std::sqrt(variance());
   }
 

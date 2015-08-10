@@ -14,13 +14,11 @@
 namespace vast {
 
 template <>
-struct access::printer<address> : vast::printer<access::printer<address>>
-{
+struct access::printer<address> : vast::printer<access::printer<address>> {
   using attribute = address;
 
   template <typename Iterator>
-  bool print(Iterator& out, address const& a) const
-  {
+  bool print(Iterator& out, address const& a) const {
     char buf[INET6_ADDRSTRLEN];
     std::memset(buf, 0, sizeof(buf));
     auto result = a.is_v4()
@@ -31,8 +29,7 @@ struct access::printer<address> : vast::printer<access::printer<address>>
 };
 
 template <>
-struct printer_registry<address>
-{
+struct printer_registry<address> {
   using type = access::printer<address>;
 };
 

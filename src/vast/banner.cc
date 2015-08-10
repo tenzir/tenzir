@@ -6,8 +6,7 @@
 
 namespace vast {
 
-std::string banner(bool colorize)
-{
+std::string banner(bool colorize) {
   std::stringstream ss;
   if (colorize)
     ss << util::color::red;

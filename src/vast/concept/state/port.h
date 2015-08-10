@@ -8,11 +8,9 @@ namespace vast {
 class port;
 
 template <>
-struct access::state<port>
-{
+struct access::state<port> {
   template <typename T, typename F>
-  static void call(T&& x, F f)
-  {
+  static void call(T&& x, F f) {
     f(x.number_, x.type_);
   }
 };
@@ -20,4 +18,3 @@ struct access::state<port>
 } // namespace vast
 
 #endif
-

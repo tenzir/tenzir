@@ -8,15 +8,13 @@
 namespace vast {
 
 template <char... Chars>
-struct char_printer : printer<char_printer<Chars...>>
-{
+struct char_printer : printer<char_printer<Chars...>> {
   using attribute = unused_type;
 
   static constexpr std::array<char, sizeof...(Chars)> chars = {{Chars...}};
 
   template <typename Iterator>
-  bool print(Iterator& out, unused_type) const
-  {
+  bool print(Iterator& out, unused_type) const {
     // TODO: in the future when we have ranges, we should add a mechanism to
     // check whether we exceed the bounds instead of just deref'ing the
     // iterator and pretending it'll work out.

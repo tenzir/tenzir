@@ -16,24 +16,20 @@
 namespace vast {
 
 template <>
-struct access::parser<data> : vast::parser<access::parser<data>>
-{
+struct access::parser<data> : vast::parser<access::parser<data>> {
   using attribute = data;
 
   template <typename Iterator>
-  static auto make()
-  {
+  static auto make() {
     auto to_record = [](std::vector<data>&& v) { return record{std::move(v)}; };
     auto to_vector = [](std::vector<data>&& v) { return vector{std::move(v)}; };
     auto to_set = [](std::vector<data>&& v) { return set{v}; };
-    auto to_table =
-      [](std::vector<std::tuple<data, data>>&& v) -> table
-      {
-        table t;
-        for (auto& x : v)
-          t.emplace(std::move(get<0>(x)), std::move(get<1>(x)));
-        return t;
-      };
+    auto to_table = [](std::vector<std::tuple<data, data>>&& v) -> table {
+      table t;
+      for (auto& x : v)
+        t.emplace(std::move(get<0>(x)), std::move(get<1>(x)));
+      return t;
+    };
     rule<Iterator, data> p;
     p = parsers::time_point
       | parsers::time_duration
@@ -56,15 +52,13 @@ struct access::parser<data> : vast::parser<access::parser<data>>
   }
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, unused_type) const
-  {
+  bool parse(Iterator& f, Iterator const& l, unused_type) const {
     static auto p = make<Iterator>();
     return p.parse(f, l, unused);
   }
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, data& a) const
-  {
+  bool parse(Iterator& f, Iterator const& l, data& a) const {
     using namespace parsers;
     static auto p = make<Iterator>();
     return p.parse(f, l, a);
@@ -72,8 +66,7 @@ struct access::parser<data> : vast::parser<access::parser<data>>
 };
 
 template <>
-struct parser_registry<data>
-{
+struct parser_registry<data> {
   using type = access::parser<data>;
 };
 

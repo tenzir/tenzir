@@ -8,15 +8,13 @@
 
 using namespace vast;
 
-TEST(offset printing)
-{
+TEST(offset printing) {
   auto o = offset{0, 10, 8};
   CHECK(to_string(o) == "0,10,8");
 }
 
-TEST(offset parsing)
-{
+TEST(offset parsing) {
   auto o = to<offset>("0,4,8,12");
   CHECK(o);
-  CHECK(*o == offset({0,4,8,12}));
+  CHECK(*o == offset({0, 4, 8, 12}));
 }

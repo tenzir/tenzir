@@ -7,18 +7,15 @@ namespace vast {
 namespace source {
 
 /// Unpacks events of a chunk.
-class dechunkifier : public base<dechunkifier>
-{
+class dechunkifier : public base<dechunkifier> {
 public:
   dechunkifier(chunk chk)
     : base<dechunkifier>{"dechunkifier"},
       chunk_{std::move(chk)},
-      reader_{chunk_}
-  {
+      reader_{chunk_} {
   }
 
-  result<event> extract()
-  {
+  result<event> extract() {
     auto e = reader_.read();
     if (e.empty())
       done(true);

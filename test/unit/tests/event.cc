@@ -13,8 +13,7 @@
 
 using namespace vast;
 
-TEST(event)
-{
+TEST(event) {
   auto tr = type::record{
     {"x", type::boolean{}},
     {"y", type::count{}},
@@ -43,8 +42,7 @@ TEST(event)
   CHECK(e.timestamp() == now);
 
   e.timestamp(time::point{});
-  CHECK(to_string(e) 
-        == "foo [123456789|1970-01-01+00:00:00] (T, 42, -234987)");
+  CHECK(to_string(e) == "foo [123456789|1970-01-01+00:00:00] (T, 42, -234987)");
 
   std::vector<uint8_t> buf;
   save(buf, e);

@@ -6,8 +6,7 @@
 namespace vast {
 namespace detail {
 
-struct is_convertible
-{
+struct is_convertible {
   template <typename From, typename To>
   static auto test(From const* from, To* to)
     -> decltype(convert(*from, *to), std::true_type());

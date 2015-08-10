@@ -3,14 +3,14 @@
 
 #include <iosfwd>
 #include <string>
+
 #include "vast/fwd.h"
 #include "vast/print.h"
 
 namespace vast {
 
 /// The type of a value.
-enum type_tag : uint8_t
-{
+enum type_tag : uint8_t {
   invalid_value    = 0x00, ///< An invalid value.
 
   // Basic types
@@ -34,20 +34,17 @@ enum type_tag : uint8_t
 };
 
 /// Checks whether a type tag is a container.
-constexpr bool is_container(type_tag t)
-{
+constexpr bool is_container(type_tag t) {
   return t == vector_value || t == set_value || t == table_value;
 }
 
 /// Checks whether a type tag is basic.
-constexpr bool is_basic(type_tag t)
-{
+constexpr bool is_basic(type_tag t) {
   return t != invalid_value && ! is_container(t) && t != record_value;
 }
 
 /// Checks whether a type tag is arithmetic.
-constexpr bool is_arithmetic(type_tag t)
-{
+constexpr bool is_arithmetic(type_tag t) {
   return t > 0x00 && t < 0x07;
 }
 
@@ -55,8 +52,7 @@ void serialize(serializer& sink, type_tag x);
 void deserialize(deserializer& source, type_tag& x);
 
 template <typename Iterator>
-trial<void> print(type_tag t, Iterator&& out)
-{
+trial<void> print(type_tag t, Iterator&& out) {
   switch (t)
   {
     default:

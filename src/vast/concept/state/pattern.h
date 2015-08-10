@@ -8,11 +8,9 @@ namespace vast {
 class pattern;
 
 template <>
-struct access::state<pattern>
-{
+struct access::state<pattern> {
   template <typename T, typename F>
-  static void call(T&& x, F f)
-  {
+  static void call(T&& x, F f) {
     f(x.str_);
   }
 };

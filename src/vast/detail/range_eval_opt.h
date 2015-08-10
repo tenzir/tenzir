@@ -26,8 +26,8 @@ namespace detail {
 /// @param x The value to evaluate.
 template <typename Base, typename Coder, typename T, size_t N>
 typename Coder::bitstream_type
-range_eval_opt(std::array<Coder, N> const& coders, relational_operator op, T x)
-{
+range_eval_opt(std::array<Coder, N> const& coders, relational_operator op,
+               T x) {
   static_assert(Base::components == N, "one component per base required");
   static_assert(std::is_unsigned<T>{}, "RangeEval-Opt requires unsigned types");
   static_assert(std::is_integral<T>{}, "RangeEval-Opt requires integers");
@@ -36,54 +36,44 @@ range_eval_opt(std::array<Coder, N> const& coders, relational_operator op, T x)
   auto coder_pred = [=](auto c) { return c.rows() == rows; };
   VAST_ASSERT(std::all_of(coders.begin(), coders.end(), coder_pred));
   // Check boundaries first.
-  if (x == std::numeric_limits<T>::min())
-  {
-    if (op == less)  // A < min => false
+  if (x == std::numeric_limits<T>::min()) {
+    if (op == less) // A < min => false
       return {rows, false};
     else if (op == greater_equal) // A >= min => true
       return {rows, true};
-  }
-  else if (op == less || op == greater_equal)
-  {
+  } else if (op == less || op == greater_equal) {
     --x;
   }
   typename Coder::bitstream_type result{rows, true};
   auto xs = decompose(x, Base::values);
-  switch (op)
-  {
+  switch (op) {
     default:
       return {rows, false};
     case less:
     case less_equal:
     case greater:
-    case greater_equal:
-      {
-        if (xs[0] < Base::values[0] - 1) // && bitstream != all_ones
-          result = coders[0][xs[0]];
-        for (auto i = 1u; i < N; ++i)
-        {
-          if (xs[i] != Base::values[i] - 1) // && bitstream != all_ones
-            result &= coders[i][xs[i]];
-          if (xs[i] != 0) // && bitstream != all_ones
-            result |= coders[i][xs[i] - 1];
-        }
+    case greater_equal: {
+      if (xs[0] < Base::values[0] - 1) // && bitstream != all_ones
+        result = coders[0][xs[0]];
+      for (auto i = 1u; i < N; ++i) {
+        if (xs[i] != Base::values[i] - 1) // && bitstream != all_ones
+          result &= coders[i][xs[i]];
+        if (xs[i] != 0) // && bitstream != all_ones
+          result |= coders[i][xs[i] - 1];
       }
-      break;
+    } break;
     case equal:
-    case not_equal:
-      {
-        for (auto i = 0u; i < N; ++i)
-        {
-          auto& c = coders[i];
-          if (xs[i] == 0) // && bitstream != all_ones
-            result &= c[0];
-          else if (xs[i] == Base::values[i] - 1)
-            result &= ~c[Base::values[i] - 2];
-          else
-            result &= c[xs[i]] ^ c[xs[i] - 1];
-        }
+    case not_equal: {
+      for (auto i = 0u; i < N; ++i) {
+        auto& c = coders[i];
+        if (xs[i] == 0) // && bitstream != all_ones
+          result &= c[0];
+        else if (xs[i] == Base::values[i] - 1)
+          result &= ~c[Base::values[i] - 2];
+        else
+          result &= c[xs[i]] ^ c[xs[i] - 1];
       }
-      break;
+    } break;
   }
   if (op == greater || op == greater_equal || op == not_equal)
     result.flip();

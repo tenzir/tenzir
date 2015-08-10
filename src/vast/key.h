@@ -8,8 +8,7 @@
 namespace vast {
 
 /// A sequence of type/argument names to recursively access a type or value.
-struct key : util::stack::vector<4, std::string>
-{
+struct key : util::stack::vector<4, std::string> {
   using super = util::stack::vector<4, std::string>;
   using super::vector;
 };

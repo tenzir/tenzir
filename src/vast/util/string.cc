@@ -12,17 +12,13 @@ static constexpr char hex[] = "0123456789abcdef";
 
 } // namespace <anonymous>
 
-std::string byte_escape(std::string const& str)
-{
+std::string byte_escape(std::string const& str) {
   std::string esc;
   esc.reserve(str.size());
   for (auto c : str)
-    if (std::isprint(c))
-    {
+    if (std::isprint(c)) {
       esc += c;
-    }
-    else
-    {
+    } else {
       esc += '\\';
       esc += 'x';
       esc += hex[(c & 0xf0) >> 4];
@@ -31,19 +27,15 @@ std::string byte_escape(std::string const& str)
   return esc;
 }
 
-std::string byte_escape(std::string const& str, std::string const& extra)
-{
+std::string byte_escape(std::string const& str, std::string const& extra) {
   std::string esc;
   esc.reserve(str.size());
   for (auto c : str)
-    if (std::isprint(c))
-    {
+    if (std::isprint(c)) {
       if (extra.find(c) != std::string::npos)
         esc += '\\';
       esc += c;
-    }
-    else
-    {
+    } else {
       esc += '\\';
       esc += 'x';
       esc += hex[(c & 0xf0) >> 4];
@@ -52,13 +44,11 @@ std::string byte_escape(std::string const& str, std::string const& extra)
   return esc;
 }
 
-std::string byte_escape_all(std::string const& str)
-{
+std::string byte_escape_all(std::string const& str) {
   std::string esc;
   esc.resize(str.size() * 4);
   auto i = std::string::size_type{0};
-  for (auto c : str)
-  {
+  for (auto c : str) {
     esc[i++] = '\\';
     esc[i++] = 'x';
     esc[i++] = hex[(c & 0xf0) >> 4];
@@ -67,39 +57,28 @@ std::string byte_escape_all(std::string const& str)
   return esc;
 }
 
-std::string byte_unescape(std::string const& str)
-{
+std::string byte_unescape(std::string const& str) {
   std::string unesc;
   auto i = str.begin();
   auto last = str.end();
-  while (i != last)
-  {
+  while (i != last) {
     auto c = *i++;
-    if (c != '\\')
-    {
+    if (c != '\\') {
       unesc += c;
-    }
-    else if (i == last)
-    {
+    } else if (i == last) {
       return {}; // malformed string with dangling '\' at the end.
-    }
-    else
-    {
-      switch ((c = *i++))
-      {
+    } else {
+      switch ((c = *i++)) {
         default:
           unesc += c;
           break;
         case 'x':
-          if (i != last && i + 1 != last
-              && std::isxdigit(i[0]) && std::isxdigit(i[1]))
-          {
+          if (i != last && i + 1 != last && std::isxdigit(i[0])
+              && std::isxdigit(i[1])) {
             auto hi = *i++;
             auto lo = *i++;
             unesc += hex_to_byte(hi, lo);
-          }
-          else
-          {
+          } else {
             unesc += 'x';
           }
           break;
@@ -109,8 +88,7 @@ std::string byte_unescape(std::string const& str)
   return unesc;
 }
 
-std::string json_escape(std::string const& str)
-{
+std::string json_escape(std::string const& str) {
   if (str.empty())
     return "\"\"";
   std::string esc;
@@ -125,17 +103,12 @@ std::string json_escape(std::string const& str)
   //
   //  That is, '"', '\\', and control characters are the only mandatory escaped
   //  values. The rest is optional.
-  for (auto c : str)
-  {
-    switch (c)
-    {
+  for (auto c : str) {
+    switch (c) {
       default:
-        if (std::isprint(c))
-        {
+        if (std::isprint(c)) {
           esc += c;
-        }
-        else
-        {
+        } else {
           esc += '\\';
           esc += 'x';
           esc += hex[(c & 0xf0) >> 4];
@@ -169,33 +142,30 @@ std::string json_escape(std::string const& str)
   return esc;
 }
 
-std::string json_unescape(std::string const& str)
-{
+std::string json_unescape(std::string const& str) {
   std::string unesc;
   if (str.empty() || str.size() < 2)
     return {};
   // Only consider double-quote strings.
-  if (! (str.front() == '"' && str.back() == '"'))
+  if (!(str.front() == '"' && str.back() == '"'))
     return {};
   unesc.reserve(str.size());
   std::string::size_type i = 1;
   std::string::size_type last = str.size() - 1;
   // Skip the opening double quote.
   // Unescape everything until the closing double quote.
-  while (i < last)
-  {
+  while (i < last) {
     auto c = str[i++];
-    if (c == '"')   // Unescaped double-quotes not allowed.
+    if (c == '"') // Unescaped double-quotes not allowed.
       return {};
-    if (c != '\\')  // Skip everything non-escpaed character.
+    if (c != '\\') // Skip everything non-escpaed character.
     {
       unesc += c;
       continue;
     }
-    if (i == last)  // No '\' before final double quote allowed.
+    if (i == last) // No '\' before final double quote allowed.
       return {};
-    switch (str[i++])
-    {
+    switch (str[i++]) {
       default:
         return {};
       case '\\':
@@ -222,22 +192,19 @@ std::string json_unescape(std::string const& str)
       case 't':
         unesc += '\t';
         break;
-      case 'u':    // We can't handle unicode and leave \uXXXX as is.
-        {
-          unesc += '\\';
-          unesc += 'u';
-          auto end = std::min(std::string::size_type{4}, last - i);
-          for (std::string::size_type j = 0; j < end; ++j)
-            unesc += str[i++];
-        }
-        break;
+      case 'u': // We can't handle unicode and leave \uXXXX as is.
+      {
+        unesc += '\\';
+        unesc += 'u';
+        auto end = std::min(std::string::size_type{4}, last - i);
+        for (std::string::size_type j = 0; j < end; ++j)
+          unesc += str[i++];
+      } break;
       case 'x':
-        if (i + 1 < last)
-        {
+        if (i + 1 < last) {
           auto hi = str[i++];
           auto lo = str[i++];
-          if (std::isxdigit(hi) && std::isxdigit(lo))
-          {
+          if (std::isxdigit(hi) && std::isxdigit(lo)) {
             unesc += hex_to_byte(hi, lo);
             break;
           }

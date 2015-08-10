@@ -5,16 +5,14 @@
 
 using namespace vast;
 
-TEST(chunk)
-{
+TEST(chunk) {
   auto t = type::integer{};
   t.name("i");
 
   chunk chk;
   chunk::writer w{chk};
   std::vector<event> es;
-  for (auto i = 0; i < 1e3; ++i)
-  {
+  for (auto i = 0; i < 1e3; ++i) {
     es.push_back(event::make(i, t));
     REQUIRE(w.write(es.back()));
   }
@@ -23,8 +21,7 @@ TEST(chunk)
   CHECK(chk.events() == 1e3);
 
   chunk::reader r{chk};
-  for (auto i = 0; i < 1e3; ++i)
-  {
+  for (auto i = 0; i < 1e3; ++i) {
     auto e = r.read();
     REQUIRE(e);
     CHECK(*e == event::make(i, t));
@@ -40,22 +37,20 @@ TEST(chunk)
   ewah_bitstream ids;
   ids.append(42, false);
   ids.append(1e3 - 1, true);
-  CHECK(! chk.ids(ids));  // 1 event ID missing.
+  CHECK(!chk.ids(ids)); // 1 event ID missing.
 
   ids.push_back(true);
   CHECK(chk.ids(std::move(ids)));
 }
 
-TEST(chunk_event_extraction)
-{
+TEST(chunk_event_extraction) {
   auto t = type::integer{};
   REQUIRE(t.name("test"));
 
   chunk chk;
   chunk::writer w{chk};
   std::vector<event> es;
-  for (auto i = 0; i < 1024; ++i)
-  {
+  for (auto i = 0; i < 1024; ++i) {
     es.push_back(event::make(integer{1000 + i}, t));
     es.back().id(1000 + i);
     REQUIRE(w.write(es.back()));
@@ -75,9 +70,9 @@ TEST(chunk_event_extraction)
   REQUIRE(e);
   CHECK(*get<integer>(*e) == 1010);
 
-  CHECK(! r.read(10));
-  CHECK(! r.read(999));
-  CHECK(! r.read(2024));
+  CHECK(!r.read(10));
+  CHECK(!r.read(999));
+  CHECK(!r.read(2024));
 
   e = r.read(1011);
   REQUIRE(e);

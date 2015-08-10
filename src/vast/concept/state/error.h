@@ -6,11 +6,9 @@
 namespace vast {
 
 template <>
-struct access::state<error>
-{
+struct access::state<error> {
   template <typename T, typename F>
-  static void call(T&& x, F f)
-  {
+  static void call(T&& x, F f) {
     f(x.msg_);
   }
 };

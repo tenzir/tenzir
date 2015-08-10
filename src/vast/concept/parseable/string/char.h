@@ -7,19 +7,15 @@
 namespace vast {
 
 /// Parses a specific character.
-class char_parser : public parser<char_parser>
-{
+class char_parser : public parser<char_parser> {
 public:
   using attribute = char;
 
-  char_parser(char c)
-    : c_{c}
-  {
+  char_parser(char c) : c_{c} {
   }
 
   template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const
-  {
+  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
     if (f == l || *f != c_)
       return false;
     detail::absorb(a, c_);
@@ -39,4 +35,3 @@ using chr = char_parser;
 } // namespace vast
 
 #endif
-

@@ -15,8 +15,10 @@ namespace vast {
 /// @returns *from* converted to `T`.
 template <typename To, typename From, typename... Opts>
 auto to(From&& from, Opts&&... opts)
-  -> std::enable_if_t<is_convertible<std::decay_t<From>, To>{}, optional<To>>
-{
+  -> std::enable_if_t<
+       is_convertible<std::decay_t<From>, To>{},
+       optional<To>
+     > {
   optional<To> x{To()};
   if (convert(from, *x, std::forward<Opts>(opts)...))
     return x;
@@ -28,8 +30,7 @@ auto to_string(From&& from, Opts&&... opts)
   -> std::enable_if_t<
        std::is_same<To, std::string>{}
         && is_convertible<std::decay_t<From>, To>{}, To
-     >
-{
+     > {
   std::string str;
   if (convert(from, str, std::forward<Opts>(opts)...))
     return str;

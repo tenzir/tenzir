@@ -36,12 +36,10 @@ namespace vast {
 ///                    / "1" 2DIGIT            ; 100-199
 ///                    / "2" %x30-34 DIGIT     ; 200-249
 ///                    / "25" %x30-35          ; 250-255
-struct address_parser : vast::parser<address_parser>
-{
+struct address_parser : vast::parser<address_parser> {
   using attribute = address;
 
-  static auto make_v4()
-  {
+  static auto make_v4() {
     using namespace parsers;
     auto dec
       = integral_parser<uint16_t, 3, 1>{}.with([](auto i) { return i < 256; });
@@ -52,8 +50,7 @@ struct address_parser : vast::parser<address_parser>
     return v4;
   }
 
-  static auto make_v6()
-  {
+  static auto make_v6() {
     using namespace parsers;
     auto h16
       = rep<1, 4>(xdigit)
@@ -88,8 +85,7 @@ struct address_parser : vast::parser<address_parser>
   }
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, unused_type) const
-  {
+  bool parse(Iterator& f, Iterator const& l, unused_type) const {
     static auto v4 = make_v4();
     static auto v6 = make_v6();
     if (v4.parse(f, l, unused))
@@ -100,35 +96,28 @@ struct address_parser : vast::parser<address_parser>
   }
 };
 
-
 template <>
-struct access::parser<address> : vast::parser<access::parser<address>>
-{
+struct access::parser<address> : vast::parser<access::parser<address>> {
   using attribute = address;
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, unused_type) const
-  {
+  bool parse(Iterator& f, Iterator const& l, unused_type) const {
     static auto const p = address_parser{};
     return p.parse(f, l, unused);
   }
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, address& a) const
-  {
+  bool parse(Iterator& f, Iterator const& l, address& a) const {
     static auto const v4 = address_parser::make_v4();
     auto a4 = std::tie(a.bytes_[12], a.bytes_[13], a.bytes_[14], a.bytes_[15]);
     auto begin = f;
-    if (v4.parse(f, l, a4))
-    {
+    if (v4.parse(f, l, a4)) {
       std::copy(address::v4_mapped_prefix.begin(),
-                address::v4_mapped_prefix.end(),
-                a.bytes_.begin());
+                address::v4_mapped_prefix.end(), a.bytes_.begin());
       return true;
     }
     static auto const v6 = address_parser::make_v6();
-    if (v6.parse(f, l, unused))
-    {
+    if (v6.parse(f, l, unused)) {
       // We still need to enhance the parseable concept with a few more tools
       // so that we can transparently parse into 16-byte sequence. Until
       // then, we rely on inet_pton. Unfortunately this incurs an extra copy
@@ -145,8 +134,7 @@ struct access::parser<address> : vast::parser<access::parser<address>>
 };
 
 template <>
-struct parser_registry<address>
-{
+struct parser_registry<address> {
   using type = access::parser<address>;
 };
 

@@ -50,19 +50,16 @@ namespace vast {
 namespace {
 
 template <typename Bitstream>
-void announce_bmi_hierarchy(std::string const& bs_name)
-{
+void announce_bmi_hierarchy(std::string const& bs_name) {
   using detail::bitmap_index_concept;
   using detail::bitmap_index_model;
   static auto wrap = 
     [](std::string const& prefix, std::string const& str, std::string const& t)
-      -> std::string
-  {
+      -> std::string {
     return prefix + '<' + str + ">,T=" + t;
   };
   static auto model_wrap = [](std::string const& str, std::string const& t)
-    -> std::string
-  {
+    -> std::string {
     return wrap("vast::detail::bitmap_index_model", str, t);
   };
   announce<arithmetic_bitmap_index<Bitstream, boolean>>(
@@ -116,8 +113,7 @@ void announce_bmi_hierarchy(std::string const& bs_name)
 
 } // namespace <anonymous>
 
-void announce_types()
-{
+void announce_types() {
   announce<path>("vast::path");
   announce<uuid>("vast::uuid");
   announce<arithmetic_operator>("vast::arithmetic_operator");

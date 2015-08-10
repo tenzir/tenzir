@@ -11,13 +11,11 @@
 
 namespace vast {
 
-struct key_parser : parser<key_parser>
-{
+struct key_parser : parser<key_parser> {
   using attribute = key;
 
   template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const
-  {
+  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
     using namespace parsers;
     static auto p = +(alnum | chr{'_'} | chr{':'}) % '.';
     return p.parse(f, l, a);
@@ -25,8 +23,7 @@ struct key_parser : parser<key_parser>
 };
 
 template <>
-struct parser_registry<key>
-{
+struct parser_registry<key> {
   using type = key_parser;
 };
 

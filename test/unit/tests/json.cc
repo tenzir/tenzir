@@ -11,8 +11,7 @@
 using namespace vast;
 using namespace std::string_literals;
 
-TEST(construction and assignment)
-{
+TEST(construction and assignment) {
   CHECK(which(json{}) == json::type::null);
   CHECK(which(json{nil}) == json::type::null);
 
@@ -56,8 +55,7 @@ TEST(construction and assignment)
   CHECK(is<json::object>(j));
 }
 
-TEST(total order)
-{
+TEST(total order) {
   json j0{true};
   json j1{false};
 
@@ -73,14 +71,13 @@ TEST(total order)
   j1 = 42;
 
   CHECK(j0 != j1);
-  CHECK(! (j0 < j1));
-  CHECK(! (j0 <= j1));
+  CHECK(!(j0 < j1));
+  CHECK(!(j0 <= j1));
   CHECK(j0 > j1);
   CHECK(j0 >= j1);
 }
 
-TEST(parsing)
-{
+TEST(parsing) {
   json j;
   std::string str;
 
@@ -153,8 +150,7 @@ TEST(parsing)
   CHECK(j == o);
 }
 
-TEST(printing)
-{
+TEST(printing) {
   CHECK(to_string(json{}) == "null");
   CHECK(to_string(json{true}) == "true");
   CHECK(to_string(json{false}) == "false");
@@ -213,8 +209,7 @@ TEST(printing)
   CHECK(str == json_tree);
 }
 
-TEST(conversion)
-{
+TEST(conversion) {
   auto t = to<json>(true);
   REQUIRE(t);
   CHECK(*t == json{true});

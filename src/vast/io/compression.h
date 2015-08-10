@@ -8,8 +8,7 @@
 namespace vast {
 namespace io {
 
-enum compression : uint8_t
-{
+enum compression : uint8_t {
   null      = 0,
   automatic = 1,  // TODO: implement automatic detection of the compression format.
   lz4       = 2,

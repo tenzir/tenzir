@@ -8,27 +8,22 @@
 namespace vast {
 namespace io {
 
-class input_stream_range : public util::range_facade<input_stream_range>
-{
+class input_stream_range : public util::range_facade<input_stream_range> {
 public:
-  input_stream_range(input_stream& is)
-    : is_{&is}
-  {
+  input_stream_range(input_stream& is) : is_{&is} {
     next();
   }
 
 protected:
-  bool next()
-  {
+  bool next() {
     buf_ = is_->next_block();
-    return !! buf_;
+    return !!buf_;
   }
 
 private:
   friend util::range_facade<input_stream_range>;
 
-  buffer<void const> const& state() const
-  {
+  buffer<void const> const& state() const {
     return buf_;
   }
 

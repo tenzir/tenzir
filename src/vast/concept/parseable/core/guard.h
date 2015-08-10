@@ -11,30 +11,24 @@ namespace vast {
 /// @tparam Guard The guard function which simply take the synthesized
 ///               attribute by const-reference and returns `bool`.
 template <typename Parser, typename Guard>
-class guard_parser : public parser<guard_parser<Parser, Guard>>
-{
+class guard_parser : public parser<guard_parser<Parser, Guard>> {
 public:
   // We keep the semantic action transparent and just haul through the parser's
   // attribute.
   using attribute = typename Parser::attribute;
 
-  guard_parser(Parser p, Guard fun)
-    : parser_{std::move(p)},
-      guard_(fun)
-  {
+  guard_parser(Parser p, Guard fun) : parser_{std::move(p)}, guard_(fun) {
   }
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, unused_type) const
-  {
+  bool parse(Iterator& f, Iterator const& l, unused_type) const {
     return parser_.parse(f, l, unused);
   }
 
   template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const
-  {
+  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
     attribute attr;
-    if (! (parser_.parse(f, l, attr) && guard_(attr)))
+    if (!(parser_.parse(f, l, attr) && guard_(attr)))
       return false;
     a = std::move(attr);
     return true;

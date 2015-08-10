@@ -8,15 +8,12 @@
 
 namespace vast {
 
-struct arithmetic_operator_printer : printer<arithmetic_operator_printer>
-{
+struct arithmetic_operator_printer : printer<arithmetic_operator_printer> {
   using attribute = arithmetic_operator;
 
   template <typename Iterator>
-  bool print(Iterator& out, arithmetic_operator const& op) const
-  {
-    switch (op)
-    {
+  bool print(Iterator& out, arithmetic_operator const& op) const {
+    switch (op) {
       default:
         die("missing case for arithmetic operator");
       case positive:
@@ -43,15 +40,12 @@ struct arithmetic_operator_printer : printer<arithmetic_operator_printer>
   }
 };
 
-struct relational_operator_printer : printer<relational_operator_printer>
-{
+struct relational_operator_printer : printer<relational_operator_printer> {
   using attribute = relational_operator;
 
   template <typename Iterator>
-  bool print(Iterator& out, relational_operator const& op) const
-  {
-    switch (op)
-    {
+  bool print(Iterator& out, relational_operator const& op) const {
+    switch (op) {
       default:
         die("missing case for relational operator");
       case match:
@@ -82,15 +76,12 @@ struct relational_operator_printer : printer<relational_operator_printer>
   }
 };
 
-struct boolean_operator_printer : printer<boolean_operator_printer>
-{
+struct boolean_operator_printer : printer<boolean_operator_printer> {
   using attribute = boolean_operator;
 
   template <typename Iterator>
-  bool print(Iterator& out, boolean_operator const& op) const
-  {
-    switch (op)
-    {
+  bool print(Iterator& out, boolean_operator const& op) const {
+    switch (op) {
       default:
         die("missing case for boolean operator");
       case logical_not:
@@ -104,20 +95,17 @@ struct boolean_operator_printer : printer<boolean_operator_printer>
 };
 
 template <>
-struct printer_registry<arithmetic_operator>
-{
+struct printer_registry<arithmetic_operator> {
   using type = arithmetic_operator_printer;
 };
 
 template <>
-struct printer_registry<relational_operator>
-{
+struct printer_registry<relational_operator> {
   using type = relational_operator_printer;
 };
 
 template <>
-struct printer_registry<boolean_operator>
-{
+struct printer_registry<boolean_operator> {
   using type = boolean_operator_printer;
 };
 

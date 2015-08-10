@@ -7,39 +7,33 @@
 
 namespace vast {
 
-struct null_bitstream_printer : printer<null_bitstream_printer>
-{
+struct null_bitstream_printer : printer<null_bitstream_printer> {
   using attribute = null_bitstream;
 
   template <typename Iterator>
-  bool print(Iterator& out, null_bitstream const& b) const
-  {
+  bool print(Iterator& out, null_bitstream const& b) const {
     static auto p = bitvector_printer<policy::lsb_to_msb>{};
     return p.print(out, b.bits());
   }
 };
 
-struct ewah_bitstream_printer : printer<ewah_bitstream_printer>
-{
+struct ewah_bitstream_printer : printer<ewah_bitstream_printer> {
   using attribute = ewah_bitstream;
 
   template <typename Iterator>
-  bool print(Iterator& out, ewah_bitstream const& b) const
-  {
+  bool print(Iterator& out, ewah_bitstream const& b) const {
     static auto p = bitvector_printer<policy::msb_to_lsb, ' ', '\n'>{};
     return p.print(out, b.bits());
   }
 };
 
 template <>
-struct printer_registry<null_bitstream>
-{
+struct printer_registry<null_bitstream> {
   using type = null_bitstream_printer;
 };
 
 template <>
-struct printer_registry<ewah_bitstream>
-{
+struct printer_registry<ewah_bitstream> {
   using type = ewah_bitstream_printer;
 };
 
@@ -51,8 +45,7 @@ template <
   typename Bitstream,
   typename = std::enable_if_t<is_bitstream<Bitstream>::value>
 >
-bool print(Iterator& out, std::vector<Bitstream> const& v)
-{
+bool print(Iterator& out, std::vector<Bitstream> const& v) {
   if (v.empty())
     return true;
   using const_iterator = typename Bitstream::const_iterator;
@@ -63,8 +56,7 @@ bool print(Iterator& out, std::vector<Bitstream> const& v)
   auto const zero_row = std::string(v.size(), '0') + '\n';
   typename Bitstream::size_type last = 0;
   bool done = false;
-  while (! done)
-  {
+  while (!done) {
     // Compute the minimum.
     typename Bitstream::size_type min = Bitstream::npos;
     for (auto& p : is)
@@ -79,16 +71,12 @@ bool print(Iterator& out, std::vector<Bitstream> const& v)
     last = min + 1;
     // Print the current transposed row.
     done = true;
-    for (auto& p : is)
-    {
-      if (p.first != p.second && *p.first == min)
-      {
+    for (auto& p : is) {
+      if (p.first != p.second && *p.first == min) {
         *out++ = '1';
         done = false;
         ++p.first;
-      }
-      else
-      {
+      } else {
         *out++ = '0';
       }
     }

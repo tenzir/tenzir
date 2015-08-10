@@ -8,8 +8,7 @@
 namespace vast {
 
 template <typename Parser>
-class optional_parser : public parser<optional_parser<Parser>>
-{
+class optional_parser : public parser<optional_parser<Parser>> {
 public:
   using inner_attribute =
     typename detail::attr_fold<typename Parser::attribute>::type;
@@ -21,20 +20,17 @@ public:
     >;
 
   explicit optional_parser(Parser p)
-    : parser_{std::move(p)}
-  {
+    : parser_{std::move(p)} {
   }
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, unused_type) const
-  {
+  bool parse(Iterator& f, Iterator const& l, unused_type) const {
     parser_.parse(f, l, unused);
     return true;
   }
 
   template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const
-  {
+  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
     inner_attribute attr;
     if (parser_.parse(f, l, attr))
       a = std::move(attr);

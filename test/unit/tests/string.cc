@@ -6,8 +6,7 @@
 using namespace vast;
 using namespace util;
 
-TEST(string byte escaping)
-{
+TEST(string byte escaping) {
   // Identities.
   CHECK(byte_escape("") == "");
   CHECK(byte_escape("foo") == "foo");
@@ -33,8 +32,7 @@ TEST(string byte escaping)
   CHECK(byte_unescape("foo\\") == ""); // Invalid '/' at end of string.
 }
 
-TEST(JSON string escaping)
-{
+TEST(JSON string escaping) {
   CHECK(json_escape("") == "\"\"");
   CHECK(json_escape("\r") == "\"\\r\"");
   CHECK(json_escape("\r\n") == "\"\\r\\n\"");
@@ -46,7 +44,7 @@ TEST(JSON string escaping)
   CHECK(json_unescape("\"\\r\\n\"") == "\r\n");
   CHECK(json_unescape("\"\\begin\"") == "\begin");
   CHECK(json_unescape("\"end\\n\"") == "end\n");
-  CHECK(json_unescape("\"end\\uaaaa\"")  == "end\\uaaaa");
+  CHECK(json_unescape("\"end\\uaaaa\"") == "end\\uaaaa");
 
   CHECK(json_escape("foo\"bar") == "\"foo\\\"bar\"");
   CHECK(json_escape("foo\\bar") == "\"foo\\\\bar\"");
@@ -75,8 +73,7 @@ TEST(JSON string escaping)
   CHECK(json_unescape("\"unescaped\"quote\"") == "");
 }
 
-TEST(string splitting and joining)
-{
+TEST(string splitting and joining) {
   using namespace std::string_literals;
 
   auto s = split_to_str("Der Geist, der stets verneint."s, " ");

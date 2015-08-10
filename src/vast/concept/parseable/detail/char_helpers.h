@@ -8,18 +8,15 @@ namespace vast {
 namespace detail {
 
 template <typename Attribute, typename T>
-void absorb(Attribute& a, T&& x)
-{
+void absorb(Attribute& a, T&& x) {
   a = std::move(x);
 }
 
-inline void absorb(std::string& str, char c)
-{
+inline void absorb(std::string& str, char c) {
   str += c;
 }
 
-inline void absorb(std::vector<char> v, char c)
-{
+inline void absorb(std::vector<char> v, char c) {
   v.push_back(c);
 }
 
@@ -27,4 +24,3 @@ inline void absorb(std::vector<char> v, char c)
 } // namespace vast
 
 #endif
-
