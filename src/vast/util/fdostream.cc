@@ -3,10 +3,7 @@
 namespace vast {
 namespace util {
 
-fdostream::fdostream(int fd)
-  : std::ostream{0},
-    buf_{fd}
-{
+fdostream::fdostream(int fd) : std::ostream{0}, buf_{fd} {
   rdbuf(&buf_);
 }
 

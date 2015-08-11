@@ -9,8 +9,7 @@
 using namespace caf;
 using namespace vast;
 
-TEST(key-value store)
-{
+TEST(key-value store) {
   scoped_actor self;
   self->on_sync_failure([&] {
     FAIL("got unexpected message: " << to_string(self->current_message()));
@@ -33,8 +32,7 @@ TEST(key-value store)
   );
   MESSAGE("get multiple values");
   self->sync_send(s, list_atom::value, "/foo").await(
-    [&](std::map<std::string, message> const& map)
-    {
+    [&](std::map<std::string, message> const& map) {
       REQUIRE(map.size() == 2);
       CHECK(map.begin()->first == "/foo/bar");
       CHECK(map.begin()->second.get_as<uint8_t>(0) == 42);
@@ -70,8 +68,7 @@ TEST(key-value store)
   self->await_all_other_actors_done();
 }
 
-TEST(key-value store wrapper)
-{
+TEST(key-value store wrapper) {
   scoped_actor self;
   auto s = self->spawn<key_value_store>();
   auto w = key_value_store::wrapper{s};
@@ -97,8 +94,7 @@ TEST(key-value store wrapper)
   self->await_all_other_actors_done();
 }
 
-TEST(distributed key-value store)
-{
+TEST(distributed key-value store) {
   scoped_actor self;
   self->on_sync_failure([&] {
     FAIL("got unexpected message: " << to_string(self->current_message()));

@@ -13,55 +13,45 @@
 namespace vast {
 
 template <>
-struct access::state<vector>
-{
+struct access::state<vector> {
   template <typename T, typename F>
-  static void call(T&& x, F f)
-  {
+  static void call(T&& x, F f) {
     using base = util::deduce<decltype(x), std::vector<data>>;
     f(static_cast<base>(x));
   }
 };
 
 template <>
-struct access::state<set>
-{
+struct access::state<set> {
   template <typename T, typename F>
-  static void call(T&& x, F f)
-  {
+  static void call(T&& x, F f) {
     using base = util::deduce<decltype(x), util::flat_set<data>>;
     f(static_cast<base>(x));
   }
 };
 
 template <>
-struct access::state<table>
-{
+struct access::state<table> {
   template <typename T, typename F>
-  static void call(T&& x, F f)
-  {
+  static void call(T&& x, F f) {
     using base = util::deduce<decltype(x), std::map<data, data>>;
     f(static_cast<base>(x));
   }
 };
 
 template <>
-struct access::state<record>
-{
+struct access::state<record> {
   template <typename T, typename F>
-  static void call(T&& x, F f)
-  {
+  static void call(T&& x, F f) {
     using base = util::deduce<decltype(x), std::vector<data>>;
     f(static_cast<base>(x));
   }
 };
 
 template <>
-struct access::state<data>
-{
+struct access::state<data> {
   template <typename T, typename F>
-  static void call(T&& x, F f)
-  {
+  static void call(T&& x, F f) {
     f(x.data_);
   }
 };

@@ -11,8 +11,7 @@ namespace io {
 
 /// An input stream that reads in a buffered fashion from a given input stream
 /// buffer.
-class buffered_input_stream : public input_stream
-{
+class buffered_input_stream : public input_stream {
 public:
   /// Constructs a buffered input stream from an input_device.
   /// @param idev The input_device.
@@ -33,14 +32,13 @@ private:
   bool failed_ = false;
   int64_t position_ = 0;
   size_t rewind_bytes_ = 0;
-  size_t valid_bytes_ = 0;  // Size of last call to next();
+  size_t valid_bytes_ = 0; // Size of last call to next();
   std::vector<uint8_t> buffer_;
   input_device* idev_;
 };
 
 /// An output stream that buffers its data before flushing it upon destruction.
-class buffered_output_stream : public output_stream
-{
+class buffered_output_stream : public output_stream {
 public:
   /// Constructs a buffered output stream from an output device.
   /// @param odev The output device.
@@ -62,7 +60,7 @@ public:
 private:
   bool failed_ = false;
   int64_t position_ = 0;
-  size_t valid_bytes_ = 0;  // Size of last call to next();
+  size_t valid_bytes_ = 0; // Size of last call to next();
   std::vector<uint8_t> buffer_;
   output_device* odev_;
 };

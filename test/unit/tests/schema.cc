@@ -12,38 +12,35 @@
 
 using namespace vast;
 
-#define DEFINE_SCHEMA_TEST_CASE(name, input)                        \
-  TEST(name)                                                        \
-  {                                                                 \
-    auto contents = load_contents(input);                           \
-    REQUIRE(contents);                                              \
-    auto s0 = detail::to_schema(*contents);                         \
-    if (! s0)                                                       \
-      ERROR(s0.error());                                            \
-    REQUIRE(s0);                                                    \
-                                                                    \
-    auto str = to_string(*s0);                                      \
-    auto s1 = detail::to_schema(str);                               \
-    if (! s1)                                                       \
-    {                                                               \
-      ERROR(s1.error());                                            \
-      ERROR("schema: " << str);                                     \
-    }                                                               \
-    REQUIRE(s1);                                                    \
-    CHECK(str == to_string(*s1));                                   \
+#define DEFINE_SCHEMA_TEST_CASE(name, input)                                   \
+  TEST(name) {                                                                 \
+    auto contents = load_contents(input);                                      \
+    REQUIRE(contents);                                                         \
+    auto s0 = detail::to_schema(*contents);                                    \
+    if (!s0)                                                                   \
+      ERROR(s0.error());                                                       \
+    REQUIRE(s0);                                                               \
+                                                                               \
+    auto str = to_string(*s0);                                                 \
+    auto s1 = detail::to_schema(str);                                          \
+    if (!s1) {                                                                 \
+      ERROR(s1.error());                                                       \
+      ERROR("schema: " << str);                                                \
+    }                                                                          \
+    REQUIRE(s1);                                                               \
+    CHECK(str == to_string(*s1));                                              \
   }
 
 // Contains the test case defintions for all taxonomy test files.
 #include "tests/schema_test_cases.h"
 
-TEST(offset finding)
-{
-  std::string str =
-    "type a = int\n"
-    "type inner = record{ x: int, y: real }\n"
-    "type middle = record{ a: int, b: inner }\n"
-    "type outer = record{ a: middle, b: record { y: string }, c: int }\n"
-    "type foo = record{ a: int, b: real, c: outer, d: middle }";
+TEST(offset finding) {
+  std::string str
+    = "type a = int\n"
+      "type inner = record{ x: int, y: real }\n"
+      "type middle = record{ a: int, b: inner }\n"
+      "type outer = record{ a: middle, b: record { y: string }, c: int }\n"
+      "type foo = record{ a: int, b: real, c: outer, d: middle }";
 
   auto sch = detail::to_schema(str);
   REQUIRE(sch);
@@ -68,18 +65,17 @@ TEST(offset finding)
   CHECK(inner->name() == "inner");
 }
 
-TEST(merging)
-{
-  std::string str =
-    "type a = int\n"
-    "type inner = record { x: int, y: real }\n";
+TEST(merging) {
+  std::string str
+    = "type a = int\n"
+      "type inner = record { x: int, y: real }\n";
 
   auto s1 = detail::to_schema(str);
   REQUIRE(s1);
 
-  str =
-    "type a = int\n"  // Same type allowed.
-    "type b = int\n";
+  str
+    = "type a = int\n" // Same type allowed.
+      "type b = int\n";
 
   auto s2 = detail::to_schema(str);
   REQUIRE(s2);
@@ -91,8 +87,7 @@ TEST(merging)
   CHECK(merged->find_type("inner"));
 }
 
-TEST(serialization)
-{
+TEST(serialization) {
   schema sch, sch2;
   auto t = type::record{
     {"s1", type::string{}},

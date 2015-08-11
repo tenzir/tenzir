@@ -13,14 +13,12 @@ namespace vast {
 struct access;
 
 /// A compressed buffer of serialized objects.
-class block : util::equality_comparable<block>
-{
+class block : util::equality_comparable<block> {
   friend access;
 
 public:
   /// A helper class to to write into the block.
-  class writer
-  {
+  class writer {
   public:
     /// Constructs a writer from a block.
     /// @param blk The block to serialize into.
@@ -36,8 +34,7 @@ public:
     /// @param x The object to serialize.
     /// @param count The number of elements *x* should count for.
     template <typename T>
-    bool write(T const& x, size_t count = 1)
-    {
+    bool write(T const& x, size_t count = 1) {
       serializer_ << x;
       block_.elements_ += count;
       return true;
@@ -62,8 +59,7 @@ public:
   };
 
   /// A proxy class to deserialize from the block.
-  class reader
-  {
+  class reader {
   public:
     /// Constructs a reader from a block.
     /// @param blk The block to extract objects from.
@@ -73,8 +69,7 @@ public:
     /// @param x The object to deserialize into.
     /// @param count The number of elements *x* should count for.
     template <typename T>
-    bool read(T& x, size_t count = 1)
-    {
+    bool read(T& x, size_t count = 1) {
       if (available_ == 0)
         return false;
 

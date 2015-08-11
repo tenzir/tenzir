@@ -8,8 +8,7 @@ namespace vast {
 namespace expr {
 
 /// Transforms schema extractors into one or more data extractors.
-struct schema_resolver
-{
+struct schema_resolver {
   schema_resolver(type const& t);
 
   trial<expression> operator()(none);
@@ -21,8 +20,7 @@ struct schema_resolver
   trial<expression> operator()(data const& d, schema_extractor const& e);
 
   template <typename T, typename U>
-  trial<expression> operator()(T const& lhs, U const& rhs)
-  {
+  trial<expression> operator()(T const& lhs, U const& rhs) {
     return {predicate{lhs, op_, rhs}};
   }
 
@@ -35,8 +33,7 @@ struct schema_resolver
 // - Type extractor: replaces the predicate with one or more data extractors.
 // - Data extractor: removes the predicate if the event type does not match the
 //   type given to this visitor.
-struct type_resolver
-{
+struct type_resolver {
   type_resolver(type const& event_type);
 
   expression operator()(none);

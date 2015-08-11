@@ -8,8 +8,7 @@ namespace vast {
 
 /// Receives chunks from SOURCEs, imbues them with an ID, and relays them to
 /// ARCHIVE and INDEX.
-struct importer : flow_controlled_actor
-{
+struct importer : flow_controlled_actor {
   importer();
   void on_exit() override;
   caf::behavior make_behavior() override;

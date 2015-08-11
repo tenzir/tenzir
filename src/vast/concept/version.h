@@ -13,8 +13,7 @@ struct version;
 
 namespace detail {
 
-struct is_versionized
-{
+struct is_versionized {
   template <typename T>
   static auto test(T*) -> decltype(version<T>::serial(), std::true_type());
 

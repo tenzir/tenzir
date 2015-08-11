@@ -7,8 +7,7 @@
 using namespace vast;
 using namespace std::string_literals;
 
-TEST(data)
-{
+TEST(data) {
   auto p = make_parser<data>();
   data d;
 

@@ -16,29 +16,25 @@ namespace vast {
 /// A horizontal partition of the index.
 ///
 /// For each event batch PARTITION receives, it spawns one EVENT_INDEXERs per
-/// type occurring in the batch and forwards them the events. 
-struct partition : flow_controlled_actor
-{
+/// type occurring in the batch and forwards them the events.
+struct partition : flow_controlled_actor {
   using bitstream_type = default_bitstream;
 
-  struct evaluator : expr::bitstream_evaluator<evaluator, default_bitstream>
-  {
+  struct evaluator : expr::bitstream_evaluator<evaluator, default_bitstream> {
     evaluator(partition const& p);
     bitstream_type const* lookup(predicate const& pred) const;
 
     partition const& partition_;
   };
 
-  struct predicate_state
-  {
+  struct predicate_state {
     caf::actor task;
     bitstream_type hits;
     util::flat_set<event_id> cache;
     util::flat_set<expression const*> queries;
   };
 
-  struct query_state
-  {
+  struct query_state {
     caf::actor task;
     bitstream_type hits;
   };

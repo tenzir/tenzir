@@ -8,8 +8,7 @@
 namespace vast {
 
 /// Keeps track of the event ID space.
-struct identifier : default_actor
-{
+struct identifier : default_actor {
   /// Constructs the ID tracker.
   /// @param dir The directory where to save the ID to.
   identifier(path dir);

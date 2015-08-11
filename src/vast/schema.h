@@ -11,8 +11,7 @@
 namespace vast {
 
 /// An ordered sequence of of named types.
-class schema : util::equality_comparable<schema>
-{
+class schema : util::equality_comparable<schema> {
   friend access;
 
 public:

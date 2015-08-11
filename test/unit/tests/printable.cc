@@ -13,8 +13,7 @@
 using namespace vast;
 using namespace std::string_literals;
 
-TEST(signed integers)
-{
+TEST(signed integers) {
   auto i = 42;
   std::string str;
   CHECK(printers::integral<int>(str, i));
@@ -26,16 +25,14 @@ TEST(signed integers)
   CHECK(str == "-42");
 }
 
-TEST(unsigned integers)
-{
+TEST(unsigned integers) {
   auto i = 42u;
   std::string str;
   CHECK(printers::integral<unsigned>(str, i));
   CHECK(str == "42");
 }
 
-TEST(floating point)
-{
+TEST(floating point) {
   std::string str;
   auto d = double{0.0};
   CHECK(printers::real(str, d));
@@ -87,8 +84,7 @@ TEST(floating point)
   CHECK(str == "123456.001230");
 }
 
-TEST(string)
-{
+TEST(string) {
   std::string str;
   CHECK(printers::str(str, "foo"));
   CHECK(str == "foo");
@@ -100,48 +96,41 @@ TEST(string)
 
 namespace ns {
 
-struct foo
-{
+struct foo {
   int i = 42;
 };
 
 } // namespace n
 
 template <>
-struct access::printer<ns::foo> : vast::printer<access::printer<ns::foo>>
-{
+struct access::printer<ns::foo> : vast::printer<access::printer<ns::foo>> {
   template <typename Iterator>
-  bool print(Iterator& out, ns::foo const& x) const
-  {
+  bool print(Iterator& out, ns::foo const& x) const {
     using vast::print;
     return print(out, x.i);
   }
 };
 
-TEST(custom type)
-{
+TEST(custom type) {
   std::string str;
   CHECK(print(std::back_inserter(str), ns::foo{}));
   CHECK(str == "+42");
 }
 
-TEST(stream)
-{
+TEST(stream) {
   std::ostringstream ss;
   auto x = ns::foo{};
   ss << x;
   CHECK(ss.str() == "+42");
 }
 
-TEST(to)
-{
+TEST(to) {
   auto t = to<std::string>(true);
   REQUIRE(t);
   CHECK(*t == "T");
 }
 
-TEST(to_string)
-{
+TEST(to_string) {
   auto str = to_string(true);
   CHECK(str == "T");
 }

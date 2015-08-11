@@ -19,30 +19,23 @@ std::pair<size_t, size_t> copy(input_stream& source, output_stream& sink);
 /// @param begin The beginning of the data.
 /// @param end The end of the data.
 template <typename Iterator>
-bool copy(Iterator begin, Iterator end, output_stream& sink)
-{
+bool copy(Iterator begin, Iterator end, output_stream& sink) {
   auto buf = sink.next_block();
-  if (! buf)
+  if (!buf)
     return false;
-  while (begin != end)
-  {
+  while (begin != end) {
     size_t input_size = end - begin;
-    if (input_size <= buf.size())
-    {
+    if (input_size <= buf.size()) {
       std::copy(begin, end, buf.data());
       sink.rewind(buf.size() - input_size);
       break;
-    }
-    else if (buf.size() == 0)
-    {
+    } else if (buf.size() == 0) {
       return false;
-    }
-    else
-    {
+    } else {
       std::copy(begin, begin + buf.size(), buf.data());
       begin += buf.size();
       buf = sink.next_block();
-      if (! buf)
+      if (!buf)
         break;
     }
   }

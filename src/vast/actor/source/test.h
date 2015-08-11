@@ -12,13 +12,14 @@
 namespace vast {
 namespace source {
 
-using distribution = util::variant<
-  std::uniform_int_distribution<integer>,
-  std::uniform_int_distribution<count>,
-  std::uniform_real_distribution<long double>,
-  std::normal_distribution<long double>,
-  util::pareto_distribution<long double>
->;
+using distribution =
+  util::variant<
+    std::uniform_int_distribution<integer>,
+    std::uniform_int_distribution<count>,
+    std::uniform_real_distribution<long double>,
+    std::normal_distribution<long double>,
+    util::pareto_distribution<long double>
+  >;
 
 // 64-bit linear congruential generator with MMIX/Knuth parameterization.
 using lcg64 =
@@ -37,11 +38,9 @@ using lcg = lcg64;
 #endif
 
 /// A source that generates random events according to a given schema.
-class test : public base<test>
-{
+class test : public base<test> {
 public:
-  struct blueprint
-  {
+  struct blueprint {
     record data;
     std::vector<distribution> dists;
   };

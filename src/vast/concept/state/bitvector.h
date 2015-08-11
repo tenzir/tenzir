@@ -8,11 +8,9 @@ namespace vast {
 class bitvector;
 
 template <>
-struct access::state<bitvector>
-{
+struct access::state<bitvector> {
   template <typename T, typename F>
-  static void call(T&& x, F f)
-  {
+  static void call(T&& x, F f) {
     f(x.num_bits_, x.bits_);
   }
 };

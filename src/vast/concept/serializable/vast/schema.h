@@ -17,14 +17,12 @@ namespace vast {
 // keep the pointer relationships of the types intact.
 
 template <typename Serializer>
-void serialize(Serializer& sink, schema const& sch)
-{
+void serialize(Serializer& sink, schema const& sch) {
   sink << to_string(sch);
 }
 
 template <typename Deserializer>
-void deserialize(Deserializer& source, schema& sch)
-{
+void deserialize(Deserializer& source, schema& sch) {
   std::string str;
   source >> str;
   if (str.empty())

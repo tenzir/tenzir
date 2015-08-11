@@ -8,12 +8,10 @@ namespace vast {
 
 /// Base class for serialziers.
 template <typename Derived>
-class serializer
-{
+class serializer {
 public:
   template <typename T>
-  friend Derived& operator<<(Derived& sink, T const& x)
-  {
+  friend Derived& operator<<(Derived& sink, T const& x) {
     sink.put(x);
     return sink;
   }
@@ -21,8 +19,7 @@ public:
   /// Writes an arithmetic value.
   /// @param x The value to write.
   template <typename T>
-  auto write(T x)
-    -> std::enable_if_t<std::is_arithmetic<T>::value>;
+  auto write(T x) -> std::enable_if_t<std::is_arithmetic<T>::value>;
 
   /// Writes raw bytes.
   /// @param data A pointer to the source of the write.
@@ -33,16 +30,14 @@ public:
   /// @tparam T The type of the instance to be serialized.
   /// @returns The version of type `T`.
   template <typename T>
-  uint32_t begin_instance()
-  {
+  uint32_t begin_instance() {
     return 0;
   }
 
   /// Hook executed after serializing an instance.
   /// @tparam T The type of the just serialized instance.
   template <typename T>
-  void end_instance()
-  {
+  void end_instance() {
     // nop
   }
 
@@ -51,34 +46,28 @@ public:
   void begin_sequence(uint64_t size);
 
   /// Finishes writing a sequence.
-  void end_sequence()
-  {
+  void end_sequence() {
     // nop
   }
 
   /// Serializes an instance.
   /// @param x The instance to write.
   template <typename T>
-  auto put(T const& x)
-    -> decltype(serialize(std::declval<Derived&>(), x, 0))
-  {
+  auto put(T const& x) -> decltype(serialize(std::declval<Derived&>(), x, 0)) {
     auto version = derived()->template begin_instance<T>();
     serialize(*derived(), x, version);
     derived()->template end_instance<T>();
   }
 
   template <typename T>
-  auto put(T const& x)
-    -> decltype(serialize(std::declval<Derived&>(), x))
-  {
+  auto put(T const& x) -> decltype(serialize(std::declval<Derived&>(), x)) {
     derived()->template begin_instance<T>();
     serialize(*derived(), x);
     derived()->template end_instance<T>();
   }
 
   template <typename T, typename... Ts>
-  void put(T const& x, Ts const&... xs)
-  {
+  void put(T const& x, Ts const&... xs) {
     put(x);
     put(xs...);
   }
@@ -88,8 +77,7 @@ public:
   uint64_t bytes() const;
 
 private:
-  Derived* derived()
-  {
+  Derived* derived() {
     return static_cast<Derived*>(this);
   }
 };

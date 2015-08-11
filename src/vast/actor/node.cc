@@ -41,31 +41,26 @@ using namespace std::string_literals;
 
 namespace vast {
 
-path const& node::log_path()
-{
-  static auto const ts = std::to_string(time::now().time_since_epoch().seconds());
+path const& node::log_path() {
+  static auto const ts
+    = std::to_string(time::now().time_since_epoch().seconds());
   static auto const pid = std::to_string(util::process_id());
   static auto const dir = path{"log"} / (ts + '_' + pid);
   return dir;
 }
 
 node::node(std::string const& name, path const& dir)
-  : default_actor{"node"},
-    name_{name},
-    dir_{dir}
-{
+  : default_actor{"node"}, name_{name}, dir_{dir} {
 }
 
-void node::on_exit()
-{
+void node::on_exit() {
   store_ = invalid_actor;
   accountant_ = invalid_actor;
 }
 
-behavior node::make_behavior()
-{
-  accountant_ =
-    spawn<accountant<uint64_t>, linked>(dir_ / log_path() / "accounting.log");
+behavior node::make_behavior() {
+  accountant_
+    = spawn<accountant<uint64_t>, linked>(dir_ / log_path() / "accounting.log");
   store_ = spawn<key_value_store, linked>();
   // We always begin with registering ourselves in the key value store. We
   // don't have to check for conflicting names until we peer with another node.
@@ -78,61 +73,48 @@ behavior node::make_behavior()
       quit(exit::error);
     }
   );
-  return
-  {
+  return {
     //
     // PUBLIC
     //
-    on("stop") >> [=]
-    {
+    on("stop") >> [=] {
       return stop();
     },
-    on("peer", arg_match) >> [=](std::string const& e)
-    {
+    on("peer", arg_match) >> [=](std::string const& e) {
       return request_peering(e);
     },
-    on("spawn", any_vals) >> [=]
-    {
+    on("spawn", any_vals) >> [=] {
       return spawn_actor(current_message().drop(1));
     },
     on("send", val<std::string>, "run")
-      >> [=](std::string const& arg, std::string const& /* run */)
-    {
+      >> [=](std::string const& arg, std::string const& /* run */) {
       return send_run(arg);
     },
     on("send", val<std::string>, "flush")
-      >> [=](std::string const& arg, std::string const& /* flush */)
-    {
+      >> [=](std::string const& arg, std::string const& /* flush */) {
       send_flush(arg);
     },
-    on("quit", arg_match) >> [=](std::string const& arg)
-    {
+    on("quit", arg_match) >> [=](std::string const& arg) {
       return quit_actor(arg);
     },
     on("connect", arg_match)
-      >> [=](std::string const& source, std::string const& sink)
-    {
+      >> [=](std::string const& source, std::string const& sink) {
       return connect(source, sink);
     },
     on("disconnect", arg_match)
-      >> [=](std::string const& source, std::string const& sink)
-    {
+      >> [=](std::string const& source, std::string const& sink) {
       return disconnect(source, sink);
     },
-    on("show", arg_match) >> [=](std::string const& arg)
-    {
+    on("show", arg_match) >> [=](std::string const& arg) {
       return show(arg, false);
     },
-    on("show", "-v", arg_match) >> [=](std::string const& arg)
-    {
+    on("show", "-v", arg_match) >> [=](std::string const& arg) {
       return show(arg, true);
     },
-    [=](store_atom)
-    {
+    [=](store_atom) {
       return store_;
     },
-    [=](store_atom, get_atom, actor_atom, std::string const& label)
-    {
+    [=](store_atom, get_atom, actor_atom, std::string const& label) {
       auto job = spawn(
         [=](event_based_actor* self) -> behavior {
           return {
@@ -165,25 +147,19 @@ behavior node::make_behavior()
       forward_to(job);
     },
     [=](store_atom, peer_atom, actor const& peer, actor const& peer_store,
-        std::string const& peer_name)
-    {
+        std::string const& peer_name) {
       // Respond to peering request from another node with the forward-to-spawn
       // idiom.
       auto job = spawn(
-        [=](event_based_actor* self, actor parent) -> behavior
-        {
-          return
-          {
-            others >> [=]
-            {
+        [=](event_based_actor* self, actor parent) -> behavior {
+          return {
+            others >> [=] {
               auto rp = self->make_response_promise();
-              auto abort_on_error = [=](error e)
-              {
+              auto abort_on_error = [=](error e) {
                 rp.deliver(make_message(std::move(e)));
                 self->quit(exit::error);
               };
-              if (peer_name == name_)
-              {
+              if (peer_name == name_) {
                 VAST_WARN(this, "ignores new peer with duplicate name");
                 abort_on_error(error{"duplicate peer name"});
                 return;
@@ -194,18 +170,14 @@ behavior node::make_behavior()
               self->send(store_, put_atom::value, key1, peer);
               self->send(store_, put_atom::value, key2, parent);
               self->become(
-                [=](ok_atom)
-                {
+                [=](ok_atom) {
                   self->become(
-                    [=](ok_atom)
-                    {
+                    [=](ok_atom) {
                       self->send(store_, peer_atom::value, peer_store);
                       self->become(
-                        [=](ok_atom)
-                        {
+                        [=](ok_atom) {
                           peer->attach_functor(
-                            [=](uint32_t)
-                            {
+                            [=](uint32_t) {
                               anon_send(store_, delete_atom::value, key1);
                               anon_send(store_, delete_atom::value, key2);
                             }
@@ -247,22 +219,19 @@ behavior node::make_behavior()
   };
 }
 
-message node::stop()
-{
+message node::stop() {
   VAST_VERBOSE(this, "stops");
   quit(exit::stop);
   return make_message(ok_atom::value);
 }
 
-message node::request_peering(std::string const& endpoint)
-{
+message node::request_peering(std::string const& endpoint) {
   VAST_VERBOSE(this, "peers with", endpoint);
   auto host = "127.0.0.1"s;
   auto port = uint16_t{42000};
-  if (! util::parse_endpoint(endpoint, host, port))
+  if (!util::parse_endpoint(endpoint, host, port))
     return make_message(error{"invalid endpoint: ", endpoint});
-  try
-  {
+  try {
     VAST_DEBUG(this, "connects to", host << ':' << port);
     auto peer = caf::io::remote_actor(host.c_str(), port);
     auto result = make_message(ok_atom::value);
@@ -270,12 +239,10 @@ message node::request_peering(std::string const& endpoint)
     auto msg =
       make_message(store_atom::value, peer_atom::value, this, store_, name_);
     self->sync_send(peer, std::move(msg)).await(
-      [&](ok_atom, std::string const& peer_name)
-      {
+      [&](ok_atom, std::string const& peer_name) {
         VAST_INFO(this, "now peers with:", peer_name);
         peer->attach_functor(
-          [=](uint32_t)
-          {
+          [=](uint32_t) {
             auto key1 = "actors/" + name_ + '/' + peer_name;
             auto key2 = "actors/" + peer_name + '/' + name_;
             anon_send(store_, delete_atom::value, key1);
@@ -283,21 +250,17 @@ message node::request_peering(std::string const& endpoint)
           }
         );
       },
-      [&](error& e)
-      {
+      [&](error& e) {
         result = make_message(std::move(e));
       }
     );
     return result;
-  }
-  catch (caf::network_error const& e)
-  {
+  } catch (caf::network_error const& e) {
     return make_message(error{"failed to connect to ", host, ':', port});
   }
 }
 
-message node::spawn_actor(message const& msg)
-{
+message node::spawn_actor(message const& msg) {
   auto syntax = "spawn [arguments] <actor> [params]";
   if (msg.empty())
     return make_message(error{"missing actor: ", syntax});
@@ -315,8 +278,8 @@ message node::spawn_actor(message const& msg)
   std::vector<std::string> args(msg.size());
   for (auto i = 0u; i < msg.size(); ++i)
     args[i] = msg.get_as<std::string>(i);
-  auto a = std::find_first_of(args.begin(), args.end(),
-                              actors.begin(), actors.end());
+  auto a = std::find_first_of(args.begin(), args.end(), actors.begin(),
+                              actors.end());
   if (a == args.end())
     return make_message(error{"invalid actor: ", syntax});
   // Extract spawn arguments.
@@ -324,7 +287,7 @@ message node::spawn_actor(message const& msg)
   auto r = message_builder{args.begin(), a}.extract_opts({
     {"label,l", "a unique label of the actor within this node", label},
   });
-  if (! r.error.empty())
+  if (!r.error.empty())
     return make_message(error{std::move(r.error)});
   if (label.empty())
     return make_message(error{"empty actor label"});
@@ -333,11 +296,10 @@ message node::spawn_actor(message const& msg)
   auto& name = s.size() == 1 ? name_ : s[1];
   auto key = "actors/" + name + '/' + s[0];
   bool actor_exists = false;
-  scoped_actor{}->sync_send(store_, exists_atom::value, key).await(
+  scoped_actor {}->sync_send(store_, exists_atom::value, key).await(
     [&](bool b) { actor_exists = b; }
   );
-  if (actor_exists)
-  {
+  if (actor_exists) {
     VAST_ERROR(this, "aborts spawn: actor", label, "exists already");
     return make_message(error{"actor already exists: ", label});
   }
@@ -345,14 +307,12 @@ message node::spawn_actor(message const& msg)
   auto component = msg.drop(a - args.begin());
   auto params = component.drop(1);
   auto result = component.apply({
-    on("identifier") >> [&]
-    {
+    on("identifier") >> [&] {
       auto i = spawn<identifier>(dir_);
       attach_functor([=](uint32_t ec) { anon_send_exit(i, ec); });
       return make_message(std::move(i), "identifier");
     },
-    on("archive", any_vals) >> [&]
-    {
+    on("archive", any_vals) >> [&] {
       io::compression method;
       auto comp = "lz4"s;
       uint64_t segments = 10;
@@ -362,7 +322,7 @@ message node::spawn_actor(message const& msg)
         {"segments,s", "maximum number of cached segments", segments},
         {"size,m", "maximum size of segment before flushing (MB)", size}
       });
-      if (! r.error.empty())
+      if (!r.error.empty())
         return make_message(error{std::move(r.error)});
       if (comp == "null")
         method = io::null;
@@ -383,8 +343,7 @@ message node::spawn_actor(message const& msg)
       send(a, put_atom::value, accountant_atom::value, accountant_);
       return make_message(std::move(a), "archive");
     },
-    on("index", any_vals) >> [&]
-    {
+    on("index", any_vals) >> [&] {
       uint64_t events = 1 << 20;
       uint64_t passive = 10;
       uint64_t active = 5;
@@ -393,7 +352,7 @@ message node::spawn_actor(message const& msg)
         {"active,a", "maximum active partitions", active},
         {"passive,p", "maximum passive partitions", passive}
       });
-      if (! r.error.empty())
+      if (!r.error.empty())
         return make_message(error{std::move(r.error)});
       auto dir = dir_ / "index";
       auto idx = spawn<index, priority_aware>(dir, events, passive, active);
@@ -401,15 +360,13 @@ message node::spawn_actor(message const& msg)
       send(idx, put_atom::value, accountant_atom::value, accountant_);
       return make_message(std::move(idx), "index");
     },
-    on("importer") >> [&]
-    {
+    on("importer") >> [&] {
       auto imp = spawn<importer, priority_aware>();
       attach_functor([=](uint32_t ec) { anon_send_exit(imp, ec); });
-      //send(imp, put_atom::value, accountant_atom::value, accountant_);
+      // send(imp, put_atom::value, accountant_atom::value, accountant_);
       return make_message(std::move(imp), "importer");
     },
-    on("exporter", any_vals) >> [&]
-    {
+    on("exporter", any_vals) >> [&] {
       VAST_VERBOSE(this, "got exporter parameters:",
                    to_string(current_message().drop(1)));
       auto events = uint64_t{0};
@@ -420,12 +377,11 @@ message node::spawn_actor(message const& msg)
         {"unified,u", "marks a query as unified"},
         {"auto-connect,a", "connect to available archives & indexes"}
       });
-      if (! r.error.empty())
+      if (!r.error.empty())
         return make_message(error{std::move(r.error)});
       // Join remainder into single string.
       std::string str;
-      for (auto i = 0u; i < r.remainder.size(); ++i)
-      {
+      for (auto i = 0u; i < r.remainder.size(); ++i) {
         if (i != 0)
           str += ' ';
         str += r.remainder.get_as<std::string>(i);
@@ -438,15 +394,13 @@ message node::spawn_actor(message const& msg)
         query_opts = query_opts + historical;
       if (r.opts.count("unified") > 0)
         query_opts = unified;
-      if (query_opts == no_query_options)
-      {
+      if (query_opts == no_query_options) {
         VAST_ERROR(this, "got query without options (-h, -c, -u)");
         return make_message(error{"no query options specified (-h, -c, -u)"});
       }
       VAST_DEBUG(this, "parses expression");
       auto expr = detail::to_expression(str);
-      if (! expr)
-      {
+      if (!expr) {
         VAST_VERBOSE(this, "ignores invalid query:", str);
         return make_message(std::move(expr.error()));
       }
@@ -455,69 +409,60 @@ message node::spawn_actor(message const& msg)
       auto exp = spawn<exporter>(*expr, query_opts);
       attach_functor([=](uint32_t ec) { anon_send_exit(exp, ec); });
       send(exp, extract_atom::value, events);
-      if (r.opts.count("auto-connect") > 0)
-      {
+      if (r.opts.count("auto-connect") > 0) {
         std::vector<caf::actor> archives;
         std::vector<caf::actor> indexes;
         scoped_actor self;
         self->sync_send(store_, list_atom::value, "actors/" + name_).await(
           [&](std::map<std::string, caf::message>& m) {
             for (auto& p : m)
-              p.second.apply({
-                [&](caf::actor const& a, std::string const& type)
-                {
+              p.second.apply(
+                {[&](caf::actor const& a, std::string const& type) {
                   VAST_ASSERT(a != invalid_actor);
                   if (type == "archive")
                     send(exp, put_atom::value, archive_atom::value, a);
                   else if (type == "index")
                     send(exp, put_atom::value, index_atom::value, a);
-                }
-              });
+                }});
           }
         );
       }
       return make_message(std::move(exp), "exporter");
     },
-    on("source", any_vals) >> [&]
-    {
+    on("source", any_vals) >> [&] {
       r = params.extract_opts({
         {"auto-connect,a", "connect to available archives & indexes"}
       });
       auto src = source::spawn(params);
-      if (! src)
+      if (!src)
         return make_message(std::move(src.error()));
       send(*src, put_atom::value, accountant_atom::value, accountant_);
-      attach_functor([s=*src](uint32_t ec) { anon_send_exit(s, ec); });
-      if (r.opts.count("auto-connect") > 0)
-      {
+      attach_functor([s = *src](uint32_t ec) { anon_send_exit(s, ec); });
+      if (r.opts.count("auto-connect") > 0) {
         scoped_actor self;
         self->sync_send(store_, list_atom::value, "actors/" + name_).await(
           [&](std::map<std::string, caf::message>& m) {
             for (auto& p : m)
-              p.second.apply({
-                [&](caf::actor const& a, std::string const& type)
-                {
+              p.second.apply(
+                {[&](caf::actor const& a, std::string const& type) {
                   VAST_ASSERT(a != invalid_actor);
                   if (type == "importer")
                     send(*src, put_atom::value, sink_atom::value, a);
-                }
-              });
+                }});
           }
         );
       }
       return make_message(std::move(*src), "source");
     },
-    on("sink", any_vals) >> [&]
-    {
+    on("sink", any_vals) >> [&] {
       auto snk = sink::spawn(params);
-      if (! snk)
+      if (!snk)
         return make_message(std::move(snk.error()));
       send(*snk, put_atom::value, accountant_atom::value, accountant_);
-      attach_functor([s=*snk](uint32_t ec) { anon_send_exit(s, ec); });
+      attach_functor([s = *snk](uint32_t ec) { anon_send_exit(s, ec); });
       return make_message(std::move(*snk), "sink");
     },
-    on("profiler", any_vals) >> [&]
-    {
+    on("profiler", any_vals) >> [&] {
 #ifdef VAST_HAVE_GPERFTOOLS
       auto resolution = 0u;
       r = params.extract_opts({
@@ -525,7 +470,7 @@ message node::spawn_actor(message const& msg)
         {"heap,h", "start the heap profiler"},
         {"resolution,r", "seconds between measurements", resolution}
       });
-      if (! r.error.empty())
+      if (!r.error.empty())
         return make_message(error{std::move(r.error)});
       auto secs = std::chrono::seconds(resolution);
       auto prof = spawn<profiler, detached>(dir_ / log_path(), secs);
@@ -539,19 +484,14 @@ message node::spawn_actor(message const& msg)
       return error{"not compiled with gperftools"};
 #endif
     },
-    others >> []
-    {
-      return error{"invalid actor type"};
-    }
+    others >> [] { return error{"invalid actor type"}; }
   });
   result = result->apply({
-    [&](error& e) {
-      return std::move(e);
-    },
+    [&](error& e) { return std::move(e); },
     [&](actor const& a, std::string const& type) {
       VAST_ASSERT(a != invalid_actor);
       auto t = put({a, type, label});
-      if (! t)
+      if (!t)
         return make_message(std::move(t.error()));
       VAST_ASSERT(*t != invalid_actor);
       return make_message(std::move(*t));
@@ -561,12 +501,10 @@ message node::spawn_actor(message const& msg)
   return std::move(*result);
 }
 
-message node::send_run(std::string const& arg)
-{
+message node::send_run(std::string const& arg) {
   VAST_VERBOSE(this, "sends RUN to", arg);
   auto state = get(arg);
-  if (! state.actor)
-  {
+  if (!state.actor) {
     VAST_ERROR(this, "has no such actor:", arg);
     return make_message(error{"no such actor: ", arg});
   }
@@ -574,59 +512,47 @@ message node::send_run(std::string const& arg)
   return make_message(ok_atom::value);
 }
 
-void node::send_flush(std::string const& arg)
-{
+void node::send_flush(std::string const& arg) {
   VAST_VERBOSE(this, "sends FLUSH to", arg);
   auto rp = make_response_promise();
   auto state = get(arg);
-  if (! state.actor)
-  {
+  if (!state.actor) {
     rp.deliver(make_message(error{"no such actor: ", arg}));
     return;
   }
-  if (! (state.type == "index" || state.type == "archive"))
-  {
+  if (!(state.type == "index" || state.type == "archive")) {
     rp.deliver(make_message(error{state.type, " does not support flushing"}));
     return;
   };
   auto job = spawn(
-    [=](event_based_actor* self, actor target) -> behavior
-    {
-      return
-      {
-        others >> [=]
-        {
+    [=](event_based_actor* self, actor target) -> behavior {
+      return {
+        others >> [=] {
           self->send(target, flush_atom::value);
           self->become(
-            [=](actor const& task)
-            {
+            [=](actor const& task) {
               self->monitor(task);
               self->become(
-                [=](down_msg const& msg)
-                {
+                [=](down_msg const& msg) {
                   VAST_ASSERT(msg.source == task);
                   rp.deliver(make_message(ok_atom::value));
                   self->quit(exit::done);
                 }
               );
             },
-            [=](ok_atom)
-            {
+            [=](ok_atom) {
               rp.deliver(self->current_message());
               self->quit(exit::done);
             },
-            [=](error const&)
-            {
+            [=](error const&) {
               rp.deliver(self->current_message());
               self->quit(exit::error);
             },
-            others >> [=]
-            {
+            others >> [=] {
               rp.deliver(make_message(error{"unexpected response to FLUSH"}));
               self->quit(exit::error);
             },
-            after(time::seconds(10)) >> [=]
-            {
+            after(time::seconds(10)) >> [=] {
               rp.deliver(make_message(error{"timed out"}));
               self->quit(exit::error);
             }
@@ -639,8 +565,7 @@ void node::send_flush(std::string const& arg)
   forward_to(job);
 }
 
-message node::quit_actor(std::string const& arg)
-{
+message node::quit_actor(std::string const& arg) {
   VAST_VERBOSE(this, "terminates actor", arg);
   auto state = get(arg);
   if (! state.actor)
@@ -649,11 +574,9 @@ message node::quit_actor(std::string const& arg)
   return make_message(ok_atom::value);
 }
 
-message node::connect(std::string const& sources, std::string const& sinks)
-{
+message node::connect(std::string const& sources, std::string const& sinks) {
   for (auto& source : util::split_to_str(sources, ","))
-    for (auto& sink : util::split_to_str(sinks, ","))
-    {
+    for (auto& sink : util::split_to_str(sinks, ",")) {
       VAST_VERBOSE(this, "connects actors:", source, "->", sink);
       // Retrieve source and sink information.
       auto src = get(source);
@@ -664,30 +587,25 @@ message node::connect(std::string const& sources, std::string const& sinks)
         return make_message(error{"no such sink: ", sink});
       if (has_topology_entry(src.fqn, snk.fqn))
         return make_message(
-            error{"connection already exists: ", source, " -> ", sink});
+          error{"connection already exists: ", source, " -> ", sink});
       // Wire actors based on their type.
       message msg;
-      if (src.type == "source")
-      {
+      if (src.type == "source") {
         if (snk.type == "importer")
           msg = make_message(put_atom::value, sink_atom::value, snk.actor);
         else
           return make_message(error{"sink not an importer: ", snk.type});
-      }
-      else if (src.type == "importer")
-      {
+      } else if (src.type == "importer") {
         if (snk.type == "identifier")
-          msg = make_message(put_atom::value, identifier_atom::value,
-                             snk.actor);
+          msg
+            = make_message(put_atom::value, identifier_atom::value, snk.actor);
         else if (snk.type == "archive")
           msg = make_message(put_atom::value, archive_atom::value, snk.actor);
         else if (snk.type == "index")
           msg = make_message(put_atom::value, index_atom::value, snk.actor);
         else
           return make_message(error{"invalid importer sink: ", snk.type});
-      }
-      else if (src.type == "exporter")
-      {
+      } else if (src.type == "exporter") {
         if (snk.type == "archive")
           msg = make_message(put_atom::value, archive_atom::value, snk.actor);
         else if (snk.type == "index")
@@ -696,9 +614,7 @@ message node::connect(std::string const& sources, std::string const& sinks)
           msg = make_message(put_atom::value, sink_atom::value, snk.actor);
         else
           return make_message(error{"invalid exporter sink: ", snk.type});
-      }
-      else
-      {
+      } else {
         return make_message(error{"invalid source: ", source});
       }
       send(src.actor, msg);
@@ -713,17 +629,15 @@ message node::connect(std::string const& sources, std::string const& sinks)
   return make_message(ok_atom::value);
 }
 
-message node::disconnect(std::string const& sources, std::string const& sinks)
-{
+message node::disconnect(std::string const& sources, std::string const& sinks) {
   for (auto& source : util::split_to_str(sources, ","))
-    for (auto& sink : util::split_to_str(sinks, ","))
-    {
+    for (auto& sink : util::split_to_str(sinks, ",")) {
       VAST_VERBOSE(this, "disconnects actors:", source, "->", sink);
       auto src = get(source);
       auto snk = get(sink);
       if (has_topology_entry(src.fqn, snk.fqn))
         return make_message(
-            error{"connection already exists: ", source, " -> ", sink});
+          error{"connection already exists: ", source, " -> ", sink});
       // TODO: send message that performs actual diconnection.
       scoped_actor self;
       auto key = "topology/" + src.fqn + '/' + snk.fqn;
@@ -734,8 +648,7 @@ message node::disconnect(std::string const& sources, std::string const& sinks)
   return make_message(ok_atom::value);
 }
 
-message node::show(std::string const& arg, bool verbose)
-{
+message node::show(std::string const& arg, bool verbose) {
   VAST_VERBOSE(this, "got request to show", arg);
   std::string result;
   scoped_actor self;
@@ -757,16 +670,14 @@ message node::show(std::string const& arg, bool verbose)
     return result;
   };
   self->sync_send(store_, list_atom::value, key).await(
-    [&](std::map<std::string, message> const& values)
-    {
+    [&](std::map<std::string, message> const& values) {
       result = util::join(values.begin(), values.end(), "\n", pred);
     }
   );
   return make_message(std::move(result));
 }
 
-node::actor_state node::get(std::string const& label)
-{
+node::actor_state node::get(std::string const& label) {
   auto s = util::split_to_str(label, "@");
   auto& name = s.size() == 1 ? name_ : s[1];
   auto key = "actors/" + name + '/' + s[0];
@@ -780,20 +691,17 @@ node::actor_state node::get(std::string const& label)
   return result;
 };
 
-trial<actor> node::put(actor_state const& state)
-{
+trial<actor> node::put(actor_state const& state) {
   auto key = "actors/" + name_ + "/" + state.fqn;
   auto result = trial<actor>{state.actor};
-  scoped_actor{}->sync_send(store_, put_atom::value, key, state.actor,
-                            state.type).await(
-    [&](ok_atom)
-    {
+  auto msg = make_message(put_atom::value, key, state.actor, state.type);
+  scoped_actor{}->sync_send(store_, std::move(msg)).await(
+    [&](ok_atom) {
       state.actor->attach_functor(
         [=](uint32_t) { anon_send(store_, delete_atom::value, key); }
       );
     },
-    [&](error& e)
-    {
+    [&](error& e) {
       send_exit(state.actor, exit::error);
       result = std::move(e);
     }
@@ -801,15 +709,12 @@ trial<actor> node::put(actor_state const& state)
   return result;
 };
 
-bool node::has_topology_entry(std::string const& src, std::string const& snk)
-{
+bool node::has_topology_entry(std::string const& src, std::string const& snk) {
   bool result = false;
   scoped_actor self;
   self->sync_send(store_, list_atom::value, "topology/" + src).await(
-    [&](std::map<std::string, message> const& vals)
-    {
-      auto pred = [&](auto& p)
-      {
+    [&](std::map<std::string, message> const& vals) {
+      auto pred = [&](auto& p) {
         return util::split_to_str(p.first, "/").back() == snk;
       };
       result = std::find_if(vals.begin(), vals.end(), pred) != vals.end();

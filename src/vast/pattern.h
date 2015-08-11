@@ -10,8 +10,7 @@ namespace vast {
 struct access;
 
 /// A regular expression.
-class pattern : util::totally_ordered<pattern>
-{
+class pattern : util::totally_ordered<pattern> {
   friend access;
 
 public:

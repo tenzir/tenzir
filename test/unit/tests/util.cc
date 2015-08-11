@@ -7,15 +7,13 @@
 
 using namespace vast;
 
-TEST(error)
-{
+TEST(error) {
   error e;
   error shoot{"holy cow"};
   CHECK(shoot.msg() == "holy cow");
 }
 
-TEST(trial)
-{
+TEST(trial) {
   trial<int> t = 42;
   REQUIRE(t);
   CHECK(*t == 42);
@@ -25,7 +23,7 @@ TEST(trial)
   CHECK(*u == 42);
 
   t = error{"whoops"};
-  CHECK(! t);
+  CHECK(!t);
 
   t = std::move(u);
   CHECK(t);
@@ -33,27 +31,26 @@ TEST(trial)
   trial<void> x;
   CHECK(x);
   x = error{"bad"};
-  CHECK(! x);
+  CHECK(!x);
   x = nothing;
   CHECK(x);
 }
 
-TEST(result)
-{
+TEST(result) {
   result<int> t;
   REQUIRE(t.empty());
-  REQUIRE(! t.engaged());
-  REQUIRE(! t.failed());
+  REQUIRE(!t.engaged());
+  REQUIRE(!t.failed());
 
   t = 42;
-  REQUIRE(! t.empty());
+  REQUIRE(!t.empty());
   REQUIRE(t.engaged());
-  REQUIRE(! t.failed());
+  REQUIRE(!t.failed());
   REQUIRE(*t == 42);
 
   t = error{"whoops"};
-  REQUIRE(! t.empty());
-  REQUIRE(! t.engaged());
+  REQUIRE(!t.empty());
+  REQUIRE(!t.engaged());
   REQUIRE(t.failed());
 
   CHECK(t.error().msg() == "whoops");

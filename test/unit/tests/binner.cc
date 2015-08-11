@@ -5,8 +5,7 @@
 
 using namespace vast;
 
-TEST(precision-binner 1)
-{
+TEST(precision - binner 1) {
   using b = precision_binner<1>;
   CHECK(b::integral_max == 10);
   CHECK(b::fractional_max == 1);
@@ -16,8 +15,7 @@ TEST(precision-binner 1)
   CHECK(b::bin(123.456) == 10.0);
 }
 
-TEST(precision-binner 5 and 2)
-{
+TEST(precision - binner 5 and 2) {
   using b = precision_binner<5, 2>;
   CHECK(b::bin(-7.8) == -7.8);
   CHECK(b::bin(42.123) == 42.12);
@@ -25,8 +23,7 @@ TEST(precision-binner 5 and 2)
   CHECK(b::bin(123456.0) == 100000.0);
 }
 
-TEST(precision-binner 2 and 3)
-{
+TEST(precision - binner 2 and 3) {
   using b = precision_binner<2, 3>;
   CHECK(b::integral_max == 100);
   CHECK(b::fractional_max == 1000);
@@ -41,8 +38,7 @@ TEST(precision-binner 2 and 3)
   CHECK(b::bin(43.0015) == 43.002);
 }
 
-TEST(decimal binner 1)
-{
+TEST(decimal binner 1) {
   using b = decimal_binner<1>;
   CHECK(b::bucket_size == 10);
   CHECK(b::digits2 == 4);
@@ -54,8 +50,7 @@ TEST(decimal binner 1)
   CHECK(b::bin(49.5) == 5);
 }
 
-TEST(decimal binner 2)
-{
+TEST(decimal binner 2) {
   using b = decimal_binner<2>;
   CHECK(b::bucket_size == 100);
 }

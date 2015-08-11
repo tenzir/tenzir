@@ -15,16 +15,15 @@ template <
   typename OutputIterator
 >
 bool print_delimited(InputIterator begin, InputIterator end,
-                     OutputIterator&& out)
-{
+                     OutputIterator&& out) {
   static auto const printer = make_printer<T>{};
   static auto const delim = Delimiter{};
   if (begin == end)
     return true;
-  if (! printer.print(out, *begin))
+  if (!printer.print(out, *begin))
     return false;
   while (++begin != end)
-    if (! (delim.print(out, unused) && printer.print(out, *begin)))
+    if (!(delim.print(out, unused) && printer.print(out, *begin)))
       return false;
   return true;
 }
@@ -32,14 +31,13 @@ bool print_delimited(InputIterator begin, InputIterator end,
 /// Prints a delimited Iterator range.
 template <typename InputIterator, typename OutputIterator, typename Delimiter>
 bool print_delimited(InputIterator begin, InputIterator end,
-                     OutputIterator&& out, Delimiter const& delim)
-{
+                     OutputIterator&& out, Delimiter const& delim) {
   if (begin == end)
     return true;
-  if (! print(out, *begin))
+  if (!print(out, *begin))
     return false;
   while (++begin != end)
-    if (! (print(out, delim) && print(out, *begin)))
+    if (!(print(out, delim) && print(out, *begin)))
       return false;
   return true;
 }

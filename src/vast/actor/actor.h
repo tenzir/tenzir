@@ -16,39 +16,34 @@ namespace caf {
 
 template <typename Char, typename Traits>
 std::basic_ostream<Char, Traits>&
-operator<<(std::basic_ostream<Char, Traits>& out, actor_addr const& a)
-{
+operator<<(std::basic_ostream<Char, Traits>& out, actor_addr const& a) {
   out << '#' << a.id();
   return out;
 }
 
 template <typename Char, typename Traits>
 std::basic_ostream<Char, Traits>&
-operator<<(std::basic_ostream<Char, Traits>& out, actor const& a)
-{
+operator<<(std::basic_ostream<Char, Traits>& out, actor const& a) {
   out << a.address();
   return out;
 }
 
 template <typename Char, typename Traits>
 std::basic_ostream<Char, Traits>&
-operator<<(std::basic_ostream<Char, Traits>& out, abstract_actor const& a)
-{
+operator<<(std::basic_ostream<Char, Traits>& out, abstract_actor const& a) {
   out << a.address();
   return out;
 }
 
 template <typename Stream>
-inline Stream& operator<<(Stream& out, actor const* a)
-{
+inline Stream& operator<<(Stream& out, actor const* a) {
   VAST_ASSERT(a != nullptr);
   out << *a;
   return out;
 }
 
 template <typename Stream>
-inline Stream& operator<<(Stream& out, abstract_actor const* a)
-{
+inline Stream& operator<<(Stream& out, abstract_actor const* a) {
   VAST_ASSERT(a != nullptr);
   out << *a;
   return out;
@@ -63,50 +58,40 @@ inline Stream& operator<<(Stream& out, abstract_actor const* a)
 namespace vast {
 
 /// The base class for VAST actors.
-class default_actor : public caf::event_based_actor
-{
+class default_actor : public caf::event_based_actor {
 public:
-  default_actor(char const* name = "actor")
-    : name_{name}
-  {
+  default_actor(char const* name = "actor") : name_{name} {
     VAST_DEBUG(this, "spawned");
-    attach_functor([=](uint32_t reason)
-    {
+    attach_functor([=](uint32_t reason) {
       VAST_DEBUG(this, "terminated (" << render_exit_reason(reason) << ')');
     });
   }
 
-  char const* name() const
-  {
+  char const* name() const {
     return name_;
   }
 
-  void name(char const* name)
-  {
+  void name(char const* name) {
     name_ = name;
   }
 
-  std::string label() const
-  {
+  std::string label() const {
     return std::string{name()} + '#' + std::to_string(id());
   }
 
 protected:
-  bool downgrade_exit()
-  {
-    if (! current_mailbox_element()->mid.is_high_priority())
+  bool downgrade_exit() {
+    if (!current_mailbox_element()->mid.is_high_priority())
       return false;
     VAST_DEBUG(this, "delays exit");
     send(caf::message_priority::normal, this, current_message());
     return true;
   };
 
-  auto catch_unexpected()
-  {
-    return caf::others() >> [=]
-    {
-      VAST_WARN(this, "got unexpected message from",
-                current_sender() << ':', caf::to_string(current_message()));
+  auto catch_unexpected() {
+    return caf::others() >> [=] {
+      VAST_WARN(this, "got unexpected message from", current_sender() << ':',
+                caf::to_string(current_message()));
     };
   }
 
@@ -114,15 +99,13 @@ private:
   char const* name_ = "actor";
 };
 
-inline std::ostream& operator<<(std::ostream& out, default_actor const& a)
-{
+inline std::ostream& operator<<(std::ostream& out, default_actor const& a) {
   out << a.label();
   return out;
 }
 
 template <typename Stream>
-inline Stream& operator<<(Stream& out, default_actor const* a)
-{
+inline Stream& operator<<(Stream& out, default_actor const* a) {
   VAST_ASSERT(a != nullptr);
   out << *a;
   return out;
@@ -179,29 +162,23 @@ inline Stream& operator<<(Stream& out, default_actor const* a)
 /// with `overloaded(false)`. Calls to these functions propagate the signal
 /// upstream to the sender. At the source producing data, the handlers for
 /// overload/underload should regulate the sender rate.
-class flow_controlled_actor : public default_actor
-{
+class flow_controlled_actor : public default_actor {
 public:
   flow_controlled_actor(char const* name = "flow-controlled-actor")
-    : default_actor{name}
-  {
+    : default_actor{name} {
     attach_functor([=](uint32_t) { upstream_.clear(); });
   }
 
 protected:
-  void add_upstream_node(caf::actor const& upstream)
-  {
+  void add_upstream_node(caf::actor const& upstream) {
     VAST_DEBUG(this, "registers", upstream, "as upstream flow-control node");
     monitor(upstream);
     upstream_.insert(upstream);
   }
 
-  bool remove_upstream_node(caf::actor_addr const& upstream)
-  {
-    auto i = std::find_if(
-        upstream_.begin(),
-        upstream_.end(),
-        [&](auto& u) { return u == upstream; });
+  bool remove_upstream_node(caf::actor_addr const& upstream) {
+    auto i = std::find_if(upstream_.begin(), upstream_.end(),
+                          [&](auto& u) { return u == upstream; });
     if (i == upstream_.end())
       return false;
     VAST_DEBUG(this, "deregisters upstream flow-control node", upstream);
@@ -209,24 +186,19 @@ protected:
     return true;
   }
 
-  bool overloaded() const
-  {
+  bool overloaded() const {
     return overloaded_;
   }
 
-  bool overloaded(bool flag)
-  {
-    if (flag)
-    {
+  bool overloaded(bool flag) {
+    if (flag) {
       if (overloaded())
         return false;
       VAST_DEBUG(this, "becomes overloaded");
       overloaded_ = true;
       propagate_overload();
-    }
-    else
-    {
-      if (! overloaded())
+    } else {
+      if (!overloaded())
         return false;
       VAST_DEBUG(this, "becomes underloaded");
       overloaded_ = false;
@@ -235,44 +207,35 @@ protected:
     return true;
   }
 
-  void propagate_overload()
-  {
-    for (auto& u : upstream_)
-    {
+  void propagate_overload() {
+    for (auto& u : upstream_) {
       VAST_DEBUG(this, "propagates overload signal to", u);
       send(caf::message_priority::high, u, overload_atom::value);
     }
   }
 
-  void propagate_underload()
-  {
-    for (auto& u : upstream_)
-    {
+  void propagate_underload() {
+    for (auto& u : upstream_) {
       VAST_DEBUG(this, "propagates underload signal to", u);
       send(caf::message_priority::high, u, underload_atom::value);
     }
   }
 
-  auto forward_overload()
-  {
+  auto forward_overload() {
     return [=](overload_atom) { propagate_overload(); };
   }
 
-  auto forward_underload()
-  {
+  auto forward_underload() {
     return [=](underload_atom) { propagate_underload(); };
   }
 
-  auto register_upstream_node()
-  {
-    return [=](upstream_atom, caf::actor const& upstream)
-    {
+  auto register_upstream_node() {
+    return [=](upstream_atom, caf::actor const& upstream) {
       add_upstream_node(upstream);
     };
   }
 
-  auto upstream() const
-  {
+  auto upstream() const {
     return upstream_;
   }
 

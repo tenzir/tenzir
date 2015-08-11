@@ -12,113 +12,90 @@ namespace vast {
 /// An abstraction of a task where each work item consists of an actor. The
 /// task completes as soon as all registered items send either a DONE atom or
 /// terminate.
-struct task : default_actor
-{
+struct task : default_actor {
   /// Spawns a task.
   /// @param xs Opaque tokens return appended to the completion message.
   template <typename... Ts>
   task(Ts&&... xs)
     : default_actor{"task"},
-      done_msg_{caf::make_message(done_atom::value, std::forward<Ts>(xs)...)}
-  {
+      done_msg_{caf::make_message(done_atom::value, std::forward<Ts>(xs)...)} {
     trap_exit(true);
   }
 
-  void on_exit() override
-  {
+  void on_exit() override {
     subscribers_.clear();
     supervisors_.clear();
   }
 
-  caf::behavior make_behavior() override
-  {
+  caf::behavior make_behavior() override {
     using namespace caf;
-    return
-    {
-      [=](exit_msg const& msg)
-      {
+    return {
+      [=](exit_msg const& msg) {
         subscribers_.clear(); // Only notify our supervisors when exiting.
         notify();
         quit(msg.reason);
       },
-      [=](down_msg const& msg)
-      {
+      [=](down_msg const& msg) {
         if (workers_.erase(msg.source) == 1)
           notify();
       },
-      [=](uint32_t exit_reason)
-      {
-        exit_reason_ = exit_reason;
-      },
-      [=](actor const& a)
-      {
+      [=](uint32_t exit_reason) { exit_reason_ = exit_reason; },
+      [=](actor const& a) {
         VAST_TRACE(this, "registers actor", a);
         monitor(a);
         ++workers_[a.address()];
         ++total_;
       },
-      [=](actor const& a, uint64_t n)
-      {
+      [=](actor const& a, uint64_t n) {
         VAST_TRACE(this, "registers actor", a, "for", n, "sub-tasks");
         monitor(a);
         workers_[a.address()] += n;
         ++total_;
       },
-      [=](done_atom, actor const& a)
-      {
+      [=](done_atom, actor const& a) {
         VAST_TRACE(this, "manually completed actor", a);
         complete(a->address());
       },
-      [=](done_atom, actor_addr const& addr)
-      {
+      [=](done_atom, actor_addr const& addr) {
         VAST_TRACE(this, "manually completed actor with address", addr);
         complete(addr);
       },
-      [=](done_atom)
-      {
-        VAST_TRACE(this, "completed actor with address", current_sender());
+      [=](done_atom) {
+        VAST_TRACE(this, "completed actor with address",
+                   current_sender());
         complete(current_sender());
       },
-      [=](supervisor_atom, actor const& a)
-      {
+      [=](supervisor_atom, actor const& a) {
         VAST_TRACE(this, "notifies", a, "about task completion");
         supervisors_.insert(a);
       },
-      [=](subscriber_atom, actor const& a)
-      {
+      [=](subscriber_atom, actor const& a) {
         VAST_TRACE(this, "notifies", a, "on task status change");
         subscribers_.insert(a);
       },
-      [=](progress_atom)
-      {
+      [=](progress_atom) {
         return make_message(uint64_t{workers_.size()}, total_);
       }
     };
   }
 
-  void complete(caf::actor_addr const& addr)
-  {
+  void complete(caf::actor_addr const& addr) {
     auto w = workers_.find(addr);
-    if (w == workers_.end())
-    {
+    if (w == workers_.end()) {
       VAST_ERROR(this, "got completion signal from unregistered actor:", addr);
       quit(exit::error);
-    }
-    else if (--w->second == 0)
-    {
+    } else if (--w->second == 0) {
       demonitor(addr);
       workers_.erase(w);
       notify();
     }
   }
 
-  void notify()
-  {
+  void notify() {
     using namespace caf;
     for (auto& s : subscribers_)
       send(s, progress_atom::value, uint64_t{workers_.size()}, total_);
-    if (workers_.empty())
-    {
+    if (workers_.empty()) {
       for (auto& s : supervisors_)
         send(s, done_msg_);
       quit(exit_reason_);

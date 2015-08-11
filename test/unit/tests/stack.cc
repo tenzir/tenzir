@@ -5,8 +5,7 @@ using namespace vast;
 #define SUITE util
 #include "test.h"
 
-TEST(stack vector)
-{
+TEST(stack vector) {
   MESSAGE("default construction");
   util::stack::vector<4, int> v;
   CHECK(v.arena.size() == 4 * sizeof(int));
@@ -25,14 +24,14 @@ TEST(stack vector)
   CHECK(w[1] == 2);
   CHECK(w[2] == 3);
   CHECK(w.arena.used() == 3 * sizeof(int));
-  
+
   MESSAGE("copy construction");
   util::stack::vector<4, int> copy{w};
   REQUIRE(copy.size() == 3);
   CHECK(copy[0] == 1);
   CHECK(copy[1] == 2);
   CHECK(copy.arena.used() == 3 * sizeof(int));
-  
+
   MESSAGE("move construction");
   util::stack::vector<4, int> move{std::move(copy)};
   REQUIRE(move.size() == 3);

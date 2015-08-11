@@ -70,28 +70,20 @@ static const uint32_t crc_table[256] = {
 };
 
 #define DO1(buf) crc = crc_table[((int)crc ^ (*buf++)) & 0xff] ^ (crc >> 8);
-#define DO2(buf)  DO1(buf); DO1(buf);
-#define DO4(buf)  DO2(buf); DO2(buf);
-#define DO8(buf)  DO4(buf); DO4(buf);
+#define DO2(buf) DO1(buf); DO1(buf);
+#define DO4(buf) DO2(buf); DO2(buf);
+#define DO8(buf) DO4(buf); DO4(buf);
 
-void crc32 ( const void * key, int len, uint32_t seed, void * out )
-{
-  uint8_t * buf = (uint8_t*)key;
+void crc32(const void * key, int len, uint32_t seed, void * out) {
+  uint8_t* buf = (uint8_t*)key;
   uint32_t crc = seed ^ 0xffffffffL;
-
-  while (len >= 8)
-  {
+  while (len >= 8) {
     DO8(buf);
     len -= 8;
   }
-
   while(len--)
-  {
     DO1(buf);
-  }
-
   crc ^= 0xffffffffL;
-
   *(uint32_t*)out = crc;
 }
 

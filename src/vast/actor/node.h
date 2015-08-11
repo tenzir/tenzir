@@ -19,8 +19,7 @@ namespace vast {
 ///   - /peers/<node>/<fqn>
 ///   - /topology/<source>/<sink>
 ///
-struct node : default_actor
-{
+struct node : default_actor {
   /// Returns the path of the log directory relative to the base directory.
   /// @returns The directory where to write log and status messages to.
   static path const& log_path();
@@ -51,8 +50,7 @@ struct node : default_actor
   // Helper functions to synchronously interact with the key-value store.
   //
 
-  struct actor_state
-  {
+  struct actor_state {
     caf::actor actor;
     std::string type;
     std::string fqn;

@@ -15,12 +15,9 @@
 namespace vast {
 
 /// Accepts chunks and constructs segments.
-struct archive : flow_controlled_actor
-{
-  struct chunk_compare
-  {
-    bool operator()(chunk const& lhs, chunk const& rhs) const
-    {
+struct archive : flow_controlled_actor {
+  struct chunk_compare {
+    bool operator()(chunk const& lhs, chunk const& rhs) const {
       return lhs.meta().ids.find_first() < rhs.meta().ids.find_first();
     };
   };

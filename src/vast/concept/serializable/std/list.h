@@ -7,8 +7,7 @@
 namespace vast {
 
 template <typename Serializer, typename T>
-void serialize(Serializer& sink, std::list<T> const& list)
-{
+void serialize(Serializer& sink, std::list<T> const& list) {
   sink.begin_sequence(list.size());
   for (auto& x : list)
     sink << x;
@@ -16,12 +15,10 @@ void serialize(Serializer& sink, std::list<T> const& list)
 }
 
 template <typename Deserializer, typename T>
-void deserialize(Deserializer& source, std::list<T>& list)
-{
+void deserialize(Deserializer& source, std::list<T>& list) {
   list.clear();
   uint64_t size = source.begin_sequence();
-  for (uint64_t i = 0; i < size; ++i)
-  {
+  for (uint64_t i = 0; i < size; ++i) {
     T x;
     source >> x;
     list.push_back(std::move(x));
@@ -32,4 +29,3 @@ void deserialize(Deserializer& source, std::list<T>& list)
 } // namespace vast
 
 #endif
-

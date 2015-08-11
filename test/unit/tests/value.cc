@@ -17,24 +17,21 @@ using namespace vast;
 
 // An *invalid* value has neither a type nor data.
 // This is the default-constructed state.
-TEST(invalid/nil)
-{
+TEST(invalid / nil) {
   value v;
   CHECK(is<none>(v));
   CHECK(is<none>(v.type()));
 }
 
 // A *data* value contains only data but lacks a type.
-TEST(data value)
-{
+TEST(data value) {
   value v{42};
   CHECK(v.type().check(nil));
   CHECK(is<integer>(v));
   CHECK(is<none>(v.type()));
 }
 
-TEST(typed value (empty))
-{
+TEST(typed value(empty)) {
   type t = type::count{};
   value v{nil, t};
   CHECK(t.check(nil));
@@ -43,8 +40,7 @@ TEST(typed value (empty))
   CHECK(is<type::count>(v.type()));
 }
 
-TEST(typed value (data))
-{
+TEST(typed value(data)) {
   type t = type::real{};
   value v{4.2, t};
   CHECK(t.check(4.2));
@@ -53,8 +49,7 @@ TEST(typed value (data))
   CHECK(is<type::real>(v.type()));
 }
 
-TEST(data and type mismatch)
-{
+TEST(data and type mismatch) {
   // This value has a data and type mismatch. For performance reasons, the
   // constructor will *not* perform a type check.
   value v{42, type::real{}};
@@ -67,8 +62,7 @@ TEST(data and type mismatch)
   CHECK(is<none>(fail.type()));
 }
 
-TEST(relational operators)
-{
+TEST(relational operators) {
   value v1;
   value v2;
 
@@ -81,16 +75,16 @@ TEST(relational operators)
   v2 = {4.2, t};
   CHECK(t.check(4.2));
   CHECK(v1 == v2);
-  CHECK(! (v1 != v2));
-  CHECK(! (v1 < v2));
+  CHECK(!(v1 != v2));
+  CHECK(!(v1 < v2));
   CHECK(v1 <= v2);
   CHECK(v1 >= v2);
-  CHECK(! (v1 > v2));
+  CHECK(!(v1 > v2));
 
   MESSAGE("different data, same type");
   v2 = {4.3, t};
   CHECK(v1 != v2);
-  CHECK(! (v1 == v2));
+  CHECK(!(v1 == v2));
   CHECK(v1 < v2);
 
   MESSAGE("no type, but data comparison still works");
@@ -105,8 +99,7 @@ TEST(relational operators)
   CHECK(v1 < v2);
 }
 
-TEST(serialization)
-{
+TEST(serialization) {
   type t = type::set{type::port{}};
   set s;
   s.emplace(port{80, port::tcp});

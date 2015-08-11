@@ -21,8 +21,7 @@ using namespace std::string_literals;
 namespace vast {
 namespace source {
 
-trial<caf::actor> spawn(message const& params)
-{
+trial<caf::actor> spawn(message const& params) {
   auto batch_size = uint64_t{100000};
   auto schema_file = ""s;
   auto input = "-"s;
@@ -37,20 +36,16 @@ trial<caf::actor> spawn(message const& params)
   // input. All other sources are file-based and we setup their input
   // stream here.
   std::unique_ptr<io::input_stream> in;
-  if (! (format == "pcap" || format == "test"))
-  {
-    if (r.opts.count("uds") > 0)
-    {
+  if (!(format == "pcap" || format == "test")) {
+    if (r.opts.count("uds") > 0) {
       if (input == "-")
         return error{"cannot use stdin as UNIX domain socket"};
       auto uds = util::unix_domain_socket::connect(input);
-      if (! uds)
+      if (!uds)
         return error{"failed to connect to UNIX domain socket at ", input};
       auto remote_fd = uds.recv_fd(); // Blocks!
       in = std::make_unique<io::file_input_stream>(remote_fd);
-    }
-    else
-    {
+    } else {
       in = std::make_unique<io::file_input_stream>(input);
     }
   }
@@ -60,8 +55,7 @@ trial<caf::actor> spawn(message const& params)
     [&] { anon_send_exit(src, exit::error); }
   );
   // Spawn a source according to format.
-  if (format == "pcap")
-  {
+  if (format == "pcap") {
 #ifndef VAST_HAVE_PCAP
     return error{"not compiled with pcap support"};
 #else
@@ -70,60 +64,49 @@ trial<caf::actor> spawn(message const& params)
     auto flow_expiry = 10u;
     auto cutoff = std::numeric_limits<size_t>::max();
     auto pseudo_realtime = int64_t{0};
-    r = r.remainder.extract_opts({ // -i overrides -r
+    r = r.remainder.extract_opts({// -i overrides -r
       {"interface,i", "the interface to read packets from", input},
       {"cutoff,c", "skip flow packets after this many bytes", cutoff},
       {"flow-max,m", "number of concurrent flows to track", flow_max},
       {"flow-age,a", "max flow lifetime before eviction", flow_age},
       {"flow-expiry,e", "flow table expiration interval", flow_expiry},
       {"pseudo-realtime,p", "factor c delaying trace packets by 1/c",
-                            pseudo_realtime}
+       pseudo_realtime}
     });
-    if (! r.error.empty())
+    if (!r.error.empty())
       return error{std::move(r.error)};
     if (input.empty())
       return error{"no input specified (-r or -i)"};
     src = caf::spawn<pcap, priority_aware + detached>(
       input, cutoff, flow_max, flow_age, flow_expiry, pseudo_realtime);
 #endif
-  }
-  else if (format == "test")
-  {
+  } else if (format == "test") {
     auto id = event_id{0};
     auto events = uint64_t{100};
     r = r.remainder.extract_opts({
       {"id,i", "the base event ID", id},
       {"events,e", "number of events to generate", events}
     });
-    if (! r.error.empty())
+    if (!r.error.empty())
       return error{std::move(r.error)};
     src = caf::spawn<test, priority_aware>(id, events);
     // The test source doesn't consume any data, it only generates events.
     // Therefore we can use the input channel for the schema.
     schema_file = input;
-  }
-  else if (format == "bro")
-  {
-    src = caf::spawn<bro, priority_aware + detached>(
-      std::move(in));
-  }
-  else if (format == "bgpdump")
-  {
-    src = caf::spawn<bgpdump, priority_aware + detached>(
-      std::move(in));
-  }
-  else
-  {
+  } else if (format == "bro") {
+    src = caf::spawn<bro, priority_aware + detached>(std::move(in));
+  } else if (format == "bgpdump") {
+    src = caf::spawn<bgpdump, priority_aware + detached>(std::move(in));
+  } else {
     return error{"invalid import format: ", format};
   }
   // Set a new schema if provided.
-  if (! schema_file.empty())
-  {
+  if (!schema_file.empty()) {
     auto t = load_contents(schema_file);
-    if (! t)
+    if (!t)
       return t.error();
     auto s = vast::detail::to_schema(*t);
-    if (! s)
+    if (!s)
       return error{"failed to load schema: ", s.error()};
     anon_send(src, put_atom::value, *s);
   }

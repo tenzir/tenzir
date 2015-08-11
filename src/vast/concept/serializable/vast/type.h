@@ -12,8 +12,7 @@
 namespace vast {
 
 template <typename Serializer>
-void serialize(Serializer& sink, type const& t)
-{
+void serialize(Serializer& sink, type const& t) {
   auto tag = which(t);
   sink << tag;
   if (tag != type::tag::none)
@@ -21,14 +20,12 @@ void serialize(Serializer& sink, type const& t)
 }
 
 template <typename Deserializer>
-void deserialize(Deserializer& source, type& t)
-{
+void deserialize(Deserializer& source, type& t) {
   type::tag tag = {};
   source >> tag;
-  if (tag != type::tag::none)
-  {
+  if (tag != type::tag::none) {
     t = type{util::make_intrusive<type::intrusive_info>(
-             type::info::make(static_cast<type::tag>(tag)))};
+      type::info::make(static_cast<type::tag>(tag)))};
     visit([&](auto& x) { source >> x; }, t);
   }
 }

@@ -7,11 +7,9 @@
 namespace vast {
 
 template <>
-struct access::state<expression>
-{
+struct access::state<expression> {
   template <typename T, typename F>
-  static void call(T&& x, F f)
-  {
+  static void call(T&& x, F f) {
     f(x.node_);
   }
 };

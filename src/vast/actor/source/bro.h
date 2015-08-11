@@ -13,8 +13,7 @@ namespace vast {
 namespace source {
 
 /// A Bro log file source.
-class bro : public line_based<bro>
-{
+class bro : public line_based<bro> {
 public:
   /// Spawns a Bro source.
   /// @param is The input stream to read Bro logs from.

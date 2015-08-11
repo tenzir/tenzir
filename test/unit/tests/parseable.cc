@@ -13,8 +13,7 @@
 using namespace vast;
 using namespace std::string_literals;
 
-TEST(char)
-{
+TEST(char) {
   using namespace parsers;
   MESSAGE("equality");
   auto character = '.';
@@ -28,12 +27,11 @@ TEST(char)
   MESSAGE("inequality");
   character = 'x';
   f = &character;
-  CHECK(! chr{'y'}.parse(f, l, c));
+  CHECK(!chr{'y'}.parse(f, l, c));
   CHECK(f != l);
 }
 
-TEST(char class)
-{
+TEST(char class) {
   using namespace parsers;
   MESSAGE("xdigit");
   auto str = "deadbeef"s;
@@ -53,15 +51,14 @@ TEST(char class)
   CHECK(p.parse(f, l, attr));
   CHECK(attr == "dead");
   CHECK(f == str.begin() + 4);
-  CHECK(! p.parse(f, l, attr));
+  CHECK(!p.parse(f, l, attr));
   ++f;
   CHECK(p.parse(f, l, attr));
   CHECK(f == l);
   CHECK(attr == "deadbeef");
 }
 
-TEST(quoted string)
-{
+TEST(quoted string) {
   auto p = quoted_string_parser<'\'', '#'>{};
   auto attr = ""s;
 
@@ -105,7 +102,7 @@ TEST(quoted string)
   f = str.begin();
   l = str.end();
   attr.clear();
-  CHECK(! p.parse(f, l, attr));
+  CHECK(!p.parse(f, l, attr));
   CHECK(attr == "foobar");
 
   MESSAGE("missing trailing quote after escaped quote");
@@ -113,12 +110,11 @@ TEST(quoted string)
   f = str.begin();
   l = str.end();
   attr.clear();
-  CHECK(! p.parse(f, l, attr));
+  CHECK(!p.parse(f, l, attr));
   CHECK(attr == "foobar'");
 }
 
-TEST(attribute compatibility: string)
-{
+TEST(attribute compatibility : string) {
   auto str = "..."s;
   auto attr = ""s;
   auto f = str.begin();
@@ -159,8 +155,7 @@ TEST(attribute compatibility: string)
   CHECK(f == l);
 }
 
-TEST(attribute compatibility: pair)
-{
+TEST(attribute compatibility : pair) {
   using namespace parsers;
   auto str = "xy"s;
   auto attr = ""s;
@@ -182,8 +177,7 @@ TEST(attribute compatibility: pair)
   CHECK(p1.second == "y");
 }
 
-TEST(bool)
-{
+TEST(bool) {
   auto p0 = single_char_bool_parser{};
   auto p1 = zero_one_bool_parser{};
   auto p2 = literal_bool_parser{};
@@ -198,25 +192,25 @@ TEST(bool)
   CHECK(b);
   CHECK(i == f + 1);
   // Wrong parser
-  CHECK(! p0.parse(i, l, b));
+  CHECK(!p0.parse(i, l, b));
   CHECK(i == f + 1);
   // Correct parser
   CHECK(p1.parse(i, l, b));
-  CHECK(! b);
+  CHECK(!b);
   CHECK(i == f + 2);
   CHECK(p2.parse(i, l, b));
   CHECK(b);
   CHECK(i == f + 6);
   // Wrong parser
-  CHECK(! p2.parse(i, l, b));
+  CHECK(!p2.parse(i, l, b));
   CHECK(i == f + 6);
   // Correct parser
   CHECK(p0.parse(i, l, b));
-  CHECK(! b);
+  CHECK(!b);
   CHECK(i == f + 7);
   b = true;
   CHECK(p2.parse(i, l, b));
-  CHECK(! b);
+  CHECK(!b);
   CHECK(i == f + 12);
   CHECK(p1.parse(i, l, b));
   CHECK(b);
@@ -229,8 +223,7 @@ TEST(bool)
   CHECK(p0(str));
 }
 
-TEST(integral)
-{
+TEST(integral) {
   MESSAGE("signed integers");
   auto str = "-1024"s;
   auto p0 = integral_parser<int>{};
@@ -255,7 +248,7 @@ TEST(integral)
   MESSAGE("unsigned integers");
   auto p1 = integral_parser<unsigned>{};
   unsigned u;
-  f = str.begin() + 1;  // no sign
+  f = str.begin() + 1; // no sign
   CHECK(p1.parse(f, l, u));
   CHECK(u == 1024);
   CHECK(f == l);
@@ -277,18 +270,17 @@ TEST(integral)
   str = "-1";
   f = str.begin();
   l = str.end();
-  CHECK(! p2.parse(f, l, n));
+  CHECK(!p2.parse(f, l, n));
   CHECK(f == str.begin());
   // Too many digits.
   str = "-123456";
   f = str.begin();
   l = str.end();
-  CHECK(! p2.parse(f, l, unused));
+  CHECK(!p2.parse(f, l, unused));
   CHECK(f == str.begin());
 }
 
-TEST(real)
-{
+TEST(real) {
   auto p = make_parser<double>{};
   MESSAGE("integral plus fractional part, negative");
   auto str = "-123.456789"s;
@@ -317,22 +309,21 @@ TEST(real)
   CHECK(p.parse(f, l, d));
   CHECK(d == -0.456789);
   CHECK(f == l);
-//  MESSAGE("no fractional part, negative");
-//  d = 0;
-//  f = str.begin();
-//  CHECK(p.parse(f, f + 4, d));
-//  CHECK(d == -123);
-//  CHECK(f == str.begin() + 4);
-//  MESSAGE("no fractional part, positive");
-//  d = 0;
-//  f = str.begin() + 1;
-//  CHECK(p.parse(f, f + 3, d));
-//  CHECK(d == 123);
-//  CHECK(f == str.begin() + 4);
+  //  MESSAGE("no fractional part, negative");
+  //  d = 0;
+  //  f = str.begin();
+  //  CHECK(p.parse(f, f + 4, d));
+  //  CHECK(d == -123);
+  //  CHECK(f == str.begin() + 4);
+  //  MESSAGE("no fractional part, positive");
+  //  d = 0;
+  //  f = str.begin() + 1;
+  //  CHECK(p.parse(f, f + 3, d));
+  //  CHECK(d == 123);
+  //  CHECK(f == str.begin() + 4);
 }
 
-TEST(recursive rule)
-{
+TEST(recursive rule) {
   using namespace parsers;
   rule<std::string::iterator, char> r;
   r = alpha | '[' >> r >> ']';
@@ -352,8 +343,7 @@ TEST(recursive rule)
   CHECK(c == 'x');
 }
 
-TEST(stream)
-{
+TEST(stream) {
   std::istringstream ss{"a.b.c"};
   key k;
   ss >> k;
@@ -361,8 +351,7 @@ TEST(stream)
   CHECK(k == key{"a", "b", "c"});
 }
 
-TEST(to)
-{
+TEST(to) {
   auto k = to<key>("a.b.c"); // John!
   REQUIRE(k);
   CHECK(*k == key{"a", "b", "c"});

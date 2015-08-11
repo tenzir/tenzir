@@ -8,12 +8,10 @@ namespace detail {
 namespace parser {
 
 template <typename Iterator>
-struct query : qi::grammar<Iterator, ast::query::query_expr(), skipper<Iterator>>
-{
+struct query
+  : qi::grammar<Iterator, ast::query::query_expr(), skipper<Iterator>> {
   query(error_handler<Iterator>& on_error)
-    : query::base_type{expr},
-      data_expr{on_error}
-  {
+    : query::base_type{expr}, data_expr{on_error} {
     qi::_3_type _3;
     qi::_4_type _4;
     qi::raw_type raw;

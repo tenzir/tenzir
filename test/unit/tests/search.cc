@@ -5,8 +5,7 @@ using namespace vast;
 #define SUITE util
 #include "test.h"
 
-TEST(boyer-moore)
-{
+TEST(boyer-moore) {
   std::string needle = "foo";
   std::string haystack = "hello foo world";
 
@@ -15,7 +14,7 @@ TEST(boyer-moore)
   auto i = bm(haystack.begin(), haystack.end());
   REQUIRE(i != haystack.end());
 
-  //// Free-function API
+  // Free-function API
   auto j = util::search_boyer_moore(needle.begin(), needle.end(),
                                     haystack.begin(), haystack.end());
   REQUIRE(j != haystack.end());
@@ -33,8 +32,7 @@ TEST(boyer-moore)
     CHECK(bm(haystack.begin() + i, haystack.end()) == haystack.end());
 }
 
-TEST(knuth-morris-pratt)
-{
+TEST(knuth-morris-pratt) {
   std::string needle = "foo";
   std::string haystack = "hello foo world";
 
@@ -43,7 +41,7 @@ TEST(knuth-morris-pratt)
   auto i = kmp(haystack.begin(), haystack.end());
   REQUIRE(i != haystack.end());
 
-  //// Free-function API
+  // Free-function API
   auto j = util::search_knuth_morris_pratt(needle.begin(), needle.end(),
                                            haystack.begin(), haystack.end());
   REQUIRE(j != haystack.end());

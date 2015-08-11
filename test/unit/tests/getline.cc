@@ -6,11 +6,9 @@
 
 using namespace vast;
 
-TEST(getline)
-{
+TEST(getline) {
   auto str = "\n1st\nline\rn3\r\nline4\nline5\n\nline6\n";
-  for (size_t i = 3; i < 10; ++i)
-  {
+  for (size_t i = 3; i < 10; ++i) {
     io::array_input_stream input(str, std::strlen(str), i);
     std::string line;
     CHECK(io::getline(input, line));

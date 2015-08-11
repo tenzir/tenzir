@@ -10,12 +10,10 @@
 namespace vast {
 
 template <>
-struct access::parser<subnet> : vast::parser<access::parser<subnet>>
-{
+struct access::parser<subnet> : vast::parser<access::parser<subnet>> {
   using attribute = subnet;
 
-  static auto make()
-  {
+  static auto make() {
     using namespace parsers;
     auto addr = make_parser<address>{};
     auto prefix = u8.with([](auto x) { return x <= 128; });
@@ -23,18 +21,16 @@ struct access::parser<subnet> : vast::parser<access::parser<subnet>>
   }
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, unused_type) const
-  {
+  bool parse(Iterator& f, Iterator const& l, unused_type) const {
     static auto p = make();
     return p.parse(f, l, unused);
   }
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, subnet& a) const
-  {
+  bool parse(Iterator& f, Iterator const& l, subnet& a) const {
     static auto p = make();
     auto t = std::tie(a.network_, a.length_);
-    if (! p.parse(f, l, t))
+    if (!p.parse(f, l, t))
       return false;
     a.initialize();
     return true;
@@ -42,8 +38,7 @@ struct access::parser<subnet> : vast::parser<access::parser<subnet>>
 };
 
 template <>
-struct parser_registry<subnet>
-{
+struct parser_registry<subnet> {
   using type = access::parser<subnet>;
 };
 

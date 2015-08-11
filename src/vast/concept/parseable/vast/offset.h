@@ -10,21 +10,18 @@
 
 namespace vast {
 
-struct offset_parser : parser<offset_parser>
-{
+struct offset_parser : parser<offset_parser> {
   using attribute = offset;
 
   template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const
-  {
+  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
     static auto p = parsers::u32 % ',';
     return p.parse(f, l, a);
   }
 };
 
 template <>
-struct parser_registry<offset>
-{
+struct parser_registry<offset> {
   using type = offset_parser;
 };
 

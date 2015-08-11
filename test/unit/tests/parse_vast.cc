@@ -16,8 +16,7 @@
 using namespace vast;
 using namespace std::string_literals;
 
-TEST(time::duration)
-{
+TEST(time::duration) {
   time::duration d;
 
   MESSAGE("nanoseconds");
@@ -69,13 +68,12 @@ TEST(time::duration)
   CHECK(d == time::hours(44));
 
   // TODO
-  //MESSAGE("compound");
-  //CHECK(parsers::time_duration("5m99s", d));
-  //CHECK(d.count() == 399000000000ll);
+  // MESSAGE("compound");
+  // CHECK(parsers::time_duration("5m99s", d));
+  // CHECK(d.count() == 399000000000ll);
 }
 
-TEST(time::point)
-{
+TEST(time::point) {
   MESSAGE("YYY-MM-DD+HH:MM:SS");
   auto p = make_parser<time::point>{};
   auto str = "2012-08-12+23:55:04"s;
@@ -87,15 +85,14 @@ TEST(time::point)
   CHECK(tp == time::point::utc(2012, 8, 12, 23, 55, 4));
 
   // TODO
-  //MESSAGE("UNIX epoch");
-  //CHECK(p("@1398933902", tp));
-  //CHECK(p == time::seconds{1398933902});
-  //CHECK(p("@1398933902.686337", tp));
-  //CHECK(p == time::double_seconds{1398933902.686337});
+  // MESSAGE("UNIX epoch");
+  // CHECK(p("@1398933902", tp));
+  // CHECK(p == time::seconds{1398933902});
+  // CHECK(p("@1398933902.686337", tp));
+  // CHECK(p == time::double_seconds{1398933902.686337});
 }
 
-TEST(pattern)
-{
+TEST(pattern) {
   auto p = make_parser<pattern>{};
   auto str = "/^\\w{3}\\w{3}\\w{3}$/"s;
   auto f = str.begin();
@@ -114,8 +111,7 @@ TEST(pattern)
   CHECK(to_string(pat) == str);
 }
 
-TEST(address)
-{
+TEST(address) {
   auto p = make_parser<address>{};
 
   MESSAGE("IPv4");
@@ -152,8 +148,7 @@ TEST(address)
   CHECK(to_string(a) == str);
 }
 
-TEST(subnet)
-{
+TEST(subnet) {
   auto p = make_parser<subnet>{};
 
   MESSAGE("IPv4");
@@ -176,8 +171,7 @@ TEST(subnet)
   CHECK(s.network().is_v6());
 }
 
-TEST(port)
-{
+TEST(port) {
   auto p = make_parser<port>();
 
   MESSAGE("tcp");
@@ -214,15 +208,13 @@ TEST(port)
   CHECK(prt == port{42, port::unknown});
 }
 
-TEST(key)
-{
+TEST(key) {
   key k;
   CHECK(parsers::key("foo.bar_baz.qux", k));
   CHECK(k == key{"foo", "bar_baz", "qux"});
 }
 
-TEST(offset)
-{
+TEST(offset) {
   offset o;
   CHECK(parsers::offset("1,2,3", o));
   CHECK(o == offset{1, 2, 3});

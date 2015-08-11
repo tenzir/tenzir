@@ -6,11 +6,9 @@
 
 namespace vast {
 
-bool convert(subnet const& sn, json& j)
-{
+bool convert(subnet const& sn, json& j) {
   j = to_string(sn);
   return true;
 }
 
 } // namespace vast
-

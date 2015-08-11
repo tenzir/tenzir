@@ -50,9 +50,11 @@ Coding Style
 General
 -------
 
-- 2 spaces per indentation level.
+- Use 2 spaces per indentation level.
 
 - No tabs, ever.
+
+- No C-style casts, ever.
 
 - 80 characters max per line.
 
@@ -78,7 +80,21 @@ General
 - Keywords are always followed by a whitespace: `if (...)`, `template <...>`,
   `while (...)`, etc.
 
-- Never use C-style casts.
+- Leave a whitespace after `!` to make negations easily recognizable.
+
+  ```cpp
+  if (! sunny())
+    stay_home()
+  ```
+
+- Opening braces belong onto the same line:
+
+  ```cpp
+  struct foo {
+    void f() {
+    }
+  };
+  ```
 
 - Do not use the `inline` keyword unless to avoid duplicate symbols. The
   compiler does a better job at figuring out what functions should be inlined.
@@ -97,28 +113,32 @@ Header
 
 - Include order is from low-level to high-level headers, e.g.,
 
-        #include <cstdlib>
+  ```cpp
+  #include <sys/types.h>
 
-        #include <memory>
+  #include <memory>
 
-        #include <3rd/party.hpp>
+  #include <3rd/party.hpp>
 
-        #include "vast/logger.h"
-        #include "vast/util/profiler.h"
+  #include "vast/logger.h"
+  ```
 
   Within each section the order should be alphabetical. VAST includes should
   always be in doublequotes and relative to the source directory, whereas
   system-wide includes in angle brackets.
 
-- As in the STL, the order of parameters when declaring a function is: inputs,
-  then outputs. API coherence and symmetry trumps this rule, e.g., when the
-  first argument of related functions model the same concept.
+- As in the standard library, the order of parameters when declaring a function
+  is: inputs, then outputs. API coherence and symmetry trumps this rule, e.g.,
+  when the first argument of related functions model the same concept.
 
 Classes
 -------
 
 - Use the order `public`, `proctected`, `private` for functions and members in
   classes.
+
+- Mark single-argument constructors as `explicit` to avoid implicit
+  conversions.
 
 - The order of member functions within a class is: constructors, operators,
   mutating members, accessors.
@@ -156,12 +176,60 @@ Naming
 - Put non-API implementation into namespace `detail`.
 
 - Member variables have an underscore (`_`) as suffix, unless they constitute
-  the public interface.
+  the public interface. Getters and setters use the same member name without
+  the suffix.
 
 - Put static non-const variables in an anonymous namespace.
 
+Breaking Statements
+-------------------
+
+- Break constructor initializers after the comma, use two spaces for
+  indentation, and place each initializer on its own line (unless you don't
+  need to break at all):
+
+  ```cpp
+  my_class::my_class()
+      : my_base_class{some_function()},
+        greeting_{"Hello there! This is my_class!"},
+        some_bool_flag_{false} {
+    // ok
+  }
+  other_class::other_class() : name_{"tommy"}, buddy_{"michael"} {
+    // ok
+  }
+  ```
+
+- Break function arguments after the comma for both declaration and invocation:
+
+  ```cpp
+  a_rather_long_return_type f(std::string const& x,
+                              std::string const& y) {
+    // ...
+  }
+  ```
+
+- Break before binary and tenary operators:
+
+  ```cpp
+  if (today_is_a_sunny_day()
+      && it_is_not_too_hot_to_go_swimming()) {
+    // ...
+  }
+  ```
+
 Template Metaprogramming
 ------------------------
+
+- Use `T` for generic, unconstrained template parameters and `x` for generic
+  function arguments. Suffix both with `s` for template parameter packs:
+
+  ```cpp
+  template <class T, class... Ts>
+  auto f(T x, Ts... xs) {
+    // ...
+  }
+  ```
 
 - Break `using name = ...` statements always directly after `=` if they do not
   fit in one line.

@@ -14,17 +14,15 @@ namespace vast {
 namespace source {
 namespace detail {
 
-struct connection : util::equality_comparable<connection>
-{
+struct connection : util::equality_comparable<connection> {
   address src;
   address dst;
   port sport;
   port dport;
 
-  friend bool operator==(connection const& lhs, connection const& rhs)
-  {
-    return lhs.src == rhs.src && lhs.dst == rhs.dst
-        && lhs.sport == rhs.sport && lhs.dport == rhs.dport;
+  friend bool operator==(connection const& lhs, connection const& rhs) {
+    return lhs.src == rhs.src && lhs.dst == rhs.dst && lhs.sport == rhs.sport
+           && lhs.dport == rhs.dport;
   }
 };
 
@@ -35,10 +33,8 @@ struct connection : util::equality_comparable<connection>
 namespace std {
 
 template <>
-struct hash<vast::source::detail::connection>
-{
-  size_t operator()(vast::source::detail::connection const& c) const
-  {
+struct hash<vast::source::detail::connection> {
+  size_t operator()(vast::source::detail::connection const& c) const {
     auto src0 = *reinterpret_cast<uint64_t const*>(&c.src.data()[0]);
     auto src1 = *reinterpret_cast<uint64_t const*>(&c.src.data()[8]);
     auto dst0 = *reinterpret_cast<uint64_t const*>(&c.dst.data()[0]);
@@ -46,7 +42,6 @@ struct hash<vast::source::detail::connection>
     auto sprt = c.sport.number();
     auto dprt = c.dport.number();
     auto proto = static_cast<uint8_t>(c.sport.type());
-
     return vast::util::hash_combine(src0, src1, dst0, dst1, sprt, dprt, proto);
   }
 };
@@ -57,8 +52,7 @@ namespace vast {
 namespace source {
 
 /// A source that reads PCAP packets from an interface or a file.
-class pcap : public base<pcap>
-{
+class pcap : public base<pcap> {
 public:
   /// Constructs a PCAP source.
   /// @param name The name of the interface or trace file.
@@ -72,12 +66,8 @@ public:
   ///                        example, if 5, then for two packets spaced *t*
   ///                        seconds apart, the source will sleep for *t/5*
   ///                        seconds.
-  ///
-  pcap(std::string name,
-       uint64_t cutoff = -1,
-       size_t max_flows = 100000,
-       size_t max_age = 60,
-       size_t expire_interval = 10,
+  pcap(std::string name, uint64_t cutoff = -1, size_t max_flows = 100000,
+       size_t max_age = 60, size_t expire_interval = 10,
        int64_t pseudo_realtime = 0);
 
   ~pcap();
@@ -89,8 +79,7 @@ public:
   result<event> extract();
 
 private:
-  struct connection_state
-  {
+  struct connection_state {
     uint64_t bytes;
     uint64_t last;
   };

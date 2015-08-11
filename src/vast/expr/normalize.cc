@@ -5,13 +5,11 @@
 namespace vast {
 namespace expr {
 
-expression hoister::operator()(none) const
-{
+expression hoister::operator()(none) const {
   return expression{};
 }
 
-expression hoister::operator()(conjunction const& c) const
-{
+expression hoister::operator()(conjunction const& c) const {
   conjunction hoisted;
   for (auto& op : c)
     if (auto inner = get<conjunction>(op))
@@ -22,8 +20,7 @@ expression hoister::operator()(conjunction const& c) const
   return hoisted.size() == 1 ? hoisted[0] : hoisted;
 }
 
-expression hoister::operator()(disjunction const& d) const
-{
+expression hoister::operator()(disjunction const& d) const {
   disjunction hoisted;
   for (auto& op : d)
     if (auto inner = get<disjunction>(op))
@@ -34,70 +31,54 @@ expression hoister::operator()(disjunction const& d) const
   return hoisted.size() == 1 ? hoisted[0] : hoisted;
 }
 
-expression hoister::operator()(negation const& n) const
-{
+expression hoister::operator()(negation const& n) const {
   return {negation{visit(*this, n.expression())}};
 }
 
-expression hoister::operator()(predicate const& p) const
-{
+expression hoister::operator()(predicate const& p) const {
   return {p};
 }
 
-
-expression aligner::operator()(none) const
-{
+expression aligner::operator()(none) const {
   return nil;
 }
 
-expression aligner::operator()(conjunction const& c) const
-{
+expression aligner::operator()(conjunction const& c) const {
   conjunction copy;
   for (auto& op : c)
     copy.push_back(visit(*this, op));
   return copy;
 }
 
-expression aligner::operator()(disjunction const& d) const
-{
+expression aligner::operator()(disjunction const& d) const {
   disjunction copy;
   for (auto& op : d)
     copy.push_back(visit(*this, op));
   return copy;
 }
 
-expression aligner::operator()(negation const& n) const
-{
+expression aligner::operator()(negation const& n) const {
   return {negation{visit(*this, n.expression())}};
 }
 
-expression aligner::operator()(predicate const& p) const
-{
+expression aligner::operator()(predicate const& p) const {
   return {is<data>(p.rhs) ? p : predicate{p.rhs, flip(p.op), p.lhs}};
 }
 
-
-denegator::denegator(bool negate)
-  : negate_{negate}
-{
+denegator::denegator(bool negate) : negate_{negate} {
 }
 
-expression denegator::operator()(none) const
-{
+expression denegator::operator()(none) const {
   return nil;
 }
 
-expression denegator::operator()(conjunction const& c) const
-{
-  if (negate_)
-  {
+expression denegator::operator()(conjunction const& c) const {
+  if (negate_) {
     disjunction copy;
     for (auto& op : c)
       copy.push_back(visit(*this, op));
     return copy;
-  }
-  else
-  {
+  } else {
     conjunction copy;
     for (auto& op : c)
       copy.push_back(visit(*this, op));
@@ -105,17 +86,13 @@ expression denegator::operator()(conjunction const& c) const
   }
 }
 
-expression denegator::operator()(disjunction const& d) const
-{
-  if (negate_)
-  {
+expression denegator::operator()(disjunction const& d) const {
+  if (negate_) {
     conjunction copy;
     for (auto& op : d)
       copy.push_back(visit(*this, op));
     return copy;
-  }
-  else
-  {
+  } else {
     disjunction copy;
     for (auto& op : d)
       copy.push_back(visit(*this, op));
@@ -123,8 +100,7 @@ expression denegator::operator()(disjunction const& d) const
   }
 }
 
-expression denegator::operator()(negation const& n) const
-{
+expression denegator::operator()(negation const& n) const {
   // Step through double negations.
   if (auto inner = get<negation>(n.expression()))
     return visit(*this, inner->expression());
@@ -133,13 +109,11 @@ expression denegator::operator()(negation const& n) const
   return visit(visitor, n.expression());
 }
 
-expression denegator::operator()(predicate const& p) const
-{
+expression denegator::operator()(predicate const& p) const {
   return predicate{p.lhs, negate_ ? negate(p.op) : p.op, p.rhs};
 }
 
-expression normalize(expression const& expr)
-{
+expression normalize(expression const& expr) {
   expression r;
   r = visit(hoister{}, expr);
   r = visit(aligner{}, r);

@@ -11,8 +11,7 @@ namespace vast {
 
 // (LHS >> ~RHS) | RHS
 template <typename Lhs, typename Rhs>
-class sequence_choice_parser : public parser<sequence_choice_parser<Lhs, Rhs>>
-{
+class sequence_choice_parser : public parser<sequence_choice_parser<Lhs, Rhs>> {
 public:
   using lhs_type = Lhs;
   using rhs_type = Rhs;
@@ -40,18 +39,13 @@ public:
     >;
 
   sequence_choice_parser(Lhs lhs, Rhs rhs)
-    : lhs_{std::move(lhs)},
-      rhs_{rhs},
-      rhs_opt_{std::move(rhs)}
-  {
+    : lhs_{std::move(lhs)}, rhs_{rhs}, rhs_opt_{std::move(rhs)} {
   }
 
   template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const
-  {
+  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
     optional<rhs_attribute> rhs_attr;
-    if (lhs_.parse(f, l, left_attr(a)) && rhs_opt_.parse(f, l, rhs_attr))
-    {
+    if (lhs_.parse(f, l, left_attr(a)) && rhs_opt_.parse(f, l, rhs_attr)) {
       right_attr(a) = std::move(rhs_attr);
       return true;
     }
@@ -65,8 +59,7 @@ private:
     typename R = rhs_attribute
   >
   static auto left_attr(Attribute&)
-    -> std::enable_if_t<std::is_same<L, unused_type>{}, unused_type&>
-  {
+    -> std::enable_if_t<std::is_same<L, unused_type>{}, unused_type&> {
     return unused;
   }
 
@@ -79,8 +72,7 @@ private:
     -> std::enable_if_t<
          ! std::is_same<L, unused_type>{} && std::is_same<R, unused_type>{},
          optional<L>&
-       >
-  {
+       > {
     return a;
   }
 
@@ -93,8 +85,7 @@ private:
     -> std::enable_if_t<
          ! std::is_same<L, unused_type>{} && ! std::is_same<R, unused_type>{},
          optional<L>&
-       >
-  {
+       > {
     return std::get<0>(t);
   }
 
@@ -104,8 +95,7 @@ private:
     typename R = rhs_attribute
   >
   static auto right_attr(Attribute&)
-    -> std::enable_if_t<std::is_same<R, unused_type>{}, unused_type&>
-  {
+    -> std::enable_if_t<std::is_same<R, unused_type>{}, unused_type&> {
     return unused;
   }
 
@@ -118,8 +108,7 @@ private:
     -> std::enable_if_t<
          std::is_same<L, unused_type>{} && ! std::is_same<R, unused_type>{},
          optional<R>&
-       >
-  {
+       > {
     return a;
   }
 
@@ -132,8 +121,7 @@ private:
     -> std::enable_if_t<
          ! std::is_same<L, unused_type>{} && ! std::is_same<R, unused_type>{},
          optional<R>&
-       >
-  {
+       > {
     return std::get<1>(t);
   }
 

@@ -9,11 +9,9 @@ namespace vast {
 namespace detail {
 
 template <typename Iterator>
-bool parse_sign(Iterator& i)
-{
+bool parse_sign(Iterator& i) {
   auto minus = *i == '-';
-  if (minus || *i == '+')
-  {
+  if (minus || *i == '+') {
     ++i;
     return minus;
   }
@@ -28,8 +26,8 @@ template <
   int MinDigits = 1,
   int Radix = 10
 >
-struct integral_parser : parser<integral_parser<T, MaxDigits, MinDigits, Radix>>
-{
+struct integral_parser 
+  : parser<integral_parser<T, MaxDigits, MinDigits, Radix>> {
   static_assert(Radix == 10, "unsupported radix");
   static_assert(MinDigits > 0, "need at least one minimum digit");
   static_assert(MaxDigits > 0, "need at least one maximum digit");
@@ -37,18 +35,15 @@ struct integral_parser : parser<integral_parser<T, MaxDigits, MinDigits, Radix>>
 
   using attribute = T;
 
-  static bool isdigit(char c)
-  {
+  static bool isdigit(char c) {
     return c >= '0' && c <= '9';
   }
 
   template <typename Iterator, typename Attribute, typename F>
-  static auto accumulate(Iterator& f, Iterator const& l, Attribute& a, F acc)
-  {
+  static auto accumulate(Iterator& f, Iterator const& l, Attribute& a, F acc) {
     int digits = 0;
     a = 0;
-    while (f != l && isdigit(*f))
-    {
+    while (f != l && isdigit(*f)) {
       if (++digits > MaxDigits)
         return false;
       acc(a, *f++ - '0');
@@ -59,58 +54,55 @@ struct integral_parser : parser<integral_parser<T, MaxDigits, MinDigits, Radix>>
   }
 
   template <typename Iterator>
-  static auto parse_pos(Iterator& f, Iterator const& l, unused_type)
-  {
+  static auto parse_pos(Iterator& f, Iterator const& l, unused_type) {
     return accumulate(f, l, unused, [](auto&, auto) {});
   }
 
   template <typename Iterator, typename Attribute>
-  static auto parse_pos(Iterator& f, Iterator const& l, Attribute& a)
-  {
-    return accumulate(f, l, a, [](auto& n, auto x) { n *= Radix; n += x; });
+  static auto parse_pos(Iterator& f, Iterator const& l, Attribute& a) {
+    return accumulate(f, l, a, [](auto& n, auto x) {
+      n *= Radix;
+      n += x;
+    });
   }
 
   template <typename Iterator>
-  static auto parse_neg(Iterator& f, Iterator const& l, unused_type)
-  {
+  static auto parse_neg(Iterator& f, Iterator const& l, unused_type) {
     return accumulate(f, l, unused, [](auto&, auto) {});
   }
 
   template <typename Iterator, typename Attribute>
-  static auto parse_neg(Iterator& f, Iterator const& l, Attribute& a)
-  {
-    return accumulate(f, l, a, [](auto& n, auto x) { n *= Radix; n -= x; });
+  static auto parse_neg(Iterator& f, Iterator const& l, Attribute& a) {
+    return accumulate(f, l, a, [](auto& n, auto x) {
+      n *= Radix;
+      n -= x;
+    });
   }
 
   template <typename Iterator, typename Attribute>
-  static bool parse_signed(Iterator& f, Iterator const& l, Attribute& a)
-  {
+  static bool parse_signed(Iterator& f, Iterator const& l, Attribute& a) {
     return detail::parse_sign(f) ? parse_neg(f, l, a) : parse_pos(f, l, a);
   }
 
   template <typename Iterator, typename Attribute>
-  static bool parse_unsigned(Iterator& f, Iterator const& l, Attribute& a)
-  {
+  static bool parse_unsigned(Iterator& f, Iterator const& l, Attribute& a) {
     return parse_pos(f, l, a);
   }
 
   template <typename Iterator, typename Attribute, typename This = T>
   static auto dispatch(Iterator& f, Iterator const& l, Attribute& a)
-    -> std::enable_if_t<std::is_signed<This>{}, bool>
-  {
+    -> std::enable_if_t<std::is_signed<This>{}, bool> {
     return parse_signed(f, l, a);
   }
 
   template <typename Iterator, typename Attribute, typename This = T>
   static auto dispatch(Iterator& f, Iterator const& l, Attribute& a)
-    -> std::enable_if_t<std::is_unsigned<This>{}, bool>
-  {
+    -> std::enable_if_t<std::is_unsigned<This>{}, bool> {
     return parse_unsigned(f, l, a);
   }
 
   template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const
-  {
+  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
     if (f == l)
       return false;
     auto save = f;
@@ -122,8 +114,7 @@ struct integral_parser : parser<integral_parser<T, MaxDigits, MinDigits, Radix>>
 };
 
 template <typename T>
-struct parser_registry<T, std::enable_if_t<std::is_integral<T>::value>>
-{
+struct parser_registry<T, std::enable_if_t<std::is_integral<T>::value>> {
   using type = integral_parser<T>;
 };
 

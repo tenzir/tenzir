@@ -23,30 +23,24 @@ namespace vast {
 /// @note This CAS-style singleton implementation originally comes from Dominik
 /// Charousset's libcaf.
 template <typename T>
-class singleton
-{
+class singleton {
   singleton(singleton const&) = delete;
   singleton& operator=(singleton const&) = delete;
 
 public:
   /// Retrieves the one-and-only instance of `T`.
   /// @returns A pointer to access the instance of `T`.
-  static T* instance()
-  {
+  static T* instance() {
     T* result = ptr.load();
-    while (result == nullptr)
-    {
+    while (result == nullptr) {
       T* tmp = T::create();
-      if (ptr.load() == nullptr)
-      {
+      if (ptr.load() == nullptr) {
         tmp->initialize();
         if (ptr.compare_exchange_weak(result, tmp))
           result = tmp;
         else
           tmp->destroy();
-      }
-      else
-      {
+      } else {
         tmp->dispose();
       }
     }
@@ -54,17 +48,12 @@ public:
   }
 
   /// Destroys the instance of `T`.
-  static void destruct()
-  {
-    while (true)
-    {
+  static void destruct() {
+    while (true) {
       T* p = ptr.load();
-      if (p == nullptr)
-      {
+      if (p == nullptr) {
         return;
-      }
-      else if (ptr.compare_exchange_weak(p, nullptr))
-      {
+      } else if (ptr.compare_exchange_weak(p, nullptr)) {
         p->destroy();
         ptr = nullptr;
         return;

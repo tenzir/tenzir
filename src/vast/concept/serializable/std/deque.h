@@ -8,8 +8,7 @@
 namespace vast {
 
 template <typename Serializer, typename T, typename Allocator>
-void serialize(Serializer& sink, std::deque<T, Allocator> const& d)
-{
+void serialize(Serializer& sink, std::deque<T, Allocator> const& d) {
   sink.begin_sequence(d.size());
   for (auto const& x : d)
     sink << x;
@@ -17,11 +16,9 @@ void serialize(Serializer& sink, std::deque<T, Allocator> const& d)
 }
 
 template <typename Deserializer, typename T, typename Allocator>
-void deserialize(Deserializer& source, std::deque<T, Allocator>& d)
-{
+void deserialize(Deserializer& source, std::deque<T, Allocator>& d) {
   auto size = source.begin_sequence();
-  if (size > 0)
-  {
+  if (size > 0) {
     d.resize(size);
     for (auto& x : d)
       source >> x;
@@ -32,4 +29,3 @@ void deserialize(Deserializer& source, std::deque<T, Allocator>& d)
 } // namespace vast
 
 #endif
-

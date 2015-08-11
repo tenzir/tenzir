@@ -13,8 +13,7 @@
 
 using namespace vast;
 
-TEST(polymorphic)
-{
+TEST(polymorphic) {
   bitmap_index<null_bitstream> bmi;
   REQUIRE(! bmi);
   bmi = string_bitmap_index<null_bitstream>{};
@@ -29,8 +28,7 @@ TEST(polymorphic)
   CHECK(bmi == bmi2);
 }
 
-TEST(boolean)
-{
+TEST(boolean) {
   arithmetic_bitmap_index<null_bitstream, boolean> bmi;
   CHECK(bmi.push_back(true));
   CHECK(bmi.push_back(true));
@@ -56,8 +54,7 @@ TEST(boolean)
   CHECK(bmi == bmi2);
 }
 
-TEST(integral)
-{
+TEST(integral) {
   arithmetic_bitmap_index<null_bitstream, integer> bmi;
   CHECK(bmi.push_back(-7));
   CHECK(bmi.push_back(42));
@@ -85,8 +82,7 @@ TEST(integral)
   CHECK(bmi == bmi2);
 }
 
-TEST(floating-point with custom binner)
-{
+TEST(floating-point with custom binner) {
   arithmetic_bitmap_index<null_bitstream, real, precision_binner<6, 2>> bmi;
   CHECK(bmi.push_back(-7.8));
   CHECK(bmi.push_back(42.123));
@@ -109,8 +105,7 @@ TEST(floating-point with custom binner)
   CHECK(bmi == bmi2);
 }
 
-TEST(time duration)
-{
+TEST(time duration) {
   // Default binning gives granularity of seconds.
   arithmetic_bitmap_index<null_bitstream, time::duration> bmi;
   CHECK(bmi.push_back(std::chrono::milliseconds(1000)));
@@ -138,8 +133,7 @@ TEST(time duration)
   CHECK(bmi == bmi2);
 }
 
-TEST(time point)
-{
+TEST(time point) {
   arithmetic_bitmap_index<null_bitstream, time::point> bmi;
 
   auto t = to<time::point>("2014-01-16+05:30:15");
@@ -184,8 +178,7 @@ TEST(time point)
   CHECK(bmi == bmi2);
 }
 
-TEST(string)
-{
+TEST(string) {
   string_bitmap_index<null_bitstream> bmi;
   CHECK(bmi.push_back("foo"));
   CHECK(bmi.push_back("bar"));
@@ -231,8 +224,7 @@ TEST(string)
   CHECK(to_string(*bmi2.lookup(equal, "bar")) == "0100010000");
 }
 
-TEST(address)
-{
+TEST(address) {
   address_bitmap_index<null_bitstream> bmi;
   CHECK(bmi.push_back(*to<address>("192.168.0.1")));
   CHECK(bmi.push_back(*to<address>("192.168.0.2")));
@@ -287,10 +279,8 @@ TEST(address)
   CHECK(bmi == bmi2);
 }
 
-TEST(subnet)
-{
+TEST(subnet) {
   subnet_bitmap_index<null_bitstream> bmi;
-
   auto s0 = to<subnet>("192.168.0.0/24");
   auto s1 = to<subnet>("192.168.1.0/24");
   auto s2 = to<subnet>("::/40");
@@ -321,8 +311,7 @@ TEST(subnet)
   CHECK(bmi == bmi2);
 }
 
-TEST(port)
-{
+TEST(port) {
   port_bitmap_index<null_bitstream> bmi;
   bmi.push_back(port(80, port::tcp));
   bmi.push_back(port(443, port::tcp));
@@ -354,8 +343,7 @@ TEST(port)
   CHECK(bmi == bmi2);
 }
 
-TEST(container)
-{
+TEST(container) {
   sequence_bitmap_index<null_bitstream> bmi{type::string{}};
 
   vector v{"foo", "bar"};
@@ -394,8 +382,7 @@ TEST(container)
   CHECK(bmi == bmi2);
 }
 
-TEST(offset_push_back)
-{
+TEST(offset_push_back) {
   string_bitmap_index<null_bitstream> bmi;
   CHECK(bmi.push_back("foo", 2));
   CHECK(bmi.push_back(data{"bar"}, 3));

@@ -42,31 +42,21 @@ struct type_writer;
 /// all subtypes. Two types are equal if they have the same signature. Each
 /// type has a unique hash digest over which defines a total ordering, albeit
 /// not consistent with lexicographical string representation.
-class type : util::totally_ordered<type>
-{
+class type : util::totally_ordered<type> {
   friend access;
 
 public:
   struct intrusive_info;
 
   /// A type attrbiute.
-  struct attribute : util::equality_comparable<attribute>
-  {
-    enum key_type : uint16_t
-    {
-      invalid,
-      skip,
-      default_
-    };
+  struct attribute : util::equality_comparable<attribute> {
+    enum key_type : uint16_t { invalid, skip, default_ };
 
     attribute(key_type k = invalid, std::string v = {})
-      : key{k},
-        value{std::move(v)}
-    {
+      : key{k}, value{std::move(v)} {
     }
 
-    friend bool operator==(attribute const& lhs, attribute const& rhs)
-    {
+    friend bool operator==(attribute const& lhs, attribute const& rhs) {
       return lhs.key == rhs.key && lhs.value == rhs.value;
     }
 
@@ -83,68 +73,55 @@ public:
 
   // The base class for type classes.
   template <typename Derived>
-  class base : util::totally_ordered<base<Derived>>
-  {
+  class base : util::totally_ordered<base<Derived>> {
     friend access;
 
   public:
-    friend bool operator==(base const& lhs, base const& rhs)
-    {
+    friend bool operator==(base const& lhs, base const& rhs) {
       return lhs.digest() == rhs.digest();
     }
 
-    friend bool operator<(base const& lhs, base const& rhs)
-    {
+    friend bool operator<(base const& lhs, base const& rhs) {
       return lhs.digest() < rhs.digest();
     }
 
-    std::string const& name() const
-    {
+    std::string const& name() const {
       return name_;
     }
 
-    bool name(std::string name)
-    {
-      if (! name_.empty())
+    bool name(std::string name) {
+      if (!name_.empty())
         return false;
       name_ = std::move(name);
       return hash_.add(name_.data(), name_.size());
     }
 
-    std::vector<attribute> const& attributes() const
-    {
+    std::vector<attribute> const& attributes() const {
       return attributes_;
     }
 
-    attribute const* find_attribute(attribute::key_type k) const
-    {
-      auto i = std::find_if(attributes_.begin(),
-                            attributes_.end(),
+    attribute const* find_attribute(attribute::key_type k) const {
+      auto i = std::find_if(attributes_.begin(), attributes_.end(),
                             [&](attribute const& a) { return a.key == k; });
 
       return i == attributes_.end() ? nullptr : &*i;
     }
 
-    hash_type::digest_type digest() const
-    {
+    hash_type::digest_type digest() const {
       // FIXME: put the digest somewhere and remove the const_cast.
       return const_cast<hash_type&>(hash_).get();
     }
 
   protected:
-    base(std::vector<attribute> a = {})
-      : attributes_(std::move(a))
-    {
-      for (auto& a : attributes_)
-      {
+    base(std::vector<attribute> a = {}) : attributes_(std::move(a)) {
+      for (auto& a : attributes_) {
         update(a.key);
         update(a.value.data(), a.value.size());
       }
     }
 
     template <typename... Ts>
-    void update(Ts&&... xs)
-    {
+    void update(Ts&&... xs) {
       hash_.add(std::forward<Ts>(xs)...);
     }
 
@@ -161,15 +138,12 @@ public:
   class record;
   class alias;
 
-#define VAST_DEFINE_BASIC_TYPE(name, desc)                    \
-  class name : public base<name>                              \
-  {                                                           \
-  public:                                                     \
-    name(std::vector<attribute> a = {})                       \
-      : base<name>(std::move(a))                              \
-    {                                                         \
-      update(#name, sizeof(#name) - 1);                       \
-    }                                                         \
+#define VAST_DEFINE_BASIC_TYPE(name, desc)                                     \
+  class name : public base<name> {                                             \
+  public:                                                                      \
+    name(std::vector<attribute> a = {}) : base<name>(std::move(a)) {           \
+      update(#name, sizeof(#name) - 1);                                        \
+    }                                                                          \
   };
 
   VAST_DEFINE_BASIC_TYPE(boolean, "bool")
@@ -380,8 +354,7 @@ public:
   >;
 
   /// An enum type.
-  class enumeration : public base<enumeration>
-  {
+  class enumeration : public base<enumeration> {
     friend access;
     friend info;
     friend detail::type_reader;
@@ -389,17 +362,14 @@ public:
 
   public:
     enumeration(std::vector<std::string> fields, std::vector<attribute> a = {})
-      : base<enumeration>{std::move(a)},
-        fields_{std::move(fields)}
-    {
+      : base<enumeration>{std::move(a)}, fields_{std::move(fields)} {
       static constexpr auto desc = "enumeration";
       update(desc, sizeof(desc));
       for (auto& f : fields_)
         update(f.data(), f.size());
     }
 
-    std::vector<std::string> const& fields() const
-    {
+    std::vector<std::string> const& fields() const {
       return fields_;
     }
 
@@ -442,13 +412,10 @@ public:
     >
   >
   type(T&& x)
-    : info_{util::make_intrusive<intrusive_info>(std::forward<T>(x))}
-  {
+    : info_{util::make_intrusive<intrusive_info>(std::forward<T>(x))} {
   }
 
-  explicit type(util::intrusive_ptr<intrusive_info> ii)
-    : info_{std::move(ii)}
-  {
+  explicit type(util::intrusive_ptr<intrusive_info> ii) : info_{std::move(ii)} {
   }
 
   friend bool operator==(type const& lhs, type const& rhs);
@@ -558,8 +525,7 @@ bool congruent(type const& x, type const& y);
 /// @returns `true` if *lhs* and *rhs* are compatible to each other under *op*.
 bool compatible(type const& lhs, relational_operator op, type const& rhs);
 
-class type::vector : public type::base<type::vector>
-{
+class type::vector : public type::base<type::vector> {
   friend access;
   friend type::info;
   friend detail::type_reader;
@@ -567,16 +533,13 @@ class type::vector : public type::base<type::vector>
 
 public:
   vector(type t, std::vector<attribute> a = {})
-    : base<vector>{std::move(a)},
-      elem_{std::move(t)}
-  {
+    : base<vector>{std::move(a)}, elem_{std::move(t)} {
     static constexpr auto desc = "vector";
     update(desc, sizeof(desc));
     update(elem_.digest());
   }
 
-  type const& elem() const
-  {
+  type const& elem() const {
     return elem_;
   }
 
@@ -586,8 +549,7 @@ private:
   type elem_;
 };
 
-class type::set : public base<type::set>
-{
+class type::set : public base<type::set> {
   friend access;
   friend type::info;
   friend detail::type_reader;
@@ -595,16 +557,13 @@ class type::set : public base<type::set>
 
 public:
   set(type t, std::vector<attribute> a = {})
-    : base<set>{std::move(a)},
-      elem_{std::move(t)}
-  {
+    : base<set>{std::move(a)}, elem_{std::move(t)} {
     static constexpr auto desc = "set";
     update(desc, sizeof(desc));
     update(elem_.digest());
   }
 
-  type const& elem() const
-  {
+  type const& elem() const {
     return elem_;
   }
 
@@ -614,8 +573,7 @@ private:
   type elem_;
 };
 
-class type::table : public type::base<type::table>
-{
+class type::table : public type::base<type::table> {
   friend access;
   friend type::info;
   friend detail::type_reader;
@@ -623,23 +581,18 @@ class type::table : public type::base<type::table>
 
 public:
   table(type k, type v, std::vector<attribute> a = {})
-    : base<table>{std::move(a)},
-      key_{std::move(k)},
-      value_{std::move(v)}
-  {
+    : base<table>{std::move(a)}, key_{std::move(k)}, value_{std::move(v)} {
     static constexpr auto desc = "table";
     update(desc, sizeof(desc));
     update(key_.digest());
     update(value_.digest());
   }
 
-  type const& key() const
-  {
+  type const& key() const {
     return key_;
   }
 
-  type const& value() const
-  {
+  type const& value() const {
     return value_;
   }
 
@@ -650,26 +603,20 @@ private:
   type value_;
 };
 
-class type::record : public type::base<type::record>
-{
+class type::record : public type::base<type::record> {
   friend access;
   friend type::info;
   friend detail::type_reader;
   friend detail::type_writer;
 
 public:
-  struct field : util::equality_comparable<field>
-  {
+  struct field : util::equality_comparable<field> {
     field() = default;
 
-    field(std::string n, type t)
-      : name{std::move(n)},
-        type{std::move(t)}
-    {
+    field(std::string n, type t) : name{std::move(n)}, type{std::move(t)} {
     }
 
-    friend bool operator==(field const& lhs, field const& rhs)
-    {
+    friend bool operator==(field const& lhs, field const& rhs) {
       return lhs.name == rhs.name && lhs.type == rhs.type;
     }
 
@@ -678,11 +625,9 @@ public:
   };
 
   /// Enables recursive record iteration.
-  class each : public util::range_facade<each>
-  {
+  class each : public util::range_facade<each> {
   public:
-    struct range_state
-    {
+    struct range_state {
       vast::key key() const;
       size_t depth() const;
 
@@ -695,8 +640,7 @@ public:
   private:
     friend util::range_facade<each>;
 
-    range_state const& state() const
-    {
+    range_state const& state() const {
       return state_;
     }
 
@@ -707,23 +651,18 @@ public:
   };
 
   record(std::initializer_list<field> fields, std::vector<attribute> a = {})
-    : base<record>{std::move(a)},
-      fields_(fields.begin(), fields.end())
-  {
+    : base<record>{std::move(a)}, fields_(fields.begin(), fields.end()) {
     initialize();
   }
 
   record(std::vector<field> fields, std::vector<attribute> a = {})
-    : base<record>{std::move(a)},
-      fields_(std::move(fields))
-  {
+    : base<record>{std::move(a)}, fields_(std::move(fields)) {
     initialize();
   }
 
   /// Retrieves the fields of the record.
   /// @returns The field of the records.
-  std::vector<field> const& fields() const
-  {
+  std::vector<field> const& fields() const {
     return fields_;
   }
 
@@ -778,8 +717,7 @@ private:
   std::vector<field> fields_;
 };
 
-class type::alias : public type::base<type::alias>
-{
+class type::alias : public type::base<type::alias> {
   friend access;
   friend type::info;
   friend detail::type_reader;
@@ -787,16 +725,13 @@ class type::alias : public type::base<type::alias>
 
 public:
   alias(vast::type t, std::vector<attribute> a = {})
-    : base<alias>{std::move(a)},
-      type_{std::move(t)}
-  {
+    : base<alias>{std::move(a)}, type_{std::move(t)} {
     static constexpr auto desc = "alias";
     update(desc, sizeof(desc));
     update(type_.digest());
   }
 
-  vast::type const& type() const
-  {
+  vast::type const& type() const {
     return type_;
   }
 
@@ -806,26 +741,20 @@ private:
   vast::type type_;
 };
 
-struct type::intrusive_info : util::intrusive_base<intrusive_info>, type::info
-{
+struct type::intrusive_info : util::intrusive_base<intrusive_info>, type::info {
   intrusive_info() = default;
 
-  template <
-    typename T,
-    typename = util::disable_if_same_or_derived_t<intrusive_info, T>
-  >
+  template <typename T,
+            typename = util::disable_if_same_or_derived_t<intrusive_info, T>>
   intrusive_info(T&& x)
-    : type::info{std::forward<T>(x)}
-  {
+    : type::info{std::forward<T>(x)} {
   }
 
-  friend type::info& expose(intrusive_info& i)
-  {
+  friend type::info& expose(intrusive_info& i) {
     return static_cast<type::info&>(i);
   }
 
-  friend type::info const& expose(intrusive_info const& i)
-  {
+  friend type::info const& expose(intrusive_info const& i) {
     return static_cast<type::info const&>(i);
   }
 };
@@ -835,10 +764,8 @@ struct type::intrusive_info : util::intrusive_base<intrusive_info>, type::info
 namespace std {
 
 template <>
-struct hash<vast::type>
-{
-  size_t operator()(vast::type const& t) const
-  {
+struct hash<vast::type> {
+  size_t operator()(vast::type const& t) const {
     return t.digest();
   }
 };

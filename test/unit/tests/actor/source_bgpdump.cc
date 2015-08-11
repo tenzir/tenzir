@@ -11,8 +11,7 @@
 using namespace caf;
 using namespace vast;
 
-TEST(bgpdump_source)
-{
+TEST(bgpdump_source) {
   scoped_actor self;
   auto f = bgpdump::updates20140821;
   auto is = std::make_unique<vast::io::file_input_stream>(f);
@@ -24,8 +23,7 @@ TEST(bgpdump_source)
   MESSAGE("running the source");
   anon_send(bgpdump, run_atom::value);
   self->receive(
-    [&](std::vector<event> const& events)
-    {
+    [&](std::vector<event> const& events) {
       REQUIRE(events.size() == 11782);
       CHECK(events[0].type().name() == "bgpdump::state_change");
       auto r = get<record>(events[0]);

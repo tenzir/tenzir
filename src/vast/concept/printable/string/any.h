@@ -5,13 +5,11 @@
 
 namespace vast {
 
-struct any_printer : printer<any_printer>
-{
+struct any_printer : printer<any_printer> {
   using attribute = char;
 
   template <typename Iterator>
-  bool print(Iterator& out, char x) const
-  {
+  bool print(Iterator& out, char x) const {
     // TODO: in the future when we have ranges, we should add a mechanism to
     // check whether we exceed the bounds instead of just deref'ing the
     // iterator and pretending it'll work out.
@@ -21,8 +19,7 @@ struct any_printer : printer<any_printer>
 };
 
 template <>
-struct printer_registry<char>
-{
+struct printer_registry<char> {
   using type = any_printer;
 };
 

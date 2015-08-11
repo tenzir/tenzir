@@ -13,8 +13,7 @@ namespace detail {
 namespace ast {
 namespace schema {
 
-enum basic_type
-{
+enum basic_type {
   bool_type,
   int_type,
   uint_type,
@@ -28,8 +27,7 @@ enum basic_type
   port_type
 };
 
-struct enum_type
-{
+struct enum_type {
   std::vector<std::string> fields;
 };
 
@@ -54,49 +52,40 @@ struct attribute
   boost::optional<std::string> value;
 };
 
-struct type
-{
+struct type {
   type() = default;
 
   type(type_info i, std::vector<attribute> a = {})
-    : info{std::move(i)},
-      attrs{std::move(a)}
-  {
+    : info{std::move(i)}, attrs{std::move(a)} {
   }
 
   type_info info;
   std::vector<attribute> attrs;
 };
 
-struct vector_type
-{
+struct vector_type {
   type element_type;
 };
 
-struct set_type
-{
+struct set_type {
   type element_type;
 };
 
-struct table_type
-{
+struct table_type {
   type key_type;
   type value_type;
 };
 
-struct argument_declaration
-{
+struct argument_declaration {
   std::string name;
   schema::type type;
 };
 
-struct record_type
-{
+struct record_type {
   std::vector<argument_declaration> args;
 };
 
-struct type_declaration
-{
+struct type_declaration {
   std::string name;
   schema::type type;
 };

@@ -9,21 +9,18 @@
 
 namespace vast {
 
-struct offset_printer : printer<offset_printer>
-{
+struct offset_printer : printer<offset_printer> {
   using attribute = offset;
 
   template <typename Iterator>
-  bool print(Iterator& out, offset const& o) const
-  {
+  bool print(Iterator& out, offset const& o) const {
     using delim = char_printer<','>;
     return detail::print_delimited<size_t, delim>(o.begin(), o.end(), out);
   }
 };
 
 template <>
-struct printer_registry<offset>
-{
+struct printer_registry<offset> {
   using type = offset_printer;
 };
 

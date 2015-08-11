@@ -29,17 +29,14 @@ using is_bitstream = util::any<
 // bits, typically greater than or equal to the block size, and a *literal*
 // sequence representing bits from a single block, typically less than or
 // equal to the block size.
-struct bitseq
-{
+struct bitseq {
   enum block_type { fill, literal };
 
-  bool is_fill() const
-  {
+  bool is_fill() const {
     return type == fill;
   }
 
-  bool is_literal() const
-  {
+  bool is_literal() const {
     return type == literal;
   }
 
@@ -51,8 +48,7 @@ struct bitseq
 
 /// The base class for all bitstream implementations.
 template <typename Derived>
-class bitstream_base
-{
+class bitstream_base {
   friend access;
   friend Derived;
 
@@ -64,64 +60,55 @@ public:
   static constexpr auto all_one = bitvector::all_one;
   static constexpr auto msb_one = bitvector::msb_one;
 
-  Derived& operator&=(Derived const& other)
-  {
+  Derived& operator&=(Derived const& other) {
     derived().bitwise_and(other);
     return static_cast<Derived&>(*this);
   }
 
-  friend Derived operator&(Derived const& x, Derived const& y)
-  {
+  friend Derived operator&(Derived const& x, Derived const& y) {
     Derived d(x);
     return d &= y;
   }
 
-  Derived& operator|=(Derived const& other)
-  {
+  Derived& operator|=(Derived const& other) {
     derived().bitwise_or(other);
     return static_cast<Derived&>(*this);
   }
 
-  friend Derived operator|(Derived const& x, Derived const& y)
-  {
+  friend Derived operator|(Derived const& x, Derived const& y) {
     Derived d(x);
     return d |= y;
   }
 
-  Derived& operator^=(Derived const& other)
-  {
+  Derived& operator^=(Derived const& other) {
     derived().bitwise_xor(other);
     return static_cast<Derived&>(*this);
   }
 
-  friend Derived operator^(Derived const& x, Derived const& y)
-  {
+  friend Derived operator^(Derived const& x, Derived const& y) {
     Derived d(x);
     return d ^= y;
   }
 
-  Derived& operator-=(Derived const& other)
-  {
+  Derived&
+  operator-=(Derived const& other) {
     derived().bitwise_subtract(other);
     return static_cast<Derived&>(*this);
   }
 
-  friend Derived operator-(Derived const& x, Derived const& y)
-  {
+  friend Derived operator-(Derived const& x, Derived const& y) {
     Derived d(x);
     return d -= y;
   }
 
   /// Flips all bits, i.e., creates the complement bitstream.
-  Derived& flip()
-  {
+  Derived& flip() {
     derived().bitwise_not();
     return static_cast<Derived&>(*this);
   }
 
   /// Flips all bits, i.e., creates the complement bitstream.
-  Derived operator~() const
-  {
+  Derived operator~() const {
     Derived d(derived());
     return d.flip();
   }
@@ -129,41 +116,35 @@ public:
   /// Inspects a bit at a given position.
   /// @param i The bit position to check.
   /// @returns `true` if bit *i* is set.
-  bool operator[](size_type i) const
-  {
+  bool operator[](size_type i) const {
     return derived().at(i);
   }
 
   /// Retrieves the number of bits in the bitstream.
   /// @returns The number of total bits in the bitstream.
-  size_type size() const
-  {
+  size_type size() const {
     return derived().size_impl();
   }
 
   /// Retrieves the population count (aka. Hamming weight) of the bitstream.
   /// @returns The number of set bits.
-  size_type count() const
-  {
+  size_type count() const {
     return derived().count_impl();
   }
 
   /// Checks whether the bitstream has no bits.
   /// @returns `true` iff `size() > 0`
-  bool empty() const
-  {
+  bool empty() const {
     return derived().empty_impl();
   }
 
   /// Appends another bitstream.
   /// @param other The other bitstream.
   /// @returns `true` on success.
-  bool append(Derived const& other)
-  {
+  bool append(Derived const& other) {
     if (other.empty())
       return true;
-    if (empty())
-    {
+    if (empty()) {
       *this = other;
       return true;
     }
@@ -177,8 +158,7 @@ public:
   /// @param n The number of bits to append.
   /// @param bit The bit value of the *n* bits to append.
   /// @returns `true` on success.
-  bool append(size_type n, bool bit)
-  {
+  bool append(size_type n, bool bit) {
     if (n == 0)
       return true;
     if (npos - n < size())
@@ -191,8 +171,7 @@ public:
   /// @param block The block whose bits to append.
   /// @param bits The number of bits to take from *block*.
   /// @returns `true` on success.
-  bool append_block(block_type block, size_type bits = block_width)
-  {
+  bool append_block(block_type block, size_type bits = block_width) {
     VAST_ASSERT(bits <= block_width);
     if (npos - bits < size())
       return false;
@@ -203,8 +182,7 @@ public:
   /// Appends a single bit.
   /// @param bit The bit value.
   /// @returns `true` on success.
-  bool push_back(bool bit)
-  {
+  bool push_back(bool bit) {
     if (std::numeric_limits<size_type>::max() == size())
       return false;
     derived().push_back_impl(bit);
@@ -212,47 +190,39 @@ public:
   }
 
   /// Removes trailing zero bits.
-  void trim()
-  {
+  void trim() {
     derived().trim_impl();
   }
 
   /// Removes all bits from bitstream.
   /// @post `empty() == true`.
-  void clear() noexcept
-  {
+  void clear() noexcept {
     derived().clear_impl();
   }
 
   template <typename Hack = Derived>
-  auto begin() const
-    -> decltype(std::declval<Hack>().begin_impl())
-  {
+  auto begin() const -> decltype(std::declval<Hack>().begin_impl()) {
     static_assert(std::is_same<Hack, Derived>::value, ":-P");
     return derived().begin_impl();
   }
 
   template <typename Hack = Derived>
-  auto end() const
-    -> decltype(std::declval<Hack>().end_impl())
-  {
+  auto end() const -> decltype(std::declval<Hack>().end_impl()) {
     static_assert(std::is_same<Hack, Derived>::value, ":-P");
     return derived().end_impl();
   }
 
   /// Accesses the last bit of the bitstream.
   /// @returns The bit value of the last bit.
-  bool back() const
-  {
-    VAST_ASSERT(! empty());
+  bool back() const {
+    VAST_ASSERT(!empty());
     return derived().back_impl();
   }
 
   /// Retrieves the position of the first one-bit.
   /// @returns The position of the first one-bit or bitstream::npos if no such
   /// position exists (i.e., if all bits are zero).
-  size_type find_first() const
-  {
+  size_type find_first() const {
     return derived().find_first_impl();
   }
 
@@ -260,8 +230,7 @@ public:
   /// @param i The position after which to begin finding.
   /// @returns The position of the first one-bit after *i* or bitstream::npos
   /// if no such one-bit exists.
-  size_type find_next(size_type i) const
-  {
+  size_type find_next(size_type i) const {
     auto r = derived().find_next_impl(i);
     VAST_ASSERT(r > i || r == npos);
     return r;
@@ -270,8 +239,7 @@ public:
   /// Retrieves the position of the last one-bit.
   /// @returns The position of the last one-bit or bitstream::npos if no such
   /// position exists (i.e., if all bits are zero).
-  size_type find_last() const
-  {
+  size_type find_last() const {
     return derived().find_last_impl();
   }
 
@@ -279,8 +247,7 @@ public:
   /// @param i The position before which to begin finding.
   /// @returns The position of the first one-bit before *i* or bitstream::npos
   /// if no such one-bit exists.
-  size_type find_prev(size_type i) const
-  {
+  size_type find_prev(size_type i) const {
     auto r = derived().find_prev_impl(i);
     VAST_ASSERT(r < i || r == npos);
     return r;
@@ -289,34 +256,29 @@ public:
   /// Checks whether a non-empty bitstream consists only of 0s.
   /// @returns `true` iff all bits in the bitstream are 0.
   /// @pre `! empty()`
-  bool all_zeros() const
-  {
-    VAST_ASSERT(! empty());
+  bool all_zeros() const {
+    VAST_ASSERT(!empty());
     return find_first() == npos;
   }
 
   /// Checks whether a non-empty bitstream consists only of 1s.
   /// @returns `true` iff all bits in the bitstream are 1.
   /// @pre `! empty()`
-  bool all_ones() const
-  {
-    VAST_ASSERT(! empty());
+  bool all_ones() const {
+    VAST_ASSERT(!empty());
     return find_first() == size() - 1;
   }
 
-  bitvector const& bits() const
-  {
+  bitvector const& bits() const {
     return derived().bits_impl();
   }
 
 protected:
-  Derived& derived()
-  {
+  Derived& derived() {
     return *static_cast<Derived*>(this);
   }
 
-  Derived const& derived() const
-  {
+  Derived const& derived() const {
     return *static_cast<Derived const*>(this);
   }
 };
@@ -329,19 +291,16 @@ namespace detail {
 /// The base class for bit sequence ranges.
 template <typename Derived>
 class sequence_range_base
-  : public util::range_facade<sequence_range_base<Derived>>
-{
+  : public util::range_facade<sequence_range_base<Derived>> {
 protected:
-  bool next()
-  {
+  bool next() {
     return static_cast<Derived*>(this)->next_sequence(seq_);
   }
 
 private:
   friend util::range_facade<sequence_range_base<Derived>>;
 
-  bitseq const& state() const
-  {
+  bitseq const& state() const {
     return seq_;
   }
 
@@ -356,8 +315,7 @@ class bitstream_model;
 /// An uncompressed bitstream that simply forwards all operations to its
 /// underlying ::bitvector.
 class null_bitstream : public bitstream_base<null_bitstream>,
-                       util::totally_ordered<null_bitstream>
-{
+                       util::totally_ordered<null_bitstream> {
   template <typename>
   friend class detail::bitstream_model;
   friend bitstream_base<null_bitstream>;
@@ -373,8 +331,7 @@ public:
         size_type,
         std::forward_iterator_tag,
         size_type
-      >
-  {
+      > {
   public:
     iterator() = default;
 
@@ -388,17 +345,14 @@ public:
     auto dereference() const -> decltype(this->base().position());
   };
 
-  class ones_range : public util::iterator_range<iterator>
-  {
+  class ones_range : public util::iterator_range<iterator> {
   public:
     explicit ones_range(null_bitstream const& bs)
-      : util::iterator_range<iterator>{iterator::begin(bs), iterator::end(bs)}
-    {
+      : util::iterator_range<iterator>{iterator::begin(bs), iterator::end(bs)} {
     }
   };
 
-  class sequence_range : public detail::sequence_range_base<sequence_range>
-  {
+  class sequence_range : public detail::sequence_range_base<sequence_range> {
   public:
     explicit sequence_range(null_bitstream const& bs);
 
@@ -441,8 +395,6 @@ private:
   bitvector const& bits_impl() const;
 
   bitvector bits_;
-
-private:
 };
 
 /// A bitstream encoded with the *Enhanced World-Aligned Hybrid (EWAH)*
@@ -460,8 +412,7 @@ private:
 ///     1. The first block is a marker.
 ///     2. The last block is always dirty.
 class ewah_bitstream : public bitstream_base<ewah_bitstream>,
-                       util::totally_ordered<ewah_bitstream>
-{
+                       util::totally_ordered<ewah_bitstream> {
   template <typename>
   friend class detail::bitstream_model;
   friend bitstream_base<ewah_bitstream>;
@@ -472,9 +423,11 @@ class ewah_bitstream : public bitstream_base<ewah_bitstream>,
 public:
   using const_iterator = class iterator
     : public util::iterator_facade<
-               iterator, size_type, std::forward_iterator_tag, size_type
-             >
-  {
+        iterator,
+        size_type,
+        std::forward_iterator_tag,
+        size_type
+      > {
   public:
     iterator() = default;
 
@@ -501,17 +454,14 @@ public:
     size_type idx_ = 0;
   };
 
-  class ones_range : public util::iterator_range<iterator>
-  {
+  class ones_range : public util::iterator_range<iterator> {
   public:
     explicit ones_range(ewah_bitstream const& bs)
-      : util::iterator_range<iterator>{iterator::begin(bs), iterator::end(bs)}
-    {
+      : util::iterator_range<iterator>{iterator::begin(bs), iterator::end(bs)} {
     }
   };
 
-  class sequence_range : public detail::sequence_range_base<sequence_range>
-  {
+  class sequence_range : public detail::sequence_range_base<sequence_range> {
   public:
     explicit sequence_range(ewah_bitstream const& bs);
 
@@ -572,27 +522,24 @@ private:
   static constexpr auto marker_clean_mask = ~(marker_dirty_mask | msb_one);
 
   /// The maximum value of the counter of clean words.
-  static constexpr auto marker_clean_max =
-    marker_clean_mask >> clean_dirty_divide;
+  static constexpr auto marker_clean_max
+    = marker_clean_mask >> clean_dirty_divide;
 
   /// Retrieves the type of the clean word in a marker word.
   /// @param block The block to check.
   /// @returns `true` if *block* represents a sequence of 1s and `false` if 0s.
-  static constexpr bool marker_type(block_type block)
-  {
+  static constexpr bool marker_type(block_type block) {
     return (block & msb_one) == msb_one;
   }
 
-  static constexpr block_type marker_type(block_type block, bool type)
-  {
+  static constexpr block_type marker_type(block_type block, bool type) {
     return (block & ~msb_one) | (type ? msb_one : 0);
   }
 
   /// Retrieves the number of clean words in a marker word.
   /// @param block The block to check.
   /// @returns The number of clean words in *block*.
-  static constexpr block_type marker_num_clean(block_type block)
-  {
+  static constexpr block_type marker_num_clean(block_type block) {
     return (block & marker_clean_mask) >> clean_dirty_divide;
   }
 
@@ -600,16 +547,14 @@ private:
   /// @param block The block to check.
   /// @param n The new value for the number of clean words.
   /// @returns The updated block that has a new clean word length of *n*.
-  static constexpr block_type marker_num_clean(block_type block, block_type n)
-  {
+  static constexpr block_type marker_num_clean(block_type block, block_type n) {
     return (block & ~marker_clean_mask) | (n << clean_dirty_divide);
   }
 
   /// Retrieves the number of dirty words following a marker word.
   /// @param block The block to check.
   /// @returns The number of dirty words following *block*.
-  static constexpr block_type marker_num_dirty(block_type block)
-  {
+  static constexpr block_type marker_num_dirty(block_type block) {
     return block & marker_dirty_mask;
   }
 
@@ -617,8 +562,7 @@ private:
   /// @param block The block to check.
   /// @param n The new value for the number of dirty words.
   /// @returns The updated block that has a new dirty word length of *n*.
-  static constexpr block_type marker_num_dirty(block_type block, block_type n)
-  {
+  static constexpr block_type marker_num_dirty(block_type block, block_type n) {
     return (block & ~marker_dirty_mask) | n;
   }
 
@@ -661,68 +605,53 @@ private:
 /// @returns The result of a bitwise operation between *lhs* and *rhs*
 /// according to *op*.
 template <typename Bitstream, typename Operation>
-Bitstream apply(Bitstream const& lhs, Bitstream const& rhs,
-                bool fill_lhs, bool fill_rhs, Operation op)
-{
+Bitstream apply(Bitstream const& lhs, Bitstream const& rhs, bool fill_lhs,
+                bool fill_rhs, Operation op) {
   auto rx = typename Bitstream::sequence_range{lhs};
   auto ry = typename Bitstream::sequence_range{rhs};
   auto ix = rx.begin();
   auto iy = ry.begin();
-
+  // Check corner cases.
   if (ix == rx.end() && iy == ry.end())
     return {};
   if (ix == rx.end())
     return rhs;
   if (iy == ry.end())
     return lhs;
-
+  // Initialize result.
   Bitstream result;
   auto first = std::min(ix->offset, iy->offset);
   if (first > 0)
     result.append(first, false);
-
+  // Iterate.
   auto lx = ix->length;
   auto ly = iy->length;
-  while (ix != rx.end() && iy != rx.end())
-  {
+  while (ix != rx.end() && iy != rx.end()) {
     auto min = std::min(lx, ly);
     auto block = op(ix->data, iy->data);
-
-    if (ix->is_fill() && iy->is_fill())
-    {
+    if (ix->is_fill() && iy->is_fill()) {
       result.append(min, block != 0);
       lx -= min;
       ly -= min;
-    }
-    else if (ix->is_fill())
-    {
+    } else if (ix->is_fill()) {
       result.append_block(block);
       lx -= Bitstream::block_width;
       ly = 0;
-    }
-    else if (iy->is_fill())
-    {
+    } else if (iy->is_fill()) {
       result.append_block(block);
       ly -= Bitstream::block_width;
       lx = 0;
-    }
-    else
-    {
+    } else {
       result.append_block(block, std::max(lx, ly));
       lx = ly = 0;
     }
-
     if (lx == 0 && ++ix != rx.end())
       lx = ix->length;
-
     if (ly == 0 && ++iy != ry.end())
       ly = iy->length;
   }
-
-  if (fill_lhs)
-  {
-    while (ix != rx.end())
-    {
+  if (fill_lhs) {
+    while (ix != rx.end()) {
       if (ix->is_fill())
         result.append(lx, ix->data);
       else
@@ -732,11 +661,8 @@ Bitstream apply(Bitstream const& lhs, Bitstream const& rhs,
         lx = ix->length;
     }
   }
-
-  if (fill_rhs)
-  {
-    while (iy != ry.end())
-    {
+  if (fill_rhs) {
+    while (iy != ry.end()) {
       if (iy->is_fill())
         result.append(ly, iy->data);
       else
@@ -746,52 +672,45 @@ Bitstream apply(Bitstream const& lhs, Bitstream const& rhs,
         ly = iy->length;
     }
   }
-
   // If the result has not yet been filled with the remaining bits of either
   // LHS or RHS, we have to fill it up with zeros. This is necessary, for
   // example, to ensure that the complement of the result can still be used in
   // further bitwise operations with bitstreams having the size of
   // max(size(LHS), size(RHS)).
   result.append(std::max(lhs.size(), rhs.size()) - result.size(), false);
-
   return result;
 }
 
 template <typename Bitstream>
-Bitstream and_(Bitstream const& lhs, Bitstream const& rhs)
-{
+Bitstream and_(Bitstream const& lhs, Bitstream const& rhs) {
   using block_type = typename Bitstream::block_type;
   return apply(lhs, rhs, false, false,
                [](block_type x, block_type y) { return x & y; });
 }
 
 template <typename Bitstream>
-Bitstream or_(Bitstream const& lhs, Bitstream const& rhs)
-{
+Bitstream or_(Bitstream const& lhs, Bitstream const& rhs) {
   using block_type = typename Bitstream::block_type;
   return apply(lhs, rhs, true, true,
                [](block_type x, block_type y) { return x | y; });
 }
 
 template <typename Bitstream>
-Bitstream xor_(Bitstream const& lhs, Bitstream const& rhs)
-{
+Bitstream xor_(Bitstream const& lhs, Bitstream const& rhs) {
   using block_type = typename Bitstream::block_type;
   return apply(lhs, rhs, true, true,
                [](block_type x, block_type y) { return x ^ y; });
 }
 
 template <typename Bitstream>
-Bitstream nand_(Bitstream const& lhs, Bitstream const& rhs)
-{
+Bitstream nand_(Bitstream const& lhs, Bitstream const& rhs) {
   using block_type = typename Bitstream::block_type;
   return apply(lhs, rhs, true, false,
                [](block_type x, block_type y) { return x & ~y; });
 }
 
 template <typename Bitstream>
-Bitstream nor_(Bitstream const& lhs, Bitstream const& rhs)
-{
+Bitstream nor_(Bitstream const& lhs, Bitstream const& rhs) {
   using block_type = typename Bitstream::block_type;
   return apply(lhs, rhs, true, true,
                [](block_type x, block_type y) { return x | ~y; });

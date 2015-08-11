@@ -15,112 +15,86 @@ namespace source {
 /// The base class for data sources which synchronously extract events
 /// one-by-one.
 template <typename Derived>
-class base : public flow_controlled_actor
-{
+class base : public flow_controlled_actor {
 public:
-  base(char const* name)
-    : flow_controlled_actor{name}
-  {
+  base(char const* name) : flow_controlled_actor{name} {
     trap_exit(true);
   }
 
-  void on_exit() override
-  {
+  void on_exit() override {
     accountant_ = caf::invalid_actor;
     sinks_.clear();
   }
 
-  caf::behavior make_behavior() override
-  {
+  caf::behavior make_behavior() override {
     using namespace caf;
-    return
-    {
-      [=](exit_msg const& msg)
-      {
+    return {
+      [=](exit_msg const& msg) {
         if (downgrade_exit())
           return;
-        if (! events_.empty())
+        if (!events_.empty())
           send(sinks_[next_sink_++ % sinks_.size()], std::move(events_));
         quit(msg.reason);
       },
-      [=](down_msg const& msg)
-      {
+      [=](down_msg const& msg) {
         // Handle sink termination.
-        auto sink = std::find_if(
-            sinks_.begin(), sinks_.end(),
-            [&](auto& x) { return x->address() == msg.source; });
+        auto sink = std::find_if(sinks_.begin(), sinks_.end(), [&](auto& x) {
+          return x->address() == msg.source;
+        });
         if (sink != sinks_.end())
           sinks_.erase(sink);
-        if (sinks_.empty())
-        {
+        if (sinks_.empty()) {
           VAST_WARN(this, "has no more sinks");
           send_exit(*this, exit::done);
         }
       },
-      [=](overload_atom)
-      {
+      [=](overload_atom) {
         overloaded(true); // Stop after the next batch.
       },
-      [=](underload_atom)
-      {
+      [=](underload_atom) {
         overloaded(false);
-        if (! done())
+        if (!done())
           send(this, run_atom::value);
       },
-      [=](batch_atom, uint64_t batch_size)
-      {
+      [=](batch_atom, uint64_t batch_size) {
         VAST_DEBUG(this, "sets batch size to", batch_size);
         batch_size_ = batch_size;
       },
-      [=](get_atom, schema_atom)
-      {
+      [=](get_atom, schema_atom) {
         return static_cast<Derived*>(this)->sniff();
       },
-      [=](put_atom, schema const& sch)
-      {
+      [=](put_atom, schema const& sch) {
         static_cast<Derived*>(this)->set(sch);
       },
-      [=](put_atom, sink_atom, actor const& sink)
-      {
+      [=](put_atom, sink_atom, actor const& sink) {
         VAST_DEBUG(this, "adds sink to", sink);
         monitor(sink);
         send(sink, upstream_atom::value, this);
         sinks_.push_back(sink);
       },
-      [=](put_atom, accountant_atom, actor const& accountant)
-      {
+      [=](put_atom, accountant_atom, actor const& accountant) {
         VAST_DEBUG(this, "registers accountant", accountant);
         accountant_ = accountant;
         send(accountant_, label() + "-events", time::now());
       },
-      [=](get_atom, sink_atom)
-      {
-        return sinks_;
-      },
-      [=](run_atom)
-      {
-        if (sinks_.empty())
-        {
+      [=](get_atom, sink_atom) { return sinks_; },
+      [=](run_atom) {
+        if (sinks_.empty()) {
           VAST_ERROR(this, "cannot run without sinks");
           this->quit(exit::error);
           return;
         }
-        while (events_.size() < batch_size_ && ! done())
-        {
+        while (events_.size() < batch_size_ && !done()) {
           result<event> r = static_cast<Derived*>(this)->extract();
-          if (r)
-          {
+          if (r) {
             events_.push_back(std::move(*r));
-          }
-          else if (r.failed())
-          {
+          } else if (r.failed()) {
             VAST_ERROR(this, r.error());
             done(true);
             break;
           }
         }
-        if (! events_.empty())
-        {
+        if (!events_.empty()) {
           VAST_VERBOSE(this, "produced", events_.size(), "events");
           if (accountant_ != invalid_actor)
             send(accountant_, uint64_t{events_.size()}, time::snapshot());
@@ -129,7 +103,7 @@ public:
         }
         if (done())
           send_exit(*this, exit::done);
-        else if (! overloaded())
+        else if (!overloaded())
           this->send(this, this->current_message());
       },
       catch_unexpected(),
@@ -137,13 +111,11 @@ public:
   }
 
 protected:
-  bool done() const
-  {
+  bool done() const {
     return done_;
   }
 
-  void done(bool flag)
-  {
+  void done(bool flag) {
     done_ = flag;
   }
 

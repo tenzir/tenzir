@@ -10,8 +10,7 @@ namespace vast {
 namespace sink {
 
 /// A sink dumping events in plain ASCII.
-class ascii : public base<ascii>
-{
+class ascii : public base<ascii> {
 public:
   /// Spawns an ASCII sink.
   /// @param out The output stream.

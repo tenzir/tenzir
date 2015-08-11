@@ -13,18 +13,15 @@ namespace source {
 
 /// A line-based source that transforms an input stream into lines.
 template <typename Derived>
-class line_based : public base<Derived>
-{
+class line_based : public base<Derived> {
 public:
   /// Retrieves the current line number.
-  uint64_t line_number() const
-  {
+  uint64_t line_number() const {
     return current_;
   }
 
   /// Retrieves the current line.
-  std::string const& line() const
-  {
+  std::string const& line() const {
     return line_;
   }
 
@@ -33,27 +30,21 @@ protected:
   /// @param name The name of the actor.
   /// @param is The input stream to read from.
   line_based(char const* name, std::unique_ptr<io::input_stream> is)
-    : base<Derived>{name},
-      input_stream_{std::move(is)}
-  {
+    : base<Derived>{name}, input_stream_{std::move(is)} {
     VAST_ASSERT(input_stream_ != nullptr);
   }
 
   /// Advances to the next non-empty line in the file.
   /// @returns `true` on success and false on failure or EOF.
-  bool next_line()
-  {
+  bool next_line() {
     if (this->done())
       return false;
     line_.clear();
     // Get the next non-empty line.
     while (line_.empty())
-      if (io::getline(*input_stream_, line_))
-      {
+      if (io::getline(*input_stream_, line_)) {
         ++current_;
-      }
-      else
-      {
+      } else {
         this->done(true);
         return false;
       }

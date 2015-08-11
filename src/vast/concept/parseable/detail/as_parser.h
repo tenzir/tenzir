@@ -15,19 +15,16 @@ namespace detail {
 // Unary
 //
 
-inline auto as_parser(char c)
-{
+inline auto as_parser(char c) {
   return ignore(char_parser{c});
 }
 
 template <size_t N>
-auto as_parser(char const (&str)[N])
-{
+auto as_parser(char const(&str)[N]) {
   return ignore(string_parser{str});
 }
 
-inline auto as_parser(std::string str)
-{
+inline auto as_parser(std::string str) {
   return ignore(string_parser{std::move(str)});
 }
 
@@ -36,15 +33,12 @@ auto as_parser(T x)
   -> std::enable_if_t<
        std::is_arithmetic<T>{} && ! std::is_same<T, bool>::value,
        decltype(ignore(string_parser{""}))
-     >
-{
+     > {
   return ignore(string_parser{std::to_string(x)});
 }
 
 template <typename T>
-auto as_parser(T x)
-  -> std::enable_if_t<is_parser<T>{}, T>
-{
+auto as_parser(T x) -> std::enable_if_t<is_parser<T>{}, T> {
   return x; // A good compiler will elide the copy.
 }
 
@@ -102,8 +96,7 @@ auto as_parser(T&& x, U&& y)
          decltype(detail::as_parser(std::forward<T>(x))),
          decltype(detail::as_parser(std::forward<U>(y)))
        >
-     >
-{
+     > {
   return {as_parser(std::forward<T>(x)), as_parser(std::forward<U>(y))};
 }
 

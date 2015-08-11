@@ -9,21 +9,18 @@
 
 namespace vast {
 
-struct time_duration_parser : parser<time_duration_parser>
-{
+struct time_duration_parser : parser<time_duration_parser> {
   using attribute = time::duration;
 
   template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const
-  {
+  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
     using namespace parsers;
     auto save = f;
     int64_t i;
-    if (! i64.parse(f, l, i))
+    if (!i64.parse(f, l, i))
       return false;
     static auto whitespace = *blank;
-    if (! whitespace.parse(f, l, unused))
-    {
+    if (!whitespace.parse(f, l, unused)) {
       f = save;
       return false;
     }
@@ -64,19 +61,16 @@ struct time_duration_parser : parser<time_duration_parser>
 };
 
 template <>
-struct parser_registry<time::duration>
-{
+struct parser_registry<time::duration> {
   using type = time_duration_parser;
 };
 
 namespace detail {
 
-struct ymd_parser : vast::parser<ymd_parser>
-{
+struct ymd_parser : vast::parser<ymd_parser> {
   using attribute = std::tm;
 
-  static auto make()
-  {
+  static auto make() {
     auto year = integral_parser<unsigned, 4, 4>{};
     auto mon = integral_parser<unsigned, 2, 2>{};
     auto day = integral_parser<unsigned, 2, 2>{};
@@ -84,19 +78,17 @@ struct ymd_parser : vast::parser<ymd_parser>
   }
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, unused_type) const
-  {
+  bool parse(Iterator& f, Iterator const& l, unused_type) const {
     static auto p = make();
     return p.parse(f, l, unused);
   }
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, std::tm& a) const
-  {
+  bool parse(Iterator& f, Iterator const& l, std::tm& a) const {
     static auto p = make();
     unsigned y, m, d;
     auto t = std::tie(y, m, d);
-    if (! p.parse(f, l, t))
+    if (!p.parse(f, l, t))
       return false;
     a.tm_year = y - 1900;
     a.tm_mon = m - 1;
@@ -105,12 +97,10 @@ struct ymd_parser : vast::parser<ymd_parser>
   }
 };
 
-struct hms_parser : vast::parser<hms_parser>
-{
+struct hms_parser : vast::parser<hms_parser> {
   using attribute = std::tm;
 
-  static auto make()
-  {
+  static auto make() {
     auto hour = integral_parser<unsigned, 2, 2>{};
     auto min = integral_parser<unsigned, 2, 2>{};
     auto sec = integral_parser<unsigned, 2, 2>{};
@@ -118,19 +108,17 @@ struct hms_parser : vast::parser<hms_parser>
   }
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, unused_type) const
-  {
+  bool parse(Iterator& f, Iterator const& l, unused_type) const {
     static auto p = make();
     return p.parse(f, l, unused);
   }
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, std::tm& a) const
-  {
+  bool parse(Iterator& f, Iterator const& l, std::tm& a) const {
     static auto p = make();
     unsigned h, m, s;
     auto t = std::tie(h, m, s);
-    if (! p.parse(f, l, t))
+    if (!p.parse(f, l, t))
       return false;
     a.tm_hour = h;
     a.tm_min = m;
@@ -141,31 +129,27 @@ struct hms_parser : vast::parser<hms_parser>
 
 } // detail
 
-struct time_point_parser : parser<time_point_parser>
-{
+struct time_point_parser : parser<time_point_parser> {
   using attribute = time::point;
 
-  static auto make()
-  {
+  static auto make() {
     using namespace parsers;
-    //auto delta = lit("now") >> ('+' | '-') >> time_duration_parser{};
+    // auto delta = lit("now") >> ('+' | '-') >> time_duration_parser{};
     return detail::ymd_parser{} >> '+' >> detail::hms_parser{};
   }
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, unused_type) const
-  {
+  bool parse(Iterator& f, Iterator const& l, unused_type) const {
     static auto p = make();
     return p.parse(f, l, unused);
   }
 
   template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const
-  {
+  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
     static auto p = make();
     std::tm tm;
     std::memset(&tm, 0, sizeof(tm));
-    if (! p.parse(f, l, tm))
+    if (!p.parse(f, l, tm))
       return false;
     a = time::point::from_tm(tm);
     return true;
@@ -173,8 +157,7 @@ struct time_point_parser : parser<time_point_parser>
 };
 
 template <>
-struct parser_registry<time::point>
-{
+struct parser_registry<time::point> {
   using type = time_point_parser;
 };
 

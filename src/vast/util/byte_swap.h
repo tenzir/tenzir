@@ -42,8 +42,7 @@
 
 namespace vast {
 
-enum endianness
-{
+enum endianness {
   little_endian,
   big_endian,
   network_endian = big_endian,
@@ -60,37 +59,29 @@ namespace util {
 namespace detail {
 
 template <typename T, size_t size>
-struct swap_bytes
-{
-  inline T operator()(T)
-  {
-    VAST_ASSERT(! "sizeof(T) is not 1, 2, 4, or 8");
+struct swap_bytes {
+  inline T operator()(T) {
+    VAST_ASSERT(!"sizeof(T) is not 1, 2, 4, or 8");
   }
 };
 
 template <typename T>
-struct swap_bytes<T, 1>
-{
-  inline T operator()(T x)
-  {
+struct swap_bytes<T, 1> {
+  inline T operator()(T x) {
     return x;
   }
 };
 
 template <typename T>
-struct swap_bytes<T, 2>
-{
-  inline T operator()(T x)
-  {
+struct swap_bytes<T, 2> {
+  inline T operator()(T x) {
     return ((x >> 8) & 0xff) | ((x & 0xff) << 8);
   }
 };
 
 template<typename T>
-struct swap_bytes<T, 4>
-{
-  inline T operator()(T x)
-  {
+struct swap_bytes<T, 4> {
+  inline T operator()(T x) {
     return ((x & 0xff000000) >> 24) |
            ((x & 0x00ff0000) >>  8) |
            ((x & 0x0000ff00) <<  8) |
@@ -99,10 +90,8 @@ struct swap_bytes<T, 4>
 };
 
 template <>
-struct swap_bytes<float, 4>
-{
-  inline float operator()(float x)
-  {
+struct swap_bytes<float, 4> {
+  inline float operator()(float x) {
     uint32_t* ptr = reinterpret_cast<uint32_t*>(&x);
     uint32_t mem = swap_bytes<uint32_t, sizeof(uint32_t)>()(*ptr);
     float* f = reinterpret_cast<float*>(&mem);
@@ -111,10 +100,8 @@ struct swap_bytes<float, 4>
 };
 
 template <typename T>
-struct swap_bytes<T, 8>
-{
-  inline T operator()(T x)
-  {
+struct swap_bytes<T, 8> {
+  inline T operator()(T x) {
     return ((x & 0xff00000000000000ull) >> 56) |
            ((x & 0x00ff000000000000ull) >> 40) |
            ((x & 0x0000ff0000000000ull) >> 24) |
@@ -127,10 +114,8 @@ struct swap_bytes<T, 8>
 };
 
 template <>
-struct swap_bytes<double, 8>
-{
-  inline double operator()(double x)
-  {
+struct swap_bytes<double, 8> {
+  inline double operator()(double x) {
     uint64_t* ptr = reinterpret_cast<uint64_t*>(&x);
     uint64_t mem = swap_bytes<uint64_t, sizeof(uint64_t)>()(*ptr);
     double* d = reinterpret_cast<double*>(&mem);
@@ -139,28 +124,22 @@ struct swap_bytes<double, 8>
 };
 
 template <endianness from, endianness to, typename T>
-struct dispatch_byte_swap
-{
-  inline T operator()(T x)
-  {
+struct dispatch_byte_swap {
+  inline T operator()(T x) {
     return swap_bytes<T, sizeof(T)>()(x);
   }
 };
 
 template <typename T>
-struct dispatch_byte_swap<little_endian, little_endian, T>
-{
-  inline T operator()(T x)
-  {
+struct dispatch_byte_swap<little_endian, little_endian, T> {
+  inline T operator()(T x) {
     return x;
   }
 };
 
 template <typename T>
-struct dispatch_byte_swap<big_endian, big_endian, T>
-{
-  inline T operator()(T x)
-  {
+struct dispatch_byte_swap<big_endian, big_endian, T> {
+  inline T operator()(T x) {
     return x;
   }
 };
@@ -173,16 +152,13 @@ struct dispatch_byte_swap<big_endian, big_endian, T>
 /// @tparam to The endianness to convert to.
 /// @param x The value whose endianness to change.
 template <endianness from, endianness to, typename T>
-inline T byte_swap(T x)
-{
+inline T byte_swap(T x) {
   static_assert(std::is_arithmetic<T>::value, "T is no arithmetic type");
-
   static_assert(sizeof(T) == 1 ||
                 sizeof(T) == 2 ||
                 sizeof(T) == 4 ||
                 sizeof(T) == 8,
                 "sizeof(T) is not 1, 2, 4, or 8");
-
   return detail::dispatch_byte_swap<from, to, T>()(x);
 }
 

@@ -5,19 +5,18 @@
 namespace vast {
 namespace util {
 
-bool parse_endpoint(std::string const& str, std::string& host, uint16_t& port)
-{
+bool parse_endpoint(std::string const& str, std::string& host, uint16_t& port) {
   // TODO: parse endpoint properly.
-  //static constexpr std::string v4 = "[0-9.]+";
-  //static constexpr std::string v6 = "[a-fA-F0-9:]+";
-  //static constexpr std::string name = "[a-fA-F0-9_.-]+";
-  //static constexpr std::string port = "\\d{1,5}";
-  //static auto const rx =
+  // static constexpr std::string v4 = "[0-9.]+";
+  // static constexpr std::string v6 = "[a-fA-F0-9:]+";
+  // static constexpr std::string name = "[a-fA-F0-9_.-]+";
+  // static constexpr std::string port = "\\d{1,5}";
+  // static auto const rx =
   //  std::regex{'('v4 + '|' + name + ")(" + port + ")?|" +
   //             "\\[(" + v6 + ")\\]:(" + port + ")|" +
   //             '(' + v6 + ')';
-  static auto const rx =
-    std::regex{"(\\[([a-fA-F0-9:]+)\\]|[0-9.]+)?(:(\\d{1,5}))?"};
+  static auto const rx
+    = std::regex{"(\\[([a-fA-F0-9:]+)\\]|[0-9.]+)?(:(\\d{1,5}))?"};
   std::smatch match;
   std::regex_match(str.cbegin(), str.cend(), match, rx);
   if (match.empty())

@@ -11,21 +11,17 @@ class point;
 }
 
 template <>
-struct access::state<time::duration>
-{
+struct access::state<time::duration> {
   template <typename T, typename F>
-  static void call(T&& x, F f)
-  {
+  static void call(T&& x, F f) {
     f(x.duration_);
   }
 };
 
 template <>
-struct access::state<time::point>
-{
+struct access::state<time::point> {
   template <typename T, typename F>
-  static void call(T&& x, F f)
-  {
+  static void call(T&& x, F f) {
     f(x.time_point_);
   }
 };

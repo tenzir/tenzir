@@ -7,8 +7,7 @@
 
 using namespace vast;
 
-TEST(to_string)
-{
+TEST(to_string) {
   bitvector a;
   bitvector b{10};
   bitvector c{78, true};
@@ -18,15 +17,14 @@ TEST(to_string)
   CHECK(to_string(c), std::string(78, '1'));
 }
 
-TEST(basic_operations)
-{
+TEST(basic operations) {
   bitvector x;
   x.push_back(true);
   x.push_back(false);
   x.push_back(true);
 
   CHECK(x[0]);
-  CHECK(! x[1]);
+  CHECK(!x[1]);
   CHECK(x[2]);
 
   CHECK(x.size() == 3);
@@ -46,13 +44,13 @@ TEST(basic_operations)
   CHECK(x.size() == 3 + 16 + 8 + bitvector::block_width + 8);
 }
 
-TEST(block_operations)
-{
+TEST(block operations) {
   auto ones = bitvector::all_one;
 
   for (bitvector::block_type i = 0; i < bitvector::block_width - 1; ++i)
     CHECK(bitvector::next_bit(ones, i) == i + 1);
-  CHECK(bitvector::next_bit(ones, bitvector::block_width - 1) == bitvector::npos);
+  CHECK(bitvector::next_bit(ones, bitvector::block_width - 1)
+        == bitvector::npos);
   CHECK(bitvector::next_bit(ones, bitvector::block_width) == bitvector::npos);
 
   CHECK(bitvector::prev_bit(ones, bitvector::block_width) == bitvector::npos);
@@ -65,8 +63,7 @@ TEST(block_operations)
   CHECK(bitvector::lowest_bit(ones & (ones - 3)) == 2);
 }
 
-TEST(bitwise_operations)
-{
+TEST(bitwise operations) {
   bitvector a{6};
   CHECK(a.size() == 6);
   CHECK(a.blocks() == 1);
@@ -92,8 +89,7 @@ TEST(bitwise_operations)
   CHECK(b.count() == 3);
 }
 
-TEST(backward_search)
-{
+TEST(backward search) {
   bitvector x;
   x.append(0xffff);
   x.append(0x30abffff7000ffff);
@@ -112,38 +108,33 @@ TEST(backward_search)
   CHECK(y.find_prev(59) == 55);
 }
 
-TEST(iteration)
-{
+TEST(iteration) {
   bitvector x;
   x.append(0x30abffff7000ffff);
 
   std::string str;
-  std::transform(
-      bitvector::const_bit_iterator::begin(x),
-      bitvector::const_bit_iterator::end(x),
-      std::back_inserter(str),
-      [](auto bit) { return bit ? '1' : '0'; });
+  std::transform(bitvector::const_bit_iterator::begin(x),
+                 bitvector::const_bit_iterator::end(x), std::back_inserter(str),
+                 [](auto bit) { return bit ? '1' : '0'; });
 
   std::string lsb_to_msb;
   CHECK(bitvector_printer<policy::lsb_to_msb>{}(lsb_to_msb, x));
   CHECK(lsb_to_msb == str);
 
   std::string rts;
-  std::transform(
-      bitvector::const_bit_iterator::rbegin(x),
-      bitvector::const_bit_iterator::rend(x),
-      std::back_inserter(rts),
-      [](auto bit) { return bit ? '1' : '0'; });
+  std::transform(bitvector::const_bit_iterator::rbegin(x),
+                 bitvector::const_bit_iterator::rend(x),
+                 std::back_inserter(rts),
+                 [](auto bit) { return bit ? '1' : '0'; });
 
   std::reverse(str.begin(), str.end());
   CHECK(str == rts);
 
   std::string ones;
   std::transform(
-      bitvector::const_ones_iterator::begin(x),
-      bitvector::const_ones_iterator::end(x),
-      std::back_inserter(ones),
-      [](bitvector::const_reference bit) { return bit ? '1' : '0'; });
+    bitvector::const_ones_iterator::begin(x),
+    bitvector::const_ones_iterator::end(x), std::back_inserter(ones),
+    [](bitvector::const_reference bit) { return bit ? '1' : '0'; });
 
   CHECK(ones == "111111111111111111111111111111111111111111");
 
@@ -166,15 +157,16 @@ TEST(iteration)
   CHECK(j.base().position() == 55);
 }
 
-TEST(selective_flipping)
-{
+TEST(selective flipping) {
   using block_type = bitvector::block_type;
   auto blk = block_type{0xffffffffffffffff};
   CHECK(bitvector::flip(blk, 0) == block_type{0x0000000000000000});
   CHECK(bitvector::flip(blk, 1) == block_type{0x0000000000000001});
   CHECK(bitvector::flip(blk, 4) == block_type{0x000000000000000f});
-  CHECK(bitvector::flip(blk, bitvector::block_width / 2) == block_type{0x00000000ffffffff});
-  CHECK(bitvector::flip(blk, bitvector::block_width - 1) == block_type{0x7fffffffffffffff});
+  CHECK(bitvector::flip(blk, bitvector::block_width / 2)
+        == block_type{0x00000000ffffffff});
+  CHECK(bitvector::flip(blk, bitvector::block_width - 1)
+        == block_type{0x7fffffffffffffff});
 
   bitvector v;
   v.append(0xffffffffffffffff);
@@ -186,8 +178,7 @@ TEST(selective_flipping)
   CHECK(v == expected);
 }
 
-TEST(bitvector_appending)
-{
+TEST(bitvector appending) {
   bitvector v1;
   v1.append(0xffffffffffffffff);
   v1.resize(200, false);
@@ -201,13 +192,13 @@ TEST(bitvector_appending)
   auto size_before = v1.size();
   v1.append(v2);
   CHECK(v1.size() == size_before + v2.size());
-  CHECK(! v1[149]);
+  CHECK(!v1[149]);
   CHECK(v1[150]);
   CHECK(v1[200]);
   CHECK(v1[263]);
   CHECK(v1[264]);
   CHECK(v1[295]);
-  CHECK(! v1[296]);
+  CHECK(!v1[296]);
 
   v1.resize(128);
   v2.resize(128);

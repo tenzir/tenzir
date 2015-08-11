@@ -9,23 +9,19 @@
 
 namespace vast {
 
-struct subnet_printer : printer<subnet_printer>
-{
+struct subnet_printer : printer<subnet_printer> {
   using attribute = subnet;
 
   template <typename Iterator>
-  bool print(Iterator& out, subnet const& sn) const
-  {
+  bool print(Iterator& out, subnet const& sn) const {
     using namespace printers;
-    return addr.print(out, sn.network())
-        && any.print(out, '/')
-        && u8.print(out, sn.length());
+    return addr.print(out, sn.network()) && any.print(out, '/')
+           && u8.print(out, sn.length());
   }
 };
 
 template <>
-struct printer_registry<subnet>
-{
+struct printer_registry<subnet> {
   using type = subnet_printer;
 };
 

@@ -8,11 +8,9 @@ namespace vast {
 class subnet;
 
 template <>
-struct access::state<subnet>
-{
+struct access::state<subnet> {
   template <typename T, typename F>
-  static void call(T&& x, F f)
-  {
+  static void call(T&& x, F f) {
     f(x.network_, x.length_);
   }
 };

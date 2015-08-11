@@ -8,8 +8,7 @@
 namespace vast {
 
 template <typename Serializer, typename Key, typename T>
-void serialize(Serializer& sink, std::map<Key, T> const& map)
-{
+void serialize(Serializer& sink, std::map<Key, T> const& map) {
   sink.begin_sequence(map.size());
   for (auto& p : map)
     sink << p;
@@ -17,12 +16,10 @@ void serialize(Serializer& sink, std::map<Key, T> const& map)
 }
 
 template <typename Deserializer, typename Key, typename T>
-void deserialize(Deserializer& source, std::map<Key, T>& map)
-{
+void deserialize(Deserializer& source, std::map<Key, T>& map) {
   auto size = source.begin_sequence();
   map.clear();
-  for (uint64_t i = 0; i < size; ++i)
-  {
+  for (uint64_t i = 0; i < size; ++i) {
     std::pair<Key, T> p;
     source >> p;
     map.insert(std::move(p));

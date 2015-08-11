@@ -15,8 +15,7 @@ template <
   typename... Args
 >
 auto from_string(Iterator begin, Iterator end, Args&&... args)
-  -> std::enable_if_t<is_parseable<Iterator, To>::value, trial<To>>
-{
+  -> std::enable_if_t<is_parseable<Iterator, To>::value, trial<To>> {
   trial<To> t{To{}};
   if (Parser{std::forward<Args>(args)...}.parse(begin, end, *t))
     return t;
@@ -28,8 +27,7 @@ template <
   typename Parser = make_parser<To>,
   typename... Args
 >
-auto from_string(std::string const& str, Args&&... args)
-{
+auto from_string(std::string const& str, Args&&... args) {
   auto f = str.begin();
   auto l = str.end();
   return from_string<To, Parser, std::string::const_iterator, Args...>(
@@ -42,12 +40,11 @@ template <
   size_t N,
   typename... Args
 >
-auto from_string(char const (&str)[N], Args&&... args)
-{
+auto from_string(char const (&str)[N], Args&&... args) {
   auto f = str;
   auto l = str + N - 1; // No NUL byte.
   return from_string<To, Parser, char const*, Args...>(
-      f, l, std::forward<Args>(args)...);
+    f, l, std::forward<Args>(args)...);
 }
 
 } // namespace vast

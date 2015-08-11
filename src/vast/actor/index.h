@@ -37,43 +37,37 @@ namespace vast {
 ///
 /// After receiving the DONE atom the sink will not receive any further hits.
 /// This sequence applies both to continuous and historical queries.
-struct index : public flow_controlled_actor
-{
+struct index : public flow_controlled_actor {
   // FIXME: only propagate overload upstream if *all* partitions are
   // overloaded. This requires tracking the set of overloaded partitions
   // manually.
 
   using bitstream_type = default_bitstream;
 
-  struct schedule_state
-  {
+  struct schedule_state {
     uuid part;
     util::flat_set<expression> queries;
   };
 
-  struct partition_state
-  {
+  struct partition_state {
     uint64_t events = 0;
     time::point last_modified;
     time::point from = time::duration{};
     time::point to = time::duration{};
   };
 
-  struct continuous_query_state
-  {
+  struct continuous_query_state {
     bitstream_type hits;
     caf::actor task;
   };
 
-  struct historical_query_state
-  {
+  struct historical_query_state {
     bitstream_type hits;
     caf::actor task;
     std::map<caf::actor_addr, uuid> parts;
   };
 
-  struct query_state
-  {
+  struct query_state {
     optional<continuous_query_state> cont;
     optional<historical_query_state> hist;
     util::flat_set<caf::actor> subscribers;
@@ -86,8 +80,8 @@ struct index : public flow_controlled_actor
   ///                      memory.
   /// @param active_parts The number of active partitions to hold in memory.
   /// @pre `passive_parts > 0 && active_parts > 0`
-  index(path const& dir, size_t max_events,
-        size_t passive_parts, size_t active_parts);
+  index(path const& dir, size_t max_events, size_t passive_parts,
+        size_t active_parts);
 
   void on_exit() override;
   caf::behavior make_behavior() override;
