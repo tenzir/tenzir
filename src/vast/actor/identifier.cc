@@ -37,6 +37,9 @@ behavior identifier::make_behavior() {
         quit(exit::error);
       }
     },
+    [=](id_atom) {
+      return id_;
+    },
     [=](request_atom, uint64_t n) {
       if (n == 0)
         return make_message(error{"cannot hand out 0 ids"});
