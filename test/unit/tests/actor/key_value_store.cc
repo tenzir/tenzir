@@ -100,6 +100,9 @@ TEST(distributed key-value store) {
     FAIL("got unexpected message: " << to_string(self->current_message()));
   });
   auto s1 = self->spawn<key_value_store>();
+  self->sync_send(s1, put_atom::value, "test", 4.2).await(
+    [&](ok_atom) { /* nop */ }
+  );
   auto s2 = self->spawn<key_value_store>();
   MESSAGE("setup peeering");
   self->sync_send(s1, peer_atom::value, s2).await(

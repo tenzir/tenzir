@@ -286,6 +286,7 @@ int main(int argc, char* argv[]) {
       mb.append(std::move(a));
     auto cmd_line = *cmd + util::join(args, " ");
     auto exit_code = 0;
+    VAST_DEBUG("sending command:", to_string(mb.to_message()));
     self->sync_send(node, mb.to_message()).await(
       [&](ok_atom) {
         VAST_VERBOSE("successfully executed command:", cmd_line);

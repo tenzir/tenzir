@@ -14,6 +14,10 @@ namespace fixtures {
 
 struct core {
   core() {
+    self->on_sync_failure([&] {
+      VAST_ERROR("got unexpected reply:", to_string(self->current_message()));
+      self->quit(exit::error);
+    });
     if (exists(dir)) {
       MESSAGE("removing existing directory");
       REQUIRE(rm(dir));
@@ -55,6 +59,7 @@ struct core {
     // Assume all sources have terminated. Then we stop the IMPORTER. After
     // getting notified that it terminated, we can guarantee that ARCHIVE and
     // INDEX have received all their events.
+    MESSAGE("stopping importer");
     self->sync_send(n, store_atom::value, get_atom::value, actor_atom::value,
                     "importer").await(
       [&](actor const& a, std::string const& fqn, std::string const& type) {
@@ -63,12 +68,10 @@ struct core {
         REQUIRE(a != invalid_actor);
         self->monitor(a);
         self->send_exit(a, exit::done);
-      },
-      others >> [&] {
-        FAIL("unexpected message: " << to_string(self->current_message()));
       }
     );
     self->receive([&](down_msg const& dm) { CHECK(dm.reason == exit::done); });
+    MESSAGE("stopping node");
     self->sync_send(n, "stop").await([](ok_atom) {});
   }
 
@@ -80,7 +83,8 @@ struct core {
       make_message("send", "source", "run")
     };
     for (auto& msg : msgs)
-      self->sync_send(n, msg).await( [&](error const& e) {
+      self->sync_send(n, msg).await(
+        [&](error const& e) {
           FAIL(e);
         },
         others >> [] {

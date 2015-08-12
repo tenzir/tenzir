@@ -81,15 +81,17 @@ behavior key_value_store::make_behavior() {
       if (!peers_.insert(peer).second)
         return ok_atom::value;
       monitor(peer);
-      send(peer, peer_atom::value, this); // Peerings are bidirectional.
-      // TODO: relay state in a more efficient manner, e.g., by serializing the
-      // underlying radix tree.
-      for (auto& d : data_) {
-        VAST_DEBUG(this, "relays data to peer:", d.first, "->",
-                   to_string(d.second));
-        auto header = make_message(put_atom::value, d.first);
-        send(peer, message::concat(header, d.second));
+      if (!data_.empty()) {
+        VAST_DEBUG(this, "relays data to peer");
+        std::map<std::string, message> data;
+        for (auto& d : data_)
+          data.emplace(d.first, d.second);
+        scoped_actor self;
+        self->sync_send(peer, put_atom::value, std::move(data)).await(
+          [](ok_atom) { /* nop */ }
+        );
       }
+      send(peer, peer_atom::value, this); // Peerings are bidirectional.
       return ok_atom::value;
     },
     on(put_atom::value, val<std::string>, any_vals) >>
@@ -104,6 +106,12 @@ behavior key_value_store::make_behavior() {
         relay();
         return make_message(ok_atom::value);
       },
+    on(put_atom::value, arg_match) >> [=](std::map<std::string, message>& m) {
+      VAST_DEBUG(this, "got PUT for", m.size(), "elements");
+      for (auto& p : m)
+        data_[p.first] = std::move(p.second);
+      return make_message(ok_atom::value);
+    },
     [=](exists_atom, std::string const& key) {
       VAST_DEBUG(this, "got EXISTS:", key);
       return !data_.prefixed_by(key).empty();
