@@ -30,6 +30,7 @@
 #include "vast/io/file_stream.h"
 #include "vast/util/assert.h"
 #include "vast/util/endpoint.h"
+#include "vast/util/flat_set.h"
 #include "vast/util/string.h"
 
 #ifdef VAST_HAVE_GPERFTOOLS
@@ -51,35 +52,72 @@ path const& node::log_path() {
 
 node::node(std::string const& name, path const& dir)
   : default_actor{"node"}, name_{name}, dir_{dir} {
-}
-
-void node::on_exit() {
-  store_ = invalid_actor;
-  accountant_ = invalid_actor;
-}
-
-behavior node::make_behavior() {
-  accountant_ = spawn<accountant<uint64_t>, linked>(dir_ / log_path() /
-                                                    "accounting.log");
-  store_ = spawn<key_value_store, linked>();
-  send(store_, put_atom::value, "nodes/" + name_, this);
-  become(
-    [&](ok_atom) {
-      become(operating_);
-    },
-    [&](error const& e)
-    {
-      VAST_ERROR(e);
-      quit(exit::error);
-    }
-  );
+    trap_exit(true);
+    // Shut down the node safely.
+   auto terminate = [=](uint32_t reason) {
+     // Begin with shutting down IMPORTERs.
+     auto importers = std::make_shared<util::flat_set<actor>>();
+     auto er = actors_by_type_.equal_range("importer");
+     for (auto i = er.first; i != er.second; ) {
+       importers->insert(i->second);
+       send_exit(i->second, reason);
+       i = actors_by_type_.erase(i);
+     }
+     become(
+      [=](down_msg const& imp_msg) {
+        auto n = importers->erase(actor_cast<actor>(imp_msg.source));
+        if (n == 0)
+          for (auto i = actors_by_type_.begin();
+               i != actors_by_type_.end(); ++i)
+            if (i->second->address() == imp_msg.source) {
+              actors_by_type_.erase(i);
+              return;
+            }
+        if (! importers->empty())
+          return;
+        //  Once all IMPORTERs have terminated, terminate the rest.
+        VAST_DEBUG(this, "waits for", actors_by_type_.size(),
+                   "remaining actors to quit");
+        for (auto& p : actors_by_type_)
+          send_exit(p.second, reason);
+        become(
+          [=](down_msg const& msg) {
+            for (auto i = actors_by_type_.begin();
+                 i != actors_by_type_.end(); ++i)
+              if (i->second->address() == msg.source) {
+                actors_by_type_.erase(i);
+                if (! actors_by_type_.empty())
+                  quit(reason);
+                return;
+            }
+          }
+        );
+      }
+    );
+  };
   operating_ = {
-    //
-    // PUBLIC
-    //
+    [=](exit_msg const& msg) {
+      VAST_DEBUG(this, "got EXIT from", msg.source);
+      terminate(msg.reason);
+    },
+    [=](down_msg const& msg) {
+      VAST_DEBUG(this, "got DOWN from", msg.source);
+      for (auto p = peers_.begin(); p != peers_.end(); ++p)
+        if (p->second->address() == msg.source) {
+          VAST_VERBOSE(this, "removes peer", p->first);
+          peers_.erase(p);
+          return;
+        }
+      for (auto p = actors_by_label_.begin(); p != actors_by_label_.end(); ++p)
+        if (p->second->address() == msg.source) {
+          VAST_VERBOSE(this, "removes actor", p->first);
+          actors_by_label_.erase(p);
+          return;
+        }
+    },
     on("stop") >> [=] {
       VAST_VERBOSE(this, "stops");
-      quit(exit::stop);
+      terminate(exit::stop);
       return make_message(ok_atom::value);
     },
     on("peer", arg_match) >> [=](std::string const& endpoint) {
@@ -174,7 +212,34 @@ behavior node::make_behavior() {
       return error{"invalid command syntax:", cmd};
     }
   };
-  return operating_;
+}
+
+void node::on_exit() {
+  store_ = invalid_actor;
+  accountant_ = invalid_actor;
+  peers_.clear();
+  actors_by_label_.clear();
+  actors_by_type_.clear();
+}
+
+behavior node::make_behavior() {
+  accountant_ = spawn<accountant<uint64_t>, linked>(dir_ / log_path() /
+                                                    "accounting.log");
+  store_ = spawn<key_value_store, linked>(dir_ / "meta");
+  // Until we've implemented leader election, each node starts as leader.
+  send(store_, leader_atom::value);
+  send(store_, persist_atom::value, key::str("id"));
+  send(store_, put_atom::value, key::str("nodes", name_), this);
+  return {
+    [=](ok_atom) {
+      become(operating_);
+    },
+    [=](error const& e)
+    {
+      VAST_ERROR(e);
+      quit(exit::error);
+    }
+  };
 }
 
 behavior node::spawn_actor(event_based_actor* self) {
@@ -189,14 +254,17 @@ behavior node::spawn_actor(event_based_actor* self) {
     // Continuation to record a spawned actor and return to the user.
     auto save_actor = [=](actor const& a, std::string const& type) {
       VAST_ASSERT(a != invalid_actor);
+      monitor(a);
       VAST_DEBUG(this, "records new actor in key-value store");
-      auto key = "actors/" + name_ + '/' + label;
-      self->send(store_, put_atom::value, key, a, type);
+      auto k = key::str("actors", name_, label);
+      self->send(store_, put_atom::value, k, a, type);
       self->become(
         [=](ok_atom) {
           a->attach_functor([=](uint32_t) {
-            anon_send(store_, delete_atom::value, key);
+            anon_send(store_, delete_atom::value, k);
           });
+          actors_by_type_.emplace(type, a);
+          actors_by_label_.emplace(label, a);
           rp.deliver(make_message(a));
           self->quit();
         }
@@ -205,8 +273,16 @@ behavior node::spawn_actor(event_based_actor* self) {
     // Continuation to spawn an actor.
     message_handler spawning = {
       on("identifier") >> [=] {
-        auto i = spawn<identifier>(dir_);
-        attach_functor([=](uint32_t ec) { anon_send_exit(i, ec); });
+        auto batch_size = event_id{128};
+        auto r = self->current_message().extract_opts({
+          {"batch-size,b", "the batch size to start at", batch_size}
+        });
+        if (!r.error.empty()) {
+          rp.deliver(make_message(error{std::move(r.error)}));
+          self->quit(exit::error);
+          return;
+        }
+        auto i = spawn<identifier>(store_, dir_ / "id", batch_size);
         save_actor(i, "identifier");
       },
       on("archive", any_vals) >> [=] {
@@ -244,7 +320,6 @@ behavior node::spawn_actor(event_based_actor* self) {
         size <<= 20; // MB'ify
         auto dir = dir_ / "archive";
         auto a = spawn<archive, priority_aware>(dir, segments, size, method);
-        attach_functor([=](uint32_t ec) { anon_send_exit(a, ec); });
         self->send(a, put_atom::value, accountant_atom::value, accountant_);
         save_actor(std::move(a), "archive");
       },
@@ -264,13 +339,11 @@ behavior node::spawn_actor(event_based_actor* self) {
         }
         auto dir = dir_ / "index";
         auto idx = spawn<index, priority_aware>(dir, events, passive, active);
-        attach_functor([=](uint32_t ec) { anon_send_exit(idx, ec); });
         self->send(idx, put_atom::value, accountant_atom::value, accountant_);
         save_actor(std::move(idx), "index");
       },
       on("importer") >> [=] {
         auto imp = spawn<importer, priority_aware>();
-        attach_functor([=](uint32_t ec) { anon_send_exit(imp, ec); });
         // send(imp, put_atom::value, accountant_atom::value, accountant_);
         save_actor(std::move(imp), "importer");
       },
@@ -322,7 +395,6 @@ behavior node::spawn_actor(event_based_actor* self) {
         *expr = expr::normalize(*expr);
         VAST_VERBOSE(this, "normalized query to", *expr);
         auto exp = self->spawn<exporter>(*expr, query_opts);
-        attach_functor([=](uint32_t ec) { anon_send_exit(exp, ec); });
         self->send(exp, extract_atom::value, events);
         if (r.opts.count("auto-connect") > 0) {
           std::vector<caf::actor> archives;
@@ -358,7 +430,6 @@ behavior node::spawn_actor(event_based_actor* self) {
           return;
         }
         self->send(*src, put_atom::value, accountant_atom::value, accountant_);
-        attach_functor([s=*src](uint32_t ec) { anon_send_exit(s, ec); });
         if (r.opts.count("auto-connect") > 0) {
           self->send(store_, list_atom::value, "actors/" + name_);
           self->become(
@@ -386,7 +457,6 @@ behavior node::spawn_actor(event_based_actor* self) {
           return;
         }
         self->send(*snk, put_atom::value, accountant_atom::value, accountant_);
-        attach_functor([s=*snk](uint32_t ec) { anon_send_exit(s, ec); });
         save_actor(*snk, "sink");
       },
       on("profiler", any_vals) >> [=] {
@@ -404,7 +474,6 @@ behavior node::spawn_actor(event_based_actor* self) {
         }
         auto secs = std::chrono::seconds(resolution);
         auto prof = spawn<profiler, detached>(dir_ / log_path(), secs);
-        attach_functor([=](uint32_t ec) { anon_send_exit(prof, ec); });
         if (r.opts.count("cpu") > 0)
           self->send(prof, start_atom::value, "cpu");
         if (r.opts.count("heap") > 0)
@@ -575,11 +644,11 @@ behavior node::connect(event_based_actor* self) {
         return;
       }
       // Create new edge in topology.
-      auto key = "topology/" + src_fqn + '/' + snk_fqn;
-      auto del = [=](uint32_t) { anon_send(store_, delete_atom::value, key); };
+      auto k = key::str("topology", src_fqn, snk_fqn);
+      auto del = [=](uint32_t) { anon_send(store_, delete_atom::value, k); };
       src->attach_functor(del);
       snk->attach_functor(del);
-      self->send(store_, put_atom::value, key);
+      self->send(store_, put_atom::value, k);
       self->become(
         [=](ok_atom) {
           rp.deliver(self->current_message());
@@ -588,7 +657,7 @@ behavior node::connect(event_based_actor* self) {
       );
     };
     VAST_DEBUG(this, "checks if link exists:", source, "->", sink);
-    self->send(store_, list_atom::value, "topology/" + qualify(source));
+    self->send(store_, list_atom::value, key::str("topology", qualify(source)));
     self->become(
       [=](std::map<std::string, message> const& vals) {
         auto pred = [=](auto& p) {
@@ -634,10 +703,10 @@ behavior node::disconnect(event_based_actor* self) {
                                             std::string const& sink) {
     auto rp = self->make_response_promise();
     VAST_VERBOSE(this, "disconnects actors:", source, "->", sink);
-    auto key = "topology/" + qualify(source) + '/' + qualify(sink);
+    auto k = key::str("topology", qualify(source), qualify(sink));
     // FIXME: we currently only remove the edge from the topology
     // graph, but do not remove the source/sink at the actual actors.
-    self->send(store_, delete_atom::value, std::move(key));
+    self->send(store_, delete_atom::value, std::move(k));
     self->become(
       [=](uint64_t n) {
         if (n == 0)
@@ -654,29 +723,28 @@ behavior node::disconnect(event_based_actor* self) {
 behavior node::show(event_based_actor* self) {
   return on("show", any_vals) >> [=] {
     auto rp = self->make_response_promise();
-    auto& arg = self->current_message().take_right(1).get_as<std::string>(0);
     auto r = self->current_message().extract_opts({
       {"verbose,-v", "show values in addition to keys"},
     });
+    auto& arg = r.remainder.take_right(1).get_as_mutable<std::string>(0);
     std::string result;
-    std::string key;
     if (arg == "nodes") {
-      key = "nodes/";
+      arg = key::str("nodes");
     } else if (arg == "peers") {
-      key = "peers/";
+      arg = key::str("peers");
     } else if (arg == "actors") {
-      key = "actors/";
+      arg = key::str("actors");
     } else if (arg == "topology") {
-      key = "topology/";
+      arg = key::str("topology");
     } else {
-      rp.deliver(make_message(error{"show: invalid argument"}));
+      rp.deliver(make_message(error{"show: invalid argument \"", arg, '"'}));
       self->quit();
       return;
     }
     auto pred = [verbose=r.opts.count("verbose")](auto& p) -> std::string {
       return p.first + (verbose ? " -> " + to_string(p.second) : "");
     };
-    self->send(store_, list_atom::value, std::move(key));
+    self->send(store_, list_atom::value, std::move(arg));
     self->become(
       [=](std::map<std::string, message> const& values) {
         auto str = util::join(values.begin(), values.end(), "\n", pred);
@@ -710,135 +778,38 @@ behavior node::store_get_actor(caf::event_based_actor* self) {
 behavior node::request_peering(event_based_actor* self) {
   return on("peer", arg_match) >> [=](std::string const& endpoint) {
     auto rp = self->make_response_promise();
-    // Continuation connecting all IMPORTERs with a remote IDENTIFIER.
-    message_handler connecting_importers = {
-      [=](std::map<std::string, caf::message>& m) {
-        std::map<std::string, actor> importers;
-        std::pair<std::string, caf::actor> remote_identifier;
-        for (auto& p : m)
-          p.second.apply({[&](caf::actor const& a, std::string const& type) {
-            if (util::starts_with(p.first, "actors/" + name_)) {
-              if (type == "importer")
-                importers.emplace(p.first, a);
-            } else if (type == "identifier") {
-              remote_identifier = {p.first, a}; // there can be only one.
-            }
-          }});
-        // Turns a key like "/actors/<node>/<label>" into "label@node".
-        auto parse_actor_key = [](std::string const& key) -> std::string {
-          auto split = util::split_to_str(key, "/");
-          VAST_ASSERT(split.size() > 2);
-          return split[2] + '@' + split[1];
-        };
-        // Create one job per connection.
-        auto id_fqn = parse_actor_key(remote_identifier.first);
-        VAST_DEBUG(this, "connects", importers.size(),
-                   "importer(s) with a remote identifier");
-        for (auto& p : importers) {
-          auto job = self->spawn([=](event_based_actor* job_self) {
-            return connect(job_self);
-          });
-          self->send(job, "connect", parse_actor_key(p.first), id_fqn);
-        }
-        // Wait for sub-jobs to terminate.
-        auto num_sub_jobs = std::make_shared<size_t>(importers.size());
-        self->become(
-          [=](ok_atom) {
-            if (--*num_sub_jobs == 0) {
-              rp.deliver(make_message(ok_atom::value));
-              self->quit();
-            }
-          },
-          [=](error& e) {
-            VAST_ERROR(this, "failed to connect importers to identifier:", e);
-            rp.deliver(make_message(std::move(e)));
-            self->quit(exit::error);
-          }
-        );
-      }
-    };
-    // Continuation that connects to a remote endpoint and sends peering
-    // request.
-    auto connect_and_peer = [=](bool has_local_identifier) {
-      auto host = "127.0.0.1"s;
-      auto port = uint16_t{42000};
-      if (!util::parse_endpoint(endpoint, host, port)) {
-        rp.deliver(make_message(error{"invalid endpoint: ", endpoint}));
-        self->quit(exit::error);
-      }
-      VAST_DEBUG(this, "connects to", host << ':' << port);
-      actor peer;
-      try {
-        peer = caf::io::remote_actor(host.c_str(), port);
-      } catch (caf::network_error const& e) {
-        rp.deliver(make_message(error{"failed to connect to ", host, ':', port,
-                                ", ", e.what()}));
-        self->quit(exit::error);
-      }
-      VAST_DEBUG(this, "sends peering request");
-      self->send(peer, store_atom::value, peer_atom::value, this, store_,
-                 name_);
-      self->become(
-        [=](ok_atom, std::string const& peer_name) {
-          VAST_INFO(this, "got peering response from", peer_name);
-          peer->attach_functor(
-            [=](uint32_t) {
-              auto key1 = "actors/" + name_ + '/' + peer_name;
-              auto key2 = "actors/" + peer_name + '/' + name_;
-              anon_send(store_, delete_atom::value, key1);
-              anon_send(store_, delete_atom::value, key2);
-            }
-          );
-          if (has_local_identifier) {
-            VAST_DEBUG(this, "connects importers with remote identifier");
-            self->send(store_, list_atom::value, "actors/");
-            self->become(connecting_importers);
-          } else {
-            rp.deliver(make_message(ok_atom::value));
-            self->quit();
-          }
-        },
-        [=](error& e) {
-          rp.deliver(make_message(std::move(e)));
-          self->quit(exit::error);
-        }
-      );
-    };
-    // Peering nodes currently share the same IDENTIFIER.  Consequently, we
-    // must terminate a local IDENTIFIER if it runs. If it has already
-    // handed out IDs in the past, we can no longer peer with the remote
-    // side. (This is only a quick-fix until we've rolled out the
-    // Raft-based meta store.)
-    self->send(store_, list_atom::value, "actors/" + name_);
+    auto host = "127.0.0.1"s;
+    auto port = uint16_t{42000};
+    if (!util::parse_endpoint(endpoint, host, port)) {
+      rp.deliver(make_message(error{"invalid endpoint: ", endpoint}));
+      self->quit(exit::error);
+    }
+    VAST_DEBUG(this, "connects to", host << ':' << port);
+    actor peer;
+    try {
+      peer = caf::io::remote_actor(host.c_str(), port);
+    } catch (caf::network_error const& e) {
+      VAST_ERROR(this, "failed to connect to peer", host, ':', port);
+      rp.deliver(make_message(error{"failed to connect to peer ",
+                                    host, ':', port, ", ", e.what()}));
+      self->quit(exit::error);
+      return;
+    }
+    VAST_DEBUG(this, "sends follower request");
+    self->send(store_, follower_atom::value); // step down
+    self->send(peer, store_atom::value, peer_atom::value, this, store_,
+               name_);
     self->become(
-      [=](std::map<std::string, caf::message>& m) {
-        caf::actor identifier;
-        for (auto& p : m)
-          p.second.apply({
-            [&](caf::actor const& a, std::string const& type) {
-              if (type == "identifier")
-                identifier = a;
-            }
-          });
-        if (identifier == invalid_actor) {
-          connect_and_peer(false);
-          return;
-        }
-        self->send(identifier, id_atom::value);
-        self->become(
-          [=](event_id id) {
-            if (id > 0) {
-              auto str = "cannot peer with node which used identifier";
-              VAST_ERROR(this, str);
-              rp.deliver(make_message(error{str}));
-              self->quit(exit::error);
-            } else {
-              VAST_DEBUG(this, "shuts down local identifier");
-              self->send_exit(identifier, exit::done);
-              connect_and_peer(true);
-            }
-          }
-        );
+      [=](ok_atom, std::string const& peer_name) {
+        VAST_INFO(this, "got peering response from", peer_name);
+        VAST_ASSERT(peers_.count(peer_name) == 0);
+        peers_.emplace(peer_name, peer);
+        rp.deliver(make_message(ok_atom::value));
+        self->quit();
+      },
+      [=](error& e) {
+        rp.deliver(make_message(std::move(e)));
+        self->quit(exit::error);
       }
     );
   };
@@ -848,35 +819,63 @@ behavior node::respond_to_peering(event_based_actor* self) {
   return [=](store_atom, peer_atom, actor const& peer, actor const& peer_store,
         std::string const& peer_name) {
     auto rp = self->make_response_promise();
-    if (peer_name == name_) {
+    // FIXME: check for conflicting names in the store, not just locally.
+    if (peer_name == name_ || peers_.count(peer_name) > 0) {
       VAST_WARN(this, "ignores new peer with duplicate name");
       rp.deliver(make_message(error{"duplicate peer name"}));
       self->quit(exit::error);
       return;
     }
     VAST_INFO(this, "got new peer:", peer_name);
-    auto key1 = "peers/" + name_ + '/' + peer_name;
-    auto key2 = "peers/" + peer_name + '/' + name_;
+    auto key1 = key::str("peers", name_, peer_name);
+    auto key2 = key::str("peers", peer_name, name_);
     self->send(store_, put_atom::value, key1, peer);
     self->send(store_, put_atom::value, key2, this);
     self->become(
       [=](ok_atom) {
         self->become(
           [=](ok_atom) {
-            self->send(store_, peer_atom::value, peer_store);
+            self->send(store_, follower_atom::value, add_atom::value,
+                       peer_store);
             self->become(
-              [=](ok_atom) {
+              [=](ok_atom, key_value_store::storage const& delta) {
                 peer->attach_functor(
                   [=](uint32_t) {
                     anon_send(store_, delete_atom::value, key1);
                     anon_send(store_, delete_atom::value, key2);
                   }
                 );
-                rp.deliver(make_message(ok_atom::value, name_));
-                self->quit();
+                peers_.emplace(peer_name, peer);
+                if (delta.empty()) {
+                  rp.deliver(make_message(ok_atom::value, name_));
+                  self->quit();
+                  return;
+                }
+                // Add peer state.
+                VAST_DEBUG(this, "adds", delta.size(), "entries from follower");
+                auto num_entries = std::make_shared<size_t>(delta.size());
+                for (auto& pair : delta) {
+                  auto msg = make_message(put_atom::value, pair.first);
+                  self->send(store_, msg + pair.second);
+                }
+                self->become(
+                  [=](ok_atom) {
+                    if (--*num_entries == 0) {
+                      VAST_DEBUG(this, "completed replay of delta state");
+                      rp.deliver(make_message(ok_atom::value, name_));
+                      self->quit();
+                    }
+                  },
+                  [=](error const& e) {
+                    VAST_ERROR(this, "failed to add follower state:", e);
+                    rp.deliver(self->current_message());
+                    self->quit();
+                  }
+                );
               },
-              [=](error& e) {
-                rp.deliver(make_message(std::move(e)));
+              [=](error const& e) {
+                VAST_ERROR(this, "failed to incorporate follower:", e);
+                rp.deliver(self->current_message());
                 self->quit(exit::error);
               }
             );
@@ -895,7 +894,7 @@ std::string node::qualify(std::string const& label) const {
 std::string node::make_actor_key(std::string const& label) const {
   auto split = util::split_to_str(label, "@");
   auto& name = split.size() == 1 ? name_ : split[1];
-  return "actors/" + name + '/' + split[0];
+  return key::str("actors", name, split[0]);
 }
 
 } // namespace vast

@@ -13,6 +13,7 @@
 #include "vast/announce.h"
 #include "vast/banner.h"
 #include "vast/filesystem.h"
+#include "vast/key.h"
 #include "vast/logger.h"
 #include "vast/uuid.h"
 #include "vast/actor/accountant.h"
@@ -146,8 +147,8 @@ int main(int argc, char* argv[]) {
     self->send(*src, put_atom::value, accountant_atom::value, acc);
     // 2. Find all IMPORTERs to load-balance across them.
     std::vector<caf::actor> importers;
-    auto list = make_message(store_atom::value, list_atom::value, "actors/");
-    self->sync_send(node, std::move(list)).await(
+    self->sync_send(node, store_atom::value, list_atom::value,
+                    key::str("actors")).await(
       [&](std::map<std::string, caf::message>& m) {
         for (auto& p : m)
           p.second.apply({
@@ -195,7 +196,8 @@ int main(int argc, char* argv[]) {
     // 2. For each node, spawn an (auto-connected) EXPORTER and connect it to
     // the sink.
     std::vector<caf::actor> nodes;
-    self->sync_send(node, store_atom::value, list_atom::value, "nodes/").await(
+    self->sync_send(node, store_atom::value, list_atom::value,
+                    key::str("nodes")).await(
       [&](std::map<std::string, caf::message> const& m) {
         for (auto& p : m)
           nodes.push_back(p.second.get_as<caf::actor>(0));

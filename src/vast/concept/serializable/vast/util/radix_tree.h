@@ -13,8 +13,8 @@ namespace vast {
 template <typename Serializer, typename T, size_t N>
 void serialize(Serializer& sink, util::radix_tree<T, N> const& rt) {
   sink.begin_sequence(rt.size());
-  for (auto pair : rt)
-    sink << pair;
+  for (auto& pair : rt)
+    sink << pair.first << pair.second;
   sink.end_sequence();
 }
 
@@ -25,6 +25,7 @@ void deserialize(Deserializer& source, util::radix_tree<T, N>& rt) {
     typename util::radix_tree<T, N>::mapped_type
   >;
   auto size = source.begin_sequence();
+  rt.clear();
   for (uint64_t i = 0; i < size; ++i) {
     mutable_value_type pair;
     source >> pair;

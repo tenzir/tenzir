@@ -29,6 +29,7 @@
 #include "vast/concept/printable/vast/error.h"
 #include "vast/detail/adjust_resource_consumption.h"
 #include "vast/util/endpoint.h"
+#include "vast/util/string.h"
 #include "vast/util/system.h"
 
 using namespace vast;
@@ -43,7 +44,7 @@ int main(int argc, char* argv[]) {
   auto host = "127.0.0.1"s;
   auto log_level = 3;
   auto messages = std::numeric_limits<size_t>::max();
-  auto name = util::hostname();
+  auto name = util::split_to_str(util::hostname(), ".")[0];
   auto port = uint16_t{42000};
   auto profile_file = std::string{};
   auto threads = std::thread::hardware_concurrency();

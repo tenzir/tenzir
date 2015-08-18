@@ -48,31 +48,21 @@ struct core {
         [&](error const& e) {
           FAIL(e);
         },
-        others >> [] {
-          // Everyting except an error is a valid return value.
-        }
+        // Everyting except an error is a valid return value.
+        others >> [] {}
       );
     return n;
   }
 
   void stop_core(actor const& n) {
-    // Assume all sources have terminated. Then we stop the IMPORTER. After
-    // getting notified that it terminated, we can guarantee that ARCHIVE and
-    // INDEX have received all their events.
-    MESSAGE("stopping importer");
-    self->sync_send(n, store_atom::value, get_atom::value, actor_atom::value,
-                    "importer").await(
-      [&](actor const& a, std::string const& fqn, std::string const& type) {
-        CHECK(fqn == "importer@" + node_name);
-        CHECK(type == "importer");
-        REQUIRE(a != invalid_actor);
-        self->monitor(a);
-        self->send_exit(a, exit::done);
+    MESSAGE("stopping node");
+    self->monitor(n);
+    self->send_exit(n, exit::stop);
+    self->receive(
+      [&](down_msg const& msg) {
+        CHECK(msg.source == n->address());
       }
     );
-    self->receive([&](down_msg const& dm) { CHECK(dm.reason == exit::done); });
-    MESSAGE("stopping node");
-    self->sync_send(n, "stop").await([](ok_atom) {});
   }
 
   template <typename... Args>

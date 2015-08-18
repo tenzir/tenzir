@@ -1,6 +1,9 @@
 #ifndef VAST_ACTOR_NODE_H
 #define VAST_ACTOR_NODE_H
 
+#include <map>
+#include <string>
+
 #include "vast/filesystem.h"
 #include "vast/trial.h"
 #include "vast/actor/actor.h"
@@ -16,7 +19,7 @@ namespace vast {
 /// The key space has the following structure:
 ///
 ///   - /actors/<node>/<label>/{actor, type}
-///   - /peers/<node>/<fqn>
+///   - /peers/<node>/<node>
 ///   - /topology/<source>/<sink>
 ///
 struct node : default_actor {
@@ -36,7 +39,7 @@ struct node : default_actor {
   // Public message interface
   //
 
-  caf::behavior spawn_actor(event_based_actor* self);
+  caf::behavior spawn_actor(caf::event_based_actor* self);
   caf::behavior send_run(caf::event_based_actor* self);
   caf::behavior send_flush(caf::event_based_actor* self);
   caf::behavior quit_actor(caf::event_based_actor* self);
@@ -58,6 +61,9 @@ struct node : default_actor {
   caf::behavior operating_;
   caf::actor accountant_;
   caf::actor store_;
+  std::map<std::string, caf::actor> peers_;
+  std::map<std::string, caf::actor> actors_by_label_;
+  std::multimap<std::string, caf::actor> actors_by_type_;
   std::string name_;
   path const dir_;
 };

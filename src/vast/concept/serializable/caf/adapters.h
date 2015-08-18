@@ -119,7 +119,7 @@ public:
     auto uti_map = caf::detail::singletons::get_uniform_type_info_map();
     auto uti = uti_map->by_uniform_name(name);
     if (uti == nullptr)
-      die("no type information available");
+      die("no type information available for type '" + name + "'");
     return uti;
   }
 
