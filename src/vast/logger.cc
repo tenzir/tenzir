@@ -149,7 +149,10 @@ struct logger::impl {
           log_file_ << std::setprecision(15) << std::setw(16) << std::left
                     << std::setfill('0') << m.timestamp() << " 0x"
                     << std::setw(14) << std::setfill(' ') << m.thread_id()
-                    << ' ' << m.lvl() << ' ' << line << std::endl;
+                    << ' ' << m.lvl() << ' ';
+          if (! m.context().empty())
+            log_file_ << m.context() << ' ';
+          log_file_ << line << std::endl;
         }
         if (console_ && m.lvl() <= console_level_) {
           if (colorized_) {
@@ -157,26 +160,31 @@ struct logger::impl {
               default:
                 break;
               case error:
-                std::cerr << util::color::red;
+                std::cerr << util::color::bold_red;
                 break;
               case warn:
-                std::cerr << util::color::yellow;
+                std::cerr << util::color::bold_yellow;
                 break;
               case info:
-                std::cerr << util::color::green;
+                std::cerr << util::color::bold_green;
                 break;
               case verbose:
-                std::cerr << util::color::cyan;
+                std::cerr << util::color::bold_cyan;
                 break;
               case debug:
               case trace:
-                std::cerr << util::color::blue;
+                std::cerr << util::color::bold_blue;
                 break;
             }
           }
           std::cerr << "::";
-          if (colorized_)
+          if (colorized_) {
             std::cerr << util::color::reset;
+            if (! m.context().empty()) {
+              std::cerr << ' ' << util::color::cyan << m.context();
+              std::cerr << util::color::reset;
+            }
+          }
           std::cerr << ' ' << line << std::endl;
         }
       }
@@ -210,7 +218,7 @@ logger::message::message(message const& other)
   : lvl_{other.lvl_},
     timestamp_{other.timestamp_},
     thread_id_{other.thread_id_},
-    facility_{other.facility_},
+    context_{other.context_},
     function_{other.function_} {
   ss_ << other.msg();
 }
@@ -244,8 +252,8 @@ std::string const& logger::message::thread_id() const {
   return thread_id_;
 }
 
-std::string const& logger::message::facility() const {
-  return facility_;
+std::string const& logger::message::context() const {
+  return context_;
 }
 
 std::string const& logger::message::function() const {
@@ -352,16 +360,14 @@ bool logger::takes(logger::level lvl) {
   return instance()->impl_->takes(lvl);
 }
 
-logger::message logger::make_message(logger::level lvl, char const* facility,
+logger::message logger::make_message(logger::level lvl, std::string ctx,
                                      char const* fun) {
-  VAST_ASSERT(facility != nullptr);
   VAST_ASSERT(instance()->impl_);
   auto& impl = instance()->impl_;
   message m{lvl};
   if (impl->console_level_ == trace || impl->file_level_ == trace)
     m.function_ = prettify(fun);
-  if (*facility)
-    m.facility_ = facility;
+  m.context_ = std::move(ctx);
   m.coin();
   return m;
 }

@@ -62,7 +62,7 @@ public:
 
     std::string const& thread_id() const;
 
-    std::string const& facility() const;
+    std::string const& context() const;
 
     std::string const& function() const;
 
@@ -72,7 +72,7 @@ public:
     level lvl_ = quiet;
     double timestamp_ = 0.0;
     std::string thread_id_;
-    std::string facility_;
+    std::string context_;
     std::string function_;
     std::stringstream ss_;
 
@@ -124,9 +124,9 @@ public:
 
   /// Constructs a message which accepts arbitrary values via `operator<<`.
   /// @param lvl The log level.
-  /// @param facility The facility or component.
+  /// @param ctx The log context/facility.
   /// @param fun The caller function, typically `__PRETTY_FUNCTION__`.
-  static message make_message(level lvl, char const* facility, char const* fun);
+  static message make_message(level lvl, std::string ctx, char const* fun);
 
 private:
   /// Implementation of the logger. We use PIMPL here to reduce the footprint
@@ -135,7 +135,6 @@ private:
 
   /// Default-constructs a logger.
   logger() = default;
-  ;
 
   // Singleton implementation.
   static logger* create();
@@ -154,19 +153,47 @@ std::ostream& operator<<(std::ostream& stream, logger::level lvl);
 
 #define VAST_VOID static_cast<void>(0)
 
-#ifndef VAST_LOG_FACILITY
-#define VAST_LOG_FACILITY "\0"
+#ifndef VAST_LOG_CONTEXT
+// Before including this header file, users can set a file-global log context
+// by defining VAST_LOG_CONTEXT. This makes it possible to use VAST_XXX(..)
+// instead of VAST_XXX_AT(ctx, ...) with a repetitive first argument *ctx*.
+#define VAST_LOG_CONTEXT ""
 #endif
 
-#define VAST_LOG(lvl, msg)                                                     \
+#define VAST_LOG_CTX(lvl, ctx, msg)                                            \
   do {                                                                         \
     if (::vast::logger::takes(lvl)) {                                          \
-      auto __vast_msg = ::vast::logger::make_message(lvl, VAST_LOG_FACILITY,   \
+      std::ostringstream __vast_ctx;                                           \
+      __vast_ctx << ctx;                                                       \
+      auto __vast_msg = ::vast::logger::make_message(lvl, __vast_ctx.str(),    \
                                                      __PRETTY_FUNCTION__);     \
       __vast_msg << msg;                                                       \
       ::vast::logger::log(std::move(__vast_msg));                              \
     }                                                                          \
   } while (false)
+
+#define VAST_LOG(lvl, msg)                                                     \
+  VAST_LOG_CTX(lvl, VAST_LOG_CONTEXT, msg)
+
+#define VAST_LOG_CTX_MSG_3(lvl, ctx, m1) VAST_LOG_CTX(lvl, ctx, m1)
+#define VAST_LOG_CTX_MSG_4(lvl, ctx, m1, m2)                                   \
+  VAST_LOG_CTX_MSG_3(lvl, ctx, m1 << ' ' << m2)
+#define VAST_LOG_CTX_MSG_5(lvl, ctx, m1, m2, m3)                               \
+  VAST_LOG_CTX_MSG_4(lvl, ctx, m1, m2 << ' ' << m3)
+#define VAST_LOG_CTX_MSG_6(lvl, ctx, m1, m2, m3, m4)                           \
+  VAST_LOG_CTX_MSG_5(lvl, ctx, m1, m2, m3 << ' ' << m4)
+#define VAST_LOG_CTX_MSG_7(lvl, ctx, m1, m2, m3, m4, m5)                       \
+  VAST_LOG_CTX_MSG_6(lvl, ctx, m1, m2, m3, m4 << ' ' << m5)
+#define VAST_LOG_CTX_MSG_8(lvl, ctx, m1, m2, m3, m4, m5, m6)                   \
+  VAST_LOG_CTX_MSG_7(lvl, ctx, m1, m2, m3, m4, m5 << ' ' << m6)
+#define VAST_LOG_CTX_MSG_9(lvl, ctx, m1, m2, m3, m4, m5, m6, m7)               \
+  VAST_LOG_CTX_MSG_8(lvl, ctx, m1, m2, m3, m4, m5, m6 << ' ' << m7)
+#define VAST_LOG_CTX_MSG_10(lvl, ctx, m1, m2, m3, m4, m5, m6, m7, m8)          \
+  VAST_LOG_CTX_MSG_9(lvl, ctx, m1, m2, m3, m4, m5, m6, m7 << ' ' << m8)
+#define VAST_LOG_CTX_MSG_11(lvl, ctx, m1, m2, m3, m4, m5, m6, m7, m8, m9)      \
+  VAST_LOG_CTX_MSG_10(lvl, ctx, m1, m2, m3, m4, m5, m6, m7, m8 << ' ' << m9)
+#define VAST_LOG_CTX_MSG(...)                                                  \
+  VAST_PP_OVERLOAD(VAST_LOG_CTX_MSG_, __VA_ARGS__)(__VA_ARGS__)
 
 #define VAST_LOG_MSG_2(lvl, m1) VAST_LOG(lvl, m1)
 #define VAST_LOG_MSG_3(lvl, m1, m2) VAST_LOG_MSG_2(lvl, m1 << ' ' << m2)
@@ -196,38 +223,56 @@ std::ostream& operator<<(std::ostream& stream, logger::level lvl);
 
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_ERROR
 #define VAST_ERROR(...) VAST_LOG_MSG(::vast::logger::error, __VA_ARGS__)
+#define VAST_ERROR_AT(ctx, ...)                                                \
+  VAST_LOG_CTX_MSG(::vast::logger::error, ctx, __VA_ARGS__)
 #else
 #define VAST_ERROR(...) VAST_VOID
+#define VAST_ERROR_AT(...) VAST_VOID
 #endif
 
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_WARN
 #define VAST_WARN(...) VAST_LOG_MSG(::vast::logger::warn, __VA_ARGS__)
+#define VAST_WARN_AT(ctx, ...)                                                 \
+  VAST_LOG_CTX_MSG(::vast::logger::warn, ctx, __VA_ARGS__)
 #else
 #define VAST_WARN(...) VAST_VOID
+#define VAST_WARN_AT(...) VAST_VOID
 #endif
 
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
 #define VAST_INFO(...) VAST_LOG_MSG(::vast::logger::info, __VA_ARGS__)
+#define VAST_INFO_AT(ctx, ...)                                                 \
+  VAST_LOG_CTX_MSG(::vast::logger::info, ctx, __VA_ARGS__)
 #else
 #define VAST_INFO(...) VAST_VOID
+#define VAST_INFO_AT(...) VAST_VOID
 #endif
 
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_VERBOSE
 #define VAST_VERBOSE(...) VAST_LOG_MSG(::vast::logger::verbose, __VA_ARGS__)
+#define VAST_VERBOSE_AT(ctx, ...)                                              \
+  VAST_LOG_CTX_MSG(::vast::logger::verbose, ctx, __VA_ARGS__)
 #else
 #define VAST_VERBOSE(...) VAST_VOID
+#define VAST_VERBOSE_AT(...) VAST_VOID
 #endif
 
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_DEBUG
 #define VAST_DEBUG(...) VAST_LOG_MSG(::vast::logger::debug, __VA_ARGS__)
+#define VAST_DEBUG_AT(ctx, ...)                                                \
+  VAST_LOG_CTX_MSG(::vast::logger::debug, ctx, __VA_ARGS__)
 #else
 #define VAST_DEBUG(...) VAST_VOID
+#define VAST_DEBUG_AT(...) VAST_VOID
 #endif
 
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_TRACE
 #define VAST_TRACE(...) VAST_LOG_MSG(::vast::logger::trace, __VA_ARGS__)
+#define VAST_TRACE_AT(ctx, ...)                                                \
+  VAST_LOG_CTX_MSG(::vast::logger::trace, ctx, __VA_ARGS__)
 #else
 #define VAST_TRACE(...) VAST_VOID
+#define VAST_TRACE_AT(...) VAST_VOID
 #endif
 
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_TRACE
@@ -235,7 +280,7 @@ std::ostream& operator<<(std::ostream& stream, logger::level lvl);
 #define VAST_ARGS_LEAVE(args) "<-- (" << args << ')'
 #define VAST_ENTER_ARGS(args, msg)                                             \
   auto __vast_msg = ::vast::logger::make_message(                              \
-    ::vast::logger::level::trace, VAST_LOG_FACILITY, __PRETTY_FUNCTION__);     \
+    ::vast::logger::level::trace, VAST_LOG_CONTEXT, __PRETTY_FUNCTION__);      \
   ::vast::logger::tracer __vast_tracer{std::move(__vast_msg)};                 \
   __vast_tracer << VAST_ARGS_ENTER(args) << msg;                               \
   __vast_tracer.commit()
