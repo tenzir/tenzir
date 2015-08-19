@@ -9,20 +9,17 @@
 
 namespace vast {
 
-struct key_printer : printer<key_printer>
-{
+struct key_printer : printer<key_printer> {
   using attribute = key;
 
   template <typename Iterator>
-  bool print(Iterator& out, key const& k) const
-  {
+  bool print(Iterator& out, key const& k) const {
     return detail::print_delimited(k.begin(), k.end(), out, '.');
   }
 };
 
 template <>
-struct printer_registry<key>
-{
+struct printer_registry<key> {
   using type = key_printer;
 };
 

@@ -24,34 +24,26 @@ namespace stack {
 /// @tparam N The number of bytes in the arena.
 /// @tparam Align The alignment to use for the *N* bytes.
 template <size_t N, size_t Align = 16>
-class arena : equality_comparable<arena<N, Align>>
-{
+class arena : equality_comparable<arena<N, Align>> {
 public:
-  arena() noexcept
-    : ptr_{buf_}
-  {
+  arena() noexcept : ptr_{buf_} {
   }
 
-  ~arena()
-  {
+  ~arena() {
     ptr_ = nullptr;
   }
 
   /// Copy-constructs the arena.
-  arena(arena const& other) noexcept
-    : ptr_{buf_ + other.used()}
-  {
+  arena(arena const& other) noexcept : ptr_{buf_ + other.used()} {
     std::copy(other.buf_, other.buf_ + N, buf_);
   }
 
   /// Allocates a chunk of bytes.
   /// @param n The number of bytes of the chunk to allocate.
   /// @returns A pointer to the allocated chunk.
-  char* allocate(size_t n)
-  {
+  char* allocate(size_t n) {
     VAST_ASSERT(pointer_in_buffer(ptr_) && "allocator has outlived arena");
-    if (static_cast<size_t>(buf_ + N - ptr_) >= n)
-    {
+    if (static_cast<size_t>(buf_ + N - ptr_) >= n) {
       auto r = ptr_;
       ptr_ += n;
       return r;
@@ -63,10 +55,9 @@ public:
   /// Deallocates a chunk of bytes.
   /// @param p A pointer to the beginning of the bytes to deallocate.
   /// @param n The size of the chunk *p* points to.
-  void deallocate(char* p, size_t n) noexcept
-  {
+  void deallocate(char* p, size_t n) noexcept {
     VAST_ASSERT(pointer_in_buffer(ptr_) && "allocator has outlived arena");
-    if (! pointer_in_buffer(p))
+    if (!pointer_in_buffer(p))
       ::operator delete(p);
     else if (p + n == ptr_)
       ptr_ = p;
@@ -74,38 +65,32 @@ public:
 
   /// Retrieves the arena capacity.
   /// @returns The number of bytes the arena provides.
-  static constexpr size_t size()
-  {
+  static constexpr size_t size() {
     return N;
   }
 
   /// Retrieves the number of bytes used.
   /// @returns The number of bytes the arena uses.
-  size_t used() const
-  {
+  size_t used() const {
     return static_cast<size_t>(ptr_ - buf_);
   }
 
   /// Resets the arena.
-  void reset()
-  {
+  void reset() {
     ptr_ = buf_;
   }
 
   /// Retrieves the buffer for inspection.
-  char const* data()
-  {
+  char const* data() {
     return buf_;
   }
 
 private:
-  friend bool operator==(arena const& x, arena const& y)
-  {
+  friend bool operator==(arena const& x, arena const& y) {
     return std::equal(x.buf_, x.buf_ + N, y.buf_, y.buf_ + N);
   }
 
-  bool pointer_in_buffer(char* p) noexcept
-  {
+  bool pointer_in_buffer(char* p) noexcept {
     return buf_ <= p && p <= buf_ + N;
   }
 
@@ -117,8 +102,7 @@ private:
 /// @tparam T The type of the element to allocate.
 /// @tparam N The number of elements the stack arena should be able to hold.
 template <typename T, size_t N>
-class allocator
-{
+class allocator {
   template <typename, size_t>
   friend class allocator;
 
@@ -132,34 +116,27 @@ public:
   using propagate_on_container_move_assignment = std::true_type;
   using propagate_on_container_swap = std::true_type;
 
-  // This should be provided by std::allocator_traits, but buggy GCC 4.9
-  // complains.
+// This should be provided by std::allocator_traits, but buggy GCC 4.9
+// complains.
 #ifdef VAST_GCC
   template <typename U>
-  struct rebind
-  {
+  struct rebind {
     using other = allocator<U, N>;
   };
 #endif
 
-  explicit allocator(arena_type* a) noexcept
-    : arena_{a}
-  {
+  explicit allocator(arena_type* a) noexcept : arena_{a} {
   }
 
   template <typename U, size_t M>
-  allocator(allocator<U, M> const& other) noexcept
-    : arena_{other.arena_}
-  {
+  allocator(allocator<U, M> const& other) noexcept : arena_{other.arena_} {
   }
 
-  pointer allocate(size_t n)
-  {
+  pointer allocate(size_t n) {
     return reinterpret_cast<pointer>(arena_->allocate(n * sizeof(T)));
   }
 
-  void deallocate(pointer p, size_t n)
-  {
+  void deallocate(pointer p, size_t n) {
     arena_->deallocate(reinterpret_cast<char*>(p), n * sizeof(T));
   }
 
@@ -176,14 +153,12 @@ private:
 };
 
 template <typename U, size_t N0, typename V, size_t N1>
-bool operator==(allocator<U, N0> const& x, allocator<V, N1> const& y)
-{
+bool operator==(allocator<U, N0> const& x, allocator<V, N1> const& y) {
   return x.arena_ == y.arena_;
 }
 
 template <typename U, size_t N0, typename V, size_t N1>
-bool operator!=(allocator<U, N0> const& x, allocator<V, N1> const& y)
-{
+bool operator!=(allocator<U, N0> const& x, allocator<V, N1> const& y) {
   return x.arena_ != y.arena_;
 }
 
@@ -193,17 +168,12 @@ namespace detail {
 // the stack-based container, which inherits from both this class and the
 // standard library container.
 template <size_t N, typename T>
-struct container_base
-{
-  container_base()
-    : allocator{&arena}
-  {
+struct container_base {
+  container_base() : allocator{&arena} {
   }
 
   container_base(container_base const& other)
-    : arena{other.arena},
-      allocator{&arena}
-  {
+    : arena{other.arena}, allocator{&arena} {
   }
 
   container_base& operator=(container_base const& other) = delete;

@@ -16,8 +16,7 @@ namespace ascii = boost::spirit::ascii;
 
 template <typename Iterator>
 struct data_expression
-  : qi::grammar<Iterator, ast::query::data_expr(), skipper<Iterator>>
-{
+  : qi::grammar<Iterator, ast::query::data_expr(), skipper<Iterator>> {
   data_expression(error_handler<Iterator>& on_error)
     : data_expression::base_type(expr)
   {
@@ -70,17 +69,14 @@ struct data_expression
       primary.name("primary expression");
   }
 
-  qi::rule<Iterator, ast::query::data_expr(), skipper<Iterator>>
-      expr;
+  qi::rule<Iterator, ast::query::data_expr(), skipper<Iterator>> expr;
 
   qi::rule<Iterator, ast::query::expr_operand(), skipper<Iterator>>
       unary, primary;
 
-  qi::rule<Iterator, std::string(), skipper<Iterator>>
-      identifier;
+  qi::rule<Iterator, std::string(), skipper<Iterator>> identifier;
 
-  qi::symbols<char, arithmetic_operator>
-      unary_op, binary_op;
+  qi::symbols<char, arithmetic_operator> unary_op, binary_op;
 
   data<Iterator> dta;
 };

@@ -17,27 +17,22 @@ namespace util {
 namespace detail {
 
 template <typename Key, typename Value>
-class unordered_skip_table
-{
+class unordered_skip_table {
   static_assert(sizeof(Key) > 1,
                 "unordered skip table makes only sense for large keys");
 
 public:
   unordered_skip_table(size_t n, Value default_value)
-      : default_{default_value},
-        skip_(n)
-  {
+    : default_{default_value}, skip_(n) {
   }
 
-  void insert(Key key, Value value)
-  {
+  void insert(Key key, Value value) {
     skip_[key] = value;
   }
 
-  Value operator[](Key const& key) const
-  {
+  Value operator[](Key const& key) const {
     auto i = skip_.find(key);
-    return i == skip_.end () ? default_ : i->second;
+    return i == skip_.end() ? default_ : i->second;
   }
 
 private:
@@ -46,27 +41,22 @@ private:
 };
 
 template <typename Key, typename Value>
-class array_skip_table
-{
+class array_skip_table {
   static_assert(std::is_integral<Key>::value,
                 "array skip table key must be integral");
 
-  static_assert(sizeof(Key) == 1,
-                "array skip table key must occupy one byte");
+  static_assert(sizeof(Key) == 1, "array skip table key must occupy one byte");
 
 public:
-  array_skip_table(size_t, Value default_value)
-  {
+  array_skip_table(size_t, Value default_value) {
     std::fill_n(skip_.begin(), skip_.size(), default_value);
   }
 
-  void insert(Key key, Value val)
-  {
+  void insert(Key key, Value val) {
     skip_[static_cast<unsigned_key_type>(key)] = val;
   }
 
-  Value operator[](Key key) const
-  {
+  Value operator[](Key key) const {
     return skip_[static_cast<unsigned_key_type>(key)];
   }
 
@@ -81,17 +71,14 @@ private:
 /// can look for a pattern *P* over a (text) sequence *T*.
 /// @tparam PatternIterator The iterator type over the pattern.
 template <typename PatternIterator>
-class boyer_moore
-{
+class boyer_moore {
   template <typename Iterator, typename Container>
-  static void make_prefix(Iterator begin, Iterator end, Container& pfx)
-  {
+  static void make_prefix(Iterator begin, Iterator end, Container& pfx) {
     VAST_ASSERT(end - begin > 0);
     VAST_ASSERT(pfx.size() == static_cast<size_t>(end - begin));
     pfx[0] = 0;
     size_t k = 0;
-    for (decltype(end - begin) i = 1; i < end - begin; ++i)
-    {
+    for (decltype(end - begin) i = 1; i < end - begin; ++i) {
       while (k > 0 && begin[k] != begin[i])
         k = pfx[k - 1];
       if (begin[k] == begin[i])
@@ -108,8 +95,7 @@ public:
     : pat_{begin},
       n_{end - begin},
       skip_{static_cast<size_t>(n_), -1},
-      suffix_(n_ + 1)
-  {
+      suffix_(n_ + 1) {
     if (n_ == 0)
       return;
     // Build the skip table (delta_1).
@@ -126,8 +112,7 @@ public:
     for (size_t i = 0; i < suffix_.size(); i++)
       suffix_[i] = n_ - prefix[n_ - 1];
 
-    for (decltype(n_) i = 0; i < n_; i++)
-    {
+    for (decltype(n_) i = 0; i < n_; i++) {
       auto j = n_ - prefix_reversed[i];
       auto k = i - prefix_reversed[i] + 1;
       if (suffix_[j] > k)
@@ -142,8 +127,7 @@ public:
   /// @returns The position in *T* where *P* occurrs or *end* if *P* does not
   ///     exist in *T*.
   template <typename TextIterator>
-  TextIterator operator()(TextIterator begin, TextIterator end) const
-  {
+  TextIterator operator()(TextIterator begin, TextIterator end) const {
     /// Empty *P* always matches at the beginning of *T*.
     if (n_ == 0)
       return begin;
@@ -151,8 +135,7 @@ public:
     if (begin == end || end - begin < n_)
       return end;
     auto i = begin;
-    while (i <= end - n_)
-    {
+    while (i <= end - n_) {
       auto j = n_;
       while (pat_[j - 1] == i[j - 1])
         if (--j == 0)
@@ -189,8 +172,7 @@ private:
 /// @param begin The iterator to the start of the pattern.
 /// @param end The iterator to the end of the pattern.
 template <typename Iterator>
-auto make_boyer_moore(Iterator begin, Iterator end)
-{
+auto make_boyer_moore(Iterator begin, Iterator end) {
   return boyer_moore<Iterator>{begin, end};
 }
 
@@ -207,8 +189,7 @@ auto make_boyer_moore(Iterator begin, Iterator end)
 ///     does not occur in *T*.
 template <typename TextIterator, typename PatternIterator>
 TextIterator search_boyer_moore(PatternIterator p0, PatternIterator p1,
-                                TextIterator t0, TextIterator t1)
-{
+                                TextIterator t0, TextIterator t1) {
   return make_boyer_moore(p0, p1)(t0, t1);
 }
 
@@ -216,8 +197,7 @@ TextIterator search_boyer_moore(PatternIterator p0, PatternIterator p1,
 /// context. It can look for a pattern *P* over a (text) sequence *T*.
 /// @tparam PatternIterator The iterator type over the pattern.
 template <typename PatternIterator>
-class knuth_morris_pratt
-{
+class knuth_morris_pratt {
   using pat_difference_type =
     typename std::iterator_traits<PatternIterator>::difference_type;
 
@@ -226,19 +206,14 @@ public:
   /// @param begin The start of the pattern.
   /// @param end The end of the pattern.
   knuth_morris_pratt(PatternIterator begin, PatternIterator end)
-    : pat_{begin},
-      n_{end - begin},
-      skip_(static_cast<size_t>(n_ + 1))
-  {
+    : pat_{begin}, n_{end - begin}, skip_(static_cast<size_t>(n_ + 1)) {
     skip_[0] = -1;
-    for (auto i = 1; i <= n_; ++i)
-    {
+    for (auto i = 1; i <= n_; ++i) {
       auto j = skip_[i - 1];
-      while (j >= 0)
-      {
+      while (j >= 0) {
         if (begin[j] == begin[i - 1])
           break;
-        j = skip_ [j];
+        j = skip_[j];
       }
       skip_[i] = j + 1;
     }
@@ -251,18 +226,16 @@ public:
   /// @returns The position in *T* where *P* occurrs or *end* if *P* does not
   ///     exist in *T*.
   template <typename TextIterator>
-  TextIterator operator()(TextIterator begin, TextIterator end) const
-  {
+  TextIterator operator()(TextIterator begin, TextIterator end) const {
     /// Empty *P* always matches at the beginning of *T*.
     if (n_ == 0)
       return begin;
     // Empty *T* or |T| < |P| can never match.
     if (begin == end || end - begin < n_)
       return end;
-    pat_difference_type i = 0;  // Position in T.
-    pat_difference_type p = 0;  // Position in P.
-    while (i <= end - begin - n_)
-    {
+    pat_difference_type i = 0; // Position in T.
+    pat_difference_type p = 0; // Position in P.
+    while (i <= end - begin - n_) {
       while (pat_[p] == begin[i + p])
         if (++p == n_)
           return begin + i;
@@ -283,8 +256,7 @@ private:
 /// @param begin The iterator to the start of the pattern.
 /// @param end The iterator to the end of the pattern.
 template <typename Iterator>
-auto make_knuth_morris_pratt(Iterator begin, Iterator end)
-{
+auto make_knuth_morris_pratt(Iterator begin, Iterator end) {
   return knuth_morris_pratt<Iterator>{begin, end};
 }
 
@@ -301,8 +273,7 @@ auto make_knuth_morris_pratt(Iterator begin, Iterator end)
 ///     does not occur in *T*.
 template <typename TextIterator, typename PatternIterator>
 TextIterator search_knuth_morris_pratt(PatternIterator p0, PatternIterator p1,
-                                       TextIterator t0, TextIterator t1)
-{
+                                       TextIterator t0, TextIterator t1) {
   return make_knuth_morris_pratt(p0, p1)(t0, t1);
 }
 

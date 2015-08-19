@@ -6,6 +6,7 @@
 namespace vast {
 
 // Inherited from CAF
+using caf::add_atom;
 using caf::delete_atom;
 using caf::flush_atom;
 using caf::get_atom;
@@ -13,11 +14,10 @@ using caf::ok_atom;
 using caf::put_atom;
 using caf::join_atom;
 using caf::leave_atom;
-using caf::sys_atom;
 
 // Generic
 using accept_atom = caf::atom_constant<caf::atom("accept")>;
-using add_atom = caf::atom_constant<caf::atom("add")>;
+using announce_atom = caf::atom_constant<caf::atom("announce")>;
 using batch_atom = caf::atom_constant<caf::atom("batch")>;
 using connect_atom = caf::atom_constant<caf::atom("connect")>;
 using continuous_atom = caf::atom_constant<caf::atom("continuous")>;
@@ -38,6 +38,7 @@ using list_atom = caf::atom_constant<caf::atom("list")>;
 using load_atom = caf::atom_constant<caf::atom("load")>;
 using overload_atom = caf::atom_constant<caf::atom("overload")>;
 using peer_atom = caf::atom_constant<caf::atom("peer")>;
+using persist_atom = caf::atom_constant<caf::atom("persist")>;
 using ping_atom = caf::atom_constant<caf::atom("ping")>;
 using pong_atom = caf::atom_constant<caf::atom("pong")>;
 using progress_atom = caf::atom_constant<caf::atom("progress")>;
@@ -45,6 +46,7 @@ using prompt_atom = caf::atom_constant<caf::atom("prompt")>;
 using publish_atom = caf::atom_constant<caf::atom("publish")>;
 using query_atom = caf::atom_constant<caf::atom("query")>;
 using read_atom = caf::atom_constant<caf::atom("read")>;
+using replicate_atom = caf::atom_constant<caf::atom("replicate")>;
 using request_atom = caf::atom_constant<caf::atom("request")>;
 using response_atom = caf::atom_constant<caf::atom("response")>;
 using run_atom = caf::atom_constant<caf::atom("run")>;
@@ -53,6 +55,7 @@ using set_atom = caf::atom_constant<caf::atom("set")>;
 using signal_atom = caf::atom_constant<caf::atom("signal")>;
 using spawn_atom = caf::atom_constant<caf::atom("spawn")>;
 using start_atom = caf::atom_constant<caf::atom("start")>;
+using state_atom = caf::atom_constant<caf::atom("state")>;
 using stop_atom = caf::atom_constant<caf::atom("stop")>;
 using store_atom = caf::atom_constant<caf::atom("store")>;
 using submit_atom = caf::atom_constant<caf::atom("submit")>;
@@ -65,8 +68,11 @@ using write_atom = caf::atom_constant<caf::atom("write")>;
 using actor_atom = caf::atom_constant<caf::atom("actor")>;
 using accountant_atom = caf::atom_constant<caf::atom("accountant")>;
 using archive_atom = caf::atom_constant<caf::atom("archive")>;
+using candidate_atom = caf::atom_constant<caf::atom("candidate")>;
 using identifier_atom = caf::atom_constant<caf::atom("identifier")>;
 using index_atom = caf::atom_constant<caf::atom("index")>;
+using follower_atom = caf::atom_constant<caf::atom("follower")>;
+using leader_atom = caf::atom_constant<caf::atom("leader")>;
 using receiver_atom = caf::atom_constant<caf::atom("receiver")>;
 using sink_atom = caf::atom_constant<caf::atom("sink")>;
 using source_atom = caf::atom_constant<caf::atom("source")>;

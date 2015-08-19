@@ -14,8 +14,7 @@ namespace vast {
 namespace source {
 
 bgpdump::bgpdump(std::unique_ptr<io::input_stream> is)
-  : line_based<bgpdump>{"bgpdump-source", std::move(is)}
-{
+  : line_based<bgpdump>{"bgpdump-source", std::move(is)} {
   std::vector<type::record::field> fields;
   fields.emplace_back("timestamp", type::time_point{});
   fields.emplace_back("source_ip", type::address{});
@@ -54,8 +53,7 @@ bgpdump::bgpdump(std::unique_ptr<io::input_stream> is)
   state_change_type_.name("bgpdump::state_change");
 }
 
-schema bgpdump::sniff()
-{
+schema bgpdump::sniff() {
   schema sch;
   sch.add(announce_type_);
   sch.add(route_type_);
@@ -64,67 +62,48 @@ schema bgpdump::sniff()
   return sch;
 }
 
-void bgpdump::set(schema const& sch)
-{
-  if (auto t = sch.find_type(announce_type_.name()))
-  {
-    if (congruent(*t, announce_type_))
-    {
+void bgpdump::set(schema const& sch) {
+  if (auto t = sch.find_type(announce_type_.name())) {
+    if (congruent(*t, announce_type_)) {
       VAST_VERBOSE("prefers type in schema over default type:", *t);
       announce_type_ = *t;
-    }
-    else
-    {
+    } else {
       VAST_WARN("ignores incongruent schema type:", t->name());
     }
   }
-  if (auto t = sch.find_type(route_type_.name()))
-  {
-    if (congruent(*t, route_type_))
-    {
+  if (auto t = sch.find_type(route_type_.name())) {
+    if (congruent(*t, route_type_)) {
       VAST_VERBOSE("prefers type in schema over default type:", *t);
       route_type_ = *t;
-    }
-    else
-    {
+    } else {
       VAST_WARN("ignores incongruent schema type:", t->name());
     }
   }
-  if (auto t = sch.find_type(withdraw_type_.name()))
-  {
-    if (congruent(*t, withdraw_type_))
-    {
+  if (auto t = sch.find_type(withdraw_type_.name())) {
+    if (congruent(*t, withdraw_type_)) {
       VAST_VERBOSE("prefers type in schema over default type:", *t);
       withdraw_type_ = *t;
-    }
-    else
-    {
+    } else {
       VAST_WARN("ignores incongruent schema type:", t->name());
     }
   }
-  if (auto t = sch.find_type(state_change_type_.name()))
-  {
-    if (congruent(*t, state_change_type_))
-    {
+  if (auto t = sch.find_type(state_change_type_.name())) {
+    if (congruent(*t, state_change_type_)) {
       VAST_VERBOSE("prefers type in schema over default type:", *t);
       state_change_type_ = *t;
-    }
-    else
-    {
+    } else {
       VAST_WARN("ignores incongruent schema type:", t->name());
     }
   }
 }
 
-result<event> bgpdump::extract()
-{
+result<event> bgpdump::extract() {
   using namespace parsers;
   static auto str = +(any - '|');
-  static auto ts =
-    u64 ->* [](count x) { return time::point{time::seconds{x}}; };
+  static auto ts = u64->*[](count x) { return time::point{time::seconds{x}}; };
   static auto head
     = "BGP4MP|" >> ts >> '|' >> str >> '|' >> addr >> '|' >> u64 >> '|';
-  if (! next_line())
+  if (!next_line())
     return {};
   time::point timestamp;
   std::string update;
@@ -133,35 +112,18 @@ result<event> bgpdump::extract()
   auto tuple = std::tie(timestamp, update, source_ip, source_as);
   auto f = this->line().begin();
   auto l = this->line().end();
-  if (! head.parse(f, l, tuple))
+  if (!head.parse(f, l, tuple))
     return {};
   record r;
   r.emplace_back(timestamp);
   r.emplace_back(std::move(source_ip));
   r.emplace_back(source_as);
-  if (update == "A" || update == "B")
-  {
+  if (update == "A" || update == "B") {
     // Announcement or routing table entry
-    static auto num = u64 ->* [](count x) { return data{x}; };
-    static auto tail
-      =   net
-      >> '|'
-      >>  (num % ' ') >> -(" {" >> u64 >> '}')
-      >> '|'
-      >> str
-      >> '|'
-      >> addr
-      >> '|'
-      >> u64
-      >> '|'
-      >> u64
-      >> '|'
-      >> -str
-      >> '|'
-      >> -str
-      >> '|'
-      >> -str
-      ;
+    static auto num = u64->*[](count x) { return data{x}; };
+    static auto tail = net >> '|' >> (num % ' ') >> -(" {" >> u64 >> '}') >> '|'
+                       >> str >> '|' >> addr >> '|' >> u64 >> '|' >> u64 >> '|'
+                       >> -str >> '|' >> -str >> '|' >> -str;
     subnet sn;
     std::vector<data> as_path;
     optional<count> origin_as;
@@ -174,7 +136,7 @@ result<event> bgpdump::extract()
     optional<std::string> aggregator;
     auto t = std::tie(sn, as_path, origin_as, origin, nexthop, local_pref, med,
                       community, atomic_aggregate, aggregator);
-    if (! tail.parse(f, l, t))
+    if (!tail.parse(f, l, t))
       return {};
     r.emplace_back(std::move(sn));
     r.emplace_back(vector(std::move(as_path)));
@@ -189,24 +151,20 @@ result<event> bgpdump::extract()
     event e{{std::move(r), update == "A" ? announce_type_ : route_type_}};
     e.timestamp(timestamp);
     return e;
-  }
-  else if (update == "W")
-  {
+  } else if (update == "W") {
     subnet sn;
-    if (! net.parse(f, l, sn))
+    if (!net.parse(f, l, sn))
       return {};
     r.emplace_back(sn);
     event e{{std::move(r), withdraw_type_}};
     e.timestamp(timestamp);
     return e;
-  }
-  else if (update == "STATE")
-  {
+  } else if (update == "STATE") {
     static auto tail = -str >> '|' >> -str;
     optional<std::string> old_state;
     optional<std::string> new_state;
     auto t = std::tie(old_state, new_state);
-    if (! tail.parse(f, l, t))
+    if (!tail.parse(f, l, t))
       return {};
     r.emplace_back(std::move(old_state));
     r.emplace_back(std::move(new_state));

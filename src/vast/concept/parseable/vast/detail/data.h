@@ -19,65 +19,50 @@ namespace vast {
 namespace detail {
 namespace parser {
 
-struct sequence_inserter
-{
+struct sequence_inserter {
   template <typename, typename>
-  struct result
-  {
+  struct result {
     using type = void;
   };
 
   template <typename Vector, typename T>
-  void operator()(Vector& v, T&& x) const
-  {
+  void operator()(Vector& v, T&& x) const {
     v.push_back(std::forward<T>(x));
   }
 
   template <typename T>
-  void operator()(set& s, T&& x) const
-  {
+  void operator()(set& s, T&& x) const {
     s.insert(std::forward<T>(x));
   }
 };
 
-struct map_inserter
-{
+struct map_inserter {
   template <typename, typename, typename>
-  struct result
-  {
+  struct result {
     using type = void;
   };
 
   template <typename K, typename V>
-  void operator()(table& t, K&& k, V&& v) const
-  {
+  void operator()(table& t, K&& k, V&& v) const {
     t.emplace(std::forward<K>(k), std::forward<V>(v));
   }
 };
 
-struct data_factory
-{
+struct data_factory {
   template <typename>
-  struct result
-  {
+  struct result {
     using type = vast::data;
   };
 
   template <typename T>
-  vast::data operator()(T&& x) const
-  {
+  vast::data operator()(T&& x) const {
     return {std::forward<T>(x)};
   }
 };
 
 template <typename Iterator>
-struct data : qi::grammar<Iterator, vast::data(), skipper<Iterator>>
-{
-  data()
-    : data::base_type(dta)
-    , str('"')
-    , pat('/')
-  {
+struct data : qi::grammar<Iterator, vast::data(), skipper<Iterator>> {
+  data() : data::base_type(dta), str('"'), pat('/') {
     using boost::phoenix::construct;
 
     qi::_1_type _1;

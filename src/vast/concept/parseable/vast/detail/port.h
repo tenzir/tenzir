@@ -9,11 +9,8 @@ namespace detail {
 namespace parser {
 
 template <typename Iterator>
-struct port : qi::grammar<Iterator, vast::port()>
-{
-  port()
-    : port::base_type(p)
-  {
+struct port : qi::grammar<Iterator, vast::port()> {
+  port() : port::base_type(p) {
     using boost::phoenix::construct;
 
     qi::_1_type _1;

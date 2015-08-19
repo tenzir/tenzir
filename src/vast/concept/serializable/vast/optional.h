@@ -7,8 +7,7 @@
 namespace vast {
 
 template <typename Serializer, typename T>
-void serialize(Serializer& sink, optional<T> const& opt)
-{
+void serialize(Serializer& sink, optional<T> const& opt) {
   if (opt.valid())
     sink << true << opt.get();
   else
@@ -16,11 +15,10 @@ void serialize(Serializer& sink, optional<T> const& opt)
 }
 
 template <typename Deserializer, typename T>
-void deserialize(Deserializer& source, optional<T>& opt)
-{
+void deserialize(Deserializer& source, optional<T>& opt) {
   bool flag;
   source >> flag;
-  if (! flag)
+  if (!flag)
     return;
   T x;
   source >> x;

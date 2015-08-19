@@ -10,21 +10,14 @@ namespace vast {
 struct access;
 
 /// A transport-layer port.
-class port : util::totally_ordered<port>
-{
+class port : util::totally_ordered<port> {
   friend access;
 
 public:
   using number_type = uint16_t;
 
   /// The transport layer type.
-  enum port_type : uint8_t
-  {
-    unknown,
-    tcp,
-    udp,
-    icmp
-  };
+  enum port_type : uint8_t { unknown, tcp, udp, icmp };
 
   /// Constructs the empty port, i.e., @c 0/unknown.
   port() = default;

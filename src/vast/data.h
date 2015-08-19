@@ -27,8 +27,7 @@ namespace vast {
 
 class data;
 
-class vector : public std::vector<data>
-{
+class vector : public std::vector<data> {
   using super = std::vector<vast::data>;
 
 public:
@@ -36,14 +35,11 @@ public:
 
   vector() = default;
 
-  explicit vector(super v)
-    : super{std::move(v)}
-  {
+  explicit vector(super v) : super{std::move(v)} {
   }
 };
 
-class set : public util::flat_set<data>
-{
+class set : public util::flat_set<data> {
   using super = util::flat_set<vast::data>;
 
 public:
@@ -51,42 +47,34 @@ public:
 
   set() = default;
 
-  explicit set(super s)
-    : super(std::move(s))
-  {
+  explicit set(super s) : super(std::move(s)) {
   }
 
   explicit set(std::vector<vast::data>& v)
     : super(std::make_move_iterator(v.begin()),
-            std::make_move_iterator(v.end()))
-  {
+            std::make_move_iterator(v.end())) {
   }
 
-  explicit set(std::vector<vast::data> const& v)
-    : super(v.begin(), v.end())
-  {
+  explicit set(std::vector<vast::data> const& v) 
+    : super(v.begin(), v.end()) {
   }
 };
 
-class table : public std::map<data, data>
-{
+class table : public std::map<data, data> {
   using super = std::map<vast::data, vast::data>;
 
 public:
   using super::map;
 };
 
-class record : public std::vector<data>
-{
+class record : public std::vector<data> {
   using super = std::vector<vast::data>;
 
 public:
   /// Enables recursive record iteration.
-  class each : public util::range_facade<each>
-  {
+  class each : public util::range_facade<each> {
   public:
-    struct range_state
-    {
+    struct range_state {
       vast::data const& data() const;
       util::stack::vector<8, vast::data const*> trace;
       vast::offset offset;
@@ -97,8 +85,7 @@ public:
   private:
     friend util::range_facade<each>;
 
-    range_state const& state() const
-    {
+    range_state const& state() const {
       return state_;
     }
 
@@ -112,9 +99,7 @@ public:
 
   record() = default;
 
-  explicit record(super v)
-    : super{std::move(v)}
-  {
+  explicit record(super v) : super{std::move(v)} {
   }
 
   using super::at;
@@ -263,15 +248,13 @@ public:
     >
   >
   data(T&& x)
-    : data_(type<T>(std::forward<T>(x)))
-  {
+    : data_(type<T>(std::forward<T>(x))) {
   }
 
   /// Constructs optional data.
   template <typename T>
   data(optional<T>&& o)
-    : data{o ? std::move(*o) : data{nil}}
-  {
+    : data{o ? std::move(*o) : data{nil}} {
   }
 
   friend bool operator==(data const& lhs, data const& rhs);

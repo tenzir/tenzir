@@ -40,7 +40,7 @@ using caf::detail::tl_distinct;
 using caf::detail::tl_is_distinct;
 using caf::detail::tl_trim;
 using caf::detail::tl_apply;
-//using caf::detail::tl_is_strict_subset;
+// using caf::detail::tl_is_strict_subset;
 using caf::detail::tl_equal;
 
 template <typename List>

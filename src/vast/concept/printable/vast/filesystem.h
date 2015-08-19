@@ -6,20 +6,17 @@
 
 namespace vast {
 
-struct path_printer : printer<path_printer>
-{
+struct path_printer : printer<path_printer> {
   using attribute = path;
 
   template <typename Iterator>
-  bool print(Iterator& out, path const& p) const
-  {
+  bool print(Iterator& out, path const& p) const {
     return printers::str.print(out, p.str());
   }
 };
 
 template <>
-struct printer_registry<path>
-{
+struct printer_registry<path> {
   using type = path_printer;
 };
 

@@ -13,41 +13,35 @@ using namespace std::string_literals;
 using namespace vast;
 using namespace vast::io;
 
-int main(int argc, char** argv)
-{
+int main(int argc, char** argv) {
   auto usage = "usage: dscat [-lrw] <uds> [file]";
   auto r = message_builder{argv + 1, argv + argc}.extract_opts({
     {"listen,l", "listen on <uds> and serve <file>"},
     {"write,w", "open <file> for writing"},
     {"read,r", "open <file> for reading"}
   });
-  if (r.remainder.size() > 2)
-  {
+  if (r.remainder.size() > 2) {
     cerr << usage << endl;
     return 1;
   }
-  if (r.remainder.empty())
-  {
+  if (r.remainder.empty()) {
     cerr << usage << "\n\n" << r.helptext;
     return 1;
   }
   auto& uds_name = r.remainder.get_as<std::string>(0);
-  auto filename =
-    r.remainder.size() == 2 ? r.remainder.get_as<std::string>(1) : "-";
+  auto filename
+    = r.remainder.size() == 2 ? r.remainder.get_as<std::string>(1) : "-";
   auto reading = r.opts.count("read") > 0;
   auto writing = r.opts.count("write") > 0;
-  if (! reading && ! writing)
-  {
+  if (!reading && !writing) {
     cerr << "need to specify either read (-r) or write (-w) mode" << endl;
     return 1;
   }
-  if (reading && writing && filename == "-")
-  {
+  if (reading && writing && filename == "-") {
     cerr << "cannot open standard input or output in read/write mode" << endl;
     return 1;
   }
-  if (r.opts.count("listen") > 0)
-  {
+  if (r.opts.count("listen") > 0) {
     cerr << "listening on " << uds_name << " (";
     if (reading)
       cerr << 'R';
@@ -55,8 +49,7 @@ int main(int argc, char** argv)
       cerr << 'W';
     cerr << ") to serve " << filename << endl;
     auto uds = util::unix_domain_socket::accept(uds_name);
-    if (! uds)
-    {
+    if (!uds) {
       cerr << "failed to accept connection" << endl;
       return -1;
     }
@@ -68,31 +61,25 @@ int main(int argc, char** argv)
       mode = file::read_only;
     else if (writing)
       mode = file::write_only;
-    if (! f.open(mode))
-    {
+    if (!f.open(mode)) {
       cerr << "failed to open file " << filename << endl;
       return 1;
     }
     cerr << "sending file descriptor " << f.handle() << endl;
-    if (! uds.send_fd(f.handle()))
-    {
+    if (!uds.send_fd(f.handle())) {
       cerr << "failed to send file descriptor" << endl;
       return 1;
     }
-  }
-  else
-  {
+  } else {
     cerr << "connecting to " << uds_name << endl;
     auto uds = util::unix_domain_socket::connect(uds_name);
-    if (! uds)
-    {
+    if (!uds) {
       cerr << "failed to connect" << endl;
       return 1;
     }
     cerr << "receiving file descriptor " << endl;
     auto fd = uds.recv_fd();
-    if (fd < 0)
-    {
+    if (fd < 0) {
       cerr << "failed to receive file descriptor" << endl;
       return 1;
     }

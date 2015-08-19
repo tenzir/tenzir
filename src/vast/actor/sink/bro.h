@@ -12,8 +12,7 @@ namespace vast {
 namespace sink {
 
 /// A sink generating Bro logs.
-class bro : public base<bro>
-{
+class bro : public base<bro> {
 public:
   static constexpr char sep = '\x09';
   static constexpr auto set_separator = ",";
@@ -31,10 +30,8 @@ public:
   bool process(event const& e);
 
 private:
-  using map_type = std::unordered_map<
-    std::string,
-    std::unique_ptr<io::file_output_stream>
-  >;
+  using map_type
+    = std::unordered_map<std::string, std::unique_ptr<io::file_output_stream>>;
 
   path dir_;
   map_type streams_;

@@ -23,8 +23,7 @@ using namespace vast;
 
 FIXTURE_SCOPE(core_scope, fixtures::core)
 
-TEST(import)
-{
+TEST(import) {
   MESSAGE("inhaling a Bro FTP log");
   auto n = make_core();
   run_source(n, "bro", "-r", m57_day11_18::ftp);
@@ -36,8 +35,7 @@ TEST(import)
   for (auto& p0 : directory{dir / "index"})
     if (p0.is_directory())
       for (auto& p1 : directory{p0})
-        if (p1.is_directory())
-        {
+        if (p1.is_directory()) {
           id_range = p1;
           break;
         }
@@ -67,8 +65,7 @@ TEST(import)
   MESSAGE("checking that ARCHIVE has successfully stored the segment");
   path segment_file;
   for (auto& p : directory{dir / "archive"})
-    if (p.basename() != "meta.data")
-    {
+    if (p.basename() != "meta.data") {
       segment_file = p;
       break;
     }

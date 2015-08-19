@@ -90,7 +90,6 @@ set(tests
   tests/data.cc
   tests/event.cc
   tests/expr.cc
-  tests/factory.cc
   tests/filesystem.cc
   tests/getline.cc
   tests/hash.cc

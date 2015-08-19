@@ -6,14 +6,12 @@
 namespace vast {
 
 template <typename Serializer>
-void serialize(Serializer&, none const&)
-{
+void serialize(Serializer&, none const&) {
   // nop
 }
 
 template <typename Deserializer>
-void deserialize(Deserializer&, none&)
-{
+void deserialize(Deserializer&, none&) {
   // nop
 }
 

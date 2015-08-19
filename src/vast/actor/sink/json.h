@@ -10,8 +10,7 @@ namespace vast {
 namespace sink {
 
 /// A sink generating JSON output.
-class json : public base<json>
-{
+class json : public base<json> {
 public:
   /// Spawns a JSON sink.
   /// @param out The output stream.

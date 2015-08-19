@@ -7,8 +7,7 @@
 namespace vast {
 
 /// Stores IPv4 and IPv6 prefixes, e.g., `192.168.1.1/16` and `FD00::/8`.
-class subnet : util::totally_ordered<subnet>
-{
+class subnet : util::totally_ordered<subnet> {
   friend access;
 
 public:

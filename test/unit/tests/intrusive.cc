@@ -5,17 +5,15 @@
 
 using namespace vast;
 
-struct T : public intrusive_base<T>
-{
+struct T : public intrusive_base<T> {
   int i = 42;
   std::string s = "Hier steppt der Baer!";
   std::vector<int> v{1, 2, 3, 4, 5};
 };
 
-TEST(intrusive_ptr_automatic_reffing)
-{
+TEST(intrusive_ptr_automatic_reffing) {
   intrusive_ptr<T> x;
-  CHECK(! x);
+  CHECK(!x);
 
   x = new T;
   CHECK(x->ref_count() == 1);
@@ -29,11 +27,10 @@ TEST(intrusive_ptr_automatic_reffing)
   CHECK(x->ref_count() == 1);
 }
 
-TEST(intrusive_ptr_manual_reffing)
-{
+TEST(intrusive_ptr_manual_reffing) {
   T* raw;
   intrusive_ptr<T> x;
-  CHECK(! x);
+  CHECK(!x);
 
   x = new T;
   CHECK(x);

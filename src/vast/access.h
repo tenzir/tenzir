@@ -5,8 +5,7 @@ namespace vast {
 
 /// Wrapper to encapsulate the implementation of concepts requiring access to
 /// private state.
-struct access
-{
+struct access {
   template <typename, typename = void>
   struct state;
 
@@ -22,8 +21,7 @@ struct access
 
 namespace detail {
 
-struct has_access_state
-{
+struct has_access_state {
   template <typename T>
   static auto test(T* x) -> decltype(access::state<T>{}, std::true_type());
 
@@ -31,8 +29,7 @@ struct has_access_state
   static auto test(...) -> std::false_type;
 };
 
-struct has_access_parser
-{
+struct has_access_parser {
   template <typename T>
   static auto test(T* x) -> decltype(access::parser<T>{}, std::true_type());
 
@@ -40,8 +37,7 @@ struct has_access_parser
   static auto test(...) -> std::false_type;
 };
 
-struct has_access_printer
-{
+struct has_access_printer {
   template <typename T>
   static auto test(T* x) -> decltype(access::printer<T>{}, std::true_type());
 
@@ -49,8 +45,7 @@ struct has_access_printer
   static auto test(...) -> std::false_type;
 };
 
-struct has_access_converter
-{
+struct has_access_converter {
   template <typename T>
   static auto test(T* x) -> decltype(access::converter<T>{}, std::true_type());
 
@@ -70,7 +65,8 @@ template <typename T>
 struct has_access_printer : decltype(detail::has_access_printer::test<T>(0)) {};
 
 template <typename T>
-struct has_access_converter : decltype(detail::has_access_converter::test<T>(0)) {};
+struct has_access_converter
+  : decltype(detail::has_access_converter::test<T>(0)) {};
 
 } // namespace vast
 

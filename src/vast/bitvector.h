@@ -15,8 +15,7 @@ namespace vast {
 struct access;
 
 /// A vector of bits having similar semantics as a `std::vector<bool>`.
-class bitvector : util::totally_ordered<bitvector>
-{
+class bitvector : util::totally_ordered<bitvector> {
   friend access;
 
 public:
@@ -25,8 +24,8 @@ public:
   using size_type = uint64_t;
 
   /// Bits per block.
-  static constexpr block_type block_width =
-    std::numeric_limits<block_type>::digits;
+  static constexpr block_type block_width
+    = std::numeric_limits<block_type>::digits;
 
   /// One past the last addressable bit index; analogue to an `end` iterator.
   static constexpr size_type npos = ~size_type{0};
@@ -42,8 +41,7 @@ public:
 
 public:
   /// An lvalue proxy for single bits.
-  class reference
-  {
+  class reference {
     friend class bitvector;
     void operator&() = delete;
 
@@ -74,40 +72,34 @@ public:
 
   /// The base class for iterators which inspect every single bit.
   template <typename Bitvector>
-  class bit_iterator_base : public util::iterator_facade<
-    bit_iterator_base<Bitvector>,
-    bool,
-    std::random_access_iterator_tag,
-    std::conditional_t<
-      std::is_const<Bitvector>::value,
-      const_reference,
-      reference
-    >,
-    size_type
-  >
-  {
+  class bit_iterator_base
+    : public util::iterator_facade<
+        bit_iterator_base<Bitvector>,
+        bool,
+        std::random_access_iterator_tag,
+        std::conditional_t<
+          std::is_const<Bitvector>::value, const_reference, reference
+        >,
+        size_type
+      > {
   public:
     using reverse_iterator = std::reverse_iterator<bit_iterator_base>;
 
     bit_iterator_base() = default;
 
-    static bit_iterator_base begin(Bitvector& bits)
-    {
+    static bit_iterator_base begin(Bitvector& bits) {
       return bit_iterator_base{bits};
     }
 
-    static bit_iterator_base end(Bitvector& bits)
-    {
+    static bit_iterator_base end(Bitvector& bits) {
       return bit_iterator_base{bits, bits.size()};
     }
 
-    static reverse_iterator rbegin(Bitvector& bits)
-    {
+    static reverse_iterator rbegin(Bitvector& bits) {
       return reverse_iterator{end(bits)};
     }
 
-    static reverse_iterator rend(Bitvector& bits)
-    {
+    static reverse_iterator rend(Bitvector& bits) {
       return reverse_iterator{begin(bits)};
     }
 
@@ -115,42 +107,33 @@ public:
     friend util::iterator_access;
 
     bit_iterator_base(Bitvector& bits, size_type off = 0)
-      : bits_{&bits},
-        i_{off}
-    {
+      : bits_{&bits}, i_{off} {
       VAST_ASSERT(bits_);
-      VAST_ASSERT(! bits_->empty());
+      VAST_ASSERT(!bits_->empty());
     }
 
-    bool equals(bit_iterator_base const& other) const
-    {
+    bool equals(bit_iterator_base const& other) const {
       return i_ == other.i_;
     }
 
-    void increment()
-    {
+    void increment() {
       VAST_ASSERT(i_ != npos);
       ++i_;
     }
 
-    void decrement()
-    {
+    void decrement() {
       VAST_ASSERT(i_ != npos);
       --i_;
     }
 
-    void advance(size_type n)
-    {
+    void advance(size_type n) {
       i_ += n;
     }
 
     auto dereference() const
       -> std::conditional_t<
-           std::is_const<Bitvector>::value,
-           const_reference,
-           reference
-         >
-    {
+           std::is_const<Bitvector>::value, const_reference, reference
+         > {
       VAST_ASSERT(bits_);
       VAST_ASSERT(i_ != npos);
       return const_cast<Bitvector&>(*bits_)[i_];
@@ -165,73 +148,60 @@ public:
 
   /// The base class for iterators which inspect 1 bits only.
   template <typename Bitvector>
-  class ones_iterator_base :
-    public util::iterator_facade<
-             ones_iterator_base<Bitvector>,
-             bool,
-             std::bidirectional_iterator_tag,
-             std::conditional_t<
-               std::is_const<Bitvector>::value,
-               const_reference,
-               reference
-             >,
-             size_type
-           >
-  {
+  class ones_iterator_base
+    : public util::iterator_facade<
+        ones_iterator_base<Bitvector>,
+        bool,
+        std::bidirectional_iterator_tag,
+        std::conditional_t<
+          std::is_const<Bitvector>::value, const_reference, reference
+        >,
+        size_type
+      > {
   public:
     using reverse_iterator = std::reverse_iterator<ones_iterator_base>;
 
     ones_iterator_base() = default;
 
-    static ones_iterator_base begin(Bitvector& bits)
-    {
+    static ones_iterator_base begin(Bitvector& bits) {
       return ones_iterator_base{bits, true};
     }
 
-    static ones_iterator_base end(Bitvector&)
-    {
+    static ones_iterator_base end(Bitvector&) {
       return ones_iterator_base{};
     }
 
-    static reverse_iterator rbegin(Bitvector& bits)
-    {
+    static reverse_iterator rbegin(Bitvector& bits) {
       return reverse_iterator{ones_iterator_base{bits, false}};
     }
 
-    static reverse_iterator rend(Bitvector& bits)
-    {
+    static reverse_iterator rend(Bitvector& bits) {
       return reverse_iterator{begin(bits)};
     }
 
-    size_type position() const
-    {
+    size_type position() const {
       return i_;
     }
 
   private:
     friend util::iterator_access;
 
-    ones_iterator_base(Bitvector& bits, bool forward)
-      : bits_{&bits}
-    {
+    ones_iterator_base(Bitvector& bits, bool forward) : bits_{&bits} {
       VAST_ASSERT(bits_);
-      VAST_ASSERT(! bits_->empty());
+      VAST_ASSERT(!bits_->empty());
       i_ = forward ? bits_->find_first() : bits_->find_last();
     }
 
-    bool equals(ones_iterator_base const& other) const
-    {
+    bool equals(ones_iterator_base const& other) const {
       return i_ == other.i_;
     }
 
-    void increment()
-    {
+    void increment() {
       VAST_ASSERT(bits_);
       i_ = bits_->find_next(i_);
     }
 
-    void decrement()
-    {
+    void decrement() {
       VAST_ASSERT(bits_);
       VAST_ASSERT(i_ != npos);
       i_ = bits_->find_prev(i_);
@@ -239,11 +209,8 @@ public:
 
     auto dereference() const
       -> std::conditional_t<
-           std::is_const<Bitvector>::value,
-           const_reference,
-           reference
-         >
-    {
+           std::is_const<Bitvector>::value, const_reference, reference
+         > {
       VAST_ASSERT(bits_);
       VAST_ASSERT(i_ != npos);
       return const_cast<Bitvector&>(*bits_)[i_];
@@ -257,20 +224,17 @@ public:
   using const_ones_iterator = ones_iterator_base<bitvector const>;
 
   /// Computes the block index for a given bit position.
-  static constexpr size_type block_index(size_type i)
-  {
+  static constexpr size_type block_index(size_type i) {
     return i / block_width;
   }
 
   /// Computes the bit index within a given block for a given bit position.
-  static constexpr block_type bit_index(size_type i)
-  {
+  static constexpr block_type bit_index(size_type i) {
     return i % block_width;
   }
 
   /// Computes the bitmask block to extract a bit a given bit position.
-  static constexpr block_type bit_mask(size_type i)
-  {
+  static constexpr block_type bit_mask(size_type i) {
     return block_type(1) << bit_index(i);
   }
 
@@ -278,8 +242,7 @@ public:
   /// bits.
   /// @param bits the number of bits.
   /// @returns The number of blocks to represent *bits* number of bits.
-  static constexpr size_type bits_to_blocks(size_type bits)
-  {
+  static constexpr size_type bits_to_blocks(size_type bits) {
     return bits / block_width + static_cast<size_type>(bits % block_width != 0);
   }
 
@@ -331,8 +294,7 @@ public:
 
   /// Constructs a bit vector from a sequence of blocks.
   template <typename InputIterator>
-  bitvector(InputIterator first, InputIterator last)
-  {
+  bitvector(InputIterator first, InputIterator last) {
     bits_.insert(bits_.end(), first, last);
     num_bits_ = bits_.size() * block_width;
   }
@@ -433,29 +395,22 @@ public:
   /// @param first Points to the first block of the range.
   /// @param last Points to the one past the last block of the range.
   template <typename Iterator>
-  void block_append(Iterator first, Iterator last)
-  {
+  void block_append(Iterator first, Iterator last) {
     if (first == last)
       return;
-
     auto delta = last - first;
     num_bits_ += block_width * delta;
-
     bits_.reserve(blocks() + delta);
     auto extra = extra_bits();
-    if (extra == 0)
-    {
+    if (extra == 0) {
       bits_.insert(bits_.end(), first, last);
       return;
     }
-
     bits_.back() |= (*first << extra);
-    do
-    {
+    do {
       auto blk = *first++ >> (block_width - extra);
       bits_.push_back(blk | (first == last ? 0 : *first << extra));
-    }
-    while (first != last);
+    } while (first != last);
   }
 
   /// Counts the number of 1-bits in the bit vector.

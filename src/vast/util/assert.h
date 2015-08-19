@@ -9,8 +9,7 @@
 #  include <cstdio>
 #  include <cstdlib>
 #  define VAST_ASSERT(expr)                                                 \
-   if (static_cast<bool>(expr) == false)                                    \
-   {                                                                        \
+   if (static_cast<bool>(expr) == false) {                                  \
      ::printf("%s:%u: assertion failed '%s'\n", __FILE__, __LINE__, #expr); \
      ::abort();                                                             \
    }                                                                        \
@@ -20,8 +19,7 @@
 #  include <cstdio>
 #  include <cstdlib>
 #  define VAST_ASSERT(expr)                                                 \
-   if (static_cast<bool>(expr) == false)                                    \
-   {                                                                        \
+   if (static_cast<bool>(expr) == false) {                                  \
      ::printf("%s:%u: assertion failed '%s'\n", __FILE__, __LINE__, #expr); \
      void* vast_array[10];                                                  \
      auto vast_bt_size = ::backtrace(vast_array, 10);                       \

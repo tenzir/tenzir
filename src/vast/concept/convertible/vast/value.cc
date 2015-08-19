@@ -8,27 +8,22 @@
 
 namespace vast {
 
-bool convert(value const& v, json& j)
-{
+bool convert(value const& v, json& j) {
   json::object o;
   std::string type_string;
-  if (! printers::type<policy::signature>(type_string, v.type()))
+  if (!printers::type<policy::signature>(type_string, v.type()))
     return false;
   o["type"] = std::move(type_string);
-  if (! is<type::record>(v.type()))
-  {
-    if (! convert(v.data(), o["data"]))
+  if (!is<type::record>(v.type())) {
+    if (!convert(v.data(), o["data"]))
       return false;
-  }
-  else
-  {
+  } else {
     json::object rec;
     type::record::each record_range{*get<type::record>(v.type())};
     record::each data_range{*get<record>(v.data())};
     auto r = record_range.begin();
     auto d = data_range.begin();
-    while (r != record_range.end())
-    {
+    while (r != record_range.end()) {
       rec[r->key().back()] = to_json(d->data());
       ++r;
       ++d;
@@ -41,4 +36,3 @@ bool convert(value const& v, json& j)
 }
 
 } // namespace vast
-

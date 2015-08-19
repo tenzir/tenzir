@@ -17,136 +17,114 @@
 
 namespace vast {
 
-struct data_printer : printer<data_printer>
-{
+struct data_printer : printer<data_printer> {
   using attribute = data;
 
   template <typename Iterator>
-  struct visitor
-  {
-    visitor(Iterator& out)
-      : out_{out}
-    {
+  struct visitor {
+    visitor(Iterator& out) : out_{out} {
     }
 
     template <typename T>
-    bool operator()(T const& x) const
-    {
+    bool operator()(T const& x) const {
       return make_printer<T>{}.print(out_, x);
     }
 
-    bool operator()(std::string const& str) const
-    {
+    bool operator()(std::string const& str) const {
       return printers::any.print(out_, '"')
-          && printers::str.print(out_, util::byte_escape(str, "\""))
-          && printers::any.print(out_, '"');
+             && printers::str.print(out_, util::byte_escape(str, "\""))
+             && printers::any.print(out_, '"');
     }
 
     Iterator& out_;
   };
 
   template <typename Iterator>
-  bool print(Iterator& out, data const& d) const
-  {
+  bool print(Iterator& out, data const& d) const {
     return visit(visitor<Iterator>{out}, d);
   }
 };
 
-struct vector_printer : printer<vector_printer>
-{
+struct vector_printer : printer<vector_printer> {
   using attribute = vector;
 
   template <typename Iterator>
-  bool print(Iterator& out, vector const& v) const
-  {
+  bool print(Iterator& out, vector const& v) const {
     using namespace printers;
     return any.print(out, '[')
-        && detail::print_delimited(v.begin(), v.end(), out, ", ")
-        && any.print(out, ']');
+           && detail::print_delimited(v.begin(), v.end(), out, ", ")
+           && any.print(out, ']');
   }
 };
 
-struct set_printer : printer<set_printer>
-{
+struct set_printer : printer<set_printer> {
   using attribute = set;
 
   template <typename Iterator>
-  bool print(Iterator& out, set const& s) const
-  {
+  bool print(Iterator& out, set const& s) const {
     using namespace printers;
     return any.print(out, '{')
-        && detail::print_delimited(s.begin(), s.end(), out, ", ")
-        && any.print(out, '}');
+           && detail::print_delimited(s.begin(), s.end(), out, ", ")
+           && any.print(out, '}');
   }
 };
 
-struct table_printer : printer<table_printer>
-{
+struct table_printer : printer<table_printer> {
   using attribute = table;
 
   template <typename Iterator>
-  bool print(Iterator& out, table const& t) const
-  {
+  bool print(Iterator& out, table const& t) const {
     using namespace printers;
     using vast::print;
-    if (! any.print(out, '{'))
+    if (!any.print(out, '{'))
       return false;
     auto f = t.begin();
     auto l = t.end();
-    while (f != l)
-    {
-      if (! (print(out, f->first)
-             && str.print(out, " -> ")
-             && print(out, f->second)))
+    while (f != l) {
+      if (!(print(out, f->first) && str.print(out, " -> ")
+            && print(out, f->second)))
         return false;
-      if (++f != l && ! str.print(out, ", "))
+      if (++f != l && !str.print(out, ", "))
         return false;
     }
     return any.print(out, '{');
   }
 };
 
-struct record_printer : printer<record_printer>
-{
+struct record_printer : printer<record_printer> {
   using attribute = record;
 
   template <typename Iterator>
-  bool print(Iterator& out, record const& r) const
-  {
+  bool print(Iterator& out, record const& r) const {
     using namespace printers;
     return any.print(out, '(')
-        && detail::print_delimited(r.begin(), r.end(), out, ", ")
-        && any.print(out, ')');
+           && detail::print_delimited(r.begin(), r.end(), out, ", ")
+           && any.print(out, ')');
   }
 };
 
 template <>
-struct printer_registry<vector>
-{
+struct printer_registry<vector> {
   using type = vector_printer;
 };
 
 template <>
-struct printer_registry<set>
-{
+struct printer_registry<set> {
   using type = set_printer;
 };
 
 template <>
-struct printer_registry<table>
-{
+struct printer_registry<table> {
   using type = table_printer;
 };
 
 template <>
-struct printer_registry<record>
-{
+struct printer_registry<record> {
   using type = record_printer;
 };
 
 template <>
-struct printer_registry<data>
-{
+struct printer_registry<data> {
   using type = data_printer;
 };
 

@@ -6,8 +6,7 @@
 
 namespace vast {
 
-bool convert(port const& p, json& j)
-{
+bool convert(port const& p, json& j) {
   j = to_string(p);
   return true;
 }

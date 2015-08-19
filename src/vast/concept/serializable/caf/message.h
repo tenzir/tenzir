@@ -11,15 +11,13 @@
 namespace vast {
 
 template <typename Serializer>
-void serialize(Serializer& sink, caf::message const& msg)
-{
+void serialize(Serializer& sink, caf::message const& msg) {
   vast_to_caf_serializer<Serializer> s{sink};
   caf::uniform_typeid<caf::message>()->serialize(&msg, &s);
 }
 
 template <typename Deserializer>
-void deserialize(Deserializer& source, caf::message& msg)
-{
+void deserialize(Deserializer& source, caf::message& msg) {
   vast_to_caf_deserializer<Deserializer> d{source};
   caf::uniform_typeid<caf::message>()->deserialize(&msg, &d);
 }

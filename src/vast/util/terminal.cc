@@ -17,15 +17,13 @@ bool initialized = false;
 struct termios backup;
 struct termios current;
 
-void restore()
-{
+void restore() {
   if (initialized)
     tcsetattr(::fileno(stdin), TCSANOW, &backup);
 }
 
-bool initialize()
-{
-  if (! ::isatty(::fileno(stdin)))
+bool initialize() {
+  if (!::isatty(::fileno(stdin)))
     return false;
   std::atexit(&restore);
   if (initialized)
@@ -38,19 +36,16 @@ bool initialize()
 
 } // namespace <anonymous>
 
-unbufferer::unbufferer()
-{
+unbufferer::unbufferer() {
   unbuffer();
 }
 
-unbufferer::~unbufferer()
-{
+unbufferer::~unbufferer() {
   buffer();
 }
 
-bool unbuffer()
-{
-  if (! (initialized || initialize()))
+bool unbuffer() {
+  if (!(initialized || initialize()))
     return false;
   current.c_lflag &= ~(ICANON | ECHO);
   current.c_cc[VMIN] = 1;
@@ -58,9 +53,8 @@ bool unbuffer()
   return true;
 }
 
-bool buffer()
-{
-  if (! (initialized || initialize()))
+bool buffer() {
+  if (!(initialized || initialize()))
     return false;
   current.c_lflag |= ICANON | ECHO;
   current.c_cc[VMIN] = backup.c_cc[VMIN];
@@ -68,25 +62,22 @@ bool buffer()
   return tcsetattr(::fileno(stdin), TCSANOW, &current) < 0;
 }
 
-bool disable_echo()
-{
-  if (! (initialized || initialize()))
+bool disable_echo() {
+  if (!(initialized || initialize()))
     return false;
   current.c_lflag &= ~ECHO;
   return tcsetattr(::fileno(stdin), TCSANOW, &current) < 0;
 }
 
-bool enable_echo()
-{
-  if (! (initialized || initialize()))
+bool enable_echo() {
+  if (!(initialized || initialize()))
     return false;
   current.c_lflag |= ECHO;
   return tcsetattr(::fileno(stdin), TCSANOW, &current) < 0;
 }
 
-bool get(char& c, int timeout)
-{
-  if (! poll(::fileno(stdin), timeout))
+bool get(char& c, int timeout) {
+  if (!poll(::fileno(stdin), timeout))
     return false;
   auto i = ::fgetc(stdin);
   if (::feof(stdin))

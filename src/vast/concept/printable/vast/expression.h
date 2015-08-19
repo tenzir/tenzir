@@ -15,90 +15,72 @@
 
 namespace vast {
 
-struct expression_printer : printer<expression_printer>
-{
+struct expression_printer : printer<expression_printer> {
   using attribute = expression;
 
   template <typename Iterator>
-  struct visitor
-  {
-    visitor(Iterator& out)
-      : out_{out}
-    {
+  struct visitor {
+    visitor(Iterator& out) : out_{out} {
     }
 
-    bool operator()(none) const
-    {
+    bool operator()(none) const {
       using vast::print;
       return print(out_, nil);
     }
 
-    bool operator()(conjunction const& c) const
-    {
+    bool operator()(conjunction const& c) const {
       using vast::print;
       return print(out_, '{')
-          && detail::print_delimited(c.begin(), c.end(), out_, " && ")
-          && print(out_, '}');
+             && detail::print_delimited(c.begin(), c.end(), out_, " && ")
+             && print(out_, '}');
     }
 
-    bool operator()(disjunction const& d) const
-    {
+    bool operator()(disjunction const& d) const {
       using vast::print;
       return print(out_, '(')
-          && detail::print_delimited(d.begin(), d.end(), out_, " || ")
-          && print(out_, ')');
+             && detail::print_delimited(d.begin(), d.end(), out_, " || ")
+             && print(out_, ')');
     }
 
-    bool operator()(negation const& n) const
-    {
+    bool operator()(negation const& n) const {
       using vast::print;
       return print(out_, "! ") && print(out_, n.expression());
     }
 
-    bool operator()(predicate const& p) const
-    {
+    bool operator()(predicate const& p) const {
       using vast::print;
-      return visit(*this, p.lhs)
-          && print(out_, ' ')
-          && print(out_, p.op)
-          && print(out_, ' ')
-          && visit(*this, p.rhs);
+      return visit(*this, p.lhs) && print(out_, ' ') && print(out_, p.op)
+             && print(out_, ' ') && visit(*this, p.rhs);
     }
 
-    bool operator()(event_extractor const&) const
-    {
+    bool operator()(event_extractor const&) const {
       using vast::print;
       return print(out_, "&type");
     }
 
-    bool operator()(time_extractor const&) const
-    {
+    bool operator()(time_extractor const&) const {
       using vast::print;
       return print(out_, "&time");
     }
 
-    bool operator()(type_extractor const& e) const
-    {
+    bool operator()(type_extractor const& e) const {
       using vast::print;
       return print(out_, e.type);
     }
 
-    bool operator()(schema_extractor const& e) const
-    {
+    bool operator()(schema_extractor const& e) const {
       using vast::print;
       return print(out_, e.key);
     }
 
-    bool operator()(data_extractor const& e) const
-    {
+    bool operator()(data_extractor const& e) const {
       using vast::print;
-      if (! print(out_, e.type))
+      if (!print(out_, e.type))
         return false;
       return e.offset.empty() || (print(out_, '@') && print(out_, e.offset));
     }
 
-    bool operator()(data const& d) const
-    {
+    bool operator()(data const& d) const {
       using vast::print;
       return print(out_, d);
     }

@@ -9,11 +9,9 @@
 namespace vast {
 
 template <typename Serializer>
-void serialize(Serializer& sink, bitstream const& bs)
-{
+void serialize(Serializer& sink, bitstream const& bs) {
   sink.template begin_instance<bitstream>();
-  if (! bs)
-  {
+  if (!bs) {
     serialize(sink, false);
     return;
   }
@@ -24,19 +22,16 @@ void serialize(Serializer& sink, bitstream const& bs)
 }
 
 template <typename Deserializer>
-void deserialize(Deserializer& source, bitstream& bs)
-{
+void deserialize(Deserializer& source, bitstream& bs) {
   source.template begin_instance<bitstream>();
   bool flag;
   deserialize(source, flag);
-  if (! flag)
+  if (!flag)
     return;
   detail::bitstream_concept* bsc;
   polymorphic_deserialize(source, bsc);
-  auto f = [=](auto& c)
-  {
-    c = std::unique_ptr<detail::bitstream_concept>{bsc};
-  };
+  auto f
+    = [=](auto& c) { c = std::unique_ptr<detail::bitstream_concept>{bsc}; };
   access::state<bitstream>::call(bs, f);
   source.template end_instance<bitstream>();
 }
@@ -44,4 +39,3 @@ void deserialize(Deserializer& source, bitstream& bs)
 } // namespace vast
 
 #endif
-

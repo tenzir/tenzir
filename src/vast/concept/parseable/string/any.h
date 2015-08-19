@@ -5,13 +5,11 @@
 
 namespace vast {
 
-struct any_parser : public parser<any_parser>
-{
+struct any_parser : public parser<any_parser> {
   using attribute = char;
 
   template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const
-  {
+  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
     if (f == l)
       return false;
     detail::absorb(a, *f);
@@ -21,8 +19,7 @@ struct any_parser : public parser<any_parser>
 };
 
 template <>
-struct parser_registry<char>
-{
+struct parser_registry<char> {
   using type = any_parser;
 };
 
@@ -34,4 +31,3 @@ static auto const any = any_parser{};
 } // namespace vast
 
 #endif
-

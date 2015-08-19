@@ -12,8 +12,7 @@ using namespace vast;
 
 namespace {
 
-ewah_bitstream make_ewah1()
-{
+ewah_bitstream make_ewah1() {
   ewah_bitstream ewah;
   ewah.append(10, true);
   ewah.append(20, false);
@@ -36,8 +35,7 @@ ewah_bitstream make_ewah1()
   return ewah;
 }
 
-ewah_bitstream make_ewah2()
-{
+ewah_bitstream make_ewah2() {
   ewah_bitstream ewah;
   ewah.push_back(false);
   ewah.push_back(true);
@@ -46,8 +44,7 @@ ewah_bitstream make_ewah2()
   return ewah;
 }
 
-ewah_bitstream make_ewah3()
-{
+ewah_bitstream make_ewah3() {
   ewah_bitstream ewah;
   ewah.append(222, true);
   ewah.push_back(false);
@@ -61,8 +58,7 @@ ewah_bitstream make_ewah3()
 
 } // namespace <anonymous>
 
-TEST(EWAH_algorithm_1)
-{
+TEST(EWAH algorithm 1) {
   ewah_bitstream ewah;
   ewah.append(10, true);
   ewah.append(20, false);
@@ -134,7 +130,6 @@ TEST(EWAH_algorithm_1)
   REQUIRE(to_string(ewah) == str);
   CHECK(ewah.size() == 384 + 64 * 15);
 
-
   // Now we're add the maximum number of new blocks with value 1. This
   // amounts to 64 * (2^32-1) = 274,877,906,880 bits in 2^32-2 blocks. Note
   // that the maximum value of a clean block is 2^32-1, but the invariant
@@ -164,7 +159,8 @@ TEST(EWAH_algorithm_1)
 
   /// Create another full dirty block, just so that we can check that the
   /// dirty counter works properly.
-  for (auto i = 0; i < 64; ++i) ewah.push_back(i % 2 == 0);
+  for (auto i = 0; i < 64; ++i)
+    ewah.push_back(i % 2 == 0);
 
   CHECK(ewah.size() == 274877908352ull);
 
@@ -225,8 +221,7 @@ TEST(EWAH_algorithm_1)
   REQUIRE(ewah == make_ewah1());
 }
 
-TEST(EWAH_algorithm_2)
-{
+TEST(EWAH algorithm 2) {
   ewah_bitstream ewah;
   ewah.push_back(false);
   ewah.push_back(true);
@@ -244,8 +239,7 @@ TEST(EWAH_algorithm_2)
   REQUIRE(ewah == make_ewah2());
 }
 
-TEST(EWAH_algorithm_3)
-{
+TEST(EWAH algorithm 3) {
   ewah_bitstream ewah;
   ewah.append(222, true);
   ewah.push_back(false);
@@ -264,10 +258,9 @@ TEST(EWAH_algorithm_3)
   REQUIRE(ewah == make_ewah3());
 }
 
-TEST(polymorphic)
-{
+TEST(polymorphic) {
   bitstream empty;
-  CHECK(! empty);
+  CHECK(!empty);
 
   bitstream x{null_bitstream{}}, y;
   REQUIRE(x);
@@ -280,13 +273,12 @@ TEST(polymorphic)
   CHECK(y.size() == 3);
 }
 
-TEST(bitwise_operations_NULL)
-{
+TEST(bitwise operations NULL) {
   null_bitstream x;
   REQUIRE(x.append(3, true));
   REQUIRE(x.append(7, false));
   REQUIRE(x.push_back(true));
-  CHECK(to_string(x) ==  "11100000001");
+  CHECK(to_string(x) == "11100000001");
   CHECK(to_string(~x) == "00011111110");
 
   null_bitstream y;
@@ -295,7 +287,7 @@ TEST(bitwise_operations_NULL)
   REQUIRE(y.append(3, true));
   REQUIRE(y.push_back(false));
   REQUIRE(y.push_back(true));
-  CHECK(to_string(y) ==  "11000011101");
+  CHECK(to_string(y) == "11000011101");
   CHECK(to_string(~y) == "00111100010");
 
   CHECK(to_string(x & y) == "11000000001");
@@ -340,8 +332,7 @@ TEST(bitwise_operations_NULL)
   CHECK(to_string(z) == "01");
 }
 
-TEST(trimming_EWAH)
-{
+TEST(trimming EWAH) {
   auto ewah1 = make_ewah1();
   auto ewah2 = make_ewah2();
   auto ewah3 = make_ewah3();
@@ -413,8 +404,7 @@ TEST(trimming_EWAH)
   ebs.clear();
 }
 
-TEST(bitwise_iteration_EWAH)
-{
+TEST(bitwise iteration EWAH) {
   auto ewah1 = make_ewah1();
   auto ewah2 = make_ewah2();
 
@@ -467,43 +457,37 @@ TEST(bitwise_iteration_EWAH)
 
   ewah_bitstream::size_type cnt = 1000;
   i = ebs.begin();
-  while (i != ebs.end())
-  {
+  while (i != ebs.end()) {
     CHECK(*i == cnt);
     cnt += 4;
     ++i;
   }
 }
 
-TEST(iterator_increment_bugfix_EWAH)
-{
+TEST(iterator increment bugfix EWAH) {
   ewah_bitstream ebs;
   ebs.push_back(false);
   ebs.append(1023, true);
-
   auto begin = ebs.begin();
   auto end = ebs.end();
   size_t n = 1;
   while (begin != end)
-    REQUIRE (*begin++ == n++);
-
+    REQUIRE(*begin++ == n++);
   CHECK(n == 1024);
 }
 
-TEST(element_access_EWAH)
-{
+TEST(element access EWAH) {
   auto ewah1 = make_ewah1();
   CHECK(ewah1[0]);
   CHECK(ewah1[9]);
-  CHECK(! ewah1[10]);
+  CHECK(!ewah1[10]);
   CHECK(ewah1[64]);
-  CHECK(! ewah1[1024]);
+  CHECK(!ewah1[1024]);
   CHECK(ewah1[1344]);
   CHECK(ewah1[2473901163905 - 1]);
 }
 
-TEST(finding_EWAH)
-{
+TEST(finding EWAH) {
   auto ewah1 = make_ewah1();
   CHECK(ewah1.find_first() == 0);
   CHECK(ewah1.find_next(0) == 1);
@@ -560,13 +544,11 @@ TEST(finding_EWAH)
   CHECK(ebs.find_prev(63) == 62);
   CHECK(ebs.find_next(63) == 96);
   bitstream::size_type i;
-  for (i = 64; i < 64 + 32; ++i)
-  {
+  for (i = 64; i < 64 + 32; ++i) {
     CHECK(ebs.find_prev(i) == 63);
     CHECK(ebs.find_next(i) == 96);
   }
-  while (i < 64 + 32 + 20 - 1)
-  {
+  while (i < 64 + 32 + 20 - 1) {
     CHECK(ebs.find_next(i) == i + 1);
     ++i;
     CHECK(ebs.find_prev(i) == i - 1);
@@ -584,14 +566,12 @@ TEST(finding_EWAH)
 
   CHECK(ebs.find_next(63) == 64);
   i = 64;
-  while (i < 64 + 32 - 1)
-  {
+  while (i < 64 + 32 - 1) {
     CHECK(ebs.find_next(i) == i + 1);
     ++i;
     CHECK(ebs.find_prev(i) == i - 1);
   }
-  while (i < 64 + 32 + 20 - 1)
-  {
+  while (i < 64 + 32 + 20 - 1) {
     CHECK(ebs.find_next(i) == ewah_bitstream::npos);
     ++i;
     CHECK(ebs.find_prev(i) == 64 + 32 - 1);
@@ -599,8 +579,7 @@ TEST(finding_EWAH)
   CHECK(ebs.find_next(64 + 31) == ewah_bitstream::npos);
 }
 
-TEST(bitwise_NOT_EWAH)
-{
+TEST(bitwise NOT EWAH) {
   ewah_bitstream ebs;
   ebs.push_back(true);
   ebs.push_back(false);
@@ -646,9 +625,7 @@ TEST(bitwise_NOT_EWAH)
   CHECK(to_string(~ewah1) == str);
 }
 
-
-TEST(bitwise_AND_EWAH)
-{
+TEST(bitwise AND EWAH) {
   auto ewah2 = make_ewah2();
   auto ewah3 = make_ewah3();
   auto str =
@@ -679,8 +656,7 @@ TEST(bitwise_AND_EWAH)
   CHECK((ebs2 & ebs1).size() == max_size);
 }
 
-TEST(bitwise_OR_EWAH)
-{
+TEST(bitwise OR EWAH) {
   auto ewah2 = make_ewah2();
   auto ewah3 = make_ewah3();
   auto str =
@@ -704,8 +680,7 @@ TEST(bitwise_OR_EWAH)
   CHECK(to_string(ebs1 | ebs2) == str);
 }
 
-TEST(bitwise_XOR_EWAH)
-{
+TEST(bitwise XOR EWAH) {
   auto ewah2 = make_ewah2();
   auto ewah3 = make_ewah3();
   auto str =
@@ -720,8 +695,7 @@ TEST(bitwise_XOR_EWAH)
   CHECK(to_string(ewah2 ^ ewah3) == str);
 }
 
-TEST(bitwise_NAND_EWAH)
-{
+TEST(bitwise NAND EWAH) {
   auto ewah2 = make_ewah2();
   auto ewah3 = make_ewah3();
   auto str =
@@ -744,8 +718,7 @@ TEST(bitwise_NAND_EWAH)
   CHECK(to_string(ebs1 - ebs2) == str);
 }
 
-TEST(sequence_iteration_EWAH)
-{
+TEST(sequence iteration EWAH) {
   auto ewah1 = make_ewah1();
   auto range = ewah_bitstream::sequence_range{ewah1};
 
@@ -797,8 +770,7 @@ TEST(sequence_iteration_EWAH)
   CHECK(++i == range.end());
 }
 
-TEST(block appending (EWAH))
-{
+TEST(block appending(EWAH)) {
   ewah_bitstream ebs;
   ebs.append(10, true);
   ebs.append_block(0xf00);
@@ -824,8 +796,7 @@ TEST(block appending (EWAH))
   CHECK(to_string(ebs) == str);
 }
 
-TEST(polymorphic_iteration)
-{
+TEST(polymorphic iteration) {
   bitstream bs{null_bitstream{}};
   bs.push_back(true);
   bs.append(10, false);
@@ -851,8 +822,7 @@ TEST(polymorphic_iteration)
   CHECK(++i == bs.end());
 }
 
-TEST(sequence_iteration_NULL)
-{
+TEST(sequence iteration NULL) {
   null_bitstream nbs;
   nbs.push_back(true);
   nbs.push_back(false);
@@ -884,8 +854,7 @@ TEST(sequence_iteration_NULL)
   CHECK(++i == range.end());
 }
 
-TEST(pop_count_NULL)
-{
+TEST(pop count NULL) {
   null_bitstream bs;
   bs.push_back(true);
   bs.push_back(false);
@@ -897,8 +866,7 @@ TEST(pop_count_NULL)
   CHECK(bs.count() == 575);
 }
 
-TEST(pop_count_EWAH)
-{
+TEST(pop count EWAH) {
   ewah_bitstream bs;
   bs.push_back(true);
   bs.push_back(false);
@@ -915,8 +883,7 @@ TEST(pop_count_EWAH)
 namespace {
 
 template <typename Bitstream>
-void test_append()
-{
+void test_append() {
   Bitstream bs1, bs2;
   bs1.push_back(true);
   bs1.push_back(false);
@@ -938,19 +905,17 @@ void test_append()
   bs2.append(bs1);
   CHECK(bs2.size() == size + bs1.size());
   CHECK(bs2[size]); // first of bs1
-  CHECK(! bs2[size + 1]);
+  CHECK(!bs2[size + 1]);
   CHECK(bs2[size + 2]);
   CHECK(bs2[size + 2 + 4443]);
 }
 
 } // namespace <anonymous>
 
-TEST(append_NULL)
-{
+TEST(append_NULL) {
   test_append<null_bitstream>();
 }
 
-TEST(append_EWAH)
-{
+TEST(append_EWAH) {
   test_append<ewah_bitstream>();
 }

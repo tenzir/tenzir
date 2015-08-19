@@ -7,8 +7,7 @@
 namespace vast {
 
 /// An object with a unique ID.
-class individual : util::totally_ordered<individual>
-{
+class individual : util::totally_ordered<individual> {
   friend access;
 
 public:

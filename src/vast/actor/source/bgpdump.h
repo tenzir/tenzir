@@ -8,8 +8,7 @@ namespace vast {
 namespace source {
 
 /// A source reading ASCII output from the BGPDump utility.
-class bgpdump : public line_based<bgpdump>
-{
+class bgpdump : public line_based<bgpdump> {
 public:
   /// Spawns a BGPDump source.
   /// @param is The input stream to read BGPDump data logs from.

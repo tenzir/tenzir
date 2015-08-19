@@ -11,46 +11,39 @@ template <typename, typename, typename, typename, typename>
 class iterator_facade;
 
 // Provides clean access to iterator internals.
-class iterator_access
-{
+class iterator_access {
   template <typename, typename, typename, typename, typename>
   friend class iterator_facade;
 
 public:
   template <typename Facade>
-  static typename Facade::reference dereference(Facade const& f)
-  {
+  static typename Facade::reference dereference(Facade const& f) {
     return f.dereference();
   }
 
   template <typename Facade>
-  static void increment(Facade& f)
-  {
+  static void increment(Facade& f) {
     f.increment();
   }
 
   template <typename Facade>
-  static void decrement(Facade& f)
-  {
+  static void decrement(Facade& f) {
     f.decrement();
   }
 
   template <typename Facade>
-  static void advance(Facade& f, typename Facade::difference_type n)
-  {
+  static void advance(Facade& f, typename Facade::difference_type n) {
     f.advance(n);
   }
 
   template <typename Facade1, typename Facade2>
-  static bool equals(Facade1 const& f1, Facade2 const& f2)
-  {
+  static bool equals(Facade1 const& f1, Facade2 const& f2) {
     return f1.equals(f2);
   }
 
   template <typename Facade1, typename Facade2>
-  static auto distance_from(Facade1 const& f1, Facade2 const& f2)
-    -> typename Facade2::difference_type
-  {
+  static auto distance_from(Facade1 const& f1, Facade2 const& f2) ->
+    typename Facade2::difference_type {
     return f2.distance_to(f1);
   }
 
@@ -70,21 +63,15 @@ class iterator_facade : totally_ordered<
                           iterator_facade<
                             Derived, Value, Category, Reference, Difference
                           >
-                        >
-{
+                        > {
 private:
   template <typename R, typename P>
-  struct operator_arrow_dispatch
-  {
-    struct proxy
-    {
-      explicit proxy(R const& x)
-        : ref(x)
-      {
+  struct operator_arrow_dispatch {
+    struct proxy {
+      explicit proxy(R const& x) : ref(x) {
       }
 
-      R* operator->()
-      {
+      R* operator->() {
         return std::addressof(ref);
       }
 
@@ -93,33 +80,27 @@ private:
 
     using result_type = proxy;
 
-    static result_type apply(R const& x)
-    {
+    static result_type apply(R const& x) {
       return result_type{x};
     }
   };
 
   template <typename T, typename P>
-  struct operator_arrow_dispatch<T&, P>
-  {
+  struct operator_arrow_dispatch<T&, P> {
     using result_type = P;
 
-    static result_type apply(T& x)
-    {
+    static result_type apply(T& x) {
       return std::addressof(x);
     }
   };
 
-  Derived& derived()
-  {
+  Derived& derived() {
     return *static_cast<Derived*>(this);
   }
 
-  Derived const& derived() const
-  {
+  Derived const& derived() const {
     return *static_cast<Derived const*>(this);
   }
-
 
 public:
   using iterator_category = Category;
@@ -142,88 +123,73 @@ public:
 
   // TODO: operator[]
 
-  reference operator*() const
-  {
+  reference operator*() const {
     return iterator_access::dereference(derived());
   }
 
-  pointer operator->() const
-  {
+  pointer operator->() const {
     return arrow_dispatcher::apply(*derived());
   }
 
-  Derived& operator++()
-  {
+  Derived& operator++() {
     iterator_access::increment(derived());
     return derived();
   }
 
-  Derived operator++(int)
-  {
+  Derived operator++(int) {
     Derived tmp{derived()};
     ++*this;
     return tmp;
   }
 
-  Derived& operator--()
-  {
+  Derived& operator--() {
     iterator_access::decrement(derived());
     return derived();
   }
 
-  Derived operator--(int)
-  {
+  Derived operator--(int) {
     Derived tmp{derived()};
     --*this;
     return tmp;
   }
 
-  Derived& operator+=(difference_type n)
-  {
+  Derived& operator+=(difference_type n) {
     iterator_access::advance(derived(), n);
     return derived();
   }
 
-  Derived& operator-=(difference_type n)
-  {
+  Derived& operator-=(difference_type n) {
     iterator_access::advance(derived(), -n);
     return derived();
   }
 
-
-  Derived operator-(difference_type x) const
-  {
+  Derived operator-(difference_type x) const {
     Derived result(derived());
     return result -= x;
   }
 
-  friend bool operator==(iterator_facade const& x, iterator_facade const& y)
-  {
+  friend bool operator==(iterator_facade const& x, iterator_facade const& y) {
     return iterator_access::equals(static_cast<Derived const&>(x),
                                    static_cast<Derived const&>(y));
   }
 
-  friend bool operator<(iterator_facade const& x, iterator_facade const& y)
-  {
+  friend bool operator<(iterator_facade const& x, iterator_facade const& y) {
     return 0 > iterator_access::distance_from(static_cast<Derived const&>(x),
                                               static_cast<Derived const&>(y));
   }
 
-  friend Derived operator+(iterator_facade const& x, difference_type n)
-  {
+  friend Derived operator+(iterator_facade const& x, difference_type n) {
     Derived tmp{static_cast<Derived const&>(x)};
     return tmp += n;
   }
 
-  friend Derived operator+(difference_type n, iterator_facade const& x)
-  {
+  friend Derived operator+(difference_type n, iterator_facade const& x) {
     Derived tmp{static_cast<Derived const&>(x)};
     return tmp += n;
   }
 
   friend auto operator-(iterator_facade const& x, iterator_facade const& y)
-    -> decltype(iterator_access::distance_from(x, y))
-  {
+    -> decltype(iterator_access::distance_from(x, y)) {
     return iterator_access::distance_from(static_cast<Derived const&>(x),
                                           static_cast<Derived const&>(y));
   }
@@ -245,8 +211,7 @@ template <
 class iterator_adaptor
   : public iterator_facade<
              Derived, Value, Category, Reference, Difference
-           >
-{
+           > {
  public:
     using base_iterator = Base;
     using super = iterator_adaptor<
@@ -256,51 +221,42 @@ class iterator_adaptor
     iterator_adaptor() = default;
 
     explicit iterator_adaptor(Base const& b)
-      : iterator_{b}
-    {
+      : iterator_{b} {
     }
 
-    Base const& base() const
-    {
+    Base const& base() const {
       return iterator_;
     }
 
  protected:
-    Base& base()
-    {
+    Base& base() {
       return iterator_;
     }
 
  private:
     friend iterator_access;
 
-    Reference dereference() const
-    {
+    Reference dereference() const {
       return *iterator_;
     }
 
-    bool equals(iterator_adaptor const& other) const
-    {
+    bool equals(iterator_adaptor const& other) const {
       return iterator_ == other.base();
     }
 
-    void advance(Difference n)
-    {
+    void advance(Difference n) {
       iterator_ += n;
     }
 
-    void increment()
-    {
+    void increment() {
       ++iterator_;
     }
 
-    void decrement()
-    {
+    void decrement() {
       --iterator_;
     }
 
-    Difference distance_to(iterator_adaptor const& other) const
-    {
+    Difference distance_to(iterator_adaptor const& other) const {
       return other.base() - iterator_;
     }
 

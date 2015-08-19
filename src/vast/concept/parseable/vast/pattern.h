@@ -11,28 +11,24 @@ namespace vast {
 using pattern_parser = quoted_string_parser<'/', '\\'>;
 
 template <>
-struct access::parser<pattern> : vast::parser<access::parser<pattern>>
-{
+struct access::parser<pattern> : vast::parser<access::parser<pattern>> {
   using attribute = pattern;
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, unused_type) const
-  {
+  bool parse(Iterator& f, Iterator const& l, unused_type) const {
     static auto const p = pattern_parser{};
     return p.parse(f, l, unused);
   }
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, pattern& a) const
-  {
+  bool parse(Iterator& f, Iterator const& l, pattern& a) const {
     static auto const p = pattern_parser{};
     return p.parse(f, l, a.str_);
   }
 };
 
 template <>
-struct parser_registry<pattern>
-{
+struct parser_registry<pattern> {
   using type = access::parser<pattern>;
 };
 

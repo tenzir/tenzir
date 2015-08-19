@@ -9,8 +9,7 @@ namespace vast {
 namespace util {
 
 /// An output stream which wraps a ::fdoutbuf.
-class fdostream : public std::ostream
-{
+class fdostream : public std::ostream {
 public:
   fdostream(int fd);
 
@@ -22,4 +21,3 @@ private:
 } // namespace vast
 
 #endif
-

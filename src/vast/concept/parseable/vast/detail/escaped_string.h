@@ -12,12 +12,8 @@ namespace parser {
 namespace qi = boost::spirit::qi;
 
 template <typename Iterator>
-struct escaped_string : qi::grammar<Iterator, std::string()>
-{
-  escaped_string(char id)
-    : escaped_string::base_type(str)
-    , id(id)
-  {
+struct escaped_string : qi::grammar<Iterator, std::string()> {
+  escaped_string(char id) : escaped_string::base_type(str), id(id) {
     qi::hex_type hex;
     qi::lit_type lit;
     qi::print_type print;

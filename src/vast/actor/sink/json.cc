@@ -13,23 +13,19 @@ namespace vast {
 namespace sink {
 
 json::json(std::unique_ptr<std::ostream> out)
-  : base<json>{"json-sink"},
-    out_{std::move(out)}
-{
+  : base<json>{"json-sink"}, out_{std::move(out)} {
   VAST_ASSERT(out_ != nullptr);
 }
 
-bool json::process(event const& e)
-{
+bool json::process(event const& e) {
   auto j = to<vast::json>(e);
-  if (! j)
+  if (!j)
     return false;
   auto i = std::ostreambuf_iterator<std::ostream::char_type>{*out_};
   return print(i, *j) && print(i, '\n');
 }
 
-void json::flush()
-{
+void json::flush() {
   out_->flush();
 }
 

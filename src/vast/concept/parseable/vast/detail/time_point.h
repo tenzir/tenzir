@@ -16,62 +16,47 @@ namespace detail {
 namespace parser {
 
 template <typename Iterator>
-struct time_point : qi::grammar<Iterator, time::point(), skipper<Iterator>>
-{
-  struct absolute_time
-  {
+struct time_point : qi::grammar<Iterator, time::point(), skipper<Iterator>> {
+  struct absolute_time {
     template <typename>
-    struct result
-    {
+    struct result {
       typedef time::point type;
     };
 
-    time::point operator()(time::duration d) const
-    {
+    time::point operator()(time::duration d) const {
       return time::point{} + d;
     }
   };
 
-  struct initializer
-  {
-    initializer(time::point& p)
-      : p(p)
-    {
+  struct initializer {
+    initializer(time::point& p) : p(p) {
     }
 
     template <typename>
-    struct result
-    {
+    struct result {
       typedef void type;
     };
 
-    void operator()(int) const
-    {
+    void operator()(int) const {
       p = time::now();
     }
 
     time::point& p;
   };
 
-  struct adder
-  {
-    adder(time::point& p)
-      : p(p)
-    {
+  struct adder {
+    adder(time::point& p) : p(p) {
     }
 
     template <typename, typename, typename>
-    struct result
-    {
+    struct result {
       typedef void type;
     };
 
-    void operator()(int tag, int64_t n, bool negate) const
-    {
-      switch (tag)
-      {
+    void operator()(int tag, int64_t n, bool negate) const {
+      switch (tag) {
         default:
-          VAST_ASSERT(! "invalid tag");
+          VAST_ASSERT(!"invalid tag");
           break;
         case 0:
           p += time::duration(std::chrono::nanoseconds(negate ? -n : n));
@@ -109,27 +94,20 @@ struct time_point : qi::grammar<Iterator, time::point(), skipper<Iterator>>
     time::point& p;
   };
 
-  struct time_point_factory
-  {
+  struct time_point_factory {
     template <typename, typename>
-    struct result
-    {
+    struct result {
       using type = time::point;
     };
 
     template <typename I>
-    time::point operator()(I begin, I end) const
-    {
+    time::point operator()(I begin, I end) const {
       auto t = to<time::point>(begin, end);
       return t ? *t : time::point{};
     }
   };
 
-  time_point()
-    : time_point::base_type(time),
-      init(point),
-      add(point)
-  {
+  time_point() : time_point::base_type(time), init(point), add(point) {
     using boost::phoenix::construct;
     using boost::phoenix::begin;
     using boost::phoenix::end;

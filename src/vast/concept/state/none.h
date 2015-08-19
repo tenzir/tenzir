@@ -6,11 +6,9 @@
 namespace vast {
 
 template <>
-struct access::state<none>
-{
+struct access::state<none> {
   template <typename T, typename F>
-  static void call(T&&, F)
-  {
+  static void call(T&&, F) {
     // nop
   }
 };

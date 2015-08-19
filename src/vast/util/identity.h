@@ -7,12 +7,10 @@ namespace vast {
 namespace util {
 
 /// A function object that acts as identity function.
-struct identity
-{
+struct identity {
   template <typename T>
   constexpr auto operator()(T&& x) const noexcept
-    -> decltype(std::forward<T>(x))
-  {
+    -> decltype(std::forward<T>(x)) {
     return std::forward<T>(x);
   }
 };

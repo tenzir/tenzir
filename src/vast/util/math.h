@@ -34,8 +34,7 @@ constexpr T pow(T base);
 namespace detail {
 
 template <int exp, typename T>
-inline constexpr T pow_impl(T base, uint64_t result = 1)
-{
+inline constexpr T pow_impl(T base, uint64_t result = 1) {
   return exp
     ? (exp & 1
        ? pow_impl<(exp >> 1)>(base * base, base * result)
@@ -45,16 +44,14 @@ inline constexpr T pow_impl(T base, uint64_t result = 1)
 
 // Checks if base can be squared without overflow the type.
 template <typename T>
-constexpr bool can_square(T base)
-{
+constexpr bool can_square(T base) {
   return base <= std::numeric_limits<T>::max() / base;
 }
 
 // Get the largest exponent x such that x is a power of two and pow(base, x) doesn't
 // overflow the type of base.
 template <typename T, T base>
-constexpr int max_pot_exp(int result = 1)
-{
+constexpr int max_pot_exp(int result = 1) {
   // Despite the fact that this can never overflow we still have to check for
   // overflow or the compiler will complain.
   return can_square(base)
@@ -62,8 +59,7 @@ constexpr int max_pot_exp(int result = 1)
 }
 
 template <int base, typename T, int i = max_pot_exp<T, base>()>
-constexpr int ilog_helper(T n, int x = 0)
-{
+constexpr int ilog_helper(T n, int x = 0) {
   // binary search
   return i 
     ? ilog_helper<base, T, i / 2>(
@@ -79,8 +75,7 @@ constexpr int ilog_helper(T n, int x = 0)
 /// @param base The value to raise to the power of *exp*.
 /// @returns `base` raised to the power of *exp*.
 template <int exp, typename T>
-constexpr T pow(T base)
-{
+constexpr T pow(T base) {
   static_assert(exp < 64, "pow exponents >= 64 can only overflow");
   return exp < 0
     ? 1 / detail::pow_impl<-exp>(base) : detail::pow_impl<exp>(base);
@@ -91,8 +86,7 @@ constexpr T pow(T base)
 /// @tparam T The argument type.
 /// @returns The integer logarithm of *x*.
 template <int base, typename T>
-constexpr int ilog(T x)
-{
+constexpr int ilog(T x) {
   static_assert(! (base <= 0), "ilog is not useful for base <= 0");
   static_assert(base != 1, "ilog is not useful for base == 1");
   static_assert(std::is_integral<T>{}, "ilog only works on integral types");

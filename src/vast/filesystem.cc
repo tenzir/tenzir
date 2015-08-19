@@ -42,8 +42,7 @@ namespace vast {
 
 constexpr char const* path::separator;
 
-path path::current()
-{
+path path::current() {
 #ifdef VAST_POSIX
   char buf[max_len];
   return ::getcwd(buf, max_len);
@@ -52,18 +51,13 @@ path path::current()
 #endif
 }
 
-path::path(char const* str)
-  : str_{str}
-{
+path::path(char const* str) : str_{str} {
 }
 
-path::path(std::string str)
-  : str_{std::move(str)}
-{
+path::path(std::string str) : str_{std::move(str)} {
 }
 
-path& path::operator/=(path const& p)
-{
+path& path::operator/=(path const& p) {
   if (p.empty() || (util::ends_with(str_, separator) && p == separator))
     return *this;
   if (str_.empty())
@@ -75,28 +69,24 @@ path& path::operator/=(path const& p)
   return *this;
 }
 
-path& path::operator+=(path const& p)
-{
+path& path::operator+=(path const& p) {
   str_ = str_ + p.str_;
   return *this;
 }
 
-bool path::empty() const
-{
+bool path::empty() const {
   return str_.empty();
 }
 
-path path::root() const
-{
+path path::root() const {
 #ifdef VAST_POSIX
-  if (! empty() && str_[0] == *separator)
+  if (!empty() && str_[0] == *separator)
     return str_.size() > 1 && str_[1] == *separator ? "//" : separator;
 #endif
   return {};
 }
 
-path path::parent() const
-{
+path path::parent() const {
   if (str_ == separator || str_ == "." || str_ == "..")
     return {};
   auto pos = str_.rfind(separator);
@@ -107,19 +97,18 @@ path path::parent() const
   return str_.substr(0, pos);
 }
 
-path path::basename(bool strip_extension) const
-{
+path path::basename(bool strip_extension) const {
   if (str_ == separator)
     return separator;
   auto pos = str_.rfind(separator);
-  if (pos == std::string::npos && ! strip_extension)  // Already a basename.
+  if (pos == std::string::npos && !strip_extension) // Already a basename.
     return *this;
   if (pos == str_.size() - 1)
     return ".";
   if (pos == std::string::npos)
     pos = 0;
   auto base = str_.substr(pos + 1);
-  if (! strip_extension)
+  if (!strip_extension)
     return base;
   auto ext = base.rfind(".");
   if (ext == 0)
@@ -129,8 +118,7 @@ path path::basename(bool strip_extension) const
   return base.substr(0, ext);
 }
 
-path path::extension() const
-{
+path path::extension() const {
   if (str_.back() == '.')
     return ".";
   auto base = basename();
@@ -140,13 +128,11 @@ path path::extension() const
   return base.str_.substr(ext);
 }
 
-path path::complete() const
-{
+path path::complete() const {
   return root().empty() ? current() / *this : *this;
 }
 
-path path::trim(int n) const
-{
+path path::trim(int n) const {
   if (empty())
     return *this;
   else if (n == 0)
@@ -165,8 +151,7 @@ path path::trim(int n) const
   return r;
 }
 
-path path::chop(int n) const
-{
+path path::chop(int n) const {
   if (empty() || n == 0)
     return *this;
   auto pieces = split(*this);
@@ -182,13 +167,11 @@ path path::chop(int n) const
   return r;
 }
 
-std::string const& path::str() const
-{
+std::string const& path::str() const {
   return str_;
 }
 
-path::type path::kind() const
-{
+path::type path::kind() const {
 #ifdef VAST_POSIX
   struct stat st;
   if (::lstat(str_.data(), &st))
@@ -211,62 +194,50 @@ path::type path::kind() const
   return unknown;
 }
 
-bool path::is_regular_file() const
-{
+bool path::is_regular_file() const {
   return kind() == regular_file;
 }
 
-bool path::is_directory() const
-{
+bool path::is_directory() const {
   return kind() == directory;
 }
 
-bool path::is_symlink() const
-{
+bool path::is_symlink() const {
   return kind() == symlink;
 }
 
-bool operator==(path const& x, path const& y)
-{
+bool operator==(path const& x, path const& y) {
   return x.str_ == y.str_;
 }
 
-bool operator<(path const& x, path const& y)
-{
+bool operator<(path const& x, path const& y) {
   return x.str_ < y.str_;
 }
 
-
-file::file(vast::path p)
-  : path_{std::move(p)}
-{
+file::file(vast::path p) : path_{std::move(p)} {
 }
 
 file::file(native_type handle, bool close_behavior, vast::path p)
   : handle_{handle},
     close_on_destruction_{close_behavior},
     is_open_{true},
-    path_{std::move(p)}
-{
+    path_{std::move(p)} {
 }
 
-file::~file()
-{
+file::~file() {
   // Don't close stdin/stdout implicitly.
   if (path_ != "-" && close_on_destruction_)
     close();
 }
 
-trial<void> file::open(open_mode mode, bool append)
-{
+trial<void> file::open(open_mode mode, bool append) {
   if (is_open_)
     return error{"file already open"};
   if (mode == read_only && append)
     return error{"cannot open file in read and append mode simultaneously"};
 #ifdef VAST_POSIX
   // Support reading from STDIN and writing to STDOUT.
-  if (path_ == "-")
-  {
+  if (path_ == "-") {
     if (mode == read_write)
       return error{"cannot open - in read/write mode"};
     handle_ = ::fileno(mode == read_only ? stdin : stdout);
@@ -274,8 +245,7 @@ trial<void> file::open(open_mode mode, bool append)
     return nothing;
   }
   int flags = 0;
-  switch (mode)
-  {
+  switch (mode) {
     case invalid:
       return error{"invalid open mode"};
     case read_write:
@@ -291,15 +261,13 @@ trial<void> file::open(open_mode mode, bool append)
   if (append)
     flags |= O_APPEND;
   errno = 0;
-  if (mode != read_only && ! exists(path_.parent()))
-  {
+  if (mode != read_only && !exists(path_.parent())) {
     auto t = mkdir(path_.parent());
-    if (! t)
+    if (!t)
       return error{"failed to create parent directory: ", t.error()};
   }
   handle_ = ::open(path_.str().data(), flags, 0644);
-  if (handle_ != -1)
-  {
+  if (handle_ != -1) {
     is_open_ = true;
     return nothing;
   }
@@ -309,69 +277,54 @@ trial<void> file::open(open_mode mode, bool append)
 #endif // VAST_POSIX
 }
 
-bool file::close()
-{
-  if (! (is_open_ && util::close(handle_)))
+bool file::close() {
+  if (!(is_open_ && util::close(handle_)))
     return false;
   is_open_ = false;
   return true;
 }
 
-bool file::is_open() const
-{
+bool file::is_open() const {
   return is_open_;
 }
 
-bool file::read(void* sink, size_t bytes, size_t* got)
-{
+bool file::read(void* sink, size_t bytes, size_t* got) {
   return is_open_ && util::read(handle_, sink, bytes, got);
 }
 
-bool file::write(void const* source, size_t bytes, size_t* put)
-{
+bool file::write(void const* source, size_t bytes, size_t* put) {
   return is_open_ && util::write(handle_, source, bytes, put);
 }
 
-bool file::seek(size_t bytes)
-{
-  if (! is_open_ || seek_failed_)
+bool file::seek(size_t bytes) {
+  if (!is_open_ || seek_failed_)
     return false;
-  if (! util::seek(handle_, bytes))
-  {
+  if (!util::seek(handle_, bytes)) {
     seek_failed_ = true;
     return false;
   }
   return true;
 }
 
-path const& file::path() const
-{
+path const& file::path() const {
   return path_;
 }
 
-file::native_type file::handle() const
-{
+file::native_type file::handle() const {
   return handle_;
 }
 
-
-directory::iterator::iterator(directory* dir)
-  : dir_{dir}
-{
+directory::iterator::iterator(directory* dir) : dir_{dir} {
   increment();
 }
 
-void directory::iterator::increment()
-{
-  if (! dir_)
+void directory::iterator::increment() {
+  if (!dir_)
     return;
 #ifdef VAST_POSIX
-  if (! dir_->dir_)
-  {
+  if (!dir_->dir_) {
     dir_ = nullptr;
-  }
-  else if (auto ent = ::readdir(dir_->dir_))
-  {
+  } else if (auto ent = ::readdir(dir_->dir_)) {
     auto d = ent->d_name;
     VAST_ASSERT(d);
     auto dot = d[0] == '.' && d[1] == '\0';
@@ -380,65 +333,52 @@ void directory::iterator::increment()
       increment();
     else
       current_ = dir_->path_ / d;
-  }
-  else
-  {
+  } else {
     dir_ = nullptr;
   }
 #endif
 }
 
-path const& directory::iterator::dereference() const
-{
+path const& directory::iterator::dereference() const {
   return current_;
 }
 
-bool directory::iterator::equals(iterator const& other) const
-{
+bool directory::iterator::equals(iterator const& other) const {
   return dir_ == other.dir_;
 }
 
 directory::directory(vast::path p)
-  : path_{std::move(p)},
-    dir_{::opendir(path_.str().data())}
-{
+  : path_{std::move(p)}, dir_{::opendir(path_.str().data())} {
 }
 
-directory::~directory()
-{
+directory::~directory() {
 #ifdef VAST_POSIX
   if (dir_)
     ::closedir(dir_);
 #endif
 }
 
-directory::iterator directory::begin()
-{
+directory::iterator directory::begin() {
   return iterator{this};
 }
 
-directory::iterator directory::end() const
-{
+directory::iterator directory::end() const {
   return {};
 }
 
-path const& directory::path() const
-{
+path const& directory::path() const {
   return path_;
 }
 
-
-std::vector<path> split(path const& p)
-{
+std::vector<path> split(path const& p) {
   if (p.empty())
     return {};
-  auto components =
-    util::to_strings(util::split(p.str(), path::separator, "\\", -1, true));
-  VAST_ASSERT(! components.empty());
+  auto components
+    = util::to_strings(util::split(p.str(), path::separator, "\\", -1, true));
+  VAST_ASSERT(!components.empty());
   std::vector<path> result;
   size_t begin = 0;
-  if (components[0].empty())
-  {
+  if (components[0].empty()) {
     // Path starts with "/".
     result.emplace_back(path::separator);
     begin = 2;
@@ -448,8 +388,7 @@ std::vector<path> split(path const& p)
   return result;
 }
 
-bool exists(path const& p)
-{
+bool exists(path const& p) {
 #ifdef VAST_POSIX
   struct stat st;
   return ::lstat(p.str().data(), &st) == 0;
@@ -458,13 +397,11 @@ bool exists(path const& p)
 #endif // VAST_POSIX
 }
 
-bool rm(const path& p)
-{
+bool rm(const path& p) {
   // Because a file system only offers primitives to delete empty directories,
   // we have to recursively delete all files in a directory before deleting it.
   auto t = p.kind();
-  if (t == path::type::directory)
-  {
+  if (t == path::type::directory) {
     traverse(p, [](path const& inner) { return rm(inner); });
     return VAST_DELETE_DIRECTORY(p.str().data());
   }
@@ -473,34 +410,25 @@ bool rm(const path& p)
   return false;
 }
 
-trial<void> mkdir(path const& p)
-{
+trial<void> mkdir(path const& p) {
   auto components = split(p);
   if (components.empty())
     return error{"cannot mkdir empty path"};
   path c;
-  for (auto& comp : components)
-  {
+  for (auto& comp : components) {
     c /= comp;
-    if (exists(c))
-    {
+    if (exists(c)) {
       auto kind = c.kind();
-      if (! (kind == path::directory || kind == path::symlink))
+      if (!(kind == path::directory || kind == path::symlink))
         return error{"not a directory or symlink:", c};
-    }
-    else
-    {
-      if (! VAST_CREATE_DIRECTORY(c.str().data()))
-      {
+    } else {
+      if (!VAST_CREATE_DIRECTORY(c.str().data())) {
         // Because there exists a TOCTTOU issue here, we have to check again.
-        if (errno == EEXIST)
-        {
+        if (errno == EEXIST) {
           auto kind = c.kind();
-          if (! (kind == path::directory || kind == path::symlink))
+          if (!(kind == path::directory || kind == path::symlink))
             return error{"not a directory or symlink:", c};
-        }
-        else
-        {
+        } else {
           return error{std::strerror(errno), c};
         }
       }
@@ -509,17 +437,15 @@ trial<void> mkdir(path const& p)
   return nothing;
 }
 
-void traverse(path const& p, std::function<bool(path const&)> f)
-{
+void traverse(path const& p, std::function<bool(path const&)> f) {
 #ifdef VAST_POSIX
   DIR* d = ::opendir(p.str().data());
-  if (! d)
+  if (!d)
     return;
   struct dirent* ent;
-  while ((ent = ::readdir(d)))
-  {
+  while ((ent = ::readdir(d))) {
     auto str = std::string{ent->d_name};
-    if (str != "." && str != ".." && ! f(p / std::move(str)))
+    if (str != "." && str != ".." && !f(p / std::move(str)))
       break;
   }
   ::closedir(d);
@@ -529,8 +455,7 @@ void traverse(path const& p, std::function<bool(path const&)> f)
 }
 
 // Loads file contents into a string.
-trial<std::string> load_contents(path const& p)
-{
+trial<std::string> load_contents(path const& p) {
   std::string contents;
   auto out = io::make_container_output_stream(contents);
   io::file_input_stream in{p};

@@ -7,12 +7,10 @@ namespace vast {
 
 class block;
 
-template<>
-struct access::state<block>
-{
+template <>
+struct access::state<block> {
   template <typename T, typename F>
-  static void call(T&& x, F f)
-  {
+  static void call(T&& x, F f) {
     f(x.compression_, x.elements_, x.uncompressed_bytes_, x.buffer_);
   }
 };

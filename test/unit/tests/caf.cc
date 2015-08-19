@@ -6,8 +6,7 @@
 
 using namespace vast;
 
-TEST(caf_serialization)
-{
+TEST(caf_serialization) {
   record r0{42, "foo", -8.3, record{nil, time::now()}};
   MESSAGE("serializing record");
   std::vector<uint8_t> buf;

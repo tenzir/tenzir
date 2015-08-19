@@ -7,20 +7,17 @@
 
 namespace vast {
 
-struct error_printer : printer<error_printer>
-{
+struct error_printer : printer<error_printer> {
   using attribute = error;
 
   template <typename Iterator>
-  bool print(Iterator& out, error const& e) const
-  {
+  bool print(Iterator& out, error const& e) const {
     return printers::str.print(out, e.msg());
   }
 };
 
 template <>
-struct printer_registry<error>
-{
+struct printer_registry<error> {
   using type = error_printer;
 };
 

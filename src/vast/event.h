@@ -11,8 +11,7 @@ namespace vast {
 struct access;
 
 /// A value with a named type plus additional meta data.
-class event : public value, util::totally_ordered<event>
-{
+class event : public value, util::totally_ordered<event> {
   friend access;
 
 public:
@@ -22,16 +21,14 @@ public:
   /// @param t The type of the value.
   /// @returns A valid event if *t* can successfully check *x*.
   template <typename T>
-  static event make(T&& x, vast::type t)
-  {
+  static event make(T&& x, vast::type t) {
     return value::make(std::forward<T>(x), std::move(t));
   }
 
   /// Type-safe factory function to construct an event from an unchecked value.
   /// @param v The value to check and convert into an event.
   /// @returns A valid event according *v* if `v.type().check(v.data())`.
-  static event make(value v)
-  {
+  static event make(value v) {
     return v.type().check(v.data()) ? event{std::move(v)} : nil;
   }
 

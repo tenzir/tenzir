@@ -13,15 +13,12 @@ template <
   typename Compare = std::less<T>,
   typename Allocator = std::allocator<T>
 >
-class flat_set : totally_ordered<flat_set<T, Compare, Allocator>>
-{
-  friend bool operator<(flat_set const& x, flat_set const& y)
-  {
+class flat_set : totally_ordered<flat_set<T, Compare, Allocator>> {
+  friend bool operator<(flat_set const& x, flat_set const& y) {
     return x.v_ < y.v_;
   }
 
-  friend bool operator==(flat_set const& x, flat_set const& y)
-  {
+  friend bool operator==(flat_set const& x, flat_set const& y) {
     return x.v_ == y.v_;
   }
 
@@ -52,15 +49,13 @@ public:
 
   flat_set() = default;
 
-  flat_set(std::initializer_list<T> l)
-  {
+  flat_set(std::initializer_list<T> l) {
     for (auto& x : l)
       insert(x);
   }
 
   template <typename InputIterator>
-  flat_set(InputIterator first, InputIterator last)
-  {
+  flat_set(InputIterator first, InputIterator last) {
     insert(first, last);
   }
 
@@ -68,85 +63,69 @@ public:
   // Element access and lookup
   //
 
-  reference at(size_type i)
-  {
+  reference at(size_type i) {
     return v_.at(i);
   }
 
-  const_reference at(size_type i) const
-  {
+  const_reference at(size_type i) const {
     return v_.at(i);
   }
 
-  reference operator[](size_type i)
-  {
+  reference operator[](size_type i) {
     return v_[i];
   }
 
-  const_reference operator[](size_type i) const
-  {
+  const_reference operator[](size_type i) const {
     return v_[i];
   }
 
-  reference front()
-  {
+  reference front() {
     return v_.front();
   }
 
-  const_reference front() const
-  {
+  const_reference front() const {
     return v_.front();
   }
 
-  reference back()
-  {
+  reference back() {
     return v_.back();
   }
 
-  const_reference back() const
-  {
+  const_reference back() const {
     return v_.back();
   }
 
-  value_type* data()
-  {
+  value_type* data() {
     return v_.data();
   }
 
-  value_type const* data() const
-  {
+  value_type const* data() const {
     return v_.data();
   }
 
-  iterator find(value_type const& x)
-  {
+  iterator find(value_type const& x) {
     auto i = std::lower_bound(begin(), end(), x, compare{});
     return i == end() || compare{}(x, *i) ? end() : i;
   }
 
-  const_iterator find(value_type const& x) const
-  {
+  const_iterator find(value_type const& x) const {
     auto i = std::lower_bound(begin(), end(), x, compare{});
     return i == end() || compare{}(x, *i) ? end() : i;
   }
 
-  bool contains(value_type const& x) const
-  {
+  bool contains(value_type const& x) const {
     return find(x) != end();
   }
 
-  size_type count(value_type const& x) const
-  {
+  size_type count(value_type const& x) const {
     return contains(x) ? 1 : 0;
   }
 
-  vector_type const& as_vector() const
-  {
+  vector_type const& as_vector() const {
     return v_;
   }
 
-  vector_type& as_vector()
-  {
+  vector_type& as_vector() {
     return v_;
   }
 
@@ -154,43 +133,35 @@ public:
   // Iterators
   //
 
-  iterator begin()
-  {
+  iterator begin() {
     return v_.begin();
   }
 
-  const_iterator begin() const
-  {
+  const_iterator begin() const {
     return v_.begin();
   }
 
-  iterator end()
-  {
+  iterator end() {
     return v_.end();
   }
 
-  const_iterator end() const
-  {
+  const_iterator end() const {
     return v_.end();
   }
 
-  reverse_iterator rbegin()
-  {
+  reverse_iterator rbegin() {
     return v_.rbegin();
   }
 
-  const_reverse_iterator rbegin() const
-  {
+  const_reverse_iterator rbegin() const {
     return v_.rbegin();
   }
 
-  reverse_iterator rend()
-  {
+  reverse_iterator rend() {
     return v_.rend();
   }
 
-  const_reverse_iterator rend() const
-  {
+  const_reverse_iterator rend() const {
     return v_.rend();
   }
 
@@ -198,23 +169,19 @@ public:
   // Capacity
   //
 
-  bool empty() const
-  {
+  bool empty() const {
     return v_.empty();
   }
 
-  size_type size() const
-  {
+  size_type size() const {
     return v_.size();
   }
 
-  void reserve(size_type capacity)
-  {
+  void reserve(size_type capacity) {
     v_.reserve(capacity);
   }
 
-  void shrink_to_fit()
-  {
+  void shrink_to_fit() {
     v_.shrink_to_fit();
   }
 
@@ -222,13 +189,11 @@ public:
   // Modifiers
   //
 
-  void clear()
-  {
+  void clear() {
     return v_.clear();
   }
 
-  std::pair<iterator, bool> insert(T x)
-  {
+  std::pair<iterator, bool> insert(T x) {
     auto i = std::lower_bound(begin(), end(), x, compare{});
     if (i == end() || compare{}(x, *i))
       return {v_.insert(i, std::move(x)), true};
@@ -237,34 +202,29 @@ public:
   };
 
   template <typename InputIterator>
-  bool insert(InputIterator first, InputIterator last)
-  {
+  bool insert(InputIterator first, InputIterator last) {
     bool all = true;
     while (first != last)
-      if (! insert(*first++).second)
+      if (!insert(*first++).second)
         all = false;
 
     return all;
   }
 
   template <typename... Args>
-  std::pair<iterator, bool> emplace(Args&&... args)
-  {
+  std::pair<iterator, bool> emplace(Args&&... args) {
     return insert(T(std::forward<Args>(args)...));
   }
 
-  iterator erase(const_iterator i)
-  {
+  iterator erase(const_iterator i) {
     return v_.erase(i);
   }
 
-  iterator erase(const_iterator first, const_iterator last)
-  {
+  iterator erase(const_iterator first, const_iterator last) {
     return v_.erase(first, last);
   }
 
-  size_type erase(T const& x)
-  {
+  size_type erase(T const& x) {
     auto i = std::find(v_.begin(), v_.end(), x);
     if (i == v_.end())
       return 0;
@@ -273,13 +233,11 @@ public:
     return 1;
   }
 
-  void pop_back()
-  {
+  void pop_back() {
     v_.pop_back();
   }
 
-  bool resize(size_type n)
-  {
+  bool resize(size_type n) {
     if (n >= v_.size())
       return false;
 
@@ -287,8 +245,7 @@ public:
     return true;
   }
 
-  void swap(flat_set& other)
-  {
+  void swap(flat_set& other) {
     v_.swap(other);
   }
 
@@ -296,20 +253,16 @@ public:
   // Algorithms
   //
 
-  flat_set intersect(flat_set const& other) const
-  {
+  flat_set intersect(flat_set const& other) const {
     flat_set r;
-    std::set_intersection(begin(), end(),
-                          other.begin(), other.end(),
+    std::set_intersection(begin(), end(), other.begin(), other.end(),
                           std::back_inserter(r));
     return r;
   }
 
-  flat_set unify(flat_set const& other) const
-  {
+  flat_set unify(flat_set const& other) const {
     flat_set r;
-    std::set_intersection(begin(), end(),
-                          other.begin(), other.end(),
+    std::set_intersection(begin(), end(), other.begin(), other.end(),
                           std::back_inserter(r));
     return r;
   }

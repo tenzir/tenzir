@@ -7,69 +7,51 @@
 namespace vast {
 namespace expr {
 
-trial<void> validator::operator()(none) const
-{
+trial<void> validator::operator()(none) const {
   return error{"nil expression"};
 }
 
-trial<void> validator::operator()(conjunction const& c) const
-{
-  for (auto& op : c)
-  {
+trial<void> validator::operator()(conjunction const& c) const {
+  for (auto& op : c) {
     auto t = visit(*this, op);
-    if (! t)
-     return t;
+    if (!t)
+      return t;
   }
   return nothing;
 }
 
-trial<void> validator::operator()(disjunction const& d) const
-{
-  for (auto& op : d)
-  {
+trial<void> validator::operator()(disjunction const& d) const {
+  for (auto& op : d) {
     auto t = visit(*this, op);
-    if (! t)
-     return t;
+    if (!t)
+      return t;
   }
   return nothing;
 }
 
-trial<void> validator::operator()(negation const& n) const
-{
+trial<void> validator::operator()(negation const& n) const {
   return visit(*this, n.expression());
 }
 
-trial<void> validator::operator()(predicate const& p) const
-{
+trial<void> validator::operator()(predicate const& p) const {
   auto valid = [&](predicate::operand const& lhs,
-                  predicate::operand const& rhs) -> trial<void>
-  {
+                   predicate::operand const& rhs) -> trial<void> {
     auto rhs_data = get<data>(rhs);
-    if (is<event_extractor>(lhs) && rhs_data)
-    {
-      if (! compatible(type::string{}, p.op, type::derive(*rhs_data)))
+    if (is<event_extractor>(lhs) && rhs_data) {
+      if (!compatible(type::string{}, p.op, type::derive(*rhs_data)))
         return error{"invalid event extractor: ", *rhs_data, " under ", p.op};
-    }
-    else if (is<time_extractor>(lhs) && rhs_data)
-    {
-      if (! compatible(type::time_point{}, p.op, type::derive(*rhs_data)))
+    } else if (is<time_extractor>(lhs) && rhs_data) {
+      if (!compatible(type::time_point{}, p.op, type::derive(*rhs_data)))
         return error{"invalid time extractor: ", *rhs_data, " under ", p.op};
-    }
-    else
-    {
+    } else {
       auto t = get<type_extractor>(lhs);
-      if (t && rhs_data)
-      {
-        if (! compatible(t->type, p.op, type::derive(*rhs_data)))
-          return error{"invalid type extractor: ",
-                       t->type, ' ', p.op, ' ', *rhs_data};
-      }
-      else if (is<schema_extractor>(lhs) && rhs_data)
-      {
+      if (t && rhs_data) {
+        if (!compatible(t->type, p.op, type::derive(*rhs_data)))
+          return error{
+            "invalid type extractor: ", t->type, ' ', p.op, ' ', *rhs_data};
+      } else if (is<schema_extractor>(lhs) && rhs_data) {
         return nothing;
-      }
-      else
-      {
+      } else {
         return error{"invalid extractor"};
       }
     }

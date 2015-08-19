@@ -8,11 +8,9 @@ namespace vast {
 class address;
 
 template <>
-struct access::state<address>
-{
+struct access::state<address> {
   template <typename T, typename F>
-  static void call(T&& x, F f)
-  {
+  static void call(T&& x, F f) {
     f(x.bytes_);
   }
 };

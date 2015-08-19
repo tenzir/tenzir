@@ -15,8 +15,7 @@ namespace expr {
 
 /// Hoists the contained expression of a single-element conjunction or
 /// disjunction one level in the tree.
-struct hoister
-{
+struct hoister {
   expression operator()(none) const;
   expression operator()(conjunction const& c) const;
   expression operator()(disjunction const& d) const;
@@ -25,8 +24,7 @@ struct hoister
 };
 
 /// Ensures that extractors always end up on the LHS of a predicate.
-struct aligner
-{
+struct aligner {
   expression operator()(none) const;
   expression operator()(conjunction const& c) const;
   expression operator()(disjunction const& d) const;
@@ -35,8 +33,7 @@ struct aligner
 };
 
 /// Pushes negations down to the predicate level and removes double negations.
-struct denegator
-{
+struct denegator {
   denegator(bool negate = false);
 
   expression operator()(none) const;

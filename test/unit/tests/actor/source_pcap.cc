@@ -7,8 +7,7 @@
 using namespace caf;
 using namespace vast;
 
-TEST(pcap_source)
-{
+TEST(pcap_source) {
   scoped_actor self;
   self->on_sync_failure([&] {
     FAIL("got unexpected message: " << to_string(self->current_message()));

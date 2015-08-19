@@ -15,11 +15,8 @@ namespace query {
 
 struct nil {};
 
-struct identifier
-{
-  identifier(std::string const& s = "")
-    : name(s)
-  {
+struct identifier {
+  identifier(std::string const& s = "") : name(s) {
   }
 
   std::string name;
@@ -34,26 +31,22 @@ using expr_operand = boost::variant<
   boost::recursive_wrapper<data_expr>
 >;
 
-struct unary_expr
-{
+struct unary_expr {
   arithmetic_operator op;
   expr_operand operand;
 };
 
-struct expr_operation
-{
+struct expr_operation {
   arithmetic_operator op;
   expr_operand operand;
 };
 
-struct data_expr
-{
+struct data_expr {
   expr_operand first;
   std::vector<expr_operation> rest;
 };
 
-struct predicate
-{
+struct predicate {
   using lhs_or_rhs = boost::variant<std::string, data_expr>;
 
   lhs_or_rhs lhs;
@@ -64,26 +57,20 @@ struct predicate
 struct query_expr;
 struct negated;
 
-using group = boost::variant<
-  predicate,
-  boost::recursive_wrapper<query_expr>,
-  boost::recursive_wrapper<negated>
->;
+using group = boost::variant<predicate, boost::recursive_wrapper<query_expr>,
+                             boost::recursive_wrapper<negated>>;
 
-struct query_operation
-{
+struct query_operation {
   boolean_operator op;
   group operand;
 };
 
-struct query_expr
-{
+struct query_expr {
   group first;
   std::vector<query_operation> rest;
 };
 
-struct negated
-{
+struct negated {
   query_expr expr;
 };
 

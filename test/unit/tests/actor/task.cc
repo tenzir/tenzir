@@ -8,12 +8,9 @@ using namespace vast;
 
 namespace {
 
-behavior worker(event_based_actor* self, actor const& task)
-{
-  return
-  {
-    others() >> [=]
-    {
+behavior worker(event_based_actor* self, actor const& task) {
+  return {
+    others() >> [=] {
       self->send(task, done_atom::value);
       self->quit();
     }
@@ -35,8 +32,7 @@ behavior worker(event_based_actor* self, actor const& task)
  * Here, 't' and 'i' represent tasks and the remaining nodes workers.
  */
 
-TEST(task)
-{
+TEST(task) {
   scoped_actor self;
   auto t = self->spawn<task>();
   self->send(t, subscriber_atom::value, self);
@@ -60,18 +56,18 @@ TEST(task)
 
   MESSAGE("asking main task for the current progress");
   self->sync_send(t, progress_atom::value).await(
-    [&](uint64_t remaining, uint64_t total)
-    {
+    [&](uint64_t remaining, uint64_t total) {
       CHECK(remaining == 3);
       CHECK(total == 3);
-    });
+    }
+  );
   MESSAGE("asking intermediate task for the current progress");
   self->sync_send(i, progress_atom::value).await(
-    [&](uint64_t remaining, uint64_t total)
-    {
+    [&](uint64_t remaining, uint64_t total) {
       CHECK(remaining == 3);
       CHECK(total == 3);
-    });
+    }
+  );
 
   MESSAGE("completing intermediate work items");
   self->send(leaf2a, "Go");
@@ -79,22 +75,22 @@ TEST(task)
   self->send(leaf2c, "money!");
   self->receive([&](down_msg const& msg) { CHECK(msg.source == i); });
   self->receive(
-    [&](progress_atom, uint64_t remaining, uint64_t total)
-    {
+    [&](progress_atom, uint64_t remaining, uint64_t total) {
       CHECK(remaining == 2);
       CHECK(total == 3);
-    });
+    }
+  );
 
   MESSAGE("completing remaining work items");
   self->send(leaf1a, "Lots");
   self->send(leaf1b, "please!");
   auto n = 1;
   self->receive_for(n, 2) (
-    [&](progress_atom, uint64_t remaining, uint64_t total)
-    {
+    [&](progress_atom, uint64_t remaining, uint64_t total) {
       CHECK(remaining == n);
       CHECK(total == 3);
-    });
+    }
+  );
 
   MESSAGE("checking final notification");
   self->receive([&](done_atom) { CHECK(self->current_sender() == t); } );

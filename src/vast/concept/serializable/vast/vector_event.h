@@ -16,16 +16,13 @@
 namespace vast {
 
 template <typename Serializer>
-void serialize(Serializer& sink, std::vector<event> const& events)
-{
+void serialize(Serializer& sink, std::vector<event> const& events) {
   util::flat_set<type::hash_type::digest_type> digests;
   sink << uint64_t{events.size()};
-  for (auto& e : events)
-  {
+  for (auto& e : events) {
     auto digest = e.type().digest();
     sink << digest;
-    if (digests.count(digest) == 0)
-    {
+    if (digests.count(digest) == 0) {
       digests.insert(digest);
       sink << e.type();
     }
@@ -34,19 +31,16 @@ void serialize(Serializer& sink, std::vector<event> const& events)
 }
 
 template <typename Deserializer>
-void deserialize(Deserializer& source, std::vector<event>& events)
-{
+void deserialize(Deserializer& source, std::vector<event>& events) {
   std::map<type::hash_type::digest_type, type> types;
   uint64_t size;
   source >> size;
   events.resize(size);
-  for (auto& e : events)
-  {
+  for (auto& e : events) {
     type::hash_type::digest_type digest;
     source >> digest;
     auto i = types.find(digest);
-    if (i == types.end())
-    {
+    if (i == types.end()) {
       type t;
       source >> t;
       VAST_ASSERT(digest == t.digest());

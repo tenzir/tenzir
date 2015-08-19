@@ -10,8 +10,7 @@ class event;
 namespace expr {
 
 /// Evaluates an event over a resolved expression.
-struct event_evaluator
-{
+struct event_evaluator {
   event_evaluator(event const& e);
 
   bool operator()(none);
@@ -26,14 +25,12 @@ struct event_evaluator
   bool operator()(data_extractor const& e, data const& d);
 
   template <typename T>
-  bool operator()(data const& d, T const& e)
-  {
+  bool operator()(data const& d, T const& e) {
     return (*this)(e, d);
   }
 
   template <typename T, typename U>
-  bool operator()(T const&, U const&)
-  {
+  bool operator()(T const&, U const&) {
     return false;
   }
 
@@ -41,25 +38,20 @@ struct event_evaluator
   relational_operator op_;
 };
 
-
 /// Base class for expression evaluators operating on bitstreams.
 /// @tparam Derived The CRTP client.
 /// @tparam Bitstream The type of bitstream used during evaluation.
 template <typename Derived, typename Bitstream>
-struct bitstream_evaluator
-{
-  Bitstream operator()(none) const
-  {
+struct bitstream_evaluator {
+  Bitstream operator()(none) const {
     return {};
   }
 
-  Bitstream operator()(conjunction const& con) const
-  {
+  Bitstream operator()(conjunction const& con) const {
     auto hits = visit(*this, con[0]);
     if (hits.empty() || hits.all_zeros())
       return {};
-    for (size_t i = 1; i < con.size(); ++i)
-    {
+    for (size_t i = 1; i < con.size(); ++i) {
       hits &= visit(*this, con[i]);
       if (hits.empty() || hits.all_zeros()) // short-circuit
         return {};
@@ -67,27 +59,23 @@ struct bitstream_evaluator
     return hits;
   }
 
-  Bitstream operator()(disjunction const& dis) const
-  {
+  Bitstream operator()(disjunction const& dis) const {
     Bitstream hits;
-    for (auto& op : dis)
-    {
+    for (auto& op : dis) {
       hits |= visit(*this, op);
-      if (! hits.empty() && hits.all_ones())  // short-circuit
+      if (!hits.empty() && hits.all_ones()) // short-circuit
         break;
     }
     return hits;
   }
 
-  Bitstream operator()(negation const& n) const
-  {
+  Bitstream operator()(negation const& n) const {
     auto hits = visit(*this, n.expression());
     hits.flip();
     return hits;
   }
 
-  Bitstream operator()(predicate const& pred) const
-  {
+  Bitstream operator()(predicate const& pred) const {
     auto* bs = static_cast<Derived const*>(this)->lookup(pred);
     return bs ? *bs : Bitstream{};
   }

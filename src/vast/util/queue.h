@@ -10,8 +10,7 @@ namespace util {
 
 /// A thread-safe `std::queue`.
 template <typename T>
-class queue : std::queue<T>
-{
+class queue : std::queue<T> {
   queue(queue&) = delete;
   queue& operator=(queue&) = delete;
   typedef std::queue<T> super;
@@ -31,8 +30,7 @@ public:
   /// @param x The value to push in the queue.
   /// @note The notification occurs *after* the mutex is unlocked, thus the
   /// waiting thread will be able to acquire the mutex without blocking.
-  void push(value_type x)
-  {
+  void push(value_type x) {
     std::unique_lock<std::mutex> lock(mutex_);
     const bool empty = super::empty();
     super::push(std::move(x));
@@ -48,8 +46,7 @@ public:
   /// The constructor of the element is called with exactly the same
   /// arguments, as supplied to the function.
   template <typename... Args>
-  void emplace(Args&&... args)
-  {
+  void emplace(Args&&... args) {
     std::unique_lock<std::mutex> lock(mutex_);
     bool const empty = super::empty();
     super::emplace(std::forward<Args>(args)...);
@@ -67,8 +64,7 @@ public:
   /// element is not removed from the queue.
   ///
   /// @note This function blocks when the queue is empty.
-  value_type pop()
-  {
+  value_type pop() {
     std::unique_lock<std::mutex> lock(mutex_);
     while (super::empty())
       cond_.wait(lock);
@@ -82,10 +78,10 @@ public:
   /// Tries to get the top-most queue element.
   /// @param x The reference parameter receiving the result.
   ///
-  /// @returns `true` if the top-most element could be returned and `false` if the
+  /// @returns `true` if the top-most element could be returned and `false` if
+  /// the
   /// queue is empty.
-  bool try_pop(value_type& x)
-  {
+  bool try_pop(value_type& x) {
     std::lock_guard<std::mutex> lock(mutex_);
     if (super::empty())
       return false;

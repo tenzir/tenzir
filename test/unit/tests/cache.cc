@@ -10,8 +10,7 @@
 
 using namespace vast;
 
-TEST(LRU_cache)
-{
+TEST(LRU cache) {
   util::cache<std::string, int> c{2};
   c["x"] = 1;
   auto x = c.lookup("x");
@@ -25,8 +24,8 @@ TEST(LRU_cache)
   c.on_evict([&](std::string const&, int v) { CHECK(v == 4); });
   CHECK(c.insert("foo", 6).second);
   // Duplicate keys cannot be re-inserted.
-  CHECK(! c.insert("foo", 7).second);
-  CHECK(! c.lookup("x"));
+  CHECK(!c.insert("foo", 7).second);
+  CHECK(!c.lookup("x"));
   CHECK(c.lookup("corge"));
   // Ensure key has the right value.
   x = c.lookup("foo");
@@ -48,19 +47,18 @@ TEST(LRU_cache)
   CHECK(c.size() == d.size());
   CHECK(*c.begin() == *d.begin());
   // Erasure (does not call evict function)
-  CHECK(! c.contains("x"));
+  CHECK(!c.contains("x"));
   CHECK(c.contains("foo"));
   CHECK(c.erase("foo") == 1);
 }
 
-TEST(MRU_cache)
-{
+TEST(MRU cache) {
   util::cache<std::string, int, util::mru> c{2};
   c.on_evict([&](std::string const&, int v) { CHECK(v == 3); });
   CHECK(c.insert("fu", 2).second);
   CHECK(c.insert("foo", 3).second);
   CHECK(c.insert("quux", 4).second);
   CHECK(c.contains("quux"));
-  CHECK(! c.contains("foo"));
+  CHECK(!c.contains("foo"));
   CHECK(c.contains("fu"));
 }

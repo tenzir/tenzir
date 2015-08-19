@@ -11,29 +11,23 @@
 
 namespace vast {
 
-struct event_printer : printer<event_printer>
-{
+struct event_printer : printer<event_printer> {
   using attribute = event;
 
   template <typename Iterator>
-  bool print(Iterator& out, event const& e) const
-  {
+  bool print(Iterator& out, event const& e) const {
     using namespace printers;
-    if (e.type().name().empty() && ! str.print(out, "<anonymous>"))
+    if (e.type().name().empty() && !str.print(out, "<anonymous>"))
       return false;
-    return str.print(out, e.type().name())
-        && str.print(out, " [")
-        && u64.print(out, e.id())
-        && any.print(out, '|')
-        && make_printer<time::point>{}.print(out, e.timestamp())
-        && str.print(out, "] ")
-        && make_printer<value>{}.print(out, e);
+    return str.print(out, e.type().name()) && str.print(out, " [")
+           && u64.print(out, e.id()) && any.print(out, '|')
+           && make_printer<time::point>{}.print(out, e.timestamp())
+           && str.print(out, "] ") && make_printer<value>{}.print(out, e);
   }
 };
 
 template <>
-struct printer_registry<event>
-{
+struct printer_registry<event> {
   using type = event_printer;
 };
 

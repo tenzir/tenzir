@@ -8,11 +8,9 @@
 namespace vast {
 
 template <>
-struct access::state<value>
-{
+struct access::state<value> {
   template <typename T, typename F>
-  static void call(T&& x, F f)
-  {
+  static void call(T&& x, F f) {
     f(x.data_, x.type_);
   }
 };

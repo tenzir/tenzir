@@ -11,11 +11,8 @@ namespace qi = boost::spirit::qi;
 namespace ascii = boost::spirit::ascii;
 
 template <typename Iterator>
-struct skipper : qi::grammar<Iterator>
-{
-  skipper()
-    : skipper::base_type(start)
-  {
+struct skipper : qi::grammar<Iterator> {
+  skipper() : skipper::base_type(start) {
     qi::char_type char_;
     ascii::space_type space;
 
@@ -26,7 +23,7 @@ struct skipper : qi::grammar<Iterator>
         ;
   }
 
-    qi::rule<Iterator> start;
+  qi::rule<Iterator> start;
 };
 
 } // namespace ast

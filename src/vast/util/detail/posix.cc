@@ -10,8 +10,7 @@ namespace vast {
 namespace util {
 namespace detail {
 
-int uds_listen(std::string const& path)
-{
+int uds_listen(std::string const& path) {
   int fd;
   if ((fd = ::socket(AF_UNIX, SOCK_STREAM, 0)) < 0)
     return fd;
@@ -21,16 +20,14 @@ int uds_listen(std::string const& path)
   std::strncpy(un.sun_path, path.data(), sizeof(un.sun_path));
   ::unlink(path.c_str()); // Always remove previous socket file.
   auto sa = reinterpret_cast<sockaddr*>(&un);
-  if (::bind(fd, sa, sizeof(un)) < 0 || ::listen(fd, 10) < 0)
-  {
+  if (::bind(fd, sa, sizeof(un)) < 0 || ::listen(fd, 10) < 0) {
     ::close(fd);
     return -1;
   }
   return fd;
 }
 
-int uds_accept(int socket)
-{
+int uds_accept(int socket) {
   if (socket < 0)
     return -1;
   int fd;
@@ -41,8 +38,7 @@ int uds_accept(int socket)
   return fd;
 }
 
-int uds_connect(std::string const& path)
-{
+int uds_connect(std::string const& path) {
   int fd;
   if ((fd = ::socket(AF_UNIX, SOCK_STREAM, 0)) < 0)
     return fd;
@@ -59,8 +55,7 @@ int uds_connect(std::string const& path)
 VAST_DIAGNOSTIC_PUSH
 VAST_DIAGNOSTIC_IGNORE_VLA_EXTENSION
 
-bool uds_send_fd(int socket, int fd)
-{
+bool uds_send_fd(int socket, int fd) {
   if (socket < 0)
     return -1;
   char dummy = '*';
@@ -88,8 +83,7 @@ bool uds_send_fd(int socket, int fd)
   return ::sendmsg(socket, &m, 0) > 0;
 }
 
-int uds_recv_fd(int socket)
-{
+int uds_recv_fd(int socket) {
   if (socket < 0)
     return -1;
   char ctrl_buf[CMSG_SPACE(sizeof(int))];
@@ -107,13 +101,13 @@ int uds_recv_fd(int socket)
   m.msg_controllen = CMSG_SPACE(sizeof(int));
   m.msg_iov = iov;
   m.msg_iovlen = 1;
-   // Receive a message.
+  // Receive a message.
   if (::recvmsg(socket, &m, 0) <= 0)
     return -1;
   // Iterate over control message headers until we find the descriptor.
   for (auto c = CMSG_FIRSTHDR(&m); c != nullptr; c = CMSG_NXTHDR(&m, c))
-   if (c->cmsg_level == SOL_SOCKET && c->cmsg_type == SCM_RIGHTS)
-     return *reinterpret_cast<int*>(CMSG_DATA(c));
+    if (c->cmsg_level == SOL_SOCKET && c->cmsg_type == SCM_RIGHTS)
+      return *reinterpret_cast<int*>(CMSG_DATA(c));
   return -1;
 }
 

@@ -11,8 +11,7 @@ namespace vast {
 namespace sink {
 
 /// A file source that reads PCAP traces.
-class pcap : public base<pcap>
-{
+class pcap : public base<pcap> {
 public:
   /// Constructs a file source.
   /// @param sch The schema containing the packet type.

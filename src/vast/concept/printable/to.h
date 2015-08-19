@@ -14,8 +14,7 @@ auto to(From&& from, Opts&&... opts)
   -> std::enable_if_t<
        std::is_same<std::string, To>{} && has_printer<std::decay_t<From>>{},
        optional<std::string>
-     >
-{
+     > {
   std::string str;
   if (! print(std::back_inserter(str), from, std::forward<Opts>(opts)...))
     return nil;

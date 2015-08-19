@@ -1,4 +1,4 @@
-#include <unistd.h>       // gethostname, getpid
+#include <unistd.h> // gethostname, getpid
 
 #include <cerrno>
 
@@ -7,20 +7,18 @@
 namespace vast {
 namespace util {
 
-std::string hostname()
-{
+std::string hostname() {
   char buf[256];
   if (::gethostname(buf, sizeof(buf)) == 0)
     return buf;
-  //if (errno == EFAULT)
+  // if (errno == EFAULT)
   //  VAST_ERROR("failed to get hostname: invalid address");
-  //else if (errno == ENAMETOOLONG)
+  // else if (errno == ENAMETOOLONG)
   //  VAST_ERROR("failed to get hostname: longer than 256 characters");
   return {};
 }
 
-int32_t process_id()
-{
+int32_t process_id() {
   return ::getpid();
 }
 

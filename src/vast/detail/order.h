@@ -20,8 +20,7 @@ template <
     std::is_unsigned<T>::value && std::is_integral<T>::value
   >
 >
-T order(T x)
-{
+T order(T x) {
   // Unsigned integral types already exhibit a bitwise total order.
   return x;
 }
@@ -32,8 +31,7 @@ template <
     std::is_signed<T>::value && std::is_integral<T>::value
   >
 >
-auto order(T x) -> std::make_unsigned_t<T>
-{
+auto order(T x) -> std::make_unsigned_t<T> {
   // For signed integral types, We shift the entire domain by 2^w to the left,
   // where w is the size of T in bits. By ditching 2's-complement, we get a
   // total bitwise ordering.
@@ -45,14 +43,12 @@ template <
   typename T,
   typename = std::enable_if_t<std::is_floating_point<T>::value>
 >
-uint64_t order(T x)
-{
+uint64_t order(T x) {
   static_assert(std::numeric_limits<T>::is_iec559,
                 "can only order IEEE 754 double types");
   VAST_ASSERT(! std::isnan(x));
   uint64_t result;
-  switch (std::fpclassify(x))
-  {
+  switch (std::fpclassify(x)) {
     default:
       throw std::invalid_argument("missing std::fpclassify() case");
     case FP_ZERO:
@@ -66,8 +62,7 @@ uint64_t order(T x)
       break;
     case FP_NAN:
       throw std::invalid_argument("NaN cannot be ordered");
-    case FP_NORMAL:
-    {
+    case FP_NORMAL: {
       static constexpr auto exp_mask = (~0ull << 53) >> 1;
       static constexpr auto sig_mask = ~0ull >> 12;
       auto p = reinterpret_cast<uint64_t*>(&x);
@@ -82,17 +77,14 @@ uint64_t order(T x)
       // Thereafter, we add the desired bits of the significand. Because the
       // significand is always >= 0, we can use the same subtraction method
       // for negative values as for the offset-binary encoded exponent.
-      if (x > 0.0)
-      {
+      if (x > 0.0) {
         result = (*p & exp_mask) | (1ull << 63); // Add positive MSB
-        result |= sig;  // Plug in significand as-is.
-        ++result; // Account for subnormal.
-      }
-      else
-      {
-        result = ((exp_mask >> 52) - exp) << 52;  // Reverse exponent.
-        result |= (sig_mask - sig); // Reverse significand.
-        --result; // Account for subnormal.
+        result |= sig;                           // Plug in significand as-is.
+        ++result;                                // Account for subnormal.
+      } else {
+        result = ((exp_mask >> 52) - exp) << 52; // Reverse exponent.
+        result |= (sig_mask - sig);              // Reverse significand.
+        --result;                                // Account for subnormal.
       }
     }
   }

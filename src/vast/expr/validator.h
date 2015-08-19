@@ -15,8 +15,7 @@ namespace expr {
 
 /// Ensures expression node integrity by checking whether the predicates are
 /// semantically correct.
-struct validator
-{
+struct validator {
   trial<void> operator()(none) const;
   trial<void> operator()(conjunction const& c) const;
   trial<void> operator()(disjunction const& d) const;

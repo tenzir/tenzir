@@ -15,6 +15,7 @@
 #include "vast/type.h"
 #include "vast/uuid.h"
 #include "vast/value.h"
+#include "vast/util/radix_tree.h"
 #include "vast/concept/serializable/builtin.h"
 #include "vast/concept/serializable/state.h"
 #include "vast/concept/serializable/caf/message.h"
@@ -31,6 +32,7 @@
 #include "vast/concept/serializable/vast/schema.h"
 #include "vast/concept/serializable/vast/type.h"
 #include "vast/concept/serializable/vast/vector_event.h"
+#include "vast/concept/serializable/vast/util/radix_tree.h"
 #include "vast/concept/state/address.h"
 #include "vast/concept/state/bitmap_index.h"
 #include "vast/concept/state/block.h"
@@ -49,20 +51,50 @@
 namespace vast {
 namespace {
 
+// TODO: remove after having consolidated VAST's and CAF's serialization
+// frameworks.
+class radix_tree_msg_type_info
+  : public caf::abstract_uniform_type_info<util::radix_tree<caf::message>> {
+public:
+  radix_tree_msg_type_info()
+    : caf::abstract_uniform_type_info<util::radix_tree<caf::message>>{
+        "vast::util::radix_tree<caf::message>"} {
+  }
+
+protected:
+  void serialize(void const* ptr, caf::serializer* sink) const final {
+    auto x = reinterpret_cast<util::radix_tree<caf::message> const*>(ptr);
+    sink->begin_sequence(x->size());
+    for (auto& pair : *x)
+      *sink << pair.first << pair.second;
+    sink->end_sequence();
+  }
+
+  void deserialize(void* ptr, caf::deserializer* source) const final {
+    auto x = reinterpret_cast<util::radix_tree<caf::message>*>(ptr);
+    x->clear();
+    auto n = source->begin_sequence();
+    for (auto i = 0u; i < n; ++i) {
+      std::string key;
+      caf::message value;
+      *source >> key >> value;
+      x->insert(std::make_pair(std::move(key), std::move(value)));
+    }
+    source->end_sequence();
+  }
+};
+
 template <typename Bitstream>
-void announce_bmi_hierarchy(std::string const& bs_name)
-{
+void announce_bmi_hierarchy(std::string const& bs_name) {
   using detail::bitmap_index_concept;
   using detail::bitmap_index_model;
-  static auto wrap = 
+  static auto wrap =
     [](std::string const& prefix, std::string const& str, std::string const& t)
-      -> std::string
-  {
+      -> std::string {
     return prefix + '<' + str + ">,T=" + t;
   };
   static auto model_wrap = [](std::string const& str, std::string const& t)
-    -> std::string
-  {
+    -> std::string {
     return wrap("vast::detail::bitmap_index_model", str, t);
   };
   announce<arithmetic_bitmap_index<Bitstream, boolean>>(
@@ -116,8 +148,7 @@ void announce_bmi_hierarchy(std::string const& bs_name)
 
 } // namespace <anonymous>
 
-void announce_types()
-{
+void announce_types() {
   announce<path>("vast::path");
   announce<uuid>("vast::uuid");
   announce<arithmetic_operator>("vast::arithmetic_operator");
@@ -148,13 +179,15 @@ void announce_types()
   announce<expression>("vast::expression");
   announce<predicate>("vast::predicate");
   announce<io::compression>("vast::io::compression");
-  announce<none>("vast::util::none");
-  announce<error>("vast::util::error");
+  announce<none>("vast::none");
+  announce<error>("vast::error");
   // std::vector<T>
   announce<std::vector<data>>("std::vector<vast::data>");
   announce<std::vector<event>>("std::vector<vast::event>");
   announce<std::vector<value>>("std::vector<vast::value>");
   announce<std::vector<uuid>>("std::vector<vast::uuid>");
+  announce<util::radix_tree<caf::message>>(
+    "vast::util::radix_tree<caf::message>>");
   // Polymorphic bitstreams
   announce<ewah_bitstream>("vast::ewah_bitstream");
   announce<null_bitstream>("vast::null_bitstream");
@@ -171,6 +204,9 @@ void announce_types()
   // CAF only
   caf::announce<std::map<std::string, caf::message>>(
     "std::map<std::string,caf::message>>");
+  // Temporary workaround.
+  caf::announce(typeid(util::radix_tree<caf::message>),
+                std::make_unique<radix_tree_msg_type_info>());
 }
 
 } // namespace vast

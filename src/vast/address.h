@@ -11,9 +11,7 @@ namespace vast {
 struct access;
 
 /// An IP address.
-class address : util::totally_ordered<address>,
-                util::bitwise<address>
-{
+class address : util::totally_ordered<address>, util::bitwise<address> {
   friend access;
 
   /// Top 96 bits of v4-mapped-addr.
@@ -21,18 +19,10 @@ class address : util::totally_ordered<address>,
 
 public:
   /// Address family.
-  enum family
-  {
-    ipv4,
-    ipv6
-  };
+  enum family { ipv4, ipv6 };
 
   /// Address byte order.
-  enum byte_order
-  {
-    host,
-    network
-  };
+  enum byte_order { host, network };
 
   /// Default-constructs an (invalid) address.
   address();

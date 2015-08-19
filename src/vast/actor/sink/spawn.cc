@@ -23,8 +23,7 @@ using namespace std::string_literals;
 namespace vast {
 namespace sink {
 
-trial<caf::actor> spawn(message const& params)
-{
+trial<caf::actor> spawn(message const& params) {
   auto schema_file = ""s;
   auto output = "-"s;
   auto r = params.extract_opts({
@@ -32,52 +31,43 @@ trial<caf::actor> spawn(message const& params)
     {"write,w", "path to write events to", output},
     {"uds,u", "treat -w as UNIX domain socket to connect to"}
   });
-  if (! r.error.empty())
+  if (!r.error.empty())
     return error{std::move(r.error)};
   // Setup a custom schema.
   schema sch;
-  if (! schema_file.empty())
-  {
+  if (!schema_file.empty()) {
     auto t = load_contents(schema_file);
-    if (! t)
+    if (!t)
       return t.error();
     auto s = vast::detail::to_schema(*t);
-    if (! s)
+    if (!s)
       return error{"failed to load schema: ", s.error()};
     sch = std::move(*s);
   }
   // Facilitate actor shutdown when returning with error.
   actor snk;
-  auto guard = caf::detail::make_scope_guard(
-    [&] { anon_send_exit(snk, exit::error); }
-  );
+  auto guard
+    = caf::detail::make_scope_guard([&] { anon_send_exit(snk, exit::error); });
   // The "pcap" and "bro" sink manually handle file output. All other
   // sources are file-based and we setup their input stream here.
   auto& format = params.get_as<std::string>(0);
   std::unique_ptr<std::ostream> out;
-  if (! (format == "pcap" || format == "bro"))
-  {
-    if (r.opts.count("uds") > 0)
-    {
+  if (!(format == "pcap" || format == "bro")) {
+    if (r.opts.count("uds") > 0) {
       if (output == "-")
         return error{"cannot use stdout as UNIX domain socket"};
       auto uds = util::unix_domain_socket::connect(output);
-      if (! uds)
+      if (!uds)
         return error{"failed to connect to UNIX domain socket at ", output};
       auto remote_fd = uds.recv_fd(); // Blocks!
       out = std::make_unique<util::fdostream>(remote_fd);
-    }
-    else if (output == "-")
-    {
+    } else if (output == "-") {
       out = std::make_unique<util::fdostream>(1); // stdout
-    }
-    else
-    {
+    } else {
       out = std::make_unique<std::ofstream>(output);
     }
   }
-  if (format == "pcap")
-  {
+  if (format == "pcap") {
 #ifndef VAST_HAVE_PCAP
     return error{"not compiled with pcap support"};
 #else
@@ -85,25 +75,17 @@ trial<caf::actor> spawn(message const& params)
     r = r.remainder.extract_opts({
       {"flush,f", "flush to disk after this many packets", flush}
     });
-    if (! r.error.empty())
+    if (!r.error.empty())
       return error{std::move(r.error)};
     snk = caf::spawn<sink::pcap, priority_aware>(sch, output, flush);
 #endif
-  }
-  else if (format == "bro")
-  {
+  } else if (format == "bro") {
     snk = caf::spawn<sink::bro>(output);
-  }
-  else if (format == "ascii")
-  {
+  } else if (format == "ascii") {
     snk = caf::spawn<sink::ascii>(std::move(out));
-  }
-  else if (format == "json")
-  {
+  } else if (format == "json") {
     snk = caf::spawn<sink::json>(std::move(out));
-  }
-  else
-  {
+  } else {
     return error{"invalid export format: ", format};
   }
   guard.disable();

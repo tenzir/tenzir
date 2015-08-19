@@ -10,18 +10,14 @@
 
 namespace vast {
 namespace ast {
-namespace expr {
-
-} // namespace expr
+namespace expr {} // namespace expr
 } // namespace ast
 
-struct expression_parser : vast::parser<expression_parser>
-{
+struct expression_parser : vast::parser<expression_parser> {
   using attribute = expression;
 
   template <typename Iterator>
-  static auto make()
-  {
+  static auto make() {
     using namespace parsers;
     auto id
       = (alpha | '_' | '&' | ':') >> *(alnum | '_' | '.' | ':')
@@ -67,15 +63,13 @@ struct expression_parser : vast::parser<expression_parser>
   }
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, unused_type) const
-  {
+  bool parse(Iterator& f, Iterator const& l, unused_type) const {
     static auto p = make<Iterator>();
     return p.parse(f, l, unused);
   }
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, expression& a) const
-  {
+  bool parse(Iterator& f, Iterator const& l, expression& a) const {
     using namespace parsers;
     static auto p = make<Iterator>();
     return p.parse(f, l, a);
@@ -83,8 +77,7 @@ struct expression_parser : vast::parser<expression_parser>
 };
 
 template <>
-struct parser_registry<expression>
-{
+struct parser_registry<expression> {
   using type = detail::expression_parser;
 };
 

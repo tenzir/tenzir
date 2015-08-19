@@ -14,8 +14,7 @@ namespace vast {
 namespace io {
 
 /// An actor input stream
-class actor_input_stream : public input_stream
-{
+class actor_input_stream : public input_stream {
 public:
   /// Constructs an actor input stream from an actor.
   /// @param source The actor to poll for new data chunks.
@@ -41,8 +40,7 @@ private:
 };
 
 /// An output device which sends its data as byte vectors to a sink actor.
-class actor_output_device : public output_device
-{
+class actor_output_device : public output_device {
 public:
   /// Constructs an actor output device.
   /// @param sink The actor receiving the written data.
@@ -56,8 +54,7 @@ private:
 
 /// An output device which sends its buffered data as byte vectors to a sink
 /// actor upon flushing.
-class actor_output_stream : public output_stream
-{
+class actor_output_stream : public output_stream {
 public:
   /// Constructs an actor output stream.
   /// @param sink The sink actor receiving byte vectors.

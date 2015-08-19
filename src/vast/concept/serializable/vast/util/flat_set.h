@@ -6,8 +6,7 @@
 namespace vast {
 
 template <typename Serializer, typename T, typename C, typename A>
-void serialize(Serializer& sink, util::flat_set<T, C, A> const& s)
-{
+void serialize(Serializer& sink, util::flat_set<T, C, A> const& s) {
   sink.begin_sequence(s.size());
   for (auto& x : s)
     sink << x;
@@ -15,11 +14,9 @@ void serialize(Serializer& sink, util::flat_set<T, C, A> const& s)
 }
 
 template <typename Deserializer, typename T, typename C, typename A>
-void deserialize(Deserializer& source, util::flat_set<T, C, A>& s)
-{
+void deserialize(Deserializer& source, util::flat_set<T, C, A>& s) {
   auto size = source.begin_sequence();
-  for (uint64_t i = 0; i < size; ++i)
-  {
+  for (uint64_t i = 0; i < size; ++i) {
     T x;
     source >> x;
     s.insert(std::move(x));

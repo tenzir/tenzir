@@ -15,11 +15,9 @@ template <size_t N>
 struct extract;
 
 template <>
-struct extract<1>
-{
+struct extract<1> {
   template <typename Iterator, typename Attribute>
-  static bool parse(Iterator& f, Iterator const& l, Attribute& a)
-  {
+  static bool parse(Iterator& f, Iterator const& l, Attribute& a) {
     if (f == l)
       return false;
     a = *f++;
@@ -28,11 +26,9 @@ struct extract<1>
 };
 
 template <>
-struct extract<2>
-{
+struct extract<2> {
   template <typename Iterator, typename Attribute>
-  static bool parse(Iterator& f, Iterator const& l, Attribute& a)
-  {
+  static bool parse(Iterator& f, Iterator const& l, Attribute& a) {
     if (f == l)
       return false;
     a = *f++;
@@ -45,12 +41,10 @@ struct extract<2>
 };
 
 template <>
-struct extract<4>
-{
+struct extract<4> {
   template <typename Iterator, typename Attribute>
-  static bool parse(Iterator& f, Iterator const& l, Attribute& a)
-  {
-    if (! extract<2>::parse(f, l, a))
+  static bool parse(Iterator& f, Iterator const& l, Attribute& a) {
+    if (!extract<2>::parse(f, l, a))
       return false;
     a <<= 8;
     return extract<2>::parse(f, l, a);
@@ -58,12 +52,10 @@ struct extract<4>
 };
 
 template <>
-struct extract<8>
-{
+struct extract<8> {
   template <typename Iterator, typename Attribute>
-  static bool parse(Iterator& f, Iterator const& l, Attribute& a)
-  {
-    if (! extract<4>::parse(f, l, a))
+  static bool parse(Iterator& f, Iterator const& l, Attribute& a) {
+    if (!extract<4>::parse(f, l, a))
       return false;
     a <<= 8;
     return extract<4>::parse(f, l, a);
@@ -73,23 +65,20 @@ struct extract<8>
 } // namespace detail
 
 template <typename T, endianness Endian = big_endian, size_t Bytes = sizeof(T)>
-struct binary_parser : parser<binary_parser<T, Endian, Bytes>>
-{
+struct binary_parser : parser<binary_parser<T, Endian, Bytes>> {
   using attribute = T;
 
   template <typename Iterator>
-  static bool extract(Iterator& f, Iterator const& l, T& x)
-  {
+  static bool extract(Iterator& f, Iterator const& l, T& x) {
     auto save = f;
-    if (! detail::extract<Bytes>::parse(save, l, x))
+    if (!detail::extract<Bytes>::parse(save, l, x))
       return false;
     f = save;
     return true;
   }
 
   template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, unused_type) const
-  {
+  bool parse(Iterator& f, Iterator const& l, unused_type) const {
     for (auto i = 0u; i < Bytes; ++i)
       if (f != l)
         ++f;
@@ -100,16 +89,14 @@ struct binary_parser : parser<binary_parser<T, Endian, Bytes>>
 
   template <typename Iterator, endianness E = Endian>
   auto parse(Iterator& f, Iterator const& l, T& x) const
-    -> std::enable_if_t<E == big_endian, bool>
-  {
+    -> std::enable_if_t<E == big_endian, bool> {
     return extract(f, l, x);
   }
 
   template <typename Iterator, endianness E = Endian>
   auto parse(Iterator& f, Iterator const& l, T& x) const
-    -> std::enable_if_t<E == little_endian, bool>
-  {
-    if (! extract(f, l, x))
+    -> std::enable_if_t<E == little_endian, bool> {
+    if (!extract(f, l, x))
       return false;
     x = util::byte_swap<big_endian, little_endian>(x);
     return true;

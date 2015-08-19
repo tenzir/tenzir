@@ -8,15 +8,13 @@ namespace vast {
 
 /// Parses a single ASCII character in a given continguous range.
 template <char From, char To, char... Ranges>
-class char_range_parser : public parser<char_range_parser<From, To>>
-{
+class char_range_parser : public parser<char_range_parser<From, To>> {
 public:
   using attribute = char;
 
   template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const
-  {
-    if (f == l || ! check<From, To, Ranges...>(*f))
+  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
+    if (f == l || !check<From, To, Ranges...>(*f))
       return false;
     detail::absorb(a, *f);
     ++f;
@@ -25,14 +23,12 @@ public:
 
 private:
   template <char L, char R>
-  static bool check(char c)
-  {
+  static bool check(char c) {
     return L <= c && c <= R;
   }
 
   template <char L0, char R0, char L1, char R1, char... Cs>
-  static bool check(char c)
-  {
+  static bool check(char c) {
     return check<L0, R0>(c) && check<L1, R1, Cs...>;
   }
 };
@@ -48,4 +44,3 @@ auto const a_zA_Z0_9 = char_range_parser<'a', 'z', 'A', 'Z', '0', '9'>{};
 } // namespace vast
 
 #endif
-

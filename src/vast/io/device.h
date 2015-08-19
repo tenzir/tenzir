@@ -7,8 +7,7 @@ namespace vast {
 namespace io {
 
 /// An interface for reading from an underlying device.
-class input_device
-{
+class input_device {
 public:
   /// Attempts to read data into a given buffer.
   /// @param data The buffer receiving the result of the read operation.
@@ -26,12 +25,11 @@ public:
   /// @param skipped The number of bytes actually skipped.
   /// @returns `true` if *bytes* bytes were successfully skipped and false
   ///          otherwise.
-  virtual bool skip(size_t bytes, size_t *skipped = nullptr);
+  virtual bool skip(size_t bytes, size_t* skipped = nullptr);
 };
 
 /// An interface for writing to an underlying device.
-class output_device
-{
+class output_device {
 public:
   /// Attempts to write data to a given buffer.
   /// @param data The data to write.

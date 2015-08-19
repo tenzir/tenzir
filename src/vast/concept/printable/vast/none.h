@@ -7,24 +7,20 @@
 
 namespace vast {
 
-struct none_printer : printer<none_printer>
-{
+struct none_printer : printer<none_printer> {
   using attribute = none;
 
   template <typename Iterator>
-  bool print(Iterator& out, none) const
-  {
+  bool print(Iterator& out, none) const {
     return printers::str.print(out, "nil");
   }
 };
 
 template <>
-struct printer_registry<none>
-{
+struct printer_registry<none> {
   using type = none_printer;
 };
 
 } // namespace vast
 
 #endif
-

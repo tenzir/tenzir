@@ -24,15 +24,13 @@ struct upper_class {};
 struct xdigit_class {};
 
 template <typename CharClass>
-class char_class_parser : public parser<char_class_parser<CharClass>>
-{
+class char_class_parser : public parser<char_class_parser<CharClass>> {
 public:
   using attribute = char;
 
   template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, Iterator const& l, Attribute& a) const
-  {
-    if (f == l || ! test_char(*f, CharClass{}))
+  bool parse(Iterator& f, Iterator const& l, Attribute& a) const {
+    if (f == l || !test_char(*f, CharClass{}))
       return false;
     detail::absorb(a, *f);
     ++f;
@@ -40,10 +38,9 @@ public:
   }
 
 private:
-#define VAST_DEFINE_CHAR_TEST(klass, fun)          \
-  static bool test_char(int c, klass##_class)      \
-  {                                                \
-    return std::fun(c);                            \
+#define VAST_DEFINE_CHAR_TEST(klass, fun)                                      \
+  static bool test_char(int c, klass##_class) {                                \
+    return std::fun(c);                                                        \
   }
 
   VAST_DEFINE_CHAR_TEST(alnum, isalnum)
@@ -62,8 +59,8 @@ private:
 #undef VAST_DEFINE_CHAR_TEST
 };
 
-#define VAST_DEFINE_CHAR_CLASS_PARSER(klass) \
-using klass##_parser = char_class_parser<klass##_class>
+#define VAST_DEFINE_CHAR_CLASS_PARSER(klass)                                   \
+  using klass##_parser = char_class_parser<klass##_class>
 
 VAST_DEFINE_CHAR_CLASS_PARSER(alnum);
 VAST_DEFINE_CHAR_CLASS_PARSER(alpha);

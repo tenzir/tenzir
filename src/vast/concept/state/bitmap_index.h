@@ -9,21 +9,17 @@
 namespace vast {
 
 template <typename Derived, typename Bitstream>
-struct access::state<bitmap_index_base<Derived, Bitstream>>
-{
+struct access::state<bitmap_index_base<Derived, Bitstream>> {
   template <typename T, typename F>
-  static void call(T&& x, F f)
-  {
+  static void call(T&& x, F f) {
     f(x.mask_, x.nil_);
   }
 };
 
 template <typename Bitstream, typename Z, typename Binner>
-struct access::state<arithmetic_bitmap_index<Bitstream, Z, Binner>>
-{
+struct access::state<arithmetic_bitmap_index<Bitstream, Z, Binner>> {
   template <typename T, typename F>
-  static void call(T&& x, F f)
-  {
+  static void call(T&& x, F f) {
     using super = typename std::decay_t<decltype(x)>::super;
     using base = util::deduce<decltype(x), super>;
     f(static_cast<base>(x), x.bitmap_);
@@ -31,11 +27,9 @@ struct access::state<arithmetic_bitmap_index<Bitstream, Z, Binner>>
 };
 
 template <typename Bitstream>
-struct access::state<string_bitmap_index<Bitstream>>
-{
+struct access::state<string_bitmap_index<Bitstream>> {
   template <typename T, typename F>
-  static void call(T&& x, F f)
-  {
+  static void call(T&& x, F f) {
     using super = typename std::decay_t<decltype(x)>::super;
     using base = util::deduce<decltype(x), super>;
     f(static_cast<base>(x), x.bitmaps_, x.length_);
@@ -43,11 +37,9 @@ struct access::state<string_bitmap_index<Bitstream>>
 };
 
 template <typename Bitstream>
-struct access::state<address_bitmap_index<Bitstream>>
-{
+struct access::state<address_bitmap_index<Bitstream>> {
   template <typename T, typename F>
-  static void call(T&& x, F f)
-  {
+  static void call(T&& x, F f) {
     using super = typename std::decay_t<decltype(x)>::super;
     using base = util::deduce<decltype(x), super>;
     f(static_cast<base>(x), x.bitmaps_, x.v4_);
@@ -55,11 +47,9 @@ struct access::state<address_bitmap_index<Bitstream>>
 };
 
 template <typename Bitstream>
-struct access::state<subnet_bitmap_index<Bitstream>>
-{
+struct access::state<subnet_bitmap_index<Bitstream>> {
   template <typename T, typename F>
-  static void call(T&& x, F f)
-  {
+  static void call(T&& x, F f) {
     using super = typename std::decay_t<decltype(x)>::super;
     using base = util::deduce<decltype(x), super>;
     f(static_cast<base>(x), x.network_, x.length_);
@@ -67,11 +57,9 @@ struct access::state<subnet_bitmap_index<Bitstream>>
 };
 
 template <typename Bitstream>
-struct access::state<port_bitmap_index<Bitstream>>
-{
+struct access::state<port_bitmap_index<Bitstream>> {
   template <typename T, typename F>
-  static void call(T&& x, F f)
-  {
+  static void call(T&& x, F f) {
     using super = typename std::decay_t<decltype(x)>::super;
     using base = util::deduce<decltype(x), super>;
     f(static_cast<base>(x), x.num_, x.proto_);

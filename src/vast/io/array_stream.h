@@ -7,8 +7,7 @@ namespace vast {
 namespace io {
 
 /// An input stream that reads from a raw array.
-class array_input_stream : public input_stream
-{
+class array_input_stream : public input_stream {
   array_input_stream(array_input_stream const&) = delete;
   array_input_stream& operator=(array_input_stream const&) = delete;
 
@@ -36,16 +35,13 @@ private:
 };
 
 template <typename Container>
-inline array_input_stream
-make_array_input_stream(Container const& container, size_t block_size = 0)
-{
+inline array_input_stream make_array_input_stream(Container const& container,
+                                                  size_t block_size = 0) {
   return array_input_stream(container.data(), container.size(), block_size);
 }
 
-
 /// An output stream that writes into a raw array.
-class array_output_stream : public output_stream
-{
+class array_output_stream : public output_stream {
   array_output_stream(array_output_stream const&) = delete;
   array_output_stream& operator=(array_output_stream const&) = delete;
 
@@ -54,7 +50,7 @@ public:
   /// @param data The beginning of the array.
   /// @param size The size of *data*.
   /// @param block_size The size in bytes used to chop up the array buffer.
-  array_output_stream(void *data, size_t size, size_t block_size = 0);
+  array_output_stream(void* data, size_t size, size_t block_size = 0);
 
   array_output_stream(array_output_stream&&) = default;
   array_output_stream& operator=(array_output_stream&&) = default;
@@ -72,12 +68,10 @@ private:
 };
 
 template <typename Container>
-inline array_output_stream
-make_array_output_stream(Container& container, size_t block_size = 0)
-{
+inline array_output_stream make_array_output_stream(Container& container,
+                                                    size_t block_size = 0) {
   return array_output_stream(container.data(), container.size(), block_size);
 }
-
 
 } // namespace io
 } // namespace vast

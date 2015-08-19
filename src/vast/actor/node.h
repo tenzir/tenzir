@@ -1,6 +1,9 @@
 #ifndef VAST_ACTOR_NODE_H
 #define VAST_ACTOR_NODE_H
 
+#include <map>
+#include <string>
+
 #include "vast/filesystem.h"
 #include "vast/trial.h"
 #include "vast/actor/actor.h"
@@ -15,12 +18,11 @@ namespace vast {
 ///
 /// The key space has the following structure:
 ///
-///   - /actors/<node>/<fqn>/{actor, type}
-///   - /peers/<node>/<fqn>
+///   - /actors/<node>/<label>/{actor, type}
+///   - /peers/<node>/<node>
 ///   - /topology/<source>/<sink>
 ///
-struct node : default_actor
-{
+struct node : default_actor {
   /// Returns the path of the log directory relative to the base directory.
   /// @returns The directory where to write log and status messages to.
   static path const& log_path();
@@ -37,33 +39,31 @@ struct node : default_actor
   // Public message interface
   //
 
-  caf::message stop();
-  caf::message request_peering(std::string const& endpoint);
-  caf::message spawn_actor(caf::message const& msg);
-  caf::message send_run(std::string const& arg);
-  void send_flush(std::string const& arg);
-  caf::message quit_actor(std::string const& arg);
-  caf::message connect(std::string const& sources, std::string const& sinks);
-  caf::message disconnect(std::string const& sources, std::string const& sinks);
-  caf::message show(std::string const& arg, bool verbose);
+  caf::behavior spawn_actor(caf::event_based_actor* self);
+  caf::behavior send_run(caf::event_based_actor* self);
+  caf::behavior send_flush(caf::event_based_actor* self);
+  caf::behavior quit_actor(caf::event_based_actor* self);
+  caf::behavior connect(caf::event_based_actor* self);
+  caf::behavior disconnect(caf::event_based_actor* self);
+  caf::behavior show(caf::event_based_actor* self);
+  caf::behavior store_get_actor(caf::event_based_actor* self);
+  caf::behavior request_peering(caf::event_based_actor* self);
+  caf::behavior respond_to_peering(caf::event_based_actor* self);
 
   //
-  // Helper functions to synchronously interact with the key-value store.
+  // Helpers
   //
 
-  struct actor_state
-  {
-    caf::actor actor;
-    std::string type;
-    std::string fqn;
-  };
+  std::string qualify(std::string const& label) const;
+  std::string make_actor_key(std::string const& label) const;
+  std::string parse_actor_key(std::string const& key) const;
 
-  actor_state get(std::string const& label);
-  trial<caf::actor> put(actor_state const& state);
-  bool has_topology_entry(std::string const& src, std::string const& snk);
-
+  caf::behavior operating_;
   caf::actor accountant_;
   caf::actor store_;
+  std::map<std::string, caf::actor> peers_;
+  std::map<std::string, caf::actor> actors_by_label_;
+  std::multimap<std::string, caf::actor> actors_by_type_;
   std::string name_;
   path const dir_;
 };

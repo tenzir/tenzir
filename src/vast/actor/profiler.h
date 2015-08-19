@@ -3,14 +3,14 @@
 
 #include <chrono>
 #include <fstream>
+
 #include "vast/filesystem.h"
 #include "vast/actor/actor.h"
 
 namespace vast {
 
 /// Profiles CPU and heap via gperftools.
-struct profiler : default_actor
-{
+struct profiler : default_actor {
   /// Spawns the profiler.
   /// @param log_dir The directory where to write profiler output to.
   /// @param secs The number of seconds between subsequent measurements.

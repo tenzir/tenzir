@@ -10,21 +10,18 @@ namespace vast {
 
 template <typename Serializer, typename T, typename Allocator>
 auto serialize(Serializer& sink, std::vector<T, Allocator> const& v)
-  -> std::enable_if_t<sizeof(T) == 1>
-{
+  -> std::enable_if_t<sizeof(T) == 1> {
   sink.begin_sequence(v.size());
-  if (! v.empty())
+  if (!v.empty())
     sink.write(v.data(), v.size());
   sink.end_sequence();
 }
 
 template <typename Deserializer, typename T, typename Allocator>
 auto deserialize(Deserializer& source, std::vector<T, Allocator>& v)
-  -> std::enable_if_t<sizeof(T) == 1>
-{
+  -> std::enable_if_t<sizeof(T) == 1> {
   auto size = source.begin_sequence();
-  if (size > 0)
-  {
+  if (size > 0) {
     v.resize(size);
     source.read(v.data(), size);
   }
@@ -33,8 +30,7 @@ auto deserialize(Deserializer& source, std::vector<T, Allocator>& v)
 
 template <typename Serializer, typename T, typename Allocator>
 auto serialize(Serializer& sink, std::vector<T, Allocator> const& v)
-  -> std::enable_if_t<sizeof(T) != 1>
-{
+  -> std::enable_if_t<sizeof(T) != 1> {
   sink.begin_sequence(v.size());
   for (auto const& x : v)
     sink << x;
@@ -43,11 +39,9 @@ auto serialize(Serializer& sink, std::vector<T, Allocator> const& v)
 
 template <typename Deserializer, typename T, typename Allocator>
 auto deserialize(Deserializer& source, std::vector<T, Allocator>& v)
-  -> std::enable_if_t<sizeof(T) != 1>
-{
+  -> std::enable_if_t<sizeof(T) != 1> {
   auto size = source.begin_sequence();
-  if (size > 0)
-  {
+  if (size > 0) {
     v.resize(size);
     for (auto& x : v)
       source >> x;
@@ -58,4 +52,3 @@ auto deserialize(Deserializer& source, std::vector<T, Allocator>& v)
 } // namespace vast
 
 #endif
-

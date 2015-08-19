@@ -21,19 +21,15 @@ namespace qi = boost::spirit::qi;
 
 template <typename Iterator>
 struct time_duration
-  : qi::grammar<Iterator, time::duration(), skipper<Iterator>>
-{
-  struct nanoseconds_converter
-  {
+  : qi::grammar<Iterator, time::duration(), skipper<Iterator>> {
+  struct nanoseconds_converter {
     template <typename, typename>
-    struct result
-    {
+    struct result {
       using type = time::duration;
     };
 
     template <typename Range>
-    time::duration operator()(int64_t d, Range r) const
-    {
+    time::duration operator()(int64_t d, Range r) const {
       std::string s(boost::begin(r), boost::end(r));
       if (s == "nsec" || s == "nsecs" || s == "ns" || s == "n")
         return time::nanoseconds(d);
@@ -49,38 +45,33 @@ struct time_duration
         return time::hours(d);
       else if (s == "day" || s == "days" || s == "d")
         return time::duration(
-            std::chrono::duration<int64_t, std::ratio<86400>>(d));
+          std::chrono::duration<int64_t, std::ratio<86400>>(d));
       else if (s == "week" || s == "weeks" || s == "w" || s == "W")
         return time::duration(
-            std::chrono::duration<int64_t, std::ratio<604800>>(d));
+          std::chrono::duration<int64_t, std::ratio<604800>>(d));
       else if (s == "month" || s == "months" || s == "mo" || s == "M")
         return time::duration(
-            std::chrono::duration<int64_t, std::ratio<2592000>>(d));
+          std::chrono::duration<int64_t, std::ratio<2592000>>(d));
       else if (s == "year" || s == "years" || s == "y" || s == "Y")
         return time::duration(
-            std::chrono::duration<int64_t, std::ratio<31536000>>(d));
-      VAST_ASSERT(! "missing cast implementation");
+          std::chrono::duration<int64_t, std::ratio<31536000>>(d));
+      VAST_ASSERT(!"missing cast implementation");
       return {};
     }
   };
 
-  struct epoch_converter
-  {
+  struct epoch_converter {
     template <typename>
-    struct result
-    {
+    struct result {
       using type = time::duration;
     };
 
-    time::duration operator()(double d) const
-    {
+    time::duration operator()(double d) const {
       return time::fractional(d);
     }
   };
 
-  time_duration()
-    : time_duration::base_type(dur)
-  {
+  time_duration() : time_duration::base_type(dur) {
     qi::_val_type _val;
     qi::_1_type _1;
     qi::_2_type _2;
