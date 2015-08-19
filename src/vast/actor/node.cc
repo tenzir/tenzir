@@ -282,7 +282,7 @@ behavior node::spawn_actor(event_based_actor* self) {
           self->quit(exit::error);
           return;
         }
-        auto i = spawn<identifier>(store_, dir_ / "id", batch_size);
+        auto i = spawn(identifier::actor, store_, dir_ / "id", batch_size);
         save_actor(i, "identifier");
       },
       on("archive", any_vals) >> [=] {

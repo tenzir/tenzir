@@ -4,31 +4,34 @@
 #include "vast/aliases.h"
 #include "vast/time.h"
 #include "vast/filesystem.h"
-#include "vast/actor/actor.h"
+#include "vast/actor/basic_state.h"
 
 namespace vast {
+namespace identifier {
 
-/// Keeps track of the event ID space.
-struct identifier : default_actor {
-  /// Constructs the ID tracker.
-  /// @param store The key-value store to ask for more IDs
-  /// @param dir The directory where to save local state to.
-  /// @param batch_size The batch-size to start at.
-  identifier(caf::actor store, path dir, event_id batch_size = 128);
+struct state : basic_state {
+  state(event_based_actor* self);
+  ~state();
 
-  void on_exit();
-  caf::behavior make_behavior() override;
+  bool flush();
 
-  bool save_state();
-
-  caf::actor store_;
-  path const dir_;
-  event_id id_ = 0;
-  event_id available_ = 0;
-  event_id batch_size_;
-  time::moment last_replenish_ = time::snapshot();
+  actor store;
+  path dir;
+  event_id id = 0;
+  event_id available = 0;
+  event_id batch_size = 1;
+  time::moment last_replenish = time::snapshot();
 };
 
+/// Spawns the ID tracker.
+/// @param self The actor handle.
+/// @param store The key-value store to ask for more IDs.
+/// @param dir The directory where to save local state to.
+/// @param batch_size The batch-size to start at.
+behavior actor(stateful_actor<state>* self, actor store,
+               path dir, event_id batch_size = 128);
+
+} // namespace identifier
 } // namespace vast
 
 #endif
