@@ -70,6 +70,7 @@ include_directories(
 
 set(tests
   tests/actor/export.cc
+  tests/actor/flow_control.cc
   tests/actor/import.cc
   tests/actor/index.cc
   tests/actor/indexer.cc

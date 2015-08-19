@@ -69,6 +69,7 @@ using actor_atom = caf::atom_constant<caf::atom("actor")>;
 using accountant_atom = caf::atom_constant<caf::atom("accountant")>;
 using archive_atom = caf::atom_constant<caf::atom("archive")>;
 using candidate_atom = caf::atom_constant<caf::atom("candidate")>;
+using deflector_atom = caf::atom_constant<caf::atom("deflector")>;
 using identifier_atom = caf::atom_constant<caf::atom("identifier")>;
 using index_atom = caf::atom_constant<caf::atom("index")>;
 using follower_atom = caf::atom_constant<caf::atom("follower")>;

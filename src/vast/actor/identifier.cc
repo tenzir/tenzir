@@ -16,8 +16,7 @@ namespace vast {
 namespace identifier {
 
 state::state(event_based_actor* self)
-  : basic_state{self, "identifier"}
-{
+  : basic_state{self, "identifier"} {
 }
 
 state::~state() {

@@ -1,55 +1,9 @@
 #ifndef VAST_ACTOR_ACTOR_H
 #define VAST_ACTOR_ACTOR_H
 
-#include <cassert>
-#include <ostream>
-
-#include <caf/event_based_actor.hpp>
-#include <caf/send.hpp>
-#include <caf/to_string.hpp>
-
 #include "vast/util/assert.h"
 #include "vast/actor/atoms.h"
-#include "vast/actor/exit.h"
-
-namespace caf {
-
-template <typename Char, typename Traits>
-std::basic_ostream<Char, Traits>&
-operator<<(std::basic_ostream<Char, Traits>& out, actor_addr const& a) {
-  out << '#' << a.id();
-  return out;
-}
-
-template <typename Char, typename Traits>
-std::basic_ostream<Char, Traits>&
-operator<<(std::basic_ostream<Char, Traits>& out, actor const& a) {
-  out << a.address();
-  return out;
-}
-
-template <typename Char, typename Traits>
-std::basic_ostream<Char, Traits>&
-operator<<(std::basic_ostream<Char, Traits>& out, abstract_actor const& a) {
-  out << a.address();
-  return out;
-}
-
-template <typename Stream>
-inline Stream& operator<<(Stream& out, actor const* a) {
-  VAST_ASSERT(a != nullptr);
-  out << *a;
-  return out;
-}
-
-template <typename Stream>
-inline Stream& operator<<(Stream& out, abstract_actor const* a) {
-  VAST_ASSERT(a != nullptr);
-  out << *a;
-  return out;
-}
-
-} // namespace caf
+#include "vast/actor/caf.h"
 
 #include "vast/logger.h"
 #include "vast/util/operators.h"

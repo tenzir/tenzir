@@ -29,6 +29,7 @@ set(libvast_sources
   value.cc
   actor/archive.cc
   actor/exporter.cc
+  actor/flow_controller.cc
   actor/importer.cc
   actor/identifier.cc
   actor/index.cc
