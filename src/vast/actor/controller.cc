@@ -1,9 +1,9 @@
 #include <caf/all.hpp>
 
-#include "vast/actor/flow_controller.h"
+#include "vast/actor/controller.h"
 
 namespace vast {
-namespace flow_controller {
+namespace controller {
 
 namespace {
 
@@ -119,5 +119,5 @@ behavior actor(stateful_actor<state>* self) {
   };
 }
 
-} // namespace flow_controller
+} // namespace controller
 } // namespace vast

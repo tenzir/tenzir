@@ -72,6 +72,7 @@ using actor_atom = atom_constant<atom("actor")>;
 using accountant_atom = atom_constant<atom("accountant")>;
 using archive_atom = atom_constant<atom("archive")>;
 using candidate_atom = atom_constant<atom("candidate")>;
+using controller_atom = atom_constant<atom("controller")>;
 using deflector_atom = atom_constant<atom("deflector")>;
 using identifier_atom = atom_constant<atom("identifier")>;
 using index_atom = atom_constant<atom("index")>;

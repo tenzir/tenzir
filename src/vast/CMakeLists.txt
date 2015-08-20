@@ -28,8 +28,8 @@ set(libvast_sources
   uuid.cc
   value.cc
   actor/archive.cc
+  actor/controller.cc
   actor/exporter.cc
-  actor/flow_controller.cc
   actor/importer.cc
   actor/identifier.cc
   actor/index.cc

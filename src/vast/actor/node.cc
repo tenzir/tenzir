@@ -344,7 +344,7 @@ behavior node::spawn_actor(event_based_actor* self) {
         save_actor(std::move(idx), "index");
       },
       on("importer") >> [=] {
-        auto imp = spawn<importer, priority_aware>();
+        auto imp = spawn<priority_aware>(importer::actor);
         // send(imp, put_atom::value, accountant_atom::value, accountant_);
         save_actor(std::move(imp), "importer");
       },
@@ -398,14 +398,14 @@ behavior node::spawn_actor(event_based_actor* self) {
         auto exp = self->spawn<exporter>(*expr, query_opts);
         self->send(exp, extract_atom::value, events);
         if (r.opts.count("auto-connect") > 0) {
-          std::vector<caf::actor> archives;
-          std::vector<caf::actor> indexes;
+          std::vector<actor> archives;
+          std::vector<actor> indexes;
           self->send(store_, list_atom::value, key::str("actors", name_));
           self->become(
-            [=](std::map<std::string, caf::message>& m) {
+            [=](std::map<std::string, message>& m) {
               for (auto& p : m)
                 p.second.apply({
-                  [&](caf::actor const& a, std::string const& type) {
+                  [&](actor const& a, std::string const& type) {
                     VAST_ASSERT(a != invalid_actor);
                     if (type == "archive")
                       self->send(exp, put_atom::value, archive_atom::value, a);
@@ -434,10 +434,10 @@ behavior node::spawn_actor(event_based_actor* self) {
         if (r.opts.count("auto-connect") > 0) {
           self->send(store_, list_atom::value, key::str("actors", name_));
           self->become(
-            [=](std::map<std::string, caf::message>& m) {
+            [=](std::map<std::string, message>& m) {
               for (auto& p : m)
                 p.second.apply({
-                  [&](caf::actor const& a, std::string const& type) {
+                  [&](actor const& a, std::string const& type) {
                     VAST_ASSERT(a != invalid_actor);
                     if (type == "importer")
                       self->send(*src, put_atom::value, sink_atom::value, a);
@@ -528,7 +528,7 @@ behavior node::send_run(event_based_actor* self) {
   };
 }
 
-caf::behavior node::send_flush(event_based_actor* self) {
+behavior node::send_flush(event_based_actor* self) {
   return on("send", val<std::string>, "flush") >> [=](std::string const& arg,
                                                       std::string const&) {
     auto rp = self->make_response_promise();
@@ -758,7 +758,7 @@ behavior node::show(event_based_actor* self) {
   };
 }
 
-behavior node::store_get_actor(caf::event_based_actor* self) {
+behavior node::store_get_actor(event_based_actor* self) {
   return [=](store_atom, get_atom, actor_atom, std::string const& label) {
     auto rp = self->make_response_promise();
     self->send(store_, get_atom::value, make_actor_key(label));

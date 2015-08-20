@@ -1,5 +1,5 @@
-#ifndef VAST_ACTOR_FLOW_CONTROLLER_H
-#define VAST_ACTOR_FLOW_CONTROLLER_H
+#ifndef VAST_ACTOR_CONTROLLER_H
+#define VAST_ACTOR_CONTROLLER_H
 
 #include <map>
 
@@ -9,8 +9,8 @@
 
 namespace vast {
 
-/// A flow controller maintains a DAG representing the data flow over a chain
-/// of actors. By default, it forwards overload message to the root of the DAG
+/// A controller maintains a DAG representing the data flow over a chain of
+/// actors. By default, it forwards overload message to the root of the DAG
 /// in order to throttle the sending rate of of the data source.
 ///
 /// Intermediate nodes can inject themselves as *deflector* into the signal
@@ -31,7 +31,7 @@ namespace vast {
 ///
 /// Note that all actors processing flow control signals should be spawned with
 /// the `priority_aware` flag to minimize response times.
-namespace flow_controller {
+namespace controller {
 
 struct state : basic_state {
   state(event_based_actor* self);
@@ -57,7 +57,7 @@ struct state : basic_state {
 
 behavior actor(stateful_actor<state>* self);
 
-} // namespace flow_controller
+} // namespace controller
 } // namespace vast
 
 #endif

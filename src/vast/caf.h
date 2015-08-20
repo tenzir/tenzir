@@ -102,6 +102,7 @@ using caf::replies_to;
 using caf::response_promise;
 using caf::scoped_actor;
 using caf::set_scheduler;
+using caf::skip_message;
 using caf::spawn;
 using caf::to_string;
 using caf::typed_actor;

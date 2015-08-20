@@ -1,4 +1,4 @@
-#include "vast/actor/flow_controller.h"
+#include "vast/actor/controller.h"
 
 #define SUITE actors
 #include "test.h"
@@ -31,7 +31,7 @@ behavior worker(event_based_actor* self, actor controller, actor supervisor) {
 TEST(single-path flow-control) {
   scoped_actor self;
   MESSAGE("constructing data flow path A -> B -> C -> D");
-  auto fc = self->spawn(flow_controller::actor);
+  auto fc = self->spawn(controller::actor);
   auto a = self->spawn<priority_aware>(worker, fc, self);
   auto b = self->spawn<priority_aware>(worker, fc, self);
   auto c = self->spawn<priority_aware>(worker, fc, self);
@@ -72,7 +72,7 @@ TEST(multi-path flow-control with deflectors) {
   scoped_actor self;
   MESSAGE("constructing data flow path A -> B -> C -> D");
   MESSAGE("constructing data flow path E -> F -> C");
-  auto fc = self->spawn(flow_controller::actor);
+  auto fc = self->spawn(controller::actor);
   auto a = self->spawn<priority_aware>(worker, fc, self);
   auto b = self->spawn<priority_aware>(worker, fc, self);
   auto c = self->spawn<priority_aware>(worker, fc, self);
