@@ -42,7 +42,7 @@ result<distribution> make_distribution(type const& t) {
 }
 
 struct blueprint_factory {
-  blueprint_factory(test::blueprint& bp) : blueprint_{bp} {
+  blueprint_factory(test_state::blueprint& bp) : blueprint_{bp} {
   }
 
   template <typename T>
@@ -69,7 +69,7 @@ struct blueprint_factory {
     return nothing;
   }
 
-  test::blueprint& blueprint_;
+  test_state::blueprint& blueprint_;
 };
 
 template <typename RNG>
@@ -186,10 +186,8 @@ struct randomizer {
 
 } // namespace <anonymous>
 
-test::test(event_id id, uint64_t events)
-  : base<test>{"test-source"},
-    id_{id},
-    events_{events},
+test_state::test_state(local_actor* self)
+  : base_state{self, "test-source"},
     generator_{std::random_device{}()} {
   VAST_ASSERT(events_ > 0);
   static auto builtin_schema = R"schema(
@@ -209,14 +207,14 @@ test::test(event_id id, uint64_t events)
   )schema";
   auto t = detail::to_schema(builtin_schema);
   VAST_ASSERT(t);
-  set(*t);
+  schema(*t);
 }
 
-schema test::sniff() {
+schema test_state::schema() {
   return schema_;
 }
 
-void test::set(schema const& sch) {
+void test_state::schema(vast::schema const& sch) {
   VAST_ASSERT(!sch.empty());
   schema_ = sch;
   next_ = schema_.begin();
@@ -225,14 +223,14 @@ void test::set(schema const& sch) {
     auto attempt = visit(blueprint_factory{bp}, t);
     if (!attempt) {
       VAST_ERROR(this, "failed to generate blueprint:", attempt.error());
-      quit(exit::error);
+      self->quit(exit::error);
       return;
     }
     if (auto r = get<type::record>(t)) {
       auto u = bp.data.unflatten(*r);
       if (!u) {
         VAST_ERROR(this, "failed to unflatten record:", u.error());
-        quit(exit::error);
+        self->quit(exit::error);
         return;
       }
       bp.data = std::move(*u);
@@ -242,7 +240,7 @@ void test::set(schema const& sch) {
   }
 }
 
-result<event> test::extract() {
+result<event> test_state::extract() {
   VAST_ASSERT(next_ != schema_.end());
   // Generate random data.
   auto& bp = blueprints_[*next_];
@@ -257,8 +255,14 @@ result<event> test::extract() {
     next_ = schema_.begin();
   VAST_ASSERT(events_ > 0);
   if (--events_ == 0)
-    done(true);
+    done = true;
   return std::move(e);
+}
+
+behavior test(stateful_actor<test_state>* self, event_id id, uint64_t events) {
+  self->state.id_ = id;
+  self->state.events_ = events;
+  return base(self);
 }
 
 } // namespace source

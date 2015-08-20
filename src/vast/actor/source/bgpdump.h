@@ -7,25 +7,23 @@
 namespace vast {
 namespace source {
 
-/// A source reading ASCII output from the BGPDump utility.
-class bgpdump : public line_based<bgpdump> {
-public:
-  /// Spawns a BGPDump source.
-  /// @param is The input stream to read BGPDump data logs from.
-  bgpdump(std::unique_ptr<io::input_stream> is);
+struct bgpdump_state : line_based_state {
+  bgpdump_state(local_actor* self);
 
-  schema sniff();
+  vast::schema schema() final;
+  void schema(vast::schema const& sch) final;
+  result<event> extract() final;
 
-  void set(schema const& sch);
-
-  result<event> extract();
-
-private:
   type announce_type_;
   type route_type_;
   type withdraw_type_;
   type state_change_type_;
 };
+
+/// A source reading ASCII output from the BGPDump utility.
+/// @param self The actor handle.
+/// @param sb The streambuffer to read from.
+behavior bgpdump(stateful_actor<bgpdump_state>* self, std::streambuf* sb);
 
 } // namespace source
 } // namespace vast

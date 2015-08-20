@@ -37,33 +37,31 @@ using lcg = std::minstd_rand;
 using lcg = lcg64;
 #endif
 
-/// A source that generates random events according to a given schema.
-class test : public base<test> {
-public:
+struct test_state : base_state {
   struct blueprint {
     record data;
     std::vector<distribution> dists;
   };
 
-  /// Constructs a test source.
-  /// @param id The base event ID.
-  /// @param events The numer of events to generate.
-  test(event_id id, uint64_t events);
+  test_state(local_actor* self);
 
-  schema sniff();
+  vast::schema schema() final;
+  void schema(vast::schema const& sch) final;
+  result<event> extract() final;
 
-  void set(schema const& sch);
-
-  result<event> extract();
-
-private:
-  schema schema_;
+  vast::schema schema_;
   event_id id_;
   uint64_t events_;
   std::mt19937_64 generator_;
   schema::const_iterator next_;
   std::unordered_map<type, blueprint> blueprints_;
 };
+
+/// A source that generates random events according to a given schema.
+/// @param self The actor handle.
+/// @param id The base event ID.
+/// @param events The numer of events to generate.
+behavior test(stateful_actor<test_state>* self, event_id id, uint64_t events);
 
 } // namespace source
 } // namespace vast

@@ -2,7 +2,6 @@
 #include "vast/concept/parseable/to.h"
 #include "vast/concept/parseable/vast/address.h"
 #include "vast/concept/parseable/vast/subnet.h"
-#include "vast/io/file_stream.h"
 
 #define SUITE actors
 #include "test.h"
@@ -12,9 +11,10 @@ using namespace vast;
 
 TEST(bgpdump_source) {
   scoped_actor self;
-  auto f = bgpdump::updates20140821;
-  auto is = std::make_unique<vast::io::file_input_stream>(f);
-  auto bgpdump = self->spawn<source::bgpdump>(std::move(is));
+  auto flags = std::ios_base::binary | std::ios_base::in;
+  auto sb = std::make_unique<std::filebuf>();
+  sb->open(bgpdump::updates20140821, flags);
+  auto bgpdump = self->spawn(source::bgpdump, sb.release());
   self->monitor(bgpdump);
   anon_send(bgpdump, put_atom::value, sink_atom::value, self);
   self->receive([&](upstream_atom, actor const& a) { CHECK(a == bgpdump); });

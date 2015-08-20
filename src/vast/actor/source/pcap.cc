@@ -12,31 +12,24 @@
 namespace vast {
 namespace source {
 
-pcap::pcap(std::string name, uint64_t cutoff, size_t max_flows, size_t max_age,
-           size_t expire_interval, int64_t pseudo_realtime)
-  : base<pcap>{"pcap-source"},
-    name_{std::move(name)},
+pcap_state::pcap_state(local_actor* self)
+  : base_state{self, "pcap-source"},
     packet_type_{vast::detail::pcap_packet_type},
-    cutoff_{cutoff},
-    max_flows_{max_flows},
-    generator_{std::random_device{}()},
-    max_age_{max_age},
-    expire_interval_{expire_interval},
-    pseudo_realtime_{pseudo_realtime} {
+    generator_{std::random_device{}()} {
 }
 
-pcap::~pcap() {
+pcap_state::~pcap_state() {
   if (pcap_)
     ::pcap_close(pcap_);
 }
 
-schema pcap::sniff() {
-  schema sch;
+schema pcap_state::schema() {
+  vast::schema sch;
   sch.add(packet_type_);
   return sch;
 }
 
-void pcap::set(schema const& sch) {
+void pcap_state::schema(vast::schema const& sch) {
   auto t = sch.find_type("vast::packet");
   if (!t) {
     VAST_ERROR(this, "did not find type vast::packet in given schema");
@@ -50,19 +43,19 @@ void pcap::set(schema const& sch) {
   packet_type_ = *t;
 }
 
-result<event> pcap::extract() {
+result<event> pcap_state::extract() {
   char buf[PCAP_ERRBUF_SIZE]; // for errors.
-  if (!pcap_ && !done()) {
+  if (!pcap_ && !done) {
     // Determine interfaces.
     pcap_if_t* iface;
     if (::pcap_findalldevs(&iface, buf) == -1)
       return error{"failed to enumerate interfaces: ", buf};
     for (auto i = iface; i != nullptr; i = i->next)
-      if (name_ == i->name) {
+      if (input_ == i->name) {
         pcap_ = ::pcap_open_live(i->name, 65535, 1, 1000, buf);
         if (!pcap_) {
           ::pcap_freealldevs(iface);
-          return error{"failed to open interface ", name_, ": ", buf};
+          return error{"failed to open interface ", input_, ": ", buf};
         }
         if (pseudo_realtime_ > 0) {
           pseudo_realtime_ = 0;
@@ -73,21 +66,21 @@ result<event> pcap::extract() {
       }
     ::pcap_freealldevs(iface);
     if (!pcap_) {
-      if (name_ != "-" && !exists(name_))
-        return error{"no such file: ", name_};
+      if (input_ != "-" && !exists(input_))
+        return error{"no such file: ", input_};
 #ifdef PCAP_TSTAMP_PRECISION_NANO
       pcap_ = ::pcap_open_offline_with_tstamp_precision(
-        name_.c_str(), PCAP_TSTAMP_PRECISION_NANO, buf);
+        input_.c_str(), PCAP_TSTAMP_PRECISION_NANO, buf);
 #else
-      pcap_ = ::pcap_open_offline(name_.c_str(), buf);
+      pcap_ = ::pcap_open_offline(input_.c_str(), buf);
 #endif
       if (!pcap_) {
         std::string err{buf};
         flows_.clear();
-        return error{"failed to open pcap file ", name_, ": ", err};
+        return error{"failed to open pcap file ", input_, ": ", err};
       }
 
-      VAST_INFO(this, "reads trace from", name_);
+      VAST_INFO(this, "reads trace from", input_);
       if (pseudo_realtime_ > 0)
         VAST_INFO(this, "uses pseudo-realtime factor 1/" << pseudo_realtime_);
     }
@@ -102,13 +95,13 @@ result<event> pcap::extract() {
   if (r == 0)
     return {}; // Attempt to fetch next packet timed out.
   if (r == -2) {
-    done(true);
+    done = true;
     return {}; // Reached end of trace.
   }
   if (r == -1) {
     std::string err{::pcap_geterr(pcap_)};
     pcap_ = nullptr;
-    done(true);
+    done = true;
     return error{"failed to get next packet: ", err};
   }
   // Parse packet.
@@ -256,6 +249,18 @@ result<event> pcap::extract() {
   event e{{std::move(packet), packet_type_}};
   e.timestamp(time::point{timestamp});
   return std::move(e);
+}
+
+behavior pcap(stateful_actor<pcap_state>* self, std::string input,
+              uint64_t cutoff, size_t max_flows, size_t max_age,
+              size_t expire_interval, int64_t pseudo_realtime) {
+  self->state.input_ = std::move(input);
+  self->state.cutoff_ = cutoff;
+  self->state.max_flows_ = max_flows;
+  self->state.max_age_ = max_age;
+  self->state.expire_interval_ = expire_interval;
+  self->state.pseudo_realtime_ = pseudo_realtime;
+  return base(self);
 }
 
 } // namespace source

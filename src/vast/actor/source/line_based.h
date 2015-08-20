@@ -1,60 +1,53 @@
 #ifndef VAST_ACTOR_SOURCE_LINE_BASED_H
 #define VAST_ACTOR_SOURCE_LINE_BASED_H
 
-#include <cassert>
+#include <istream>
 
 #include "vast/actor/source/base.h"
-#include "vast/io/getline.h"
-#include "vast/io/stream.h"
 #include "vast/util/assert.h"
 
 namespace vast {
 namespace source {
 
 /// A line-based source that transforms an input stream into lines.
-template <typename Derived>
-class line_based : public base<Derived> {
-public:
-  /// Retrieves the current line number.
-  uint64_t line_number() const {
-    return current_;
+struct line_based_state : base_state {
+  line_based_state(local_actor* self, char const* name)
+    : base_state{self, name},
+      input{nullptr} {
   }
 
-  /// Retrieves the current line.
-  std::string const& line() const {
-    return line_;
-  }
-
-protected:
-  /// Constructs a a lined-based source.
-  /// @param name The name of the actor.
-  /// @param is The input stream to read from.
-  line_based(char const* name, std::unique_ptr<io::input_stream> is)
-    : base<Derived>{name}, input_stream_{std::move(is)} {
-    VAST_ASSERT(input_stream_ != nullptr);
-  }
-
-  /// Advances to the next non-empty line in the file.
-  /// @returns `true` on success and false on failure or EOF.
   bool next_line() {
-    if (this->done())
+    VAST_ASSERT(input);
+    if (done)
       return false;
-    line_.clear();
+    line.clear();
     // Get the next non-empty line.
-    while (line_.empty())
-      if (io::getline(*input_stream_, line_)) {
-        ++current_;
+    while (line.empty())
+      if (std::getline(input, line)) {
+        ++line_no;
       } else {
-        this->done(true);
+        done = true;
         return false;
       }
     return true;
   }
 
-private:
-  std::unique_ptr<io::input_stream> input_stream_;
-  uint64_t current_ = 0;
-  std::string line_;
+  std::istream input;
+  uint64_t line_no = 0;
+  std::string line;
+};
+
+/// A source that reads input line-by-line.
+/// @param self The actor handle.
+/// @param sb A streambuffer to read from.
+template <typename State>
+behavior line_based(stateful_actor<State>* self, std::streambuf* sb) {
+  // FIXME: The naked owning pointer is not exception safe. But because CAF's
+  // factory function constructing stateful actors currently shoves all
+  // arguments into a message, we cannot have non-copyable types as arguments.
+  // Once this changes we should switch back to a unique_ptr<std::streambuf>.
+  self->state.input.rdbuf(sb);
+  return base(self);
 };
 
 } // namespace source
