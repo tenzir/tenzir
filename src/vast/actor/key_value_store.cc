@@ -11,8 +11,6 @@
 #include "vast/concept/serializable/io.h"
 #include "vast/concept/serializable/caf/message.h"
 
-using namespace caf;
-
 namespace vast {
 
 key_value_store::key_value_store(path dir)
@@ -90,7 +88,7 @@ behavior key_value_store::make_behavior() {
     return make_message(total);
   };
   // Poor-man's log replication. The current implementation merely pushes the
-  // "log" (which is the current caf::message) to the remote stores.
+  // "log" (which is the current message) to the remote stores.
   // TODO: Refactor the replication and peering aspects into a seperate raft
   // consensus module and orthogonalize them to the key-value store
   // implementation.
@@ -241,7 +239,7 @@ behavior key_value_store::make_behavior() {
       VAST_DEBUG(this, "changes state: leader -> follower");
       become(following_);
     },
-    [=](follower_atom, add_atom, caf::actor const& new_follower) {
+    [=](follower_atom, add_atom, actor const& new_follower) {
       auto rp = make_response_promise();
       VAST_DEBUG(this, "got request to add new follower", new_follower);
       // If we know this follower already, we have nothing to do.

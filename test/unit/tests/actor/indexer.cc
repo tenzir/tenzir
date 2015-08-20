@@ -7,7 +7,6 @@
 #define SUITE actors
 #include "test.h"
 
-using namespace caf;
 using namespace vast;
 
 TEST(indexer)

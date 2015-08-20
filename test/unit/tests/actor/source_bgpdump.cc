@@ -8,7 +8,6 @@
 #include "test.h"
 #include "data.h"
 
-using namespace caf;
 using namespace vast;
 
 TEST(bgpdump_source) {

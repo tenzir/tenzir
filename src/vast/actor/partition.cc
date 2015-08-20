@@ -15,8 +15,6 @@
 #include "vast/concept/serializable/vast/schema.h"
 #include "vast/util/assert.h"
 
-using namespace caf;
-
 namespace vast {
 
 namespace {

@@ -1,5 +1,3 @@
-#include <caf/all.hpp>
-
 #include "vast/bitmap_index.h"
 #include "vast/event.h"
 #include "vast/filesystem.h"
@@ -18,7 +16,6 @@
 #include "data.h"
 #include "fixtures/core.h"
 
-using namespace caf;
 using namespace vast;
 
 FIXTURE_SCOPE(core_scope, fixtures::core)

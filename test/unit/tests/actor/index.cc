@@ -1,5 +1,3 @@
-#include <caf/all.hpp>
-
 #include "vast/event.h"
 #include "vast/query_options.h"
 #include "vast/actor/index.h"
@@ -9,7 +7,6 @@
 #include "test.h"
 #include "fixtures/events.h"
 
-using namespace caf;
 using namespace vast;
 
 FIXTURE_SCOPE(fixture_scope, fixtures::simple_events)

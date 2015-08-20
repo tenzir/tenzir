@@ -18,7 +18,7 @@ struct task : default_actor {
   template <typename... Ts>
   task(Ts&&... xs)
     : default_actor{"task"},
-      done_msg_{caf::make_message(done_atom::value, std::forward<Ts>(xs)...)} {
+      done_msg_{make_message(done_atom::value, std::forward<Ts>(xs)...)} {
     trap_exit(true);
   }
 
@@ -27,8 +27,7 @@ struct task : default_actor {
     supervisors_.clear();
   }
 
-  caf::behavior make_behavior() override {
-    using namespace caf;
+  behavior make_behavior() override {
     return {
       [=](exit_msg const& msg) {
         subscribers_.clear(); // Only notify our supervisors when exiting.
@@ -79,7 +78,7 @@ struct task : default_actor {
     };
   }
 
-  void complete(caf::actor_addr const& addr) {
+  void complete(actor_addr const& addr) {
     auto w = workers_.find(addr);
     if (w == workers_.end()) {
       VAST_ERROR(this, "got completion signal from unregistered actor:", addr);
@@ -92,7 +91,6 @@ struct task : default_actor {
   }
 
   void notify() {
-    using namespace caf;
     for (auto& s : subscribers_)
       send(s, progress_atom::value, uint64_t{workers_.size()}, total_);
     if (workers_.empty()) {
@@ -104,10 +102,10 @@ struct task : default_actor {
 
   uint32_t exit_reason_ = exit::done;
   uint64_t total_ = 0;
-  caf::message done_msg_;
-  std::map<caf::actor_addr, uint64_t> workers_;
-  util::flat_set<caf::actor> subscribers_;
-  util::flat_set<caf::actor> supervisors_;
+  message done_msg_;
+  std::map<actor_addr, uint64_t> workers_;
+  util::flat_set<actor> subscribers_;
+  util::flat_set<actor> supervisors_;
 };
 
 } // namespace vast

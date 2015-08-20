@@ -25,7 +25,7 @@ struct exporter : default_actor {
   exporter(expression ast, query_options opts);
 
   void on_exit() override;
-  caf::behavior make_behavior() override;
+  behavior make_behavior() override;
 
   // Prefetches the next chunk and sets the "inflight" chunk status. If we
   // don't have a chunk yet, we look for the chunk corresponding to the last
@@ -34,14 +34,14 @@ struct exporter : default_actor {
   // the current one. If neither exist, we don't do anything.
   void prefetch();
 
-  util::flat_set<caf::actor> archives_;
-  util::flat_set<caf::actor> indexes_;
-  util::flat_set<caf::actor> sinks_;
-  caf::actor task_;
-  caf::message_handler init_;
-  caf::message_handler idle_;
-  caf::message_handler waiting_;
-  caf::message_handler extracting_;
+  util::flat_set<actor> archives_;
+  util::flat_set<actor> indexes_;
+  util::flat_set<actor> sinks_;
+  actor task_;
+  message_handler init_;
+  message_handler idle_;
+  message_handler waiting_;
+  message_handler extracting_;
 
   bool draining_ = false;
   bool inflight_ = false;

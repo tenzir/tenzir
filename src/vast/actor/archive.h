@@ -34,7 +34,7 @@ struct archive : flow_controlled_actor {
           io::compression = io::lz4);
 
   void on_exit() override;
-  caf::behavior make_behavior() override;
+  behavior make_behavior() override;
 
   trial<void> store(segment s);
   bool flush();
@@ -47,7 +47,7 @@ struct archive : flow_controlled_actor {
   util::cache<uuid, segment> cache_;
   segment current_;
   uint64_t current_size_;
-  caf::actor accountant_;
+  actor accountant_;
 };
 
 } // namespace vast

@@ -20,8 +20,6 @@
 #include "vast/concept/state/time.h"
 #include "vast/util/assert.h"
 
-using namespace caf;
-
 namespace vast {
 
 template <typename Serializer>

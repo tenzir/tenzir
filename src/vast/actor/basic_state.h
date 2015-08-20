@@ -3,8 +3,7 @@
 
 #include <string>
 
-#include "vast/logger.h"
-#include "vast/actor/caf.h"
+#include "vast/caf.h"
 
 namespace vast {
 

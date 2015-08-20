@@ -28,14 +28,14 @@ struct partition : flow_controlled_actor {
   };
 
   struct predicate_state {
-    caf::actor task;
+    actor task;
     bitstream_type hits;
     util::flat_set<event_id> cache;
     util::flat_set<expression const*> queries;
   };
 
   struct query_state {
-    caf::actor task;
+    actor task;
     bitstream_type hits;
   };
 
@@ -43,19 +43,19 @@ struct partition : flow_controlled_actor {
   /// @param dir The directory where to store this partition on the file system.
   /// @param sink The actor receiving results of this partition.
   /// @pre `sink != invalid_actor`
-  partition(path dir, caf::actor sink);
+  partition(path dir, actor sink);
 
   void on_exit() override;
-  caf::behavior make_behavior() override;
+  behavior make_behavior() override;
 
   void flush();
 
   path const dir_;
-  caf::actor sink_;
-  caf::actor proxy_;
+  actor sink_;
+  actor proxy_;
   schema schema_;
   size_t events_indexed_concurrently_ = 0;
-  std::multimap<event_id, caf::actor> indexers_;
+  std::multimap<event_id, actor> indexers_;
   std::map<expression, query_state> queries_;
   std::map<predicate, predicate_state> predicates_;
 };

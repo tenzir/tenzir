@@ -13,8 +13,6 @@
 #include "vast/expr/resolver.h"
 #include "vast/util/assert.h"
 
-using namespace caf;
-
 namespace vast {
 
 exporter::exporter(expression ast, query_options opts)

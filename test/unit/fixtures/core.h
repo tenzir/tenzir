@@ -3,11 +3,8 @@
 
 #include <vector>
 
-#include <caf/all.hpp>
-
 #include "vast/actor/node.h"
 
-using namespace caf;
 using namespace vast;
 
 namespace fixtures {

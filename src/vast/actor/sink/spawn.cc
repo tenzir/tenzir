@@ -17,13 +17,12 @@
 #include "vast/actor/sink/pcap.h"
 #endif
 
-using namespace caf;
 using namespace std::string_literals;
 
 namespace vast {
 namespace sink {
 
-trial<caf::actor> spawn(message const& params) {
+trial<actor> spawn(message const& params) {
   auto schema_file = ""s;
   auto output = "-"s;
   auto r = params.extract_opts({
@@ -46,8 +45,7 @@ trial<caf::actor> spawn(message const& params) {
   }
   // Facilitate actor shutdown when returning with error.
   actor snk;
-  auto guard
-    = caf::detail::make_scope_guard([&] { anon_send_exit(snk, exit::error); });
+  auto guard = make_scope_guard([&] { anon_send_exit(snk, exit::error); });
   // The "pcap" and "bro" sink manually handle file output. All other
   // sources are file-based and we setup their input stream here.
   auto& format = params.get_as<std::string>(0);

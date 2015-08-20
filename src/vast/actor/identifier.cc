@@ -10,8 +10,6 @@
 #include "vast/concept/printable/vast/error.h"
 #include "vast/concept/printable/vast/filesystem.h"
 
-using namespace caf;
-
 namespace vast {
 namespace identifier {
 

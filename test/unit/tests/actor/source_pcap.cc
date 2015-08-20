@@ -4,7 +4,6 @@
 #include "test.h"
 #include "data.h"
 
-using namespace caf;
 using namespace vast;
 
 TEST(pcap_source) {

@@ -34,8 +34,7 @@ public:
 
   virtual bool push_back(BitmapIndex& bmi, event const& e) = 0;
 
-  caf::behavior make_behavior() override {
-    using namespace caf;
+  behavior make_behavior() override {
     // Materialize an existing index.
     if (exists(path_)) {
       using vast::load;
@@ -195,62 +194,62 @@ struct indexer_factory {
   }
 
   template <typename T>
-  trial<caf::actor> operator()(T const&) const {
+  trial<actor> operator()(T const&) const {
     return make<arithmetic_bitmap_index<Bitstream, type::to_data<T>>>();
   }
 
-  trial<caf::actor> operator()(type::address const&) const {
+  trial<actor> operator()(type::address const&) const {
     return make<address_bitmap_index<Bitstream>>();
   }
 
-  trial<caf::actor> operator()(type::subnet const&) const {
+  trial<actor> operator()(type::subnet const&) const {
     return make<subnet_bitmap_index<Bitstream>>();
   }
 
-  trial<caf::actor> operator()(type::port const&) const {
+  trial<actor> operator()(type::port const&) const {
     return make<port_bitmap_index<Bitstream>>();
   }
 
-  trial<caf::actor> operator()(type::string const&) const {
+  trial<actor> operator()(type::string const&) const {
     return make<string_bitmap_index<Bitstream>>();
   }
 
-  trial<caf::actor> operator()(type::enumeration const&) const {
+  trial<actor> operator()(type::enumeration const&) const {
     return make<string_bitmap_index<Bitstream>>();
   }
 
-  trial<caf::actor> operator()(type::vector const& t) const {
+  trial<actor> operator()(type::vector const& t) const {
     return make<sequence_bitmap_index<Bitstream>>(t.elem());
   }
 
-  trial<caf::actor> operator()(type::set const& t) const {
+  trial<actor> operator()(type::set const& t) const {
     return make<sequence_bitmap_index<Bitstream>>(t.elem());
   }
 
-  trial<caf::actor> operator()(none const&) const {
+  trial<actor> operator()(none const&) const {
     return error{"bitmap index for invalid type not supported"};
   }
 
-  trial<caf::actor> operator()(type::pattern const&) const {
+  trial<actor> operator()(type::pattern const&) const {
     return error{"regular expressions not yet supported"};
   }
 
-  trial<caf::actor> operator()(type::table const&) const {
+  trial<actor> operator()(type::table const&) const {
     return error{"tables not yet supported"};
   }
 
-  trial<caf::actor> operator()(type::record const&) const {
+  trial<actor> operator()(type::record const&) const {
     return error{"records shall be unrolled"};
   }
 
-  trial<caf::actor> operator()(type::alias const& a) const {
+  trial<actor> operator()(type::alias const& a) const {
     return visit(*this, a.type());
   }
 
   template <typename BitmapIndex, typename... Args>
-  caf::actor make(Args&&... args) const {
+  actor make(Args&&... args) const {
     using indexer_type = event_data_indexer<Bitstream, BitmapIndex>;
-    return caf::spawn<indexer_type>(path_, off_, event_type_,
+    return spawn<indexer_type>(path_, off_, event_type_,
                                     std::forward<Args>(args)...);
   }
 
@@ -265,7 +264,7 @@ struct indexer_factory {
 /// @param o The location of the non-record data to index.
 /// @param e The e
 template <typename Bitstream>
-trial<caf::actor> make_data_indexer(type const& t, path const& p,
+trial<actor> make_data_indexer(type const& t, path const& p,
                                     offset const& o, type const& e) {
   return visit(indexer_factory<Bitstream>{p, o, e}, t);
 }
@@ -280,30 +279,30 @@ struct event_indexer : default_actor {
     }
 
     template <typename T>
-    std::vector<caf::actor> operator()(T const&) {
+    std::vector<actor> operator()(T const&) {
       return {};
     }
 
     template <typename T, typename U>
-    std::vector<caf::actor> operator()(T const&, U const&) {
+    std::vector<actor> operator()(T const&, U const&) {
       return {};
     }
 
-    std::vector<caf::actor> operator()(predicate const& p) {
+    std::vector<actor> operator()(predicate const& p) {
       op_ = p.op;
       return visit(*this, p.lhs, p.rhs);
     }
 
-    std::vector<caf::actor> operator()(event_extractor const&, data const&) {
+    std::vector<actor> operator()(event_extractor const&, data const&) {
       return {indexer_.load_name_indexer()};
     }
 
-    std::vector<caf::actor> operator()(time_extractor const&, data const&) {
+    std::vector<actor> operator()(time_extractor const&, data const&) {
       return {indexer_.load_time_indexer()};
     }
 
-    std::vector<caf::actor> operator()(type_extractor const& e, data const&) {
-      std::vector<caf::actor> indexes;
+    std::vector<actor> operator()(type_extractor const& e, data const&) {
+      std::vector<actor> indexes;
       if (auto r = get<type::record>(indexer_.type_)) {
         for (auto& i : type::record::each{*r})
           if (i.trace.back()->type == e.type) {
@@ -325,9 +324,9 @@ struct event_indexer : default_actor {
       return indexes;
     }
 
-    std::vector<caf::actor> operator()(schema_extractor const& e,
+    std::vector<actor> operator()(schema_extractor const& e,
                                        data const& d) {
-      std::vector<caf::actor> indexes;
+      std::vector<actor> indexes;
       if (auto r = get<type::record>(indexer_.type_)) {
         for (auto& pair : r->find_suffix(e.key)) {
           auto& o = pair.first;
@@ -356,7 +355,7 @@ struct event_indexer : default_actor {
     }
 
     template <typename T>
-    std::vector<caf::actor> operator()(data const& d, T const& e) {
+    std::vector<actor> operator()(data const& d, T const& e) {
       return (*this)(e, d);
     }
 
@@ -375,8 +374,7 @@ struct event_indexer : default_actor {
     trap_exit(true);
   }
 
-  caf::actor load_name_indexer() {
-    using namespace caf;
+  actor load_name_indexer() {
     auto p = dir_ / "meta" / "name";
     auto& a = indexers_[p];
     if (!a) {
@@ -386,8 +384,7 @@ struct event_indexer : default_actor {
     return a;
   }
 
-  caf::actor load_time_indexer() {
-    using namespace caf;
+  actor load_time_indexer() {
     auto p = dir_ / "meta" / "time";
     auto& a = indexers_[p];
     if (!a) {
@@ -397,7 +394,7 @@ struct event_indexer : default_actor {
     return a;
   }
 
-  trial<caf::actor> load_data_indexer(offset const& o) {
+  trial<actor> load_data_indexer(offset const& o) {
     auto p = dir_ / "data";
     auto r = get<type::record>(type_);
     if (r) {
@@ -433,8 +430,7 @@ struct event_indexer : default_actor {
     indexers_.clear();
   }
 
-  caf::behavior make_behavior() override {
-    using namespace caf;
+  behavior make_behavior() override {
     if (!exists(dir_))
       load_bitmap_indexers();
     auto on_down = [=](down_msg const& msg) {
@@ -451,7 +447,7 @@ struct event_indexer : default_actor {
           return;
         }
         become([ reason = msg.reason, on_down, this ](
-          caf::down_msg const& msg) {
+          down_msg const& msg) {
           on_down(msg);
           if (indexers_.empty())
             quit(reason);
@@ -522,7 +518,7 @@ private:
 
   path const dir_;
   type type_;
-  std::map<path, caf::actor> indexers_;
+  std::map<path, actor> indexers_;
 };
 
 } // namespace vast

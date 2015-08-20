@@ -1,11 +1,13 @@
-#ifndef VAST_ACTOR_CAF_H
-#define VAST_ACTOR_CAF_H
+#ifndef VAST_CAF_H
+#define VAST_CAF_H
 
 #include <ostream>
 
 #include <caf/all.hpp>
-#include <caf/experimental/stateful_actor.hpp>
+#include <caf/experimental/whereis.hpp>
+#include <caf/scheduler/profiled_coordinator.hpp>
 
+#include "vast/logger.h"
 #include "vast/util/assert.h"
 
 namespace caf {
@@ -31,8 +33,6 @@ operator<<(std::basic_ostream<Char, Traits>& out, abstract_actor const& a) {
   return out;
 }
 
-namespace experimental {
-
 template <typename Char, typename Traits, typename T>
 std::basic_ostream<Char, Traits>&
 operator<<(std::basic_ostream<Char, Traits>& out, stateful_actor<T> const& a) {
@@ -46,8 +46,6 @@ inline Stream& operator<<(Stream& out, stateful_actor<T> const* a) {
   out << *a;
   return out;
 }
-
-} // namespace experimental
 
 template <typename Stream>
 inline Stream& operator<<(Stream& out, actor const* a) {
@@ -69,28 +67,56 @@ namespace vast {
 
 // Hoist various CAF types that we consider family in VAST. <3
 
+using caf::abstract_uniform_type_info;
 using caf::actor;
 using caf::actor_addr;
 using caf::actor_cast;
+using caf::after;
+using caf::arg_match;
+using caf::anon_send;
+using caf::any_vals;
+using caf::arg_match;
+using caf::atom;
 using caf::behavior;
+using caf::detached;
 using caf::down_msg;
 using caf::either_or_t;
 using caf::event_based_actor;
 using caf::exit_msg;
+using caf::invalid_actor;
+using caf::keep_behavior;
+using caf::linked;
 using caf::local_actor;
+using caf::make_message;
 using caf::message;
+using caf::message_builder;
+using caf::message_handler;
 using caf::message_priority;
+using caf::monitored;
 using caf::on;
+using caf::optional;
 using caf::others;
+using caf::priority_aware;
 using caf::reacts_to;
 using caf::replies_to;
+using caf::response_promise;
+using caf::scoped_actor;
+using caf::set_scheduler;
+using caf::spawn;
 using caf::to_string;
 using caf::typed_actor;
 using caf::typed_response_promise;
+using caf::unit;
+using caf::uniform_type_info;
+using caf::val;
 
-using caf::experimental::stateful_actor;
+using caf::detail::make_scope_guard;
+
+using caf::stateful_actor;
+using caf::experimental::whereis;
 
 namespace exit_reason = caf::exit_reason;
+namespace scheduler = caf::scheduler;
 
 namespace exit {
 

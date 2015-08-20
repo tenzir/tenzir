@@ -22,12 +22,11 @@ public:
   }
 
   void on_exit() override {
-    accountant_ = caf::invalid_actor;
+    accountant_ = invalid_actor;
     sinks_.clear();
   }
 
-  caf::behavior make_behavior() override {
-    using namespace caf;
+  behavior make_behavior() override {
     return {
       [=](exit_msg const& msg) {
         if (downgrade_exit())
@@ -130,8 +129,8 @@ protected:
 
 private:
   bool done_ = false;
-  caf::actor accountant_;
-  std::vector<caf::actor> sinks_;
+  actor accountant_;
+  std::vector<actor> sinks_;
   size_t next_sink_ = 0;
   uint64_t batch_size_ = std::numeric_limits<uint16_t>::max();
   std::vector<event> events_;

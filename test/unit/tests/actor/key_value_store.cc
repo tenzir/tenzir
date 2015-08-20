@@ -1,5 +1,3 @@
-#include <caf/all.hpp>
-
 #include "vast/key.h"
 #include "vast/none.h"
 #include "vast/actor/key_value_store.h"
@@ -7,7 +5,6 @@
 #define SUITE actors
 #include "test.h"
 
-using namespace caf;
 using namespace vast;
 
 TEST(key-value store (leader interface)) {

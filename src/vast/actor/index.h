@@ -58,19 +58,19 @@ struct index : public flow_controlled_actor {
 
   struct continuous_query_state {
     bitstream_type hits;
-    caf::actor task;
+    actor task;
   };
 
   struct historical_query_state {
     bitstream_type hits;
-    caf::actor task;
-    std::map<caf::actor_addr, uuid> parts;
+    actor task;
+    std::map<actor_addr, uuid> parts;
   };
 
   struct query_state {
     optional<continuous_query_state> cont;
     optional<historical_query_state> hist;
-    util::flat_set<caf::actor> subscribers;
+    util::flat_set<actor> subscribers;
   };
 
   /// Spawns the index.
@@ -84,14 +84,14 @@ struct index : public flow_controlled_actor {
         size_t active_parts);
 
   void on_exit() override;
-  caf::behavior make_behavior() override;
+  behavior make_behavior() override;
 
   /// Dispatches a query for a partition either by relaying it directly if
   /// active or enqueing it into partition queue.
   /// @param part The partition to query with *expr*.
   /// @param expr The query to look for in *part*.
   /// @returns The partition actor for *part* if *expr* can be scheduled.
-  optional<caf::actor> dispatch(uuid const& part, expression const& expr);
+  optional<actor> dispatch(uuid const& part, expression const& expr);
 
   /// Consolidates a query which has previously been dispatched.
   /// @param part The partition of *expr*.
@@ -103,12 +103,12 @@ struct index : public flow_controlled_actor {
 
   path dir_;
   size_t max_events_per_partition_;
-  caf::actor accountant_;
+  actor accountant_;
   std::map<expression, query_state> queries_;
   std::unordered_map<uuid, partition_state> partitions_;
   std::list<schedule_state> schedule_;
-  util::cache<uuid, caf::actor, util::mru> passive_;
-  std::vector<std::pair<uuid, caf::actor>> active_;
+  util::cache<uuid, actor, util::mru> passive_;
+  std::vector<std::pair<uuid, actor>> active_;
   size_t next_active_ = 0;
 };
 

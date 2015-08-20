@@ -33,22 +33,22 @@ struct node : default_actor {
   node(std::string const& name = util::hostname(), path const& dir = "vast");
 
   void on_exit() override;
-  caf::behavior make_behavior() override;
+  behavior make_behavior() override;
 
   //
   // Public message interface
   //
 
-  caf::behavior spawn_actor(caf::event_based_actor* self);
-  caf::behavior send_run(caf::event_based_actor* self);
-  caf::behavior send_flush(caf::event_based_actor* self);
-  caf::behavior quit_actor(caf::event_based_actor* self);
-  caf::behavior connect(caf::event_based_actor* self);
-  caf::behavior disconnect(caf::event_based_actor* self);
-  caf::behavior show(caf::event_based_actor* self);
-  caf::behavior store_get_actor(caf::event_based_actor* self);
-  caf::behavior request_peering(caf::event_based_actor* self);
-  caf::behavior respond_to_peering(caf::event_based_actor* self);
+  behavior spawn_actor(event_based_actor* self);
+  behavior send_run(event_based_actor* self);
+  behavior send_flush(event_based_actor* self);
+  behavior quit_actor(event_based_actor* self);
+  behavior connect(event_based_actor* self);
+  behavior disconnect(event_based_actor* self);
+  behavior show(event_based_actor* self);
+  behavior store_get_actor(event_based_actor* self);
+  behavior request_peering(event_based_actor* self);
+  behavior respond_to_peering(event_based_actor* self);
 
   //
   // Helpers
@@ -58,12 +58,12 @@ struct node : default_actor {
   std::string make_actor_key(std::string const& label) const;
   std::string parse_actor_key(std::string const& key) const;
 
-  caf::behavior operating_;
-  caf::actor accountant_;
-  caf::actor store_;
-  std::map<std::string, caf::actor> peers_;
-  std::map<std::string, caf::actor> actors_by_label_;
-  std::multimap<std::string, caf::actor> actors_by_type_;
+  behavior operating_;
+  actor accountant_;
+  actor store_;
+  std::map<std::string, actor> peers_;
+  std::map<std::string, actor> actors_by_label_;
+  std::multimap<std::string, actor> actors_by_type_;
   std::string name_;
   path const dir_;
 };

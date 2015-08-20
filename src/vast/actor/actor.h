@@ -1,18 +1,17 @@
 #ifndef VAST_ACTOR_ACTOR_H
 #define VAST_ACTOR_ACTOR_H
 
-#include "vast/util/assert.h"
-#include "vast/actor/atoms.h"
-#include "vast/actor/caf.h"
-
+#include "vast/caf.h"
 #include "vast/logger.h"
-#include "vast/util/operators.h"
+#include "vast/actor/atoms.h"
+#include "vast/util/assert.h"
 #include "vast/util/flat_set.h"
+#include "vast/util/operators.h"
 
 namespace vast {
 
 /// The base class for VAST actors.
-class default_actor : public caf::event_based_actor {
+class default_actor : public event_based_actor {
 public:
   default_actor(char const* name = "actor") : name_{name} {
     VAST_DEBUG(this, "spawned");
@@ -38,14 +37,14 @@ protected:
     if (!current_mailbox_element()->mid.is_high_priority())
       return false;
     VAST_DEBUG(this, "delays exit");
-    send(caf::message_priority::normal, this, current_message());
+    send(message_priority::normal, this, current_message());
     return true;
   };
 
   auto catch_unexpected() {
-    return caf::others() >> [=] {
+    return others() >> [=] {
       VAST_WARN(this, "got unexpected message from", current_sender() << ':',
-                caf::to_string(current_message()));
+                to_string(current_message()));
     };
   }
 
@@ -88,7 +87,7 @@ inline Stream& operator<<(Stream& out, default_actor const* a) {
 ///
 ///   1. <overload_atom>
 ///   2. <underload_atom>
-///   3. <upstream_atom, caf::actor>
+///   3. <upstream_atom, actor>
 ///
 /// An actor who just sits in a flow-control aware chain of actors typically
 /// just needs to forward overload signals from downstream nodes back upstream.
@@ -124,13 +123,13 @@ public:
   }
 
 protected:
-  void add_upstream_node(caf::actor const& upstream) {
+  void add_upstream_node(actor const& upstream) {
     VAST_DEBUG(this, "registers", upstream, "as upstream flow-control node");
     monitor(upstream);
     upstream_.insert(upstream);
   }
 
-  bool remove_upstream_node(caf::actor_addr const& upstream) {
+  bool remove_upstream_node(actor_addr const& upstream) {
     auto i = std::find_if(upstream_.begin(), upstream_.end(),
                           [&](auto& u) { return u == upstream; });
     if (i == upstream_.end())
@@ -164,14 +163,14 @@ protected:
   void propagate_overload() {
     for (auto& u : upstream_) {
       VAST_DEBUG(this, "propagates overload signal to", u);
-      send(caf::message_priority::high, u, overload_atom::value);
+      send(message_priority::high, u, overload_atom::value);
     }
   }
 
   void propagate_underload() {
     for (auto& u : upstream_) {
       VAST_DEBUG(this, "propagates underload signal to", u);
-      send(caf::message_priority::high, u, underload_atom::value);
+      send(message_priority::high, u, underload_atom::value);
     }
   }
 
@@ -184,7 +183,7 @@ protected:
   }
 
   auto register_upstream_node() {
-    return [=](upstream_atom, caf::actor const& upstream) {
+    return [=](upstream_atom, actor const& upstream) {
       add_upstream_node(upstream);
     };
   }
@@ -195,7 +194,7 @@ protected:
 
 private:
   bool overloaded_ = false;
-  util::flat_set<caf::actor> upstream_;
+  util::flat_set<actor> upstream_;
 };
 
 } // namespace vast

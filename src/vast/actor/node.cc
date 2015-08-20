@@ -39,7 +39,6 @@
 #include "vast/actor/profiler.h"
 #endif
 
-using namespace caf;
 using namespace std::string_literals;
 
 namespace vast {

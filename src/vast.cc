@@ -5,20 +5,18 @@
 #include <thread>
 #include <vector>
 
-#include <caf/all.hpp>
-#include <caf/experimental/whereis.hpp>
 #include <caf/io/all.hpp>
 
 #include "vast/aliases.h"
 #include "vast/announce.h"
 #include "vast/banner.h"
+#include "vast/caf.h"
 #include "vast/filesystem.h"
 #include "vast/key.h"
 #include "vast/logger.h"
 #include "vast/uuid.h"
 #include "vast/actor/accountant.h"
 #include "vast/actor/atoms.h"
-#include "vast/actor/exit.h"
 #include "vast/actor/sink/spawn.h"
 #include "vast/actor/source/spawn.h"
 #include "vast/concept/printable/to_string.h"
@@ -59,7 +57,7 @@ int main(int argc, char* argv[]) {
   auto port = uint16_t{42000};
   auto messages = std::numeric_limits<size_t>::max();
   auto threads = std::thread::hardware_concurrency();
-  auto r = caf::message_builder(command_line.begin(), cmd).extract_opts({
+  auto r = message_builder(command_line.begin(), cmd).extract_opts({
     {"dir,d", "directory for logs and client state", dir},
     {"endpoint,e", "node endpoint", endpoint},
     {"log-level,l", "verbosity of console and/or log file", log_level},
@@ -106,19 +104,19 @@ int main(int argc, char* argv[]) {
   }
   // Adjust scheduler parameters.
   if (r.opts.count("threads") || r.opts.count("messages"))
-    caf::set_scheduler<>(threads, messages);
+    set_scheduler<>(threads, messages);
   // Enable direct connections.
   VAST_VERBOSE("enabling direct connection optimization");
-  auto cfg = caf::experimental::whereis(caf::atom("ConfigServ"));
-  caf::anon_send(cfg, put_atom::value, "global.enable-automatic-connections",
-                 caf::make_message(true));
+  auto cfg = whereis(atom("ConfigServ"));
+  anon_send(cfg, put_atom::value, "global.enable-automatic-connections",
+                 make_message(true));
   // Establish connection to remote node.
-  auto guard = caf::detail::make_scope_guard([] {
+  auto guard = make_scope_guard([] {
     caf::shutdown();
     logger::destruct();
   });
   announce_types();
-  caf::actor node;
+  actor node;
   try {
     VAST_VERBOSE("connecting to", host << ':' << port);
     node = caf::io::remote_actor(host.c_str(), port);
@@ -127,11 +125,11 @@ int main(int argc, char* argv[]) {
     return 1;
   }
   // Process commands.
-  caf::scoped_actor self;
+  scoped_actor self;
   auto accounting_log = path(dir) / "accounting.log";
   if (*cmd == "import") {
     // 1. Spawn a SOURCE.
-    caf::message_builder mb;
+    message_builder mb;
     auto i = cmd + 1;
     while (i != command_line.end())
       mb.append(*i++);
@@ -140,20 +138,20 @@ int main(int argc, char* argv[]) {
       VAST_ERROR("failed to spawn source:", src.error());
       return 1;
     }
-    auto source_guard = caf::detail::make_scope_guard(
+    auto source_guard = make_scope_guard(
       [=] { anon_send_exit(*src, exit::kill); });
     auto acc = self->spawn<accountant<uint64_t>>(accounting_log);
     acc->link_to(*src);
     self->send(*src, put_atom::value, accountant_atom::value, acc);
     // 2. Find all IMPORTERs to load-balance across them.
-    std::vector<caf::actor> importers;
+    std::vector<actor> importers;
     self->sync_send(node, store_atom::value, list_atom::value,
                     key::str("actors")).await(
-      [&](std::map<std::string, caf::message>& m) {
+      [&](std::map<std::string, message>& m) {
         for (auto& p : m)
           p.second.apply({
-            [&](caf::actor const& a, std::string const& type) {
-              VAST_ASSERT(a != caf::invalid_actor);
+            [&](actor const& a, std::string const& type) {
+              VAST_ASSERT(a != invalid_actor);
               if (type == "importer")
                 importers.push_back(a);
             }
@@ -166,7 +164,7 @@ int main(int argc, char* argv[]) {
     }
     // 3. Connect SOURCE and IMPORTERs.
     for (auto& imp : importers) {
-      VAST_ASSERT(imp != caf::invalid_actor);
+      VAST_ASSERT(imp != invalid_actor);
       VAST_DEBUG("connecting source with importer", imp);
       self->send(*src, put_atom::value, sink_atom::value, imp);
     }
@@ -183,30 +181,30 @@ int main(int argc, char* argv[]) {
       return 1;
     }
     // 1. Spawn a SINK.
-    auto snk = sink::spawn(caf::make_message(*(cmd + 1)));
+    auto snk = sink::spawn(make_message(*(cmd + 1)));
     if (!snk) {
       VAST_ERROR("failed to spawn sink:", snk.error());
       return 1;
     }
-    auto sink_guard = caf::detail::make_scope_guard(
+    auto sink_guard = make_scope_guard(
       [snk = *snk] { anon_send_exit(snk, exit::kill); });
     auto acc = self->spawn<accountant<uint64_t>>(accounting_log);
     acc->link_to(*snk);
     self->send(*snk, put_atom::value, accountant_atom::value, acc);
     // 2. For each node, spawn an (auto-connected) EXPORTER and connect it to
     // the sink.
-    std::vector<caf::actor> nodes;
+    std::vector<actor> nodes;
     self->sync_send(node, store_atom::value, list_atom::value,
                     key::str("nodes")).await(
-      [&](std::map<std::string, caf::message> const& m) {
+      [&](std::map<std::string, message> const& m) {
         for (auto& p : m)
-          nodes.push_back(p.second.get_as<caf::actor>(0));
+          nodes.push_back(p.second.get_as<actor>(0));
       }
     );
     VAST_ASSERT(!nodes.empty());
     for (auto n : nodes) {
       // Spawn remote exporter.
-      caf::message_builder mb;
+      message_builder mb;
       auto label = "exporter-" + to_string(uuid::random()).substr(0, 7);
       mb.append("spawn");
       mb.append("-l");
@@ -224,9 +222,9 @@ int main(int argc, char* argv[]) {
     // monitor them and connect them with our local SINK.
     auto failed = false;
     auto early_finishers = 0u;
-    util::flat_set<caf::actor> exporters;
+    util::flat_set<actor> exporters;
     self->do_receive(
-      [&](caf::actor const& exporter) {
+      [&](actor const& exporter) {
         exporters.insert(exporter);
         self->monitor(exporter);
         self->send(exporter, put_atom::value, sink_atom::value, *snk);
@@ -234,20 +232,20 @@ int main(int argc, char* argv[]) {
         self->send(exporter, stop_atom::value);
         self->send(exporter, run_atom::value);
       },
-      [&](caf::down_msg const& msg) {
+      [&](down_msg const& msg) {
         ++early_finishers;
-        exporters.erase(caf::actor_cast<caf::actor>(msg.source));
+        exporters.erase(actor_cast<actor>(msg.source));
       },
       [&](error const& e) {
         failed = true;
         VAST_ERROR("failed to spawn exporter on node"
                    << self->current_sender() << ':', e);
       },
-      caf::others >> [&] {
+      others >> [&] {
         failed = true;
         VAST_ERROR("got unexpected message from node"
                    << self->current_sender() << ':',
-                   caf::to_string(self->current_message()));
+                   to_string(self->current_message()));
       }
     ).until([&] {
       return early_finishers + exporters.size() == nodes.size() || failed;
@@ -261,16 +259,16 @@ int main(int argc, char* argv[]) {
     // SINK and finish.
     if (!exporters.empty()) {
       self->do_receive(
-        [&](caf::down_msg const& msg) {
-          exporters.erase(caf::actor_cast<caf::actor>(msg.source));
+        [&](down_msg const& msg) {
+          exporters.erase(actor_cast<actor>(msg.source));
           VAST_DEBUG("got DOWN from exporter" << msg.source << ',',
                      "remaining:", exporters.size());
         },
-        caf::others >> [&] {
+        others >> [&] {
           failed = true;
           VAST_ERROR("got unexpected message from node"
                        << self->current_sender() << ':',
-                     caf::to_string(self->current_message()));
+                     to_string(self->current_message()));
         }
       ).until([&] { return exporters.size() == 0 || failed; });
     }
@@ -282,7 +280,7 @@ int main(int argc, char* argv[]) {
     // Only "import" and "export" are local commands, the remote node executes
     // all other ones.
     auto args = std::vector<std::string>(cmd + 1, command_line.end());
-    caf::message_builder mb;
+    message_builder mb;
     mb.append(*cmd);
     for (auto& a : args)
       mb.append(std::move(a));
@@ -293,7 +291,7 @@ int main(int argc, char* argv[]) {
       [&](ok_atom) {
         VAST_VERBOSE("successfully executed command:", cmd_line);
       },
-      [&](caf::actor const&) {
+      [&](actor const&) {
         VAST_VERBOSE("successfully executed command:", cmd_line);
       },
       [&](std::string const& str) {
@@ -305,7 +303,7 @@ int main(int argc, char* argv[]) {
         VAST_ERROR(e);
         exit_code = 1;
       },
-      caf::others >> [&] {
+      others >> [&] {
         auto msg = to_string(self->current_message());
         VAST_ERROR("got unexpected reply:", msg);
         exit_code = 1;

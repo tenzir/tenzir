@@ -15,13 +15,12 @@
 #include "vast/actor/source/pcap.h"
 #endif
 
-using namespace caf;
 using namespace std::string_literals;
 
 namespace vast {
 namespace source {
 
-trial<caf::actor> spawn(message const& params) {
+trial<actor> spawn(message const& params) {
   auto batch_size = uint64_t{100000};
   auto schema_file = ""s;
   auto input = "-"s;
@@ -51,9 +50,7 @@ trial<caf::actor> spawn(message const& params) {
   }
   // Facilitate shutdown when returning with error.
   actor src;
-  auto guard = caf::detail::make_scope_guard(
-    [&] { anon_send_exit(src, exit::error); }
-  );
+  auto guard = make_scope_guard([&] { anon_send_exit(src, exit::error); });
   // Spawn a source according to format.
   if (format == "pcap") {
 #ifndef VAST_HAVE_PCAP

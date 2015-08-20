@@ -7,9 +7,7 @@
 
 namespace vast {
 
-/// An optional value of `T` with similar semantics as `std::optional`.
-template <typename T>
-using optional = caf::optional<T>;
+using caf::optional;
 
 } // namespace vast
 

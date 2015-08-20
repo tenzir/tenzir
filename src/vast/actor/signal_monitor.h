@@ -11,12 +11,12 @@ namespace vast {
 struct signal_monitor : default_actor {
   /// Spawns the system monitor with a given receiver.
   /// @param receiver the actor receiving the signals.
-  signal_monitor(caf::actor receiver);
+  signal_monitor(actor receiver);
 
   void on_exit() override;
-  caf::behavior make_behavior() override;
+  behavior make_behavior() override;
 
-  caf::actor sink_;
+  actor sink_;
 };
 
 } // namespace vast

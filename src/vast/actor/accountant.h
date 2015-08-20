@@ -35,7 +35,7 @@ struct accountant : default_actor {
       resolution_{resolution} {
   }
 
-  caf::behavior make_behavior() override {
+  behavior make_behavior() override {
     if (filename_.empty()) {
       VAST_ERROR(this, "require non-empty directory to write log file");
       quit(exit::error);
@@ -117,7 +117,7 @@ struct accountant : default_actor {
   path const filename_;
   time::duration const resolution_;
   std::ofstream file_;
-  std::unordered_map<caf::actor_addr, std::string> actors_;
+  std::unordered_map<actor_addr, std::string> actors_;
   std::unordered_map<std::string, context> contexts_;
 };
 

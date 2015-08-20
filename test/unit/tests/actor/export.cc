@@ -16,7 +16,6 @@
 #include "data.h"
 #include "fixtures/core.h"
 
-using namespace caf;
 using namespace vast;
 
 FIXTURE_SCOPE(core_scope, fixtures::core)

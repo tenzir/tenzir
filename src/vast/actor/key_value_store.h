@@ -16,7 +16,7 @@ namespace vast {
 /// A replicated hierarchical key-value store.
 class key_value_store : public default_actor {
 public:
-  using storage = util::radix_tree<caf::message>;
+  using storage = util::radix_tree<message>;
 
   /// Spawns a key-value store.
   /// @param dir The directory used for persistence. If empty, the instance
@@ -25,18 +25,18 @@ public:
 
 private:
   void on_exit() override;
-  caf::behavior make_behavior() override;
+  behavior make_behavior() override;
 
-  bool update(std::string const& key, caf::message const& value);
+  bool update(std::string const& key, message const& value);
 
   path dir_;
   storage data_;
   util::radix_tree<none> persistent_;
-  caf::actor leader_;
-  std::set<caf::actor> followers_;
-  caf::behavior following_;
-  caf::behavior candidating_;
-  caf::behavior leading_;
+  actor leader_;
+  std::set<actor> followers_;
+  behavior following_;
+  behavior candidating_;
+  behavior leading_;
 };
 
 } // namespace vast

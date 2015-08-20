@@ -13,8 +13,6 @@
 
 namespace vast {
 
-using namespace caf;
-
 archive::archive(path dir, size_t capacity, size_t max_segment_size,
                  io::compression compression)
   : flow_controlled_actor{"archive"},
@@ -31,7 +29,7 @@ void archive::on_exit() {
   accountant_ = invalid_actor;
 }
 
-caf::behavior archive::make_behavior() {
+behavior archive::make_behavior() {
   if (exists(meta_data_filename_)) {
     using vast::load;
     auto t = load(meta_data_filename_, segments_);

@@ -28,8 +28,6 @@ void signal_handler(int signo) {
 
 } // namespace <anonymous>
 
-using namespace caf;
-
 signal_monitor::signal_monitor(actor receiver)
   : default_actor{"signal-monitor"}, sink_{std::move(receiver)} {
 }

@@ -13,8 +13,6 @@
 #include "vast/concept/printable/vast/error.h"
 #include "vast/concept/printable/vast/filesystem.h"
 
-using namespace caf;
-
 namespace vast {
 
 profiler::profiler(path log_dir, std::chrono::seconds secs)

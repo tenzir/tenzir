@@ -23,11 +23,10 @@ public:
 
   void on_exit() override {
     static_cast<Derived*>(this)->flush();
-    accountant_ = caf::invalid_actor;
+    accountant_ = invalid_actor;
   }
 
-  caf::behavior make_behavior() override {
-    using namespace caf;
+  behavior make_behavior() override {
     last_flush_ = time::snapshot();
     return {
       [=](exit_msg const& msg) { quit(msg.reason); },
@@ -89,7 +88,7 @@ private:
 
   time::extent flush_interval_ = time::seconds(1); // TODO: make configurable
   time::moment last_flush_;
-  caf::actor accountant_;
+  actor accountant_;
   uint64_t processed_ = 0;
   uint64_t limit_ = 0;
 };

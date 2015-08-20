@@ -1,3 +1,4 @@
+#include "vast/caf.h"
 #include "vast/chunk.h"
 #include "vast/event.h"
 #include "vast/concept/serializable/state.h"
@@ -132,7 +133,7 @@ result<event> chunk::reader::materialize(bool discard) {
 }
 
 chunk::chunk(io::compression method)
-  : msg_{caf::make_message(meta_data{}, vast::block{method})} {
+  : msg_{make_message(meta_data{}, vast::block{method})} {
 }
 
 chunk::chunk(std::vector<event> const& es, io::compression method) {
@@ -147,7 +148,7 @@ bool chunk::ids(default_bitstream ids) {
 }
 
 bool chunk::compress(std::vector<event> const& events, io::compression method) {
-  msg_ = caf::make_message(meta_data{}, vast::block{method});
+  msg_ = make_message(meta_data{}, vast::block{method});
   writer w{*this};
   for (auto& e : events)
     if (!w.write(e))

@@ -14,13 +14,11 @@
 #include <string>
 #include <thread>
 
-#include <caf/all.hpp>
-#include <caf/experimental/whereis.hpp>
 #include <caf/io/all.hpp>
-#include <caf/scheduler/profiled_coordinator.hpp>
 
 #include "vast/announce.h"
 #include "vast/banner.h"
+#include "vast/caf.h"
 #include "vast/filesystem.h"
 #include "vast/logger.h"
 #include "vast/optional.h"
@@ -49,7 +47,7 @@ int main(int argc, char* argv[]) {
   auto profile_file = std::string{};
   auto threads = std::thread::hardware_concurrency();
   // Parse and validate command line.
-  auto r = caf::message_builder(argv + 1, argv + argc).extract_opts({
+  auto r = message_builder(argv + 1, argv + argc).extract_opts({
     {"bare,b", "spawn empty node without any actors"},
     {"directory,d", "path to persistent state directory", dir},
     {"endpoint,e", "the node endpoint", endpoint},
@@ -109,11 +107,11 @@ int main(int argc, char* argv[]) {
   }
   // Replace/adjust scheduler.
   if (r.opts.count("profile"))
-    caf::set_scheduler(
-      new caf::scheduler::profiled_coordinator<>{
+    set_scheduler(
+      new scheduler::profiled_coordinator<>{
         profile_file, std::chrono::milliseconds{1000}, threads, messages});
   else if (r.opts.count("threads") || r.opts.count("messages"))
-    caf::set_scheduler<>(threads, messages);
+    set_scheduler<>(threads, messages);
   VAST_VERBOSE(banner() << "\n\n");
   VAST_VERBOSE("set scheduler threads to", threads);
   VAST_VERBOSE("set scheduler maximum throughput to",
@@ -121,28 +119,28 @@ int main(int argc, char* argv[]) {
                 ? "unlimited" : std::to_string(messages)));
   // Enable direct connections.
   VAST_VERBOSE("enabling direct connection optimization");
-  auto cfg = caf::experimental::whereis(caf::atom("ConfigServ"));
-  caf::anon_send(cfg, put_atom::value, "global.enable-automatic-connections",
-            caf::make_message(true));
+  auto cfg = whereis(atom("ConfigServ"));
+  anon_send(cfg, put_atom::value, "global.enable-automatic-connections",
+            make_message(true));
   // Initialize node actor.
-  auto guard = caf::detail::make_scope_guard(
+  auto guard = make_scope_guard(
     [] { caf::shutdown(); logger::destruct(); }
   );
   announce_types();
-  auto n = caf::spawn<node>(name, dir);
-  caf::scoped_actor self;
+  auto n = spawn<node>(name, dir);
+  scoped_actor self;
   if (r.opts.count("bare") == 0) {
-    std::vector<caf::message> msgs = {
-      caf::make_message("spawn", "identifier"),
-      caf::make_message("spawn", "archive"),
-      caf::make_message("spawn", "index"),
-      caf::make_message("spawn", "importer"),
+    std::vector<message> msgs = {
+      make_message("spawn", "identifier"),
+      make_message("spawn", "archive"),
+      make_message("spawn", "index"),
+      make_message("spawn", "importer"),
     };
     for (auto& msg : msgs) {
       optional<error> failure;
       self->sync_send(n, msg).await(
         [&](error& e) { failure = std::move(e); },
-        caf::others >> [] { /* nop */ }
+        others >> [] { /* nop */ }
       );
       if (failure) {
         VAST_ERROR(*failure);
@@ -150,9 +148,9 @@ int main(int argc, char* argv[]) {
       }
     }
     msgs = {
-      caf::make_message("connect", "importer", "identifier"),
-      caf::make_message("connect", "importer", "archive"),
-      caf::make_message("connect", "importer", "index")
+      make_message("connect", "importer", "identifier"),
+      make_message("connect", "importer", "archive"),
+      make_message("connect", "importer", "index")
     };
     for (auto& msg : msgs)
       self->sync_send(n, msg).await([](ok_atom) {});
@@ -168,7 +166,7 @@ int main(int argc, char* argv[]) {
     self->monitor(n);
     auto stop = false;
     self->do_receive(
-      [&](caf::down_msg const& msg) {
+      [&](down_msg const& msg) {
         VAST_DEBUG("received DOWN from " << msg.source);
         stop = true;
       },
@@ -179,12 +177,12 @@ int main(int argc, char* argv[]) {
         else
           self->send(n, signal_atom::value, signal);
       },
-      caf::others() >> [&] {
+      others() >> [&] {
         VAST_WARN("received unexpected message:",
-                   caf::to_string(self->current_message()));
+                   to_string(self->current_message()));
       }
     ).until([&] { return stop == true; });
-    if (n->exit_reason() == caf::exit_reason::not_exited)
+    if (n->exit_reason() == exit_reason::not_exited)
       self->send_exit(n, exit::stop);
     self->send_exit(sig_mon, exit::stop);
     self->await_all_other_actors_done();
