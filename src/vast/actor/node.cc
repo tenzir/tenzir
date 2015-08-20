@@ -284,7 +284,7 @@ behavior node::spawn_actor(event_based_actor* self) {
           return;
         }
         auto i = spawn(identifier::actor, store_, dir_ / "id", batch_size);
-        save_actor(i, "identifier");
+        save_actor(actor_cast<actor>(i), "identifier");
       },
       on("archive", any_vals) >> [=] {
         io::compression method;

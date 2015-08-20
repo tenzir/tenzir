@@ -9,11 +9,12 @@
 #include "vast/concept/printable/to_string.h"
 #include "vast/concept/printable/vast/error.h"
 #include "vast/concept/printable/vast/filesystem.h"
+#include "vast/util/type_list.h"
 
 namespace vast {
 namespace identifier {
 
-state::state(event_based_actor* self)
+state::state(local_actor* self)
   : basic_state{self, "identifier"} {
 }
 
@@ -40,43 +41,44 @@ bool state::flush() {
   return true;
 }
 
-behavior actor(stateful_actor<state>* self, caf::actor store, path dir,
-               event_id batch_size) {
+behavior_type actor(stateful_pointer self, caf::actor store, path dir,
+                    event_id batch_size) {
   self->state.store = std::move(store);
   self->state.dir = std::move(dir);
   self->state.batch_size = batch_size;
   if (exists(self->state.dir)) {
     // Load current batch size.
     std::ifstream available{to_string(self->state.dir / "available")};
+    std::ifstream next{to_string(self->state.dir / "next")};
     if (!available) {
       VAST_ERROR_AT(self, "failed to open ID batch file:",
                     self->state.dir / "available",
                     '(' << std::strerror(errno) << ')');
       self->quit(exit::error);
-      return {};
-    }
-    available >> self->state.available;
-    VAST_INFO_AT(self, "found", self->state.available, "local IDs");
-    // Load next ID.
-    std::ifstream next{to_string(self->state.dir / "next")};
-    if (!next) {
+    } else if (!next) {
       VAST_ERROR_AT(self, "failed to open ID file:", self->state.dir / "next",
                     '(' << std::strerror(errno) << ')');
       self->quit(exit::error);
-      return {};
+    } else {
+      available >> self->state.available;
+      next >> self->state.id;
+      VAST_INFO_AT(self, "found", self->state.available, "local IDs");
+      VAST_INFO_AT(self, "found next event ID:", self->state.id);
     }
-    next >> self->state.id;
-    VAST_INFO_AT(self, "found next event ID:", self->state.id);
   }
+  using request_response_promise =
+    typed_response_promise<
+      either<id_atom, event_id, event_id>::or_else<error>
+    >;
   return {
     [=](id_atom) {
       return self->state.id;
     },
-    [=](request_atom, event_id n) {
-      auto rp = self->make_response_promise();
+    [=](request_atom, event_id n) -> request_response_promise {
+      request_response_promise rp = self->make_response_promise();
       if (n == 0) {
-        rp.deliver(make_message(error{"cannot hand out 0 ids"}));
-        return;
+        rp.deliver(error{"cannot hand out 0 ids"});
+        return rp;
       }
       // If the requester wants more than we can locally offer, we give
       // everything we have, but double the batch size to avoid future
@@ -92,8 +94,7 @@ behavior actor(stateful_actor<state>* self, caf::actor store, path dir,
       VAST_DEBUG_AT(self, "hands out [" << self->state.id << ',' <<
                     self->state.id + n << "),", self->state.available - n,
                     "local IDs remaining");
-      rp.deliver(make_message(id_atom::value, self->state.id,
-                              self->state.id + n));
+      rp.deliver(id_atom::value, self->state.id, self->state.id + n);
       self->state.id += n;
       self->state.available -= n;
       // Replenish if we're running low of IDs (or are already out of 'em).
@@ -130,8 +131,8 @@ behavior actor(stateful_actor<state>* self, caf::actor store, path dir,
           quit_on_others(self)
         );
       }
-    },
-    quit_on_others(self)
+      return rp;
+    }
   };
 }
 

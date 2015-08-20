@@ -33,15 +33,16 @@ operator<<(std::basic_ostream<Char, Traits>& out, abstract_actor const& a) {
   return out;
 }
 
-template <typename Char, typename Traits, typename T>
+template <typename Char, typename Traits, typename T, typename Base>
 std::basic_ostream<Char, Traits>&
-operator<<(std::basic_ostream<Char, Traits>& out, stateful_actor<T> const& a) {
+operator<<(std::basic_ostream<Char, Traits>& out,
+           stateful_actor<T, Base> const& a) {
   out << a.name() << a.address();
   return out;
 }
 
-template <typename Stream, typename T>
-inline Stream& operator<<(Stream& out, stateful_actor<T> const* a) {
+template <typename Stream, typename T, typename Base>
+inline Stream& operator<<(Stream& out, stateful_actor<T, Base> const* a) {
   VAST_ASSERT(a != nullptr);
   out << *a;
   return out;
@@ -80,7 +81,7 @@ using caf::atom;
 using caf::behavior;
 using caf::detached;
 using caf::down_msg;
-using caf::either_or_t;
+using caf::either;
 using caf::event_based_actor;
 using caf::exit_msg;
 using caf::invalid_actor;
