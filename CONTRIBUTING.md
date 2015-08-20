@@ -2,7 +2,7 @@ This document specifies the coding style for VAST. The style is based on
 STL, [Google style][google-style], and [CAF style][caf-style] guidelines.
 
 [google-style]: http://google-styleguide.googlecode.com/svn/trunk/cppguide.xml
-[caf-style]: https://github.com/actor-framework/actor-framework/blob/master/HACKING.md
+[caf-style]: https://github.com/actor-framework/actor-framework/blob/master/CONTRIBUTING.md
 
 Git Workflow
 ============
