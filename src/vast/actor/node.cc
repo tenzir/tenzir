@@ -22,6 +22,8 @@
 #include "vast/actor/node.h"
 #include "vast/actor/sink/spawn.h"
 #include "vast/actor/source/spawn.h"
+#include "vast/concept/parseable/to.h"
+#include "vast/concept/parseable/vast/key.h"
 #include "vast/concept/printable/vast/expression.h"
 #include "vast/concept/printable/vast/error.h"
 #include "vast/concept/printable/vast/filesystem.h"
@@ -399,7 +401,7 @@ behavior node::spawn_actor(event_based_actor* self) {
         if (r.opts.count("auto-connect") > 0) {
           std::vector<caf::actor> archives;
           std::vector<caf::actor> indexes;
-          self->send(store_, list_atom::value, "actors/" + name_);
+          self->send(store_, list_atom::value, key::str("actors", name_));
           self->become(
             [=](std::map<std::string, caf::message>& m) {
               for (auto& p : m)
@@ -431,7 +433,7 @@ behavior node::spawn_actor(event_based_actor* self) {
         }
         self->send(*src, put_atom::value, accountant_atom::value, accountant_);
         if (r.opts.count("auto-connect") > 0) {
-          self->send(store_, list_atom::value, "actors/" + name_);
+          self->send(store_, list_atom::value, key::str("actors", name_));
           self->become(
             [=](std::map<std::string, caf::message>& m) {
               for (auto& p : m)
@@ -661,7 +663,9 @@ behavior node::connect(event_based_actor* self) {
     self->become(
       [=](std::map<std::string, message> const& vals) {
         auto pred = [=](auto& p) {
-          return util::split_to_str(p.first, "/").back() == qualify(sink);
+          auto k = to<key>(p.first);
+          VAST_ASSERT(k && !k->empty());
+          return k->back() == qualify(sink);
         };
         if (std::find_if(vals.begin(), vals.end(), pred) != vals.end()) {
           rp.deliver(make_message(

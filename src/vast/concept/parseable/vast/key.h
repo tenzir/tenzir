@@ -3,6 +3,7 @@
 
 #include "vast/key.h"
 
+#include "vast/concept/parseable/core/choice.h"
 #include "vast/concept/parseable/core/list.h"
 #include "vast/concept/parseable/core/operators.h"
 #include "vast/concept/parseable/core/parser.h"
