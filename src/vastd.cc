@@ -50,7 +50,7 @@ int main(int argc, char* argv[]) {
   auto threads = std::thread::hardware_concurrency();
   // Parse and validate command line.
   auto r = caf::message_builder(argv + 1, argv + argc).extract_opts({
-    {"core,c", "spawn core actors"},
+    {"bare,b", "spawn empty node without any actors"},
     {"directory,d", "path to persistent state directory", dir},
     {"endpoint,e", "the node endpoint", endpoint},
     {"foreground,f", "run daemon in foreground"},
@@ -131,8 +131,7 @@ int main(int argc, char* argv[]) {
   announce_types();
   auto n = caf::spawn<node>(name, dir);
   caf::scoped_actor self;
-  // Create core ecosystem.
-  if (r.opts.count("core") > 0) {
+  if (r.opts.count("bare") == 0) {
     std::vector<caf::message> msgs = {
       caf::make_message("spawn", "identifier"),
       caf::make_message("spawn", "archive"),
@@ -140,15 +139,13 @@ int main(int argc, char* argv[]) {
       caf::make_message("spawn", "importer"),
     };
     for (auto& msg : msgs) {
-      optional<error> err;
+      optional<error> failure;
       self->sync_send(n, msg).await(
-        [&](error& e) {
-          err = std::move(e);
-        },
+        [&](error& e) { failure = std::move(e); },
         caf::others >> [] { /* nop */ }
       );
-      if (err) {
-        VAST_ERROR(*err);
+      if (failure) {
+        VAST_ERROR(*failure);
         return 1;
       }
     }

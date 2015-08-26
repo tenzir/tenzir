@@ -9,10 +9,9 @@ forensics and incident response.
 
 ## Synopsis
 
-Start a VAST node with debug log verbosity in the foreground and spawn all core
-actors:
+Start a VAST node with debug log verbosity in the foreground:
 
-    vastd -l 5 -f -c
+    vastd -l 5 -f
 
 Import [Bro](http://www.bro.org) logs or a PCAP trace in one shot:
 

@@ -23,24 +23,29 @@ topology.
 DESCRIPTION
 -----------
 
-Typically, each physical machine in a VAST deployment runs a single `vastd`
-process. For single-node deployments all actors run inside this process,
-whereas cluster deployments consist of multiple nodes with actors spread across
-them.
+The `vastd` process spawns a special *node* actor, which is as a container for
+other actors. Typically, each physical machine in a VAST deployment runs a
+single `vastd` process. For single-node deployments all actors run inside this
+process, whereas cluster deployments consist of multiple nodes with actors
+spread across them.
 
-A `vastd` process spawn a special *node* actor which acts as a container for
-other actors. Nodes can enter a peering relationship to share global state. The
-set of peering nodes constitutes a VAST *ecosystem*: an overlay network in
-which actors can be connected irrespective of process boundaries.
+Nodes can enter a peering relationship to form a cluster. All peers have the
+same authority: if one fails, others can take over. By default, each node
+includes all core actors: archive, index, importer, identifier. For more
+fine-grained control about the components running on a node, one can spawn the
+node in bare mode to get an empty node. This allows for more flexible
+arrangement of components to best match the available system hardware.
 
 OPTIONS
 -------
 
 The following *options* are available:
 
-`-c`
-  Start all core actors and connect them. Specifying this option automatically
-  executes the following commands after starting the node:
+`-b`
+  Run in *bare* mode, i.e., do not spawn any actors. Use *bare* mode when you
+  want to create a custom topology. When not specifying this option, `vastd`
+  automatically spawns all core actors by executing the following commands
+  upon spawning the node:
 
       vast spawn identifier
       vast spawn importer
@@ -73,7 +78,7 @@ The following *options* are available:
 
 `-n` *name* [*hostname*]
   Overrides the node *name*, which defaults to the system hostname. Each node
-  in an ecosystem must have a unique name, otherwise peering fails.
+  in an topology must have a unique name, otherwise peering fails.
 
 `-p` *logfile*
   Enable CAF profiling of worker threads and actors and write the per-second
@@ -88,10 +93,13 @@ The following *options* are available:
 EXAMPLES
 --------
 
-Start a node in the foreground with debugging logging verbosity and launch all
-core actors:
+Start a node in the foreground:
 
-    vastd -l 5 -f -c
+    vastd -f
+
+Start a node with debugging logging verbosity and use directory "test":
+
+    vastd -l 5 -d test 
 
 Start a node at a different port with 10 worker threads:
 
