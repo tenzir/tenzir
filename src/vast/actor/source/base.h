@@ -101,10 +101,20 @@ public:
           send(sinks_[next_sink_++ % sinks_.size()], std::move(events_));
           events_ = {};
         }
-        if (done())
+        if (done()) {
           send_exit(*this, exit::done);
-        else if (!overloaded())
+        } else if (!overloaded()) {
           this->send(this, this->current_message());
+          // FIXME: if we do not give the stdlib implementation a hint to yield
+          // here, this actor can monopolize all available resources. In
+          // particular, we encountered a scenario where it prevented the BASP
+          // broker from a getting a chance to operate, thereby queuing up
+          // all event batches locally and running out of memory, as opposed to
+          // sending them out as soon as possible. This yield fix temporarily
+          // works around a deeper issue in CAF, which needs to be addressed in
+          // the future.
+          std::this_thread::yield();
+        }
       },
       catch_unexpected(),
     };
