@@ -4,12 +4,11 @@
 #include <string>
 #include <ostream>
 
-#include <caf/experimental/stateful_actor.hpp>
+#include <caf/stateful_actor.hpp>
 
 #include "vast/util/assert.h"
 
 namespace caf {
-namespace experimental {
 
 template <typename Char, typename Traits, typename T>
 std::basic_ostream<Char, Traits>&
@@ -19,7 +18,6 @@ operator<<(std::basic_ostream<Char, Traits>& out, stateful_actor<T> const* a) {
   return out;
 }
 
-} // namespace experimental
 } // namespace caf
 
 #include "vast/logger.h"
@@ -33,7 +31,7 @@ using caf::behavior;
 using caf::event_based_actor;
 using caf::local_actor;
 using caf::others;
-using caf::experimental::stateful_actor;
+using caf::stateful_actor;
 
 /// The base class for actor state.
 struct basic_state  {

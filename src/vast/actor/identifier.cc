@@ -43,8 +43,8 @@ bool state::flush() {
   return true;
 }
 
-behavior actor(experimental::stateful_actor<state>* self,
-               caf::actor store, path dir, event_id batch_size) {
+behavior actor(stateful_actor<state>* self, caf::actor store, path dir,
+               event_id batch_size) {
   self->state.store = std::move(store);
   self->state.dir = std::move(dir);
   self->state.batch_size = batch_size;
