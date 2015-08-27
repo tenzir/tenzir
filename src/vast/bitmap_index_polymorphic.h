@@ -205,9 +205,10 @@ private:
 
   template <typename Container>
   bool push_back_impl(Container const& c) {
-    VAST_ASSERT(c.size() < max_container_length);
     if (c.empty())
       return size_.stretch(1);
+    if (c.size() > max_container_length)
+      return false;
     if (bmis_.size() < c.size()) {
       auto old = bmis_.size();
       bmis_.resize(c.size());
