@@ -100,11 +100,6 @@ public:
             send(accountant_, uint64_t{events_.size()}, time::snapshot());
           send(sinks_[next_sink_++ % sinks_.size()], std::move(events_));
           events_ = {};
-        }
-        if (done()) {
-          send_exit(*this, exit::done);
-        } else if (!overloaded()) {
-          this->send(this, this->current_message());
           // FIXME: if we do not give the stdlib implementation a hint to yield
           // here, this actor can monopolize all available resources. In
           // particular, we encountered a scenario where it prevented the BASP
@@ -115,6 +110,10 @@ public:
           // the future.
           std::this_thread::yield();
         }
+        if (done())
+          send_exit(*this, exit::done);
+        else if (!overloaded())
+          this->send(this, this->current_message());
       },
       catch_unexpected(),
     };
