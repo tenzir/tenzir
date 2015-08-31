@@ -13,6 +13,13 @@
 using namespace vast;
 using namespace std::string_literals;
 
+TEST(container attribute folding) {
+  using namespace parsers;
+  auto spaces = *lit(' ');
+  static_assert(std::is_same<decltype(spaces)::attribute, unused_type>::value,
+                "container attribute folding failed");
+}
+
 TEST(char) {
   using namespace parsers;
   MESSAGE("equality");

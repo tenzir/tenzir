@@ -20,6 +20,9 @@ struct attr_fold<std::vector<char>> : std::decay<std::string> {};
 template <>
 struct attr_fold<unused_type> : std::decay<unused_type> {};
 
+template <>
+struct attr_fold<std::vector<unused_type>> : std::decay<unused_type> {};
+
 } // namespace detail
 } // namespace vast
 

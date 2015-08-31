@@ -13,7 +13,19 @@ template <typename Elem>
 struct container {
   using vector_type = std::vector<Elem>;
   using attribute = typename attr_fold<vector_type>::type;
-  using value_type = typename attribute::value_type;
+
+  template <typename T>
+  struct lazy_value_type {
+    using value_type = T;
+  };
+
+  using value_type =
+    typename std::conditional_t<
+      std::is_same<attribute, std::decay_t<unused_type>>{},
+      lazy_value_type<unused_type>,
+      attribute
+    >::value_type;
+
   static constexpr bool modified = std::is_same<vector_type, attribute>{};
 
   template <typename Container, typename T>
