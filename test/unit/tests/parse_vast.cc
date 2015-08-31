@@ -9,6 +9,8 @@
 #include "vast/concept/printable/to_string.h"
 #include "vast/concept/printable/vast/pattern.h"
 #include "vast/concept/printable/vast/address.h"
+#include "vast/concept/parseable/vast/http.h"
+
 
 #define SUITE parseable
 #include "test.h"
@@ -218,4 +220,48 @@ TEST(offset) {
   offset o;
   CHECK(parsers::offset("1,2,3", o));
   CHECK(o == offset{1, 2, 3});
+}
+
+TEST(http_header_parser)
+{
+  auto p = make_parser<http::header>();
+  auto str = "foo: bar"s;
+  auto f = str.begin();
+  auto l = str.end();
+  http::header hdr;
+  CHECK(p.parse(f, l, hdr));
+  CHECK(hdr.name == "FOO");
+  CHECK(hdr.value == "bar");
+  CHECK(f == l);
+
+  str = "Content-Type:application/pdf";
+  f = str.begin();
+  l = str.end();
+  CHECK(p.parse(f, l, hdr));
+  CHECK(hdr.name == "CONTENT-TYPE");
+  CHECK(hdr.value == "application/pdf");
+  CHECK(f == l);
+}
+
+TEST(http_request_parser)
+{
+  auto p = make_parser<http::request>();
+  auto str = "GET /foo/bar%20baz/ HTTP/1.1\r\nContent-Type:text/html\r\nContent-Length:1234\r\n\r\nBody "s;
+  auto f = str.begin();
+  auto l = str.end();
+  http::request req;
+  CHECK(p.parse(f, l, req));
+  CHECK(req.method == "GET");
+  CHECK(req.uri == "/foo/bar baz/");
+  CHECK(req.protocol == "HTTP");
+  CHECK(req.version == 1.1);
+  auto hdr = req.header("content-type");
+  REQUIRE(hdr);
+  CHECK(hdr->name == "CONTENT-TYPE");
+  CHECK(hdr->value == "text/html");
+  hdr = req.header("content-length");
+  REQUIRE(hdr);
+  CHECK(hdr->name == "CONTENT-LENGTH");
+  CHECK(hdr->value == "1234");
+  CHECK(f == l);
 }
