@@ -73,6 +73,15 @@ TEST(JSON string escaping) {
   CHECK(json_unescape("\"unescaped\"quote\"") == "");
 }
 
+TEST(URL escaping) {
+  // These are the reserved characters: !*'();:@&=+$,/?#[]
+  CHECK(url_escape("") == "");
+  CHECK(url_escape("/f o o/index.html&foo=b@r") == "/f%20o%20o/index.html&foo=b@r");
+
+  CHECK(url_unescape("") == "");
+  CHECK(url_unescape("/f%20o%20o/index.html&foo=b@r") == "/f o o/index.html&foo=b@r");
+}
+
 TEST(string splitting and joining) {
   using namespace std::string_literals;
 

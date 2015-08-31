@@ -1,3 +1,4 @@
+#include <cstring>
 #include <vector>
 
 #include "vast/util/coding.h"
@@ -10,90 +11,101 @@ namespace {
 
 static constexpr char hex[] = "0123456789abcdef";
 
+template <class Iterator, class Escaper>
+void escape(Iterator f, Iterator l, std::string& escaped, Escaper escaper) {
+  escaped.reserve(l - f);
+  auto out = std::back_inserter(escaped);
+  while (f != l)
+    escaper(f++, out);
+}
+
+template <class Iterator, class Unescaper>
+bool unescape(Iterator f, Iterator l, std::string& unescaped,
+              Unescaper unescaper) {
+  unescaped.reserve(l - f);
+  auto out = std::back_inserter(unescaped);
+  while (f != l)
+    if (unescaper(f, l, out))
+      ++f;
+    else
+      return false;
+  return true;
+}
+
+auto hex_escaper = [](auto in, auto out) {
+  *out++ = '\\';
+  *out++ = 'x';
+  *out++ = hex[(*in & 0xf0) >> 4];
+  *out++ = hex[*in & 0x0f];
+};
+
+auto hex_unescaper = [](auto& f, auto l, auto out) {
+  VAST_ASSERT(l - f >= 2);
+  auto hi = *++f;
+  auto lo = *++f;
+  if (! std::isxdigit(hi) || ! std::isxdigit(lo))
+    return false;
+  *out++ = hex_to_byte(hi, lo);
+  return true;
+};
+
+auto print_escaper = [](auto in, auto out) {
+  if (std::isprint(*in))
+    *out++ = *in;
+  else
+    hex_escaper(in, out);
+};
+
 } // namespace <anonymous>
 
 std::string byte_escape(std::string const& str) {
-  std::string esc;
-  esc.reserve(str.size());
-  for (auto c : str)
-    if (std::isprint(c)) {
-      esc += c;
-    } else {
-      esc += '\\';
-      esc += 'x';
-      esc += hex[(c & 0xf0) >> 4];
-      esc += hex[c & 0x0f];
-    }
-  return esc;
+  std::string result;
+  escape(str.begin(), str.end(), result, print_escaper);
+  return result;
 }
 
 std::string byte_escape(std::string const& str, std::string const& extra) {
-  std::string esc;
-  esc.reserve(str.size());
-  for (auto c : str)
-    if (std::isprint(c)) {
-      if (extra.find(c) != std::string::npos)
-        esc += '\\';
-      esc += c;
+  auto extra_print_escaper = [&](auto in, auto out) {
+    if (extra.find(*in) != std::string::npos) {
+      *out++ = '\\';
+      *out++ = *in;
     } else {
-      esc += '\\';
-      esc += 'x';
-      esc += hex[(c & 0xf0) >> 4];
-      esc += hex[c & 0x0f];
+      print_escaper(in, out);
     }
-  return esc;
+  };
+  std::string result;
+  escape(str.begin(), str.end(), result, extra_print_escaper);
+  return result;
 }
 
+
 std::string byte_escape_all(std::string const& str) {
-  std::string esc;
-  esc.resize(str.size() * 4);
-  auto i = std::string::size_type{0};
-  for (auto c : str) {
-    esc[i++] = '\\';
-    esc[i++] = 'x';
-    esc[i++] = hex[(c & 0xf0) >> 4];
-    esc[i++] = hex[c & 0x0f];
-  }
-  return esc;
+  std::string result;
+  escape(str.begin(), str.end(), result, hex_escaper);
+  return result;
 }
 
 std::string byte_unescape(std::string const& str) {
-  std::string unesc;
-  auto i = str.begin();
-  auto last = str.end();
-  while (i != last) {
-    auto c = *i++;
-    if (c != '\\') {
-      unesc += c;
-    } else if (i == last) {
-      return {}; // malformed string with dangling '\' at the end.
-    } else {
-      switch ((c = *i++)) {
-        default:
-          unesc += c;
-          break;
-        case 'x':
-          if (i != last && i + 1 != last && std::isxdigit(i[0])
-              && std::isxdigit(i[1])) {
-            auto hi = *i++;
-            auto lo = *i++;
-            unesc += hex_to_byte(hi, lo);
-          } else {
-            unesc += 'x';
-          }
-          break;
-      }
+  auto byte_unescaper = [](auto& f, auto l, auto out) {
+    if (*f != '\\') {
+      *out++ = *f;
+      return true;
     }
-  }
-  return unesc;
+    if (l - f < 4)
+      return false; // Not enough input.
+    if (*++f != 'x') {
+      *out++ = *f++; // Remove escape backslashes that aren't \x.
+      return true;
+    }
+    return hex_unescaper(f, l, out);
+  };
+  std::string result;
+  if (! unescape(str.begin(), str.end(), result, byte_unescaper))
+    return {};
+  return result;
 }
 
 std::string json_escape(std::string const& str) {
-  if (str.empty())
-    return "\"\"";
-  std::string esc;
-  esc.reserve(str.size() + 2);
-  esc += '"';
   // The JSON RFC (http://www.ietf.org/rfc/rfc4627.txt) specifies the escaping
   // rules in section 2.5:
   //
@@ -103,117 +115,155 @@ std::string json_escape(std::string const& str) {
   //
   //  That is, '"', '\\', and control characters are the only mandatory escaped
   //  values. The rest is optional.
-  for (auto c : str) {
-    switch (c) {
+  auto json_escaper = [](auto in, auto out) {
+    auto escape_char = [](char c, auto out) {
+      *out++ = '\\';
+      *out++ = c;
+    };
+    switch (*in) {
       default:
-        if (std::isprint(c)) {
-          esc += c;
-        } else {
-          esc += '\\';
-          esc += 'x';
-          esc += hex[(c & 0xf0) >> 4];
-          esc += hex[c & 0x0f];
-        }
+        print_escaper(in, out);
         break;
       case '"':
-        esc += "\\\"";
-        break;
       case '\\':
-        esc += "\\\\";
+        escape_char(*in, out);
         break;
       case '\b':
-        esc += "\\b";
+        escape_char('b', out);
         break;
       case '\f':
-        esc += "\\f";
+        escape_char('f', out);
         break;
       case '\r':
-        esc += "\\r";
+        escape_char('r', out);
         break;
       case '\n':
-        esc += "\\n";
+        escape_char('n', out);
         break;
       case '\t':
-        esc += "\\t";
+        escape_char('t', out);
         break;
     }
-  }
-  esc += '"';
-  return esc;
+  };
+  if (str.empty())
+    return "\"\"";
+  std::string result;
+  result += '"';
+  escape(str.begin(), str.end(), result, json_escaper);
+  result += '"';
+  return result;
 }
 
 std::string json_unescape(std::string const& str) {
-  std::string unesc;
-  if (str.empty() || str.size() < 2)
-    return {};
-  // Only consider double-quote strings.
-  if (!(str.front() == '"' && str.back() == '"'))
-    return {};
-  unesc.reserve(str.size());
-  std::string::size_type i = 1;
-  std::string::size_type last = str.size() - 1;
-  // Skip the opening double quote.
   // Unescape everything until the closing double quote.
-  while (i < last) {
-    auto c = str[i++];
-    if (c == '"') // Unescaped double-quotes not allowed.
-      return {};
-    if (c != '\\') // Skip everything non-escpaed character.
-    {
-      unesc += c;
-      continue;
+  auto json_unescaper = [](auto& f, auto l, auto out) {
+    if (*f == '"') // Unescaped double-quotes not allowed.
+      return false;
+    if (*f != '\\') { // Skip every non-escape character.
+      *out++ = *f;
+      return true;
     }
-    if (i == last) // No '\' before final double quote allowed.
-      return {};
-    switch (str[i++]) {
+    if (l - f < 2)
+      return false; // Need at least one char after \.
+    switch (auto c = *++f) {
       default:
-        return {};
+        return false;
       case '\\':
-        unesc += '\\';
+        *out++ = '\\';
         break;
       case '"':
-        unesc += '"';
+        *out++ = '"';
         break;
       case '/':
-        unesc += '/';
+        *out++ = '/';
         break;
       case 'b':
-        unesc += '\b';
+        *out++ = '\b';
         break;
       case 'f':
-        unesc += '\f';
+        *out++ = '\f';
         break;
       case 'r':
-        unesc += '\r';
+        *out++ = '\r';
         break;
       case 'n':
-        unesc += '\n';
+        *out++ = '\n';
         break;
       case 't':
-        unesc += '\t';
+        *out++ = '\t';
         break;
-      case 'u': // We can't handle unicode and leave \uXXXX as is.
-      {
-        unesc += '\\';
-        unesc += 'u';
-        auto end = std::min(std::string::size_type{4}, last - i);
-        for (std::string::size_type j = 0; j < end; ++j)
-          unesc += str[i++];
-      } break;
-      case 'x':
-        if (i + 1 < last) {
-          auto hi = str[i++];
-          auto lo = str[i++];
-          if (std::isxdigit(hi) && std::isxdigit(lo)) {
-            unesc += hex_to_byte(hi, lo);
-            break;
-          }
-        }
-        return {}; // \x must be followed by two hex bytes.
+      case 'u': {
+        // We currently don't support unicode and leave \uXXXX as is.
+        *out++ = '\\';
+        *out++ = 'u';
+        auto end = std::min(decltype(l - f){4}, l - f);
+        for (auto i = 0; i < end; ++i)
+          *out++ = *++f;
+        break;
+      }
+      case 'x': {
+        if (l - f < 3)
+          return false; // Need \x##.
+        auto hi = *++f;
+        auto lo = *++f;
+        if (! std::isxdigit(hi) || ! std::isxdigit(lo))
+          return false;
+        *out++ = hex_to_byte(hi, lo);
+        break;
+      }
     }
-  }
-  VAST_ASSERT(i == last);
-  return unesc;
+    return true;
+  };
+  auto f = str.begin();
+  auto l = str.end();
+  // Need at least two delimiting double quotes.
+  if (f == l || l - f < 2)
+    return {};
+  // Only consider double-quoted strings.
+  if (!(*f++ == '"' && (*--l == '"')))
+    return {};
+  std::string result;
+  if (! unescape(f, l, result, json_unescaper))
+    return {};
+  return result;
+}
+
+std::string url_escape(std::string const& str) {
+  // Based on: https://en.wikipedia.org/wiki/Percent-encoding
+  auto url_escaper = [](auto in, auto out) {
+    auto is_reserved = [](char c) {
+      return std::strchr("!*'();:@&=+$,/?#[]", c) != nullptr;
+    };
+    auto is_unreserved = [](char c) {
+      return std::isalnum(c) || c == '-' || c == '_' || c == '.' || c ==	'~';
+    };
+    if (is_reserved(*in) || is_unreserved(*in)) {
+      *out++ = *in;
+    } else {
+      *out++ = '%';
+      *out++ = hex[(*in & 0xf0) >> 4];
+      *out++ = hex[*in & 0x0f];
+    }
+  };
+  std::string result;
+  escape(str.begin(), str.end(), result, url_escaper);
+  return result;
+}
+
+std::string url_unescape(std::string const& str) {
+  auto url_unescaper = [](auto& f, auto l, auto out) {
+    if (*f != '%') {
+      *out++ = *f;
+      return true;
+    }
+    if (l - f < 3) // Need %xx
+      return false;
+    return hex_unescaper(f, l, out);
+  };
+  std::string result;
+  if (! unescape(str.begin(), str.end(), result, url_unescaper))
+    return {};
+  return result;
 }
 
 } // namespace util
