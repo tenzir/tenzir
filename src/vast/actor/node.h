@@ -7,6 +7,7 @@
 #include "vast/filesystem.h"
 #include "vast/trial.h"
 #include "vast/actor/actor.h"
+#include "vast/actor/accountant.h"
 #include "vast/actor/key_value_store.h"
 #include "vast/util/system.h"
 
@@ -59,7 +60,7 @@ struct node : default_actor {
   std::string parse_actor_key(std::string const& key) const;
 
   behavior operating_;
-  actor accountant_;
+  accountant::actor_type accountant_;
   actor store_;
   std::map<std::string, actor> peers_;
   std::map<std::string, actor> actors_by_label_;

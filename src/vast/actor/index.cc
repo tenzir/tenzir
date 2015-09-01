@@ -50,7 +50,6 @@ index::index(path const& dir, size_t max_events, size_t passive_parts,
 }
 
 void index::on_exit() {
-  accountant_ = invalid_actor;
   queries_.clear();
 }
 
@@ -151,9 +150,9 @@ behavior index::make_behavior() {
         }
       }
     },
-    [=](put_atom, accountant_atom, actor const& accountant) {
-      VAST_DEBUG(this, "registers accountant", accountant);
-      accountant_ = accountant;
+    [=](accountant::actor_type const& acc) {
+      VAST_DEBUG(this, "registers accountant#", acc->id());
+      accountant_ = acc;
       send(accountant_, label() + "-events", time::now());
     },
     [=](flush_atom) {

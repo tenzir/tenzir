@@ -27,6 +27,7 @@ set(libvast_sources
   type.cc
   uuid.cc
   value.cc
+  actor/accountant.cc
   actor/archive.cc
   actor/controller.cc
   actor/exporter.cc

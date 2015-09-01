@@ -6,6 +6,7 @@
 #include "vast/concept/printable/vast/time.h"
 #include "vast/concept/printable/vast/uuid.h"
 #include "vast/actor/actor.h"
+#include "vast/actor/accountant.h"
 #include "vast/event.h"
 #include "vast/time.h"
 #include "vast/uuid.h"
@@ -23,7 +24,6 @@ public:
 
   void on_exit() override {
     static_cast<Derived*>(this)->flush();
-    accountant_ = invalid_actor;
   }
 
   behavior make_behavior() override {
@@ -38,9 +38,9 @@ public:
           VAST_WARN(this, "ignores new limit of", max, "(already processed",
                     processed_, " events)");
       },
-      [=](put_atom, accountant_atom, actor const& accountant) {
-        VAST_DEBUG(this, "registers accountant", accountant);
-        accountant_ = accountant;
+      [=](accountant::actor_type acc) {
+        VAST_DEBUG_AT(this, "registers accountant#" << acc->id());
+        accountant_ = acc;
         send(accountant_, label() + "-events", time::now());
       },
       [=](uuid const&, event const& e) { handle(e); },
@@ -88,7 +88,7 @@ private:
 
   time::extent flush_interval_ = time::seconds(1); // TODO: make configurable
   time::moment last_flush_;
-  actor accountant_;
+  accountant::actor_type accountant_;
   uint64_t processed_ = 0;
   uint64_t limit_ = 0;
 };

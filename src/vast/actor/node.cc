@@ -13,7 +13,6 @@
 #include "vast/time.h"
 #include "vast/expression.h"
 #include "vast/query_options.h"
-#include "vast/actor/accountant.h"
 #include "vast/actor/archive.h"
 #include "vast/actor/identifier.h"
 #include "vast/actor/importer.h"
@@ -217,15 +216,15 @@ node::node(std::string const& name, path const& dir)
 
 void node::on_exit() {
   store_ = invalid_actor;
-  accountant_ = invalid_actor;
   peers_.clear();
   actors_by_label_.clear();
   actors_by_type_.clear();
 }
 
 behavior node::make_behavior() {
-  accountant_ = spawn<accountant<uint64_t>, linked>(dir_ / log_path() /
-                                                    "accounting.log");
+  accountant_ = spawn<linked>(accountant::actor,
+                              dir_ / log_path() / "accounting.log",
+                              time::seconds(1));
   store_ = spawn<key_value_store, linked>(dir_ / "meta");
   // Until we've implemented leader election, each node starts as leader.
   send(store_, leader_atom::value);
@@ -321,7 +320,7 @@ behavior node::spawn_actor(event_based_actor* self) {
         size <<= 20; // MB'ify
         auto dir = dir_ / "archive";
         auto a = spawn<archive, priority_aware>(dir, segments, size, method);
-        self->send(a, put_atom::value, accountant_atom::value, accountant_);
+        self->send(a, accountant_);
         save_actor(std::move(a), "archive");
       },
       on("index", any_vals) >> [=] {
@@ -340,12 +339,11 @@ behavior node::spawn_actor(event_based_actor* self) {
         }
         auto dir = dir_ / "index";
         auto idx = spawn<index, priority_aware>(dir, events, passive, active);
-        self->send(idx, put_atom::value, accountant_atom::value, accountant_);
+        self->send(idx, accountant_);
         save_actor(std::move(idx), "index");
       },
       on("importer") >> [=] {
         auto imp = spawn<priority_aware>(importer::actor);
-        // send(imp, put_atom::value, accountant_atom::value, accountant_);
         save_actor(std::move(imp), "importer");
       },
       on("exporter", any_vals) >> [=] {
@@ -430,7 +428,7 @@ behavior node::spawn_actor(event_based_actor* self) {
           self->quit(exit::error);
           return;
         }
-        self->send(*src, put_atom::value, accountant_atom::value, accountant_);
+        self->send(*src, accountant_);
         if (r.opts.count("auto-connect") > 0) {
           self->send(store_, list_atom::value, key::str("actors", name_));
           self->become(
@@ -457,7 +455,7 @@ behavior node::spawn_actor(event_based_actor* self) {
           self->quit(exit::error);
           return;
         }
-        self->send(*snk, put_atom::value, accountant_atom::value, accountant_);
+        self->send(*snk, accountant_);
         save_actor(*snk, "sink");
       },
       on("profiler", any_vals) >> [=] {

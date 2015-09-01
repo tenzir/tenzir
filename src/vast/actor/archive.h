@@ -7,6 +7,7 @@
 #include "vast/filesystem.h"
 #include "vast/uuid.h"
 #include "vast/actor/actor.h"
+#include "vast/actor/accountant.h"
 #include "vast/io/compression.h"
 #include "vast/util/cache.h"
 #include "vast/util/flat_set.h"
@@ -47,7 +48,7 @@ struct archive : flow_controlled_actor {
   util::cache<uuid, segment> cache_;
   segment current_;
   uint64_t current_size_;
-  actor accountant_;
+  accountant::actor_type accountant_;
 };
 
 } // namespace vast

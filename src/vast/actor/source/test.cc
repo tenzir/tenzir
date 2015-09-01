@@ -189,7 +189,7 @@ struct randomizer {
 test_state::test_state(local_actor* self)
   : base_state{self, "test-source"},
     generator_{std::random_device{}()} {
-  VAST_ASSERT(events_ > 0);
+  VAST_ASSERT(num_events_ > 0);
   static auto builtin_schema = R"schema(
     type test = record
     {
@@ -253,15 +253,15 @@ result<event> test_state::extract() {
   // Advance to next type in schema.
   if (++next_ == schema_.end())
     next_ = schema_.begin();
-  VAST_ASSERT(events_ > 0);
-  if (--events_ == 0)
-    done = true;
+  VAST_ASSERT(num_events_ > 0);
+  if (--num_events_ == 0)
+    done_ = true;
   return std::move(e);
 }
 
 behavior test(stateful_actor<test_state>* self, event_id id, uint64_t events) {
   self->state.id_ = id;
-  self->state.events_ = events;
+  self->state.num_events_ = events;
   return base(self);
 }
 

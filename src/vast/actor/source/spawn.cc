@@ -47,6 +47,8 @@ trial<actor> spawn(message const& params) {
         return error{"failed to connect to UNIX domain socket at ", input};
       auto remote_fd = uds.recv_fd(); // Blocks!
       sb = std::make_unique<util::fdinbuf>(remote_fd);
+    } else if (input == "-") {
+      sb = std::make_unique<util::fdinbuf>(0);
     } else {
       auto fb = std::make_unique<std::filebuf>();
       fb->open(input, std::ios_base::binary | std::ios_base::in);

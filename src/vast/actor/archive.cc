@@ -26,7 +26,6 @@ archive::archive(path dir, size_t capacity, size_t max_segment_size,
 }
 
 void archive::on_exit() {
-  accountant_ = invalid_actor;
 }
 
 behavior archive::make_behavior() {
@@ -49,9 +48,9 @@ behavior archive::make_behavior() {
       quit(msg.reason);
     },
     [=](down_msg const& msg) { remove_upstream_node(msg.source); },
-    [=](put_atom, accountant_atom, actor const& accountant) {
-      VAST_DEBUG(this, "registers accountant", accountant);
-      accountant_ = accountant;
+    [=](accountant::actor_type const& acc) {
+      VAST_DEBUG_AT(this, "registers accountant#" << acc->id());
+      accountant_ = acc;
       send(accountant_, label() + "-events", time::now());
     },
     [=](std::vector<event> const& events) {

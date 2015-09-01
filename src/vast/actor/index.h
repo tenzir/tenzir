@@ -11,6 +11,7 @@
 #include "vast/uuid.h"
 #include "vast/time.h"
 #include "vast/actor/actor.h"
+#include "vast/actor/accountant.h"
 #include "vast/util/cache.h"
 #include "vast/util/flat_set.h"
 
@@ -103,7 +104,7 @@ struct index : public flow_controlled_actor {
 
   path dir_;
   size_t max_events_per_partition_;
-  actor accountant_;
+  accountant::actor_type accountant_;
   std::map<expression, query_state> queries_;
   std::unordered_map<uuid, partition_state> partitions_;
   std::list<schedule_state> schedule_;

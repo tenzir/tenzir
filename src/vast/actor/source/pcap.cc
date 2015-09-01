@@ -32,20 +32,20 @@ schema pcap_state::schema() {
 void pcap_state::schema(vast::schema const& sch) {
   auto t = sch.find_type("vast::packet");
   if (!t) {
-    VAST_ERROR(this, "did not find type vast::packet in given schema");
+    VAST_ERROR_AT(self, "did not find type vast::packet in given schema");
     return;
   }
   if (!congruent(packet_type_, *t)) {
-    VAST_WARN(this, "ignores incongruent schema type:", t->name());
+    VAST_WARN_AT(self, "ignores incongruent schema type:", t->name());
     return;
   }
-  VAST_VERBOSE(this, "prefers type in schema over default type");
+  VAST_VERBOSE_AT(self, "prefers type in schema over default type");
   packet_type_ = *t;
 }
 
 result<event> pcap_state::extract() {
   char buf[PCAP_ERRBUF_SIZE]; // for errors.
-  if (!pcap_ && !done) {
+  if (!pcap_ && !done_) {
     // Determine interfaces.
     pcap_if_t* iface;
     if (::pcap_findalldevs(&iface, buf) == -1)
@@ -59,9 +59,9 @@ result<event> pcap_state::extract() {
         }
         if (pseudo_realtime_ > 0) {
           pseudo_realtime_ = 0;
-          VAST_WARN(this, "ignores pseudo-realtime in live mode");
+          VAST_WARN_AT(self, "ignores pseudo-realtime in live mode");
         }
-        VAST_INFO(this, "listens on interface " << i->name);
+        VAST_INFO_AT(self, "listens on interface " << i->name);
         break;
       }
     ::pcap_freealldevs(iface);
@@ -80,28 +80,29 @@ result<event> pcap_state::extract() {
         return error{"failed to open pcap file ", input_, ": ", err};
       }
 
-      VAST_INFO(this, "reads trace from", input_);
+      VAST_INFO_AT(self, "reads trace from", input_);
       if (pseudo_realtime_ > 0)
-        VAST_INFO(this, "uses pseudo-realtime factor 1/" << pseudo_realtime_);
+        VAST_INFO_AT(self, "uses pseudo-realtime factor 1/" <<
+                     pseudo_realtime_);
     }
-    VAST_VERBOSE(this, "cuts off flows after", cutoff_,
-                 "bytes in each direction");
-    VAST_VERBOSE(this, "keeps at most", max_flows_, "concurrent flows");
-    VAST_VERBOSE(this, "evicts flows after", max_age_, "seconds of inactivity");
-    VAST_VERBOSE(this, "expires flow table every", expire_interval_, "seconds");
+    VAST_VERBOSE_AT(self, "cuts off flows after", cutoff_,
+                    "bytes in each direction");
+    VAST_VERBOSE_AT(self, "keeps at most", max_flows_, "concurrent flows");
+    VAST_VERBOSE_AT(self, "evicts flows after", max_age_ << "s of inactivity");
+    VAST_VERBOSE_AT(self, "expires flow table every", expire_interval_ << "s");
   }
   uint8_t const* data;
   auto r = ::pcap_next_ex(pcap_, &packet_header_, &data);
   if (r == 0)
     return {}; // Attempt to fetch next packet timed out.
   if (r == -2) {
-    done = true;
+    done_ = true;
     return {}; // Reached end of trace.
   }
   if (r == -1) {
     std::string err{::pcap_geterr(pcap_)};
     pcap_ = nullptr;
-    done = true;
+    done_ = true;
     return error{"failed to get next packet: ", err};
   }
   // Parse packet.
@@ -237,8 +238,8 @@ result<event> pcap_state::extract() {
   auto timestamp = s + sub;
   if (pseudo_realtime_ > 0) {
     if (timestamp < last_timestamp_) {
-      VAST_WARN(this, "encountered non-monotonic packet timestamps:",
-                timestamp.count(), '<', last_timestamp_.count());
+      VAST_WARN_AT(self, "encountered non-monotonic packet timestamps:",
+                   timestamp.count(), '<', last_timestamp_.count());
     }
     if (last_timestamp_ != std::chrono::nanoseconds{}) {
       auto delta = timestamp - last_timestamp_;

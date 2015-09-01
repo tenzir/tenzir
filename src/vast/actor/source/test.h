@@ -51,7 +51,7 @@ struct test_state : base_state {
 
   vast::schema schema_;
   event_id id_;
-  uint64_t events_;
+  uint64_t num_events_;
   std::mt19937_64 generator_;
   schema::const_iterator next_;
   std::unordered_map<type, blueprint> blueprints_;

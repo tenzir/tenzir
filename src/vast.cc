@@ -140,9 +140,9 @@ int main(int argc, char* argv[]) {
     }
     auto source_guard = make_scope_guard(
       [=] { anon_send_exit(*src, exit::kill); });
-    auto acc = self->spawn<accountant<uint64_t>>(accounting_log);
+    auto acc = self->spawn(accountant::actor, accounting_log, time::seconds(1));
     acc->link_to(*src);
-    self->send(*src, put_atom::value, accountant_atom::value, acc);
+    self->send(*src, acc);
     // 2. Find all IMPORTERs to load-balance across them.
     std::vector<actor> importers;
     self->sync_send(node, store_atom::value, list_atom::value,
@@ -188,9 +188,9 @@ int main(int argc, char* argv[]) {
     }
     auto sink_guard = make_scope_guard(
       [snk = *snk] { anon_send_exit(snk, exit::kill); });
-    auto acc = self->spawn<accountant<uint64_t>>(accounting_log);
+    auto acc = self->spawn(accountant::actor, accounting_log, time::seconds(1));
     acc->link_to(*snk);
-    self->send(*snk, put_atom::value, accountant_atom::value, acc);
+    self->send(*snk, acc);
     // 2. For each node, spawn an (auto-connected) EXPORTER and connect it to
     // the sink.
     std::vector<actor> nodes;

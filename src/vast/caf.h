@@ -42,21 +42,21 @@ operator<<(std::basic_ostream<Char, Traits>& out,
 }
 
 template <typename Stream, typename T, typename Base>
-inline Stream& operator<<(Stream& out, stateful_actor<T, Base> const* a) {
+Stream& operator<<(Stream& out, stateful_actor<T, Base> const* a) {
   VAST_ASSERT(a != nullptr);
   out << *a;
   return out;
 }
 
 template <typename Stream>
-inline Stream& operator<<(Stream& out, actor const* a) {
+Stream& operator<<(Stream& out, actor const* a) {
   VAST_ASSERT(a != nullptr);
   out << *a;
   return out;
 }
 
 template <typename Stream>
-inline Stream& operator<<(Stream& out, abstract_actor const* a) {
+Stream& operator<<(Stream& out, abstract_actor const* a) {
   VAST_ASSERT(a != nullptr);
   out << *a;
   return out;

@@ -18,7 +18,7 @@ struct line_based_state : base_state {
 
   bool next_line() {
     VAST_ASSERT(input);
-    if (done)
+    if (done_)
       return false;
     line.clear();
     // Get the next non-empty line.
@@ -26,7 +26,7 @@ struct line_based_state : base_state {
       if (std::getline(input, line)) {
         ++line_no;
       } else {
-        done = true;
+        done_ = true;
         return false;
       }
     return true;
