@@ -17,15 +17,18 @@
 #include "vast/uuid.h"
 #include "vast/actor/accountant.h"
 #include "vast/actor/atoms.h"
+#include "vast/actor/node.h"
 #include "vast/actor/sink/spawn.h"
 #include "vast/actor/source/spawn.h"
 #include "vast/concept/printable/to_string.h"
 #include "vast/concept/printable/vast/error.h"
+#include "vast/concept/printable/vast/time.h"
 #include "vast/concept/printable/vast/uuid.h"
 #include "vast/detail/adjust_resource_consumption.h"
 #include "vast/util/endpoint.h"
 #include "vast/util/flat_set.h"
 #include "vast/util/string.h"
+#include "vast/util/system.h"
 
 using namespace vast;
 using namespace std::string_literals;
@@ -79,7 +82,7 @@ int main(int argc, char* argv[]) {
   }
   if (r.opts.count("endpoint") > 0
       && !util::parse_endpoint(endpoint, host, port)) {
-    std::cout << "invalid endpoint: " << endpoint << std::endl;
+    std::cerr << "invalid endpoint: " << endpoint << std::endl;
     return 1;
   }
   if (!r.remainder.empty()) {
@@ -102,6 +105,10 @@ int main(int argc, char* argv[]) {
     std::cerr << "failed to reset logger file backend" << std::endl;
     return 1;
   }
+  auto guard = make_scope_guard([] {
+    caf::shutdown();
+    logger::destruct();
+  });
   // Adjust scheduler parameters.
   if (r.opts.count("threads") || r.opts.count("messages"))
     set_scheduler<>(threads, messages);
@@ -110,23 +117,44 @@ int main(int argc, char* argv[]) {
   auto cfg = whereis(atom("ConfigServ"));
   anon_send(cfg, put_atom::value, "global.enable-automatic-connections",
                  make_message(true));
-  // Establish connection to remote node.
-  auto guard = make_scope_guard([] {
-    caf::shutdown();
-    logger::destruct();
-  });
   announce_types();
   actor node;
-  try {
-    VAST_VERBOSE("connecting to", host << ':' << port);
-    node = caf::io::remote_actor(host.c_str(), port);
-  } catch (caf::network_error const& e) {
-    VAST_ERROR("failed to connect to", host << ':' << port);
-    return 1;
+  scoped_actor self;
+  auto failed = false;
+  if (r.opts.count("endpoint") == 0) {
+    // Spawn local NODE.
+    auto name = util::split_to_str(util::hostname(), ".")[0];
+    if (dir == ".")
+      dir = "vast"; // don't clobber the current directory
+    node = self->spawn<vast::node>(name, dir);
+    self->sync_send(node, "spawn", "core").await(
+      [](ok_atom) {},
+      [&](error const& e) {
+        failed = true;
+        VAST_ERROR("failed to spawn core:", e);
+      }
+    );
+    if (failed) {
+      if (node->exit_reason() == exit_reason::not_exited) {
+        self->monitor(node);
+        self->send_exit(node, exit::error);
+        self->receive([&](down_msg const&) {});
+      }
+      return 1;
+    }
+  } else {
+    // Establish connection to remote node.
+    try {
+      VAST_VERBOSE("connecting to", host << ':' << port);
+      node = caf::io::remote_actor(host.c_str(), port);
+    } catch (caf::network_error const& e) {
+      VAST_ERROR("failed to connect to", host << ':' << port);
+      return 1;
+    }
   }
   // Process commands.
-  scoped_actor self;
   auto accounting_log = path(dir) / "accounting.log";
+  auto start = time::snapshot();
   if (*cmd == "import") {
     // 1. Spawn a SOURCE.
     message_builder mb;
@@ -169,9 +197,10 @@ int main(int argc, char* argv[]) {
       self->send(*src, put_atom::value, sink_atom::value, imp);
     }
     // 4. Run the SOURCE.
-    VAST_DEBUG("running source");
-    self->send(*src, run_atom::value);
     source_guard.disable();
+    self->send(*src, run_atom::value);
+    self->monitor(*src);
+    self->receive([](down_msg const&) {});
   } else if (*cmd == "export") {
     if (cmd + 1 == command_line.end()) {
       VAST_ERROR("missing sink format");
@@ -220,7 +249,6 @@ int main(int argc, char* argv[]) {
     }
     // 3. Wait until the remote NODE returns the EXPORTERs so that we can
     // monitor them and connect them with our local SINK.
-    auto failed = false;
     auto early_finishers = 0u;
     util::flat_set<actor> exporters;
     self->do_receive(
@@ -275,7 +303,9 @@ int main(int argc, char* argv[]) {
     if (failed)
       return 1;
     sink_guard.disable();
+    self->monitor(*snk);
     self->send_exit(*snk, exit::done);
+    self->receive([](down_msg const&) {});
   } else {
     // Only "import" and "export" are local commands, the remote node executes
     // all other ones.
@@ -312,6 +342,12 @@ int main(int argc, char* argv[]) {
     if (exit_code != 0)
       return exit_code;
   }
-  self->await_all_other_actors_done();
+  auto stop = time::snapshot();
+  VAST_INFO("completed execution in", stop - start);
+  if (!node->is_remote()) {
+    self->monitor(node);
+    self->send_exit(node, exit::done);
+    self->receive([](down_msg const&) {});
+  }
   return 0;
 }

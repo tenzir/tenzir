@@ -62,8 +62,8 @@ behavior_type actor(stateful_pointer self, caf::actor store, path dir,
     } else {
       available >> self->state.available;
       next >> self->state.id;
-      VAST_INFO_AT(self, "found", self->state.available, "local IDs");
-      VAST_INFO_AT(self, "found next event ID:", self->state.id);
+      VAST_VERBOSE_AT(self, "found", self->state.available, "local IDs");
+      VAST_VERBOSE_AT(self, "found next event ID:", self->state.id);
     }
   }
   using request_response_promise =
