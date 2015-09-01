@@ -1,4 +1,4 @@
-.TH VAST 1 "August 26, 2015" 0.1 "Visibility Across Space and Time"
+.TH VAST 1 "September 01, 2015" 0.1 "Visibility Across Space and Time"
 .SH NAME
 .PP
 \fB\fCvast\fR \-\- interface to a VAST node
@@ -158,6 +158,10 @@ spawned on the connected node.
    spawned instance of \fIactor\fP\&.
 .PP
 Available \fIactor\fP values with corresponding \fIparameters\fP:
+.TP
+\fIcore\fP
+Spawns all \fIcore\fP actors (i.e., ARCHIVE, INDEX, IDENTIFIER, IMPORTER) and
+connects IMPORTER with them.
 .PP
 \fIarchive\fP [\fIparameters\fP]
   \fB\fC\-c\fR \fIcompression\fP [\fIlz4\fP]

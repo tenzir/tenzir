@@ -54,7 +54,7 @@ exporter::exporter(expression ast, query_options opts)
     auto runtime = time::snapshot() - start_time_;
     for (auto& s : sinks_)
       send(s, id_, done_atom::value, runtime);
-    VAST_INFO(this, "took", runtime, "for:", ast_);
+    VAST_VERBOSE(this, "took", runtime, "for:", ast_);
     quit(exit::done);
   };
 

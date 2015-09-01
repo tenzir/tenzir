@@ -11,6 +11,7 @@ state::state(event_based_actor* self) : basic_state{self, "importer"} {
 
 behavior actor(stateful_actor<state>* self) {
   using caf::actor;
+  self->trap_exit(true);
   auto dependencies_alive = [=] {
     if (self->state.identifier == invalid_actor) {
       VAST_ERROR_AT(self, "has no identifier configured");
@@ -30,6 +31,7 @@ behavior actor(stateful_actor<state>* self) {
     return true;
   };
   return {
+    downgrade_exit_msg(self),
     [=](down_msg const& msg) {
       if (msg.source == self->state.identifier)
         self->state.identifier = invalid_actor;
@@ -74,6 +76,7 @@ behavior actor(stateful_actor<state>* self) {
       self->send(self->state.identifier, request_atom::value, needed);
       self->become(
         keep_behavior,
+        downgrade_exit_msg(self),
         [=](std::vector<event> const&) {
           // Wait until we've processed the current batch.
           return skip_message();

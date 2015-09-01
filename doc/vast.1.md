@@ -175,6 +175,10 @@ Available *arguments*:
 
 Available *actor* values with corresponding *parameters*:
 
+*core*
+  Spawns all *core* actors (i.e., ARCHIVE, INDEX, IDENTIFIER, IMPORTER) and
+  connects IMPORTER with them.
+
 *archive* [*parameters*]
   `-c` *compression* [*lz4*]
     Compression algorithm for chunks

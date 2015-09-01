@@ -40,6 +40,7 @@ struct node : default_actor {
   // Public message interface
   //
 
+  behavior spawn_core(event_based_actor* self);
   behavior spawn_actor(event_based_actor* self);
   behavior send_run(event_based_actor* self);
   behavior send_flush(event_based_actor* self);
@@ -62,9 +63,6 @@ struct node : default_actor {
   behavior operating_;
   accountant::actor_type accountant_;
   actor store_;
-  std::map<std::string, actor> peers_;
-  std::map<std::string, actor> actors_by_label_;
-  std::multimap<std::string, actor> actors_by_type_;
   std::string name_;
   path const dir_;
 };
