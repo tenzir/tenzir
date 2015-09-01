@@ -174,6 +174,24 @@ auto quit_on_others = [](auto self) {
   };
 };
 
+/// Delays processing of an EXIT message. If an actor is spawned with the
+/// `priority_aware` flag, it will process CAF high-priority message before
+/// those with normal priority. Since CAF sends exit messages with high
+/// priority, a priority-aware actor will terminate even if it still has
+/// received other messages earlier. This conflicts when actor termination
+/// semantics should be that all messages are processed up to the point of
+/// receiving an EXIT message. In such scenarios, one can downgrade the
+/// priority of the EXIT signal by re-inserting it with normal priority at the
+/// end of the mailbox.
+/// @param self The actor context.
+auto downgrade_exit_msg = [](auto self) {
+  return [=](exit_msg const& msg) {
+    VAST_DEBUG_AT(self, "delays EXIT message from", '#' << msg.source.id());
+    self->trap_exit(false);
+    self->send(self, self->current_message());
+  };
+};
+
 } // namespace vast
 
 #endif
