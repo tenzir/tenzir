@@ -295,13 +295,6 @@ bool rm(path const& p);
 /// @returns `true` on success or if *p* exists already.
 trial<void> mkdir(path const& p);
 
-/// Traverses each entry of a directory.
-/// @param p The path to a directory.
-/// @param f The function to call for each directory entry. The return value of
-///          *f* indicates whether to continue (`true`) or to stop (`false`)
-///          iterating.
-void traverse(path const& p, std::function<bool(path const&)> f);
-
 // Loads file contents into a string.
 // @param p The path of the file to load.
 // @returns The contents of the file *p*.
