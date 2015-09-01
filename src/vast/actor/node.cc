@@ -54,46 +54,61 @@ node::node(std::string const& name, path const& dir)
   : default_actor{"node"}, name_{name}, dir_{dir} {
     trap_exit(true);
     // Shut down the node safely.
-   auto terminate = [=](uint32_t reason) {
-     // Begin with shutting down IMPORTERs.
-     auto importers = std::make_shared<util::flat_set<actor>>();
-     auto er = actors_by_type_.equal_range("importer");
-     for (auto i = er.first; i != er.second; ) {
-       importers->insert(i->second);
-       send_exit(i->second, reason);
-       i = actors_by_type_.erase(i);
-     }
-     become(
-      [=](down_msg const& imp_msg) {
-        auto n = importers->erase(actor_cast<actor>(imp_msg.source));
-        if (n == 0)
-          for (auto i = actors_by_type_.begin();
-               i != actors_by_type_.end(); ++i)
-            if (i->second->address() == imp_msg.source) {
-              actors_by_type_.erase(i);
-              return;
+  auto terminate = [=](uint32_t reason) {
+    // Begin with shutting down IMPORTERs.
+    auto importers = std::make_shared<size_t>(0);
+    auto others = std::make_shared<std::vector<actor>>();
+    // Terminates all non-IMPORTER actors.
+    auto terminate_others = [=] {
+      if (others->empty()) {
+        quit(reason);
+        return;
+      }
+      for (auto& a : *others) {
+        monitor(a);
+        send_exit(a, reason);
+      }
+      VAST_DEBUG(this, "waits for", others->size(), "other actors to quit");
+      become(
+        [=](down_msg const&) {
+          // Order doesn't matter, only size. As usual.
+          others->pop_back();
+          if (others->empty())
+            quit(reason);
+        }
+      );
+    };
+    // Get all locally running actors.
+    send(store_, list_atom::value, key::str("actors", name_));
+    become(
+      [=](std::map<std::string, message>& m) {
+        for (auto& p : m)
+          p.second.apply({
+            [&](actor const& a, std::string const& type) {
+              VAST_ASSERT(a != invalid_actor);
+              if (type == "importer") {
+                monitor(a);
+                send_exit(a, reason);
+                ++*importers;
+              } else {
+                others->push_back(a);
+              }
             }
-        if (! importers->empty())
-          return;
-        //  Once all IMPORTERs have terminated, terminate the rest.
-        VAST_DEBUG(this, "waits for", actors_by_type_.size(),
-                   "remaining actors to quit");
-        for (auto& p : actors_by_type_)
-          send_exit(p.second, reason);
-        become(
-          [=](down_msg const& msg) {
-            for (auto i = actors_by_type_.begin();
-                 i != actors_by_type_.end(); ++i)
-              if (i->second->address() == msg.source) {
-                actors_by_type_.erase(i);
-                if (! actors_by_type_.empty())
-                  quit(reason);
-                return;
+          });
+        if (*importers > 0) {
+          VAST_DEBUG(this, "waits for", *importers, "importers to quit");
+          become(
+            [=](down_msg const&) {
+              if (--*importers == 0)
+                terminate_others();
             }
-          }
-        );
+          );
+        } else {
+          terminate_others();
+        }
       }
     );
+
   };
   operating_ = {
     [=](exit_msg const& msg) {
@@ -102,18 +117,6 @@ node::node(std::string const& name, path const& dir)
     },
     [=](down_msg const& msg) {
       VAST_DEBUG(this, "got DOWN from", msg.source);
-      for (auto p = peers_.begin(); p != peers_.end(); ++p)
-        if (p->second->address() == msg.source) {
-          VAST_VERBOSE(this, "removes peer", p->first);
-          peers_.erase(p);
-          return;
-        }
-      for (auto p = actors_by_label_.begin(); p != actors_by_label_.end(); ++p)
-        if (p->second->address() == msg.source) {
-          VAST_VERBOSE(this, "removes actor", p->first);
-          actors_by_label_.erase(p);
-          return;
-        }
     },
     on("stop") >> [=] {
       VAST_VERBOSE(this, "stops");
@@ -126,8 +129,14 @@ node::node(std::string const& name, path const& dir)
         return request_peering(self);
       }));
     },
+    on("spawn", "core") >> [=] {
+      VAST_VERBOSE(this, "spawns core actors");
+      forward_to(spawn([=](event_based_actor* self) {
+        return spawn_core(self);
+      }));
+    },
     on("spawn", any_vals) >> [=] {
-      VAST_VERBOSE(this, "spawns new actor");
+      VAST_VERBOSE(this, "spawns", current_message().get_as<std::string>(1));
       current_message() = current_message().drop(1);
       forward_to(spawn([=](event_based_actor* self) {
         return spawn_actor(self);
@@ -216,15 +225,11 @@ node::node(std::string const& name, path const& dir)
 
 void node::on_exit() {
   store_ = invalid_actor;
-  peers_.clear();
-  actors_by_label_.clear();
-  actors_by_type_.clear();
 }
 
 behavior node::make_behavior() {
-  accountant_ = spawn<linked>(accountant::actor,
-                              dir_ / log_path() / "accounting.log",
-                              time::seconds(1));
+  accountant_ = spawn<linked>(
+    accountant::actor, dir_ / log_path() / "accounting.log", time::seconds(1));
   store_ = spawn<key_value_store, linked>(dir_ / "meta");
   // Until we've implemented leader election, each node starts as leader.
   send(store_, leader_atom::value);
@@ -242,6 +247,34 @@ behavior node::make_behavior() {
   };
 }
 
+behavior node::spawn_core(event_based_actor* self) {
+  return others >> [=] {
+    auto rp = self->make_response_promise();
+    self->send(this, "spawn", "identifier");
+    self->send(this, "spawn", "archive");
+    self->send(this, "spawn", "index");
+    auto replies = std::make_shared<size_t>(3 + 1);
+    self->become(
+      [&](error& e) {
+        VAST_ERROR(this, "failed to spawn core actor:", e);
+        rp.deliver(make_message(std::move(e)));
+        self->quit(exit::error);
+      },
+      [=](actor const&) {
+        --*replies;
+        if (*replies == 1) {
+          self->send(this, "spawn", "importer", "-a");
+        } else if (*replies == 0) {
+          rp.deliver(make_message(ok_atom::value));
+          self->quit();
+        } else {
+          // Wait until ARCHIVE, INDEX, and IDENTIFIER have spawned.
+        }
+      }
+    );
+  };
+}
+
 behavior node::spawn_actor(event_based_actor* self) {
   return others >> [=] {
     auto rp = self->make_response_promise();
@@ -254,7 +287,6 @@ behavior node::spawn_actor(event_based_actor* self) {
     // Continuation to record a spawned actor and return to the user.
     auto save_actor = [=](actor const& a, std::string const& type) {
       VAST_ASSERT(a != invalid_actor);
-      monitor(a);
       VAST_DEBUG(this, "records new actor in key-value store");
       auto k = key::str("actors", name_, label);
       self->send(store_, put_atom::value, k, a, type);
@@ -263,8 +295,6 @@ behavior node::spawn_actor(event_based_actor* self) {
           a->attach_functor([=](uint32_t) {
             anon_send(store_, delete_atom::value, k);
           });
-          actors_by_type_.emplace(type, a);
-          actors_by_label_.emplace(label, a);
           rp.deliver(make_message(a));
           self->quit();
         }
@@ -342,9 +372,35 @@ behavior node::spawn_actor(event_based_actor* self) {
         self->send(idx, accountant_);
         save_actor(std::move(idx), "index");
       },
-      on("importer") >> [=] {
+      on("importer", any_vals) >> [=] {
+        auto r = self->current_message().extract_opts({
+          {"auto-connect,a",
+           "connect to available identifier, archives, indexes"}
+        });
         auto imp = spawn<priority_aware>(importer::actor);
-        save_actor(std::move(imp), "importer");
+        if (r.opts.count("auto-connect") > 0) {
+          self->send(store_, list_atom::value, key::str("actors", name_));
+          self->become(
+            [=](std::map<std::string, message>& m) {
+              for (auto& p : m)
+                p.second.apply({
+                  [&](actor const& a, std::string const& type) {
+                    VAST_ASSERT(a != invalid_actor);
+                    if (type == "archive")
+                      self->send(imp, put_atom::value, archive_atom::value, a);
+                    else if (type == "index")
+                      self->send(imp, put_atom::value, index_atom::value, a);
+                    else if (type == "identifier")
+                      self->send(imp, put_atom::value, identifier_atom::value,
+                                 a);
+                  }
+               });
+              save_actor(imp, "importer");
+            }
+          );
+        } else {
+          save_actor(imp, "importer");
+        }
       },
       on("exporter", any_vals) >> [=] {
         auto events = uint64_t{0};
@@ -396,8 +452,6 @@ behavior node::spawn_actor(event_based_actor* self) {
         auto exp = self->spawn<exporter>(*expr, query_opts);
         self->send(exp, extract_atom::value, events);
         if (r.opts.count("auto-connect") > 0) {
-          std::vector<actor> archives;
-          std::vector<actor> indexes;
           self->send(store_, list_atom::value, key::str("actors", name_));
           self->become(
             [=](std::map<std::string, message>& m) {
@@ -803,8 +857,6 @@ behavior node::request_peering(event_based_actor* self) {
     self->become(
       [=](ok_atom, std::string const& peer_name) {
         VAST_INFO(this, "got peering response from", peer_name);
-        VAST_ASSERT(peers_.count(peer_name) == 0);
-        peers_.emplace(peer_name, peer);
         rp.deliver(make_message(ok_atom::value));
         self->quit();
       },
@@ -820,8 +872,8 @@ behavior node::respond_to_peering(event_based_actor* self) {
   return [=](store_atom, peer_atom, actor const& peer, actor const& peer_store,
         std::string const& peer_name) {
     auto rp = self->make_response_promise();
-    // FIXME: check for conflicting names in the store, not just locally.
-    if (peer_name == name_ || peers_.count(peer_name) > 0) {
+    // FIXME: check for conflicting names in the store as well.
+    if (peer_name == name_) {
       VAST_WARN(this, "ignores new peer with duplicate name");
       rp.deliver(make_message(error{"duplicate peer name"}));
       self->quit(exit::error);
@@ -846,7 +898,6 @@ behavior node::respond_to_peering(event_based_actor* self) {
                     anon_send(store_, delete_atom::value, key2);
                   }
                 );
-                peers_.emplace(peer_name, peer);
                 if (delta.empty()) {
                   rp.deliver(make_message(ok_atom::value, name_));
                   self->quit();

@@ -127,43 +127,19 @@ int main(int argc, char* argv[]) {
     [] { caf::shutdown(); logger::destruct(); }
   );
   announce_types();
-  auto n = spawn<node>(name, dir);
+  auto node = spawn<vast::node>(name, dir);
   scoped_actor self;
-  if (r.opts.count("bare") == 0) {
-    std::vector<message> msgs = {
-      make_message("spawn", "identifier"),
-      make_message("spawn", "archive"),
-      make_message("spawn", "index"),
-      make_message("spawn", "importer"),
-    };
-    for (auto& msg : msgs) {
-      optional<error> failure;
-      self->sync_send(n, msg).await(
-        [&](error& e) { failure = std::move(e); },
-        others >> [] { /* nop */ }
-      );
-      if (failure) {
-        VAST_ERROR(*failure);
-        return 1;
-      }
-    }
-    msgs = {
-      make_message("connect", "importer", "identifier"),
-      make_message("connect", "importer", "archive"),
-      make_message("connect", "importer", "index")
-    };
-    for (auto& msg : msgs)
-      self->sync_send(n, msg).await([](ok_atom) {});
-  }
+  if (r.opts.count("bare") == 0)
+    self->sync_send(node, "spawn", "core").await([](ok_atom) {});
   try {
     // Publish the node.
-    auto bound_port = caf::io::publish(n, port, host.c_str());
+    auto bound_port = caf::io::publish(node, port, host.c_str());
     VAST_VERBOSE("listening on", host << ':' << bound_port,
                  "with name \"" << name << '"');
     /// Install signal handlers and block until either a signal arrives or the
     /// node terminates.
     auto sig_mon = self->spawn<signal_monitor>(self);
-    self->monitor(n);
+    self->monitor(node);
     auto stop = false;
     self->do_receive(
       [&](down_msg const& msg) {
@@ -175,18 +151,18 @@ int main(int argc, char* argv[]) {
         if (signal == SIGINT || signal == SIGTERM)
           stop = true;
         else
-          self->send(n, signal_atom::value, signal);
+          self->send(node, signal_atom::value, signal);
       },
       others() >> [&] {
         VAST_WARN("received unexpected message:",
                    to_string(self->current_message()));
       }
     ).until([&] { return stop == true; });
-    if (n->exit_reason() == exit_reason::not_exited)
-      self->send_exit(n, exit::stop);
+    if (node->exit_reason() == exit_reason::not_exited)
+      self->send_exit(node, exit::stop);
     self->send_exit(sig_mon, exit::stop);
     self->await_all_other_actors_done();
-    auto er = n->exit_reason();
+    auto er = node->exit_reason();
     if (er == exit::error)
       return 1;
     else if (er == exit::kill)
@@ -195,7 +171,7 @@ int main(int argc, char* argv[]) {
       return 2;
   } catch (caf::network_error const& e) {
     VAST_ERROR(e.what());
-    self->send_exit(n, exit::stop);
+    self->send_exit(node, exit::stop);
     return 1;
   } catch (...) {
     VAST_ERROR("terminating due to uncaught exception");
