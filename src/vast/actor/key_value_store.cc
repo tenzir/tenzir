@@ -1,3 +1,4 @@
+#include <iterator>
 #include <fstream>
 
 #include <caf/all.hpp>
@@ -130,9 +131,8 @@ behavior key_value_store::make_behavior() {
   for (auto entry : directory{dir_}) {
     auto key = entry.basename().str();
     std::ifstream f{entry.str()};
-    f.unsetf(std::ios_base::skipws);
-    std::string str;
-    f >> str;
+    std::string contents{std::istreambuf_iterator<char>{f},
+                         std::istreambuf_iterator<char>{}};
     if (! f) {
       VAST_ERROR(this, "failed to read contents of file:", entry);
       quit(exit::error);
@@ -140,8 +140,8 @@ behavior key_value_store::make_behavior() {
     }
     // TODO: String serialization would make for a more readable file system
     // representation, but to_string/from_string is currently broken in CAF.
-    // auto value = from_string<message>(str);
-    caf::binary_deserializer bs{str.data(), str.size()};
+    // auto value = from_string<message>(contents);
+    caf::binary_deserializer bs{contents.data(), contents.size()};
     message value;
     bs >> value;
     VAST_DEBUG(this, "loaded persistent key:", key, "->", to_string(value));
