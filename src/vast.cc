@@ -59,12 +59,14 @@ int main(int argc, char* argv[]) {
   auto host = "127.0.0.1"s;
   auto port = uint16_t{42000};
   auto messages = std::numeric_limits<size_t>::max();
+  auto profile_file = std::string{};
   auto threads = std::thread::hardware_concurrency();
   auto r = message_builder(command_line.begin(), cmd).extract_opts({
     {"dir,d", "directory for logs and client state", dir},
     {"endpoint,e", "node endpoint", endpoint},
     {"log-level,l", "verbosity of console and/or log file", log_level},
     {"messages,m", "maximum messages per CAF scheduler invocation", messages},
+    {"profile,p", "enable CAF profiler", profile_file},
     {"threads,t", "number of worker threads in CAF scheduler", threads},
     {"version,v", "print version and exit"}
   });
@@ -109,9 +111,17 @@ int main(int argc, char* argv[]) {
     caf::shutdown();
     logger::destruct();
   });
-  // Adjust scheduler parameters.
-  if (r.opts.count("threads") || r.opts.count("messages"))
-    set_scheduler<>(threads, messages);
+  // Replace/adjust scheduler.
+  if (r.opts.count("profile"))
+    set_scheduler(
+      new scheduler::profiled_coordinator<>{
+        profile_file, std::chrono::milliseconds{1000}, threads, messages});
+  else if (r.opts.count("threads") || r.opts.count("messages"))
+  VAST_VERBOSE(banner() << "\n\n");
+  VAST_VERBOSE("set scheduler threads to", threads);
+  VAST_VERBOSE("set scheduler maximum throughput to",
+               (messages == std::numeric_limits<size_t>::max()
+                ? "unlimited" : std::to_string(messages)));
   // Enable direct connections.
   VAST_VERBOSE("enabling direct connection optimization");
   auto cfg = whereis(atom("ConfigServ"));
