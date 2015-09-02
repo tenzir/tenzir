@@ -348,8 +348,12 @@ bool logger::file(level verbosity, std::string const& filename) {
   return instance()->impl_->file(verbosity, filename);
 }
 
-bool logger::console(level verbosity, bool colorized) {
-  return instance()->impl_->console(verbosity, colorized);
+bool logger::console(level verbosity) {
+  return instance()->impl_->console(verbosity, false);
+}
+
+bool logger::console_colorized(level verbosity) {
+  return instance()->impl_->console(verbosity, true);
 }
 
 void logger::log(message msg) {

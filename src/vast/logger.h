@@ -109,9 +109,13 @@ public:
 
   /// Initializes the console backend.
   /// @param verbosity The log level to filter messages.
-  /// @param colorized Whether to colorize console messages.
   /// @returns `true` on success.
-  static bool console(level verbosity, bool colorized = true);
+  static bool console(level verbosity);
+
+  /// Initializes the console backend with colorized output.
+  /// @param verbosity The log level to filter messages.
+  /// @returns `true` on success.
+  static bool console_colorized(level verbosity);
 
   /// Logs a record.
   /// @param msg The log message.

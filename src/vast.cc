@@ -62,6 +62,7 @@ int main(int argc, char* argv[]) {
   auto profile_file = std::string{};
   auto threads = std::thread::hardware_concurrency();
   auto r = message_builder(command_line.begin(), cmd).extract_opts({
+    {"no-colors,C", "disable colors on console"},
     {"dir,d", "directory for logs and client state", dir},
     {"endpoint,e", "node endpoint", endpoint},
     {"log-level,l", "verbosity of console and/or log file", log_level},
@@ -100,9 +101,11 @@ int main(int argc, char* argv[]) {
     return 1;
   }
   // Initialize logger.
-  auto colorized = true;
+  auto console = [no_colors = r.opts.count("no-colors") > 0](auto v) {
+    return no_colors ? logger::console(v) : logger::console_colorized(v);
+  };
   auto verbosity = static_cast<logger::level>(log_level);
-  if (!logger::console(verbosity, colorized)) {
+  if (!console(verbosity)) {
     std::cerr << "failed to initialize logger console backend" << std::endl;
     return 1;
   }

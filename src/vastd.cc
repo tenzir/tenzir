@@ -48,6 +48,7 @@ int main(int argc, char* argv[]) {
   auto threads = std::thread::hardware_concurrency();
   // Parse and validate command line.
   auto r = message_builder(argv + 1, argv + argc).extract_opts({
+    {"no-colors,C", "disable colors on console"},
     {"bare,b", "spawn empty node without any actors"},
     {"directory,d", "path to persistent state directory", dir},
     {"endpoint,e", "the node endpoint", endpoint},
@@ -89,8 +90,10 @@ int main(int argc, char* argv[]) {
     return 1;
   }
   if (r.opts.count("foreground")) {
-    auto colorized = true;
-    if (!logger::console(verbosity, colorized)) {
+    auto console = [no_colors = r.opts.count("no-colors") > 0](auto v) {
+      return no_colors ? logger::console(v) : logger::console_colorized(v);
+    };
+    if (!console(verbosity)) {
       std::cerr << "failed to initialize logger console backend" << std::endl;
       return 1;
     }
