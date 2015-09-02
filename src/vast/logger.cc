@@ -102,7 +102,7 @@ struct logger::impl {
           && !mkdir(filename_.parent()))
         return false;
       log_file_.open(filename_.str());
-      if (!log_file_)
+      if (!log_file_.is_open())
         return false;
     }
     if (!log_thread_.joinable())

@@ -83,8 +83,8 @@ int main(int argc, char* argv[]) {
   }
   // Initialize logger.
   auto verbosity = static_cast<logger::level>(log_level);
-  auto log_dir = path{dir} / node::log_path();
-  if (!logger::file(verbosity, (log_dir / "vast.log").str())) {
+  auto log_file = dir / node::log_path() / "vast.log";
+  if (!logger::file(verbosity, log_file.str())) {
     std::cerr << "failed to initialize logger file backend" << std::endl;
     return 1;
   }

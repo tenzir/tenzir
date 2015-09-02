@@ -237,9 +237,20 @@ behavior node::make_behavior() {
   send(store_, leader_atom::value);
   send(store_, persist_atom::value, key::str("id"));
   send(store_, put_atom::value, key::str("nodes", name_), this);
+  auto acc_key = key::str("actors", name_, "accountant");
+  send(store_, put_atom::value, std::move(acc_key), accountant_);
   return {
     [=](ok_atom) {
-      become(operating_);
+      become(
+        [=](ok_atom) {
+          become(operating_);
+        },
+        [=](error const& e)
+        {
+          VAST_ERROR(e);
+          quit(exit::error);
+        }
+      );
     },
     [=](error const& e)
     {

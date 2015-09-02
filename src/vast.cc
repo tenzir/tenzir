@@ -82,10 +82,13 @@ int main(int argc, char* argv[]) {
     std::cout << banner() << "\n\n" << r.helptext;
     return 0;
   }
-  if (r.opts.count("endpoint") > 0
-      && !util::parse_endpoint(endpoint, host, port)) {
-    std::cerr << "invalid endpoint: " << endpoint << std::endl;
-    return 1;
+  if (r.opts.count("endpoint") > 0) {
+    if (!util::parse_endpoint(endpoint, host, port)) {
+      std::cerr << "invalid endpoint: " << endpoint << std::endl;
+      return 1;
+    }
+  } else if (dir == ".") {
+    dir = "vast"; // Don't clobber current directory.
   }
   if (!r.remainder.empty()) {
     auto invalid_cmd = r.remainder.get_as<std::string>(0);
@@ -103,8 +106,11 @@ int main(int argc, char* argv[]) {
     std::cerr << "failed to initialize logger console backend" << std::endl;
     return 1;
   }
-  if (!logger::file(logger::quiet)) {
-    std::cerr << "failed to reset logger file backend" << std::endl;
+  if (r.opts.count("endpoint") > 0)
+    verbosity = logger::quiet;
+  auto log_file = dir / node::log_path() / "vast.log";
+  if (!logger::file(verbosity, log_file.str())) {
+    std::cerr << "failed to initialize logger file backend" << std::endl;
     return 1;
   }
   auto guard = make_scope_guard([] {
@@ -132,12 +138,10 @@ int main(int argc, char* argv[]) {
   actor node;
   scoped_actor self;
   auto failed = false;
+  auto node_name = util::split_to_str(util::hostname(), ".")[0];
   if (r.opts.count("endpoint") == 0) {
     // Spawn local NODE.
-    auto name = util::split_to_str(util::hostname(), ".")[0];
-    if (dir == ".")
-      dir = "vast"; // don't clobber the current directory
-    node = self->spawn<vast::node>(name, dir);
+    node = self->spawn<vast::node>(node_name, dir);
     self->sync_send(node, "spawn", "core").await(
       [](ok_atom) {},
       [&](error const& e) {
@@ -163,8 +167,22 @@ int main(int argc, char* argv[]) {
       return 1;
     }
   }
+  // Prepare accountant.
+  vast::accountant::actor_type accountant;
+  if (node->is_remote()) {
+    VAST_DEBUG("spawning local accountant");
+    accountant = self->spawn(accountant::actor, path(dir) / "accounting.log",
+                             time::seconds(1));
+  } else {
+    VAST_DEBUG("using node accountant");
+    self->sync_send(node, store_atom::value, get_atom::value,
+                    key::str("actors", node_name, "accountant")).await(
+      [&](accountant::actor_type const& acc) {
+        accountant = acc;
+      }
+    );
+  }
   // Process commands.
-  auto accounting_log = path(dir) / "accounting.log";
   auto start = time::snapshot();
   if (*cmd == "import") {
     // 1. Spawn a SOURCE.
@@ -178,10 +196,9 @@ int main(int argc, char* argv[]) {
       return 1;
     }
     auto source_guard = make_scope_guard(
-      [=] { anon_send_exit(*src, exit::kill); });
-    auto acc = self->spawn(accountant::actor, accounting_log, time::seconds(1));
-    acc->link_to(*src);
-    self->send(*src, acc);
+      [=] { anon_send_exit(*src, exit::kill); }
+    );
+    self->send(*src, accountant);
     // 2. Find all IMPORTERs to load-balance across them.
     std::vector<actor> importers;
     self->sync_send(node, store_atom::value, list_atom::value,
@@ -227,10 +244,9 @@ int main(int argc, char* argv[]) {
       return 1;
     }
     auto sink_guard = make_scope_guard(
-      [snk = *snk] { anon_send_exit(snk, exit::kill); });
-    auto acc = self->spawn(accountant::actor, accounting_log, time::seconds(1));
-    acc->link_to(*snk);
-    self->send(*snk, acc);
+      [snk = *snk] { anon_send_exit(snk, exit::kill); }
+    );
+    self->send(*snk, accountant);
     // 2. For each node, spawn an (auto-connected) EXPORTER and connect it to
     // the sink.
     std::vector<actor> nodes;
@@ -353,12 +369,16 @@ int main(int argc, char* argv[]) {
     if (exit_code != 0)
       return exit_code;
   }
-  auto stop = time::snapshot();
-  VAST_INFO("completed execution in", stop - start);
-  if (!node->is_remote()) {
+  if (node->is_remote()) {
+    self->monitor(accountant);
+    self->send_exit(accountant, exit::done);
+    self->receive([](down_msg const&) {});
+  } else {
     self->monitor(node);
     self->send_exit(node, exit::done);
     self->receive([](down_msg const&) {});
   }
+  auto stop = time::snapshot();
+  VAST_INFO("completed execution in", stop - start);
   return 0;
 }
