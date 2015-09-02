@@ -154,21 +154,24 @@ inline char const* render_exit_reason(uint32_t reason) {
   }
 }
 
-/// Helper to inject a catch-all match expression that logs unexpected
-/// messages.
+/// A catch-all match expression that logs unexpected messages.
 /// @param self The actor context.
+/// @relates quit_on_others
 auto log_others = [](auto self) {
   return others >> [=] {
     VAST_ERROR_AT(self, "got unexpected message from",
-                  '#' << self->current_sender()->id() << ':',
+                  self->current_sender() << ':',
                   to_string(self->current_message()));
   };
 };
 
+/// A catch-all match expression that logs unexpected messages and terminates.
+/// @param self The actor context.
+/// @relates log_others
 auto quit_on_others = [](auto self) {
   return others >> [=] {
     VAST_ERROR_AT(self, "got unexpected message from",
-                  '#' << self->current_sender()->id() << ':',
+                  self->current_sender() << ':',
                   to_string(self->current_message()));
     self->quit(exit::error);
   };
@@ -186,9 +189,12 @@ auto quit_on_others = [](auto self) {
 /// @param self The actor context.
 auto downgrade_exit_msg = [](auto self) {
   return [=](exit_msg const& msg) {
-    VAST_DEBUG_AT(self, "delays EXIT message from", '#' << msg.source.id());
-    self->trap_exit(false);
-    self->send(self, self->current_message());
+    if (self->current_mailbox_element()->mid.is_high_priority()) {
+      VAST_DEBUG_AT(self, "delays EXIT from", msg.source);
+      self->send(message_priority::normal, self, self->current_message());
+    } else {
+      self->quit(msg.reason);
+    }
   };
 };
 

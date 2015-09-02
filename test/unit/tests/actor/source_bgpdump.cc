@@ -17,7 +17,6 @@ TEST(bgpdump_source) {
   auto bgpdump = self->spawn(source::bgpdump, sb.release());
   self->monitor(bgpdump);
   anon_send(bgpdump, put_atom::value, sink_atom::value, self);
-  self->receive([&](upstream_atom, actor const& a) { CHECK(a == bgpdump); });
 
   MESSAGE("running the source");
   anon_send(bgpdump, run_atom::value);

@@ -15,7 +15,6 @@ TEST(pcap_source) {
   auto pcap = self->spawn<monitored>(source::pcap, traces::nmap_vsn,
                                      -1, 5, 60, 10, 0);
   anon_send(pcap, put_atom::value, sink_atom::value, self);
-  self->receive([&](upstream_atom, actor const& a) { CHECK(a == pcap); });
   MESSAGE("running the source");
   anon_send(pcap, run_atom::value);
   self->receive([&](std::vector<event> const& events) {
@@ -32,7 +31,6 @@ TEST(pcap_source) {
   pcap = self->spawn<monitored>(source::pcap, traces::workshop_2011_browse,
                                 64, 100, 5, 2, 0);
   anon_send(pcap, put_atom::value, sink_atom::value, self);
-  self->receive([&](upstream_atom, actor const& a) { CHECK(a == pcap); });
   anon_send(pcap, run_atom::value);
   self->receive(
     [&](std::vector<event> const& events) { CHECK(events.size() == 36); }

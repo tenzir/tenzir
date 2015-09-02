@@ -17,7 +17,8 @@ struct core {
     });
     if (exists(dir)) {
       MESSAGE("removing existing directory");
-      REQUIRE(rm(dir));
+      if (! rm(dir))
+        FAIL("failed to remove test directory: " << std::strerror(errno));
     }
   }
 
@@ -25,7 +26,8 @@ struct core {
     self->await_all_other_actors_done();
     if (exists(dir)) {
       MESSAGE("removing created directory");
-      REQUIRE(rm(dir));
+      if (! rm(dir))
+        FAIL("failed to remove test directory: " << std::strerror(errno));
     }
   }
 

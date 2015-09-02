@@ -7,6 +7,7 @@
 #include "vast/actor/atoms.h"
 #include "vast/actor/basic_state.h"
 #include "vast/concept/printable/vast/error.h"
+#include "vast/concept/printable/vast/time.h"
 #include "vast/util/assert.h"
 
 namespace vast {
@@ -19,21 +20,26 @@ struct base_state : basic_state {
   }
 
   ~base_state() {
-    if (!events_.empty())
-      self->send(sinks_[next_sink_++ % sinks_.size()], std::move(events_));
+    if (events_.empty())
+      return;
+    VAST_DEBUG_AT(self, "sends", events_.size(), "last events");
+    self->send(sinks_[next_sink_++ % sinks_.size()], std::move(events_));
   }
 
   virtual vast::schema schema() = 0;
   virtual void schema(vast::schema const& sch) = 0;
   virtual result<event> extract() = 0;
 
+  static constexpr size_t max_batch_size = 1 << 20;
+
   bool done_ = false;
   bool paused_ = false;
   accountant::actor_type accountant_;
   std::vector<actor> sinks_;
   size_t next_sink_ = 0;
-  uint64_t batch_size_ = std::numeric_limits<uint16_t>::max();
+  uint64_t batch_size_ = 65536;
   std::vector<event> events_;
+  time::moment start_;
 };
 
 /// The base actor for sources.
@@ -57,18 +63,24 @@ behavior base(stateful_actor<State>* self) {
       }
     },
     [=](overload_atom, actor const& victim) {
-      VAST_DEBUG_AT(self, "got OVERLOAD signal from", victim);
+      VAST_DEBUG_AT(self, "got OVERLOAD from", victim);
       self->state.paused_ = true; // Stop after the next batch.
     },
     [=](underload_atom, actor const& victim) {
-      VAST_DEBUG_AT(self, "got UNDERLOAD signal from", victim);
+      VAST_DEBUG_AT(self, "got UNDERLOAD from", victim);
       self->state.paused_ = false;
       if (!self->state.done_)
         self->send(self, run_atom::value);
     },
     [=](batch_atom, uint64_t batch_size) {
+      if (batch_size > base_state::max_batch_size) {
+        VAST_ERROR_AT(self, "got too large batch size:", batch_size);
+        self->quit(exit::error);
+        return;
+      }
       VAST_DEBUG_AT(self, "sets batch size to", batch_size);
       self->state.batch_size_ = batch_size;
+      self->state.events_.reserve(batch_size);
     },
     [=](get_atom, schema_atom) {
       return self->state.schema();
@@ -79,7 +91,6 @@ behavior base(stateful_actor<State>* self) {
     [=](put_atom, sink_atom, actor const& sink) {
       VAST_DEBUG_AT(self, "adds sink to", sink);
       self->monitor(sink);
-      self->send(sink, upstream_atom::value, self);
       self->state.sinks_.push_back(sink);
     },
     [=](accountant::actor_type acc) {
@@ -90,6 +101,8 @@ behavior base(stateful_actor<State>* self) {
     },
     [=](get_atom, sink_atom) { return self->state.sinks_; },
     [=](run_atom) {
+      if (self->current_sender() != self)
+        self->state.start_ = time::snapshot();
       if (self->state.sinks_.empty()) {
         VAST_ERROR_AT(self, "cannot run without sinks");
         self->quit(exit::error);
@@ -107,13 +120,17 @@ behavior base(stateful_actor<State>* self) {
         }
       }
       if (!self->state.events_.empty()) {
-        VAST_VERBOSE_AT(self, "produced", self->state.events_.size(), "events");
+        auto stop = time::snapshot();
+        VAST_VERBOSE_AT(self, "produced", self->state.events_.size(),
+                        "events in", stop - self->state.start_);
         if (self->state.accountant_)
           self->send(self->state.accountant_,
-                     uint64_t{self->state.events_.size()}, time::snapshot());
+                     uint64_t{self->state.events_.size()}, stop);
         auto next = self->state.next_sink_++ % self->state.sinks_.size();
         self->send(self->state.sinks_[next], std::move(self->state.events_));
         self->state.events_ = {};
+        self->state.events_.reserve(self->state.batch_size_);
+        self->state.start_ = time::snapshot();
         // FIXME: if we do not give the stdlib implementation a hint to yield
         // here, this actor can monopolize all available resources. In
         // particular, we encountered a scenario where it prevented the BASP

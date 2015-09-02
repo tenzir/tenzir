@@ -69,6 +69,7 @@ behavior actor(stateful_actor<state>* self) {
       self->state.controller = c;
     },
     [=](std::vector<event>& events) {
+      VAST_DEBUG_AT(self, "got", events.size(), "events");
       if (! dependencies_alive())
         return;
       event_id needed = events.size();
@@ -76,11 +77,6 @@ behavior actor(stateful_actor<state>* self) {
       self->send(self->state.identifier, request_atom::value, needed);
       self->become(
         keep_behavior,
-        downgrade_exit_msg(self),
-        [=](std::vector<event> const&) {
-          // Wait until we've processed the current batch.
-          return skip_message();
-        },
         [=](id_atom, event_id from, event_id to)  {
           auto n = to - from;
           self->state.got += n;

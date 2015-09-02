@@ -53,10 +53,8 @@ path const& node::log_path() {
 node::node(std::string const& name, path const& dir)
   : default_actor{"node"}, name_{name}, dir_{dir} {
     trap_exit(true);
-    // Shut down the node safely.
+  // Shut down the node safely.
   auto terminate = [=](uint32_t reason) {
-    // Begin with shutting down IMPORTERs.
-    auto importers = std::make_shared<size_t>(0);
     auto others = std::make_shared<std::vector<actor>>();
     // Terminates all non-IMPORTER actors.
     auto terminate_others = [=] {
@@ -66,6 +64,7 @@ node::node(std::string const& name, path const& dir)
       }
       for (auto& a : *others) {
         monitor(a);
+        VAST_DEBUG(this, "sends EXIT to", a);
         send_exit(a, reason);
       }
       VAST_DEBUG(this, "waits for", others->size(), "other actors to quit");
@@ -82,12 +81,15 @@ node::node(std::string const& name, path const& dir)
     send(store_, list_atom::value, key::str("actors", name_));
     become(
       [=](std::map<std::string, message>& m) {
+        auto importers = std::make_shared<size_t>(0);
         for (auto& p : m)
           p.second.apply({
             [&](actor const& a, std::string const& type) {
               VAST_ASSERT(a != invalid_actor);
               if (type == "importer") {
                 monitor(a);
+                // Begin with shutting down IMPORTERs.
+                VAST_DEBUG(this, "sends EXIT to importer" << a);
                 send_exit(a, reason);
                 ++*importers;
               } else {

@@ -73,7 +73,7 @@ int main(int argc, char* argv[]) {
   }
   if (r.opts.count("endpoint") > 0
       && !util::parse_endpoint(endpoint, host, port)) {
-    std::cout << "invalid endpoint: " << endpoint << std::endl;
+    std::cerr << "invalid endpoint: " << endpoint << std::endl;
     return 1;
   }
   if (!r.remainder.empty()) {
