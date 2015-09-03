@@ -131,7 +131,7 @@ node::node(std::string const& name, path const& dir)
         return request_peering(self);
       }));
     },
-    on("spawn", "core") >> [=] {
+    on("spawn", "core", any_vals) >> [=] {
       VAST_VERBOSE(this, "spawns core actors");
       forward_to(spawn([=](event_based_actor* self) {
         return spawn_core(self);
@@ -263,9 +263,51 @@ behavior node::make_behavior() {
 behavior node::spawn_core(event_based_actor* self) {
   return others >> [=] {
     auto rp = self->make_response_promise();
-    self->send(this, "spawn", "identifier");
-    self->send(this, "spawn", "archive");
-    self->send(this, "spawn", "index");
+    std::string id_batch_size;
+    std::string archive_comp;
+    std::string archive_segments;
+    std::string archive_size;
+    std::string index_events;
+    std::string index_active;
+    std::string index_passive;
+    // These must be kept in sync with the individual options for each actor.
+    auto r = self->current_message().extract_opts({
+      {"identifier-batch-size", "", id_batch_size},
+      {"archive-compression", "", archive_comp},
+      {"archive-segments", "", archive_segments},
+      {"archive-size", "", archive_size},
+      {"index-events", "", index_events},
+      {"index-active", "", index_active},
+      {"index-passive", "", index_passive}
+    });
+    if (!r.error.empty()) {
+      VAST_ERROR(this, "failed to parse spawn core args:", r.error);
+      rp.deliver(make_message(error{std::move(r.error)}));
+      return;
+    }
+    // Spawn IDENTIFIER.
+    auto msg = make_message("spawn", "identifier");
+    if (r.opts.count("identifier-batch-size") > 0)
+      msg = msg + make_message("--batch-size=", id_batch_size);
+    self->send(this, msg);
+    // Spawn ARCHIVE.
+    msg = make_message("spawn", "archive");
+    if (r.opts.count("archive-compression") > 0)
+      msg = msg + make_message("--compression=" + archive_comp);
+    if (r.opts.count("archive-segments") > 0)
+      msg = msg + make_message("--segments=" + archive_segments);
+    if (r.opts.count("archive-size") > 0)
+      msg = msg + make_message("--size=" + archive_size);
+    self->send(this, msg);
+    // Spawn INDEX.
+    msg = make_message("spawn", "index");
+    if (r.opts.count("index-events") > 0)
+      msg = msg + make_message("--events=" + index_events);
+    if (r.opts.count("index-active") > 0)
+      msg = msg + make_message("--active=" + index_active);
+    if (r.opts.count("index-passive") > 0)
+      msg = msg + make_message("--passive=" + index_passive);
+    self->send(this, msg);
     auto replies = std::make_shared<size_t>(3 + 1);
     self->become(
       [&](error& e) {
@@ -318,7 +360,7 @@ behavior node::spawn_actor(event_based_actor* self) {
       on("identifier") >> [=] {
         auto batch_size = event_id{128};
         auto r = self->current_message().extract_opts({
-          {"batch-size,b", "the batch size to start at", batch_size}
+          {"batch-size,b", "the batch size to start from", batch_size}
         });
         if (!r.error.empty()) {
           rp.deliver(make_message(error{std::move(r.error)}));

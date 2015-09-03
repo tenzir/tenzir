@@ -52,7 +52,42 @@ int main(int argc, char* argv[]) {
   std::vector<std::string> command_line(argv + 1, argv + argc);
   auto cmd = std::find_first_of(command_line.begin(), command_line.end(),
                                 commands.begin(), commands.end());
-  // Parse and validate command line.
+  // Parse and validate command line. First, parse node-specific options.
+  // FIXME: We need a better way to manage program options in the future. This
+  // option handling is lifted from node.cc. And there, we also stitched it
+  // together from the individual actor options. It's too easy to diverge.
+  auto core = make_message("spawn", "core");
+  std::string id_batch_size;
+  std::string archive_comp;
+  std::string archive_segments;
+  std::string archive_size;
+  std::string index_events;
+  std::string index_active;
+  std::string index_passive;
+  auto r = message_builder(command_line.begin(), cmd).extract_opts({
+    {"identifier-batch-size", "", id_batch_size},
+    {"archive-compression", "", archive_comp},
+    {"archive-segments", "", archive_segments},
+    {"archive-size", "", archive_size},
+    {"index-events", "", index_events},
+    {"index-active", "", index_active},
+    {"index-passive", "", index_passive}
+  });
+  if (r.opts.count("identifier-batch-size") > 0)
+    core = core + make_message("--identifier-batch-size=", id_batch_size);
+  if (r.opts.count("archive-compression") > 0)
+    core = core + make_message("--archive-compression=" + archive_comp);
+  if (r.opts.count("archive-segments") > 0)
+    core = core + make_message("--archive-segments=" + archive_segments);
+  if (r.opts.count("archive-size") > 0)
+    core = core + make_message("--archive-size=" + archive_size);
+  if (r.opts.count("index-events") > 0)
+    core = core + make_message("--index-events=" + index_events);
+  if (r.opts.count("index-active") > 0)
+    core = core + make_message("--index-active=" + index_active);
+  if (r.opts.count("index-passive") > 0)
+    core = core + make_message("--index-passive=" + index_passive);
+  // Then parse options for this executable.
   auto log_level = 3;
   auto dir = "."s;
   auto endpoint = ""s;
@@ -61,7 +96,7 @@ int main(int argc, char* argv[]) {
   auto messages = std::numeric_limits<size_t>::max();
   auto profile_file = std::string{};
   auto threads = std::thread::hardware_concurrency();
-  auto r = message_builder(command_line.begin(), cmd).extract_opts({
+  r = r.remainder.extract_opts({
     {"no-colors,C", "disable colors on console"},
     {"dir,d", "directory for logs and client state", dir},
     {"endpoint,e", "node endpoint", endpoint},
@@ -145,7 +180,7 @@ int main(int argc, char* argv[]) {
   if (r.opts.count("endpoint") == 0) {
     // Spawn local NODE.
     node = self->spawn<vast::node>(node_name, dir);
-    self->sync_send(node, "spawn", "core").await(
+    self->sync_send(node, std::move(core)).await(
       [](ok_atom) {},
       [&](error const& e) {
         failed = true;

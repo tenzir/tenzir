@@ -33,23 +33,15 @@ struct core {
 
   actor make_core() {
     auto n = self->spawn<node>(node_name, dir);
-    std::vector<message> msgs = {
-      make_message("spawn", "archive", "-s", "1"),
-      make_message("spawn", "index", "-e", "10"),
-      make_message("spawn", "importer"),
-      make_message("spawn", "identifier"),
-      make_message("connect", "importer", "identifier"),
-      make_message("connect", "importer", "archive"),
-      make_message("connect", "importer", "index"),
-    };
-    for (auto& msg : msgs)
-      self->sync_send(n, msg).await(
-        [&](error const& e) {
-          FAIL(e);
-        },
-        // Everyting except an error is a valid return value.
-        others >> [] {}
-      );
+    auto hdl = self->sync_send(n, "spawn", "core",
+                               "--archive-segments=1",
+                               "--index-events=10");
+    hdl.await(
+      [](ok_atom) {},
+      [&](error const& e) {
+        FAIL(e);
+      }
+    );
     return n;
   }
 
