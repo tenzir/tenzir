@@ -52,17 +52,21 @@ std::string json_escape(std::string const& str);
 /// @relates json_escape
 std::string json_unescape(std::string const& str);
 
-/// Escapes a string according to URL encoding.
+/// Escapes a string according to percent-encoding.
+/// @note This function escapes all non-*unreserved* characters as listed in
+///       RFC3986. It does *not* correctly preserve HTTP URLs, but servers
+///       merely as poor-man's substitute to prevent illegal characters from
+///       slipping in.
 /// @param str The string to escape.
 /// @returns The escaped string.
-/// @relates url_unescape
-std::string url_escape(std::string const& str);
+/// @relates percent_unescape
+std::string percent_escape(std::string const& str);
 
-/// Unescapes a URL-encoded string.
+/// Unescapes a percent-encoded string.
 /// @param str The string to unescape.
 /// @returns The unescaped string.
-/// @relates url_escape
-std::string url_unescape(std::string const& str);
+/// @relates percent_escape
+std::string percent_unescape(std::string const& str);
 
 /// Splits a string into a vector of iterator pairs representing the
 /// *[start, end)* range of each element.

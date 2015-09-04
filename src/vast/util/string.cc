@@ -9,8 +9,6 @@ namespace util {
 
 namespace {
 
-static constexpr char hex[] = "0123456789abcdef";
-
 template <class Iterator, class Escaper>
 void escape(Iterator f, Iterator l, std::string& escaped, Escaper escaper) {
   escaped.reserve(l - f);
@@ -35,8 +33,9 @@ bool unescape(Iterator f, Iterator l, std::string& unescaped,
 auto hex_escaper = [](auto in, auto out) {
   *out++ = '\\';
   *out++ = 'x';
-  *out++ = hex[(*in & 0xf0) >> 4];
-  *out++ = hex[*in & 0x0f];
+  auto hex = byte_to_hex(*in);
+  *out++ = hex.first;
+  *out++ = hex.second;
 };
 
 auto hex_unescaper = [](auto& f, auto l, auto out) {
@@ -228,21 +227,18 @@ std::string json_unescape(std::string const& str) {
   return result;
 }
 
-std::string url_escape(std::string const& str) {
-  // Based on: https://en.wikipedia.org/wiki/Percent-encoding
+std::string percent_escape(std::string const& str) {
   auto url_escaper = [](auto in, auto out) {
-    auto is_reserved = [](char c) {
-      return std::strchr("!*'();:@&=+$,/?#[]", c) != nullptr;
-    };
     auto is_unreserved = [](char c) {
-      return std::isalnum(c) || c == '-' || c == '_' || c == '.' || c ==	'~';
+      return std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~';
     };
-    if (is_reserved(*in) || is_unreserved(*in)) {
+    if (is_unreserved(*in)) {
       *out++ = *in;
     } else {
       *out++ = '%';
-      *out++ = hex[(*in & 0xf0) >> 4];
-      *out++ = hex[*in & 0x0f];
+      auto hex = byte_to_hex(*in);
+      *out++ = hex.first;
+      *out++ = hex.second;
     }
   };
   std::string result;
@@ -250,7 +246,7 @@ std::string url_escape(std::string const& str) {
   return result;
 }
 
-std::string url_unescape(std::string const& str) {
+std::string percent_unescape(std::string const& str) {
   auto url_unescaper = [](auto& f, auto l, auto out) {
     if (*f != '%') {
       *out++ = *f;

@@ -252,7 +252,7 @@ TEST(http_request_parser)
   http::request req;
   CHECK(p.parse(f, l, req));
   CHECK(req.method == "GET");
-  CHECK(req.uri == "/foo/bar baz/");
+  CHECK(req.uri == "/foo/bar%20baz/");
   CHECK(req.protocol == "HTTP");
   CHECK(req.version == 1.1);
   auto hdr = req.header("content-type");

@@ -73,13 +73,23 @@ TEST(JSON string escaping) {
   CHECK(json_unescape("\"unescaped\"quote\"") == "");
 }
 
-TEST(URL escaping) {
-  // These are the reserved characters: !*'();:@&=+$,/?#[]
-  CHECK(url_escape("") == "");
-  CHECK(url_escape("/f o o/index.html&foo=b@r") == "/f%20o%20o/index.html&foo=b@r");
+TEST(percent escaping) {
+  CHECK(percent_escape("") == "");
+  CHECK(percent_unescape("") == "");
+  CHECK(percent_escape("ABC") == "ABC");
 
-  CHECK(url_unescape("") == "");
-  CHECK(url_unescape("/f%20o%20o/index.html&foo=b@r") == "/f o o/index.html&foo=b@r");
+  CHECK(percent_escape("/f o o/index.html&foo=b@r") 
+        == "%2ff%20o%20o%2findex.html%26foo%3db%40r");
+  CHECK(percent_unescape("/f%20o%20o/index.html&foo=b@r") 
+        == "/f o o/index.html&foo=b@r");
+
+  CHECK(percent_escape("&text") == "%26text");
+  CHECK(percent_unescape("%26text") == "&text");
+  CHECK(percent_unescape("text%3c") == "text<");
+
+  auto esc = "%21%2a%27%28%29%3b%3a%40%26%3d%2b%24%2c%2f%3f%23%5b%5d%25%22%20";
+  CHECK(percent_escape("!*'();:@&=+$,/?#[]%\" ") == esc);
+  CHECK(percent_unescape(esc) == "!*'();:@&=+$,/?#[]%\" ");
 }
 
 TEST(string splitting and joining) {

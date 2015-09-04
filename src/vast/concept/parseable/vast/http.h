@@ -57,7 +57,7 @@ struct http_request_parser : parser<http_request_parser> {
     auto crlf = "\r\n";
     auto word = +(parsers::print - ' ');
     auto method = word;
-    auto uri = word ->* [](std::string u) { return util::url_unescape(u); };
+    auto uri = word;
     auto proto = +alpha;
     auto version = real;
     auto header = make_parser<http::header>() >> crlf;

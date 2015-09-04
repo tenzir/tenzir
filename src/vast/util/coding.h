@@ -8,7 +8,9 @@ namespace vast {
 namespace util {
 
 /// Converts a byte value into an ASCII character.
-/// @param b The byte to convert
+/// @param b The byte to convert.
+/// @returns The ASCII representation of *b*.
+/// @relates byte_to_hex hex_to_byte
 template <
   typename T,
   typename = std::enable_if_t<std::is_integral<T>::value>
@@ -17,7 +19,23 @@ char byte_to_char(T b) {
   return b < 10 ? '0' + b : 'a' + b - 10;
 }
 
+/// Converts a byte value into a hex value.
+/// @param b The byte to convert.
+/// @returns b The two hex nibbles as `(high, low)` pair.
+/// @relates byte_to_char hex_to_byte
+template <
+  typename T,
+  typename = std::enable_if_t<std::is_integral<T>::value>
+>
+std::pair<char, char> byte_to_hex(T b) {
+  static constexpr char hex[] = "0123456789abcdef";
+  return {hex[(b >> 4) & 0x0f], hex[b & 0x0f]};
+}
+
 /// Converts two characters representing a hex byte into a single byte value.
+/// @param hi The high hex nibble.
+/// @param lo The low hex nibble.
+/// @relates byte_to_hex byte_to_char
 template <
   typename T,
   typename = std::enable_if_t<std::is_integral<T>::value>
