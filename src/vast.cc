@@ -209,8 +209,7 @@ int main(int argc, char* argv[]) {
   vast::accountant::actor_type accountant;
   if (node->is_remote()) {
     VAST_DEBUG("spawning local accountant");
-    accountant = self->spawn(accountant::actor, path(dir) / "accounting.log",
-                             time::seconds(1));
+    accountant = self->spawn(accountant::actor, path(dir) / "accounting.log");
   } else {
     VAST_DEBUG("using node accountant");
     self->sync_send(node, store_atom::value, get_atom::value,

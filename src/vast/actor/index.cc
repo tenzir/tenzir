@@ -80,6 +80,8 @@ behavior index::make_behavior() {
     VAST_VERBOSE(this, "loads", (i < parts.size() ? "existing" : "new"),
                  "active partition", id);
     auto p = spawn<partition, monitored>(dir_ / to_string(id), this);
+    if (accountant_)
+      send(p, accountant_);
     send(p, upstream_atom::value, this);
     active_[i] = {id, p};
     partitions_[id].last_modified = time::now();
@@ -153,7 +155,6 @@ behavior index::make_behavior() {
     [=](accountant::actor_type const& acc) {
       VAST_DEBUG(this, "registers accountant#", acc->id());
       accountant_ = acc;
-      send(accountant_, label() + "-events", time::now());
     },
     [=](flush_atom) {
       VAST_VERBOSE(this, "flushes", active_.size(), "active partitions");
@@ -180,6 +181,8 @@ behavior index::make_behavior() {
         // Create a new partition.
         a.first = uuid::random();
         a.second = spawn<partition, monitored>(dir_ / to_string(a.first), this);
+        if (accountant_)
+          send(a.second, accountant_);
         send(a.second, upstream_atom::value, this);
         i = partitions_.emplace(a.first, partition_state()).first;
         // Register continuous queries.
@@ -277,10 +280,13 @@ behavior index::make_behavior() {
       }
     },
     [=](done_atom, time::moment start, uint64_t events) {
-      VAST_VERBOSE(this, "indexed", events, "events in",
-                   time::snapshot() - start);
-      if (accountant_)
-        send(accountant_, events, time::snapshot());
+      auto runtime = time::snapshot() - start;
+      VAST_VERBOSE(this, "indexed", events, "events in", runtime);
+      if (accountant_) {
+        auto unit = time::duration_cast<time::microseconds>(runtime).count();
+        auto rate = events * 1e6 / unit;
+        send(accountant_, "index", "indexing-rate", rate);
+      }
     },
     [=](done_atom, time::moment start, expression const& expr) {
       auto runtime = time::snapshot() - start;
@@ -363,6 +369,8 @@ optional<actor> index::dispatch(uuid const& part, expression const& expr) {
   if (passive_.size() < passive_.capacity()) {
     VAST_DEBUG(this, "spawns passive partition", part);
     auto p = spawn<partition, monitored>(dir_ / to_string(part), this);
+    if (accountant_)
+      send(p, accountant_);
     send(p, upstream_atom::value, this);
     passive_.insert(part, p);
     return p;
@@ -410,6 +418,8 @@ void index::consolidate(uuid const& part, expression const& expr) {
     if (a == active_.end() && !passive_.contains(entry.part)) {
       VAST_DEBUG(this, "schedules next passive partition", entry.part);
       auto p = spawn<partition, monitored>(dir_ / to_string(entry.part), this);
+      if (accountant_)
+        send(p, accountant_);
       send(p, upstream_atom::value, this);
       passive_.insert(entry.part, p); // automatically evicts 'part'.
       for (auto& next_expr : entry.queries) {

@@ -8,6 +8,7 @@
 #include "vast/schema.h"
 #include "vast/time.h"
 #include "vast/uuid.h"
+#include "vast/actor/accountant.h"
 #include "vast/actor/actor.h"
 #include "vast/expr/evaluator.h"
 
@@ -53,6 +54,7 @@ struct partition : flow_controlled_actor {
   path const dir_;
   actor sink_;
   actor proxy_;
+  accountant::actor_type accountant_;
   schema schema_;
   size_t events_indexed_concurrently_ = 0;
   std::multimap<event_id, actor> indexers_;

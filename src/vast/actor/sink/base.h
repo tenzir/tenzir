@@ -41,16 +41,20 @@ public:
       [=](accountant::actor_type acc) {
         VAST_DEBUG_AT(this, "registers accountant#" << acc->id());
         accountant_ = acc;
-        send(accountant_, label() + "-events", time::now());
       },
       [=](uuid const&, event const& e) { handle(e); },
       [=](uuid const&, std::vector<event> const& v) {
         assert(!v.empty());
+        auto start = time::snapshot();
         for (auto& e : v)
           if (!handle(e))
             return;
-        if (accountant_)
-          send(accountant_, static_cast<uint64_t>(v.size()), time::snapshot());
+        if (accountant_) {
+          auto runtime = time::snapshot() - start;
+          auto unit = time::duration_cast<time::microseconds>(runtime).count();
+          auto rate = v.size() * 1e6 / unit;
+          send(accountant_, "sink", "event-rate", rate);
+        }
       },
       [=](uuid const& id, progress_atom, double progress, uint64_t total_hits) {
         VAST_VERBOSE(this, "got progress from query ", id << ':', total_hits,

@@ -9,6 +9,7 @@
 #include "vast/expression.h"
 #include "vast/query_options.h"
 #include "vast/uuid.h"
+#include "vast/actor/accountant.h"
 #include "vast/actor/actor.h"
 #include "vast/util/flat_set.h"
 
@@ -37,7 +38,7 @@ struct exporter : default_actor {
   util::flat_set<actor> archives_;
   util::flat_set<actor> indexes_;
   util::flat_set<actor> sinks_;
-  actor task_;
+  accountant::actor_type accountant_;
   message_handler init_;
   message_handler idle_;
   message_handler waiting_;

@@ -230,8 +230,8 @@ void node::on_exit() {
 }
 
 behavior node::make_behavior() {
-  accountant_ = spawn<linked>(
-    accountant::actor, dir_ / log_path() / "accounting.log", time::seconds(1));
+  auto accountant_log = dir_ / log_path() / "accounting.log";
+  accountant_ = spawn<linked>(accountant::actor, accountant_log);
   store_ = spawn<key_value_store, linked>(dir_ / "meta");
   // Until we've implemented leader election, each node starts as leader.
   send(store_, leader_atom::value);
@@ -506,6 +506,7 @@ behavior node::spawn_actor(event_based_actor* self) {
         VAST_VERBOSE(this, "normalized query to", *expr);
         auto exp = self->spawn<exporter>(*expr, query_opts);
         self->send(exp, extract_atom::value, events);
+        self->send(exp, accountant_);
         if (r.opts.count("auto-connect") > 0) {
           self->send(store_, list_atom::value, key::str("actors", name_));
           self->become(

@@ -26,6 +26,10 @@ exporter::exporter(expression ast, query_options opts)
                                                    << ')');
     VAST_ASSERT(!hits.all_zeros());           // Empty hits are useless.
     VAST_ASSERT((hits & hits_).count() == 0); // So are duplicate hits.
+    if (total_hits_ == 0 && accountant_) {
+      auto runtime = time::snapshot() - start_time_;
+      send(accountant_, "exporter", "first-hit", runtime);
+    }
     total_hits_ += hits.count();
     hits_ |= hits;
     unprocessed_ = hits_ - processed_;
@@ -55,11 +59,17 @@ exporter::exporter(expression ast, query_options opts)
     for (auto& s : sinks_)
       send(s, id_, done_atom::value, runtime);
     VAST_VERBOSE(this, "took", runtime, "for:", ast_);
+    if (accountant_)
+      send(accountant_, "exporter", "completion", runtime);
     quit(exit::done);
   };
 
   init_ = {
     handle_down,
+    [=](accountant::actor_type const& acc) {
+      VAST_DEBUG(this, "registers accountant#" << acc->id());
+      accountant_ = acc;
+    },
     [=](put_atom, archive_atom, actor const& a) {
       VAST_DEBUG(this, "registers archive", a);
       monitor(a);
@@ -100,8 +110,7 @@ exporter::exporter(expression ast, query_options opts)
     handle_progress,
     [=](actor const& task) {
       VAST_TRACE(this, "received task from index");
-      task_ = task;
-      send(task_, subscriber_atom::value, this);
+      send(task, subscriber_atom::value, this);
     },
     [=](bitstream_type const& hits) {
       incorporate_hits(hits);
@@ -113,6 +122,8 @@ exporter::exporter(expression ast, query_options opts)
     [=](done_atom, time::extent runtime, expression const&) // from INDEX
     {
       VAST_VERBOSE(this, "completed index interaction in", runtime);
+      if (accountant_)
+        send(accountant_, "exporter", "last-hit", runtime);
       complete();
     }
   };
@@ -198,6 +209,10 @@ exporter::exporter(expression ast, query_options opts)
             auto msg = make_message(id_, std::move(*e));
             for (auto& s : sinks_)
               send(s, msg);
+            if (total_results_ == 0 && accountant_) {
+              auto runtime = time::snapshot() - start_time_;
+              send(accountant_, "exporter", "taste", runtime);
+            }
             ++total_results_;
             if (++extracted == pending_)
               break;
@@ -254,6 +269,7 @@ exporter::exporter(expression ast, query_options opts)
 }
 
 void exporter::on_exit() {
+  accountant_ = {};
   archives_.clear();
   indexes_.clear();
   sinks_.clear();

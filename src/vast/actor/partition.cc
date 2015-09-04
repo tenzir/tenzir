@@ -246,6 +246,10 @@ behavior partition::make_behavior() {
       flush();
     },
     on_down,
+    [=](accountant::actor_type const& acc) {
+      VAST_DEBUG_AT(this, "registers accountant#" << acc->id());
+      accountant_ = acc;
+    },
     [=](std::vector<event> const& events, actor const& task) {
       VAST_DEBUG(this, "got", events.size(),
                  "events [" << events.front().id() << ','
@@ -289,8 +293,13 @@ behavior partition::make_behavior() {
                  "events in parallel");
     },
     [=](done_atom, time::moment start, uint64_t events) {
-      VAST_DEBUG(this, "indexed", events, "events in",
-                 time::snapshot() - start);
+      auto runtime = time::snapshot() - start;
+      VAST_DEBUG(this, "indexed", events, "events in", runtime);
+      if (accountant_) {
+        auto unit = time::duration_cast<time::microseconds>(runtime).count();
+        auto rate = events * 1e6 / unit;
+        send(accountant_, "partition", "indexing-rate", rate);
+      }
       VAST_ASSERT(events_indexed_concurrently_ > events);
       events_indexed_concurrently_ -= events;
       if (events_indexed_concurrently_ < 1 << 20)

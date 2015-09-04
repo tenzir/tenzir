@@ -51,18 +51,22 @@ behavior archive::make_behavior() {
     [=](accountant::actor_type const& acc) {
       VAST_DEBUG_AT(this, "registers accountant#" << acc->id());
       accountant_ = acc;
-      send(accountant_, label() + "-events", time::now());
     },
     [=](std::vector<event> const& events) {
       VAST_DEBUG(this, "got", events.size(),
                  "events [" << events.front().id() << ','
                             << (events.back().id() + 1) << ')');
+      auto start = time::snapshot();
       chunk chk{events, compression_};
+      if (accountant_) {
+        auto stop = time::snapshot();
+        auto unit = time::duration_cast<time::microseconds>(stop - start).count();
+        auto rate = events.size() * 1e6 / unit;
+        send(accountant_, "archive", "compression-rate", rate);
+      }
       auto too_large = current_size_ + chk.bytes() >= max_segment_size_;
       if (!current_.empty() && too_large && !flush())
         return;
-      if (accountant_)
-        send(accountant_, uint64_t{events.size()}, time::snapshot());
       current_size_ += chk.bytes();
       current_.insert(std::move(chk));
     },
@@ -138,11 +142,18 @@ bool archive::flush() {
   VAST_VERBOSE(this, "flushes segment with", current_.size(), "chunks");
   if (current_.empty())
     return true;
+  auto start = time::snapshot();
   auto t = store(std::move(current_));
   if (!t) {
     VAST_ERROR(this, "failed to store segment:", t.error());
     quit(exit::error);
     return false;
+  }
+  if (accountant_) {
+    auto stop = time::snapshot();
+    auto unit = time::duration_cast<time::microseconds>(stop - start).count();
+    auto rate = current_size_ * 1e6 / unit;
+    send(accountant_, "archive", "flush-rate", rate);
   }
   current_ = {};
   current_size_ = 0;
