@@ -34,7 +34,7 @@ struct json_parser : parser<json_parser> {
     auto lbrace = ws >> '{' >> ws;
     auto rbrace = ws >> '}' >> ws;
     auto delim = ws >> ',' >> ws;
-    auto null = ws >> parsers::lit("null") ->* [] { return nil; };
+    auto null = ws >> "null"_p ->* [] { return nil; };
     auto true_false = ws >> parsers::boolean;
     auto string = ws >> parsers::qq_str;
     auto number = ws >> parsers::real_opt_dot;

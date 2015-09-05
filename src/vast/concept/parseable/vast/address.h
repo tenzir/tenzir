@@ -64,7 +64,7 @@ struct address_parser : vast::parser<address_parser> {
     // already consumes the input "f00:" after the first repitition parser, thus
     // erroneously leaving only ":" for next rule `>> h16` to consume.
     auto h16_colon
-      = h16 >> ':' >> !lit(':')
+      = h16 >> ':' >> ! ':'_p
       ;
     auto ls32
       = h16 >> ':' >> h16

@@ -16,22 +16,24 @@ struct access::parser<port> : vast::parser<access::parser<port>> {
   template <typename Iterator>
   bool parse(Iterator& f, Iterator const& l, unused_type) const {
     using namespace parsers;
-    auto p = u16 >> '/' >> (lit("?") | "tcp" | "udp" | "icmp");
+    auto p = u16 >> '/' >> ("?"_p | "tcp" | "udp" | "icmp");
     return p.parse(f, l, unused);
   }
 
   template <typename Iterator>
   bool parse(Iterator& f, Iterator const& l, port& a) const {
     using namespace parsers;
-    auto p
-      =  u16 ->* [&](uint16_t n) {a.number_ = n; }
+    static auto p
+      =  u16
       >> '/'
-      >> ( str{"?"} ->* [&] { a.type_ = port::unknown; }
-         | str{"tcp"} ->* [&] { a.type_ = port::tcp; }
-         | str{"udp"} ->* [&] { a.type_ = port::udp; }
-         | str{"icmp"} ->* [&] { a.type_ = port::icmp; }
-         );
-    return p.parse(f, l, unused);
+      >> ( "?"_p ->* [] { return port::unknown; }
+         | "tcp"_p ->* [] { return port::tcp; }
+         | "udp"_p ->* [] { return port::udp; }
+         | "icmp"_p ->* [] { return port::icmp; }
+         )
+      ;
+    auto t = std::tie(a.number_, a.type_);
+    return p.parse(f, l, t);
   }
 };
 

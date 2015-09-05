@@ -25,33 +25,32 @@ struct time_duration_parser : parser<time_duration_parser> {
       return false;
     }
     static auto unit
-      = lit("nsecs") ->* [] { return time::nanoseconds(1); }
-      | lit("nsec")  ->* [] { return time::nanoseconds(1); }
-      | lit("ns")    ->* [] { return time::nanoseconds(1); }
-      | lit("usecs") ->* [] { return time::microseconds(1); }
-      | lit("usec")  ->* [] { return time::microseconds(1); }
-      | lit("us")    ->* [] { return time::microseconds(1); }
-      | lit("msecs") ->* [] { return time::milliseconds(1); }
-      | lit("msec")  ->* [] { return time::milliseconds(1); }
-      | lit("ms")    ->* [] { return time::milliseconds(1); }
-      | lit("secs")  ->* [] { return time::seconds(1); }
-      | lit("sec")   ->* [] { return time::seconds(1); }
-      | lit("s")     ->* [] { return time::seconds(1); }
-      | lit("mins")  ->* [] { return time::minutes(1); }
-      | lit("min")   ->* [] { return time::minutes(1); }
-      | lit("m")     ->* [] { return time::minutes(1); }
-      | lit("hours") ->* [] { return time::hours(1); }
-      | lit("hrs")   ->* [] { return time::hours(1); }
-      | lit("h")     ->* [] { return time::hours(1); }
-      | lit("days")  ->* [] { return time::hours(24); }
-      | lit("d")     ->* [] { return time::hours(24); }
-      | lit("weeks") ->* [] { return time::hours(24 * 7); }
-      | lit("w")     ->* [] { return time::hours(24 * 7); }
-      | lit("years") ->* [] { return time::hours(24 * 365); }
-      | lit("y")     ->* [] { return time::hours(24 * 365); }
+      = "nsecs"_p ->* [] { return time::nanoseconds(1); }
+      | "nsec"_p  ->* [] { return time::nanoseconds(1); }
+      | "ns"_p    ->* [] { return time::nanoseconds(1); }
+      | "usecs"_p ->* [] { return time::microseconds(1); }
+      | "usec"_p  ->* [] { return time::microseconds(1); }
+      | "us"_p    ->* [] { return time::microseconds(1); }
+      | "msecs"_p ->* [] { return time::milliseconds(1); }
+      | "msec"_p  ->* [] { return time::milliseconds(1); }
+      | "ms"_p    ->* [] { return time::milliseconds(1); }
+      | "secs"_p  ->* [] { return time::seconds(1); }
+      | "sec"_p   ->* [] { return time::seconds(1); }
+      | "s"_p     ->* [] { return time::seconds(1); }
+      | "mins"_p  ->* [] { return time::minutes(1); }
+      | "min"_p   ->* [] { return time::minutes(1); }
+      | "m"_p     ->* [] { return time::minutes(1); }
+      | "hours"_p ->* [] { return time::hours(1); }
+      | "hrs"_p   ->* [] { return time::hours(1); }
+      | "h"_p     ->* [] { return time::hours(1); }
+      | "days"_p  ->* [] { return time::hours(24); }
+      | "d"_p     ->* [] { return time::hours(24); }
+      | "weeks"_p ->* [] { return time::hours(24 * 7); }
+      | "w"_p     ->* [] { return time::hours(24 * 7); }
+      | "years"_p ->* [] { return time::hours(24 * 365); }
+      | "y"_p     ->* [] { return time::hours(24 * 365); }
       ;
-    if (! unit.parse(f, l, a))
-    {
+    if (! unit.parse(f, l, a)) {
       f = save;
       return false;
     }

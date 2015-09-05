@@ -15,7 +15,7 @@ using namespace std::string_literals;
 
 TEST(container attribute folding) {
   using namespace parsers;
-  auto spaces = *lit(' ');
+  auto spaces = *' '_p;
   static_assert(std::is_same<decltype(spaces)::attribute, unused_type>::value,
                 "container attribute folding failed");
 }

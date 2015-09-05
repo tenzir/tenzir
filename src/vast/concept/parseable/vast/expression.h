@@ -23,26 +23,26 @@ struct expression_parser : vast::parser<expression_parser> {
       = (alpha | '_' | '&' | ':') >> *(alnum | '_' | '.' | ':')
       ;
     auto pred_op
-      = lit("~")   ->* [] { return match; }
-      | lit("!~")  ->* [] { return not_match; }
-      | lit("==")  ->* [] { return equal; }
-      | lit("!=")  ->* [] { return not_equal; }
-      | lit("<")   ->* [] { return less; }
-      | lit("<=")  ->* [] { return less_equal; }
-      | lit(">")   ->* [] { return greater; }
-      | lit(">=")  ->* [] { return greater_equal; }
-      | lit("in")  ->* [] { return in; }
-      | lit("!in") ->* [] { return not_in; }
-      | lit("ni")  ->* [] { return ni; }
-      | lit("!ni") ->* [] { return not_ni; }
-      | lit("[+")  ->* [] { return in; }
-      | lit("[-")  ->* [] { return not_in; }
-      | lit("+]")  ->* [] { return ni; }
-      | lit("-]")  ->* [] { return not_ni; }
+      = "~"_p   ->* [] { return match; }
+      | "!~"_p  ->* [] { return not_match; }
+      | "=="_p  ->* [] { return equal; }
+      | "!="_p  ->* [] { return not_equal; }
+      | "<"_p   ->* [] { return less; }
+      | "<="_p  ->* [] { return less_equal; }
+      | ">"_p   ->* [] { return greater; }
+      | ">="_p  ->* [] { return greater_equal; }
+      | "in"_p  ->* [] { return in; }
+      | "!in"_p ->* [] { return not_in; }
+      | "ni"_p  ->* [] { return ni; }
+      | "!ni"_p ->* [] { return not_ni; }
+      | "[+"_p  ->* [] { return in; }
+      | "[-"_p  ->* [] { return not_in; }
+      | "+]"_p  ->* [] { return ni; }
+      | "-]"_p  ->* [] { return not_ni; }
       ;
     auto rel_op
-      = lit("||")  ->* [] { return logical_or; }
-      | lit("&&")  ->* [] { return logical_and; }
+      = "||"_p  ->* [] { return logical_or; }
+      | "&&"_p  ->* [] { return logical_and; }
       ;
     auto operand
       = parsers::data | id

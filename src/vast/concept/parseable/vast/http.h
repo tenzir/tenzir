@@ -26,7 +26,7 @@ struct http_header_parser : parser<http_header_parser> {
     using namespace parsers;
     auto name = +(printable - ':') ->* to_upper;
     auto value = +printable;
-    auto ws = *lit(' ');
+    auto ws = *' '_p;
     return name >> ':' >> ws >> value;
   }
 
