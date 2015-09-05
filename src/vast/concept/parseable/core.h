@@ -10,6 +10,7 @@
 #include "vast/concept/parseable/core/kleene.h"
 #include "vast/concept/parseable/core/list.h"
 #include "vast/concept/parseable/core/literal.h"
+#include "vast/concept/parseable/core/maybe.h"
 #include "vast/concept/parseable/core/not.h"
 #include "vast/concept/parseable/core/operators.h"
 #include "vast/concept/parseable/core/optional.h"

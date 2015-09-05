@@ -13,6 +13,24 @@
 using namespace vast;
 using namespace std::string_literals;
 
+TEST(maybe) {
+  using namespace parsers;
+  auto maybe_x = ~chr{'x'};
+  auto c = 'x';
+  auto f = &c;
+  auto l = &c + 1;
+  char result = 0;
+  CHECK(maybe_x.parse(f, l, result));
+  CHECK(f == l);
+  CHECK(result == 'x');
+  c = 'y';
+  f = &c;
+  result = '\0';
+  CHECK(maybe_x.parse(f, l, result));
+  CHECK(f == &c); // Iterator not advanced.
+  CHECK(result == '\0'); // Result not modified.
+}
+
 TEST(container attribute folding) {
   using namespace parsers;
   auto spaces = *' '_p;
