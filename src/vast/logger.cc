@@ -152,7 +152,7 @@ struct logger::impl {
                     << ' ' << m.lvl() << ' ';
           if (! m.context().empty())
             log_file_ << m.context() << ' ';
-          log_file_ << line << std::endl;
+          log_file_ << line << '\n';
         }
         if (console_ && m.lvl() <= console_level_) {
           if (colorized_) {
