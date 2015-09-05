@@ -280,13 +280,13 @@ TEST(URI with HTTP URL)
   auto l = str.end();
   uri u;
   CHECK(p.parse(f, l, u));
-  CHECK(u.protocol == "http");
-  CHECK(u.hostname == "foo.bar");
+  CHECK(u.scheme == "http");
+  CHECK(u.host == "foo.bar");
   CHECK(u.port == 80);
   CHECK(u.path[0] == "foo");
   CHECK(u.path[1] == "bar");
-  CHECK(u.options["opt1"] == "val1");
-  CHECK(u.options["opt2"] == "val2");
+  CHECK(u.query["opt1"] == "val1");
+  CHECK(u.query["opt2"] == "val2");
   CHECK(u.fragment == "frag1");
   CHECK(f == l);
 }
@@ -299,13 +299,13 @@ TEST(URI with path only)
   auto l = str.end();
   uri u;
   CHECK(p.parse(f, l, u));
-  CHECK(u.protocol == "");
-  CHECK(u.hostname == "");
+  CHECK(u.scheme == "");
+  CHECK(u.host == "");
   CHECK(u.port == 0);
   CHECK(u.path[0] == "foo");
   CHECK(u.path[1] == "bar");
-  CHECK(u.options["opt1"] == "val1");
-  CHECK(u.options["opt2"] == "val2");
+  CHECK(u.query["opt1"] == "val1");
+  CHECK(u.query["opt2"] == "val2");
   CHECK(u.fragment == "");
   CHECK(f == l);
 }

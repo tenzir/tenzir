@@ -22,23 +22,23 @@ struct uri_parser : parser<uri_parser> {
     auto percent_unescape = [](std::string str) {
       return util::percent_unescape(str);
     };
-    auto protocol_ignore_char = ':'_p | '/';
-    auto protocol = *(printable - protocol_ignore_char);
-    auto hostname = *(printable - protocol_ignore_char);
+    auto scheme_ignore_char = ':'_p | '/';
+    auto scheme = *(printable - scheme_ignore_char);
+    auto host = *(printable - scheme_ignore_char);
     auto port = u16;
     auto path_ignore_char = '/'_p | '?' | '#' | ' ';
     auto path_segment = *(printable - path_ignore_char) ->* percent_unescape;
-    auto option_key = +(printable - '=') ->* percent_unescape;
-    auto option_ignore_char = '&'_p | '#' | ' ';
-    auto option_value = +(printable - option_ignore_char) ->* percent_unescape;
-    auto option = option_key >> '=' >> option_value;
+    auto query_key = +(printable - '=') ->* percent_unescape;
+    auto query_ignore_char = '&'_p | '#' | ' ';
+    auto query_value = +(printable - query_ignore_char) ->* percent_unescape;
+    auto query = query_key >> '=' >> query_value;
     auto fragment = *(printable - ' ');
     auto uri
-      =  ~(protocol >> ':')
-      >> ~("//" >> hostname)
+      =  ~(scheme >> ':')
+      >> ~("//" >> host)
       >> ~(':' >> port)
       >> '/' >> path_segment % '/'
-      >> ~('?' >> option % '&')
+      >> ~('?' >> query % '&')
       >> ~('#' >>  fragment)
       ;
     return uri;
@@ -53,8 +53,7 @@ struct uri_parser : parser<uri_parser> {
   template <typename Iterator>
   bool parse(Iterator& f, Iterator const& l, uri& u) const {
     static auto p = make();
-    auto t = std::tie(u.protocol, u.hostname, u.port, u.path, u.options,
-                      u.fragment);
+    auto t = std::tie(u.scheme, u.host, u.port, u.path, u.query, u.fragment);
     return p.parse(f, l, t);
   }
 };
