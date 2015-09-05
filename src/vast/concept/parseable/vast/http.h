@@ -24,8 +24,8 @@ struct http_header_parser : parser<http_header_parser> {
       return name;
     };
     using namespace parsers;
-    auto name = +(parsers::print - ':') ->* to_upper;
-    auto value = +parsers::print;
+    auto name = +(printable - ':') ->* to_upper;
+    auto value = +printable;
     auto ws = *lit(' ');
     return name >> ':' >> ws >> value;
   }
@@ -57,13 +57,13 @@ struct http_request_parser : parser<http_request_parser> {
   static auto make() {
     using namespace parsers;
     auto crlf = "\r\n";
-    auto word = +(parsers::print - ' ');
+    auto word = +(printable - ' ');
     auto method = word;
     auto uri = make_parser<vast::uri>();
     auto proto = +alpha;
     auto version = real;
     auto header = make_parser<http::header>() >> crlf;
-    auto body = *parsers::print;
+    auto body = *printable;
     auto request
       =   method >> ' ' >> uri >> ' ' >> proto >> '/' >> version >> crlf
       >>  *header >> crlf

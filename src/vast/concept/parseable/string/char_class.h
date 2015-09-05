@@ -92,6 +92,9 @@ auto const space = char_class_parser<space_class>{};
 auto const upper = char_class_parser<upper_class>{};
 auto const xdigit = char_class_parser<xdigit_class>{};
 
+// Avoid name clashes with the free function vast::print.
+auto const printable = print;
+
 } // namespace parsers
 } // namespace vast
 

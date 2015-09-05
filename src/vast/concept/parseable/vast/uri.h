@@ -29,7 +29,7 @@ struct uri_parser : parser<uri_parser> {
     auto option_ignore_char = ignore(char_parser{'&'}) | ignore(char_parser{'#'}) | ignore(char_parser{' '});
     auto option_value = +(print_parser{} - option_ignore_char) ->* [](std::string o) { return util::percent_unescape(o); };
     auto option = option_key >> '=' >> option_value;
-    auto fragment = *(parsers::print - ' ');
+    auto fragment = *(printable - ' ');
     auto uri = 
          -(protocol >> ':')
       >> -("//" >> hostname)
