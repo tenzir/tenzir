@@ -13,30 +13,33 @@
 
 namespace vast {
 
+// A URI parser based on RFC 3986.
 struct uri_parser : parser<uri_parser> {
   using attribute = uri;
 
   static auto make() {
     using namespace parsers;
-    // rfc 3986
-    auto protocol_ignore_char = ignore(char_parser{':'}) | ignore(char_parser{'/'});
-    auto protocol = *(print_parser{} - protocol_ignore_char);
-    auto hostname = *(print_parser{} - protocol_ignore_char);
+    auto percent_unescape = [](std::string str) {
+      return util::percent_unescape(str);
+    };
+    auto protocol_ignore_char = ':'_p | '/';
+    auto protocol = *(printable - protocol_ignore_char);
+    auto hostname = *(printable - protocol_ignore_char);
     auto port = u16;
-    auto path_ignore_char = ignore(char_parser{'/'}) | ignore(char_parser{'?'}) | ignore(char_parser{'#'}) | ignore(char_parser{' '});
-    auto path_segment = *(print_parser{} - path_ignore_char) ->* [](std::string p) { return util::percent_unescape(p); };
-    auto option_key = +(print_parser{} - '=') ->* [](std::string o) { return util::percent_unescape(o); };
-    auto option_ignore_char = ignore(char_parser{'&'}) | ignore(char_parser{'#'}) | ignore(char_parser{' '});
-    auto option_value = +(print_parser{} - option_ignore_char) ->* [](std::string o) { return util::percent_unescape(o); };
+    auto path_ignore_char = '/'_p | '?' | '#' | ' ';
+    auto path_segment = *(printable - path_ignore_char) ->* percent_unescape;
+    auto option_key = +(printable - '=') ->* percent_unescape;
+    auto option_ignore_char = '&'_p | '#' | ' ';
+    auto option_value = +(printable - option_ignore_char) ->* percent_unescape;
     auto option = option_key >> '=' >> option_value;
     auto fragment = *(printable - ' ');
-    auto uri = 
-         -(protocol >> ':')
-      >> -("//" >> hostname)
-      >> -(':' >> port)
+    auto uri
+      =  ~(protocol >> ':')
+      >> ~("//" >> hostname)
+      >> ~(':' >> port)
       >> '/' >> path_segment % '/'
-      >> -('?' >> option % '&')
-      >> -('#' >>  fragment)
+      >> ~('?' >> option % '&')
+      >> ~('#' >>  fragment)
       ;
     return uri;
   }
@@ -50,45 +53,10 @@ struct uri_parser : parser<uri_parser> {
   template <typename Iterator>
   bool parse(Iterator& f, Iterator const& l, uri& u) const {
     static auto p = make();
-    using std::get;
-    std::tuple<
-      optional<std::string>,
-      optional<std::string>,
-      optional<uint16_t>,
-      std::vector<std::string>,
-      optional<std::vector<std::tuple<std::string,std::string>>>,
-      optional<std::string>
-    > h;
-    if (p.parse(f, l, h))
-    {
-      if (get<0>(h)) {
-        u.protocol = *get<0>(h);
-      }
-      if (get<1>(h)) {
-        u.hostname = *get<1>(h);
-      }
-      if (get<2>(h)) {
-        u.port = *get<2>(h);
-      } else {
-        u.port = 0;
-      }
-      u.path = get<3>(h);
-      if (get<4>(h))
-      {
-        for (auto& option : *get<4>(h)){
-          auto key = get<0>(option);
-          auto value = get<1>(option);
-          u.options[key] = value;
-        }
-      }
-      if (get<5>(h)) {
-        u.fragment = *get<5>(h);
-      }
-      return true;
-    }
-    return false;
+    auto t = std::tie(u.protocol, u.hostname, u.port, u.path, u.options,
+                      u.fragment);
+    return p.parse(f, l, t);
   }
-
 };
 
 template <>

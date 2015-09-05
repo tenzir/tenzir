@@ -223,7 +223,7 @@ TEST(offset) {
   CHECK(o == offset{1, 2, 3});
 }
 
-TEST(http_header_parser)
+TEST(HTTP header)
 {
   auto p = make_parser<http::header>();
   auto str = "foo: bar"s;
@@ -244,10 +244,14 @@ TEST(http_header_parser)
   CHECK(f == l);
 }
 
-TEST(http_request_parser)
+TEST(HTTP request)
 {
   auto p = make_parser<http::request>();
-  auto str = "GET /foo/bar%20baz/ HTTP/1.1\r\nContent-Type:text/html\r\nContent-Length:1234\r\n\r\nBody "s;
+  auto str = "GET /foo/bar%20baz/ HTTP/1.1\r\n"
+             "Content-Type:text/html\r\n"
+             "Content-Length:1234\r\n"
+             "\r\n"
+             "Body "s;
   auto f = str.begin();
   auto l = str.end();
   http::request req;
@@ -268,7 +272,7 @@ TEST(http_request_parser)
   CHECK(f == l);
 }
 
-TEST(URI_parser_URL)
+TEST(URI with HTTP URL)
 {
   auto p = make_parser<uri>();
   auto str = "http://foo.bar:80/foo/bar?opt1=val1&opt2=val2#frag1"s;
@@ -287,7 +291,7 @@ TEST(URI_parser_URL)
   CHECK(f == l);
 }
 
-TEST(URI_parser_http)
+TEST(URI with path only)
 {
   auto p = make_parser<uri>();
   auto str = "/foo/bar?opt1=val1&opt2=val2"s;
