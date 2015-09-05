@@ -8,7 +8,9 @@
 #include "vast/concept/parseable/core.h"
 #include "vast/concept/parseable/string.h"
 #include "vast/concept/parseable/numeric/real.h"
+#include "vast/concept/parseable/vast/uri.h"
 #include "vast/http.h"
+#include "vast/uri.h"
 #include "vast/util/string.h"
 
 namespace vast {
@@ -57,7 +59,7 @@ struct http_request_parser : parser<http_request_parser> {
     auto crlf = "\r\n";
     auto word = +(parsers::print - ' ');
     auto method = word;
-    auto uri = word;
+    auto uri = make_parser<vast::uri>();
     auto proto = +alpha;
     auto version = real;
     auto header = make_parser<http::header>() >> crlf;

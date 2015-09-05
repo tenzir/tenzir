@@ -5,11 +5,18 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <map>
 
 namespace vast {
 
-// TODO: implement according to #84.
-using uri = std::string;
+struct uri {
+  std::string protocol;
+  std::string hostname;
+  uint16_t port;
+  std::vector<std::string> path;
+  std::map<std::string,std::string> options;
+  std::string fragment;
+};
 
 } // namespace vast
 

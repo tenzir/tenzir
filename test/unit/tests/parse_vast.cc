@@ -10,6 +10,7 @@
 #include "vast/concept/printable/vast/pattern.h"
 #include "vast/concept/printable/vast/address.h"
 #include "vast/concept/parseable/vast/http.h"
+#include "vast/concept/parseable/vast/uri.h"
 
 
 #define SUITE parseable
@@ -252,7 +253,8 @@ TEST(http_request_parser)
   http::request req;
   CHECK(p.parse(f, l, req));
   CHECK(req.method == "GET");
-  CHECK(req.uri == "/foo/bar%20baz/");
+  CHECK(req.uri.path[0] == "foo");
+  CHECK(req.uri.path[1] == "bar baz");
   CHECK(req.protocol == "HTTP");
   CHECK(req.version == 1.1);
   auto hdr = req.header("content-type");
@@ -263,5 +265,43 @@ TEST(http_request_parser)
   REQUIRE(hdr);
   CHECK(hdr->name == "CONTENT-LENGTH");
   CHECK(hdr->value == "1234");
+  CHECK(f == l);
+}
+
+TEST(URI_parser_URL)
+{
+  auto p = make_parser<uri>();
+  auto str = "http://foo.bar:80/foo/bar?opt1=val1&opt2=val2#frag1"s;
+  auto f = str.begin();
+  auto l = str.end();
+  uri u;
+  CHECK(p.parse(f, l, u));
+  CHECK(u.protocol == "http");
+  CHECK(u.hostname == "foo.bar");
+  CHECK(u.port == 80);
+  CHECK(u.path[0] == "foo");
+  CHECK(u.path[1] == "bar");
+  CHECK(u.options["opt1"] == "val1");
+  CHECK(u.options["opt2"] == "val2");
+  CHECK(u.fragment == "frag1");
+  CHECK(f == l);
+}
+
+TEST(URI_parser_http)
+{
+  auto p = make_parser<uri>();
+  auto str = "/foo/bar?opt1=val1&opt2=val2"s;
+  auto f = str.begin();
+  auto l = str.end();
+  uri u;
+  CHECK(p.parse(f, l, u));
+  CHECK(u.protocol == "");
+  CHECK(u.hostname == "");
+  CHECK(u.port == 0);
+  CHECK(u.path[0] == "foo");
+  CHECK(u.path[1] == "bar");
+  CHECK(u.options["opt1"] == "val1");
+  CHECK(u.options["opt2"] == "val2");
+  CHECK(u.fragment == "");
   CHECK(f == l);
 }
