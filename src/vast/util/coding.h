@@ -28,8 +28,26 @@ template <
   typename = std::enable_if_t<std::is_integral<T>::value>
 >
 std::pair<char, char> byte_to_hex(T b) {
-  static constexpr char hex[] = "0123456789abcdef";
+  static constexpr char hex[] = "0123456789ABCDEF";
   return {hex[(b >> 4) & 0x0f], hex[b & 0x0f]};
+}
+
+/// Converts a single hex character into its byte value.
+/// @param hex The hex character.
+/// @returns The byte value of *hex* or 0 if *hex* is not a valid hex char.
+/// @relates byte_to_hex byte_to_char
+template <
+  typename T,
+  typename = std::enable_if_t<std::is_integral<T>::value>
+>
+char hex_to_byte(T hex) {
+  if (hex >= '0' && hex <= '9')
+    return hex - '0';
+  if (hex >= 'A' && hex <= 'F')
+    return hex - 'A' + 10;
+  if (hex >= 'a' && hex <= 'f')
+    return hex - 'a' + 10;
+  return '\0';
 }
 
 /// Converts two characters representing a hex byte into a single byte value.
@@ -41,9 +59,8 @@ template <
   typename = std::enable_if_t<std::is_integral<T>::value>
 >
 char hex_to_byte(T hi, T lo) {
-  char byte;
-  byte = (hi > '9' ? hi - 'a' + 10 : hi - '0') << 4;
-  byte |= (lo > '9' ? lo - 'a' + 10 : lo - '0');
+  auto byte = hex_to_byte(hi) << 4;
+  byte |= hex_to_byte(lo);
   return byte;
 }
 

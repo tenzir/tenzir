@@ -16,8 +16,8 @@ TEST(string byte escaping) {
 
   CHECK(byte_escape("foob\ar") == "foob\\x07r");
   CHECK(byte_escape("foo\tbar") == "foo\\x09bar");
-  CHECK(byte_escape("foo\nbar") == "foo\\x0abar");
-  CHECK(byte_escape("foo\r\nbar") == "foo\\x0d\\x0abar");
+  CHECK(byte_escape("foo\nbar") == "foo\\x0Abar");
+  CHECK(byte_escape("foo\r\nbar") == "foo\\x0D\\x0Abar");
 
   CHECK(byte_unescape("f\\o\\obar") == "foobar");
 
@@ -26,8 +26,8 @@ TEST(string byte escaping) {
   CHECK(byte_unescape("foo\\x0abar") == "foo\nbar");
   CHECK(byte_unescape("foo\\x0d\\x0abar") == "foo\r\nbar");
 
-  CHECK(byte_escape_all("foo") == "\\x66\\x6f\\x6f");
-  CHECK(byte_unescape("\\x66\\x6f\\x6f") == "foo");
+  CHECK(byte_escape_all("foo") == "\\x66\\x6F\\x6F");
+  CHECK(byte_unescape("\\x66\\x6f\\x6F") == "foo");
 
   CHECK(byte_unescape("foo\\") == ""); // Invalid '/' at end of string.
 }
@@ -53,7 +53,7 @@ TEST(JSON string escaping) {
   CHECK(json_escape("foo\rbar") == "\"foo\\rbar\"");
   CHECK(json_escape("foo\nbar") == "\"foo\\nbar\"");
   CHECK(json_escape("foo\tbar") == "\"foo\\tbar\"");
-  CHECK(json_escape("foo\xFF\xFF") == "\"foo\\xff\\xff\"");
+  CHECK(json_escape("foo\xFF\xFF") == "\"foo\\xFF\\xFF\"");
 
   CHECK(json_unescape("\"foo\\\"bar\"") == "foo\"bar");
   CHECK(json_unescape("\"foo\\\\bar\"") == "foo\\bar");
@@ -64,7 +64,7 @@ TEST(JSON string escaping) {
   CHECK(json_unescape("\"foo\\nbar\"")  == "foo\nbar");
   CHECK(json_unescape("\"foo\\tbar\"")  == "foo\tbar");
   CHECK(json_unescape("\"foo\\uaaaabar\"")  == "foo\\uaaaabar");
-  CHECK(json_unescape("\"foo\\xFF\\xFF\"") == "foo\xFF\xFF");
+  CHECK(json_unescape("\"foo\\xFF\\xFF\"") == "foo\xff\xff");
 
   // Invalid.
   CHECK(json_unescape("unquoted") == "");
@@ -79,15 +79,15 @@ TEST(percent escaping) {
   CHECK(percent_escape("ABC") == "ABC");
 
   CHECK(percent_escape("/f o o/index.html&foo=b@r") 
-        == "%2ff%20o%20o%2findex.html%26foo%3db%40r");
+        == "%2Ff%20o%20o%2Findex.html%26foo%3Db%40r");
   CHECK(percent_unescape("/f%20o%20o/index.html&foo=b@r") 
         == "/f o o/index.html&foo=b@r");
 
   CHECK(percent_escape("&text") == "%26text");
   CHECK(percent_unescape("%26text") == "&text");
-  CHECK(percent_unescape("text%3c") == "text<");
+  CHECK(percent_unescape("text%3C") == "text<");
 
-  auto esc = "%21%2a%27%28%29%3b%3a%40%26%3d%2b%24%2c%2f%3f%23%5b%5d%25%22%20";
+  auto esc = "%21%2A%27%28%29%3B%3A%40%26%3D%2B%24%2C%2F%3F%23%5B%5D%25%22%20";
   CHECK(percent_escape("!*'();:@&=+$,/?#[]%\" ") == esc);
   CHECK(percent_unescape(esc) == "!*'();:@&=+$,/?#[]%\" ");
 }
