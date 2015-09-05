@@ -139,7 +139,7 @@ TEST(quoted string) {
   CHECK(attr == "foobar'");
 }
 
-TEST(attribute compatibility : string) {
+TEST(attribute compatibility with string) {
   auto str = "..."s;
   auto attr = ""s;
   auto f = str.begin();
@@ -180,7 +180,7 @@ TEST(attribute compatibility : string) {
   CHECK(f == l);
 }
 
-TEST(attribute compatibility : pair) {
+TEST(attribute compatibility with pair) {
   using namespace parsers;
   auto str = "xy"s;
   auto attr = ""s;
@@ -200,6 +200,20 @@ TEST(attribute compatibility : pair) {
   CHECK(c.parse(f, l, p1));
   CHECK(p1.first == "x");
   CHECK(p1.second == "y");
+}
+
+TEST(attribute compatibility with map) {
+  using namespace parsers;
+  auto str = "a->x,b->y,c->z"s;
+  auto f = str.begin();
+  auto l = str.end();
+  std::map<char, char> map;
+  auto p = (any >> "->" >> any) % ',';
+  CHECK(p.parse(f, l, map));
+  CHECK(f == l);
+  CHECK(map['a'] == 'x');
+  CHECK(map['b'] == 'y');
+  CHECK(map['c'] == 'z');
 }
 
 TEST(bool) {
