@@ -5,22 +5,22 @@
 #include <fstream>
 
 #include "vast/filesystem.h"
-#include "vast/actor/actor.h"
+#include "vast/actor/basic_state.h"
 
 namespace vast {
 
-/// Profiles CPU and heap via gperftools.
-struct profiler : default_actor {
-  /// Spawns the profiler.
+struct profiler {
+  struct state : basic_state {
+    state(local_actor* self);
+    ~state();
+  };
+
+  /// Profiles CPU and heap via gperftools.
+  /// @param self The actor context.
   /// @param log_dir The directory where to write profiler output to.
   /// @param secs The number of seconds between subsequent measurements.
-  profiler(path log_dir, std::chrono::seconds secs);
-
-  void on_exit() override;
-  caf::behavior make_behavior() override;
-
-  path const log_dir_;
-  std::chrono::seconds secs_;
+  static behavior make(stateful_actor<state>* self,
+                       path log_dir, std::chrono::seconds secs);
 };
 
 } // namespace vast

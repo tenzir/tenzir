@@ -1,13 +1,10 @@
-#include <cassert>
-
 #include <gperftools/profiler.h>
 #include <gperftools/heap-profiler.h>
-
-#include <caf/all.hpp>
 
 #include "vast/config.h"
 #include "vast/time.h"
 #include "vast/filesystem.h"
+#include "vast/actor/atoms.h"
 #include "vast/actor/profiler.h"
 #include "vast/concept/printable/to_string.h"
 #include "vast/concept/printable/vast/error.h"
@@ -15,63 +12,64 @@
 
 namespace vast {
 
-profiler::profiler(path log_dir, std::chrono::seconds secs)
-  : default_actor{"profiler"}, log_dir_{std::move(log_dir)}, secs_{secs} {
+profiler::state::state(local_actor* self)
+  : basic_state{self, "profiler"} {
 }
 
-void profiler::on_exit() {
+profiler::state::~state() {
   ProfilerState state;
   ProfilerGetCurrentState(&state);
   if (state.enabled) {
-    VAST_INFO(this, "stops Gperftools CPU profiler");
+    VAST_INFO_AT(self, "stops gperftools CPU profiler");
     ProfilerStop();
-    VAST_INFO(this, "recorded", state.samples_gathered,
-              "Gperftools CPU profiler samples in", state.profile_name);
+    VAST_INFO_AT(self, "recorded", state.samples_gathered,
+              "gperftools CPU profiler samples in", state.profile_name);
   }
 #ifdef VAST_USE_TCMALLOC
   if (IsHeapProfilerRunning()) {
-    VAST_INFO(this, "stops Gperftools heap profiler");
+    VAST_INFO_AT(self, "stops gperftools heap profiler");
     HeapProfilerDump("cleanup");
     HeapProfilerStop();
   }
 #endif
 }
 
-behavior profiler::make_behavior() {
-  if (!exists(log_dir_)) {
-    auto t = mkdir(log_dir_);
-    if (!t) {
-      VAST_ERROR(this, "could not create directory:", t.error());
-      quit(exit::error);
-    }
-  }
+behavior profiler::make(stateful_actor<state>* self, path log_dir,
+                        std::chrono::seconds secs) {
   return {
     [=](start_atom, std::string const& type) {
+    if (!exists(log_dir)) {
+      auto t = mkdir(log_dir);
+      if (!t) {
+        VAST_ERROR_AT(self, "could not create directory:", t.error());
+        self->quit(exit::error);
+      }
+    }
     if (type == "cpu") {
-      VAST_INFO(this, "starts Gperftools CPU profiler");
-      auto filename = to_string(log_dir_ / "perftools.cpu");
+      VAST_INFO_AT(self, "starts gperftools CPU profiler");
+      auto filename = to_string(log_dir / "perftools.cpu");
       ProfilerStart(filename.c_str());
-      delayed_send(this, secs_, flush_atom::value);
+      self->delayed_send(self, secs, flush_atom::value);
     } else if (type == "heap") {
 #ifdef VAST_USE_TCMALLOC
-    VAST_INFO(this, "starts Gperftools heap profiler");
-    auto filename = to_string(log_dir_ / "perftools.heap");
+    VAST_INFO_AT(self, "starts gperftools heap profiler");
+    auto filename = to_string(log_dir / "perftools.heap");
     HeapProfilerStart(filename.c_str());
 #else
-    VAST_ERROR(this, "cannot start heap profiler",
+    VAST_ERROR_AT(self, "cannot start heap profiler",
                "(not linked against tcmalloc)");
-    quit(exit::error);
+    self->quit(exit::error);
 #endif
     } else {
-      VAST_ERROR(this, "got invalid profiler type");
-      quit(exit::error);
+      VAST_ERROR_AT(self, "got invalid profiler type");
+      self->quit(exit::error);
     }
     },
     [=](flush_atom) {
       ProfilerFlush();
-      delayed_send(this, secs_, flush_atom::value);
+      self->delayed_send(self, secs, flush_atom::value);
     },
-    catch_unexpected()
+    quit_on_others(self)
   };
 }
 

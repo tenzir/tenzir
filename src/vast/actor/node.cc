@@ -528,7 +528,7 @@ behavior node::spawn_actor(event_based_actor* self) {
           return;
         }
         auto secs = std::chrono::seconds(resolution);
-        auto prof = spawn<profiler, detached>(dir_ / log_path(), secs);
+        auto prof = spawn<detached>(profiler::make, dir_ / log_path(), secs);
         if (r.opts.count("cpu") > 0)
           self->send(prof, start_atom::value, "cpu");
         if (r.opts.count("heap") > 0)
