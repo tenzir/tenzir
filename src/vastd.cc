@@ -138,7 +138,7 @@ int main(int argc, char* argv[]) {
                  "with name \"" << name << '"');
     /// Install signal handlers and block until either a signal arrives or the
     /// node terminates.
-    auto sig_mon = self->spawn<signal_monitor>(self);
+    auto sig_mon = self->spawn(signal_monitor::make, self);
     self->monitor(node);
     auto stop = false;
     self->do_receive(
