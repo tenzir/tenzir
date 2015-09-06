@@ -38,6 +38,7 @@ set(libvast_sources
   actor/node.cc
   actor/partition.cc
   actor/signal_monitor.cc
+  actor/task.cc
   actor/sink/ascii.cc
   actor/sink/bro.cc
   actor/sink/json.cc

@@ -18,11 +18,12 @@ TEST(partition) {
   path dir = "vast-test-partition";
   scoped_actor self;
   auto p = self->spawn<partition, monitored+priority_aware>(dir, self);
-  auto t = self->spawn<task, monitored>(time::snapshot(),
-                                        uint64_t{events0.size()});
+  auto t = self->spawn<monitored>(task::make<time::moment, uint64_t>,
+                                  time::snapshot(), events0.size());
   self->send(p, events0, t);
   self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
-  t = self->spawn<task, monitored>(time::snapshot(), uint64_t{events1.size()});
+  t = self->spawn<monitored>(task::make<time::moment, uint64_t>,
+                             time::snapshot(), events1.size());
   self->send(p, events1, t);
   self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
 
@@ -55,7 +56,8 @@ TEST(partition) {
   self->send(p, *expr, continuous_atom::value);
 
   MESSAGE("sending another event");
-  t = self->spawn<task, monitored>(time::snapshot(), uint64_t{events.size()});
+  t = self->spawn<monitored>(task::make<time::moment, uint64_t>,
+                             time::snapshot(), events.size());
   self->send(p, events, t);
   self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
 
@@ -75,7 +77,8 @@ TEST(partition) {
   self->send(p, *expr, continuous_atom::value, disable_atom::value);
   auto e = event::make(record{1337u, std::to_string(1337)}, type0);
   e.id(4711);
-  t = self->spawn<task, monitored>(time::snapshot(), 1ull);
+  t = self->spawn<monitored>(task::make<time::moment, uint64_t>,
+                             time::snapshot(), 1);
   self->send(p, std::vector<event>{std::move(e)}, t);
   self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
   // Make sure that we didn't get any new hits.

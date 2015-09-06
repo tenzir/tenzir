@@ -97,7 +97,7 @@ behavior index::make_behavior() {
         return;
       flush();
       trap_exit(false); // Once the task completes we go down with it.
-      auto t = spawn<task, linked>();
+      auto t = spawn<linked>(task::make<>);
       send(t, msg.reason);
       for (auto& q : queries_)
         if (q.second.cont)
@@ -157,7 +157,7 @@ behavior index::make_behavior() {
     },
     [=](flush_atom) {
       VAST_VERBOSE(this, "flushes", active_.size(), "active partitions");
-      auto t = spawn<task>();
+      auto t = spawn(task::make<>);
       send(t, this);
       for (auto& a : active_)
         send(a.second, flush_atom::value, t);
@@ -199,7 +199,8 @@ behavior index::make_behavior() {
       VAST_DEBUG(this, "forwards", events.size(), "events [" <<
                  events.front().id() << ',' << (events.back().id() + 1) << ')',
                  "to", a.second, '(' << a.first << ')');
-      auto t = spawn<task>(time::snapshot(), uint64_t{events.size()});
+      auto t = spawn(task::make<time::moment, uint64_t>,
+                     time::snapshot(), events.size());
       send(t, supervisor_atom::value, this);
       send(a.second,
            message::concat(current_message(), make_message(std::move(t))));
@@ -221,7 +222,8 @@ behavior index::make_behavior() {
         if (!qs.hist->task) {
           VAST_VERBOSE(this, "enables historical query");
           qs.hist->task
-            = spawn<task>(time::snapshot(), expr, historical_atom::value);
+            = spawn(task::make<time::moment, expression, historical_atom>,
+                    time::snapshot(), expr, historical_atom::value);
           send(qs.hist->task, supervisor_atom::value, this);
           // Test whether this query matches any partition and relay it where
           // possible.
@@ -251,7 +253,7 @@ behavior index::make_behavior() {
         }
         if (!qs.cont->task) {
           VAST_VERBOSE(this, "enables continuous query");
-          qs.cont->task = spawn<task>(time::snapshot());
+          qs.cont->task = spawn(task::make<time::moment>, time::snapshot());
           send(qs.cont->task, this);
           // Relay the continuous query to all active partitions, as these may
           // still receive events.

@@ -114,7 +114,7 @@ struct continuous_query_proxy : default_actor {
         // FIXME: do not stupidly send every predicate to every indexer,
         // rather, pick the minimal subset intelligently.
         auto acc = spawn<accumulator>(exprs_.as_vector(), this);
-        auto t = spawn<task>();
+        auto t = spawn(task::make<>);
         send(t, supervisor_atom::value, acc);
         for (auto& i : indexers) {
           send(t, i, uint64_t{preds_.size()});
@@ -318,7 +318,8 @@ behavior partition::make_behavior() {
         // spin up a new task to ensure that we incorporate results from events
         // that have arrived in the meantime.
         VAST_DEBUG(this, "spawns new query task");
-        q->second.task = spawn<task>(time::snapshot(), q->first);
+        q->second.task = spawn(task::make<time::moment, expression>,
+                               time::snapshot(), q->first);
         send(q->second.task, supervisor_atom::value, this);
         send(q->second.task, this);
         for (auto& pred : visit(expr::predicatizer{}, expr)) {
@@ -342,7 +343,8 @@ behavior partition::make_behavior() {
                 VAST_DEBUG(this, " - forwards predicate to", i->second);
                 p->second.cache.insert(i->first);
                 if (!p->second.task) {
-                  p->second.task = spawn<task>(time::snapshot(), pred);
+                  p->second.task = spawn(task::make<time::moment, predicate>,
+                                         time::snapshot(), pred);
                   send(p->second.task, supervisor_atom::value, this);
                 }
                 send(q->second.task, p->second.task);
