@@ -1,5 +1,6 @@
 #include "vast/concept/printable/to_string.h"
 #include "vast/concept/printable/vast/http.h"
+#include "vast/concept/printable/vast/uri.h"
 
 #define SUITE printable
 #include "test.h"
@@ -20,3 +21,19 @@ TEST(HTTP response) {
   ok += "Content-Type: text/plain\r\nConnection: keep-alive\r\n\r\nfoo";
   CHECK(to_string(r) == ok);
 }
+
+TEST(URI) {
+  uri u;
+  u.scheme = "http";
+  u.host = "foo.bar";
+  u.port = 80;
+  u.path.push_back("foo");
+  u.path.push_back("bar");
+  u.path.push_back("baz");
+  u.query["opt1"] = "val 1";
+  u.query["opt2"] = "val2";
+  u.fragment = "frag 1";
+  auto ok = "http://foo.bar:80/foo/bar/baz?opt1=val%201&opt2=val2#frag%201"s;
+  CHECK(to_string(u) == ok);
+}
+
