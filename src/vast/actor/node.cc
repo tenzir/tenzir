@@ -451,7 +451,7 @@ behavior node::spawn_actor(event_based_actor* self) {
         }
         *expr = expr::normalize(*expr);
         VAST_VERBOSE(this, "normalized query to", *expr);
-        auto exp = self->spawn<exporter>(*expr, query_opts);
+        auto exp = self->spawn(exporter::make, *expr, query_opts);
         self->send(exp, extract_atom::value, events);
         if (r.opts.count("auto-connect") > 0) {
           self->send(store_, list_atom::value, key::str("actors", name_));
