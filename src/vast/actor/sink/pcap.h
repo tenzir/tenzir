@@ -2,6 +2,7 @@
 #define VAST_ACTOR_SINK_PCAP_H
 
 #include <pcap.h>
+
 #include "vast/filesystem.h"
 #include "vast/schema.h"
 #include "vast/type.h"
@@ -11,27 +12,28 @@ namespace vast {
 namespace sink {
 
 /// A file source that reads PCAP traces.
-class pcap : public base<pcap> {
-public:
-  /// Constructs a file source.
-  /// @param sch The schema containing the packet type.
-  /// @param trace The name of the trace file to construct.
-  /// @param flush Number of packets after which to flush to disk.
-  pcap(schema sch, path trace, size_t flush = 10000);
+struct pcap_state : state {
+  pcap_state(local_actor* self);
+  ~pcap_state();
 
-  ~pcap();
+  bool process(event const& e) override;
 
-  bool process(event const& e);
-
-private:
-  schema schema_;
-  path trace_;
-  type packet_type_;
-  size_t flush_;
-  size_t total_packets_ = 0;
-  pcap_t* pcap_ = nullptr;
-  pcap_dumper_t* pcap_dumper_ = nullptr;
+  vast::schema schema;
+  path trace;
+  type packet_type;
+  size_t flush_packets;
+  size_t total_packets = 0;
+  pcap_t* pcap_handle = nullptr;
+  pcap_dumper_t* pcap_dumper = nullptr;
 };
+
+/// Spawns a PCAP source.
+/// @param self The actor handle.
+/// @param sch The schema containing the packet type.
+/// @param trace The name of the trace file to construct.
+/// @param flush_packets Number of packets after which to flush to disk.
+behavior pcap(stateful_actor<pcap_state>* self,
+              schema sch, path trace, size_t flush_packets);
 
 } // namespace sink
 } // namespace vast

@@ -6,8 +6,8 @@
 #include "vast/concept/printable/vast/error.h"
 #include "vast/concept/printable/vast/filesystem.h"
 #include "vast/concept/printable/vast/key.h"
-#include "vast/io/algorithm.h"
 #include "vast/util/assert.h"
+#include "vast/util/fdoutbuf.h"
 #include "vast/util/string.h"
 
 using namespace std::string_literals;
@@ -15,9 +15,9 @@ using namespace std::string_literals;
 namespace vast {
 namespace sink {
 
-constexpr char const* bro::format;
+constexpr char const* bro_state::format;
 
-std::string bro::make_header(type const& t) {
+std::string bro_state::make_header(type const& t) {
   auto r = get<type::record>(t);
   VAST_ASSERT(r);
   std::string h;
@@ -37,22 +37,21 @@ std::string bro::make_header(type const& t) {
   return h;
 }
 
-std::string bro::make_footer() {
+std::string bro_state::make_footer() {
   std::string f = "#close"s + sep + to_string(time::now(), format) + '\n';
   return f;
 }
 
-bro::bro(path p) : base<bro>{"bro-sink"} {
-  // An empty directory means we write to standard output.
-  if (p != "-")
-    dir_ = std::move(p);
-  attach_functor([=](uint32_t) {
-    auto footer = make_footer();
-    for (auto& p : streams_)
-      if (p.second)
-        io::copy(footer.begin(), footer.end(), *p.second);
-    streams_.clear();
-  });
+bro_state::bro_state(local_actor* self)
+  : state{self, "bro-sink"} {
+}
+
+bro_state::~bro_state() {
+  auto footer = make_footer();
+  for (auto& pair : streams)
+    if (pair.second)
+      std::copy(footer.begin(), footer.end(),
+                std::ostreambuf_iterator<char>(*pair.second));
 }
 
 namespace {
@@ -61,7 +60,7 @@ struct value_printer {
   using result_type = std::string;
 
   std::string operator()(none) const {
-    return bro::unset_field;
+    return bro_state::unset_field;
   }
 
   template <typename T>
@@ -104,7 +103,7 @@ struct value_printer {
 
   std::string operator()(record const& r) const {
     auto visitor = this;
-    return util::join(r.begin(), r.end(), std::string{bro::sep},
+    return util::join(r.begin(), r.end(), std::string{bro_state::sep},
                       [&](auto& d) { return visit(*visitor, d); });
   }
 
@@ -115,69 +114,77 @@ struct value_printer {
          std::string
         > {
     if (c.empty())
-      return bro::empty_field;
+      return bro_state::empty_field;
     auto visitor = this;
-    return util::join(c.begin(), c.end(), bro::set_separator,
+    return util::join(c.begin(), c.end(), bro_state::set_separator,
                       [&](auto& x) { return visit(*visitor, x); });
   }
 
   std::string operator()(table const&) const {
-    return bro::unset_field; // Not yet supported by Bro.
+    return bro_state::unset_field; // Not yet supported by Bro.
   }
 };
 
 } // namespace <anonymous>
 
-bool bro::process(event const& e) {
+bool bro_state::process(event const& e) {
   auto& t = e.type();
   if (!is<type::record>(t)) {
-    VAST_ERROR(this, "cannot process non-record events");
+    VAST_ERROR_AT(self, "cannot process non-record events");
     return false;
   }
-  io::file_output_stream* os = nullptr;
-  if (dir_.empty()) {
-    if (streams_.empty()) {
-      VAST_DEBUG(this, "creates a new stream for STDOUT");
-      auto fos = std::make_unique<io::file_output_stream>("-");
-      auto i = streams_.emplace("", std::move(fos));
+  std::ostream* os = nullptr;
+  if (dir.empty()) {
+    if (streams.empty()) {
+      VAST_DEBUG_AT(self, "creates a new stream for STDOUT");
+      auto sb = std::make_unique<util::fdoutbuf>(1);
+      auto out = std::make_unique<std::ostream>(sb.release());
+      auto i = streams.emplace("", std::move(out));
       auto header = make_header(t);
-      if (!io::copy(header.begin(), header.end(), *i.first->second))
-        return false;
+      std::copy(header.begin(), header.end(),
+                std::ostreambuf_iterator<char>(*i.first->second));
     }
-    os = streams_.begin()->second.get();
+    os = streams.begin()->second.get();
   } else {
-    auto i = streams_.find(t.name());
-    if (i != streams_.end()) {
+    auto i = streams.find(t.name());
+    if (i != streams.end()) {
       os = i->second.get();
       VAST_ASSERT(os != nullptr);
     } else {
-      VAST_DEBUG(this, "creates new stream for event", t.name());
-      if (!exists(dir_)) {
-        auto d = mkdir(dir_);
+      VAST_DEBUG_AT(self, "creates new stream for event", t.name());
+      if (!exists(dir)) {
+        auto d = mkdir(dir);
         if (!d) {
-          VAST_ERROR(this, "failed to create directory:", d.error());
-          quit(exit::error);
+          VAST_ERROR_AT(self, "failed to create directory:", d.error());
+          self->quit(exit::error);
           return false;
         }
-      } else if (!dir_.is_directory()) {
-        VAST_ERROR(this, "got existing non-directory path:", dir_);
-        quit(exit::error);
+      } else if (!dir.is_directory()) {
+        VAST_ERROR_AT(self, "got existing non-directory path:", dir);
+        self->quit(exit::error);
         return false;
       }
-      auto filename = dir_ / (t.name() + ".log");
-      auto fos = std::make_unique<io::file_output_stream>(filename);
+      auto filename = dir / (t.name() + ".log");
+      auto fos = std::make_unique<std::ofstream>(filename.str());
       auto header = make_header(t);
-      if (!(io::copy(header.begin(), header.end(), *fos) && fos->flush()))
-        return false;
-      auto i = streams_.emplace("", std::move(fos));
+      std::copy(header.begin(), header.end(),
+                std::ostreambuf_iterator<char>(*fos));
+      auto i = streams.emplace("", std::move(fos));
       os = i.first->second.get();
     }
   }
   VAST_ASSERT(os != nullptr);
+  // FIXME: print to stream directly and don't go through std::string.
   auto str = visit(value_printer{}, e);
   str += '\n';
-  // FIXME: don't flush on every event!
-  return io::copy(str.begin(), str.end(), *os) && os->flush();
+  std::copy(str.begin(), str.end(), std::ostreambuf_iterator<char>(*os));
+  return os->good();
+}
+
+behavior bro(stateful_actor<bro_state>* self, path p) {
+  if (p != "-")
+    self->state.dir = std::move(p);
+  return make(self);
 }
 
 } // namespace sink

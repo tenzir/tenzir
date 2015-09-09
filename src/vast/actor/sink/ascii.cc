@@ -7,18 +7,23 @@
 namespace vast {
 namespace sink {
 
-ascii::ascii(std::unique_ptr<std::ostream> out)
-  : base<ascii>{"ascii-sink"}, out_{std::move(out)} {
-  VAST_ASSERT(out_ != nullptr);
+ascii_state::ascii_state(local_actor* self)
+  : state{self, "ascii-sink"} {
 }
 
-bool ascii::process(event const& e) {
-  auto i = std::ostreambuf_iterator<std::ostream::char_type>{*out_};
+bool ascii_state::process(event const& e) {
+  auto i = std::ostreambuf_iterator<char>{*out};
   return print(i, e) && print(i, '\n');
 }
 
-void ascii::flush() {
-  out_->flush();
+void ascii_state::flush() {
+  out->flush();
+}
+
+behavior ascii(stateful_actor<ascii_state>* self, std::ostream* out) {
+  VAST_ASSERT(out != nullptr);
+  self->state.out = std::unique_ptr<std::ostream>{out};
+  return make(self);
 }
 
 } // namespace sink
