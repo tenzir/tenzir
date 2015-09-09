@@ -77,11 +77,9 @@ behavior index::make_behavior() {
   });
   for (size_t i = 0; i < active_.size(); ++i) {
     auto id = i < parts.size() ? parts[i].first : uuid::random();
-    VAST_VERBOSE(this, "loads", (i < parts.size() ? "existing" : "new"),
+    VAST_VERBOSE(this, "spawns", (i < parts.size() ? "existing" : "new"),
                  "active partition", id);
     auto p = spawn<partition, monitored>(dir_ / to_string(id), this);
-    if (accountant_)
-      send(p, accountant_);
     send(p, upstream_atom::value, this);
     active_[i] = {id, p};
     partitions_[id].last_modified = time::now();
@@ -155,6 +153,8 @@ behavior index::make_behavior() {
     [=](accountant::actor_type const& acc) {
       VAST_DEBUG(this, "registers accountant#", acc->id());
       accountant_ = acc;
+      for (auto& pair : active_)
+        send(pair.second, acc);
     },
     [=](flush_atom) {
       VAST_VERBOSE(this, "flushes", active_.size(), "active partitions");
@@ -203,9 +203,7 @@ behavior index::make_behavior() {
                  events.front().id() << ',' << (events.back().id() + 1) << ')',
                  "to", a.second, '(' << a.first << ')');
       auto t = spawn<task>(time::snapshot(), uint64_t{events.size()});
-      send(t, supervisor_atom::value, this);
-      send(a.second,
-           message::concat(current_message(), make_message(std::move(t))));
+      send(a.second, current_message() + make_message(std::move(t)));
     },
     [=](expression const& expr, query_options opts, actor const& subscriber) {
       VAST_VERBOSE(this, "got query:", expr);
@@ -277,15 +275,6 @@ behavior index::make_behavior() {
         VAST_VERBOSE(this, "disables continuous query:", expr);
         send(q->second.cont->task, done_atom::value);
         q->second.cont->task = invalid_actor;
-      }
-    },
-    [=](done_atom, time::moment start, uint64_t events) {
-      auto runtime = time::snapshot() - start;
-      VAST_VERBOSE(this, "indexed", events, "events in", runtime);
-      if (accountant_) {
-        auto unit = time::duration_cast<time::microseconds>(runtime).count();
-        auto rate = events * 1e6 / unit;
-        send(accountant_, "index", "indexing-rate", rate);
       }
     },
     [=](done_atom, time::moment start, expression const& expr) {

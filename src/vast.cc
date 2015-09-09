@@ -411,9 +411,8 @@ int main(int argc, char* argv[]) {
     self->send_exit(accountant, exit::done);
     self->receive([](down_msg const&) {});
   } else {
-    self->monitor(node);
     self->send_exit(node, exit::done);
-    self->receive([](down_msg const&) {});
+    self->await_all_other_actors_done();
   }
   auto stop = time::snapshot();
   VAST_INFO("completed execution in", stop - start);
