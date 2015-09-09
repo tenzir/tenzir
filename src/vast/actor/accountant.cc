@@ -51,9 +51,21 @@ behavior_type actor(stateful_pointer self, path const& filename) {
       << name << '\t'
       << self->current_sender()->id() << '\t'
       << key << '\t'
-      << std::setprecision(3) << value << '\n';
+      << std::setprecision(6) << value << '\n';
   };
+  self->trap_exit(true);
   return {
+    [=](exit_msg const& msg) {
+      // Delay termination if we have still samples lingering in the mailbox.
+      auto n = self->mailbox().count();
+      if (n == 0) {
+        self->quit(msg.reason);
+      } else {
+        VAST_DEBUG_AT(self, "delays exit with", n, "messages in mailbox");
+        self->trap_exit(false);
+        self->send(message_priority::normal, self, self->current_message());
+      }
+    },
     [=](std::string const& name, std::string const& key,
         std::string const& value) {
       record(name, key, value);
