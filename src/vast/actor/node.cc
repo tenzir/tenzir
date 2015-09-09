@@ -232,7 +232,7 @@ void node::on_exit() {
 behavior node::make_behavior() {
   accountant_ = spawn<linked>(
     accountant::actor, dir_ / log_path() / "accounting.log", time::seconds(1));
-  store_ = spawn<key_value_store, linked>(dir_ / "meta");
+  store_ = spawn<linked>(key_value_store::make, dir_ / "meta");
   // Until we've implemented leader election, each node starts as leader.
   send(store_, leader_atom::value);
   send(store_, persist_atom::value, key::str("id"));
