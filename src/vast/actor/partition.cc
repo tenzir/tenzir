@@ -187,7 +187,8 @@ behavior partition::make_behavior() {
           VAST_DEBUG(this, "loads", interval / name.basename());
           auto t = schema_.find_type(name.basename().str());
           VAST_ASSERT(t != nullptr);
-          auto a = spawn<event_indexer<bitstream_type>, monitored>(name, *t);
+          auto a = spawn<monitored>(
+            event_indexer<bitstream_type>::make, name, *t);
           indexers_.emplace(*base, a);
         }
       }
@@ -300,8 +301,8 @@ behavior partition::make_behavior() {
             quit(exit::error);
             return;
           }
-          auto indexer = spawn<event_indexer<bitstream_type>, monitored>(
-            dir_ / interval / t.name(), t);
+          auto indexer = spawn<monitored>(event_indexer<bitstream_type>::make,
+                                          dir_ / interval / t.name(), t);
           indexers.push_back(indexer);
           indexers_.emplace(base, std::move(indexer));
         }

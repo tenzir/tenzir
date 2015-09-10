@@ -34,8 +34,10 @@ TEST(indexer)
   scoped_actor self;
   path dir0 = "vast-test-indexer-t0";
   path dir1 = "vast-test-indexer-t1";
-  auto i0 = self->spawn<event_indexer<bitstream_type>, monitored>(dir0, t0);
-  auto i1 = self->spawn<event_indexer<bitstream_type>, monitored>(dir1, t1);
+  auto i0 = self->spawn(event_indexer<bitstream_type>::make, dir0, t0);
+  self->monitor(i0);
+  auto i1 = self->spawn(event_indexer<bitstream_type>::make, dir1, t1);
+  self->monitor(i1);
   auto t = self->spawn<monitored>(task::make<>);
   self->send(t, i0);
   self->send(t, i1);
@@ -89,7 +91,8 @@ TEST(indexer)
   self->receive([&](down_msg const& msg) { CHECK(msg.source == i1); });
 
   MESSAGE("loading index from file system and querying again");
-  i0 = self->spawn<event_indexer<bitstream_type>, monitored>(dir0, t0);
+  i0 = self->spawn(event_indexer<bitstream_type>::make, dir0, t0);
+  self->monitor(i0);
   pred = predicate{type_extractor{type::count{}}, equal, data{998u}};
   t = self->spawn<monitored>(task::make<>);
   self->send(t, i0);
