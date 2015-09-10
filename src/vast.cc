@@ -52,10 +52,16 @@ int main(int argc, char* argv[]) {
   std::vector<std::string> command_line(argv + 1, argv + argc);
   auto cmd = std::find_first_of(command_line.begin(), command_line.end(),
                                 commands.begin(), commands.end());
-  // Parse and validate command line. First, parse node-specific options.
-  // FIXME: We need a better way to manage program options in the future. This
-  // option handling is lifted from node.cc. And there, we also stitched it
-  // together from the individual actor options. It's too easy to diverge.
+  // Parse options.
+  auto log_level = 3;
+  auto dir = "."s;
+  auto endpoint = ""s;
+  auto host = "127.0.0.1"s;
+  auto port = uint16_t{42000};
+  auto messages = std::numeric_limits<size_t>::max();
+  auto profile_file = std::string{};
+  auto threads = std::thread::hardware_concurrency();
+  // Options for "spawn core".
   auto core = make_message("spawn", "core");
   std::string id_batch_size;
   std::string archive_comp;
@@ -65,14 +71,29 @@ int main(int argc, char* argv[]) {
   std::string index_active;
   std::string index_passive;
   auto r = message_builder(command_line.begin(), cmd).extract_opts({
-    {"identifier-batch-size", "", id_batch_size},
-    {"archive-compression", "", archive_comp},
-    {"archive-segments", "", archive_segments},
-    {"archive-size", "", archive_size},
-    {"index-events", "", index_events},
-    {"index-active", "", index_active},
-    {"index-passive", "", index_passive}
+    {"no-colors,C", "disable colors on console"},
+    {"dir,d", "directory for logs and client state", dir},
+    {"endpoint,e", "node endpoint", endpoint},
+    {"log-level,l", "verbosity of console and/or log file", log_level},
+    {"messages,m", "CAF scheduler message throughput", messages},
+    {"profile,p", "CAF scheduler profiling", profile_file},
+    {"threads,t", "CAF scheduler threads", threads},
+    {"version,v", "print version and exit"},
+    // FIXME: We need a better way to manage program options in the future.
+    // option handling is lifted from node.cc. And there, we also stitched it
+    // together from the individual actor options. It's too easy to diverge.
+    {"identifier-batch-size", "initial identifier btach size", id_batch_size},
+    {"archive-compression", "archive compression algorithm", archive_comp},
+    {"archive-segments", "archive in-memory segments", archive_segments},
+    {"archive-size", "archive segment size", archive_size},
+    {"index-events", "maximum number of events per partition", index_events},
+    {"index-active", "number of active partitions", index_active},
+    {"index-passive", "number of passive partitions", index_passive}
   });
+  if (! r.error.empty()) {
+    std::cerr << r.error << std::endl;
+    return 1;
+  }
   if (r.opts.count("identifier-batch-size") > 0)
     core = core + make_message("--identifier-batch-size=", id_batch_size);
   if (r.opts.count("archive-compression") > 0)
@@ -87,29 +108,6 @@ int main(int argc, char* argv[]) {
     core = core + make_message("--index-active=" + index_active);
   if (r.opts.count("index-passive") > 0)
     core = core + make_message("--index-passive=" + index_passive);
-  // Then parse options for this executable.
-  auto log_level = 3;
-  auto dir = "."s;
-  auto endpoint = ""s;
-  auto host = "127.0.0.1"s;
-  auto port = uint16_t{42000};
-  auto messages = std::numeric_limits<size_t>::max();
-  auto profile_file = std::string{};
-  auto threads = std::thread::hardware_concurrency();
-  r = r.remainder.extract_opts({
-    {"no-colors,C", "disable colors on console"},
-    {"dir,d", "directory for logs and client state", dir},
-    {"endpoint,e", "node endpoint", endpoint},
-    {"log-level,l", "verbosity of console and/or log file", log_level},
-    {"messages,m", "maximum messages per CAF scheduler invocation", messages},
-    {"profile,p", "enable CAF profiler", profile_file},
-    {"threads,t", "number of worker threads in CAF scheduler", threads},
-    {"version,v", "print version and exit"}
-  });
-  if (! r.error.empty()) {
-    std::cerr << r.error << std::endl;
-    return 1;
-  }
   if (r.opts.count("version") > 0) {
     std::cout << VAST_VERSION << std::endl;
     return 0;
@@ -129,6 +127,14 @@ int main(int argc, char* argv[]) {
   if (!r.remainder.empty()) {
     auto invalid_cmd = r.remainder.get_as<std::string>(0);
     std::cerr << "invalid command: " << invalid_cmd << std::endl;
+    return 1;
+  }
+  if (threads == 0) {
+    std::cerr << "CAF scheduler threads cannot be 0" << std::endl;
+    return 1;
+  }
+  if (messages == 0) {
+    std::cerr << "CAF scheduler throughput cannot be 0" << std::endl;
     return 1;
   }
   if (cmd == command_line.end()) {
@@ -156,6 +162,8 @@ int main(int argc, char* argv[]) {
     logger::destruct();
   });
   // Replace/adjust scheduler.
+  VAST_ASSERT(threads > 0);
+  VAST_ASSERT(messages > 0);
   if (r.opts.count("profile"))
     set_scheduler(
       new scheduler::profiled_coordinator<>{

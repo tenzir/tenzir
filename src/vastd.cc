@@ -54,14 +54,22 @@ int main(int argc, char* argv[]) {
     {"endpoint,e", "the node endpoint", endpoint},
     {"foreground,f", "run daemon in foreground"},
     {"log-level,l", "verbosity of console and/or log file", log_level},
-    {"messages,m", "maximum messages per CAF scheduler invocation", messages},
+    {"messages,m", "CAF scheduler message throughput", messages},
     {"name,n", "the name of this node", name},
-    {"profile,p", "enable CAF profiler", profile_file},
-    {"threads,t", "number of worker threads in CAF scheduler", threads},
+    {"profile,p", "CAF scheduler profiling", profile_file},
+    {"threads,t", "CAF scheduler threads", threads},
     {"version,v", "print version and exit"}
   });
   if (! r.error.empty()) {
     std::cerr << r.error << std::endl;
+    return 1;
+  }
+  if (threads == 0) {
+    std::cerr << "CAF scheduler threads cannot be 0" << std::endl;
+    return 1;
+  }
+  if (messages == 0) {
+    std::cerr << "CAF scheduler throughput cannot be 0" << std::endl;
     return 1;
   }
   if (r.opts.count("version") > 0) {
@@ -109,6 +117,8 @@ int main(int argc, char* argv[]) {
     VAST_DIAGNOSTIC_POP
   }
   // Replace/adjust scheduler.
+  VAST_ASSERT(threads > 0);
+  VAST_ASSERT(messages > 0);
   if (r.opts.count("profile"))
     set_scheduler(
       new scheduler::profiled_coordinator<>{
