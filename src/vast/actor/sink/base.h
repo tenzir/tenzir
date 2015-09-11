@@ -29,7 +29,7 @@ struct state : basic_state {
 
   time::extent flush_interval = time::seconds(1); // TODO: make configurable
   time::moment last_flush;
-  accountant::actor_type accountant;
+  accountant::type accountant;
   uint64_t processed = 0;
   uint64_t limit = 0;
 };
@@ -63,7 +63,7 @@ behavior make(stateful_actor<State>* self) {
         VAST_WARN_AT(self, "ignores new limit of", max, "(already processed",
                      self->state.processed, " events)");
     },
-    [=](accountant::actor_type acc) {
+    [=](accountant::type acc) {
       VAST_DEBUG_AT(self, "registers accountant#" << acc->id());
       self->state.accountant = acc;
     },

@@ -214,15 +214,15 @@ int main(int argc, char* argv[]) {
     }
   }
   // Prepare accountant.
-  vast::accountant::actor_type accountant;
+  vast::accountant::type accountant;
   if (node->is_remote()) {
     VAST_DEBUG("spawning local accountant");
-    accountant = self->spawn(accountant::actor, path(dir) / "accounting.log");
+    accountant = self->spawn(accountant::make, path(dir) / "accounting.log");
   } else {
     VAST_DEBUG("using node accountant");
     self->sync_send(node, store_atom::value, get_atom::value,
                     key::str("actors", node_name, "accountant")).await(
-      [&](accountant::actor_type const& acc) {
+      [&](accountant::type const& acc) {
         accountant = acc;
       }
     );

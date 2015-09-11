@@ -150,7 +150,7 @@ behavior index::make_behavior() {
         }
       }
     },
-    [=](accountant::actor_type const& acc) {
+    [=](accountant::type const& acc) {
       VAST_DEBUG(this, "registers accountant#", acc->id());
       accountant_ = acc;
       for (auto& pair : active_)

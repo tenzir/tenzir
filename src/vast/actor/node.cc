@@ -231,7 +231,7 @@ void node::on_exit() {
 
 behavior node::make_behavior() {
   auto accounting_log = dir_ / log_path() / "accounting.log"; 
-  accountant_ = spawn<linked>(accountant::actor, accounting_log);
+  accountant_ = spawn<linked>(accountant::make, accounting_log);
   store_ = spawn<linked>(key_value_store::make, dir_ / "meta");
   // Until we've implemented leader election, each node starts as leader.
   send(store_, leader_atom::value);
@@ -367,7 +367,7 @@ behavior node::spawn_actor(event_based_actor* self) {
           self->quit(exit::error);
           return;
         }
-        auto i = spawn(identifier::actor, store_, dir_ / "id", batch_size);
+        auto i = spawn(identifier::make, store_, dir_ / "id", batch_size);
         save_actor(actor_cast<actor>(i), "identifier");
       },
       on("archive", any_vals) >> [=] {
@@ -432,7 +432,7 @@ behavior node::spawn_actor(event_based_actor* self) {
           {"auto-connect,a",
            "connect to available identifier, archives, indexes"}
         });
-        auto imp = spawn<priority_aware>(importer::actor);
+        auto imp = spawn<priority_aware>(importer::make);
         if (r.opts.count("auto-connect") > 0) {
           self->send(store_, list_atom::value, key::str("actors", name_));
           self->become(

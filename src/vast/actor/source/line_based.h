@@ -10,9 +10,9 @@ namespace vast {
 namespace source {
 
 /// A line-based source that transforms an input stream into lines.
-struct line_based_state : base_state {
+struct line_based_state : state {
   line_based_state(local_actor* self, char const* name)
-    : base_state{self, name},
+    : state{self, name},
       input{nullptr} {
   }
 
@@ -47,7 +47,7 @@ behavior line_based(stateful_actor<State>* self, std::streambuf* sb) {
   // arguments into a message, we cannot have non-copyable types as arguments.
   // Once this changes we should switch back to a unique_ptr<std::streambuf>.
   self->state.input.rdbuf(sb);
-  return base(self);
+  return make(self);
 };
 
 } // namespace source

@@ -48,7 +48,7 @@ struct archive : flow_controlled_actor {
   util::cache<uuid, segment> cache_;
   segment current_;
   uint64_t current_size_;
-  accountant::actor_type accountant_;
+  accountant::type accountant_;
 };
 
 } // namespace vast

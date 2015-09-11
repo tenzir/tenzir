@@ -187,9 +187,9 @@ struct randomizer {
 } // namespace <anonymous>
 
 test_state::test_state(local_actor* self)
-  : base_state{self, "test-source"},
+  : state{self, "test-source"},
     generator_{std::random_device{}()} {
-  static auto builtin_schema = R"schema(
+  static auto builtin_schema = R"__(
     type test = record
     {
       b: bool &default="uniform(0,1)",
@@ -203,7 +203,7 @@ test_state::test_state(local_actor* self)
       s: subnet &default="uniform(1000,2000)",
       p: port &default="uniform(1,65384)"
     }
-  )schema";
+  )__";
   auto t = detail::to_schema(builtin_schema);
   VAST_ASSERT(t);
   schema(*t);
@@ -262,7 +262,7 @@ behavior test(stateful_actor<test_state>* self, event_id id, uint64_t events) {
   VAST_ASSERT(events > 0);
   self->state.id_ = id;
   self->state.num_events_ = events;
-  return base(self);
+  return make(self);
 }
 
 } // namespace source

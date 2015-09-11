@@ -8,11 +8,12 @@
 #include "vast/util/coding.h"
 
 namespace vast {
-namespace accountant {
 
-state::state(local_actor* self) : basic_state{self, "accountant"} { }
+accountant::state::state(local_actor* self)
+  : basic_state{self, "accountant"} {
+}
 
-void state::init(path const& filename) {
+void accountant::state::init(path const& filename) {
   if (!exists(filename.parent())) {
     auto t = mkdir(filename.parent());
     if (!t) {
@@ -35,7 +36,8 @@ void state::init(path const& filename) {
   }
 }
 
-behavior_type actor(stateful_pointer self, path const& filename) {
+accountant::behavior accountant::make(stateful_pointer self,
+                                      path const& filename) {
   self->state.init(filename);
   auto record = [=](auto const& name, auto const& key, auto const& value) {
     auto node = self->current_sender().node();
@@ -87,5 +89,4 @@ behavior_type actor(stateful_pointer self, path const& filename) {
   };
 }
 
-} // namespace accountant
 } // namespace vast

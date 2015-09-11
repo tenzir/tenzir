@@ -14,12 +14,12 @@ namespace vast {
 namespace source {
 
 /// The base class for derived states which extract events.
-struct base_state : basic_state {
-  base_state(local_actor* self, char const* name)
+struct state : basic_state {
+  state(local_actor* self, char const* name)
     : basic_state{self, name} {
   }
 
-  ~base_state() {
+  ~state() {
     if (events_.empty())
       return;
     VAST_DEBUG_AT(self, "sends", events_.size(), "last events");
@@ -34,7 +34,7 @@ struct base_state : basic_state {
 
   bool done_ = false;
   bool paused_ = false;
-  accountant::actor_type accountant_;
+  accountant::type accountant_;
   std::vector<actor> sinks_;
   size_t next_sink_ = 0;
   uint64_t batch_size_ = 65536;
@@ -45,7 +45,7 @@ struct base_state : basic_state {
 /// The base actor for sources.
 /// @param self The actor handle.
 template <typename State>
-behavior base(stateful_actor<State>* self) {
+behavior make(stateful_actor<State>* self) {
   using caf::actor;
   return {
     [=](down_msg const& msg) {
@@ -73,7 +73,7 @@ behavior base(stateful_actor<State>* self) {
         self->send(self, run_atom::value);
     },
     [=](batch_atom, uint64_t batch_size) {
-      if (batch_size > base_state::max_batch_size) {
+      if (batch_size > state::max_batch_size) {
         VAST_ERROR_AT(self, "got too large batch size:", batch_size);
         self->quit(exit::error);
         return;
@@ -93,7 +93,7 @@ behavior base(stateful_actor<State>* self) {
       self->monitor(sink);
       self->state.sinks_.push_back(sink);
     },
-    [=](accountant::actor_type const& acc) {
+    [=](accountant::type const& acc) {
       VAST_DEBUG_AT(self, "registers accountant#" << acc->id());
       self->state.accountant_ = acc;
     },

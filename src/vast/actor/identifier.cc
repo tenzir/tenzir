@@ -12,20 +12,19 @@
 #include "vast/util/type_list.h"
 
 namespace vast {
-namespace identifier {
 
-state::state(local_actor* self)
+identifier::state::state(local_actor* self)
   : basic_state{self, "identifier"} {
 }
 
-state::~state() {
+identifier::state::~state() {
   if (!flush()) {
     VAST_ERROR_AT(self, "failed to save local ID state");
     VAST_ERROR_AT(self, "has", id, "as current ID,", available, "available");
   }
 }
 
-bool state::flush() {
+bool identifier::state::flush() {
   if (id == 0)
     return true;
   if (!exists(dir) && !mkdir(dir))
@@ -41,8 +40,8 @@ bool state::flush() {
   return true;
 }
 
-behavior_type actor(stateful_pointer self, caf::actor store, path dir,
-                    event_id batch_size) {
+identifier::behavior identifier::make(stateful_pointer self, caf::actor store,
+                                      path dir, event_id batch_size) {
   self->state.store = std::move(store);
   self->state.dir = std::move(dir);
   self->state.batch_size = batch_size;
@@ -136,5 +135,4 @@ behavior_type actor(stateful_pointer self, caf::actor store, path dir,
   };
 }
 
-} // namespace identifier
 } // namespace vast

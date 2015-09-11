@@ -54,7 +54,7 @@ struct partition : flow_controlled_actor {
   path const dir_;
   actor sink_;
   actor proxy_;
-  accountant::actor_type accountant_;
+  accountant::type accountant_;
   schema schema_;
   size_t events_indexed_concurrently_ = 0;
   std::multimap<event_id, actor> indexers_;

@@ -48,7 +48,7 @@ behavior archive::make_behavior() {
       quit(msg.reason);
     },
     [=](down_msg const& msg) { remove_upstream_node(msg.source); },
-    [=](accountant::actor_type const& acc) {
+    [=](accountant::type const& acc) {
       VAST_DEBUG_AT(this, "registers accountant#" << acc->id());
       accountant_ = acc;
     },

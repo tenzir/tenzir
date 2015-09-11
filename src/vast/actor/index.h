@@ -104,7 +104,7 @@ struct index : public flow_controlled_actor {
 
   path dir_;
   size_t max_events_per_partition_;
-  accountant::actor_type accountant_;
+  accountant::type accountant_;
   std::map<expression, query_state> queries_;
   std::unordered_map<uuid, partition_state> partitions_;
   std::list<schedule_state> schedule_;

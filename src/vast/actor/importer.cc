@@ -4,12 +4,12 @@
 #include "vast/concept/printable/vast/error.h"
 
 namespace vast {
-namespace importer {
 
-state::state(event_based_actor* self) : basic_state{self, "importer"} {
+importer::state::state(event_based_actor* self)
+  : basic_state{self, "importer"} {
 }
 
-behavior actor(stateful_actor<state>* self) {
+behavior importer::make(stateful_actor<state>* self) {
   using caf::actor;
   self->trap_exit(true);
   auto dependencies_alive = [=] {
@@ -119,5 +119,4 @@ behavior actor(stateful_actor<state>* self) {
   };
 }
 
-} // namespace importer
 } // namespace vast

@@ -51,7 +51,7 @@ struct hash<vast::source::detail::connection> {
 namespace vast {
 namespace source {
 
-struct pcap_state : base_state {
+struct pcap_state : state {
   struct connection_state {
     uint64_t bytes;
     uint64_t last;

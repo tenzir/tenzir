@@ -277,7 +277,7 @@ behavior partition::make_behavior() {
     },
     on_down,
     on_done,
-    [=](accountant::actor_type const& acc) {
+    [=](accountant::type const& acc) {
       VAST_DEBUG_AT(this, "registers accountant#" << acc->id());
       accountant_ = acc;
     },

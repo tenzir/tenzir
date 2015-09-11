@@ -13,7 +13,7 @@ namespace vast {
 namespace source {
 
 pcap_state::pcap_state(local_actor* self)
-  : base_state{self, "pcap-source"},
+  : state{self, "pcap-source"},
     packet_type_{vast::detail::pcap_packet_type},
     generator_{std::random_device{}()} {
 }
@@ -261,7 +261,7 @@ behavior pcap(stateful_actor<pcap_state>* self, std::string input,
   self->state.max_age_ = max_age;
   self->state.expire_interval_ = expire_interval;
   self->state.pseudo_realtime_ = pseudo_realtime;
-  return base(self);
+  return make(self);
 }
 
 } // namespace source

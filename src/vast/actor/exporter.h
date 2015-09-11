@@ -29,7 +29,7 @@ struct exporter {
     util::flat_set<actor> archives;
     util::flat_set<actor> indexes;
     util::flat_set<actor> sinks;
-    accountant::actor_type accountant;
+    accountant::type accountant;
     bool draining = false;
     bool inflight = false;
     double progress = 0.0;

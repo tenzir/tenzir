@@ -61,7 +61,7 @@ struct node : default_actor {
   std::string parse_actor_key(std::string const& key) const;
 
   behavior operating_;
-  accountant::actor_type accountant_;
+  accountant::type accountant_;
   actor store_;
   std::string name_;
   path const dir_;

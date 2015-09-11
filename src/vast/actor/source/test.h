@@ -37,7 +37,7 @@ using lcg = std::minstd_rand;
 using lcg = lcg64;
 #endif
 
-struct test_state : base_state {
+struct test_state : state {
   struct blueprint {
     record data;
     std::vector<distribution> dists;
