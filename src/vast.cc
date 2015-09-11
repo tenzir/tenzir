@@ -329,8 +329,8 @@ int main(int argc, char* argv[]) {
         self->monitor(exporter);
         self->send(exporter, put_atom::value, sink_atom::value, *snk);
         VAST_DEBUG("running exporter");
-        self->send(exporter, stop_atom::value);
         self->send(exporter, run_atom::value);
+        self->send(exporter, stop_atom::value); // enter draining mode
       },
       [&](down_msg const& msg) {
         ++early_finishers;

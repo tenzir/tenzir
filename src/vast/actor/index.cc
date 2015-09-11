@@ -294,7 +294,8 @@ behavior index::make_behavior() {
     },
     [=](done_atom, time::moment start, expression const& expr,
         historical_atom) {
-      auto runtime = time::snapshot() - start;
+      auto now = time::snapshot();
+      auto runtime = now - start;
       VAST_VERBOSE(this, "completed lookup", expr, "in", runtime);
       auto q = queries_.find(expr);
       VAST_ASSERT(q != queries_.end());
@@ -302,7 +303,7 @@ behavior index::make_behavior() {
       VAST_ASSERT(q->second.hist->parts.empty());
       // Notify subscribers about completion.
       for (auto& s : q->second.subscribers)
-        send(s, done_atom::value, runtime, expr);
+        send(s, done_atom::value, now, runtime, expr);
       // Remove query state.
       // TODO: consider caching it for a while and also record its coverage
       // so that future queries don't need to start over again.

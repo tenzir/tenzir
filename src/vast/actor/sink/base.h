@@ -54,7 +54,9 @@ behavior make(stateful_actor<State>* self) {
     }
     return true;
   };
+  self->trap_exit(true);
   return {
+    downgrade_exit_msg(self),
     [=](limit_atom, uint64_t max) {
       VAST_DEBUG_AT(self, "caps event export at", max, "events");
       if (self->state.processed < max)

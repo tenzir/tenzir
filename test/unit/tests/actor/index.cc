@@ -45,7 +45,7 @@ TEST(index) {
     [&](bitstream_type const& h) {
       hits |= h;
     },
-    [&](done_atom, time::extent, expression const& e) {
+    [&](done_atom, time::moment, time::extent, expression const& e) {
       CHECK(*expr == e);
       done = true;
     }

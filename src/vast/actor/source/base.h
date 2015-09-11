@@ -46,8 +46,9 @@ struct state : basic_state {
 /// @param self The actor handle.
 template <typename State>
 behavior make(stateful_actor<State>* self) {
-  using caf::actor;
+  self->trap_exit(true);
   return {
+    downgrade_exit_msg(self),
     [=](down_msg const& msg) {
       // Handle sink termination.
       auto sink = std::find_if(

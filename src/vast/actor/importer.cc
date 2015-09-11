@@ -10,8 +10,6 @@ importer::state::state(event_based_actor* self)
 }
 
 behavior importer::make(stateful_actor<state>* self) {
-  using caf::actor;
-  self->trap_exit(true);
   auto dependencies_alive = [=] {
     if (self->state.identifier == invalid_actor) {
       VAST_ERROR_AT(self, "has no identifier configured");
@@ -30,6 +28,7 @@ behavior importer::make(stateful_actor<state>* self) {
     }
     return true;
   };
+  self->trap_exit(true);
   return {
     downgrade_exit_msg(self),
     [=](down_msg const& msg) {

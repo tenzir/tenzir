@@ -74,7 +74,7 @@ TEST(export) {
     [&](default_bitstream const& hits) {
       CHECK(hits.count() > 0);
     },
-    [&](done_atom, time::extent, expression const& expr) {
+    [&](done_atom, time::moment, time::extent, expression const& expr) {
       done = true;
       CHECK(expr == *pops);
     },

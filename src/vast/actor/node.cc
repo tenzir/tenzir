@@ -55,27 +55,39 @@ node::node(std::string const& name, path const& dir)
     trap_exit(true);
   // Shut down the node safely.
   auto terminate = [=](uint32_t reason) {
+    // Terminates all builtin actors.
+    auto terminate_builtin = [=] {
+      monitor(accountant_);
+      monitor(store_);
+      send_exit(accountant_, reason);
+      send_exit(store_, reason);
+      become(
+        [=](down_msg const&) {
+          become([=](down_msg const&) { quit(reason); });
+        }
+      );
+    };
     auto others = std::make_shared<std::vector<actor>>();
     // Terminates all non-IMPORTER actors.
     auto terminate_others = [=] {
       if (others->empty()) {
-        quit(reason);
-        return;
-      }
-      for (auto& a : *others) {
-        monitor(a);
-        VAST_DEBUG(this, "sends EXIT to", a);
-        send_exit(a, reason);
-      }
-      VAST_DEBUG(this, "waits for", others->size(), "other actors to quit");
-      become(
-        [=](down_msg const&) {
-          // Order doesn't matter, only size. As usual.
-          others->pop_back();
-          if (others->empty())
-            quit(reason);
+        terminate_builtin();
+      } else {
+        for (auto& a : *others) {
+          monitor(a);
+          VAST_DEBUG(this, "sends EXIT to", a);
+          send_exit(a, reason);
         }
-      );
+        VAST_DEBUG(this, "waits for", others->size(), "other actors to quit");
+        become(
+          [=](down_msg const&) {
+            // Order doesn't matter, only size. As usual.
+            others->pop_back();
+            if (others->empty())
+              terminate_builtin();
+          }
+        );
+      }
     };
     // Get all locally running actors.
     send(store_, list_atom::value, key::str("actors", name_));
@@ -97,7 +109,9 @@ node::node(std::string const& name, path const& dir)
               }
             }
           });
-        if (*importers > 0) {
+        if (*importers == 0) {
+          terminate_others();
+        } else {
           VAST_DEBUG(this, "waits for", *importers, "importers to quit");
           become(
             [=](down_msg const&) {
@@ -105,8 +119,6 @@ node::node(std::string const& name, path const& dir)
                 terminate_others();
             }
           );
-        } else {
-          terminate_others();
         }
       }
     );
@@ -505,8 +517,8 @@ behavior node::spawn_actor(event_based_actor* self) {
         *expr = expr::normalize(*expr);
         VAST_VERBOSE(this, "normalized query to", *expr);
         auto exp = self->spawn(exporter::make, *expr, query_opts);
-        self->send(exp, extract_atom::value, events);
         self->send(exp, accountant_);
+        self->send(exp, extract_atom::value, events);
         if (r.opts.count("auto-connect") > 0) {
           self->send(store_, list_atom::value, key::str("actors", name_));
           self->become(

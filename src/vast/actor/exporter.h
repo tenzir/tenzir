@@ -24,8 +24,6 @@ struct exporter {
   struct state : basic_state {
     state(local_actor* self);
 
-    void prefetch();
-
     util::flat_set<actor> archives;
     util::flat_set<actor> indexes;
     util::flat_set<actor> sinks;
@@ -33,13 +31,14 @@ struct exporter {
     bool draining = false;
     bool inflight = false;
     double progress = 0.0;
-    uint64_t pending = 0;
+    uint64_t requested = 0;
     uint64_t total_hits = 0;
     uint64_t total_results = 0;
+    uint64_t total_chunks = 0;
+    uint64_t chunk_results = 0;
     bitstream_type hits;
-    bitstream_type processed;
     bitstream_type unprocessed;
-    std::unordered_map<type, expression> expressions;
+    std::unordered_map<type, expression> checkers;
     std::unique_ptr<chunk::reader> reader;
     chunk current_chunk;
     uuid const id;

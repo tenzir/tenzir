@@ -77,6 +77,11 @@ accountant::behavior accountant::make(stateful_pointer self,
       auto us = time::duration_cast<time::microseconds>(value).count();
       record(name, key, us);
     },
+    [=](std::string const& name, std::string const& key, time::moment value) {
+      auto duration = value.time_since_epoch();
+      auto us = time::duration_cast<time::microseconds>(duration).count();
+      record(name, key, us);
+    },
     [=](std::string const& name, std::string const& key, int64_t value) {
       record(name, key, value);
     },

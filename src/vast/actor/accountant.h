@@ -24,6 +24,7 @@ struct accountant {
     typed_actor<
       reacts_to<std::string, std::string, std::string>,
       reacts_to<std::string, std::string, time::extent>,
+      reacts_to<std::string, std::string, time::moment>,
       reacts_to<std::string, std::string, int64_t>,
       reacts_to<std::string, std::string, uint64_t>,
       reacts_to<std::string, std::string, double>
