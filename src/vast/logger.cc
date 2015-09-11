@@ -102,7 +102,7 @@ struct logger::impl {
           && !mkdir(filename_.parent()))
         return false;
       log_file_.open(filename_.str());
-      if (!log_file_)
+      if (!log_file_.is_open())
         return false;
     }
     if (!log_thread_.joinable())
@@ -152,7 +152,7 @@ struct logger::impl {
                     << ' ' << m.lvl() << ' ';
           if (! m.context().empty())
             log_file_ << m.context() << ' ';
-          log_file_ << line << std::endl;
+          log_file_ << line << '\n';
         }
         if (console_ && m.lvl() <= console_level_) {
           if (colorized_) {
@@ -348,8 +348,12 @@ bool logger::file(level verbosity, std::string const& filename) {
   return instance()->impl_->file(verbosity, filename);
 }
 
-bool logger::console(level verbosity, bool colorized) {
-  return instance()->impl_->console(verbosity, colorized);
+bool logger::console(level verbosity) {
+  return instance()->impl_->console(verbosity, false);
+}
+
+bool logger::console_colorized(level verbosity) {
+  return instance()->impl_->console(verbosity, true);
 }
 
 void logger::log(message msg) {

@@ -10,6 +10,7 @@
 #include "vast/expression.h"
 #include "vast/query_options.h"
 #include "vast/uuid.h"
+#include "vast/actor/accountant.h"
 #include "vast/actor/basic_state.h"
 #include "vast/util/flat_set.h"
 
@@ -28,6 +29,7 @@ struct exporter {
     util::flat_set<actor> archives;
     util::flat_set<actor> indexes;
     util::flat_set<actor> sinks;
+    accountant::actor_type accountant;
     bool draining = false;
     bool inflight = false;
     double progress = 0.0;

@@ -114,7 +114,7 @@ result<event> bro_state::extract() {
   // Check if we encountered a new log file.
   auto s = util::split(line, separator_);
   if (s.size() > 0 && s[0].first != s[0].second && *s[0].first == '#') {
-    if (util::starts_with(s[0].first, s[0].second, "#separator_")) {
+    if (util::starts_with(s[0].first, s[0].second, "#separator")) {
       VAST_VERBOSE_AT(self, "restarts with new log");
       timestamp_field_ = -1;
       separator_ = " ";

@@ -25,7 +25,6 @@ struct state : basic_state {
   }
 
   virtual bool process(event const& e) = 0;
-
   virtual void flush() { /* nop */ }
 
   time::extent flush_interval = time::seconds(1); // TODO: make configurable

@@ -77,7 +77,7 @@ behavior index::make_behavior() {
   });
   for (size_t i = 0; i < active_.size(); ++i) {
     auto id = i < parts.size() ? parts[i].first : uuid::random();
-    VAST_VERBOSE(this, "loads", (i < parts.size() ? "existing" : "new"),
+    VAST_VERBOSE(this, "spawns", (i < parts.size() ? "existing" : "new"),
                  "active partition", id);
     auto p = spawn<partition, monitored>(dir_ / to_string(id), this);
     send(p, upstream_atom::value, this);
@@ -153,7 +153,8 @@ behavior index::make_behavior() {
     [=](accountant::actor_type const& acc) {
       VAST_DEBUG(this, "registers accountant#", acc->id());
       accountant_ = acc;
-      send(accountant_, label() + "-events", time::now());
+      for (auto& pair : active_)
+        send(pair.second, acc);
     },
     [=](flush_atom) {
       VAST_VERBOSE(this, "flushes", active_.size(), "active partitions");
@@ -180,6 +181,8 @@ behavior index::make_behavior() {
         // Create a new partition.
         a.first = uuid::random();
         a.second = spawn<partition, monitored>(dir_ / to_string(a.first), this);
+        if (accountant_)
+          send(a.second, accountant_);
         send(a.second, upstream_atom::value, this);
         i = partitions_.emplace(a.first, partition_state()).first;
         // Register continuous queries.
@@ -201,9 +204,7 @@ behavior index::make_behavior() {
                  "to", a.second, '(' << a.first << ')');
       auto t = spawn(task::make<time::moment, uint64_t>,
                      time::snapshot(), events.size());
-      send(t, supervisor_atom::value, this);
-      send(a.second,
-           message::concat(current_message(), make_message(std::move(t))));
+      send(a.second, current_message() + make_message(std::move(t)));
     },
     [=](expression const& expr, query_options opts, actor const& subscriber) {
       VAST_VERBOSE(this, "got query:", expr);
@@ -277,12 +278,6 @@ behavior index::make_behavior() {
         send(q->second.cont->task, done_atom::value);
         q->second.cont->task = invalid_actor;
       }
-    },
-    [=](done_atom, time::moment start, uint64_t events) {
-      VAST_VERBOSE(this, "indexed", events, "events in",
-                   time::snapshot() - start);
-      if (accountant_)
-        send(accountant_, events, time::snapshot());
     },
     [=](done_atom, time::moment start, expression const& expr) {
       auto runtime = time::snapshot() - start;
@@ -365,6 +360,8 @@ optional<actor> index::dispatch(uuid const& part, expression const& expr) {
   if (passive_.size() < passive_.capacity()) {
     VAST_DEBUG(this, "spawns passive partition", part);
     auto p = spawn<partition, monitored>(dir_ / to_string(part), this);
+    if (accountant_)
+      send(p, accountant_);
     send(p, upstream_atom::value, this);
     passive_.insert(part, p);
     return p;
@@ -412,6 +409,8 @@ void index::consolidate(uuid const& part, expression const& expr) {
     if (a == active_.end() && !passive_.contains(entry.part)) {
       VAST_DEBUG(this, "schedules next passive partition", entry.part);
       auto p = spawn<partition, monitored>(dir_ / to_string(entry.part), this);
+      if (accountant_)
+        send(p, accountant_);
       send(p, upstream_atom::value, this);
       passive_.insert(entry.part, p); // automatically evicts 'part'.
       for (auto& next_expr : entry.queries) {

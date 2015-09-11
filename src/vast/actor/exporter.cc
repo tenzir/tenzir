@@ -59,10 +59,15 @@ void exporter::state::prefetch() {
 behavior exporter::make(stateful_actor<state>* self, expression expr,
                         query_options opts) {
   auto incorporate_hits = [=](bitstream_type const& hits) {
+    auto stop = time::snapshot();
     VAST_DEBUG_AT(self, "got index hit covering", '[' << hits.find_first()
                   << ',' << (hits.find_last() + 1) << ')');
     VAST_ASSERT(!hits.all_zeros());           // Empty hits are useless.
     VAST_ASSERT((self->state.hits & hits).count() == 0); // Duplicates, too.
+    auto runtime = stop - self->state.start_time;
+    if (self->state.total_hits == 0 && self->state.accountant) {
+      self->send(self->state.accountant, "exporter", "first-hit", runtime);
+    }
     self->state.total_hits += hits.count();
     self->state.hits |= hits;
     self->state.unprocessed |= hits;
@@ -90,6 +95,8 @@ behavior exporter::make(stateful_actor<state>* self, expression expr,
     for (auto& s : self->state.sinks)
       self->send(s, self->state.id, done_atom::value, runtime);
     VAST_VERBOSE_AT(self, "took", runtime, "for:", expr);
+    if (self->state.accountant)
+      self->send(self->state.accountant, "exporter", "completion", runtime);
     self->quit(exit::done);
   };
   auto extracting = std::make_shared<behavior>(); // break cyclic dependency
@@ -129,6 +136,8 @@ behavior exporter::make(stateful_actor<state>* self, expression expr,
     [=](done_atom, time::extent runtime, expression const&) // from INDEX
     {
       VAST_VERBOSE_AT(self, "completed index interaction in", runtime);
+      if (self->state.accountant)
+        self->send(self->state.accountant, "exporter", "last-hit", runtime);
       complete();
     }
   };
@@ -197,6 +206,10 @@ behavior exporter::make(stateful_actor<state>* self, expression expr,
             auto msg = make_message(self->state.id, std::move(*e));
             for (auto& s : self->state.sinks)
               self->send(s, msg);
+            if (self->state.total_results == 0 && self->state.accountant) {
+              auto runtime = time::snapshot() - self->state.start_time;
+              self->send(self->state.accountant, "exporter", "taste", runtime);
+            }
             ++self->state.total_results;
             if (++extracted == self->state.pending)
               break;

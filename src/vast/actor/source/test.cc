@@ -189,7 +189,6 @@ struct randomizer {
 test_state::test_state(local_actor* self)
   : base_state{self, "test-source"},
     generator_{std::random_device{}()} {
-  VAST_ASSERT(num_events_ > 0);
   static auto builtin_schema = R"schema(
     type test = record
     {
@@ -260,6 +259,7 @@ result<event> test_state::extract() {
 }
 
 behavior test(stateful_actor<test_state>* self, event_id id, uint64_t events) {
+  VAST_ASSERT(events > 0);
   self->state.id_ = id;
   self->state.num_events_ = events;
   return base(self);

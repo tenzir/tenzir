@@ -93,11 +93,9 @@ behavior base(stateful_actor<State>* self) {
       self->monitor(sink);
       self->state.sinks_.push_back(sink);
     },
-    [=](accountant::actor_type acc) {
+    [=](accountant::actor_type const& acc) {
       VAST_DEBUG_AT(self, "registers accountant#" << acc->id());
       self->state.accountant_ = acc;
-      auto label = self->state.name + '#' + to_string(self->id()) + "-events";
-      self->send(self->state.accountant_, std::move(label), time::now());
     },
     [=](get_atom, sink_atom) { return self->state.sinks_; },
     [=](run_atom) {
@@ -120,12 +118,14 @@ behavior base(stateful_actor<State>* self) {
         }
       }
       if (!self->state.events_.empty()) {
-        auto stop = time::snapshot();
+        auto runtime = time::snapshot() - self->state.start_;
+        auto unit = time::duration_cast<time::microseconds>(runtime).count();
+        auto rate = self->state.events_.size() * 1e6 / unit;
         VAST_VERBOSE_AT(self, "produced", self->state.events_.size(),
-                        "events in", stop - self->state.start_);
+                        "events in", runtime, '(' << size_t(rate),
+                        "events/sec)");
         if (self->state.accountant_)
-          self->send(self->state.accountant_,
-                     uint64_t{self->state.events_.size()}, stop);
+          self->send(self->state.accountant_, "source", "event-rate", rate);
         auto next = self->state.next_sink_++ % self->state.sinks_.size();
         self->send(self->state.sinks_[next], std::move(self->state.events_));
         self->state.events_ = {};

@@ -207,6 +207,27 @@ behavior partition::make_behavior() {
     if (i != indexers_.end())
       indexers_.erase(i);
   };
+  // Handler executing after indexing a batch of events.
+  auto on_done = [=](done_atom, time::moment start, uint64_t events) {
+    auto stop = time::snapshot();
+    auto runtime = stop - start;
+    auto unit = time::duration_cast<time::microseconds>(runtime).count();
+    auto rate = events * 1e6 / unit;
+    VAST_DEBUG(this, "indexed", events, "events in", runtime,
+               '(' << size_t(rate), "events/sec)");
+    if (accountant_) {
+      static auto to_sec = [](auto t) -> int64_t{
+        auto tp = t.time_since_epoch();
+        return time::duration_cast<time::microseconds>(tp).count();
+      };
+      send(accountant_, "partition", "indexing-start", to_sec(start));
+      send(accountant_, "partition", "indexing-stop", to_sec(stop));
+      send(accountant_, "partition", "indexing-events", events);
+      send(accountant_, "partition", "indexing-rate", rate);
+    }
+    VAST_ASSERT(events_indexed_concurrently_ >= events);
+    events_indexed_concurrently_ -= events;
+  };
   return {
     forward_overload(),
     forward_underload(),
@@ -236,16 +257,30 @@ behavior partition::make_behavior() {
         VAST_DEBUG(this, "brings down all indexers");
         for (auto& i : indexers_)
           send_exit(i.second, msg.reason);
-        become([ reason = msg.reason, on_down, this ](down_msg const& down) {
-          // Terminate as soon as all indexers have exited.
-          on_down(down);
-          if (indexers_.empty())
-            quit(reason);
-        });
+        // Terminate not before all indexers have exited and we've recorded
+        // their sample to the accountant.
+        become(
+          [reason=msg.reason, on_down, this](down_msg const& down) {
+            on_down(down);
+            if (events_indexed_concurrently_ == 0 && indexers_.empty())
+              quit(reason);
+          },
+          [reason=msg.reason, on_done, this](done_atom, time::moment start,
+                                             uint64_t events) {
+            on_done(done_atom::value, start, events);
+            if (events_indexed_concurrently_ == 0 && indexers_.empty())
+              quit(reason);
+          }
+        );
       }
       flush();
     },
     on_down,
+    on_done,
+    [=](accountant::actor_type const& acc) {
+      VAST_DEBUG_AT(this, "registers accountant#" << acc->id());
+      accountant_ = acc;
+    },
     [=](std::vector<event> const& events, actor const& task) {
       VAST_DEBUG(this, "got", events.size(),
                  "events [" << events.front().id() << ','
@@ -282,19 +317,9 @@ behavior partition::make_behavior() {
       if (proxy_ != invalid_actor)
         send(proxy_, std::move(indexers));
       events_indexed_concurrently_ += events.size();
-      if (++events_indexed_concurrently_ > 1 << 20) // TODO: calibrate
-        overloaded(true);
       send(task, supervisor_atom::value, this);
       VAST_DEBUG(this, "indexes", events_indexed_concurrently_,
                  "events in parallel");
-    },
-    [=](done_atom, time::moment start, uint64_t events) {
-      VAST_DEBUG(this, "indexed", events, "events in",
-                 time::snapshot() - start);
-      VAST_ASSERT(events_indexed_concurrently_ > events);
-      events_indexed_concurrently_ -= events;
-      if (events_indexed_concurrently_ < 1 << 20)
-        overloaded(false);
     },
     [=](expression const& expr, continuous_atom) {
       VAST_DEBUG(this, "got continuous query:", expr);

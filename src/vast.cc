@@ -52,7 +52,7 @@ int main(int argc, char* argv[]) {
   std::vector<std::string> command_line(argv + 1, argv + argc);
   auto cmd = std::find_first_of(command_line.begin(), command_line.end(),
                                 commands.begin(), commands.end());
-  // Parse and validate command line.
+  // Parse options.
   auto log_level = 3;
   auto dir = "."s;
   auto endpoint = ""s;
@@ -61,19 +61,53 @@ int main(int argc, char* argv[]) {
   auto messages = std::numeric_limits<size_t>::max();
   auto profile_file = std::string{};
   auto threads = std::thread::hardware_concurrency();
+  // Options for "spawn core".
+  auto core = make_message("spawn", "core");
+  std::string id_batch_size;
+  std::string archive_comp;
+  std::string archive_segments;
+  std::string archive_size;
+  std::string index_events;
+  std::string index_active;
+  std::string index_passive;
   auto r = message_builder(command_line.begin(), cmd).extract_opts({
+    {"no-colors,C", "disable colors on console"},
     {"dir,d", "directory for logs and client state", dir},
     {"endpoint,e", "node endpoint", endpoint},
     {"log-level,l", "verbosity of console and/or log file", log_level},
-    {"messages,m", "maximum messages per CAF scheduler invocation", messages},
-    {"profile,p", "enable CAF profiler", profile_file},
-    {"threads,t", "number of worker threads in CAF scheduler", threads},
-    {"version,v", "print version and exit"}
+    {"messages,m", "CAF scheduler message throughput", messages},
+    {"profile,p", "CAF scheduler profiling", profile_file},
+    {"threads,t", "CAF scheduler threads", threads},
+    {"version,v", "print version and exit"},
+    // FIXME: We need a better way to manage program options in the future.
+    // option handling is lifted from node.cc. And there, we also stitched it
+    // together from the individual actor options. It's too easy to diverge.
+    {"identifier-batch-size", "initial identifier btach size", id_batch_size},
+    {"archive-compression", "archive compression algorithm", archive_comp},
+    {"archive-segments", "archive in-memory segments", archive_segments},
+    {"archive-size", "archive segment size", archive_size},
+    {"index-events", "maximum number of events per partition", index_events},
+    {"index-active", "number of active partitions", index_active},
+    {"index-passive", "number of passive partitions", index_passive}
   });
   if (! r.error.empty()) {
     std::cerr << r.error << std::endl;
     return 1;
   }
+  if (r.opts.count("identifier-batch-size") > 0)
+    core = core + make_message("--identifier-batch-size=", id_batch_size);
+  if (r.opts.count("archive-compression") > 0)
+    core = core + make_message("--archive-compression=" + archive_comp);
+  if (r.opts.count("archive-segments") > 0)
+    core = core + make_message("--archive-segments=" + archive_segments);
+  if (r.opts.count("archive-size") > 0)
+    core = core + make_message("--archive-size=" + archive_size);
+  if (r.opts.count("index-events") > 0)
+    core = core + make_message("--index-events=" + index_events);
+  if (r.opts.count("index-active") > 0)
+    core = core + make_message("--index-active=" + index_active);
+  if (r.opts.count("index-passive") > 0)
+    core = core + make_message("--index-passive=" + index_passive);
   if (r.opts.count("version") > 0) {
     std::cout << VAST_VERSION << std::endl;
     return 0;
@@ -82,14 +116,25 @@ int main(int argc, char* argv[]) {
     std::cout << banner() << "\n\n" << r.helptext;
     return 0;
   }
-  if (r.opts.count("endpoint") > 0
-      && !util::parse_endpoint(endpoint, host, port)) {
-    std::cerr << "invalid endpoint: " << endpoint << std::endl;
-    return 1;
+  if (r.opts.count("endpoint") > 0) {
+    if (!util::parse_endpoint(endpoint, host, port)) {
+      std::cerr << "invalid endpoint: " << endpoint << std::endl;
+      return 1;
+    }
+  } else if (dir == ".") {
+    dir = "vast"; // Don't clobber current directory.
   }
   if (!r.remainder.empty()) {
     auto invalid_cmd = r.remainder.get_as<std::string>(0);
     std::cerr << "invalid command: " << invalid_cmd << std::endl;
+    return 1;
+  }
+  if (threads == 0) {
+    std::cerr << "CAF scheduler threads cannot be 0" << std::endl;
+    return 1;
+  }
+  if (messages == 0) {
+    std::cerr << "CAF scheduler throughput cannot be 0" << std::endl;
     return 1;
   }
   if (cmd == command_line.end()) {
@@ -97,14 +142,19 @@ int main(int argc, char* argv[]) {
     return 1;
   }
   // Initialize logger.
-  auto colorized = true;
+  auto console = [no_colors = r.opts.count("no-colors") > 0](auto v) {
+    return no_colors ? logger::console(v) : logger::console_colorized(v);
+  };
   auto verbosity = static_cast<logger::level>(log_level);
-  if (!logger::console(verbosity, colorized)) {
+  if (!console(verbosity)) {
     std::cerr << "failed to initialize logger console backend" << std::endl;
     return 1;
   }
-  if (!logger::file(logger::quiet)) {
-    std::cerr << "failed to reset logger file backend" << std::endl;
+  if (r.opts.count("endpoint") > 0)
+    verbosity = logger::quiet;
+  auto log_file = dir / node::log_path() / "vast.log";
+  if (!logger::file(verbosity, log_file.str())) {
+    std::cerr << "failed to initialize logger file backend" << std::endl;
     return 1;
   }
   auto guard = make_scope_guard([] {
@@ -112,11 +162,14 @@ int main(int argc, char* argv[]) {
     logger::destruct();
   });
   // Replace/adjust scheduler.
+  VAST_ASSERT(threads > 0);
+  VAST_ASSERT(messages > 0);
   if (r.opts.count("profile"))
     set_scheduler(
       new scheduler::profiled_coordinator<>{
         profile_file, std::chrono::milliseconds{1000}, threads, messages});
   else if (r.opts.count("threads") || r.opts.count("messages"))
+    set_scheduler<>(threads, messages);
   VAST_VERBOSE(banner() << "\n\n");
   VAST_VERBOSE("set scheduler threads to", threads);
   VAST_VERBOSE("set scheduler maximum throughput to",
@@ -131,13 +184,11 @@ int main(int argc, char* argv[]) {
   actor node;
   scoped_actor self;
   auto failed = false;
+  auto node_name = util::split_to_str(util::hostname(), ".")[0];
   if (r.opts.count("endpoint") == 0) {
     // Spawn local NODE.
-    auto name = util::split_to_str(util::hostname(), ".")[0];
-    if (dir == ".")
-      dir = "vast"; // don't clobber the current directory
-    node = self->spawn<vast::node>(name, dir);
-    self->sync_send(node, "spawn", "core").await(
+    node = self->spawn<vast::node>(node_name, dir);
+    self->sync_send(node, std::move(core)).await(
       [](ok_atom) {},
       [&](error const& e) {
         failed = true;
@@ -162,8 +213,21 @@ int main(int argc, char* argv[]) {
       return 1;
     }
   }
+  // Prepare accountant.
+  vast::accountant::actor_type accountant;
+  if (node->is_remote()) {
+    VAST_DEBUG("spawning local accountant");
+    accountant = self->spawn(accountant::actor, path(dir) / "accounting.log");
+  } else {
+    VAST_DEBUG("using node accountant");
+    self->sync_send(node, store_atom::value, get_atom::value,
+                    key::str("actors", node_name, "accountant")).await(
+      [&](accountant::actor_type const& acc) {
+        accountant = acc;
+      }
+    );
+  }
   // Process commands.
-  auto accounting_log = path(dir) / "accounting.log";
   auto start = time::snapshot();
   if (*cmd == "import") {
     // 1. Spawn a SOURCE.
@@ -177,10 +241,9 @@ int main(int argc, char* argv[]) {
       return 1;
     }
     auto source_guard = make_scope_guard(
-      [=] { anon_send_exit(*src, exit::kill); });
-    auto acc = self->spawn(accountant::actor, accounting_log, time::seconds(1));
-    acc->link_to(*src);
-    self->send(*src, acc);
+      [=] { anon_send_exit(*src, exit::kill); }
+    );
+    self->send(*src, accountant);
     // 2. Find all IMPORTERs to load-balance across them.
     std::vector<actor> importers;
     self->sync_send(node, store_atom::value, list_atom::value,
@@ -226,10 +289,9 @@ int main(int argc, char* argv[]) {
       return 1;
     }
     auto sink_guard = make_scope_guard(
-      [snk = *snk] { anon_send_exit(snk, exit::kill); });
-    auto acc = self->spawn(accountant::actor, accounting_log, time::seconds(1));
-    acc->link_to(*snk);
-    self->send(*snk, acc);
+      [snk = *snk] { anon_send_exit(snk, exit::kill); }
+    );
+    self->send(*snk, accountant);
     // 2. For each node, spawn an (auto-connected) EXPORTER and connect it to
     // the sink.
     std::vector<actor> nodes;
@@ -352,12 +414,15 @@ int main(int argc, char* argv[]) {
     if (exit_code != 0)
       return exit_code;
   }
+  if (node->is_remote()) {
+    self->monitor(accountant);
+    self->send_exit(accountant, exit::done);
+    self->receive([](down_msg const&) {});
+  } else {
+    self->send_exit(node, exit::done);
+    self->await_all_other_actors_done();
+  }
   auto stop = time::snapshot();
   VAST_INFO("completed execution in", stop - start);
-  if (!node->is_remote()) {
-    self->monitor(node);
-    self->send_exit(node, exit::done);
-    self->receive([](down_msg const&) {});
-  }
   return 0;
 }
