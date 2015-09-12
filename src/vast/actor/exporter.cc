@@ -237,6 +237,7 @@ behavior exporter::make(stateful_actor<state>* self, expression expr,
             VAST_DEBUG_AT(self, "resolved AST for", e->type() << ':', checker);
           }
           // Perform candidate check and relay event on success (= result).
+          ++self->state.chunk_candidates;
           if (visit(expr::event_evaluator{*e}, checker)) {
             auto msg = make_message(self->state.id, std::move(*e));
             for (auto& s : self->state.sinks)
@@ -291,11 +292,16 @@ behavior exporter::make(stateful_actor<state>* self, expression expr,
         if (self->state.accountant) {
           auto now = time::snapshot();
           self->send(self->state.accountant, "exporter", "chunk.done", now);
+          self->send(self->state.accountant, "exporter", "chunk.candidates",
+                     self->state.chunk_candidates);
           self->send(self->state.accountant, "exporter", "chunk.results",
                      self->state.chunk_results);
+          self->send(self->state.accountant, "exporter", "chunk.events",
+                     self->state.current_chunk.events());
         }
         self->state.reader.reset();
         self->state.current_chunk = {};
+        self->state.chunk_candidates = 0;
         self->state.chunk_results = 0;
       }
       if (self->state.requested == 0 && self->state.draining) {

@@ -60,9 +60,10 @@ behavior archive::make_behavior() {
       chunk chk{events, compression_};
       if (accountant_) {
         auto stop = time::snapshot();
-        auto unit = time::duration_cast<time::microseconds>(stop - start).count();
+        auto runtime = stop - start;
+        auto unit = time::duration_cast<time::microseconds>(runtime).count();
         auto rate = events.size() * 1e6 / unit;
-        send(accountant_, "archive", "compression-rate", rate);
+        send(accountant_, "archive", "compression.rate", rate);
       }
       auto too_large = current_size_ + chk.bytes() >= max_segment_size_;
       if (!current_.empty() && too_large && !flush())
@@ -153,7 +154,7 @@ bool archive::flush() {
     auto stop = time::snapshot();
     auto unit = time::duration_cast<time::microseconds>(stop - start).count();
     auto rate = current_size_ * 1e6 / unit;
-    send(accountant_, "archive", "flush-rate", rate);
+    send(accountant_, "archive", "flush.rate", rate);
   }
   current_ = {};
   current_size_ = 0;

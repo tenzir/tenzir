@@ -220,10 +220,10 @@ behavior partition::make_behavior() {
         auto tp = t.time_since_epoch();
         return time::duration_cast<time::microseconds>(tp).count();
       };
-      send(accountant_, "partition", "indexing-start", to_sec(start));
-      send(accountant_, "partition", "indexing-stop", to_sec(stop));
-      send(accountant_, "partition", "indexing-events", events);
-      send(accountant_, "partition", "indexing-rate", rate);
+      send(accountant_, "partition", "indexing.start", to_sec(start));
+      send(accountant_, "partition", "indexing.stop", to_sec(stop));
+      send(accountant_, "partition", "indexing.events", events);
+      send(accountant_, "partition", "indexing.rate", rate);
     }
     VAST_ASSERT(events_indexed_concurrently_ >= events);
     events_indexed_concurrently_ -= events;

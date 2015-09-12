@@ -47,6 +47,12 @@ struct state : basic_state {
 template <typename State>
 behavior make(stateful_actor<State>* self) {
   self->trap_exit(true);
+  self->attach_functor([=](uint32_t) {
+    if (self->state.accountant_) {
+      auto now = time::snapshot();
+      self->send(self->state.accountant_, "source", "end", now);
+    }
+  });
   return {
     downgrade_exit_msg(self),
     [=](down_msg const& msg) {
@@ -100,8 +106,12 @@ behavior make(stateful_actor<State>* self) {
     },
     [=](get_atom, sink_atom) { return self->state.sinks_; },
     [=](run_atom) {
-      if (self->current_sender() != self)
-        self->state.start_ = time::snapshot();
+      if (self->current_sender() != self) {
+        auto now = time::snapshot();
+        self->state.start_ = now;
+        if (self->state.accountant_)
+          self->send(self->state.accountant_, "source", "start", now);
+      }
       if (self->state.sinks_.empty()) {
         VAST_ERROR_AT(self, "cannot run without sinks");
         self->quit(exit::error);
@@ -119,14 +129,20 @@ behavior make(stateful_actor<State>* self) {
         }
       }
       if (!self->state.events_.empty()) {
-        auto runtime = time::snapshot() - self->state.start_;
+        auto start = self->state.start_;
+        auto now = time::snapshot();
+        auto runtime = now - start;
         auto unit = time::duration_cast<time::microseconds>(runtime).count();
         auto rate = self->state.events_.size() * 1e6 / unit;
-        VAST_VERBOSE_AT(self, "produced", self->state.events_.size(),
-                        "events in", runtime, '(' << size_t(rate),
-                        "events/sec)");
-        if (self->state.accountant_)
-          self->send(self->state.accountant_, "source", "event-rate", rate);
+        auto events = uint64_t{self->state.events_.size()};
+        VAST_VERBOSE_AT(self, "produced", events, "events in", runtime,
+                        '(' << size_t(rate), "events/sec)");
+        if (self->state.accountant_) {
+          self->send(self->state.accountant_, "source", "batch.start", start);
+          self->send(self->state.accountant_, "source", "batch.stop", now);
+          self->send(self->state.accountant_, "source", "batch.events", events);
+          self->send(self->state.accountant_, "source", "batch.rate", rate);
+        }
         auto next = self->state.next_sink_++ % self->state.sinks_.size();
         self->send(self->state.sinks_[next], std::move(self->state.events_));
         self->state.events_ = {};

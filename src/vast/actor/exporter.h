@@ -33,9 +33,11 @@ struct exporter {
     double progress = 0.0;
     uint64_t requested = 0;
     uint64_t total_hits = 0;
-    uint64_t total_results = 0;
     uint64_t total_chunks = 0;
+    uint64_t total_results = 0;
+    uint64_t chunk_candidates = 0;
     uint64_t chunk_results = 0;
+    uint64_t chunk_events = 0;
     bitstream_type hits;
     bitstream_type unprocessed;
     std::unordered_map<type, expression> checkers;
