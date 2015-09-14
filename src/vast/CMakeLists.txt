@@ -38,6 +38,7 @@ set(libvast_sources
   actor/key_value_store.cc
   actor/node.cc
   actor/partition.cc
+  actor/http_broker.cc
   actor/signal_monitor.cc
   actor/task.cc
   actor/sink/ascii.cc

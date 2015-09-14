@@ -5,7 +5,6 @@
 #include <iostream>
 #include <type_traits>
 
-// TODO: remove
 #include <caf/all.hpp>
 #include <caf/io/all.hpp>
 
@@ -20,6 +19,7 @@
 #include "vast/actor/importer.h"
 #include "vast/actor/index.h"
 #include "vast/actor/exporter.h"
+#include "vast/actor/http_broker.h"
 #include "vast/actor/node.h"
 #include "vast/actor/sink/spawn.h"
 #include "vast/actor/source/spawn.h"
@@ -284,8 +284,7 @@ behavior spawn_actor(event_based_actor* self,
           {"unified,u", "marks a query as unified"},
           {"auto-connect,a", "connect to available archives & indexes"}
         });
-        if (!r.error.empty())
-        {
+        if (!r.error.empty()) {
           rp.deliver(make_message(error{std::move(r.error)}));
           self->quit(exit::error);
           return;
@@ -412,6 +411,27 @@ behavior spawn_actor(event_based_actor* self,
         rp.deliver(make_message(error{"not compiled with gperftools"}));
         self->quit(exit::error);
 #endif
+      },
+      on("http-broker", any_vals) >> [=] {
+        using namespace caf::io;
+        auto port = uint16_t{8888};
+        auto r = self->current_message().extract_opts({
+          {"port,p", "the port to listen on", port}
+        });
+        if (!r.error.empty()) {
+          rp.deliver(make_message(error{std::move(r.error)}));
+          self->quit(exit::error);
+          return;
+        }
+        auto broker = spawn_io_server(http_broker, port, node);
+        VAST_ASSERT(broker);
+        if (!broker) {
+          auto err = error{"failed to spawn HTTP broker at port ", port};
+          rp.deliver(make_message(std::move(err)));
+          self->quit(exit::error);
+          return;
+        }
+        save_actor(broker, "http_broker");
       },
       others >> [=] {
         auto syntax = "spawn <actor> [params]";

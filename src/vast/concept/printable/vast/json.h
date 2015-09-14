@@ -168,8 +168,10 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
 
   template <typename Iterator, typename T>
   auto print(Iterator& out, T const& x) const
-    -> std::enable_if_t<!std::is_same<json::jsonize<T>,
-                                      std::false_type>::value> {
+    -> std::enable_if_t<
+         !std::is_same<json::jsonize<T>, std::false_type>::value,
+         bool
+       > {
     return print_visitor<Iterator>{out}(x);
   }
 
