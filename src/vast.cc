@@ -150,12 +150,12 @@ int main(int argc, char* argv[]) {
     std::cerr << "failed to initialize logger console backend" << std::endl;
     return 1;
   }
-  if (r.opts.count("endpoint") > 0)
-    verbosity = logger::quiet;
-  auto log_file = dir / node::log_path() / "vast.log";
-  if (!logger::file(verbosity, log_file.str())) {
-    std::cerr << "failed to initialize logger file backend" << std::endl;
-    return 1;
+  if (r.opts.count("endpoint") > 0) {
+    auto log_file = dir / node::log_path() / "vast.log";
+    if (!logger::file(verbosity, log_file.str())) {
+      std::cerr << "failed to initialize logger file backend" << std::endl;
+      return 1;
+    }
   }
   auto guard = make_scope_guard([] {
     caf::shutdown();

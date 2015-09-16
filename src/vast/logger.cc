@@ -78,14 +78,6 @@ std::string prettify(char const* pretty_func) {
 } // namespace <anonymous>
 
 struct logger::impl {
-  impl() {
-    auto start = std::to_string(std::time(nullptr));
-    auto pid = std::to_string(util::process_id());
-    auto lvl = static_cast<logger::level>(VAST_LOG_LEVEL);
-    if (!file(lvl, "vast-log-" + start + '-' + pid + ".log"))
-      throw std::runtime_error{"failed to default-initialize logger"};
-  }
-
   bool file(level verbosity, std::string const& filename) {
     // Close and delete existing file first.
     if (log_file_.is_open()) {

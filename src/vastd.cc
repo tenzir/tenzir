@@ -90,14 +90,19 @@ int main(int argc, char* argv[]) {
     std::cerr << "invalid stray argument: " << arg << std::endl;
     return 1;
   }
-  // Initialize logger.
+  auto abs_dir = path{dir}.complete();
   auto verbosity = static_cast<logger::level>(log_level);
-  auto log_file = dir / node::log_path() / "vast.log";
-  if (!logger::file(verbosity, log_file.str())) {
-    std::cerr << "failed to initialize logger file backend" << std::endl;
-    return 1;
-  }
-  if (r.opts.count("foreground")) {
+  if (!r.opts.count("foreground")) {
+    // On Mac OS, daemon(3) is deprecated since 10.5.
+    VAST_DIAGNOSTIC_PUSH
+    VAST_DIAGNOSTIC_IGNORE_DEPRECATED
+    if (::daemon(0, 0) != 0) {
+      std::cerr << "failed to daemonize process" << std::endl;
+      return 1;
+    }
+    VAST_DIAGNOSTIC_POP
+  } else {
+    // Initialize console logger.
     auto console = [no_colors = r.opts.count("no-colors") > 0](auto v) {
       return no_colors ? logger::console(v) : logger::console_colorized(v);
     };
@@ -105,16 +110,12 @@ int main(int argc, char* argv[]) {
       std::cerr << "failed to initialize logger console backend" << std::endl;
       return 1;
     }
-  } else {
-    VAST_DEBUG("deamonizing process (PID", util::process_id() << ")");
-    // On Mac OS, daemon(3) is deprecated since 10.5.
-    VAST_DIAGNOSTIC_PUSH
-    VAST_DIAGNOSTIC_IGNORE_DEPRECATED
-    if (::daemon(0, 0) != 0) {
-      VAST_ERROR("failed to daemonize process");
-      return 1;
-    }
-    VAST_DIAGNOSTIC_POP
+  }
+  // Initialize file logger.
+  auto log_file = abs_dir / node::log_path() / "vast.log";
+  if (!logger::file(verbosity, log_file.str())) {
+    std::cerr << "failed to initialize logger file backend" << std::endl;
+    return 1;
   }
   // Replace/adjust scheduler.
   VAST_ASSERT(threads > 0);
@@ -140,7 +141,7 @@ int main(int argc, char* argv[]) {
     [] { caf::shutdown(); logger::destruct(); }
   );
   announce_types();
-  auto node = spawn<vast::node>(name, dir);
+  auto node = spawn<vast::node>(name, abs_dir);
   scoped_actor self;
   if (r.opts.count("bare") == 0)
     self->sync_send(node, "spawn", "core").await([](ok_atom) {});
