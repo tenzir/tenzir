@@ -220,48 +220,54 @@ behavior exporter::make(stateful_actor<state>* self, expression expr,
       // hit, relaying event to the sink on success.
       auto extracted = uint64_t{0};
       auto last = event_id{0};
+      std::vector<event> results;
       for (auto id : mask) {
         last = id;
-        auto e = self->state.reader->read(id);
-        if (e) {
-          auto& checker = self->state.checkers[e->type()];
+        auto candidate = self->state.reader->read(id);
+        ++self->state.chunk_candidates;
+        if (candidate) {
+          auto& checker = self->state.checkers[candidate->type()];
           // Construct a candidate checker if we don't have one for this type.
           if (is<none>(checker)) {
-            auto t = visit(expr::schema_resolver{e->type()}, expr);
+            auto t = visit(expr::schema_resolver{candidate->type()}, expr);
             if (!t) {
               VAST_ERROR_AT(self, "failed to resolve", expr << ',', t.error());
               self->quit(exit::error);
               return;
             }
-            checker = visit(expr::type_resolver{e->type()}, *t);
-            VAST_DEBUG_AT(self, "resolved AST for", e->type() << ':', checker);
+            checker = visit(expr::type_resolver{candidate->type()}, *t);
+            VAST_DEBUG_AT(self, "resolved AST for",
+                          candidate->type() << ':', checker);
           }
-          // Perform candidate check and relay event on success (= result).
-          ++self->state.chunk_candidates;
-          if (visit(expr::event_evaluator{*e}, checker)) {
-            auto msg = make_message(self->state.id, std::move(*e));
-            for (auto& s : self->state.sinks)
-              self->send(s, msg);
-            if (self->state.total_results == 0 && self->state.accountant) {
-              auto now = time::snapshot();
-              self->send(self->state.accountant, "exporter", "taste", now);
-            }
-            ++self->state.total_results;
-            ++self->state.chunk_results;
+          // Perform candidate check and keep event as result on success.
+          if (visit(expr::event_evaluator{*candidate}, checker)) {
+            results.push_back(std::move(*candidate));
             if (++extracted == self->state.requested)
               break;
           } else {
-            VAST_WARN(self, "ignores false positive:", *e);
+            VAST_WARN(self, "ignores false positive:", *candidate);
           }
         } else {
-          if (e.empty())
+          if (candidate.empty())
             VAST_ERROR_AT(self, "failed to extract event", id);
           else
             VAST_ERROR_AT(self, "failed to extract event", id << ':',
-                          e.error());
+                          candidate.error());
           self->quit(exit::error);
           return;
         }
+      }
+      // Send results to SINKs.
+      if (!results.empty()) {
+        auto msg = make_message(self->state.id, std::move(results));
+        for (auto& s : self->state.sinks)
+          self->send(s, msg);
+        if (self->state.total_results == 0 && self->state.accountant) {
+          auto now = time::snapshot();
+          self->send(self->state.accountant, "exporter", "taste", now);
+        }
+        self->state.total_results += extracted;
+        self->state.chunk_results += extracted;
       }
       // Record processed events.
       self->state.requested -= extracted;
