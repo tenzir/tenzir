@@ -847,7 +847,7 @@ behavior node::show(event_based_actor* self) {
   return on("show", any_vals) >> [=] {
     auto rp = self->make_response_promise();
     auto r = self->current_message().extract_opts({
-      {"verbose,-v", "show values in addition to keys"},
+      {"verbose,v", "show values in addition to keys"},
     });
     auto& arg = r.remainder.take_right(1).get_as_mutable<std::string>(0);
     std::string result;
