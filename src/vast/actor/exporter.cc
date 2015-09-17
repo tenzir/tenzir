@@ -91,12 +91,11 @@ behavior exporter::make(stateful_actor<state>* self, expression expr,
   // Handle DOWN from source.
   auto handle_down = [=](down_msg const& msg) {
     VAST_DEBUG_AT("got DOWN from", msg.source);
-    auto a = actor_cast<actor>(msg.source);
-    if (self->state.archives.erase(a) > 0)
+    if (self->state.archives.erase(actor_cast<archive::type>(msg.source)) > 0)
       return;
-    if (self->state.indexes.erase(a) > 0)
+    if (self->state.indexes.erase(actor_cast<actor>(msg.source)) > 0)
       return;
-    if (self->state.sinks.erase(a) > 0)
+    if (self->state.sinks.erase(actor_cast<actor>(msg.source)) > 0)
       return;
   };
   // Finish query execution.
@@ -318,8 +317,8 @@ behavior exporter::make(stateful_actor<state>* self, expression expr,
   };
   return {
     handle_down,
-    [=](put_atom, archive_atom, actor const& a) {
-      VAST_DEBUG_AT(self, "registers archive", a);
+    [=](archive::type const& a) {
+      VAST_DEBUG_AT(self, "registers archive#" << a->id());
       self->monitor(a);
       self->state.archives.insert(a);
     },

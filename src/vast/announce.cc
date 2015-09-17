@@ -18,6 +18,7 @@
 #include "vast/value.h"
 #include "vast/util/radix_tree.h"
 #include "vast/actor/accountant.h"
+#include "vast/actor/archive.h"
 #include "vast/actor/identifier.h"
 #include "vast/concept/serializable/builtin.h"
 #include "vast/concept/serializable/state.h"
@@ -212,6 +213,7 @@ void announce_types() {
                 std::make_unique<radix_tree_msg_type_info>());
   // Actors
   caf::announce<accountant::type>("vast::accountant");
+  caf::announce<archive::type>("vast::archive");
   caf::announce<identifier::type>("vast::identifier");
 }
 

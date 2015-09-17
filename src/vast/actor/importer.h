@@ -5,6 +5,7 @@
 
 #include "vast/aliases.h"
 #include "vast/event.h"
+#include "vast/actor/archive.h"
 #include "vast/actor/basic_state.h"
 
 namespace vast {
@@ -16,9 +17,8 @@ struct importer {
     state(event_based_actor* self);
 
     actor identifier;
-    actor archive;
+    archive::type archive;
     actor index;
-    actor controller;
     event_id got = 0;
     std::vector<event> batch;
   };

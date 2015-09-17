@@ -416,9 +416,10 @@ behavior node::spawn_actor(event_based_actor* self) {
         }
         size <<= 20; // MB'ify
         auto dir = dir_ / "archive";
-        auto a = spawn<archive, priority_aware>(dir, segments, size, method);
+        auto a = spawn<priority_aware>(archive::make, dir, segments, size,
+                                       method);
         self->send(a, accountant_);
-        save_actor(std::move(a), "archive");
+        save_actor(actor_cast<actor>(a), "archive");
       },
       on("index", any_vals) >> [=] {
         uint64_t events = 1 << 20;
@@ -454,7 +455,7 @@ behavior node::spawn_actor(event_based_actor* self) {
                   [&](actor const& a, std::string const& type) {
                     VAST_ASSERT(a != invalid_actor);
                     if (type == "archive")
-                      self->send(imp, put_atom::value, archive_atom::value, a);
+                      self->send(imp, actor_cast<archive::type>(a));
                     else if (type == "index")
                       self->send(imp, put_atom::value, index_atom::value, a);
                     else if (type == "identifier")
@@ -528,7 +529,7 @@ behavior node::spawn_actor(event_based_actor* self) {
                   [&](actor const& a, std::string const& type) {
                     VAST_ASSERT(a != invalid_actor);
                     if (type == "archive")
-                      self->send(exp, put_atom::value, archive_atom::value, a);
+                      self->send(exp, actor_cast<archive::type>(a));
                     else if (type == "index")
                       self->send(exp, put_atom::value, index_atom::value, a);
                   }
@@ -739,7 +740,7 @@ behavior node::connect(event_based_actor* self) {
         if (snk_type == "identifier") {
           self->send(src, put_atom::value, identifier_atom::value, snk);
         } else if (snk_type == "archive") {
-          self->send(src, put_atom::value, archive_atom::value, snk);
+          self->send(src, actor_cast<archive::type>(snk));
         } else if (snk_type == "index") {
           self->send(src, put_atom::value, index_atom::value, snk);
         } else {
@@ -749,7 +750,7 @@ behavior node::connect(event_based_actor* self) {
         }
       } else if (src_type == "exporter") {
         if (snk_type == "archive") {
-          self->send(src, put_atom::value, archive_atom::value, snk);
+          self->send(src, actor_cast<archive::type>(snk));
         } else if (snk_type == "index") {
           self->send(src, put_atom::value, index_atom::value, snk);
         } else if (snk_type == "sink") {

@@ -70,7 +70,6 @@ using write_atom = atom_constant<atom("write")>;
 // Actor roles
 using actor_atom = atom_constant<atom("actor")>;
 using accountant_atom = atom_constant<atom("accountant")>;
-using archive_atom = atom_constant<atom("archive")>;
 using candidate_atom = atom_constant<atom("candidate")>;
 using controller_atom = atom_constant<atom("controller")>;
 using deflector_atom = atom_constant<atom("deflector")>;

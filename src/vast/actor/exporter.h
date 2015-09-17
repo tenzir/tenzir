@@ -11,6 +11,7 @@
 #include "vast/query_options.h"
 #include "vast/uuid.h"
 #include "vast/actor/accountant.h"
+#include "vast/actor/archive.h"
 #include "vast/actor/basic_state.h"
 #include "vast/util/flat_set.h"
 
@@ -24,7 +25,7 @@ struct exporter {
   struct state : basic_state {
     state(local_actor* self);
 
-    util::flat_set<actor> archives;
+    util::flat_set<archive::type> archives;
     util::flat_set<actor> indexes;
     util::flat_set<actor> sinks;
     accountant::type accountant;

@@ -16,7 +16,7 @@ behavior importer::make(stateful_actor<state>* self) {
       self->quit(exit::error);
       return false;
     }
-    if (self->state.archive == invalid_actor) {
+    if (!self->state.archive) {
       VAST_ERROR_AT(self, "has no archive configured");
       self->quit(exit::error);
       return false;
@@ -35,37 +35,24 @@ behavior importer::make(stateful_actor<state>* self) {
       if (msg.source == self->state.identifier)
         self->state.identifier = invalid_actor;
       else if (msg.source == self->state.archive)
-        self->state.archive = invalid_actor;
+        self->state.archive = {};
       else if (msg.source == self->state.index)
         self->state.index = invalid_actor;
-      else if (msg.source == self->state.controller)
-        self->state.controller = invalid_actor;
     },
     [=](put_atom, identifier_atom, actor const& a) {
       VAST_DEBUG_AT(self, "registers identifier", a);
       self->monitor(a);
       self->state.identifier = a;
     },
-    [=](put_atom, archive_atom, actor const& a) {
-      VAST_DEBUG_AT(self, "registers archive", a);
-      self->send(a, upstream_atom::value, self);
+    [=](archive::type const& a) {
+      VAST_DEBUG_AT(self, "registers archive#" << a->id());
       self->monitor(a);
       self->state.archive = a;
-      if (self->state.controller)
-        self->send(self->state.controller, add_atom::value, self, a);
     },
     [=](put_atom, index_atom, actor const& a) {
       VAST_DEBUG_AT(self, "registers index", a);
-      self->send(a, upstream_atom::value, self);
       self->monitor(a);
       self->state.index = a;
-      if (self->state.controller)
-        self->send(self->state.controller, add_atom::value, self, a);
-    },
-    [=](put_atom, controller_atom, actor const& c) {
-      VAST_DEBUG_AT(self, "registers controller", c);
-      self->monitor(c);
-      self->state.controller = c;
     },
     [=](std::vector<event>& events) {
       VAST_DEBUG_AT(self, "got", events.size(), "events");
@@ -91,7 +78,8 @@ behavior importer::make(stateful_actor<state>* self) {
                 std::make_move_iterator(self->state.batch.end()));
               self->state.batch.resize(n);
               auto msg = make_message(std::move(self->state.batch));
-              self->send(self->state.archive, msg);
+              // FIXME: how to make this type-safe?
+              self->send(actor_cast<actor>(self->state.archive), msg);
               self->send(self->state.index, msg);
               self->state.batch = std::move(remainder);
             }
@@ -102,7 +90,8 @@ behavior importer::make(stateful_actor<state>* self) {
           } else {
             // Ship the batch directly if we got enough IDs.
             auto msg = make_message(std::move(self->state.batch));
-            self->send(self->state.archive, msg);
+            // FIXME: how to make this type-safe?
+            self->send(actor_cast<actor>(self->state.archive), msg);
             self->send(self->state.index, msg);
             self->state.got = 0;
             self->unbecome();

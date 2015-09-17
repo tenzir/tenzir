@@ -1,5 +1,3 @@
-#include <caf/all.hpp>
-
 #include "vast/chunk.h"
 #include "vast/event.h"
 #include "vast/actor/archive.h"
@@ -13,160 +11,173 @@
 
 namespace vast {
 
-archive::archive(path dir, size_t capacity, size_t max_segment_size,
-                 io::compression compression)
-  : flow_controlled_actor{"archive"},
-    dir_{dir},
-    meta_data_filename_{dir_ / "meta.data"},
-    max_segment_size_{max_segment_size},
-    compression_{compression},
-    cache_{capacity} {
-  VAST_ASSERT(max_segment_size_ > 0);
-  trap_exit(true);
+archive::state::state(local_actor* self)
+  : basic_state{self, "archive"} {
 }
 
-void archive::on_exit() {
+trial<void> archive::state::flush() {
+  // Don't touch filesystem if we have nothing to do.
+  if (current.empty())
+    return nothing;
+  auto start = time::snapshot();
+  // Store segment on file system.
+  if (!exists(dir) && !mkdir(dir))
+    return error{"failed to create directory: ", dir};
+  auto id = uuid::random();
+  auto filename = dir / to_string(id);
+  if (!save(filename, current))
+    return error{"failed to save segment to ", filename};
+  // Record each chunk of segment in registry.
+  for (auto& chk : current) {
+    auto first = chk.meta().ids.find_first();
+    auto last = chk.meta().ids.find_last();
+    VAST_ASSERT(first != invalid_event_id && last != invalid_event_id);
+    segments.inject(first, last + 1, id);
+  }
+  cache.insert(std::move(id), std::move(current));
+  // Report about the time it took.
+  if (accountant) {
+    auto stop = time::snapshot();
+    auto unit = time::duration_cast<time::microseconds>(stop - start).count();
+    auto rate = current_size * 1e6 / unit;
+    self->send(accountant, "archive", "flush.rate", rate);
+  }
+  current = {};
+  current_size = 0;
+  // Update meta data on filessytem.
+  auto t = save(dir / "meta", segments);
+  if (!t)
+    return error{"failed to write segment meta data ", t.error()};
+  return nothing;
 }
 
-behavior archive::make_behavior() {
-  if (exists(meta_data_filename_)) {
-    using vast::load;
-    auto t = load(meta_data_filename_, segments_);
+using flush_response_promise =
+  typed_response_promise<either<ok_atom>::or_else<error>>;
+
+using lookup_response_promise =
+  typed_response_promise<either<chunk>::or_else<empty_atom, event_id>>;
+
+archive::behavior archive::make(stateful_pointer self, path dir,
+                                size_t capacity, size_t max_segment_size,
+                                io::compression compression) {
+  VAST_ASSERT(max_segment_size > 0);
+  self->state.dir = std::move(dir);
+  self->state.max_segment_size = max_segment_size;
+  self->state.compression = compression;
+  self->state.cache.capacity(capacity);
+  if (exists(self->state.dir / "meta")) {
+    auto t = load(self->state.dir / "meta", self->state.segments);
     if (!t) {
-      VAST_ERROR(this, "failed to unarchive meta data:", t.error());
-      quit(exit::error);
-      return {};
+      VAST_ERROR_AT(self, "failed to unarchive meta data:", t.error());
+      self->quit(exit::error);
     }
   }
+  self->trap_exit(true);
   return {
-    register_upstream_node(),
     [=](exit_msg const& msg) {
-      if (downgrade_exit())
-        return;
-      if (!flush())
-        return;
-      quit(msg.reason);
+      if (self->current_mailbox_element()->mid.is_high_priority()) {
+        VAST_DEBUG_AT(self, "delays EXIT from", msg.source);
+        self->send(message_priority::normal, self, self->current_message());
+      } else {
+        VAST_VERBOSE_AT(self, "flushes current segment");
+        self->state.flush();
+        self->quit(msg.reason);
+      }
     },
-    [=](down_msg const& msg) { remove_upstream_node(msg.source); },
     [=](accountant::type const& acc) {
-      VAST_DEBUG_AT(this, "registers accountant#" << acc->id());
-      accountant_ = acc;
+      VAST_DEBUG_AT(self, "registers accountant#" << acc->id());
+      self->state.accountant = acc;
     },
     [=](std::vector<event> const& events) {
-      VAST_DEBUG(this, "got", events.size(),
-                 "events [" << events.front().id() << ','
-                            << (events.back().id() + 1) << ')');
+      VAST_DEBUG_AT(self, "got", events.size(),
+                    "events [" << events.front().id() << ','
+                               << (events.back().id() + 1) << ')');
       auto start = time::snapshot();
-      chunk chk{events, compression_};
-      if (accountant_) {
+      chunk chk{events, self->state.compression};
+      if (self->state.accountant) {
         auto stop = time::snapshot();
         auto runtime = stop - start;
         auto unit = time::duration_cast<time::microseconds>(runtime).count();
         auto rate = events.size() * 1e6 / unit;
-        send(accountant_, "archive", "compression.rate", rate);
+        self->send(self->state.accountant, "archive", "compression.rate", rate);
       }
-      auto too_large = current_size_ + chk.bytes() >= max_segment_size_;
-      if (!current_.empty() && too_large && !flush())
-        return;
-      current_size_ += chk.bytes();
-      current_.insert(std::move(chk));
+      auto too_large = !self->state.current.empty()
+                         && self->state.current_size + chk.bytes()
+                              >= self->state.max_segment_size;
+      if (too_large) {
+        VAST_VERBOSE_AT(self, "flushes current segment");
+        auto t = self->state.flush();
+        if (!t) {
+          VAST_ERROR_AT(self, "failed to flush segment:", t.error());
+          self->quit(exit::error);
+          return;
+        }
+      }
+      self->state.current_size += chk.bytes();
+      self->state.current.insert(std::move(chk));
     },
-    [=](flush_atom) {
-      if (flush())
-        return make_message(ok_atom::value);
-      else
-        return make_message(error{"flush failed"});
+    [=](flush_atom) -> flush_response_promise {
+      // FIXME: wait for CAF fix on typed response promises, then uncomment.
+      //auto t = self->state.flush();
+      //if (!t) {
+      //  VAST_ERROR_AT(self, "failed to flush segment:", t.error());
+      //  self->quit(exit::error);
+      //  return std::move(t.error());
+      //}
+      //return ok_atom::value;
+      flush_response_promise rp = self->make_response_promise();
+      auto t = self->state.flush();
+      if (!t) {
+        VAST_ERROR_AT(self, "failed to flush segment:", t.error());
+        self->quit(exit::error);
+        rp.deliver(std::move(t.error()));
+        return rp;
+      }
+      rp.deliver(ok_atom::value);
+      return rp;
     },
-    [=](event_id eid) {
-      VAST_DEBUG(this, "got request for event", eid);
-      // First check the currently buffered segment.
-      for (size_t i = 0; i < current_.size(); ++i)
-        if (eid < current_[i].meta().ids.size()
-            && current_[i].meta().ids[eid]) {
-          VAST_DEBUG(this, "delivers chunk from cache",
-                     '[' << current_[i].meta().ids.find_first() << ','
-                         << current_[i].meta().ids.find_last() + 1 << ')');
-          return make_message(current_[i]);
+    [=](event_id eid) -> lookup_response_promise {
+      lookup_response_promise rp = self->make_response_promise();
+      VAST_DEBUG_AT(self, "got request for event", eid);
+      // First check the buffered segment in memory.
+      for (size_t i = 0; i < self->state.current.size(); ++i)
+        if (eid < self->state.current[i].meta().ids.size()
+            && self->state.current[i].meta().ids[eid]) {
+          VAST_DEBUG_AT(self, "delivers chunk from cache");
+          rp.deliver(self->state.current[i]);
+          return rp;
         }
       // Then inspect the existing segments.
-      if (auto id = segments_.lookup(eid)) {
-        auto s = cache_.lookup(*id);
+      if (auto id = self->state.segments.lookup(eid)) {
+        auto s = self->state.cache.lookup(*id);
         if (s == nullptr) {
-          VAST_DEBUG(this, "experienced cache miss for", *id);
+          VAST_DEBUG_AT(self, "experienced cache miss for", *id);
           segment seg;
-          auto filename = dir_ / to_string(*id);
-          using vast::load;
+          auto filename = self->state.dir / to_string(*id);
           auto t = load(filename, seg);
           if (!t) {
-            VAST_ERROR(this, "failed to unarchive segment:", t.error());
-            quit(exit::error);
-            return make_message(empty_atom::value, eid);
+            VAST_ERROR_AT(self, "failed to unarchive segment:", t.error());
+            self->quit(exit::error);
+            rp.deliver(empty_atom::value, eid);
+            return rp;
           }
-          s = cache_.insert(*id, std::move(seg)).first;
+          s = self->state.cache.insert(*id, std::move(seg)).first;
         }
         for (size_t i = 0; i < s->size(); ++i)
           if (eid < (*s)[i].meta().ids.size() && (*s)[i].meta().ids[eid]) {
-            VAST_DEBUG(this, "delivers chunk",
-                       '[' << (*s)[i].meta().ids.find_first() << ','
-                           << (*s)[i].meta().ids.find_last() + 1 << ')');
-            return make_message((*s)[i]);
+            VAST_DEBUG_AT(self, "delivers chunk",
+                          '[' << (*s)[i].meta().ids.find_first() << ','
+                              << (*s)[i].meta().ids.find_last() + 1 << ')');
+            rp.deliver((*s)[i]);
+            return rp;
           }
         VAST_ASSERT(!"segment must contain looked up id");
       }
-      VAST_WARN(this, "no segment for id", eid);
-      return make_message(empty_atom::value, eid);
-    },
-    catch_unexpected()};
-}
-
-trial<void> archive::store(segment s) {
-  if (!exists(dir_) && !mkdir(dir_))
-    return error{"failed to create directory ", dir_};
-  auto id = uuid::random();
-  auto filename = dir_ / to_string(id);
-  VAST_VERBOSE(this, "writes segment", id, "to", filename.trim(-3));
-  using vast::save;
-  auto t = save(filename, s);
-  if (!t)
-    return t;
-  for (auto& chk : s) {
-    auto first = chk.meta().ids.find_first();
-    auto last = chk.meta().ids.find_last();
-    VAST_ASSERT(first != invalid_event_id && last != invalid_event_id);
-    segments_.inject(first, last + 1, id);
-  }
-  cache_.insert(std::move(id), std::move(s));
-  return nothing;
-}
-
-bool archive::flush() {
-  VAST_VERBOSE(this, "flushes segment with", current_.size(), "chunks");
-  if (current_.empty())
-    return true;
-  auto start = time::snapshot();
-  auto t = store(std::move(current_));
-  if (!t) {
-    VAST_ERROR(this, "failed to store segment:", t.error());
-    quit(exit::error);
-    return false;
-  }
-  if (accountant_) {
-    auto stop = time::snapshot();
-    auto unit = time::duration_cast<time::microseconds>(stop - start).count();
-    auto rate = current_size_ * 1e6 / unit;
-    send(accountant_, "archive", "flush.rate", rate);
-  }
-  current_ = {};
-  current_size_ = 0;
-  VAST_VERBOSE(this, "writes meta data to:", meta_data_filename_.trim(-3));
-  using vast::save;
-  t = save(meta_data_filename_, segments_);
-  if (!t) {
-    VAST_ERROR(this, "failed to store segment meta data:", t.error());
-    quit(exit::error);
-    return false;
-  }
-  return true;
+      VAST_WARN_AT(self, "no segment for id", eid);
+      rp.deliver(empty_atom::value, eid);
+      return rp;
+    }
+  };
 }
 
 } // namespace vast
