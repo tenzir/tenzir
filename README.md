@@ -11,11 +11,11 @@ forensics and incident response.
 
 Import a PCAP trace into a local VAST node in one shot:
 
-    vast import pcap < trace.pcap
+    vast -n import pcap < trace.pcap
 
 Query a local node and get the result back as PCAP trace:
 
-    vast export pcap -h "sport > 60000/tcp && src !in 10.0.0.0/8" \
+    vast -n export pcap -h "sport > 60000/tcp && src !in 10.0.0.0/8" \
       | ipsumdump --collate -w - \
       | tcpdump -r - -nl
 

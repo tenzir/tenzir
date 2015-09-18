@@ -23,6 +23,7 @@
 #include "vast/actor/sink/spawn.h"
 #include "vast/actor/source/spawn.h"
 #include "vast/concept/parseable/to.h"
+#include "vast/concept/parseable/vast/endpoint.h"
 #include "vast/concept/parseable/vast/key.h"
 #include "vast/concept/printable/vast/expression.h"
 #include "vast/concept/printable/vast/error.h"
@@ -32,7 +33,6 @@
 #include "vast/io/compression.h"
 #include "vast/io/file_stream.h"
 #include "vast/util/assert.h"
-#include "vast/util/endpoint.h"
 #include "vast/util/flat_set.h"
 #include "vast/util/string.h"
 
@@ -724,22 +724,27 @@ behavior store_get_actor(event_based_actor* self,
 
 behavior request_peering(event_based_actor* self,
                          stateful_actor<node::state>* node) {
-  return on("peer", arg_match) >> [=](std::string const& endpoint) {
+  return on("peer", arg_match) >> [=](std::string const& peer_endpoint) {
     auto rp = self->make_response_promise();
-    auto host = "127.0.0.1"s;
-    auto port = uint16_t{42000};
-    if (!util::parse_endpoint(endpoint, host, port)) {
-      rp.deliver(make_message(error{"invalid endpoint: ", endpoint}));
+    auto ep = to<endpoint>(peer_endpoint);
+    if (!ep) {
+      rp.deliver(make_message(error{"invalid endpoint: ", peer_endpoint}));
       self->quit(exit::error);
+      return;
     }
-    VAST_DEBUG_AT(node, "connects to", host << ':' << port);
+    // Use localhost:42000 by default.
+    if (ep->host.empty())
+      ep->host = "127.0.0.1";
+    if (ep->port == 0)
+      ep->port = 42000;
+    VAST_DEBUG_AT(node, "connects to", ep->host << ':' << ep->port);
     actor peer;
     try {
-      peer = caf::io::remote_actor(host.c_str(), port);
+      peer = caf::io::remote_actor(ep->host.c_str(), ep->port);
     } catch (caf::network_error const& e) {
-      VAST_ERROR_AT(node, "failed to connect to peer", host, ':', port);
+      VAST_ERROR_AT(node, "failed to connect to peer", ep->host, ':', ep->port);
       rp.deliver(make_message(error{"failed to connect to peer ",
-                                    host, ':', port, ", ", e.what()}));
+                                    ep->host, ':', ep->port, ", ", e.what()}));
       self->quit(exit::error);
       return;
     }

@@ -1,17 +1,17 @@
 #include "vast/concept/parseable/to.h"
 #include "vast/concept/parseable/vast/address.h"
+#include "vast/concept/parseable/vast/endpoint.h"
+#include "vast/concept/parseable/vast/http.h"
 #include "vast/concept/parseable/vast/key.h"
 #include "vast/concept/parseable/vast/offset.h"
 #include "vast/concept/parseable/vast/pattern.h"
 #include "vast/concept/parseable/vast/port.h"
 #include "vast/concept/parseable/vast/subnet.h"
 #include "vast/concept/parseable/vast/time.h"
-#include "vast/concept/printable/to_string.h"
-#include "vast/concept/printable/vast/pattern.h"
-#include "vast/concept/printable/vast/address.h"
-#include "vast/concept/parseable/vast/http.h"
 #include "vast/concept/parseable/vast/uri.h"
-
+#include "vast/concept/printable/to_string.h"
+#include "vast/concept/printable/vast/address.h"
+#include "vast/concept/printable/vast/pattern.h"
 
 #define SUITE parseable
 #include "test.h"
@@ -223,8 +223,7 @@ TEST(offset) {
   CHECK(o == offset{1, 2, 3});
 }
 
-TEST(HTTP header)
-{
+TEST(HTTP header) {
   auto p = make_parser<http::header>();
   auto str = "foo: bar"s;
   auto f = str.begin();
@@ -244,8 +243,7 @@ TEST(HTTP header)
   CHECK(f == l);
 }
 
-TEST(HTTP request)
-{
+TEST(HTTP request) {
   auto p = make_parser<http::request>();
   auto str = "GET /foo/bar%20baz/ HTTP/1.1\r\n"
              "Content-Type:text/html\r\n"
@@ -272,8 +270,7 @@ TEST(HTTP request)
   CHECK(f == l);
 }
 
-TEST(URI with HTTP URL)
-{
+TEST(URI with HTTP URL) {
   auto p = make_parser<uri>();
   auto str = "http://foo.bar:80/foo/bar?opt1=val1&opt2=x+y#frag1"s;
   auto f = str.begin();
@@ -291,8 +288,7 @@ TEST(URI with HTTP URL)
   CHECK(f == l);
 }
 
-TEST(URI with path only)
-{
+TEST(URI with path only) {
   auto p = make_parser<uri>();
   auto str = "/foo/bar?opt1=val1&opt2=val2"s;
   auto f = str.begin();
@@ -308,4 +304,20 @@ TEST(URI with path only)
   CHECK(u.query["opt2"] == "val2");
   CHECK(u.fragment == "");
   CHECK(f == l);
+}
+
+TEST(endpoint) {
+  endpoint e;
+  CHECK(parsers::endpoint(":42000", e));
+  CHECK(e.host == "");
+  CHECK(e.port == 42000);
+  CHECK(parsers::endpoint("localhost", e));
+  CHECK(e.host == "localhost");
+  CHECK(e.port == 0);
+  CHECK(parsers::endpoint("10.0.0.1:80", e));
+  CHECK(e.host == "10.0.0.1");
+  CHECK(e.port == 80);
+  CHECK(parsers::endpoint("foo-bar_baz.test", e));
+  CHECK(e.host == "foo-bar_baz.test");
+  CHECK(e.port == 0);
 }

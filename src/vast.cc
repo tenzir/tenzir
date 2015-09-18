@@ -31,12 +31,13 @@
 #include "vast/actor/signal_monitor.h"
 #include "vast/actor/sink/spawn.h"
 #include "vast/actor/source/spawn.h"
+#include "vast/concept/parseable/parse.h"
+#include "vast/concept/parseable/vast/endpoint.h"
 #include "vast/concept/printable/to_string.h"
 #include "vast/concept/printable/vast/error.h"
 #include "vast/concept/printable/vast/time.h"
 #include "vast/concept/printable/vast/uuid.h"
 #include "vast/detail/adjust_resource_consumption.h"
-#include "vast/util/endpoint.h"
 #include "vast/util/flat_set.h"
 #include "vast/util/string.h"
 #include "vast/util/system.h"
@@ -65,7 +66,7 @@ std::pair<message, message> parse_core_args(message const& input) {
     {"index-active", "number of active partitions", index_active},
     {"index-passive", "number of passive partitions", index_passive},
     // FIXME: Because extract_opts unfortunately *always* defines -h, we have
-    // to "hault it through" if it was set. :-/
+    // to "haul it through" if it was set. :-/
     {"historical,h", "marks a query as historical"},
   });
   if (r.opts.count("identifier-batch-size") > 0)
@@ -89,13 +90,15 @@ std::pair<message, message> parse_core_args(message const& input) {
 }
 
 int run_start(actor const& node, std::string const& name,
-              char const* host, uint16_t port) {
+              endpoint const& node_endpoint) {
   VAST_ASSERT(!node->is_remote());
   scoped_actor self;
   auto sig_mon = self->spawn<linked>(signal_monitor::make, self);
   try {
     // Publish the node.
-    auto bound_port = caf::io::publish(node, port, host);
+    auto host =
+      node_endpoint.host.empty() ? nullptr : node_endpoint.host.c_str();
+    auto bound_port = caf::io::publish(node, node_endpoint.port, host);
     VAST_VERBOSE("listening on", (host ? host : "") << ':' << bound_port,
                  "with name \"" << name << '"');
     self->monitor(node);
@@ -400,18 +403,18 @@ int main(int argc, char* argv[]) {
   // Parse options.
   auto log_level = 3;
   auto dir = "vast"s;
-  auto endpoint = ""s;
-  auto host = ""s;
-  auto port = uint16_t{42000};
+  auto node_endpoint_str = ""s;
+  auto node_endpoint = endpoint{"", 42000};
   auto messages = std::numeric_limits<size_t>::max();
   auto profile_file = std::string{};
   auto threads = std::thread::hardware_concurrency();
   auto conf = message_builder(command_line.begin(), cmd).extract_opts({
     {"no-colors,C", "disable colors on console"},
     {"dir,d", "directory for logs and state", dir},
-    {"endpoint,e", "node endpoint", endpoint},
+    {"endpoint,e", "node endpoint", node_endpoint_str},
     {"log-level,l", "verbosity of console and/or log file", log_level},
     {"messages,m", "CAF scheduler message throughput", messages},
+    {"node,n", "apply command to a locally spawned node"},
     {"profile,p", "CAF scheduler profiling", profile_file},
     {"threads,t", "CAF scheduler threads", threads},
     {"version,v", "print version and exit"},
@@ -447,8 +450,8 @@ int main(int argc, char* argv[]) {
     dir = "vast";
   auto abs_dir = path{dir}.complete();
   if (conf.opts.count("endpoint") > 0) {
-    if (!util::parse_endpoint(endpoint, host, port)) {
-      std::cerr << "invalid endpoint: " << endpoint << std::endl;
+    if (!make_parser<endpoint>()(node_endpoint_str, node_endpoint)) {
+      std::cerr << "invalid endpoint: " << node_endpoint_str << std::endl;
       return 1;
     }
   }
@@ -504,23 +507,20 @@ int main(int argc, char* argv[]) {
   auto timer_guard = make_scope_guard([start_time] {
     VAST_DEBUG("completed execution in", time::snapshot() - start_time);
   });
-  auto local_node = *cmd == "start" 
-                    || (endpoint.empty() 
-                        && (*cmd == "import" || *cmd == "export"));
+  auto local_node = *cmd == "start" || conf.opts.count("node") > 0;
   if (local_node) {
+    // Start logger file backend.
     auto log = abs_dir / node::log_path() / "vast.log";
     if (!logger::file(verbosity, log.str())) {
       std::cerr << "failed to initialize logger file backend" << std::endl;
       return 1;
     }
+    // Create symlink to current log directory.
     auto link = log.chop(-2) / "current";
     VAST_DEBUG(link.str());
     if (exists(link))
       rm(link);
     create_symlink(log.trim(-2).chop(-1), link);
-  } else if (endpoint.empty()) {
-    VAST_ERROR("no endpoint (-e) specified");
-    return 1;
   }
   // Replace/adjust CAF scheduler.
   VAST_ASSERT(threads > 0);
@@ -561,7 +561,7 @@ int main(int argc, char* argv[]) {
         [](ok_atom) {},
         [&](error const& e) {
           failed = true;
-          VAST_ERROR("failed to spawn core:", e);
+          VAST_ERROR("failed to spawn node:", e);
         }
       );
       if (failed) {
@@ -576,8 +576,11 @@ int main(int argc, char* argv[]) {
     }
   } else {
     try {
-      VAST_VERBOSE("connecting to", host << ':' << port);
-      node = caf::io::remote_actor(host.c_str(), port);
+      auto host = node_endpoint.host;
+      if (host.empty())
+        host = "127.0.0.1";
+      VAST_VERBOSE("connecting to", host << ':' << node_endpoint.port);
+      node = caf::io::remote_actor(host, node_endpoint.port);
     } catch (caf::network_error const& e) {
       VAST_ERROR(e.what());
       return 1;
@@ -585,8 +588,7 @@ int main(int argc, char* argv[]) {
   }
   // Process commands.
   if (*cmd == "start") {
-    auto interfaces = endpoint.empty() ? nullptr : host.c_str();
-    return run_start(node, name, interfaces, port);
+    return run_start(node, name, node_endpoint);
   } else if (*cmd == "import") {
     message_builder mb;
     auto i = cmd + 1;

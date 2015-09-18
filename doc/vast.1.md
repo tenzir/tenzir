@@ -91,6 +91,10 @@ The following *options* are available:
   process when a worker gets scheduled. The default value of *-1* means an
   unlimited number of messages.
 
+`-n`
+  Do not attempt to connect to a remote **node** but start a local instance
+  instead.
+
 `-p` *logfile*
   Enable CAF profiling of worker threads and actors and write the per-second
   sampled data to *logfile*.

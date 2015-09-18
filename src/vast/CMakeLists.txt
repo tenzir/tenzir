@@ -79,7 +79,6 @@ set(libvast_sources
   io/iterator.cc
   io/stream_device.cc
   io/stream.cc
-  util/endpoint.cc
   util/fdistream.cc
   util/fdinbuf.cc
   util/fdostream.cc
