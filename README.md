@@ -21,11 +21,11 @@ Query a local node and get the result back as PCAP trace:
 
 Start a node with debug log verbosity in the foreground:
 
-    vastd -l 5 -f
+    vast -e 10.0.0.1 start -l 5 -f
 
 Send [Bro](http://www.bro.org) logs to the remote node:
 
-    zcat *.log.gz | vast -e 127.0.0.1 import bro
+    zcat *.log.gz | vast -e 10.0.0.1 import bro
 
 ## Resources
 

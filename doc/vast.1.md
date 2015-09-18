@@ -3,7 +3,7 @@
 NAME
 ----
 
-`vast` -- interface to a VAST node
+`vast` -- interface to manage a VAST ecosystem
 
 SYNOPSIS
 --------
@@ -17,45 +17,55 @@ VAST is a distributed platform for large-scale network forensics. Its modular
 system architecture is exclusively implemented in terms of the actor model. In
 this model, concurrent entities (actors) execute in parallel and
 communicate asynchronously solely via message passing. Users spawn system
-components as actors and connect them together to create a custom system
-topology.
+components as actors and connect them together to create a custom ecosystem.
 
 DESCRIPTION
 -----------
 
-The `vast` executable enables users to manage an ecosystem, such as creating
-event sources and sinks for data import/export, issuing queries, or retrieving
-statistics about system components.
+The `vast` executable enables users to manage a VAST ecosystem: one or more
+**node**s run various components, such as event sources and sinks for data
+import/export, issuing queries, or retrieving statistics about system
+components. The following key actors exist:
 
-The following key actors exist:
-
-**NODE**
+**node**
   The main VAST actor which accommodates all other actors and manages global
-  state. Use vastd(1) to start a NODE.
+  state.
 
-**SOURCE**
+**source**
   Generates events from a data source, such as packets from a network interface
   or log files.
 
-**SINK**
+**sink**
   Receives events as the result of a query and displays them in specific output
   format, such as JSON, PCAP (for packets), or Bro logs.
 
-**ARCHIVE**
+**archive**
   Compressed bulk storage of the all events.
 
-**INDEX**
+**index**
   Accelerates queries by constructing bitmap indexes over a subset of the event
   data.
 
-**IMPORTER**
-  Accepts events from SOURCEs, assigns them unique 64-bit IDs, and relays
-  them to ARCHIVE and INDEX.
+**importer**
+  Accepts events from **source**s, assigns them unique 64-bit IDs, and relays
+  them to **archive** and **index**.
 
-**EXPORTER**
-  Accepts query expressions from users, asks INDEX for hits, takes them to
-  ARCHIVE to extract candidates, and relays matching events to SINKs.
-  them to ARCHIVE and INDEX.
+**exporter**
+  Accepts query expressions from users, asks **index** for hits, takes them to
+  **archive** to extract candidates, and relays matching events to **sink**s.
+
+The `vast` executable spawns **node**, which acts as a container for other
+actors. Typically, each physical machine in a VAST deployment runs a single
+`vast` process. For single-machine deployments all actors run inside this
+process, whereas cluster deployments consist of multiple nodes with actors
+spread across them.
+
+Nodes can enter a peering relationship to form an ecosystem. All peers have
+the same authority: if one fails, others can take over. By default, each
+node includes all core actors: **archive**, **index**, **importer**. For
+more fine-grained control about the components running on a node, one can spawn
+the node in "bare" mode to get an empty container. This allows for more
+flexible arrangement of components to best match the available system hardware.
 
 OPTIONS
 -------
@@ -70,14 +80,30 @@ The following *options* are available:
 `-e` *endpoint* [*127.0.0.1:42000*]
   The endpoint of the node to connect to or launch. (See below)
 
-`-l` *verbosity* [*3*]
-  The logging verbosity. (See below)
-
 `-h`
   Display a help message and exit.
 
+`-l` *verbosity* [*3*]
+  The logging verbosity. (See below)
+
+`-m` *messages* [*-1*]
+  The CAF worker throughput expressed in the maximum number of messages to
+  process when a worker gets scheduled. The default value of *-1* means an
+  unlimited number of messages.
+
+`-p` *logfile*
+  Enable CAF profiling of worker threads and actors and write the per-second
+  sampled data to *logfile*.
+
+`-t` *threads* [*std::thread::hardware_concurrency()*]
+  The number of worker threads to use for CAF's scheduler.
+
 `-v`
   Print VAST version and exit.
+
+When specifying an endpoint via `-e`, `vast` connects to that endpoint to
+obtain a **node** reference. An exception is the command `vast start`,
+which uses the endpoint specification to spawn a **node**.
 
 ### endpoint
 
@@ -103,6 +129,7 @@ COMMANDS
 
 This section describes each *command* and its *arguments*. The following
 commands exist:
+    *start*         starts a node
     *stop*          stops a node
     *peer*          peers with another node
     *show*          shows various properties of an ecosystem
@@ -113,6 +140,38 @@ commands exist:
     *disconnect*    disconnects two connected actors
     *import*        imports data from standard input
     *export*        exports query results to standard output
+
+### start
+
+Synopsis:
+
+  *start* [*arguments*]
+
+Start a node at the specified endpoint.
+
+Available *arguments*:
+
+`-b`
+  Run in *bare* mode, i.e., do not spawn any actors. Use *bare* mode when you
+  want to create a custom topology. When not specifying this option, `vast`
+  automatically spawns all core actors by executing the following commands
+  upon spawning the node:
+
+      vast spawn identifier
+      vast spawn importer
+      vast spawn archive
+      vast spawn index
+      vast connect importer identifier
+      vast connect importer archive
+      vast connect importer index
+
+`-f`
+  Start in foreground, i.e., do not detach from controlling terminal and
+  run in background. Unless specified, VAST will call daemon(3).
+
+`-n` *name* [*hostname*]
+  Overrides the node *name*, which defaults to the system hostname. Each node
+  in an topology must have a unique name, otherwise peering fails.
 
 ### stop
 
@@ -376,6 +435,24 @@ Because *export* always writes to standard output, *-w file* has no effect.
 EXAMPLES
 --------
 
+Start a node with debug log verbosity in the foreground:
+
+    vast -e 10.0.0.1 start -l 5 -f
+
+Send [Bro](http://www.bro.org) logs to the remote node:
+
+    zcat *.log.gz | vast -e 10.0.0.1 import bro
+
+Import a PCAP trace into a local VAST node in one shot:
+
+    vast import pcap < trace.pcap
+
+Query a local node and get the result back as PCAP trace:
+
+    vast export pcap -h "sport > 60000/tcp && src !in 10.0.0.0/8" \
+      | ipsumdump --collate -w - \
+      | tcpdump -r - -nl
+
 Make the node at 10.0.0.1 peer with 10.0.0.2:
 
     vast -e 10.0.0.1 peer 10.0.0.2
@@ -385,23 +462,17 @@ topology:
 
     vast -e 1.2.3.4:31337 show topology
 
-Import Bro log files:
-
-    zcat log.gz | vast import bro
-
 Run a historical query, printed in ASCII, limited to at most 10 results:
 
     vast export ascii -h -e 10 :addr in 10.0.0.0/8
 
-BUGS
-----
+ISSUES
+------
 
 If you encounter a bug or have suggestions for improvement, please file an
-issue at https://github.com/mavam/vast/issues.
+issue at http://vast.fail.
 
 SEE ALSO
 --------
-
-vastd(1)
 
 Visit https://github.com/mavam/vast for more information about VAST.

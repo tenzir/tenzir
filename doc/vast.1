@@ -1,7 +1,7 @@
-.TH VAST 1 "September 01, 2015" 0.1 "Visibility Across Space and Time"
+.TH VAST 1 "September 18, 2015" 0.1 "Visibility Across Space and Time"
 .SH NAME
 .PP
-\fB\fCvast\fR \-\- interface to a VAST node
+\fB\fCvast\fR \-\- interface to manage a VAST ecosystem
 .SH SYNOPSIS
 .PP
 \fB\fCvast\fR [\fIoptions\fP] \fIcommand\fP [\fIarguments\fP]
@@ -11,45 +11,53 @@ VAST is a distributed platform for large\-scale network forensics. Its modular
 system architecture is exclusively implemented in terms of the actor model. In
 this model, concurrent entities (actors) execute in parallel and
 communicate asynchronously solely via message passing. Users spawn system
-components as actors and connect them together to create a custom system
-topology.
+components as actors and connect them together to create a custom ecosystem.
 .SH DESCRIPTION
 .PP
-The \fB\fCvast\fR executable enables users to manage an ecosystem, such as creating
-event sources and sinks for data import/export, issuing queries, or retrieving
-statistics about system components.
-.PP
-The following key actors exist:
+The \fB\fCvast\fR executable enables users to manage a VAST ecosystem: one or more
+\fBnode\fPs run various components, such as event sources and sinks for data
+import/export, issuing queries, or retrieving statistics about system
+components. The following key actors exist:
 .TP
-\fBNODE\fP
+\fBnode\fP
 The main VAST actor which accommodates all other actors and manages global
-state. Use 
-.BR vastd (1) 
-to start a NODE.
+state.
 .TP
-\fBSOURCE\fP
+\fBsource\fP
 Generates events from a data source, such as packets from a network interface
 or log files.
 .TP
-\fBSINK\fP
+\fBsink\fP
 Receives events as the result of a query and displays them in specific output
 format, such as JSON, PCAP (for packets), or Bro logs.
 .TP
-\fBARCHIVE\fP
+\fBarchive\fP
 Compressed bulk storage of the all events.
 .TP
-\fBINDEX\fP
+\fBindex\fP
 Accelerates queries by constructing bitmap indexes over a subset of the event
 data.
 .TP
-\fBIMPORTER\fP
-Accepts events from SOURCEs, assigns them unique 64\-bit IDs, and relays
-them to ARCHIVE and INDEX.
+\fBimporter\fP
+Accepts events from \fBsource\fPs, assigns them unique 64\-bit IDs, and relays
+them to \fBarchive\fP and \fBindex\fP\&.
 .TP
-\fBEXPORTER\fP
-Accepts query expressions from users, asks INDEX for hits, takes them to
-ARCHIVE to extract candidates, and relays matching events to SINKs.
-them to ARCHIVE and INDEX.
+\fBexporter\fP
+Accepts query expressions from users, asks \fBindex\fP for hits, takes them to
+\fBarchive\fP to extract candidates, and relays matching events to \fBsink\fPs.
+.PP
+The \fB\fCvast\fR executable spawns \fBnode\fP, which acts as a container for other
+actors. Typically, each physical machine in a VAST deployment runs a single
+\fB\fCvast\fR process. For single\-machine deployments all actors run inside this
+process, whereas cluster deployments consist of multiple nodes with actors
+spread across them.
+.PP
+Nodes can enter a peering relationship to form an ecosystem. All peers have
+the same authority: if one fails, others can take over. By default, each
+node includes all core actors: \fBarchive\fP, \fBindex\fP, \fBimporter\fP\&. For
+more fine\-grained control about the components running on a node, one can spawn
+the node in "bare" mode to get an empty container. This allows for more
+flexible arrangement of components to best match the available system hardware.
 .SH OPTIONS
 .PP
 The \fIoptions\fP in front of \fIcommand\fP control how to to connect to a node.
@@ -62,14 +70,30 @@ The directory for logs and state.
 \fB\fC\-e\fR \fIendpoint\fP [\fI127.0.0.1:42000\fP]
 The endpoint of the node to connect to or launch. (See below)
 .TP
-\fB\fC\-l\fR \fIverbosity\fP [\fI3\fP]
-The logging verbosity. (See below)
-.TP
 \fB\fC\-h\fR
 Display a help message and exit.
 .TP
+\fB\fC\-l\fR \fIverbosity\fP [\fI3\fP]
+The logging verbosity. (See below)
+.TP
+\fB\fC\-m\fR \fImessages\fP [\fI\-1\fP]
+The CAF worker throughput expressed in the maximum number of messages to
+process when a worker gets scheduled. The default value of \fI\-1\fP means an
+unlimited number of messages.
+.TP
+\fB\fC\-p\fR \fIlogfile\fP
+Enable CAF profiling of worker threads and actors and write the per\-second
+sampled data to \fIlogfile\fP\&.
+.TP
+\fB\fC\-t\fR \fIthreads\fP [\fIstd::thread::hardware_concurrency()\fP]
+The number of worker threads to use for CAF's scheduler.
+.TP
 \fB\fC\-v\fR
 Print VAST version and exit.
+.PP
+When specifying an endpoint via \fB\fC\-e\fR, \fB\fCvast\fR connects to that endpoint to
+obtain a \fBnode\fP reference. An exception is the command \fB\fCvast start\fR,
+which uses the endpoint specification to spawn a \fBnode\fP\&.
 .SS endpoint
 .PP
 An endpoint has the format \fIhost:port\fP where \fIhost\fP is a hostname or IP address
@@ -91,6 +115,7 @@ in log files. It can take on the following values:
 .PP
 This section describes each \fIcommand\fP and its \fIarguments\fP\&. The following
 commands exist:
+    \fIstart\fP         starts a node
     \fIstop\fP          stops a node
     \fIpeer\fP          peers with another node
     \fIshow\fP          shows various properties of an ecosystem
@@ -101,6 +126,42 @@ commands exist:
     \fIdisconnect\fP    disconnects two connected actors
     \fIimport\fP        imports data from standard input
     \fIexport\fP        exports query results to standard output
+.SS start
+.PP
+Synopsis:
+.IP
+\fIstart\fP [\fIarguments\fP]
+.PP
+Start a node at the specified endpoint.
+.PP
+Available \fIarguments\fP:
+.TP
+\fB\fC\-b\fR
+Run in \fIbare\fP mode, i.e., do not spawn any actors. Use \fIbare\fP mode when you
+want to create a custom topology. When not specifying this option, \fB\fCvast\fR
+automatically spawns all core actors by executing the following commands
+upon spawning the node:
+.PP
+.RS
+.nf
+  vast spawn identifier
+  vast spawn importer
+  vast spawn archive
+  vast spawn index
+  vast connect importer identifier
+  vast connect importer archive
+  vast connect importer index
+.fi
+.RE
+.TP
+\fB\fC\-f\fR
+Start in foreground, i.e., do not detach from controlling terminal and
+run in background. Unless specified, VAST will call 
+.BR daemon (3).
+.TP
+\fB\fC\-n\fR \fIname\fP [\fIhostname\fP]
+Overrides the node \fIname\fP, which defaults to the system hostname. Each node
+in an topology must have a unique name, otherwise peering fails.
 .SS stop
 .PP
 Synopsis:
@@ -352,6 +413,41 @@ invoking \fIexport\fP\&.
 Because \fIexport\fP always writes to standard output, \fI\-w file\fP has no effect.
 .SH EXAMPLES
 .PP
+Start a node with debug log verbosity in the foreground:
+.PP
+.RS
+.nf
+vast \-e 10.0.0.1 start \-l 5 \-f
+.fi
+.RE
+.PP
+Send Bro
+\[la]http://www.bro.org\[ra] logs to the remote node:
+.PP
+.RS
+.nf
+zcat *.log.gz | vast \-e 10.0.0.1 import bro
+.fi
+.RE
+.PP
+Import a PCAP trace into a local VAST node in one shot:
+.PP
+.RS
+.nf
+vast import pcap < trace.pcap
+.fi
+.RE
+.PP
+Query a local node and get the result back as PCAP trace:
+.PP
+.RS
+.nf
+vast export pcap \-h "sport > 60000/tcp && src !in 10.0.0.0/8" \\
+  | ipsumdump \-\-collate \-w \- \\
+  | tcpdump \-r \- \-nl
+.fi
+.RE
+.PP
 Make the node at 10.0.0.1 peer with 10.0.0.2:
 .PP
 .RS
@@ -369,14 +465,6 @@ vast \-e 1.2.3.4:31337 show topology
 .fi
 .RE
 .PP
-Import Bro log files:
-.PP
-.RS
-.nf
-zcat log.gz | vast import bro
-.fi
-.RE
-.PP
 Run a historical query, printed in ASCII, limited to at most 10 results:
 .PP
 .RS
@@ -384,14 +472,12 @@ Run a historical query, printed in ASCII, limited to at most 10 results:
 vast export ascii \-h \-e 10 :addr in 10.0.0.0/8
 .fi
 .RE
-.SH BUGS
+.SH ISSUES
 .PP
 If you encounter a bug or have suggestions for improvement, please file an
 issue at 
-\[la]https://github.com/mavam/vast/issues\[ra]\&.
+\[la]http://vast.fail\[ra]\&.
 .SH SEE ALSO
-.PP
-.BR vastd (1)
 .PP
 Visit 
 \[la]https://github.com/mavam/vast\[ra] for more information about VAST.
