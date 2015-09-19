@@ -1,5 +1,6 @@
 #include "vast/event.h"
 #include "vast/query_options.h"
+#include "vast/actor/atoms.h"
 #include "vast/actor/index.h"
 #include "vast/concept/printable/vast/expression.h"
 
@@ -17,7 +18,7 @@ TEST(index) {
   MESSAGE("sending events to index");
   path dir = "vast-test-index";
   scoped_actor self;
-  auto idx = self->spawn<vast::index, priority_aware>(dir, 500, 2, 3);
+  auto idx = self->spawn<priority_aware>(index::make, dir, 500, 2, 3);
   self->send(idx, events0);
   self->send(idx, events1);
 
@@ -26,7 +27,7 @@ TEST(index) {
   self->await_all_other_actors_done();
 
   MESSAGE("reloading index and running a query against it");
-  idx = self->spawn<vast::index, priority_aware>(dir, 500, 2, 3);
+  idx = self->spawn<priority_aware>(index::make, dir, 500, 2, 3);
   auto expr = vast::detail::to_expression("c >= 42 && c < 84");
   REQUIRE(expr);
   actor task;

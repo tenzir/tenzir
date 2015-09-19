@@ -436,7 +436,8 @@ behavior node::spawn_actor(event_based_actor* self) {
           return;
         }
         auto dir = dir_ / "index";
-        auto idx = spawn<index, priority_aware>(dir, events, passive, active);
+        auto idx = spawn<priority_aware>(index::make, dir, events, passive,
+                                         active);
         self->send(idx, accountant_);
         save_actor(std::move(idx), "index");
       },
