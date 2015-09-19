@@ -17,7 +17,7 @@ TEST(partition) {
   MESSAGE("sending events to partition");
   path dir = "vast-test-partition";
   scoped_actor self;
-  auto p = self->spawn<partition, monitored+priority_aware>(dir, self);
+  auto p = self->spawn<monitored + priority_aware>(partition::make, dir, self);
   auto t = self->spawn<monitored>(task::make<time::moment, uint64_t>,
                                   time::snapshot(), events0.size());
   self->send(p, events0, t);
@@ -32,7 +32,7 @@ TEST(partition) {
   self->receive([&](down_msg const& msg) { CHECK(msg.source == p); });
 
   MESSAGE("reloading partition and running a query against it");
-  p = self->spawn<partition, monitored+priority_aware>(dir, self);
+  p = self->spawn<monitored + priority_aware>(partition::make, dir, self);
   auto expr = vast::detail::to_expression("&time < now && c >= 42 && c < 84");
   REQUIRE(expr);
   self->send(p, *expr, historical_atom::value);

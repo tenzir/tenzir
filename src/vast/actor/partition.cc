@@ -1,6 +1,7 @@
 #include <caf/all.hpp>
 
 #include "vast/event.h"
+#include "vast/actor/atoms.h"
 #include "vast/actor/indexer.h"
 #include "vast/actor/partition.h"
 #include "vast/actor/task.h"
@@ -19,194 +20,178 @@ namespace vast {
 
 namespace {
 
-// Accumulates all hits from an event batch, evalutes a query, and sends the
-// result of the evaluation to PARTITION.
 template <typename Bitstream>
-struct continuous_query_proxy : default_actor {
-  using predicate_map = std::map<predicate, Bitstream>;
+using hits_map = std::map<predicate, Bitstream>;
 
-  // Evalutes an expression according to a given set of predicates.
-  struct evaluator : expr::bitstream_evaluator<evaluator, Bitstream> {
-    evaluator(predicate_map const& pm) : map_{pm} {
+// Receives hits from INDEXERs and evaluates a set of expression over them.
+template <typename Bitstream>
+struct accumulator {
+  struct state : basic_state {
+    state(local_actor *self) : basic_state{self, "accumulator"} { }
+
+    Bitstream evaluate(expression const& expr) const {
+      struct evaluator : expr::bitstream_evaluator<evaluator, Bitstream> {
+        evaluator(state const* s) : this_{s} { }
+        Bitstream const* lookup(predicate const& pred) const {
+          auto i = this_->hits.find(pred);
+          return i == this_->hits.end() ? nullptr : &i->second;
+        }
+        state const* this_;
+      };
+      return visit(evaluator{this}, expr);
     }
 
-    Bitstream const* lookup(predicate const& pred) const {
-      auto i = map_.find(pred);
-      return i == map_.end() ? nullptr : &i->second;
-    }
+    hits_map<Bitstream> hits;
+  };
 
-    predicate_map const& map_;
+  static behavior make(stateful_actor<state>* self,
+                       std::vector<expression> exprs, actor const& sink) {
+    return {
+      [=](expression& pred, Bitstream& hits) {
+        auto p = get<predicate>(pred);
+        VAST_ASSERT(p);
+        self->state.hits.emplace(std::move(*p), std::move(hits));
+      },
+      [self, exprs=std::move(exprs), sink](done_atom) {
+        for (auto& expr : exprs) {
+          VAST_DEBUG_AT(self, "evalutes continuous query:", expr);
+          self->send(sink, expr, self->state.evaluate(expr));
+        }
+        self->quit(exit::done);
+        // TODO: relay the hits back to PARTITION if the query is also
+        // historical. Caveat: we should not re-evaluate the historical query
+        // with these hits to avoid that the sink receives duplicate hits.
+      }
+    };
+  }
+};
+
+// Accumulates all hits from an event batch, evalutes a query, and sends the
+// result of the evaluation back to PARTITION.
+template <typename Bitstream>
+struct cq_proxy {
+  struct state : basic_state {
+    state(local_actor* self) : basic_state{self, "cq-proxy"} { }
+
+    util::flat_set<expression> exprs;
+    util::flat_set<predicate> preds;
   };
 
   // Accumulates hits from indexers for a single event batch.
-  struct accumulator : default_actor {
-    accumulator(std::vector<expression> exprs, actor sink)
-      : default_actor{"accumulator"},
-        exprs_{std::move(exprs)},
-        sink_{std::move(sink)} {
-    }
-
-    void on_exit() override {
-      sink_ = invalid_actor;
-    }
-
-    behavior make_behavior() override {
-      return {
-        [=](expression& pred, Bitstream& hits) {
-          auto p = get<predicate>(pred);
-          VAST_ASSERT(p);
-          map_.emplace(std::move(*p), std::move(hits));
-        },
-        [=](done_atom) {
-          for (auto& expr : exprs_) {
-            VAST_DEBUG(this, "evalutes continuous query:", expr);
-            send(sink_, expr, visit(evaluator{map_}, expr));
-          }
-          quit(exit::done);
-          // TODO: relay predicate_map back to PARTITION if the query is also
-          // historical. Caveat: we should not re-evaluate the historical query
-          // with these hits to avoid that the sink receives duplicate hits.
-        }
-      };
-    }
-
-    predicate_map map_;
-    std::vector<expression> exprs_;
-    actor sink_;
-  };
-
-  continuous_query_proxy(actor sink)
-    : default_actor{"continuous-query-proxy"}, sink_{std::move(sink)} {
-  }
-
-  void on_exit() override {
-    sink_ = invalid_actor;
-  }
-
-  behavior make_behavior() override {
+  static behavior make(stateful_actor<state>* self, actor const& sink) {
     return {
       [=](expression const& expr) {
-        exprs_.insert(expr);
+        self->state.exprs.insert(expr);
         for (auto& p : visit(expr::predicatizer{}, expr))
-          preds_.insert(std::move(p));
+          self->state.preds.insert(std::move(p));
       },
       [=](expression const& expr, disable_atom) {
-        exprs_.erase(expr);
-        preds_.clear();
-        if (exprs_.empty())
-          quit(exit::done);
+        self->state.exprs.erase(expr);
+        self->state.preds.clear();
+        if (self->state.exprs.empty())
+          self->quit(exit::done);
         else
-          for (auto& ex : exprs_)
+          for (auto& ex : self->state.exprs)
             for (auto& p : visit(expr::predicatizer{}, ex))
-              preds_.insert(std::move(p));
+              self->state.preds.insert(std::move(p));
       },
-      [=](expression& expr, Bitstream& hits) {
-        VAST_DEBUG(this, "relays", hits.count(), "hits");
-        send(sink_, std::move(expr), std::move(hits),
-             continuous_atom::value);
+      [=](expression const&, Bitstream const& hits) {
+        VAST_DEBUG_AT(self, "relays", hits.count(), "hits");
+        self->send(sink, self->current_message()
+                           + make_message(continuous_atom::value));
       },
       [=](std::vector<actor> const& indexers) {
-        VAST_DEBUG(this, "got", indexers.size(), "indexers");
-        if (exprs_.empty()) {
-          VAST_WARN(this, "got indexers without having queries");
+        VAST_DEBUG_AT(self, "got", indexers.size(), "indexers");
+        if (self->state.exprs.empty()) {
+          VAST_WARN_AT(self, "got indexers without having queries");
           return;
         }
         // FIXME: do not stupidly send every predicate to every indexer,
         // rather, pick the minimal subset intelligently.
-        auto acc = spawn<accumulator>(exprs_.as_vector(), this);
-        auto t = spawn(task::make<>);
-        send(t, supervisor_atom::value, acc);
-        for (auto& i : indexers) {
-          send(t, i, uint64_t{preds_.size()});
-          for (auto& p : preds_)
-            send(i, expression{p}, acc, t);
+        auto acc = self->spawn(accumulator<Bitstream>::make,
+                               self->state.exprs.as_vector(), self);
+        auto t = self->spawn(task::make<>);
+        self->send(t, supervisor_atom::value, acc);
+        for (auto& indexer : indexers) {
+          self->send(t, indexer, uint64_t{self->state.preds.size()});
+          for (auto& p : self->state.preds)
+            self->send(indexer, expression{p}, acc, t);
         }
       }
     };
   }
-
-  actor sink_;
-  util::flat_set<expression> exprs_;
-  util::flat_set<predicate> preds_;
 };
 
 } // namespace <anonymous>
 
-partition::evaluator::evaluator(partition const& p) : partition_{p} {
-}
+partition::state::state(local_actor* self) : basic_state{self, "partition"} { }
 
-partition::bitstream_type const*
-partition::evaluator::lookup(predicate const& pred) const {
-  auto p = partition_.predicates_.find(pred);
-  return p == partition_.predicates_.end() ? nullptr : &p->second.hits;
-}
-
-partition::partition(path dir, actor sink)
-  : flow_controlled_actor{"partition"},
-    dir_{std::move(dir)},
-    sink_{std::move(sink)} {
-  VAST_ASSERT(sink_ != invalid_actor);
-  trap_exit(true);
-}
-
-void partition::on_exit() {
-  sink_ = invalid_actor;
-  proxy_ = invalid_actor;
-  indexers_.clear();
-  predicates_.clear();
-  queries_.clear();
-}
-
-behavior partition::make_behavior() {
-  if (exists(dir_)) {
-    using vast::load;
-    auto t = load(dir_ / "schema", schema_);
+behavior partition::make(stateful_actor<state>* self, path dir, actor sink) {
+  VAST_ASSERT(sink != invalid_actor);
+  // If the directory exists already, we must have some state and are loading
+  // all INDEXERs.
+  // FIXME: it might be cheaper to load them on demand.
+  if (exists(dir)) {
+    // Load PARTITION meta data.
+    auto t = load(dir / "schema", self->state.schema);
     if (!t) {
-      VAST_ERROR(this, "failed to load schema:", t.error());
-      quit(exit::error);
-      return {};
-    }
-    VAST_ASSERT(!schema_.empty());
-    for (auto& p : directory{dir_}) {
-      auto interval = p.basename().str();
-      if (p.is_directory()) {
-        // Extract the base ID from the path. Directories have the form a-b.
-        auto dash = interval.find('-');
-        if (dash < 1 || dash == std::string::npos) {
-          VAST_WARN(this, "ignores directory with invalid format:", interval);
-          continue;
-        }
-        auto left = interval.substr(0, dash);
-        auto base = to<event_id>(left);
-        if (!base) {
-          VAST_WARN("ignores directory with invalid event ID:", left);
-          continue;
-        }
-        // Load the indexer for each event.
-        for (auto& name : directory{p}) {
-          VAST_DEBUG(this, "loads", interval / name.basename());
-          auto t = schema_.find_type(name.basename().str());
-          VAST_ASSERT(t != nullptr);
-          auto a = spawn<monitored>(
-            event_indexer<bitstream_type>::make, name, *t);
-          indexers_.emplace(*base, a);
+      VAST_ERROR_AT(self, "failed to load schema:", t.error());
+      self->quit(exit::error);
+    } else {
+      // Load INDXERs for each batch.
+      VAST_ASSERT(!self->state.schema.empty());
+      for (auto& batch_dir : directory{dir}) {
+        auto interval = batch_dir.basename().str();
+        if (batch_dir.is_directory()) {
+          // Extract the base ID from the path. Directories have the form a-b
+          // to represent the batch [a,b).
+          auto dash = interval.find('-');
+          if (dash < 1 || dash == std::string::npos) {
+            VAST_WARN_AT(self, "ignores directory with invalid format:",
+                         interval);
+            continue;
+          }
+          auto left = interval.substr(0, dash);
+          auto base = to<event_id>(left);
+          if (!base) {
+            VAST_WARN_AT("ignores directory with invalid event ID:", left);
+            continue;
+          }
+          // Load the INDEXERs for each type in the batch.
+          for (auto& type_dir : directory{batch_dir}) {
+            VAST_DEBUG_AT(self, "loads", interval / type_dir.basename());
+            auto t = self->state.schema.find_type(type_dir.basename().str());
+            VAST_ASSERT(t != nullptr);
+            auto a = self->spawn<monitored>(
+              event_indexer<bitstream_type>::make, type_dir, *t);
+            self->state.indexers.emplace(*base, a);
+          }
         }
       }
     }
   }
+  // Write schema to disk.
+  auto flush = [=] {
+    if (self->state.schema.empty())
+      return;
+    VAST_DEBUG_AT(self, "flushes schema");
+    auto t = save(dir / "schema", self->state.schema);
+    if (!t) {
+      VAST_ERROR_AT(self, "failed to flush:", t.error());
+      self->quit(exit::error);
+    }
+  };
   // Basic DOWN handler.
   auto on_down = [=](down_msg const& msg) {
-    if (msg.source == proxy_->address()) {
-      proxy_ = invalid_actor;
+    if (msg.source == self->state.proxy) {
+      self->state.proxy = invalid_actor;
       return;
     }
-    if (remove_upstream_node(msg.source))
-      return;
-    auto i = std::find_if(indexers_.begin(), indexers_.end(), [&](auto& p) {
-      return p.second.address() == msg.source;
-    });
-    if (i != indexers_.end())
-      indexers_.erase(i);
+    auto pred = [&](auto& p) { return p.second.address() == msg.source; };
+    auto i = std::find_if(self->state.indexers.begin(),
+                          self->state.indexers.end(), pred);
+    if (i != self->state.indexers.end())
+      self->state.indexers.erase(i);
   };
   // Handler executing after indexing a batch of events.
   auto on_done = [=](done_atom, time::moment start, uint64_t events) {
@@ -214,63 +199,69 @@ behavior partition::make_behavior() {
     auto runtime = stop - start;
     auto unit = time::duration_cast<time::microseconds>(runtime).count();
     auto rate = events * 1e6 / unit;
-    VAST_DEBUG(this, "indexed", events, "events in", runtime,
+    VAST_DEBUG_AT(self, "indexed", events, "events in", runtime,
                '(' << size_t(rate), "events/sec)");
-    if (accountant_) {
+    if (self->state.accountant) {
       static auto to_sec = [](auto t) -> int64_t{
         auto tp = t.time_since_epoch();
         return time::duration_cast<time::microseconds>(tp).count();
       };
-      send(accountant_, "partition", "indexing.start", to_sec(start));
-      send(accountant_, "partition", "indexing.stop", to_sec(stop));
-      send(accountant_, "partition", "indexing.events", events);
-      send(accountant_, "partition", "indexing.rate", rate);
+      self->send(self->state.accountant, "partition", "indexing.start",
+                 to_sec(start));
+      self->send(self->state.accountant, "partition", "indexing.stop",
+                 to_sec(stop));
+      self->send(self->state.accountant, "partition", "indexing.events",
+                 events);
+      self->send(self->state.accountant, "partition", "indexing.rate", rate);
     }
-    VAST_ASSERT(events_indexed_concurrently_ >= events);
-    events_indexed_concurrently_ -= events;
+    VAST_ASSERT(self->state.pending_events >= events);
+    self->state.pending_events -= events;
   };
+  self->trap_exit(true);
   return {
-    forward_overload(),
-    forward_underload(),
-    register_upstream_node(),
     [=](exit_msg const& msg) {
+      // FIXME: don't abuse EXIT messages as shutdown mechanism.
       if (msg.reason == exit::kill) {
-        if (proxy_)
-          send_exit(proxy_, exit::kill);
-        for (auto& i : indexers_)
-          link_to(i.second);
-        for (auto& q : queries_)
-          link_to(q.second.task);
-        quit(msg.reason);
+        if (self->state.proxy)
+          self->send_exit(self->state.proxy, exit::kill);
+        for (auto& i : self->state.indexers)
+          self->link_to(i.second);
+        for (auto& q : self->state.queries)
+          self->link_to(q.second.task);
+        self->quit(msg.reason);
         return;
       }
-      if (downgrade_exit())
+      if (self->current_mailbox_element()->mid.is_high_priority()) {
+        VAST_DEBUG_AT(self, "delays EXIT from", msg.source);
+        self->send(message_priority::normal, self, self->current_message());
         return;
+      }
       // A partition doesn't have persistent query state, nor does the
       // continuous query proxy, so we can always terminate the them directly.
-      for (auto& q : queries_)
-        send_exit(q.second.task, msg.reason);
-      if (proxy_)
-        send_exit(proxy_, msg.reason);
-      if (indexers_.empty()) {
-        quit(msg.reason);
+      if (self->state.proxy)
+        self->send_exit(self->state.proxy, msg.reason);
+      for (auto& q : self->state.queries)
+        self->send_exit(q.second.task, msg.reason);
+      // Terminate after all INDEXERs have exited safely.
+      if (self->state.indexers.empty()) {
+        self->quit(msg.reason);
       } else {
-        VAST_DEBUG(this, "brings down all indexers");
-        for (auto& i : indexers_)
-          send_exit(i.second, msg.reason);
-        // Terminate not before all indexers have exited and we've recorded
-        // their sample to the accountant.
-        become(
-          [reason=msg.reason, on_down, this](down_msg const& down) {
+        VAST_DEBUG_AT(self, "brings down all indexers");
+        for (auto& i : self->state.indexers)
+          self->send_exit(i.second, msg.reason);
+        // Terminate not before all INDEXERS have exited and we've recorded
+        // the fact that they have finished.
+        self->become(
+          [reason=msg.reason, on_down, self](down_msg const& down) {
             on_down(down);
-            if (events_indexed_concurrently_ == 0 && indexers_.empty())
-              quit(reason);
+            if (self->state.pending_events == 0 && self->state.indexers.empty())
+              self->quit(reason);
           },
-          [reason=msg.reason, on_done, this](done_atom, time::moment start,
+          [reason=msg.reason, on_done, self](done_atom, time::moment start,
                                              uint64_t events) {
             on_done(done_atom::value, start, events);
-            if (events_indexed_concurrently_ == 0 && indexers_.empty())
-              quit(reason);
+            if (self->state.pending_events == 0 && self->state.indexers.empty())
+              self->quit(reason);
           }
         );
       }
@@ -278,168 +269,169 @@ behavior partition::make_behavior() {
     },
     on_down,
     on_done,
-    [=](accountant::type const& acc) {
-      VAST_DEBUG_AT(this, "registers accountant#" << acc->id());
-      accountant_ = acc;
+    [=](accountant::type const& accountant) {
+      VAST_DEBUG_AT(self, "registers accountant#" << accountant->id());
+      self->state.accountant = accountant;
     },
     [=](std::vector<event> const& events, actor const& task) {
-      VAST_DEBUG(this, "got", events.size(),
+      VAST_DEBUG_AT(self, "got", events.size(),
                  "events [" << events.front().id() << ','
                             << (events.back().id() + 1) << ')');
       // Extract all unique types.
       util::flat_set<type> types;
       for (auto& e : events)
         types.insert(e.type());
-      // Create one event indexer per type.
+      // Create one INDEXER per type.
       auto base = events.front().id();
       auto interval = to_string(base) + "-" + to_string(base + events.size());
       std::vector<actor> indexers;
+      indexers.reserve(types.size());
       for (auto& t : types)
         if (!t.find_attribute(type::attribute::skip)) {
-          if (!schema_.add(t)) {
-            VAST_ERROR(this, "failed to incorporate types from new schema");
-            quit(exit::error);
+          if (!self->state.schema.add(t)) {
+            VAST_ERROR_AT(self, "failed to incorporate types from new schema");
+            self->quit(exit::error);
             return;
           }
-          auto indexer = spawn<monitored>(event_indexer<bitstream_type>::make,
-                                          dir_ / interval / t.name(), t);
+          auto indexer = self->spawn<monitored>(
+            event_indexer<bitstream_type>::make, dir / interval / t.name(), t);
           indexers.push_back(indexer);
-          indexers_.emplace(base, std::move(indexer));
+          self->state.indexers.emplace(base, std::move(indexer));
         }
       if (indexers.empty()) {
-        VAST_WARN(this, "didn't find any types to index");
-        send_exit(task, exit::done);
+        VAST_WARN_AT(self, "didn't find any types to index");
+        self->send_exit(task, exit::done);
         return;
       }
       for (auto& i : indexers) {
-        send(task, i);
-        send(i, current_message());
+        self->send(task, i);
+        self->send(i, self->current_message());
       }
-      if (proxy_ != invalid_actor)
-        send(proxy_, std::move(indexers));
-      events_indexed_concurrently_ += events.size();
-      send(task, supervisor_atom::value, this);
-      VAST_DEBUG(this, "indexes", events_indexed_concurrently_,
+      if (self->state.proxy != invalid_actor)
+        self->send(self->state.proxy, std::move(indexers));
+      self->state.pending_events += events.size();
+      self->send(task, supervisor_atom::value, self);
+      VAST_DEBUG_AT(self, "indexes", self->state.pending_events,
                  "events in parallel");
     },
     [=](expression const& expr, continuous_atom) {
-      VAST_DEBUG(this, "got continuous query:", expr);
-      if (!proxy_)
-        proxy_
-          = spawn<continuous_query_proxy<default_bitstream>, monitored>(sink_);
-      send(proxy_, expr);
+      VAST_DEBUG_AT(self, "got continuous query:", expr);
+      if (!self->state.proxy)
+        self->state.proxy
+          = self->spawn<monitored>(cq_proxy<default_bitstream>::make, sink);
+      self->send(self->state.proxy, expr);
     },
     [=](expression const& expr, continuous_atom, disable_atom) {
-      VAST_DEBUG(this, "got continuous query:", expr);
-      if (!proxy_)
-        VAST_WARN(this, "ignores disable request, no continuous queries");
+      VAST_DEBUG_AT(self, "got continuous query:", expr);
+      if (!self->state.proxy)
+        VAST_WARN_AT(self, "ignores disable request, no continuous queries");
       else
-        send(proxy_, expr, disable_atom::value);
+        self->send(self->state.proxy, expr, disable_atom::value);
     },
     [=](expression const& expr, historical_atom) {
-      VAST_DEBUG(this, "got historical query:", expr);
-      auto q = queries_.emplace(expr, query_state()).first;
+      VAST_DEBUG_AT(self, "got historical query:", expr);
+      auto q = self->state.queries.emplace(expr, query_state()).first;
       if (!q->second.task) {
         // Even if we still have evaluated this query in the past, we still
         // spin up a new task to ensure that we incorporate results from events
         // that have arrived in the meantime.
-        VAST_DEBUG(this, "spawns new query task");
-        q->second.task = spawn(task::make<time::moment, expression>,
+        VAST_DEBUG_AT(self, "spawns new query task");
+        q->second.task = self->spawn(task::make<time::moment, expression>,
                                time::snapshot(), q->first);
-        send(q->second.task, supervisor_atom::value, this);
-        send(q->second.task, this);
+        self->send(q->second.task, supervisor_atom::value, self);
+        self->send(q->second.task, self);
         for (auto& pred : visit(expr::predicatizer{}, expr)) {
-          VAST_DEBUG(this, "dispatches predicate", pred);
-          auto p = predicates_.emplace(pred, predicate_state()).first;
+          VAST_DEBUG_AT(self, "dispatches predicate", pred);
+          auto p =
+            self->state.predicates.emplace(pred, predicate_state()).first;
           p->second.queries.insert(&q->first);
-          auto i = indexers_.begin();
-          while (i != indexers_.end()) {
+          auto i = self->state.indexers.begin();
+          while (i != self->state.indexers.end()) {
             // We forward the predicate to the subset of indexers which we
             // haven't asked yet. If an indexer has already lookup up predicate
             // in the past, it must have sent the hits back to this partition,
             // or is in the process of doing so.
             auto base = i->first;
             if (p->second.cache.contains(i->first)) {
-              VAST_DEBUG(this, "skips indexers for base", base);
-              while (base == i->first && i != indexers_.end())
+              VAST_DEBUG_AT(self, "skips indexers for base", base);
+              while (base == i->first && i != self->state.indexers.end())
                 ++i;
             } else {
-              VAST_DEBUG(this, "relays predicate to indexers for base", base);
-              while (base == i->first && i != indexers_.end()) {
-                VAST_DEBUG(this, " - forwards predicate to", i->second);
+              VAST_DEBUG_AT(self, "relays predicate for base", base);
+              while (base == i->first && i != self->state.indexers.end()) {
+                VAST_DEBUG_AT(self, " - forwards predicate to", i->second);
                 p->second.cache.insert(i->first);
                 if (!p->second.task) {
-                  p->second.task = spawn(task::make<time::moment, predicate>,
-                                         time::snapshot(), pred);
-                  send(p->second.task, supervisor_atom::value, this);
+                  p->second.task =
+                    self->spawn(task::make<time::moment, predicate>,
+                                time::snapshot(), pred);
+                  self->send(p->second.task, supervisor_atom::value, self);
                 }
-                send(q->second.task, p->second.task);
-                send(p->second.task, i->second);
-                send(i->second, expression{pred}, this, p->second.task);
+                self->send(q->second.task, p->second.task);
+                self->send(p->second.task, i->second);
+                self->send(i->second, expression{pred}, self, p->second.task);
                 ++i;
               }
             }
           }
         }
-        send(q->second.task, done_atom::value);
+        self->send(q->second.task, done_atom::value);
       }
       if (!q->second.hits.empty() && !q->second.hits.all_zeros())
-        send(sink_, expr, q->second.hits, historical_atom::value);
+        self->send(sink, expr, q->second.hits, historical_atom::value);
     },
     [=](expression const& pred, bitstream_type const& hits) {
-      VAST_DEBUG(this, "got", hits.count(), "hits for predicate:", pred);
-      predicates_[*get<predicate>(pred)].hits |= hits;
+      VAST_DEBUG_AT(self, "got", hits.count(), "hits for predicate:", pred);
+      self->state.predicates[*get<predicate>(pred)].hits |= hits;
     },
     [=](done_atom, time::moment start, predicate const& pred) {
+      struct evaluator : expr::bitstream_evaluator<evaluator,
+                                                   default_bitstream> {
+        evaluator(state const& s) : state_{s} { }
+        bitstream_type const* lookup(predicate const& pred) const {
+          auto p = state_.predicates.find(pred);
+          return p == state_.predicates.end() ? nullptr : &p->second.hits;
+        }
+        state const& state_;
+      };
       // Once we've completed all tasks of a certain predicate for all events,
       // we evaluate all queries in which the predicate participates.
-      auto& ps = predicates_[pred];
-      VAST_DEBUG(this, "took", time::snapshot() - start,
+      auto& ps = self->state.predicates[pred];
+      VAST_DEBUG_AT(self, "took", time::snapshot() - start,
                  "to complete predicate for", ps.cache.size(), "indexers:",
                  pred);
       for (auto& q : ps.queries) {
         VAST_ASSERT(q != nullptr);
-        VAST_DEBUG(this, "evaluates", *q);
-        auto& qs = queries_[*q];
-        auto hits = visit(evaluator{*this}, *q);
+        VAST_DEBUG_AT(self, "evaluates", *q);
+        auto& qs = self->state.queries[*q];
+        auto hits = visit(evaluator{self->state}, *q);
         if (!hits.empty() && !hits.all_zeros() && hits != qs.hits) {
-          VAST_DEBUG(this, "relays", hits.count(), "hits");
+          VAST_DEBUG_AT(self, "relays", hits.count(), "hits");
           qs.hits = hits;
-          send(sink_, *q, std::move(hits), historical_atom::value);
+          self->send(sink, *q, std::move(hits), historical_atom::value);
         }
       }
       ps.task = invalid_actor;
     },
     [=](done_atom, time::moment start, expression const& expr) {
-      VAST_DEBUG(this, "completed query", expr, "in", time::snapshot() - start);
-      queries_[expr].task = invalid_actor;
-      send(sink_, current_message());
+      VAST_DEBUG_AT(self, "completed query", expr, "in",
+                    time::snapshot() - start);
+      self->state.queries[expr].task = invalid_actor;
+      self->send(sink, self->current_message());
     },
     [=](flush_atom, actor const& task) {
-      VAST_DEBUG(this, "peforms flush");
-      send(task, this);
-      for (auto& i : indexers_)
+      VAST_DEBUG_AT(self, "peforms flush");
+      self->send(task, self);
+      for (auto& i : self->state.indexers)
         if (i.second) {
-          send(task, i.second);
-          send(i.second, flush_atom::value, task);
+          self->send(task, i.second);
+          self->send(i.second, flush_atom::value, task);
         }
       flush();
-      send(task, done_atom::value);
+      self->send(task, done_atom::value);
     },
-    catch_unexpected()
+    log_others(self)
   };
-}
-
-void partition::flush() {
-  if (schema_.empty())
-    return;
-  VAST_DEBUG(this, "flushes schema");
-  using vast::save;
-  auto t = save(dir_ / "schema", schema_);
-  if (!t) {
-    VAST_ERROR(this, "failed to flush:", t.error());
-    quit(exit::error);
-  }
 }
 
 } // namespace vast

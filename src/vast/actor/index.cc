@@ -60,8 +60,8 @@ optional<actor> dispatch(stateful_actor<index::state>* self,
   // self->spawn the partition directly.
   if (self->state.passive.size() < self->state.passive.capacity()) {
     VAST_DEBUG_AT(self, "spawns passive partition", part);
-    auto p = self->spawn<partition, monitored>(
-      self->state.dir / to_string(part), self);
+    auto p = self->spawn<monitored>(partition::make,
+                                    self->state.dir / to_string(part), self);
     if (self->state.accountant)
       self->send(p, self->state.accountant);
     self->state.passive.insert(part, p);
@@ -115,8 +115,8 @@ void consolidate(stateful_actor<index::state>*self,
     if (a == self->state.active.end()
         && !self->state.passive.contains(entry.part)) {
       VAST_DEBUG_AT(self, "schedules next passive partition", entry.part);
-      auto p = self->spawn<partition, monitored>(
-        self->state.dir / to_string(entry.part), self);
+      auto p = self->spawn<monitored>(
+        partition::make, self->state.dir / to_string(entry.part), self);
       if (self->state.accountant)
         self->send(p, self->state.accountant);
       self->state.passive.insert(entry.part, p); // automatically evicts 'part'.
@@ -186,8 +186,8 @@ behavior index::make(stateful_actor<state>*self, path const& dir,
     auto id = i < parts.size() ? parts[i].first : uuid::random();
     VAST_VERBOSE_AT(self, "spawns", (i < parts.size() ? "existing" : "new"),
                     "active partition", id);
-    auto p = self->spawn<partition, monitored>(
-      self->state.dir / to_string(id), self);
+    auto p = self->spawn<monitored>(partition::make,
+                                    self->state.dir / to_string(id), self);
     self->state.active[i] = {id, p};
     self->state.partitions[id].last_modified = time::now();
   }
@@ -291,8 +291,9 @@ behavior index::make(stateful_actor<state>*self, path const& dir,
         self->send_exit(a.second, exit::stop);
         // Create a new partition.
         a.first = uuid::random();
-        a.second = self->spawn<partition, monitored>(
-          self->state.dir / to_string(a.first), self);
+        a.second = self->spawn<monitored>(partition::make,
+                                          self->state.dir / to_string(a.first),
+                                          self);
         if (self->state.accountant)
           self->send(a.second, self->state.accountant);
         i = self->state.partitions.emplace(a.first, partition_state()).first;
