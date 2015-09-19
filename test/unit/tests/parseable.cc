@@ -323,6 +323,59 @@ TEST(real) {
   //  CHECK(f == str.begin() + 4);
 }
 
+TEST(binary) {
+  using namespace parsers;
+  auto str = "\x01\x02\x03\x04\x05\x06\x07\x08"s;
+
+  MESSAGE("big endian");
+  auto f = str.begin();
+  auto l = f + 1;
+  auto u8 = uint8_t{0};
+  CHECK(b8be.parse(f, l, u8));
+  CHECK(u8 == 0x01);
+  CHECK(f == l);
+  f = str.begin();
+  l = f + 2;
+  auto u16 = uint16_t{0};
+  CHECK(b16be.parse(f, l, u16));
+  CHECK(u16 == 0x0102);
+  CHECK(f == l);
+  f = str.begin();
+  l = f + 4;
+  auto u32 = uint32_t{0};
+  CHECK(b32be.parse(f, l, u32));
+  CHECK(u32 == 0x01020304);
+  CHECK(f == l);
+  f = str.begin();
+  l = f + 8;
+  auto u64 = uint64_t{0};
+  CHECK(b64be.parse(f, l, u64));
+  CHECK(u64 == 0x0102030405060708);
+  CHECK(f == l);
+
+  MESSAGE("little endian");
+  f = str.begin();
+  l = f + 1;
+  CHECK(b8le.parse(f, l, u8));
+  CHECK(u8 == 0x01);
+  CHECK(f == l);
+  f = str.begin();
+  l = f + 2;
+  CHECK(b16le.parse(f, l, u16));
+  CHECK(u16 == 0x0201);
+  CHECK(f == l);
+  f = str.begin();
+  l = f + 4;
+  CHECK(b32le.parse(f, l, u32));
+  CHECK(u32 == 0x04030201);
+  CHECK(f == l);
+  f = str.begin();
+  l = f + 8;
+  CHECK(b64le.parse(f, l, u64));
+  CHECK(u64 == 0x0807060504030201);
+  CHECK(f == l);
+}
+
 TEST(recursive rule) {
   using namespace parsers;
   rule<std::string::iterator, char> r;

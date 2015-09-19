@@ -20,7 +20,7 @@ struct extract<1> {
   static bool parse(Iterator& f, Iterator const& l, Attribute& a) {
     if (f == l)
       return false;
-    a = *f++;
+    a |= *f++;
     return true;
   }
 };
@@ -29,14 +29,10 @@ template <>
 struct extract<2> {
   template <typename Iterator, typename Attribute>
   static bool parse(Iterator& f, Iterator const& l, Attribute& a) {
-    if (f == l)
-      return false;
-    a = *f++;
-    if (f == l)
+    if (! extract<1>::parse(f, l, a))
       return false;
     a <<= 8;
-    a |= *f++;
-    return true;
+    return extract<1>::parse(f, l, a);
   }
 };
 
@@ -71,6 +67,7 @@ struct binary_parser : parser<binary_parser<T, Endian, Bytes>> {
   template <typename Iterator>
   static bool extract(Iterator& f, Iterator const& l, T& x) {
     auto save = f;
+    x = 0;
     if (!detail::extract<Bytes>::parse(save, l, x))
       return false;
     f = save;
