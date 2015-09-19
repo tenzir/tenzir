@@ -9,9 +9,6 @@
 #include "vast/concept/parseable/vast/detail/expression.h"
 
 namespace vast {
-namespace ast {
-namespace expr {} // namespace expr
-} // namespace ast
 
 struct expression_parser : vast::parser<expression_parser> {
   using attribute = expression;
@@ -19,6 +16,23 @@ struct expression_parser : vast::parser<expression_parser> {
   template <typename Iterator>
   static auto make() {
     using namespace parsers;
+    using predicate_tuple =
+      std::tuple<predicate::operand, relational_operator, predicate::operand>;
+    using group_tuple =
+      std::tuple<
+        expression,
+        std::vector<std::tuple<relational_operator, expression>>
+      >;
+    auto pred_to_expr = [](predicate_tuple t) -> predicate {
+      return {std::move(std::get<0>(t)), std::get<1>(t),
+              std::move(std::get<2>(t))};
+    };
+    auto str_to_operand = [](std::string str) -> predicate::operand {
+      return {}; // TODO
+    };
+    auto group_to_expr = [](group_tuple t) -> expression {
+      return {}; // TODO
+    };
     auto id
       = (alpha | '_' | '&' | ':') >> *(alnum | '_' | '.' | ':')
       ;
@@ -45,19 +59,20 @@ struct expression_parser : vast::parser<expression_parser> {
       | "&&"_p  ->* [] { return logical_and; }
       ;
     auto operand
-      = parsers::data | id
+      = parsers::data ->* [](data d) -> predicate::operand { return d; }
+      | id            ->* str_to_operand
       ;
     auto pred
-      = operand >> pred_op >> operand
+      = (operand >> pred_op >> operand) ->* pred_to_expr;
       ;
-    rule<Iterator> group; // TODO: use proper attribute.
+    rule<Iterator, expression> group;
     group
       = '(' >> group >> ')'
       | '!' >> group
       | pred
       ;
     auto expr
-      = group >> *(rel_op >> group)
+      = (group >> *(rel_op >> group)) ->* group_to_expr
       ;
     return expr;
   }
