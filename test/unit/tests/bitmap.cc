@@ -561,7 +561,6 @@ TEST(precision-binner fractional) {
 }
 
 TEST(decimal binner with integers) {
-  using base_type = uniform_base<10, 4>;
   using binner = decimal_binner<2>;
   bitmap<uint16_t, equality_coder<null_bitstream>, binner> bm{400};
   bm.push_back(183);
