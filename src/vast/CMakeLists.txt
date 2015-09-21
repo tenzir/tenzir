@@ -27,7 +27,9 @@ set(libvast_sources
   type.cc
   uuid.cc
   value.cc
+  actor/accountant.cc
   actor/archive.cc
+  actor/controller.cc
   actor/exporter.cc
   actor/importer.cc
   actor/identifier.cc
@@ -36,6 +38,7 @@ set(libvast_sources
   actor/node.cc
   actor/partition.cc
   actor/signal_monitor.cc
+  actor/task.cc
   actor/sink/ascii.cc
   actor/sink/bro.cc
   actor/sink/json.cc

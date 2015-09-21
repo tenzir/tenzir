@@ -1,5 +1,4 @@
 #include "vast/actor/source/bgpdump.h"
-
 #include "vast/concept/parseable/core.h"
 #include "vast/concept/parseable/numeric.h"
 #include "vast/concept/parseable/string/any.h"
@@ -13,8 +12,9 @@
 namespace vast {
 namespace source {
 
-bgpdump::bgpdump(std::unique_ptr<io::input_stream> is)
-  : line_based<bgpdump>{"bgpdump-source", std::move(is)} {
+bgpdump_state::bgpdump_state(local_actor* self)
+  : line_based_state{self, "bgpdump-source"} {
+  // Announce type.
   std::vector<type::record::field> fields;
   fields.emplace_back("timestamp", type::time_point{});
   fields.emplace_back("source_ip", type::address{});
@@ -31,10 +31,9 @@ bgpdump::bgpdump(std::unique_ptr<io::input_stream> is)
   fields.emplace_back("aggregator", type::string{});
   announce_type_ = type::record{fields};
   announce_type_.name("bgpdump::announcement");
-
+  // Route & withdraw type.
   route_type_ = type::record{std::move(fields)};
   route_type_.name("bgpdump::routing");
-
   std::vector<type::record::field> withdraw_fields;
   withdraw_fields.emplace_back("timestamp", type::time_point{});
   withdraw_fields.emplace_back("source_ip", type::address{});
@@ -42,7 +41,7 @@ bgpdump::bgpdump(std::unique_ptr<io::input_stream> is)
   withdraw_fields.emplace_back("prefix", type::subnet{});
   withdraw_type_ = type::record{std::move(withdraw_fields)};
   withdraw_type_.name("bgpdump::withdrawn");
-
+  // State-change type.
   std::vector<type::record::field> state_change_fields;
   state_change_fields.emplace_back("timestamp", type::time_point{});
   state_change_fields.emplace_back("source_ip", type::address{});
@@ -53,8 +52,8 @@ bgpdump::bgpdump(std::unique_ptr<io::input_stream> is)
   state_change_type_.name("bgpdump::state_change");
 }
 
-schema bgpdump::sniff() {
-  schema sch;
+schema bgpdump_state::schema() {
+  vast::schema sch;
   sch.add(announce_type_);
   sch.add(route_type_);
   sch.add(withdraw_type_);
@@ -62,7 +61,7 @@ schema bgpdump::sniff() {
   return sch;
 }
 
-void bgpdump::set(schema const& sch) {
+void bgpdump_state::schema(vast::schema const& sch) {
   if (auto t = sch.find_type(announce_type_.name())) {
     if (congruent(*t, announce_type_)) {
       VAST_VERBOSE("prefers type in schema over default type:", *t);
@@ -97,7 +96,7 @@ void bgpdump::set(schema const& sch) {
   }
 }
 
-result<event> bgpdump::extract() {
+result<event> bgpdump_state::extract() {
   using namespace parsers;
   static auto str = +(any - '|');
   static auto ts = u64->*[](count x) { return time::point{time::seconds{x}}; };
@@ -110,8 +109,8 @@ result<event> bgpdump::extract() {
   vast::address source_ip;
   count source_as;
   auto tuple = std::tie(timestamp, update, source_ip, source_as);
-  auto f = this->line().begin();
-  auto l = this->line().end();
+  auto f = line.begin();
+  auto l = line.end();
   if (!head.parse(f, l, tuple))
     return {};
   record r;
@@ -173,6 +172,10 @@ result<event> bgpdump::extract() {
     return e;
   }
   return {};
+}
+
+behavior bgpdump(stateful_actor<bgpdump_state>* self, std::streambuf* sb) {
+  return line_based(self, sb);
 }
 
 } // namespace source

@@ -1,11 +1,12 @@
 #ifndef VAST_ACTOR_SINK_BASE_H
 #define VAST_ACTOR_SINK_BASE_H
 
+#include "vast/actor/atoms.h"
+#include "vast/actor/accountant.h"
 #include "vast/concept/printable/vast/error.h"
 #include "vast/concept/printable/vast/event.h"
 #include "vast/concept/printable/vast/time.h"
 #include "vast/concept/printable/vast/uuid.h"
-#include "vast/actor/actor.h"
 #include "vast/event.h"
 #include "vast/time.h"
 #include "vast/uuid.h"
@@ -13,86 +14,78 @@
 namespace vast {
 namespace sink {
 
-/// The base class for event sinks.
-template <typename Derived>
-class base : public default_actor {
-public:
-  base(char const* name = "sink") : default_actor{name} {
-    trap_exit(true);
+// The base class for SINK actors.
+struct state : basic_state {
+  state(local_actor* self, char const* name)
+    : basic_state{self, name} {
   }
 
-  void on_exit() override {
-    static_cast<Derived*>(this)->flush();
-    accountant_ = caf::invalid_actor;
+  ~state() {
+    flush();
   }
 
-  caf::behavior make_behavior() override {
-    using namespace caf;
-    last_flush_ = time::snapshot();
-    return {
-      [=](exit_msg const& msg) { quit(msg.reason); },
-      [=](limit_atom, uint64_t max) {
-        VAST_DEBUG(this, "caps event export at", max, "events");
-        if (processed_ < max)
-          limit_ = max;
-        else
-          VAST_WARN(this, "ignores new limit of", max, "(already processed",
-                    processed_, " events)");
-      },
-      [=](put_atom, accountant_atom, actor const& accountant) {
-        VAST_DEBUG(this, "registers accountant", accountant);
-        accountant_ = accountant;
-        send(accountant_, label() + "-events", time::now());
-      },
-      [=](uuid const&, event const& e) { handle(e); },
-      [=](uuid const&, std::vector<event> const& v) {
-        assert(!v.empty());
-        for (auto& e : v)
-          if (!handle(e))
-            return;
-        if (accountant_)
-          send(accountant_, static_cast<uint64_t>(v.size()), time::snapshot());
-      },
-      [=](uuid const& id, progress_atom, double progress, uint64_t total_hits) {
-        VAST_VERBOSE(this, "got progress from query ", id << ':', total_hits,
-                     "hits (" << size_t(progress * 100) << "%)");
-      },
-      [=](uuid const& id, done_atom, time::extent runtime) {
-        VAST_VERBOSE(this, "got DONE from query", id << ", took", runtime);
-      },
-      catch_unexpected()};
-  }
+  virtual bool process(event const& e) = 0;
+  virtual void flush() { /* nop */ }
 
-protected:
-  void flush() {
-    // Nothing by default.
-  }
+  time::extent flush_interval = time::seconds(1); // TODO: make configurable
+  time::moment last_flush;
+  accountant::type accountant;
+  uint64_t processed = 0;
+  uint64_t limit = 0;
+};
 
-private:
-  bool handle(event const& e) {
-    if (!static_cast<Derived*>(this)->process(e)) {
-      VAST_ERROR(this, "failed to process event:", e);
-      this->quit(exit::error);
+template <typename State>
+behavior make(stateful_actor<State>* self) {
+  self->state.last_flush = time::snapshot();
+  auto handle = [=](event const& e) {
+    if (!self->state.process(e)) {
+      VAST_ERROR(self, "failed to process event:", e);
+      self->quit(exit::error);
       return false;
     }
-    if (++processed_ == limit_) {
-      VAST_VERBOSE(this, "reached limit: ", limit_, "events");
-      this->quit(exit::done);
+    if (++self->state.processed == self->state.limit) {
+      VAST_VERBOSE_AT(self, "reached limit: ", self->state.limit, "events");
+      self->quit(exit::done);
     }
     auto now = time::snapshot();
-    if (now - last_flush_ > flush_interval_) {
-      static_cast<Derived*>(this)->flush();
-      last_flush_ = now;
+    if (now - self->state.last_flush > self->state.flush_interval) {
+      self->state.flush();
+      self->state.last_flush = now;
     }
     return true;
-  }
-
-  time::extent flush_interval_ = time::seconds(1); // TODO: make configurable
-  time::moment last_flush_;
-  caf::actor accountant_;
-  uint64_t processed_ = 0;
-  uint64_t limit_ = 0;
-};
+  };
+  self->trap_exit(true);
+  return {
+    downgrade_exit_msg(self),
+    [=](limit_atom, uint64_t max) {
+      VAST_DEBUG_AT(self, "caps event export at", max, "events");
+      if (self->state.processed < max)
+        self->state.limit = max;
+      else
+        VAST_WARN_AT(self, "ignores new limit of", max, "(already processed",
+                     self->state.processed, " events)");
+    },
+    [=](accountant::type acc) {
+      VAST_DEBUG_AT(self, "registers accountant#" << acc->id());
+      self->state.accountant = acc;
+    },
+    [=](uuid const&, event const& e) { handle(e); },
+    [=](uuid const&, std::vector<event> const& v) {
+      assert(!v.empty());
+      for (auto& e : v)
+        if (!handle(e))
+          return;
+    },
+    [=](uuid const& id, progress_atom, double progress, uint64_t total_hits) {
+      VAST_VERBOSE_AT(self, "got progress from query ", id << ':', total_hits,
+                      "hits (" << size_t(progress * 100) << "%)");
+    },
+    [=](uuid const& id, done_atom, time::extent runtime) {
+      VAST_VERBOSE_AT(self, "got DONE from query", id << ", took", runtime);
+    },
+    log_others(self)
+  };
+}
 
 } // namespace sink
 } // namespace vast

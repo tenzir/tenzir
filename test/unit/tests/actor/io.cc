@@ -1,13 +1,11 @@
-#include <caf/all.hpp>
-
-#include "vast/actor/actor.h"
+#include "vast/caf.h"
+#include "vast/actor/atoms.h"
 #include "vast/io/actor_stream.h"
 #include "vast/io/buffered_stream.h"
 
 #define SUITE actors
 #include "test.h"
 
-using namespace caf;
 using namespace vast;
 
 TEST(actor_input_stream)

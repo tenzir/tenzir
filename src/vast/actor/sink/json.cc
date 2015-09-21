@@ -12,21 +12,26 @@
 namespace vast {
 namespace sink {
 
-json::json(std::unique_ptr<std::ostream> out)
-  : base<json>{"json-sink"}, out_{std::move(out)} {
-  VAST_ASSERT(out_ != nullptr);
+json_state::json_state(local_actor* self)
+  : state{self, "json-sink"} {
 }
 
-bool json::process(event const& e) {
+bool json_state::process(event const& e) {
   auto j = to<vast::json>(e);
   if (!j)
     return false;
-  auto i = std::ostreambuf_iterator<std::ostream::char_type>{*out_};
+  auto i = std::ostreambuf_iterator<char>{*out};
   return print(i, *j) && print(i, '\n');
 }
 
-void json::flush() {
-  out_->flush();
+void json_state::flush() {
+  out->flush();
+}
+
+behavior json(stateful_actor<json_state>* self, std::ostream* out) {
+  VAST_ASSERT(out != nullptr);
+  self->state.out = std::unique_ptr<std::ostream>{out};
+  return make(self);
 }
 
 } // namespace sink

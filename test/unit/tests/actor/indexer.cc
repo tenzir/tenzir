@@ -7,7 +7,6 @@
 #define SUITE actors
 #include "test.h"
 
-using namespace caf;
 using namespace vast;
 
 TEST(indexer)
@@ -35,9 +34,11 @@ TEST(indexer)
   scoped_actor self;
   path dir0 = "vast-test-indexer-t0";
   path dir1 = "vast-test-indexer-t1";
-  auto i0 = self->spawn<event_indexer<bitstream_type>, monitored>(dir0, t0);
-  auto i1 = self->spawn<event_indexer<bitstream_type>, monitored>(dir1, t1);
-  auto t = self->spawn<task, monitored>();
+  auto i0 = self->spawn(event_indexer<bitstream_type>::make, dir0, t0);
+  self->monitor(i0);
+  auto i1 = self->spawn(event_indexer<bitstream_type>::make, dir1, t1);
+  self->monitor(i1);
+  auto t = self->spawn<monitored>(task::make<>);
   self->send(t, i0);
   self->send(t, i1);
   self->send(i0, events, t);
@@ -46,7 +47,7 @@ TEST(indexer)
 
   MESSAGE("running a query against the first indexer");
   predicate pred{type_extractor{type::count{}}, less, data{100u}};
-  t = self->spawn<task, monitored>();
+  t = self->spawn<monitored>(task::make<>);
   self->send(t, i0);
   self->send(i0, expression{pred}, self, t);
   self->receive(
@@ -59,7 +60,7 @@ TEST(indexer)
 
   MESSAGE("running a query against the second indexer");
   pred = {type_extractor{t1}, less_equal, data{42.0}};
-  t = self->spawn<task, monitored>();
+  t = self->spawn<monitored>(task::make<>);
   self->send(t, i1);
   self->send(i1, expression{pred}, self, t);
   self->receive(
@@ -71,7 +72,7 @@ TEST(indexer)
   self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
 
   MESSAGE("writing first index to file system");
-  t = self->spawn<task, monitored>();
+  t = self->spawn<monitored>(task::make<>);
   self->send(t, i0);
   self->send(i0, flush_atom::value, t);
   self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
@@ -80,7 +81,7 @@ TEST(indexer)
   self->send_exit(i0, exit::done);
   self->receive([&](down_msg const& msg) { CHECK(msg.source == i0); });
   MESSAGE("writing second index to file system");
-  t = self->spawn<task, monitored>();
+  t = self->spawn<monitored>(task::make<>);
   self->send(t, i1);
   self->send(i1, flush_atom::value, t);
   self->receive([&](down_msg const& msg) { CHECK(msg.source == t); });
@@ -90,9 +91,10 @@ TEST(indexer)
   self->receive([&](down_msg const& msg) { CHECK(msg.source == i1); });
 
   MESSAGE("loading index from file system and querying again");
-  i0 = self->spawn<event_indexer<bitstream_type>, monitored>(dir0, t0);
+  i0 = self->spawn(event_indexer<bitstream_type>::make, dir0, t0);
+  self->monitor(i0);
   pred = predicate{type_extractor{type::count{}}, equal, data{998u}};
-  t = self->spawn<task, monitored>();
+  t = self->spawn<monitored>(task::make<>);
   self->send(t, i0);
   self->send(i0, expression{pred}, self, t);
   self->receive(

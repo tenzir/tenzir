@@ -3,11 +3,8 @@
 
 #include <vector>
 
-#include <caf/all.hpp>
-
 #include "vast/actor/node.h"
 
-using namespace caf;
 using namespace vast;
 
 namespace fixtures {
@@ -20,7 +17,8 @@ struct core {
     });
     if (exists(dir)) {
       MESSAGE("removing existing directory");
-      REQUIRE(rm(dir));
+      if (! rm(dir))
+        FAIL("failed to remove test directory: " << std::strerror(errno));
     }
   }
 
@@ -28,29 +26,22 @@ struct core {
     self->await_all_other_actors_done();
     if (exists(dir)) {
       MESSAGE("removing created directory");
-      REQUIRE(rm(dir));
+      if (! rm(dir))
+        FAIL("failed to remove test directory: " << std::strerror(errno));
     }
   }
 
   actor make_core() {
-    auto n = self->spawn<node>(node_name, dir);
-    std::vector<message> msgs = {
-      make_message("spawn", "archive", "-s", "1"),
-      make_message("spawn", "index", "-e", "10"),
-      make_message("spawn", "importer"),
-      make_message("spawn", "identifier"),
-      make_message("connect", "importer", "identifier"),
-      make_message("connect", "importer", "archive"),
-      make_message("connect", "importer", "index"),
-    };
-    for (auto& msg : msgs)
-      self->sync_send(n, msg).await(
-        [&](error const& e) {
-          FAIL(e);
-        },
-        // Everyting except an error is a valid return value.
-        others >> [] {}
-      );
+    auto n = self->spawn(node::make, node_name, dir);
+    auto hdl = self->sync_send(n, "spawn", "core",
+                               "--archive-segments=1",
+                               "--index-events=10");
+    hdl.await(
+      [](ok_atom) {},
+      [&](error const& e) {
+        FAIL(e);
+      }
+    );
     return n;
   }
 

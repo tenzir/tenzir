@@ -1,22 +1,26 @@
 #ifndef VAST_ACTOR_SIGNAL_MONITOR_H
 #define VAST_ACTOR_SIGNAL_MONITOR_H
 
-#include <caf/all.hpp>
-
-#include "vast/actor/actor.h"
+#include "vast/actor/atoms.h"
+#include "vast/actor/basic_state.h"
 
 namespace vast {
 
-/// Monitors the application for UNIX signals and forwards them to an actor.
-struct signal_monitor : default_actor {
-  /// Spawns the system monitor with a given receiver.
-  /// @param receiver the actor receiving the signals.
-  signal_monitor(caf::actor receiver);
+struct signal_monitor {
+  struct state : basic_state {
+    state(local_actor* self);
+  };
 
-  void on_exit() override;
-  caf::behavior make_behavior() override;
+  using type = typed_actor<reacts_to<run_atom>>;
+  using behavior = type::behavior_type;
+  using stateful_pointer = type::stateful_pointer<state>;
 
-  caf::actor sink_;
+  /// Monitors the application for UNIX signals.
+  /// @note There must not exist more than one instance of this actor per
+  ///       process.
+  /// @param self The actor handle.
+  /// @param receiver The actor receiving the signals.
+  static behavior make(stateful_pointer self, actor receiver);
 };
 
 } // namespace vast

@@ -17,13 +17,12 @@
 #include "vast/actor/sink/pcap.h"
 #endif
 
-using namespace caf;
 using namespace std::string_literals;
 
 namespace vast {
 namespace sink {
 
-trial<caf::actor> spawn(message const& params) {
+trial<actor> spawn(message const& params) {
   auto schema_file = ""s;
   auto output = "-"s;
   auto r = params.extract_opts({
@@ -46,8 +45,7 @@ trial<caf::actor> spawn(message const& params) {
   }
   // Facilitate actor shutdown when returning with error.
   actor snk;
-  auto guard
-    = caf::detail::make_scope_guard([&] { anon_send_exit(snk, exit::error); });
+  auto guard = make_scope_guard([&] { anon_send_exit(snk, exit::error); });
   // The "pcap" and "bro" sink manually handle file output. All other
   // sources are file-based and we setup their input stream here.
   auto& format = params.get_as<std::string>(0);
@@ -77,14 +75,14 @@ trial<caf::actor> spawn(message const& params) {
     });
     if (!r.error.empty())
       return error{std::move(r.error)};
-    snk = caf::spawn<sink::pcap, priority_aware>(sch, output, flush);
+    snk = caf::spawn<priority_aware>(pcap, sch, output, flush);
 #endif
   } else if (format == "bro") {
-    snk = caf::spawn<sink::bro>(output);
+    snk = caf::spawn(bro, output);
   } else if (format == "ascii") {
-    snk = caf::spawn<sink::ascii>(std::move(out));
+    snk = caf::spawn(ascii, out.release());
   } else if (format == "json") {
-    snk = caf::spawn<sink::json>(std::move(out));
+    snk = caf::spawn(sink::json, out.release());
   } else {
     return error{"invalid export format: ", format};
   }

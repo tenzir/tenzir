@@ -1,31 +1,48 @@
+#include <iterator>
 #include <fstream>
-
-#include <caf/all.hpp>
 
 #include "vast/error.h"
 #include "vast/logger.h"
 #include "vast/none.h"
+#include "vast/actor/atoms.h"
 #include "vast/actor/key_value_store.h"
 #include "vast/concept/printable/vast/error.h"
 #include "vast/concept/printable/vast/filesystem.h"
 #include "vast/concept/serializable/io.h"
 #include "vast/concept/serializable/caf/message.h"
 
-using namespace caf;
-
 namespace vast {
 
-key_value_store::key_value_store(path dir)
-  : default_actor{"key-value-store"},
-    dir_{std::move(dir)} {
+key_value_store::state::state(local_actor* self)
+  : basic_state{self, "key-value-store"} {
 }
 
-void key_value_store::on_exit() {
-  leader_ = invalid_actor;
-  followers_.clear();
-}
-
-behavior key_value_store::make_behavior() {
+behavior key_value_store::make(stateful_actor<state>* self, path dir) {
+  auto update = [=](std::string const& key, message const& value) {
+    self->state.data[key] = value;
+    if (self->state.persistent.find(key) == self->state.persistent.end())
+      return true;
+    if (! exists(dir)) {
+      auto t = mkdir(dir);
+      if (! t) {
+        VAST_ERROR_AT(self, "failed to create state directory:", t.error());
+        return false;
+      }
+    }
+    auto filename = dir / key;
+    std::ofstream f{filename.str()};
+    // TODO: String serialization would make for a more readable file system
+    // representation, but to_string/from_string is currently broken in CAF.
+    // f << to_string(value);
+    caf::binary_serializer bs{std::ostreambuf_iterator<char>(f)};
+    bs << value;
+    if (f)
+      return true;
+    VAST_ERROR_AT(self, "failed to save entry:", key, "->", to_string(value));
+    if (exists(filename))
+      rm(filename);
+    return false;
+  };
   // Assigns a value to a given key.
   auto assign = [=](std::string const& key, message const& value) {
     if (! update(key, value))
@@ -34,7 +51,7 @@ behavior key_value_store::make_behavior() {
   };
   // Adds a value to an existing value.
   auto add = [=](std::string const& key, message const& value) {
-    auto existing = data_[key];
+    auto existing = self->state.data[key];
     if (existing.empty()) {
       auto copy = value;  // FIXME: message::apply() non-const?
       auto unit = copy.apply({
@@ -52,7 +69,7 @@ behavior key_value_store::make_behavior() {
       });
       if (!unit)
         return make_message(error{"unsupported value"});
-      data_[key] = value;
+      self->state.data[key] = value;
       if (! update(key, value))
         return make_message(error{"failed to write entry to filesystem"});
       return *unit + value;
@@ -80,39 +97,40 @@ behavior key_value_store::make_behavior() {
   // persistent state).
   auto erase = [=](std::string const& prefix) {
     auto total = uint64_t{0};
-    for (auto& pair : data_.prefixed_by(prefix)) {
+    for (auto& pair : self->state.data.prefixed_by(prefix)) {
       auto key = pair->first;
-      total += data_.erase(key);
-      persistent_.erase(key);
+      total += self->state.data.erase(key);
+      self->state.persistent.erase(key);
       if (exists(key))
         rm(key);
     }
     return make_message(total);
   };
   // Poor-man's log replication. The current implementation merely pushes the
-  // "log" (which is the current caf::message) to the remote stores.
+  // "log" (which is the current message) to the remote stores.
   // TODO: Refactor the replication and peering aspects into a seperate raft
   // consensus module and orthogonalize them to the key-value store
   // implementation.
   auto replicate = [=](response_promise& rp, auto f, auto&&... xs) {
-    if (followers_.empty()) {
-      VAST_DEBUG(this, "replicates entry locally");
+    if (self->state.followers.empty()) {
+      VAST_DEBUG_AT(self, "replicates entry locally");
       rp.deliver(f(xs...));
     } else {
-      VAST_DEBUG(this, "replicates entry to", followers_.size(), "follower(s)");
-      for (auto& follower : followers_)
-        send(follower, current_message());
-      auto num_acks = std::make_shared<size_t>(followers_.size());
-      become(
+      VAST_DEBUG_AT(self, "replicates entry to", self->state.followers.size(),
+                    "follower(s)");
+      for (auto& follower : self->state.followers)
+        self->send(follower, self->current_message());
+      auto num_acks = std::make_shared<size_t>(self->state.followers.size());
+      self->become(
         keep_behavior,
         [=](down_msg const& msg) {
-          VAST_DEBUG(this, "got DOWN from follower", msg.source);
-          auto n = followers_.erase(actor_cast<actor>(msg.source));
+          VAST_DEBUG_AT(self, "got DOWN from follower", msg.source);
+          auto n = self->state.followers.erase(actor_cast<actor>(msg.source));
           VAST_ASSERT(n > 0);
           if (--*num_acks == 0) {
-            VAST_DEBUG(this, "completed follower replication");
+            VAST_DEBUG_AT(self, "completed follower replication");
             rp.deliver(f(xs...));
-            unbecome();
+            self->unbecome();
           }
         },
         [=](replicate_atom, ok_atom) {
@@ -120,165 +138,166 @@ behavior key_value_store::make_behavior() {
           // Because don't have terms and batched AppendEntries yet, we use
           // slightly stronger requirements.
           if (--*num_acks == 0) {
-            VAST_DEBUG(this, "completed follower replication");
+            VAST_DEBUG_AT(self, "completed follower replication");
             rp.deliver(f(xs...));
-            unbecome();
+            self->unbecome();
           }
         }
       );
     }
   };
   // Load existing persistent values.
-  for (auto entry : directory{dir_}) {
+  for (auto entry : directory{dir}) {
     auto key = entry.basename().str();
     std::ifstream f{entry.str()};
-    f.unsetf(std::ios_base::skipws);
-    std::string str;
-    f >> str;
+    std::string contents{std::istreambuf_iterator<char>{f},
+                         std::istreambuf_iterator<char>{}};
     if (! f) {
-      VAST_ERROR(this, "failed to read contents of file:", entry);
-      quit(exit::error);
+      VAST_ERROR_AT(self, "failed to read contents of file:", entry);
+      self->quit(exit::error);
       return {};
     }
     // TODO: String serialization would make for a more readable file system
     // representation, but to_string/from_string is currently broken in CAF.
-    // auto value = from_string<message>(str);
-    caf::binary_deserializer bs{str.data(), str.size()};
+    // auto value = from_string<message>(contents);
+    caf::binary_deserializer bs{contents.data(), contents.size()};
     message value;
     bs >> value;
-    VAST_DEBUG(this, "loaded persistent key:", key, "->", to_string(value));
-    persistent_[key] = {};
-    data_[key] = value;
+    VAST_DEBUG_AT(self, "loaded persistent key:", key, "->", to_string(value));
+    self->state.persistent[key] = {};
+    self->state.data[key] = value;
   }
-  following_ = {
+  behavior candidating = {
+    others >> [=] {
+      VAST_ERROR("leader election not yet implemented");
+      self->quit(exit::error);
+    }
+  };
+  auto leading = std::make_shared<behavior>();
+  behavior following = {
     [=](leader_atom) {
       // Because we don't have implemented leader election yet, we use an
       // external vote to unconditionally promote followers to leaders.
-      VAST_DEBUG(this, "changes state: follower -> leader");
-      become(leading_);
+      VAST_DEBUG_AT(self, "changes state: follower -> leader");
+      self->become(*leading);
     },
     [=](down_msg const& msg) {
-      VAST_DEBUG(this, "got DOWN from leader");
-      VAST_DEBUG(this, "changes state: follower -> candidate");
-      VAST_ASSERT(msg.source == leader_->address());
-      leader_ = invalid_actor;
-      become(candidating_);
+      VAST_DEBUG_AT(self, "got DOWN from leader");
+      VAST_DEBUG_AT(self, "changes state: follower -> candidate");
+      VAST_ASSERT(msg.source == self->state.leader->address());
+      self->state.leader = invalid_actor;
+      self->become(candidating);
     },
     [=](exists_atom, std::string const& key) {
-      VAST_DEBUG(this, "forwards EXISTS to leader:", key);
-      forward_to(leader_);
+      VAST_DEBUG_AT(self, "forwards EXISTS to leader:", key);
+      self->forward_to(self->state.leader);
     },
     [=](get_atom, std::string const& key) {
-      VAST_DEBUG(this, "forwards GET to leader:", key);
-      forward_to(leader_);
+      VAST_DEBUG_AT(self, "forwards GET to leader:", key);
+      self->forward_to(self->state.leader);
     },
     [=](list_atom, std::string const& key) {
-      VAST_DEBUG(this, "forwards LIST to leader:", key);
-      forward_to(leader_);
+      VAST_DEBUG_AT(self, "forwards LIST to leader:", key);
+      self->forward_to(self->state.leader);
     },
     on(put_atom::value, val<std::string>, any_vals) >> [=](std::string const&
                                                            key) {
-      auto value = current_message().drop(2);
-      if (current_sender() != leader_->address()) {
-        VAST_DEBUG(this, "forwards PUT:", key, "->", to_string(value));
-        forward_to(leader_);
+      auto value = self->current_message().drop(2);
+      if (self->current_sender() != self->state.leader->address()) {
+        VAST_DEBUG_AT(self, "forwards PUT:", key, "->", to_string(value));
+        self->forward_to(self->state.leader);
       } else {
-        VAST_DEBUG(this, "replicates PUT:", key, "->", to_string(value));
+        VAST_DEBUG_AT(self, "replicates PUT:", key, "->", to_string(value));
         assign(key, value);
-        send(leader_, replicate_atom::value, ok_atom::value);
+        self->send(self->state.leader, replicate_atom::value, ok_atom::value);
       }
     },
     on(add_atom::value, val<std::string>, any_vals) >> [=](std::string const&
                                                            key) {
-      auto value = current_message().drop(2);
-      if (current_sender() != leader_->address()) {
-        VAST_DEBUG(this, "forwards ADD:", key, "+=", to_string(value));
-        forward_to(leader_);
+      auto value = self->current_message().drop(2);
+      if (self->current_sender() != self->state.leader->address()) {
+        VAST_DEBUG_AT(self, "forwards ADD:", key, "+=", to_string(value));
+        self->forward_to(self->state.leader);
       } else {
-        VAST_DEBUG(this, "replicates ADD:", key, "+=", to_string(value));
+        VAST_DEBUG_AT(self, "replicates ADD:", key, "+=", to_string(value));
         add(key, value);
-        send(leader_, replicate_atom::value, ok_atom::value);
+        self->send(self->state.leader, replicate_atom::value, ok_atom::value);
       }
     },
     [=](delete_atom, std::string const& key) {
-      if (current_sender() != leader_->address()) {
-        VAST_DEBUG(this, "forwards DELETE:", key);
-        forward_to(leader_);
+      if (self->current_sender() != self->state.leader->address()) {
+        VAST_DEBUG_AT(self, "forwards DELETE:", key);
+        self->forward_to(self->state.leader);
       } else {
-        VAST_DEBUG(this, "replicates DELETE:", key);
+        VAST_DEBUG_AT(self, "replicates DELETE:", key);
         erase(key);
-        send(leader_, replicate_atom::value, ok_atom::value);
+        self->send(self->state.leader, replicate_atom::value, ok_atom::value);
       }
     },
     [=](announce_atom, actor const& leader, storage& data) {
-      VAST_DEBUG(this, "got state from leader");
-      leader_ = leader;
-      monitor(leader_);
+      VAST_DEBUG_AT(self, "got state from leader");
+      self->state.leader = leader;
+      self->monitor(self->state.leader);
       // Send back the state difference A - B, with local follower A
       // and leader B.
       storage delta;
-      for (auto& pair : data_)
+      for (auto& pair : self->state.data)
         if (data.find(pair.first) == data.end())
           delta[pair.first] = pair.second;
-      data_ = std::move(data);
+      self->state.data = std::move(data);
       return make_message(announce_atom::value, ok_atom::value,
                           std::move(delta));
     },
-    catch_unexpected()
+    log_others(self)
   };
-  candidating_ = {
-    others >> [=] {
-      VAST_ERROR("leader election not yet implemented");
-      quit(exit::error);
-    }
-  };
-  leading_ = {
+  *leading = {
     [=](down_msg const& msg) {
-      VAST_DEBUG(this, "got DOWN from follower", msg.source);
-      followers_.erase(actor_cast<actor>(msg.source));
+      VAST_DEBUG_AT(self, "got DOWN from follower", msg.source);
+      self->state.followers.erase(actor_cast<actor>(msg.source));
     },
     [=](follower_atom) {
-      VAST_DEBUG(this, "changes state: leader -> follower");
-      become(following_);
+      VAST_DEBUG_AT(self, "changes state: leader -> follower");
+      self->become(following);
     },
-    [=](follower_atom, add_atom, caf::actor const& new_follower) {
-      auto rp = make_response_promise();
-      VAST_DEBUG(this, "got request to add new follower", new_follower);
-      // If we know this follower already, we have nothing to do.
-      if (followers_.find(new_follower) != followers_.end()) {
-        VAST_WARN(this, "ignores existing follower");
+    [=](follower_atom, add_atom, actor const& follower) {
+      auto rp = self->make_response_promise();
+      VAST_DEBUG_AT(self, "got request to add new follower", follower);
+      // If we know self follower already, we have nothing to do.
+      if (self->state.followers.find(follower) != self->state.followers.end()) {
+        VAST_WARN_AT(self, "ignores existing follower");
         rp.deliver(make_message(ok_atom::value));
         return;
       }
-      VAST_DEBUG(this, "relays", data_.size(), "entries to follower");
-      send(new_follower, announce_atom::value, this, data_);
-      become(
+      VAST_DEBUG_AT(self, "relays", self->state.data.size(),
+                 "entries to follower");
+      self->send(follower, announce_atom::value, self, self->state.data);
+      self->become(
         keep_behavior,
         [=](announce_atom, ok_atom, storage const& delta) {
-          VAST_DEBUG(this, "got", delta.size(), "new entries from follower");
-          monitor(new_follower);
-          followers_.insert(new_follower);
-          rp.deliver(current_message().drop(1));
-          unbecome();
+          VAST_DEBUG_AT(self, "got", delta.size(), "new entries from follower");
+          self->monitor(follower);
+          self->state.followers.insert(follower);
+          rp.deliver(self->current_message().drop(1));
+          self->unbecome();
         }
       );
     },
     [=](exists_atom, std::string const& key) {
-      VAST_DEBUG(this, "got EXISTS:", key);
-      return !data_.prefixed_by(key).empty();
+      VAST_DEBUG_AT(self, "got EXISTS:", key);
+      return !self->state.data.prefixed_by(key).empty();
     },
     [=](get_atom, std::string const& key) {
-      VAST_DEBUG(this, "got GET for key:", key);
-      auto v = data_.find(key);
-      if (v == data_.end())
+      VAST_DEBUG_AT(self, "got GET for key:", key);
+      auto v = self->state.data.find(key);
+      if (v == self->state.data.end())
         return make_message(nil);
       return v->second.empty() ? make_message(unit) : v->second;
     },
     [=](list_atom, std::string const& key) {
-      VAST_DEBUG(this, "got LIST:", key);
+      VAST_DEBUG_AT(self, "got LIST:", key);
       std::map<std::string, message> result;
       if (!key.empty()) {
-        auto values = data_.prefixed_by(key);
+        auto values = self->state.data.prefixed_by(key);
         for (auto& v : values)
           result.emplace(v->first, v->second);
       }
@@ -286,56 +305,30 @@ behavior key_value_store::make_behavior() {
     },
     on(put_atom::value, val<std::string>, any_vals) >> [=](std::string const&
                                                            key) {
-      auto rp = make_response_promise();
-      auto value = current_message().drop(2);
-      VAST_DEBUG(this, "got PUT:", key, "->", to_string(value));
+      auto rp = self->make_response_promise();
+      auto value = self->current_message().drop(2);
+      VAST_DEBUG_AT(self, "got PUT:", key, "->", to_string(value));
       replicate(rp, assign, key, value);
     },
     on(add_atom::value, val<std::string>, any_vals) >> [=](std::string const&
                                                            key) {
-      auto rp = make_response_promise();
-      auto value = current_message().drop(2);
-      VAST_DEBUG(this, "got ADD:", key, "+=", to_string(value));
+      auto rp = self->make_response_promise();
+      auto value = self->current_message().drop(2);
+      VAST_DEBUG_AT(self, "got ADD:", key, "+=", to_string(value));
       replicate(rp, add, key, value);
     },
     [=](delete_atom, std::string const& key) {
-      auto rp = make_response_promise();
-      VAST_DEBUG(this, "got DELETE:", key);
+      auto rp = self->make_response_promise();
+      VAST_DEBUG_AT(self, "got DELETE:", key);
       replicate(rp, erase, key);
     },
     [=](persist_atom, std::string const& key) {
-      VAST_DEBUG(this, "marks key as persistent:", key);
-      persistent_[key] = {};
+      VAST_DEBUG_AT(self, "marks key as persistent:", key);
+      self->state.persistent[key] = {};
     },
-    catch_unexpected()
+    log_others(self)
   };
-  return following_;
-}
-
-bool key_value_store::update(std::string const& key, message const& value) {
-  data_[key] = value;
-  if (persistent_.find(key) == persistent_.end())
-    return true;
-  if (! exists(dir_)) {
-    auto t = mkdir(dir_);
-    if (! t) {
-      VAST_ERROR(this, "failed to create state directory:", t.error());
-      return false;
-    }
-  }
-  auto filename = dir_ / key;
-  std::ofstream f{filename.str()};
-  // TODO: String serialization would make for a more readable file system
-  // representation, but to_string/from_string is currently broken in CAF.
-  // f << to_string(value);
-  caf::binary_serializer bs{std::ostreambuf_iterator<char>(f)};
-  bs << value;
-  if (f)
-    return true;
-  VAST_ERROR(this, "failed to save entry:", key, "->", to_string(value));
-  if (exists(filename))
-    rm(filename);
-  return false;
+  return following;
 }
 
 } // namespace vast

@@ -402,7 +402,9 @@ bool rm(const path& p) {
   // we have to recursively delete all files in a directory before deleting it.
   auto t = p.kind();
   if (t == path::type::directory) {
-    traverse(p, [](path const& inner) { return rm(inner); });
+    for (auto& entry : directory{p})
+      if (! rm(entry))
+        return false;
     return VAST_DELETE_DIRECTORY(p.str().data());
   }
   if (t == path::type::regular_file || t == path::type::symlink)
@@ -435,23 +437,6 @@ trial<void> mkdir(path const& p) {
     }
   }
   return nothing;
-}
-
-void traverse(path const& p, std::function<bool(path const&)> f) {
-#ifdef VAST_POSIX
-  DIR* d = ::opendir(p.str().data());
-  if (!d)
-    return;
-  struct dirent* ent;
-  while ((ent = ::readdir(d))) {
-    auto str = std::string{ent->d_name};
-    if (str != "." && str != ".." && !f(p / std::move(str)))
-      break;
-  }
-  ::closedir(d);
-#else
-  VAST_ASSERT(false);
-#endif // VAST_POSIX
 }
 
 // Loads file contents into a string.

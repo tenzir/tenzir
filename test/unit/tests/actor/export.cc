@@ -8,6 +8,7 @@
 #include "vast/query_options.h"
 #include "vast/uuid.h"
 #include "vast/actor/task.h"
+#include "vast/concept/parseable/vast/detail/to_expression.h"
 #include "vast/concept/printable/vast/error.h"
 #include "vast/concept/printable/vast/expression.h"
 
@@ -16,7 +17,6 @@
 #include "data.h"
 #include "fixtures/core.h"
 
-using namespace caf;
 using namespace vast;
 
 FIXTURE_SCOPE(core_scope, fixtures::core)
@@ -75,7 +75,7 @@ TEST(export) {
     [&](default_bitstream const& hits) {
       CHECK(hits.count() > 0);
     },
-    [&](done_atom, time::extent, expression const& expr) {
+    [&](done_atom, time::moment, time::extent, expression const& expr) {
       done = true;
       CHECK(expr == *pops);
     },
@@ -118,26 +118,28 @@ TEST(export) {
   self->send(exp, run_atom::value);
   self->send(exp, extract_atom::value, max_events);
   MESSAGE("verifying query results");
-  auto i = 0;
+  auto num_events = 0;
   done = false;
   self->do_receive(
-    [&](uuid const&, event const& e) {
-      ++i;
+    [&](uuid const&, std::vector<event> const& v) {
+      num_events += v.size();
       // Verify contents of a few random events.
-      if (e.id() == 3)
-        CHECK(get<record>(e)->at(1) == "KKSlmtmkkxf");
-      if (e.id() == 41)
-      {
-        CHECK(get<record>(e)->at(1) == "7e0gZmKgGS4");
-        CHECK(get<record>(e)->at(4) == "TLS_RSA_WITH_RC4_128_MD5");
+      for (auto & e : v) {
+        if (e.id() == 3)
+          CHECK(get<record>(e)->at(1) == "KKSlmtmkkxf");
+        if (e.id() == 41)
+        {
+          CHECK(get<record>(e)->at(1) == "7e0gZmKgGS4");
+          CHECK(get<record>(e)->at(4) == "TLS_RSA_WITH_RC4_128_MD5");
+        }
+        // The last event.
+        if (e.id() == 102)
+          CHECK(get<record>(e)->at(1) == "mXRBhfuUqag");
       }
-      // The last event.
-      if (e.id() == 102)
-        CHECK(get<record>(e)->at(1) == "mXRBhfuUqag");
     },
     [&](uuid const&, progress_atom, double, uint64_t) { /* nop */ },
     [&](uuid const&, done_atom, time::extent) {
-      CHECK(i == 46);
+      CHECK(num_events == 46);
       done = true;
     },
     others >> [&] {
@@ -179,15 +181,15 @@ TEST(export) {
   self->send(exp, run_atom::value);
   self->send(exp, extract_atom::value, max_events);
   MESSAGE("processing query results");
-  i = 0;
+  num_events = 0;
   done = false;
   self->do_receive(
-    [&](uuid const&, event const&) {
-      ++i;
+    [&](uuid const&, std::vector<event> const& v) {
+      num_events += v.size();
     },
     [&](uuid const&, progress_atom, double, uint64_t) { /* nop */ },
     [&](uuid const&, done_atom, time::extent) {
-      CHECK(i == 15);
+      CHECK(num_events == 15);
       done = true;
     },
     others() >> [&] {

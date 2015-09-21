@@ -1,0 +1,251 @@
+#!/bin/sh
+#
+# This script facilitates benchmarking of VAST.
+#
+
+# Static defaults.
+mode=import
+format=bro
+
+# Matrix defaults.
+cores=1,2,4
+throughputs=0
+batches=131072
+parts=1
+runs=1
+
+# Abort on error
+set -e
+
+usage() {
+  printf "usage: %s [options] <input...>\n" $(basename $0)
+  echo
+  echo 'common options:'
+  echo "    -d <dir>        VAST directory [$(pwd)/tag/vast]"
+  echo "    -f              SOURCE/SINK format"
+  echo "    -h|-?           display this help"
+  echo "    -m              mode (either 'import' or 'export') [$mode]"
+  echo "    -o              overwrite already existing run"
+  echo "    -p              enable CAF scheduler profiling"
+  echo "    -t              wrap invocation in time(1)"
+  echo
+  echo 'import options:'
+  echo "    -l              keep only the logs and delete the VAST directory"
+  echo
+  echo 'export options:'
+  echo "    -q              query label (defaults to full query expression)"
+  echo
+  echo 'matrix options (comma-separated):'
+  echo "    -B <batches>    batch sizes [$batches]"
+  echo "    -C <cores>      CAF scheduler threads [$cores]"
+  echo "    -T <messages>   CAF scheduler throughput [$throughputs]"
+  echo "    -R <runs>       runs [$runs]"
+  echo "    -P <partitions> INDEX partitions [$parts]"
+  echo
+}
+
+log() {
+  green="\e[0;32m"
+  cyan="\e[0;36m"
+  reset="\e[0;0m"
+  printf "$green$(date '+%F %H:%M:%S') $cyan%s$reset\n" "$*"
+}
+
+while getopts "B:C:d:f:lm:opP:q:R:tT:h?" opt; do
+  case "$opt" in
+    B)
+      batches=$OPTARG
+      ;;
+    C)
+      cores=$OPTARG
+      ;;
+    d)
+      dir=$OPTARG
+      ;;
+    f)
+      format=$OPTARG
+      ;;
+    l)
+      logs=1
+      ;;
+    m)
+      mode=$OPTARG
+      ;;
+    o)
+      force=1
+      ;;
+    P)
+      parts=$OPTARG
+      ;;
+    p)
+      profiler=1
+      ;;
+    q)
+      query_label=$OPTARG
+      ;;
+    R)
+      runs=$OPTARG
+      ;;
+    T)
+      throughputs=$OPTARG
+      ;;
+    t)
+      time=1
+      ;;
+    h|\?)
+      usage
+      exit 0
+    ;;
+  esac
+done
+
+if ! which vast > /dev/null 2>&1; then
+  log "could not find vast executable"
+  exit 1
+fi
+
+shift $(expr $OPTIND - 1)
+input=$1
+
+if [ -z "$query_label" ]; then
+  query_label="$input"
+fi
+
+if [ -z "$input" ]; then
+  usage
+  exit 1
+fi
+
+if [ "$mode" = "import" ]; then
+  if [ "$format" = "test" ]; then
+    if [ -z "$input" ]; then
+      log "no schema provided"
+      exit 1
+    fi
+  elif ! [ -f "$input" ] ; then
+    log "no such file: $input"
+    exit 1
+  fi
+elif [ "$mode" = "export" ]; then
+  if [ -z "$input" ] ; then
+    log "no query provided"
+    exit 1
+  fi
+fi
+
+
+# Awk script to post-process output of "/usr/bin/time -l -p" so that it becomes
+# more parseable.
+process_time='{ \
+  if (NR <= 3) \
+    print $2 "\t" $1; \
+  else \
+    print $1 "\t" substr($0, index($0,$2)); \
+}'
+
+# Awk script to post-process log output of VAST to generate labels for caf-prof.
+process_labels='/spawned/ { \
+  split($4, x, /#/); \
+  if (x[2] != "") \
+    print x[2] "\t" x[1]; \
+}'
+
+strsplit() {
+  sep=$1
+  precision=$2
+  awk -v RS="$sep" "{ printf \"%.${precision}u\\n\", \$0 }"
+}
+
+for core in $(printf $cores | strsplit , 3 ); do
+  for throughput in $(printf $throughputs | strsplit , 6); do
+    for batch in $(printf $batches | strsplit , 8); do
+      for part in $(printf $parts | strsplit , 2); do
+        for run in $(seq 1 $runs); do
+          tag="$format-C-$core-T-$throughput-B-$batch-P-$part-R-$run"
+          workdir="vast-$tag"
+          existing=
+          if [ -d $workdir ]; then
+            existing=$workdir
+          fi
+          if [ "$mode" = "import" ] && [ -z "$force" ] && [ -n "$existing" ]
+          then
+            log "skipping $existing"
+          else
+            log "running  $workdir"
+            mkdir -p $workdir
+            # Upon CTRL+C, delete the current working directory.
+            terminate="printf \"\nremoving incomplete run: $workdir\n\";"
+            terminate="$terminate rm -rf $workdir* && exit 1 || kill -2 $$"
+            trap "$terminate" SIGINT SIGTERM
+            # Build common command line arguments.
+            if [ -z "$dir" ]; then
+              vastdir=$workdir/vast
+            else
+              vastdir="$dir"
+            fi
+            args="-d \"$vastdir\" -C -l 5 -t $core"
+            if [ "$throughput" != "000000" ]; then
+              args="$args -m $throughput"
+            fi
+            if [ -n "$profiler" ]; then
+              args="$args -p $workdir/caf.log"
+            fi
+            # Build arguments in $args.
+            if [ "$mode" = "import" ]; then
+              args="$args --index-active=$part"
+              if [ "$format" = "bro" ]; then
+                args="$args import bro"
+              elif [ "$format" = "pcap" ]; then
+                args="$args import pcap"
+              elif [ "$format" = "test" ]; then
+                args="$args import test -e 10000000"
+              else
+                log "invalid SOURCE format: $format"
+                exit 1
+              fi
+              args="$args -b $batch"
+              if [ "$format" = "test" ] ; then
+                echo $input > $workdir/benchmark-schema
+                args="$args -r $workdir/benchmark-schema"
+              else
+                args="$args -r \"$input\""
+              fi
+            elif [ "$mode" = "export" ]; then
+              args="$args --index-passive=$part"
+              if [ "$format" = "bro" ]; then
+                args="$args export bro"
+              elif [ "$format" = "pcap" ]; then
+                args="$args export pcap"
+              else
+                log "invalid SINK format: $format"
+                exit 1
+              fi
+              args="$args -h '$input'"
+            else
+              log "mode must be either 'import' or 'export'"
+              exit 1
+            fi
+            vast="vast $args > /dev/null 2> $workdir/stderr"
+            if [ -n "$time" ]; then
+              vast="/usr/bin/time -l -p -o $workdir/time $vast"
+            fi
+            # Run it!
+            eval $vast
+            # Post-process logs.
+            logdir="$vastdir/log/$(ls $vastdir/log/ | tail -n 1)"
+            if [ -n "$profiler" ]; then
+              mv $workdir/caf.log $logdir
+              awk "$process_labels" $logdir/vast.log > $logdir/labels.log
+            fi
+            if [ "$mode" = "export" ]; then
+              echo $query_label >> $logdir/query.log
+            fi
+            if [ -n "$logs" ]; then
+              rm -rf $workdir
+            fi
+          fi
+        done
+      done
+    done
+  done
+done

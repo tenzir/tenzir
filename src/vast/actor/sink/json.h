@@ -9,20 +9,20 @@
 namespace vast {
 namespace sink {
 
-/// A sink generating JSON output.
-class json : public base<json> {
-public:
-  /// Spawns a JSON sink.
-  /// @param out The output stream.
-  json(std::unique_ptr<std::ostream> out);
+struct json_state : state {
+  json_state(local_actor *self);
 
-  bool process(event const& e);
+  bool process(event const& e) override;
 
-  void flush();
+  void flush() override;
 
-private:
-  std::unique_ptr<std::ostream> out_;
+  std::unique_ptr<std::ostream> out;
 };
+
+/// A sink dumping events in JSON.
+/// @param self The actor handle.
+/// @param out The stream to print received events into.
+behavior json(stateful_actor<json_state>* self, std::ostream* out);
 
 } // namespace sink
 } // namespace vast

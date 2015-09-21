@@ -4,7 +4,6 @@
 #include "test.h"
 #include "data.h"
 
-using namespace caf;
 using namespace vast;
 
 TEST(pcap_source) {
@@ -13,9 +12,9 @@ TEST(pcap_source) {
     FAIL("got unexpected message: " << to_string(self->current_message()));
   });
   MESSAGE("spawning pcap source with no cutoff and <= 5 concurrent flows");
-  auto pcap = self->spawn<source::pcap, monitored>(traces::nmap_vsn, -1, 5);
+  auto pcap = self->spawn<monitored>(source::pcap, traces::nmap_vsn,
+                                     -1, 5, 60, 10, 0);
   anon_send(pcap, put_atom::value, sink_atom::value, self);
-  self->receive([&](upstream_atom, actor const& a) { CHECK(a == pcap); });
   MESSAGE("running the source");
   anon_send(pcap, run_atom::value);
   self->receive([&](std::vector<event> const& events) {
@@ -29,10 +28,9 @@ TEST(pcap_source) {
   // Spawn a PCAP source with a 64-byte cutoff, at most 100 flow table entries,
   // with flows inactive for more than 5 seconds to be evicted every 2 seconds.
   MESSAGE("spawning pcap source with 64B cutoff and <= 100 concurrent flows");
-  pcap = self->spawn<source::pcap, monitored>(
-    traces::workshop_2011_browse, 64, 100, 5, 2);
+  pcap = self->spawn<monitored>(source::pcap, traces::workshop_2011_browse,
+                                64, 100, 5, 2, 0);
   anon_send(pcap, put_atom::value, sink_atom::value, self);
-  self->receive([&](upstream_atom, actor const& a) { CHECK(a == pcap); });
   anon_send(pcap, run_atom::value);
   self->receive(
     [&](std::vector<event> const& events) { CHECK(events.size() == 36); }

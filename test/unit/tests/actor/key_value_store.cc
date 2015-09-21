@@ -1,13 +1,11 @@
-#include <caf/all.hpp>
-
 #include "vast/key.h"
 #include "vast/none.h"
+#include "vast/actor/atoms.h"
 #include "vast/actor/key_value_store.h"
 
 #define SUITE actors
 #include "test.h"
 
-using namespace caf;
 using namespace vast;
 
 TEST(key-value store (leader interface)) {
@@ -15,7 +13,7 @@ TEST(key-value store (leader interface)) {
   self->on_sync_failure([&] {
     FAIL("got unexpected message: " << to_string(self->current_message()));
   });
-  auto s = self->spawn<key_value_store>();
+  auto s = self->spawn(key_value_store::make, path{});
   self->send(s, leader_atom::value);
   MESSAGE("put two values");
   self->sync_send(s, put_atom::value, "foo.bar", 42).await([&](ok_atom) {});
@@ -71,9 +69,9 @@ TEST(key-value store (distributed consensus)) {
   });
   // In the future, we add an election phase.
   MESSAGE("setup leader-follower relationship");
-  auto leader = self->spawn<key_value_store>();
-  auto follower1 = self->spawn<key_value_store>();
-  auto follower2 = self->spawn<key_value_store>();
+  auto leader = self->spawn(key_value_store::make, path{});
+  auto follower1 = self->spawn(key_value_store::make, path{});
+  auto follower2 = self->spawn(key_value_store::make, path{});
   self->send(leader, leader_atom::value);
   self->send(leader, follower_atom::value, add_atom::value, follower1);
   self->send(leader, follower_atom::value, add_atom::value, follower2);

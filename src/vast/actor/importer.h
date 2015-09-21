@@ -1,28 +1,31 @@
 #ifndef VAST_ACTOR_IMPORTER_H
 #define VAST_ACTOR_IMPORTER_H
 
-#include <set>
 #include <vector>
 
 #include "vast/aliases.h"
 #include "vast/event.h"
-#include "vast/actor/actor.h"
+#include "vast/actor/archive.h"
+#include "vast/actor/basic_state.h"
 
 namespace vast {
 
 /// Receives chunks from SOURCEs, imbues them with an ID, and relays them to
 /// ARCHIVE and INDEX.
-struct importer : flow_controlled_actor {
-  importer();
+struct importer {
+  struct state : basic_state {
+    state(event_based_actor* self);
 
-  void on_exit() override;
-  caf::behavior make_behavior() override;
+    actor identifier;
+    archive::type archive;
+    actor index;
+    event_id got = 0;
+    std::vector<event> batch;
+  };
 
-  caf::actor identifier_;
-  caf::actor archive_;
-  caf::actor index_;
-  event_id got_ = 0;
-  std::vector<event> batch_;
+  /// Spawns an IMPORTER.
+  /// @param self The actor handle.
+  static behavior make(stateful_actor<state>* self);
 };
 
 } // namespace vast

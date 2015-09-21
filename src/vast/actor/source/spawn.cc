@@ -1,27 +1,29 @@
+#include <fstream>
+
 #include <caf/all.hpp>
 #include <caf/detail/scope_guard.hpp>
 
 #include "vast/config.h"
+#include "vast/filesystem.h"
 #include "vast/actor/source/bro.h"
 #include "vast/actor/source/bgpdump.h"
 #include "vast/actor/source/test.h"
 #include "vast/concept/parseable/vast/detail/to_schema.h"
 #include "vast/concept/printable/to_string.h"
 #include "vast/concept/printable/vast/schema.h"
-#include "vast/io/file_stream.h"
+#include "vast/util/fdinbuf.h"
 #include "vast/util/posix.h"
 
 #ifdef VAST_HAVE_PCAP
 #include "vast/actor/source/pcap.h"
 #endif
 
-using namespace caf;
 using namespace std::string_literals;
 
 namespace vast {
 namespace source {
 
-trial<caf::actor> spawn(message const& params) {
+trial<actor> spawn(message const& params) {
   auto batch_size = uint64_t{100000};
   auto schema_file = ""s;
   auto input = "-"s;
@@ -34,8 +36,8 @@ trial<caf::actor> spawn(message const& params) {
   auto& format = params.get_as<std::string>(0);
   // The "pcap" and "test" sources manually verify the presence of
   // input. All other sources are file-based and we setup their input
-  // stream here.
-  std::unique_ptr<io::input_stream> in;
+  // streambuf here.
+  std::unique_ptr<std::streambuf> sb;
   if (!(format == "pcap" || format == "test")) {
     if (r.opts.count("uds") > 0) {
       if (input == "-")
@@ -44,16 +46,18 @@ trial<caf::actor> spawn(message const& params) {
       if (!uds)
         return error{"failed to connect to UNIX domain socket at ", input};
       auto remote_fd = uds.recv_fd(); // Blocks!
-      in = std::make_unique<io::file_input_stream>(remote_fd);
+      sb = std::make_unique<util::fdinbuf>(remote_fd);
+    } else if (input == "-") {
+      sb = std::make_unique<util::fdinbuf>(0);
     } else {
-      in = std::make_unique<io::file_input_stream>(input);
+      auto fb = std::make_unique<std::filebuf>();
+      fb->open(input, std::ios_base::binary | std::ios_base::in);
+      sb = std::move(fb);
     }
   }
   // Facilitate shutdown when returning with error.
   actor src;
-  auto guard = caf::detail::make_scope_guard(
-    [&] { anon_send_exit(src, exit::error); }
-  );
+  auto guard = make_scope_guard([&] { anon_send_exit(src, exit::error); });
   // Spawn a source according to format.
   if (format == "pcap") {
 #ifndef VAST_HAVE_PCAP
@@ -77,8 +81,9 @@ trial<caf::actor> spawn(message const& params) {
       return error{std::move(r.error)};
     if (input.empty())
       return error{"no input specified (-r or -i)"};
-    src = caf::spawn<pcap, priority_aware + detached>(
-      input, cutoff, flow_max, flow_age, flow_expiry, pseudo_realtime);
+    src = caf::spawn<priority_aware + detached>(pcap, input, cutoff, flow_max,
+                                                flow_age, flow_expiry,
+                                                pseudo_realtime);
 #endif
   } else if (format == "test") {
     auto id = event_id{0};
@@ -89,14 +94,16 @@ trial<caf::actor> spawn(message const& params) {
     });
     if (!r.error.empty())
       return error{std::move(r.error)};
-    src = caf::spawn<test, priority_aware>(id, events);
+    src = caf::spawn<priority_aware>(test, id, events);
     // The test source doesn't consume any data, it only generates events.
     // Therefore we can use the input channel for the schema.
     schema_file = input;
   } else if (format == "bro") {
-    src = caf::spawn<bro, priority_aware + detached>(std::move(in));
+    VAST_ASSERT(sb);
+    src = caf::spawn<priority_aware + detached>(bro, sb.release());
   } else if (format == "bgpdump") {
-    src = caf::spawn<bgpdump, priority_aware + detached>(std::move(in));
+    VAST_ASSERT(sb);
+    src = caf::spawn<priority_aware + detached>(bgpdump, sb.release());
   } else {
     return error{"invalid import format: ", format};
   }

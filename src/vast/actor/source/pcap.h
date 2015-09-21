@@ -51,40 +51,20 @@ struct hash<vast::source::detail::connection> {
 namespace vast {
 namespace source {
 
-/// A source that reads PCAP packets from an interface or a file.
-class pcap : public base<pcap> {
-public:
-  /// Constructs a PCAP source.
-  /// @param name The name of the interface or trace file.
-  /// @param cutoff The number of bytes to keep per flow.
-  /// @param max_flows The maximum number of flows to keep state for.
-  /// @param max_age The number of seconds to wait since the last seen packet
-  ///                before evicting the corresponding flow.
-  /// @param expire_interval The number of seconds between successive expire
-  ///                        passes over the flow table.
-  /// @param pseudo_realtime The inverse factor by which to delay packets. For
-  ///                        example, if 5, then for two packets spaced *t*
-  ///                        seconds apart, the source will sleep for *t/5*
-  ///                        seconds.
-  pcap(std::string name, uint64_t cutoff = -1, size_t max_flows = 100000,
-       size_t max_age = 60, size_t expire_interval = 10,
-       int64_t pseudo_realtime = 0);
-
-  ~pcap();
-
-  schema sniff();
-
-  void set(schema const& sch);
-
-  result<event> extract();
-
-private:
+struct pcap_state : state {
   struct connection_state {
     uint64_t bytes;
     uint64_t last;
   };
 
-  std::string name_;
+  pcap_state(local_actor* self);
+  ~pcap_state();
+
+  vast::schema schema() final;
+  void schema(vast::schema const& sch) final;
+  result<event> extract() final;
+
+  std::string input_;
   type packet_type_;
   pcap_t* pcap_ = nullptr;
   pcap_pkthdr* packet_header_ = nullptr;
@@ -98,6 +78,24 @@ private:
   std::chrono::nanoseconds last_timestamp_;
   int64_t pseudo_realtime_;
 };
+
+/// A source that reads PCAP packets from an interface or a file.
+/// @param self The actor handle.
+/// @param input The name of the interface or trace file.
+/// @param cutoff The number of bytes to keep per flow.
+/// @param max_flows The maximum number of flows to keep state for.
+/// @param max_age The number of seconds to wait since the last seen packet
+///                before evicting the corresponding flow.
+/// @param expire_interval The number of seconds between successive expire
+///                        passes over the flow table.
+/// @param pseudo_realtime The inverse factor by which to delay packets. For
+///                        example, if 5, then for two packets spaced *t*
+///                        seconds apart, the source will sleep for *t/5*
+///                        seconds.
+behavior pcap(stateful_actor<pcap_state>* self, std::string input,
+              uint64_t cutoff = -1, size_t max_flows = 100000,
+              size_t max_age = 60, size_t expire_interval = 10,
+              int64_t pseudo_realtime = 0);
 
 } // namespace source
 } // namespace vast

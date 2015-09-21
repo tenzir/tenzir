@@ -9,18 +9,23 @@ forensics and incident response.
 
 ## Synopsis
 
-Start a VAST node with debug log verbosity in the foreground:
+Import a PCAP trace into a local VAST node in one shot:
 
-    vastd -l 5 -f
-
-Import [Bro](http://www.bro.org) logs or a PCAP trace in one shot:
-
-    zcat *.log.gz | vast import bro
     vast import pcap < trace.pcap
 
-Query VAST and get the result back as PCAP trace:
+Query a local node and get the result back as PCAP trace:
 
-    vast export pcap -h "sport > 60000/tcp && src !in 10.0.0.0/8"
+    vast export pcap -h "sport > 60000/tcp && src !in 10.0.0.0/8" \
+      | ipsumdump --collate -w - \
+      | tcpdump -r - -nl
+
+Start a node with debug log verbosity in the foreground:
+
+    vast -e 10.0.0.1 start -l 5 -f
+
+Send [Bro](http://www.bro.org) logs to the remote node:
+
+    zcat *.log.gz | vast -e 10.0.0.1 import bro
 
 ## Resources
 
@@ -28,7 +33,7 @@ Query VAST and get the result back as PCAP trace:
 - [Issue board](https://waffle.io/mavam/vast)
 - [Chat](https://gitter.im/mavam/vast)
 - [Contribution guidelines](CONTRIBUTING.md)
-- [Project page](http://www.icir.org/vast)
+- [Project page](http://vast.tools)
 - Mailing lists:
     - [vast@icir.org][mailing-list]: general help and discussion
     - [vast-commits@icir.org][mailing-list-commits]: full diffs of git commits

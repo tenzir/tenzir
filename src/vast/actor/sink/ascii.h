@@ -9,20 +9,20 @@
 namespace vast {
 namespace sink {
 
-/// A sink dumping events in plain ASCII.
-class ascii : public base<ascii> {
-public:
-  /// Spawns an ASCII sink.
-  /// @param out The output stream.
-  ascii(std::unique_ptr<std::ostream> out);
+struct ascii_state : state {
+  ascii_state(local_actor *self);
 
-  bool process(event const& e);
+  bool process(event const& e) override;
 
-  void flush();
+  void flush() override;
 
-private:
-  std::unique_ptr<std::ostream> out_;
+  std::unique_ptr<std::ostream> out;
 };
+
+/// A sink dumping events in plain ASCII.
+/// @param self The actor handle.
+/// @param out The stream to print received events into.
+behavior ascii(stateful_actor<ascii_state>* self, std::ostream* out);
 
 } // namespace sink
 } // namespace vast

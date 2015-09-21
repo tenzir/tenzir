@@ -3,7 +3,6 @@
 #define SUITE actors
 #include "test.h"
 
-using namespace caf;
 using namespace vast;
 
 namespace {
@@ -34,7 +33,7 @@ behavior worker(event_based_actor* self, actor const& task) {
 
 TEST(task) {
   scoped_actor self;
-  auto t = self->spawn<task>();
+  auto t = self->spawn(task::make<>);
   self->send(t, subscriber_atom::value, self);
   self->send(t, supervisor_atom::value, self);
 
@@ -45,7 +44,7 @@ TEST(task) {
   self->send(t, leaf1b);
 
   MESSAGE("spawning intermediate workers");
-  auto i = self->spawn<task, monitored>();
+  auto i = self->spawn<monitored>(task::make<>);
   self->send(t, i);
   auto leaf2a = self->spawn(worker, i);
   auto leaf2b = self->spawn(worker, i);
@@ -96,7 +95,7 @@ TEST(task) {
   self->receive([&](done_atom) { CHECK(self->current_sender() == t); } );
 
   MESSAGE("customizing an exit message");
-  t = spawn<task>(42);
+  t = spawn(task::make<int>, 42);
   self->send(t, supervisor_atom::value, self);
   self->send_exit(t, exit::kill);
   self->receive([&](done_atom, int i) { CHECK(i == 42); } );

@@ -12,35 +12,29 @@
 namespace vast {
 namespace source {
 
-/// A Bro log file source.
-class bro : public line_based<bro> {
-public:
-  /// Spawns a Bro source.
-  /// @param is The input stream to read Bro logs from.
-  bro(std::unique_ptr<io::input_stream> is);
+struct bro_state : line_based_state {
+  bro_state(local_actor* self);
 
-  result<event> extract();
-
-  schema sniff();
-
-  void set(schema const& sch);
-
-private:
-  trial<std::string> parse_header_line(std::string const& line,
-                                       std::string const& prefix);
+  vast::schema schema() final;
+  void schema(vast::schema const& sch) final;
+  result<event> extract() final;
 
   trial<void> parse_header();
 
-  vast::schema schema_;
-  int timestamp_field_ = -1;
   std::string separator_ = " ";
   std::string set_separator_;
   std::string empty_field_;
   std::string unset_field_;
-  std::string event_name_prefix_ = "bro";
+  int timestamp_field_ = -1;
+  vast::schema schema_;
   type type_;
   std::vector<rule<std::string::const_iterator, data>> parsers_;
 };
+
+// A source parsing Bro logs files.
+// @param self The actor handle.
+// @param sb The streambuffer to read log lines from.
+behavior bro(stateful_actor<bro_state>* self, std::streambuf* sb);
 
 } // namespace source
 } // namespace vast

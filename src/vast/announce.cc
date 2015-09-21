@@ -2,6 +2,7 @@
 #include "vast/announce.h"
 #include "vast/bitmap_index_polymorphic.h"
 #include "vast/bitstream.h"
+#include "vast/caf.h"
 #include "vast/chunk.h"
 #include "vast/expression.h"
 #include "vast/event.h"
@@ -16,6 +17,9 @@
 #include "vast/uuid.h"
 #include "vast/value.h"
 #include "vast/util/radix_tree.h"
+#include "vast/actor/accountant.h"
+#include "vast/actor/archive.h"
+#include "vast/actor/identifier.h"
 #include "vast/concept/serializable/builtin.h"
 #include "vast/concept/serializable/state.h"
 #include "vast/concept/serializable/caf/message.h"
@@ -54,16 +58,16 @@ namespace {
 // TODO: remove after having consolidated VAST's and CAF's serialization
 // frameworks.
 class radix_tree_msg_type_info
-  : public caf::abstract_uniform_type_info<util::radix_tree<caf::message>> {
+  : public abstract_uniform_type_info<util::radix_tree<message>> {
 public:
   radix_tree_msg_type_info()
-    : caf::abstract_uniform_type_info<util::radix_tree<caf::message>>{
+    : abstract_uniform_type_info<util::radix_tree<message>>{
         "vast::util::radix_tree<caf::message>"} {
   }
 
 protected:
   void serialize(void const* ptr, caf::serializer* sink) const final {
-    auto x = reinterpret_cast<util::radix_tree<caf::message> const*>(ptr);
+    auto x = reinterpret_cast<util::radix_tree<message> const*>(ptr);
     sink->begin_sequence(x->size());
     for (auto& pair : *x)
       *sink << pair.first << pair.second;
@@ -71,12 +75,12 @@ protected:
   }
 
   void deserialize(void* ptr, caf::deserializer* source) const final {
-    auto x = reinterpret_cast<util::radix_tree<caf::message>*>(ptr);
+    auto x = reinterpret_cast<util::radix_tree<message>*>(ptr);
     x->clear();
     auto n = source->begin_sequence();
     for (auto i = 0u; i < n; ++i) {
       std::string key;
-      caf::message value;
+      message value;
       *source >> key >> value;
       x->insert(std::make_pair(std::move(key), std::move(value)));
     }
@@ -186,7 +190,7 @@ void announce_types() {
   announce<std::vector<event>>("std::vector<vast::event>");
   announce<std::vector<value>>("std::vector<vast::value>");
   announce<std::vector<uuid>>("std::vector<vast::uuid>");
-  announce<util::radix_tree<caf::message>>(
+  announce<util::radix_tree<message>>(
     "vast::util::radix_tree<caf::message>>");
   // Polymorphic bitstreams
   announce<ewah_bitstream>("vast::ewah_bitstream");
@@ -202,11 +206,15 @@ void announce_types() {
   announce_bmi_hierarchy<ewah_bitstream>("ewah_bitstream");
   announce_bmi_hierarchy<null_bitstream>("null_bitstream");
   // CAF only
-  caf::announce<std::map<std::string, caf::message>>(
+  caf::announce<std::map<std::string, message>>(
     "std::map<std::string,caf::message>>");
   // Temporary workaround.
-  caf::announce(typeid(util::radix_tree<caf::message>),
+  caf::announce(typeid(util::radix_tree<message>),
                 std::make_unique<radix_tree_msg_type_info>());
+  // Actors
+  caf::announce<accountant::type>("vast::accountant");
+  caf::announce<archive::type>("vast::archive");
+  caf::announce<identifier::type>("vast::identifier");
 }
 
 } // namespace vast

@@ -8,7 +8,8 @@
 #include "vast/schema.h"
 #include "vast/time.h"
 #include "vast/uuid.h"
-#include "vast/actor/actor.h"
+#include "vast/actor/accountant.h"
+#include "vast/actor/basic_state.h"
 #include "vast/expr/evaluator.h"
 
 namespace vast {
@@ -17,47 +18,38 @@ namespace vast {
 ///
 /// For each event batch PARTITION receives, it spawns one EVENT_INDEXERs per
 /// type occurring in the batch and forwards them the events.
-struct partition : flow_controlled_actor {
+struct partition {
   using bitstream_type = default_bitstream;
 
-  struct evaluator : expr::bitstream_evaluator<evaluator, default_bitstream> {
-    evaluator(partition const& p);
-    bitstream_type const* lookup(predicate const& pred) const;
-
-    partition const& partition_;
-  };
-
   struct predicate_state {
-    caf::actor task;
+    actor task;
     bitstream_type hits;
     util::flat_set<event_id> cache;
     util::flat_set<expression const*> queries;
   };
 
   struct query_state {
-    caf::actor task;
+    actor task;
     bitstream_type hits;
+  };
+
+  struct state : basic_state {
+    state(local_actor* self);
+
+    actor proxy;
+    accountant::type accountant;
+    vast::schema schema;
+    size_t pending_events = 0;
+    std::multimap<event_id, actor> indexers;
+    std::map<expression, query_state> queries;
+    std::map<predicate, predicate_state> predicates;
   };
 
   /// Spawns a partition.
   /// @param dir The directory where to store this partition on the file system.
   /// @param sink The actor receiving results of this partition.
   /// @pre `sink != invalid_actor`
-  partition(path dir, caf::actor sink);
-
-  void on_exit() override;
-  caf::behavior make_behavior() override;
-
-  void flush();
-
-  path const dir_;
-  caf::actor sink_;
-  caf::actor proxy_;
-  schema schema_;
-  size_t events_indexed_concurrently_ = 0;
-  std::multimap<event_id, caf::actor> indexers_;
-  std::map<expression, query_state> queries_;
-  std::map<predicate, predicate_state> predicates_;
+  static behavior make(stateful_actor<state>* self, path dir, actor sink);
 };
 
 } // namespace vast

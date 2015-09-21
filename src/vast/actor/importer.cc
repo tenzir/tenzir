@@ -1,129 +1,109 @@
-#include <caf/all.hpp>
-
 #include "vast/event.h"
+#include "vast/actor/atoms.h"
 #include "vast/actor/importer.h"
 #include "vast/concept/printable/vast/error.h"
 
 namespace vast {
 
-using namespace caf;
-
-importer::importer() : flow_controlled_actor{"importer"} {
+importer::state::state(event_based_actor* self)
+  : basic_state{self, "importer"} {
 }
 
-void importer::on_exit() {
-  identifier_ = invalid_actor;
-  archive_ = invalid_actor;
-  index_ = invalid_actor;
-}
-
-behavior importer::make_behavior() {
-  trap_exit(true);
-  auto exit_handler = [=](exit_msg const& msg) {
-    if (downgrade_exit())
-      return;
-    quit(msg.reason);
-  };
+behavior importer::make(stateful_actor<state>* self) {
   auto dependencies_alive = [=] {
-    if (identifier_ == invalid_actor) {
-      VAST_ERROR(this, "has no identifier configured");
-      quit(exit::error);
+    if (self->state.identifier == invalid_actor) {
+      VAST_ERROR_AT(self, "has no identifier configured");
+      self->quit(exit::error);
       return false;
     }
-    if (archive_ == invalid_actor) {
-      VAST_ERROR(this, "has no archive configured");
-      quit(exit::error);
+    if (!self->state.archive) {
+      VAST_ERROR_AT(self, "has no archive configured");
+      self->quit(exit::error);
       return false;
     }
-    if (index_ == invalid_actor) {
-      VAST_ERROR(this, "has no index configured");
-      quit(exit::error);
+    if (self->state.index == invalid_actor) {
+      VAST_ERROR_AT(self, "has no index configured");
+      self->quit(exit::error);
       return false;
     }
     return true;
   };
+  self->trap_exit(true);
   return {
-    forward_overload(),
-    forward_underload(),
-    register_upstream_node(),
-    exit_handler,
+    downgrade_exit_msg(self),
     [=](down_msg const& msg) {
-      if (remove_upstream_node(msg.source))
-        return;
-      if (msg.source == identifier_)
-        identifier_ = invalid_actor;
-      else if (msg.source == archive_)
-        archive_ = invalid_actor;
-      else if (msg.source == index_)
-        index_ = invalid_actor;
+      if (msg.source == self->state.identifier)
+        self->state.identifier = invalid_actor;
+      else if (msg.source == self->state.archive)
+        self->state.archive = {};
+      else if (msg.source == self->state.index)
+        self->state.index = invalid_actor;
     },
     [=](put_atom, identifier_atom, actor const& a) {
-      VAST_DEBUG(this, "registers identifier", a);
-      monitor(a);
-      identifier_ = a;
+      VAST_DEBUG_AT(self, "registers identifier", a);
+      self->monitor(a);
+      self->state.identifier = a;
     },
-    [=](put_atom, archive_atom, actor const& a) {
-      VAST_DEBUG(this, "registers archive", a);
-      send(a, upstream_atom::value, this);
-      monitor(a);
-      archive_ = a;
+    [=](archive::type const& a) {
+      VAST_DEBUG_AT(self, "registers archive#" << a->id());
+      self->monitor(a);
+      self->state.archive = a;
     },
     [=](put_atom, index_atom, actor const& a) {
-      VAST_DEBUG(this, "registers index", a);
-      send(a, upstream_atom::value, this);
-      monitor(a);
-      index_ = a;
+      VAST_DEBUG_AT(self, "registers index", a);
+      self->monitor(a);
+      self->state.index = a;
     },
     [=](std::vector<event>& events) {
+      VAST_DEBUG_AT(self, "got", events.size(), "events");
       if (! dependencies_alive())
         return;
       event_id needed = events.size();
-      batch_ = std::move(events);
-      send(identifier_, request_atom::value, needed);
-      become(
+      self->state.batch = std::move(events);
+      self->send(self->state.identifier, request_atom::value, needed);
+      self->become(
         keep_behavior,
-        [=](std::vector<event> const&) {
-          // Wait until we've processed the current batch.
-          return skip_message();
-        },
         [=](id_atom, event_id from, event_id to)  {
           auto n = to - from;
-          got_ += n;
-          VAST_DEBUG(this, "got", n, "IDs [" << from << "," << to << ")");
+          self->state.got += n;
+          VAST_DEBUG_AT(self, "got", n, "IDs [" << from << "," << to << ")");
           for (auto i = 0u; i < n; ++i)
-            batch_[i].id(from++);
-          if (got_ < needed) {
-            if (got_ > 0) {
+            self->state.batch[i].id(from++);
+          if (self->state.got < needed) {
+            if (self->state.got > 0) {
               // We take the front slice and ship it separately until
               // IDENTIFIER has calibrated itself.
               auto remainder = std::vector<event>(
-                std::make_move_iterator(batch_.begin() + n),
-                std::make_move_iterator(batch_.end()));
-              batch_.resize(n);
-              auto msg = make_message(std::move(batch_));
-              send(archive_, msg);
-              send(index_, msg);
-              batch_ = std::move(remainder);
+                std::make_move_iterator(self->state.batch.begin() + n),
+                std::make_move_iterator(self->state.batch.end()));
+              self->state.batch.resize(n);
+              auto msg = make_message(std::move(self->state.batch));
+              // FIXME: how to make this type-safe?
+              self->send(actor_cast<actor>(self->state.archive), msg);
+              self->send(self->state.index, msg);
+              self->state.batch = std::move(remainder);
             }
-            VAST_VERBOSE(this, "asks for more IDs: got", got_,
-                         "so far, still need", needed - got_);
-            send(identifier_, request_atom::value, needed - got_);
+            VAST_VERBOSE_AT(self, "asks for more IDs: got", self->state.got,
+                            "so far, still need", needed - self->state.got);
+            self->send(self->state.identifier, request_atom::value,
+                       needed - self->state.got);
           } else {
             // Ship the batch directly if we got enough IDs.
-            auto msg = make_message(std::move(batch_));
-            send(archive_, msg);
-            send(index_, msg);
-            got_ = 0;
-            unbecome();
+            auto msg = make_message(std::move(self->state.batch));
+            // FIXME: how to make this type-safe?
+            self->send(actor_cast<actor>(self->state.archive), msg);
+            self->send(self->state.index, msg);
+            self->state.got = 0;
+            self->unbecome();
           }
         },
         [=](error const& e) {
-          VAST_ERROR(this, e);
-          quit(exit::error);
+          VAST_ERROR_AT(self, e);
+          self->quit(exit::error);
         }
       );
     },
-    catch_unexpected()
+    log_others(self)
   };
 }
 
