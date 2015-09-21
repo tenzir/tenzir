@@ -8,6 +8,7 @@
 #include "vast/query_options.h"
 #include "vast/uuid.h"
 #include "vast/actor/task.h"
+#include "vast/concept/parseable/vast/detail/to_expression.h"
 #include "vast/concept/printable/vast/error.h"
 #include "vast/concept/printable/vast/expression.h"
 

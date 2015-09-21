@@ -545,7 +545,7 @@ int main(int argc, char* argv[]) {
   if (local_node) {
     VAST_VERBOSE("spawning local node:", name);
     scoped_actor self;
-    node = self->spawn<vast::node>(name, abs_dir);
+    node = self->spawn(vast::node::make, name, abs_dir);
     if (start.opts.count("bare") == 0) {
       // TODO: once we have a better API for adjusting parameters of running
       // actors, we don't need to haul through the command line arguments in

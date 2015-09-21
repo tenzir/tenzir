@@ -32,7 +32,7 @@ struct core {
   }
 
   actor make_core() {
-    auto n = self->spawn<node>(node_name, dir);
+    auto n = self->spawn(node::make, node_name, dir);
     auto hdl = self->sync_send(n, "spawn", "core",
                                "--archive-segments=1",
                                "--index-events=10");

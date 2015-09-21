@@ -2,6 +2,7 @@
 #include "vast/event.h"
 #include "vast/actor/partition.h"
 #include "vast/actor/task.h"
+#include "vast/concept/parseable/vast/detail/to_expression.h"
 
 #define SUITE actors
 #include "test.h"

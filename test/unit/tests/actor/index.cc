@@ -2,6 +2,7 @@
 #include "vast/query_options.h"
 #include "vast/actor/atoms.h"
 #include "vast/actor/index.h"
+#include "vast/concept/parseable/vast/detail/to_expression.h"
 #include "vast/concept/printable/vast/expression.h"
 
 #define SUITE actors

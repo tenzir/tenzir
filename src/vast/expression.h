@@ -188,14 +188,6 @@ private:
   node node_;
 };
 
-namespace detail {
-
-// Helper function constructing an expression from a string in order to save
-// compile times.
-trial<expression> to_expression(std::string const& str);
-
-} // namespace detail
-
 } // namespace vast
 
 #endif

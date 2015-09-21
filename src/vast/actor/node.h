@@ -6,7 +6,7 @@
 
 #include "vast/filesystem.h"
 #include "vast/trial.h"
-#include "vast/actor/actor.h"
+#include "vast/actor/basic_state.h"
 #include "vast/actor/accountant.h"
 #include "vast/actor/key_value_store.h"
 #include "vast/util/system.h"
@@ -23,48 +23,26 @@ namespace vast {
 ///   - /peers/<node>/<node>
 ///   - /topology/<source>/<sink>
 ///
-struct node : default_actor {
+struct node  {
+  struct state : basic_state {
+    state(local_actor* self);
+
+    path dir;
+    std::string desc;
+    accountant::type accountant;
+    actor store;
+  };
+
   /// Returns the path of the log directory relative to the base directory.
   /// @returns The directory where to write log and status messages to.
   static path const& log_path();
 
   /// Spawns a node.
+  /// @param self The actor handle
   /// @param name The name of the node.
   /// @param dir The directory where to store persistent state.
-  node(std::string const& name = util::hostname(), path const& dir = "vast");
-
-  void on_exit() override;
-  behavior make_behavior() override;
-
-  //
-  // Public message interface
-  //
-
-  behavior spawn_core(event_based_actor* self);
-  behavior spawn_actor(event_based_actor* self);
-  behavior send_run(event_based_actor* self);
-  behavior send_flush(event_based_actor* self);
-  behavior quit_actor(event_based_actor* self);
-  behavior connect(event_based_actor* self);
-  behavior disconnect(event_based_actor* self);
-  behavior show(event_based_actor* self);
-  behavior store_get_actor(event_based_actor* self);
-  behavior request_peering(event_based_actor* self);
-  behavior respond_to_peering(event_based_actor* self);
-
-  //
-  // Helpers
-  //
-
-  std::string qualify(std::string const& label) const;
-  std::string make_actor_key(std::string const& label) const;
-  std::string parse_actor_key(std::string const& key) const;
-
-  behavior operating_;
-  accountant::type accountant_;
-  actor store_;
-  std::string name_;
-  path const dir_;
+  static behavior make(stateful_actor<state>* self, std::string const& name,
+                       path const& dir);
 };
 
 } // namespace vast
