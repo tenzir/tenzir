@@ -285,6 +285,11 @@ std::vector<path> split(path const& p);
 /// @returns `true` if *p* exists.
 bool exists(path const& p);
 
+/// Creates a symlink (aka. "soft link").
+/// @param target The existing file that should be linked.
+/// @param link The symlink that points to *target*.
+void create_symlink(path const& target, path const& link);
+
 /// Deletes the path on the filesystem.
 /// @param p The path to a directory to delete.
 /// @returns `true` if *p* has been successfully deleted.

@@ -397,6 +397,10 @@ bool exists(path const& p) {
 #endif // VAST_POSIX
 }
 
+void create_symlink(path const& target, path const& link) {
+  ::symlink(target.str().c_str(), link.str().c_str());
+}
+
 bool rm(const path& p) {
   // Because a file system only offers primitives to delete empty directories,
   // we have to recursively delete all files in a directory before deleting it.

@@ -508,11 +508,16 @@ int main(int argc, char* argv[]) {
                     || (endpoint.empty() 
                         && (*cmd == "import" || *cmd == "export"));
   if (local_node) {
-    auto log_file = abs_dir / node::log_path() / "vast.log";
-    if (!logger::file(verbosity, log_file.str())) {
+    auto log = abs_dir / node::log_path() / "vast.log";
+    if (!logger::file(verbosity, log.str())) {
       std::cerr << "failed to initialize logger file backend" << std::endl;
       return 1;
     }
+    auto link = log.chop(-2) / "current";
+    VAST_DEBUG(link.str());
+    if (exists(link))
+      rm(link);
+    create_symlink(log.trim(-2).chop(-1), link);
   } else if (endpoint.empty()) {
     VAST_ERROR("no endpoint (-e) specified");
     return 1;
