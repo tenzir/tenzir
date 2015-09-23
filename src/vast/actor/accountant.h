@@ -6,6 +6,7 @@
 
 #include "vast/filesystem.h"
 #include "vast/time.h"
+#include "vast/actor/atoms.h"
 #include "vast/actor/basic_state.h"
 
 namespace vast {
@@ -22,6 +23,7 @@ struct accountant {
 
   using type =
     typed_actor<
+      reacts_to<flush_atom>,
       reacts_to<std::string, std::string, std::string>,
       reacts_to<std::string, std::string, time::extent>,
       reacts_to<std::string, std::string, time::moment>,

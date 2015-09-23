@@ -56,6 +56,7 @@ accountant::behavior accountant::make(stateful_pointer self,
       << std::setprecision(6) << value << '\n';
   };
   self->trap_exit(true);
+  self->send(self, flush_atom::value);
   return {
     [=](exit_msg const& msg) {
       // Delay termination if we have still samples lingering in the mailbox.
@@ -67,6 +68,12 @@ accountant::behavior accountant::make(stateful_pointer self,
         self->trap_exit(false);
         self->send(message_priority::normal, self, self->current_message());
       }
+    },
+    [=](flush_atom) {
+      if (self->state.file_)
+        self->state.file_.flush();
+      if (self->current_sender() == self)
+        self->delayed_send(self, time::seconds(10), self->current_message());
     },
     [=](std::string const& name, std::string const& key,
         std::string const& value) {
