@@ -232,7 +232,7 @@ for core in $(printf $cores | strsplit , 3 ); do
             # Run it!
             eval $vast
             # Post-process logs.
-            logdir="$vastdir/log/$(ls $vastdir/log/ | tail -n 1)"
+            logdir="$vastdir/log/current"
             if [ -n "$profiler" ]; then
               mv $workdir/caf.log $logdir
               awk "$process_labels" $logdir/vast.log > $logdir/labels.log
