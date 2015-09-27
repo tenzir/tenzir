@@ -19,6 +19,10 @@ struct uri_parser : parser<uri_parser> {
 
   static auto make() {
     using namespace parsers;
+    auto query_unescape = [](std::string str) {
+      std::replace(str.begin(), str.end(), '+', ' ');
+      return util::percent_unescape(str);
+    };
     auto percent_unescape = [](std::string str) {
       return util::percent_unescape(str);
     };
@@ -30,7 +34,7 @@ struct uri_parser : parser<uri_parser> {
     auto path_segment = *(printable - path_ignore_char) ->* percent_unescape;
     auto query_key = +(printable - '=') ->* percent_unescape;
     auto query_ignore_char = '&'_p | '#' | ' ';
-    auto query_value = +(printable - query_ignore_char) ->* percent_unescape;
+    auto query_value = +(printable - query_ignore_char) ->* query_unescape;
     auto query = query_key >> '=' >> query_value;
     auto fragment = *(printable - ' ');
     auto uri

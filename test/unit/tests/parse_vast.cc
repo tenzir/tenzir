@@ -275,7 +275,7 @@ TEST(HTTP request)
 TEST(URI with HTTP URL)
 {
   auto p = make_parser<uri>();
-  auto str = "http://foo.bar:80/foo/bar?opt1=val1&opt2=val2#frag1"s;
+  auto str = "http://foo.bar:80/foo/bar?opt1=val1&opt2=x+y#frag1"s;
   auto f = str.begin();
   auto l = str.end();
   uri u;
@@ -286,7 +286,7 @@ TEST(URI with HTTP URL)
   CHECK(u.path[0] == "foo");
   CHECK(u.path[1] == "bar");
   CHECK(u.query["opt1"] == "val1");
-  CHECK(u.query["opt2"] == "val2");
+  CHECK(u.query["opt2"] == "x y");
   CHECK(u.fragment == "frag1");
   CHECK(f == l);
 }
