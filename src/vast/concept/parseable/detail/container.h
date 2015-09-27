@@ -9,11 +9,29 @@
 namespace vast {
 namespace detail {
 
+template <typename T>
+struct is_pair : std::false_type {};
+
+template <typename T, typename U>
+struct is_pair<std::pair<T, U>> : std::true_type {};
+
 template <typename Elem>
 struct container {
   using vector_type = std::vector<Elem>;
   using attribute = typename attr_fold<vector_type>::type;
-  using value_type = typename attribute::value_type;
+
+  template <typename T>
+  struct lazy_value_type {
+    using value_type = T;
+  };
+
+  using value_type =
+    typename std::conditional_t<
+      std::is_same<attribute, std::decay_t<unused_type>>{},
+      lazy_value_type<unused_type>,
+      attribute
+    >::value_type;
+
   static constexpr bool modified = std::is_same<vector_type, attribute>{};
 
   template <typename Container, typename T>
@@ -38,12 +56,29 @@ struct container {
   }
 
   template <typename Parser, typename Iterator, typename Attribute>
-  static bool parse(Parser const& p, Iterator& f, Iterator const& l,
-                    Attribute& a) {
+  static auto parse(Parser const& p, Iterator& f, Iterator const& l,
+                    Attribute& a)
+    -> std::enable_if_t<!is_pair<typename Attribute::value_type>{}, bool> {
     value_type x;
     if (!p.parse(f, l, x))
       return false;
     push_back(a, std::move(x));
+    return true;
+  }
+
+  template <typename Parser, typename Iterator, typename Attribute>
+  static auto parse(Parser const& p, Iterator& f, Iterator const& l,
+                    Attribute& a)
+    -> std::enable_if_t<is_pair<typename Attribute::value_type>{}, bool> {
+    using pair_type =
+      std::pair<
+        std::remove_const_t<typename Attribute::value_type::first_type>,
+        typename Attribute::value_type::second_type
+      >;
+    pair_type pair;
+    if (!p.parse(f, l, pair))
+      return false;
+    push_back(a, std::move(pair));
     return true;
   }
 };

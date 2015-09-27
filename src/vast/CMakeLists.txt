@@ -16,6 +16,7 @@ set(libvast_sources
   expression.cc
   event.cc
   filesystem.cc
+  http.cc
   individual.cc
   logger.cc
   operator.cc

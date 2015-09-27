@@ -13,6 +13,31 @@
 using namespace vast;
 using namespace std::string_literals;
 
+TEST(maybe) {
+  using namespace parsers;
+  auto maybe_x = ~chr{'x'};
+  auto c = 'x';
+  auto f = &c;
+  auto l = &c + 1;
+  char result = 0;
+  CHECK(maybe_x.parse(f, l, result));
+  CHECK(f == l);
+  CHECK(result == 'x');
+  c = 'y';
+  f = &c;
+  result = '\0';
+  CHECK(maybe_x.parse(f, l, result));
+  CHECK(f == &c); // Iterator not advanced.
+  CHECK(result == '\0'); // Result not modified.
+}
+
+TEST(container attribute folding) {
+  using namespace parsers;
+  auto spaces = *' '_p;
+  static_assert(std::is_same<decltype(spaces)::attribute, unused_type>::value,
+                "container attribute folding failed");
+}
+
 TEST(char) {
   using namespace parsers;
   MESSAGE("equality");
@@ -114,7 +139,7 @@ TEST(quoted string) {
   CHECK(attr == "foobar'");
 }
 
-TEST(attribute compatibility : string) {
+TEST(attribute compatibility with string) {
   auto str = "..."s;
   auto attr = ""s;
   auto f = str.begin();
@@ -155,7 +180,7 @@ TEST(attribute compatibility : string) {
   CHECK(f == l);
 }
 
-TEST(attribute compatibility : pair) {
+TEST(attribute compatibility with pair) {
   using namespace parsers;
   auto str = "xy"s;
   auto attr = ""s;
@@ -175,6 +200,20 @@ TEST(attribute compatibility : pair) {
   CHECK(c.parse(f, l, p1));
   CHECK(p1.first == "x");
   CHECK(p1.second == "y");
+}
+
+TEST(attribute compatibility with map) {
+  using namespace parsers;
+  auto str = "a->x,b->y,c->z"s;
+  auto f = str.begin();
+  auto l = str.end();
+  std::map<char, char> map;
+  auto p = (any >> "->" >> any) % ',';
+  CHECK(p.parse(f, l, map));
+  CHECK(f == l);
+  CHECK(map['a'] == 'x');
+  CHECK(map['b'] == 'y');
+  CHECK(map['c'] == 'z');
 }
 
 TEST(bool) {

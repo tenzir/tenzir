@@ -9,6 +9,9 @@
 #include "vast/concept/printable/to_string.h"
 #include "vast/concept/printable/vast/pattern.h"
 #include "vast/concept/printable/vast/address.h"
+#include "vast/concept/parseable/vast/http.h"
+#include "vast/concept/parseable/vast/uri.h"
+
 
 #define SUITE parseable
 #include "test.h"
@@ -218,4 +221,91 @@ TEST(offset) {
   offset o;
   CHECK(parsers::offset("1,2,3", o));
   CHECK(o == offset{1, 2, 3});
+}
+
+TEST(HTTP header)
+{
+  auto p = make_parser<http::header>();
+  auto str = "foo: bar"s;
+  auto f = str.begin();
+  auto l = str.end();
+  http::header hdr;
+  CHECK(p.parse(f, l, hdr));
+  CHECK(hdr.name == "FOO");
+  CHECK(hdr.value == "bar");
+  CHECK(f == l);
+
+  str = "Content-Type:application/pdf";
+  f = str.begin();
+  l = str.end();
+  CHECK(p.parse(f, l, hdr));
+  CHECK(hdr.name == "CONTENT-TYPE");
+  CHECK(hdr.value == "application/pdf");
+  CHECK(f == l);
+}
+
+TEST(HTTP request)
+{
+  auto p = make_parser<http::request>();
+  auto str = "GET /foo/bar%20baz/ HTTP/1.1\r\n"
+             "Content-Type:text/html\r\n"
+             "Content-Length:1234\r\n"
+             "\r\n"
+             "Body "s;
+  auto f = str.begin();
+  auto l = str.end();
+  http::request req;
+  CHECK(p.parse(f, l, req));
+  CHECK(req.method == "GET");
+  CHECK(req.uri.path[0] == "foo");
+  CHECK(req.uri.path[1] == "bar baz");
+  CHECK(req.protocol == "HTTP");
+  CHECK(req.version == 1.1);
+  auto hdr = req.header("content-type");
+  REQUIRE(hdr);
+  CHECK(hdr->name == "CONTENT-TYPE");
+  CHECK(hdr->value == "text/html");
+  hdr = req.header("content-length");
+  REQUIRE(hdr);
+  CHECK(hdr->name == "CONTENT-LENGTH");
+  CHECK(hdr->value == "1234");
+  CHECK(f == l);
+}
+
+TEST(URI with HTTP URL)
+{
+  auto p = make_parser<uri>();
+  auto str = "http://foo.bar:80/foo/bar?opt1=val1&opt2=x+y#frag1"s;
+  auto f = str.begin();
+  auto l = str.end();
+  uri u;
+  CHECK(p.parse(f, l, u));
+  CHECK(u.scheme == "http");
+  CHECK(u.host == "foo.bar");
+  CHECK(u.port == 80);
+  CHECK(u.path[0] == "foo");
+  CHECK(u.path[1] == "bar");
+  CHECK(u.query["opt1"] == "val1");
+  CHECK(u.query["opt2"] == "x y");
+  CHECK(u.fragment == "frag1");
+  CHECK(f == l);
+}
+
+TEST(URI with path only)
+{
+  auto p = make_parser<uri>();
+  auto str = "/foo/bar?opt1=val1&opt2=val2"s;
+  auto f = str.begin();
+  auto l = str.end();
+  uri u;
+  CHECK(p.parse(f, l, u));
+  CHECK(u.scheme == "");
+  CHECK(u.host == "");
+  CHECK(u.port == 0);
+  CHECK(u.path[0] == "foo");
+  CHECK(u.path[1] == "bar");
+  CHECK(u.query["opt1"] == "val1");
+  CHECK(u.query["opt2"] == "val2");
+  CHECK(u.fragment == "");
+  CHECK(f == l);
 }

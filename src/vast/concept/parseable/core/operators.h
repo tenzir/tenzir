@@ -11,6 +11,9 @@ template <typename>
 class and_parser;
 
 template <typename>
+class maybe_parser;
+
+template <typename>
 class not_parser;
 
 template <typename>
@@ -81,6 +84,15 @@ auto operator+(T&& x)
        plus_parser<std::decay_t<T>>
      > {
   return plus_parser<std::decay_t<T>>{std::forward<T>(x)};
+}
+
+template <typename T>
+auto operator~(T&& x)
+  -> std::enable_if_t<
+       is_parser<std::decay_t<T>>{},
+       maybe_parser<std::decay_t<T>>
+     > {
+  return maybe_parser<std::decay_t<T>>{std::forward<T>(x)};
 }
 
 //
