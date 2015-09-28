@@ -8,18 +8,26 @@
 using namespace vast;
 using namespace vast::util;
 
-TEST(murmur_hash) {
+TEST(murmur hash) {
   CHECK(murmur3<32>::digest(42) == 3160117731);
 }
 
-TEST(xxhash_hash) {
-  CHECK(xxhash::digest(42) == 1161967057);
+TEST(xxhash) {
+  CHECK(xxhash64::digest("42", 42) == 7873697032674743835); // includes NUL
+  xxhash64 xxh64;
+  xxh64.add("foo", 3);
+  CHECK(xxh64.get() == 3728699739546630719ul);
+  xxh64.add("bar", 3);
+  CHECK(xxh64.get() == 11721187498075204345ul);
+  xxh64.add("baz", 3);
+  CHECK(xxh64.get() == 6505385152087097371ul);
 
-  xxhash xxh;
-  xxh.add(0);
-  xxh.add(1);
-  xxh.add(2);
-  CHECK(xxh.get() == 964478135);
+  CHECK(xxhash32::digest(42) == 1161967057);
+  xxhash32 xxh32;
+  xxh32.add(0);
+  xxh32.add(1);
+  xxh32.add(2);
+  CHECK(xxh32.get() == 964478135);
 }
 
 TEST(crc32) {

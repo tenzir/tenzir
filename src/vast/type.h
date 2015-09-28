@@ -64,7 +64,7 @@ public:
     std::string value;
   };
 
-  using hash_type = util::xxhash;
+  using hash_type = util::xxhash64;
 
   /// Derives a type from data.
   /// @param d The data to derive a type from.

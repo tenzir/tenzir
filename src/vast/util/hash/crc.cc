@@ -1,5 +1,3 @@
-#include "vast/util/hash/xxhash.h"
-
 namespace vast {
 namespace util {
 namespace detail {

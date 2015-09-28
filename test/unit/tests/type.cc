@@ -98,21 +98,6 @@ TEST(congruence) {
   CHECK(!congruent(b, i));
 }
 
-TEST(hashing) {
-  CHECK(type{}.digest() == 3479547966);
-  CHECK(type::boolean{}.digest() == 2972654956);
-  CHECK(type::integer{}.digest() == 2281945551);
-  CHECK(type::count{}.digest() == 1692035121);
-  CHECK(type::real{}.digest() == 2416297880);
-  CHECK(type::time_point{}.digest() == 3079435956);
-  CHECK(type::time_duration{}.digest() == 3468112332);
-  CHECK(type::string{}.digest() == 2437335011);
-  CHECK(type::pattern{}.digest() == 1812382548);
-  CHECK(type::address{}.digest() == 587189681);
-  CHECK(type::subnet{}.digest() == 4127993363);
-  CHECK(type::port{}.digest() == 489833540);
-}
-
 TEST(serialization) {
   type s0 = type::string{{type::attribute::skip}};
   type t = type::set{type::port{}};
