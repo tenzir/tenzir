@@ -227,9 +227,10 @@ size_t lz4_input_stream::uncompress(void const* source, size_t size) {
   // LZ4 does not offer functionality to estimate the output size. It operates
   // on at most 64KB blocks, so we need to ensure this maximum.
   VAST_ASSERT(uncompressed_.size() >= 64 << 10);
-  auto n = LZ4_uncompress_unknownOutputSize(
+  auto n = LZ4_decompress_safe(
     reinterpret_cast<char const*>(source),
-    reinterpret_cast<char*>(uncompressed_.data()), static_cast<int>(size),
+    reinterpret_cast<char*>(uncompressed_.data()),
+    static_cast<int>(size),
     static_cast<int>(uncompressed_.size()));
   VAST_ASSERT(n > 0);
   VAST_RETURN(n);
@@ -252,9 +253,10 @@ size_t lz4_output_stream::compressed_size(size_t output) const {
 size_t lz4_output_stream::compress(void* sink, size_t sink_size) {
   VAST_ENTER_WITH(VAST_ARG(sink, sink_size));
   VAST_ASSERT(sink_size >= valid_bytes_);
-  auto n = LZ4_compress_limitedOutput(
+  auto n = LZ4_compress_default(
     reinterpret_cast<char const*>(uncompressed_.data()),
-    reinterpret_cast<char*>(sink), static_cast<int>(valid_bytes_),
+    reinterpret_cast<char*>(sink),
+    static_cast<int>(valid_bytes_),
     static_cast<int>(sink_size));
   VAST_ASSERT(n > 0);
   VAST_RETURN(n);

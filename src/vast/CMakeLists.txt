@@ -104,7 +104,7 @@ if (PCAP_FOUND)
     actor/source/pcap.cc)
 endif ()
 
-set(libvast_libs lz4 ${CAF_LIBRARIES})
+set(libvast_libs ${CAF_LIBRARIES})
 
 if (VAST_ENABLE_ASSERTIONS)
   set(libvast_libs ${libvast_libs} ${Backtrace_LIBRARIES})
