@@ -12,26 +12,26 @@ namespace util {
 
 namespace detail {
 
-void MurmurHash3_x86_32(const void* key, int len, uint32_t seed, void* out);
-void MurmurHash3_x86_128(const void* key, int len, uint32_t seed, void* out);
-void MurmurHash3_x64_128(const void* key, int len, uint32_t seed, void* out);
+void murmur3_x86_32(const void* key, int len, uint32_t seed, void* out);
+void murmur3_x86_128(const void* key, int len, uint32_t seed, void* out);
+void murmur3_x64_128(const void* key, int len, uint32_t seed, void* out);
 
 template <size_t N>
 std::enable_if_t<(N== 32)>
 murmur3(void const* key, int len, uint32_t seed, void* out) {
-  MurmurHash3_x86_32(key, len, seed, out);
+  murmur3_x86_32(key, len, seed, out);
 }
 
 template <size_t N>
 std::enable_if_t<(N == 128 && sizeof(void*) == 4)>
 murmur3(void const* key, int len, uint32_t seed, void* out) {
-  MurmurHash3_x86_128(key, len, seed, out);
+  murmur3_x86_128(key, len, seed, out);
 }
 
 template <size_t N>
 std::enable_if_t<(N == 128 && sizeof(void*) == 8)>
 murmur3(void const* key, int len, uint32_t seed, void* out) {
-  MurmurHash3_x64_128(key, len, seed, out);
+  murmur3_x64_128(key, len, seed, out);
 }
 
 } // namespace detail
