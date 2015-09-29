@@ -4,6 +4,57 @@
 
 namespace vast {
 
+type::attribute::attribute(key_type k, std::string v)
+  : key{k},
+    value{std::move(v)} {
+}
+
+bool operator==(type::attribute const& lhs, type::attribute const& rhs) {
+  return lhs.key == rhs.key && lhs.value == rhs.value;
+}
+
+bool operator==(type::base const& lhs, type::base const& rhs) {
+  return lhs.digest() == rhs.digest();
+}
+
+bool operator<(type::base const& lhs, type::base const& rhs) {
+  return lhs.digest() < rhs.digest();
+}
+
+std::string const& type::base::name() const {
+  return name_;
+}
+
+bool type::base::name(std::string name) {
+  if (!name_.empty())
+    return false;
+  name_ = std::move(name);
+  update_digest(name_.data(), name_.size());
+  return true;
+}
+
+std::vector<type::attribute> const& type::base::attributes() const {
+  return attributes_;
+}
+
+type::attribute const* type::base::find_attribute(attribute::key_type k) const {
+  auto i = std::find_if(attributes_.begin(), attributes_.end(),
+                        [&](attribute const& a) { return a.key == k; });
+  return i == attributes_.end() ? nullptr : &*i;
+}
+
+type::hash_type::digest_type type::base::digest() const {
+  return digest_;
+}
+
+type::base::base(std::vector<attribute> a)
+  : attributes_(std::move(a)) {
+  for (auto& a : attributes_) {
+    update_digest(&a.key, sizeof(a.key));
+    update_digest(a.value.data(), a.value.size());
+  }
+}
+
 namespace {
 
 struct deriver {
@@ -60,8 +111,7 @@ type::type() {
 namespace {
 
 struct name_setter {
-  name_setter(std::string& name) : name_{name} {
-  }
+  name_setter(std::string& name) : name_{name} { }
 
   bool operator()(none&) {
     return false;
@@ -155,8 +205,7 @@ type::hash_type::digest_type type::digest() const {
 namespace {
 
 struct data_checker {
-  data_checker(type const& t) : type_{t} {
-  }
+  data_checker(type const& t) : type_{t} { }
 
   bool operator()(none const&) const {
     return false;
@@ -281,97 +330,69 @@ bool operator<(type const& lhs, type const& rhs) {
   return lhs.digest() < rhs.digest();
 }
 
-namespace {
-
-struct congruentor {
-  template <typename T>
-  bool operator()(T const&, T const&) const {
-    return true;
-  }
-
-  template <typename T, typename U>
-  bool operator()(T const&, U const&) const {
-    return false;
-  }
-
-  template <typename T>
-  bool operator()(T const& x, type::alias const& a) const {
-    using namespace std::placeholders;
-    return visit(std::bind(std::cref(*this), std::cref(x), _1), a.type());
-  }
-
-  template <typename T>
-  bool operator()(type::alias const& a, T const& x) const {
-    return (*this)(x, a);
-  }
-
-  bool operator()(type::alias const& x, type::alias const& y) const {
-    return visit(*this, x.type(), y.type());
-  }
-
-  bool operator()(type::enumeration const& x,
-                  type::enumeration const& y) const {
-    return x.fields().size() == y.fields().size();
-  }
-
-  bool operator()(type::vector const& x, type::vector const& y) const {
-    return visit(*this, x.elem(), y.elem());
-  }
-
-  bool operator()(type::set const& x, type::set const& y) const {
-    return visit(*this, x.elem(), y.elem());
-  }
-
-  bool operator()(type::table const& x, type::table const& y) const {
-    return visit(*this, x.key(), y.key()) && visit(*this, x.value(), y.value());
-  }
-
-  bool operator()(type::record const& x, type::record const& y) const {
-    if (x.fields().size() != y.fields().size())
-      return false;
-    for (size_t i = 0; i < x.fields().size(); ++i)
-      if (!visit(*this, x.fields()[i].type, y.fields()[i].type))
-        return false;
-    return true;
-  }
-};
-
-} // namespace <anonymous>
-
-bool congruent(type const& x, type const& y) {
-  return visit(congruentor{}, x, y);
+type::enumeration::enumeration(std::vector<std::string> fields,
+                               std::vector<attribute> a)
+  : base{std::move(a)}, fields_{std::move(fields)} {
+  static constexpr auto desc = "enumeration";
+  update_digest(desc, sizeof(desc));
+  for (auto& f : fields_)
+    update_digest(f.data(), f.size());
 }
 
-bool compatible(type const& lhs, relational_operator op, type const& rhs) {
-  switch (op) {
-    default:
-      return false;
-    case match:
-    case not_match:
-      return is<type::string>(lhs) && is<type::pattern>(rhs);
-    case equal:
-    case not_equal:
-      return is<none>(lhs) || is<none>(rhs) || congruent(lhs, rhs);
-    case less:
-    case less_equal:
-    case greater:
-    case greater_equal:
-      return congruent(lhs, rhs);
-    case in:
-    case not_in:
-      switch (which(lhs)) {
-        default:
-          return rhs.container();
-        case type::tag::string:
-          return is<type::string>(rhs) || rhs.container();
-        case type::tag::address:
-          return is<type::subnet>(rhs) || rhs.container();
-      }
-    case ni:
-      return compatible(rhs, in, lhs);
-    case not_ni:
-      return compatible(rhs, not_in, lhs);
-  }
+std::vector<std::string> const& type::enumeration::fields() const {
+  return fields_;
+}
+
+type::vector::vector(type t, std::vector<attribute> a)
+  : base{std::move(a)}, elem_{std::move(t)} {
+  static constexpr auto desc = "vector";
+  update_digest(desc, sizeof(desc));
+  auto digest = elem_.digest();
+  update_digest(&digest, sizeof(digest));
+}
+
+type const& type::vector::elem() const {
+  return elem_;
+}
+
+type::set::set(type t, std::vector<attribute> a)
+  : base{std::move(a)}, elem_{std::move(t)} {
+  static constexpr auto desc = "set";
+  update_digest(desc, sizeof(desc));
+  auto digest = elem_.digest();
+  update_digest(&digest, sizeof(digest));
+}
+
+type const& type::set::elem() const {
+  return elem_;
+}
+
+type::table::table(type k, type v, std::vector<attribute> a)
+  : base{std::move(a)}, key_{std::move(k)}, value_{std::move(v)} {
+  static constexpr auto desc = "table";
+  update_digest(desc, sizeof(desc));
+  auto key_digest = key_.digest();
+  update_digest(&key_digest, sizeof(key_digest));
+  auto value_digest = value_.digest();
+  update_digest(&value_digest, sizeof(value_digest));
+}
+
+type const& type::table::key() const {
+  return key_;
+}
+
+type const& type::table::value() const {
+  return value_;
+}
+
+type::record::field::field(std::string n, vast::type t)
+      : name{std::move(n)},
+        type{std::move(t)} {
+    }
+
+bool
+operator==(type::record::field const& lhs, type::record::field const& rhs) {
+  return lhs.name == rhs.name && lhs.type == rhs.type;
 }
 
 key type::record::each::range_state::key() const {
@@ -415,6 +436,23 @@ bool type::record::each::next() {
     state_.offset.push_back(0);
   }
   return true;
+}
+
+type::record::record(std::initializer_list<field> fields,
+                     std::vector<attribute> a)
+  : base{std::move(a)},
+    fields_(fields.begin(), fields.end()) {
+  initialize();
+}
+
+type::record::record(std::vector<field> fields, std::vector<attribute> a)
+  : base{std::move(a)},
+    fields_(std::move(fields)) {
+  initialize();
+}
+
+std::vector<type::record::field> const& type::record::fields() const {
+  return fields_;
 }
 
 trial<offset> type::record::resolve(key const& k) const {
@@ -629,10 +667,116 @@ type const* type::record::at(offset const& o) const {
 
 void type::record::initialize() {
   static constexpr auto desc = "record";
-  update(desc, sizeof(desc));
+  update_digest(desc, sizeof(desc));
   for (auto f : fields_) {
-    update(f.name.data(), f.name.size());
-    update(f.type.digest());
+    update_digest(f.name.data(), f.name.size());
+    auto digest = f.type.digest();
+    update_digest(&digest, sizeof(digest));
+  }
+}
+
+type::alias::alias(vast::type t, std::vector<attribute> a)
+  : base{std::move(a)}, type_{std::move(t)} {
+  static constexpr auto desc = "alias";
+  update_digest(desc, sizeof(desc));
+  auto digest = type_.digest();
+  update_digest(&digest, sizeof(digest));
+}
+
+vast::type const& type::alias::type() const {
+  return type_;
+}
+
+namespace {
+
+struct congruence_checker {
+  template <typename T>
+  bool operator()(T const&, T const&) const {
+    return true;
+  }
+
+  template <typename T, typename U>
+  bool operator()(T const&, U const&) const {
+    return false;
+  }
+
+  template <typename T>
+  bool operator()(T const& x, type::alias const& a) const {
+    using namespace std::placeholders;
+    return visit(std::bind(std::cref(*this), std::cref(x), _1), a.type());
+  }
+
+  template <typename T>
+  bool operator()(type::alias const& a, T const& x) const {
+    return (*this)(x, a);
+  }
+
+  bool operator()(type::alias const& x, type::alias const& y) const {
+    return visit(*this, x.type(), y.type());
+  }
+
+  bool operator()(type::enumeration const& x,
+                  type::enumeration const& y) const {
+    return x.fields().size() == y.fields().size();
+  }
+
+  bool operator()(type::vector const& x, type::vector const& y) const {
+    return visit(*this, x.elem(), y.elem());
+  }
+
+  bool operator()(type::set const& x, type::set const& y) const {
+    return visit(*this, x.elem(), y.elem());
+  }
+
+  bool operator()(type::table const& x, type::table const& y) const {
+    return visit(*this, x.key(), y.key()) && visit(*this, x.value(), y.value());
+  }
+
+  bool operator()(type::record const& x, type::record const& y) const {
+    if (x.fields().size() != y.fields().size())
+      return false;
+    for (size_t i = 0; i < x.fields().size(); ++i)
+      if (!visit(*this, x.fields()[i].type, y.fields()[i].type))
+        return false;
+    return true;
+  }
+};
+
+} // namespace <anonymous>
+
+bool congruent(type const& x, type const& y) {
+  return visit(congruence_checker{}, x, y);
+}
+
+bool compatible(type const& lhs, relational_operator op, type const& rhs) {
+  switch (op) {
+    default:
+      return false;
+    case match:
+    case not_match:
+      return is<type::string>(lhs) && is<type::pattern>(rhs);
+    case equal:
+    case not_equal:
+      return is<none>(lhs) || is<none>(rhs) || congruent(lhs, rhs);
+    case less:
+    case less_equal:
+    case greater:
+    case greater_equal:
+      return congruent(lhs, rhs);
+    case in:
+    case not_in:
+      switch (which(lhs)) {
+        default:
+          return rhs.container();
+        case type::tag::string:
+          return is<type::string>(rhs) || rhs.container();
+        case type::tag::address:
+          return is<type::subnet>(rhs) || rhs.container();
+      }
+    case ni:
+      return compatible(rhs, in, lhs);
+    case not_ni:
+      return compatible(rhs, not_in, lhs);
   }
 }
 

@@ -48,17 +48,17 @@ class type : util::totally_ordered<type> {
 public:
   struct intrusive_info;
 
-  /// A type attrbiute.
+  /// Additional type property in the form of a key and optional value.
   struct attribute : util::equality_comparable<attribute> {
-    enum key_type : uint16_t { invalid, skip, default_ };
+    enum key_type : uint16_t {
+      invalid,
+      skip,
+      default_
+    };
 
-    attribute(key_type k = invalid, std::string v = {})
-      : key{k}, value{std::move(v)} {
-    }
+    attribute(key_type k = invalid, std::string v = {});
 
-    friend bool operator==(attribute const& lhs, attribute const& rhs) {
-      return lhs.key == rhs.key && lhs.value == rhs.value;
-    }
+    friend bool operator==(attribute const& lhs, attribute const& rhs);
 
     key_type key;
     std::string value;
@@ -66,69 +66,37 @@ public:
 
   using hash_type = util::xxhash64;
 
-  /// Derives a type from data.
-  /// @param d The data to derive a type from.
-  /// @returns The type corresponding to *d*.
-  static type derive(data const& d);
-
   // The base class for type classes.
-  template <typename Derived>
-  class base : util::totally_ordered<base<Derived>> {
+  class base : util::totally_ordered<base> {
     friend access;
 
   public:
-    friend bool operator==(base const& lhs, base const& rhs) {
-      return lhs.digest() == rhs.digest();
-    }
+    friend bool operator==(base const& lhs, base const& rhs);
 
-    friend bool operator<(base const& lhs, base const& rhs) {
-      return lhs.digest() < rhs.digest();
-    }
+    friend bool operator<(base const& lhs, base const& rhs);
 
-    std::string const& name() const {
-      return name_;
-    }
+    std::string const& name() const;
 
-    bool name(std::string name) {
-      if (!name_.empty())
-        return false;
-      name_ = std::move(name);
-      return hash_.add(name_.data(), name_.size());
-    }
+    bool name(std::string name);
 
-    std::vector<attribute> const& attributes() const {
-      return attributes_;
-    }
+    std::vector<attribute> const& attributes() const;
 
-    attribute const* find_attribute(attribute::key_type k) const {
-      auto i = std::find_if(attributes_.begin(), attributes_.end(),
-                            [&](attribute const& a) { return a.key == k; });
+    attribute const* find_attribute(attribute::key_type k) const;
 
-      return i == attributes_.end() ? nullptr : &*i;
-    }
-
-    hash_type::digest_type digest() const {
-      // FIXME: put the digest somewhere and remove the const_cast.
-      return const_cast<hash_type&>(hash_).get();
-    }
+    hash_type::digest_type digest() const;
 
   protected:
-    base(std::vector<attribute> a = {}) : attributes_(std::move(a)) {
-      for (auto& a : attributes_) {
-        update(a.key);
-        update(a.value.data(), a.value.size());
-      }
-    }
+    base(std::vector<attribute> a = {});
 
     template <typename... Ts>
-    void update(Ts&&... xs) {
-      hash_.add(std::forward<Ts>(xs)...);
+    void update_digest(void const* bytes, size_t length) {
+      digest_ = hash_type::digest_bytes(bytes, length, digest_);
     }
 
   private:
     std::string name_;
     std::vector<attribute> attributes_;
-    hash_type hash_;
+    hash_type::digest_type digest_ = 0;
   };
 
   class enumeration;
@@ -139,10 +107,11 @@ public:
   class alias;
 
 #define VAST_DEFINE_BASIC_TYPE(name, desc)                                     \
-  class name : public base<name> {                                             \
+  class name : public base {                                                   \
   public:                                                                      \
-    name(std::vector<attribute> a = {}) : base<name>(std::move(a)) {           \
-      update(#name, sizeof(#name) - 1);                                        \
+    name(std::vector<attribute> a = {})                                        \
+      : base(std::move(a)) {                                                   \
+      update_digest(#name, sizeof(#name) - 1);                                 \
     }                                                                          \
   };
 
@@ -305,8 +274,7 @@ public:
       >
     >;
 
-  enum class tag : uint8_t
-  {
+  enum class tag : uint8_t {
     none,
     boolean,
     integer,
@@ -354,30 +322,27 @@ public:
   >;
 
   /// An enum type.
-  class enumeration : public base<enumeration> {
+  class enumeration : public base {
     friend access;
     friend info;
     friend detail::type_reader;
     friend detail::type_writer;
 
   public:
-    enumeration(std::vector<std::string> fields, std::vector<attribute> a = {})
-      : base<enumeration>{std::move(a)}, fields_{std::move(fields)} {
-      static constexpr auto desc = "enumeration";
-      update(desc, sizeof(desc));
-      for (auto& f : fields_)
-        update(f.data(), f.size());
-    }
+    enumeration(std::vector<std::string> fields, std::vector<attribute> a = {});
 
-    std::vector<std::string> const& fields() const {
-      return fields_;
-    }
+    std::vector<std::string> const& fields() const;
 
   private:
     enumeration() = default;
 
     std::vector<std::string> fields_;
   };
+
+  /// Derives a type from data.
+  /// @param d The data to derive a type from.
+  /// @returns The type corresponding to *d*.
+  static type derive(data const& d);
 
   /// Default-constructs an invalid type.
   type();
@@ -415,7 +380,8 @@ public:
     : info_{util::make_intrusive<intrusive_info>(std::forward<T>(x))} {
   }
 
-  explicit type(util::intrusive_ptr<intrusive_info> ii) : info_{std::move(ii)} {
+  explicit type(util::intrusive_ptr<intrusive_info> ii)
+    : info_{std::move(ii)} {
   }
 
   friend bool operator==(type const& lhs, type const& rhs);
@@ -507,41 +473,16 @@ private:
   util::intrusive_ptr<intrusive_info> info_;
 };
 
-/// Checks whether two types are *congruent* to each other, i.e., whether they
-/// are *representationally equal*.
-/// @param x The first type.
-/// @param y The second type.
-/// @returns `true` *iff* *x* and *y* are congruent.
-bool congruent(type const& x, type const& y);
-
-/// Checks whether the types of two nodes in a predicate are compatible with
-/// each other, i.e., whether operator evaluation for the given types is
-/// semantically correct.
-/// @note This function assumes the AST has already been normalized with the
-///       extractor occurring at the LHS and the value at the RHS.
-/// @param lhs The LHS of *op*.
-/// @param op The operator under which to compare *lhs* and *rhs*.
-/// @param rhs The RHS of *op*.
-/// @returns `true` if *lhs* and *rhs* are compatible to each other under *op*.
-bool compatible(type const& lhs, relational_operator op, type const& rhs);
-
-class type::vector : public type::base<type::vector> {
+class type::vector : public type::base {
   friend access;
   friend type::info;
   friend detail::type_reader;
   friend detail::type_writer;
 
 public:
-  vector(type t, std::vector<attribute> a = {})
-    : base<vector>{std::move(a)}, elem_{std::move(t)} {
-    static constexpr auto desc = "vector";
-    update(desc, sizeof(desc));
-    update(elem_.digest());
-  }
+  vector(type t, std::vector<attribute> a = {});
 
-  type const& elem() const {
-    return elem_;
-  }
+  type const& elem() const;
 
 private:
   vector() = default;
@@ -549,23 +490,16 @@ private:
   type elem_;
 };
 
-class type::set : public base<type::set> {
+class type::set : public base {
   friend access;
   friend type::info;
   friend detail::type_reader;
   friend detail::type_writer;
 
 public:
-  set(type t, std::vector<attribute> a = {})
-    : base<set>{std::move(a)}, elem_{std::move(t)} {
-    static constexpr auto desc = "set";
-    update(desc, sizeof(desc));
-    update(elem_.digest());
-  }
+  set(type t, std::vector<attribute> a = {});
 
-  type const& elem() const {
-    return elem_;
-  }
+  type const& elem() const;
 
 private:
   set() = default;
@@ -573,28 +507,18 @@ private:
   type elem_;
 };
 
-class type::table : public type::base<type::table> {
+class type::table : public type::base {
   friend access;
   friend type::info;
   friend detail::type_reader;
   friend detail::type_writer;
 
 public:
-  table(type k, type v, std::vector<attribute> a = {})
-    : base<table>{std::move(a)}, key_{std::move(k)}, value_{std::move(v)} {
-    static constexpr auto desc = "table";
-    update(desc, sizeof(desc));
-    update(key_.digest());
-    update(value_.digest());
-  }
+  table(type k, type v, std::vector<attribute> a = {});
 
-  type const& key() const {
-    return key_;
-  }
+  type const& key() const;
 
-  type const& value() const {
-    return value_;
-  }
+  type const& value() const;
 
 private:
   table() = default;
@@ -603,7 +527,7 @@ private:
   type value_;
 };
 
-class type::record : public type::base<type::record> {
+class type::record : public type::base {
   friend access;
   friend type::info;
   friend detail::type_reader;
@@ -611,14 +535,9 @@ class type::record : public type::base<type::record> {
 
 public:
   struct field : util::equality_comparable<field> {
-    field() = default;
+    field(std::string n = {}, type t = {});
 
-    field(std::string n, type t) : name{std::move(n)}, type{std::move(t)} {
-    }
-
-    friend bool operator==(field const& lhs, field const& rhs) {
-      return lhs.name == rhs.name && lhs.type == rhs.type;
-    }
+    friend bool operator==(field const& lhs, field const& rhs);
 
     std::string name;
     vast::type type;
@@ -650,21 +569,12 @@ public:
     util::stack::vector<8, record const*> records_;
   };
 
-  record(std::initializer_list<field> fields, std::vector<attribute> a = {})
-    : base<record>{std::move(a)}, fields_(fields.begin(), fields.end()) {
-    initialize();
-  }
-
-  record(std::vector<field> fields, std::vector<attribute> a = {})
-    : base<record>{std::move(a)}, fields_(std::move(fields)) {
-    initialize();
-  }
+  record(std::initializer_list<field> fields, std::vector<attribute> a = {});
+  record(std::vector<field> fields, std::vector<attribute> a = {});
 
   /// Retrieves the fields of the record.
   /// @returns The field of the records.
-  std::vector<field> const& fields() const {
-    return fields_;
-  }
+  std::vector<field> const& fields() const;
 
   /// Attemps to resolve a ::key to an ::offset.
   /// @param k The key to resolve.
@@ -717,23 +627,16 @@ private:
   std::vector<field> fields_;
 };
 
-class type::alias : public type::base<type::alias> {
+class type::alias : public type::base {
   friend access;
   friend type::info;
   friend detail::type_reader;
   friend detail::type_writer;
 
 public:
-  alias(vast::type t, std::vector<attribute> a = {})
-    : base<alias>{std::move(a)}, type_{std::move(t)} {
-    static constexpr auto desc = "alias";
-    update(desc, sizeof(desc));
-    update(type_.digest());
-  }
+  alias(vast::type t, std::vector<attribute> a = {});
 
-  vast::type const& type() const {
-    return type_;
-  }
+  vast::type const& type() const;
 
 private:
   alias() = default;
@@ -758,6 +661,24 @@ struct type::intrusive_info : util::intrusive_base<intrusive_info>, type::info {
     return static_cast<type::info const&>(i);
   }
 };
+
+/// Checks whether two types are *congruent* to each other, i.e., whether they
+/// are *representationally equal*.
+/// @param x The first type.
+/// @param y The second type.
+/// @returns `true` *iff* *x* and *y* are congruent.
+bool congruent(type const& x, type const& y);
+
+/// Checks whether the types of two nodes in a predicate are compatible with
+/// each other, i.e., whether operator evaluation for the given types is
+/// semantically correct.
+/// @note This function assumes the AST has already been normalized with the
+///       extractor occurring at the LHS and the value at the RHS.
+/// @param lhs The LHS of *op*.
+/// @param op The operator under which to compare *lhs* and *rhs*.
+/// @param rhs The RHS of *op*.
+/// @returns `true` if *lhs* and *rhs* are compatible to each other under *op*.
+bool compatible(type const& lhs, relational_operator op, type const& rhs);
 
 } // namespace vast
 
