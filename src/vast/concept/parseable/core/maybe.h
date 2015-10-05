@@ -6,7 +6,7 @@
 namespace vast {
 
 /// Like ::optional_parser, but exposes `T` instead of `optional<T>` as
-/// attribute. In the parser does not match, it leaves the attribute untouched.
+/// attribute.
 template <typename Parser>
 class maybe_parser : public parser<maybe_parser<Parser>> {
 public:
@@ -14,12 +14,6 @@ public:
 
   explicit maybe_parser(Parser p)
     : parser_{std::move(p)} {
-  }
-
-  template <typename Iterator>
-  bool parse(Iterator& f, Iterator const& l, unused_type) const {
-    parser_.parse(f, l, unused);
-    return true;
   }
 
   template <typename Iterator, typename Attribute>
