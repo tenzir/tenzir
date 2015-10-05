@@ -12,6 +12,7 @@
 #include "vast/concept/printable/to_string.h"
 #include "vast/concept/printable/vast/address.h"
 #include "vast/concept/printable/vast/pattern.h"
+#include "vast/concept/printable/vast/time.h"
 
 #define SUITE parseable
 #include "test.h"
@@ -77,22 +78,41 @@ TEST(time::duration) {
 }
 
 TEST(time::point) {
-  MESSAGE("YYY-MM-DD+HH:MM:SS");
-  auto p = make_parser<time::point>{};
-  auto str = "2012-08-12+23:55:04"s;
-  auto f = str.begin();
-  auto l = str.end();
   time::point tp;
-  CHECK(p.parse(f, l, tp));
-  CHECK(f == l);
+  MESSAGE("YYYY-MM-DD+HH:MM:SS");
+  CHECK(parsers::time_point("2012-08-12+23:55:04", tp));
   CHECK(tp == time::point::utc(2012, 8, 12, 23, 55, 4));
-
-  // TODO
-  // MESSAGE("UNIX epoch");
-  // CHECK(p("@1398933902", tp));
-  // CHECK(p == time::seconds{1398933902});
-  // CHECK(p("@1398933902.686337", tp));
-  // CHECK(p == time::double_seconds{1398933902.686337});
+  MESSAGE("YYYY-MM-DD+HH:MM");
+  CHECK(parsers::time_point("2012-08-12+23:55", tp));
+  CHECK(tp == time::point::utc(2012, 8, 12, 23, 55));
+  MESSAGE("YYYY-MM-DD+HH");
+  CHECK(parsers::time_point("2012-08-12+23", tp));
+  CHECK(tp == time::point::utc(2012, 8, 12, 23));
+  MESSAGE("YYYY-MM-DD");
+  CHECK(parsers::time_point("2012-08-12", tp));
+  CHECK(tp == time::point::utc(2012, 8, 12));
+  MESSAGE("YYYY-MM");
+  CHECK(parsers::time_point("2012-08", tp));
+  CHECK(tp == time::point::utc(2012, 8));
+  MESSAGE("UNIX epoch");
+  CHECK(parsers::time_point("@1444040673", tp));
+  CHECK(tp.time_since_epoch() == time::seconds{1444040673});
+  CHECK(parsers::time_point("@1398933902.686337", tp));
+  CHECK(tp.time_since_epoch() == time::double_seconds{1398933902.686337});
+  MESSAGE("now");
+  CHECK(parsers::time_point("now", tp));
+  CHECK(tp > time::now() - time::minutes{1});
+  CHECK(tp < time::now() + time::minutes{1});
+  CHECK(parsers::time_point("now - 1m", tp));
+  CHECK(tp < time::now());
+  CHECK(parsers::time_point("now + 1m", tp));
+  CHECK(tp > time::now());
+  MESSAGE("ago");
+  CHECK(parsers::time_point("10 days ago", tp));
+  CHECK(tp < time::now());
+  MESSAGE("in");
+  CHECK(parsers::time_point("in 1 year", tp));
+  CHECK(tp > time::now());
 }
 
 TEST(pattern) {
