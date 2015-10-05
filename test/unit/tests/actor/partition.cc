@@ -2,7 +2,8 @@
 #include "vast/event.h"
 #include "vast/actor/partition.h"
 #include "vast/actor/task.h"
-#include "vast/concept/parseable/vast/detail/to_expression.h"
+#include "vast/concept/parseable/to.h"
+#include "vast/concept/parseable/vast/expression.h"
 
 #define SUITE actors
 #include "test.h"
@@ -34,7 +35,7 @@ TEST(partition) {
 
   MESSAGE("reloading partition and running a query against it");
   p = self->spawn<monitored + priority_aware>(partition::make, dir, self);
-  auto expr = vast::detail::to_expression("&time < now && c >= 42 && c < 84");
+  auto expr = to<expression>("&time < now && c >= 42 && c < 84");
   REQUIRE(expr);
   self->send(p, *expr, historical_atom::value);
   bool done = false;
@@ -52,7 +53,7 @@ TEST(partition) {
   CHECK(hits.count() == 42);
 
   MESSAGE("creating a continuous query");
-  expr = vast::detail::to_expression("s ni \"7\"");
+  expr = to<expression>("s ni \"7\"");
   REQUIRE(expr);
   self->send(p, *expr, continuous_atom::value);
 

@@ -102,6 +102,7 @@ set(tests
   tests/offset.cc
   tests/parse_bro.cc
   tests/parse_data.cc
+  tests/parse_expr.cc
   tests/parse_vast.cc
   tests/parseable.cc
   tests/print_vast.cc

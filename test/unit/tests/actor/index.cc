@@ -2,7 +2,8 @@
 #include "vast/query_options.h"
 #include "vast/actor/atoms.h"
 #include "vast/actor/index.h"
-#include "vast/concept/parseable/vast/detail/to_expression.h"
+#include "vast/concept/parseable/to.h"
+#include "vast/concept/parseable/vast/expression.h"
 #include "vast/concept/printable/vast/expression.h"
 
 #define SUITE actors
@@ -29,7 +30,7 @@ TEST(index) {
 
   MESSAGE("reloading index and running a query against it");
   idx = self->spawn<priority_aware>(index::make, dir, 500, 2, 3);
-  auto expr = vast::detail::to_expression("c >= 42 && c < 84");
+  auto expr = to<expression>("c >= 42 && c < 84");
   REQUIRE(expr);
   actor task;
   self->send(idx, *expr, historical, self);
@@ -58,7 +59,7 @@ TEST(index) {
 
   MESSAGE("creating a continuous query");
   // The expression must have already been normalized as it hits the index.
-  expr = vast::detail::to_expression("s ni \"7\"");
+  expr = to<expression>("s ni \"7\"");
   REQUIRE(expr);
   self->send(idx, *expr, continuous, self);
   self->receive(

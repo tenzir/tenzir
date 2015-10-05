@@ -8,7 +8,8 @@
 #include "vast/query_options.h"
 #include "vast/uuid.h"
 #include "vast/actor/task.h"
-#include "vast/concept/parseable/vast/detail/to_expression.h"
+#include "vast/concept/parseable/to.h"
+#include "vast/concept/parseable/vast/expression.h"
 #include "vast/concept/printable/vast/error.h"
 #include "vast/concept/printable/vast/expression.h"
 
@@ -54,7 +55,7 @@ TEST(export) {
   });
 
   MESSAGE("performing manual index lookup");
-  auto pops = vast::detail::to_expression("id.resp_p == 995/?");
+  auto pops = to<expression>("id.resp_p == 995/?");
   REQUIRE(pops);
   self->sync_send(n, store_atom::value, get_atom::value, actor_atom::value,
                   "index").await(
