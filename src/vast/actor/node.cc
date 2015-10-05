@@ -24,11 +24,11 @@
 #include "vast/actor/source/spawn.h"
 #include "vast/concept/parseable/to.h"
 #include "vast/concept/parseable/vast/endpoint.h"
+#include "vast/concept/parseable/vast/expression.h"
 #include "vast/concept/parseable/vast/key.h"
 #include "vast/concept/printable/vast/expression.h"
 #include "vast/concept/printable/vast/error.h"
 #include "vast/concept/printable/vast/filesystem.h"
-#include "vast/concept/parseable/vast/detail/to_expression.h"
 #include "vast/expr/normalize.h"
 #include "vast/io/compression.h"
 #include "vast/io/file_stream.h"
@@ -309,10 +309,10 @@ behavior spawn_actor(event_based_actor* self,
           return;
         }
         VAST_DEBUG_AT(node, "parses expression");
-        auto expr = detail::to_expression(str);
+        auto expr = to<expression>(str);
         if (!expr) {
           VAST_VERBOSE_AT(node, "ignores invalid query:", str);
-          rp.deliver(make_message(std::move(expr.error())));
+          rp.deliver(make_message(error{"invalid query: ", str}));
           self->quit(exit::error);
           return;
         }

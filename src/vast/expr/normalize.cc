@@ -105,7 +105,7 @@ expression denegator::operator()(negation const& n) const {
   if (auto inner = get<negation>(n.expression()))
     return visit(*this, inner->expression());
   // Apply De Morgan from here downward.
-  denegator visitor{true};
+  denegator visitor{!negate_};
   return visit(visitor, n.expression());
 }
 
