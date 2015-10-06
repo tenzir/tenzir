@@ -139,6 +139,20 @@ TEST(quoted string) {
   CHECK(attr == "foobar'");
 }
 
+TEST(symbol table) {
+  symbol_table<int> sym{{"foo", 42}, {"bar", 84}, {"foobar", 1337}};
+  int i;
+  CHECK(sym("foo", i));
+  CHECK(i == 42);
+  CHECK(sym("bar", i));
+  CHECK(i == 84);
+  CHECK(sym("foobar", i));
+  CHECK(i == 1337);
+  i = 0;
+  CHECK(!sym("baz", i));
+  CHECK(i == 0);
+}
+
 TEST(attribute compatibility with string) {
   auto str = "..."s;
   auto attr = ""s;
