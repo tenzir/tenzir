@@ -216,6 +216,14 @@ TEST(attribute compatibility with map) {
   CHECK(map['c'] == 'z');
 }
 
+TEST(attribute compatibility with string sequences) {
+  using namespace parsers;
+  auto p = alpha >> '-' >> alpha >> '-' >> alpha;
+  std::string str;
+  CHECK(p("x-y-z", str));
+  CHECK(str == "xyz");
+}
+
 TEST(bool) {
   auto p0 = single_char_bool_parser{};
   auto p1 = zero_one_bool_parser{};

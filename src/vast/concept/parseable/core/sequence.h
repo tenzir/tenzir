@@ -5,6 +5,7 @@
 #include <type_traits>
 
 #include "vast/concept/parseable/core/parser.h"
+#include "vast/concept/parseable/detail/attr_fold.h"
 
 namespace vast {
 
@@ -49,8 +50,10 @@ public:
         std::conditional_t<
           std::is_same<rhs_attribute, unused_type>{},
           lhs_attribute,
-          decltype(std::tuple_cat(tuple_wrap<lhs_attribute>{},
-                                  tuple_wrap<rhs_attribute>{}))
+          typename detail::attr_fold<
+            decltype(std::tuple_cat(tuple_wrap<lhs_attribute>{},
+                                    tuple_wrap<rhs_attribute>{}))
+          >::type
         >
       >
     >;
@@ -101,11 +104,6 @@ private:
     return depth_helper<sequence_parser>();
   }
 
-  template <typename Iterator>
-  bool parse_left(Iterator& f, Iterator const& l, unused_type) const {
-    return lhs_.parse(f, l, unused);
-  }
-
   template <typename L, typename T>
   static auto get_helper(T& x)
     -> std::enable_if_t<is_sequence_parser<L>{}, T&> {
@@ -121,19 +119,19 @@ private:
     return std::get<0>(x);
   }
 
-  template <typename Iterator, typename T, typename U>
-  bool parse_left(Iterator& f, Iterator const& l, std::pair<T, U>& p) const {
-    return lhs_.parse(f, l, p.first);
-  }
-
   template <typename Iterator, typename... Ts>
   bool parse_left(Iterator& f, Iterator const& l, std::tuple<Ts...>& t) const {
     return lhs_.parse(f, l, get_helper<lhs_type>(t));
   }
 
-  template <typename Iterator, typename Attribute>
-  bool parse_left(Iterator& f, Iterator const& l, Attribute& a) const {
-    return lhs_.parse(f, l, a);
+  template <typename Iterator, typename... Ts>
+  bool parse_right(Iterator& f, Iterator const& l, std::tuple<Ts...>& t) const {
+    return rhs_.parse(f, l, std::get<depth()>(t));
+  }
+
+  template <typename Iterator>
+  bool parse_left(Iterator& f, Iterator const& l, unused_type) const {
+    return lhs_.parse(f, l, unused);
   }
 
   template <typename Iterator>
@@ -142,13 +140,18 @@ private:
   }
 
   template <typename Iterator, typename T, typename U>
+  bool parse_left(Iterator& f, Iterator const& l, std::pair<T, U>& p) const {
+    return lhs_.parse(f, l, p.first);
+  }
+
+  template <typename Iterator, typename T, typename U>
   bool parse_right(Iterator& f, Iterator const& l, std::pair<T, U>& p) const {
     return rhs_.parse(f, l, p.second);
   }
 
-  template <typename Iterator, typename... Ts>
-  bool parse_right(Iterator& f, Iterator const& l, std::tuple<Ts...>& t) const {
-    return rhs_.parse(f, l, std::get<depth()>(t));
+  template <typename Iterator, typename Attribute>
+  bool parse_left(Iterator& f, Iterator const& l, Attribute& a) const {
+    return lhs_.parse(f, l, a);
   }
 
   template <typename Iterator, typename Attribute>
