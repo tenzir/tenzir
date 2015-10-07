@@ -1,19 +1,4 @@
 #
-# Generate header file that defines the schema test cases.
-#
-
-set (schema_test_cases "")
-file(GLOB schemas schemas/*.sch)
-foreach (s ${schemas})
-    get_filename_component(base ${s} NAME_WE)
-    set (this "DEFINE_SCHEMA_TEST_CASE(${base}, \"${s}\")")
-    set (schema_test_cases "${schema_test_cases}${this}\n")
-endforeach ()
-
-configure_file(tests/schema_test_cases.h.in 
-               ${CMAKE_CURRENT_BINARY_DIR}/tests/schema_test_cases.h)
-
-#
 # Generate header file that defines the paths to data.
 #
 
@@ -103,6 +88,7 @@ set(tests
   tests/parse_bro.cc
   tests/parse_data.cc
   tests/parse_expr.cc
+  tests/parse_type.cc
   tests/parse_vast.cc
   tests/parseable.cc
   tests/print_vast.cc

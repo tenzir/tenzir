@@ -65,7 +65,6 @@ Required dependencies:
   - GCC >= 5
 - [CMake](http://www.cmake.org)
 - [CAF](https://github.com/actor-framework/actor-framework) (develop branch)
-- [Boost](http://www.boost.org) (headers only)
 
 Optional:
 
@@ -76,13 +75,13 @@ Optional:
 
 #### FreeBSD
 
-VAST development primarily takes place on FreeBSD because it ships with a C++14
-compiler. One can install as the dependencies as follows:
+FreeBSD ships with a C++14 compiler. One can install as the dependencies as
+follows:
 
-    pkg install cmake boost-libs google-perftools
+    pkg install cmake google-perftools
 
-FreeBSD provides a CAF port, but VAST currently requires the develop branch,
-requiring manual installation.
+Even though FreeBSD provides a CAF port, VAST depends the develop branch and
+therefore requires a manual CAF installation.
 
 #### Linux
 
@@ -90,7 +89,7 @@ On recent Debian-based distributions (e.g., Ubuntu 15.04), getting a working
 toolchain requires installing the following packages:
 
     apt-get install clang libc++-dev cmake # build harness
-    apt-get install libboost-dev libpcap-dev libgoogle-perftools-dev
+    apt-get install libpcap-dev libgoogle-perftools-dev
 
 CAF also requires manual installation.
 
@@ -99,7 +98,7 @@ CAF also requires manual installation.
 Mac OS Yosemite also ships with a working C++14 compiler.
 [Homebrew](http://brew.sh) makes it easy to install the dependencies:
 
-    brew install cmake boost google-perftools
+    brew install cmake google-perftools
     brew install caf --HEAD
 
 ## License

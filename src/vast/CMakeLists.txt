@@ -58,7 +58,6 @@ set(libvast_sources
   concept/convertible/vast/time.cc
   concept/convertible/vast/value.cc
   concept/serializable/hierarchy.cc
-  concept/parseable/vast/detail/to_schema.cc
   detail/adjust_resource_consumption.cc
   expr/evaluator.cc
   expr/normalize.cc

@@ -66,7 +66,7 @@ struct predicate_parser : parser<predicate_parser> {
       return {std::move(std::get<0>(t)), std::get<1>(t),
               std::move(std::get<2>(t))};
     };
-    auto ws = ignore(*parsers::blank);
+    auto ws = ignore(*parsers::space);
     auto pred
       = (operand >> ws >> pred_op >> ws >> operand) ->* to_predicate;
       ;
@@ -138,7 +138,7 @@ struct expression_parser : parser<expression_parser> {
         dis.emplace_back(std::move(con));
       return dis.size() == 1 ? std::move(dis[0]) : expression{dis};
     };
-    auto ws = ignore(*parsers::blank);
+    auto ws = ignore(*parsers::space);
     auto negate_pred = [](predicate p) { return negation{expression{p}}; };
     auto negate_expr = [](expression expr) { return negation{expr}; };
     rule<Iterator, expression> expr;

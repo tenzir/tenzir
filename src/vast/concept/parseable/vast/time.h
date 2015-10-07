@@ -19,7 +19,7 @@ struct time_duration_parser : parser<time_duration_parser> {
     int64_t i;
     if (!i64.parse(f, l, i))
       return false;
-    static auto whitespace = *blank;
+    static auto whitespace = *space;
     if (!whitespace.parse(f, l, unused)) {
       f = save;
       return false;
@@ -140,7 +140,7 @@ struct time_point_parser : parser<time_point_parser> {
     static auto minus = [](time::duration d) {
       return time::now() - d;
     };
-    static auto ws = ignore(*parsers::blank);
+    static auto ws = ignore(*parsers::space);
     static auto p
       = parsers::ymdhms
       | '@' >> parsers::epoch

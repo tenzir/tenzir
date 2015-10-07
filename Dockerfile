@@ -12,7 +12,7 @@ ENV CXX clang++
 # Compiler and dependcy setup
 RUN apt-get -qq update && apt-get -qqy install clang libc++-dev cmake git-core
 RUN apt-get -qq update && apt-get -qqy install \
-    libboost-dev libpcap-dev libedit-dev libgoogle-perftools-dev
+    libpcap-dev libedit-dev libgoogle-perftools-dev
 RUN apt-get -qq update && apt-get -qqy install vim-tiny tmux wget
 
 # By placing the ADD directive at this point, we build both CAF and VAST

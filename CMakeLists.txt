@@ -39,8 +39,7 @@ set(VERSION_MAJ_MIN "${VERSION_MAJOR}.${VERSION_MINOR}")
 #------------------------------------------------------------------------------
 
 if (NOT CMAKE_CXX_FLAGS)
-  # -ftemplate-depth=256 to make Boost Spirit happy
-  set(EXTRA_FLAGS "-Wall -Wextra -pedantic -std=c++1y -ftemplate-depth=256")
+  set(EXTRA_FLAGS "-Wall -Wextra -pedantic -std=c++1y")
   set(CMAKE_CXX_FLAGS_DEBUG          "-O0 -g")
   set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os")
   set(CMAKE_CXX_FLAGS_RELEASE        "-O3")
@@ -121,18 +120,6 @@ if (VAST_ENABLE_ASSERTIONS)
     include_directories(${Backtrace_INCLUDE_DIRS})
     message(FATAL_ERROR "Could not find backtrace (execinfo) libraries")
   endif ()
-endif ()
-
-if (BOOST_ROOT)
-  set(Boost_NO_SYSTEM_PATHS true)
-elseif (VAST_PREFIX)
-  set(BOOST_ROOT ${VAST_PREFIX})
-endif ()
-find_package(Boost 1.50.0)
-if (Boost_FOUND)
-  include_directories(${Boost_INCLUDE_DIRS})
-else ()
-  message(FATAL_ERROR "Could not find Boost")
 endif ()
 
 if (NOT CAF_ROOT_DIR AND VAST_PREFIX)
@@ -291,7 +278,6 @@ set(build_summary
     "\nCXX:                  ${CMAKE_CXX_COMPILER}"
     "\nCXXFLAGS:             ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${build_type}}"
     "\n"
-    "\nBoost:                ${Boost_INCLUDE_DIR}"
     "\nCAF:                  ${caf_summary}"
     "\nPCAP:                 ${pcap_summary}"
     "\nGperftools:           ${perftools_summary}"

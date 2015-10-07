@@ -8,7 +8,8 @@
 #include "vast/actor/source/bro.h"
 #include "vast/actor/source/bgpdump.h"
 #include "vast/actor/source/test.h"
-#include "vast/concept/parseable/vast/detail/to_schema.h"
+#include "vast/concept/parseable/to.h"
+#include "vast/concept/parseable/vast/schema.h"
 #include "vast/concept/printable/to_string.h"
 #include "vast/concept/printable/vast/schema.h"
 #include "vast/util/fdinbuf.h"
@@ -112,9 +113,9 @@ trial<actor> spawn(message const& params) {
     auto t = load_contents(schema_file);
     if (!t)
       return t.error();
-    auto s = vast::detail::to_schema(*t);
+    auto s = to<schema>(*t);
     if (!s)
-      return error{"failed to load schema: ", s.error()};
+      return error{"failed to load schema"};
     anon_send(src, put_atom::value, *s);
   }
   // Set parameters.

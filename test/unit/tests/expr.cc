@@ -7,8 +7,8 @@
 #include "vast/expr/normalize.h"
 #include "vast/concept/parseable/to.h"
 #include "vast/concept/parseable/vast/expression.h"
+#include "vast/concept/parseable/vast/schema.h"
 #include "vast/concept/parseable/vast/time.h"
-#include "vast/concept/parseable/vast/detail/to_schema.h"
 #include "vast/concept/printable/to_string.h"
 #include "vast/concept/printable/vast/expression.h"
 #include "vast/concept/serializable/vast/expression.h"
@@ -47,33 +47,26 @@ TEST(serialization) {
 }
 
 TEST(event evaluation) {
-  std::string str
-    = "type foo = record"
-      "{"
-      "  s1: string,"
-      "  d1: real,"
-      "  c: count,"
-      "  i: int,"
-      "  s2: string,"
-      "  d2: real"
-      "}"
-      "type bar = record { s1: string, r : record { b: bool, s: string } }";
-
-  auto sch = detail::to_schema(str);
+  std::string str = R"__(
+    type foo = record{
+      s1: string,
+      d1: real,
+      c: count,
+      i: int,
+      s2: string,
+      d2: real
+    }
+    type bar = record { s1: string, r : record { b: bool, s: string } }
+  )__";
+  auto sch = to<schema>(str);
   REQUIRE(sch);
-
   auto foo = sch->find_type("foo");
   auto bar = sch->find_type("bar");
   REQUIRE(foo);
   REQUIRE(bar);
-
   auto e0 = event::make(record{"babba", 1.337, 42u, 100, "bar", -4.8}, *foo);
   auto e1 = event::make(record{"yadda", record{false, "baz"}}, *bar);
-
-  //
-  // Event meta data queries
-  //
-
+  MESSAGE("event meta data queries");
   event e;
   auto tp = to<time::point>("2014-01-16+05:30:12");
   REQUIRE(tp);
@@ -81,79 +74,60 @@ TEST(event evaluation) {
   auto t = type::alias{type{}};
   CHECK(t.name("foo"));
   CHECK(e.type(t));
-
   auto ast = to<expression>("&time == 2014-01-16+05:30:12");
   REQUIRE(ast);
   CHECK(visit(expr::event_evaluator{e}, *ast));
-
   ast = to<expression>("&type == \"foo\"");
   REQUIRE(ast);
   CHECK(visit(expr::event_evaluator{e}, *ast));
-
   ast = to<expression>("! &type == \"bar\"");
   REQUIRE(ast);
   CHECK(visit(expr::event_evaluator{e}, *ast));
-
   ast = to<expression>("&type != \"foo\"");
   REQUIRE(ast);
   CHECK(!visit(expr::event_evaluator{e}, *ast));
-
-  //
-  // Type queries
-  //
-
+  MESSAGE("type queries");
   ast = to<expression>(":count == 42");
   REQUIRE(ast);
   CHECK(
     visit(expr::event_evaluator{e0}, visit(expr::type_resolver{*foo}, *ast)));
   CHECK(
     !visit(expr::event_evaluator{e1}, visit(expr::type_resolver{*bar}, *ast)));
-
   ast = to<expression>(":int != +101");
   REQUIRE(ast);
   CHECK(
     visit(expr::event_evaluator{e0}, visit(expr::type_resolver{*foo}, *ast)));
   CHECK(
     !visit(expr::event_evaluator{e1}, visit(expr::type_resolver{*bar}, *ast)));
-
   ast = to<expression>(":string ~ /bar/ && :int == +100");
   REQUIRE(ast);
   CHECK(
     visit(expr::event_evaluator{e0}, visit(expr::type_resolver{*foo}, *ast)));
   CHECK(
     !visit(expr::event_evaluator{e1}, visit(expr::type_resolver{*bar}, *ast)));
-
   ast = to<expression>(":real >= -4.8");
   REQUIRE(ast);
   CHECK(
     visit(expr::event_evaluator{e0}, visit(expr::type_resolver{*foo}, *ast)));
   CHECK(
     !visit(expr::event_evaluator{e1}, visit(expr::type_resolver{*bar}, *ast)));
-
   ast = to<expression>(
     ":int <= -3 || :int >= +100 && :string !~ /bar/ || :real > 1.0");
   REQUIRE(ast);
   CHECK(
     visit(expr::event_evaluator{e0}, visit(expr::type_resolver{*foo}, *ast)));
-
   // For the event of type "bar", this expression degenerates to
   // <nil> because it has no numeric types and the first predicate of the
   // conjunction in the middle renders the entire conjunction not viable.
   CHECK(
     !visit(expr::event_evaluator{e1}, visit(expr::type_resolver{*bar}, *ast)));
-
-  //
-  // Schema queries
-  //
-
-  // FIXME:
+  MESSAGE("schema queries");
   ast = to<expression>("foo.s1 == \"babba\" && d1 <= 1337.0");
   REQUIRE(ast);
   auto schema_resolved = visit(expr::schema_resolver{*foo}, *ast);
   REQUIRE(schema_resolved);
   CHECK(visit(expr::event_evaluator{e0}, *schema_resolved));
   CHECK(!visit(expr::event_evaluator{e1}, *schema_resolved));
-
   ast = to<expression>("s1 != \"cheetah\"");
   REQUIRE(ast);
   schema_resolved = visit(expr::schema_resolver{*foo}, *ast);
@@ -162,31 +136,24 @@ TEST(event evaluation) {
   schema_resolved = visit(expr::schema_resolver{*bar}, *ast);
   REQUIRE(schema_resolved);
   CHECK(visit(expr::event_evaluator{e1}, *schema_resolved));
-
   ast = to<expression>("d1 > 0.5");
   REQUIRE(ast);
   schema_resolved = visit(expr::schema_resolver{*foo}, *ast);
   REQUIRE(schema_resolved);
   CHECK(visit(expr::event_evaluator{e0}, *schema_resolved));
   CHECK(!visit(expr::event_evaluator{e1}, *schema_resolved));
-
   ast = to<expression>("r.b == F");
   REQUIRE(ast);
   schema_resolved = visit(expr::schema_resolver{*bar}, *ast);
   REQUIRE(schema_resolved);
   CHECK(visit(expr::event_evaluator{e1}, *schema_resolved));
-
-  //
-  // Error cases
-  //
-
+  MESSAGE("error cases");
   // Invalid prefix.
   ast = to<expression>("not.there ~ /nil/");
   REQUIRE(ast);
   schema_resolved = visit(expr::schema_resolver{*foo}, *ast);
   REQUIRE(schema_resolved);
   CHECK(is<none>(*schema_resolved));
-
   // 'q' doesn't exist in 'r'.
   ast = to<expression>("r.q == 80/tcp");
   REQUIRE(ast);
