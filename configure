@@ -38,8 +38,7 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --enable-asan           enable AddressSanitizer
 
   Required packages in non-standard locations:
-    --with-caf=PATH         path to CAF install root
-    --with-boost=PATH       path to Boost install root
+    --with-caf=PATH         path to CAF install root or build directory
 
   Optional packages in non-standard locations:
     --with-perftools=PATH   path to gperftools install root
@@ -52,13 +51,11 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
 #   $1 is the cache entry variable name
 #   $2 is the cache entry variable type
 #   $3 is the cache entry variable value
-append_cache_entry ()
-{
+append_cache_entry() {
   CMakeCacheEntries="$CMakeCacheEntries -D \"$1:$2=$3\""
 }
 
-levelize()
-{
+levelize() {
   case "$1" in
     quiet)
       echo 0
@@ -141,9 +138,6 @@ while [ $# -ne 0 ]; do
       ;;
     --with-caf=*)
       append_cache_entry CAF_ROOT_DIR PATH "$optarg"
-      ;;
-    --with-boost=*)
-      append_cache_entry BOOST_ROOT PATH "$optarg"
       ;;
     --with-pcap=*)
       append_cache_entry PCAP_ROOT_DIR PATH "$optarg"
