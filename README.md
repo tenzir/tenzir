@@ -86,12 +86,11 @@ therefore requires a manual CAF installation.
 #### Linux
 
 On recent Debian-based distributions (e.g., Ubuntu 15.04), getting a working
-toolchain requires installing the following packages:
+toolchain involves installing the following packages:
 
-    apt-get install clang libc++-dev cmake # build harness
-    apt-get install libpcap-dev libgoogle-perftools-dev
+    apt-get install clang libc++-dev cmake libpcap-dev libgoogle-perftools-dev
 
-CAF also requires manual installation.
+CAF offers binary packages via [openSUSE's Build Service][caf-obs].
 
 #### Mac OS
 
@@ -113,3 +112,4 @@ licence](https://raw.github.com/mavam/vast/master/COPYING).
 [gitter-badge]: https://img.shields.io/badge/gitter-join%20chat%20%E2%86%92-green.svg
 [docker-url]: https://quay.io/repository/mavam/vast
 [docker-badge]: https://quay.io/repository/mavam/vast/status
+[caf-obs]: https://build.opensuse.org/package/show/devel:libraries:caf/caf
