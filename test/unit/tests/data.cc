@@ -361,14 +361,14 @@ TEST(relational_operators) {
   data d2;
   CHECK(d1 == d2);
   CHECK(!(d1 < d2));
-  CHECK(!(d1 <= d2));
-  CHECK(!(d1 >= d2));
+  CHECK(d1 <= d2);
+  CHECK(d1 >= d2);
   CHECK(!(d1 > d2));
 
   d2 = 42;
   CHECK(d1 != d2);
-  CHECK(!(d1 < d2));
-  CHECK(!(d1 <= d2));
+  CHECK(d1 < d2);
+  CHECK(d1 <= d2);
   CHECK(!(d1 >= d2));
   CHECK(!(d1 > d2));
 
@@ -377,8 +377,8 @@ TEST(relational_operators) {
   CHECK(d1 != d2);
   CHECK(!(d1 < d2));
   CHECK(!(d1 <= d2));
-  CHECK(!(d1 >= d2));
-  CHECK(!(d1 > d2));
+  CHECK(d1 >= d2);
+  CHECK(d1 > d2);
 
   d2 = 1377;
   CHECK(d1 != d2);

@@ -21,6 +21,7 @@
 #include "vast/trial.h"
 #include "vast/util/flat_set.h"
 #include "vast/util/meta.h"
+#include "vast/util/operators.h"
 #include "vast/util/string.h"
 
 namespace vast {
@@ -99,8 +100,7 @@ public:
 
   record() = default;
 
-  explicit record(super v) : super{std::move(v)} {
-  }
+  explicit record(super v) : super{std::move(v)} { }
 
   using super::at;
 
@@ -116,8 +116,7 @@ public:
   trial<record> unflatten(type::record const& t) const;
 };
 
-class data
-{
+class data : util::totally_ordered<data> {
   friend access;
 
 public:
@@ -258,11 +257,7 @@ public:
   }
 
   friend bool operator==(data const& lhs, data const& rhs);
-  friend bool operator!=(data const& lhs, data const& rhs);
   friend bool operator<(data const& lhs, data const& rhs);
-  friend bool operator<=(data const& lhs, data const& rhs);
-  friend bool operator>=(data const& lhs, data const& rhs);
-  friend bool operator>(data const& lhs, data const& rhs);
 
   friend variant_type& expose(data& d);
   friend variant_type const& expose(data const& d);

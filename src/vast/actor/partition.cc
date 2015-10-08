@@ -344,15 +344,16 @@ behavior partition::make(stateful_actor<state>* self, path dir, actor sink) {
           VAST_DEBUG_AT(self, "dispatches predicate", pred);
           auto p =
             self->state.predicates.emplace(pred, predicate_state()).first;
+          VAST_ASSERT(p->first == pred);
           p->second.queries.insert(&q->first);
           auto i = self->state.indexers.begin();
           while (i != self->state.indexers.end()) {
             // We forward the predicate to the subset of indexers which we
-            // haven't asked yet. If an indexer has already lookup up predicate
-            // in the past, it must have sent the hits back to this partition,
-            // or is in the process of doing so.
+            // haven't asked yet. If an indexer has already looked up this
+            // predicate in the past, it must have sent the hits back to this
+            // partition, or is in the process of doing so.
             auto base = i->first;
-            if (p->second.cache.contains(i->first)) {
+            if (p->second.cache.contains(base)) {
               VAST_DEBUG_AT(self, "skips indexers for base", base);
               while (base == i->first && i != self->state.indexers.end())
                 ++i;

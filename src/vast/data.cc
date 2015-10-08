@@ -174,36 +174,8 @@ bool operator==(data const& lhs, data const& rhs) {
   return lhs.data_ == rhs.data_;
 }
 
-bool operator!=(data const& lhs, data const& rhs) {
-  return lhs.data_ != rhs.data_;
-}
-
 bool operator<(data const& lhs, data const& rhs) {
-  if (which(lhs.data_) == data::tag::none
-      || which(rhs.data_) == data::tag::none)
-    return false;
   return lhs.data_ < rhs.data_;
-}
-
-bool operator<=(data const& lhs, data const& rhs) {
-  if (which(lhs.data_) == data::tag::none
-      || which(rhs.data_) == data::tag::none)
-    return false;
-  return lhs.data_ <= rhs.data_;
-}
-
-bool operator>=(data const& lhs, data const& rhs) {
-  if (which(lhs.data_) == data::tag::none
-      || which(rhs.data_) == data::tag::none)
-    return false;
-  return lhs.data_ >= rhs.data_;
-}
-
-bool operator>(data const& lhs, data const& rhs) {
-  if (which(lhs.data_) == data::tag::none
-      || which(rhs.data_) == data::tag::none)
-    return false;
-  return lhs.data_ > rhs.data_;
 }
 
 } // namespace vast
