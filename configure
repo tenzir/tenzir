@@ -197,31 +197,15 @@ chmod u+x config.status
 makefile="$sourcedir/Makefile"
 if [ -f "$makefile" ]; then
   if ! head -n 1 "$makefile" | cut -d ' ' -f 2- | grep -q "\"$builddir\""; then
-    sed -i.orig "s/\(DIRS :=.*\)/\1 \"$builddir\"/" "$makefile"
+    sed -i.orig "s/\(DIRS=.*\)/\1 \"$builddir\"/" "$makefile"
     rm "$makefile.orig"
-    echo "-- added \"$builddir\" to list of build directories" 1>&2
+    echo "-- added \"$builddir\" to top-level Makefile" 1>&2
   fi
-  exit 0
+else
+  printf "DIRS= \"%s\" \n\n" "$builddir" > "$makefile"
+  if [ "$(uname -m)" = "FreeBSD" ]; then
+    printf ".include \"Makefile.BSD\"" >> "$makefile"
+  else
+    printf "include Makefile.GNU" >> "$makefile"
+  fi
 fi
-
-printf "DIRS := \"%s\" \n\n" "$builddir" > "$makefile"
-contents=$(cat <<'EOT'
-THIS := distclean
-OTHERS := $(filter-out $(THIS), $(MAKECMDGOALS))
-
-$(or $(lastword $(OTHERS)), all):
-	@for dir in $(DIRS); do $(MAKE) -C $$dir $(OTHERS); done
-
-.PHONY: $(OTHERS) all
-
-$(filter-out $(lastword $(OTHERS)), $(OTHERS)):
-	@cd .
-
-distclean:
-	rm -rf $(DIRS) Makefile
-
-.PHONY: distclean
-EOT
-)
-
-echo "$contents" >> "$makefile"

@@ -1,0 +1,33 @@
+# The top-level Makefile includes this Makefile and must define the variable
+# DIRS to point to at least one directory.
+
+all:
+.for dir in ${DIRS}
+	${MAKE} -C ${dir}
+.endfor
+
+# Accumulate all targets from existing build directories. This will ensure that
+# a top-level `make T' succeeds as long as *at least one* of the build
+# directories provide a target T.
+.for dir in ${DIRS}
+targets!=grep '^[^\$$. ]\+:.*' ${dir}/Makefile | sed 's/:.*$$//' | tr '\n' ' '
+TARGETS+="${targets}"
+.endfor
+TARGETS!=echo ${TARGETS} | tr ' ' '\n' | sort | uniq | tr '\n' ' '
+
+# Define one target for all found targets and execute it in *all* known build
+# directories.
+.for t in ${TARGETS}
+.if !target(${t})
+${t}:
+.for dir in ${DIRS}
+	${MAKE} -C ${dir} ${t}
+.endfor
+.endif
+.endfor
+
+# Clear all build state and bring repository back to state after clone.
+distclean:
+	rm -rf ${DIRS} Makefile
+
+.PHONY: all distclean ${TARGETS}
