@@ -7,6 +7,7 @@
 #include "vast/config.h"
 #include "vast/actor/sink/ascii.h"
 #include "vast/actor/sink/bro.h"
+#include "vast/actor/sink/csv.h"
 #include "vast/actor/sink/json.h"
 #include "vast/concept/parseable/to.h"
 #include "vast/concept/parseable/vast/schema.h"
@@ -80,6 +81,8 @@ trial<actor> spawn(message const& params) {
 #endif
   } else if (format == "bro") {
     snk = caf::spawn(bro, output);
+  } else if (format == "csv") {
+    snk = caf::spawn(csv, out.release());
   } else if (format == "ascii") {
     snk = caf::spawn(ascii, out.release());
   } else if (format == "json") {

@@ -340,6 +340,8 @@ Available *actor* values with corresponding *parameters*:
 
 *sink* *bro*
 
+*sink* *csv*
+
 *sink* *json*
   `-u` *uds*
     Treats `-w` as a listening UNIX domain socket instead of a regular file.
