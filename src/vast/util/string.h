@@ -68,6 +68,14 @@ std::string percent_escape(std::string const& str);
 /// @relates percent_escape
 std::string percent_unescape(std::string const& str);
 
+/// Replaces find and replace all occurences of a substring.
+/// @param str The string in which to replace a substring.
+/// @param search The string to search.
+/// @param replace The replacement string.
+/// @returns The string with replacements.
+std::string replace_all(std::string str, const std::string& search,
+                        const std::string& replace);
+
 /// Splits a string into a vector of iterator pairs representing the
 /// *[start, end)* range of each element.
 /// @tparam Iterator A random-access iterator to a character sequence.

@@ -15,12 +15,11 @@ struct csv_printer : printer<csv_printer> {
 
   // TODO: agree on reasonable values.
   static constexpr auto set_sep = "+";
-  static constexpr auto unset = "-";
-  static constexpr auto empty = "--";
+  static constexpr auto empty = "\"\"";
 
   struct visitor {
     std::string operator()(none) const {
-      return unset;
+      return {};
     }
 
     template <typename T>
@@ -54,7 +53,7 @@ struct csv_printer : printer<csv_printer> {
     }
 
     std::string operator()(std::string const& str) const {
-      return util::byte_escape(str, ",+- \"");
+      return '"' + util::replace_all(str, "\"", "\"\"") + '"';
     }
 
     std::string operator()(port const& p) const {
@@ -81,7 +80,7 @@ struct csv_printer : printer<csv_printer> {
     }
 
     std::string operator()(table const&) const {
-      return unset; // Not yet supported.
+      return {}; // Not yet supported.
     }
   };
 

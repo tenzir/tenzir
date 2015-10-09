@@ -262,5 +262,15 @@ std::string percent_unescape(std::string const& str) {
   return result;
 }
 
+std::string replace_all(std::string str, const std::string& search,
+                        const std::string& replace) {
+  auto pos = std::string::size_type{0};
+  while ((pos = str.find(search, pos)) != std::string::npos) {
+     str.replace(pos, search.length(), replace);
+     pos += replace.length();
+  }
+  return str;
+}
+
 } // namespace util
 } // namespace vast
