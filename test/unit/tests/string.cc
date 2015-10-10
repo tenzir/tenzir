@@ -92,6 +92,14 @@ TEST(percent escaping) {
   CHECK(percent_unescape(esc) == "!*'();:@&=+$,/?#[]%\" ");
 }
 
+TEST(double escaping) {
+  CHECK(double_escape("||", "|") == "||||");
+  CHECK(double_unescape("||||", "|") == "||");
+  CHECK(double_unescape("|||", "|") == "||");
+  CHECK(double_unescape("||", "|") == "|");
+  CHECK(double_unescape("|", "|") == "|");
+}
+
 TEST(string splitting and joining) {
   using namespace std::string_literals;
 

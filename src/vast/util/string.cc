@@ -72,6 +72,14 @@ std::string percent_unescape(std::string const& str) {
   return unescape(str, percent_unescaper);
 }
 
+std::string double_escape(std::string const& str, std::string const& esc) {
+  return escape(str, double_escaper(esc));
+}
+
+std::string double_unescape(std::string const& str, std::string const& esc) {
+  return unescape(str, double_unescaper(esc));
+}
+
 std::string replace_all(std::string str, const std::string& search,
                         const std::string& replace) {
   auto pos = std::string::size_type{0};

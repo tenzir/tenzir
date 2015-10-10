@@ -53,7 +53,16 @@ struct csv_printer : printer<csv_printer> {
     }
 
     std::string operator()(std::string const& str) const {
-      return '"' + util::replace_all(str, "\"", "\"\"") + '"';
+      std::string result;
+      result.reserve(str.size() + 2);
+      result += '"';
+      auto f = str.begin();
+      auto l = str.begin();
+      auto out = std::back_inserter(result);
+      while (f != l)
+        util::double_escaper("\"|")(f, l, out);
+      result += '"';
+      return result;
     }
 
     std::string operator()(port const& p) const {

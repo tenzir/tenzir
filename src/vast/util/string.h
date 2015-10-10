@@ -209,6 +209,29 @@ auto percent_unescaper = [](auto& f, auto l, auto out) {
   return hex_unescaper(++f, l, out);
 };
 
+auto double_escaper = [](std::string const& esc) {
+  return [&](auto& f, auto, auto out) {
+    if (esc.find(*f) != std::string::npos)
+      *out++ = *f;
+    *out++ = *f++;
+  };
+};
+
+auto double_unescaper = [](std::string const& esc) {
+  return [&](auto& f, auto l, auto out) -> bool {
+    auto x = *f++;
+    if (f == l) {
+      *out++ = x;
+      return true;
+    }
+    *out++ = x;
+    auto y = *f++;
+    if (x == y && esc.find(x) == std::string::npos)
+      *out++ = y;
+    return true;
+  };
+};
+
 /// Escapes all non-printable characters in a string with `\xAA` where `AA` is
 /// the byte in hexadecimal representation.
 /// @param str The string to escape.
