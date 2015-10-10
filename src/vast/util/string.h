@@ -6,9 +6,231 @@
 #include <vector>
 
 #include "vast/util/assert.h"
+#include "vast/util/coding.h"
 
 namespace vast {
 namespace util {
+
+/// Unscapes a string according to an escaper.
+/// @param str The string to escape.
+/// @param escaper The escaper to use.
+/// @returns The escaped version of *str*.
+template <class Escaper>
+std::string escape(std::string const& str, Escaper escaper) {
+  std::string result;
+  result.reserve(str.size());
+  auto f = str.begin();
+  auto l = str.end();
+  auto out = std::back_inserter(result);
+  while (f != l)
+    escaper(f, l, out);
+  return result;
+}
+
+/// Unscapes a string according to an unescaper.
+/// @param str The string to unescape.
+/// @param unescaper The unescaper to use.
+/// @returns The unescaped version of *str*.
+template <class Unescaper>
+std::string unescape(std::string const& str, Unescaper unescaper) {
+  std::string result;
+  result.reserve(str.size());
+  auto f = str.begin();
+  auto l = str.end();
+  auto out = std::back_inserter(result);
+  while (f != l)
+    if (!unescaper(f, l, out))
+      return {};
+  return result;
+}
+
+auto hex_escaper = [](auto& f, auto, auto out) {
+  *out++ = '\\';
+  *out++ = 'x';
+  auto hex = byte_to_hex(*f++);
+  *out++ = hex.first;
+  *out++ = hex.second;
+};
+
+auto hex_unescaper = [](auto& f, auto l, auto out) {
+  auto hi = *f++;
+  if (f == l)
+    return false;
+  auto lo = *f++;
+  if (! std::isxdigit(hi) || ! std::isxdigit(lo))
+    return false;
+  *out++ = hex_to_byte(hi, lo);
+  return true;
+};
+
+auto print_escaper = [](auto& f, auto l, auto out) {
+  if (std::isprint(*f))
+    *out++ = *f++;
+  else
+    hex_escaper(f, l, out);
+};
+
+auto byte_unescaper = [](auto& f, auto l, auto out) {
+  if (*f != '\\') {
+    *out++ = *f++;
+    return true;
+  }
+  if (l - f < 4)
+    return false; // Not enough input.
+  if (*++f != 'x') {
+    *out++ = *f++; // Remove escape backslashes that aren't \x.
+    return true;
+  }
+  return hex_unescaper(++f, l, out);
+};
+
+// The JSON RFC (http://www.ietf.org/rfc/rfc4627.txt) specifies the escaping
+// rules in section 2.5:
+//
+//    All Unicode characters may be placed within the quotation marks except
+//    for the characters that must be escaped: quotation mark, reverse
+//    solidus, and the control characters (U+0000 through U+001F).
+//
+// That is, '"', '\\', and control characters are the only mandatory escaped
+// values. The rest is optional.
+auto json_escaper = [](auto& f, auto l, auto out) {
+  auto escape_char = [](char c, auto out) {
+    *out++ = '\\';
+    *out++ = c;
+  };
+  switch (*f) {
+    default:
+      print_escaper(f, l, out);
+      return;
+    case '"':
+    case '\\':
+      escape_char(*f, out);
+      break;
+    case '\b':
+      escape_char('b', out);
+      break;
+    case '\f':
+      escape_char('f', out);
+      break;
+    case '\r':
+      escape_char('r', out);
+      break;
+    case '\n':
+      escape_char('n', out);
+      break;
+    case '\t':
+      escape_char('t', out);
+      break;
+  }
+  ++f;
+};
+
+auto json_unescaper = [](auto& f, auto l, auto out) {
+  if (*f == '"') // Unescaped double-quotes not allowed.
+    return false;
+  if (*f != '\\') { // Skip every non-escape character.
+    *out++ = *f++;
+    return true;
+  }
+  if (l - f < 2)
+    return false; // Need at least one char after \.
+  switch (auto c = *++f) {
+    default:
+      return false;
+    case '\\':
+      *out++ = '\\';
+      break;
+    case '"':
+      *out++ = '"';
+      break;
+    case '/':
+      *out++ = '/';
+      break;
+    case 'b':
+      *out++ = '\b';
+      break;
+    case 'f':
+      *out++ = '\f';
+      break;
+    case 'r':
+      *out++ = '\r';
+      break;
+    case 'n':
+      *out++ = '\n';
+      break;
+    case 't':
+      *out++ = '\t';
+      break;
+    case 'u': {
+      // We currently don't support unicode and leave \uXXXX as is.
+      *out++ = '\\';
+      *out++ = 'u';
+      auto end = std::min(decltype(l - f){4}, l - f);
+      for (auto i = 0; i < end; ++i)
+        *out++ = *++f;
+      break;
+    }
+    case 'x': {
+      if (l - f < 3)
+        return false; // Need \x##.
+      auto hi = *++f;
+      auto lo = *++f;
+      if (! std::isxdigit(hi) || ! std::isxdigit(lo))
+        return false;
+      *out++ = hex_to_byte(hi, lo);
+      break;
+    }
+  }
+  ++f;
+  return true;
+};
+
+auto percent_escaper = [](auto& f, auto, auto out) {
+  auto is_unreserved = [](char c) {
+    return std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~';
+  };
+  if (is_unreserved(*f)) {
+    *out++ = *f++;
+  } else {
+    auto hex = byte_to_hex(*f++);
+    *out++ = '%';
+    *out++ = hex.first;
+    *out++ = hex.second;
+  }
+};
+
+auto percent_unescaper = [](auto& f, auto l, auto out) {
+  if (*f != '%') {
+    *out++ = *f++;
+    return true;
+  }
+  if (l - f < 3) // Need %xx
+    return false;
+  return hex_unescaper(++f, l, out);
+};
+
+auto double_escaper = [](std::string const& esc) {
+  return [&](auto& f, auto, auto out) {
+    if (esc.find(*f) != std::string::npos)
+      *out++ = *f;
+    *out++ = *f++;
+  };
+};
+
+auto double_unescaper = [](std::string const& esc) {
+  return [&](auto& f, auto l, auto out) -> bool {
+    auto x = *f++;
+    if (f == l) {
+      *out++ = x;
+      return true;
+    }
+    *out++ = x;
+    auto y = *f++;
+    if (x == y && esc.find(x) == std::string::npos)
+      *out++ = y;
+    return true;
+  };
+};
 
 /// Escapes all non-printable characters in a string with `\xAA` where `AA` is
 /// the byte in hexadecimal representation.
@@ -67,6 +289,28 @@ std::string percent_escape(std::string const& str);
 /// @returns The unescaped string.
 /// @relates percent_escape
 std::string percent_unescape(std::string const& str);
+
+/// Escapes a string by repeating characters from a special set.
+/// @param str The string to escape.
+/// @param esc The set of characters to double-escape.
+/// @returns The escaped string.
+/// @relates double_unescape
+std::string double_escape(std::string const& str, std::string const& esc);
+
+/// Unescapes a string by removing consecutive character sequences.
+/// @param str The string to unescape.
+/// @param esc The set of repeated characters to unescape.
+/// @returns The unescaped string.
+/// @relates double_escape
+std::string double_unescape(std::string const& str, std::string const& esc);
+
+/// Replaces find and replace all occurences of a substring.
+/// @param str The string in which to replace a substring.
+/// @param search The string to search.
+/// @param replace The replacement string.
+/// @returns The string with replacements.
+std::string replace_all(std::string str, const std::string& search,
+                        const std::string& replace);
 
 /// Splits a string into a vector of iterator pairs representing the
 /// *[start, end)* range of each element.

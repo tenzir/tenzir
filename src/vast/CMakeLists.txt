@@ -43,6 +43,7 @@ set(libvast_sources
   actor/task.cc
   actor/sink/ascii.cc
   actor/sink/bro.cc
+  actor/sink/csv.cc
   actor/sink/json.cc
   actor/sink/spawn.cc
   actor/source/bro.cc
