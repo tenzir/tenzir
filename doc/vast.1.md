@@ -209,7 +209,7 @@ following values:
 *peers*
   Displays the nodes connected to this node.
 
-*components*
+*actors*
   Displays the existing components per node.
 
 *topology*
@@ -372,7 +372,7 @@ Terminates an actor. The argument *name* refers to an actor label.
 
 Synopsis:
 
-  *run* *name* *message*
+  *send* *name* *message*
 
 Sends a message to an actor. The argument *name* refers to the actor to run.
 The argument *message* represents the data to send to the actor.
@@ -441,13 +441,13 @@ Because *export* always writes to standard output, *-w file* has no effect.
 EXAMPLES
 --------
 
-Start a node with debug log verbosity in the foreground:
+Start a node at 10.0.0.1 on port 42000 with debug log verbosity in the foreground:
 
-    vast -e 10.0.0.1 start -l 5 -f
+    vast -e 10.0.0.1:42000 -l 5 start -f
 
 Send [Bro](http://www.bro.org) logs to the remote node:
 
-    zcat *.log.gz | vast -e 10.0.0.1 import bro
+    zcat *.log.gz | vast -e 10.0.0.1:42000 import bro
 
 Import a PCAP trace into a local VAST node in one shot:
 
