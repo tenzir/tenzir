@@ -14,7 +14,7 @@ struct csv_printer : printer<csv_printer> {
   using attribute = event;
 
   // TODO: agree on reasonable values.
-  static constexpr auto set_sep = "+";
+  static constexpr auto set_sep = " | ";
   static constexpr auto empty = "\"\"";
 
   struct visitor {
@@ -57,7 +57,7 @@ struct csv_printer : printer<csv_printer> {
       result.reserve(str.size() + 2);
       result += '"';
       auto f = str.begin();
-      auto l = str.begin();
+      auto l = str.end();
       auto out = std::back_inserter(result);
       while (f != l)
         util::double_escaper("\"|")(f, l, out);
