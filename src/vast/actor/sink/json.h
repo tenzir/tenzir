@@ -11,12 +11,14 @@ namespace sink {
 
 struct json_state : state {
   json_state(local_actor *self);
+  ~json_state();
 
   bool process(event const& e) override;
 
   void flush() override;
 
   std::unique_ptr<std::ostream> out;
+  bool first_ = true;
 };
 
 /// A sink dumping events in JSON.
