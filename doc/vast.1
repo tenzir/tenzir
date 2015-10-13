@@ -192,7 +192,7 @@ Displays all existing nodes in the ecosystem.
 \fIpeers\fP
 Displays the nodes connected to this node.
 .TP
-\fIcomponents\fP
+\fIactors\fP
 Displays the existing components per node.
 .TP
 \fItopology\fP
@@ -350,7 +350,7 @@ Terminates an actor. The argument \fIname\fP refers to an actor label.
 .PP
 Synopsis:
 .IP
-\fIrun\fP \fIname\fP \fImessage\fP
+\fIsend\fP \fIname\fP \fImessage\fP
 .PP
 Sends a message to an actor. The argument \fIname\fP refers to the actor to run.
 The argument \fImessage\fP represents the data to send to the actor.
@@ -413,11 +413,11 @@ invoking \fIexport\fP\&.
 Because \fIexport\fP always writes to standard output, \fI\-w file\fP has no effect.
 .SH EXAMPLES
 .PP
-Start a node with debug log verbosity in the foreground:
+Start a node at 10.0.0.1 on port 42000 with debug log verbosity in the foreground:
 .PP
 .RS
 .nf
-vast \-e 10.0.0.1 start \-l 5 \-f
+vast \-e 10.0.0.1:42000 \-l 5 start \-f
 .fi
 .RE
 .PP
@@ -426,7 +426,7 @@ Send Bro
 .PP
 .RS
 .nf
-zcat *.log.gz | vast \-e 10.0.0.1 import bro
+zcat *.log.gz | vast \-e 10.0.0.1:42000 import bro
 .fi
 .RE
 .PP
