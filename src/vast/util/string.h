@@ -45,9 +45,9 @@ std::string unescape(std::string const& str, Unescaper unescaper) {
 }
 
 auto hex_escaper = [](auto& f, auto, auto out) {
+  auto hex = byte_to_hex(*f++);
   *out++ = '\\';
   *out++ = 'x';
-  auto hex = byte_to_hex(*f++);
   *out++ = hex.first;
   *out++ = hex.second;
 };

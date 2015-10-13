@@ -14,7 +14,7 @@ namespace sink {
 /// A sink generating Bro logs.
 struct bro_state : state {
   static constexpr char sep = '\x09';
-  static constexpr auto set_separator = ",";
+  static constexpr char set_separator = ',';
   static constexpr auto empty_field = "(empty)";
   static constexpr auto unset_field = "-";
   static constexpr auto format = "%Y-%m-%d-%H-%M-%S";

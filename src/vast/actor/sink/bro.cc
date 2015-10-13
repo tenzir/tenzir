@@ -94,7 +94,12 @@ struct value_printer {
   }
 
   std::string operator()(std::string const& str) const {
-    return str;
+    auto escaper = [](auto& f, auto l, auto out) {
+      if (!std::isprint(*f) || *f == bro_state::set_separator)
+        return util::hex_escaper(f, l, out);
+      *out++ = *f++;
+    };
+    return util::escape(str, escaper);
   }
 
   std::string operator()(port const& p) const {
@@ -116,7 +121,7 @@ struct value_printer {
     if (c.empty())
       return bro_state::empty_field;
     auto visitor = this;
-    return util::join(c.begin(), c.end(), bro_state::set_separator,
+    return util::join(c.begin(), c.end(), std::string{bro_state::set_separator},
                       [&](auto& x) { return visit(*visitor, x); });
   }
 
