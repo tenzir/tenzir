@@ -2,6 +2,7 @@
 #define VAST_UTIL_STRING_H
 
 #include <algorithm>
+#include <array>
 #include <string>
 #include <vector>
 
@@ -98,9 +99,22 @@ auto json_escaper = [](auto& f, auto l, auto out) {
     *out++ = '\\';
     *out++ = c;
   };
+  auto json_print_escaper = [](auto& f, auto, auto out) {
+    if (std::isprint(*f)) {
+      *out++ = *f++;
+    } else {
+      auto hex = byte_to_hex(*f++);
+      *out++ = '\\';
+      *out++ = 'u';
+      *out++ = '0';
+      *out++ = '0';
+      *out++ = hex.first;
+      *out++ = hex.second;
+    }
+  };
   switch (*f) {
     default:
-      print_escaper(f, l, out);
+      json_print_escaper(f, l, out);
       return;
     case '"':
     case '\\':
@@ -162,22 +176,26 @@ auto json_unescaper = [](auto& f, auto l, auto out) {
       *out++ = '\t';
       break;
     case 'u': {
-      // We currently don't support unicode and leave \uXXXX as is.
-      *out++ = '\\';
-      *out++ = 'u';
-      auto end = std::min(decltype(l - f){4}, l - f);
-      for (auto i = 0; i < end; ++i)
-        *out++ = *++f;
-      break;
-    }
-    case 'x': {
-      if (l - f < 3)
-        return false; // Need \x##.
-      auto hi = *++f;
-      auto lo = *++f;
-      if (! std::isxdigit(hi) || ! std::isxdigit(lo))
+      // We currently only support single-byte escapings and any unicode escape
+      // sequence other than \u00XX as is.
+      if (l - f < 4)
         return false;
-      *out++ = hex_to_byte(hi, lo);
+      std::array<char, 4> bytes;
+      bytes[0] = *++f;
+      bytes[1] = *++f;
+      bytes[2] = *++f;
+      bytes[3] = *++f;
+      if (bytes[0] != '0' || bytes[1] != '0') {
+        // Leave input as is, we don't know how to handle it (yet).
+        *out++ = '\\';
+        *out++ = 'u';
+        std::copy(bytes.begin(), bytes.end(), out);
+      } else {
+        // Hex-unescape the XX portion of \u00XX.
+        if (! std::isxdigit(bytes[2]) || ! std::isxdigit(bytes[3]))
+          return false;
+        *out++ = hex_to_byte(bytes[2], bytes[3]);
+      }
       break;
     }
   }
