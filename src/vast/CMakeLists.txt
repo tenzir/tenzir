@@ -57,6 +57,7 @@ set(libvast_sources
   concept/convertible/vast/port.cc
   concept/convertible/vast/subnet.cc
   concept/convertible/vast/time.cc
+  concept/convertible/vast/type.cc
   concept/convertible/vast/value.cc
   concept/serializable/hierarchy.cc
   detail/adjust_resource_consumption.cc

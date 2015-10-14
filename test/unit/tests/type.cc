@@ -1,6 +1,10 @@
 #include "vast/data.h"
 #include "vast/type.h"
+#include "vast/json.h"
+#include "vast/concept/convertible/vast/type.h"
+#include "vast/concept/printable/stream.h"
 #include "vast/concept/printable/to_string.h"
+#include "vast/concept/printable/vast/json.h"
 #include "vast/concept/printable/vast/type.h"
 #include "vast/concept/serializable/io.h"
 #include "vast/concept/serializable/vast/type.h"
@@ -323,25 +327,119 @@ TEST(representational equality(congruence)) {
   CHECK(congruent(a, r0));
 }
 
-TEST(type derivation) {
+TEST(derivation) {
   CHECK(type::derive(data{"foo"}), type::string{});
-
   type::record r{
     {"", type::integer{}},
     {"", type::count{}},
     {"", type::real{}}
   };
-
   CHECK(type::derive(record{42, 1337u, 3.1415}), r);
 }
 
-TEST(type attributes) {
+TEST(attributes) {
   // Attributes are key-value pairs...
   type::vector v{type::integer{}, {type::attribute::skip}};
   auto a = v.find_attribute(type::attribute::skip);
   REQUIRE(a);
   CHECK(a->value == "");
-
   // Attributes are part of the type signature.
   CHECK(v != type::vector{type::integer{}});
+}
+
+TEST(json conversion) {
+  auto e = type::enumeration{{"foo", "bar", "baz"}};
+  e.name("e");
+  auto t = type::table{type::boolean{}, type::count{}};
+  t.name("bit_table");
+  auto r = type::record{
+    {"x", type::address{{type::attribute::skip}}},
+    {"y", type::boolean{{{type::attribute::default_, "F"}}}},
+    {"z", type::record{{"inner", e}}}
+  };
+  r.name("foo");
+  auto expected = R"__({
+  "attributes": [],
+  "kind": "record",
+  "name": "foo",
+  "structure": {
+    "x": {
+      "attributes": [
+        "skip"
+      ],
+      "kind": "address",
+      "name": "",
+      "structure": null
+    },
+    "y": {
+      "attributes": [
+        [
+          "default",
+          "F"
+        ]
+      ],
+      "kind": "boolean",
+      "name": "",
+      "structure": null
+    },
+    "z": {
+      "attributes": [],
+      "kind": "record",
+      "name": "",
+      "structure": {
+        "inner": {
+          "attributes": [],
+          "kind": "enumeration",
+          "name": "e",
+          "structure": [
+            "foo",
+            "bar",
+            "baz"
+          ]
+        }
+      }
+    }
+  }
+})__";
+  CHECK(to_string(to_json(r)) == expected);
+  json j;
+  auto flatten = true;
+  CHECK(convert(r, j, flatten));
+  expected = R"__({
+  "attributes": [],
+  "kind": "record",
+  "name": "foo",
+  "structure": {
+    "x": {
+      "attributes": [
+        "skip"
+      ],
+      "kind": "address",
+      "name": "",
+      "structure": null
+    },
+    "y": {
+      "attributes": [
+        [
+          "default",
+          "F"
+        ]
+      ],
+      "kind": "boolean",
+      "name": "",
+      "structure": null
+    },
+    "z.inner": {
+      "attributes": [],
+      "kind": "enumeration",
+      "name": "e",
+      "structure": [
+        "foo",
+        "bar",
+        "baz"
+      ]
+    }
+  }
+})__";
+  CHECK(to_string(j), expected);
 }

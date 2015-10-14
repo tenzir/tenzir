@@ -10,6 +10,73 @@
 #include "vast/concept/printable/vast/none.h"
 
 namespace vast {
+
+struct type_tag_printer : printer<type_tag_printer> {
+  using attribute = type::tag;
+
+  template <typename Iterator>
+  bool print(Iterator out, type::tag t) const {
+    using namespace printers;
+    switch (t) {
+      case type::tag::none:
+        str.print(out, "none");
+        break;
+      case type::tag::boolean:
+        str.print(out, "boolean");
+        break;
+      case type::tag::integer:
+        str.print(out, "integer");
+        break;
+      case type::tag::count:
+        str.print(out, "count");
+        break;
+      case type::tag::real:
+        str.print(out, "real");
+        break;
+      case type::tag::time_point:
+        str.print(out, "time_point");
+        break;
+      case type::tag::time_duration:
+        str.print(out, "time_duration");
+        break;
+      case type::tag::string:
+        str.print(out, "string");
+        break;
+      case type::tag::pattern:
+        str.print(out, "pattern");
+        break;
+      case type::tag::address:
+        str.print(out, "address");
+        break;
+      case type::tag::subnet:
+        str.print(out, "subnet");
+        break;
+      case type::tag::port:
+        str.print(out, "port");
+        break;
+      case type::tag::enumeration:
+        str.print(out, "enumeration");
+        break;
+      case type::tag::vector:
+        str.print(out, "vector");
+        break;
+      case type::tag::set:
+        str.print(out, "set");
+        break;
+      case type::tag::table:
+        str.print(out, "table");
+        break;
+      case type::tag::record:
+        str.print(out, "record");
+        break;
+      case type::tag::alias:
+        str.print(out, "alias");
+        break;
+    }
+    return true;
+  }
+};
+
 namespace detail {
 
 template <typename Iterator>
@@ -176,8 +243,7 @@ struct type_printer : printer<type_printer<Policy>> {
 
   template <typename Iterator>
   struct visitor {
-    visitor(Iterator& out) : out_{out} {
-    }
+    visitor(Iterator& out) : out_{out} { }
 
     bool operator()(none) const {
       return printers::str.print(out_, "none");
@@ -257,11 +323,19 @@ struct printer_registry<type::alias> {
 };
 
 template <>
+struct printer_registry<type::tag> {
+  using type = type_tag_printer;
+};
+
+template <>
 struct printer_registry<type> {
   using type = type_printer<policy::name_only>;
 };
 
 namespace printers {
+
+template <typename Policy>
+type_printer<Policy> type_tag{};
 
 template <typename Policy>
 type_printer<Policy> type{};
