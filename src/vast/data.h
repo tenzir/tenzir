@@ -18,7 +18,6 @@
 #include "vast/optional.h"
 #include "vast/time.h"
 #include "vast/type.h"
-#include "vast/trial.h"
 #include "vast/util/flat_set.h"
 #include "vast/util/meta.h"
 #include "vast/util/operators.h"
@@ -109,12 +108,25 @@ public:
   /// @returns A pointer to the data at *o* or `nullptr` if *o* does not
   ///          resolve.
   vast::data const* at(offset const& o) const;
-
-  /// Unflattens a data sequence according to a given record type.
-  /// @param t The type holding the structure for unflattening.
-  /// @returns The unflattened record on success.
-  trial<record> unflatten(type::record const& t) const;
 };
+
+/// Flattens a record.
+/// @param r The record to flatten.
+/// @returns The flattened record.
+record flatten(record const& r);
+
+/// Flattens a record or returns the argument if the data is not record.
+/// @param d The record data to flatten.
+/// @returns The flattened record.
+data flatten(data const& d);
+
+/// Unflattens a data sequence according to a given record type.
+/// @param r The record to flatten.
+/// @param t The record type according to which *r* gets flattened.
+/// @returns The unflattened record.
+optional<record> unflatten(record const& r, type::record const& t);
+
+optional<record> unflatten(data const& d, type const& t);
 
 class data : util::totally_ordered<data> {
   friend access;

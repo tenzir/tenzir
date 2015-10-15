@@ -532,6 +532,8 @@ class type::record : public type::base {
   friend type::info;
   friend detail::type_reader;
   friend detail::type_writer;
+  friend type::record flatten(type::record const& rec);
+  friend type::record unflatten(type::record const& rec);
 
 public:
   struct field : util::equality_comparable<field> {
@@ -601,14 +603,6 @@ public:
   /// @returns The offset-key pairs corresponding to the found *k*.
   std::vector<std::pair<offset, key>> find_suffix(key const& k) const;
 
-  /// Recursively flattens the arguments of a record type.
-  /// @returns The flattened record type.
-  record flatten() const;
-
-  /// Undos a flattening operation.
-  /// @returns The unflattened record type.
-  record unflatten() const;
-
   /// Retrieves the type at a given key.
   /// @param k The key to resolve.
   /// @returns The type at key *k* or `nullptr` if *k* doesn't resolve.
@@ -626,6 +620,20 @@ private:
 
   std::vector<field> fields_;
 };
+
+/// Recursively flattens the arguments of a record type.
+/// @param rec the record to flatten.
+/// @returns The flattened record type.
+type::record flatten(type::record const& rec);
+
+type flatten(type const& t);
+
+/// Unflattens a flattened record type.
+/// @param rec the record to unflatten.
+/// @returns The unflattened record type.
+type::record unflatten(type::record const& rec);
+
+type unflatten(type const& t);
 
 class type::alias : public type::base {
   friend access;

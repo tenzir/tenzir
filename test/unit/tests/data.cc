@@ -243,15 +243,15 @@ TEST(ports) {
   port p;
   CHECK(p.number() == 0u);
   CHECK(p.type() == port::unknown);
-
+  MESSAGE("tcp");
   p = port(22u, port::tcp);
   CHECK(p.number() == 22u);
   CHECK(p.type() == port::tcp);
-
+  MESSAGE("udp");
   port q(53u, port::udp);
   CHECK(q.number() == 53u);
   CHECK(q.type() == port::udp);
-
+  MESSAGE("operators");
   CHECK(p != q);
   CHECK(p < q);
 }
@@ -275,52 +275,52 @@ TEST(set) {
 TEST(tables) {
   table ports{{"ssh", 22u}, {"http", 80u}, {"https", 443u}, {"imaps", 993u}};
   CHECK(ports.size() == 4);
-
   auto i = ports.find("ssh");
   REQUIRE(i != ports.end());
   CHECK(i->second == 22u);
   i = ports.find("imaps");
   REQUIRE(i != ports.end());
   CHECK(i->second == 993u);
-
   CHECK(ports.emplace("telnet", 23u).second);
   CHECK(!ports.emplace("http", 8080u).second);
 }
 
 TEST(records) {
+  MESSAGE("construction");
   record r{"foo", -42, 1001u, "x", port{443, port::tcp}};
   record s{100, "bar", r};
   CHECK(r.size() == 5);
-
+  MESSAGE("access");
   CHECK(*s.at(offset{0}) == 100);
   CHECK(*s.at(offset{1}) == "bar");
   CHECK(*s.at(offset{2}) == r);
   CHECK(*s.at(offset{2, 3}) == data{"x"});
-
+  MESSAGE("flatten");
   auto structured =
     record{"foo", record{-42, record{1001u}}, "x", port{443, port::tcp}};
-
-  auto t = type::record{{
-        {"foo", type::string{}},
-        {"r0", type::record{{
-          {"i", type::integer{}},
-          {"r1", type::record{{
-            {"c", type::count{}}}}}}}},
-        {"bar", type::string{}},
-        {"baz", type::port{}}
-      }};
-
-  auto attempt = r.unflatten(t);
+  auto flat = record{"foo", -42, 1001u, "x", port{443, port::tcp}};
+  auto flattened = flatten(structured);
+  CHECK(flattened == flat);
+  MESSAGE("unflatten");
+  auto t = type::record{
+    {"foo", type::string{}},
+    {"r0", type::record{{
+      {"i", type::integer{}},
+      {"r1", type::record{{
+        {"c", type::count{}}}}}}}},
+    {"bar", type::string{}},
+    {"baz", type::port{}}
+  };
+  auto attempt = unflatten(r, t);
   REQUIRE(attempt);
   CHECK(*attempt == structured);
   CHECK(congruent(t, type::derive(structured)));
-
+  MESSAGE("recursive iteration");
   std::vector<data> each;
-  auto flat = record{"foo", -42, 1001u, "x", port{443, port::tcp}};
   for (auto& i : record::each{structured})
     each.push_back(i.data());
   CHECK(each == flat);
-
+  MESSAGE("serialization");
   std::string buf;
   save(buf, structured);
   decltype(structured) structured2;

@@ -50,4 +50,8 @@ bool operator>(value const& lhs, value const& rhs) {
   return lhs.data_ > rhs.data_;
 }
 
+value flatten(value const& v) {
+  return {flatten(v.data()), flatten(v.type())};
+}
+
 } // namespace vast

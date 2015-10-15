@@ -85,23 +85,6 @@ TEST(equality comparison) {
   CHECK(t != u);
 }
 
-TEST(congruence) {
-  type s0 = type::set{type::port{}};
-  type s1 = type::set{type::port{}};
-  s0.name("foo");
-  s1.name("bar");
-  CHECK(congruent(s0, s1));
-
-  type a = type::alias{s0};
-  a.name("baz");
-  CHECK(congruent(a, s0));
-  CHECK(congruent(a, s1));
-
-  type b = type::boolean{};
-  type i = type::integer{};
-  CHECK(!congruent(b, i));
-}
-
 TEST(serialization) {
   type s0 = type::string{{type::attribute::skip}};
   type t = type::set{type::port{}};
@@ -192,7 +175,6 @@ TEST(record flattening/unflattening) {
           }},
     {"y", type::record{{"b", type::boolean{}}}}
   };
-
   auto y = type::record{{
     {"x.y.z", type::integer{}},
     {"x.y.k", type::boolean{}},
@@ -201,11 +183,9 @@ TEST(record flattening/unflattening) {
     {"x.b", type::boolean{}},
     {"y.b", type::boolean{}}
   }};
-
-  auto f = x.flatten();
+  auto f = flatten(x);
   CHECK(f == y);
-
-  auto u = f.unflatten();
+  auto u = unflatten(f);
   CHECK(u == x);
 }
 
@@ -233,44 +213,35 @@ TEST(record symbol finding) {
   auto deep = r.at(key{"b", "c", "y"});
   REQUIRE(deep);
   CHECK(is<type::address>(*deep));
-
   //
   // Prefix finding.
   //
-
   auto o = r.find_prefix({"a"});
   CHECK(o.size() == 0);
-
   o = r.find_prefix({"foo", "a"});
   offset a{0};
   REQUIRE(o.size() == 1);
   CHECK(o[0].first == a);
-
   o = r.find_prefix({"foo", "b", "a"});
   offset ba{1, 0};
   REQUIRE(o.size() == 1);
   CHECK(o[0].first == ba);
-
   //
   // Suffix finding.
   //
-
   o = r.find_suffix({"z"});
   offset z{1, 2, 2};
   REQUIRE(o.size() == 1);
   CHECK(o[0].first == z);
-
   o = r.find_suffix({"c", "y"});
   offset cy{1, 2, 1};
   REQUIRE(o.size() == 1);
   CHECK(o[0].first == cy);
-
   o = r.find_suffix({"a"});
   offset a0{0}, a1{1, 0};
   REQUIRE(o.size() == 2);
   CHECK(o[0].first == a0);
   CHECK(o[1].first == a1);
-
   o = r.find_suffix({"c", "*"});
   offset c0{1, 2, 0}, c1{1, 2, 1}, c2{1, 2, 2};
   REQUIRE(o.size() == 3);
@@ -279,50 +250,42 @@ TEST(record symbol finding) {
   CHECK(o[2].first == c2);
 }
 
-TEST(representational equality(congruence)) {
+TEST(congruence) {
+  MESSAGE("basic");
   auto i = type::integer{};
   i.name("i");
-
   auto j = type::integer{};
   j.name("j");
-
   auto c = type::count{};
   c.name("c");
-
   CHECK(congruent(i, i));
   CHECK(congruent(i, j));
   CHECK(!congruent(i, c));
-
+  MESSAGE("sets");
   auto s0 = type::set{i};
   auto s1 = type::set{j};
   auto s2 = type::set{c};
-
   CHECK(s0 != s1);
   CHECK(congruent(s0, s1));
   CHECK(! congruent(s1, s2));
-
+  MESSAGE("records");
   auto r0 = type::record{
     {"a", type::address{}},
     {"b", type::boolean{}},
     {"c", type::count{}}};
-
   auto r1 = type::record{
     {"x", type::address{}},
     {"y", type::boolean{}},
     {"z", type::count{}}};
-
   CHECK(r0 != r1);
   CHECK(congruent(r0, r1));
-
+  MESSAGE("aliases");
   type a = type::alias{i};
   a.name("a");
-
   CHECK(a != i);
   CHECK(congruent(a, i));
-
   a = type::alias{r0};
   a.name("r0");
-
   CHECK(a != r0);
   CHECK(congruent(a, r0));
 }

@@ -268,7 +268,7 @@ trial<void> bro_state::parse_header() {
   }
   // Construct type.
   type::record flat{std::move(fields)};
-  type_ = flat.unflatten();
+  type_ = unflatten(flat);
   type_.name("bro::" + event_name);
   VAST_VERBOSE_AT(self, "parsed bro header:");
   VAST_VERBOSE_AT(self, "    #separator", separator_);
